@@ -1,6 +1,6 @@
 {
   "name": "zhin",
-  "version": "1.0.1",
+  "version": "1.0.5",
   "description": "知音",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -31,7 +31,6 @@
     "@types/node": "latest",
     "ts-node-dev": "latest",
     "tsc-alias": "latest",
-    "tsconfig-paths": "latest",
     "typescript": "latest"
   },
   "files": [
@@ -46,6 +45,7 @@
     "event-deliver": "^1.0.1",
     "js-yaml": "^4.1.0",
     "log4js": "^6.6.1",
-    "oicq": "^2.3.1"
+    "oicq": "^2.3.1",
+    "tsconfig-paths": "^4.0.0"
   }
 }

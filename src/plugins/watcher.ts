@@ -58,7 +58,7 @@ export function install(this:Bot.Plugin,bot:Bot,root:string){
 
     const watchPath=path.resolve(process.cwd(),root||'.')
     const watcher: FSWatcher = watch(watchPath, {
-        ignored: ['**/node_modules/**', '**/.git/**', '**/logs/**', '**/.idea/**']
+        ignored: ['**/node_modules/**', '**/.git/**', '**/.idea/**']
     })
     watcher.on('change', (filename) => {
         const changeFileName=path.resolve(process.cwd(),filename)
