@@ -1,6 +1,6 @@
 {
   "name": "zhin",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "知音",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -40,6 +40,7 @@
     "/lib/**/LICENSE"
   ],
   "dependencies": {
+    "chokidar": "^3.5.3",
     "esbuild": "^0.15.5",
     "esbuild-register": "^3.3.3",
     "event-deliver": "^1.0.1",
