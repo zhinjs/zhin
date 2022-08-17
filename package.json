@@ -1,18 +1,19 @@
 {
-  "name": "@lc-cn/ts-dev-template",
+  "name": "zhin",
   "version": "1.0.0",
-  "description": "ts开发环境配置",
+  "description": "知音",
   "main": "lib/index.js",
+  "types": "lib/index.d.ts",
   "scripts": {
     "start": "node .",
     "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
-    "dev": "ts-node-dev -r tsconfig-paths/register ./src/index.ts",
+    "dev": "ts-node -r tsconfig-paths/register -r esbuild-register ./src/index.ts",
     "pub": "npm publish --access public",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lc-cn/ts-dev-template.git"
+    "url": "git+https://github.com/liucl-cn/zhing.git"
   },
   "keywords": [
     "ts",
@@ -22,10 +23,11 @@
   "author": "凉菜",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/lc-cn/ts-dev-template/issues"
+    "url": "https://github.com/liucl-cn/zhing/issues"
   },
-  "homepage": "https://github.com/lc-cn/ts-dev-template#readme",
+  "homepage": "https://github.com/liucl-cn/zhing#readme",
   "devDependencies": {
+    "@types/js-yaml": "^4.0.5",
     "@types/node": "latest",
     "ts-node-dev": "latest",
     "tsc-alias": "latest",
@@ -37,5 +39,12 @@
     "/lib/**/*.d.ts",
     "/lib/**/LICENSE"
   ],
-  "dependencies": {}
+  "dependencies": {
+    "esbuild": "^0.15.5",
+    "esbuild-register": "^3.3.3",
+    "event-deliver": "^1.0.1",
+    "js-yaml": "^4.1.0",
+    "log4js": "^6.6.1",
+    "oicq": "^2.3.1"
+  }
 }
