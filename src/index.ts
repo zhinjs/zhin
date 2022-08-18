@@ -3,11 +3,11 @@ import {join,resolve} from 'path'
 import * as fs from 'fs'
 import * as Yaml from 'js-yaml'
 import {Bot} from "@/bot";
-export function createWorker(config:Bot.Config|string='zhing.yaml'){
-    if(typeof config!=='string') fs.writeFileSync(join(process.cwd(),'zhing.yaml'),Yaml.dump(config))
+export function createWorker(config:Bot.Options|string='zhin.yaml'){
+    if(typeof config!=='string') fs.writeFileSync(join(process.cwd(),'zhin.yaml'),Yaml.dump(config))
     return fork(join(__dirname,'worker'),[],{
         env:{
-            configPath:resolve(process.cwd(),typeof config==='string'?config:'zhing.yaml')
+            configPath:resolve(process.cwd(),typeof config==='string'?config:'zhin.yaml')
         },
         execArgv:[
             '-r', 'esbuild-register',

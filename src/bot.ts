@@ -11,34 +11,43 @@ import {DiscussMessageEvent, EventMap, GroupMessageEvent, PrivateMessageEvent} f
 import {deepClone, deepMerge, wrapExport} from "@/utils";
 import {Awaitable} from "@/types";
 
-export function createBot(config:Partial<Bot.Config>|string){
-    if(typeof config==='string'){
-        if(!fs.existsSync(config)) fs.writeFileSync(config,Yaml.dump(Bot.defaultConfig))
-        config=Yaml.load(fs.readFileSync(config,{encoding:'utf8'}))
+export function createBot(options:Partial<Bot.Options>|string){
+    if(typeof options==='string'){
+        if(!fs.existsSync(options)) fs.writeFileSync(options,Yaml.dump(Bot.defaultConfig))
+        options=Yaml.load(fs.readFileSync(options,{encoding:'utf8'}))
     }
-    return new Bot(deepMerge(deepClone(Bot.defaultConfig),config))
+    return new Bot(deepMerge(deepClone(Bot.defaultConfig),options))
 }
-export function defineConfig(config:Bot.Config){
-    return config
+export function defineConfig(options:Bot.Options){
+    return options
 }
 export class Bot extends EventDeliver{
     plugins:Map<string,Bot.Plugin>=new Map<string, Bot.Plugin>()
     middlewares:Bot.Middleware[]=[]
     commands:Map<string,Command>=new Map<string, Command>()
-    private client:Client
+    private readonly client:Client
     public logger:Logger
-    constructor(public config:Bot.Config) {
+    constructor(public options:Bot.Options) {
         super();
-        this.logger=getLogger('zhing')
-        this.logger.level=config.log_level||'info'
-        if(!config.uin) throw new Error('need client account')
-        this.client=new Client(config.uin,config)
+        this.logger=getLogger('zhin')
+        this.logger.level=options.log_level||'info'
+        if(!options.uin) throw new Error('need client account')
+        this.client=new Client(options.uin,options)
         const oldEmit=this.client.emit
         const _this=this
         this.client.emit=function (event:string|symbol,...args:any[]){
             _this.emit(event,...args)
             return oldEmit.apply(this,[event,...args])
         }
+        return new Proxy(this,{
+            get(target: typeof _this, p: string | symbol, receiver: any): any {
+                let result=Reflect.get(target,p,receiver)
+                if(result) return result
+                result = Reflect.get(target.client,p,receiver)
+                if(typeof result==='function') result.bind(target.client)
+                return result
+            }
+        })
     }
     middleware(middleware:Bot.Middleware){
         this.middlewares.push(middleware)
@@ -159,11 +168,11 @@ export class Bot extends EventDeliver{
             return modulePath
         }
         let resolved
-        const orgModule = `@zhing/plugin-${name}`
-        const comModule = `zhing-plugin-${name}`
+        const orgModule = `@zhin/plugin-${name}`
+        const comModule = `zhin-plugin-${name}`
         const builtModule = path.join(__dirname, `plugins`, name)
         let customModule
-        if (this.config.plugin_dir) customModule = path.resolve(this.config.plugin_dir, name)
+        if (this.options.plugin_dir) customModule = path.resolve(this.options.plugin_dir, name)
         if (customModule) {
             try {
                 require.resolve(customModule)
@@ -225,9 +234,9 @@ export class Bot extends EventDeliver{
         }
     }
     start(){
-        for(const pluginName of Object.keys(this.config.plugins)){
+        for(const pluginName of Object.keys(this.options.plugins)){
             const plugin=this.load(pluginName)
-            this.use(plugin,this.config.plugins[pluginName])
+            this.use(plugin,this.options.plugins[pluginName])
         }
         this.middleware(async (message)=>{
             const result=await this.executeCommand(message)
@@ -237,7 +246,7 @@ export class Bot extends EventDeliver{
             const middleware=this.compose(this.middlewares)
             middleware(event)
         })
-        this.client.login(this.config.password)
+        this.client.login(this.options.password)
     }
     listen(port:number){
         const server:Server=new Server()
@@ -248,24 +257,33 @@ export class Bot extends EventDeliver{
         return server
     }
 }
-export interface Bot extends EventDeliver{
-    on<T extends keyof EventMap>(event: T, listener: EventMap<this>[T]);
-    on<S extends string | symbol>(event: S & Exclude<S, keyof EventMap>, listener: (this: this, ...args: any[]) => void);
-    once<T extends keyof EventMap>(event: T, listener: EventMap<this>[T]);
-    once<S extends string | symbol>(event: S & Exclude<S, keyof EventMap>, listener: (this: this, ...args: any[]) => void);
-    prependListener<T extends keyof EventMap>(event: T, listener: EventMap<this>[T]);
-    prependListener(event: string | symbol, listener: (this: this, ...args: any[]) => void);
+export interface Bot extends EventDeliver,Omit<Client, keyof EventDeliver>{
+    on<T extends keyof EventMap>(event: T, listener: EventMap<this>[T]):EventDeliver.Dispose;
+    on<S extends string | symbol>(event: S & Exclude<S, keyof EventMap>, listener: (this: this, ...args: any[]) => void):EventDeliver.Dispose;
+    once<T extends keyof EventMap>(event: T, listener: EventMap<this>[T]):EventDeliver.Dispose;
+    once<S extends string | symbol>(event: S & Exclude<S, keyof EventMap>, listener: (this: this, ...args: any[]) => void):EventDeliver.Dispose;
+    prependListener<T extends keyof EventMap>(event: T, listener: EventMap<this>[T]):EventDeliver.Dispose;
+    prependListener(event: string | symbol, listener: (this: this, ...args: any[]) => void):EventDeliver.Dispose;
+    emit<T extends keyof EventMap>(event: T, ...args:Parameters<EventMap<this>[T]>):void;
+    emit<S extends string | symbol>(event: S & Exclude<S, keyof EventMap>, ...args:any[]):void;
+    emitSync<T extends keyof EventMap>(event: T, ...args:Parameters<EventMap<this>[T]>):Promise<void>;
+    emitSync<S extends string | symbol>(event: S & Exclude<S, keyof EventMap>, ...args:any[]):Promise<void>;
+    bailSync<T extends keyof EventMap>(event: T, ...args:Parameters<EventMap<this>[T]>):Promise<any>;
+    bailSync<S extends string | symbol>(event: S & Exclude<S, keyof EventMap>, ...args:any[]):Promise<any>;
+    bail<T extends keyof EventMap>(event: T, ...args:Parameters<EventMap<this>[T]>):any;
+    bail<S extends string | symbol>(event: S & Exclude<S, keyof EventMap>, ...args:any[]):any;
     off<T extends keyof EventMap>(event: T, listener: EventMap<this>[T]);
     off<S extends string | symbol>(event: S & Exclude<S, keyof EventMap>, listener: (this: this, ...args: any[]) => void);
 }
 export namespace Bot{
-    export const defaultConfig:Partial<Config>={
-        uin:Number(process.env.ACCOUNT),
-        password:process.env.PASSWORD,
+    export const defaultConfig:Partial<Options>={
+        uin:1472558369,
+        password: 'zhin.icu',
         plugins:{},
-        plugin_dir:path.join(process.cwd(),'plugins')
+        plugin_dir:path.join(process.cwd(),'plugins'),
+        data_dir:path.join(process.cwd(),'data')
     }
-    export interface Config extends ClientConfig{
+    export interface Options extends ClientConfig{
         uin:number
         password?:string
         plugins?:Record<string, any>

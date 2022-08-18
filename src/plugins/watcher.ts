@@ -1,5 +1,6 @@
 import {FSWatcher, watch} from 'chokidar'
 import {Bot} from "@/bot";
+import * as fs from 'fs';
 import * as Yaml from 'js-yaml'
 import * as path from "path";
 import {Dict} from "@/types";
@@ -63,7 +64,7 @@ export function install(this:Bot.Plugin,bot:Bot,root:string){
     watcher.on('change', (filename) => {
         const changeFileName=path.resolve(process.cwd(),filename)
         if(path.resolve(process.env.configPath)===changeFileName){
-            checkChange(bot.config,Yaml.load(process.env.configPath))
+            checkChange(bot.config,Yaml.load(fs.readFileSync(process.env.configPath,"utf8")))
         }else{
             const plugin=[...bot.plugins.values()].find(p=>p['fullPath']===filename)
             if(plugin){

@@ -43,4 +43,4 @@ module.exports={
 3. 在配置文件中声明使用的插件
 - 配置文件中的plugins项中添加`hello`，下次启动项目时，会自动加载刚刚定义的插件
 ## 了解更多
-- 至此，你应该能使项目正常跑起来了，但更多的API使用方法，需要你访问 [本仓库](https://github.com/liucl-cn/zhing) 查看源代码了解更多
+- 至此，你应该能使项目正常跑起来了，但更多的API使用方法，需要你访问 [本仓库](https://github.com/liucl-cn/zhin) 查看源代码了解更多
