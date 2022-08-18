@@ -4,6 +4,7 @@ import {Logger,getLogger} from "log4js";
 import * as Yaml from 'js-yaml'
 import * as path from 'path'
 import * as fs from 'fs'
+import 'oicq2-cq-enable'
 import {Client, Config as ClientConfig, Sendable} from "oicq";
 import {Command} from "@/command";
 import {Argv} from "@/argv";
@@ -217,20 +218,19 @@ export class Bot extends EventDeliver{
                 || cmd.shortcuts.some(({name}) => typeof name === 'string' ? name === argv.name : name.test(argv.cqCode))
         })
     }
-    async executeCommand(message:Bot.MessageEvent):Promise<Sendable|string|boolean|void>{
-        const argv=Argv.parse(message.toCqcode())
+    async executeCommand(message:Bot.MessageEvent):Promise<Sendable|boolean|void>{
+        const argv=Argv.parse(message.cqCode)
         argv.client=this.client
         argv.event=message
         const command=this.findCommand(argv)
         if(command){
-            let result
+            let result:Sendable|void|boolean
             if (result) return result
             try{
-                result = await command.execute(argv)
+                return await command.execute(argv)
             }catch (e){
                 this.logger.warn(e.message)
             }
-            if (result) return result
         }
     }
     start(){

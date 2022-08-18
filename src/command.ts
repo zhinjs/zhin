@@ -1,6 +1,7 @@
 import {Argv} from "@/argv";
 import {DiscussMessageEvent, GroupMessageEvent, PrivateMessageEvent} from "oicq/lib/events";
 import {Awaitable, Define} from "@/types";
+import {Sendable} from "oicq";
 
 export class Command<A extends any[] = any[], O extends {} = {}>{
     public name:string
@@ -179,7 +180,7 @@ export class Command<A extends any[] = any[], O extends {} = {}>{
         return {args,options}
     }
     // 执行指令
-    async execute(argv:Argv<A, O>):Promise<string|boolean|void>{
+    async execute(argv:Argv<A, O>):Promise<Sendable|boolean|void>{
         // 匹配参数、选项
         this.parseShortcut(argv)
         if(argv.error){
@@ -220,7 +221,7 @@ export namespace Command{
         declaration?:Argv.Declaration
     }
     export type Callback< A extends any[] = any[], O extends {} = {},>
-        = (this:Command<A,O>,argv:Argv<A,O>, ...args: A) => Awaitable<string|boolean|void>
+        = (this:Command<A,O>,argv:Argv<A,O>, ...args: A) => Awaitable<Sendable|boolean|void>
 
 
     export type OptionType<S extends string> = Argv.ExtractFirst<Argv.Replace<S, '>', ']'>, any>

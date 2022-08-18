@@ -1,6 +1,6 @@
 {
   "name": "zhin",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "description": "知音",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -42,10 +42,11 @@
     "chokidar": "^3.5.3",
     "esbuild": "^0.15.5",
     "esbuild-register": "^3.3.3",
-    "event-deliver": "^1.0.1",
+    "event-deliver": "latest",
     "js-yaml": "^4.1.0",
     "log4js": "^6.6.1",
-    "oicq": "^2.3.1",
+    "oicq": "latest",
+    "oicq2-cq-enable": "latest",
     "tsconfig-paths": "^4.0.0"
   }
 }
