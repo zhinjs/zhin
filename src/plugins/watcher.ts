@@ -66,6 +66,7 @@ export function install(this:Bot.Plugin,bot:Bot,root:string){
         if(path.resolve(process.env.configPath)===changeFileName){
             const newOptions:Bot.Options=Yaml.load(fs.readFileSync(process.env.configPath,"utf8")) as any
             checkChange(bot.options.plugins,newOptions.plugins)
+            bot.options=newOptions
         }else{
             const plugin=[...bot.plugins.values()].find(p=>p['fullPath']===filename)
             if(plugin){
