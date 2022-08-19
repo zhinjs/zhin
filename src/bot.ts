@@ -243,6 +243,7 @@ export class Bot extends EventDeliver{
         for(const pluginName of Object.keys(this.options.plugins)){
             const plugin=this.load(pluginName)
             this.use(plugin,this.options.plugins[pluginName])
+            this.logger.info('已载入:'+pluginName)
         }
         this.middleware(async (message)=>{
             const result=await this.executeCommand(message)
