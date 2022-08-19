@@ -48,6 +48,13 @@ export function install(this:Bot.Plugin,bot:Bot,root:string){
         try {
             item.dispose()
             delete require.cache[fullPath]
+            if(fullPath!==item['fullPath']){
+                delete require.cache[item['fullPath']]
+                delete require.cache[item['fullPath']+'/index.js']
+                delete require.cache[item['fullPath']+'/index.ts']
+                delete require.cache[item['fullPath']+'/index.cjs']
+                delete require.cache[item['fullPath']+'/index.mjs']
+            }
             require(fullPath)
             const plugin=bot.load(item.name)
             bot.use(plugin)
