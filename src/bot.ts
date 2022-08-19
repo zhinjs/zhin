@@ -70,7 +70,7 @@ export class Bot extends EventDeliver{
         }
         const proxy=new Proxy(this,{
             get(target: typeof _this, p: PropertyKey, receiver: any): any {
-                const proxyEvents=['on','once','addListener','addOnceListener','before','after','command']
+                const proxyEvents=['addListener','command']
                 const result=Reflect.get(target,p,receiver)
                 if(typeof result!=='function' || typeof p !=='string' || !proxyEvents.includes(p)) return result
                 return new Proxy(result,{
