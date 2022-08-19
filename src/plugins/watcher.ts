@@ -68,7 +68,7 @@ export function install(this:Bot.Plugin,bot:Bot,root:string){
             checkChange(bot.options.plugins,newOptions.plugins)
             bot.options=newOptions
         }else{
-            const plugin=[...bot.plugins.values()].find(p=>p['fullPath']===filename)
+            const plugin=[...bot.plugins.values()].find(p=>filename.includes(p['fullPath']))
             if(plugin){
                 reloadDependency(plugin,changeFileName)
             }

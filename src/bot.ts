@@ -70,15 +70,16 @@ export class Bot extends EventDeliver{
         }
         const proxy=new Proxy(this,{
             get(target: typeof _this, p: PropertyKey, receiver: any): any {
-                const proxyEvents=['on','once','addListener','addOnceListener','plugin','command']
+                const proxyEvents=['on','once','addListener','addOnceListener','before','after','command']
                 const result=Reflect.get(target,p,receiver)
                 if(typeof result!=='function' || typeof p !=='string' || !proxyEvents.includes(p)) return result
                 return new Proxy(result,{
                     apply(target: typeof _this, thisArg: any, argArray?: any): any {
-                        let res=result.apply(thisArg,argArray) as Bot.Dispose
+                        let res=result.apply(thisArg,argArray)
                         if(res instanceof Command){
                             plugin.disposes.push(()=>{
                                 _this.commands.delete(res.name)
+                                _this.emit('command-remove',res)
                                 return true
                             })
                         }else{
@@ -92,6 +93,7 @@ export class Bot extends EventDeliver{
         const callback=(plugin['install']||plugin) as Bot.FunctionPlugin<T>
         callback.apply(plugin,[proxy,options])
         this.plugins.set(name,plugin)
+        this.emit('plugin-add',plugin)
         return plugin
     }
     command<D extends string>(def: D,triggerEvent:Command.TriggerEvent): Command<Argv.ArgumentType<D>>{
@@ -115,6 +117,7 @@ export class Bot extends EventDeliver{
             parent.children.push(command)
         }
         this.commands.set(name,command)
+        this.emit('command-add',command)
         return command as any
     }
     use<T>(plugin:Bot.Plugin<T>,options?:T):this{
@@ -127,12 +130,14 @@ export class Bot extends EventDeliver{
                 this.dispose(plugin)
             })
             this.plugins.clear()
-            return
+            this.emit('dispose');
+            return process.exit()
         }
         if(typeof plugin==='string'){
             const plug=this.plugins.get(plugin)
             this.dispose(plug)
             this.plugins.delete(plugin)
+            this.emit('plugin-remove',plug)
             return
         }
         plugin.dispose()
@@ -225,6 +230,7 @@ export class Bot extends EventDeliver{
         const command=this.findCommand(argv)
         if(command){
             let result:Sendable|void|boolean
+            result= await this.bailSync('before-command',argv)
             if (result) return result
             try{
                 return await command.execute(argv)
@@ -247,6 +253,7 @@ export class Bot extends EventDeliver{
             middleware(event)
         })
         this.client.login(this.options.password)
+        this.emit('ready')
     }
     listen(port:number){
         const server:Server=new Server()
@@ -258,22 +265,26 @@ export class Bot extends EventDeliver{
     }
 }
 export interface Bot extends EventDeliver,Omit<Client, keyof EventDeliver>{
-    on<T extends keyof EventMap>(event: T, listener: EventMap<this>[T]):EventDeliver.Dispose;
-    on<S extends string | symbol>(event: S & Exclude<S, keyof EventMap>, listener: (this: this, ...args: any[]) => void):EventDeliver.Dispose;
-    once<T extends keyof EventMap>(event: T, listener: EventMap<this>[T]):EventDeliver.Dispose;
-    once<S extends string | symbol>(event: S & Exclude<S, keyof EventMap>, listener: (this: this, ...args: any[]) => void):EventDeliver.Dispose;
-    prependListener<T extends keyof EventMap>(event: T, listener: EventMap<this>[T]):EventDeliver.Dispose;
-    prependListener(event: string | symbol, listener: (this: this, ...args: any[]) => void):EventDeliver.Dispose;
-    emit<T extends keyof EventMap>(event: T, ...args:Parameters<EventMap<this>[T]>):void;
-    emit<S extends string | symbol>(event: S & Exclude<S, keyof EventMap>, ...args:any[]):void;
-    emitSync<T extends keyof EventMap>(event: T, ...args:Parameters<EventMap<this>[T]>):Promise<void>;
-    emitSync<S extends string | symbol>(event: S & Exclude<S, keyof EventMap>, ...args:any[]):Promise<void>;
-    bailSync<T extends keyof EventMap>(event: T, ...args:Parameters<EventMap<this>[T]>):Promise<any>;
-    bailSync<S extends string | symbol>(event: S & Exclude<S, keyof EventMap>, ...args:any[]):Promise<any>;
-    bail<T extends keyof EventMap>(event: T, ...args:Parameters<EventMap<this>[T]>):any;
-    bail<S extends string | symbol>(event: S & Exclude<S, keyof EventMap>, ...args:any[]):any;
-    off<T extends keyof EventMap>(event: T, listener: EventMap<this>[T]);
-    off<S extends string | symbol>(event: S & Exclude<S, keyof EventMap>, listener: (this: this, ...args: any[]) => void);
+    on<T extends keyof Bot.AllEventMap<this>>(event: T, listener: Bot.AllEventMap<this>[T]):EventDeliver.Dispose;
+    on<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, listener: (this: this, ...args: any[]) => void):EventDeliver.Dispose;
+    before<T extends keyof Bot.BotEventMap<this>>(event: T, listener: Bot.BotEventMap<this>[T]):EventDeliver.Dispose;
+    before<S extends string>(event: S & Exclude<S, keyof Bot.BotEventMap<this>>, listener: (this: this, ...args: any[]) => void):EventDeliver.Dispose;
+    after<T extends keyof Bot.BotEventMap<this>>(event: T, listener: Bot.BotEventMap<this>[T]):EventDeliver.Dispose;
+    after<S extends string>(event: S & Exclude<S, keyof Bot.BotEventMap<this>>, listener: (this: this, ...args: any[]) => void):EventDeliver.Dispose;
+    once<T extends keyof Bot.AllEventMap<this>>(event: T, listener: Bot.AllEventMap<this>[T]):EventDeliver.Dispose;
+    once<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, listener: (this: this, ...args: any[]) => void):EventDeliver.Dispose;
+    prependListener<T extends keyof Bot.AllEventMap<this>>(event: T, listener: Bot.AllEventMap<this>[T]):EventDeliver.Dispose;
+    prependListener<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, listener: (this: this, ...args: any[]) => void):EventDeliver.Dispose;
+    emit<T extends keyof Bot.AllEventMap<this>>(event: T, ...args:Parameters<Bot.AllEventMap<this>[T]>):void;
+    emit<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, ...args:any[]):void;
+    emitSync<T extends keyof Bot.AllEventMap<this>>(event: T, ...args:Parameters<Bot.AllEventMap<this>[T]>):Promise<void>;
+    emitSync<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, ...args:any[]):Promise<void>;
+    bailSync<T extends keyof Bot.AllEventMap<this>>(event: T, ...args:Parameters<Bot.AllEventMap<this>[T]>):Promise<any>;
+    bailSync<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, ...args:any[]):Promise<any>;
+    bail<T extends keyof Bot.AllEventMap<this>>(event: T, ...args:Parameters<Bot.AllEventMap<this>[T]>):any;
+    bail<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, ...args:any[]):any;
+    off<T extends keyof Bot.AllEventMap<this>>(event: T, listener: Bot.AllEventMap<this>[T]);
+    off<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, listener: (this: this, ...args: any[]) => void);
 }
 export namespace Bot{
     export const defaultConfig:Partial<Options>={
@@ -283,6 +294,28 @@ export namespace Bot{
         plugin_dir:path.join(process.cwd(),'plugins'),
         data_dir:path.join(process.cwd(),'data')
     }
+    export type Before<M>={
+        // @ts-ignore
+        [P in keyof M as `before-${P}`]:M[P]
+    }
+    export type After<M>={
+        // @ts-ignore
+        [P in keyof M as `after-${P}`]:M[P]
+    }
+    export interface LifeCycle{
+        'ready'():void
+        'dispose'():void
+        'command-add'(command:Command):void
+        'command-remove'(command:Command):void
+        'plugin-add'(plugin:Plugin):void
+        'plugin-remove'(plugin:Plugin):void
+    }
+    export interface beforeEventMap<T> extends Before<EventMap<T>>,Before<LifeCycle>{
+    }
+    export interface AfterEventMap<T> extends After<EventMap<T>>,After<LifeCycle>{}
+    export interface BotEventMap<T> extends EventMap<T>,LifeCycle{
+    }
+    export interface AllEventMap<T> extends BotEventMap<T>,AfterEventMap<T>,BotEventMap<T>{}
     export interface Options extends ClientConfig{
         uin:number
         password?:string
