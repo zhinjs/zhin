@@ -1,5 +1,7 @@
 import EventDeliver from "event-deliver";
 import {Server} from "http";
+import {join,resolve} from 'path'
+import {fork,ChildProcess} from "child_process";
 import {Logger,getLogger} from "log4js";
 import * as Yaml from 'js-yaml'
 import * as path from 'path'
@@ -11,6 +13,54 @@ import {Argv} from "@/argv";
 import {DiscussMessageEvent, EventMap, GroupMessageEvent, PrivateMessageEvent} from "oicq/lib/events";
 import {deepClone, deepMerge, wrapExport} from "@/utils";
 import {Awaitable} from "@/types";
+interface Message {
+    type: 'start' | 'queue'
+    body: any
+}
+export type TargetType = 'group' | 'private' | 'discuss'
+export type ChannelId = `${TargetType}:${number}`
+let cp:ChildProcess
+
+let buffer = null
+export function createWorker(options:Bot.Options|string='zhin.yaml'){
+    if(typeof options!=='string') fs.writeFileSync(join(process.cwd(),'zhin.yaml'),Yaml.dump(options))
+    cp=fork(join(__dirname,'worker'),[],{
+        env:{
+            configPath:resolve(process.cwd(),typeof options==='string'?options:'zhin.yaml')
+        },
+        execArgv:[
+            '-r', 'esbuild-register',
+            '-r', 'tsconfig-paths/register'
+        ]
+    })
+    let config: { autoRestart: boolean }
+    cp.on('message', (message: Message) => {
+        if (message.type === 'start') {
+            config = message.body
+            if (buffer) {
+                cp.send({type: 'send', body: buffer})
+                buffer = null
+            }
+        } else if (message.type === 'queue') {
+            buffer = message.body
+        }
+    })
+    const closingCode = [0, 130, 137]
+    cp.on('exit', (code) => {
+        if (!config || closingCode.includes(code) || code !== 51 && !config.autoRestart) {
+            process.exit(code)
+        }
+        createWorker(options)
+    })
+    return cp
+}
+process.on('SIGINT', () => {
+    if (cp) {
+        cp.emit('SIGINT')
+    } else {
+        process.exit()
+    }
+})
 
 export function createBot(options:Partial<Bot.Options>|string){
     if(typeof options==='string'){
@@ -26,6 +76,8 @@ export class Bot extends EventDeliver{
     plugins:Map<string,Bot.Plugin>=new Map<string, Bot.Plugin>()
     middlewares:Bot.Middleware[]=[]
     commands:Map<string,Command>=new Map<string, Command>()
+    master:number
+    admins:number[]
     private readonly client:Client
     public logger:Logger
     constructor(public options:Bot.Options) {
@@ -34,6 +86,8 @@ export class Bot extends EventDeliver{
         this.logger.level=options.log_level||'info'
         if(!options.uin) throw new Error('need client account')
         this.client=new Client(options.uin,options)
+        this.master=options.master
+        this.admins=[].concat(options.admins).filter(Boolean)
         const oldEmit=this.client.emit
         const _this=this
         this.client.emit=function (event:string|symbol,...args:any[]){
@@ -50,12 +104,31 @@ export class Bot extends EventDeliver{
             }
         })
     }
+    isMaster(user_id:number){
+        return this.master===user_id
+    }
+    isAdmin(user_id:number){
+        return this.admins.includes(user_id)
+    }
     middleware(middleware:Bot.Middleware):Bot.Dispose{
         this.middlewares.push(middleware)
         return ()=>EventDeliver.remove(this.middlewares,middleware)
     }
     get commandList(){
         return [...this.commands.values()].flat()
+    }
+    sendMsg(channelId:ChannelId,message:Sendable){
+        const [targetType,targetId] = channelId.split(':') as [TargetType,`${number}`]
+        switch (targetType){
+            case "discuss":
+                return this.sendDiscussMsg(Number(targetId),message)
+            case "group":
+                return this.sendGroupMsg(Number(targetId),message)
+            case "private":
+                return this.sendPrivateMsg(Number(targetId),message)
+            default:
+                throw new Error('无法识别的channelId:'+channelId)
+        }
     }
     plugin<T>(name:string,plugin:Bot.Plugin<T>,options:T){
         const _this=this
@@ -323,6 +396,8 @@ export namespace Bot{
     export interface Options extends ClientConfig{
         uin:number
         password?:string
+        master?:number
+        admins?:number|number[]
         delay:Record<string, number>
         plugins?:Record<string, any>
         plugin_dir?:string

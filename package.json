@@ -1,6 +1,6 @@
 {
   "name": "zhin",
-  "version": "1.0.21",
+  "version": "1.0.24",
   "description": "知音",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
