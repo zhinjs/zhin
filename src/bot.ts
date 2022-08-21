@@ -50,9 +50,9 @@ export class Bot extends EventDeliver{
             }
         })
     }
-    middleware(middleware:Bot.Middleware){
+    middleware(middleware:Bot.Middleware):Bot.Dispose{
         this.middlewares.push(middleware)
-        return this
+        return ()=>EventDeliver.remove(this.middlewares,middleware)
     }
     get commandList(){
         return [...this.commands.values()].flat()
@@ -292,16 +292,22 @@ export namespace Bot{
         uin:1472558369,
         password: 'zhin.icu',
         plugins:{},
+        delay:{},
         plugin_dir:path.join(process.cwd(),'plugins'),
         data_dir:path.join(process.cwd(),'data')
     }
-    export type Before<M>={
-        // @ts-ignore
-        [P in keyof M as `before-${P}`]:M[P]
+    type BeforeEventMap<T>={
+        [P in keyof EventMap<T> as `before-${P}`]:EventMap<T>[P]
+    } & BeforeLifeCycle
+
+    type AfterEventMap<T>={
+        [P in keyof EventMap<T> as `after-${P}`]:EventMap<T>[P]
+    } & AfterLifeCycle
+    type BeforeLifeCycle={
+        [P in keyof LifeCycle as `before-${P}`]:LifeCycle[P]
     }
-    export type After<M>={
-        // @ts-ignore
-        [P in keyof M as `after-${P}`]:M[P]
+    type AfterLifeCycle={
+        [P in keyof LifeCycle as `after-${P}`]:LifeCycle[P]
     }
     export interface LifeCycle{
         'ready'():void
@@ -311,15 +317,13 @@ export namespace Bot{
         'plugin-add'(plugin:Plugin):void
         'plugin-remove'(plugin:Plugin):void
     }
-    export interface beforeEventMap<T> extends Before<EventMap<T>>,Before<LifeCycle>{
-    }
-    export interface AfterEventMap<T> extends After<EventMap<T>>,After<LifeCycle>{}
     export interface BotEventMap<T> extends EventMap<T>,LifeCycle{
     }
-    export interface AllEventMap<T> extends BotEventMap<T>,AfterEventMap<T>,BotEventMap<T>{}
+    export interface AllEventMap<T> extends BeforeEventMap<T>,AfterEventMap<T>,BotEventMap<T>{}
     export interface Options extends ClientConfig{
         uin:number
         password?:string
+        delay:Record<string, number>
         plugins?:Record<string, any>
         plugin_dir?:string
     }

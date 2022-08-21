@@ -1,6 +1,6 @@
 {
   "name": "zhin",
-  "version": "1.0.17",
+  "version": "1.0.21",
   "description": "知音",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -46,7 +46,7 @@
     "js-yaml": "^4.1.0",
     "log4js": "^6.6.1",
     "oicq": "latest",
-    "oicq2-cq-enable": "latest",
+    "oicq2-cq-enable": "^1.0.6",
     "tsconfig-paths": "^4.0.0"
   }
 }
