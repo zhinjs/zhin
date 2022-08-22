@@ -143,7 +143,7 @@ export class Bot extends EventDeliver{
         }
         const proxy=new Proxy(this,{
             get(target: typeof _this, p: PropertyKey, receiver: any): any {
-                const proxyEvents=['addListener','command']
+                const proxyEvents=['addListener','command','middleware']
                 const result=Reflect.get(target,p,receiver)
                 if(typeof result!=='function' || typeof p !=='string' || !proxyEvents.includes(p)) return result
                 return new Proxy(result,{
@@ -319,9 +319,10 @@ export class Bot extends EventDeliver{
             this.use(plugin,this.options.plugins[pluginName])
             this.logger.info('已载入:'+pluginName)
         }
-        this.middleware(async (message)=>{
+        this.middleware(async (message,next)=>{
             const result=await this.executeCommand(message)
             if(result && typeof result!=='boolean') await message.reply(result)
+            else next()
         })
         this.on('message',(event)=>{
             const middleware=this.compose(this.middlewares)
@@ -329,14 +330,6 @@ export class Bot extends EventDeliver{
         })
         this.client.login(this.options.password)
         this.emit('ready')
-    }
-    listen(port:number){
-        const server:Server=new Server()
-        this.start()
-        server.listen(port,()=>{
-            this.logger.info('server listening at http://localhost:'+port)
-        })
-        return server
     }
 }
 export interface Bot extends EventDeliver,Omit<Client, keyof EventDeliver>{
