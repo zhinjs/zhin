@@ -1,6 +1,6 @@
 {
   "name": "zhin",
-  "version": "1.0.24",
+  "version": "1.0.36",
   "description": "知音",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -28,6 +28,7 @@
   "homepage": "https://github.com/liucl-cn/zhin#readme",
   "devDependencies": {
     "@types/js-yaml": "^4.0.5",
+    "@types/lodash": "^4.14.184",
     "@types/node": "latest",
     "ts-node-dev": "latest",
     "tsc-alias": "latest",

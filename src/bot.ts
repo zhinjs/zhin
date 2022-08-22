@@ -185,6 +185,7 @@ export class Bot extends EventDeliver{
         }
         const name=nameArr.pop()
         const command = new Command(name+decl,triggerEvent)
+        command.bot=this
         if(parent){
             command.parent=parent
             parent.children.push(command)

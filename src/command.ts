@@ -2,10 +2,19 @@ import {Argv} from "@/argv";
 import {DiscussMessageEvent, GroupMessageEvent, PrivateMessageEvent} from "oicq/lib/events";
 import {Awaitable, Define} from "@/types";
 import {Sendable} from "oicq";
-
+import {isEmpty, keys} from "lodash";
+import {Bot} from "@/bot";
+interface HelpOptions{
+    showHidden?:boolean
+    showAuth?:boolean
+    dep?:number
+    current?:number
+    simple?:boolean
+}
 export class Command<A extends any[] = any[], O extends {} = {}>{
     public name:string
     args:Argv.Declaration[]
+    bot:Bot
     parent:Command=null
     children:Command[]=[]
     public authority:number=1
@@ -39,6 +48,13 @@ export class Command<A extends any[] = any[], O extends {} = {}>{
     example(example:string){
         this.examples.push(example)
         return this
+    }
+    // 定义子指令
+    subcommand<D extends string>(def: D,triggerEvent:Command.TriggerEvent): Command<Argv.ArgumentType<D>> {
+        const command=this.bot.command(def,triggerEvent)
+        command.parent=this
+        this.children.push(command)
+        return command
     }
     match(message:PrivateMessageEvent | GroupMessageEvent | DiscussMessageEvent){
         return this.triggerEvent==='all'
@@ -199,6 +215,39 @@ export class Command<A extends any[] = any[], O extends {} = {}>{
             result=await callback.call(this,argv,...argv.args)
             if(result)return result
         }
+    }
+    //显示帮助信息
+    help({simple,showAuth,showHidden,dep=1,current=0}:HelpOptions={}){
+
+        const output:string[]=[`${this.name} ${this.descriptions.join(';')}`]
+        if(!simple){
+            if(showAuth) output.push(`authority:${this.authority}`)
+            if(this.aliasNames.length)output.push(` alias:${this.aliasNames.join(',')}`)
+            if(this.shortcuts.length)output.push(` shortcuts:${this.shortcuts.map(shortcut=>String(shortcut.name))}`)
+            if(!isEmpty(this.options)){
+                const options=keys(this.options)
+                    .filter(name=>!name.startsWith('-'))
+                    .filter(name=>showHidden?true:!this.options[name].hidden)
+                if(options.length){
+                    output.push(' options:')
+                    options.forEach(key=>{
+                        const nameDesc:string[]=[]
+                        const option=this.options[key]
+                        nameDesc.push(option.declaration?.required?'<':'[')
+                        nameDesc.push(option.declaration?.variadic?'...':'')
+                        nameDesc.push(key+':')
+                        nameDesc.push(String(option.declaration.type))
+                        nameDesc.push(option.declaration?.required?'>':']')
+                        output.push(`  ${option.shortName} ${nameDesc.join('')} ${option.description}`)
+                    })
+                }
+            }
+        }
+        if(this.children.length && dep!==current){
+            output.push(' children:')
+            return output.concat(...this.children.map(children=>children.help({simple,showAuth,showHidden,current:current+1,dep}).map(str=>`${new Array((current+1)*2).fill(' ').join('')}${str}`)).flat())
+        }
+        return output
     }
 }
 export namespace Command{
