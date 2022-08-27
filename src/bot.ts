@@ -12,7 +12,8 @@ import {Command} from "@/command";
 import {Argv} from "@/argv";
 import {DiscussMessageEvent, EventMap, GroupMessageEvent, PrivateMessageEvent} from "oicq/lib/events";
 import {deepClone, deepMerge, wrapExport} from "@/utils";
-import {Awaitable} from "@/types";
+import {Awaitable, Dict} from "@/types";
+import {Prompt} from "@/prompt";
 interface Message {
     type: 'start' | 'queue'
     body: any
@@ -111,6 +112,7 @@ export class Bot extends EventDeliver{
         return this.admins.includes(user_id)
     }
     middleware(middleware:Bot.Middleware):Bot.Dispose{
+        if(this.middlewares.indexOf(middleware)!==-1) return ()=>EventDeliver.remove(this.middlewares,middleware)
         this.middlewares.push(middleware)
         return ()=>EventDeliver.remove(this.middlewares,middleware)
     }
@@ -130,7 +132,78 @@ export class Bot extends EventDeliver{
                 throw new Error('无法识别的channelId:'+channelId)
         }
     }
-    plugin<T>(name:string,plugin:Bot.Plugin<T>,options:T){
+    public nextMessage(filter:(message:Bot.MessageEvent)=>boolean=()=>true){
+        return new Promise<Bot.MessageEvent|void>(resolve=>{
+            const dispose=this.middleware(async (message,next)=>{
+                if(filter(message)){
+                    clearTimeout(timer)
+                    dispose()
+                    resolve(message)
+                }else{
+                    await next()
+                }
+            })
+            const timer=setTimeout(()=>{
+                dispose()
+                resolve()
+            })
+        })
+    }
+    private promptReal<T extends keyof Prompt.TypeKV>(prev: any, answer: Dict, options: Prompt.Options<T>,event): Promise<Prompt.ValueType<T> | void> {
+        if (typeof options.type === 'function') options.type = options.type(prev, answer, options)
+        if (!options.type) return
+        if (['select', 'multipleSelect'].includes(options.type as keyof Prompt.TypeKV) && !options.choices) throw new Error('choices is required')
+        return new Promise<Prompt.ValueType<T> | void>(resolve => {
+            event.reply(Prompt.formatOutput(prev, answer, options))
+            const dispose = this.middleware((session) => {
+                const cb = () => {
+                    let result = Prompt.formatValue(prev, answer, options, session.cqCode)
+                    dispose()
+                    resolve(result)
+                    clearTimeout(timer)
+                }
+                if (!options.validate) {
+                    cb()
+                } else {
+                    if (typeof options.validate !== "function") {
+                        options.validate = (str: string) => (options.validate as RegExp).test(str)
+                    }
+                    try {
+                        let result = options.validate(session.cqCode)
+                        if (result && typeof result === "boolean") cb()
+                        else event.reply(options.errorMsg)
+                    } catch (e) {
+                        event.reply(e.message)
+                    }
+                }
+            })
+            const timer = setTimeout(() => {
+                dispose()
+                resolve()
+            }, options.timeout || this.options.delay.prompt)
+        })
+    }
+
+    async prompt<T extends keyof Prompt.TypeKV>(options: Prompt.Options<T> | Array<Prompt.Options<T>>,event:Bot.MessageEvent) {
+        options = [].concat(options)
+        let answer: Dict = {}
+        let prev: any = undefined
+        try {
+            if (options.length === 0) return
+            for (const option of options) {
+                if (typeof option.type === 'function') option.type = option.type(prev, answer, option)
+                if (!option.type) continue
+                if (!option.name) throw new Error('name is required')
+                prev = await this.promptReal(prev, answer, option,event)
+                answer[option.name] = prev
+            }
+        } catch (e) {
+            return event.reply(e.message)
+        }
+        return answer as Prompt.Answers<Prompt.ValueType<T>>
+    }
+    plugin<T>(plugin:string|Bot.Plugin,options?:T){
+        if(typeof plugin==='string') return this.plugins.get(plugin)
         const _this=this
         plugin.disposes=[]
         plugin.dispose=function (){
@@ -163,13 +236,13 @@ export class Bot extends EventDeliver{
                 })
             }
         })
-        const callback=(plugin['install']||plugin) as Bot.FunctionPlugin<T>
-        callback.apply(plugin,[proxy,options])
-        this.plugins.set(name,plugin)
+        const installFunction=(plugin['install']||plugin) as Bot.FunctionPlugin<T>
+        installFunction.apply(plugin,[proxy,options])
+        this.plugins.set(plugin.name,plugin)
         this.emit('plugin-add',plugin)
-        return plugin
+        return this
     }
-    command<D extends string>(def: D,triggerEvent:Command.TriggerEvent): Command<Argv.ArgumentType<D>>{
+    command<D extends string>(def: D,triggerEvent:Command.TriggerEvent='all'): Command<Argv.ArgumentType<D>>{
         const namePath = def.split(' ', 1)[0]
         const decl = def.slice(namePath.length)
         const segments = namePath.split(/(?=[/])/g)
@@ -195,37 +268,36 @@ export class Bot extends EventDeliver{
         return command as any
     }
     use<T>(plugin:Bot.Plugin<T>,options?:T):this{
-        this.plugin(plugin.name,plugin,options)
+        this.plugin(plugin,options)
         return this
+    }
+    unUse(plugin:Bot.Plugin){
+        return this.dispose(plugin)
     }
     dispose<T>(plugin?:Bot.Plugin<T>|string){
         if(!plugin) {
             this.plugins.forEach(plugin=>{
                 this.dispose(plugin)
             })
-            this.plugins.clear()
             this.emit('dispose');
-            return process.exit()
+            return this
         }
         if(typeof plugin==='string'){
-            const plug=this.plugins.get(plugin)
-            this.dispose(plug)
-            this.plugins.delete(plugin)
-            this.emit('plugin-remove',plug)
-            return
+            plugin=this.plugins.get(plugin)
         }
         plugin.dispose()
+        this.plugins.delete(plugin.name)
+        this.emit('plugin-remove',plugin)
+        return this
     }
-    private compose (middlewares:Bot.Middleware[]):Bot.ComposedMiddleware {
+    private compose (middlewares:Bot.Middleware[]=this.middlewares):Bot.ComposedMiddleware {
         if (!Array.isArray(middlewares)) throw new TypeError('Middleware stack must be an array!')
         for (const fn of middlewares) {
             if (typeof fn !== 'function') throw new TypeError('Middleware must be composed of functions!')
         }
-        return function (message:Bot.MessageEvent, next?:Bot.Next) {
-            // last called middleware #
+        return (message:Bot.MessageEvent, next?:Bot.Next)=> {
             let index = -1
-            return dispatch(0)
-            function dispatch (i) {
+            const dispatch= (i)=>{
                 if (i <= index) return Promise.reject(new Error('next() called multiple times'))
                 index = i
                 let fn = middlewares[i]
@@ -237,6 +309,7 @@ export class Bot extends EventDeliver{
                     return Promise.reject(err)
                 }
             }
+            return dispatch(0)
         }
     }
     public load(name: string) {
@@ -270,25 +343,26 @@ export class Bot extends EventDeliver{
         if (!resolved) {
             try {
                 require.resolve(orgModule)
-                resolved = path.resolve(process.cwd(),'node_modules',`@oitq/plugin-${name}`)
+                resolved = path.resolve(process.cwd(),'node_modules',`@zhin/plugin-${name}`)
             } catch {
             }
         }
         if (!resolved) {
             try {
                 require.resolve(comModule)
-                resolved = path.resolve(process.cwd(),'node_modules',`oitq-plugin-${name}`)
+                resolved = path.resolve(process.cwd(),'node_modules',`zhin-plugin-${name}`)
             } catch {
             }
         }
 
         if (!resolved) throw new Error(`未找到plugin(${name})`)
         const result=wrapExport(resolved)
-        return {
+        const plugin:Bot.Plugin={
             install:result.install||result,
             name:result.name||name,
             fullPath:getListenDir(resolved)
         }
+        return plugin
     }
     findCommand(argv: Argv) {
         return this.commandList.find(cmd => {
@@ -315,8 +389,7 @@ export class Bot extends EventDeliver{
     }
     start(){
         for(const pluginName of Object.keys(this.options.plugins)){
-            const plugin=this.load(pluginName)
-            this.use(plugin,this.options.plugins[pluginName])
+            this.use(this.load(pluginName),this.options.plugins[pluginName])
             this.logger.info('已载入:'+pluginName)
         }
         this.middleware(async (message,next)=>{
@@ -325,14 +398,20 @@ export class Bot extends EventDeliver{
             else next()
         })
         this.on('message',(event)=>{
-            const middleware=this.compose(this.middlewares)
+            const middleware=this.compose()
             middleware(event)
         })
         this.client.login(this.options.password)
         this.emit('ready')
     }
+    stop(){
+        this.dispose()
+        process.exit()
+    }
 }
 export interface Bot extends EventDeliver,Omit<Client, keyof EventDeliver>{
+    plugin(name:string):Bot.Plugin
+    plugin<T>(plugin:Bot.Plugin,options?:T):this
     on<T extends keyof Bot.AllEventMap<this>>(event: T, listener: Bot.AllEventMap<this>[T]):EventDeliver.Dispose;
     on<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, listener: (this: this, ...args: any[]) => void):EventDeliver.Dispose;
     before<T extends keyof Bot.BotEventMap<this>>(event: T, listener: Bot.BotEventMap<this>[T]):EventDeliver.Dispose;
@@ -397,21 +476,19 @@ export namespace Bot{
         plugin_dir?:string
     }
     export type Dispose=()=>boolean
-    export type FunctionPlugin<T>=((app:Bot,options:T)=>any) & {
-        dispose?:Dispose
-        disposes?:Dispose[]
-    }
-    export interface ObjectPlugin<T>{
-        install:FunctionPlugin<T>
-        name:string
-        fullPath?:string
-        dispose?:Dispose
-        disposes?:Dispose[]
-        [index:string]:any
-    }
     export type Middleware = (event: MessageEvent, next: Next) => Awaitable<Sendable|boolean|void>;
     export type ComposedMiddleware = (event: MessageEvent, next?: Next) => Awaitable<Sendable|boolean|void>
     export type Next = () => Promise<any>;
     export type MessageEvent=PrivateMessageEvent|GroupMessageEvent|DiscussMessageEvent
-    export type Plugin<T = any>= (FunctionPlugin<T> |ObjectPlugin<T>)
+    export type FunctionPlugin<T>=(bot:Bot,options:T)=>any
+    export interface ObjectPlugin<T>{
+        install:FunctionPlugin<T>
+        name:string
+    }
+    export type Plugin<T = any>= (FunctionPlugin<T> | ObjectPlugin<T>) & {
+        dispose?:Dispose
+        disposes?:Dispose[]
+        fullPath?:string
+        [key:string]:any
+    }
 }

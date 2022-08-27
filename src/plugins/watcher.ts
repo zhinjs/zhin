@@ -25,7 +25,7 @@ export function install(this:Bot.Plugin,bot:Bot,root:string){
             if (name in newConfig) {
                 const p=[...bot.plugins.values()].find(p=>p.name===name)
                 if (name in oldConfig && p) {
-                    reloadDependency(p,p['fullPath'])
+                    reloadDependency(p,p.fullPath)
                 } else {
                     loadDependency(name)
                 }
@@ -41,19 +41,19 @@ export function install(this:Bot.Plugin,bot:Bot,root:string){
     }
     function unloadDependency(name:string){
         const plugin=[...bot.plugins.values()].find(p=>p.name===name)
-        if(plugin && plugin['fullPath'])
+        if(plugin && plugin.fullPath)
         bot.logger.info(`已移除:${name}`)
     }
     function reloadDependency(item: Bot.Plugin, fullPath) {
         try {
             item.dispose()
             delete require.cache[fullPath]
-            if(fullPath!==item['fullPath']){
-                delete require.cache[item['fullPath']]
-                delete require.cache[item['fullPath']+'/index.js']
-                delete require.cache[item['fullPath']+'/index.ts']
-                delete require.cache[item['fullPath']+'/index.cjs']
-                delete require.cache[item['fullPath']+'/index.mjs']
+            if(fullPath!==item.fullPath){
+                delete require.cache[item.fullPath]
+                delete require.cache[item.fullPath+'/index.js']
+                delete require.cache[item.fullPath+'/index.ts']
+                delete require.cache[item.fullPath+'/index.cjs']
+                delete require.cache[item.fullPath+'/index.mjs']
             }
             require(fullPath)
             const plugin=bot.load(item.name)
@@ -75,7 +75,7 @@ export function install(this:Bot.Plugin,bot:Bot,root:string){
             checkChange(bot.options.plugins,newOptions.plugins)
             bot.options=newOptions
         }else{
-            const plugin=[...bot.plugins.values()].find(p=>filename.includes(p['fullPath']))
+            const plugin=[...bot.plugins.values()].find(p=>filename.includes(p.fullPath))
             if(plugin){
                 reloadDependency(plugin,changeFileName)
             }
