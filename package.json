@@ -1,12 +1,13 @@
 {
   "name": "zhin",
-  "version": "1.0.41",
+  "version": "1.1.13",
   "description": "知音",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "scripts": {
     "start": "node .",
-    "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
+    "compile": "tsc --project tsconfig.build.json && tsc-alias -p tsconfig.build.json",
+    "build": "npm run compile && dtsc --project tsconfig.dtsc.json",
     "dev": "ts-node -r tsconfig-paths/register -r esbuild-register ./src/index.ts",
     "pub": "npm publish --access public",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -28,8 +29,10 @@
   "homepage": "https://github.com/liucl-cn/zhin#readme",
   "devDependencies": {
     "@types/js-yaml": "^4.0.5",
+    "@types/koa": "^2.13.5",
     "@types/lodash": "^4.14.184",
     "@types/node": "latest",
+    "dtsc": "^2.2.3",
     "ts-node-dev": "latest",
     "tsc-alias": "latest",
     "typescript": "latest"
@@ -45,6 +48,7 @@
     "esbuild-register": "^3.3.3",
     "event-deliver": "^1.0.2",
     "js-yaml": "^4.1.0",
+    "koa": "^2.13.4",
     "log4js": "^6.6.1",
     "oicq": "latest",
     "oicq2-cq-enable": "^1.0.6",

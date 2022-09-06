@@ -1,5 +1,7 @@
 export * from './argv'
 export * from './bot'
+export * from './plugin'
+export * from './prompt'
 export * from './command'
 export * from './types'
 export * from './utils'

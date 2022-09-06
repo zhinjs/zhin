@@ -1,5 +1,4 @@
 import EventDeliver from "event-deliver";
-import {Server} from "http";
 import {join,resolve} from 'path'
 import {fork,ChildProcess} from "child_process";
 import {Logger,getLogger} from "log4js";
@@ -14,6 +13,9 @@ import {DiscussMessageEvent, EventMap, GroupMessageEvent, PrivateMessageEvent} f
 import {deepClone, deepMerge, wrapExport} from "@/utils";
 import {Awaitable, Dict} from "@/types";
 import {Prompt} from "@/prompt";
+import {Plugin} from "@/plugin";
+import Koa from "koa";
+
 interface Message {
     type: 'start' | 'queue'
     body: any
@@ -21,7 +23,9 @@ interface Message {
 export type TargetType = 'group' | 'private' | 'discuss'
 export type ChannelId = `${TargetType}:${number}`
 let cp:ChildProcess
-
+export function isConstructor<R,T>(value:any):value is (new (...args:any[])=>any){
+    return typeof value==='function' && value.prototype && value.prototype.constructor===value
+}
 let buffer = null
 export function createWorker(options:Bot.Options|string='zhin.yaml'){
     if(typeof options!=='string') fs.writeFileSync(join(process.cwd(),'zhin.yaml'),Yaml.dump(options))
@@ -74,7 +78,9 @@ export function defineConfig(options:Bot.Options){
     return options
 }
 export class Bot extends EventDeliver{
-    plugins:Map<string,Bot.Plugin>=new Map<string, Bot.Plugin>()
+    isReady:boolean=false
+    plugins:Map<string,Plugin>=new Map<string, Plugin>()
+    private services:Record<string, any>={}
     middlewares:Bot.Middleware[]=[]
     commands:Map<string,Command>=new Map<string, Command>()
     master:number
@@ -83,6 +89,7 @@ export class Bot extends EventDeliver{
     public logger:Logger
     constructor(public options:Bot.Options) {
         super();
+        this.service('koa',new Koa())
         this.logger=getLogger('zhin')
         this.logger.level=options.log_level||'info'
         if(!options.uin) throw new Error('need client account')
@@ -99,11 +106,27 @@ export class Bot extends EventDeliver{
             get(target: typeof _this, p: string | symbol, receiver: any): any {
                 let result=Reflect.get(target,p,receiver)
                 if(result) return result
+                result=Reflect.get(target.services,p,receiver)
+                if(result) return result
                 result = Reflect.get(target.client,p,receiver)
                 if(typeof result==='function') result.bind(target.client)
                 return result
             }
         })
+    }
+    service<K extends keyof Bot.Services>(key:K):Bot.Services[K]
+    service<K extends keyof Bot.Services>(key:K,service:Bot.Services[K]):this
+    service<K extends keyof Bot.Services,T>(key:K,constructor:Bot.ServiceConstructor<Bot.Services[K],T>,options?:T):this
+    service<K extends keyof Bot.Services,T>(key:K,Service?:Bot.Services[K]|Bot.ServiceConstructor<Bot.Services[K],T>,options?:T):Bot.Services[K]|this{
+        if(Service===undefined){
+            return this.services[key]
+        }
+        if(isConstructor(Service)){
+            this.services[key]=new Service(this,options)
+        }else{
+            this.services[key]=Service
+        }
+        return this
     }
     isMaster(user_id:number){
         return this.master===user_id
@@ -118,19 +141,6 @@ export class Bot extends EventDeliver{
     }
     get commandList(){
         return [...this.commands.values()].flat()
-    }
-    sendMsg(channelId:ChannelId,message:Sendable){
-        const [targetType,targetId] = channelId.split(':') as [TargetType,`${number}`]
-        switch (targetType){
-            case "discuss":
-                return this.sendDiscussMsg(Number(targetId),message)
-            case "group":
-                return this.sendGroupMsg(Number(targetId),message)
-            case "private":
-                return this.sendPrivateMsg(Number(targetId),message)
-            default:
-                throw new Error('无法识别的channelId:'+channelId)
-        }
     }
     public nextMessage(filter:(message:Bot.MessageEvent)=>boolean=()=>true){
         return new Promise<Bot.MessageEvent|void>(resolve=>{
@@ -198,22 +208,15 @@ export class Bot extends EventDeliver{
                 answer[option.name] = prev
             }
         } catch (e) {
-            return event.reply(e.message)
+            event.reply(e.message)
         }
         return answer as Prompt.Answers<Prompt.ValueType<T>>
     }
-    plugin<T>(plugin:string|Bot.Plugin,options?:T){
+    plugin(name:string):Plugin
+    plugin<T>(plugin:Plugin<T>,options?:T):this
+    plugin<T>(plugin:string|Plugin<T>,options?:T){
         if(typeof plugin==='string') return this.plugins.get(plugin)
         const _this=this
-        plugin.disposes=[]
-        plugin.dispose=function (){
-            while (this.disposes.length){
-                const dispose=this.disposes.shift()
-                dispose()
-            }
-            plugin.disposes=[]
-            return true
-        }
         const proxy=new Proxy(this,{
             get(target: typeof _this, p: PropertyKey, receiver: any): any {
                 const proxyEvents=['addListener','command','middleware']
@@ -236,10 +239,38 @@ export class Bot extends EventDeliver{
                 })
             }
         })
-        const installFunction=(plugin['install']||plugin) as Bot.FunctionPlugin<T>
-        installFunction.apply(plugin,[proxy,options])
-        this.plugins.set(plugin.name,plugin)
-        this.emit('plugin-add',plugin)
+        const installPlugin=()=>{
+            plugin.disposes=[]
+            plugin.dispose=function (){
+                while (this.disposes.length){
+                    const dispose=this.disposes.shift()
+                    dispose()
+                }
+                plugin.disposes=[]
+                return true
+            }
+            const installFunction= typeof plugin==="function"?plugin:plugin.install
+            installFunction.apply(plugin,[proxy,options])
+            this.plugins.set(plugin.name,plugin)
+            this.logger.info('已载入:'+plugin.name)
+            this.emit('plugin-add',plugin)
+        }
+        const using=plugin.using||=[]
+        if(!using.length){
+            installPlugin()
+        }else{
+            if(!using.every(name=>this.plugins.has(name))){
+                this.logger.info(`插件(${plugin.name})将在所需插件(${using.join()})加载完毕后加载`)
+                const dispose=this.on('plugin-add',()=>{
+                    if(using.every(name=>this.plugins.has(name))){
+                        dispose()
+                        installPlugin()
+                    }
+                })
+            }else{
+                installPlugin()
+            }
+        }
         return this
     }
     command<D extends string>(def: D,triggerEvent:Command.TriggerEvent='all'): Command<Argv.ArgumentType<D>>{
@@ -267,14 +298,25 @@ export class Bot extends EventDeliver{
         this.emit('command-add',command)
         return command as any
     }
-    use<T>(plugin:Bot.Plugin<T>,options?:T):this{
-        this.plugin(plugin,options)
+    sendMsg(channelId: ChannelId, message: string) {
+        const [targetType,targetId] = channelId.split(':') as [TargetType,`${number}`]
+        switch (targetType){
+            case "discuss":
+                return this.sendDiscussMsg(Number(targetId),message)
+            case "group":
+                return this.sendGroupMsg(Number(targetId),message)
+            case "private":
+                return this.sendPrivateMsg(Number(targetId),message)
+            default:
+                throw new Error('无法识别的channelId:'+channelId)
+        }
+    }
+
+    use(middleware:Bot.Middleware):this{
+        this.middleware(middleware)
         return this
     }
-    unUse(plugin:Bot.Plugin){
-        return this.dispose(plugin)
-    }
-    dispose<T>(plugin?:Bot.Plugin<T>|string){
+    dispose<T>(plugin?:Plugin<T>|string){
         if(!plugin) {
             this.plugins.forEach(plugin=>{
                 this.dispose(plugin)
@@ -287,6 +329,7 @@ export class Bot extends EventDeliver{
         }
         plugin.dispose()
         this.plugins.delete(plugin.name)
+        this.logger.info('已移除:'+plugin.name)
         this.emit('plugin-remove',plugin)
         return this
     }
@@ -312,7 +355,7 @@ export class Bot extends EventDeliver{
             return dispatch(0)
         }
     }
-    public load(name: string) {
+    public load(name: string,type:'plugin'|'service'='plugin') {
         function getListenDir(modulePath:string){
             if(modulePath.endsWith('/index')) return modulePath.replace('/index','')
             for(const extension of ['ts','js','cjs','mjs']){
@@ -321,8 +364,8 @@ export class Bot extends EventDeliver{
             return modulePath
         }
         let resolved
-        const orgModule = `@zhin/plugin-${name}`
-        const comModule = `zhin-plugin-${name}`
+        const orgModule = `@zhinjs/${type}-${name}`
+        const comModule = `zhin-${type}-${name}`
         const builtModule = path.join(__dirname, `plugins`, name)
         let customModule
         if (this.options.plugin_dir) customModule = path.resolve(this.options.plugin_dir, name)
@@ -343,22 +386,23 @@ export class Bot extends EventDeliver{
         if (!resolved) {
             try {
                 require.resolve(orgModule)
-                resolved = path.resolve(process.cwd(),'node_modules',`@zhin/plugin-${name}`)
+                resolved = path.resolve(process.cwd(),'node_modules',`@zhinjs/${type}-${name}`)
             } catch {
             }
         }
         if (!resolved) {
             try {
                 require.resolve(comModule)
-                resolved = path.resolve(process.cwd(),'node_modules',`zhin-plugin-${name}`)
+                resolved = path.resolve(process.cwd(),'node_modules',`zhin-${type}-${name}`)
             } catch {
             }
         }
 
-        if (!resolved) throw new Error(`未找到plugin(${name})`)
+        if (!resolved) throw new Error(`未找到${type}(${name})`)
         const result=wrapExport(resolved)
-        const plugin:Bot.Plugin={
+        const plugin:Plugin={
             install:result.install||result,
+            using:result.using ||= [],
             name:result.name||name,
             fullPath:getListenDir(resolved)
         }
@@ -388,9 +432,11 @@ export class Bot extends EventDeliver{
         }
     }
     start(){
+        for(const serviceName of Object.keys(this.options.services)){
+            this.plugin(this.load(serviceName,this.options.services[serviceName]))
+        }
         for(const pluginName of Object.keys(this.options.plugins)){
-            this.use(this.load(pluginName),this.options.plugins[pluginName])
-            this.logger.info('已载入:'+pluginName)
+            this.plugin(this.load(pluginName),this.options.plugins[pluginName])
         }
         this.middleware(async (message,next)=>{
             const result=await this.executeCommand(message)
@@ -403,15 +449,16 @@ export class Bot extends EventDeliver{
         })
         this.client.login(this.options.password)
         this.emit('ready')
+        this.isReady=true
     }
     stop(){
         this.dispose()
         process.exit()
     }
 }
-export interface Bot extends EventDeliver,Omit<Client, keyof EventDeliver>{
-    plugin(name:string):Bot.Plugin
-    plugin<T>(plugin:Bot.Plugin,options?:T):this
+export interface Bot extends EventDeliver,Omit<Client, keyof EventDeliver>,Bot.Services{
+    plugin(name:string):Plugin
+    plugin<T>(plugin:Plugin,options?:T):this
     on<T extends keyof Bot.AllEventMap<this>>(event: T, listener: Bot.AllEventMap<this>[T]):EventDeliver.Dispose;
     on<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, listener: (this: this, ...args: any[]) => void):EventDeliver.Dispose;
     before<T extends keyof Bot.BotEventMap<this>>(event: T, listener: Bot.BotEventMap<this>[T]):EventDeliver.Dispose;
@@ -434,10 +481,14 @@ export interface Bot extends EventDeliver,Omit<Client, keyof EventDeliver>{
     off<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, listener: (this: this, ...args: any[]) => void);
 }
 export namespace Bot{
+    export interface Services{
+        koa:Koa
+    }
     export const defaultConfig:Partial<Options>={
         uin:1472558369,
         password: 'zhin.icu',
         plugins:{},
+        services:{},
         delay:{},
         plugin_dir:path.join(process.cwd(),'plugins'),
         data_dir:path.join(process.cwd(),'data')
@@ -473,22 +524,13 @@ export namespace Bot{
         admins?:number|number[]
         delay:Record<string, number>
         plugins?:Record<string, any>
+        services?:Record<string, any>
         plugin_dir?:string
     }
+    export type ServiceConstructor<R,T=any>=new (bot:Bot,options?:T)=>R
     export type Dispose=()=>boolean
     export type Middleware = (event: MessageEvent, next: Next) => Awaitable<Sendable|boolean|void>;
     export type ComposedMiddleware = (event: MessageEvent, next?: Next) => Awaitable<Sendable|boolean|void>
     export type Next = () => Promise<any>;
     export type MessageEvent=PrivateMessageEvent|GroupMessageEvent|DiscussMessageEvent
-    export type FunctionPlugin<T>=(bot:Bot,options:T)=>any
-    export interface ObjectPlugin<T>{
-        install:FunctionPlugin<T>
-        name:string
-    }
-    export type Plugin<T = any>= (FunctionPlugin<T> | ObjectPlugin<T>) & {
-        dispose?:Dispose
-        disposes?:Dispose[]
-        fullPath?:string
-        [key:string]:any
-    }
 }

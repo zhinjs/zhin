@@ -1,10 +1,11 @@
 import {FSWatcher, watch} from 'chokidar'
 import {Bot} from "@/bot";
+import {Plugin} from "@/plugin";
 import * as fs from 'fs';
 import * as Yaml from 'js-yaml'
 import * as path from "path";
 import {Dict} from "@/types";
-export function install(this:Bot.Plugin,bot:Bot,root:string){
+export function install(this:Plugin,bot:Bot,root:string){
     function deepEqual(a: any, b: any) {
         if (a === b) return true
         if (typeof a !== typeof b) return false
@@ -23,42 +24,48 @@ export function install(this:Bot.Plugin,bot:Bot,root:string){
             if (name.startsWith('~')) continue
             if (deepEqual(oldConfig[name], newConfig[name])) continue
             if (name in newConfig) {
-                const p=[...bot.plugins.values()].find(p=>p.name===name)
+                const p=bot.plugins.get(name)
                 if (name in oldConfig && p) {
-                    reloadDependency(p,p.fullPath)
+                    reloadDependency(p,newConfig[name])
                 } else {
-                    loadDependency(name)
+                    loadDependency(name,newConfig[name])
                 }
             } else {
                 unloadDependency(name)
             }
         }
     }
-    function loadDependency(name:string){
+    function loadDependency(name:string,options:Dict){
         const plugin=bot.load(name)
-        bot.use(plugin)
-        bot.logger.info(`已载入:${name}`)
+        bot.plugin(plugin,options)
     }
     function unloadDependency(name:string){
-        const plugin=[...bot.plugins.values()].find(p=>p.name===name)
-        if(plugin && plugin.fullPath)
-        bot.logger.info(`已移除:${name}`)
+        bot.dispose(name)
     }
-    function reloadDependency(item: Bot.Plugin, fullPath) {
+    function reloadDependency(plugin:Plugin,config:Dict)
+    function reloadDependency(plugin: Plugin,changeFile:string)
+    function reloadDependency(plugin:Plugin,...args:[Dict|string]|[]){
+        let changeFile=typeof args[0]==='string'?args[0]:plugin.fullPath
+        let options=typeof args[0]!=='string'?args[0]:bot.options.plugins[plugin.name]
         try {
-            item.dispose()
-            delete require.cache[fullPath]
-            if(fullPath!==item.fullPath){
-                delete require.cache[item.fullPath]
-                delete require.cache[item.fullPath+'/index.js']
-                delete require.cache[item.fullPath+'/index.ts']
-                delete require.cache[item.fullPath+'/index.cjs']
-                delete require.cache[item.fullPath+'/index.mjs']
+            bot.dispose(plugin.name)
+            delete require.cache[changeFile]
+            if(changeFile!==plugin.fullPath){
+                delete require.cache[plugin.fullPath]
+                delete require.cache[plugin.fullPath+'/index.js']
+                delete require.cache[plugin.fullPath+'/index.ts']
+                delete require.cache[plugin.fullPath+'/index.cjs']
+                delete require.cache[plugin.fullPath+'/index.mjs']
             }
-            require(fullPath)
-            const plugin=bot.load(item.name)
-            bot.use(plugin)
-            bot.logger.info(`已重载:${plugin.name}`)
+            require(plugin.fullPath)
+            const newPlugin=bot.load(plugin.name)
+            bot.plugin(newPlugin,options)
+            const dependentPlugins=[...bot.plugins.values()].filter(p=>p.using && p.using.includes(plugin.name as never))
+            dependentPlugins.forEach(dependentPlugin=>{
+                bot.logger.info('正在重载依赖该插件的插件:'+dependentPlugin.name)
+                reloadDependency(dependentPlugin,dependentPlugin.fullPath)
+            })
+            bot.logger.info(`已重载:${newPlugin.name}`)
         } catch (e) {
             bot.logger.warn(e)
         }

@@ -4,5 +4,6 @@
     "emitDeclarationOnly": true,
     "rootDir": "src",
     "outFile": "lib/index.d.ts"
-  }
+  },
+  "exclude": ["src/plugins/*"]
 }
