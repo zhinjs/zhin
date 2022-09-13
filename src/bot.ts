@@ -10,7 +10,7 @@ import {Client, Config as ClientConfig, Sendable} from "oicq";
 import {Command} from "@/command";
 import {Argv} from "@/argv";
 import {DiscussMessageEvent, EventMap, GroupMessageEvent, PrivateMessageEvent} from "oicq/lib/events";
-import {deepClone, deepMerge, wrapExport} from "@/utils";
+import {deepClone, deepMerge, wrapExport,remove} from "@/utils";
 import {Awaitable, Dict} from "@/types";
 import {Prompt} from "@/prompt";
 import {Plugin} from "@/plugin";
@@ -81,6 +81,7 @@ export class Bot extends EventDeliver{
     isReady:boolean=false
     plugins:Map<string,Plugin>=new Map<string, Plugin>()
     private services:Record<string, any>={}
+    disposes:Bot.Dispose[]=[]
     middlewares:Bot.Middleware[]=[]
     commands:Map<string,Command>=new Map<string, Command>()
     master:number
@@ -102,6 +103,12 @@ export class Bot extends EventDeliver{
             _this.emit(event,...args)
             return oldEmit.apply(this,[event,...args])
         }
+        this.on('dispose',()=>{
+            while (this.disposes.length){
+                const dispose=this.disposes.shift()
+                dispose()
+            }
+        })
         return new Proxy(this,{
             get(target: typeof _this, p: string | symbol, receiver: any): any {
                 let result=Reflect.get(target,p,receiver)
@@ -134,30 +141,16 @@ export class Bot extends EventDeliver{
     isAdmin(user_id:number){
         return this.admins.includes(user_id)
     }
-    middleware(middleware:Bot.Middleware):Bot.Dispose{
+    middleware(middleware:Bot.Middleware,prepend?:boolean):Bot.Dispose{
+        const method:'push'|'unshift'=prepend?"unshift":"push"
         if(this.middlewares.indexOf(middleware)!==-1) return ()=>EventDeliver.remove(this.middlewares,middleware)
-        this.middlewares.push(middleware)
-        return ()=>EventDeliver.remove(this.middlewares,middleware)
+        this.middlewares[method](middleware)
+        const dispose=()=>remove(this.middlewares,middleware)
+        this.disposes.push(dispose)
+        return dispose
     }
     get commandList(){
         return [...this.commands.values()].flat()
-    }
-    public nextMessage(filter:(message:Bot.MessageEvent)=>boolean=()=>true){
-        return new Promise<Bot.MessageEvent|void>(resolve=>{
-            const dispose=this.middleware(async (message,next)=>{
-                if(filter(message)){
-                    clearTimeout(timer)
-                    dispose()
-                    resolve(message)
-                }else{
-                    await next()
-                }
-            })
-            const timer=setTimeout(()=>{
-                dispose()
-                resolve()
-            })
-        })
     }
     private promptReal<T extends keyof Prompt.TypeKV>(prev: any, answer: Dict, options: Prompt.Options<T>,event): Promise<Prompt.ValueType<T> | void> {
         if (typeof options.type === 'function') options.type = options.type(prev, answer, options)
@@ -165,12 +158,12 @@ export class Bot extends EventDeliver{
         if (['select', 'multipleSelect'].includes(options.type as keyof Prompt.TypeKV) && !options.choices) throw new Error('choices is required')
         return new Promise<Prompt.ValueType<T> | void>(resolve => {
             event.reply(Prompt.formatOutput(prev, answer, options))
-            const dispose = this.middleware((session) => {
+            const dispose = this.middleware((session,next) => {
                 const cb = () => {
                     let result = Prompt.formatValue(prev, answer, options, session.cqCode)
                     dispose()
                     resolve(result)
-                    clearTimeout(timer)
+                    timeoutDispose()
                 }
                 if (!options.validate) {
                     cb()
@@ -186,8 +179,9 @@ export class Bot extends EventDeliver{
                         event.reply(e.message)
                     }
                 }
+                next()
             })
-            const timer = setTimeout(() => {
+            const timeoutDispose = this.setTimeout(() => {
                 dispose()
                 resolve()
             }, options.timeout || this.options.delay.prompt)
@@ -241,9 +235,9 @@ export class Bot extends EventDeliver{
         })
         const installPlugin=()=>{
             plugin.disposes=[]
-            plugin.dispose=function (){
+            plugin.dispose=()=>{
                 while (this.disposes.length){
-                    const dispose=this.disposes.shift()
+                    const dispose=plugin.disposes.shift()
                     dispose()
                 }
                 plugin.disposes=[]
@@ -312,6 +306,22 @@ export class Bot extends EventDeliver{
         }
     }
 
+    setTimeout(callback:Function,ms:number,...args):Bot.Dispose{
+        const timer=setTimeout(()=>{
+            callback()
+            dispose()
+            remove(this.disposes,dispose)
+        },ms,...args)
+        const dispose=()=>{clearTimeout(timer);return true}
+        this.disposes.push(dispose)
+        return dispose
+    }
+    setInterval(callback:Function,ms:number,...args):Bot.Dispose{
+        const timer=setInterval(callback,ms,...args)
+        const dispose=()=>{clearInterval(timer);return true}
+        this.disposes.push(dispose)
+        return dispose
+    }
     use(middleware:Bot.Middleware):this{
         this.middleware(middleware)
         return this
@@ -355,7 +365,7 @@ export class Bot extends EventDeliver{
             return dispatch(0)
         }
     }
-    public load(name: string,type:'plugin'|'service'='plugin') {
+    public load(name: string,type:string='plugin') {
         function getListenDir(modulePath:string){
             if(modulePath.endsWith('/index')) return modulePath.replace('/index','')
             for(const extension of ['ts','js','cjs','mjs']){
@@ -363,41 +373,26 @@ export class Bot extends EventDeliver{
             }
             return modulePath
         }
-        let resolved
-        const orgModule = `@zhinjs/${type}-${name}`
-        const comModule = `zhin-${type}-${name}`
-        const builtModule = path.join(__dirname, `plugins`, name)
-        let customModule
-        if (this.options.plugin_dir) customModule = path.resolve(this.options.plugin_dir, name)
-        if (customModule) {
+        function getResolvePath(moduleName:string){
             try {
-                require.resolve(customModule)
-                resolved = customModule
+                return require.resolve(moduleName)
             } catch {
+                return ''
             }
         }
-        if (!resolved) {
-            try {
-                require.resolve(builtModule)
-                resolved = `${__dirname}/plugins/${name}`
-            } catch {
+        function getModulesPath(modules:string[]){
+            for(const moduleName of modules){
+                const result=getResolvePath(moduleName)
+                if(result) return result
             }
+            return ''
         }
-        if (!resolved) {
-            try {
-                require.resolve(orgModule)
-                resolved = path.resolve(process.cwd(),'node_modules',`@zhinjs/${type}-${name}`)
-            } catch {
-            }
-        }
-        if (!resolved) {
-            try {
-                require.resolve(comModule)
-                resolved = path.resolve(process.cwd(),'node_modules',`zhin-${type}-${name}`)
-            } catch {
-            }
-        }
-
+        const resolved=getModulesPath([
+            this.options[`${type}_dir`] ? path.resolve(this.options[`${type}_dir`], name):null,// 用户自定义插件/服务/游戏目录
+            path.join(__dirname, `${type}s`, name), // 内置插件/服务/游戏目录
+            `@zhinjs/${type}-${name}`,// 官方插件/服务/游戏模块
+            `zhin-${type}-${name}`,// 社区插件/服务/游戏模块
+        ].filter(Boolean))
         if (!resolved) throw new Error(`未找到${type}(${name})`)
         const result=wrapExport(resolved)
         const plugin:Plugin={
