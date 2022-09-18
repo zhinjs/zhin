@@ -8,7 +8,7 @@ export function install(bot:Bot,config:DaemonConfig={}){
         process.exit()
     }
     exitCommand && bot
-        .command(exitCommand === true ? 'exit' : exitCommand, 'all')
+        .command(exitCommand === true ? 'exit' : exitCommand)
         .desc('关闭bot')
         .check(async ({event}) => {
             if (!bot.isMaster(event.user_id) && !bot.isAdmin(event.user_id)) {

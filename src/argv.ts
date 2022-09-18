@@ -1,12 +1,13 @@
-import {Client} from "oicq";
-import {DiscussMessageEvent, GroupMessageEvent, PrivateMessageEvent} from "oicq/lib/events";
+import {Client} from "icqq";
+import {DiscussMessageEvent, GroupMessageEvent, PrivateMessageEvent} from "icqq/lib/events";
+import {TriggerEventMap} from "@/command";
 
-export interface Argv<A extends any[] = any[], O = {}> {
+export interface Argv<T extends keyof TriggerEventMap=keyof TriggerEventMap,A extends any[] = any[], O = {}> {
     name:string//指令名称
-    argv:string[]
+    argv?:string[]
     client?:Client
-    event?:PrivateMessageEvent | GroupMessageEvent | DiscussMessageEvent
-    cqCode: string//原文
+    event:TriggerEventMap[T]
+    cqCode?: string//原文
     args?: A//携带的args
     options?: O//携带的options
     error?: string//是否报错
@@ -116,7 +117,7 @@ export namespace Argv{
     interface DeclarationList extends Array<Declaration> {
         stripped: string
     }
-    export function parse(content:string):Argv{
+    export function parse(content:string):Partial<Argv>{
         const message=content.split(' ')
         const name=message.shift()
         function mergeQuote(quote, list, start) {

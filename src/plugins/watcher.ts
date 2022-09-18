@@ -3,6 +3,7 @@ import {Bot} from "@/bot";
 import {Plugin} from "@/plugin";
 import * as fs from 'fs';
 import * as Yaml from 'js-yaml'
+
 import * as path from "path";
 import {Dict} from "@/types";
 export function install(this:Plugin,bot:Bot,root:string){

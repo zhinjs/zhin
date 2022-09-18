@@ -1,15 +1,15 @@
 import EventDeliver from "event-deliver";
 import {join,resolve} from 'path'
 import {fork,ChildProcess} from "child_process";
-import {Logger,getLogger} from "log4js";
+import {Logger,getLogger,configure,Configuration} from "log4js";
 import * as Yaml from 'js-yaml'
 import * as path from 'path'
 import * as fs from 'fs'
-import 'oicq2-cq-enable'
-import {Client, Config as ClientConfig, Sendable} from "oicq";
-import {Command} from "@/command";
+import 'icqq-cq-enable'
+import {Client, Config as ClientConfig, Sendable} from "icqq";
+import {Command, TriggerEventMap} from "@/command";
 import {Argv} from "@/argv";
-import {DiscussMessageEvent, EventMap, GroupMessageEvent, PrivateMessageEvent} from "oicq/lib/events";
+import {DiscussMessageEvent, EventMap, GroupMessageEvent, PrivateMessageEvent} from "icqq/lib/events";
 import {deepClone, deepMerge, wrapExport,remove} from "@/utils";
 import {Awaitable, Dict} from "@/types";
 import {Prompt} from "@/prompt";
@@ -79,6 +79,7 @@ export function defineConfig(options:Bot.Options){
 }
 export class Bot extends EventDeliver{
     isReady:boolean=false
+    startTime:number
     plugins:Map<string,Plugin>=new Map<string, Plugin>()
     private services:Record<string, any>={}
     disposes:Bot.Dispose[]=[]
@@ -90,6 +91,9 @@ export class Bot extends EventDeliver{
     public logger:Logger
     constructor(public options:Bot.Options) {
         super();
+        if(options.logConfig){
+            configure(options.logConfig as Configuration)
+        }
         this.service('koa',new Koa())
         this.logger=getLogger('zhin')
         this.logger.level=options.log_level||'info'
@@ -140,6 +144,9 @@ export class Bot extends EventDeliver{
     }
     isAdmin(user_id:number){
         return this.admins.includes(user_id)
+    }
+    static getChannelId(event:Dict){
+        return [event.message_type,event.group_id||event.discuss_id||event.sender.user_id].join(':') as ChannelId
     }
     middleware(middleware:Bot.Middleware,prepend?:boolean):Bot.Dispose{
         const method:'push'|'unshift'=prepend?"unshift":"push"
@@ -235,9 +242,9 @@ export class Bot extends EventDeliver{
         })
         const installPlugin=()=>{
             plugin.disposes=[]
-            plugin.dispose=()=>{
+            plugin.dispose=function (){
                 while (this.disposes.length){
-                    const dispose=plugin.disposes.shift()
+                    const dispose=this.disposes.shift()
                     dispose()
                 }
                 plugin.disposes=[]
@@ -267,7 +274,11 @@ export class Bot extends EventDeliver{
         }
         return this
     }
-    command<D extends string>(def: D,triggerEvent:Command.TriggerEvent='all'): Command<Argv.ArgumentType<D>>{
+    on(event,listener){
+        if(event==='ready' && this.isReady) listener()
+        return super.on(event,listener)
+    }
+    command<T extends keyof TriggerEventMap,D extends string>(def: D,triggerEvent?:T): Command<T,Argv.ArgumentType<D>>{
         const namePath = def.split(' ', 1)[0]
         const decl = def.slice(namePath.length)
         const segments = namePath.split(/(?=[/])/g)
@@ -292,7 +303,7 @@ export class Bot extends EventDeliver{
         this.emit('command-add',command)
         return command as any
     }
-    sendMsg(channelId: ChannelId, message: string) {
+    sendMsg(channelId: ChannelId, message: Sendable) {
         const [targetType,targetId] = channelId.split(':') as [TargetType,`${number}`]
         switch (targetType){
             case "discuss":
@@ -410,21 +421,28 @@ export class Bot extends EventDeliver{
                 || cmd.shortcuts.some(({name}) => typeof name === 'string' ? name === argv.name : name.test(argv.cqCode))
         })
     }
-    async executeCommand(message:Bot.MessageEvent):Promise<Sendable|boolean|void>{
-        const argv=Argv.parse(message.cqCode)
-        argv.client=this.client
-        argv.event=message
-        const command=this.findCommand(argv)
-        if(command){
+    async execute(argv:Partial<Argv>){
+        if(!argv.client)argv.client=this.client
+        if(!argv.args)argv.args=[]
+        if(!argv.argv)argv.argv=[]
+        if(!argv.cqCode) argv.cqCode=argv.event.cqCode
+        if(!argv.options) argv.options={}
+        const command=this.findCommand(argv as Argv)
+        if(command && command.match(argv.event)){
             let result:Sendable|void|boolean
             result= await this.bailSync('before-command',argv)
             if (result) return result
             try{
-                return await command.execute(argv)
+                return await command.execute(argv as Argv)
             }catch (e){
                 this.logger.warn(e.message)
             }
         }
+    }
+    async executeCommand(message:Bot.MessageEvent,cqCode=message.cqCode):Promise<Sendable|boolean|void>{
+        const argv=Argv.parse(cqCode)
+        argv.event=message
+        return this.execute(argv)
     }
     start(){
         for(const serviceName of Object.keys(this.options.services)){
@@ -434,7 +452,7 @@ export class Bot extends EventDeliver{
             this.plugin(this.load(pluginName),this.options.plugins[pluginName])
         }
         this.middleware(async (message,next)=>{
-            const result=await this.executeCommand(message)
+            const result=await this.executeCommand(message).catch(e=>e.message)
             if(result && typeof result!=='boolean') await message.reply(result)
             else next()
         })
@@ -444,7 +462,22 @@ export class Bot extends EventDeliver{
         })
         this.client.login(this.options.password)
         this.emit('ready')
+        this.startTime=new Date().getTime()
         this.isReady=true
+    }
+    private getAllChannels():ChannelId[]{
+        return [...this.gl.keys()].map(gid=>`group:${gid}`)
+            .concat(...[...this.fl.keys()].map(uid=>`private:${uid}`)) as ChannelId[]
+    }
+    broadcast(channelIds:ChannelId[],content:string)
+    broadcast(content:string)
+    broadcast(...args:[ChannelId[],string]|[string]){
+        const channelIds=args.length===1?this.getAllChannels():args[0]
+        const content=args.length===1?args[0]:args[1]
+        return Promise.all(channelIds.map(async (channelId)=>{
+            const {message_id}=await this.sendMsg(channelId,content)
+            return message_id
+        }))
     }
     stop(){
         this.dispose()
@@ -483,8 +516,28 @@ export namespace Bot{
         uin:1472558369,
         password: 'zhin.icu',
         plugins:{},
+        log_level:'info',
         services:{},
         delay:{},
+        logConfig:{
+            appenders: {
+                console:{type:'console'},
+                zhin: {
+                    type:'file',
+                    filename:path.join(process.cwd(),'logs.log')
+                }
+            },
+            categories:{
+                default:{
+                    appenders:['console'],
+                    level:'error'
+                },
+                zhin:{
+                    appenders:['console','zhin'],
+                    level:'info'
+                }
+            }
+        },
         plugin_dir:path.join(process.cwd(),'plugins'),
         data_dir:path.join(process.cwd(),'data')
     }
@@ -517,6 +570,7 @@ export namespace Bot{
         password?:string
         master?:number
         admins?:number|number[]
+        logConfig?:Partial<Configuration>
         delay:Record<string, number>
         plugins?:Record<string, any>
         services?:Record<string, any>

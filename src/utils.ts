@@ -138,7 +138,20 @@ export function sanitize(source: string) {
     if (!source.startsWith('/')) source = '/' + source
     return trimSlash(source)
 }
-
+export function toJSON(cls:object):Dict{
+    function getProperty(new_obj){
+        if(new_obj.__proto__ === null){ //说明该对象已经是最顶层的对象
+            return [];
+        }
+        return [...Object.getOwnPropertyNames(new_obj),...getProperty(new_obj.__proto__)];
+    }
+    const {info={},...obj}= Object.fromEntries(getProperty(cls).filter(key=>{
+        return typeof cls[key]!=='function' && !key.startsWith('_') && !['c','client'].includes(key)
+    }).map(key=>{
+        return [key,cls[key]]
+    }))
+    return {...obj,...info}
+}
 export function template(path: string | string[], ...params: any[]) {
     path=[].concat(path)
     for (const item of path) {

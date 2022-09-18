@@ -1,16 +1,19 @@
 {
   "name": "zhin",
-  "version": "1.1.16",
+  "version": "1.1.37",
   "description": "知音",
   "main": "lib/index.js",
+  "bin": {
+    "zhin": "lib/bin.js"
+  },
   "types": "lib/index.d.ts",
   "scripts": {
     "start": "node .",
     "compile": "tsc --project tsconfig.build.json && tsc-alias -p tsconfig.build.json",
     "build": "npm run compile && dtsc --project tsconfig.dtsc.json",
-    "dev": "ts-node -r tsconfig-paths/register -r esbuild-register ./src/index.ts",
+    "dev": "ts-node -r tsconfig-paths/register -r esbuild-register ./src/test",
     "pub": "npm publish --access public",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \\\"Error: no src/test specified\\\" && exit 1"
   },
   "repository": {
     "type": "git",
@@ -47,11 +50,11 @@
     "esbuild": "^0.15.5",
     "esbuild-register": "^3.3.3",
     "event-deliver": "^1.0.2",
+    "icqq": "^0.0.1",
+    "icqq-cq-enable": "^1.0.0",
     "js-yaml": "^4.1.0",
     "koa": "^2.13.4",
     "log4js": "^6.6.1",
-    "oicq": "latest",
-    "oicq2-cq-enable": "^1.0.6",
     "tsconfig-paths": "^4.0.0"
   }
 }

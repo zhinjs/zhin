@@ -1,7 +1,7 @@
 import {Bot} from "@/bot";
 
 export function install(bot:Bot){
-    bot.command('help [command:string]',"all")
+    bot.command('help [command:string]')
         .desc('显示指令的帮助信息')
         .shortcut('帮助',{fuzzy:true})
         .option('showHidden','-H 显示隐藏选项')
@@ -14,7 +14,7 @@ export function install(bot:Bot){
                 return output.filter(Boolean).join('\n')
             }
 
-            const command = bot.findCommand({name: target, cqCode: event.cqCode,argv})
+            const command = bot.findCommand({name: target,event, cqCode: event.cqCode,argv})
             if (!command?.match(event)) {
                 return
             }

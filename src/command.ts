@@ -1,7 +1,7 @@
 import {Argv} from "@/argv";
-import {DiscussMessageEvent, GroupMessageEvent, PrivateMessageEvent} from "oicq/lib/events";
+import {DiscussMessageEvent, GroupMessageEvent, PrivateMessageEvent} from "icqq/lib/events";
 import {Awaitable, Define} from "@/types";
-import {Sendable} from "oicq";
+import {Sendable} from "icqq";
 import {isEmpty, keys} from "lodash";
 import {Bot} from "@/bot";
 interface HelpOptions{
@@ -11,7 +11,12 @@ interface HelpOptions{
     current?:number
     simple?:boolean
 }
-export class Command<A extends any[] = any[], O extends {} = {}>{
+export interface TriggerEventMap{
+    private:PrivateMessageEvent
+    group:GroupMessageEvent
+    discuss:DiscussMessageEvent
+}
+export class Command<T extends keyof TriggerEventMap=keyof TriggerEventMap,A extends any[] = any[], O extends {} = {}>{
     public name:string
     args:Argv.Declaration[]
     bot:Bot
@@ -20,12 +25,12 @@ export class Command<A extends any[] = any[], O extends {} = {}>{
     public authority:number=1
     descriptions:string[]=[]
     shortcuts:Command.Shortcut[]=[]
-    private checkers:Command.Callback<A,O>[]=[]
-    private callback:Command.Callback<A,O>[]=[]
+    private checkers:Command.Callback<T,A,O>[]=[]
+    private callback:Command.Callback<T,A,O>[]=[]
     public examples:string[]=[]
     public aliasNames:string[]=[]
     public options:Record<string, Command.OptionConfig>={}
-    constructor(declaration:string,public triggerEvent:Command.TriggerEvent) {
+    constructor(declaration:string,public triggerEvent?:T) {
         this.name=Command.removeDeclarationArgs(declaration)
         this.args=Command.findDeclarationArgs(declaration)
     }
@@ -40,7 +45,7 @@ export class Command<A extends any[] = any[], O extends {} = {}>{
         return this
     }
     // 添加验证回调函数
-    check(checker:Command.Callback<A,O>){
+    check(checker:Command.Callback<T,A,O>){
         this.checkers.push(checker)
         return this
     }
@@ -50,15 +55,14 @@ export class Command<A extends any[] = any[], O extends {} = {}>{
         return this
     }
     // 定义子指令
-    subcommand<D extends string>(def: D,triggerEvent:Command.TriggerEvent): Command<Argv.ArgumentType<D>> {
-        const command=this.bot.command(def,triggerEvent)
+    subcommand<D extends string>(def: D): Command<T,Argv.ArgumentType<D>> {
+        const command=this.bot.command(def,this.triggerEvent)
         command.parent=this
         this.children.push(command)
         return command
     }
     match(message:PrivateMessageEvent | GroupMessageEvent | DiscussMessageEvent){
-        return this.triggerEvent==='all'
-            || message.message_type===this.triggerEvent
+        return !this.triggerEvent||this.triggerEvent===message.message_type
     }
     // 定义别名
     alias(...name:string[]){
@@ -75,7 +79,7 @@ export class Command<A extends any[] = any[], O extends {} = {}>{
         return this
     }
     // 添加选项
-    option<K extends string,D extends string>(name:K,declaration:D,config:Command.OptionConfig={}):Command<A, Define<O, K, Command.OptionType<D>>>{
+    option<K extends string,D extends string>(name:K,declaration:D,config:Command.OptionConfig={}):Command<T,A, Define<O, K, Command.OptionType<D>>>{
         const decl = declaration.replace(/(?<=^|\s)[\w\x80-\uffff].*/, '')
         const shortName= Command.removeDeclarationArgs(decl);
         const argDeclaration = Command.findDeclarationArgs(decl)[0]
@@ -104,12 +108,12 @@ export class Command<A extends any[] = any[], O extends {} = {}>{
         return Object.create(this)
     }
     // 添加执行的操作
-    action(argv:Command.Callback<A,O>){
+    action(argv:Command.Callback<T,A,O>){
         this.callback.push(argv)
         return this
     }
     //匹配常规调用参数、选项
-    private parseCommand(argv:Argv<A,O>){
+    private parseCommand(argv:Argv<T,A,O>){
         const args:A=argv.args||=[] as A
         const options:O=argv.options||={} as O
         while (!argv.error && argv.argv.length) {
@@ -196,7 +200,7 @@ export class Command<A extends any[] = any[], O extends {} = {}>{
         return {args,options}
     }
     // 执行指令
-    async execute(argv:Argv<A, O>):Promise<Sendable|boolean|void>{
+    async execute(argv:Argv<T,A, O>):Promise<Sendable|boolean|void>{
         // 匹配参数、选项
         this.parseShortcut(argv)
         if(argv.error){
@@ -218,8 +222,20 @@ export class Command<A extends any[] = any[], O extends {} = {}>{
     }
     //显示帮助信息
     help({simple,showAuth,showHidden,dep=1,current=0}:HelpOptions={}){
-
-        const output:string[]=[`${this.name} ${this.descriptions.join(';')}`]
+        const createArgsOutput=()=>{
+            const result=[]
+            this.args.forEach((arg)=>{
+                const nameDesc:string[]=[]
+                nameDesc.push(arg?.required?'<':'[')
+                nameDesc.push(arg?.variadic?'...':'')
+                nameDesc.push(arg.name+':')
+                nameDesc.push(String(arg.type))
+                nameDesc.push(arg.required?'>':']')
+                result.push(nameDesc.join(''))
+            })
+            return result.join(' ')
+        }
+        const output:string[]=[`${this.name} ${createArgsOutput()} ${this.descriptions.join(';')}`]
         if(!simple){
             if(showAuth) output.push(`authority:${this.authority}`)
             if(this.aliasNames.length)output.push(` alias:${this.aliasNames.join(',')}`)
@@ -251,7 +267,6 @@ export class Command<A extends any[] = any[], O extends {} = {}>{
     }
 }
 export namespace Command{
-    export type TriggerEvent='private'|'group'|'discuss'|'all'
     export interface Shortcut {
         name?: string | RegExp;
         fuzzy?: boolean;
@@ -269,8 +284,8 @@ export namespace Command{
         description?:string
         declaration?:Argv.Declaration
     }
-    export type Callback< A extends any[] = any[], O extends {} = {},>
-        = (this:Command<A,O>,argv:Argv<A,O>, ...args: A) => Awaitable<Sendable|boolean|void>
+    export type Callback<T extends keyof TriggerEventMap=keyof TriggerEventMap,A extends any[] = any[], O extends {} = {},>
+        = (this:Command<T,A,O>,argv:Argv<T,A,O>, ...args: A) => Awaitable<Sendable|boolean|void>
 
 
     export type OptionType<S extends string> = Argv.ExtractFirst<Argv.Replace<S, '>', ']'>, any>
