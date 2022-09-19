@@ -62,10 +62,13 @@ export function install(this:Plugin,bot:Bot,root:string){
             const newPlugin=bot.load(plugin.name)
             bot.plugin(newPlugin,options)
             const dependentPlugins=[...bot.plugins.values()].filter(p=>p.using && p.using.includes(plugin.name as never))
-            dependentPlugins.forEach(dependentPlugin=>{
+            for(const dependentPlugin of dependentPlugins){
                 bot.logger.info('正在重载依赖该插件的插件:'+dependentPlugin.name)
                 reloadDependency(dependentPlugin,dependentPlugin.fullPath)
-            })
+            }
+            if(dependentPlugins.length){
+                bot.emit('ready')
+            }
             bot.logger.info(`已重载:${newPlugin.name}`)
         } catch (e) {
             bot.logger.warn(e)

@@ -159,35 +159,46 @@ export class Bot extends EventDeliver{
     get commandList(){
         return [...this.commands.values()].flat()
     }
+    static getFullChannelId(event:Bot.MessageEvent):string{
+        return [event.message_type,event['group_id'],event['discuss_id'],event['sub_type'],event.user_id]
+            .filter(Boolean)
+            .join(':')
+    }
     private promptReal<T extends keyof Prompt.TypeKV>(prev: any, answer: Dict, options: Prompt.Options<T>,event): Promise<Prompt.ValueType<T> | void> {
         if (typeof options.type === 'function') options.type = options.type(prev, answer, options)
         if (!options.type) return
         if (['select', 'multipleSelect'].includes(options.type as keyof Prompt.TypeKV) && !options.choices) throw new Error('choices is required')
+        function isSameFrom<T>(event1,event2){
+            return Bot.getFullChannelId(event)===Bot.getFullChannelId(event2)
+        }
         return new Promise<Prompt.ValueType<T> | void>(resolve => {
             event.reply(Prompt.formatOutput(prev, answer, options))
             const dispose = this.middleware((session,next) => {
-                const cb = () => {
-                    let result = Prompt.formatValue(prev, answer, options, session.cqCode)
-                    dispose()
-                    resolve(result)
-                    timeoutDispose()
-                }
-                if (!options.validate) {
-                    cb()
-                } else {
-                    if (typeof options.validate !== "function") {
-                        options.validate = (str: string) => (options.validate as RegExp).test(str)
+                if(!isSameFrom(session,event)) next()
+                else{
+                    const cb = () => {
+                        let result = Prompt.formatValue(prev, answer, options, session.cqCode)
+                        dispose()
+                        resolve(result)
+                        timeoutDispose()
                     }
-                    try {
-                        let result = options.validate(session.cqCode)
-                        if (result && typeof result === "boolean") cb()
-                        else event.reply(options.errorMsg)
-                    } catch (e) {
-                        event.reply(e.message)
+                    if (!options.validate) {
+                        cb()
+                    } else {
+                        if (typeof options.validate !== "function") {
+                            options.validate = (str: string) => (options.validate as RegExp).test(str)
+                        }
+                        try {
+                            let result = options.validate(session.cqCode)
+                            if (result && typeof result === "boolean") cb()
+                            else event.reply(options.errorMsg)
+                        } catch (e) {
+                            event.reply(e.message)
+                        }
                     }
                 }
-                next()
-            })
+
+            },true)
             const timeoutDispose = this.setTimeout(() => {
                 dispose()
                 resolve()
@@ -273,10 +284,6 @@ export class Bot extends EventDeliver{
             }
         }
         return this
-    }
-    on(event,listener){
-        if(event==='ready' && this.isReady) listener()
-        return super.on(event,listener)
     }
     command<T extends keyof TriggerEventMap,D extends string>(def: D,triggerEvent?:T): Command<T,Argv.ArgumentType<D>>{
         const namePath = def.split(' ', 1)[0]
