@@ -6,7 +6,7 @@ import * as Yaml from 'js-yaml'
 import * as path from 'path'
 import * as fs from 'fs'
 import 'icqq-cq-enable'
-import {Client, Config as ClientConfig, Sendable} from "icqq";
+import {Client,Message as IcqqMessage, Config as ClientConfig, Sendable} from "icqq";
 import {Command, TriggerEventMap} from "@/command";
 import {Argv} from "@/argv";
 import {DiscussMessageEvent, EventMap, GroupMessageEvent, PrivateMessageEvent} from "icqq/lib/events";
@@ -15,7 +15,18 @@ import {Awaitable, Dict} from "@/types";
 import {Prompt} from "@/prompt";
 import {Plugin} from "@/plugin";
 import Koa from "koa";
-
+declare module 'icqq'{
+    interface Message{
+        toJSON<T extends keyof IcqqMessage>(...besides:T[]):Omit<IcqqMessage, T>
+    }
+}
+IcqqMessage.prototype.toJSON=function<T extends keyof IcqqMessage> (...keys:T[]){
+    return Object.fromEntries(Object.keys(this).filter((key)=>{
+        return typeof this[key]!=="function" && !keys.includes(key as any)
+    }).map(key=>{
+        return [key,this[key]]
+    })) as Omit<IcqqMessage, T>
+}
 interface Message {
     type: 'start' | 'queue'
     body: any
@@ -159,6 +170,9 @@ export class Bot extends EventDeliver{
     get commandList(){
         return [...this.commands.values()].flat()
     }
+    get pluginList(){
+        return [...this.plugins.values()].flat()
+    }
     static getFullChannelId(event:Bot.MessageEvent):string{
         return [event.message_type,event['group_id'],event['discuss_id'],event['sub_type'],event.user_id]
             .filter(Boolean)
@@ -174,27 +188,25 @@ export class Bot extends EventDeliver{
         return new Promise<Prompt.ValueType<T> | void>(resolve => {
             event.reply(Prompt.formatOutput(prev, answer, options))
             const dispose = this.middleware((session,next) => {
-                if(!isSameFrom(session,event)) next()
-                else{
-                    const cb = () => {
-                        let result = Prompt.formatValue(prev, answer, options, session.cqCode)
-                        dispose()
-                        resolve(result)
-                        timeoutDispose()
+                if(!isSameFrom(session,event)) return next()
+                const cb = () => {
+                    let result = Prompt.formatValue(prev, answer, options, session.cqCode)
+                    dispose()
+                    resolve(result)
+                    timeoutDispose()
+                }
+                if (!options.validate) {
+                    cb()
+                } else {
+                    if (typeof options.validate !== "function") {
+                        options.validate = (str: string) => (options.validate as RegExp).test(str)
                     }
-                    if (!options.validate) {
-                        cb()
-                    } else {
-                        if (typeof options.validate !== "function") {
-                            options.validate = (str: string) => (options.validate as RegExp).test(str)
-                        }
-                        try {
-                            let result = options.validate(session.cqCode)
-                            if (result && typeof result === "boolean") cb()
-                            else event.reply(options.errorMsg)
-                        } catch (e) {
-                            event.reply(e.message)
-                        }
+                    try {
+                        let result = options.validate(session.cqCode)
+                        if (result && typeof result === "boolean") cb()
+                        else event.reply(options.errorMsg)
+                    } catch (e) {
+                        event.reply(e.message)
                     }
                 }
 
@@ -224,10 +236,17 @@ export class Bot extends EventDeliver{
         }
         return answer as Prompt.Answers<Prompt.ValueType<T>>
     }
-    plugin(name:string):Plugin
+    plugin(name:string):Plugin|this
     plugin<T>(plugin:Plugin<T>,options?:T):this
-    plugin<T>(plugin:string|Plugin<T>,options?:T){
-        if(typeof plugin==='string') return this.plugins.get(plugin)
+    plugin<T>(entry:string|Plugin<T>,options?:T){
+        let plugin:Plugin
+        if(typeof entry==='string'){
+            const result=this.plugins.get(entry)
+            if(result) return result
+            plugin=this.load(entry)
+        }else{
+            plugin=entry
+        }
         const _this=this
         const proxy=new Proxy(this,{
             get(target: typeof _this, p: PropertyKey, receiver: any): any {
@@ -238,7 +257,7 @@ export class Bot extends EventDeliver{
                     apply(target: typeof _this, thisArg: any, argArray?: any): any {
                         let res=result.apply(thisArg,argArray)
                         if(res instanceof Command){
-                            plugin.disposes.push(()=>{
+                            (plugin).disposes.push(()=>{
                                 _this.commands.delete(res.name)
                                 _this.emit('command-remove',res)
                                 return true
@@ -415,8 +434,12 @@ export class Bot extends EventDeliver{
         const result=wrapExport(resolved)
         const plugin:Plugin={
             install:result.install||result,
+            author:JSON.stringify(result.author),
+            version:result.version,
+            desc:result.desc,
             using:result.using ||= [],
             name:result.name||name,
+            fullName:result.fullName,
             fullPath:getListenDir(resolved)
         }
         return plugin

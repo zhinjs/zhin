@@ -1,6 +1,8 @@
 
 // 深合并
 import {Dict} from "@/types";
+import * as path from "path";
+import * as fs from "fs";
 
 export function remove<T>(list: T[], item: T) {
     const index = list.indexOf(item)
@@ -76,8 +78,16 @@ export function omit<T, K extends keyof T>(source: T, keys?: Iterable<K>) {
     return result
 }
 export function wrapExport(filepath:string){
-    const {default:result,...other}=require(filepath)
-    return result?Object.assign(result,other):other
+    const {default:result={},...other}=require(filepath)
+    const fileDir=path.dirname(filepath)
+    if(fs.existsSync(path.resolve(fileDir,'../package.json'))){
+        const {name:fullName,...packageJson}=require(path.join(fileDir,'../package.json'))
+        Object.assign(result,packageJson,{fullName})
+    }else if(fs.existsSync(path.resolve(fileDir,'package.json'))){
+        const {name:fullName,...packageJson}=require(path.resolve(fileDir,'package.json'))
+        Object.assign(result,packageJson,{fullName})
+    }
+    return Object.assign(result,other)
 }
 function deepen(modifyString: (source: string) => string) {
     function modifyObject<T extends unknown>(source: T): T {
