@@ -20,8 +20,10 @@ export namespace Argv{
         text: string
         integer: number
         date: Date,
+        regexp:RegExp
         qq:number
         object:Record<string, any>
+        array:any[]
         function:Function
     }
     type DomainType = keyof Domain
@@ -74,6 +76,8 @@ export namespace Argv{
     createDomain('string', source => source)
     createDomain('text', source => source, { greedy: true })
     createDomain('boolean', () => true)
+    createDomain('regexp', (source) => new RegExp(source))
+    createDomain('array', (source) => JSON.parse(source))
     createDomain('number', (source) => {
         const value = +source
         if (Number.isFinite(value)) return value

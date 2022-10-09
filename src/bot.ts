@@ -12,7 +12,6 @@ import {Argv} from "@/argv";
 import {DiscussMessageEvent, EventMap, GroupMessageEvent, PrivateMessageEvent} from "icqq/lib/events";
 import {deepClone, deepMerge, wrapExport,remove} from "@/utils";
 import {Awaitable, Dict} from "@/types";
-import {Prompt} from "@/prompt";
 import {Plugin} from "@/plugin";
 import Koa from "koa";
 declare module 'icqq'{
@@ -177,64 +176,6 @@ export class Bot extends EventDeliver{
         return [event.message_type,event['group_id'],event['discuss_id'],event['sub_type'],event.user_id]
             .filter(Boolean)
             .join(':')
-    }
-    private promptReal<T extends keyof Prompt.TypeKV>(prev: any, answer: Dict, options: Prompt.Options<T>,event): Promise<Prompt.ValueType<T> | void> {
-        if (typeof options.type === 'function') options.type = options.type(prev, answer, options)
-        if (!options.type) return
-        if (['select', 'multipleSelect'].includes(options.type as keyof Prompt.TypeKV) && !options.choices) throw new Error('choices is required')
-        function isSameFrom<T>(event1,event2){
-            return Bot.getFullChannelId(event)===Bot.getFullChannelId(event2)
-        }
-        return new Promise<Prompt.ValueType<T> | void>(resolve => {
-            event.reply(Prompt.formatOutput(prev, answer, options))
-            const dispose = this.middleware((session,next) => {
-                if(!isSameFrom(session,event)) return next()
-                const cb = () => {
-                    let result = Prompt.formatValue(prev, answer, options, session.cqCode)
-                    dispose()
-                    resolve(result)
-                    timeoutDispose()
-                }
-                if (!options.validate) {
-                    cb()
-                } else {
-                    if (typeof options.validate !== "function") {
-                        options.validate = (str: string) => (options.validate as RegExp).test(str)
-                    }
-                    try {
-                        let result = options.validate(session.cqCode)
-                        if (result && typeof result === "boolean") cb()
-                        else event.reply(options.errorMsg)
-                    } catch (e) {
-                        event.reply(e.message)
-                    }
-                }
-
-            },true)
-            const timeoutDispose = this.setTimeout(() => {
-                dispose()
-                resolve()
-            }, options.timeout || this.options.delay.prompt)
-        })
-    }
-
-    async prompt<T extends keyof Prompt.TypeKV>(options: Prompt.Options<T> | Array<Prompt.Options<T>>,event:Bot.MessageEvent) {
-        options = [].concat(options)
-        let answer: Dict = {}
-        let prev: any = undefined
-        try {
-            if (options.length === 0) return
-            for (const option of options) {
-                if (typeof option.type === 'function') option.type = option.type(prev, answer, option)
-                if (!option.type) continue
-                if (!option.name) throw new Error('name is required')
-                prev = await this.promptReal(prev, answer, option,event)
-                answer[option.name] = prev
-            }
-        } catch (e) {
-            event.reply(e.message)
-        }
-        return answer as Prompt.Answers<Prompt.ValueType<T>>
     }
     plugin(name:string):Plugin|this
     plugin<T>(plugin:Plugin<T>,options?:T):this
@@ -474,7 +415,7 @@ export class Bot extends EventDeliver{
         argv.event=message
         return this.execute(argv)
     }
-    start(){
+    async start(){
         for(const serviceName of Object.keys(this.options.services)){
             this.plugin(this.load(serviceName,this.options.services[serviceName]))
         }
@@ -490,10 +431,11 @@ export class Bot extends EventDeliver{
             const middleware=this.compose()
             middleware(event)
         })
-        this.client.login(this.options.password)
-        this.emit('ready')
-        this.startTime=new Date().getTime()
+        await this.client.login(this.options.password)
+        await this.emitAsync('ready')
         this.isReady=true
+        await this.emitAsync('start')
+        this.startTime=new Date().getTime()
     }
     private getAllChannels():ChannelId[]{
         return [...this.gl.keys()].map(gid=>`group:${gid}`)
@@ -529,8 +471,8 @@ export interface Bot extends EventDeliver,Omit<Client, keyof EventDeliver>,Bot.S
     prependListener<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, listener: (this: this, ...args: any[]) => void):EventDeliver.Dispose;
     emit<T extends keyof Bot.AllEventMap<this>>(event: T, ...args:Parameters<Bot.AllEventMap<this>[T]>):void;
     emit<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, ...args:any[]):void;
-    emitSync<T extends keyof Bot.AllEventMap<this>>(event: T, ...args:Parameters<Bot.AllEventMap<this>[T]>):Promise<void>;
-    emitSync<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, ...args:any[]):Promise<void>;
+    emitAsync<T extends keyof Bot.AllEventMap<this>>(event: T, ...args:Parameters<Bot.AllEventMap<this>[T]>):Promise<void>;
+    emitAsync<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, ...args:any[]):Promise<void>;
     bailSync<T extends keyof Bot.AllEventMap<this>>(event: T, ...args:Parameters<Bot.AllEventMap<this>[T]>):Promise<any>;
     bailSync<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, ...args:any[]):Promise<any>;
     bail<T extends keyof Bot.AllEventMap<this>>(event: T, ...args:Parameters<Bot.AllEventMap<this>[T]>):any;
@@ -585,6 +527,7 @@ export namespace Bot{
         [P in keyof LifeCycle as `after-${P}`]:LifeCycle[P]
     }
     export interface LifeCycle{
+        start():void
         'ready'():void
         'dispose'():void
         'command-add'(command:Command):void
