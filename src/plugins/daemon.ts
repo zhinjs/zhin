@@ -10,11 +10,7 @@ export function install(bot:Bot,config:DaemonConfig={}){
     exitCommand && bot
         .command(exitCommand === true ? 'exit' : exitCommand)
         .desc('关闭bot')
-        .check(async ({event}) => {
-            if (!bot.isMaster(event.user_id) && !bot.isAdmin(event.user_id)) {
-                return '权限不足'
-            }
-        })
+        .auth('master','admins')
         .option('restart', '-r  重新启动')
         .shortcut('关机')
         .shortcut('重启', {options: {restart: true}})

@@ -22,9 +22,9 @@ export class Command<T extends keyof TriggerEventMap=keyof TriggerEventMap,A ext
     bot:Bot
     parent:Command=null
     children:Command[]=[]
-    public authority:number=1
     descriptions:string[]=[]
     shortcuts:Command.Shortcut[]=[]
+    authorities:Command.Authority[]
     private checkers:Command.Callback<T,A,O>[]=[]
     private callback:Command.Callback<T,A,O>[]=[]
     public examples:string[]=[]
@@ -35,9 +35,16 @@ export class Command<T extends keyof TriggerEventMap=keyof TriggerEventMap,A ext
         this.args=Command.findDeclarationArgs(declaration)
     }
     // 定义指令调用所需权限
-    auth(authority:number){
-        this.authority=authority
-        return this
+    auth(...authorities:Command.Authority[]){
+        this.authorities=[].concat(authorities)
+        return this.check(({event},...args)=>{
+            const userAuthorities:Command.Authority[]=[]
+            if(this.bot.isMaster(event.user_id)) userAuthorities.push('master')
+            if(this.bot.isAdmin(event.user_id)) userAuthorities.push('admins')
+            if(event.message_type==='group' && event.member.is_owner) userAuthorities.push('owner')
+            if(event.message_type==='group' && event.member.is_admin) userAuthorities.push('admin')
+            if(!userAuthorities.some(auth=>this.authorities.includes(auth))) return '权限不足'
+        })
     }
     // 添加指令描述文本
     desc(desc:string){
@@ -237,7 +244,7 @@ export class Command<T extends keyof TriggerEventMap=keyof TriggerEventMap,A ext
         }
         const output:string[]=[`${this.name} ${createArgsOutput()} ${this.descriptions.join(';')}`]
         if(!simple){
-            if(showAuth) output.push(`authority:${this.authority}`)
+            if(showAuth) output.push(`authority:${this.authorities.join()}`)
             if(this.aliasNames.length)output.push(` alias:${this.aliasNames.join(',')}`)
             if(this.shortcuts.length)output.push(` shortcuts:${this.shortcuts.map(shortcut=>String(shortcut.name))}`)
             if(!isEmpty(this.options)){
@@ -286,8 +293,7 @@ export namespace Command{
     }
     export type Callback<T extends keyof TriggerEventMap=keyof TriggerEventMap,A extends any[] = any[], O extends {} = {},>
         = (this:Command<T,A,O>,argv:Argv<T,A,O>, ...args: A) => Awaitable<Sendable|boolean|void>
-
-
+    export type Authority='admin'|'owner'|'master'|'admins'
     export type OptionType<S extends string> = Argv.ExtractFirst<Argv.Replace<S, '>', ']'>, any>
     export function removeDeclarationArgs(name: string): string {
         return name.replace(/[<[].+/, '').trim();
