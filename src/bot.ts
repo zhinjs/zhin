@@ -328,14 +328,14 @@ export class Bot extends EventDeliver{
         }
         return (message:Bot.MessageEvent, next?:Bot.Next)=> {
             let index = -1
-            const dispatch= (i)=>{
+            const dispatch= (i,event=message)=>{
                 if (i <= index) return Promise.reject(new Error('next() called multiple times'))
                 index = i
                 let fn = middlewares[i]
                 if (i === middlewares.length) fn = next
                 if (!fn) return Promise.resolve()
                 try {
-                    return Promise.resolve(fn(message, dispatch.bind(null, i + 1)));
+                    return Promise.resolve(fn(event, dispatch.bind(null, i + 1)));
                 } catch (err) {
                     return Promise.reject(err)
                 }
@@ -423,7 +423,7 @@ export class Bot extends EventDeliver{
             this.plugin(this.load(pluginName),this.options.plugins[pluginName])
         }
         this.middleware(async (message,next)=>{
-            const result=await this.executeCommand(message).catch(e=>e.message)
+            const result=await this.executeCommand(message).catch(e=>e.message as string)
             if(result && typeof result!=='boolean') await message.reply(result)
             else next()
         })
