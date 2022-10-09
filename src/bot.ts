@@ -14,19 +14,6 @@ import {deepClone, deepMerge, wrapExport,remove} from "@/utils";
 import {Awaitable, Dict} from "@/types";
 import {Plugin} from "@/plugin";
 import Koa from "koa";
-declare module 'icqq'{
-    interface Message{
-        cqCode:string
-        toJSON<T extends keyof IcqqMessage>(...besides:T[]):Omit<IcqqMessage, T>
-    }
-}
-IcqqMessage.prototype.toJSON=function<T extends keyof IcqqMessage> (...keys:T[]){
-    return Object.fromEntries(Object.keys(this).filter((key)=>{
-        return typeof this[key]!=="function" && !keys.includes(key as any)
-    }).map(key=>{
-        return [key,this[key]]
-    })) as Omit<IcqqMessage, T>
-}
 interface Message {
     type: 'start' | 'queue'
     body: any
@@ -397,7 +384,7 @@ export class Bot extends EventDeliver{
         if(!argv.client)argv.client=this.client
         if(!argv.args)argv.args=[]
         if(!argv.argv)argv.argv=[]
-        if(!argv.cqCode) argv.cqCode=argv.event.cqCode
+        if(!argv.cqCode) argv.cqCode=argv.event.toCqcode()
         if(!argv.options) argv.options={}
         const command=this.findCommand(argv as Argv)
         if(command && command.match(argv.event)){
@@ -411,7 +398,7 @@ export class Bot extends EventDeliver{
             }
         }
     }
-    async executeCommand(message:Bot.MessageEvent,cqCode=message.cqCode):Promise<Sendable|boolean|void>{
+    async executeCommand(message:Bot.MessageEvent,cqCode=message.toCqcode()):Promise<Sendable|boolean|void>{
         const argv=Argv.parse(cqCode)
         argv.event=message
         return this.execute(argv)

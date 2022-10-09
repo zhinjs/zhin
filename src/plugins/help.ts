@@ -14,7 +14,7 @@ export function install(bot:Bot){
                 return output.filter(Boolean).join('\n')
             }
 
-            const command = bot.findCommand({name: target,event, cqCode: event.cqCode,argv})
+            const command = bot.findCommand({name: target,event, cqCode: event.toCqcode(),argv})
             if (!command?.match(event)) {
                 return
             }
