@@ -16,6 +16,7 @@ import {Plugin} from "@/plugin";
 import Koa from "koa";
 declare module 'icqq'{
     interface Message{
+        cqCode:string
         toJSON<T extends keyof IcqqMessage>(...besides:T[]):Omit<IcqqMessage, T>
     }
 }
@@ -514,11 +515,11 @@ export namespace Bot{
         data_dir:path.join(process.cwd(),'data')
     }
     type BeforeEventMap<T>={
-        [P in keyof EventMap<T> as `before-${P}`]:EventMap<T>[P]
+        [P in keyof EventMap as `before-${P}`]:EventMap[P]
     } & BeforeLifeCycle
 
     type AfterEventMap<T>={
-        [P in keyof EventMap<T> as `after-${P}`]:EventMap<T>[P]
+        [P in keyof EventMap as `after-${P}`]:EventMap[P]
     } & AfterLifeCycle
     type BeforeLifeCycle={
         [P in keyof LifeCycle as `before-${P}`]:LifeCycle[P]
@@ -535,7 +536,7 @@ export namespace Bot{
         'plugin-add'(plugin:Plugin):void
         'plugin-remove'(plugin:Plugin):void
     }
-    export interface BotEventMap<T> extends EventMap<T>,LifeCycle{
+    export interface BotEventMap<T> extends EventMap,LifeCycle{
     }
     export interface AllEventMap<T> extends BeforeEventMap<T>,AfterEventMap<T>,BotEventMap<T>{}
     export interface Options extends ClientConfig{

@@ -4,5 +4,8 @@
     "emitDeclarationOnly": true,
     "rootDir": "src",
     "outFile": "lib/index.d.ts"
+  },
+  "dtsc": {
+    "inline": ["icqq-cq-enable"],
   }
 }
