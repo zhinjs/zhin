@@ -12,7 +12,7 @@ export type Plugin<T = any>= (Plugin.Function<T> | Plugin.Object<T>) & {
     [key:string]:any
 }
 export namespace Plugin{
-    export type Function<T>=(bot:Bot,options:T)=>any
+    export type Function<T>=(bot:Bot,options:T)=>void|Bot.Dispose
     export interface Object<T>{
         install:Function<T>
         name:string

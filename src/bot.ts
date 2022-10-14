@@ -5,8 +5,7 @@ import {Logger,getLogger,configure,Configuration} from "log4js";
 import * as Yaml from 'js-yaml'
 import * as path from 'path'
 import * as fs from 'fs'
-import 'icqq-cq-enable'
-import {Client,Message as IcqqMessage, Config as ClientConfig, Sendable} from "icqq";
+import {Client, Config as ClientConfig, Sendable} from "icqq";
 import {Command, TriggerEventMap} from "@/command";
 import {Argv} from "@/argv";
 import {DiscussMessageEvent, EventMap, GroupMessageEvent, PrivateMessageEvent} from "icqq/lib/events";
@@ -210,7 +209,14 @@ export class Bot extends EventDeliver{
                 return true
             }
             const installFunction= typeof plugin==="function"?plugin:plugin.install
-            installFunction.apply(plugin,[proxy,options])
+            if(this.plugins.get(plugin.name)) {
+                this.logger.warn('重复载入:'+plugin.name)
+                return
+            }
+            const result=installFunction.apply(plugin,[proxy,options])
+            if(typeof result==='function'){
+                plugin.disposes.push(result)
+            }
             this.plugins.set(plugin.name,plugin)
             this.logger.info('已载入:'+plugin.name)
             this.emit('plugin-add',plugin)

@@ -39,19 +39,21 @@ export function deepMerge(base, ...from) {
     return base;
 }
 // 深拷贝
-export function deepClone(obj) {
-    if (typeof obj !== 'object')
-        return obj;
-    if (!obj)
-        return obj;
+export function deepClone(obj,cache=new WeakMap()) {
+    if(obj===null) return obj
+    if(obj instanceof Date) return new Date(obj)
+    if(obj instanceof RegExp) return new RegExp(obj)
+    if(typeof obj!=='object') return obj
+    if(cache.get(obj)) return cache.get(obj)
     //判断拷贝的obj是对象还是数组
     if (Array.isArray(obj))
-        return obj.map((item) => deepClone(item));
+        return obj.map((item) => deepClone(item,cache));
     const objClone = {};
+    cache.set(obj,objClone)
     for (const key in obj) {
         if (obj.hasOwnProperty(key)) {
             if (obj[key] && typeof obj[key] === "object") {
-                objClone[key] = deepClone(obj[key]);
+                objClone[key] = deepClone(obj[key],cache);
             }
             else {
                 objClone[key] = obj[key];

@@ -1,11 +1,11 @@
 {
   "name": "zhin",
-  "version": "1.1.56",
+  "version": "1.1.57",
   "description": "知音",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "scripts": {
-    "start": "node .",
+    "start": "",
     "compile": "tsc --project tsconfig.build.json && tsc-alias -p tsconfig.build.json",
     "build": "npm run compile && dtsc --project tsconfig.dtsc.json",
     "dev": "ts-node -r tsconfig-paths/register -r esbuild-register ./src/test",
@@ -56,7 +56,6 @@
     "esbuild-register": "^3.3.3",
     "event-deliver": "^1.0.2",
     "icqq": "^0.0.6",
-    "icqq-cq-enable": "^1.0.0",
     "js-yaml": "^4.1.0",
     "koa": "^2.13.4",
     "lodash": "^4.17.21",
