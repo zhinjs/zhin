@@ -481,25 +481,24 @@ export namespace Bot{
     export const defaultConfig:Partial<Options>={
         uin:1472558369,
         password: 'zhin.icu',
-        plugins:{},
+        plugins:{
+            daemon:null,
+            help:null,
+            watcher:process.cwd()
+        },
         log_level:'info',
         services:{},
         delay:{},
         logConfig:{
             appenders: {
-                console:{type:'console'},
                 zhin: {
                     type:'file',
                     filename:path.join(process.cwd(),'logs.log')
                 }
             },
             categories:{
-                default:{
-                    appenders:['console'],
-                    level:'error'
-                },
                 zhin:{
-                    appenders:['console','zhin'],
+                    appenders:['zhin'],
                     level:'info'
                 }
             }
