@@ -430,6 +430,13 @@ export class Bot extends EventDeliver{
         this.isReady=true
         await this.emitAsync('start')
         this.startTime=new Date().getTime()
+        this.on('message',(e)=>{
+            if(e.toCqcode()==='test'){
+                this.pickGroup(123).pickMember(456).once('message',(e)=>{
+
+                })
+            }
+        })
     }
     private getAllChannels():ChannelId[]{
         return [...this.gl.keys()].map(gid=>`group:${gid}`)
@@ -491,15 +498,22 @@ export namespace Bot{
         delay:{},
         logConfig:{
             appenders: {
-                zhin: {
+                consoleOut:{
+                    type: 'console'
+                },
+                saveFile: {
                     type:'file',
                     filename:path.join(process.cwd(),'logs.log')
                 }
             },
-            categories:{
-                zhin:{
-                    appenders:['zhin'],
-                    level:'info'
+            categories: {
+                zhin: {
+                    appenders: ['consoleOut', 'saveFile'],
+                    level: 'info'
+                },
+                default: {
+                    appenders: ['consoleOut'],
+                    level: 'info'
                 }
             }
         },

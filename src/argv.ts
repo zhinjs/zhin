@@ -12,6 +12,8 @@ export interface Argv<T extends keyof TriggerEventMap=keyof TriggerEventMap,A ex
     options?: O//携带的options
     error?: string//是否报错
 }
+
+
 export namespace Argv{
     export interface Domain {
         string: string
