@@ -1,4 +1,5 @@
 import {join,resolve} from 'path'
+import 'oicq2-cq-enable'
 import {fork,ChildProcess} from "child_process";
 import {Logger,getLogger,configure,Configuration} from "log4js";
 import * as Yaml from 'js-yaml'
@@ -75,15 +76,6 @@ export function defineConfig(options:Bot.Options){
     return options
 }
 
-export function getStack(): NodeJS.CallSite[] {
-    const orig = Error.prepareStackTrace;
-    Error.prepareStackTrace = (_, stack) => stack;
-
-    const stack: NodeJS.CallSite[] = new Error().stack as any;
-
-    Error.prepareStackTrace = orig;
-    return stack;
-}
 
 export class Bot extends Client{
     isReady:boolean=false
@@ -134,6 +126,17 @@ export class Bot extends Client{
                 return Reflect.get(_this,p,receiver)
             }
         })
+    }
+    emit(event,...args){
+        const listeners=this.listeners(event)
+        if(typeof event==="string" && !event.startsWith('before-') && !event.startsWith('after-')){
+            listeners.unshift(...this.listeners(`before-${event}`))
+            listeners.push(...this.listeners(`after-${event}`))
+        }
+        for(const listener of listeners){
+            listener.apply(this,args)
+        }
+        return true
     }
     service<K extends keyof Bot.Services>(key:K):Bot.Services[K]
     service<K extends keyof Bot.Services>(key:K,service:Bot.Services[K]):this
@@ -194,7 +197,12 @@ export class Bot extends Client{
         if(typeof entry==='string'){
             const result=this.plugins.get(entry)
             if(result) return result
-            plugin=this.load(entry)
+            try{
+                plugin=this.load(entry)
+            }catch (e){
+                this.logger.warn(e.message)
+                return this
+            }
         }else{
             plugin=entry
         }
@@ -362,6 +370,7 @@ export class Bot extends Client{
         if(typeof plugin==='string'){
             plugin=this.plugins.get(plugin)
         }
+        if(!plugin) return this
         plugin.dispose()
         this.plugins.delete(plugin.name)
         if(plugin.children){
@@ -468,10 +477,18 @@ export class Bot extends Client{
     }
     async start(){
         for(const serviceName of Object.keys(this.options.services)){
-            this.plugin(this.load(serviceName,this.options.services[serviceName]))
+            try{
+                this.plugin(this.load(serviceName,this.options.services[serviceName]))
+            }catch (e){
+                this.logger.warn(e.message)
+            }
         }
         for(const pluginName of Object.keys(this.options.plugins)){
-            this.plugin(this.load(pluginName),this.options.plugins[pluginName])
+            try{
+                this.plugin(this.load(pluginName),this.options.plugins[pluginName])
+            }catch (e){
+                this.logger.warn(e.message)
+            }
         }
         this.middleware(async (message,next)=>{
             const result=await this.executeCommand(message).catch(e=>e.message as string)
@@ -490,6 +507,10 @@ export class Bot extends Client{
     }
     async emitSync(event,...args){
         const listeners=this.listeners(event)
+        if(typeof event==="string"){
+            listeners.unshift(...this.listeners(`before-${event}`))
+            listeners.push(...this.listeners(`after-${event}`))
+        }
         for(const listener of listeners){
             await listener.apply(this,args)
         }
@@ -498,6 +519,10 @@ export class Bot extends Client{
     bail(event,...args){
         let result
         const listeners=this.listeners(event)
+        if(typeof event==="string"){
+            listeners.unshift(...this.listeners(`before-${event}`))
+            listeners.push(...this.listeners(`after-${event}`))
+        }
         for(const listener of listeners){
             result=listener.apply(this,args)
             if(isBailed(result)) return result
@@ -506,6 +531,10 @@ export class Bot extends Client{
     async bailSync(event,...args){
         let result
         const listeners=this.listeners(event)
+        if(typeof event==="string"){
+            listeners.unshift(...this.listeners(`before-${event}`))
+            listeners.push(...this.listeners(`after-${event}`))
+        }
         for(const listener of listeners){
             result=await listener.apply(this,args)
             if(isBailed(result)) return result

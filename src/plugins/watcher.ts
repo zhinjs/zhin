@@ -37,8 +37,12 @@ export function install(this:Plugin,bot:Bot,root:string){
         }
     }
     function loadDependency(name:string,options:Dict){
-        const plugin=bot.load(name)
-        bot.plugin(plugin,options)
+        try{
+            const plugin=bot.load(name)
+            bot.plugin(plugin,options)
+        }catch (e){
+            bot.logger.warn(e.message)
+        }
     }
     function unloadDependency(name:string){
         bot.dispose(name)
@@ -65,7 +69,11 @@ export function install(this:Plugin,bot:Bot,root:string){
             const dependentPlugins=[...bot.plugins.values()].filter(p=>p.using && p.using.includes(plugin.name as never))
             for(const dependentPlugin of dependentPlugins){
                 bot.logger.info('正在重载依赖该插件的插件:'+dependentPlugin.name)
-                reloadDependency(dependentPlugin,dependentPlugin.fullPath)
+                try{
+                    reloadDependency(dependentPlugin,dependentPlugin.fullPath)
+                }catch (e){
+                    bot.logger.warn(e.message)
+                }
             }
             if(dependentPlugins.length){
                 bot.emit('ready')

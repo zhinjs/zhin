@@ -1,6 +1,6 @@
 {
   "name": "zhin",
-  "version": "1.2.6",
+  "version": "1.2.14",
   "description": "知音",
   "main": "lib/index.js",
   "bin": {
@@ -63,6 +63,7 @@
     "lodash": "^4.17.21",
     "log4js": "^6.6.1",
     "oicq": "^2.3.1",
+    "oicq2-cq-enable": "^1.0.6",
     "tsconfig-paths": "^4.0.0"
   }
 }

@@ -5,6 +5,7 @@ import * as path from "path";
 import * as fs from "fs";
 
 export function deepMerge(base, ...from) {
+    if(base===null||base===undefined) base=from.shift()
     if (from.length === 0) {
         return base;
     }
