@@ -32,15 +32,19 @@ export function install(bot:Bot,config:DaemonConfig={}){
 
     interface Message {
         type: 'send'
-        body: any
+        body: any,
+        times?:number
     }
     process.on('message', (data: Message) => {
         if (data.type === 'send') {
-            const {channelId, message} = data.body
+            let {channelId, message} = data.body
+            const times=data.times
             if (bot && bot.isOnline()) {
+                if(times) message+=`耗时：${(new Date().getTime()-times)/1000}s`
                 bot.sendMsg(channelId, message)
             } else {
                 const dispose = bot.on('system.online', () => {
+                    if(times) message+=`耗时：${(new Date().getTime()-times)/1000}s`
                     bot.sendMsg(channelId, message)
                     dispose()
                 })

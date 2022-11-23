@@ -1,7 +1,7 @@
 import {Argv} from "@/argv";
-import {DiscussMessageEvent, GroupMessageEvent, PrivateMessageEvent} from "icqq/lib/events";
+import {DiscussMessageEvent, GroupMessageEvent, PrivateMessageEvent} from "oicq/lib/events";
 import {Awaitable, Define} from "@/types";
-import {Sendable} from "icqq";
+import {Sendable} from "oicq";
 import {isEmpty, keys} from "lodash";
 import {Bot} from "@/bot";
 interface HelpOptions{

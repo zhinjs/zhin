@@ -5,5 +5,8 @@
     "rootDir": "src",
     "outFile": "lib/index.d.ts"
   },
-  "exclude": ["src/plugins/*"]
+  "exclude": ["src/plugins/*"],
+  "dtsc": {
+    "inline": ["@zhinjs/schema"],
+  }
 }

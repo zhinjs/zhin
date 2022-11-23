@@ -1,6 +1,12 @@
 import {Bot} from "@/bot";
 
 export function install(bot:Bot){
+    bot.on('command-add',(command)=>{
+        command.option('help','-h 显示帮助信息',{hidden:true})
+            .action(({options})=>{
+                if(options.help) return command.help().concat('回复“帮助 指令名”以查看对应指令帮助。').join('\n')
+            })
+    })
     bot.command('help [command:string]')
         .desc('显示指令的帮助信息')
         .shortcut('帮助',{fuzzy:true})
@@ -21,10 +27,4 @@ export function install(bot:Bot){
 
             return command.help({...options,dep:1}).concat('回复“帮助 指令名”以查看对应指令帮助。').join('\n')
         })
-    bot.on('command-add',(command)=>{
-        command.option('help','-h 显示帮助信息',{hidden:true})
-            .action(({options})=>{
-                if(options.help) return command.help().concat('回复“帮助 指令名”以查看对应指令帮助。').join('\n')
-            })
-    })
 }

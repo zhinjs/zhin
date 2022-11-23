@@ -4,13 +4,6 @@ import {Dict} from "@/types";
 import * as path from "path";
 import * as fs from "fs";
 
-export function remove<T>(list: T[], item: T) {
-    const index = list.indexOf(item)
-    if (index >= 0) {
-        list.splice(index, 1)
-        return true
-    }
-}
 export function deepMerge(base, ...from) {
     if (from.length === 0) {
         return base;
@@ -519,6 +512,12 @@ export function isNullable(value: any) {
 }
 export function isBailed(value: any) {
     return value !== null && value !== false && value !== undefined
+}
+export function remove<T>(list:T[],value:T){
+    const idx=list.indexOf(value)
+    if(idx>=0){
+        list.splice(idx,1)
+    }
 }
 export function makeArray<T>(source: T | T[]) {
     return Array.isArray(source) ? source : isNullable(source) ? [] : [source]

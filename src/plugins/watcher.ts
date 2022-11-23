@@ -50,6 +50,7 @@ export function install(this:Plugin,bot:Bot,root:string){
         let options=typeof args[0]!=='string'?args[0]:bot.options.plugins[plugin.name]
         try {
             bot.dispose(plugin.name)
+            if(plugin.functional) return
             delete require.cache[changeFile]
             if(changeFile!==plugin.fullPath){
                 delete require.cache[plugin.fullPath]
@@ -86,14 +87,14 @@ export function install(this:Plugin,bot:Bot,root:string){
             checkChange(bot.options.plugins,newOptions.plugins)
             bot.options=newOptions
         }else{
-            const plugin=[...bot.plugins.values()].find(p=>filename.includes(p.fullPath))
-            if(plugin){
+            const plugins=[...bot.plugins.values()].filter(p=>filename.includes(p.fullPath))
+            for(const plugin of plugins){
                 reloadDependency(plugin,changeFileName)
             }
         }
     })
-    this.disposes.push(()=>{
+    this.disposes.push((()=>{
         watcher.close()
         return true
-    })
+    }) as any)
 }

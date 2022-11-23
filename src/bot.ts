@@ -1,15 +1,14 @@
-import EventDeliver from "event-deliver";
 import {join,resolve} from 'path'
 import {fork,ChildProcess} from "child_process";
 import {Logger,getLogger,configure,Configuration} from "log4js";
 import * as Yaml from 'js-yaml'
 import * as path from 'path'
 import * as fs from 'fs'
-import {Client, Config as ClientConfig, Sendable} from "icqq";
+import {Client, Config as ClientConfig, Sendable} from "oicq";
 import {Command, TriggerEventMap} from "@/command";
 import {Argv} from "@/argv";
-import {DiscussMessageEvent, EventMap, GroupMessageEvent, PrivateMessageEvent} from "icqq/lib/events";
-import {deepClone, deepMerge, wrapExport,remove} from "@/utils";
+import {DiscussMessageEvent, EventMap, GroupMessageEvent, PrivateMessageEvent} from "oicq/lib/events";
+import {deepClone, deepMerge, wrapExport, remove, isBailed} from "@/utils";
 import {Awaitable, Dict} from "@/types";
 import {Plugin} from "@/plugin";
 import Koa from "koa";
@@ -23,7 +22,7 @@ let cp:ChildProcess
 export function isConstructor<R,T>(value:any):value is (new (...args:any[])=>any){
     return typeof value==='function' && value.prototype && value.prototype.constructor===value
 }
-let buffer = null
+let buffer = null,timeStart:number
 export function createWorker(options:Bot.Options|string='zhin.yaml'){
     if(typeof options!=='string') fs.writeFileSync(join(process.cwd(),'zhin.yaml'),Yaml.dump(options))
     cp=fork(join(__dirname,'worker'),[],{
@@ -40,7 +39,7 @@ export function createWorker(options:Bot.Options|string='zhin.yaml'){
         if (message.type === 'start') {
             config = message.body
             if (buffer) {
-                cp.send({type: 'send', body: buffer})
+                cp.send({type: 'send', body: buffer,times:timeStart})
                 buffer = null
             }
         } else if (message.type === 'queue') {
@@ -52,6 +51,7 @@ export function createWorker(options:Bot.Options|string='zhin.yaml'){
         if (!config || closingCode.includes(code) || code !== 51 && !config.autoRestart) {
             process.exit(code)
         }
+        timeStart=new Date().getTime()
         createWorker(options)
     })
     return cp
@@ -74,20 +74,30 @@ export function createBot(options:Partial<Bot.Options>|string){
 export function defineConfig(options:Bot.Options){
     return options
 }
-export class Bot extends EventDeliver{
+
+export function getStack(): NodeJS.CallSite[] {
+    const orig = Error.prepareStackTrace;
+    Error.prepareStackTrace = (_, stack) => stack;
+
+    const stack: NodeJS.CallSite[] = new Error().stack as any;
+
+    Error.prepareStackTrace = orig;
+    return stack;
+}
+
+export class Bot extends Client{
     isReady:boolean=false
     startTime:number
     plugins:Map<string,Plugin>=new Map<string, Plugin>()
     private services:Record<string, any>={}
-    disposes:Bot.Dispose[]=[]
+    disposes:Bot.Dispose<any>[]=[]
     middlewares:Bot.Middleware[]=[]
     commands:Map<string,Command>=new Map<string, Command>()
     master:number
     admins:number[]
-    private readonly client:Client
     public logger:Logger
     constructor(public options:Bot.Options) {
-        super();
+        super(options.uin,options);
         if(options.logConfig){
             configure(options.logConfig as Configuration)
         }
@@ -95,15 +105,9 @@ export class Bot extends EventDeliver{
         this.logger=getLogger('zhin')
         this.logger.level=options.log_level||'info'
         if(!options.uin) throw new Error('need client account')
-        this.client=new Client(options.uin,options)
         this.master=options.master
         this.admins=[].concat(options.admins).filter(Boolean)
-        const oldEmit=this.client.emit
         const _this=this
-        this.client.emit=function (event:string|symbol,...args:any[]){
-            _this.emit(event,...args)
-            return oldEmit.apply(this,[event,...args])
-        }
         this.on('dispose',()=>{
             while (this.disposes.length){
                 const dispose=this.disposes.shift()
@@ -113,12 +117,21 @@ export class Bot extends EventDeliver{
         return new Proxy(this,{
             get(target: typeof _this, p: string | symbol, receiver: any): any {
                 let result=Reflect.get(target,p,receiver)
-                if(result) return result
+                if(result!==undefined) return result
                 result=Reflect.get(target.services,p,receiver)
-                if(result) return result
-                result = Reflect.get(target.client,p,receiver)
-                if(typeof result==='function') result.bind(target.client)
                 return result
+            }
+        })
+    }
+    on(event,listener):Bot.Dispose<this>{
+        super.on(event,listener)
+        const dispose:Bot.Dispose<this>=(()=>{
+            super.off(event,listener)
+        }) as Bot.Dispose<this>
+        const _this=this
+        return new Proxy(dispose,{
+            get(target: Bot.Dispose<typeof _this>, p: string | symbol, receiver: any): any {
+                return Reflect.get(_this,p,receiver)
             }
         })
     }
@@ -129,6 +142,7 @@ export class Bot extends EventDeliver{
         if(Service===undefined){
             return this.services[key]
         }
+        if(this[key]) throw new Error('服务key不能和bot已有属性重复')
         if(isConstructor(Service)){
             this.services[key]=new Service(this,options)
         }else{
@@ -145,13 +159,22 @@ export class Bot extends EventDeliver{
     static getChannelId(event:Dict){
         return [event.message_type,event.group_id||event.discuss_id||event.sender.user_id].join(':') as ChannelId
     }
-    middleware(middleware:Bot.Middleware,prepend?:boolean):Bot.Dispose{
+    middleware(middleware:Bot.Middleware,prepend?:boolean):Bot.Dispose<this>{
         const method:'push'|'unshift'=prepend?"unshift":"push"
-        if(this.middlewares.indexOf(middleware)!==-1) return ()=>EventDeliver.remove(this.middlewares,middleware)
-        this.middlewares[method](middleware)
-        const dispose=()=>remove(this.middlewares,middleware)
-        this.disposes.push(dispose)
-        return dispose
+        let dispose:Bot.Dispose<this>
+        if(this.middlewares.indexOf(middleware)!==-1){
+            dispose=(()=>remove(this.middlewares,middleware)) as Bot.Dispose<this>
+        }else{
+            this.middlewares[method](middleware)
+            dispose=(()=>remove(this.middlewares,middleware)) as Bot.Dispose<this>
+            this.disposes.push(dispose)
+        }
+        const _this=this
+        return new Proxy(dispose,{
+            get(target: Bot.Dispose<typeof _this>, p: string | symbol, receiver: any): any {
+                return Reflect.get(_this,p,receiver)
+            }
+        })
     }
     get commandList(){
         return [...this.commands.values()].flat()
@@ -175,14 +198,34 @@ export class Bot extends EventDeliver{
         }else{
             plugin=entry
         }
+        plugin.anonymousCount=0
+        plugin.children=[]
         const _this=this
         const proxy=new Proxy(this,{
             get(target: typeof _this, p: PropertyKey, receiver: any): any {
-                const proxyEvents=['addListener','command','middleware']
+                const proxyEvents=['on','plugin','command','middleware']
                 const result=Reflect.get(target,p,receiver)
                 if(typeof result!=='function' || typeof p !=='string' || !proxyEvents.includes(p)) return result
                 return new Proxy(result,{
                     apply(target: typeof _this, thisArg: any, argArray?: any): any {
+                        if(p==='plugin'){
+                            let [entry,config]=argArray
+                            if(typeof argArray[0] !=='string'){
+                                if(typeof entry==="function"){
+                                    entry={
+                                        name:`${plugin.name}:${entry.name}`,
+                                        install:entry,
+                                        functional:true
+                                    }
+                                    if(entry.install.prototype===undefined){
+                                        plugin.anonymousCount++
+                                        entry.name=`${plugin.name}:anonymous${plugin.anonymousCount}`
+                                    }
+                                }
+                                plugin.children.push(entry)
+                            }
+                            return result.apply(thisArg,[entry,config])
+                        }
                         let res=result.apply(thisArg,argArray)
                         if(res instanceof Command){
                             (plugin).disposes.push(()=>{
@@ -278,21 +321,31 @@ export class Bot extends EventDeliver{
         }
     }
 
-    setTimeout(callback:Function,ms:number,...args):Bot.Dispose{
+    setTimeout(callback:Function,ms:number,...args):Bot.Dispose<this>{
         const timer=setTimeout(()=>{
             callback()
             dispose()
             remove(this.disposes,dispose)
         },ms,...args)
-        const dispose=()=>{clearTimeout(timer);return true}
+        const dispose=(()=>clearTimeout(timer)) as Bot.Dispose<this>
         this.disposes.push(dispose)
-        return dispose
+        const _this=this
+        return new Proxy(dispose,{
+            get(target: Bot.Dispose<typeof _this>, p: string | symbol, receiver: any): any {
+                return Reflect.get(_this,p,receiver)
+            }
+        })
     }
-    setInterval(callback:Function,ms:number,...args):Bot.Dispose{
+    setInterval(callback:Function,ms:number,...args):Bot.Dispose<this>{
         const timer=setInterval(callback,ms,...args)
-        const dispose=()=>{clearInterval(timer);return true}
+        const dispose=(()=>clearInterval(timer)) as Bot.Dispose<this>
         this.disposes.push(dispose)
-        return dispose
+        const _this=this
+        return new Proxy(dispose,{
+            get(target: Bot.Dispose<typeof _this>, p: string | symbol, receiver: any): any {
+                return Reflect.get(_this,p,receiver)
+            }
+        })
     }
     use(middleware:Bot.Middleware):this{
         this.middleware(middleware)
@@ -311,6 +364,9 @@ export class Bot extends EventDeliver{
         }
         plugin.dispose()
         this.plugins.delete(plugin.name)
+        if(plugin.children){
+            plugin.children.forEach((p)=>this.dispose(p))
+        }
         this.logger.info('已移除:'+plugin.name)
         this.emit('plugin-remove',plugin)
         return this
@@ -368,6 +424,7 @@ export class Bot extends EventDeliver{
         if (!resolved) throw new Error(`未找到${type}(${name})`)
         const result=wrapExport(resolved)
         const plugin:Plugin={
+            anonymousCount:0,
             install:result.install||result,
             author:JSON.stringify(result.author),
             version:result.version,
@@ -387,7 +444,7 @@ export class Bot extends EventDeliver{
         })
     }
     async execute(argv:Partial<Argv>){
-        if(!argv.client)argv.client=this.client
+        if(!argv.client)argv.client=this
         if(!argv.args)argv.args=[]
         if(!argv.argv)argv.argv=[]
         if(!argv.cqCode) argv.cqCode=argv.event.toCqcode()
@@ -425,18 +482,34 @@ export class Bot extends EventDeliver{
             const middleware=this.compose()
             middleware(event)
         })
-        await this.client.login(this.options.password)
-        await this.emitAsync('ready')
+        await this.login(this.options.password)
+        await this.emitSync('ready')
         this.isReady=true
-        await this.emitAsync('start')
+        await this.emitSync('start')
         this.startTime=new Date().getTime()
-        this.on('message',(e)=>{
-            if(e.toCqcode()==='test'){
-                this.pickGroup(123).pickMember(456).once('message',(e)=>{
+    }
+    async emitSync(event,...args){
+        const listeners=this.listeners(event)
+        for(const listener of listeners){
+            await listener.apply(this,args)
+        }
+    }
 
-                })
-            }
-        })
+    bail(event,...args){
+        let result
+        const listeners=this.listeners(event)
+        for(const listener of listeners){
+            result=listener.apply(this,args)
+            if(isBailed(result)) return result
+        }
+    }
+    async bailSync(event,...args){
+        let result
+        const listeners=this.listeners(event)
+        for(const listener of listeners){
+            result=await listener.apply(this,args)
+            if(isBailed(result)) return result
+        }
     }
     private getAllChannels():ChannelId[]{
         return [...this.gl.keys()].map(gid=>`group:${gid}`)
@@ -457,37 +530,25 @@ export class Bot extends EventDeliver{
         process.exit()
     }
 }
-export interface Bot extends EventDeliver,Omit<Client, keyof EventDeliver>,Bot.Services{
+export interface Bot extends Bot.Services{
     plugin(name:string):Plugin
     plugin<T>(plugin:Plugin,options?:T):this
-    on<T extends keyof Bot.AllEventMap<this>>(event: T, listener: Bot.AllEventMap<this>[T]):EventDeliver.Dispose;
-    on<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, listener: (this: this, ...args: any[]) => void):EventDeliver.Dispose;
-    before<T extends keyof Bot.BotEventMap<this>>(event: T, listener: Bot.BotEventMap<this>[T]):EventDeliver.Dispose;
-    before<S extends string>(event: S & Exclude<S, keyof Bot.BotEventMap<this>>, listener: (this: this, ...args: any[]) => void):EventDeliver.Dispose;
-    after<T extends keyof Bot.BotEventMap<this>>(event: T, listener: Bot.BotEventMap<this>[T]):EventDeliver.Dispose;
-    after<S extends string>(event: S & Exclude<S, keyof Bot.BotEventMap<this>>, listener: (this: this, ...args: any[]) => void):EventDeliver.Dispose;
-    once<T extends keyof Bot.AllEventMap<this>>(event: T, listener: Bot.AllEventMap<this>[T]):EventDeliver.Dispose;
-    once<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, listener: (this: this, ...args: any[]) => void):EventDeliver.Dispose;
-    prependListener<T extends keyof Bot.AllEventMap<this>>(event: T, listener: Bot.AllEventMap<this>[T]):EventDeliver.Dispose;
-    prependListener<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, listener: (this: this, ...args: any[]) => void):EventDeliver.Dispose;
-    emit<T extends keyof Bot.AllEventMap<this>>(event: T, ...args:Parameters<Bot.AllEventMap<this>[T]>):void;
-    emit<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, ...args:any[]):void;
-    emitAsync<T extends keyof Bot.AllEventMap<this>>(event: T, ...args:Parameters<Bot.AllEventMap<this>[T]>):Promise<void>;
-    emitAsync<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, ...args:any[]):Promise<void>;
-    bailSync<T extends keyof Bot.AllEventMap<this>>(event: T, ...args:Parameters<Bot.AllEventMap<this>[T]>):Promise<any>;
-    bailSync<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, ...args:any[]):Promise<any>;
+    on<T extends keyof Bot.AllEventMap<this>>(event: T, listener:Bot.AllEventMap<this>[T]):Bot.Dispose<this>;
+    on<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, listener:(...args:any[])=>any):Bot.Dispose<this>;
+    emitSync<T extends keyof Bot.AllEventMap<this>>(event: T, ...args:Parameters<Bot.AllEventMap<this>[T]>):Promise<void>;
+    emitSync<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, ...args:any[]):Promise<void>;
     bail<T extends keyof Bot.AllEventMap<this>>(event: T, ...args:Parameters<Bot.AllEventMap<this>[T]>):any;
     bail<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, ...args:any[]):any;
-    off<T extends keyof Bot.AllEventMap<this>>(event: T, listener: Bot.AllEventMap<this>[T]);
-    off<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, listener: (this: this, ...args: any[]) => void);
+    bailSync<T extends keyof Bot.AllEventMap<this>>(event: T, ...args:Parameters<Bot.AllEventMap<this>[T]>):Promise<any>;
+    bailSync<S extends string | symbol>(event: S & Exclude<S, keyof Bot.AllEventMap<this>>, ...args:any[]):Promise<any>;
 }
 export namespace Bot{
+    export type Dispose<T>=(()=>void) & T
     export interface Services{
         koa:Koa
     }
     export const defaultConfig:Partial<Options>={
         uin:1472558369,
-        password: 'zhin.icu',
         plugins:{
             daemon:null,
             help:null,
@@ -557,7 +618,6 @@ export namespace Bot{
         plugin_dir?:string
     }
     export type ServiceConstructor<R,T=any>=new (bot:Bot,options?:T)=>R
-    export type Dispose=()=>boolean
     export type Middleware = (event: MessageEvent, next: Next) => Awaitable<Sendable|boolean|void>;
     export type ComposedMiddleware = (event: MessageEvent, next?: Next) => Awaitable<Sendable|boolean|void>
     export type Next = () => Promise<any>;

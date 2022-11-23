@@ -1,5 +1,4 @@
-import {Client} from "icqq";
-import {DiscussMessageEvent, GroupMessageEvent, PrivateMessageEvent} from "icqq/lib/events";
+import {Client} from "oicq";
 import {TriggerEventMap} from "@/command";
 
 export interface Argv<T extends keyof TriggerEventMap=keyof TriggerEventMap,A extends any[] = any[], O = {}> {

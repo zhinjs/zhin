@@ -1,6 +1,6 @@
 {
   "name": "zhin",
-  "version": "1.1.60",
+  "version": "1.2.6",
   "description": "知音",
   "main": "lib/index.js",
   "bin": {
@@ -8,10 +8,10 @@
   },
   "types": "lib/index.d.ts",
   "scripts": {
-    "start": "",
+    "start": "node ./lib/service.js",
     "compile": "tsc --project tsconfig.build.json && tsc-alias -p tsconfig.build.json",
     "build": "npm run compile && dtsc --project tsconfig.dtsc.json",
-    "dev": "ts-node -r tsconfig-paths/register -r esbuild-register ./src/test",
+    "dev": "ts-node -r tsconfig-paths/register -r esbuild-register ./src/service.ts",
     "pub": "npm publish --access public",
     "test": "echo \\\"Error: no src/test specified\\\" && exit 1"
   },
@@ -25,7 +25,6 @@
     "zhin",
     "onebot",
     "cqhttp",
-    "icqq",
     "oicq",
     "framework",
     "bot",
@@ -54,15 +53,16 @@
     "/lib/**/LICENSE"
   ],
   "dependencies": {
+    "@zhinjs/schema": "^0.0.4",
     "chokidar": "^3.5.3",
     "esbuild": "^0.15.5",
     "esbuild-register": "^3.3.3",
     "event-deliver": "^1.0.2",
-    "icqq": "^0.0.6",
     "js-yaml": "^4.1.0",
     "koa": "^2.13.4",
     "lodash": "^4.17.21",
     "log4js": "^6.6.1",
+    "oicq": "^2.3.1",
     "tsconfig-paths": "^4.0.0"
   }
 }
