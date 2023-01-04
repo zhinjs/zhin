@@ -24,7 +24,7 @@ export class Command<T extends keyof TriggerEventMap=keyof TriggerEventMap,A ext
     children:Command[]=[]
     descriptions:string[]=[]
     shortcuts:Command.Shortcut[]=[]
-    authorities:Command.Authority[]
+    authorities:Command.Authority[]=[]
     private checkers:Command.Callback<T,A,O>[]=[]
     private callback:Command.Callback<T,A,O>[]=[]
     public examples:string[]=[]
