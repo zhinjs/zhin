@@ -673,9 +673,14 @@ export namespace Bot {
     export const defaultConfig: Partial<Options> = {
         uin: 1472558369,
         plugins: {
+            config:null,
             daemon: null,
             help: null,
-            watcher: process.cwd()
+            login:null,
+            logs:null,
+            plugin:null,
+            status:null,
+            watcher: process.cwd(),
         },
         log_level: 'info',
         services: {},
@@ -692,7 +697,7 @@ export namespace Bot {
             },
             categories: {
                 zhin: {
-                    appenders: ['consoleOut', 'saveFile'],
+                    appenders: ['saveFile'],
                     level: 'info'
                 },
                 default: {
