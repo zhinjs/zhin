@@ -15,14 +15,14 @@ export function install(app:App, config:DaemonConfig={}){
         .option('restart', '-r  重新启动')
         .shortcut('关机')
         .shortcut('重启', {options: {restart: true}})
-        .action(async ({options, event}) => {
-            const channelId = [event.message_type, event['group_id'] || event['discuss_id'] || event.user_id].join(':');
+        .action(async ({options,session}) => {
+            const channelId = [session.bot.adapter.platform,session.bot.self_id,session.message_type, session['group_id'] || session['discuss_id'] || session['user_id']].join(':');
             if (!options.restart) {
-                await event.reply('正在关机...').catch(()=>{})
+                await session.reply('正在关机...').catch(()=>{})
                 process.exit()
             }
             process.send({type: 'queue', body: {channelId, message: '已成功重启.'}})
-            await event.reply('正在重启...').catch(()=>{})
+            await session.reply('正在重启...').catch(()=>{})
             process.exit(51)
         })
     app.on('ready', () => {

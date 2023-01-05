@@ -19,7 +19,7 @@ export const name='config'
 export function install(bot:App){
     bot.command('config [key:string] [value]')
         .desc('编辑配置文件')
-        .auth('admin',"owner")
+        .auth("master","admins")
         .option('delete','-d 删除指定配置')
         .action(({options}, key,value) => {
             const config=Yaml.load(fs.readFileSync(process.env.configPath||'','utf8')) as object

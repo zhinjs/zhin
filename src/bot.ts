@@ -1,6 +1,7 @@
 import {App} from "@/app";
 import {Adapter, Adapters} from "@/adapter";
 import {OicqBot} from "@/adapters/oicq";
+import {Session} from "@/session";
 
 export type BotOptions<O={}>={
     master?:string|number
@@ -12,9 +13,10 @@ export interface Bot<K extends keyof Bots=keyof Bots,BO={},AO={},UT extends stri
     options:BotOptions<BO>
     adapter:Adapter<K,BO,AO>
     app:App
-    isMaster(user_id: UT):boolean
-    isAdmin(user_id: UT):boolean
+    isMaster(session:Session):boolean
+    isAdmin(session: Session):boolean
     start():any
+    reply(session:Session,message:Sendable,quote?:boolean):Promise<any>
     sendMsg(target_id:UT,target_type:string,message:Sendable):any
 }
 
@@ -56,7 +58,7 @@ export type SegmentElem<K extends keyof SegmentMap=keyof SegmentMap>={
 export type Segment={
     [P in keyof SegmentMap]:(input:SegmentMap[P])=>SegmentElem
 }
-export type Sendable=Segment|string|(string|Segment)[]
+export type Sendable=SegmentElem|string|(string|SegmentElem)[]
 export const segment:Segment={
     text:(data)=>({type:'text',data}),
     mention:(data)=>({type:'text',data}),
@@ -70,7 +72,7 @@ export const segment:Segment={
 }
 export class BotList<UT extends string|number> extends Array<Bot<keyof Adapters,{},{},UT>>{
     get(self_id:UT){
-        return this.find(bot=>bot.self_id===self_id)
+        return this.find(bot=>bot.self_id===self_id || bot.self_id===Number(self_id))
     }
 }
 export type BotConstruct<K extends keyof Bots=keyof Bots,BO={},AO={},UT extends string|number=number>={

@@ -4,6 +4,7 @@ import {Awaitable, Define} from "@/types";
 import {Bot, Sendable} from "@/bot";
 import {isEmpty, keys} from "lodash";
 import {App} from "@/app";
+import {Session} from "@/session";
 interface HelpOptions{
     showHidden?:boolean
     showAuth?:boolean
@@ -37,12 +38,10 @@ export class Command<T extends keyof TriggerEventMap=keyof TriggerEventMap,A ext
     // 定义指令调用所需权限
     auth(...authorities:Command.Authority[]){
         this.authorities=[].concat(authorities)
-        return this.check(({event,bot},...args)=>{
+        return this.check(({session,bot,options},...args)=>{
             const userAuthorities:Command.Authority[]=[]
-            if(bot.isMaster(event.user_id)) userAuthorities.push('master')
-            if(bot.isAdmin(event.user_id)) userAuthorities.push('admins')
-            if(event.message_type==='group' && event.member.is_owner) userAuthorities.push('owner')
-            if(event.message_type==='group' && event.member.is_admin) userAuthorities.push('admin')
+            if(bot.isMaster(session)) userAuthorities.push('master')
+            if(bot.isAdmin(session)) userAuthorities.push('admins')
             if(!userAuthorities.some(auth=>this.authorities.includes(auth))) return '权限不足'
         })
     }
@@ -68,8 +67,8 @@ export class Command<T extends keyof TriggerEventMap=keyof TriggerEventMap,A ext
         this.children.push(command)
         return command
     }
-    match(message:PrivateMessageEvent | GroupMessageEvent | DiscussMessageEvent){
-        return !this.triggerEvent||this.triggerEvent===message.message_type
+    match(session:Session){
+        return !this.triggerEvent||this.triggerEvent===session.message_type
     }
     // 定义别名
     alias(...name:string[]){
@@ -127,11 +126,11 @@ export class Command<T extends keyof TriggerEventMap=keyof TriggerEventMap,A ext
             const content=argv.argv.shift()
             const argDecl=this.args[args.length]
 
-            if (content[0] !== '-' && Argv.resolveConfig(argDecl?.type).greedy) {
-                args.push(Argv.parseValue([content, ...argv.argv].join(' '), 'argument', argv, argDecl));
+            if (content[0]?.data['text'] !== '-' && Argv.resolveConfig(argDecl?.type).greedy) {
+                args.push(Argv.parseValue([content, ...argv.argv].flat(), 'argument', argv, argDecl));
                 break;
             }
-            if (content[0] !== '-' && !Object.values(this.options).find(opt=>opt.shortName===content) && argDecl) {
+            if (content[0]?.data['text'] !== '-' && !Object.values(this.options).find(opt=>opt.shortName===content[0]?.data['text']) && argDecl) {
                 if(argDecl.variadic){
                     args.push(...[content].concat(argv.argv).map(str=>Argv.parseValue(str, 'argument', argv, argDecl)));
                     break;
@@ -140,7 +139,7 @@ export class Command<T extends keyof TriggerEventMap=keyof TriggerEventMap,A ext
                     continue;
                 }
             }
-            const optionDecl=[...Object.values(this.options)].find(decl=>decl.shortName===content)
+            const optionDecl=[...Object.values(this.options)].find(decl=>decl.shortName===content[0]?.data['text'])
             if(optionDecl && !options[optionDecl.name]){
                 if(optionDecl.declaration.required && !optionDecl.initial && (!argv.argv[0] || options[argv.args[0]])){
                     argv.error=`option ${optionDecl.name} is required`
@@ -151,7 +150,7 @@ export class Command<T extends keyof TriggerEventMap=keyof TriggerEventMap,A ext
                             options[optionDecl.name]=argv.argv.map(arg=>Argv.parseValue(arg,'option',argv,optionDecl.declaration))
                             break;
                         } else if(Argv.resolveConfig(optionDecl.declaration.type).greedy){
-                            options[optionDecl.name]=Argv.parseValue(argv.argv.join(' '),'option',argv,optionDecl.declaration)
+                            options[optionDecl.name]=Argv.parseValue(argv.argv.flat(),'option',argv,optionDecl.declaration)
                             break;
                         }else{
                             options[optionDecl.name]=Argv.parseValue(argv.argv.shift(),'option',argv,optionDecl.declaration)
@@ -177,19 +176,20 @@ export class Command<T extends keyof TriggerEventMap=keyof TriggerEventMap,A ext
     private parseShortcut(argv:Argv){
         const args=argv.args||=[],options=argv.options||={}
         for(const shortcut of this.shortcuts){
-            if(typeof shortcut.name==='string' && argv.cqCode){
+            const segment=argv.segments?.length?argv.segments[0]:undefined
+            if(typeof shortcut.name==='string' && segment.type==='text' && segment.data['text']===shortcut.name){
                 args.push(...(shortcut.args||[]))
                 Object.assign(options,shortcut.options||{})
             }
-            if(shortcut.name instanceof RegExp){
-                const matched=argv.cqCode.match(shortcut.name)
+            if(shortcut.name instanceof RegExp && segment.type==='text'){
+                const matched=(segment.data['text'] as string).match(shortcut.name)
                 if(matched){
                     matched.forEach((str,index)=>{
                         if(index===0)return
                         if(shortcut.args){
                             shortcut.args.forEach((arg,i)=>{
                                 if(typeof arg==='string' && arg.includes(`${index}`)){
-                                    args.push(Argv.parseValue(arg.replace(`$${index}`,str),'argument',argv,this.args[i]))
+                                    args.push(Argv.parseValue([{type:"text",data:{text:arg.replace(`$${index}`,str)}}],'argument',argv,this.args[i]))
                                 }
                             })
                         }
@@ -293,7 +293,7 @@ export namespace Command{
     }
     export type Callback<T extends keyof TriggerEventMap=keyof TriggerEventMap,A extends any[] = any[], O extends {} = {},>
         = (this:Command<T,A,O>,argv:Argv<T,A,O>, ...args: A) => Awaitable<Sendable|boolean|void>
-    export type Authority='admin'|'owner'|'master'|'admins'
+    export type Authority='master'|'admins'
     export type OptionType<S extends string> = Argv.ExtractFirst<Argv.Replace<S, '>', ']'>, any>
     export function removeDeclarationArgs(name: string): string {
         return name.replace(/[<[].+/, '').trim();

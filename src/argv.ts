@@ -1,14 +1,13 @@
 import {TriggerEventMap} from "@/command";
-import {Bot} from "@/bot";
+import {Bot, SegmentElem} from "@/bot";
 import {Session} from "@/session";
 
 export interface Argv<T extends keyof TriggerEventMap=keyof TriggerEventMap,A extends any[] = any[], O = {}> {
-    name:string//指令名称
-    argv?:string[]
+    name?:string//指令名称
+    argv?:SegmentElem[][]
     session:Session
     bot?:Bot
-    event:TriggerEventMap[T]
-    cqCode?: string//原文
+    segments?: SegmentElem[]//原文
     args?: A//携带的args
     options?: O//携带的options
     error?: string//是否报错
@@ -51,7 +50,7 @@ export namespace Argv{
         variadic?: boolean
         required?: boolean
     }
-    export type Transform<T> = (source: string) => T
+    export type Transform<T> = (source: SegmentElem[]) => T
     export interface DomainConfig<T> {
         transform?: Transform<T>
         greedy?: boolean
@@ -60,13 +59,13 @@ export namespace Argv{
         if (typeof type === 'function') {
             return type
         } else if (type instanceof RegExp) {
-            return (source: string) => {
-                if (type.test(source)) return source
+            return (source: SegmentElem[]) => {
+                if (source.every(s=>s.type==='text') && source.map(s=>s.data['text']).join('').match(type)) return source
                 throw new Error()
             }
         } else if (Array.isArray(type)) {
-            return (source: string) => {
-                if (type.includes(source)) return source
+            return (source: SegmentElem[]) => {
+                if (type.includes(source.map(s=>s.data['text']).join(''))) return source
                 throw new Error()
             }
         }
@@ -76,86 +75,47 @@ export namespace Argv{
     export function createDomain<K extends keyof Domain>(name: K, transform: Transform<Domain[K]>, options?: DomainConfig<Domain[K]>) {
         typeTransformer[name] = { ...options, transform }
     }
-    createDomain('string', source => source)
-    createDomain('text', source => source, { greedy: true })
+    createDomain('string', source => source.map(s=>s.data['text']).join(''))
+    createDomain('text', source => source.map(s=>s.data['text']).join(''), { greedy: true })
     createDomain('boolean', () => true)
-    createDomain('regexp', (source) => new RegExp(source))
-    createDomain('array', (source) => JSON.parse(source))
     createDomain('number', (source) => {
-        const value = +source
+        const value = +source[0].data['text']
         if (Number.isFinite(value)) return value
         throw new Error('无效的数值')
     })
-    createDomain('object',(source)=>{
-        try {
-            return JSON.parse(source)
-        }catch {
-            throw new Error('无效的对象')
-        }
-    })
-    createDomain('function',(source)=>{
-        try{
-            return new Function(source)
-        }catch {
-            throw new Error('无效的函数')
-        }
-    })
     createDomain('integer', (source) => {
-        const value = +source
+        const value = +source[0].data['text']
         if (value * 0 === 0 && Math.floor(value) === value) return value
         throw new Error('无效的整数')
     })
     createDomain('qq',(source)=>{
-        const atMsg = /\[CQ:at,type=at,qq=(\d+).*]/;
-        if (atMsg.test(source)) {
-            source=atMsg.exec(source)[1]
-        }
-        const value = +source
-        if (value * 0 === 0 && Math.floor(value) === value) return value
+        if (source[0].type==='mention') return source[0].data['user_id']
         throw new Error('无效的用户qq')
 
-    })
-    createDomain('date', (source) => {
-        const timestamp = new Date(source)
-        if (+timestamp) return timestamp
-        throw new Error('无效的日期')
     })
     const BRACKET_REGEXP = /<[^>]+>|\[[^\]]+\]/g
     interface DeclarationList extends Array<Declaration> {
         stripped: string
     }
-    export function parse(content:string):Partial<Argv>{
-        const message=content.split(' ')
-        const name=message.shift()
-        function mergeQuote(quote, list, start) {
-            let end = list.slice(start).findIndex(str => str.endsWith(quote));
-            end = end === -1 ? list.length : start + end + 1;
-            const mergeList = message.slice(start, end);
-            list.splice(start, end - start);
-            let result:string=mergeList.join(' ')
-            if(['"',"'"].includes(quote)){
-                result=result.replace(new RegExp(`${quote}`, 'g'), '')
-            }
-            list.splice(start,0,result);
-        }
-        message.forEach((msg, start) => {
-            if (msg.startsWith('"')) {
-                mergeQuote('"', message, start);
-            }
-            if (msg.startsWith("'")) {
-                mergeQuote("'", message, start);
-            }
-            if (msg.startsWith("$(")) {
-                mergeQuote(")", message, start);
-            }
-            if(msg.startsWith('[CQ')){
-                mergeQuote(']',message,start)
-            }
-        });
+    export function parse(content:SegmentElem[]):Partial<Argv>{
+        let argv:SegmentElem[][]=[]
+        content.forEach(segment=>{
+            let argvItem:SegmentElem[]=[]
+            if(segment.type!=='text') argvItem.push(segment)
+            else segment.data['text'].split(' ').forEach(text=>{
+                argvItem.push({
+                    type:'text',
+                    data:{text}
+                })
+                argv.push([...argvItem])
+                argvItem=[]
+            })
+        })
+        const first=argv.shift()[0]
         return {
-            name,
-            argv:message.filter(Boolean),
-            cqCode:content
+            name:first.data['text']||'',
+            argv,
+            segments:content
         }
     }
     export function parseDecl(source: string) {
@@ -183,10 +143,10 @@ export namespace Argv{
     export function resolveConfig(type: Type) {
         return typeof type === 'string' ? typeTransformer[type] || {} : {}
     }
-    export function parseValue(source: string, kind: string, argv: Argv, decl: Declaration = {}) {
+    export function parseValue(source: SegmentElem[], kind: string, argv: Argv, decl: Declaration = {}) {
         const { name, type, initial } = decl
         // no explicit parameter & has fallback
-        const implicit = source === ''
+        const implicit = source.length===1&& source[0].type==='text' && source[0].data['text']===''
         if (implicit && initial !== undefined) return initial
         // apply domain callback
         const transform = resolveType(type)

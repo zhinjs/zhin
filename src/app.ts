@@ -145,6 +145,9 @@ export class App extends EventEmitter {
             Construct=Adapter.get(platform).Adapter as unknown as AdapterConstructs[K]
         }
         if(!Construct) throw new Error(`can't find adapter fom platform:${platform}`)
+        this.on(`${platform}.message`,(session)=>{
+            session.execute()
+        })
         this.adapters.set(platform,new Construct(this,platform,options))
         return this
     }
@@ -474,7 +477,7 @@ export class App extends EventEmitter {
         return this.commandList.find(cmd => {
             return cmd.name === argv.name
                 || cmd.aliasNames.includes(argv.name)
-                || cmd.shortcuts.some(({name}) => typeof name === 'string' ? name === argv.name : name.test(argv.cqCode))
+                || cmd.shortcuts.some(({name}) => typeof name === 'string' ? name === argv.name : name.test(argv.name))
         })
     }
 

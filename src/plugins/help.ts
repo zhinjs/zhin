@@ -12,7 +12,7 @@ export function install(bot:App){
         .shortcut('帮助',{fuzzy:true})
         .option('showHidden','-H 显示隐藏选项')
         .option('showAuth','-A 显示权限信息')
-        .action(({event,options,argv},target)=>{
+        .action(({options,session,argv},target)=>{
             if (!target) {
                 const commands = bot.commandList.filter(cmd => cmd.parent === null)
                 const output = commands.map(command=>command.help({...options,simple:true,dep:0})).flat()
@@ -20,8 +20,8 @@ export function install(bot:App){
                 return output.filter(Boolean).join('\n')
             }
 
-            const command = bot.findCommand({name: target,event, cqCode: event.toCqcode(),argv})
-            if (!command?.match(event)) {
+            const command = bot.findCommand({name: target,session, cqCode: session.cqCode,argv})
+            if (!command?.match(session)) {
                 return
             }
 

@@ -13,7 +13,7 @@ export function install(bot:App){
         })
     command.subcommand('plugin.detail <name:string>')
         .desc('查看指定插件详情')
-        .action(({options,event},name)=>{
+        .action(({options},name)=>{
             const {install,dispose,disposes,...detail}=bot.pluginList.find(p=>p.name===name)||{}
             if(!Object.keys(detail).length) return '未找到插件：'+name
             return JSON.stringify(detail,null,2)

@@ -23,7 +23,13 @@ export abstract class Adapter<
         this.bots=new BotList<string | number>()
         this.app.on('start',()=>this.start())
     }
-    async start(...args:any[]){}
+    async start(...args:any[]){
+
+        this.app.on(`${this.platform}.message`,(session)=>{
+            console.log(session)
+            session.execute()
+        })
+    }
     async stop(...args:any[]){}
     protected startBot(options:BotOptions<BO>){
         const Construct=Bot.botConstructors[this.platform]
