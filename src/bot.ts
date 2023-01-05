@@ -12,6 +12,8 @@ export interface Bot<K extends keyof Bots=keyof Bots,BO={},AO={},UT extends stri
     options:BotOptions<BO>
     adapter:Adapter<K,BO,AO>
     app:App
+    isMaster(user_id: UT):boolean
+    isAdmin(user_id: UT):boolean
     start():any
     sendMsg(target_id:UT,target_type:string,message:Sendable):any
 }

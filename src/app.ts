@@ -105,9 +105,6 @@ export class App extends EventEmitter {
         this.service('koa', new Koa())
         this.logger = getLogger('zhin')
         this.logger.level = options.log_level || 'info'
-        if (!options.uin) throw new Error('need client account')
-        this.master = options.master
-        this.admins = [].concat(options.admins).filter(Boolean)
         const _this = this
         this.on('dispose', () => {
             while (this.disposes.length) {
@@ -182,13 +179,6 @@ export class App extends EventEmitter {
         return this
     }
 
-    isMaster(user_id: number) {
-        return this.master === user_id
-    }
-
-    isAdmin(user_id: number) {
-        return this.admins.includes(user_id)
-    }
 
     static getChannelId(event: Dict) {
         return [event.message_type, event.group_id || event.discuss_id || event.sender.user_id].join(':') as ChannelId
@@ -353,7 +343,7 @@ export class App extends EventEmitter {
         }
         const name = nameArr.pop()
         const command = new Command(name + decl, triggerEvent)
-        command.bot = this
+        command.app=this
         if (parent) {
             command.parent = parent
             parent.children.push(command)
@@ -500,7 +490,7 @@ export class App extends EventEmitter {
             try {
                 this.plugin(pluginName, this.options.plugins[pluginName])
             } catch (e) {
-                this.logger.warn(e.message)
+                this.logger.warn(e.message,e.stack)
             }
         }
         await this.emitSync('ready')
@@ -574,7 +564,6 @@ export interface App extends App.Services {
     bail<S extends string | symbol>(event: S & Exclude<S, keyof App.AllEventMap<this>>, ...args: any[]): any;
 
     bailSync<T extends keyof App.AllEventMap<this>>(event: T, ...args: Parameters<App.AllEventMap<this>[T]>): Promise<any>;
-
     // @ts-ignore
     emitSync<P extends keyof Adapters,E extends keyof App.BotEventMaps[P]>(event: `${P}.${E}`, session:ToSession<P,App.BotEventMaps[P],E>): Promise<any>;
     bailSync<S extends string | symbol>(event: S & Exclude<S, keyof App.AllEventMap<this>>, ...args: any[]): Promise<any>;
@@ -582,11 +571,9 @@ export interface App extends App.Services {
 
 export namespace App {
     export type Dispose<T> = (() => void) & T
-
     export interface Services {
         koa: Koa
     }
-
     export const defaultConfig: Partial<Options> = {
         adapters:{
             oicq:{
@@ -672,10 +659,6 @@ export namespace App {
     export type LogLevel="trace" | "debug" | "info" | "warn" | "error" | "fatal" | "mark" | "off"
     export interface Options {
         log_level:LogLevel
-        uin: number
-        password?: string
-        master?: number
-        admins?: number | number[]
         logConfig?: Partial<Configuration>
         delay: Record<string, number>
         plugins?: Record<string, any>

@@ -1,7 +1,7 @@
 import {Argv} from "@/argv";
 import {DiscussMessageEvent, GroupMessageEvent, PrivateMessageEvent} from "oicq/lib/events";
 import {Awaitable, Define} from "@/types";
-import {Sendable} from "@/bot";
+import {Bot, Sendable} from "@/bot";
 import {isEmpty, keys} from "lodash";
 import {App} from "@/app";
 interface HelpOptions{
@@ -19,7 +19,7 @@ export interface TriggerEventMap{
 export class Command<T extends keyof TriggerEventMap=keyof TriggerEventMap,A extends any[] = any[], O extends {} = {}>{
     public name:string
     args:Argv.Declaration[]
-    bot:App
+    app:App
     parent:Command=null
     children:Command[]=[]
     descriptions:string[]=[]
@@ -37,10 +37,10 @@ export class Command<T extends keyof TriggerEventMap=keyof TriggerEventMap,A ext
     // 定义指令调用所需权限
     auth(...authorities:Command.Authority[]){
         this.authorities=[].concat(authorities)
-        return this.check(({event},...args)=>{
+        return this.check(({event,bot},...args)=>{
             const userAuthorities:Command.Authority[]=[]
-            if(this.bot.isMaster(event.user_id)) userAuthorities.push('master')
-            if(this.bot.isAdmin(event.user_id)) userAuthorities.push('admins')
+            if(bot.isMaster(event.user_id)) userAuthorities.push('master')
+            if(bot.isAdmin(event.user_id)) userAuthorities.push('admins')
             if(event.message_type==='group' && event.member.is_owner) userAuthorities.push('owner')
             if(event.message_type==='group' && event.member.is_admin) userAuthorities.push('admin')
             if(!userAuthorities.some(auth=>this.authorities.includes(auth))) return '权限不足'
@@ -63,7 +63,7 @@ export class Command<T extends keyof TriggerEventMap=keyof TriggerEventMap,A ext
     }
     // 定义子指令
     subcommand<D extends string>(def: D): Command<T,Argv.ArgumentType<D>> {
-        const command=this.bot.command(def,this.triggerEvent)
+        const command=this.app.command(def,this.triggerEvent)
         command.parent=this
         this.children.push(command)
         return command

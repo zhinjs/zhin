@@ -38,6 +38,14 @@ export class OicqBot extends Client implements Bot<'oicq',OicqBotOptions,{},numb
         },{args})
         return new Session<"oicq", OicqEventMap, E>(this.adapter,this.self_id,event,obj)
     }
+
+    isAdmin(user_id: number): boolean {
+        return this.options.admins && this.options.admins.includes(user_id);
+    }
+
+    isMaster(user_id: number): boolean {
+        return this.options.master===user_id;
+    }
 }
 export class OicqAdapter extends Adapter<'oicq',BotOptions<OicqBotOptions>,{},OicqEventMap>{
     constructor(app:App, platform, options:AdapterOptions<OicqBotOptions>) {
