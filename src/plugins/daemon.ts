@@ -1,13 +1,14 @@
-import {Bot} from "@/bot";
+import {App} from "@/app";
+import {Adapters} from "@";
 
-export function install(bot:Bot,config:DaemonConfig={}){
+export function install(app:App, config:DaemonConfig={}){
     const {exitCommand=true, autoRestart = true} = config||{}
 
     function handleSignal(signal: NodeJS.Signals) {
-        bot.logger.info(`terminated by ${signal}`)
+        app.logger.info(`terminated by ${signal}`)
         process.exit()
     }
-    exitCommand && bot
+    exitCommand && app
         .command(exitCommand === true ? 'exit' : exitCommand)
         .desc('关闭bot')
         .auth('master','admins')
@@ -24,7 +25,7 @@ export function install(bot:Bot,config:DaemonConfig={}){
             await event.reply('正在重启...').catch(()=>{})
             process.exit(51)
         })
-    bot.on('ready', () => {
+    app.on('ready', () => {
         process.send({type: 'start', body: {autoRestart}})
         process.on('SIGINT', handleSignal)
         process.on('SIGTERM', handleSignal)
@@ -38,14 +39,16 @@ export function install(bot:Bot,config:DaemonConfig={}){
     process.on('message', (data: Message) => {
         if (data.type === 'send') {
             let {channelId, message} = data.body
+            const [platform,self_id,target_id,target_type]=channelId.split(':')
             const times=data.times
+            const bot=app.pickBot(platform as keyof Adapters,self_id)
             if (bot && bot.isOnline()) {
                 if(times) message+=`耗时：${(new Date().getTime()-times)/1000}s`
-                bot.sendMsg(channelId, message)
+                bot.sendMsg(target_id,target_type, message)
             } else {
-                const dispose = bot.on('system.online', () => {
+                const dispose = app.on('oicq.system.online', () => {
                     if(times) message+=`耗时：${(new Date().getTime()-times)/1000}s`
-                    bot.sendMsg(channelId, message)
+                    bot.sendMsg(target_id,target_type, message)
                     dispose()
                 })
             }

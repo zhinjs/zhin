@@ -13,7 +13,7 @@ export function deepMerge(base, ...from) {
         return base;
     }
     if (Array.isArray(base)) {
-        return base.concat(...from);
+        return Array.from(new Set(base.concat(...from)));
     }
     for (const item of from) {
         for (const key in item) {
@@ -56,7 +56,7 @@ export function deepClone(obj,cache=new WeakMap()) {
     }
     return objClone;
 }
-export function pick<T, K extends keyof T>(source: T, keys?: Iterable<K>, forced?: boolean) {
+export function pick<T extends object, K extends keyof T>(source: T, keys?: Iterable<K>, forced?: boolean) {
     if (!keys) return { ...source }
     const result = {} as Pick<T, K>
     for (const key of keys) {

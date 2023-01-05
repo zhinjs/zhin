@@ -1,9 +1,9 @@
 import {Argv} from "@/argv";
 import {DiscussMessageEvent, GroupMessageEvent, PrivateMessageEvent} from "oicq/lib/events";
 import {Awaitable, Define} from "@/types";
-import {Sendable} from "oicq";
+import {Sendable} from "@/bot";
 import {isEmpty, keys} from "lodash";
-import {Bot} from "@/bot";
+import {App} from "@/app";
 interface HelpOptions{
     showHidden?:boolean
     showAuth?:boolean
@@ -19,7 +19,7 @@ export interface TriggerEventMap{
 export class Command<T extends keyof TriggerEventMap=keyof TriggerEventMap,A extends any[] = any[], O extends {} = {}>{
     public name:string
     args:Argv.Declaration[]
-    bot:Bot
+    bot:App
     parent:Command=null
     children:Command[]=[]
     descriptions:string[]=[]
@@ -115,8 +115,8 @@ export class Command<T extends keyof TriggerEventMap=keyof TriggerEventMap,A ext
         return Object.create(this)
     }
     // 添加执行的操作
-    action(argv:Command.Callback<T,A,O>){
-        this.callback.push(argv)
+    action(callback:Command.Callback<T,A,O>){
+        this.callback.push(callback)
         return this
     }
     //匹配常规调用参数、选项

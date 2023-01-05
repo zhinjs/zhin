@@ -1,9 +1,9 @@
-import {Bot, Time} from "@";
+import {App, Time} from "@";
 import {totalmem,freemem, cpus, type, arch} from 'os'
 export const name='status'
-export function install(bot:Bot){
-    bot.command('status')
-        .action(()=>{
+export function install(app:App){
+    app.command('status')
+        .action(({session})=>{
             function format(bytes){
                 const operators=['B','KB','MB','GB','TB']
                 while (bytes>1024 && operators.length>1){
@@ -22,11 +22,11 @@ export function install(bot:Bot){
                 `CPU架构:${cpus().length}核 ${cpu.model}`,
                 `内存:${format(usedMem)}/${format(totalMem)}(${(usedMem/totalMem*100).toFixed(2)}%)`,
                 `进程内存占比:${(memoryUsage.rss/usedMem*100).toFixed(2)}%(${format(memoryUsage.rss)}/${format(usedMem)})`,
-                `持续运行时间：${Time.formatTime(new Date().getTime()-bot.startTime)}`,
-                `掉线次数:${bot.stat.lost_times}次`,
-                `发送消息数:${bot.stat.sent_msg_cnt}条`,
-                `接收消息数:${bot.stat.recv_msg_cnt}条`,
-                `消息频率:${bot.stat.msg_cnt_per_min}条/分`,
+                `持续运行时间：${Time.formatTime(new Date().getTime()-session.bot.startTime)}`,
+                `掉线次数:${session.bot.stat.lost_times}次`,
+                `发送消息数:${session.bot.stat.sent_msg_cnt}条`,
+                `接收消息数:${session.bot.stat.recv_msg_cnt}条`,
+                `消息频率:${session.bot.stat.msg_cnt_per_min}条/分`,
             ].join('\n')
         })
 }

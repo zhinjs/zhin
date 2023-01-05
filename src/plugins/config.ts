@@ -1,4 +1,4 @@
-import {Bot} from "@";
+import {App} from "@";
 import * as Yaml from 'js-yaml'
 import * as fs from 'fs'
 import {get,unset,set,mapValues} from "lodash";
@@ -16,7 +16,7 @@ function outputConfig(config,key){
     return key.endsWith('password')?new Array(result.length).fill('*').join(''):result
 }
 export const name='config'
-export function install(bot:Bot){
+export function install(bot:App){
     bot.command('config [key:string] [value]')
         .desc('编辑配置文件')
         .auth('admin',"owner")

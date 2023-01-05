@@ -1,7 +1,7 @@
-import {Bot} from "@";
+import {App} from "@";
 
 export const name= 'plugin'
-export function install(bot:Bot){
+export function install(bot:App){
     const command=bot.command('plugin')
         .desc('插件管理')
     command.subcommand('plugin.list')

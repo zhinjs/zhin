@@ -1,12 +1,12 @@
 import {FSWatcher, watch} from 'chokidar'
-import {Bot} from "@/bot";
+import {App} from "@/app";
 import {Plugin} from "@/plugin";
 import * as fs from 'fs';
 import * as Yaml from 'js-yaml'
 
 import * as path from "path";
 import {Dict} from "@/types";
-export function install(this:Plugin,bot:Bot,root:string){
+export function install(this:Plugin, bot:App, root:string){
     function deepEqual(a: any, b: any) {
         if (a === b) return true
         if (typeof a !== typeof b) return false
@@ -91,7 +91,7 @@ export function install(this:Plugin,bot:Bot,root:string){
     watcher.on('change', (filename) => {
         const changeFileName=path.resolve(process.cwd(),filename)
         if(path.resolve(process.env.configPath)===changeFileName){
-            const newOptions:Bot.Options=Yaml.load(fs.readFileSync(process.env.configPath,"utf8")) as any
+            const newOptions:App.Options=Yaml.load(fs.readFileSync(process.env.configPath,"utf8")) as any
             checkChange(bot.options.plugins,newOptions.plugins)
             bot.options=newOptions
         }else{

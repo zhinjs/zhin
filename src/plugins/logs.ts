@@ -1,10 +1,10 @@
 import {createReadStream, copyFileSync, statSync, writeFileSync} from 'fs'
 import {resolve as PathResolve,dirname} from "path";
 import * as readline from 'readline'
-import {Bot} from "@";
+import {App} from "@";
 export const name='logs'
-export function install(bot:Bot){
-    const logFile=PathResolve(dirname(bot.config.data_dir),'logs.log')
+export function install(bot:App){
+    const logFile=PathResolve(dirname(bot.options.data_dir),'logs.log')
     function readLogs():Promise<string[]>{
         return new Promise<string[]>(resolve=>{
             const rl=readline.createInterface({input:createReadStream(logFile)})

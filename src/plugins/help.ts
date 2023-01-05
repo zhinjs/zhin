@@ -1,6 +1,6 @@
-import {Bot} from "@/bot";
+import {App} from "@/app";
 
-export function install(bot:Bot){
+export function install(bot:App){
     bot.on('command-add',(command)=>{
         command.option('help','-h 显示帮助信息',{hidden:true})
             .action(({options})=>{

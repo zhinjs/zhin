@@ -1,10 +1,12 @@
-import {Client} from "oicq";
 import {TriggerEventMap} from "@/command";
+import {Bot} from "@/bot";
+import {Session} from "@/session";
 
 export interface Argv<T extends keyof TriggerEventMap=keyof TriggerEventMap,A extends any[] = any[], O = {}> {
     name:string//指令名称
     argv?:string[]
-    client?:Client
+    session:Session
+    bot?:Bot
     event:TriggerEventMap[T]
     cqCode?: string//原文
     args?: A//携带的args

@@ -1,4 +1,4 @@
-import {createBot} from "@/bot";
+import {createApp} from "@/app";
 import {resolve} from 'path'
 process.on('unhandledRejection',(e)=>{
     console.error(e)
@@ -6,4 +6,4 @@ process.on('unhandledRejection',(e)=>{
 process.on('uncaughtException',(e)=>{
     console.error(e)
 })
-createBot(process.env.configPath||resolve(process.cwd(),'zhin.yaml')).start()
+createApp(process.env.configPath||resolve(process.cwd(),'zhin.yaml')).start()
