@@ -1,8 +1,7 @@
-import {TriggerEventMap} from "@/command";
 import {Bot, SegmentElem} from "@/bot";
 import {Session} from "@/session";
 
-export interface Argv<T extends keyof TriggerEventMap=keyof TriggerEventMap,A extends any[] = any[], O = {}> {
+export interface Argv<A extends any[] = any[], O = {}> {
     name?:string//指令名称
     argv?:SegmentElem[][]
     session:Session

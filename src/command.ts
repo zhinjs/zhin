@@ -1,7 +1,6 @@
 import {Argv} from "@/argv";
-import {DiscussMessageEvent, GroupMessageEvent, PrivateMessageEvent} from "oicq/lib/events";
 import {Awaitable, Define} from "@/types";
-import {Bot, Sendable} from "@/bot";
+import {Sendable} from "@/bot";
 import {isEmpty, keys} from "lodash";
 import {App} from "@/app";
 import {Session} from "@/session";
@@ -12,12 +11,7 @@ interface HelpOptions{
     current?:number
     simple?:boolean
 }
-export interface TriggerEventMap{
-    private:PrivateMessageEvent
-    group:GroupMessageEvent
-    discuss:DiscussMessageEvent
-}
-export class Command<T extends keyof TriggerEventMap=keyof TriggerEventMap,A extends any[] = any[], O extends {} = {}>{
+export class Command<A extends any[] = any[], O extends {} = {}>{
     public name:string
     args:Argv.Declaration[]
     app:App
@@ -26,12 +20,12 @@ export class Command<T extends keyof TriggerEventMap=keyof TriggerEventMap,A ext
     descriptions:string[]=[]
     shortcuts:Command.Shortcut[]=[]
     authorities:Command.Authority[]=[]
-    private checkers:Command.Callback<T,A,O>[]=[]
-    private callback:Command.Callback<T,A,O>[]=[]
+    private checkers:Command.Callback<A,O>[]=[]
+    private callback:Command.Callback<A,O>[]=[]
     public examples:string[]=[]
     public aliasNames:string[]=[]
     public options:Record<string, Command.OptionConfig>={}
-    constructor(declaration:string,public triggerEvent?:T) {
+    constructor(declaration:string) {
         this.name=Command.removeDeclarationArgs(declaration)
         this.args=Command.findDeclarationArgs(declaration)
     }
@@ -51,7 +45,7 @@ export class Command<T extends keyof TriggerEventMap=keyof TriggerEventMap,A ext
         return this
     }
     // 添加验证回调函数
-    check(checker:Command.Callback<T,A,O>){
+    check(checker:Command.Callback<A,O>){
         this.checkers.push(checker)
         return this
     }
@@ -61,14 +55,14 @@ export class Command<T extends keyof TriggerEventMap=keyof TriggerEventMap,A ext
         return this
     }
     // 定义子指令
-    subcommand<D extends string>(def: D): Command<T,Argv.ArgumentType<D>> {
-        const command=this.app.command(def,this.triggerEvent)
+    subcommand<D extends string>(def: D): Command<Argv.ArgumentType<D>> {
+        const command=this.app.command(def)
         command.parent=this
         this.children.push(command)
         return command
     }
     match(session:Session){
-        return !this.triggerEvent||this.triggerEvent===session.message_type
+        return true
     }
     // 定义别名
     alias(...name:string[]){
@@ -85,7 +79,7 @@ export class Command<T extends keyof TriggerEventMap=keyof TriggerEventMap,A ext
         return this
     }
     // 添加选项
-    option<K extends string,D extends string>(name:K,declaration:D,config:Command.OptionConfig={}):Command<T,A, Define<O, K, Command.OptionType<D>>>{
+    option<K extends string,D extends string>(name:K,declaration:D,config:Command.OptionConfig={}):Command<A, Define<O, K, Command.OptionType<D>>>{
         const decl = declaration.replace(/(?<=^|\s)[\w\x80-\uffff].*/, '')
         const shortName= Command.removeDeclarationArgs(decl);
         const argDeclaration = Command.findDeclarationArgs(decl)[0]
@@ -114,12 +108,12 @@ export class Command<T extends keyof TriggerEventMap=keyof TriggerEventMap,A ext
         return Object.create(this)
     }
     // 添加执行的操作
-    action(callback:Command.Callback<T,A,O>){
+    action(callback:Command.Callback<A,O>){
         this.callback.push(callback)
         return this
     }
     //匹配常规调用参数、选项
-    private parseCommand(argv:Argv<T,A,O>){
+    private parseCommand(argv:Argv<A,O>){
         const args:A=argv.args||=[] as A
         const options:O=argv.options||={} as O
         while (!argv.error && argv.argv.length) {
@@ -207,7 +201,7 @@ export class Command<T extends keyof TriggerEventMap=keyof TriggerEventMap,A ext
         return {args,options}
     }
     // 执行指令
-    async execute(argv:Argv<T,A, O>):Promise<Sendable|boolean|void>{
+    async execute(argv:Argv<A, O>):Promise<Sendable|boolean|void>{
         // 匹配参数、选项
         this.parseShortcut(argv)
         if(argv.error){
@@ -291,8 +285,8 @@ export namespace Command{
         description?:string
         declaration?:Argv.Declaration
     }
-    export type Callback<T extends keyof TriggerEventMap=keyof TriggerEventMap,A extends any[] = any[], O extends {} = {},>
-        = (this:Command<T,A,O>,argv:Argv<T,A,O>, ...args: A) => Awaitable<Sendable|boolean|void>
+    export type Callback<A extends any[] = any[], O extends {} = {},>
+        = (this:Command<A,O>,argv:Argv<A,O>, ...args: A) => Awaitable<Sendable|boolean|void>
     export type Authority='master'|'admins'
     export type OptionType<S extends string> = Argv.ExtractFirst<Argv.Replace<S, '>', ']'>, any>
     export function removeDeclarationArgs(name: string): string {

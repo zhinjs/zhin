@@ -4,7 +4,7 @@ import {Logger, getLogger, configure, Configuration} from "log4js";
 import * as Yaml from 'js-yaml'
 import * as path from 'path'
 import * as fs from 'fs'
-import {Command, TriggerEventMap} from "@/command";
+import {Command} from "@/command";
 import {Argv} from "@/argv";
 import {deepClone, deepMerge, wrapExport, remove, isBailed} from "@/utils";
 import {Dict} from "@/types";
@@ -14,7 +14,7 @@ import {Adapter, AdapterConstructs, AdapterOptions, AdapterOptionsType, Adapters
 import {Bots, Sendable} from "@/bot";
 import {EventEmitter} from "events";
 import {OicqEventMap} from './adapters/oicq'
-import {FunctionToSessionObj, ParametersToObj, Session, ToSession} from "@/session";
+import { ToSession} from "@/session";
 
 interface Message {
     type: 'start' | 'queue'
@@ -330,7 +330,7 @@ export class App extends EventEmitter {
         return this
     }
 
-    command<T extends keyof TriggerEventMap, D extends string>(def: D, triggerEvent?: T): Command<T, Argv.ArgumentType<D>> {
+    command<D extends string>(def: D): Command<Argv.ArgumentType<D>> {
         const namePath = def.split(' ', 1)[0]
         const decl = def.slice(namePath.length)
         const segments = namePath.split(/(?=[/])/g)
@@ -345,7 +345,7 @@ export class App extends EventEmitter {
             if (!parent && segments.length) throw Error(`cannot find parent command:${nameArr.join('.')}`)
         }
         const name = nameArr.pop()
-        const command = new Command(name + decl, triggerEvent)
+        const command = new Command(name + decl)
         command.app=this
         if (parent) {
             command.parent = parent
