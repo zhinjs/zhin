@@ -14,6 +14,7 @@ export class OicqBot extends Client implements Bot<'oicq',OicqBotOptions,{},numb
     public self_id:number
     public startTime:number
     constructor(public app:App, public adapter:Adapter<'oicq',BotOptions<OicqBotOptions>>, public options:BotOptions<OicqBotOptions>) {
+        if(!options.data_dir) options.data_dir=app.options.data_dir
         super(options.uin,options)
         this.self_id=options.uin
     }

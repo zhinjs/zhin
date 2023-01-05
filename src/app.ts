@@ -241,7 +241,6 @@ export class App extends EventEmitter {
             try {
                 plugin = this.load(entry)
             } catch (e) {
-                console.log('报错了',e)
                 this.logger.warn(e.message)
                 return this
             }
@@ -589,7 +588,13 @@ export namespace App {
     }
 
     export const defaultConfig: Partial<Options> = {
-        uin: 1472558369,
+        adapters:{
+            oicq:{
+                bots:[]
+            }
+        },
+        data_dir:path.join(process.cwd(), 'data'),
+        plugin_dir: path.join(process.cwd(), 'plugins'),
         plugins: {
             config:null,
             daemon: null,
@@ -624,7 +629,6 @@ export namespace App {
                 }
             }
         },
-        plugin_dir: path.join(process.cwd(), 'plugins'),
     }
     type BeforeEventMap<T> = {
     } & BeforeLifeCycle
