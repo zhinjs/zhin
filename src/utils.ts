@@ -1,10 +1,75 @@
-
 // 深合并
 import {Dict} from "@/types";
 import * as path from "path";
 import * as fs from "fs";
+
+const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+const lookup = new Uint8Array(256);
+
+for (let i = 0; i < chars.length; i++) {
+    lookup[chars.charCodeAt(i)] = i;
+}
+
+export function arrayBufferToBase64(arrayBuffer: ArrayBuffer, mediaType: string = ''): string {
+    const bytes = new Uint8Array(arrayBuffer);
+    const len = bytes.length;
+
+    let base64 = (mediaType) ? 'data:' + mediaType + ';base64,' : '';
+
+    for (let i = 0; i < len; i += 3) {
+        base64 += chars[bytes[i] >> 2];
+        base64 += chars[((bytes[i] & 3) << 4) | (bytes[i + 1] >> 4)];
+        base64 += chars[((bytes[i + 1] & 15) << 2) | (bytes[i + 2] >> 6)];
+        base64 += chars[bytes[i + 2] & 63];
+    }
+
+    if ((len % 3) === 2) {
+        base64 = base64.substring(0, base64.length - 1) + '=';
+    } else if (len % 3 === 1) {
+        base64 = base64.substring(0, base64.length - 2) + '==';
+    }
+
+    return base64;
+}
+
+export function base64ToArrayBuffer(base64: string): ArrayBuffer {
+    base64 = base64.substring(base64.indexOf(',') + 1);
+
+    const len = base64.length;
+    let bufferLength = len * 0.75;
+    let p = 0;
+    let encoded1;
+    let encoded2;
+    let encoded3;
+    let encoded4;
+
+    if (base64[len - 1] === '=') {
+        bufferLength--;
+
+        if (base64[len - 2] === '=') {
+            bufferLength--;
+        }
+    }
+
+    const arrayBuffer = new ArrayBuffer(bufferLength);
+    const bytes = new Uint8Array(arrayBuffer);
+
+    for (let i = 0; i < len; i += 4) {
+        encoded1 = lookup[base64.charCodeAt(i)];
+        encoded2 = lookup[base64.charCodeAt(i + 1)];
+        encoded3 = lookup[base64.charCodeAt(i + 2)];
+        encoded4 = lookup[base64.charCodeAt(i + 3)];
+
+        bytes[p++] = (encoded1 << 2) | (encoded2 >> 4);
+        bytes[p++] = ((encoded2 & 15) << 4) | (encoded3 >> 2);
+        bytes[p++] = ((encoded3 & 3) << 6) | (encoded4 & 63);
+    }
+
+    return arrayBuffer;
+}
+
 export function deepMerge(base, ...from) {
-    if(base===null||base===undefined) base=from.shift()
+    if (base === null || base === undefined) base = from.shift()
     if (from.length === 0) {
         return base;
     }
@@ -19,44 +84,43 @@ export function deepMerge(base, ...from) {
             if (base.hasOwnProperty(key)) {
                 if (typeof base[key] === 'object') {
                     base[key] = deepMerge(base[key], item[key]);
-                }
-                else {
+                } else {
                     base[key] = item[key];
                 }
-            }
-            else {
+            } else {
                 base[key] = item[key];
             }
         }
     }
     return base;
 }
+
 // 深拷贝
-export function deepClone(obj,cache=new WeakMap()) {
-    if(obj===null) return obj
-    if(obj instanceof Date) return new Date(obj)
-    if(obj instanceof RegExp) return new RegExp(obj)
-    if(typeof obj!=='object') return obj
-    if(cache.get(obj)) return cache.get(obj)
+export function deepClone(obj, cache = new WeakMap()) {
+    if (obj === null) return obj
+    if (obj instanceof Date) return new Date(obj)
+    if (obj instanceof RegExp) return new RegExp(obj)
+    if (typeof obj !== 'object') return obj
+    if (cache.get(obj)) return cache.get(obj)
     //判断拷贝的obj是对象还是数组
     if (Array.isArray(obj))
-        return obj.map((item) => deepClone(item,cache));
+        return obj.map((item) => deepClone(item, cache));
     const objClone = {};
-    cache.set(obj,objClone)
+    cache.set(obj, objClone)
     for (const key in obj) {
         if (obj.hasOwnProperty(key)) {
             if (obj[key] && typeof obj[key] === "object") {
-                objClone[key] = deepClone(obj[key],cache);
-            }
-            else {
+                objClone[key] = deepClone(obj[key], cache);
+            } else {
                 objClone[key] = obj[key];
             }
         }
     }
     return objClone;
 }
+
 export function pick<T extends object, K extends keyof T>(source: T, keys?: Iterable<K>, forced?: boolean) {
-    if (!keys) return { ...source }
+    if (!keys) return {...source}
     const result = {} as Pick<T, K>
     for (const key of keys) {
         if (forced || key in source) result[key] = source[key]
@@ -65,25 +129,27 @@ export function pick<T extends object, K extends keyof T>(source: T, keys?: Iter
 }
 
 export function omit<T, K extends keyof T>(source: T, keys?: Iterable<K>) {
-    if (!keys) return { ...source }
-    const result = { ...source } as Omit<T, K>
+    if (!keys) return {...source}
+    const result = {...source} as Omit<T, K>
     for (const key of keys) {
         Reflect.deleteProperty(result, key)
     }
     return result
 }
-export function wrapExport(filepath:string){
-    const {default:result={},...other}=require(filepath)
-    const fileDir=path.dirname(filepath)
-    if(fs.existsSync(path.resolve(fileDir,'../package.json'))){
-        const {name:fullName,...packageJson}=require(path.join(fileDir,'../package.json'))
-        Object.assign(result,packageJson,{fullName})
-    }else if(fs.existsSync(path.resolve(fileDir,'package.json'))){
-        const {name:fullName,...packageJson}=require(path.resolve(fileDir,'package.json'))
-        Object.assign(result,packageJson,{fullName})
+
+export function wrapExport(filepath: string) {
+    const {default: result = {}, ...other} = require(filepath)
+    const fileDir = path.dirname(filepath)
+    if (fs.existsSync(path.resolve(fileDir, '../package.json'))) {
+        const {name: fullName, ...packageJson} = require(path.join(fileDir, '../package.json'))
+        Object.assign(result, packageJson, {fullName})
+    } else if (fs.existsSync(path.resolve(fileDir, 'package.json'))) {
+        const {name: fullName, ...packageJson} = require(path.resolve(fileDir, 'package.json'))
+        Object.assign(result, packageJson, {fullName})
     }
-    return Object.assign(result,other)
+    return Object.assign(result, other)
 }
+
 function deepen(modifyString: (source: string) => string) {
     function modifyObject<T extends unknown>(source: T): T {
         if (typeof source !== 'object' || !source) return source
@@ -95,7 +161,7 @@ function deepen(modifyString: (source: string) => string) {
         return result as T
     }
 
-    return function<T> (source: T): T {
+    return function <T>(source: T): T {
         if (typeof source === 'string') {
             return modifyString(source) as any
         } else {
@@ -143,22 +209,25 @@ export function sanitize(source: string) {
     if (!source.startsWith('/')) source = '/' + source
     return trimSlash(source)
 }
-export function toJSON(cls:object):Dict{
-    function getProperty(new_obj){
-        if(new_obj.__proto__ === null){ //说明该对象已经是最顶层的对象
+
+export function toJSON(cls: object): Dict {
+    function getProperty(new_obj) {
+        if (new_obj.__proto__ === null) { //说明该对象已经是最顶层的对象
             return [];
         }
-        return [...Object.getOwnPropertyNames(new_obj),...getProperty(new_obj.__proto__)];
+        return [...Object.getOwnPropertyNames(new_obj), ...getProperty(new_obj.__proto__)];
     }
-    const {info={},...obj}= Object.fromEntries(getProperty(cls).filter(key=>{
-        return typeof cls[key]!=='function' && !key.startsWith('_') && !['c','client'].includes(key)
-    }).map(key=>{
-        return [key,cls[key]]
+
+    const {info = {}, ...obj} = Object.fromEntries(getProperty(cls).filter(key => {
+        return typeof cls[key] !== 'function' && !key.startsWith('_') && !['c', 'client'].includes(key)
+    }).map(key => {
+        return [key, cls[key]]
     }))
-    return {...obj,...info}
+    return {...obj, ...info}
 }
+
 export function template(path: string | string[], ...params: any[]) {
-    path=[].concat(path)
+    path = [].concat(path)
     for (const item of path) {
         const source = template.get(item)
         if (typeof source === 'string') {
@@ -194,7 +263,7 @@ export namespace template {
         while (seg.length > 1) {
             node = node[seg.shift()] ||= {}
         }
-        deepAssign(node, { [seg[0]]: value })
+        deepAssign(node, {[seg[0]]: value})
     }
 
     export function get(path: string) {
@@ -230,7 +299,7 @@ export namespace template {
     }
 }
 
-export { template as t }
+export {template as t}
 
 /* eslint-disable quote-props */
 template.set('basic', {
@@ -242,7 +311,10 @@ template.set('basic', {
     'and': '和',
     'or': '或',
 })
-export function noop(){}
+
+export function noop() {
+}
+
 export namespace Time {
     export const millisecond = 1
     export const second = 1000
@@ -377,11 +449,14 @@ export namespace Time {
             return `${template('yyyy-MM-dd hh:mm:ss', time)} 起每隔 ${formatTime(interval)}`
         }
     }
-}/**
+}
+
+/**
  * random operations
  */
 export class Random {
-    constructor(private value = Math.random()) {}
+    constructor(private value = Math.random()) {
+    }
 
     bool(probability: number) {
         if (probability >= 1) return true
@@ -503,31 +578,36 @@ export namespace Random {
     }
 }
 
-export async function sleep(timeout){
-    return new Promise(resolve => setTimeout(resolve,timeout))
+export async function sleep(timeout) {
+    return new Promise(resolve => setTimeout(resolve, timeout))
 }
 
 export function isNullable(value: any) {
     return value === null || value === undefined
 }
+
 export function isBailed(value: any) {
     return value !== null && value !== false && value !== undefined
 }
-export function remove<T>(list:T[],value:T){
-    const idx=list.indexOf(value)
-    if(idx>=0){
-        list.splice(idx,1)
+
+export function remove<T>(list: T[], value: T) {
+    const idx = list.indexOf(value)
+    if (idx >= 0) {
+        list.splice(idx, 1)
     }
 }
+
 export function makeArray<T>(source: T | T[]) {
     return Array.isArray(source) ? source : isNullable(source) ? [] : [source]
 }
+
 export function valueMap<T, U>(object: Dict<T>, transform: (value: T, key: string) => U): Dict<U> {
     return Object.fromEntries(Object.entries(object).map(([key, value]) => [key, transform(value, key)]))
 }
+
 export function defineProperty<T, K extends keyof T>(object: T, key: K, value: T[K]): void
 export function defineProperty<T, K extends keyof any>(object: T, key: K, value: any): void
 export function defineProperty<T, K extends keyof any>(object: T, key: K, value: any) {
-    Object.defineProperty(object, key, { writable: true, value })
+    Object.defineProperty(object, key, {writable: true, value})
 }
 
