@@ -14,7 +14,9 @@ import {Adapter, AdapterConstructs, AdapterOptions, AdapterOptionsType, Adapters
 import {Bots, Sendable} from "@/bot";
 import {EventEmitter} from "events";
 import {OicqEventMap} from './adapters/oicq'
-import { ToSession} from "@/session";
+import {Session, ToSession} from "@/session";
+import {Middleware} from "@/middleware";
+import {Dispose} from "@/dispose";
 
 interface Message {
     type: 'start' | 'queue'
@@ -91,12 +93,10 @@ export class App extends EventEmitter {
     plugins: Map<string, Plugin> = new Map<string, Plugin>()
     adapters:Map<keyof Adapters,Adapter>=new Map<keyof Adapters, Adapter>()
     private services: Record<string, any> = {}
-    disposes: App.Dispose<any>[] = []
+    disposes: Dispose[] = []
+    middlewares:Middleware<Session>[]=[]
     commands: Map<string, Command> = new Map<string, Command>()
     public logger: Logger
-    getLogger<K extends keyof Adapters>(platform:K,self_id?:string|number){
-        return getLogger(`[zhin:adapter-${[platform,self_id].filter(Boolean).join(':')}]`)
-    }
     constructor(public options: App.Options) {
         super();
         if (options.logConfig) {
@@ -112,6 +112,7 @@ export class App extends EventEmitter {
                 dispose()
             }
         })
+        this.middleware((session)=>session.execute())
         return new Proxy(this, {
             get(target: typeof _this, p: string | symbol, receiver: any): any {
                 let result = Reflect.get(target, p, receiver)
@@ -122,16 +123,10 @@ export class App extends EventEmitter {
         })
     }
 
-    on(event, listener): App.Dispose<this> {
+    on(event, listener){
         super.on(event, listener)
-        const dispose: App.Dispose<this> = (() => {
-            super.off(event, listener)
-        }) as App.Dispose<this>
-        const _this = this
-        return new Proxy(dispose, {
-            get(target: App.Dispose<typeof _this>, p: string | symbol, receiver: any): any {
-                return Reflect.get(_this, p, receiver)
-            }
+        return Dispose.from(this,()=>{
+            super.off(event,listener)
         })
     }
     adapter<K extends keyof Adapters>(platform:K):Adapters[K]
@@ -145,11 +140,15 @@ export class App extends EventEmitter {
             Construct=Adapter.get(platform).Adapter as unknown as AdapterConstructs[K]
         }
         if(!Construct) throw new Error(`can't find adapter fom platform:${platform}`)
-        this.on(`${platform}.message`,(session)=>{
-            session.execute()
+        const dispose=this.on(`${platform}.message`,(session)=>{
+            const middleware = Middleware.compose(this.middlewares)
+            middleware(session)
         })
         this.adapters.set(platform,new Construct(this,platform,options))
-        return this
+        return Dispose.from(this,()=>{
+            dispose()
+            this.adapters.delete(platform)
+        }) as any
     }
     pickBot<K extends keyof Bots>(platform:K,self_id:string|number):Bots[K]{
         return this.adapters.get(platform).bots.get(self_id) as Bots[K]
@@ -165,7 +164,16 @@ export class App extends EventEmitter {
         }
         return true
     }
-
+    middleware(middleware:Middleware<Session>,prepend?:boolean){
+        const method:'push'|'unshift'=prepend?'unshift':"push"
+        this.middlewares[method](middleware)
+        return Dispose.from(this,()=>{
+            return remove(this.middlewares, middleware);
+        })
+    }
+    getLogger<K extends keyof Adapters>(platform:K,self_id?:string|number){
+        return getLogger(`[zhin:adapter-${[platform,self_id].filter(Boolean).join(':')}]`)
+    }
     service<K extends keyof App.Services>(key: K): App.Services[K]
     service<K extends keyof App.Services>(key: K, service: App.Services[K]): this
     service<K extends keyof App.Services, T>(key: K, constructor: App.ServiceConstructor<App.Services[K], T>, options?: T): this
@@ -179,7 +187,9 @@ export class App extends EventEmitter {
         } else {
             this.services[key] = Service
         }
-        return this
+        return Dispose.from(this,()=>{
+            delete this.services[key]
+        })
     }
 
 
@@ -363,32 +373,22 @@ export class App extends EventEmitter {
         return bot.sendMsg(targetId,targetType,message)
     }
 
-    setTimeout(callback: Function, ms: number, ...args): App.Dispose<this> {
+    setTimeout(callback: Function, ms: number, ...args) {
         const timer = setTimeout(() => {
             callback()
             dispose()
             remove(this.disposes, dispose)
         }, ms, ...args)
-        const dispose = (() => clearTimeout(timer)) as App.Dispose<this>
+        const dispose = Dispose.from(this,()=>clearTimeout(timer))
         this.disposes.push(dispose)
-        const _this = this
-        return new Proxy(dispose, {
-            get(target: App.Dispose<typeof _this>, p: string | symbol, receiver: any): any {
-                return Reflect.get(_this, p, receiver)
-            }
-        })
+        return
     }
 
-    setInterval(callback: Function, ms: number, ...args): App.Dispose<this> {
+    setInterval(callback: Function, ms: number, ...args){
         const timer = setInterval(callback, ms, ...args)
-        const dispose = (() => clearInterval(timer)) as App.Dispose<this>
+        const dispose = Dispose.from(this,()=>clearInterval(timer))
         this.disposes.push(dispose)
-        const _this = this
-        return new Proxy(dispose, {
-            get(target: App.Dispose<typeof _this>, p: string | symbol, receiver: any): any {
-                return Reflect.get(_this, p, receiver)
-            }
-        })
+        return dispose
     }
 
     use<T=any>(plugin:Plugin.Object<T>,options?:T): this {
@@ -549,11 +549,11 @@ export interface App extends App.Services {
 
     plugin<T>(plugin: Plugin, options?: T): this
 
-    on<T extends keyof App.AllEventMap<this>>(event: T, listener: App.AllEventMap<this>[T]): App.Dispose<this>;
+    on<T extends keyof App.AllEventMap<this>>(event: T, listener: App.AllEventMap<this>[T]);
     // @ts-ignore
-    on<P extends keyof Adapters,E extends keyof App.BotEventMaps[P]>(event: `${P}.${E}`, listener: (session:ToSession<P,App.BotEventMaps[P],E>)=>any): App.Dispose<this>;
+    on<P extends keyof Adapters,E extends keyof App.BotEventMaps[P]>(event: `${P}.${E}`, listener: (session:ToSession<P,App.BotEventMaps[P],E>)=>any);
 
-    on<S extends string | symbol>(event: S & Exclude<S, keyof App.AllEventMap<this>>, listener: (...args: any[]) => any): App.Dispose<this>;
+    on<S extends string | symbol>(event: S & Exclude<S, keyof App.AllEventMap<this>>, listener: (...args: any[]) => any);
 
     emitSync<T extends keyof App.AllEventMap<this>>(event: T, ...args: Parameters<App.AllEventMap<this>[T]>): Promise<void>;
     // @ts-ignore
@@ -573,7 +573,6 @@ export interface App extends App.Services {
 }
 
 export namespace App {
-    export type Dispose<T> = (() => void) & T
     export interface Services {
         koa: Koa
     }

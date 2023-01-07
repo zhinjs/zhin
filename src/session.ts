@@ -2,17 +2,17 @@ import {Adapters} from "@/adapter";
 import {Bots, SegmentElem, Sendable} from "@/bot";
 import {App} from "@/app";
 import {Argv} from "@/argv";
+import {Middleware} from "@/middleware";
+import {Prompt} from "@/prompt";
 export type FunctionToSessionObj<E extends (...args:any[])=>any>=E extends (...args:infer R)=>any?ParametersToObj<R>:unknown
 export type ParametersToObj<A extends any[]>=A extends [infer R,...infer L]? R extends object?R & {args:L}: { args:[R,...L] }:unknown
 export interface Session<P extends keyof Adapters=keyof Adapters, EM extends App.BaseEventMap=App.BaseEventMap, E extends keyof EM=keyof EM>{
     platform:P,
     post_type?:string
-    message_type?:string
-    system_type?:string
-    notice_time?:string
-    request_type?:string
+    detail_type?:string
     app:App
-    segments?:SegmentElem[]
+    prompt:Prompt
+    segments:SegmentElem[]
     adapter:Adapters[P],
     bot:Bots[P]
     event:E
@@ -26,6 +26,10 @@ export class Session<P extends keyof Adapters=keyof Adapters,EM extends App.Base
         this.bot=adapter.bots.get(self_id) as any
         const {reply,...other}=obj as any
         Object.assign(this,other)
+        this.prompt=new Prompt(this.bot,this as any,this.app.options.delay.timeout||6000)
+    }
+    middleware(middleware:Middleware<Session>){
+
     }
     async execute(argv:SegmentElem[]|Argv=this.segments){
         if(Array.isArray(argv)) argv={

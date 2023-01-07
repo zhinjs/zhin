@@ -2,7 +2,6 @@ import {App} from "@/app";
 import {Adapter, Adapters} from "@/adapter";
 import {OicqBot} from "@/adapters/oicq";
 import {Session} from "@/session";
-import {Logger} from "log4js";
 
 export type BotOptions<O={}>={
     master?:string|number
@@ -28,6 +27,19 @@ export type BotConstructors={
     [P in (keyof Adapters)]:BotConstruct
 }
 export namespace Bot{
+    export type FullTargetId=`${keyof Adapters}:${string|number}:${string}:${string|number}`
+    export function getFullTargetId(session:Session):FullTargetId{
+        return [
+            session.adapter.platform,
+            session.bot.self_id,
+            session.detail_type,
+            session['guid_id'],
+            session['channel_id'],
+            session['group_id'],
+            session['discuss_id'],
+            session['user_id']
+        ].filter(Boolean).join(':') as FullTargetId
+    }
     export const botConstructors:Partial<BotConstructors>={}
     export function define<K extends keyof Adapters, BO={},AO={}>(key: K, botConstruct: BotConstruct<K,BO,AO>) {
         botConstructors[key]=botConstruct

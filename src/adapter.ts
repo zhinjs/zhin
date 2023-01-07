@@ -50,7 +50,7 @@ export type AdapterConstructs={
 }
 export namespace Adapter {
     export const adapterConstructs:Partial<AdapterConstructs>={}
-    export function define<K extends keyof Adapters, BO extends BotOptions, AO={},UT extends string|number=number>(key: K, adapterConstruct: AdapterConstruct<K,BO, AO>,botConstruct:BotConstruct<K,BO,AO,UT>) {
+    export function define<K extends keyof Adapters, BO extends BotOptions, AO={}>(key: K, adapterConstruct: AdapterConstruct<K,BO, AO>,botConstruct:BotConstruct<K,BO,AO>) {
         adapterConstructs[key]=adapterConstruct
         Bot.define(key,botConstruct)
     }

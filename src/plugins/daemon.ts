@@ -1,5 +1,5 @@
 import {App} from "@/app";
-import {Adapters} from "@";
+import {Adapters, Bot} from "@";
 export const name='systemDaemon'
 export function install(app:App, config:DaemonConfig={}){
     const {exitCommand=true, autoRestart = true} = config||{}
@@ -16,7 +16,7 @@ export function install(app:App, config:DaemonConfig={}){
         .shortcut('关机')
         .shortcut('重启', {options: {restart: true}})
         .action(async ({options,session}) => {
-            const channelId = [session.bot.adapter.platform,session.bot.self_id,session.message_type, session['group_id'] || session['discuss_id'] || session['user_id']].join(':');
+            const channelId = Bot.getFullTargetId(session);
             if (!options.restart) {
                 await session.reply('正在关机...').catch(()=>{})
                 process.exit()
@@ -39,7 +39,7 @@ export function install(app:App, config:DaemonConfig={}){
     process.on('message', (data: Message) => {
         if (data.type === 'send') {
             let {channelId, message} = data.body
-            const [platform,self_id,target_id,target_type]=channelId.split(':')
+            const [platform,self_id,target_type,target_id]=channelId.split(':')
             const times=data.times
             const bot=app.pickBot(platform as keyof Adapters,self_id)
             if (bot && bot.isOnline()) {
