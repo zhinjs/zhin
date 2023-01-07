@@ -12,7 +12,7 @@ export interface Session<P extends keyof Adapters=keyof Adapters, EM extends App
     notice_time?:string
     request_type?:string
     app:App
-    message?:SegmentElem[]
+    segments?:SegmentElem[]
     adapter:Adapters[P],
     bot:Bots[P]
     event:E
@@ -22,10 +22,12 @@ export class Session<P extends keyof Adapters=keyof Adapters,EM extends App.Base
     constructor(public adapter:Adapters[P],self_id,public event:E,obj:FunctionToSessionObj<EM[E]>) {
         this.platform=adapter.platform as any
         this.app=adapter.app
+        this.event=event
         this.bot=adapter.bots.get(self_id) as any
-        Object.assign(this,obj)
+        const {reply,...other}=obj as any
+        Object.assign(this,other)
     }
-    async execute(argv:SegmentElem[]|Argv=this.message){
+    async execute(argv:SegmentElem[]|Argv=this.segments){
         if(Array.isArray(argv)) argv={
             session:this as any,
             bot:this.bot,
@@ -39,9 +41,7 @@ export class Session<P extends keyof Adapters=keyof Adapters,EM extends App.Base
         await this.reply(result)
 
     }
-    approve(accept?:boolean,reason?:string){
-    }
-    async reply(message:Sendable,quote?:boolean){
-        return this.bot.reply(this,message,quote)
+    async reply(message:Sendable){
+        return this.bot.reply(this,message,this.bot.options.quote_self)
     }
 }

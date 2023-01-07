@@ -93,17 +93,17 @@ export class App extends EventEmitter {
     private services: Record<string, any> = {}
     disposes: App.Dispose<any>[] = []
     commands: Map<string, Command> = new Map<string, Command>()
-    master: number
-    admins: number[]
     public logger: Logger
-
+    getLogger<K extends keyof Adapters>(platform:K,self_id?:string|number){
+        return getLogger(`[zhin:adapter-${[platform,self_id].filter(Boolean).join(':')}]`)
+    }
     constructor(public options: App.Options) {
         super();
         if (options.logConfig) {
             configure(options.logConfig as Configuration)
         }
         this.service('koa', new Koa())
-        this.logger = getLogger('zhin')
+        this.logger = getLogger('[zhin]')
         this.logger.level = options.log_level || 'info'
         const _this = this
         this.on('dispose', () => {
@@ -486,7 +486,7 @@ export class App extends EventEmitter {
             try {
                 this.adapter(platform as keyof Adapters, this.options.adapters[platform])
             } catch (e) {
-                this.logger.warn(e.message)
+                this.logger.warn(e.message,e.stack)
             }
         }
         for (const pluginName of Object.keys(this.options.plugins)) {

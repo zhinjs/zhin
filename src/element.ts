@@ -1,7 +1,8 @@
 import {Awaitable, Dict} from "@/types";
-import {SegmentMap, Sendable} from "@/bot";
-import {arrayBufferToBase64, camelize, hyphenate, interpolate, isNullable, makeArray} from "@/utils";
+import {Sendable} from "@/bot";
+import {camelize, hyphenate, interpolate, isNullable, makeArray} from "@/utils";
 import {Session} from "@/session";
+import {Command} from "@/command";
 
 export interface Element {
     type: string
@@ -59,7 +60,6 @@ export class Element {
         }
         return Object.assign(this, {type, attrs, children})
     }
-
     toString(strip = false) {
         if (this.type === 'text') return Element.escape(this.attrs.content)
         const inner = this.children.map((child) => child.toString(strip)).join('')
@@ -72,7 +72,7 @@ export class Element {
             return ` ${key}="${Element.escape('' + value, true)}"`
         }).join('')
         if (!this.children.length) return `<${this.type}${attrs}/>`
-        return `<${this.type}${attrs}>${inner}</${this.type}>`
+        return `${this.type}${attrs}>${inner}</${this.type}>`
     }
 }
 
@@ -201,7 +201,6 @@ export namespace Element {
         rollback(stack.length - 1)
         return stack[0].children
     }
-
     export function transform<S = never>(source: string, rules: Dict<Transformer<S>>, context?: S): string
     export function transform<S = never>(source: Element[], rules: Dict<Transformer<S>>, context?: S): Element[]
     export function transform<S>(source: string | Element[], rules: Dict<Transformer<S>>, context?: S) {
@@ -245,52 +244,9 @@ export namespace Element {
 
 }
 export type Fragment = string | Element | (string | Element)[]
-export type Factory<T extends keyof SegmentMap> = (...args: [data: SegmentMap[T], attrs?: Dict]) => Element
-
-function createFactory<T extends keyof SegmentMap>(type: T, ...keys: (keyof SegmentMap[T])[]): Factory<T> {
-    return (data, attrs) => {
-        const element = createElement(type)
-        keys.forEach((key, index) => {
-            element.attrs[key as string] = data[key]
-        })
-        if (attrs) {
-            Object.assign(element.attrs, attrs)
-        }
-        return element
-    }
-}
-
-
-function createAssetFactory<T extends keyof SegmentMap>(type: T, key: keyof SegmentMap[T]): Factory<T> {
-    return (data, attrs = {}) => {
-        let prefix = 'base64://'
-        let url = data[key] as unknown
-        if (typeof url === 'string') {
-            prefix = `data:${url};base64,`
-        }
-        if (url instanceof Buffer) {
-            url = prefix + url.toString('base64')
-        } else if (url instanceof ArrayBuffer) {
-            url = prefix + arrayBufferToBase64(url)
-        }
-        return createElement(type, {url, ...attrs})
-    }
-}
-
-const segment = {
-    text: createFactory('text', 'text'),
-    mention: createFactory('mention', 'user_id'),
-    reply: createFactory('reply', 'message_id'),
-    image: createAssetFactory('image', 'file_id'),
-    video: createAssetFactory('voice', 'file_id'),
-    audio: createAssetFactory('audio', 'file_id'),
-    file: createAssetFactory('file', 'file_id'),
-}
 
 export function createElement(type: string, ...children: Fragment[]): Element
 export function createElement(type: string, attrs: Dict, ...children: Fragment[]): Element
 export function createElement(type: string, ...args: any[]) {
     return new Element(type, ...args)
 }
-
-export {segment}

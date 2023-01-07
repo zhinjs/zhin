@@ -2,7 +2,7 @@ import {createReadStream, copyFileSync, statSync, writeFileSync} from 'fs'
 import {resolve as PathResolve,dirname} from "path";
 import * as readline from 'readline'
 import {App} from "@";
-export const name='logs'
+export const name='logsManage'
 export function install(bot:App){
     const logFile=PathResolve(dirname(bot.options.data_dir),'logs.log')
     function readLogs():Promise<string[]>{

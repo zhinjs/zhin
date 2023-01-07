@@ -2,6 +2,7 @@ import {App} from "@/app";
 import {Adapter, Adapters} from "@/adapter";
 import {OicqBot} from "@/adapters/oicq";
 import {Session} from "@/session";
+import {Logger} from "log4js";
 
 export type BotOptions<O={}>={
     master?:string|number
@@ -24,15 +25,16 @@ export interface Bots{
     oicq:OicqBot
 }
 export type BotConstructors={
-    [P in (keyof Bots)]:BotConstruct
+    [P in (keyof Adapters)]:BotConstruct
 }
 export namespace Bot{
     export const botConstructors:Partial<BotConstructors>={}
-    export function define<K extends keyof BotConstructors, BO={},AO={}>(key: K, botConstruct: BotConstruct<K,BO,AO>) {
+    export function define<K extends keyof Adapters, BO={},AO={}>(key: K, botConstruct: BotConstruct<K,BO,AO>) {
         botConstructors[key]=botConstruct
     }
 }
 export interface SegmentMap{
+    face:{id:number,text:string}
     text:{text:string}
     mention:{user_id:string}
     mention_all:null
@@ -56,20 +58,9 @@ export type SegmentElem<K extends keyof SegmentMap=keyof SegmentMap>={
     data:SegmentMap[K]
 }
 export type Segment={
-    [P in keyof SegmentMap]:(input:SegmentMap[P])=>SegmentElem
+    [P in keyof SegmentMap]:(input:SegmentMap[P])=>SegmentElem<P>
 }
-export type Sendable=SegmentElem|string|(string|SegmentElem)[]
-export const segment:Segment={
-    text:(data)=>({type:'text',data}),
-    mention:(data)=>({type:'text',data}),
-    mention_all:(data)=>({type:'text',data}),
-    image:(data)=>({type:'text',data}),
-    voice:(data)=>({type:'text',data}),
-    audio:(data)=>({type:'text',data}),
-    file:(data)=>({type:'text',data}),
-    location:(data)=>({type:'text',data}),
-    reply:(data)=>({type:'text',data}),
-}
+export type Sendable=SegmentElem|string|number|(string|number|SegmentElem)[]
 export class BotList<UT extends string|number> extends Array<Bot<keyof Adapters,{},{},UT>>{
     get(self_id:UT){
         return this.find(bot=>bot.self_id===self_id || bot.self_id===Number(self_id))

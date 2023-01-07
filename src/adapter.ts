@@ -1,7 +1,8 @@
-import {Bot, BotList, BotOptions} from "@/bot";
+import {Bot, BotConstruct, BotList, BotOptions} from "@/bot";
 import {App} from "@/app";
 import {OicqAdapter} from "@/adapters/oicq";
 import {Session} from "@/Session";
+import {Logger} from "log4js";
 
 interface AdapterConstruct<K extends keyof Adapters=keyof Adapters,BO extends BotOptions = BotOptions, AO = {}> {
     new(app: App, platform:K, options: AdapterOptions<BO, AO>): Adapter<K,BO, AO>
@@ -19,16 +20,13 @@ export abstract class Adapter<
     EM extends App.BaseEventMap=App.BaseEventMap
     > {
     public bots:BotList<string|number>
+    logger:Logger
     protected constructor(public app:App, public platform:K, public options:AdapterOptions<BO,AO>) {
         this.bots=new BotList<string | number>()
+        this.logger=app.getLogger(platform)
         this.app.on('start',()=>this.start())
     }
     async start(...args:any[]){
-
-        this.app.on(`${this.platform}.message`,(session)=>{
-            console.log(session)
-            session.execute()
-        })
     }
     async stop(...args:any[]){}
     protected startBot(options:BotOptions<BO>){
@@ -52,8 +50,9 @@ export type AdapterConstructs={
 }
 export namespace Adapter {
     export const adapterConstructs:Partial<AdapterConstructs>={}
-    export function define<K extends keyof Adapters, BO extends BotOptions, AO={}>(key: K, adapterConstruct: AdapterConstruct<K,BO, AO>) {
+    export function define<K extends keyof Adapters, BO extends BotOptions, AO={},UT extends string|number=number>(key: K, adapterConstruct: AdapterConstruct<K,BO, AO>,botConstruct:BotConstruct<K,BO,AO,UT>) {
         adapterConstructs[key]=adapterConstruct
+        Bot.define(key,botConstruct)
     }
     export function get<K extends keyof Adapters>(platform:K){
         return {

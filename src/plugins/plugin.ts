@@ -1,6 +1,5 @@
 import {App} from "@";
-
-export const name= 'plugin'
+export const name= 'pluginManage'
 export function install(bot:App){
     const command=bot.command('plugin')
         .desc('插件管理')

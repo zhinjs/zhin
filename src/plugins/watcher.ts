@@ -6,6 +6,7 @@ import * as Yaml from 'js-yaml'
 
 import * as path from "path";
 import {Dict} from "@/types";
+export const name='pluginWatcher'
 export function install(this:Plugin, bot:App, root:string){
     function deepEqual(a: any, b: any) {
         if (a === b) return true
@@ -64,7 +65,7 @@ export function install(this:Plugin, bot:App, root:string){
                 delete require.cache[plugin.fullPath+'/index.mjs']
             }
             require(plugin.fullPath)
-            const newPlugin=bot.load(plugin.name)
+            const newPlugin=bot.load(plugin.fullPath)
             bot.plugin(newPlugin,options)
             const dependentPlugins=[...bot.plugins.values()].filter(p=>p.using && p.using.includes(plugin.name as never))
             for(const dependentPlugin of dependentPlugins){

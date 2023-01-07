@@ -1,4 +1,5 @@
 import {Plugin,App} from "@";
+export const name='terminalLogin'
 export function install(this:Plugin,app:App){
     app.on('oicq.system.login.slider',(e)=>{
         console.log('输入滑块地址获取的ticket后继续。\n滑块地址:    '+e.url)

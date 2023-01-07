@@ -120,11 +120,15 @@ export class Command<A extends any[] = any[], O extends {} = {}>{
             const content=argv.argv.shift()
             const argDecl=this.args[args.length]
 
-            if (content[0]?.data['text'] !== '-' && Argv.resolveConfig(argDecl?.type).greedy) {
-                args.push(Argv.parseValue([content, ...argv.argv].flat(), 'argument', argv, argDecl));
+            if (content[0]?.data?.['text']?.[0] !== '-' && Argv.resolveConfig(argDecl?.type).greedy) {
+                args.push(Argv.parseValue([content, ...argv.argv].reduce((result,sArr)=>{
+                    if(result.length) result.push({type:'text',data:{text:' '}})
+                    result.push(...sArr)
+                    return result
+                },[]), 'argument', argv, argDecl));
                 break;
             }
-            if (content[0]?.data['text'] !== '-' && !Object.values(this.options).find(opt=>opt.shortName===content[0]?.data['text']) && argDecl) {
+            if (content[0]?.data?.['text']?.[0] !== '-' && !Object.values(this.options).find(opt=>opt.shortName===content[0]?.data['text']) && argDecl) {
                 if(argDecl.variadic){
                     args.push(...[content].concat(argv.argv).map(str=>Argv.parseValue(str, 'argument', argv, argDecl)));
                     break;
@@ -144,7 +148,11 @@ export class Command<A extends any[] = any[], O extends {} = {}>{
                             options[optionDecl.name]=argv.argv.map(arg=>Argv.parseValue(arg,'option',argv,optionDecl.declaration))
                             break;
                         } else if(Argv.resolveConfig(optionDecl.declaration.type).greedy){
-                            options[optionDecl.name]=Argv.parseValue(argv.argv.flat(),'option',argv,optionDecl.declaration)
+                            options[optionDecl.name]=Argv.parseValue(argv.argv.reduce((result,sArr)=>{
+                                if(result.length) result.push({type:'text',data:{text:' '}})
+                                result.push(...sArr)
+                                return result
+                            },[]),'option',argv,optionDecl.declaration)
                             break;
                         }else{
                             options[optionDecl.name]=Argv.parseValue(argv.argv.shift(),'option',argv,optionDecl.declaration)

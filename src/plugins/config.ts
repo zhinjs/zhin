@@ -2,6 +2,7 @@ import {App} from "@";
 import * as Yaml from 'js-yaml'
 import * as fs from 'fs'
 import {get,unset,set,mapValues} from "lodash";
+import {segmentsToString} from "@/adapters/oicq";
 function protectPassword(obj:Record<string, any>){
     if(!obj || typeof obj!=='object') return obj
     return mapValues(obj,(value,key)=>{
@@ -15,7 +16,7 @@ function outputConfig(config,key){
     const result=JSON.stringify(protectPassword(get(config,key)),null,2)
     return key.endsWith('password')?new Array(result.length).fill('*').join(''):result
 }
-export const name='config'
+export const name='configManage'
 export function install(bot:App){
     bot.command('config [key:string] [value]')
         .desc('编辑配置文件')
@@ -25,14 +26,14 @@ export function install(bot:App){
             const config=Yaml.load(fs.readFileSync(process.env.configPath||'','utf8')) as object
             if(value===undefined && !options.delete) return outputConfig(config,key)
             if(options.delete){
-                unset(config,key)
+                unset(config,key.data.text)
                 fs.writeFileSync(process.env.configPath,Yaml.dump(config))
                 return `已删除:config.${key}`
             }
             try{
-                value=JSON.parse(value)
+                value=JSON.parse(segmentsToString(value))
             }catch {}
-            set(config,key,value)
+            set(config,key.data.text,value)
             fs.writeFileSync(process.env.configPath,Yaml.dump(config))
             return `修改成功`
         })

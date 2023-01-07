@@ -1,6 +1,6 @@
 import {App} from "@/app";
 import {Adapters} from "@";
-
+export const name='systemDaemon'
 export function install(app:App, config:DaemonConfig={}){
     const {exitCommand=true, autoRestart = true} = config||{}
 

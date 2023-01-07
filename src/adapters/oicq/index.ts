@@ -1,29 +1,48 @@
 import {Adapter, AdapterOptions} from "@/adapter";
-import {Config as OicqConfig, Client, MessageRet,Sendable as OicqSendable, Quotable, MessageElem} from "oicq";
+import {Config as OicqConfig,EventMap, Client, MessageRet,Sendable as OicqSendable, Quotable, MessageElem} from "oicq";
 import {Bot, BotOptions, SegmentElem, Sendable} from '@/bot'
 import {App} from "@/app";
-import {EventMap} from "oicq/lib/events";
 import {Session} from "@/Session";
 function toSegment(msgList:OicqSendable) {
     msgList = [].concat(msgList);
-    return msgList.map(msg => {
-        if(typeof msg==='string') return {type:'text',data:{text:msg}}
-        const { type, ...other } = msg;
-        return { type, data: other };
-    });
+    return msgList.map((msg) => {
+        if (typeof msg === 'string') return {type: 'text', data: {text: msg}} as SegmentElem
+        let {type, ...other} = msg;
+        return {
+            type:type==='at'?other['qq']?'mention':"mention_all":type,
+            data: {
+                ...other,
+                user_id:other['qq']
+            }
+        }  as SegmentElem
+    })
 }
-function fromSegment(msgList:SegmentElem|(SegmentElem|string)[]) {
+export function segmentsToString(segments:SegmentElem[]){
+    return segments.map(segment=>{
+        const toString=(obj:Record<string, any>)=>{
+            return Object.keys(obj).map(key=>`${key}=${obj[key]}`).join(',')
+        }
+        return segment.type==='text'?segment.data['text']:`[SG:${segment.type} $${toString(segment.data)}]`
+    }).join('')
+}
+function fromSegment(msgList:SegmentElem|string|number|(SegmentElem|string|number)[]) {
     msgList = [].concat(msgList);
     return msgList.map((msg) => {
+        if(typeof msg !=='object') msg=String(msg)
         if(typeof msg==='string'){
             return {type: 'text',text:msg}
         }
         const { type, data, ...other } = msg;
-        return { type:type.replace('mention','at'), ...other, ...data };
+        return {
+            type: type.replace('mention','at').replace('at_all','at'),
+            ...other,
+            ...data
+        };
     }) as MessageElem[]
 }
 export interface OicqBotOptions extends OicqConfig{
     uin:number
+    quote_self?:boolean
     password?:string
 }
 export interface OicqEventMap extends App.BaseEventMap,EventMap{
@@ -44,15 +63,17 @@ export class OicqBot extends Client implements Bot<'oicq',OicqBotOptions,{},numb
     start(){
         this.login(this.options.password)
     }
-    sendMsg(target_id: number, target_type: string, message:Sendable,quote?:Quotable) {
-        const msg=typeof message==='string'?message:fromSegment(message)
+
+    sendMsg(target_id: number, target_type: string, content:Sendable,session?:Session) {
+        const msg=typeof content==='string'?content:fromSegment(content)
+        const message:Quotable|undefined=session?{...session,message:fromSegment(session.segments)} as unknown as Quotable:undefined
         switch (target_type){
             case 'group':
-                return this.sendGroupMsg(target_id,msg,quote)
+                return this.sendGroupMsg(target_id,msg,message)
             case 'private':
-                return this.sendGroupMsg(target_id,msg,quote)
+                return this.sendPrivateMsg(target_id,msg,message)
             case 'discuss':
-                return this.sendDiscussMsg(target_id,msg,quote)
+                return this.sendDiscussMsg(target_id,msg,message)
         }
     }
     createSession<E extends keyof OicqEventMap>(event:E,...args:Parameters<OicqEventMap[E]>):Session<'oicq', OicqEventMap, E>{
@@ -62,7 +83,7 @@ export class OicqBot extends Client implements Bot<'oicq',OicqBotOptions,{},numb
             platform:'oicq',
             adapter:this.adapter,
             event,
-            message:event==='message'?toSegment(obj['message']):obj['message']
+            segments:toSegment(obj['message']||[]),
         },{args})
         return new Session<"oicq", OicqEventMap, E>(this.adapter,this.self_id,event,obj)
     }
@@ -77,7 +98,7 @@ export class OicqBot extends Client implements Bot<'oicq',OicqBotOptions,{},numb
 
     reply(session: Session, message: Sendable, quote?: boolean): Promise<MessageRet> {
         if(session.post_type!=='message') throw new Error(`not exist reply when post_type !=='message`)
-        return this.sendMsg(session['group_id']||session['discuss_id']||session['user_id'],session.message_type,message,session as any)
+        return this.sendMsg(session['group_id']||session['discuss_id']||session['user_id'],session.message_type,message,session)
     }
 }
 export class OicqAdapter extends Adapter<'oicq',BotOptions<OicqBotOptions>,{},OicqEventMap>{
@@ -90,5 +111,4 @@ export class OicqAdapter extends Adapter<'oicq',BotOptions<OicqBotOptions>,{},Oi
         }
     }
 }
-Adapter.define('oicq',OicqAdapter)
-Bot.define('oicq',OicqBot)
+Adapter.define('oicq',OicqAdapter,OicqBot)

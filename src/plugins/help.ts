@@ -1,5 +1,5 @@
 import {App} from "@/app";
-
+export const name='systemHelper'
 export function install(bot:App){
     bot.on('command-add',(command)=>{
         command.option('help','-h 显示帮助信息',{hidden:true})
@@ -20,7 +20,7 @@ export function install(bot:App){
                 return output.filter(Boolean).join('\n')
             }
 
-            const command = bot.findCommand({name: target,session, segments:session.message,argv})
+            const command = bot.findCommand({name: target.data.text,session, segments:session.segments,argv})
             if (!command?.match(session)) {
                 return
             }
