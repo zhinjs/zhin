@@ -83,8 +83,10 @@ export class OicqBot extends Client implements Bot<'oicq',OicqBotOptions,{},numb
             platform:'oicq',
             adapter:this.adapter,
             event,
+            detail_type:obj.message_type||obj.request_type||obj.system_type||obj.notice_type,
             segments:toSegment(obj['message']||[]),
         },{args})
+        delete obj.reply
         return new Session<"oicq", OicqEventMap, E>(this.adapter,this.self_id,event,obj)
     }
 
@@ -98,7 +100,7 @@ export class OicqBot extends Client implements Bot<'oicq',OicqBotOptions,{},numb
 
     reply(session: Session, message: Sendable, quote?: boolean): Promise<MessageRet> {
         if(session.post_type!=='message') throw new Error(`not exist reply when post_type !=='message`)
-        return this.sendMsg(session['group_id']||session['discuss_id']||session['user_id'],session.message_type,message,session)
+        return this.sendMsg(session['group_id']||session['discuss_id']||session['user_id'],session.detail_type,message,session)
     }
 }
 export class OicqAdapter extends Adapter<'oicq',BotOptions<OicqBotOptions>,{},OicqEventMap>{

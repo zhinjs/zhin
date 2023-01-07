@@ -1,5 +1,5 @@
 import {Adapters} from "@/adapter";
-import {Bots, SegmentElem, Sendable} from "@/bot";
+import {Bot, Bots, SegmentElem, Sendable} from "@/bot";
 import {App} from "@/app";
 import {Argv} from "@/argv";
 import {Middleware} from "@/middleware";
@@ -24,12 +24,22 @@ export class Session<P extends keyof Adapters=keyof Adapters,EM extends App.Base
         this.app=adapter.app
         this.event=event
         this.bot=adapter.bots.get(self_id) as any
-        const {reply,...other}=obj as any
-        Object.assign(this,other)
+        Object.assign(this,obj)
         this.prompt=new Prompt(this.bot,this as any,this.app.options.delay.timeout||6000)
     }
-    middleware(middleware:Middleware<Session>){
-
+    middleware(middleware:Middleware<Session>,timeout:number=this.app.options.delay.prompt){
+        return new Promise<void|boolean|Sendable>(resolve => {
+            const dispose=this.app.middleware(async (session,next)=>{
+                if(Bot.getFullTargetId(this as any) !==Bot.getFullTargetId(session)) await next()
+                dispose()
+                clearTimeout(timer)
+                resolve(await middleware(session,next))
+            },true)
+            const timer=setTimeout(()=>{
+                dispose()
+                resolve()
+            },timeout)
+        })
     }
     async execute(argv:SegmentElem[]|Argv=this.segments){
         if(Array.isArray(argv)) argv={
