@@ -1,7 +1,6 @@
 import {Bot, Segment, Sendable} from "@/bot";
 import {Session} from "@/session";
 import {Dict} from "@/types";
-import {Dispose} from "@/dispose";
 export class Prompt{
     private readonly fullTargetId:string
     constructor(private bot:Bot,private session:Session,public timeout:number) {
@@ -24,7 +23,6 @@ export class Prompt{
                 dispose()
                 clearTimeout(timer)
             },true)
-            console.log(dispose[Dispose.key])
             const timer=setTimeout(()=>{
                 dispose()
                 resolve(options.initial)
