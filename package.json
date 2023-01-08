@@ -62,6 +62,7 @@
     "koa": "^2.13.4",
     "lodash": "^4.17.21",
     "log4js": "^6.6.1",
+    "obj-observer": "^1.0.3",
     "oicq": "^2.3.1",
     "oicq2-cq-enable": "^1.0.6",
     "tsconfig-paths": "^4.0.0"

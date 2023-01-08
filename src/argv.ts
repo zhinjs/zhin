@@ -15,7 +15,7 @@ export interface Argv<A extends any[] = any[], O = {}> {
 
 export namespace Argv{
     export interface Domain {
-        string: ReturnType<Segment['text']>
+        string: string
         mention: ReturnType<Segment['mention']>
         face: ReturnType<Segment['face']>
         file: ReturnType<Segment['file']>
@@ -78,7 +78,7 @@ export namespace Argv{
     }
     createDomain('string', (source) => {
         const textElem=source.find(s=>s.type==='text')
-        if(textElem) return textElem as ReturnType<Segment['text']>
+        if(textElem) return textElem.data['text']
         throw new Error('无效的文本')
     })
     createDomain('text', source => source, { greedy: true })

@@ -26,14 +26,14 @@ export function install(bot:App){
             const config=Yaml.load(fs.readFileSync(process.env.configPath||'','utf8')) as object
             if(value===undefined && !options.delete) return outputConfig(config,key)
             if(options.delete){
-                unset(config,key.data.text)
+                unset(config,key)
                 fs.writeFileSync(process.env.configPath,Yaml.dump(config))
                 return `已删除:config.${key}`
             }
             try{
                 value=JSON.parse(segmentsToString(value))
             }catch {}
-            set(config,key.data.text,value)
+            set(config,key,value)
             fs.writeFileSync(process.env.configPath,Yaml.dump(config))
             return `修改成功`
         })

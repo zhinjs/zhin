@@ -1,6 +1,4 @@
-export type Dispose = {
-    ():boolean
-}
+export type Dispose = ()=>boolean|void
 export type ToDispose<T>= T & Dispose
 export namespace Dispose{
     export function from<T extends object>(source:T,callback):ToDispose<T>{

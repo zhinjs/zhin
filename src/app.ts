@@ -1,4 +1,6 @@
 import {join, resolve, dirname} from 'path'
+import {ref, watch} from 'obj-observer'
+import {callBackProxy, Proxied} from 'obj-observer/lib/deepProxy'
 import {fork, ChildProcess} from "child_process";
 import {Logger, getLogger, configure, Configuration} from "log4js";
 import * as Yaml from 'js-yaml'
@@ -6,9 +8,9 @@ import * as path from 'path'
 import * as fs from 'fs'
 import {Command} from "@/command";
 import {Argv} from "@/argv";
-import {deepClone, deepMerge, wrapExport, remove, isBailed} from "@/utils";
+import {deepClone, deepMerge, wrapExport, remove, isBailed, getPackageInfo, deepEqual, getCaller} from "@/utils";
 import {Dict} from "@/types";
-import {Plugin} from "@/plugin";
+import {Plugin, PluginOptions, Plugins} from "@/plugin";
 import Koa from "koa";
 import {Adapter, AdapterConstructs, AdapterOptions, AdapterOptionsType, Adapters} from "@/adapter";
 import {Bots, Sendable} from "@/bot";
@@ -24,7 +26,7 @@ interface Message {
 }
 
 export type TargetType = 'group' | 'private' | 'discuss'
-export type ChannelId = `${keyof Adapters}:${string|number}:${TargetType}:${number|string}`
+export type ChannelId = `${keyof Adapters}:${string | number}:${TargetType}:${number | string}`
 let cp: ChildProcess
 
 export function isConstructor<R, T>(value: any): value is (new (...args: any[]) => any) {
@@ -75,14 +77,6 @@ process.on('SIGINT', () => {
     }
 })
 
-export function createApp(options: Partial<App.Options> | string) {
-    if (typeof options === 'string') {
-        if (!fs.existsSync(options)) fs.writeFileSync(options, Yaml.dump(App.defaultConfig))
-        options = Yaml.load(fs.readFileSync(options, {encoding: 'utf8'}))
-    }
-    return new App(deepMerge(deepClone(App.defaultConfig), options))
-}
-
 export function defineConfig(options: App.Options) {
     return options
 }
@@ -90,14 +84,16 @@ export function defineConfig(options: App.Options) {
 
 export class App extends EventEmitter {
     isReady: boolean = false
+    options: App.Options
     plugins: Map<string, Plugin> = new Map<string, Plugin>()
-    adapters:Map<keyof Adapters,Adapter>=new Map<keyof Adapters, Adapter>()
+    adapters: Map<keyof Adapters, Adapter> = new Map<keyof Adapters, Adapter>()
     private services: Record<string, any> = {}
     disposes: Dispose[] = []
-    middlewares:Middleware<Session>[]=[]
+    middlewares: Middleware<Session>[] = []
     commands: Map<string, Command> = new Map<string, Command>()
     public logger: Logger
-    constructor(public options: App.Options) {
+
+    constructor(options: App.Options) {
         super();
         if (options.logConfig) {
             configure(options.logConfig as Configuration)
@@ -106,13 +102,14 @@ export class App extends EventEmitter {
         this.logger = getLogger('[zhin]')
         this.logger.level = options.log_level || 'info'
         const _this = this
+        this.options = ref(options)
         this.on('dispose', () => {
             while (this.disposes.length) {
                 const dispose = this.disposes.shift()
                 dispose()
             }
         })
-        this.middleware((session)=>session.execute())
+        this.middleware((session) => session.execute())
         return new Proxy(this, {
             get(target: typeof _this, p: string | symbol, receiver: any): any {
                 let result = Reflect.get(target, p, receiver)
@@ -123,36 +120,70 @@ export class App extends EventEmitter {
         })
     }
 
-    on(event, listener){
+    on(event, listener) {
         super.on(event, listener)
-        return Dispose.from(this,()=>{
-            super.off(event,listener)
+        return Dispose.from(this, () => {
+            super.off(event, listener)
         })
     }
-    adapter<K extends keyof Adapters>(platform:K):Adapters[K]
-    adapter<K extends keyof Adapters>(platform:K,options:AdapterOptionsType<Adapters[K]>):this
-    adapter<K extends keyof Adapters>(platform:K,adapter:AdapterConstructs[K],options:AdapterOptionsType<Adapters[K]>):this
-    adapter<K extends keyof Adapters>(platform:K,Construct?:AdapterConstructs[K]|AdapterOptions,options?:AdapterOptions){
-        if(!Construct && ! options) return this.adapters.get(platform)
-        if(typeof Construct!=="function") {
-            this.load(platform,'adapter')
-            options=Construct as AdapterOptions
-            Construct=Adapter.get(platform).Adapter as unknown as AdapterConstructs[K]
+
+    changeOptions(options: App.Options) {
+        const changeValue = (source, key, value) => {
+            if (source[key] && typeof source[key] === 'object') {
+                Object.keys(source[key]).forEach(k => {
+                    if(value[k] && typeof value[k]==='object'){
+                        changeValue(source[key], k, value[k])
+                    }else if(value[k]===undefined){
+                        // 无则删除
+                        delete source[key][k]
+                    }else{
+                        // 有则更新
+                        source[key][k]=value[k]
+                    }
+                })
+                Object.keys(value).forEach(k=>{
+                    if(source[key][k]===undefined){
+                        // 无则添加
+                        source[key][k]=value[k]
+                    }
+                })
+            } else {
+                source[key] = value
+            }
         }
-        if(!Construct) throw new Error(`can't find adapter fom platform:${platform}`)
-        const dispose=this.on(`${platform}.message`,(session)=>{
+        Object.keys(options).forEach(key => {
+            if (!deepEqual(this.options[key], options[key])) {
+                changeValue(this.options, key, options[key])
+            }
+        })
+    }
+
+    adapter<K extends keyof Adapters>(platform: K): Adapters[K]
+    adapter<K extends keyof Adapters>(platform: K, options: AdapterOptionsType<Adapters[K]>): this
+    adapter<K extends keyof Adapters>(platform: K, adapter: AdapterConstructs[K], options: AdapterOptionsType<Adapters[K]>): this
+    adapter<K extends keyof Adapters>(platform: K, Construct?: AdapterConstructs[K] | AdapterOptions, options?: AdapterOptions) {
+        if (!Construct && !options) return this.adapters.get(platform)
+        if (typeof Construct !== "function") {
+            this.load(platform, 'adapter')
+            options = Construct as AdapterOptions
+            Construct = Adapter.get(platform).Adapter as unknown as AdapterConstructs[K]
+        }
+        if (!Construct) throw new Error(`can't find adapter fom platform:${platform}`)
+        const dispose = this.on(`${platform}.message`, (session) => {
             const middleware = Middleware.compose(this.middlewares)
             middleware(session)
         })
-        this.adapters.set(platform,new Construct(this,platform,options))
-        return Dispose.from(this,()=>{
+        this.adapters.set(platform, new Construct(this, platform, options))
+        return Dispose.from(this, () => {
             dispose()
             this.adapters.delete(platform)
         }) as any
     }
-    pickBot<K extends keyof Bots>(platform:K,self_id:string|number):Bots[K]{
+
+    pickBot<K extends keyof Bots>(platform: K, self_id: string | number): Bots[K] {
         return this.adapters.get(platform).bots.get(self_id) as Bots[K]
     }
+
     emit(event, ...args) {
         const listeners = this.listeners(event)
         if (typeof event === "string" && !event.startsWith('before-') && !event.startsWith('after-')) {
@@ -164,16 +195,19 @@ export class App extends EventEmitter {
         }
         return true
     }
-    middleware(middleware:Middleware<Session>,prepend?:boolean){
-        const method:'push'|'unshift'=prepend?'unshift':"push"
+
+    middleware(middleware: Middleware<Session>, prepend?: boolean) {
+        const method: 'push' | 'unshift' = prepend ? 'unshift' : "push"
         this.middlewares[method](middleware)
-        return Dispose.from(this,()=>{
+        return Dispose.from(this, () => {
             return remove(this.middlewares, middleware);
         })
     }
-    getLogger<K extends keyof Adapters>(platform:K,self_id?:string|number){
-        return getLogger(`[zhin:adapter-${[platform,self_id].filter(Boolean).join(':')}]`)
+
+    getLogger<K extends keyof Adapters>(platform: K, self_id?: string | number) {
+        return getLogger(`[zhin:adapter-${[platform, self_id].filter(Boolean).join(':')}]`)
     }
+
     service<K extends keyof App.Services>(key: K): App.Services[K]
     service<K extends keyof App.Services>(key: K, service: App.Services[K]): this
     service<K extends keyof App.Services, T>(key: K, constructor: App.ServiceConstructor<App.Services[K], T>, options?: T): this
@@ -187,7 +221,7 @@ export class App extends EventEmitter {
         } else {
             this.services[key] = Service
         }
-        return Dispose.from(this,()=>{
+        return Dispose.from(this, () => {
             delete this.services[key]
         })
     }
@@ -202,30 +236,33 @@ export class App extends EventEmitter {
     }
 
     get pluginList() {
-        const result: Plugin[] = []
+        return [...this.plugins.values()]
+    }
+    getCachedPluginList(){
+        const result:Plugin[]=[]
         if (fs.existsSync(resolve(process.cwd(), 'node_modules', '@zhinjs'))) {
             result.push(...fs.readdirSync(resolve(process.cwd(), 'node_modules', '@zhinjs')).map((str) => {
                 if (/^plugin-/.test(str)) return `@zhinjs/${str}`
                 return false
             }).filter(Boolean)
-                .map((name) => this.load(name as string)))
+                .map((name) => this.load<Plugin>(name as string, 'plugin')))
         }
         if (fs.existsSync(resolve(process.cwd(), 'node_modules'))) {
             result.push(...fs.readdirSync(resolve(process.cwd(), 'node_modules')).map((str) => {
                 if (/^zhinjs-plugin-/.test(str)) return str
                 return false
             }).filter(Boolean)
-                .map((name) => this.load(name as string)))
+                .map((name) => this.load<Plugin>(name as string, 'plugin')))
         }
         if (fs.existsSync(resolve(process.cwd(), this.options.plugin_dir))) {
             result.push(
                 ...fs.readdirSync(resolve(process.cwd(), this.options.plugin_dir))
-                    .map((name) => this.load(name.replace(/\.(d\.)?[d|j]s$/, '')))
+                    .map((name) => this.load<Plugin>(name.replace(/\.(d\.)?[d|j]s$/, ''), 'plugin'))
             )
         }
         if (fs.existsSync(resolve(__dirname, 'plugins'))) {
             result.push(...fs.readdirSync(resolve(__dirname, 'plugins'))
-                .map((name) => this.load(name.replace(/\.(d\.)?[d|j]s$/, ''))))
+                .map((name) => this.load<Plugin>(name.replace(/\.(d\.)?[d|j]s$/, ''), 'plugin')))
         }
         return result
     }
@@ -235,14 +272,14 @@ export class App extends EventEmitter {
     }
 
     plugin<T>(name: string, options?: T): Plugin | this
-    plugin<T>(plugin: Plugin<T>, options?: T): this
-    plugin<T>(entry: string | Plugin<T>, options?: T) {
+    plugin<P extends Plugin>(plugin: P, options?: PluginOptions<P>): this
+    plugin<P extends Plugin>(entry: string | P, options?: PluginOptions<P>) {
         let plugin: Plugin
         if (typeof entry === 'string') {
             const result = this.plugins.get(entry)
             if (result) return result
             try {
-                plugin = this.load(entry)
+                plugin = this.load<P>(entry, 'plugin')
             } catch (e) {
                 this.logger.warn(e.message)
                 return this
@@ -252,14 +289,16 @@ export class App extends EventEmitter {
         }
         plugin.anonymousCount = 0
         plugin.children = []
-        const _this = this
-        const proxy = new Proxy(this, {
-            get(target: typeof _this, p: PropertyKey, receiver: any): any {
+        const dispose = Dispose.from(this, () => {
+            this.dispose(plugin)
+        })
+        const proxy = new Proxy(dispose, {
+            get(target: typeof dispose, p: PropertyKey, receiver: any): any {
                 const proxyEvents = ['on', 'plugin', 'command']
                 const result = Reflect.get(target, p, receiver)
                 if (typeof result !== 'function' || typeof p !== 'string' || !proxyEvents.includes(p)) return result
-                // @ts-ignore
-                return new Proxy(result, {apply(target: typeof _this, thisArg: any, argArray?: any): any {
+                return new Proxy(result, {
+                    apply(target: Function, thisArg: any, argArray?: any): any {
                         if (p === 'plugin') {
                             let [entry, config] = argArray
                             if (typeof entry !== 'string') {
@@ -277,17 +316,17 @@ export class App extends EventEmitter {
                                 plugin.children.push(entry)
                             } else if (entry.startsWith('./')) {
                                 entry = {
-                                    name: `${plugin.name}:${entry.replace('./', '')}`,
-                                    install: _this.load(resolve(dirname(plugin.fullPath), entry)).install
+                                    name: `${plugin.name}:${entry.replace('./', '').split('/').join(':')}`,
+                                    install: dispose.load<Plugin>(resolve(dirname(plugin.fullPath), entry), 'plugin').install
                                 }
                             }
                             return result.apply(thisArg, [entry, config])
                         }
                         let res = result.apply(thisArg, argArray)
                         if (res instanceof Command) {
-                            (plugin).disposes.push(() => {
-                                _this.commands.delete(res.name)
-                                _this.emit('command-remove', res)
+                            plugin.disposes.push(() => {
+                                dispose.commands.delete(res.name)
+                                dispose.emit('command-remove', res)
                                 return true
                             })
                         } else {
@@ -301,23 +340,32 @@ export class App extends EventEmitter {
         const installPlugin = () => {
             plugin.disposes = []
             plugin.dispose = function () {
-                while (this.disposes.length) {
-                    const dispose = this.disposes.shift()
+                while (plugin.disposes.length) {
+                    const dispose = plugin.disposes.shift()
                     dispose()
                 }
                 plugin.disposes = []
                 return true
             }
-            const installFunction = typeof plugin === "function" ? plugin : plugin.install
+            const installFunction = plugin.install ? plugin.install : plugin as Plugin.Function<any>
             if (this.plugins.get(plugin.name)) {
                 this.logger.warn('重复载入:' + plugin.name)
                 return
             }
-            const result = installFunction.apply(plugin, [proxy, options])
-            if (typeof result === 'function') {
-                plugin.disposes.push(result)
+            if (plugin.setup) {
+                plugin.app = proxy
+                this.plugins.set(plugin.name, plugin)
+                const result = installFunction.apply(plugin, [proxy, options])
+                if (typeof result === 'function') {
+                    plugin.disposes.push(result)
+                }
+            } else {
+                const result = installFunction.apply(plugin, [proxy, options])
+                if (typeof result === 'function') {
+                    plugin.disposes.push(result)
+                }
+                this.plugins.set(plugin.name, plugin)
             }
-            this.plugins.set(plugin.name, plugin)
             this.logger.info('已载入:' + plugin.name)
             this.emit('plugin-add', plugin)
         }
@@ -356,7 +404,7 @@ export class App extends EventEmitter {
         }
         const name = nameArr.pop()
         const command = new Command(name + decl)
-        command.app=this
+        command.app = this
         if (parent) {
             command.parent = parent
             parent.children.push(command)
@@ -367,10 +415,10 @@ export class App extends EventEmitter {
     }
 
     sendMsg(channelId: ChannelId, message: Sendable) {
-        const [platform,self_id,targetType, targetId] = channelId.split(':') as [keyof Adapters,`${string|number}`,TargetType, `${string|number}`]
-        const adapter=this.adapters.get(platform)
-        const bot=adapter.bots.get(self_id)
-        return bot.sendMsg(targetId,targetType,message)
+        const [platform, self_id, targetType, targetId] = channelId.split(':') as [keyof Adapters, `${string | number}`, TargetType, `${string | number}`]
+        const adapter = this.adapters.get(platform)
+        const bot = adapter.bots.get(self_id)
+        return bot.sendMsg(targetId, targetType, message)
     }
 
     setTimeout(callback: Function, ms: number, ...args) {
@@ -379,20 +427,20 @@ export class App extends EventEmitter {
             dispose()
             remove(this.disposes, dispose)
         }, ms, ...args)
-        const dispose = Dispose.from(this,()=>clearTimeout(timer))
+        const dispose = Dispose.from(this, () => clearTimeout(timer))
         this.disposes.push(dispose)
         return
     }
 
-    setInterval(callback: Function, ms: number, ...args){
+    setInterval(callback: Function, ms: number, ...args) {
         const timer = setInterval(callback, ms, ...args)
-        const dispose = Dispose.from(this,()=>clearInterval(timer))
+        const dispose = Dispose.from(this, () => clearInterval(timer))
         this.disposes.push(dispose)
         return dispose
     }
 
-    use<T=any>(plugin:Plugin.Object<T>,options?:T): this {
-        this.plugin(plugin,options)
+    use<P extends Plugin>(plugin: P, options?: PluginOptions<P>): this {
+        this.plugin(plugin, options)
         return this
     }
 
@@ -418,7 +466,7 @@ export class App extends EventEmitter {
         return this
     }
 
-    public load<T extends keyof App.LoadTypes='plugin'>(name: string, type?:T):App.LoadTypes[T] {
+    public load<R = object>(name: string, type: string): R {
         function getListenDir(modulePath: string) {
             if (modulePath.endsWith('/index')) return modulePath.replace('/index', '')
             for (const extension of ['ts', 'js', 'cjs', 'mjs']) {
@@ -434,6 +482,7 @@ export class App extends EventEmitter {
                 return ''
             }
         }
+
         function getModulesPath(modules: string[]) {
             for (const moduleName of modules) {
                 const result = getResolvePath(moduleName)
@@ -443,34 +492,43 @@ export class App extends EventEmitter {
         }
 
         const getType = (resolvePath: string) => {
-            if (resolvePath.includes(`@zhinjs/${type||'plugin'}-`)) return 'official'
-            if(resolvePath.includes(`zhin-${type||'plugin'}-`)) return 'community'
-            if(resolvePath.startsWith(path.resolve(__dirname,'plugins'))) return 'built'
+            if (resolvePath.includes(`@zhinjs/${type || 'plugin'}-`)) return 'official'
+            if (resolvePath.includes(`zhin-${type || 'plugin'}-`)) return 'community'
+            if (resolvePath.startsWith(path.resolve(__dirname, 'plugins'))) return 'built'
             return 'custom'
         }
         const resolved = getModulesPath([
-            this.options[`${type||'plugin'}_dir`] ? path.resolve(this.options[`${type||'plugin'}_dir`], name) : null,// 用户自定义插件/服务/游戏目录
-            path.join(__dirname, `${type||'plugin'}s`, name), // 内置插件/服务/游戏目录
-            `@zhinjs/${type||'plugin'}-${name}`,// 官方插件/服务/游戏模块
-            `zhin-${type||'plugin'}-${name}`,// 社区插件/服务/游戏模块
+            this.options[`${type || 'plugin'}_dir`] ? path.resolve(this.options[`${type || 'plugin'}_dir`], name) : null,// 用户自定义插件/服务/游戏目录
+            path.join(__dirname, `${type || 'plugin'}s`, name), // 内置插件/服务/游戏目录
+            `@zhinjs/${type || 'plugin'}-${name}`,// 官方插件/服务/游戏模块
+            `zhin-${type || 'plugin'}-${name}`,// 社区插件/服务/游戏模块
         ].filter(Boolean))
-        if (!resolved) throw new Error(`未找到${type||'plugin'}(${name})`)
-        const result = wrapExport(resolved)
+        if (!resolved) throw new Error(`未找到${type || 'plugin'}(${name})`)
+        const packageInfo = getPackageInfo(resolved)
+        let result: Record<string, any> = {}
+        if (packageInfo) {
+            Object.assign(result, packageInfo)
+            if (packageInfo.setup) {
+                result.install = () => {
+                    wrapExport(resolved)
+                }
+            } else {
+                Object.assign(result, wrapExport(resolved))
+            }
+        } else {
+            Object.assign(result, wrapExport(resolved))
+        }
         const dirs = resolved.split('/')
-
-        const plugin = {
-            anonymousCount: 0,
-            install: result.install || result,
+        return {
+            ...result,
             author: JSON.stringify(result.author),
-            version: result.version,
             desc: result.desc,
             using: result.using ||= [],
             type: getType(resolved),
             name: result.name || name,
             fullName: result.fullName || dirs[dirs.length - 1].replace(/\.(d\.)?[t|j]s$/, ''),
             fullPath: getListenDir(resolved)
-        }
-        return type==='adapter'?result:plugin
+        } as any
     }
 
     findCommand(argv: Argv) {
@@ -482,18 +540,18 @@ export class App extends EventEmitter {
     }
 
     async start() {
-        for (const platform of Object.keys(this.options.adapters||{})) {
+        for (const platform of Object.keys(this.options.adapters || {})) {
             try {
                 this.adapter(platform as keyof Adapters, this.options.adapters[platform])
             } catch (e) {
-                this.logger.warn(e.message,e.stack)
+                this.logger.warn(e.message, e.stack)
             }
         }
         for (const pluginName of Object.keys(this.options.plugins)) {
             try {
                 this.plugin(pluginName, this.options.plugins[pluginName])
             } catch (e) {
-                this.logger.warn(e.message,e.stack)
+                this.logger.warn(e.message, e.stack)
             }
         }
         await this.emitSync('ready')
@@ -550,48 +608,57 @@ export interface App extends App.Services {
     plugin<T>(plugin: Plugin, options?: T): this
 
     on<T extends keyof App.AllEventMap<this>>(event: T, listener: App.AllEventMap<this>[T]);
+
     // @ts-ignore
-    on<P extends keyof Adapters,E extends keyof App.BotEventMaps[P]>(event: `${P}.${E}`, listener: (session:ToSession<P,App.BotEventMaps[P],E>)=>any);
+    on<P extends keyof Adapters, E extends keyof App.BotEventMaps[P]>(event: `${P}.${E}`, listener: (session: ToSession<P, App.BotEventMaps[P], E>) => any);
 
     on<S extends string | symbol>(event: S & Exclude<S, keyof App.AllEventMap<this>>, listener: (...args: any[]) => any);
 
     emitSync<T extends keyof App.AllEventMap<this>>(event: T, ...args: Parameters<App.AllEventMap<this>[T]>): Promise<void>;
+
     // @ts-ignore
-    emitSync<P extends keyof Adapters,E extends keyof App.BotEventMaps[P]>(event: `${P}.${E}`, session:ToSession<P,App.BotEventMaps[P],E>): Promise<void>;
+    emitSync<P extends keyof Adapters, E extends keyof App.BotEventMaps[P]>(event: `${P}.${E}`, session: ToSession<P, App.BotEventMaps[P], E>): Promise<void>;
+
     emitSync<S extends string | symbol>(event: S & Exclude<S, keyof App.AllEventMap<this>>, ...args: any[]): Promise<void>;
 
     bail<T extends keyof App.AllEventMap<this>>(event: T, ...args: Parameters<App.AllEventMap<this>[T]>): any;
 
     // @ts-ignore
-    emitSync<P extends keyof Adapters,E extends keyof App.BotEventMaps[P]>(event: `${P}.${E}`, session:ToSession<P,App.BotEventMaps[P],E>): any;
+    emitSync<P extends keyof Adapters, E extends keyof App.BotEventMaps[P]>(event: `${P}.${E}`, session: ToSession<P, App.BotEventMaps[P], E>): any;
+
     bail<S extends string | symbol>(event: S & Exclude<S, keyof App.AllEventMap<this>>, ...args: any[]): any;
 
     bailSync<T extends keyof App.AllEventMap<this>>(event: T, ...args: Parameters<App.AllEventMap<this>[T]>): Promise<any>;
+
     // @ts-ignore
-    emitSync<P extends keyof Adapters,E extends keyof App.BotEventMaps[P]>(event: `${P}.${E}`, session:ToSession<P,App.BotEventMaps[P],E>): Promise<any>;
+    emitSync<P extends keyof Adapters, E extends keyof App.BotEventMaps[P]>(event: `${P}.${E}`, session: ToSession<P, App.BotEventMaps[P], E>): Promise<any>;
+
     bailSync<S extends string | symbol>(event: S & Exclude<S, keyof App.AllEventMap<this>>, ...args: any[]): Promise<any>;
 }
 
 export namespace App {
+    export const key = Symbol('Zhin')
+
     export interface Services {
         koa: Koa
     }
+
     export const defaultConfig: Partial<Options> = {
-        adapters:{
-            oicq:{
-                bots:[]
+        adapters: {
+            oicq: {
+                bots: []
             }
         },
-        data_dir:path.join(process.cwd(), 'data'),
+        data_dir: path.join(process.cwd(), 'data'),
         plugin_dir: path.join(process.cwd(), 'plugins'),
         plugins: {
-            config:null,
+            config: null,
             daemon: null,
             help: null,
-            login:null,
-            logs:null,
-            plugin:null,
-            status:null,
+            login: null,
+            logs: null,
+            plugin: null,
+            status: null,
             watcher: process.cwd(),
         },
         log_level: 'info',
@@ -609,7 +676,7 @@ export namespace App {
             },
             categories: {
                 zhin: {
-                    appenders: ['saveFile','consoleOut'],
+                    appenders: ['saveFile', 'consoleOut'],
                     level: 'info'
                 },
                 default: {
@@ -619,21 +686,21 @@ export namespace App {
             }
         },
     }
-    type BeforeEventMap<T> = {
-    } & BeforeLifeCycle
+    type BeforeEventMap<T> = {} & BeforeLifeCycle
 
-    type AfterEventMap<T> = {
-    } & AfterLifeCycle
+    type AfterEventMap<T> = {} & AfterLifeCycle
     type BeforeLifeCycle = {
         [P in keyof LifeCycle as `before-${P}`]: LifeCycle[P]
     }
     type AfterLifeCycle = {
         [P in keyof LifeCycle as `after-${P}`]: LifeCycle[P]
     }
-    export interface LoadTypes{
-        plugin:Plugin
-        adapter:Adapter
+
+    export interface LoadTypes {
+        plugin: Plugin
+        adapter: Adapter
     }
+
     export interface LifeCycle {
         start(): void
 
@@ -649,26 +716,108 @@ export namespace App {
 
         'plugin-remove'(plugin: Plugin): void
     }
-    export type BaseEventMap=Record<string, (...args:any[])=>any>
-    export interface BotEventMaps{
-        oicq:OicqEventMap
+
+    export type BaseEventMap = Record<string, (...args: any[]) => any>
+
+    export interface BotEventMaps {
+        oicq: OicqEventMap
     }
+
     export interface AllEventMap<T> extends LifeCycle, BeforeEventMap<T>, AfterEventMap<T> {
     }
-    export type AdapterConfig={
-        [P in keyof Adapters]:AdapterOptionsType<Adapters[P]>
+
+    export type AdapterConfig = {
+        [P in keyof Adapters]: AdapterOptionsType<Adapters[P]>
     }
-    export type LogLevel="trace" | "debug" | "info" | "warn" | "error" | "fatal" | "mark" | "off"
-    export interface Options {
-        log_level:LogLevel
+    export type PluginConfig={
+        [P in keyof Plugins]:PluginOptions<Plugins[P]>
+    }
+    export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal" | "mark" | "off"
+    type KVMap<V =any,K extends string=string>=Record<K, V>
+    export interface Options extends KVMap{
+        log_level: LogLevel
         logConfig?: Partial<Configuration>
         delay: Record<string, number>
-        plugins?: Record<string, any>
+        plugins?: PluginConfig
         services?: Record<string, any>
         adapters?: AdapterConfig
-        adapter_dir?:string
+        adapter_dir?: string
         plugin_dir?: string
-        data_dir?:string
+        data_dir?: string
     }
+    export type Keys<O extends KVMap>=O extends KVMap<infer V,infer K>? V extends object?`${K}.${Keys<V>}`:`${K}`:never
+    export type Value<O extends KVMap,K>=K extends `${infer L}.${infer R}`? Value<O[L],R>:K extends keyof O?O[K]:any
+
     export type ServiceConstructor<R, T = any> = new (bot: App, options?: T) => R
+}
+
+function createAppAPI() {
+    const contextMap: Map<string | symbol, App> = new Map<string | symbol, App>()
+    const createApp = (options: Partial<App.Options> | string) => {
+        if (contextMap.get(App.key)) return contextMap.get(App.key)
+        if (typeof options === 'string') {
+            if (!fs.existsSync(options)) fs.writeFileSync(options, Yaml.dump(App.defaultConfig))
+            options = Yaml.load(fs.readFileSync(options, {encoding: 'utf8'}))
+        }
+        const app = new App(deepMerge(deepClone(App.defaultConfig), options))
+        contextMap.set(App.key, app)
+        return app
+    }
+    const useApp = () => {
+        const app = contextMap.get(App.key)
+        if (!app) throw new Error(`can't found app with context for key:${App.key.toString()}`)
+        const callSite = getCaller()
+        const pluginFullPath = callSite.getFileName()
+        const plugin = app.pluginList.find(plugin => plugin.fullPath === pluginFullPath)
+        if(plugin && plugin.app) return plugin.app
+        return app
+    }
+
+    function getValue<T>(obj: T, path: string[]) {
+        if (!obj || typeof obj !== 'object') return obj
+        let result = obj
+        while (path.length) {
+            const key = path.shift()
+            result = result[key] || {}
+        }
+        return result
+    }
+
+    function useOptions<K extends App.Keys<App.Options>>(path: K):App.Value<App.Options,K>{
+        const app = contextMap.get(App.key)
+        if (!app) throw new Error(`can't found app with context for key:${App.key.toString()}`)
+        return getValue(app.options, path.split('.').filter(Boolean)) as App.Value<App.Options,K>
+    }
+    type EffectReturn=()=>void
+    type EffectCallBack<T = any>=(value?:T,oldValue?:T)=>void|EffectReturn
+    function useEffect<T extends object = object>(callback:EffectCallBack<T>,effect?:Proxied<T>){
+        const app = contextMap.get(App.key)
+        if (!app) throw new Error(`can't found app with context for key:${App.key.toString()}`)
+        const callSite = getCaller()
+        const pluginFullPath = callSite.getFileName()
+        const plugin = app.pluginList.find(plugin => plugin.fullPath === pluginFullPath)
+        if(!effect){
+            const dispose=callback()
+            if(dispose){
+                plugin.disposes.push(dispose)
+            }
+        }else{
+            const unWatch=watch(effect,callback)
+            plugin.disposes.push(unWatch)
+        }
+
+    }
+    return {
+        createApp,
+        useApp,
+        useEffect,
+        useOptions
+    }
+}
+const {createApp, useApp,useEffect, useOptions} = createAppAPI()
+export {
+    createApp,
+    useApp,
+    useEffect,
+    useOptions
 }

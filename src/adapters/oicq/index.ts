@@ -103,7 +103,7 @@ export class OicqBot extends Client implements Bot<'oicq',OicqBotOptions,{},numb
         return this.sendMsg(session['group_id']||session['discuss_id']||session['user_id'],session.detail_type,message,quote?session:undefined)
     }
 }
-export class OicqAdapter extends Adapter<'oicq',BotOptions<OicqBotOptions>,{},OicqEventMap>{
+export class OicqAdapter extends Adapter<'oicq',OicqBotOptions,{},OicqEventMap>{
     constructor(app:App, platform, options:AdapterOptions<OicqBotOptions>) {
         super(app,platform,options);
     }

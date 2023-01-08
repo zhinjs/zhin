@@ -20,7 +20,7 @@ export function install(bot:App){
                 return output.filter(Boolean).join('\n')
             }
 
-            const command = bot.findCommand({name: target.data.text,session, segments:session.segments,argv})
+            const command = bot.findCommand({name: target,session, segments:session.segments,argv})
             if (!command?.match(session)) {
                 return
             }

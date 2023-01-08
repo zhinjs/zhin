@@ -6,7 +6,7 @@ export function install(bot:App){
     command.subcommand('plugin.list')
         .desc('显示插件列表')
         .action(()=>{
-            return bot.pluginList.map((plugin,idx)=>{
+            return bot.getCachedPluginList().map((plugin,idx)=>{
                 return `${idx+1}. 插件名：${plugin.fullName}${bot.hasInstall(plugin.fullName)?' (已安装)':''} ${plugin.type}`
             }).join('\n')
         })

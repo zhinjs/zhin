@@ -1,29 +1,40 @@
 import {App} from "@/app";
+import {Dispose} from "@/dispose";
 
 export interface PluginInfo{
-    fullName?:string
     version?:string
-    fullPath?:string
     type?:string
     desc?:string
     author?:string|{name:string,email?:string}
 }
-export type PluginOptions<T=any>=Plugin.Function<T>|Plugin.Object<T>
-export function definePlugin<T>(plugin:PluginOptions<T>){
-    return plugin
+export interface Plugins{
+    help:Plugin<null>
+    logs:Plugin<null>
+    login:Plugin<null>
+    plugin:Plugin<null>
+    config:Plugin<null>
+    daemon:Plugin<null>
+    status:Plugin<null>
+    watcher:Plugin<string>
+    [key:string]:Plugin
 }
-export type Plugin<T = any>= PluginOptions<T> & {
+export type PluginOptions<P extends Plugin>=P extends Plugin<infer R>?R:unknown
+export type Plugin<T = any>= (Plugin.Object<T> | Plugin.Function<T>)& {
     dispose?:Function
+    setup?:boolean
+    app?:App
     anonymousCount?:number
     children?:Plugin[]
     functional?:boolean
     disposes?:Function[]
-    using?:(keyof App.Services)[]
+    fullName?:string
+    fullPath?:string
     [key:string]:any
 } & PluginInfo
 export namespace Plugin{
-    export type Function<T>=(bot:App, options:T)=>void|App.Dispose<App>
+    export type Function<T>=(bot:App, options:T)=>void|Dispose
     export interface Object<T>{
+        name?:string
         install:Function<T>
     }
 }

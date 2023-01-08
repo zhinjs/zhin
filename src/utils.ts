@@ -1,7 +1,8 @@
 // 深合并
-import {Dict} from "@/types";
+import {Dict, PackageJson} from "@/types";
 import * as path from "path";
 import * as fs from "fs";
+import CallSite = NodeJS.CallSite;
 
 const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 const lookup = new Uint8Array(256);
@@ -136,20 +137,48 @@ export function omit<T, K extends keyof T>(source: T, keys?: Iterable<K>) {
     }
     return result
 }
-
-export function wrapExport(filepath: string) {
-    const {default: result = {}, ...other} = require(filepath)
+export function getPackageInfo(filepath:string){
     const fileDir = path.dirname(filepath)
     if (fs.existsSync(path.resolve(fileDir, '../package.json'))) {
-        const {name: fullName, ...packageJson} = require(path.join(fileDir, '../package.json'))
-        Object.assign(result, packageJson, {fullName})
+        const {name: fullName, ...packageJson} = require(path.join(fileDir, '../package.json')) as PackageJson
+        return Object.assign(packageJson,{fullName})
     } else if (fs.existsSync(path.resolve(fileDir, 'package.json'))) {
-        const {name: fullName, ...packageJson} = require(path.resolve(fileDir, 'package.json'))
-        Object.assign(result, packageJson, {fullName})
+        const {name: fullName, ...packageJson} = require(path.resolve(fileDir, 'package.json')) as PackageJson
+        return Object.assign(packageJson,{fullName})
     }
-    return Object.assign(result, other)
+    return null
 }
-
+export function wrapExport(filepath: string) {
+    const {default: result, ...other} = require(filepath)
+    return Object.assign(typeof result==="function"?{
+        install:result
+    }:result||{}, other)
+}
+export function getCaller(){
+    const origPrepareStackTrace = Error.prepareStackTrace
+    Error.prepareStackTrace = function (_, stack) {
+        return stack
+    }
+    const err = new Error()
+    const stack:CallSite[] = err.stack as unknown as CallSite[]
+    Error.prepareStackTrace = origPrepareStackTrace
+    stack.shift()
+    stack.shift()
+    return stack.shift()
+}
+export function deepEqual<T = object>(a: Partial<T>, b: Partial<T>):boolean {
+    if (a === b) return true
+    if (typeof a !== typeof b) return false
+    if (typeof a !== 'object') return false
+    if (!a || !b) return false
+    if (Array.isArray(a)) {
+        if (!Array.isArray(b) || a.length !== b.length) return false
+        return a.every((item, index) => deepEqual(item, b[index]))
+    } else if (Array.isArray(b)) {
+        return false
+    }
+    return Object.keys({...a, ...b}).every(key => deepEqual(a[key], b[key]))
+}
 function deepen(modifyString: (source: string) => string) {
     function modifyObject<T extends unknown>(source: T): T {
         if (typeof source !== 'object' || !source) return source
