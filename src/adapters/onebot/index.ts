@@ -18,6 +18,7 @@ export namespace OneBotAdapter{
             url:string
             access_token?:string
             get_events_interval:number
+            events_buffer_size?:number
             timeout?:number
         }
         webhook:{

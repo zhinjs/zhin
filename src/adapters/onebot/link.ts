@@ -13,6 +13,7 @@ export function createHttpHandler(bot:OneBot,options:OneBot.Options<'http'>){
             return config
         })
     }
+    const cachedEvent:number[]=[]
     bot.sendPayload=function (payload){
         return request.post(payload.action,payload.params)
     }
@@ -20,8 +21,12 @@ export function createHttpHandler(bot:OneBot,options:OneBot.Options<'http'>){
         request.get('/get_latest_events').then(res=>{
             if(res.status===200){
                 const events=res.data.data||[]
-                for(const event of events){
+                for(const event of events.filter(event=>!cachedEvent.includes(event.time))){
                     bot.adapter.dispatch(event.type,bot.createSession(event.type,event))
+                    cachedEvent.push(event.time)
+                    if(cachedEvent.length>(options.events_buffer_size||20)){
+                        cachedEvent.shift()
+                    }
                 }
             }
         }).catch(e=>{
