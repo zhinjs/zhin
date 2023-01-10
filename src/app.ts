@@ -1,24 +1,37 @@
 import {join, resolve, dirname} from 'path'
 import {ref, watch} from 'obj-observer'
-import {callBackProxy, Proxied} from 'obj-observer/lib/deepProxy'
 import {fork, ChildProcess} from "child_process";
 import {Logger, getLogger, configure, Configuration} from "log4js";
 import * as Yaml from 'js-yaml'
 import * as path from 'path'
 import * as fs from 'fs'
+import {EventEmitter} from "events";
+import {createServer, Server} from "http";
+import KoaBodyParser from "koa-bodyparser";
+import {Proxied} from 'obj-observer/lib/deepProxy'
 import {Command} from "@/command";
 import {Argv} from "@/argv";
-import {deepClone, deepMerge, wrapExport, remove, isBailed, getPackageInfo, deepEqual, getCaller} from "@/utils";
+import {
+    deepClone,
+    deepMerge,
+    wrapExport,
+    remove,
+    isBailed,
+    getPackageInfo,
+    deepEqual,
+    getCaller,
+    getIpAddress
+} from "@/utils";
 import {Dict} from "@/types";
 import {Plugin, PluginOptions, Plugins} from "@/plugin";
 import Koa from "koa";
 import {Adapter, AdapterConstructs, AdapterOptions, AdapterOptionsType, Adapters} from "@/adapter";
 import {Bots, Sendable} from "@/bot";
-import {EventEmitter} from "events";
 import {OicqEventMap} from './adapters/oicq'
 import {Session, ToSession} from "@/session";
 import {Middleware} from "@/middleware";
 import {Dispose} from "@/dispose";
+import {Router} from "@/router";
 
 interface Message {
     type: 'start' | 'queue'
@@ -98,12 +111,23 @@ export class App extends EventEmitter {
         if (options.logConfig) {
             configure(options.logConfig as Configuration)
         }
-        this.service('koa', new Koa())
         this.logger = getLogger('[zhin]')
         this.logger.level = options.log_level || 'info'
         const _this = this
+        const koa=new Koa()
+        const server=createServer(koa.callback())
+        const router=new Router(server,{prefix:''})
+        this.service('server',server)
+            .service('koa', koa)
+            .service('router',router)
+        koa.use(KoaBodyParser())
+            .use(router.routes())
+            .use(router.allowedMethods())
+        server.listen(options.port||=8086)
+        this.logger.info(`server listen at ${getIpAddress().map(ip=>`http://${ip}:${options.port}`).join(' and ')}`)
         this.options = ref(options)
         this.on('dispose', () => {
+            server.close()
             while (this.disposes.length) {
                 const dispose = this.disposes.shift()
                 dispose()
@@ -164,7 +188,10 @@ export class App extends EventEmitter {
     adapter<K extends keyof Adapters>(platform: K, Construct?: AdapterConstructs[K] | AdapterOptions, options?: AdapterOptions) {
         if (!Construct && !options) return this.adapters.get(platform)
         if (typeof Construct !== "function") {
-            this.load(platform, 'adapter')
+            const result=this.load<Plugin>(platform, 'adapter')
+            if(result && result.install){
+                result.install(this,options)
+            }
             options = Construct as AdapterOptions
             Construct = Adapter.get(platform).Adapter as unknown as AdapterConstructs[K]
         }
@@ -640,13 +667,19 @@ export namespace App {
     export const key = Symbol('Zhin')
 
     export interface Services {
-        koa: Koa
+        koa:Koa
+        router:Router
+        server:Server
     }
 
     export const defaultConfig: Partial<Options> = {
+        port:8086,
         adapters: {
             oicq: {
                 bots: []
+            },
+            onebot:{
+                bots:[]
             }
         },
         data_dir: path.join(process.cwd(), 'data'),
@@ -735,12 +768,13 @@ export namespace App {
     export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal" | "mark" | "off"
     type KVMap<V =any,K extends string=string>=Record<K, V>
     export interface Options extends KVMap{
+        port:number
         log_level: LogLevel
         logConfig?: Partial<Configuration>
         delay: Record<string, number>
         plugins?: PluginConfig
         services?: Record<string, any>
-        adapters?: AdapterConfig
+        adapters?: Partial<AdapterConfig>
         adapter_dir?: string
         plugin_dir?: string
         data_dir?: string

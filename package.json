@@ -1,6 +1,6 @@
 {
   "name": "zhin",
-  "version": "1.2.20",
+  "version": "2.0.0",
   "description": "知音",
   "main": "lib/index.js",
   "bin": {
@@ -8,7 +8,7 @@
   },
   "types": "lib/index.d.ts",
   "scripts": {
-    "start": "node ./lib/service.js",
+    "start:zhin": "start-zhin",
     "compile": "tsc --project tsconfig.build.json && tsc-alias -p tsconfig.build.json",
     "build": "npm run compile && dtsc --project tsconfig.dtsc.json",
     "dev": "ts-node -r tsconfig-paths/register -r esbuild-register ./src/service.ts",
@@ -40,8 +40,10 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.5",
     "@types/koa": "^2.13.5",
+    "@types/koa__router": "^12.0.0",
     "@types/lodash": "^4.14.184",
     "@types/node": "latest",
+    "@types/ws": "^8.5.4",
     "dtsc": "^2.2.3",
     "ts-node-dev": "latest",
     "tsc-alias": "latest",
@@ -53,18 +55,22 @@
     "/lib/**/LICENSE"
   ],
   "dependencies": {
+    "@koa/router": "^12.0.0",
     "@zhinjs/schema": "^0.0.4",
+    "axios": "^1.2.2",
     "chokidar": "^3.5.3",
     "esbuild": "^0.15.5",
     "esbuild-register": "^3.3.3",
     "event-deliver": "^1.0.2",
     "js-yaml": "^4.1.0",
     "koa": "^2.13.4",
+    "koa-bodyparser": "^4.3.0",
     "lodash": "^4.17.21",
     "log4js": "^6.6.1",
     "obj-observer": "^1.0.3",
     "oicq": "^2.3.1",
     "oicq2-cq-enable": "^1.0.6",
-    "tsconfig-paths": "^4.0.0"
+    "tsconfig-paths": "^4.0.0",
+    "ws": "^8.12.0"
   }
 }

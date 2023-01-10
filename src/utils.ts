@@ -3,6 +3,7 @@ import {Dict, PackageJson} from "@/types";
 import * as path from "path";
 import * as fs from "fs";
 import CallSite = NodeJS.CallSite;
+import {networkInterfaces} from "os";
 
 const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 const lookup = new Uint8Array(256);
@@ -153,6 +154,20 @@ export function wrapExport(filepath: string) {
     return Object.assign(typeof result==="function"?{
         install:result
     }:result||{}, other)
+}
+
+export function getIpAddress(){
+    const interfaces=networkInterfaces()
+    const ips:string[]=[]
+    for (let dev in interfaces) {
+        for (let j = 0; j < interfaces[dev].length; j++) {
+            if (interfaces[dev][j].family === 'IPv4') {
+                ips.push(interfaces[dev][j].address);
+            }
+        }
+    }
+    if(!ips.length)ips.push('127.0.0.1')
+    return ips
 }
 export function getCaller(){
     const origPrepareStackTrace = Error.prepareStackTrace

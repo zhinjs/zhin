@@ -4,11 +4,18 @@ import {App} from "@/app";
 import {Argv} from "@/argv";
 import {Middleware} from "@/middleware";
 import {Prompt} from "@/prompt";
+import {Dict} from "@/types";
 export type FunctionToSessionObj<E extends (...args:any[])=>any>=E extends (...args:infer R)=>any?ParametersToObj<R>:unknown
-export type ParametersToObj<A extends any[]>=A extends [infer R,...infer L]? R extends object?R & {args:L}: { args:[R,...L] }:unknown
+export type ParametersToObj<A extends any[]>=A extends [infer R,...infer L]? R & R extends object ? R & {args:L}: { args:[R,...L] }:Dict
 export interface Session<P extends keyof Adapters=keyof Adapters, EM extends App.BaseEventMap=App.BaseEventMap, E extends keyof EM=keyof EM>{
     platform:P,
     post_type?:string
+    type?:string
+    user_id?:string|number
+    group_id?:string|number
+    discuss_id?:string|number
+    channel_id?:string|number
+    guild_id?:string|number
     detail_type?:string
     app:App
     prompt:Prompt
@@ -56,6 +63,6 @@ export class Session<P extends keyof Adapters=keyof Adapters,EM extends App.Base
 
     }
     async reply(message:Sendable){
-        return this.bot.reply(this,message,this.bot.options.quote_self)
+        return this.bot.reply(this as any,message,this.bot.options.quote_self)
     }
 }

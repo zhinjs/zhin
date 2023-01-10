@@ -100,7 +100,7 @@ export class OicqBot extends Client implements Bot<'oicq',OicqBotOptions,{},numb
 
     reply(session: Session, message: Sendable, quote?: boolean): Promise<MessageRet> {
         if(session.post_type!=='message') throw new Error(`not exist reply when post_type !=='message`)
-        return this.sendMsg(session['group_id']||session['discuss_id']||session['user_id'],session.detail_type,message,quote?session:undefined)
+        return this.sendMsg(Number(session.group_id||session.discuss_id||session.user_id),session.detail_type,message,quote?session:undefined)
     }
 }
 export class OicqAdapter extends Adapter<'oicq',OicqBotOptions,{},OicqEventMap>{

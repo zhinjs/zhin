@@ -1,11 +1,11 @@
-import {Bot,SegmentElem, Segment} from "@/bot";
+import {Bot, SegmentElem, Segment, Bots} from "@/bot";
 import {Session} from "@/session";
 
 export interface Argv<A extends any[] = any[], O = {}> {
     name?:string//指令名称
     argv?:SegmentElem[][]
     session:Session
-    bot?:Bot
+    bot?:Bot<keyof Bots,any,any,string|number>
     segments?: SegmentElem[]//原文
     args?: A//携带的args
     options?: O//携带的options

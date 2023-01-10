@@ -39,7 +39,7 @@ export function install(app:App, config:DaemonConfig={}){
     process.on('message', (data: Message) => {
         if (data.type === 'send') {
             let {channelId, message} = data.body
-            const [platform,self_id,target_type,target_id]=channelId.split(':')
+            const [platform,self_id,target_type,target_id]=channelId.split(':') as never[]
             const times=data.times
             const bot=app.pickBot(platform as keyof Adapters,self_id)
             if (bot && bot.isOnline()) {

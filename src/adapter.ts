@@ -3,6 +3,7 @@ import {App} from "@/app";
 import {OicqAdapter} from "@/adapters/oicq";
 import {Session} from "@/Session";
 import {Logger} from "log4js";
+import {OneBotAdapter} from "@/adapters/onebot";
 
 interface AdapterConstruct<K extends keyof Adapters=keyof Adapters,BO extends BotOptions = BotOptions, AO = {}> {
     new(app: App, platform:K, options: AdapterOptions<BO, AO>): Adapter<K,BO, AO>
@@ -44,13 +45,14 @@ export abstract class Adapter<
 }
 export interface Adapters{
     oicq:OicqAdapter
+    onebot:OneBotAdapter
 }
 export type AdapterConstructs={
     [P in keyof Adapters]:AdapterConstruct
 }
 export namespace Adapter {
     export const adapterConstructs:Partial<AdapterConstructs>={}
-    export function define<K extends keyof Adapters, BO extends BotOptions, AO={}>(key: K, adapterConstruct: AdapterConstruct<K,BO, AO>,botConstruct:BotConstruct<K,BO,AO>) {
+    export function define<K extends keyof Adapters, BO={}, AO={}>(key: K, adapterConstruct: AdapterConstruct<K,BO, AO>,botConstruct:BotConstruct<K,BO,AO>) {
         adapterConstructs[key]=adapterConstruct
         Bot.define(key,botConstruct)
     }

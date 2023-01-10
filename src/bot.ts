@@ -2,8 +2,10 @@ import {App} from "@/app";
 import {Adapter, Adapters} from "@/adapter";
 import {OicqBot} from "@/adapters/oicq";
 import {Session} from "@/session";
+import {OneBot} from "@/adapters/onebot/bot";
 
 export type BotOptions<O={}>={
+    quote_self?:boolean
     master?:string|number
     admins?:(string|number)[]
 } & O
@@ -19,8 +21,8 @@ export interface Bot<K extends keyof Bots=keyof Bots,BO={},AO={},UT extends stri
     reply(session:Session,message:Sendable,quote?:boolean):Promise<any>
     sendMsg(target_id:UT,target_type:string,message:Sendable):any
 }
-
 export interface Bots{
+    onebot:OneBot
     oicq:OicqBot
 }
 export type BotConstructors={
@@ -78,6 +80,6 @@ export class BotList<UT extends string|number> extends Array<Bot<keyof Adapters,
         return this.find(bot=>bot.self_id===self_id || bot.self_id===Number(self_id))
     }
 }
-export type BotConstruct<K extends keyof Bots=keyof Bots,BO={},AO={},UT extends string|number=number>={
+export type BotConstruct<K extends keyof Bots=keyof Bots,BO={},AO={},UT extends string|number=string|number>={
     new(app:App, adapter:Adapter<K,BO,AO>, options:BotOptions<BO>):Bot<K,BO,AO,UT>
 }

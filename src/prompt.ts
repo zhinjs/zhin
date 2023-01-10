@@ -1,9 +1,9 @@
-import {Bot, Segment, Sendable} from "@/bot";
+import {Bot, Bots, Segment, Sendable} from "@/bot";
 import {Session} from "@/session";
 import {Dict} from "@/types";
 export class Prompt{
     private readonly fullTargetId:string
-    constructor(private bot:Bot,private session:Session,public timeout:number) {
+    constructor(private bot:Bot<keyof Bots,any,any,string|number>,private session:Session,public timeout:number) {
         this.fullTargetId=Bot.getFullTargetId(session)
     }
     async prompts<O extends Prompt.Options>(options:O):Promise<Prompt.ResultS<O>>{
