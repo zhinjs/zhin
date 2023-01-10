@@ -35,7 +35,7 @@ export namespace OneBotAdapter{
         }
         ws_reverse:{
             self_id:string
-            url:string
+            path:string
             access_token?:string
         }
     }

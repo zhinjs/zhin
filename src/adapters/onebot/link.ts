@@ -81,5 +81,36 @@ export function createWsHandler(bot:OneBot,options:OneBot.Options<'ws'>){
     }
 }
 export function createWsReverseHandler(bot:OneBot,options:OneBot.Options<'ws_reverse'>){
-
+    const socketServer=bot.app.router.ws(options.path,(req)=>{
+        return String(req.headers['sec-websocket-protocol']).includes('12')
+    })
+    const wss:Set<WebSocket>=new Set<WebSocket>()
+    socketServer.on('connection',(ws,req)=>{
+        if(options.access_token && req.headers['authorization']!==`Bearer ${options.access_token}`) return
+        ws.send(JSON.stringify({type: 'connected'}))
+        ws.emit('open')
+        wss.add(ws)
+        ws.onmessage=(data)=>{
+            const event=JSON.parse(data.data.toString())
+            if(event){
+                bot.adapter.dispatch(event.type,bot.createSession(event.type,event))
+            }
+        }
+        ws.on("error", (err) => {
+            console.error('协议端报错：',err)
+        })
+        ws.on('close',()=>wss.delete(ws))
+    })
+    socketServer.on("error", (err) => {
+        console.error('socket Server，报错：',err)
+    })
+    bot.sendPayload=function (payload){
+        for(const ws of wss){
+            ws.send(JSON.stringify(payload))
+        }
+    }
+    return ()=>{
+        socketServer.close()
+        bot.sendPayload=()=>{}
+    }
 }

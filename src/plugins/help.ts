@@ -8,7 +8,7 @@ export function install(bot:App){
             })
     })
     bot.command('help [command:string]')
-        .desc('显示指令的帮助信息')
+        .desc('zhin帮助指令')
         .shortcut('帮助',{fuzzy:true})
         .option('showHidden','-H 显示隐藏选项')
         .option('showAuth','-A 显示权限信息')

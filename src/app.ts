@@ -155,20 +155,20 @@ export class App extends EventEmitter {
         const changeValue = (source, key, value) => {
             if (source[key] && typeof source[key] === 'object') {
                 Object.keys(source[key]).forEach(k => {
-                    if(value[k] && typeof value[k]==='object'){
+                    if (value[k] && typeof value[k] === 'object') {
                         changeValue(source[key], k, value[k])
-                    }else if(value[k]===undefined){
+                    } else if (value[k] === undefined) {
                         // 无则删除
                         delete source[key][k]
-                    }else{
+                    } else {
                         // 有则更新
-                        source[key][k]=value[k]
+                        source[key][k] = value[k]
                     }
                 })
-                Object.keys(value).forEach(k=>{
-                    if(source[key][k]===undefined){
+                Object.keys(value).forEach(k => {
+                    if (source[key][k] === undefined) {
                         // 无则添加
-                        source[key][k]=value[k]
+                        source[key][k] = value[k]
                     }
                 })
             } else {
@@ -265,8 +265,9 @@ export class App extends EventEmitter {
     get pluginList() {
         return [...this.plugins.values()]
     }
-    getCachedPluginList(){
-        const result:Plugin[]=[]
+
+    getCachedPluginList() {
+        const result: Plugin[] = []
         if (fs.existsSync(resolve(process.cwd(), 'node_modules', '@zhinjs'))) {
             result.push(...fs.readdirSync(resolve(process.cwd(), 'node_modules', '@zhinjs')).map((str) => {
                 if (/^plugin-/.test(str)) return `@zhinjs/${str}`
@@ -684,19 +685,12 @@ export namespace App {
         },
         data_dir: path.join(process.cwd(), 'data'),
         plugin_dir: path.join(process.cwd(), 'plugins'),
-        plugins: {
-            config: null,
-            daemon: null,
-            help: null,
-            login: null,
-            logs: null,
-            plugin: null,
-            status: null,
-            watcher: process.cwd(),
-        },
+        plugins: {},
         log_level: 'info',
         services: {},
-        delay: {},
+        delay: {
+            prompt: 60000
+        },
         logConfig: {
             appenders: {
                 consoleOut: {
@@ -760,10 +754,10 @@ export namespace App {
     }
 
     export type AdapterConfig = {
-        [P in keyof Adapters]: AdapterOptionsType<Adapters[P]>
+        [P in keyof Adapters]?: AdapterOptionsType<Adapters[P]>
     }
-    export type PluginConfig={
-        [P in keyof Plugins]:PluginOptions<Plugins[P]>
+    export type PluginConfig = {
+        [P in keyof Plugins]?: PluginOptions<Plugins[P]>
     }
     export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal" | "mark" | "off"
     type KVMap<V =any,K extends string=string>=Record<K, V>
@@ -779,8 +773,9 @@ export namespace App {
         plugin_dir?: string
         data_dir?: string
     }
-    export type Keys<O extends KVMap>=O extends KVMap<infer V,infer K>? V extends object?`${K}.${Keys<V>}`:`${K}`:never
-    export type Value<O extends KVMap,K>=K extends `${infer L}.${infer R}`? Value<O[L],R>:K extends keyof O?O[K]:any
+
+    export type Keys<O extends KVMap> = O extends KVMap<infer V, infer K> ? V extends object ? `${K}.${Keys<V>}` : `${K}` : never
+    export type Value<O extends KVMap, K> = K extends `${infer L}.${infer R}` ? Value<O[L], R> : K extends keyof O ? O[K] : any
 
     export type ServiceConstructor<R, T = any> = new (bot: App, options?: T) => R
 }
@@ -790,7 +785,26 @@ function createAppAPI() {
     const createApp = (options: Partial<App.Options> | string) => {
         if (contextMap.get(App.key)) return contextMap.get(App.key)
         if (typeof options === 'string') {
-            if (!fs.existsSync(options)) fs.writeFileSync(options, Yaml.dump(App.defaultConfig))
+            if (!fs.existsSync(options)) fs.writeFileSync(options, Yaml.dump({
+                adapters: {
+                    oicq: {
+                        bots: []
+                    }
+                },
+                plugins: {
+                    config: null,
+                    daemon: null,
+                    help: null,
+                    login: null,
+                    logs: null,
+                    plugin: null,
+                    status: null,
+                },
+                log_level: 'info',
+                delay: {
+                    prompt: 60000
+                },
+            }))
             options = Yaml.load(fs.readFileSync(options, {encoding: 'utf8'}))
         }
         const app = new App(deepMerge(deepClone(App.defaultConfig), options))
@@ -803,7 +817,7 @@ function createAppAPI() {
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
         const plugin = app.pluginList.find(plugin => plugin.fullPath === pluginFullPath)
-        if(plugin && plugin.app) return plugin.app
+        if (plugin && plugin.app) return plugin.app
         return app
     }
 
@@ -817,30 +831,33 @@ function createAppAPI() {
         return result
     }
 
-    function useOptions<K extends App.Keys<App.Options>>(path: K):App.Value<App.Options,K>{
+    function useOptions<K extends App.Keys<App.Options>>(path: K): App.Value<App.Options, K> {
         const app = contextMap.get(App.key)
         if (!app) throw new Error(`can't found app with context for key:${App.key.toString()}`)
-        return getValue(app.options, path.split('.').filter(Boolean)) as App.Value<App.Options,K>
+        return getValue(app.options, path.split('.').filter(Boolean)) as App.Value<App.Options, K>
     }
-    type EffectReturn=()=>void
-    type EffectCallBack<T = any>=(value?:T,oldValue?:T)=>void|EffectReturn
-    function useEffect<T extends object = object>(callback:EffectCallBack<T>,effect?:Proxied<T>){
+
+    type EffectReturn = () => void
+    type EffectCallBack<T = any> = (value?: T, oldValue?: T) => void | EffectReturn
+
+    function useEffect<T extends object = object>(callback: EffectCallBack<T>, effect?: Proxied<T>) {
         const app = contextMap.get(App.key)
         if (!app) throw new Error(`can't found app with context for key:${App.key.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
         const plugin = app.pluginList.find(plugin => plugin.fullPath === pluginFullPath)
-        if(!effect){
-            const dispose=callback()
-            if(dispose){
+        if (!effect) {
+            const dispose = callback()
+            if (dispose) {
                 plugin.disposes.push(dispose)
             }
-        }else{
-            const unWatch=watch(effect,callback)
+        } else {
+            const unWatch = watch(effect, callback)
             plugin.disposes.push(unWatch)
         }
 
     }
+
     return {
         createApp,
         useApp,
@@ -848,7 +865,8 @@ function createAppAPI() {
         useOptions
     }
 }
-const {createApp, useApp,useEffect, useOptions} = createAppAPI()
+
+const {createApp, useApp, useEffect, useOptions} = createAppAPI()
 export {
     createApp,
     useApp,

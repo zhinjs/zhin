@@ -54,7 +54,8 @@ export function install(bot:App){
         return `detail:\n${sizeInfo.join('\n')}`
     }
     bot.command('logs <lines:number>')
-        .desc('输出最近的日志')
+        .desc('日志管理')
+        .auth('master',"admins")
         .option('clean','-c 清理日志')
         .option('backup','-b 备份日志')
         .option('detail','-d 查看日志大小')

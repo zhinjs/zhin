@@ -5,6 +5,7 @@ import {EventEmitter} from "events";
 import {createHttpHandler, createWebhookHandler, createWsHandler, createWsReverseHandler} from "@/adapters/onebot/link";
 export interface OneBot{
     sendPayload(payload:OneBotPayload):void
+    stop():void
 }
 export class OneBot extends EventEmitter implements Bot<
     `onebot`,
@@ -96,23 +97,20 @@ export class OneBot extends EventEmitter implements Bot<
     start(): any {
         switch (this.options.type){
             case "http":{
-                createHttpHandler(this,this.options as OneBot.Options<'http'>)
-                break;
+                return this.stop=createHttpHandler(this,this.options as OneBot.Options<'http'>)
             }
             case "webhook":{
-                createWebhookHandler(this,this.options as OneBot.Options<'webhook'>)
-                break;
+                return this.stop=createWebhookHandler(this,this.options as OneBot.Options<'webhook'>)
             }
             case "ws":{
-                createWsHandler(this,this.options as OneBot.Options<'ws'>)
-                break;
+                return this.stop=createWsHandler(this,this.options as OneBot.Options<'ws'>)
             }
             case "ws_reverse":{
-                createWsReverseHandler(this,this.options as OneBot.Options<'ws_reverse'>)
-                break;
+                return this.stop=createWsReverseHandler(this,this.options as OneBot.Options<'ws_reverse'>)
             }
         }
     }
+
 }
 export namespace OneBot{
 
