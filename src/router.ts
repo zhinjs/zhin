@@ -1,5 +1,7 @@
+import {remove} from "@/utils";
+
 const KoaRouter=require('@koa/router')
-import {RouterOptions} from "@koa/router";
+import {Layer, RouterOptions} from "@koa/router";
 import * as http from "http";
 import {WebSocketServer} from 'ws'
 import { parse } from 'url';
@@ -14,6 +16,13 @@ export class Router extends KoaRouter {
         const path:Path=args[0] as any
         this.whiteList.push(path)
         return super.register(...args)
+    }
+    destroy(layer:Layer){
+        remove(this.stack,layer)
+    }
+    destroyWs(wsServer:WebSocketServer){
+        wsServer.close()
+        remove(this.wsStack,wsServer)
     }
     ws(path:string) {
         const wsServer = new WebSocketServer({ noServer: true,path })

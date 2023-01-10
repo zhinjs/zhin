@@ -2,7 +2,7 @@ import {Adapter, App, Bot, SegmentElem, Sendable, Session} from "@";
 import {OneBotAdapter} from "@/adapters/onebot";
 import {OneBotPayload, Types} from './types'
 import {EventEmitter} from "events";
-import {createHttpHandler, createWebhookHandler} from "@/adapters/onebot/link";
+import {createHttpHandler, createWebhookHandler, createWsHandler, createWsReverseHandler} from "@/adapters/onebot/link";
 export interface OneBot{
     sendPayload(payload:OneBotPayload):void
 }
@@ -103,8 +103,14 @@ export class OneBot extends EventEmitter implements Bot<
                 createWebhookHandler(this,this.options as OneBot.Options<'webhook'>)
                 break;
             }
-            case "ws":
-            case "ws_reverse":
+            case "ws":{
+                createWsHandler(this,this.options as OneBot.Options<'ws'>)
+                break;
+            }
+            case "ws_reverse":{
+                createWsReverseHandler(this,this.options as OneBot.Options<'ws_reverse'>)
+                break;
+            }
         }
     }
 }
