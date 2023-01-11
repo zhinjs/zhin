@@ -1,8 +1,9 @@
-import {Adapter, App, Bot, SegmentElem, Sendable, Session} from "@";
+import {Adapter, App, Bot, BotOptions, SegmentElem, Sendable, Session} from "@";
 import {OneBotAdapter} from "@/adapters/onebot";
 import {OneBotPayload, Types} from './types'
 import {EventEmitter} from "events";
 import {createHttpHandler, createWebhookHandler, createWsHandler, createWsReverseHandler} from "@/adapters/onebot/link";
+import {Logger} from "log4js";
 export interface OneBot{
     sendPayload(payload:OneBotPayload):void
     stop():void
@@ -15,9 +16,11 @@ export class OneBot extends EventEmitter implements Bot<
     self_id: string;
     startTime: number;
     stat:Record<string, any>={}
-    constructor(public app:App, public adapter:Adapter<'onebot',OneBot.Options<keyof OneBotAdapter.AdapterOptions>,OneBotAdapter.Options>, public options:OneBot.Options<keyof OneBotAdapter.AdapterOptions>) {
+    logger:Logger
+    constructor(public app:App, public adapter:Adapter<'onebot',OneBot.Options<keyof OneBotAdapter.AdapterOptions>,OneBotAdapter.Options>, public options:BotOptions<OneBot.Options<keyof OneBotAdapter.AdapterOptions>>) {
         super();
         this.self_id=options.self_id
+        this.logger=this.adapter.getLogger(options.type)
     }
     isOnline(){
         return true

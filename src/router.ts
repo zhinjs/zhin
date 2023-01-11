@@ -3,7 +3,7 @@ import {remove} from "@/utils";
 const KoaRouter=require('@koa/router')
 import {Layer, RouterOptions} from "@koa/router";
 import * as http from "http";
-import {WebSocketServer} from 'ws'
+import {ServerOptions, WebSocketServer} from 'ws'
 import { parse } from 'url';
 import {IncomingMessage} from "http";
 import {Duplex} from "stream";
@@ -26,13 +26,13 @@ export class Router extends KoaRouter {
         wsServer.close()
         remove(this.wsStack,wsServer)
     }
-    ws(path:string,verifyFn:(request:IncomingMessage,socket:Duplex,head:Buffer)=>boolean=()=>true) {
-        const wsServer = new WebSocketServer({ noServer: true,path })
+    ws(path:string,options:Omit<ServerOptions, 'noServer'|'path'>={}) {
+        const wsServer = new WebSocketServer({ noServer: true,path,...options })
         this.wsStack.push(wsServer)
 
         this.server!.on('upgrade',(request, socket, head)=>{
             const { pathname } = parse(request.url);
-            if(!verifyFn(request,socket,head) || this.wsStack.findIndex(wss=>wss.options.path===path)===-1){
+            if(this.wsStack.findIndex(wss=>wss.options.path===path)===-1){
                 socket.destroy()
             }else if (pathname === path) {
                 wsServer.handleUpgrade(request, socket, head, (ws)=> {

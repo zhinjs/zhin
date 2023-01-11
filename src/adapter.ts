@@ -27,6 +27,9 @@ export abstract class Adapter<
         this.logger=app.getLogger(platform)
         this.app.on('start',()=>this.start())
     }
+    getLogger(sub_type:string){
+        return this.app.getLogger(this.platform,sub_type)
+    }
     async start(...args:any[]){
     }
     async stop(...args:any[]){}

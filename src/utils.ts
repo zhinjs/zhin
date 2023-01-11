@@ -4,14 +4,17 @@ import * as path from "path";
 import * as fs from "fs";
 import CallSite = NodeJS.CallSite;
 import {networkInterfaces} from "os";
-
+import {IncomingMessage} from "http";
 const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 const lookup = new Uint8Array(256);
 
 for (let i = 0; i < chars.length; i++) {
     lookup[chars.charCodeAt(i)] = i;
 }
-
+export function getReqIp(req:IncomingMessage){
+    return req.headers['x-forwarded-for'] || // 判断是否有反向代理 IP
+        req.socket.remoteAddress
+}
 export function arrayBufferToBase64(arrayBuffer: ArrayBuffer, mediaType: string = ''): string {
     const bytes = new Uint8Array(arrayBuffer);
     const len = bytes.length;
