@@ -19,7 +19,7 @@ export class OneBot extends EventEmitter implements Bot<
     logger:Logger
     constructor(public app:App, public adapter:Adapter<'onebot',OneBot.Options<keyof OneBotAdapter.AdapterOptions>,OneBotAdapter.Options>, public options:BotOptions<OneBot.Options<keyof OneBotAdapter.AdapterOptions>>) {
         super();
-        this.self_id=options.self_id
+        if((['http','ws']).includes(options.type)) this.self_id=options['self_id']
         this.logger=this.adapter.getLogger(options.type)
     }
     isOnline(){

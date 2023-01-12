@@ -22,7 +22,6 @@ export namespace OneBotAdapter{
             timeout?:number
         }
         webhook:{
-            self_id:string
             path:string
             get_actions_path:string
             access_token?:string

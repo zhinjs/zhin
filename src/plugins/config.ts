@@ -1,8 +1,8 @@
-import {App} from "@";
 import * as Yaml from 'js-yaml'
 import * as fs from 'fs'
 import {get,unset,set,mapValues} from "lodash";
 import {segmentsToString} from "@/adapters/oicq";
+import {Context} from "@/context";
 function protectPassword(obj:Record<string, any>){
     if(!obj || typeof obj!=='object') return obj
     return mapValues(obj,(value,key)=>{
@@ -11,14 +11,15 @@ function protectPassword(obj:Record<string, any>){
         return new Array(value.length).fill('*').join('')
     })
 }
+
 function outputConfig(config,key){
     if(!key)return JSON.stringify(protectPassword(config),null,2)
     const result=JSON.stringify(protectPassword(get(config,key)),null,2)
     return key.endsWith('password')?new Array(result.length).fill('*').join(''):result
 }
 export const name='configManage'
-export function install(bot:App){
-    bot.command('config [key:string] [value]')
+export function install(ctx:Context){
+    ctx.command('config [key:string] [value]')
         .desc('编辑配置文件')
         .auth("master","admins")
         .option('delete','-d 删除指定配置')

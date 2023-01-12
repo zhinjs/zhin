@@ -1,10 +1,10 @@
 import {createReadStream, copyFileSync, statSync, writeFileSync} from 'fs'
 import {resolve as PathResolve,dirname} from "path";
 import * as readline from 'readline'
-import {App} from "@";
+import {Context} from "@/context";
 export const name='logsManage'
-export function install(bot:App){
-    const logFile=PathResolve(dirname(bot.options.data_dir),'logs.log')
+export function install(ctx:Context){
+    const logFile=PathResolve(dirname(ctx.app.options.data_dir),'logs.log')
     function readLogs():Promise<string[]>{
         return new Promise<string[]>(resolve=>{
             const rl=readline.createInterface({input:createReadStream(logFile)})
@@ -53,7 +53,7 @@ export function install(bot:App){
         })
         return `detail:\n${sizeInfo.join('\n')}`
     }
-    bot.command('logs <lines:number>')
+    ctx.command('logs <lines:number>')
         .desc('日志管理')
         .auth('master',"admins")
         .option('clean','-c 清理日志')

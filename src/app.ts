@@ -1,11 +1,10 @@
-import {join, resolve, dirname} from 'path'
+import {join, resolve} from 'path'
 import {ref, watch} from 'obj-observer'
 import {fork, ChildProcess} from "child_process";
 import {Logger, getLogger, configure, Configuration} from "log4js";
 import * as Yaml from 'js-yaml'
 import * as path from 'path'
 import * as fs from 'fs'
-import {EventEmitter} from "events";
 import {createServer, Server} from "http";
 import KoaBodyParser from "koa-bodyparser";
 import {Proxied} from 'obj-observer/lib/deepProxy'
@@ -23,9 +22,9 @@ import {
     getIpAddress
 } from "@/utils";
 import {Dict} from "@/types";
-import {Plugin, PluginOptions, Plugins} from "@/plugin";
+import {Context, Plugin, Plugins} from "@/context";
 import Koa from "koa";
-import {Adapter, AdapterConstructs, AdapterOptions, AdapterOptionsType, Adapters} from "@/adapter";
+import {Adapter, AdapterOptionsType, Adapters} from "@/adapter";
 import {Bots, Sendable} from "@/bot";
 import {OicqEventMap} from './adapters/oicq'
 import {Session, ToSession} from "@/session";
@@ -95,43 +94,36 @@ export function defineConfig(options: App.Options) {
 }
 
 
-export class App extends EventEmitter {
+export class App extends Context {
     isReady: boolean = false
     options: App.Options
-    plugins: Map<string, Plugin> = new Map<string, Plugin>()
     adapters: Map<keyof Adapters, Adapter> = new Map<keyof Adapters, Adapter>()
-    private services: Record<string, any> = {}
-    disposes: Dispose[] = []
-    middlewares: Middleware<Session>[] = []
-    commands: Map<string, Command> = new Map<string, Command>()
+    services: Map<keyof App.Services, any> = new Map<keyof App.Services, any>()
     public logger: Logger
+    public app: App = this
 
     constructor(options: App.Options) {
-        super();
+        super(null, null);
         if (options.logConfig) {
             configure(options.logConfig as Configuration)
         }
         this.logger = getLogger('[zhin]')
         this.logger.level = options.log_level || 'info'
         const _this = this
-        const koa=new Koa()
-        const server=createServer(koa.callback())
-        const router=new Router(server,{prefix:''})
-        this.service('server',server)
+        const koa = new Koa()
+        const server = createServer(koa.callback())
+        const router = new Router(server, {prefix: ''})
+        this.service('server', server)
             .service('koa', koa)
-            .service('router',router)
+            .service('router', router)
         koa.use(KoaBodyParser())
             .use(router.routes())
             .use(router.allowedMethods())
-        server.listen(options.port||=8086)
-        this.logger.info(`server listen at ${getIpAddress().map(ip=>`http://${ip}:${options.port}`).join(' and ')}`)
+        server.listen(options.port ||= 8086)
+        this.logger.info(`server listen at ${getIpAddress().map(ip => `http://${ip}:${options.port}`).join(' and ')}`)
         this.options = ref(options)
-        this.on('dispose', () => {
+        this['disposes'].push(() => {
             server.close()
-            while (this.disposes.length) {
-                const dispose = this.disposes.shift()
-                dispose()
-            }
         })
         this.middleware((session) => session.execute())
         return new Proxy(this, {
@@ -144,13 +136,6 @@ export class App extends EventEmitter {
         })
     }
 
-    on(event, listener) {
-        super.on(event, listener)
-        return Dispose.from(this, () => {
-            super.off(event, listener)
-        })
-    }
-
     changeOptions(options: App.Options) {
         const changeValue = (source, key, value) => {
             if (source[key] && typeof source[key] === 'object') {
@@ -160,15 +145,21 @@ export class App extends EventEmitter {
                     } else if (value[k] === undefined) {
                         // 无则删除
                         delete source[key][k]
-                    } else {
+                        if(key==='plugins') this.dispose(k)
+                    } else if(!deepEqual(source[key][k],value[k])){
                         // 有则更新
                         source[key][k] = value[k]
+                        if(key==='plugins') {
+                            this.dispose(k)
+                            this.plugin(k)
+                        }
                     }
                 })
                 Object.keys(value).forEach(k => {
                     if (source[key][k] === undefined) {
                         // 无则添加
                         source[key][k] = value[k]
+                        if(key==='plugins') this.plugin(k)
                     }
                 })
             } else {
@@ -182,30 +173,6 @@ export class App extends EventEmitter {
         })
     }
 
-    adapter<K extends keyof Adapters>(platform: K): Adapters[K]
-    adapter<K extends keyof Adapters>(platform: K, options: AdapterOptionsType<Adapters[K]>): this
-    adapter<K extends keyof Adapters>(platform: K, adapter: AdapterConstructs[K], options: AdapterOptionsType<Adapters[K]>): this
-    adapter<K extends keyof Adapters>(platform: K, Construct?: AdapterConstructs[K] | AdapterOptions, options?: AdapterOptions) {
-        if (!Construct && !options) return this.adapters.get(platform)
-        if (typeof Construct !== "function") {
-            const result=this.load<Plugin>(platform, 'adapter')
-            if(result && result.install){
-                result.install(this,options)
-            }
-            options = Construct as AdapterOptions
-            Construct = Adapter.get(platform).Adapter as unknown as AdapterConstructs[K]
-        }
-        if (!Construct) throw new Error(`can't find adapter fom platform:${platform}`)
-        const dispose = this.on(`${platform}.message`, (session) => {
-            const middleware = Middleware.compose(this.middlewares)
-            middleware(session)
-        })
-        this.adapters.set(platform, new Construct(this, platform, options))
-        return Dispose.from(this, () => {
-            dispose()
-            this.adapters.delete(platform)
-        }) as any
-    }
 
     pickBot<K extends keyof Bots>(platform: K, self_id: string | number): Bots[K] {
         return this.adapters.get(platform).bots.get(self_id) as Bots[K]
@@ -223,47 +190,14 @@ export class App extends EventEmitter {
         return true
     }
 
-    middleware(middleware: Middleware<Session>, prepend?: boolean) {
-        const method: 'push' | 'unshift' = prepend ? 'unshift' : "push"
-        this.middlewares[method](middleware)
-        return Dispose.from(this, () => {
-            return remove(this.middlewares, middleware);
-        })
-    }
 
     getLogger<K extends keyof Adapters>(platform: K, self_id?: string | number) {
         return getLogger(`[zhin:adapter-${[platform, self_id].filter(Boolean).join(':')}]`)
     }
 
-    service<K extends keyof App.Services>(key: K): App.Services[K]
-    service<K extends keyof App.Services>(key: K, service: App.Services[K]): this
-    service<K extends keyof App.Services, T>(key: K, constructor: App.ServiceConstructor<App.Services[K], T>, options?: T): this
-    service<K extends keyof App.Services, T>(key: K, Service?: App.Services[K] | App.ServiceConstructor<App.Services[K], T>, options?: T): App.Services[K] | this {
-        if (Service === undefined) {
-            return this.services[key]
-        }
-        if (this[key]) throw new Error('服务key不能和bot已有属性重复')
-        if (isConstructor(Service)) {
-            this.services[key] = new Service(this, options)
-        } else {
-            this.services[key] = Service
-        }
-        return Dispose.from(this, () => {
-            delete this.services[key]
-        })
-    }
-
 
     static getChannelId(event: Dict) {
         return [event.message_type, event.group_id || event.discuss_id || event.sender.user_id].join(':') as ChannelId
-    }
-
-    get commandList() {
-        return [...this.commands.values()].flat()
-    }
-
-    get pluginList() {
-        return [...this.plugins.values()]
     }
 
     getCachedPluginList() {
@@ -296,151 +230,9 @@ export class App extends EventEmitter {
     }
 
     hasInstall(pluginName: string) {
-        return !![...this.plugins.values()].find(plugin => plugin.fullName === pluginName)
+        return !!this.pluginList.find(plugin => plugin.fullName === pluginName)
     }
 
-    plugin<T>(name: string, options?: T): Plugin | this
-    plugin<P extends Plugin>(plugin: P, options?: PluginOptions<P>): this
-    plugin<P extends Plugin>(entry: string | P, options?: PluginOptions<P>) {
-        let plugin: Plugin
-        if (typeof entry === 'string') {
-            const result = this.plugins.get(entry)
-            if (result) return result
-            try {
-                plugin = this.load<P>(entry, 'plugin')
-            } catch (e) {
-                this.logger.warn(e.message)
-                return this
-            }
-        } else {
-            plugin = entry
-        }
-        plugin.anonymousCount = 0
-        plugin.children = []
-        const dispose = Dispose.from(this, () => {
-            this.dispose(plugin)
-        })
-        const proxy = new Proxy(dispose, {
-            get(target: typeof dispose, p: PropertyKey, receiver: any): any {
-                const proxyEvents = ['on', 'plugin', 'command']
-                const result = Reflect.get(target, p, receiver)
-                if (typeof result !== 'function' || typeof p !== 'string' || !proxyEvents.includes(p)) return result
-                return new Proxy(result, {
-                    apply(target: Function, thisArg: any, argArray?: any): any {
-                        if (p === 'plugin') {
-                            let [entry, config] = argArray
-                            if (typeof entry !== 'string') {
-                                if (typeof entry === "function") {
-                                    entry = {
-                                        name: `${plugin.name}:${entry.name}`,
-                                        install: entry,
-                                        functional: true
-                                    }
-                                    if (entry.install.prototype === undefined) {
-                                        plugin.anonymousCount++
-                                        entry.name = `${plugin.name}:anonymous${plugin.anonymousCount}`
-                                    }
-                                }
-                                plugin.children.push(entry)
-                            } else if (entry.startsWith('./')) {
-                                entry = {
-                                    name: `${plugin.name}:${entry.replace('./', '').split('/').join(':')}`,
-                                    install: dispose.load<Plugin>(resolve(dirname(plugin.fullPath), entry), 'plugin').install
-                                }
-                            }
-                            return result.apply(thisArg, [entry, config])
-                        }
-                        let res = result.apply(thisArg, argArray)
-                        if (res instanceof Command) {
-                            plugin.disposes.push(() => {
-                                dispose.commands.delete(res.name)
-                                dispose.emit('command-remove', res)
-                                return true
-                            })
-                        } else {
-                            plugin.disposes.push(res)
-                        }
-                        return res
-                    }
-                })
-            }
-        })
-        const installPlugin = () => {
-            plugin.disposes = []
-            plugin.dispose = function () {
-                while (plugin.disposes.length) {
-                    const dispose = plugin.disposes.shift()
-                    dispose()
-                }
-                plugin.disposes = []
-                return true
-            }
-            const installFunction = plugin.install ? plugin.install : plugin as Plugin.Function<any>
-            if (this.plugins.get(plugin.name)) {
-                this.logger.warn('重复载入:' + plugin.name)
-                return
-            }
-            if (plugin.setup) {
-                plugin.app = proxy
-                this.plugins.set(plugin.name, plugin)
-                const result = installFunction.apply(plugin, [proxy, options])
-                if (typeof result === 'function') {
-                    plugin.disposes.push(result)
-                }
-            } else {
-                const result = installFunction.apply(plugin, [proxy, options])
-                if (typeof result === 'function') {
-                    plugin.disposes.push(result)
-                }
-                this.plugins.set(plugin.name, plugin)
-            }
-            this.logger.info('已载入:' + plugin.name)
-            this.emit('plugin-add', plugin)
-        }
-        const using = plugin.using ||= []
-        if (!using.length) {
-            installPlugin()
-        } else {
-            if (!using.every(name => this.plugins.has(name))) {
-                this.logger.info(`插件(${plugin.name})将在所需插件(${using.join()})加载完毕后加载`)
-                const dispose = this.on('plugin-add', () => {
-                    if (using.every(name => this.plugins.has(name))) {
-                        dispose()
-                        installPlugin()
-                    }
-                })
-            } else {
-                installPlugin()
-            }
-        }
-        return this
-    }
-
-    command<D extends string>(def: D): Command<Argv.ArgumentType<D>> {
-        const namePath = def.split(' ', 1)[0]
-        const decl = def.slice(namePath.length)
-        const segments = namePath.split(/(?=[/])/g)
-
-        let parent: Command, nameArr = []
-        while (segments.length) {
-            const segment = segments.shift()
-            const code = segment.charCodeAt(0)
-            const tempName = code === 47 ? segment.slice(1) : segment
-            nameArr.push(tempName)
-            if (segments.length) parent = this.commandList.find(cmd => cmd.name === tempName)
-            if (!parent && segments.length) throw Error(`cannot find parent command:${nameArr.join('.')}`)
-        }
-        const name = nameArr.pop()
-        const command = new Command(name + decl)
-        command.app = this
-        if (parent) {
-            command.parent = parent
-            parent.children.push(command)
-        }
-        this.commands.set(name, command)
-        this.emit('command-add', command)
-        return command as any
-    }
 
     sendMsg(channelId: ChannelId, message: Sendable) {
         const [platform, self_id, targetType, targetId] = channelId.split(':') as [keyof Adapters, `${string | number}`, TargetType, `${string | number}`]
@@ -449,48 +241,9 @@ export class App extends EventEmitter {
         return bot.sendMsg(targetId, targetType, message)
     }
 
-    setTimeout(callback: Function, ms: number, ...args) {
-        const timer = setTimeout(() => {
-            callback()
-            dispose()
-            remove(this.disposes, dispose)
-        }, ms, ...args)
-        const dispose = Dispose.from(this, () => clearTimeout(timer))
-        this.disposes.push(dispose)
-        return
-    }
 
-    setInterval(callback: Function, ms: number, ...args) {
-        const timer = setInterval(callback, ms, ...args)
-        const dispose = Dispose.from(this, () => clearInterval(timer))
-        this.disposes.push(dispose)
-        return dispose
-    }
-
-    use<P extends Plugin>(plugin: P, options?: PluginOptions<P>): this {
+    use<P extends Plugin.Install>(plugin: P, options?: Plugin.Config<P>): this {
         this.plugin(plugin, options)
-        return this
-    }
-
-    dispose<T>(plugin?: Plugin<T> | string) {
-        if (!plugin) {
-            this.plugins.forEach(plugin => {
-                this.dispose(plugin)
-            })
-            this.emit('dispose');
-            return this
-        }
-        if (typeof plugin === 'string') {
-            plugin = this.plugins.get(plugin)
-        }
-        if (!plugin) return this
-        plugin.dispose()
-        this.plugins.delete(plugin.name)
-        if (plugin.children) {
-            plugin.children.forEach((p) => this.dispose(p))
-        }
-        this.logger.info('已移除:' + plugin.name)
-        this.emit('plugin-remove', plugin)
         return this
     }
 
@@ -546,15 +299,22 @@ export class App extends EventEmitter {
         } else {
             Object.assign(result, wrapExport(resolved))
         }
-        const dirs = resolved.split('/')
+        let fullName = resolved.replace(path.join(__dirname, `${type || 'plugin'}s`), '')
+        if (this.options[`${type || 'plugin'}_dir`]) {
+            fullName = fullName.replace(path.resolve(this.options[`${type || 'plugin'}_dir`]), '')
+        }
+        fullName = fullName.split('/')
+            .filter(Boolean).join(':')
+            .replace(/\.(d\.)?[t|j]s$/, '')
+            .replace(/:index$/,'')
         return {
             ...result,
             author: JSON.stringify(result.author),
             desc: result.desc,
             using: result.using ||= [],
             type: getType(resolved),
-            name: result.name || name,
-            fullName: result.fullName || dirs[dirs.length - 1].replace(/\.(d\.)?[t|j]s$/, ''),
+            fullName: result.fullName || fullName,
+            name: result.name || fullName,
             fullPath: getListenDir(resolved)
         } as any
     }
@@ -631,10 +391,6 @@ export class App extends EventEmitter {
 }
 
 export interface App extends App.Services {
-    plugin(name: string): Plugin
-
-    plugin<T>(plugin: Plugin, options?: T): this
-
     on<T extends keyof App.AllEventMap<this>>(event: T, listener: App.AllEventMap<this>[T]);
 
     // @ts-ignore
@@ -668,19 +424,19 @@ export namespace App {
     export const key = Symbol('Zhin')
 
     export interface Services {
-        koa:Koa
-        router:Router
-        server:Server
+        koa: Koa
+        router: Router
+        server: Server
     }
 
     export const defaultConfig: Partial<Options> = {
-        port:8086,
+        port: 8086,
         adapters: {
             oicq: {
                 bots: []
             },
-            onebot:{
-                bots:[]
+            onebot: {
+                bots: []
             }
         },
         data_dir: path.join(process.cwd(), 'data'),
@@ -756,17 +512,19 @@ export namespace App {
     export type AdapterConfig = {
         [P in keyof Adapters]?: AdapterOptionsType<Adapters[P]>
     }
-    export type PluginConfig = {
-        [P in keyof Plugins]?: PluginOptions<Plugins[P]>
+    type PluginConfig<P extends Plugin> = P extends Plugin<infer R> ? R : unknown
+    export type PluginConfigs = {
+        [P in keyof Plugins]?: PluginConfig<Plugins[P]>
     }
     export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal" | "mark" | "off"
-    type KVMap<V =any,K extends string=string>=Record<K, V>
-    export interface Options extends KVMap{
-        port:number
+    type KVMap<V = any, K extends string = string> = Record<K, V>
+
+    export interface Options extends KVMap {
+        port: number
         log_level: LogLevel
         logConfig?: Partial<Configuration>
         delay: Record<string, number>
-        plugins?: PluginConfig
+        plugins?: PluginConfigs
         services?: Record<string, any>
         adapters?: Partial<AdapterConfig>
         adapter_dir?: string
@@ -811,14 +569,12 @@ function createAppAPI() {
         contextMap.set(App.key, app)
         return app
     }
-    const useApp = () => {
+    const useContext = () => {
         const app = contextMap.get(App.key)
         if (!app) throw new Error(`can't found app with context for key:${App.key.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
-        const plugin = app.pluginList.find(plugin => plugin.fullPath === pluginFullPath)
-        if (plugin && plugin.app) return plugin.app
-        return app
+        return app.pluginList.find(plugin => plugin.fullPath === pluginFullPath) as Context
     }
 
     function getValue<T>(obj: T, path: string[]) {
@@ -849,27 +605,27 @@ function createAppAPI() {
         if (!effect) {
             const dispose = callback()
             if (dispose) {
-                plugin.disposes.push(dispose)
+                plugin['disposes'].push(dispose)
             }
         } else {
             const unWatch = watch(effect, callback)
-            plugin.disposes.push(unWatch)
+            plugin['disposes'].push(unWatch)
         }
 
     }
 
     return {
         createApp,
-        useApp,
+        useContext,
         useEffect,
         useOptions
     }
 }
 
-const {createApp, useApp, useEffect, useOptions} = createAppAPI()
+const {createApp, useContext, useEffect, useOptions} = createAppAPI()
 export {
     createApp,
-    useApp,
+    useContext,
     useEffect,
     useOptions
 }

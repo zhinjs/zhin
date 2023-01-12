@@ -69,6 +69,7 @@ export function createWebhookHandler(bot: OneBot, options: OneBot.Options<'webho
         const event = ctx.request.body
         if (event) {
             bot.logger.debug(`收到事件:${JSON.stringify(event)}`)
+            bot.self_id=event.self_id
             bot.adapter.dispatch(event.type, bot.createSession(event.type, event))
         }
         ctx.res.writeHead(200).end()
@@ -138,6 +139,7 @@ export function createWsReverseHandler(bot: OneBot, options: OneBot.Options<'ws_
         ws.on('message', (data) => {
             const event = JSON.parse(data.toString())
             if (event && event.type) {
+                bot.self_id=event.self_id
                 if(!['heartbeat','status_update','connect'].includes(event.detail_type)) {
                     bot.logger.debug('receive:',JSON.stringify(event))
                     if(event.type==='message'){

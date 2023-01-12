@@ -1,8 +1,9 @@
-import {App, Time} from "@";
+import {Time} from "@";
 import {totalmem,freemem, cpus, type, arch} from 'os'
+import {Context} from "@/context";
 export const name='status'
-export function install(app:App){
-    app.command('status')
+export function install(ctx:Context){
+    ctx.command('status')
         .action(({session})=>{
             function format(bytes){
                 const operators=['B','KB','MB','GB','TB']
@@ -16,6 +17,7 @@ export function install(app:App){
             const totalMem=totalmem()
             const usedMem=totalMem-freemem()
             const cpu=cpus()[0]
+
             return [
                 '当前状态:',
                 `系统架构:${type()}  ${arch()}`,
