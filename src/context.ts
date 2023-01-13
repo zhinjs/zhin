@@ -42,7 +42,7 @@ export class Context<T=any> extends EventEmitter{
     name:string
     fullName:string
     type:string
-    platform:(keyof Adapters)[]
+    protocol:(keyof Adapters)[]
     using:string[]=[]
     functional:boolean=false
     fullPath:string
@@ -55,7 +55,7 @@ export class Context<T=any> extends EventEmitter{
         super()
         if(!parent) return
         this.name=options.name
-        this.platform=options.platform
+        this.protocol=options.protocol
         this.type=options.type||''
         this.using=options.using||[]
         this.fullName=options.fullName
@@ -68,7 +68,12 @@ export class Context<T=any> extends EventEmitter{
             this.parent.emit('plugin-remove',this)
         })
     }
-
+    get middlewareList(){
+        return [...this.plugins.values()].reduce((result,plugin)=>{
+            result.push(...plugin.middlewareList)
+            return result
+        },[...this.middlewares])
+    }
     get commandList():Command[] {
         return [...this.plugins.values()].reduce((result,plugin)=>{
             result.push(...plugin.commandList)
@@ -93,28 +98,28 @@ export class Context<T=any> extends EventEmitter{
         return dispose
     }
 
-    adapter<K extends keyof Adapters>(platform: K): Adapters[K]
-    adapter<K extends keyof Adapters>(platform: K, options: AdapterOptionsType<Adapters[K]>): this
-    adapter<K extends keyof Adapters>(platform: K, adapter: AdapterConstructs[K], options: AdapterOptionsType<Adapters[K]>): this
-    adapter<K extends keyof Adapters>(platform: K, Construct?: AdapterConstructs[K] | AdapterOptions, options?: AdapterOptions) {
-        if (!Construct && !options) return this.app.adapters.get(platform)
+    adapter<K extends keyof Adapters>(adapter: K): Adapters[K]
+    adapter<K extends keyof Adapters>(adapter: K, options: AdapterOptionsType<Adapters[K]>): this
+    adapter<K extends keyof Adapters>(adapter: K, protocol: AdapterConstructs[K], options: AdapterOptionsType<Adapters[K]>): this
+    adapter<K extends keyof Adapters>(adapter: K, Construct?: AdapterConstructs[K] | AdapterOptions, options?: AdapterOptions) {
+        if (!Construct && !options) return this.app.adapters.get(adapter)
         if (typeof Construct !== "function") {
-            const result=this.app.load<Plugin.Options>(platform, 'adapter')
+            const result=this.app.load<Plugin.Options>(adapter, 'adapter')
             if(result && result.install){
                 result.install(this,options)
             }
             options = Construct as AdapterOptions
-            Construct = Adapter.get(platform).Adapter as unknown as AdapterConstructs[K]
+            Construct = Adapter.get(adapter).Adapter as unknown as AdapterConstructs[K]
         }
-        if (!Construct) throw new Error(`can't find adapter fom platform:${platform}`)
-        const dispose = this.on(`${platform}.message`, (session) => {
-            const middleware = Middleware.compose(this.middlewares)
+        if (!Construct) throw new Error(`can't find protocol fom protocol:${adapter}`)
+        const dispose = this.on(`${adapter}.message`, (session) => {
+            const middleware = Middleware.compose(this.app.getSupportMiddlewares(session))
             middleware(session)
         })
-        this.app.adapters.set(platform, new Construct(this.app, platform, options))
+        this.app.adapters.set(adapter, new Construct(this.app, adapter, options))
         return Dispose.from(this, () => {
             dispose()
-            this.app.adapters.delete(platform)
+            this.app.adapters.delete(adapter)
         }) as any
     }
     service<K extends keyof App.Services>(key: K): App.Services[K]
@@ -278,7 +283,7 @@ export namespace Plugin{
     }
     export type Options<T = any>=InstallObject<T> &{
         type?:string
-        platform?:(keyof Adapters)[]
+        protocol?:(keyof Adapters)[]
         using?:(keyof App.Services)[]
         setup?:boolean
         anonymous?:boolean

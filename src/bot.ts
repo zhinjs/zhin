@@ -32,7 +32,7 @@ export namespace Bot{
     export type FullTargetId=`${keyof Adapters}:${string|number}:${string}:${string|number}`
     export function getFullTargetId(session:Session):FullTargetId{
         return [
-            session.adapter.platform,
+            session.adapter.protocol,
             session.bot.self_id,
             session.detail_type,
             session['guid_id'],
@@ -81,5 +81,5 @@ export class BotList<UT extends string|number> extends Array<Bot<keyof Adapters,
     }
 }
 export type BotConstruct<K extends keyof Bots=keyof Bots,BO={},AO={},UT extends string|number=string|number>={
-    new(app:App, adapter:Adapter<K,BO,AO>, options:BotOptions<BO>):Bot<K,BO,AO,UT>
+    new(app:App, protocol:Adapter<K,BO,AO>, options:BotOptions<BO>):Bot<K,BO,AO,UT>
 }

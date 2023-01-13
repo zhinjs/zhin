@@ -8,7 +8,7 @@ process.on('uncaughtException',(e)=>{
 })
 createApp(process.env.configPath||resolve(process.cwd(),'zhin.yaml')).start()
 createApp({
-    adapters:{
+    protocols:{
         onebot:{
             bots:[]
         },

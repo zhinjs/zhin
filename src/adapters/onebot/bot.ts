@@ -40,11 +40,11 @@ export class OneBot extends EventEmitter implements Bot<
         })
     }
     isAdmin(session: Session): boolean {
-        return false;
+        return this.options.admins && this.options.admins.includes(session['user_id']);
     }
 
     isMaster(session: Session): boolean {
-        return false;
+        return this.options.master===session['user_id'];
     }
 
     reply(session: Session<'onebot'>, message: Sendable, quote?: boolean){

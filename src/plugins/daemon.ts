@@ -1,4 +1,3 @@
-import {App} from "@/app";
 import {Adapters, Bot} from "@";
 import {Context} from "@/context";
 export const name='systemDaemon'
@@ -39,9 +38,9 @@ export function install(ctx:Context, config:DaemonConfig={}){
     const handleMessage=(data: Message) => {
         if (data.type === 'send') {
             let {channelId, message} = data.body
-            const [platform,self_id,target_type,target_id]=channelId.split(':') as never[]
+            const [protocol,self_id,target_type,target_id]=channelId.split(':') as never[]
             const times=data.times
-            const bot=ctx.app.pickBot(platform as keyof Adapters,self_id)
+            const bot=ctx.app.pickBot(protocol as keyof Adapters,self_id)
             if (bot && bot.isOnline()) {
                 if(times) message+=`耗时：${(new Date().getTime()-times)/1000}s`
                 bot.sendMsg(target_id,target_type, message)

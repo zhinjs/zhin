@@ -2,8 +2,8 @@ import {Adapter, AdapterOptions, App} from "@";
 import {OneBot} from "@/adapters/onebot/bot";
 
 export class OneBotAdapter<T extends keyof OneBotAdapter.AdapterOptions=keyof OneBotAdapter.AdapterOptions> extends Adapter<`onebot`,OneBot.Options<T>,OneBotAdapter.Options>{
-    constructor(app:App, platform, options:AdapterOptions<OneBot.Options<T>,OneBotAdapter.Options>) {
-        super(app,platform,options);
+    constructor(app:App, protocol, options:AdapterOptions<OneBot.Options<T>,OneBotAdapter.Options>) {
+        super(app,protocol,options);
     }
     async start(){
         for(const botOptions of this.options.bots){

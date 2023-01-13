@@ -80,7 +80,7 @@ export class OicqBot extends Client implements Bot<'oicq',OicqBotOptions,{},numb
         const obj=typeof args[0]==="object"?args.shift():{}
         Object.assign(obj,{
             bot:this,
-            platform:'oicq',
+            protocol:'oicq',
             adapter:this.adapter,
             event,
             detail_type:obj.message_type||obj.request_type||obj.system_type||obj.notice_type,
@@ -104,8 +104,8 @@ export class OicqBot extends Client implements Bot<'oicq',OicqBotOptions,{},numb
     }
 }
 export class OicqAdapter extends Adapter<'oicq',OicqBotOptions,{},OicqEventMap>{
-    constructor(app:App, platform, options:AdapterOptions<OicqBotOptions>) {
-        super(app,platform,options);
+    constructor(app:App, protocol, options:AdapterOptions<OicqBotOptions>) {
+        super(app,protocol,options);
     }
     async start(){
         for(const botOptions of this.options.bots){

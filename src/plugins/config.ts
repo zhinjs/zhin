@@ -3,18 +3,18 @@ import * as fs from 'fs'
 import {get,unset,set,mapValues} from "lodash";
 import {segmentsToString} from "@/adapters/oicq";
 import {Context} from "@/context";
-function protectPassword(obj:Record<string, any>){
+function protectkeys(obj:Record<string, any>,keys:string[]){
     if(!obj || typeof obj!=='object') return obj
     return mapValues(obj,(value,key)=>{
-        if(typeof value==='object') return protectPassword(value)
-        if(key!=='password') return value
+        if(typeof value==='object') return protectkeys(value,keys)
+        if(!keys.includes(key)) return value
         return new Array(value.length).fill('*').join('')
     })
 }
 
 function outputConfig(config,key){
-    if(!key)return JSON.stringify(protectPassword(config),null,2)
-    const result=JSON.stringify(protectPassword(get(config,key)),null,2)
+    if(!key)return JSON.stringify(protectkeys(config,['password','access_token']),null,2)
+    const result=JSON.stringify(protectkeys(get(config,key),['password','access_token']),null,2)
     return key.endsWith('password')?new Array(result.length).fill('*').join(''):result
 }
 export const name='configManage'

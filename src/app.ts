@@ -125,7 +125,10 @@ export class App extends Context {
         this['disposes'].push(() => {
             server.close()
         })
-        this.middleware((session) => session.execute())
+        this.middleware(async (session,next) => {
+            const result=await session.execute()
+            if(!result)await next()
+        })
         return new Proxy(this, {
             get(target: typeof _this, p: string | symbol, receiver: any): any {
                 let result = Reflect.get(target, p, receiver)
@@ -174,8 +177,8 @@ export class App extends Context {
     }
 
 
-    pickBot<K extends keyof Bots>(platform: K, self_id: string | number): Bots[K] {
-        return this.adapters.get(platform).bots.get(self_id) as Bots[K]
+    pickBot<K extends keyof Bots>(protocol: K, self_id: string | number): Bots[K] {
+        return this.adapters.get(protocol).bots.get(self_id) as Bots[K]
     }
 
     emit(event, ...args) {
@@ -191,8 +194,8 @@ export class App extends Context {
     }
 
 
-    getLogger<K extends keyof Adapters>(platform: K, self_id?: string | number) {
-        return getLogger(`[zhin:adapter-${[platform, self_id].filter(Boolean).join(':')}]`)
+    getLogger<K extends keyof Adapters>(protocol: K, self_id?: string | number) {
+        return getLogger(`[zhin:protocol-${[protocol, self_id].filter(Boolean).join(':')}]`)
     }
 
 
@@ -235,8 +238,8 @@ export class App extends Context {
 
 
     sendMsg(channelId: ChannelId, message: Sendable) {
-        const [platform, self_id, targetType, targetId] = channelId.split(':') as [keyof Adapters, `${string | number}`, TargetType, `${string | number}`]
-        const adapter = this.adapters.get(platform)
+        const [protocol, self_id, targetType, targetId] = channelId.split(':') as [keyof Adapters, `${string | number}`, TargetType, `${string | number}`]
+        const adapter = this.adapters.get(protocol)
         const bot = adapter.bots.get(self_id)
         return bot.sendMsg(targetId, targetType, message)
     }
@@ -246,7 +249,12 @@ export class App extends Context {
         this.plugin(plugin, options)
         return this
     }
-
+    broadcast(event:string|symbol,session:Session<keyof Adapters,any,any>){
+        this.emit(event,session)
+        for(const plugin of this.getSupportPlugins(session.protocol)){
+            plugin.emit(event,session)
+        }
+    }
     public load<R = object>(name: string, type: string): R {
         function getListenDir(modulePath: string) {
             if (modulePath.endsWith('/index')) return modulePath.replace('/index', '')
@@ -318,9 +326,25 @@ export class App extends Context {
             fullPath: getListenDir(resolved)
         } as any
     }
-
+    getSupportPlugins(protocol:keyof Adapters){
+        return this.pluginList.filter(plugin=>{
+            return plugin.protocol===undefined || plugin.protocol.length===0 || plugin.protocol.includes(protocol)
+        })
+    }
+    getSupportMiddlewares(session:Session<keyof Adapters>){
+        return this.getSupportPlugins(session.protocol).reduce((result:Middleware<Session>[],plugin)=>{
+            result.push(...plugin.middlewareList)
+            return result
+        },[...this.middlewares])
+    }
+    getSupportCommands(argv:Argv){
+        return this.getSupportPlugins(argv.session.protocol).reduce((result:Command[],plugin)=>{
+            result.push(...plugin.commandList)
+            return result
+        },[])
+    }
     findCommand(argv: Argv) {
-        return this.commandList.find(cmd => {
+        return this.getSupportCommands(argv).find(cmd => {
             return cmd.name === argv.name
                 || cmd.aliasNames.includes(argv.name)
                 || cmd.shortcuts.some(({name}) => typeof name === 'string' ? name === argv.name : name.test(argv.name))
@@ -328,9 +352,9 @@ export class App extends Context {
     }
 
     async start() {
-        for (const platform of Object.keys(this.options.adapters || {})) {
+        for (const adapter of Object.keys(this.options.adapters || {})) {
             try {
-                this.adapter(platform as keyof Adapters, this.options.adapters[platform])
+                this.adapter(adapter as keyof Adapters, this.options.adapters[adapter])
             } catch (e) {
                 this.logger.warn(e.message, e.stack)
             }
@@ -431,7 +455,7 @@ export namespace App {
 
     export const defaultConfig: Partial<Options> = {
         port: 8086,
-        adapters: {
+        protocols: {
             oicq: {
                 bots: []
             },
@@ -458,12 +482,8 @@ export namespace App {
                 }
             },
             categories: {
-                zhin: {
-                    appenders: ['saveFile', 'consoleOut'],
-                    level: 'info'
-                },
                 default: {
-                    appenders: ['consoleOut'],
+                    appenders: ['consoleOut','saveFile'],
                     level: 'info'
                 }
             }
@@ -481,7 +501,7 @@ export namespace App {
 
     export interface LoadTypes {
         plugin: Plugin
-        adapter: Adapter
+        protocol: Adapter
     }
 
     export interface LifeCycle {
@@ -526,8 +546,8 @@ export namespace App {
         delay: Record<string, number>
         plugins?: PluginConfigs
         services?: Record<string, any>
-        adapters?: Partial<AdapterConfig>
-        adapter_dir?: string
+        protocols?: Partial<AdapterConfig>
+        protocol_dir?: string
         plugin_dir?: string
         data_dir?: string
     }
@@ -544,7 +564,7 @@ function createAppAPI() {
         if (contextMap.get(App.key)) return contextMap.get(App.key)
         if (typeof options === 'string') {
             if (!fs.existsSync(options)) fs.writeFileSync(options, Yaml.dump({
-                adapters: {
+                protocols: {
                     oicq: {
                         bots: []
                     }
@@ -613,19 +633,28 @@ function createAppAPI() {
         }
 
     }
-
+    function onDispose(callback:Dispose){
+        const app = contextMap.get(App.key)
+        if (!app) throw new Error(`can't found app with context for key:${App.key.toString()}`)
+        const callSite = getCaller()
+        const pluginFullPath = callSite.getFileName()
+        const plugin = app.pluginList.find(plugin => plugin.fullPath === pluginFullPath)
+        plugin['disposes'].push(callback)
+    }
     return {
         createApp,
         useContext,
         useEffect,
+        onDispose,
         useOptions
     }
 }
 
-const {createApp, useContext, useEffect, useOptions} = createAppAPI()
+const {createApp, useContext,onDispose, useEffect, useOptions} = createAppAPI()
 export {
     createApp,
     useContext,
     useEffect,
+    onDispose,
     useOptions
 }

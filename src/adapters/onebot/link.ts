@@ -105,11 +105,19 @@ export function createWsHandler(bot: OneBot, options: OneBot.Options<'ws'>) {
     socket.on('message', (data) => {
         const event = JSON.parse(data.toString())
         if (event) {
+            if(!['heartbeat','status_update','connect'].includes(event.detail_type)) {
+                bot.logger.debug('receive:',JSON.stringify(event))
+                if(event.type==='message'){
+                    bot.logger.info(`receive:${JSON.stringify(event.message)}`)
+                }
+            }
             bot.adapter.dispatch(event.type, bot.createSession(event.type, event))
         }
     })
     bot.sendPayload = function (payload) {
-        socket.send(JSON.stringify(payload))
+        const data=JSON.stringify(payload)
+        bot.logger.info('send:',data)
+        socket.send(data)
     }
     return () => {
         socket.close()

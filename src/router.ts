@@ -5,8 +5,6 @@ import {Layer, RouterOptions} from "@koa/router";
 import * as http from "http";
 import {ServerOptions, WebSocketServer} from 'ws'
 import { parse } from 'url';
-import {IncomingMessage} from "http";
-import {Duplex} from "stream";
 type Path=string|RegExp
 export class Router extends KoaRouter {
     wsStack: WebSocketServer[] = []
