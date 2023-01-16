@@ -6,6 +6,7 @@ import {OneBot} from "@/adapters/onebot/bot";
 
 export type BotOptions<O={}>={
     quote_self?:boolean
+    prefix?:string
     master?:string|number
     admins?:(string|number)[]
 } & O

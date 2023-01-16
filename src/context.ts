@@ -2,11 +2,12 @@ import {App, isConstructor} from "@/app";
 import {Dispose} from "@/dispose";
 import {Adapter, AdapterConstructs, AdapterOptions, AdapterOptionsType, Adapters} from "@/adapter";
 import {Middleware} from "@/middleware";
-import {Command} from "@/command";
-import {Session} from "@/session";
+import {Command, TriggerSessionMap} from "@/command";
+import {PayloadWithSession} from "@/session";
 import {EventEmitter} from "events";
-import {remove} from "@/utils";
+import {getCaller, remove} from "@/utils";
 import {Argv} from "@/argv";
+import * as path from "path";
 export interface Plugins{
     help:Plugin<null>
     logs:Plugin<null>
@@ -47,7 +48,7 @@ export class Context<T=any> extends EventEmitter{
     functional:boolean=false
     fullPath:string
     plugins:Map<string,Plugin>=new Map<string, Plugin>()
-    middlewares:Middleware<Session>[]=[]
+    middlewares:Middleware<PayloadWithSession<keyof Adapters,'message'>>[]=[]
     private disposes:Dispose[]=[]
     app:App
     commands:Map<string,Command>=new Map<string, Command>()
@@ -55,18 +56,29 @@ export class Context<T=any> extends EventEmitter{
         super()
         if(!parent) return
         this.name=options.name
-        this.protocol=options.protocol
+        this.protocol=options.protocol||=[]
         this.type=options.type||''
         this.using=options.using||[]
         this.fullName=options.fullName
         this.fullPath=options.fullPath
         this.functional=options.functional||false
         this.app=parent.app
-        this.disposes.push(()=>{
+        this.on('dispose',()=>{
             this.parent.plugins.delete(this.fullName)
             this.app.logger.info('已移除：',this.name)
             this.parent.emit('plugin-remove',this)
         })
+        return new Proxy(this,{
+            get(target: Context<T>, p: string | symbol, receiver: any): any {
+                if(App.Services.includes(p as keyof App.Services)) return target.app.services.get(p as keyof App.Services)
+                return Reflect.get(target,p,receiver)
+            }
+        })
+    }
+    scope<K extends keyof Adapters>(scope:K|K[]):Context{
+        if(!Array.isArray(scope)) scope=[scope]
+        this.protocol=Array.from(new Set<keyof Adapters>([...this.protocol,...scope]))
+        return this
     }
     get middlewareList(){
         return [...this.plugins.values()].reduce((result,plugin)=>{
@@ -135,22 +147,37 @@ export class Context<T=any> extends EventEmitter{
         } else {
             this.app.services.set(key,Service)
         }
+        App.Services.push(key)
         return Dispose.from(this, () => {
             this.app.services.delete(key)
+            remove(App.Services,key)
         })
     }
     plugin<T>(name: string, options?: T): Context | this
+    plugin<T>(name: string,setup?:boolean, options?: T): Context | this
     plugin<P extends Plugin.Install>(plugin: P, config?: Plugin.Config<P>): this
-    plugin<P extends Plugin.Install>(entry: string | P, config?: Plugin.Config<P>) {
+    plugin<P extends Plugin.Install>(entry: string | P, ...args:[boolean?,Plugin.Config<P>?]) {
         let options: Plugin.Options
+        const setup:boolean=typeof args[0]==='boolean'?args.shift():false
+        const config:Plugin.Config<P>=args.shift() as any
         if (typeof entry === 'string') {
             const result = this.plugins.get(entry)
             if (result) return result
             try {
-                options = this.app.load<Plugin.Options>(entry, 'plugin')
+                options = this.app.load<Plugin.Options>(entry, 'plugin',setup)
             } catch (e) {
-                this.app.logger.warn(e.message)
-                return this
+                if(this.fullPath){
+                    try{
+                        const dir=path.dirname(this.fullPath)
+                        options=this.app.load<Plugin.Options>(path.resolve(dir,entry),'plugin')
+                    }catch {
+                        this.app.logger.warn(e.message)
+                        return this
+                    }
+                }else{
+                    this.app.logger.warn(e.message)
+                    return this
+                }
             }
         } else {
             options = definePlugin(entry)
@@ -196,7 +223,7 @@ export class Context<T=any> extends EventEmitter{
         }
         return this
     }
-    command<D extends string>(def: D): Command<Argv.ArgumentType<D>> {
+    command<D extends string,T extends keyof TriggerSessionMap>(def: D,trigger?:T): Command<Argv.ArgumentType<D>,{},T> {
         const namePath = def.split(' ', 1)[0]
         const decl = def.slice(namePath.length)
         const segments = namePath.split(/(?=[/])/g)
@@ -212,6 +239,7 @@ export class Context<T=any> extends EventEmitter{
         }
         const name = nameArr.pop()
         const command = new Command(name + decl)
+        command.trigger=trigger
         command.app = this.app
         if (parent) {
             command.parent = parent
@@ -225,7 +253,7 @@ export class Context<T=any> extends EventEmitter{
         })
         return Object.create(command)
     }
-    middleware(middleware: Middleware<Session>, prepend?: boolean) {
+    middleware(middleware: Middleware<PayloadWithSession<keyof Adapters,'message'>>, prepend?: boolean) {
         const method: 'push' | 'unshift' = prepend ? 'unshift' : "push"
         this.middlewares[method](middleware)
         return Dispose.from(this, () => {
@@ -260,11 +288,41 @@ export class Context<T=any> extends EventEmitter{
         }
 
         [...this.plugins.values()].forEach(plugin=>plugin.dispose())
+        this.emit('dispose')
         while (this.disposes.length){
             const dispose=this.disposes.shift()
             dispose()
         }
     }
+}
+
+export interface Context extends App.Services {
+    on<T extends keyof App.AllEventMap<this>>(event: T, listener: App.AllEventMap<this>[T]);
+    // @ts-ignore
+    on<P extends keyof Adapters, E extends keyof App.BotEventMaps[P]>(event: `${P}.${E}`, listener: (session: PayloadWithSession<P, E>) => any);
+
+    on<S extends string | symbol>(event: S & Exclude<S, keyof App.AllEventMap<this>>, listener: (...args: any[]) => any);
+
+    emitSync<T extends keyof App.AllEventMap<this>>(event: T, ...args: Parameters<App.AllEventMap<this>[T]>): Promise<void>;
+
+    // @ts-ignore
+    emitSync<P extends keyof Adapters, E extends keyof App.BotEventMaps[P]>(event: `${P}.${E}`, session: PayloadWithSession<P,  E>): Promise<void>;
+
+    emitSync<S extends string | symbol>(event: S & Exclude<S, keyof App.AllEventMap<this>>, ...args: any[]): Promise<void>;
+
+    bail<T extends keyof App.AllEventMap<this>>(event: T, ...args: Parameters<App.AllEventMap<this>[T]>): any;
+
+    // @ts-ignore
+    bail<P extends keyof Adapters, E extends keyof App.BotEventMaps[P]>(event: `${P}.${E}`, session: PayloadWithSession<P, E>): any;
+
+    bail<S extends string | symbol>(event: S & Exclude<S, keyof App.AllEventMap<this>>, ...args: any[]): any;
+
+    bailSync<T extends keyof App.AllEventMap<this>>(event: T, ...args: Parameters<App.AllEventMap<this>[T]>): Promise<any>;
+
+    // @ts-ignore
+    bailSync<P extends keyof Adapters, E extends keyof App.BotEventMaps[P]>(event: `${P}.${E}`, session: PayloadWithSession<P,  E>): Promise<any>;
+
+    bailSync<S extends string | symbol>(event: S & Exclude<S, keyof App.AllEventMap<this>>, ...args: any[]): Promise<any>;
 }
 export interface Plugin<T=any> extends Context<T>{}
 export namespace Plugin{

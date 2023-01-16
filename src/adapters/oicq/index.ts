@@ -76,7 +76,7 @@ export class OicqBot extends Client implements Bot<'oicq',OicqBotOptions,{},numb
                 return this.sendDiscussMsg(target_id,msg,message)
         }
     }
-    createSession<E extends keyof OicqEventMap>(event:E,...args:Parameters<OicqEventMap[E]>):Session<'oicq', OicqEventMap, E>{
+    createSession<E extends keyof OicqEventMap>(event:E,...args:Parameters<OicqEventMap[E]>):Session<'oicq', E>{
         const obj=typeof args[0]==="object"?args.shift():{}
         Object.assign(obj,{
             bot:this,
@@ -87,14 +87,14 @@ export class OicqBot extends Client implements Bot<'oicq',OicqBotOptions,{},numb
             segments:toSegment(obj['message']||[]),
         },{args})
         delete obj.reply
-        return new Session<"oicq", OicqEventMap, E>(this.adapter,this.self_id,event,obj)
+        return new Session<"oicq", E>(this.adapter,this.self_id,event,obj)
     }
 
-    isAdmin(session: Session<'oicq',OicqEventMap,'message'>): boolean {
+    isAdmin(session: Session<'oicq','message'>): boolean {
         return this.options.admins && this.options.admins.includes(session['user_id']);
     }
 
-    isMaster(session: Session<'oicq',OicqEventMap,'message'>): boolean {
+    isMaster(session: Session<'oicq','message'>): boolean {
         return this.options.master===session['user_id'];
     }
 

@@ -1,4 +1,3 @@
-import {App} from "@/app";
 import {Context} from "@/context";
 export const name='systemHelper'
 export function install(ctx:Context){
@@ -15,17 +14,15 @@ export function install(ctx:Context){
         .option('showAuth','-A 显示权限信息')
         .action(({options,session,argv},target)=>{
             if (!target) {
-                const commands = ctx.app.commandList.filter(cmd => cmd.parent === null)
+                const commands = ctx.app.commandList.filter(cmd => cmd.parent === null && cmd.match(session))
                 const output = commands.map(command=>command.help({...options,simple:true,dep:0})).flat()
                 output.push('回复“帮助 指令名”以查看对应指令帮助。')
                 return output.filter(Boolean).join('\n')
             }
 
-            const command = ctx.app.findCommand({name: target,session, segments:session.segments,argv})
-            if (!command?.match(session)) {
-                return
-            }
-
-            return command.help({...options,dep:1}).concat('回复“帮助 指令名”以查看对应指令帮助。').join('\n')
+            return ctx.app
+                .findCommand({name: target,session, segments:session.segments,argv})
+                ?.help({...options,dep:1})
+                .concat('回复“帮助 指令名”以查看对应指令帮助。').join('\n')
         })
 }

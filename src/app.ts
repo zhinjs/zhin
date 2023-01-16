@@ -27,7 +27,7 @@ import Koa from "koa";
 import {Adapter, AdapterOptionsType, Adapters} from "@/adapter";
 import {Bots, Sendable} from "@/bot";
 import {OicqEventMap} from './adapters/oicq'
-import {Session, ToSession} from "@/session";
+import {Session} from "@/session";
 import {Middleware} from "@/middleware";
 import {Dispose} from "@/dispose";
 import {Router} from "@/router";
@@ -122,7 +122,7 @@ export class App extends Context {
         server.listen(options.port ||= 8086)
         this.logger.info(`server listen at ${getIpAddress().map(ip => `http://${ip}:${options.port}`).join(' and ')}`)
         this.options = ref(options)
-        this['disposes'].push(() => {
+        this.on('dispose',()=>{
             server.close()
         })
         this.middleware(async (session,next) => {
@@ -249,13 +249,13 @@ export class App extends Context {
         this.plugin(plugin, options)
         return this
     }
-    broadcast(event:string|symbol,session:Session<keyof Adapters,any,any>){
+    broadcast<P extends keyof Adapters, E extends keyof App.BotEventMaps[P]>(event: string, session: Session<P, E>){
         this.emit(event,session)
         for(const plugin of this.getSupportPlugins(session.protocol)){
             plugin.emit(event,session)
         }
     }
-    public load<R = object>(name: string, type: string): R {
+    public load<R = object>(name: string, type: string,setup?:boolean): R {
         function getListenDir(modulePath: string) {
             if (modulePath.endsWith('/index')) return modulePath.replace('/index', '')
             for (const extension of ['ts', 'js', 'cjs', 'mjs']) {
@@ -297,7 +297,7 @@ export class App extends Context {
         let result: Record<string, any> = {}
         if (packageInfo) {
             Object.assign(result, packageInfo)
-            if (packageInfo.setup) {
+            if (packageInfo.setup || setup) {
                 result.install = () => {
                     wrapExport(resolved)
                 }
@@ -339,7 +339,11 @@ export class App extends Context {
     }
     getSupportCommands(argv:Argv){
         return this.getSupportPlugins(argv.session.protocol).reduce((result:Command[],plugin)=>{
-            result.push(...plugin.commandList)
+            for(const command of plugin.commandList){
+                if(command.match(argv.session)){
+                    result.push(command)
+                }
+            }
             return result
         },[])
     }
@@ -414,39 +418,10 @@ export class App extends Context {
     }
 }
 
-export interface App extends App.Services {
-    on<T extends keyof App.AllEventMap<this>>(event: T, listener: App.AllEventMap<this>[T]);
-
-    // @ts-ignore
-    on<P extends keyof Adapters, E extends keyof App.BotEventMaps[P]>(event: `${P}.${E}`, listener: (session: ToSession<P, App.BotEventMaps[P], E>) => any);
-
-    on<S extends string | symbol>(event: S & Exclude<S, keyof App.AllEventMap<this>>, listener: (...args: any[]) => any);
-
-    emitSync<T extends keyof App.AllEventMap<this>>(event: T, ...args: Parameters<App.AllEventMap<this>[T]>): Promise<void>;
-
-    // @ts-ignore
-    emitSync<P extends keyof Adapters, E extends keyof App.BotEventMaps[P]>(event: `${P}.${E}`, session: ToSession<P, App.BotEventMaps[P], E>): Promise<void>;
-
-    emitSync<S extends string | symbol>(event: S & Exclude<S, keyof App.AllEventMap<this>>, ...args: any[]): Promise<void>;
-
-    bail<T extends keyof App.AllEventMap<this>>(event: T, ...args: Parameters<App.AllEventMap<this>[T]>): any;
-
-    // @ts-ignore
-    emitSync<P extends keyof Adapters, E extends keyof App.BotEventMaps[P]>(event: `${P}.${E}`, session: ToSession<P, App.BotEventMaps[P], E>): any;
-
-    bail<S extends string | symbol>(event: S & Exclude<S, keyof App.AllEventMap<this>>, ...args: any[]): any;
-
-    bailSync<T extends keyof App.AllEventMap<this>>(event: T, ...args: Parameters<App.AllEventMap<this>[T]>): Promise<any>;
-
-    // @ts-ignore
-    emitSync<P extends keyof Adapters, E extends keyof App.BotEventMaps[P]>(event: `${P}.${E}`, session: ToSession<P, App.BotEventMaps[P], E>): Promise<any>;
-
-    bailSync<S extends string | symbol>(event: S & Exclude<S, keyof App.AllEventMap<this>>, ...args: any[]): Promise<any>;
-}
 
 export namespace App {
     export const key = Symbol('Zhin')
-
+    export const Services:(keyof Services)[]=[]
     export interface Services {
         koa: Koa
         router: Router
@@ -499,10 +474,6 @@ export namespace App {
         [P in keyof LifeCycle as `after-${P}`]: LifeCycle[P]
     }
 
-    export interface LoadTypes {
-        plugin: Plugin
-        protocol: Adapter
-    }
 
     export interface LifeCycle {
         start(): void
@@ -522,8 +493,9 @@ export namespace App {
 
     export type BaseEventMap = Record<string, (...args: any[]) => any>
 
-    export interface BotEventMaps {
+    export interface BotEventMaps extends Record<keyof Adapters, BaseEventMap>{
         oicq: OicqEventMap
+        onebot:BaseEventMap
     }
 
     export interface AllEventMap<T> extends LifeCycle, BeforeEventMap<T>, AfterEventMap<T> {
@@ -594,6 +566,18 @@ function createAppAPI() {
         if (!app) throw new Error(`can't found app with context for key:${App.key.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
+        const context=app.pluginList.find(plugin => plugin.fullPath === pluginFullPath) as Context
+        if(context) return context
+        const pluginDir=path.dirname(pluginFullPath)
+        const reg=new RegExp(`${pluginDir}/index\.[tj]s`)
+        const parent=app.pluginList.find(plugin=>{
+            return plugin.fullPath.match(reg)
+        })
+        if(parent){
+            parent.plugin(pluginFullPath,true)
+            return app.pluginList.find(plugin => plugin.fullPath === pluginFullPath) as Context
+        }
+        app.plugin(pluginFullPath,true)
         return app.pluginList.find(plugin => plugin.fullPath === pluginFullPath) as Context
     }
 
@@ -625,11 +609,11 @@ function createAppAPI() {
         if (!effect) {
             const dispose = callback()
             if (dispose) {
-                plugin['disposes'].push(dispose)
+                plugin.on('dispose',dispose)
             }
         } else {
             const unWatch = watch(effect, callback)
-            plugin['disposes'].push(unWatch)
+            plugin.on('dispose',unWatch)
         }
 
     }
@@ -639,7 +623,7 @@ function createAppAPI() {
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
         const plugin = app.pluginList.find(plugin => plugin.fullPath === pluginFullPath)
-        plugin['disposes'].push(callback)
+        plugin.on('dispose',callback)
     }
     return {
         createApp,

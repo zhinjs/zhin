@@ -2,7 +2,6 @@ import {FSWatcher, watch} from 'chokidar'
 import {App} from "@/app";
 import * as fs from 'fs';
 import * as Yaml from 'js-yaml'
-
 import * as path from "path";
 import {Context,Plugin} from "@/context";
 export const name='pluginWatcher'
@@ -52,7 +51,7 @@ export function install(ctx:Context, root:string){
             }
         }
     })
-    ctx['disposes'].push(()=>{
+    ctx.on('dispose',()=>{
         watcher.close()
         return true
     })

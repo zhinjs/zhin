@@ -4,6 +4,8 @@ import {OicqAdapter} from "@/adapters/oicq";
 import {Session} from "@/Session";
 import {Logger} from "log4js";
 import {OneBotAdapter} from "@/adapters/onebot";
+import {EventEmitter} from "events";
+import {Dispose} from "@/dispose";
 
 interface AdapterConstruct<K extends keyof Adapters=keyof Adapters,BO extends BotOptions = BotOptions, AO = {}> {
     new(app: App, protocol:K, options: AdapterOptions<BO, AO>): Adapter<K,BO, AO>
@@ -19,16 +21,23 @@ export abstract class Adapter<
     BO = {},
     AO = {},
     EM extends App.BaseEventMap=App.BaseEventMap
-    > {
+    >  extends EventEmitter{
     public bots:BotList<string|number>
     logger:Logger
     protected constructor(public app:App, public protocol:K, public options:AdapterOptions<BO,AO>) {
+        super()
         this.bots=new BotList<string | number>()
         this.logger=app.getLogger(protocol)
         this.app.on('start',()=>this.start())
     }
     getLogger(sub_type:string){
         return this.app.getLogger(this.protocol,sub_type)
+    }
+    on(event,listener){
+        super.on(event,listener)
+        return Dispose.from(this,()=>{
+            super.off(event,listener)
+        })
     }
     async start(...args:any[]){
     }
@@ -41,9 +50,9 @@ export abstract class Adapter<
         bot.startTime = new Date().getTime()
         this.bots.push(bot)
     }
-    dispatch<E extends keyof EM>(event:E,session:Session<K, EM, E>){
-        if(typeof event==='symbol') return this.app.broadcast(event,session)
-        this.app.broadcast(`${this.protocol}.${event as string}`,session)
+    dispatch<E extends keyof App.BotEventMaps[K]>(event:E,session:Session<K, E>){
+        this.emit(event as any,session)
+        this.app.broadcast(`${this.protocol}.${String(event)}`,session)
     }
 }
 export interface Adapters{

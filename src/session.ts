@@ -6,10 +6,10 @@ import {Middleware} from "@/middleware";
 import {Prompt} from "@/prompt";
 import {Dict} from "@/types";
 
-export type FunctionToSessionObj<E extends (...args: any[]) => any> = E extends (...args: infer R) => any ? ParametersToObj<R> : unknown
+export type FunctionPayloadWithSessionObj<E extends (...args: any[]) => any> = E extends (...args: infer R) => any ? ParametersToObj<R> : unknown
 export type ParametersToObj<A extends any[]> = A extends [infer R, ...infer L] ? R & R extends object ? R & { args: L } : { args: [R, ...L] } : Dict
 
-export interface Session<P extends keyof Adapters = keyof Adapters, EM extends App.BaseEventMap = App.BaseEventMap, E extends keyof EM = keyof EM> {
+export interface Session<P extends keyof Adapters = keyof Adapters,E extends keyof App.BotEventMaps[P] = keyof App.BotEventMaps[P]> {
     protocol: P,
     post_type?: string
     type?: string
@@ -27,12 +27,12 @@ export interface Session<P extends keyof Adapters = keyof Adapters, EM extends A
     event: E
 }
 
-export type ToSession<P extends keyof Adapters = keyof Adapters, EM extends App.BaseEventMap = App.BaseEventMap, E extends keyof EM = keyof EM> =
-    Session<P, EM, E>
-    & FunctionToSessionObj<EM[E]>
+export type PayloadWithSession<P extends keyof Adapters = keyof Adapters,E extends keyof App.BotEventMaps[P] = keyof App.BotEventMaps[P]> =
+    Session<P, E>
+    & FunctionPayloadWithSessionObj<App.BotEventMaps[P][E]>
 
-export class Session<P extends keyof Adapters = keyof Adapters, EM extends App.BaseEventMap = App.BaseEventMap, E extends keyof EM = keyof EM> {
-    constructor(public adapter: Adapters[P], self_id, public event: E, obj: FunctionToSessionObj<EM[E]>) {
+export class Session<P extends keyof Adapters = keyof Adapters,E extends keyof App.BotEventMaps[P] = keyof App.BotEventMaps[P]> {
+    constructor(public adapter: Adapters[P], self_id, public event: E, obj: FunctionPayloadWithSessionObj<App.BotEventMaps[P][E]>) {
         this.protocol = adapter.protocol as any
         this.app = adapter.app
         this.event = event
@@ -42,6 +42,7 @@ export class Session<P extends keyof Adapters = keyof Adapters, EM extends App.B
     }
 
     middleware(middleware: Middleware<Session>, timeout: number = this.app.options.delay.prompt) {
+        console.log(timeout,999999)
         return new Promise<void | boolean | Sendable>(resolve => {
             const dispose = this.app.middleware(async (session, next) => {
                 if (Bot.getFullTargetId(this as any) !== Bot.getFullTargetId(session)) await next()
@@ -55,12 +56,22 @@ export class Session<P extends keyof Adapters = keyof Adapters, EM extends App.B
             }, timeout)
         })
     }
-
+    isAtMe(){
+        return this.segments.length && this.segments[0].type==='mention' && String(this.segments[0].data['qq'])===String(this.bot.self_id)
+    }
     async execute(argv: SegmentElem[] | Argv = this.segments) {
-        if (Array.isArray(argv)) argv = {
-            session: this as any,
-            bot: this.bot,
-            ...Argv.parse(argv)
+        if (Array.isArray(argv)) {
+            let data=Argv.parse<P,E>(argv,this)
+            if(!data) return
+            argv=data
+        }
+        if(argv.atMe && !argv.name){
+            await this.reply('嗯哼？')
+            await this.middleware((session)=>{
+                let data=Argv.parse(session.segments,this)
+                if(!data) return
+                argv=data
+            })
         }
         const command = this.app.findCommand(argv)
         if (!command) return

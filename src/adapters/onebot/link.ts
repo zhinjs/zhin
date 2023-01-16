@@ -37,7 +37,11 @@ export function createHttpHandler(bot: OneBot, options: OneBot.Options<'http'>) 
                 const events = res.data.data || []
                 for (const event of events.filter(event => !cachedEvent.includes(event.time))) {
                     bot.logger.debug(`收到事件:${JSON.stringify(event)}`)
-                    bot.adapter.dispatch(event.type, bot.createSession(event.type, event))
+                    if(event.echo){
+                        bot.adapter.dispatch('echo', event)
+                    }else{
+                        bot.adapter.dispatch(event.type, bot.createSession(event.type, event))
+                    }
                     cachedEvent.push(event.time)
                     if (cachedEvent.length > (options.events_buffer_size || 20)) {
                         cachedEvent.shift()
@@ -70,7 +74,11 @@ export function createWebhookHandler(bot: OneBot, options: OneBot.Options<'webho
         if (event) {
             bot.logger.debug(`收到事件:${JSON.stringify(event)}`)
             bot.self_id=event.self_id
-            bot.adapter.dispatch(event.type, bot.createSession(event.type, event))
+            if(event.echo){
+                bot.adapter.dispatch('echo', event)
+            }else{
+                bot.adapter.dispatch(event.type, bot.createSession(event.type, event))
+            }
         }
         ctx.res.writeHead(200).end()
     })
@@ -111,7 +119,11 @@ export function createWsHandler(bot: OneBot, options: OneBot.Options<'ws'>) {
                     bot.logger.info(`receive:${JSON.stringify(event.message)}`)
                 }
             }
-            bot.adapter.dispatch(event.type, bot.createSession(event.type, event))
+            if(event.echo){
+                bot.adapter.dispatch('echo', event)
+            }else{
+                bot.adapter.dispatch(event.type, bot.createSession(event.type, event))
+            }
         }
     })
     bot.sendPayload = function (payload) {
@@ -146,14 +158,16 @@ export function createWsReverseHandler(bot: OneBot, options: OneBot.Options<'ws_
         bot.logger.info(`已连接到协议端：(${getReqIp(req)})`)
         ws.on('message', (data) => {
             const event = JSON.parse(data.toString())
-            if (event && event.type) {
+            if(!['heartbeat','status_update','connect'].includes(event.detail_type)) {
+                bot.logger.debug('receive:',JSON.stringify(event))
                 bot.self_id=event.self_id
-                if(!['heartbeat','status_update','connect'].includes(event.detail_type)) {
-                    bot.logger.debug('receive:',JSON.stringify(event))
-                    if(event.type==='message'){
-                        bot.logger.info(`receive:${JSON.stringify(event.message)}`)
-                    }
+                if(event.type==='message'){
+                    bot.logger.info(`receive:${JSON.stringify(event.message)}`)
                 }
+            }
+            if(event.echo){
+                bot.adapter.dispatch('echo', event)
+            }else{
                 bot.adapter.dispatch(event.type, bot.createSession(event.type, event))
             }
         })

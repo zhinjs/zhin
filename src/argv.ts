@@ -1,10 +1,14 @@
 import {Bot, SegmentElem, Segment, Bots} from "@/bot";
 import {Session} from "@/session";
+import {TriggerSessionMap} from "@/command";
+import {Adapters} from "@/adapter";
+import {App} from "@/app";
 
-export interface Argv<A extends any[] = any[], O = {}> {
+export interface Argv<A extends any[] = any[], O = {},T extends keyof TriggerSessionMap=keyof TriggerSessionMap> {
     name?:string//指令名称
     argv?:SegmentElem[][]
-    session:Session
+    session:TriggerSessionMap[T]
+    atMe?:boolean
     bot?:Bot<keyof Bots,any,any,string|number>
     segments?: SegmentElem[]//原文
     args?: A//携带的args
@@ -15,6 +19,8 @@ export interface Argv<A extends any[] = any[], O = {}> {
 
 export namespace Argv{
     export interface Domain {
+        any: SegmentElem[]
+        text:string
         string: string
         mention: ReturnType<Segment['mention']>
         face: ReturnType<Segment['face']>
@@ -24,7 +30,6 @@ export namespace Argv{
         image: ReturnType<Segment['image']>
         number: number
         boolean: boolean
-        text: SegmentElem[]
         integer: number
         date: Date,
         regexp:RegExp
@@ -76,12 +81,23 @@ export namespace Argv{
     export function createDomain<K extends keyof Domain>(name: K, transform: Transform<Domain[K]>, options?: DomainConfig<Domain[K]>) {
         typeTransformer[name] = { ...options, transform }
     }
+    createDomain('any', source => source, { greedy: true })
     createDomain('string', (source) => {
         const textElem=source.find(s=>s.type==='text')
         if(textElem) return textElem.data['text']
         throw new Error('无效的文本')
     })
-    createDomain('text', source => source, { greedy: true })
+    createDomain('text', (source) => {
+        let result:string=''
+        for(const elem of source){
+            if(elem.type==='text'){
+                result+=elem.data['text']
+            }else{
+                break;
+            }
+        }
+        return result
+    })
     createDomain('boolean', () => true)
     createDomain('mention', (source) => {
         const elem=source.find(s=>s.type==='mention')
@@ -132,10 +148,24 @@ export namespace Argv{
     interface DeclarationList extends Array<Declaration> {
         stripped: string
     }
-    export function parse(content:SegmentElem[]):Partial<Argv>{
+    export function parse<P extends keyof Adapters,E extends keyof App.BotEventMaps[P]>(content:SegmentElem[],session:Session<P,E>):Argv|void{
         let argv:SegmentElem[][]=[]
+        const atMe=session.isAtMe();
+        const saveSession=session.segments===content
         let argvItem:SegmentElem[]=[]
-        content.forEach(segment=>{
+        for(const segment of content){
+            const idx=content.indexOf(segment)
+            if(idx===0){
+                if(session.bot.options.prefix && (segment.type!=='text' || !segment.data['text'].startsWith(session.bot.options.prefix)) && !atMe){
+                    return
+                }else if(atMe && saveSession){
+                    continue
+                }else if(saveSession){
+                    segment.data['text']=segment.data['text'].replace(session.bot.options.prefix,'')
+                }
+            }else if(atMe && idx===1 && segment.type!=='text' && saveSession){
+                segment.data['text']=segment.data['text'].trim()
+            }
             if(segment.type!=='text') argvItem.push(segment)
             else {
                 // 结束引号标识
@@ -166,7 +196,7 @@ export namespace Argv{
                     }
                 })
             }
-        })
+        }
         if(argvItem.length) argv.push([...argvItem])
         argv=argv.filter(sArr=>{
             return sArr.filter(s=>{
@@ -176,9 +206,12 @@ export namespace Argv{
             if(sArr.every(s=>s.type==='text')) return [{type:'text',data:{text:sArr.map(s=>s.data['text']).join('')}}]
             return sArr
         })
-        const first=argv.shift()[0]
+        const first=argv.length?argv.shift()[0]:{type:'text',data:{text:''}}
         return {
             name:first.data['text']||'',
+            bot:session.bot,
+            atMe,
+            session:session as any,
             argv,
             segments:content
         }

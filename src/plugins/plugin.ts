@@ -5,9 +5,9 @@ export const name = 'pluginManage'
 export function install(ctx: Context) {
     const command = ctx.command('plugin')
         .desc('插件管理')
-    command.subcommand('plugin.list')
+    command.subcommand('plugin.list',"group")
         .desc('显示插件列表')
-        .action(() => {
+        .action(({session}) => {
             return ctx.app.getCachedPluginList().map((plugin, idx) => {
                 return `${idx + 1}. 插件名：${plugin.fullName}${ctx.app.hasInstall(plugin.fullName) ? ' (已安装)' : ''} ${plugin.type}`
             }).join('\n')

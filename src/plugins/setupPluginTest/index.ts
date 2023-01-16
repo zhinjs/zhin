@@ -1,11 +1,7 @@
 import {useContext} from "@";
-const context=useContext()
-context.on('oicq.message',(e)=>{
-    e.reply('hello world')
-})
-context.on('oicq.request.group',(e)=>{
-    e.approve(true)
-})
-context.on('onebot.message',(e)=>{
-    e.bot.reply('123')
-})
+import './sub'
+const ctx=useContext()
+ctx.plugin('./sub2')
+ctx.command('send <msessage>')
+.desc('发送指定消息')
+.action((_,msg)=>msg)

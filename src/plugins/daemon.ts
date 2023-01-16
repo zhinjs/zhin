@@ -54,7 +54,7 @@ export function install(ctx:Context, config:DaemonConfig={}){
         }
     }
     process.on('message', handleMessage)
-    ctx['disposes'].push(()=>{
+    ctx.on('dispose',()=>{
         process.off('SIGINT',handleSignal)
         process.off('SIGTERM',handleSignal)
         process.off('message',handleMessage)

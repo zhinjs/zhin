@@ -33,9 +33,17 @@ export class OneBot extends EventEmitter implements Bot<
     }
     private async runAction<T extends keyof Types.ActionMap>(action:T,params?:Parameters<Types.ActionMap[T]>[0]):Promise<ReturnType<Types.ActionMap[T]>>{
         return new Promise(resolve => {
+            const echo=new Date().getTime()
             this.sendPayload({
                 action,
+                echo,
                 params
+            })
+            const dispose=this.adapter.on('echo',(payload)=>{
+                if(payload.echo===echo){
+                    resolve(payload.data)
+                    dispose()
+                }
             })
         })
     }

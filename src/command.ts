@@ -3,7 +3,8 @@ import {Awaitable, Define} from "@/types";
 import {Sendable} from "@/bot";
 import {isEmpty, keys} from "lodash";
 import {App} from "@/app";
-import {Session} from "@/session";
+import {Session, PayloadWithSession} from "@/session";
+import {Adapters} from "@/adapter";
 interface HelpOptions{
     showHidden?:boolean
     showAuth?:boolean
@@ -11,17 +12,22 @@ interface HelpOptions{
     current?:number
     simple?:boolean
 }
-export class Command<A extends any[] = any[], O extends {} = {}>{
+export interface TriggerSessionMap{
+    group:PayloadWithSession<keyof Adapters,'message.group'>
+    private:PayloadWithSession<keyof Adapters,'message.private'>
+}
+export class Command<A extends any[] = any[], O extends {} = {},T extends keyof TriggerSessionMap=keyof TriggerSessionMap>{
     public name:string
     args:Argv.Declaration[]
     app:App
+    trigger?:T
     parent:Command=null
     children:Command[]=[]
     descriptions:string[]=[]
     shortcuts:Command.Shortcut[]=[]
     authorities:Command.Authority[]=[]
-    private checkers:Command.Callback<A,O>[]=[]
-    private callback:Command.Callback<A,O>[]=[]
+    private checkers:Command.Callback<A,O,T>[]=[]
+    private callback:Command.Callback<A,O,T>[]=[]
     public examples:string[]=[]
     public aliasNames:string[]=[]
     public options:Record<string, Command.OptionConfig>={}
@@ -45,7 +51,7 @@ export class Command<A extends any[] = any[], O extends {} = {}>{
         return this
     }
     // 添加验证回调函数
-    check(checker:Command.Callback<A,O>){
+    check(checker:Command.Callback<A,O,T>){
         this.checkers.push(checker)
         return this
     }
@@ -55,14 +61,14 @@ export class Command<A extends any[] = any[], O extends {} = {}>{
         return this
     }
     // 定义子指令
-    subcommand<D extends string>(def: D): Command<Argv.ArgumentType<D>> {
-        const command=this.app.command(def)
+    subcommand<D extends string,T extends keyof TriggerSessionMap>(def: D,trigger?:T): Command<Argv.ArgumentType<D>,{},T> {
+        const command=this.app.command(def,trigger)
         command.parent=this
         this.children.push(command)
         return command
     }
-    match(session:Session){
-        return true
+    match(session:Session<keyof Adapters,`message.${T}`>){
+        return (!this.trigger) || session.detail_type===this.trigger
     }
     // 定义别名
     alias(...name:string[]){
@@ -108,7 +114,7 @@ export class Command<A extends any[] = any[], O extends {} = {}>{
         return Object.create(this)
     }
     // 添加执行的操作
-    action(callback:Command.Callback<A,O>){
+    action(callback:Command.Callback<A,O,T>){
         this.callback.push(callback)
         return this
     }
@@ -209,7 +215,7 @@ export class Command<A extends any[] = any[], O extends {} = {}>{
         return {args,options}
     }
     // 执行指令
-    async execute(argv:Argv<A, O>):Promise<Sendable|boolean|void>{
+    async execute(argv:Argv<A, O,T>):Promise<Sendable|boolean|void>{
         // 匹配参数、选项
         this.parseShortcut(argv)
         if(argv.error){
@@ -293,8 +299,8 @@ export namespace Command{
         description?:string
         declaration?:Argv.Declaration
     }
-    export type Callback<A extends any[] = any[], O extends {} = {},>
-        = (this:Command<A,O>,argv:Argv<A,O>, ...args: A) => Awaitable<Sendable|boolean|void>
+    export type Callback<A extends any[] = any[], O extends {} = {},T extends keyof TriggerSessionMap=keyof TriggerSessionMap>
+        = (this:Command<A,O,T>,argv:Argv<A,O,T>, ...args: A) => Awaitable<Sendable|boolean|void>
     export type Authority='master'|'admins'
     export type OptionType<S extends string> = Argv.ExtractFirst<Argv.Replace<S, '>', ']'>, any>
     export function removeDeclarationArgs(name: string): string {
@@ -307,7 +313,7 @@ export namespace Command{
         const BOOLEAN_BRACKET_RE_GLOBAL=/(-\S)+/g
         const parse = (match: string[]) => {
             let variadic = false;
-            let [value,type=match[1].startsWith('-')?'boolean':'string'] = match[1].split(':');
+            let [value,type=match[1].startsWith('-')?'boolean':'any'] = match[1].split(':');
             if (value.startsWith('...')) {
                 value = value.slice(3)
                 variadic = true
