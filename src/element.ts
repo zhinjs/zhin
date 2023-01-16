@@ -358,6 +358,7 @@ namespace Element {
 
     export const text = createFactory<[content: any]>('text', 'text')
     export const mention = createFactory<[user_id: any]>('mention', 'user_id','text')
+    export const face = createFactory<[user_id: any]>('face', 'id','text')
     export const sharp = createFactory<[id: any]>('sharp', 'id')
     export const quote = createFactory<[id: any]>('quote', 'id')
     export const image = createAssetFactory('image')

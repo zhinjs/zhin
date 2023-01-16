@@ -133,7 +133,6 @@ export class App extends Context {
                 if(Segment.isSegment(element)){
                     return Segment.stringify([element])
                 }else{
-                    console.log(element,element.type==='text')
                     return element.type==='text'?Segment.stringify([{
                         type:'text',
                         data:{
