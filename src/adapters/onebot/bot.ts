@@ -58,13 +58,13 @@ export class OneBot extends EventEmitter implements Bot<
     reply(session: Session<'onebot'>, message: Sendable, quote?: boolean){
         switch (session.detail_type){
             case 'private':
-                return this.sendMsg(String(session.user_id),'user',message)
+                return this.sendMsg(String(session.user_id),'user',message,quote?session:undefined)
             case 'group':
-                return this.sendMsg(String(session.group_id),'group',message)
+                return this.sendMsg(String(session.group_id),'group',message,quote?session:undefined)
             case 'discuss':
-                return this.sendMsg(String(session.discuss_id),'discuss',message)
+                return this.sendMsg(String(session.discuss_id),'discuss',message,quote?session:undefined)
             case 'channel':
-                return this.sendMsg(String(session.guild_id),String(session.channel_id),message)
+                return this.sendMsg(String(session.guild_id),String(session.channel_id),message,quote?session:undefined)
         }
     }
     deleteMsg(message_id:string){
@@ -88,7 +88,7 @@ export class OneBot extends EventEmitter implements Bot<
     getGroupMemberInfo(group_id:string,member_id){
         return this.runAction('get_group_member_info',{group_id,member_id})
     }
-    sendMsg(target_id: string, target_type: string, message: Sendable){
+    sendMsg(target_id: string, target_type: string, message: Sendable,quote?:Session){
         const types= ['user','group','discuss']
         if(typeof message!=='object'){
             message={
@@ -97,6 +97,15 @@ export class OneBot extends EventEmitter implements Bot<
             }
         }
         if(!Array.isArray(message))message=[message]
+        if(quote){
+            message.unshift({
+                type:'reply',
+                data:{
+                    user_id:String(quote.user_id),
+                    message_id:quote['message_id']
+                }
+            })
+        }
         return this.runAction('send_message',{
             guild_id:types.includes(target_type)?undefined:target_id,
             channel_id:types.includes(target_type)?undefined:target_type,

@@ -5,9 +5,11 @@ import {Middleware} from "@/middleware";
 import {Command, TriggerSessionMap} from "@/command";
 import {PayloadWithSession} from "@/session";
 import {EventEmitter} from "events";
-import {getCaller, remove} from "@/utils";
+import {remove} from "@/utils";
 import {Argv} from "@/argv";
 import * as path from "path";
+import {Dict} from "@/types";
+import {Component} from "@/component";
 export interface Plugins{
     help:Plugin<null>
     logs:Plugin<null>
@@ -48,6 +50,7 @@ export class Context<T=any> extends EventEmitter{
     functional:boolean=false
     fullPath:string
     plugins:Map<string,Plugin>=new Map<string, Plugin>()
+    public components: Dict<Component> = Object.create(null)
     middlewares:Middleware<PayloadWithSession<keyof Adapters,'message'>>[]=[]
     private disposes:Dispose[]=[]
     app:App
@@ -80,11 +83,31 @@ export class Context<T=any> extends EventEmitter{
         this.protocol=Array.from(new Set<keyof Adapters>([...this.protocol,...scope]))
         return this
     }
+    component(name: string, component: Component, options: Component.Options = {}) {
+        this.components[name] = async (attrs, children, session) => {
+            if (options.session && session.type === 'send') {
+                throw new Error('interactive components is not available outside sessions')
+            }
+            if (!options.passive) {
+                children = await session.transform(children)
+            }
+            return component(attrs, children, session)
+        }
+        return Dispose.from(this,()=>{
+            delete this.components[name]
+        })
+    }
     get middlewareList(){
         return [...this.plugins.values()].reduce((result,plugin)=>{
             result.push(...plugin.middlewareList)
             return result
         },[...this.middlewares])
+    }
+    get componentList(){
+        return [...this.plugins.values()].reduce((result,plugin)=>{
+            Object.assign(result,plugin.componentList)
+            return result
+        },this.components)
     }
     get commandList():Command[] {
         return [...this.plugins.values()].reduce((result,plugin)=>{

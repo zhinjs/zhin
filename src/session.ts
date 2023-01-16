@@ -2,6 +2,7 @@ import {Adapters} from "@/adapter";
 import {Bot, Bots, SegmentElem, Sendable} from "@/bot";
 import {App} from "@/app";
 import {Argv} from "@/argv";
+import Element from '@/element'
 import {Middleware} from "@/middleware";
 import {Prompt} from "@/prompt";
 import {Dict} from "@/types";
@@ -42,7 +43,6 @@ export class Session<P extends keyof Adapters = keyof Adapters,E extends keyof A
     }
 
     middleware(middleware: Middleware<Session>, timeout: number = this.app.options.delay.prompt) {
-        console.log(timeout,999999)
         return new Promise<void | boolean | Sendable>(resolve => {
             const dispose = this.app.middleware(async (session, next) => {
                 if (Bot.getFullTargetId(this as any) !== Bot.getFullTargetId(session)) await next()
@@ -78,8 +78,10 @@ export class Session<P extends keyof Adapters = keyof Adapters,E extends keyof A
         const result = await command.execute(argv)
         if (!result || typeof result === 'boolean') return
         if (Array.isArray(result) && !result.length) return
-        await this.reply(result)
-        return true
+        return result
+    }
+    async transform(elements: Element[]): Promise<Element[]> {
+        return await Element.transformAsync(elements, this.app.getSupportComponents(this as any), this as any)
     }
 
     toJSON() {

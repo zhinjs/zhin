@@ -3,6 +3,7 @@ import * as fs from 'fs'
 import {get,unset,set,mapValues} from "lodash";
 import {segmentsToString} from "@/adapters/oicq";
 import {Context} from "@/context";
+import {Segment} from "@";
 function protectkeys(obj:Record<string, any>,keys:string[]){
     if(!obj || typeof obj!=='object') return obj
     return mapValues(obj,(value,key)=>{

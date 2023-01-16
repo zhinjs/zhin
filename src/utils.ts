@@ -5,6 +5,7 @@ import * as fs from "fs";
 import CallSite = NodeJS.CallSite;
 import {networkInterfaces} from "os";
 import {IncomingMessage} from "http";
+import lodash from "lodash";
 const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 const lookup = new Uint8Array(256);
 
@@ -140,6 +141,40 @@ export function omit<T, K extends keyof T>(source: T, keys?: Iterable<K>) {
         Reflect.deleteProperty(result, key)
     }
     return result
+}
+
+const mCQInside = {
+    "&": "&amp;",
+    ",": "&#44;",
+    "[": "&#91;",
+    "]": "&#93;",
+};
+export function qs(text:string, sep = ",", equal = "="){
+    const ret:Record<string, any> = {};
+    text.split(sep).forEach((c) => {
+        const i = c.indexOf(equal);
+        if (-1 === i) {
+            return;
+        }
+        ret[c.substring(0, i)] = c
+            .substring(i + 1)
+            .replace(new RegExp(Object.values(mCQInside).join("|"), "g"), (s) => lodash.invert(mCQInside)[s] || "");
+    });
+    for (const k in ret) {
+        try {
+            if ("text" !== k) {
+                ret[k] = JSON.parse(ret[k]);
+            }
+        }
+        catch (e) {
+            // do nothing
+        }
+    }
+    return ret;
+}
+export function is<K extends keyof typeof globalThis>(type: K, value: any): value is InstanceType<typeof globalThis[K]> {
+    return type in globalThis && value instanceof (globalThis[type] as any)
+        || Object.prototype.toString.call(value).slice(8, -1) === type
 }
 export function getPackageInfo(filepath:string){
     const fileDir = path.dirname(filepath)

@@ -25,12 +25,14 @@ import {Dict} from "@/types";
 import {Context, Plugin, Plugins} from "@/context";
 import Koa from "koa";
 import {Adapter, AdapterOptionsType, Adapters} from "@/adapter";
-import {Bots, Sendable} from "@/bot";
+import {Bots, Segment, Sendable} from "@/bot";
 import {OicqEventMap} from './adapters/oicq'
 import {Session} from "@/session";
 import {Middleware} from "@/middleware";
 import {Dispose} from "@/dispose";
 import {Router} from "@/router";
+import {Component} from "@/component";
+import Element from "@/element";
 
 interface Message {
     type: 'start' | 'queue'
@@ -126,8 +128,24 @@ export class App extends Context {
             server.close()
         })
         this.middleware(async (session,next) => {
+            const elements= await session.transform(Element.parse(Segment.stringify(session.segments)))
+            session.segments=Segment.parse(elements.map((element)=>{
+                if(Segment.isSegment(element)){
+                    return Segment.stringify([element])
+                }else{
+                    console.log(element,element.type==='text')
+                    return element.type==='text'?Segment.stringify([{
+                        type:'text',
+                        data:{
+                            text:element.toString()
+                        }
+                    }]):element.toString()
+                }
+            }).join(''));
             const result=await session.execute()
-            if(!result)await next()
+            if(!result) return next()
+            return session.reply(result)
+
         })
         return new Proxy(this, {
             get(target: typeof _this, p: string | symbol, receiver: any): any {
@@ -330,6 +348,12 @@ export class App extends Context {
         return this.pluginList.filter(plugin=>{
             return plugin.protocol===undefined || plugin.protocol.length===0 || plugin.protocol.includes(protocol)
         })
+    }
+    getSupportComponents(session:Session<keyof Adapters>){
+        return this.getSupportPlugins(session.protocol).reduce((result:Dict<Component>,plugin)=>{
+            Object.assign(result,plugin.componentList)
+            return result
+        },this.components)
     }
     getSupportMiddlewares(session:Session<keyof Adapters>){
         return this.getSupportPlugins(session.protocol).reduce((result:Middleware<Session>[],plugin)=>{
