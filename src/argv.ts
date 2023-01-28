@@ -1,15 +1,14 @@
-import {Bot, SegmentElem, Segment, Bots} from "@/bot";
-import {Session} from "@/session";
-import {TriggerSessionMap} from "@/command";
-import {Adapters} from "@/adapter";
-import {App} from "@/app";
+import {Bot, SegmentElem, Segment} from "./bot";
+import {Session} from "./session";
+import {TriggerSessionMap} from "./command";
+import {Zhin} from "./zhin";
 
 export interface Argv<A extends any[] = any[], O = {},T extends keyof TriggerSessionMap=keyof TriggerSessionMap> {
     name?:string//指令名称
     argv?:SegmentElem[][]
     session:TriggerSessionMap[T]
     atMe?:boolean
-    bot?:Bot<keyof Bots,any,any,string|number>
+    bot?:Bot<keyof Zhin.Bots,any,any,string|number>
     segments?: SegmentElem[]//原文
     args?: A//携带的args
     options?: O//携带的options
@@ -148,7 +147,7 @@ export namespace Argv{
     interface DeclarationList extends Array<Declaration> {
         stripped: string
     }
-    export function parse<P extends keyof Adapters,E extends keyof App.BotEventMaps[P]>(content:SegmentElem[],session:Session<P,E>):Argv|void{
+    export function parse<P extends keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P]>(content:SegmentElem[],session:Session<P,E>):Argv|void{
         let argv:SegmentElem[][]=[]
         const atMe=session.isAtMe();
         const saveSession=session.segments===content

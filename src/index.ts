@@ -1,6 +1,6 @@
 export * from './argv'
 export * from './bot'
-export * from './app'
+export * from './zhin'
 export * from './adapter'
 export * from './session'
 export * from './command'

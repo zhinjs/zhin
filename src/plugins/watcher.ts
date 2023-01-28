@@ -1,11 +1,13 @@
 import {FSWatcher, watch} from 'chokidar'
-import {App} from "@/app";
+import {Zhin} from "@/zhin";
 import * as fs from 'fs';
 import * as Yaml from 'js-yaml'
 import * as path from "path";
 import {Context,Plugin} from "@/context";
+import {Schema} from "@zhinjs/schema";
 export const name='pluginWatcher'
-export function install(ctx:Context, root:string){
+export const config=Schema.string().required().desc('监听路径')
+export function install(ctx:Context, root:ReturnType<typeof config>){
     function reloadDependency(plugin: Plugin,changeFile:string){
         const options=ctx.app.options.plugins[plugin.name]
         try {
@@ -42,7 +44,7 @@ export function install(ctx:Context, root:string){
     watcher.on('change', (filename) => {
         const changeFileName=path.resolve(process.cwd(),filename)
         if(path.resolve(process.env.configPath)===changeFileName){
-            const newOptions:App.Options=Yaml.load(fs.readFileSync(process.env.configPath,"utf8")) as any
+            const newOptions:Zhin.Options=Yaml.load(fs.readFileSync(process.env.configPath,"utf8")) as any
             ctx.app.changeOptions(newOptions)
         }else{
             const plugins=ctx.app.pluginList.filter(p=>filename.includes(p.fullPath))

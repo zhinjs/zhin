@@ -1,7 +1,7 @@
-import {arrayBufferToBase64, camelize, hyphenate, interpolate, is, isNullable, makeArray} from "@/utils";
-import {Awaitable, Dict} from "@/types";
-import {Segment, SegmentElem} from "@/bot";
-import {Fragment} from "@/element";
+import {arrayBufferToBase64, camelize, hyphenate, interpolate, is, isNullable, makeArray} from "./utils";
+import {Awaitable, Dict} from "./types";
+import {Segment, SegmentElem} from "./bot";
+import {Fragment} from "./element";
 
 interface Element {
     [Element.key]: true

@@ -1,8 +1,8 @@
-import {Adapter, AdapterOptions, App} from "@";
+import {Adapter, AdapterOptions, Zhin} from "@";
 import {OneBot} from "@/adapters/onebot/bot";
 
 export class OneBotAdapter<T extends keyof OneBotAdapter.AdapterOptions=keyof OneBotAdapter.AdapterOptions> extends Adapter<`onebot`,OneBot.Options<T>,OneBotAdapter.Options>{
-    constructor(app:App, protocol, options:AdapterOptions<OneBot.Options<T>,OneBotAdapter.Options>) {
+    constructor(app:Zhin, protocol, options:AdapterOptions<OneBot.Options<T>,OneBotAdapter.Options>) {
         super(app,protocol,options);
     }
     async start(){
@@ -30,6 +30,7 @@ export namespace OneBotAdapter{
         ws:{
             self_id:string
             url:string
+            reconnect_interval?:number
             access_token?:string
         }
         ws_reverse:{

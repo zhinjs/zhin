@@ -1,5 +1,5 @@
 // 深合并
-import {Dict, PackageJson} from "@/types";
+import {Dict, PackageJson} from "./types";
 import * as path from "path";
 import * as fs from "fs";
 import CallSite = NodeJS.CallSite;
@@ -149,6 +149,43 @@ const mCQInside = {
     "[": "&#91;",
     "]": "&#93;",
 };
+type MergeType<B={},N={}>={
+    [P in keyof B|keyof N]:P extends keyof N?N[P]:P extends keyof B?B[P]:unknown
+}
+type MergedClass<T extends new (...args:any[])=>any,O extends new (...args:any[])=>any>= T extends new (...args:infer A)=>infer L ?
+    O extends new (...args:any[])=>infer R ? new (...args:[...A,...any[]])=> MergeType<L,R>:
+        new (...args:any[])=> L: T
+type MergedManyClass<T extends new (...args:any[])=>any,O extends any[]>=O extends [infer L,...infer R] ?
+    L extends new (...args:any[])=>any ?
+        MergedManyClass<MergedClass<T,L>, R> :
+        MergedManyClass<T, R> :
+    T
+export function Mixin<T extends new (...args:any[])=>any,O extends (new (...args:any[])=>any)[]>(base:T,...classes:O):MergedManyClass<T,O>{
+    if(!classes.length) return base as MergedManyClass<T, O>
+    function copyProperties(target, source,skipName=false) {
+        for (let key of Reflect.ownKeys(source)) {
+            if ( key !== 'constructor'&& key !== 'prototype'){
+                if(skipName  && key == 'name') continue
+                let desc = Object.getOwnPropertyDescriptor(source, key);
+                Object.defineProperty(target, key, desc);
+            }
+        }
+    }
+    class Mix {
+        constructor(...args:any[]) {
+            for (let _class of [base,...classes]) {
+                // this 指向子类Benz实例
+                copyProperties(this, new _class(...args)); // 拷贝实例属性
+            }
+        }
+    }
+
+    for (let mixin of [base,...classes]) {
+        copyProperties(Mix, mixin,true); // 拷贝静态属性
+        copyProperties(Mix.prototype, mixin.prototype); // 拷贝原型属性
+    }
+    return Mix as MergedManyClass<T, O>
+}
 export function qs(text:string, sep = ",", equal = "="){
     const ret:Record<string, any> = {};
     text.split(sep).forEach((c) => {
@@ -263,7 +300,6 @@ export function capitalize(source: string) {
     return source.charAt(0).toUpperCase() + source.slice(1)
 }
 
-// eslint-disable-next-line no-new-func
 export const interpolate = new Function('template', 'context', 'pattern', `
   return template.replace(pattern || /\\{\\{([\\s\\S]+?)\\}\\}/g, (_, expr) => {
     try {
@@ -532,10 +568,6 @@ export namespace Time {
         }
     }
 }
-
-/**
- * random operations
- */
 export class Random {
     constructor(private value = Math.random()) {
     }
@@ -545,13 +577,6 @@ export class Random {
         if (probability <= 0) return false
         return this.value < probability
     }
-
-    /**
-     * random real
-     * @param start start number
-     * @param end end number
-     * @returns a random real in the interval [start, end)
-     */
     real(end: number): number
     real(start: number, end: number): number
     real(...args: [number, number?]): number {
@@ -559,13 +584,6 @@ export class Random {
         const end = args[args.length - 1]
         return this.value * (end - start) + start
     }
-
-    /**
-     * random integer
-     * @param start start number
-     * @param end end number
-     * @returns a random integer in the interval [start, end)
-     */
     int(end: number): number
     int(start: number, end: number): number
     int(...args: [number, number?]): number {
@@ -601,25 +619,11 @@ export namespace Random {
         }
         return result
     }
-
-    /**
-     * random real
-     * @param start start number
-     * @param end end number
-     * @returns a random real in the interval [start, end)
-     */
     export function real(end: number): number
     export function real(start: number, end: number): number
     export function real(...args: [number, number?]): number {
         return new Random().real(...args)
     }
-
-    /**
-     * random integer
-     * @param start start number
-     * @param end end number
-     * @returns a random integer in the interval [start, end)
-     */
     export function int(end: number): number
     export function int(start: number, end: number): number
     export function int(...args: [number, number?]): number {

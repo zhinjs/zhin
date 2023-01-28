@@ -1,4 +1,4 @@
-import {createApp} from "@/app";
+import {createZhin} from "./zhin";
 import {resolve} from 'path'
 process.on('unhandledRejection',(e)=>{
     console.error(e)
@@ -6,8 +6,8 @@ process.on('unhandledRejection',(e)=>{
 process.on('uncaughtException',(e)=>{
     console.error(e)
 })
-createApp(process.env.configPath||resolve(process.cwd(),'zhin.yaml')).start()
-createApp({
+createZhin(process.env.configPath||resolve(process.cwd(),'zhin.yaml')).start()
+createZhin({
     protocols:{
         onebot:{
             bots:[]

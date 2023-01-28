@@ -1,18 +1,16 @@
-import {Adapters} from "@/adapter";
-import {Bot, Bots, SegmentElem, Sendable} from "@/bot";
-import {App} from "@/app";
-import {Argv} from "@/argv";
-import Element from '@/element'
-import {Middleware} from "@/middleware";
-import {Prompt} from "@/prompt";
-import {Dict} from "@/types";
+import {Bot, Segment, SegmentElem, Sendable} from "./bot";
+import {Zhin} from "./zhin";
+import {Argv} from "./argv";
+import Element from './element'
+import {Middleware} from "./middleware";
+import {Prompt} from "./prompt";
+import {Dict} from "./types";
 
 export type FunctionPayloadWithSessionObj<E extends (...args: any[]) => any> = E extends (...args: infer R) => any ? ParametersToObj<R> : unknown
 export type ParametersToObj<A extends any[]> = A extends [infer R, ...infer L] ? R & R extends object ? R & { args: L } : { args: [R, ...L] } : Dict
 
-export interface Session<P extends keyof Adapters = keyof Adapters,E extends keyof App.BotEventMaps[P] = keyof App.BotEventMaps[P]> {
+export interface Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P] = keyof Zhin.BotEventMaps[P]> {
     protocol: P,
-    post_type?: string
     type?: string
     user_id?: string | number
     group_id?: string | number
@@ -20,25 +18,27 @@ export interface Session<P extends keyof Adapters = keyof Adapters,E extends key
     channel_id?: string | number
     guild_id?: string | number
     detail_type?: string
-    app: App
+    app: Zhin
     prompt: Prompt
     segments: SegmentElem[]
-    adapter: Adapters[P],
-    bot: Bots[P]
+    content:string
+    adapter: Zhin.Adapters[P],
+    bot: Zhin.Bots[P]
     event: E
 }
 
-export type PayloadWithSession<P extends keyof Adapters = keyof Adapters,E extends keyof App.BotEventMaps[P] = keyof App.BotEventMaps[P]> =
+export type PayloadWithSession<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P] = keyof Zhin.BotEventMaps[P]> =
     Session<P, E>
-    & FunctionPayloadWithSessionObj<App.BotEventMaps[P][E]>
+    & FunctionPayloadWithSessionObj<Zhin.BotEventMaps[P][E]>
 
-export class Session<P extends keyof Adapters = keyof Adapters,E extends keyof App.BotEventMaps[P] = keyof App.BotEventMaps[P]> {
-    constructor(public adapter: Adapters[P], self_id, public event: E, obj: FunctionPayloadWithSessionObj<App.BotEventMaps[P][E]>) {
+export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P] = keyof Zhin.BotEventMaps[P]> {
+    constructor(public adapter: Zhin.Adapters[P], self_id, public event: E, obj: FunctionPayloadWithSessionObj<Zhin.BotEventMaps[P][E]>) {
         this.protocol = adapter.protocol as any
         this.app = adapter.app
         this.event = event
         this.bot = adapter.bots.get(self_id) as any
         Object.assign(this, obj)
+        this.content=Segment.stringify(this.segments)
         this.prompt = new Prompt(this.bot, this as any, this.app.options.delay.timeout || 6000)
     }
 

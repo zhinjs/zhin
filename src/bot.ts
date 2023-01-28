@@ -1,38 +1,37 @@
-import {App} from "@/app";
-import {Adapter, Adapters} from "@/adapter";
-import {OicqBot} from "@/adapters/oicq";
-import Element from '@/element'
-import {Session} from "@/session";
-import {OneBot} from "@/adapters/onebot/bot";
-import {qs} from '@/utils'
-
+import {Zhin} from "./zhin";
+import {Adapter} from "./adapter";
+import Element from './element'
+import {Session} from "./session";
+import {qs} from './utils'
 export type BotOptions<O={}>={
     quote_self?:boolean
     prefix?:string
     master?:string|number
     admins?:(string|number)[]
 } & O
-export interface Bot<K extends keyof Bots=keyof Bots,BO={},AO={},UT extends string|number=number>{
+export interface Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},UT extends string|number=number>{
     self_id:UT
-    startTime: number
     options:BotOptions<BO>
     adapter:Adapter<K,BO,AO>
-    app:App
+    app:Zhin
+    get stat():{
+        start_time:number
+        lost_times:number
+        recv_msg_cnt:number
+        sent_msg_cnt:number
+        msg_cnt_per_min:number
+    }
     isMaster(session:Session):boolean
     isAdmin(session: Session):boolean
     start():any
     reply(session:Session,message:Sendable,quote?:boolean):Promise<any>
     sendMsg(target_id:UT,target_type:string,message:Sendable):any
 }
-export interface Bots{
-    onebot:OneBot
-    oicq:OicqBot
-}
 export type BotConstructors={
-    [P in (keyof Adapters)]:BotConstruct
+    [P in (keyof Zhin.Adapters)]:BotConstruct
 }
 export namespace Bot{
-    export type FullTargetId=`${keyof Adapters}:${string|number}:${string}:${string|number}`
+    export type FullTargetId=`${keyof Zhin.Adapters}:${string|number}:${string}:${string|number}`
     export function getFullTargetId(session:Session):FullTargetId{
         return [
             session.adapter.protocol,
@@ -46,7 +45,7 @@ export namespace Bot{
         ].filter(Boolean).join(':') as FullTargetId
     }
     export const botConstructors:Partial<BotConstructors>={}
-    export function define<K extends keyof Adapters, BO={},AO={}>(key: K, botConstruct: BotConstruct<K,BO,AO>) {
+    export function define<K extends keyof Zhin.Adapters, BO={},AO={}>(key: K, botConstruct: BotConstruct<K,BO,AO>) {
         botConstructors[key]=botConstruct
     }
 }
@@ -66,8 +65,8 @@ export interface SegmentMap{
         content:string
     }
     reply:{
-        message_id:string
-        user_id:string
+        message_id?:string
+        user_id:string|number
     }
 }
 export type SegmentElem<K extends keyof SegmentMap=keyof SegmentMap>={
@@ -182,12 +181,27 @@ export namespace Segment{
         }
         return elems;
     }
+    function factory<K extends keyof SegmentMap>(type:K,keyMap:{[P in keyof SegmentMap[K]]?:string}={}){
+        return (obj?:string|number|Record<string, any>)=>{
+            return {
+                type,
+                data:Object.fromEntries(Object.keys(keyMap).map(key=>{
+                    return [key,obj && typeof obj==='object'?obj[keyMap[key]]:obj]
+                }))
+            } as SegmentElem<K>
+        }
+    }
+    export const image=factory('image',{file_id:'file'})
+    export const text=factory('text',{text:'text'})
+    export const at=factory('mention',{user_id:'user_id'})
+    export const face=factory('face',{id:'id'})
+    export const reply=factory('reply',{message_id:'message_id'})
 }
-export class BotList<UT extends string|number> extends Array<Bot<keyof Adapters,{},{},UT>>{
+export class BotList<UT extends string|number> extends Array<Bot<keyof Zhin.Adapters,{},{},UT>>{
     get(self_id:UT){
         return this.find(bot=>bot.self_id===self_id || bot.self_id===Number(self_id))
     }
 }
-export type BotConstruct<K extends keyof Bots=keyof Bots,BO={},AO={},UT extends string|number=string|number>={
-    new(app:App, protocol:Adapter<K,BO,AO>, options:BotOptions<BO>):Bot<K,BO,AO,UT>
+export type BotConstruct<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},UT extends string|number=string|number>={
+    new(app:Zhin, protocol:Adapter<K,BO,AO>, options:BotOptions<BO>):Bot<K,BO,AO,UT>
 }

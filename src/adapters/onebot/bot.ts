@@ -1,4 +1,4 @@
-import {Adapter, App, Bot, BotOptions, SegmentElem, Sendable, Session} from "@";
+import {Adapter, Zhin, Bot, BotOptions, SegmentElem, Sendable, Session} from "@";
 import {OneBotAdapter} from "@/adapters/onebot";
 import {OneBotPayload, Types} from './types'
 import {EventEmitter} from "events";
@@ -14,10 +14,15 @@ export class OneBot extends EventEmitter implements Bot<
     OneBotAdapter.Options,
     string>{
     self_id: string;
-    startTime: number;
-    stat:Record<string, any>={}
+    stat={
+        start_time:0,
+        lost_times:0,
+        recv_msg_cnt: 0,
+        sent_msg_cnt: 0,
+        msg_cnt_per_min:0
+    }
     logger:Logger
-    constructor(public app:App, public adapter:Adapter<'onebot',OneBot.Options<keyof OneBotAdapter.AdapterOptions>,OneBotAdapter.Options>, public options:BotOptions<OneBot.Options<keyof OneBotAdapter.AdapterOptions>>) {
+    constructor(public app:Zhin, public adapter:Adapter<'onebot',OneBot.Options<keyof OneBotAdapter.AdapterOptions>,OneBotAdapter.Options>, public options:BotOptions<OneBot.Options<keyof OneBotAdapter.AdapterOptions>>) {
         super();
         if((['http','ws']).includes(options.type)) this.self_id=options['self_id']
         this.logger=this.adapter.getLogger(options.type)

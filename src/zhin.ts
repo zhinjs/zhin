@@ -1,38 +1,39 @@
 import {join, resolve} from 'path'
 import {ref, watch} from 'obj-observer'
 import {fork, ChildProcess} from "child_process";
-import {Logger, getLogger, configure, Configuration} from "log4js";
+import {getLogger, configure, Configuration} from "log4js";
 import * as Yaml from 'js-yaml'
 import * as path from 'path'
 import * as fs from 'fs'
 import {createServer, Server} from "http";
 import KoaBodyParser from "koa-bodyparser";
 import {Proxied} from 'obj-observer/lib/deepProxy'
-import {Command} from "@/command";
-import {Argv} from "@/argv";
+import {Command} from "./command";
+import {Argv} from "./argv";
 import {
     deepClone,
     deepMerge,
     wrapExport,
-    remove,
     isBailed,
     getPackageInfo,
     deepEqual,
     getCaller,
     getIpAddress
-} from "@/utils";
-import {Dict} from "@/types";
-import {Context, Plugin, Plugins} from "@/context";
+} from "./utils";
+import {Dict} from "./types";
+import {Context, Plugin, Plugins} from "./context";
 import Koa from "koa";
-import {Adapter, AdapterOptionsType, Adapters} from "@/adapter";
-import {Bots, Segment, Sendable} from "@/bot";
-import {OicqEventMap} from './adapters/oicq'
-import {Session} from "@/session";
-import {Middleware} from "@/middleware";
-import {Dispose} from "@/dispose";
-import {Router} from "@/router";
-import {Component} from "@/component";
-import Element from "@/element";
+import {Adapter, AdapterOptionsType} from "./adapter";
+import {Segment, Sendable} from "./bot";
+import {OicqAdapter, OicqBot, OicqEventMap} from './adapters/oicq'
+import {Session} from "./session";
+import {Middleware} from "./middleware";
+import {Dispose} from "./dispose";
+import {Router} from "./router";
+import {Component} from "./component";
+import Element from "./element";
+import {OneBot} from "./adapters/onebot/bot";
+import {OneBotAdapter} from "./adapters/onebot";
 
 interface Message {
     type: 'start' | 'queue'
@@ -40,7 +41,7 @@ interface Message {
 }
 
 export type TargetType = 'group' | 'private' | 'discuss'
-export type ChannelId = `${keyof Adapters}:${string | number}:${TargetType}:${number | string}`
+export type ChannelId = `${keyof Zhin.Adapters}:${string | number}:${TargetType}:${number | string}`|`${TargetType}:${number | string}`
 let cp: ChildProcess
 
 export function isConstructor<R, T>(value: any): value is (new (...args: any[]) => any) {
@@ -49,7 +50,7 @@ export function isConstructor<R, T>(value: any): value is (new (...args: any[]) 
 
 let buffer = null, timeStart: number
 
-export function createWorker(options: App.Options | string = 'zhin.yaml') {
+export function createWorker(options: Zhin.Options | string = 'zhin.yaml') {
     if (typeof options !== 'string') fs.writeFileSync(join(process.cwd(), 'zhin.yaml'), Yaml.dump(options))
     cp = fork(join(__dirname, 'worker'), [], {
         env: {
@@ -91,20 +92,19 @@ process.on('SIGINT', () => {
     }
 })
 
-export function defineConfig(options: App.Options) {
+export function defineConfig(options: Zhin.Options) {
     return options
 }
 
 
-export class App extends Context {
+export class Zhin extends Context {
     isReady: boolean = false
-    options: App.Options
-    adapters: Map<keyof Adapters, Adapter> = new Map<keyof Adapters, Adapter>()
-    services: Map<keyof App.Services, any> = new Map<keyof App.Services, any>()
-    public logger: Logger
-    public app: App = this
+    options: Zhin.Options
+    adapters: Map<keyof Zhin.Adapters, Adapter> = new Map<keyof Zhin.Adapters, Adapter>()
+    services: Map<keyof Zhin.Services, any> = new Map<keyof Zhin.Services, any>()
+    public app: Zhin = this
 
-    constructor(options: App.Options) {
+    constructor(options: Zhin.Options) {
         super(null, null);
         if (options.logConfig) {
             configure(options.logConfig as Configuration)
@@ -156,7 +156,7 @@ export class App extends Context {
         })
     }
 
-    changeOptions(options: App.Options) {
+    changeOptions(options: Zhin.Options) {
         const changeValue = (source, key, value) => {
             if (source[key] && typeof source[key] === 'object') {
                 Object.keys(source[key]).forEach(k => {
@@ -194,8 +194,8 @@ export class App extends Context {
     }
 
 
-    pickBot<K extends keyof Bots>(protocol: K, self_id: string | number): Bots[K] {
-        return this.adapters.get(protocol).bots.get(self_id) as Bots[K]
+    pickBot<K extends keyof Zhin.Bots>(protocol: K, self_id: string | number): Zhin.Bots[K] {
+        return this.adapters.get(protocol).bots.get(self_id) as Zhin.Bots[K]
     }
 
     emit(event, ...args) {
@@ -211,7 +211,7 @@ export class App extends Context {
     }
 
 
-    getLogger<K extends keyof Adapters>(protocol: K, self_id?: string | number) {
+    getLogger<K extends keyof Zhin.Adapters>(protocol: K, self_id?: string | number) {
         return getLogger(`[zhin:protocol-${[protocol, self_id].filter(Boolean).join(':')}]`)
     }
 
@@ -255,7 +255,7 @@ export class App extends Context {
 
 
     sendMsg(channelId: ChannelId, message: Sendable) {
-        const [protocol, self_id, targetType, targetId] = channelId.split(':') as [keyof Adapters, `${string | number}`, TargetType, `${string | number}`]
+        const [protocol, self_id, targetType, targetId] = channelId.split(':') as [keyof Zhin.Adapters, `${string | number}`, TargetType, `${string | number}`]
         const adapter = this.adapters.get(protocol)
         const bot = adapter.bots.get(self_id)
         return bot.sendMsg(targetId, targetType, message)
@@ -266,7 +266,7 @@ export class App extends Context {
         this.plugin(plugin, options)
         return this
     }
-    broadcast<P extends keyof Adapters, E extends keyof App.BotEventMaps[P]>(event: string, session: Session<P, E>){
+    dispatch<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P]>(event: string, session: Session<P, E>){
         this.emit(event,session)
         for(const plugin of this.getSupportPlugins(session.protocol)){
             plugin.emit(event,session)
@@ -343,18 +343,18 @@ export class App extends Context {
             fullPath: getListenDir(resolved)
         } as any
     }
-    getSupportPlugins(protocol:keyof Adapters){
+    getSupportPlugins(protocol:keyof Zhin.Adapters){
         return this.pluginList.filter(plugin=>{
             return plugin.protocol===undefined || plugin.protocol.length===0 || plugin.protocol.includes(protocol)
         })
     }
-    getSupportComponents(session:Session<keyof Adapters>){
+    getSupportComponents(session:Session<keyof Zhin.Adapters>){
         return this.getSupportPlugins(session.protocol).reduce((result:Dict<Component>,plugin)=>{
             Object.assign(result,plugin.componentList)
             return result
         },this.components)
     }
-    getSupportMiddlewares(session:Session<keyof Adapters>){
+    getSupportMiddlewares(session:Session<keyof Zhin.Adapters>){
         return this.getSupportPlugins(session.protocol).reduce((result:Middleware<Session>[],plugin)=>{
             result.push(...plugin.middlewareList)
             return result
@@ -381,7 +381,7 @@ export class App extends Context {
     async start() {
         for (const adapter of Object.keys(this.options.adapters || {})) {
             try {
-                this.adapter(adapter as keyof Adapters, this.options.adapters[adapter])
+                this.adapter(adapter as keyof Zhin.Adapters, this.options.adapters[adapter])
             } catch (e) {
                 this.logger.warn(e.message, e.stack)
             }
@@ -409,32 +409,6 @@ export class App extends Context {
         }
     }
 
-    bail(event, ...args) {
-        let result
-        const listeners = this.listeners(event)
-        if (typeof event === "string") {
-            listeners.unshift(...this.listeners(`before-${event}`))
-            listeners.push(...this.listeners(`after-${event}`))
-        }
-        for (const listener of listeners) {
-            result = listener.apply(this, args)
-            if (isBailed(result)) return result
-        }
-    }
-
-    async bailSync(event, ...args) {
-        let result
-        const listeners = this.listeners(event)
-        if (typeof event === "string") {
-            listeners.unshift(...this.listeners(`before-${event}`))
-            listeners.push(...this.listeners(`after-${event}`))
-        }
-        for (const listener of listeners) {
-            result = await listener.apply(this, args)
-            if (isBailed(result)) return result
-        }
-    }
-
     stop() {
         this.dispose()
         process.exit()
@@ -442,7 +416,15 @@ export class App extends Context {
 }
 
 
-export namespace App {
+export namespace Zhin {
+    export interface Adapters{
+        oicq:OicqAdapter
+        onebot:OneBotAdapter
+    }
+    export interface Bots{
+        onebot:OneBot
+        oicq:OicqBot
+    }
     export const key = Symbol('Zhin')
     export const Services:(keyof Services)[]=[]
     export interface Services {
@@ -516,16 +498,17 @@ export namespace App {
 
     export type BaseEventMap = Record<string, (...args: any[]) => any>
 
-    export interface BotEventMaps extends Record<keyof Adapters, BaseEventMap>{
+    export interface BotEventMaps extends Record<keyof Zhin.Adapters, BaseEventMap>{
         oicq: OicqEventMap
         onebot:BaseEventMap
+        mock:BaseEventMap
     }
 
     export interface AllEventMap<T> extends LifeCycle, BeforeEventMap<T>, AfterEventMap<T> {
     }
 
     export type AdapterConfig = {
-        [P in keyof Adapters]?: AdapterOptionsType<Adapters[P]>
+        [P in keyof Zhin.Adapters]?: AdapterOptionsType<Adapters[P]>
     }
     type PluginConfig<P extends Plugin> = P extends Plugin<infer R> ? R : unknown
     export type PluginConfigs = {
@@ -550,13 +533,13 @@ export namespace App {
     export type Keys<O extends KVMap> = O extends KVMap<infer V, infer K> ? V extends object ? `${K}.${Keys<V>}` : `${K}` : never
     export type Value<O extends KVMap, K> = K extends `${infer L}.${infer R}` ? Value<O[L], R> : K extends keyof O ? O[K] : any
 
-    export type ServiceConstructor<R, T = any> = new (bot: App, options?: T) => R
+    export type ServiceConstructor<R, T = any> = new (bot: Zhin, options?: T) => R
 }
 
-function createAppAPI() {
-    const contextMap: Map<string | symbol, App> = new Map<string | symbol, App>()
-    const createApp = (options: Partial<App.Options> | string) => {
-        if (contextMap.get(App.key)) return contextMap.get(App.key)
+function createZhinAPI() {
+    const contextMap: Map<string | symbol, Zhin> = new Map<string | symbol, Zhin>()
+    const createZhin = (options: Partial<Zhin.Options> | string) => {
+        if (contextMap.get(Zhin.key)) return contextMap.get(Zhin.key)
         if (typeof options === 'string') {
             if (!fs.existsSync(options)) fs.writeFileSync(options, Yaml.dump({
                 protocols: {
@@ -580,13 +563,13 @@ function createAppAPI() {
             }))
             options = Yaml.load(fs.readFileSync(options, {encoding: 'utf8'}))
         }
-        const app = new App(deepMerge(deepClone(App.defaultConfig), options))
-        contextMap.set(App.key, app)
+        const app = new Zhin(deepMerge(deepClone(Zhin.defaultConfig), options))
+        contextMap.set(Zhin.key, app)
         return app
     }
     const useContext = () => {
-        const app = contextMap.get(App.key)
-        if (!app) throw new Error(`can't found app with context for key:${App.key.toString()}`)
+        const app = contextMap.get(Zhin.key)
+        if (!app) throw new Error(`can't found app with context for key:${Zhin.key.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
         const context=app.pluginList.find(plugin => plugin.fullPath === pluginFullPath) as Context
@@ -614,18 +597,18 @@ function createAppAPI() {
         return result
     }
 
-    function useOptions<K extends App.Keys<App.Options>>(path: K): App.Value<App.Options, K> {
-        const app = contextMap.get(App.key)
-        if (!app) throw new Error(`can't found app with context for key:${App.key.toString()}`)
-        return getValue(app.options, path.split('.').filter(Boolean)) as App.Value<App.Options, K>
+    function useOptions<K extends Zhin.Keys<Zhin.Options>>(path: K): Zhin.Value<Zhin.Options, K> {
+        const app = contextMap.get(Zhin.key)
+        if (!app) throw new Error(`can't found app with context for key:${Zhin.key.toString()}`)
+        return getValue(app.options, path.split('.').filter(Boolean)) as Zhin.Value<Zhin.Options, K>
     }
 
     type EffectReturn = () => void
     type EffectCallBack<T = any> = (value?: T, oldValue?: T) => void | EffectReturn
 
     function useEffect<T extends object = object>(callback: EffectCallBack<T>, effect?: Proxied<T>) {
-        const app = contextMap.get(App.key)
-        if (!app) throw new Error(`can't found app with context for key:${App.key.toString()}`)
+        const app = contextMap.get(Zhin.key)
+        if (!app) throw new Error(`can't found app with context for key:${Zhin.key.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
         const plugin = app.pluginList.find(plugin => plugin.fullPath === pluginFullPath)
@@ -641,15 +624,15 @@ function createAppAPI() {
 
     }
     function onDispose(callback:Dispose){
-        const app = contextMap.get(App.key)
-        if (!app) throw new Error(`can't found app with context for key:${App.key.toString()}`)
+        const app = contextMap.get(Zhin.key)
+        if (!app) throw new Error(`can't found app with context for key:${Zhin.key.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
         const plugin = app.pluginList.find(plugin => plugin.fullPath === pluginFullPath)
         plugin.on('dispose',callback)
     }
     return {
-        createApp,
+        createZhin,
         useContext,
         useEffect,
         onDispose,
@@ -657,9 +640,9 @@ function createAppAPI() {
     }
 }
 
-const {createApp, useContext,onDispose, useEffect, useOptions} = createAppAPI()
+const {createZhin, useContext,onDispose, useEffect, useOptions} = createZhinAPI()
 export {
-    createApp,
+    createZhin,
     useContext,
     useEffect,
     onDispose,

@@ -1,7 +1,7 @@
 import {Adapter, AdapterOptions} from "@/adapter";
 import {Config as OicqConfig,EventMap, Client, MessageRet,Sendable as OicqSendable, Quotable, MessageElem} from "oicq";
 import {Bot, BotOptions, SegmentElem, Sendable} from '@/bot'
-import {App} from "@/app";
+import {Zhin} from "@/zhin";
 import {Session} from "@/Session";
 function toSegment(msgList:OicqSendable) {
     msgList = [].concat(msgList);
@@ -45,12 +45,11 @@ export interface OicqBotOptions extends OicqConfig{
     quote_self?:boolean
     password?:string
 }
-export interface OicqEventMap extends App.BaseEventMap,EventMap{
+export interface OicqEventMap extends Zhin.BaseEventMap,EventMap{
 }
 export class OicqBot extends Client implements Bot<'oicq',OicqBotOptions,{},number>{
     public self_id:number
-    public startTime:number
-    constructor(public app:App, public adapter:Adapter<'oicq',BotOptions<OicqBotOptions>>, public options:BotOptions<OicqBotOptions>) {
+    constructor(public app:Zhin, public adapter:Adapter<'oicq',BotOptions<OicqBotOptions>>, public options:BotOptions<OicqBotOptions>) {
         if(!options.data_dir) options.data_dir=app.options.data_dir
         super(options.uin,options)
         this.self_id=options.uin
@@ -99,12 +98,12 @@ export class OicqBot extends Client implements Bot<'oicq',OicqBotOptions,{},numb
     }
 
     reply(session: Session, message: Sendable, quote?: boolean): Promise<MessageRet> {
-        if(session.post_type!=='message') throw new Error(`not exist reply when post_type !=='message`)
+        if(session.type!=='message') throw new Error(`not exist reply when post_type !=='message`)
         return this.sendMsg(Number(session.group_id||session.discuss_id||session.user_id),session.detail_type,message,quote?session:undefined)
     }
 }
 export class OicqAdapter extends Adapter<'oicq',OicqBotOptions,{},OicqEventMap>{
-    constructor(app:App, protocol, options:AdapterOptions<OicqBotOptions>) {
+    constructor(app:Zhin, protocol, options:AdapterOptions<OicqBotOptions>) {
         super(app,protocol,options);
     }
     async start(){

@@ -1,15 +1,18 @@
-import {App, isConstructor} from "@/app";
-import {Dispose} from "@/dispose";
-import {Adapter, AdapterConstructs, AdapterOptions, AdapterOptionsType, Adapters} from "@/adapter";
-import {Middleware} from "@/middleware";
-import {Command, TriggerSessionMap} from "@/command";
-import {PayloadWithSession} from "@/session";
+import {Zhin, isConstructor, ChannelId} from "./zhin";
+import {Dispose} from "./dispose";
+import {Adapter, AdapterConstructs, AdapterOptions, AdapterOptionsType} from "./adapter";
+import {Middleware} from "./middleware";
+import {Command, TriggerSessionMap} from "./command";
+import {PayloadWithSession} from "./session";
 import {EventEmitter} from "events";
-import {remove} from "@/utils";
-import {Argv} from "@/argv";
+import {isBailed, remove} from "./utils";
+import {Argv} from "./argv";
 import * as path from "path";
-import {Dict} from "@/types";
-import {Component} from "@/component";
+import {Dict} from "./types";
+import {Component} from "./component";
+import {Logger} from "log4js";
+import {Bot, Segment, Sendable} from "./bot";
+import exp from "constants";
 export interface Plugins{
     help:Plugin<null>
     logs:Plugin<null>
@@ -40,20 +43,19 @@ export function definePlugin<T=any>(options:Plugin.Install<T>):Plugin.Options<T>
     }
 }
 
-
 export class Context<T=any> extends EventEmitter{
     name:string
     fullName:string
     type:string
-    protocol:(keyof Adapters)[]
+    protocol:(keyof Zhin.Adapters)[]
     using:string[]=[]
     functional:boolean=false
     fullPath:string
     plugins:Map<string,Plugin>=new Map<string, Plugin>()
     public components: Dict<Component> = Object.create(null)
-    middlewares:Middleware<PayloadWithSession<keyof Adapters,'message'>>[]=[]
-    private disposes:Dispose[]=[]
-    app:App
+    middlewares:Middleware<PayloadWithSession<keyof Zhin.Adapters,'message'>>[]=[]
+    public readonly disposes:Dispose[]=[]
+    app:Zhin
     commands:Map<string,Command>=new Map<string, Command>()
     constructor(public parent:Context,options:Plugin.Options<T>,public info:Plugin.Info={}) {
         super()
@@ -66,6 +68,7 @@ export class Context<T=any> extends EventEmitter{
         this.fullPath=options.fullPath
         this.functional=options.functional||false
         this.app=parent.app
+        this.logger=parent.logger
         this.on('dispose',()=>{
             this.parent.plugins.delete(this.fullName)
             this.app.logger.info('已移除：',this.name)
@@ -73,14 +76,15 @@ export class Context<T=any> extends EventEmitter{
         })
         return new Proxy(this,{
             get(target: Context<T>, p: string | symbol, receiver: any): any {
-                if(App.Services.includes(p as keyof App.Services)) return target.app.services.get(p as keyof App.Services)
+                if(Zhin.Services.includes(p as keyof Zhin.Services)) return target.app.services.get(p as keyof Zhin.Services)
                 return Reflect.get(target,p,receiver)
             }
         })
     }
-    scope<K extends keyof Adapters>(scope:K|K[]):Context{
+    public logger: Logger
+    scope<K extends keyof Zhin.Adapters>(scope:K|K[]):Context{
         if(!Array.isArray(scope)) scope=[scope]
-        this.protocol=Array.from(new Set<keyof Adapters>([...this.protocol,...scope]))
+        this.protocol=Array.from(new Set<keyof Zhin.Adapters>([...this.protocol,...scope]))
         return this
     }
     component(name: string, component: Component, options: Component.Options = {}) {
@@ -133,10 +137,10 @@ export class Context<T=any> extends EventEmitter{
         return dispose
     }
 
-    adapter<K extends keyof Adapters>(adapter: K): Adapters[K]
-    adapter<K extends keyof Adapters>(adapter: K, options: AdapterOptionsType<Adapters[K]>): this
-    adapter<K extends keyof Adapters>(adapter: K, protocol: AdapterConstructs[K], options: AdapterOptionsType<Adapters[K]>): this
-    adapter<K extends keyof Adapters>(adapter: K, Construct?: AdapterConstructs[K] | AdapterOptions, options?: AdapterOptions) {
+    adapter<K extends keyof Zhin.Adapters>(adapter: K): Zhin.Adapters[K]
+    adapter<K extends keyof Zhin.Adapters>(adapter: K, options: AdapterOptionsType<Zhin.Adapters[K]>): this
+    adapter<K extends keyof Zhin.Adapters>(adapter: K, protocol: AdapterConstructs[K], options: AdapterOptionsType<Zhin.Adapters[K]>): this
+    adapter<K extends keyof Zhin.Adapters>(adapter: K, Construct?: AdapterConstructs[K] | AdapterOptions, options?: AdapterOptions) {
         if (!Construct && !options) return this.app.adapters.get(adapter)
         if (typeof Construct !== "function") {
             const result=this.app.load<Plugin.Options>(adapter, 'adapter')
@@ -157,10 +161,10 @@ export class Context<T=any> extends EventEmitter{
             this.app.adapters.delete(adapter)
         }) as any
     }
-    service<K extends keyof App.Services>(key: K): App.Services[K]
-    service<K extends keyof App.Services>(key: K, service: App.Services[K]): this
-    service<K extends keyof App.Services, T>(key: K, constructor: App.ServiceConstructor<App.Services[K], T>, options?: T): this
-    service<K extends keyof App.Services, T>(key: K, Service?: App.Services[K] | App.ServiceConstructor<App.Services[K], T>, options?: T): App.Services[K] | this {
+    service<K extends keyof Zhin.Services>(key: K): Zhin.Services[K]
+    service<K extends keyof Zhin.Services>(key: K, service: Zhin.Services[K]): this
+    service<K extends keyof Zhin.Services, T>(key: K, constructor: Zhin.ServiceConstructor<Zhin.Services[K], T>, options?: T): this
+    service<K extends keyof Zhin.Services, T>(key: K, Service?: Zhin.Services[K] | Zhin.ServiceConstructor<Zhin.Services[K], T>, options?: T): Zhin.Services[K] | this {
         if (Service === undefined) {
             return this.app.services.get(key)
         }
@@ -170,10 +174,10 @@ export class Context<T=any> extends EventEmitter{
         } else {
             this.app.services.set(key,Service)
         }
-        App.Services.push(key)
+        Zhin.Services.push(key)
         return Dispose.from(this, () => {
             this.app.services.delete(key)
-            remove(App.Services,key)
+            remove(Zhin.Services,key)
         })
     }
     plugin<T>(name: string, options?: T): Context | this
@@ -276,7 +280,7 @@ export class Context<T=any> extends EventEmitter{
         })
         return Object.create(command)
     }
-    middleware(middleware: Middleware<PayloadWithSession<keyof Adapters,'message'>>, prepend?: boolean) {
+    middleware(middleware: Middleware<PayloadWithSession<keyof Zhin.Adapters,'message'>>, prepend?: boolean) {
         const method: 'push' | 'unshift' = prepend ? 'unshift' : "push"
         this.middlewares[method](middleware)
         return Dispose.from(this, () => {
@@ -291,7 +295,7 @@ export class Context<T=any> extends EventEmitter{
         }, ms, ...args)
         const dispose = Dispose.from(this, () => clearTimeout(timer))
         this.disposes.push(dispose)
-        return
+        return dispose
     }
 
     setInterval(callback: Function, ms: number, ...args) {
@@ -299,6 +303,41 @@ export class Context<T=any> extends EventEmitter{
         const dispose = Dispose.from(this, () => clearInterval(timer))
         this.disposes.push(dispose)
         return dispose
+    }
+    broadcast(channelId:ChannelId,content:Sendable){
+        const [platform,self_id,target_type=platform,target_id=self_id]=channelId.split(':')
+        const bots=[...this.app.adapters.values()].reduce((result,adapter)=>{
+           if(platform===target_type) result.push(...(adapter.bots as Bot[]))
+           else if(platform===adapter.protocol) result.push(...(adapter.bots.filter(bot=>bot.self_id===self_id) as Bot[]))
+            return result
+        },[] as Bot[])
+        return Promise.all(bots.map(bot=>bot.sendMsg(Number(target_id),target_type,content)))
+    }
+
+    bail(event, ...args) {
+        let result
+        const listeners = this.listeners(event)
+        if (typeof event === "string") {
+            listeners.unshift(...this.listeners(`before-${event}`))
+            listeners.push(...this.listeners(`after-${event}`))
+        }
+        for (const listener of listeners) {
+            result = listener.apply(this, args)
+            if (isBailed(result)) return result
+        }
+    }
+
+    async bailSync(event, ...args) {
+        let result
+        const listeners = this.listeners(event)
+        if (typeof event === "string") {
+            listeners.unshift(...this.listeners(`before-${event}`))
+            listeners.push(...this.listeners(`after-${event}`))
+        }
+        for (const listener of listeners) {
+            result = await listener.apply(this, args)
+            if (isBailed(result)) return result
+        }
     }
     dispose(plugin?:Plugin|string){
         if(plugin){
@@ -318,34 +357,36 @@ export class Context<T=any> extends EventEmitter{
         }
     }
 }
+export class Plugin<T=any>{
 
-export interface Context extends App.Services {
-    on<T extends keyof App.AllEventMap<this>>(event: T, listener: App.AllEventMap<this>[T]);
+}
+export interface Context extends Zhin.Services {
+    on<T extends keyof Zhin.AllEventMap<this>>(event: T, listener: Zhin.AllEventMap<this>[T]);
     // @ts-ignore
-    on<P extends keyof Adapters, E extends keyof App.BotEventMaps[P]>(event: `${P}.${E}`, listener: (session: PayloadWithSession<P, E>) => any);
+    on<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P]>(event: `${P}.${E}`, listener: (session: PayloadWithSession<P, E>) => any);
 
-    on<S extends string | symbol>(event: S & Exclude<S, keyof App.AllEventMap<this>>, listener: (...args: any[]) => any);
+    on<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, listener: (...args: any[]) => any);
 
-    emitSync<T extends keyof App.AllEventMap<this>>(event: T, ...args: Parameters<App.AllEventMap<this>[T]>): Promise<void>;
-
-    // @ts-ignore
-    emitSync<P extends keyof Adapters, E extends keyof App.BotEventMaps[P]>(event: `${P}.${E}`, session: PayloadWithSession<P,  E>): Promise<void>;
-
-    emitSync<S extends string | symbol>(event: S & Exclude<S, keyof App.AllEventMap<this>>, ...args: any[]): Promise<void>;
-
-    bail<T extends keyof App.AllEventMap<this>>(event: T, ...args: Parameters<App.AllEventMap<this>[T]>): any;
+    emitSync<T extends keyof Zhin.AllEventMap<this>>(event: T, ...args: Parameters<Zhin.AllEventMap<this>[T]>): Promise<void>;
 
     // @ts-ignore
-    bail<P extends keyof Adapters, E extends keyof App.BotEventMaps[P]>(event: `${P}.${E}`, session: PayloadWithSession<P, E>): any;
+    emitSync<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P]>(event: `${P}.${E}`, session: PayloadWithSession<P,  E>): Promise<void>;
 
-    bail<S extends string | symbol>(event: S & Exclude<S, keyof App.AllEventMap<this>>, ...args: any[]): any;
+    emitSync<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, ...args: any[]): Promise<void>;
 
-    bailSync<T extends keyof App.AllEventMap<this>>(event: T, ...args: Parameters<App.AllEventMap<this>[T]>): Promise<any>;
+    bail<T extends keyof Zhin.AllEventMap<this>>(event: T, ...args: Parameters<Zhin.AllEventMap<this>[T]>): any;
 
     // @ts-ignore
-    bailSync<P extends keyof Adapters, E extends keyof App.BotEventMaps[P]>(event: `${P}.${E}`, session: PayloadWithSession<P,  E>): Promise<any>;
+    bail<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P]>(event: `${P}.${E}`, session: PayloadWithSession<P, E>): any;
 
-    bailSync<S extends string | symbol>(event: S & Exclude<S, keyof App.AllEventMap<this>>, ...args: any[]): Promise<any>;
+    bail<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, ...args: any[]): any;
+
+    bailSync<T extends keyof Zhin.AllEventMap<this>>(event: T, ...args: Parameters<Zhin.AllEventMap<this>[T]>): Promise<any>;
+
+    // @ts-ignore
+    bailSync<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P]>(event: `${P}.${E}`, session: PayloadWithSession<P,  E>): Promise<any>;
+
+    bailSync<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, ...args: any[]): Promise<any>;
 }
 export interface Plugin<T=any> extends Context<T>{}
 export namespace Plugin{
@@ -364,8 +405,8 @@ export namespace Plugin{
     }
     export type Options<T = any>=InstallObject<T> &{
         type?:string
-        protocol?:(keyof Adapters)[]
-        using?:(keyof App.Services)[]
+        protocol?:(keyof Zhin.Adapters)[]
+        using?:(keyof Zhin.Services)[]
         setup?:boolean
         anonymous?:boolean
         anonymousCount?:number

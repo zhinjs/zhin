@@ -17,14 +17,14 @@ export function install(ctx:Context){
             const totalMem=totalmem()
             const usedMem=totalMem-freemem()
             const cpu=cpus()[0]
-
+            console.log(session.bot)
             return [
                 '当前状态:',
                 `系统架构:${type()}  ${arch()}`,
                 `CPU架构:${cpus().length}核 ${cpu.model}`,
                 `内存:${format(usedMem)}/${format(totalMem)}(${(usedMem/totalMem*100).toFixed(2)}%)`,
                 `进程内存占比:${(memoryUsage.rss/usedMem*100).toFixed(2)}%(${format(memoryUsage.rss)}/${format(usedMem)})`,
-                `持续运行时间：${Time.formatTime(new Date().getTime()-session.bot.startTime)}`,
+                `持续运行时间：${Time.formatTime(new Date().getTime()-session.bot.stat.start_time)}`,
                 `掉线次数:${session.bot.stat.lost_times}次`,
                 `发送消息数:${session.bot.stat.sent_msg_cnt}条`,
                 `接收消息数:${session.bot.stat.recv_msg_cnt}条`,

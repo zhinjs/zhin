@@ -1,10 +1,9 @@
-import {Argv} from "@/argv";
-import {Awaitable, Define} from "@/types";
-import {Sendable} from "@/bot";
+import {Argv} from "./argv";
+import {Awaitable, Define} from "./types";
+import {Sendable} from "./bot";
 import {isEmpty, keys} from "lodash";
-import {App} from "@/app";
-import {Session, PayloadWithSession} from "@/session";
-import {Adapters} from "@/adapter";
+import {Zhin} from "./zhin";
+import {Session, PayloadWithSession} from "./session";
 interface HelpOptions{
     showHidden?:boolean
     showAuth?:boolean
@@ -13,13 +12,13 @@ interface HelpOptions{
     simple?:boolean
 }
 export interface TriggerSessionMap{
-    group:PayloadWithSession<keyof Adapters,'message.group'>
-    private:PayloadWithSession<keyof Adapters,'message.private'>
+    group:PayloadWithSession<keyof Zhin.Adapters,'message.group'>
+    private:PayloadWithSession<keyof Zhin.Adapters,'message.private'>
 }
 export class Command<A extends any[] = any[], O extends {} = {},T extends keyof TriggerSessionMap=keyof TriggerSessionMap>{
     public name:string
     args:Argv.Declaration[]
-    app:App
+    app:Zhin
     trigger?:T
     parent:Command=null
     children:Command[]=[]
@@ -67,7 +66,7 @@ export class Command<A extends any[] = any[], O extends {} = {},T extends keyof 
         this.children.push(command)
         return command
     }
-    match(session:Session<keyof Adapters,`message.${T}`>){
+    match(session:Session<keyof Zhin.Adapters,`message.${T}`>){
         return (!this.trigger) || session.detail_type===this.trigger
     }
     // 定义别名

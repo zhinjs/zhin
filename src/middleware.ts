@@ -1,4 +1,4 @@
-import {Sendable} from "@/bot";
+import {Sendable} from "./bot";
 
 type Next = () => Promise<Sendable|boolean|null>;
 export type Middleware<S>=Compose.Middleware<S>
@@ -28,5 +28,5 @@ export namespace Middleware{
 }
 export namespace Compose{
     export type Middleware<S> = (session: S, next: Next) => any;
-    export type ComposedMiddleware<S> = (context: S, next?: Next) => Promise<void>;
+    export type ComposedMiddleware<S> = (session: S, next?: Next) => Promise<void>;
 }

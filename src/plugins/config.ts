@@ -3,7 +3,6 @@ import * as fs from 'fs'
 import {get,unset,set,mapValues} from "lodash";
 import {segmentsToString} from "@/adapters/oicq";
 import {Context} from "@/context";
-import {Segment} from "@";
 function protectkeys(obj:Record<string, any>,keys:string[]){
     if(!obj || typeof obj!=='object') return obj
     return mapValues(obj,(value,key)=>{
@@ -20,6 +19,8 @@ function outputConfig(config,key){
 }
 export const name='configManage'
 export function install(ctx:Context){
+    ctx.command('send <message>')
+        .action((_,message)=>message)
     ctx.command('config [key:string] [value]')
         .desc('编辑配置文件')
         .auth("master","admins")
