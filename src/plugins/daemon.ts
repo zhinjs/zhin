@@ -45,7 +45,7 @@ export function install(ctx:Context, config:DaemonConfig={}){
                 if(times) message+=`耗时：${(new Date().getTime()-times)/1000}s`
                 bot.sendMsg(target_id,target_type, message)
             } else {
-                const dispose = ctx.on('oicq.system.online', () => {
+                const dispose = ctx.on('icqq.system.online', () => {
                     if(times) message+=`耗时：${(new Date().getTime()-times)/1000}s`
                     bot.sendMsg(target_id,target_type, message)
                     dispose()

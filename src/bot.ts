@@ -37,7 +37,7 @@ export namespace Bot{
             session.adapter.protocol,
             session.bot.self_id,
             session.detail_type,
-            session['guid_id'],
+            session['guild_id'],
             session['channel_id'],
             session['group_id'],
             session['discuss_id'],

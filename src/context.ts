@@ -150,7 +150,7 @@ export class Context<T=any> extends EventEmitter{
             options = Construct as AdapterOptions
             Construct = Adapter.get(adapter).Adapter as unknown as AdapterConstructs[K]
         }
-        if (!Construct) throw new Error(`can't find protocol fom protocol:${adapter}`)
+        if (!Construct) throw new Error(`can't find protocol from protocol:${adapter}`)
         const dispose = this.on(`${adapter}.message`, (session) => {
             const middleware = Middleware.compose(this.app.getSupportMiddlewares(session))
             middleware(session)

@@ -1,9 +1,9 @@
 import {Adapter, AdapterOptions} from "@/adapter";
-import {Config as OicqConfig,EventMap, Client, MessageRet,Sendable as OicqSendable, Quotable, MessageElem} from "oicq";
+import {Config as IcqqConfig,EventMap, Client, MessageRet,Sendable as IcqqSendable, Quotable, MessageElem} from "icqq";
 import {Bot, BotOptions, SegmentElem, Sendable} from '@/bot'
 import {Zhin} from "@/zhin";
 import {Session} from "@/Session";
-function toSegment(msgList:OicqSendable) {
+function toSegment(msgList:IcqqSendable) {
     msgList = [].concat(msgList);
     return msgList.map((msg) => {
         if (typeof msg === 'string') return {type: 'text', data: {text: msg}} as SegmentElem
@@ -40,27 +40,27 @@ function fromSegment(msgList:SegmentElem|string|number|(SegmentElem|string|numbe
         };
     }) as MessageElem[]
 }
-export interface OicqBotOptions extends OicqConfig{
+export interface IcqqBotOptions extends IcqqConfig{
     uin:number
     quote_self?:boolean
     password?:string
 }
-export interface OicqEventMap extends Zhin.BaseEventMap,EventMap{
+export interface IcqqEventMap extends Zhin.BaseEventMap,EventMap{
 }
-export class OicqBot extends Client implements Bot<'oicq',OicqBotOptions,{},number>{
+export class IcqqBot extends Client implements Bot<'icqq',IcqqBotOptions,{},number>{
     public self_id:number
-    constructor(public app:Zhin, public adapter:Adapter<'oicq',BotOptions<OicqBotOptions>>, public options:BotOptions<OicqBotOptions>) {
+    constructor(public app:Zhin, public adapter:Adapter<'icqq',BotOptions<IcqqBotOptions>>, public options:BotOptions<IcqqBotOptions>) {
         if(!options.data_dir) options.data_dir=app.options.data_dir
-        super(options.uin,options)
+        super(options)
         this.self_id=options.uin
     }
-    emit<E extends keyof EventMap>(eventName: E, ...args:Parameters<EventMap[E]>): boolean {
+    trip<E extends keyof EventMap>(eventName: E, ...args:Parameters<EventMap[E]>): boolean {
         this.adapter.dispatch(eventName,this.createSession(eventName,...args))
-        return super.emit(eventName,...args)
+        return super.trip(eventName,...args)
     }
 
     start(){
-        this.login(this.options.password)
+        this.login(this.options.uin,this.options.password)
     }
 
     sendMsg(target_id: number, target_type: string, content:Sendable,session?:Session) {
@@ -75,25 +75,25 @@ export class OicqBot extends Client implements Bot<'oicq',OicqBotOptions,{},numb
                 return this.sendDiscussMsg(target_id,msg,message)
         }
     }
-    createSession<E extends keyof OicqEventMap>(event:E,...args:Parameters<OicqEventMap[E]>):Session<'oicq', E>{
+    createSession<E extends keyof IcqqEventMap>(event:E,...args:Parameters<IcqqEventMap[E]>):Session<'icqq', E>{
         const obj=typeof args[0]==="object"?args.shift():{}
         Object.assign(obj,{
             bot:this,
-            protocol:'oicq',
+            protocol:'icqq',
             adapter:this.adapter,
             event,
             detail_type:obj.message_type||obj.request_type||obj.system_type||obj.notice_type,
             segments:toSegment(obj['message']||[]),
         },{args})
         delete obj.reply
-        return new Session<"oicq", E>(this.adapter,this.self_id,event,obj)
+        return new Session<"icqq", E>(this.adapter,this.self_id,event,obj)
     }
 
-    isAdmin(session: Session<'oicq','message'>): boolean {
+    isAdmin(session: Session<'icqq','message'>): boolean {
         return this.options.admins && this.options.admins.includes(session['user_id']);
     }
 
-    isMaster(session: Session<'oicq','message'>): boolean {
+    isMaster(session: Session<'icqq','message'>): boolean {
         return this.options.master===session['user_id'];
     }
 
@@ -102,8 +102,8 @@ export class OicqBot extends Client implements Bot<'oicq',OicqBotOptions,{},numb
         return this.sendMsg(Number(session.group_id||session.discuss_id||session.user_id),session.detail_type,message,quote?session:undefined)
     }
 }
-export class OicqAdapter extends Adapter<'oicq',OicqBotOptions,{},OicqEventMap>{
-    constructor(app:Zhin, protocol, options:AdapterOptions<OicqBotOptions>) {
+export class IcqqAdapter extends Adapter<'icqq',IcqqBotOptions,{},IcqqEventMap>{
+    constructor(app:Zhin, protocol, options:AdapterOptions<IcqqBotOptions>) {
         super(app,protocol,options);
     }
     async start(){
@@ -112,4 +112,4 @@ export class OicqAdapter extends Adapter<'oicq',OicqBotOptions,{},OicqEventMap>{
         }
     }
 }
-Adapter.define('oicq',OicqAdapter,OicqBot)
+Adapter.define('icqq',IcqqAdapter,IcqqBot)

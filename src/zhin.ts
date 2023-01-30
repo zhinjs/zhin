@@ -14,7 +14,6 @@ import {
     deepClone,
     deepMerge,
     wrapExport,
-    isBailed,
     getPackageInfo,
     deepEqual,
     getCaller,
@@ -25,15 +24,13 @@ import {Context, Plugin, Plugins} from "./context";
 import Koa from "koa";
 import {Adapter, AdapterOptionsType} from "./adapter";
 import {Segment, Sendable} from "./bot";
-import {OicqAdapter, OicqBot, OicqEventMap} from './adapters/oicq'
+import {IcqqAdapter, IcqqBot, IcqqEventMap} from './adapters/icqq'
 import {Session} from "./session";
 import {Middleware} from "./middleware";
 import {Dispose} from "./dispose";
 import {Router} from "./router";
 import {Component} from "./component";
 import Element from "./element";
-import {OneBot} from "./adapters/onebot/bot";
-import {OneBotAdapter} from "./adapters/onebot";
 
 interface Message {
     type: 'start' | 'queue'
@@ -418,12 +415,10 @@ export class Zhin extends Context {
 
 export namespace Zhin {
     export interface Adapters{
-        oicq:OicqAdapter
-        onebot:OneBotAdapter
+        icqq:IcqqAdapter
     }
     export interface Bots{
-        onebot:OneBot
-        oicq:OicqBot
+        icqq:IcqqBot
     }
     export const key = Symbol('Zhin')
     export const Services:(keyof Services)[]=[]
@@ -436,10 +431,7 @@ export namespace Zhin {
     export const defaultConfig: Partial<Options> = {
         port: 8086,
         protocols: {
-            oicq: {
-                bots: []
-            },
-            onebot: {
+            icqq: {
                 bots: []
             }
         },
@@ -499,9 +491,7 @@ export namespace Zhin {
     export type BaseEventMap = Record<string, (...args: any[]) => any>
 
     export interface BotEventMaps extends Record<keyof Zhin.Adapters, BaseEventMap>{
-        oicq: OicqEventMap
-        onebot:BaseEventMap
-        mock:BaseEventMap
+        icqq: IcqqEventMap
     }
 
     export interface AllEventMap<T> extends LifeCycle, BeforeEventMap<T>, AfterEventMap<T> {
