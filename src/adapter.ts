@@ -45,7 +45,7 @@ export abstract class Adapter<
         if(!Construct) throw new Error(`can not find bot constructor from protocol:${this.protocol}`)
         const bot=new Construct(this.app,this,options)
         bot.start()
-        bot.stat.start_time = new Date().getTime()
+        bot.stat.start_time = new Date().getTime()/1000;
         this.bots.push(bot)
     }
     dispatch<E extends keyof Zhin.BotEventMaps[K]>(event:E,session:Session<K, E>){

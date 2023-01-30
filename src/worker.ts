@@ -9,10 +9,7 @@ process.on('uncaughtException',(e)=>{
 createZhin(process.env.configPath||resolve(process.cwd(),'zhin.yaml')).start()
 createZhin({
     protocols:{
-        onebot:{
-            bots:[]
-        },
-        oicq:{
+        icqq:{
             bots:[]
         }
     }
