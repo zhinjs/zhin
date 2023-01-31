@@ -67,7 +67,7 @@ export default defineConfig({
                     ]
                 },
                 {
-                    text:'教学',
+                    text:'深入了解',
                     collapsible:true,
                     items:[
                         {text:`指令`,link:'/guide/command'},
