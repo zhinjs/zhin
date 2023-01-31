@@ -12,6 +12,9 @@
     "compile": "tsc --project tsconfig.build.json && tsc-alias -p tsconfig.build.json",
     "build": "npm run compile && dtsc --project tsconfig.dtsc.json",
     "dev": "ts-node -r tsconfig-paths/register -r esbuild-register ./src/service.ts",
+    "docs:dev": "vitepress dev docs --port 8989",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
     "pub": "npm publish --access public",
     "test": "echo \\\"Error: no src/test specified\\\" && exit 1"
   },
@@ -47,7 +50,9 @@
     "dtsc": "^2.2.3",
     "ts-node-dev": "latest",
     "tsc-alias": "latest",
-    "typescript": "latest"
+    "typescript": "latest",
+    "vitepress": "^1.0.0-alpha.43",
+    "vue": "^3.2.45"
   },
   "files": [
     "/lib/**/*.js",
