@@ -124,20 +124,11 @@ export class Zhin extends Context {
         this.on('dispose',()=>{
             server.close()
         })
+        this.use(Component)
         this.middleware(async (session,next) => {
-            const elements= await session.transform(Element.parse(Segment.stringify(session.segments)))
-            session.segments=Segment.parse(elements.map((element)=>{
-                if(Segment.isSegment(element)){
-                    return Segment.stringify([element])
-                }else{
-                    return element.type==='text'?Segment.stringify([{
-                        type:'text',
-                        data:{
-                            text:element.toString()
-                        }
-                    }]):element.toString()
-                }
-            }).join(''));
+            const elements= await session.transform(Element.parse(session.content,session))
+            session.segments=Segment.parse(session.content=elements.map(element=>element.toString()).join(''))
+
             const result=await session.execute()
             if(!result) return next()
             return session.reply(result)

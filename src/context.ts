@@ -11,8 +11,7 @@ import * as path from "path";
 import {Dict} from "./types";
 import {Component} from "./component";
 import {Logger} from "log4js";
-import {Bot, Segment, Sendable} from "./bot";
-import exp from "constants";
+import {Bot, Sendable} from "./bot";
 export interface Plugins{
     help:Plugin<null>
     logs:Plugin<null>

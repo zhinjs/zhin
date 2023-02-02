@@ -17,19 +17,18 @@ function isElement(source: any): source is Element {
     return source && typeof source === 'object' && source[Element.key]
 }
 
-function toElement(content: string | SegmentElem | Element) {
+function toElement(content: string|number|boolean | Element) {
     if (typeof content === 'string' || typeof content === 'number' || typeof content === 'boolean') {
         content = '' + content
         if (content) return Element('text', {content})
     } else if (isElement(content)) {
         return content
-    } else if (!isNullable(content) && !Segment.isSegment(content)) {
+    } else {
         throw new TypeError(`Invalid content: ${content}`)
     }
-    return content as SegmentElem
 }
 
-function toElementArray(content: Element.Fragment):(Element|SegmentElem)[] {
+function toElementArray(content: Element.Fragment):(Element)[] {
     if (Array.isArray(content)) {
         return content.map(toElement).filter(x => x)
     } else {
@@ -87,11 +86,11 @@ namespace Element {
     export const key = Symbol('zhinElement')
 
     export const Fragment = 'template'
-    export type Render<T, S> = (attrs: Dict, children: Element[], session: S) => T
+    export type Render<T, S,K extends string|symbol=string> = (attrs: Dict<any,K>, children: Element[], session: S) => T
     export type Transformer<S = never> = boolean | Fragment | Render<boolean | Fragment, S>
     export type AsyncTransformer<S = never> = boolean | Fragment | Render<Awaitable<boolean | Fragment>, S>
 
-    export type Fragment = string |SegmentElem | Element | (string|SegmentElem | Element)[]
+    export type Fragment = string | Element | (string | Element)[]
 
     export function normalize(source: Fragment, context?: any) {
         if (typeof source !== 'string') return toElementArray(source)
@@ -120,7 +119,7 @@ namespace Element {
 
     const tagRegExp = /<!--[\s\S]*?-->|<(\/?)([^!\s>/]*)([^>]*?)\s*(\/?)>/
     const attrRegExp1 = /([^\s=]+)(?:="([^"]*)"|='([^']*)')?/g
-    const attrRegExp2 = /([^\s=]+)(?:="([^"]*)"|='([^']*)'|=\{([^}]+)\})?/g
+    const attrRegExp2 = /([^\s=]+)(?:="([^"]*)"|='([^']*)'|=\{([^}]*)})?/g
     const interpRegExp = /\{([^}]*)\}/
 
     interface Token {
@@ -190,7 +189,7 @@ namespace Element {
     }
 
     export function parse(source: string, context?: any) {
-        const tokens: (Element | Token|SegmentElem)[] = []
+        const tokens: (Element | Token)[] = []
 
         function pushText(content: string) {
             if (content) tokens.push(Element('text', {content}))
@@ -206,17 +205,27 @@ namespace Element {
             const token: Token = {source: _, type: type || Fragment, close, empty, attrs: {}}
             let attrCap: RegExpExecArray
             while ((attrCap = attrRegExp.exec(attrs))) {
-                const [_, key, v1, v2 = v1, v3] = attrCap
+                let [_, key, v1, v2 = v1, v3] = attrCap
                 if (v3) {
-                    token.attrs[camelize(key)] = interpolate(v3, context)
+
+                    token.attrs[camelize(key)] = (new Function(`return this.${v3}`)).apply(context)
                 } else if (!isNullable(v2)) {
-                    token.attrs[camelize(key)] = unescape(v2)
+                    if(key.startsWith(':')){
+                        try{
+                            key=key.replace(':','')
+                            v2=JSON.parse(v2)
+                        }catch {}
+                        token.attrs[camelize(key)]=v2
+                    }else{
+                        token.attrs[camelize(key)] = unescape(v2)
+                    }
                 } else if (key.startsWith('no-')) {
                     token.attrs[camelize(key.slice(3))] = false
                 } else {
                     token.attrs[camelize(key)] = true
                 }
             }
+            console.log(token)
             tokens.push(token)
         }
 
@@ -238,7 +247,6 @@ namespace Element {
             }
             pushText(unescape(source))
         }
-
         const stack = [Element(Fragment)]
 
         function rollback(index: number) {
@@ -249,13 +257,10 @@ namespace Element {
                 stack[0].children.push(...children)
             }
         }
-
         for (const token of tokens) {
             if (isElement(token)) {
                 stack[0].children.push(token)
-            }else if(Segment.isSegment(token)){
-                stack[0].children.push(Element[token.type](token.data))
-            } else if (token.close) {
+            }else if (token.close) {
                 let index = 0
                 while (index < stack.length && stack[index].type !== token.type) index++
                 if (index === stack.length) {
@@ -282,7 +287,7 @@ namespace Element {
     export function transform<S = never>(source: string, rules: Dict<Transformer<S>>, session?: S): string
     export function transform<S = never>(source: Element[], rules: Dict<Transformer<S>>, session?: S): Element[]
     export function transform<S>(source: string | Element[], rules: Dict<Transformer<S>>, session?: S) {
-        const elements = typeof source === 'string' ? parse(source) : source
+        const elements = typeof source === 'string' ? parse(source,session) : source
         const output: Fragment[] = []
         elements.forEach((element) => {
             const {type, attrs, children} = element
@@ -293,7 +298,7 @@ namespace Element {
             if (result === true) {
                 output.push(Element(type, attrs, transform(children, rules, session)))
             } else if (result !== false) {
-                output.push(...normalize(result))
+                output.push(...normalize(result,session))
             }
         })
         return typeof source === 'string' ? output.join('') : output
@@ -302,7 +307,7 @@ namespace Element {
     export async function transformAsync<S = never>(source: string, rules: Dict<AsyncTransformer<S>>, session?: S): Promise<string>
     export async function transformAsync<S = never>(source: Element[], rules: Dict<AsyncTransformer<S>>, session?: S): Promise<Element[]>
     export async function transformAsync<S>(source: string | Element[], rules: Dict<AsyncTransformer<S>>, session?: S) {
-        const elements = typeof source === 'string' ? parse(source) : source
+        const elements = typeof source === 'string' ? parse(source,source) : source
         const children = (await Promise.all(elements.map(async (element) => {
             const {type, attrs, children} = element
             let result = rules[type] ?? rules.default ?? true
@@ -312,14 +317,14 @@ namespace Element {
             if (result === true) {
                 return [Element(type, attrs, await transformAsync(children, rules, session))]
             } else if (result !== false) {
-                return normalize(result)
+                return normalize(result,session)
             } else {
                 return []
             }
         }))).flat(1)
         return typeof source === 'string' ? children.join('') : children
     }
-    export type Factory<R extends any[]> = (...args: [...rest: R, attrs?: Dict<any>]) => Element
+    export type Factory<R extends any[]> = (...args: [...rest: R, attrs?: Dict]) => Element
 
     function createFactory<R extends any[] = any[]>(type: string, ...keys: string[]): Factory<R> {
         return (...args: any[]) => {
@@ -339,28 +344,26 @@ namespace Element {
     export let warn: (message: string) => void = () => {}
 
     function createAssetFactory(type: string): Factory<[data: string] | [data: Buffer | ArrayBuffer, type: string]> {
-        return (url, ...args) => {
+        return (file, ...args) => {
             let prefix = 'base64://'
             if (typeof args[0] === 'string') {
                 prefix = `data:${args.shift()};base64,`
             }
-            if (is('Buffer', url)) {
-                url = prefix + url.toString('base64')
-            } else if (is('ArrayBuffer', url)) {
-                url = prefix + arrayBufferToBase64(url)
+            if (is('Buffer', file)) {
+                file = prefix + file.toString('base64')
+            } else if (is('ArrayBuffer', file)) {
+                file = prefix + arrayBufferToBase64(file)
             }
-            if (url.startsWith('base64://')) {
+            if (file.startsWith('base64://')) {
                 warn(`protocol "base64:" is deprecated and will be removed in the future, please use "data:" instead`)
             }
-            return Element(type, { ...args[0] as {}, url })
+            return Element(type, { ...args[0] as {}, file })
         }
     }
 
     export const text = createFactory<[content: any]>('text', 'text')
     export const mention = createFactory<[user_id: any]>('mention', 'user_id','text')
     export const face = createFactory<[user_id: any]>('face', 'id','text')
-    export const sharp = createFactory<[id: any]>('sharp', 'id')
-    export const quote = createFactory<[id: any]>('quote', 'id')
     export const image = createAssetFactory('image')
     export const video = createAssetFactory('video')
     export const audio = createAssetFactory('audio')

@@ -82,6 +82,7 @@ export class IcqqBot extends Client implements Bot<'icqq',IcqqBotOptions,{},numb
             protocol:'icqq',
             adapter:this.adapter,
             event,
+            type:obj.post_type,
             detail_type:obj.message_type||obj.request_type||obj.system_type||obj.notice_type,
             segments:toSegment(obj['message']||[]),
         },{args})
@@ -98,7 +99,7 @@ export class IcqqBot extends Client implements Bot<'icqq',IcqqBotOptions,{},numb
     }
 
     reply(session: Session, message: Sendable, quote?: boolean): Promise<MessageRet> {
-        if(session.type!=='message') throw new Error(`not exist reply when post_type !=='message`)
+        if(session.type!=='message') throw new Error(`not exist reply when type !=='message`)
         return this.sendMsg(Number(session.group_id||session.discuss_id||session.user_id),session.detail_type,message,quote?session:undefined)
     }
 }
