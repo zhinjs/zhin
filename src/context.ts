@@ -266,18 +266,18 @@ export class Context<T=any> extends EventEmitter{
         const name = nameArr.pop()
         const command = new Command(name + decl)
         command.trigger=trigger
-        command.app = this.app
+        command.context = this
         if (parent) {
             command.parent = parent
             parent.children.push(command)
         }
         this.commands.set(name, command)
-        this.emit('command-add', command)
+        this.app.emit('command-add', command,this)
         this.disposes.push(()=>{
             this.commands.delete(name)
-            this.emit('command-remove', command)
+            this.app.emit('command-remove', command,this)
         })
-        return Object.create(command)
+        return command as Command<Argv.ArgumentType<D>,{},T>
     }
     middleware(middleware: Middleware<PayloadWithSession<keyof Zhin.Adapters,'message'>>, prepend?: boolean) {
         const method: 'push' | 'unshift' = prepend ? 'unshift' : "push"

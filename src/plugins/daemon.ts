@@ -16,6 +16,7 @@ export function install(ctx:Context, config:DaemonConfig={}){
     exitCommand && ctx
         .command(exitCommand === true ? 'exit' : exitCommand)
         .desc('关闭bot')
+        .hidden()
         .auth('master','admins')
         .option('restart', '-r  重新启动')
         .shortcut('关机')

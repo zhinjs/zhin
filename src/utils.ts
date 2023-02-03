@@ -299,24 +299,25 @@ export const hyphenate = paramCase
 export function capitalize(source: string) {
     return source.charAt(0).toUpperCase() + source.slice(1)
 }
+const evalCache: Record<string, Function> = Object.create(null)
 
-export const interpolate = new Function('template', 'context', 'pattern', `
-  return template.replace(pattern || /\\{\\{([\\s\\S]+?)\\}\\}/g, (_, expr) => {
+export const evaluate=<S,T=any>(exp: string,context: S ) =>execute<S,T>(`return(${exp})`,context)
+
+export const execute = <S,T=any>(exp: string,context: S) => {
+    const fn = evalCache[exp] || (evalCache[exp] = toFunction(exp))
     try {
-      with (context) {
-        const result = eval(expr)
-        return result === undefined ? '' : result
-      }
+        return fn(context) as T
     } catch {
-      return ''
+        return exp
     }
-  })
-`) as ((template: string, context: object, pattern?: RegExp) => string)
+}
 
-export function escapeRegExp(source: string) {
-    return source
-        .replace(/[|\\{}()[\]^$+*?.]/g, '\\$&')
-        .replace(/-/g, '\\x2d')
+const toFunction = (exp: string): Function => {
+    try {
+        return new Function(`$data`, `with($data){${exp}}`)
+    } catch {
+        return () => {}
+    }
 }
 
 export function trimSlash(source: string) {
@@ -395,7 +396,7 @@ export namespace template {
 
     export function format(source: string, ...params: any[]) {
         if (params[0] && typeof params[0] === 'object') {
-            source = interpolate(source, params[0])
+            source = evaluate(source, params[0])
         }
         let result = ''
         let cap: RegExpExecArray

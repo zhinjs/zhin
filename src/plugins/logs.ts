@@ -56,6 +56,7 @@ export function install(ctx:Context){
     ctx.command('logs <lines:number>')
         .desc('日志管理')
         .auth('master',"admins")
+        .hidden()
         .option('clean','-c 清理日志')
         .option('backup','-b 备份日志')
         .option('detail','-d 查看日志大小')

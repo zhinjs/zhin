@@ -125,9 +125,15 @@ export class Zhin extends Context {
             server.close()
         })
         this.use(Component)
+        this.command('execute <template>')
+            .desc('根据指令模板执行指令')
+            .hidden()
+            .action(async ({session},template)=>{
+                return Segment.parse(await Command.executeTemplate.apply(session,[Segment.stringify(template)]))
+            })
         this.middleware(async (session,next) => {
-            const elements= await session.transform(Element.parse(session.content,session))
-            session.segments=Segment.parse(session.content=elements.map(element=>element.toString()).join(''))
+            const elements= await session.transform(Element.parse(session.content,Zhin.createContext(session)))
+            session.segments=Segment.parse(session.content=elements.map(element=>Element.unescape(element.toString())).join(''))
 
             const result=await session.execute()
             if(!result) return next()
@@ -348,18 +354,18 @@ export class Zhin extends Context {
             return result
         },[...this.middlewares])
     }
-    getSupportCommands(argv:Argv){
-        return this.getSupportPlugins(argv.session.protocol).reduce((result:Command[],plugin)=>{
+    getSupportCommands(session:Session<keyof Zhin.Adapters>){
+        return this.getSupportPlugins(session.protocol).reduce((result:Command[],plugin)=>{
             for(const command of plugin.commandList){
-                if(command.match(argv.session)){
+                if(command.match(session as any)){
                     result.push(command)
                 }
             }
             return result
-        },[])
+        },[...this.commands.values()])
     }
     findCommand(argv: Argv) {
-        return this.getSupportCommands(argv).find(cmd => {
+        return this.getSupportCommands(argv.session).find(cmd => {
             return cmd.name === argv.name
                 || cmd.aliasNames.includes(argv.name)
                 || cmd.shortcuts.some(({name}) => typeof name === 'string' ? name === argv.name : name.test(argv.name))
@@ -515,6 +521,30 @@ export namespace Zhin {
     export type Value<O extends KVMap, K> = K extends `${infer L}.${infer R}` ? Value<O[L], R> : K extends keyof O ? O[K] : any
 
     export type ServiceConstructor<R, T = any> = new (bot: Zhin, options?: T) => R
+    export function createContext(session:Session<keyof Adapters>){
+        const whiteList = ['Math', 'Date','JSON']
+        return new Proxy(session,{
+            has(target, key) {
+                // 由于代理对象作为`with`的参数成为当前作用域对象，因此若返回false则会继续往父作用域查找解析绑定
+                if (typeof key==='string' && whiteList.includes(key)) {
+                    return target.hasOwnProperty(key)
+                }
+
+                // 返回true则不会往父作用域继续查找解析绑定，但实际上没有对应的绑定，则会返回undefined，而不是报错，因此需要手动抛出异常。
+                if (!target.hasOwnProperty(key)) {
+                    throw ReferenceError(`${key.toString()} is not defined`)
+                }
+
+                return true
+            },
+            get(target, key, receiver) {
+                if (key === Symbol.unscopables) {
+                    return undefined
+                }
+                return Reflect.get(target, key, receiver)
+            }
+        })
+    }
 }
 
 function createZhinAPI() {

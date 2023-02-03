@@ -4,6 +4,8 @@ import {Context} from "@/context";
 export const name='status'
 export function install(ctx:Context){
     ctx.command('status')
+        .desc('查看知音状态')
+        .hidden()
         .action(({session})=>{
             function format(bytes){
                 const operators=['B','KB','MB','GB','TB']
@@ -17,7 +19,6 @@ export function install(ctx:Context){
             const totalMem=totalmem()
             const usedMem=totalMem-freemem()
             const cpu=cpus()[0]
-            console.log(session.bot)
             return [
                 '当前状态:',
                 `系统架构:${type()}  ${arch()}`,

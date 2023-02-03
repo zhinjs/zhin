@@ -19,11 +19,10 @@ function outputConfig(config,key){
 }
 export const name='configManage'
 export function install(ctx:Context){
-    ctx.command('send <message>')
-        .action((_,message)=>message)
     ctx.command('config [key:string] [value]')
         .desc('编辑配置文件')
         .auth("master","admins")
+        .hidden()
         .option('delete','-d 删除指定配置')
         .action(({options}, key,value) => {
             const config=Yaml.load(fs.readFileSync(process.env.configPath||'','utf8')) as object

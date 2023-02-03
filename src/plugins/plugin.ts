@@ -5,6 +5,7 @@ export const name = 'pluginManage'
 export function install(ctx: Context) {
     const command = ctx.command('plugin')
         .desc('插件管理')
+        .hidden()
     command.subcommand('plugin.list',"group")
         .desc('显示插件列表')
         .action(({session}) => {

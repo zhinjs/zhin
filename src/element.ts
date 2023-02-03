@@ -1,6 +1,5 @@
-import {arrayBufferToBase64, camelize, hyphenate, interpolate, is, isNullable, makeArray} from "./utils";
+import {arrayBufferToBase64, camelize, hyphenate, evaluate, is, isNullable, makeArray} from "./utils";
 import {Awaitable, Dict} from "./types";
-import {Segment, SegmentElem} from "./bot";
 import {Fragment} from "./element";
 
 interface Element {
@@ -17,15 +16,14 @@ function isElement(source: any): source is Element {
     return source && typeof source === 'object' && source[Element.key]
 }
 
-function toElement(content: string|number|boolean | Element) {
-    if (typeof content === 'string' || typeof content === 'number' || typeof content === 'boolean') {
-        content = '' + content
-        if (content) return Element('text', {content})
-    } else if (isElement(content)) {
+function toElement(content: any) {
+    if (isElement(content)) {
         return content
-    } else {
-        throw new TypeError(`Invalid content: ${content}`)
     }
+    if(Array.isArray(content)){
+        return Element('text', {content:`[${content.join()}]`})
+    }
+    return Element('text', {content:content.toString()})
 }
 
 function toElementArray(content: Element.Fragment):(Element)[] {
@@ -118,9 +116,8 @@ namespace Element {
     }
 
     const tagRegExp = /<!--[\s\S]*?-->|<(\/?)([^!\s>/]*)([^>]*?)\s*(\/?)>/
-    const attrRegExp1 = /([^\s=]+)(?:="([^"]*)"|='([^']*)')?/g
-    const attrRegExp2 = /([^\s=]+)(?:="([^"]*)"|='([^']*)'|=\{([^}]*)})?/g
-    const interpRegExp = /\{([^}]*)\}/
+    const attrRegExp = /([^\s=]+)(?:="([^"]*)"|='([^']*)')?/g
+    const interpRegExp = /\{\{([^{}]*)\}\}/
 
     interface Token {
         type: string
@@ -188,14 +185,12 @@ namespace Element {
         return results
     }
 
-    export function parse(source: string, context?: any) {
+    export function parse<S>(source: string, context?: S) {
         const tokens: (Element | Token)[] = []
 
         function pushText(content: string) {
             if (content) tokens.push(Element('text', {content}))
         }
-
-        const attrRegExp = context ? attrRegExp2 : attrRegExp1
         let tagCap: RegExpExecArray
         while ((tagCap = tagRegExp.exec(source))) {
             parseContent(source.slice(0, tagCap.index))
@@ -205,17 +200,10 @@ namespace Element {
             const token: Token = {source: _, type: type || Fragment, close, empty, attrs: {}}
             let attrCap: RegExpExecArray
             while ((attrCap = attrRegExp.exec(attrs))) {
-                let [_, key, v1, v2 = v1, v3] = attrCap
-                if (v3) {
-
-                    token.attrs[camelize(key)] = (new Function(`return this.${v3}`)).apply(context)
-                } else if (!isNullable(v2)) {
+                let [_, key, v1, v2 = v1] = attrCap
+                if (!isNullable(v2)) {
                     if(key.startsWith(':')){
-                        try{
-                            key=key.replace(':','')
-                            v2=JSON.parse(v2)
-                        }catch {}
-                        token.attrs[camelize(key)]=v2
+                        token.attrs[camelize(key.slice(1))]=evaluate<S>(v2, context)
                     }else{
                         token.attrs[camelize(key)] = unescape(v2)
                     }
@@ -225,7 +213,6 @@ namespace Element {
                     token.attrs[camelize(key)] = true
                 }
             }
-            console.log(token)
             tokens.push(token)
         }
 
@@ -241,7 +228,7 @@ namespace Element {
                     const [_, expr] = interpCap
                     pushText(unescape(source.slice(0, interpCap.index)))
                     source = source.slice(interpCap.index + _.length)
-                    const content = interpolate(expr, context)
+                    const content = evaluate(expr, context)
                     tokens.push(...toElementArray(content))
                 }
             }
@@ -337,6 +324,9 @@ namespace Element {
             if (args[keys.length]) {
                 Object.assign(element.attrs, args[keys.length])
             }
+            element.toString=function (){
+                return `[SG:${this.type},${Object.keys(this.attrs).map(key=>`${key}=${this.attrs[key]}`).join()}]`
+            }
             return element
         }
     }
@@ -357,7 +347,11 @@ namespace Element {
             if (file.startsWith('base64://')) {
                 warn(`protocol "base64:" is deprecated and will be removed in the future, please use "data:" instead`)
             }
-            return Element(type, { ...args[0] as {}, file })
+            const element=Element(type, { ...args[0] as {}, file })
+            element.toString=function (){
+                return `[SG:${this.type},${Object.keys(this.attrs).map(key=>`${key}=${this.attrs[key]}`).join()}]`
+            }
+            return element
         }
     }
 
