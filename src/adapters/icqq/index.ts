@@ -147,9 +147,10 @@ function fromElement(elementList: Element | string | number | (Element | string 
         const result = {
             type: type.replace('mention', 'at').replace('at_all', 'at'),
             ...attrs,
-            text:attrs.content||children.join('')
+            text:attrs.text||children.join('')
         }
-        if(allowElement.includes(type)){
+        console.log(result)
+        if(allowElement.includes(result.type)){
             if (attrs['user_id']) result['qq'] = attrs['user_id']
             if (attrs['file_id']) result['file'] = attrs['file_id']
             if (attrs['src']) result['file'] = attrs['src']

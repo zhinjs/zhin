@@ -3,13 +3,13 @@ import {Dispose} from "./dispose";
 import {Adapter, AdapterConstructs, AdapterOptions, AdapterOptionsType} from "./adapter";
 import {Middleware} from "./middleware";
 import {Command, TriggerSessionMap} from "./command";
-import {PayloadWithSession} from "./session";
-import Element from './element'
+import {PayloadWithSession, Session} from "./session";
+import Element, {Fragment} from './element'
 import {EventEmitter} from "events";
 import {isBailed, remove} from "./utils";
 import {Argv} from "./argv";
 import * as path from "path";
-import {Dict} from "./types";
+import {Awaitable, Dict} from "./types";
 import {Component} from "./component";
 import {Logger} from "log4js";
 import {Bot} from "./bot";
@@ -52,7 +52,7 @@ export class Context<T=any> extends EventEmitter{
     functional:boolean=false
     fullPath:string
     plugins:Map<string,Plugin>=new Map<string, Plugin>()
-    public components: Dict<Component> = Object.create(null)
+    public components: Dict<Component.Options> = Object.create(null)
     middlewares:Middleware<PayloadWithSession<keyof Zhin.Adapters,'message'>>[]=[]
     public readonly disposes:Dispose[]=[]
     app:Zhin
@@ -87,16 +87,12 @@ export class Context<T=any> extends EventEmitter{
         this.protocol=Array.from(new Set<keyof Zhin.Adapters>([...this.protocol,...scope]))
         return this
     }
-    component(name: string, component: Component, options: Component.Options = {}) {
-        this.components[name] = async (attrs, children, session) => {
-            if (options.session && session.type === 'send') {
-                throw new Error('interactive components is not available outside sessions')
-            }
-            if (!options.passive) {
-                children = await session.transform(children)
-            }
-            return component(attrs, children, session)
+    component(name: string, component: Component,options?:Omit<Component.Options, 'render'>) {
+        if(typeof component==='function') component={
+            ...(options||{}),
+            render:component
         }
+        this.components[name] = component as Component.Options
         return Dispose.from(this,()=>{
             delete this.components[name]
         })
@@ -387,6 +383,10 @@ export interface Context extends Zhin.Services {
     bailSync<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P]>(event: `${P}.${E}`, session: PayloadWithSession<P,  E>): Promise<any>;
 
     bailSync<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, ...args: any[]): Promise<any>;
+
+    component<S,A extends Dict=Dict,C=Element,T extends Awaitable<Fragment>=Awaitable<Fragment>>(name: string, render: Element.Render<Session,A,T>,options?:Omit<Component.Options, 'render'>):this
+    component<S,A extends Dict=Dict,C=Element,T extends Awaitable<Fragment>=Awaitable<Fragment>>(name: string, component: Component.Options<A,T>):this
+    component<S,A extends Dict=Dict,C=Element,T extends Awaitable<Fragment>=Awaitable<Fragment>>(name: string, component: Component.Options<A,T>|Element.Render<Session,A,T>,options?:Omit<Component.Options, 'render'>):this
 }
 export interface Plugin<T=any> extends Context<T>{}
 export namespace Plugin{

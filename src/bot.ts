@@ -35,7 +35,6 @@ export class Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I extends
     reply(session:Session<K>,message:Element.Fragment,quote?:boolean){
         if(session.type!=='message') throw new Error(`not exist reply when type !=='message`)
         message=[].concat(message)
-
         const replyElem:Element|undefined=quote?Element('reply',{message_id:session.message_id}):undefined
         if(replyElem) message.unshift(replyElem)
         return this.sendMsg(session.group_id||session.discuss_id||session.user_id,session.detail_type as Bot.MessageType,message)
@@ -43,9 +42,8 @@ export class Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I extends
     async sendMsg(target_id:string|number,target_type:Bot.MessageType,message:Element.Fragment):Promise<Bot.MessageRet>{
         message=[].concat(message).map((item)=>{
             if(Element.isElement(item)) return item
-            return Element('text',{content:String(item)})
+            return Element('text',{text:String(item)})
         })
-        // @ts-ignore
         const {message_id}=await this.callApi('sendMsg',target_id,target_type,message)
         const messageRet:Bot.MessageRet={
             message_id,
@@ -64,7 +62,7 @@ export interface Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I ext
     adapter:Adapter<K,BO,AO>
     app:Zhin
     createSession<E extends keyof IcqqEventMap>(event: E, ...args: Parameters<IcqqEventMap[E]>): Session<'icqq', E>
-    callApi<K extends keyof I>(apiName:K,...args:Bot.ApiParams<I[K]>):Promisify<Bot.ApiReturn<I[K]>>
+    callApi<K extends keyof Bot.Internal>(apiName:K,...args:Bot.ApiParams<Bot.Internal[K]>):Promisify<Bot.ApiReturn<Bot.Internal[K]>>
     on<K extends keyof Bot.EventMap>(event:K,listener:Bot.EventMap[K])
     on<S extends string|symbol>(event:S & Exclude<keyof Bot.EventMap,S>,listener:(...args:any[])=>any)
     emit<K extends keyof Bot.EventMap>(event:K,...args:Parameters<Bot.EventMap[K]>)

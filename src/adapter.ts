@@ -31,7 +31,12 @@ export abstract class Adapter<
         this.app.on('start',()=>this.start())
         this.on('message.receive',(bot_id:string|number,message)=>{
             this.botStatus(bot_id).recv_msg_cnt++
-            this.app.dispatch(`${this.protocol}.message`,this.bots.get(bot_id).createSession('message',message))
+            const session=this.bots.get(bot_id).createSession('message',message)
+            session.render().then(elements=>{
+                session.elements=elements
+            }).finally(()=>{
+                this.app.dispatch(`${this.protocol}.message`,session)
+            })
         })
         this.on('bot.online',(bot_id)=>{
             this.botStatus(bot_id).online=true
@@ -103,17 +108,6 @@ export abstract class Adapter<
         bot.start()
         this.botStatus(bot.self_id).start_time=Date.now()
         this.bots.push(bot)
-    }
-    dispatch<E extends keyof Zhin.BotEventMaps[K]>(event:E,session:Session<K, E>){
-        if(event==='message'){
-            session.transform().then(elements=>{
-                session.elements=Element.parse(elements.map(element=>Element.unescape(element.toString())).join(''))
-            }).finally(()=>{
-                this.app.dispatch(`${this.protocol}.message`,session)
-            })
-        }else{
-            this.app.dispatch(`${this.protocol}.${String(event)}`,session)
-        }
     }
 }
 export type AdapterConstructs={

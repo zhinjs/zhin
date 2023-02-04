@@ -1,4 +1,4 @@
-import {arrayBufferToBase64, camelize, hyphenate, evaluate, is, isNullable, makeArray} from "./utils";
+import {arrayBufferToBase64, evaluate, is, isNullable, makeArray} from "./utils";
 import {Awaitable, Dict} from "./types";
 import {Fragment} from "./element";
 
@@ -17,9 +17,9 @@ function toElement(content: any) {
         return content
     }
     if(Array.isArray(content)){
-        return Element('text', {content:`[${content.join()}]`})
+        return Element('text', {text:`[${content.join()}]`})
     }
-    return Element('text', {content:content.toString()})
+    return Element('text', {text:content.toString()})
 }
 
 function toElementArray(content: Element.Fragment):(Element)[] {
@@ -38,12 +38,11 @@ class ElementConstructor {
     name: string = 'Element';
 
     toString(strip = false) {
-        if (this.type === 'text') return Element.escape(this.attrs.content)
+        if (this.type === 'text') return Element.escape(this.attrs.text)
         const inner = this.children.map(child => child.toString(strip)).join('')
         if (strip) return inner
         const attrs = Object.entries(this.attrs).map(([key, value]) => {
             if (isNullable(value)) return ''
-            key = hyphenate(key)
             if (value === true) return ` ${key}`
             if (value === false) return ` no-${key}`
             return ` ${key}="${Element.escape('' + value, true)}"`
@@ -84,9 +83,9 @@ namespace Element {
     }
 
     export const Fragment = 'template'
-    export type Render<S,A extends Dict=Dict,C=Element,T=Fragment> = (attrs: A, children: C[], session: S) => T
-    export type Transformer<S = never> = boolean | Fragment | Render<S,Dict,Element,boolean | Fragment>
-    export type AsyncTransformer<S = never> = boolean | Fragment | Render<S,Dict,Element,Awaitable<boolean | Fragment>>
+    export type Render<S,A extends Dict=Dict,T=Fragment> = (attrs: A, children: Element[], session: S) => T
+    export type Transformer<S = never> = boolean | Fragment | Render<S,Dict,boolean | Fragment>
+    export type AsyncTransformer<S = never> = boolean | Fragment | Render<S,Dict,Awaitable<boolean | Fragment>>
 
     export type Fragment = string|number|boolean | Element | (string|number|boolean | Element)[]
 
@@ -188,7 +187,7 @@ namespace Element {
         const tokens: (Element | Token)[] = []
 
         function pushText(content: string) {
-            if (content) tokens.push(Element('text', {content}))
+            if (content) tokens.push(Element('text', {text:content}))
         }
         let tagCap: RegExpExecArray
         while ((tagCap = tagRegExp.exec(source))) {
@@ -239,7 +238,7 @@ namespace Element {
             for (; index > 0; index--) {
                 const {children} = stack.shift()
                 const {source} = stack[0].children.pop()
-                stack[0].children.push(Element('text', {content: source}))
+                stack[0].children.push(Element('text', {text: source}))
                 stack[0].children.push(...children)
             }
         }
@@ -251,7 +250,7 @@ namespace Element {
                 while (index < stack.length && stack[index].type !== token.type) index++
                 if (index === stack.length) {
                     // no matching open tag
-                    stack[0].children.push(Element('text', {content: token.source}))
+                    stack[0].children.push(Element('text', {text: token.source}))
                 } else {
                     rollback(index)
                     const element = stack.shift()
@@ -289,7 +288,7 @@ namespace Element {
                 result = result(attrs, children, session)
             }
             if (result === true) {
-                return children.length?transformAsync(children,rules):[Element('text',{content:escape(element.toString())})]
+                output.push(Element(type, attrs, transform(children, rules, session)))
             } else if (result !== false) {
                 output.push(...normalize(result,session))
             }
@@ -297,7 +296,7 @@ namespace Element {
         return typeof source === 'string' ? output.join('') : output
     }
 
-    export async function transformAsync<S = never>(source: string, rules: Dict<AsyncTransformer<S>>, session?: S): Promise<string>
+    export async function transformAsync<S = never>(source: string, rules: Dict<AsyncTransformer<S>>, session?: S): Promise<Element[]>
     export async function transformAsync<S = never>(source: Element[], rules: Dict<AsyncTransformer<S>>, session?: S): Promise<Element[]>
     export async function transformAsync<S>(source: string | Element[], rules: Dict<AsyncTransformer<S>>, session?: S) {
         const elements = typeof source === 'string' ? parse(source,source) : source
@@ -308,7 +307,7 @@ namespace Element {
                 result = await result(attrs, children, session)
             }
             if (result === true) {
-                return children.length?await transformAsync(children,rules):[Element('text',{content:escape(element.toString())})]
+                return [Element(type,attrs,await transformAsync(children, rules, session))]
             } else if (result !== false) {
                 return normalize(result,session)
             } else {
@@ -348,18 +347,5 @@ namespace Element {
         }
     }
 
-    export const reply = createFactory<{message_id: string,user_id?:string|number}>('text')
-    export const text = createFactory<{content: string,text?:string}>('text')
-    export const mention = createFactory<{user_id: string|number,text?:string}>('mention')
-    export const mention_all = createFactory('mention_all')
-    export const json = createFactory('json')
-    export const xml = createFactory('xml')
-    export const face = createFactory<{id: string|number,text?:string}>('face')
-    export const location = createFactory<{latitude:number,longitude:number,title?:string,content?:string}>('location')
-    export const image = createAssetFactory('image','src')
-    export const video = createAssetFactory('video','src')
-    export const audio = createAssetFactory('audio','src')
-    export const voice = createAssetFactory('voice','src')
-    export const file = createAssetFactory('file')
 }
 export = Element

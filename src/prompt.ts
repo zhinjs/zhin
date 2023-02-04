@@ -101,7 +101,7 @@ export class Prompt{
             }).join('\n')}${config.multiple?`\n选项之间使用'${config.separator||','}'分隔`:''}`,
             format:(event)=>{
                 const firstElem=event.elements[0]
-                const chooseIdxArr=(firstElem.attrs.content).split(config.separator||',').map(Number)
+                const chooseIdxArr=(firstElem.attrs.text).split(config.separator||',').map(Number)
                 return Prompt.transforms['select'][config.child_type][config.multiple?'true':'false'](event,config.options,chooseIdxArr) as Prompt.Select<T,M>
             },
             ...config
@@ -171,51 +171,51 @@ export namespace Prompt{
     }
     defineTransform("number",(session)=>{
         const firstElem=session.elements[0]
-        if(firstElem.type!=='text' || !/^[0-9]*$/.test(firstElem.attrs.content)) throw new Error('type Error')
-        return +firstElem.attrs.content
+        if(firstElem.type!=='text' || !/^[0-9]*$/.test(firstElem.attrs.text)) throw new Error('type Error')
+        return +firstElem.attrs.text
     })
     defineTransform('text',(session)=>{
         const firstElem=session.elements[0]
         if(firstElem.type!=='text') throw new Error('type Error')
-        return firstElem.attrs.content
+        return firstElem.attrs.text
     })
     defineTransform('confirm',(session)=>{
         const firstElem=session.elements[0]
         if(firstElem.type!=='text') throw new Error('type Error')
-        return ['yes','y','Yes','YES','Y','.','。','确认'].includes(firstElem.attrs.content)
+        return ['yes','y','Yes','YES','Y','.','。','确认'].includes(firstElem.attrs.text)
     })
     defineTransform("regexp", (session)=>{
         const firstElem=session.elements[0]
         if(firstElem.type!=='text') throw new Error('type Error')
-        return new RegExp(firstElem.attrs.content)
+        return new RegExp(firstElem.attrs.text)
     })
     defineTransform('date',(session)=>{
         const firstElem=session.elements[0]
         if(firstElem.type!=='text') throw new Error('type Error')
-        return new Date(firstElem.attrs.content)
+        return new Date(firstElem.attrs.text)
     })
     defineTransform('list',{
         date(session,separator){
             const firstElem=session.elements[0]
-            return firstElem.attrs.content?.split(separator).map(str=>{
+            return firstElem.attrs.text?.split(separator).map(str=>{
                 if(/^[0-9]$/g.test(str)) return new Date(+str)
                 return new Date(str)
             })
         },
         number(session,separator){
             const firstElem=session.elements[0]
-            return firstElem.attrs.content?.split(separator).map(str=>{
+            return firstElem.attrs.text?.split(separator).map(str=>{
                 if(!/^[0-9]$/g.test(str))throw new Error('type Error')
                 return +str
             })
         },
         text(session,separator){
             const firstElem=session.elements[0]
-            return firstElem.attrs.content?.split(separator)
+            return firstElem.attrs.text?.split(separator)
         },
         regexp(session,separator){
             const firstElem=session.elements[0]
-            return firstElem.attrs.content?.split(separator).map(str=>{
+            return firstElem.attrs.text?.split(separator).map(str=>{
                 return new RegExp(str)
             })
         }

@@ -333,7 +333,7 @@ export class Zhin extends Context {
         })
     }
     getSupportComponents<P extends keyof Zhin.Adapters>(session:Session<P>){
-        return this.getSupportPlugins(session.protocol).reduce((result:Dict<Component>,plugin)=>{
+        return this.getSupportPlugins(session.protocol).reduce((result:Dict<Component.Options>,plugin)=>{
             Object.assign(result,plugin.componentList)
             return result
         },this.components)
@@ -529,15 +529,7 @@ export namespace Zhin {
             },
             get(target, key, receiver) {
                 if (key === Symbol.unscopables) {
-                    return {
-                        app:true,
-                        adapter:true,
-                        plugin:true,
-                        context:true
-                    }
-                }
-                if(key==='bot' && typeof target['bot']==='object'){
-                    return createContext(target['bot'])
+                    return undefined
                 }
                 return Reflect.get(target, key, receiver)
             }

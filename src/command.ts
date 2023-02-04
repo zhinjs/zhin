@@ -151,7 +151,7 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
             const content = argv.argv.shift()
             const argDecl = this.args[args.length]
 
-            if (content[0].attrs.content?.[0] !== '-' && Argv.resolveConfig(argDecl?.type).greedy) {
+            if (content[0].attrs.text?.[0] !== '-' && Argv.resolveConfig(argDecl?.type).greedy) {
                 args.push(Argv.parseValue([content, ...argv.argv].reduce((result, sArr) => {
                     if (result.length) result.push(Element('text',{content:' '}))
                     result.push(...sArr)
@@ -159,7 +159,7 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
                 }, []), 'argument', argv, argDecl));
                 break;
             }
-            if (content[0].attrs.content?.[0] !== '-' && !Object.values(this.options).find(opt => opt.shortName === content[0].attrs.content) && argDecl) {
+            if (content[0].attrs.text?.[0] !== '-' && !Object.values(this.options).find(opt => opt.shortName === content[0].attrs.text) && argDecl) {
                 if (argDecl.variadic) {
                     args.push(...[content].concat(argv.argv).map(str => Argv.parseValue(str, 'argument', argv, argDecl)));
                     break;
@@ -168,7 +168,7 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
                     continue;
                 }
             }
-            const optionDecl = [...Object.values(this.options)].find(decl => decl.shortName === content[0]?.attrs.content)
+            const optionDecl = [...Object.values(this.options)].find(decl => decl.shortName === content[0]?.attrs.text)
             if (optionDecl && !options[optionDecl.name]) {
                 if (optionDecl.declaration.required && !optionDecl.initial && (!argv.argv[0] || options[argv.args[0]])) {
                     argv.error = `option ${optionDecl.name} is required`
@@ -211,12 +211,12 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
         const args = argv.args ||= [], options = argv.options ||= {}
         for (const shortcut of this.shortcuts) {
             const segment = argv.segments?.length ? argv.segments[0] : undefined
-            if (typeof shortcut.name === 'string' && segment.type === 'text' && segment.attrs.content === shortcut.name) {
+            if (typeof shortcut.name === 'string' && segment.type === 'text' && segment.attrs.text === shortcut.name) {
                 args.push(...(shortcut.args || []))
                 Object.assign(options, shortcut.options || {})
             }
             if (shortcut.name instanceof RegExp && segment.type === 'text') {
-                const matched = (segment.attrs.content as string).match(shortcut.name)
+                const matched = (segment.attrs.text as string).match(shortcut.name)
                 if (matched) {
                     matched.forEach((str, index) => {
                         if (index === 0) return

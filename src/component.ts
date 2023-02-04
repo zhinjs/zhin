@@ -1,36 +1,25 @@
 import {Awaitable, Dict} from "./types";
 import {Session} from "./session";
-import Element from "./element";
+import Element, {Fragment} from "./element";
 import {Context} from "@/context";
 import {Random, Time} from "@/utils";
 
-export type Component<A extends Dict=Dict,C=Element,T=Awaitable<Element.Fragment>> = Element.Render<Session,A,C,T>
+export type Component<A extends Dict=Dict,T extends Awaitable<Fragment>=Awaitable<Element.Fragment>> = Component.Options|Element.Render<Session,A,T>
 export namespace Component {
     export const name='builtComponent'
-    export interface Options {
+    export interface Options<A extends Dict=Dict,C=Element,T=Awaitable<Element.Fragment>> {
         session?: boolean
         passive?: boolean
+        render:Element.Render<Session,A,T>
     }
     const confirm:Component<{initial:boolean}>=async (attrs,children,session)=>{
-       return Element.stringify(await session.prompt.confirm(children.join(''),attrs.initial))
+       return (await session.prompt.confirm(children.join(''),attrs.initial))+''
     }
     export function install(ctx: Context) {
-        // 基本元素
-        ctx.component('face', Element.face)
-            .component('reply', Element.reply)
-            .component('mention', Element.mention)
-            .component('mention_all', Element.mention_all)
-            .component('audio', Element.audio)
-            .component('video', Element.video)
-            .component('voice', Element.voice)
-            .component('image', Element.image)
-            .component('file', Element.file)
-            .component('location', Element.location)
-            .component('xml', Element.xml)
-            .component('json', Element.json)
-            .component('confirm',confirm)
         // 内置组件
-        ctx.component('template', (attrs, children) => children.join(''))
+        ctx
+            .component('confirm',confirm)
+            .component('template', (attrs, children) => children.join(''))
             .component('execute', async (attrs, children, session) => {
                 return await session.execute(children)
             }, {session: true})
