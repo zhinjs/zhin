@@ -12,12 +12,8 @@ interface Element {
     toString(strip?: boolean): string
 }
 
-function isElement(source: any): source is Element {
-    return source && typeof source === 'object' && source[Element.key]
-}
-
 function toElement(content: any) {
-    if (isElement(content)) {
+    if (Element.isElement(content)) {
         return content
     }
     if(Array.isArray(content)){
@@ -63,7 +59,7 @@ function Element(type: string, ...args: any[]) {
     const el = Object.create(ElementConstructor.prototype)
     el[Element.key] = true
     let attrs: Dict = {}, children: Fragment[] = []
-    if (args[0] && typeof args[0] === 'object' && !isElement(args[0]) && !Array.isArray(args[0])) {
+    if (args[0] && typeof args[0] === 'object' && !Element.isElement(args[0]) && !Array.isArray(args[0])) {
         const props = args.shift()
         for (const [key, value] of Object.entries(props)) {
             if (isNullable(value)) continue
@@ -83,12 +79,16 @@ function Element(type: string, ...args: any[]) {
 namespace Element {
     export const key = Symbol('zhinElement')
 
-    export const Fragment = 'template'
-    export type Render<T, S,K extends string|symbol=string> = (attrs: Dict<any,K>, children: Element[], session: S) => T
-    export type Transformer<S = never> = boolean | Fragment | Render<boolean | Fragment, S>
-    export type AsyncTransformer<S = never> = boolean | Fragment | Render<Awaitable<boolean | Fragment>, S>
+    export function isElement(source: any): source is Element {
+        return source && typeof source === 'object' && source[Element.key]
+    }
 
-    export type Fragment = string | Element | (string | Element)[]
+    export const Fragment = 'template'
+    export type Render<S,A extends Dict=Dict,C=Element,T=Fragment> = (attrs: A, children: C[], session: S) => T
+    export type Transformer<S = never> = boolean | Fragment | Render<S,Dict,Element,boolean | Fragment>
+    export type AsyncTransformer<S = never> = boolean | Fragment | Render<S,Dict,Element,Awaitable<boolean | Fragment>>
+
+    export type Fragment = string|number|boolean | Element | (string|number|boolean | Element)[]
 
     export function normalize(source: Fragment, context?: any) {
         if (typeof source !== 'string') return toElementArray(source)
@@ -184,7 +184,6 @@ namespace Element {
         }
         return results
     }
-
     export function parse<S>(source: string, context?: S) {
         const tokens: (Element | Token)[] = []
 
@@ -203,14 +202,14 @@ namespace Element {
                 let [_, key, v1, v2 = v1] = attrCap
                 if (!isNullable(v2)) {
                     if(key.startsWith(':')){
-                        token.attrs[camelize(key.slice(1))]=evaluate<S>(v2, context)
+                        token.attrs[key.slice(1)]=evaluate<S>(v2, context)
                     }else{
-                        token.attrs[camelize(key)] = unescape(v2)
+                        token.attrs[key] = unescape(v2)
                     }
                 } else if (key.startsWith('no-')) {
-                    token.attrs[camelize(key.slice(3))] = false
+                    token.attrs[key.slice(3)] = false
                 } else {
-                    token.attrs[camelize(key)] = true
+                    token.attrs[key] = true
                 }
             }
             tokens.push(token)
@@ -270,6 +269,13 @@ namespace Element {
         rollback(stack.length - 1)
         return stack[0].children
     }
+    export function stringify(fragment:Element.Fragment){
+        if(!Array.isArray(fragment)) fragment=[fragment]
+        return fragment.map((element)=>{
+            if(typeof element==='string' || typeof element==='number'|| typeof element==='boolean') element=Element('text',{content:element})
+            return element.toString()
+        }).join('')
+    }
 
     export function transform<S = never>(source: string, rules: Dict<Transformer<S>>, session?: S): string
     export function transform<S = never>(source: Element[], rules: Dict<Transformer<S>>, session?: S): Element[]
@@ -283,7 +289,7 @@ namespace Element {
                 result = result(attrs, children, session)
             }
             if (result === true) {
-                output.push(Element(type, attrs, transform(children, rules, session)))
+                return children.length?transformAsync(children,rules):[Element('text',{content:escape(element.toString())})]
             } else if (result !== false) {
                 output.push(...normalize(result,session))
             }
@@ -302,7 +308,7 @@ namespace Element {
                 result = await result(attrs, children, session)
             }
             if (result === true) {
-                return [Element(type, attrs, await transformAsync(children, rules, session))]
+                return children.length?await transformAsync(children,rules):[Element('text',{content:escape(element.toString())})]
             } else if (result !== false) {
                 return normalize(result,session)
             } else {
@@ -311,56 +317,49 @@ namespace Element {
         }))).flat(1)
         return typeof source === 'string' ? children.join('') : children
     }
-    export type Factory<R extends any[]> = (...args: [...rest: R, attrs?: Dict]) => Element
+    export type Factory<R extends Dict> = (attrs:R) => Element
 
-    function createFactory<R extends any[] = any[]>(type: string, ...keys: string[]): Factory<R> {
-        return (...args: any[]) => {
+    function createFactory<R extends Dict=Dict>(type: string): Factory<R> {
+        return (attrs) => {
             const element = Element(type)
-            keys.forEach((key, index) => {
-                if (!isNullable(args[index])) {
-                    element.attrs[key] = args[index]
-                }
-            })
-            if (args[keys.length]) {
-                Object.assign(element.attrs, args[keys.length])
-            }
-            element.toString=function (){
-                return `[SG:${this.type},${Object.keys(this.attrs).map(key=>`${key}=${this.attrs[key]}`).join()}]`
-            }
+            Object.assign(element.attrs,attrs||{})
             return element
         }
     }
 
     export let warn: (message: string) => void = () => {}
 
-    function createAssetFactory(type: string): Factory<[data: string] | [data: Buffer | ArrayBuffer, type: string]> {
-        return (file, ...args) => {
+    function createAssetFactory(type: string,key='file'): Factory<{file_id:string|Buffer|ArrayBuffer}> {
+        return (attrs) => {
+            let file_id=attrs[key]
             let prefix = 'base64://'
-            if (typeof args[0] === 'string') {
-                prefix = `data:${args.shift()};base64,`
+            if (typeof file_id === 'string') {
+                prefix = `data:${file_id};base64,`
             }
-            if (is('Buffer', file)) {
-                file = prefix + file.toString('base64')
-            } else if (is('ArrayBuffer', file)) {
-                file = prefix + arrayBufferToBase64(file)
+            if (is('Buffer', file_id)) {
+                file_id = prefix + file_id.toString('base64')
+            } else if (is('ArrayBuffer', file_id)) {
+                file_id = prefix + arrayBufferToBase64(file_id)
             }
-            if (file.startsWith('base64://')) {
+            if (file_id.startsWith('base64://')) {
                 warn(`protocol "base64:" is deprecated and will be removed in the future, please use "data:" instead`)
             }
-            const element=Element(type, { ...args[0] as {}, file })
-            element.toString=function (){
-                return `[SG:${this.type},${Object.keys(this.attrs).map(key=>`${key}=${this.attrs[key]}`).join()}]`
-            }
-            return element
+            return Element(type, { file_id })
         }
     }
 
-    export const text = createFactory<[content: any]>('text', 'text')
-    export const mention = createFactory<[user_id: any]>('mention', 'user_id','text')
-    export const face = createFactory<[user_id: any]>('face', 'id','text')
-    export const image = createAssetFactory('image')
-    export const video = createAssetFactory('video')
-    export const audio = createAssetFactory('audio')
+    export const reply = createFactory<{message_id: string,user_id?:string|number}>('text')
+    export const text = createFactory<{content: string,text?:string}>('text')
+    export const mention = createFactory<{user_id: string|number,text?:string}>('mention')
+    export const mention_all = createFactory('mention_all')
+    export const json = createFactory('json')
+    export const xml = createFactory('xml')
+    export const face = createFactory<{id: string|number,text?:string}>('face')
+    export const location = createFactory<{latitude:number,longitude:number,title?:string,content?:string}>('location')
+    export const image = createAssetFactory('image','src')
+    export const video = createAssetFactory('video','src')
+    export const audio = createAssetFactory('audio','src')
+    export const voice = createAssetFactory('voice','src')
     export const file = createAssetFactory('file')
 }
 export = Element

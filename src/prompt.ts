@@ -1,10 +1,11 @@
 import {Zhin} from "./zhin";
-import {Bot, Segment, Sendable} from "./bot";
+import {Bot} from "./bot";
+import Element from './element'
 import {Session} from "./session";
 import {Dict} from "./types";
 export class Prompt{
     private readonly fullTargetId:string
-    constructor(private bot:Bot<keyof Zhin.Bots,any,any,string|number>,private session:Session,public timeout:number) {
+    constructor(private bot:Bot<keyof Zhin.Bots,any,any>,private session:Session,public timeout:number) {
         this.fullTargetId=Bot.getFullTargetId(session)
     }
     async prompts<O extends Prompt.Options>(options:O):Promise<Prompt.ResultS<O>>{
@@ -18,21 +19,24 @@ export class Prompt{
     private async $prompt<T extends keyof Prompt.Types,CT extends keyof Prompt.BaseTypes,M extends boolean=false>(options:Prompt.Option<T,CT,M>){
         await this.session.reply(options.message)
         return new Promise<Prompt.Result<T, CT, M>>((resolve)=>{
-            const dispose=this.bot.app.middleware(async (session,next)=>{
-                if(this.fullTargetId!==Bot.getFullTargetId(session)) return next()
-                resolve(options.format(session))
-                dispose()
-                clearTimeout(timer)
-            },true)
-            const timer=setTimeout(()=>{
-                dispose()
+            try{
+                const dispose=this.bot.app.middleware(async (session,next)=>{
+                    if(this.fullTargetId!==Bot.getFullTargetId(session)) return next()
+                    resolve(options.format(session))
+                    dispose()
+                    clearTimeout(timer)
+                },true)
+                const timer=setTimeout(()=>{
+                    dispose()
+                    resolve(options.initial)
+                },this.timeout)
+            }catch (e){
+                this.session.reply(e.message)
                 resolve(options.initial)
-            },this.timeout)
-        }).catch(e=>{
-            this.session.reply(e.message)
+            }
         })
     }
-    text(message:Sendable='请输入文本',initial=''){
+    text(message:Element.Fragment='请输入文本',initial=''){
         return this.$prompt({
             type:'text',
             message,
@@ -40,7 +44,7 @@ export class Prompt{
             format:Prompt.transforms['text']
         })
     }
-    number(message:Sendable='请输入数值',initial=0){
+    number(message:Element.Fragment='请输入数值',initial=0){
         return this.$prompt({
             type:'number',
             message,
@@ -48,7 +52,7 @@ export class Prompt{
             format:Prompt.transforms['number'],
         })
     }
-    date(message:Sendable='请输入日期',initial=new Date()){
+    date(message:Element.Fragment='请输入日期',initial=new Date()){
         return this.$prompt({
             type:'date',
             message,
@@ -56,7 +60,7 @@ export class Prompt{
             format:Prompt.transforms['date'],
         })
     }
-    regexp(message:Sendable='请输入正则',initial=/.+/){
+    regexp(message:Element.Fragment='请输入正则',initial=/.+/){
         return this.$prompt({
             type:'regexp',
             message,
@@ -64,7 +68,7 @@ export class Prompt{
             format:Prompt.transforms['regexp'],
         })
     }
-    confirm(message:Sendable='确认么？',initial:boolean=false){
+    confirm(message:Element.Fragment='确认么？',initial:boolean=false){
         return this.$prompt({
             type:'confirm',
             message:`${message}\n输入${['yes','y','Yes','YES','Y','.','。','确认'].join()}为确认`,
@@ -72,14 +76,7 @@ export class Prompt{
             format:Prompt.transforms['confirm']
         })
     }
-    qq(message:Sendable='请输入qq'){
-        return this.$prompt({
-            type:'qq',
-            message,
-            format:Prompt.transforms['qq'],
-        })
-    }
-    list<T extends keyof Prompt.BaseTypes>(message:Sendable='请输入',config:Prompt.Option<'list',T>){
+    list<T extends keyof Prompt.BaseTypes>(message:Element.Fragment='请输入',config:Prompt.Option<'list',T>){
         return this.$prompt({
             type:'list',
             message:`${message}\n值之间使用'${config.separator||','}'分隔`,
@@ -96,15 +93,15 @@ export class Prompt{
             timeout:this.timeout
         }
     }
-    select<T extends keyof Prompt.BaseTypes,M extends boolean>(message:Sendable='请选择',config:Prompt.Option<'select',T,M>){
+    select<T extends keyof Prompt.BaseTypes,M extends boolean>(message:Element.Fragment='请选择',config:Prompt.Option<'select',T,M>){
         const options:Prompt.Option<'select',T,M>={
             type:'select',
             message:`${message}\n${config.options.map((option,index)=>{
                 return `${index+1}:${option.label}`
             }).join('\n')}${config.multiple?`\n选项之间使用'${config.separator||','}'分隔`:''}`,
             format:(event)=>{
-                const firstElem=event.segments[0]
-                const chooseIdxArr=(firstElem.data['text']||'').split(config.separator||',').map(Number)
+                const firstElem=event.elements[0]
+                const chooseIdxArr=(firstElem.attrs.content).split(config.separator||',').map(Number)
                 return Prompt.transforms['select'][config.child_type][config.multiple?'true':'false'](event,config.options,chooseIdxArr) as Prompt.Select<T,M>
             },
             ...config
@@ -116,7 +113,6 @@ export namespace Prompt{
     export interface BaseTypes{
         text:string
         number:number
-        qq:Segment['mention']
         confirm:boolean
         regexp:RegExp
         date:Date
@@ -131,7 +127,7 @@ export namespace Prompt{
     export type List<T extends keyof BaseTypes=keyof BaseTypes>=Array<BaseTypes[T]>
     export type Select<T extends keyof BaseTypes=keyof BaseTypes,M extends boolean=false>=M extends true?Array<BaseTypes[T]>:BaseTypes[T]
     export type Option<T extends keyof Types=keyof Types,CT extends keyof BaseTypes=keyof BaseTypes,M extends boolean=false> = {
-        message?:Sendable
+        message?:Element.Fragment
         type?:T
         child_type?:CT
         multiple?:T extends 'select'?M:boolean
@@ -150,7 +146,7 @@ export namespace Prompt{
     }
     export type ResultItem<O>= O extends Option<infer T,infer CT,infer M>?Result<T, CT, M>:unknown
     export interface SelectOption<T extends keyof BaseTypes>{
-        label:Sendable
+        label:Element.Fragment
         value:BaseTypes[T]
     }
     export  type Transforms<CT extends keyof BaseTypes= keyof BaseTypes,M extends boolean=false>={
@@ -174,57 +170,52 @@ export namespace Prompt{
         transforms[type]=transform
     }
     defineTransform("number",(session)=>{
-        const firstElem=session.segments[0]
-        if(firstElem.type!=='text' || !/^[0-9]*$/.test(firstElem.data['text'])) throw new Error('type Error')
-        return +firstElem.data['text']
-    })
-    defineTransform('qq',(session)=>{
-        const firstElem=session.segments[0]
-        if(firstElem.type!=='mention') throw new Error('type Error')
-        return firstElem as unknown as Segment['mention']
+        const firstElem=session.elements[0]
+        if(firstElem.type!=='text' || !/^[0-9]*$/.test(firstElem.attrs.content)) throw new Error('type Error')
+        return +firstElem.attrs.content
     })
     defineTransform('text',(session)=>{
-        const firstElem=session.segments[0]
+        const firstElem=session.elements[0]
         if(firstElem.type!=='text') throw new Error('type Error')
-        return firstElem.data['text']
+        return firstElem.attrs.content
     })
     defineTransform('confirm',(session)=>{
-        const firstElem=session.segments[0]
+        const firstElem=session.elements[0]
         if(firstElem.type!=='text') throw new Error('type Error')
-        return ['yes','y','Yes','YES','Y','.','。','确认'].includes(firstElem.data['text'])
+        return ['yes','y','Yes','YES','Y','.','。','确认'].includes(firstElem.attrs.content)
     })
     defineTransform("regexp", (session)=>{
-        const firstElem=session.segments[0]
+        const firstElem=session.elements[0]
         if(firstElem.type!=='text') throw new Error('type Error')
-        return new RegExp(firstElem.data['text'])
+        return new RegExp(firstElem.attrs.content)
     })
     defineTransform('date',(session)=>{
-        const firstElem=session.segments[0]
+        const firstElem=session.elements[0]
         if(firstElem.type!=='text') throw new Error('type Error')
-        return new Date(firstElem.data['text'])
+        return new Date(firstElem.attrs.content)
     })
     defineTransform('list',{
         date(session,separator){
-            const firstElem=session.segments[0]
-            return firstElem.data['text']?.split(separator).map(str=>{
+            const firstElem=session.elements[0]
+            return firstElem.attrs.content?.split(separator).map(str=>{
                 if(/^[0-9]$/g.test(str)) return new Date(+str)
                 return new Date(str)
             })
         },
         number(session,separator){
-            const firstElem=session.segments[0]
-            return firstElem.data['text']?.split(separator).map(str=>{
+            const firstElem=session.elements[0]
+            return firstElem.attrs.content?.split(separator).map(str=>{
                 if(!/^[0-9]$/g.test(str))throw new Error('type Error')
                 return +str
             })
         },
         text(session,separator){
-            const firstElem=session.segments[0]
-            return firstElem.data['text']?.split(separator)
+            const firstElem=session.elements[0]
+            return firstElem.attrs.content?.split(separator)
         },
         regexp(session,separator){
-            const firstElem=session.segments[0]
-            return firstElem.data['text']?.split(separator).map(str=>{
+            const firstElem=session.elements[0]
+            return firstElem.attrs.content?.split(separator).map(str=>{
                 return new RegExp(str)
             })
         }

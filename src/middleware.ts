@@ -1,6 +1,5 @@
-import {Sendable} from "./bot";
-
-type Next = () => Promise<Sendable|boolean|null>;
+import Element from './element'
+type Next = () => Promise<Element.Fragment|null>;
 export type Middleware<S>=Compose.Middleware<S>
 export namespace Middleware{
     export function compose<S>(middlewares:Middleware<S>[]):Compose.ComposedMiddleware<S>{

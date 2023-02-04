@@ -4,6 +4,7 @@ import {Adapter, AdapterConstructs, AdapterOptions, AdapterOptionsType} from "./
 import {Middleware} from "./middleware";
 import {Command, TriggerSessionMap} from "./command";
 import {PayloadWithSession} from "./session";
+import Element from './element'
 import {EventEmitter} from "events";
 import {isBailed, remove} from "./utils";
 import {Argv} from "./argv";
@@ -11,7 +12,7 @@ import * as path from "path";
 import {Dict} from "./types";
 import {Component} from "./component";
 import {Logger} from "log4js";
-import {Bot, Sendable} from "./bot";
+import {Bot} from "./bot";
 export interface Plugins{
     help:Plugin<null>
     logs:Plugin<null>
@@ -150,7 +151,7 @@ export class Context<T=any> extends EventEmitter{
             Construct = Adapter.get(adapter).Adapter as unknown as AdapterConstructs[K]
         }
         if (!Construct) throw new Error(`can't find protocol from protocol:${adapter}`)
-        const dispose = this.on(`${adapter}.message`, (session) => {
+        const dispose = this.app.on(`${adapter}.message`, (session) => {
             const middleware = Middleware.compose(this.app.getSupportMiddlewares(session))
             middleware(session)
         })
@@ -281,9 +282,9 @@ export class Context<T=any> extends EventEmitter{
     }
     middleware(middleware: Middleware<PayloadWithSession<keyof Zhin.Adapters,'message'>>, prepend?: boolean) {
         const method: 'push' | 'unshift' = prepend ? 'unshift' : "push"
-        this.middlewares[method](middleware)
+        this.app.middlewares[method](middleware)
         return Dispose.from(this, () => {
-            return remove(this.middlewares, middleware);
+            return remove(this.app.middlewares, middleware);
         })
     }
     setTimeout(callback: Function, ms: number, ...args) {
@@ -303,14 +304,14 @@ export class Context<T=any> extends EventEmitter{
         this.disposes.push(dispose)
         return dispose
     }
-    broadcast(channelId:ChannelId,content:Sendable){
+    broadcast(channelId:ChannelId,content:Element.Fragment){
         const [platform,self_id,target_type=platform,target_id=self_id]=channelId.split(':')
         const bots=[...this.app.adapters.values()].reduce((result,adapter)=>{
            if(platform===target_type) result.push(...(adapter.bots as Bot[]))
            else if(platform===adapter.protocol) result.push(...(adapter.bots.filter(bot=>bot.self_id===self_id) as Bot[]))
             return result
         },[] as Bot[])
-        return Promise.all(bots.map(bot=>bot.sendMsg(Number(target_id),target_type,content)))
+        return Promise.all(bots.map(bot=>bot.sendMsg(Number(target_id),<"private" | "group" | "discuss" | "guild">target_type,content)))
     }
 
     bail(event, ...args) {

@@ -23,7 +23,6 @@ import {Dict} from "./types";
 import {Context, Plugin, Plugins} from "./context";
 import Koa from "koa";
 import {Adapter, AdapterOptionsType} from "./adapter";
-import {Segment, Sendable} from "./bot";
 import {IcqqAdapter, IcqqBot, IcqqEventMap} from './adapters/icqq'
 import {Session} from "./session";
 import {Middleware} from "./middleware";
@@ -125,16 +124,7 @@ export class Zhin extends Context {
             server.close()
         })
         this.use(Component)
-        this.command('execute <template>')
-            .desc('根据指令模板执行指令')
-            .hidden()
-            .action(async ({session},template)=>{
-                return Segment.parse(await Command.executeTemplate.apply(session,[Segment.stringify(template)]))
-            })
         this.middleware(async (session,next) => {
-            const elements= await session.transform(Element.parse(session.content,Zhin.createContext(session)))
-            session.segments=Segment.parse(session.content=elements.map(element=>Element.unescape(element.toString())).join(''))
-
             const result=await session.execute()
             if(!result) return next()
             return session.reply(result)
@@ -248,7 +238,7 @@ export class Zhin extends Context {
     }
 
 
-    sendMsg(channelId: ChannelId, message: Sendable) {
+    sendMsg(channelId: ChannelId, message: Element.Fragment) {
         const [protocol, self_id, targetType, targetId] = channelId.split(':') as [keyof Zhin.Adapters, `${string | number}`, TargetType, `${string | number}`]
         const adapter = this.adapters.get(protocol)
         const bot = adapter.bots.get(self_id)
@@ -337,24 +327,24 @@ export class Zhin extends Context {
             fullPath: getListenDir(resolved)
         } as any
     }
-    getSupportPlugins(protocol:keyof Zhin.Adapters){
+    getSupportPlugins<P extends keyof Zhin.Adapters>(protocol:P){
         return this.pluginList.filter(plugin=>{
             return plugin.protocol===undefined || plugin.protocol.length===0 || plugin.protocol.includes(protocol)
         })
     }
-    getSupportComponents(session:Session<keyof Zhin.Adapters>){
+    getSupportComponents<P extends keyof Zhin.Adapters>(session:Session<P>){
         return this.getSupportPlugins(session.protocol).reduce((result:Dict<Component>,plugin)=>{
             Object.assign(result,plugin.componentList)
             return result
         },this.components)
     }
-    getSupportMiddlewares(session:Session<keyof Zhin.Adapters>){
+    getSupportMiddlewares<P extends keyof Zhin.Adapters>(session:Session<P>){
         return this.getSupportPlugins(session.protocol).reduce((result:Middleware<Session>[],plugin)=>{
             result.push(...plugin.middlewareList)
             return result
         },[...this.middlewares])
     }
-    getSupportCommands(session:Session<keyof Zhin.Adapters>){
+    getSupportCommands<P extends keyof Zhin.Adapters>(session:Session<P>){
         return this.getSupportPlugins(session.protocol).reduce((result:Command[],plugin)=>{
             for(const command of plugin.commandList){
                 if(command.match(session as any)){
@@ -521,9 +511,9 @@ export namespace Zhin {
     export type Value<O extends KVMap, K> = K extends `${infer L}.${infer R}` ? Value<O[L], R> : K extends keyof O ? O[K] : any
 
     export type ServiceConstructor<R, T = any> = new (bot: Zhin, options?: T) => R
-    export function createContext(session:Session<keyof Adapters>){
+    export function createContext<T extends object>(context:T):T{
         const whiteList = ['Math', 'Date','JSON']
-        return new Proxy(session,{
+        return new Proxy(context,{
             has(target, key) {
                 // 由于代理对象作为`with`的参数成为当前作用域对象，因此若返回false则会继续往父作用域查找解析绑定
                 if (typeof key==='string' && whiteList.includes(key)) {
@@ -539,7 +529,15 @@ export namespace Zhin {
             },
             get(target, key, receiver) {
                 if (key === Symbol.unscopables) {
-                    return undefined
+                    return {
+                        app:true,
+                        adapter:true,
+                        plugin:true,
+                        context:true
+                    }
+                }
+                if(key==='bot' && typeof target['bot']==='object'){
+                    return createContext(target['bot'])
                 }
                 return Reflect.get(target, key, receiver)
             }

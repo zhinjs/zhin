@@ -1,6 +1,6 @@
 import {Argv} from "./argv";
 import {Awaitable, Define} from "./types";
-import {Segment, Sendable} from "./bot";
+import Element from './element'
 import {isEmpty, keys} from "lodash";
 import {Zhin} from "./zhin";
 import {Session, PayloadWithSession} from "./session";
@@ -151,15 +151,15 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
             const content = argv.argv.shift()
             const argDecl = this.args[args.length]
 
-            if (content[0]?.data?.['text']?.[0] !== '-' && Argv.resolveConfig(argDecl?.type).greedy) {
+            if (content[0].attrs.content?.[0] !== '-' && Argv.resolveConfig(argDecl?.type).greedy) {
                 args.push(Argv.parseValue([content, ...argv.argv].reduce((result, sArr) => {
-                    if (result.length) result.push({type: 'text', data: {text: ' '}})
+                    if (result.length) result.push(Element('text',{content:' '}))
                     result.push(...sArr)
                     return result
                 }, []), 'argument', argv, argDecl));
                 break;
             }
-            if (content[0]?.data?.['text']?.[0] !== '-' && !Object.values(this.options).find(opt => opt.shortName === content[0]?.data['text']) && argDecl) {
+            if (content[0].attrs.content?.[0] !== '-' && !Object.values(this.options).find(opt => opt.shortName === content[0].attrs.content) && argDecl) {
                 if (argDecl.variadic) {
                     args.push(...[content].concat(argv.argv).map(str => Argv.parseValue(str, 'argument', argv, argDecl)));
                     break;
@@ -168,7 +168,7 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
                     continue;
                 }
             }
-            const optionDecl = [...Object.values(this.options)].find(decl => decl.shortName === content[0]?.data['text'])
+            const optionDecl = [...Object.values(this.options)].find(decl => decl.shortName === content[0]?.attrs.content)
             if (optionDecl && !options[optionDecl.name]) {
                 if (optionDecl.declaration.required && !optionDecl.initial && (!argv.argv[0] || options[argv.args[0]])) {
                     argv.error = `option ${optionDecl.name} is required`
@@ -180,7 +180,7 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
                             break;
                         } else if (Argv.resolveConfig(optionDecl.declaration.type).greedy) {
                             options[optionDecl.name] = Argv.parseValue(argv.argv.reduce((result, sArr) => {
-                                if (result.length) result.push({type: 'text', data: {text: ' '}})
+                                if (result.length) result.push(Element('text',{content:' '}))
                                 result.push(...sArr)
                                 return result
                             }, []), 'option', argv, optionDecl.declaration)
@@ -211,22 +211,21 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
         const args = argv.args ||= [], options = argv.options ||= {}
         for (const shortcut of this.shortcuts) {
             const segment = argv.segments?.length ? argv.segments[0] : undefined
-            if (typeof shortcut.name === 'string' && segment.type === 'text' && segment.data['text'] === shortcut.name) {
+            if (typeof shortcut.name === 'string' && segment.type === 'text' && segment.attrs.content === shortcut.name) {
                 args.push(...(shortcut.args || []))
                 Object.assign(options, shortcut.options || {})
             }
             if (shortcut.name instanceof RegExp && segment.type === 'text') {
-                const matched = (segment.data['text'] as string).match(shortcut.name)
+                const matched = (segment.attrs.content as string).match(shortcut.name)
                 if (matched) {
                     matched.forEach((str, index) => {
                         if (index === 0) return
                         if (shortcut.args) {
                             shortcut.args.forEach((arg, i) => {
                                 if (typeof arg === 'string' && arg.includes(`${index}`)) {
-                                    args.push(Argv.parseValue([{
-                                        type: "text",
-                                        data: {text: arg.replace(`$${index}`, str)}
-                                    }], 'argument', argv, this.args[i]))
+                                    args.push(Argv.parseValue([Element('text',{
+                                        content: arg.replace(`$${index}`, str)
+                                    })], 'argument', argv, this.args[i]))
                                 }
                             })
                         }
@@ -245,7 +244,7 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
     }
 
     // 执行指令
-    async execute(argv: Argv<A, O, T>): Promise<Sendable | boolean | void> {
+    async execute(argv: Argv<A, O, T>): Promise<Element.Fragment | boolean | void> {
         // 匹配参数、选项
         this.parseShortcut(argv)
         if (argv.error) {
@@ -326,23 +325,6 @@ export namespace Command {
         hidden?:boolean
         authorities:Command.Authority[]
     }
-    export async function executeTemplate(this: Session, template: string): Promise<string> {
-        template = template.replace(/\$A/g, `[SG:mention,qq=all]`)
-            .replace(/\$a/g, `[SG:mention,qq=${this.user_id}]`)
-            .replace(/\$m/g, `[SG:mention,qq=${this.bot.self_id}]`);
-        while (template.match(/\$\(.*\)/)) {
-            const text = /\$\((.*)\)/.exec(template)[1];
-            const executeResult = await executeTemplate.call(this, text);
-            if (executeResult && typeof executeResult !== 'boolean') {
-                template = template.replace(`$(${text})`, executeResult);
-            }
-        }
-        const result = await this.execute(Segment.parse(template));
-        if (result && typeof result !== "boolean")
-            return typeof result === 'string' ? result : Segment.stringify(result)
-        return template;
-    }
-
     export interface Shortcut {
         name?: string | RegExp;
         fuzzy?: boolean;
@@ -363,7 +345,7 @@ export namespace Command {
     }
 
     export type Callback<A extends any[] = any[], O extends {} = {}, T extends keyof TriggerSessionMap = keyof TriggerSessionMap>
-        = (this: Command<A, O, T>, argv: Argv<A, O, T>, ...args: A) => Awaitable<Sendable | boolean | void>
+        = (this: Command<A, O, T>, argv: Argv<A, O, T>, ...args: A) => Awaitable<Element.Fragment| void>
     export type Authority = 'master' | 'admins'
     export type OptionType<S extends string> = Argv.ExtractFirst<Argv.Replace<S, '>', ']'>, any>
 

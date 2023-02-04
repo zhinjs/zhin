@@ -1,10 +1,11 @@
-import {Bot, Segment, SegmentElem, Sendable} from "./bot";
+import {Bot} from "./bot";
 import {Zhin} from "./zhin";
 import {Argv} from "./argv";
-import Element from './element'
+import Element from '@/element'
 import {Middleware} from "./middleware";
 import {Prompt} from "./prompt";
 import {Dict} from "./types";
+import { isNullable} from "./utils";
 
 export type FunctionPayloadWithSessionObj<E extends (...args: any[]) => any> = E extends (...args: infer R) => any ? ParametersToObj<R> : unknown
 export type ParametersToObj<A extends any[]> = A extends [infer R, ...infer L] ? R & R extends object ? R & { args: L } : { args: [R, ...L] } : Dict
@@ -20,11 +21,11 @@ export interface Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E e
     detail_type?: string
     app: Zhin
     prompt: Prompt
-    segments: SegmentElem[]
-    content:string
+    elements: Element[]
     adapter: Zhin.Adapters[P],
     bot: Zhin.Bots[P]
     event: E
+    message_id?:string
 }
 
 export type PayloadWithSession<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P] = keyof Zhin.BotEventMaps[P]> =
@@ -38,28 +39,35 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
         this.event = event
         this.bot = adapter.bots.get(self_id) as any
         Object.assign(this, obj)
-        this.content=Segment.stringify(this.segments)
-        this.prompt = new Prompt(this.bot, this as any, this.app.options.delay.timeout || 6000)
+        this.prompt = new Prompt(this.bot, this as any, this.app.options.delay.prompt)
     }
 
     middleware(middleware: Middleware<Session>, timeout: number = this.app.options.delay.prompt) {
-        return new Promise<void | boolean | Sendable>(resolve => {
-            const dispose = this.app.middleware(async (session, next) => {
-                if (Bot.getFullTargetId(this as any) !== Bot.getFullTargetId(session)) await next()
-                dispose()
+        const fullId = Bot.getFullTargetId(this as any)
+        return this.app.middleware(async (session, next) => {
+            if (fullId && Bot.getFullTargetId(session)!==fullId) return next()
+            return middleware(session, next)
+        }, true)
+    }
+    isAtMe(){
+        return this.elements.length && this.elements[0].type==='mention' && String(this.elements[0].attrs['user_id'])===String(this.bot.self_id)
+    }
+    async nextArgv(){
+        return new Promise<void|Argv>(resolve => {
+            const dispose = this.middleware(async (session, next) => {
                 clearTimeout(timer)
-                resolve(await middleware(session, next))
-            }, true)
+                dispose()
+                const value=Argv.parse(session.elements,this)
+                resolve(value)
+                if (isNullable(value)) return next()
+            })
             const timer = setTimeout(() => {
                 dispose()
                 resolve()
-            }, timeout)
+            }, this.app.options.delay.prompt)
         })
     }
-    isAtMe(){
-        return this.segments.length && this.segments[0].type==='mention' && String(this.segments[0].data['qq'])===String(this.bot.self_id)
-    }
-    async execute(argv: SegmentElem[] | Argv = this.segments) {
+    async execute(argv: Element[] | Argv = this.elements) {
         if (Array.isArray(argv)) {
             let data=Argv.parse<P,E>(argv,this)
             if(!data) return
@@ -67,11 +75,9 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
         }
         if(argv.atMe && !argv.name){
             await this.reply('嗯哼？')
-            await this.middleware((session)=>{
-                let data=Argv.parse(session.segments,this)
-                if(!data) return
-                argv=data
-            })
+            const  data=await this.nextArgv()
+            if(!data) return
+            argv=data
         }
         const command = this.app.findCommand(argv)
         if (!command) return
@@ -80,8 +86,8 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
         if (Array.isArray(result) && !result.length) return
         return result
     }
-    async transform(elements: Element[]): Promise<Element[]> {
-        return await Element.transformAsync(elements, this.app.getSupportComponents(this as any), this as any)
+    async transform(elements: Element[]=this.elements): Promise<Element[]> {
+        return await Element.transformAsync(elements, this.app.getSupportComponents(this) as any, this)
     }
 
     toJSON() {
@@ -92,7 +98,7 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
         )
     }
 
-    async reply(message: Sendable) {
+    async reply(message: Element.Fragment) {
         return this.bot.reply(this as any, message, this.bot.options.quote_self)
     }
 }

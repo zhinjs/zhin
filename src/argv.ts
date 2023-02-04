@@ -1,15 +1,16 @@
-import {Bot, SegmentElem, Segment} from "./bot";
+import {Bot} from "./bot";
 import {Session} from "./session";
+import Element,{mention,mention_all,face,image,reply,audio,voice,location,json,xml,text,file} from "@/element";
 import {TriggerSessionMap} from "./command";
 import {Zhin} from "./zhin";
 
 export interface Argv<A extends any[] = any[], O = {},T extends keyof TriggerSessionMap=keyof TriggerSessionMap> {
     name?:string//指令名称
-    argv?:SegmentElem[][]
+    argv?:Element[][]
     session:TriggerSessionMap[T]
     atMe?:boolean
-    bot?:Bot<keyof Zhin.Bots,any,any,string|number>
-    segments?: SegmentElem[]//原文
+    bot?:Bot<keyof Zhin.Bots,any,any>
+    segments?: Element[]//原文
     args?: A//携带的args
     options?: O//携带的options
     error?: string//是否报错
@@ -18,21 +19,20 @@ export interface Argv<A extends any[] = any[], O = {},T extends keyof TriggerSes
 
 export namespace Argv{
     export interface Domain {
-        any: SegmentElem[]
+        any: Element[]
         text:string
         string: string
-        mention: ReturnType<Segment['mention']>
-        face: ReturnType<Segment['face']>
-        file: ReturnType<Segment['file']>
-        voice: ReturnType<Segment['voice']>
-        audio: ReturnType<Segment['audio']>
-        image: ReturnType<Segment['image']>
+        mention: ReturnType<typeof mention>
+        face: ReturnType<typeof face>
+        file: ReturnType<typeof file>
+        voice: ReturnType<typeof voice>
+        audio: ReturnType<typeof audio>
+        image: ReturnType<typeof image>
         number: number
         boolean: boolean
         integer: number
         date: Date,
         regexp:RegExp
-        qq:ReturnType<Segment['mention']>|number
     }
     type DomainType = keyof Domain
 
@@ -45,10 +45,10 @@ export namespace Argv{
     export type ExtractFirst<S extends string, F>
         = S extends `${infer L}]${any}` ? ParamType<L, F> : boolean
     type ExtractSpread<S extends string> = S extends `${infer L}...${infer R}`
-        ? [...ExtractAll<L, SegmentElem[]>, ...ExtractFirst<R, SegmentElem[]>[]]
-        : [...ExtractAll<S, SegmentElem[]>, ...SegmentElem[]]
+        ? [...ExtractAll<L, Element[]>, ...ExtractFirst<R, Element[]>[]]
+        : [...ExtractAll<S, Element[]>, ...Element[]]
     export type ArgumentType<S extends string> = ExtractSpread<Replace<S, '>', ']'>>
-    export type Type = DomainType | RegExp | SegmentElem[] | Transform<any>
+    export type Type = DomainType | RegExp | Element[] | Transform<any>
     export interface Declaration {
         name?: string
         type?: Type
@@ -56,7 +56,7 @@ export namespace Argv{
         variadic?: boolean
         required?: boolean
     }
-    export type Transform<T> = (source: SegmentElem[]) => T
+    export type Transform<T> = (source: Element[]) => T
     export interface DomainConfig<T> {
         transform?: Transform<T>
         greedy?: boolean
@@ -65,12 +65,12 @@ export namespace Argv{
         if (typeof type === 'function') {
             return type
         } else if (type instanceof RegExp) {
-            return (source: SegmentElem[]) => {
-                if (source.every(s=>s.type==='text') && source.map(s=>s.data['text']).join('').match(type)) return source
+            return (source: Element[]) => {
+                if (source.every(s=>s.type==='text') && source.map(s=>s.attrs.content).join('').match(type)) return source
                 throw new Error()
             }
         } else if (Array.isArray(type)) {
-            return (source: SegmentElem[]) => {
+            return (source: Element[]) => {
                 return source
             }
         }
@@ -83,14 +83,14 @@ export namespace Argv{
     createDomain('any', source => source, { greedy: true })
     createDomain('string', (source) => {
         const textElem=source.find(s=>s.type==='text')
-        if(textElem) return textElem.data['text']
+        if(textElem) return textElem.attrs.content
         throw new Error('无效的文本')
     })
     createDomain('text', (source) => {
         let result:string=''
         for(const elem of source){
             if(elem.type==='text'){
-                result+=elem.data['text']
+                result+=elem.attrs.content
             }else{
                 break;
             }
@@ -100,76 +100,71 @@ export namespace Argv{
     createDomain('boolean', () => true)
     createDomain('mention', (source) => {
         const elem=source.find(s=>s.type==='mention')
-        if(elem) return elem as ReturnType<Segment['mention']>
+        if(elem) return elem as ReturnType<typeof mention>
         throw new Error('无效的用户qq')
     })
     createDomain('face', (source) => {
-        const elem=source.find(s=>s.type==='face' || (s.type==='image' && s.data['asface']))
-        if(elem) return elem as ReturnType<Segment['face']>
+        const elem=source.find(s=>s.type==='face' || (s.type==='image' && s.attrs['asface']))
+        if(elem) return elem as ReturnType<typeof face>
         throw new Error('无效的表情对象')
     })
     createDomain('file', (source) => {
         const elem=source.find(s=>s.type==='file')
-        if(elem) return elem as ReturnType<Segment['file']>
+        if(elem) return elem as ReturnType<typeof file>
         throw new Error('无效的文件')
     })
     createDomain('image', (source) => {
         const elem=source.find(s=>s.type==='image')
-        if(elem) return elem as ReturnType<Segment['image']>
+        if(elem) return elem as ReturnType<typeof image>
         throw new Error('无效的图片')
     })
     createDomain('voice', (source) => {
         const elem=source.find(s=>s.type==='voice')
-        if(elem) return elem as ReturnType<Segment['voice']>
+        if(elem) return elem as ReturnType<typeof voice>
         throw new Error('无效的音频')
     })
     createDomain('audio', (source) => {
         const elem=source.find(s=>s.type==='audio')
-        if(elem) return elem as ReturnType<Segment['audio']>
+        if(elem) return elem as ReturnType<typeof audio>
         throw new Error('无效的语音')
     })
     createDomain('number', (source) => {
-        const value = +source[0].data['text']
+        const value = +source[0].attrs.content
         if (Number.isFinite(value)) return value
         throw new Error('无效的数值')
     })
     createDomain('integer', (source) => {
-        const value = +source[0].data['text']
+        const value = +source[0].attrs.content
         if (value * 0 === 0 && Math.floor(value) === value) return value
         throw new Error('无效的整数')
-    })
-    createDomain('qq',(source)=>{
-        const elem=source.find(s=>s.type==='mention')
-        if(elem) return elem as ReturnType<Segment['mention']>
-        throw new Error('无效的用户qq')
     })
     const BRACKET_REGEXP = /<[^>]+>|\[[^\]]+\]/g
     interface DeclarationList extends Array<Declaration> {
         stripped: string
     }
-    export function parse<P extends keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P]>(content:SegmentElem[],session:Session<P,E>):Argv|void{
-        let argv:SegmentElem[][]=[]
+    export function parse<P extends keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P]>(content:Element[],session:Session<P,E>):Argv|void{
+        let argv:Element[][]=[]
         const atMe=session.isAtMe();
-        const saveSession=session.segments===content
-        let argvItem:SegmentElem[]=[]
+        const saveSession=session.elements===content
+        let argvItem:Element[]=[]
         for(const segment of content){
             const idx=content.indexOf(segment)
             if(idx===0){
-                if(session.bot.options.prefix && (segment.type!=='text' || !segment.data['text'].startsWith(session.bot.options.prefix)) && !atMe){
+                if(session.bot.options.prefix && (segment.type!=='text' || !segment.attrs.content.startsWith(session.bot.options.prefix)) && saveSession && !atMe){
                     return
                 }else if(atMe && saveSession){
                     continue
                 }else if(saveSession){
-                    segment.data['text']=segment.data['text'].replace(session.bot.options.prefix,'')
+                    segment.attrs.content=segment.attrs.content.replace(session.bot.options.prefix,'')
                 }
             }else if(atMe && idx===1 && segment.type!=='text' && saveSession){
-                segment.data['text']=segment.data['text'].trim()
+                segment.attrs.content=segment.attrs.content.trim()
             }
             if(segment.type!=='text') argvItem.push(segment)
             else {
                 // 结束引号标识
                 let quoteEnd=''
-                segment.data['text'].split(' ').forEach(text=>{
+                segment.attrs.content.split(' ').forEach(text=>{
                     // 处理文本
                     if(/^'|"|“|‘.+$/.test(text) && !quoteEnd) {
                         if(text.startsWith('“')){
@@ -180,10 +175,7 @@ export namespace Argv{
                             quoteEnd=text[0]
                         }
                     }
-                    argvItem.push({
-                        type:'text',
-                        data:{text:text}
-                    })
+                    argvItem.push(Element('text',{content:text}))
                     if(/'|"|”|’$/.test(text) && quoteEnd && quoteEnd===text[text.length-1]){
                         quoteEnd=''
                     }
@@ -191,7 +183,7 @@ export namespace Argv{
                         argv.push([...argvItem])
                         argvItem=[]
                     }else{
-                        argvItem.push({type:'text',data:{text:' '}})
+                        argvItem.push(Element('text',{content:' '}))
                     }
                 })
             }
@@ -199,15 +191,15 @@ export namespace Argv{
         if(argvItem.length) argv.push([...argvItem])
         argv=argv.filter(sArr=>{
             return sArr.filter(s=>{
-                return s.type !=="text" || !!s.data['text']?.length
+                return s.type !=="text" || !!s.attrs.content?.length
             }).length
         }).map(sArr=>{
-            if(sArr.every(s=>s.type==='text')) return [{type:'text',data:{text:sArr.map(s=>s.data['text']).join('')}}]
+            if(sArr.every(s=>s.type==='text')) return [Element('text',{content:sArr.map(s=>s.attrs.content).join('')})]
             return sArr
         })
-        const first=argv.length?argv.shift()[0]:{type:'text',data:{text:''}}
+        const first=argv.length?argv.shift()[0]:Element('text',{content:''})
         return {
-            name:first.data['text']||'',
+            name:first.attrs.content||'',
             bot:session.bot,
             atMe,
             session:session as any,
@@ -240,9 +232,9 @@ export namespace Argv{
     export function resolveConfig(type: Type) {
         return typeof type === 'string' ? typeTransformer[type] || {} : {}
     }
-    export function parseValue(source: SegmentElem[], kind: string, argv: Argv, decl: Declaration = {}) {
+    export function parseValue(source: Element[], kind: string, argv: Argv, decl: Declaration = {}) {
         const { name, type, initial } = decl
-        const implicit = source.length===1&& source[0].type==='text' && source[0].data['text']===''
+        const implicit = source.length===1&& source[0].type==='text' && source[0].attrs.content===''
         if (implicit && initial !== undefined) return initial
         const transform = resolveType(type)
         if (transform) {

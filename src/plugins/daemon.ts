@@ -22,6 +22,10 @@ export function install(ctx:Context, config:DaemonConfig={}){
         .shortcut('关机')
         .shortcut('重启', {options: {restart: true}})
         .action(async ({options,session}) => {
+            const result=await session.prompt.prompts({
+                abc:{type:'text',message:'请输入姓名'},
+                def:{type:"number",message:'请输入年龄'}
+            })
             const channelId = Bot.getFullTargetId(session);
             if (!options.restart) {
                 await session.reply('正在关机...').catch(()=>{})
@@ -46,10 +50,12 @@ export function install(ctx:Context, config:DaemonConfig={}){
                 if(times) message+=`耗时：${(new Date().getTime()-times)/1000}s`
                 bot.sendMsg(target_id,target_type, message)
             } else {
-                const dispose = ctx.on('icqq.system.online', () => {
+                const dispose = ctx.on('bot.online', (platform,bot_id) => {
                     if(times) message+=`耗时：${(new Date().getTime()-times)/1000}s`
-                    bot.sendMsg(target_id,target_type, message)
-                    dispose()
+                    if(bot.adapter.protocol===platform && bot.self_id===bot_id){
+                        bot.sendMsg(target_id,target_type, message)
+                        dispose()
+                    }
                 })
             }
         }

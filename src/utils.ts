@@ -256,6 +256,7 @@ export function getCaller(){
     stack.shift()
     return stack.shift()
 }
+export type Promisify<T>=T extends Promise<infer R>?Promise<R>:Promise<T>
 export function deepEqual<T = object>(a: Partial<T>, b: Partial<T>):boolean {
     if (a === b) return true
     if (typeof a !== typeof b) return false

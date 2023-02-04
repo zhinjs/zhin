@@ -1,116 +1,176 @@
 import {Adapter, AdapterOptions} from "@/adapter";
-import {Config as IcqqConfig,EventMap, Client, MessageRet,Sendable as IcqqSendable, Quotable, MessageElem} from "icqq";
-import {Bot, BotOptions, SegmentElem, Sendable} from '@/bot'
+import {
+    Config as IcqqConfig,
+    Quotable,
+    Client,
+    Sendable,
+    MessageElem,
+    MessageRet, GroupMessageEvent, DiscussMessageEvent
+} from "icqq";
+import {Bot, BotOptions} from '@/bot'
+import Element from '@/element'
 import {Zhin} from "@/zhin";
-import {Session} from "@/Session";
-function toSegment(msgList:IcqqSendable) {
-    msgList = [].concat(msgList);
-    return msgList.map((msg) => {
-        if (typeof msg === 'string') return {type: 'text', data: {text: msg}} as SegmentElem
-        let {type, ...other} = msg;
-        return {
-            type:type==='at'?other['qq']?'mention':"mention_all":type,
-            data: {
-                ...other,
-                user_id:other['qq']
+import {Session} from "@/session";
+import {MergeEventMap, PrivateMessageEvent} from "icqq/lib/events";
+
+
+export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
+    constructor(public app: Zhin, public adapter: Adapter<'icqq', BotOptions<IcqqBotOptions>>, public options: BotOptions<IcqqBotOptions>) {
+        if (!options.data_dir) options.data_dir = app.options.data_dir
+        super()
+        this.internal = new Client(options)
+        this.self_id = options.uin
+        this.internal.on('message',(message)=>{
+            this.emit('message',message)
+        })
+        this.internal.on('notice',(notice)=>{
+            this.emit('notice',notice)
+        })
+        this.internal.on('request',(request)=>{
+            this.emit('request',request)
+        })
+        this.internal.on('system',(...args)=>{
+            this.emit('system',...args)
+        })
+        this.internal.on('system.online',()=>{
+            this.adapter.emit('bot.online',this.self_id)
+        })
+        this.internal.on('system.offline',()=>{
+            this.adapter.emit('bot.offline',this.self_id)
+        })
+        this.callApi=<K extends keyof Client>(apiName, ...args)=> {
+            let fn=this.internal[apiName]
+            if(typeof fn==='function') return fn.apply(this.internal,args)
+            if(fn===undefined) fn=this[apiName]
+            if(typeof fn==='function') return fn.apply(this,args)
+            return fn
+        }
+        this.internal.sendMsg=async function (this:Client,target_id, target_type, content):Promise<Bot.MessageRet>{
+            const replyElement=content.find(ele=>ele.type==='reply')
+            const ele=[...content]
+            let quote:Quotable
+            if(replyElement){
+                quote=await this.getMsg(replyElement.attrs.message_id)
+                ele.splice(content.indexOf(replyElement),1)
             }
-        }  as SegmentElem
+            const message=fromElement(ele)
+            let func:string
+            switch (target_type){
+                case 'private':
+                    func='sendPrivateMsg'
+                    break;
+                case 'discuss':
+                    func='sendDiscussMsg'
+                    break;
+                case 'group':
+                    func='sendGroupMsg'
+                    break
+                default:
+                    throw new Error('not support')
+            }
+            const messageRet=(await this[func](target_id,message,quote)) as MessageRet
+            return {
+                message_id:messageRet.message_id,
+                from_id:this.uin,
+                to_id:target_id,
+                type:target_type as Bot.MessageType,
+                elements:content
+            }
+        }
+    }
+
+    start() {
+        this.internal.login(Number(this.options.uin), this.options.password)
+    }
+    stop(){
+        this.internal.offTrap()
+        this.internal.logout()
+    }
+    createSession<E extends keyof IcqqEventMap>(event: E, ...args: Parameters<IcqqEventMap[E]>): Session<'icqq', E> {
+        const obj = typeof args[0] === "object" ? args.shift() : {}
+        Object.assign(obj, {
+            bot: this,
+            protocol: 'icqq',
+            adapter: this.adapter,
+            event,
+            type: obj.post_type,
+            detail_type: obj.message_type || obj.request_type || obj.system_type || obj.notice_type,
+        }, {args})
+        delete obj.reply
+        const session=new Session<"icqq", E>(this.adapter, this.self_id, event, obj)
+        session.elements=toElement(obj.message,session)
+        return session
+    }
+
+}
+
+export class IcqqAdapter extends Adapter<'icqq', IcqqBotOptions, {}, IcqqEventMap> {
+    constructor(app: Zhin, protocol, options: AdapterOptions<IcqqBotOptions>) {
+        super(app, protocol, options);
+    }
+
+}
+
+function toElement<S>(msgList: Sendable,ctx?:S) {
+    msgList = [].concat(msgList)
+    let result:Element[]=[]
+    msgList.forEach((msg) => {
+        if (typeof msg === 'string') msg={type:'text',text:msg}
+        if(msg.type==="text"){
+            result.push(...Element.parse(msg.text,ctx))
+        }else{let {type, ...attrs} = msg;
+            result.push(Element(type === 'at' ? attrs['qq'] ? 'mention' : "mention_all" : type,{
+                user_id: attrs['qq'],
+                file:attrs['file_id']||attrs['src'],
+                content:attrs['text'],
+                ...attrs
+            }))
+        }
     })
+    return result
 }
-export function segmentsToString(segments:SegmentElem[]){
-    return segments.map(segment=>{
-        const toString=(obj:Record<string, any>)=>{
-            return Object.keys(obj).map(key=>`${key}=${obj[key]}`).join(',')
-        }
-        return segment.type==='text'?segment.data['text']:`[SG:${segment.type} $${toString(segment.data)}]`
-    }).join('')
+
+declare module 'icqq' {
+    interface Client {
+        sendMsg(target_id: number, target_type: string, content: Element[]):Promise<Bot.MessageRet>
+    }
 }
-function fromSegment(msgList:SegmentElem|string|number|(SegmentElem|string|number)[]) {
-    msgList = [].concat(msgList);
-    return msgList.map((msg) => {
-        if(typeof msg !=='object') msg=String(msg)
-        if(typeof msg==='string'){
-            return {type: 'text',text:msg}
+const allowElement=['text','at','image','face','rps','dice']
+function fromElement(elementList: Element | string | number | (Element | string | number)[]) {
+    elementList = [].concat(elementList);
+    return elementList.map((element) => {
+        if (typeof element !== 'object') element = String(element)
+        if (typeof element === 'string') {
+            return {type: 'text', text: element}
         }
-        const { type, data, ...other } = msg;
-        return {
-            type: type.replace('mention','at').replace('at_all','at'),
-            ...other,
-            ...data
-        };
+        const {type, attrs, children} = element;
+        const result = {
+            type: type.replace('mention', 'at').replace('at_all', 'at'),
+            ...attrs,
+            text:attrs.content||children.join('')
+        }
+        if(allowElement.includes(type)){
+            if (attrs['user_id']) result['qq'] = attrs['user_id']
+            if (attrs['file_id']) result['file'] = attrs['file_id']
+            if (attrs['src']) result['file'] = attrs['src']
+            return result
+        }
+        return element.toString()
     }) as MessageElem[]
 }
-export interface IcqqBotOptions extends IcqqConfig{
-    uin:number
-    quote_self?:boolean
-    password?:string
+
+export interface IcqqBotOptions extends IcqqConfig {
+    uin: string
+    quote_self?: boolean
+    password?: string
 }
-export interface IcqqEventMap extends Zhin.BaseEventMap,EventMap{
+export interface EventMap<T=any>{
+    system(...args:any[]):T
+    message(event:PrivateMessageEvent|GroupMessageEvent|DiscussMessageEvent):T
+    notice(event:Parameters<MergeEventMap['notice.friend']> | Parameters<MergeEventMap['notice.group']>):T
+    request(event:Parameters<MergeEventMap['request.friend']> | Parameters<MergeEventMap['request.group']>):T
 }
-export class IcqqBot extends Client implements Bot<'icqq',IcqqBotOptions,{},number>{
-    public self_id:number
-    constructor(public app:Zhin, public adapter:Adapter<'icqq',BotOptions<IcqqBotOptions>>, public options:BotOptions<IcqqBotOptions>) {
-        if(!options.data_dir) options.data_dir=app.options.data_dir
-        super(options)
-        this.self_id=options.uin
-    }
-    trip<E extends keyof EventMap>(eventName: E, ...args:Parameters<EventMap[E]>): boolean {
-        this.adapter.dispatch(eventName,this.createSession(eventName,...args))
-        return super.trip(eventName,...args)
-    }
+export interface IcqqEventMap extends Zhin.BaseEventMap,EventMap<IcqqBot> {
 
-    start(){
-        this.login(this.options.uin,this.options.password)
-    }
-
-    sendMsg(target_id: number, target_type: string, content:Sendable,session?:Session) {
-        const msg=typeof content==='string'?content:fromSegment(content)
-        const message:Quotable|undefined=session?{...session,message:fromSegment(session.segments)} as unknown as Quotable:undefined
-        switch (target_type){
-            case 'group':
-                return this.sendGroupMsg(target_id,msg,message)
-            case 'private':
-                return this.sendPrivateMsg(target_id,msg,message)
-            case 'discuss':
-                return this.sendDiscussMsg(target_id,msg,message)
-        }
-    }
-    createSession<E extends keyof IcqqEventMap>(event:E,...args:Parameters<IcqqEventMap[E]>):Session<'icqq', E>{
-        const obj=typeof args[0]==="object"?args.shift():{}
-        Object.assign(obj,{
-            bot:this,
-            protocol:'icqq',
-            adapter:this.adapter,
-            event,
-            type:obj.post_type,
-            detail_type:obj.message_type||obj.request_type||obj.system_type||obj.notice_type,
-            segments:toSegment(obj['message']||[]),
-        },{args})
-        delete obj.reply
-        return new Session<"icqq", E>(this.adapter,this.self_id,event,obj)
-    }
-
-    isAdmin(session: Session<'icqq','message'>): boolean {
-        return this.options.admins && this.options.admins.includes(session['user_id']);
-    }
-
-    isMaster(session: Session<'icqq','message'>): boolean {
-        return this.options.master===session['user_id'];
-    }
-
-    reply(session: Session, message: Sendable, quote?: boolean): Promise<MessageRet> {
-        if(session.type!=='message') throw new Error(`not exist reply when type !=='message`)
-        return this.sendMsg(Number(session.group_id||session.discuss_id||session.user_id),session.detail_type,message,quote?session:undefined)
-    }
 }
-export class IcqqAdapter extends Adapter<'icqq',IcqqBotOptions,{},IcqqEventMap>{
-    constructor(app:Zhin, protocol, options:AdapterOptions<IcqqBotOptions>) {
-        super(app,protocol,options);
-    }
-    async start(){
-        for(const botOptions of this.options.bots){
-            this.startBot(botOptions)
-        }
-    }
-}
-Adapter.define('icqq',IcqqAdapter,IcqqBot)
+Adapter.define('icqq', IcqqAdapter, IcqqBot)
