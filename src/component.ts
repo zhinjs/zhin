@@ -27,7 +27,7 @@ export namespace Component {
                 return await session.prompt[attrs.type ||= 'text'](children.join(''), attrs)
             }, {session: true})
             .component('random', async (attrs, children, session) => {
-                return Random.pick(children).toString()
+                return Random.pick(children)
             })
             .component('time', (attrs) => {
                 let ms = attrs.value ? +attrs.value : Date.now()

@@ -295,8 +295,7 @@ namespace Element {
             if (result === true) {
                 output.push(Element(type, attrs, transform(children, rules, session)))
             } else if (result !== false) {
-
-                output.push(...normalize(result, session))
+                output.push(...transform(toElementArray(result),rules,session))
             }
         })
         return typeof source === 'string' ? output.join('') : output
@@ -316,7 +315,7 @@ namespace Element {
             if (render === true) {
                 result.push(Element(type, attrs, await transformAsync(children, rules, session)))
             } else if (render !== false) {
-                result.push(...normalize(render, session))
+                result.push(...await transformAsync(toElementArray(render),rules,session))
             }
         }
         return result
