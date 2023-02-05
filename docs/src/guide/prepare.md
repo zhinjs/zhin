@@ -7,6 +7,11 @@
 - 操作系统：`Windows`、`Linux`、`MacOS`
 - 运行环境：`NodeJS`(>=16.0)
 
+可以使用如下指令查询当前设备的nodeJS版本:
+```bash
+node -v
+```
+
 zhin为基于NodeJS开发的机器人框架，所以需要运行于NodeJS环境下，若未安装，请前往NodeJS官网，根据自身电脑配置，下载对应安装包，安装完成后继续
 
 ::: tip
