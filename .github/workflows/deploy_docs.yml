@@ -1,16 +1,24 @@
-name: Build Docs
-on: [push]
-
+name: 'github actions build and deploy gh-pages'
+on:
+  push:
+    branches:
+      - master  // 基于 master 分支，如果你的分支不是这个，请切换
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest   // 使用 ubuntu 服务器
     steps:
-      # 下载源码
       - name: Checkout
-        uses: actions/checkout@master
+        uses: actions/checkout@v2.3.1
+        with:
+          persist-credentials: false
+      - name: install and build
+        run: |
+          npm install
+          npm run docs:build
 
-      # 打包构建
-      - name: Build
-        uses: actions/setup-node@master
-      - run: npm install
-      - run: npm run deploy:docs
+      - name: Deploy
+        uses: JamesIves/github-pages-deploy-action@3.5.9  // 引用别人的部署插件
+        with:
+          ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}   // 这里需要设置成你的 token
+          BRANCH: gh-pages
+          FOLDER: docs/dist
