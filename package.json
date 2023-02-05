@@ -16,6 +16,7 @@
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
     "pub": "npm publish --access public",
+    "deploy:docs": "bash dosc.sh",
     "test": "echo \\\"Error: no src/test specified\\\" && exit 1"
   },
   "repository": {
