@@ -149,7 +149,6 @@ function fromElement(elementList: Element | string | number | (Element | string 
             ...attrs,
             text:attrs.text||children.join('')
         }
-        console.log(result)
         if(allowElement.includes(result.type)){
             if (attrs['user_id']) result['qq'] = attrs['user_id']
             if (attrs['file_id']) result['file'] = attrs['file_id']

@@ -1,24 +1,13 @@
-import { createRequire } from 'module'
-import {defineConfig} from "vitepress";
-const require = createRequire(import.meta.url)
-const pkg = require('../../package.json')
-export default defineConfig({
-    head: [['meta', { name: 'theme-color', content: '#3c8772' }]],
+import {defineConfigWithTheme} from "vitepress";
+export default defineConfigWithTheme({
     title: '知音(Zhin)',
     titleTemplate: ':title - 知音(Zhin)',
-    description: '轻量、优雅的开发机器人',
-    cleanUrls: true,
-    lang: 'zn-CH',
-    appearance: true,
-    base: '/docs/',
-    lastUpdated: true,
-    markdown: {
-        headers: {
-            level: [0, 0]
-        },
-    },
-    outDir: './dist',
+    head: [['meta', { name: 'theme-color', content: '#3c8772' }]],
     srcDir: './src',
+    outDir: './dist',
+    description: '轻量、优雅的开发机器人',
+    lang: 'zh-CN',
+    lastUpdated: true,
     ignoreDeadLinks: true,
     themeConfig: {
         nav: [
@@ -28,7 +17,7 @@ export default defineConfig({
             // { text: '插件市场', link: '/market/', activeMatch: '/market/' },
             // { text: 'Playground', link: 'https://playground.zhin.icu', activeMatch: '/playground/' },
             {
-                text: pkg.version,
+                text: require('../../package.json').version,
                 items: [
                     {
                         text: 'Changelog',
@@ -41,18 +30,6 @@ export default defineConfig({
                 ]
             }
         ],
-        editLink: {
-            pattern: 'https://github.com/zhinjs/zhin/edit/main/docs/:path',
-            text: '修正文档',
-        },
-        socialLinks: [
-            { icon: 'github', link: 'https://github.com/zhinjs/zhin' }
-        ],
-        lastUpdatedText: '上次更新时间',
-        docFooter: {
-            prev: '上一节',
-            next: '下一节'
-        },
         sidebar: {
             '/guide/':[
                 {
@@ -133,6 +110,22 @@ export default defineConfig({
                     link:'/config/built-plugin',
                 },
             ]
+        },
+        footer: {
+            message: 'Released under the <a href="https://github.com/zhinjs/zhin/blob/master/LICENSE">MIT License</a>.',
+            copyright: 'Copyright © 2022-2023 <a href="https://github.com/lc-cn">凉菜</a>'
+        },
+        editLink: {
+            pattern: 'https://github.com/zhinjs/zhin/edit/master/docs/src/:path',
+            text: '修正文档',
+        },
+        socialLinks: [
+            { icon: 'github', link: 'https://github.com/zhinjs/zhin' }
+        ],
+        lastUpdatedText: '上次更新时间',
+        docFooter: {
+            prev: '上一节',
+            next: '下一节'
         }
     }
 })

@@ -131,7 +131,15 @@ export function install (ctx:Context){
 }
 ```
 :::
-现在，一个简单的复读机就写好了，接下来，我们启用刚刚编写的插件
+
+### 测试一下
+
+<ChatHistory>
+  <ChatMsg id="1659488338">hello</ChatMsg>
+  <ChatMsg id="1659488338">...</ChatMsg>
+</ChatHistory>
+谔谔 为啥没效果呢？因为插件还未被启用，现在，我们来启用插件
+
 ## 3.启用插件
 在配置文件`zhin.yaml`中声明该插件，zhin则会自动载入该插件
 ```yaml [zhin.yaml]
@@ -156,6 +164,12 @@ data_dir: data # 缓存文件存放目录
 delay:
   prompt: 60000 # prompt方法超时时间为1分钟(60*1000毫秒)
 ```
+### 再试试
+<ChatHistory>
+  <ChatMsg id="1659488338">hello</ChatMsg>
+  <ChatMsg id="1689919782">hello</ChatMsg>
+</ChatHistory>
+
 ## 4.编译插件 (可选)
 ::: tip
 在发布插件前，若你使用TS开发插件，推荐先编译为JS可用的插件。否则，该插件将不能在JS环境下执行

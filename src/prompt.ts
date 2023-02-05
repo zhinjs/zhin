@@ -3,6 +3,8 @@ import {Bot} from "./bot";
 import Element from './element'
 import {Session} from "./session";
 import {Dict} from "./types";
+import {Argv} from "@/argv";
+import {isNullable} from "@/utils";
 export class Prompt{
     private readonly fullTargetId:string
     constructor(private bot:Bot<keyof Zhin.Bots,any,any>,private session:Session,public timeout:number) {
@@ -20,16 +22,15 @@ export class Prompt{
         await this.session.reply(options.message)
         return new Promise<Prompt.Result<T, CT, M>>((resolve)=>{
             try{
-                const dispose=this.bot.app.middleware(async (session,next)=>{
-                    if(this.fullTargetId!==Bot.getFullTargetId(session)) return next()
+                const dispose = this.session.middleware(async (session) => {
                     resolve(options.format(session))
                     dispose()
                     clearTimeout(timer)
-                },true)
-                const timer=setTimeout(()=>{
-                    dispose()
+                })
+                const timer = setTimeout(() => {
+                    this.session.reply('输入超时')
                     resolve(options.initial)
-                },this.timeout)
+                }, this.timeout)
             }catch (e){
                 this.session.reply(e.message)
                 resolve(options.initial)

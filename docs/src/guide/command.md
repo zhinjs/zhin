@@ -69,7 +69,6 @@ ctx.command('my-command <arg1> [...rest]')
 - integer： 整数
 - date： 日期
 - regexp： 正则
-- qq： 一个qq号
 用例：
 ```ts
 ctx.command('my-command <arg1:face> [...rest:number]') // 声明第一个参数为一个表情，剩下的参数均为数值

@@ -16,13 +16,13 @@ function toElement(content: any) {
     if (Element.isElement(content)) {
         return content
     }
-    if(Array.isArray(content)){
-        return Element('text', {text:`[${content.join()}]`})
+    if (Array.isArray(content)) {
+        return Element('text', {text: `[${content.join()}]`})
     }
-    return Element('text', {text:content.toString()})
+    return Element('text', {text: content.toString()})
 }
 
-function toElementArray(content: Element.Fragment):(Element)[] {
+function toElementArray(content: Element.Fragment): (Element)[] {
     if (Array.isArray(content)) {
         return content.map(toElement).filter(x => x)
     } else {
@@ -83,11 +83,11 @@ namespace Element {
     }
 
     export const Fragment = 'template'
-    export type Render<S,A extends Dict=Dict,T=Fragment> = (attrs: A, children: Element[], session: S) => T
-    export type Transformer<S = never> = boolean | Fragment | Render<S,Dict,boolean | Fragment>
-    export type AsyncTransformer<S = never> = boolean | Fragment | Render<S,Dict,Awaitable<boolean | Fragment>>
+    export type Render<S, A extends Dict = Dict, T = Fragment> = (attrs: A, children: Element[], session: S) => T
+    export type Transformer<S = never> = boolean | Fragment | Render<S, Dict, boolean | Fragment>
+    export type AsyncTransformer<S = never> = boolean | Fragment | Render<S, Dict, Awaitable<boolean | Fragment>>
 
-    export type Fragment = string|number|boolean | Element | (string|number|boolean | Element)[]
+    export type Fragment = string | number | boolean | Element | (string | number | boolean | Element)[]
 
     export function normalize(source: Fragment, context?: any) {
         if (typeof source !== 'string') return toElementArray(source)
@@ -183,12 +183,14 @@ namespace Element {
         }
         return results
     }
+
     export function parse<S>(source: string, context?: S) {
         const tokens: (Element | Token)[] = []
 
         function pushText(content: string) {
-            if (content) tokens.push(Element('text', {text:content}))
+            if (content) tokens.push(Element('text', {text: content}))
         }
+
         let tagCap: RegExpExecArray
         while ((tagCap = tagRegExp.exec(source))) {
             parseContent(source.slice(0, tagCap.index))
@@ -200,9 +202,9 @@ namespace Element {
             while ((attrCap = attrRegExp.exec(attrs))) {
                 let [_, key, v1, v2 = v1] = attrCap
                 if (!isNullable(v2)) {
-                    if(key.startsWith(':')){
-                        token.attrs[key.slice(1)]=evaluate<S>(v2, context)
-                    }else{
+                    if (key.startsWith(':')) {
+                        token.attrs[key.slice(1)] = evaluate<S>(v2, context)
+                    } else {
                         token.attrs[key] = unescape(v2)
                     }
                 } else if (key.startsWith('no-')) {
@@ -232,6 +234,7 @@ namespace Element {
             }
             pushText(unescape(source))
         }
+
         const stack = [Element(Fragment)]
 
         function rollback(index: number) {
@@ -242,10 +245,11 @@ namespace Element {
                 stack[0].children.push(...children)
             }
         }
+
         for (const token of tokens) {
             if (isElement(token)) {
                 stack[0].children.push(token)
-            }else if (token.close) {
+            } else if (token.close) {
                 let index = 0
                 while (index < stack.length && stack[index].type !== token.type) index++
                 if (index === stack.length) {
@@ -268,10 +272,11 @@ namespace Element {
         rollback(stack.length - 1)
         return stack[0].children
     }
-    export function stringify(fragment:Element.Fragment){
-        if(!Array.isArray(fragment)) fragment=[fragment]
-        return fragment.map((element)=>{
-            if(typeof element==='string' || typeof element==='number'|| typeof element==='boolean') element=Element('text',{content:element})
+
+    export function stringify(fragment: Element.Fragment) {
+        if (!Array.isArray(fragment)) fragment = [fragment]
+        return fragment.map((element) => {
+            if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') element = Element('text', {content: element})
             return element.toString()
         }).join('')
     }
@@ -279,7 +284,7 @@ namespace Element {
     export function transform<S = never>(source: string, rules: Dict<Transformer<S>>, session?: S): string
     export function transform<S = never>(source: Element[], rules: Dict<Transformer<S>>, session?: S): Element[]
     export function transform<S>(source: string | Element[], rules: Dict<Transformer<S>>, session?: S) {
-        const elements = typeof source === 'string' ? parse(source,session) : source
+        const elements = typeof source === 'string' ? parse(source, session) : source
         const output: Fragment[] = []
         elements.forEach((element) => {
             const {type, attrs, children} = element
@@ -290,7 +295,8 @@ namespace Element {
             if (result === true) {
                 output.push(Element(type, attrs, transform(children, rules, session)))
             } else if (result !== false) {
-                output.push(...normalize(result,session))
+
+                output.push(...normalize(result, session))
             }
         })
         return typeof source === 'string' ? output.join('') : output
@@ -299,38 +305,39 @@ namespace Element {
     export async function transformAsync<S = never>(source: string, rules: Dict<AsyncTransformer<S>>, session?: S): Promise<Element[]>
     export async function transformAsync<S = never>(source: Element[], rules: Dict<AsyncTransformer<S>>, session?: S): Promise<Element[]>
     export async function transformAsync<S>(source: string | Element[], rules: Dict<AsyncTransformer<S>>, session?: S) {
-        const elements = typeof source === 'string' ? parse(source,source) : source
-        const children = (await Promise.all(elements.map(async (element) => {
+        const elements = typeof source === 'string' ? parse(source, source) : source
+        const result: Element[] = []
+        for (const element of elements) {
             const {type, attrs, children} = element
-            let result = rules[type] ?? rules.default ?? true
-            if (typeof result === 'function') {
-                result = await result(attrs, children, session)
+            let render = rules[type] ?? rules.default ?? true
+            if (typeof render === 'function') {
+                render = await render(attrs, children, session)
             }
-            if (result === true) {
-                return [Element(type,attrs,await transformAsync(children, rules, session))]
-            } else if (result !== false) {
-                return normalize(result,session)
-            } else {
-                return []
+            if (render === true) {
+                result.push(Element(type, attrs, await transformAsync(children, rules, session)))
+            } else if (render !== false) {
+                result.push(...normalize(render, session))
             }
-        }))).flat(1)
-        return typeof source === 'string' ? children.join('') : children
+        }
+        return result
     }
-    export type Factory<R extends Dict> = (attrs:R) => Element
 
-    function createFactory<R extends Dict=Dict>(type: string): Factory<R> {
+    export type Factory<R extends Dict> = (attrs: R) => Element
+
+    function createFactory<R extends Dict = Dict>(type: string): Factory<R> {
         return (attrs) => {
             const element = Element(type)
-            Object.assign(element.attrs,attrs||{})
+            Object.assign(element.attrs, attrs || {})
             return element
         }
     }
 
-    export let warn: (message: string) => void = () => {}
+    export let warn: (message: string) => void = () => {
+    }
 
-    function createAssetFactory(type: string,key='file'): Factory<{file_id:string|Buffer|ArrayBuffer}> {
+    function createAssetFactory(type: string, key = 'file'): Factory<{ file_id: string | Buffer | ArrayBuffer }> {
         return (attrs) => {
-            let file_id=attrs[key]
+            let file_id = attrs[key]
             let prefix = 'base64://'
             if (typeof file_id === 'string') {
                 prefix = `data:${file_id};base64,`
@@ -343,7 +350,7 @@ namespace Element {
             if (file_id.startsWith('base64://')) {
                 warn(`protocol "base64:" is deprecated and will be removed in the future, please use "data:" instead`)
             }
-            return Element(type, { file_id })
+            return Element(type, {file_id})
         }
     }
 
