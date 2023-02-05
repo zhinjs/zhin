@@ -1,8 +1,5 @@
 name: Build Docs
-on:
-  push:
-    tags:
-      - "v*"
+on: [push]
 
 jobs:
   build-and-deploy:
