@@ -149,7 +149,7 @@ export namespace Argv{
         let argvItem:Element[]=[]
         for(const segment of content){
             const idx=content.indexOf(segment)
-            if(idx===0){
+            if(idx===0 && segment.type==='text'){
                 if(session.bot.options.prefix && (segment.type!=='text' || !segment.attrs.text.startsWith(session.bot.options.prefix)) && saveSession && !atMe){
                     return
                 }else if(atMe && saveSession){
@@ -157,7 +157,7 @@ export namespace Argv{
                 }else if(saveSession){
                     segment.attrs.text=segment.attrs.text.replace(session.bot.options.prefix,'')
                 }
-            }else if(atMe && idx===1 && segment.type!=='text' && saveSession){
+            }else if(atMe && idx===1 && segment.type==='text' && saveSession){
                 segment.attrs.text=segment.attrs.text.trim()
             }
             if(segment.type!=='text') argvItem.push(segment)

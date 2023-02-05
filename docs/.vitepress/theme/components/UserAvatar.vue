@@ -1,6 +1,6 @@
 <template>
   <div class="c-avatar-box" style="display: inline-block">
-    <span class="nickname">{{props.nickname}}</span>
+    <span class="nickname">{{props.nickname||props.id}}</span>
     <img v-if="props.avatar || props.id" class="avatar"
          :src="props.avatar || getAvatarById(props.id, props.type, props.size)" />
     <div v-else class="avatar" :style="`background-color:${color}`">
