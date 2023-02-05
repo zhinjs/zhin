@@ -19,7 +19,7 @@ export namespace Component {
         // 内置组件
         ctx
             .component('confirm',confirm)
-            .component('template', (attrs, children) => children.join(''))
+            .component('template', (attrs, children) => children)
             .component('execute', async (attrs, children, session) => {
                 return await session.execute(children)
             }, {session: true})

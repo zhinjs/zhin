@@ -1,4 +1,4 @@
-import {arrayBufferToBase64, evaluate, is, isNullable, makeArray} from "./utils";
+import {evaluate,  isNullable, makeArray} from "./utils";
 import {Awaitable, Dict} from "./types";
 import {Fragment} from "./element";
 
@@ -6,13 +6,14 @@ interface Element {
     [Element.key]: true
     type: string
     attrs: Dict
+    parent?:Element
     children: (Element)[]
     source?: string
 
     toString(strip?: boolean): string
 }
 
-function toElement(content: any) {
+function toElement(content: Fragment) {
     if (Element.isElement(content)) {
         return content
     }
@@ -24,9 +25,9 @@ function toElement(content: any) {
 
 function toElementArray(content: Element.Fragment): (Element)[] {
     if (Array.isArray(content)) {
-        return content.map(toElement).filter(x => x)
+        return content.map(toElement).filter(Boolean)
     } else {
-        return [toElement(content)].filter(x => x)
+        return [toElement(content)].filter(Boolean)
     }
 }
 
@@ -89,10 +90,6 @@ namespace Element {
 
     export type Fragment = string | number | boolean | Element | (string | number | boolean | Element)[]
 
-    export function normalize(source: Fragment, context?: any) {
-        if (typeof source !== 'string') return toElementArray(source)
-        return Element.parse(source, context)
-    }
 
     export function escape(source: string, inline = false) {
         const result = source
@@ -234,27 +231,33 @@ namespace Element {
             }
             pushText(unescape(source))
         }
-
-        const stack = [Element(Fragment)]
+        const root=Element(Fragment)
+        const stack = [root]
 
         function rollback(index: number) {
             for (; index > 0; index--) {
                 const {children} = stack.shift()
                 const {source} = stack[0].children.pop()
-                stack[0].children.push(Element('text', {text: source}))
+                const element=Element('text', {text: source})
+                element.parent=stack[0]
+                stack[0].children.push(element)
+                children.map(ele=>ele.parent=stack[0])
                 stack[0].children.push(...children)
             }
         }
 
         for (const token of tokens) {
             if (isElement(token)) {
+                token.parent=stack[0]
                 stack[0].children.push(token)
             } else if (token.close) {
                 let index = 0
                 while (index < stack.length && stack[index].type !== token.type) index++
                 if (index === stack.length) {
                     // no matching open tag
-                    stack[0].children.push(Element('text', {text: token.source}))
+                    const child=Element('text', {text: token.source})
+                    child.parent=stack[0]
+                    stack[0].children.push(child)
                 } else {
                     rollback(index)
                     const element = stack.shift()
@@ -262,6 +265,7 @@ namespace Element {
                 }
             } else {
                 const element = Element(token.type, token.attrs)
+                element.parent=stack[0]
                 stack[0].children.push(element)
                 if (!token.empty) {
                     element.source = token.source
@@ -293,7 +297,7 @@ namespace Element {
                 result = result(attrs, children, session)
             }
             if (result === true) {
-                output.push(Element(type, attrs, transform(children, rules, session)))
+                output.push(element)
             } else if (result !== false) {
                 output.push(...transform(toElementArray(result),rules,session))
             }
@@ -313,7 +317,7 @@ namespace Element {
                 render = await render(attrs, children, session)
             }
             if (render === true) {
-                result.push(Element(type, attrs, await transformAsync(children, rules, session)))
+                result.push(element)
             } else if (render !== false) {
                 result.push(...await transformAsync(toElementArray(render),rules,session))
             }
@@ -321,36 +325,7 @@ namespace Element {
         return result
     }
 
-    export type Factory<R extends Dict> = (attrs: R) => Element
-
-    function createFactory<R extends Dict = Dict>(type: string): Factory<R> {
-        return (attrs) => {
-            const element = Element(type)
-            Object.assign(element.attrs, attrs || {})
-            return element
-        }
-    }
-
     export let warn: (message: string) => void = () => {
-    }
-
-    function createAssetFactory(type: string, key = 'file'): Factory<{ file_id: string | Buffer | ArrayBuffer }> {
-        return (attrs) => {
-            let file_id = attrs[key]
-            let prefix = 'base64://'
-            if (typeof file_id === 'string') {
-                prefix = `data:${file_id};base64,`
-            }
-            if (is('Buffer', file_id)) {
-                file_id = prefix + file_id.toString('base64')
-            } else if (is('ArrayBuffer', file_id)) {
-                file_id = prefix + arrayBufferToBase64(file_id)
-            }
-            if (file_id.startsWith('base64://')) {
-                warn(`protocol "base64:" is deprecated and will be removed in the future, please use "data:" instead`)
-            }
-            return Element(type, {file_id})
-        }
     }
 
 }
