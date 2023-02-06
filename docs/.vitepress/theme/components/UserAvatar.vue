@@ -40,17 +40,6 @@ const getAvatarById = (id, type, size) => {
 <style lang="less">
 .c-avatar-box{
   position: relative;
-  .nickname{
-    position: absolute;
-    display: block;
-    left:50%;
-    transform: translateX(-50%);
-    word-break: keep-all;
-    text-align: center;
-    bottom:100%;
-    font-size: .5rem;
-    line-height: 1rem;
-  }
   .avatar {
     display: inline-flex;
     width: 2.5rem;
