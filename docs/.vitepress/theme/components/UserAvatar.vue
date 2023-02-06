@@ -1,6 +1,5 @@
 <template>
   <div class="c-avatar-box" style="display: inline-block">
-    <span class="nickname">{{props.nickname||props.id}}</span>
     <img v-if="props.avatar || props.id" class="avatar"
          :src="props.avatar || getAvatarById(props.id, props.type, props.size)" />
     <div v-else class="avatar" :style="`background-color:${color}`">
@@ -44,7 +43,8 @@ const getAvatarById = (id, type, size) => {
   .nickname{
     position: absolute;
     display: block;
-    width: 100%;
+    left:50%;
+    transform: translateX(-50%);
     word-break: keep-all;
     text-align: center;
     bottom:100%;
@@ -54,6 +54,7 @@ const getAvatarById = (id, type, size) => {
   .avatar {
     display: inline-flex;
     width: 2.5rem;
+    min-width: 2.5rem;
     height: 2.5rem;
     border-radius: 50%;
     line-height: 0;

@@ -2,7 +2,7 @@
   <div ref="messageEl" class="chat-message show" :class="{ right: isMine }">
     <UserAvatar :id="props.id" :avatar="props.avatar" :nickname="props.nickname || getNickname(props.id)" :color="props.color"></UserAvatar>
     <div class="message-box">
-      <div class="nickname">{{ props.nickname }}</div>
+      <div class="nickname">{{ props.nickname||getNickname(props.id) }}</div>
       <div class="message shadow-sm">
         <slot></slot>
       </div>
@@ -70,12 +70,12 @@ onMounted(() => {
 <style lang="less">
 .chat-message {
   position: relative;
-  margin: 1rem 0;
+  margin: 1.5rem 0;
   opacity: 0;
   transform: translateX(-10%);
   transition: transform 0.4s ease-out, opacity 0.4s ease-in;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-start;
   &.show {
     opacity: 1;
@@ -84,6 +84,11 @@ onMounted(() => {
   &.right{
     flex-direction: row-reverse;
     .message{
+      &-box{
+        .nickname{
+          text-align: right;
+        }
+      }
       &::before{
         left:100%;
         border-radius: 0 0 1rem 0;
@@ -101,6 +106,9 @@ onMounted(() => {
 .nickname {
   font-size: 0.8rem;
   color: gray;
+  &:empty{
+    display: none;
+  }
 }
 .message {
   position: relative;
