@@ -26,9 +26,11 @@ export class Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I extends
     isOnline(){
         return this.status.online=true
     }
+    // 会话发起者是否为zhin主人
     isMaster(session:Session<K>){
         return this.options.master===session.user_id
     }
+    // 会话发起者是否为zhin管理员
     isAdmin(session:Session<K>){
         return this.options.admins && this.options.admins.includes(session.user_id)
     }
@@ -67,6 +69,12 @@ export interface Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I ext
     on<S extends string|symbol>(event:S & Exclude<keyof Bot.EventMap,S>,listener:(...args:any[])=>any)
     emit<K extends keyof Bot.EventMap>(event:K,...args:Parameters<Bot.EventMap[K]>)
     emit<S extends string|symbol>(event:S & Exclude<keyof Bot.EventMap,S>,...args:any[])
+    // 会话发起者是否为群管理员
+    isGroupAdmin?(session:Session<K>):boolean
+    // 会话发起者是否为频道管理员
+    isChannelAdmin?(session:Session<K>):boolean
+    // 会话发起者是否为群主
+    isGroupOwner?(session:Session<K>):boolean
     start():any
 }
 export type BotConstructors={

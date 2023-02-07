@@ -10,7 +10,7 @@ import {
 import {Bot, BotOptions} from '@/bot'
 import Element from '@/element'
 import {Zhin} from "@/zhin";
-import {Session} from "@/session";
+import {PayloadWithSession, Session} from "@/session";
 import {MergeEventMap, PrivateMessageEvent} from "icqq/lib/events";
 
 
@@ -86,6 +86,13 @@ export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
         this.internal.offTrap()
         this.internal.logout()
     }
+    isGroupAdmin(session: PayloadWithSession<'icqq','message'>): boolean {
+        return session.message_type==='group' && session.member.is_admin
+    }
+    isGroupOwner(session: PayloadWithSession<'icqq','message'>): boolean {
+        return session.message_type==='group' && session.member.is_owner
+    }
+
     createSession<E extends keyof IcqqEventMap>(event: E, ...args: Parameters<IcqqEventMap[E]>): Session<'icqq', E> {
         const obj = typeof args[0] === "object" ? args.shift() : {}
         Object.assign(obj, {

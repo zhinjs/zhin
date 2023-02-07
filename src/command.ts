@@ -50,12 +50,14 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
         return this
     }
     // 定义指令调用所需权限
-    auth(...authorities: Command.Authority[]) {
+    auth(...authorities: Command.Authority<T>[]) {
         this.config.authorities = [].concat(authorities)
         return this.check(({session, bot, options}, ...args) => {
             const userAuthorities: Command.Authority[] = []
             if (bot.isMaster(session)) userAuthorities.push('master')
             if (bot.isAdmin(session)) userAuthorities.push('admins')
+            if(bot?.isGroupAdmin(session) || bot?.isChannelAdmin(session)) userAuthorities.push('admin')
+            if(bot?.isGroupOwner(session)) userAuthorities.push('owner')
             if (!userAuthorities.some(auth => this.config.authorities.includes(auth))) return '权限不足'
         })
     }
@@ -343,10 +345,10 @@ export namespace Command {
         description?: string
         declaration?: Argv.Declaration
     }
-
-    export type Callback<A extends any[] = any[], O extends {} = {}, T extends keyof TriggerSessionMap = keyof TriggerSessionMap>
+    export type MessageType=keyof TriggerSessionMap
+    export type Callback<A extends any[] = any[], O extends {} = {}, T extends MessageType = MessageType>
         = (this: Command<A, O, T>, argv: Argv<A, O, T>, ...args: A) => Awaitable<Element.Fragment| void>
-    export type Authority = 'master' | 'admins'
+    export type Authority<T extends MessageType=MessageType>= T extends 'group'|'guild'?'master' | 'admins'|'owner'|'admin':'master' | 'admins'
     export type OptionType<S extends string> = Argv.ExtractFirst<Argv.Replace<S, '>', ']'>, any>
 
     export function removeDeclarationArgs(name: string): string {
