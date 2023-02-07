@@ -20,17 +20,10 @@ export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
         super()
         this.internal = new Client(options)
         this.self_id = options.uin
-        this.internal.on('message',(message)=>{
-            this.emit('message',message)
-        })
-        this.internal.on('notice',(notice)=>{
-            this.emit('notice',notice)
-        })
-        this.internal.on('request',(request)=>{
-            this.emit('request',request)
-        })
-        this.internal.on('system',(...args)=>{
-            this.emit('system',...args)
+        this.internal.trap((eventName,...args)=>{
+            this.adapter.dispatch(eventName,this.createSession(eventName,...args))
+            return true
+        },(...args:any[])=>{
         })
         this.internal.on('system.online',()=>{
             this.adapter.emit('bot.online',this.self_id)

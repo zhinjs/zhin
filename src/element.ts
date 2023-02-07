@@ -84,7 +84,7 @@ namespace Element {
     }
 
     export const Fragment = 'template'
-    export type Render<S, A extends Dict = Dict, T = Fragment> = (attrs: A, children: Element[], session: S) => T
+    export type Render<S, A extends Dict = Dict, T = Awaitable<Fragment>> = (this:S,attrs: A, children: Element[]) => T
     export type Transformer<S = never> = boolean | Fragment | Render<S, Dict, boolean | Fragment>
     export type AsyncTransformer<S = never> = boolean | Fragment | Render<S, Dict, Awaitable<boolean | Fragment>>
 
@@ -294,7 +294,7 @@ namespace Element {
             const {type, attrs, children} = element
             let result = rules[type] ?? rules.default ?? true
             if (typeof result === 'function') {
-                result = result(attrs, children, session)
+                result = result.apply(session,[attrs, children, session])
             }
             if (result === true) {
                 output.push(element)
@@ -314,7 +314,7 @@ namespace Element {
             const {type, attrs, children} = element
             let render = rules[type] ?? rules.default ?? true
             if (typeof render === 'function') {
-                render = await render(attrs, children, session)
+                render = await render.apply(session,[attrs, children, session])
             }
             if (render === true) {
                 result.push(element)

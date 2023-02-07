@@ -29,7 +29,7 @@ export abstract class Adapter<
         this.bots=new BotList()
         this.logger=app.getLogger(protocol)
         this.app.on('start',()=>this.start())
-        this.on('message.receive',(bot_id:string|number,message)=>{
+        this.on('message',(bot_id:string|number,message)=>{
             this.botStatus(bot_id).recv_msg_cnt++
             const session=this.bots.get(bot_id).createSession('message',message)
             session.render().then(elements=>{
@@ -86,6 +86,10 @@ export abstract class Adapter<
         return Dispose.from(this,()=>{
             super.off(event,listener)
         })
+    }
+    dispatch(eventName:string,session:Session){
+        this.emit(eventName,session)
+        this.app.dispatch(`${this.protocol}.${eventName}`,session)
     }
     protected async start(...args:any[]){
         for (const botOptions of this.options.bots) {

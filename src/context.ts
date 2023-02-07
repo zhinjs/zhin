@@ -52,7 +52,7 @@ export class Context<T=any> extends EventEmitter{
     functional:boolean=false
     fullPath:string
     plugins:Map<string,Plugin>=new Map<string, Plugin>()
-    public components: Dict<Component.Options> = Object.create(null)
+    public components: Dict<Component> = Object.create(null)
     middlewares:Middleware<PayloadWithSession<keyof Zhin.Adapters,'message'>>[]=[]
     public readonly disposes:Dispose[]=[]
     app:Zhin
@@ -87,12 +87,12 @@ export class Context<T=any> extends EventEmitter{
         this.protocol=Array.from(new Set<keyof Zhin.Adapters>([...this.protocol,...scope]))
         return this
     }
-    component(name: string, component: Component,options?:Omit<Component.Options, 'render'>) {
+    component(name: string, component: Component|Component['render'],options?:Omit<Component, 'render'>) {
         if(typeof component==='function') component={
             ...(options||{}),
             render:component
         }
-        this.components[name] = component as Component.Options
+        this.components[name] = component as Component
         return Dispose.from(this,()=>{
             delete this.components[name]
         })
@@ -384,9 +384,9 @@ export interface Context extends Zhin.Services {
 
     bailSync<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, ...args: any[]): Promise<any>;
 
-    component<S,A extends Dict=Dict,C=Element,T extends Awaitable<Fragment>=Awaitable<Fragment>>(name: string, render: Element.Render<Session,A,T>,options?:Omit<Component.Options, 'render'>):this
-    component<S,A extends Dict=Dict,C=Element,T extends Awaitable<Fragment>=Awaitable<Fragment>>(name: string, component: Component.Options<A,T>):this
-    component<S,A extends Dict=Dict,C=Element,T extends Awaitable<Fragment>=Awaitable<Fragment>>(name: string, component: Component.Options<A,T>|Element.Render<Session,A,T>,options?:Omit<Component.Options, 'render'>):this
+    component(name: string, render: Component['render'],options?:Omit<Component, 'render'>):this
+    component(name: string, component: Component):this
+    component(name: string, component: Component|Component['render'],options?:Omit<Component, 'render'>):this
 }
 export interface Plugin<T=any> extends Context<T>{}
 export namespace Plugin{

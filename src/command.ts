@@ -155,7 +155,7 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
 
             if (content[0].attrs.text?.[0] !== '-' && Argv.resolveConfig(argDecl?.type).greedy) {
                 args.push(Argv.parseValue([content, ...argv.argv].reduce((result, sArr) => {
-                    if (result.length) result.push(Element('text',{content:' '}))
+                    if (result.length) result.push(Element('text',{text:' '}))
                     result.push(...sArr)
                     return result
                 }, []), 'argument', argv, argDecl));
@@ -182,7 +182,7 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
                             break;
                         } else if (Argv.resolveConfig(optionDecl.declaration.type).greedy) {
                             options[optionDecl.name] = Argv.parseValue(argv.argv.reduce((result, sArr) => {
-                                if (result.length) result.push(Element('text',{content:' '}))
+                                if (result.length) result.push(Element('text',{text:' '}))
                                 result.push(...sArr)
                                 return result
                             }, []), 'option', argv, optionDecl.declaration)
@@ -226,7 +226,7 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
                             shortcut.args.forEach((arg, i) => {
                                 if (typeof arg === 'string' && arg.includes(`${index}`)) {
                                     args.push(Argv.parseValue([Element('text',{
-                                        content: arg.replace(`$${index}`, str)
+                                        text: arg.replace(`$${index}`, str)
                                     })], 'argument', argv, this.args[i]))
                                 }
                             })

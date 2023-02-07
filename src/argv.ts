@@ -175,7 +175,9 @@ export namespace Argv{
                             quoteEnd=text[0]
                         }
                     }
-                    argvItem.push(Element('text',{text}))
+                    const element=Element('text',{text})
+                    element.parent=segment.parent
+                    argvItem.push(element)
                     if(/'|"|”|’$/.test(text) && quoteEnd && quoteEnd===text[text.length-1]){
                         quoteEnd=''
                     }
@@ -183,7 +185,9 @@ export namespace Argv{
                         argv.push([...argvItem])
                         argvItem=[]
                     }else{
-                        argvItem.push(Element('text',{text:' '}))
+                        const element=Element('text',{text:' '})
+                        element.parent=segment.parent
+                        argvItem.push(element)
                     }
                 })
             }

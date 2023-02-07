@@ -35,7 +35,7 @@ export class Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I extends
         return this.options.admins && this.options.admins.includes(session.user_id)
     }
     reply(session:Session<K>,message:Element.Fragment,quote?:boolean){
-        if(session.type!=='message') throw new Error(`not exist reply when type !=='message`)
+        if(session.type!=='message') throw new Error(`not exist reply when type !=='message'`)
         message=[].concat(message)
         const replyElem:Element|undefined=quote?Element('reply',{message_id:session.message_id}):undefined
         if(replyElem) message.unshift(replyElem)

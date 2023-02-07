@@ -91,7 +91,7 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters, E exte
     }
 
     async render(elements: Element[] = this.elements): Promise<Element[]> {
-        const rules: Dict<AsyncTransformer> = Object.fromEntries(Object.entries(this.app.getSupportComponents(this)).map(([key, options]) => [key, options.render]))
+        const rules: Dict<AsyncTransformer> = Object.fromEntries(Object.entries(this.app.getSupportComponents(this)).map(([key, component]) => [key, component.render]))
         return await Element.transformAsync(elements, rules, Zhin.createContext(this))
     }
 

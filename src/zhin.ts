@@ -333,7 +333,7 @@ export class Zhin extends Context {
         })
     }
     getSupportComponents<P extends keyof Zhin.Adapters>(session:Session<P>){
-        return this.getSupportPlugins(session.protocol).reduce((result:Dict<Component.Options>,plugin)=>{
+        return this.getSupportPlugins(session.protocol).reduce((result:Dict<Component>,plugin)=>{
             Object.assign(result,plugin.componentList)
             return result
         },this.components)
