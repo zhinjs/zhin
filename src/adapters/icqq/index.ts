@@ -20,11 +20,12 @@ export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
         super()
         this.internal = new Client(options)
         this.self_id = options.uin
-        this.internal.trap((eventName,...args)=>{
-            this.adapter.dispatch(eventName,this.createSession(eventName,...args))
-            return true
-        },(...args:any[])=>{
-        })
+        const _this=this
+        const trip=this.internal.trip
+        this.internal.trip=function (this:Client,event,...args){
+            _this.adapter.dispatch(event,_this.createSession(event,...args))
+            return trip.apply(this,[event,...args])
+        }
         this.internal.on('system.online',()=>{
             this.adapter.emit('bot.online',this.self_id)
         })
@@ -112,6 +113,7 @@ export class IcqqAdapter extends Adapter<'icqq', IcqqBotOptions, {}, IcqqEventMa
 }
 
 function toElement<S>(msgList: Sendable,ctx?:S) {
+    if(!msgList) return []
     msgList = [].concat(msgList)
     let result:Element[]=[]
     msgList.forEach((msg) => {

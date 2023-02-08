@@ -4,76 +4,28 @@ import {Adapter, AdapterConstructs, AdapterOptions, AdapterOptionsType} from "./
 import {Middleware} from "./middleware";
 import {Command, TriggerSessionMap} from "./command";
 import {PayloadWithSession, Session} from "./session";
-import Element, {Fragment} from './element'
+import Element from './element'
 import {EventEmitter} from "events";
 import {isBailed, remove} from "./utils";
 import {Argv} from "./argv";
-import * as path from "path";
-import {Awaitable, Dict} from "./types";
+import {Plugin} from "@/plugin";
+import { Dict} from "./types";
 import {Component} from "./component";
 import {Logger} from "log4js";
 import {Bot} from "./bot";
-export interface Plugins{
-    help:Plugin<null>
-    logs:Plugin<null>
-    login:Plugin<null>
-    plugin:Plugin<null>
-    config:Plugin<null>
-    daemon:Plugin<null>
-    status:Plugin<null>
-    watcher:Plugin<string>
-    [key:string]:Plugin
-}
-export function definePlugin<T=any>(options:Plugin.Install<T>):Plugin.Options<T>{
-    const baseOption:Omit<Plugin.Options<T>, 'install'>={
-        setup:false,
-        anonymous:false,
-        functional:false,
-        anonymousCount:0,
-    }
-    return typeof options==="function"?{
-        ...baseOption,
-        functional:true,
-        anonymous:options.prototype===undefined,
-        install:options,
-    }:{
-        ...baseOption,
-        functional:false,
-        ...options,
-    }
-}
 
 export class Context<T=any> extends EventEmitter{
-    name:string
-    fullName:string
-    type:string
-    protocol:(keyof Zhin.Adapters)[]
-    using:string[]=[]
-    functional:boolean=false
-    fullPath:string
     plugins:Map<string,Plugin>=new Map<string, Plugin>()
     public components: Dict<Component> = Object.create(null)
     middlewares:Middleware<PayloadWithSession<keyof Zhin.Adapters,'message'>>[]=[]
     public readonly disposes:Dispose[]=[]
     app:Zhin
     commands:Map<string,Command>=new Map<string, Command>()
-    constructor(public parent:Context,options:Plugin.Options<T>,public info:Plugin.Info={}) {
+    constructor(public parent:Context) {
         super()
         if(!parent) return
-        this.name=options.name
-        this.protocol=options.protocol||=[]
-        this.type=options.type||''
-        this.using=options.using||[]
-        this.fullName=options.fullName
-        this.fullPath=options.fullPath
-        this.functional=options.functional||false
         this.app=parent.app
         this.logger=parent.logger
-        this.on('dispose',()=>{
-            this.parent.plugins.delete(this.fullName)
-            this.app.logger.info('已移除：',this.name)
-            this.parent.emit('plugin-remove',this)
-        })
         return new Proxy(this,{
             get(target: Context<T>, p: string | symbol, receiver: any): any {
                 if(Zhin.Services.includes(p as keyof Zhin.Services)) return target.app.services.get(p as keyof Zhin.Services)
@@ -82,11 +34,6 @@ export class Context<T=any> extends EventEmitter{
         })
     }
     public logger: Logger
-    scope<K extends keyof Zhin.Adapters>(scope:K|K[]):Context{
-        if(!Array.isArray(scope)) scope=[scope]
-        this.protocol=Array.from(new Set<keyof Zhin.Adapters>([...this.protocol,...scope]))
-        return this
-    }
     component(name: string, component: Component|Component['render'],options?:Omit<Component, 'render'>) {
         if(typeof component==='function') component={
             ...(options||{}),
@@ -99,26 +46,26 @@ export class Context<T=any> extends EventEmitter{
     }
     get middlewareList(){
         return [...this.plugins.values()].reduce((result,plugin)=>{
-            result.push(...plugin.middlewareList)
+            result.push(...plugin.context.middlewareList)
             return result
         },[...this.middlewares])
     }
     get componentList(){
         return [...this.plugins.values()].reduce((result,plugin)=>{
-            Object.assign(result,plugin.componentList)
+            Object.assign(result,plugin.context.componentList)
             return result
         },this.components)
     }
     get commandList():Command[] {
         return [...this.plugins.values()].reduce((result,plugin)=>{
-            result.push(...plugin.commandList)
+            result.push(...plugin.context.commandList)
             return result
         },[...this.commands.values()])
     }
 
     get pluginList():Plugin[] {
         return [...this.plugins.values()].reduce((result,plugin)=>{
-            result.push(...plugin.pluginList)
+            result.push(...plugin.context.pluginList)
             return result
         },[...this.plugins.values()])
     }
@@ -132,7 +79,13 @@ export class Context<T=any> extends EventEmitter{
         this.disposes.push(dispose)
         return dispose
     }
-
+    // 往下级插件抛事件
+    dispatch<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P]>(protocol:P,eventName:E, session: Session<P, E>){
+        this.emit(`${protocol}.${String(eventName)}`,session)
+        for(const plugin of this.getSupportPlugins(session.protocol)){
+            plugin.context.dispatch(protocol,eventName,session)
+        }
+    }
     adapter<K extends keyof Zhin.Adapters>(adapter: K): Zhin.Adapters[K]
     adapter<K extends keyof Zhin.Adapters>(adapter: K, options: AdapterOptionsType<Zhin.Adapters[K]>): this
     adapter<K extends keyof Zhin.Adapters>(adapter: K, protocol: AdapterConstructs[K], options: AdapterOptionsType<Zhin.Adapters[K]>): this
@@ -176,11 +129,11 @@ export class Context<T=any> extends EventEmitter{
             remove(Zhin.Services,key)
         })
     }
-    plugin<T>(name: string, options?: T): Context | this
-    plugin<T>(name: string,setup?:boolean, options?: T): Context | this
+    plugin<T>(name: string, options?: T): Plugin | this
+    plugin<T>(name: string,setup?:boolean, options?: T): Plugin | this
     plugin<P extends Plugin.Install>(plugin: P, config?: Plugin.Config<P>): this
     plugin<P extends Plugin.Install>(entry: string | P, ...args:[boolean?,Plugin.Config<P>?]) {
-        let options: Plugin.Options
+        let options: Plugin.Options<T>
         const setup:boolean=typeof args[0]==='boolean'?args.shift():false
         const config:Plugin.Config<P>=args.shift() as any
         if (typeof entry === 'string') {
@@ -189,44 +142,29 @@ export class Context<T=any> extends EventEmitter{
             try {
                 options = this.app.load<Plugin.Options>(entry, 'plugin',setup)
             } catch (e) {
-                if(this.fullPath){
-                    try{
-                        const dir=path.dirname(this.fullPath)
-                        options=this.app.load<Plugin.Options>(path.resolve(dir,entry),'plugin')
-                    }catch {
-                        this.app.logger.warn(e.message)
-                        return this
-                    }
-                }else{
-                    this.app.logger.warn(e.message)
-                    return this
-                }
+                this.app.logger.warn(e.message)
+                return this
             }
         } else {
-            options = definePlugin(entry)
+            options = Plugin.defineOptions<T>(entry)
         }
+        const info:Plugin.Info=Plugin.getInfo(options.fullPath)
         const installPlugin = () => {
-            const context=new Context(this,options)
-            const installFunction = typeof options==="function"?options:options.install
+            const context=new Context(this)
+            const plugin=new Plugin(options,info)
             if (this.plugins.get(options.fullName)) {
                 this.app.logger.warn('重复载入:' + options.name)
                 return
             }
             if (options.setup) {
-                this.plugins.set(options.fullName, context)
-                const result = installFunction.apply(this, [context, config])
-                if (typeof result === 'function') {
-                    context.disposes.push(result)
-                }
+                this.plugins.set(options.fullName, plugin)
+                plugin.install(context,config)
             } else {
-                const result = installFunction.apply(this, [context, config])
-                if (typeof result === 'function') {
-                    context.disposes.push(result)
-                }
-                this.plugins.set(options.fullName, context)
+                plugin.install(context,config)
+                this.plugins.set(options.fullName, plugin)
             }
             this.app.logger.info('已载入:' + options.name)
-            this.app.emit('plugin-add', context)
+            this.app.emit('plugin-add', plugin)
         }
         const using = options.using ||= []
         if (!using.length) {
@@ -294,6 +232,11 @@ export class Context<T=any> extends EventEmitter{
         return dispose
     }
 
+    getSupportPlugins<P extends keyof Zhin.Adapters>(protocol:P){
+        return this.pluginList.filter(plugin=>{
+            return plugin.options.scopes===undefined || plugin.options.scopes.length===0 || plugin.options.scopes.includes(protocol)
+        })
+    }
     setInterval(callback: Function, ms: number, ...args) {
         const timer = setInterval(callback, ms, ...args)
         const dispose = Dispose.from(this, () => clearInterval(timer))
@@ -340,21 +283,20 @@ export class Context<T=any> extends EventEmitter{
             if(typeof plugin==='string') plugin=this.pluginList.find(p=>p.name===plugin)
             if(plugin) {
                 plugin.dispose()
-                this.plugins.delete(plugin.fullName)
+                this.plugins.delete(plugin.options.fullName)
             }
             return
         }
-
-        [...this.plugins.values()].forEach(plugin=>plugin.dispose())
+        [...this.plugins.values()].forEach(plugin=>{
+            plugin.dispose()
+            this.plugins.delete(plugin.options.fullName)
+        })
         this.emit('dispose')
         while (this.disposes.length){
             const dispose=this.disposes.shift()
             dispose()
         }
     }
-}
-export class Plugin<T=any>{
-
 }
 export interface Context extends Zhin.Services {
     on<T extends keyof Zhin.AllEventMap<this>>(event: T, listener: Zhin.AllEventMap<this>[T]);
@@ -387,31 +329,4 @@ export interface Context extends Zhin.Services {
     component(name: string, render: Component['render'],options?:Omit<Component, 'render'>):this
     component(name: string, component: Component):this
     component(name: string, component: Component|Component['render'],options?:Omit<Component, 'render'>):this
-}
-export interface Plugin<T=any> extends Context<T>{}
-export namespace Plugin{
-    export type InstallFunction<T>=(parent:Context, config:T)=>void|Dispose
-    export interface InstallObject<T>{
-        name?:string
-        install:InstallFunction<T>
-    }
-    export type Install<T=any>=InstallFunction<T>|InstallObject<T>
-    export type Config<P extends Install>=P extends Install<infer R>?R:unknown
-    export interface Info{
-        version?:string
-        type?:string
-        desc?:string
-        author?:string|{name:string,email?:string}
-    }
-    export type Options<T = any>=InstallObject<T> &{
-        type?:string
-        protocol?:(keyof Zhin.Adapters)[]
-        using?:(keyof Zhin.Services)[]
-        setup?:boolean
-        anonymous?:boolean
-        anonymousCount?:number
-        functional?:boolean
-        fullName?:string
-        fullPath?:string
-    }
 }

@@ -10,7 +10,7 @@ export function install(ctx: Context) {
         .desc('显示插件列表')
         .action(({session}) => {
             return ctx.app.getCachedPluginList().map((plugin, idx) => {
-                return `${idx + 1}. 插件名：${plugin.fullName}${ctx.app.hasInstall(plugin.fullName) ? ' (已安装)' : ''} ${plugin.type}`
+                return `${idx + 1}. 插件名：${plugin.options.fullName}${ctx.app.hasInstall(plugin.options.fullName) ? ' (已安装)' : ''} ${plugin.type}`
             }).join('\n')
         })
     command.subcommand('plugin.detail <name:string>')

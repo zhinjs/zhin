@@ -4,7 +4,6 @@ import {Session} from "./Session";
 import {Logger} from "log4js";
 import {EventEmitter} from "events";
 import {Dispose} from "./dispose";
-import Element from "@/element";
 
 interface AdapterConstruct<K extends keyof Zhin.Adapters=keyof Zhin.Adapters,BO extends BotOptions = BotOptions, AO = {}> {
     new(app: Zhin, protocol:K, options: AdapterOptions<BO, AO>): Adapter<K,BO, AO>
@@ -29,14 +28,8 @@ export abstract class Adapter<
         this.bots=new BotList()
         this.logger=app.getLogger(protocol)
         this.app.on('start',()=>this.start())
-        this.on('message',(bot_id:string|number,message)=>{
-            this.botStatus(bot_id).recv_msg_cnt++
-            const session=this.bots.get(bot_id).createSession('message',message)
-            session.render().then(elements=>{
-                session.elements=elements
-            }).finally(()=>{
-                this.app.dispatch(`${this.protocol}.message`,session)
-            })
+        this.on('message',(session:Session<K>)=>{
+            this.botStatus(session.bot.self_id).recv_msg_cnt++
         })
         this.on('bot.online',(bot_id)=>{
             this.botStatus(bot_id).online=true
@@ -76,7 +69,14 @@ export abstract class Adapter<
         return this._status
     }
     botStatus(uin:string|number){
-        return this.status[uin]
+        return this.status[uin]||={
+            lost_times: 0,
+            msg_cnt_per_min: 0,
+            online: false,
+            recv_msg_cnt: 0,
+            sent_msg_cnt: 0,
+            start_time: 0
+        }
     }
     getLogger(sub_type:string){
         return this.app.getLogger(this.protocol,sub_type)
@@ -87,9 +87,9 @@ export abstract class Adapter<
             super.off(event,listener)
         })
     }
-    dispatch(eventName:string,session:Session){
+    dispatch<E extends keyof keyof Zhin.BotEventMaps[K]>(eventName:E,session:Session<K,E>){
         this.emit(eventName,session)
-        this.app.dispatch(`${this.protocol}.${eventName}`,session)
+        this.app.dispatch(this.protocol,eventName,session)
     }
     protected async start(...args:any[]){
         for (const botOptions of this.options.bots) {

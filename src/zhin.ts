@@ -20,7 +20,8 @@ import {
     getIpAddress
 } from "./utils";
 import {Dict} from "./types";
-import {Context, Plugin, Plugins} from "./context";
+import {Plugin} from './plugin'
+import {Context} from "./context";
 import Koa from "koa";
 import {Adapter, AdapterOptionsType} from "./adapter";
 import {IcqqAdapter, IcqqBot, IcqqEventMap} from './adapters/icqq'
@@ -99,9 +100,8 @@ export class Zhin extends Context {
     adapters: Map<keyof Zhin.Adapters, Adapter> = new Map<keyof Zhin.Adapters, Adapter>()
     services: Map<keyof Zhin.Services, any> = new Map<keyof Zhin.Services, any>()
     public app: Zhin = this
-
     constructor(options: Zhin.Options) {
-        super(null, null);
+        super(null);
         if (options.logConfig) {
             configure(options.logConfig as Configuration)
         }
@@ -125,6 +125,7 @@ export class Zhin extends Context {
         })
         this.use(Component)
         this.middleware(async (session,next) => {
+            session.elements=await session.render()
             const result=await session.execute()
             if(!result) return next()
             return session.reply(result)
@@ -234,7 +235,7 @@ export class Zhin extends Context {
     }
 
     hasInstall(pluginName: string) {
-        return !!this.pluginList.find(plugin => plugin.fullName === pluginName)
+        return !!this.pluginList.find(plugin => plugin.options.fullName === pluginName)
     }
 
 
@@ -249,12 +250,6 @@ export class Zhin extends Context {
     use<P extends Plugin.Install>(plugin: P, options?: Plugin.Config<P>): this {
         this.plugin(plugin, options)
         return this
-    }
-    dispatch<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P]>(event: string, session: Session<P, E>){
-        this.emit(event,session)
-        for(const plugin of this.getSupportPlugins(session.protocol)){
-            plugin.emit(event,session)
-        }
     }
     public load<R = object>(name: string, type: string,setup?:boolean): R {
         function getListenDir(modulePath: string) {
@@ -327,26 +322,21 @@ export class Zhin extends Context {
             fullPath: getListenDir(resolved)
         } as any
     }
-    getSupportPlugins<P extends keyof Zhin.Adapters>(protocol:P){
-        return this.pluginList.filter(plugin=>{
-            return plugin.protocol===undefined || plugin.protocol.length===0 || plugin.protocol.includes(protocol)
-        })
-    }
     getSupportComponents<P extends keyof Zhin.Adapters>(session:Session<P>){
         return this.getSupportPlugins(session.protocol).reduce((result:Dict<Component>,plugin)=>{
-            Object.assign(result,plugin.componentList)
+            Object.assign(result,plugin.context.componentList)
             return result
         },this.components)
     }
     getSupportMiddlewares<P extends keyof Zhin.Adapters>(session:Session<P>){
         return this.getSupportPlugins(session.protocol).reduce((result:Middleware<Session>[],plugin)=>{
-            result.push(...plugin.middlewareList)
+            result.push(...plugin.context.middlewareList)
             return result
         },[...this.middlewares])
     }
     getSupportCommands<P extends keyof Zhin.Adapters>(session:Session<P>){
         return this.getSupportPlugins(session.protocol).reduce((result:Command[],plugin)=>{
-            for(const command of plugin.commandList){
+            for(const command of plugin.context.commandList){
                 if(command.match(session as any)){
                     result.push(command)
                 }
@@ -403,6 +393,18 @@ export class Zhin extends Context {
 export namespace Zhin {
     export interface Adapters{
         icqq:IcqqAdapter
+    }
+
+    export interface Plugins{
+        help:Plugin<null>
+        logs:Plugin<null>
+        login:Plugin<null>
+        plugin:Plugin<null>
+        config:Plugin<null>
+        daemon:Plugin<null>
+        status:Plugin<null>
+        watcher:Plugin<string>
+        [key:string]:Plugin
     }
     export interface Bots{
         icqq:IcqqBot
@@ -573,19 +575,19 @@ function createZhinAPI() {
         if (!app) throw new Error(`can't found app with context for key:${Zhin.key.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
-        const context=app.pluginList.find(plugin => plugin.fullPath === pluginFullPath) as Context
+        const context=app.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath)?.context
         if(context) return context
         const pluginDir=path.dirname(pluginFullPath)
         const reg=new RegExp(`${pluginDir}/index\.[tj]s`)
         const parent=app.pluginList.find(plugin=>{
-            return plugin.fullPath.match(reg)
+            return plugin.options.fullPath.match(reg)
         })
         if(parent){
-            parent.plugin(pluginFullPath,true)
-            return app.pluginList.find(plugin => plugin.fullPath === pluginFullPath) as Context
+            parent.context.plugin(pluginFullPath,true)
+            return app.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath).context
         }
         app.plugin(pluginFullPath,true)
-        return app.pluginList.find(plugin => plugin.fullPath === pluginFullPath) as Context
+        return app.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath).context
     }
 
     function getValue<T>(obj: T, path: string[]) {
@@ -612,15 +614,15 @@ function createZhinAPI() {
         if (!app) throw new Error(`can't found app with context for key:${Zhin.key.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
-        const plugin = app.pluginList.find(plugin => plugin.fullPath === pluginFullPath)
+        const plugin = app.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath)
         if (!effect) {
             const dispose = callback()
             if (dispose) {
-                plugin.on('dispose',dispose)
+                plugin.context.on('dispose',dispose)
             }
         } else {
             const unWatch = watch(effect, callback)
-            plugin.on('dispose',unWatch)
+            plugin.context.on('dispose',unWatch)
         }
 
     }
@@ -629,8 +631,8 @@ function createZhinAPI() {
         if (!app) throw new Error(`can't found app with context for key:${Zhin.key.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
-        const plugin = app.pluginList.find(plugin => plugin.fullPath === pluginFullPath)
-        plugin.on('dispose',callback)
+        const plugin = app.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath)
+        plugin.context.on('dispose',callback)
     }
     return {
         createZhin,

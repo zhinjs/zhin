@@ -4,14 +4,14 @@ import Element from "./element";
 import {Context} from "@/context";
 import {Random, Time} from "@/utils";
 
-export type Component<P extends Dict = Dict, D extends Dict = Dict, M extends Component.Methods = Component.Methods> = ({
+export type Component<S=any,P extends Dict = Dict, D extends Dict = Dict, M extends Component.Methods = Component.Methods> = ({
     [K in keyof (P | D | M)]: K extends keyof P ? P[K] : K extends keyof D ? D[K] : M[K]
 } & {
-    render: Component.Render<P, D, M>
+    render: Component.Render<S,P, D, M>
 })
-export type DefineComponent<P extends Component.PropsDesc = Component.PropsDesc, D extends Component.InitFunc<Dict> = Component.InitFunc<Dict>, M extends Component.Methods = Component.Methods> = Component.InitOption<P, D, M>
+export type DefineComponent<S=any,P extends Component.PropsDesc = Component.PropsDesc, D extends Component.InitFunc<Dict> = Component.InitFunc<Dict>, M extends Component.Methods = Component.Methods> = Component.InitOption<S,P, D, M>
 
-export function defineComponent<P extends Component.PropsDesc = Component.PropsDesc, D extends Component.InitFunc<Dict> = Component.InitFunc<Dict>, M extends Component.Methods = Component.Methods>(component: DefineComponent<P, D, M>): DefineComponent<P, D, M> {
+export function defineComponent<S=any,P extends Component.PropsDesc = Component.PropsDesc, D extends Component.InitFunc<Dict> = Component.InitFunc<Dict>, M extends Component.Methods = Component.Methods>(component: DefineComponent<S,P, D, M>): DefineComponent<S,P, D, M> {
     return component
 }
 
@@ -48,14 +48,14 @@ export namespace Component {
     };
     export type PropsType<O extends PropsDesc> = ExtractPropTypes<O>
 
-    export interface InitOption<P extends PropsDesc, D extends InitFunc<Dict>, M extends Methods> {
+    export interface InitOption<S,P extends PropsDesc, D extends InitFunc<Dict>, M extends Methods> {
         props?: P
         data?: D
         methods?: M
-        render: Render<PropsType<P>, DataType<D>, M>
+        render: Render<S,PropsType<P>, DataType<D>, M>
     }
 
-    export type Render<P extends Dict, D extends Dict, M extends Dict> = Element.Render<Session & P & D & M, P>
+    export type Render<S,P extends Dict, D extends Dict, M extends Dict> = Element.Render<S & P & D & M, P>
 
     export function install(ctx: Context) {
         // 内置组件

@@ -1,6 +1,7 @@
 import {evaluate,  isNullable, makeArray} from "./utils";
 import {Awaitable, Dict} from "./types";
 import {Fragment} from "./element";
+import {Component} from "@/component";
 
 interface Element {
     [Element.key]: true
@@ -285,41 +286,43 @@ namespace Element {
         }).join('')
     }
 
-    export function transform<S = never>(source: string, rules: Dict<Transformer<S>>, session?: S): string
-    export function transform<S = never>(source: Element[], rules: Dict<Transformer<S>>, session?: S): Element[]
-    export function transform<S>(source: string | Element[], rules: Dict<Transformer<S>>, session?: S) {
+    export function transform<S = never>(source: string, rules: Dict<Component>, session?: S): string
+    export function transform<S = never>(source: Element[], rules: Dict<Component>, session?: S): Element[]
+    export function transform<S>(source: string | Element[], rules: Dict<Component>, session?: S) {
         const elements = typeof source === 'string' ? parse(source, session) : source
         const output: Fragment[] = []
         elements.forEach((element) => {
             const {type, attrs, children} = element
-            let result = rules[type] ?? rules.default ?? true
-            if (typeof result === 'function') {
-                result = result.apply(session,[attrs, children, session])
+            let component:Component<S>|Fragment = rules[type] ?? rules.default ?? true
+            if (typeof component!=="boolean" && component instanceof Element) {
+                const {render,...others}=component
+                component =render.apply(Object.assign(session,others) as S,[attrs, children, session]) as Fragment
             }
-            if (result === true) {
+            if (component === true) {
                 output.push(element)
-            } else if (result !== false) {
-                output.push(...transform(toElementArray(result),rules,session))
+            } else if (component !== false) {
+                output.push(...transform(toElementArray(component as Fragment),rules,session))
             }
         })
         return typeof source === 'string' ? output.join('') : output
     }
 
-    export async function transformAsync<S = never>(source: string, rules: Dict<AsyncTransformer<S>>, session?: S): Promise<Element[]>
-    export async function transformAsync<S = never>(source: Element[], rules: Dict<AsyncTransformer<S>>, session?: S): Promise<Element[]>
-    export async function transformAsync<S>(source: string | Element[], rules: Dict<AsyncTransformer<S>>, session?: S) {
+    export async function transformAsync<S = never>(source: string, rules: Dict<Component>, session?: S): Promise<Element[]>
+    export async function transformAsync<S = never>(source: Element[], rules: Dict<Component>, session?: S): Promise<Element[]>
+    export async function transformAsync<S>(source: string | Element[], rules: Dict<Component>, session?: S) {
         const elements = typeof source === 'string' ? parse(source, source) : source
         const result: Element[] = []
         for (const element of elements) {
             const {type, attrs, children} = element
-            let render = rules[type] ?? rules.default ?? true
-            if (typeof render === 'function') {
-                render = await render.apply(session,[attrs, children, session])
+            let component:Component<S>|Fragment = rules[type] ?? rules.default ?? true
+            if (typeof component!=="boolean" && component instanceof Element) {
+                const {render,...others}=component
+                component =render.apply(Object.assign(session,others) as S,[attrs, children, session]) as Fragment
             }
-            if (render === true) {
+            if (component === true) {
                 result.push(element)
-            } else if (render !== false) {
-                result.push(...await transformAsync(toElementArray(render),rules,session))
+            } else if (component !== false) {
+                result.push(...await transformAsync(toElementArray(component as Fragment),rules,session))
             }
         }
         return result
