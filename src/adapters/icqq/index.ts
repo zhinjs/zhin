@@ -80,6 +80,9 @@ export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
         this.internal.offTrap()
         this.internal.logout()
     }
+    isChannelAdmin(session){
+        return false
+    }
     isGroupAdmin(session: PayloadWithSession<'icqq','message'>): boolean {
         return session.message_type==='group' && session.member.is_admin
     }

@@ -6,11 +6,4 @@ process.on('unhandledRejection',(e)=>{
 process.on('uncaughtException',(e)=>{
     console.error(e)
 })
-createZhin(process.env.configPath||resolve(process.cwd(),'zhin.yaml')).start()
-createZhin({
-    protocols:{
-        icqq:{
-            bots:[]
-        }
-    }
-})
+createZhin(process.env.configPath||=resolve(process.cwd(),'zhin.yaml')).start()

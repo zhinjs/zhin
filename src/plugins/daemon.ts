@@ -3,7 +3,6 @@ import {Context} from "@/context";
 export const name='systemDaemon'
 export function install(ctx:Context, config:DaemonConfig={}){
     const {exitCommand=true, autoRestart = true} = config||{}
-
     function handleSignal(signal: NodeJS.Signals) {
         ctx.app.logger.info(`terminated by ${signal}`)
         process.exit()
@@ -22,12 +21,8 @@ export function install(ctx:Context, config:DaemonConfig={}){
         .shortcut('关机')
         .shortcut('重启', {options: {restart: true}})
         .action(async ({options,session}) => {
-            const result=await session.prompt.prompts({
-                abc:{type:'text',message:'请输入姓名'},
-                def:{type:"number",message:'请输入年龄'}
-            })
             const channelId = Bot.getFullTargetId(session);
-            if (!options.restart) {
+            if (!options.restart && !autoRestart) {
                 await session.reply('正在关机...').catch(()=>{})
                 process.exit()
             }
@@ -50,7 +45,7 @@ export function install(ctx:Context, config:DaemonConfig={}){
                 if(times) message+=`耗时：${(new Date().getTime()-times)/1000}s`
                 bot.sendMsg(target_id,target_type, message)
             } else {
-                const dispose = ctx.on('bot.online', (platform,bot_id) => {
+                const dispose = ctx.app.on('bot.online', (platform,bot_id) => {
                     if(times) message+=`耗时：${(new Date().getTime()-times)/1000}s`
                     if(bot.adapter.protocol===platform && bot.self_id===bot_id){
                         bot.sendMsg(target_id,target_type, message)

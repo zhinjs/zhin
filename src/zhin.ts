@@ -92,8 +92,6 @@ process.on('SIGINT', () => {
 export function defineConfig(options: Zhin.Options) {
     return options
 }
-
-
 export class Zhin extends Context {
     isReady: boolean = false
     options: Zhin.Options
@@ -126,6 +124,24 @@ export class Zhin extends Context {
         this.on('dispose',()=>{
             server.close()
         })
+        this.on('service-add',(addName)=>{
+            const plugins=this.pluginList.filter(p=>p.options.using && p.options.using.includes(addName))
+            plugins.forEach(plugin=>{
+                if(plugin.options.using.every(name=>this.services.has(name))){
+                    this.logger.info(`所需服务已全部就绪，插件(${plugin.name})已启用`)
+                    plugin.enable()
+                }
+            })
+        })
+        this.on('service-remove',(removeName)=>{
+            const plugins=this.pluginList.filter(p=>p.options.using && p.options.using.includes(removeName))
+            plugins.forEach(plugin=>{
+                if(plugin.options.using.some(name=>!this.services.has(name))){
+                    this.logger.info(`所需服务(${removeName})未就绪，插件(${plugin.name})已停用`)
+                    plugin.disable()
+                }
+            })
+        })
         this.use(Component)
         this.middleware(async (session,next) => {
             session.elements=await session.render()
@@ -143,7 +159,7 @@ export class Zhin extends Context {
             }
         })
     }
-
+    // 更改zhin的配置
     changeOptions(options: Zhin.Options) {
         const changeValue = (source, key, value) => {
             if (source[key] && typeof source[key] === 'object') {
@@ -180,12 +196,10 @@ export class Zhin extends Context {
             }
         })
     }
-
-
+    // 获取一个机器人实例
     pickBot<K extends keyof Zhin.Bots>(protocol: K, self_id: string | number): Zhin.Bots[K] {
         return this.adapters.get(protocol).bots.get(self_id) as Zhin.Bots[K]
     }
-
     emit(event, ...args) {
         const listeners = this.listeners(event)
         if (typeof event === "string" && !event.startsWith('before-') && !event.startsWith('after-')) {
@@ -197,17 +211,14 @@ export class Zhin extends Context {
         }
         return true
     }
-
-
+    // 获取logger
     getLogger<K extends keyof Zhin.Adapters>(protocol: K, self_id?: string | number) {
         return getLogger(`[zhin:protocol-${[protocol, self_id].filter(Boolean).join(':')}]`)
     }
-
-
     static getChannelId(event: Dict) {
         return [event.message_type, event.group_id || event.discuss_id || event.sender.user_id].join(':') as ChannelId
     }
-
+    // 扫描项目依赖中的所有插件
     getCachedPluginList() {
         const result: Plugin.Options[] = []
         if (fs.existsSync(resolve(process.cwd(), 'node_modules', '@zhinjs'))) {
@@ -236,24 +247,22 @@ export class Zhin extends Context {
         }
         return result
     }
-
+    // 检查知音是否安装指定插件
     hasInstall(pluginName: string) {
         return !!this.pluginList.find(plugin => plugin.options.fullName === pluginName)
     }
-
-
     sendMsg(channelId: ChannelId, message: Element.Fragment) {
         const [protocol, self_id, targetType, targetId] = channelId.split(':') as [keyof Zhin.Adapters, `${string | number}`, TargetType, `${string | number}`]
         const adapter = this.adapters.get(protocol)
         const bot = adapter.bots.get(self_id)
         return bot.sendMsg(targetId, targetType, message)
     }
-
-
+    // 安装插件
     use<P extends Plugin.Install>(plugin: P, options?: Plugin.Config<P>): this {
         this.plugin(plugin, options)
         return this
     }
+    // 加载指定名称，指定类型的模块
     public load<R = object>(name: string, type: string,setup?:boolean): R {
         function getListenDir(modulePath: string) {
             if (modulePath.endsWith('/index')) return modulePath.replace('/index', '')
@@ -325,18 +334,21 @@ export class Zhin extends Context {
             fullPath: getListenDir(resolved)
         } as any
     }
+    // 获取所有可用的组件
     getSupportComponents<P extends keyof Zhin.Adapters>(session:Session<P>){
         return this.getSupportPlugins(session).reduce((result:Dict<Component>,plugin)=>{
             Object.assign(result,plugin.context.componentList)
             return result
         },this.components)
     }
+    // 获取所有可用的中间件
     getSupportMiddlewares<P extends keyof Zhin.Adapters>(session:Session<P>){
         return this.getSupportPlugins(session).reduce((result:Middleware<Session>[],plugin)=>{
             result.push(...plugin.context.middlewareList)
             return result
         },[...this.middlewares])
     }
+    // 获取所有可用的指令
     getSupportCommands<P extends keyof Zhin.Adapters>(session:Session<P>){
         return this.getSupportPlugins(session).reduce((result:Command[],plugin)=>{
             for(const command of plugin.context.commandList){
@@ -347,6 +359,7 @@ export class Zhin extends Context {
             return result
         },[...this.commands.values()])
     }
+    // 获取匹配出来的指令
     findCommand(argv: Argv) {
         return this.getSupportCommands(argv.session).find(cmd => {
             return cmd.name === argv.name
@@ -354,7 +367,7 @@ export class Zhin extends Context {
                 || cmd.shortcuts.some(({name}) => typeof name === 'string' ? name === argv.name : name.test(argv.name))
         })
     }
-
+    // 启动zhin
     async start() {
         for (const adapter of Object.keys(this.options.adapters || {})) {
             try {
@@ -385,7 +398,7 @@ export class Zhin extends Context {
             await listener.apply(this, args)
         }
     }
-
+    // 停止 zhin
     stop() {
         this.dispose()
         process.exit()
@@ -404,7 +417,7 @@ export namespace Zhin {
         login:Plugin<null>
         plugin:Plugin<null>
         config:Plugin<null>
-        daemon:Plugin<null>
+        daemon:Plugin<{ exitCommand?:string|boolean,autoRestart?:boolean }>
         status:Plugin<null>
         watcher:Plugin<string>
         [key:string]:Plugin
@@ -413,9 +426,9 @@ export namespace Zhin {
         icqq:IcqqBot
     }
     export const key = Symbol('Zhin')
-    export const Services:(keyof Services)[]=[]
     export interface Services {
         koa: Koa
+        test:123
         router: Router
         server: Server
     }

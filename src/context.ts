@@ -28,107 +28,25 @@ export class Context extends EventEmitter{
         this.logger=parent.logger
         return new Proxy(this,{
             get(target: Context, p: string | symbol, receiver: any): any {
-                if(Zhin.Services.includes(p as keyof Zhin.Services)) return target.app.services.get(p as keyof Zhin.Services)
+                if(target.app.services.has(p as keyof Zhin.Services)) return target.app.services.get(p as keyof Zhin.Services)
                 return Reflect.get(target,p,receiver)
             }
         })
     }
     public logger: Logger
-    component(name: string, component: Component|Component['render'],options?:Omit<Component, 'render'>) {
-        if(typeof component==='function') component={
-            ...(options||{}),
-            render:component
-        }
-        this.components[name] = component as Component
-        return Dispose.from(this,()=>{
-            delete this.components[name]
-        })
-    }
-    get middlewareList(){
-        return [...this.plugins.values()].reduce((result,plugin)=>{
-            result.push(...plugin.context.middlewareList)
-            return result
-        },[...this.middlewares])
-    }
-    get componentList(){
-        return [...this.plugins.values()].reduce((result,plugin)=>{
-            Object.assign(result,plugin.context.componentList)
-            return result
-        },this.components)
-    }
-    get commandList():Command[] {
-        return [...this.plugins.values()].reduce((result,plugin)=>{
-            result.push(...plugin.context.commandList)
-            return result
-        },[...this.commands.values()])
-    }
-
+    // 获取当前上下文所有插件
     get pluginList():Plugin[] {
         return [...this.plugins.values()].reduce((result,plugin)=>{
             result.push(...plugin.context.pluginList)
             return result
         },[...this.plugins.values()])
     }
-
-    on(event, listener) {
-        super.on(event, listener)
-        const dispose= Dispose.from(this, () => {
-            super.off(event, listener)
-            remove(this.disposes,dispose)
-        })
-        this.disposes.push(dispose)
-        return dispose
+    // 根据会话获取插件列表
+    getSupportPlugins<P extends keyof Zhin.Adapters>(session:Session<P>){
+        // 双向奔赴或者未反向奔赴
+        return this.pluginList.filter(plugin=>plugin.options.enable!==false && session.bot.match(plugin) && plugin.match(session))
     }
-    // 往下级插件抛事件
-    dispatch<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P]>(protocol:P,eventName:E, session: Session<P, E>){
-        this.emit(`${protocol}.${String(eventName)}`,session)
-        for(const plugin of this.getSupportPlugins(session)){
-            plugin.context.dispatch(protocol,eventName,session)
-        }
-    }
-    adapter<K extends keyof Zhin.Adapters>(adapter: K): Zhin.Adapters[K]
-    adapter<K extends keyof Zhin.Adapters>(adapter: K, options: AdapterOptionsType<Zhin.Adapters[K]>): this
-    adapter<K extends keyof Zhin.Adapters>(adapter: K, protocol: AdapterConstructs[K], options: AdapterOptionsType<Zhin.Adapters[K]>): this
-    adapter<K extends keyof Zhin.Adapters>(adapter: K, Construct?: AdapterConstructs[K] | AdapterOptions, options?: AdapterOptions) {
-        if (!Construct && !options) return this.app.adapters.get(adapter)
-        if (typeof Construct !== "function") {
-            const result=this.app.load<Plugin.Options>(adapter, 'adapter')
-            if(result && result.install){
-                result.install(this,options)
-            }
-            options = Construct as AdapterOptions
-            Construct = Adapter.get(adapter).Adapter as unknown as AdapterConstructs[K]
-        }
-        if (!Construct) throw new Error(`can't find protocol from protocol:${adapter}`)
-        const dispose = this.app.on(`${adapter}.message`, (session) => {
-            const middleware = Middleware.compose(this.app.getSupportMiddlewares(session))
-            middleware(session)
-        })
-        this.app.adapters.set(adapter, new Construct(this.app, adapter, options))
-        return Dispose.from(this, () => {
-            dispose()
-            this.app.adapters.delete(adapter)
-        }) as any
-    }
-    service<K extends keyof Zhin.Services>(key: K): Zhin.Services[K]
-    service<K extends keyof Zhin.Services>(key: K, service: Zhin.Services[K]): this
-    service<K extends keyof Zhin.Services, T>(key: K, constructor: Zhin.ServiceConstructor<Zhin.Services[K], T>, options?: T): this
-    service<K extends keyof Zhin.Services, T>(key: K, Service?: Zhin.Services[K] | Zhin.ServiceConstructor<Zhin.Services[K], T>, options?: T): Zhin.Services[K] | this {
-        if (Service === undefined) {
-            return this.app.services.get(key)
-        }
-        if (this.app[key]) throw new Error('服务key不能和bot已有属性重复')
-        if (isConstructor(Service)) {
-            this.app.services.set(key,new Service(this.app, options))
-        } else {
-            this.app.services.set(key,Service)
-        }
-        Zhin.Services.push(key)
-        return Dispose.from(this, () => {
-            this.app.services.delete(key)
-            remove(Zhin.Services,key)
-        })
-    }
+    // 为当前上下文添加插件
     plugin<T>(name: string, options?: T): Plugin | this
     plugin<T>(name: string,setup?:boolean, options?: T): Plugin | this
     plugin<P extends Plugin.Install>(plugin: P, config?: Plugin.Config<P>): this
@@ -170,20 +88,56 @@ export class Context extends EventEmitter{
         if (!using.length) {
             installPlugin()
         } else {
-            if (!using.every(name => this.app.pluginList.find(p=>p.name===name))) {
-                this.app.logger.info(`插件(${options.name})将在所需插件(${using.join()})加载完毕后加载`)
-                const dispose = this.app.on('plugin-add', () => {
-                    if (using.every(name => this.app.pluginList.find(p=>p.name===name))) {
-                        dispose()
-                        installPlugin()
-                    }
-                })
+            installPlugin()
+            if (using.some(name => !this.app.services.has(name))) {
+                this.app.logger.info(`插件(${options.name})所需服务(${using.join()})未就绪，已停用`);
+                (this.plugin(options.fullName) as Plugin).disable()
             } else {
-                installPlugin()
             }
         }
         return this
     }
+    // 获取当前上下文所有中间件
+    get middlewareList(){
+        return [...this.plugins.values()].reduce((result,plugin)=>{
+            result.push(...plugin.context.middlewareList)
+            return result
+        },[...this.middlewares])
+    }
+    // 为当前上下文添加中间件
+    middleware(middleware: Middleware<PayloadWithSession<keyof Zhin.Adapters,'message'>>, prepend?: boolean) {
+        const method: 'push' | 'unshift' = prepend ? 'unshift' : "push"
+        this.app.middlewares[method](middleware)
+        return Dispose.from(this, () => {
+            return remove(this.app.middlewares, middleware);
+        })
+    }
+    // 获取当前上下文所有组件
+    get componentList(){
+        return [...this.plugins.values()].reduce((result,plugin)=>{
+            Object.assign(result,plugin.context.componentList)
+            return result
+        },this.components)
+    }
+    // 为当前上下文添加组件
+    component(name: string, component: Component|Component['render'],options?:Omit<Component, 'render'>) {
+        if(typeof component==='function') component={
+            ...(options||{}),
+            render:component
+        }
+        this.components[name] = component as Component
+        return Dispose.from(this,()=>{
+            delete this.components[name]
+        })
+    }
+    // 获取当前上下文所有指令
+    get commandList():Command[] {
+        return [...this.plugins.values()].reduce((result,plugin)=>{
+            result.push(...plugin.context.commandList)
+            return result
+        },[...this.commands.values()])
+    }
+    // 为当前上下文添加指令
     command<D extends string,T extends keyof TriggerSessionMap>(def: D,trigger?:T): Command<Argv.ArgumentType<D>,{},T> {
         const namePath = def.split(' ', 1)[0]
         const decl = def.slice(namePath.length)
@@ -214,13 +168,74 @@ export class Context extends EventEmitter{
         })
         return command as Command<Argv.ArgumentType<D>,{},T>
     }
-    middleware(middleware: Middleware<PayloadWithSession<keyof Zhin.Adapters,'message'>>, prepend?: boolean) {
-        const method: 'push' | 'unshift' = prepend ? 'unshift' : "push"
-        this.app.middlewares[method](middleware)
-        return Dispose.from(this, () => {
-            return remove(this.app.middlewares, middleware);
+    on(event, listener) {
+        super.on(event, listener)
+        const dispose= Dispose.from(this, () => {
+            super.off(event, listener)
+            remove(this.disposes,dispose)
         })
+        this.disposes.push(dispose)
+        return dispose
     }
+    // 往下级插件抛事件
+    dispatch<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P]>(protocol:P,eventName:E, session: Session<P, E>){
+        this.emit(`${protocol}.${String(eventName)}`,session)
+        for(const plugin of this.getSupportPlugins(session)){
+            plugin.context.dispatch(protocol,eventName,session)
+        }
+    }
+    // 为zhin添加适配器
+    adapter<K extends keyof Zhin.Adapters>(adapter: K): Zhin.Adapters[K]
+    adapter<K extends keyof Zhin.Adapters>(adapter: K, options: AdapterOptionsType<Zhin.Adapters[K]>): this
+    adapter<K extends keyof Zhin.Adapters>(adapter: K, protocol: AdapterConstructs[K], options: AdapterOptionsType<Zhin.Adapters[K]>): this
+    adapter<K extends keyof Zhin.Adapters>(adapter: K, Construct?: AdapterConstructs[K] | AdapterOptions, options?: AdapterOptions) {
+        if (!Construct && !options) return this.app.adapters.get(adapter)
+        if (typeof Construct !== "function") {
+            const result=this.app.load<Plugin.Options>(adapter, 'adapter')
+            if(result && result.install){
+                result.install(this,options)
+            }
+            options = Construct as AdapterOptions
+            Construct = Adapter.get(adapter).Adapter as unknown as AdapterConstructs[K]
+        }
+        if (!Construct) throw new Error(`can't find protocol from protocol:${adapter}`)
+        const dispose = this.app.on(`${adapter}.message`, (session) => {
+            const middleware = Middleware.compose(this.app.getSupportMiddlewares(session))
+            middleware(session)
+        })
+        this.app.adapters.set(adapter, new Construct(this.app, adapter, options))
+        return Dispose.from(this, () => {
+            dispose()
+            this.app.adapters.delete(adapter)
+        }) as any
+    }
+    // 为zhin添加服务
+    service<K extends keyof Zhin.Services>(key: K): Zhin.Services[K]
+    service<K extends keyof Zhin.Services>(key: K, service: Zhin.Services[K]): this
+    service<K extends keyof Zhin.Services, T>(key: K, constructor: Zhin.ServiceConstructor<Zhin.Services[K], T>, options?: T): this
+    service<K extends keyof Zhin.Services, T>(key: K, Service?: Zhin.Services[K] | Zhin.ServiceConstructor<Zhin.Services[K], T>, options?: T): Zhin.Services[K] | this {
+        if (Service === undefined) {
+            return this.app.services.get(key)
+        }
+        if (this.app[key]) throw new Error('服务key不能和bot已有属性重复')
+        if(this.app.services.has(key)) throw new Error('重复定义服务')
+        if (isConstructor(Service)) {
+            this.app.services.set(key,new Service(this.app, options))
+        } else {
+            this.app.services.set(key,Service)
+        }
+        this.app.logger.info(`已挂载服务(${key})`)
+        this.app.emit('service-add',key)
+        const dispose=Dispose.from(this, () => {
+            this.app.logger.info(`已卸载服务(${key})`)
+            this.app.services.delete(key)
+            this.app.emit('service-remove',key)
+            remove(this.disposes,dispose)
+        })
+        this.disposes.push(dispose)
+        return dispose
+    }
+    // 效果同名
     setTimeout(callback: Function, ms: number, ...args) {
         const timer = setTimeout(() => {
             callback()
@@ -231,17 +246,14 @@ export class Context extends EventEmitter{
         this.disposes.push(dispose)
         return dispose
     }
-
-    getSupportPlugins<P extends keyof Zhin.Adapters>(session:Session<P>){
-        // 双向奔赴或者未反向奔赴
-        return this.pluginList.filter(plugin=>session.bot.match(plugin) && plugin.match(session))
-    }
+    // 效果同名
     setInterval(callback: Function, ms: number, ...args) {
         const timer = setInterval(callback, ms, ...args)
         const dispose = Dispose.from(this, () => clearInterval(timer))
         this.disposes.push(dispose)
         return dispose
     }
+    // 群发消息
     broadcast(channelId:ChannelId,content:Element.Fragment){
         const [platform,self_id,target_type=platform,target_id=self_id]=channelId.split(':')
         const bots=[...this.app.adapters.values()].reduce((result,adapter)=>{
@@ -277,6 +289,7 @@ export class Context extends EventEmitter{
             if (isBailed(result)) return result
         }
     }
+    // 销毁当前上下文或当前上下文中的指定插件
     dispose(plugin?:Plugin|string){
         if(plugin){
             if(typeof plugin==='string') plugin=this.pluginList.find(p=>p.name===plugin)

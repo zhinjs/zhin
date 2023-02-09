@@ -35,7 +35,7 @@ export class Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I extends
         return this.adapter.botStatus(this.self_id)
     }
     isOnline(){
-        return this.status.online=true
+        return this.status.online===true
     }
     enable():boolean
     enable(plugin:Plugin):this
@@ -57,6 +57,7 @@ export class Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I extends
         }
         return this.options.enable=false
     }
+    // 机器人是否启用指定插件
     match(plugin:Plugin){
         return this.options.enable_plugins.includes(plugin.options.fullName) || !this.options.disable_plugins.includes(plugin.options.fullName)
     }
