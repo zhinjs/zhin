@@ -120,6 +120,9 @@ export class Zhin extends Context {
         server.listen(options.port ||= 8086)
         this.logger.info(`server listen at ${getIpAddress().map(ip => `http://${ip}:${options.port}`).join(' and ')}`)
         this.options = ref(options)
+        watch(this.options,(value:Zhin.Options)=>{
+            fs.writeFileSync(process.env.configPath,Yaml.dump(value))
+        })
         this.on('dispose',()=>{
             server.close()
         })
@@ -419,7 +422,7 @@ export namespace Zhin {
 
     export const defaultConfig: Partial<Options> = {
         port: 8086,
-        protocols: {
+        adapters: {
             icqq: {
                 bots: []
             }

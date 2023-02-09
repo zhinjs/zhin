@@ -1,7 +1,16 @@
 import {Context} from "@/context";
+import {Session, Zhin} from "@";
 
 export const name = 'pluginManage'
-
+function getPluginStatus(ctx:Context,session:Session,fullName:string){
+    if(session.bot.options.enable_plugins.includes(fullName)) return '(已启用)'
+    if(session.bot.options.disable_plugins.includes(fullName)) return '(已停用)'
+    const plugin=ctx.pluginList.find(p=>p.options.fullName===fullName)
+    if(!plugin) return ''
+    const flag:`${keyof Zhin.Adapters}:${string|number}`=`${session.protocol}:${session.bot.self_id}`
+    if(plugin.enableBots.includes(flag)) return '(已启用)'
+    if(plugin.disableBots.includes(flag)) return '(已停用)'
+}
 export function install(ctx: Context) {
     const command = ctx.command('plugin')
         .desc('插件管理')
@@ -9,8 +18,10 @@ export function install(ctx: Context) {
     command.subcommand('plugin.list',"group")
         .desc('显示插件列表')
         .action(({session}) => {
-            return ctx.app.getCachedPluginList().map((plugin, idx) => {
-                return `${idx + 1}. 插件名：${plugin.fullName}${ctx.app.hasInstall(plugin.fullName) ? ' (已安装)' : ''} ${plugin.type}`
+            return ctx.app.getCachedPluginList().map((options, idx) => {
+                const installStatus=ctx.app.hasInstall(options.fullName) ? ' (已安装)' : ''
+                let enableStatus=installStatus ? getPluginStatus(ctx,session,options.fullName):''
+                return `${idx + 1}.${options.fullName}${installStatus}${enableStatus} ${options.type}`
             }).join('\n')
         })
     command.subcommand('plugin.detail <name:string>')

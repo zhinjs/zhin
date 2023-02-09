@@ -6,8 +6,10 @@ import {deepMerge, Promisify, remove} from './utils'
 import {EventEmitter} from "events";
 import {IcqqEventMap} from "@/adapters/icqq";
 import Element from "@/element";
+import {ref, watch} from "obj-observer";
 export type BotOptions<O={}>={
     quote_self?:boolean
+    self_id?:string|number
     prefix?:string
     enable?:boolean
     master?:string|number
@@ -21,9 +23,12 @@ export class Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I extends
     public options:BotOptions<BO>
     constructor(public app:Zhin,public adapter:Adapter<K,BO,AO>,options:BotOptions<BO>) {
         super();
-        this.options=deepMerge(Bot.defaultOptions,options)
+        this.options=ref(deepMerge(Bot.defaultOptions,options))
         this.on('message',(message:Bot.MessageRet)=>{
             this.adapter.emit('message.receive',this.self_id,message)
+        })
+        watch(this.options,(value:BotOptions<BO>)=>{
+            this.adapter.changeOptions(this.self_id,value)
         })
     }
     get status(){

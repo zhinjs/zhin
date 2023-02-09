@@ -19,7 +19,7 @@ export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
         if (!options.data_dir) options.data_dir = app.options.data_dir
         super(app,adapter,options)
         this.internal = new Client(options)
-        this.self_id = options.uin
+        this.self_id = options.self_id
         const _this=this
         const trip=this.internal.trip
         this.internal.trip=function (this:Client,event,...args){
@@ -74,7 +74,7 @@ export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
     }
 
     start() {
-        this.internal.login(Number(this.options.uin), this.options.password)
+        this.internal.login(Number(this.options.self_id), this.options.password)
     }
     stop(){
         this.internal.offTrap()
@@ -162,8 +162,7 @@ function fromElement(elementList: Element | string | number | (Element | string 
 }
 
 export interface IcqqBotOptions extends IcqqConfig {
-    uin: string
-    quote_self?: boolean
+    self_id: string
     password?: string
 }
 export interface EventMap<T=any>{

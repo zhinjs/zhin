@@ -87,6 +87,11 @@ export abstract class Adapter<
             super.off(event,listener)
         })
     }
+    changeOptions(bot_id:string|number,options:BotOptions<BO>){
+        const idx=this.options.bots.findIndex(opt=>opt.self_id===bot_id)
+        if(idx===-1) return
+        this.options.bots[idx]=options
+    }
     dispatch<E extends keyof keyof Zhin.BotEventMaps[K]>(eventName:E,session:Session<K,E>){
         this.emit(eventName,session)
         this.app.dispatch(this.protocol,eventName,session)
