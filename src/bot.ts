@@ -1,21 +1,27 @@
 import {Zhin} from "./zhin";
 import {Adapter} from "./adapter";
+import {Plugin} from "@/plugin";
 import {Session} from "./session";
-import {Promisify} from './utils'
+import {deepMerge, Promisify, remove} from './utils'
 import {EventEmitter} from "events";
 import {IcqqEventMap} from "@/adapters/icqq";
 import Element from "@/element";
 export type BotOptions<O={}>={
     quote_self?:boolean
     prefix?:string
+    enable?:boolean
     master?:string|number
+    enable_plugins?:string[]
+    disable_plugins?:string[]
     admins?:(string|number)[]
 } & O
 
 export class Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I extends object=object> extends EventEmitter{
     public internal:I
-    constructor() {
+    public options:BotOptions<BO>
+    constructor(public app:Zhin,public adapter:Adapter<K,BO,AO>,options:BotOptions<BO>) {
         super();
+        this.options=deepMerge(Bot.defaultOptions,options)
         this.on('message',(message:Bot.MessageRet)=>{
             this.adapter.emit('message.receive',this.self_id,message)
         })
@@ -25,6 +31,29 @@ export class Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I extends
     }
     isOnline(){
         return this.status.online=true
+    }
+    enable():boolean
+    enable(plugin:Plugin):this
+    enable(plugin?:Plugin):this|boolean{
+        if(plugin) {
+            this.options.enable_plugins.push(plugin.options.fullName)
+            remove(this.options.disable_plugins,plugin.options.fullName)
+            return this
+        }
+        return this.options.enable=true
+    }
+    disable():boolean
+    disable(plugin:Plugin):this
+    disable(plugin?:Plugin):this|boolean{
+        if(plugin) {
+            this.options.disable_plugins.push(plugin.options.fullName)
+            remove(this.options.enable_plugins,plugin.options.fullName)
+            return this
+        }
+        return this.options.enable=false
+    }
+    match(plugin:Plugin){
+        return this.options.enable_plugins.includes(plugin.options.fullName) || !this.options.disable_plugins.includes(plugin.options.fullName)
     }
     // 会话发起者是否为zhin主人
     isMaster(session:Session<K>){
@@ -129,4 +158,13 @@ export class BotList extends Array<Bot<keyof Zhin.Adapters,{},{}>>{
 }
 export type BotConstruct<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={}>={
     new(app:Zhin, protocol:Adapter<K,BO,AO>, options:BotOptions<BO>):Zhin.Bots[K]
+}
+export namespace Bot{
+    export const defaultOptions:BotOptions={
+        quote_self:false,
+        enable:true,
+        enable_plugins:[],
+        disable_plugins:[],
+        admins:[]
+    }
 }

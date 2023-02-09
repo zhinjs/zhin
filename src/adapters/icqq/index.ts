@@ -15,9 +15,9 @@ import {MergeEventMap, PrivateMessageEvent} from "icqq/lib/events";
 
 
 export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
-    constructor(public app: Zhin, public adapter: Adapter<'icqq', BotOptions<IcqqBotOptions>>, public options: BotOptions<IcqqBotOptions>) {
+    constructor(app: Zhin,adapter: Adapter<'icqq', BotOptions<IcqqBotOptions>>,options: BotOptions<IcqqBotOptions>) {
         if (!options.data_dir) options.data_dir = app.options.data_dir
-        super()
+        super(app,adapter,options)
         this.internal = new Client(options)
         this.self_id = options.uin
         const _this=this

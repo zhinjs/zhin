@@ -12,7 +12,8 @@ export function install(ctx:Context, root:ReturnType<typeof config>){
     function reloadDependency(plugin: Plugin,changeFile:string){
         const options=ctx.app.options.plugins[plugin.name]
         try {
-            plugin.dispose()
+            const parent=plugin.context.parent
+            plugin.unmount()
             delete require.cache[changeFile]
             if(changeFile!==plugin.options.fullPath){
                 delete require.cache[plugin.options.fullPath]
@@ -22,7 +23,7 @@ export function install(ctx:Context, root:ReturnType<typeof config>){
                 delete require.cache[plugin.options.fullPath+'/index.mjs']
             }
             const newPlugin=ctx.app.load<Plugin.Install>(plugin.options.fullPath,'plugin')
-            plugin.context.parent.plugin(newPlugin,options)
+            parent.plugin(newPlugin,options)
 
             ctx.app.logger.info(`已重载:${newPlugin.name}`)
         } catch (e) {

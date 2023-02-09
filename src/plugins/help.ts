@@ -8,7 +8,7 @@ export function install(ctx:Context){
         .option('showAuth','-A 显示权限信息')
         .action(({options,session,argv},target)=>{
             if (!target) {
-                const commands = ctx.app.commandList.filter(cmd => {
+                const commands = ctx.app.getSupportCommands(session).filter(cmd => {
                     if(options.showHidden) return cmd.parent === null && cmd.match(session)
                     return !cmd.config.hidden && cmd.parent === null && cmd.match(session)
                 })

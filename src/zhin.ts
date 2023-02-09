@@ -206,30 +206,30 @@ export class Zhin extends Context {
     }
 
     getCachedPluginList() {
-        const result: Plugin[] = []
+        const result: Plugin.Options[] = []
         if (fs.existsSync(resolve(process.cwd(), 'node_modules', '@zhinjs'))) {
             result.push(...fs.readdirSync(resolve(process.cwd(), 'node_modules', '@zhinjs')).map((str) => {
                 if (/^plugin-/.test(str)) return `@zhinjs/${str}`
                 return false
             }).filter(Boolean)
-                .map((name) => this.load<Plugin>(name as string, 'plugin')))
+                .map((name) => this.load<Plugin.Options>(name as string, 'plugin')))
         }
         if (fs.existsSync(resolve(process.cwd(), 'node_modules'))) {
             result.push(...fs.readdirSync(resolve(process.cwd(), 'node_modules')).map((str) => {
                 if (/^zhinjs-plugin-/.test(str)) return str
                 return false
             }).filter(Boolean)
-                .map((name) => this.load<Plugin>(name as string, 'plugin')))
+                .map((name) => this.load<Plugin.Options>(name as string, 'plugin')))
         }
         if (fs.existsSync(resolve(process.cwd(), this.options.plugin_dir))) {
             result.push(
                 ...fs.readdirSync(resolve(process.cwd(), this.options.plugin_dir))
-                    .map((name) => this.load<Plugin>(name.replace(/\.(d\.)?[d|j]s$/, ''), 'plugin'))
+                    .map((name) => this.load<Plugin.Options>(name.replace(/\.(d\.)?[d|j]s$/, ''), 'plugin'))
             )
         }
         if (fs.existsSync(resolve(__dirname, 'plugins'))) {
             result.push(...fs.readdirSync(resolve(__dirname, 'plugins'))
-                .map((name) => this.load<Plugin>(name.replace(/\.(d\.)?[d|j]s$/, ''), 'plugin')))
+                .map((name) => this.load<Plugin.Options>(name.replace(/\.(d\.)?[d|j]s$/, ''), 'plugin')))
         }
         return result
     }
@@ -323,19 +323,19 @@ export class Zhin extends Context {
         } as any
     }
     getSupportComponents<P extends keyof Zhin.Adapters>(session:Session<P>){
-        return this.getSupportPlugins(session.protocol).reduce((result:Dict<Component>,plugin)=>{
+        return this.getSupportPlugins(session).reduce((result:Dict<Component>,plugin)=>{
             Object.assign(result,plugin.context.componentList)
             return result
         },this.components)
     }
     getSupportMiddlewares<P extends keyof Zhin.Adapters>(session:Session<P>){
-        return this.getSupportPlugins(session.protocol).reduce((result:Middleware<Session>[],plugin)=>{
+        return this.getSupportPlugins(session).reduce((result:Middleware<Session>[],plugin)=>{
             result.push(...plugin.context.middlewareList)
             return result
         },[...this.middlewares])
     }
     getSupportCommands<P extends keyof Zhin.Adapters>(session:Session<P>){
-        return this.getSupportPlugins(session.protocol).reduce((result:Command[],plugin)=>{
+        return this.getSupportPlugins(session).reduce((result:Command[],plugin)=>{
             for(const command of plugin.context.commandList){
                 if(command.match(session as any)){
                     result.push(command)

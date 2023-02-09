@@ -14,7 +14,7 @@ import {Component} from "./component";
 import {Logger} from "log4js";
 import {Bot} from "./bot";
 
-export class Context<T=any> extends EventEmitter{
+export class Context extends EventEmitter{
     plugins:Map<string,Plugin>=new Map<string, Plugin>()
     public components: Dict<Component> = Object.create(null)
     middlewares:Middleware<PayloadWithSession<keyof Zhin.Adapters,'message'>>[]=[]
@@ -27,7 +27,7 @@ export class Context<T=any> extends EventEmitter{
         this.app=parent.app
         this.logger=parent.logger
         return new Proxy(this,{
-            get(target: Context<T>, p: string | symbol, receiver: any): any {
+            get(target: Context, p: string | symbol, receiver: any): any {
                 if(Zhin.Services.includes(p as keyof Zhin.Services)) return target.app.services.get(p as keyof Zhin.Services)
                 return Reflect.get(target,p,receiver)
             }
@@ -82,7 +82,7 @@ export class Context<T=any> extends EventEmitter{
     // 往下级插件抛事件
     dispatch<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P]>(protocol:P,eventName:E, session: Session<P, E>){
         this.emit(`${protocol}.${String(eventName)}`,session)
-        for(const plugin of this.getSupportPlugins(session.protocol)){
+        for(const plugin of this.getSupportPlugins(session)){
             plugin.context.dispatch(protocol,eventName,session)
         }
     }
@@ -133,7 +133,7 @@ export class Context<T=any> extends EventEmitter{
     plugin<T>(name: string,setup?:boolean, options?: T): Plugin | this
     plugin<P extends Plugin.Install>(plugin: P, config?: Plugin.Config<P>): this
     plugin<P extends Plugin.Install>(entry: string | P, ...args:[boolean?,Plugin.Config<P>?]) {
-        let options: Plugin.Options<T>
+        let options: Plugin.Options
         const setup:boolean=typeof args[0]==='boolean'?args.shift():false
         const config:Plugin.Config<P>=args.shift() as any
         if (typeof entry === 'string') {
@@ -146,7 +146,7 @@ export class Context<T=any> extends EventEmitter{
                 return this
             }
         } else {
-            options = Plugin.defineOptions<T>(entry)
+            options = Plugin.defineOptions(entry)
         }
         const info:Plugin.Info=Plugin.getInfo(options.fullPath)
         const installPlugin = () => {
@@ -158,9 +158,9 @@ export class Context<T=any> extends EventEmitter{
             }
             if (options.setup) {
                 this.plugins.set(options.fullName, plugin)
-                plugin.install(context,config)
+                plugin.mount(context,config)
             } else {
-                plugin.install(context,config)
+                plugin.mount(context,config)
                 this.plugins.set(options.fullName, plugin)
             }
             this.app.logger.info('已载入:' + options.name)
@@ -232,10 +232,9 @@ export class Context<T=any> extends EventEmitter{
         return dispose
     }
 
-    getSupportPlugins<P extends keyof Zhin.Adapters>(protocol:P){
-        return this.pluginList.filter(plugin=>{
-            return plugin.options.scopes===undefined || plugin.options.scopes.length===0 || plugin.options.scopes.includes(protocol)
-        })
+    getSupportPlugins<P extends keyof Zhin.Adapters>(session:Session<P>){
+        // 双向奔赴或者未反向奔赴
+        return this.pluginList.filter(plugin=>session.bot.match(plugin) && plugin.match(session))
     }
     setInterval(callback: Function, ms: number, ...args) {
         const timer = setInterval(callback, ms, ...args)
@@ -282,13 +281,13 @@ export class Context<T=any> extends EventEmitter{
         if(plugin){
             if(typeof plugin==='string') plugin=this.pluginList.find(p=>p.name===plugin)
             if(plugin) {
-                plugin.dispose()
+                plugin.unmount()
                 this.plugins.delete(plugin.options.fullName)
             }
             return
         }
         [...this.plugins.values()].forEach(plugin=>{
-            plugin.dispose()
+            plugin.unmount()
             this.plugins.delete(plugin.options.fullName)
         })
         this.emit('dispose')
