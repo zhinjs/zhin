@@ -44,7 +44,7 @@ export class Context extends EventEmitter{
     // 根据会话获取插件列表
     getSupportPlugins<P extends keyof Zhin.Adapters>(session:Session<P>){
         // 双向奔赴或者未反向奔赴
-        return this.pluginList.filter(plugin=>plugin.options.enable!==false && session.bot.match(plugin) && plugin.match(session))
+        return this.pluginList.filter(plugin=>plugin.status && session.bot.match(plugin) && plugin.match(session))
     }
     // 为当前上下文添加插件
     plugin<T>(name: string, options?: T): Plugin | this

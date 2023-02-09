@@ -9,10 +9,13 @@ export interface Plugin<T=any>{
 }
 export class Plugin<T=any>{
     public name:string
+    // 可用状态
+    public status:boolean
     public enableBots:`${keyof Zhin.Adapters}:${string|number}`[]=[]
     public disableBots:`${keyof Zhin.Adapters}:${string|number}`[]=[]
     constructor(public options:Plugin.Options<T>,public info:Plugin.Info) {
         this.name=options.name
+        this.status=true
     }
     // 插件类型
     get type(){
@@ -47,7 +50,7 @@ export class Plugin<T=any>{
     enable():boolean
     enable<P extends keyof Zhin.Adapters>(bot:Zhin.Bots[P]):this
     enable<P extends keyof Zhin.Adapters>(bot?:Zhin.Bots[P]):boolean|this{
-        if(!bot) return this.options.enable=false
+        if(!bot) return this.status=true
         this.enableBots.push(`${bot.adapter.protocol}:${bot.self_id}`)
         remove(this.disableBots,`${bot.adapter.protocol}:${bot.self_id}`)
         return this
@@ -56,7 +59,7 @@ export class Plugin<T=any>{
     disable():boolean
     disable<P extends keyof Zhin.Adapters>(bot:Zhin.Bots[P]):this
     disable<P extends keyof Zhin.Adapters>(bot?:Zhin.Bots[P]):boolean|this{
-        if(!bot) return this.options.enable=false
+        if(!bot) return this.status=false
         this.disableBots.push(`${bot.adapter.protocol}:${bot.self_id}`)
         remove(this.enableBots,`${bot.adapter.protocol}:${bot.self_id}`)
         return this
