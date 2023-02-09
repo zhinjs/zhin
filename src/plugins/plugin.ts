@@ -35,6 +35,7 @@ export function install(ctx: Context) {
         })
     command.subcommand('plugin.enable <name:string>')
         .desc('启用指定插件')
+        .auth('admins','master')
         .action(({options,session}, name) => {
             const plugin = ctx.app.pluginList.find(p => p.options.fullName === name)
             if (!plugin) return '未找到插件：' + name
@@ -43,6 +44,7 @@ export function install(ctx: Context) {
         })
     command.subcommand('plugin.disable <name:string>')
         .desc('禁用指定插件')
+        .auth('admins','master')
         .action(({options,session}, name) => {
             const plugin = ctx.app.pluginList.find(p => p.options.fullName === name)
             if (!plugin) return '未找到插件：' + name
