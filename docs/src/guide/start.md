@@ -3,8 +3,27 @@
 :::
 
 # 试试水
-## 项目构建(二选一)
-### 1. 通过模板仓库构建
+## 项目构建(三选一)
+### 1. 通过cli指令构建
+1. 全局安装`@zhinjs/cli`
+```shell
+# 安装zhin cli
+npm install -g @zhinjs/cli
+
+# 通过cli初始化项目
+zhin init zhin-bot # `zhin-bot`为你需要创建的项目名
+
+# 安装依赖
+cd zhin-bot && npm install
+
+```
+### 2. 通过npm指令构建
+1. 直接使用npm命令初始化一个zhin项目
+```shell
+npm init zhin
+```
+然后根据操作引导即可
+### 3. 通过模板仓库构建
 
 ::: tip
 此方式需要你能自行解决国内github访问受限的问题
@@ -21,19 +40,6 @@ git clone https://gitbub.com/[你的github用户名]/[仓库名].git
 
 # 安装依赖
 cd [仓库名] && npm install
-
-```
-### 2. 通过cli指令构建
-1. 全局安装`@zhinjs/cli`
-```shell
-# 安装zhin cli
-npm install -g @zhinjs/cli
-
-# 通过cli初始化项目
-zhin init zhin-bot # `zhin-bot`为你需要创建的项目名
-
-# 安装依赖
-cd zhin-bot && npm install
 
 ```
 ## 项目结构
