@@ -19,8 +19,6 @@ function outputConfig(config,key){
 }
 export const name='configManage'
 export function install(ctx:Context){
-    ctx.command('output <msg>')
-        .action((_,msg)=>msg)
     ctx.command('config [key:string] [value]')
         .desc('编辑配置文件')
         .auth("master","admins")

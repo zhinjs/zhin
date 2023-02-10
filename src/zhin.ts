@@ -428,7 +428,6 @@ export namespace Zhin {
     export const key = Symbol('Zhin')
     export interface Services {
         koa: Koa
-        test:123
         router: Router
         server: Server
     }
