@@ -15,7 +15,7 @@ export function install(ctx: Context) {
     const command = ctx.command('plugin')
         .desc('插件管理')
         .hidden()
-    command.subcommand('plugin.list',"group")
+    command.subcommand('plugin.list')
         .desc('显示插件列表')
         .action(({session}) => {
             return ctx.app.getCachedPluginList().map((options, idx) => {
@@ -23,6 +23,31 @@ export function install(ctx: Context) {
                 let enableStatus=installStatus ? getPluginStatus(ctx,session,options.fullName):''
                 return `${idx + 1}.${options.fullName}${installStatus}${enableStatus} ${options.type}`
             }).join('\n')
+        })
+
+    command.subcommand('plugin.mount <name:string>')
+        .desc('载入指定插件')
+        .action(({session}, name) => {
+            const options = ctx.app.getCachedPluginList().find(p => p.fullName === name)
+            if (!options) return '当前没有该插件'
+            try {
+                ctx.app.plugin(name)
+            } catch (e) {
+                return '加载失败：' + e.message
+            }
+            return '载入成功'
+        })
+    command.subcommand('plugin.unmount <name:string>')
+        .desc('移除指定插件')
+        .action(({session}, name) => {
+            const plugin = ctx.app.pluginList.find(p => p.options.fullName === name)
+            if (!plugin) return '尚未载入该插件'
+            try {
+                plugin.unmount()
+            } catch (e) {
+                return '加载失败：' + e.message
+            }
+            return '移除成功'
         })
     command.subcommand('plugin.detail <name:string>')
         .desc('查看指定插件详情')

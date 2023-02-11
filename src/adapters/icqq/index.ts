@@ -47,22 +47,30 @@ export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
                 quote=await this.getMsg(replyElement.attrs.message_id)
                 ele.splice(content.indexOf(replyElement),1)
             }
+            const args:any[]=[]
             const message=fromElement(ele)
             let func:string
             switch (target_type){
                 case 'private':
                     func='sendPrivateMsg'
+                    args.push(target_id)
                     break;
                 case 'discuss':
                     func='sendDiscussMsg'
+                    args.push(target_id)
                     break;
                 case 'group':
                     func='sendGroupMsg'
+                    args.push(target_id)
+                    break
+                case 'guild':
+                    func='sendGuildMsg'
+                    args.push(...String(target_id).split(':'))
                     break
                 default:
                     throw new Error('not support')
             }
-            const messageRet=(await this[func](target_id,message,quote)) as MessageRet
+            const messageRet=(await this[func](...[...args,message,quote])) as MessageRet
             return {
                 message_id:messageRet.message_id,
                 from_id:this.uin,
@@ -97,8 +105,8 @@ export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
             protocol: 'icqq',
             adapter: this.adapter,
             event,
-            type: obj.post_type,
-            detail_type: obj.message_type || obj.request_type || obj.system_type || obj.notice_type,
+            type: obj.post_type||event,
+            detail_type: obj.message_type || obj.request_type || obj.system_type || obj.notice_type||'guild',
         }, {args})
         delete obj.reply
         const session=new Session<"icqq", E>(this.adapter, this.self_id, event, obj)

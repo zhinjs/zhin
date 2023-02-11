@@ -7,6 +7,7 @@ export type Define<D extends Dict,K extends string,V extends any=any>={
 }
 export type Awaitable<R extends any=void>=R|Promise<R>
 export type PackageJson={
+    main:string
     name:string
     version?:string
     using?:string[]

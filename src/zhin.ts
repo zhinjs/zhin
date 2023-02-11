@@ -323,12 +323,13 @@ export class Zhin extends Context {
             .filter(Boolean).join(':')
             .replace(/\.(d\.)?[t|j]s$/, '')
             .replace(/:index$/,'')
+        const pluginType=getType(resolved)
         return {
             ...result,
             author: JSON.stringify(result.author),
             desc: result.desc,
             using: result.using ||= [],
-            type: getType(resolved),
+            type: pluginType,
             fullName: result.fullName || fullName,
             name: result.name || fullName,
             fullPath: getListenDir(resolved)

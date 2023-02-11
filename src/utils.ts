@@ -217,9 +217,13 @@ export function getPackageInfo(filepath:string){
     const fileDir = path.dirname(filepath)
     if (fs.existsSync(path.resolve(fileDir, '../package.json'))) {
         const {name: fullName, ...packageJson} = require(path.join(fileDir, '../package.json')) as PackageJson
+        if(packageJson.main.startsWith('./')) packageJson.main=packageJson.main.slice(1)
+        if(!filepath.endsWith(packageJson.main)) return null
         return Object.assign(packageJson,{fullName})
     } else if (fs.existsSync(path.resolve(fileDir, 'package.json'))) {
         const {name: fullName, ...packageJson} = require(path.resolve(fileDir, 'package.json')) as PackageJson
+        if(packageJson.main.startsWith('./')) packageJson.main=packageJson.main.slice(1)
+        if(!filepath.endsWith(packageJson.main)) return null
         return Object.assign(packageJson,{fullName})
     }
     return null
