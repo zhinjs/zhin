@@ -22,8 +22,18 @@ delay:
   prompt: 60000
 ```
 ## adapters
-- 存放适配器的配置文件，每一个key对应一个适配器，每一个适配器可以启动多个机器人，每个机器人的配置存在bots中
-- 不同适配器的机器人配置不尽相同，zhin在每一个bot配置基础上增加了`master`和`admins`配置，用于声明该机器人所属用户以及管理机器人的用户
+- 存放适配器的配置文件，每一个key对应一个适配器，每一个适配器可以启动多个机器人，每个机器人的配置存在`bots`中
+- 不同适配器的机器人配置不尽相同，zhin在每一个bot配置基础上增加了一些zhin专有的配置项，大致含义如下：
+### bot通用配置项
+|参数名| 参数类型               | 默认值   | 描述               |
+|:---|:-------------------|:------|:-----------------|
+|self_id|string&#124;number| -     | 必填参数 当前机器人唯一表示   |
+|master| string&#124;number | -     | 当前机器人的主人账号       |
+|admins|(string&#124;number)[]| []    | 当前机器人的管理员账号      |
+|quote_self|boolean| false | 触发指令时，是否自动引用触发消息 |
+| enable|boolean| -     | 当前机器人是否启用|
+|enable_plugins|stirng[]|-|启用的插件列表|
+|disable_plugins|string[]|-|禁用的插件列表|
 
 ::: tip
 适配器需安装后方能使用，(icqq为内置适配器，无需安装，相应配置请查看[adapter-icqq](/config/adapter-icqq))

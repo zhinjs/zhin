@@ -147,13 +147,12 @@ export function install(ctx: Context) {
   <ChatMsg id="1689919782">请输入一个正则表达式</ChatMsg>
   <ChatMsg id="1659488338">/^(.*)$/</ChatMsg>
   <ChatMsg id="1689919782">是否成年<br/>输入yes,y,Yes,YES,Y,.,。,确认为确认</ChatMsg>
-  <ChatMsg id="1659488338">y/</ChatMsg>
+  <ChatMsg id="1659488338">y</ChatMsg>
   <ChatMsg id="1689919782">请输入你的兴趣爱好<br/>值之间使用','分隔</ChatMsg>
   <ChatMsg id="1659488338">唱,跳,Rap,篮球</ChatMsg>
-  <ChatMsg id="1689919782">请选择你喜欢的水果1.苹果<br/>2.香蕉<br/>3.橙子<br/>值之间使用','分隔</ChatMsg>
+  <ChatMsg id="1689919782">请选择你喜欢的水果<br/>1.苹果<br/>2.香蕉<br/>3.橙子<br/>值之间使用','分隔</ChatMsg>
   <ChatMsg id="1659488338">1</ChatMsg>
-  <ChatMsg id="1689919782">
-{{JSON.stringify({
+  <ChatMsg id="1689919782">{
   "name": "张三",
   "age": 18,
   "birthDay": "2000-01-01T00:00:00.000Z",
@@ -168,6 +167,6 @@ export function install(ctx: Context) {
   "likeFruits": [
     "apple"
   ]
-},null,2)}}
+}
   </ChatMsg>
 </ChatHistory>

@@ -67,7 +67,7 @@ adapters:
   icqq: # 指定使用icqq适配器
     bots: [] // [!code --]
     bots: // [!code ++]
-      - uin: 147258369 # 机器人账号 // [!code ++]
+      - self_id: 147258369 # 机器人账号 // [!code ++]
         platform: 5 # 指定qq登录平台为iPad（可不配置  1：安卓  2：安卓平板  3：手表  4：苹果电脑  5：苹果平板） // [!code ++]
         password: abcdefg # 账号密码(不配置则使用扫码登录) // [!code ++]
         prefix: '' # 指令调用前缀，可不配置 // [!code ++]
