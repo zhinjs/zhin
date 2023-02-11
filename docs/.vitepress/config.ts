@@ -48,10 +48,10 @@ export default defineConfigWithTheme({
                     text:'深入了解',
                     collapsible:true,
                     items:[
-                        {text:`指令`,link:'/guide/command'},
-                        {text:`可交互输入`,link:'/guide/prompt'},
+                        {text:`指令(Command)`,link:'/guide/command'},
+                        {text:`可交互输入(Prompt)`,link:'/guide/prompt'},
+                        {text:`组件(Component)`,link:'/guide/component'},
                         {text:`调用机器人API`,link:'/guide/bot'},
-                        {text:`组件`,link:'/guide/component'},
                     ]
                 },
                 {

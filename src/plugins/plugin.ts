@@ -1,4 +1,5 @@
 import {Context} from "@/context";
+import Element from "@/element";
 import {Session, Zhin} from "@";
 
 export const name = 'pluginManage'
@@ -12,6 +13,8 @@ function getPluginStatus(ctx:Context,session:Session,fullName:string){
     if(plugin.disableBots.includes(flag)) return '(已停用)'
 }
 export function install(ctx: Context) {
+    ctx.command('测发送')
+        .action(()=>Element('image',{src:"/Users/liuchunlang/Downloads/d926127f82097.jpeg"}))
     const command = ctx.command('plugin')
         .desc('插件管理')
         .hidden()

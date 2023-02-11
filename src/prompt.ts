@@ -3,8 +3,6 @@ import {Bot} from "./bot";
 import Element from './element'
 import {Session} from "./session";
 import {Dict} from "./types";
-import {Argv} from "@/argv";
-import {isNullable} from "@/utils";
 export class Prompt{
     private readonly fullTargetId:string
     constructor(private bot:Bot<keyof Zhin.Bots,any,any>,private session:Session,public timeout:number) {
@@ -97,15 +95,15 @@ export class Prompt{
     select<T extends keyof Prompt.BaseTypes,M extends boolean>(message:Element.Fragment='请选择',config:Prompt.Option<'select',T,M>){
         const options:Prompt.Option<'select',T,M>={
             type:'select',
+            ...config,
             message:`${message}\n${config.options.map((option,index)=>{
                 return `${index+1}:${option.label}`
             }).join('\n')}${config.multiple?`\n选项之间使用'${config.separator||','}'分隔`:''}`,
-            format:(event)=>{
-                const firstElem=event.elements[0]
-                const chooseIdxArr=(firstElem.attrs.text).split(config.separator||',').map(Number)
-                return Prompt.transforms['select'][config.child_type][config.multiple?'true':'false'](event,config.options,chooseIdxArr) as Prompt.Select<T,M>
-            },
-            ...config
+            format:(event)=> {
+                const firstElem = event.elements[0]
+                const chooseIdxArr = (firstElem.attrs.text).split(config.separator || ',').map(Number)
+                return Prompt.transforms['select'][config.child_type][config.multiple ? 'true' : 'false'](event, config.options, chooseIdxArr) as Prompt.Select<T, M>
+            }
         }
         return this.$prompt(options)
     }
