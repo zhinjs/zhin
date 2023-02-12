@@ -1,17 +1,17 @@
 {
   "name": "zhin",
-  "version": "2.0.2-33",
+  "version": "2.0.2-46",
   "description": "知音",
   "main": "lib/index.js",
   "bin": {
-    "start-zhin": "lib/service.js"
+    "start-zhin": "./bin.js"
   },
   "types": "lib/index.d.ts",
   "scripts": {
-    "start:zhin": "start-zhin",
+    "start:zhin": "node ./bin",
     "compile": "tsc --project tsconfig.build.json && tsc-alias -p tsconfig.build.json",
     "build": "npm run compile && dtsc --project tsconfig.dtsc.json",
-    "dev": "ts-node -r tsconfig-paths/register -r esbuild-register ./src/service.ts",
+    "dev": "ts-node -r tsconfig-paths/register -r esbuild-register ./bin -e src",
     "docs:dev": "vitepress dev docs --port 8989",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
@@ -57,13 +57,16 @@
     "vue": "^3.2.45"
   },
   "files": [
+    "bin.js",
+    "worker.js",
+    "LICENSE",
     "/lib/**/*.js",
-    "/lib/**/*.d.ts",
-    "/lib/**/LICENSE"
+    "/lib/**/*.d.ts"
   ],
   "dependencies": {
     "@koa/router": "^12.0.0",
-    "@zhinjs/schema": "^0.0.4",
+    "@zhinjs/schema": "^0.0.5-1",
+    "@zhinjs/shared": "^0.0.3",
     "axios": "^1.2.2",
     "chokidar": "^3.5.3",
     "esbuild": "^0.15.5",
@@ -77,6 +80,7 @@
     "log4js": "^6.6.1",
     "obj-observer": "^1.0.3",
     "tsconfig-paths": "^4.0.0",
-    "ws": "^8.12.0"
+    "ws": "^8.12.0",
+    "yargs-parser": "^21.1.1"
   }
 }

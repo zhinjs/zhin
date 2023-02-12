@@ -1,8 +1,6 @@
-import {Dict} from "./types";
-import {Session} from "./session";
-import Element from "./element";
+import {Random, Time,Dict} from "@zhinjs/shared";
+import {Element} from "./element";
 import {Context} from "@/context";
-import {Random, Time} from "@/utils";
 
 export type Component<S=any,P extends Dict = Dict, D extends Dict = Dict, M extends Component.Methods = Component.Methods> = ({
     [K in keyof (P | D | M)]: K extends keyof P ? P[K] : K extends keyof D ? D[K] : M[K]

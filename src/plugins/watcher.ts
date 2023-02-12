@@ -1,16 +1,15 @@
 import {FSWatcher, watch} from 'chokidar'
-import {Zhin} from "@/zhin";
+import {useOptions, Zhin,Schema} from "@";
 import * as fs from 'fs';
 import * as Yaml from 'js-yaml'
 import * as path from "path";
 import {Plugin} from "@/plugin";
 import {Context} from "@/context";
-import {Schema} from "@zhinjs/schema";
 export const name='pluginWatcher'
-export const config=Schema.string().required().desc('监听路径')
-export function install(ctx:Context, root:ReturnType<typeof config>){
+export const Config=Schema.string().default(process.cwd()).required().description('监听路径')
+export function install(ctx:Context){
+    const root=Config(useOptions('plugins.watcher'))
     function reloadDependency(plugin: Plugin,changeFile:string){
-        const options=ctx.app.options.plugins[plugin.name]
         try {
             const parent=plugin.context.parent
             plugin.unmount()
@@ -23,9 +22,8 @@ export function install(ctx:Context, root:ReturnType<typeof config>){
                 delete require.cache[plugin.options.fullPath+'/index.mjs']
             }
             const newPlugin=ctx.app.load<Plugin.Install>(plugin.options.fullPath,'plugin')
-            parent.plugin(newPlugin,options)
-
-            ctx.app.logger.info(`已重载:${newPlugin.name}`)
+            parent.plugin(newPlugin)
+            ctx.app.logger.info(`已重载插件:${newPlugin.name}`)
         } catch (e) {
             ctx.app.logger.warn(e)
         }

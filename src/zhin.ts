@@ -5,11 +5,6 @@ import {getLogger, configure, Configuration} from "log4js";
 import * as Yaml from 'js-yaml'
 import * as path from 'path'
 import * as fs from 'fs'
-import {createServer, Server} from "http";
-import KoaBodyParser from "koa-bodyparser";
-import {Proxied} from 'obj-observer/lib/deepProxy'
-import {Command} from "./command";
-import {Argv} from "./argv";
 import {
     deepClone,
     deepMerge,
@@ -17,20 +12,25 @@ import {
     getPackageInfo,
     deepEqual,
     getCaller,
-    getIpAddress
-} from "./utils";
-import {Dict} from "./types";
+    getIpAddress,
+    Dict
+} from "@zhinjs/shared";
+import {createServer, Server} from "http";
+import KoaBodyParser from "koa-bodyparser";
+import {Proxied} from 'obj-observer/lib/deepProxy'
+import {Command} from "./command";
+import {Argv} from "./argv";
 import {Plugin} from './plugin'
 import {Context} from "./context";
 import Koa from "koa";
 import {Adapter, AdapterOptionsType} from "./adapter";
 import {IcqqAdapter, IcqqBot, IcqqEventMap} from './adapters/icqq'
-import {Session} from "./session";
+import {NSession} from "./session";
 import {Middleware} from "./middleware";
 import {Dispose} from "./dispose";
 import {Router} from "./router";
 import {Component} from "./component";
-import Element from "./element";
+import {Element} from "./element";
 
 interface Message {
     type: 'start' | 'queue'
@@ -47,11 +47,14 @@ export function isConstructor<R, T>(value: any): value is (new (...args: any[]) 
 
 let buffer = null, timeStart: number
 
-export function createWorker(options: Zhin.Options | string = 'zhin.yaml') {
-    if (typeof options !== 'string') fs.writeFileSync(join(process.cwd(), 'zhin.yaml'), Yaml.dump(options))
-    cp = fork(join(__dirname, 'worker'), [], {
+export function createWorker(options:Zhin.WorkerOptions) {
+    const {entry='lib',mode='production',config:configPath='zhin.yaml'}=options||{}
+    if (!fs.existsSync(join(process.cwd(),configPath))) fs.writeFileSync(join(process.cwd(), configPath), Yaml.dump(options))
+    cp = fork(join(__dirname, '../worker.js'), [], {
         env: {
-            configPath: resolve(process.cwd(), typeof options === 'string' ? options : 'zhin.yaml')
+            mode,
+            entry,
+            configPath
         },
         execArgv: [
             '-r', 'esbuild-register',
@@ -91,6 +94,18 @@ process.on('SIGINT', () => {
 
 export function defineConfig(options: Zhin.Options) {
     return options
+}
+export interface Zhin{
+    on<T extends keyof Zhin.AllEventMap<this>>(event: T, listener: Zhin.AllEventMap<this>[T]);
+    on<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, listener: (...args: any[]) => any);
+    emit<T extends keyof Zhin.AllEventMap<this>>(event: T, ...args: Parameters<Zhin.AllEventMap<this>[T]>): boolean;
+    emit<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, ...args: any[]): boolean;
+    emitSync<T extends keyof Zhin.AllEventMap<this>>(event: T, ...args: Parameters<Zhin.AllEventMap<this>[T]>): Promise<void>;
+    emitSync<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, ...args: any[]): Promise<void>;
+    bail<T extends keyof Zhin.AllEventMap<this>>(event: T, ...args: Parameters<Zhin.AllEventMap<this>[T]>): any;
+    bail<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, ...args: any[]): any;
+    bailSync<T extends keyof Zhin.AllEventMap<this>>(event: T, ...args: Parameters<Zhin.AllEventMap<this>[T]>): Promise<any>;
+    bailSync<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, ...args: any[]): Promise<any>;
 }
 export class Zhin extends Context {
     isReady: boolean = false
@@ -219,7 +234,7 @@ export class Zhin extends Context {
         return [event.message_type, event.group_id || event.discuss_id || event.sender.user_id].join(':') as ChannelId
     }
     // 扫描项目依赖中的所有插件
-    getCachedPluginList() {
+    getInstalledPlugins() {
         const result: Plugin.Options[] = []
         if (fs.existsSync(resolve(process.cwd(), 'node_modules', '@zhinjs'))) {
             result.push(...fs.readdirSync(resolve(process.cwd(), 'node_modules', '@zhinjs')).map((str) => {
@@ -258,14 +273,15 @@ export class Zhin extends Context {
         return bot.sendMsg(targetId, targetType, message)
     }
     // 安装插件
-    use<P extends Plugin.Install>(plugin: P, options?: Plugin.Config<P>): this {
-        this.plugin(plugin, options)
+    use<P extends Plugin.Install>(plugin: P): this {
+        this.plugin(plugin)
         return this
     }
     // 加载指定名称，指定类型的模块
     public load<R = object>(name: string, type: string,setup?:boolean): R {
         function getListenDir(modulePath: string) {
-            if (modulePath.endsWith('/index')) return modulePath.replace('/index', '')
+            path.sep
+            if (modulePath.endsWith(path.sep+'index')) return modulePath.replace(path.sep+'index', '')
             for (const extension of ['ts', 'js', 'cjs', 'mjs']) {
                 if (fs.existsSync(`${modulePath}.${extension}`)) return `${modulePath}.${extension}`
             }
@@ -319,7 +335,7 @@ export class Zhin extends Context {
         if (this.options[`${type || 'plugin'}_dir`]) {
             fullName = fullName.replace(path.resolve(this.options[`${type || 'plugin'}_dir`]), '')
         }
-        fullName = fullName.split('/')
+        fullName = fullName.split(path.sep)
             .filter(Boolean).join(':')
             .replace(/\.(d\.)?[t|j]s$/, '')
             .replace(/:index$/,'')
@@ -336,21 +352,21 @@ export class Zhin extends Context {
         } as any
     }
     // 获取所有可用的组件
-    getSupportComponents<P extends keyof Zhin.Adapters>(session:Session<P>){
+    getSupportComponents<P extends keyof Zhin.Adapters>(session:NSession<P>){
         return this.getSupportPlugins(session).reduce((result:Dict<Component>,plugin)=>{
             Object.assign(result,plugin.context.componentList)
             return result
         },this.components)
     }
     // 获取所有可用的中间件
-    getSupportMiddlewares<P extends keyof Zhin.Adapters>(session:Session<P>){
-        return this.getSupportPlugins(session).reduce((result:Middleware<Session>[],plugin)=>{
+    getSupportMiddlewares<P extends keyof Zhin.Adapters>(session:NSession<P>){
+        return this.getSupportPlugins(session).reduce((result:Middleware[],plugin)=>{
             result.push(...plugin.context.middlewareList)
             return result
         },[...this.middlewares])
     }
     // 获取所有可用的指令
-    getSupportCommands<P extends keyof Zhin.Adapters>(session:Session<P>){
+    getSupportCommands<P extends keyof Zhin.Adapters>(session:NSession<P>){
         return this.getSupportPlugins(session).reduce((result:Command[],plugin)=>{
             for(const command of plugin.context.commandList){
                 if(command.match(session as any)){
@@ -369,7 +385,7 @@ export class Zhin extends Context {
         })
     }
     // 启动zhin
-    async start() {
+    async start(mode:'dev'|'devel'|'develop'|string) {
         for (const adapter of Object.keys(this.options.adapters || {})) {
             try {
                 this.adapter(adapter as keyof Zhin.Adapters, this.options.adapters[adapter])
@@ -377,6 +393,13 @@ export class Zhin extends Context {
                 this.logger.warn(e.message, e.stack)
             }
         }
+        this.getInstalledPlugins().forEach(plugin=>{
+            try {
+                this.plugin(plugin.fullName)
+            } catch (e) {
+                this.logger.warn(e.message, e.stack)
+            }
+        })
         for (const pluginName of Object.keys(this.options.plugins)) {
             try {
                 this.plugin(pluginName, this.options.plugins[pluginName])
@@ -408,24 +431,18 @@ export class Zhin extends Context {
 
 
 export namespace Zhin {
+    export interface WorkerOptions{
+        entry?:string
+        config?:string
+        mode?:string
+    }
     export interface Adapters{
         icqq:IcqqAdapter
-    }
-
-    export interface Plugins{
-        help:Plugin<null>
-        logs:Plugin<null>
-        login:Plugin<null>
-        plugin:Plugin<null>
-        config:Plugin<null>
-        daemon:Plugin<{ exitCommand?:string|boolean,autoRestart?:boolean }>
-        status:Plugin<null>
-        watcher:Plugin<string>
-        [key:string]:Plugin
     }
     export interface Bots{
         icqq:IcqqBot
     }
+    export type Bot=Bots[keyof Bots]
     export const key = Symbol('Zhin')
     export interface Services {
         koa: Koa
@@ -478,19 +495,15 @@ export namespace Zhin {
 
 
     export interface LifeCycle {
-        start(): void
-
+        'start'(): void
         'ready'(): void
-
         'dispose'(): void
-
         'command-add'(command: Command): void
-
         'command-remove'(command: Command): void
-
         'plugin-add'(plugin: Plugin): void
-
         'plugin-remove'(plugin: Plugin): void
+        'service-add'(serviceName:keyof Zhin.Services):void
+        'service-remove'(serviceName:keyof Zhin.Services):void
     }
 
     export type BaseEventMap = Record<string, (...args: any[]) => any>
@@ -498,16 +511,15 @@ export namespace Zhin {
     export interface BotEventMaps extends Record<keyof Zhin.Adapters, BaseEventMap>{
         icqq: IcqqEventMap
     }
-
-    export interface AllEventMap<T> extends LifeCycle, BeforeEventMap<T>, AfterEventMap<T> {
+    type FlatBotEventMap<P=keyof BotEventMaps>=P extends keyof BotEventMaps?{
+        [E in keyof BotEventMaps[P] as MapKey<P,E>]:(session:NSession<P, E>)=>void
+    }:{}
+    type MapKey<S extends string,K extends string|number|symbol>=K extends string|number?`${S}.${K}`:K
+    type MapValue<M extends BaseEventMap,E extends keyof M>=M[E] extends (...args:any[])=>any?M[E]:(...args:any[])=>any
+    export interface AllEventMap<T> extends LifeCycle, BeforeEventMap<T>, AfterEventMap<T>,FlatBotEventMap {
     }
-
     export type AdapterConfig = {
         [P in keyof Zhin.Adapters]?: AdapterOptionsType<Adapters[P]>
-    }
-    type PluginConfig<P extends Plugin> = P extends Plugin<infer R> ? R : unknown
-    export type PluginConfigs = {
-        [P in keyof Plugins]?: PluginConfig<Plugins[P]>
     }
     export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal" | "mark" | "off"
     type KVMap<V = any, K extends string = string> = Record<K, V>
@@ -517,7 +529,7 @@ export namespace Zhin {
         log_level: LogLevel
         logConfig?: Partial<Configuration>
         delay: Record<string, number>
-        plugins?: PluginConfigs
+        plugins?: Record<string, any>
         services?: Record<string, any>
         protocols?: Partial<AdapterConfig>
         protocol_dir?: string
@@ -619,6 +631,23 @@ function createZhinAPI() {
     function useOptions<K extends Zhin.Keys<Zhin.Options>>(path: K): Zhin.Value<Zhin.Options, K> {
         const app = contextMap.get(Zhin.key)
         if (!app) throw new Error(`can't found app with context for key:${Zhin.key.toString()}`)
+        const callSite = getCaller()
+        const pluginFullPath = callSite.getFileName()
+        const plugin = app.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath)
+        const parent=plugin.context.parent
+        const pathArr=path.split('.').filter(Boolean)
+        const result=getValue(app.options, pathArr) as Zhin.Value<Zhin.Options, K>
+        const backupData=deepClone(result)
+        const unwatch=watch(app.options,(value)=>{
+            const newVal=getValue(value, pathArr)
+            if(!deepEqual(backupData,newVal)){
+                plugin.unmount()
+                const newPlugin=app.load<Plugin.Install>(plugin.options.fullPath,'plugin')
+                parent.plugin(newPlugin)
+                app.logger.info(`已重载插件:${newPlugin.name}`)
+            }
+        })
+        plugin.context.disposes.push(unwatch)
         return getValue(app.options, path.split('.').filter(Boolean)) as Zhin.Value<Zhin.Options, K>
     }
 

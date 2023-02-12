@@ -2,7 +2,9 @@ import {createReadStream, copyFileSync, statSync, writeFileSync} from 'fs'
 import {resolve as PathResolve,dirname} from "path";
 import * as readline from 'readline'
 import {Context} from "@/context";
-export const name='logsManage'
+import {arch, cpus, freemem, totalmem, type} from "os";
+import {Time} from "@";
+export const name='systemInfo'
 export function install(ctx:Context){
     const logFile=PathResolve(dirname(ctx.app.options.data_dir),'logs.log')
     function readLogs():Promise<string[]>{
@@ -67,5 +69,34 @@ export function install(ctx:Context){
             const logLines=await readLogs()
             const lines=logLines.reverse().slice(0,lineNum).reverse()
             return lines.join('\n')
+        })
+    ctx.command('status')
+        .desc('查看知音状态')
+        .hidden()
+        .action(({session})=>{
+            function format(bytes){
+                const operators=['B','KB','MB','GB','TB']
+                while (bytes>1024 && operators.length>1){
+                    bytes=bytes/1024
+                    operators.shift()
+                }
+                return (+bytes.toFixed(0)===bytes?bytes:bytes.toFixed(2))+operators[0];
+            }
+            const memoryUsage=process.memoryUsage()
+            const totalMem=totalmem()
+            const usedMem=totalMem-freemem()
+            const cpu=cpus()[0]
+            return [
+                '当前状态:',
+                `系统架构:${type()}  ${arch()}`,
+                `CPU架构:${cpus().length}核 ${cpu.model}`,
+                `内存:${format(usedMem)}/${format(totalMem)}(${(usedMem/totalMem*100).toFixed(2)}%)`,
+                `进程内存占比:${(memoryUsage.rss/usedMem*100).toFixed(2)}%(${format(memoryUsage.rss)}/${format(usedMem)})`,
+                `持续运行时间：${Time.formatTime(new Date().getTime()-session.bot.status.start_time)}`,
+                `掉线次数:${session.bot.status.lost_times}次`,
+                `发送消息数:${session.bot.status.sent_msg_cnt}条`,
+                `接收消息数:${session.bot.status.recv_msg_cnt}条`,
+                `消息频率:${session.bot.status.msg_cnt_per_min}条/分`,
+            ].join('\n')
         })
 }

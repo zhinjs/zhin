@@ -88,6 +88,9 @@ data_dir: data
 delay:
   prompt: 60000
 ```
+:::tip
+要了解zhin配置，请前往[配置](/config/common)
+:::
 ## 启动
 一切准备就绪，开始启动你的项目吧。如果你是本地安装，就要使用`npx zhin start`启动项目。
 ```shell

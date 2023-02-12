@@ -20,9 +20,8 @@ plugins:
   daemon: null # 指定启用守护进程插件
   help: null # 指定启用帮助插件
   login: null # 指定启用命令行登录插件
-  logs: null # 指定启用日志插件
   plugin: null # 指定启用插件管理插件
-  status: null # 指定启用状态查看插件
+  systemInfo: null # 指定启用系统信息查看插件
   watcher: /path/to/zhin-bot # 指定启用文件监听插件
 log_level: info # 指定日志等级
 plugin_dir: plugins # 指定本地插件存放目录

@@ -11,9 +11,8 @@ plugins:
   daemon: null
   help: null
   login: null
-  logs: null
+  systemInfo: null
   plugin: null
-  status: null
   watcher: plugins
 log_level: info
 plugin_dir: plugins
@@ -28,8 +27,9 @@ delay:
 |参数名| 参数类型               | 默认值   | 描述               |
 |:---|:-------------------|:------|:-----------------|
 |self_id|string&#124;number| -     | 必填参数 当前机器人唯一表示   |
-|master| string&#124;number | -     | 当前机器人的主人账号       |
-|admins|(string&#124;number)[]| []    | 当前机器人的管理员账号      |
+|  master | string &#124; number     | - | 主人账号    |
+| admins| (string &#124; number)[] | [] | 管理员账号列表 |
+| prefix| string                   | - | 指令调用前缀  |
 |quote_self|boolean| false | 触发指令时，是否自动引用触发消息 |
 | enable|boolean| -     | 当前机器人是否启用|
 |enable_plugins|stirng[]|-|启用的插件列表|

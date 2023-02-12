@@ -1,9 +1,9 @@
 import {Argv} from "./argv";
-import {Awaitable, Define} from "./types";
-import Element from './element'
+import {Awaitable, Define} from "@zhinjs/shared";
+import {Element} from './element'
 import {isEmpty, keys} from "lodash";
 import {Zhin} from "./zhin";
-import {Session, PayloadWithSession} from "./session";
+import {NSession} from "./session";
 import {Context} from "@/context";
 
 interface HelpOptions {
@@ -15,10 +15,10 @@ interface HelpOptions {
 }
 
 export interface TriggerSessionMap {
-    private: PayloadWithSession<keyof Zhin.Adapters, 'message.private'>
-    group: PayloadWithSession<keyof Zhin.Adapters, 'message.group'>
-    discuss: PayloadWithSession<keyof Zhin.Adapters, 'message.discuss'>
-    guild: PayloadWithSession<keyof Zhin.Adapters, 'message.guild'>
+    private: NSession<keyof Zhin.Adapters, 'message.private'>
+    group: NSession<keyof Zhin.Adapters, 'message.group'>
+    discuss: NSession<keyof Zhin.Adapters, 'message.discuss'>
+    guild: NSession<keyof Zhin.Adapters, 'message.guild'>
 }
 
 export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof TriggerSessionMap = keyof TriggerSessionMap> {
@@ -88,7 +88,7 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
         return command
     }
 
-    match(session: Session<keyof Zhin.Adapters, `message.${T}`>) {
+    match(session: NSession<keyof Zhin.Adapters, `message.${T}`>) {
         return (!this.trigger) || session.detail_type === this.trigger
     }
 
@@ -212,7 +212,7 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
     private parseShortcut(argv: Argv) {
         const args = argv.args ||= [], options = argv.options ||= {}
         for (const shortcut of this.shortcuts) {
-            const segment = argv.segments?.length ? argv.segments[0] : undefined
+            const segment = argv.elements?.length ? argv.elements[0] : undefined
             if (typeof shortcut.name === 'string' && segment.type === 'text' && segment.attrs.text === shortcut.name) {
                 args.push(...(shortcut.args || []))
                 Object.assign(options, shortcut.options || {})

@@ -1,12 +1,13 @@
 import {Bot, BotConstruct, BotList, BotOptions} from "./bot";
 import {Zhin} from "./zhin";
-import {Session} from "./Session";
+import {NSession} from "./Session";
 import {Logger} from "log4js";
 import {EventEmitter} from "events";
 import {Dispose} from "./dispose";
+import {Context} from "@/context";
 
 interface AdapterConstruct<K extends keyof Zhin.Adapters=keyof Zhin.Adapters,BO extends BotOptions = BotOptions, AO = {}> {
-    new(app: Zhin, protocol:K, options: AdapterOptions<BO, AO>): Adapter<K,BO, AO>
+    new(app: Zhin, protocol:K, options: AdapterOptions<BO, AO>): Zhin.Adapters[K]
 }
 
 export type AdapterOptions<BO ={}, AO = {}> = {
@@ -14,12 +15,7 @@ export type AdapterOptions<BO ={}, AO = {}> = {
 } & AO
 export type AdapterOptionsType<A extends Adapter>=A extends Adapter<infer K,infer BO,infer AO>?AdapterOptions<BO, AO>:unknown
 
-export abstract class Adapter<
-    K extends keyof Zhin.Adapters=keyof Zhin.Adapters,
-    BO = {},
-    AO = {},
-    EM extends Zhin.BaseEventMap=Zhin.BaseEventMap
-    >  extends EventEmitter{
+export abstract class Adapter<K extends keyof Zhin.Adapters=keyof Zhin.Adapters, BO = {}, AO = {}>  extends EventEmitter{
     public bots:BotList
     logger:Logger
     private _status:Record<string,Adapter.BotStatus>={}
@@ -28,7 +24,7 @@ export abstract class Adapter<
         this.bots=new BotList()
         this.logger=app.getLogger(protocol)
         this.app.on('start',()=>this.start())
-        this.on('message',(session:Session<K>)=>{
+        this.on('message',(session:NSession<K>)=>{
             this.botStatus(session.bot.self_id).recv_msg_cnt++
         })
         this.on('bot.online',(bot_id)=>{
@@ -92,8 +88,8 @@ export abstract class Adapter<
         if(idx===-1) return
         this.options.bots[idx]=options
     }
-    dispatch<E extends keyof keyof Zhin.BotEventMaps[K]>(eventName:E,session:Session<K,E>){
-        this.emit(eventName,session)
+    dispatch<E extends keyof Zhin.BotEventMaps[K]>(eventName:E,session:NSession<K,E>){
+        this.emit(eventName as any,session)
         this.app.dispatch(this.protocol,eventName,session)
     }
     protected async start(...args:any[]){
@@ -105,7 +101,7 @@ export abstract class Adapter<
     protected startBot(options:BotOptions<BO>){
         const Construct=Bot.botConstructors[this.protocol]
         if(!Construct) throw new Error(`can not find bot constructor from protocol:${this.protocol}`)
-        const bot=new Construct(this.app,this,options)
+        const bot=new Construct(this.app,this as Zhin.Adapters[K],options)
         this.status[bot.self_id]={
             lost_times: 0,
             msg_cnt_per_min: 0,
@@ -120,13 +116,16 @@ export abstract class Adapter<
     }
 }
 export type AdapterConstructs={
-    [P in keyof Zhin.Adapters]:AdapterConstruct
+    [P in keyof Zhin.Adapters]?:AdapterConstruct
 }
 export namespace Adapter {
-    export const adapterConstructs:Partial<AdapterConstructs>={}
+    export const adapterConstructs:AdapterConstructs={}
     export function define<K extends keyof Zhin.Adapters, BO={}, AO={}>(key: K, protocolConstruct: AdapterConstruct<K,BO, AO>,botConstruct:BotConstruct<K,BO,AO>) {
         adapterConstructs[key]=protocolConstruct
         Bot.define(key,botConstruct)
+    }
+    export interface Install<T=any>{
+        install(ctx:Context,config?:T)
     }
     export interface BotStatus{
         start_time:number

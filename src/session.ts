@@ -1,16 +1,15 @@
+import {Dict,isNullable} from "@zhinjs/shared";
 import {Bot} from "./bot";
 import {Zhin} from "./zhin";
 import {Argv} from "./argv";
-import Element, {AsyncTransformer} from '@/element'
+import {Element} from '@/element'
 import {Middleware} from "./middleware";
 import {Prompt} from "./prompt";
-import {Dict} from "./types";
-import {isNullable} from "./utils";
 
 export type FunctionPayloadWithSessionObj<E extends (...args: any[]) => any> = E extends (...args: infer R) => any ? ParametersToObj<R> : unknown
 export type ParametersToObj<A extends any[]> = A extends [infer R, ...infer L] ? R & R extends object ? R & { args: L } : { args: [R, ...L] } : Dict
-
-export interface Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P] = keyof Zhin.BotEventMaps[P]> {
+export type NSession<P extends keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P]=keyof Zhin.BotEventMaps[P]>=Session<P> & (Zhin.BotEventMaps[P][E] extends (...args: any[]) => any?FunctionPayloadWithSessionObj<Zhin.BotEventMaps[P][E]>:unknown)
+export interface Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P]=keyof Zhin.BotEventMaps[P]> {
     protocol: P,
     type?: string
     user_id?: string | number
@@ -25,15 +24,16 @@ export interface Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters, E 
     adapter: Zhin.Adapters[P],
     bot: Zhin.Bots[P]
     event: E
+    quote?:QuoteMessage
     message_id?: string
 }
+export type QuoteMessage={
+    message_id:string
+    element:Element[]
+}
 
-export type PayloadWithSession<P extends keyof Zhin.Adapters = keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P] = keyof Zhin.BotEventMaps[P]> =
-    Session<P, E>
-    & FunctionPayloadWithSessionObj<Zhin.BotEventMaps[P][E]>
-
-export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P] = keyof Zhin.BotEventMaps[P]> {
-    constructor(public adapter: Zhin.Adapters[P], self_id, public event: E, obj: FunctionPayloadWithSessionObj<Zhin.BotEventMaps[P][E]>) {
+export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P]=keyof Zhin.BotEventMaps[P]> {
+    constructor(public adapter: Zhin.Adapters[P], self_id, public event: E, obj: object) {
         this.protocol = adapter.protocol as any
         this.app = adapter.app
         this.event = event
@@ -42,7 +42,7 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters, E exte
         this.prompt = new Prompt(this.bot, this as any, this.app.options.delay.prompt)
     }
 
-    middleware(middleware: Middleware<Session>, timeout: number = this.app.options.delay.prompt) {
+    middleware(middleware: Middleware) {
         const fullId = Bot.getFullTargetId(this as any)
         return this.app.middleware(async (session, next) => {
             if (fullId && Bot.getFullTargetId(session) !== fullId) return next()
@@ -72,7 +72,7 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters, E exte
 
     async execute(argv: Element[] | Argv = this.elements) {
         if (Array.isArray(argv)) {
-            let data = Argv.parse<P, E>(argv, this)
+            let data = Argv.parse<P,E>(argv, this)
             if (!data) return
             argv = data
         }
@@ -91,7 +91,7 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters, E exte
     }
 
     async render(elements: Element[] = this.elements): Promise<Element[]> {
-        const components=this.app.getSupportComponents(this)
+        const components=this.app.getSupportComponents(this as NSession<P>)
         return await Element.transformAsync(elements, components, Zhin.createContext(this))
     }
 

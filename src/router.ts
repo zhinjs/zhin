@@ -1,4 +1,4 @@
-import {remove} from "./utils";
+import {remove} from "@zhinjs/shared";
 
 const KoaRouter=require('@koa/router')
 import {Layer, RouterOptions} from "@koa/router";

@@ -1,35 +1,15 @@
-import {evaluate,  isNullable, makeArray} from "./utils";
-import {Awaitable, Dict} from "./types";
-import {Fragment} from "./element";
+import {evaluate,  isNullable, makeArray,Awaitable, Dict} from "@zhinjs/shared";
 import {Component} from "@/component";
-
-interface Element {
+import {Readable} from "stream";
+export interface Element<T extends Element.BaseType|string=string,A extends Element.Attrs<T>=Element.Attrs<T>> {
     [Element.key]: true
-    type: string
-    attrs: Dict
+    type: T
+    attrs: Element.Attrs<T>
     parent?:Element
     children: (Element)[]
     source?: string
 
     toString(strip?: boolean): string
-}
-
-function toElement(content: Fragment) {
-    if (Element.isElement(content)) {
-        return content
-    }
-    if (Array.isArray(content)) {
-        return Element('text', {text: `[${content.join()}]`})
-    }
-    return Element('text', {text: content.toString()})
-}
-
-function toElementArray(content: Element.Fragment): (Element)[] {
-    if (Array.isArray(content)) {
-        return content.map(toElement).filter(Boolean)
-    } else {
-        return [toElement(content)].filter(Boolean)
-    }
 }
 
 interface ElementConstructor extends Element {
@@ -54,12 +34,12 @@ class ElementConstructor {
     }
 }
 
-function Element(type: string, ...children: Element.Fragment[]): Element
-function Element(type: string, attrs: Dict, ...children: Element.Fragment[]): Element
-function Element(type: string, ...args: any[]) {
+export function Element(type: string, ...children: Element.Fragment[]): Element
+export function Element<T extends Element.BaseType|string>(type: T, attrs: Element.Attrs<T>, ...children: Element.Fragment[]): Element<T>
+export function Element(type: string, ...args: any[]) {
     const el = Object.create(ElementConstructor.prototype)
     el[Element.key] = true
-    let attrs: Dict = {}, children: Fragment[] = []
+    let attrs: Dict = {}, children: Element.Fragment[] = []
     if (args[0] && typeof args[0] === 'object' && !Element.isElement(args[0]) && !Array.isArray(args[0])) {
         const props = args.shift()
         for (const [key, value] of Object.entries(props)) {
@@ -72,16 +52,34 @@ function Element(type: string, ...args: any[]) {
         }
     }
     for (const child of args) {
-        children.push(...toElementArray(child))
+        children.push(...Element.toElementArray(child))
     }
     return Object.assign(el, {type, attrs, children})
 }
 
-namespace Element {
+export namespace Element {
     export const key = Symbol('zhinElement')
 
     export function isElement(source: any): source is Element {
         return source && typeof source === 'object' && source[Element.key]
+    }
+    export type Attrs<T extends Element.BaseType|string>=T extends Element.BaseType?Element.BaseAttrs[T] & Record<string, any>:Record<string, any>
+    function toElement(content: Element.Fragment) {
+        if (Element.isElement(content)) {
+            return content
+        }
+        if (Array.isArray(content)) {
+            return Element('text', {text: `[${content.join()}]`})
+        }
+        return Element('text', {text: content.toString()})
+    }
+
+    export function toElementArray(content: Element.Fragment): (Element)[] {
+        if (Array.isArray(content)) {
+            return content.map(toElement).filter(Boolean)
+        } else {
+            return [toElement(content)].filter(Boolean)
+        }
     }
 
     export const Fragment = 'template'
@@ -91,6 +89,16 @@ namespace Element {
 
     export type Fragment = string | number | boolean | Element | (string | number | boolean | Element)[]
 
+    export interface BaseAttrs{
+        image:{src:string|Buffer|Readable},
+        record:{src:string|Buffer|Readable},
+        video:{src:string|Buffer|Readable},
+        audio:{src:string|Buffer|Readable},
+        text:{text:string},
+        mention:{user_id:string|number}
+        face:{id:number}
+    }
+    export type BaseType=keyof BaseAttrs
 
     export function escape(source: string, inline = false) {
         const result = source
@@ -281,7 +289,7 @@ namespace Element {
     export function stringify(fragment: Element.Fragment) {
         if (!Array.isArray(fragment)) fragment = [fragment]
         return fragment.map((element) => {
-            if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') element = Element('text', {content: element})
+            if (typeof element === 'string' || typeof element === 'number' || typeof element === 'boolean') element = Element('text', {text: element+''})
             return element.toString()
         }).join('')
     }
@@ -296,7 +304,7 @@ namespace Element {
             let component:Component<S>|Fragment = rules[type] ?? rules.default ?? true
             if (typeof component!=="boolean" && component instanceof Element) {
                 const {render,...others}=component
-                component =render.apply(Object.assign(session,others) as S,[attrs, children, session]) as Fragment
+                component =render.apply(Object.assign(session,others) as S,[attrs, children]) as Fragment
             }
             if (component === true) {
                 output.push(element)
@@ -317,7 +325,7 @@ namespace Element {
             let component:Component<S>|Fragment = rules[type] ?? rules.default ?? true
             if (typeof component!=="boolean" && component instanceof Element) {
                 const {render,...others}=component
-                component =render.apply(Object.assign(session,others) as S,[attrs, children, session]) as Fragment
+                component =render.apply(Object.assign(session,others) as S,[attrs, children]) as Fragment
             }
             if (component === true) {
                 result.push(element)
@@ -330,6 +338,5 @@ namespace Element {
 
     export let warn: (message: string) => void = () => {
     }
-
 }
-export = Element
+export const h=Element

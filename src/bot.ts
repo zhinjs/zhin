@@ -1,11 +1,10 @@
 import {Zhin} from "./zhin";
 import {Adapter} from "./adapter";
-import {Plugin} from "@/plugin";
-import {Session} from "./session";
-import {deepMerge, Promisify, remove} from './utils'
+import {Plugin} from "./plugin";
+import {NSession} from "./session";
+import {deepMerge, Promisify, remove} from '@zhinjs/shared'
 import {EventEmitter} from "events";
-import {IcqqEventMap} from "@/adapters/icqq";
-import Element from "@/element";
+import {Element} from "./element";
 import {ref, watch} from "obj-observer";
 export type BotOptions<O={}>={
     quote_self?:boolean
@@ -13,7 +12,6 @@ export type BotOptions<O={}>={
     prefix?:string
     enable?:boolean
     master?:string|number
-    enable_plugins?:string[]
     disable_plugins?:string[]
     admins?:(string|number)[]
 } & O
@@ -40,36 +38,38 @@ export class Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I extends
     enable():boolean
     enable(plugin:Plugin):this
     enable(plugin?:Plugin):this|boolean{
-        if(plugin) {
-            this.options.enable_plugins.push(plugin.options.fullName)
-            remove(this.options.disable_plugins,plugin.options.fullName)
+        if(!plugin) return this.options.enable=true
+        if(!this.options.disable_plugins.includes(plugin.options.fullName)){
+            this.app.logger.warn(`Bot(${this.self_id})插件未被禁用:${plugin.name}`)
             return this
         }
-        return this.options.enable=true
+        remove(this.options.disable_plugins,plugin.options.fullName)
+        return this
     }
     disable():boolean
     disable(plugin:Plugin):this
     disable(plugin?:Plugin):this|boolean{
-        if(plugin) {
-            this.options.disable_plugins.push(plugin.options.fullName)
-            remove(this.options.enable_plugins,plugin.options.fullName)
+        if(!plugin) return this.options.enable=false
+        if(!this.options.disable_plugins.includes(plugin.options.fullName)){
+            this.app.logger.warn(`Bot(${this.self_id})重复禁用插件:${plugin.name}`)
             return this
         }
-        return this.options.enable=false
+        this.options.disable_plugins.push(plugin.options.fullName)
+        return this
     }
     // 机器人是否启用指定插件
     match(plugin:Plugin){
-        return this.options.enable_plugins.includes(plugin.options.fullName) || !this.options.disable_plugins.includes(plugin.options.fullName)
+        return !this.options.disable_plugins.includes(plugin.options.fullName)
     }
     // 会话发起者是否为zhin主人
-    isMaster(session:Session<K>){
+    isMaster(session:NSession<K>){
         return this.options.master===session.user_id
     }
     // 会话发起者是否为zhin管理员
-    isAdmin(session:Session<K>){
+    isAdmin(session:NSession<K>){
         return this.options.admins && this.options.admins.includes(session.user_id)
     }
-    reply(session:Session<K>,message:Element.Fragment,quote?:boolean){
+    reply(session:NSession<K>,message:Element.Fragment,quote?:boolean){
         if(session.type!=='message') throw new Error(`not exist reply when type !=='message'`)
         message=[].concat(message)
         const replyElem:Element|undefined=quote?Element('reply',{message_id:session.message_id}):undefined
@@ -93,44 +93,30 @@ export class Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I extends
         return messageRet
     }
 }
-export interface Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I extends object=object> extends Bot.Internal{
+export interface Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I extends object=object>{
     self_id:string|number
     options:BotOptions<BO>
     adapter:Adapter<K,BO,AO>
     app:Zhin
-    createSession<E extends keyof IcqqEventMap>(event: E, ...args: Parameters<IcqqEventMap[E]>): Session<'icqq', E>
-    callApi<K extends keyof Bot.Internal>(apiName:K,...args:Bot.ApiParams<Bot.Internal[K]>):Promisify<Bot.ApiReturn<Bot.Internal[K]>>
-    on<K extends keyof Bot.EventMap>(event:K,listener:Bot.EventMap[K])
-    on<S extends string|symbol>(event:S & Exclude<keyof Bot.EventMap,S>,listener:(...args:any[])=>any)
-    emit<K extends keyof Bot.EventMap>(event:K,...args:Parameters<Bot.EventMap[K]>)
-    emit<S extends string|symbol>(event:S & Exclude<keyof Bot.EventMap,S>,...args:any[])
+    createSession(event: string, ...args: any[]): NSession<K>
+    callApi<K extends keyof Bot.Methods>(apiName:K,...args:Parameters<Bot.Methods[K]>):Promise<ReturnType<Bot.Methods[K]>>
     // 会话发起者是否为群管理员
-    isGroupAdmin?(session:Session<K>):boolean
+    isGroupAdmin?(session:NSession<K>):boolean
     // 会话发起者是否为频道管理员
-    isChannelAdmin?(session:Session<K>):boolean
+    isChannelAdmin?(session:NSession<K>):boolean
     // 会话发起者是否为群主
-    isGroupOwner?(session:Session<K>):boolean
+    isGroupOwner?(session:NSession<K>):boolean
     start():any
 }
 export type BotConstructors={
-    [P in (keyof Zhin.Adapters)]:BotConstruct
+    [P in (keyof Zhin.Adapters)]?:BotConstruct<P>
 }
 export namespace Bot{
     export interface Methods{
-        sendMsg(target_id:string|number,target_type:MessageType,message:Element.Fragment):Promise<{message_id:string}>
+        sendMsg(target_id:string|number,target_type:MessageType,message:Element.Fragment):Bot.MessageRet
+        getMsg(message_id:string):Bot.Message
+        deleteMsg(message_id:string):boolean
     }
-    export interface Attrs{
-
-    }
-    export interface EventMap{
-        message(message:any):any
-        notice(notice:any):any
-        request(request:any):any
-        system(...args:any[]):any
-    }
-    export type ApiParams<T>=T extends (...args:infer R)=>any?R:never
-    export type ApiReturn<T>=T extends (...args:any[])=>infer R?R:T
-    export interface Internal extends Attrs,Methods{}
     export type MessageType='private'|'group'|'discuss'|'guild'
     export interface MessageRet{
         message_id:string
@@ -140,7 +126,7 @@ export namespace Bot{
         elements:Element[]
     }
     export type FullTargetId=`${keyof Zhin.Adapters}:${string|number}:${string}:${string|number|`${string|number}:${string|number}`}`
-    export function getFullTargetId(session:Session):FullTargetId{
+    export function getFullTargetId(session:NSession<keyof Zhin.Adapters>):FullTargetId{
         return [
             session.adapter.protocol,
             session.bot.self_id,
@@ -152,25 +138,37 @@ export namespace Bot{
             session.user_id
         ].filter(Boolean).join(':') as FullTargetId
     }
-    export const botConstructors:Partial<BotConstructors>={}
+    export const botConstructors:BotConstructors={}
     export function define<K extends keyof Zhin.Adapters>(key: K, botConstruct: BotConstruct<K>) {
         botConstructors[key]=botConstruct
     }
 }
-export class BotList extends Array<Bot<keyof Zhin.Adapters,{},{}>>{
+export class BotList extends Array<Zhin.Bot>{
     get(self_id:string|number){
-        return this.find(bot=>bot.self_id===self_id || bot.self_id===Number(self_id))
+        return this.find(bot=>bot.self_id===self_id || bot.self_id===Number(self_id)) as Zhin.Bot
     }
 }
 export type BotConstruct<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={}>={
-    new(app:Zhin, protocol:Adapter<K,BO,AO>, options:BotOptions<BO>):Zhin.Bots[K]
+    new(app:Zhin, protocol:Zhin.Adapters[K], options:BotOptions<BO>):Zhin.Bots[K]
 }
 export namespace Bot{
     export const defaultOptions:BotOptions={
         quote_self:false,
         enable:true,
-        enable_plugins:[],
         disable_plugins:[],
         admins:[]
     }
+    interface MsgBase{
+        user_id:string|number
+        elements:Element[]
+    }
+    export interface GroupMsg extends MsgBase{
+        group_id:string|number
+    }
+    export interface PrivateMsg extends MsgBase{}
+    export interface GuildMsg extends MsgBase{
+        guild_id:string|number
+        channel_id:string|number
+    }
+    export type Message=PrivateMsg|GroupMsg|GuildMsg
 }

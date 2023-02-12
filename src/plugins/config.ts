@@ -2,7 +2,7 @@ import * as Yaml from 'js-yaml'
 import * as fs from 'fs'
 import {get,unset,set,mapValues} from "lodash";
 import {Context} from "@/context";
-import Element from "@/element";
+import {Element} from "@/element";
 function protectkeys(obj:Record<string, any>,keys:string[]){
     if(!obj || typeof obj!=='object') return obj
     return mapValues(obj,(value,key)=>{

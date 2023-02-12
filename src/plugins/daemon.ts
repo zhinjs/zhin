@@ -1,8 +1,15 @@
-import {Zhin, Bot} from "@";
+import {Zhin, Bot, useOptions,Schema} from "@";
 import {Context} from "@/context";
 export const name='systemDaemon'
-export function install(ctx:Context, config:DaemonConfig={}){
-    const {exitCommand=true, autoRestart = true} = config||{}
+export const Config=Schema.object({
+    exitCommand:Schema.union([
+        Schema.boolean().default(true).description('是否添加退出指令'),
+        Schema.string().default('添加的指令')
+    ]),
+    autoRestart:Schema.boolean().default(true).description('是否自动重启')
+})
+export function install(ctx:Context){
+    const {exitCommand=true, autoRestart = true} = Config(useOptions('plugins.daemon'))
     function handleSignal(signal: NodeJS.Signals) {
         ctx.app.logger.info(`terminated by ${signal}`)
         process.exit()

@@ -43,7 +43,7 @@ export function install(ctx: Context) {
 - 输出一条提示信息，提示用户输入一行文本
 
 ```typescript
-const name = session.prompt('请输入姓名')
+const name = session.prompt.text('请输入姓名')
 ```
 
 ### 2.number
@@ -51,7 +51,7 @@ const name = session.prompt('请输入姓名')
 - 输出一条提示信息，提示用户输入一个数字
 
 ```typescript
-const age = session.number('请输入年龄')
+const age = session.prompt.number('请输入年龄')
 ```
 
 ### 3.date
@@ -59,7 +59,7 @@ const age = session.number('请输入年龄')
 - 输入一条提示信息，提示用户输入一个日期
 
 ```typescript
-const birthDay = session.date('请输入出生年月日')
+const birthDay = session.prompt.date('请输入出生年月日')
 ```
 
 ### 4.regexp
@@ -67,7 +67,7 @@ const birthDay = session.date('请输入出生年月日')
 - 输入一条提示信息，提示用户输入一个正则表达式
 
 ```typescript
-const reg = session.regexp('请输入一个正则表达式')
+const reg = session.prompt.regexp('请输入一个正则表达式')
 ```
 
 ### 5.confirm
@@ -75,7 +75,7 @@ const reg = session.regexp('请输入一个正则表达式')
 - 输入一条提示信息，提示用户是否确认
 
 ```typescript
-const isAdult = session.confirm('是否成年')
+const isAdult = session.prompt.confirm('是否成年')
 ```
 
 ### 6.list
@@ -83,7 +83,7 @@ const isAdult = session.confirm('是否成年')
 - 输入一条提示信息，提示用户输入一个指定类型的list
 
 ```typescript
-const hobbies = session.list('请输入你的兴趣爱好', {child_type: 'text'})
+const hobbies = session.prompt.list('请输入你的兴趣爱好', {child_type: 'text'})
 ```
 
 ### 7.select
@@ -91,7 +91,7 @@ const hobbies = session.list('请输入你的兴趣爱好', {child_type: 'text'}
 - 输入一条提示信息，提示用户选择一个或多个给出选项的值
 
 ```typescript
-const selctedList = session.select('请选择你喜欢的水果', {
+const selctedList = session.prompt.select('请选择你喜欢的水果', {
     child_type: 'text',
     multiple: true,// 不传则为单选
     options: [

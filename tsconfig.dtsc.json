@@ -7,6 +7,9 @@
   },
   "exclude": ["src/plugins/*"],
   "dtsc": {
-    "inline": ["@zhinjs/schema"],
+    "inline": [
+      "@zhinjs/schema",
+      "@zhinjs/shared"
+    ],
   }
 }

@@ -1,11 +1,11 @@
+import {Dict} from "@zhinjs/shared";
 import {Zhin} from "./zhin";
 import {Bot} from "./bot";
-import Element from './element'
-import {Session} from "./session";
-import {Dict} from "./types";
+import {Element} from './element'
+import {NSession} from "./session";
 export class Prompt{
     private readonly fullTargetId:string
-    constructor(private bot:Bot<keyof Zhin.Bots,any,any>,private session:Session,public timeout:number) {
+    constructor(private bot:Zhin.Bots[keyof Zhin.Adapters],private session:NSession<keyof Zhin.Adapters>,public timeout:number) {
         this.fullTargetId=Bot.getFullTargetId(session)
     }
     async prompts<O extends Prompt.Options>(options:O):Promise<Prompt.ResultS<O>>{
@@ -132,7 +132,7 @@ export namespace Prompt{
         multiple?:T extends 'select'?M:boolean
         initial?:Result<T, CT, M>
         timeout?:number
-        format?:(session:Session)=>Result<T, CT, M>
+        format?:(session:NSession<keyof Zhin.Adapters>)=>Result<T, CT, M>
         validate?:(value:Types[T],...args:any[])=>boolean
         separator?:string
         options?:T extends 'select'?Prompt.SelectOption<CT>[]:never
@@ -151,18 +151,18 @@ export namespace Prompt{
     export  type Transforms<CT extends keyof BaseTypes= keyof BaseTypes,M extends boolean=false>={
         [P in keyof Types]?:Transform<P>
     }
-    export type Transform<T extends keyof Types>= T extends keyof QuoteTypes?QuoteTransform<T>:(session:Session)=>Types[T]
+    export type Transform<T extends keyof Types>= T extends keyof QuoteTypes?QuoteTransform<T>:(session:NSession<keyof Zhin.Adapters>)=>Types[T]
     export type QuoteTransform<T extends keyof Types>=T extends 'select'?SelectTransform:
         T extends 'list'?ListTransform:
             unknown
     export type SelectTransform={
         [P in keyof BaseTypes]?:{
-            true?:(session:Session,options:Array<SelectOption<P>>,chooseArr:number[])=>Array<BaseTypes[P]>
-            false?:(session:Session,options:Array<SelectOption<P>>,chooseArr:number[])=>BaseTypes[P]
+            true?:(session:NSession<keyof Zhin.Adapters>,options:Array<SelectOption<P>>,chooseArr:number[])=>Array<BaseTypes[P]>
+            false?:(session:NSession<keyof Zhin.Adapters>,options:Array<SelectOption<P>>,chooseArr:number[])=>BaseTypes[P]
         }
     }
     export type ListTransform={
-        [P in keyof BaseTypes]?:(session:Session,separator:string)=>Array<BaseTypes[P]>
+        [P in keyof BaseTypes]?:(session:NSession<keyof Zhin.Adapters>,separator:string)=>Array<BaseTypes[P]>
     }
     export const transforms:Transforms={}
     export function defineTransform<T extends keyof Types,CT extends keyof BaseTypes=keyof BaseTypes,M extends boolean=false>(type:T,transform:Transforms[T]){

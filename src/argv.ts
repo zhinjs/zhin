@@ -1,6 +1,5 @@
-import {Bot} from "./bot";
 import {Session} from "./session";
-import Element from "@/element";
+import {Element} from "@/element";
 import {TriggerSessionMap} from "./command";
 import {Zhin} from "./zhin";
 
@@ -9,8 +8,8 @@ export interface Argv<A extends any[] = any[], O = {},T extends keyof TriggerSes
     argv?:Element[][]
     session:TriggerSessionMap[T]
     atMe?:boolean
-    bot?:Bot<keyof Zhin.Bots,any,any>
-    segments?: Element[]//原文
+    bot?:Zhin.Bot
+    elements?: Element[]//原文
     args?: A//携带的args
     options?: O//携带的options
     error?: string//是否报错
@@ -142,7 +141,7 @@ export namespace Argv{
     interface DeclarationList extends Array<Declaration> {
         stripped: string
     }
-    export function parse<P extends keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P]>(content:Element[],session:Session<P,E>):Argv|void{
+    export function parse<P extends keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P]=keyof Zhin.BotEventMaps[P]>(content:Element[],session:Session<P,E>):Argv|void{
         let argv:Element[][]=[]
         const atMe=session.isAtMe();
         const saveSession=session.elements===content
@@ -208,7 +207,7 @@ export namespace Argv{
             atMe,
             session:session as any,
             argv,
-            segments:content
+            elements:content
         }
     }
     export function parseDecl(source: string) {

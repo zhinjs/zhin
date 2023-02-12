@@ -40,7 +40,6 @@ export default defineConfigWithTheme({
                         {text:`索引`,link:'/guide/index'},
                         {text:`准备工作`,link:'/guide/prepare'},
                         {text:`试试水`,link:'/guide/start'},
-                        {text:`了解配置`,link:'/guide/config'},
                         {text:`写个复读🐔`,link:'/guide/repeater'},
                     ]
                 },

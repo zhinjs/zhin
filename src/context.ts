@@ -1,15 +1,14 @@
+import {isBailed, remove,Dict} from "@zhinjs/shared";
 import {Zhin, isConstructor, ChannelId} from "./zhin";
 import {Dispose} from "./dispose";
 import {Adapter, AdapterConstructs, AdapterOptions, AdapterOptionsType} from "./adapter";
 import {Middleware} from "./middleware";
 import {Command, TriggerSessionMap} from "./command";
-import {PayloadWithSession, Session} from "./session";
-import Element from './element'
+import {FunctionPayloadWithSessionObj, NSession} from "./session";
+import {Element} from './element'
 import {EventEmitter} from "events";
-import {isBailed, remove} from "./utils";
 import {Argv} from "./argv";
 import {Plugin} from "@/plugin";
-import { Dict} from "./types";
 import {Component} from "./component";
 import {Logger} from "log4js";
 import {Bot} from "./bot";
@@ -17,7 +16,7 @@ import {Bot} from "./bot";
 export class Context extends EventEmitter{
     plugins:Map<string,Plugin>=new Map<string, Plugin>()
     public components: Dict<Component> = Object.create(null)
-    middlewares:Middleware<PayloadWithSession<keyof Zhin.Adapters,'message'>>[]=[]
+    middlewares:Middleware[]=[]
     public readonly disposes:Dispose[]=[]
     app:Zhin
     commands:Map<string,Command>=new Map<string, Command>()
@@ -42,18 +41,15 @@ export class Context extends EventEmitter{
         },[...this.plugins.values()])
     }
     // 根据会话获取插件列表
-    getSupportPlugins<P extends keyof Zhin.Adapters>(session:Session<P>){
+    getSupportPlugins<P extends keyof Zhin.Adapters>(session:NSession<P>){
         // 双向奔赴或者未反向奔赴
         return this.pluginList.filter(plugin=>plugin.status && session.bot.match(plugin) && plugin.match(session))
     }
     // 为当前上下文添加插件
-    plugin<T>(name: string, options?: T): Plugin | this
-    plugin<T>(name: string,setup?:boolean, options?: T): Plugin | this
-    plugin<P extends Plugin.Install>(plugin: P, config?: Plugin.Config<P>): this
-    plugin<P extends Plugin.Install>(entry: string | P, ...args:[boolean?,Plugin.Config<P>?]) {
+    plugin(name: string,setup?:boolean): Plugin | this
+    plugin<P extends Plugin.Install>(plugin: P): this
+    plugin<P extends Plugin.Install>(entry: string | P, setup?:boolean) {
         let options: Plugin.Options
-        const setup:boolean=typeof args[0]==='boolean'?args.shift():false
-        const config:Plugin.Config<P>=args.shift() as any
         if (typeof entry === 'string') {
             const result = this.plugins.get(entry)
             if (result) return result
@@ -74,15 +70,16 @@ export class Context extends EventEmitter{
                 this.app.logger.warn('重复载入:' + options.name)
                 return
             }
-            if (options.setup) {
-                this.plugins.set(options.fullName, plugin)
-                plugin.mount(context,config)
-            } else {
-                plugin.mount(context,config)
-                this.plugins.set(options.fullName, plugin)
+            this.plugins.set(options.fullName, plugin)
+            try{
+                plugin.mount(context)
+            }catch (e){
+                this.app.logger.info(`载入插件(${options.name})失败：${e.massage}`)
+                this.plugins.delete(options.fullName)
+                return this
             }
-            this.app.logger.info('已载入:' + options.name)
-            this.app.emit('plugin-add', plugin)
+            this.app.logger.info(`已载入插件:${options.name}`)
+            this.app.emit('plugin-add',plugin)
         }
         const using = options.using ||= []
         if (!using.length) {
@@ -105,7 +102,7 @@ export class Context extends EventEmitter{
         },[...this.middlewares])
     }
     // 为当前上下文添加中间件
-    middleware(middleware: Middleware<PayloadWithSession<keyof Zhin.Adapters,'message'>>, prepend?: boolean) {
+    middleware(middleware: Middleware, prepend?: boolean) {
         const method: 'push' | 'unshift' = prepend ? 'unshift' : "push"
         this.app.middlewares[method](middleware)
         return Dispose.from(this, () => {
@@ -141,16 +138,16 @@ export class Context extends EventEmitter{
     command<D extends string,T extends keyof TriggerSessionMap>(def: D,trigger?:T): Command<Argv.ArgumentType<D>,{},T> {
         const namePath = def.split(' ', 1)[0]
         const decl = def.slice(namePath.length)
-        const segments = namePath.split(/(?=[/])/g)
+        const elements = namePath.split(/(?=[/])/g)
 
         let parent: Command, nameArr = []
-        while (segments.length) {
-            const segment = segments.shift()
+        while (elements.length) {
+            const segment = elements.shift()
             const code = segment.charCodeAt(0)
             const tempName = code === 47 ? segment.slice(1) : segment
             nameArr.push(tempName)
-            if (segments.length) parent = this.app.commandList.find(cmd => cmd.name === tempName)
-            if (!parent && segments.length) throw Error(`cannot find parent command:${nameArr.join('.')}`)
+            if (elements.length) parent = this.app.commandList.find(cmd => cmd.name === tempName)
+            if (!parent && elements.length) throw Error(`cannot find parent command:${nameArr.join('.')}`)
         }
         const name = nameArr.pop()
         const command = new Command(name + decl)
@@ -178,7 +175,7 @@ export class Context extends EventEmitter{
         return dispose
     }
     // 往下级插件抛事件
-    dispatch<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P]>(protocol:P,eventName:E, session: Session<P, E>){
+    dispatch<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P]>(protocol:P,eventName:E, session: NSession<P, E>){
         this.emit(`${protocol}.${String(eventName)}`,session)
         for(const plugin of this.getSupportPlugins(session)){
             plugin.context.dispatch(protocol,eventName,session)
@@ -191,7 +188,7 @@ export class Context extends EventEmitter{
     adapter<K extends keyof Zhin.Adapters>(adapter: K, Construct?: AdapterConstructs[K] | AdapterOptions, options?: AdapterOptions) {
         if (!Construct && !options) return this.app.adapters.get(adapter)
         if (typeof Construct !== "function") {
-            const result=this.app.load<Plugin.Options>(adapter, 'adapter')
+            const result=this.app.load<Adapter.Install>(adapter, 'adapter')
             if(result && result.install){
                 result.install(this,options)
             }
@@ -254,14 +251,17 @@ export class Context extends EventEmitter{
         return dispose
     }
     // 群发消息
-    broadcast(channelId:ChannelId,content:Element.Fragment){
-        const [platform,self_id,target_type=platform,target_id=self_id]=channelId.split(':')
-        const bots=[...this.app.adapters.values()].reduce((result,adapter)=>{
-           if(platform===target_type) result.push(...(adapter.bots as Bot[]))
-           else if(platform===adapter.protocol) result.push(...(adapter.bots.filter(bot=>bot.self_id===self_id) as Bot[]))
-            return result
-        },[] as Bot[])
-        return Promise.all(bots.map(bot=>bot.sendMsg(Number(target_id),<"private" | "group" | "discuss" | "guild">target_type,content)))
+    broadcast(channelIds:ChannelId|ChannelId[],content:Element.Fragment){
+        channelIds=[].concat(channelIds)
+        return Promise.all(channelIds.map(channelId=>{
+            const [platform,self_id,target_type=platform,target_id=self_id]=channelId.split(':')
+            const bots=[...this.app.adapters.values()].reduce((result,adapter)=>{
+                if(platform===target_type) result.push(...(adapter.bots as Zhin.Bot[]))
+                else if(platform===adapter.protocol) result.push(...(adapter.bots.filter(bot=>bot.self_id===self_id) as Zhin.Bot[]))
+                return result
+            },[] as Bot[])
+            return bots.map(bot=>bot.sendMsg(Number(target_id),<"private" | "group" | "discuss" | "guild">target_type,content))
+        }).flat())
     }
 
     bail(event, ...args) {
@@ -312,32 +312,15 @@ export class Context extends EventEmitter{
 }
 export interface Context extends Zhin.Services {
     on<T extends keyof Zhin.AllEventMap<this>>(event: T, listener: Zhin.AllEventMap<this>[T]);
-    // @ts-ignore
-    on<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P]>(event: `${P}.${E}`, listener: (session: PayloadWithSession<P, E>) => any);
-
     on<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, listener: (...args: any[]) => any);
-
+    emit<T extends keyof Zhin.AllEventMap<this>>(event: T, ...args: Parameters<Zhin.AllEventMap<this>[T]>): boolean;
+    emit<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, ...args: any[]): boolean;
     emitSync<T extends keyof Zhin.AllEventMap<this>>(event: T, ...args: Parameters<Zhin.AllEventMap<this>[T]>): Promise<void>;
-
-    // @ts-ignore
-    emitSync<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P]>(event: `${P}.${E}`, session: PayloadWithSession<P,  E>): Promise<void>;
-
     emitSync<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, ...args: any[]): Promise<void>;
-
     bail<T extends keyof Zhin.AllEventMap<this>>(event: T, ...args: Parameters<Zhin.AllEventMap<this>[T]>): any;
-
-    // @ts-ignore
-    bail<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P]>(event: `${P}.${E}`, session: PayloadWithSession<P, E>): any;
-
     bail<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, ...args: any[]): any;
-
     bailSync<T extends keyof Zhin.AllEventMap<this>>(event: T, ...args: Parameters<Zhin.AllEventMap<this>[T]>): Promise<any>;
-
-    // @ts-ignore
-    bailSync<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P]>(event: `${P}.${E}`, session: PayloadWithSession<P,  E>): Promise<any>;
-
     bailSync<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, ...args: any[]): Promise<any>;
-
     component(name: string, render: Component['render'],options?:Omit<Component, 'render'>):this
     component(name: string, component: Component):this
     component(name: string, component: Component|Component['render'],options?:Omit<Component, 'render'>):this
