@@ -113,7 +113,7 @@ export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
             type: obj.post_type||event,
             detail_type: obj.message_type || obj.request_type || obj.system_type || obj.notice_type||'guild',
         }, {args})
-        delete obj.repl
+        delete obj.reply
         let msg=[...(obj.message||'')]
         if(obj.source){
             obj.quote={
