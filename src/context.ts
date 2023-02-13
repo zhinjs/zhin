@@ -4,7 +4,7 @@ import {Dispose} from "./dispose";
 import {Adapter, AdapterConstructs, AdapterOptions, AdapterOptionsType} from "./adapter";
 import {Middleware} from "./middleware";
 import {Command, TriggerSessionMap} from "./command";
-import {FunctionPayloadWithSessionObj, NSession} from "./session";
+import {NSession} from "./session";
 import {Element} from './element'
 import {EventEmitter} from "events";
 import {Argv} from "./argv";
@@ -82,14 +82,11 @@ export class Context extends EventEmitter{
             this.app.emit('plugin-add',plugin)
         }
         const using = options.using ||= []
+        installPlugin()
         if (!using.length) {
-            installPlugin()
-        } else {
-            installPlugin()
             if (using.some(name => !this.app.services.has(name))) {
                 this.app.logger.info(`插件(${options.name})所需服务(${using.join()})未就绪，已停用`);
                 (this.plugin(options.fullName) as Plugin).disable()
-            } else {
             }
         }
         return this
@@ -197,8 +194,7 @@ export class Context extends EventEmitter{
         }
         if (!Construct) throw new Error(`can't find protocol from protocol:${adapter}`)
         const dispose = this.app.on(`${adapter}.message`, (session) => {
-            const middleware = Middleware.compose(this.app.getSupportMiddlewares(session))
-            middleware(session)
+            this.app.emitSync('message',session)
         })
         this.app.adapters.set(adapter, new Construct(this.app, adapter, options))
         return Dispose.from(this, () => {
@@ -311,16 +307,16 @@ export class Context extends EventEmitter{
     }
 }
 export interface Context extends Zhin.Services {
-    on<T extends keyof Zhin.AllEventMap<this>>(event: T, listener: Zhin.AllEventMap<this>[T]);
-    on<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, listener: (...args: any[]) => any);
-    emit<T extends keyof Zhin.AllEventMap<this>>(event: T, ...args: Parameters<Zhin.AllEventMap<this>[T]>): boolean;
-    emit<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, ...args: any[]): boolean;
-    emitSync<T extends keyof Zhin.AllEventMap<this>>(event: T, ...args: Parameters<Zhin.AllEventMap<this>[T]>): Promise<void>;
-    emitSync<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, ...args: any[]): Promise<void>;
-    bail<T extends keyof Zhin.AllEventMap<this>>(event: T, ...args: Parameters<Zhin.AllEventMap<this>[T]>): any;
-    bail<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, ...args: any[]): any;
-    bailSync<T extends keyof Zhin.AllEventMap<this>>(event: T, ...args: Parameters<Zhin.AllEventMap<this>[T]>): Promise<any>;
-    bailSync<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, ...args: any[]): Promise<any>;
+    on<T extends keyof Zhin.EventMap<this>>(event: T, listener: Zhin.EventMap<this>[T]);
+    on<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.EventMap<this>>, listener: (...args: any[]) => any);
+    emit<T extends keyof Zhin.EventMap<this>>(event: T, ...args: Parameters<Zhin.EventMap<this>[T]>): boolean;
+    emit<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.EventMap<this>>, ...args: any[]): boolean;
+    emitSync<T extends keyof Zhin.EventMap<this>>(event: T, ...args: Parameters<Zhin.EventMap<this>[T]>): Promise<void>;
+    emitSync<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.EventMap<this>>, ...args: any[]): Promise<void>;
+    bail<T extends keyof Zhin.EventMap<this>>(event: T, ...args: Parameters<Zhin.EventMap<this>[T]>): any;
+    bail<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.EventMap<this>>, ...args: any[]): any;
+    bailSync<T extends keyof Zhin.EventMap<this>>(event: T, ...args: Parameters<Zhin.EventMap<this>[T]>): Promise<any>;
+    bailSync<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.EventMap<this>>, ...args: any[]): Promise<any>;
     component(name: string, render: Component['render'],options?:Omit<Component, 'render'>):this
     component(name: string, component: Component):this
     component(name: string, component: Component|Component['render'],options?:Omit<Component, 'render'>):this

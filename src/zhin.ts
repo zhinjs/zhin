@@ -1,4 +1,4 @@
-import {join, resolve} from 'path'
+import path_1, {join, resolve} from 'path'
 import {ref, watch} from 'obj-observer'
 import {fork, ChildProcess} from "child_process";
 import {getLogger, configure, Configuration} from "log4js";
@@ -13,7 +13,7 @@ import {
     deepEqual,
     getCaller,
     getIpAddress,
-    Dict
+    Dict, pick
 } from "@zhinjs/shared";
 import {createServer, Server} from "http";
 import KoaBodyParser from "koa-bodyparser";
@@ -96,16 +96,16 @@ export function defineConfig(options: Zhin.Options) {
     return options
 }
 export interface Zhin{
-    on<T extends keyof Zhin.AllEventMap<this>>(event: T, listener: Zhin.AllEventMap<this>[T]);
-    on<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, listener: (...args: any[]) => any);
-    emit<T extends keyof Zhin.AllEventMap<this>>(event: T, ...args: Parameters<Zhin.AllEventMap<this>[T]>): boolean;
-    emit<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, ...args: any[]): boolean;
-    emitSync<T extends keyof Zhin.AllEventMap<this>>(event: T, ...args: Parameters<Zhin.AllEventMap<this>[T]>): Promise<void>;
-    emitSync<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, ...args: any[]): Promise<void>;
-    bail<T extends keyof Zhin.AllEventMap<this>>(event: T, ...args: Parameters<Zhin.AllEventMap<this>[T]>): any;
-    bail<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, ...args: any[]): any;
-    bailSync<T extends keyof Zhin.AllEventMap<this>>(event: T, ...args: Parameters<Zhin.AllEventMap<this>[T]>): Promise<any>;
-    bailSync<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.AllEventMap<this>>, ...args: any[]): Promise<any>;
+    on<T extends keyof Zhin.EventMap<this>>(event: T, listener: Zhin.EventMap<this>[T]);
+    on<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.EventMap<this>>, listener: (...args: any[]) => any);
+    emit<T extends keyof Zhin.EventMap<this>>(event: T, ...args: Parameters<Zhin.EventMap<this>[T]>): boolean;
+    emit<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.EventMap<this>>, ...args: any[]): boolean;
+    emitSync<T extends keyof Zhin.EventMap<this>>(event: T, ...args: Parameters<Zhin.EventMap<this>[T]>): Promise<void>;
+    emitSync<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.EventMap<this>>, ...args: any[]): Promise<void>;
+    bail<T extends keyof Zhin.EventMap<this>>(event: T, ...args: Parameters<Zhin.EventMap<this>[T]>): any;
+    bail<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.EventMap<this>>, ...args: any[]): any;
+    bailSync<T extends keyof Zhin.EventMap<this>>(event: T, ...args: Parameters<Zhin.EventMap<this>[T]>): Promise<any>;
+    bailSync<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.EventMap<this>>, ...args: any[]): Promise<any>;
 }
 export class Zhin extends Context {
     isReady: boolean = false
@@ -138,6 +138,10 @@ export class Zhin extends Context {
         })
         this.on('dispose',()=>{
             server.close()
+        })
+        this.on('message',(session)=>{
+            const middleware = Middleware.compose(this.getSupportMiddlewares(session))
+            middleware(session)
         })
         this.on('service-add',(addName)=>{
             const plugins=this.pluginList.filter(p=>p.options.using && p.options.using.includes(addName))
@@ -236,20 +240,57 @@ export class Zhin extends Context {
     // 扫描项目依赖中的所有插件
     getInstalledPlugins() {
         const result: Plugin.Options[] = []
-        if (fs.existsSync(resolve(process.cwd(), 'node_modules', '@zhinjs'))) {
-            result.push(...fs.readdirSync(resolve(process.cwd(), 'node_modules', '@zhinjs')).map((str) => {
-                if (/^plugin-/.test(str)) return `@zhinjs/${str}`
-                return false
-            }).filter(Boolean)
-                .map((name) => this.load<Plugin.Options>(name as string, 'plugin')))
+        const loadManifest=(name) => {
+            const filename = require.resolve(name + '/package.json')
+            const meta = JSON.parse(fs.readFileSync(filename, 'utf8'))
+            meta.dependencies ||= {}
+            return meta
         }
-        if (fs.existsSync(resolve(process.cwd(), 'node_modules'))) {
-            result.push(...fs.readdirSync(resolve(process.cwd(), 'node_modules')).map((str) => {
-                if (/^zhinjs-plugin-/.test(str)) return str
-                return false
-            }).filter(Boolean)
-                .map((name) => this.load<Plugin.Options>(name as string, 'plugin')))
+        const parsePackage=(name)=>{
+            const data = loadManifest(name)
+            const result = pick(data, [
+                'name',
+                'version',
+                'setup',
+                'author',
+                'description',
+            ])
+            return {
+                ...result,
+                name:data.name.replace(/(zhin-|^@zhinjs\/)plugin-/, ''),
+                fullName:data.name,
+            }
         }
+        const loadPackage=(name)=>{
+            try {
+                result.push(this.load(parsePackage(name).fullName,'plugin'))
+            } catch (error) {
+                this.logger.warn('failed to parse %c', name)
+                this.logger.warn(error)
+            }
+        }
+        const loadDirectory=(baseDir)=>{
+            const base = path_1.resolve(baseDir,'node_modules')
+            const files = fs.existsSync(base)?fs.readdirSync(base):[]
+            for (const name of files) {
+                const base2 = base + '/' + name
+                if (name==='@zhinjs') {
+                    const files = fs.readdirSync(base2)
+                    for (const name2 of files) {
+                        if (name2.startsWith('plugin-')) {
+                            loadPackage(name + '/' + name2)
+                        }
+                    }
+                } else if(name.startsWith('zhin-plugin-')){
+                    loadPackage(name)
+                }
+            }
+            if(path_1.dirname(baseDir) !==baseDir){
+                loadDirectory(path_1.dirname(baseDir))
+            }
+        }
+        const startDir=path_1.dirname(__dirname)
+        loadDirectory(startDir)
         if (fs.existsSync(resolve(process.cwd(), this.options.plugin_dir))) {
             result.push(
                 ...fs.readdirSync(resolve(process.cwd(), this.options.plugin_dir))
@@ -280,7 +321,6 @@ export class Zhin extends Context {
     // 加载指定名称，指定类型的模块
     public load<R = object>(name: string, type: string,setup?:boolean): R {
         function getListenDir(modulePath: string) {
-            path.sep
             if (modulePath.endsWith(path.sep+'index')) return modulePath.replace(path.sep+'index', '')
             for (const extension of ['ts', 'js', 'cjs', 'mjs']) {
                 if (fs.existsSync(`${modulePath}.${extension}`)) return `${modulePath}.${extension}`
@@ -315,6 +355,7 @@ export class Zhin extends Context {
             path.join(__dirname, `${type || 'plugin'}s`, name), // 内置插件/服务/游戏目录
             `@zhinjs/${type || 'plugin'}-${name}`,// 官方插件/服务/游戏模块
             `zhin-${type || 'plugin'}-${name}`,// 社区插件/服务/游戏模块
+            name
         ].filter(Boolean))
         if (!resolved) throw new Error(`未找到${type || 'plugin'}(${name})`)
         const packageInfo = getPackageInfo(resolved)
@@ -483,21 +524,24 @@ export namespace Zhin {
             }
         },
     }
-    type BeforeEventMap<T> = {} & BeforeLifeCycle
-
-    type AfterEventMap<T> = {} & AfterLifeCycle
-    type BeforeLifeCycle = {
-        [P in keyof LifeCycle as `before-${P}`]: LifeCycle[P]
+    type BeforeEventMap = {} & BeforeLifeCycle<LifeCycle> & BeforeLifeCycle<ServiceLifeCycle>
+    type Prefix<P extends string,T extends string|symbol|number>=T extends string|number?`${P}-${T}`:`${P}-${string}`
+    type AfterEventMap = {} & AfterLifeCycle<LifeCycle>
+    type BeforeLifeCycle<T extends Dict> = {
+        [P in keyof T as Prefix<'before', P>]: T[P]
     }
-    type AfterLifeCycle = {
-        [P in keyof LifeCycle as `after-${P}`]: LifeCycle[P]
+    type AfterLifeCycle<T extends Dict> = {
+        [P in keyof T as Prefix<'after', P>]: T[P]
     }
-
-
-    export interface LifeCycle {
+    type LifeType='created'|'mounted'|'disposed'
+    export type ServiceLifeCycle={
+        [P in keyof Services as `${P}-${LifeType}`]:()=>void
+    }
+    export interface LifeCycle{
         'start'(): void
         'ready'(): void
         'dispose'(): void
+        'message'(session:NSession<keyof Adapters>):void
         'command-add'(command: Command): void
         'command-remove'(command: Command): void
         'plugin-add'(plugin: Plugin): void
@@ -516,7 +560,7 @@ export namespace Zhin {
     }:{}
     type MapKey<S extends string,K extends string|number|symbol>=K extends string|number?`${S}.${K}`:K
     type MapValue<M extends BaseEventMap,E extends keyof M>=M[E] extends (...args:any[])=>any?M[E]:(...args:any[])=>any
-    export interface AllEventMap<T> extends LifeCycle, BeforeEventMap<T>, AfterEventMap<T>,FlatBotEventMap {
+    export interface EventMap<T> extends LifeCycle,ServiceLifeCycle, BeforeEventMap, AfterEventMap,FlatBotEventMap {
     }
     export type AdapterConfig = {
         [P in keyof Zhin.Adapters]?: AdapterOptionsType<Adapters[P]>
@@ -621,11 +665,12 @@ function createZhinAPI() {
     function getValue<T>(obj: T, path: string[]) {
         if (!obj || typeof obj !== 'object') return obj
         let result = obj
-        while (path.length) {
+        while (path.length>1) {
             const key = path.shift()
             result = result[key] || {}
         }
-        return result
+        if(path.length) return result[path.shift()]
+        return
     }
 
     function useOptions<K extends Zhin.Keys<Zhin.Options>>(path: K): Zhin.Value<Zhin.Options, K> {

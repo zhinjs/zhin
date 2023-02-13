@@ -13,10 +13,15 @@ export interface Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E e
     protocol: P,
     type?: string
     user_id?: string | number
+    user_name?:string
     group_id?: string | number
+    group_name?:string
     discuss_id?: string | number
+    discuss_name?:string
     channel_id?: string | number
+    channel_name?:string
     guild_id?: string | number
+    guild_name?:string
     detail_type?: string
     app: Zhin
     prompt: Prompt
@@ -29,6 +34,7 @@ export interface Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E e
 }
 export type QuoteMessage={
     message_id:string
+    user_id:string|number
     element:Element[]
 }
 

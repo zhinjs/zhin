@@ -1,6 +1,6 @@
 {
   "name": "zhin",
-  "version": "2.0.2-46",
+  "version": "2.0.2-56",
   "description": "知音",
   "main": "lib/index.js",
   "bin": {
@@ -65,14 +65,14 @@
   ],
   "dependencies": {
     "@koa/router": "^12.0.0",
-    "@zhinjs/schema": "^0.0.5-1",
-    "@zhinjs/shared": "^0.0.3",
+    "@zhinjs/schema": "~0.0.5-1",
+    "@zhinjs/shared": "~0.0.6",
     "axios": "^1.2.2",
     "chokidar": "^3.5.3",
     "esbuild": "^0.15.5",
     "esbuild-register": "^3.3.3",
     "event-deliver": "^1.0.2",
-    "icqq": "latest",
+    "icqq": "^0.0.13",
     "js-yaml": "^4.1.0",
     "koa": "^2.13.4",
     "koa-bodyparser": "^4.3.0",

@@ -102,25 +102,36 @@ export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
     }
 
     createSession<E extends keyof EventMap>(event: E, ...args: Parameters<EventMap[E]>): NSession<'icqq',E> {
-        const obj:Record<string, any> = typeof args[0] === "object" ? args.shift() : {}
+        let obj:Record<string, any> = typeof args[0] === "object" ? args.shift() : {}
+        if(!obj) obj={}
         Object.assign(obj, {
             bot: this,
             protocol: 'icqq',
             adapter: this.adapter,
             event,
+            user_name:obj.nickname||obj.sender?.nickname||obj.sender?.card||obj.sender?.title,
             type: obj.post_type||event,
             detail_type: obj.message_type || obj.request_type || obj.system_type || obj.notice_type||'guild',
         }, {args})
-        delete obj.reply
-        const session=new Session<"icqq">(this.adapter, this.self_id, event, obj)
+        delete obj.repl
+        let msg=[...(obj.message||'')]
         if(obj.source){
-            session.quote={
-                message_id:session.type==='group'?
+            obj.quote={
+                message_id:obj.detail_type==='group'?
                     genGroupMessageId(obj.group_id,obj.source.user_id,obj.source.seq,obj.source.rand,obj.source.time):
                     genDmMessageId(obj.user_id,obj.source.seq,obj.source.rand,obj.source.time),
+                user_id:obj.source.user_id,
                 element:[Element('text',{text:obj.source.message})]
             }
+            // oicq bug:引用消息会在message里产生一个AtElem
+            msg.shift()
+            if(msg[0]?.type==='text'){
+                msg[0].text=msg[0].text.trim()
+            }
+            obj.message=typeof obj.message==='string'?msg.join(''):Array.isArray(obj.message)?msg:undefined
+            delete obj.source
         }
+        const session=new Session<"icqq">(this.adapter, this.self_id, event, obj)
         session.elements=toElement(obj.message,session)
         return session as any
     }

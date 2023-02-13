@@ -29,7 +29,7 @@ export class Plugin{
     mount(ctx:Context){
         this.context=ctx
         const result=this.options.install.apply(this,[ctx])
-        if(result){
+        if(result && typeof result ==="function"){
             const dispose=()=>{
                 result()
                 remove(ctx.disposes,dispose)
@@ -86,14 +86,18 @@ export namespace Plugin{
         }
         return typeof options==="function"?{
             ...baseOption,
-            functional:true,
-            anonymous:options.prototype===undefined,
-            install:options,
-        }:{
+            name:options.name||'anonymousPlugin',
+            fullName:`${options.name||'anonymousPlugin'}:${Date.now()}`,
+            anonymous: options.prototype === undefined,
+            functional: true,
+            install: options,
+        } : {
             ...baseOption,
-            functional:false,
+            name:options.name||'localPlugin',
+            fullName:`${options.name||'localPlugin'}:${Date.now()}`,
+            functional: false,
             ...options,
-        }
+        };
     }
     export type Install=InstallFunction|InstallObject
     export interface Info{
