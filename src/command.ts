@@ -217,8 +217,8 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
                 args.push(...(shortcut.args || []))
                 Object.assign(options, shortcut.options || {})
             }
-            if (shortcut.name instanceof RegExp && segment.type === 'text') {
-                const matched = (segment.attrs.text as string).match(shortcut.name)
+            if (shortcut.name instanceof RegExp) {
+                const matched = argv.name.match(shortcut.name)
                 if (matched) {
                     matched.forEach((str, index) => {
                         if (index === 0) return
@@ -235,6 +235,8 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
                             Object.keys(shortcut.options).forEach(key => {
                                 if (this.options[key] && typeof shortcut.options[key] === 'string' && shortcut.options[key].includes(`$${index}`)) {
                                     options[key] = Argv.parseValue(shortcut.options[key].replace(`$${index}`, str), 'option', argv, Object.values(this.options).find(opt => opt.name = key))
+                                }else {
+                                    options[key]=shortcut.options
                                 }
                             })
                         }
@@ -242,7 +244,8 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
                 }
             }
         }
-        return {args, options}
+        argv.options = options as O
+        argv.args = args as A
     }
 
     // 执行指令

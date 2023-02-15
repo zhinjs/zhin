@@ -28,7 +28,8 @@ export class Plugin{
     // 根据指定配置挂载插件
     mount(ctx:Context){
         this.context=ctx
-        const result=this.options.install.apply(this,[ctx])
+        ctx[Context.plugin]=this
+        const result=this.options.install.call(this,ctx)
         if(result && typeof result ==="function"){
             const dispose=()=>{
                 result()

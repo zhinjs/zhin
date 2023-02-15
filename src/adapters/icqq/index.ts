@@ -165,7 +165,7 @@ function toElement<S>(msgList: Sendable,ctx?:S) {
     return result
 }
 
-const allowElement=['text','at','image','face','rps','dice']
+const allowElement=['text','at','image','face','xms','json','rps','dice']
 function fromElement(elementList: Element | string | number | (Element | string | number)[]) {
     elementList = [].concat(elementList);
     return elementList.map((element) => {

@@ -1,10 +1,11 @@
-import {Dict,isNullable} from "@zhinjs/shared";
+import {deepEqual, Dict, isNullable} from "@zhinjs/shared";
 import {Bot} from "./bot";
 import {Zhin} from "./zhin";
 import {Argv} from "./argv";
 import {Element} from '@/element'
 import {Middleware} from "./middleware";
 import {Prompt} from "./prompt";
+import {Context} from "@/context";
 
 export type FunctionPayloadWithSessionObj<E extends (...args: any[]) => any> = E extends (...args: infer R) => any ? ParametersToObj<R> : unknown
 export type ParametersToObj<A extends any[]> = A extends [infer R, ...infer L] ? R & R extends object ? R & { args: L } : { args: [R, ...L] } : Dict
@@ -24,9 +25,10 @@ export interface Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E e
     guild_name?:string
     detail_type?: string
     app: Zhin
+    context:Context
+    adapter: Zhin.Adapters[P],
     prompt: Prompt
     elements: Element[]
-    adapter: Zhin.Adapters[P],
     bot: Zhin.Bots[P]
     event: E
     quote?:QuoteMessage
@@ -55,7 +57,38 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
             return middleware(session, next)
         }, true)
     }
+    match(context:Context){
+        return context.filter(this as any)
+    }
 
+    /**
+     * 拦截接下来所有filter(默认当前发送消息的用户)筛选出来的session，执行传入的runFunc,直到满足free条件
+     * @param tip  提示文本
+     * @param runFunc {Function} 执行的函数
+     * @param free {string|number|boolean|(session)=>boolean} 释放条件
+     * @param filter {} 筛选哪些会话
+     */
+    intercept(tip:Element.Fragment,runFunc:(session:NSession<keyof Zhin.Adapters>)=>Element.Fragment|void,free:Element.Fragment|((session:NSession<keyof Zhin.Adapters>)=>boolean),filter?:(session:NSession<keyof Zhin.Adapters>)=>boolean){
+        if(!filter) filter=(session)=>Bot.getFullTargetId(session)===Bot.getFullTargetId(this as any)
+        this.reply(tip)
+        const needFree=(session)=>typeof free==="function"?free(session):deepEqual(session.elements.join(''),Element.toElementArray(free).join(''))
+        return new Promise<void>(resolve => {
+            const dispose=this.app.middleware(async (session,next)=>{
+                if(!filter(session)) return next()
+                if(needFree(session)){
+                    dispose()
+                    cleanTimeout()
+                    resolve()
+                }else{
+                    await runFunc(session)
+                }
+            })
+            const cleanTimeout=this.context.setTimeout(()=>{
+                dispose()
+                resolve()
+            },this.app.options.delay.prompt)
+        })
+    }
     isAtMe() {
         return this.elements.length && this.elements[0].type === 'mention' && String(this.elements[0].attrs['user_id']) === String(this.bot.self_id)
     }
@@ -122,5 +155,10 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
 
     async reply(message: Element.Fragment) {
         return this.bot.reply(this as any, message, this.bot.options.quote_self)
+    }
+}
+export namespace Session{
+    export const checkProp = <K extends keyof Session>(key: K, ...values: Session[K][]) => {
+        return ((session: Session) => values.length ? values.includes(session[key]) : !!session[key]) as Context.Filter
     }
 }

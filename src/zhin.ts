@@ -394,22 +394,22 @@ export class Zhin extends Context {
     }
     // 获取所有可用的组件
     getSupportComponents<P extends keyof Zhin.Adapters>(session:NSession<P>){
-        return this.getSupportPlugins(session).reduce((result:Dict<Component>,plugin)=>{
-            Object.assign(result,plugin.context.componentList)
+        return this.getMatchedContextList(session).reduce((result:Dict<Component>,context)=>{
+            Object.assign(result,context.componentList)
             return result
         },this.components)
     }
     // 获取所有可用的中间件
     getSupportMiddlewares<P extends keyof Zhin.Adapters>(session:NSession<P>){
-        return this.getSupportPlugins(session).reduce((result:Middleware[],plugin)=>{
-            result.push(...plugin.context.middlewareList)
+        return this.getMatchedContextList(session).reduce((result:Middleware[],context)=>{
+            result.push(...context.middlewareList)
             return result
         },[...this.middlewares])
     }
     // 获取所有可用的指令
     getSupportCommands<P extends keyof Zhin.Adapters>(session:NSession<P>){
-        return this.getSupportPlugins(session).reduce((result:Command[],plugin)=>{
-            for(const command of plugin.context.commandList){
+        return this.getMatchedContextList(session).reduce((result:Command[],context)=>{
+            for(const command of context.commandList){
                 if(command.match(session as any)){
                     result.push(command)
                 }
@@ -419,7 +419,8 @@ export class Zhin extends Context {
     }
     // 获取匹配出来的指令
     findCommand(argv: Argv) {
-        return this.getSupportCommands(argv.session).find(cmd => {
+        const commands=this.getSupportCommands(argv.session)
+        return commands.find(cmd => {
             return cmd.name === argv.name
                 || cmd.aliasNames.includes(argv.name)
                 || cmd.shortcuts.some(({name}) => typeof name === 'string' ? name === argv.name : name.test(argv.name))
