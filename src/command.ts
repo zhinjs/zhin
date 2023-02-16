@@ -170,9 +170,11 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
                     continue;
                 }
             }
-            const optionDecl = [...Object.values(this.options)].find(decl => decl.shortName === content[0]?.attrs.text)
+            const optionDecl = [...Object.values(this.options)].find(decl => {
+                return decl.shortName === content[0]?.attrs.text || (`-no${decl.shortName}` === content[0]?.attrs.text && decl.declaration.type==='boolean')
+            })
             if (optionDecl && !options[optionDecl.name]) {
-                if (optionDecl.declaration.required && !optionDecl.initial && (!argv.argv[0] || options[argv.args[0]])) {
+                if (optionDecl.declaration.required && optionDecl.initial===undefined && (!argv.argv[0] || options[argv.args[0]])) {
                     argv.error = `option ${optionDecl.name} is required`
                     break
                 } else {
@@ -236,7 +238,7 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
                                 if (this.options[key] && typeof shortcut.options[key] === 'string' && shortcut.options[key].includes(`$${index}`)) {
                                     options[key] = Argv.parseValue(shortcut.options[key].replace(`$${index}`, str), 'option', argv, Object.values(this.options).find(opt => opt.name = key))
                                 }else {
-                                    options[key]=shortcut.options
+                                    options[key]=shortcut.options[key]
                                 }
                             })
                         }

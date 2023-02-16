@@ -22,6 +22,7 @@ export namespace Argv{
         text:string
         string: string
         mention: Element
+        user_id:string|number
         face: Element
         file: Element
         voice: Element
@@ -81,9 +82,16 @@ export namespace Argv{
     }
     createDomain('any', source => source, { greedy: true })
     createDomain('string', (source) => {
-        const textElem=source.find(s=>s.type==='text')
-        if(textElem) return textElem.attrs.text
+        const elem=source[0]
+        if(elem && elem.type==='text') return elem.attrs.text
         throw new Error('无效的文本')
+    })
+    createDomain('user_id', (source) => {
+        const element=source[0]
+        if(!element) throw new Error('无效的user_id')
+        if(element.type==='text') return element.attrs.text
+        if(element.type==='mention' && element.attrs.user_id) return element.attrs.user_id
+        return '无效的user_id'
     })
     createDomain('text', (source) => {
         let result:string=''
@@ -96,44 +104,41 @@ export namespace Argv{
         }
         return result
     })
-    createDomain('boolean', () => true)
-    createDomain('mention', (source) => {
-        const elem=source.find(s=>s.type==='mention')
-        if(elem) return elem
-        throw new Error('无效的用户qq')
+    createDomain('boolean', (source) => {
+        return !source[0].attrs.text.start('-no')
     })
     createDomain('face', (source) => {
-        const elem=source.find(s=>s.type==='face' || (s.type==='image' && s.attrs['asface']))
-        if(elem) return elem
+        const elem=source[0]
+        if(elem && elem.type==='face' || (elem.type==='image' && elem.attrs['asface'])) return elem
         throw new Error('无效的表情对象')
     })
     createDomain('file', (source) => {
-        const elem=source.find(s=>s.type==='file')
-        if(elem) return elem
+        const elem=source[0]
+        if(elem && elem.type==='file') return elem
         throw new Error('无效的文件')
     })
     createDomain('image', (source) => {
-        const elem=source.find(s=>s.type==='image')
-        if(elem) return elem
+        const elem=source[0]
+        if(elem && elem.type==='image') return elem
         throw new Error('无效的图片')
     })
     createDomain('voice', (source) => {
-        const elem=source.find(s=>s.type==='voice')
-        if(elem) return elem
+        const elem=source[0]
+        if(elem && elem.type==='voice') return elem
         throw new Error('无效的音频')
     })
     createDomain('audio', (source) => {
-        const elem=source.find(s=>s.type==='audio')
-        if(elem) return elem
+        const elem=source[0]
+        if(elem && elem.type==='audio') return elem
         throw new Error('无效的语音')
     })
     createDomain('number', (source) => {
-        const value = +source[0].attrs.text
+        const value = +source[0]?.attrs?.text
         if (Number.isFinite(value)) return value
         throw new Error('无效的数值')
     })
     createDomain('integer', (source) => {
-        const value = +source[0].attrs.text
+        const value = +source[0]?.attrs?.text
         if (value * 0 === 0 && Math.floor(value) === value) return value
         throw new Error('无效的整数')
     })
@@ -244,9 +249,8 @@ export namespace Argv{
             try {
                 return transform(source)
             } catch (err) {
-                const message = err['message'] || 'check-syntax'
-                argv.error = `invalid-${kind}.(${name}):${message}(${JSON.stringify(source)})`
-                    .replace(/invalid-/g,'无效的')
+                const message = err['message'] || '校验错误'
+                argv.error = `无效的${kind}(${name}):${message}(${source.join('')})`
                     .replace('argument.','参数')
                     .replace('option.','选项')
                 return

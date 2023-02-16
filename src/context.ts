@@ -14,20 +14,20 @@ import {Logger} from "log4js";
 import {Bot} from "./bot";
 
 export class Context extends EventEmitter {
-    plugins: Map<string, Plugin> = new Map<string, Plugin>()
-    public components: Dict<Component> = Object.create(null)
-    middlewares: Middleware[] = []
-    public readonly disposes: Dispose[] = []
     app: Zhin
+    plugins: Map<string, Plugin> = new Map<string, Plugin>()
+    middlewares: Middleware[] = []
+    components: Dict<Component> = Object.create(null)
     commands: Map<string, Command> = new Map<string, Command>();
+    public readonly disposes: Dispose[] = []
     constructor(public parent: Context, public filter: Context.Filter = parent?.filter || Context.defaultFilter) {
         super()
-        this[Context.childKey]=[]
-        this[Context.plugin]=null
+        this[Context.childKey] = []
+        this[Context.plugin] = null
         if (!parent) return
         parent[Context.childKey].push(this)
-        this.on('dispose',()=>{
-            remove(this.parent[Context.childKey],this)
+        this.on('dispose', () => {
+            remove(this.parent[Context.childKey], this)
         })
         this.app = parent.app
         this.logger = parent.logger
@@ -39,59 +39,73 @@ export class Context extends EventEmitter {
         })
     }
 
-    extend(ctx:Partial<Context>){
-        Object.assign(this,ctx)
+    extend(ctx: Partial<Context>) {
+        Object.assign(this, ctx)
         return this
     }
-    pick<K extends keyof Session>(key:K,...values:Session[K][]){
+
+    pick<K extends keyof Session>(key: K, ...values: Session[K][]) {
         return Context.from(this, Context.withFilter(this, Session.checkProp(key, ...values)))
     }
-    union(filter:Context.Filter){
-        return Context.from(this,Context.union(this,filter))
+
+    union(filter: Context.Filter) {
+        return Context.from(this, Context.union(this, filter))
     }
-    except(filter:Context.Filter){
-        return Context.from(this,Context.except(this,filter))
+
+    except(filter: Context.Filter) {
+        return Context.from(this, Context.except(this, filter))
     }
+
     user(...user_ids: (string | number)[]) {
-        return this.pick('user_id',...user_ids)
+        return this.pick('user_id', ...user_ids)
     }
+
     group(...group_ids: (string | number)[]) {
-        return this.pick('group_id',...group_ids)
+        return this.pick('group_id', ...group_ids)
     }
+
     discuss(...discuss_ids: (string | number)[]) {
-        return this.pick('discuss_id',...discuss_ids)
+        return this.pick('discuss_id', ...discuss_ids)
     }
-    guild(...guild_ids:string[]){
-        return this.pick('guild_id',...guild_ids)
+
+    guild(...guild_ids: string[]) {
+        return this.pick('guild_id', ...guild_ids)
     }
-    channel(...channel_ids:string[]){
-        return this.pick('channel_id',...channel_ids)
+
+    channel(...channel_ids: string[]) {
+        return this.pick('channel_id', ...channel_ids)
     }
-    platform(...platform:(keyof Zhin.Adapters)[]){
-        return this.pick('protocol',...platform)
+
+    platform(...platform: (keyof Zhin.Adapters)[]) {
+        return this.pick('protocol', ...platform)
     }
+
     private(...user_ids: (string | number)[]) {
-        return this.pick('detail_type','private').pick('user_id',...user_ids)
+        return this.pick('detail_type', 'private').pick('user_id', ...user_ids)
     }
 
     public logger: Logger
 
     // 获取当前上下文所有插件
     get pluginList(): Plugin[] {
-        return [...this.plugins.values()].reduce((result, plugin) => {
+        const result = [...this.plugins.values()].reduce((result, plugin) => {
             result.push(...plugin.context.pluginList)
             return result
         }, [...this.plugins.values()])
+        if (this[Context.childKey]) {
+            result.push(...this[Context.childKey].map(ctx=>ctx.pluginList).flat())
+        }
+        return result
     }
 
     // 根据会话获取匹配的上下文
-    getMatchedContextList<P extends keyof Zhin.Adapters>(session: NSession<P>):Context[] {
-        return this[Context.childKey].reduce((result,ctx)=>{
+    getMatchedContextList<P extends keyof Zhin.Adapters>(session: NSession<P>): Context[] {
+        return this[Context.childKey].reduce((result, ctx) => {
             result.push(...ctx.getMatchedContextList(session))
             return result
-        },[this] as Context[]).filter((ctx)=> {
-            if(!ctx[Context.plugin]) return session.match(ctx)
-            const plugin=ctx[Context.plugin]
+        }, [this] as Context[]).filter((ctx) => {
+            if (!ctx[Context.plugin]) return session.match(ctx)
+            const plugin = ctx[Context.plugin]
             return session.match(ctx) && plugin.status && session.bot.match(plugin) && plugin.match(session)
         })
     }
@@ -145,27 +159,37 @@ export class Context extends EventEmitter {
 
     // 获取当前上下文所有中间件
     get middlewareList() {
-        return [...this.plugins.values()].reduce((result, plugin) => {
+        const result=[...this.plugins.values()].reduce((result, plugin) => {
             result.push(...plugin.context.middlewareList)
             return result
         }, [...this.middlewares])
+        if (this[Context.childKey]) {
+            result.push(...this[Context.childKey].map(ctx=>ctx.middlewareList).flat())
+        }
+        return result
     }
 
     // 为当前上下文添加中间件
     middleware(middleware: Middleware, prepend?: boolean) {
         const method: 'push' | 'unshift' = prepend ? 'unshift' : "push"
-        this.app.middlewares[method](middleware)
+        this.middlewares[method](middleware)
         return Dispose.from(this, () => {
-            return remove(this.app.middlewares, middleware);
+            return remove(this.middlewares, middleware);
         })
     }
 
     // 获取当前上下文所有组件
     get componentList() {
-        return [...this.plugins.values()].reduce((result, plugin) => {
+        const result=[...this.plugins.values()].reduce((result, plugin) => {
             Object.assign(result, plugin.context.componentList)
             return result
-        }, this.components)
+        }, {...this.components})
+        if (this[Context.childKey]) {
+            this[Context.childKey].map(ctx=>{
+                Object.assign(result,ctx.componentList)
+            })
+        }
+        return result
     }
 
     // 为当前上下文添加组件
@@ -182,10 +206,14 @@ export class Context extends EventEmitter {
 
     // 获取当前上下文所有指令
     get commandList(): Command[] {
-        return [...this.plugins.values()].reduce((result, plugin) => {
+        const result = [...this.plugins.values()].reduce((result, plugin) => {
             result.push(...plugin.context.commandList)
             return result
         }, [...this.commands.values()])
+        if (this[Context.childKey]) {
+            result.push(...this[Context.childKey].map(ctx=>ctx.commandList).flat())
+        }
+        return result
     }
 
     // 为当前上下文添加指令
@@ -233,7 +261,7 @@ export class Context extends EventEmitter {
     // 往下级插件抛会话
     dispatch<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P]>(protocol: P, eventName: E, session: NSession<P, E>) {
         session.context = this
-        if(session.match(this)){
+        if (session.match(this)) {
             this.emit(`${protocol}.${String(eventName)}`, session)
             for (const context of this[Context.childKey]) {
                 context.dispatch(protocol, eventName, session)
@@ -374,9 +402,11 @@ export class Context extends EventEmitter {
         }
     }
 }
+
 export interface Context extends Zhin.Services {
-    [Context.childKey]:Context[]
-    [Context.plugin]:Plugin
+    [Context.childKey]: Context[]
+    [Context.plugin]: Plugin
+
     on<T extends keyof Zhin.EventMap<this>>(event: T, listener: Zhin.EventMap<this>[T]);
 
     on<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.EventMap<this>>, listener: (...args: any[]) => any);
@@ -403,20 +433,23 @@ export interface Context extends Zhin.Services {
 
     component(name: string, component: Component | Component['render'], options?: Omit<Component, 'render'>): this
 }
-export namespace Context{
-    export const plugin=Symbol('plugin')
-    export function from(parent:Context,filter:Filter){
-        const ctx=new Context(parent,filter)
-        ctx[plugin]=parent?parent[plugin]:null
+
+export namespace Context {
+    export const plugin = Symbol('plugin')
+
+    export function from(parent: Context, filter: Filter) {
+        const ctx = new Context(parent, filter)
+        ctx[plugin] = parent ? parent[plugin] : null
         return ctx
     }
-    export const childKey=Symbol('children')
-    export type Filter= (session: Session)=> boolean
+
+    export const childKey = Symbol('children')
+    export type Filter = (session: Session) => boolean
     export const defaultFilter: Filter = () => true
-    export const union = (ctx:Context,filter:Filter)=>{
+    export const union = (ctx: Context, filter: Filter) => {
         return ((session: Session) => ctx.filter(session) || filter(session)) as Filter
     }
-    export const except=(ctx:Context,filter:Filter)=>{
+    export const except = (ctx: Context, filter: Filter) => {
         return ((session: Session) => ctx.filter(session) && !filter(session)) as Filter
     }
     export const withFilter = (ctx: Context, filter: Filter) => {
