@@ -8,7 +8,6 @@ export interface Element<T extends Element.BaseType|string=string,A extends Elem
     parent?:Element
     children: (Element)[]
     source?: string
-
     toString(strip?: boolean): string
 }
 
@@ -35,7 +34,7 @@ class ElementConstructor {
 }
 
 export function Element(type: string, ...children: Element.Fragment[]): Element
-export function Element<T extends Element.BaseType|string>(type: T, attrs: Element.Attrs<T>, ...children: Element.Fragment[]): Element<T>
+export function Element<T extends Element.BaseType|string>(type: T, attrs: Element.Attrs<T>, ...children: Element.Children<T>): Element<T>
 export function Element(type: string, ...args: any[]) {
     const el = Object.create(ElementConstructor.prototype)
     el[Element.key] = true
@@ -63,6 +62,7 @@ export namespace Element {
     export function isElement(source: any): source is Element {
         return source && typeof source === 'object' && source[Element.key]
     }
+    export type Children<T extends keyof Element.BaseChildren|string> = T extends keyof Element.BaseChildren?Element.BaseChildren[T]:Element[]
     export type Attrs<T extends Element.BaseType|string>=T extends Element.BaseType?Element.BaseAttrs[T] & Record<string, any>:Record<string, any>
     function toElement(content: Element.Fragment) {
         if (Element.isElement(content)) {
@@ -84,8 +84,6 @@ export namespace Element {
 
     export const Fragment = 'template'
     export type Render<S, A extends Dict = Dict, T = Awaitable<Fragment>> = (this:S,attrs: A, children: Element[]) => T
-    export type Transformer<S = never> = boolean | Fragment | Render<S, Dict, boolean | Fragment>
-    export type AsyncTransformer<S = never> = boolean | Fragment | Render<S, Dict, Awaitable<boolean | Fragment>>
 
     export type Fragment = string | number | boolean | Element | (string | number | boolean | Element)[]
 
@@ -95,8 +93,13 @@ export namespace Element {
         video:{src:string|Buffer|Readable},
         audio:{src:string|Buffer|Readable},
         text:{text:string},
+        forward:{}
         mention:{user_id:string|number}
         face:{id:number}
+        node:{user_id:string,user_name?:string,time?:number,message?:Element.Fragment[]}
+    }
+    export interface BaseChildren{
+        forward:Element<'node'>[]
     }
     export type BaseType=keyof BaseAttrs
 

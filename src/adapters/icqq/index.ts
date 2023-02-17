@@ -3,8 +3,6 @@ import {
     Config as IcqqConfig,
     Quotable,
     Client,
-    Sendable,
-    MessageElem,
     MessageRet, genGroupMessageId, genDmMessageId
 } from "icqq";
 import {Bot, BotOptions} from '@/bot'
@@ -12,22 +10,17 @@ import {Element} from '@/element'
 import {Zhin} from "@/zhin";
 import {NSession, Session} from "@/session";
 import {EventMap} from "icqq/lib/events";
+import {processMessage, processMusic, toElement} from "@/adapters/icqq/utils";
 
 async function sendMsg(this:Client,target_id:number,target_type:string,content:Element[]){
-    const replyElement=content.find(ele=>ele.type==='reply')
-    const ele=[...content]
-    let quote:Quotable
-    if(replyElement){
-        quote=await this.getMsg(replyElement.attrs.message_id)
-        ele.splice(content.indexOf(replyElement),1)
-    }
-    const args:any[]=[]
-    const message=fromElement(ele)
+    let {element, quote} = await processMessage.apply(this, [content])
+    element = await processMusic.apply(this, [target_type, target_id, element])
+    let args:any[]=[]
+    if (!element.length) return
     let func:string
     switch (target_type){
         case 'private':
             func='sendPrivateMsg'
-            args.push(target_id)
             break;
         case 'discuss':
             func='sendDiscussMsg'
@@ -44,7 +37,7 @@ async function sendMsg(this:Client,target_id:number,target_type:string,content:E
         default:
             throw new Error('not support')
     }
-    const messageRet=(await this[func](...[...args,message,quote])) as MessageRet
+    const messageRet=(await this[func](...args,element,quote?await this.getMsg(quote.attrs.message_id):undefined)) as MessageRet
     return {
         message_id:messageRet.message_id,
         from_id:this.uin,
@@ -145,49 +138,6 @@ export class IcqqAdapter extends Adapter<'icqq', IcqqBotOptions, {}> {
 
 }
 
-function toElement<S>(msgList: Sendable,ctx?:S) {
-    if(!msgList) return []
-    msgList = [].concat(msgList)
-    let result:Element[]=[]
-    msgList.forEach((msg) => {
-        if (typeof msg === 'string') msg={type:'text',text:msg}
-        if(msg.type==="text"){
-            result.push(...Element.parse(msg.text,ctx))
-        }else{let {type, ...attrs} = msg;
-            result.push(Element(type === 'at' ? attrs['qq'] ? 'mention' : "mention_all" : type,{
-                user_id: attrs['qq'],
-                file:attrs['file_id']||attrs['src'],
-                content:attrs['text'],
-                ...attrs
-            }))
-        }
-    })
-    return result
-}
-
-const allowElement=['text','at','image','face','xms','json','rps','dice']
-function fromElement(elementList: Element | string | number | (Element | string | number)[]) {
-    elementList = [].concat(elementList);
-    return elementList.map((element) => {
-        if (typeof element !== 'object') element = String(element)
-        if (typeof element === 'string') {
-            return {type: 'text', text: element}
-        }
-        const {type, attrs, children} = element;
-        const result = {
-            type: type.replace('mention', 'at').replace('at_all', 'at'),
-            ...attrs,
-            text:attrs.text||children.join('')
-        }
-        if(allowElement.includes(result.type)){
-            if (attrs['user_id']) result['qq'] = attrs['user_id']
-            if (attrs['file_id']) result['file'] = attrs['file_id']
-            if (attrs['src']) result['file'] = attrs['src']
-            return result
-        }
-        return element.toString()
-    }) as MessageElem[]
-}
 
 export interface IcqqBotOptions extends IcqqConfig {
     self_id: string
