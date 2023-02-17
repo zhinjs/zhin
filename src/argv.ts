@@ -105,7 +105,7 @@ export namespace Argv{
         return result
     })
     createDomain('boolean', (source) => {
-        return !source[0].attrs.text.start('-no')
+        return !source[0].attrs.text.startsWith('-no')
     })
     createDomain('face', (source) => {
         const elem=source[0]

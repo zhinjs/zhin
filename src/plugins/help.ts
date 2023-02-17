@@ -28,7 +28,6 @@ export function install(ctx:Context){
                 if(options.help) return command.help().concat('回复“帮助 指令名”以查看对应指令帮助。').join('\n')
             })
     })
-
     return ()=>{
         dispose()
     }

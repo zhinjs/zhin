@@ -392,31 +392,6 @@ export class Zhin extends Context {
             fullPath: getListenDir(resolved)
         } as any
     }
-    // 获取所有可用的组件
-    getSupportComponents<P extends keyof Zhin.Adapters>(session:NSession<P>){
-        return this.getMatchedContextList(session).reduce((result:Dict<Component>,context)=>{
-            Object.assign(result,context.componentList)
-            return result
-        },this.components)
-    }
-    // 获取所有可用的中间件
-    getSupportMiddlewares<P extends keyof Zhin.Adapters>(session:NSession<P>){
-        return this.getMatchedContextList(session).reduce((result:Middleware[],context)=>{
-            result.push(...context.middlewareList)
-            return result
-        },[...this.middlewares])
-    }
-    // 获取所有可用的指令
-    getSupportCommands<P extends keyof Zhin.Adapters>(session:NSession<P>){
-        return this.getMatchedContextList(session).reduce((result:Command[],context)=>{
-            for(const command of context.commandList){
-                if(command.match(session as any)){
-                    result.push(command)
-                }
-            }
-            return result
-        },[...this.commands.values()])
-    }
     // 获取匹配出来的指令
     findCommand(argv: Argv) {
         const commands=this.getSupportCommands(argv.session)

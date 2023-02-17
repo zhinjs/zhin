@@ -20,6 +20,7 @@ export class Context extends EventEmitter {
     components: Dict<Component> = Object.create(null)
     commands: Map<string, Command> = new Map<string, Command>();
     public readonly disposes: Dispose[] = []
+
     constructor(public parent: Context, public filter: Context.Filter = parent?.filter || Context.defaultFilter) {
         super()
         this[Context.childKey] = []
@@ -89,11 +90,11 @@ export class Context extends EventEmitter {
     // 获取当前上下文所有插件
     get pluginList(): Plugin[] {
         const result = [...this.plugins.values()].reduce((result, plugin) => {
-            result.push(...plugin.context.pluginList)
+            if (plugin.context !== this) result.push(...plugin.context.pluginList)
             return result
         }, [...this.plugins.values()])
         if (this[Context.childKey]) {
-            result.push(...this[Context.childKey].map(ctx=>ctx.pluginList).flat())
+            result.push(...this[Context.childKey].map(ctx => ctx.pluginList).flat())
         }
         return result
     }
@@ -103,7 +104,7 @@ export class Context extends EventEmitter {
         return this[Context.childKey].reduce((result, ctx) => {
             result.push(...ctx.getMatchedContextList(session))
             return result
-        }, [this] as Context[]).filter((ctx) => {
+        },[...this.plugins.values()].map(p=>p.context)).filter((ctx) => {
             if (!ctx[Context.plugin]) return session.match(ctx)
             const plugin = ctx[Context.plugin]
             return session.match(ctx) && plugin.status && session.bot.match(plugin) && plugin.match(session)
@@ -159,12 +160,12 @@ export class Context extends EventEmitter {
 
     // 获取当前上下文所有中间件
     get middlewareList() {
-        const result=[...this.plugins.values()].reduce((result, plugin) => {
-            result.push(...plugin.context.middlewareList)
+        const result = [...this.plugins.values()].reduce((result, plugin) => {
+            if (plugin.context !== this) result.push(...plugin.context.middlewareList)
             return result
         }, [...this.middlewares])
         if (this[Context.childKey]) {
-            result.push(...this[Context.childKey].map(ctx=>ctx.middlewareList).flat())
+            result.push(...this[Context.childKey].map(ctx => ctx.middlewareList).flat())
         }
         return result
     }
@@ -179,14 +180,14 @@ export class Context extends EventEmitter {
     }
 
     // 获取当前上下文所有组件
-    get componentList() {
-        const result=[...this.plugins.values()].reduce((result, plugin) => {
-            Object.assign(result, plugin.context.componentList)
+    get componentList():Dict<Component> {
+        const result = [...this.plugins.values()].reduce((result, plugin) => {
+            if (plugin.context !== this) Object.assign(result, plugin.context.componentList)
             return result
         }, {...this.components})
         if (this[Context.childKey]) {
-            this[Context.childKey].map(ctx=>{
-                Object.assign(result,ctx.componentList)
+            this[Context.childKey].map(ctx => {
+                Object.assign(result, ctx.componentList)
             })
         }
         return result
@@ -198,20 +199,19 @@ export class Context extends EventEmitter {
             ...(options || {}),
             render: component
         }
-        this.components[name] = component as Component
+        this.components[name] = component
         return Dispose.from(this, () => {
             delete this.components[name]
         })
     }
-
     // 获取当前上下文所有指令
     get commandList(): Command[] {
         const result = [...this.plugins.values()].reduce((result, plugin) => {
-            result.push(...plugin.context.commandList)
+            if (plugin.context !== this) result.push(...plugin.context.commandList)
             return result
         }, [...this.commands.values()])
         if (this[Context.childKey]) {
-            result.push(...this[Context.childKey].map(ctx=>ctx.commandList).flat())
+            result.push(...this[Context.childKey].map(ctx => ctx.commandList).flat())
         }
         return result
     }
@@ -400,6 +400,33 @@ export class Context extends EventEmitter {
             const dispose = this.disposes.shift()
             dispose()
         }
+    }
+    // 获取所有可用的组件
+    getSupportComponents<P extends keyof Zhin.Adapters>(session:NSession<P>){
+        return this.getMatchedContextList(session).reduce((result:Dict<Component>,context)=>{
+            if(context===this) return result
+            Object.assign(result,context.getSupportComponents(session))
+            return result
+        },{...this.components})
+    }
+    // 获取所有可用的中间件
+    getSupportMiddlewares<P extends keyof Zhin.Adapters>(session:NSession<P>){
+        return this.getMatchedContextList(session).reduce((result:Middleware[],context)=>{
+            if(context===this) return result
+            result.push(...context.getSupportMiddlewares(session))
+            return result
+        },[...this.middlewares])
+    }
+    // 获取所有可用的指令
+    getSupportCommands<P extends keyof Zhin.Adapters>(session:NSession<P>){
+        return this.getMatchedContextList(session).reduce((result:Command[],context)=>{
+            for(const command of context.getSupportCommands(session)){
+                if(command.match(session as any)){
+                    result.push(command)
+                }
+            }
+            return result
+        },[...this.commands.values()])
     }
 }
 

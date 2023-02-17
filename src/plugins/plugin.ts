@@ -1,5 +1,4 @@
 import {Context} from "@/context";
-import {Element} from "@/element";
 import {Session, Zhin} from "@";
 
 export const name = 'pluginManage'
