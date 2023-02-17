@@ -509,7 +509,7 @@ export namespace Zhin {
     type AfterLifeCycle<T extends Dict> = {
         [P in keyof T as Prefix<'after', P>]: T[P]
     }
-    type LifeType='created'|'mounted'|'disposed'
+    type LifeType='created'|'mounted'|'ready'|'disposed'
     export type ServiceLifeCycle={
         [P in keyof Services as `${P}-${LifeType}`]:()=>void
     }
