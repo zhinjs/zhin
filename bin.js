@@ -2,7 +2,7 @@
 "use strict";
 const path=require('path')
 const parse=require('yargs-parser')
-const argv = parse(process.argv.slice(2), {
+const argv = parse(process.argv?.slice(2), {
     alias: {
         config: ['c'],
         entry: ['e'],

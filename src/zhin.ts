@@ -400,7 +400,7 @@ export class Zhin extends Context {
         return commands.find(cmd => {
             return cmd.name === argv.name
                 || cmd.aliasNames.includes(argv.name)
-                || cmd.shortcuts.some(({name}) => typeof name === 'string' ? name === argv.name : name.test(argv.elements.join('')))
+                || cmd.shortcuts.some(({name}) => typeof name === 'string' ? name === argv.name : name.test((argv.elements||=[]).join('')))
         })
     }
     // 启动zhin
@@ -470,6 +470,7 @@ export namespace Zhin {
                 bots: []
             }
         },
+        self_url:'localhost',
         data_dir: path.join(process.cwd(), 'data'),
         plugin_dir: path.join(process.cwd(), 'plugins'),
         plugins: {},
@@ -541,6 +542,7 @@ export namespace Zhin {
     type KVMap<V = any, K extends string = string> = Record<K, V>
 
     export interface Options extends KVMap {
+        self_url: string
         port: number
         log_level: LogLevel
         logConfig?: Partial<Configuration>
@@ -556,7 +558,7 @@ export namespace Zhin {
     export type Keys<O extends KVMap> = O extends KVMap<infer V, infer K> ? V extends object ? `${K}.${Keys<V>}` : `${K}` : never
     export type Value<O extends KVMap, K> = K extends `${infer L}.${infer R}` ? Value<O[L], R> : K extends keyof O ? O[K] : any
 
-    export type ServiceConstructor<R, T = any> = new (bot: Zhin, options?: T) => R
+    export type ServiceConstructor<R, T = any> = new (ctx: Context, options?: T) => R
     export function createContext<T extends object>(context:T):T{
         const whiteList = ['Math', 'Date','JSON']
         return new Proxy(context,{

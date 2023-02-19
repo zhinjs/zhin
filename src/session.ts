@@ -71,7 +71,7 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
     intercept(tip:Element.Fragment,runFunc:(session:NSession<keyof Zhin.Adapters>)=>Element.Fragment|void,free:Element.Fragment|((session:NSession<keyof Zhin.Adapters>)=>boolean),filter?:(session:NSession<keyof Zhin.Adapters>)=>boolean){
         if(!filter) filter=(session)=>Bot.getFullTargetId(session)===Bot.getFullTargetId(this as any)
         this.reply(tip)
-        const needFree=(session)=>typeof free==="function"?free(session):deepEqual(session.elements.join(''),Element.toElementArray(free).join(''))
+        const needFree=(session)=>typeof free==="function"?free(session):deepEqual(session.elements?.join(''),Element.toElementArray(free).join(''))
         return new Promise<void>(resolve => {
             const dispose=this.app.middleware(async (session,next)=>{
                 if(!filter(session)) return next()
@@ -90,7 +90,7 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
         })
     }
     isAtMe() {
-        return this.elements.length && this.elements[0].type === 'mention' && String(this.elements[0].attrs['user_id']) === String(this.bot.self_id)
+        return this.elements?.length && this.elements[0].type === 'mention' && String(this.elements[0].attrs['user_id']) === String(this.bot.self_id)
     }
 
     async nextArgv() {

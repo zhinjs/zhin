@@ -21,7 +21,7 @@ export function install(ctx: Context) {
             }
 
             return ctx.app
-                .findCommand({name: target, session, elements: session.elements, argv})
+                .findCommand({name: target, session, elements: session.elements||=[], argv})
                 ?.help({...options, dep: 1})
                 .concat('回复“帮助 指令名”以查看对应指令帮助。').join('\n')
         })

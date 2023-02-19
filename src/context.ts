@@ -306,7 +306,7 @@ export class Context extends EventEmitter {
         if (this.app[key]) throw new Error('服务key不能和bot已有属性重复')
         if (this.app.services.has(key)) throw new Error('重复定义服务')
         if (isConstructor(Service)) {
-            this.app.services.set(key, new Service(this.app, options))
+            this.app.services.set(key, new Service(this, options))
         } else {
             this.app.services.set(key, Service)
         }

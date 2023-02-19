@@ -149,12 +149,12 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
     private parseCommand(argv: Argv<A, O>) {
         const args: A = argv.args ||= [] as A
         const options: O = argv.options ||= {} as O
-        while (!argv.error && argv.argv.length) {
-            const content = argv.argv.shift()
+        while (!argv.error && argv.argv?.length) {
+            const content = argv.argv?.shift()
             const argDecl = this.args[args.length]
 
             if (content[0].attrs.text?.[0] !== '-' && !this.options[content[0].attrs.text] && Argv.resolveConfig(argDecl?.type).greedy) {
-                args.push(Argv.parseValue([content, ...argv.argv].reduce((result, sArr) => {
+                args.push(Argv.parseValue([content, ...argv?.argv].reduce((result, sArr) => {
                     if (result.length) result.push(Element('text',{text:' '}))
                     result.push(...sArr)
                     return result
@@ -180,17 +180,17 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
                 } else {
                     if (optionDecl.declaration.type !== "boolean") {
                         if (optionDecl.declaration.variadic) {
-                            options[optionDecl.name] = argv.argv.map(arg => Argv.parseValue(arg, 'option', argv, optionDecl.declaration))
+                            options[optionDecl.name] = argv.argv?.map(arg => Argv.parseValue(arg, 'option', argv, optionDecl.declaration))
                             break;
                         } else if (Argv.resolveConfig(optionDecl.declaration.type).greedy) {
-                            options[optionDecl.name] = Argv.parseValue(argv.argv.reduce((result, sArr) => {
+                            options[optionDecl.name] = Argv.parseValue(argv.argv?.reduce((result, sArr) => {
                                 if (result.length) result.push(Element('text',{text:' '}))
                                 result.push(...sArr)
                                 return result
                             }, []), 'option', argv, optionDecl.declaration)
                             break;
                         } else {
-                            options[optionDecl.name] = Argv.parseValue(argv.argv.shift(), 'option', argv, optionDecl.declaration)
+                            options[optionDecl.name] = Argv.parseValue(argv.argv?.shift(), 'option', argv, optionDecl.declaration)
                         }
                     } else {
                         options[optionDecl.name] = Argv.parseValue(content, 'option', argv, optionDecl.declaration)
@@ -214,7 +214,7 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
     private parseShortcut(argv: Argv) {
         const args = argv.args ||= [], options = argv.options ||= {}
         for (const shortcut of this.shortcuts) {
-            const content=argv.elements.join('')
+            const content=(argv.elements||=[]).join('')
             if (typeof shortcut.name === 'string' && content===shortcut.name) {
                 args.push(...(shortcut.args || []))
                 Object.assign(options, shortcut.options || {})
@@ -263,11 +263,11 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
         }
         let result
         for (const callback of this.checkers) {
-            result = await callback.call(this, argv, ...argv.args)
+            result = await callback.call(this, argv, ...argv?.args)
             if (result) return result
         }
         for (const callback of this.callback) {
-            result = await callback.call(this, argv, ...argv.args)
+            result = await callback.call(this, argv, ...argv?.args)
             if (result) return result
         }
     }
