@@ -29,23 +29,24 @@ import {NSession} from "./session";
 import {Middleware} from "./middleware";
 import {Dispose} from "./dispose";
 import {Router} from "./router";
+import {Request} from "@/request";
 import {Component} from "./component";
 import {Element} from "./element";
-
+let cp: ChildProcess
 interface Message {
     type: 'start' | 'queue'
     body: any
 }
+let buffer = null, timeStart: number
 
 export type TargetType = 'group' | 'private' | 'discuss'
 export type ChannelId = `${keyof Zhin.Adapters}:${string | number}:${TargetType}:${number | string}`|`${TargetType}:${number | string}`
-let cp: ChildProcess
+
 
 export function isConstructor<R, T>(value: any): value is (new (...args: any[]) => any) {
     return typeof value === 'function' && value.prototype && value.prototype.constructor === value
 }
 
-let buffer = null, timeStart: number
 
 export function createWorker(options:Zhin.WorkerOptions) {
     const {entry='lib',mode='production',config:configPath='zhin.yaml'}=options||{}
@@ -127,6 +128,7 @@ export class Zhin extends Context {
         this.service('server', server)
             .service('koa', koa)
             .service('router', router)
+            .service('request',Request.create())
         koa.use(KoaBodyParser())
             .use(router.routes())
             .use(router.allowedMethods())
@@ -238,7 +240,7 @@ export class Zhin extends Context {
         return [event.message_type, event.group_id || event.discuss_id || event.sender.user_id].join(':') as ChannelId
     }
     // 扫描项目依赖中的所有插件
-    getInstalledPlugins() {
+    getInstalledDependencies(type='plugin') {
         const result: Plugin.Options[] = []
         const loadManifest=(name) => {
             const filename = require.resolve(name + '/package.json')
@@ -257,13 +259,13 @@ export class Zhin extends Context {
             ])
             return {
                 ...result,
-                name:data.name.replace(/(zhin-|^@zhinjs\/)plugin-/, ''),
+                name:data.name.replace(/(zhin-|^@zhinjs\/)(plugin|service|adapter)-/, ''),
                 fullName:data.name,
             }
         }
         const loadPackage=(name)=>{
             try {
-                result.push(this.load(parsePackage(name).fullName,'plugin'))
+                result.push(this.load(parsePackage(name).fullName,type))
             } catch (error) {
                 this.logger.warn('failed to parse %c', name)
                 this.logger.warn(error)
@@ -277,11 +279,11 @@ export class Zhin extends Context {
                 if (name==='@zhinjs') {
                     const files = fs.readdirSync(base2)
                     for (const name2 of files) {
-                        if (name2.startsWith('plugin-')) {
+                        if (name2.startsWith(`${type}-`)) {
                             loadPackage(name + '/' + name2)
                         }
                     }
-                } else if(name.startsWith('zhin-plugin-')){
+                } else if(name.startsWith(`zhin-${type}-`)){
                     loadPackage(name)
                 }
             }
@@ -297,8 +299,8 @@ export class Zhin extends Context {
                     .map((name) => this.load<Plugin.Options>(name.replace(/\.(d\.)?[d|j]s$/, ''), 'plugin'))
             )
         }
-        if (fs.existsSync(resolve(__dirname, 'plugins'))) {
-            result.push(...fs.readdirSync(resolve(__dirname, 'plugins'))
+        if (fs.existsSync(resolve(__dirname, `${type}s`))) {
+            result.push(...fs.readdirSync(resolve(__dirname, `${type}s`))
                 .map((name) => this.load<Plugin.Options>(name.replace(/\.(d\.)?[d|j]s$/, ''), 'plugin')))
         }
         return result
@@ -398,7 +400,7 @@ export class Zhin extends Context {
         return commands.find(cmd => {
             return cmd.name === argv.name
                 || cmd.aliasNames.includes(argv.name)
-                || cmd.shortcuts.some(({name}) => typeof name === 'string' ? name === argv.name : name.test(argv.name))
+                || cmd.shortcuts.some(({name}) => typeof name === 'string' ? name === argv.name : name.test(argv.elements.join('')))
         })
     }
     // 启动zhin
@@ -410,20 +412,13 @@ export class Zhin extends Context {
                 this.logger.warn(e.message, e.stack)
             }
         }
-        this.getInstalledPlugins().forEach(plugin=>{
+        this.getInstalledDependencies().forEach(plugin=>{
             try {
                 this.plugin(plugin.fullName)
             } catch (e) {
                 this.logger.warn(e.message, e.stack)
             }
         })
-        for (const pluginName of Object.keys(this.options.plugins)) {
-            try {
-                this.plugin(pluginName, this.options.plugins[pluginName])
-            } catch (e) {
-                this.logger.warn(e.message, e.stack)
-            }
-        }
         await this.emitSync('ready')
         this.isReady = true
         await this.emitSync('start')
@@ -465,6 +460,7 @@ export namespace Zhin {
         koa: Koa
         router: Router
         server: Server
+        request:Request
     }
 
     export const defaultConfig: Partial<Options> = {

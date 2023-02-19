@@ -1,6 +1,6 @@
 {
   "name": "zhin",
-  "version": "2.0.2-68",
+  "version": "2.0.2-76",
   "description": "知音",
   "main": "lib/index.js",
   "bin": {
@@ -11,13 +11,13 @@
     "start:zhin": "node ./bin",
     "compile": "tsc --project tsconfig.build.json && tsc-alias -p tsconfig.build.json",
     "build": "npm run compile && dtsc --project tsconfig.dtsc.json",
+    "test": "ts-node -r tsconfig-paths/register -r esbuild-register ./src/test.ts",
     "dev": "ts-node -r tsconfig-paths/register -r esbuild-register ./bin -e src",
     "docs:dev": "vitepress dev docs --port 8989",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
     "pub": "npm publish --access public",
-    "deploy:docs": "bash dosc.sh",
-    "test": "echo \\\"Error: no src/test specified\\\" && exit 1"
+    "deploy:docs": "bash dosc.sh"
   },
   "repository": {
     "type": "git",
@@ -67,7 +67,7 @@
     "@koa/router": "^12.0.0",
     "@zhinjs/schema": "~0.0.5-1",
     "@zhinjs/shared": "~0.0.6",
-    "axios": "^1.2.2",
+    "axios": "^1.3.3",
     "chokidar": "^3.5.3",
     "esbuild": "^0.15.5",
     "esbuild-register": "^3.3.3",

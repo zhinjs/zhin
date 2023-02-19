@@ -153,7 +153,7 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
             const content = argv.argv.shift()
             const argDecl = this.args[args.length]
 
-            if (content[0].attrs.text?.[0] !== '-' && Argv.resolveConfig(argDecl?.type).greedy) {
+            if (content[0].attrs.text?.[0] !== '-' && !this.options[content[0].attrs.text] && Argv.resolveConfig(argDecl?.type).greedy) {
                 args.push(Argv.parseValue([content, ...argv.argv].reduce((result, sArr) => {
                     if (result.length) result.push(Element('text',{text:' '}))
                     result.push(...sArr)
@@ -214,13 +214,13 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
     private parseShortcut(argv: Argv) {
         const args = argv.args ||= [], options = argv.options ||= {}
         for (const shortcut of this.shortcuts) {
-            const segment = argv.elements?.length ? argv.elements[0] : undefined
-            if (typeof shortcut.name === 'string' && segment.type === 'text' && segment.attrs.text === shortcut.name) {
+            const content=argv.elements.join('')
+            if (typeof shortcut.name === 'string' && content===shortcut.name) {
                 args.push(...(shortcut.args || []))
                 Object.assign(options, shortcut.options || {})
             }
             if (shortcut.name instanceof RegExp) {
-                const matched = argv.name.match(shortcut.name)
+                const matched = content.match(shortcut.name)
                 if (matched) {
                     matched.forEach((str, index) => {
                         if (index === 0) return

@@ -2,13 +2,15 @@ import {Context} from "@/context";
 import {Session, Zhin} from "@";
 
 export const name = 'pluginManage'
-function getPluginStatus(ctx:Context,session:Session,fullName:string){
-    if(session.bot.options.disable_plugins.includes(fullName)) return '(已停用)'
-    const plugin=ctx.pluginList.find(p=>p.options.fullName===fullName)
-    if(!plugin) return ''
-    const flag:`${keyof Zhin.Adapters}:${string|number}`=`${session.protocol}:${session.bot.self_id}`
-    if(plugin.disableBots.includes(flag)) return '(已停用)'
+
+function getPluginStatus(ctx: Context, session: Session, fullName: string) {
+    if (session.bot.options.disable_plugins.includes(fullName)) return '(已停用)'
+    const plugin = ctx.pluginList.find(p => p.options.fullName === fullName)
+    if (!plugin) return ''
+    const flag: `${keyof Zhin.Adapters}:${string | number}` = `${session.protocol}:${session.bot.self_id}`
+    if (plugin.disableBots.includes(flag)) return '(已停用)'
 }
+
 export function install(ctx: Context) {
     const command = ctx.command('plugin')
         .desc('插件管理')
@@ -16,9 +18,9 @@ export function install(ctx: Context) {
     command.subcommand('plugin.list')
         .desc('显示插件列表')
         .action(({session}) => {
-            return ctx.app.getInstalledPlugins().map((options, idx) => {
-                const installStatus=ctx.app.hasInstall(options.fullName) ? ' (已安装)' : ''
-                let enableStatus=installStatus ? getPluginStatus(ctx,session,options.fullName):''
+            return ctx.app.getInstalledDependencies().map((options, idx) => {
+                const installStatus = ctx.app.hasInstall(options.fullName) ? ' (已安装)' : ''
+                let enableStatus = installStatus ? getPluginStatus(ctx, session, options.fullName) : ''
                 return `${idx + 1}.${options.fullName}${installStatus}${enableStatus} ${options.type}`
             }).join('\n')
         })
@@ -26,7 +28,7 @@ export function install(ctx: Context) {
     command.subcommand('plugin.mount <name:string>')
         .desc('载入指定插件')
         .action(({session}, name) => {
-            const options = ctx.app.getInstalledPlugins().find(p => p.fullName === name)
+            const options = ctx.app.getInstalledDependencies().find(p => p.fullName === name)
             if (!options) return '当前没有该插件'
             try {
                 ctx.app.plugin(name)
@@ -58,8 +60,8 @@ export function install(ctx: Context) {
         })
     command.subcommand('plugin.enable <name:string>')
         .desc('启用指定插件')
-        .auth('admins','master')
-        .action(({options,session}, name) => {
+        .auth('admins', 'master')
+        .action(({options, session}, name) => {
             const plugin = ctx.app.pluginList.find(p => p.options.fullName === name)
             if (!plugin) return '未找到插件：' + name
             session.bot.enable(plugin)
@@ -67,8 +69,8 @@ export function install(ctx: Context) {
         })
     command.subcommand('plugin.disable <name:string>')
         .desc('禁用指定插件')
-        .auth('admins','master')
-        .action(({options,session}, name) => {
+        .auth('admins', 'master')
+        .action(({options, session}, name) => {
             const plugin = ctx.app.pluginList.find(p => p.options.fullName === name)
             if (!plugin) return '未找到插件：' + name
             session.bot.disable(plugin)

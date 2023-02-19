@@ -140,7 +140,7 @@ export class Context extends EventEmitter {
             try {
                 plugin.mount(context)
             } catch (e) {
-                this.app.logger.info(`载入插件(${options.name})失败：${e.massage}`)
+                this.app.logger.info(`载入插件(${options.name})失败：${e.message}`)
                 this.plugins.delete(options.fullName)
                 return this
             }
@@ -300,7 +300,8 @@ export class Context extends EventEmitter {
     service<K extends keyof Zhin.Services, T>(key: K, constructor: Zhin.ServiceConstructor<Zhin.Services[K], T>, options?: T): this
     service<K extends keyof Zhin.Services, T>(key: K, Service?: Zhin.Services[K] | Zhin.ServiceConstructor<Zhin.Services[K], T>, options?: T): Zhin.Services[K] | this {
         if (Service === undefined) {
-            return this.app.services.get(key)
+            if(this.app.services.get(key)) return this.app.services.get(key)
+            Service=this.app.load<Zhin.ServiceConstructor<Zhin.Services[K], T>>(key,'service')
         }
         if (this.app[key]) throw new Error('服务key不能和bot已有属性重复')
         if (this.app.services.has(key)) throw new Error('重复定义服务')

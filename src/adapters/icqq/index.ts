@@ -17,21 +17,14 @@ async function sendMsg(this:Client,target_id:number,target_type:string,content:E
     element = await processMusic.apply(this, [target_type, target_id, element])
     let args:any[]=[]
     if (!element.length) return
-    let func:string
+    let func:string=`send${target_type.replace(/[a-z]/,(str)=>str.toUpperCase())}Msg`
     switch (target_type){
         case 'private':
-            func='sendPrivateMsg'
-            break;
         case 'discuss':
-            func='sendDiscussMsg'
-            args.push(target_id)
-            break;
         case 'group':
-            func='sendGroupMsg'
             args.push(target_id)
             break
         case 'guild':
-            func='sendGuildMsg'
             args.push(...String(target_id).split(':'))
             break
         default:

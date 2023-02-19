@@ -13,7 +13,7 @@ hero:
       text: 试试水
       link: /guide/start
     - theme: alt
-      text: 深入了解
+      text: Api介绍
       link: /api
     - theme: alt
       text: 剖析源码

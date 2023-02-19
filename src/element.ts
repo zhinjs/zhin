@@ -19,14 +19,14 @@ class ElementConstructor {
     name: string = 'Element';
 
     toString(strip = false) {
-        if (this.type === 'text') return Element.escape(this.attrs.text)
+        if (this.type === 'text') return this.attrs.text
         const inner = this.children.map(child => child.toString(strip)).join('')
         if (strip) return inner
         const attrs = Object.entries(this.attrs).map(([key, value]) => {
             if (isNullable(value)) return ''
             if (value === true) return ` ${key}`
             if (value === false) return ` no-${key}`
-            return ` ${key}="${Element.escape('' + value, true)}"`
+            return ` ${key}="${'' + value}"`
         }).join('')
         if (!this.children.length) return `<${this.type}${attrs}/>`
         return `<${this.type}${attrs}>${inner}</${this.type}>`

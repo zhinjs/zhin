@@ -36,7 +36,7 @@ export function install(ctx:Context){
 
     watcher.on('change', (filename) => {
         const changeFileName=path.resolve(process.cwd(),filename)
-        if(path.resolve(process.env.configPath)===changeFileName){
+        if(path.resolve(process.env.configPath||='zhin.yaml')===changeFileName){
             const newOptions:Zhin.Options=Yaml.load(fs.readFileSync(process.env.configPath,"utf8")) as any
             ctx.app.changeOptions(newOptions)
         }else{

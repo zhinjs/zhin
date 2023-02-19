@@ -33,8 +33,10 @@ export function install(ctx:Context){
                 return `已删除:config.${key}`
             }
             try{
-                value=JSON.parse(Element.stringify(value))
-            }catch {}
+                value=JSON.parse(Element.stringify(value.join('')))
+            }catch {
+                value=value.join('') as any
+            }
             set(config,key,value)
             fs.writeFileSync(process.env.configPath,Yaml.dump(config))
             return `修改成功`
