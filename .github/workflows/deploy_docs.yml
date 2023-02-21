@@ -1,18 +1,33 @@
-name: 'github actions build and deploy gh-pages'
-on: [push]
+name: Deploy Docs
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - main
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
+    permissions:
+      pages: write     
+      id-token: write 
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v2.3.1
+      - uses: actions/checkout@v3
         with:
-          persist-credentials: false
-      - name: install and build
-        run:  npm install && npm run docs:build
+          fetch-depth: 0
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - name: Build
+        run: yarn docs:build
+      - uses: actions/configure-pages@v2
+      - uses: actions/upload-pages-artifact@v1
+        with:
+          path: docs/.vitepress/dist
       - name: Deploy
-        uses: JamesIves/github-pages-deploy-action@3.5.9
-        with:
-          ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
-          BRANCH: gh-pages
-          FOLDER: docs/dist
+        id: deployment
+        uses: actions/deploy-pages@v1
