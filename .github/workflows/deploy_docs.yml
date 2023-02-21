@@ -1,4 +1,4 @@
-name: Deploy Docs
+name: CI Deploy Docs
 on:
   workflow_dispatch: {}
   push:
