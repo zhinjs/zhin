@@ -2,5 +2,11 @@ name: CI
 on:
   - push
 jobs:
-  - name: Upload coverage reports to Codecov
-    uses: codecov/codecov-action@v3
+  codeCov:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v3
