@@ -1,6 +1,6 @@
 {
   "name": "zhin",
-  "version": "2.0.2-79",
+  "version": "2.0.2-80",
   "description": "知音",
   "main": "lib/index.js",
   "bin": {
@@ -72,7 +72,7 @@
     "esbuild": "^0.15.5",
     "esbuild-register": "^3.3.3",
     "event-deliver": "^1.0.2",
-    "icqq": "^0.0.13",
+    "icqq": "^0.0.16",
     "js-yaml": "^4.1.0",
     "koa": "^2.13.4",
     "koa-bodyparser": "^4.3.0",
