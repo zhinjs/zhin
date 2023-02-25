@@ -258,7 +258,7 @@ export class Zhin extends Context {
             ])
             return {
                 ...result,
-                setup:result.setup||true,
+                setup:!!result.setup,
                 name:data.name.replace(/(zhin-|^@zhinjs\/)(plugin|service|adapter)-/, ''),
                 fullName:data.name,
             }
@@ -301,7 +301,7 @@ export class Zhin extends Context {
         }
         if (fs.existsSync(path.resolve(__dirname, `${type}s`))) {
             result.push(...fs.readdirSync(path.resolve(__dirname, `${type}s`))
-                .map((name) => this.load<Plugin.Options>(name.replace(/\.(d\.)?[d|j]s$/, ''), 'plugin')))
+                .map((name) => this.load<Plugin.Options>(name.replace(/\.(d\.)?[d|j]s$/, ''), 'plugin',true)))
         }
         return result
     }
@@ -321,7 +321,7 @@ export class Zhin extends Context {
         return this
     }
     // 加载指定名称，指定类型的模块
-    public load<R = object>(name: string, type: string,setup:boolean=true): R {
+    public load<R = object>(name: string, type: string='plugin',setup?:boolean): R {
         function getListenDir(modulePath: string) {
             if (modulePath.endsWith(path.sep+'index')) return modulePath.replace(path.sep+'index', '')
             for (const extension of ['ts', 'js', 'cjs', 'mjs']) {
@@ -412,7 +412,7 @@ export class Zhin extends Context {
         }
         this.getInstalledDependencies().forEach(plugin=>{
             try {
-                this.plugin(plugin.fullName)
+                this.plugin(plugin.fullName,true)
             } catch (e) {
                 console.log(e.stack)
                 this.app.logger.warn(`自动载入插件(${plugin.name})失败：${e.message}`)

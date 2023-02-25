@@ -111,7 +111,7 @@ export class Context extends EventEmitter {
     // 为当前上下文添加插件
     plugin(name: string, setup?: boolean): Plugin | this
     plugin<P extends Plugin.Install>(plugin: P): this
-    plugin<P extends Plugin.Install>(entry: string | P, setup: boolean=true) {
+    plugin<P extends Plugin.Install>(entry: string | P, setup?: boolean) {
         let options: Plugin.Options
         if (typeof entry === 'string') {
             const result = this.plugins.get(entry)
