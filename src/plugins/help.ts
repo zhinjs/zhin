@@ -1,6 +1,4 @@
 import {Context} from "@/context";
-import {h} from '@/element'
-
 export const name = 'systemHelper'
 
 export function install(ctx: Context) {

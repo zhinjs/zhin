@@ -1,4 +1,5 @@
 import {getPackageInfo, remove} from "@zhinjs/shared";
+import * as path from 'path'
 import {Dispose} from "@/dispose";
 import {Context} from "@/context";
 import {Zhin} from "@/zhin";
@@ -11,6 +12,7 @@ export class Plugin{
     public name:string
     // 可用状态
     public status:boolean
+    public dependencies:string[]=[]
     public disableBots:`${keyof Zhin.Adapters}:${string|number}`[]=[]
     constructor(public options:Plugin.Options,public info:Plugin.Info) {
         this.name=options.name
@@ -30,6 +32,8 @@ export class Plugin{
         this.context=ctx
         ctx[Context.plugin]=this
         const result=this.options.install.call(this,ctx)
+
+        this.dependencies=this.initDependencies(this.options.fullPath)
         if(result && typeof result ==="function"){
             const dispose=()=>{
                 result()
@@ -37,6 +41,12 @@ export class Plugin{
             }
             ctx.disposes.push(dispose)
         }
+    }
+    private initDependencies(filePath:string){
+        if(!require.cache[filePath]) return []
+        return [filePath].concat((require.cache[filePath].children||[]).map(mod=>mod.filename)).filter(filePath=>{
+            return !filePath.includes('node_modules') &&  !this.context.app.pluginList.filter(p=>p!==this).map(p=>p.options.fullPath).includes(filePath)
+        })
     }
     // 卸载插件
     unmount(){

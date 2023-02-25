@@ -361,27 +361,25 @@ export class Zhin extends Context {
         ].filter(Boolean))
         if (!resolved) throw new Error(`未找到${type || 'plugin'}(${name})`)
         const packageInfo = getPackageInfo(resolved)
-        let result: Record<string, any> = {}
-        if (packageInfo) {
-            Object.assign(result, packageInfo)
-            if (packageInfo.setup || setup) {
-                result.install = () => {
-                    wrapExport(resolved)
-                }
-            } else {
-                Object.assign(result, wrapExport(resolved))
+        let result: Record<string, any> = {setup}
+        if (packageInfo?.setup || setup) {
+            result.install = () => {
+                wrapExport(resolved)
             }
         } else {
             Object.assign(result, wrapExport(resolved))
+        }
+        if (packageInfo) {
+            Object.assign(result, packageInfo)
         }
         let fullName = resolved.replace(path.join(__dirname, `${type || 'plugin'}s`), '')
         if (this.options[`${type || 'plugin'}_dir`]) {
             fullName = fullName.replace(path.resolve(this.options[`${type || 'plugin'}_dir`]), '')
         }
-        fullName = fullName.split(path.sep)
-            .filter(Boolean).join(':')
+        fullName = fullName
+            .replace(path.sep,'')
+            .replace(new RegExp(`${path.sep}index`),'')
             .replace(/\.(d\.)?[t|j]s$/, '')
-            .replace(/:index$/,'')
         const pluginType=getType(resolved)
         return {
             ...result,
@@ -416,7 +414,9 @@ export class Zhin extends Context {
             try {
                 this.plugin(plugin.fullName)
             } catch (e) {
-                this.logger.warn(e.message, e.stack)
+                console.log(e.stack)
+                this.app.logger.warn(`自动载入插件(${plugin.name})失败：${e.message}`)
+                this.plugins.delete(plugin.fullName)
             }
         })
         await this.emitSync('ready')

@@ -93,9 +93,6 @@ export class Context extends EventEmitter {
             if (plugin.context !== this) result.push(...plugin.context.pluginList)
             return result
         }, [...this.plugins.values()])
-        if (this[Context.childKey]) {
-            result.push(...this[Context.childKey].map(ctx => ctx.pluginList).flat())
-        }
         return result
     }
 
@@ -119,12 +116,7 @@ export class Context extends EventEmitter {
         if (typeof entry === 'string') {
             const result = this.plugins.get(entry)
             if (result) return result
-            try {
-                options = this.app.load<Plugin.Options>(entry, 'plugin', setup)
-            } catch (e) {
-                this.app.logger.warn(e.message)
-                return this
-            }
+            options = this.app.load<Plugin.Options>(entry, 'plugin', setup)
         } else {
             options = Plugin.defineOptions(entry)
         }
@@ -137,13 +129,7 @@ export class Context extends EventEmitter {
                 return
             }
             this.plugins.set(options.fullName, plugin)
-            try {
-                plugin.mount(context)
-            } catch (e) {
-                this.app.logger.info(`载入插件(${options.name})失败：${e.message}`)
-                this.plugins.delete(options.fullName)
-                return this
-            }
+            plugin.mount(context)
             this.app.logger.info(`已载入插件:${options.name}`)
             this.app.emit('plugin-add', plugin)
         }
@@ -399,7 +385,9 @@ export class Context extends EventEmitter {
         this.emit('dispose')
         while (this.disposes.length) {
             const dispose = this.disposes.shift()
-            dispose()
+            try {
+                dispose()
+            }catch{}
         }
     }
     // 获取所有可用的组件
