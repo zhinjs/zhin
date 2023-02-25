@@ -1,4 +1,3 @@
-import path_1, {join, resolve} from 'path'
 import {ref, watch} from 'obj-observer'
 import {fork, ChildProcess} from "child_process";
 import {getLogger, configure, Configuration} from "log4js";
@@ -50,8 +49,8 @@ export function isConstructor<R, T>(value: any): value is (new (...args: any[]) 
 
 export function createWorker(options:Zhin.WorkerOptions) {
     const {entry='lib',mode='production',config:configPath='zhin.yaml'}=options||{}
-    if (!fs.existsSync(join(process.cwd(),configPath))) fs.writeFileSync(join(process.cwd(), configPath), Yaml.dump(options))
-    cp = fork(join(__dirname, '../worker.js'), [], {
+    if (!fs.existsSync(path.join(process.cwd(),configPath))) fs.writeFileSync(path.join(process.cwd(), configPath), Yaml.dump(options))
+    cp = fork(path.join(__dirname, '../worker.js'), [], {
         env: {
             mode,
             entry,
@@ -259,6 +258,7 @@ export class Zhin extends Context {
             ])
             return {
                 ...result,
+                setup:result.setup||true,
                 name:data.name.replace(/(zhin-|^@zhinjs\/)(plugin|service|adapter)-/, ''),
                 fullName:data.name,
             }
@@ -272,7 +272,7 @@ export class Zhin extends Context {
             }
         }
         const loadDirectory=(baseDir)=>{
-            const base = path_1.resolve(baseDir,'node_modules')
+            const base = path.resolve(baseDir,'node_modules')
             const files = fs.existsSync(base)?fs.readdirSync(base):[]
             for (const name of files) {
                 const base2 = base + '/' + name
@@ -287,20 +287,20 @@ export class Zhin extends Context {
                     loadPackage(name)
                 }
             }
-            if(path_1.dirname(baseDir) !==baseDir){
-                loadDirectory(path_1.dirname(baseDir))
+            if(path.dirname(baseDir) !==baseDir){
+                loadDirectory(path.dirname(baseDir))
             }
         }
-        const startDir=path_1.dirname(__dirname)
+        const startDir=path.dirname(__dirname)
         loadDirectory(startDir)
-        if (fs.existsSync(resolve(process.cwd(), this.options.plugin_dir))) {
+        if (fs.existsSync(path.resolve(process.cwd(), this.options.plugin_dir))) {
             result.push(
-                ...fs.readdirSync(resolve(process.cwd(), this.options.plugin_dir))
+                ...fs.readdirSync(path.resolve(process.cwd(), this.options.plugin_dir))
                     .map((name) => this.load<Plugin.Options>(name.replace(/\.(d\.)?[d|j]s$/, ''), 'plugin'))
             )
         }
-        if (fs.existsSync(resolve(__dirname, `${type}s`))) {
-            result.push(...fs.readdirSync(resolve(__dirname, `${type}s`))
+        if (fs.existsSync(path.resolve(__dirname, `${type}s`))) {
+            result.push(...fs.readdirSync(path.resolve(__dirname, `${type}s`))
                 .map((name) => this.load<Plugin.Options>(name.replace(/\.(d\.)?[d|j]s$/, ''), 'plugin')))
         }
         return result
@@ -321,7 +321,7 @@ export class Zhin extends Context {
         return this
     }
     // 加载指定名称，指定类型的模块
-    public load<R = object>(name: string, type: string,setup?:boolean): R {
+    public load<R = object>(name: string, type: string,setup:boolean=true): R {
         function getListenDir(modulePath: string) {
             if (modulePath.endsWith(path.sep+'index')) return modulePath.replace(path.sep+'index', '')
             for (const extension of ['ts', 'js', 'cjs', 'mjs']) {
@@ -629,10 +629,10 @@ function createZhinAPI() {
             return plugin.options.fullPath.match(reg)
         })
         if(parent){
-            parent.context.plugin(pluginFullPath,true)
+            parent.context.plugin(pluginFullPath)
             return app.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath).context
         }
-        app.plugin(pluginFullPath,true)
+        app.plugin(pluginFullPath)
         return app.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath).context
     }
 
