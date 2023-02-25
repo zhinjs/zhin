@@ -1,9 +1,8 @@
 name: CI Publish Package
 on:
-  workflow_dispatch: {}
   push:
     tags:
-      - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+      - 'v*'
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -13,7 +12,10 @@ jobs:
         with:
             node-version: '16.x'
             registry-url: 'https://registry.npmjs.org'
+      - run: npm install
+      - name: Build
       - run: npm run build
+      - name: Publish to npmjs
       - run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
