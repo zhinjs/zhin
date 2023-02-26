@@ -22,7 +22,7 @@ function reloadDependency(plugin: Plugin, changeFile: string, withErr?: boolean)
             delete require.cache[plugin.options.fullPath + '/index.mjs']
         }
     }
-    const newPlugin = ctx.app.load<Plugin.Options>(plugin.options.fullPath, 'plugin', plugin.options.setup)
+    const newPlugin = ctx.app.load(plugin.options.fullPath, 'plugin', plugin.options.setup)
     try {
         context.parent.plugin(newPlugin)
         ctx.app.logger.info(`已重载插件:${newPlugin.name}`)

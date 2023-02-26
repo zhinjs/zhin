@@ -238,11 +238,11 @@ export class Zhin extends Context {
     static getChannelId(event: Dict) {
         return [event.message_type, event.group_id || event.discuss_id || event.sender.user_id].join(':') as ChannelId
     }
-    // 扫描项目依赖中的所有插件
-    getInstalledDependencies(type='plugin') {
-        const result: Plugin.Options[] = []
-        const loadManifest=(name) => {
-            const filename = require.resolve(name + '/package.json')
+    // 扫描项目依赖中的已安装的模块
+    getInstalledModules<T extends Zhin.ModuleType>(moduleType:T):Zhin.Modules[T][] {
+        const result: Zhin.Modules[T][] = []
+        const loadManifest=(packageName) => {
+            const filename = require.resolve(packageName + '/package.json')
             const meta = JSON.parse(fs.readFileSync(filename, 'utf8'))
             meta.dependencies ||= {}
             return meta
@@ -265,7 +265,7 @@ export class Zhin extends Context {
         }
         const loadPackage=(name)=>{
             try {
-                result.push(this.load(parsePackage(name).fullName,type))
+                result.push(this.load(parsePackage(name).fullName,moduleType))
             } catch (error) {
                 this.logger.warn('failed to parse %c', name)
                 this.logger.warn(error)
@@ -279,11 +279,11 @@ export class Zhin extends Context {
                 if (name==='@zhinjs') {
                     const files = fs.readdirSync(base2)
                     for (const name2 of files) {
-                        if (name2.startsWith(`${type}-`)) {
+                        if (name2.startsWith(`${moduleType}-`)) {
                             loadPackage(name + '/' + name2)
                         }
                     }
-                } else if(name.startsWith(`zhin-${type}-`)){
+                } else if(name.startsWith(`zhin-${moduleType}-`)){
                     loadPackage(name)
                 }
             }
@@ -296,12 +296,12 @@ export class Zhin extends Context {
         if (fs.existsSync(path.resolve(process.cwd(), this.options.plugin_dir))) {
             result.push(
                 ...fs.readdirSync(path.resolve(process.cwd(), this.options.plugin_dir))
-                    .map((name) => this.load<Plugin.Options>(name.replace(/\.(d\.)?[d|j]s$/, ''), 'plugin'))
+                    .map((name) => this.load(name.replace(/\.(d\.)?[d|j]s$/, ''), moduleType))
             )
         }
-        if (fs.existsSync(path.resolve(__dirname, `${type}s`))) {
-            result.push(...fs.readdirSync(path.resolve(__dirname, `${type}s`))
-                .map((name) => this.load<Plugin.Options>(name.replace(/\.(d\.)?[d|j]s$/, ''), 'plugin',true)))
+        if (fs.existsSync(path.resolve(__dirname, `${moduleType}s`))) {
+            result.push(...fs.readdirSync(path.resolve(__dirname, `${moduleType}s`))
+                .map((name) => this.load(name.replace(/\.(d\.)?[d|j]s$/, ''), moduleType,true)))
         }
         return result
     }
@@ -321,7 +321,7 @@ export class Zhin extends Context {
         return this
     }
     // 加载指定名称，指定类型的模块
-    public load<R = object>(name: string, type: string='plugin',setup?:boolean): R {
+    public load<T extends Zhin.ModuleType>(name: string, moduleType: T,setup?:boolean): Zhin.Modules[T] {
         function getListenDir(modulePath: string) {
             if (modulePath.endsWith(path.sep+'index')) return modulePath.replace(path.sep+'index', '')
             for (const extension of ['ts', 'js', 'cjs', 'mjs']) {
@@ -347,19 +347,19 @@ export class Zhin extends Context {
         }
 
         const getType = (resolvePath: string) => {
-            if (resolvePath.includes(`@zhinjs/${type || 'plugin'}-`)) return 'official'
-            if (resolvePath.includes(`zhin-${type || 'plugin'}-`)) return 'community'
+            if (resolvePath.includes(`@zhinjs/${moduleType}-`)) return 'official'
+            if (resolvePath.includes(`zhin-${moduleType}-`)) return 'community'
             if (resolvePath.startsWith(path.resolve(__dirname, 'plugins'))) return 'built'
             return 'custom'
         }
         const resolved = getModulesPath([
-            this.options[`${type || 'plugin'}_dir`] ? path.resolve(this.options[`${type || 'plugin'}_dir`], name) : null,// 用户自定义插件/服务/游戏目录
-            path.join(__dirname, `${type || 'plugin'}s`, name), // 内置插件/服务/游戏目录
-            `@zhinjs/${type || 'plugin'}-${name}`,// 官方插件/服务/游戏模块
-            `zhin-${type || 'plugin'}-${name}`,// 社区插件/服务/游戏模块
+            this.options[`${moduleType}_dir`] ? path.resolve(this.options[`${moduleType}_dir`], name) : null,// 用户自定义插件/服务/游戏目录
+            path.join(__dirname, `${moduleType}s`, name), // 内置插件/服务/游戏目录
+            `@zhinjs/${moduleType}-${name}`,// 官方插件/服务/游戏模块
+            `zhin-${moduleType}-${name}`,// 社区插件/服务/游戏模块
             name
         ].filter(Boolean))
-        if (!resolved) throw new Error(`未找到${type || 'plugin'}(${name})`)
+        if (!resolved) throw new Error(`未找到${moduleType}(${name})`)
         const packageInfo = getPackageInfo(resolved)
         let result: Record<string, any> = {setup}
         if (packageInfo?.setup || setup) {
@@ -372,9 +372,9 @@ export class Zhin extends Context {
         if (packageInfo) {
             Object.assign(result, packageInfo)
         }
-        let fullName = resolved.replace(path.join(__dirname, `${type || 'plugin'}s`), '')
-        if (this.options[`${type || 'plugin'}_dir`]) {
-            fullName = fullName.replace(path.resolve(this.options[`${type || 'plugin'}_dir`]), '')
+        let fullName = resolved.replace(path.join(__dirname, `${moduleType}s`), '')
+        if (this.options[`${moduleType}_dir`]) {
+            fullName = fullName.replace(path.resolve(this.options[`${moduleType}_dir`]), '')
         }
         fullName = fullName
             .replace(path.sep,'')
@@ -410,11 +410,10 @@ export class Zhin extends Context {
                 this.logger.warn(e.message, e.stack)
             }
         }
-        this.getInstalledDependencies().forEach(plugin=>{
+        this.getInstalledModules('plugin').forEach(plugin=>{
             try {
                 this.plugin(plugin.fullName,true)
             } catch (e) {
-                console.log(e.stack)
                 this.app.logger.warn(`自动载入插件(${plugin.name})失败：${e.message}`)
                 this.plugins.delete(plugin.fullName)
             }
@@ -539,6 +538,12 @@ export namespace Zhin {
         [P in keyof Zhin.Adapters]?: AdapterOptionsType<Adapters[P]>
     }
     export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal" | "mark" | "off"
+    export interface Modules{
+        plugin:Plugin.Options
+        service:Services[keyof Services]|ServiceConstructor<Services[keyof Services]>
+        adapter:Adapter.Install
+    }
+    export type ModuleType=keyof Modules
     type KVMap<V = any, K extends string = string> = Record<K, V>
 
     export interface Options extends KVMap {
@@ -661,7 +666,7 @@ function createZhinAPI() {
             const newVal=getValue(value, pathArr)
             if(!deepEqual(backupData,newVal)){
                 plugin.unmount()
-                const newPlugin=app.load<Plugin.Install>(plugin.options.fullPath,'plugin')
+                const newPlugin=app.load(plugin.options.fullPath,'plugin')
                 parent.plugin(newPlugin)
                 app.logger.info(`已重载插件:${newPlugin.name}`)
             }

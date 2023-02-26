@@ -116,7 +116,7 @@ export class Context extends EventEmitter {
         if (typeof entry === 'string') {
             const result = this.plugins.get(entry)
             if (result) return result
-            options = this.app.load<Plugin.Options>(entry, 'plugin', setup)
+            options = this.app.load(entry, 'plugin', setup)
         } else {
             options = Plugin.defineOptions(entry)
         }
@@ -262,7 +262,7 @@ export class Context extends EventEmitter {
     adapter<K extends keyof Zhin.Adapters>(adapter: K, Construct?: AdapterConstructs[K] | AdapterOptions, options?: AdapterOptions) {
         if (!Construct && !options) return this.app.adapters.get(adapter)
         if (typeof Construct !== "function") {
-            const result = this.app.load<Adapter.Install>(adapter, 'adapter',false)
+            const result = this.app.load(adapter, 'adapter',false)
             if (result && result.install) {
                 result.install(this, options)
             }
@@ -287,7 +287,7 @@ export class Context extends EventEmitter {
     service<K extends keyof Zhin.Services, T>(key: K, Service?: Zhin.Services[K] | Zhin.ServiceConstructor<Zhin.Services[K], T>, options?: T): Zhin.Services[K] | this {
         if (Service === undefined) {
             if(this.app.services.get(key)) return this.app.services.get(key)
-            Service=this.app.load<Zhin.ServiceConstructor<Zhin.Services[K], T>>(key,'service',false)
+            Service=this.app.load(key,'service',false) as Zhin.Services[K] | Zhin.ServiceConstructor<Zhin.Services[K], T>
         }
         if (this.app[key]) throw new Error('服务key不能和bot已有属性重复')
         if (this.app.services.has(key)) throw new Error('重复定义服务')
