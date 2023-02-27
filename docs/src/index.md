@@ -10,13 +10,13 @@ hero:
   tagline: 轻量、优雅、热更，拥抱icqq
   actions:
     - theme: brand
-      text: 试试水
+      text: 开始上手
       link: /guide/start
     - theme: alt
-      text: Api介绍
+      text: 查看API
       link: /api
     - theme: alt
-      text: 剖析源码
+      text: 仓库地址
       link: https://github.com/zhinjs/zhin
 
 features:

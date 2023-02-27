@@ -12,7 +12,7 @@ export default defineConfigWithTheme({
     ignoreDeadLinks: true,
     themeConfig: {
         nav: [
-            { text: '入门', link: '/guide/index', activeMatch: '/guide/' },
+            { text: '开始', link: '/guide/index', activeMatch: '/guide/' },
             { text: '配置', link: '/config/common', activeMatch: '/config/' },
             // { text: 'API', link: '/api/zhin', activeMatch: '/api/' },
             // { text: '插件市场', link: '/market/', activeMatch: '/market/' },
@@ -39,8 +39,8 @@ export default defineConfigWithTheme({
                     items:[
                         {text:`索引`,link:'/guide/index'},
                         {text:`准备工作`,link:'/guide/prepare'},
-                        {text:`试试水`,link:'/guide/start'},
-                        {text:`写个复读🐔`,link:'/guide/repeater'},
+                        {text:`安装`,link:'/guide/start'},
+                        {text:`HelloWorld`,link:'/guide/repeater'},
                     ]
                 },
                 {
