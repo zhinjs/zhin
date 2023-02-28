@@ -303,7 +303,7 @@ export namespace Element {
         elements.forEach((element) => {
             const {type, attrs, children} = element
             let component:Component<S>|Fragment = rules[type] ?? rules.default ?? true
-            if (typeof component!=="boolean" && component instanceof Element) {
+            if (typeof component!=="boolean" && typeof component==='object' && !(component instanceof Element)) {
                 const {render,...others}=component
                 component =render.apply(Object.assign(session,others) as S,[attrs, children]) as Fragment
             }
@@ -319,14 +319,14 @@ export namespace Element {
     export async function transformAsync<S = never>(source: string, rules: Dict<Component>, session?: S): Promise<Element[]>
     export async function transformAsync<S = never>(source: Element[], rules: Dict<Component>, session?: S): Promise<Element[]>
     export async function transformAsync<S>(source: string | Element[], rules: Dict<Component>, session?: S) {
-        const elements = typeof source === 'string' ? parse(source, source) : source
+        const elements = typeof source === 'string' ? parse(source, session) : source
         const result: Element[] = []
         for (const element of elements) {
             const {type, attrs, children} = element
             let component:Component<S>|Fragment = rules[type] ?? rules.default ?? true
-            if (typeof component!=="boolean" && component instanceof Element) {
+            if (typeof component!=="boolean" && typeof component==='object' && !(component instanceof Element)) {
                 const {render,...others}=component
-                component =render.apply(Object.assign(session,others) as S,[attrs, children]) as Fragment
+                component =await render.apply(Object.assign(session,others) as S,[attrs, children]) as Fragment
             }
             if (component === true) {
                 result.push(element)
@@ -336,7 +336,6 @@ export namespace Element {
         }
         return result
     }
-
     export let warn: (message: string) => void = () => {
     }
 }
