@@ -25,8 +25,8 @@ export namespace Argv{
         user_id:string|number
         face: Element
         file: Element
-        voice: Element
-        audio: Element
+        record: Element
+        video:Element
         image: Element
         number: number
         boolean: boolean
@@ -122,14 +122,14 @@ export namespace Argv{
         if(elem && elem.type==='image') return elem
         throw new Error('无效的图片')
     })
-    createDomain('voice', (source) => {
+    createDomain('video', (source) => {
         const elem=source[0]
-        if(elem && elem.type==='voice') return elem
-        throw new Error('无效的音频')
+        if(elem && elem.type==='video') return elem
+        throw new Error('无效的视频')
     })
-    createDomain('audio', (source) => {
+    createDomain('record', (source) => {
         const elem=source[0]
-        if(elem && elem.type==='audio') return elem
+        if(elem && elem.type==='record') return elem
         throw new Error('无效的语音')
     })
     createDomain('number', (source) => {

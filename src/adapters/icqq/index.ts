@@ -10,13 +10,24 @@ import {Element} from '@/element'
 import {Zhin} from "@/zhin";
 import {NSession, Session} from "@/session";
 import {EventMap} from "icqq/lib/events";
-import {processMessage, processMusic, toElement} from "@/adapters/icqq/utils";
+import {processMessage, toElement} from "@/adapters/icqq/utils";
 
 async function sendMsg(this:Client,target_id:number,target_type:string,content:Element[]){
-    let {element, quote} = await processMessage.apply(this, [content])
-    element = await processMusic.apply(this, [target_type, target_id, element])
+    let {element, quote,music,share} = await processMessage.apply(this, [content])
     let args:any[]=[]
-    if (!element.length) return
+    if (!element.length && (!music||!share)) throw new Error('发送消息不受支持')
+    if(music||share) {
+        const target=target_type==='group'?this.pickGroup(target_id):this.pickFriend(target_id)
+        if(music) await target.shareMusic(music.attrs.type,music.attrs.id)
+        if(share) await target.shareUrl(share.attrs as any)
+        return {
+            message_id:'',
+            from_id:this.uin,
+            to_id:target_id,
+            type:target_type as Bot.MessageType,
+            elements:content
+        }
+    }
     let func:string=`send${target_type.replace(/[a-z]/,(str)=>str.toUpperCase())}Msg`
     switch (target_type){
         case 'private':

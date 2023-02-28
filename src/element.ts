@@ -91,9 +91,7 @@ export namespace Element {
         image:{src:string|Buffer|Readable},
         record:{src:string|Buffer|Readable},
         video:{src:string|Buffer|Readable},
-        audio:{src:string|Buffer|Readable},
         text:{text:string},
-        forward:{}
         mention:{user_id:string|number}
         face:{id:number}
         node:{user_id:string,user_name?:string,time?:number,message?:Element.Fragment[]}

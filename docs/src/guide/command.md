@@ -51,8 +51,8 @@ ctx.command('echo <arg1> [...rest]')
 - string： 普通文本，不可带空格
 - mention： 一个At消息段
 - face： 一个表情
-- voice： 一段音频
-- audio： 一条语音
+- record： 一段音频
+- video： 一段视频
 - image： 一张图片
 - number： 数值类型
 - boolean： 布尔值

@@ -387,7 +387,7 @@ export class Zhin extends Context {
             desc: result.desc,
             using: result.using ||= [],
             type: pluginType,
-            fullName: result.fullName || fullName,
+            fullName: fullName,
             name: result.name || fullName,
             fullPath: getListenDir(resolved)
         } as any
@@ -412,7 +412,7 @@ export class Zhin extends Context {
         }
         this.getInstalledModules('plugin').forEach(plugin=>{
             try {
-                this.plugin(plugin.fullName,true)
+                this.plugin(plugin.fullName,plugin.setup)
             } catch (e) {
                 this.app.logger.warn(`自动载入插件(${plugin.name})失败：${e.message}`)
                 this.plugins.delete(plugin.fullName)
