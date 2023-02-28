@@ -4,6 +4,7 @@ import {getLogger, configure, Configuration} from "log4js";
 import * as Yaml from 'js-yaml'
 import * as path from 'path'
 import * as fs from 'fs'
+export const version=require('../package.json').version
 import {
     deepClone,
     deepMerge,
@@ -387,7 +388,7 @@ export class Zhin extends Context {
             desc: result.desc,
             using: result.using ||= [],
             type: pluginType,
-            fullName: fullName,
+            fullName: ["official","community"].includes(pluginType)?result.fullName||fullName:fullName,
             name: result.name || fullName,
             fullPath: getListenDir(resolved)
         } as any

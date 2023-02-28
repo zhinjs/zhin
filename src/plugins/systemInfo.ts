@@ -3,6 +3,7 @@ import {resolve as PathResolve, dirname} from "path";
 import * as readline from 'readline'
 import {arch, cpus, freemem, totalmem, type} from "os";
 import {Time, useContext} from "@";
+import {version} from "@";
 
 export const name = 'systemInfo'
 const ctx = useContext()
@@ -95,6 +96,7 @@ ctx.command('status')
         const cpu = cpus()[0]
         return [
             '当前状态:',
+            `zhin版本：${version}`,
             `系统架构:${type()}  ${arch()}`,
             `CPU架构:${cpus().length}核 ${cpu.model}`,
             `内存:${format(usedMem)}/${format(totalMem)}(${(usedMem / totalMem * 100).toFixed(2)}%)`,
