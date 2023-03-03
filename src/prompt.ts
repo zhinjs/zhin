@@ -35,6 +35,25 @@ export class Prompt{
             }
         })
     }
+    async any(message:Element.Fragment='请输入'){
+        return new Promise<Element[]>((resolve)=>{
+            try{
+                this.session.reply(message)
+                const dispose = this.session.middleware(async (session) => {
+                    resolve(session.elements)
+                    dispose()
+                    clearTimeout(timer)
+                })
+                const timer = setTimeout(() => {
+                    this.session.reply('输入超时')
+                    resolve([Element('text',{text:''})])
+                }, this.timeout)
+            }catch (e){
+                this.session.reply(e.message)
+                resolve([Element('text',{text:''})])
+            }
+        })
+    }
     text(message:Element.Fragment='请输入文本',initial=''){
         return this.$prompt({
             type:'text',

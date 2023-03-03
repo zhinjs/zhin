@@ -165,9 +165,9 @@ export class Zhin extends Context {
         })
         this.use(Component)
         this.middleware(async (session,next) => {
-            session.elements=await session.render()
             const result=await session.execute()
             if(!result) return next()
+            session.elements=await session.render(result)
             return session.reply(result)
 
         })

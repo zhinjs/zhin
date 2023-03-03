@@ -23,7 +23,12 @@ export function toElement<S>(msgList: Sendable, ctx?: S) {
     return result
 }
 
-const allowElement = ['text', 'at','record','video', 'image', 'face', 'xml', 'json', 'rps', 'dice']
+const allowElement = [
+    'face', 'text', 'image',// 基础类
+    'rps', 'dice', 'poke', 'mention', 'mention_all','at', // 功能类
+    'video','voice', 'file', 'record',// 音视频类
+    'xml', 'json', 'location', // 分享类
+]
 
 export function fromElement(elementList: Element[]) {
     return elementList.map((element) => {
@@ -65,13 +70,7 @@ export async function processMessage(this: Client, message: Element.Fragment, so
     if(forwardNodes.length && segments.length) throw new Error('只能单独发送转发节点')
     let quote = segments.find(e => e.type === 'reply') as Element
     if (quote) remove(segments, quote)
-    segments = segments.filter(n => [
-        'face', 'text', 'image',// 基础类
-        'rpx', 'dice', 'poke', 'mention', 'mention_all', // 功能类
-        'voice', 'file', 'record',// 音视频类
-        'forward','node',// 转发类
-        'music', 'share', 'xml', 'json', 'location', // 分享类
-    ].includes(n.type))
+    segments = segments.filter(n => allowElement.includes(n.type))
     const element = fromElement(segments)
     if (forwardNodes.length) element.unshift(
         // 构造转发消息

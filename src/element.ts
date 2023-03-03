@@ -26,7 +26,7 @@ class ElementConstructor {
             if (isNullable(value)) return ''
             if (value === true) return ` ${key}`
             if (value === false) return ` no-${key}`
-            return ` ${key}="${'' + value}"`
+            return ` ${key}='${Element.escape('' + value)}'`
         }).join('')
         if (!this.children.length) return `<${this.type}${attrs}/>`
         return `<${this.type}${attrs}>${inner}</${this.type}>`
@@ -103,6 +103,8 @@ export namespace Element {
 
     export function escape(source: string, inline = false) {
         const result = source
+            .replace('"','\"')
+            .replace("'","\'")
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
@@ -113,6 +115,8 @@ export namespace Element {
 
     export function unescape(source: string) {
         return source
+            .replace('\"','"')
+            .replace("\'","'")
             .replace(/&lt;/g, '<')
             .replace(/&gt;/g, '>')
             .replace(/&quot;/g, '"')
