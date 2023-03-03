@@ -19,8 +19,6 @@ interface Message {
     body: any,
     times?:number
 }
-ctx.command('send [msg:any]')
-    .action((_,c)=>c)
 exitCommand && ctx
     .command(exitCommand === true ? 'exit' : exitCommand)
     .desc('关闭bot')
