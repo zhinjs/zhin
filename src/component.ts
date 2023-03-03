@@ -58,7 +58,11 @@ export namespace Component {
     export function install(ctx: Context) {
         // 内置组件
         ctx
-            .component('template', (attrs, children) => children)
+            .component('template', defineComponent({
+                render(attrs, children){
+                    return children
+                }
+            }))
             .component('execute', defineComponent({
                 render(attrs, children) {
                     return this.execute(children)
@@ -87,7 +91,6 @@ export namespace Component {
                 },
                 render() {
                     let ms = this.value || Date.now()
-                    // @ts-ignore
                     return Time.template(this.format || 'yyyy-MM-dd hh:mm:ss', new Date(ms))
                 }
             }))

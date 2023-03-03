@@ -109,7 +109,7 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
         })
     }
 
-    async execute(argv: Element[] | Argv = this.elements) {
+    async execute(argv: Element[] | Argv = this.elements):Promise<Element.Fragment> {
         if (Array.isArray(argv)) {
             let data = Argv.parse<P,E>(argv, this)
             if (!data) return
@@ -122,14 +122,14 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
             argv = data
         }
         const command = this.app.findCommand(argv)
-        if (!command) return
+        if (!command) return false
         const result = await command.execute(argv)
-        if (!result || typeof result === 'boolean') return
-        if (Array.isArray(result) && !result.length) return
+        if (!result || typeof result === 'boolean') return false
+        if (Array.isArray(result) && !result.length) return false
         return result
     }
-
-    async render(elements: Element[] = this.elements): Promise<Element[]> {
+    // 渲染组件模板成基础元素AST树
+    async render(elements: Element.Fragment = this.elements): Promise<Element[]> {
         const components=this.app.getSupportComponents(this as NSession<P>)
         return await Element.transformAsync(elements, components, Zhin.createContext(this))
     }

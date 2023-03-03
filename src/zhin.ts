@@ -167,8 +167,7 @@ export class Zhin extends Context {
         this.middleware(async (session,next) => {
             const result=await session.execute()
             if(!result) return next()
-            session.elements=await session.render(result)
-            return session.reply(result)
+            return session.reply(await session.render(result))
 
         })
         return new Proxy(this, {

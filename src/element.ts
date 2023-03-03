@@ -298,11 +298,14 @@ export namespace Element {
             return element.toString()
         }).join('')
     }
-
-    export function transform<S = never>(source: string, rules: Dict<Component>, session?: S): string
-    export function transform<S = never>(source: Element[], rules: Dict<Component>, session?: S): Element[]
     export function transform<S>(source: string | Element[], rules: Dict<Component>, session?: S) {
-        const elements = typeof source === 'string' ? parse(source, session) : source
+        const elements=[].concat(source).reduce((result:Element[],item:string|boolean|number|Element)=>{
+            if(Element.isElement(item)) result.push(item)
+            else{
+                result.push(...parse(item+'',session))
+            }
+            return result
+        },[] as Element[])
         const output: Fragment[] = []
         elements.forEach((element) => {
             const {type, attrs, children} = element
@@ -320,10 +323,14 @@ export namespace Element {
         return typeof source === 'string' ? output.join('') : output
     }
 
-    export async function transformAsync<S = never>(source: string, rules: Dict<Component>, session?: S): Promise<Element[]>
-    export async function transformAsync<S = never>(source: Element[], rules: Dict<Component>, session?: S): Promise<Element[]>
-    export async function transformAsync<S>(source: string | Element[], rules: Dict<Component>, session?: S) {
-        const elements = typeof source === 'string' ? parse(source, session) : source
+    export async function transformAsync<S>(source: Element.Fragment, rules: Dict<Component>, session?: S) {
+        const elements=[].concat(source).reduce((result:Element[],item:string|boolean|number|Element)=>{
+            if(Element.isElement(item)) result.push(item)
+            else{
+                result.push(...parse(item+'',session))
+            }
+            return result
+        },[] as Element[])
         const result: Element[] = []
         for (const element of elements) {
             const {type, attrs, children} = element
