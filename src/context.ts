@@ -77,8 +77,8 @@ export class Context extends EventEmitter {
         return this.pick('channel_id', ...channel_ids)
     }
 
-    platform(...platform: (keyof Zhin.Adapters)[]) {
-        return this.pick('protocol', ...platform)
+    platform(...platforms: (keyof Zhin.Adapters)[]) {
+        return this.pick('protocol', ...platforms)
     }
 
     private(...user_ids: (string | number)[]) {

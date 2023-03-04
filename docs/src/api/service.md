@@ -60,7 +60,7 @@ module.exports = {
 }
 ```
 :::
-### 如何使用?
+## 如何使用?
 - 在其他插件中，直接使用ctx[serviceName]使用
 ::: code-group
 
