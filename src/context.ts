@@ -144,6 +144,11 @@ export class Context extends EventEmitter {
         return this
     }
 
+    // 安装插件
+    use<P extends Plugin.Install>(plugin: P): this {
+        this.plugin(plugin)
+        return this
+    }
     // 获取当前上下文所有中间件
     get middlewareList() {
         const result = [...this.plugins.values()].reduce((result, plugin) => {

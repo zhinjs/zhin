@@ -59,8 +59,9 @@ export default defineConfigWithTheme({
                 },
             ],
             '/api/':[
+                {text:`目录`,link:'/api/'},
                 {
-                    text:'核心功能',
+                    text:'核心模块',
                     collapsible:true,
                     items:[
                         {text:`知音`,link:'/api/zhin'},

@@ -7,7 +7,7 @@ import {Dispose} from "./dispose";
 import {Context} from "@/context";
 
 interface AdapterConstruct<K extends keyof Zhin.Adapters=keyof Zhin.Adapters,BO extends BotOptions = BotOptions, AO = {}> {
-    new(app: Zhin, protocol:K, options: AdapterOptions<BO, AO>): Zhin.Adapters[K]
+    new(zhin: Zhin, protocol:K, options: AdapterOptions<BO, AO>): Zhin.Adapters[K]
 }
 
 export type AdapterOptions<BO ={}, AO = {}> = {
@@ -19,21 +19,21 @@ export abstract class Adapter<K extends keyof Zhin.Adapters=keyof Zhin.Adapters,
     public bots:BotList
     logger:Logger
     private _status:Record<string,Adapter.BotStatus>={}
-    protected constructor(public app:Zhin, public protocol:K, public options:AdapterOptions<BO,AO>) {
+    protected constructor(public zhin:Zhin, public protocol:K, public options:AdapterOptions<BO,AO>) {
         super()
         this.bots=new BotList()
-        this.logger=app.getLogger(protocol)
-        this.app.on('start',()=>this.start())
+        this.logger=zhin.getLogger(protocol)
+        this.zhin.on('start',()=>this.start())
         this.on('message',(session:NSession<K>)=>{
             this.botStatus(session.bot.self_id).recv_msg_cnt++
         })
         this.on('bot.online',(bot_id)=>{
             this.botStatus(bot_id).online=true
-            this.app.emit(`bot.online`,this.protocol,bot_id)
+            this.zhin.emit(`bot.online`,this.protocol,bot_id)
         })
         this.on('bot.offline',(bot_id)=>{
             this.botStatus(bot_id).online=false
-            this.app.emit(`bot.offline`,this.protocol,bot_id)
+            this.zhin.emit(`bot.offline`,this.protocol,bot_id)
         })
         this.on('message.send',(bot_id:string|number,message:Bot.MessageRet)=>{
             let cache=this._cache.get(String(bot_id))
@@ -64,8 +64,8 @@ export abstract class Adapter<K extends keyof Zhin.Adapters=keyof Zhin.Adapters,
         })
         return this._status
     }
-    botStatus(uin:string|number){
-        return this.status[uin]||={
+    botStatus(self_id:string|number){
+        return this.status[self_id]||={
             lost_times: 0,
             msg_cnt_per_min: 0,
             online: false,
@@ -75,7 +75,7 @@ export abstract class Adapter<K extends keyof Zhin.Adapters=keyof Zhin.Adapters,
         }
     }
     getLogger(sub_type:string){
-        return this.app.getLogger(this.protocol,sub_type)
+        return this.zhin.getLogger(this.protocol,sub_type)
     }
     on(event,listener){
         super.on(event,listener)
@@ -90,7 +90,7 @@ export abstract class Adapter<K extends keyof Zhin.Adapters=keyof Zhin.Adapters,
     }
     dispatch<E extends keyof Zhin.BotEventMaps[K]>(eventName:E,session:NSession<K,E>){
         this.emit(eventName as any,session)
-        this.app.dispatch(this.protocol,eventName,session)
+        this.zhin.dispatch(this.protocol,eventName,session)
     }
     protected async start(...args:any[]){
         for (const botOptions of this.options.bots) {
@@ -101,7 +101,7 @@ export abstract class Adapter<K extends keyof Zhin.Adapters=keyof Zhin.Adapters,
     protected startBot(options:BotOptions<BO>){
         const Construct=Bot.botConstructors[this.protocol]
         if(!Construct) throw new Error(`can not find bot constructor from protocol:${this.protocol}`)
-        const bot=new Construct(this.app,this as Zhin.Adapters[K],options)
+        const bot=new Construct(this.zhin,this as Zhin.Adapters[K],options)
         this.status[bot.self_id]={
             lost_times: 0,
             msg_cnt_per_min: 0,

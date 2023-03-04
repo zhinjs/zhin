@@ -2,7 +2,7 @@ import {Zhin} from "./zhin";
 import {Adapter} from "./adapter";
 import {Plugin} from "./plugin";
 import {NSession} from "./session";
-import {deepMerge, Promisify, remove} from '@zhinjs/shared'
+import {deepMerge, remove} from '@zhinjs/shared'
 import {EventEmitter} from "events";
 import {Element} from "./element";
 import {ref, watch} from "obj-observer";
@@ -19,7 +19,7 @@ export type BotOptions<O={}>={
 export class Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I extends object=object> extends EventEmitter{
     public internal:I
     public options:BotOptions<BO>
-    constructor(public app:Zhin,public adapter:Adapter<K,BO,AO>,options:BotOptions<BO>) {
+    constructor(public zhin:Zhin,public adapter:Adapter<K,BO,AO>,options:BotOptions<BO>) {
         super();
         this.options=ref(deepMerge(Bot.defaultOptions,options))
         this.on('message',(message:Bot.MessageRet)=>{
@@ -40,7 +40,7 @@ export class Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I extends
     enable(plugin?:Plugin):this|boolean{
         if(!plugin) return this.options.enable=true
         if(!this.options.disable_plugins.includes(plugin.options.fullName)){
-            this.app.logger.warn(`Bot(${this.self_id})插件未被禁用:${plugin.name}`)
+            this.zhin.logger.warn(`Bot(${this.self_id})插件未被禁用:${plugin.name}`)
             return this
         }
         remove(this.options.disable_plugins,plugin.options.fullName)
@@ -51,7 +51,7 @@ export class Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I extends
     disable(plugin?:Plugin):this|boolean{
         if(!plugin) return this.options.enable=false
         if(!this.options.disable_plugins.includes(plugin.options.fullName)){
-            this.app.logger.warn(`Bot(${this.self_id})重复禁用插件:${plugin.name}`)
+            this.zhin.logger.warn(`Bot(${this.self_id})重复禁用插件:${plugin.name}`)
             return this
         }
         this.options.disable_plugins.push(plugin.options.fullName)
@@ -97,7 +97,7 @@ export interface Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I ext
     self_id:string|number
     options:BotOptions<BO>
     adapter:Adapter<K,BO,AO>
-    app:Zhin
+    zhin:Zhin
     createSession(event: string, ...args: any[]): NSession<K>
     callApi<K extends keyof Bot.Methods>(apiName:K,...args:Parameters<Bot.Methods[K]>):Promise<ReturnType<Bot.Methods[K]>>
     // 会话发起者是否为群管理员
@@ -149,7 +149,7 @@ export class BotList extends Array<Zhin.Bot>{
     }
 }
 export type BotConstruct<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={}>={
-    new(app:Zhin, protocol:Zhin.Adapters[K], options:BotOptions<BO>):Zhin.Bots[K]
+    new(zhin:Zhin, protocol:Zhin.Adapters[K], options:BotOptions<BO>):Zhin.Bots[K]
 }
 export namespace Bot{
     export const defaultOptions:BotOptions={

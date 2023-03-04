@@ -165,7 +165,7 @@ export class Zhin extends Context {
         })
         this.use(Component)
         this.middleware(async (session,next) => {
-            const result=await session.execute()
+            let result=await session.execute()
             if(!result) return next()
             return session.reply(await session.render(result))
 
@@ -314,11 +314,6 @@ export class Zhin extends Context {
         const adapter = this.adapters.get(protocol)
         const bot = adapter.bots.get(self_id)
         return bot.sendMsg(targetId, targetType, message)
-    }
-    // 安装插件
-    use<P extends Plugin.Install>(plugin: P): this {
-        this.plugin(plugin)
-        return this
     }
     // 加载指定名称，指定类型的模块
     public load<T extends Zhin.ModuleType>(name: string, moduleType: T,setup?:boolean): Zhin.Modules[T] {
@@ -554,8 +549,7 @@ export namespace Zhin {
         delay: Record<string, number>
         plugins?: Record<string, any>
         services?: Record<string, any>
-        protocols?: Partial<AdapterConfig>
-        protocol_dir?: string
+        adapters?: Partial<AdapterConfig>
         plugin_dir?: string
         data_dir?: string
     }

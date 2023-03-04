@@ -14,7 +14,7 @@ hero:
       link: /guide/start
     - theme: alt
       text: 查看API
-      link: /api
+      link: /api/
     - theme: alt
       text: 仓库地址
       link: https://github.com/zhinjs/zhin
