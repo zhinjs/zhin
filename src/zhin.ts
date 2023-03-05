@@ -53,13 +53,14 @@ export function createWorker(options:Zhin.WorkerOptions) {
     if (!fs.existsSync(path.join(process.cwd(),configPath))) fs.writeFileSync(path.join(process.cwd(), configPath), Yaml.dump(options))
     cp = fork(path.join(__dirname, '../worker.js'), [], {
         env: {
+            ...process.env,
             mode,
             entry,
-            configPath
+            configPath,
         },
         execArgv: [
             '-r', 'esbuild-register',
-            '-r', 'tsconfig-paths/register'
+            '-r', 'tsconfig-paths/register',
         ]
     })
     let config: { autoRestart: boolean }
@@ -238,6 +239,10 @@ export class Zhin extends Context {
     static getChannelId(event: Dict) {
         return [event.message_type, event.group_id || event.discuss_id || event.sender.user_id].join(':') as ChannelId
     }
+    async getMarketPackages():Promise<Plugin.Package[]>{
+        const {objects:modules}=(await this.services.get('request').get('https://registry.npmjs.org/-/v1/search?text=keywords:zhin%20zhin-plugin&size=250')) || {}
+        return modules.map(packageModule=>packageModule.package)
+    }
     // 扫描项目依赖中的已安装的模块
     getInstalledModules<T extends Zhin.ModuleType>(moduleType:T):Zhin.Modules[T][] {
         const result: Zhin.Modules[T][] = []
@@ -306,7 +311,7 @@ export class Zhin extends Context {
         return result
     }
     // 检查知音是否安装指定插件
-    hasInstall(pluginName: string) {
+    hanMounted(pluginName: string) {
         return !!this.pluginList.find(plugin => plugin.options.fullName === pluginName)
     }
     sendMsg(channelId: ChannelId, message: Element.Fragment) {
@@ -636,6 +641,7 @@ function createZhinAPI() {
     }
 
     function getValue<T>(obj: T, path: string[]) {
+        path=[...path]
         if (!obj || typeof obj !== 'object') return obj
         let result = obj
         while (path.length>1) {
@@ -652,17 +658,13 @@ function createZhinAPI() {
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
         const plugin = zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath)
-        const parent=plugin.context.parent
         const pathArr=path.split('.').filter(Boolean)
-        const result=getValue(zhin.options, pathArr) as Zhin.Value<Zhin.Options, K>
+        const result=getValue(zhin.options, pathArr)
         const backupData=deepClone(result)
         const unwatch=watch(zhin.options,(value)=>{
             const newVal=getValue(value, pathArr)
             if(!deepEqual(backupData,newVal)){
-                plugin.unmount()
-                const newPlugin=zhin.load(plugin.options.fullPath,'plugin')
-                parent.plugin(newPlugin)
-                zhin.logger.info(`已重载插件:${newPlugin.name}`)
+                plugin.reLoad()
             }
         })
         plugin.context.disposes.push(unwatch)

@@ -22,7 +22,7 @@
 - 获取logger
 ### getInstalledModules(moduleType:string):Modules[]
 - 扫描项目依赖中的已安装的模块
-### hasInstall(name:string):boolean
+### hasMounted(name:string):boolean
 - 检查知音是否安装指定插件
 ### sendMsg(channelId: ChannelId, message: Fragment):MessageRet
 - 发送消息到指定通道

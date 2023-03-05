@@ -1,5 +1,4 @@
-import {getPackageInfo, remove} from "@zhinjs/shared";
-import * as path from 'path'
+import {Dict, getPackageInfo, remove} from "@zhinjs/shared";
 import {Dispose} from "@/dispose";
 import {Context} from "@/context";
 import {Zhin} from "@/zhin";
@@ -41,6 +40,17 @@ export class Plugin{
             }
             ctx.disposes.push(dispose)
         }
+    }
+    reLoad(){
+        if(!this.context.parent) {
+            this.context?.zhin?.logger.warn('未载入插件无法重载')
+            return
+        }
+        const parent=this.context.parent
+        this.unmount()
+        const newPlugin=parent.zhin.load(this.options.fullPath,'plugin',this.options.setup)
+        parent.plugin(newPlugin)
+        parent.logger.info(`已重载插件:${newPlugin.name}`)
     }
     private initDependencies(filePath:string){
         if(!require.cache[filePath]) return []
@@ -132,5 +142,20 @@ export namespace Plugin{
         functional?:boolean
         fullName?:string
         fullPath?:string
+    }
+    type AuthorInfo={
+        username:string,
+        email:string
+    }
+    export interface Package{
+        name:string
+        scope:string
+        version:string
+        description:string
+        keywords:string[]
+        date:string
+        links:Dict<string>
+        publisher:AuthorInfo
+        maintainers:AuthorInfo[]
     }
 }
