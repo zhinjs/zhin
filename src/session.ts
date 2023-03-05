@@ -24,7 +24,7 @@ export interface Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E e
     guild_id?: string | number
     guild_name?:string
     detail_type?: string
-    app: Zhin
+    zhin: Zhin
     context:Context
     adapter: Zhin.Adapters[P],
     prompt: Prompt
@@ -43,16 +43,16 @@ export type QuoteMessage={
 export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P]=keyof Zhin.BotEventMaps[P]> {
     constructor(public adapter: Zhin.Adapters[P], self_id, public event: E, obj: object) {
         this.protocol = adapter.protocol as any
-        this.app = adapter.app
+        this.zhin = adapter.zhin
         this.event = event
         this.bot = adapter.bots.get(self_id) as any
         Object.assign(this, obj)
-        this.prompt = new Prompt(this.bot, this as any, this.app.options.delay.prompt)
+        this.prompt = new Prompt(this.bot, this as any, this.zhin.options.delay.prompt)
     }
 
     middleware(middleware: Middleware) {
         const fullId = Bot.getFullTargetId(this as any)
-        return this.app.middleware(async (session, next) => {
+        return this.zhin.middleware(async (session, next) => {
             if (fullId && Bot.getFullTargetId(session) !== fullId) return next()
             return middleware(session, next)
         }, true)
@@ -73,7 +73,7 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
         this.reply(tip)
         const needFree=(session)=>typeof free==="function"?free(session):deepEqual(session.elements?.join(''),Element.toElementArray(free).join(''))
         return new Promise<void>(resolve => {
-            const dispose=this.app.middleware(async (session,next)=>{
+            const dispose=this.zhin.middleware(async (session,next)=>{
                 if(!filter(session)) return next()
                 if(needFree(session)){
                     dispose()
@@ -86,7 +86,7 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
             const cleanTimeout=this.context.setTimeout(()=>{
                 dispose()
                 resolve()
-            },this.app.options.delay.prompt)
+            },this.zhin.options.delay.prompt)
         })
     }
     isAtMe() {
@@ -105,7 +105,7 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
             const timer = setTimeout(() => {
                 dispose()
                 resolve()
-            }, this.app.options.delay.prompt)
+            }, this.zhin.options.delay.prompt)
         })
     }
 
@@ -121,7 +121,7 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
             if (!data) return
             argv = data
         }
-        const command = this.app.findCommand(argv)
+        const command = this.zhin.findCommand(argv)
         if (!command) return false
         const result = await command.execute(argv)
         if (!result || typeof result === 'boolean') return false
@@ -130,13 +130,13 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
     }
     // 渲染组件模板成基础元素AST树
     async render(elements: Element.Fragment = this.elements): Promise<Element[]> {
-        const components=this.app.getSupportComponents(this as NSession<P>)
+        const components=this.zhin.getSupportComponents(this as NSession<P>)
         return await Element.transformAsync(elements, components, Zhin.createContext(this))
     }
 
     get [Symbol.unscopables]() {
         return {
-            app: true,
+            zhin: true,
             options: true,
             adapter: true,
             bot: true,
@@ -148,7 +148,7 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
     toJSON() {
         return Object.fromEntries(
             Object.keys(this).filter(key => {
-                return !['app', 'adapter', 'bot'].includes(key) && typeof this[key] !== 'function'
+                return !['zhin', 'adapter', 'bot'].includes(key) && typeof this[key] !== 'function'
             }).map(key => [key, this[key]])
         )
     }

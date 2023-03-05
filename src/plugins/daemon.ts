@@ -11,7 +11,7 @@ const Config=Schema.object({
 })
 const {exitCommand=true, autoRestart = true} = Config(config)
 function handleSignal(signal: NodeJS.Signals) {
-    ctx.app.logger.info(`terminated by ${signal}`)
+    ctx.zhin.logger.info(`terminated by ${signal}`)
     process.exit()
 }
 interface Message {
@@ -37,7 +37,7 @@ exitCommand && ctx
         await session.reply('正在重启...').catch(()=>{})
         process.exit(51)
     })
-ctx.app.on('ready', () => {
+ctx.zhin.on('ready', () => {
     process.send({type: 'start', body: {autoRestart}})
     process.on('SIGINT', handleSignal)
     process.on('SIGTERM', handleSignal)
@@ -47,12 +47,12 @@ const handleMessage=(data: Message) => {
         let {channelId, message} = data.body
         const [protocol,self_id,target_type,target_id]=channelId.split(':') as never[]
         const times=data.times
-        const bot=ctx.app.pickBot(protocol as keyof Zhin.Adapters,self_id)
+        const bot=ctx.zhin.pickBot(protocol as keyof Zhin.Adapters,self_id)
         if (bot && bot.isOnline()) {
             if(times) message+=`耗时：${(new Date().getTime()-times)/1000}s`
             bot.sendMsg(target_id,target_type, message)
         } else {
-            const dispose = ctx.app.on('bot.online', (platform,bot_id) => {
+            const dispose = ctx.zhin.on('bot.online', (platform,bot_id) => {
                 if(times) message+=`耗时：${(new Date().getTime()-times)/1000}s`
                 if(bot.adapter.protocol===platform && bot.self_id===bot_id){
                     bot.sendMsg(target_id,target_type, message)

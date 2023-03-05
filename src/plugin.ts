@@ -45,12 +45,12 @@ export class Plugin{
     private initDependencies(filePath:string){
         if(!require.cache[filePath]) return []
         return [filePath].concat((require.cache[filePath].children||[]).map(mod=>mod.filename)).filter(filePath=>{
-            return !filePath.includes('node_modules') &&  !this.context.app.pluginList.filter(p=>p!==this).map(p=>p.options.fullPath).includes(filePath)
+            return !filePath.includes('node_modules') &&  !this.context.zhin.pluginList.filter(p=>p!==this).map(p=>p.options.fullPath).includes(filePath)
         })
     }
     // 卸载插件
     unmount(){
-        this.context?.app.emit('plugin-remove',this)
+        this.context?.zhin.emit('plugin-remove',this)
         this.context?.parent.plugins.delete(this.options.fullName)
         this.context?.logger.info(`已卸载插件:${this.name}`)
         this.context?.dispose()
@@ -65,7 +65,7 @@ export class Plugin{
             return this
         }
         remove(this.disableBots,`${bot.adapter.protocol}:${bot.self_id}`)
-        this.context.app.emit('plugin-enable',this.options.fullName)
+        this.context.zhin.emit('plugin-enable',this.options.fullName)
         return this
     }
     // 启用插件
@@ -78,7 +78,7 @@ export class Plugin{
             return this
         }
         this.disableBots.push(`${bot.adapter.protocol}:${bot.self_id}`)
-        this.context.app.emit('plugin-disable',this.options.fullName)
+        this.context.zhin.emit('plugin-disable',this.options.fullName)
         return this
     }
 }

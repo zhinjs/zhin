@@ -22,14 +22,14 @@ function reloadDependency(plugin: Plugin, changeFile: string, withErr?: boolean)
             delete require.cache[plugin.options.fullPath + '/index.mjs']
         }
     }
-    const newPlugin = ctx.app.load(plugin.options.fullPath, 'plugin', plugin.options.setup)
+    const newPlugin = ctx.zhin.load(plugin.options.fullPath, 'plugin', plugin.options.setup)
     try {
         context.parent.plugin(newPlugin)
-        ctx.app.logger.info(`已重载插件:${newPlugin.name}`)
+        ctx.zhin.logger.info(`已重载插件:${newPlugin.name}`)
     } catch (e) {
-        ctx.app.logger.warn(e)
+        ctx.zhin.logger.warn(e)
         context.parent.plugins.delete(newPlugin.fullName)
-        ctx.app.logger.mark('请先处理错误')
+        ctx.zhin.logger.mark('请先处理错误')
         plugin.context = context
         let listener
         watcher.on('change', listener = (filename) => {
@@ -45,7 +45,7 @@ const watcher: FSWatcher = watch(watchPath, {
     ignored: ['**/node_modules/**', '**/.git/**', '**/.idea/**']
 })
 watcher.on('unlink', (filename) => {
-    const plugins = ctx.app.pluginList.filter((p) => p.dependencies.includes(filename))
+    const plugins = ctx.zhin.pluginList.filter((p) => p.dependencies.includes(filename))
     for (const plugin of plugins) {
         plugin.unmount()
     }
@@ -53,9 +53,9 @@ watcher.on('unlink', (filename) => {
 watcher.on('change', (filename) => {
     if (path.resolve(process.env.configPath ||= 'zhin.yaml') === filename) {
         const newOptions: Zhin.Options = Yaml.load(fs.readFileSync(process.env.configPath, "utf8")) as any
-        ctx.app.changeOptions(newOptions)
+        ctx.zhin.changeOptions(newOptions)
     } else {
-        const plugins = ctx.app.pluginList.filter((p) => p.dependencies.includes(filename))
+        const plugins = ctx.zhin.pluginList.filter((p) => p.dependencies.includes(filename))
         for (const plugin of plugins) {
             reloadDependency(plugin, filename)
         }

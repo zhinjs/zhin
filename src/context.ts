@@ -14,7 +14,7 @@ import {Logger} from "log4js";
 import {Bot} from "./bot";
 
 export class Context extends EventEmitter {
-    app: Zhin
+    zhin: Zhin
     plugins: Map<string, Plugin> = new Map<string, Plugin>()
     middlewares: Middleware[] = []
     components: Dict<Component> = Object.create(null)
@@ -30,11 +30,11 @@ export class Context extends EventEmitter {
         this.on('dispose', () => {
             remove(this.parent[Context.childKey], this)
         })
-        this.app = parent.app
+        this.zhin = parent.zhin
         this.logger = parent.logger
         return new Proxy(this, {
             get(target: Context, p: string | symbol, receiver: any): any {
-                if (target.app.services.has(p as keyof Zhin.Services)) return target.app.services.get(p as keyof Zhin.Services)
+                if (target.zhin.services.has(p as keyof Zhin.Services)) return target.zhin.services.get(p as keyof Zhin.Services)
                 return Reflect.get(target, p, receiver)
             }
         })
@@ -116,7 +116,7 @@ export class Context extends EventEmitter {
         if (typeof entry === 'string') {
             const result = this.plugins.get(entry)
             if (result) return result
-            options = this.app.load(entry, 'plugin', setup)
+            options = this.zhin.load(entry, 'plugin', setup)
         } else {
             options = Plugin.defineOptions(entry)
         }
@@ -125,19 +125,19 @@ export class Context extends EventEmitter {
             const context = new Context(this)
             const plugin = new Plugin(options, info)
             if (this.plugins.get(options.fullName)) {
-                this.app.logger.warn('重复载入:' + options.name)
+                this.zhin.logger.warn('重复载入:' + options.name)
                 return
             }
             this.plugins.set(options.fullName, plugin)
             plugin.mount(context)
-            this.app.logger.info(`已载入插件:${options.name}`)
-            this.app.emit('plugin-add', plugin)
+            this.zhin.logger.info(`已载入插件:${options.name}`)
+            this.zhin.emit('plugin-add', plugin)
         }
         const using = options.using ||= []
         installPlugin()
         if (!using.length) {
-            if (using.some(name => !this.app.services.has(name))) {
-                this.app.logger.info(`插件(${options.name})所需服务(${using.join()})未就绪，已停用`);
+            if (using.some(name => !this.zhin.services.has(name))) {
+                this.zhin.logger.info(`插件(${options.name})所需服务(${using.join()})未就绪，已停用`);
                 (this.plugin(options.fullName) as Plugin).disable()
             }
         }
@@ -219,7 +219,7 @@ export class Context extends EventEmitter {
             const code = segment.charCodeAt(0)
             const tempName = code === 47 ? segment.slice(1) : segment
             nameArr.push(tempName)
-            if (elements.length) parent = this.app.commandList.find(cmd => cmd.name === tempName)
+            if (elements.length) parent = this.zhin.commandList.find(cmd => cmd.name === tempName)
             if (!parent && elements.length) throw Error(`cannot find parent command:${nameArr.join('.')}`)
         }
         const name = nameArr.pop()
@@ -231,10 +231,10 @@ export class Context extends EventEmitter {
             parent.children.push(command)
         }
         this.commands.set(name, command)
-        this.app.emit('command-add', command, this)
+        this.zhin.emit('command-add', command, this)
         this.disposes.push(() => {
             this.commands.delete(name)
-            this.app.emit('command-remove', command, this)
+            this.zhin.emit('command-remove', command, this)
         })
         return command as Command<Argv.ArgumentType<D>, {}, T>
     }
@@ -265,9 +265,9 @@ export class Context extends EventEmitter {
     adapter<K extends keyof Zhin.Adapters>(adapter: K, options: AdapterOptionsType<Zhin.Adapters[K]>): this
     adapter<K extends keyof Zhin.Adapters>(adapter: K, protocol: AdapterConstructs[K], options: AdapterOptionsType<Zhin.Adapters[K]>): this
     adapter<K extends keyof Zhin.Adapters>(adapter: K, Construct?: AdapterConstructs[K] | AdapterOptions, options?: AdapterOptions) {
-        if (!Construct && !options) return this.app.adapters.get(adapter)
+        if (!Construct && !options) return this.zhin.adapters.get(adapter)
         if (typeof Construct !== "function") {
-            const result = this.app.load(adapter, 'adapter',false)
+            const result = this.zhin.load(adapter, 'adapter',false)
             if (result && result.install) {
                 result.install(this, options)
             }
@@ -275,13 +275,13 @@ export class Context extends EventEmitter {
             Construct = Adapter.get(adapter).Adapter
         }
         if (!Construct) throw new Error(`can't find adapter for protocol:${adapter}`)
-        const dispose = this.app.on(`${adapter}.message`, (session) => {
-            this.app.emitSync('message', session)
+        const dispose = this.zhin.on(`${adapter}.message`, (session) => {
+            this.zhin.emitSync('message', session)
         })
-        this.app.adapters.set(adapter, new Construct(this.app, adapter, options))
+        this.zhin.adapters.set(adapter, new Construct(this.zhin, adapter, options))
         return Dispose.from(this, () => {
             dispose()
-            this.app.adapters.delete(adapter)
+            this.zhin.adapters.delete(adapter)
         }) as any
     }
 
@@ -291,22 +291,22 @@ export class Context extends EventEmitter {
     service<K extends keyof Zhin.Services, T>(key: K, constructor: Zhin.ServiceConstructor<Zhin.Services[K], T>, options?: T): this
     service<K extends keyof Zhin.Services, T>(key: K, Service?: Zhin.Services[K] | Zhin.ServiceConstructor<Zhin.Services[K], T>, options?: T): Zhin.Services[K] | this {
         if (Service === undefined) {
-            if(this.app.services.get(key)) return this.app.services.get(key)
-            Service=this.app.load(key,'service',false) as Zhin.Services[K] | Zhin.ServiceConstructor<Zhin.Services[K], T>
+            if(this.zhin.services.get(key)) return this.zhin.services.get(key)
+            Service=this.zhin.load(key,'service',false) as Zhin.Services[K] | Zhin.ServiceConstructor<Zhin.Services[K], T>
         }
-        if (this.app[key]) throw new Error('服务key不能和bot已有属性重复')
-        if (this.app.services.has(key)) throw new Error('重复定义服务')
+        if (this.zhin[key]) throw new Error('服务key不能和bot已有属性重复')
+        if (this.zhin.services.has(key)) throw new Error('重复定义服务')
         if (isConstructor(Service)) {
-            this.app.services.set(key, new Service(this, options))
+            this.zhin.services.set(key, new Service(this, options))
         } else {
-            this.app.services.set(key, Service)
+            this.zhin.services.set(key, Service)
         }
-        this.app.logger.info(`已挂载服务(${key})`)
-        this.app.emit('service-add', key)
+        this.zhin.logger.info(`已挂载服务(${key})`)
+        this.zhin.emit('service-add', key)
         const dispose = Dispose.from(this, () => {
-            this.app.logger.info(`已卸载服务(${key})`)
-            this.app.services.delete(key)
-            this.app.emit('service-remove', key)
+            this.zhin.logger.info(`已卸载服务(${key})`)
+            this.zhin.services.delete(key)
+            this.zhin.emit('service-remove', key)
             remove(this.disposes, dispose)
         })
         this.disposes.push(dispose)
@@ -338,7 +338,7 @@ export class Context extends EventEmitter {
         channelIds = [].concat(channelIds)
         return Promise.all(channelIds.map(channelId => {
             const [platform, self_id, target_type = platform, target_id = self_id] = channelId.split(':')
-            const bots = [...this.app.adapters.values()].reduce((result, adapter) => {
+            const bots = [...this.zhin.adapters.values()].reduce((result, adapter) => {
                 if (platform === target_type) result.push(...(adapter.bots as Zhin.Bot[]))
                 else if (platform === adapter.protocol) result.push(...(adapter.bots.filter(bot => bot.self_id === self_id) as Zhin.Bot[]))
                 return result

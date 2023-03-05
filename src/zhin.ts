@@ -113,7 +113,7 @@ export class Zhin extends Context {
     options: Zhin.Options
     adapters: Map<keyof Zhin.Adapters, Adapter> = new Map<keyof Zhin.Adapters, Adapter>()
     services: Map<keyof Zhin.Services, any> = new Map<keyof Zhin.Services, any>()
-    public app: Zhin = this
+    public zhin: Zhin = this
     constructor(options: Zhin.Options) {
         super(null);
         if (options.logConfig) {
@@ -409,7 +409,7 @@ export class Zhin extends Context {
             try {
                 this.plugin(plugin.fullName,plugin.setup)
             } catch (e) {
-                this.app.logger.warn(`自动载入插件(${plugin.name})失败：${e.message}`)
+                this.zhin.logger.warn(`自动载入插件(${plugin.name})失败：${e.message}`)
                 this.plugins.delete(plugin.fullName)
             }
         })
@@ -611,28 +611,28 @@ function createZhinAPI() {
             }))
             options = Yaml.load(fs.readFileSync(options, {encoding: 'utf8'}))
         }
-        const app = new Zhin(deepMerge(deepClone(Zhin.defaultConfig), options))
-        contextMap.set(Zhin.key, app)
-        return app
+        const zhin = new Zhin(deepMerge(deepClone(Zhin.defaultConfig), options))
+        contextMap.set(Zhin.key, zhin)
+        return zhin
     }
     const useContext = () => {
-        const app = contextMap.get(Zhin.key)
-        if (!app) throw new Error(`can't found app with context for key:${Zhin.key.toString()}`)
+        const zhin = contextMap.get(Zhin.key)
+        if (!zhin) throw new Error(`can't found zhin with context for key:${Zhin.key.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
-        const context=app.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath)?.context
+        const context=zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath)?.context
         if(context) return context
         const pluginDir=path.dirname(pluginFullPath)
         const reg=new RegExp(`${pluginDir}/index\.[tj]s`)
-        const parent=app.pluginList.find(plugin=>{
+        const parent=zhin.pluginList.find(plugin=>{
             return plugin.options.fullPath.match(reg)
         })
         if(parent){
             parent.context.plugin(pluginFullPath)
-            return app.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath).context
+            return zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath).context
         }
-        app.plugin(pluginFullPath)
-        return app.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath).context
+        zhin.plugin(pluginFullPath)
+        return zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath).context
     }
 
     function getValue<T>(obj: T, path: string[]) {
@@ -647,37 +647,37 @@ function createZhinAPI() {
     }
 
     function useOptions<K extends Zhin.Keys<Zhin.Options>>(path: K): Zhin.Value<Zhin.Options, K> {
-        const app = contextMap.get(Zhin.key)
-        if (!app) throw new Error(`can't found app with context for key:${Zhin.key.toString()}`)
+        const zhin = contextMap.get(Zhin.key)
+        if (!zhin) throw new Error(`can't found zhin with context for key:${Zhin.key.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
-        const plugin = app.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath)
+        const plugin = zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath)
         const parent=plugin.context.parent
         const pathArr=path.split('.').filter(Boolean)
-        const result=getValue(app.options, pathArr) as Zhin.Value<Zhin.Options, K>
+        const result=getValue(zhin.options, pathArr) as Zhin.Value<Zhin.Options, K>
         const backupData=deepClone(result)
-        const unwatch=watch(app.options,(value)=>{
+        const unwatch=watch(zhin.options,(value)=>{
             const newVal=getValue(value, pathArr)
             if(!deepEqual(backupData,newVal)){
                 plugin.unmount()
-                const newPlugin=app.load(plugin.options.fullPath,'plugin')
+                const newPlugin=zhin.load(plugin.options.fullPath,'plugin')
                 parent.plugin(newPlugin)
-                app.logger.info(`已重载插件:${newPlugin.name}`)
+                zhin.logger.info(`已重载插件:${newPlugin.name}`)
             }
         })
         plugin.context.disposes.push(unwatch)
-        return getValue(app.options, path.split('.').filter(Boolean)) as Zhin.Value<Zhin.Options, K>
+        return getValue(zhin.options, path.split('.').filter(Boolean)) as Zhin.Value<Zhin.Options, K>
     }
 
     type EffectReturn = () => void
     type EffectCallBack<T = any> = (value?: T, oldValue?: T) => void | EffectReturn
 
     function useEffect<T extends object = object>(callback: EffectCallBack<T>, effect?: Proxied<T>) {
-        const app = contextMap.get(Zhin.key)
-        if (!app) throw new Error(`can't found app with context for key:${Zhin.key.toString()}`)
+        const zhin = contextMap.get(Zhin.key)
+        if (!zhin) throw new Error(`can't found zhin with context for key:${Zhin.key.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
-        const plugin = app.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath)
+        const plugin = zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath)
         if (!effect) {
             const dispose = callback()
             if (dispose) {
@@ -690,11 +690,11 @@ function createZhinAPI() {
 
     }
     function onDispose(callback:Dispose){
-        const app = contextMap.get(Zhin.key)
-        if (!app) throw new Error(`can't found app with context for key:${Zhin.key.toString()}`)
+        const zhin = contextMap.get(Zhin.key)
+        if (!zhin) throw new Error(`can't found zhin with context for key:${Zhin.key.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
-        const plugin = app.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath)
+        const plugin = zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath)
         plugin.context.on('dispose',callback)
     }
     return {

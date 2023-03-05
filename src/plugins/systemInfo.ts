@@ -8,7 +8,7 @@ import {version} from "@";
 export const name = 'systemInfo'
 const ctx = useContext()
 
-const logFile = PathResolve(dirname(ctx.app.options.data_dir), 'logs.log')
+const logFile = PathResolve(dirname(ctx.zhin.options.data_dir), 'logs.log')
 
 function readLogs(): Promise<string[]> {
     return new Promise<string[]>(resolve => {
