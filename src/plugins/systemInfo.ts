@@ -1,9 +1,13 @@
-import {createReadStream, copyFileSync, statSync, writeFileSync} from 'fs'
+import {createReadStream,readFile,copyFile,writeFile, statSync} from 'fs'
 import {resolve as PathResolve, dirname} from "path";
+import {promisify} from "util";
+const readFileSync=promisify(readFile)
+const copyFileSync=promisify(copyFile)
+const writeFileSync=promisify(writeFile)
 import * as readline from 'readline'
 import {arch, cpus, freemem, totalmem, type} from "os";
 import {Time, useContext} from "@";
-import {version} from "@";
+import {version,h} from "@";
 
 export const name = 'systemInfo'
 const ctx = useContext()
@@ -35,20 +39,20 @@ function readLogs(): Promise<string[]> {
     })
 }
 
-function cleanLogs(backup?: boolean) {
+async function cleanLogs(backup?: boolean) {
     if (backup) {
         const date = new Date()
         const backupDate = [date.getFullYear(), date.getMonth() + 1, date.getDate()].join('-')
         const backupTime = [date.getHours(), date.getMinutes(), date.getSeconds()].join(':')
-        copyFileSync(logFile, PathResolve(dirname(logFile), `logs-${[backupDate, backupTime].join()}.log`))
+        await copyFileSync(logFile, PathResolve(dirname(logFile), `logs-${[backupDate, backupTime].join()}.log`))
     }
-    writeFileSync(logFile, '')
+    await writeFileSync(logFile,'')
     return '已清理所有日志'
 }
 
-function backupLogs() {
+async function backupLogs() {
     const backupDate = new Date().toLocaleDateString()
-    copyFileSync(logFile, PathResolve(dirname(logFile), `logs-${backupDate}.log`))
+    await copyFileSync(logFile, PathResolve(dirname(logFile), `logs-${backupDate}.log`))
     return `已备份日志到logs-${backupDate}.log`
 }
 
@@ -75,7 +79,7 @@ ctx.command('logs <lines:number>')
         if (options.detail) return showLogDetail()
         const logLines = await readLogs()
         const lines = logLines.reverse().slice(0, lineNum).reverse()
-        return lines.join('\n')
+        return h('text',{text:lines.join('\n')})
     })
 ctx.command('status')
     .desc('查看知音状态')

@@ -30,7 +30,8 @@ command.subcommand('plugin.list')
     .option('official','-o 显示社区插件')
     .action(async ({session,options}) => {
         if(!options.official){
-            return ctx.zhin.getInstalledModules('plugin').map((o, idx) => {
+            const plugins=await ctx.zhin.getInstalledModules('plugin')
+            return plugins.map((o, idx) => {
                 const installStatus = ctx.zhin.hanMounted(o.fullName) ? ' (已载入)' : ''
                 let enableStatus = installStatus ? getPluginStatus(ctx, session, o.fullName) : ''
                 return `${idx + 1}.${o.fullName}${installStatus}${enableStatus} ${o.type}`
@@ -63,7 +64,7 @@ command.subcommand('plugin.install <name:string>')
 command.subcommand('plugin.uninstall <name:string>')
     .desc('卸载指定插件')
     .action(async ({session}, name) => {
-        const packages = ctx.zhin.getInstalledModules('plugin')
+        const packages = await ctx.zhin.getInstalledModules('plugin')
         const options=packages.find(p=>p.fullName===name)
         if (!options) return '没有安装该插件'
         await session.reply('已开始卸载...')
@@ -77,8 +78,9 @@ command.subcommand('plugin.uninstall <name:string>')
     })
 command.subcommand('plugin.mount <name:string>')
     .desc('载入指定插件')
-    .action(({session}, name) => {
-        const options = ctx.zhin.getInstalledModules('plugin').find(p => p.fullName === name)
+    .action(async ({session}, name) => {
+        const plugins=await ctx.zhin.getInstalledModules('plugin')
+        const options = plugins.find(p => p.fullName === name)
         if (!options) return '当前没有该插件'
         try {
             ctx.zhin.plugin(name)
