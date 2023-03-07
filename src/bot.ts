@@ -85,6 +85,7 @@ export class Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I extends
         const messageRet:Bot.MessageRet={
             message_id,
             from_id:this.self_id,
+            user_id:this.self_id,
             to_id:target_id,
             type:target_type,
             elements:message as Element[]
@@ -113,17 +114,13 @@ export type BotConstructors={
 }
 export namespace Bot{
     export interface Methods{
-        sendMsg(target_id:string|number,target_type:MessageType,message:Element.Fragment):Bot.MessageRet
-        getMsg(message_id:string):Bot.Message
+        sendMsg(target_id:string|number,target_type:MessageType,message:Element.Fragment):MessageRet
+        getMsg(message_id:string):Message
         deleteMsg(message_id:string):boolean
     }
     export type MessageType='private'|'group'|'discuss'|'guild'
-    export interface MessageRet{
+    export interface MessageRet extends Message{
         message_id:string
-        from_id:string|number
-        to_id:string|number
-        type:MessageType
-        elements:Element[]
     }
     export type FullTargetId=`${keyof Zhin.Adapters}:${string|number}:${string}:${string|number|`${string|number}:${string|number}`}`
     export function getFullTargetId(session:NSession<keyof Zhin.Adapters>):FullTargetId{
@@ -162,13 +159,11 @@ export namespace Bot{
         user_id:string|number
         elements:Element[]
     }
-    export interface GroupMsg extends MsgBase{
-        group_id:string|number
+    export interface Message{
+        from_id:string|number
+        to_id:string|number
+        user_id:string|number
+        type:MessageType
+        elements:Element[]
     }
-    export interface PrivateMsg extends MsgBase{}
-    export interface GuildMsg extends MsgBase{
-        guild_id:string|number
-        channel_id:string|number
-    }
-    export type Message=PrivateMsg|GroupMsg|GuildMsg
 }

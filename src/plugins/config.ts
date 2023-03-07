@@ -1,20 +1,24 @@
 import * as Yaml from 'js-yaml'
 import * as fs from 'fs'
-import {get,unset,set,mapValues} from "lodash";
 import {useContext} from "@";
 import {Element} from "@/element";
-function protectkeys(obj:Record<string, any>,keys:string[]){
+import {getValue,setValue,deleteValue} from "@zhinjs/shared";
+function protectKeys(obj:Record<string, any>,keys:string[]){
     if(!obj || typeof obj!=='object') return obj
-    return mapValues(obj,(value,key)=>{
-        if(typeof value==='object') return protectkeys(value,keys)
-        if(!keys.includes(key)) return value
-        return new Array(value.length).fill('*').join('')
-    })
+    return Object.fromEntries(Object.entries(obj).map(([key,value])=>{
+        return [
+            key,
+            value && typeof value==='object' ?
+                protectKeys(value,keys):keys.includes(key) ?
+                    new Array(value.length).fill('*').join('') :
+                    value
+        ]
+    }))
 }
 
 function outputConfig(config,key){
-    if(!key)return JSON.stringify(protectkeys(config,['password','access_token']),null,2)
-    const result=JSON.stringify(protectkeys(get(config,key),['password','access_token']),null,2)
+    if(!key)return JSON.stringify(protectKeys(config,['password','access_token']),null,2)
+    const result=JSON.stringify(protectKeys(getValue(config,key.split('.')),['password','access_token']),null,2)
     return key.endsWith('password')?new Array(result.length).fill('*').join(''):result
 }
 const ctx=useContext()
@@ -27,7 +31,7 @@ ctx.command('config [key:string] [value]')
         const config=Yaml.load(fs.readFileSync(process.env.configPath||'','utf8')) as object
         if(value===undefined && !options.delete) return outputConfig(config,key)
         if(options.delete){
-            unset(config,key)
+            deleteValue(config,key.split('.'))
             fs.writeFileSync(process.env.configPath,Yaml.dump(config))
             return `已删除:config.${key}`
         }
@@ -36,7 +40,7 @@ ctx.command('config [key:string] [value]')
         }catch {
             value=value.join('') as any
         }
-        set(config,key,value)
+        setValue(config,key.split('.'),value)
         fs.writeFileSync(process.env.configPath,Yaml.dump(config))
         return `修改成功`
     })

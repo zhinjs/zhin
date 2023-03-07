@@ -13,7 +13,7 @@ import {
     deepEqual,
     getCaller,
     getIpAddress,
-    Dict, pick
+    Dict, pick, getValue
 } from "@zhinjs/shared";
 import {createServer, Server} from "http";
 import KoaBodyParser from "koa-bodyparser";
@@ -45,45 +45,6 @@ export type ChannelId = `${keyof Zhin.Adapters}:${string | number}:${TargetType}
 
 export function isConstructor<R, T>(value: any): value is (new (...args: any[]) => any) {
     return typeof value === 'function' && value.prototype && value.prototype.constructor === value
-}
-
-
-export function createWorker(options:Zhin.WorkerOptions) {
-    const {entry='lib',mode='production',config:configPath='zhin.yaml'}=options||{}
-    if (!fs.existsSync(path.join(process.cwd(),configPath))) fs.writeFileSync(path.join(process.cwd(), configPath), Yaml.dump(options))
-    cp = fork(path.join(__dirname, '../worker.js'), [], {
-        env: {
-            ...process.env,
-            mode,
-            entry,
-            configPath,
-        },
-        execArgv: [
-            '-r', 'esbuild-register',
-            '-r', 'tsconfig-paths/register',
-        ]
-    })
-    let config: { autoRestart: boolean }
-    cp.on('message', (message: Message) => {
-        if (message.type === 'start') {
-            config = message.body
-            if (buffer) {
-                cp.send({type: 'send', body: buffer, times: timeStart})
-                buffer = null
-            }
-        } else if (message.type === 'queue') {
-            buffer = message.body
-        }
-    })
-    const closingCode = [0, 130, 137]
-    cp.on('exit', (code) => {
-        if (!config || closingCode.includes(code) || code !== 51 && !config.autoRestart) {
-            process.exit(code)
-        }
-        timeStart = new Date().getTime()
-        createWorker(options)
-    })
-    return cp
 }
 
 process.on('SIGINT', () => {
@@ -440,7 +401,6 @@ export class Zhin extends Context {
     }
 }
 
-
 export namespace Zhin {
     export interface WorkerOptions{
         entry?:string
@@ -640,17 +600,6 @@ function createZhinAPI() {
         return zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath).context
     }
 
-    function getValue<T>(obj: T, path: string[]) {
-        path=[...path]
-        if (!obj || typeof obj !== 'object') return obj
-        let result = obj
-        while (path.length>1) {
-            const key = path.shift()
-            result = result[key] || {}
-        }
-        if(path.length) return result[path.shift()]
-        return
-    }
 
     function useOptions<K extends Zhin.Keys<Zhin.Options>>(path: K): Zhin.Value<Zhin.Options, K> {
         const zhin = contextMap.get(Zhin.key)
@@ -708,6 +657,43 @@ function createZhinAPI() {
     }
 }
 
+export function createWorker(options:Zhin.WorkerOptions) {
+    const {entry='lib',mode='production',config:configPath='zhin.yaml'}=options||{}
+    if (!fs.existsSync(path.join(process.cwd(),configPath))) fs.writeFileSync(path.join(process.cwd(), configPath), Yaml.dump(options))
+    cp = fork(path.join(__dirname, '../worker.js'), [], {
+        env: {
+            ...process.env,
+            mode,
+            entry,
+            configPath,
+        },
+        execArgv: [
+            '-r', 'esbuild-register',
+            '-r', 'tsconfig-paths/register',
+        ]
+    })
+    let config: { autoRestart: boolean }
+    cp.on('message', (message: Message) => {
+        if (message.type === 'start') {
+            config = message.body
+            if (buffer) {
+                cp.send({type: 'send', body: buffer, times: timeStart})
+                buffer = null
+            }
+        } else if (message.type === 'queue') {
+            buffer = message.body
+        }
+    })
+    const closingCode = [0, 130, 137]
+    cp.on('exit', (code) => {
+        if (!config || closingCode.includes(code) || code !== 51 && !config.autoRestart) {
+            process.exit(code)
+        }
+        timeStart = new Date().getTime()
+        createWorker(options)
+    })
+    return cp
+}
 const {createZhin, useContext,onDispose, useEffect, useOptions} = createZhinAPI()
 export {
     createZhin,

@@ -1,7 +1,7 @@
 import {Argv} from "./argv";
 import {Awaitable, Define} from "@zhinjs/shared";
 import {Element} from './element'
-import {isEmpty, keys} from "lodash";
+import {isEmpty} from "@zhinjs/shared";
 import {Zhin} from "./zhin";
 import {NSession} from "./session";
 import {Context} from "@/context";
@@ -293,7 +293,7 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
             if (this.aliasNames.length) output.push(` alias:${this.aliasNames.join(',')}`)
             if (this.shortcuts.length) output.push(` shortcuts:${this.shortcuts.map(shortcut => String(shortcut.name))}`)
             if (!isEmpty(this.options)) {
-                const options = keys(this.options)
+                const options = Object.keys(this.options)
                     .filter(name => !name.startsWith('-'))
                     .filter(name => showHidden ? true : !this.options[name].hidden)
                 if (options.length) {

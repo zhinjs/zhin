@@ -61,7 +61,7 @@ command.subcommand('plugin.install <name:string>')
         }
     })
 command.subcommand('plugin.uninstall <name:string>')
-    .desc('安装指定插件')
+    .desc('卸载指定插件')
     .action(async ({session}, name) => {
         const packages = ctx.zhin.getInstalledModules('plugin')
         const options=packages.find(p=>p.fullName===name)

@@ -1,7 +1,6 @@
 import {Adapter, AdapterOptions} from "@/adapter";
 import {
     Config as IcqqConfig,
-    Quotable,
     Client,
     MessageRet, genGroupMessageId, genDmMessageId
 } from "icqq";
