@@ -468,8 +468,8 @@ export namespace Zhin {
             }
         },
         self_url: 'localhost',
-        data_dir: path.join(process.cwd(), 'data'),
-        plugin_dir: path.join(process.cwd(), 'plugins'),
+        data_dir: 'data',
+        plugin_dir: 'plugins',
         plugins: {},
         log_level: 'info',
         services: {},
@@ -615,13 +615,6 @@ function createZhinAPI() {
                     }
                 },
                 plugins: {
-                    config: null,
-                    daemon: null,
-                    help: null,
-                    login: null,
-                    logs: null,
-                    plugin: null,
-                    status: null,
                 },
                 log_level: 'info',
                 delay: {

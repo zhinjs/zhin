@@ -14,7 +14,7 @@ import {processMessage, toElement} from "@/adapters/icqq/utils";
 async function sendMsg(this:Client,target_id:number,target_type:string,content:Element[]){
     let {element, quote,music,share} = await processMessage.apply(this, [content])
     let args:any[]=[]
-    if (!element.length && (!music||!share)) throw new Error('发送消息不受支持')
+    if (!element.length && (!music && !share)) throw new Error('发送消息不受支持')
     if([''])
     if(music||share) {
         const target=target_type==='group'?this.pickGroup(target_id):this.pickFriend(target_id)

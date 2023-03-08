@@ -60,14 +60,23 @@ export async function processMessage(this: Client, message: Element.Fragment, so
     const music = segments.find(e => e.type === 'music')
     if(music) remove(segments,music)
     if(segments.find(e => e.type === 'music')) throw new Error('一次只能发送一个音乐元素')
-    if(segments.length && music) throw new Error('音乐元素只能单独发送')
+    if(segments.length && music) {
+        this.logger.warn('音乐元素只能单独发送')
+        segments=[]
+    }
     const share = segments.find(e => e.type === 'share')
     if(share) remove(segments,share)
     if(segments.find(e => e.type === 'share')) throw new Error('一次只能发送一个分享元素')
-    if(segments.length && share) throw new Error('分享元素只能单独发送')
+    if(segments.length && share) {
+        this.logger.warn('分享元素只能单独发送')
+        segments=[]
+    }
     const forwardNodes = segments.filter(e => e.type === 'node') as Element[]
     segments=segments.filter(s=>!forwardNodes.includes(s))
-    if(forwardNodes.length && segments.length) throw new Error('只能单独发送转发节点')
+    if(forwardNodes.length && segments.length) {
+        this.logger.warn('只能单独发送转发节点')
+        segments=[]
+    }
     let quote = segments.find(e => e.type === 'reply') as Element
     if (quote) remove(segments, quote)
     segments = segments.filter(n => allowElement.includes(n.type))
