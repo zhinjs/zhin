@@ -1,33 +1,44 @@
 import {Random, Time,Dict} from "@zhinjs/shared";
-import {Element} from "./element";
+import {Element,h} from "./element";
 import {Context} from "@/context";
+import {Session} from "@/session";
 
 export type Component<
     S=any,
     P extends Dict = Dict,
     D extends Dict = Dict,
-    M extends Component.Methods = Component.Methods
+    M extends Dict=Dict
 > = ({
     [K in keyof (P | D | M)]: K extends keyof P ? P[K] : K extends keyof D ? D[K] : M[K]
 } & {
-    render: Component.Render<S,P, D, M>
+    render: Component.Render<S & M & D,P>
 })
 export type DefineComponent<S=any,
+    M extends Dict<Function>=Dict<Function>,
     P extends Component.PropsDesc = Component.PropsDesc,
-    D extends Component.InitFunc<Dict> = Component.InitFunc<Dict>,
-    M extends Component.Methods = Component.Methods
-> = Component.InitOption<S,P, D, M>
+    D extends Component.InitFunc<Dict> = Component.InitFunc<Dict>
+> = Component.InitOption<S,M,P,D>
 
-export function defineComponent<S=any,
+export function defineComponent<S,
+M extends Dict<Function>=Dict<Function>,
     P extends Component.PropsDesc = Component.PropsDesc,
-    D extends Component.InitFunc<Dict> = Component.InitFunc<Dict>,
-    M extends Component.Methods = Component.Methods
->(component: DefineComponent<S,P, D, M>): DefineComponent<S,P, D, M> {
+    D extends Component.InitFunc<Dict> = Component.InitFunc<Dict>
+>(component: DefineComponent<
+    S & M,
+    M,
+    P,
+    D
+>): DefineComponent<S,M,P, D> {
     return component
 }
 
 export namespace Component {
+    export type Runtime<S,P extends Component.PropsDesc = Component.PropsDesc,
+        D extends Component.InitFunc<Dict> = Component.InitFunc<Dict>> = S & PropsType<P> & DataType<D>
     export const name = 'builtComponent'
+    export interface Method<S,P={}, D ={}>{
+        (this:S & P & D):any
+    }
     export type InitFunc<T = any> = (this: Component) => T
     type PropType = string | number | boolean | object | any[]
     type ValueDescObj<T extends PropType = PropType> = {
@@ -37,8 +48,8 @@ export namespace Component {
     }
     type ValueDesc = (new(...args: any[]) => PropType) | ValueDescObj
     export type PropsDesc = Record<string, ValueDesc>
-    export type Methods = Dict<InitFunc>
-    type DataType<D extends Dict> = D
+    export type Methods<C> = Dict<Method<C>>
+    export type DataType<D extends InitFunc> = D extends InitFunc<infer R>?R:unknown
     type RequiredKeys<T> = {
         [K in keyof T]: T[K] extends {
             required: true;
@@ -59,45 +70,52 @@ export namespace Component {
     };
     export type PropsType<O extends PropsDesc> = ExtractPropTypes<O>
 
-    export interface InitOption<S,P extends PropsDesc, D extends InitFunc<Dict>, M extends Methods> {
+    export interface InitOption<S,M extends Dict<Function>,P extends PropsDesc, D extends InitFunc<Dict>> {
         props?: P
         data?: D
         methods?: M
-        render: Render<S,PropsType<P>, DataType<D>, M>
+        render: Render<S & M & DataType<D>,PropsType<P>>
     }
 
-    export type Render<S,P extends Dict, D extends Dict, M extends Dict> = Element.Render<S & P & D & M, P>
-
+    export type Render<S,P extends Dict> = Element.Render<S & P, P>
+    export function createRuntime<S>(session:S,options:InitOption<S, {  },{},()=>{}>,attrs){
+        const {data:dataInitFunc,methods}=options
+        const runtime=Object.assign(session,attrs)
+        Object.keys(methods).forEach(key=>{
+            if(typeof methods[key]==='function'){
+                runtime[key]=methods[key].bind(runtime)
+            }
+        })
+        const data=dataInitFunc.apply(runtime)
+        return Object.assign(runtime,data)
+    }
     export function install(ctx: Context) {
         // 内置组件
         ctx
-            .component('template', defineComponent({
+            .component('template', defineComponent<Session>({
                 render(attrs, children){
                     return children
                 }
             }))
-            .component('execute', defineComponent({
+            .component('execute', defineComponent<Session>({
                 render(attrs, children) {
                     return this.execute(children)
                 }
             }))
-            .component('prompt', defineComponent({
+            .component('prompt', defineComponent<Session>({
                 props: {
                     type: String
-                },
-                data() {
-                    return {args: []}
                 },
                 async render(props, children) {
                     return await this.prompt[this.type ||= 'text'](children.join(''), props)
                 }
             }))
-            .component('random', defineComponent({
+            .component('random', defineComponent<Session>({
                 async render(attrs, children) {
                     return Random.pick(children)
                 }
             }))
-            .component('time', defineComponent({
+            .component('time', defineComponent<Session>({
                 props: {
                     value: Number,
                     format: String

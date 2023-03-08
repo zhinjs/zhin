@@ -77,10 +77,7 @@ export class Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I extends
         return this.sendMsg(session.group_id||session.discuss_id||session.user_id||`${session.guild_id}:${session.channel_id}`,session.detail_type as Bot.MessageType,message)
     }
     async sendMsg(target_id:string|number,target_type:Bot.MessageType,message:Element.Fragment):Promise<Bot.MessageRet>{
-        message=[].concat(message).map((item)=>{
-            if(Element.isElement(item)) return item
-            return Element('text',{text:String(item)})
-        })
+        message=Element.toElementArray(message)
         const {message_id}=await this.callApi('sendMsg',target_id,target_type,message)
         const messageRet:Bot.MessageRet={
             message_id,

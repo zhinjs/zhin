@@ -106,6 +106,7 @@ export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
             protocol: 'icqq',
             adapter: this.adapter,
             event,
+            user_id:obj.user_id||obj.sender?.user_id||obj.sender?.tiny_id,
             user_name:obj.nickname||obj.sender?.nickname||obj.sender?.card||obj.sender?.title,
             type: obj.post_type||event,
             detail_type: obj.message_type || obj.request_type || obj.system_type || obj.notice_type||'guild',

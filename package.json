@@ -1,6 +1,6 @@
 {
   "name": "zhin",
-  "version": "2.0.2-916",
+  "version": "2.0.3-9",
   "description": "知音",
   "main": "lib/index.js",
   "bin": {
@@ -38,9 +38,9 @@
   "author": "凉菜",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/liucl-cn/zhin/issues"
+    "url": "https://github.com/zhinjs/zhin/issues"
   },
-  "homepage": "https://github.com/liucl-cn/zhin#readme",
+  "homepage": "https://github.com/zhinjs/zhin#readme",
   "devDependencies": {
     "@types/js-yaml": "^4.0.5",
     "@types/koa": "^2.13.5",
@@ -70,7 +70,7 @@
     "chokidar": "^3.5.3",
     "esbuild": "^0.15.5",
     "esbuild-register": "^3.3.3",
-    "icqq": "^0.0.28",
+    "icqq": "^0.0.29",
     "js-yaml": "^4.1.0",
     "koa": "^2.13.4",
     "koa-bodyparser": "^4.3.0",

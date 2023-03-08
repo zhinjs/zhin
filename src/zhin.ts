@@ -35,10 +35,6 @@ import {Component} from "./component";
 import {Element} from "./element";
 import {promisify} from "util";
 
-const readFileSync = promisify(fs.readFile);
-const readdirSync = promisify(fs.readdir);
-const existsSync = promisify(fs.exists)
-const writeFileSync = promisify(fs.writeFile)
 let cp: ChildProcess
 
 interface Message {
@@ -121,7 +117,7 @@ export class Zhin extends Context {
         this.logger.info(`server listen at ${getIpAddress().map(ip => `http://${ip}:${options.port}`).join(' and ')}`)
         this.options = ref(options)
         watch(this.options, async (value: Zhin.Options) => {
-            await writeFileSync(process.env.configPath, Yaml.dump(value))
+            await fs.writeFileSync(process.env.configPath, Yaml.dump(value))
         })
         this.on('dispose', () => {
             server.close()
@@ -235,16 +231,16 @@ export class Zhin extends Context {
     }
 
     // 扫描项目依赖中的已安装的模块
-    async getInstalledModules<T extends Zhin.ModuleType>(moduleType: T): Promise<Zhin.Modules[T][]> {
+    getInstalledModules<T extends Zhin.ModuleType>(moduleType: T): Zhin.Modules[T][] {
         const result: Zhin.Modules[T][] = []
-        const loadManifest = async (packageName) => {
+        const loadManifest = (packageName) => {
             const filename = require.resolve(packageName + '/package.json')
-            const meta = JSON.parse(await readFileSync(filename, 'utf8'))
+            const meta = JSON.parse(fs.readFileSync(filename, 'utf8'))
             meta.dependencies ||= {}
             return meta
         }
-        const parsePackage = async (name) => {
-            const data = await loadManifest(name)
+        const parsePackage =(name) => {
+            const data = loadManifest(name)
             const result = pick(data, [
                 'name',
                 'version',
@@ -259,21 +255,21 @@ export class Zhin extends Context {
                 fullName: data.name,
             }
         }
-        const loadPackage = async (name) => {
+        const loadPackage = (name) => {
             try {
-                result.push(this.load((await parsePackage(name)).fullName, moduleType))
+                result.push(this.load(parsePackage(name).fullName, moduleType))
             } catch (error) {
                 this.logger.warn('failed to parse %c', name)
                 this.logger.warn(error)
             }
         }
-        const loadDirectory = async (baseDir) => {
+        const loadDirectory = (baseDir) => {
             const base = path.resolve(baseDir, 'node_modules')
-            const files = await existsSync(base) ? await readdirSync(base) : []
+            const files = fs.existsSync(base) ? fs.readdirSync(base) : []
             for (const name of files) {
                 const base2 = base + '/' + name
                 if (name === '@zhinjs') {
-                    const files = await readdirSync(base2)
+                    const files = fs.readdirSync(base2)
                     for (const name2 of files) {
                         if (name2.startsWith(`${moduleType}-`)) {
                             loadPackage(name + '/' + name2)
@@ -289,14 +285,14 @@ export class Zhin extends Context {
         }
         const startDir = path.dirname(__dirname)
         loadDirectory(startDir)
-        if (await existsSync(path.resolve(process.cwd(), this.options.plugin_dir))) {
-            const dirs=await readdirSync(path.resolve(process.cwd(), this.options.plugin_dir))
+        if (fs.existsSync(path.resolve(process.cwd(), this.options.plugin_dir))) {
+            const dirs=fs.readdirSync(path.resolve(process.cwd(), this.options.plugin_dir))
             result.push(
                 ...dirs.map((name) => this.load(name.replace(/\.(d\.)?[d|j]s$/, ''), moduleType))
             )
         }
-        if (await existsSync(path.resolve(__dirname, `${moduleType}s`))) {
-            const dirs=await readdirSync(path.resolve(__dirname, `${moduleType}s`))
+        if (fs.existsSync(path.resolve(__dirname, `${moduleType}s`))) {
+            const dirs=fs.readdirSync(path.resolve(__dirname, `${moduleType}s`))
             result.push(
                 ...dirs.map((name) => this.load(name.replace(/\.(d\.)?[d|j]s$/, ''), moduleType, true)))
         }
@@ -407,16 +403,16 @@ export class Zhin extends Context {
                 this.logger.warn(e.message, e.stack)
             }
         }
-        const installedPlugins = await this.getInstalledModules('plugin')
+        const installedPlugins = this.getInstalledModules('plugin')
         installedPlugins.forEach(plugin => {
             try {
-                this.plugin(plugin.fullName, plugin.setup)
+                this.plugin(plugin.name, plugin.setup)
             } catch (e) {
                 this.zhin.logger.warn(`自动载入插件(${plugin.name})失败：${e.message}`)
                 this.plugins.delete(plugin.fullName)
             }
         })
-        await this.emitSync('ready')
+        this.emitSync('ready')
         this.isReady = true
         await this.emitSync('start')
     }

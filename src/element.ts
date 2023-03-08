@@ -5,7 +5,6 @@ export interface Element<T extends Element.BaseType|string=string,A extends Elem
     [Element.key]: true
     type: T
     attrs: Element.Attrs<T>
-    parent?:Element
     children: (Element)[]
     source?: string
     toString(strip?: boolean): string
@@ -214,7 +213,8 @@ export namespace Element {
                 let [_, key, v1, v2 = v1] = attrCap
                 if (!isNullable(v2)) {
                     if (key.startsWith(':')) {
-                        token.attrs[key.slice(1)] = evaluate<S>(v2, context)
+                        let result=evaluate<S>(v2, context)
+                        token.attrs[key.slice(1)] = result===`return(${v2})`?`:${v2}`:result
                     } else {
                         token.attrs[key] = unescape(v2)
                     }
@@ -239,7 +239,8 @@ export namespace Element {
                     const [_, expr] = interpCap
                     pushText(unescape(source.slice(0, interpCap.index)))
                     source = source.slice(interpCap.index + _.length)
-                    const content = evaluate(expr, context)
+                    let result=evaluate(expr, context)
+                    const content = result===`{{${context}}}`?context:result
                     tokens.push(...toElementArray(content))
                 }
             }
@@ -253,16 +254,13 @@ export namespace Element {
                 const {children} = stack.shift()
                 const {source} = stack[0].children.pop()
                 const element=Element('text', {text: source})
-                element.parent=stack[0]
                 stack[0].children.push(element)
-                children.map(ele=>ele.parent=stack[0])
                 stack[0].children.push(...children)
             }
         }
 
         for (const token of tokens) {
             if (isElement(token)) {
-                token.parent=stack[0]
                 stack[0].children.push(token)
             } else if (token.close) {
                 let index = 0
@@ -270,7 +268,6 @@ export namespace Element {
                 if (index === stack.length) {
                     // no matching open tag
                     const child=Element('text', {text: token.source})
-                    child.parent=stack[0]
                     stack[0].children.push(child)
                 } else {
                     rollback(index)
@@ -279,7 +276,6 @@ export namespace Element {
                 }
             } else {
                 const element = Element(token.type, token.attrs)
-                element.parent=stack[0]
                 stack[0].children.push(element)
                 if (!token.empty) {
                     element.source = token.source
@@ -298,7 +294,7 @@ export namespace Element {
             return element.toString()
         }).join('')
     }
-    export function transform<S>(source: string | Element[], rules: Dict<Component>, session?: S) {
+    export function render<S>(source: string | Element[], rules: Dict<Component>, session?: S,runtime=session) {
         const elements=[].concat(source).reduce((result:Element[],item:string|boolean|number|Element)=>{
             if(Element.isElement(item)) result.push(item)
             else{
@@ -308,23 +304,44 @@ export namespace Element {
         },[] as Element[])
         const output: Fragment[] = []
         elements.forEach((element) => {
-            const {type, attrs, children} = element
+            const {type, attrs} = element
             let component:Component<S>|Fragment = rules[type] ?? rules.default ?? true
             if (typeof component!=="boolean" && typeof component==='object' && !(component instanceof Element)) {
-                const {render,...others}=component
-                component =render.apply(Object.assign(session,others) as S,[attrs, children]) as Fragment
+                runtime=Component.createRuntime(runtime,component,attrs)
+                Object.assign(runtime,transform(element,runtime).attrs)
+                component =render.apply(runtime as S,[element.attrs, element.children]) as Fragment
             }
             if (component === true) {
                 output.push(element)
             } else if (component !== false) {
-                output.push(...transform(toElementArray(component as Fragment),rules,session))
+                output.push(...render(toElementArray(component as Fragment),rules,session,runtime))
             }
         })
         return typeof source === 'string' ? output.join('') : output
     }
-
-    export async function transformAsync<S>(source: Element.Fragment, rules: Dict<Component>, session?: S) {
-        const elements=[].concat(source).reduce((result:Element[],item:string|boolean|number|Element)=>{
+    function transform(element:Element,runtime){
+        const {attrs,children}=element
+        for(const e of children){
+            if(e.type!=='text' || !(interpRegExp.test(e.attrs.text))) continue
+            const [_, expr] = interpRegExp.exec(e.attrs.text)
+            let result=evaluate(expr,runtime)
+            e.attrs.text=result===`return(${expr})`?`{{${expr}}`:result
+        }
+        for(const key in attrs){
+            if(typeof attrs[key]!=='string' || !attrs[key].startsWith(':')) continue
+            const val=attrs[key].replace(':','')
+            let result=evaluate(val,runtime)
+            attrs[key]=result===`return(${val})`?`:${val}`:result
+        }
+        element.attrs=attrs
+        element.children=children
+        return {
+            attrs,
+            children
+        }
+    }
+    export async function renderAsync<S>(source: Element.Fragment, rules: Dict<Component>, session?: S,runtime=session) {
+        const elements:Element[]=[].concat(source).reduce((result:Element[],item:string|boolean|number|Element)=>{
             if(Element.isElement(item)) result.push(item)
             else{
                 result.push(...parse(item+'',session))
@@ -333,16 +350,18 @@ export namespace Element {
         },[] as Element[])
         const result: Element[] = []
         for (const element of elements) {
-            const {type, attrs, children} = element
-            let component:Component<S>|Fragment = rules[type] ?? rules.default ?? true
+            const {type, attrs} = element
+            let component:Component.InitOption<S,{},{},()=>{}>|Fragment = rules[type] ?? rules.default ?? true
             if (typeof component!=="boolean" && typeof component==='object' && !(component instanceof Element)) {
-                const {render,...others}=component
-                component =await render.apply(Object.assign(session,others) as S,[attrs, children]) as Fragment
+                runtime=Component.createRuntime(runtime,component,attrs)
+                Object.assign(runtime,transform(element,runtime).attrs)
+                const {render}=component
+                component =await render.apply(runtime as S,[element.attrs, element.children]) as Fragment
             }
             if (component === true) {
                 result.push(element)
             } else if (component !== false) {
-                result.push(...await transformAsync(toElementArray(component as Fragment),rules,session))
+                result.push(...await renderAsync(toElementArray(component as Fragment),rules,session,runtime))
             }
         }
         return result

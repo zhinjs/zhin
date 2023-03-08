@@ -128,10 +128,9 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
         if (Array.isArray(result) && !result.length) return false
         return result
     }
-    // 渲染组件模板成基础元素AST树
     async render(elements: Element.Fragment = this.elements): Promise<Element[]> {
         const components=this.zhin.getSupportComponents(this as NSession<P>)
-        return await Element.transformAsync(elements, components, Zhin.createContext(this))
+        return await Element.renderAsync(elements, components, Zhin.createContext(this))
     }
 
     get [Symbol.unscopables]() {
@@ -152,7 +151,6 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
             }).map(key => [key, this[key]])
         )
     }
-
     async reply(message: Element.Fragment) {
         return this.bot.reply(this as any, message, this.bot.options.quote_self)
     }

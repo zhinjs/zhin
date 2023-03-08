@@ -180,7 +180,6 @@ export namespace Argv{
                         }
                     }
                     const element=Element('text',{text})
-                    element.parent=segment.parent
                     argvItem.push(element)
                     if(/'|"|”|’$/.test(text) && quoteEnd && quoteEnd===text[text.length-1]){
                         quoteEnd=''
@@ -190,7 +189,6 @@ export namespace Argv{
                         argvItem=[]
                     }else{
                         const element=Element('text',{text:' '})
-                        element.parent=segment.parent
                         argvItem.push(element)
                     }
                 })
