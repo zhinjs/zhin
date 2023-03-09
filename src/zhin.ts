@@ -352,6 +352,9 @@ export class Zhin extends Context {
         ].filter(Boolean))
         if (!resolved) throw new Error(`未找到${moduleType}(${name})`)
         const packageInfo = getPackageInfo(resolved)
+        if(packageInfo?.name){
+            packageInfo.name=packageInfo.name.replace(/(zhin-|^@zhinjs\/)(plugin|service|adapter)-/, '')
+        }
         let result: Record<string, any> = {setup}
         if (packageInfo?.setup || setup) {
             result.install = () => {
