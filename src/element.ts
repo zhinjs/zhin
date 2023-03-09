@@ -304,7 +304,7 @@ export namespace Element {
         },[] as Element[])
         const output: Fragment[] = []
         elements.forEach((element) => {
-            const {type, attrs} = element
+            const {type, attrs={}} = element
             let component:Component<S>|Fragment = rules[type] ?? rules.default ?? true
             if (typeof component!=="boolean" && typeof component==='object' && !(component instanceof Element)) {
                 runtime=Component.createRuntime(runtime,component,attrs)
@@ -350,7 +350,7 @@ export namespace Element {
         },[] as Element[])
         const result: Element[] = []
         for (const element of elements) {
-            const {type, attrs} = element
+            const {type, attrs={}} = element
             let component:Component.InitOption<S,{},{},()=>{}>|Fragment = rules[type] ?? rules.default ?? true
             if (typeof component!=="boolean" && typeof component==='object' && !(component instanceof Element)) {
                 runtime=Component.createRuntime(runtime,component,attrs)

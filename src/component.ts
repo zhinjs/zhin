@@ -79,7 +79,7 @@ export namespace Component {
 
     export type Render<S,P extends Dict> = Element.Render<S & P, P>
     export function createRuntime<S>(session:S,options:InitOption<S, {  },{},()=>{}>,attrs){
-        const {data:dataInitFunc,methods}=options
+        const {data:dataInitFunc=()=>({}),methods={}}=options
         const runtime=Object.assign(session,attrs)
         Object.keys(methods).forEach(key=>{
             if(typeof methods[key]==='function'){
