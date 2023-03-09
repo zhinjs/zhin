@@ -14,11 +14,29 @@ import {Logger} from "log4js";
 import {Bot} from "./bot";
 
 export class Context extends EventEmitter {
+    /**
+     * zhin实体
+     */
     zhin: Zhin
+    /**
+     * 当前上下文产生的插件
+     */
     plugins: Map<string, Plugin> = new Map<string, Plugin>()
+    /**
+     * 当前上下文产生的中间件
+     */
     middlewares: Middleware[] = []
+    /**
+     * 当前上下文产生的组件
+     */
     components: Dict<Component> = Object.create(null)
+    /**
+     * 当前上下文产生的指令
+     */
     commands: Map<string, Command> = new Map<string, Command>();
+    /**
+     * 卸载当前上下文需要执行的函数集合
+     */
     public readonly disposes: Dispose[] = []
 
     constructor(public parent: Context, public filter: Context.Filter = parent?.filter || Context.defaultFilter) {
@@ -40,54 +58,104 @@ export class Context extends EventEmitter {
         })
     }
 
+    /**
+     * 上下文继承
+     * @param ctx
+     */
     extend(ctx: Partial<Context>) {
         Object.assign(this, ctx)
         return this
     }
 
+    /**
+     * 选择values包含会话中指定key值的上下文
+     * @param key session的key
+     * @param values 对应key可以为哪些值
+     */
     pick<K extends keyof Session>(key: K, ...values: Session[K][]) {
         return Context.from(this, Context.withFilter(this, Session.checkProp(key, ...values)))
     }
 
+    /**
+     * 联合某一条件的上下文
+     * @param filter 过滤器
+     */
     union(filter: Context.Filter) {
         return Context.from(this, Context.union(this, filter))
     }
 
+    /**
+     * 排除某一条件的上下文
+     * @param filter 过滤器
+     */
     except(filter: Context.Filter) {
         return Context.from(this, Context.except(this, filter))
     }
 
+    /**
+     * 筛选带用户id的上下文
+     * @param user_ids 用户id数组
+     */
     user(...user_ids: (string | number)[]) {
         return this.pick('user_id', ...user_ids)
     }
 
+    /**
+     * 筛选群聊上下文
+     * @param group_ids 群id数组
+     */
     group(...group_ids: (string | number)[]) {
         return this.pick('group_id', ...group_ids)
     }
 
+    /**
+     * 筛选讨论组上下文
+     * @param discuss_ids 讨论组id数组
+     */
     discuss(...discuss_ids: (string | number)[]) {
         return this.pick('discuss_id', ...discuss_ids)
     }
 
+    /**
+     * 筛选频道上下文
+     * @param guild_ids 频道id数组
+     */
     guild(...guild_ids: string[]) {
         return this.pick('guild_id', ...guild_ids)
     }
 
+    /**
+     * 筛选子频道上下文
+     * @param channel_ids 自频道id数组
+     */
     channel(...channel_ids: string[]) {
         return this.pick('channel_id', ...channel_ids)
     }
 
+    /**
+     * 筛选指定平台的上下文
+     * @param platforms 平台类型数组
+     */
     platform(...platforms: (keyof Zhin.Adapters)[]) {
         return this.pick('protocol', ...platforms)
     }
 
+    /**
+     * 筛选私聊上下文
+     * @param user_ids 用户id数组
+     */
     private(...user_ids: (string | number)[]) {
         return this.pick('detail_type', 'private').pick('user_id', ...user_ids)
     }
 
+    /**
+     * zhin日志记录器
+     */
     public logger: Logger
 
-    // 获取当前上下文所有插件
+    /**
+     * 获取当前上下文所有插件
+     */
     get pluginList(): Plugin[] {
         const result = [...this.plugins.values()].reduce((result, plugin) => {
             if (plugin.context !== this) result.push(...plugin.context.pluginList)
@@ -96,7 +164,10 @@ export class Context extends EventEmitter {
         return result
     }
 
-    // 根据会话获取匹配的上下文
+    /**
+     * 根据会话获取匹配的上下文
+     * @param session 会话实体
+     */
     getMatchedContextList<P extends keyof Zhin.Adapters>(session: NSession<P>): Context[] {
         return this[Context.childKey].reduce((result, ctx) => {
             result.push(...ctx.getMatchedContextList(session))
@@ -108,8 +179,16 @@ export class Context extends EventEmitter {
         })
     }
 
-    // 为当前上下文添加插件
+    /**
+     * 为当前上下文添加插件
+     * @param name 插件名
+     * @param setup 是否setup插件
+     */
     plugin(name: string, setup?: boolean): Plugin | this
+    /**
+     * 为当前上下文添加插件
+     * @param plugin 插件安装配置对象
+     */
     plugin<P extends Plugin.Install>(plugin: P): this
     plugin<P extends Plugin.Install>(entry: string | P, setup?: boolean) {
         let options: Plugin.Options
@@ -144,7 +223,10 @@ export class Context extends EventEmitter {
         return this
     }
 
-    // 安装插件
+    /**
+     * 为当前上下文添加插件
+     * @param plugin 插件安装配置对象
+     */
     use<P extends Plugin.Install>(plugin: P): this {
         this.plugin(plugin)
         return this
@@ -161,7 +243,11 @@ export class Context extends EventEmitter {
         return result
     }
 
-    // 为当前上下文添加中间件
+    /**
+     * 为当前上下文添加中间件
+     * @param middleware 中间件
+     * @param prepend 是否插入到最前端
+     */
     middleware(middleware: Middleware, prepend?: boolean) {
         const method: 'push' | 'unshift' = prepend ? 'unshift' : "push"
         this.middlewares[method](middleware)
@@ -170,7 +256,9 @@ export class Context extends EventEmitter {
         })
     }
 
-    // 获取当前上下文所有组件
+    /**
+     * 获取当前上下文所有组件
+     */
     get componentList():Dict<Component> {
         const result = [...this.plugins.values()].reduce((result, plugin) => {
             if (plugin.context !== this) Object.assign(result, plugin.context.componentList)
@@ -184,7 +272,12 @@ export class Context extends EventEmitter {
         return result
     }
 
-    // 为当前上下文添加组件
+    /**
+     * 为当前上下文添加组件
+     * @param name 组件名(需确保唯一性)
+     * @param component 添加的组件
+     * @param options 组件配置项，仅在组件为纯函数时有效
+     */
     component(name: string, component: Component | Component['render'], options?: Omit<Component, 'render'>) {
         if (typeof component === 'function') component = {
             ...(options || {}),
@@ -195,7 +288,10 @@ export class Context extends EventEmitter {
             delete this.components[name]
         })
     }
-    // 获取当前上下文所有指令
+
+    /**
+     * 获取当前上下文所有指令
+     */
     get commandList(): Command[] {
         const result = [...this.plugins.values()].reduce((result, plugin) => {
             if (plugin.context !== this) result.push(...plugin.context.commandList)
@@ -207,7 +303,11 @@ export class Context extends EventEmitter {
         return result
     }
 
-    // 为当前上下文添加指令
+    /**
+     * 为当前上下文添加指令
+     * @param def 组件创建字面量
+     * @param trigger 触发环境（group:群聊 private:私聊 discuss:讨论组 guild:频道）不传则所有会话
+     */
     command<D extends string, T extends keyof TriggerSessionMap>(def: D, trigger?: T): Command<Argv.ArgumentType<D>, {}, T> {
         const namePath = def.split(' ', 1)[0]
         const decl = def.slice(namePath.length)
@@ -239,6 +339,11 @@ export class Context extends EventEmitter {
         return command as Command<Argv.ArgumentType<D>, {}, T>
     }
 
+    /**
+     * 监听事件
+     * @param event 事件名
+     * @param listener 回调函数
+     */
     on(event, listener) {
         super.on(event, listener)
         const dispose = Dispose.from(this, () => {
@@ -249,7 +354,9 @@ export class Context extends EventEmitter {
         return dispose
     }
 
-    // 往下级插件抛会话
+    /**
+     * 往下级插件抛会话，普通开发者用不上
+     */
     dispatch<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P]>(protocol: P, eventName: E, session: NSession<P, E>) {
         session.context = this
         if (session.match(this)) {
@@ -260,10 +367,24 @@ export class Context extends EventEmitter {
         }
     }
 
-    // 为zhin添加适配器
+    /**
+     * 为zhin添加适配器，若已安装，则直接返回该服务，若未安装，会自动查询本地模块中`@zhinjs/adapter-${adapter}`。
+     * @param adapter 适配平台
+     */
     adapter<K extends keyof Zhin.Adapters>(adapter: K): Zhin.Adapters[K]
+    /**
+     * 为zhin添加适配器，若已安装，则直接返回该服务，若未安装，会自动查询本地模块中`@zhinjs/adapter-${adapter}`。
+     * @param adapter 适配平台
+     * @param options 初始化适配器时的配置
+     */
     adapter<K extends keyof Zhin.Adapters>(adapter: K, options: AdapterOptionsType<Zhin.Adapters[K]>): this
-    adapter<K extends keyof Zhin.Adapters>(adapter: K, protocol: AdapterConstructs[K], options: AdapterOptionsType<Zhin.Adapters[K]>): this
+    /**
+     * 为zhin添加适配器
+     * @param adapter 适配平台
+     * @param construct 适配器构造函数
+     * @param options 初始化适配器时的配置
+     */
+    adapter<K extends keyof Zhin.Adapters>(adapter: K, construct: AdapterConstructs[K], options: AdapterOptionsType<Zhin.Adapters[K]>): this
     adapter<K extends keyof Zhin.Adapters>(adapter: K, Construct?: AdapterConstructs[K] | AdapterOptions, options?: AdapterOptions) {
         if (!Construct && !options) return this.zhin.adapters.get(adapter)
         if (typeof Construct !== "function") {
@@ -285,9 +406,23 @@ export class Context extends EventEmitter {
         }) as any
     }
 
-    // 为zhin添加服务
+    /**
+     * 为zhin添加服务，若已安装，则直接返回该服务，若未安装，会自动查询本地模块中`@zhinjs/service-${key}`。
+     * @param key 服务名
+     */
     service<K extends keyof Zhin.Services>(key: K): Zhin.Services[K]
+    /**
+     * 为zhin添加服务
+     * @param key 服务名
+     * @param service 服务实体
+     */
     service<K extends keyof Zhin.Services>(key: K, service: Zhin.Services[K]): this
+    /**
+     * 为zhin添加服务
+     * @param key 服务名
+     * @param constructor 服务构造函数
+     * @param options 初始化服务时的配置
+     */
     service<K extends keyof Zhin.Services, T>(key: K, constructor: Zhin.ServiceConstructor<Zhin.Services[K], T>, options?: T): this
     service<K extends keyof Zhin.Services, T>(key: K, Service?: Zhin.Services[K] | Zhin.ServiceConstructor<Zhin.Services[K], T>, options?: T): Zhin.Services[K] | this {
         if (Service === undefined) {
@@ -313,7 +448,12 @@ export class Context extends EventEmitter {
         return dispose
     }
 
-    // 效果同名
+    /**
+     * 定义原生setTimeout
+     * @param callback 同原生setTimeout入参
+     * @param ms 同原生setTimeout入参
+     * @param args 同原生setTimeout入参
+     */
     setTimeout(callback: Function, ms: number, ...args) {
         const timer = setTimeout(() => {
             callback()
@@ -325,7 +465,12 @@ export class Context extends EventEmitter {
         return dispose
     }
 
-    // 效果同名
+    /**
+     * 定义原生setInterval
+     * @param callback 同原生setInterval入参
+     * @param ms 同原生setInterval入参
+     * @param args 同原生setInterval入参
+     */
     setInterval(callback: Function, ms: number, ...args) {
         const timer = setInterval(callback, ms, ...args)
         const dispose = Dispose.from(this, () => clearInterval(timer))
@@ -333,7 +478,11 @@ export class Context extends EventEmitter {
         return dispose
     }
 
-    // 群发消息
+    /**
+     * 群发消息
+     * @param channelIds 群发的通道id数组
+     * @param content 群发的内容
+     */
     broadcast(channelIds: ChannelId | ChannelId[], content: Element.Fragment) {
         channelIds = [].concat(channelIds)
         return Promise.all(channelIds.map(channelId => {
@@ -347,6 +496,11 @@ export class Context extends EventEmitter {
         }).flat())
     }
 
+    /**
+     * 执行某一event的所有listener，并获取其返回值
+     * @param event 事件名
+     * @param args 传递给其listener的参数
+     */
     bail(event, ...args) {
         let result
         const listeners = this.listeners(event)
@@ -360,6 +514,11 @@ export class Context extends EventEmitter {
         }
     }
 
+    /**
+     * 同步执行某一event的所有listener，并获取其返回值
+     * @param event 事件名
+     * @param args 传递给其listener的参数
+     */
     async bailSync(event, ...args) {
         let result
         const listeners = this.listeners(event)
@@ -373,7 +532,10 @@ export class Context extends EventEmitter {
         }
     }
 
-    // 销毁当前上下文或当前上下文中的指定插件
+    /**
+     * 销毁指定上下文，如不传入插件，则销毁当前上下文，若传入插件，则销毁指定插件的上下文
+     * @param plugin
+     */
     dispose(plugin?: Plugin | string) {
         if (plugin) {
             if (typeof plugin === 'string') plugin = this.pluginList.find(p => p.name === plugin)
@@ -395,7 +557,11 @@ export class Context extends EventEmitter {
             }catch{}
         }
     }
-    // 获取所有可用的组件
+
+    /**
+     * 获得会话匹配的所有可用的组件
+     * @param session 会话
+     */
     getSupportComponents<P extends keyof Zhin.Adapters>(session:NSession<P>){
         return this.getMatchedContextList(session).reduce((result:Dict<Component>,context)=>{
             if(context===this) return result
@@ -403,7 +569,11 @@ export class Context extends EventEmitter {
             return result
         },{...this.components})
     }
-    // 获取所有可用的中间件
+
+    /**
+     * 获得会话匹配的所有可用的中间件
+     * @param session 会话
+     */
     getSupportMiddlewares<P extends keyof Zhin.Adapters>(session:NSession<P>){
         return this.getMatchedContextList(session).reduce((result:Middleware[],context)=>{
             if(context===this) return result
@@ -411,7 +581,11 @@ export class Context extends EventEmitter {
             return result
         },[...this.middlewares])
     }
-    // 获取所有可用的指令
+
+    /**
+     * 获得会话匹配的所有可用的指令
+     * @param session 会话
+     */
     getSupportCommands<P extends keyof Zhin.Adapters>(session:NSession<P>){
         return this.getMatchedContextList(session).reduce((result:Command[],context)=>{
             for(const command of context.getSupportCommands(session)){
