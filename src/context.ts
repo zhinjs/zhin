@@ -278,11 +278,7 @@ export class Context extends EventEmitter {
      * @param component 添加的组件
      * @param options 组件配置项，仅在组件为纯函数时有效
      */
-    component(name: string, component: Component | Component['render'], options?: Omit<Component, 'render'>) {
-        if (typeof component === 'function') component = {
-            ...(options || {}),
-            render: component
-        }
+    component(name: string, component: Component) {
         this.components[name] = component
         return Dispose.from(this, () => {
             delete this.components[name]
@@ -622,11 +618,7 @@ export interface Context extends Zhin.Services {
 
     bailSync<S extends string | symbol>(event: S & Exclude<S, keyof Zhin.EventMap<this>>, ...args: any[]): Promise<any>;
 
-    component(name: string, render: Component['render'], options?: Omit<Component, 'render'>): this
-
     component(name: string, component: Component): this
-
-    component(name: string, component: Component | Component['render'], options?: Omit<Component, 'render'>): this
 }
 
 export namespace Context {

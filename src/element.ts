@@ -1,6 +1,7 @@
 import {evaluate,  isNullable, makeArray,Awaitable, Dict} from "@zhinjs/shared";
 import {Component} from "@/component";
 import {Readable} from "stream";
+import {Session} from "@/session";
 export interface Element<T extends Element.BaseType|string=string,A extends Element.Attrs<T>=Element.Attrs<T>> {
     [Element.key]: true
     type: T
@@ -294,7 +295,7 @@ export namespace Element {
             return element.toString()
         }).join('')
     }
-    export function render<S>(source: string | Element[], rules: Dict<Component>, session?: S,runtime=session) {
+    export function render<S>(source: string | Element[], rules: Dict<Component>, session: S,runtime:Component.Runtime={session:session as any}) {
         const elements=[].concat(source).reduce((result:Element[],item:string|boolean|number|Element)=>{
             if(Element.isElement(item)) result.push(item)
             else{
@@ -305,11 +306,11 @@ export namespace Element {
         const output: Fragment[] = []
         elements.forEach((element) => {
             const {type, attrs={}} = element
-            let component:Component<S>|Fragment = rules[type] ?? rules.default ?? true
+            let component:Component|Fragment = rules[type] ?? rules.default ?? true
             if (typeof component!=="boolean" && typeof component==='object' && !(component instanceof Element)) {
                 runtime=Component.createRuntime(runtime,component,attrs)
-                Object.assign(runtime,transform(element,runtime).attrs)
-                component =render.apply(runtime as S,[element.attrs, element.children]) as Fragment
+                Object.assign(runtime,transform(element,runtime))
+                component =render.apply(runtime,[element.attrs, element.children]) as Fragment
             }
             if (component === true) {
                 output.push(element)
@@ -340,7 +341,7 @@ export namespace Element {
             children
         }
     }
-    export async function renderAsync<S>(source: Element.Fragment, rules: Dict<Component>, session?: S,runtime=session) {
+    export async function renderAsync<S>(source: Element.Fragment, rules: Dict<Component>, session?: S,runtime:Component.Runtime= {session:session as any}) {
         const elements:Element[]=[].concat(source).reduce((result:Element[],item:string|boolean|number|Element)=>{
             if(Element.isElement(item)) result.push(item)
             else{
@@ -351,12 +352,12 @@ export namespace Element {
         const result: Element[] = []
         for (const element of elements) {
             const {type, attrs={}} = element
-            let component:Component.InitOption<S,{},{},()=>{}>|Fragment = rules[type] ?? rules.default ?? true
+            let component:Component|Fragment = rules[type] ?? rules.default ?? true
             if (typeof component!=="boolean" && typeof component==='object' && !(component instanceof Element)) {
                 runtime=Component.createRuntime(runtime,component,attrs)
-                Object.assign(runtime,transform(element,runtime).attrs)
+                Object.assign(runtime,transform(element,runtime))
                 const {render}=component
-                component =await render.apply(runtime as S,[element.attrs, element.children]) as Fragment
+                component =await render.apply(runtime,[element.attrs, element.children]) as Fragment
             }
             if (component === true) {
                 result.push(element)

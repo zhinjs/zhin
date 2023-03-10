@@ -8,7 +8,7 @@ import {Prompt} from "./prompt";
 import {Context} from "@/context";
 
 export type FunctionPayloadWithSessionObj<E extends (...args: any[]) => any> = E extends (...args: infer R) => any ? ParametersToObj<R> : unknown
-export type ParametersToObj<A extends any[]> = A extends [infer R, ...infer L] ? R & R extends object ? R & { args: L } : { args: [R, ...L] } : Dict
+export type ParametersToObj<A extends any[]> = A extends [infer R, ...infer L] ? R extends object ? R & { args: L } : { args: [R, ...L] } : Dict
 export type NSession<P extends keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P]=keyof Zhin.BotEventMaps[P]>=Session<P> & (Zhin.BotEventMaps[P][E] extends (...args: any[]) => any?FunctionPayloadWithSessionObj<Zhin.BotEventMaps[P][E]>:unknown)
 export interface Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P]=keyof Zhin.BotEventMaps[P]> {
     protocol: P,
