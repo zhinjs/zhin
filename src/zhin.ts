@@ -258,9 +258,15 @@ export class Zhin extends Context {
         const loadPackage = (name) => {
             try {
                 result.push(this.load(parsePackage(name).fullName, moduleType))
-            } catch (error) {
-                this.logger.warn('failed to parse %c', name)
-                this.logger.warn(error)
+            } catch (e) {
+                let message=e.message||''
+                message=message.split('\n')[0]
+                if(/^Cannot find module '(\S+)'$/i.test(message)){
+                    const needModeule=/^Cannot find module '(\S+)'$/i.exec(message)[1]
+                    this.logger.warn(`获取模块${moduleType}(${name})详情失败:\n依赖 ${needModeule} 未安装，请使用 'npm install ${needModeule}' 后重试`);
+                }else{
+                    this.logger.warn(`获取模块${moduleType}(${name})详情失败:\n${message}`);
+                }
             }
         }
         const loadDirectory = (baseDir) => {

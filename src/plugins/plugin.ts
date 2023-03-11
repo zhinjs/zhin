@@ -34,7 +34,7 @@ command.subcommand('plugin.list')
             return plugins.map((o, idx) => {
                 const installStatus = ctx.zhin.hanMounted(o.fullName) ? ' (已载入)' : ''
                 let enableStatus = installStatus ? getPluginStatus(ctx, session, o.fullName) : ''
-                return `${idx + 1}.${o.fullName}${installStatus}${enableStatus} ${o.type}`
+                return `${idx + 1}.${o.name}${installStatus}${enableStatus} ${o.type}`
             }).join('\n')
         }else{
             const packages = await ctx.zhin.getMarketPackages()
@@ -65,7 +65,7 @@ command.subcommand('plugin.uninstall <name:string>')
     .desc('卸载指定插件')
     .action(async ({session}, name) => {
         const packages = await ctx.zhin.getInstalledModules('plugin')
-        const options=packages.find(p=>p.fullName===name)
+        const options=packages.find(p=>p.name===name)
         if (!options) return '没有安装该插件'
         await session.reply('已开始卸载...')
         try{
@@ -80,7 +80,7 @@ command.subcommand('plugin.mount <name:string>')
     .desc('载入指定插件')
     .action(async ({session}, name) => {
         const plugins=await ctx.zhin.getInstalledModules('plugin')
-        const options = plugins.find(p => p.fullName === name)
+        const options = plugins.find(p => p.name === name)
         if (!options) return '当前没有该插件'
         try {
             ctx.zhin.plugin(name)
@@ -92,7 +92,7 @@ command.subcommand('plugin.mount <name:string>')
 command.subcommand('plugin.unmount <name:string>')
     .desc('移除指定插件')
     .action(({session}, name) => {
-        const plugin = ctx.zhin.pluginList.find(p => p.options.fullName === name)
+        const plugin = ctx.zhin.pluginList.find(p => p.options.name === name)
         if (!plugin) return '尚未载入该插件'
         try {
             plugin.unmount()
