@@ -1,6 +1,6 @@
 {
   "name": "zhin",
-  "version": "2.0.3-19",
+  "version": "2.0.3-20",
   "description": "知音",
   "main": "lib/index.js",
   "bin": {
@@ -70,7 +70,7 @@
     "chokidar": "^3.5.3",
     "esbuild": "^0.15.5",
     "esbuild-register": "^3.3.3",
-    "icqq": "^0.0.31",
+    "icqq": "^0.0.33",
     "js-yaml": "^4.1.0",
     "koa": "^2.13.4",
     "koa-bodyparser": "^4.3.0",
