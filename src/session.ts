@@ -49,7 +49,9 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
         Object.assign(this, obj)
         this.prompt = new Prompt(this.bot, this as any, this.zhin.options.delay.prompt)
     }
-
+    get client(){
+        return this.bot.internal
+    }
     middleware(middleware: Middleware) {
         const fullId = Bot.getFullTargetId(this as any)
         return this.zhin.middleware(async (session, next) => {

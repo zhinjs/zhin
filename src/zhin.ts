@@ -4,6 +4,7 @@ import {getLogger, configure, Configuration} from "log4js";
 import * as Yaml from 'js-yaml'
 import * as path from 'path'
 import * as fs from 'fs'
+import {createZhinAPI} from "@/factory";
 
 export const version = require('../package.json').version
 import {
@@ -14,11 +15,10 @@ import {
     deepEqual,
     getCaller,
     getIpAddress,
-    Dict, pick, getValue
+    Dict, pick,
 } from "@zhinjs/shared";
 import {createServer, Server} from "http";
 import KoaBodyParser from "koa-bodyparser";
-import {Proxied} from 'obj-observer/lib/deepProxy'
 import {Command} from "./command";
 import {Argv} from "./argv";
 import {Plugin} from './plugin'
@@ -28,12 +28,10 @@ import {Adapter, AdapterOptionsType} from "./adapter";
 import {IcqqAdapter, IcqqBot, IcqqEventMap} from './adapters/icqq'
 import {NSession} from "./session";
 import {Middleware} from "./middleware";
-import {Dispose} from "./dispose";
 import {Router} from "./router";
 import {Request} from "@/request";
 import {Component} from "./component";
 import {Element} from "./element";
-import {promisify} from "util";
 
 let cp: ChildProcess
 
@@ -612,108 +610,6 @@ export namespace Zhin {
     }
 }
 
-function createZhinAPI() {
-    const contextMap: Map<string | symbol, Zhin> = new Map<string | symbol, Zhin>()
-    const createZhin = (options: Partial<Zhin.Options> | string) => {
-        if (contextMap.get(Zhin.key)) return contextMap.get(Zhin.key)
-        if (typeof options === 'string') {
-            if (!fs.existsSync(options)) fs.writeFileSync(options, Yaml.dump({
-                protocols: {
-                    oicq: {
-                        bots: []
-                    }
-                },
-                plugins: {
-                },
-                log_level: 'info',
-                delay: {
-                    prompt: 60000
-                },
-            }))
-            options = Yaml.load(fs.readFileSync(options, {encoding: 'utf8'}))
-        }
-        const zhin = new Zhin(deepMerge(deepClone(Zhin.defaultConfig), options))
-        contextMap.set(Zhin.key, zhin)
-        return zhin
-    }
-    const useContext = () => {
-        const zhin = contextMap.get(Zhin.key)
-        if (!zhin) throw new Error(`can't found zhin with context for key:${Zhin.key.toString()}`)
-        const callSite = getCaller()
-        const pluginFullPath = callSite.getFileName()
-        const context = zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath)?.context
-        if (context) return context
-        const pluginDir = path.dirname(pluginFullPath)
-        const reg = new RegExp(`${pluginDir}/index\.[tj]s`)
-        const parent = zhin.pluginList.find(plugin => {
-            return plugin.options.fullPath.match(reg)
-        })
-        if (parent) {
-            parent.context.plugin(pluginFullPath)
-            return zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath).context
-        }
-        zhin.plugin(pluginFullPath)
-        return zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath).context
-    }
-
-
-    function useOptions<K extends Zhin.Keys<Zhin.Options>>(path: K): Zhin.Value<Zhin.Options, K> {
-        const zhin = contextMap.get(Zhin.key)
-        if (!zhin) throw new Error(`can't found zhin with context for key:${Zhin.key.toString()}`)
-        const callSite = getCaller()
-        const pluginFullPath = callSite.getFileName()
-        const plugin = zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath)
-        const pathArr = path.split('.').filter(Boolean)
-        const result = getValue(zhin.options, pathArr)
-        const backupData = deepClone(result)
-        const unwatch = watch(zhin.options, (value) => {
-            const newVal = getValue(value, pathArr)
-            if (!deepEqual(backupData, newVal)) {
-                plugin.reLoad()
-            }
-        })
-        plugin.context.disposes.push(unwatch)
-        return getValue(zhin.options, path.split('.').filter(Boolean)) as Zhin.Value<Zhin.Options, K>
-    }
-
-    type EffectReturn = () => void
-    type EffectCallBack<T = any> = (value?: T, oldValue?: T) => void | EffectReturn
-
-    function useEffect<T extends object = object>(callback: EffectCallBack<T>, effect?: Proxied<T>) {
-        const zhin = contextMap.get(Zhin.key)
-        if (!zhin) throw new Error(`can't found zhin with context for key:${Zhin.key.toString()}`)
-        const callSite = getCaller()
-        const pluginFullPath = callSite.getFileName()
-        const plugin = zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath)
-        if (!effect) {
-            const dispose = callback()
-            if (dispose) {
-                plugin.context.on('dispose', dispose)
-            }
-        } else {
-            const unWatch = watch(effect, callback)
-            plugin.context.on('dispose', unWatch)
-        }
-
-    }
-
-    function onDispose(callback: Dispose) {
-        const zhin = contextMap.get(Zhin.key)
-        if (!zhin) throw new Error(`can't found zhin with context for key:${Zhin.key.toString()}`)
-        const callSite = getCaller()
-        const pluginFullPath = callSite.getFileName()
-        const plugin = zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath)
-        plugin.context.on('dispose', callback)
-    }
-
-    return {
-        createZhin,
-        useContext,
-        useEffect,
-        onDispose,
-        useOptions
-    }
-}
 
 export function createWorker(options: Zhin.WorkerOptions) {
     const {entry = 'lib', mode = 'production', config: configPath = 'zhin.yaml'} = options || {}
@@ -753,11 +649,17 @@ export function createWorker(options: Zhin.WorkerOptions) {
     return cp
 }
 
-const {createZhin, useContext, onDispose, useEffect, useOptions} = createZhinAPI()
+const {createZhin, useContext, onDispose, useEffect,useCommand,defineCommand,useComponent,listenOnce,listen,useMiddleware, useOptions} = createZhinAPI()
 export {
     createZhin,
     useContext,
+    listen,
+    listenOnce,
     useEffect,
+    defineCommand,
+    useCommand,
+    useMiddleware,
+    useComponent,
     onDispose,
     useOptions
 }
