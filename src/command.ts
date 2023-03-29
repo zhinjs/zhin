@@ -1,5 +1,5 @@
 import {Argv} from "./argv";
-import {Awaitable, Define} from "@zhinjs/shared";
+import {Awaitable, Define, Dict} from "@zhinjs/shared";
 import {Element} from './element'
 import {isEmpty} from "@zhinjs/shared";
 import {Zhin} from "./zhin";
@@ -20,9 +20,59 @@ export interface TriggerSessionMap {
     discuss: NSession<keyof Zhin.Adapters, 'message.discuss'>
     guild: NSession<keyof Zhin.Adapters, 'message.guild'>
 }
-
+type OptionConfig<D extends string,T extends Argv.Type>={
+    decl:D,
+    config?:Command.OptionConfig<T>
+}
+type ParseOptions<O extends Dict>={
+    [P in keyof O]:O[P] extends OptionConfig<infer D,infer T>?Command.OptionType<D>:Element.Fragment
+}
+export function defineCommandOption<T extends string,D extends Argv.Type>(options:OptionConfig<T,D>){
+    return options
+}
+type CommandOptions<D extends string, T extends keyof TriggerSessionMap,O extends Dict>={
+    fullName:string
+    args?:D
+    hidden?:boolean
+    example?:string|string[]
+    desc?:string|string[]
+    options?:O
+    trigger?:T
+    authority?:Command.Authority<T>|Command.Authority<T>[]
+    alias?:string|string[]
+    shortcuts?:Map<string|RegExp,Command.Shortcut>
+    check?:Command.Callback<Argv.ArgumentType<`${string} ${D}`>, ParseOptions<O>, T>|Command.Callback<Argv.ArgumentType<`${string} ${D}`>, ParseOptions<O>, T>[]
+    action:Command.Callback<Argv.ArgumentType<`${string} ${D}`>, ParseOptions<O>, T>|Command.Callback<Argv.ArgumentType<`${string} ${D}`>, ParseOptions<O>, T>[]
+}
+// 定义一个指令
+export function defineCommand<D extends string, T extends keyof TriggerSessionMap,O extends Dict>(options:CommandOptions<D,T,O>){
+    let command=new Command<Argv.ArgumentType<D>, ParseOptions<O>, T>(`${options.fullName}${options.args?` ${options.args}`:''}`)
+    command.fullName=options.fullName
+    if(options.options){
+        for(const key in options.options){
+            const config=options.options[key]
+            command.option<typeof key,typeof config.decl>(key,config.decl,config.config)
+        }
+    }
+    if(options.hidden) command.hidden()
+    if(options.example)[].concat(options.example).map(str=>command.example(str))
+    if(options.desc) [].concat(options.desc).map((str)=>command.desc(str))
+    if(options.trigger) command.trigger=options.trigger
+    if(options.authority) command.auth(...[].concat(options.authority))
+    if(options.alias) command.alias(...[].concat(options.alias))
+    if(options.shortcuts){
+        for(const [reg,config] of options.shortcuts){
+            command.shortcut(reg,config)
+        }
+    }
+    for(const action of [].concat(options.action)){
+        command.action(action)
+    }
+    return command
+}
 export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof TriggerSessionMap = keyof TriggerSessionMap> {
-    public name: string
+    name:string
+    fullName:string
     config:Command.Config
     args: Argv.Declaration[]
     context: Context

@@ -172,7 +172,7 @@ export class Context extends EventEmitter {
         return this[Context.childKey].reduce((result, ctx) => {
             result.push(...ctx.getMatchedContextList(session))
             return result
-        },[...this.plugins.values()].map(p=>p.context)).filter((ctx) => {
+        }, [...this.plugins.values()].map(p => p.context)).filter((ctx) => {
             if (!ctx[Context.plugin]) return session.match(ctx)
             const plugin = ctx[Context.plugin]
             return session.match(ctx) && plugin.status && session.bot.match(plugin) && plugin.match(session)
@@ -231,6 +231,7 @@ export class Context extends EventEmitter {
         this.plugin(plugin)
         return this
     }
+
     // 获取当前上下文所有中间件
     get middlewareList() {
         const result = [...this.plugins.values()].reduce((result, plugin) => {
@@ -259,7 +260,7 @@ export class Context extends EventEmitter {
     /**
      * 获取当前上下文所有组件
      */
-    get componentList():Dict<Component> {
+    get componentList(): Dict<Component> {
         const result = [...this.plugins.values()].reduce((result, plugin) => {
             if (plugin.context !== this) Object.assign(result, plugin.context.componentList)
             return result
@@ -320,6 +321,7 @@ export class Context extends EventEmitter {
         }
         const name = nameArr.pop()
         const command = new Command(name + decl)
+        command.fullName=namePath
         command.trigger = trigger
         command.context = this
         if (parent) {
@@ -384,7 +386,7 @@ export class Context extends EventEmitter {
     adapter<K extends keyof Zhin.Adapters>(adapter: K, Construct?: AdapterConstructs[K] | AdapterOptions, options?: AdapterOptions) {
         if (!Construct && !options) return this.zhin.adapters.get(adapter)
         if (typeof Construct !== "function") {
-            const result = this.zhin.load(adapter, 'adapter',false)
+            const result = this.zhin.load(adapter, 'adapter', false)
             if (result && result.install) {
                 result.install(this, options)
             }
@@ -422,8 +424,8 @@ export class Context extends EventEmitter {
     service<K extends keyof Zhin.Services, T>(key: K, constructor: Zhin.ServiceConstructor<Zhin.Services[K], T>, options?: T): this
     service<K extends keyof Zhin.Services, T>(key: K, Service?: Zhin.Services[K] | Zhin.ServiceConstructor<Zhin.Services[K], T>, options?: T): Zhin.Services[K] | this {
         if (Service === undefined) {
-            if(this.zhin.services.get(key)) return this.zhin.services.get(key)
-            Service=this.zhin.load(key,'service',false) as Zhin.Services[K] | Zhin.ServiceConstructor<Zhin.Services[K], T>
+            if (this.zhin.services.get(key)) return this.zhin.services.get(key)
+            Service = this.zhin.load(key, 'service', false) as Zhin.Services[K] | Zhin.ServiceConstructor<Zhin.Services[K], T>
         }
         if (this.zhin[key]) throw new Error('服务key不能和bot已有属性重复')
         if (this.zhin.services.has(key)) throw new Error('重复定义服务')
@@ -550,7 +552,8 @@ export class Context extends EventEmitter {
             const dispose = this.disposes.shift()
             try {
                 dispose()
-            }catch{}
+            } catch {
+            }
         }
     }
 
@@ -558,39 +561,39 @@ export class Context extends EventEmitter {
      * 获得会话匹配的所有可用的组件
      * @param session 会话
      */
-    getSupportComponents<P extends keyof Zhin.Adapters>(session:NSession<P>){
-        return this.getMatchedContextList(session).reduce((result:Dict<Component>,context)=>{
-            if(context===this) return result
-            Object.assign(result,context.getSupportComponents(session))
+    getSupportComponents<P extends keyof Zhin.Adapters>(session: NSession<P>) {
+        return this.getMatchedContextList(session).reduce((result: Dict<Component>, context) => {
+            if (context === this) return result
+            Object.assign(result, context.getSupportComponents(session))
             return result
-        },{...this.components})
+        }, {...this.components})
     }
 
     /**
      * 获得会话匹配的所有可用的中间件
      * @param session 会话
      */
-    getSupportMiddlewares<P extends keyof Zhin.Adapters>(session:NSession<P>){
-        return this.getMatchedContextList(session).reduce((result:Middleware[],context)=>{
-            if(context===this) return result
+    getSupportMiddlewares<P extends keyof Zhin.Adapters>(session: NSession<P>) {
+        return this.getMatchedContextList(session).reduce((result: Middleware[], context) => {
+            if (context === this) return result
             result.push(...context.getSupportMiddlewares(session))
             return result
-        },[...this.middlewares])
+        }, [...this.middlewares])
     }
 
     /**
      * 获得会话匹配的所有可用的指令
      * @param session 会话
      */
-    getSupportCommands<P extends keyof Zhin.Adapters>(session:NSession<P>){
-        return this.getMatchedContextList(session).reduce((result:Command[],context)=>{
-            for(const command of context.getSupportCommands(session)){
-                if(command.match(session as any)){
+    getSupportCommands<P extends keyof Zhin.Adapters>(session: NSession<P>) {
+        return this.getMatchedContextList(session).reduce((result: Command[], context) => {
+            for (const command of context.getSupportCommands(session)) {
+                if (command.match(session as any)) {
                     result.push(command)
                 }
             }
             return result
-        },[...this.commands.values()])
+        }, [...this.commands.values()])
     }
 }
 

@@ -5,7 +5,7 @@ import path from "path";
 import {watch} from "obj-observer";
 import {Proxied} from "obj-observer/lib/deepProxy";
 import {Dispose} from "@/dispose";
-import {Argv, Command, Component, TriggerSessionMap, Zhin} from "@";
+import {Command, Component, Zhin} from "@";
 import {Context} from "@/context";
 import {Middleware} from "@/middleware";
 
@@ -56,12 +56,6 @@ export function createZhinAPI() {
         zhin.plugin(pluginFullPath)
         return zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath).context
     }
-    // 定义一个指令
-    const defineCommand=<D extends string, T extends keyof TriggerSessionMap>(decl: D, trigger?: T)=>{
-        const command=new Command('{placeholder} '+decl)
-        command.trigger=trigger
-        return command as Command<Argv.ArgumentType<`{placeholder} ${D}`>, {}, T>
-    }
     // 添加指定组件到插件中
     const useComponent=(name:string,component:Component)=>{
         const zhin = zhinMap.get(Zhin.key)
@@ -99,13 +93,13 @@ export function createZhinAPI() {
         return context.middleware(middleware)
     }
     // 添加指令到插件中
-    const useCommand=(name:string,command:Command)=>{
+    const useCommand=(command:Command)=>{
         const zhin = zhinMap.get(Zhin.key)
         if (!zhin) throw new Error(`can't found zhin with context for key:${Zhin.key.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
         const context=getContext(pluginFullPath)
-        const elements = name.split(/(?=[/])/g)
+        const elements = command.fullName.split(/(?=[/])/g)
         let parent: Command, nameArr = []
         while (elements.length) {
             const segment = elements.shift()
@@ -121,10 +115,10 @@ export function createZhinAPI() {
             command.parent = parent
             parent.children.push(command)
         }
-        context.commands.set(name, command)
+        context.commands.set(command.name, command)
         zhin.emit('command-add', command, context)
         context.disposes.push(() => {
-            context.commands.delete(name)
+            context.commands.delete(command.name)
             zhin.emit('command-remove', command, context)
         })
     }
@@ -196,7 +190,6 @@ export function createZhinAPI() {
         useMiddleware,
         useCommand,
         useComponent,
-        defineCommand,
         onDispose,
         useOptions
     }

@@ -100,7 +100,6 @@ export class Zhin extends Context {
         }
         this.logger = getLogger('[zhin]')
         this.logger.level = options.log_level || 'info'
-        const _this = this
         const koa = new Koa()
         const server = createServer(koa.callback())
         const router = new Router(server, {prefix: ''})
@@ -147,8 +146,8 @@ export class Zhin extends Context {
             let result = await session.execute()
             if (!result) return next()
             return session.reply(await session.render(result))
-
         })
+        let _this=this
         return new Proxy(this, {
             get(target: typeof _this, p: string | symbol, receiver: any): any {
                 let result = Reflect.get(target, p, receiver)
@@ -649,14 +648,13 @@ export function createWorker(options: Zhin.WorkerOptions) {
     return cp
 }
 
-const {createZhin, useContext, onDispose, useEffect,useCommand,defineCommand,useComponent,listenOnce,listen,useMiddleware, useOptions} = createZhinAPI()
+const {createZhin, useContext, onDispose, useEffect,useCommand,useComponent,listenOnce,listen,useMiddleware, useOptions} = createZhinAPI()
 export {
     createZhin,
     useContext,
     listen,
     listenOnce,
     useEffect,
-    defineCommand,
     useCommand,
     useMiddleware,
     useComponent,
