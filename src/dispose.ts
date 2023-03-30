@@ -6,6 +6,6 @@ export namespace Dispose{
             get(target, p: string | symbol, receiver: any): any {
                 return Reflect.get(source, p, receiver)
             }
-        })
+        }) as ToDispose<T>
     }
 }

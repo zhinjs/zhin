@@ -1,22 +1,11 @@
 import {ref, watch} from 'obj-observer'
-import {fork, ChildProcess} from "child_process";
-import {getLogger, configure, Configuration} from "log4js";
+import {ChildProcess, fork} from "child_process";
+import {Configuration, configure, getLogger} from "log4js";
 import * as Yaml from 'js-yaml'
 import * as path from 'path'
 import * as fs from 'fs'
 import {createZhinAPI} from "@/factory";
-
-export const version = require('../package.json').version
-import {
-    deepClone,
-    deepMerge,
-    wrapExport,
-    getPackageInfo,
-    deepEqual,
-    getCaller,
-    getIpAddress,
-    Dict, pick,
-} from "@zhinjs/shared";
+import {deepEqual, Dict, getIpAddress, getPackageInfo, pick, wrapExport,} from "@zhinjs/shared";
 import {createServer, Server} from "http";
 import KoaBodyParser from "koa-bodyparser";
 import {Command} from "./command";
@@ -32,6 +21,8 @@ import {Router} from "./router";
 import {Request} from "@/request";
 import {Component} from "./component";
 import {Element} from "./element";
+
+export const version = require('../package.json').version
 
 let cp: ChildProcess
 
@@ -91,10 +82,15 @@ export class Zhin extends Context {
     options: Zhin.Options
     adapters: Map<keyof Zhin.Adapters, Adapter> = new Map<keyof Zhin.Adapters, Adapter>()
     services: Map<keyof Zhin.Services, any> = new Map<keyof Zhin.Services, any>()
-    public zhin: Zhin = this
 
     constructor(options: Zhin.Options) {
         super(null);
+        const result=this.zhin=new Proxy(this, {
+            get(target: Zhin, p: string | symbol, receiver: any): any {
+                if (target.services.has(p as keyof Zhin.Services)) return target.services.get(p as keyof Zhin.Services)
+                return Reflect.get(target, p, receiver)
+            }
+        })
         if (options.logConfig) {
             configure(options.logConfig as Configuration)
         }
@@ -147,15 +143,7 @@ export class Zhin extends Context {
             if (!result) return next()
             return session.reply(await session.render(result))
         })
-        let _this=this
-        return new Proxy(this, {
-            get(target: typeof _this, p: string | symbol, receiver: any): any {
-                let result = Reflect.get(target, p, receiver)
-                if (result !== undefined) return result
-                result = Reflect.get(target.services, p, receiver)
-                return result
-            }
-        })
+        return result
     }
 
     // 更改zhin的配置
@@ -341,10 +329,10 @@ export class Zhin extends Context {
         }
 
         const getType = (resolvePath: string) => {
-            if (resolvePath.includes(`@zhinjs/${moduleType}-`)) return 'official'
-            if (resolvePath.includes(`zhin-${moduleType}-`)) return 'community'
-            if (resolvePath.startsWith(path.resolve(__dirname, 'plugins'))) return 'built'
-            return 'custom'
+            if (resolvePath.includes(`@zhinjs/${moduleType}-`)) return Plugin.PluginSource.official
+            if (resolvePath.includes(`zhin-${moduleType}-`)) return Plugin.PluginSource.community
+            if (resolvePath.startsWith(path.resolve(__dirname, 'plugins'))) return Plugin.PluginSource.built
+            return Plugin.PluginSource.local
         }
         const resolved = getModulesPath([
             this.options[`${moduleType}_dir`] ? path.resolve(this.options[`${moduleType}_dir`], name) : null,// 用户自定义插件/服务/游戏目录

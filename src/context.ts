@@ -1,5 +1,6 @@
 import {isBailed, remove, Dict} from "@zhinjs/shared";
 import {Zhin, isConstructor, ChannelId} from "./zhin";
+import {JobCallback, RecurrenceRule, RecurrenceSpecDateRange, RecurrenceSpecObjLit, scheduleJob} from 'node-schedule'
 import {Dispose} from "./dispose";
 import {Adapter, AdapterConstructs, AdapterOptions, AdapterOptionsType} from "./adapter";
 import {Middleware} from "./middleware";
@@ -12,7 +13,6 @@ import {Plugin} from "@/plugin";
 import {Component} from "./component";
 import {Logger} from "log4js";
 import {Bot} from "./bot";
-
 export class Context extends EventEmitter {
     /**
      * zhin实体
@@ -286,6 +286,18 @@ export class Context extends EventEmitter {
         })
     }
 
+    /**
+     * 添加定时任务
+     */
+    schedule(rule:RecurrenceRule | RecurrenceSpecDateRange | RecurrenceSpecObjLit | Date | string | number,callback:JobCallback){
+        const job=scheduleJob(rule,callback)
+        const dispose=Dispose.from(this,()=>{
+            job.cancel()
+            remove(this.disposes,dispose)
+        })
+        this.disposes.push(dispose)
+        return dispose
+    }
     /**
      * 获取当前上下文所有指令
      */

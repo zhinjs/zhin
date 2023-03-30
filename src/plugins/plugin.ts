@@ -1,7 +1,10 @@
 import {Context} from "@/context";
+import {Plugin} from "@/plugin";
 import {exec} from "child_process";
 import {promisify} from 'util'
 import {Session, useContext, Zhin} from "@";
+import PluginSource = Plugin.PluginSource;
+
 const promiseExec=promisify(exec)
 const changeDependency=async (name?:string,unInstall?:boolean)=>{
     const cmd=`npm ${unInstall?'un':''}install ${name?? ''} --force`
@@ -27,9 +30,9 @@ const command = ctx.command('plugin')
     .hidden()
 command.subcommand('plugin.list')
     .desc('显示插件列表')
-    .option('official','-o 显示社区插件')
+    .option('cloud','-c 显示云端插件')
     .action(async ({session,options}) => {
-        if(!options.official){
+        if(!options.cloud){
             const plugins=await ctx.zhin.getInstalledModules('plugin')
             return plugins.map((o, idx) => {
                 const installStatus = ctx.zhin.hanMounted(o.fullName) ? ' (已载入)' : ''
@@ -48,6 +51,7 @@ command.subcommand('plugin.list')
 
 command.subcommand('plugin.install <name:string>')
     .desc('安装指定插件')
+    .auth('master')
     .action(async ({session}, name) => {
         const packages = await ctx.zhin.getMarketPackages()
         const options=packages.find(p=>p.name===name)
@@ -62,14 +66,16 @@ command.subcommand('plugin.install <name:string>')
         }
     })
 command.subcommand('plugin.uninstall <name:string>')
+    .auth('master')
     .desc('卸载指定插件')
     .action(async ({session}, name) => {
-        const packages = await ctx.zhin.getInstalledModules('plugin')
+        const packages = ctx.zhin.getInstalledModules('plugin')
         const options=packages.find(p=>p.name===name)
         if (!options) return '没有安装该插件'
+        if([PluginSource.built,PluginSource.local].includes(options.type)) return '只有模块化的插件才能卸载'
         await session.reply('已开始卸载...')
         try{
-            const [success,err]=await changeDependency(`${name}`,true)
+            const [success,err]=await changeDependency(`${options.fullName}`,true)
             return success?'卸载成功':`卸载失败:\n${err}`
         }catch (e){
             ctx.zhin.logger.warn(e.message)
@@ -78,6 +84,7 @@ command.subcommand('plugin.uninstall <name:string>')
     })
 command.subcommand('plugin.mount <name:string>')
     .desc('载入指定插件')
+    .auth('master','admins')
     .action(async ({session}, name) => {
         const plugins=await ctx.zhin.getInstalledModules('plugin')
         const options = plugins.find(p => p.name === name)
@@ -91,6 +98,7 @@ command.subcommand('plugin.mount <name:string>')
     })
 command.subcommand('plugin.unmount <name:string>')
     .desc('移除指定插件')
+    .auth('master','admins')
     .action(({session}, name) => {
         const plugin = ctx.zhin.pluginList.find(p => p.options.name === name)
         if (!plugin) return '尚未载入该插件'

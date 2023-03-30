@@ -85,7 +85,7 @@ export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
         this.internal.login(Number(this.options.self_id), this.options.password)
     }
     stop(){
-        this.internal.offTrap()
+        this.internal.offTrap(/^(notice|request|message).+/)
         this.internal.logout()
     }
     isChannelAdmin(session){

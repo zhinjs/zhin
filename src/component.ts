@@ -127,7 +127,7 @@ export namespace Component {
             }))
             .component('execute', defineComponent({
                 render(attrs, children) {
-                    return this.execute(children)
+                    return this.session.execute(children)
                 }
             }))
             .component('prompt', defineComponent({

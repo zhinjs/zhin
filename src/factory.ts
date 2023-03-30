@@ -47,7 +47,7 @@ export function createZhinAPI() {
         const pluginDir = path.dirname(pluginFullPath)
         const reg = new RegExp(`${pluginDir}/index\.[tj]s`)
         const parent = zhin.pluginList.find(plugin => {
-            return plugin.options.fullPath.match(reg)
+            return plugin.options.fullPath?.match(reg)
         })
         if (parent) {
             parent.context.plugin(pluginFullPath)
