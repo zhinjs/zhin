@@ -1,7 +1,6 @@
 import {evaluate,  isNullable, makeArray,Awaitable, Dict} from "@zhinjs/shared";
 import {Component} from "@/component";
 import {Readable} from "stream";
-import {Session} from "@/session";
 export interface Element<T extends Element.BaseType|string=string,A extends Element.Attrs<T>=Element.Attrs<T>> {
     [Element.key]: true
     type: T

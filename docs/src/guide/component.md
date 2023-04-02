@@ -2,6 +2,7 @@
 # 组件
 
 - zhin 提供了组件以增加代码的复用性，zhin 的组件系统在一定程度上参考了 Vue.js 的语法，从而实现了高易学性和一定的移植性
+- 在组件中，你可以直接获取到当前会话的一些变量，这类似于vue的vuex，是根据会话产生环境自动生成的
 
 ## 文本插值
 
@@ -24,12 +25,12 @@
   <ChatMsg id="1659488338"><span v-pre>output &lt;image src="https://maohaoji.com/image标签.gif"/&gt;</span></ChatMsg>
   <ChatMsg id="1689919782"> <!--  image标签示例图片由taidixiong233提供 github.com/taidixiong233 !--><img alt="" style="height:100px" src="https://maohaoji.com/image标签.gif" /></ChatMsg>
   </ChatHistory>
-  可以看到，使用 src 标签可以很快的发送想要发送的图片，下面我们来看一个使用 v-bind 和 image 标签获取用户头像的实例
+  可以看到，使用 src 标签可以很快的发送想要发送的图片，下面我们来看一个使用 image 标签获取用户头像的实例
   <ChatHistory>
   <ChatMsg id="1659488338"><span v-pre>output &lt;image :src="`https://q1.qlogo.cn/g?b=qq&nk=${sender.user_id}&s=100`"/&gt;</span></ChatMsg>
   <ChatMsg id="1689919782"> <!--  image标签示例图片由taidixiong233提供 github.com/taidixiong233 !--><img alt="" style="height:100px" src="https://q1.qlogo.cn/g?b=qq&nk=1659488338&s=100" /></ChatMsg>
   </ChatHistory>
-  ps 这里的:src 是 v-bind:src 的缩写，在 zhin 中，请尽可能使用缩写形式，这可以很好的改善可读性，zhin 的 v-bind 使用方法和 vue 相同，详情可以浏览 vuejs 的 v-bind 文档
+  ps 这里的:src 代表此处使用变量为src赋值，在 zhin 中，不支持v-bind代替这个语法，请注意与vue的区别;session可选字段参考`Session`
 
 ## template 标签
 

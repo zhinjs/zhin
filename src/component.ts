@@ -1,15 +1,16 @@
-import {Random, Time} from "@zhinjs/shared";
+import {Awaitable, Random, Time} from "@zhinjs/shared";
 import {Context} from "@/context";
 import {Session} from "@/session";
+import {Element} from "@/element";
 
 
-export type DefineComponent<PropsOptions = Component.ObjectPropsOptions, D = {}, M extends Component.MethodOptions = {}, Props = Component.ExtractPropTypes<PropsOptions>> =
-    Component.OptionsBase<Props, D, M>
+export type DefineComponent<P = Component.ObjectPropsOptions, D = {}, M extends Component.MethodOptions = {}, PT = Component.ExtractPropTypes<P>> =
+    Component.OptionsBase<PT, D, M>
     & {
-    props?: PropsOptions & ThisType<void>;
-} & ThisType<Component.Runtime<Props, D, M>>;
+    props?: P & ThisType<void>;
+} & ThisType<Component.Runtime<PT, D, M>>;
 
-export function defineComponent<PropsOptions extends Component.ComponentPropsOptions, D, M extends Component.MethodOptions = {}>(options: DefineComponent<PropsOptions, D, M>): DefineComponent<PropsOptions, D, M> {
+export function defineComponent<P extends Component.ComponentPropsOptions, D, M extends Component.MethodOptions = {}>(options: DefineComponent<P, D, M>): DefineComponent<P, D, M> {
     return options
 }
 
@@ -24,15 +25,6 @@ export namespace Component {
         [K in keyof P]: Prop<P[K]> | null;
     };
 
-    interface PropOptions<T = any, D = T> {
-        type?: PropType<T> | true | null;
-        required?: boolean;
-        default?: D | DefaultFactory<D> | null | undefined | object;
-
-        validator?(value: unknown): boolean;
-    }
-
-    type DefaultFactory<T> = (props: Data) => T | null | undefined;
     type PropConstructor<T = any> = {
         new(...args: any[]): T & {};
     } | {
@@ -48,7 +40,7 @@ export namespace Component {
     } : never;
 
     export type PropType<T> = PropConstructor<T> | PropConstructor<T>[];
-    export type Prop<T, D = T> = PropOptions<T, D> | PropType<T>;
+    export type Prop<T> =PropType<T>;
     export type ComponentPropsOptions<P = Data> = ObjectPropsOptions<P> | string[];
 
     export interface MethodOptions {
@@ -84,7 +76,7 @@ export namespace Component {
         type: DateConstructor;
     }] ? Date : [T] extends [(infer U)[] | {
         type: (infer U)[];
-    }] ? U extends DateConstructor ? Date | InferPropType<U> : InferPropType<U> : [T] extends [Prop<infer V, infer D>] ? unknown extends V ? IfAny<V, V, D> : V : T;
+    }] ? U extends DateConstructor ? Date | InferPropType<U> : InferPropType<U> : T;
 
     export type IfAny<T, Y, N> = 0 extends 1 & T ? Y : N;
 
@@ -102,7 +94,7 @@ export namespace Component {
         & M;
 
     export interface OptionsBase<Props, D, M extends MethodOptions> extends LegacyOptions<Props, D, M> {
-        render: Function
+        render(this:Component.Runtime<Props, D, M>,props:Props,children:Element[]):Awaitable<Element.Fragment>
     }
 
     export function createRuntime(old: Runtime, component: Component, attrs) {
@@ -135,7 +127,6 @@ export namespace Component {
                     type: String
                 },
                 async render(props, children) {
-
                     return await this.session.prompt[this.type ||= 'text'](children.join(''), props)
                 }
             }))
