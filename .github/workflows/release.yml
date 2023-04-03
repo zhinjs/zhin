@@ -1,8 +1,8 @@
 name: Release and Publish
 on:
   push:
-    comment:
-      - 'bump version'
+    branches:
+      - main
 permissions:
   contents: write
   pull-requests: write
