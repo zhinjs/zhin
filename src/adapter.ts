@@ -1,6 +1,6 @@
 import {Bot, BotConstruct, BotList, BotOptions} from "./bot";
 import {Zhin} from "./zhin";
-import {NSession} from "./Session";
+import {NSession} from "./session";
 import {Logger} from "log4js";
 import {EventEmitter} from "events";
 import {Dispose} from "./dispose";
