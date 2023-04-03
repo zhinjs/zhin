@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.3](https://github.com/zhinjs/zhin/compare/v2.0.2...v2.0.3) (2023-04-03)
+
+
+### Bug Fixes
+
+* 修复版本号错误 ([40531fd](https://github.com/zhinjs/zhin/commit/40531fd70a1709efbe083cb9a335efc9a2384ec6))
+
 ## [1.0.1](https://github.com/zhinjs/zhin/compare/v1.0.0...v1.0.1) (2023-04-03)
 
 
