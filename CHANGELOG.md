@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.4](https://github.com/zhinjs/zhin/compare/v2.0.3...v2.0.4) (2023-04-04)
+
+
+### Bug Fixes
+
+* 将icqq 移入peerDependencies，并指定为最新版本(latest) ([d3eecdf](https://github.com/zhinjs/zhin/commit/d3eecdf39d76aa5840a007026fe26f3d53140c09))
+
 ## [2.0.3](https://github.com/zhinjs/zhin/compare/v2.0.2...v2.0.3) (2023-04-03)
 
 
