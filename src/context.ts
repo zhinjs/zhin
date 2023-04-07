@@ -317,7 +317,7 @@ export class Context extends EventEmitter {
      * @param def 组件创建字面量
      * @param trigger 触发环境（group:群聊 private:私聊 discuss:讨论组 guild:频道）不传则所有会话
      */
-    command<D extends string, T extends keyof TriggerSessionMap>(def: D, trigger?: T): Command<Argv.ArgumentType<D>, {}, T> {
+    command<D extends string, T extends keyof TriggerSessionMap>(def: D, trigger?: T): Command<Argv.ArgumentType<D>, {},any, T> {
         const namePath = def.split(' ', 1)[0]
         const decl = def.slice(namePath.length)
         const elements = namePath.split(/(?=[/])/g)
@@ -346,7 +346,7 @@ export class Context extends EventEmitter {
             this.commands.delete(name)
             this.zhin.emit('command-remove', command, this)
         })
-        return command as Command<Argv.ArgumentType<D>, {}, T>
+        return command as Command<Argv.ArgumentType<D>, {},any, T>
     }
 
     /**
@@ -409,7 +409,7 @@ export class Context extends EventEmitter {
         const dispose = this.zhin.on(`${adapter}.message`, (session) => {
             this.zhin.emitSync('message', session)
         })
-        this.zhin.adapters.set(adapter, new Construct(this.zhin, adapter, options))
+        this.zhin.adapters.set(adapter, new Construct(this.zhin, adapter, options) as any)
         return Dispose.from(this, () => {
             dispose()
             this.zhin.adapters.delete(adapter)
@@ -496,13 +496,13 @@ export class Context extends EventEmitter {
     broadcast(channelIds: ChannelId | ChannelId[], content: Element.Fragment) {
         channelIds = [].concat(channelIds)
         return Promise.all(channelIds.map(channelId => {
-            const [platform, self_id, target_type = platform, target_id = self_id] = channelId.split(':')
-            const bots = [...this.zhin.adapters.values()].reduce((result, adapter) => {
-                if (platform === target_type) result.push(...(adapter.bots as Zhin.Bot[]))
-                else if (platform === adapter.protocol) result.push(...(adapter.bots.filter(bot => bot.self_id === self_id) as Zhin.Bot[]))
+            const [protocol, self_id, target_type = protocol, target_id = self_id] = channelId.split(':')
+            const bots:Bot[] = [...this.zhin.adapters.values()].reduce((result, adapter) => {
+                if (protocol === target_type) result.push(...(adapter.bots))
+                else if (protocol === adapter.protocol) result.push(...(adapter.bots.filter(bot => bot.self_id === self_id)))
                 return result
-            }, [] as Bot[])
-            return bots.map(bot => bot.sendMsg(Number(target_id), <"private" | "group" | "discuss" | "guild">target_type, content))
+            }, [])
+            return bots.map((bot) => bot.sendMsg(Number(target_id), <"private" | "group" | "discuss" | "guild">target_type, content))
         }).flat())
     }
 

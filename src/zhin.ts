@@ -21,6 +21,7 @@ import {Router} from "./router";
 import {Request} from "@/request";
 import {Component} from "./component";
 import {Element} from "./element";
+import {Bot} from "@/bot";
 
 export const version = require('../package.json').version
 
@@ -444,7 +445,7 @@ export namespace Zhin {
         icqq: IcqqBot
     }
 
-    export type Bot = Bots[keyof Bots]
+    export type AdapterBot = Bots[keyof Bots]
     export const key = Symbol('Zhin')
 
     export interface Services {
@@ -510,7 +511,7 @@ export namespace Zhin {
         'dispose'(): void
 
         'message'(session: NSession<keyof Adapters>): void
-
+        'message.send'(message:Bot.MessageRet):void
         'command-add'(command: Command): void
 
         'command-remove'(command: Command): void
@@ -536,9 +537,7 @@ export namespace Zhin {
     type MapKey<S extends string, K extends string | number | symbol> = K extends string | number ? `${S}.${K}` : K
     type MapValue<M extends BaseEventMap, E extends keyof M> = M[E] extends (...args: any[]) => any ? M[E] : (...args: any[]) => any
 
-    export interface EventMap<T> extends LifeCycle, ServiceLifeCycle, BeforeEventMap, AfterEventMap, FlatBotEventMap {
-    }
-
+    export type EventMap<T> ={} & LifeCycle & ServiceLifeCycle & BeforeEventMap & AfterEventMap & FlatBotEventMap
     export type AdapterConfig = {
         [P in keyof Zhin.Adapters]?: AdapterOptionsType<Adapters[P]>
     }
@@ -635,7 +634,6 @@ export function createWorker(options: Zhin.WorkerOptions) {
     })
     return cp
 }
-
 const {createZhin, useContext, onDispose, useEffect,useCommand,useComponent,listenOnce,listen,useMiddleware, useOptions} = createZhinAPI()
 export {
     createZhin,

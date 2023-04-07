@@ -1,6 +1,6 @@
 {
   "name": "zhin",
-  "version": "2.0.4",
+  "version": "2.0.4-3",
   "description": "知音",
   "main": "lib/index.js",
   "bin": {
@@ -27,7 +27,7 @@
     "ts",
     "typescript",
     "zhin",
-    "onebot",
+    "oneBot",
     "cqhttp",
     "oicq",
     "framework",

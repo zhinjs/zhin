@@ -14,11 +14,11 @@ interface HelpOptions {
     simple?: boolean
 }
 
-export interface TriggerSessionMap {
-    private: NSession<keyof Zhin.Adapters, 'message.private'>
-    group: NSession<keyof Zhin.Adapters, 'message.group'>
-    discuss: NSession<keyof Zhin.Adapters, 'message.discuss'>
-    guild: NSession<keyof Zhin.Adapters, 'message.guild'>
+export interface TriggerSessionMap<P extends keyof Zhin.Adapters=keyof Zhin.Adapters> {
+    private: NSession<P, 'message.private'>
+    group: NSession<P, 'message.group'>
+    discuss: NSession<P, 'message.discuss'>
+    guild: NSession<P, 'message.guild'>
 }
 type OptionConfig<D extends string,T extends Argv.Type>={
     decl:D,
@@ -41,12 +41,12 @@ type CommandOptions<D extends string, T extends keyof TriggerSessionMap,O extend
     authority?:Command.Authority<T>|Command.Authority<T>[]
     alias?:string|string[]
     shortcuts?:Map<string|RegExp,Command.Shortcut>
-    check?:Command.Callback<Argv.ArgumentType<`${string} ${D}`>, ParseOptions<O>, T>|Command.Callback<Argv.ArgumentType<`${string} ${D}`>, ParseOptions<O>, T>[]
-    action:Command.Callback<Argv.ArgumentType<`${string} ${D}`>, ParseOptions<O>, T>|Command.Callback<Argv.ArgumentType<`${string} ${D}`>, ParseOptions<O>, T>[]
+    check?:Command.Callback<Argv.ArgumentType<`${string} ${D}`>, ParseOptions<O>,any, T>|Command.Callback<Argv.ArgumentType<`${string} ${D}`>, ParseOptions<O>,any, T>[]
+    action:Command.Callback<Argv.ArgumentType<`${string} ${D}`>, ParseOptions<O>,any, T>|Command.Callback<Argv.ArgumentType<`${string} ${D}`>, ParseOptions<O>,any, T>[]
 }
 // 定义一个指令
 export function defineCommand<D extends string, T extends keyof TriggerSessionMap,O extends Dict>(options:CommandOptions<D,T,O>){
-    let command=new Command<Argv.ArgumentType<D>, ParseOptions<O>, T>(`${options.fullName}${options.args?` ${options.args}`:''}`)
+    let command=new Command<Argv.ArgumentType<D>, ParseOptions<O>,any, T>(`${options.fullName}${options.args?` ${options.args}`:''}`)
     command.fullName=options.fullName
     if(options.options){
         for(const key in options.options){
@@ -70,7 +70,7 @@ export function defineCommand<D extends string, T extends keyof TriggerSessionMa
     }
     return command
 }
-export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof TriggerSessionMap = keyof TriggerSessionMap> {
+export class Command<A extends any[] = any[], O extends {} = {},P extends keyof Zhin.Adapters=keyof Zhin.Adapters,T extends keyof TriggerSessionMap<P> = keyof TriggerSessionMap<P>> {
     name:string
     fullName:string
     config:Command.Config
@@ -81,8 +81,8 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
     children: Command[] = []
     descriptions: string[] = []
     shortcuts: Command.Shortcut[] = []
-    private checkers: Command.Callback<A, O, T>[] = []
-    private callback: Command.Callback<A, O, T>[] = []
+    private checkers: Command.Callback<A, O,P, T>[] = []
+    private callback: Command.Callback<A, O,P, T>[] = []
     public examples: string[] = []
     public aliasNames: string[] = []
     public options: Record<string, Command.OptionConfig> = {}
@@ -119,7 +119,7 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
     }
 
     // 添加验证回调函数
-    check(checker: Command.Callback<A, O, T>) {
+    check(checker: Command.Callback<A, O,P, T>) {
         this.checkers.push(checker)
         return this
     }
@@ -131,7 +131,7 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
     }
 
     // 定义子指令
-    subcommand<D extends string, T extends keyof TriggerSessionMap>(def: D, trigger?: T): Command<Argv.ArgumentType<D>, {}, T> {
+    subcommand<D extends string, T extends keyof TriggerSessionMap<P>>(def: D, trigger?: T): Command<Argv.ArgumentType<D>, {},P, T> {
         const command = this.context.command(def, trigger)
         command.parent = this
         this.children.push(command)
@@ -190,7 +190,7 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
     }
 
     // 添加执行的操作
-    action(callback: Command.Callback<A, O, T>) {
+    action(callback: Command.Callback<A, O,P, T>) {
         this.callback.push(callback)
         return this
     }
@@ -301,7 +301,7 @@ export class Command<A extends any[] = any[], O extends {} = {}, T extends keyof
     }
 
     // 执行指令
-    async execute(argv: Argv<A, O, T>): Promise<Element.Fragment | boolean | void> {
+    async execute(argv: Argv<A, O,P, T>): Promise<Element.Fragment | boolean | void> {
         // 匹配参数、选项
         this.parseShortcut(argv)
         if (argv.error) {
@@ -401,8 +401,8 @@ export namespace Command {
         declaration?: Argv.Declaration
     }
     export type MessageType=keyof TriggerSessionMap
-    export type Callback<A extends any[] = any[], O extends {} = {}, T extends MessageType = MessageType>
-        = (this: Command<A, O, T>, argv: Argv<A, O, T>, ...args: A) => Awaitable<Element.Fragment| void>
+    export type Callback<A extends any[] = any[], O extends {} = {},P extends keyof Zhin.Adapters=keyof Zhin.Adapters, T extends MessageType = MessageType>
+        = (this: Command<A, O,P, T>, argv: Argv<A, O,P, T>, ...args: A) => Awaitable<Element.Fragment| void>
     export type Authority<T extends MessageType=MessageType>= T extends 'group'|'guild'?'master' | 'admins'|'owner'|'admin':'master' | 'admins'
     export type OptionType<S extends string> = Argv.ExtractFirst<Argv.Replace<S, '>', ']'>, any>
 

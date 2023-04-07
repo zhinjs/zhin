@@ -1,6 +1,6 @@
 import {Bot, BotConstruct, BotList, BotOptions} from "./bot";
 import {Zhin} from "./zhin";
-import {NSession} from "./session";
+import {NSession, Session} from "./session";
 import {Logger} from "log4js";
 import {EventEmitter} from "events";
 import {Dispose} from "./dispose";
@@ -13,10 +13,10 @@ interface AdapterConstruct<K extends keyof Zhin.Adapters=keyof Zhin.Adapters,BO 
 export type AdapterOptions<BO ={}, AO = {}> = {
     bots?: BotOptions<BO>[]
 } & AO
-export type AdapterOptionsType<A extends Adapter>=A extends Adapter<infer K,infer BO,infer AO>?AdapterOptions<BO, AO>:unknown
+export type AdapterOptionsType<T extends Zhin.Adapters[keyof Zhin.Adapters]>=T extends Adapter<infer K,infer BO,infer AO>?AdapterOptions<BO, AO>:unknown
 
 export abstract class Adapter<K extends keyof Zhin.Adapters=keyof Zhin.Adapters, BO = {}, AO = {}>  extends EventEmitter{
-    public bots:BotList
+    public bots:BotList<K>
     logger:Logger
     private _status:Record<string,Adapter.BotStatus>={}
     protected constructor(public zhin:Zhin, public protocol:K, public options:AdapterOptions<BO,AO>) {
@@ -43,6 +43,7 @@ export abstract class Adapter<K extends keyof Zhin.Adapters=keyof Zhin.Adapters,
             if(!set) cache.set(time,set=new Set())
             set.add(message.message_id)
             this.botStatus(bot_id).sent_msg_cnt++
+            this.zhin.emit('message.send',message)
         })
     }
     protected readonly _cache = new Map<string, Map<number,Set<string>>>()
@@ -90,7 +91,9 @@ export abstract class Adapter<K extends keyof Zhin.Adapters=keyof Zhin.Adapters,
     }
     dispatch<E extends keyof Zhin.BotEventMaps[K]>(eventName:E,session:NSession<K,E>){
         this.emit(eventName as any,session)
-        this.zhin.dispatch(this.protocol,eventName,session)
+        if(session instanceof Session){
+            this.zhin.dispatch(this.protocol,eventName,session)
+        }
     }
     protected async start(...args:any[]){
         for (const botOptions of this.options.bots) {
@@ -101,7 +104,7 @@ export abstract class Adapter<K extends keyof Zhin.Adapters=keyof Zhin.Adapters,
     protected startBot(options:BotOptions<BO>){
         const Construct=Bot.botConstructors[this.protocol]
         if(!Construct) throw new Error(`can not find bot constructor from protocol:${this.protocol}`)
-        const bot=new Construct(this.zhin,this as Zhin.Adapters[K],options)
+        const bot=new Construct(this.zhin,this as any,options)
         this.status[bot.self_id]={
             lost_times: 0,
             msg_cnt_per_min: 0,

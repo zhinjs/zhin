@@ -3,12 +3,12 @@ import {Element} from "@/element";
 import {TriggerSessionMap} from "./command";
 import {Zhin} from "./zhin";
 
-export interface Argv<A extends any[] = any[], O = {},T extends keyof TriggerSessionMap=keyof TriggerSessionMap> {
+export interface Argv<A extends any[] = any[], O = {},P extends keyof Zhin.Adapters=keyof Zhin.Adapters,T extends keyof TriggerSessionMap<P>=keyof TriggerSessionMap<P>> {
     name?:string//指令名称
     argv?:Element[][]
     session:TriggerSessionMap[T]
     atMe?:boolean
-    bot?:Zhin.Bot
+    bot?:Zhin.Bots[P]
     elements?: Element[]//原文
     args?: A//携带的args
     options?: O//携带的options
@@ -19,7 +19,6 @@ export interface Argv<A extends any[] = any[], O = {},T extends keyof TriggerSes
 export namespace Argv{
     export interface Domain {
         any: Element[]
-        text:string
         string: string
         mention: Element
         user_id:string|number
@@ -92,17 +91,6 @@ export namespace Argv{
         if(element.type==='text') return element.attrs.text
         if(element.type==='mention' && element.attrs.user_id) return element.attrs.user_id
         return '无效的user_id'
-    })
-    createDomain('text', (source) => {
-        let result:string=''
-        for(const elem of source){
-            if(elem.type==='text'){
-                result+=elem.attrs.text
-            }else{
-                break;
-            }
-        }
-        return result
     })
     createDomain('boolean', (source) => {
         return !source[0].attrs.text.startsWith('-no')

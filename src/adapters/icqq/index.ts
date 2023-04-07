@@ -68,19 +68,35 @@ export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
         this.internal.on('system.offline',()=>{
             this.adapter.emit('bot.offline',this.self_id)
         })
-        this.callApi=async <K extends keyof Bot.Methods>(apiName:K, ...args:Parameters<Bot.Methods[K]>)=> {
-            switch (apiName){
-                case "deleteMsg":
-                    return await this.internal.deleteMsg(args[0] as string) as ReturnType<Bot.Methods[K]>
-                case "sendMsg":
-                    return await sendMsg.apply(this.internal,args as any)as ReturnType<Bot.Methods[K]>
-                case 'getMsg':
-                    const res=await this.internal.getMsg(args[0] as string)
-                    return {...res,elements:toElement(res.message)} as ReturnType<Bot.Methods[K]>
-            }
-        }
     }
 
+    async sendMsg(target_id:string|number,target_type:Bot.MessageType,message:Element.Fragment):Promise<Bot.MessageRet>{
+        message=Element.toElementArray(message)
+        const {message_id}=await sendMsg.apply(this.internal,[target_id,target_type,message])
+        const messageRet:Bot.MessageRet={
+            message_id,
+            from_id:this.self_id,
+            user_id:this.self_id,
+            to_id:target_id,
+            type:target_type,
+            elements:message as Element[]
+        }
+        this.adapter.emit(`message.send`,this.self_id,messageRet)
+        return messageRet
+    }
+    async getMsg(message_id:string):Promise<Bot.Message>{
+        const message=await this.internal.getMsg(message_id)
+        return {
+            user_id:message.user_id,
+            from_id:message.sender.user_id,
+            type:message.message_type,
+            to_id:this.self_id,
+            elements:toElement(message.message)
+        }
+    }
+    async deleteMsg(message_id:string){
+        return this.internal.deleteMsg(message_id)
+    }
     start() {
         this.internal.login(Number(this.options.self_id), this.options.password)
     }
@@ -92,10 +108,10 @@ export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
         return false
     }
     isGroupAdmin(session): boolean {
-        return session.message_type==='group' && session.member.is_admin
+        return session.detail_type==='group' && session.member.is_admin
     }
     isGroupOwner(session): boolean {
-        return session.message_type==='group' && session.member.is_owner
+        return session.detail_type==='group' && session.member.is_owner
     }
 
     createSession<E extends keyof EventMap>(event: E, ...args: Parameters<EventMap[E]>): NSession<'icqq',E> {

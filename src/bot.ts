@@ -16,7 +16,7 @@ export type BotOptions<O={}>={
     admins?:(string|number)[]
 } & O
 
-export class Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I extends object=object> extends EventEmitter{
+export class Bot<K extends keyof Zhin.Adapters=keyof Zhin.Adapters,BO={},AO={},I=object> extends EventEmitter{
     public internal:I
     public options:BotOptions<BO>
     constructor(public zhin:Zhin,public adapter:Adapter<K,BO,AO>,options:BotOptions<BO>) {
@@ -62,11 +62,11 @@ export class Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I extends
         return !this.options.disable_plugins.includes(plugin.options.fullName)
     }
     // 会话发起者是否为zhin主人
-    isMaster(session:NSession<K>){
+    isMaster<P extends keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P]=keyof Zhin.BotEventMaps[P]>(session:NSession<P,E>){
         return this.options.master===session.user_id
     }
     // 会话发起者是否为zhin管理员
-    isAdmin(session:NSession<K>){
+    isAdmin<P extends keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P]=keyof Zhin.BotEventMaps[P]>(session:NSession<P,E>){
         return this.options.admins && this.options.admins.includes(session.user_id)
     }
     reply(session:NSession<K>,message:Element.Fragment,quote?:boolean){
@@ -76,45 +76,35 @@ export class Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I extends
         if(replyElem) message.unshift(replyElem)
         return this.sendMsg(session.group_id||session.discuss_id||session.user_id||`${session.guild_id}:${session.channel_id}`,session.detail_type as Bot.MessageType,message)
     }
-    async sendMsg(target_id:string|number,target_type:Bot.MessageType,message:Element.Fragment):Promise<Bot.MessageRet>{
-        message=Element.toElementArray(message)
-        const {message_id}=await this.callApi('sendMsg',target_id,target_type,message)
-        const messageRet:Bot.MessageRet={
-            message_id,
-            from_id:this.self_id,
-            user_id:this.self_id,
-            to_id:target_id,
-            type:target_type,
-            elements:message as Element[]
-        }
-        this.adapter.emit(`message.send`,this.self_id,messageRet)
-        return messageRet
+    callApi<T extends keyof I>(apiName:T,...args:Params<I[T]>){
+        const fn=this.internal[apiName]
+        return typeof fn==='function'?fn.apply(this.internal,args):fn
     }
 }
-export interface Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I extends object=object>{
+type Params<T>=T extends (...args:infer R)=>any ? R:never
+type Return<T>=T extends ((...args:any[])=>infer R)?R:T
+export interface Bot<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={},I=object>{
     self_id:string|number
     options:BotOptions<BO>
     adapter:Adapter<K,BO,AO>
     zhin:Zhin
+    sendMsg(target_id:string|number,target_type:Bot.MessageType,message:Element.Fragment):Promise<Bot.MessageRet>
+    getMsg(message_id:string):Promise<Bot.Message>
+    deleteMsg(message_id:string):Promise<boolean>
     createSession(event: string, ...args: any[]): NSession<K>
-    callApi<K extends keyof Bot.Methods>(apiName:K,...args:Parameters<Bot.Methods[K]>):Promise<ReturnType<Bot.Methods[K]>>
+    callApi<K extends keyof I>(apiName:K,...args:Params<I[K]>):Promise<Return<I[K]>>
     // 会话发起者是否为群管理员
-    isGroupAdmin?(session:NSession<K>):boolean
+    isGroupAdmin?<P extends keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P]=keyof Zhin.BotEventMaps[P]>(session:NSession<P,E>):boolean
     // 会话发起者是否为频道管理员
-    isChannelAdmin?(session:NSession<K>):boolean
+    isChannelAdmin?<P extends keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P]=keyof Zhin.BotEventMaps[P]>(session:NSession<P,E>):boolean
     // 会话发起者是否为群主
-    isGroupOwner?(session:NSession<K>):boolean
+    isGroupOwner?<P extends keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P]=keyof Zhin.BotEventMaps[P]>(session:NSession<P,E>):boolean
     start():any
 }
-export type BotConstructors={
-    [P in (keyof Zhin.Adapters)]?:BotConstruct<P>
+export type BotConstructs={
+    [P in keyof Zhin.Adapters]?:BotConstruct<P>
 }
 export namespace Bot{
-    export interface Methods{
-        sendMsg(target_id:string|number,target_type:MessageType,message:Element.Fragment):MessageRet
-        getMsg(message_id:string):Message
-        deleteMsg(message_id:string):boolean
-    }
     export type MessageType='private'|'group'|'discuss'|'guild'
     export interface MessageRet extends Message{
         message_id:string
@@ -132,14 +122,15 @@ export namespace Bot{
             session.user_id
         ].filter(Boolean).join(':') as FullTargetId
     }
-    export const botConstructors:BotConstructors={}
+    export const botConstructors:BotConstructs={}
     export function define<K extends keyof Zhin.Adapters>(key: K, botConstruct: BotConstruct<K>) {
+        // @ts-ignore
         botConstructors[key]=botConstruct
     }
 }
-export class BotList extends Array<Zhin.Bot>{
+export class BotList<K extends keyof Zhin.Adapters> extends Array<Zhin.Bots[K]>{
     get(self_id:string|number){
-        return this.find(bot=>bot.self_id===self_id || bot.self_id===Number(self_id)) as Zhin.Bot
+        return this.find(bot=>bot.self_id===self_id || bot.self_id===Number(self_id)) as Zhin.Bots[K]
     }
 }
 export type BotConstruct<K extends keyof Zhin.Bots=keyof Zhin.Bots,BO={},AO={}>={
@@ -151,10 +142,6 @@ export namespace Bot{
         enable:true,
         disable_plugins:[],
         admins:[]
-    }
-    interface MsgBase{
-        user_id:string|number
-        elements:Element[]
     }
     export interface Message{
         from_id:string|number

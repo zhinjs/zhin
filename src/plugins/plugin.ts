@@ -44,7 +44,7 @@ command.subcommand('plugin.list')
             return packages.map((o,idx)=>{
                 const installStatus = ctx.zhin.hanMounted(o.name) ? ' (已载入)' : ''
                 let enableStatus = installStatus ? getPluginStatus(ctx, session, o.name) : ''
-                return `${idx + 1}.${o.name}${installStatus}${enableStatus} ${o.scope==='zhinjs'?'官方':'社区'}`
+                return `${idx + 1}.${o.name}@${o.version}${installStatus}${enableStatus} ${o.scope==='zhinjs'?'官方':'社区'}`
             }).join('\n')
         }
     })
@@ -52,13 +52,14 @@ command.subcommand('plugin.list')
 command.subcommand('plugin.install <name:string>')
     .desc('安装指定插件')
     .auth('master')
-    .action(async ({session}, name) => {
+    .option('version','-v <version:string> 指定版本，默认最新版')
+    .action(async ({session,options}, name) => {
         const packages = await ctx.zhin.getMarketPackages()
-        const options=packages.find(p=>p.name===name)
-        if (!options) return '没有该插件'
+        const info=packages.find(p=>p.name===name)
+        if (!info) return '没有该插件'
         await session.reply('已开始安装...')
         try{
-            const [success,err]=await changeDependency(`${name}@${options.version}`)
+            const [success,err]=await changeDependency(`${name}@${options.version||info.version}`)
             return success?'安装成功':`安装失败:\n${err}`
         }catch (e){
             ctx.zhin.logger.warn(e.message)
@@ -111,9 +112,14 @@ command.subcommand('plugin.unmount <name:string>')
     })
 command.subcommand('plugin.detail <name:string>')
     .desc('查看指定插件详情')
-    .action(({options}, name) => {
+    .action(async ({options}, name) => {
         const plugin = ctx.zhin.pluginList.find(p => p.options.fullName === name)
-        if (!plugin) return '未找到插件：' + name
+        if (!plugin) {
+            const packages = await ctx.zhin.getMarketPackages()
+            const info=packages.find(p=>p.name===name)
+            if(info) return JSON.stringify(info,null,2)
+            return '未找到插件：' + name
+        }
         return JSON.stringify(plugin.info, null, 2)
             .replace(/"/g, '')
             .replace(/\\/g, '')
