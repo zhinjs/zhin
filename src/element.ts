@@ -90,6 +90,7 @@ export namespace Element {
         image:{src:string|Buffer|Readable},
         record:{src:string|Buffer|Readable},
         video:{src:string|Buffer|Readable},
+        audio:{src:string|Buffer|Readable},
         text:{text:string},
         mention:{user_id:string|number}
         face:{id:number}
@@ -126,7 +127,7 @@ export namespace Element {
 
     const tagRegExp = /<!--[\s\S]*?-->|<(\/?)([^!\s>/]*)([^>]*?)\s*(\/?)>/
     const attrRegExp = /([^\s=]+)(?:="([^"]*)"|='([^']*)')?/g
-    const interpRegExp = /\{\{([^{}]*)\}\}/
+    const interpRegExp = /\{\{([^{{]*)\}\}/
 
     interface Token {
         type: string
@@ -196,7 +197,7 @@ export namespace Element {
 
     export function parse<S>(source: string, context?: S) {
         const tokens: (Element | Token)[] = []
-
+        source=source.replace(/<>([^<>]*)<\/>/g,(s,a)=>`<template>${a}</template>`)
         function pushText(content: string) {
             if (content) tokens.push(Element('text', {text: content}))
         }

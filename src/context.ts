@@ -170,7 +170,7 @@ export class Context extends EventEmitter {
      */
     getMatchedContextList<P extends keyof Zhin.Adapters>(session: NSession<P>): Context[] {
         return this[Context.childKey].reduce((result, ctx) => {
-            result.push(...ctx.getMatchedContextList(session))
+            if(session.match(ctx)) result.push(ctx,...ctx.getMatchedContextList(session))
             return result
         }, [...this.plugins.values()].map(p => p.context)).filter((ctx) => {
             if (!ctx[Context.plugin]) return session.match(ctx)
@@ -489,8 +489,18 @@ export class Context extends EventEmitter {
     }
 
     /**
-     * 群发消息
-     * @param channelIds 群发的通道id数组
+     * 向指定通道发送消息
+     * @param channel {import('zhin').Context.MsgChannel} 通道信息
+     * @param msg {import('zhin').Element.Fragment} 消息内容
+     */
+    sendMsg(channel:Context.MsgChannel,msg:Element.Fragment){
+        const {protocol,bot_id,target_id,target_type}=channel
+        return this.zhin.pickBot(protocol,bot_id)
+            .sendMsg(target_id,target_type,msg)
+    }
+    /**
+     * 广播一条消息
+     * @param channelIds 消息的通道id数组
      * @param content 群发的内容
      */
     broadcast(channelIds: ChannelId | ChannelId[], content: Element.Fragment) {
@@ -498,10 +508,10 @@ export class Context extends EventEmitter {
         return Promise.all(channelIds.map(channelId => {
             const [protocol, self_id, target_type = protocol, target_id = self_id] = channelId.split(':')
             const bots:Bot[] = [...this.zhin.adapters.values()].reduce((result, adapter) => {
-                if (protocol === target_type) result.push(...(adapter.bots))
+                if (protocol === target_type) result.push(...adapter.bots)
                 else if (protocol === adapter.protocol) result.push(...(adapter.bots.filter(bot => bot.self_id === self_id)))
                 return result
-            }, [])
+            }, [] as Bot[])
             return bots.map((bot) => bot.sendMsg(Number(target_id), <"private" | "group" | "discuss" | "guild">target_type, content))
         }).flat())
     }
@@ -575,8 +585,7 @@ export class Context extends EventEmitter {
      */
     getSupportComponents<P extends keyof Zhin.Adapters>(session: NSession<P>) {
         return this.getMatchedContextList(session).reduce((result: Dict<Component>, context) => {
-            if (context === this) return result
-            Object.assign(result, context.getSupportComponents(session))
+            Object.assign(result, {...context.components})
             return result
         }, {...this.components})
     }
@@ -587,8 +596,9 @@ export class Context extends EventEmitter {
      */
     getSupportMiddlewares<P extends keyof Zhin.Adapters>(session: NSession<P>) {
         return this.getMatchedContextList(session).reduce((result: Middleware[], context) => {
-            if (context === this) return result
-            result.push(...context.getSupportMiddlewares(session))
+            for(const middleware of context.middlewares){
+                if(!result.includes(middleware)) result.push(middleware)
+            }
             return result
         }, [...this.middlewares])
     }
@@ -599,8 +609,8 @@ export class Context extends EventEmitter {
      */
     getSupportCommands<P extends keyof Zhin.Adapters>(session: NSession<P>) {
         return this.getMatchedContextList(session).reduce((result: Command[], context) => {
-            for (const command of context.getSupportCommands(session)) {
-                if (command.match(session as any)) {
+            for (const command of context.commands.values()) {
+                if (command.match(session as any) && !result.includes(command)) {
                     result.push(command)
                 }
             }
@@ -638,14 +648,20 @@ export interface Context extends Zhin.Services {
 
 export namespace Context {
     export const plugin = Symbol('plugin')
+    export const childKey = Symbol('children')
 
+    export type MsgChannel={
+        protocol:keyof Zhin.Adapters
+        bot_id:string|number
+        target_id:string|number
+        target_type:'private'|'group'|'discuss'|'guild'
+    }
     export function from(parent: Context, filter: Filter) {
         const ctx = new Context(parent, filter)
         ctx[plugin] = parent ? parent[plugin] : null
         return ctx
     }
 
-    export const childKey = Symbol('children')
     export type Filter = (session: Session) => boolean
     export const defaultFilter: Filter = () => true
     export const union = (ctx: Context, filter: Filter) => {

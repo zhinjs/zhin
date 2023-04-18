@@ -217,7 +217,7 @@ export class Zhin extends Context {
     }
 
     // 扫描项目依赖中的已安装的模块
-    getInstalledModules<T extends Zhin.ModuleType>(moduleType: T): Zhin.Modules[T][] {
+    getInstalledModules<T extends Zhin.ModuleCategory>(category: T): Zhin.Modules[T][] {
         const result: Zhin.Modules[T][] = []
         const loadManifest = (packageName) => {
             const filename = require.resolve(packageName + '/package.json')
@@ -243,15 +243,15 @@ export class Zhin extends Context {
         }
         const loadPackage = (name) => {
             try {
-                result.push(this.load(parsePackage(name).fullName, moduleType))
+                result.push(this.load(parsePackage(name).fullName, category))
             } catch (e) {
                 let message=e.message||''
                 message=message.split('\n')[0]
                 if(/^Cannot find module '(\S+)'$/i.test(message)){
                     const needModeule=/^Cannot find module '(\S+)'$/i.exec(message)[1]
-                    this.logger.warn(`获取模块${moduleType}(${name})详情失败:\n依赖 ${needModeule} 未安装，请使用 'npm install ${needModeule}' 后重试`);
+                    this.logger.warn(`获取模块${category}(${name})详情失败:\n依赖 ${needModeule} 未安装，请使用 'npm install ${needModeule}' 后重试`);
                 }else{
-                    this.logger.warn(`获取模块${moduleType}(${name})详情失败:\n${message}`);
+                    this.logger.warn(`获取模块${category}(${name})详情失败:\n${message}`);
                 }
             }
         }
@@ -263,11 +263,11 @@ export class Zhin extends Context {
                 if (name === '@zhinjs') {
                     const files = fs.readdirSync(base2)
                     for (const name2 of files) {
-                        if (name2.startsWith(`${moduleType}-`)) {
+                        if (name2.startsWith(`${category}-`)) {
                             loadPackage(name + '/' + name2)
                         }
                     }
-                } else if (name.startsWith(`zhin-${moduleType}-`)) {
+                } else if (name.startsWith(`zhin-${category}-`)) {
                     loadPackage(name)
                 }
             }
@@ -280,13 +280,13 @@ export class Zhin extends Context {
         if (fs.existsSync(path.resolve(process.cwd(), this.options.plugin_dir))) {
             const dirs=fs.readdirSync(path.resolve(process.cwd(), this.options.plugin_dir))
             result.push(
-                ...dirs.map((name) => this.load(name.replace(/\.(d\.)?[d|j]s$/, ''), moduleType))
+                ...dirs.map((name) => this.load(name.replace(/\.(d\.)?[d|j]s$/, ''), category))
             )
         }
-        if (fs.existsSync(path.resolve(__dirname, `${moduleType}s`))) {
-            const dirs=fs.readdirSync(path.resolve(__dirname, `${moduleType}s`))
+        if (fs.existsSync(path.resolve(__dirname, `${category}s`))) {
+            const dirs=fs.readdirSync(path.resolve(__dirname, `${category}s`))
             result.push(
-                ...dirs.map((name) => this.load(name.replace(/\.(d\.)?[d|j]s$/, ''), moduleType, true)))
+                ...dirs.map((name) => this.load(name.replace(/\.(d\.)?[d|j]s$/, ''), category, true)))
         }
         return result
     }
@@ -295,16 +295,8 @@ export class Zhin extends Context {
     hanMounted(pluginName: string) {
         return !!this.pluginList.find(plugin => plugin.options.fullName === pluginName)
     }
-
-    sendMsg(channelId: ChannelId, message: Element.Fragment) {
-        const [protocol, self_id, targetType, targetId] = channelId.split(':') as [keyof Zhin.Adapters, `${string | number}`, TargetType, `${string | number}`]
-        const adapter = this.adapters.get(protocol)
-        const bot = adapter.bots.get(self_id)
-        return bot.sendMsg(targetId, targetType, message)
-    }
-
     // 加载指定名称，指定类型的模块
-    public load<T extends Zhin.ModuleType>(name: string, moduleType: T, setup?: boolean): Zhin.Modules[T] {
+    public load<T extends Zhin.ModuleCategory>(name: string, category: T, setup?: boolean): Zhin.Modules[T] {
         function getListenDir(modulePath: string) {
             if (modulePath.endsWith(path.sep + 'index')) return modulePath.replace(path.sep + 'index', '')
             for (const extension of ['ts', 'js', 'cjs', 'mjs']) {
@@ -330,19 +322,19 @@ export class Zhin extends Context {
         }
 
         const getType = (resolvePath: string) => {
-            if (resolvePath.includes(`@zhinjs/${moduleType}-`)) return Plugin.PluginSource.official
-            if (resolvePath.includes(`zhin-${moduleType}-`)) return Plugin.PluginSource.community
-            if (resolvePath.startsWith(path.resolve(__dirname, 'plugins'))) return Plugin.PluginSource.built
+            if (resolvePath.includes(`@zhinjs/${category}-`)) return Plugin.PluginSource.official
+            if (resolvePath.includes(`zhin-${category}-`)) return Plugin.PluginSource.community
+            if (resolvePath.startsWith(path.resolve(__dirname, `${category}s`))) return Plugin.PluginSource.built
             return Plugin.PluginSource.local
         }
         const resolved = getModulesPath([
-            this.options[`${moduleType}_dir`] ? path.resolve(this.options[`${moduleType}_dir`], name) : null,// 用户自定义插件/服务/游戏目录
-            path.join(__dirname, `${moduleType}s`, name), // 内置插件/服务/游戏目录
-            `@zhinjs/${moduleType}-${name}`,// 官方插件/服务/游戏模块
-            `zhin-${moduleType}-${name}`,// 社区插件/服务/游戏模块
+            this.options[`${category}_dir`] ? path.resolve(this.options[`${category}_dir`], name) : null,// 用户自定义插件/服务/游戏目录
+            path.join(__dirname, `${category}s`, name), // 内置插件/服务/游戏目录
+            `@zhinjs/${category}-${name}`,// 官方插件/服务/游戏模块
+            `zhin-${category}-${name}`,// 社区插件/服务/游戏模块
             name
         ].filter(Boolean))
-        if (!resolved) throw new Error(`未找到${moduleType}(${name})`)
+        if (!resolved) throw new Error(`can't find ${category}(${name})`)
         const packageInfo = getPackageInfo(resolved)
         if(packageInfo?.name){
             packageInfo.name=packageInfo.name.replace(/(zhin-|^@zhinjs\/)(plugin|service|adapter)-/, '')
@@ -358,22 +350,23 @@ export class Zhin extends Context {
         if (packageInfo) {
             Object.assign(result, packageInfo)
         }
-        let fullName = resolved.replace(path.join(__dirname, `${moduleType}s`), '')
-        if (this.options[`${moduleType}_dir`]) {
-            fullName = fullName.replace(path.resolve(this.options[`${moduleType}_dir`]), '')
+        let fullName = resolved.replace(path.join(__dirname, `${category}s`), '')
+        if (this.options[`${category}_dir`]) {
+            fullName = fullName.replace(path.resolve(this.options[`${category}_dir`]), '')
         }
         fullName = fullName
             .replace(path.sep, '')
             .replace(new RegExp(`${path.sep}index`), '')
             .replace(/\.(d\.)?[t|j]s$/, '')
-        const pluginType = getType(resolved)
+        const moduleType = getType(resolved)
         return {
             ...result,
             author: JSON.stringify(result.author),
             desc: result.desc,
             using: result.using ||= [],
-            type: pluginType,
-            fullName: ["official", "community"].includes(pluginType) ? result.fullName || fullName : fullName,
+            type: moduleType,
+            category,
+            fullName: ["official", "community"].includes(moduleType) ? result.fullName || fullName : fullName,
             name: result.name || fullName,
             fullPath: getListenDir(resolved)
         } as any
@@ -549,7 +542,7 @@ export namespace Zhin {
         adapter: Adapter.Install
     }
 
-    export type ModuleType = keyof Modules
+    export type ModuleCategory = keyof Modules
     type KVMap<V = any, K extends string = string> = Record<K, V>
 
     export interface Options extends KVMap {

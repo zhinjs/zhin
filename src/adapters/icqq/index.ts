@@ -50,6 +50,8 @@ async function sendMsg(this:Client,target_id:number,target_type:string,content:E
         elements:content
     } as Bot.MessageRet
 }
+type Params<T>=T extends (...args:infer R)=>any ? R:never
+type Return<T>=T extends ((...args:any[])=>infer R)?R:T
 export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
     constructor(app: Zhin,adapter: IcqqAdapter,options: BotOptions<IcqqBotOptions>) {
         if (!options.data_dir) options.data_dir = app.options.data_dir
@@ -96,6 +98,10 @@ export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
     }
     async deleteMsg(message_id:string){
         return this.internal.deleteMsg(message_id)
+    }
+    callApi<T extends keyof Client>(apiName:T,...args:Params<Client[T]>){
+        const fn=this.internal[apiName]
+        return typeof fn==='function'?(fn as Function).apply(this.internal,args):fn
     }
     start() {
         this.internal.login(Number(this.options.self_id), this.options.password)

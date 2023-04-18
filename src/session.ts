@@ -59,6 +59,20 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
             return middleware(session, next)
         }, true)
     }
+    waitReply<K extends keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[K]>(message_id:string,timeout?:number){
+        return new Promise<NSession<K,E>>(resolve=>{
+            const timer=timeout && setTimeout(()=>{
+                resolve(null)
+                dispose()
+            })
+            const dispose=this.zhin.middleware(async (session,next)=>{
+                if(!session.quote || session.quote.message_id!==message_id) return next()
+                dispose()
+               timer &&  clearTimeout(timeout)
+                resolve(session as NSession<K,E>)
+            })
+        })
+    }
     match(context:Context){
         return context.filter(this as any)
     }
