@@ -14,7 +14,7 @@ export function toElement<S>(msgList: Sendable, ctx?: S) {
             let {type, ...attrs} = msg;
             result.push(Element(type === 'at' ? attrs['qq'] ? 'mention' : "mention_all" : type, {
                 user_id: attrs['qq'],
-                file: attrs['file_id'] || attrs['src'],
+                src: attrs['file_id'] || attrs['file'],
                 content: attrs['text'],
                 ...attrs
             }))
@@ -39,12 +39,13 @@ export function fromElement(elementList: Element[]) {
         const result = {
             type: type.replace('mention', 'at').replace('at_all', 'at'),
             ...attrs,
-            text: attrs.text || children.join('')
+            text: attrs.text
         }
         if (allowElement.includes(result.type)) {
             if (attrs['user_id']) result['qq'] = attrs['user_id']
             if (attrs['file_id']) result['file'] = attrs['file_id']
             if (attrs['src']) result['file'] = attrs['src']
+            if(attrs['text']) result['content']=attrs['text']
             return result
         }
         return element.toString()

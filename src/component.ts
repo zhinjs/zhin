@@ -130,6 +130,70 @@ export namespace Component {
                     return await this.session.prompt[this.type ||= 'text'](children.join(''), props)
                 }
             }))
+            .component('c-image',defineComponent({
+                props:{
+                    src:String,
+                    file:String,
+                    file_id:String
+                },
+                async render(attrs,children){
+                    if(attrs.src|| attrs.file||attrs.file_id) return Element('image',{
+                        src:(attrs.src||attrs.file||attrs.file_id) as unknown as string
+                    })
+                    const result=await Element.renderAsync(children,ctx.zhin.getSupportComponents(this.session),this.session,this)
+                    return Element('image',{
+                        src:Element.stringify(result)
+                    })
+                }
+            }))
+            .component('c-video',defineComponent({
+                props:{
+                    src:String,
+                    file:String,
+                    file_id:String
+                },
+                async render(attrs,children){
+                    if(attrs.src|| attrs.file||attrs.file_id) return Element('video',{
+                        src:(attrs.src||attrs.file||attrs.file_id) as unknown as string
+                    })
+                    const result=await Element.renderAsync(children,ctx.zhin.getSupportComponents(this.session),this.session,this)
+                    return Element('video',{
+                        src:Element.stringify(result)
+                    })
+                }
+            }))
+            .component('c-record',defineComponent({
+                props:{
+                    src:String,
+                    file:String,
+                    file_id:String
+                },
+                async render(attrs,children){
+                    if(attrs.src|| attrs.file||attrs.file_id) return Element('record',{
+                        src:(attrs.src||attrs.file||attrs.file_id) as unknown as string
+                    })
+                    const result=await Element.renderAsync(children,ctx.zhin.getSupportComponents(this.session),this.session,this)
+                    return Element('record',{
+                        src:Element.stringify(result)
+                    })
+                }
+            }))
+            .component('c-audio',defineComponent({
+                props:{
+                    src:String,
+                    file:String,
+                    file_id:String
+                },
+                async render(attrs,children){
+                    if(attrs.src|| attrs.file||attrs.file_id) return Element('audio',{
+                        src:(attrs.src||attrs.file||attrs.file_id) as unknown as string
+                    })
+                    const result=await Element.renderAsync(children,ctx.zhin.getSupportComponents(this.session),this.session,this)
+                    return Element('audio',{
+                        src:Element.stringify(result)
+                    })
+                }
+            }))
             .component('random', defineComponent({
                 async render(attrs, children) {
                     return Random.pick(children)
