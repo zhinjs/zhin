@@ -6,41 +6,46 @@ import {Element} from '@/element'
 import {Middleware} from "./middleware";
 import {Prompt} from "./prompt";
 import {Context} from "@/context";
+import {TriggerSessionMap} from "@/command";
 
 export type FunctionPayloadWithSessionObj<E extends (...args: any[]) => any> = E extends (...args: infer R) => any ? ParametersToObj<R> : unknown
 export type ParametersToObj<A extends any[]> = A extends [infer R, ...infer L] ? R extends object ? Partial<R> & { args: L } : { args: [R, ...L] } : Dict
-export type NSession<P extends keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P]=keyof Zhin.BotEventMaps[P]>=Session<P> & (Zhin.BotEventMaps[P][E] extends (...args: any[]) => any?FunctionPayloadWithSessionObj<Zhin.BotEventMaps[P][E]>:unknown)
-export interface Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P]=keyof Zhin.BotEventMaps[P]> {
+export type NSession<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P] = keyof Zhin.BotEventMaps[P]> =
+    Session<P>
+    & (Zhin.BotEventMaps[P][E] extends (...args: any[]) => any ? FunctionPayloadWithSessionObj<Zhin.BotEventMaps[P][E]> : unknown)
+
+export interface Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P] = keyof Zhin.BotEventMaps[P]> {
     protocol: P,
     type?: string
     user_id?: string | number
-    user_name?:string
+    user_name?: string
     group_id?: string | number
-    group_name?:string
+    group_name?: string
     discuss_id?: string | number
-    discuss_name?:string
+    discuss_name?: string
     channel_id?: string
-    channel_name?:string
+    channel_name?: string
     guild_id?: string
-    guild_name?:string
+    guild_name?: string
     detail_type?: string
     zhin: Zhin
-    context:Context
+    context: Context
     adapter: Zhin.Adapters[P],
     prompt: Prompt
     elements: Element[]
     bot: Zhin.Bots[P]
     event: E
-    quote?:QuoteMessage
+    quote?: QuoteMessage
     message_id?: string
 }
-export type QuoteMessage={
-    message_id:string
-    user_id:string|number
-    element:Element[]
+
+export type QuoteMessage = {
+    message_id: string
+    user_id: string | number
+    element: Element[]
 }
 
-export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P]=keyof Zhin.BotEventMaps[P]> {
+export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P] = keyof Zhin.BotEventMaps[P]> {
     constructor(public adapter: Zhin.Adapters[P], self_id, public event: E, obj: object) {
         this.protocol = adapter.protocol as any
         this.zhin = adapter.zhin
@@ -49,9 +54,11 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
         Object.assign(this, obj)
         this.prompt = new Prompt(this.bot, this as any, this.zhin.options.delay.prompt)
     }
-    get client(){
+
+    get client() {
         return this.bot.internal
     }
+
     middleware(middleware: Middleware) {
         const fullId = Bot.getFullTargetId(this as any)
         return this.zhin.middleware(async (session, next) => {
@@ -59,21 +66,23 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
             return middleware(session, next)
         }, true)
     }
-    waitReply<K extends keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[K]>(message_id:string,timeout?:number){
-        return new Promise<NSession<K,E>>(resolve=>{
-            const timer=timeout && setTimeout(()=>{
+
+    waitReply<K extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[K]>(message_id: string, timeout?: number) {
+        return new Promise<NSession<K, E>>(resolve => {
+            const timer = timeout && setTimeout(() => {
                 resolve(null)
                 dispose()
             })
-            const dispose=this.zhin.middleware(async (session,next)=>{
-                if(!session.quote || session.quote.message_id!==message_id) return next()
+            const dispose = this.zhin.middleware(async (session, next) => {
+                if (!session.quote || session.quote.message_id !== message_id) return next()
                 dispose()
-               timer &&  clearTimeout(timeout)
-                resolve(session as NSession<K,E>)
+                timer && clearTimeout(timeout)
+                resolve(session as NSession<K, E>)
             })
         })
     }
-    match(context:Context){
+
+    match(context: Context) {
         return context.filter(this as any)
     }
 
@@ -84,33 +93,34 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
      * @param free {string|number|boolean|(session)=>boolean} 释放条件
      * @param filter {} 筛选哪些会话
      */
-    intercept(tip:Element.Fragment,runFunc:(session:NSession<keyof Zhin.Adapters>)=>Element.Fragment|void,free:Element.Fragment|((session:NSession<keyof Zhin.Adapters>)=>boolean),filter?:(session:NSession<keyof Zhin.Adapters>)=>boolean){
-        if(!filter) filter=(session)=>Bot.getFullTargetId(session)===Bot.getFullTargetId(this as any)
+    intercept(tip: Element.Fragment, runFunc: (session: NSession<keyof Zhin.Adapters>) => Element.Fragment | void, free: Element.Fragment | ((session: NSession<keyof Zhin.Adapters>) => boolean), filter?: (session: NSession<keyof Zhin.Adapters>) => boolean) {
+        if (!filter) filter = (session) => Bot.getFullTargetId(session) === Bot.getFullTargetId(this as any)
         this.reply(tip)
-        const needFree=(session)=>typeof free==="function"?free(session):deepEqual(session.elements?.join(''),Element.toElementArray(free).join(''))
+        const needFree = (session) => typeof free === "function" ? free(session) : deepEqual(session.elements?.join(''), Element.toElementArray(free).join(''))
         return new Promise<void>(resolve => {
-            const dispose=this.zhin.middleware(async (session,next)=>{
-                if(!filter(session)) return next()
-                if(needFree(session)){
+            const dispose = this.zhin.middleware(async (session, next) => {
+                if (!filter(session)) return next()
+                if (needFree(session)) {
                     dispose()
                     cleanTimeout()
                     resolve()
-                }else{
+                } else {
                     await runFunc(session)
                 }
             })
-            const cleanTimeout=this.context.setTimeout(()=>{
+            const cleanTimeout = this.context.setTimeout(() => {
                 dispose()
                 resolve()
-            },this.zhin.options.delay.prompt)
+            }, this.zhin.options.delay.prompt)
         })
     }
+
     isAtMe() {
         return this.elements?.length && this.elements[0].type === 'mention' && String(this.elements[0].attrs['user_id']) === String(this.bot.self_id)
     }
 
     async nextArgv() {
-        return new Promise<void | Argv>(resolve => {
+        return new Promise<void | Argv<any,any,P,keyof TriggerSessionMap<P>>>(resolve => {
             const dispose = this.middleware(async (session, next) => {
                 clearTimeout(timer)
                 dispose()
@@ -125,9 +135,9 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
         })
     }
 
-    async execute(argv: Element[] | Argv = this.elements):Promise<Element.Fragment> {
+    async execute(argv: Element[] | Argv = this.elements): Promise<Element.Fragment> {
         if (Array.isArray(argv)) {
-            let data = Argv.parse<P,E>(argv, this)
+            let data = Argv.parse<P, E>(argv, this)
             if (!data) return
             argv = data
         }
@@ -144,9 +154,10 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
         if (Array.isArray(result) && !result.length) return false
         return result
     }
-    async render(elements: Element.Fragment = this.elements): Promise<Element[]> {
-        const components=this.zhin.getSupportComponents(this as NSession<P>)
-        return await Element.renderAsync(elements, components, Zhin.createContext(this))
+
+    async render(elements: Element.Fragment = this.elements, context = Zhin.createContext(this)): Promise<Element[]> {
+        const components = this.zhin.getSupportComponents(this as NSession<P>)
+        return await Element.renderAsync(elements, components, context)
     }
 
     get [Symbol.unscopables]() {
@@ -167,11 +178,13 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters,E exten
             }).map(key => [key, this[key]])
         )
     }
+
     async reply(message: Element.Fragment) {
         return this.bot.reply(this as any, message, this.bot.options.quote_self)
     }
 }
-export namespace Session{
+
+export namespace Session {
     export const checkProp = <K extends keyof Session>(key: K, ...values: Session[K][]) => {
         return ((session: Session) => values.length ? values.includes(session[key]) : !!session[key]) as Context.Filter
     }

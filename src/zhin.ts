@@ -8,7 +8,7 @@ import {createZhinAPI} from "@/factory";
 import {deepEqual, Dict, getIpAddress, getPackageInfo, pick, wrapExport,} from "@zhinjs/shared";
 import {createServer, Server} from "http";
 import KoaBodyParser from "koa-bodyparser";
-import {Command} from "./command";
+import {Command, TriggerSessionMap} from "./command";
 import {Argv} from "./argv";
 import {Plugin} from './plugin'
 import {Context} from "./context";
@@ -20,7 +20,7 @@ import {Middleware} from "./middleware";
 import {Router} from "./router";
 import {Request} from "@/request";
 import {Component} from "./component";
-import {Element} from "./element";
+import {h} from "./element";
 import {Bot} from "@/bot";
 
 export const version = require('../package.json').version
@@ -86,7 +86,7 @@ export class Zhin extends Context {
 
     constructor(options: Zhin.Options) {
         super(null);
-        const result=this.zhin=new Proxy(this, {
+        const result = this.zhin = new Proxy(this, {
             get(target: Zhin, p: string | symbol, receiver: any): any {
                 if (target.services.has(p as keyof Zhin.Services)) return target.services.get(p as keyof Zhin.Services)
                 return Reflect.get(target, p, receiver)
@@ -225,7 +225,7 @@ export class Zhin extends Context {
             meta.dependencies ||= {}
             return meta
         }
-        const parsePackage =(name) => {
+        const parsePackage = (name) => {
             const data = loadManifest(name)
             const result = pick(data, [
                 'name',
@@ -245,12 +245,12 @@ export class Zhin extends Context {
             try {
                 result.push(this.load(parsePackage(name).fullName, category))
             } catch (e) {
-                let message=e.message||''
-                message=message.split('\n')[0]
-                if(/^Cannot find module '(\S+)'$/i.test(message)){
-                    const needModeule=/^Cannot find module '(\S+)'$/i.exec(message)[1]
+                let message = e.message || ''
+                message = message.split('\n')[0]
+                if (/^Cannot find module '(\S+)'$/i.test(message)) {
+                    const needModeule = /^Cannot find module '(\S+)'$/i.exec(message)[1]
                     this.logger.warn(`获取模块${category}(${name})详情失败:\n依赖 ${needModeule} 未安装，请使用 'npm install ${needModeule}' 后重试`);
-                }else{
+                } else {
                     this.logger.warn(`获取模块${category}(${name})详情失败:\n${message}`);
                 }
             }
@@ -278,13 +278,13 @@ export class Zhin extends Context {
         const startDir = path.dirname(__dirname)
         loadDirectory(startDir)
         if (fs.existsSync(path.resolve(process.cwd(), this.options.plugin_dir))) {
-            const dirs=fs.readdirSync(path.resolve(process.cwd(), this.options.plugin_dir))
+            const dirs = fs.readdirSync(path.resolve(process.cwd(), this.options.plugin_dir))
             result.push(
                 ...dirs.map((name) => this.load(name.replace(/\.(d\.)?[d|j]s$/, ''), category))
             )
         }
         if (fs.existsSync(path.resolve(__dirname, `${category}s`))) {
-            const dirs=fs.readdirSync(path.resolve(__dirname, `${category}s`))
+            const dirs = fs.readdirSync(path.resolve(__dirname, `${category}s`))
             result.push(
                 ...dirs.map((name) => this.load(name.replace(/\.(d\.)?[d|j]s$/, ''), category, true)))
         }
@@ -295,6 +295,7 @@ export class Zhin extends Context {
     hanMounted(pluginName: string) {
         return !!this.pluginList.find(plugin => plugin.options.fullName === pluginName)
     }
+
     // 加载指定名称，指定类型的模块
     public load<T extends Zhin.ModuleCategory>(name: string, category: T, setup?: boolean): Zhin.Modules[T] {
         function getListenDir(modulePath: string) {
@@ -336,8 +337,8 @@ export class Zhin extends Context {
         ].filter(Boolean))
         if (!resolved) throw new Error(`can't find ${category}(${name})`)
         const packageInfo = getPackageInfo(resolved)
-        if(packageInfo?.name){
-            packageInfo.name=packageInfo.name.replace(/(zhin-|^@zhinjs\/)(plugin|service|adapter)-/, '')
+        if (packageInfo?.name) {
+            packageInfo.name = packageInfo.name.replace(/(zhin-|^@zhinjs\/)(plugin|service|adapter)-/, '')
         }
         let result: Record<string, any> = {setup}
         if (packageInfo?.setup || setup) {
@@ -373,13 +374,13 @@ export class Zhin extends Context {
     }
 
     // 获取匹配出来的指令
-    findCommand(argv: Argv) {
+    findCommand<A extends any[], O, P extends keyof Zhin.Adapters, T extends keyof TriggerSessionMap<P>>(argv: Argv<A, O, P, T>) {
         const commands = this.getSupportCommands(argv.session)
         return commands.find(cmd => {
             return cmd.name === argv.name
                 || cmd.aliasNames.includes(argv.name)
                 || cmd.shortcuts.some(({name}) => typeof name === 'string' ? name === argv.name : name.test((argv.elements ||= []).join('')))
-        })
+        }) as Command<A, O, P, T>
     }
 
     // 启动zhin
@@ -504,7 +505,9 @@ export namespace Zhin {
         'dispose'(): void
 
         'message'(session: NSession<keyof Adapters>): void
-        'message.send'(message:Bot.MessageRet):void
+
+        'message.send'(message: Bot.MessageRet): void
+
         'command-add'(command: Command): void
 
         'command-remove'(command: Command): void
@@ -530,7 +533,7 @@ export namespace Zhin {
     type MapKey<S extends string, K extends string | number | symbol> = K extends string | number ? `${S}.${K}` : K
     type MapValue<M extends BaseEventMap, E extends keyof M> = M[E] extends (...args: any[]) => any ? M[E] : (...args: any[]) => any
 
-    export type EventMap<T> ={} & LifeCycle & ServiceLifeCycle & BeforeEventMap & AfterEventMap & FlatBotEventMap
+    export type EventMap<T> = {} & LifeCycle & ServiceLifeCycle & BeforeEventMap & AfterEventMap & FlatBotEventMap
     export type AdapterConfig = {
         [P in keyof Zhin.Adapters]?: AdapterOptionsType<Adapters[P]>
     }
@@ -557,10 +560,6 @@ export namespace Zhin {
         plugin_dir?: string
         data_dir?: string
     }
-
-    export type Keys<O extends KVMap> = O extends KVMap<infer V, infer K> ? V extends object ? `${K}.${Keys<V>}` : `${K}` : never
-    export type Value<O extends KVMap, K> = K extends `${infer L}.${infer R}` ? Value<O[L], R> : K extends keyof O ? O[K] : any
-
     export type ServiceConstructor<R, T = any> = new (ctx: Context, options?: T) => R
 
     export function createContext<T extends object>(context: T): T {
@@ -627,7 +626,19 @@ export function createWorker(options: Zhin.WorkerOptions) {
     })
     return cp
 }
-const {createZhin, useContext, onDispose, useEffect,useCommand,useComponent,listenOnce,listen,useMiddleware, useOptions} = createZhinAPI()
+
+const {
+    createZhin,
+    useContext,
+    onDispose,
+    useEffect,
+    useCommand,
+    useComponent,
+    listenOnce,
+    listen,
+    useMiddleware,
+    useOptions
+} = createZhinAPI()
 export {
     createZhin,
     useContext,

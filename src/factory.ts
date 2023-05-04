@@ -1,11 +1,11 @@
 import fs from "fs";
 import * as Yaml from "js-yaml";
-import {deepClone, deepEqual, deepMerge, getCaller, getValue} from "@zhinjs/shared";
+import {deepClone, deepEqual, deepMerge, getCaller, getValue, Keys, Value} from "@zhinjs/shared";
 import path from "path";
 import {watch} from "obj-observer";
 import {Proxied} from "obj-observer/lib/deepProxy";
 import {Dispose} from "@/dispose";
-import {Command, Component, Zhin} from "@";
+import {Command, Component, TriggerSessionMap, Zhin} from "@";
 import {Context} from "@/context";
 import {Middleware} from "@/middleware";
 
@@ -90,10 +90,10 @@ export function createZhinAPI() {
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
         const context=getContext(pluginFullPath)
-        return context.middleware(middleware)
+        return context.middleware(middleware) as Dispose
     }
     // 添加指令到插件中
-    const useCommand=(command:Command)=>{
+    const useCommand=<A extends any[],O,P extends keyof Zhin.Adapters,T extends keyof TriggerSessionMap<P>>(command:Command<A,O,P,T>)=>{
         const zhin = zhinMap.get(Zhin.key)
         if (!zhin) throw new Error(`can't found zhin with context for key:${Zhin.key.toString()}`)
         const callSite = getCaller()
@@ -123,23 +123,22 @@ export function createZhinAPI() {
         })
     }
     // 读取指定path的配置文件
-    function useOptions<K extends Zhin.Keys<Zhin.Options>>(path: K): Zhin.Value<Zhin.Options, K> {
+    function useOptions<K extends Keys<Zhin.Options>>(path: K): Value<Zhin.Options, K> {
         const zhin = zhinMap.get(Zhin.key)
         if (!zhin) throw new Error(`can't found zhin with context for key:${Zhin.key.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
         const plugin = zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath)
-        const pathArr = path.split('.').filter(Boolean)
-        const result = getValue(zhin.options, pathArr)
+        const result = getValue(zhin.options, path)
         const backupData = deepClone(result)
         const unwatch = watch(zhin.options, (value) => {
-            const newVal = getValue(value, pathArr)
+            const newVal = getValue(value, path)
             if (!deepEqual(backupData, newVal)) {
                 plugin.reLoad()
             }
         })
         plugin.context.disposes.push(unwatch)
-        return getValue(zhin.options, path.split('.').filter(Boolean)) as Zhin.Value<Zhin.Options, K>
+        return getValue(zhin.options, path)
     }
 
     type EffectReturn = () => void

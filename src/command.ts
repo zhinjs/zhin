@@ -301,7 +301,7 @@ export class Command<A extends any[] = any[], O extends {} = {},P extends keyof 
     }
 
     // 执行指令
-    async execute(argv: Argv<A, O,P, T>): Promise<Element.Fragment | boolean | void> {
+    async execute(argv: Argv<A, O, P , T>): Promise<Element.Fragment | boolean | void> {
         // 匹配参数、选项
         this.parseShortcut(argv)
         if (argv.error) {

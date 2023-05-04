@@ -615,7 +615,7 @@ export class Context extends EventEmitter {
                 }
             }
             return result
-        }, [...this.commands.values()])
+        }, [...this.commands.values()]) as Command<any[],{},P,keyof TriggerSessionMap<P>>[]
     }
 }
 

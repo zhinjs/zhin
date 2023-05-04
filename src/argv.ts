@@ -134,7 +134,7 @@ export namespace Argv{
     interface DeclarationList extends Array<Declaration> {
         stripped: string
     }
-    export function parse<P extends keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P]=keyof Zhin.BotEventMaps[P]>(content:Element[],session:Session<P,E>):Argv|void{
+    export function parse<P extends keyof Zhin.Adapters,E extends keyof Zhin.BotEventMaps[P]=keyof Zhin.BotEventMaps[P]>(content:Element[],session:Session<P,E>):Argv<any,any,P,keyof TriggerSessionMap<P>>|void{
         let argv:Element[][]=[]
         const atMe=session.isAtMe();
         const saveSession=session.elements===content

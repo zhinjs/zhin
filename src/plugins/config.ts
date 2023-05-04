@@ -2,7 +2,7 @@ import * as Yaml from 'js-yaml'
 import * as fs from 'fs'
 import {useContext} from "@";
 import {Element} from "@/element";
-import {getValue, setValue, deleteValue} from "@zhinjs/shared";
+import {getValue, setValue, deleteValue, Keys} from "@zhinjs/shared";
 
 function protectKeys(obj: Record<string, any>, keys: string[]) {
     if (!obj || typeof obj !== 'object') return obj
@@ -33,7 +33,7 @@ ctx.command('config [key:string] [value]')
         const config = Yaml.load(fs.readFileSync(process.env.configPath || '', 'utf8')) as object
         if (value === undefined && !options.delete) return outputConfig(config, key)
         if (options.delete) {
-            deleteValue(config, key.split('.'))
+            deleteValue(config, key as Keys<object>)
             fs.writeFileSync(process.env.configPath, Yaml.dump(config))
             return `已删除:config.${key}`
         }
@@ -42,7 +42,7 @@ ctx.command('config [key:string] [value]')
         } catch {
             value = value.join('') as any
         }
-        setValue(config, key.split('.'), value)
+        setValue(config, key as Keys<object>, value as never)
         fs.writeFileSync(process.env.configPath, Yaml.dump(config))
         return `修改成功`
     })
