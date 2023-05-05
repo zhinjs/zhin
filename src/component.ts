@@ -19,6 +19,7 @@ export interface Component extends DefineComponent<any, any, any> {
 
 export namespace Component {
     export const name = 'builtComponent'
+    export const type='built'
     type Data = Record<string, unknown>;
 
     export type ObjectPropsOptions<P = Data> = {

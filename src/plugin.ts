@@ -7,7 +7,31 @@ import {NSession} from "@/session";
 export interface Plugin {
     context: Context
 }
-
+export class PluginMap extends Map<string,Plugin>{
+    get builtList(){
+        return [...this.values()].filter(plugin=>{
+            return plugin.type===Plugin.Source.built
+        })
+    }
+    get localList(){
+        return [...this.values()].filter(plugin=>{
+            return plugin.type===Plugin.Source.local
+        })
+    }
+    get communityList(){
+        return [...this.values()].filter(plugin=>{
+            return plugin.type===Plugin.Source.community
+        })
+    }
+    get officialList(){
+        return [...this.values()].filter(plugin=>{
+            return plugin.type===Plugin.Source.official
+        })
+    }
+    get npmList(){
+        return [].concat(this.communityList,this.officialList)
+    }
+}
 export class Plugin {
     public name: string
     // 可用状态
@@ -69,7 +93,7 @@ export class Plugin {
     unmount() {
         this.context?.zhin.emit('plugin-remove', this)
         this.context?.parent.plugins.delete(this.options.fullName)
-        this.context?.logger.info(`已卸载插件:${this.name}`)
+        this.context?.logger.debug(`已卸载插件:${this.name}`)
         this.context?.dispose()
     }
 
@@ -146,14 +170,14 @@ export namespace Plugin {
         if (!pluginPath) return {}
         return getPackageInfo(pluginPath)
     }
-    export enum PluginSource{
+    export enum Source{
         built='built',
         local='local',
         community='community',
         official="official"
     }
     export type Options<T = any> = InstallObject & {
-        type?: PluginSource
+        type?: Source
         enable?: boolean
         scopes?: (keyof Zhin.Adapters)[]
         using?: (keyof Zhin.Services)[]

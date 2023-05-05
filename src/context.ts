@@ -9,7 +9,7 @@ import {NSession, Session} from "./session";
 import {Element} from './element'
 import {EventEmitter} from "events";
 import {Argv} from "./argv";
-import {Plugin} from "@/plugin";
+import {Plugin, PluginMap} from "@/plugin";
 import {Component} from "./component";
 import {Logger} from "log4js";
 import {Bot} from "./bot";
@@ -21,7 +21,7 @@ export class Context extends EventEmitter {
     /**
      * 当前上下文产生的插件
      */
-    plugins: Map<string, Plugin> = new Map<string, Plugin>()
+    plugins: PluginMap = new PluginMap()
     /**
      * 当前上下文产生的中间件
      */
@@ -209,7 +209,7 @@ export class Context extends EventEmitter {
             }
             this.plugins.set(options.fullName, plugin)
             plugin.mount(context)
-            this.zhin.logger.info(`已载入插件:${options.name}`)
+            this.zhin.logger.debug(`已载入插件:${options.name}`)
             this.zhin.emit('plugin-add', plugin)
         }
         const using = options.using ||= []
@@ -446,10 +446,10 @@ export class Context extends EventEmitter {
         } else {
             this.zhin.services.set(key, Service)
         }
-        this.zhin.logger.info(`已挂载服务(${key})`)
+        this.zhin.logger.debug(`已挂载服务(${key})`)
         this.zhin.emit('service-add', key)
         const dispose = Dispose.from(this, () => {
-            this.zhin.logger.info(`已卸载服务(${key})`)
+            this.zhin.logger.debug(`已卸载服务(${key})`)
             this.zhin.services.delete(key)
             this.zhin.emit('service-remove', key)
             remove(this.disposes, dispose)

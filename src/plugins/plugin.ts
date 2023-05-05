@@ -1,9 +1,9 @@
 import {Context} from "@/context";
 import {Plugin} from "@/plugin";
+import {h} from '@'
 import {exec} from "child_process";
 import {promisify} from 'util'
 import {Session, useContext, Zhin} from "@";
-import PluginSource = Plugin.PluginSource;
 
 const promiseExec=promisify(exec)
 const changeDependency=async (name?:string,unInstall?:boolean)=>{
@@ -25,24 +25,28 @@ function getPluginStatus(ctx: Context, session: Session, fullName: string) {
     if (plugin.disableBots.includes(flag)) return '(已停用)'
 }
 
-const command = ctx.command('plugin')
+const command = ctx.command('plugin [action:string] [name:string]')
     .desc('插件管理')
     .hidden()
+    .auth('master')
+    .action(({session},action,name)=>{
+        return session.execute([h('text',{text:`plugin.${action} ${name}`})])
+    })
 command.subcommand('plugin.list')
-    .desc('显示插件列表')
-    .option('cloud','-c 显示云端插件')
+    .desc('插件列表')
+    .option('cloud','-c 云端插件')
     .action(async ({session,options}) => {
         if(!options.cloud){
-            const plugins=await ctx.zhin.getInstalledModules('plugin')
+            const plugins=ctx.zhin.getInstalledModules('plugin')
             return plugins.map((o, idx) => {
-                const installStatus = ctx.zhin.hanMounted(o.fullName) ? ' (已载入)' : ''
+                const installStatus = ctx.zhin.hasMounted(o.fullName) ? ' (已载入)' : ''
                 let enableStatus = installStatus ? getPluginStatus(ctx, session, o.fullName) : ''
                 return `${idx + 1}.${o.name}${installStatus}${enableStatus} ${o.type}`
             }).join('\n')
         }else{
             const packages = await ctx.zhin.getMarketPackages()
             return packages.map((o,idx)=>{
-                const installStatus = ctx.zhin.hanMounted(o.name) ? ' (已载入)' : ''
+                const installStatus = ctx.zhin.hasMounted(o.name) ? ' (已载入)' : ''
                 let enableStatus = installStatus ? getPluginStatus(ctx, session, o.name) : ''
                 return `${idx + 1}.${o.name}@${o.version}${installStatus}${enableStatus} ${o.scope==='zhinjs'?'官方':'社区'}`
             }).join('\n')
@@ -50,13 +54,13 @@ command.subcommand('plugin.list')
     })
 
 command.subcommand('plugin.install <name:string>')
-    .desc('安装指定插件')
+    .desc('安装插件')
     .auth('master')
     .option('version','-v <version:string> 指定版本，默认最新版')
     .action(async ({session,options}, name) => {
         const packages = await ctx.zhin.getMarketPackages()
         const info=packages.find(p=>p.name===name)
-        if (!info) return '没有该插件'
+        if (!info) return '该插件不存在'
         await session.reply('已开始安装...')
         try{
             const [success,err]=await changeDependency(`${name}@${options.version||info.version}`)
@@ -68,28 +72,28 @@ command.subcommand('plugin.install <name:string>')
     })
 command.subcommand('plugin.uninstall <name:string>')
     .auth('master')
-    .desc('卸载指定插件')
+    .desc('卸载插件')
     .action(async ({session}, name) => {
         const packages = ctx.zhin.getInstalledModules('plugin')
         const options=packages.find(p=>p.name===name)
         if (!options) return '没有安装该插件'
-        if([PluginSource.built,PluginSource.local].includes(options.type)) return '只有模块化的插件才能卸载'
+        if([Plugin.Source.built,Plugin.Source.local].includes(options.type)) return '只有模块化的插件才能卸载'
         await session.reply('已开始卸载...')
         try{
             const [success,err]=await changeDependency(`${options.fullName}`,true)
             return success?'卸载成功':`卸载失败:\n${err}`
         }catch (e){
-            ctx.zhin.logger.warn(e.message)
+            ctx.zhin.logger.error(e.message,e.stack)
             return `卸载失败:\n${e.message}`
         }
     })
 command.subcommand('plugin.mount <name:string>')
-    .desc('载入指定插件')
+    .desc('载入插件')
     .auth('master','admins')
     .action(async ({session}, name) => {
         const plugins=await ctx.zhin.getInstalledModules('plugin')
         const options = plugins.find(p => p.name === name)
-        if (!options) return '当前没有该插件'
+        if (!options) return '没有安装该插件'
         try {
             ctx.zhin.plugin(name)
         } catch (e) {
@@ -98,11 +102,11 @@ command.subcommand('plugin.mount <name:string>')
         return '载入成功'
     })
 command.subcommand('plugin.unmount <name:string>')
-    .desc('移除指定插件')
+    .desc('移除插件')
     .auth('master','admins')
     .action(({session}, name) => {
         const plugin = ctx.zhin.pluginList.find(p => p.options.name === name)
-        if (!plugin) return '尚未载入该插件'
+        if (!plugin) return '没有载入该插件'
         try {
             plugin.unmount()
         } catch (e) {
@@ -124,8 +128,8 @@ command.subcommand('plugin.detail <name:string>')
             .replace(/"/g, '')
             .replace(/\\/g, '')
     })
-command.subcommand('plugin.enable <name:string>')
-    .desc('启用指定插件')
+command.subcommand('plugin.on <name:string>')
+    .desc('启用插件')
     .auth('admins', 'master')
     .action(({options, session}, name) => {
         const plugin = ctx.zhin.pluginList.find(p => p.options.fullName === name)
@@ -133,8 +137,8 @@ command.subcommand('plugin.enable <name:string>')
         session.bot.enable(plugin)
         return `启用插件(${name})成功`
     })
-command.subcommand('plugin.disable <name:string>')
-    .desc('禁用指定插件')
+command.subcommand('plugin.off <name:string>')
+    .desc('停用插件')
     .auth('admins', 'master')
     .action(({options, session}, name) => {
         const plugin = ctx.zhin.pluginList.find(p => p.options.fullName === name)

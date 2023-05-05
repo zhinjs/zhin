@@ -25,14 +25,17 @@ export abstract class Adapter<K extends keyof Zhin.Adapters=keyof Zhin.Adapters,
         this.logger=zhin.getLogger(protocol)
         this.zhin.on('start',()=>this.start())
         this.on('message',(session:NSession<K>)=>{
+            this.zhin.logger.info(`【${this.protocol}:${session.bot.self_id}】received\t：message_id(${session.message_id})`)
             this.botStatus(session.bot.self_id).recv_msg_cnt++
         })
         this.on('bot.online',(bot_id)=>{
             this.botStatus(bot_id).online=true
+            this.zhin.logger.info(`【${this.protocol}:${bot_id}】已上线`)
             this.zhin.emit(`bot.online`,this.protocol,bot_id)
         })
         this.on('bot.offline',(bot_id)=>{
             this.botStatus(bot_id).online=false
+            this.zhin.logger.info(`【${this.protocol}:${bot_id}】已掉线`)
             this.zhin.emit(`bot.offline`,this.protocol,bot_id)
         })
         this.on('message.send',(bot_id:string|number,message:Bot.MessageRet)=>{
@@ -43,6 +46,7 @@ export abstract class Adapter<K extends keyof Zhin.Adapters=keyof Zhin.Adapters,
             if(!set) cache.set(time,set=new Set())
             set.add(message.message_id)
             this.botStatus(bot_id).sent_msg_cnt++
+            this.zhin.logger.info(`【${this.protocol}:${bot_id}】send\t：message_id(${message.message_id})`)
             this.zhin.emit('message.send',message)
         })
     }

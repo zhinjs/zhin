@@ -66,21 +66,6 @@ function showLogDetail() {
     return `detail:\n${sizeInfo.join('\n')}`
 }
 
-ctx.command('logs <lines:number>')
-    .desc('日志管理')
-    .auth('master', "admins")
-    .hidden()
-    .option('clean', '-c 清理日志')
-    .option('backup', '-b 备份日志')
-    .option('detail', '-d 查看日志大小')
-    .action(async ({options}, lineNum = 10) => {
-        if (options.clean) return cleanLogs(options.backup)
-        if (options.backup) return backupLogs()
-        if (options.detail) return showLogDetail()
-        const logLines = await readLogs()
-        const lines = logLines.reverse().slice(0, lineNum).reverse()
-        return h('text',{text:lines.join('\n')})
-    })
 ctx.command('status')
     .desc('查看知音状态')
     .hidden()
@@ -111,4 +96,19 @@ ctx.command('status')
             `接收消息数:${session.bot.status.recv_msg_cnt}条`,
             `消息频率:${session.bot.status.msg_cnt_per_min}条/分`,
         ].join('\n')
+    })
+
+ctx.command('status/logs <lines:number>')
+    .desc('日志管理')
+    .auth('master', "admins")
+    .option('clean', '-c 清理日志')
+    .option('backup', '-b 备份日志')
+    .option('detail', '-d 查看日志大小')
+    .action(async ({options}, lineNum = 10) => {
+        if (options.clean) return cleanLogs(options.backup)
+        if (options.backup) return backupLogs()
+        if (options.detail) return showLogDetail()
+        const logLines = await readLogs()
+        const lines = logLines.reverse().slice(0, lineNum).reverse()
+        return h('text',{text:lines.join('\n')})
     })

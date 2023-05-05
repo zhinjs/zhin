@@ -20,7 +20,6 @@ import {Middleware} from "./middleware";
 import {Router} from "./router";
 import {Request} from "@/request";
 import {Component} from "./component";
-import {h} from "./element";
 import {Bot} from "@/bot";
 
 export const version = require('../package.json').version
@@ -108,7 +107,7 @@ export class Zhin extends Context {
             .use(router.routes())
             .use(router.allowedMethods())
         server.listen(options.port ||= 8086)
-        this.logger.info(`server listen at ${getIpAddress().map(ip => `http://${ip}:${options.port}`).join(' and ')}`)
+        this.logger.info(`server listen at \n${getIpAddress().map(ip => `http://${ip}:${options.port}`).join('\n')}`)
         this.options = ref(options)
         watch(this.options, async (value: Zhin.Options) => {
             await fs.writeFileSync(process.env.configPath, Yaml.dump(value))
@@ -292,7 +291,7 @@ export class Zhin extends Context {
     }
 
     // 检查知音是否安装指定插件
-    hanMounted(pluginName: string) {
+    hasMounted(pluginName: string) {
         return !!this.pluginList.find(plugin => plugin.options.fullName === pluginName)
     }
 
@@ -323,10 +322,10 @@ export class Zhin extends Context {
         }
 
         const getType = (resolvePath: string) => {
-            if (resolvePath.includes(`@zhinjs/${category}-`)) return Plugin.PluginSource.official
-            if (resolvePath.includes(`zhin-${category}-`)) return Plugin.PluginSource.community
-            if (resolvePath.startsWith(path.resolve(__dirname, `${category}s`))) return Plugin.PluginSource.built
-            return Plugin.PluginSource.local
+            if (resolvePath.includes(`@zhinjs/${category}-`)) return Plugin.Source.official
+            if (resolvePath.includes(`zhin-${category}-`)) return Plugin.Source.community
+            if (resolvePath.startsWith(path.resolve(__dirname, `${category}s`))) return Plugin.Source.built
+            return Plugin.Source.local
         }
         const resolved = getModulesPath([
             this.options[`${category}_dir`] ? path.resolve(this.options[`${category}_dir`], name) : null,// 用户自定义插件/服务/游戏目录
@@ -401,7 +400,10 @@ export class Zhin extends Context {
                 this.plugins.delete(plugin.fullName)
             }
         })
-        this.emitSync('ready')
+
+        this.logger.info(`已载入(${this.plugins.size})个插件 (${this.plugins.builtList.length}个内置，${this.plugins.localList.length}个本地，${this.plugins.npmList.length}个模块)`)
+        this.logger.info(`已挂载(${this.services.size})个服务(${[...this.services.keys()].join()})`)
+        await this.emitSync('ready')
         this.isReady = true
         await this.emitSync('start')
     }
@@ -467,18 +469,35 @@ export namespace Zhin {
         },
         logConfig: {
             appenders: {
-                consoleOut: {
+                console_out: {
                     type: 'console'
                 },
-                saveFile: {
+                log_file: {
                     type: 'file',
-                    filename: path.join(process.cwd(), 'logs.log')
+                    maxLogSize:10485760,
+                    filename: path.join(process.cwd(), 'logs.log'),
+                    encoding:'utf-8'
+                },
+                _error_file:{
+                    type: 'file',
+                    maxLogSize:10485760,
+                    filename: path.join(process.cwd(), 'logs_error.log'),
+                    encoding:'utf-8'
+                },
+                error_file:{
+                    type:'logLevelFilter',
+                    appender:'_error_file',
+                    level:'warn'
                 }
             },
             categories: {
                 default: {
-                    appenders: ['consoleOut', 'saveFile'],
+                    appenders: ['log_file','error_file'],
                     level: 'info'
+                },
+                '[zhin]':{
+                    appenders:['console_out'],
+                    level:'info'
                 }
             }
         },
