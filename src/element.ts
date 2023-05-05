@@ -25,12 +25,14 @@ class ElementConstructor {
         if (this.type === 'text') return this.attrs.text
         const inner = this.children.map(child => child.toString(strip)).join('')
         if (strip) return inner
-        const attrs = Object.entries(this.attrs).map(([key, value]) => {
+        let attrs = Object.entries(this.attrs).map(([key, value]) => {
             if (isNullable(value)) return ''
             if (value === true) return ` ${key}`
             if (value === false) return ` no-${key}`
             return ` ${key}='${Element.escape('' + value)}'`
         }).join('')
+        if(this.loop) attrs+=` v-for="${this.loop}"`
+        if(this.when) attrs+=` v-if="${this.when}"`
         if (!this.children.length) return `<${this.type}${attrs}/>`
         return `<${this.type}${attrs}>${inner}</${this.type}>`
     }
