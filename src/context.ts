@@ -211,13 +211,14 @@ export class Context extends EventEmitter {
             plugin.mount(context)
             this.zhin.logger.debug(`已载入插件:${options.name}`)
             this.zhin.emit('plugin-add', plugin)
+            return plugin
         }
         const using = options.using ||= []
-        installPlugin()
+        const plugin=installPlugin()
         if (!using.length) {
             if (using.some(name => !this.zhin.services.has(name))) {
-                this.zhin.logger.info(`插件(${options.name})所需服务(${using.join()})未就绪，已停用`);
-                (this.plugin(options.fullName) as Plugin).disable()
+                this.zhin.logger.warn(`插件(${options.name})所需服务(${using.join()})未就绪，已停用`);
+                plugin.disable()
             }
         }
         return this

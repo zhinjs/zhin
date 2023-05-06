@@ -123,7 +123,7 @@ export class Zhin extends Context {
             const plugins = this.pluginList.filter(p => p.options.using && p.options.using.includes(addName))
             plugins.forEach(plugin => {
                 if (plugin.options.using.every(name => this.services.has(name))) {
-                    this.logger.info(`所需服务已全部就绪，插件(${plugin.name})已启用`)
+                    this.logger.debug(`所需服务已全部就绪，插件(${plugin.name})已启用`)
                     plugin.enable()
                 }
             })
@@ -132,7 +132,7 @@ export class Zhin extends Context {
             const plugins = this.pluginList.filter(p => p.options.using && p.options.using.includes(removeName))
             plugins.forEach(plugin => {
                 if (plugin.options.using.some(name => !this.services.has(name))) {
-                    this.logger.info(`所需服务(${removeName})未就绪，插件(${plugin.name})已停用`)
+                    this.logger.warn(`所需服务(${removeName})未就绪，插件(${plugin.name})已停用`)
                     plugin.disable()
                 }
             })

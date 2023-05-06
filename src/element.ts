@@ -374,6 +374,8 @@ export namespace Element {
                     const fn=new Function('element,transform,runtime',`const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{${name}:runtime.${value}[${name}]});RESULT.push({...element,...transform(element,runtime)})};return RESULT;`)
                     output.push(...fn(element,transform,runtime))
                 }else{
+                    const newAttrs=transform(element,runtime)
+                    Object.assign(element,newAttrs)
                     output.push(element)
                 }
             } else if (component !== false) {
@@ -414,6 +416,8 @@ export namespace Element {
                     const fn=new Function('element,transform,runtime',`const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{${name}:runtime.${value}[${name}]});RESULT.push({...element,...transform(element,runtime)})};return RESULT;`)
                     result.push(...fn(element,transform,runtime))
                 }else{
+                    const newAttrs=transform(element,runtime)
+                    Object.assign(element,newAttrs)
                     result.push(element)
                 }
             } else if (component !== false) {
