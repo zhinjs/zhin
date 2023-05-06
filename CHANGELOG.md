@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.6](https://github.com/zhinjs/zhin/compare/v2.0.5...v2.0.6) (2023-05-06)
+
+
+### Bug Fixes
+
+* type error ([9557d14](https://github.com/zhinjs/zhin/commit/9557d14ba8639f2546ec84e14142edb1b9e4f397))
+
 ## [2.0.5](https://github.com/zhinjs/zhin/compare/v2.0.4...v2.0.5) (2023-05-06)
 
 
