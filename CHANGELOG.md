@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.0.5](https://github.com/zhinjs/zhin/compare/v2.0.4...v2.0.5) (2023-05-06)
+
+
+### Bug Fixes
+
+* allow loop and when ([1313491](https://github.com/zhinjs/zhin/commit/1313491ad8f625a19a9a057ea08d731a8a73bbf6))
+* element transform bug ([fb00359](https://github.com/zhinjs/zhin/commit/fb00359ff6c09ab7a43654578dc506b3629f6c49))
+* 增加图片、语音、视频云端加载方案 ([1e2dd39](https://github.com/zhinjs/zhin/commit/1e2dd39e47b98225982cd901568369c930dec1c3))
+* 日志优化 ([5a09713](https://github.com/zhinjs/zhin/commit/5a09713bda0782f35d1cbe0cb895cccd4307325b))
+* 消息限速、文本超长自动转发 ([a1db268](https://github.com/zhinjs/zhin/commit/a1db26810c707946ed9d02b2c3308910d62cf2f7))
+* 类型补充 ([5749c35](https://github.com/zhinjs/zhin/commit/5749c355732d9fbf8e2deb95cd7cd99378d36e9a))
+* 系统保护 ([6a7f289](https://github.com/zhinjs/zhin/commit/6a7f28929948be128e3817b55ef766367c992705))
+
 ## [2.0.4](https://github.com/zhinjs/zhin/compare/v2.0.3...v2.0.4) (2023-04-04)
 
 
