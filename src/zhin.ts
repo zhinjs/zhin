@@ -582,7 +582,37 @@ export namespace Zhin {
     export type ServiceConstructor<R, T = any> = new (ctx: Context, options?: T) => R
 
     export function createContext<T extends object>(context: T): T {
-        const whiteList = ['Math', 'Date', 'JSON']
+        const whiteList = ['Math', 'Date', 'JSON'];
+        const fakeProcess= {
+            process: {
+                exit() {
+                    return '好嘞,我退出了';
+                },
+                abort() {
+                    return '好嘞,我中断了';
+                },
+                disconnect() {
+                    return '好嘞,我断开了';
+                },
+                cwd() {
+                    return '就这儿啦！';
+                },
+                env() {
+                    return {
+                        foo: 'bar'
+                    };
+                }
+            }
+        }
+        Object.assign(context, {
+            ...fakeProcess,
+            toString() {
+                return fakeProcess.toString();
+            },
+            toJSON() {
+                return fakeProcess;
+            }
+        });
         return new Proxy(context, {
             has(target, key) {
                 // 由于代理对象作为`with`的参数成为当前作用域对象，因此若返回false则会继续往父作用域查找解析绑定
