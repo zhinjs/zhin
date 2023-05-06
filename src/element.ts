@@ -326,13 +326,27 @@ export namespace Element {
         for (const e of children) {
             if (e.type !== 'text' || !(interpRegExp.test(e.attrs.text))) continue
             const [_, expr] = interpRegExp.exec(e.attrs.text)
-            let result = evaluate(expr, runtime)
+            let result = expr.match(/^process\./)?e.attrs.text:evaluate(expr, runtime);
+            if(typeof result !=='string'){
+                try{
+                    result=JSON.stringify(result)
+                }catch {
+                    result=expr
+                }
+            }
             e.attrs.text = result === `return(${expr})` ? `{{${expr}}}` : result
         }
         for (const key in attrs) {
             if (typeof attrs[key] !== 'string' || !attrs[key].startsWith(':')) continue
-            const val = attrs[key].replace(':', '')
-            let result = evaluate(val, runtime)
+            const val:string = attrs[key].replace(':', '')
+            let result = val.match(/^process\./)?val:evaluate(val, runtime);
+            if(typeof result !=='string'){
+                try{
+                    result=JSON.stringify(result)
+                }catch {
+                    result=val
+                }
+            }
             attrs[key] = result === `return(${val})` ? `:${val}` : result
         }
         element.attrs = attrs
