@@ -113,7 +113,14 @@ export class Bot<K extends keyof Zhin.Adapters = keyof Zhin.Adapters, BO = {}, A
         message = [].concat(message)
         const replyElem: Element | undefined = quote ? Element('reply', {message_id: session.message_id}) : undefined
         if (replyElem) message.unshift(replyElem)
-        const textLen = message.filter(m => typeof m !== 'object' || m.type === 'text').reduce((r: number, c: Element<'text'>) => r += (c.attrs?.text?.length || 0), 0)
+        const calcLen=(message:Element.Fragment)=>{
+            return [].concat(message).filter(m => typeof m !== 'object' || m.type === 'text').reduce((r: number, c: Element<'text'>|string|number|boolean) =>{
+                if(typeof c !=="object") r+=String(c).length
+                else r+=(c.attrs.text?.length||0)
+                return r
+            }, 0) as number
+        }
+        const textLen = calcLen(message)
         if (textLen > this.options.text_limit) message = [
             Element('node', {user_id: this.self_id as string,children:message})
         ]
