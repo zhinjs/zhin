@@ -583,6 +583,7 @@ export namespace Zhin {
 
     export function createContext<T extends object>(context: T): T {
         const whiteList = ['Math', 'Date', 'JSON'];
+
         const fakeProcess= {
             process: {
                 exit() {
