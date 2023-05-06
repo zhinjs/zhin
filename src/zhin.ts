@@ -584,7 +584,7 @@ export namespace Zhin {
     export function createContext<T extends object>(context: T): T {
         const whiteList = ['Math', 'Date', 'JSON'];
 
-        const fakeProcess= {
+        const fakeGlobal= {
             process: {
                 exit() {
                     return '好嘞,我退出了';
@@ -603,15 +603,26 @@ export namespace Zhin {
                         foo: 'bar'
                     };
                 }
+            },
+            console:{
+                log(...msg){
+                    return msg.join('')
+                },
+                info(...msg){
+                    return msg.join('')
+                },
+                debug(...msg){
+                    return msg.join('')
+                }
             }
         }
         Object.assign(context, {
-            ...fakeProcess,
+            ...fakeGlobal,
             toString() {
-                return fakeProcess.toString();
+                return fakeGlobal.toString();
             },
             toJSON() {
-                return fakeProcess;
+                return fakeGlobal;
             }
         });
         return new Proxy(context, {
