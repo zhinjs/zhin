@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.7](https://github.com/zhinjs/zhin/compare/v2.0.6...v2.0.7) (2023-05-06)
+
+
+### Bug Fixes
+
+* fake console ([c96b88a](https://github.com/zhinjs/zhin/commit/c96b88a3c59eaeb911a9a3f6f374cd2e75bb179b))
+
 ## [2.0.6](https://github.com/zhinjs/zhin/compare/v2.0.5...v2.0.6) (2023-05-06)
 
 
