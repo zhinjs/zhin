@@ -1,4 +1,4 @@
-import {useContext, Schema, useOptions, Bot, Zhin} from "@";
+import {useContext, Schema, useOptions, Bot, Zhin, NSession} from "@";
 export const name='systemDaemon'
 const ctx=useContext()
 const config=useOptions('plugins.daemon')
@@ -19,15 +19,14 @@ interface Message {
     body: any,
     times?:number
 }
-exitCommand && ctx
+exitCommand && ctx.master()
     .command(exitCommand === true ? 'exit' : exitCommand)
     .desc('关闭bot')
     .hidden()
-    .auth('master','admins')
-    .option('restart', '-r  重新启动')
+    .option('-r [restart:boolean] 重新启动')
     .shortcut('关机')
     .shortcut('重启', {options: {restart: true}})
-    .action(async ({options,session}) => {
+    .action<NSession<keyof Zhin.Adapters>>(async ({options,session}) => {
         const channelId = Bot.getFullTargetId(session);
         if (!options.restart && !autoRestart) {
             await session.reply('正在关机...').catch(()=>{})

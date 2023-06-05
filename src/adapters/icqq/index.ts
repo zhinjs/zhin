@@ -47,11 +47,12 @@ async function sendMsg(this:Client,target_id:number,target_type:string,content:E
         from_id:this.uin,
         to_id:target_id,
         type:target_type as Bot.MessageType,
-        elements:content
+        toString(): string {
+            return Element.stringify(content)
+        }
     } as Bot.MessageRet
 }
 type Params<T>=T extends (...args:infer R)=>any ? R:never
-type Return<T>=T extends ((...args:any[])=>infer R)?R:T
 export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
     constructor(app: Zhin,adapter: IcqqAdapter,options: BotOptions<IcqqBotOptions>) {
         if (!options.data_dir) options.data_dir = app.options.data_dir
@@ -81,7 +82,9 @@ export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
             user_id:this.self_id,
             to_id:target_id,
             type:target_type,
-            elements:message as Element[]
+            toString(): string {
+                return Element.stringify(message)
+            }
         }
         this.adapter.emit(`message.send`,this.self_id,messageRet)
         return messageRet
@@ -93,7 +96,9 @@ export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
             from_id:message.sender.user_id,
             type:message.message_type,
             to_id:this.self_id,
-            elements:toElement(message.message)
+            toString(): string {
+                return Element.stringify(toElement(message.message))
+            }
         }
     }
     async deleteMsg(message_id:string){

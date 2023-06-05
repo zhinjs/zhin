@@ -24,11 +24,10 @@ function outputConfig(config, key) {
 }
 
 const ctx = useContext()
-ctx.command('config [key:string] [value]')
+ctx.master().command('config [key:string] [value:any]')
     .desc('编辑配置文件')
-    .auth("master", "admins")
     .hidden()
-    .option('delete', '-d 删除指定配置')
+    .option('-d <delete:boolean> 删除指定配置')
     .action(({options}, key, value) => {
         const config = Yaml.load(fs.readFileSync(process.env.configPath || '', 'utf8')) as object
         if (value === undefined && !options.delete) return outputConfig(config, key)
@@ -38,10 +37,8 @@ ctx.command('config [key:string] [value]')
             return `已删除:config.${key}`
         }
         try {
-            value = JSON.parse(Element.stringify(value.join('')))
-        } catch {
-            value = value.join('') as any
-        }
+            value = JSON.parse(Element.stringify(value))
+        } catch {}
         setValue(config, key as Keys<object>, value as never)
         fs.writeFileSync(process.env.configPath, Yaml.dump(config))
         return `修改成功`

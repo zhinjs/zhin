@@ -104,13 +104,13 @@ export class Bot<K extends keyof Zhin.Adapters = keyof Zhin.Adapters, BO = {}, A
     }
 
     // 会话发起者是否为zhin管理员
-    isAdmin<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P] = keyof Zhin.BotEventMaps[P]>(session: NSession<P, E>) {
+    isAdmins<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P] = keyof Zhin.BotEventMaps[P]>(session: NSession<P, E>) {
         return this.options.admins && this.options.admins.includes(session.user_id)
     }
 
-    reply(session: NSession<K>, message: Element.Fragment, quote?: boolean) {
-        if (session.type !== 'message') throw new Error(`not exist reply when type !=='message'`)
-        message = [].concat(message)
+    async reply(session: NSession<K>, message: Element.Fragment, quote?: boolean) {
+        if (session.type !== 'message') throw new Error(`property 'reply' is only available for message event`)
+        message = await session.render(message)
         const replyElem: Element | undefined = quote ? Element('reply', {message_id: session.message_id}) : undefined
         if (replyElem) message.unshift(replyElem)
         const calcLen=(message:Element.Fragment)=>{
@@ -197,6 +197,7 @@ export type BotConstruct<K extends keyof Zhin.Bots = keyof Zhin.Bots, BO = {}, A
     new(zhin: Zhin, protocol: Zhin.Adapters[K], options: BotOptions<BO>): Zhin.Bots[K]
 }
 export namespace Bot {
+    export type Authority='master' | 'admins' | 'owner' | 'admin'
     export const defaultOptions: BotOptions = {
         quote_self: false,
         enable: true,
@@ -211,6 +212,6 @@ export namespace Bot {
         to_id: string | number
         user_id: string | number
         type: MessageType
-        elements: Element[]
+        toString(): string
     }
 }

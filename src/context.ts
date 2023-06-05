@@ -4,15 +4,15 @@ import {JobCallback, RecurrenceRule, RecurrenceSpecDateRange, RecurrenceSpecObjL
 import {Dispose} from "./dispose";
 import {Adapter, AdapterConstructs, AdapterOptions, AdapterOptionsType} from "./adapter";
 import {Middleware} from "./middleware";
-import {Command, TriggerSessionMap} from "./command";
+import {ArgsType, Command} from "./command";
 import {NSession, Session} from "./session";
 import {Element} from './element'
 import {EventEmitter} from "events";
-import {Argv} from "./argv";
 import {Plugin, PluginMap} from "@/plugin";
 import {Component} from "./component";
 import {Logger} from "log4js";
 import {Bot} from "./bot";
+type RemoveFirst<S extends string>=S extends `${infer L} ${infer R}`?R:S
 export class Context extends EventEmitter {
     /**
      * zhin实体
@@ -98,6 +98,31 @@ export class Context extends EventEmitter {
      */
     user(...user_ids: (string | number)[]) {
         return this.pick('user_id', ...user_ids)
+    }
+
+    /**
+     * 获取指定角色类型的上下文
+     * @param roles
+     */
+    role(...roles:Bot.Authority[]) {
+        let result:Context=this
+        if(roles.includes('master')) result= result.union((session)=>session.isMaster)
+        if(roles.includes('admins')) result=result.union((session)=>session.isAdmins)
+        if(roles.includes('owner')) result=result.union((session)=>session.isOwner)
+        if(roles.includes('admin')) result=result.union((session)=>session.isAdmin)
+        return result
+    }
+    admin(...admin_ids:(string|number)[]){
+        return this.role('admin').user(...admin_ids)
+    }
+    owner(...owner_ids:(string|number)[]){
+        return this.role('owner').user(...owner_ids)
+    }
+    admins(...admin_ids:(string|number)[]){
+        return this.role('admins').user(...admin_ids)
+    }
+    master(...master_ids:(string|number)[]){
+        return this.role('master').user(...master_ids)
     }
 
     /**
@@ -315,41 +340,27 @@ export class Context extends EventEmitter {
 
     /**
      * 为当前上下文添加指令
-     * @param def 组件创建字面量
-     * @param trigger 触发环境（group:群聊 private:私聊 discuss:讨论组 guild:频道）不传则所有会话
+     * @param decl 指令声明
+     * @param initialValue 指令初始值
      */
-    command<D extends string, T extends keyof TriggerSessionMap>(def: D, trigger?: T): Command<Argv.ArgumentType<D>, {},any, T> {
-        const namePath = def.split(' ', 1)[0]
-        const decl = def.slice(namePath.length)
-        const elements = namePath.split(/(?=[/])/g)
-
-        let parent: Command, nameArr = []
-        while (elements.length) {
-            const segment = elements.shift()
-            const code = segment.charCodeAt(0)
-            const tempName = code === 47 ? segment.slice(1) : segment
-            nameArr.push(tempName)
-            if (elements.length) parent = this.zhin.commandList.find(cmd => cmd.name === tempName)
-            if (!parent && elements.length) throw Error(`cannot find parent command:${nameArr.join('.')}`)
-        }
-        const name = nameArr.pop()
-        const command = new Command(name + decl)
-        command.fullName=namePath
-        command.trigger = trigger
-        command.context = this
-        if (parent) {
-            command.parent = parent
-            parent.children.push(command)
-        }
+    command<S extends Command.Declare>(decl: S, initialValue?: ArgsType<RemoveFirst<S>>): Command<ArgsType<RemoveFirst<S>>>
+    command<S extends Command.Declare>(decl: S, config?: Command.Config): Command<ArgsType<RemoveFirst<S>>>
+    command<S extends Command.Declare>(decl: S, initialValue?: ArgsType<RemoveFirst<S>>, config?: Command.Config): Command<ArgsType<RemoveFirst<S>>>
+    command<S extends Command.Declare>(decl: S, ...args: (ArgsType<RemoveFirst<S>> | Command.Config)[]): Command<ArgsType<RemoveFirst<S>>>{
+        const [name]=decl.split(/\s+/)
+        const command=Command.defineCommand(decl.slice(name.length+1),...args as any)
+        command.name=name
         this.commands.set(name, command)
         this.zhin.emit('command-add', command, this)
         this.disposes.push(() => {
             this.commands.delete(name)
             this.zhin.emit('command-remove', command, this)
         })
-        return command as Command<Argv.ArgumentType<D>, {},any, T>
+        return command as Command<ArgsType<RemoveFirst<S>>>
     }
-
+    findCommand(name: string) {
+        return this.zhin.commandList.find(command => command.name === name)
+    }
     /**
      * 监听事件
      * @param event 事件名
@@ -601,7 +612,9 @@ export class Context extends EventEmitter {
                 if(!result.includes(middleware)) result.push(middleware)
             }
             return result
-        }, [...this.middlewares])
+        }, [...this.middlewares]).filter((item,idx,list)=>{
+            return list.indexOf(item)===idx
+        })
     }
 
     /**
@@ -610,13 +623,11 @@ export class Context extends EventEmitter {
      */
     getSupportCommands<P extends keyof Zhin.Adapters>(session: NSession<P>) {
         return this.getMatchedContextList(session).reduce((result: Command[], context) => {
-            for (const command of context.commands.values()) {
-                if (command.match(session as any) && !result.includes(command)) {
-                    result.push(command)
-                }
-            }
+            result.push(...context.commands.values())
             return result
-        }, [...this.commands.values()]) as Command<any[],{},P,keyof TriggerSessionMap<P>>[]
+        }, [...this.commands.values()]).filter((item,idx,list)=>{
+            return list.indexOf(item)===idx
+        }) as Command[]
     }
 }
 

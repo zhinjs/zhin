@@ -5,7 +5,7 @@ import path from "path";
 import {watch} from "obj-observer";
 import {Proxied} from "obj-observer/lib/deepProxy";
 import {Dispose} from "@/dispose";
-import {Command, Component, TriggerSessionMap, Zhin} from "@";
+import {Command, Component, Zhin} from "@";
 import {Context} from "@/context";
 import {Middleware} from "@/middleware";
 
@@ -93,13 +93,13 @@ export function createZhinAPI() {
         return context.middleware(middleware) as Dispose
     }
     // 添加指令到插件中
-    const useCommand=<A extends any[],O,P extends keyof Zhin.Adapters,T extends keyof TriggerSessionMap<P>>(command:Command<A,O,P,T>)=>{
+    const useCommand=(command:Command)=>{
         const zhin = zhinMap.get(Zhin.key)
         if (!zhin) throw new Error(`can't found zhin with context for key:${Zhin.key.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
         const context=getContext(pluginFullPath)
-        const elements = command.fullName.split(/(?=[/])/g)
+        const elements = command.name.split(/(?=[/])/g)
         let parent: Command, nameArr = []
         while (elements.length) {
             const segment = elements.shift()
@@ -110,7 +110,6 @@ export function createZhinAPI() {
             if (!parent && elements.length) throw Error(`cannot find parent command:${nameArr.join('.')}`)
         }
         command.name=nameArr.pop()
-        command.context=context
         if (parent) {
             command.parent = parent
             parent.children.push(command)

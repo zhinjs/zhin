@@ -207,110 +207,114 @@ export namespace Element {
         return results
     }
 
+
     export function parse<S>(source: string, context?: S) {
-        const tokens: (Element | Token)[] = []
         source = source.replace(/<>([^<>]*)<\/>/g, (s, a) => `<template>${a}</template>`)
 
-        function pushText(content: string) {
-            if (content) tokens.push(Element('text', {text: content}))
+        function fixAttr(attrString:string,element:Element){
+            attrString.replace(
+                /([:\w-]+)\s*=\s*(?:(?:"([^"]*)")|(?:'([^']*)')|([^>\s]+))/g,
+                (_, key, value) => {
+                    element.attrs[key] = value || "";
+                    return ''
+                }
+            );
+            for(let key in element.attrs||={}){
+                let value=String(element.attrs[key])
+                if(key==='v-for'){
+                    element.loop=value
+                    delete element.attrs[key]
+                }else if(key==='condition'){
+                    element.when=value
+                    delete element.attrs[key]
+                }else if(key.startsWith(':')){
+                    delete element.attrs[key]
+                    const newKey=key.slice(1)
+                    element.attrs[newKey]=`:${value}`
+                }else if(isNullable(value)){
+                    element.attrs[key]=false
+                }else if(key.startsWith('no-')){
+                    const newKey=key.replace('no-','')
+                    delete element.attrs[key]
+                    element.attrs[newKey]=true
+                }
+            }
         }
-
-        let tagCap: RegExpExecArray
-        while ((tagCap = tagRegExp.exec(source))) {
-            parseContent(source.slice(0, tagCap.index))
-            const [_, close, type, attrs, empty] = tagCap
-            source = source.slice(tagCap.index + _.length)
-            if (_.startsWith('<!')) continue
-            const token: Token = {source: _, type: type || Fragment, close, empty, attrs: {}}
-            let attrCap: RegExpExecArray
-            while ((attrCap = attrRegExp.exec(attrs))) {
-                let [_, key, v1, v2 = v1] = attrCap
-                if (!isNullable(v2)) {
-                    if (key === 'v-for') {
-                        token.loop = unescape(v2)
-                        continue;
+        function analyzeHtml(content:string){
+            const result=[]
+            if(!content.length) return result
+            let matched:RegExpMatchArray,closeMatched:RegExpMatchArray;
+            const tagCap=/<([a-z]+)(?:\s+([^>]*))?>((?:.|\n)*?)<\/\1>/g
+            const tagCloseCap=/<([^\s>]+)(.*?)\/>/g
+            while ((matched=tagCap.exec(content))||(closeMatched=tagCloseCap.exec(content))){
+                if(matched){
+                    if(matched.index!==0){
+                        let source=content.substring(0,matched.index)
+                        while (source.match(tagCloseCap)){
+                            closeMatched=tagCloseCap.exec(source)
+                            if(closeMatched.index!==0){
+                                let source2=source.substring(0,closeMatched.index)
+                                source=source.replace(source2,'')
+                                const element=Element('text',{
+                                    text:source2
+                                })
+                                element.source=source2
+                                fixAttr('',element)
+                                result.push(element)
+                            }
+                            const [source2,type,attrString]=closeMatched
+                            source=source.substring(source2.length,source.length)
+                            const element=Element(type,{})
+                            element.source=source2
+                            fixAttr(attrString,element)
+                            result.push(element)
+                        }
+                        content=content.substring(matched.index,content.length)
+                        const element=Element('text',{
+                            text:source
+                        })
+                        element.source=source
+                        fixAttr('',element)
+                        result.push(element)
                     }
-                    if (key === 'v-if') {
-                        token.when = unescape(v2)
-                        continue;
+                    const [source,type,attrString='',children='']=matched
+                    content=content.replace(source,'')
+                    const element=Element(type,{},...analyzeHtml(children))
+                    element.source=source
+                    fixAttr(attrString,element)
+                    result.push(element)
+                }else if(closeMatched){
+                    if(closeMatched.index!==0){
+                        const source=content.substring(0,closeMatched.index)
+                        content=content.replace(source,'')
+                        const element=Element('text',{
+                            text:source
+                        })
+                        element.source=source
+                        fixAttr('',element)
+                        result.push(element)
                     }
-                    if (key.startsWith(':')) {
-                        let result = evaluate<S>(v2, context)
-                        token.attrs[key.slice(1)] = result === `return(${v2})` ? `:${v2}` : result
-                    } else {
-                        token.attrs[key] = unescape(v2)
-                    }
-                } else if (key.startsWith('no-')) {
-                    token.attrs[key.slice(3)] = false
-                } else {
-                    token.attrs[key] = true
+                    const [source,type,attrString]=closeMatched
+                    content=content.replace(source,'')
+                    const element=Element(type,{})
+                    fixAttr(attrString,element)
+                    element.source=source
+                    result.push(element)
                 }
             }
-            tokens.push(token)
-        }
+            if(0!==content.length) {
+                const source=content.substring(0,content.length)
+                const element=Element('text',{
+                    text:source
+                })
+                element.source=source
+                fixAttr('',element)
+                result.push(element)
 
-        parseContent(source)
-
-        function parseContent(source: string) {
-            source = source
-                .replace(/^\s*\n\s*/, '')
-                .replace(/\s*\n\s*$/, '')
-            if (context) {
-                let interpCap: RegExpExecArray
-                while ((interpCap = interpRegExp.exec(source))) {
-                    const [_, expr] = interpCap
-                    pushText(unescape(source.slice(0, interpCap.index)))
-                    source = source.slice(interpCap.index + _.length)
-                    let result = evaluate(expr, context)
-                    const content = result === `return(${expr})` ? `{{${expr}}}` : result
-                    tokens.push(...toElementArray(content))
-                }
             }
-            pushText(unescape(source))
+            return result
         }
-
-        const root = Element(Fragment)
-        const stack = [root]
-
-        function rollback(index: number) {
-            for (; index > 0; index--) {
-                const {children} = stack.shift()
-                const {source} = stack[0].children.pop()
-                const element = Element('text', {text: source})
-                stack[0].children.push(element)
-                stack[0].children.push(...children)
-            }
-        }
-
-        for (const token of tokens) {
-            if (isElement(token)) {
-                stack[0].children.push(token)
-            } else if (token.close) {
-                let index = 0
-                while (index < stack.length && stack[index].type !== token.type) index++
-                if (index === stack.length) {
-                    const child: Element = Element('text', {text: token.source})
-                    if (token.loop) child.loop = token.loop
-                    if (token.when) child.when = token.when
-                    stack[0].children.push(child)
-                } else {
-                    rollback(index)
-                    const element = stack.shift()
-                    delete element.source
-                }
-            } else {
-                const element: Element = Element(token.type, token.attrs)
-                if (token.loop) element.loop = token.loop
-                if (token.when) element.when = token.when
-                stack[0].children.push(element)
-                if (!token.empty) {
-                    element.source = token.source
-                    stack.unshift(element)
-                }
-            }
-        }
-        rollback(stack.length - 1)
-        return stack[0].children
+        return analyzeHtml(source)
     }
 
     export function stringify(fragment: Element.Fragment) {
@@ -326,7 +330,7 @@ export namespace Element {
         for (const e of children) {
             if (e.type !== 'text' || !(interpRegExp.test(e.attrs.text))) continue
             const [_, expr] = interpRegExp.exec(e.attrs.text)
-            let result = expr.match(/^process\./)?e.attrs.text:evaluate(expr, runtime);
+            let result = expr.match(/^((process|console)\.)|import|require/)?e.attrs.text:evaluate(expr, runtime);
             if(typeof result !=='string'){
                 try{
                     result=JSON.stringify(result)

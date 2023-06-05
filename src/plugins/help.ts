@@ -1,30 +1,27 @@
-import {useContext} from "@";
+import {NSession, useContext, Zhin} from "@";
 
 export const name = 'systemHelper'
 const ctx = useContext()
 ctx.command('help [command:string]')
     .desc('查看某个指令的帮助文档')
-    .shortcut('帮助', {fuzzy: true})
-    .option('showHidden', '-H 显示隐藏选项')
-    .option('showAuth', '-A 显示权限信息')
-    .action(({options, session, argv}, target) => {
+    .alias('帮助')
+    .option('-H [showHidden:boolean] 显示隐藏选项')
+    .action<NSession< keyof Zhin.Adapters>>(({options, session}, target) => {
         if (!target) {
             const commands = ctx.zhin.getSupportCommands(session).filter(cmd => {
-                if (options.showHidden) return cmd.parent === null && cmd.match(session)
-                return !cmd.config.hidden && cmd.parent === null && cmd.match(session)
+                if (options.showHidden) return cmd.parent === null
+                return !cmd.config.hidden && cmd.parent === null
             })
             const output = commands.map(command => command.help({...options, simple: true, dep: 0})).flat()
             output.push('回复“help [指令名]”查看指令帮助')
             return output.filter(Boolean).join('\n')
         }
 
-        return ctx.zhin
-            .findCommand({name: target, session, elements: session.elements ||= [], argv})
-            ?.help({...options, dep: 1})
+        return ctx.zhin.findCommand(target)?.help({...options, dep: 1})
             .concat('回复“help [指令名]”查看指令帮助').join('\n')
     })
 const dispose = ctx.zhin.on('command-add', (command) => {
-    command.option('help', '-h 查看帮助', {hidden: true})
+    command.option('-h [help:boolean] 查看帮助')
         .action(({options}) => {
             if (options.help) return command.help().concat('回复“help [指令名]”查看指令帮助').join('\n')
         })

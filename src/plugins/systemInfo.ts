@@ -6,7 +6,7 @@ const copyFileSync=promisify(copyFile)
 const writeFileSync=promisify(writeFile)
 import * as readline from 'readline'
 import {arch, cpus, freemem, totalmem, type} from "os";
-import {Time, useContext} from "@";
+import {NSession, Time, useContext, Zhin} from "@";
 import {version,h} from "@";
 
 export const name = 'systemInfo'
@@ -69,7 +69,7 @@ function showLogDetail() {
 ctx.command('status')
     .desc('查看知音状态')
     .hidden()
-    .action(({session}) => {
+    .action<NSession < keyof Zhin.Adapters>>(({session}) => {
         function format(bytes) {
             const operators = ['B', 'KB', 'MB', 'GB', 'TB']
             while (bytes > 1024 && operators.length > 1) {
@@ -98,17 +98,16 @@ ctx.command('status')
         ].join('\n')
     })
 
-ctx.command('status/logs <lines:number>')
+ctx.command('logs [lines:number]',[10])
     .desc('日志管理')
-    .auth('master', "admins")
-    .option('clean', '-c 清理日志')
-    .option('backup', '-b 备份日志')
-    .option('detail', '-d 查看日志大小')
+    .option( '-c [clean:boolean] 清理日志')
+    .option( '-b [backup:boolean] 备份日志')
+    .option( '-d [detail:boolean] 查看日志大小')
     .action(async ({options}, lineNum = 10) => {
         if (options.clean) return cleanLogs(options.backup)
         if (options.backup) return backupLogs()
         if (options.detail) return showLogDetail()
         const logLines = await readLogs()
         const lines = logLines.reverse().slice(0, lineNum).reverse()
-        return h('text',{text:lines.join('\n')})
+        return lines.join('\n')
     })

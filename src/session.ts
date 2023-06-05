@@ -1,12 +1,10 @@
 import {deepEqual, Dict, isNullable} from "@zhinjs/shared";
 import {Bot} from "./bot";
 import {Zhin} from "./zhin";
-import {Argv} from "./argv";
 import {Element} from '@/element'
 import {Middleware} from "./middleware";
 import {Prompt} from "./prompt";
 import {Context} from "@/context";
-import {TriggerSessionMap} from "@/command";
 
 export type FunctionPayloadWithSessionObj<E extends (...args: any[]) => any> = E extends (...args: infer R) => any ? ParametersToObj<R> : unknown
 export type ParametersToObj<A extends any[]> = A extends [infer R, ...infer L] ? R extends object ? Partial<R> & { args: L } : { args: [R, ...L] } : Dict
@@ -114,45 +112,37 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters, E exte
             }, this.zhin.options.delay.prompt)
         })
     }
-
-    isAtMe() {
+    get isMaster(){
+        return this.bot.isMaster(this as NSession<P,E>)
+    }
+    get isAdmins(){
+        return this.bot.isAdmins(this as NSession<P,E>)
+    }
+    get isGroup(){
+        return !! this.group_id
+    }
+    get isPrivate(){
+        return this.detail_type === 'private'
+    }
+    get isOwner(){
+        return this.bot.isGroupOwner(this as NSession<P,E>)
+    }
+    get isAdmin(){
+        return this.bot.isGroupAdmin(this as NSession<P,E>)
+    }
+    get isAtMe() {
         return this.elements?.length && this.elements[0].type === 'mention' && String(this.elements[0].attrs['user_id']) === String(this.bot.self_id)
     }
-
-    async nextArgv() {
-        return new Promise<void | Argv<any,any,P,keyof TriggerSessionMap<P>>>(resolve => {
-            const dispose = this.middleware(async (session, next) => {
-                clearTimeout(timer)
-                dispose()
-                const value = Argv.parse(session.elements, this)
-                resolve(value)
-                if (isNullable(value)) return next()
-            })
-            const timer = setTimeout(() => {
-                dispose()
-                resolve()
-            }, this.zhin.options.delay.prompt)
-        })
+    toString(){
+        return this.elements?.join('')||''
     }
 
-    async execute(argv: Element[] | Argv = this.elements): Promise<Element.Fragment> {
-        if (Array.isArray(argv)) {
-            let data = Argv.parse<P, E>(argv, this)
-            if (!data) return
-            argv = data
+    async execute(template=this.toString()): Promise<string> {
+        for(const command of this.zhin.commandList){
+            const result = await command.execute(this as any,template)
+            if(result) return result
         }
-        if (argv.atMe && !argv.name) {
-            await this.reply('嗯哼？')
-            const data = await this.nextArgv()
-            if (!data) return
-            argv = data
-        }
-        const command = this.zhin.findCommand(argv)
-        if (!command) return false
-        const result = await command.execute(argv)
-        if (!result || typeof result === 'boolean') return false
-        if (Array.isArray(result) && !result.length) return false
-        return result
+        return template
     }
 
     async render(elements: Element.Fragment = this.elements, context = Zhin.createContext(this)): Promise<Element[]> {

@@ -8,8 +8,7 @@ import {createZhinAPI} from "@/factory";
 import {deepEqual, Dict, getIpAddress, getPackageInfo, pick, wrapExport,} from "@zhinjs/shared";
 import {createServer, Server} from "http";
 import KoaBodyParser from "koa-bodyparser";
-import {Command, TriggerSessionMap} from "./command";
-import {Argv} from "./argv";
+import {Command} from "./command";
 import {Plugin} from './plugin'
 import {Context} from "./context";
 import Koa from "koa";
@@ -140,8 +139,8 @@ export class Zhin extends Context {
         this.use(Component)
         this.middleware(async (session, next) => {
             let result = await session.execute()
-            if (!result) return next()
-            return session.reply(await session.render(result))
+            if (result===session.toString()) return next()
+            return session.reply(result)
         })
         return result
     }
@@ -372,15 +371,6 @@ export class Zhin extends Context {
         } as any
     }
 
-    // 获取匹配出来的指令
-    findCommand<A extends any[], O, P extends keyof Zhin.Adapters, T extends keyof TriggerSessionMap<P>>(argv: Argv<A, O, P, T>) {
-        const commands = this.getSupportCommands(argv.session)
-        return commands.find(cmd => {
-            return cmd.name === argv.name
-                || cmd.aliasNames.includes(argv.name)
-                || cmd.shortcuts.some(({name}) => typeof name === 'string' ? name === argv.name : name.test((argv.elements ||= []).join('')))
-        }) as Command<A, O, P, T>
-    }
 
     // 启动zhin
     async start(mode: 'dev' | 'devel' | 'develop' | string) {

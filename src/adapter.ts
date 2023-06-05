@@ -24,7 +24,7 @@ export abstract class Adapter<K extends keyof Zhin.Adapters=keyof Zhin.Adapters,
         this.bots=new BotList()
         this.logger=zhin.getLogger(protocol)
         this.zhin.on('start',()=>this.start())
-        this.on('message',(session:NSession<K>)=>{
+        this.on('message.receive',(session:NSession<K>)=>{
             this.zhin.logger.info(`【${this.protocol}:${session.bot.self_id}】received\t：message_id(${session.message_id})`)
             this.botStatus(session.bot.self_id).recv_msg_cnt++
         })
