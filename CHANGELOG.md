@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.0](https://github.com/zhinjs/zhin/compare/v2.0.7...v2.1.0) (2023-06-10)
+
+
+### Features
+
+* 重构command，破坏更新，请谨慎升级，与旧版command不兼容 ([8a2f644](https://github.com/zhinjs/zhin/commit/8a2f644a335053042a0a76d9c8de677d23f76fa4))
+
 ## [2.0.7](https://github.com/zhinjs/zhin/compare/v2.0.6...v2.0.7) (2023-05-06)
 
 
