@@ -139,7 +139,7 @@ export class Zhin extends Context {
         this.use(Component)
         this.middleware(async (session, next) => {
             let result = await session.execute()
-            if (result===session.toString()) return next()
+            if (result === session.toString()) return next()
             return session.reply(result)
         })
         return result
@@ -464,30 +464,30 @@ export namespace Zhin {
                 },
                 log_file: {
                     type: 'file',
-                    maxLogSize:10485760,
+                    maxLogSize: 10485760,
                     filename: path.join(process.cwd(), 'logs.log'),
-                    encoding:'utf-8'
+                    encoding: 'utf-8'
                 },
-                _error_file:{
+                _error_file: {
                     type: 'file',
-                    maxLogSize:10485760,
+                    maxLogSize: 10485760,
                     filename: path.join(process.cwd(), 'logs_error.log'),
-                    encoding:'utf-8'
+                    encoding: 'utf-8'
                 },
-                error_file:{
-                    type:'logLevelFilter',
-                    appender:'_error_file',
-                    level:'warn'
+                error_file: {
+                    type: 'logLevelFilter',
+                    appender: '_error_file',
+                    level: 'warn'
                 }
             },
             categories: {
                 default: {
-                    appenders: ['log_file','error_file'],
+                    appenders: ['log_file', 'error_file'],
                     level: 'info'
                 },
-                '[zhin]':{
-                    appenders:['console_out'],
-                    level:'info'
+                '[zhin]': {
+                    appenders: ['console_out'],
+                    level: 'info'
                 }
             }
         },
@@ -569,12 +569,13 @@ export namespace Zhin {
         plugin_dir?: string
         data_dir?: string
     }
+
     export type ServiceConstructor<R, T = any> = new (ctx: Context, options?: T) => R
 
     export function createContext<T extends object>(context: T): T {
         const whiteList = ['Math', 'Date', 'JSON'];
 
-        const fakeGlobal= {
+        const fakeGlobal = {
             process: {
                 exit() {
                     return '好嘞,我退出了';
@@ -590,18 +591,52 @@ export namespace Zhin {
                 },
                 env() {
                     return {
-                        foo: 'bar'
+                        zhin: '~/zhin',
+                        node: 'node',
+                        npm: 'npm',
+                        yarn: 'yarn',
+                        cnpm: 'cnpm',
+                        npx: 'npx',
+                        tnpm: 'tnpm',
+                        nrm: 'nrm',
+                        nvm: 'nvm',
+                        n: 'n',
+                        pm2: 'pm2',
+                        prod: 'prod',
                     };
                 }
             },
-            console:{
-                log(...msg){
+            setTimeout() {
+                return '好嘞,我定时了';
+            },
+            setInterval() {
+                return '好嘞,我循环了';
+            },
+            setImmediate() {
+                return '好嘞,我立即了';
+            },
+            log(...msg) {
+                return msg.join('')
+            },
+            info(...msg) {
+                return msg.join('')
+            },
+            error(...msg) {
+                return msg.join('')
+            },
+            debug(...msg) {
+                return msg.join('')
+            },
+            console: {
+                log(...msg) {
                     return msg.join('')
-                },
-                info(...msg){
+                }
+                ,
+                info(...msg) {
                     return msg.join('')
-                },
-                debug(...msg){
+                }
+                ,
+                debug(...msg) {
                     return msg.join('')
                 }
             }
@@ -633,6 +668,8 @@ export namespace Zhin {
                 if (key === Symbol.unscopables) {
                     return undefined
                 }
+                const value = Reflect.get(target, key, receiver)
+                if (value === undefined) return Reflect.get(target['session'] || {}, key, receiver)
                 return Reflect.get(target, key, receiver)
             }
         })

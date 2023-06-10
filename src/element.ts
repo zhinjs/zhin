@@ -1,6 +1,7 @@
 import {evaluate, isNullable, makeArray, Awaitable, Dict} from "@zhinjs/shared";
 import {Component} from "@/component";
 import {Readable} from "stream";
+import {Session} from "@/session";
 
 export interface Element<T extends Element.BaseType | string = string, A extends Element.Attrs<T> = Element.Attrs<T>> {
     [Element.key]: true
@@ -31,15 +32,19 @@ class ElementConstructor {
             if (value === false) return ` no-${key}`
             return ` ${key}='${Element.escape('' + value)}'`
         }).join('')
-        if(this.loop) attrs+=` v-for="${this.loop}"`
-        if(this.when) attrs+=` v-if="${this.when}"`
+        if (this.loop) attrs += ` v-for="${this.loop}"`
+        if (this.when) attrs += ` v-if="${this.when}"`
         if (!this.children.length) return `<${this.type}${attrs}/>`
         return `<${this.type}${attrs}>${inner}</${this.type}>`
     }
 }
 
+type ArrayToString<T extends any[]> = T extends [infer A, ...infer B] ? A extends Element ? `${ToString<A>}${ArrayToString<B>}` : '' : ''
+type ToString<E extends Element, C extends any[] = []> = E extends Element<infer T, infer A> ? C extends Element.Children<T> ? `<${T} ${Stringify<A>}>${ArrayToString<C>}</${T}>` : `<${T} ${Stringify<A>}/>` : string
+type Stringify<T extends Dict> = { [K in keyof T]: K extends string | number | bigint ? T[K] extends boolean ? (T[K] extends true ? K : `no-${K}`) : `${K}='${T[K]}'` : string }[keyof T]
+
 export function Element(type: string, ...children: Element.Fragment[]): Element
-export function Element<T extends Element.BaseType | string>(type: T, attrs: Element.Attrs<T>, ...children: Element.Children<T>): Element<T>
+export function Element<T extends Element.BaseType | string>(type: T, attrs: Element.Attrs<T>, ...children: Element.Children<T>): Element<T, Element.Attrs<T>>
 export function Element(type: string, ...args: any[]) {
     const el = Object.create(ElementConstructor.prototype)
     el[Element.key] = true
@@ -137,8 +142,8 @@ export namespace Element {
 
     const tagRegExp = /<!--[\s\S]*?-->|<(\/?)([^!\s>/]*)([^>]*?)\s*(\/?)>/
     const attrRegExp = /([^\s=]+)(?:="([^"]*)"|='([^']*)')?/g
-    const interpRegExp = /\{\{([^{{]*)\}\}/
 
+    // 匹配双大括号里面的内容，可以包含{foo:bar}，${}，但是不能包含{{}}，因为{{}}会被当做表达式
     interface Token {
         type: string
         close: string
@@ -211,109 +216,119 @@ export namespace Element {
     export function parse<S>(source: string, context?: S) {
         source = source.replace(/<>([^<>]*)<\/>/g, (s, a) => `<template>${a}</template>`)
 
-        function fixAttr(attrString:string,element:Element){
-            attrString.replace(
-                /([:\w-]+)\s*=\s*(?:(?:"([^"]*)")|(?:'([^']*)')|([^>\s]+))/g,
-                (_, key, value) => {
-                    element.attrs[key] = value || "";
-                    return ''
+        function fixAttr(attrString: string, element: Element) {
+            const attrs = element.attrs ||= {}
+            // 匹配出所有属性，包含不带值的属性
+            const attrRegExp = /(?:([^\s=]+)(?:="([^"]*)"|='([^']*)')?|([^\s=]+))\s*/g
+            attrString.replace(attrRegExp, (s, key, value1, value2) => {
+                attrs[key] = value1 || value2 || ''
+                if (!attrs[key]) {
+                    if (key.startsWith('no-')) {
+                        attrs[key.slice(3)] = false
+                    } else {
+                        attrs[key] = true
+                    }
                 }
-            );
-            for(let key in element.attrs||={}){
-                let value=String(element.attrs[key])
-                if(key==='v-for'){
-                    element.loop=value
+                return ''
+            })
+            for (let key in element.attrs ||= {}) {
+                let value = String(element.attrs[key])
+                if (key === 'v-for') {
+                    element.loop = value
                     delete element.attrs[key]
-                }else if(key==='condition'){
-                    element.when=value
+                } else if (key === 'condition') {
+                    element.when = value
                     delete element.attrs[key]
-                }else if(key.startsWith(':')){
+                } else if (key.startsWith(':')) {
                     delete element.attrs[key]
-                    const newKey=key.slice(1)
-                    element.attrs[newKey]=`:${value}`
-                }else if(isNullable(value)){
-                    element.attrs[key]=false
-                }else if(key.startsWith('no-')){
-                    const newKey=key.replace('no-','')
+                    const newKey = key.slice(1)
+                    element.attrs[newKey] = `:${value}`
+                } else if (isNullable(value)) {
+                    element.attrs[key] = false
+                } else if (key.startsWith('no-')) {
+                    const newKey = key.replace('no-', '')
                     delete element.attrs[key]
-                    element.attrs[newKey]=true
+                    element.attrs[newKey] = true
                 }
             }
         }
-        function analyzeHtml(content:string){
-            const result=[]
-            if(!content.length) return result
-            let matched:RegExpMatchArray,closeMatched:RegExpMatchArray;
-            const tagCap=/<([a-z]+)(?:\s+([^>]*))?>((?:.|\n)*?)<\/\1>/g
-            const tagCloseCap=/<([^\s>]+)(.*?)\/>/g
-            while ((matched=tagCap.exec(content))||(closeMatched=tagCloseCap.exec(content))){
-                if(matched){
-                    if(matched.index!==0){
-                        let source=content.substring(0,matched.index)
-                        while (source.match(tagCloseCap)){
-                            closeMatched=tagCloseCap.exec(source)
-                            if(closeMatched.index!==0){
-                                let source2=source.substring(0,closeMatched.index)
-                                source=source.replace(source2,'')
-                                const element=Element('text',{
-                                    text:source2
+
+        function analyzeHtml(content: string) {
+            const result = []
+            if (!content.length) return result
+            let matched: RegExpMatchArray, closeMatched: RegExpMatchArray;
+            const tagCap = /<([a-z]+)(?:\s+([^>]*))?>((?:.|\n)*?)<\/\1>/g
+            const tagCloseCap = /<([^\s>]+)(.*?)\/>/g
+            while ((matched = tagCap.exec(content)) || (closeMatched = tagCloseCap.exec(content))) {
+                if (matched) {
+                    if (matched.index !== 0) {
+                        let source = content.substring(0, matched.index)
+                        while (source.match(tagCloseCap)) {
+                            closeMatched = tagCloseCap.exec(source)
+                            if (closeMatched.index !== 0) {
+                                let source2 = source.substring(0, closeMatched.index)
+                                source = source.replace(source2, '')
+                                const element = Element('text', {
+                                    text: source2
                                 })
-                                element.source=source2
-                                fixAttr('',element)
+                                element.source = source2
+                                fixAttr('', element)
                                 result.push(element)
                             }
-                            const [source2,type,attrString]=closeMatched
-                            source=source.substring(source2.length,source.length)
-                            const element=Element(type,{})
-                            element.source=source2
-                            fixAttr(attrString,element)
+                            const [source2, type, attrString] = closeMatched
+                            source = source.substring(source2.length, source.length)
+                            const element = Element(type, {})
+                            element.source = source2
+                            fixAttr(attrString, element)
                             result.push(element)
                         }
-                        content=content.substring(matched.index,content.length)
-                        const element=Element('text',{
-                            text:source
+                        content = content.substring(matched.index, content.length)
+                        const element = Element('text', {
+                            text: source
                         })
-                        element.source=source
-                        fixAttr('',element)
+                        element.source = source
+                        fixAttr('', element)
                         result.push(element)
                     }
-                    const [source,type,attrString='',children='']=matched
-                    content=content.replace(source,'')
-                    const element=Element(type,{},...analyzeHtml(children))
-                    element.source=source
-                    fixAttr(attrString,element)
+                    const [source, type, attrString = '', children = ''] = matched
+                    content = content.replace(source, '')
+                    const element = Element(type, {}, ...analyzeHtml(children))
+                    element.source = source
+                    fixAttr(attrString, element)
                     result.push(element)
-                }else if(closeMatched){
-                    if(closeMatched.index!==0){
-                        const source=content.substring(0,closeMatched.index)
-                        content=content.replace(source,'')
-                        const element=Element('text',{
-                            text:source
+                } else if (closeMatched) {
+                    if (closeMatched.index !== 0) {
+                        const source = content.substring(0, closeMatched.index)
+                        content = content.replace(source, '')
+                        const element = Element('text', {
+                            text: source
                         })
-                        element.source=source
-                        fixAttr('',element)
+                        element.source = source
+                        fixAttr('', element)
                         result.push(element)
                     }
-                    const [source,type,attrString]=closeMatched
-                    content=content.replace(source,'')
-                    const element=Element(type,{})
-                    fixAttr(attrString,element)
-                    element.source=source
+                    const [source, type, attrString] = closeMatched
+                    content = content.replace(source, '')
+                    const element = Element(type, {})
+                    fixAttr(attrString, element)
+                    element.source = source
                     result.push(element)
                 }
+                tagCap.lastIndex = 0
+                tagCloseCap.lastIndex = 0
             }
-            if(0!==content.length) {
-                const source=content.substring(0,content.length)
-                const element=Element('text',{
-                    text:source
+            if (0 !== content.length) {
+                const source = content.substring(0, content.length)
+                const element = Element('text', {
+                    text: source
                 })
-                element.source=source
-                fixAttr('',element)
+                element.source = source
+                fixAttr('', element)
                 result.push(element)
-
             }
             return result
         }
+
         return analyzeHtml(source)
     }
 
@@ -327,28 +342,35 @@ export namespace Element {
 
     function transform(element: Element, runtime) {
         const {attrs, children} = element
-        for (const e of children) {
-            if (e.type !== 'text' || !(interpRegExp.test(e.attrs.text))) continue
-            const [_, expr] = interpRegExp.exec(e.attrs.text)
-            let result = expr.match(/^((process|console)\.)|import|require/)?e.attrs.text:evaluate(expr, runtime);
-            if(typeof result !=='string'){
-                try{
-                    result=JSON.stringify(result)
-                }catch {
-                    result=expr
+        for (const e of [element, ...children]) {
+            if (e.type !== 'text') continue
+            if (!e.attrs.text) continue
+            const exprRegExp = /{{([^{}]*?)}}/g
+            let matched
+            while (matched = exprRegExp.exec(e.attrs.text)) {
+                const [_, expr] = matched
+                let result = expr.match(/^((process|console)\.)|import|require/) ? e.attrs.text : evaluate(expr, runtime);
+                if (typeof result !== 'string') {
+                    try {
+                        result = JSON.stringify(result, null, 2)
+                    } catch {
+                        result = expr
+                    }
                 }
+                const replacer = result === `return(${expr})` ? `{{${expr}}}` : result
+                e.attrs.text = e.attrs.text.replace(`{{${expr}}}`, replacer)
+                exprRegExp.lastIndex = e.attrs.text.indexOf(replacer) + replacer.length
             }
-            e.attrs.text = result === `return(${expr})` ? `{{${expr}}}` : result
         }
         for (const key in attrs) {
-            if (typeof attrs[key] !== 'string' || !attrs[key].startsWith(':')) continue
-            const val:string = attrs[key].replace(':', '')
-            let result = val.match(/^process\./)?val:evaluate(val, runtime);
-            if(typeof result !=='string'){
-                try{
-                    result=JSON.stringify(result)
-                }catch {
-                    result=val
+            if (typeof attrs[key] !== 'string' || (!attrs[key].startsWith(':'))) continue
+            const val: string = attrs[key].replace(':', '')
+            let result = val.match(/^process\./) ? val : evaluate(val, runtime);
+            if (typeof result !== 'string') {
+                try {
+                    result = JSON.stringify(result)
+                } catch {
+                    result = val
                 }
             }
             attrs[key] = result === `return(${val})` ? `:${val}` : result
@@ -376,24 +398,24 @@ export namespace Element {
             if (typeof component !== "boolean" && typeof component === 'object' && !(component instanceof Element)) {
                 runtime = Component.createRuntime(runtime, component, attrs)
                 const {render} = component
-                if(loop){
+                if (loop) {
                     const [_, name, value] = /(\S+)\sin\s(\S+)/.exec(loop);
                     const fn = new Function('element,transform,render,runtime', `const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{...transform(element,runtime),${name}:runtime.${value}[${name}]});with (runtime) {RESULT.push(render.apply(runtime,[element.attrs,element.children]));};};return RESULT;`);
                     component = fn(element, transform, render, runtime).flat()
-                }else{
+                } else {
                     if (when && !evaluate(when, runtime)) return
                     Object.assign(runtime, transform(element, runtime))
                     component = render.apply(runtime, [element.attrs, element.children]) as Fragment
                 }
             }
             if (component === true) {
-                if(loop){
+                if (loop) {
                     const [_, name, value] = /(\S+)\sin\s(\S+)/.exec(loop);
-                    const fn=new Function('element,transform,runtime',`const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{${name}:runtime.${value}[${name}]});RESULT.push({...element,...transform(element,runtime)})};return RESULT;`)
-                    output.push(...fn(element,transform,runtime))
-                }else{
-                    const newAttrs=transform(element,runtime)
-                    Object.assign(element,newAttrs)
+                    const fn = new Function('element,transform,runtime', `const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{${name}:runtime.${value}[${name}]});RESULT.push({...element,...transform(element,runtime)})};return RESULT;`)
+                    output.push(...fn(element, transform, runtime))
+                } else {
+                    const newAttrs = transform(element, runtime)
+                    Object.assign(element, newAttrs)
                     output.push(element)
                 }
             } else if (component !== false) {
@@ -403,11 +425,12 @@ export namespace Element {
         return typeof source === 'string' ? output.join('') : output
     }
 
-    export async function renderAsync<S>(source: Element.Fragment, rules: Dict<Component>, session?: S, runtime: Component.Runtime = {session: session as any}) {
+    export async function renderAsync<S>(this: Session<any>, source: Element.Fragment, rules: Dict<Component>, runtime?: Component.Runtime) {
+        if (!runtime) runtime = {session: this as any}
         const elements: Element[] = [].concat(source).reduce((result: Element[], item: string | boolean | number | Element) => {
             if (Element.isElement(item)) result.push(item)
             else {
-                result.push(...parse(item + '', session))
+                result.push(...parse(item + '', this))
             }
             return result
         }, [] as Element[])
@@ -418,28 +441,28 @@ export namespace Element {
             if (typeof component !== "boolean" && typeof component === 'object' && !(component instanceof Element)) {
                 runtime = Component.createRuntime(runtime, component, attrs)
                 const {render} = component
-                if(loop){
+                if (loop) {
                     const [_, name, value] = /(\S+)\sin\s(\S+)/.exec(loop);
                     const fn = new Function('element,transform,render,runtime', `const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{...transform(element,runtime),${name}:runtime.${value}[${name}]});with (runtime) {RESULT.push(render.apply(runtime,[element.attrs,element.children]));};};return RESULT;`);
                     component = (await Promise.all(fn(element, transform, render, runtime))).flat()
-                }else{
+                } else {
                     if (when && !evaluate(when, runtime)) continue
                     Object.assign(runtime, transform(element, runtime))
                     component = await render.apply(runtime, [element.attrs, element.children]) as Fragment
                 }
             }
             if (component === true) {
-                if(loop){
+                if (loop) {
                     const [_, name, value] = /(\S+)\sin\s(\S+)/.exec(loop);
-                    const fn=new Function('element,transform,runtime',`const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{${name}:runtime.${value}[${name}]});RESULT.push({...element,...transform(element,runtime)})};return RESULT;`)
-                    result.push(...fn(element,transform,runtime))
-                }else{
-                    const newAttrs=transform(element,runtime)
-                    Object.assign(element,newAttrs)
+                    const fn = new Function('element,transform,runtime', `const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{${name}:runtime.${value}[${name}]});RESULT.push({...element,...transform(element,runtime.session)})};return RESULT;`)
+                    result.push(...fn(element, transform, runtime))
+                } else {
+                    const newAttrs = transform(element, runtime)
+                    Object.assign(element, newAttrs)
                     result.push(element)
                 }
             } else if (component !== false) {
-                result.push(...await renderAsync(toElementArray(component as Fragment), rules, session, runtime))
+                result.push(...await renderAsync.apply(this, [toElementArray(component as Fragment), rules, runtime]))
             }
         }
         return result

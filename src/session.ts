@@ -5,6 +5,7 @@ import {Element} from '@/element'
 import {Middleware} from "./middleware";
 import {Prompt} from "./prompt";
 import {Context} from "@/context";
+import {Component} from "@/component";
 
 export type FunctionPayloadWithSessionObj<E extends (...args: any[]) => any> = E extends (...args: infer R) => any ? ParametersToObj<R> : unknown
 export type ParametersToObj<A extends any[]> = A extends [infer R, ...infer L] ? R extends object ? Partial<R> & { args: L } : { args: [R, ...L] } : Dict
@@ -27,10 +28,11 @@ export interface Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters, E 
     guild_name?: string
     detail_type?: string
     zhin: Zhin
+    isAtMe?: boolean
     context: Context
     adapter: Zhin.Adapters[P],
     prompt: Prompt
-    elements: Element[]
+    content:string
     bot: Zhin.Bots[P]
     event: E
     quote?: QuoteMessage
@@ -94,7 +96,7 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters, E exte
     intercept(tip: Element.Fragment, runFunc: (session: NSession<keyof Zhin.Adapters>) => Element.Fragment | void, free: Element.Fragment | ((session: NSession<keyof Zhin.Adapters>) => boolean), filter?: (session: NSession<keyof Zhin.Adapters>) => boolean) {
         if (!filter) filter = (session) => Bot.getFullTargetId(session) === Bot.getFullTargetId(this as any)
         this.reply(tip)
-        const needFree = (session) => typeof free === "function" ? free(session) : deepEqual(session.elements?.join(''), Element.toElementArray(free).join(''))
+        const needFree = (session) => typeof free === "function" ? free(session) : deepEqual(session.content, Element.toElementArray(free).join(''))
         return new Promise<void>(resolve => {
             const dispose = this.zhin.middleware(async (session, next) => {
                 if (!filter(session)) return next()
@@ -130,11 +132,8 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters, E exte
     get isAdmin(){
         return this.bot.isGroupAdmin(this as NSession<P,E>)
     }
-    get isAtMe() {
-        return this.elements?.length && this.elements[0].type === 'mention' && String(this.elements[0].attrs['user_id']) === String(this.bot.self_id)
-    }
     toString(){
-        return this.elements?.join('')||''
+        return this.content
     }
 
     async execute(template=this.toString()): Promise<string> {
@@ -145,9 +144,12 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters, E exte
         return template
     }
 
-    async render(elements: Element.Fragment = this.elements, context = Zhin.createContext(this)): Promise<Element[]> {
+    async render<T extends Component.Runtime>(template: Element.Fragment = this.content, context?:T): Promise<Element[]> {
+        if(!context) context=Zhin.createContext({
+            session:this as any
+        }) as T
         const components = this.zhin.getSupportComponents(this as NSession<P>)
-        return await Element.renderAsync(elements, components, context)
+        return await Element.renderAsync.apply(this,[template, components, context])
     }
 
     get [Symbol.unscopables]() {

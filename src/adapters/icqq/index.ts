@@ -9,9 +9,9 @@ import {Element} from '@/element'
 import {Zhin} from "@/zhin";
 import {NSession, Session} from "@/session";
 import {EventMap} from "icqq/lib/events";
-import {processMessage, toElement} from "@/adapters/icqq/utils";
+import {processMessage, toString} from "@/adapters/icqq/utils";
 
-async function sendMsg(this:Client,target_id:number,target_type:string,content:Element[]){
+async function sendMsg(this:Client,target_id:number,target_type:string,content:string){
     let {element, quote,music,share} = await processMessage.apply(this, [content])
     let args:any[]=[]
     if (!element.length && (!music && !share)) throw new Error(`发送消息(${element.join('')})不受支持`)
@@ -74,31 +74,27 @@ export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
     }
 
     async sendMsg(target_id:string|number,target_type:Bot.MessageType,message:Element.Fragment):Promise<Bot.MessageRet>{
-        message=Element.toElementArray(message)
-        const {message_id}=await sendMsg.apply(this.internal,[target_id,target_type,message])
+        const content=[].concat(message).map(item=>item.toString()).join('')
+        const {message_id}=await sendMsg.apply(this.internal,[target_id,target_type,content])
         const messageRet:Bot.MessageRet={
             message_id,
             from_id:this.self_id,
             user_id:this.self_id,
             to_id:target_id,
             type:target_type,
-            toString(): string {
-                return Element.stringify(message)
-            }
+            content
         }
         this.adapter.emit(`message.send`,this.self_id,messageRet)
         return messageRet
     }
     async getMsg(message_id:string):Promise<Bot.Message>{
-        const message=await this.internal.getMsg(message_id)
+        const messageRet=await this.internal.getMsg(message_id)
         return {
-            user_id:message.user_id,
-            from_id:message.sender.user_id,
-            type:message.message_type,
+            user_id:messageRet.user_id,
+            from_id:messageRet.sender.user_id,
+            type:messageRet.message_type,
             to_id:this.self_id,
-            toString(): string {
-                return Element.stringify(toElement(message.message))
-            }
+            content:toString(messageRet.message),
         }
     }
     async deleteMsg(message_id:string){
@@ -140,25 +136,26 @@ export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
         }, {args})
         delete obj.reply
         let msg=[...(obj.message||'')]
+        obj.isAtMe=msg[0]?.type==='at' && msg[0].user_id===this.self_id
         if(obj.source){
             obj.quote={
                 message_id:obj.detail_type==='group'?
                     genGroupMessageId(obj.group_id,obj.source.user_id,obj.source.seq,obj.source.rand,obj.source.time):
                     genDmMessageId(obj.user_id,obj.source.seq,obj.source.rand,obj.source.time),
                 user_id:obj.source.user_id,
-                element:[Element('text',{text:obj.source.message})]
+                content:obj.source.message
             }
             // oicq bug:引用消息会在message里产生一个AtElem
             msg.shift()
             if(msg[0]?.type==='text'){
                 msg[0].text=msg[0].text.trim()
             }
-            obj.message=typeof obj.message==='string'?msg.join(''):Array.isArray(obj.message)?msg:undefined
+            obj.content=toString(obj.message||'')
             delete obj.source
+        }else{
+            obj.content=toString(obj.message||'')
         }
-        const session=new Session<"icqq">(this.adapter, this.self_id, event, obj)
-        session.elements=toElement(obj.message,session)
-        return session as any
+        return new Session<"icqq">(this.adapter, this.self_id, event, obj) as any
     }
 
 }

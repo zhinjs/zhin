@@ -60,10 +60,14 @@ export class Bot<K extends keyof Zhin.Adapters = keyof Zhin.Adapters, BO = {}, A
     }
 
     sendQueueMsg(target_id: string | number, target_type: Bot.MessageType, message: Element.Fragment) {
-        return new Promise<Bot.MessageRet>((resolve) => {
+        return new Promise<Bot.MessageRet|null>((resolve) => {
             this.task.queue.push(async () => {
-                const result = await this.sendMsg(target_id, target_type, message)
-                resolve(result)
+                try{
+                    resolve(await this.sendMsg(target_id, target_type, message))
+                }catch {
+                    this.zhin.logger.error(`Bot(${this.self_id})消息发送失败`)
+                    resolve(null)
+                }
             })
             this.runQueue()
         })
@@ -212,6 +216,6 @@ export namespace Bot {
         to_id: string | number
         user_id: string | number
         type: MessageType
-        toString(): string
+        content: string
     }
 }

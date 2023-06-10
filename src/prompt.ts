@@ -36,11 +36,11 @@ export class Prompt{
         })
     }
     async any(message:Element.Fragment='请输入'){
-        return new Promise<Element[]>((resolve)=>{
+        return new Promise<Element.Fragment>((resolve)=>{
             try{
                 this.session.reply(message)
                 const dispose = this.session.middleware(async (session) => {
-                    resolve(session.elements)
+                    resolve(session.content)
                     dispose()
                     clearTimeout(timer)
                 })
@@ -119,9 +119,8 @@ export class Prompt{
                 return `${index+1}:${option.label}`
             }).join('\n')}${config.multiple?`\n选项之间使用'${config.separator||','}'分隔`:''}`,
             format:(event)=> {
-                const firstElem = event.elements[0]
-                const chooseIdxArr = (firstElem.attrs.text).split(config.separator || ',').map(Number)
-                return Prompt.transforms['select'][config.child_type][config.multiple ? 'true' : 'false'](event, config.options, chooseIdxArr) as Prompt.Select<T, M>
+                const choiceArr=event.content.split(',').map(Number)
+                return Prompt.transforms['select'][config.child_type][config.multiple ? 'true' : 'false'](event, config.options, choiceArr) as Prompt.Select<T, M>
             }
         }
         return this.$prompt(options)
@@ -188,52 +187,54 @@ export namespace Prompt{
         transforms[type]=transform
     }
     defineTransform("number",(session)=>{
-        const firstElem=session.elements[0]
-        if(firstElem.type!=='text' || !/^[0-9]*$/.test(firstElem.attrs.text)) throw new Error('type Error')
-        return +firstElem.attrs.text
+        const matchedArr=/^[0-9]*$/.exec(session.content)
+        if(!matchedArr) throw new Error('type Error')
+        return Number(matchedArr[0])
     })
     defineTransform('text',(session)=>{
-        const firstElem=session.elements[0]
-        if(firstElem.type!=='text') throw new Error('type Error')
-        return firstElem.attrs.text
+        return session.content
     })
     defineTransform('confirm',(session)=>{
-        const firstElem=session.elements[0]
-        if(firstElem.type!=='text') throw new Error('type Error')
-        return ['yes','y','Yes','YES','Y','.','。','确认'].includes(firstElem.attrs.text)
+        const matchedArr=/^[^<]*$/.exec(session.content)
+        if(!matchedArr) throw new Error('type Error')
+        return ['yes','y','Yes','YES','Y','.','。','确认'].includes(matchedArr[0])
     })
     defineTransform("regexp", (session)=>{
-        const firstElem=session.elements[0]
-        if(firstElem.type!=='text') throw new Error('type Error')
-        return new RegExp(firstElem.attrs.text)
+        const matchedArr=/^[^<]*$/.exec(session.content)
+        if(!matchedArr) throw new Error('type Error')
+        return new RegExp(matchedArr[0])
     })
     defineTransform('date',(session)=>{
-        const firstElem=session.elements[0]
-        if(firstElem.type!=='text') throw new Error('type Error')
-        return new Date(firstElem.attrs.text)
+        const matchedArr=/^[^<]*$/.exec(session.content)
+        if(!matchedArr) throw new Error('type Error')
+        return new Date(matchedArr[0])
     })
     defineTransform('list',{
         date(session,separator){
-            const firstElem=session.elements[0]
-            return firstElem.attrs.text?.split(separator).map(str=>{
+            const matchedArr=/^[^<]*$/.exec(session.content)
+            if(!matchedArr) throw new Error('type Error')
+            return matchedArr[0].split(separator).map(str=>{
                 if(/^[0-9]$/g.test(str)) return new Date(+str)
                 return new Date(str)
             })
         },
         number(session,separator){
-            const firstElem=session.elements[0]
-            return firstElem.attrs.text?.split(separator).map(str=>{
+            const matchedArr=/^[^<]*$/.exec(session.content)
+            if(!matchedArr) throw new Error('type Error')
+            return matchedArr[0].split(separator).map(str=>{
                 if(!/^[0-9]$/g.test(str))throw new Error('type Error')
                 return +str
             })
         },
         text(session,separator){
-            const firstElem=session.elements[0]
-            return firstElem.attrs.text?.split(separator)
+            const matchedArr=/^[^<]*$/.exec(session.content)
+            if(!matchedArr) throw new Error('type Error')
+            return matchedArr[0].split(separator)
         },
         regexp(session,separator){
-            const firstElem=session.elements[0]
-            return firstElem.attrs.text?.split(separator).map(str=>{
+            const matchedArr=/^[^<]*$/.exec(session.content)
+            if(!matchedArr) throw new Error('type Error')
+            return matchedArr[0].split(separator).map(str=>{
                 return new RegExp(str)
             })
         }

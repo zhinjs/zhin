@@ -320,23 +320,33 @@ export namespace Command {
     }
     function joinNestedTags(args: string[]) {
         const result:string[] = []
-        let merged = ''
-        args.forEach(arg=>{
-            if(!arg.startsWith('<') && !merged) return result.push(arg)
-            if(!merged) {
-                if(arg.endsWith('/>')) return result.push(arg)
-                return merged = arg
+        const copyArgs = [...args]
+        while (copyArgs.length) {
+            const arg = copyArgs.shift()
+            if(!/^<[^>]+>$/.test(arg)) {
+                result.push(arg)
+                continue;
             }
-            if(!arg.startsWith('<')) return merged+=/<[^>]>$/.test(merged)?arg:` ${arg}`
-            if(!arg.startsWith('</')) return merged+=arg
-            merged+=arg
-            result.push(merged)
-            merged=''
-        })
+            const tag = arg.slice(1,-1)
+            if(tag.startsWith('/')) {
+                result.push(arg);
+                continue;
+            }
+            const endTag = `</${tag}>`
+            const index = copyArgs.findIndex(item => item === endTag)
+            if(index===-1) {
+                result.push(arg)
+            }else{
+                result.push([arg,...copyArgs.splice(0,index+1)].map((str,i,arr)=>{
+                    if(arr[i-1] && !/^<[^>]+>$/.test(arr[i-1])) return ` ${str}`
+                    return str
+                }).join(''))
+            }
+        }
         return result.map(removeOuterQuoteOnce)
     }
     export function parseParams(text) {
-        const regex = /(".*?"|'.*?'|`.*?`|<[^>]+?>|\S+)/g;
+        const regex = /(".*?"|'.*?'|`.*?`|<[^>]+?>|[^<>\s]+|\S+)/g;
         const matches = text.match(regex);
         if (matches) {
             return joinNestedTags(matches.reduce((result, match) => {
