@@ -387,6 +387,7 @@ export class Zhin extends Context {
                 this.plugin(plugin.name, plugin.setup)
             } catch (e) {
                 this.zhin.logger.warn(`自动载入插件(${plugin.name})失败：${e.message}`)
+                this.zhin.logger.debug(e.stack)
                 this.plugins.delete(plugin.fullName)
             }
         })

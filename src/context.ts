@@ -4,7 +4,7 @@ import {JobCallback, RecurrenceRule, RecurrenceSpecDateRange, RecurrenceSpecObjL
 import {Dispose} from "./dispose";
 import {Adapter, AdapterConstructs, AdapterOptions, AdapterOptionsType} from "./adapter";
 import {Middleware} from "./middleware";
-import {ArgsType, Command} from "./command";
+import {ArgsType, Command, defineCommand} from "./command";
 import {NSession, Session} from "./session";
 import {Element} from './element'
 import {EventEmitter} from "events";
@@ -248,7 +248,20 @@ export class Context extends EventEmitter {
         }
         return this
     }
-
+    useCommand<A extends any[],O={}>(name:string,command:Command<A,O>,parent=null){
+        if(parent){
+            command.parent=parent
+            parent.children.push(command)
+        }
+        command.name=name
+        this.commands.set(command.name, command as any)
+        this.zhin.emit('command-add', command, this)
+        this.disposes.push(() => {
+            this.commands.delete(command.name)
+            remove(command.parent?.children||[],command as any)
+            this.zhin.emit('command-remove', command, this)
+        })
+    }
     /**
      * 为当前上下文添加插件
      * @param plugin 插件安装配置对象
@@ -348,7 +361,7 @@ export class Context extends EventEmitter {
     command<S extends Command.Declare>(decl: S, initialValue?: ArgsType<RemoveFirst<S>>, config?: Command.Config): Command<ArgsType<RemoveFirst<S>>>
     command<S extends Command.Declare>(decl: S, ...args: (ArgsType<RemoveFirst<S>> | Command.Config)[]): Command<ArgsType<RemoveFirst<S>>>{
         const [name]=decl.split(/\s+/)
-        const command=Command.defineCommand(decl.slice(name.length+1),...args as any)
+        const command=defineCommand(decl.slice(name.length+1),...args as any)
         command.name=name
         this.commands.set(name, command)
         this.zhin.emit('command-add', command, this)

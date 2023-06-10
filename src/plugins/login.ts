@@ -29,5 +29,5 @@ ctx.on('icqq.system.login.device', (e) => {
         }
     })
 })
-ctx.command('send <msg:text>')
-    .action(async (e, msg) => msg)
+ctx.command('send <msg:string>')
+    .action(({session}, msg) => msg)

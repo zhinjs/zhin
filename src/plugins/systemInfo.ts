@@ -1,7 +1,6 @@
 import {createReadStream,readFile,copyFile,writeFile, statSync} from 'fs'
 import {resolve as PathResolve, dirname} from "path";
 import {promisify} from "util";
-const readFileSync=promisify(readFile)
 const copyFileSync=promisify(copyFile)
 const writeFileSync=promisify(writeFile)
 import * as readline from 'readline'

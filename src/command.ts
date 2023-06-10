@@ -13,6 +13,7 @@ export interface HelpOptions {
     current?: number;
     simple?: boolean;
 }
+
 function getType(value) {
     if (value === undefined) {
         return 'undefined'
@@ -68,8 +69,8 @@ export class Command<A extends any[] = [], O = {}> {
     checkers: Command.CallBack<object, A, O>[] = []
     public name?: string
     private aliasNames: string[] = []
-    public parent:Command=null
-    public children:Command[]=[]
+    public parent: Command = null
+    public children: Command[] = []
     private sugarsConfig: Command.Sugar<A, O>[] = []
     private argsConfig: Command.ArgsConfig = []
     private optionsConfig: Command.OptionsConfig = {}
@@ -92,37 +93,44 @@ export class Command<A extends any[] = [], O = {}> {
         }
         return this as Command<A, O & OptionType<S>>
     }
-    command<S extends string>(name: string, decl: S,initialValue?:ArgsType<S>): Command<ArgsType<S>> {
-        const args=[initialValue,this.config].filter(Boolean)
-        const command = Command.defineCommand(decl,...args as any)
+
+    command<S extends string>(name: string, decl: S, initialValue?: ArgsType<S>): Command<ArgsType<S>> {
+        const args = [initialValue, this.config].filter(Boolean)
+        const command = defineCommand(decl, ...args as any)
         command.name = name
-        command.parent=this as any
+        command.parent = this as any
         this.children.push(command)
         return command
     }
-    check<S extends object>(callback:Command.CallBack<S, A,O>): this {
+
+    check<S extends object>(callback: Command.CallBack<S, A, O>): this {
         this.checkers.push(callback)
         return this
     }
-    hidden(){
+
+    hidden() {
         this.config.hidden = true
         return this
     }
+
     desc(desc: string) {
         this.config.desc = desc
         return this
     }
+
     alias(alias: string) {
         this.aliasNames.push(alias)
         return this
     }
+
     /**
      * @deprecated use sugar instead
      *
      **/
-    shortcut(...params:Parameters<Command['sugar']>) {
-        return this.sugar.apply(this,params as any)
+    shortcut(...params: Parameters<Command['sugar']>) {
+        return this.sugar.apply(this, params as any)
     }
+
     sugar(sugar: string | RegExp, config?: Omit<Command.Sugar<A, O>, 'regexp'>): Command<A, O> {
         this.sugarsConfig.push({
             regexp: sugar instanceof RegExp ? sugar : new RegExp(sugar),
@@ -130,7 +138,8 @@ export class Command<A extends any[] = [], O = {}> {
         })
         return this
     }
-    use(middleware:(command:Command<any[],any>)=>any){
+
+    use(middleware: (command: Command<any[], any>) => any) {
         middleware(this)
     }
 
@@ -149,7 +158,7 @@ export class Command<A extends any[] = [], O = {}> {
             })
             return result.join(' ')
         }
-        const output: string[] = [`${this.name} ${createArgsOutput()} ${this.config.desc||''}`]
+        const output: string[] = [`${this.name} ${createArgsOutput()} ${this.config.desc || ''}`]
         if (!simple) {
             if (this.aliasNames.length) output.push(` alias:${this.aliasNames.join(',')}`)
             if (this.sugarsConfig.length) output.push(` shortcuts:${this.sugarsConfig.map(sugar => String(sugar.regexp))}`)
@@ -161,7 +170,7 @@ export class Command<A extends any[] = [], O = {}> {
                     output.push(' options:')
                     options.forEach(key => {
                         const nameDesc: string[] = []
-                        const option:Command.OptionConfig = this.optionsConfig[key]
+                        const option: Command.OptionConfig = this.optionsConfig[key]
                         nameDesc.push(option?.required ? '<' : '[')
                         nameDesc.push(option?.rest ? '...' : '')
                         nameDesc.push(key + ':')
@@ -190,29 +199,31 @@ export class Command<A extends any[] = [], O = {}> {
         this.callbacks.push(callback)
         return this as Command<A, O>
     }
-    async execute<S extends object>(session: S,template=session.toString()): Promise<string | void> {
+
+    async execute<S extends object>(session: S, template = session.toString()): Promise<string | void> {
         let runtime: Command.RunTime<S, A, O> | void
-        try{
-            runtime=this.match(session,template)
-        }catch (e){
+        try {
+            runtime = this.match(session, template)
+        } catch (e) {
             console.error(e)
             return e.message
         }
         if (!runtime) return
-        for(const checker of runtime.command.checkers){
-            const result=await checker.apply(runtime.command,[runtime as Command.RunTime<S, A, O>,...(runtime as Command.RunTime<S, A, O>).args])
-            if(result) return result
+        for (const checker of runtime.command.checkers) {
+            const result = await checker.apply(runtime.command, [runtime as Command.RunTime<S, A, O>, ...(runtime as Command.RunTime<S, A, O>).args])
+            if (result) return result
         }
         for (const callback of runtime.command.callbacks) {
             const result = await callback.apply(runtime.command, [runtime as Command.RunTime<S, A, O>, ...(runtime as Command.RunTime<S, A, O>).args])
             if (result) return result
         }
     }
-    addArgConfig(config:Command.ArgConfig){
+
+    addArgConfig(config: Command.ArgConfig) {
         this.argsConfig.push(config)
     }
 
-    private parseSugar(template:string) {
+    private parseSugar(template: string) {
         const argv: Argv = {
             name: '',
             args: [],
@@ -254,27 +265,29 @@ export class Command<A extends any[] = [], O = {}> {
         return argv
     }
 
-    private parseArgv(template:string) {
+    private parseArgv(template: string) {
         const argv: Argv = {
             name: '',
             args: [],
             options: {}
         }
-        const [name,...matchedArr]=Command.parseParams(template)
-        if(![this.name,...this.aliasNames].includes(name)) return argv
-        argv.name=this.name
+        const [name, ...matchedArr] = Command.parseParams(template)
+        if (![this.name, ...this.aliasNames].includes(name)) return argv
+        argv.name = this.name
         for (let i = 0; i < matchedArr.length; i++) {
             const arg = matchedArr[i]
-            if (arg.startsWith('--') || arg.startsWith('—')){
-                const name = arg.startsWith('--') ? arg.slice(2) : arg.slice(1)
+            if (arg.startsWith('--') || arg.startsWith('-')) {
+                const name = arg.startsWith('--') ? arg.slice(2) : Object.entries(this.optionsConfig)
+                    .find(([, option]) => option.name === arg.slice(1))?.[0]
+                if (!name) throw new Error(`option ${arg} is not defined`)
                 const option = this.optionsConfig[name]
                 if (!option) throw new Error(`option ${name} is not defined`)
                 if (option.rest) {
                     argv.options[name] = matchedArr.slice(i + 1).map(v => Command.transform(v, option.type as Command.Type))
                     break
-                } else if(option.type==='boolean') {
+                } else if (option.type === 'boolean') {
                     argv.options[name] = true
-                }else{
+                } else {
                     argv.options[name] = Command.transform(matchedArr[++i], option.type as Command.Type)
                 }
             } else {
@@ -291,7 +304,7 @@ export class Command<A extends any[] = [], O = {}> {
         return argv
     }
 
-    match<S extends object>(session: S,template:string): Command.RunTime<S, A, O> | void {
+    match<S extends object>(session: S, template: string): Command.RunTime<S, A, O> | void {
         let argv = this.parseSugar(template)
         if (!argv.name) argv = this.parseArgv(template)
         if (argv.name !== this.name) {
@@ -310,50 +323,77 @@ export class Command<A extends any[] = [], O = {}> {
 }
 
 type MayBePromise<T> = T | Promise<T>
+
+export function defineCommand<S extends string>(decl: S, initialValue?: ArgsType<S>): Command<ArgsType<S>>
+export function defineCommand<S extends string>(decl: S, config?: Command.Config): Command<ArgsType<S>>
+export function defineCommand<S extends string>(decl: S, initialValue?: ArgsType<S>, config?: Command.Config): Command<ArgsType<S>>
+export function defineCommand<S extends string>(decl: S, ...args: (ArgsType<S> | Command.Config)[]): Command<ArgsType<S>> {
+    const initialValue: ArgsType<S> | undefined = Array.isArray(args[0]) ? undefined : args.shift() as ArgsType<S>
+    const command = new Command<ArgsType<S>>(...args as [Command.Config?])
+    const argDeclArr = decl.split(' ').filter(Boolean)
+    for (let i = 0; i < argDeclArr.length; i++) {
+        const argDecl = argDeclArr[i]
+        const argMatch = argDecl.match(/^([<[])(\.\.\.)?(\w+):(\w+)([>\]])$/) as RegExpExecArray
+        if (!argMatch) throw new Error(`arg ${argDecl} is not valid`)
+        const [, required, rest, name, type] = argMatch
+        command.addArgConfig({
+            name,
+            type: type as Command.Type,
+            required: required === '<',
+            rest: rest === '...',
+            initialValue: initialValue && initialValue[i]
+        })
+    }
+    return command
+}
+
 export namespace Command {
     export const transforms: Transforms = {}
+
     export function removeOuterQuoteOnce(str: string) {
         if (str.startsWith('"') && str.endsWith('"')) return str.slice(1, -1)
         if (str.startsWith("'") && str.endsWith("'")) return str.slice(1, -1)
-        if(str.startsWith('`') && str.endsWith('`')) return str.slice(1,-1)
+        if (str.startsWith('`') && str.endsWith('`')) return str.slice(1, -1)
         return str
     }
+
     function joinNestedTags(args: string[]) {
-        const result:string[] = []
+        const result: string[] = []
         const copyArgs = [...args]
         while (copyArgs.length) {
             const arg = copyArgs.shift()
-            if(!/^<[^>]+>$/.test(arg)) {
+            if (!/^<[^>]+>$/.test(arg)) {
                 result.push(arg)
                 continue;
             }
-            const tag = arg.slice(1,-1)
-            if(tag.startsWith('/')) {
+            const tag = arg.slice(1, -1)
+            if (tag.startsWith('/')) {
                 result.push(arg);
                 continue;
             }
             const endTag = `</${tag}>`
             const index = copyArgs.findIndex(item => item === endTag)
-            if(index===-1) {
+            if (index === -1) {
                 result.push(arg)
-            }else{
-                result.push([arg,...copyArgs.splice(0,index+1)].map((str,i,arr)=>{
-                    if(arr[i-1] && !/^<[^>]+>$/.test(arr[i-1])) return ` ${str}`
+            } else {
+                result.push([arg, ...copyArgs.splice(0, index + 1)].map((str, i, arr) => {
+                    if (arr[i - 1] && !/^<[^>]+>$/.test(arr[i - 1])) return ` ${str}`
                     return str
                 }).join(''))
             }
         }
         return result.map(removeOuterQuoteOnce)
     }
+
     export function parseParams(text) {
         const regex = /(".*?"|'.*?'|`.*?`|<[^>]+?>|[^<>\s]+|\S+)/g;
         const matches = text.match(regex);
         if (matches) {
             return joinNestedTags(matches.reduce((result, match) => {
-                if(/<\/\S+>/.test(match)) {
-                    const [start,end] = match.split('</')
-                    result.push(start,`</${end}`)
-                }else{
+                if (/<\/\S+>/.test(match)) {
+                    const [start, end] = match.split('</')
+                    result.push(start, `</${end}`)
+                } else {
                     result.push(match)
                 }
                 return result
@@ -361,8 +401,9 @@ export namespace Command {
         }
         return [];
     }
+
     export interface Config {
-        hidden?:boolean
+        hidden?: boolean
         desc?: string
     }
 
@@ -445,7 +486,9 @@ export namespace Command {
             }
         }
     }
-    export type Declare=`${string} ${string}`|string
+
+    export type Declare = `${string} ${string}` | string
+
     export function transform<T extends Type>(source: string, type: T): Domain[T] {
         const transform = transforms[type]
         if (!transform) throw new Error(`type ${type} is not defined`)
@@ -454,29 +497,6 @@ export namespace Command {
 
     export function registerDomain<T extends Type>(type: T, transform: Transform<T>) {
         transforms[type] = transform as any
-    }
-
-    export function defineCommand<S extends string>(decl: S, initialValue?: ArgsType<S>): Command<ArgsType<S>>
-    export function defineCommand<S extends string>(decl: S, config?: Command.Config): Command<ArgsType<S>>
-    export function defineCommand<S extends string>(decl: S, initialValue?: ArgsType<S>, config?: Command.Config): Command<ArgsType<S>>
-    export function defineCommand<S extends string>(decl: S, ...args: (ArgsType<S> | Command.Config)[]): Command<ArgsType<S>> {
-        const initialValue: ArgsType<S> | undefined = Array.isArray(args[0]) ? undefined : args.shift() as ArgsType<S>
-        const command = new Command<ArgsType<S>>(...args as [Config?])
-        const argDeclArr = decl.split(' ').filter(Boolean)
-        for (let i = 0; i < argDeclArr.length; i++) {
-            const argDecl = argDeclArr[i]
-            const argMatch = argDecl.match(/^([<[])(\.\.\.)?(\w+):(\w+)([>\]])$/) as RegExpExecArray
-            if (!argMatch) throw new Error(`arg ${argDecl} is not valid`)
-            const [, required, rest, name, type] = argMatch
-            command.addArgConfig({
-                name,
-                type: type as Command.Type,
-                required: required === '<',
-                rest: rest === '...',
-                initialValue: initialValue && initialValue[i]
-            })
-        }
-        return command
     }
 
     registerDomain('string', (source) => source)

@@ -78,7 +78,7 @@ export async function processMessage(this: Client, content: string, source?: Ele
                     async (forwardNode) => {
                         return {
                             // 转发套转发处理
-                            message: (await processMessage.apply(this, [forwardNode.attrs.message || forwardNode.children])).element,
+                            message: (await processMessage.apply(this, [Element.stringify(forwardNode.attrs.message || forwardNode.children)])).element,
                             user_id: Number(forwardNode.attrs.user_id),
                             nickname: forwardNode.attrs.user_name,
                             time: forwardNode.attrs.time

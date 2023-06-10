@@ -64,8 +64,9 @@ export class Bot<K extends keyof Zhin.Adapters = keyof Zhin.Adapters, BO = {}, A
             this.task.queue.push(async () => {
                 try{
                     resolve(await this.sendMsg(target_id, target_type, message))
-                }catch {
+                }catch (e){
                     this.zhin.logger.error(`Bot(${this.self_id})消息发送失败`)
+                    this.zhin.logger.debug(e.stack)
                     resolve(null)
                 }
             })

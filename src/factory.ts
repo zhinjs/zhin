@@ -93,33 +93,13 @@ export function createZhinAPI() {
         return context.middleware(middleware) as Dispose
     }
     // 添加指令到插件中
-    const useCommand=(command:Command)=>{
+    const useCommand=<A extends any[],O ={}>(name:string,command:Command<A,O>)=>{
         const zhin = zhinMap.get(Zhin.key)
         if (!zhin) throw new Error(`can't found zhin with context for key:${Zhin.key.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
         const context=getContext(pluginFullPath)
-        const elements = command.name.split(/(?=[/])/g)
-        let parent: Command, nameArr = []
-        while (elements.length) {
-            const segment = elements.shift()
-            const code = segment.charCodeAt(0)
-            const tempName = code === 47 ? segment.slice(1) : segment
-            nameArr.push(tempName)
-            if (elements.length) parent = zhin.commandList.find(cmd => cmd.name === tempName)
-            if (!parent && elements.length) throw Error(`cannot find parent command:${nameArr.join('.')}`)
-        }
-        command.name=nameArr.pop()
-        if (parent) {
-            command.parent = parent
-            parent.children.push(command)
-        }
-        context.commands.set(command.name, command)
-        zhin.emit('command-add', command, context)
-        context.disposes.push(() => {
-            context.commands.delete(command.name)
-            zhin.emit('command-remove', command, context)
-        })
+        context.useCommand(name,command)
     }
     // 读取指定path的配置文件
     function useOptions<K extends Keys<Zhin.Options>>(path: K): Value<Zhin.Options, K> {
