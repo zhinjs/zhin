@@ -202,7 +202,7 @@ export class Command<A extends any[] = [], O = {}> {
         return this as Command<A, O>
     }
 
-    async execute<S extends object>(session: S, template = session.toString()): Promise<string | void> {
+    async execute<S extends object>(session: S, template = session.toString()): Promise<string|boolean|number| void> {
         let runtime: Command.RunTime<S, A, O> | void
         try {
             runtime = this.match(session, template)
@@ -449,7 +449,7 @@ export namespace Command {
     } & OptionsConfig<R> : {
         [key: string]: OptionConfig<L>
     } & OptionsConfig<R> : {}
-    export type CallBack<Session extends object, A extends any[] = [], O = {}> = (runtime: RunTime<Session, A, O>, ...args: A) => MayBePromise<string | void>
+    export type CallBack<Session extends object, A extends any[] = [], O = {}> = (runtime: RunTime<Session, A, O>, ...args: A) => MayBePromise<string|boolean|number| void>
 
     export interface Domain {
         string: string
