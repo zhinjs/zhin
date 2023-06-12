@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.3](https://github.com/zhinjs/zhin/compare/v2.1.2...v2.1.3) (2023-06-12)
+
+
+### Bug Fixes
+
+* 返回值允许是boolean、number ([6948dbf](https://github.com/zhinjs/zhin/commit/6948dbfd45238a1e38a0491d9fcec7fb66d41faa))
+* 返回值允许是boolean、number ([2c965e3](https://github.com/zhinjs/zhin/commit/2c965e3062ba8fb6274b44f22dc560fba0b39ad9))
+
 ## [2.1.2](https://github.com/zhinjs/zhin/compare/v2.1.1...v2.1.2) (2023-06-12)
 
 
