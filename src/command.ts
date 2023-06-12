@@ -504,7 +504,7 @@ export namespace Command {
 
     export function transform<T extends Type>(source: string, type: T): Domain[T] {
         const domainConfig = domains[type]
-        if (!transform) throw new Error(`type ${type} is not defined`)
+        if (!domainConfig) throw new Error(`type ${type} is not defined`)
         return domainConfig.transform(source)
     }
 

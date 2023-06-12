@@ -42,7 +42,7 @@ export interface Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters, E 
 export type QuoteMessage = {
     message_id: string
     user_id: string | number
-    element: Element[]
+    content: string
 }
 
 export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P] = keyof Zhin.BotEventMaps[P]> {
