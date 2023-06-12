@@ -479,7 +479,7 @@ export namespace Command {
             }
             const validate = argConfig.type && domains[argConfig.type] && domains[argConfig.type].validate
             if(!validate) continue
-            if (arg && argConfig.type && validate(arg)) {
+            if (arg && argConfig.type && !validate(arg)) {
                 if (argConfig.rest && Array.isArray(arg) && arg.every(v => getType(v) === argConfig.type)) continue
                 throw new Error(`arg ${argConfig.name} should be ${argConfig.type}`)
             }
@@ -490,7 +490,9 @@ export namespace Command {
                 if (optionConfig.initialValue !== undefined) argv.options[option] = optionConfig.initialValue
                 else throw new Error(`option ${option} is required`)
             }
-            if (argv.options[option] && optionConfig.type && getType(argv.options[option]) !== optionConfig.type) {
+            const validate = optionConfig.type && domains[optionConfig.type] && domains[optionConfig.type].validate
+            if(!validate) continue
+            if (argv.options[option] && optionConfig.type && !validate(argv.options[option])) {
                 if (optionConfig.rest && Array.isArray(argv.options[option]) && (argv.options[option] as any[]).every(v => getType(v) === optionConfig.type)) continue
                 throw new Error(`option ${option} should be ${optionConfig.type}`)
             }
