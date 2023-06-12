@@ -453,6 +453,7 @@ export namespace Command {
 
     export interface Domain {
         string: string
+        integer: number
         number: number
         boolean: boolean
         user_id: number
@@ -516,14 +517,18 @@ export namespace Command {
 
     registerDomain('string',(source) => source)
     registerDomain('number', (source) => +source)
+    registerDomain('integer', (source) => +source, (source) => Number.isInteger(+source))
     registerDomain('boolean', (source) => source !== 'false')
     registerDomain('date', (source) => new Date(source))
     registerDomain('regexp', (source) => new RegExp(source))
     registerDomain('user_id', (source) => {
         const matched= source.match(/^<mention user_id="(\d+)"\/>$/)
-        if(!matched) throw new Error('invalid user_id')
+        if(!matched){
+            if(!/^\d+$/.test(source)) throw new Error(`user_id should be number or <mention user_id="number"/>`)
+            return +source
+        }
         return +matched[1]
     }, (source) => {
-        return /^<mention user_id="(\d+)"\/>$/.test(source)
+        return /^<mention user_id="(\d+)"\/>$/.test(source)|| /^\d+$/.test(source)
     })
 }
