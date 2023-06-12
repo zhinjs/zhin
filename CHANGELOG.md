@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.1.2](https://github.com/zhinjs/zhin/compare/v2.1.1...v2.1.2) (2023-06-12)
+
+
+### Bug Fixes
+
+* 允许定义指令时，通过/定义父级指令 ([269ab97](https://github.com/zhinjs/zhin/commit/269ab974e658a889f9735e626f8a9ddf0c0bf0ee))
+* 参数/选项类型判断错误 ([b32eeee](https://github.com/zhinjs/zhin/commit/b32eeeec1e5b3ef91effffb98c43d612c20c5078))
+* 同步更改内置指令 ([3b2b26c](https://github.com/zhinjs/zhin/commit/3b2b26c6678c2f385fbb926a1fc74a372eb920ee))
+
 ## [2.1.1](https://github.com/zhinjs/zhin/compare/v2.1.0...v2.1.1) (2023-06-12)
 
 
