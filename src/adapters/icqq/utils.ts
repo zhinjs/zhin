@@ -23,13 +23,13 @@ const allowElement = [
 export function fromElement(elementList: Element[]) {
     return elementList.map((element) => {
         if (typeof element === 'string') {
-            return {type: 'text', text: element}
+            return {type: 'text', text: Element.unescape(element)}
         }
         const {type, attrs, children} = element;
         const result = {
             type: type.replace('mention', 'at').replace('at_all', 'at'),
             ...attrs,
-            text: attrs.text
+            text: Element.unescape(attrs.text||'')
         }
         if (allowElement.includes(result.type)) {
             if (attrs['user_id']) result['qq'] = attrs['user_id']

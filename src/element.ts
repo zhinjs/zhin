@@ -23,7 +23,7 @@ class ElementConstructor {
     name: string = 'Element';
 
     toString(strip = false) {
-        if (this.type === 'text') return this.attrs.text
+        if (this.type === 'text') return Element.escape(this.attrs.text||'')
         const inner = this.children.map(child => child.toString(strip)).join('')
         if (strip) return inner
         let attrs = Object.entries(this.attrs).map(([key, value]) => {
@@ -132,12 +132,12 @@ export namespace Element {
         return source
             .replace('\"', '"')
             .replace("\'", "'")
+            .replace(/&(amp|#38|#x26);/g, '&')
             .replace(/&lt;/g, '<')
             .replace(/&gt;/g, '>')
             .replace(/&quot;/g, '"')
             .replace(/&#(\d+);/g, (_, code) => code === '38' ? _ : String.fromCharCode(+code))
             .replace(/&#x([0-9a-f]+);/gi, (_, code) => code === '26' ? _ : String.fromCharCode(parseInt(code, 16)))
-            .replace(/&(amp|#38|#x26);/g, '&')
     }
 
     const tagRegExp = /<!--[\s\S]*?-->|<(\/?)([^!\s>/]*)([^>]*?)\s*(\/?)>/

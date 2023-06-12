@@ -79,9 +79,9 @@ export class Command<A extends any[] = [], O = {}> {
     }
 
     option<S extends string>(option: S, initialValue?: OptionValueType<S>): Command<A, O & OptionType<S>> {
-        const optionMatch = option.match(/^-(\w+) ([<[])(\.\.\.)?(\w+):(\w+)([>\]])(.*)?/) as RegExpExecArray
+        const optionMatch = option.match(/^-(\S+) ([<[])(\.\.\.)?(\w+):(\w+)([>\]])(.*)?/) as RegExpExecArray
         if (!optionMatch) throw new Error(`option ${option} is not valid`)
-        const [, shortName, required, rest, name, type, _, desc] = optionMatch
+        const [, shortName, required, rest, name, type, _, desc=''] = optionMatch
         if (this.optionsConfig[name]) throw new Error(`option ${name} is already defined`)
         this.optionsConfig[name] = {
             type: type as Command.Type,
