@@ -348,7 +348,7 @@ export function defineCommand<S extends string>(decl: S, ...args: (ArgsType<S> |
 }
 
 export namespace Command {
-    export const transforms: Transforms = {}
+    export const domains: Domains = {}
 
     export function removeOuterQuoteOnce(str: string) {
         if (str.startsWith('"') && str.endsWith('"')) return str.slice(1, -1)
@@ -451,14 +451,18 @@ export namespace Command {
         string: string
         number: number
         boolean: boolean
+        user_id: number
         regexp: RegExp
         date: Date
     }
 
     export type Type = keyof Domain
-    export type Transform<T extends Type> = (source: string) => Domain[T]
-    export type Transforms = {
-        [K in Type]?: Transform<K>
+    export type DomainConfig<T extends Type> = {
+        transform: (source: string) => Domain[T]
+        validate: (source: string) => boolean
+    }
+    export type Domains = {
+        [K in Type]?: DomainConfig<K>
     }
 
     export function checkArgv(argv: Argv, argsConfig: ArgConfig[], optionsConfig: OptionsConfig) {
@@ -469,7 +473,9 @@ export namespace Command {
                 if (argConfig.initialValue !== undefined) argv.args[i] = argConfig.initialValue
                 else throw new Error(`arg ${argConfig.name} is required`)
             }
-            if (arg && argConfig.type && getType(arg) !== argConfig.type) {
+            const validate = argConfig.type && domains[argConfig.type] && domains[argConfig.type].validate
+            if(!validate) continue
+            if (arg && argConfig.type && validate(arg)) {
                 if (argConfig.rest && Array.isArray(arg) && arg.every(v => getType(v) === argConfig.type)) continue
                 throw new Error(`arg ${argConfig.name} should be ${argConfig.type}`)
             }
@@ -490,18 +496,28 @@ export namespace Command {
     export type Declare = `${string} ${string}` | string
 
     export function transform<T extends Type>(source: string, type: T): Domain[T] {
-        const transform = transforms[type]
+        const domainConfig = domains[type]
         if (!transform) throw new Error(`type ${type} is not defined`)
-        return transform(source)
+        return domainConfig.transform(source)
     }
 
-    export function registerDomain<T extends Type>(type: T, transform: Transform<T>) {
-        transforms[type] = transform as any
+    export function registerDomain<T extends Type>(type: T, transform: (source:string)=>Domain[T],validate:DomainConfig<T>['validate']=(source:string)=>getType(source)===type) {
+        domains[type] = {
+            transform: transform as any,
+            validate
+        }
     }
 
-    registerDomain('string', (source) => source)
+    registerDomain('string',(source) => source)
     registerDomain('number', (source) => +source)
     registerDomain('boolean', (source) => source !== 'false')
     registerDomain('date', (source) => new Date(source))
     registerDomain('regexp', (source) => new RegExp(source))
+    registerDomain('user_id', (source) => {
+        const matched= source.match(/^<mention user_id="(\d+)"\/>$/)
+        if(!matched) throw new Error('invalid user_id')
+        return +matched[1]
+    }, (source) => {
+        return /^<mention user_id="(\d+)"\/>$/.test(source)
+    })
 }

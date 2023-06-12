@@ -471,4 +471,8 @@ export namespace Element {
     export let warn: (message: string) => void = () => {
     }
 }
-export const h = Element
+export function h(type: string, ...children: Element.Fragment[]): string
+export function h<T extends Element.BaseType | string,C extends Element.Children<T>[]>(type: T, attrs: Element.Attrs<T>, ...children: C): ToString<Element<T,Element.Attrs<T>>,C>
+export function h(type: string, ...args: any[]){
+    return Element(type,...args).toString()
+}
