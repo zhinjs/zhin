@@ -248,10 +248,19 @@ export class Context extends EventEmitter {
         }
         return this
     }
-    useCommand<A extends any[],O={}>(name:string,command:Command<A,O>,parent=null){
+    useCommand<A extends any[],O={}>(nameDecl:string,command:Command<A,O>){
+        if(!nameDecl && !command.name)throw new Error('nameDecl不能为空')
+        if(!nameDecl) nameDecl=command.name
+        const nameArr=nameDecl.split('/').filter(Boolean)
+        const name=nameArr.pop()
+        let parent:Command<any>|undefined
+        while(nameArr.length){
+            parent=this.zhin.findCommand(nameArr.shift())
+            if(!parent) throw new Error(`找不到父指令:${nameArr.join('/')}`)
+        }
         if(parent){
             command.parent=parent
-            parent.children.push(command)
+            parent.children.push(command as unknown as Command)
         }
         command.name=name
         this.commands.set(command.name, command as any)
@@ -360,8 +369,20 @@ export class Context extends EventEmitter {
     command<S extends Command.Declare>(decl: S, config?: Command.Config): Command<ArgsType<RemoveFirst<S>>>
     command<S extends Command.Declare>(decl: S, initialValue?: ArgsType<RemoveFirst<S>>, config?: Command.Config): Command<ArgsType<RemoveFirst<S>>>
     command<S extends Command.Declare>(decl: S, ...args: (ArgsType<RemoveFirst<S>> | Command.Config)[]): Command<ArgsType<RemoveFirst<S>>>{
-        const [name]=decl.split(/\s+/)
+        const [nameDecl]=decl.split(/\s+/)
+        if(!nameDecl)throw new Error('nameDecl不能为空')
+        const nameArr=nameDecl.split('/').filter(Boolean)
+        const name=nameArr.pop()
+        let parent:Command
+        while(nameArr.length){
+            parent=this.zhin.findCommand(nameArr.shift())
+            if(!parent) throw new Error(`找不到父指令:${nameArr.join('/')}`)
+        }
         const command=defineCommand(decl.slice(name.length+1),...args as any)
+        if(parent){
+            command.parent=parent
+            parent.children.push(command as unknown as Command)
+        }
         command.name=name
         this.commands.set(name, command)
         this.zhin.emit('command-add', command, this)
