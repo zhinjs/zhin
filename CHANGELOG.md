@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.4](https://github.com/zhinjs/zhin/compare/v2.1.3...v2.1.4) (2023-06-12)
+
+
+### Bug Fixes
+
+* 参数类型添加integer ([052d105](https://github.com/zhinjs/zhin/commit/052d10598a9cdb26d4ceeb3498bdd2bc6582e413))
+
 ## [2.1.3](https://github.com/zhinjs/zhin/compare/v2.1.2...v2.1.3) (2023-06-12)
 
 
