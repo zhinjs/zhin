@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.1](https://github.com/zhinjs/zhin/compare/v2.1.0...v2.1.1) (2023-06-12)
+
+
+### Bug Fixes
+
+* baseType add user_id,set command action return string ([29dbfd7](https://github.com/zhinjs/zhin/commit/29dbfd75f21c16facec5464f78439a10a91d69ca))
+* 默认指令写法更改 ([387582f](https://github.com/zhinjs/zhin/commit/387582fb5992fb20d80aff7071468a09e8443830))
+
 ## [2.1.0](https://github.com/zhinjs/zhin/compare/v2.0.7...v2.1.0) (2023-06-10)
 
 
