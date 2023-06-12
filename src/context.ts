@@ -12,7 +12,6 @@ import {Plugin, PluginMap} from "@/plugin";
 import {Component} from "./component";
 import {Logger} from "log4js";
 import {Bot} from "./bot";
-type RemoveFirst<S extends string>=S extends `${infer L} ${infer R}`?R:S
 export class Context extends EventEmitter {
     /**
      * zhin实体
@@ -365,10 +364,10 @@ export class Context extends EventEmitter {
      * @param decl 指令声明
      * @param initialValue 指令初始值
      */
-    command<S extends Command.Declare>(decl: S, initialValue?: ArgsType<RemoveFirst<S>>): Command<ArgsType<RemoveFirst<S>>>
-    command<S extends Command.Declare>(decl: S, config?: Command.Config): Command<ArgsType<RemoveFirst<S>>>
-    command<S extends Command.Declare>(decl: S, initialValue?: ArgsType<RemoveFirst<S>>, config?: Command.Config): Command<ArgsType<RemoveFirst<S>>>
-    command<S extends Command.Declare>(decl: S, ...args: (ArgsType<RemoveFirst<S>> | Command.Config)[]): Command<ArgsType<RemoveFirst<S>>>{
+    command<S extends Command.Declare>(decl: S, initialValue?: ArgsType<Command.RemoveFirst<S>>): Command<ArgsType<Command.RemoveFirst<S>>>
+    command<S extends Command.Declare>(decl: S, config?: Command.Config): Command<ArgsType<Command.RemoveFirst<S>>>
+    command<S extends Command.Declare>(decl: S, initialValue?: ArgsType<Command.RemoveFirst<S>>, config?: Command.Config): Command<ArgsType<Command.RemoveFirst<S>>>
+    command<S extends Command.Declare>(decl: S, ...args: (ArgsType<Command.RemoveFirst<S>> | Command.Config)[]): Command<ArgsType<Command.RemoveFirst<S>>>{
         const [nameDecl]=decl.split(/\s+/)
         if(!nameDecl)throw new Error('nameDecl不能为空')
         const nameArr=nameDecl.split('/').filter(Boolean)
@@ -390,7 +389,7 @@ export class Context extends EventEmitter {
             this.commands.delete(name)
             this.zhin.emit('command-remove', command, this)
         })
-        return command as Command<ArgsType<RemoveFirst<S>>>
+        return command as Command<ArgsType<Command.RemoveFirst<S>>>
     }
     findCommand(name: string) {
         return this.zhin.commandList.find(command => command.name === name)

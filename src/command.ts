@@ -94,9 +94,11 @@ export class Command<A extends any[] = [], O = {}> {
         return this as Command<A, O & OptionType<S>>
     }
 
-    command<S extends string>(name: string, decl: S, initialValue?: ArgsType<S>): Command<ArgsType<S>> {
+    command<S extends Command.Declare>(decl: S, initialValue?: ArgsType<Command.RemoveFirst<S>>): Command<ArgsType<Command.RemoveFirst<S>>> {
         const args = [initialValue, this.config].filter(Boolean)
-        const command = defineCommand(decl, ...args as any)
+        const name = decl.split(' ')[0]
+        const declareStr:Command.RemoveFirst<S>= decl.replace(name, '').trimStart() as Command.RemoveFirst<S>
+        const command = defineCommand(declareStr, ...args as any)
         command.name = name
         command.parent = this as any
         this.children.push(command)
@@ -409,6 +411,8 @@ export namespace Command {
 
     type WithRegIndex<T> = T extends Array<infer R> ? WithRegIndex<R>[] : T | `$${number}`
     type MapArrWithString<T> = T extends [infer L, ...infer R] ? [WithRegIndex<L>?, ...MapArrWithString<R>] : T
+
+    export type RemoveFirst<S extends string>=S extends `${infer L} ${infer R}`?R:S
     export type Sugar<A = any[], O = {}> = {
         regexp: RegExp
         args?: MapArrWithString<A>
