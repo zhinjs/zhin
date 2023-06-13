@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.7](https://github.com/zhinjs/zhin/compare/v2.1.6...v2.1.7) (2023-06-13)
+
+
+### Bug Fixes
+
+* 上下文过滤bug修复 ([36d6da3](https://github.com/zhinjs/zhin/commit/36d6da3f1ab204b22adc95f0ca7aad4452570b91))
+
 ## [2.1.6](https://github.com/zhinjs/zhin/compare/v2.1.5...v2.1.6) (2023-06-12)
 
 
