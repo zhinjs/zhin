@@ -72,23 +72,25 @@ export class Context extends EventEmitter {
      * @param values 对应key可以为哪些值
      */
     pick<K extends keyof Session>(key: K, ...values: Session[K][]) {
-        return Context.from(this, Context.withFilter(this, Session.checkProp(key, ...values)))
+        return this.and(Session.checkProp(key, ...values))
     }
-
+    and(filter: Context.Filter) {
+        return Context.from(this, Context.and(this, filter))
+    }
     /**
      * 联合某一条件的上下文
      * @param filter 过滤器
      */
-    union(filter: Context.Filter) {
-        return Context.from(this, Context.union(this, filter))
+    or(filter: Context.Filter) {
+        return Context.from(this, Context.or(this, filter))
     }
 
     /**
      * 排除某一条件的上下文
      * @param filter 过滤器
      */
-    except(filter: Context.Filter) {
-        return Context.from(this, Context.except(this, filter))
+    not(filter: Context.Filter) {
+        return Context.from(this, Context.not(this, filter))
     }
 
     /**
@@ -104,12 +106,14 @@ export class Context extends EventEmitter {
      * @param roles
      */
     role(...roles:Bot.Authority[]) {
-        let result:Context=this
-        if(roles.includes('master')) result= result.union((session)=>session.isMaster)
-        if(roles.includes('admins')) result=result.union((session)=>session.isAdmins)
-        if(roles.includes('owner')) result=result.union((session)=>session.isOwner)
-        if(roles.includes('admin')) result=result.union((session)=>session.isAdmin)
-        return result
+        return this.and((session)=>{
+            return roles.some(role=>{
+                if(role === 'master') return session.isMaster
+                if(role === 'admin') return session.isAdmin
+                if(role === 'owner') return session.isOwner
+                return session.isAdmins
+            })
+        })
     }
     admin(...admin_ids:(string|number)[]){
         return this.role('admin').user(...admin_ids)
@@ -709,13 +713,13 @@ export namespace Context {
 
     export type Filter = (session: Session) => boolean
     export const defaultFilter: Filter = () => true
-    export const union = (ctx: Context, filter: Filter) => {
+    export const or = (ctx: Context, filter: Filter) => {
         return ((session: Session) => ctx.filter(session) || filter(session)) as Filter
     }
-    export const except = (ctx: Context, filter: Filter) => {
+    export const not = (ctx: Context, filter: Filter) => {
         return ((session: Session) => ctx.filter(session) && !filter(session)) as Filter
     }
-    export const withFilter = (ctx: Context, filter: Filter) => {
+    export const and = (ctx: Context, filter: Filter) => {
         return ((session: Session) => ctx.filter(session) && filter(session)) as Filter
     }
 }

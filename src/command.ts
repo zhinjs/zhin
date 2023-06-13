@@ -146,7 +146,7 @@ export class Command<A extends any[] = [], O = {}> {
     }
 
     //显示帮助信息
-    help({simple, showHidden, dep = 1, current = 0}: HelpOptions = {}) {
+    help({simple, showHidden, dep = 1, current = 0}: HelpOptions = {},allowList:Command[]=[]) {
         const createArgsOutput = () => {
             const result = []
             this.argsConfig.forEach((arg) => {
@@ -186,7 +186,7 @@ export class Command<A extends any[] = [], O = {}> {
         if (this.children.length && dep !== current) {
             output.push(' children:')
             return output.concat(...this.children
-                .filter(cmd => showHidden || !cmd.config.hidden)
+                .filter(cmd => showHidden || !cmd.config.hidden && allowList.includes(cmd))
                 .map(children => children.help({
                     simple,
                     showHidden,
@@ -205,9 +205,8 @@ export class Command<A extends any[] = [], O = {}> {
     async execute<S extends object>(session: S, template = session.toString()): Promise<string|boolean|number| void> {
         let runtime: Command.RunTime<S, A, O> | void
         try {
-            runtime = this.match(session, template)
+            runtime = this.parse(session, template)
         } catch (e) {
-            console.error(e)
             return e.message
         }
         if (!runtime) return
@@ -305,8 +304,14 @@ export class Command<A extends any[] = [], O = {}> {
         }
         return argv
     }
-
-    match<S extends object>(session: S, template: string): Command.RunTime<S, A, O> | void {
+    match<S extends object>(session: S, template: string): boolean {
+        try{
+            return !!this.parse(session, template)
+        }catch {
+            return false
+        }
+    }
+    parse<S extends object>(session: S, template: string): Command.RunTime<S, A, O> | void {
         let argv = this.parseSugar(template)
         if (!argv.name) argv = this.parseArgv(template)
         if (argv.name !== this.name) {
