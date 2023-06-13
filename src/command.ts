@@ -1,4 +1,4 @@
-import {isEmpty} from "@zhinjs/shared";
+import {Dict, isEmpty} from "@zhinjs/shared";
 
 type Argv = {
     name: string
@@ -81,7 +81,7 @@ export class Command<A extends any[] = [], O = {}> {
     option<S extends string>(option: S, initialValue?: OptionValueType<S>): Command<A, O & OptionType<S>> {
         const optionMatch = option.match(/^-(\S+) ([<[])(\.\.\.)?(\w+):(\w+)([>\]])(.*)?/) as RegExpExecArray
         if (!optionMatch) throw new Error(`option ${option} is not valid`)
-        const [, shortName, required, rest, name, type, _, desc=''] = optionMatch
+        const [, shortName, required, rest, name, type, _, desc = ''] = optionMatch
         if (this.optionsConfig[name]) throw new Error(`option ${name} is already defined`)
         this.optionsConfig[name] = {
             type: type as Command.Type,
@@ -97,7 +97,7 @@ export class Command<A extends any[] = [], O = {}> {
     command<S extends Command.Declare>(decl: S, initialValue?: ArgsType<Command.RemoveFirst<S>>): Command<ArgsType<Command.RemoveFirst<S>>> {
         const args = [initialValue, this.config].filter(Boolean)
         const name = decl.split(' ')[0]
-        const declareStr:Command.RemoveFirst<S>= decl.replace(name, '').trimStart() as Command.RemoveFirst<S>
+        const declareStr: Command.RemoveFirst<S> = decl.replace(name, '').trimStart() as Command.RemoveFirst<S>
         const command = defineCommand(declareStr, ...args as any)
         command.name = name
         command.parent = this as any
@@ -146,7 +146,7 @@ export class Command<A extends any[] = [], O = {}> {
     }
 
     //显示帮助信息
-    help({simple, showHidden, dep = 1, current = 0}: HelpOptions = {},allowList:Command[]=[]) {
+    help({simple, showHidden, dep = 1, current = 0}: HelpOptions = {}, allowList: Command[] = []) {
         const createArgsOutput = () => {
             const result = []
             this.argsConfig.forEach((arg) => {
@@ -202,7 +202,7 @@ export class Command<A extends any[] = [], O = {}> {
         return this as Command<A, O>
     }
 
-    async execute<S extends object>(session: S, template = session.toString()): Promise<string|boolean|number| void> {
+    async execute<S extends object>(session: S, template = session.toString()): Promise<string | boolean | number | void> {
         let runtime: Command.RunTime<S, A, O> | void
         try {
             runtime = this.parse(session, template)
@@ -304,13 +304,15 @@ export class Command<A extends any[] = [], O = {}> {
         }
         return argv
     }
+
     match<S extends object>(session: S, template: string): boolean {
-        try{
+        try {
             return !!this.parse(session, template)
-        }catch {
+        } catch {
             return false
         }
     }
+
     parse<S extends object>(session: S, template: string): Command.RunTime<S, A, O> | void {
         let argv = this.parseSugar(template)
         if (!argv.name) argv = this.parseArgv(template)
@@ -417,7 +419,7 @@ export namespace Command {
     type WithRegIndex<T> = T extends Array<infer R> ? WithRegIndex<R>[] : T | `$${number}`
     type MapArrWithString<T> = T extends [infer L, ...infer R] ? [WithRegIndex<L>?, ...MapArrWithString<R>] : T
 
-    export type RemoveFirst<S extends string>=S extends `${infer L} ${infer R}`?R:S
+    export type RemoveFirst<S extends string> = S extends `${infer L} ${infer R}` ? R : S
     export type Sugar<A = any[], O = {}> = {
         regexp: RegExp
         args?: MapArrWithString<A>
@@ -454,7 +456,7 @@ export namespace Command {
     } & OptionsConfig<R> : {
         [key: string]: OptionConfig<L>
     } & OptionsConfig<R> : {}
-    export type CallBack<Session extends object, A extends any[] = [], O = {}> = (runtime: RunTime<Session, A, O>, ...args: A) => MayBePromise<string|boolean|number| void>
+    export type CallBack<Session extends object, A extends any[] = [], O = {}> = (runtime: RunTime<Session, A, O>, ...args: A) => MayBePromise<string | boolean | number | void>
 
     export interface Domain {
         string: string
@@ -464,6 +466,8 @@ export namespace Command {
         user_id: number
         regexp: RegExp
         date: Date
+        json: Dict
+        function: Function
     }
 
     export type Type = keyof Domain
@@ -484,7 +488,7 @@ export namespace Command {
                 else throw new Error(`arg ${argConfig.name} is required`)
             }
             const validate = argConfig.type && domains[argConfig.type] && domains[argConfig.type].validate
-            if(!validate) continue
+            if (!validate) continue
             if (arg && argConfig.type && !validate(arg)) {
                 if (argConfig.rest && Array.isArray(arg) && arg.every(v => getType(v) === argConfig.type)) continue
                 throw new Error(`arg ${argConfig.name} should be ${argConfig.type}`)
@@ -497,7 +501,7 @@ export namespace Command {
                 else throw new Error(`option ${option} is required`)
             }
             const validate = optionConfig.type && domains[optionConfig.type] && domains[optionConfig.type].validate
-            if(!validate) continue
+            if (!validate) continue
             if (argv.options[option] && optionConfig.type && !validate(argv.options[option])) {
                 if (optionConfig.rest && Array.isArray(argv.options[option]) && (argv.options[option] as any[]).every(v => getType(v) === optionConfig.type)) continue
                 throw new Error(`option ${option} should be ${optionConfig.type}`)
@@ -513,27 +517,45 @@ export namespace Command {
         return domainConfig.transform(source)
     }
 
-    export function registerDomain<T extends Type>(type: T, transform: (source:string)=>Domain[T],validate:DomainConfig<T>['validate']=(source:string)=>getType(source)===type) {
+    export function registerDomain<T extends Type>(type: T, transform: (source: string) => Domain[T], validate: DomainConfig<T>['validate'] = (source: string) => getType(source) === type) {
         domains[type] = {
             transform: transform as any,
             validate
         }
     }
 
-    registerDomain('string',(source) => source)
+    registerDomain('string', (source) => source)
     registerDomain('number', (source) => +source)
     registerDomain('integer', (source) => +source, (source) => Number.isInteger(+source))
     registerDomain('boolean', (source) => source !== 'false')
     registerDomain('date', (source) => new Date(source))
     registerDomain('regexp', (source) => new RegExp(source))
     registerDomain('user_id', (source) => {
-        const matched= source.match(/^<mention user_id="(\d+)"\/>$/)
-        if(!matched){
-            if(!/^\d+$/.test(source)) throw new Error(`user_id should be number or <mention user_id="number"/>`)
+        const matched = source.match(/^<mention user_id="(\d+)"\/>$/)
+        if (!matched) {
+            if (!/^\d+$/.test(source)) throw new Error(`user_id should be number or <mention user_id="number"/>`)
             return +source
         }
         return +matched[1]
     }, (source) => {
-        return /^<mention user_id="(\d+)"\/>$/.test(source)|| /^\d+$/.test(source)
+        return /^<mention user_id="(\d+)"\/>$/.test(source) || /^\d+$/.test(source)
+    })
+    registerDomain('json', (source) => JSON.parse(source), (source) => {
+        try {
+            JSON.parse(source)
+            return true
+        } catch {
+            return false
+        }
+    })
+    registerDomain('function', (source) => {
+        return new Function(`return ${source}`)()
+    }, (source) => {
+        try {
+            new Function(`return ${source}`)()
+            return true
+        } catch {
+            return false
+        }
     })
 }
