@@ -473,7 +473,7 @@ export namespace Command {
     export type Type = keyof Domain
     export type DomainConfig<T extends Type> = {
         transform: (source: string) => Domain[T]
-        validate: (source: string) => boolean
+        validate: (source: Domain[T]) => boolean
     }
     export type Domains = {
         [K in Type]?: DomainConfig<K>
@@ -517,10 +517,10 @@ export namespace Command {
         return domainConfig.transform(source)
     }
 
-    export function registerDomain<T extends Type>(type: T, transform: (source: string) => Domain[T], validate: DomainConfig<T>['validate'] = (source: string) => getType(source) === type) {
+    export function registerDomain<T extends Type>(type: T, transform: (source: string) => Domain[T], validate: DomainConfig<T>['validate'] = (source: Domain[T]) => getType(source) === type) {
         domains[type] = {
             transform: transform as any,
-            validate
+            validate: validate as any
         }
     }
 
@@ -537,25 +537,9 @@ export namespace Command {
             return +source
         }
         return +matched[1]
-    }, (source) => {
-        return /^<mention user_id="(\d+)"\/>$/.test(source) || /^\d+$/.test(source)
-    })
-    registerDomain('json', (source) => JSON.parse(source), (source) => {
-        try {
-            JSON.parse(source)
-            return true
-        } catch {
-            return false
-        }
-    })
+    }, (source) => getType(source) ==='number')
+    registerDomain('json', (source) => JSON.parse(source), (source) => getType(source) === 'object')
     registerDomain('function', (source) => {
         return new Function(`return ${source}`)()
-    }, (source) => {
-        try {
-            new Function(`return ${source}`)()
-            return true
-        } catch {
-            return false
-        }
-    })
+    }, (source) => getType(source) === 'function')
 }
