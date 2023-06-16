@@ -694,9 +694,6 @@ export function createWorker(options: Zhin.WorkerOptions) {
             '-r', 'tsconfig-paths/register',
         ],
     }
-    if(isWin){
-        forkOptions.stdio='pipe'
-    }
     cp = fork(path.join(__dirname, '../worker.js'), [], forkOptions)
     cp.stdout?.on('data', data => process.stdout.push(data));
     cp.stderr?.on('data', data => process.stderr.push(data));
