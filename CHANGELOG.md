@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.8](https://github.com/zhinjs/zhin/compare/v2.1.7...v2.1.8) (2023-06-13)
+
+
+### Bug Fixes
+
+* 内置类型增加json、function ([b38b9ca](https://github.com/zhinjs/zhin/commit/b38b9ca779ea1c3fb5a6144cc8085f7d48da9327))
+* 内置类型增加json、function ([7b6169f](https://github.com/zhinjs/zhin/commit/7b6169ff7f5b39cae85b1a0ada308d539cd46168))
+
 ## [2.1.7](https://github.com/zhinjs/zhin/compare/v2.1.6...v2.1.7) (2023-06-13)
 
 
