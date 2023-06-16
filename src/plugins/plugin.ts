@@ -1,6 +1,6 @@
 import {Context} from "@/context";
 import {Plugin} from "@/plugin";
-import {defineCommand, NSession} from '@'
+import {NSession} from '@'
 import {exec} from "child_process";
 import {promisify} from 'util'
 import {Session, useContext, Zhin} from "@";
@@ -26,13 +26,13 @@ function getPluginStatus(ctx: Context, session: Session, fullName: string) {
     if (plugin.disableBots.includes(flag)) return '(已停用)'
 }
 
-const parent = ctx.command('plugin [action:string] [name:string]')
+ctx.command('plugin [action:string] [name:string]')
     .desc('插件管理')
     .hidden()
     .action<NSession<keyof Zhin.Adapters>>(({session}, action, name) => {
         return session.execute(`plugin.${action} ${name}`)
     })
-ctx.useCommand('plugin/plugin.list', defineCommand('')
+ctx.command('plugin/plugin.list')
     .desc('插件列表')
     .option('-c [cloud:boolean] 云端插件')
     .action<NSession<keyof Zhin.Adapters>>(async ({session, options}) => {
@@ -51,71 +51,71 @@ ctx.useCommand('plugin/plugin.list', defineCommand('')
                 return `${idx + 1}.${o.name}@${o.version}${installStatus}${enableStatus} ${o.scope === 'zhinjs' ? '官方' : '社区'}`
             }).join('\n')
         }
-    }))
+    })
 
 
-ctx.role('master')
-    .useCommand('plugin/plugin.install', defineCommand('<name:string>')
-        .desc('安装插件')
-        .option('-v [version:string] 指定版本，默认最新版')
-        .action<NSession<keyof Zhin.Adapters>>(async ({session, options}, name) => {
-            const packages = await ctx.zhin.getMarketPackages()
-            const info = packages.find(p => p.name === name)
-            if (!info) return '该插件不存在'
-            await session.reply('已开始安装...')
-            try {
-                const [success, err] = await changeDependency(`${name}@${options.version || info.version}`)
-                return success ? '安装成功' : `安装失败:\n${err}`
-            } catch (e) {
-                ctx.zhin.logger.warn(e.message)
-                return `安装失败:\n${e.message}`
-            }
-        }))
-ctx.role('master')
-    .useCommand('plugin/plugin.uninstall', defineCommand('<name:string>')
-        .desc('卸载插件')
-        .action<NSession<keyof Zhin.Adapters>>(async ({session}, name) => {
-            const packages = ctx.zhin.getInstalledModules('plugin')
-            const options = packages.find(p => p.name === name)
-            if (!options) return '没有安装该插件'
-            if ([Plugin.Source.built, Plugin.Source.local].includes(options.type)) return '只有模块化的插件才能卸载'
-            await session.reply('已开始卸载...')
-            try {
-                const [success, err] = await changeDependency(`${options.fullName}`, true)
-                return success ? '卸载成功' : `卸载失败:\n${err}`
-            } catch (e) {
-                ctx.zhin.logger.error(e.message, e.stack)
-                return `卸载失败:\n${e.message}`
-            }
-        }))
+ctx.master()
+    .command('plugin/plugin.install <name:string>')
+    .desc('安装插件')
+    .option('-v [version:string] 指定版本，默认最新版')
+    .action<NSession<keyof Zhin.Adapters>>(async ({session, options}, name) => {
+        const packages = await ctx.zhin.getMarketPackages()
+        const info = packages.find(p => p.name === name)
+        if (!info) return '该插件不存在'
+        await session.reply('已开始安装...')
+        try {
+            const [success, err] = await changeDependency(`${name}@${options.version || info.version}`)
+            return success ? '安装成功' : `安装失败:\n${err}`
+        } catch (e) {
+            ctx.zhin.logger.warn(e.message)
+            return `安装失败:\n${e.message}`
+        }
+    })
+ctx.master()
+    .command('plugin/plugin.uninstall <name:string>')
+    .desc('卸载插件')
+    .action<NSession<keyof Zhin.Adapters>>(async ({session}, name) => {
+        const packages = ctx.zhin.getInstalledModules('plugin')
+        const options = packages.find(p => p.name === name)
+        if (!options) return '没有安装该插件'
+        if ([Plugin.Source.built, Plugin.Source.local].includes(options.type)) return '只有模块化的插件才能卸载'
+        await session.reply('已开始卸载...')
+        try {
+            const [success, err] = await changeDependency(`${options.fullName}`, true)
+            return success ? '卸载成功' : `卸载失败:\n${err}`
+        } catch (e) {
+            ctx.zhin.logger.error(e.message, e.stack)
+            return `卸载失败:\n${e.message}`
+        }
+    })
 ctx.role('master', "admins")
-    .useCommand('plugin/plugin.mount', defineCommand('<name:string>')
-        .desc('载入插件')
-        .action<NSession<keyof Zhin.Adapters>>(async ({session}, name) => {
-            const plugins = await ctx.zhin.getInstalledModules('plugin')
-            const options = plugins.find(p => p.name === name)
-            if (!options) return '没有安装该插件'
-            try {
-                ctx.zhin.plugin(name)
-            } catch (e) {
-                return '加载失败：' + e.message
-            }
-            return '载入成功'
-        }))
+    .command('plugin/plugin.mount <name:string>')
+    .desc('载入插件')
+    .action<NSession<keyof Zhin.Adapters>>(async ({session}, name) => {
+        const plugins = await ctx.zhin.getInstalledModules('plugin')
+        const options = plugins.find(p => p.name === name)
+        if (!options) return '没有安装该插件'
+        try {
+            ctx.zhin.plugin(name)
+        } catch (e) {
+            return '加载失败：' + e.message
+        }
+        return '载入成功'
+    })
 ctx.role('master', "admins")
-    .useCommand('plugin/plugin.unmount', defineCommand('<name:string>')
-        .desc('移除插件')
-        .action(({session}, name) => {
-            const plugin = ctx.zhin.pluginList.find(p => p.options.name === name)
-            if (!plugin) return '没有载入该插件'
-            try {
-                plugin.unmount()
-            } catch (e) {
-                return '加载失败：' + e.message
-            }
-            return '移除成功'
-        }))
-ctx.useCommand('plugin/plugin.detail', defineCommand('<name:string>')
+    .command('plugin/plugin.unmount <name:string>')
+    .desc('移除插件')
+    .action(({session}, name) => {
+        const plugin = ctx.zhin.pluginList.find(p => p.options.name === name)
+        if (!plugin) return '没有载入该插件'
+        try {
+            plugin.unmount()
+        } catch (e) {
+            return '加载失败：' + e.message
+        }
+        return '移除成功'
+    })
+ctx.command('plugin/plugin.detail <name:string>')
     .desc('查看指定插件详情')
     .action(async ({options}, name) => {
         const plugin = ctx.zhin.pluginList.find(p => p.options.fullName === name)
@@ -128,22 +128,22 @@ ctx.useCommand('plugin/plugin.detail', defineCommand('<name:string>')
         return JSON.stringify(plugin.info, null, 2)
             .replace(/"/g, '')
             .replace(/\\/g, '')
-    }))
+    })
 ctx.role('master', "admin", "owner", "admins")
-    .useCommand('plugin/plugin.on', defineCommand('<name:string>')
-        .desc('启用插件')
-        .action<NSession<keyof Zhin.Adapters>>(({options, session}, name) => {
-            const plugin = ctx.zhin.pluginList.find(p => p.options.fullName === name)
-            if (!plugin) return '未找到插件：' + name
-            session.bot.enable(plugin)
-            return `启用插件(${name})成功`
-        }))
+    .command('plugin/plugin.on <name:string>')
+    .desc('启用插件')
+    .action<NSession<keyof Zhin.Adapters>>(({options, session}, name) => {
+        const plugin = ctx.zhin.pluginList.find(p => p.options.fullName === name)
+        if (!plugin) return '未找到插件：' + name
+        session.bot.enable(plugin)
+        return `启用插件(${name})成功`
+    })
 ctx.role('master', "admin", "owner", "admins")
-    .useCommand('plugin/plugin.off', defineCommand('<name:string>')
-        .desc('停用插件')
-        .action<NSession<keyof Zhin.Adapters>>(({options, session}, name) => {
-            const plugin = ctx.zhin.pluginList.find(p => p.options.fullName === name)
-            if (!plugin) return '未找到插件：' + name
-            session.bot.disable(plugin)
-            return `禁用插件(${name})成功`
-        }))
+    .command('plugin/plugin.off <name:string>')
+    .desc('停用插件')
+    .action<NSession<keyof Zhin.Adapters>>(({options, session}, name) => {
+        const plugin = ctx.zhin.pluginList.find(p => p.options.fullName === name)
+        if (!plugin) return '未找到插件：' + name
+        session.bot.disable(plugin)
+        return `禁用插件(${name})成功`
+    })

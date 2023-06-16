@@ -1,6 +1,5 @@
 import {isBailed, remove, Dict} from "@zhinjs/shared";
 import {Zhin, isConstructor, ChannelId} from "./zhin";
-import {JobCallback, RecurrenceRule, RecurrenceSpecDateRange, RecurrenceSpecObjLit, scheduleJob} from 'node-schedule'
 import {Dispose} from "./dispose";
 import {Adapter, AdapterConstructs, AdapterOptions, AdapterOptionsType} from "./adapter";
 import {Middleware} from "./middleware";
@@ -74,11 +73,16 @@ export class Context extends EventEmitter {
     pick<K extends keyof Session>(key: K, ...values: Session[K][]) {
         return this.and(Session.checkProp(key, ...values))
     }
+
+    /**
+     * 将当前上下文的过滤器与另一个过滤器进行与操作
+     * @param filter
+     */
     and(filter: Context.Filter) {
         return Context.from(this, Context.and(this, filter))
     }
     /**
-     * 联合某一条件的上下文
+     * 将当前上下文的过滤器与另一个过滤器进行或操作
      * @param filter 过滤器
      */
     or(filter: Context.Filter) {
@@ -86,7 +90,7 @@ export class Context extends EventEmitter {
     }
 
     /**
-     * 排除某一条件的上下文
+     * 将当前上下文的过滤器与另一个过滤器进行非操作
      * @param filter 过滤器
      */
     not(filter: Context.Filter) {
@@ -337,18 +341,6 @@ export class Context extends EventEmitter {
         })
     }
 
-    /**
-     * 添加定时任务
-     */
-    schedule(rule:RecurrenceRule | RecurrenceSpecDateRange | RecurrenceSpecObjLit | Date | string | number,callback:JobCallback){
-        const job=scheduleJob(rule,callback)
-        const dispose=Dispose.from(this,()=>{
-            job.cancel()
-            remove(this.disposes,dispose)
-        })
-        this.disposes.push(dispose)
-        return dispose
-    }
     /**
      * 获取当前上下文所有指令
      */
@@ -698,7 +690,6 @@ export interface Context extends Zhin.Services {
 export namespace Context {
     export const plugin = Symbol('plugin')
     export const childKey = Symbol('children')
-
     export type MsgChannel={
         protocol:keyof Zhin.Adapters
         bot_id:string|number

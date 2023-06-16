@@ -691,8 +691,12 @@ export function createWorker(options: Zhin.WorkerOptions) {
         execArgv: [
             '-r', 'esbuild-register',
             '-r', 'tsconfig-paths/register',
-        ]
+        ],
+        stdio:'pipe'
     })
+    cp.stdout?.on('data', data => process.stdout.push(data));
+    cp.stderr?.on('data', data => process.stderr.push(data));
+    process.stdin?.on('data', data => cp.stdin?.write(data));
     let config: { autoRestart: boolean }
     cp.on('message', (message: Message) => {
         if (message.type === 'start') {

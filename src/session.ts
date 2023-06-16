@@ -133,7 +133,13 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters, E exte
         return this.bot.isGroupAdmin(this as NSession<P,E>)
     }
     toString(){
-        return this.content
+        // 处理前缀
+        let result=this.content||''
+        // 有配置前缀，但是消息不是以前缀开头
+        if(this.bot.options.prefix && !result.startsWith(this.bot.options.prefix)) return ''
+        // 有配置前缀且消息以前缀开头，去掉前缀
+        if(this.bot.options.prefix) result=result.slice(this.bot.options.prefix.length)
+        return result
     }
 
     async execute(template=this.toString()): Promise<string|boolean|number> {
