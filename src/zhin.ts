@@ -1,5 +1,5 @@
 import {ref, watch} from 'obj-observer'
-import {ChildProcess, fork} from "child_process";
+import {ChildProcess, fork, ForkOptions} from "child_process";
 import {Configuration, configure, getLogger} from "log4js";
 import * as Yaml from 'js-yaml'
 import * as path from 'path'
@@ -677,11 +677,12 @@ export namespace Zhin {
     }
 }
 
-
+// 判断是否是windows系统
+export const isWin = process.platform === 'win32'
 export function createWorker(options: Zhin.WorkerOptions) {
     const {entry = 'lib', mode = 'production', config: configPath = 'zhin.yaml'} = options || {}
     if (!fs.existsSync(path.join(process.cwd(), configPath))) fs.writeFileSync(path.join(process.cwd(), configPath), Yaml.dump(options))
-    cp = fork(path.join(__dirname, '../worker.js'), [], {
+    const forkOptions:ForkOptions={
         env: {
             ...process.env,
             mode,
@@ -692,8 +693,11 @@ export function createWorker(options: Zhin.WorkerOptions) {
             '-r', 'esbuild-register',
             '-r', 'tsconfig-paths/register',
         ],
-        stdio:'pipe'
-    })
+    }
+    if(isWin){
+        forkOptions.stdio='pipe'
+    }
+    cp = fork(path.join(__dirname, '../worker.js'), [], forkOptions)
     cp.stdout?.on('data', data => process.stdout.push(data));
     cp.stderr?.on('data', data => process.stderr.push(data));
     process.stdin?.on('data', data => cp.stdin?.write(data));
