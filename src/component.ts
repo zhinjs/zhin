@@ -120,7 +120,8 @@ export namespace Component {
             }))
             .component('execute', defineComponent({
                 async render(attrs, children) {
-                    return this.session.execute(await this.session.render(children,this))
+                    const template=(await this.session.render(children,this)).join('')
+                    return this.session.execute(template)
                 }
             }))
             .component('forward',defineComponent({
