@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.10](https://github.com/zhinjs/zhin/compare/v2.1.9...v2.1.10) (2023-06-16)
+
+
+### Bug Fixes
+
+* 子进程管道错误 ([35eebb8](https://github.com/zhinjs/zhin/commit/35eebb8806cc2a352928fc97338b96efde746c2d))
+* 子进程管道错误 ([6820c7a](https://github.com/zhinjs/zhin/commit/6820c7a9435ded46f4f73d79715e630472d655d6))
+
 ## [2.1.9](https://github.com/zhinjs/zhin/compare/v2.1.8...v2.1.9) (2023-06-16)
 
 
