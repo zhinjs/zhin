@@ -364,7 +364,7 @@ export class Context extends EventEmitter {
     command<S extends Command.Declare>(decl: S, config?: Command.Config): Command<ArgsType<Command.RemoveFirst<S>>>
     command<S extends Command.Declare>(decl: S, initialValue?: ArgsType<Command.RemoveFirst<S>>, config?: Command.Config): Command<ArgsType<Command.RemoveFirst<S>>>
     command<S extends Command.Declare>(decl: S, ...args: (ArgsType<Command.RemoveFirst<S>> | Command.Config)[]): Command<ArgsType<Command.RemoveFirst<S>>>{
-        const [nameDecl,argsDecl='']=decl.split(/\s+/)
+        const [nameDecl,...argsDecl]=decl.split(/\s+/)
         if(!nameDecl)throw new Error('nameDecl不能为空')
         const nameArr=nameDecl.split('/').filter(Boolean)
         const name=nameArr.pop()
@@ -373,7 +373,7 @@ export class Context extends EventEmitter {
             parent=this.zhin.findCommand(nameArr.shift())
             if(!parent) throw new Error(`找不到父指令:${nameArr.join('/')}`)
         }
-        const command=defineCommand(argsDecl,...args as any)
+        const command=defineCommand(argsDecl.join(' '),...args as any)
         if(parent){
             command.parent=parent
             parent.children.push(command as unknown as Command)

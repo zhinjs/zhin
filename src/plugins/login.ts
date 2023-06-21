@@ -29,3 +29,6 @@ ctx.on('icqq.system.login.device', (e) => {
         }
     })
 })
+ctx.on('icqq.system.login.error',e=>{
+    e.bot.adapter.logger.error(`${e.bot.self_id}:${e.message}`)
+})
