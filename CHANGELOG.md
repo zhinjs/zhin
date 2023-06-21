@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.11](https://github.com/zhinjs/zhin/compare/v2.1.10...v2.1.11) (2023-06-21)
+
+
+### Bug Fixes
+
+* 登录失败输出错误信息,指令定义错误 ([49a7986](https://github.com/zhinjs/zhin/commit/49a7986f0a90be08f83cd58130f28b6dabb6745c))
+
 ## [2.1.10](https://github.com/zhinjs/zhin/compare/v2.1.9...v2.1.10) (2023-06-16)
 
 
