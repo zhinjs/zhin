@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.12](https://github.com/zhinjs/zhin/compare/v2.1.11...v2.1.12) (2023-06-21)
+
+
+### Bug Fixes
+
+* execute组件错误 ([f489715](https://github.com/zhinjs/zhin/commit/f48971502876c09f854d69b5238785d9ab693b36))
+
 ## [2.1.11](https://github.com/zhinjs/zhin/compare/v2.1.10...v2.1.11) (2023-06-21)
 
 
