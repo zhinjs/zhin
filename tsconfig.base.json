@@ -10,8 +10,18 @@
     "moduleResolution": "node",
     "strictBindCallApply": true,
     "paths": {
-      "@/*": ["./src/*"],
-      "@": ["./src"]
+      "@/*": [
+        "./src/*"
+      ],
+      "@": [
+        "./src"
+      ],
+      "zhin": [
+        "./src"
+      ],
+      "zhin/*": [
+        "./src/*"
+      ]
     }
   },
   "include": [

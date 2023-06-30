@@ -5,6 +5,7 @@ const ctx = useContext()
 ctx.command('help [command:string]')
     .desc('查看某个指令的帮助文档')
     .alias('帮助')
+    .option('-> <simple:boolean> 简单模式',false)
     .option('-H [showHidden:boolean] 显示隐藏选项')
     .action<NSession< keyof Zhin.Adapters>>(({options, session}, target) => {
         const supportCommands = ctx.zhin.getSupportCommands(session)

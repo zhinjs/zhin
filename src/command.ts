@@ -369,13 +369,14 @@ export namespace Command {
     function joinNestedTags(args: string[]) {
         const result: string[] = []
         const copyArgs = [...args]
+        const isTag = (str: string) => /^<[^>]+>$/.test(str)
         while (copyArgs.length) {
             const arg = copyArgs.shift()
             if (!/^<[^>]+>$/.test(arg)) {
                 result.push(arg)
                 continue;
             }
-            const tag = arg.slice(1, -1)
+            const tag = /^<([^>\s]+).*?>$/.exec(arg)?.[1]||''
             if (tag.startsWith('/')) {
                 result.push(arg);
                 continue;
@@ -385,17 +386,16 @@ export namespace Command {
             if (index === -1) {
                 result.push(arg)
             } else {
-                result.push([arg, ...copyArgs.splice(0, index + 1)].map((str, i, arr) => {
-                    if (arr[i - 1] && !/^<[^>]+>$/.test(arr[i - 1])) return ` ${str}`
-                    return str
-                }).join(''))
+                const needJoinArg = copyArgs.splice(0, index + 1)
+                const endTap= needJoinArg.pop()
+                result.push([arg,needJoinArg.join(' '), endTap].join(''))
             }
         }
         return result.map(removeOuterQuoteOnce)
     }
 
     export function parseParams(text) {
-        const regex = /(".*?"|'.*?'|`.*?`|<[^>]+?>|[^<>\s]+|\S+)/g;
+        const regex = /(".*?"|'.*?'|`.*?`|”.*?“|‘.*?’|<[^>]+?>|\S+)/g;
         const matches = text.match(regex);
         if (matches) {
             return joinNestedTags(matches.reduce((result, match) => {
@@ -459,11 +459,12 @@ export namespace Command {
     export type CallBack<Session extends object, A extends any[] = [], O = {}> = (runtime: RunTime<Session, A, O>, ...args: A) => MayBePromise<string | boolean | number | void>
 
     export interface Domain {
+        text:string
         string: string
         integer: number
         number: number
         boolean: boolean
-        user_id: number
+        user_id: number|string
         regexp: RegExp
         date: Date
         json: Dict
@@ -510,7 +511,6 @@ export namespace Command {
     }
 
     export type Declare = `${string} ${string}` | string
-
     export function transform<T extends Type>(source: string, type: T): Domain[T] {
         const domainConfig = domains[type]
         if (!domainConfig) throw new Error(`type ${type} is not defined`)
@@ -523,7 +523,6 @@ export namespace Command {
             validate: validate as any
         }
     }
-
     registerDomain('string', (source) => source)
     registerDomain('number', (source) => +source)
     registerDomain('integer', (source) => +source, (source) => Number.isInteger(+source))
@@ -531,13 +530,16 @@ export namespace Command {
     registerDomain('date', (source) => new Date(source))
     registerDomain('regexp', (source) => new RegExp(source))
     registerDomain('user_id', (source) => {
-        const matched = source.match(/^<mention user_id="(\d+)"\/>$/)
+        // <mention user_id="123"/> or <mention user_id="123">xxx</mention>
+        const autoCloseMention = source.match(/^<mention user_id="(\S+)"\/>$/)
+        const twinningMention = source.match(/^<mention user_id="(\S+)"[^>]+?>.*?<\/mention>$/)
+        const matched = autoCloseMention || twinningMention
         if (!matched) {
-            if (!/^\d+$/.test(source)) throw new Error(`user_id should be number or <mention user_id="number"/>`)
+            if (!/^\d+$/.test(source)) throw new Error(`user_id should be number or <mention user_id="string|number"/> or <mention user_id="string|number"></mention>`)
             return +source
         }
-        return +matched[1]
-    }, (source) => getType(source) ==='number')
+        return matched[1].match(/^\d+$/) ? +matched[1] : matched[1]
+    }, (source) => ['string', 'number'].includes(getType(source)))
     registerDomain('json', (source) => JSON.parse(source), (source) => getType(source) === 'object')
     registerDomain('function', (source) => {
         return new Function(`return ${source}`)()

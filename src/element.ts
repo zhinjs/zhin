@@ -30,6 +30,8 @@ class ElementConstructor {
             if (isNullable(value)) return ''
             if (value === true) return ` ${key}`
             if (value === false) return ` no-${key}`
+            if(value instanceof Buffer) return ` ${key}='base64://${value.toString('base64')}'`
+            if(typeof value ==='object') return ` ${key}='${JSON.stringify(value)}'`
             return ` ${key}='${Element.escape('' + value)}'`
         }).join('')
         if (this.loop) attrs += ` v-for="${this.loop}"`
@@ -100,10 +102,10 @@ export namespace Element {
     export type Fragment = string | number | boolean | Element | (string | number | boolean | Element)[]
 
     export interface BaseAttrs {
-        image: { src: string | Buffer | Readable },
-        record: { src: string | Buffer | Readable },
-        video: { src: string | Buffer | Readable },
-        audio: { src: string | Buffer | Readable },
+        image: { src: string | Buffer },
+        record: { src: string | Buffer },
+        video: { src: string | Buffer },
+        audio: { src: string | Buffer },
         text: { text: string },
         mention: { user_id: string | number }
         face: { id: number }
