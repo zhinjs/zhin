@@ -81,6 +81,7 @@ export class Zhin extends Context {
     options: Zhin.Options
     adapters: Map<keyof Zhin.Adapters, Adapter> = new Map<keyof Zhin.Adapters, Adapter>()
     services: Map<keyof Zhin.Services, any> = new Map<keyof Zhin.Services, any>()
+    permissions: Dict<Command.Filters> = {}
 
     constructor(options: Zhin.Options) {
         super(null);
@@ -92,6 +93,14 @@ export class Zhin extends Context {
         })
         if (options.logConfig) {
             configure(options.logConfig as Configuration)
+        }
+        if (fs.existsSync(path.join(process.cwd(), 'permissions.yaml'))) {
+            this.permissions = Yaml.load(
+                fs.readFileSync(
+                    path.join(process.cwd(), 'permissions.yaml'),
+                    {encoding: 'utf-8'}
+                )
+            ) as Dict<Command.Filters>
         }
         this.logger = getLogger('[zhin]')
         this.logger.level = options.log_level || 'info'
@@ -679,10 +688,11 @@ export namespace Zhin {
 
 // 判断是否是windows系统
 export const isWin = process.platform === 'win32'
+
 export function createWorker(options: Zhin.WorkerOptions) {
     const {entry = 'lib', mode = 'production', config: configPath = 'zhin.yaml'} = options || {}
     if (!fs.existsSync(path.join(process.cwd(), configPath))) fs.writeFileSync(path.join(process.cwd(), configPath), Yaml.dump(options))
-    const forkOptions:ForkOptions={
+    const forkOptions: ForkOptions = {
         env: {
             ...process.env,
             mode,

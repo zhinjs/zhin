@@ -374,6 +374,8 @@ export class Context extends EventEmitter {
             if(!parent) throw new Error(`找不到父指令:${nameArr.join('/')}`)
         }
         const command=defineCommand(argsDecl.join(' '),...args as any)
+        const filters=this.zhin.permissions[nameDecl]
+        if(filters) command.setFilters(filters)
         if(parent){
             command.parent=parent
             parent.children.push(command as unknown as Command)

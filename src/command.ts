@@ -1,4 +1,5 @@
-import {Dict, isEmpty} from "@zhinjs/shared";
+import {deepClone, Dict, isEmpty} from "@zhinjs/shared";
+import {Session} from "@/session";
 
 type Argv = {
     name: string
@@ -65,6 +66,7 @@ type OptionValueType<S extends string> = OptionType<S> extends { [key: string]: 
 
 // 定义一个Command类，用于定义指令，这个类的实例会被注册到CommandManager中
 export class Command<A extends any[] = [], O = {}> {
+    filters: Command.Filters = {}
     callbacks: Command.CallBack<object, A, O>[] = []
     checkers: Command.CallBack<object, A, O>[] = []
     public name?: string
@@ -77,7 +79,9 @@ export class Command<A extends any[] = [], O = {}> {
 
     constructor(public config: Command.Config = {}) {
     }
-
+    setFilters(filters: Command.Filters) {
+        this.filters = filters
+    }
     option<S extends string>(option: S, initialValue?: OptionValueType<S>): Command<A, O & OptionType<S>> {
         const optionMatch = option.match(/^-(\S+) ([<[])(\.\.\.)?(\w+):(\w+)([>\]])(.*)?/) as RegExpExecArray
         if (!optionMatch) throw new Error(`option ${option} is not valid`)
@@ -210,6 +214,8 @@ export class Command<A extends any[] = [], O = {}> {
             return e.message
         }
         if (!runtime) return
+        const filterFn=Command.createFilterFunction(this.filters)
+        if (!filterFn(runtime.session)) return
         for (const checker of runtime.command.checkers) {
             const result = await checker.apply(runtime.command, [runtime as Command.RunTime<S, A, O>, ...(runtime as Command.RunTime<S, A, O>).args])
             if (result) return result
@@ -376,7 +382,7 @@ export namespace Command {
                 result.push(arg)
                 continue;
             }
-            const tag = /^<([^>\s]+).*?>$/.exec(arg)?.[1]||''
+            const tag = /^<([^>\s]+).*?>$/.exec(arg)?.[1] || ''
             if (tag.startsWith('/')) {
                 result.push(arg);
                 continue;
@@ -387,8 +393,8 @@ export namespace Command {
                 result.push(arg)
             } else {
                 const needJoinArg = copyArgs.splice(0, index + 1)
-                const endTap= needJoinArg.pop()
-                result.push([arg,needJoinArg.join(' '), endTap].join(''))
+                const endTap = needJoinArg.pop()
+                result.push([arg, needJoinArg.join(' '), endTap].join(''))
             }
         }
         return result.map(removeOuterQuoteOnce)
@@ -427,6 +433,51 @@ export namespace Command {
             [P in keyof O]?: WithRegIndex<O[P]>
         }
     }
+    type MaybeArray<T = any> = T | T[]
+    type AttrFilter<T extends object> = {
+        [P in keyof Session]?: MaybeArray<P> | boolean
+    }
+    export type Filters = AttrFilter<Session> | WithFilter | UnionFilter | ExcludeFilter
+    export type WithFilter = {
+        and: Filters
+    }
+    export type UnionFilter = {
+        or: Filters
+    }
+    export type ExcludeFilter = {
+        not: Filters
+    }
+
+    export function createFilterFunction<T extends Filters>(filters: T) {
+        const filterFn = <K extends keyof T|keyof Session>(session:Session,key: K, value: any) => {
+            if (typeof value === 'boolean' && typeof session[key as keyof Session] !== 'boolean') {
+                return value
+            }
+            if (Array.isArray(value)) {
+                return value.includes(session[key as keyof Session])
+            }
+            if (typeof value !== 'object') return value === session[key as keyof Session]
+            return createFilterFunction(value)(session)
+        }
+        if (filters['$and']) {
+            return (session: Session) => {
+                return Object.entries(filters['$and']).every(([key, value]) => filterFn(session, key as keyof T, value as any))
+            }
+        }
+        if (filters['$or']) {
+            return (session: Session) => {
+                return Object.entries(filters['$or']).some(([key, value]) => filterFn(session, key as keyof T, value as any))
+            }
+        }
+        if (filters['$not']) {
+            return (session: Session) => {
+                return Object.entries(filters['$not']).every(([key, value]) => !filterFn(session, key as keyof T, value as any))
+            }
+        }
+        return (session: Session) => {
+            return Object.entries(filters).every(([key, value]) => filterFn(session, key as keyof T, value as any))
+        }
+    }
 
     export type RunTime<S extends object, A extends any[] = [], O = {}> = {
         args: A,
@@ -459,12 +510,12 @@ export namespace Command {
     export type CallBack<Session extends object, A extends any[] = [], O = {}> = (runtime: RunTime<Session, A, O>, ...args: A) => MayBePromise<string | boolean | number | void>
 
     export interface Domain {
-        text:string
+        text: string
         string: string
         integer: number
         number: number
         boolean: boolean
-        user_id: number|string
+        user_id: number | string
         regexp: RegExp
         date: Date
         json: Dict
@@ -511,6 +562,7 @@ export namespace Command {
     }
 
     export type Declare = `${string} ${string}` | string
+
     export function transform<T extends Type>(source: string, type: T): Domain[T] {
         const domainConfig = domains[type]
         if (!domainConfig) throw new Error(`type ${type} is not defined`)
@@ -523,6 +575,7 @@ export namespace Command {
             validate: validate as any
         }
     }
+
     registerDomain('string', (source) => source)
     registerDomain('number', (source) => +source)
     registerDomain('integer', (source) => +source, (source) => Number.isInteger(+source))
