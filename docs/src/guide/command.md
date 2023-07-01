@@ -47,18 +47,15 @@ ctx.command('echo <arg1> [...rest]')
 上面一行代码声明了一个`echo`指令，并且该指令接收**1到多个参数**
 ### 参数类型
 知音默认参数类型为消息段，若你需要指定类型，仅需在参数名后跟上`:type`即可，zhin内置的数据类型有：
-- text： 长文本，可带通过
-- string： 普通文本，不可带空格
-- mention： 一个At消息段
-- face： 一个表情
-- record： 一段音频
-- video： 一段视频
-- image： 一张图片
-- number： 数值类型
-- boolean： 布尔值
-- integer： 整数
-- date： 日期
-- regexp： 正则
+- string: string 字符串
+- integer: number 整数
+- number: number 数值
+- boolean: boolean 布尔值
+- user_id: number | string 用户id
+- regexp: RegExp 正则表达式
+- date: Date 日期
+- json: Dict | List JSON对象
+- function: Function 函数
 用例：
 ```ts
 ctx.command('send <arg1:face> [...rest:number]') // 声明第一个参数为一个表情，剩下的参数均为数值
@@ -68,9 +65,9 @@ ctx.command('send <arg1:face> [...rest:number]') // 声明第一个参数为一�
 使用 cmd.option(name, desc) 函数可以给指令定义参数。这个函数也是可以链式调用的，例如：
 ```ts
 ctx.command('music <keyword:string>')
-  .option('origin', '-o')          // 是否原生输出
-  .option('platform', '-p <platform:string>')    // 选用音乐平台
-  .option('singer', '-s [singer:number]')  // 指定歌手id
+  .option('-o [origin:boolean]')          // 是否原声输出
+  .option('-p <platform:string>')    // 选用音乐平台
+  .option('-s [singer:number]')  // 指定歌手id
   .action(({ options },keyword) => JSON.stringify(options))
 ```
 
@@ -87,10 +84,10 @@ zhin的指令机制虽然能够尽可能避免冲突和误触发，但是也带�
 我们将刚刚上边的`music`指令稍微进行一下改造
 ```ts
 ctx.command('music <keyword:string>')
-    .option('origin', '-o')          // 是否原生输出
-    .option('platform', '-p <platform:string>')    // 选用音乐平台
-    .option('singer', '-s [singer:number]')  // 指定歌手id
-    .shortcut('qq点歌',{fuzzy:true,options:{platform:'qq',origin:true}}) // [!code ++]
+    .option('-o [origin:boolean]')    // 是否原声输出
+    .option('-p <platform:string>')    // 选用音乐平台
+    .option('-s [singer:number]')  // 指定歌手id
+    .sugar('qq点歌',{options:{platform:'qq',origin:true}}) // [!code ++]
     .action(({ options },keyword) => JSON.stringify(options))
 ```
 - 这儿的`fuzzy`标识指令可以带参数
@@ -103,11 +100,11 @@ ctx.command('music <keyword:string>')
 除此以外，你还可以使用正则表达式作为快捷方式：
 ```ts
 ctx.command('music <keyword:string>')
-    .option('origin', '-o')          // 是否原生输出
-    .option('platform', '-p <platform:string>')    // 选用音乐平台
-    .option('singer', '-s [singer:number]')  // 指定歌手id
-    .shortcut('qq点歌',{fuzzy:true,options:{platform:'qq',origin:true}})
-    .shortcut(/^来一首(.+)$/,{args:['$1'],options:{platform:'qq',origin:true}}) // [!code ++]
+    .option('-o [origin:boolean]')    // 是否原声输出
+    .option('-p <platform:string>')    // 选用音乐平台
+    .option('-s [singer:number]')  // 指定歌手id
+    .sugar('qq点歌',{options:{platform:'qq',origin:true}})
+    .sugar(/^来一首(.+)$/,{args:['$1'],options:{platform:'qq',origin:true}}) // [!code ++]
     .action(({ options },keyword) => [keyword,JSON.stringify(options)])
 ```
 这样一来，输入**来一首烟雨行舟**就等价于输入`music 烟雨行舟 -p qq -o`了。

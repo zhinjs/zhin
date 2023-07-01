@@ -28,7 +28,6 @@ export interface Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters, E 
     guild_name?: string
     detail_type?: string
     zhin: Zhin
-    isAtMe?: boolean
     context: Context
     adapter: Zhin.Adapters[P],
     prompt: Prompt
@@ -65,21 +64,6 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters, E exte
             if (fullId && Bot.getFullTargetId(session) !== fullId) return next()
             return middleware(session, next)
         }, true)
-    }
-
-    waitReply<K extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[K]>(message_id: string, timeout?: number) {
-        return new Promise<NSession<K, E>>(resolve => {
-            const timer = timeout && setTimeout(() => {
-                resolve(null)
-                dispose()
-            })
-            const dispose = this.zhin.middleware(async (session, next) => {
-                if (!session.quote || session.quote.message_id !== message_id) return next()
-                dispose()
-                timer && clearTimeout(timeout)
-                resolve(session as NSession<K, E>)
-            })
-        })
     }
 
     match(context: Context) {
@@ -119,6 +103,9 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters, E exte
     }
     get isAdmins(){
         return this.bot.isAdmins(this as NSession<P,E>)
+    }
+    get isAtMe(){
+        return this.bot.isAtMe(this as NSession<P,E>)
     }
     get isGroup(){
         return !! this.group_id

@@ -11,8 +11,8 @@ import {Middleware} from "@/middleware";
 
 export function createZhinAPI() {
     const zhinMap: Map<string | symbol, Zhin> = new Map<string | symbol, Zhin>()
-    const createZhin = (options: Partial<Zhin.Options> | string) => {
-        if (zhinMap.get(Zhin.key)) return zhinMap.get(Zhin.key)
+    const createZhin = (options: Partial<Zhin.Options> | string,key=Zhin.key) => {
+        if (zhinMap.get(key)) return zhinMap.get(key)
         if (typeof options === 'string') {
             if (!fs.existsSync(options)) fs.writeFileSync(options, Yaml.dump({
                 protocols: {
@@ -30,18 +30,18 @@ export function createZhinAPI() {
             options = Yaml.load(fs.readFileSync(options, {encoding: 'utf8'}))
         }
         const zhin = new Zhin(deepMerge(deepClone(Zhin.defaultConfig), options))
-        zhinMap.set(Zhin.key, zhin)
+        zhinMap.set(key, zhin)
         return zhin
     }
     // 获取插件上下文
-    const useContext = () => {
+    const useContext = (zhinKey=Zhin.key) => {
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
-        return getContext(pluginFullPath)
+        return getContext(pluginFullPath,zhinKey)
     }
-    const getContext=(pluginFullPath:string)=>{
-        const zhin = zhinMap.get(Zhin.key)
-        if (!zhin) throw new Error(`can't found zhin with context for key:${Zhin.key.toString()}`)
+    const getContext=(pluginFullPath:string,key=Zhin.key)=>{
+        const zhin = zhinMap.get(key)
+        if (!zhin) throw new Error(`can't found zhin with context for key:${key.toString()}`)
         const context=zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath)?.context
         if (context) return context
         const pluginDir = path.dirname(pluginFullPath)
@@ -57,54 +57,54 @@ export function createZhinAPI() {
         return zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath).context
     }
     // 添加指定组件到插件中
-    const useComponent=(name:string,component:Component)=>{
-        const zhin = zhinMap.get(Zhin.key)
-        if (!zhin) throw new Error(`can't found zhin with context for key:${Zhin.key.toString()}`)
+    const useComponent=(name:string,component:Component,key=Zhin.key)=>{
+        const zhin = zhinMap.get(key)
+        if (!zhin) throw new Error(`can't found zhin with context for key:${key.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
         const context=getContext(pluginFullPath)
         context.component(name,component)
     }
     // 添加指定事件监听到插件中
-    const on=<T extends keyof Zhin.EventMap<Context>>(event: T, listener: Zhin.EventMap<Context>[T])=>{
-        const zhin = zhinMap.get(Zhin.key)
-        if (!zhin) throw new Error(`can't found zhin with context for key:${Zhin.key.toString()}`)
+    const on=<T extends keyof Zhin.EventMap<Context>>(event: T, listener: Zhin.EventMap<Context>[T],key=Zhin.key)=>{
+        const zhin = zhinMap.get(key)
+        if (!zhin) throw new Error(`can't found zhin with context for key:${key.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
         const context=getContext(pluginFullPath)
         return context.on(event,listener)
     }
     // 监听指定事件监听一次到插件中
-    const once=<T extends keyof Zhin.EventMap<Context>>(event: T, listener: Zhin.EventMap<Context>[T])=>{
-        const zhin = zhinMap.get(Zhin.key)
-        if (!zhin) throw new Error(`can't found zhin with context for key:${Zhin.key.toString()}`)
+    const once=<T extends keyof Zhin.EventMap<Context>>(event: T, listener: Zhin.EventMap<Context>[T],zhinKey=Zhin.key)=>{
+        const zhin = zhinMap.get(zhinKey)
+        if (!zhin) throw new Error(`can't found zhin with context for key:${zhinKey.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
         const context=getContext(pluginFullPath)
         return context.once(event,listener)
     }
     // 添加插件到插件中
-    const useMiddleware=(middleware:Middleware)=>{
-        const zhin = zhinMap.get(Zhin.key)
-        if (!zhin) throw new Error(`can't found zhin with context for key:${Zhin.key.toString()}`)
+    const useMiddleware=(middleware:Middleware,zhinKey=Zhin.key)=>{
+        const zhin = zhinMap.get(zhinKey)
+        if (!zhin) throw new Error(`can't found zhin with context for key:${zhinKey.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
         const context=getContext(pluginFullPath)
         return context.middleware(middleware) as Dispose
     }
     // 添加指令到插件中
-    const useCommand=<A extends any[],O ={}>(name:string,command:Command<A,O>)=>{
-        const zhin = zhinMap.get(Zhin.key)
-        if (!zhin) throw new Error(`can't found zhin with context for key:${Zhin.key.toString()}`)
+    const useCommand=<A extends any[],O ={}>(name:string,command:Command<A,O>,zhinKey=Zhin.key)=>{
+        const zhin = zhinMap.get(zhinKey)
+        if (!zhin) throw new Error(`can't found zhin with context for key:${zhinKey.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
         const context=getContext(pluginFullPath)
         context.useCommand(name,command)
     }
     // 读取指定path的配置文件
-    function useOptions<K extends Keys<Zhin.Options>>(path: K): Value<Zhin.Options, K> {
-        const zhin = zhinMap.get(Zhin.key)
-        if (!zhin) throw new Error(`can't found zhin with context for key:${Zhin.key.toString()}`)
+    function useOptions<K extends Keys<Zhin.Options>>(path: K,zhinKey=Zhin.key): Value<Zhin.Options, K> {
+        const zhin = zhinMap.get(zhinKey)
+        if (!zhin) throw new Error(`can't found zhin with context for key:${zhinKey.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
         const plugin = zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath)
@@ -128,9 +128,9 @@ export function createZhinAPI() {
      * @param callback
      * @param effect
      */
-    function useEffect<T extends object = object>(callback: EffectCallBack<T>, effect?: Proxied<T>) {
-        const zhin = zhinMap.get(Zhin.key)
-        if (!zhin) throw new Error(`can't found zhin with context for key:${Zhin.key.toString()}`)
+    function useEffect<T extends object = object>(callback: EffectCallBack<T>, effect?: Proxied<T>,zhinKey=Zhin.key) {
+        const zhin = zhinMap.get(zhinKey)
+        if (!zhin) throw new Error(`can't found zhin with context for key:${zhinKey.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
         const plugin = zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath)
@@ -150,9 +150,9 @@ export function createZhinAPI() {
      * 添加插件卸载副作用
      * @param callback
      */
-    function onDispose(callback: Dispose) {
-        const zhin = zhinMap.get(Zhin.key)
-        if (!zhin) throw new Error(`can't found zhin with context for key:${Zhin.key.toString()}`)
+    function onDispose(callback: Dispose,zhinKey=Zhin.key) {
+        const zhin = zhinMap.get(zhinKey)
+        if (!zhin) throw new Error(`can't found zhin with context for key:${zhinKey.toString()}`)
         const callSite = getCaller()
         const pluginFullPath = callSite.getFileName()
         const plugin = zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath)

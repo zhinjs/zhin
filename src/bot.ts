@@ -152,7 +152,7 @@ export interface Bot<K extends keyof Zhin.Bots = keyof Zhin.Bots, BO = {}, AO = 
 
     // 会话发起者是否为频道管理员
     isChannelAdmin?<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P] = keyof Zhin.BotEventMaps[P]>(session: NSession<P, E>): boolean
-
+    isAtMe?<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P] = keyof Zhin.BotEventMaps[P]>(session: NSession<P, E>): boolean
     // 会话发起者是否为群主
     isGroupOwner?<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P] = keyof Zhin.BotEventMaps[P]>(session: NSession<P, E>): boolean
 

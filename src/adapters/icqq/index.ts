@@ -120,6 +120,9 @@ export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
     isGroupOwner(session): boolean {
         return session.detail_type==='group' && session.member.is_owner
     }
+    isAtMe(session): boolean {
+        return !!session.atme
+    }
 
     createSession<E extends keyof EventMap>(event: E, ...args: Parameters<EventMap[E]>): NSession<'icqq',E> {
         let obj:Record<string, any> = typeof args[0] === "object" ? args.shift() : {}

@@ -47,6 +47,7 @@ export default defineConfigWithTheme({
                     text:'深入了解',
                     collapsible:true,
                     items:[
+                        {text:`插件(Plugin)`,link:'/guide/plugin'},
                         {text:`指令(Command)`,link:'/guide/command'},
                         {text:`可交互输入(Prompt)`,link:'/guide/prompt'},
                         {text:`组件(Component)`,link:'/guide/component'},
