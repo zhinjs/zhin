@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.2.0](https://github.com/zhinjs/zhin/compare/v2.1.12...v2.2.0) (2023-06-30)
+
+
+### Features
+
+* 指令筛选功能初版 ([7929f91](https://github.com/zhinjs/zhin/commit/7929f914d3244582367d30e5f3989e294d3d1c63))
+
+
+### Bug Fixes
+
+* 指令解析优化，elementBuffer传输错误 ([f06ee2b](https://github.com/zhinjs/zhin/commit/f06ee2ba75e07750cdb75f79b3a7b9bf75e53ba8))
+* 调试参数移除 ([e562917](https://github.com/zhinjs/zhin/commit/e5629178bde125b6d0280897c4bc6f84ef1310c0))
+
 ## [2.1.12](https://github.com/zhinjs/zhin/compare/v2.1.11...v2.1.12) (2023-06-21)
 
 
