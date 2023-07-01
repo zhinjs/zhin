@@ -10,22 +10,22 @@ session.reply("Hello World!");
 ```typescript
 import {h} from "zhin";
 
-session.reply(h("at", {qq: 123456789})); // at某人
+session.reply(h("mention", {user_id: 123456789})); // 提及某人
 session.reply(h("image", {url: "https://example.com/image.png"})); // 发送图片
 session.reply(h("face", {id: 123})); // 发送表情
 session.reply(h("rps", {id: 1})); // 发送猜拳
 session.reply(h("dice", {id: 1})); // 发送骰子
 session.reply(h("node", {
     message: [
-        h("text", {}, ["Hello World!"]),
-        h("at", {qq: 123456789})
+        "Hello World!",
+        h("mention", {user_id: 123456789})
     ]
 })); // 发送节点
 ```
 ## 消息模板
 消息模板是一种特殊的文本消息，在其中你可以通过类html的方式来构造消息元素。你可以通过session.reply方法来发送消息模板。
 ```typescript
-session.reply('Hello World!<face id="123"/><at qq="123456789"/><image url="https://example.com/image.png"/>');
+session.reply('Hello World!<face id="123"/><mention user_id="123456789"/><image url="https://example.com/image.png"/>');
 ```
 ## 消息组件
 消息组件是由开发者自定义的消息元素，你可以通过ctx.component来注册消息组件，通过session.reply方法来发送消息组件。
