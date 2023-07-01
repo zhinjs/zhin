@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.1](https://github.com/zhinjs/zhin/compare/v2.2.0...v2.2.1) (2023-07-01)
+
+
+### Bug Fixes
+
+* 1.更新文档， ([47714ba](https://github.com/zhinjs/zhin/commit/47714baa5c3575d1477c7e08e67e84ab03fe1187))
+
 ## [2.2.0](https://github.com/zhinjs/zhin/compare/v2.1.12...v2.2.0) (2023-06-30)
 
 
