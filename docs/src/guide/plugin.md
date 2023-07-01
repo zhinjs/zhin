@@ -422,7 +422,7 @@ ctx.on('message',({session})=>{
 });
 ```
 :::
-可监听的事件及返回参数可以参考[事件地图](/api/events)
+可监听的事件及返回参数可以参考[事件地图](/api/event/map)
 ### 2.4 定义服务
 ::: code-group
 ```javascript [javascript]

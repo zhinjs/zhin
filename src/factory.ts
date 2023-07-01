@@ -127,6 +127,7 @@ export function createZhinAPI() {
      * 添加插件副作用，类似react的useEffect使用方法
      * @param callback
      * @param effect
+     * @param zhinKey
      */
     function useEffect<T extends object = object>(callback: EffectCallBack<T>, effect?: Proxied<T>,zhinKey=Zhin.key) {
         const zhin = zhinMap.get(zhinKey)
@@ -149,6 +150,7 @@ export function createZhinAPI() {
     /**
      * 添加插件卸载副作用
      * @param callback
+     * @param zhinKey
      */
     function onDispose(callback: Dispose,zhinKey=Zhin.key) {
         const zhin = zhinMap.get(zhinKey)
