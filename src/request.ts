@@ -14,7 +14,7 @@ export interface Request {
     patch<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T>
 }
 export namespace Request {
-    export interface Config {
+    export interface Config extends AxiosRequestConfig{
         headers?: Dict
         endpoint?: string
         timeout?: number

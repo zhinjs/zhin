@@ -110,7 +110,7 @@ export class Zhin extends Context {
         this.service('server', server)
             .service('koa', koa)
             .service('router', router)
-            .service('request', Request.create())
+            .service('request', Request.create(options.request_config))
         koa.use(KoaBodyParser())
             .use(router.routes())
             .use(router.allowedMethods())
@@ -571,7 +571,10 @@ export namespace Zhin {
         self_url: string
         port: number
         log_level: LogLevel
-        logConfig?: Partial<Configuration>
+        /** @deprecated 请使用 log_level 替换 */
+        logConfig?:Partial<Configuration>
+        log_config?: Partial<Configuration>
+        request_config?:Request.Config
         delay: Record<string, number>
         plugins?: Record<string, any>
         services?: Record<string, any>
