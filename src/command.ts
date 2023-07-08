@@ -201,12 +201,12 @@ export class Command<A extends any[] = [], O = {}> {
         return output
     }
 
-    action<S extends object = object>(callback: Command.CallBack<S, A, O>) {
+    action<S extends Session = Session>(callback: Command.CallBack<S, A, O>) {
         this.callbacks.push(callback)
         return this as Command<A, O>
     }
 
-    async execute<S extends object>(session: S, template = session.toString()): Promise<string | boolean | number | void> {
+    async execute<S extends Session>(session: S, template = session.toString()): Promise<string | boolean | number | void> {
         let runtime: Command.RunTime<S, A, O> | void
         try {
             runtime = this.parse(session, template)
@@ -311,7 +311,7 @@ export class Command<A extends any[] = [], O = {}> {
         return argv
     }
 
-    match<S extends object>(session: S, template: string): boolean {
+    match<S extends Session>(session: S, template: string): boolean {
         try {
             return !!this.parse(session, template)
         } catch {
@@ -319,8 +319,8 @@ export class Command<A extends any[] = [], O = {}> {
         }
     }
 
-    parse<S extends object>(session: S, template: string): Command.RunTime<S, A, O> | void {
-        let argv = this.parseSugar(template)
+    parse<S extends Session>(session: S, template: string): Command.RunTime<S, A, O> | void {
+        let argv = this.parseSugar(session.content)
         if (!argv.name) argv = this.parseArgv(template)
         if (argv.name !== this.name) {
             if (this.aliasNames.includes(argv.name)) argv.name = this.name
