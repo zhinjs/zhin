@@ -116,7 +116,7 @@ export class Zhin extends Context {
             .use(router.allowedMethods())
         server.listen(options.port ||= 8086)
         this.logger.info(`server listen at \n${getIpAddress().map(ip => `http://${ip}:${options.port}`).join('\n')}`)
-        this.options = ref(options)
+        this.options = ref(options) as any
         watch(this.options, async (value: Zhin.Options) => {
             await fs.writeFileSync(process.env.configPath, Yaml.dump(value))
         })
