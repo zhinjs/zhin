@@ -224,7 +224,7 @@ export class Zhin extends Context {
     }
 
     // 扫描项目依赖中的已安装的模块
-    getInstalledModules<T extends Zhin.ModuleCategory>(...categories: T[]): Zhin.Modules[T][] {
+    getInstalledModules<T extends Zhin.ModuleCategory>(category: T): Zhin.Modules[T][] {
         const result: Zhin.Modules[T][] = []
         const loadManifest = (packageName) => {
             const filename = require.resolve(packageName + '/package.json')
@@ -248,7 +248,7 @@ export class Zhin extends Context {
                 fullName: data.name,
             }
         }
-        const loadPackage = (name, category) => {
+        const loadPackage = (name) => {
             try {
                 result.push(this.load(parsePackage(name).fullName, category))
             } catch (e) {
@@ -267,17 +267,15 @@ export class Zhin extends Context {
             const files = fs.existsSync(base) ? fs.readdirSync(base) : []
             for (const name of files) {
                 const base2 = base + '/' + name
-                for(const category of categories){
-                    if (name === '@zhinjs') {
-                        const files = fs.readdirSync(base2)
-                        for (const name2 of files) {
-                            if (name2.startsWith(`${category}-`)) {
-                                loadPackage(name + '/' + name2, category)
-                            }
+                if (name === '@zhinjs') {
+                    const files = fs.readdirSync(base2)
+                    for (const name2 of files) {
+                        if (name2.startsWith(`${category}-`)) {
+                            loadPackage(name + '/' + name2)
                         }
-                    } else if (name.startsWith(`zhin-${category}-`)) {
-                        loadPackage(name,category)
                     }
+                } else if (name.startsWith(`zhin-${category}-`)) {
+                    loadPackage(name)
                 }
             }
             if (path.dirname(baseDir) !== baseDir) {
@@ -286,18 +284,16 @@ export class Zhin extends Context {
         }
         const startDir = path.dirname(__dirname)
         loadDirectory(startDir)
-        for(const category of categories){
-            if (fs.existsSync(path.resolve(process.cwd(), this.options.plugin_dir))) {
-                const dirs = fs.readdirSync(path.resolve(process.cwd(), this.options.plugin_dir))
-                result.push(
-                    ...dirs.map((name) => this.load(name.replace(/\.(d\.)?[d|j]s$/, ''), category))
-                )
-            }
-            if (fs.existsSync(path.resolve(__dirname, `${category}s`))) {
-                const dirs = fs.readdirSync(path.resolve(__dirname, `${category}s`))
-                result.push(
-                    ...dirs.map((name) => this.load(name.replace(/\.(d\.)?[d|j]s$/, ''), category, true)))
-            }
+        if (fs.existsSync(path.resolve(process.cwd(), this.options.plugin_dir))) {
+            const dirs = fs.readdirSync(path.resolve(process.cwd(), this.options.plugin_dir))
+            result.push(
+                ...dirs.map((name) => this.load(name.replace(/\.(d\.)?[d|j]s$/, ''), category))
+            )
+        }
+        if (fs.existsSync(path.resolve(__dirname, `${category}s`))) {
+            const dirs = fs.readdirSync(path.resolve(__dirname, `${category}s`))
+            result.push(
+                ...dirs.map((name) => this.load(name.replace(/\.(d\.)?[d|j]s$/, ''), category, true)))
         }
         return result
     }

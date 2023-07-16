@@ -45,10 +45,13 @@ ctx.command('plugin/plugin.list')
             }).join('\n')+`\n\n■:已启用 □:未启用`
         } else {
             const packages = await ctx.zhin.getMarketPackages()
-            const plugins = ctx.zhin.getInstalledModules('plugin','adapter','service')
+            const plugins = ctx.zhin.getInstalledModules('plugin')
+            const adapters = ctx.zhin.getInstalledModules('adapter')
+            const services = ctx.zhin.getInstalledModules('service')
+            const localPlugins = [...plugins, ...adapters, ...services]
             return packages.map((o, idx) => {
-                const installStatus = plugins.some(p => p['fullName'] === o.name)
-                const installVersion = plugins.find(p => p['fullName'] === o.name)?.['version']
+                const installStatus = localPlugins.some(p => p['fullName'] === o.name)
+                const installVersion = localPlugins.find(p => p['fullName'] === o.name)?.['version']
                 const isLatest = installVersion === o.version
                 return `${installStatus ? '●' : '○'} ${o.name}@${o.version}${isLatest ? ' (latest)' : installStatus?`(${installVersion})`:''}`
             }).join('\n')+`\n\n●:已安装 ○:未安装`
