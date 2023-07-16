@@ -79,9 +79,11 @@ export class Command<A extends any[] = [], O = {}> {
 
     constructor(public config: Command.Config = {}) {
     }
+
     setFilters(filters: Command.Filters) {
         this.filters = filters
     }
+
     option<S extends string>(option: S, initialValue?: OptionValueType<S>): Command<A, O & OptionType<S>> {
         const optionMatch = option.match(/^-(\S+) ([<[])(\.\.\.)?(\w+):(\w+)([>\]])(.*)?/) as RegExpExecArray
         if (!optionMatch) throw new Error(`option ${option} is not valid`)
@@ -214,7 +216,7 @@ export class Command<A extends any[] = [], O = {}> {
             return e.message
         }
         if (!runtime) return
-        const filterFn=Command.createFilterFunction(this.filters)
+        const filterFn = Command.createFilterFunction(this.filters)
         if (!filterFn(runtime.session)) return
         for (const checker of runtime.command.checkers) {
             const result = await checker.apply(runtime.command, [runtime as Command.RunTime<S, A, O>, ...(runtime as Command.RunTime<S, A, O>).args])
@@ -294,6 +296,9 @@ export class Command<A extends any[] = [], O = {}> {
                     break
                 } else if (option.type === 'boolean') {
                     argv.options[name] = true
+                } else if (option.type==='text') {
+                    argv.options[name]=matchedArr.slice(i+1).join(' ')
+                    break;
                 } else {
                     argv.options[name] = Command.transform(matchedArr[++i], option.type as Command.Type)
                 }
@@ -449,7 +454,7 @@ export namespace Command {
     }
 
     export function createFilterFunction<T extends Filters>(filters: T) {
-        const filterFn = <K extends keyof T|keyof Session>(session:Session,key: K, value: any) => {
+        const filterFn = <K extends keyof T | keyof Session>(session: Session, key: K, value: any) => {
             if (typeof value === 'boolean' && typeof session[key as keyof Session] !== 'boolean') {
                 return value
             }
