@@ -41,7 +41,7 @@ interface Session {
     get isAdmins(): boolean // 当前会话发起者是否为zhin管理员
     get isOwner(): boolean // 当前会话发起者是否为群主
     get isAdmin(): boolean // 当前会话发起者是否为群组管理
-    get isAtme(): boolean // 当前会话是否at了机器人
+    get isAtMe(): boolean // 当前会话是否at了机器人
     get isPrivate(): boolean // 当前会话是否为私聊
     get isGroup(): boolean // 当前会话是否为群聊
 }
