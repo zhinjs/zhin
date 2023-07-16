@@ -24,10 +24,10 @@ function outputConfig(config, key) {
 }
 
 const ctx = useContext()
-ctx.master().command('config [key:string] [value:any]')
+ctx.master().command('config [key:string] [value:string]')
     .desc('编辑配置文件')
     .hidden()
-    .option('-d <delete:boolean> 删除指定配置')
+    .option('-d [delete:boolean] 删除指定配置')
     .action(({options}, key, value) => {
         const config = Yaml.load(fs.readFileSync(process.env.configPath || '', 'utf8')) as object
         if (value === undefined && !options.delete) return outputConfig(config, key)
