@@ -82,7 +82,9 @@ export class Zhin extends Context {
     adapters: Map<keyof Zhin.Adapters, Adapter> = new Map<keyof Zhin.Adapters, Adapter>()
     services: Map<keyof Zhin.Services, any> = new Map<keyof Zhin.Services, any>()
     permissions: Dict<Command.Filters> = {}
-
+    get version(){
+        return require('../package.json').version
+    }
     constructor(options: Zhin.Options) {
         super(null);
         const result = this.zhin = new Proxy(this, {
