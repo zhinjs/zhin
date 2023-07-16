@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.1](https://github.com/zhinjs/zhin/compare/v2.3.0...v2.3.1) (2023-07-16)
+
+
+### Bug Fixes
+
+* daemon 增加zhin升级指令(update)，可快速升级zhin到指定版本 ([0b9e5a5](https://github.com/zhinjs/zhin/commit/0b9e5a54b21bc5b3571e26cf8776842e7e426203))
+
 ## [2.3.0](https://github.com/zhinjs/zhin/compare/v2.2.1...v2.3.0) (2023-07-16)
 
 
