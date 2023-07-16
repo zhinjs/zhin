@@ -139,7 +139,6 @@ export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
         }, {args})
         delete obj.reply
         let msg=[...(obj.message||'')]
-        obj.isAtMe=msg[0]?.type==='at' && msg[0].user_id===this.self_id
         if(obj.source){
             obj.quote={
                 message_id:obj.detail_type==='group'?
