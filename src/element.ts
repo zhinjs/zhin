@@ -1,8 +1,6 @@
 import {evaluate, isNullable, makeArray, Awaitable, Dict} from "@zhinjs/shared";
 import {Component} from "@/component";
-import {Readable} from "stream";
 import {Session} from "@/session";
-
 export interface Element<T extends Element.BaseType | string = string, A extends Element.Attrs<T> = Element.Attrs<T>> {
     [Element.key]: true
     type: T
@@ -42,7 +40,7 @@ class ElementConstructor {
 }
 
 type ArrayToString<T extends any[]> = T extends [infer A, ...infer B] ? A extends Element ? `${ToString<A>}${ArrayToString<B>}` : '' : ''
-type ToString<E extends Element, C extends any[] = []> = E extends Element<infer T, infer A> ? C extends Element.Children<T> ? `<${T} ${Stringify<A>}>${ArrayToString<C>}</${T}>` : `<${T} ${Stringify<A>}/>` : string
+export type ToString<E extends Element, C extends any[] = []> = E extends Element<infer T, infer A> ? C extends Element.Children<T> ? `<${T} ${Stringify<A>}>${ArrayToString<C>}</${T}>` : `<${T} ${Stringify<A>}/>` : string
 type Stringify<T extends Dict> = { [K in keyof T]: K extends string | number | bigint ? T[K] extends boolean ? (T[K] extends true ? K : `no-${K}`) : `${K}='${T[K]}'` : string }[keyof T]
 
 export function Element(type: string, ...children: Element.Fragment[]): Element
@@ -63,6 +61,7 @@ export function Element(type: string, ...args: any[]) {
         }
     }
     for (const child of args) {
+        if(child ===null) continue
         children.push(...Element.toElementArray(child))
     }
     return Object.assign(el, {type, attrs, children})

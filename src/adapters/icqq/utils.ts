@@ -1,4 +1,4 @@
-import {Client, MessageElem, Sendable, ShareElem} from "icqq";
+import {Client, MessageElem, Sendable} from "icqq";
 import {Element} from "@";
 import {remove} from "@zhinjs/shared";
 

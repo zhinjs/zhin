@@ -286,8 +286,8 @@ export class Zhin extends Context {
         }
         const startDir = path.dirname(__dirname)
         loadDirectory(startDir)
-        if (fs.existsSync(path.resolve(process.cwd(), this.options.plugin_dir))) {
-            const dirs = fs.readdirSync(path.resolve(process.cwd(), this.options.plugin_dir))
+        if (this.options[`${category}_dir`] && fs.existsSync(path.resolve(process.cwd(), this.options[`${category}_dir`]))) {
+            const dirs = fs.readdirSync(path.resolve(process.cwd(), this.options[`${category}_dir`]))
             result.push(
                 ...dirs.map((name) => this.load(name.replace(/\.(d\.)?[d|j]s$/, ''), category))
             )
