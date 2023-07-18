@@ -142,7 +142,7 @@ export class Command<A extends any[] = [], O = {}> {
 
     sugar(sugar: string | RegExp, config?: Omit<Command.Sugar<A, O>, 'regexp'>): Command<A, O> {
         this.sugarsConfig.push({
-            regexp: sugar instanceof RegExp ? sugar : new RegExp(sugar),
+            regexp: sugar instanceof RegExp ? sugar : new RegExp(`^${sugar}$`),
             ...config
         })
         return this
