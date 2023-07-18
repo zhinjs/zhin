@@ -1,4 +1,4 @@
-import {Awaitable, Random, Time} from "@zhinjs/shared";
+import {Awaitable, Promisify, Random, Time} from "@zhinjs/shared";
 import {Context} from "@/context";
 import {Session} from "@/session";
 import {Element, h} from "@/element";
@@ -9,7 +9,7 @@ export type DefineComponent<P = Component.ObjectPropsOptions, D = {}, M extends 
     & {
     props?: P & ThisType<void>;
 } & ThisType<Component.Runtime<PT, D, M>>;
-export type FunctionalComponent<P = {}>=(this:ThisType<Component.Runtime<P>>,props:P,children:Element[])=>Element.Fragment
+export type FunctionalComponent<P = {}>=(this:ThisType<Component.Runtime<P>>,props:P,children:Element[])=>Promisify<Element.Fragment>
 export function defineComponent<P extends Component.ComponentPropsOptions, D, M extends Component.MethodOptions = {}>(options: DefineComponent<P, D, M>|FunctionalComponent): DefineComponent<P, D, M> {
     if(typeof options === 'function') options={
         render:options
