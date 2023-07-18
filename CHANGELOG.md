@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.3.2](https://github.com/zhinjs/zhin/compare/v2.3.1...v2.3.2) (2023-07-18)
+
+
+### Bug Fixes
+
+* jsx Runtime ([bca1225](https://github.com/zhinjs/zhin/commit/bca1225c9638673de4703f6c825ba5e8689e92e2))
+* update docs ([8fa5320](https://github.com/zhinjs/zhin/commit/8fa53203a630cf7d9b629a97a136dd5c9bd7db4d))
+* 优化command注册数据类型流程； ([1ae2956](https://github.com/zhinjs/zhin/commit/1ae2956de96cd74d49c12886f3f4bcab3bda1ab2))
+* 内置组件语法优化，修复函数式组件类型错误 ([fc29bb1](https://github.com/zhinjs/zhin/commit/fc29bb189a2ac59a0dc572f74bc00e41aa5d6988))
+* 函数组件支持异步 ([fc65c92](https://github.com/zhinjs/zhin/commit/fc65c92420a7ae764a8680f962e65af35eac75c2))
+* 支持函数式组件，增强代码健壮性 ([b620625](https://github.com/zhinjs/zhin/commit/b620625715e4e41763c33a002bdce742335f62af))
+
 ## [2.3.1](https://github.com/zhinjs/zhin/compare/v2.3.0...v2.3.1) (2023-07-16)
 
 
