@@ -1,4 +1,4 @@
-import {Awaitable, Promisify, Random, Time} from "@zhinjs/shared";
+import {Awaitable, Random, Time} from "@zhinjs/shared";
 import {Context} from "@/context";
 import {Session} from "@/session";
 import {Element, h} from "@/element";
@@ -9,19 +9,21 @@ export type DefineComponent<P = Component.ObjectPropsOptions, D = {}, M extends 
     & {
     props?: P & ThisType<void>;
 } & ThisType<Component.Runtime<PT, D, M>>;
-export type FunctionalComponent<P = {}>=(this:ThisType<Component.Runtime<P>>,props:P,children:Element[])=>Promisify<Element.Fragment>
-export function defineComponent<P extends Component.ComponentPropsOptions, D, M extends Component.MethodOptions = {}>(options: DefineComponent<P, D, M>|FunctionalComponent): DefineComponent<P, D, M> {
-    if(typeof options === 'function') options={
-        render:options
+export type FunctionalComponent<P = {}> = (this: Component.Runtime<P>, props: P, children: Element[]) => Element.Fragment | Promise<Element.Fragment>;
+
+export function defineComponent<P extends Component.ComponentPropsOptions, D, M extends Component.MethodOptions = {}>(options: DefineComponent<P, D, M> | FunctionalComponent): DefineComponent<P, D, M> {
+    if (typeof options === 'function') options = {
+        render: options
     }
     return options
 }
+
 export interface Component extends DefineComponent<any, any, any> {
 }
 
 export namespace Component {
     export const name = 'builtComponent'
-    export const type='built'
+    export const type = 'built'
     type Data = Record<string, unknown>;
 
     export type ObjectPropsOptions<P = Data> = {
@@ -43,7 +45,7 @@ export namespace Component {
     } : never;
 
     export type PropType<T> = PropConstructor<T> | PropConstructor<T>[];
-    export type Prop<T> =PropType<T>;
+    export type Prop<T> = PropType<T>;
     export type ComponentPropsOptions<P = Data> = ObjectPropsOptions<P> | string[];
 
     export interface MethodOptions {
@@ -97,7 +99,7 @@ export namespace Component {
         & M;
 
     export interface OptionsBase<Props, D, M extends MethodOptions> extends LegacyOptions<Props, D, M> {
-        render(this:Component.Runtime<Props, D, M>,props:Props,children:Element[]):Awaitable<Element.Fragment>
+        render(this: Component.Runtime<Props, D, M>, props: Props, children: Element[]): Awaitable<Element.Fragment>
     }
 
     export function createRuntime(old: Runtime, component: Component, attrs) {
@@ -115,48 +117,37 @@ export namespace Component {
     export function install(ctx: Context) {
         // 内置组件
         ctx
-            .component('template', defineComponent({
-                async render(attrs, children) {
-                    return await this.session.render(children,this)
-                }
-            }))
-            .component('execute', defineComponent({
-                async render(attrs, children) {
-                    const template=(await this.session.render(children,this)).join('')
-                    return this.session.execute(template)
-                }
-            }))
-            .component('forward',defineComponent({
-                async render(attrs, children) {
-                    return h('node',{
-                        user_id:this.session.self_id,
-                        user_name:this.session.nickname,
-                        children:Element.toElementArray(await this.session.render(children,this))
-                    })
-                }
-            }))
-            .component('prompt', defineComponent({
-                props: {
-                    type: String
-                },
-                async render(props, children) {
-                    return await this.session.prompt[this.type ||= 'text'](children.join(''), props)
-                }
-            }))
-            .component('random', defineComponent({
-                async render(attrs, children) {
-                    return Random.pick(children)
-                }
-            }))
-            .component('time', defineComponent({
-                props: {
-                    value: Number,
-                    format: String
-                },
-                render() {
-                    let ms = this.value || Date.now()
-                    return Time.template(this.format || 'yyyy-MM-dd hh:mm:ss', new Date(ms))
-                }
-            }))
+            .component(async function template(attrs, children) {
+                return await this.session.render(children, this)
+            })
+            .component(async function execute(attrs, children) {
+                const template = (await this.session.render(children, this)).join('')
+                return this.session.execute(template)
+            })
+            .component(async function forward(attrs: {
+                user_id?: string | number
+                user_name?: string
+            }, children) {
+                return h('node', {
+                    user_id: attrs.user_id || this.session.user_id,
+                    user_name: attrs.user_name || this.session.user_name,
+                    children: Element.toElementArray(await this.session.render(children, this))
+                })
+            })
+            .component(async function prompt(props: {
+                type?: string
+            }, children) {
+                return await this.session.prompt[this.type ||= 'text'](children.join(''), props)
+            })
+            .component(async function random(attrs, children) {
+                return Random.pick(children)
+            })
+            .component(function time(props: {
+                value?: number
+                format?: string
+            }) {
+                let ms = props.value || Date.now()
+                return Time.template(props.format || 'yyyy-MM-dd hh:mm:ss', new Date(ms))
+            })
     }
 }
