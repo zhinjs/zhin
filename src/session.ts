@@ -129,7 +129,7 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters, E exte
         return result
     }
 
-    async execute(template=this.toString()): Promise<string|boolean|number> {
+    async execute(template=this.toString()): Promise<Element.Fragment> {
         const commands=this.zhin.getSupportCommands(this as NSession<P,E>)
         for(const command of commands){
             const result = await command.execute(this as any,template)

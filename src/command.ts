@@ -1,5 +1,6 @@
-import {deepClone, Dict, isEmpty} from "@zhinjs/shared";
+import { Dict, isEmpty} from "@zhinjs/shared";
 import {Session} from "@/session";
+import {Element} from "@/element";
 
 type Argv = {
     name: string
@@ -208,7 +209,7 @@ export class Command<A extends any[] = [], O = {}> {
         return this as Command<A, O>
     }
 
-    async execute<S extends Session>(session: S, template = session.toString()): Promise<string | boolean | number | void> {
+    async execute<S extends Session>(session: S, template = session.toString()): Promise<Element.Fragment| void> {
         let runtime: Command.RunTime<S, A, O> | void
         try {
             runtime = this.parse(session, template)
@@ -248,11 +249,11 @@ export class Command<A extends any[] = [], O = {}> {
                 const argConfig = this.argsConfig[i]
                 if (!argConfig) break
                 if (typeof arg === 'string' && arg.startsWith('$') && matched[+arg.slice(1)]) {
-                    argv.args[i] = Command.transform(matched[+arg.slice(1)], argConfig.type as Command.Type)
+                    argv.args[i] = Command.transform([matched[+arg.slice(1)]], argConfig.type as Command.Type)
                 } else if (getType(arg) === argConfig.type) {
                     argv.args[i] = arg
                 } else if (typeof arg === 'string') {
-                    argv.args[i] = Command.transform(arg, argConfig.type as Command.Type)
+                    argv.args[i] = Command.transform([arg], argConfig.type as Command.Type)
                 } else if (argConfig.rest && Array.isArray(arg) && arg.every(item => getType(item) === argConfig.type)) {
                     argv.args[i] = arg
                 }
@@ -261,7 +262,7 @@ export class Command<A extends any[] = [], O = {}> {
                 const optionConfig = this.optionsConfig[option]
                 if (!optionConfig) continue
                 if (typeof options[option] === 'string' && options[option].startsWith('$') && matched[+options[option].slice(1)]) {
-                    argv.options[option] = Command.transform(matched[+options[option].slice(1)], optionConfig.type as Command.Type)
+                    argv.options[option] = Command.transform([matched[+options[option].slice(1)]], optionConfig.type as Command.Type)
                 } else if (getType(options[option]) === optionConfig.type) {
                     argv.options[option] = options[option]
                 } else if (typeof options[option] === 'string') {
@@ -283,33 +284,36 @@ export class Command<A extends any[] = [], O = {}> {
         const [name, ...matchedArr] = Command.parseParams(template)
         if (![this.name, ...this.aliasNames].includes(name)) return argv
         argv.name = this.name
-        for (let i = 0; i < matchedArr.length; i++) {
-            const arg = matchedArr[i]
+        while (matchedArr.length) {
+            const arg = matchedArr.shift()
             if (arg.startsWith('--') || arg.startsWith('-')) {
                 const name = arg.startsWith('--') ? arg.slice(2) : Object.entries(this.optionsConfig)
                     .find(([, option]) => option.name === arg.slice(1))?.[0]
                 if (!name) throw new Error(`option ${arg} is not defined`)
                 const option = this.optionsConfig[name]
-                if (!option) throw new Error(`option ${name} is not defined`)
+                if(!option) throw new Error(`option ${name} is not defined`)
                 if (option.rest) {
-                    argv.options[name] = matchedArr.slice(i + 1).map(v => Command.transform(v, option.type as Command.Type))
+                    argv.options[name] = matchedArr.map(arg=>Command.transform([arg], option.type as Command.Type))
                     break
-                } else if (option.type === 'boolean') {
-                    argv.options[name] = true
-                } else if (option.type==='text') {
-                    argv.options[name]=matchedArr.slice(i+1).join(' ')
-                    break;
-                } else {
-                    argv.options[name] = Command.transform(matchedArr[++i], option.type as Command.Type)
+                }else{
+                    const parser=Command.domains[option.type as Command.Type]?.parse
+                    if(!parser) throw new Error(`type ${option.type} is not defined parser`)
+                    const needTransformArgv=parser(matchedArr)
+                    argv.options[name]=Command.transform(needTransformArgv,option.type as Command.Type)
                 }
-            } else {
-                const arg = this.argsConfig[argv.args.length]
-                if (!arg) continue
-                if (arg.rest) {
-                    argv.args.push(matchedArr.slice(i).map(v => Command.transform(v, arg.type as Command.Type)))
+            }else{
+                const argConfig = this.argsConfig[argv.args.length]
+                if (!argConfig) continue
+                if (argConfig.rest) {
+                    matchedArr.unshift(arg)
+                    argv.args.push(matchedArr.map(arg => Command.transform([arg], argConfig.type as Command.Type)))
                     break
                 } else {
-                    argv.args.push(Command.transform(matchedArr[i], arg.type as Command.Type))
+                    const parser=Command.domains[argConfig.type as Command.Type]?.parse
+                    if(!parser) throw new Error(`type ${argConfig.type} is not defined parser`)
+                    matchedArr.unshift(arg)
+                    const needTransformArgv=parser(matchedArr)
+                    argv.args.push(Command.transform(needTransformArgv, argConfig.type as Command.Type))
                 }
             }
         }
@@ -512,7 +516,7 @@ export namespace Command {
     } & OptionsConfig<R> : {
         [key: string]: OptionConfig<L>
     } & OptionsConfig<R> : {}
-    export type CallBack<Session extends object, A extends any[] = [], O = {}> = (runtime: RunTime<Session, A, O>, ...args: A) => MayBePromise<string | boolean | number | void>
+    export type CallBack<Session extends object, A extends any[] = [], O = {}> = (runtime: RunTime<Session, A, O>, ...args: A) => MayBePromise<Element.Fragment | void>
 
     export interface Domain {
         text: string
@@ -520,6 +524,7 @@ export namespace Command {
         integer: number
         number: number
         boolean: boolean
+        any:Element.Fragment
         user_id: number | string
         regexp: RegExp
         date: Date
@@ -528,12 +533,13 @@ export namespace Command {
     }
 
     export type Type = keyof Domain
-    export type DomainConfig<T extends Type> = {
-        transform: (source: string) => Domain[T]
-        validate: (source: Domain[T]) => boolean
+    export type DomainConfig<T extends Type,A extends string[]=string[]> = {
+        parse(argv: string[]): A
+        transform: (...source: A) => Domain[T]
+        validate: (value: Domain[T]) => boolean
     }
     export type Domains = {
-        [K in Type]?: DomainConfig<K>
+        [K in keyof Domain]?: DomainConfig<K>
     }
 
     export function checkArgv(argv: Argv, argsConfig: ArgConfig[], optionsConfig: OptionsConfig) {
@@ -568,38 +574,75 @@ export namespace Command {
 
     export type Declare = `${string} ${string}` | string
 
-    export function transform<T extends Type>(source: string, type: T): Domain[T] {
+    export function transform<T extends Type>(source: string[], type: T): Domain[T] {
         const domainConfig = domains[type]
         if (!domainConfig) throw new Error(`type ${type} is not defined`)
-        return domainConfig.transform(source)
+        return domainConfig.transform(...source)
     }
 
-    export function registerDomain<T extends Type>(type: T, transform: (source: string) => Domain[T], validate: DomainConfig<T>['validate'] = (source: Domain[T]) => getType(source) === type) {
+    export function registerDomain<T extends Type,A extends string[]>(
+        type: T,
+        config:Pick<DomainConfig<T, A>, 'transform'> & Partial<Omit<DomainConfig<T, A>, 'transform'>> |
+            ((...source:A) => Domain[T])){
+        if (typeof config === 'function') config = { transform: config }
         domains[type] = {
-            transform: transform as any,
-            validate: validate as any
-        }
+            parse: config.parse||((argv:string[]) => [argv.shift()]),
+            transform: config.transform,
+            validate: config.validate||((source: Domain[T]) => getType(source) === type),
+        } as Domains[T]
     }
-
+    registerDomain('any', {
+        parse:(argv)=>{
+            const result=[...argv]
+            while (argv.length)
+                argv.shift()
+            return result
+        },
+        transform:(...argv)=>Element.parse(argv.join(' '))
+    })
+    registerDomain('text', {
+        parse:(argv)=>{
+            const result=[...argv]
+            while (argv.length)
+                argv.shift()
+            return result
+        },
+        transform:(...argv)=>argv.join(' '),
+        validate:(value)=>typeof value === 'string'
+    })
     registerDomain('string', (source) => source)
     registerDomain('number', (source) => +source)
-    registerDomain('integer', (source) => +source, (source) => Number.isInteger(+source))
-    registerDomain('boolean', (source) => source !== 'false')
+    registerDomain('integer', {
+        transform: (source) => +source,
+        validate: (value) => Number.isInteger(value)
+    })
+    registerDomain('boolean', {
+        parse:(argv)=>[],
+        transform:()=>true
+    })
     registerDomain('date', (source) => new Date(source))
     registerDomain('regexp', (source) => new RegExp(source))
-    registerDomain('user_id', (source) => {
-        // <mention user_id="123"/> or <mention user_id="123">xxx</mention>
-        const autoCloseMention = source.match(/^<mention user_id="(\S+)"\/>$/)
-        const twinningMention = source.match(/^<mention user_id="(\S+)"[^>]+?>.*?<\/mention>$/)
-        const matched = autoCloseMention || twinningMention
-        if (!matched) {
-            if (!/^\d+$/.test(source)) throw new Error(`user_id should be number or <mention user_id="string|number"/> or <mention user_id="string|number"></mention>`)
-            return +source
-        }
-        return matched[1].match(/^\d+$/) ? +matched[1] : matched[1]
-    }, (source) => ['string', 'number'].includes(getType(source)))
-    registerDomain('json', (source) => JSON.parse(source), (source) => getType(source) === 'object')
-    registerDomain('function', (source) => {
-        return new Function(`return ${source}`)()
-    }, (source) => getType(source) === 'function')
+    registerDomain('user_id', {
+        transform: (source) => {
+            const autoCloseMention = source.match(/^<mention user_id="(\S+)"\/>$/)
+            const twinningMention = source.match(/^<mention user_id="(\S+)"[^>]+?>.*?<\/mention>$/)
+            const matched = autoCloseMention || twinningMention
+            if (!matched) {
+                if (!/^\d+$/.test(source)) throw new Error(`user_id should be number or <mention user_id="string|number"/> or <mention user_id="string|number"></mention>`)
+                return +source
+            }
+            return matched[1].match(/^\d+$/) ? +matched[1] : matched[1]
+        },
+        validate: (value) => ['string', 'number'].includes(getType(value))
+    })
+    registerDomain('json',{
+        transform:(source)=>JSON.parse(source),
+        validate:(value)=>getType(value) === 'object'
+    })
+    registerDomain('function', {
+        transform: (source) => {
+            return new Function(`return ${source}`)()
+        },
+        validate: (value) => getType(value) === 'function'
+    })
 }
