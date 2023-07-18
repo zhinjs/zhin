@@ -61,7 +61,7 @@ export function Element(type: string, ...args: any[]) {
         }
     }
     for (const child of args) {
-        if(child ===null) continue
+        if(child ===null||child===undefined) continue
         children.push(...Element.toElementArray(child))
     }
     return Object.assign(el, {type, attrs, children})
@@ -258,7 +258,7 @@ export namespace Element {
             const result = []
             if (!content.length) return result
             let matched: RegExpMatchArray, closeMatched: RegExpMatchArray;
-            const tagCap = /<([a-z]+)(?:\s+([^>]*))?>((?:.|\n)*?)<\/\1>/g
+            const tagCap = /<([a-z_\-A-Z]+)(?:\s+([^>]*))?>((?:.|\n)*?)<\/\1>/g
             const tagCloseCap = /<([^\s>]+)(.*?)\/>/g
             while ((matched = tagCap.exec(content)) || (closeMatched = tagCloseCap.exec(content))) {
                 if (matched) {

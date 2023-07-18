@@ -121,7 +121,7 @@ export class Bot<K extends keyof Zhin.Adapters = keyof Zhin.Adapters, BO = {}, A
         const calcLen=(message:Element.Fragment)=>{
             return [].concat(message).filter(m => typeof m !== 'object' || m.type === 'text').reduce((r: number, c: Element<'text'>|string|number|boolean) =>{
                 if(typeof c !=="object") r+=String(c).length
-                else r+=(c.attrs.text?.length||0)
+                else r+=(c.attrs.text?.length||String(c.children)?.length||0)
                 return r
             }, 0) as number
         }

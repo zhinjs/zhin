@@ -1,6 +1,6 @@
 import {isBailed, remove, Dict} from "@zhinjs/shared";
 import {Zhin, isConstructor, ChannelId} from "./zhin";
-import {Dispose} from "./dispose";
+import {Dispose, ToDispose} from "./dispose";
 import {Adapter, AdapterConstructs, AdapterOptions, AdapterOptionsType} from "./adapter";
 import {Middleware} from "./middleware";
 import {ArgsType, Command, defineCommand} from "./command";
@@ -8,7 +8,7 @@ import {NSession, Session} from "./session";
 import {Element} from './element'
 import {EventEmitter} from "events";
 import {Plugin, PluginMap} from "@/plugin";
-import {Component} from "./component";
+import {Component, FunctionalComponent} from "./component";
 import {Logger} from "log4js";
 import {Bot} from "./bot";
 export class Context extends EventEmitter {
@@ -330,15 +330,30 @@ export class Context extends EventEmitter {
 
     /**
      * 为当前上下文添加组件
+     * @param component 添加的组件
+     */
+    component<T>(component:FunctionalComponent<T>):ToDispose<this>
+    /**
+     * 为当前上下文添加组件
      * @param name 组件名(需确保唯一性)
      * @param component 添加的组件
-     * @param options 组件配置项，仅在组件为纯函数时有效
      */
-    component(name: string, component: Component) {
+    component(name: string, component: Component): ToDispose<this>
+    component(name: string | FunctionalComponent, component?: Component) {
+        if (typeof name === 'function') {
+            component = {
+                render: name
+            }
+            name = name.name
+        }
         this.components[name] = component
-        return Dispose.from(this, () => {
-            delete this.components[name]
+        if(this.components[name]) this.logger.warn(`组件(${name})已存在，将被覆盖`)
+        const dispose=Dispose.from(this, () => {
+            delete this.components[name as string]
+            remove(this.disposes,dispose)
         })
+        this.disposes.push(dispose)
+        return dispose
     }
 
     /**

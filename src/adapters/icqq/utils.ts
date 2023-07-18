@@ -29,7 +29,7 @@ export function fromElement(elementList: Element[]) {
         const result = {
             type: type.replace('mention', 'at').replace('at_all', 'at'),
             ...attrs,
-            text: Element.unescape(attrs.text||'')
+            text: Element.unescape(attrs.text||children.toString()||'')
         }
         if (allowElement.includes(result.type)) {
             if (attrs['user_id']) result['qq'] = attrs['user_id']
@@ -38,7 +38,7 @@ export function fromElement(elementList: Element[]) {
             if (attrs['text']) result['content'] = attrs['text']
             return result
         }
-        return element.toString()
+        return element.source??element.toString()
     }) as MessageElem[]
 }
 
