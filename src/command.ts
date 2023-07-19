@@ -381,10 +381,15 @@ export namespace Command {
         return str
     }
 
+    /**
+     * 解析参数
+     * @param args 参数数组
+     * @private
+     * @example
+     */
     function joinNestedTags(args: string[]) {
         const result: string[] = []
         const copyArgs = [...args]
-        const isTag = (str: string) => /^<[^>]+>$/.test(str)
         while (copyArgs.length) {
             const arg = copyArgs.shift()
             if (!/^<[^>]+>$/.test(arg)) {

@@ -136,7 +136,12 @@ export namespace Component {
             })
             .component(async function prompt(props: {
                 type?: string
+                options?: string
             }, children) {
+                if(props.options) {
+                    props.options=props.options.startsWith(':')?props.options.slice(1):props.options;
+                    props.options=new Function(`return (${props.options})`)();
+                }
                 return await this.session.prompt[this.type ||= 'text'](children.join(''), props)
             })
             .component(async function random(attrs, children) {
