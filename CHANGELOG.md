@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.3](https://github.com/zhinjs/zhin/compare/v2.3.2...v2.3.3) (2023-07-19)
+
+
+### Bug Fixes
+
+* 修复内置组件prompt错误 ([ce7ae54](https://github.com/zhinjs/zhin/commit/ce7ae543366e4c59c4b44bb8096afc99ab6b0abd))
+
 ## [2.3.2](https://github.com/zhinjs/zhin/compare/v2.3.1...v2.3.2) (2023-07-18)
 
 
