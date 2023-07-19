@@ -527,7 +527,7 @@ export namespace Zhin {
 
         'message'(session: NSession<keyof Adapters>): void
 
-        'message.send'(message: Bot.MessageRet): void
+        'message.send'(self_id:string|number,message: Bot.MessageRet): void
 
         'command-add'(command: Command): void
 

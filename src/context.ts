@@ -346,8 +346,8 @@ export class Context extends EventEmitter {
             }
             name = name.name
         }
-        this.components[name] = component
         if(this.components[name]) this.logger.warn(`组件(${name})已存在，将被覆盖`)
+        this.components[name] = component
         const dispose=Dispose.from(this, () => {
             delete this.components[name as string]
             remove(this.disposes,dispose)
