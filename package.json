@@ -1,6 +1,6 @@
 {
   "name": "zhin",
-  "version": "2.3.3",
+  "version": "2.3.4",
   "description": "知音",
   "main": "lib/index.js",
   "bin": {
