@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.5](https://github.com/zhinjs/zhin/compare/v2.3.4...v2.3.5) (2023-07-19)
+
+
+### Bug Fixes
+
+* 保护更多危险变量 ([a701f1b](https://github.com/zhinjs/zhin/commit/a701f1bf361dda4a854c1adc5ec43bdae5815762))
+
 ## [2.3.4](https://github.com/zhinjs/zhin/compare/v2.3.3...v2.3.4) (2023-07-19)
 
 
