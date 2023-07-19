@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.4](https://github.com/zhinjs/zhin/compare/v2.3.3...v2.3.4) (2023-07-19)
+
+
+### Bug Fixes
+
+* 嵌套标签解析错误 ([0c64975](https://github.com/zhinjs/zhin/commit/0c64975db9ca250fcf1aa16af9b8a4008a8a9068))
+
 ## [2.3.3](https://github.com/zhinjs/zhin/compare/v2.3.2...v2.3.3) (2023-07-19)
 
 
