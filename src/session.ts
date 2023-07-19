@@ -151,6 +151,11 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters, E exte
             zhin: true,
             options: true,
             adapter: true,
+            friend: true,
+            client: true,
+            group: true,
+            member: true,
+            user: true,
             bot: true,
             plugin: true,
             context: true
@@ -160,7 +165,19 @@ export class Session<P extends keyof Zhin.Adapters = keyof Zhin.Adapters, E exte
     toJSON() {
         return Object.fromEntries(
             Object.keys(this).filter(key => {
-                return !['zhin', 'adapter', 'bot'].includes(key) && typeof this[key] !== 'function'
+                return ![
+                    'zhin',
+                    'options',
+                    'adapter',
+                    'friend',
+                    'client',
+                    'group',
+                    'member',
+                    'user',
+                    'bot',
+                    'plugin',
+                    'context',
+                ].includes(key) && typeof this[key] !== 'function'
             }).map(key => [key, this[key]])
         )
     }

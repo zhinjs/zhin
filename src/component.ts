@@ -142,7 +142,7 @@ export namespace Component {
                     props.options=props.options.startsWith(':')?props.options.slice(1):props.options;
                     props.options=new Function(`return (${props.options})`)();
                 }
-                return await this.session.prompt[this.type ||= 'text'](children.join(''), props)
+                return await this.session.prompt[this.type || 'text'](children.join(''), props)
             })
             .component(function random(attrs, children) {
                 return Random.pick(children)
