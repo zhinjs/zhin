@@ -144,7 +144,7 @@ export namespace Component {
                 }
                 return await this.session.prompt[this.type ||= 'text'](children.join(''), props)
             })
-            .component(async function random(attrs, children) {
+            .component(function random(attrs, children) {
                 return Random.pick(children)
             })
             .component(function time(props: {

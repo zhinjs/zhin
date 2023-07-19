@@ -416,19 +416,33 @@ export namespace Command {
 
     export function parseParams(text) {
         const regex = /(".*?"|'.*?'|`.*?`|”.*?“|‘.*?’|<[^>]+?>|\S+)/g;
-        const matches = text.match(regex);
-        if (matches) {
-            return joinNestedTags(matches.reduce((result, match) => {
-                if (/<\/\S+>/.test(match)) {
-                    const [start, end] = match.split('</')
-                    result.push(start, `</${end}`)
-                } else {
-                    result.push(match)
-                }
-                return result
-            }, []));
+        const matcher=(text:string)=>{
+            const matches = text.match(regex);
+            if (matches) {
+                return joinNestedTags(matches.reduce((result, match) => {
+                    if (/<\/\S+>/.test(match)) {
+                        let [start, ...rest] = match.split('</')
+                        result.push(start)
+                        let end=`</${rest.join('</')}`
+                        // 继续匹配是否有嵌套标签
+                        const endTag=end.split('>')[0]+'>'
+                        end=end.slice(endTag.length)
+                        result.push(endTag)
+                        const nestedMatches = end.match(regex)
+                        if (nestedMatches) {
+                            result.push(...matcher(nestedMatches.join(' ')))
+                        }else{
+                            result.push(end)
+                        }
+                    } else {
+                        result.push(match)
+                    }
+                    return result.filter(Boolean)
+                }, []));
+            }
+            return [];
         }
-        return [];
+        return matcher(text)
     }
 
     export interface Config {
