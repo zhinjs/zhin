@@ -1,4 +1,6 @@
 /zhin.yaml
+lib/
+/docs/.vitepress/dist/
 /src/test/*
 /node_modules/
 /package-lock.json
