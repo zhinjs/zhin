@@ -22,13 +22,13 @@ touch index.js
 ```
 完成创建后，插件目录大体如下：
 ::: code-group
-```text [手动创建]
+```txt [手动创建]
 plugins/
 └─ repeater/                 test 插件
    ├─ index.js           程序主入口
    └─ package.json       包管理文件 (可选)
 ```
-```text [cli创建]
+```txt [cli创建]
 plugins/
 └─ repeater/                 test 插件
    └─ src/                 资源目录 插件
