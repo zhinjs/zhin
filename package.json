@@ -17,7 +17,7 @@
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
     "lint": "prettier --check ./**/*.{ts,js,vue}",
-    "lint:fix": "prettier --write ./**/*.{ts,js,vue}",
+    "lint:fix": "prettier --write ./**/*.{ts,js,vue,md}",
     "pub": "npm publish --access public",
     "deploy:docs": "bash dosc.sh"
   },
