@@ -44,13 +44,13 @@ zhin new test -t # 此处test为插件名, -t选项表示使用ts进行开发, �
 2. 如果你想使用setup语法开发，则必须添加package.json文件，并在内容中添加`"setup": true`字段，否则zhin将会以普通插件的方式进行加载。
 - 完成创建后，插件目录大体如下：
 ::: code-group
-```txt [javascript]
+```txt [JavaScript/JS]
 plugins/
 └─ test/                 test 插件
    └─ index.js           程序主入口
    └─ package.json       包管理文件 (可选)
 ```
-```txt [typescript]
+```txt [TypeScript/TS]
 plugins/
 └─ test/                 test 插件
    ├─ src/               资源目录 插件

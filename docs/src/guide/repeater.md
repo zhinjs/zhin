@@ -28,7 +28,7 @@ plugins/
    ├─ index.js           程序主入口
    └─ package.json       包管理文件 (可选)
 ```
-```txt [cli创建]
+```txt [通过 cli 创建]
 plugins/
 └─ repeater/                 test 插件
    └─ src/                 资源目录 插件
