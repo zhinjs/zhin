@@ -24,9 +24,9 @@ export abstract class Adapter<K extends keyof Zhin.Adapters=keyof Zhin.Adapters,
         this.bots=new BotList()
         this.logger=zhin.getLogger(protocol)
         this.zhin.on('start',()=>this.start())
-        this.on('message.receive',(session:NSession<K>)=>{
-            this.zhin.logger.info(`【${this.protocol}:${session.bot.self_id}】received\t：message_id(${session.message_id})`)
-            this.botStatus(session.bot.self_id).recv_msg_cnt++
+        this.on('message.receive',(self_id:string|number,session:NSession<K>)=>{
+            this.zhin.logger.info(`【${this.protocol}:${self_id}】 ↓ ${session.message_id}：${session.content}`)
+            this.botStatus(self_id).recv_msg_cnt++
         })
         this.on('bot.online',(bot_id)=>{
             this.botStatus(bot_id).online=true
@@ -38,6 +38,10 @@ export abstract class Adapter<K extends keyof Zhin.Adapters=keyof Zhin.Adapters,
             this.zhin.logger.info(`【${this.protocol}:${bot_id}】已掉线`)
             this.zhin.emit(`bot.offline`,this.protocol,bot_id)
         })
+        this.on('bot.error',(bot_id,error)=>{
+            this.zhin.logger.error(`【${this.protocol}:${bot_id}】`,error)
+            this.zhin.emit(`bot.error`,this.protocol,bot_id,error)
+        })
         this.on('message.send',(bot_id:string|number,message:Bot.MessageRet)=>{
             let cache=this._cache.get(String(bot_id))
             if(!cache) this._cache.set(String(bot_id),cache=new Map<number, Set<string>>())
@@ -46,7 +50,7 @@ export abstract class Adapter<K extends keyof Zhin.Adapters=keyof Zhin.Adapters,
             if(!set) cache.set(time,set=new Set())
             set.add(message.message_id)
             this.botStatus(bot_id).sent_msg_cnt++
-            this.zhin.logger.info(`【${this.protocol}:${bot_id}】send\t：message_id(${message.message_id})`)
+            this.zhin.logger.info(`【${this.protocol}:${bot_id}】 ↑ ${message.message_id}：${message.content}`)
             this.zhin.emit('message.send',message)
         })
     }

@@ -708,6 +708,7 @@ export function createWorker(options: Zhin.WorkerOptions) {
             '-r', 'esbuild-register',
             '-r', 'tsconfig-paths/register',
         ],
+        stdio:"inherit"
     }
     cp = fork(path.join(__dirname, '../worker.js'), [], forkOptions)
     cp.stdout?.on('data', data => process.stdout.push(data));

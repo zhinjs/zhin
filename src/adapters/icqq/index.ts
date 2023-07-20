@@ -71,6 +71,9 @@ export class IcqqBot extends Bot<'icqq', IcqqBotOptions, {}, Client> {
         this.internal.on('system.offline',()=>{
             this.adapter.emit('bot.offline',this.self_id)
         })
+        this.internal.on('system.login.error',(msg)=>{
+            this.adapter.emit('bot.error',this.self_id,msg)
+        })
     }
 
     async sendMsg(target_id:string|number,target_type:Bot.MessageType,message:Element.Fragment):Promise<Bot.MessageRet>{
