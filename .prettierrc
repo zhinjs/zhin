@@ -1,11 +1,16 @@
 {
-    "useTabs": true,
+    "useTabs": false,
     "tabWidth": 4,
     "bracketSpacing": true,
     "semi": true,
     "quoteProps": "preserve",
     "bracketSameLine": true,
     "arrowParens": "avoid",
-    "requirePragma": true,
-    "proseWrap": "always"
+    "proseWrap": "always",
+    "overrides": [
+        {
+            "files": "*.md",
+            "options": { "tabWidth": 2 }
+        }
+    ]
 }
