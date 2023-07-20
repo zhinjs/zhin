@@ -27,5 +27,6 @@ features:
   - title: 热更
     details: 知音内置热更插件，让开发者在开发时避免频繁重启进程，从而降低账号风险概率
   - title: 拥抱 icqq
-    details: 知音内置了 icqq 适配器（Zhin 作者维护的 oicq 分支），快速对接 QQ 平台
+    details:
+      知音内置了 icqq 适配器（Zhin 作者维护的 oicq 分支），快速对接 QQ 平台
 ---

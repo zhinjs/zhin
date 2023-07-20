@@ -1,4 +1,5 @@
 # 核心模块
+
 ## [知音(Zhin)](/api/zhin)
 
 - 框架的统筹管理者，[适配器](#适配器--adapter-)、[服务](#服务--service-)的载体
@@ -20,7 +21,8 @@
 
 ## [上下文(Context)](/api/context)
 
-- [中间件](#中间件--middleware-)、[指令](#指令--command-)、[组件](#组件--component-)的载体
+- [中间件](#中间件--middleware-)、[指令](#指令--command-)、[组件](#组件--component-)的
+  载体
 
 ## [插件(Plugin)](/api/plugin)
 
@@ -31,7 +33,8 @@
 
 ## [服务(Service)](/api/service)
 
-- 为[知音](#知音--zhin-)添加的**任何**[上下文](#上下文--context-)都可以访问的属性
+- 为[知音](#知音--zhin-)添加的**任何**[上下文](#上下文--context-)都可以访问的属
+  性
 
 ## [指令(Command)](/api/command)
 

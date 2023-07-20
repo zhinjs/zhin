@@ -1,8 +1,7 @@
 # 安装 Zhin 机器人
 
-::: tip
-阅读本节前，请确认你已正确配置 [Node.js](https://nodejs.org/zh-cn) 环境。
-:::
+::: tip阅读本节前，请确认你已正确配置 [Node.js](https://nodejs.org/zh-cn) 环
+境。:::
 
 ## 创建项目（三选一）
 
@@ -18,6 +17,7 @@ zhin init zhin-bot # `zhin-bot` 为你需要创建的项目名
 # 安装依赖
 cd zhin-bot && npm install
 ```
+
 ### 2. 通过 npm 指令创建
 
 ```shell
@@ -27,15 +27,14 @@ npm init zhin
 
 ### 3. 通过模板仓库创建
 
-::: tip
-此方式需要你：
+::: tip此方式需要你：
 
 - 能自行解决国内 GitHub 访问受限的问题
 - 有自己的 GitHub 账号
-- 电脑已安装 `Git` 代码版本管理工具
-:::
+- 电脑已安装 `Git` 代码版本管理工具 :::
 
-1. 前往[模板仓库](https://github.com/zhinjs/boilerplate)，点击 `Use this template` 按钮创建一个新的仓库
+1. 前往[模板仓库](https://github.com/zhinjs/boilerplate)，点击
+   `Use this template` 按钮创建一个新的仓库
 
 2. 使用 `git` 命令拉取 GitHub 仓库的代码到本地，并安装依赖
 
@@ -46,6 +45,7 @@ git clone https://gitbub.com/[你的github用户名]/[仓库名].git
 # 安装依赖
 cd [仓库名] && npm install
 ```
+
 ## 项目结构
 
 构建完成后，我们可在项目文件夹下看到如下结构
@@ -60,21 +60,20 @@ cd [仓库名] && npm install
 └─ package-lock.json  项目依赖描述文件(npm自动生成，开发者无需关心)
 ```
 
-::: tip
-`node_modules`、`package.json` 等都是由 npm 生成的，**仅开发者**需要了解，可参考 [插件开发](/plugin/start) 一节。
-:::
-
+::: tip `node_modules`、`package.json` 等都是由 npm 生成的，**仅开发者**需要了
+解，可参考 [插件开发](/plugin/start) 一节。:::
 
 ## 添加第一个 Bot
 
 默认情况下，Zhin 没有任何机器人账号，我们需要手动配置后，才能正常使用。
 
-如果你是使用 cli 创建的， Zhin 已经引导你完成了第一个账号的配置，可以跳过当前步骤。
+如果你是使用 cli 创建的， Zhin 已经引导你完成了第一个账号的配置，可以跳过当前步
+骤。
 
 打开配置文件 `zhin.yaml`，并增加你的机器人信息。
 
 ```yaml
-adapters: 
+adapters:
   icqq: # 指定使用 icqq 适配器
     bots: [] // [!code --]
     bots: // [!code ++]
@@ -99,9 +98,8 @@ data_dir: data
 delay:
   prompt: 60000
 ```
-:::tip
-有关 Zhin 的详细配置说明，请前往 [配置](/config/common) 章节。
-:::
+
+:::tip 有关 Zhin 的详细配置说明，请前往 [配置](/config/common) 章节。:::
 
 ## 启动
 
