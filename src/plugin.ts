@@ -94,11 +94,7 @@ export class Plugin {
         }
         const parent = this.context.parent;
         this.unmount();
-        const newPlugin = parent.zhin.load(
-            this.options.fullPath,
-            "plugin",
-            this.options.setup,
-        );
+        const newPlugin = parent.zhin.load(this.options.fullPath, "plugin", this.options.setup);
         parent.plugin(newPlugin);
         parent.logger.info(`已重载插件:${newPlugin.name}`);
     }
@@ -106,11 +102,7 @@ export class Plugin {
     private initDependencies(filePath: string) {
         if (!require.cache[filePath]) return [];
         return [filePath]
-            .concat(
-                (require.cache[filePath].children || []).map(
-                    mod => mod.filename,
-                ),
-            )
+            .concat((require.cache[filePath].children || []).map(mod => mod.filename))
             .filter(filePath => {
                 return (
                     !filePath.includes("node_modules") &&
@@ -135,9 +127,7 @@ export class Plugin {
     enable<P extends keyof Zhin.Adapters>(bot: Zhin.Bots[P]): this;
     enable<P extends keyof Zhin.Adapters>(bot?: Zhin.Bots[P]): boolean | this {
         if (!bot) return (this.status = true);
-        if (
-            !this.disableBots.includes(`${bot.adapter.protocol}:${bot.self_id}`)
-        ) {
+        if (!this.disableBots.includes(`${bot.adapter.protocol}:${bot.self_id}`)) {
             this.context?.logger.warn(`插件未被禁用:${this.name}`);
             return this;
         }
@@ -151,9 +141,7 @@ export class Plugin {
     disable<P extends keyof Zhin.Adapters>(bot: Zhin.Bots[P]): this;
     disable<P extends keyof Zhin.Adapters>(bot?: Zhin.Bots[P]): boolean | this {
         if (!bot) return (this.status = false);
-        if (
-            this.disableBots.includes(`${bot.adapter.protocol}:${bot.self_id}`)
-        ) {
+        if (this.disableBots.includes(`${bot.adapter.protocol}:${bot.self_id}`)) {
             this.context?.logger.warn(`重复禁用插件:${this.name}`);
             return this;
         }
@@ -182,9 +170,7 @@ export namespace Plugin {
             ? {
                   ...baseOption,
                   name: options.name || "anonymousPlugin",
-                  fullName: `${
-                      options.name || "anonymousPlugin"
-                  }:${Date.now()}`,
+                  fullName: `${options.name || "anonymousPlugin"}:${Date.now()}`,
                   anonymous: options.prototype === undefined,
                   functional: true,
                   install: options,

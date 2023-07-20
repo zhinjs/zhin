@@ -21,9 +21,7 @@ export function defineComponent<
     P extends Component.ComponentPropsOptions,
     D,
     M extends Component.MethodOptions = {},
->(
-    options: DefineComponent<P, D, M> | FunctionalComponent,
-): DefineComponent<P, D, M> {
+>(options: DefineComponent<P, D, M> | FunctionalComponent): DefineComponent<P, D, M> {
     if (typeof options === "function")
         options = {
             render: options,
@@ -51,9 +49,7 @@ export namespace Component {
           }
         | PropMethod<T>;
 
-    type PropMethod<T, TConstructor = any> = [T] extends [
-        ((...args: any) => any) | undefined,
-    ]
+    type PropMethod<T, TConstructor = any> = [T] extends [((...args: any) => any) | undefined]
         ? {
               new (): TConstructor;
               (): T;
@@ -63,9 +59,7 @@ export namespace Component {
 
     export type PropType<T> = PropConstructor<T> | PropConstructor<T>[];
     export type Prop<T> = PropType<T>;
-    export type ComponentPropsOptions<P = Data> =
-        | ObjectPropsOptions<P>
-        | string[];
+    export type ComponentPropsOptions<P = Data> = ObjectPropsOptions<P> | string[];
 
     export interface MethodOptions {
         [key: string]: Function;
@@ -145,11 +139,7 @@ export namespace Component {
         methods?: M;
     }
 
-    export type Runtime<
-        P = {},
-        D = {},
-        M extends MethodOptions = {},
-    > = RuntimeContext<M> & D & P;
+    export type Runtime<P = {}, D = {}, M extends MethodOptions = {}> = RuntimeContext<M> & D & P;
 
     export declare type RuntimeContext<M extends MethodOptions = {}> = {
         session: Session;
@@ -182,9 +172,7 @@ export namespace Component {
             return await this.session.render(children, this);
         })
             .component(async function execute(attrs, children) {
-                const template = (
-                    await this.session.render(children, this)
-                ).join("");
+                const template = (await this.session.render(children, this)).join("");
                 return this.session.execute(template);
             })
             .component(async function forward(
@@ -197,9 +185,7 @@ export namespace Component {
                 return h("node", {
                     user_id: attrs.user_id || this.session.user_id,
                     user_name: attrs.user_name || this.session.user_name,
-                    children: Element.toElementArray(
-                        await this.session.render(children, this),
-                    ),
+                    children: Element.toElementArray(await this.session.render(children, this)),
                 });
             })
             .component(async function prompt(
@@ -215,23 +201,14 @@ export namespace Component {
                         : props.options;
                     props.options = new Function(`return (${props.options})`)();
                 }
-                return await this.session.prompt[this.type || "text"](
-                    children.join(""),
-                    props,
-                );
+                return await this.session.prompt[this.type || "text"](children.join(""), props);
             })
             .component(function random(attrs, children) {
                 return Random.pick(children);
             })
-            .component(function time(props: {
-                value?: number;
-                format?: string;
-            }) {
+            .component(function time(props: { value?: number; format?: string }) {
                 let ms = props.value || Date.now();
-                return Time.template(
-                    props.format || "yyyy-MM-dd hh:mm:ss",
-                    new Date(ms),
-                );
+                return Time.template(props.format || "yyyy-MM-dd hh:mm:ss", new Date(ms));
             });
     }
 }

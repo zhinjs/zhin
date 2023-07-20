@@ -43,9 +43,7 @@ export class Router extends KoaRouter {
 
         this.server!.on("upgrade", (request, socket, head) => {
             const { pathname } = parse(request.url);
-            if (
-                this.wsStack.findIndex(wss => wss.options.path === path) === -1
-            ) {
+            if (this.wsStack.findIndex(wss => wss.options.path === path) === -1) {
                 socket.destroy();
             } else if (pathname === path) {
                 wsServer.handleUpgrade(request, socket, head, ws => {

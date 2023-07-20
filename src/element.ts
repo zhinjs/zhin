@@ -1,10 +1,4 @@
-import {
-    evaluate,
-    isNullable,
-    makeArray,
-    Awaitable,
-    Dict,
-} from "@zhinjs/shared";
+import { evaluate, isNullable, makeArray, Awaitable, Dict } from "@zhinjs/shared";
 import { Component } from "@/component";
 import { Session } from "@/session";
 
@@ -30,9 +24,7 @@ class ElementConstructor {
 
     toString(strip = false) {
         if (this.type === "text") return Element.escape(this.attrs.text || "");
-        const inner = this.children
-            .map(child => child.toString(strip))
-            .join("");
+        const inner = this.children.map(child => child.toString(strip)).join("");
         if (strip) return inner;
         let attrs = Object.entries(this.attrs)
             .map(([key, value]) => {
@@ -41,8 +33,7 @@ class ElementConstructor {
                 if (value === false) return ` no-${key}`;
                 if (value instanceof Buffer)
                     return ` ${key}='base64://${value.toString("base64")}'`;
-                if (typeof value === "object")
-                    return ` ${key}='${JSON.stringify(value)}'`;
+                if (typeof value === "object") return ` ${key}='${JSON.stringify(value)}'`;
                 return ` ${key}='${Element.escape("" + value)}'`;
             })
             .join("");
@@ -58,10 +49,7 @@ type ArrayToString<T extends any[]> = T extends [infer A, ...infer B]
         ? `${ToString<A>}${ArrayToString<B>}`
         : ""
     : "";
-export type ToString<
-    E extends Element,
-    C extends any[] = [],
-> = E extends Element<infer T, infer A>
+export type ToString<E extends Element, C extends any[] = []> = E extends Element<infer T, infer A>
     ? C extends Element.Children<T>
         ? `<${T} ${Stringify<A>}>${ArrayToString<C>}</${T}>`
         : `<${T} ${Stringify<A>}/>`
@@ -118,13 +106,10 @@ export namespace Element {
     }
 
     export type Children<T extends keyof Element.BaseChildren | string> =
-        T extends keyof Element.BaseChildren
-            ? Element.BaseChildren[T]
-            : Element[];
-    export type Attrs<T extends Element.BaseType | string> =
-        T extends Element.BaseType
-            ? Element.BaseAttrs[T] & Record<string, any>
-            : Record<string, any>;
+        T extends keyof Element.BaseChildren ? Element.BaseChildren[T] : Element[];
+    export type Attrs<T extends Element.BaseType | string> = T extends Element.BaseType
+        ? Element.BaseAttrs[T] & Record<string, any>
+        : Record<string, any>;
 
     function toElement(content: Element.Fragment) {
         if (Element.isElement(content)) {
@@ -198,9 +183,7 @@ export namespace Element {
             .replace(/&lt;/g, "<")
             .replace(/&gt;/g, ">")
             .replace(/&quot;/g, '"')
-            .replace(/&#(\d+);/g, (_, code) =>
-                code === "38" ? _ : String.fromCharCode(+code),
-            )
+            .replace(/&#(\d+);/g, (_, code) => (code === "38" ? _ : String.fromCharCode(+code)))
             .replace(/&#x([0-9a-f]+);/gi, (_, code) =>
                 code === "26" ? _ : String.fromCharCode(parseInt(code, 16)),
             );
@@ -248,10 +231,7 @@ export namespace Element {
         });
     }
 
-    export function select(
-        source: string | Element[],
-        query: string | Selector[][],
-    ): Element[] {
+    export function select(source: string | Element[], query: string | Selector[][]): Element[] {
         if (typeof source === "string") source = parse(source);
         if (typeof query === "string") query = parseSelector(query);
         if (!query.length) return;
@@ -286,16 +266,12 @@ export namespace Element {
     }
 
     export function parse<S>(source: string, context?: S) {
-        source = source.replace(
-            /<>([^<>]*)<\/>/g,
-            (s, a) => `<template>${a}</template>`,
-        );
+        source = source.replace(/<>([^<>]*)<\/>/g, (s, a) => `<template>${a}</template>`);
 
         function fixAttr(attrString: string, element: Element) {
             const attrs = (element.attrs ||= {});
             // 匹配出所有属性，包含不带值的属性
-            const attrRegExp =
-                /(?:([^\s=]+)(?:="([^"]*)"|='([^']*)')?|([^\s=]+))\s*/g;
+            const attrRegExp = /(?:([^\s=]+)(?:="([^"]*)"|='([^']*)')?|([^\s=]+))\s*/g;
             attrString.replace(attrRegExp, (s, key, value1, value2) => {
                 attrs[key] = value1 || value2 || "";
                 if (!attrs[key]) {
@@ -335,20 +311,14 @@ export namespace Element {
             let matched: RegExpMatchArray, closeMatched: RegExpMatchArray;
             const tagCap = /<([a-z_\-A-Z]+)(?:\s+([^>]*))?>((?:.|\n)*?)<\/\1>/g;
             const tagCloseCap = /<([^\s>]+)(.*?)\/>/g;
-            while (
-                (matched = tagCap.exec(content)) ||
-                (closeMatched = tagCloseCap.exec(content))
-            ) {
+            while ((matched = tagCap.exec(content)) || (closeMatched = tagCloseCap.exec(content))) {
                 if (matched) {
                     if (matched.index !== 0) {
                         let source = content.substring(0, matched.index);
                         while (source.match(tagCloseCap)) {
                             closeMatched = tagCloseCap.exec(source);
                             if (closeMatched.index !== 0) {
-                                let source2 = source.substring(
-                                    0,
-                                    closeMatched.index,
-                                );
+                                let source2 = source.substring(0, closeMatched.index);
                                 source = source.replace(source2, "");
                                 const element = Element("text", {
                                     text: source2,
@@ -358,19 +328,13 @@ export namespace Element {
                                 result.push(element);
                             }
                             const [source2, type, attrString] = closeMatched;
-                            source = source.substring(
-                                source2.length,
-                                source.length,
-                            );
+                            source = source.substring(source2.length, source.length);
                             const element = Element(type, {});
                             element.source = source2;
                             fixAttr(attrString, element);
                             result.push(element);
                         }
-                        content = content.substring(
-                            matched.index,
-                            content.length,
-                        );
+                        content = content.substring(matched.index, content.length);
                         const element = Element("text", {
                             text: source,
                         });
@@ -378,8 +342,7 @@ export namespace Element {
                         fixAttr("", element);
                         result.push(element);
                     }
-                    const [source, type, attrString = "", children = ""] =
-                        matched;
+                    const [source, type, attrString = "", children = ""] = matched;
                     content = content.replace(source, "");
                     const element = Element(type, {}, ...analyzeHtml(children));
                     element.source = source;
@@ -455,16 +418,13 @@ export namespace Element {
                         result = expr;
                     }
                 }
-                const replacer =
-                    result === `return(${expr})` ? `{{${expr}}}` : result;
+                const replacer = result === `return(${expr})` ? `{{${expr}}}` : result;
                 e.attrs.text = e.attrs.text.replace(`{{${expr}}}`, replacer);
-                exprRegExp.lastIndex =
-                    e.attrs.text.indexOf(replacer) + replacer.length;
+                exprRegExp.lastIndex = e.attrs.text.indexOf(replacer) + replacer.length;
             }
         }
         for (const key in attrs) {
-            if (typeof attrs[key] !== "string" || !attrs[key].startsWith(":"))
-                continue;
+            if (typeof attrs[key] !== "string" || !attrs[key].startsWith(":")) continue;
             const val: string = attrs[key].replace(":", "");
             let result = val.match(/^process\./) ? val : evaluate(val, runtime);
             if (typeof result !== "string") {
@@ -492,24 +452,17 @@ export namespace Element {
     ) {
         const elements = []
             .concat(source)
-            .reduce(
-                (
-                    result: Element[],
-                    item: string | boolean | number | Element,
-                ) => {
-                    if (Element.isElement(item)) result.push(item);
-                    else {
-                        result.push(...parse(item + "", session));
-                    }
-                    return result;
-                },
-                [] as Element[],
-            );
+            .reduce((result: Element[], item: string | boolean | number | Element) => {
+                if (Element.isElement(item)) result.push(item);
+                else {
+                    result.push(...parse(item + "", session));
+                }
+                return result;
+            }, [] as Element[]);
         const output: Fragment[] = [];
         elements.forEach(element => {
             const { type, attrs = {}, when, loop } = element;
-            let component: Component | Fragment =
-                rules[type] ?? rules.default ?? true;
+            let component: Component | Fragment = rules[type] ?? rules.default ?? true;
             if (
                 typeof component !== "boolean" &&
                 typeof component === "object" &&
@@ -548,12 +501,7 @@ export namespace Element {
                 }
             } else if (component !== false) {
                 output.push(
-                    ...render(
-                        toElementArray(component as Fragment),
-                        rules,
-                        session,
-                        runtime,
-                    ),
+                    ...render(toElementArray(component as Fragment), rules, session, runtime),
                 );
             }
         });
@@ -569,24 +517,17 @@ export namespace Element {
         if (!runtime) runtime = { session: this as any };
         const elements: Element[] = []
             .concat(source)
-            .reduce(
-                (
-                    result: Element[],
-                    item: string | boolean | number | Element,
-                ) => {
-                    if (Element.isElement(item)) result.push(item);
-                    else {
-                        result.push(...parse(item + "", this));
-                    }
-                    return result;
-                },
-                [] as Element[],
-            );
+            .reduce((result: Element[], item: string | boolean | number | Element) => {
+                if (Element.isElement(item)) result.push(item);
+                else {
+                    result.push(...parse(item + "", this));
+                }
+                return result;
+            }, [] as Element[]);
         const result: Element[] = [];
         for (const element of elements) {
             const { type, attrs = {}, loop, when } = element;
-            let component: Component | Fragment =
-                rules[type] ?? rules.default ?? true;
+            let component: Component | Fragment = rules[type] ?? rules.default ?? true;
             if (
                 typeof component !== "boolean" &&
                 typeof component === "object" &&
@@ -600,11 +541,7 @@ export namespace Element {
                         "element,transform,render,runtime",
                         `const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{...transform(element,runtime),${name}:runtime.${value}[${name}]});with (runtime) {RESULT.push(render.apply(runtime,[element.attrs,element.children]));};};return RESULT;`,
                     );
-                    component = (
-                        await Promise.all(
-                            fn(element, transform, render, runtime),
-                        )
-                    ).flat();
+                    component = (await Promise.all(fn(element, transform, render, runtime))).flat();
                 } else {
                     if (when && !evaluate(when, runtime)) continue;
                     Object.assign(runtime, transform(element, runtime));

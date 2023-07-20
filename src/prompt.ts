@@ -19,9 +19,7 @@ export class Prompt {
      * 发起一个询问会话，等待用户回复
      * @param options {Prompt.Option} 询问配置
      */
-    async prompts<O extends Prompt.Options>(
-        options: O,
-    ): Promise<Prompt.ResultS<O>> {
+    async prompts<O extends Prompt.Options>(options: O): Promise<Prompt.ResultS<O>> {
         let result: Prompt.ResultS<O> = {} as Prompt.ResultS<O>;
         const names = Object.keys(options);
         for (const name of names) {
@@ -119,10 +117,7 @@ export class Prompt {
     number(
         message: Element.Fragment = "请输入数值",
         initial = 0,
-        options: Omit<
-            Prompt.NumberOptions,
-            "type" | "message" | "initial"
-        > = {},
+        options: Omit<Prompt.NumberOptions, "type" | "message" | "initial"> = {},
     ) {
         return this.$prompt({
             type: "number",
@@ -164,10 +159,7 @@ export class Prompt {
     regexp(
         message: Element.Fragment = "请输入正则",
         initial = /.+/,
-        options: Omit<
-            Prompt.RegexpOptions,
-            "type" | "message" | "initial"
-        > = {},
+        options: Omit<Prompt.RegexpOptions, "type" | "message" | "initial"> = {},
     ) {
         return this.$prompt({
             type: "regexp",
@@ -188,10 +180,7 @@ export class Prompt {
     confirm(
         message: Element.Fragment = "确认么？",
         initial: boolean = false,
-        options: Omit<
-            Prompt.ConfirmOptions,
-            "type" | "message" | "initial"
-        > = {},
+        options: Omit<Prompt.ConfirmOptions, "type" | "message" | "initial"> = {},
     ) {
         return this.$prompt({
             type: "confirm",
@@ -234,10 +223,7 @@ export class Prompt {
             initial: option.initial || [],
             child_type: option.child_type,
             format(event) {
-                return Prompt.transforms["list"][option.child_type](
-                    event,
-                    option.separator || ",",
-                );
+                return Prompt.transforms["list"][option.child_type](event, option.separator || ",");
             },
             ...option,
         });
@@ -268,9 +254,7 @@ export class Prompt {
                     return `${index + 1}:${option.label}`;
                 })
                 .join("\n")}${
-                option.multiple
-                    ? `\n选项之间使用'${option.separator || ","}'分隔`
-                    : ""
+                option.multiple ? `\n选项之间使用'${option.separator || ","}'分隔` : ""
             }`,
             format: event => {
                 const choiceArr = event.content.split(",").map(Number);
@@ -300,24 +284,16 @@ export namespace Prompt {
         select: Select<T, M>;
     }
 
-    export interface Types<
-        CT extends keyof BaseTypes = keyof BaseTypes,
-        M extends boolean = false,
-    > extends BaseTypes,
+    export interface Types<CT extends keyof BaseTypes = keyof BaseTypes, M extends boolean = false>
+        extends BaseTypes,
             QuoteTypes<CT, M> {}
 
     export type Result<
         T extends keyof Types,
         CT extends keyof BaseTypes,
         M extends boolean,
-    > = T extends "select"
-        ? Select<CT, M>
-        : T extends "list"
-        ? Array<BaseTypes[CT]>
-        : Types[T];
-    export type List<T extends keyof BaseTypes = keyof BaseTypes> = Array<
-        BaseTypes[T]
-    >;
+    > = T extends "select" ? Select<CT, M> : T extends "list" ? Array<BaseTypes[CT]> : Types[T];
+    export type List<T extends keyof BaseTypes = keyof BaseTypes> = Array<BaseTypes[T]>;
     export type Select<
         T extends keyof BaseTypes = keyof BaseTypes,
         M extends boolean = false,
@@ -358,10 +334,11 @@ export namespace Prompt {
     export type DateOptions = Option<"date", never>;
     export type RegexpOptions = Option<"regexp", never>;
     export type ListOptions<T extends keyof BaseTypes> = Option<"list", T>;
-    export type SelectOptions<
-        T extends keyof BaseTypes,
-        M extends boolean,
-    > = Option<"select", T, M>;
+    export type SelectOptions<T extends keyof BaseTypes, M extends boolean> = Option<
+        "select",
+        T,
+        M
+    >;
 
     export interface Options {
         [key: string]: Option;
@@ -434,9 +411,7 @@ export namespace Prompt {
     defineTransform("confirm", session => {
         const matchedArr = /^[^<]*$/.exec(session.content);
         if (!matchedArr) throw new Error("type Error");
-        return ["yes", "y", "Yes", "YES", "Y", ".", "。", "确认"].includes(
-            matchedArr[0],
-        );
+        return ["yes", "y", "Yes", "YES", "Y", ".", "。", "确认"].includes(matchedArr[0]);
     });
     defineTransform("regexp", session => {
         const matchedArr = /^[^<]*$/.exec(session.content);

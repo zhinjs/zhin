@@ -7,8 +7,11 @@ import { Prompt } from "./prompt";
 import { Context } from "@/context";
 import { Component } from "@/component";
 
-export type FunctionPayloadWithSessionObj<E extends (...args: any[]) => any> =
-    E extends (...args: infer R) => any ? ParametersToObj<R> : unknown;
+export type FunctionPayloadWithSessionObj<E extends (...args: any[]) => any> = E extends (
+    ...args: infer R
+) => any
+    ? ParametersToObj<R>
+    : unknown;
 export type ParametersToObj<A extends any[]> = A extends [infer R, ...infer L]
     ? R extends object
         ? Partial<R> & {
@@ -73,11 +76,7 @@ export class Session<
         this.event = event;
         this.bot = adapter.bots.get(self_id) as any;
         Object.assign(this, obj);
-        this.prompt = new Prompt(
-            this.bot,
-            this as any,
-            this.zhin.options.delay.prompt,
-        );
+        this.prompt = new Prompt(this.bot, this as any, this.zhin.options.delay.prompt);
     }
 
     get client() {
@@ -87,8 +86,7 @@ export class Session<
     middleware(middleware: Middleware) {
         const fullId = Bot.getFullTargetId(this as any);
         return this.zhin.middleware(async (session, next) => {
-            if (fullId && Bot.getFullTargetId(session) !== fullId)
-                return next();
+            if (fullId && Bot.getFullTargetId(session) !== fullId) return next();
             return middleware(session, next);
         }, true);
     }
@@ -106,26 +104,17 @@ export class Session<
      */
     intercept(
         tip: Element.Fragment,
-        runFunc: (
-            session: NSession<keyof Zhin.Adapters>,
-        ) => Element.Fragment | void,
-        free:
-            | Element.Fragment
-            | ((session: NSession<keyof Zhin.Adapters>) => boolean),
+        runFunc: (session: NSession<keyof Zhin.Adapters>) => Element.Fragment | void,
+        free: Element.Fragment | ((session: NSession<keyof Zhin.Adapters>) => boolean),
         filter?: (session: NSession<keyof Zhin.Adapters>) => boolean,
     ) {
         if (!filter)
-            filter = session =>
-                Bot.getFullTargetId(session) ===
-                Bot.getFullTargetId(this as any);
+            filter = session => Bot.getFullTargetId(session) === Bot.getFullTargetId(this as any);
         this.reply(tip);
         const needFree = session =>
             typeof free === "function"
                 ? free(session)
-                : deepEqual(
-                      session.content,
-                      Element.toElementArray(free).join(""),
-                  );
+                : deepEqual(session.content, Element.toElementArray(free).join(""));
         return new Promise<void>(resolve => {
             const dispose = this.zhin.middleware(async (session, next) => {
                 if (!filter(session)) return next();
@@ -176,14 +165,9 @@ export class Session<
         // 处理前缀
         let result = this.content || "";
         // 有配置前缀，但是消息不是以前缀开头
-        if (
-            this.bot.options.prefix &&
-            !result.startsWith(this.bot.options.prefix)
-        )
-            return "";
+        if (this.bot.options.prefix && !result.startsWith(this.bot.options.prefix)) return "";
         // 有配置前缀且消息以前缀开头，去掉前缀
-        if (this.bot.options.prefix)
-            result = result.slice(this.bot.options.prefix.length);
+        if (this.bot.options.prefix) result = result.slice(this.bot.options.prefix.length);
         return result;
     }
 
@@ -205,11 +189,7 @@ export class Session<
                 session: this as any,
             }) as T;
         const components = this.zhin.getSupportComponents(this as NSession<P>);
-        return await Element.renderAsync.apply(this, [
-            template,
-            components,
-            context,
-        ]);
+        return await Element.renderAsync.apply(this, [template, components, context]);
     }
 
     get [Symbol.unscopables]() {
@@ -253,22 +233,13 @@ export class Session<
     }
 
     async reply(message: Element.Fragment) {
-        return this.bot.reply(
-            this as any,
-            message,
-            this.bot.options.quote_self,
-        );
+        return this.bot.reply(this as any, message, this.bot.options.quote_self);
     }
 }
 
 export namespace Session {
-    export const checkProp = <K extends keyof Session>(
-        key: K,
-        ...values: Session[K][]
-    ) => {
+    export const checkProp = <K extends keyof Session>(key: K, ...values: Session[K][]) => {
         return ((session: Session) =>
-            values.length
-                ? values.includes(session[key])
-                : !!session[key]) as Context.Filter;
+            values.length ? values.includes(session[key]) : !!session[key]) as Context.Filter;
     };
 }

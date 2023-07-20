@@ -11,20 +11,19 @@ interface AdapterConstruct<
     BO extends BotOptions = BotOptions,
     AO = {},
 > {
-    new (
-        zhin: Zhin,
-        protocol: K,
-        options: AdapterOptions<BO, AO>,
-    ): Zhin.Adapters[K];
+    new (zhin: Zhin, protocol: K, options: AdapterOptions<BO, AO>): Zhin.Adapters[K];
 }
 
 export type AdapterOptions<BO = {}, AO = {}> = {
     bots?: BotOptions<BO>[];
 } & AO;
-export type AdapterOptionsType<T extends Zhin.Adapters[keyof Zhin.Adapters]> =
-    T extends Adapter<infer K, infer BO, infer AO>
-        ? AdapterOptions<BO, AO>
-        : unknown;
+export type AdapterOptionsType<T extends Zhin.Adapters[keyof Zhin.Adapters]> = T extends Adapter<
+    infer K,
+    infer BO,
+    infer AO
+>
+    ? AdapterOptions<BO, AO>
+    : unknown;
 
 export abstract class Adapter<
     K extends keyof Zhin.Adapters = keyof Zhin.Adapters,
@@ -44,15 +43,12 @@ export abstract class Adapter<
         this.bots = new BotList();
         this.logger = zhin.getLogger(protocol);
         this.zhin.on("start", () => this.start());
-        this.on(
-            "message.receive",
-            (self_id: string | number, session: NSession<K>) => {
-                this.zhin.logger.info(
-                    `【${this.protocol}:${self_id}】 ↓ ${session.message_id}：${session.content}`,
-                );
-                this.botStatus(self_id).recv_msg_cnt++;
-            },
-        );
+        this.on("message.receive", (self_id: string | number, session: NSession<K>) => {
+            this.zhin.logger.info(
+                `【${this.protocol}:${self_id}】 ↓ ${session.message_id}：${session.content}`,
+            );
+            this.botStatus(self_id).recv_msg_cnt++;
+        });
         this.on("bot.online", bot_id => {
             this.botStatus(bot_id).online = true;
             this.zhin.logger.info(`【${this.protocol}:${bot_id}】已上线`);
@@ -67,26 +63,19 @@ export abstract class Adapter<
             this.zhin.logger.error(`【${this.protocol}:${bot_id}】`, error);
             this.zhin.emit(`bot.error`, this.protocol, bot_id, error);
         });
-        this.on(
-            "message.send",
-            (bot_id: string | number, message: Bot.MessageRet) => {
-                let cache = this._cache.get(String(bot_id));
-                if (!cache)
-                    this._cache.set(
-                        String(bot_id),
-                        (cache = new Map<number, Set<string>>()),
-                    );
-                let time = Number.parseInt(Date.now() / 1000 + "");
-                let set = cache.get(time);
-                if (!set) cache.set(time, (set = new Set()));
-                set.add(message.message_id);
-                this.botStatus(bot_id).sent_msg_cnt++;
-                this.zhin.logger.info(
-                    `【${this.protocol}:${bot_id}】 ↑ ${message.message_id}：${message.content}`,
-                );
-                this.zhin.emit("message.send", message);
-            },
-        );
+        this.on("message.send", (bot_id: string | number, message: Bot.MessageRet) => {
+            let cache = this._cache.get(String(bot_id));
+            if (!cache) this._cache.set(String(bot_id), (cache = new Map<number, Set<string>>()));
+            let time = Number.parseInt(Date.now() / 1000 + "");
+            let set = cache.get(time);
+            if (!set) cache.set(time, (set = new Set()));
+            set.add(message.message_id);
+            this.botStatus(bot_id).sent_msg_cnt++;
+            this.zhin.logger.info(
+                `【${this.protocol}:${bot_id}】 ↑ ${message.message_id}：${message.content}`,
+            );
+            this.zhin.emit("message.send", message);
+        });
     }
 
     protected readonly _cache = new Map<string, Map<number, Set<string>>>();
@@ -94,8 +83,7 @@ export abstract class Adapter<
     protected _calcMsgCntPerMin(bot_id: string) {
         let cnt = 0;
         let cache = this._cache.get(bot_id);
-        if (!cache)
-            this._cache.set(bot_id, (cache = new Map<number, Set<string>>()));
+        if (!cache) this._cache.set(bot_id, (cache = new Map<number, Set<string>>()));
         for (let [time, set] of cache) {
             if (Date.now() / 1000 - time >= 60) cache.delete(time);
             else cnt += set.size;
@@ -105,8 +93,7 @@ export abstract class Adapter<
 
     get status() {
         Object.keys(this._status).forEach(bot_id => {
-            this._status[bot_id].msg_cnt_per_min =
-                this._calcMsgCntPerMin(bot_id);
+            this._status[bot_id].msg_cnt_per_min = this._calcMsgCntPerMin(bot_id);
         });
         return this._status;
     }
@@ -139,10 +126,7 @@ export abstract class Adapter<
         this.options.bots[idx] = options;
     }
 
-    dispatch<E extends keyof Zhin.BotEventMaps[K]>(
-        eventName: E,
-        session: NSession<K, E>,
-    ) {
+    dispatch<E extends keyof Zhin.BotEventMaps[K]>(eventName: E, session: NSession<K, E>) {
         this.emit(eventName as any, session);
         if (session instanceof Session) {
             this.zhin.dispatch(this.protocol, eventName, session);
@@ -160,9 +144,7 @@ export abstract class Adapter<
     protected startBot(options: BotOptions<BO>) {
         const Construct = Bot.botConstructors[this.protocol];
         if (!Construct)
-            throw new Error(
-                `can not find bot constructor from protocol:${this.protocol}`,
-            );
+            throw new Error(`can not find bot constructor from protocol:${this.protocol}`);
         const bot = new Construct(this.zhin, this as any, options);
         this.status[bot.self_id] = {
             lost_times: 0,

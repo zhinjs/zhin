@@ -76,9 +76,7 @@ export class Bot<
         return new Promise<Bot.MessageRet | null>(resolve => {
             this.task.queue.push(async () => {
                 try {
-                    resolve(
-                        await this.sendMsg(target_id, target_type, message),
-                    );
+                    resolve(await this.sendMsg(target_id, target_type, message));
                 } catch (e) {
                     this.zhin.logger.error(`Bot(${this.self_id})消息发送失败`);
                     this.zhin.logger.debug(e.stack);
@@ -94,9 +92,7 @@ export class Bot<
     enable(plugin?: Plugin): this | boolean {
         if (!plugin) return (this.options.enable = true);
         if (!this.options.disable_plugins.includes(plugin.options.fullName)) {
-            this.zhin.logger.warn(
-                `Bot(${this.self_id})插件未被禁用:${plugin.name}`,
-            );
+            this.zhin.logger.warn(`Bot(${this.self_id})插件未被禁用:${plugin.name}`);
             return this;
         }
         remove(this.options.disable_plugins, plugin.options.fullName);
@@ -108,9 +104,7 @@ export class Bot<
     disable(plugin?: Plugin): this | boolean {
         if (!plugin) return (this.options.enable = false);
         if (!this.options.disable_plugins.includes(plugin.options.fullName)) {
-            this.zhin.logger.warn(
-                `Bot(${this.self_id})重复禁用插件:${plugin.name}`,
-            );
+            this.zhin.logger.warn(`Bot(${this.self_id})重复禁用插件:${plugin.name}`);
             return this;
         }
         this.options.disable_plugins.push(plugin.options.fullName);
@@ -135,20 +129,12 @@ export class Bot<
         P extends keyof Zhin.Adapters,
         E extends keyof Zhin.BotEventMaps[P] = keyof Zhin.BotEventMaps[P],
     >(session: NSession<P, E>) {
-        return (
-            this.options.admins && this.options.admins.includes(session.user_id)
-        );
+        return this.options.admins && this.options.admins.includes(session.user_id);
     }
 
-    async reply(
-        session: NSession<K>,
-        message: Element.Fragment,
-        quote?: boolean,
-    ) {
+    async reply(session: NSession<K>, message: Element.Fragment, quote?: boolean) {
         if (session.type !== "message")
-            throw new Error(
-                `property 'reply' is only available for message event`,
-            );
+            throw new Error(`property 'reply' is only available for message event`);
         message = await session.render(message);
         const replyElem: Element | undefined = quote
             ? Element("reply", { message_id: session.message_id })
@@ -158,21 +144,11 @@ export class Bot<
             return []
                 .concat(message)
                 .filter(m => typeof m !== "object" || m.type === "text")
-                .reduce(
-                    (
-                        r: number,
-                        c: Element<"text"> | string | number | boolean,
-                    ) => {
-                        if (typeof c !== "object") r += String(c).length;
-                        else
-                            r +=
-                                c.attrs.text?.length ||
-                                String(c.children)?.length ||
-                                0;
-                        return r;
-                    },
-                    0,
-                ) as number;
+                .reduce((r: number, c: Element<"text"> | string | number | boolean) => {
+                    if (typeof c !== "object") r += String(c).length;
+                    else r += c.attrs.text?.length || String(c.children)?.length || 0;
+                    return r;
+                }, 0) as number;
         };
         const textLen = calcLen(message);
         if (textLen > this.options.text_limit)
@@ -193,12 +169,7 @@ export class Bot<
     }
 }
 
-export interface Bot<
-    K extends keyof Zhin.Bots = keyof Zhin.Bots,
-    BO = {},
-    AO = {},
-    I = object,
-> {
+export interface Bot<K extends keyof Zhin.Bots = keyof Zhin.Bots, BO = {}, AO = {}, I = object> {
     self_id: string | number;
     options: BotOptions<BO>;
     adapter: Adapter<K, BO, AO>;
@@ -260,16 +231,12 @@ export namespace Bot {
         message_id: string;
     }
 
-    export type FullTargetId = `${keyof Zhin.Adapters}:${
-        | string
-        | number}:${string}:${
+    export type FullTargetId = `${keyof Zhin.Adapters}:${string | number}:${string}:${
         | string
         | number
         | `${string | number}:${string | number}`}`;
 
-    export function getFullTargetId(
-        session: NSession<keyof Zhin.Adapters>,
-    ): FullTargetId {
+    export function getFullTargetId(session: NSession<keyof Zhin.Adapters>): FullTargetId {
         return [
             session.adapter.protocol,
             session.bot.self_id,
@@ -286,18 +253,13 @@ export namespace Bot {
 
     export const botConstructors: BotConstructs = {};
 
-    export function define<K extends keyof Zhin.Adapters>(
-        key: K,
-        botConstruct: BotConstruct<K>,
-    ) {
+    export function define<K extends keyof Zhin.Adapters>(key: K, botConstruct: BotConstruct<K>) {
         // @ts-ignore
         botConstructors[key] = botConstruct;
     }
 }
 
-export class BotList<K extends keyof Zhin.Adapters> extends Array<
-    Zhin.Bots[K]
-> {
+export class BotList<K extends keyof Zhin.Adapters> extends Array<Zhin.Bots[K]> {
     get(self_id: string | number) {
         return this.find(
             bot => bot.self_id === self_id || bot.self_id === Number(self_id),
@@ -305,16 +267,8 @@ export class BotList<K extends keyof Zhin.Adapters> extends Array<
     }
 }
 
-export type BotConstruct<
-    K extends keyof Zhin.Bots = keyof Zhin.Bots,
-    BO = {},
-    AO = {},
-> = {
-    new (
-        zhin: Zhin,
-        protocol: Zhin.Adapters[K],
-        options: BotOptions<BO>,
-    ): Zhin.Bots[K];
+export type BotConstruct<K extends keyof Zhin.Bots = keyof Zhin.Bots, BO = {}, AO = {}> = {
+    new (zhin: Zhin, protocol: Zhin.Adapters[K], options: BotOptions<BO>): Zhin.Bots[K];
 };
 export namespace Bot {
     export type Authority = "master" | "admins" | "owner" | "admin";

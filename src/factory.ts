@@ -1,14 +1,6 @@
 import fs from "fs";
 import * as Yaml from "js-yaml";
-import {
-    deepClone,
-    deepEqual,
-    deepMerge,
-    getCaller,
-    getValue,
-    Keys,
-    Value,
-} from "@zhinjs/shared";
+import { deepClone, deepEqual, deepMerge, getCaller, getValue, Keys, Value } from "@zhinjs/shared";
 import path from "path";
 import { watch } from "obj-observer";
 import { Proxied } from "obj-observer/lib/deepProxy";
@@ -18,14 +10,8 @@ import { Context } from "@/context";
 import { Middleware } from "@/middleware";
 
 export function createZhinAPI() {
-    const zhinMap: Map<string | symbol, Zhin> = new Map<
-        string | symbol,
-        Zhin
-    >();
-    const createZhin = (
-        options: Partial<Zhin.Options> | string,
-        key = Zhin.key,
-    ) => {
+    const zhinMap: Map<string | symbol, Zhin> = new Map<string | symbol, Zhin>();
+    const createZhin = (options: Partial<Zhin.Options> | string, key = Zhin.key) => {
         if (zhinMap.get(key)) return zhinMap.get(key);
         if (typeof options === "string") {
             if (!fs.existsSync(options))
@@ -46,9 +32,7 @@ export function createZhinAPI() {
                 );
             options = Yaml.load(fs.readFileSync(options, { encoding: "utf8" }));
         }
-        const zhin = new Zhin(
-            deepMerge(deepClone(Zhin.defaultConfig), options),
-        );
+        const zhin = new Zhin(deepMerge(deepClone(Zhin.defaultConfig), options));
         zhinMap.set(key, zhin);
         return zhin;
     };
@@ -60,13 +44,9 @@ export function createZhinAPI() {
     };
     const getContext = (pluginFullPath: string, key = Zhin.key) => {
         const zhin = zhinMap.get(key);
-        if (!zhin)
-            throw new Error(
-                `can't found zhin with context for key:${key.toString()}`,
-            );
-        const context = zhin.pluginList.find(
-            plugin => plugin.options.fullPath === pluginFullPath,
-        )?.context;
+        if (!zhin) throw new Error(`can't found zhin with context for key:${key.toString()}`);
+        const context = zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath)
+            ?.context;
         if (context) return context;
         const pluginDir = path.dirname(pluginFullPath);
         const reg = new RegExp(`${pluginDir}/index\.[tj]s`);
@@ -75,26 +55,16 @@ export function createZhinAPI() {
         });
         if (parent) {
             parent.context.plugin(pluginFullPath);
-            return zhin.pluginList.find(
-                plugin => plugin.options.fullPath === pluginFullPath,
-            ).context;
+            return zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath)
+                .context;
         }
         zhin.plugin(pluginFullPath);
-        return zhin.pluginList.find(
-            plugin => plugin.options.fullPath === pluginFullPath,
-        ).context;
+        return zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath).context;
     };
     // 添加指定组件到插件中
-    const useComponent = (
-        name: string,
-        component: Component,
-        key = Zhin.key,
-    ) => {
+    const useComponent = (name: string, component: Component, key = Zhin.key) => {
         const zhin = zhinMap.get(key);
-        if (!zhin)
-            throw new Error(
-                `can't found zhin with context for key:${key.toString()}`,
-            );
+        if (!zhin) throw new Error(`can't found zhin with context for key:${key.toString()}`);
         const callSite = getCaller();
         const pluginFullPath = callSite.getFileName();
         const context = getContext(pluginFullPath);
@@ -107,10 +77,7 @@ export function createZhinAPI() {
         key = Zhin.key,
     ) => {
         const zhin = zhinMap.get(key);
-        if (!zhin)
-            throw new Error(
-                `can't found zhin with context for key:${key.toString()}`,
-            );
+        if (!zhin) throw new Error(`can't found zhin with context for key:${key.toString()}`);
         const callSite = getCaller();
         const pluginFullPath = callSite.getFileName();
         const context = getContext(pluginFullPath);
@@ -123,10 +90,7 @@ export function createZhinAPI() {
         zhinKey = Zhin.key,
     ) => {
         const zhin = zhinMap.get(zhinKey);
-        if (!zhin)
-            throw new Error(
-                `can't found zhin with context for key:${zhinKey.toString()}`,
-            );
+        if (!zhin) throw new Error(`can't found zhin with context for key:${zhinKey.toString()}`);
         const callSite = getCaller();
         const pluginFullPath = callSite.getFileName();
         const context = getContext(pluginFullPath);
@@ -135,10 +99,7 @@ export function createZhinAPI() {
     // 添加插件到插件中
     const useMiddleware = (middleware: Middleware, zhinKey = Zhin.key) => {
         const zhin = zhinMap.get(zhinKey);
-        if (!zhin)
-            throw new Error(
-                `can't found zhin with context for key:${zhinKey.toString()}`,
-            );
+        if (!zhin) throw new Error(`can't found zhin with context for key:${zhinKey.toString()}`);
         const callSite = getCaller();
         const pluginFullPath = callSite.getFileName();
         const context = getContext(pluginFullPath);
@@ -151,10 +112,7 @@ export function createZhinAPI() {
         zhinKey = Zhin.key,
     ) => {
         const zhin = zhinMap.get(zhinKey);
-        if (!zhin)
-            throw new Error(
-                `can't found zhin with context for key:${zhinKey.toString()}`,
-            );
+        if (!zhin) throw new Error(`can't found zhin with context for key:${zhinKey.toString()}`);
         const callSite = getCaller();
         const pluginFullPath = callSite.getFileName();
         const context = getContext(pluginFullPath);
@@ -167,15 +125,10 @@ export function createZhinAPI() {
         zhinKey = Zhin.key,
     ): Value<Zhin.Options, K> {
         const zhin = zhinMap.get(zhinKey);
-        if (!zhin)
-            throw new Error(
-                `can't found zhin with context for key:${zhinKey.toString()}`,
-            );
+        if (!zhin) throw new Error(`can't found zhin with context for key:${zhinKey.toString()}`);
         const callSite = getCaller();
         const pluginFullPath = callSite.getFileName();
-        const plugin = zhin.pluginList.find(
-            plugin => plugin.options.fullPath === pluginFullPath,
-        );
+        const plugin = zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath);
         const result = getValue(zhin.options, path);
         const backupData = deepClone(result);
         const unwatch = watch(zhin.options, value => {
@@ -189,10 +142,7 @@ export function createZhinAPI() {
     }
 
     type EffectReturn = () => void;
-    type EffectCallBack<T = any> = (
-        value?: T,
-        oldValue?: T,
-    ) => void | EffectReturn;
+    type EffectCallBack<T = any> = (value?: T, oldValue?: T) => void | EffectReturn;
 
     /**
      * 添加插件副作用，类似react的useEffect使用方法
@@ -206,15 +156,10 @@ export function createZhinAPI() {
         zhinKey = Zhin.key,
     ) {
         const zhin = zhinMap.get(zhinKey);
-        if (!zhin)
-            throw new Error(
-                `can't found zhin with context for key:${zhinKey.toString()}`,
-            );
+        if (!zhin) throw new Error(`can't found zhin with context for key:${zhinKey.toString()}`);
         const callSite = getCaller();
         const pluginFullPath = callSite.getFileName();
-        const plugin = zhin.pluginList.find(
-            plugin => plugin.options.fullPath === pluginFullPath,
-        );
+        const plugin = zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath);
         if (!effect) {
             const dispose = callback();
             if (dispose) {
@@ -233,15 +178,10 @@ export function createZhinAPI() {
      */
     function onDispose(callback: Dispose, zhinKey = Zhin.key) {
         const zhin = zhinMap.get(zhinKey);
-        if (!zhin)
-            throw new Error(
-                `can't found zhin with context for key:${zhinKey.toString()}`,
-            );
+        if (!zhin) throw new Error(`can't found zhin with context for key:${zhinKey.toString()}`);
         const callSite = getCaller();
         const pluginFullPath = callSite.getFileName();
-        const plugin = zhin.pluginList.find(
-            plugin => plugin.options.fullPath === pluginFullPath,
-        );
+        const plugin = zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath);
         plugin.context.on("dispose", callback);
     }
 

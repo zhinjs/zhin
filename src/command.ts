@@ -5,10 +5,7 @@ import { Element } from "@/element";
 type Argv = {
     name: string;
     args: Array<Command.Domain[Command.Type] | Command.Domain[Command.Type][]>;
-    options: Record<
-        string,
-        Command.Domain[Command.Type] | Command.Domain[Command.Type][]
-    >;
+    options: Record<string, Command.Domain[Command.Type] | Command.Domain[Command.Type][]>;
 };
 
 export interface HelpOptions {
@@ -47,10 +44,7 @@ export type ParseOptionType<
     ? L extends `...${infer K}`
         ? ParseOptionType<`${K}:${T}`, F, true>
         : {
-              [key in L]: MayBeRest<
-                  T extends Command.Type ? Command.Domain[T] : F,
-                  R
-              >;
+              [key in L]: MayBeRest<T extends Command.Type ? Command.Domain[T] : F, R>;
           }
     : S extends Command.Type
     ? Record<string, MayBeRest<Command.Domain[S], R>>
@@ -108,10 +102,8 @@ export class Command<A extends any[] = [], O = {}> {
             /^-(\S+) ([<[])(\.\.\.)?(\w+):(\w+)([>\]])(.*)?/,
         ) as RegExpExecArray;
         if (!optionMatch) throw new Error(`option ${option} is not valid`);
-        const [, shortName, required, rest, name, type, _, desc = ""] =
-            optionMatch;
-        if (this.optionsConfig[name])
-            throw new Error(`option ${name} is already defined`);
+        const [, shortName, required, rest, name, type, _, desc = ""] = optionMatch;
+        if (this.optionsConfig[name]) throw new Error(`option ${name} is already defined`);
         this.optionsConfig[name] = {
             type: type as Command.Type,
             name: shortName,
@@ -167,10 +159,7 @@ export class Command<A extends any[] = [], O = {}> {
         return this.sugar.apply(this, params as any);
     }
 
-    sugar(
-        sugar: string | RegExp,
-        config?: Omit<Command.Sugar<A, O>, "regexp">,
-    ): Command<A, O> {
+    sugar(sugar: string | RegExp, config?: Omit<Command.Sugar<A, O>, "regexp">): Command<A, O> {
         this.sugarsConfig.push({
             regexp: sugar instanceof RegExp ? sugar : new RegExp(`^${sugar}$`),
             ...config,
@@ -200,40 +189,26 @@ export class Command<A extends any[] = [], O = {}> {
             });
             return result.join(" ");
         };
-        const output: string[] = [
-            `${this.name} ${createArgsOutput()} ${this.config.desc || ""}`,
-        ];
+        const output: string[] = [`${this.name} ${createArgsOutput()} ${this.config.desc || ""}`];
         if (!simple) {
-            if (this.aliasNames.length)
-                output.push(` alias:${this.aliasNames.join(",")}`);
+            if (this.aliasNames.length) output.push(` alias:${this.aliasNames.join(",")}`);
             if (this.sugarsConfig.length)
-                output.push(
-                    ` shortcuts:${this.sugarsConfig.map(sugar =>
-                        String(sugar.regexp),
-                    )}`,
-                );
+                output.push(` shortcuts:${this.sugarsConfig.map(sugar => String(sugar.regexp))}`);
             if (!isEmpty(this.optionsConfig)) {
                 const options = Object.keys(this.optionsConfig)
                     .filter(name => !name.startsWith("-"))
-                    .filter(name =>
-                        showHidden ? true : !this.optionsConfig[name].hidden,
-                    );
+                    .filter(name => (showHidden ? true : !this.optionsConfig[name].hidden));
                 if (options.length) {
                     output.push(" options:");
                     options.forEach(key => {
                         const nameDesc: string[] = [];
-                        const option: Command.OptionConfig =
-                            this.optionsConfig[key];
+                        const option: Command.OptionConfig = this.optionsConfig[key];
                         nameDesc.push(option?.required ? "<" : "[");
                         nameDesc.push(option?.rest ? "..." : "");
                         nameDesc.push(key + ":");
                         nameDesc.push(String(option.type));
                         nameDesc.push(option?.required ? ">" : "]");
-                        output.push(
-                            `  ${option.name} ${nameDesc.join("")} ${
-                                option.desc
-                            }`,
-                        );
+                        output.push(`  ${option.name} ${nameDesc.join("")} ${option.desc}`);
                     });
                 }
             }
@@ -242,11 +217,7 @@ export class Command<A extends any[] = [], O = {}> {
             output.push(" children:");
             return output.concat(
                 ...this.children
-                    .filter(
-                        cmd =>
-                            showHidden ||
-                            (!cmd.config.hidden && allowList.includes(cmd)),
-                    )
+                    .filter(cmd => showHidden || (!cmd.config.hidden && allowList.includes(cmd)))
                     .map(children =>
                         children
                             .help({
@@ -255,12 +226,7 @@ export class Command<A extends any[] = [], O = {}> {
                                 current: current + 1,
                                 dep,
                             })
-                            .map(
-                                str =>
-                                    `${new Array((current + 1) * 2)
-                                        .fill(" ")
-                                        .join("")}${str}`,
-                            ),
+                            .map(str => `${new Array((current + 1) * 2).fill(" ").join("")}${str}`),
                     )
                     .flat(),
             );
@@ -321,11 +287,7 @@ export class Command<A extends any[] = [], O = {}> {
                 const arg = args[i];
                 const argConfig = this.argsConfig[i];
                 if (!argConfig) break;
-                if (
-                    typeof arg === "string" &&
-                    arg.startsWith("$") &&
-                    matched[+arg.slice(1)]
-                ) {
+                if (typeof arg === "string" && arg.startsWith("$") && matched[+arg.slice(1)]) {
                     argv.args[i] = Command.transform(
                         [matched[+arg.slice(1)]],
                         argConfig.type as Command.Type,
@@ -333,10 +295,7 @@ export class Command<A extends any[] = [], O = {}> {
                 } else if (getType(arg) === argConfig.type) {
                     argv.args[i] = arg;
                 } else if (typeof arg === "string") {
-                    argv.args[i] = Command.transform(
-                        [arg],
-                        argConfig.type as Command.Type,
-                    );
+                    argv.args[i] = Command.transform([arg], argConfig.type as Command.Type);
                 } else if (
                     argConfig.rest &&
                     Array.isArray(arg) &&
@@ -367,9 +326,7 @@ export class Command<A extends any[] = [], O = {}> {
                 } else if (
                     optionConfig.rest &&
                     Array.isArray(options[option]) &&
-                    options[option].every(
-                        item => getType(item) === optionConfig.type,
-                    )
+                    options[option].every(item => getType(item) === optionConfig.type)
                 ) {
                     argv.options[option] = options[option];
                 }
@@ -404,12 +361,8 @@ export class Command<A extends any[] = [], O = {}> {
                     );
                     break;
                 } else {
-                    const parser =
-                        Command.domains[option.type as Command.Type]?.parse;
-                    if (!parser)
-                        throw new Error(
-                            `type ${option.type} is not defined parser`,
-                        );
+                    const parser = Command.domains[option.type as Command.Type]?.parse;
+                    if (!parser) throw new Error(`type ${option.type} is not defined parser`);
                     const needTransformArgv = parser(matchedArr);
                     argv.options[name] = Command.transform(
                         needTransformArgv,
@@ -423,27 +376,17 @@ export class Command<A extends any[] = [], O = {}> {
                     matchedArr.unshift(arg);
                     argv.args.push(
                         matchedArr.map(arg =>
-                            Command.transform(
-                                [arg],
-                                argConfig.type as Command.Type,
-                            ),
+                            Command.transform([arg], argConfig.type as Command.Type),
                         ),
                     );
                     break;
                 } else {
-                    const parser =
-                        Command.domains[argConfig.type as Command.Type]?.parse;
-                    if (!parser)
-                        throw new Error(
-                            `type ${argConfig.type} is not defined parser`,
-                        );
+                    const parser = Command.domains[argConfig.type as Command.Type]?.parse;
+                    if (!parser) throw new Error(`type ${argConfig.type} is not defined parser`);
                     matchedArr.unshift(arg);
                     const needTransformArgv = parser(matchedArr);
                     argv.args.push(
-                        Command.transform(
-                            needTransformArgv,
-                            argConfig.type as Command.Type,
-                        ),
+                        Command.transform(needTransformArgv, argConfig.type as Command.Type),
                     );
                 }
             }
@@ -459,10 +402,7 @@ export class Command<A extends any[] = [], O = {}> {
         }
     }
 
-    parse<S extends Session>(
-        session: S,
-        template: string,
-    ): Command.RunTime<S, A, O> | void {
+    parse<S extends Session>(session: S, template: string): Command.RunTime<S, A, O> | void {
         let argv = this.parseSugar(session.content);
         if (!argv.name) argv = this.parseArgv(template);
         if (argv.name !== this.name) {
@@ -505,9 +445,7 @@ export function defineCommand<S extends string>(
     const argDeclArr = decl.split(" ").filter(Boolean);
     for (let i = 0; i < argDeclArr.length; i++) {
         const argDecl = argDeclArr[i];
-        const argMatch = argDecl.match(
-            /^([<[])(\.\.\.)?(\w+):(\w+)([>\]])$/,
-        ) as RegExpExecArray;
+        const argMatch = argDecl.match(/^([<[])(\.\.\.)?(\w+):(\w+)([>\]])$/) as RegExpExecArray;
         if (!argMatch) throw new Error(`arg ${argDecl} is not valid`);
         const [, required, rest, name, type] = argMatch;
         command.addArgConfig({
@@ -581,9 +519,7 @@ export namespace Command {
                             result.push(endTag);
                             const nestedMatches = end.match(regex);
                             if (nestedMatches) {
-                                result.push(
-                                    ...matcher(nestedMatches.join(" ")),
-                                );
+                                result.push(...matcher(nestedMatches.join(" ")));
                             } else {
                                 result.push(end);
                             }
@@ -604,15 +540,12 @@ export namespace Command {
         desc?: string;
     }
 
-    type WithRegIndex<T> = T extends Array<infer R>
-        ? WithRegIndex<R>[]
-        : T | `$${number}`;
+    type WithRegIndex<T> = T extends Array<infer R> ? WithRegIndex<R>[] : T | `$${number}`;
     type MapArrWithString<T> = T extends [infer L, ...infer R]
         ? [WithRegIndex<L>?, ...MapArrWithString<R>]
         : T;
 
-    export type RemoveFirst<S extends string> =
-        S extends `${infer L} ${infer R}` ? R : S;
+    export type RemoveFirst<S extends string> = S extends `${infer L} ${infer R}` ? R : S;
     export type Sugar<A = any[], O = {}> = {
         regexp: RegExp;
         args?: MapArrWithString<A>;
@@ -624,11 +557,7 @@ export namespace Command {
     type AttrFilter<T extends object> = {
         [P in keyof Session]?: MaybeArray<P> | boolean;
     };
-    export type Filters =
-        | AttrFilter<Session>
-        | WithFilter
-        | UnionFilter
-        | ExcludeFilter;
+    export type Filters = AttrFilter<Session> | WithFilter | UnionFilter | ExcludeFilter;
     export type WithFilter = {
         and: Filters;
     };
@@ -645,17 +574,13 @@ export namespace Command {
             key: K,
             value: any,
         ) => {
-            if (
-                typeof value === "boolean" &&
-                typeof session[key as keyof Session] !== "boolean"
-            ) {
+            if (typeof value === "boolean" && typeof session[key as keyof Session] !== "boolean") {
                 return value;
             }
             if (Array.isArray(value)) {
                 return value.includes(session[key as keyof Session]);
             }
-            if (typeof value !== "object")
-                return value === session[key as keyof Session];
+            if (typeof value !== "object") return value === session[key as keyof Session];
             return createFilterFunction(value)(session);
         };
         if (filters["$and"]) {
@@ -675,8 +600,7 @@ export namespace Command {
         if (filters["$not"]) {
             return (session: Session) => {
                 return Object.entries(filters["$not"]).every(
-                    ([key, value]) =>
-                        !filterFn(session, key as keyof T, value as any),
+                    ([key, value]) => !filterFn(session, key as keyof T, value as any),
                 );
             };
         }
@@ -706,9 +630,7 @@ export namespace Command {
             : string;
         required: S extends `<${string}>` ? true : false;
         rest: S extends `${"<" | "["}...${string}${">" | "]"}` ? true : false;
-        initialValue?: S extends `${"<" | "["}${string}:${infer R}=${infer D}${
-            | ">"
-            | "]"}`
+        initialValue?: S extends `${"<" | "["}${string}:${infer R}=${infer D}${">" | "]"}`
             ? R extends Type
                 ? Command.Domain[R]
                 : D
@@ -728,31 +650,22 @@ export namespace Command {
         rest: S extends `${"<" | "["}...${string}${">" | "]"}` ? true : false;
         name: string;
         desc: string;
-        initialValue?: S extends `${"<" | "["}${string}:${infer R}=${infer D}${
-            | ">"
-            | "]"}`
+        initialValue?: S extends `${"<" | "["}${string}:${infer R}=${infer D}${">" | "]"}`
             ? R extends Type
                 ? [R]
                 : D
             : string;
     };
-    export type OptionsConfig<S extends string = any> =
-        S extends `${infer L} ${infer R}`
-            ? L extends `${"<" | "["}${infer K}:${string}${">" | "]"}`
-                ? {
-                      [key in K extends `...${infer KR}`
-                          ? KR
-                          : L]: OptionConfig<L>;
-                  } & OptionsConfig<R>
-                : {
-                      [key: string]: OptionConfig<L>;
-                  } & OptionsConfig<R>
-            : {};
-    export type CallBack<
-        Session extends object,
-        A extends any[] = [],
-        O = {},
-    > = (
+    export type OptionsConfig<S extends string = any> = S extends `${infer L} ${infer R}`
+        ? L extends `${"<" | "["}${infer K}:${string}${">" | "]"}`
+            ? {
+                  [key in K extends `...${infer KR}` ? KR : L]: OptionConfig<L>;
+              } & OptionsConfig<R>
+            : {
+                  [key: string]: OptionConfig<L>;
+              } & OptionsConfig<R>
+        : {};
+    export type CallBack<Session extends object, A extends any[] = [], O = {}> = (
         runtime: RunTime<Session, A, O>,
         ...args: A
     ) => MayBePromise<Element.Fragment | void>;
@@ -781,23 +694,16 @@ export namespace Command {
         [K in keyof Domain]?: DomainConfig<K>;
     };
 
-    export function checkArgv(
-        argv: Argv,
-        argsConfig: ArgConfig[],
-        optionsConfig: OptionsConfig,
-    ) {
+    export function checkArgv(argv: Argv, argsConfig: ArgConfig[], optionsConfig: OptionsConfig) {
         for (let i = 0; i < argsConfig.length; i++) {
             const arg = argv.args[i];
             const argConfig = argsConfig[i];
             if (!arg && argConfig.required) {
-                if (argConfig.initialValue !== undefined)
-                    argv.args[i] = argConfig.initialValue;
+                if (argConfig.initialValue !== undefined) argv.args[i] = argConfig.initialValue;
                 else throw new Error(`arg ${argConfig.name} is required`);
             }
             const validate =
-                argConfig.type &&
-                domains[argConfig.type] &&
-                domains[argConfig.type].validate;
+                argConfig.type && domains[argConfig.type] && domains[argConfig.type].validate;
             if (!validate) continue;
             if (arg && argConfig.type && !validate(arg)) {
                 if (
@@ -806,9 +712,7 @@ export namespace Command {
                     arg.every(v => getType(v) === argConfig.type)
                 )
                     continue;
-                throw new Error(
-                    `arg ${argConfig.name} should be ${argConfig.type}`,
-                );
+                throw new Error(`arg ${argConfig.name} should be ${argConfig.type}`);
             }
         }
         for (const option in optionsConfig) {
@@ -823,32 +727,21 @@ export namespace Command {
                 domains[optionConfig.type] &&
                 domains[optionConfig.type].validate;
             if (!validate) continue;
-            if (
-                argv.options[option] &&
-                optionConfig.type &&
-                !validate(argv.options[option])
-            ) {
+            if (argv.options[option] && optionConfig.type && !validate(argv.options[option])) {
                 if (
                     optionConfig.rest &&
                     Array.isArray(argv.options[option]) &&
-                    (argv.options[option] as any[]).every(
-                        v => getType(v) === optionConfig.type,
-                    )
+                    (argv.options[option] as any[]).every(v => getType(v) === optionConfig.type)
                 )
                     continue;
-                throw new Error(
-                    `option ${option} should be ${optionConfig.type}`,
-                );
+                throw new Error(`option ${option} should be ${optionConfig.type}`);
             }
         }
     }
 
     export type Declare = `${string} ${string}` | string;
 
-    export function transform<T extends Type>(
-        source: string[],
-        type: T,
-    ): Domain[T] {
+    export function transform<T extends Type>(source: string[], type: T): Domain[T] {
         const domainConfig = domains[type];
         if (!domainConfig) throw new Error(`type ${type} is not defined`);
         return domainConfig.transform(...source);
@@ -865,9 +758,7 @@ export namespace Command {
         domains[type] = {
             parse: config.parse || ((argv: string[]) => [argv.shift()]),
             transform: config.transform,
-            validate:
-                config.validate ||
-                ((source: Domain[T]) => getType(source) === type),
+            validate: config.validate || ((source: Domain[T]) => getType(source) === type),
         } as Domains[T];
     }
 
@@ -902,12 +793,8 @@ export namespace Command {
     registerDomain("regexp", source => new RegExp(source));
     registerDomain("user_id", {
         transform: source => {
-            const autoCloseMention = source.match(
-                /^<mention user_id="(\S+)"\/>$/,
-            );
-            const twinningMention = source.match(
-                /^<mention user_id="(\S+)"[^>]+?>.*?<\/mention>$/,
-            );
+            const autoCloseMention = source.match(/^<mention user_id="(\S+)"\/>$/);
+            const twinningMention = source.match(/^<mention user_id="(\S+)"[^>]+?>.*?<\/mention>$/);
             const matched = autoCloseMention || twinningMention;
             if (!matched) {
                 if (!/^\d+$/.test(source))

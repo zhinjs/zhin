@@ -1,12 +1,7 @@
 import { isBailed, remove, Dict } from "@zhinjs/shared";
 import { Zhin, isConstructor, ChannelId } from "./zhin";
 import { Dispose, ToDispose } from "./dispose";
-import {
-    Adapter,
-    AdapterConstructs,
-    AdapterOptions,
-    AdapterOptionsType,
-} from "./adapter";
+import { Adapter, AdapterConstructs, AdapterOptions, AdapterOptionsType } from "./adapter";
 import { Middleware } from "./middleware";
 import { ArgsType, Command, defineCommand } from "./command";
 import { NSession, Session } from "./session";
@@ -206,8 +201,7 @@ export class Context extends EventEmitter {
     get pluginList(): Plugin[] {
         const result = [...this.plugins.values()].reduce(
             (result, plugin) => {
-                if (plugin.context !== this)
-                    result.push(...plugin.context.pluginList);
+                if (plugin.context !== this) result.push(...plugin.context.pluginList);
                 return result;
             },
             [...this.plugins.values()],
@@ -219,14 +213,11 @@ export class Context extends EventEmitter {
      * 根据会话获取匹配的上下文
      * @param session 会话实体
      */
-    getMatchedContextList<P extends keyof Zhin.Adapters>(
-        session: NSession<P>,
-    ): Context[] {
+    getMatchedContextList<P extends keyof Zhin.Adapters>(session: NSession<P>): Context[] {
         return this[Context.childKey]
             .reduce(
                 (result, ctx) => {
-                    if (session.match(ctx))
-                        result.push(ctx, ...ctx.getMatchedContextList(session));
+                    if (session.match(ctx)) result.push(ctx, ...ctx.getMatchedContextList(session));
                     return result;
                 },
                 [...this.plugins.values()].map(p => p.context),
@@ -282,9 +273,7 @@ export class Context extends EventEmitter {
         if (!using.length) {
             if (using.some(name => !this.zhin.services.has(name))) {
                 this.zhin.logger.warn(
-                    `插件(${
-                        options.name
-                    })所需服务(${using.join()})未就绪，已停用`,
+                    `插件(${options.name})所需服务(${using.join()})未就绪，已停用`,
                 );
                 plugin.disable();
             }
@@ -292,10 +281,7 @@ export class Context extends EventEmitter {
         return this;
     }
 
-    useCommand<A extends any[], O = {}>(
-        nameDecl: string,
-        command: Command<A, O>,
-    ) {
+    useCommand<A extends any[], O = {}>(nameDecl: string, command: Command<A, O>) {
         if (!nameDecl && !command.name) throw new Error("nameDecl不能为空");
         if (!nameDecl) nameDecl = command.name;
         const nameArr = nameDecl.split("/").filter(Boolean);
@@ -384,16 +370,13 @@ export class Context extends EventEmitter {
     get middlewareList() {
         const result = [...this.plugins.values()].reduce(
             (result, plugin) => {
-                if (plugin.context !== this)
-                    result.push(...plugin.context.middlewareList);
+                if (plugin.context !== this) result.push(...plugin.context.middlewareList);
                 return result;
             },
             [...this.middlewares],
         );
         if (this[Context.childKey]) {
-            result.push(
-                ...this[Context.childKey].map(ctx => ctx.middlewareList).flat(),
-            );
+            result.push(...this[Context.childKey].map(ctx => ctx.middlewareList).flat());
         }
         return result;
     }
@@ -417,8 +400,7 @@ export class Context extends EventEmitter {
     get componentList(): Dict<Component> {
         const result = [...this.plugins.values()].reduce(
             (result, plugin) => {
-                if (plugin.context !== this)
-                    Object.assign(result, plugin.context.componentList);
+                if (plugin.context !== this) Object.assign(result, plugin.context.componentList);
                 return result;
             },
             { ...this.components },
@@ -449,8 +431,7 @@ export class Context extends EventEmitter {
             };
             name = name.name;
         }
-        if (this.components[name])
-            this.logger.warn(`组件(${name})已存在，将被覆盖`);
+        if (this.components[name]) this.logger.warn(`组件(${name})已存在，将被覆盖`);
         this.components[name] = component;
         const dispose = Dispose.from(this, () => {
             delete this.components[name as string];
@@ -466,16 +447,13 @@ export class Context extends EventEmitter {
     get commandList(): Command[] {
         const result = [...this.plugins.values()].reduce(
             (result, plugin) => {
-                if (plugin.context !== this)
-                    result.push(...plugin.context.commandList);
+                if (plugin.context !== this) result.push(...plugin.context.commandList);
                 return result;
             },
             [...this.commands.values()],
         );
         if (this[Context.childKey]) {
-            result.push(
-                ...this[Context.childKey].map(ctx => ctx.commandList).flat(),
-            );
+            result.push(...this[Context.childKey].map(ctx => ctx.commandList).flat());
         }
         return result;
     }
@@ -550,10 +528,11 @@ export class Context extends EventEmitter {
     /**
      * 往下级插件抛会话，普通开发者用不上
      */
-    dispatch<
-        P extends keyof Zhin.Adapters,
-        E extends keyof Zhin.BotEventMaps[P],
-    >(protocol: P, eventName: E, session: NSession<P, E>) {
+    dispatch<P extends keyof Zhin.Adapters, E extends keyof Zhin.BotEventMaps[P]>(
+        protocol: P,
+        eventName: E,
+        session: NSession<P, E>,
+    ) {
         session.context = this;
         if (session.match(this)) {
             this.emit(`${protocol}.${String(eventName)}`, session);
@@ -602,15 +581,11 @@ export class Context extends EventEmitter {
             options = Construct as AdapterOptions;
             Construct = Adapter.get(adapter).Adapter;
         }
-        if (!Construct)
-            throw new Error(`can't find adapter for protocol:${adapter}`);
+        if (!Construct) throw new Error(`can't find adapter for protocol:${adapter}`);
         const dispose = this.zhin.on(`${adapter}.message`, session => {
             this.zhin.emitSync("message", session);
         });
-        this.zhin.adapters.set(
-            adapter,
-            new Construct(this.zhin, adapter, options) as any,
-        );
+        this.zhin.adapters.set(adapter, new Construct(this.zhin, adapter, options) as any);
         return Dispose.from(this, () => {
             dispose();
             this.zhin.adapters.delete(adapter);
@@ -627,10 +602,7 @@ export class Context extends EventEmitter {
      * @param key 服务名
      * @param service 服务实体
      */
-    service<K extends keyof Zhin.Services>(
-        key: K,
-        service: Zhin.Services[K],
-    ): this;
+    service<K extends keyof Zhin.Services>(key: K, service: Zhin.Services[K]): this;
     /**
      * 为zhin添加服务
      * @param key 服务名
@@ -644,9 +616,7 @@ export class Context extends EventEmitter {
     ): this;
     service<K extends keyof Zhin.Services, T>(
         key: K,
-        Service?:
-            | Zhin.Services[K]
-            | Zhin.ServiceConstructor<Zhin.Services[K], T>,
+        Service?: Zhin.Services[K] | Zhin.ServiceConstructor<Zhin.Services[K], T>,
         options?: T,
     ): Zhin.Services[K] | this {
         if (Service === undefined) {
@@ -715,9 +685,7 @@ export class Context extends EventEmitter {
      */
     sendMsg(channel: Context.MsgChannel, msg: Element.Fragment) {
         const { protocol, bot_id, target_id, target_type } = channel;
-        return this.zhin
-            .pickBot(protocol, bot_id)
-            .sendMsg(target_id, target_type, msg);
+        return this.zhin.pickBot(protocol, bot_id).sendMsg(target_id, target_type, msg);
     }
 
     /**
@@ -730,22 +698,13 @@ export class Context extends EventEmitter {
         return Promise.all(
             channelIds
                 .map(channelId => {
-                    const [
-                        protocol,
-                        self_id,
-                        target_type = protocol,
-                        target_id = self_id,
-                    ] = channelId.split(":");
+                    const [protocol, self_id, target_type = protocol, target_id = self_id] =
+                        channelId.split(":");
                     const bots: Bot[] = [...this.zhin.adapters.values()].reduce(
                         (result, adapter) => {
-                            if (protocol === target_type)
-                                result.push(...adapter.bots);
+                            if (protocol === target_type) result.push(...adapter.bots);
                             else if (protocol === adapter.protocol)
-                                result.push(
-                                    ...adapter.bots.filter(
-                                        bot => bot.self_id === self_id,
-                                    ),
-                                );
+                                result.push(...adapter.bots.filter(bot => bot.self_id === self_id));
                             return result;
                         },
                         [] as Bot[],
@@ -753,9 +712,7 @@ export class Context extends EventEmitter {
                     return bots.map(bot =>
                         bot.sendMsg(
                             Number(target_id),
-                            <"private" | "group" | "discuss" | "guild">(
-                                target_type
-                            ),
+                            <"private" | "group" | "discuss" | "guild">target_type,
                             content,
                         ),
                     );
@@ -806,8 +763,7 @@ export class Context extends EventEmitter {
      */
     dispose(plugin?: Plugin | string) {
         if (plugin) {
-            if (typeof plugin === "string")
-                plugin = this.pluginList.find(p => p.name === plugin);
+            if (typeof plugin === "string") plugin = this.pluginList.find(p => p.name === plugin);
             if (plugin) {
                 plugin.unmount();
                 this.plugins.delete(plugin.options.fullName);
@@ -850,8 +806,7 @@ export class Context extends EventEmitter {
             .reduce(
                 (result: Middleware[], context) => {
                     for (const middleware of context.middlewares) {
-                        if (!result.includes(middleware))
-                            result.push(middleware);
+                        if (!result.includes(middleware)) result.push(middleware);
                     }
                     return result;
                 },
@@ -885,10 +840,7 @@ export interface Context extends Zhin.Services {
     [Context.childKey]: Context[];
     [Context.plugin]: Plugin;
 
-    on<T extends keyof Zhin.EventMap<this>>(
-        event: T,
-        listener: Zhin.EventMap<this>[T],
-    );
+    on<T extends keyof Zhin.EventMap<this>>(event: T, listener: Zhin.EventMap<this>[T]);
 
     on<S extends string | symbol>(
         event: S & Exclude<S, keyof Zhin.EventMap<this>>,
@@ -957,15 +909,12 @@ export namespace Context {
     export type Filter = (session: Session) => boolean;
     export const defaultFilter: Filter = () => true;
     export const or = (ctx: Context, filter: Filter) => {
-        return ((session: Session) =>
-            ctx.filter(session) || filter(session)) as Filter;
+        return ((session: Session) => ctx.filter(session) || filter(session)) as Filter;
     };
     export const not = (ctx: Context, filter: Filter) => {
-        return ((session: Session) =>
-            ctx.filter(session) && !filter(session)) as Filter;
+        return ((session: Session) => ctx.filter(session) && !filter(session)) as Filter;
     };
     export const and = (ctx: Context, filter: Filter) => {
-        return ((session: Session) =>
-            ctx.filter(session) && filter(session)) as Filter;
+        return ((session: Session) => ctx.filter(session) && filter(session)) as Filter;
     };
 }
