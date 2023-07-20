@@ -1,0 +1,11 @@
+{
+    "useTabs": true,
+    "tabWidth": 4,
+    "bracketSpacing": true,
+    "semi": true,
+    "quoteProps": "preserve",
+    "bracketSameLine": true,
+    "arrowParens": "avoid",
+    "requirePragma": true,
+    "proseWrap": "always"
+}

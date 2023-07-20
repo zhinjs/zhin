@@ -1,9 +1,9 @@
 {
-  "extends": "./tsconfig.base",
-  "compilerOptions": {
-    "emitDeclarationOnly": true,
-    "esModuleInterop": true,
-    "rootDir": "src",
-    "outFile": "lib/index.d.ts"
-  }
+	"extends": "./tsconfig.base",
+	"compilerOptions": {
+		"emitDeclarationOnly": true,
+		"esModuleInterop": true,
+		"rootDir": "src",
+		"outFile": "lib/index.d.ts"
+	}
 }
