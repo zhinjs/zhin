@@ -309,54 +309,34 @@ export class Context extends EventEmitter {
      * 在zhin就绪前执行回调函数，如果zhin已经就绪则立即执行
      * @param callback
      */
-    async beforeReady<T>(callback: () => T | Promise<T>): Promise<T> {
-        if (this.zhin.isReady) return callback();
-        return new Promise<T>(resolve =>
-            this.zhin.on("before-ready", () => {
-                resolve(callback());
-            }),
-        );
+    async beforeReady(callback: () => Promise<any>) {
+        if (this.zhin.isReady) await callback();
+        return this.zhin.on("before-ready", callback);
     }
-
     /**
      * 在zhin就绪后执行回调函数，如果zhin已经就绪则立即执行
-     * @param fn 回调函数
+     * @param callback 回调函数
      */
-    async afterReady<T>(fn: () => T | Promise<T>): Promise<T> {
-        if (this.zhin.isReady) return fn();
-        return new Promise<T>(resolve =>
-            this.zhin.on("after-ready", () => {
-                resolve(fn());
-            }),
-        );
+    async afterReady(callback: () => Promise<any>) {
+        if (this.zhin.isReady) await callback();
+        return this.zhin.on("after-ready", callback);
     }
-
     /**
      * 在zhin启动前执行回调函数，如果zhin已经启动则立即执行
      * @param callback 回调函数
      */
-    async beforeStart<T>(callback: () => T | Promise<T>): Promise<T> {
-        if (this.zhin.isStarted) return callback();
-        return new Promise<T>(resolve =>
-            this.zhin.on("before-start", () => {
-                resolve(callback());
-            }),
-        );
+    async beforeStart(callback: () => Promise<any>) {
+        if (this.zhin.isStarted) await callback();
+        return this.zhin.on("before-start", callback);
     }
-
     /**
      * 在zhin启动后执行回调函数，如果zhin已经启动则立即执行
      * @param callback 回调函数
      */
-    async afterStart<T>(callback: () => T | Promise<T>): Promise<T> {
-        if (this.zhin.isStarted) return callback();
-        return new Promise<T>(resolve =>
-            this.zhin.on("after-start", () => {
-                resolve(callback());
-            }),
-        );
+    async afterStart(callback: () => Promise<any>) {
+        if (this.zhin.isStarted) await callback();
+        return this.zhin.on("after-start", callback);
     }
-
     /**
      * 为当前上下文添加插件
      * @param plugin 插件安装配置对象

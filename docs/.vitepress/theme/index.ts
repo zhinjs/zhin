@@ -5,7 +5,6 @@ import ChatMsg from './components/ChatMsg.vue';
 
 export default {
     Layout:DefaultTheme.Layout,
-    NotFound:DefaultTheme.NotFound,
     enhanceApp({ app }) {
         app.component('UserAvatar', UserAvatar);
         app.component("ChatMsg", ChatMsg);

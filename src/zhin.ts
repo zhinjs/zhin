@@ -5,7 +5,14 @@ import * as Yaml from "js-yaml";
 import * as path from "path";
 import * as fs from "fs";
 import { createZhinAPI } from "@/factory";
-import { deepEqual, Dict, getIpAddress, getPackageInfo, pick, wrapExport } from "@zhinjs/shared";
+import {
+    deepEqual,
+    Dict,
+    getIpAddress,
+    getPackageInfo,
+    pick,
+    wrapExport,
+} from "@zhinjs/shared";
 import { createServer, Server } from "http";
 import KoaBodyParser from "koa-bodyparser";
 import { Command } from "./command";
@@ -35,11 +42,19 @@ let buffer = null,
 
 export type TargetType = "group" | "private" | "discuss";
 export type ChannelId =
-    | `${keyof Zhin.Adapters}:${string | number}:${TargetType}:${number | string}`
+    | `${keyof Zhin.Adapters}:${string | number}:${TargetType}:${
+          | number
+          | string}`
     | `${TargetType}:${number | string}`;
 
-export function isConstructor<R, T>(value: any): value is new (...args: any[]) => any {
-    return typeof value === "function" && value.prototype && value.prototype.constructor === value;
+export function isConstructor<R, T>(
+    value: any,
+): value is new (...args: any[]) => any {
+    return (
+        typeof value === "function" &&
+        value.prototype &&
+        value.prototype.constructor === value
+    );
 }
 
 process.on("SIGINT", () => {
@@ -55,7 +70,10 @@ export function defineConfig(options: Zhin.Options) {
 }
 
 export interface Zhin {
-    on<T extends keyof Zhin.EventMap<this>>(event: T, listener: Zhin.EventMap<this>[T]);
+    on<T extends keyof Zhin.EventMap<this>>(
+        event: T,
+        listener: Zhin.EventMap<this>[T],
+    );
 
     on<S extends string | symbol>(
         event: S & Exclude<S, keyof Zhin.EventMap<this>>,
@@ -107,8 +125,14 @@ export class Zhin extends Context {
     isReady: boolean = false;
     isStarted: boolean = false;
     options: Zhin.Options;
-    adapters: Map<keyof Zhin.Adapters, Adapter> = new Map<keyof Zhin.Adapters, Adapter>();
-    services: Map<keyof Zhin.Services, any> = new Map<keyof Zhin.Services, any>();
+    adapters: Map<keyof Zhin.Adapters, Adapter> = new Map<
+        keyof Zhin.Adapters,
+        Adapter
+    >();
+    services: Map<keyof Zhin.Services, any> = new Map<
+        keyof Zhin.Services,
+        any
+    >();
     permissions: Dict<Command.Filters> = {};
 
     get version() {
@@ -143,7 +167,9 @@ export class Zhin extends Context {
             .service("koa", koa)
             .service("router", router)
             .service("request", Request.create(options.request_config));
-        koa.use(KoaBodyParser()).use(router.routes()).use(router.allowedMethods());
+        koa.use(KoaBodyParser())
+            .use(router.routes())
+            .use(router.allowedMethods());
         server.listen((options.port ||= 8086));
         this.logger.info(
             `server listen at \n${getIpAddress()
@@ -158,7 +184,9 @@ export class Zhin extends Context {
             server.close();
         });
         this.on("message", session => {
-            const middleware = Middleware.compose(this.getSupportMiddlewares(session));
+            const middleware = Middleware.compose(
+                this.getSupportMiddlewares(session),
+            );
             middleware(session);
         });
         this.on("service-add", addName => {
@@ -166,8 +194,12 @@ export class Zhin extends Context {
                 p => p.options.using && p.options.using.includes(addName),
             );
             plugins.forEach(plugin => {
-                if (plugin.options.using.every(name => this.services.has(name))) {
-                    this.logger.debug(`所需服务已全部就绪，插件(${plugin.name})已启用`);
+                if (
+                    plugin.options.using.every(name => this.services.has(name))
+                ) {
+                    this.logger.info(
+                        `所需服务已全部就绪，插件(${plugin.name})已启用`,
+                    );
                     plugin.enable();
                 }
             });
@@ -177,8 +209,12 @@ export class Zhin extends Context {
                 p => p.options.using && p.options.using.includes(removeName),
             );
             plugins.forEach(plugin => {
-                if (plugin.options.using.some(name => !this.services.has(name))) {
-                    this.logger.warn(`所需服务(${removeName})未就绪，插件(${plugin.name})已停用`);
+                if (
+                    plugin.options.using.some(name => !this.services.has(name))
+                ) {
+                    this.logger.warn(
+                        `所需服务(${removeName})未就绪，插件(${plugin.name})已停用`,
+                    );
                     plugin.disable();
                 }
             });
@@ -231,7 +267,10 @@ export class Zhin extends Context {
     }
 
     // 获取一个机器人实例
-    pickBot<K extends keyof Zhin.Bots>(protocol: K, self_id: string | number): Zhin.Bots[K] {
+    pickBot<K extends keyof Zhin.Bots>(
+        protocol: K,
+        self_id: string | number,
+    ): Zhin.Bots[K] {
         return this.adapters.get(protocol).bots.get(self_id) as Zhin.Bots[K];
     }
 
@@ -252,8 +291,13 @@ export class Zhin extends Context {
     }
 
     // 获取logger
-    getLogger<K extends keyof Zhin.Adapters>(protocol: K, self_id?: string | number) {
-        return getLogger(`[zhin:protocol-${[protocol, self_id].filter(Boolean).join(":")}]`);
+    getLogger<K extends keyof Zhin.Adapters>(
+        protocol: K,
+        self_id?: string | number,
+    ) {
+        return getLogger(
+            `[zhin:protocol-${[protocol, self_id].filter(Boolean).join(":")}]`,
+        );
     }
 
     static getChannelId(event: Dict) {
@@ -274,7 +318,9 @@ export class Zhin extends Context {
     }
 
     // 扫描项目依赖中的已安装的模块
-    getInstalledModules<T extends Zhin.ModuleCategory>(category: T): Zhin.Modules[T][] {
+    getInstalledModules<T extends Zhin.ModuleCategory>(
+        category: T,
+    ): Zhin.Modules[T][] {
         const result: Zhin.Modules[T][] = [];
         const loadManifest = packageName => {
             const filename = require.resolve(packageName + "/package.json");
@@ -284,11 +330,20 @@ export class Zhin extends Context {
         };
         const parsePackage = name => {
             const data = loadManifest(name);
-            const result = pick(data, ["name", "version", "setup", "author", "description"]);
+            const result = pick(data, [
+                "name",
+                "version",
+                "setup",
+                "author",
+                "description",
+            ]);
             return {
                 ...result,
                 setup: !!result.setup,
-                name: data.name.replace(/(zhin-|^@zhinjs\/)(plugin|service|adapter)-/, ""),
+                name: data.name.replace(
+                    /(zhin-|^@zhinjs\/)(plugin|service|adapter)-/,
+                    "",
+                ),
                 fullName: data.name,
             };
         };
@@ -299,12 +354,16 @@ export class Zhin extends Context {
                 let message = e.message || "";
                 message = message.split("\n")[0];
                 if (/^Cannot find module '(\S+)'$/i.test(message)) {
-                    const needModeule = /^Cannot find module '(\S+)'$/i.exec(message)[1];
+                    const needModeule = /^Cannot find module '(\S+)'$/i.exec(
+                        message,
+                    )[1];
                     this.logger.warn(
                         `获取模块${category}(${name})详情失败:\n依赖 ${needModeule} 未安装，请使用 'npm install ${needModeule}' 后重试`,
                     );
                 } else {
-                    this.logger.warn(`获取模块${category}(${name})详情失败:\n${message}`);
+                    this.logger.warn(
+                        `获取模块${category}(${name})详情失败:\n${message}`,
+                    );
                 }
             }
         };
@@ -332,19 +391,31 @@ export class Zhin extends Context {
         loadDirectory(startDir);
         if (
             this.options[`${category}_dir`] &&
-            fs.existsSync(path.resolve(process.cwd(), this.options[`${category}_dir`]))
+            fs.existsSync(
+                path.resolve(process.cwd(), this.options[`${category}_dir`]),
+            )
         ) {
             const dirs = fs.readdirSync(
                 path.resolve(process.cwd(), this.options[`${category}_dir`]),
             );
             result.push(
-                ...dirs.map(name => this.load(name.replace(/\.(d\.)?[d|j]s$/, ""), category)),
+                ...dirs.map(name =>
+                    this.load(name.replace(/\.(d\.)?[d|j]s$/, ""), category),
+                ),
             );
         }
         if (fs.existsSync(path.resolve(__dirname, `${category}s`))) {
-            const dirs = fs.readdirSync(path.resolve(__dirname, `${category}s`));
+            const dirs = fs.readdirSync(
+                path.resolve(__dirname, `${category}s`),
+            );
             result.push(
-                ...dirs.map(name => this.load(name.replace(/\.(d\.)?[d|j]s$/, ""), category, true)),
+                ...dirs.map(name =>
+                    this.load(
+                        name.replace(/\.(d\.)?[d|j]s$/, ""),
+                        category,
+                        true,
+                    ),
+                ),
             );
         }
         return result;
@@ -352,7 +423,9 @@ export class Zhin extends Context {
 
     // 检查知音是否安装指定插件
     hasMounted(pluginName: string) {
-        return !!this.pluginList.find(plugin => plugin.options.fullName === pluginName);
+        return !!this.pluginList.find(
+            plugin => plugin.options.fullName === pluginName,
+        );
     }
 
     // 加载指定名称，指定类型的模块
@@ -388,8 +461,10 @@ export class Zhin extends Context {
         }
 
         const getType = (resolvePath: string) => {
-            if (resolvePath.includes(`@zhinjs/${category}-`)) return Plugin.Source.official;
-            if (resolvePath.includes(`zhin-${category}-`)) return Plugin.Source.community;
+            if (resolvePath.includes(`@zhinjs/${category}-`))
+                return Plugin.Source.official;
+            if (resolvePath.includes(`zhin-${category}-`))
+                return Plugin.Source.community;
             if (resolvePath.startsWith(path.resolve(__dirname, `${category}s`)))
                 return Plugin.Source.built;
             return Plugin.Source.local;
@@ -424,9 +499,15 @@ export class Zhin extends Context {
         if (packageInfo) {
             Object.assign(result, packageInfo);
         }
-        let fullName = resolved.replace(path.join(__dirname, `${category}s`), "");
+        let fullName = resolved.replace(
+            path.join(__dirname, `${category}s`),
+            "",
+        );
         if (this.options[`${category}_dir`]) {
-            fullName = fullName.replace(path.resolve(this.options[`${category}_dir`]), "");
+            fullName = fullName.replace(
+                path.resolve(this.options[`${category}_dir`]),
+                "",
+            );
         }
         fullName = fullName
             .replace(path.sep, "")
@@ -453,7 +534,10 @@ export class Zhin extends Context {
         await this.emitSync("before-start");
         for (const adapter of Object.keys(this.options.adapters || {})) {
             try {
-                this.adapter(adapter as keyof Zhin.Adapters, this.options.adapters[adapter]);
+                this.adapter(
+                    adapter as keyof Zhin.Adapters,
+                    this.options.adapters[adapter],
+                );
             } catch (e) {
                 this.logger.warn(e.message, e.stack);
             }
@@ -463,7 +547,9 @@ export class Zhin extends Context {
             try {
                 this.plugin(plugin.name, plugin.setup);
             } catch (e) {
-                this.zhin.logger.warn(`自动载入插件(${plugin.name})失败：${e.message}`);
+                this.zhin.logger.warn(
+                    `自动载入插件(${plugin.name})失败：${e.message}`,
+                );
                 this.zhin.logger.debug(e.stack);
                 this.plugins.delete(plugin.fullName);
             }
@@ -473,7 +559,9 @@ export class Zhin extends Context {
             `已载入(${this.plugins.size})个插件 (${this.plugins.builtList.length}个内置，${this.plugins.localList.length}个本地，${this.plugins.npmList.length}个模块)`,
         );
         this.logger.info(
-            `已挂载(${this.services.size})个服务(${[...this.services.keys()].join()})`,
+            `已挂载(${this.services.size})个服务(${[
+                ...this.services.keys(),
+            ].join()})`,
         );
         await this.emitSync("before-ready");
         this.isReady = true;
@@ -579,10 +667,12 @@ export namespace Zhin {
             },
         },
     };
-    type BeforeEventMap = {} & BeforeLifeCycle<LifeCycle> & BeforeLifeCycle<ServiceLifeCycle>;
-    type Prefix<P extends string, T extends string | symbol | number> = T extends string | number
-        ? `${P}-${T}`
-        : `${P}-${string}`;
+    type BeforeEventMap = {} & BeforeLifeCycle<LifeCycle> &
+        BeforeLifeCycle<ServiceLifeCycle>;
+    type Prefix<
+        P extends string,
+        T extends string | symbol | number,
+    > = T extends string | number ? `${P}-${T}` : `${P}-${string}`;
     type AfterEventMap = {} & AfterLifeCycle<LifeCycle>;
     type BeforeLifeCycle<T extends Dict> = {
         [P in keyof T as Prefix<"before", P>]: T[P];
@@ -621,19 +711,25 @@ export namespace Zhin {
 
     export type BaseEventMap = Record<string, (...args: any[]) => any>;
 
-    export interface BotEventMaps extends Record<keyof Zhin.Adapters, BaseEventMap> {
+    export interface BotEventMaps
+        extends Record<keyof Zhin.Adapters, BaseEventMap> {
         icqq: IcqqEventMap;
     }
 
     type FlatBotEventMap<P = keyof BotEventMaps> = P extends keyof BotEventMaps
         ? {
-              [E in keyof BotEventMaps[P] as MapKey<P, E>]: (session: NSession<P, E>) => void;
+              [E in keyof BotEventMaps[P] as MapKey<P, E>]: (
+                  session: NSession<P, E>,
+              ) => void;
           }
         : {};
-    type MapKey<S extends string, K extends string | number | symbol> = K extends string | number
-        ? `${S}.${K}`
-        : K;
-    type MapValue<M extends BaseEventMap, E extends keyof M> = M[E] extends (...args: any[]) => any
+    type MapKey<
+        S extends string,
+        K extends string | number | symbol,
+    > = K extends string | number ? `${S}.${K}` : K;
+    type MapValue<M extends BaseEventMap, E extends keyof M> = M[E] extends (
+        ...args: any[]
+    ) => any
         ? M[E]
         : (...args: any[]) => any;
 
@@ -645,11 +741,21 @@ export namespace Zhin {
     export type AdapterConfig = {
         [P in keyof Zhin.Adapters]?: AdapterOptionsType<Adapters[P]>;
     };
-    export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal" | "mark" | "off";
+    export type LogLevel =
+        | "trace"
+        | "debug"
+        | "info"
+        | "warn"
+        | "error"
+        | "fatal"
+        | "mark"
+        | "off";
 
     export interface Modules {
         plugin: Plugin.Options;
-        service: Services[keyof Services] | ServiceConstructor<Services[keyof Services]>;
+        service:
+            | Services[keyof Services]
+            | ServiceConstructor<Services[keyof Services]>;
         adapter: Adapter.Install;
     }
 
@@ -672,7 +778,10 @@ export namespace Zhin {
         data_dir?: string;
     }
 
-    export type ServiceConstructor<R, T = any> = new (ctx: Context, options?: T) => R;
+    export type ServiceConstructor<R, T = any> = new (
+        ctx: Context,
+        options?: T,
+    ) => R;
 
     export function createContext<T extends object>(context: T): T {
         const whiteList = ["Math", "Date", "JSON"];
@@ -769,7 +878,8 @@ export namespace Zhin {
                     return undefined;
                 }
                 const value = Reflect.get(target, key, receiver);
-                if (value === undefined) return Reflect.get(target["session"] || {}, key, receiver);
+                if (value === undefined)
+                    return Reflect.get(target["session"] || {}, key, receiver);
                 return Reflect.get(target, key, receiver);
             },
         });
@@ -780,9 +890,16 @@ export namespace Zhin {
 export const isWin = process.platform === "win32";
 
 export function createWorker(options: Zhin.WorkerOptions) {
-    const { entry = "lib", mode = "production", config: configPath = "zhin.yaml" } = options || {};
+    const {
+        entry = "lib",
+        mode = "production",
+        config: configPath = "zhin.yaml",
+    } = options || {};
     if (!fs.existsSync(path.join(process.cwd(), configPath)))
-        fs.writeFileSync(path.join(process.cwd(), configPath), Yaml.dump(options));
+        fs.writeFileSync(
+            path.join(process.cwd(), configPath),
+            Yaml.dump(options),
+        );
     const forkOptions: ForkOptions = {
         env: {
             ...process.env,
@@ -811,7 +928,11 @@ export function createWorker(options: Zhin.WorkerOptions) {
     });
     const closingCode = [0, 130, 137];
     cp.on("exit", code => {
-        if (!config || closingCode.includes(code) || (code !== 51 && !config.autoRestart)) {
+        if (
+            !config ||
+            closingCode.includes(code) ||
+            (code !== 51 && !config.autoRestart)
+        ) {
             process.exit(code);
         }
         timeStart = new Date().getTime();
