@@ -41,7 +41,7 @@ npm install @zhinjs/cli && npm link @zhinjs/cli
 
 启动完成后，默认只启用了`help`,`daemon`,`watcher`插件若你在初始化时选择了安装其他官方插件，请打开项目根目录下的`zhin.yaml` 按照配置文件中的<span style="color:yellow">`plugins`</span>字段增加配置，其中key为插件名，对应value为配置，知音会自动加载对应插件
 
-> <p style="color:tomato">即使该插件没有配置，也需要配置其 value 为null，因为 Zhin 是按配置文件加载插件的，未在 plugins 中配置的插件不会加载</p>
+> <p style="color:tomato">Zhin 会默认自动加载扫描到的所有插件，如果需要不加载某个插件，可在对应 Bot 的 Config 声明 disable_plugins。</p>
 
 ## 5.编写插件
 
