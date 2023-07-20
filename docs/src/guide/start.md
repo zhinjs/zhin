@@ -1,7 +1,7 @@
 # 安装 Zhin 机器人
 
 ::: tip
-阅读本节前，请确认你已完成 [准备工作](/guide/prepare)。
+阅读本节前，请确认你已正确配置 [Node.js](https://nodejs.org/zh-cn) 环境。
 :::
 
 ## 创建项目（三选一）

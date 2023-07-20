@@ -38,7 +38,6 @@ export default defineConfigWithTheme({
                     text: '介绍',
                     collapsible: true,
                     items: [
-                        {text: `索引`, link: '/guide/index'},
                         {text: `准备工作`, link: '/guide/prepare'},
                         {text: `安装`, link: '/guide/start'},
                         {text: `HelloWorld`, link: '/guide/repeater'},
@@ -48,11 +47,11 @@ export default defineConfigWithTheme({
                     text: '深入了解',
                     collapsible: true,
                     items: [
-                        {text: `插件(Plugin)`, link: '/guide/plugin'},
-                        {text: `指令(Command)`, link: '/guide/command'},
-                        {text: `可交互输入(Prompt)`, link: '/guide/prompt'},
-                        {text: `组件(Component)`, link: '/guide/component'},
-                        {text: `调用机器人API`, link: '/guide/bot'},
+                        {text: `插件 - Plugin`, link: '/guide/plugin'},
+                        {text: `指令 - Command`, link: '/guide/command'},
+                        {text: `可交互输入 - Prompt`, link: '/guide/prompt'},
+                        {text: `组件 - Component`, link: '/guide/component'},
+                        {text: `Bot API`, link: '/guide/bot'},
                     ]
                 },
                 {
