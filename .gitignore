@@ -1,6 +1,7 @@
 /zhin.yaml
 lib/
 /docs/.vitepress/dist/
+/docs/.vitepress/cache/
 /.idea/
 /.vscode/
 /.git/

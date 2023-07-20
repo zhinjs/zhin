@@ -1,19 +1,25 @@
 # 准备工作
-## 技能要求：
-1. 熟练使用[百度](https://www.baidu.com)、[必应](https://www.bing.com)等国内常用搜索引擎获取信息，有使用[谷歌](https://www.google.com)搜索引擎的能力更佳
-2. 熟悉`JavaScript`(后续简称`JS`)语言，具备阅读`JS`代码和编写`JS`代码的能力
-3. 了解`Typescript`(后续简称`TS`)，具备阅读`TS`代码的能力（可选）
-## 环境要求：
-- 操作系统：`Windows`、`Linux`、`MacOS`
-- 运行环境：`NodeJS`(>=16.0)
 
-可以使用如下指令查询当前设备的nodeJS版本:
+## 技能要求
+
+1. 熟练使用 [百度](https://www.baidu.com)、[必应](https://www.bing.com) 等搜索引擎获取信息，能 [谷歌](https://www.google.com) 更佳
+2. 熟悉 `JavaScript` (后续简称`JS`)，具备 `JS` 代码的阅读和编写能力
+3. 了解 `Typescript` (后续简称`TS`)，具备阅读 `TS` 代码的能力（可选）
+
+## 环境要求
+
+- 操作系统
+  - `Windows`
+  - `Linux`
+  - `MacOS`
+- 运行环境
+  - `Node.js` (要求版本 >= 16.0)
+
+可以使用如下指令查询当前设备的 Node.js 版本:
+
 ```bash
 node -v
 ```
 
-zhin为基于NodeJS开发的机器人框架，所以需要运行于NodeJS环境下，若未安装，请前往NodeJS官网，根据自身电脑配置，下载对应安装包，安装完成后继续
+Zhin 基于 Node.js 开发，需要安装 Node.js 环境，请根据自身需要到 [Node.js](https://nodejs.org/zh-cn) 官网下载安装。
 
-::: tip
-NodeJS官网下载链接：[https://nodejs.org/en/download/](https://nodejs.org/en/download/)
-::: 
