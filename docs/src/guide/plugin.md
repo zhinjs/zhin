@@ -1,42 +1,36 @@
-::: info通过本节的阅读，你将了解到如何新建一个插件、使用zhin提供的api实现一些简
-单的小功能，以及插件的发布 :::
+::: info
+通过本节的阅读，你将了解到如何新建一个插件、使用 Zhin 提供的 api 实现一些简单的小功能，以及插件的发布
+:::
 
 ## 插件类型
 
-zhin的插件共分为 `本地插件` 和 `npm 插件` 两大类。
+Zhin 的插件共分为 `本地插件` 和 `npm 插件` 两大类。
 
 - 本地插件
 
-本地插件将全部存放在根目录的 plugins 下。所有由你自己编写，并 仅供个人使用 的插
-件就可以称为本地插件。
+本地插件将全部存放在根目录的 plugins 下。所有由你自己编写，并仅供**个人使用**的插件就可以称为本地插件。
 
 - npm 插件
 
-npm 插件都是直接使用 `npm i` 命令安装，存放在 `node_modules` 目录下。是由我或者
-其他开发者编写，上传至 `npmjs` 平台，为 **所有使用 zhin 框架的人** 提供服务。
+npm 插件都是直接使用 `npm i` 命令安装，存放在 `node_modules` 目录下。是由我或者其他开发者编写，上传至 `npmjs` 平台，为 **所有使用 zhin 框架的人** 提供服务。
 
-还记得在初始化项目时输入的 `zhin init` 么，在界面会有一个选择安装插件的步骤，那
-些插件就全部属于 `npm 插件`。
+还记得在初始化项目时输入的 `zhin init` 么，在界面会有一个选择安装插件的步骤，那些插件就全部属于 `npm 插件`。
 
-如果你对 npmjs 并不了解也没关系，在这里只会介绍本地插件的编写。但是如果你想对
-zhin 有一个更深入的了解，还是需要熟悉 nodejs 及 npmjs 的基本原理。
+如果你对 npmjs 并不了解也没关系，在这里只会介绍本地插件的编写。但是如果你想对 Zhin 有一个更深入的了解，还是需要熟悉 Node.js 及 npmjs 的基本原理。
 
 ## 新建插件
 
 ::: tip
+1. Zhin 同时支持使用 JS 和 TS 编写插件.
+2. 为了更好的开发体验，建议使用 TS 编写插件。
+3. 并且在 2.x 版本后，支持使用 `setup 语法` 编写插件，这将在后面的章节中介绍。
+:::
 
-1. zhin 同时支持使用javascript和typescript编写插件.
+Zhin 为开发者提供了两种方式来新建一个插件，分别是通过 `cli` 和`手动创建`。推荐使用 `cli` 创建，因为这样可以省去很多重复的工作。现在我们就来看看如何创建一个插件。
 
-2. 为了更好的开发体验，建议使用typescript编写插件。
+### 1. cli 创建
 
-3. 并且在2.x版本后，支持使用`setup语法`编写插件，这将在后面的章节中介绍。:::
-   zhin为开发者提供了两种方式来新建一个插件，分别是通过`cli`和`手动创建`。推荐使
-   用`cli`创建，因为这样可以省去很多重复的工作。现在我们就来看看如何创建一个插
-   件。
-
-### 1. cli创建
-
-- 此方式需要你安装了zhin脚手架`@zhinjs/cli`
+- 此方式需要你安装了 Zhin 脚手架 `@zhinjs/cli`
 - 如果你还没有安装，可以通过以下命令进行安装
 
 ```shell
@@ -46,17 +40,17 @@ npm i -g @zhinjs/cli
 - 安装完成后，你就可以通过以下命令创建一个插件了
 
 ```shell
-zhin new test -t # 此处test为插件名, -t选项表示使用ts进行开发, 如果不加-t选项, 则默认使用js进行开发，如果你想使用setup语法开发，可以加上-s选项
+zhin new test -t # 此处 test 为插件名, -t 选项表示使用 TS 进行开发, 如果不加 -t 选项, 则默认使用 JS 进行开发，如果你想使用 setup 语法开发，可以加上 -s 选项
 ```
 
 ### 2. 手动创建
 
-1. 手动创建插件需要你自己创建目录，然后在目录下创建`src`目录，最后在`src`目录下
-   创建`index.ts`文件，这个文件就是插件的主入口文件。
-2. 如果你想使用setup语法开发，则必须添加package.json文件，并在内容中添
-   加`"setup": true`字段，否则zhin将会以普通插件的方式进行加载。
+1. 手动创建插件需要你自己创建目录，然后在目录下创建 `src` 目录，最后在 `src` 目录下创建 `index.ts` 文件，这个文件就是插件的主入口文件。
+2. 如果你想使用 setup 语法开发，则必须添加 package.json 文件，并在内容中添加 `"setup": true` 字段，否则zhin将会以普通插件的方式进行加载。
 
-- 完成创建后，插件目录大体如下：::: code-group
+- 完成创建后，插件目录大体如下：
+
+::: code-group
 
 ```txt [JavaScript]
 plugins/
@@ -75,8 +69,7 @@ plugins/
 
 :::
 
-- 后续章节中，我们将以`cli`创建的插件为例进行讲解，如果你使用手动创建的方式，也
-  可以参考`cli`创建的插件进行开发。
+- 后续章节中，我们将以 `cli` 创建的插件为例进行讲解，如果你使用手动创建的方式，也可以参考 `cli` 创建的插件进行开发。
 
 ## 插件开发
 
@@ -87,7 +80,7 @@ plugins/
 
 ::: code-group
 
-```javascript [javascript]
+```javascript [JavaScript]
 // index.js
 module.exports = {
   name: "js",
@@ -140,7 +133,7 @@ module.exports = {
 };
 ```
 
-```typescript [typescript]
+```typescript [TypeScript]
 // src/index.ts
 import { Plugin, Context } from "zhin";
 export const name = "ts";
@@ -187,7 +180,7 @@ export function install(this: Plugin, ctx: Context) {
 }
 ```
 
-```javascript [javascript-setup]
+```javascript [JavaScript-setup]
 // index.js
 const { useContext } = require("zhin");
 const ctx = useContext();
@@ -232,7 +225,7 @@ ctx.on('dispose',()=>{
 */
 ```
 
-```typescript [typescript-setup]
+```typescript [TypeScript-setup]
 // src/index.ts
 import { useContext } from "zhin";
 
@@ -287,7 +280,7 @@ ctx.on('dispose',()=>{
 
 ::: code-group
 
-```javascript [javascript]
+```javascript [JavaScript]
 // index.js
 module.exports = {
   name: "test",
@@ -308,7 +301,7 @@ module.exports = {
 };
 ```
 
-```typescript [typescript]
+```typescript [TypeScript]
 // src/index.ts
 import { Plugin } from "zhin";
 export const name = "test";
@@ -323,7 +316,7 @@ export function install(this: Plugin, ctx: Context) {
 }
 ```
 
-```javascript [javascript-setup]
+```javascript [JavaScript-setup]
 // index.js
 const { useContext } = require("zhin");
 const ctx = useContext();
@@ -336,7 +329,7 @@ ctx
   });
 ```
 
-```typescript [typescript-setup]
+```typescript [TypeScript-setup]
 // src/index.ts
 import { useContext } from "zhin";
 const ctx = useContext();
@@ -349,14 +342,15 @@ ctx
   });
 ```
 
-::: 现在，你可以给bot发送`test -f hello`来测试一下了（如果对应bot有配置prefix，
-需要在发送的指令前边加上对应prefix）
+:::
+
+现在，你可以给 Bot 发送 `test -f hello` 来测试一下了（如果对应 Bot 有配置 prefix，需要在发送的指令前边加上对应 prefix）
 
 ### 2.2 定义中间件
 
 ::: code-group
 
-```javascript [javascript]
+```javascript [JavaScript]
 // index.js
 module.exports = {
   name: "test",
@@ -378,7 +372,7 @@ module.exports = {
 };
 ```
 
-```typescript [typescript]
+```typescript [TypeScript]
 // src/index.ts
 import { Plugin } from "zhin";
 export const name = "test";
@@ -394,7 +388,7 @@ export function install(this: Plugin, ctx: Context) {
 }
 ```
 
-```javascript [javascript-setup]
+```javascript [JavaScript-setup]
 // index.js
 const { useContext } = require("zhin");
 const ctx = useContext();
@@ -408,7 +402,7 @@ ctx.middleware(async (session, next) => {
 });
 ```
 
-```typescript [typescript-setup]
+```typescript [TypeScript-setup]
 // src/index.ts
 import { useContext } from "zhin";
 const ctx = useContext();
@@ -422,15 +416,19 @@ ctx.middleware(async (session, next) => {
 });
 ```
 
-::: ::: info如果你使用过koa，那么你应该知道这是在干嘛
+:::
 
-如果你不知道，那么你可以看看[这里](https://koa.bootcss.com/#context) :::
+::: info
+如果你使用过 koa，那么你应该知道这是在干嘛。
+
+如果你不知道，那么你可以看看[这里](https://koa.bootcss.com/#context) 
+:::
 
 ### 2.3 监听事件
 
 ::: code-group
 
-```javascript [javascript]
+```javascript [JavaScript]
 // index.js
 module.exports = {
   name: "test",
@@ -447,7 +445,7 @@ module.exports = {
 };
 ```
 
-```typescript [typescript]
+```typescript [TypeScript]
 // src/index.ts
 import { Plugin } from "zhin";
 export const name = "test";
@@ -458,7 +456,7 @@ export function install(this: Plugin, ctx: Context) {
 }
 ```
 
-```javascript [javascript-setup]
+```javascript [JavaScript-setup]
 // index.js
 const { useContext } = require("zhin");
 const ctx = useContext();
@@ -467,7 +465,7 @@ ctx.on("message", ({ session }) => {
 });
 ```
 
-```typescript [typescript-setup]
+```typescript [TypeScript-setup]
 // src/index.ts
 import { useContext } from "zhin";
 const ctx = useContext();
@@ -476,13 +474,15 @@ ctx.on("message", ({ session }) => {
 });
 ```
 
-::: 可监听的事件及返回参数可以参考[事件地图](/api/event/map)
+:::
+
+可监听的事件及返回参数可以参考 [事件地图](/api/event/map)。
 
 ### 2.4 定义服务
 
 ::: code-group
 
-```javascript [javascript]
+```javascript [JavaScript]
 // index.js
 module.exports = {
   name: "test",
@@ -499,7 +499,7 @@ module.exports = {
 };
 ```
 
-```typescript [typescript]
+```typescript [TypeScript]
 // src/index.ts
 import { Plugin } from "zhin";
 export const name = "test";
@@ -519,7 +519,7 @@ export function install(this: Plugin, ctx: Context) {
 }
 ```
 
-```javascript [javascript-setup]
+```javascript [JavaScript-setup]
 // index.js
 const { useContext } = require("zhin");
 const ctx = useContext();
@@ -528,7 +528,7 @@ ctx.service("test", {
 });
 ```
 
-```typescript [typescript-setup]
+```typescript [TypeScript-setup]
 // src/index.ts
 import { useContext } from "zhin";
 const ctx = useContext();
@@ -546,17 +546,19 @@ ctx.service("test", {
 });
 ```
 
-::: ::: tip服务名不可重复，否则会报错
+:::
 
-服务名不可为zhin内置的服务名，否则会报错
-
-内置服务可参考[内置服务](/api/service) :::
+::: tip
+- 服务名不可重复，否则会报错
+- 服务名不可为 Zhin 内置的服务名，否则会报错
+- 内置服务可参考 [内置服务](/api/service)
+:::
 
 ### 2.5 使用自定义服务
 
 ::: code-group
 
-```javascript [javascript]
+```javascript [JavaScript]
 // index.js
 module.exports = {
   name: "test",
@@ -573,7 +575,7 @@ module.exports = {
 };
 ```
 
-```typescript [typescript]
+```typescript [TypeScript]
 // src/index.ts
 import { Plugin } from "zhin";
 export const name = "test";
@@ -584,7 +586,7 @@ export function install(this: Plugin, ctx: Context) {
 }
 ```
 
-```javascript [javascript-setup]
+```javascript [JavaScript-setup]
 // index.js
 const { useContext } = require("zhin");
 const ctx = useContext();
@@ -593,7 +595,7 @@ ctx.command("test").action(({ session }) => {
 });
 ```
 
-```typescript [typescript-setup]
+```typescript [TypeScript-setup]
 // src/index.ts
 import { useContext } from "zhin";
 const ctx = useContext();
@@ -602,14 +604,17 @@ ctx.command("test").action(({ session }) => {
 });
 ```
 
-::: ::: tip如果你使用了typescript，那么你需要在使用服务前声明服务的类型，否则会
-报错 :::
+:::
+
+::: tip
+如果你使用了 TypeScript，那么你需要在使用服务前声明服务的类型，否则会报错
+:::
 
 ### 2.6 生命周期
 
 ::: code-group
 
-```javascript [javascript]
+```javascript [JavaScript]
 // index.js
 module.exports = {
   name: "test",
@@ -627,7 +632,7 @@ module.exports = {
 };
 ```
 
-```typescript [typescript]
+```typescript [TypeScript]
 // src/index.ts
 import { Plugin } from "zhin";
 export const name = "test";
@@ -639,7 +644,7 @@ export function install(this: Plugin, ctx: Context) {
 }
 ```
 
-```javascript [javascript-setup]
+```javascript [JavaScript-setup]
 // index.js
 const { useContext, onDispose } = require("zhin");
 const ctx = useContext();
@@ -649,7 +654,7 @@ onDispose(() => {
 });
 ```
 
-```typescript [typescript-setup]
+```typescript [TypeScript-setup]
 // src/index.ts
 import { useContext, onDispose } from "zhin";
 const ctx = useContext();
@@ -659,9 +664,13 @@ onDispose(() => {
 });
 ```
 
-::: 除此之外，在setup语法中，你还可以使用useEffect来监听生命周期 ::: code-group
+:::
 
-```javascript [javascript-setup]
+除此之外，在 setup 语法中，你还可以使用 useEffect 来监听生命周期
+
+::: code-group
+
+```javascript [JavaScript-setup]
 // index.js
 const { useContext, useEffect } = require("zhin");
 useEffect(() => {
@@ -673,7 +682,7 @@ useEffect(() => {
 });
 ```
 
-```typescript [typescript-setup]
+```typescript [TypeScript-setup]
 // src/index.ts
 import { useContext, useEffect } from "zhin";
 useEffect(() => {
@@ -687,9 +696,9 @@ useEffect(() => {
 
 :::
 
-### 2.7. 获取zhin.yaml中的指定配置
+### 2.7. 获取 zhin.yaml 中的指定配置
 
-假设zhin.yaml中有如下配置
+假设 `zhin.yaml` 中有如下配置
 
 ```yaml
 test:
@@ -698,7 +707,7 @@ test:
 
 ::: code-group
 
-```javascript [javascript]
+```javascript [JavaScript]
 // index.js
 const { useOption } = require("zhin");
 module.exports = {
@@ -715,7 +724,7 @@ module.exports = {
 };
 ```
 
-```typescript [typescript]
+```typescript [TypeScript]
 // src/index.ts
 import { Plugin } from "zhin";
 import { useOption } from "zhin";
@@ -726,7 +735,7 @@ export function install(this: Plugin, ctx: Context) {
 }
 ```
 
-```javascript [javascript-setup]
+```javascript [JavaScript-setup]
 // index.js
 const { useContext } = require("zhin");
 const ctx = useContext();
@@ -734,7 +743,7 @@ const option = ctx.option("test"); // 获取zhin.yaml中的test配置
 console.log(option);
 ```
 
-```typescript [typescript-setup]
+```typescript [TypeScript-setup]
 // src/index.ts
 import { useContext } from "zhin";
 const ctx = useContext();
@@ -742,9 +751,13 @@ const option = ctx.option("test"); // 获取zhin.yaml中的test配置
 console.log(option);
 ```
 
-::: 在setup中，你还可以使用useEffect来监听配置的变化 ::: code-group
+:::
 
-```javascript [javascript-setup]
+在 setu p中，你还可以使用 useEffect 来监听配置的变化。
+
+::: code-group
+
+```javascript [JavaScript-setup]
 // index.js
 const { useContext, useEffect } = require("zhin");
 const ctx = useContext();
@@ -754,7 +767,7 @@ useEffect((newOption, oldOption) => {
 }, option);
 ```
 
-```typescript [typescript-setup]
+```typescript [TypeScript-setup]
 // src/index.ts
 import { useContext, useEffect } from "zhin";
 const ctx = useContext();
@@ -764,4 +777,6 @@ useEffect((newOption, oldOption) => {
 }, option);
 ```
 
-::: 在配置变化时，useEffect会被调用，第一个参数为新的配置，第二个参数为旧的配置
+:::
+
+在配置变化时，useEffect 会被调用，第一个参数为新的配置，第二个参数为旧的配置
