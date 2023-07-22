@@ -476,13 +476,6 @@ export class Zhin extends Context {
         await this.emitSync("after-start");
     }
 
-    async emitSync(event, ...args) {
-        const listeners = this.listeners(event);
-        for (const listener of listeners) {
-            await listener.apply(this, args);
-        }
-    }
-
     // 停止 zhin
     stop() {
         this.dispose();

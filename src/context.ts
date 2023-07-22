@@ -701,6 +701,12 @@ export class Context extends EventEmitter {
         );
     }
 
+    async emitSync(event, ...args) {
+        const listeners = this.listeners(event);
+        for (const listener of listeners) {
+            await listener.apply(this, args);
+        }
+    }
     /**
      * 执行某一event的所有listener，并获取其返回值
      * @param event 事件名
