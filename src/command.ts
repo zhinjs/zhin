@@ -701,6 +701,7 @@ export namespace Command {
                 if (argConfig.initialValue !== undefined) argv.args[i] = argConfig.initialValue;
                 else throw new Error(`arg ${argConfig.name} is required`);
             }
+            if (arg === undefined && !argConfig.required) continue;
             if (!Command.validate(argConfig.type, argConfig.rest, arg))
                 throw new Error(`arg ${argConfig.name} should be ${argConfig.type}`);
         }
@@ -711,6 +712,7 @@ export namespace Command {
                     argv.options[option] = optionConfig.initialValue;
                 else throw new Error(`option ${option} is required`);
             }
+            if (argv.options[option] === undefined && !optionConfig.required) continue;
             const validate =
                 optionConfig.type &&
                 domains[optionConfig.type] &&
