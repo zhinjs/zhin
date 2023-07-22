@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.3.6](https://github.com/zhinjs/zhin/compare/v2.3.5...v2.3.6) (2023-07-22)
+
+
+### Bug Fixes
+
+* fix md err & typo error ([eb6e855](https://github.com/zhinjs/zhin/commit/eb6e8555284ad03a2eca276900194e772595316c))
+* 内置适配器优化，格式化控制台输入输出，修复内置类型user_id错误 ([652d029](https://github.com/zhinjs/zhin/commit/652d029d7f1860ab82a6896c297f19e036e2481b))
+* 服务生命周期优化 ([b1189af](https://github.com/zhinjs/zhin/commit/b1189af709c08227cdda60d515c8a1047ba0d215))
+* 生命周期优化 ([0a41a27](https://github.com/zhinjs/zhin/commit/0a41a274e3c81ceb7cb1384bf7442ffbccc1801c))
+* 生命周期优化 ([a000836](https://github.com/zhinjs/zhin/commit/a000836a1bbf566c895bee80163448e1a4ecfcf1))
+* 生命周期类型优化 ([c15c6d1](https://github.com/zhinjs/zhin/commit/c15c6d1d8530a4eb04b640e2a1b0a0ec3d62a92b))
+
 ## [2.3.5](https://github.com/zhinjs/zhin/compare/v2.3.4...v2.3.5) (2023-07-19)
 
 
