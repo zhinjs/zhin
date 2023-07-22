@@ -1,6 +1,6 @@
 import { Dict, isEmpty } from "@zhinjs/shared";
 import { Session } from "@/session";
-import { Element } from "@/element";
+import { Element, h } from "@/element";
 
 type Argv = {
     name: string;
@@ -247,7 +247,7 @@ export class Command<A extends any[] = [], O = {}> {
         try {
             runtime = this.parse(session, template);
         } catch (e) {
-            return e.message;
+            return h("text", { text: e.message });
         }
         if (!runtime) return;
         const filterFn = Command.createFilterFunction(this.filters);
@@ -284,24 +284,23 @@ export class Command<A extends any[] = [], O = {}> {
             argv.name = this.name;
             const { args = [], options = {} } = sugar;
             for (let i = 0; i < args.length; i++) {
-                const arg = args[i];
+                let arg = args[i];
                 const argConfig = this.argsConfig[i];
                 if (!argConfig) break;
                 if (typeof arg === "string" && arg.startsWith("$") && matched[+arg.slice(1)]) {
-                    argv.args[i] = Command.transform(
+                    args[i] = arg = Command.transform(
                         [matched[+arg.slice(1)]],
                         argConfig.type as Command.Type,
                     );
-                } else if (getType(arg) === argConfig.type) {
-                    argv.args[i] = arg;
-                } else if (typeof arg === "string") {
-                    argv.args[i] = Command.transform([arg], argConfig.type as Command.Type);
-                } else if (
-                    argConfig.rest &&
-                    Array.isArray(arg) &&
-                    arg.every(item => getType(item) === argConfig.type)
-                ) {
-                    argv.args[i] = arg;
+                }
+                const isValid = Command.validate(argConfig.type, argConfig.rest, arg);
+                if (!isValid) throw new Error(`invalid argument ${arg} for ${argConfig.name}`);
+                if (!argConfig.rest) argv.args[i] = arg;
+                else {
+                    argv.args[i] = Command.transform(
+                        [arg, ...args],
+                        argConfig.type as Command.Type,
+                    );
                 }
             }
             for (const option of Object.keys(options)) {
@@ -312,23 +311,23 @@ export class Command<A extends any[] = [], O = {}> {
                     options[option].startsWith("$") &&
                     matched[+options[option].slice(1)]
                 ) {
-                    argv.options[option] = Command.transform(
+                    options[option] = Command.transform(
                         [matched[+options[option].slice(1)]],
                         optionConfig.type as Command.Type,
                     );
-                } else if (getType(options[option]) === optionConfig.type) {
-                    argv.options[option] = options[option];
-                } else if (typeof options[option] === "string") {
+                }
+                const isValid = Command.validate(
+                    optionConfig.type,
+                    optionConfig.rest,
+                    options[option],
+                );
+                if (!isValid) throw new Error(`invalid option ${option} for ${optionConfig.name}`);
+                if (!optionConfig.rest) argv.options[option] = options[option];
+                else {
                     argv.options[option] = Command.transform(
-                        options[option],
+                        [options[option]],
                         optionConfig.type as Command.Type,
                     );
-                } else if (
-                    optionConfig.rest &&
-                    Array.isArray(options[option]) &&
-                    options[option].every(item => getType(item) === optionConfig.type)
-                ) {
-                    argv.options[option] = options[option];
                 }
             }
         }
@@ -702,18 +701,8 @@ export namespace Command {
                 if (argConfig.initialValue !== undefined) argv.args[i] = argConfig.initialValue;
                 else throw new Error(`arg ${argConfig.name} is required`);
             }
-            const validate =
-                argConfig.type && domains[argConfig.type] && domains[argConfig.type].validate;
-            if (!validate) continue;
-            if (arg && argConfig.type && !validate(arg)) {
-                if (
-                    argConfig.rest &&
-                    Array.isArray(arg) &&
-                    arg.every(v => getType(v) === argConfig.type)
-                )
-                    continue;
+            if (!Command.validate(argConfig.type, argConfig.rest, arg))
                 throw new Error(`arg ${argConfig.name} should be ${argConfig.type}`);
-            }
         }
         for (const option in optionsConfig) {
             const optionConfig = optionsConfig[option];
@@ -731,7 +720,7 @@ export namespace Command {
                 if (
                     optionConfig.rest &&
                     Array.isArray(argv.options[option]) &&
-                    (argv.options[option] as any[]).every(v => getType(v) === optionConfig.type)
+                    (argv.options[option] as any[]).every(v => validate(argv.options[option]))
                 )
                     continue;
                 throw new Error(`option ${option} should be ${optionConfig.type}`);
@@ -740,7 +729,16 @@ export namespace Command {
     }
 
     export type Declare = `${string} ${string}` | string;
-
+    export function validate<T extends Type>(
+        type: string,
+        rest: boolean,
+        value: Domain[T] | Domain[T][],
+    ): boolean {
+        if (rest && Array.isArray(value)) return value.every(v => validate(type, false, v));
+        const domainConfig = domains[type];
+        if (!domainConfig) throw new Error(`type ${type} is not defined`);
+        return domainConfig.validate(value as Domain[T]);
+    }
     export function transform<T extends Type>(source: string[], type: T): Domain[T] {
         const domainConfig = domains[type];
         if (!domainConfig) throw new Error(`type ${type} is not defined`);
@@ -769,6 +767,7 @@ export namespace Command {
             return result;
         },
         transform: (...argv) => Element.parse(argv.join(" ")),
+        validate: value => !!value,
     });
     registerDomain("text", {
         parse: argv => {
@@ -793,8 +792,10 @@ export namespace Command {
     registerDomain("regexp", source => new RegExp(source));
     registerDomain("user_id", {
         transform: source => {
-            const autoCloseMention = source.match(/^<mention user_id="(\S+)"\/>$/);
-            const twinningMention = source.match(/^<mention user_id="(\S+)"[^>]+?>.*?<\/mention>$/);
+            const autoCloseMention = source.match(/^<mention user_id="(\S+)"[^\/]*?\/>$/);
+            const twinningMention = source.match(
+                /^<mention user_id="(\S+)"[^>]*?>[^<]*?<\/mention>$/,
+            );
             const matched = autoCloseMention || twinningMention;
             if (!matched) {
                 if (!/^\d+$/.test(source))
@@ -805,7 +806,9 @@ export namespace Command {
             }
             return matched[1].match(/^\d+$/) ? +matched[1] : matched[1];
         },
-        validate: value => ["string", "number"].includes(getType(value)),
+        validate: value => {
+            return ["string", "number"].includes(getType(value));
+        },
     });
     registerDomain("json", {
         transform: source => JSON.parse(source),

@@ -45,7 +45,7 @@ export abstract class Adapter<
         this.zhin.on("start", () => this.start());
         this.on("message.receive", (self_id: string | number, session: NSession<K>) => {
             this.zhin.logger.info(
-                `【${this.protocol}:${self_id}】 ↓ ${session.message_id}：${session.content}`,
+                `【${this.protocol}:${self_id}】 ↓ ( ${session.message_id} )\t${session.content}`,
             );
             this.botStatus(self_id).recv_msg_cnt++;
         });
@@ -72,7 +72,7 @@ export abstract class Adapter<
             set.add(message.message_id);
             this.botStatus(bot_id).sent_msg_cnt++;
             this.zhin.logger.info(
-                `【${this.protocol}:${bot_id}】 ↑ ${message.message_id}：${message.content}`,
+                `【${this.protocol}:${bot_id}】 ↑ ( ${message.message_id} )\t${message.content}`,
             );
             this.zhin.emit("message.send", message);
         });

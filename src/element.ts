@@ -399,7 +399,7 @@ export namespace Element {
             .join("");
     }
 
-    function transform(element: Element, runtime) {
+    function runWith(element: Element, runtime) {
         const { attrs, children } = element;
         for (const e of [element, ...children]) {
             if (e.type !== "text") continue;
@@ -473,13 +473,13 @@ export namespace Element {
                 if (loop) {
                     const [_, name, value] = /(\S+)\sin\s(\S+)/.exec(loop);
                     const fn = new Function(
-                        "element,transform,render,runtime",
-                        `const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{...transform(element,runtime),${name}:runtime.${value}[${name}]});with (runtime) {RESULT.push(render.apply(runtime,[element.attrs,element.children]));};};return RESULT;`,
+                        "element,runWith,render,runtime",
+                        `const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{...runWith(element,runtime),${name}:runtime.${value}[${name}]});with (runtime) {RESULT.push(render.apply(runtime,[element.attrs,element.children]));};};return RESULT;`,
                     );
-                    component = fn(element, transform, render, runtime).flat();
+                    component = fn(element, runWith, render, runtime).flat();
                 } else {
                     if (when && !evaluate(when, runtime)) return;
-                    Object.assign(runtime, transform(element, runtime));
+                    Object.assign(runtime, runWith(element, runtime));
                     component = render.apply(runtime, [
                         element.attrs,
                         element.children,
@@ -490,12 +490,12 @@ export namespace Element {
                 if (loop) {
                     const [_, name, value] = /(\S+)\sin\s(\S+)/.exec(loop);
                     const fn = new Function(
-                        "element,transform,runtime",
-                        `const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{${name}:runtime.${value}[${name}]});RESULT.push({...element,...transform(element,runtime)})};return RESULT;`,
+                        "element,runWith,runtime",
+                        `const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{${name}:runtime.${value}[${name}]});RESULT.push({...element,...runWith(element,runtime)})};return RESULT;`,
                     );
-                    output.push(...fn(element, transform, runtime));
+                    output.push(...fn(element, runWith, runtime));
                 } else {
-                    const newAttrs = transform(element, runtime);
+                    const newAttrs = runWith(element, runtime);
                     Object.assign(element, newAttrs);
                     output.push(element);
                 }
@@ -507,7 +507,30 @@ export namespace Element {
         });
         return typeof source === "string" ? output.join("") : output;
     }
+    type Rule<T = any> = (attr: Dict, children?: (T | string)[]) => Promise<T> | T;
 
+    /**
+     * 将Element根据rules转换为其他类型
+     * @param elements {Element[]} Element数组
+     * @param rules {Dict<Rule>} 转换规则
+     */
+    export async function transform<T>(elements: Element[], rules: Dict<Rule<T>>) {
+        let result: (T | string)[] = [];
+        for (const element of elements) {
+            let { type, children, attrs } = element;
+            const rule = rules[type] ?? rules.default ?? true;
+            if (rule === true) {
+                result.push(element.toString());
+                continue;
+            }
+            if (children && children.length) {
+                result.push(await rule(attrs, await transform(children, rules)));
+            } else {
+                result.push(await rule(attrs));
+            }
+        }
+        return result;
+    }
     export async function renderAsync<S>(
         this: Session<any>,
         source: Element.Fragment,
@@ -538,13 +561,13 @@ export namespace Element {
                 if (loop) {
                     const [_, name, value] = /(\S+)\sin\s(\S+)/.exec(loop);
                     const fn = new Function(
-                        "element,transform,render,runtime",
-                        `const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{...transform(element,runtime),${name}:runtime.${value}[${name}]});with (runtime) {RESULT.push(render.apply(runtime,[element.attrs,element.children]));};};return RESULT;`,
+                        "element,runWith,render,runtime",
+                        `const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{...runWith(element,runtime),${name}:runtime.${value}[${name}]});with (runtime) {RESULT.push(render.apply(runtime,[element.attrs,element.children]));};};return RESULT;`,
                     );
-                    component = (await Promise.all(fn(element, transform, render, runtime))).flat();
+                    component = (await Promise.all(fn(element, runWith, render, runtime))).flat();
                 } else {
                     if (when && !evaluate(when, runtime)) continue;
-                    Object.assign(runtime, transform(element, runtime));
+                    Object.assign(runtime, runWith(element, runtime));
                     component = (await render.apply(runtime, [
                         element.attrs,
                         element.children,
@@ -555,12 +578,12 @@ export namespace Element {
                 if (loop) {
                     const [_, name, value] = /(\S+)\sin\s(\S+)/.exec(loop);
                     const fn = new Function(
-                        "element,transform,runtime",
-                        `const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{${name}:runtime.${value}[${name}]});RESULT.push({...element,...transform(element,runtime.session)})};return RESULT;`,
+                        "element,runWith,runtime",
+                        `const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{${name}:runtime.${value}[${name}]});RESULT.push({...element,...runWith(element,runtime.session)})};return RESULT;`,
                     );
-                    result.push(...fn(element, transform, runtime));
+                    result.push(...fn(element, runWith, runtime));
                 } else {
-                    const newAttrs = transform(element, runtime);
+                    const newAttrs = runWith(element, runtime);
                     Object.assign(element, newAttrs);
                     result.push(element);
                 }

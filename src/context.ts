@@ -319,7 +319,7 @@ export class Context extends EventEmitter {
      */
     async afterReady(callback: () => Promise<any>) {
         if (this.zhin.isReady) await callback();
-        return this.zhin.on("after-ready", callback);
+        return this.zhin.once("after-ready", callback);
     }
     /**
      * 在zhin启动前执行回调函数，如果zhin已经启动则立即执行
@@ -327,7 +327,7 @@ export class Context extends EventEmitter {
      */
     async beforeStart(callback: () => Promise<any>) {
         if (this.zhin.isStarted) await callback();
-        return this.zhin.on("before-start", callback);
+        return this.zhin.once("before-start", callback);
     }
     /**
      * 在zhin启动后执行回调函数，如果zhin已经启动则立即执行
@@ -335,7 +335,7 @@ export class Context extends EventEmitter {
      */
     async afterStart(callback: () => Promise<any>) {
         if (this.zhin.isStarted) await callback();
-        return this.zhin.on("after-start", callback);
+        return this.zhin.once("after-start", callback);
     }
     /**
      * 为当前上下文添加插件
