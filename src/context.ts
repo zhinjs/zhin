@@ -309,7 +309,7 @@ export class Context extends EventEmitter {
      * 在zhin就绪前执行回调函数，如果zhin已经就绪则立即执行
      * @param callback
      */
-    async beforeReady(callback: () => Promise<any>) {
+    async beforeReady(callback: () => Promise<any>):Promise<ToDispose<this>> {
         if (this.zhin.isReady) await callback();
         return this.zhin.on("before-ready", callback);
     }
@@ -317,25 +317,25 @@ export class Context extends EventEmitter {
      * 在zhin就绪后执行回调函数，如果zhin已经就绪则立即执行
      * @param callback 回调函数
      */
-    async afterReady(callback: () => Promise<any>) {
+    async afterReady(callback: () => Promise<any>):Promise<ToDispose<this>> {
         if (this.zhin.isReady) await callback();
-        return this.zhin.once("after-ready", callback);
+        return this.zhin.on("after-ready", callback);
     }
     /**
      * 在zhin启动前执行回调函数，如果zhin已经启动则立即执行
      * @param callback 回调函数
      */
-    async beforeStart(callback: () => Promise<any>) {
+    async beforeStart(callback: () => Promise<any>):Promise<ToDispose<this>> {
         if (this.zhin.isStarted) await callback();
-        return this.zhin.once("before-start", callback);
+        return this.zhin.on("before-start", callback);
     }
     /**
      * 在zhin启动后执行回调函数，如果zhin已经启动则立即执行
      * @param callback 回调函数
      */
-    async afterStart(callback: () => Promise<any>) {
+    async afterStart(callback: () => Promise<any>):Promise<ToDispose<this>> {
         if (this.zhin.isStarted) await callback();
-        return this.zhin.once("after-start", callback);
+        return this.zhin.on("after-start", callback);
     }
     /**
      * 为当前上下文添加插件
@@ -495,7 +495,7 @@ export class Context extends EventEmitter {
      * @param event 事件名
      * @param listener 回调函数
      */
-    on(event, listener) {
+    on(event, listener):ToDispose<this> {
         super.on(event, listener);
         const dispose = Dispose.from(this, () => {
             super.off(event, listener);
