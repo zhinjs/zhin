@@ -297,11 +297,11 @@ export class Context extends EventEmitter {
         }
         command.name = name;
         this.commands.set(command.name, command as any);
-        this.zhin.emit("command-add", command, this);
+        this.zhin.emit("command-add", command);
         this.disposes.push(() => {
             this.commands.delete(command.name);
             remove(command.parent?.children || [], command as any);
-            this.zhin.emit("command-remove", command, this);
+            this.zhin.emit("command-remove", command);
         });
     }
 
@@ -309,7 +309,7 @@ export class Context extends EventEmitter {
      * 在zhin就绪前执行回调函数，如果zhin已经就绪则立即执行
      * @param callback
      */
-    async beforeReady(callback: () => Promise<any>):Promise<ToDispose<this>> {
+    async beforeReady(callback: () => Promise<any>): Promise<ToDispose<this>> {
         if (this.zhin.isReady) await callback();
         return this.zhin.on("before-ready", callback);
     }
@@ -317,7 +317,7 @@ export class Context extends EventEmitter {
      * 在zhin就绪后执行回调函数，如果zhin已经就绪则立即执行
      * @param callback 回调函数
      */
-    async afterReady(callback: () => Promise<any>):Promise<ToDispose<this>> {
+    async afterReady(callback: () => Promise<any>): Promise<ToDispose<this>> {
         if (this.zhin.isReady) await callback();
         return this.zhin.on("after-ready", callback);
     }
@@ -325,7 +325,7 @@ export class Context extends EventEmitter {
      * 在zhin启动前执行回调函数，如果zhin已经启动则立即执行
      * @param callback 回调函数
      */
-    async beforeStart(callback: () => Promise<any>):Promise<ToDispose<this>> {
+    async beforeStart(callback: () => Promise<any>): Promise<ToDispose<this>> {
         if (this.zhin.isStarted) await callback();
         return this.zhin.on("before-start", callback);
     }
@@ -333,7 +333,7 @@ export class Context extends EventEmitter {
      * 在zhin启动后执行回调函数，如果zhin已经启动则立即执行
      * @param callback 回调函数
      */
-    async afterStart(callback: () => Promise<any>):Promise<ToDispose<this>> {
+    async afterStart(callback: () => Promise<any>): Promise<ToDispose<this>> {
         if (this.zhin.isStarted) await callback();
         return this.zhin.on("after-start", callback);
     }
@@ -478,10 +478,10 @@ export class Context extends EventEmitter {
         }
         command.name = name;
         this.commands.set(name, command);
-        this.zhin.emit("command-add", command, this);
+        this.zhin.emit("command-add", command);
         this.disposes.push(() => {
             this.commands.delete(name);
-            this.zhin.emit("command-remove", command, this);
+            this.zhin.emit("command-remove", command);
         });
         return command as Command<ArgsType<Command.RemoveFirst<S>>>;
     }
@@ -495,7 +495,7 @@ export class Context extends EventEmitter {
      * @param event 事件名
      * @param listener 回调函数
      */
-    on(event, listener):ToDispose<this> {
+    on(event, listener): ToDispose<this> {
         super.on(event, listener);
         const dispose = Dispose.from(this, () => {
             super.off(event, listener);
@@ -709,10 +709,6 @@ export class Context extends EventEmitter {
     bail(event, ...args) {
         let result;
         const listeners = this.listeners(event);
-        if (typeof event === "string") {
-            listeners.unshift(...this.listeners(`before-${event}`));
-            listeners.push(...this.listeners(`after-${event}`));
-        }
         for (const listener of listeners) {
             result = listener.apply(this, args);
             if (isBailed(result)) return result;
@@ -727,10 +723,6 @@ export class Context extends EventEmitter {
     async bailSync(event, ...args) {
         let result;
         const listeners = this.listeners(event);
-        if (typeof event === "string") {
-            listeners.unshift(...this.listeners(`before-${event}`));
-            listeners.push(...this.listeners(`after-${event}`));
-        }
         for (const listener of listeners) {
             result = await listener.apply(this, args);
             if (isBailed(result)) return result;
@@ -742,6 +734,7 @@ export class Context extends EventEmitter {
      * @param plugin
      */
     dispose(plugin?: Plugin | string) {
+        this.emit("before-dispose");
         if (plugin) {
             if (typeof plugin === "string") plugin = this.pluginList.find(p => p.name === plugin);
             if (plugin) {
@@ -754,13 +747,14 @@ export class Context extends EventEmitter {
             plugin.unmount();
             this.plugins.delete(plugin.options.fullName);
         });
-        this.emit("dispose");
         while (this.disposes.length) {
             const dispose = this.disposes.shift();
             try {
                 dispose();
             } catch {}
         }
+        this.emit("dispose");
+        this.emit("after-dispose");
     }
 
     /**

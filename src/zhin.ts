@@ -237,14 +237,6 @@ export class Zhin extends Context {
 
     emit(event, ...args) {
         const listeners = this.listeners(event);
-        if (
-            typeof event === "string" &&
-            !event.startsWith("before-") &&
-            !event.startsWith("after-")
-        ) {
-            listeners.unshift(...this.listeners(`before-${event}`));
-            listeners.push(...this.listeners(`after-${event}`));
-        }
         for (const listener of listeners) {
             listener.apply(this, args);
         }
@@ -486,13 +478,6 @@ export class Zhin extends Context {
 
     async emitSync(event, ...args) {
         const listeners = this.listeners(event);
-        if (
-            typeof event === "string" &&
-            !(event.startsWith("before-") || event.startsWith("after-"))
-        ) {
-            listeners.unshift(...this.listeners(`before-${event}`));
-            listeners.push(...this.listeners(`after-${event}`));
-        }
         for (const listener of listeners) {
             await listener.apply(this, args);
         }
@@ -603,22 +588,6 @@ export namespace Zhin {
         "ready"(): void;
 
         "dispose"(): void;
-
-        "message"(session: NSession<keyof Adapters>): void;
-
-        "message.send"(self_id: string | number, message: Bot.MessageRet): void;
-
-        "command-add"(command: Command): void;
-
-        "command-remove"(command: Command): void;
-
-        "plugin-add"(plugin: Plugin): void;
-
-        "plugin-remove"(plugin: Plugin): void;
-
-        "service-add"(serviceName: keyof Zhin.Services): void;
-
-        "service-remove"(serviceName: keyof Zhin.Services): void;
     }
 
     export type BaseEventMap = Record<string, (...args: any[]) => any>;
@@ -639,7 +608,23 @@ export namespace Zhin {
         ? M[E]
         : (...args: any[]) => any;
 
-    export type EventMap<T> = {} & LifeCycle &
+    export type EventMap<T> = {
+        "message"(session: NSession<keyof Adapters>): void;
+
+        "message.send"(self_id: string | number, message: Bot.MessageRet): void;
+
+        "command-add"(command: Command): void;
+
+        "command-remove"(command: Command): void;
+
+        "plugin-add"(plugin: Plugin): void;
+
+        "plugin-remove"(plugin: Plugin): void;
+
+        "service-add"(serviceName: keyof Zhin.Services): void;
+
+        "service-remove"(serviceName: keyof Zhin.Services): void;
+    } & LifeCycle &
         ServiceLifeCycle &
         BeforeEventMap &
         AfterEventMap &
