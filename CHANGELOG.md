@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.7](https://github.com/zhinjs/zhin/compare/v2.3.6...v2.3.7) (2023-07-22)
+
+
+### Bug Fixes
+
+* command参数验证错误 ([af10abc](https://github.com/zhinjs/zhin/commit/af10abc1ced7ba5a284f81eb93b03725495a0de6))
+
 ## [2.3.6](https://github.com/zhinjs/zhin/compare/v2.3.5...v2.3.6) (2023-07-22)
 
 
