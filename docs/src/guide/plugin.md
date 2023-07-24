@@ -95,7 +95,7 @@ module.exports = {
     // 1.定义指令
     /*
         ctx.command('test')
-            .option('foo','-f <bar:string>')
+            .option('-f [foo:string]')
             .action(({session,options})=>{
                 console.log('options',options);
                 return 'hello world'
@@ -143,7 +143,7 @@ export function install(this: Plugin, ctx: Context) {
   //1.定义指令
   /*
     ctx.command('test')
-        .option('foo','-f <bar:string>')
+        .option('-f [foo:string]')
         .action(({session,options})=>{
             console.log('options',options);
             return 'hello world'
@@ -189,7 +189,7 @@ const ctx = useContext();
 // 1.定义指令
 /*
 ctx.command('test')
-    .option('foo','-f <bar:string>')
+    .option('-f [foo:string]')
     .action(({session,options})=>{
         console.log('options',options);
         return 'hello world'
@@ -234,7 +234,7 @@ const ctx = useContext();
 //1.定义指令
 /*
 ctx.command('test')
-    .option('foo','-f <bar:string>')
+    .option('-f [foo:string]')
     .action(({session,options})=>{
         console.log('options',options);
         return 'hello world'
@@ -292,7 +292,7 @@ module.exports = {
   install(ctx) {
     ctx
       .command("test")
-      .option("-f <foo:string>")
+      .option("-f [foo:string]")
       .action(({ session, options }, foo) => {
         console.log("options", options);
         return "hello world";
@@ -308,7 +308,7 @@ export const name = "test";
 export function install(this: Plugin, ctx: Context) {
   ctx
     .command("test")
-    .option("-f <foo:string>")
+    .option("-f [foo:string]")
     .action(({ session, options }, foo) => {
       console.log("options", options);
       return "hello world";
@@ -322,7 +322,7 @@ const { useContext } = require("zhin");
 const ctx = useContext();
 ctx
   .command("test")
-  .option("-f <foo:string>")
+  .option("-f [foo:string]")
   .action(({ session, options }, foo) => {
     console.log("options", options);
     return "hello world";
@@ -335,7 +335,7 @@ import { useContext } from "zhin";
 const ctx = useContext();
 ctx
   .command("test")
-  .option("-f <foo:string>")
+  .option("-f [foo:string]")
   .action(({ session, options }, foo) => {
     console.log("options", options);
     return "hello world";

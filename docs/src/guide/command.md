@@ -82,7 +82,7 @@ ctx.command("send <arg1:face> [...rest:number]"); // 声明第一个参数为一
 ctx
   .command("music <keyword:string>")
   .option("-o [origin:boolean]") // 是否原声输出
-  .option("-p <platform:string>") // 选用音乐平台
+  .option("-p [platform:string]") // 选用音乐平台
   .option("-s [singer:number]") // 指定歌手id
   .action(({ options }, keyword) => JSON.stringify(options));
 ```
@@ -102,7 +102,7 @@ Zhin 的指令机制虽然能够尽可能避免冲突和误触发，但是也带
 ctx
   .command("music <keyword:string>")
   .option("-o [origin:boolean]") // 是否原声输出
-  .option("-p <platform:string>") // 选用音乐平台
+  .option("-p [platform:string]") // 选用音乐平台
   .option("-s [singer:number]") // 指定歌手id
   .sugar("qq点歌", { options: { platform: "qq", origin: true } }) // [!code ++]
   .action(({ options }, keyword) => JSON.stringify(options));
@@ -121,7 +121,7 @@ ctx
 ctx
   .command("music <keyword:string>")
   .option("-o [origin:boolean]") // 是否原声输出
-  .option("-p <platform:string>") // 选用音乐平台
+  .option("-p [platform:string]") // 选用音乐平台
   .option("-s [singer:number]") // 指定歌手id
   .sugar("qq点歌", { options: { platform: "qq", origin: true } })
   .sugar(/^来一首(.+)$/, {
