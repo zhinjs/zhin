@@ -104,6 +104,7 @@ export interface Zhin {
 }
 
 export class Zhin extends Context {
+    mode?: string;
     isReady: boolean = false;
     isStarted: boolean = false;
     options: Zhin.Options;
@@ -114,7 +115,9 @@ export class Zhin extends Context {
     get version() {
         return require("../package.json").version;
     }
-
+    get isDev() {
+        return this.mode === "dev";
+    }
     constructor(options: Zhin.Options) {
         super(null);
         const result = (this.zhin = new Proxy(this, {
@@ -441,7 +444,8 @@ export class Zhin extends Context {
     }
 
     // 启动zhin
-    async start(mode: "dev" | "devel" | "develop" | string) {
+    async start(mode: "dev" | "prod" | string) {
+        this.mode = mode;
         await this.emitSync("before-start");
         for (const adapter of Object.keys(this.options.adapters || {})) {
             try {
