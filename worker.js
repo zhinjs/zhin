@@ -1,6 +1,6 @@
 const path = require("path");
 
-const { configPath = "zhin.yaml", mode = "", entry } = process.env;
+let { configPath = "zhin.yaml", mode = "", entry } = process.env;
 
 const errorHandler = e => console.error(e);
 
