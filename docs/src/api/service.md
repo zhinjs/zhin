@@ -69,7 +69,7 @@ module.exports = {
 
 ```typescript
 import { Context } from "zhin";
-export const using = ["custom"]; // 定义这个，可以确保只有在custom服务正常时，插件才启用
+export const use = ["custom"]; // 定义这个，可以确保只有在custom服务正常时，插件才启用
 export function install(ctx: Context) {
   const oldConfig = ctx.custom.getConfig();
   ctx.custom.setConfig("hi");
@@ -80,7 +80,7 @@ export function install(ctx: Context) {
 
 ```javascript
 module.exports = {
-  using: ["custom"], // 定义这个，可以确保只有在custom服务正常时，插件才启用
+  use: ["custom"], // 定义这个，可以确保只有在custom服务正常时，插件才启用
   install(ctx) {
     const oldConfig = ctx.custom.getConfig();
     ctx.custom.setConfig("hi");

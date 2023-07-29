@@ -209,7 +209,7 @@ export namespace Plugin {
         type?: Source;
         enable?: boolean;
         scopes?: (keyof Zhin.Adapters)[];
-        using?: (keyof Zhin.Services)[];
+        use?: (keyof Zhin.Services)[];
         setup?: boolean;
         anonymous?: boolean;
         anonymousCount?: number;

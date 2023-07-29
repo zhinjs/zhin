@@ -268,13 +268,11 @@ export class Context extends EventEmitter {
             this.zhin.emit("plugin-add", plugin);
             return plugin;
         };
-        const using = (options.using ||= []);
+        const use = (options.use ||= []);
         const plugin = installPlugin();
-        if (!using.length) {
-            if (using.some(name => !this.zhin.services.has(name))) {
-                this.zhin.logger.warn(
-                    `插件(${options.name})所需服务(${using.join()})未就绪，已停用`,
-                );
+        if (!use.length) {
+            if (use.some(name => !this.zhin.services.has(name))) {
+                this.zhin.logger.warn(`插件(${options.name})所需服务(${use.join()})未就绪，已停用`);
                 plugin.disable();
             }
         }
@@ -345,7 +343,6 @@ export class Context extends EventEmitter {
         this.plugin(plugin);
         return this;
     }
-
     // 获取当前上下文所有中间件
     get middlewareList() {
         const result = [...this.plugins.values()].reduce(

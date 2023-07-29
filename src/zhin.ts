@@ -166,10 +166,10 @@ export class Zhin extends Context {
         });
         this.on("service-add", addName => {
             const plugins = this.pluginList.filter(
-                p => p.options.using && p.options.using.includes(addName),
+                p => p.options.use && p.options.use.includes(addName),
             );
             plugins.forEach(plugin => {
-                if (plugin.options.using.every(name => this.services.has(name))) {
+                if (plugin.options.use.every(name => this.services.has(name))) {
                     this.logger.info(`所需服务已全部就绪，插件(${plugin.name})已启用`);
                     plugin.enable();
                 }
@@ -177,10 +177,10 @@ export class Zhin extends Context {
         });
         this.on("service-remove", removeName => {
             const plugins = this.pluginList.filter(
-                p => p.options.using && p.options.using.includes(removeName),
+                p => p.options.use && p.options.use.includes(removeName),
             );
             plugins.forEach(plugin => {
-                if (plugin.options.using.some(name => !this.services.has(name))) {
+                if (plugin.options.use.some(name => !this.services.has(name))) {
                     this.logger.warn(`所需服务(${removeName})未就绪，插件(${plugin.name})已停用`);
                     plugin.disable();
                 }
@@ -432,7 +432,7 @@ export class Zhin extends Context {
             ...result,
             author: JSON.stringify(result.author),
             desc: result.desc,
-            using: (result.using ||= []),
+            use: (result.use ||= []),
             type: moduleType,
             category,
             fullName: ["official", "community"].includes(moduleType)
