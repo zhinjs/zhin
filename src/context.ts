@@ -369,9 +369,11 @@ export class Context extends EventEmitter {
     middleware(middleware: Middleware, prepend?: boolean) {
         const method: "push" | "unshift" = prepend ? "unshift" : "push";
         this.middlewares[method](middleware);
-        return Dispose.from(this, () => {
+        const dispose = Dispose.from(this, () => {
             return remove(this.middlewares, middleware);
         });
+        this.disposes.push(dispose);
+        return dispose;
     }
 
     /**
