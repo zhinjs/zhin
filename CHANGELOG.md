@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.3.9](https://github.com/zhinjs/zhin/compare/v2.3.8...v2.3.9) (2023-07-29)
+
+
+### Bug Fixes
+
+* rename using =&gt; use ([30ef3db](https://github.com/zhinjs/zhin/commit/30ef3dbc31f2eb5e9220a472b25c9286224453a4))
+* worker start error ([d38b10f](https://github.com/zhinjs/zhin/commit/d38b10f0afc781d0639ee7c00bdac3481acdf923))
+
 ## [2.3.8](https://github.com/zhinjs/zhin/compare/v2.3.7...v2.3.8) (2023-07-29)
 
 
