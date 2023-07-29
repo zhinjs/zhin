@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.8](https://github.com/zhinjs/zhin/compare/v2.3.7...v2.3.8) (2023-07-29)
+
+
+### Bug Fixes
+
+* middleware not remove when context dispose ([4aaefa3](https://github.com/zhinjs/zhin/commit/4aaefa3c395c76c05c93be4b283ff21ddd36a219))
+
 ## [2.3.7](https://github.com/zhinjs/zhin/compare/v2.3.6...v2.3.7) (2023-07-22)
 
 
