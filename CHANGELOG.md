@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.3.13](https://github.com/zhinjs/zhin/compare/v2.3.12...v2.3.13) (2023-07-30)
+
+
+### Bug Fixes
+
+* all config output error ([b0f0167](https://github.com/zhinjs/zhin/commit/b0f01673c77968c03c1f21784ff68614d24fb953))
+* 尝试标签属性值中有空白字符时报错 ([c377b0f](https://github.com/zhinjs/zhin/commit/c377b0fa70fd5719f4bbf7edd7bc8ea9e40ddb14))
+
 ## [2.3.12](https://github.com/zhinjs/zhin/compare/v2.3.11...v2.3.12) (2023-07-30)
 
 
