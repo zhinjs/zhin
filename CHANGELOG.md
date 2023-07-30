@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.10](https://github.com/zhinjs/zhin/compare/v2.3.9...v2.3.10) (2023-07-30)
+
+
+### Bug Fixes
+
+* 嵌套模板解析错误 ([f235fa6](https://github.com/zhinjs/zhin/commit/f235fa66594d2915c36565f509175905ab7999e6))
+
 ## [2.3.9](https://github.com/zhinjs/zhin/compare/v2.3.8...v2.3.9) (2023-07-29)
 
 
