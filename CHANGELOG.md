@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.3.11](https://github.com/zhinjs/zhin/compare/v2.3.10...v2.3.11) (2023-07-30)
+
+
+### Bug Fixes
+
+* update 指令错误 ([3042a1b](https://github.com/zhinjs/zhin/commit/3042a1b081ab23366c2e21b6d8d43c96edca781f))
+* 兼容用户误操作 ([95457c6](https://github.com/zhinjs/zhin/commit/95457c66a32bb28cd7976b28addacae075c94d76))
+
 ## [2.3.10](https://github.com/zhinjs/zhin/compare/v2.3.9...v2.3.10) (2023-07-30)
 
 
