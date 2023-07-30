@@ -581,7 +581,8 @@ export namespace Element {
                 } else {
                     const [type, ...attrStrArr] = match
                         .slice(1, match.endsWith("/>") ? -2 : -1)
-                        .split(/\s+/);
+                        .split(/\s+/)
+                        .filter(Boolean);
                     const attrs: Dict = attrStrArr.reduce((result, item) => {
                         const [key, value] = item.split("=");
                         result[key] = removeOuterQuoteOnce(value);
