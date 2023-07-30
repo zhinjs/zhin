@@ -23,7 +23,10 @@ function protectKeys(obj: Record<string, any>, keys: string[]) {
 }
 
 function outputConfig(config, key) {
-    if (!key) return JSON.stringify(protectKeys(config, ["password", "access_token"]), null, 2);
+    if (!key)
+        return h("text", {
+            text: JSON.stringify(protectKeys(config, ["password", "access_token"]), null, 2),
+        });
     const result = JSON.stringify(
         protectKeys(getValue(config, key), ["password", "access_token"]),
         null,
