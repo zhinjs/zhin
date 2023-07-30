@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.12](https://github.com/zhinjs/zhin/compare/v2.3.11...v2.3.12) (2023-07-30)
+
+
+### Bug Fixes
+
+* command config error ([ef84cd0](https://github.com/zhinjs/zhin/commit/ef84cd0b7ac563c7ba32f021bdd594d0a471590b))
+
 ## [2.3.11](https://github.com/zhinjs/zhin/compare/v2.3.10...v2.3.11) (2023-07-30)
 
 
