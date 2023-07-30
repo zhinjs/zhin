@@ -548,7 +548,7 @@ export namespace Element {
      * @returns {Element[]} Element数组
      */
     export const parseElementStack = (template: string) => {
-        const regex = /("[^"]*?"|'[^']*?'|`[^`]*?`|“[^”]*?”|’[^‘]*?‘|<[^>]+?>)/;
+        const regex = /("[^"]*?"|'[^']*?'|`[^`]*?`|“[^”]*?”|‘[^’]*?’|<[^>]+?>)/;
         const stack: Element[] = []; // 结果栈
         while (template.length) {
             const [match] = template.match(regex) || [];
@@ -581,7 +581,7 @@ export namespace Element {
                 } else {
                     const [type, ...attrStrArr] = match
                         .slice(1, match.endsWith("/>") ? -2 : -1)
-                        .split(/\s+/)
+                        .match(/[^=\s]+(=(".*?"|'.*?'|`.*?`|“.*?”|‘.*?’))?/g)
                         .filter(Boolean);
                     const attrs: Dict = attrStrArr.reduce((result, item) => {
                         const [key, value] = item.split("=");
