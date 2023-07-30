@@ -1,6 +1,7 @@
 import { Dict, isEmpty } from "@zhinjs/shared";
 import { Session } from "@/session";
 import { Element, h } from "@/element";
+import { findLastIndex, removeOuterQuoteOnce } from "@/utils";
 
 type Argv = {
     name: string;
@@ -461,77 +462,42 @@ export function defineCommand<S extends string>(
 export namespace Command {
     export const domains: Domains = {};
 
-    export function removeOuterQuoteOnce(str: string) {
-        if (str.startsWith('"') && str.endsWith('"')) return str.slice(1, -1);
-        if (str.startsWith("'") && str.endsWith("'")) return str.slice(1, -1);
-        if (str.startsWith("`") && str.endsWith("`")) return str.slice(1, -1);
-        return str;
-    }
-
     /**
-     * 解析参数
-     * @param args 参数数组
-     * @private
-     * @example
+     * 将一串字符串转换为参数数组，参数数组中的每一项都是一个字符串或标签
+     * @param text
      */
-    function joinNestedTags(args: string[]) {
-        const result: string[] = [];
-        const copyArgs = [...args];
-        while (copyArgs.length) {
-            const arg = copyArgs.shift();
-            if (!/^<[^>]+>$/.test(arg)) {
-                result.push(arg);
-                continue;
-            }
-            const tag = /^<([^>\s]+).*?>$/.exec(arg)?.[1] || "";
-            if (tag.startsWith("/")) {
-                result.push(arg);
-                continue;
-            }
-            const endTag = `</${tag}>`;
-            const index = copyArgs.findIndex(item => item === endTag);
-            if (index === -1) {
-                result.push(arg);
+    export function parseParams(text: string) {
+        const regex = /("[^"]*?"|'[^']*?'|`[^`]*?`|“[^”]*?”|’[^‘]*?‘|<[^>]+?>)/;
+        const stack: string[] = []; // 结果栈
+        while (text.length) {
+            const [match] = text.match(regex) || [];
+            if (!match) break;
+            const index = text.indexOf(match);
+            const prevText = text.slice(0, index);
+            if (prevText) stack.push(...prevText.split(" ").map(s => s || " "));
+            text = text.slice(index + match.length);
+            if (match.startsWith("<")) {
+                // 起始标签
+                if (match.startsWith("</")) {
+                    // 结束标签
+                    const tag = match.slice(2, -1);
+                    const startTagReg = new RegExp(`^<${tag}.*?>$`);
+                    const startTagIndex = findLastIndex(stack, item => startTagReg.test(item));
+                    if (startTagIndex === -1) {
+                        stack.push(match);
+                        continue;
+                    }
+                    const needJoinArg = stack.splice(startTagIndex);
+                    stack.push([...needJoinArg, match].join(""));
+                } else {
+                    stack.push(match);
+                }
             } else {
-                const needJoinArg = copyArgs.splice(0, index + 1);
-                const endTap = needJoinArg.pop();
-                result.push([arg, needJoinArg.join(" "), endTap].join(""));
+                stack.push(match);
             }
         }
-        return result.map(removeOuterQuoteOnce);
-    }
-
-    export function parseParams(text) {
-        const regex = /(".*?"|'.*?'|`.*?`|”.*?“|‘.*?’|<[^>]+?>|\S+)/g;
-        const matcher = (text: string) => {
-            const matches = text.match(regex);
-            if (matches) {
-                return joinNestedTags(
-                    matches.reduce((result, match) => {
-                        if (/<\/\S+>/.test(match)) {
-                            let [start, ...rest] = match.split("</");
-                            result.push(start);
-                            let end = `</${rest.join("</")}`;
-                            // 继续匹配是否有嵌套标签
-                            const endTag = end.split(">")[0] + ">";
-                            end = end.slice(endTag.length);
-                            result.push(endTag);
-                            const nestedMatches = end.match(regex);
-                            if (nestedMatches) {
-                                result.push(...matcher(nestedMatches.join(" ")));
-                            } else {
-                                result.push(end);
-                            }
-                        } else {
-                            result.push(match);
-                        }
-                        return result.filter(Boolean);
-                    }, []),
-                );
-            }
-            return [];
-        };
-        return matcher(text);
+        stack.push(...text.split(" ").map(s => s || " "));
+        return stack.filter(s => s !== " ").map(removeOuterQuoteOnce);
     }
 
     export interface Config {

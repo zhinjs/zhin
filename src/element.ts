@@ -1,6 +1,7 @@
 import { evaluate, isNullable, makeArray, Awaitable, Dict } from "@zhinjs/shared";
 import { Component } from "@/component";
 import { Session } from "@/session";
+import { findLastIndex, removeOuterQuoteOnce } from "@/utils";
 
 export interface Element<
     T extends Element.BaseType | string = string,
@@ -268,21 +269,9 @@ export namespace Element {
     export function parse<S>(source: string, context?: S) {
         source = source.replace(/<>([^<>]*)<\/>/g, (s, a) => `<template>${a}</template>`);
 
-        function fixAttr(attrString: string, element: Element) {
+        function fixAttr(element: Element) {
             const attrs = (element.attrs ||= {});
             // 匹配出所有属性，包含不带值的属性
-            const attrRegExp = /(?:([^\s=]+)(?:="([^"]*)"|='([^']*)')?|([^\s=]+))\s*/g;
-            attrString.replace(attrRegExp, (s, key, value1, value2) => {
-                attrs[key] = value1 || value2 || "";
-                if (!attrs[key]) {
-                    if (key.startsWith("no-")) {
-                        attrs[key.slice(3)] = false;
-                    } else {
-                        attrs[key] = true;
-                    }
-                }
-                return "";
-            });
             for (let key in (element.attrs ||= {})) {
                 let value = String(element.attrs[key]);
                 if (key === "v-for") {
@@ -295,92 +284,25 @@ export namespace Element {
                     delete element.attrs[key];
                     const newKey = key.slice(1);
                     element.attrs[newKey] = `:${value}`;
-                } else if (isNullable(value)) {
-                    element.attrs[key] = false;
-                } else if (key.startsWith("no-")) {
+                } else if (key.startsWith("no-") && isNullable(value)) {
                     const newKey = key.replace("no-", "");
                     delete element.attrs[key];
                     element.attrs[newKey] = true;
+                } else if (isNullable(value)) {
+                    element.attrs[key] = false;
                 }
             }
+            if (element.children) element.children.forEach(fixAttr);
         }
 
         function analyzeHtml(content: string) {
-            const result = [];
-            if (!content.length) return result;
-            let matched: RegExpMatchArray, closeMatched: RegExpMatchArray;
-            const tagCap = /<([a-z_\-A-Z]+)(?:\s+([^>]*))?>((?:.|\n)*?)<\/\1>/g;
-            const tagCloseCap = /<([^\s>]+)(.*?)\/>/g;
-            while ((matched = tagCap.exec(content)) || (closeMatched = tagCloseCap.exec(content))) {
-                if (matched) {
-                    if (matched.index !== 0) {
-                        let source = content.substring(0, matched.index);
-                        while (source.match(tagCloseCap)) {
-                            closeMatched = tagCloseCap.exec(source);
-                            if (closeMatched.index !== 0) {
-                                let source2 = source.substring(0, closeMatched.index);
-                                source = source.replace(source2, "");
-                                const element = Element("text", {
-                                    text: source2,
-                                });
-                                element.source = source2;
-                                fixAttr("", element);
-                                result.push(element);
-                            }
-                            const [source2, type, attrString] = closeMatched;
-                            source = source.substring(source2.length, source.length);
-                            const element = Element(type, {});
-                            element.source = source2;
-                            fixAttr(attrString, element);
-                            result.push(element);
-                        }
-                        content = content.substring(matched.index, content.length);
-                        const element = Element("text", {
-                            text: source,
-                        });
-                        element.source = source;
-                        fixAttr("", element);
-                        result.push(element);
-                    }
-                    const [source, type, attrString = "", children = ""] = matched;
-                    content = content.replace(source, "");
-                    const element = Element(type, {}, ...analyzeHtml(children));
-                    element.source = source;
-                    fixAttr(attrString, element);
-                    result.push(element);
-                } else if (closeMatched) {
-                    if (closeMatched.index !== 0) {
-                        const source = content.substring(0, closeMatched.index);
-                        content = content.replace(source, "");
-                        const element = Element("text", {
-                            text: source,
-                        });
-                        element.source = source;
-                        fixAttr("", element);
-                        result.push(element);
-                    }
-                    const [source, type, attrString] = closeMatched;
-                    content = content.replace(source, "");
-                    const element = Element(type, {});
-                    fixAttr(attrString, element);
-                    element.source = source;
-                    result.push(element);
-                }
-                tagCap.lastIndex = 0;
-                tagCloseCap.lastIndex = 0;
+            if (!content.length) return [];
+            const stack = parseElementStack(content);
+            for (const element of stack) {
+                fixAttr(element);
             }
-            if (0 !== content.length) {
-                const source = content.substring(0, content.length);
-                const element = Element("text", {
-                    text: source,
-                });
-                element.source = source;
-                fixAttr("", element);
-                result.push(element);
-            }
-            return result;
+            return stack;
         }
-
         return analyzeHtml(source);
     }
 
@@ -507,6 +429,7 @@ export namespace Element {
         });
         return typeof source === "string" ? output.join("") : output;
     }
+
     type Rule<T = any> = (attr: Dict, children?: (T | string)[]) => Promise<T> | T;
 
     /**
@@ -531,6 +454,7 @@ export namespace Element {
         }
         return result;
     }
+
     export async function renderAsync<S>(
         this: Session<any>,
         source: Element.Fragment,
@@ -581,25 +505,106 @@ export namespace Element {
                         "element,runWith,runtime",
                         `const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{${name}:runtime.${value}[${name}]});RESULT.push({...element,...runWith(element,runtime.session)})};return RESULT;`,
                     );
-                    result.push(...fn(element, runWith, runtime));
+                    const loopResult = await fn(element, runWith, runtime);
+                    for (const item of loopResult) {
+                        if (item.children)
+                            item.children = await renderAsync.call(
+                                this,
+                                item.children,
+                                rules,
+                                runtime,
+                            );
+                        result.push(item);
+                    }
                 } else {
                     const newAttrs = runWith(element, runtime);
                     Object.assign(element, newAttrs);
+                    if (element.children)
+                        element.children = await renderAsync.call(
+                            this,
+                            element.children,
+                            rules,
+                            runtime,
+                        );
                     result.push(element);
                 }
             } else if (component !== false) {
                 result.push(
-                    ...(await renderAsync.apply(this, [
+                    ...(await renderAsync.call(
+                        this,
                         toElementArray(component as Fragment),
                         rules,
                         runtime,
-                    ])),
+                    )),
                 );
             }
         }
         return result;
     }
 
+    /**
+     * 解析模板字符串为Element数组，支持嵌套
+     * @param template {string} 模板字符串
+     * @returns {Element[]} Element数组
+     */
+    export const parseElementStack = (template: string) => {
+        const regex = /("[^"]*?"|'[^']*?'|`[^`]*?`|“[^”]*?”|’[^‘]*?‘|<[^>]+?>)/;
+        const stack: Element[] = []; // 结果栈
+        while (template.length) {
+            const [match] = template.match(regex) || [];
+            if (!match) break;
+            const index = template.indexOf(match);
+            const prevText = template.slice(0, index);
+            if (prevText) {
+                const ele = Element("text", { text: prevText });
+                ele.source = prevText;
+                stack.push(ele);
+            }
+            template = template.slice(index + match.length);
+            if (match.startsWith("<")) {
+                // 起始标签
+                if (match.startsWith("</")) {
+                    // 结束标签
+                    const type = match.slice(2, -1);
+                    const startTagIndex = findLastIndex(stack, item => item.type === type);
+                    if (startTagIndex === -1) {
+                        const ele = Element("text", { text: match });
+                        ele.source = match;
+                        stack.push(ele);
+                        continue;
+                    }
+                    const needJoinArg = stack.splice(startTagIndex);
+                    const [element, ...children] = needJoinArg;
+                    element.children = children;
+                    element.source += `${children.map(child => child.source).join("")}${match}`;
+                    stack.push(element);
+                } else {
+                    const [type, ...attrStrArr] = match
+                        .slice(1, match.endsWith("/>") ? -2 : -1)
+                        .split(/\s+/);
+                    const attrs: Dict = attrStrArr.reduce((result, item) => {
+                        const [key, value] = item.split("=");
+                        result[key] = removeOuterQuoteOnce(value);
+                        return result;
+                    }, {} as Dict);
+                    const element = Element(type, attrs);
+                    element.source = match;
+                    stack.push(element);
+                }
+            } else {
+                // 文本
+                const ele = Element("text", { text: match });
+                ele.source = match;
+                stack.push(ele);
+            }
+        }
+        if (template) {
+            const ele = Element("text", { text: template });
+            ele.source = template;
+            stack.push(ele);
+        }
+        return stack;
+    };
     export let warn: (message: string) => void = () => {};
 }
 export const Fragment = Element.Fragment;
