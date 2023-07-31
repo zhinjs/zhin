@@ -441,6 +441,7 @@ export namespace Element {
                         "element,runWith,render,runtime",
                         `const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{...runWith(element,runtime),${name}:runtime.${value}[${name}]});with (runtime) {RESULT.push(render.apply(runtime,[element.attrs,element.children]));};};return RESULT;`,
                     );
+                    delete element.loop;
                     component = (await Promise.all(fn(element, runWith, render, runtime))).flat();
                     if (value === "__loop__") delete runtime["__loop__"];
                 } else {
