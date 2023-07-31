@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.3.14](https://github.com/zhinjs/zhin/compare/v2.3.13...v2.3.14) (2023-07-31)
+
+
+### Bug Fixes
+
+* 指令循环优化 ([f8d74e8](https://github.com/zhinjs/zhin/commit/f8d74e8725adb208bb821fd84f673b9cf52895b1))
+* 更新指令提示优化，element解析错误优化 ([217e27d](https://github.com/zhinjs/zhin/commit/217e27d9686f78dffbb0bdb842ab116b894379e4))
+
 ## [2.3.13](https://github.com/zhinjs/zhin/compare/v2.3.12...v2.3.13) (2023-07-30)
 
 
