@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.15](https://github.com/zhinjs/zhin/compare/v2.3.14...v2.3.15) (2023-07-31)
+
+
+### Bug Fixes
+
+* 打包错误 ([4642220](https://github.com/zhinjs/zhin/commit/46422207a1f776891b092540001b3f60ae3f0e2d))
+
 ## [2.3.14](https://github.com/zhinjs/zhin/compare/v2.3.13...v2.3.14) (2023-07-31)
 
 
