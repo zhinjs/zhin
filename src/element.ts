@@ -422,6 +422,10 @@ export namespace Element {
                         .fill(0)
                         .map((_, i) => i)
                         .join(",")}]`;
+                if (/^\[.+]$/.test(value)) {
+                    runtime["__loop__"] = JSON.parse(value);
+                    value = "__loop__";
+                }
                 return { name, value };
             };
             if (
@@ -435,7 +439,7 @@ export namespace Element {
                     const { name, value } = fixLoop(loop);
                     const fn = new Function(
                         "element,runWith,render,runtime",
-                        `const RESULT=[];const loop=${value}||runtime.${value};for(const ${name} in loop){Object.assign(runtime,{...runWith(element,runtime),${name}:runtime.${value}[${name}]});with (runtime) {RESULT.push(render.apply(runtime,[element.attrs,element.children]));};};return RESULT;`,
+                        `const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{...runWith(element,runtime),${name}:runtime.${value}[${name}]});with (runtime) {RESULT.push(render.apply(runtime,[element.attrs,element.children]));};};return RESULT;`,
                     );
                     component = (await Promise.all(fn(element, runWith, render, runtime))).flat();
                     if (value === "__loop__") delete runtime["__loop__"];
@@ -453,8 +457,9 @@ export namespace Element {
                     const { name, value } = fixLoop(loop);
                     const fn = new Function(
                         "element,runWith,runtime",
-                        `const RESULT=[];const loop=${value}||runtime.${value};for(const ${name} in loop){Object.assign(runtime,{${name}:runtime.${value}[${name}]});RESULT.push({...element,...runWith(element,runtime.session)})};return RESULT;`,
+                        `const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{${name}:runtime.${value}[${name}]});RESULT.push({...element,...runWith(element,runtime.session)})};return RESULT;`,
                     );
+                    delete element.loop;
                     const loopResult = await fn(element, runWith, runtime);
                     if (value === "__loop__") delete runtime["__loop__"];
                     for (const item of loopResult) {
