@@ -370,70 +370,6 @@ export namespace Element {
         };
     }
 
-    export function render<S>(
-        source: string | Element[],
-        rules: Dict<Component>,
-        session: S,
-        runtime: Component.Runtime = { session: session as any },
-    ) {
-        const elements = []
-            .concat(source)
-            .reduce((result: Element[], item: string | boolean | number | Element) => {
-                if (Element.isElement(item)) result.push(item);
-                else {
-                    result.push(...parse(item + ""));
-                }
-                return result;
-            }, [] as Element[]);
-        const output: Fragment[] = [];
-        elements.forEach(element => {
-            const { type, attrs = {}, when, loop } = element;
-            let component: Component | Fragment = rules[type] ?? rules.default ?? true;
-            if (
-                typeof component !== "boolean" &&
-                typeof component === "object" &&
-                !(component instanceof Element)
-            ) {
-                runtime = Component.createRuntime(runtime, component, attrs);
-                const { render } = component;
-                if (loop) {
-                    const [_, name, value] = /(\S+)\sin\s(\S+)/.exec(loop);
-                    const fn = new Function(
-                        "element,runWith,render,runtime",
-                        `const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{...runWith(element,runtime),${name}:runtime.${value}[${name}]});with (runtime) {RESULT.push(render.apply(runtime,[element.attrs,element.children]));};};return RESULT;`,
-                    );
-                    component = fn(element, runWith, render, runtime).flat();
-                } else {
-                    if (when && !evaluate(when, runtime)) return;
-                    Object.assign(runtime, runWith(element, runtime));
-                    component = render.apply(runtime, [
-                        element.attrs,
-                        element.children,
-                    ]) as Fragment;
-                }
-            }
-            if (component === true) {
-                if (loop) {
-                    const [_, name, value] = /(\S+)\sin\s(\S+)/.exec(loop);
-                    const fn = new Function(
-                        "element,runWith,runtime",
-                        `const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{${name}:runtime.${value}[${name}]});RESULT.push({...element,...runWith(element,runtime)})};return RESULT;`,
-                    );
-                    output.push(...fn(element, runWith, runtime));
-                } else {
-                    const newAttrs = runWith(element, runtime);
-                    Object.assign(element, newAttrs);
-                    output.push(element);
-                }
-            } else if (component !== false) {
-                output.push(
-                    ...render(toElementArray(component as Fragment), rules, session, runtime),
-                );
-            }
-        });
-        return typeof source === "string" ? output.join("") : output;
-    }
-
     type Rule<T = any> = (attr: Dict, children?: (T | string)[]) => Promise<T> | T;
 
     /**
@@ -486,10 +422,6 @@ export namespace Element {
                         .fill(0)
                         .map((_, i) => i)
                         .join(",")}]`;
-                if (/^\[.+]$/.test(value)) {
-                    runtime["__loop__"] = JSON.parse(value);
-                    value = "__loop__";
-                }
                 return { name, value };
             };
             if (
@@ -503,7 +435,7 @@ export namespace Element {
                     const { name, value } = fixLoop(loop);
                     const fn = new Function(
                         "element,runWith,render,runtime",
-                        `const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{...runWith(element,runtime),${name}:runtime.${value}[${name}]});with (runtime) {RESULT.push(render.apply(runtime,[element.attrs,element.children]));};};return RESULT;`,
+                        `const RESULT=[];const loop=${value}||runtime.${value};for(const ${name} in loop){Object.assign(runtime,{...runWith(element,runtime),${name}:runtime.${value}[${name}]});with (runtime) {RESULT.push(render.apply(runtime,[element.attrs,element.children]));};};return RESULT;`,
                     );
                     component = (await Promise.all(fn(element, runWith, render, runtime))).flat();
                     if (value === "__loop__") delete runtime["__loop__"];
@@ -521,7 +453,7 @@ export namespace Element {
                     const { name, value } = fixLoop(loop);
                     const fn = new Function(
                         "element,runWith,runtime",
-                        `const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{${name}:runtime.${value}[${name}]});RESULT.push({...element,...runWith(element,runtime.session)})};return RESULT;`,
+                        `const RESULT=[];const loop=${value}||runtime.${value};for(const ${name} in loop){Object.assign(runtime,{${name}:runtime.${value}[${name}]});RESULT.push({...element,...runWith(element,runtime.session)})};return RESULT;`,
                     );
                     const loopResult = await fn(element, runWith, runtime);
                     if (value === "__loop__") delete runtime["__loop__"];
