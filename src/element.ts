@@ -479,6 +479,19 @@ export namespace Element {
         for (const element of elements) {
             const { type, attrs = {}, loop, when } = element;
             let component: Component | Fragment = rules[type] ?? rules.default ?? true;
+            const fixLoop = (loop: string) => {
+                let [_, name, value] = /(\S+)\sin\s(\S+)/.exec(loop);
+                if (/\d+/.test(value))
+                    value = `[${new Array(+value)
+                        .fill(0)
+                        .map((_, i) => i)
+                        .join(",")}]`;
+                if (/^\[.+]$/.test(value)) {
+                    runtime["__loop__"] = JSON.parse(value);
+                    value = "__loop__";
+                }
+                return { name, value };
+            };
             if (
                 typeof component !== "boolean" &&
                 typeof component === "object" &&
@@ -487,12 +500,13 @@ export namespace Element {
                 runtime = Component.createRuntime(runtime, component, attrs);
                 const { render } = component;
                 if (loop) {
-                    const [_, name, value] = /(\S+)\sin\s(\S+)/.exec(loop);
+                    const { name, value } = fixLoop(loop);
                     const fn = new Function(
                         "element,runWith,render,runtime",
                         `const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{...runWith(element,runtime),${name}:runtime.${value}[${name}]});with (runtime) {RESULT.push(render.apply(runtime,[element.attrs,element.children]));};};return RESULT;`,
                     );
                     component = (await Promise.all(fn(element, runWith, render, runtime))).flat();
+                    if (value === "__loop__") delete runtime["__loop__"];
                 } else {
                     if (when && !evaluate(when, runtime)) continue;
                     Object.assign(runtime, runWith(element, runtime));
@@ -504,12 +518,13 @@ export namespace Element {
             }
             if (component === true) {
                 if (loop) {
-                    const [_, name, value] = /(\S+)\sin\s(\S+)/.exec(loop);
+                    const { name, value } = fixLoop(loop);
                     const fn = new Function(
                         "element,runWith,runtime",
                         `const RESULT=[];for(const ${name} in runtime.${value}){Object.assign(runtime,{${name}:runtime.${value}[${name}]});RESULT.push({...element,...runWith(element,runtime.session)})};return RESULT;`,
                     );
                     const loopResult = await fn(element, runWith, runtime);
+                    if (value === "__loop__") delete runtime["__loop__"];
                     for (const item of loopResult) {
                         if (item.children)
                             item.children = await renderAsync.call(
