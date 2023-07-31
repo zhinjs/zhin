@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.3.17](https://github.com/zhinjs/zhin/compare/v2.3.16...v2.3.17) (2023-07-31)
+
+
+### Bug Fixes
+
+* 循环渲染错误问题 ([654ed98](https://github.com/zhinjs/zhin/commit/654ed98666489db7d56a7ae2ea8d119613fd7515))
+* 循环渲染错误问题 ([e80e9a1](https://github.com/zhinjs/zhin/commit/e80e9a14042b4765a8aa4ad808511e63f4e4798c))
+
 ## [2.3.16](https://github.com/zhinjs/zhin/compare/v2.3.15...v2.3.16) (2023-07-31)
 
 
