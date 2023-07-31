@@ -381,7 +381,7 @@ export namespace Element {
             .reduce((result: Element[], item: string | boolean | number | Element) => {
                 if (Element.isElement(item)) result.push(item);
                 else {
-                    result.push(...parse(item + "", session));
+                    result.push(...parse(item + ""));
                 }
                 return result;
             }, [] as Element[]);
@@ -471,7 +471,7 @@ export namespace Element {
             .reduce((result: Element[], item: string | boolean | number | Element) => {
                 if (Element.isElement(item)) result.push(item);
                 else {
-                    result.push(...parse(item + "", this));
+                    result.push(...parse(item + ""));
                 }
                 return result;
             }, [] as Element[]);
