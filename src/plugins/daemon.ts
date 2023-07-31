@@ -42,11 +42,12 @@ ctx.master()
     .option("-r [restart:boolean] 更新完重启")
     .hidden()
     .action<NSession<keyof Zhin.Adapters>>(async ({ options, session }) => {
-        if (!options.version)
+        if (!options.version) {
             options.version = await ctx.request
                 .get("https://registry.npmjs.org/zhin")
                 .catch(() => ({ "dist-tags": { "latest": "0.0.0" } }))
-                .then(res => res["dist-tags"].latest);
+                .then(res => res["dist-tags"]?.latest);
+        }
         if (options.version === ctx.zhin.version) return "无需更新";
         const existVersions = await ctx.zhin.request
             .get("https://registry.npmjs.org/zhin")
@@ -54,6 +55,7 @@ ctx.master()
             .then(({ versions }) => Object.keys(versions));
         const hasVersion = existVersions.includes(options.version);
         if (!hasVersion) return "版本不存在";
+        session.reply(`正在更新至${options.version}，更新结果将稍后返回`).catch(() => {});
         const [success, err] = await changeDependency(`zhin@${options.version}`);
         if (!success) return err;
         if (!options.restart)

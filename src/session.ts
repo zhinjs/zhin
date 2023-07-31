@@ -32,25 +32,44 @@ export interface Session<
     E extends keyof Zhin.BotEventMaps[P] = keyof Zhin.BotEventMaps[P],
 > {
     protocol: P;
+    /** 会话类型 */
     type?: string;
+    /** 用户id */
     user_id?: string | number;
+    /** 会话发起者昵称 */
     user_name?: string;
+    /** 群id(仅group) */
     group_id?: string | number;
+    /** 群名称(仅group) */
     group_name?: string;
+    /** 讨论组id(仅discuss) */
     discuss_id?: string | number;
+    /** 讨论组名称(仅discuss) */
     discuss_name?: string;
+    /** 频道id(仅guild) */
     channel_id?: string;
+    /** 频道名称(仅guild) */
     channel_name?: string;
+    /** 服务器id(仅guild) */
     guild_id?: string;
+    /** 服务器名称(仅guild) */
     guild_name?: string;
+    /** 详细类型 */
     detail_type?: string;
+    /** zhin实例 */
     zhin: Zhin;
+    /** 当前上下文 */
     context: Context;
+    /** 当前适配器 */
     adapter: Zhin.Adapters[P];
+    /** 交互式输入辅助实例 */
     prompt: Prompt;
+    /** 会话内容 */
     content: string;
+    /** 当前bot */
     bot: Zhin.Bots[P];
     event: E;
+    /** 引用内容 */
     quote?: QuoteMessage;
     message_id?: string;
 }
@@ -83,6 +102,10 @@ export class Session<
         return this.bot.internal;
     }
 
+    /**
+     * 注册一个中间件
+     * @param middleware
+     */
     middleware(middleware: Middleware) {
         const fullId = Bot.getFullTargetId(this as any);
         return this.zhin.middleware(async (session, next) => {
@@ -91,6 +114,10 @@ export class Session<
         }, true);
     }
 
+    /**
+     * 指定上下文是否匹配当前会话
+     * @param context
+     */
     match(context: Context) {
         return context.filter(this as any);
     }
@@ -133,30 +160,51 @@ export class Session<
         });
     }
 
+    /**
+     * 发言者是否机器人主人
+     */
     get isMaster() {
         return this.bot.isMaster(this as NSession<P, E>);
     }
 
+    /**
+     * 发言者是否机器人管理员(不代表群管理员)
+     */
     get isAdmins() {
         return this.bot.isAdmins(this as NSession<P, E>);
     }
 
+    /**
+     * 是否at机器人
+     */
     get isAtMe() {
         return this.bot.isAtMe(this as NSession<P, E>);
     }
 
+    /**
+     * 当前是否群聊
+     */
     get isGroup() {
         return !!this.group_id;
     }
 
+    /**
+     * 当前是否私聊
+     */
     get isPrivate() {
         return this.detail_type === "private";
     }
 
+    /**
+     * 当前是否群主
+     */
     get isOwner() {
         return this.bot.isGroupOwner(this as NSession<P, E>);
     }
 
+    /**
+     * 当前是否群管理员
+     */
     get isAdmin() {
         return this.bot.isGroupAdmin(this as NSession<P, E>);
     }
@@ -171,6 +219,11 @@ export class Session<
         return result;
     }
 
+    /**
+     * 根据模板执行命令
+     * @param template {string} 模板
+     * @returns {Promise<Element.Fragment>} 返回执行结果
+     */
     async execute(template = this.toString()): Promise<Element.Fragment> {
         const commands = this.zhin.getSupportCommands(this as NSession<P, E>);
         for (const command of commands) {

@@ -279,6 +279,11 @@ export class Context extends EventEmitter {
         return this;
     }
 
+    /**
+     * 为当前上下文添加指令
+     * @param nameDecl 指令名
+     * @param command 指令对象
+     */
     useCommand<A extends any[], O = {}>(nameDecl: string, command: Command<A, O>) {
         if (!nameDecl && !command.name) throw new Error("nameDecl不能为空");
         if (!nameDecl) nameDecl = command.name;
@@ -343,7 +348,10 @@ export class Context extends EventEmitter {
         this.plugin(plugin);
         return this;
     }
-    // 获取当前上下文所有中间件
+
+    /**
+     * 获取当前上下文所有中间件(包含子上下文中间件)
+     */
     get middlewareList() {
         const result = [...this.plugins.values()].reduce(
             (result, plugin) => {
@@ -374,7 +382,7 @@ export class Context extends EventEmitter {
     }
 
     /**
-     * 获取当前上下文所有组件
+     * 获取当前上下文所有组件(包含自上下文组件)
      */
     get componentList(): Dict<Component> {
         const result = [...this.plugins.values()].reduce(
@@ -421,7 +429,7 @@ export class Context extends EventEmitter {
     }
 
     /**
-     * 获取当前上下文所有指令
+     * 获取当前上下文所有指令(包含子上下文指令)
      */
     get commandList(): Command[] {
         const result = [...this.plugins.values()].reduce(
@@ -446,10 +454,21 @@ export class Context extends EventEmitter {
         decl: S,
         initialValue?: ArgsType<Command.RemoveFirst<S>>,
     ): Command<ArgsType<Command.RemoveFirst<S>>>;
+    /**
+     * 为当前上下文添加指令
+     * @param decl 指令声明
+     * @param config {import('zhin').Command} 指令配置
+     */
     command<S extends Command.Declare>(
         decl: S,
         config?: Command.Config,
     ): Command<ArgsType<Command.RemoveFirst<S>>>;
+    /**
+     * 为当前上下文添加指令
+     * @param decl 指令声明
+     * @param initialValue 指令初始值
+     * @param config {import('zhin').Command} 指令配置
+     */
     command<S extends Command.Declare>(
         decl: S,
         initialValue?: ArgsType<Command.RemoveFirst<S>>,
@@ -485,6 +504,10 @@ export class Context extends EventEmitter {
         return command as Command<ArgsType<Command.RemoveFirst<S>>>;
     }
 
+    /**
+     * 查找指定名称的指令
+     * @param name 指令名
+     */
     findCommand(name: string) {
         return this.zhin.commandList.find(command => command.name === name);
     }
@@ -700,6 +723,11 @@ export class Context extends EventEmitter {
         );
     }
 
+    /**
+     * 同步执行某一event的所有listener
+     * @param event 事件名
+     * @param args 传递给其listener的参数
+     */
     async emitSync(event, ...args) {
         const listeners = this.listeners(event);
         for (const listener of listeners) {

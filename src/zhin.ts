@@ -195,7 +195,10 @@ export class Zhin extends Context {
         return result;
     }
 
-    // 更改zhin的配置
+    /**
+     * 更改zhin的配置
+     * @param options {Zhin.Options} 配置
+     */
     changeOptions(options: Zhin.Options) {
         const changeValue = (source, key, value) => {
             if (source[key] && typeof source[key] === "object") {
@@ -233,7 +236,11 @@ export class Zhin extends Context {
         });
     }
 
-    // 获取一个机器人实例
+    /**
+     * 获取一个机器人实例
+     * @param protocol 适配器名称
+     * @param self_id 机器人id
+     */
     pickBot<K extends keyof Zhin.Bots>(protocol: K, self_id: string | number): Zhin.Bots[K] {
         return this.adapters.get(protocol).bots.get(self_id) as Zhin.Bots[K];
     }
@@ -258,6 +265,10 @@ export class Zhin extends Context {
         ].join(":") as ChannelId;
     }
 
+    /**
+     * 获取市场上的模块
+     * @returns {Promise<Plugin.Package[]>}
+     */
     async getMarketPackages(): Promise<Plugin.Package[]> {
         const { objects: modules } =
             (await this.services
@@ -268,7 +279,10 @@ export class Zhin extends Context {
         return modules.map(packageModule => packageModule.package);
     }
 
-    // 扫描项目依赖中的已安装的模块
+    /**
+     * 获取已安装的模块
+     * @param category {string} 模块类型 plugin|service|adapter
+     */
     getInstalledModules<T extends Zhin.ModuleCategory>(category: T): Zhin.Modules[T][] {
         const result: Zhin.Modules[T][] = [];
         const loadManifest = packageName => {
@@ -345,12 +359,20 @@ export class Zhin extends Context {
         return result;
     }
 
-    // 检查知音是否安装指定插件
+    /**
+     * 检查知音是否安装指定插件
+     * @param pluginName {string} 插件名称
+     */
     hasMounted(pluginName: string) {
         return !!this.pluginList.find(plugin => plugin.options.fullName === pluginName);
     }
 
-    // 加载指定名称，指定类型的模块
+    /**
+     * 加载模块
+     * @param name {string} 模块名称
+     * @param category {string} 模块类型 (plugin|service|adapter)
+     * @param setup {boolean} 是否setup模块
+     */
     public load<T extends Zhin.ModuleCategory>(
         name: string,
         category: T,
@@ -443,7 +465,10 @@ export class Zhin extends Context {
         } as any;
     }
 
-    // 启动zhin
+    /**
+     * 启动知音
+     * @param mode 启动模式 dev: 开发模式 prod: 生产模式
+     */
     async start(mode: "dev" | "prod" | string) {
         this.mode = mode;
         await this.emitSync("before-start");
@@ -641,18 +666,29 @@ export namespace Zhin {
     type KVMap<V = any, K extends string = string> = Record<K, V>;
 
     export interface Options extends KVMap {
+        /** 公网地址 */
         self_url: string;
+        /** 服务端口 */
         port: number;
+        /** 日志等级 */
         log_level: LogLevel;
-        /** @deprecated 请使用 log_level 替换 */
+        /** @deprecated 请使用 log_config 替换 */
         logConfig?: Partial<Configuration>;
+        /** 日志配置 */
         log_config?: Partial<Configuration>;
+        /** 请求配置 */
         request_config?: Request.Config;
+        /** 延迟配置 */
         delay: Record<string, number>;
+        /** 插件配置 */
         plugins?: Record<string, any>;
+        /** 服务配置 */
         services?: Record<string, any>;
+        /** 适配器配置 */
         adapters?: Partial<AdapterConfig>;
+        /** 插件目录 */
         plugin_dir?: string;
+        /** 数据目录 */
         data_dir?: string;
     }
 

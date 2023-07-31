@@ -266,9 +266,13 @@ export namespace Element {
         return results;
     }
 
-    export function parse<S>(source: string, context?: S) {
+    export function parse(source: string) {
         source = source.replace(/<>([^<>]*)<\/>/g, (s, a) => `<template>${a}</template>`);
 
+        /**
+         * 处理元素的属性(v-for,v-if,no-xxx,:xxx)
+         * @param element
+         */
         function fixAttr(element: Element) {
             const attrs = (element.attrs ||= {});
             // 匹配出所有属性，包含不带值的属性
@@ -277,7 +281,7 @@ export namespace Element {
                 if (key === "v-for") {
                     element.loop = value;
                     delete element.attrs[key];
-                } else if (key === "condition") {
+                } else if (key === "v-if") {
                     element.when = value;
                     delete element.attrs[key];
                 } else if (key.startsWith(":")) {
@@ -287,7 +291,7 @@ export namespace Element {
                 } else if (key.startsWith("no-") && isNullable(value)) {
                     const newKey = key.replace("no-", "");
                     delete element.attrs[key];
-                    element.attrs[newKey] = true;
+                    element.attrs[newKey] = false;
                 } else if (isNullable(value)) {
                     element.attrs[key] = false;
                 }
@@ -565,14 +569,17 @@ export namespace Element {
                 // 起始标签
                 if (match.startsWith("</")) {
                     // 结束标签
-                    const type = match.slice(2, -1);
+                    const type = match.slice(2, -1); // 获取标签类型
+                    // 找到最近的开始标签
                     const startTagIndex = findLastIndex(stack, item => item.type === type);
                     if (startTagIndex === -1) {
+                        // 没有找到开始标签，将结束标签作为文本节点
                         const ele = Element("text", { text: match });
                         ele.source = match;
                         stack.push(ele);
                         continue;
                     }
+                    // 找到开始标签，将开始标签和结束标签之间的元素作为子元素
                     const needJoinArg = stack.splice(startTagIndex);
                     const [element, ...children] = needJoinArg;
                     element.children = children;
@@ -580,9 +587,10 @@ export namespace Element {
                     stack.push(element);
                 } else {
                     const [type, ...attrStrArr] = match
-                        .slice(1, match.endsWith("/>") ? -2 : -1)
-                        .match(/[^=\s]+(=(".*?"|'.*?'|`.*?`|“.*?”|‘.*?’))?/g)
-                        .filter(Boolean);
+                        .slice(1, match.endsWith("/>") ? -2 : -1) // 去除首尾尖括号以及尾部斜杠(自闭合标签)
+                        .match(/[^=\s]+(=(".*?"|'.*?'|`.*?`|“.*?”|‘.*?’))?/g) // 按空格分割，但是属性值中的空格不分割
+                        .filter(Boolean); // 去除空字符串
+                    // 将属性字符串数组转换为对象
                     const attrs: Dict = attrStrArr.reduce((result, item) => {
                         const [key, value] = item.split("=");
                         result[key] = removeOuterQuoteOnce(value);
@@ -599,6 +607,7 @@ export namespace Element {
                 stack.push(ele);
             }
         }
+        // 处理剩余的文本
         if (template) {
             const ele = Element("text", { text: template });
             ele.source = template;

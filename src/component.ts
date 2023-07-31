@@ -166,15 +166,18 @@ export namespace Component {
         return Object.assign(runtime, data);
     }
 
+    // 内置组件
     export function install(ctx: Context) {
-        // 内置组件
+        // 模板解析
         ctx.component(async function template(attrs, children) {
             return await this.session.render(children, this);
         })
+            // 执行指令
             .component(async function execute(attrs, children) {
                 const template = (await this.session.render(children, this)).join("");
                 return this.session.execute(template);
             })
+            // 转发
             .component(async function forward(
                 attrs: {
                     user_id?: string | number;
@@ -188,6 +191,7 @@ export namespace Component {
                     children: Element.toElementArray(await this.session.render(children, this)),
                 });
             })
+            // 提示输入基础能力
             .component(async function prompt(
                 props: {
                     type?: string;
@@ -203,9 +207,11 @@ export namespace Component {
                 }
                 return await this.session.prompt[this.type || "text"](children.join(""), props);
             })
+            // 随机输出
             .component(function random(attrs, children) {
                 return Random.pick(children);
             })
+            // 时间格式化
             .component(function time(props: { value?: number; format?: string }) {
                 let ms = props.value || Date.now();
                 return Time.template(props.format || "yyyy-MM-dd hh:mm:ss", new Date(ms));
