@@ -265,7 +265,6 @@ export namespace Element {
         }
         return results;
     }
-
     export function parse(source: string) {
         source = source.replace(/<>([^<>]*)<\/>/g, (s, a) => `<template>${a}</template>`);
 
@@ -274,7 +273,6 @@ export namespace Element {
          * @param element
          */
         function fixAttr(element: Element) {
-            const attrs = (element.attrs ||= {});
             // 匹配出所有属性，包含不带值的属性
             for (let key in (element.attrs ||= {})) {
                 let value = String(element.attrs[key]);
@@ -395,6 +393,7 @@ export namespace Element {
         return result;
     }
 
+    const cacheMap = new WeakMap<Component, string>();
     export async function renderAsync<S>(
         this: Session<any>,
         source: Element.Fragment,
@@ -434,6 +433,12 @@ export namespace Element {
                 !(component instanceof Element)
             ) {
                 runtime = Component.createRuntime(runtime, component, attrs);
+                // fix: 修复session.render(undefined)是，递归调用render导致的死循环
+                if (cacheMap.has(component) && element.source === cacheMap.get(component)) {
+                    result.push(Element("text", { text: cacheMap.get(component) }));
+                    continue;
+                }
+                cacheMap.set(component, element.source);
                 const { render } = component;
                 if (loop) {
                     const { name, value } = fixLoop(loop);
