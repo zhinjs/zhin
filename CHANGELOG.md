@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.18](https://github.com/zhinjs/zhin/compare/v2.3.17...v2.3.18) (2023-08-01)
+
+
+### Bug Fixes
+
+* 兼容组件错误的render（session.render(undefiend)） ([bdc6073](https://github.com/zhinjs/zhin/commit/bdc60736bf1750eaafd1a2c3e541f8f6a887700e))
+
 ## [2.3.17](https://github.com/zhinjs/zhin/compare/v2.3.16...v2.3.17) (2023-07-31)
 
 
