@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.19](https://github.com/zhinjs/zhin/compare/v2.3.18...v2.3.19) (2023-08-04)
+
+
+### Bug Fixes
+
+* 模板解析错误 ([0b345bf](https://github.com/zhinjs/zhin/commit/0b345bf3b56706188e636f8d800cb64f94a3bfea))
+
 ## [2.3.18](https://github.com/zhinjs/zhin/compare/v2.3.17...v2.3.18) (2023-08-01)
 
 
