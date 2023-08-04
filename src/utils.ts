@@ -16,6 +16,7 @@ export function findLastIndex<T>(list: T[], predicate: (item: T, index: number) 
  * @param str 字符串
  */
 export function removeOuterQuoteOnce(str: string) {
+    if (!str) return str;
     if (str.startsWith('"') && str.endsWith('"')) return str.slice(1, -1); // 英文双引号
     if (str.startsWith("'") && str.endsWith("'")) return str.slice(1, -1); // 英文单引号
     if (str.startsWith("`") && str.endsWith("`")) return str.slice(1, -1); // 英文反引号
