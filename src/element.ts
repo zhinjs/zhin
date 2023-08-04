@@ -547,7 +547,7 @@ export namespace Element {
                 } else {
                     const [type, ...attrStrArr] = match
                         .slice(1, match.endsWith("/>") ? -2 : -1) // 去除首尾尖括号以及尾部斜杠(自闭合标签)
-                        .match(/[^=\s]+(=(".*?"|'.*?'|`.*?`|“.*?”|‘.*?’))?/g) // 按空格分割，但是属性值中的空格不分割
+                        .match(/[^="'“‘”’\s]+(=(".*?"|'.*?'|`.*?`|“.*?”|‘.*?’))?/g) // 按空格分割，但是属性值中的空格不分割
                         .filter(Boolean); // 去除空字符串
                     // 将属性字符串数组转换为对象
                     const attrs: Dict = attrStrArr.reduce((result, item) => {
