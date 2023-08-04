@@ -551,8 +551,8 @@ export namespace Element {
                         .filter(Boolean); // 去除空字符串
                     // 将属性字符串数组转换为对象
                     const attrs: Dict = attrStrArr.reduce((result, item) => {
-                        const [key, value] = item.split("=");
-                        result[key] = removeOuterQuoteOnce(value);
+                        const [key, ...value] = item.split("=");
+                        result[key] = removeOuterQuoteOnce(value.join("="));
                         return result;
                     }, {} as Dict);
                     const element = Element(type, attrs);
