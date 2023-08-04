@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.21](https://github.com/zhinjs/zhin/compare/v2.3.20...v2.3.21) (2023-08-04)
+
+
+### Bug Fixes
+
+* 参数分割error ([1fee020](https://github.com/zhinjs/zhin/commit/1fee020030e625ab031a93ed06702cfe47f305da))
+
 ## [2.3.20](https://github.com/zhinjs/zhin/compare/v2.3.19...v2.3.20) (2023-08-04)
 
 
