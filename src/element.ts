@@ -393,7 +393,7 @@ export namespace Element {
         return result;
     }
 
-    const cacheMap = new WeakMap<Component, string>();
+    let cacheMap = new WeakMap<Component, string>();
     export async function renderAsync<S>(
         this: Session<any>,
         source: Element.Fragment,
@@ -501,6 +501,7 @@ export namespace Element {
                 );
             }
         }
+        cacheMap = new WeakMap();
         return result;
     }
 
