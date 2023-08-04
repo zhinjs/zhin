@@ -1,6 +1,6 @@
 {
   "name": "zhin",
-  "version": "2.3.21",
+  "version": "2.3.22",
   "description": "Zhin, a chat bot framework for Node.js developers, compatible with oicq/icqq",
   "main": "lib/index.js",
   "bin": {
