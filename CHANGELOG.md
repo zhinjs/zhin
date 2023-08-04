@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.3.20](https://github.com/zhinjs/zhin/compare/v2.3.19...v2.3.20) (2023-08-04)
+
+
+### Bug Fixes
+
+* removeQuoteOnce error ([3d5b2bb](https://github.com/zhinjs/zhin/commit/3d5b2bba58e291fcec4459c83d9bbce37749bf5a))
+* render结束后，清空cacheMap ([cc61d38](https://github.com/zhinjs/zhin/commit/cc61d38d4e40d9e81e2b03f0fe26ad3476069020))
+
 ## [2.3.19](https://github.com/zhinjs/zhin/compare/v2.3.18...v2.3.19) (2023-08-04)
 
 
