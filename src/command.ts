@@ -461,7 +461,17 @@ export function defineCommand<S extends string>(
 
 export namespace Command {
     export const domains: Domains = {};
-
+    function joinedArg(args: string[]) {
+        let result = "";
+        while (args.length) {
+            const arg = args.shift();
+            // 匹配自闭合标签或成对标签
+            const isCloseTag = /^<\/.+?>$/.test(arg);
+            const isTag = isCloseTag || /^<[^>]+>[^<]*?<\/[^>]+>$/.test(arg);
+            result += isTag ? arg : `${arg} `;
+        }
+        return result.trim();
+    }
     /**
      * 将一串字符串转换为参数数组，参数数组中的每一项都是一个字符串或标签
      * @param text
@@ -488,7 +498,8 @@ export namespace Command {
                         continue;
                     }
                     const needJoinArg = stack.splice(startTagIndex);
-                    stack.push([...needJoinArg, match].join(""));
+                    const first = needJoinArg.shift();
+                    stack.push([first, joinedArg(needJoinArg), match].join(""));
                 } else {
                     stack.push(match);
                 }
