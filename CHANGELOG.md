@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.22](https://github.com/zhinjs/zhin/compare/v2.3.21...v2.3.22) (2023-08-04)
+
+
+### Bug Fixes
+
+* 标签属性解析错误 ([3fc3314](https://github.com/zhinjs/zhin/commit/3fc33149eda902d390ea4ff330a433db342e73e9))
+
 ## [2.3.21](https://github.com/zhinjs/zhin/compare/v2.3.20...v2.3.21) (2023-08-04)
 
 
