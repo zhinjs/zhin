@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.23](https://github.com/zhinjs/zhin/compare/v2.3.22...v2.3.23) (2023-08-11)
+
+
+### Bug Fixes
+
+* 增加 Lifecycle：restart ([67a8d0e](https://github.com/zhinjs/zhin/commit/67a8d0e2922e337f25f49e898e3e4f6fd54d7431))
+
 ## [2.3.22](https://github.com/zhinjs/zhin/compare/v2.3.21...v2.3.22) (2023-08-04)
 
 
