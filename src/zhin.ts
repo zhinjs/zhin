@@ -466,6 +466,21 @@ export class Zhin extends Context {
     }
 
     /**
+     * 停止知音
+     * @param code
+     */
+    stop(code = 0) {
+        this.dispose();
+        process.exit(code);
+    }
+    /**
+     * 重启知音
+     */
+    async restart() {
+        await this.emitSync("restart");
+        this.stop(51);
+    }
+    /**
      * 启动知音
      * @param mode 启动模式 dev: 开发模式 prod: 生产模式
      */
@@ -503,12 +518,6 @@ export class Zhin extends Context {
         this.isStarted = true;
         this.emit("start");
         await this.emitSync("after-start");
-    }
-
-    // 停止 zhin
-    stop() {
-        this.dispose();
-        process.exit();
     }
 }
 
@@ -588,7 +597,10 @@ export namespace Zhin {
             },
         },
     };
-    type BeforeEventMap = {} & BeforeLifeCycle<LifeCycle> & BeforeLifeCycle<ServiceLifeCycle>;
+    type BeforeEventMap = {
+        "restart"(): void;
+    } & BeforeLifeCycle<LifeCycle> &
+        BeforeLifeCycle<ServiceLifeCycle>;
     type Prefix<P extends string, T extends string | symbol | number> = T extends string | number
         ? `${P}-${T}`
         : `${P}-${string}`;

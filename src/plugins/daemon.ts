@@ -69,7 +69,7 @@ ctx.master()
             },
         });
         await session.reply("更新完成，正在重启...").catch(() => {});
-        process.exit(51);
+        await ctx.zhin.restart();
     });
 
 exitCommand &&
@@ -89,7 +89,7 @@ exitCommand &&
             }
             process.send({ type: "queue", body: { channelId, message: "已成功重启." } });
             await session.reply("正在重启...").catch(() => {});
-            process.exit(51);
+            await ctx.zhin.restart();
         });
 ctx.zhin.on("ready", () => {
     process.send({ type: "start", body: { autoRestart } });

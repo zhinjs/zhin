@@ -1,4 +1,4 @@
-import { createReadStream, readFile, copyFile, writeFile, statSync } from "fs";
+import { createReadStream, copyFile, writeFile, statSync } from "fs";
 import { resolve as PathResolve, dirname } from "path";
 import { promisify } from "util";
 
