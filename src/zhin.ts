@@ -5,7 +5,14 @@ import * as Yaml from "js-yaml";
 import * as path from "path";
 import * as fs from "fs";
 import { createZhinAPI } from "@/factory";
-import { deepEqual, Dict, getIpAddress, getPackageInfo, pick, wrapExport } from "@zhinjs/shared";
+import {
+    deepEqual,
+    Dict,
+    getIpAddress,
+    getPackageInfo,
+    pick,
+    wrapExport,
+} from "@zhinjs/shared";
 import { createServer, Server } from "http";
 import KoaBodyParser from "koa-bodyparser";
 import { Command } from "./command";
