@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.24](https://github.com/zhinjs/zhin/compare/v2.3.23...v2.3.24) (2023-08-24)
+
+
+### Bug Fixes
+
+* 支持管理员设定忽略指定用户的消息 ([09d4f0e](https://github.com/zhinjs/zhin/commit/09d4f0e339e86fdcb56b49ece0714ccb81a34142))
+
 ## [2.3.23](https://github.com/zhinjs/zhin/compare/v2.3.22...v2.3.23) (2023-08-11)
 
 
