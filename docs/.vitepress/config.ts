@@ -52,6 +52,7 @@ export default defineConfigWithTheme({
                         {text: `可交互输入 - Prompt`, link: '/guide/prompt'},
                         {text: `组件 - Component`, link: '/guide/component'},
                         {text: `Bot API`, link: '/guide/bot'},
+                        {text: `装饰器（实验性）`, link: "/guide/decorator"},
                     ]
                 },
                 {
