@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.4.0](https://github.com/zhinjs/zhin/compare/v2.3.24...v2.4.0) (2023-08-28)
+
+
+### Features
+
+* add experimental decorator docs ([60b957e](https://github.com/zhinjs/zhin/commit/60b957e1225e8c8c6c9d9f55b548e8b21cedbd30))
+
+
+### Bug Fixes
+
+* docs 编译错误 ([5745ff8](https://github.com/zhinjs/zhin/commit/5745ff88f9e6d40bbc1a9bbdf605e0d25ddf40cb))
+* 修复command parseSugar错误 [#76](https://github.com/zhinjs/zhin/issues/76) ([567b7bb](https://github.com/zhinjs/zhin/commit/567b7bbb9297af523d9741d2595d40bfdeba0606))
+
 ## [2.3.24](https://github.com/zhinjs/zhin/compare/v2.3.23...v2.3.24) (2023-08-24)
 
 
