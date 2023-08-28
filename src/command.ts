@@ -1,4 +1,4 @@
-import { Dict, isEmpty } from "@zhinjs/shared";
+import { deepClone, Dict, isEmpty } from "@zhinjs/shared";
 import { Session } from "@/session";
 import { Element, h } from "@/element";
 import { findLastIndex, removeOuterQuoteOnce } from "@/utils";
@@ -283,7 +283,7 @@ export class Command<A extends any[] = [], O = {}> {
             const matched = sugar.regexp.exec(template);
             if (!matched) continue;
             argv.name = this.name;
-            const { args = [], options = {} } = sugar;
+            const { args = [], options = {} } = deepClone(sugar);
             for (let i = 0; i < args.length; i++) {
                 let arg = args[i];
                 const argConfig = this.argsConfig[i];

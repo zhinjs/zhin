@@ -1,6 +1,8 @@
 {
 	"extends": "./tsconfig.base",
 	"compilerOptions": {
+		"emitDecoratorMetadata": true,
+		"experimentalDecorators": true,
 		"emitDeclarationOnly": true,
 		"esModuleInterop": true,
 		"rootDir": "src",

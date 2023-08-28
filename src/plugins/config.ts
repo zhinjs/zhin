@@ -63,10 +63,12 @@ ctx.master()
     .desc("忽略指定用户的消息")
     .option("-d [delete:boolean] 删除指定配置")
     .action(({ options }, user_id) => {
+        if (!user_id) user_id = [];
+        user_id = user_id.map(String);
         const ignore = getValue(config, "plugins.config.ignore") || [];
         if (options.delete) {
             if (!user_id.length) return `user_id不能为空`;
-            config.ignore = ignore.filter((id: string) => !user_id.includes(id));
+            config.ignore = ignore.filter((id: string) => !user_id.includes(`${id}`));
             return `已删除:${user_id.join(",")}`;
         }
         if (!user_id?.length) return `当前忽略列表:${ignore.join(",")}`;
