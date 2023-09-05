@@ -46,6 +46,10 @@ export interface Session<
     discuss_id?: string | number;
     /** 讨论组名称(仅discuss) */
     discuss_name?: string;
+    /** 是否群主(仅group) */
+    is_owner?: boolean;
+    /** 是否管理员(仅group) */
+    is_admin?: boolean;
     /** 频道id(仅guild) */
     channel_id?: string;
     /** 频道名称(仅guild) */

@@ -1,7 +1,7 @@
 import { Zhin } from "./zhin";
 import { Adapter } from "./adapter";
 import { Plugin } from "./plugin";
-import { NSession } from "./session";
+import { NSession, Session } from "./session";
 import { deepMerge, remove, sleep } from "@zhinjs/shared";
 import { EventEmitter } from "events";
 import { Element } from "./element";
@@ -188,20 +188,10 @@ export interface Bot<K extends keyof Zhin.Bots = keyof Zhin.Bots, BO = {}, AO = 
     createSession(event: string, ...args: any[]): NSession<K>;
 
     // 会话发起者是否为群管理员
-    isGroupAdmin?<
-        P extends keyof Zhin.Adapters,
-        E extends keyof Zhin.BotEventMaps[P] = keyof Zhin.BotEventMaps[P],
-    >(
-        session: NSession<P, E>,
-    ): boolean;
+    isGroupOwner(session: Session): boolean;
 
     // 会话发起者是否为频道管理员
-    isChannelAdmin?<
-        P extends keyof Zhin.Adapters,
-        E extends keyof Zhin.BotEventMaps[P] = keyof Zhin.BotEventMaps[P],
-    >(
-        session: NSession<P, E>,
-    ): boolean;
+    isChannelAdmin(session: Session): boolean;
 
     isAtMe?<
         P extends keyof Zhin.Adapters,
@@ -211,12 +201,7 @@ export interface Bot<K extends keyof Zhin.Bots = keyof Zhin.Bots, BO = {}, AO = 
     ): boolean;
 
     // 会话发起者是否为群主
-    isGroupOwner?<
-        P extends keyof Zhin.Adapters,
-        E extends keyof Zhin.BotEventMaps[P] = keyof Zhin.BotEventMaps[P],
-    >(
-        session: NSession<P, E>,
-    ): boolean;
+    isGroupOwner(session: Session): boolean;
 
     start(): any;
 }

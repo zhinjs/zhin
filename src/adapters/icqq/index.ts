@@ -140,12 +140,12 @@ export class IcqqBot extends Bot<"icqq", IcqqBotOptions, {}, Client> {
         return false;
     }
 
-    isGroupAdmin(session): boolean {
-        return session.detail_type === "group" && session.member.is_admin;
+    isGroupAdmin(session: Session): boolean {
+        return session.detail_type === "group" && !!session.is_admin;
     }
 
-    isGroupOwner(session): boolean {
-        return session.detail_type === "group" && session.member.is_owner;
+    isGroupOwner(session: Session): boolean {
+        return session.detail_type === "group" && !!session.is_owner;
     }
 
     isAtMe(session): boolean {
@@ -169,6 +169,8 @@ export class IcqqBot extends Bot<"icqq", IcqqBotOptions, {}, Client> {
                 guild: obj.guild?.info || {},
                 member: obj.member?.info || {},
                 friend: obj.friend?.info || {},
+                is_owner: obj.sender?.role === "owner",
+                is_admin: obj.sender?.role === "admin",
                 user: obj.user?.info || {},
                 discuss: obj.discuss?.info || {},
                 user_id: obj.user_id || obj.sender?.user_id || obj.sender?.tiny_id,

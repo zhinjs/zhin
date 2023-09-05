@@ -5,6 +5,8 @@ import { Logger } from "log4js";
 import { EventEmitter } from "events";
 import { Dispose } from "./dispose";
 import { Context } from "@/context";
+import fs from "fs";
+import path from "path";
 
 interface AdapterConstruct<
     K extends keyof Zhin.Adapters = keyof Zhin.Adapters,
@@ -43,6 +45,7 @@ export abstract class Adapter<
         this.bots = new BotList();
         this.logger = zhin.getLogger(protocol);
         this.zhin.on("start", () => this.start());
+        this.zhin.on("restart", () => this.saveStatus());
         this.on("message.receive", (self_id: string | number, session: NSession<K>) => {
             this.zhin.logger.info(
                 `【${this.protocol}:${self_id}】 ↓ ( ${session.message_id} )\t${session.content}`,
@@ -90,7 +93,6 @@ export abstract class Adapter<
         }
         return cnt;
     }
-
     get status() {
         Object.keys(this._status).forEach(bot_id => {
             this._status[bot_id].msg_cnt_per_min = this._calcMsgCntPerMin(bot_id);
@@ -100,7 +102,8 @@ export abstract class Adapter<
 
     botStatus(self_id: string | number) {
         return (this.status[self_id] ||= {
-            lost_times: 0,
+            last_restart_time: 0,
+            restart_times: 0,
             msg_cnt_per_min: 0,
             online: false,
             recv_msg_cnt: 0,
@@ -138,6 +141,12 @@ export abstract class Adapter<
             this.startBot(botOptions);
         }
     }
+    saveStatus() {
+        fs.writeFileSync(
+            path.join(this.zhin.options.data_dir, this.protocol, "status.json"),
+            JSON.stringify(this.status),
+        );
+    }
 
     async stop(...args: any[]) {}
 
@@ -147,7 +156,8 @@ export abstract class Adapter<
             throw new Error(`can not find bot constructor from protocol:${this.protocol}`);
         const bot = new Construct(this.zhin, this as any, options);
         this.status[bot.self_id] = {
-            lost_times: 0,
+            last_restart_time: 0,
+            restart_times: 0,
             msg_cnt_per_min: 0,
             recv_msg_cnt: 0,
             sent_msg_cnt: 0,
@@ -181,7 +191,8 @@ export namespace Adapter {
 
     export interface BotStatus {
         start_time: number;
-        lost_times: number;
+        last_restart_time: number;
+        restart_times: number;
         recv_msg_cnt: number;
         sent_msg_cnt: number;
         msg_cnt_per_min: number;
