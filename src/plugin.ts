@@ -1,4 +1,5 @@
 import { Dict, getPackageInfo, remove } from "@zhinjs/shared";
+import { Schema } from "@zhinjs/schema";
 import { Dispose } from "@/dispose";
 import { Context } from "@/context";
 import { Zhin } from "@/zhin";
@@ -44,7 +45,7 @@ export class Plugin {
     public status: boolean;
     public dependencies: string[] = [];
     public disableBots: `${keyof Zhin.Adapters}:${string | number}`[] = [];
-
+    schemaMap: Dict<Schema> = {};
     constructor(
         public options: Plugin.Options,
         public info: Plugin.Info,
@@ -70,7 +71,9 @@ export class Plugin {
                 this.options.scopes.includes(session.protocol))
         );
     }
-
+    schema<S, T>(path: string, schema?: Schema<S, T>): Schema<S, T> {
+        return (this.schemaMap[path] ||= schema);
+    }
     // 根据指定配置挂载插件
     mount(ctx: Context) {
         this.context = ctx;

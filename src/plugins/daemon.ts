@@ -1,18 +1,18 @@
-import { useContext, Schema, useOptions, Bot, Zhin, NSession } from "@";
+import { useContext, Schema, Bot, Zhin, NSession } from "@";
 import { promisify } from "util";
 import { exec } from "child_process";
 
-export const name = "systemDaemon";
 const ctx = useContext();
-const config = useOptions("plugins.daemon");
-const Config = Schema.object({
-    exitCommand: Schema.union([
-        Schema.boolean().default(true).description("是否添加退出指令"),
-        Schema.string().default("添加的指令"),
-    ]),
-    autoRestart: Schema.boolean().default(true).description("是否自动重启"),
-});
-const { exitCommand = true, autoRestart = true } = Config(config);
+const { exitCommand = true, autoRestart = true } = ctx.useOptions(
+    "plugins.daemon",
+    Schema.object({
+        exitCommand: Schema.union([
+            Schema.boolean().default(true).description("是否添加退出指令"),
+            Schema.string().default("添加的指令"),
+        ]),
+        autoRestart: Schema.boolean().default(true).description("是否自动重启"),
+    }),
+);
 
 function handleSignal(signal: NodeJS.Signals) {
     ctx.zhin.logger.info(`terminated by ${signal}`);

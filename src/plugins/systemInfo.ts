@@ -6,13 +6,59 @@ const copyFileSync = promisify(copyFile);
 const writeFileSync = promisify(writeFile);
 import * as readline from "readline";
 import { arch, cpus, freemem, totalmem, type } from "os";
-import { NSession, Time, useContext, Zhin } from "@";
+import { Adapter, NSession, onDispose, Time, useContext, Zhin } from "@";
 import { version, h } from "@";
+import { Schema } from "@zhinjs/schema";
+import { deepClone, getValue, setValue } from "@zhinjs/shared";
 
 export const name = "systemInfo";
 const ctx = useContext();
 
 const logFile = PathResolve(dirname(ctx.zhin.options.data_dir), "logs.log");
+onDispose(
+    ctx.zhin.on("restart", () => {
+        const newOptions = deepClone(ctx.zhin.options);
+        const oldStatus = getValue(newOptions, `plugins.systemInfo`) || {};
+        setValue(newOptions, `plugins.systemInfo`, {
+            start_time: oldStatus.start_time || Date.now(),
+            restart_times: oldStatus.restart_times === undefined ? 0 : oldStatus.restart_times + 1,
+            last_restart_time: Date.now(),
+            bot_status: Object.fromEntries(
+                [...ctx.zhin.adapters.values()].reduce((result, adapter: Adapter) => {
+                    result.push(
+                        ...adapter.bots.map(bot => {
+                            return [`${adapter.protocol}:${bot.self_id}`, bot.status];
+                        }),
+                    );
+                    return result;
+                }, []),
+            ),
+        });
+        ctx.zhin.changeOptions(newOptions);
+    }),
+);
+const config = ctx.useOptions(
+    "plugins.systemInfo",
+    Schema.object({
+        start_time: Schema.number().default(0),
+        last_restart_time: Schema.number().default(0),
+        restart_times: Schema.number().default(0),
+        bot_status: Schema.dict(
+            Schema.object({
+                sent_msg_cnt: Schema.number().default(0),
+                recv_msg_cnt: Schema.number().default(0),
+            }).default({
+                sent_msg_cnt: 0,
+                recv_msg_cnt: 0,
+            }),
+        ),
+    }).default({
+        start_time: new Date().getTime(),
+        last_restart_time: 0,
+        restart_times: 0,
+        bot_status: {},
+    }),
+);
 
 function readLogs(): Promise<string[]> {
     return new Promise<string[]>(resolve => {
@@ -75,7 +121,6 @@ ctx.command("status")
             }
             return (+bytes.toFixed(0) === bytes ? bytes : bytes.toFixed(2)) + operators[0];
         }
-
         const memoryUsage = process.memoryUsage();
         const totalMem = totalmem();
         const usedMem = totalMem - freemem();
@@ -91,13 +136,14 @@ ctx.command("status")
             `进程内存占比:${((memoryUsage.rss / usedMem) * 100).toFixed(2)}%(${format(
                 memoryUsage.rss,
             )}/${format(usedMem)})`,
-            `持续运行时间：${Time.formatTime(
-                new Date().getTime() - session.bot.status.start_time,
-            )}`,
-            `掉线次数:${session.bot.status.lost_times}次`,
+            `持续运行时间：${Time.formatTime(new Date().getTime() - config.start_time)}`,
             `发送消息数:${session.bot.status.sent_msg_cnt}条`,
             `接收消息数:${session.bot.status.recv_msg_cnt}条`,
             `消息频率:${session.bot.status.msg_cnt_per_min}条/分`,
+            `重启次数:${config.restart_times}次`,
+            `上次重启时间:${
+                config.last_restart_time ? Time.format(config.last_restart_time) : "无"
+            }`,
         ].join("\n");
     });
 

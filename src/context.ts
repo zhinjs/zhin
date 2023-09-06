@@ -1,4 +1,4 @@
-import { isBailed, remove, Dict } from "@zhinjs/shared";
+import { isBailed, remove, Dict, getValue, deepClone, deepEqual } from "@zhinjs/shared";
 import { Zhin, isConstructor, ChannelId } from "./zhin";
 import { Dispose, ToDispose } from "./dispose";
 import { Adapter, AdapterConstructs, AdapterOptions, AdapterOptionsType } from "./adapter";
@@ -11,6 +11,8 @@ import { Plugin, PluginMap } from "@/plugin";
 import { Component, FunctionalComponent } from "./component";
 import { Logger } from "log4js";
 import { Bot } from "./bot";
+import { Schema } from "@zhinjs/schema";
+import { watch } from "obj-observer";
 
 export class Context extends EventEmitter {
     /**
@@ -316,6 +318,7 @@ export class Context extends EventEmitter {
         if (this.zhin.isReady) await callback();
         return this.zhin.on("before-ready", callback);
     }
+
     /**
      * 在zhin就绪后执行回调函数，如果zhin已经就绪则立即执行
      * @param callback 回调函数
@@ -324,6 +327,7 @@ export class Context extends EventEmitter {
         if (this.zhin.isReady) await callback();
         return this.zhin.on("after-ready", callback);
     }
+
     /**
      * 在zhin启动前执行回调函数，如果zhin已经启动则立即执行
      * @param callback 回调函数
@@ -332,6 +336,7 @@ export class Context extends EventEmitter {
         if (this.zhin.isStarted) await callback();
         return this.zhin.on("before-start", callback);
     }
+
     /**
      * 在zhin启动后执行回调函数，如果zhin已经启动则立即执行
      * @param callback 回调函数
@@ -340,6 +345,7 @@ export class Context extends EventEmitter {
         if (this.zhin.isStarted) await callback();
         return this.zhin.on("after-start", callback);
     }
+
     /**
      * 为当前上下文添加插件
      * @param plugin 插件安装配置对象
@@ -457,7 +463,7 @@ export class Context extends EventEmitter {
     /**
      * 为当前上下文添加指令
      * @param decl 指令声明
-     * @param config {import('zhin').Command} 指令配置
+     * @param config {import("zhin").Command} 指令配置
      */
     command<S extends Command.Declare>(
         decl: S,
@@ -467,7 +473,7 @@ export class Context extends EventEmitter {
      * 为当前上下文添加指令
      * @param decl 指令声明
      * @param initialValue 指令初始值
-     * @param config {import('zhin').Command} 指令配置
+     * @param config {import("zhin").Command} 指令配置
      */
     command<S extends Command.Declare>(
         decl: S,
@@ -734,6 +740,7 @@ export class Context extends EventEmitter {
             await listener.apply(this, args);
         }
     }
+
     /**
      * 执行某一event的所有listener，并获取其返回值
      * @param event 事件名
@@ -760,6 +767,27 @@ export class Context extends EventEmitter {
             result = await listener.apply(this, args);
             if (isBailed(result)) return result;
         }
+    }
+    useOptions<T>(path: string): T;
+    /**
+     * 获取当前上下文的插件配置信息
+     * @param path
+     * @param schema 插件配置信息
+     */
+    useOptions<S, T>(path: string, schema: Schema<S, T>): T;
+    useOptions(path: string, schema?: Schema) {
+        const config = this[Context.plugin]?.schema(path, schema);
+        if (!config) throw new Error(`找不到插件配置:${path}`);
+        const result = getValue(this.zhin.options, path);
+        const backupData = deepClone(result);
+        const unwatch = watch(this.zhin.options, value => {
+            const newVal = getValue(value, path);
+            if (!deepEqual(backupData, newVal)) {
+                this[Context.plugin].reLoad();
+            }
+        });
+        this.disposes.push(unwatch);
+        return config(result);
     }
 
     /**

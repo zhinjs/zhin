@@ -119,28 +119,6 @@ export function createZhinAPI() {
         context.useCommand(name, command);
     };
 
-    // 读取指定path的配置文件
-    function useOptions<K extends Keys<Zhin.Options>>(
-        path: K,
-        zhinKey = Zhin.key,
-    ): Value<Zhin.Options, K> {
-        const zhin = zhinMap.get(zhinKey);
-        if (!zhin) throw new Error(`can't found zhin with context for key:${zhinKey.toString()}`);
-        const callSite = getCaller();
-        const pluginFullPath = callSite.getFileName();
-        const plugin = zhin.pluginList.find(plugin => plugin.options.fullPath === pluginFullPath);
-        const result = getValue(zhin.options, path);
-        const backupData = deepClone(result);
-        const unwatch = watch(zhin.options, value => {
-            const newVal = getValue(value, path);
-            if (!deepEqual(backupData, newVal)) {
-                plugin.reLoad();
-            }
-        });
-        plugin.context.disposes.push(unwatch);
-        return getValue(zhin.options, path);
-    }
-
     type EffectReturn = () => void;
     type EffectCallBack<T = any> = (value?: T, oldValue?: T) => void | EffectReturn;
 
@@ -195,6 +173,5 @@ export function createZhinAPI() {
         useCommand,
         useComponent,
         onDispose,
-        useOptions,
     };
 }

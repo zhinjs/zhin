@@ -1,6 +1,5 @@
 import { NSession, useContext, Zhin } from "@";
 
-export const name = "systemHelper";
 const ctx = useContext();
 ctx.command("help [command:string]")
     .desc("查看某个指令的帮助文档")

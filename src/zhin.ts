@@ -862,7 +862,6 @@ const {
     listenOnce,
     listen,
     useMiddleware,
-    useOptions,
 } = createZhinAPI();
 export {
     createZhin,
@@ -874,5 +873,4 @@ export {
     useMiddleware,
     useComponent,
     onDispose,
-    useOptions,
 };
