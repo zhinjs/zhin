@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.2](https://github.com/zhinjs/zhin/compare/v2.4.1...v2.4.2) (2023-09-09)
+
+
+### Bug Fixes
+
+* update dep version ([156ed9f](https://github.com/zhinjs/zhin/commit/156ed9fd4d1ae005536677caa4a9fed8ae8c28b3))
+
 ## [2.4.1](https://github.com/zhinjs/zhin/compare/v2.4.0...v2.4.1) (2023-09-06)
 
 
