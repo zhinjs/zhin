@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.4.1](https://github.com/zhinjs/zhin/compare/v2.4.0...v2.4.1) (2023-09-06)
+
+
+### Bug Fixes
+
+* is_owner/is_admin ([6ed0946](https://github.com/zhinjs/zhin/commit/6ed094643d5f03899cc6c27a61aa54351428fcc4))
+* more systemInfo ([5186adb](https://github.com/zhinjs/zhin/commit/5186adb4569975fb809a8b359d009b9e66d223b1))
+
 ## [2.4.0](https://github.com/zhinjs/zhin/compare/v2.3.24...v2.4.0) (2023-08-28)
 
 
