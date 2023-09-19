@@ -160,7 +160,8 @@ export class Zhin extends Context {
         this.on("dispose", () => {
             server.close();
         });
-        this.on("message", session => {
+        this.on("message", async session => {
+            await this.emitSync("before-message", session);
             const middleware = Middleware.compose(this.getSupportMiddlewares(session));
             middleware(session);
         });
