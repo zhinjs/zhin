@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.3](https://github.com/zhinjs/zhin/compare/v2.4.2...v2.4.3) (2023-09-19)
+
+
+### Bug Fixes
+
+* message 事件添加before事件 ([a4c3954](https://github.com/zhinjs/zhin/commit/a4c3954898ecc921b3fc1b4a6f1a176695c898fe))
+
 ## [2.4.2](https://github.com/zhinjs/zhin/compare/v2.4.1...v2.4.2) (2023-09-09)
 
 
