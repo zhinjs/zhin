@@ -15,7 +15,7 @@ export default defineConfigWithTheme({
         nav: [
             {text: '开始', link: '/guide/start', activeMatch: '/guide/'},
             {text: '配置', link: '/config/common', activeMatch: '/config/'},
-            // { text: 'API', link: '/api/zhin', activeMatch: '/api/' },
+            { text: 'API', link: '/api/zhin', activeMatch: '/api/' },
             // { text: '插件市场', link: '/market/', activeMatch: '/market/' },
             // { text: 'Playground', link: 'https://playground.zhin.icu', activeMatch: '/playground/' },
             {
