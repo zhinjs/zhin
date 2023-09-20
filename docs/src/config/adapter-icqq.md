@@ -22,6 +22,10 @@ adapters:
     bots: // [!code ++]
       - self_id: 147258369 # 机器人账号 // [!code ++]
         platform: 5 # 指定qq登录平台为iPad（可不配置  1：安卓  2：安卓平板  3：手表  4：苹果电脑  5：苹果平板） // [!code ++]
+        password: 123456789 # 机器人密码 // [!code ++]
+        ver: 0 # 指定登录协议版本（可不配置，默认取签名支持的最新版本） // [!code ++]
+        sign_api_addr: 'zhin' # 签名接口地址 // [!code ++]
+        [...]: '' # 其他icqq配置 // [!code ++]
 ```
 
 - 其中 `self_id` 对应`icqq` 的 uin，作为一个机器人的唯一标识
