@@ -1,6 +1,8 @@
 # 知音(Zhin)
 
-::: tip继承自 [Context](/api/context) :::
+::: tip 
+继承自 [Context](/api/context) 
+:::
 
 ## 属性(Attrs)
 

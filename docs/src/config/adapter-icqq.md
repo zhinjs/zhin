@@ -2,7 +2,7 @@
 
 ## icqq由来
 
-在介绍该适配器之前，我想先让你了解一下什么是 `icqq`，相信知道 `QQ` `NodeJS` 机器人生态的都知道 `oicq`，他是有`takayama-lily` 大佬维护的 qq 机器人的 SDK。奈何近一年来，大佬似乎琐事产生，没空更新了，我们变自发开始维护起来，而 `icqq` 就是所有维护分支中的其中之一，他在保留原有 `oicq` api 的同时增加了**频道**、**加精/取消加精群消息**的 API，并优化了登录流程（createClient 不再传 uin，在 login 时才传递），更改了底层发布订阅的 EventEmitter为TripTrap，使得使用过滤器监听事件得以实现。
+在介绍该适配器之前，我想先让你了解一下什么是 `icqq`，相信知道 `QQ` `NodeJS` 机器人生态的都知道 `oicq`，他是由`takayama-lily` 大佬维护的 qq 机器人的 SDK。奈何近一年来，大佬似乎琐事缠身，没空更新了，我们便自发开始维护起来，而 `icqq` 就是所有维护分支中的其中之一，他在保留原有 `oicq` api 的同时增加了**频道**、**加精/取消加精群消息**的 API，并优化了登录流程（createClient 不再传 uin，在 login 时才传递），更改了底层发布订阅的 EventEmitter为TripTrap，使得使用过滤器监听事件得以实现。
 
 ## adapter-icqq的优势
 
