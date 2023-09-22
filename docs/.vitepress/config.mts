@@ -17,7 +17,7 @@ export default defineConfigWithTheme({
             options:{
                 appId: 'JJ7HNQWQ9J',
                 apiKey: 'be3cc799b1d0dd165a4bd11a006690b8',
-                index:'zhin',
+                indexName: 'zhin',
                 locales:{
                     zh:{
                         placeholder:'搜索文档',
