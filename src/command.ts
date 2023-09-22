@@ -76,7 +76,7 @@ type OptionValueType<S extends string> = OptionType<S> extends {
     ? T
     : never;
 
-// 定义一个Command类，用于定义指令，这个类的实例会被注册到CommandManager中
+// 定义一个Command类
 export class Command<A extends any[] = [], O = {}> {
     filters: Command.Filters = {};
     callbacks: Command.CallBack<object, A, O>[] = [];

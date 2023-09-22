@@ -12,6 +12,11 @@ export default defineConfigWithTheme({
     lastUpdated: true,
     ignoreDeadLinks: true,
     themeConfig: {
+        algolia: {
+            appId: 'JJ7HNQWQ9J',
+            apiKey: 'be3cc799b1d0dd165a4bd11a006690b8',
+            index:'zhin'
+        },
         nav: [
             {text: '开始', link: '/guide/start', activeMatch: '/guide/'},
             {text: '配置', link: '/config/common', activeMatch: '/config/'},

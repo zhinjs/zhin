@@ -122,10 +122,53 @@
 
 - 为当前上下文添加一个中间件
 
-### command（def:string,trigger?:string):Command
+### command（def:string,initial?:string):Command
+### command（def:string,config?:Command.Config):Command
+### command（def:string,initial?:string,config?:Command.Config):Command
 
 - 为当前上下文添加一个指令，并返回指令本身
 
 ### dispatch（session:Session):void
 
-- 如果会话满足当前上下文的filter，则将session
+- 如果session满足当前上下文的filter，则将session继续想下分发
+
+### sendMsg（channel: Context.MsgChannel, msg: Element.Fragment):MessageRet
+
+- 发送一条消息给指定类型的用户
+
+### broadcast(channelIds: ChannelId | ChannelId[], content: Element.Fragment):Promise<MessageRet[]>
+
+- 广播一条消息给指定类型的用户
+
+## 命名空间(Namespace)
+
+```typescript
+export namespace Context {
+  export const plugin = Symbol("plugin");
+  export const childKey = Symbol("children");
+  export type MsgChannel = {
+    protocol: keyof Zhin.Adapters;
+    bot_id: string | number;
+    target_id: string | number;
+    target_type: "private" | "group" | "discuss" | "guild";
+  };
+
+  export function from(parent: Context, filter: Filter) {
+    const ctx = new Context(parent, filter);
+    ctx[plugin] = parent ? parent[plugin] : null;
+    return ctx;
+  }
+
+  export type Filter = (session: Session) => boolean;
+  export const defaultFilter: Filter = () => true;
+  export const or = (ctx: Context, filter: Filter) => {
+    return ((session: Session) => ctx.filter(session) || filter(session)) as Filter;
+  };
+  export const not = (ctx: Context, filter: Filter) => {
+    return ((session: Session) => ctx.filter(session) && !filter(session)) as Filter;
+  };
+  export const and = (ctx: Context, filter: Filter) => {
+    return ((session: Session) => ctx.filter(session) && filter(session)) as Filter;
+  };
+}
+```
