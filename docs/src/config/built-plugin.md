@@ -52,11 +52,11 @@ zhin 内置了`7`个插件，作为协助开发者管理 zhin 的基础，让我
 ### 功能描述
 
 - 1.聊天中输入`plugin.list` 可以查看当前 zhin 的**所有**插件
-- 2.聊天中输入`config.detail <name:stirng>`可以**查看**当前 zhin 的\*\*对应名称的插件
-- 3.聊天中输入`config.mount <name:string>`可以**挂载**指定名称的插件到zhin
-- 4.聊天中输入`config.unmount <name:string>`可以**取消挂载** zhin 中指定名称的插件
-- 5.聊天中输入`config.enable <name:string>`可以**启用**指定名称的插件
-- 6.聊天中输入`config.disable <name:string>`可以**禁用**指定名称的插件
+- 2.聊天中输入`plugin.detail <name:stirng>`可以**查看**当前 zhin 的\*\*对应名称的插件
+- 3.聊天中输入`plugin.mount <name:string>`可以**挂载**指定名称的插件到zhin
+- 4.聊天中输入`plugin.unmount <name:string>`可以**取消挂载** zhin 中指定名称的插件
+- 5.聊天中输入`plugin.enable <name:string>`可以**启用**指定名称的插件
+- 6.聊天中输入`plugin.disable <name:string>`可以**禁用**指定名称的插件
 
 ### 配置项
 
