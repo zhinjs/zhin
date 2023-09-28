@@ -7,7 +7,7 @@
 adapters:
   icqq:
     bots:
-      - uin: 147258369
+      - self_id: 147258369
         platform: 5
 plugins:
   config: null
@@ -33,16 +33,18 @@ delay:
 
 ### bot通用配置项
 
-| 参数名          | 参数类型                 | 默认值 | 描述                             |
-| :-------------- | :----------------------- | :----- | :------------------------------- |
-| self_id         | string&#124;number       | -      | 必填参数 当前机器人唯一表示      |
-| master          | string &#124; number     | -      | 主人账号                         |
-| admins          | (string &#124; number)[] | []     | 管理员账号列表                   |
-| prefix          | string                   | -      | 指令调用前缀                     |
-| quote_self      | boolean                  | false  | 触发指令时，是否自动引用触发消息 |
-| enable          | boolean                  | -      | 当前机器人是否启用               |
-| enable_plugins  | stirng[]                 | -      | 启用的插件列表                   |
-| disable_plugins | string[]                 | -      | 禁用的插件列表                   |
+| 参数名          | 参数类型                 | 默认值 | 描述                     |
+| :-------------- | :----------------------- | :----- |:-----------------------|
+| self_id         | string&#124;number       | -      | 必填参数 当前机器人唯一表示         |
+| master          | string &#124; number     | -      | 主人账号                   |
+| admins          | (string &#124; number)[] | []     | 管理员账号列表                |
+| prefix          | string                   | -      | 指令调用前缀                 |
+| text_limit      | number                   | 100    | 消息长度限制,发送消息时超出该长度将自动转发 |
+| rate_limit      | number                   | 1000   | 指令调用频率限制,单位毫秒          |
+| quote_self      | boolean                  | false  | 触发指令时，是否自动引用触发消息       |
+| enable          | boolean                  | -      | 当前机器人是否启用              |
+| enable_plugins  | stirng[]                 | -      | 启用的插件列表                |
+| disable_plugins | string[]                 | -      | 禁用的插件列表                |
 
 ::: tip适配器需安装后方能使用，(icqq为内置适配器，无需安装，相应配置请查
 看[adapter-icqq](/config/adapter-icqq)) :::

@@ -30,6 +30,10 @@ adapters:
 
 - 其中 `self_id` 对应`icqq` 的 uin，作为一个机器人的唯一标识
 - `platform` 代表你要登录的平台，默认为 1
+## 关于签名
+
+- 由于 `qq` 版本升级，现在登录需要签名，而 `icqq` 也提供了签名的接口，你可以 开源项目 [qsign](https://github.com/fuqiuluo/unidbg-fetch-qsign) 自行搭建签名服务，也使用他人提供的签名服务，只需要在配置文件中配置 `sign_api_addr` 即可。
+- 需要注意的是，当使用 `qsign` 自行部署时，请确保 `sign_api_addr` 中必须携带 `?key=${KEY}` (${KEY} 替换为你qsign配置中的key)，否则将无法正常使用。
 
 ::: tip
 具体更多的配置，请参考 icqq 的[Config](https://icqqjs.github.io/icqq/interfaces/Config.html)
