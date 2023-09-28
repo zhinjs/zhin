@@ -46,16 +46,20 @@ delay:
 | enable_plugins  | stirng[]                 | -      | 启用的插件列表                |
 | disable_plugins | string[]                 | -      | 禁用的插件列表                |
 
-::: tip适配器需安装后方能使用，(icqq为内置适配器，无需安装，相应配置请查
-看[adapter-icqq](/config/adapter-icqq)) :::
+::: tip
+适配器需安装后方能使用，(icqq为内置适配器，无需安装，相应配置请查
+看[adapter-icqq](/config/adapter-icqq)) 
+:::
 
 ## plugins
 
 - 存放插件的配置文件，每一个key对应一个插件，只有在此处定义的插件才会被加载到
   zhin中
 
-::: tip插件需安装后方能使用，(样例配置文件中的插件均为内置插件，无需安装即可使
-用，相应配置请查看[内置插件](/config/built-plugin)) :::
+::: tip
+插件需安装后方能使用，(样例配置文件中的插件均为内置插件，无需安装即可使
+用，相应配置请查看[内置插件](/config/built-plugin)) 
+:::
 
 ## log_level
 
