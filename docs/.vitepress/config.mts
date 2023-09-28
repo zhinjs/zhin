@@ -157,7 +157,7 @@ export default defineConfigWithTheme({
                     collapsible: true,
                     items: [
                         {text: `icqq`, link: '/config/adapter-icqq'},
-                        // {text:`oneBot`,link:'/config/adapter-oneBot'},
+                        {text:`oneBot`,link:'/config/adapter-oneBot'},
                     ]
                 },
                 {
