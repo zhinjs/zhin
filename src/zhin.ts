@@ -488,13 +488,6 @@ export class Zhin extends Context {
     async start(mode: "dev" | "prod" | string) {
         this.mode = mode;
         await this.emitSync("before-start");
-        for (const adapter of Object.keys(this.options.adapters || {})) {
-            try {
-                this.adapter(adapter as keyof Zhin.Adapters, this.options.adapters[adapter]);
-            } catch (e) {
-                this.logger.warn(e.message, e.stack);
-            }
-        }
         const installedPlugins = this.getInstalledModules("plugin");
         installedPlugins.forEach(plugin => {
             try {
@@ -517,6 +510,13 @@ export class Zhin extends Context {
         this.isReady = true;
         await this.emitSync("after-ready");
         this.isStarted = true;
+        for (const adapter of Object.keys(this.options.adapters || {})) {
+            try {
+                this.adapter(adapter as keyof Zhin.Adapters, this.options.adapters[adapter]);
+            } catch (e) {
+                this.logger.warn(e.message, e.stack);
+            }
+        }
         this.emit("start");
         await this.emitSync("after-start");
     }

@@ -535,13 +535,13 @@ export namespace Command {
     };
     export type Filters = AttrFilter<Session> | WithFilter | UnionFilter | ExcludeFilter;
     export type WithFilter = {
-        and: Filters;
+        $and: Filters;
     };
     export type UnionFilter = {
-        or: Filters;
+        $or: Filters;
     };
     export type ExcludeFilter = {
-        not: Filters;
+        $not: Filters;
     };
 
     export function createFilterFunction<T extends Filters>(filters: T) {
