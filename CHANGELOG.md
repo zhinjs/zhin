@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.4.4](https://github.com/zhinjs/zhin/compare/v2.4.3...v2.4.4) (2023-10-20)
+
+
+### Bug Fixes
+
+* 1、指令过滤类型声明错误 ([07e4507](https://github.com/zhinjs/zhin/commit/07e4507d9bdcfb180c7454fce583116cb6362491))
+* 1. bot实例加入到适配器bots数组后再启动 ([462aee4](https://github.com/zhinjs/zhin/commit/462aee48708fa6b4132f66f4b838dcc2cbd4c317))
+
 ## [2.4.3](https://github.com/zhinjs/zhin/compare/v2.4.2...v2.4.3) (2023-09-19)
 
 
