@@ -156,8 +156,8 @@ export abstract class Adapter<
             sent_msg_cnt: currentBotStatus.sent_msg_cnt || 0,
             online: false,
         };
-        bot.start();
         this.bots.push(bot);
+        bot.start();
     }
 }
 
