@@ -6,6 +6,7 @@ import { deepMerge, remove, sleep } from "@zhinjs/shared";
 import { EventEmitter } from "events";
 import { Element } from "./element";
 import { ref, watch } from "obj-observer";
+import { Client } from "icqq";
 
 export type BotOptions<O = {}> = {
     quote_self?: boolean;
@@ -155,7 +156,13 @@ export class Bot<
             message = [
                 Element("node", {
                     user_id: this.self_id as string,
-                    children: message,
+                    children: message.map(m => {
+                        if (Element.isElement(m))
+                            return Element("text", {
+                                text: Element.unescape(m.toString()),
+                            });
+                        return Element.unescape(String(m));
+                    }),
                 }),
             ];
         return this.sendQueueMsg(
@@ -168,30 +175,51 @@ export class Bot<
         );
     }
 }
-
 export interface Bot<K extends keyof Zhin.Bots = keyof Zhin.Bots, BO = {}, AO = {}, I = object> {
     self_id: string | number;
     options: BotOptions<BO>;
     adapter: Adapter<K, BO, AO>;
     zhin: Zhin;
-
+    call(event: string | symbol, ...args: any[]): Promise<any>;
+    /** 获取自身信息 */
+    getSelfInfo(): Promise<Bot.Info>;
+    /** 获取服务器列表 */
+    getGuildList?(): Promise<Bot.GuildInfo[]>;
+    /** 获取指定服务器信息 */
+    getGuildInfo?(guild_id: string): Promise<Bot.GuildInfo>;
+    /** 获取频道列表 */
+    getChannelList?(guild_id: string): Promise<Bot.ChannelInfo[]>;
+    /** 获取指定频道信息 */
+    getChannelInfo(guild_id: string, channel_id: string): Promise<Bot.ChannelInfo>;
+    /** 获取群列表 */
+    getGroupList(): Promise<Bot.GroupInfo[]>;
+    /** 获取指定群信息 */
+    getGroupInfo(group_id: string): Promise<Bot.GroupInfo>;
+    /** 获取讨论组列表 */
+    getDiscussList?(): Promise<Bot.DiscussInfo[]>;
+    /** 获取指定讨论组信息 */
+    getDiscussInfo?(discuss_id: string): Promise<Bot.DiscussInfo>;
+    /** 获取用户列表 */
+    getUserList(): Promise<Bot.UserInfo[]>;
+    /** 获取指定用户信息 */
+    getUserInfo(user_id: string): Promise<Bot.UserInfo>;
+    /** 发送消息 */
     sendMsg(
         target_id: string | number,
         target_type: Bot.MessageType,
         message: Element.Fragment,
     ): Promise<Bot.MessageRet>;
-
+    /** 获取消息信息 */
     getMsg(message_id: string): Promise<Bot.Message>;
-
+    /** 删除消息 */
     deleteMsg(message_id: string): Promise<boolean>;
 
     createSession(event: string, ...args: any[]): NSession<K>;
+    /** 会话发起者是否为群创建者 */
+    isGroupCreator(session: Session): boolean;
 
-    // 会话发起者是否为群管理员
-    isGroupOwner(session: Session): boolean;
-
-    // 会话发起者是否为频道管理员
-    isChannelAdmin(session: Session): boolean;
+    /** 会话发起者是否为群管理 */
+    isGroupAdmin(session: Session): boolean;
 
     isAtMe?<
         P extends keyof Zhin.Adapters,
@@ -200,9 +228,6 @@ export interface Bot<K extends keyof Zhin.Bots = keyof Zhin.Bots, BO = {}, AO = 
         session: NSession<P, E>,
     ): boolean;
 
-    // 会话发起者是否为群主
-    isGroupOwner(session: Session): boolean;
-
     start(): any;
 }
 
@@ -210,10 +235,36 @@ export type BotConstructs = {
     [P in keyof Zhin.Adapters]?: BotConstruct<P>;
 };
 export namespace Bot {
-    export type MessageType = "private" | "group" | "discuss" | "guild";
+    export type MessageType = "private" | "group" | "discuss" | "channel";
 
     export interface MessageRet extends Message {
         message_id: string;
+    }
+    export interface Info {
+        self_id: string | number;
+        name: string;
+        avatar?: string;
+    }
+    export interface GuildInfo {
+        guild_id: string;
+        guild_name: string;
+    }
+    export interface ChannelInfo {
+        guild_id: string;
+        channel_id: string;
+        channel_name: string;
+    }
+    export interface GroupInfo {
+        group_id: string;
+        group_name: string;
+    }
+    export interface DiscussInfo {
+        discuss_id: string;
+        discuss_name: string;
+    }
+    export interface UserInfo {
+        user_id: string;
+        user_name: string;
     }
 
     export type FullTargetId = `${keyof Zhin.Adapters}:${string | number}:${string}:${
@@ -267,9 +318,9 @@ export namespace Bot {
     };
 
     export interface Message {
-        from_id: string | number;
-        to_id: string | number;
-        user_id: string | number;
+        from_id: string;
+        to_id: string;
+        user_id: string;
         type: MessageType;
         content: string;
     }

@@ -203,7 +203,7 @@ export class Session<
      * 当前是否群主
      */
     get isOwner() {
-        return this.bot.isGroupOwner(this as NSession<P, E>);
+        return this.bot.isGroupCreator(this);
     }
 
     /**

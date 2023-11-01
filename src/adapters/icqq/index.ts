@@ -9,7 +9,7 @@ import { processMessage, toString } from "@/adapters/icqq/utils";
 
 async function sendMsg(
     this: Client,
-    target_id: number,
+    target_id: string,
     target_type: string,
     message: Element.Fragment,
 ) {
@@ -19,7 +19,9 @@ async function sendMsg(
         throw new Error(`发送消息(${element.join("")})不受支持`);
     if (music || share) {
         const target =
-            target_type === "group" ? this.pickGroup(target_id) : this.pickFriend(target_id);
+            target_type === "group"
+                ? this.pickGroup(Number(target_id))
+                : this.pickFriend(Number(target_id));
         if (music) await target.shareMusic(music.attrs.type, music.attrs.id);
         if (share) await target.shareUrl(share.attrs as any);
         return {
@@ -50,17 +52,16 @@ async function sendMsg(
     )) as MessageRet;
     return {
         message_id: messageRet.message_id,
-        from_id: this.uin,
-        to_id: target_id,
+        from_id: this.uin + "",
+        to_id: target_id + "",
+        user_id: this.uin + "",
+        content: Element.stringify(message),
         type: target_type as Bot.MessageType,
-        toString(): string {
-            return Element.stringify(message);
-        },
     } as Bot.MessageRet;
 }
 
 type Params<T> = T extends (...args: infer R) => any ? R : never;
-
+type Returns<T> = T extends (...args: any[]) => infer R ? R : T;
 export class IcqqBot extends Bot<"icqq", IcqqBotOptions, {}, Client> {
     constructor(app: Zhin, adapter: IcqqAdapter, options: BotOptions<IcqqBotOptions>) {
         if (!options.data_dir) options.data_dir = app.options.data_dir;
@@ -84,9 +85,95 @@ export class IcqqBot extends Bot<"icqq", IcqqBotOptions, {}, Client> {
             this.adapter.emit("bot.error", this.self_id, msg);
         });
     }
+    async getSelfInfo(): Promise<Bot.Info> {
+        return {
+            self_id: this.self_id + "",
+            name: this.internal.nickname,
+            avatar: `https://q1.qlogo.cn/g?b=qq&nk=${this.self_id}&s=640`,
+        };
+    }
+    async getGuildList(): Promise<Bot.GuildInfo[]> {
+        const guildList = await this.internal.getGuildList();
+        return [...guildList.values()].map(guildInfo => {
+            return {
+                ...guildInfo,
+                guild_id: guildInfo.guild_id + "",
+            };
+        });
+    }
+    async getGuildInfo(guild_id: string): Promise<Bot.GuildInfo> {
+        const guildList = await this.getGuildList();
+        return guildList.find(guildInfo => {
+            return guildInfo.guild_id === guild_id;
+        });
+    }
+    call<K extends keyof Client>(
+        method: K,
+        ...args: Params<Client[K]>
+    ): Promise<Returns<Client[K]>> {
+        if (typeof this.internal[method] === "function") {
+            return (this.internal[method] as Function)(...args);
+        }
+        return this.internal[method] as any;
+    }
+    async getGroupInfo(group_id: string): Promise<Bot.GroupInfo> {
+        const groupInfo = await this.internal.getGroupInfo(Number(group_id));
+        return {
+            ...groupInfo,
+            group_id: groupInfo.group_id + "",
+        };
+    }
+    async getGroupList(): Promise<Bot.GroupInfo[]> {
+        const groupList = await this.internal.getGroupList();
+        return [...groupList.values()].map(groupInfo => {
+            return {
+                ...groupInfo,
+                group_id: groupInfo.group_id + "",
+            };
+        });
+    }
+    async getChannelList(guild_id: string): Promise<Bot.ChannelInfo[]> {
+        const channelList = await this.internal.getChannelList(guild_id);
+        return [...channelList.values()].map(channelInfo => {
+            return {
+                ...channelInfo,
+                guild_id: channelInfo.guild_id + "",
+            };
+        });
+    }
+    async getChannelInfo(guild_id: string, channel_id: string): Promise<Bot.ChannelInfo> {
+        const channelList = await this.getChannelList(guild_id);
+        return channelList.find(channelInfo => {
+            return channelInfo.channel_id === channel_id;
+        });
+    }
+    async getDiscussList(): Promise<Bot.DiscussInfo[]> {
+        return [];
+    }
+    async getDiscussInfo(discuss_id: string): Promise<Bot.DiscussInfo> {
+        throw new Error("not support");
+    }
+    async getUserList(): Promise<Bot.UserInfo[]> {
+        const userList = this.internal.getFriendList();
+        return [...userList.values()].map(userInfo => {
+            return {
+                ...userInfo,
+                user_name: userInfo.nickname,
+                user_id: userInfo.user_id + "",
+            };
+        });
+    }
+    async getUserInfo(user_id: string): Promise<Bot.UserInfo> {
+        const userInfo = this.internal.fl.get(Number(user_id));
+        return {
+            ...userInfo,
+            user_name: userInfo.nickname,
+            user_id: userInfo.user_id + "",
+        };
+    }
 
     async sendMsg(
-        target_id: string | number,
+        target_id: string,
         target_type: Bot.MessageType,
         message: Element.Fragment,
     ): Promise<Bot.MessageRet> {
@@ -97,23 +184,23 @@ export class IcqqBot extends Bot<"icqq", IcqqBotOptions, {}, Client> {
         ]);
         const messageRet: Bot.MessageRet = {
             message_id,
-            from_id: this.self_id,
-            user_id: this.self_id,
+            from_id: this.self_id + "",
+            user_id: this.self_id + "",
             to_id: target_id,
             type: target_type,
             content: Element.stringify(message),
         };
-        this.adapter.emit(`message.send`, this.self_id, messageRet);
+        this.adapter.emit(`message.send`, this.self_id + "", messageRet);
         return messageRet;
     }
 
     async getMsg(message_id: string): Promise<Bot.Message> {
         const messageRet = await this.internal.getMsg(message_id);
         return {
-            user_id: messageRet.user_id,
-            from_id: messageRet.sender.user_id,
+            user_id: messageRet.user_id + "",
+            from_id: messageRet.sender.user_id + "",
             type: messageRet.message_type,
-            to_id: this.self_id,
+            to_id: this.self_id + "",
             content: toString(messageRet.message),
         };
     }
@@ -144,7 +231,7 @@ export class IcqqBot extends Bot<"icqq", IcqqBotOptions, {}, Client> {
         return session.detail_type === "group" && !!session.is_admin;
     }
 
-    isGroupOwner(session: Session): boolean {
+    isGroupCreator(session: Session): boolean {
         return session.detail_type === "group" && !!session.is_owner;
     }
 

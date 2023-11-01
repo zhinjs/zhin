@@ -718,11 +718,7 @@ export class Context extends EventEmitter {
                         [] as Bot[],
                     );
                     return bots.map(bot =>
-                        bot.sendMsg(
-                            Number(target_id),
-                            <"private" | "group" | "discuss" | "guild">target_type,
-                            content,
-                        ),
+                        bot.sendMsg(Number(target_id), target_type as any, content),
                     );
                 })
                 .flat(),
@@ -930,9 +926,9 @@ export namespace Context {
     export const childKey = Symbol("children");
     export type MsgChannel = {
         protocol: keyof Zhin.Adapters;
-        bot_id: string | number;
-        target_id: string | number;
-        target_type: "private" | "group" | "discuss" | "guild";
+        bot_id: string;
+        target_id: string;
+        target_type: "private" | "group" | "discuss" | "channel";
     };
 
     export function from(parent: Context, filter: Filter) {
