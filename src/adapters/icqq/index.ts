@@ -227,11 +227,11 @@ export class IcqqBot extends Bot<"icqq", IcqqBotOptions, {}, Client> {
         return false;
     }
 
-    isGroupAdmin(session: Session): boolean {
+    isGroupAdmin(session: NSession): boolean {
         return session.detail_type === "group" && !!session.is_admin;
     }
 
-    isGroupCreator(session: Session): boolean {
+    isGroupCreator(session: NSession): boolean {
         return session.detail_type === "group" && !!session.is_owner;
     }
 

@@ -166,10 +166,12 @@ export class Bot<
                 }),
             ];
         return this.sendQueueMsg(
-            session.group_id ||
-                session.discuss_id ||
-                session.user_id ||
-                `${session.guild_id}:${session.channel_id}`,
+            session.detail_type === "direct"
+                ? session.guild_id
+                : session.group_id ||
+                      session.discuss_id ||
+                      session.user_id ||
+                      `${session.guild_id}:${session.channel_id}`,
             session.detail_type as Bot.MessageType,
             message,
         );
@@ -216,7 +218,7 @@ export interface Bot<K extends keyof Zhin.Bots = keyof Zhin.Bots, BO = {}, AO = 
 
     createSession(event: string, ...args: any[]): NSession<K>;
     /** 会话发起者是否为群创建者 */
-    isGroupCreator(session: Session): boolean;
+    isGroupCreator<T extends NSession = NSession>(session: NSession): boolean;
 
     /** 会话发起者是否为群管理 */
     isGroupAdmin(session: Session): boolean;

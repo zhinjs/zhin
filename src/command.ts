@@ -194,7 +194,7 @@ export class Command<A extends any[] = [], O = {}> {
         if (!simple) {
             if (this.aliasNames.length) output.push(` alias:${this.aliasNames.join(",")}`);
             if (this.sugarsConfig.length)
-                output.push(` shortcuts:${this.sugarsConfig.map(sugar => String(sugar.regexp))}`);
+                output.push(` sugars:${this.sugarsConfig.map(sugar => String(sugar.regexp))}`);
             if (!isEmpty(this.optionsConfig)) {
                 const options = Object.keys(this.optionsConfig)
                     .filter(name => !name.startsWith("-"))
@@ -207,9 +207,9 @@ export class Command<A extends any[] = [], O = {}> {
                         nameDesc.push(option?.required ? "<" : "[");
                         nameDesc.push(option?.rest ? "..." : "");
                         nameDesc.push(key + ":");
-                        nameDesc.push(String(option.type));
+                        nameDesc.push(String(option.type || "any"));
                         nameDesc.push(option?.required ? ">" : "]");
-                        output.push(`  ${option.name} ${nameDesc.join("")} ${option.desc}`);
+                        output.push(`  -${option.name} ${nameDesc.join("")} ${option.desc}`);
                     });
                 }
             }

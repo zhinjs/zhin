@@ -20,7 +20,7 @@ export type ParametersToObj<A extends any[]> = A extends [infer R, ...infer L]
         : { args: [R, ...L] }
     : Dict;
 export type NSession<
-    P extends keyof Zhin.Adapters,
+    P extends keyof Zhin.Adapters = keyof Zhin.Adapters,
     E extends keyof Zhin.BotEventMaps[P] = keyof Zhin.BotEventMaps[P],
 > = Session<P> &
     (Zhin.BotEventMaps[P][E] extends (...args: any[]) => any
@@ -203,14 +203,14 @@ export class Session<
      * 当前是否群主
      */
     get isOwner() {
-        return this.bot.isGroupCreator(this);
+        return this.bot.isGroupCreator(this as unknown as NSession);
     }
 
     /**
      * 当前是否群管理员
      */
     get isAdmin() {
-        return this.bot.isGroupAdmin(this as NSession<P, E>);
+        return this.bot.isGroupAdmin(this as unknown as NSession);
     }
 
     toString() {
