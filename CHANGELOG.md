@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.5](https://github.com/zhinjs/zhin/compare/v2.4.4...v2.4.5) (2023-11-19)
+
+
+### Bug Fixes
+
+* 兼容频道私信，优化适配器类型定义 ([1a4c734](https://github.com/zhinjs/zhin/commit/1a4c7347ea52cdad6e5d5fa3b81338f117498321))
+
 ## [2.4.4](https://github.com/zhinjs/zhin/compare/v2.4.3...v2.4.4) (2023-10-20)
 
 
