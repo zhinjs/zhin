@@ -3,7 +3,7 @@ import {defineConfigWithTheme} from "vitepress";
 export default defineConfigWithTheme({
     title: '知音(Zhin)',
     titleTemplate: ':title - 知音(Zhin)',
-    base: '/',
+    base: '/zhin',
     head: [['meta', {name: 'theme-color', content: '#3c8772'}]],
     srcDir: './src',
     outDir: './dist',
