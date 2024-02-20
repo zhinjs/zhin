@@ -8,6 +8,7 @@
     "scripts": {
         "start": "pnpm start -C test start",
         "dev": "pnpm -C test dev",
+        "install": "pnpm install",
         "initial": "pnpm -C test initial",
         "prepare": "husky install",
         "lint": "eslint packages --ext .ts",
@@ -44,6 +45,7 @@
         "husky": "^8.0.3",
         "vitepress": "1.0.0-rc.39",
         "vue": "^3.4.15",
+        "pnpm": "latest",
         "latest-version": "^5.0.0",
         "prettier": "^3.1.0",
         "rimraf": "^5.0.5",
