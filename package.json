@@ -8,7 +8,6 @@
     "scripts": {
         "start": "pnpm start -C test start",
         "dev": "pnpm -C test dev",
-        "mount": "npm install && pnpm install",
         "initial": "pnpm -C test initial",
         "prepare": "husky install",
         "lint": "eslint packages --ext .ts",
@@ -17,14 +16,14 @@
         "build": "node ./scripts/build.js",
         "clean": "node ./scripts/clean.js",
         "pub": "node ./scripts/publish.js",
-        "release": "npm run build && npm run pub",
+        "bump": "bumpp packages/**/package.json",
         "docs:dev": "vitepress dev docs --port 5566",
         "docs:build": "vitepress build docs",
         "docs:serve": "vitepress serve docs"
     },
     "engines": {
-        "node": ">=18",
-        "pnpm": ">=8"
+        "node": ">=16",
+        "pnpm": ">=7"
     },
     "keywords": [
         "qq",
@@ -45,7 +44,6 @@
         "husky": "^8.0.3",
         "vitepress": "1.0.0-rc.39",
         "vue": "^3.4.15",
-        "pnpm": "latest",
         "latest-version": "^5.0.0",
         "prettier": "^3.1.0",
         "rimraf": "^5.0.5",
