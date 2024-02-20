@@ -8,7 +8,7 @@
     "scripts": {
         "start": "pnpm start -C test start",
         "dev": "pnpm -C test dev",
-        "install": "pnpm install",
+        "install": "npm install && pnpm install",
         "initial": "pnpm -C test initial",
         "prepare": "husky install",
         "lint": "eslint packages --ext .ts",
