@@ -1,0 +1,26 @@
+{
+    "name": "@zhinjs/plugin-schedule",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "version": "0.0.4",
+
+    "scripts": {
+        "build": "tsc && tsc-alias"
+    },
+    "files": [
+        "lib"
+    ],
+    "author": "凉菜",
+    "repository": {
+        "url": "https://github.com/zhinjs/zhin",
+        "directory": "packages/plugins/schedule"
+    },
+    "dependencies": {
+        "zhin": "workspace:latest",
+        "node-cron": "^3.0.3",
+        "@zhinjs/plugin-jsondb": "latest"
+    },
+    "devDependencies": {
+        "@types/node-cron": "^3.0.11"
+    }
+}

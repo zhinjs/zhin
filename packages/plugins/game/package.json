@@ -1,0 +1,22 @@
+{
+    "name": "@zhinjs/plugin-game",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "version": "0.0.1",
+
+    "scripts": {
+        "build": "tsc && tsc-alias"
+    },
+    "files": [
+        "lib"
+    ],
+    "author": "凉菜",
+    "repository": {
+        "url": "https://github.com/zhinjs/zhin",
+        "directory": "packages/plugins/game"
+    },
+    "dependencies": {
+        "zhin": "workspace:latest",
+        "@zhinjs/plugin-drawer": "workspace:latest"
+    }
+}

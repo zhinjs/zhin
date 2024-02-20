@@ -1,0 +1,15 @@
+{
+    "extends": "../../../tsconfig.base",
+    "compilerOptions": {
+        "rootDir": "src",
+        "baseUrl": "./guildManager",
+        "paths": {
+            "@/*": ["src/*"],
+            "@": ["src"]
+        },
+        "outDir": "lib"
+    },
+    "include": [
+        "./src"
+    ]
+}

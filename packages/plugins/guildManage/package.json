@@ -1,0 +1,22 @@
+{
+    "name": "@zhinjs/plugin-guild-manage",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "version": "0.0.1",
+
+    "scripts": {
+        "build": "tsc && tsc-alias"
+    },
+    "files": [
+        "lib"
+    ],
+    "author": "凉菜",
+    "repository": {
+        "url": "https://github.com/zhinjs/zhin",
+        "directory": "packages/plugins/guildManage"
+    },
+    "dependencies": {
+        "zhin": "workspace:latest",
+        "@zhinjs/qq": "workspace:latest"
+    }
+}

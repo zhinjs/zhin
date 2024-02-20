@@ -1,20 +1,18 @@
 {
-    "useTabs": false,
-    "tabWidth": 4,
-    "bracketSpacing": true,
-    "semi": true,
-    "quoteProps": "preserve",
-    "bracketSameLine": true,
-    "arrowParens": "avoid",
-    "proseWrap": "always",
-    "printWidth": 100,
-    "overrides": [
-        {
-            "files": "*.md",
-            "options": {
-                "tabWidth": 2,
-                "printWidth": 2000
-            }
-        }
-    ]
+  "printWidth": 120,
+  "tabWidth": 2,
+  "useTabs": false,
+  "semi": true,
+  "singleQuote": true,
+  "quoteProps": "consistent",
+  "jsxSingleQuote": false,
+  "trailingComma": "all",
+  "bracketSpacing": true,
+  "bracketSameLine": false,
+  "arrowParens": "avoid",
+  "htmlWhitespaceSensitivity": "css",
+  "vueIndentScriptAndStyle": false,
+  "endOfLine": "lf",
+  "embeddedLanguageFormatting": "auto",
+  "singleAttributePerLine": false
 }

@@ -1,0 +1,27 @@
+{
+  "name": "@zhinjs/plugin-drawer",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "version": "0.0.2",
+  "scripts": {
+    "build": "tsc && tsc-alias"
+  },
+  "files": [
+    "lib"
+  ],
+  "author": "凉菜",
+  "repository": {
+    "url": "https://github.com/zhinjs/zhin",
+    "directory": "packages/services/drawer"
+  },
+  "dependencies": {
+    "@types/svgdom": "latest",
+    "zhin": "workspace:latest",
+    "@svgdotjs/svg.js": "latest",
+    "@resvg/resvg-js": "latest",
+    "svgdom": "latest"
+  },
+  "peerDependencies": {
+    "zhin": "workspace:latest"
+  }
+}

@@ -1,0 +1,25 @@
+{
+    "name": "@zhinjs/qq",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "version": "0.0.14",
+    "scripts": {
+        "build": "tsc && tsc-alias"
+    },
+    "files": [
+        "lib"
+    ],
+    "author": "凉菜",
+    "repository": {
+        "url": "https://github.com/zhinjs/zhin",
+        "directory": "packages/adapters/qq"
+    },
+    "dependencies": {
+        "zhin": "workspace:latest",
+        "qq-group-bot": "latest"
+    },
+    "peerDependencies": {
+        "qq-group-bot": "latest",
+        "zhin": "workspace:latest"
+    }
+}

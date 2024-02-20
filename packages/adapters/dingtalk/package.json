@@ -1,0 +1,25 @@
+{
+    "name": "@zhinjs/dingtalk",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "version": "0.0.5",
+    "scripts": {
+        "build": "tsc && tsc-alias"
+    },
+    "files": [
+        "lib"
+    ],
+    "author": "凉菜",
+    "repository": {
+        "url": "https://github.com/zhinjs/zhin",
+        "directory": "packages/adapters/dingtalk"
+    },
+    "dependencies": {
+        "zhin": "workspace:latest",
+        "node-dd-bot": "latest"
+    },
+    "peerDependencies": {
+        "zhin": "workspace:latest",
+        "node-dd-bot": "latest"
+    }
+}

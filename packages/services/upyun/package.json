@@ -1,0 +1,22 @@
+{
+    "name": "@zhinjs/plugin-upyun",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "version": "0.0.2",
+
+    "scripts": {
+        "build": "tsc && tsc-alias"
+    },
+    "files": [
+        "lib",
+        "README.md"
+    ],
+    "author": "凉菜",
+    "repository": {
+        "url": "https://github.com/zhinjs/zhin",
+        "directory": "packages/services/upyun"
+    },
+    "dependencies": {
+        "zhin": "workspace:latest"
+    }
+}

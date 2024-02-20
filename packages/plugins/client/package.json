@@ -1,0 +1,28 @@
+{
+    "name": "@zhinjs/client",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "version": "0.0.13",
+    "scripts": {
+        "build": "tsc && tsc-alias"
+    },
+    "files": [
+        "lib"
+    ],
+    "author": "凉菜",
+    "repository": {
+        "url": "https://github.com/zhinjs/zhin",
+        "directory": "packages/plugin/client"
+    },
+    "dependencies": {
+        "zhin": "workspace:latest",
+        "@vitejs/plugin-vue": "latest",
+        "@zhinjs/plugin-http-server": "workspace:latest",
+        "vue": "latest",
+        "vite": "latest"
+    },
+    "peerDependencies": {
+        "zhin": "workspace:latest",
+        "@zhinjs/plugin-http-server": "workspace:latest"
+    }
+}

@@ -1,0 +1,34 @@
+{
+    "name": "@zhinjs/plugin-http-server",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "version": "0.0.3",
+    "scripts": {
+        "build": "tsc && tsc-alias"
+    },
+    "files": [
+        "lib",
+        "dist",
+        "client"
+    ],
+    "author": "凉菜",
+    "repository": {
+        "url": "https://github.com/zhinjs/zhin",
+        "directory": "packages/services/http-server"
+    },
+    "dependencies": {
+        "zhin": "workspace:latest",
+        "koa": "latest",
+        "koa-basic-auth":"latest",
+        "@koa/router": "latest",
+        "koa-bodyparser": "latest",
+        "ws": "latest"
+    },
+    "devDependencies": {
+        "@types/koa": "latest",
+        "@types/koa-bodyparser": "latest",
+        "@types/koa-basic-auth": "latest",
+        "@types/koa__router": "latest",
+        "@types/ws": "latest"
+    }
+}

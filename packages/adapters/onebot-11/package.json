@@ -1,0 +1,29 @@
+{
+    "name": "@zhinjs/onebot-11",
+    "main": "./lib/index.js",
+    "types": "./lib/index.d.ts",
+    "version": "0.0.12",
+    "scripts": {
+        "build": "tsc && tsc-alias"
+    },
+    "files": [
+        "lib"
+    ],
+    "author": "凉菜",
+    "repository": {
+        "url": "https://github.com/zhinjs/zhin",
+        "directory": "packages/adapters/onebot-v11"
+    },
+    "dependencies": {
+        "zhin": "workspace:latest",
+        "ws": "latest",
+        "@zhinjs/plugin-http-server": "workspace:latest"
+    },
+    "peerDependencies": {
+        "zhin": "workspace:latest",
+        "@zhinjs/plugin-http-server": "workspace:latest"
+    },
+    "devDependencies": {
+        "@types/ws": "latest"
+    }
+}

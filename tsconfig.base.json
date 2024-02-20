@@ -1,20 +1,12 @@
 {
-	"compilerOptions": {
-		"target": "es2020",
-		"module": "commonjs",
-		"declaration": true,
-		"composite": true,
-		"incremental": true,
-		"skipLibCheck": true,
-		"esModuleInterop": true,
-		"moduleResolution": "node",
-		"strictBindCallApply": true,
-		"paths": {
-			"@/*": ["./src/*"],
-			"@": ["./src"],
-			"zhin": ["./src"],
-			"zhin/*": ["./src/*"]
-		}
-	},
-	"include": ["src"]
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "commonjs",
+    "declaration": true,
+    "noEmitOnError": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true
+  },
 }

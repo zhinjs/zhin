@@ -1,0 +1,22 @@
+{
+    "name": "@zhinjs/plugin-group-manage",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "version": "0.0.1",
+
+    "scripts": {
+        "build": "tsc && tsc-alias"
+    },
+    "files": [
+        "lib"
+    ],
+    "author": "凉菜",
+    "repository": {
+        "url": "https://github.com/zhinjs/zhin",
+        "directory": "packages/plugins/groupManage"
+    },
+    "dependencies": {
+        "zhin": "workspace:latest",
+        "@zhinjs/icqq": "workspace:latest"
+    }
+}
