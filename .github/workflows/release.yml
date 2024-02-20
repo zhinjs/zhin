@@ -1,37 +1,29 @@
-name: Release and Publish
+name: Release And Publish
+
 on:
   push:
     branches:
       - main
-permissions:
-  contents: write
-  pull-requests: write
 jobs:
-  release-please:
+  release:
+    name: Release
     runs-on: ubuntu-latest
     steps:
-      - uses: google-github-actions/release-please-action@v3
-        id: release
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js 20.x
+        uses: actions/setup-node@v3
         with:
-          release-type: node
-          package-name: zhin
-      # Checkout
-      - uses: actions/checkout@v3
-        if: ${{ steps.release.outputs.release_created }}
-      # Setup node
-      - uses: actions/setup-node@v3
+          node-version: 20.x
+      - name: Install Dependencies
+        run: pnpm install
+
+      - name: Create Release Pull Request or Publish to npm
+        id: changesets
+        uses: changesets/action@v1
         with:
-          node-version: 16
-          registry-url: 'https://registry.npmjs.org'
-        if: ${{ steps.release.outputs.release_created }}
-      # Install dependencies
-      - run: npm install
-        if: ${{ steps.release.outputs.release_created }}
-      # Build output
-      - run: npm run build
-        if: ${{ steps.release.outputs.release_created }}
-      # Publish to npm
-      - run: npm run pub
+          publish: npm run release
         env:
-          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
-        if: ${{ steps.release.outputs.release_created }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
