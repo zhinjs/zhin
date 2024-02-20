@@ -23,8 +23,8 @@
         "docs:serve": "vitepress serve docs"
     },
     "engines": {
-        "node": ">=14",
-        "pnpm": ">=7"
+        "node": ">=18",
+        "pnpm": ">=8"
     },
     "keywords": [
         "qq",
