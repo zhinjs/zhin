@@ -1,16 +1,16 @@
 import { EventEmitter } from 'events';
 import { WebSocketServer, WebSocket, MessageEvent } from 'ws';
-import { MessageV11 } from '@/message';
-import { OneBotMethodsV11 } from '@/types';
+import { MessageV12 } from '@/message';
+import { OneBotMethodsV12 } from '@/types';
 import { Router } from '@zhinjs/plugin-http-server';
-import { OneBotV11Adapter } from '@/index';
+import { OneBotV12Adapter } from '@/index';
 import { Dict } from 'zhin';
 import { IncomingMessage } from 'http';
 
-export class OneBotV11 extends EventEmitter {
+export class OneBotV12 extends EventEmitter {
   constructor(
-    private adapter: OneBotV11Adapter,
-    public config: OneBotV11.Config,
+    private adapter: OneBotV12Adapter,
+    public config: OneBotV12.Config,
     private router: Router,
   ) {
     super();
@@ -26,17 +26,19 @@ export class OneBotV11 extends EventEmitter {
   async start() {
     switch (this.config.type) {
       case 'ws':
-        return this.connectWs(this.config as OneBotV11.Config<'ws'>);
+        return this.connectWs(this.config as OneBotV12.Config<'ws'>);
       case 'ws_reverse':
-        return this.startWsServer(this.config as OneBotV11.Config<'ws_reverse'>);
+        return this.startWsServer(this.config as OneBotV12.Config<'ws_reverse'>);
+      default:
+        throw new Error(`unsupported type:${this.config.type}, supported types:'ws', 'ws_reverse'`);
     }
   }
 
   private dispatch(message: MessageEvent) {
-    const result: OneBotV11.EventPayload | OneBotV11.ApiResult = JSON.parse(message?.toString() || 'null');
+    const result: OneBotV12.EventPayload | OneBotV12.ApiResult = JSON.parse(message?.toString() || 'null');
     if (!result) return;
     if (result.retcode !== undefined && result.echo) return this.emit('echo', result.echo, result.data);
-    const event: OneBotV11.EventPayload = result as OneBotV11.EventPayload;
+    const event: OneBotV12.EventPayload = result as OneBotV12.EventPayload;
     this.adapter.logger.debug('receive event', event);
     if (event.post_type === 'message') {
       this.adapter.logger.info(`recv [${event.message_type} ${event.group_id || event.user_id}]: ${event.raw_message}`);
@@ -44,11 +46,11 @@ export class OneBotV11 extends EventEmitter {
     this.emit(event.post_type, event);
   }
 
-  private startWsServer(cfg: OneBotV11.Config<'ws_reverse'>) {
+  private startWsServer(cfg: OneBotV12.Config<'ws_reverse'>) {
     const config: Dict<string> = {
-      path: `${cfg.prefix || '/onebot/v11'}`,
-      api_path: `${cfg.prefix || '/onebot/v11'}/api`,
-      event_path: `${cfg.prefix || '/onebot/v11'}/event`,
+      path: `${cfg.prefix || '/onebot/v12'}`,
+      api_path: `${cfg.prefix || '/onebot/v12'}/api`,
+      event_path: `${cfg.prefix || '/onebot/v12'}/event`,
     };
     Object.entries(config).map(([key, path]) => {
       const server = this.router.ws(path, {
@@ -56,12 +58,18 @@ export class OneBotV11 extends EventEmitter {
           const {
             req: { headers },
           } = info;
+          if (!headers['sec-websocket-protocol']?.startsWith('12')) {
+            this.adapter.logger.error('连接的协议不是有效的OneBotV12协议');
+          }
           const authorization = headers['authorization'] || '';
           if (this.config.access_token && authorization !== `Bearer ${this.config.access_token}`) {
             this.adapter.logger.error('鉴权失败');
             return false;
           }
           return true;
+        },
+        handleProtocols(protocols, req) {
+          return [...protocols][0] || false;
         },
       });
       if (['path', 'event_path'].includes(key))
@@ -80,8 +88,8 @@ export class OneBotV11 extends EventEmitter {
     });
   }
 
-  private connectWs(cfg: OneBotV11.Config<'ws'>) {
-    const config: Required<OneBotV11.ConfigMap['ws']> = {
+  private connectWs(cfg: OneBotV12.Config<'ws'>) {
+    const config: Required<OneBotV12.ConfigMap['ws']> = {
       url: cfg.url || 'ws://127.0.0.1:6700',
       max_reconnect_count: (cfg.max_reconnect_count ||= 10),
       reconnect_interval: (cfg.reconnect_interval ||= 3000),
@@ -119,12 +127,12 @@ export class OneBotV11 extends EventEmitter {
     }
   }
 
-  sendPayload<T extends keyof OneBotMethodsV11>(payload: {
+  sendPayload<T extends keyof OneBotMethodsV12>(payload: {
     action: T;
-    params: Parameters<OneBotMethodsV11[T]>[0];
+    params: Parameters<OneBotMethodsV12[T]>[0];
     echo?: number | string;
-  }): Promise<ReturnType<OneBotMethodsV11[T]>> {
-    return new Promise<ReturnType<OneBotMethodsV11[T]>>((resolve, reject) => {
+  }): Promise<ReturnType<OneBotMethodsV12[T]>> {
+    return new Promise<ReturnType<OneBotMethodsV12[T]>>((resolve, reject) => {
       payload.echo = payload.echo || Date.now();
       const timer = setTimeout(
         () => {
@@ -152,7 +160,7 @@ export class OneBotV11 extends EventEmitter {
     });
   }
 
-  async sendPrivateMsg(user_id: number, message: MessageV11.Sendable, message_id?: string) {
+  async sendPrivateMsg(user_id: string, message: MessageV12.Sendable, message_id?: string) {
     this.adapter.logger.info(`send [Private ${user_id}]: ${this.getBrief(message)}`);
     const result = await this.sendPayload({
       action: 'send_private_msg',
@@ -167,7 +175,7 @@ export class OneBotV11 extends EventEmitter {
       params: {},
     });
   }
-  getGroupInfo(group_id: number) {
+  getGroupInfo(group_id: string) {
     return this.sendPayload({
       action: 'get_group_info',
       params: { group_id },
@@ -179,19 +187,43 @@ export class OneBotV11 extends EventEmitter {
       params: {},
     });
   }
-  getStrangerInfo(user_id: number) {
+  sendLike(user_id: string, times = 1) {
+    return this.sendPayload({
+      action: 'send_like',
+      params: { user_id, times },
+    });
+  }
+  getStrangerInfo(user_id: string) {
     return this.sendPayload({
       action: 'get_stranger_info',
       params: { user_id },
     });
   }
-  getGroupMemberList(group_id: number) {
+  getGroupMemberList(group_id: string) {
     return this.sendPayload({
       action: 'get_group_member_list',
       params: { group_id },
     });
   }
-  getGroupMemberInfo(group_id: number, user_id: number) {
+  setEssenceMessage(message_id: string) {
+    return this.sendPayload({
+      action: 'set_essence_message',
+      params: { message_id },
+    });
+  }
+  removeEssenceMessage(message_id: string) {
+    return this.sendPayload({
+      action: 'remove_essence_message',
+      params: { message_id },
+    });
+  }
+  setGroupBan(group_id: string, user_id: string, duration?: number) {
+    return this.sendPayload({
+      action: 'set_group_ban',
+      params: { group_id, user_id, duration },
+    });
+  }
+  getGroupMemberInfo(group_id: string, user_id: string) {
     return this.sendPayload({
       action: 'get_group_member_info',
       params: {
@@ -200,7 +232,7 @@ export class OneBotV11 extends EventEmitter {
       },
     });
   }
-  setGroupKick(group_id: number, user_id: number, reject_add_request?: boolean) {
+  setGroupKick(group_id: string, user_id: string, reject_add_request?: boolean) {
     return this.sendPayload({
       action: 'set_group_kick',
       params: {
@@ -210,7 +242,49 @@ export class OneBotV11 extends EventEmitter {
       },
     });
   }
-  async sendGroupMsg(group_id: number, message: MessageV11.Sendable, message_id?: string) {
+  setGroupAdmin(group_id: string, user_id: string, enable?: boolean) {
+    return this.sendPayload({
+      action: 'set_group_admin',
+      params: { group_id, user_id, enable },
+    });
+  }
+  setGroupSpecialTitle(group_id: string, user_id: string, special_title?: string, duration?: number) {
+    return this.sendPayload({
+      action: 'set_group_special_title',
+      params: { group_id, user_id, special_title, duration },
+    });
+  }
+  sendGroupNotice(group_id: string, content: string) {
+    return this.sendPayload({
+      action: 'send_group_notice',
+      params: { group_id, content },
+    });
+  }
+  setGroupAnonymous(group_id: string, enable?: boolean) {
+    return this.sendPayload({
+      action: 'set_group_anonymous',
+      params: { group_id, enable },
+    });
+  }
+  setGroupCard(group_id: string, user_id: string, card?: string) {
+    return this.sendPayload({
+      action: 'set_group_card',
+      params: { group_id, user_id, card },
+    });
+  }
+  setGroupName(group_id: string, group_name: string) {
+    return this.sendPayload({
+      action: 'set_group_name',
+      params: { group_id, group_name },
+    });
+  }
+  sendGroupPoke(group_id: string, user_id: string) {
+    return this.sendPayload({
+      action: 'send_group_poke',
+      params: { group_id, user_id },
+    });
+  }
+  async sendGroupMsg(group_id: string, message: MessageV12.Sendable, message_id?: string) {
     this.adapter.logger.info(`send [Group ${group_id}]: ${this.getBrief(message)}`);
     const result = await this.sendPayload({
       action: 'send_group_msg',
@@ -219,7 +293,7 @@ export class OneBotV11 extends EventEmitter {
     if (!result.message_id) return this.adapter.logger.error(`send failed:`, result);
     return result.message_id;
   }
-  getBrief(message: MessageV11.Sendable): string {
+  getBrief(message: MessageV12.Sendable): string {
     if (typeof message === 'string') {
       return message;
     }
@@ -233,7 +307,7 @@ export class OneBotV11 extends EventEmitter {
   }
 }
 
-export namespace OneBotV11 {
+export namespace OneBotV12 {
   type WsConfig = {
     url?: string;
     max_reconnect_count?: number;
@@ -272,7 +346,7 @@ export namespace OneBotV11 {
       reconnect_interval: 3000,
     },
     ws_reverse: {
-      prefix: '/onebot/v11',
+      prefix: '/onebot/v12',
     },
   };
 }

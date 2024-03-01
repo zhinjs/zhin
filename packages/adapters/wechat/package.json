@@ -2,7 +2,7 @@
     "name": "@zhinjs/wechat",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
-    "version": "0.0.1",
+    "version": "1.0.0",
     "scripts": {
         "build": "tsc && tsc-alias"
     },
@@ -15,11 +15,11 @@
         "directory": "packages/adapters/wechat"
     },
     "dependencies": {
-        "zhin": "workspace:latest",
+        "zhin": "workspace:^",
         "lib-wechat": "latest"
     },
     "peerDependencies": {
-        "zhin": "workspace:latest",
+        "zhin": "workspace:^",
         "lib-wechat": "latest"
     }
 }

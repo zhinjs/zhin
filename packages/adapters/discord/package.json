@@ -2,7 +2,7 @@
   "name": "@zhinjs/discord",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
-  "version": "0.0.6",
+  "version": "1.0.0",
   "scripts": {
     "build": "tsc && tsc-alias"
   },
@@ -15,11 +15,11 @@
     "directory": "packages/adapters/discord"
   },
   "dependencies": {
-    "zhin": "workspace:latest",
+    "zhin": "workspace:^",
     "ts-disc-bot": "latest"
   },
   "devDependencies": {
-    "zhin": "workspace:latest",
+    "zhin": "workspace:^",
     "ts-disc-bot": "latest",
     "@types/node": "latest",
     "@types/ws": "latest"

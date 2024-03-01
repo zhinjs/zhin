@@ -22,23 +22,8 @@ jobs:
         uses: pnpm/action-setup@v3
         with:
           version: latest
-      - name: Bump version
-        run: npm run bump
       - uses: google-github-actions/release-please-action@v4
         id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           release-type: node
-      - name: Install Dependencies
-        run: pnpm install
-        if: ${{ steps.release.outputs.release_created }}
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.PERSONAL_TOKEN}}
-      - name: Build
-        run: pnpm run build
-        if: ${{ steps.release.outputs.release_created }}
-      - name: Publish
-        run: pnpm publish -r --access public --no-git-checks
-        if: ${{ steps.release.outputs.release_created }}
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}

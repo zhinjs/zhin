@@ -2,7 +2,7 @@
     "name": "@zhinjs/qq",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
-    "version": "0.0.14",
+    "version": "1.0.0",
     "scripts": {
         "build": "tsc && tsc-alias"
     },
@@ -15,11 +15,11 @@
         "directory": "packages/adapters/qq"
     },
     "dependencies": {
-        "zhin": "workspace:latest",
+        "zhin": "workspace:^",
         "qq-group-bot": "latest"
     },
     "peerDependencies": {
         "qq-group-bot": "latest",
-        "zhin": "workspace:latest"
+        "zhin": "workspace:^"
     }
 }

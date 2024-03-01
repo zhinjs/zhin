@@ -2,8 +2,7 @@
     "name": "@zhinjs/plugin-guild-manage",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
-    "version": "0.0.1",
-
+    "version": "1.0.0",
     "scripts": {
         "build": "tsc && tsc-alias"
     },
@@ -16,7 +15,7 @@
         "directory": "packages/plugins/guildManage"
     },
     "dependencies": {
-        "zhin": "workspace:latest",
-        "@zhinjs/qq": "workspace:latest"
+        "zhin": "workspace:^",
+        "@zhinjs/qq": "workspace:^"
     }
 }

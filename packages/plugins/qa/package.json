@@ -2,8 +2,7 @@
     "name": "@zhinjs/plugin-qa",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
-    "version": "0.0.2",
-
+    "version": "1.0.0",
     "scripts": {
         "build": "tsc && tsc-alias"
     },
@@ -16,7 +15,7 @@
         "directory": "packages/plugins/qa"
     },
     "dependencies": {
-        "zhin": "workspace:latest",
+        "zhin": "workspace:^",
         "@zhinjs/plugin-jsondb": "latest"
     }
 }

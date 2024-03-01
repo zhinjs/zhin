@@ -1,12 +1,41 @@
-name: CI
+name: Changesets
 on:
-  - push
+  push:
+    branches:
+      - main
+env:
+  CI: true
+  PNPM_CACHE_FOLDER: .pnpm-store
 jobs:
-  codeCov:
+  version:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: checkout code repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v3
+      - name: setup node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 16.x
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: latest
+      - name: setup pnpm config
+        run: pnpm config set store-dir $PNPM_CACHE_FOLDER
+      - name: install dependencies
+        run: pnpm install
+        env:
+          GITHUB_AUTH_TOKEN: ${{secrets.PERSONAL_TOKEN}}
+      - name: create and publish versions
+        uses: changesets/action@v1
+        with:
+          version: pnpm ci:version
+          commit: "chore: update versions"
+          title: "chore: update versions"
+          publish: pnpm ci:publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -2,7 +2,7 @@
   "name": "@zhinjs/plugin-drawer",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
-  "version": "0.0.2",
+  "version": "1.0.0",
   "scripts": {
     "build": "tsc && tsc-alias"
   },
@@ -16,12 +16,12 @@
   },
   "dependencies": {
     "@types/svgdom": "latest",
-    "zhin": "workspace:latest",
+    "zhin": "workspace:^",
     "@svgdotjs/svg.js": "latest",
     "@resvg/resvg-js": "latest",
     "svgdom": "latest"
   },
   "peerDependencies": {
-    "zhin": "workspace:latest"
+    "zhin": "workspace:^"
   }
 }

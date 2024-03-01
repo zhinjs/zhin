@@ -2,8 +2,7 @@
     "name": "@zhinjs/plugin-upyun",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
-    "version": "0.0.2",
-
+    "version": "1.0.0",
     "scripts": {
         "build": "tsc && tsc-alias"
     },
@@ -17,6 +16,6 @@
         "directory": "packages/services/upyun"
     },
     "dependencies": {
-        "zhin": "workspace:latest"
+        "zhin": "workspace:^"
     }
 }

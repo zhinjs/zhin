@@ -2,7 +2,7 @@
     "name": "@zhinjs/plugin-http-server",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
-    "version": "0.0.3",
+    "version": "1.0.0",
     "scripts": {
         "build": "tsc && tsc-alias"
     },
@@ -17,9 +17,9 @@
         "directory": "packages/services/http-server"
     },
     "dependencies": {
-        "zhin": "workspace:latest",
+        "zhin": "workspace:^",
         "koa": "latest",
-        "koa-basic-auth":"latest",
+        "koa-basic-auth": "latest",
         "@koa/router": "latest",
         "koa-bodyparser": "latest",
         "ws": "latest"

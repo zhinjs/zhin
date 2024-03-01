@@ -1,7 +1,7 @@
 {
-    "name": "@zhinjs/icqq",
-    "main": "lib/index.js",
-    "types": "lib/index.d.ts",
+    "name": "@zhinjs/onebot-12",
+    "main": "./lib/index.js",
+    "types": "./lib/index.d.ts",
     "version": "1.0.0",
     "scripts": {
         "build": "tsc && tsc-alias"
@@ -12,14 +12,18 @@
     "author": "凉菜",
     "repository": {
         "url": "https://github.com/zhinjs/zhin",
-        "directory": "packages/adapters/icqq"
+        "directory": "packages/adapters/onebot-v12"
     },
     "dependencies": {
         "zhin": "workspace:^",
-        "icqq": "latest"
+        "ws": "latest",
+        "@zhinjs/plugin-http-server": "workspace:^"
     },
     "peerDependencies": {
         "zhin": "workspace:^",
-        "icqq": "latest"
+        "@zhinjs/plugin-http-server": "workspace:^"
+    },
+    "devDependencies": {
+        "@types/ws": "latest"
     }
 }

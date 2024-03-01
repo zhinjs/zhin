@@ -1,15 +1,15 @@
 import { Dict, unwrap } from 'zhin';
 
-export interface MessageV11 {
+export interface MessageV12 {
   raw_message: string;
   user_id: number;
   message_id: string;
   nickname?: string;
   group_id: number;
   message_type: 'group' | 'private';
-  message: string | (MessageV11.Segment | string)[];
+  message: string | (MessageV12.Segment | string)[];
 }
-export namespace MessageV11 {
+export namespace MessageV12 {
   export type Segment = {
     type: string;
     data: Dict;
@@ -18,20 +18,6 @@ export namespace MessageV11 {
     message_id: number;
   };
   export type Sendable = string | Segment | (string | Segment)[];
-
-  export function segmentsToCqCode(segments: Segment[]) {
-    let result = '';
-    for (const item of segments) {
-      const { type, data } = item;
-      if (type === 'text') result += data.text || '';
-      else
-        result += `[CQ:${type},${Object.entries(data || {})
-          .map(([key, value]) => `${key}=${value}`)
-          .join(',')}]`;
-    }
-    return result;
-  }
-
   export function parseSegmentsFromTemplate(template: string): Segment[] {
     const result: Segment[] = [];
     const reg = /(<[^>]+>)/;

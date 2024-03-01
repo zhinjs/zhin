@@ -1,5 +1,6 @@
 {
     "name": "zhin-workspace",
+    "private": true,
     "version": "0.0.1",
     "description": "zhin机器人开发框架",
     "repository": {
@@ -15,7 +16,7 @@
         "format": "prettier packages --write",
         "build": "node ./scripts/build.js",
         "clean": "node ./scripts/clean.js",
-        "pub": "node ./scripts/publish.js",
+        "ci:publish": "pnpm publish -r",
         "bump": "bumpp packages/**/package.json",
         "docs:dev": "vitepress dev docs --port 5566",
         "docs:build": "vitepress build docs",
@@ -33,6 +34,7 @@
     "author": "凉菜",
     "license": "MIT",
     "devDependencies": {
+        "@changesets/cli": "^2.27.1",
         "@commitlint/cli": "^18.2.0",
         "@commitlint/config-conventional": "^18.1.0",
         "@types/node": "^20.5.9",
@@ -43,15 +45,13 @@
         "eslint-plugin-prettier": "latest",
         "husky": "^8.0.3",
         "latest-version": "^5.0.0",
+        "less": "^4.2.0",
         "prettier": "^3.1.0",
         "rimraf": "^5.0.5",
         "semver": "^7.5.4",
         "tsc-alias": "^1.8.8",
         "typescript": "^5.2.2",
         "vitepress": "1.0.0-rc.39",
-        "vue": "^3.4.15",
-        "less": "^4.2.0"
-    },
-    "dependencies": {
+        "vue": "^3.4.15"
     }
 }
