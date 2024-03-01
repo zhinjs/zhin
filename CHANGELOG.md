@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.0.0](https://github.com/zhinjs/zhin/compare/v2.4.6...v3.0.0) (2024-03-01)
+
+
+### ⚠ BREAKING CHANGES
+
+* 3.0
+
+### Code Refactoring
+
+* 3.0 ([7b66620](https://github.com/zhinjs/zhin/commit/7b66620595d06af0b2585c8dba805dc080dd4321))
+
 ## [2.4.6](https://github.com/zhinjs/zhin/compare/v2.4.5...v2.4.6) (2024-03-01)
 
 
