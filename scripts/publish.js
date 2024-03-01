@@ -32,6 +32,7 @@ function isNext(version) {
       console.log(`start publish ${meta.name}@${meta.version}`);
       execSync(`npm publish --access public --tag ${isNext(meta.version) ? 'next' : 'latest'}`, {
         cwd: root,
+        env: process.env,
         encoding: 'utf8',
       });
       fs.writeFileSync(root + '/package.json', backupPackageJson);
