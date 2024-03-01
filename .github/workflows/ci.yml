@@ -11,33 +11,41 @@ jobs:
     timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
-      - name: checkout code repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: setup node.js
         uses: actions/setup-node@v4
         with:
           node-version: 16.x
-      - name: install pnpm
-        run: npm i pnpm@latest -g
+      - name: checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 7
       - name: setup pnpm config
         run: pnpm config set store-dir $PNPM_CACHE_FOLDER
       - name: install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install
         env:
           GITHUB_AUTH_TOKEN: ${{secrets.PERSONAL_TOKEN}}
-      - name: build packages
-        run: npm run build
-      - name: create and publish versions
+      - name: bump versions
         uses: changesets/action@v1
-        id: release
+        id: changesets
         with:
           version: npm run bump
           commit: "chore: update versions"
           title: "chore: update versions"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: google-github-actions/release-please-action@v3
+        id: release
+        with:
+          release-type: node
+          package-name: zhin-workspace
+      - name: build packages
+        run: npm run build
+        if: ${{ steps.release.outputs.release_created }}
       - name: publish packages
         if: ${{ steps.release.outputs.release_created }}
         run: npm run pub
