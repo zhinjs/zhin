@@ -31,12 +31,15 @@ jobs:
         run: npm run build
       - name: create and publish versions
         uses: changesets/action@v1
+        id: release
         with:
           version: pnpm ci:version
           commit: "chore: update versions"
           title: "chore: update versions"
-          publish: npm run pub
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: publish packages
+        if: ${{ steps.release.outputs.release_created }}
+        run: npm run pub
+        env:
           NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
