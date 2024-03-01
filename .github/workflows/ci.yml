@@ -24,7 +24,7 @@ jobs:
       - name: setup pnpm config
         run: pnpm config set store-dir $PNPM_CACHE_FOLDER
       - name: install dependencies
-        run: pnpm install
+        run: pnpm install --no-frozen-lockfile
         env:
           GITHUB_AUTH_TOKEN: ${{secrets.PERSONAL_TOKEN}}
       - name: create and publish versions
