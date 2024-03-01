@@ -42,7 +42,6 @@ jobs:
         id: release
         with:
           release-type: node
-          package-name: zhin-workspace
       - name: build packages
         run: npm run build
         if: ${{ steps.release.outputs.release_created }}
