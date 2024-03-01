@@ -1,7 +1,7 @@
 {
     "name": "zhin-workspace",
     "private": true,
-    "version": "3.0.0",
+    "version": "3.0.1",
     "description": "zhin机器人开发框架",
     "repository": {
         "url": "https://github.com/zhinjs/zhin"
