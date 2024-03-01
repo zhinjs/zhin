@@ -17,7 +17,7 @@
         "build": "node ./scripts/build.js",
         "clean": "node ./scripts/clean.js",
         "ci:version": "pnpm changeset version",
-        "ci:publish": "pnpm publish -r --no-git-checks",
+        "ci:publish": "pnpm publish -r --access public --no-git-checks",
         "bump": "bumpp packages/**/package.json",
         "docs:dev": "vitepress dev docs --port 5566",
         "docs:build": "vitepress build docs",
