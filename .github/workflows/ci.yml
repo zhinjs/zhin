@@ -27,13 +27,15 @@ jobs:
         run: pnpm install --no-frozen-lockfile
         env:
           GITHUB_AUTH_TOKEN: ${{secrets.PERSONAL_TOKEN}}
+      - name: build packages
+        run: npm run build
       - name: create and publish versions
         uses: changesets/action@v1
         with:
           version: pnpm ci:version
           commit: "chore: update versions"
           title: "chore: update versions"
-          publish: pnpm ci:publish
+          publish: npm run pub
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
