@@ -16,6 +16,7 @@
         "format": "prettier packages --write",
         "build": "node ./scripts/build.js",
         "clean": "node ./scripts/clean.js",
+        "ci:version": "pnpm changeset version",
         "ci:publish": "pnpm publish -r",
         "bump": "bumpp packages/**/package.json",
         "docs:dev": "vitepress dev docs --port 5566",
