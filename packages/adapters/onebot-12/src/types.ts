@@ -73,8 +73,8 @@ export type OneBotMethodsV12 = {
   set_restart(params: { delay?: number }): void;
   clean_cache(params: object): void;
   '.handle_quick_operation'(params: { context: Dict; operation: Dict }): void;
-  'set_essence_message'(params: { message_id: string }): string;
-  remove_essence_message(params: { message_id: string }): boolean;
+  set_essence_message(params: { message_id: string }): string;
+  remove_essence_message(params: { message_id: string }): string;
   send_group_notice(params: { group_id: string; content: string }): boolean;
   send_group_poke(params: { group_id: string; user_id: string }): boolean;
 };

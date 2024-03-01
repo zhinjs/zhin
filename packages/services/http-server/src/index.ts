@@ -1,4 +1,4 @@
-import { loadYamlConfigOrCreate, Plugin, saveYamlConfig } from 'zhin';
+import { Command, Plugin } from 'zhin';
 import { createServer, Server } from 'http';
 import Koa, { Context } from 'koa';
 import auth from 'koa-basic-auth';
@@ -9,63 +9,72 @@ export * from './router';
 const koa = new Koa();
 koa.use(
   auth({
-    name: process.env.username + '',
-    pass: process.env.password + '',
+    name: process.env.username || '',
+    pass: process.env.password || '',
   }),
 );
 const server = createServer(koa.callback());
 const router = new Router(server, { prefix: process.env.routerPrefix || '' });
+const outputCommand = (command: Command) => {
+  return {
+    name: command.name,
+    desc: command.config.desc,
+    alias: command.aliasNames,
+    hidden: command.config.hidden,
+    help: command.help(),
+  };
+};
 router.get('/api/plugins', (ctx: Context) => {
+  ctx.response.headers['Content-Type'] = 'application/json';
   ctx.body = httpServer.app!.pluginList.map(plugin => {
     return {
       name: plugin.name,
       status: plugin.status,
-      filePath: plugin.filePath,
       middlewareCount: plugin.middlewares.length,
-      commands: [...plugin.commands.values()].map(command => {
-        return {
-          name: command.name,
-          desc: command.config.desc,
-          alias: command.aliasNames,
-          hidden: command.config.hidden,
-          help: command.help(),
-        };
-      }),
-      services: [...plugin.services.entries()].map(([name]) => {
-        return {
-          name,
-        };
-      }),
+      commands: [...plugin.commands.values()].map(outputCommand),
+      services: [...plugin.services.entries()].map(([name]) => name),
     };
   });
 });
+router.get('/api/plugin/:name/commands', (ctx: Context) => {
+  ctx.response.headers['Content-Type'] = 'application/json';
+  ctx.body = [...(httpServer.app?.plugins.get(ctx.params.name)?.commands.values() || [])].map(outputCommand);
+});
 router.get('/api/config', (ctx: Context) => {
+  ctx.response.headers['Content-Type'] = 'application/json';
   ctx.body = httpServer.app!.config;
 });
-router.get('/api/adapter/:name/config', (ctx: Context) => {
-  ctx.body = loadYamlConfigOrCreate(`${ctx.params.name}.yaml`, '[]');
-});
-router.post('/api/adapter/:name/config', (ctx: Context) => {
-  saveYamlConfig(ctx.params.name, ctx.request.body);
-});
 router.get('/api/adapters', (ctx: Context) => {
+  ctx.response.headers['Content-Type'] = 'application/json';
   ctx.body = [...httpServer.app!.adapters.values()].map(adapter => {
     return {
       name: adapter.name,
-      botsCount: adapter.bots.length,
+      bots: adapter.bots.map(bot => {
+        return bot.unique_id;
+      }),
     };
   });
 });
+router.get('/api/adapter/:name/bots', (ctx: Context) => {
+  ctx.response.headers['Content-Type'] = 'application/json';
+  ctx.body =
+    httpServer.app?.adapters.get(ctx.params.name)?.bots.map(bot => {
+      return bot.unique_id;
+    }) || [];
+});
+router.get('/api/bots', (ctx: Context) => {
+  ctx.response.headers['Content-Type'] = 'application/json';
+  ctx.body = [...(httpServer.app?.adapters.values() || [])].reduce((result, adp) => {
+    return result.concat(
+      adp.bots.map(bot => {
+        return bot.unique_id;
+      }),
+    );
+  }, [] as any[]);
+});
 router.get('/api/commands', (ctx: Context) => {
-  ctx.body = [...httpServer.app!.commandList].map(command => {
-    return {
-      name: command.name,
-      desc: command.config.desc,
-      alias: command.aliasNames,
-      hidden: command.config.hidden,
-      help: command.help(),
-    };
-  });
+  ctx.response.headers['Content-Type'] = 'application/json';
+  ctx.body = [...httpServer.app!.commandList].map(outputCommand);
 });
 const httpServer = new Plugin('http-server');
 httpServer.service('server', server).service('koa', koa).service('router', router);

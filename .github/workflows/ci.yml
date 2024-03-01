@@ -33,7 +33,7 @@ jobs:
         uses: changesets/action@v1
         id: release
         with:
-          version: pnpm ci:version
+          version: npm run bump
           commit: "chore: update versions"
           title: "chore: update versions"
         env:

@@ -29,7 +29,7 @@ groupManage
     if (!message_id) message_id = message.quote?.message_id!;
     if (!message_id) return '请输入消息id或引用需要置顶的消息';
     const result = await bot.setEssenceMessage(message_id);
-    return result ? '已置顶' : '置顶失败';
+    return result === message_id ? '已置顶' : '置顶失败';
   });
 groupManage
   .command('unPin [message_id:string]')
@@ -41,7 +41,7 @@ groupManage
     if (!message_id) message_id = message.quote?.message_id!;
     if (!message_id) return '请输入消息id或引用需要取消置顶的消息';
     const result = await bot.removeEssenceMessage(message_id);
-    return result ? '已取消置顶' : '取消置顶失败';
+    return result === message_id ? '取消置顶失败' : '已取消置顶';
   });
 groupManage
   .command('mute [user_id:user_id]')
@@ -50,7 +50,7 @@ groupManage
   .scope('group')
   .option('-t [time:number] 禁言时长,单位秒', 10)
   .action<OneBotV12Adapter>(async ({ bot, message, options }, user_id) => {
-    const result = await bot.setGroupBan(message.group_id + '', user_id + '', options.time as number);
+    await bot.setGroupBan(message.group_id + '', user_id + '', options.time as number);
     return `已尝试将(${user_id})禁言时长设为${options.time}秒`;
   });
 groupManage

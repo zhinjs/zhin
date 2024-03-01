@@ -1,0 +1,11 @@
+// .changeset/config.json
+{
+  // ...
+  "changelog": [
+    "@changesets/changelog-github",
+    {
+      // 这个是 github 上的包路径
+      "repo": "zhinjs/zhin"
+    }
+  ]
+}
