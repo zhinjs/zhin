@@ -2,7 +2,7 @@
     "name": "@zhinjs/plugin-schedule",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "scripts": {
         "build": "tsc && tsc-alias"
     },
@@ -17,7 +17,7 @@
     "dependencies": {
         "zhin": "workspace:^",
         "node-cron": "^3.0.3",
-        "@zhinjs/plugin-jsondb": "latest"
+        "@zhinjs/plugin-jsondb": "workspace:^"
     },
     "devDependencies": {
         "@types/node-cron": "^3.0.11"

@@ -2,7 +2,7 @@
   "name": "@zhinjs/plugin-jsondb",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "scripts": {
     "build": "tsc && tsc-alias"
   },
@@ -16,6 +16,6 @@
     "directory": "packages/services/jsondb"
   },
   "dependencies": {
-    "zhin": "latest"
+    "zhin": "workspace:^"
   }
 }
