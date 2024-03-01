@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.0.1](https://github.com/zhinjs/zhin/compare/v3.0.0...v3.0.1) (2024-03-01)
+
+
+### Bug Fixes
+
+* sync version ([dba30a4](https://github.com/zhinjs/zhin/commit/dba30a425e6e660a18380281cfa9d2a346b3bd0f))
+
 ## [3.0.0](https://github.com/zhinjs/zhin/compare/v2.4.6...v3.0.0) (2024-03-01)
 
 
