@@ -1,4 +1,4 @@
-name: Changesets
+name: CI
 on:
   push:
     branches:

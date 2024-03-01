@@ -1,4 +1,5 @@
 # zhin
+[![CI](https://github.com/zhinjs/zhin/actions/workflows/ci.yml/badge.svg)](https://github.com/zhinjs/zhin/actions/workflows/ci.yml)
 ## 1. 快速上手
 - 安装 & 初始化
 ```shell
