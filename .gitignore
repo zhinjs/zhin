@@ -13,6 +13,7 @@ yarn-error.log*
 .idea/
 *.iml
 node_modules/
+docs/.vitepress/cache/
 package-lock.json
 test/.*.env
 test/*.yaml
