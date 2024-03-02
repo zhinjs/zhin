@@ -1,7 +1,7 @@
 {
     "name": "test",
     "private": true,
-    "version": "2.0.4",
+    "version": "2.0.5",
     "scripts": {
         "start": "zhin",
         "initial": "zhin init -m dev",
