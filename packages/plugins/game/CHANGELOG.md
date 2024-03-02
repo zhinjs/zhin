@@ -1,5 +1,14 @@
 # @zhinjs/plugin-game
 
+## 1.0.3
+
+### Patch Changes
+
+- 5a2e7a7: fix: rebuild
+- Updated dependencies [5a2e7a7]
+  - zhin@3.0.3
+  - @zhinjs/plugin-drawer@1.0.3
+
 ## 1.0.2
 
 ### Patch Changes
