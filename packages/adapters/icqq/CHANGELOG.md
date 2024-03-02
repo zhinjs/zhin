@@ -1,5 +1,13 @@
 # @zhinjs/icqq
 
+## 1.0.2
+
+### Patch Changes
+
+- c1fdd57: fix: change message parse rule
+- Updated dependencies [c1fdd57]
+  - zhin@3.0.2
+
 ## 1.0.1
 
 ### Patch Changes

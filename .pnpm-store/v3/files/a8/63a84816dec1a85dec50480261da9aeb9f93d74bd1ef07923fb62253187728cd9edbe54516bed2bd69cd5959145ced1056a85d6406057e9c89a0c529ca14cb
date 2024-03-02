@@ -1,0 +1,40 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.FriendRequestEvent = exports.Request = void 0;
+class Request {
+}
+exports.Request = Request;
+class FriendRequestEvent extends Request {
+    constructor(c, recommend) {
+        super();
+        this.c = c;
+        this.ticket = recommend.ticket;
+        this.user_id = recommend.user_id;
+        this.nickname = recommend.nickname;
+    }
+    async approve() {
+        const { data } = await this.c.request({
+            url: '/cgi-bin/mmwebwx-bin/webwxverifyuser',
+            method: 'POST',
+            params: {
+                'pass_ticket': this.c.session.passTicket,
+                'lang': 'zh_CN'
+            },
+            data: {
+                'BaseRequest': this.c.getBaseRequest(),
+                'Opcode': 3,
+                'VerifyUserListSize': 1,
+                'VerifyUserList': [{
+                        'Value': this,
+                        'VerifyUserTicket': this.ticket
+                    }],
+                'VerifyContent': '',
+                'SceneListCount': 1,
+                'SceneList': [33],
+                'skey': this.c.session.skey
+            }
+        });
+        return data.BaseResponse.Ret === 0;
+    }
+}
+exports.FriendRequestEvent = FriendRequestEvent;

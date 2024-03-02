@@ -1,0 +1,23 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Friend = void 0;
+const contact_1 = require("../entries/contact");
+const friendCache = new WeakMap();
+class Friend extends contact_1.Contact {
+    get is_self() {
+        return this.client.info.username === this.user_id;
+    }
+    constructor(c, info) {
+        super(c, info);
+        this.user_id = info.user_id;
+        this.sex = info.sex;
+    }
+    static from(user_id) {
+        const friendInfo = this.fl.get(user_id);
+        let friend = friendCache.get(friendInfo);
+        if (!friend)
+            friendCache.set(friendInfo, friend = new Friend(this, friendInfo));
+        return friend;
+    }
+}
+exports.Friend = Friend;

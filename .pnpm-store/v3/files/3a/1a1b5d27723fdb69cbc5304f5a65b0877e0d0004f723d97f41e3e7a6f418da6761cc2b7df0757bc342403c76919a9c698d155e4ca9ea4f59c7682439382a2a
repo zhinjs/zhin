@@ -1,0 +1,50 @@
+{
+    "name": "@types/node-cron",
+    "version": "3.0.11",
+    "description": "TypeScript definitions for node-cron",
+    "homepage": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/node-cron",
+    "license": "MIT",
+    "contributors": [
+        {
+            "name": "morsic",
+            "githubUsername": "maximelkin",
+            "url": "https://github.com/maximelkin"
+        },
+        {
+            "name": "burtek",
+            "githubUsername": "burtek",
+            "url": "https://github.com/burtek"
+        },
+        {
+            "name": "Richard Honor",
+            "githubUsername": "RMHonor",
+            "url": "https://github.com/RMHonor"
+        },
+        {
+            "name": "Ata Berk YILMAZ",
+            "githubUsername": "ataberkylmz",
+            "url": "https://github.com/ataberkylmz"
+        },
+        {
+            "name": "Alex Seidmann",
+            "githubUsername": "aseidma",
+            "url": "https://github.com/aseidma"
+        },
+        {
+            "name": "Pedro Américo",
+            "githubUsername": "ghostebony",
+            "url": "https://github.com/ghostebony"
+        }
+    ],
+    "main": "",
+    "types": "index.d.ts",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+        "directory": "types/node-cron"
+    },
+    "scripts": {},
+    "dependencies": {},
+    "typesPublisherContentHash": "e81acfe2131d688bee6ac600de6c03cd382176b27264550901f4c2323328f9bc",
+    "typeScriptVersion": "4.5"
+}

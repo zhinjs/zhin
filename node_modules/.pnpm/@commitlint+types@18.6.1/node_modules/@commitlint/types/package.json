@@ -1,0 +1,37 @@
+{
+  "name": "@commitlint/types",
+  "version": "18.6.1",
+  "description": "Shared types for commitlint packages",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "files": [
+    "lib/"
+  ],
+  "scripts": {
+    "pkg": "pkg-check"
+  },
+  "engines": {
+    "node": ">=v18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/conventional-changelog/commitlint.git",
+    "directory": "@commitlint/types"
+  },
+  "bugs": {
+    "url": "https://github.com/conventional-changelog/commitlint/issues"
+  },
+  "homepage": "https://commitlint.js.org/",
+  "author": {
+    "name": "Mario Nebl",
+    "email": "hello@herebecode.com"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^4.1.0"
+  },
+  "devDependencies": {
+    "@commitlint/utils": "^18.6.1"
+  },
+  "gitHead": "89f5bf91d1c11b1f457a6f0d99b8ea34583a9311"
+}

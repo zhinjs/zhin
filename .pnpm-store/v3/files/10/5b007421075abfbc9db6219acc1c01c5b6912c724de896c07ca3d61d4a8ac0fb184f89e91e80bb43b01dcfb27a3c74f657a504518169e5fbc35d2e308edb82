@@ -1,0 +1,101 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.trimQuote = exports.getArgs = exports.findLastIndex = exports.deepClone = exports.remove = exports.isEmpty = exports.toObject = void 0;
+const toObject = (data) => {
+    if (Buffer.isBuffer(data))
+        return JSON.parse(data.toString());
+    if (typeof data === 'object')
+        return data;
+    if (typeof data === 'string')
+        return JSON.parse(data);
+    // return String(data);
+};
+exports.toObject = toObject;
+function isEmpty(data) {
+    if (!data)
+        return true;
+    if (typeof data !== "object")
+        return false;
+    return Reflect.ownKeys(data).length === 0;
+}
+exports.isEmpty = isEmpty;
+function remove(list, item) {
+    const index = list.indexOf(item);
+    if (index !== -1)
+        list.splice(index, 1);
+}
+exports.remove = remove;
+function deepClone(obj) {
+    if (typeof obj !== "object")
+        return obj;
+    if (Array.isArray(obj))
+        return obj.map(deepClone);
+    const Constructor = obj.constructor;
+    let newObj = Constructor();
+    for (let key in obj) {
+        newObj[key] = deepClone(obj[key]);
+    }
+    return newObj;
+}
+exports.deepClone = deepClone;
+/**
+ * 寻找数组中最后一个符合条件的元素下标
+ * @param list 数组
+ * @param predicate 条件
+ * @returns {number} 元素下标，未找到返回-1
+ */
+function findLastIndex(list, predicate) {
+    for (let i = list.length - 1; i >= 0; i--) {
+        if (predicate(list[i], i))
+            return i;
+    }
+    return -1;
+}
+exports.findLastIndex = findLastIndex;
+function getArgs(fn, params) {
+    const ARGS = String(fn).match(/\(.*\)/)?.[0]
+        .replace("(", "")
+        .replace(")", "")
+        .split(",")
+        .filter(Boolean).map(v => v.replace(/=.+/, "").trim());
+    const args = [];
+    for (let k of ARGS) {
+        if (Reflect.has(params, k)) {
+            args.push(params[k]);
+        }
+    }
+    return args;
+}
+exports.getArgs = getArgs;
+function trimQuote(str) {
+    const quotes = [
+        [
+            '"',
+            '"',
+        ],
+        [
+            "'",
+            "'",
+        ],
+        [
+            '`',
+            '`',
+        ],
+        [
+            '“',
+            '”',
+        ],
+        [
+            '‘',
+            '’',
+        ]
+    ];
+    for (let i = 0; i < quotes.length; i++) {
+        const [start, end] = quotes[i];
+        if (str.startsWith(start) && str.endsWith(end)) {
+            return str.slice(1, -1);
+        }
+    }
+    return str;
+}
+exports.trimQuote = trimQuote;

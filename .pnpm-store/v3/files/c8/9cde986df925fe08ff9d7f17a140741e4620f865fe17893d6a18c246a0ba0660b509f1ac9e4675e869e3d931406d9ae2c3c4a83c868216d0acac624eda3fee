@@ -1,0 +1,147 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Parser = void 0;
+const constanst_1 = require("./core/constanst");
+class Parser {
+    constructor(c) {
+        this.c = c;
+        this.message = [];
+        this.brief = '';
+    }
+    async downloadMsgImg(message_id) {
+        const res = await this.c.request.get('/cgi-bin/mmwebwx-bin/webwxgetmsgimg', {
+            responseType: 'arraybuffer',
+            params: {
+                MsgID: message_id,
+                skey: this.c.session.skey,
+                type: 'big'
+            }
+        }).catch(e => {
+            this.c.emit('internal.verbose', e, 'debug');
+            throw new Error('获取图片或表情失败');
+        });
+        return {
+            data: res.data,
+            type: res.headers['content-type']
+        };
+    }
+    async downloadMsgVideo(message_id) {
+        const res = await this.c.request.get('/cgi-bin/mmwebwx-bin/webwxgetvideo', {
+            responseType: 'arraybuffer',
+            params: {
+                MsgID: message_id,
+                skey: this.c.session.skey
+            },
+            headers: {
+                'Range': 'bytes=0-'
+            }
+        }).catch(e => {
+            this.c.emit('internal.verbose', e, 'debug');
+            throw new Error('获取视频失败');
+        });
+        return {
+            data: res.data,
+            type: res.headers['content-type']
+        };
+    }
+    async downloadMsgVoice(message_id) {
+        const res = await this.c.request.get('/cgi-bin/mmwebwx-bin/webwxgetvoice', {
+            responseType: 'arraybuffer',
+            params: {
+                MsgID: message_id,
+                skey: this.c.session.skey
+            },
+        }).catch(e => {
+            this.c.emit('internal.verbose', e, 'debug');
+            throw new Error('获取音频失败');
+        });
+        return {
+            data: res.data,
+            type: res.headers['content-type']
+        };
+    }
+    async downloadMsgMedia(message_id) {
+        const res = await this.c.request.get('/cgi-bin/mmwebwx-bin/webwxgetmedia', {
+            baseURL: `https://file.${this.c.config.base_url}`,
+            responseType: 'arraybuffer',
+            params: {
+                MsgID: message_id,
+                skey: this.c.session.skey
+            },
+        }).catch(e => {
+            this.c.emit('internal.verbose', e, 'debug');
+            throw new Error('获取文件失败');
+        });
+        return {
+            data: res.data,
+            type: res.headers['content-type']
+        };
+    }
+    async parse(message) {
+        switch (message.MsgType) {
+            case constanst_1.OriginMessage.Text:
+                return this.text(message.Content);
+            case constanst_1.OriginMessage.Emotion:
+            case constanst_1.OriginMessage.Image: {
+                const { data } = await this.downloadMsgImg(message.MsgId);
+                this.message.push({
+                    type: 'image',
+                    file: data
+                });
+                this.brief += `[${message.MsgType === constanst_1.OriginMessage.Emotion ? '原创表情' : '图片'}]`;
+                break;
+            }
+            case constanst_1.OriginMessage.Voice: {
+                const { data } = await this.downloadMsgVoice(message.MsgId);
+                this.message.push({
+                    type: 'audio',
+                    file: data
+                });
+                this.brief += `[语音]`;
+                break;
+            }
+            case constanst_1.OriginMessage.Video:
+            case constanst_1.OriginMessage.MicroVideo: {
+                const { data } = await this.downloadMsgVideo(message.MsgId);
+                this.message.push({
+                    type: 'video',
+                    file: data
+                });
+                this.brief += '[视频]';
+                break;
+            }
+            case constanst_1.OriginMessage.App:
+                if (message.AppMsgType === 6) {
+                    const { data } = await this.downloadMsgMedia(message.MediaId);
+                    this.message.push({
+                        type: 'file',
+                        file: data
+                    });
+                    this.brief += `[文件]`;
+                    break;
+                }
+            default:
+                this.c.emit('internal.verbose', `暂未支持的消息:` + JSON.stringify(message), 'debug');
+        }
+    }
+    text(text) {
+        const faceReg = /(\[\S+])/;
+        while (text.length) {
+            const [_, matched] = text.match(faceReg) || [];
+            if (!matched)
+                break;
+            const matchedIdx = text.indexOf(matched);
+            const prevText = text.substring(0, matchedIdx);
+            if (prevText)
+                this.message.push({ type: "text", text: prevText });
+            this.brief += prevText;
+            this.message.push({ type: "face", id: matched.slice(1, -1) });
+            this.brief += `[表情:${matched.slice(1, -1)}]`;
+            text = text.replace(prevText + matched, '');
+        }
+        if (text.length)
+            this.message.push({ type: 'text', text });
+        this.brief += text;
+    }
+}
+exports.Parser = Parser;

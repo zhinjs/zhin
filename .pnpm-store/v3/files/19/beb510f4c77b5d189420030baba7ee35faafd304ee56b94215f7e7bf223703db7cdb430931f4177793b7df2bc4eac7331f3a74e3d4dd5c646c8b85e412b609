@@ -1,0 +1,12 @@
+import { Dict } from "../types";
+export declare class Mime {
+    types: Dict<string>;
+    extensions: Dict<string>;
+    static defaultType: string;
+    static defaultExtension: string;
+    constructor();
+    register(type: string, exts: string | string[]): this;
+    lookup(ext: string, fallback?: string): string;
+}
+declare const _default: Mime;
+export default _default;

@@ -1,0 +1,76 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.GroupMessageEvent = exports.PrivateMessageEvent = exports.Message = void 0;
+const parser_1 = require("../message/parser");
+class Message {
+    constructor(message_id, payload) {
+        this.message_id = message_id;
+        this.message = [];
+        this.raw_message = '';
+        this.message_type = payload.conversationType === '1' ? 'private' : 'group';
+        this.time = payload.createAt;
+    }
+    static async fromEvent(messageId, payload) {
+        const result = payload.conversationType === '1' ?
+            new PrivateMessageEvent(this, messageId, payload) :
+            new GroupMessageEvent(this, messageId, payload);
+        await result.parse(this, payload);
+        return result;
+    }
+    async parse(bot, payload) {
+        this.message = await (0, parser_1.parserMessage)(bot, payload);
+        this.raw_message = Message.toRaw(this.message);
+    }
+    static toRaw(message) {
+        return message.map(item => {
+            if (item.type === 'text')
+                return item.text;
+            const { type, ...data } = item;
+            return `{${type}:${Object.entries(data).map(([key, value]) => `${key}=${value}`)}`;
+        }).join('');
+    }
+}
+exports.Message = Message;
+class PrivateMessageEvent extends Message {
+    constructor(bot, message_id, payload) {
+        super(message_id, payload);
+        this.bot = bot;
+        this.message_type = 'private';
+        this.sender = {
+            user_id: payload.senderStaffId || payload.senderId,
+            user_name: payload.senderNick
+        };
+        this.user_id = this.sender.user_id;
+        this.user_name = this.sender.user_name;
+    }
+    ;
+    recall() {
+        return this.bot.recallPrivateMsg(this.sender.user_id, this.message_id);
+    }
+    reply(message) {
+        return this.bot.sendPrivateMsg(this.sender.user_id, message);
+    }
+}
+exports.PrivateMessageEvent = PrivateMessageEvent;
+class GroupMessageEvent extends Message {
+    constructor(bot, message_id, payload) {
+        super(message_id, payload);
+        this.bot = bot;
+        this.message_type = 'group';
+        this.sender = {
+            user_id: payload.senderStaffId || payload.senderId,
+            user_name: payload.senderNick
+        };
+        this.group_id = payload.conversationId;
+        this.user_id = this.sender.user_id;
+        this.user_name = this.sender.user_name;
+    }
+    ;
+    recall() {
+        return this.bot.recallGroupMsg(this.group_id, this.message_id);
+    }
+    reply(message) {
+        return this.bot.sendGroupMsg(this.group_id, message);
+    }
+}
+exports.GroupMessageEvent = GroupMessageEvent;

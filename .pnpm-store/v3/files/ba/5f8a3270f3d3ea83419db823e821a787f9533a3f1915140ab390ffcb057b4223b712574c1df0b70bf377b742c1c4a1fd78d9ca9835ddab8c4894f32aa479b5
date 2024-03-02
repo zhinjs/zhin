@@ -1,0 +1,54 @@
+{
+  "name": "ts-disc-bot",
+  "version": "1.0.2",
+  "description": "Discord 机器人开发SDK",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "start": "node .",
+    "compile": "tsc --project tsconfig.build.json && tsc-alias -p tsconfig.build.json",
+    "dtsc": "dtsc --project tsconfig.dtsc.json",
+    "clean": "rm -rf ./lib",
+    "build": "npm run compile && npm run dtsc",
+    "dev": "ts-node-dev -r tsconfig-paths/register ./src/test.ts",
+    "pub": "npm publish --access public",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "files": [
+    "lib",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lc-cn/ts-disc-bot.git"
+  },
+  "keywords": [
+    "Discord",
+    "bot"
+  ],
+  "author": {
+    "name": "凉菜",
+    "email": "admin@liuicl.cn"
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "form-data": "^4.0.0",
+    "https-proxy-agent": "latest",
+    "log4js": "^6.9.1",
+    "ws": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "^20.5.9",
+    "@types/ws": "^8.5.5",
+    "dtsc": "^2.3.0",
+    "ts-node-dev": "^2.0.0",
+    "tsc-alias": "^1.8.8",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.2.2"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/lc-cn/ts-disc-bot/issues"
+  },
+  "homepage": "https://github.com/lc-cn/ts-disc-bot#readme"
+}

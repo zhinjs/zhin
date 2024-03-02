@@ -1,0 +1,206 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Client = void 0;
+const baseClient_1 = require("./core/baseClient");
+const path = require("path");
+const process = require("process");
+const log4js_1 = require("log4js");
+const friend_1 = require("./entries/friend");
+const group_1 = require("./entries/group");
+const member_1 = require("./entries/member");
+const utils_1 = require("./utils");
+const constanst_1 = require("./core/constanst");
+const message_1 = require("./message");
+const request_1 = require("./request");
+class Client extends baseClient_1.BaseClient {
+    constructor(config = {}) {
+        config = Object.assign(Client.defaultConfig, config);
+        super(config);
+        this.fl = new Map();
+        this.gl = new Map();
+        this.gml = new Map();
+        this.pickGroup = group_1.Group.from.bind(this);
+        this.pickMember = member_1.Member.from.bind(this);
+        this.pickFriend = friend_1.Friend.from.bind(this);
+        this.logger = (0, log4js_1.getLogger)(`[lib-wechat]`);
+        this.logger.level = config.log_level;
+        this.on('internal.verbose', (message, logLevel) => {
+            const fn = this.logger[logLevel] || this.logger.info;
+            return fn.apply(this.logger, [message]);
+        });
+        this.on('internal.init', this.updateContacts.bind(this));
+        this.on('internal.stop', this.stop.bind(this));
+        this.on('internal.sync', this.handleSync.bind(this));
+        this.on('internal.online', this.handleOnline.bind(this));
+    }
+    handleOnline() {
+        this.emit('system.online', this.info);
+        this.emit('internal.verbose', `welcome ! ${this.info.nickname}`, 'info');
+        this.emit('internal.verbose', `加载了${this.fl.size}个好友，${this.gl.size}个群`, 'info');
+    }
+    getGroupList() {
+        return Array.from(this.gl.values());
+    }
+    getGroupInfo(group_id) {
+        return this.gl.get(group_id);
+    }
+    getGroupMemberList(group_id) {
+        return this.pickGroup(group_id).getMemberList();
+    }
+    getGroupMemberInfo(group_id, member_id) {
+        return this.pickGroup(group_id).getMemberInfo(member_id);
+    }
+    getFriendList() {
+        return Array.from(this.fl.values());
+    }
+    getFriendInfo(user_id) {
+        return this.fl.get(user_id);
+    }
+    async sendPrivateMsg(user_id, message) {
+        return this.pickFriend(user_id).sendMsg(message);
+    }
+    async sendGroupMsg(group_id, message) {
+        return this.pickGroup(group_id).sendMsg(message);
+    }
+    async recallMsg(username, message_id) {
+        return (0, utils_1.isRoomContact)(username) ?
+            this.pickGroup(username).recallMsg(message_id) :
+            this.pickFriend(username).recallMsg(message_id);
+    }
+    handleSync(data) {
+        if (!data) {
+            this.init();
+            return;
+        }
+        if (data.AddMsgCount) {
+            this.emit('internal.verbose', 'syncPolling messages count: ' + data.AddMsgCount, 'debug');
+            this.messageListener(data.AddMsgList);
+        }
+        if (data.ModContactCount) {
+            this.emit('internal.verbose', 'syncPolling ModContactList count: ' + data.ModContactCount, 'debug');
+            this.updateContacts(data.ModContactList);
+        }
+    }
+    /** 收到消息 */
+    async handleMsg(msg) {
+        const event = message_1.Message.from.apply(this, [msg]);
+        await event.parse();
+        this.em(`message.${event.message_type}`, event);
+        if (event.message_type === 'group') {
+            this.emit('internal.verbose', `recv [Group(${event.group_name}),Member(${event.sender.nickname})]:${event.raw_message}`, 'info');
+        }
+        else {
+            this.emit('internal.verbose', `recv [Private(${event.sender.nickname})]:${event.raw_message}`, 'info');
+        }
+    }
+    /** 收到加好友请求 */
+    handleRequest(msg) {
+        const event = new request_1.FriendRequestEvent(this, {
+            ticket: msg.RecommendInfo.Ticket,
+            user_id: msg.RecommendInfo.UserName,
+            nickname: msg.RecommendInfo.NickName
+        });
+        this.emit('internal.verbose', `用户(${event.nickname})申请加好友`, 'info');
+        this.em('request.friend.add', event);
+    }
+    /** 通知消息 */
+    handleNotice(msg) {
+    }
+    /** 消息总线 */
+    async messageListener(messageList) {
+        const needGetContacts = [];
+        messageList.forEach(msg => {
+            if (msg.MsgType === constanst_1.OriginMessage.StatusNotice) {
+                needGetContacts.push(...msg.StatusNotifyUserName.split(','));
+            }
+            else {
+                if ((0, utils_1.isRoomContact)(msg.FromUserName) && !this.gl.get(msg.FromUserName)) {
+                    needGetContacts.push(msg.FromUserName);
+                }
+                if (!(0, utils_1.isRoomContact)(msg.FromUserName) && !this.fl.get(msg.FromUserName)) {
+                    needGetContacts.push(msg.FromUserName);
+                }
+            }
+        });
+        await this.batchGetContact([...new Set(needGetContacts.filter(Boolean))]);
+        for (const msg of messageList) {
+            switch (msg.MsgType) {
+                case constanst_1.OriginMessage.Text:
+                case constanst_1.OriginMessage.Image:
+                case constanst_1.OriginMessage.Emotion:
+                case constanst_1.OriginMessage.Video:
+                case constanst_1.OriginMessage.MicroVideo:
+                case constanst_1.OriginMessage.Voice:
+                case constanst_1.OriginMessage.App:
+                    return this.handleMsg(msg);
+                case constanst_1.OriginMessage.VerifyMsg:
+                    return this.handleRequest(msg);
+                case constanst_1.OriginMessage.Sys:
+                case constanst_1.OriginMessage.StatusNotice:
+                case constanst_1.OriginMessage.Recalled:
+                case constanst_1.OriginMessage.SysNotice:
+                    return this.handleNotice(msg);
+            }
+        }
+    }
+    updateContacts(list) {
+        for (const contact of list) {
+            if ((0, utils_1.isRoomContact)(contact.UserName)) {
+                let gml = this.gml.get(contact.UserName);
+                if (!gml)
+                    this.gml.set(contact.UserName, gml = new Map);
+                this.gl.set(contact.UserName, {
+                    avatar: contact.HeadImgUrl,
+                    nickname: contact.NickName,
+                    username: contact.UserName,
+                    remark: contact.RemarkName,
+                    group_id: contact.UserName,
+                    group_name: contact.NickName,
+                    member_count: contact.MemberCount
+                });
+                if (contact.MemberCount) {
+                    for (const member of contact.MemberList) {
+                        gml.set(member.UserName, {
+                            avatar: contact.HeadImgUrl,
+                            username: member.UserName,
+                            group_id: contact.UserName,
+                            remark: member.NickName,
+                            user_id: member.UserName,
+                            nickname: member.NickName
+                        });
+                    }
+                }
+            }
+            else {
+                this.fl.set(contact.UserName, {
+                    user_id: contact.UserName,
+                    username: contact.UserName,
+                    nickname: contact.NickName,
+                    avatar: contact.HeadImgUrl,
+                    remark: contact.RemarkName,
+                    sex: contact.Sex === 0 ? constanst_1.Sex.Male : constanst_1.Sex.Female
+                });
+            }
+        }
+    }
+    async start() {
+        process.stdin.on('data', () => { });
+        if (this.uin)
+            return this.init().catch(e => {
+                if (!(e instanceof constanst_1.AlreadyLoggedError))
+                    throw e;
+                return this.logout();
+            });
+        return this.login();
+    }
+    async stop() {
+    }
+}
+exports.Client = Client;
+(function (Client) {
+    Client.defaultConfig = {
+        log_level: 'info',
+        base_url: `wx.qq.com`,
+        data_dir: path.join(process.cwd(), 'data')
+    };
+})(Client = exports.Client || (exports.Client = {}));

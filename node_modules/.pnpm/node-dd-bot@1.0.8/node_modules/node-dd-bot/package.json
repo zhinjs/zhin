@@ -1,0 +1,50 @@
+{
+  "name": "node-dd-bot",
+  "version": "1.0.8",
+  "description": "",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "start": "node .",
+    "compile": "tsc --project tsconfig.build.json && tsc-alias -p tsconfig.build.json",
+    "dtsc": "dtsc --project tsconfig.dtsc.json",
+    "clean": "rm -rf ./lib",
+    "build": "npm run compile && npm run dtsc",
+    "dev": "ts-node-dev -r tsconfig-paths/register ./src/test.ts",
+    "pub": "npm publish --access public",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lc-cn/dingtalk-bot.git"
+  },
+  "files": [
+    "lib",
+    "README.md"
+  ],
+  "keywords": [],
+  "author": {
+    "name": "凉菜",
+    "email": "admin@liucl.cn"
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "form-data": "^4.0.0",
+    "log4js": "^6.9.1",
+    "ws": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "^20.5.9",
+    "@types/ws": "^8.5.5",
+    "dtsc": "^2.3.0",
+    "ts-node-dev": "^2.0.0",
+    "tsc-alias": "^1.8.8",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.2.2"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/lc-cn/dingtalk-bot/issues"
+  },
+  "homepage": "https://github.com/lc-cn/dingtalk-bot#readme"
+}

@@ -1,0 +1,1 @@
+module.exports = require("legacy-swc-helpers/lib/_is_native_reflect_construct.js")

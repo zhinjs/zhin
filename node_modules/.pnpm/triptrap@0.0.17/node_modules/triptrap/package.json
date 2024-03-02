@@ -1,0 +1,40 @@
+{
+  "name": "triptrap",
+  "version": "0.0.17",
+  "description": "轻，但很实用的事件发布订阅器",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
+    "dev": "ts-node-dev -r tsconfig-paths/register ./src/index.ts",
+    "pub": "npm publish --access public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lc-cn/triptrap.git"
+  },
+  "keywords": [
+    "ts",
+    "dev",
+    "template"
+  ],
+  "author": "凉菜",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/lc-cn/triptrap/issues"
+  },
+  "homepage": "https://github.com/lc-cn/triptrap#readme",
+  "devDependencies": {
+    "@types/node": "latest",
+    "ts-node-dev": "latest",
+    "tsc-alias": "latest",
+    "tsconfig-paths": "latest",
+    "typescript": "latest"
+  },
+  "files": [
+    "/lib/**/*.js",
+    "/lib/**/*.d.ts",
+    "/lib/**/LICENSE"
+  ],
+  "dependencies": {}
+}

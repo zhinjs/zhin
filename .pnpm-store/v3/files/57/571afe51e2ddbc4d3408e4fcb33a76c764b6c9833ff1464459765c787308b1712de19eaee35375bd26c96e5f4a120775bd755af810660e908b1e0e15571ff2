@@ -1,0 +1,363 @@
+/// <reference types="node" />
+/// <reference types="ws" />
+/// <reference types="node" />
+import { EventEmitter } from 'events';
+import { RawData, WebSocket, WebSocketServer } from 'ws';
+import { AxiosInstance } from 'axios';
+import { Logger } from 'log4js';
+import { Server } from 'http';
+import { IncomingMessage, ServerResponse } from 'node:http';
+export const MAX_RETRY = 10;
+export enum OpCode {
+    DISPATCH = 0,// 服务端进行消息推送
+    HEARTBEAT = 1,// 客户端发送心跳
+    IDENTIFY = 2,// 鉴权
+    RESUME = 6,// 恢复连接
+    RECONNECT = 7,// 服务端通知客户端重连
+    INVALID_SESSION = 9,// 当identify或resume的时候，如果参数有错，服务端会返回该消息
+    HELLO = 10,// 当客户端与网关建立ws连接之后，网关下发的第一条消息
+    HEARTBEAT_ACK = 11
+}
+export const UnsupportedMethodError: Error;
+export const SessionEvents: {
+    CLOSED: string;
+    READY: string;
+    ERROR: string;
+    INVALID_SESSION: string;
+    RECONNECT: string;
+    DISCONNECT: string;
+    EVENT_WS: string;
+    RESUMED: string;
+    DEAD: string;
+};
+export const WebsocketCloseReason: ({
+    code: number;
+    reason: string;
+    resume?: undefined;
+} | {
+    code: number;
+    reason: string;
+    resume: boolean;
+})[];
+export enum Intends {
+    GUILDS = 1,// 频道操作事件
+    GUILD_MEMBERS = 2,// 频道成员变更事件
+    GUILD_MODERATION = 4,
+    GUILD_EMOJIS_AND_STICKERS = 8,
+    GUILD_INTEGRATIONS = 16,
+    GUILD_WEBHOOKS = 32,
+    GUILD_INVITES = 64,
+    GUILD_VOICE_STATES = 128,
+    GUILD_PRESENCES = 256,
+    GUILD_MESSAGES = 512,// 私域频道消息事件
+    GUILD_MESSAGE_REACTIONS = 1024,// 频道消息表态事件
+    GUILD_MESSAGE_TYPING = 2048,
+    DIRECT_MESSAGE = 4096,// 频道私信事件
+    DIRECT_MESSAGE_REACTIONS = 8192,
+    DIRECT_MESSAGE_TYPING = 16384,
+    MESSAGE_CONTENT = 32768,
+    GUILD_SCHEDULED_EVENTS = 65536,
+    AUTO_MODERATION_CONFIGURATION = 1048576,
+    AUTO_MODERATION_EXECUTION = 2097152
+}
+export enum ChannelType {
+    Content = 0,// 文本频道
+    Record = 2,// 语音频道
+    ChannelGroup = 4,// 频道分组
+    Live = 10005,// 直播频道
+    App = 10006,// 应用频道
+    Forms = 10007
+}
+export enum ChannelSubType {
+    Chat = 0,// 闲聊
+    Announces = 1,// 公告
+    Strategy = 2,// 攻略
+    Black = 3
+}
+export enum PrivateType {
+    Public = 0,// 公开
+    Admin = 1,// 频道主和管理员
+    Some = 2
+}
+export enum SpeakPermission {
+    All = 1,// 所有人
+    Some = 2
+}
+export type Dict<T = any, K extends string | symbol = string> = Record<K, T>;
+export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal" | "mark" | "off";
+export const toObject: <T = any>(data: any) => T;
+export function isEmpty<T>(data: T): boolean;
+export function remove<T>(list: T[], item: T): void;
+export function deepClone<T extends object>(obj: T): any;
+/**
+ * 寻找数组中最后一个符合条件的元素下标
+ * @param list 数组
+ * @param predicate 条件
+ * @returns {number} 元素下标，未找到返回-1
+ */
+export function findLastIndex<T>(list: T[], predicate: (item: T, index: number) => boolean): number;
+export function getArgs(fn: Function, params: Dict): any[];
+export function trimQuote(str: string): string;
+export class SessionManager extends EventEmitter {
+    private bot;
+    wsUrl: string;
+    retry: number;
+    alive?: boolean;
+    heartbeatInterval?: number;
+    isReconnect?: boolean;
+    sessionRecord: {
+        sessionID: string;
+        seq: number;
+    };
+    heartbeatParam: {
+        op: OpCode;
+        d: any;
+    };
+    get token(): string;
+    constructor(bot: Bot);
+    start(): Promise<void>;
+    connect(): void;
+    reconnectWs(): void;
+    sendWs(msg: unknown): void;
+    authWs(): void;
+    startListen(): void;
+    getValidIntends(): number;
+}
+export enum OriginEvent {
+    DIRECT_MESSAGE_CREATE = "message.direct",
+    AT_MESSAGE_CREATE = "message.guild",
+    MESSAGE_CREATE = "message.guild",
+    GUILD_CREATE = "notice.guild.increase",
+    GUILD_UPDATE = "notice.guild.update",
+    GUILD_DELETE = "notice.guild.decrease",
+    CHANNEL_CREATE = "notice.channel.increase",
+    CHANNEL_UPDATE = "notice.channel.update",
+    CHANNEL_DELETE = "notice.channel.decrease",
+    GUILD_MEMBER_ADD = "notice.guild.member.increase",
+    GUILD_MEMBER_UPDATE = "notice.guild.member.update",
+    GUILD_MEMBER_REMOVE = "notice.guild.member.decrease",
+    GROUP_ADD_ROBOT = "notice.group.increase",
+    GROUP_DEL_ROBOT = "notice.group.decrease",
+    FRIEND_ADD = "notice.friend.add",
+    FRIEND_DEL = "notice.friend.del",
+    C2C_MESSAGE_CREATE = "message.private",
+    GROUP_AT_MESSAGE_CREATE = "message.group"
+}
+export enum MusicPlatform {
+    qq = "qq",
+    netease = "163"
+}
+export interface Quotable {
+    id?: string;
+}
+export interface MessageElemMap {
+    text: {
+        text: string;
+    };
+    at: {
+        user_id: 'all' | string;
+    };
+    face: {
+        /** face为0~348，sface不明 */
+        id: number;
+        /** 表情说明，接收消息时有效 */
+        text?: string;
+    };
+    image: {
+        /**
+         * @type {string} 本地图片文件路径，例如`"/tmp/1.jpg"`
+         * @type {Buffer} 图片`Buffer`
+         */
+        file: string;
+        /** 仅接收有效 */
+        url?: string;
+    };
+    video: {
+        file: string;
+        /** 仅接收有效 */
+        url?: string;
+    };
+    audio: {
+        file: string;
+        /** 仅接收有效 */
+        url?: string;
+    };
+    markdown: Dict;
+    keyboard: {
+        id: string;
+    };
+    reply: Quotable;
+    link: {
+        channel_id: string;
+    };
+    button: {
+        data: Dict;
+    };
+    ark: {
+        template_id: number;
+        kv: Dict<string, 'key' | 'value'>[];
+    };
+    embed: {
+        title: string;
+        prompt: string;
+        htumbnail: Dict<string>;
+        fields: Dict<string, 'name'>[];
+    };
+}
+export type MessageElemType = keyof MessageElemMap;
+export type MessageElem<T extends MessageElemType = MessageElemType> = {
+    type: T;
+} & MessageElemMap[T];
+export type TextElem = MessageElem<"text">;
+export type AtElem = MessageElem<"at">;
+export type FaceElem = MessageElem<"face">;
+export type ArkElem = MessageElem<'ark'>;
+export type EmbedElem = MessageElem<'embed'>;
+export type ImageElem = MessageElem<"image">;
+export type VideoElem = MessageElem<"video">;
+export type AudioElem = MessageElem<"audio">;
+export type LinkElem = MessageElem<'link'>;
+export type MDElem = MessageElem<'markdown'>;
+export type KeyboardElem = MessageElem<'keyboard'>;
+export type ButtonElem = MessageElem<'button'>;
+export type ReplyElem = MessageElem<"reply">;
+type RepeatableCombineElem = TextElem | FaceElem | LinkElem | AtElem | ButtonElem;
+type WithReply<T extends MessageElem> = T | [T] | [ReplyElem, T] | [ReplyElem, ...RepeatableCombineElem[]];
+export type Sendable = string | RepeatableCombineElem | (RepeatableCombineElem | string)[] | WithReply<ImageElem | KeyboardElem | MDElem | ArkElem | EmbedElem | VideoElem | AudioElem>;
+export namespace User {
+    interface Info {
+        id: string;
+        username: string;
+        avatar: string;
+        bot: boolean;
+        public_flag: number;
+    }
+    enum Permission {
+        normal = 1,
+        admin = 2,
+        owner = 4,
+        channelAdmin = 5
+    }
+}
+export class Message {
+    bot: Bot;
+    message_type: Message.SubType;
+    get self_id(): string;
+    guild_id?: string;
+    channel_id?: string;
+    group_id?: string;
+    id: string;
+    message_id: string;
+    sender: Message.Sender;
+    user_id: string;
+    constructor(bot: Bot, attrs: Partial<Message>);
+    raw_message: string;
+    message_reference?: {
+        message_id: string;
+    };
+    message: Sendable;
+    get [Symbol.unscopables](): {
+        bot: boolean;
+    };
+    toJSON(): {
+        [k: string]: any;
+    };
+}
+export interface MessageEvent {
+    reply(message: Sendable, quote?: boolean): Promise<any>;
+}
+export class DirectMessageEvent extends Message implements MessageEvent {
+    user_id: string;
+    channel_id: string;
+    constructor(bot: Bot, payload: Partial<Message>);
+    reply(message: Sendable): Promise<any>;
+}
+export class GuildMessageEvent extends Message implements MessageEvent {
+    guild_id: string;
+    guild_name: string;
+    channel_id: string;
+    channel_name: string;
+    constructor(bot: Bot, payload: Partial<Message>);
+    reply(message: Sendable): Promise<any>;
+}
+export namespace Message {
+    interface Sender {
+        user_id: string;
+        user_name: string;
+        permissions: User.Permission[];
+    }
+    type SubType = 'guild' | 'direct';
+    function parse(this: Bot, payload: Dict): (string | MessageElem[])[];
+}
+export class Sender {
+    private bot;
+    private baseUrl;
+    private message;
+    private source;
+    brief: string;
+    private isFile;
+    private messagePayload;
+    private buttons;
+    private filePayload;
+    constructor(bot: Bot, baseUrl: string, message: Sendable, source?: Quotable);
+    private getType;
+    private parseFromTemplate;
+    processMessage(): Promise<void>;
+    private sendFile;
+    sendMsg(): Promise<any>;
+}
+export class Bot extends EventEmitter {
+    options: Bot.Options;
+    self_id: string;
+    nickname: string;
+    status: number;
+    request: AxiosInstance;
+    ws?: WebSocket;
+    sessionManager: SessionManager;
+    logger: Logger;
+    server: Server;
+    wss: WebSocketServer;
+    constructor(options: Bot.Options);
+    requestHandler(req: IncomingMessage, res: ServerResponse): Promise<any>;
+    handleWs(client: WebSocket, message: RawData): Promise<void>;
+    sendWsMsg(event: DirectMessageEvent | GuildMessageEvent): void;
+    applyMethod<T extends IncomingMessage | WebSocket>(source: T, action: string, params: Dict): Promise<any>;
+    dispatchEvent(event: string, wsRes: any): void;
+    processPayload(event_id: string, event: string, payload: Dict): Dict | DirectMessageEvent | GuildMessageEvent;
+    em(event: string, payload: Dict): void;
+    getGuildList(): Promise<any>;
+    getGuildMemberList(guild_id: string): Promise<any>;
+    uploadMedia(file: string): Promise<Bot.MediaInfo>;
+    sendDirectMessage(guild_id: string, message: Sendable, source?: Quotable): Promise<any>;
+    sendGuildMessage(channel_id: string, message: Sendable, source?: Quotable): Promise<any>;
+    start(): Promise<void>;
+    stop(): void;
+}
+export namespace Bot {
+    interface Options {
+        log_level?: LogLevel;
+        port?: number;
+        token: string;
+        access_token?: string;
+        intents: number | Intends[];
+        ignore_self?: boolean;
+        proxy?: {
+            host: string;
+            port: number;
+        };
+        reconnect_interval?: number;
+        max_reconnect_count?: number;
+        heartbeat_interval?: number;
+        request_timeout?: number;
+        sandbox?: boolean;
+    }
+    interface Token {
+        access_token: string;
+        expires_in: number;
+        cache: string;
+    }
+    type MediaInfo = {
+        id: string;
+        type: string;
+    };
+}

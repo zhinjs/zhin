@@ -1,0 +1,1 @@
+module.exports = require("legacy-swc-helpers/lib/_object_without_properties_loose.js")

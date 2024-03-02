@@ -1,0 +1,1 @@
+module.exports = require("legacy-swc-helpers/lib/_read_only_error.js")

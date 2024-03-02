@@ -1,0 +1,226 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Contact = void 0;
+const utils_1 = require("../utils");
+const constanst_1 = require("../core/constanst");
+const message_1 = require("../message");
+class Contact {
+    get client() {
+        return this.c;
+    }
+    constructor(c, info) {
+        this.c = c;
+        this.info = {
+            avatar: info.avatar,
+            username: info.username,
+            nickname: (0, utils_1.convertEmoji)(info.nickname),
+            remark: (0, utils_1.convertEmoji)(info.remark)
+        };
+    }
+    asFriend() {
+        return this.c.pickFriend(this.info.username);
+    }
+    asGroup() {
+        return this.c.pickGroup(this.info.username);
+    }
+    _uploadMedia(data, filename) {
+        return this.c.uploadMedia(data, filename, this.info.username);
+    }
+    async sendText(text) {
+        const msgId = message_1.Message.genMsgId();
+        const { data } = await this.c.request.post('/cgi-bin/mmwebwx-bin/webwxsendmsg', {
+            'BaseRequest': this.c.getBaseRequest(),
+            'Scene': 0,
+            'Msg': {
+                'Type': constanst_1.OriginMessage.Text,
+                'Content': text,
+                'FromUserName': this.c.info.username,
+                'ToUserName': this.info.username,
+                'LocalID': msgId,
+                'ClientMsgId': msgId
+            }
+        }, {
+            params: {
+                'pass_ticket': this.c.session.passTicket,
+                'lang': 'zh_CN'
+            }
+        });
+        if (data.BaseResponse.Ret !== 0)
+            throw new Error('发送失败');
+        this.c.emit('internal.verbose', `send [${(0, utils_1.isRoomContact)(this.info.username) ? 'Group' : 'Private'}(${this.info.nickname})]:${text}`);
+        return data;
+    }
+    async sendImg(file, filename) {
+        const { mediaId, ext } = await this._uploadMedia(file, filename);
+        const msgId = message_1.Message.genMsgId();
+        const { data } = await this.c.request({
+            url: ext === 'gif' ? '/cgi-bin/mmwebwx-bin/webwxsendemoticon' : '/cgi-bin/mmwebwx-bin/webwxsendmsgimg',
+            method: 'POST',
+            data: {
+                'BaseRequest': this.c.getBaseRequest(),
+                'Scene': 0,
+                'Msg': {
+                    'Type': ext === 'gif' ? constanst_1.OriginMessage.Emotion : constanst_1.OriginMessage.Image,
+                    'MediaId': mediaId,
+                    'EmojiFlag': ext === 'gif' ? 2 : undefined,
+                    'FromUserName': this.c.info.username,
+                    'ToUserName': this.info.username,
+                    'LocalID': msgId,
+                    'ClientMsgId': msgId
+                }
+            },
+            params: {
+                'pass_ticket': this.c.session.passTicket,
+                'fun': 'async',
+                'f': 'json',
+                'lang': 'zh_CN'
+            }
+        });
+        if (data.BaseResponse.Ret !== 0) {
+            this.c.emit('internal.verbose', data, 'debug');
+            throw new Error('发送失败');
+        }
+        this.c.emit('internal.verbose', `send [${(0, utils_1.isRoomContact)(this.info.username) ? 'Group' : 'Private'}(${this.info.nickname})]:[图片]`);
+        return data;
+    }
+    async sendVideo(file, filename) {
+        const { mediaId } = await this._uploadMedia(file, filename);
+        const msgId = message_1.Message.genMsgId();
+        const { data } = await this.c.request({
+            url: '/cgi-bin/mmwebwx-bin/webwxsendvideomsg',
+            method: 'post',
+            data: {
+                'BaseRequest': this.c.getBaseRequest(),
+                'Scene': 0,
+                'Msg': {
+                    'Type': constanst_1.OriginMessage.Video,
+                    'MediaId': mediaId,
+                    'FromUserName': this.c.info.username,
+                    'ToUserName': this.info.username,
+                    'LocalID': msgId,
+                    'ClientMsgId': msgId
+                }
+            },
+            params: {
+                'pass_ticket': this.c.session.passTicket,
+                'fun': 'async',
+                'f': 'json',
+                'lang': 'zh_CN'
+            }
+        });
+        if (data.BaseResponse.Ret !== 0)
+            throw new Error('发送失败');
+        this.c.emit('internal.verbose', `send [${(0, utils_1.isRoomContact)(this.info.username) ? 'Group' : 'Private'}(${this.info.nickname})]:[视频]`);
+        return data;
+    }
+    async sendFile(file, filename) {
+        const { mediaId, name, size, ext } = await this._uploadMedia(file, filename);
+        const msgId = message_1.Message.genMsgId();
+        const { data } = await this.c.request({
+            url: '/cgi-bin/mmwebwx-bin/webwxsendappmsg',
+            method: 'post',
+            data: {
+                'BaseRequest': this.c.getBaseRequest(),
+                'Scene': 0,
+                'Msg': {
+                    'Type': 6,
+                    'Content': `<appmsg appid='wxeb7ec651dd0aefa9' sdkver=''><title>${name}</title><des></des><action></action><type>6</type><content></content><url></url><lowurl></lowurl><appattach><totallen>${size}</totallen><attachid>${mediaId}</attachid><fileext>${ext}</fileext></appattach><extinfo></extinfo></appmsg>`,
+                    'FromUserName': this.c.info.username,
+                    'ToUserName': this.info.username,
+                    'LocalID': msgId,
+                    'ClientMsgId': msgId
+                }
+            },
+            params: {
+                'pass_ticket': this.c.session.passTicket,
+                'fun': 'async',
+                'f': 'json',
+                'lang': 'zh_CN'
+            }
+        });
+        if (data.BaseResponse.Ret !== 0)
+            throw new Error('发送失败');
+        this.c.emit('internal.verbose', `send [${(0, utils_1.isRoomContact)(this.info.username) ? 'Group' : 'Private'}(${this.info.nickname})]:[文件]`);
+        return data;
+    }
+    _sendMsg(message) {
+        const fixStrFile = (message) => {
+            const tempMsg = message;
+            if (!tempMsg.name && typeof tempMsg.file === "string") {
+                if (/data:\S+\/(\S+);base64,/.test(tempMsg.file)) {
+                    const [_, type] = tempMsg.file.match(/data:\S+\/(\S+);base64,/) || [];
+                    tempMsg.name = `${Math.random().toString(36).slice(2)}.${type}`;
+                }
+                else {
+                    tempMsg.name = tempMsg.file;
+                }
+            }
+            return tempMsg;
+        };
+        switch (message.type) {
+            case 'text':
+                return this.sendText(message.text);
+            case 'image': {
+                const tempMsg = fixStrFile(message);
+                return this.sendImg(tempMsg.file, tempMsg.name);
+            }
+            case 'video': {
+                const tempMsg = fixStrFile(message);
+                return this.sendVideo(tempMsg.file, tempMsg.name);
+            }
+            case 'file': {
+                const tempMsg = fixStrFile(message);
+                return this.sendFile(tempMsg.file, tempMsg.name);
+            }
+            default:
+                throw new Error('不支持发送的消息元素：' + message.type);
+        }
+    }
+    async sendMsg(message) {
+        const waitingQueue = [];
+        let text = '';
+        for (let msg of [].concat(message)) {
+            if (typeof msg === 'string') {
+                msg = { type: 'text', text: msg };
+            }
+            if (['text', 'face'].includes(msg.type)) {
+                text += (msg.type === 'text' ? msg.text : `[${msg.id}]`);
+            }
+            else {
+                if (text)
+                    waitingQueue.push({
+                        type: 'text',
+                        text: text
+                    });
+                text = '';
+                waitingQueue.push(msg);
+            }
+        }
+        if (text)
+            waitingQueue.push({
+                type: 'text',
+                text: text
+            });
+        if (!Array.isArray(message))
+            return (await this._sendMsg(waitingQueue[0])).MsgID;
+        let result = [];
+        for (const message of waitingQueue) {
+            result.push((await this._sendMsg(message)).MsgID);
+        }
+        return result;
+    }
+    async recallMsg(message_id) {
+        const { data } = await this.c.request({
+            url: '/cgi-bin/mmwebwx-bin/webwxrevokemsg',
+            method: 'POST',
+            data: {
+                BaseRequest: this.c.getBaseRequest(),
+                SvrMsgId: message_id,
+                ToUserName: this.info.username,
+                ClientMsgId: message_1.Message.genMsgId()
+            }
+        });
+        return data.BaseResponse.Ret === 0;
+    }
+}
+exports.Contact = Contact;

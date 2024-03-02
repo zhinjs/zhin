@@ -1,0 +1,368 @@
+/// <reference types="node" />
+/// <reference types="node" />
+/// <reference types="ws" />
+import { EventEmitter } from 'events';
+import { WebSocket } from 'ws';
+import { Logger } from 'log4js';
+import { AxiosInstance } from 'axios';
+export interface ElementMap {
+    at: {
+        user_id: string | 'all';
+    } | {
+        phone: string;
+    };
+    face: {
+        id: string;
+    };
+    text: {
+        text: string;
+    };
+    markdown: {
+        title?: string;
+        content: string;
+    };
+    image: {
+        file: string;
+        name?: string;
+    } | {
+        file: Buffer;
+        name: string;
+    };
+    link: {
+        text: string;
+        title: string;
+        thumb?: string;
+        href: string;
+    };
+    action: {
+        title: string;
+        text: string;
+        buttons: ButtonElem[];
+    };
+    button: {
+        title: string;
+        url: string;
+    };
+    audio: {
+        url: string;
+        duration: number;
+    };
+    video: {
+        thumb: string;
+        url: string;
+        duration: number;
+        width?: number;
+        height?: number;
+    };
+    file: {
+        name?: string;
+        type?: string;
+        url: string;
+    };
+    confirm: {
+        title: string;
+        text: string;
+        yesText: string;
+        yesUrl: string;
+        noText: string;
+        noUrl: string;
+    };
+}
+export type ElementType = keyof ElementMap;
+export type MessageElem<T extends ElementType = ElementType> = {
+    type: T;
+} & ElementMap[T];
+export type ButtonElem = MessageElem<'button'>;
+export type ATElem = MessageElem<'at'>;
+export type TextElem = MessageElem<'text'>;
+export type FaceElem = MessageElem<'face'>;
+export type MdElem = MessageElem<'markdown'>;
+export type ImageElem = MessageElem<'image'>;
+export type LinkElem = MessageElem<'link'>;
+export type ActionElem = MessageElem<'action'>;
+export type FileElem = MessageElem<'file'>;
+export type AudioElem = MessageElem<'audio'>;
+export type VideoElem = MessageElem<'video'>;
+export type ConfirmElem = MessageElem<'confirm'>;
+export type Sendable = string | TextElem | ATElem | FaceElem | MdElem | ImageElem | LinkElem | ActionElem | FileElem | AudioElem | VideoElem | ConfirmElem | (string | MessageElem)[];
+export type MessagePayload = {
+    content?: string;
+    title?: string;
+    text?: string;
+    photoURL?: string;
+    picUrl?: string;
+    messageUrl?: string;
+    singleTitle?: string;
+    singleUrl?: string;
+    actionTitle1?: string;
+    actionURL1?: string;
+    actionTitle2?: string;
+    actionURL2?: string;
+    actionTitle3?: string;
+    actionURL3?: string;
+    actionTitle4?: string;
+    actionURL4?: string;
+    actionTitle5?: string;
+    actionURL5?: string;
+    buttonTitle1?: string;
+    buttonURL1?: string;
+    buttonTitle2?: string;
+    buttonURL2?: string;
+    mediaId?: string;
+    duration?: string;
+    fineName?: string;
+    fileType?: string;
+    videoMediaId?: string;
+    videoType?: string;
+    picMediaId?: string;
+};
+type ConvertResult = [string, MessagePayload, string];
+type OriginConverter<T extends MessageElem = MessageElem> = (element: T, bot: Bot) => ConvertResult | Promise<ConvertResult>;
+export const originTypeConverterMap: Map<string, OriginConverter>;
+export function getConverter<T extends MessageElem>(elem: T): OriginConverter<T> | undefined;
+export function registerConverter<T extends ElementType, E extends MessageElem<T> = MessageElem<T>>(type: T, convertor: OriginConverter<E>): void;
+export type Dict<T = any, K extends string | symbol = string> = Record<K, T>;
+export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal" | "mark" | "off";
+export type DwClientMessage = {
+    conversationId: string;
+    messageId: string;
+    conversationType: "1" | "2";
+    chatbotCorpId: string;
+    senderNick: string;
+    isAdmin: boolean;
+    senderStaffId?: string;
+    senderId?: string;
+    msgtype: string;
+    content?: Dict;
+    createAt: number;
+    text?: {
+        content: string;
+    };
+};
+export function parserMessage(bot: Bot, payload: DwClientMessage): Promise<MessageElem[]>;
+type SenderInfo = {
+    user_id: string;
+    user_name: string;
+};
+export interface MessageEvent {
+    sender: SenderInfo;
+    message_type: 'group' | 'private';
+    recall(): Promise<boolean>;
+    reply(message: Sendable): Promise<string>;
+}
+export class Message {
+    message_id: string;
+    message: MessageElem[];
+    raw_message: string;
+    message_type: 'group' | 'private';
+    time: number;
+    constructor(message_id: string, payload: DwClientMessage);
+    static fromEvent(this: Bot, messageId: string, payload: DwClientMessage): Promise<PrivateMessageEvent | GroupMessageEvent>;
+    private parse;
+    static toRaw(message: MessageElem[]): string;
+}
+export class PrivateMessageEvent extends Message implements MessageEvent {
+    private bot;
+    sender: SenderInfo;
+    user_id: string;
+    user_name: string;
+    constructor(bot: Bot, message_id: string, payload: DwClientMessage);
+    recall(): Promise<boolean>;
+    reply(message: Sendable): Promise<string>;
+}
+export class GroupMessageEvent extends Message implements MessageEvent {
+    private bot;
+    group_id: string;
+    user_id: string;
+    user_name: string;
+    sender: SenderInfo;
+    constructor(bot: Bot, message_id: string, payload: DwClientMessage);
+    recall(): Promise<boolean>;
+    reply(message: Sendable): Promise<string>;
+}
+export const MAX_RETRY = 10;
+export enum OpCode {
+    DISPATCH = 0,// 服务端进行消息推送
+    HEARTBEAT = 1,// 客户端发送心跳
+    IDENTIFY = 2,// 鉴权
+    RESUME = 6,// 恢复连接
+    RECONNECT = 7,// 服务端通知客户端重连
+    INVALID_SESSION = 9,// 当identify或resume的时候，如果参数有错，服务端会返回该消息
+    HELLO = 10,// 当客户端与网关建立ws连接之后，网关下发的第一条消息
+    HEARTBEAT_ACK = 11
+}
+export const UnsupportedMethodError: Error;
+export const SessionEvents: {
+    CLOSED: string;
+    READY: string;
+    ERROR: string;
+    INVALID_SESSION: string;
+    RECONNECT: string;
+    DISCONNECT: string;
+    EVENT_WS: string;
+    RESUMED: string;
+    DEAD: string;
+};
+export const WebsocketCloseReason: ({
+    code: number;
+    reason: string;
+    resume?: undefined;
+} | {
+    code: number;
+    reason: string;
+    resume: boolean;
+})[];
+export enum Intends {
+    GUILDS = 1,// 频道操作事件
+    GUILD_MEMBERS = 2,// 频道成员变更事件
+    GUILD_MESSAGES = 512,// 私域频道消息事件
+    GUILD_MESSAGE_REACTIONS = 1024,// 频道消息表态事件
+    DIRECT_MESSAGE = 4096,// 频道私信事件
+    OPEN_FORUMS_EVENTS = 262144,
+    AUDIO_OR_LIVE_CHANNEL_MEMBERS = 524288,// 音频或直播频道成员
+    C2C_MESSAGE_CREATE = 33554432,// 私聊消息事件
+    GROUP_AT_MESSAGE_CREATE = 33554432,// 群聊@消息事件
+    INTERACTION = 67108864,// 互动事件
+    MESSAGE_AUDIT = 134217728,// 消息审核事件
+    FORUMS_EVENTS = 268435456,// 论坛事件(仅私域)
+    AUDIO_ACTIONS = 536870912,// 音频操作事件
+    PUBLIC_GUILD_MESSAGES = 1073741824
+}
+export enum ChannelType {
+    Content = 0,// 文本频道
+    Record = 2,// 语音频道
+    ChannelGroup = 4,// 频道分组
+    Live = 10005,// 直播频道
+    App = 10006,// 应用频道
+    Forms = 10007
+}
+export enum ChannelSubType {
+    Chat = 0,// 闲聊
+    Announces = 1,// 公告
+    Strategy = 2,// 攻略
+    Black = 3
+}
+export enum PrivateType {
+    Public = 0,// 公开
+    Admin = 1,// 频道主和管理员
+    Some = 2
+}
+export enum SpeakPermission {
+    All = 1,// 所有人
+    Some = 2
+}
+export const toObject: <T = any>(data: any) => T;
+export function saveFile(sourceType: 'base64', fileMime: string, fileData: string): string;
+export function saveFile(sourceType: 'buffer', fileName: string, fileData: Buffer): string;
+export function md5(data: string | Buffer): string;
+export interface EventMap {
+    'message'(e: GroupMessageEvent | PrivateMessageEvent): void;
+    'message.group'(e: GroupMessageEvent): void;
+    'message.private'(e: PrivateMessageEvent): void;
+}
+export interface DwClientDownStream {
+    specVersion: string;
+    type: string;
+    appId?: string;
+    messageId?: string;
+    headers: {
+        appId: string;
+        connectionId: string;
+        contentType: string;
+        messageId: string;
+        time: string;
+        topic: string;
+        eventType?: string;
+        eventBornTime?: string;
+        eventId?: string;
+        eventCorpId?: string;
+        eventUnifiedAppId?: string;
+    };
+    data: string;
+}
+export class SessionManager extends EventEmitter {
+    private bot;
+    connected: boolean;
+    isAlive: boolean;
+    stopEd?: boolean;
+    reconnect_count: number;
+    reconnecting: boolean;
+    private heartbeat_timer?;
+    access_token: string;
+    wsUrl?: string;
+    constructor(bot: Bot);
+    heartbeat(downStream: DwClientDownStream): void;
+    onSystem(downStream: DwClientDownStream): void;
+    handleEvent(message: DwClientDownStream): void;
+    handleCallback(message: DwClientDownStream): Promise<void>;
+    private handleWsMsg;
+    getAccessToken(): Promise<Bot.Token>;
+    getWsUrl(): Promise<void>;
+    start(): Promise<void>;
+    stop(): Promise<void>;
+    connect(): void;
+    sendWs(msg: unknown): void;
+}
+export class Sender {
+    private bot;
+    private readonly url;
+    private target;
+    private payload;
+    constructor(bot: Bot, url: string, target: Dict);
+    private sendElem;
+    sendMsg(message: Sendable): Promise<string>;
+}
+export class Bot extends EventEmitter {
+    options: Bot.Options;
+    request: AxiosInstance;
+    ws?: WebSocket;
+    sessionManager: SessionManager;
+    logger: Logger;
+    constructor(options: Bot.Options);
+    downloadFile(downloadCode: string): Promise<{
+        downloadUrl: string;
+    }>;
+    em(event: string, payload: Dict): void;
+    uploadMedia(buf: Buffer, fileName: string, mediaType: 'image' | 'video' | 'voice' | 'file'): Promise<Bot.MediaInfo>;
+    uploadMedia(file: string, mediaType: 'image' | 'video' | 'voice' | 'file'): Promise<Bot.MediaInfo>;
+    sendPrivateMsg(userId: string, message: Sendable): Promise<string>;
+    recallPrivateMsg(user_id: string, message_id: string): Promise<boolean>;
+    sendGroupMsg(group_id: string, message: Sendable): Promise<string>;
+    recallGroupMsg(group_id: string, message_id: string): Promise<boolean>;
+    start(): Promise<void>;
+    stop(): Promise<void>;
+}
+/** 事件接口 */
+export interface Bot extends EventEmitter {
+    on<T extends keyof EventMap>(event: T, listener: EventMap[T]): this;
+    on<S extends string | symbol>(event: S & Exclude<S, keyof EventMap>, listener: (...args: any[]) => any): this;
+    once<T extends keyof EventMap>(event: T, listener: EventMap[T]): this;
+    once<S extends string | symbol>(event: S & Exclude<S, keyof EventMap>, listener: (...args: any[]) => any): this;
+    addListener<T extends keyof EventMap>(event: T, listener: EventMap[T]): this;
+    addListener<S extends string | symbol>(event: S & Exclude<S, keyof EventMap>, listener: (...args: any[]) => any): this;
+    emit<T extends keyof EventMap>(event: T, ...args: Parameters<EventMap[T]>): boolean;
+    emit<S extends string | symbol>(event: S & Exclude<S, keyof EventMap>, ...args: any[]): boolean;
+    off<T extends keyof EventMap>(event: T, listener: EventMap[T]): this;
+    off<S extends string | symbol>(event: S & Exclude<S, keyof EventMap>, listener: (...args: any[]) => any): this;
+}
+export namespace Bot {
+    interface Options {
+        clientId: string;
+        clientSecret: string;
+        log_level?: LogLevel;
+        data_dir?: string;
+        reconnect_interval?: number;
+        max_reconnect_count?: number;
+        heartbeat_interval?: number;
+        request_timeout?: number;
+        sandbox?: boolean;
+    }
+    type MediaInfo = {
+        media_id: string;
+        type: string;
+    };
+    interface Token {
+        access_token: string;
+        expires_in: number;
+    }
+}

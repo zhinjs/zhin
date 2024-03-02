@@ -1,0 +1,62 @@
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.md5 = exports.saveFile = exports.toObject = void 0;
+const crypto_1 = require("crypto");
+const path = __importStar(require("path"));
+const os = __importStar(require("os"));
+const fs = __importStar(require("fs"));
+const toObject = (data) => {
+    if (Buffer.isBuffer(data))
+        return JSON.parse(data.toString());
+    if (typeof data === 'object')
+        return data;
+    if (typeof data === 'string')
+        return JSON.parse(data);
+    // return String(data);
+};
+exports.toObject = toObject;
+function saveFile(sourceType, fileMime, fileData) {
+    const hash = (0, crypto_1.createHash)('md5');
+    hash.update(fileData);
+    let fileName = fileMime;
+    if (sourceType === 'base64') {
+        fileName = `${hash.digest('hex')}.${fileMime.split('/')[1]}`;
+        fileData = Buffer.from(fileData, 'base64');
+    }
+    const filePath = path.resolve(os.tmpdir(), fileName);
+    fs.writeFileSync(filePath, fileData);
+    return filePath;
+}
+exports.saveFile = saveFile;
+function md5(data) {
+    const encoding = Buffer.isBuffer(data) ? 'hex' : 'utf8';
+    if (Buffer.isBuffer(data))
+        data = data.toString('hex');
+    return (0, crypto_1.createHash)('md5')
+        .update(data, encoding)
+        .digest('hex');
+}
+exports.md5 = md5;

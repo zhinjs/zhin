@@ -1,0 +1,35 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Group = void 0;
+const contact_1 = require("../entries/contact");
+const member_1 = require("../entries/member");
+const groupCache = new WeakMap();
+class Group extends contact_1.Contact {
+    static from(group_id) {
+        const groupInfo = this.gl.get(group_id);
+        let group = groupCache.get(groupInfo);
+        if (!group)
+            groupCache.set(groupInfo, group = new Group(this, groupInfo));
+        return group;
+    }
+    get group_name() {
+        return this.info.nickname;
+    }
+    get member_count() {
+        return this.client.gml.get(this.group_id).size;
+    }
+    getMemberList() {
+        return Array.from(this.client.gml.get(this.group_id).values());
+    }
+    getMemberInfo(member_id) {
+        return this.client.gml.get(this.group_id)?.get(member_id);
+    }
+    pickMember(member_id) {
+        return member_1.Member.from.apply(this.client, [this.group_id, member_id]);
+    }
+    constructor(c, info) {
+        super(c, info);
+        this.group_id = info.group_id;
+    }
+}
+exports.Group = Group;

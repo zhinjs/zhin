@@ -1,0 +1,24 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.OriginEvent = void 0;
+var OriginEvent;
+(function (OriginEvent) {
+    OriginEvent["DIRECT_MESSAGE_CREATE"] = "message.direct";
+    OriginEvent["AT_MESSAGE_CREATE"] = "message.guild";
+    OriginEvent["MESSAGE_CREATE"] = "message.guild";
+    OriginEvent["GUILD_CREATE"] = "notice.guild.increase";
+    OriginEvent["GUILD_UPDATE"] = "notice.guild.update";
+    OriginEvent["GUILD_DELETE"] = "notice.guild.decrease";
+    OriginEvent["CHANNEL_CREATE"] = "notice.channel.increase";
+    OriginEvent["CHANNEL_UPDATE"] = "notice.channel.update";
+    OriginEvent["CHANNEL_DELETE"] = "notice.channel.decrease";
+    OriginEvent["GUILD_MEMBER_ADD"] = "notice.guild.member.increase";
+    OriginEvent["GUILD_MEMBER_UPDATE"] = "notice.guild.member.update";
+    OriginEvent["GUILD_MEMBER_REMOVE"] = "notice.guild.member.decrease";
+    OriginEvent["GROUP_ADD_ROBOT"] = "notice.group.increase";
+    OriginEvent["GROUP_DEL_ROBOT"] = "notice.group.decrease";
+    OriginEvent["FRIEND_ADD"] = "notice.friend.add";
+    OriginEvent["FRIEND_DEL"] = "notice.friend.del";
+    OriginEvent["C2C_MESSAGE_CREATE"] = "message.private";
+    OriginEvent["GROUP_AT_MESSAGE_CREATE"] = "message.group";
+})(OriginEvent || (exports.OriginEvent = OriginEvent = {}));
