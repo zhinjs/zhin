@@ -5,7 +5,6 @@ on:
       - main
 env:
   CI: true
-  PNPM_CACHE_FOLDER: .pnpm-store
 jobs:
   version:
     timeout-minutes: 15
@@ -23,12 +22,12 @@ jobs:
         uses: pnpm/action-setup@v2
         with:
           version: 7
-      - name: setup pnpm config
-        run: pnpm config set store-dir $PNPM_CACHE_FOLDER
       - name: install dependencies
         run: pnpm install
         env:
           GITHUB_AUTH_TOKEN: ${{secrets.PERSONAL_TOKEN}}
+      - name: build packages
+        run: npm run build
       - name: bump versions
         uses: changesets/action@v1
         id: changesets
@@ -36,17 +35,7 @@ jobs:
           version: npm run bump
           commit: "chore: update versions"
           title: "chore: update versions"
+          publish: npm run pub
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: google-github-actions/release-please-action@v3
-        id: release
-        with:
-          release-type: node
-      - name: build packages
-        run: npm run build
-        if: ${{ steps.release.outputs.release_created }}
-      - name: publish packages
-        if: ${{ steps.release.outputs.release_created }}
-        run: npm run pub
-        env:
           NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
