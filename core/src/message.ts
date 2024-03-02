@@ -37,25 +37,58 @@ export class Message<AD extends Adapter> {
     };
   }
 }
-const wrapKV = Object.entries({
-  ',': '_🤤_🤖_',
-  '&': '$amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-}).map(([key, value]) => ({ key, value }));
-export function wrap(message: string) {
-  if (!message) return;
-  for (const { key, value } of wrapKV) {
-    message = message.replace(new RegExp(key, 'g'), value);
+
+export function parseFromTemplate(template: string | MessageElem): MessageElem[] {
+  if (typeof template !== 'string') return [template];
+  const result: MessageElem[] = [];
+  const closingReg = /<(\S+)(\s[^\/]+)?\/>/;
+  const twinningReg = /<(\S+)(\s[^>]+)?>([^<]*)<\/\1>/;
+  while (template.length) {
+    const [_, type, attrStr = '', child = ''] = template.match(closingReg) || template.match(twinningReg) || [];
+    if (!type) break;
+    const isClosing = closingReg.test(template);
+    const matched = isClosing ? `<${type}${attrStr}/>` : `<${type}${attrStr}>${child}</${type}>`;
+    const index = template.indexOf(matched);
+    const prevText = template.slice(0, index);
+    if (prevText)
+      result.push({
+        type: 'text',
+        data: {
+          text: prevText,
+        },
+      });
+    template = template.slice(index + matched.length);
+    const attrArr = [...attrStr.matchAll(/\s([^=]+)(=[^/\s]+)?/g)];
+    const data = Object.fromEntries(
+      attrArr.map(([attr]) => {
+        const [key, ...values] = attr.split('=');
+        const value = values.join('=');
+        try {
+          return [key.trimStart(), JSON.parse(value.slice(1, -1))];
+        } catch {
+          return [key.trimStart(), JSON.parse(value)];
+        }
+      }),
+    );
+    result.push({
+      type: type,
+      data,
+    } as MessageElem);
   }
-  return message;
-}
-export function unwrap(message: string) {
-  for (const { key, value } of wrapKV) {
-    message = message.replace(new RegExp(value, 'g'), key);
+  if (template.length) {
+    result.push({
+      type: 'text',
+      data: {
+        text: template,
+      },
+    });
   }
-  return message;
+  return result;
 }
+type MessageElem = {
+  type: string;
+  data: Dict;
+};
 export namespace Message {
   export type Render<T extends Message = Message> = (template: string, message?: T) => Promise<string> | string;
   export type Segment = `<${string},${string}>` | string;
@@ -83,16 +116,16 @@ export namespace Message {
   }
 }
 export const segment: Message.DefineSegment = function (type, data) {
-  return `<${type},${Object.entries(data)
+  return `<${type} ${Object.entries(data)
     .map(([key, value]) => {
-      return `${key}=${wrap(JSON.stringify(value))}`;
+      return `${key}='${JSON.stringify(value)}'`;
     })
-    .join()}>`;
+    .join(' ')}/>`;
 } as Message.DefineSegment;
 segment.text = text => text;
-segment.face = (id: number) => `<face,id=${id}>`;
-segment.image = (file: string) => `<image,file=${file}>`;
-segment.at = user_id => `<at,user_id=${user_id}>`;
+segment.face = (id: number) => `<face id='${id}'/>`;
+segment.image = (file: string) => `<image src='${file}'/>`;
+segment.at = user_id => `<at user_id='${user_id}'/>`;
 type MessageSender = {
   user_id?: string | number;
   user_name?: string;

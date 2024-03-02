@@ -1,6 +1,5 @@
-import { Dict, axios, Plugin } from 'zhin';
+import { Dict, axios, Plugin, compiler } from 'zhin';
 import { Component } from '@/component';
-import { compiler } from '@/utils';
 
 declare module 'zhin' {
   namespace App {

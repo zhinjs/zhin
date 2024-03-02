@@ -1,5 +1,5 @@
-import { Dict, Message } from 'zhin';
-import { fixLoop, getValueWithRuntime } from '@/utils';
+import { Dict, Message, getValueWithRuntime } from 'zhin';
+import { fixLoop } from '@/utils';
 export const CapWithChild = Symbol('CapWithChild');
 export const CapWithClose = Symbol('CapWithClose');
 export class Component<T = {}, D = {}, P = Component.Props<T>> {

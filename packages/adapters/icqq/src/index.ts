@@ -13,10 +13,74 @@ import {
 } from 'icqq';
 import * as process from 'process';
 import { formatSendable, sendableToString } from '@/utils';
+
 type QQMessageEvent = PrivateMessageEvent | GroupMessageEvent | DiscussMessageEvent | GuildMessageEvent;
 type ICQQAdapterConfig = QQConfig[];
 export type ICQQAdapter = typeof icqq;
 const icqq = new Adapter<Adapter.Bot<Client>, QQMessageEvent>('icqq');
+icqq
+  .element({
+    type: 'text',
+    data: {
+      text: 'string',
+    },
+  })
+  .element({
+    type: 'face',
+    data: {
+      id: 'number',
+      text: 'string',
+    },
+  })
+  .element({
+    type: 'at',
+    data: {
+      qq: ['string', 'number'],
+    },
+  })
+  .element({
+    type: 'image',
+    data: {
+      file: 'string',
+    },
+  })
+  .element({
+    type: 'record',
+    data: {
+      file: 'string',
+    },
+  })
+  .element({
+    type: 'video',
+    data: {
+      file: 'string',
+    },
+  })
+  .element({
+    type: 'node',
+    data: {
+      user_id: 'number',
+      message: 'string',
+    },
+  })
+  .element({
+    type: 'json',
+    data: {
+      data: 'string',
+    },
+  })
+  .element({
+    type: 'xml',
+    data: {
+      data: 'string',
+    },
+  })
+  .element({
+    type: 'markdown',
+    data: {
+      content: 'string',
+    },
+  });
 declare module 'zhin' {
   namespace App {
     interface Adapters {

@@ -4,11 +4,17 @@ import { Message } from '@/message';
 import path from 'path';
 import * as process from 'process';
 import { getLogger, Logger } from 'log4js';
+import { Dict } from '@/types';
 
 export type AdapterBot<A extends Adapter> = A extends Adapter<infer B> ? B : unknown;
 export type AdapterReceive<A extends Adapter> = A extends Adapter<infer B, infer R> ? R : unknown;
+export type Element = {
+  type: string;
+  data: Dict;
+};
 export class Adapter<I extends object = object, M = {}> extends EventEmitter {
   bots: Adapter.Bot<I>[] = [];
+  elements: Element[] = [];
   app: App | null = null;
   private _logger?: Logger;
   get logger() {
@@ -31,6 +37,19 @@ export class Adapter<I extends object = object, M = {}> extends EventEmitter {
     const bot = this.bots.find(bot => bot.unique_id === bot_id);
     if (!bot) throw new Error(`未找到Bot:${bot_id}`);
     return bot;
+  }
+  element(element: Element): this;
+  element(type: string, data: Dict): this;
+  element(...args: [Element] | [string, Dict]) {
+    const element =
+      typeof args[0] === 'string'
+        ? {
+            type: args[0],
+            data: args[1]!,
+          }
+        : args[0];
+    this.elements.push(element);
+    return this;
   }
   mount(app: App, bots: App.BotConfig[]) {
     this.emit('before-mount');

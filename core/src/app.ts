@@ -29,6 +29,15 @@ export class App extends EventEmitter {
     this.logger.level = config.logLevel;
     this.handleMessage = this.handleMessage.bind(this);
     this.on('message', this.handleMessage);
+    this.registerRender((template, message) => {
+      const elements = message?.adapter.elements || [];
+      for (const element of elements) {
+        template = template.replace(new RegExp(`^<${element.type}`), () => {
+          return '';
+        });
+      }
+      return template;
+    });
     return new Proxy(this, {
       get(target: App, key) {
         if (Reflect.has(target.services, key)) return Reflect.get(target.services, key);

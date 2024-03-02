@@ -121,27 +121,27 @@ export function json2Xml(content: any, level = 0): string {
   };
   return `<xml>${_stringify(content)}</xml>`;
 }
-console.log(
-  xml2Json(
-    `
-<xml>
-<test>123</test>
-<foo>
-    <bar>
-        <a1>b2</a1>
-    </bar>
-    <bar>abc</bar>
-</foo>
-</xml>
-`.trimStart(),
-  ),
-);
-console.log(
-  json2Xml({
-    test: 123,
-    foo: {
-      bar: [{ a1: 'b2' }, 'abc'],
-    },
-  }),
-);
+// console.log(
+//   xml2Json(
+//     `
+// <xml>
+// <test>123</test>
+// <foo>
+//     <bar>
+//         <a1>b2</a1>
+//     </bar>
+//     <bar>abc</bar>
+// </foo>
+// </xml>
+// `.trimStart(),
+//   ),
+// );
+// console.log(
+//   json2Xml({
+//     test: 123,
+//     foo: {
+//       bar: [{ a1: 'b2' }, 'abc'],
+//     },
+//   }),
+// );
 export default test;

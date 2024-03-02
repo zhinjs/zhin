@@ -1,4 +1,4 @@
-import { Dict, unwrap } from 'zhin';
+import { Dict, parseFromTemplate } from 'zhin';
 
 export interface MessageV12 {
   raw_message: string;
@@ -18,33 +18,6 @@ export namespace MessageV12 {
     message_id: number;
   };
   export type Sendable = string | Segment | (string | Segment)[];
-  export function parseSegmentsFromTemplate(template: string): Segment[] {
-    const result: Segment[] = [];
-    const reg = /(<[^>]+>)/;
-    while (template.length) {
-      const [match] = template.match(reg) || [];
-      if (!match) break;
-      const index = template.indexOf(match);
-      const prevText = template.slice(0, index);
-      if (prevText) result.push({ type: 'text', data: { text: prevText } });
-      template = template.slice(index + match.length);
-      const [type, ...attrs] = match.slice(1, -1).split(',');
-      const data = Object.fromEntries(
-        attrs.map(attrStr => {
-          const [key, ...valueArr] = attrStr.split('=');
-          try {
-            return [key, JSON.parse(unwrap(valueArr.join('=')))];
-          } catch {
-            return [key, valueArr.join('=')];
-          }
-        }),
-      );
-      result.push({ type, data });
-    }
-    if (template.length) result.push({ type: 'text', data: { text: template } });
-    return result;
-  }
-
   export function parseSegmentsFromCqCode(template: string): Segment[] {
     const result: Segment[] = [];
     const reg = /(\[CQ:[!\]]+])/;
@@ -83,7 +56,7 @@ export namespace MessageV12 {
     const result: Segment[] = [];
     if (!Array.isArray(message)) message = [message];
     for (const item of message) {
-      if (typeof item === 'string') result.push(...parseSegmentsFromTemplate(item));
+      if (typeof item === 'string') result.push(...parseFromTemplate(item));
       else result.push(item);
     }
     return result;
@@ -97,9 +70,9 @@ export namespace MessageV12 {
       const { type, data } = item;
       if (type === 'text') result += data.text || '';
       else
-        result += `<${type},${Object.entries(data)
-          .map(([key, value]) => `${key}=${JSON.stringify(value).replace(/,/g, '_🤤_🤖_')}`)
-          .join(',')}>`;
+        result += `<${type} ${Object.entries(data)
+          .map(([key, value]) => `${key}='${JSON.stringify(value)}'`)
+          .join(' ')}>`;
     }
     return result;
   }
