@@ -1,1 +1,0 @@
-module.exports = require("legacy-swc-helpers/lib/_class_extract_field_descriptor.js")

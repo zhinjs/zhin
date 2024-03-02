@@ -1,1 +1,0 @@
-module.exports = require("legacy-swc-helpers/lib/_initializer_warning_helper.js")

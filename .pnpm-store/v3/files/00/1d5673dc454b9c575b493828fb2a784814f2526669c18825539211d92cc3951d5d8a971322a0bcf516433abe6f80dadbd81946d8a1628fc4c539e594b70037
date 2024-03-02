@@ -1,1 +1,0 @@
-module.exports = require("legacy-swc-helpers/lib/index.js")

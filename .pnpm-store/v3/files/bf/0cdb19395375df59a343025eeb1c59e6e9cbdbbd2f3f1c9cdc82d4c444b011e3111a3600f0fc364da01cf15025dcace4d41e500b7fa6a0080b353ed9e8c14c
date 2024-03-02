@@ -1,1 +1,0 @@
-module.exports = require("legacy-swc-helpers/lib/_ts_param.js")

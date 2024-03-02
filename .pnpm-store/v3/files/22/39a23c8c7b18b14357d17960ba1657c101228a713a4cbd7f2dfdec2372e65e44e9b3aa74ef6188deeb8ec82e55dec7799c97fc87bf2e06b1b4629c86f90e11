@@ -1,1 +1,0 @@
-module.exports = require("legacy-swc-helpers/lib/_non_iterable_rest.js")

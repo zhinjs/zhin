@@ -1,1 +1,0 @@
-module.exports = require("legacy-swc-helpers/lib/_class_apply_descriptor_set.js")

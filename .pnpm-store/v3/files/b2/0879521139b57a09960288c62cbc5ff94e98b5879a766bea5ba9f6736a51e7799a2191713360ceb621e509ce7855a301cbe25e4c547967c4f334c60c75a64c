@@ -1,1 +1,0 @@
-module.exports = require("legacy-swc-helpers/lib/_unsupported_iterable_to_array.js")

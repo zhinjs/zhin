@@ -1,1 +1,0 @@
-module.exports = require("legacy-swc-helpers/lib/_apply_decs_2203_r.js")

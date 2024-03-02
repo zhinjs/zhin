@@ -1,1 +1,0 @@
-module.exports = require("legacy-swc-helpers/lib/_initializer_define_property.js")

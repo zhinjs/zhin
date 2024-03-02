@@ -1,4 +1,0 @@
-export declare const getPgv: (c?: string) => string;
-export declare function getDeviceID(): string;
-export declare function isRoomContact(user_name: string): boolean;
-export declare function convertEmoji(s: string): string;

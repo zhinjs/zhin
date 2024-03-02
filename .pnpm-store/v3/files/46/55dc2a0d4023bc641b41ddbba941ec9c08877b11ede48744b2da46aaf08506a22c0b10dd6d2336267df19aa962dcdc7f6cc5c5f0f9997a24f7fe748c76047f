@@ -1,1 +1,0 @@
-module.exports = require("legacy-swc-helpers/lib/_class_check_private_static_field_descriptor.js")

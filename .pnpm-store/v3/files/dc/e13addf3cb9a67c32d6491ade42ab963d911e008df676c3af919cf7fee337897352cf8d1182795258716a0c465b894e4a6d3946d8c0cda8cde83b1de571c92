@@ -1,1 +1,0 @@
-module.exports = require("legacy-swc-helpers/lib/_check_private_redeclaration.js")

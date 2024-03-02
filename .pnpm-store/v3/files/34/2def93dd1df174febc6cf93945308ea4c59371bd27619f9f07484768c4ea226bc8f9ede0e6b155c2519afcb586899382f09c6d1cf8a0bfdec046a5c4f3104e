@@ -1,1 +1,0 @@
-module.exports = require("legacy-swc-helpers/lib/_apply_decorated_descriptor.js")

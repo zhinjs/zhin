@@ -1,1 +1,0 @@
-module.exports = require("legacy-swc-helpers/lib/_class_private_field_set.js")

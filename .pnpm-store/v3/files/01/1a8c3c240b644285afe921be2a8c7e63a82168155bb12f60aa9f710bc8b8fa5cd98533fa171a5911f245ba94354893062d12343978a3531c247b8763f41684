@@ -1,1 +1,0 @@
-module.exports = require("legacy-swc-helpers/lib/_array_like_to_array.js")
