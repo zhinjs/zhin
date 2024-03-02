@@ -42,7 +42,7 @@ export default defineConfig((env)=>{
     bots:[],
     plugins:[
       'commandParser',
-      env.mode===dev && 'hmr',
+      env.mode==='dev' && 'hmr',
       'pluginManager',
       'setup',
       
