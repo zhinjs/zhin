@@ -1,5 +1,11 @@
 # @zhinjs/icqq
 
+## 1.0.5
+
+### Patch Changes
+
+- e8055de: fix: forward msg when msg too long
+
 ## 1.0.4
 
 ### Patch Changes
