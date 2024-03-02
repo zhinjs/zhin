@@ -1,5 +1,12 @@
 # @zhinjs/plugin-jsondb
 
+## 0.0.8
+
+### Patch Changes
+
+- Updated dependencies [f8ccca2]
+  - zhin@3.0.4
+
 ## 0.0.7
 
 ### Patch Changes
