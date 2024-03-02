@@ -12,14 +12,14 @@ yarn-error.log*
 .DS_Store
 .idea/
 *.iml
-/node_modules/
+node_modules/
 package-lock.json
-/test/.*.env
-/test/*.yaml
+test/.*.env
+test/*.yaml
 test/*.config.js
 test/*.config.ts
 /**/*/node_modules/
 /**/*/lib/
-/test/data/
+test/data/
 
 /pnpm-lock.yaml

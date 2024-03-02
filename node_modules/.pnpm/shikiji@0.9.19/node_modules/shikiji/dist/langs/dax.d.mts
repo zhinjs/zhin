@@ -1,1 +1,0 @@
-import { LanguageRegistration } from 'shikiji-core';declare const reg: LanguageRegistration[];export default reg

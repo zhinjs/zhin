@@ -1,1 +1,0 @@
-import { ThemeRegistrationRaw } from 'shikiji-core';declare const reg: ThemeRegistrationRaw;export default reg
