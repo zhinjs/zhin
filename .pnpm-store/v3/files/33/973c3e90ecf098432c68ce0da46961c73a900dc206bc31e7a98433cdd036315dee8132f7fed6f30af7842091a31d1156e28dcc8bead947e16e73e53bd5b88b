@@ -1,0 +1,51 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.alreadyLogoutError = exports.AlreadyLoggedError = exports.OriginMessage = exports.CHUNK_SIZE = exports.SyncSelector = exports.Sex = exports.Status = exports.SyncRet = void 0;
+var SyncRet;
+(function (SyncRet) {
+    SyncRet[SyncRet["Success"] = 0] = "Success";
+    SyncRet[SyncRet["Logout"] = 1101] = "Logout";
+})(SyncRet = exports.SyncRet || (exports.SyncRet = {}));
+var Status;
+(function (Status) {
+    Status["Init"] = "init";
+    Status["Login"] = "login";
+    Status["Logout"] = "logout";
+})(Status = exports.Status || (exports.Status = {}));
+var Sex;
+(function (Sex) {
+    Sex[Sex["Male"] = 0] = "Male";
+    Sex[Sex["Female"] = 1] = "Female";
+})(Sex = exports.Sex || (exports.Sex = {}));
+var SyncSelector;
+(function (SyncSelector) {
+    SyncSelector[SyncSelector["Normal"] = 0] = "Normal";
+    SyncSelector[SyncSelector["Msg"] = 2] = "Msg";
+    SyncSelector[SyncSelector["MobileOpen"] = 7] = "MobileOpen";
+})(SyncSelector = exports.SyncSelector || (exports.SyncSelector = {}));
+exports.CHUNK_SIZE = 0.5 * 1024 * 1024; // 0.5 MB
+var OriginMessage;
+(function (OriginMessage) {
+    OriginMessage[OriginMessage["Text"] = 1] = "Text";
+    OriginMessage[OriginMessage["Image"] = 3] = "Image";
+    OriginMessage[OriginMessage["Voice"] = 34] = "Voice";
+    OriginMessage[OriginMessage["Video"] = 43] = "Video";
+    OriginMessage[OriginMessage["MicroVideo"] = 62] = "MicroVideo";
+    OriginMessage[OriginMessage["Emotion"] = 47] = "Emotion";
+    OriginMessage[OriginMessage["App"] = 49] = "App";
+    OriginMessage[OriginMessage["StatusNotice"] = 51] = "StatusNotice";
+    OriginMessage[OriginMessage["SysNotice"] = 9999] = "SysNotice";
+    OriginMessage[OriginMessage["PossibleFriendMsg"] = 40] = "PossibleFriendMsg";
+    OriginMessage[OriginMessage["VerifyMsg"] = 37] = "VerifyMsg";
+    OriginMessage[OriginMessage["ShareCard"] = 42] = "ShareCard";
+    OriginMessage[OriginMessage["Sys"] = 10000] = "Sys";
+    OriginMessage[OriginMessage["Recalled"] = 10002] = "Recalled";
+})(OriginMessage = exports.OriginMessage || (exports.OriginMessage = {}));
+class AlreadyLoggedError extends Error {
+    constructor() {
+        super('AlreadyLogged');
+        this.message = '已退出登录';
+    }
+}
+exports.AlreadyLoggedError = AlreadyLoggedError;
+exports.alreadyLogoutError = new AlreadyLoggedError();

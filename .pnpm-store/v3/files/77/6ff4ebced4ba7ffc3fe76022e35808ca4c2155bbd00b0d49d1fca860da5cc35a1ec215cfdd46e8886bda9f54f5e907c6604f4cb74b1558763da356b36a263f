@@ -1,0 +1,1 @@
+module.exports = require("legacy-swc-helpers/lib/_sliced_to_array_loose.js")

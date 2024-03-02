@@ -1,0 +1,59 @@
+{
+  "name": "svgdom",
+  "version": "0.1.19",
+  "description": "Straightforward DOM implementation for SVG, HTML and XML",
+  "main": "./main-module.js",
+  "exports": {
+    "import": "./main-module.js",
+    "require": "./main-module.js"
+  },
+  "type": "module",
+  "scripts": {
+    "test": "mocha",
+    "fix": "npx eslint ./ --fix",
+    "lint": "npx eslint ./"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/svgdotjs/svgdom.git"
+  },
+  "keywords": [
+    "svgjs",
+    "dom",
+    "xml",
+    "xmldom",
+    "svgdom",
+    "nodejs"
+  ],
+  "author": "Ulrich-Matthias Schäfer",
+  "license": "MIT",
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/Fuzzyma"
+  },
+  "bugs": {
+    "url": "https://github.com/svgdotjs/svgdom/issues"
+  },
+  "homepage": "https://github.com/svgdotjs/svgdom#readme",
+  "dependencies": {
+    "fontkit": "^2.0.2",
+    "image-size": "^1.0.2",
+    "sax": "^1.2.4"
+  },
+  "devDependencies": {
+    "@svgdotjs/svg.js": "^3.2.0",
+    "@types/fontkit": "^2.0.3",
+    "acorn": "^8.8.2",
+    "circular-dependency-plugin": "^5.2.2",
+    "eslint": "^8.33.0",
+    "eslint-config-standard": "^17.0.0",
+    "eslint-plugin-import": "^2.27.5",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-promise": "^6.1.1",
+    "eslint-plugin-sort-class-members": "^1.16.0",
+    "mocha": "^10.2.0",
+    "reify": "^0.20.12",
+    "webpack": "^5.75.0",
+    "webpack-cli": "^5.0.1"
+  }
+}

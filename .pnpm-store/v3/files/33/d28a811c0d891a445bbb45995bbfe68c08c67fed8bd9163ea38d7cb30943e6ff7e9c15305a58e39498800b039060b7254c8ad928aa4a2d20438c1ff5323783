@@ -1,0 +1,66 @@
+/// <reference types="node" />
+import { Message } from "./message";
+import { Client } from "./client";
+interface ElementMap {
+    text: {
+        text: string;
+    };
+    face: {
+        id: string;
+    };
+    at: {
+        user_id: string;
+    };
+    image: {
+        file: string;
+        name?: string;
+    } | {
+        file: Buffer;
+        name: string;
+    };
+    video: {
+        file: string;
+        name?: string;
+    } | {
+        file: Buffer;
+        name: string;
+    };
+    audio: {
+        file: string;
+        name?: string;
+    } | {
+        file: Buffer;
+        name: string;
+    };
+    file: {
+        file: string;
+        name?: string;
+    } | {
+        file: Buffer;
+        name: string;
+    };
+}
+export type ElementType = keyof ElementMap;
+export type MessageElem<T extends ElementType = ElementType> = {
+    type: T;
+} & ElementMap[T];
+export type TextElem = MessageElem<'text'>;
+export type FaceElem = MessageElem<'face'>;
+export type ImageElem = MessageElem<'image'>;
+export type VideoElem = MessageElem<'video'>;
+export type AudioElem = MessageElem<'audio'>;
+export type FileElem = MessageElem<'file'>;
+export type Sendable = string | MessageElem | (string | MessageElem)[];
+export declare class Parser {
+    private c;
+    message: MessageElem[];
+    brief: string;
+    constructor(c: Client);
+    private downloadMsgImg;
+    private downloadMsgVideo;
+    private downloadMsgVoice;
+    private downloadMsgMedia;
+    parse(message: Message.Original): Promise<void>;
+    text(text: string): void;
+}
+export {};

@@ -1,0 +1,37 @@
+import { BaseClient } from "../core/baseClient";
+import { Client } from "../client";
+import { Group } from "../entries/group";
+import { Friend } from "../entries/friend";
+import { Member } from "../entries/member";
+import { Sendable } from "../elements";
+export declare class Contact {
+    private c;
+    info: Contact.Info;
+    get client(): Client;
+    constructor(c: Client, info: Contact.Info);
+    asFriend(): Friend;
+    asGroup(): Group;
+    private _uploadMedia;
+    private sendText;
+    private sendImg;
+    private sendVideo;
+    private sendFile;
+    private _sendMsg;
+    sendMsg<T extends Sendable>(message: T): Promise<T extends any[] ? string[] : string>;
+    recallMsg(message_id: string): Promise<boolean>;
+}
+export declare namespace Contact {
+    interface OriginalInfo extends BaseClient.OriginalInfo {
+        NickName: string;
+        RemarkName: string;
+        DisplayName: string;
+        MemberCount: number;
+        MemberList: Member.OriginalInfo[];
+    }
+    interface Info {
+        nickname: string;
+        username: string;
+        avatar: string;
+        remark: string;
+    }
+}

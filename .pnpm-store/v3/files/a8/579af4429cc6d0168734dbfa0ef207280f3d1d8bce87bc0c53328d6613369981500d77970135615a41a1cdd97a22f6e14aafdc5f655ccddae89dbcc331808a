@@ -1,0 +1,1 @@
+module.exports = require("legacy-swc-helpers/lib/_class_name_tdz_error.js")

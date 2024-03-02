@@ -1,0 +1,54 @@
+{
+    "name": "qq-group-bot",
+    "version": "1.0.34",
+    "description": "qq机器人开发SDK",
+    "main": "lib/index.js",
+    "engines": {
+        "node": ">=16"
+    },
+    "scripts": {
+        "start": "node .",
+        "compile": "tsc --project tsconfig.build.json && tsc-alias -p tsconfig.build.json",
+        "dtsc": "dtsc --project tsconfig.dtsc.json",
+        "clean": "rm -rf ./lib",
+        "build": "npm run compile && npm run dtsc",
+        "dev": "ts-node-dev -r tsconfig-paths/register ./src/test.ts",
+        "pub": "npm publish --access public",
+        "docs:dev": "vitepress dev docs --port 5566",
+        "docs:build": "vitepress build docs",
+        "docs:serve": "vitepress serve docs",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "files": [
+        "lib",
+        "LICENSE",
+        "README.md"
+    ],
+    "repository": {
+        "url": "https://github.com/lc-cn/qq-group-bot.git",
+        "type": "git"
+    },
+    "keywords": [
+        "qq",
+        "group",
+        "bot"
+    ],
+    "author": "凉菜",
+    "license": "MIT",
+    "dependencies": {
+        "axios": "^1.6.5",
+        "formdata-node": "^6.0.3",
+        "log4js": "^6.9.1",
+        "ws": "^8.16.0"
+    },
+    "devDependencies": {
+        "@types/node": "^20.11.5",
+        "@types/ws": "^8.5.10",
+        "dtsc": "^2.3.0",
+        "ts-node-dev": "^2.0.0",
+        "tsc-alias": "^1.8.8",
+        "tsconfig-paths": "^4.2.0",
+        "typescript": "^5.3.3",
+        "vitepress": "1.0.0-rc.39"
+    }
+}

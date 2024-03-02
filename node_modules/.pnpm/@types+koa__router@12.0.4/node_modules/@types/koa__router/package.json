@@ -1,0 +1,57 @@
+{
+    "name": "@types/koa__router",
+    "version": "12.0.4",
+    "description": "TypeScript definitions for @koa/router",
+    "homepage": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/koa__router",
+    "license": "MIT",
+    "contributors": [
+        {
+            "name": "Jerry Chin",
+            "githubUsername": "hellopao",
+            "url": "https://github.com/hellopao"
+        },
+        {
+            "name": "Pavel Ivanov",
+            "githubUsername": "schfkt",
+            "url": "https://github.com/schfkt"
+        },
+        {
+            "name": "JounQin",
+            "githubUsername": "JounQin",
+            "url": "https://github.com/JounQin"
+        },
+        {
+            "name": "Romain Faust",
+            "githubUsername": "romain-faust",
+            "url": "https://github.com/romain-faust"
+        },
+        {
+            "name": "Guillaume Mayer",
+            "githubUsername": "Guillaume-Mayer",
+            "url": "https://github.com/Guillaume-Mayer"
+        },
+        {
+            "name": "Andrea Gueugnaut",
+            "githubUsername": "falinor",
+            "url": "https://github.com/falinor"
+        },
+        {
+            "name": "Jeremy Forsythe",
+            "githubUsername": "jdforsythe",
+            "url": "https://github.com/jdforsythe"
+        }
+    ],
+    "main": "",
+    "types": "index.d.ts",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+        "directory": "types/koa__router"
+    },
+    "scripts": {},
+    "dependencies": {
+        "@types/koa": "*"
+    },
+    "typesPublisherContentHash": "a32bfcfa3c0db2fe280fcf13cf74620f6552d7cd37f381d0a272980cd7778cfe",
+    "typeScriptVersion": "4.5"
+}

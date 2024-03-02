@@ -1,0 +1,163 @@
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Bot = void 0;
+const events_1 = require("events");
+const form_data_1 = __importDefault(require("form-data"));
+const fs = __importStar(require("fs"));
+const log4js_1 = require("log4js");
+const axios_1 = __importDefault(require("axios"));
+const sessionManager_1 = require("./sessionManager");
+const path = __importStar(require("path"));
+const sender_1 = require("./sender");
+const utils_1 = require("./utils");
+class Bot extends events_1.EventEmitter {
+    constructor(options) {
+        super();
+        this.options = options;
+        this.logger = (0, log4js_1.getLogger)(`[node-dd-bot:${this.options.clientId}]`);
+        this.logger.level = options.log_level || 'info';
+        this.options.data_dir = this.options.data_dir || path.resolve(process.cwd(), 'data');
+        if (!fs.existsSync(this.options.data_dir))
+            fs.mkdirSync(this.options.data_dir);
+        this.request = axios_1.default.create({
+            baseURL: 'https://api.dingtalk.com',
+        });
+        this.sessionManager = new sessionManager_1.SessionManager(this);
+        this.request.interceptors.request.use((config) => {
+            config.headers.set('x-acs-dingtalk-access-token', this.sessionManager.access_token);
+            return config;
+        });
+    }
+    async downloadFile(downloadCode) {
+        const { data } = await this.request.post('/v1.0/robot/messageFiles/download', {
+            downloadCode,
+            robotCode: this.options.clientId
+        });
+        return data;
+    }
+    em(event, payload) {
+        const eventNames = event.split('.');
+        const [post_type, detail_type, ...sub_type] = eventNames;
+        Object.assign(payload, {
+            post_type,
+            [`${post_type}_type`]: detail_type,
+            sub_type: sub_type.join('.'),
+            ...payload
+        });
+        let prefix = '';
+        while (eventNames.length) {
+            let fullEventName = `${prefix}.${eventNames.shift()}`;
+            if (fullEventName.startsWith('.'))
+                fullEventName = fullEventName.slice(1);
+            this.emit(fullEventName, payload);
+            prefix = fullEventName;
+        }
+    }
+    async uploadMedia(file, ...args) {
+        const formData = new form_data_1.default();
+        const base64Matches = typeof file === "string" ? file.match(/^data:(\S+);base64,(.+)/) : null;
+        if (base64Matches)
+            file = (0, utils_1.saveFile)('base64', base64Matches[1], base64Matches[2]);
+        if (Buffer.isBuffer(file))
+            file = (0, utils_1.saveFile)('buffer', args.shift(), file);
+        const headers = formData.getHeaders();
+        const fileData = file.startsWith('http') ?
+            (await this.request.get(file, { responseType: 'stream' })).data :
+            fs.createReadStream(file);
+        formData.append('media', fileData);
+        formData.append('type', args[0]);
+        return new Promise((resolve, reject) => {
+            formData.getLength(async (e, l) => {
+                if (e)
+                    return reject(e);
+                headers['content-length'] = l;
+                const response = await this.request.post('https://oapi.dingtalk.com/media/upload', formData, {
+                    params: {
+                        access_token: this.sessionManager.access_token,
+                    },
+                    headers: {
+                        "Content-Type": 'multipart/form-data'
+                    }
+                });
+                if (base64Matches)
+                    fs.unlinkSync(file);
+                resolve(response.data);
+            });
+        });
+    }
+    sendPrivateMsg(userId, message) {
+        return new sender_1.Sender(this, '/v1.0/robot/oToMessages/batchSend', { userIds: [userId] }).sendMsg(message);
+    }
+    async recallPrivateMsg(user_id, message_id) {
+        const queryKeys = [];
+        try {
+            const arr = JSON.parse(message_id);
+            if (Array.isArray(arr) && arr.every(str => typeof str === 'string'))
+                queryKeys.push(...arr);
+        }
+        catch {
+            queryKeys.push(message_id);
+        }
+        const { data: { successResult = [] } = {} } = await this.request.post('/v1.0/robot/otoMessages/batchRecall', {
+            openConversationId: user_id,
+            robotCode: this.options.clientId,
+            processQueryKeys: queryKeys
+        });
+        return queryKeys.every(str => successResult.includes(str));
+    }
+    sendGroupMsg(group_id, message) {
+        return new sender_1.Sender(this, '/v1.0/robot/groupMessages/send', {
+            openConversationId: group_id
+        }).sendMsg(message);
+    }
+    async recallGroupMsg(group_id, message_id) {
+        const queryKeys = [];
+        try {
+            const arr = JSON.parse(message_id);
+            if (Array.isArray(arr) && arr.every(str => typeof str === 'string'))
+                queryKeys.push(...arr);
+        }
+        catch {
+            queryKeys.push(message_id);
+        }
+        const { data: { successResult = [] } = {} } = await this.request.post('/v1.0/robot/groupMessages/recall', {
+            openConversationId: group_id,
+            robotCode: this.options.clientId,
+            processQueryKeys: queryKeys
+        });
+        return queryKeys.every(str => successResult.includes(str));
+    }
+    async start() {
+        await this.sessionManager.start();
+    }
+    async stop() {
+        await this.sessionManager.stop();
+    }
+}
+exports.Bot = Bot;

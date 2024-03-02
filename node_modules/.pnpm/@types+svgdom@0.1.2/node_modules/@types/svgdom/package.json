@@ -1,0 +1,26 @@
+{
+    "name": "@types/svgdom",
+    "version": "0.1.2",
+    "description": "TypeScript definitions for svgdom",
+    "homepage": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/svgdom",
+    "license": "MIT",
+    "contributors": [
+        {
+            "name": "Alan Norbauer",
+            "githubUsername": "altano",
+            "url": "https://github.com/altano"
+        }
+    ],
+    "type": "module",
+    "main": "",
+    "types": "index.d.ts",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+        "directory": "types/svgdom"
+    },
+    "scripts": {},
+    "dependencies": {},
+    "typesPublisherContentHash": "e00567563c2cc4649793686f7d7fe8b87b3766d79c1846ab7c7eebe05af4f1c2",
+    "typeScriptVersion": "4.5"
+}

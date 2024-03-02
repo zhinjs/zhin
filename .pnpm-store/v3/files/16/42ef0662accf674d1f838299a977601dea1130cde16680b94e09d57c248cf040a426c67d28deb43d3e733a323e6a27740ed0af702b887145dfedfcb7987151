@@ -1,0 +1,99 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.registerConverter = exports.getConverter = exports.originTypeConverterMap = void 0;
+exports.originTypeConverterMap = new Map();
+function getConverter(elem) {
+    return exports.originTypeConverterMap.get(elem.type);
+}
+exports.getConverter = getConverter;
+function registerConverter(type, convertor) {
+    if (Array.isArray(type)) {
+        for (const t of type) {
+            exports.originTypeConverterMap.set(t, convertor);
+        }
+        return;
+    }
+    exports.originTypeConverterMap.set(type, convertor);
+}
+exports.registerConverter = registerConverter;
+registerConverter('text', (elem) => {
+    return ['sampleText', { content: elem.text }, elem.text];
+});
+registerConverter('image', async (elem, bot) => {
+    const imageMedia = Buffer.isBuffer(elem.file) ?
+        await bot.uploadMedia(elem.file, elem.name, 'image') :
+        await bot.uploadMedia(elem.file, 'image');
+    return [
+        'sampleImageMsg',
+        {
+            photoURL: imageMedia.media_id
+        },
+        `[Image:${imageMedia.media_id}]`
+    ];
+});
+registerConverter('markdown', (elem) => {
+    return [
+        'sampleMarkdown',
+        {
+            title: elem.title,
+            text: elem.content
+        },
+        `[Markdown:${elem.title}]`
+    ];
+});
+registerConverter('link', (elem, bot) => (['sampleLink', {
+        title: elem.title,
+        text: elem.text,
+        picUrl: elem.thumb,
+        messageUrl: elem.href
+    }, `[Link:${elem.href}]`]));
+registerConverter('action', (elem) => {
+    const result = {
+        title: elem.title,
+        text: elem.text,
+    };
+    for (const button of elem.buttons || []) {
+        const titleKey = `actionTitle${elem.buttons.indexOf(button) + 1}`;
+        const urlKey = `actionURL${elem.buttons.indexOf(button) + 1}`;
+        result[titleKey] = button.title;
+        result[urlKey] = button.url;
+    }
+    return [`sampleActionCard${elem.buttons?.length || ''}`, result, `[Action:${elem.title}]`];
+});
+registerConverter('audio', async (elem, bot) => {
+    const media = await bot.uploadMedia(elem.url, 'voice');
+    return ['sampleAudio', {
+            mediaId: media.media_id,
+            duration: elem.duration + ''
+        }, `[${Audio}:${media.media_id}]`];
+});
+registerConverter('confirm', (elem, bot) => {
+    return ['sampleActionCard6', {
+            title: elem.title,
+            text: elem.text,
+            buttonTitle1: elem.yesText,
+            buttonURL1: elem.yesUrl,
+            buttonTitle2: elem.noText,
+            buttonURL2: elem.noUrl
+        }, `[Confirm:${elem.title}]`];
+});
+registerConverter('video', async (elem, bot) => {
+    const videoMedia = await bot.uploadMedia(elem.url, 'video');
+    const thumbMedia = await bot.uploadMedia(elem.thumb, 'image');
+    return ['sampleVideo', {
+            videoMediaId: videoMedia.media_id,
+            duration: elem.duration + '',
+            videoType: 'mp4',
+            width: elem.width,
+            height: elem.height,
+            picMediaId: thumbMedia.media_id
+        }, `[Video:${videoMedia.media_id}]`];
+});
+registerConverter('file', async (elem, bot) => {
+    const fileMedia = await bot.uploadMedia(elem.url, 'file');
+    return ['sampleFile', {
+            mediaId: fileMedia.media_id,
+            fineName: elem.name,
+            fileType: fileMedia.type
+        }, `[File:${fileMedia.media_id}]`];
+});

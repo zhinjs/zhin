@@ -1,0 +1,1 @@
+module.exports = require("legacy-swc-helpers/lib/_array_with_holes.js")
