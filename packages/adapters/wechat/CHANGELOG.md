@@ -1,5 +1,13 @@
 # @zhinjs/wechat
 
+## 1.0.4
+
+### Patch Changes
+
+- f8ccca2: fix: bugs
+- Updated dependencies [f8ccca2]
+  - zhin@3.0.4
+
 ## 1.0.3
 
 ### Patch Changes

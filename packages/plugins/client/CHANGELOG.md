@@ -1,5 +1,13 @@
 # @zhinjs/client
 
+## 1.0.4
+
+### Patch Changes
+
+- Updated dependencies [f8ccca2]
+  - zhin@3.0.4
+  - @zhinjs/plugin-http-server@1.0.4
+
 ## 1.0.3
 
 ### Patch Changes

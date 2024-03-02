@@ -2,7 +2,7 @@
     "name": "@zhinjs/dingtalk",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "scripts": {
         "build": "tsc && tsc-alias"
     },

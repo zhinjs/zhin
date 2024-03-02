@@ -1,5 +1,11 @@
 # zhin
 
+## 3.0.4
+
+### Patch Changes
+
+- f8ccca2: fix: bugs
+
 ## 3.0.3
 
 ### Patch Changes
