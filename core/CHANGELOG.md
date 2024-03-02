@@ -1,5 +1,11 @@
 # zhin
 
+## 3.0.3
+
+### Patch Changes
+
+- 5a2e7a7: fix: rebuild
+
 ## 3.0.2
 
 ### Patch Changes
