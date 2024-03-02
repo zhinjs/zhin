@@ -21,7 +21,7 @@ export function sendableToString(message: Sendable) {
   }
   return result;
 }
-export function formatSendable(message: Sendable) {
+export function formatSendable(message: Sendable): MessageElem[] {
   const result: MessageElem[] = [];
   if (!Array.isArray(message)) message = [message];
   for (const item of message) {

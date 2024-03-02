@@ -15,7 +15,7 @@ import * as process from 'process';
 import { formatSendable, sendableToString } from '@/utils';
 
 type QQMessageEvent = PrivateMessageEvent | GroupMessageEvent | DiscussMessageEvent | GuildMessageEvent;
-type ICQQAdapterConfig = QQConfig[];
+type ICQQAdapterConfig = Adapter.BotConfig<QQConfig>[];
 export type ICQQAdapter = typeof icqq;
 const icqq = new Adapter<Adapter.Bot<Client>, QQMessageEvent>('icqq');
 icqq
@@ -90,14 +90,30 @@ declare module 'zhin' {
 }
 icqq.define('sendMsg', async (bot_id, target_id, target_type, message, source) => {
   const bot = icqq.pick(bot_id);
-  let msg: Sendable = await icqq.app!.renderMessage(message as string, source);
-  msg = formatSendable(msg);
+  let template: string = await icqq.app!.renderMessage(message as string, source);
+  let msg = formatSendable(template);
   const quote: Quotable | undefined = target_type !== 'guild' && source ? (source.original as any) : undefined;
+  const textLen = msg.filter(e => e.type === 'text').reduce((result, cur) => result + String(cur).length, 0);
+  if (bot.forward_length && textLen > bot.forward_length)
+    msg = [
+      {
+        type: 'forward' as any,
+        user_id: bot.uin,
+        nickname: bot.nickname,
+        time: Date.now() / 1000,
+        message: msg,
+      },
+    ];
+  const disabledQuote =
+    !bot.quote_self ||
+    msg.some(e => {
+      return ['forward', 'music', 'share', 'reply', 'quote'].includes(e.type);
+    });
   switch (target_type) {
     case 'group':
-      return bot.sendGroupMsg(parseInt(target_id), msg, quote);
+      return bot.sendGroupMsg(parseInt(target_id), msg, disabledQuote ? undefined : quote);
     case 'private':
-      return bot.sendPrivateMsg(parseInt(target_id), msg, quote);
+      return bot.sendPrivateMsg(parseInt(target_id), msg, disabledQuote ? undefined : quote);
     case 'guild':
       const [guild_id, channel_id] = target_id.split(':');
       return bot.sendGuildMsg(guild_id, channel_id, message);
@@ -107,17 +123,26 @@ icqq.define('sendMsg', async (bot_id, target_id, target_type, message, source) =
 });
 type QQConfig = {
   uin: number;
-  master: number;
   password?: string;
 } & Config;
 let adapterConfig: ICQQAdapterConfig;
-const initBot = (configs: QQConfig[]) => {
+const initBot = (configs: Adapter.BotConfig<QQConfig>[]) => {
   adapterConfig = configs;
-  for (const { uin, password: _, ...config } of configs) {
+  for (const { uin, password: _, quote_self, forward_length, ...config } of configs) {
     const client = new Client(uin, config);
-    Object.defineProperty(client, 'unique_id', {
-      value: `${uin}`,
-      writable: false,
+    Object.defineProperties(client, {
+      unique_id: {
+        value: `${uin}`,
+        writable: false,
+      },
+      quote_self: {
+        value: quote_self,
+        writable: false,
+      },
+      forward_length: {
+        value: forward_length,
+        writable: false,
+      },
     });
     icqq.bots.push(client as Adapter.Bot<Client>);
   }

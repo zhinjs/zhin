@@ -23,12 +23,22 @@ wechatAdapter.define('sendMsg', async (bot_id, target_id, target_type, message, 
       throw new Error(`wechat适配器暂不支持发送${target_type}类型的消息`);
   }
 });
-const initBot = (configs: BaseClient.Config[]) => {
+const initBot = (configs: Adapter.BotConfig<BaseClient.Config>[]) => {
   for (const config of configs) {
     const bot = new Client(config);
-    Object.defineProperty(bot, 'unique_id', {
-      value: bot.uin + '',
-      writable: false,
+    Object.defineProperties(bot, {
+      unique_id: {
+        value: bot.uin + '',
+        writable: false,
+      },
+      quote_self: {
+        value: config.quote_self,
+        writable: false,
+      },
+      forward_length: {
+        value: config.forward_length,
+        writable: false,
+      },
     });
     wechatAdapter.bots.push(bot as Adapter.Bot<Client>);
   }

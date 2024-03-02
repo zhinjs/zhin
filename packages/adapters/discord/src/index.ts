@@ -24,12 +24,22 @@ discordAdapter.define('sendMsg', async (bot_id, target_id, target_type, message,
 });
 type DingTalkMessageEvent = GuildMessageEvent | DirectMessageEvent;
 
-const initBot = (configs: Bot.Options[]) => {
+const initBot = (configs: Adapter.BotConfig<Bot.Options>[]) => {
   for (const config of configs) {
     const bot = new Bot(config);
-    Object.defineProperty(bot, 'unique_id', {
-      get() {
-        return bot.self_id;
+    Object.defineProperties(bot, {
+      unique_id: {
+        get() {
+          return bot.self_id;
+        },
+      },
+      quote_self: {
+        value: config.quote_self,
+        writable: false,
+      },
+      forward_length: {
+        value: config.forward_length,
+        writable: false,
       },
     });
     discordAdapter.bots.push(bot as Adapter.Bot<Bot>);

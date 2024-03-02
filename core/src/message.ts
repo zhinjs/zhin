@@ -58,15 +58,14 @@ export function parseFromTemplate(template: string | MessageElem): MessageElem[]
         },
       });
     template = template.slice(index + matched.length);
-    const attrArr = [...attrStr.matchAll(/\s([^=]+)(=[^/\s]+)?/g)];
+    const attrArr = [...attrStr.matchAll(/\s([^=]+)(?=(?=="([^"]+)")|(?=='([^']+)'))/g)];
     const data = Object.fromEntries(
-      attrArr.map(([attr]) => {
-        const [key, ...values] = attr.split('=');
-        const value = values.join('=');
+      attrArr.map(([source, key, v1, v2]) => {
+        const value = v1 || v2;
         try {
-          return [key.trimStart(), JSON.parse(value.slice(1, -1))];
+          return [key, JSON.parse(value)];
         } catch {
-          return [key.trimStart(), JSON.parse(value)];
+          return [key, value];
         }
       }),
     );

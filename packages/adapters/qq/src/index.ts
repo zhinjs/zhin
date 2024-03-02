@@ -52,7 +52,7 @@ type QQConfig = {
   timeout?: number;
   public?: boolean;
 };
-const initBot = (configs: QQConfig[]) => {
+const initBot = (configs: Adapter.BotConfig<QQConfig>[]) => {
   for (const { private: isPrivate, group, public: isPublic, ...config } of configs) {
     const botConfig: Bot.Config = {
       logLevel: qq.app!.config.logLevel as any,
@@ -71,9 +71,19 @@ const initBot = (configs: QQConfig[]) => {
       ].filter(Boolean) as Intent[],
     };
     const bot = new Bot(botConfig);
-    Object.defineProperty(bot, 'unique_id', {
-      value: config.appid,
-      writable: false,
+    Object.defineProperties(bot, {
+      unique_id: {
+        value: config.appid,
+        writable: false,
+      },
+      quote_self: {
+        value: config.quote_self,
+        writable: false,
+      },
+      forward_length: {
+        value: config.forward_length,
+        writable: false,
+      },
     });
     qq.bots.push(bot as Adapter.Bot<Bot>);
   }

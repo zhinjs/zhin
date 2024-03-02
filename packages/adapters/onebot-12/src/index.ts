@@ -24,15 +24,26 @@ oneBotV12.define('sendMsg', async (bot_id, target_id, target_type, message, sour
       throw new Error(`OneBotV12适配器暂不支持发送${target_type}类型的消息`);
   }
 });
-const initBot = (configs: OneBotV12.Config[]) => {
+const initBot = (configs: Adapter.BotConfig<OneBotV12.Config>[]) => {
   if (!oneBotV12.app?.server)
     throw new Error('“oneBot V12 miss require service “http”, maybe you need install “ @zhinjs/plugin-http-server ”');
 
   for (const config of configs) {
     const bot = new OneBotV12(oneBotV12, config, oneBotV12.app!.router);
-    Object.defineProperty(bot, 'unique_id', {
-      value: `OneBotV12:${configs.indexOf(config) + 1}`,
-      writable: false,
+
+    Object.defineProperties(bot, {
+      unique_id: {
+        value: `OneBotV12:${configs.indexOf(config) + 1}`,
+        writable: false,
+      },
+      quote_self: {
+        value: config.quote_self,
+        writable: false,
+      },
+      forward_length: {
+        value: config.forward_length,
+        writable: false,
+      },
     });
     oneBotV12.bots.push(bot as Adapter.Bot<OneBotV12>);
   }

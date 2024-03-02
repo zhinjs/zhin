@@ -23,12 +23,22 @@ dingTalkAdapter.define('sendMsg', async (bot_id, target_id, target_type, message
       throw new Error(`Dingtalk适配器暂不支持发送${target_type}类型的消息`);
   }
 });
-const initBot = (configs: Bot.Options[]) => {
+const initBot = (configs: Adapter.Bot<Bot.Options>[]) => {
   for (const config of configs) {
     const bot = new Bot(config);
-    Object.defineProperty(bot, 'unique_id', {
-      value: config.clientId,
-      writable: false,
+    Object.defineProperties(bot, {
+      unique_id: {
+        value: config.clientId,
+        writable: false,
+      },
+      quote_self: {
+        value: config.quote_self,
+        writable: false,
+      },
+      forward_length: {
+        value: config.forward_length,
+        writable: false,
+      },
     });
     dingTalkAdapter.bots.push(bot as Adapter.Bot<Bot>);
   }

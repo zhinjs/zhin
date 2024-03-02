@@ -14,6 +14,7 @@
         "lint:fix": "eslint packages --ext .ts --fix",
         "format": "prettier packages --write",
         "build": "pnpm -r run build",
+        "release": "pnpm changeset",
         "clean": "node ./scripts/clean.js",
         "pub": "pnpm -r publish --access public --no-git-checks",
         "bump": "pnpm changeset version",

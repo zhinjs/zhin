@@ -127,6 +127,11 @@ export namespace Adapter {
     name: T;
     bots: App.BotConfig<T>[];
   }
+  export type BotConfig<T> = {
+    master: number;
+    forward_length?: number;
+    quote_self?: boolean;
+  } & T;
   export type SendMsgFn = (
     bot_id: string,
     target_id: string,
@@ -135,6 +140,8 @@ export namespace Adapter {
   ) => Promise<any>;
   export type Bot<T = object> = {
     unique_id: string;
+    quote_self?: boolean;
+    forward_length?: number;
   } & T;
   export function load(name: string) {
     const maybePath = [
