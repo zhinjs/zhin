@@ -97,7 +97,7 @@ icqq.define('sendMsg', async (bot_id, target_id, target_type, message, source) =
   if (bot.forward_length && textLen > bot.forward_length)
     msg = [
       {
-        type: 'forward' as any,
+        type: 'node',
         user_id: bot.uin,
         nickname: bot.nickname,
         time: Date.now() / 1000,
