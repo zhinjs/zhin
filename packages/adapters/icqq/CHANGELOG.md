@@ -1,5 +1,13 @@
 # @zhinjs/icqq
 
+## 1.0.6
+
+### Patch Changes
+
+- 85ed8b3: fix: 消息编码解码
+- Updated dependencies [85ed8b3]
+  - zhin@3.0.5
+
 ## 1.0.5
 
 ### Patch Changes
