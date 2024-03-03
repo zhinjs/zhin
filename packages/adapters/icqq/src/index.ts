@@ -107,7 +107,7 @@ icqq.define('sendMsg', async (bot_id, target_id, target_type, message, source) =
   const disabledQuote =
     !bot.quote_self ||
     msg.some(e => {
-      return ['forward', 'music', 'share', 'reply', 'quote'].includes(e.type);
+      return ['node', 'music', 'share', 'reply', 'quote'].includes(e.type);
     });
   switch (target_type) {
     case 'group':

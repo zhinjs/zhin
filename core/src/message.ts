@@ -54,7 +54,7 @@ export function parseFromTemplate(template: string | MessageElem): MessageElem[]
       result.push({
         type: 'text',
         data: {
-          text: prevText,
+          text: decodeURIComponent(prevText),
         },
       });
     template = template.slice(index + matched.length);
@@ -63,9 +63,9 @@ export function parseFromTemplate(template: string | MessageElem): MessageElem[]
       attrArr.map(([source, key, v1, v2]) => {
         const value = v1 || v2;
         try {
-          return [key, JSON.parse(value)];
+          return [key, JSON.parse(decodeURIComponent(value))];
         } catch {
-          return [key, value];
+          return [key, decodeURIComponent(value)];
         }
       }),
     );
@@ -78,7 +78,7 @@ export function parseFromTemplate(template: string | MessageElem): MessageElem[]
     result.push({
       type: 'text',
       data: {
-        text: template,
+        text: decodeURIComponent(template),
       },
     });
   }
@@ -115,16 +115,17 @@ export namespace Message {
   }
 }
 export const segment: Message.DefineSegment = function (type, data) {
+  if (type === 'text') return segment.text(data.text || '');
   return `<${type} ${Object.entries(data)
     .map(([key, value]) => {
-      return `${key}='${JSON.stringify(value)}'`;
+      return `${key}='${encodeURIComponent(JSON.stringify(value))}'`;
     })
     .join(' ')}/>`;
 } as Message.DefineSegment;
-segment.text = text => text;
-segment.face = (id: number) => `<face id='${id}'/>`;
-segment.image = (file: string) => `<image src='${file}'/>`;
-segment.at = user_id => `<at user_id='${user_id}'/>`;
+segment.text = text => encodeURIComponent(text);
+segment.face = (id: number) => `<face id='${encodeURIComponent(id)}'/>`;
+segment.image = (file: string) => `<image file='${encodeURIComponent(file)}'/>`;
+segment.at = user_id => `<at user_id='${encodeURIComponent(user_id)}'/>`;
 type MessageSender = {
   user_id?: string | number;
   user_name?: string;

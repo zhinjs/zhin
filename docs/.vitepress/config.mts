@@ -1,5 +1,5 @@
 import {defineConfigWithTheme} from "vitepress";
-
+const pkg=require('../../core/package.json')
 export default defineConfigWithTheme({
     title: '知音(Zhin)',
     titleTemplate: ':title - 知音(Zhin)',
@@ -69,7 +69,7 @@ export default defineConfigWithTheme({
             // { text: '插件市场', link: '/market/', activeMatch: '/market/' },
             // { text: 'Playground', link: 'https://playground.zhin.icu', activeMatch: '/playground/' },
             {
-                text: require('../../package.json').version,
+                text: pkg.version,
                 items: [
                     {
                         text: 'Changelog',
