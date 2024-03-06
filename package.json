@@ -16,7 +16,7 @@
         "build": "pnpm -r run build",
         "release": "pnpm changeset",
         "clean": "rm -rf ./node_modules",
-        "pub": "pnpm -r publish --access public --no-git-checks",
+        "pub": "pnpm -r publish --access public --no-git-checks --registry https://registry.npmjs.org",
         "bump": "pnpm changeset version",
         "docs:dev": "vitepress dev docs --port 5566",
         "docs:build": "vitepress build docs",
