@@ -100,10 +100,10 @@ export class JsonDB {
     this.write();
     return result;
   }
-  find<T>(route: string, callback: (item: T) => boolean): T | undefined {
+  find<T>(route: string, callback: (item: T, index: number) => boolean): T | undefined {
     return this.getArray<T>(route).find(callback);
   }
-  filter<T>(route: string, callback: (item: T) => boolean): T[] {
+  filter<T>(route: string, callback: (item: T, index: number) => boolean): T[] {
     return this.getArray<T>(route).filter(callback);
   }
 }

@@ -16,6 +16,6 @@ export declare class JsonDB {
     push<T>(route: string, ...data: T[]): number;
     pop<T>(route: string): T | undefined;
     splice<T>(route: string, index?: number, deleteCount?: number, ...data: T[]): T[];
-    find<T>(route: string, callback: (item: T) => boolean): T | undefined;
-    filter<T>(route: string, callback: (item: T) => boolean): T[];
+    find<T>(route: string, callback: (item: T, index: number) => boolean): T | undefined;
+    filter<T>(route: string, callback: (item: T, index: number) => boolean): T[];
 }

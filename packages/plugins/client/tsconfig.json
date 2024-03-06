@@ -9,5 +9,7 @@
         },
         "outDir": "lib"
     },
-    "include": ["src"]
+    "include": [
+        "src"
+    ]
 }

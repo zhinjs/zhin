@@ -144,9 +144,10 @@ export namespace Adapter {
     forward_length?: number;
   } & T;
   export function load(name: string) {
+    const projectWorkDir = process.env.PWD || process.cwd();
     const maybePath = [
-      path.join(process.cwd(), 'node_modules', `@zhinjs`, name), // 官方适配器
-      path.join(process.cwd(), 'node_modules', `zhin-` + name), // 社区适配器
+      path.join(projectWorkDir, 'node_modules', `@zhinjs`, name), // 官方适配器
+      path.join(projectWorkDir, 'node_modules', `zhin-` + name), // 社区适配器
     ];
     for (const adapterPath of maybePath) {
       let result = null;

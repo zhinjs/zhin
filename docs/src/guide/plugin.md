@@ -134,7 +134,7 @@ module.exports = {
 ```
 
 ```typescript [TypeScript]
-// src/index.ts
+// node/index.ts
 import { Plugin, Context } from "zhin";
 export const name = "ts";
 export function install(this: Plugin, ctx: Context) {
@@ -226,7 +226,7 @@ ctx.on('dispose',()=>{
 ```
 
 ```typescript [TypeScript-setup]
-// src/index.ts
+// node/index.ts
 import { useContext } from "zhin";
 
 const ctx = useContext();
@@ -302,7 +302,7 @@ module.exports = {
 ```
 
 ```typescript [TypeScript]
-// src/index.ts
+// node/index.ts
 import { Plugin } from "zhin";
 export const name = "test";
 export function install(this: Plugin, ctx: Context) {
@@ -330,7 +330,7 @@ ctx
 ```
 
 ```typescript [TypeScript-setup]
-// src/index.ts
+// node/index.ts
 import { useContext } from "zhin";
 const ctx = useContext();
 ctx
@@ -373,7 +373,7 @@ module.exports = {
 ```
 
 ```typescript [TypeScript]
-// src/index.ts
+// node/index.ts
 import { Plugin } from "zhin";
 export const name = "test";
 export function install(this: Plugin, ctx: Context) {
@@ -403,7 +403,7 @@ ctx.middleware(async (session, next) => {
 ```
 
 ```typescript [TypeScript-setup]
-// src/index.ts
+// node/index.ts
 import { useContext } from "zhin";
 const ctx = useContext();
 ctx.middleware(async (session, next) => {
@@ -446,7 +446,7 @@ module.exports = {
 ```
 
 ```typescript [TypeScript]
-// src/index.ts
+// node/index.ts
 import { Plugin } from "zhin";
 export const name = "test";
 export function install(this: Plugin, ctx: Context) {
@@ -466,7 +466,7 @@ ctx.on("message", ({ session }) => {
 ```
 
 ```typescript [TypeScript-setup]
-// src/index.ts
+// node/index.ts
 import { useContext } from "zhin";
 const ctx = useContext();
 ctx.on("message", ({ session }) => {
@@ -500,7 +500,7 @@ module.exports = {
 ```
 
 ```typescript [TypeScript]
-// src/index.ts
+// node/index.ts
 import { Plugin } from "zhin";
 export const name = "test";
 declare module "zhin" {
@@ -529,7 +529,7 @@ ctx.service("test", {
 ```
 
 ```typescript [TypeScript-setup]
-// src/index.ts
+// node/index.ts
 import { useContext } from "zhin";
 const ctx = useContext();
 declare module "zhin" {
@@ -576,7 +576,7 @@ module.exports = {
 ```
 
 ```typescript [TypeScript]
-// src/index.ts
+// node/index.ts
 import { Plugin } from "zhin";
 export const name = "test";
 export function install(this: Plugin, ctx: Context) {
@@ -596,7 +596,7 @@ ctx.command("test").action(({ session }) => {
 ```
 
 ```typescript [TypeScript-setup]
-// src/index.ts
+// node/index.ts
 import { useContext } from "zhin";
 const ctx = useContext();
 ctx.command("test").action(({ session }) => {
@@ -633,7 +633,7 @@ module.exports = {
 ```
 
 ```typescript [TypeScript]
-// src/index.ts
+// node/index.ts
 import { Plugin } from "zhin";
 export const name = "test";
 export function install(this: Plugin, ctx: Context) {
@@ -655,7 +655,7 @@ onDispose(() => {
 ```
 
 ```typescript [TypeScript-setup]
-// src/index.ts
+// node/index.ts
 import { useContext, onDispose } from "zhin";
 const ctx = useContext();
 console.log("install");
@@ -683,7 +683,7 @@ useEffect(() => {
 ```
 
 ```typescript [TypeScript-setup]
-// src/index.ts
+// node/index.ts
 import { useContext, useEffect } from "zhin";
 useEffect(() => {
   const ctx = useContext();
@@ -725,7 +725,7 @@ module.exports = {
 ```
 
 ```typescript [TypeScript]
-// src/index.ts
+// node/index.ts
 import { Plugin } from "zhin";
 import { useOption } from "zhin";
 export const name = "test";
@@ -744,7 +744,7 @@ console.log(option);
 ```
 
 ```typescript [TypeScript-setup]
-// src/index.ts
+// node/index.ts
 import { useContext } from "zhin";
 const ctx = useContext();
 const option = ctx.option("test"); // 获取zhin.yaml中的test配置
@@ -768,7 +768,7 @@ useEffect((newOption, oldOption) => {
 ```
 
 ```typescript [TypeScript-setup]
-// src/index.ts
+// node/index.ts
 import { useContext, useEffect } from "zhin";
 const ctx = useContext();
 const option = ctx.option("test"); // 获取zhin.yaml中的test配置

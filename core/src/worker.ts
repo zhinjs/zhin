@@ -3,6 +3,7 @@ import { fork, ForkOptions } from 'child_process';
 import path from 'path';
 import * as fs from 'fs';
 import { deepMerge } from '@/utils';
+import process from 'process';
 interface Message {
   type: 'start' | 'queue';
   body: any;
@@ -17,15 +18,15 @@ const readEnv = (filename: string) => {
   return {};
 };
 export function startAppWorker(config: string, mode: string) {
-  const commonEnv = readEnv(path.join(process.cwd(), '.env'));
-  const modeEnv = deepMerge(commonEnv, readEnv(path.join(process.cwd(), `.env.${mode}`)));
+  const commonEnv = readEnv(path.join(process.env.PWD!, '.env'));
+  const modeEnv = deepMerge(commonEnv, readEnv(path.join(process.env.PWD!, `.env.${mode}`)));
   const forkOptions: ForkOptions = {
     env: {
       ...process.env,
       mode,
       config,
-      CWD: process.cwd(),
       ...modeEnv,
+      PWD: process.env.PWD || process.cwd(),
     },
     execArgv: ['-r', 'jiti/register', '-r', 'tsconfig-paths/register'],
     stdio: 'inherit',

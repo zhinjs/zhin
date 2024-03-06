@@ -47,10 +47,10 @@ const createDeleteMsg = (key: string, value: any) => {
   };
 };
 plugin.mounted(async () => {
-  const root = path.resolve(__dirname, '../browser');
+  const root = path.resolve(path.dirname(require.resolve('@zhinjs/client')), '../app');
   const vite: typeof import('vite') = await import('vite');
   const viteServer = await vite.createServer({
-    root: path.resolve(__dirname, '../browser'),
+    root,
     base: '/vite/',
     plugins: [vue()],
     server: {
@@ -62,8 +62,7 @@ plugin.mounted(async () => {
     resolve: {
       dedupe: ['vue', 'vue-router', 'pinia', 'element-plus'],
       alias: {
-        '@': path.resolve(__dirname, '../browser/src'),
-        '@zhinjs/client': path.resolve(__dirname, '../browser'),
+        '@zhinjs/client': path.resolve(root, '../src'),
       },
     },
     optimizeDeps: {

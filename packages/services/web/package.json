@@ -1,5 +1,5 @@
 {
-    "name": "@zhinjs/client",
+    "name": "@zhinjs/web",
     "main": "lib/index.js",
     "module": "browser/common.ts",
     "types": "lib/index.d.ts",
@@ -14,21 +14,19 @@
     "author": "凉菜",
     "repository": {
         "url": "https://github.com/zhinjs/zhin",
-        "directory": "packages/plugin/client"
+        "directory": "packages/services/web"
     },
     "dependencies": {
         "zhin": "workspace:^",
         "@vitejs/plugin-vue": "latest",
+        "vite": "latest",
         "@zhinjs/plugin-http-server": "workspace:^",
-        "vue-router": "latest",
-        "pinia": "latest",
-        "element-plus": "latest",
-        "vue": "latest",
-        "vite": "latest"
+        "@zhinjs/client": "workspace:^"
     },
     "peerDependencies": {
         "zhin": "workspace:^",
-        "@zhinjs/plugin-http-server": "workspace:^"
+        "@zhinjs/plugin-http-server": "workspace:^",
+        "@zhinjs/client": "workspace:^"
     },
     "devDependencies": {
         "@types/ws": "^8.5.5"

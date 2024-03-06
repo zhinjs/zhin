@@ -29,6 +29,6 @@ const db_1 = require("./db");
 const path = __importStar(require("path"));
 const process = __importStar(require("process"));
 const db = new zhin_1.Plugin('JsonDB');
-const configPath = path.resolve(process.cwd(), 'data', ((_a = process.env).jsondb || (_a.jsondb = 'zhin.jsondb')));
+const configPath = path.resolve(process.env.PWD, 'data', ((_a = process.env).jsondb || (_a.jsondb = 'zhin.jsondb')));
 db.service('jsondb', new db_1.JsonDB(configPath));
 exports.default = db;

@@ -101,22 +101,6 @@ export function formatTime(seconds: number) {
   }
   return result.trimEnd();
 }
-export function toYamlString(value: any) {
-  return YAML.stringify(value);
-}
-export function loadYamlConfigOrCreate<T>(name: string, defaultValue: string): [T, boolean] {
-  const filePath = path.resolve(process.cwd(), name);
-  let needCreate = !fs.existsSync(filePath);
-  if (needCreate) {
-    fs.writeFileSync(filePath, defaultValue, 'utf8');
-  }
-  const fileData = fs.readFileSync(filePath, 'utf8');
-  return [YAML.parse(fileData), needCreate];
-}
-export function saveYamlConfig<T>(name: string, config: T) {
-  const filePath = path.resolve(process.cwd(), name);
-  fs.writeFileSync(filePath, YAML.stringify(config));
-}
 export function deepMerge<First, Second>(first: First, second: Second): Merge<First, Second> {
   if (!first || typeof first !== typeof second || typeof first !== 'object') return first as any;
   const result = (Array.isArray(first) ? [] : {}) as Merge<First, Second>;

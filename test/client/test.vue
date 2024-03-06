@@ -1,11 +1,7 @@
-<script setup lang="ts">
-
-</script>
+<script setup lang="ts"></script>
 
 <template>
-  $END$
+  <div class="test">I'm test</div>
 </template>
 
-<style scoped lang="less">
-
-</style>
+<style scoped lang="less"></style>

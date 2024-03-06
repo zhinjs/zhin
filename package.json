@@ -15,7 +15,7 @@
         "format": "prettier packages --write",
         "build": "pnpm -r run build",
         "release": "pnpm changeset",
-        "clean": "node ./scripts/clean.js",
+        "clean": "rm -rf ./node_modules",
         "pub": "pnpm -r publish --access public --no-git-checks",
         "bump": "pnpm changeset version",
         "docs:dev": "vitepress dev docs --port 5566",
@@ -25,6 +25,11 @@
     "engines": {
         "node": ">=16",
         "pnpm": ">=7"
+    },
+    "packageManager": "pnpm@7.17.1",
+    "publishConfig": {
+        "access": "public",
+        "registry": "https://registry.npmjs.org"
     },
     "keywords": [
         "qq",

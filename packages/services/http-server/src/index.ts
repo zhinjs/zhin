@@ -28,7 +28,8 @@ router.get('/api/plugins', (ctx: Context) => {
   ctx.response.headers['Content-Type'] = 'application/json';
   ctx.body = httpServer.app!.pluginList.map(plugin => {
     return {
-      name: plugin.name,
+      full_name: plugin.name,
+      display_name: plugin.display_name,
       status: plugin.status,
       middlewareCount: plugin.middlewares.length,
       commands: [...plugin.commands.values()].map(outputCommand),

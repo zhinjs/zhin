@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const defaultArgv = {
   mode: 'prod',
+  entry: 'lib',
   config: 'bot.config',
   init: false,
 };
@@ -17,6 +18,10 @@ const getValue = (list, key, defaultValue) => {
 const args = process.argv?.slice(2) || [];
 for (const key of args) {
   switch (key) {
+    case '--entry':
+    case '-e':
+      defaultArgv.entry = getValue(args, key, defaultArgv.entry);
+      break;
     case '--mode':
     case '-m':
       defaultArgv.mode = getValue(args, key, defaultArgv.mode);
@@ -40,12 +45,12 @@ export default defineConfig((env)=>{
     adapters:[],
     logLevel:'info',
     bots:[],
+    pluginDirs: [path.resolve(__dirname, 'plugins')],
     plugins:[
       'commandParser',
       env.mode==='dev' && 'hmr',
       'pluginManager',
       'setup',
-      
     ]
   }
 })
@@ -55,4 +60,7 @@ export default defineConfig((env)=>{
   process.exit(0);
 }
 const jiti = require('jiti')(__dirname);
-jiti(path.resolve(__dirname, 'lib')).startAppWorker(path.resolve(process.cwd(), defaultArgv.config), defaultArgv.mode);
+jiti(path.resolve(__dirname, defaultArgv.entry)).startAppWorker(
+  path.resolve(process.cwd(), defaultArgv.config),
+  defaultArgv.mode,
+);

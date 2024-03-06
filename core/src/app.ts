@@ -8,6 +8,7 @@ import { AppKey, Required } from '@/constans';
 import path from 'path';
 import { Adapter, AdapterBot, AdapterReceive } from '@/adapter';
 import { Message } from '@/message';
+import process from 'process';
 export function defineConfig(config: Partial<App.Config>): Partial<App.Config>;
 export function defineConfig(
   initialFn: (env: typeof process.env & { mode: string }) => Partial<App.Config>,
@@ -19,6 +20,9 @@ export function defineConfig(
 }
 export class App extends EventEmitter {
   logger: Logger = getLogger(`[zhin]`);
+  get work_dir() {
+    return process.env.PWD || process.cwd();
+  }
   adapters: Map<string, Adapter> = new Map<string, Adapter>();
   middlewares: Middleware[] = [];
   plugins: PluginMap = new PluginMap();
@@ -52,13 +56,15 @@ export class App extends EventEmitter {
   }
   initPlugins(pluginConfig: App.Config['plugins']) {
     const plugins = Array.isArray(pluginConfig)
-      ? pluginConfig.map(item => {
-          return {
-            name: typeof item === 'string' ? item : item.name,
-            install: typeof item !== 'string' ? (typeof item === 'function' ? item : item.install) : undefined,
-            enable: true,
-          };
-        })
+      ? pluginConfig
+          .map(item => {
+            return {
+              name: typeof item === 'string' ? item : item.name,
+              install: typeof item !== 'string' ? (typeof item === 'function' ? item : item.install) : undefined,
+              enable: true,
+            };
+          })
+          .filter(Boolean)
       : Object.entries(this.config.plugins).map(([name, info]) => {
           return {
             name,
@@ -81,9 +87,9 @@ export class App extends EventEmitter {
       try {
         const bots = (this.config.bots ||= []).filter(bot => bot.adapter === adapter.name);
         adapter.mount(this, bots);
-        this.logger.mark(`适配器： ${adapter.name} 已加载`);
+        this.logger.debug(`adapter： ${adapter.name} loaded`);
       } catch (e) {
-        this.logger.error(`适配器： ${adapter.name} 加载失败`, e);
+        this.logger.error(`adapter： ${adapter.name} load err`, e);
         this.adapters.delete(adapter.name);
       }
     }
@@ -150,9 +156,10 @@ export class App extends EventEmitter {
     plugin[AppKey] = this;
     plugin.mounted(() => {
       for (const [name, service] of (plugin as Plugin).services) {
+        this.logger.debug(`new service(${name.toString()}) register from from(${plugin.display_name})`);
         this.emit('service-register', name, service);
       }
-      this.logger.info(`插件：${plugin.display_name} 已加载。`);
+      this.logger.info(`plugin：${plugin.display_name} loaded。`);
     });
     this.emit('plugin-mounted', plugin);
     plugin.isMounted = true;
@@ -163,7 +170,7 @@ export class App extends EventEmitter {
   enable(plugin: Plugin | string) {
     if (typeof plugin === 'string') {
       plugin = this.plugins.get(plugin)!;
-      if (!plugin) throw new Error('尚未加载插件：' + plugin);
+      if (!plugin) throw new Error('none plugin：' + plugin);
     }
     if (!(plugin instanceof Plugin)) throw new Error(`${plugin} 不是一个有效的插件`);
     plugin.status = 'enabled';
@@ -175,7 +182,7 @@ export class App extends EventEmitter {
   disable(plugin: Plugin | string) {
     if (typeof plugin === 'string') {
       plugin = this.plugins.get(plugin)!;
-      if (!plugin) throw new Error('尚未加载插件：' + plugin);
+      if (!plugin) throw new Error('plugin：' + plugin + 'no init');
     }
     if (!(plugin instanceof Plugin)) throw new Error(`${plugin} 不是一个有效的插件`);
     plugin.status = 'disabled';
@@ -216,7 +223,7 @@ export class App extends EventEmitter {
       initFn(plugin);
       return this;
     } catch (e) {
-      this.logger.error(`插件：${name} 初始化失败`, e);
+      this.logger.error(`plugin：${name} init err`, e);
       return this.unmount(plugin);
     }
   }
@@ -234,7 +241,7 @@ export class App extends EventEmitter {
       if (!plugin) throw new Error(`"${entry}" is not a valid plugin`);
       if (this.plugins.has(plugin.name)) return this;
     }
-    const userPluginDirs = (this.config.pluginDirs || []).map(dir => path.resolve(process.cwd(), dir));
+    const userPluginDirs = (this.config.pluginDirs || []).map(dir => path.resolve(this.work_dir, dir));
     for (const pluginDir of userPluginDirs) {
       plugin.name = plugin.name.replace(`${pluginDir}${path.sep}`, '');
     }
@@ -289,7 +296,7 @@ export class App extends EventEmitter {
     for (const [name, service] of plugin.services) {
       this.emit('service-destroy', name, service);
     }
-    this.logger.info(`插件：${plugin.display_name} 已卸载。`);
+    this.logger.info(`plugin：${plugin.display_name} unmount。`);
     this.emit('plugin-unmounted', plugin);
     return this;
   }
@@ -299,7 +306,7 @@ export class App extends EventEmitter {
     this.initAdapter((this.config.adapters ||= []));
     for (const [name, adapter] of this.adapters) {
       adapter.emit('start');
-      this.logger.info(`适配器： ${name} 已启动`);
+      this.logger.mark(`adapter： ${name} started`);
     }
     this.emit('start');
   }
@@ -307,10 +314,10 @@ export class App extends EventEmitter {
   loadPlugin(name: string): this {
     const maybePath = [
       ...(this.config.pluginDirs || []).map(dir => {
-        return path.resolve(process.cwd(), dir, name);
+        return path.resolve(this.work_dir, dir, name);
       }), // 用户自己的插件
       path.resolve(__dirname, 'plugins', name), // 内置插件
-      path.resolve(process.cwd(), 'node_modules', name), //社区插件
+      path.resolve(this.work_dir, 'node_modules', name), //社区插件
     ];
     let loaded: boolean = false,
       error: unknown;

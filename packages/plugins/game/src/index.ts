@@ -13,10 +13,10 @@ plugin.mounted(() => {
   drawer.polyline([0, 0, 100, 50, 50, 100, 0, 0]).fill('#f60');
   drawer.text('hello world').size(20).move(40, 80).stroke('#777');
   drawer
-    .image(path.join(process.cwd(), 'data', 'test.png'))
+    .image(path.join(process.env.PWD!, 'data', 'test.png'))
     .width(100)
     .height(200)
     .move(100, 100);
-  fs.writeFileSync(path.resolve(process.cwd(), 'data', 'test.png'), drawer.render());
+  fs.writeFileSync(path.resolve(process.env.PWD!, 'data', 'test.png'), drawer.render());
 });
 export default plugin;

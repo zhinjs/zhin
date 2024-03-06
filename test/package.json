@@ -18,6 +18,7 @@
         "@zhinjs/onebot-12": "workspace:^",
         "@zhinjs/wechat": "workspace:^",
         "@zhinjs/client": "workspace:^",
+        "@zhinjs/web": "workspace:^",
         "@zhinjs/plugin-http-server": "workspace:^",
         "@zhinjs/plugin-drawer": "workspace:^",
         "@zhinjs/plugin-game": "workspace:^",

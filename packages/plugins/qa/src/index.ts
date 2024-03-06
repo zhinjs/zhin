@@ -2,7 +2,9 @@ import { Message, Plugin } from 'zhin';
 import type {} from '@zhinjs/plugin-jsondb';
 
 type QAInfo = {
-  message_type: Message.Type[]; // 哪些消息可响应
+  adapter: string; // 可用适配器
+  bot: string; // 可用机器人
+  scope: string; // 哪些消息可响应
   content: string; // 问题
   answer: string; // 响应
   redirect?: boolean; // 是否为重定向
@@ -11,6 +13,19 @@ type QAInfo = {
   weightReal?: [number, number];
   authorId: string; // 作者Id
   authorName: string; // 作者名称
+};
+
+const zhText: Record<string, string> = {
+  adapter: '可用适配器',
+  bot: '可用机器人',
+  scope: '可响应消息',
+  content: '问题',
+  answer: '回复',
+  redirect: '是否为重定向',
+  regexp: '是否正则',
+  weight: '权重',
+  authorId: '作者id',
+  authorName: '作者名称',
 };
 const fixWeight = (list: QAInfo[]) => {
   const totalWeight = list.reduce((result, item) => result + item.weight, 0);
@@ -28,7 +43,15 @@ const getMatchedQuestion = (message: Message): undefined | QAInfo => {
     qaPlugin.jsondb
       .get<QAInfo[]>('qa')!
       .filter(qa => {
-        return qa.message_type.includes(message.message_type);
+        if (!qa.adapter || qa.adapter === '*') return true;
+        return qa.adapter.includes(message.adapter.name);
+      })
+      .filter(qa => {
+        if (!qa.bot || qa.bot === '*') return true;
+        return qa.bot.includes(message.bot.unique_id);
+      })
+      .filter(qa => {
+        return qa.scope.includes(message.message_type);
       })
       .filter(qa => {
         if (qa.regexp) return new RegExp(qa.content).test(message.raw_message);
@@ -56,46 +79,81 @@ qaPlugin.mounted(() => {
 });
 qaPlugin
   .command('问答 <question:string> <answer:string>')
+  .option('-a <adapter:string> 可用适配器,默认*', '*')
+  .option('-b <bot:string> 可用机器人,默认*', '*')
   .option('-x <regexp:boolean> 是否正则', false)
   .option('-r <redirect:boolean> 重定向', false)
-  .option('-e <edit:boolean> 是否为编辑', false)
-  .option('-s <...scope:string> 作用域(private,group,direct,guild)，默认所有', ['private', 'group', 'direct', 'guild'])
+  .option('-s <scope:string> 作用域(private,group,direct,guild)，默认所有', 'private,group,direct,guild')
   .option('-p <weight:number> 权重', 1)
   .action(async ({ message, adapter, prompt, options }, content, answer) => {
     const existQa = qaPlugin.jsondb.find<QAInfo>('qa', q => {
       return q.content === content;
     });
-    if (existQa && !options.edit) {
+    if (existQa) {
       const confirmUpdate = await prompt.confirm('该问题已存在，是否继续添加？');
       if (!confirmUpdate) return '已取消';
     }
-    if (options.edit && existQa) {
-      const editor = `${adapter.name}:${message.sender?.user_id}`;
-      if (editor !== existQa.authorId) return `仅作者本人：${existQa.authorName} 才能更改哦`;
-      const idx = qaPlugin.jsondb.indexOf('qa', existQa);
-      qaPlugin.jsondb.splice('qa', idx, 0, {
-        ...existQa,
-        content,
-        regexp: options.regexp,
-        redirect: options.redirect,
-        weight: options.weight,
-        answer,
+
+    qaPlugin.jsondb.push<QAInfo>('qa', {
+      content,
+      adapter: options.adapter,
+      bot: options.bot,
+      scope: options.scope,
+      regexp: options.regexp,
+      redirect: options.redirect,
+      weight: options.weight,
+      answer,
+      authorId: `${adapter.name}:${message.sender?.user_id}`,
+      authorName: message.sender?.user_name || message.sender?.user_id + '',
+    });
+    return `问答已添加`;
+  });
+qaPlugin
+  .command('问答列表')
+  .option('-p <page:number> 页码', 1)
+  .option('-f <full:boolean> 全作用域查询', false)
+  .action(({ adapter, bot, prompt, message, options }) => {
+    const pageSize = 10;
+    const qaList = qaPlugin.jsondb
+      .filter<QAInfo>('qa', (qa, index) => {
+        return options.full || qa.scope.includes(message.message_type);
+      })
+      .filter((_, index) => {
+        return index >= (options.page - 1) * pageSize && index < options.page * pageSize;
       });
-      return `问答${idx} 已更新`;
-    } else {
-      if (!existQa && options.edit) message.reply('问答不存在，即将添加');
-      qaPlugin.jsondb.push<QAInfo>('qa', {
-        content,
-        message_type: options.scope as Message.Type[],
-        regexp: options.regexp,
-        redirect: options.redirect,
-        weight: options.weight,
-        answer,
-        authorId: `${adapter.name}:${message.sender?.user_id}`,
-        authorName: message.sender?.user_name || message.sender?.user_id + '',
-      });
-      return `问答已添加`;
-    }
+    if (!qaList.length) return `没有更多问答数据`;
+    return (
+      qaList
+        .map((qa, index) => {
+          return `${(options.page - 1) * pageSize + index + 1}：\n问:${qa.content}\n答:${encodeURIComponent(
+            qa.answer,
+          )}\n`;
+        })
+        .join('\n') + `第${options.page}页，共${Math.ceil(qaList.length / pageSize)}页`
+    );
+  });
+qaPlugin
+  .command('修改问答 <no:number> [content:string] [answer:string]')
+  .option('-a [adapter:string] 可用适配器')
+  .option('-b [bot:string] 可用机器人,默认*')
+  .option('-x [regexp:boolean] 是否正则')
+  .option('-r [redirect:boolean] 重定向')
+  .option('-s [scope:string] 作用域(private,group,direct,guild)')
+  .option('-p [weight:number] 权重')
+  .action(({ message, adapter, options }, no, content, answer) => {
+    const existQa = qaPlugin.jsondb.find<QAInfo>('qa', (_, i) => {
+      return i === no - 1;
+    });
+    if (!existQa) return `问答${no} 不存在`;
+    const editor = `${adapter.name}:${message.sender?.user_id}`;
+    if (editor !== existQa?.authorId) return `仅作者本人：${existQa?.authorName} 才能更改哦`;
+    qaPlugin.jsondb.splice('qa', no - 1, 1, {
+      ...existQa,
+      content: content || existQa.content,
+      answer: answer || existQa.answer,
+      ...options,
+    });
+    return `问答${no} 已更新`;
   });
 qaPlugin
   .command('删除问答 <no:number>')
@@ -107,30 +165,21 @@ qaPlugin
     const isConfirm = options.confirm || (await prompt.confirm('确认删除吗？'));
     if (!isConfirm) return '已取消删除';
     qaPlugin.jsondb.splice('qa', no - 1, 1);
-    message.reply(`已删除问答：${no}`);
+    return `已删除问答：${no}`;
   });
-qaPlugin
-  .command('问答列表')
-  .option('-p <page:number> 页码', 1)
-  .option('-f <full:boolean> 全作用域查询', false)
-  .action(({ adapter, bot, prompt, message, options }) => {
-    const qaList = qaPlugin.jsondb.get<QAInfo[]>('qa');
-    const pageSize = 10;
-    if (!qaList) return '暂无问答信息，可使用 `qa 添加问答`，使用方法请回复 `help qa`';
-    const pageAfter = qaList
-      .filter(qa => options.full || qa.message_type.includes(message.message_type))
-      .slice(pageSize * (options.page - 1), pageSize * options.page);
-    if (!pageAfter.length) return `没有更多问答数据`;
-    return (
-      `共收录了${qaList.length}个问答\n` +
-      pageAfter
-        .map((qa, index) => {
-          return `${index + 1}：\n问:${qa.content}\n答:${qa.answer}\n`;
-        })
-        .join('\n') +
-      `第${options.page}页，共${Math.ceil(qaList.length / pageSize)}页`
-    );
-  });
+qaPlugin.command('问答详情 <no:number>').action((_, no) => {
+  const qa = qaPlugin.jsondb.get<QAInfo>(`qa.${no - 1}`);
+  if (!qa) return `问答不存在`;
+  return `问答${no}：\n${JSON.stringify(
+    Object.fromEntries(
+      Object.keys(qa).map(key => {
+        return [zhText[key] || key, qa[key as keyof QAInfo]];
+      }),
+    ),
+    null,
+    2,
+  )}`;
+});
 qaPlugin.middleware(async (adapter, bot, message, next) => {
   const beforeMessage = message.raw_message;
   await next();

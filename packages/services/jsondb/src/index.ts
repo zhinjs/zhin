@@ -10,6 +10,6 @@ declare module 'zhin' {
   }
 }
 const db = new Plugin('JsonDB');
-const configPath = path.resolve(process.cwd(), 'data', (process.env.jsondb ||= 'zhin.jsondb'));
+const configPath = path.resolve(process.env.PWD!, 'data', (process.env.jsondb ||= 'zhin.jsondb'));
 db.service('jsondb', new JsonDB(configPath));
 export default db;

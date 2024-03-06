@@ -4,7 +4,7 @@ export default defineConfigWithTheme({
     title: '知音(Zhin)',
     titleTemplate: ':title - 知音(Zhin)',
     head: [['meta', {name: 'theme-color', content: '#3c8772'}]],
-    srcDir: './src',
+    srcDir: './node',
     outDir: './dist',
     description: '轻量、优雅的开发机器人',
     lang: 'zh-CN',

@@ -1,5 +1,7 @@
 import { Plugin } from 'zhin';
+import * as path from 'path';
 import '@zhinjs/plugin-sandbox';
+import type {} from '@zhinjs/client/src';
 const test = new Plugin('测试插件');
 test.command('test-confirm').action(async runtime => {
   const isConfirm = await runtime.prompt.confirm('确认吗');
@@ -40,7 +42,9 @@ test.command('test-pick').action(async ({ prompt }) => {
   });
   return `inputResult:${input} ${typeof input}`;
 });
+test.required('addEntry');
 test.mounted(() => {
+  test.addEntry(path.resolve(__dirname, '../client/index.ts'));
   test.component({
     name: 'test2',
     render(_, context) {

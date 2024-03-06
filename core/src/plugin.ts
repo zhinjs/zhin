@@ -9,8 +9,7 @@ import path from 'path';
 import { Adapter } from '@/adapter';
 import * as process from 'process';
 
-export interface Plugin extends Plugin.Options {
-}
+export interface Plugin extends Plugin.Options {}
 
 export class Plugin extends EventEmitter {
   public name: string;
@@ -49,13 +48,16 @@ export class Plugin extends EventEmitter {
     return [...this.commands.values()];
   }
 
-  constructor(name?: string)
-  constructor(options?: Plugin.Options)
+  constructor(name?: string);
+  constructor(options?: Plugin.Options);
   constructor(param: Plugin.Options | string = {}) {
     super();
-    const options: Plugin.Options = typeof param === 'string' ? {
-      name: param,
-    } : param;
+    const options: Plugin.Options =
+      typeof param === 'string'
+        ? {
+            name: param,
+          }
+        : param;
     this.adapters = options.adapters;
     this.priority = options.priority || 1;
     this.desc = options.desc;
@@ -63,15 +65,13 @@ export class Plugin extends EventEmitter {
     stack.shift(); // 排除当前文件调用
     this.filePath = stack[0]?.getFileName()!;
     this.display_name = options.name!;
-    const prefixArr = [
-      path.join(__dirname, 'plugins'),
-      path.join(process.cwd(), 'node_modules')
-    ];
+    const prefixArr = [path.join(__dirname, 'plugins'), path.join(process.env.PWD!, 'node_modules')];
     this.name = this.filePath;
     for (const prefix of prefixArr) {
       this.name = this.name.replace(`${prefix}${path.sep}`, '');
     }
-    this.name = this.name.replace(`${path.sep}index`, '')
+    this.name = this.name
+      .replace(`${path.sep}index`, '')
       .replace(/\.[cm]?[tj]s$/, '')
       .replace(`${path.sep}lib`, '');
     return new Proxy(this, {
@@ -86,11 +86,15 @@ export class Plugin extends EventEmitter {
     this[Required].push(...services);
   }
 
-  service<T extends keyof App.Services>(name: T): App.Services[T]
-  service<T extends keyof App.Services>(name: T, service: App.Services[T]): this
+  service<T extends keyof App.Services>(name: T): App.Services[T];
+  service<T extends keyof App.Services>(name: T, service: App.Services[T]): this;
   service<T extends keyof App.Services>(name: T, service?: App.Services[T]) {
     if (!service) return this.app!.services[name];
     this.services.set(name, service);
+    if (this.isMounted) {
+      this.app!.logger.debug(`new service(${name}) register from plugin(${this.display_name})`);
+      this.app!.emit('service-register', name, service);
+    }
     return this;
   }
   enable() {
@@ -112,7 +116,7 @@ export class Plugin extends EventEmitter {
 
   plugin(name: string) {
     const filePath = path.resolve(this.filePath, name);
-    this.app?.once('plugin-mounted', (p) => {
+    this.app?.once('plugin-mounted', p => {
       this.disposes.push(() => {
         this.app?.unmount(p.name);
       });
@@ -126,19 +130,13 @@ export class Plugin extends EventEmitter {
     decl: S,
     initialValue?: ArgsType<Command.RemoveFirst<S>>,
   ): Command<ArgsType<Command.RemoveFirst<S>>>;
-  command<S extends Command.Declare>(
-    decl: S,
-    config?: Command.Config,
-  ): Command<ArgsType<Command.RemoveFirst<S>>>;
+  command<S extends Command.Declare>(decl: S, config?: Command.Config): Command<ArgsType<Command.RemoveFirst<S>>>;
   command<S extends Command.Declare>(
     decl: S,
     initialValue?: ArgsType<Command.RemoveFirst<S>>,
     config?: Command.Config,
   ): Command<ArgsType<Command.RemoveFirst<S>>>;
-  command<S extends Command.Declare>(
-    decl: S,
-    ...args: (ArgsType<Command.RemoveFirst<S>> | Command.Config)[]
-  ) {
+  command<S extends Command.Declare>(decl: S, ...args: (ArgsType<Command.RemoveFirst<S>> | Command.Config)[]) {
     const [nameDecl, ...argsDecl] = decl.split(/\s+/);
     if (!nameDecl) throw new Error('nameDecl不能为空');
     const nameArr = nameDecl.split('.').filter(Boolean);
@@ -172,7 +170,7 @@ export class Plugin extends EventEmitter {
   }
 
   mounted(callback: Plugin.CallBack) {
-    const lifeCycles = this.lifecycle['mounted'] ||= [];
+    const lifeCycles = (this.lifecycle['mounted'] ||= []);
     lifeCycles.push(callback);
   }
 
@@ -195,15 +193,24 @@ export class Plugin extends EventEmitter {
 export interface Plugin extends App.Services {
   on<T extends keyof App.EventMap>(event: T, callback: App.EventMap[T]): this;
 
-  on<S extends string | symbol>(event: S & Exclude<string | symbol, keyof App.EventMap>, callback: (...args: any[]) => void): this;
+  on<S extends string | symbol>(
+    event: S & Exclude<string | symbol, keyof App.EventMap>,
+    callback: (...args: any[]) => void,
+  ): this;
 
   once<T extends keyof App.EventMap>(event: T, callback: App.EventMap[T]): this;
 
-  once<S extends string | symbol>(event: S & Exclude<string | symbol, keyof App.EventMap>, callback: (...args: any[]) => void): this;
+  once<S extends string | symbol>(
+    event: S & Exclude<string | symbol, keyof App.EventMap>,
+    callback: (...args: any[]) => void,
+  ): this;
 
   off<T extends keyof App.EventMap>(event: T, callback?: App.EventMap[T]): this;
 
-  off<S extends string | symbol>(event: S & Exclude<string | symbol, keyof App.EventMap>, callback?: (...args: any[]) => void): this;
+  off<S extends string | symbol>(
+    event: S & Exclude<string | symbol, keyof App.EventMap>,
+    callback?: (...args: any[]) => void,
+  ): this;
 
   emit<T extends keyof App.EventMap>(event: T, ...args: Parameters<App.EventMap[T]>): boolean;
 
@@ -211,15 +218,24 @@ export interface Plugin extends App.Services {
 
   addListener<T extends keyof App.EventMap>(event: T, callback: App.EventMap[T]): this;
 
-  addListener<S extends string | symbol>(event: S & Exclude<string | symbol, keyof App.EventMap>, callback: (...args: any[]) => void): this;
+  addListener<S extends string | symbol>(
+    event: S & Exclude<string | symbol, keyof App.EventMap>,
+    callback: (...args: any[]) => void,
+  ): this;
 
   addListenerOnce<T extends keyof App.EventMap>(event: T, callback: App.EventMap[T]): this;
 
-  addListenerOnce<S extends string | symbol>(event: S & Exclude<string | symbol, keyof App.EventMap>, callback: (...args: any[]) => void): this;
+  addListenerOnce<S extends string | symbol>(
+    event: S & Exclude<string | symbol, keyof App.EventMap>,
+    callback: (...args: any[]) => void,
+  ): this;
 
   removeListener<T extends keyof App.EventMap>(event: T, callback?: App.EventMap[T]): this;
 
-  removeListener<S extends string | symbol>(event: S & Exclude<string | symbol, keyof App.EventMap>, callback?: (...args: any[]) => void): this;
+  removeListener<S extends string | symbol>(
+    event: S & Exclude<string | symbol, keyof App.EventMap>,
+    callback?: (...args: any[]) => void,
+  ): this;
 
   removeAllListeners<T extends keyof App.EventMap>(event: T): this;
 
@@ -227,7 +243,7 @@ export interface Plugin extends App.Services {
 }
 
 export namespace Plugin {
-  export type CallBack = (app: App) => any
+  export type CallBack = (app: App) => any;
 
   export interface Options {
     /**
@@ -248,19 +264,19 @@ export namespace Plugin {
     priority?: number;
   }
 
-  export type Status = 'enabled' | 'disabled'
+  export type Status = 'enabled' | 'disabled';
 
   export enum StatusText {
     enabled = '✅',
-    disabled = '❌'
+    disabled = '❌',
   }
 
   export type InstallObject = {
-    name?: string
-    install: InstallFn
-  }
-  export type InstallFn = (plugin: Plugin) => void
-  export type BuiltPlugins = 'commandParser' | 'guildManager' | 'hmr' | 'pluginManager'
+    name?: string;
+    install: InstallFn;
+  };
+  export type InstallFn = (plugin: Plugin) => void;
+  export type BuiltPlugins = 'commandParser' | 'guildManager' | 'hmr' | 'pluginManager';
 }
 
 export class PluginMap extends Map<string, Plugin> {
