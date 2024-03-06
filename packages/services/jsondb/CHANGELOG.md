@@ -1,5 +1,13 @@
 # @zhinjs/plugin-jsondb
 
+## 0.0.10
+
+### Patch Changes
+
+- 3509d42: fix: https-server:format api(plugins) output;jsondb:error types;client: only browser;game:PWD;web:browser common methods;qa:PWD;zhin:PWD;test:new Demo
+- Updated dependencies [3509d42]
+  - zhin@3.0.6
+
 ## 0.0.9
 
 ### Patch Changes

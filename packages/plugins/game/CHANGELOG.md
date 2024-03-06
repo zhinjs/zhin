@@ -1,5 +1,14 @@
 # @zhinjs/plugin-game
 
+## 1.0.6
+
+### Patch Changes
+
+- 3509d42: fix: https-server:format api(plugins) output;jsondb:error types;client: only browser;game:PWD;web:browser common methods;qa:PWD;zhin:PWD;test:new Demo
+- Updated dependencies [3509d42]
+  - zhin@3.0.6
+  - @zhinjs/plugin-drawer@1.0.6
+
 ## 1.0.5
 
 ### Patch Changes
