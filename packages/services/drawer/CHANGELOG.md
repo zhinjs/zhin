@@ -1,5 +1,12 @@
 # @zhinjs/plugin-drawer
 
+## 1.0.6
+
+### Patch Changes
+
+- Updated dependencies [3509d42]
+  - zhin@3.0.6
+
 ## 1.0.5
 
 ### Patch Changes

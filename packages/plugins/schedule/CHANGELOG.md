@@ -1,5 +1,13 @@
 # @zhinjs/plugin-schedule
 
+## 1.0.6
+
+### Patch Changes
+
+- Updated dependencies [3509d42]
+  - @zhinjs/plugin-jsondb@0.0.10
+  - zhin@3.0.6
+
 ## 1.0.5
 
 ### Patch Changes

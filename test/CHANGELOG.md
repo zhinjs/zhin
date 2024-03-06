@@ -1,5 +1,32 @@
 # test
 
+## 2.0.7
+
+### Patch Changes
+
+- 3509d42: fix: https-server:format api(plugins) output;jsondb:error types;client: only browser;game:PWD;web:browser common methods;qa:PWD;zhin:PWD;test:new Demo
+- Updated dependencies [3509d42]
+  - @zhinjs/plugin-http-server@1.0.6
+  - @zhinjs/plugin-jsondb@0.0.10
+  - @zhinjs/client@1.0.6
+  - @zhinjs/plugin-game@1.0.6
+  - @zhinjs/web@1.0.6
+  - @zhinjs/plugin-qa@1.0.6
+  - zhin@3.0.6
+  - @zhinjs/onebot-11@1.0.6
+  - @zhinjs/onebot-12@1.0.6
+  - @zhinjs/plugin-schedule@1.0.6
+  - @zhinjs/dingtalk@1.0.6
+  - @zhinjs/discord@1.0.6
+  - @zhinjs/icqq@1.0.7
+  - @zhinjs/qq@1.0.6
+  - @zhinjs/wechat@1.0.6
+  - @zhinjs/plugin-group-manage@1.0.6
+  - @zhinjs/plugin-guild-manage@1.0.6
+  - @zhinjs/plugin-drawer@1.0.6
+  - @zhinjs/plugin-sandbox@1.0.6
+  - @zhinjs/plugin-upyun@1.0.6
+
 ## 2.0.6
 
 ### Patch Changes
