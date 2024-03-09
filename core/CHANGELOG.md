@@ -1,5 +1,11 @@
 # zhin
 
+## 3.0.7
+
+### Patch Changes
+
+- ce71e11: fix: 项目读取process.env.PWD失败导致无法启动，优化init内容
+
 ## 3.0.6
 
 ### Patch Changes
