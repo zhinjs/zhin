@@ -1,5 +1,31 @@
 # test
 
+## 2.0.8
+
+### Patch Changes
+
+- ce71e11: fix: 项目读取process.env.PWD失败导致无法启动，优化init内容
+- Updated dependencies [ce71e11]
+  - zhin@3.0.7
+  - @zhinjs/dingtalk@1.0.7
+  - @zhinjs/discord@1.0.7
+  - @zhinjs/icqq@1.0.8
+  - @zhinjs/onebot-11@1.0.7
+  - @zhinjs/onebot-12@1.0.7
+  - @zhinjs/qq@1.0.7
+  - @zhinjs/wechat@1.0.7
+  - @zhinjs/plugin-game@1.0.7
+  - @zhinjs/plugin-group-manage@1.0.7
+  - @zhinjs/plugin-guild-manage@1.0.7
+  - @zhinjs/plugin-qa@1.0.7
+  - @zhinjs/plugin-schedule@1.0.7
+  - @zhinjs/plugin-drawer@1.0.7
+  - @zhinjs/plugin-http-server@1.0.7
+  - @zhinjs/plugin-jsondb@0.0.11
+  - @zhinjs/plugin-sandbox@1.0.7
+  - @zhinjs/plugin-upyun@1.0.7
+  - @zhinjs/web@1.0.7
+
 ## 2.0.7
 
 ### Patch Changes
