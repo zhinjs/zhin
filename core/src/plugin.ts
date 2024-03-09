@@ -3,11 +3,10 @@ import { EventEmitter } from 'events';
 import { Middleware } from '@/middleware';
 import { getCallerStack, remove } from '@/utils';
 import { App } from '@/app';
-import { AppKey, Required } from '@/constans';
+import { APP_KEY, REQUIRED_KEY, WORK_DIR } from '@/constans';
 import { Dict } from '@/types';
 import path from 'path';
 import { Adapter } from '@/adapter';
-import * as process from 'process';
 
 export interface Plugin extends Plugin.Options {}
 
@@ -16,7 +15,7 @@ export class Plugin extends EventEmitter {
   disposes: Function[] = [];
   priority: number;
   isMounted: boolean = false;
-  [Required]: (keyof App.Services)[] = [];
+  [REQUIRED_KEY]: (keyof App.Services)[] = [];
   filePath: string;
   setup: boolean = false;
   private lifecycle: Dict<Plugin.CallBack[]> = {};
@@ -26,10 +25,10 @@ export class Plugin extends EventEmitter {
   commands: Map<string, Command> = new Map<string, Command>();
   middlewares: Middleware[] = [];
   private _name?: string;
-  [AppKey]: App | null = null;
+  [APP_KEY]: App | null = null;
 
   get app() {
-    return this[AppKey];
+    return this[APP_KEY];
   }
 
   get display_name() {
@@ -65,7 +64,7 @@ export class Plugin extends EventEmitter {
     stack.shift(); // 排除当前文件调用
     this.filePath = stack[0]?.getFileName()!;
     this.display_name = options.name!;
-    const prefixArr = [path.join(__dirname, 'plugins'), path.join(process.env.PWD!, 'node_modules')];
+    const prefixArr = [path.join(__dirname, 'plugins'), path.join(WORK_DIR, 'node_modules')];
     this.name = this.filePath;
     for (const prefix of prefixArr) {
       this.name = this.name.replace(`${prefix}${path.sep}`, '');
@@ -83,7 +82,7 @@ export class Plugin extends EventEmitter {
   }
 
   required<T extends keyof App.Services>(...services: (keyof App.Services)[]) {
-    this[Required].push(...services);
+    this[REQUIRED_KEY].push(...services);
   }
 
   service<T extends keyof App.Services>(name: T): App.Services[T];

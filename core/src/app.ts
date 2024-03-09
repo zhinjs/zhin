@@ -4,7 +4,7 @@ import { Middleware } from '@/middleware';
 import { Plugin, PluginMap } from '@/plugin';
 import { Bot, Dict, LogLevel } from '@/types';
 import { deepMerge, loadModule, remove } from '@/utils';
-import { AppKey, Required } from '@/constans';
+import { APP_KEY, REQUIRED_KEY, WORK_DIR } from '@/constans';
 import path from 'path';
 import { Adapter, AdapterBot, AdapterReceive } from '@/adapter';
 import { Message } from '@/message';
@@ -20,9 +20,6 @@ export function defineConfig(
 }
 export class App extends EventEmitter {
   logger: Logger = getLogger(`[zhin]`);
-  get work_dir() {
-    return process.env.PWD || process.cwd();
-  }
   adapters: Map<string, Adapter> = new Map<string, Adapter>();
   middlewares: Middleware[] = [];
   plugins: PluginMap = new PluginMap();
@@ -153,7 +150,7 @@ export class App extends EventEmitter {
   }
   plugin(plugin: Plugin): this {
     this.emit('plugin-beforeMount', plugin);
-    plugin[AppKey] = this;
+    plugin[APP_KEY] = this;
     plugin.mounted(() => {
       for (const [name, service] of (plugin as Plugin).services) {
         this.logger.debug(`new service(${name.toString()}) register from from(${plugin.display_name})`);
@@ -241,13 +238,13 @@ export class App extends EventEmitter {
       if (!plugin) throw new Error(`"${entry}" is not a valid plugin`);
       if (this.plugins.has(plugin.name)) return this;
     }
-    const userPluginDirs = (this.config.pluginDirs || []).map(dir => path.resolve(this.work_dir, dir));
+    const userPluginDirs = (this.config.pluginDirs || []).map(dir => path.resolve(WORK_DIR, dir));
     for (const pluginDir of userPluginDirs) {
       plugin.name = plugin.name.replace(`${pluginDir}${path.sep}`, '');
     }
     this.plugins.set(plugin.name, plugin);
-    if (plugin[Required].length) {
-      const requiredServices = plugin[Required];
+    if (plugin[REQUIRED_KEY].length) {
+      const requiredServices = plugin[REQUIRED_KEY];
       const mountFn = () => {
         if (requiredServices.every(key => !!this[key])) {
           this.plugin(plugin);
@@ -292,7 +289,7 @@ export class App extends EventEmitter {
     }
     this.emit('plugin-beforeUnmount', plugin);
     this.plugins.delete(plugin.name);
-    plugin[AppKey] = null;
+    plugin[APP_KEY] = null;
     for (const [name, service] of plugin.services) {
       this.emit('service-destroy', name, service);
     }
@@ -314,10 +311,10 @@ export class App extends EventEmitter {
   loadPlugin(name: string): this {
     const maybePath = [
       ...(this.config.pluginDirs || []).map(dir => {
-        return path.resolve(this.work_dir, dir, name);
+        return path.resolve(WORK_DIR, dir, name);
       }), // 用户自己的插件
       path.resolve(__dirname, 'plugins', name), // 内置插件
-      path.resolve(this.work_dir, 'node_modules', name), //社区插件
+      path.resolve(WORK_DIR, 'node_modules', name), //社区插件
     ];
     let loaded: boolean = false,
       error: unknown;

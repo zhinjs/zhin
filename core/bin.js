@@ -39,6 +39,7 @@ if (defaultArgv.init) {
     path.resolve(process.cwd(), `bot.config.ts`),
     `
 import {defineConfig} from 'zhin';
+import * as path from 'path';
 
 export default defineConfig((env)=>{
   return {
@@ -51,11 +52,14 @@ export default defineConfig((env)=>{
       env.mode==='dev' && 'hmr',
       'pluginManager',
       'setup',
-    ]
+    ].filter(Boolean)
   }
 })
 `,
   );
+  fs.mkdirSync(path.resolve(process.cwd(), `plugins`));
+  fs.writeFileSync(path.resolve(process.cwd(), `.env`), ``);
+  fs.writeFileSync(path.resolve(process.cwd(), `.env.${defaultArgv.mode}`), ``);
   console.log(`请在.${defaultArgv.mode}.env中配置相应参数后再次调用\`npx zhin -m ${defaultArgv.mode}\` 启动`);
   process.exit(0);
 }

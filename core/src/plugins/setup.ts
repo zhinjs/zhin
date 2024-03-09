@@ -1,7 +1,7 @@
 import { Adapter, App, ArgsType, Command, getCallerStack, Message, Middleware } from '@';
 import { Plugin } from '@/plugin';
 import * as path from 'path';
-import process from 'process';
+import { WORK_DIR } from '@/constans';
 const setupPlugin = new Plugin('setup');
 const resolveCallerPlugin = (): [boolean, Plugin] => {
   const callerStack = getCallerStack().map(caller => caller.getFileName());
@@ -18,8 +18,8 @@ const resolveCallerPlugin = (): [boolean, Plugin] => {
 
   const prefixArr = [
     path.join(__dirname),
-    path.join(process.env.PWD!, 'node_modules'),
-    ...(setupPlugin.app?.config.pluginDirs || []).map(dir => path.resolve(process.env.PWD!, dir)),
+    path.join(WORK_DIR, 'node_modules'),
+    ...(setupPlugin.app?.config.pluginDirs || []).map(dir => path.resolve(WORK_DIR, dir)),
   ];
   plugin.name = plugin.filePath;
   for (const prefix of prefixArr) {

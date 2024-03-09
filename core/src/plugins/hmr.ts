@@ -3,6 +3,7 @@ import { App, Plugin, wrapExport } from '@';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as process from 'process';
+import { WORK_DIR } from '@/constans';
 
 const HMR = new Plugin('HMR');
 let watcher: FSWatcher;
@@ -19,11 +20,11 @@ HMR.mounted(app => {
   const watchDirs = [
     // 只监听本地插件和内置插件的变更，模块的管不了
     ...(app.config.pluginDirs || []).map(dir => {
-      return path.resolve(process.env.PWD!, dir);
+      return path.resolve(WORK_DIR, dir);
     }), // 本地目录插件
     __dirname, // 内置插件
     ...configFiles,
-    path.resolve(process.env.PWD!, `.${process.env.mode}.env`), // 环境变量
+    path.resolve(WORK_DIR, `.${process.env.mode}.env`), // 环境变量
   ].filter(Boolean);
   watcher = watch(
     watchDirs.filter(p => {

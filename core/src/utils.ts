@@ -1,6 +1,3 @@
-import * as path from 'path';
-import * as fs from 'fs';
-import YAML from 'yaml';
 import { Dict, Merge } from '@/types';
 
 export function isEmpty<T>(data: T) {
@@ -142,13 +139,13 @@ const toFunction = (exp: string): Function => {
 };
 
 export function compiler(template: string, ctx: Dict) {
-  const matched = [...template.matchAll(/{{([^{}]*?)}}/g)];
+  const matched = [...template.matchAll(/\${([^}]*?)}/g)];
   for (const item of matched) {
     const tpl = item[1];
     let value = getValueWithRuntime(tpl, ctx);
     if (value === tpl) continue;
     if (typeof value !== 'string') value = JSON.stringify(value, null, 2);
-    template = template.replace(`{{${item[1]}}}`, value);
+    template = template.replace(`\${${item[1]}}`, value);
   }
   return template;
 }
