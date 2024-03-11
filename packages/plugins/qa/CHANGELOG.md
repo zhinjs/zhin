@@ -1,5 +1,13 @@
 # @zhinjs/plugin-qa
 
+## 1.0.8
+
+### Patch Changes
+
+- Updated dependencies [3d10c7a]
+  - zhin@3.0.8
+  - @zhinjs/plugin-jsondb@0.0.12
+
 ## 1.0.7
 
 ### Patch Changes

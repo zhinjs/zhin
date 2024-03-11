@@ -1,5 +1,11 @@
 # zhin
 
+## 3.0.8
+
+### Patch Changes
+
+- 3d10c7a: fix: show http-server web login info;change onebot-11/12 logger category;change zhin adapter logger
+
 ## 3.0.7
 
 ### Patch Changes

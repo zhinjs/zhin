@@ -1,5 +1,13 @@
 # @zhinjs/plugin-http-server
 
+## 1.0.8
+
+### Patch Changes
+
+- 3d10c7a: fix: show http-server web login info;change onebot-11/12 logger category;change zhin adapter logger
+- Updated dependencies [3d10c7a]
+  - zhin@3.0.8
+
 ## 1.0.7
 
 ### Patch Changes
