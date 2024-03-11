@@ -8,6 +8,7 @@ import { Dict } from 'zhin';
 import { IncomingMessage } from 'http';
 
 export class OneBotV11 extends EventEmitter {
+  self_id: string | number = '';
   constructor(
     private adapter: OneBotV11Adapter,
     public config: OneBotV11.Config,
@@ -18,6 +19,9 @@ export class OneBotV11 extends EventEmitter {
   }
   get app() {
     return this.adapter.app;
+  }
+  get logger() {
+    return this.adapter.getLogger(this.self_id);
   }
   reTryCount = 0;
   ws?: WebSocket;
@@ -35,11 +39,13 @@ export class OneBotV11 extends EventEmitter {
   private dispatch(message: MessageEvent) {
     const result: OneBotV11.EventPayload | OneBotV11.ApiResult = JSON.parse(message?.toString() || 'null');
     if (!result) return;
+    let temp: OneBotV11.EventPayload = result as any;
+    if (temp.post_type === 'meta_event' && temp.sub_type === 'connect') this.self_id = temp.self_id;
     if (result.retcode !== undefined && result.echo) return this.emit('echo', result.echo, result.data);
     const event: OneBotV11.EventPayload = result as OneBotV11.EventPayload;
-    this.adapter.logger.debug('receive event', event);
+    this.logger.debug('receive event', event);
     if (event.post_type === 'message') {
-      this.adapter.logger.info(`recv [${event.message_type} ${event.group_id || event.user_id}]: ${event.raw_message}`);
+      this.logger.info(`recv [${event.message_type} ${event.group_id || event.user_id}]: ${event.raw_message}`);
     }
     this.emit(event.post_type, event);
   }
@@ -58,7 +64,7 @@ export class OneBotV11 extends EventEmitter {
           } = info;
           const authorization = headers['authorization'] || '';
           if (this.config.access_token && authorization !== `Bearer ${this.config.access_token}`) {
-            this.adapter.logger.error('鉴权失败');
+            this.logger.error('鉴权失败');
             return false;
           }
           return true;
@@ -66,16 +72,16 @@ export class OneBotV11 extends EventEmitter {
       });
       if (['path', 'event_path'].includes(key))
         server.on('connection', (ws, req) => {
-          this.adapter.logger.info(`已连接到协议端：${req.socket.remoteAddress}`);
+          this.logger.info(`已连接到协议端：${req.socket.remoteAddress}`);
           ws.on('error', err => {
-            this.adapter.logger.error('连接出错：', err);
+            this.logger.error('连接出错：', err);
           });
           ws.on('close', code => {
-            this.adapter.logger.error(`与连接端(${req.socket.remoteAddress})断开，错误码：${code}`);
+            this.logger.error(`与连接端(${req.socket.remoteAddress})断开，错误码：${code}`);
           });
           ws.on('message', this.dispatch);
         });
-      this.adapter.logger.mark(`ws server is start at route path: ${path}`);
+      this.logger.mark(`ws server is start at route path: ${path}`);
       this.wss.set(key, server);
     });
   }
@@ -92,22 +98,22 @@ export class OneBotV11 extends EventEmitter {
       },
     });
     this.ws.on('open', () => {
-      this.adapter.logger.mark(`connected to ${config.url}`);
+      this.logger.mark(`connected to ${config.url}`);
       this.reTryCount = 0;
     });
     this.ws.on('message', this.dispatch);
     this.ws.on('error', e => {
-      this.adapter.logger.error(e?.message);
+      this.logger.error(e?.message);
     });
     this.ws.on('close', () => {
       if (this.reTryCount < config.max_reconnect_count) {
-        this.adapter.logger.mark(`reconnect after ${config.reconnect_interval} ms`);
+        this.logger.mark(`reconnect after ${config.reconnect_interval} ms`);
         setTimeout(() => {
           this.reTryCount++;
           this.connectWs(cfg);
         }, config.reconnect_interval);
       } else {
-        this.adapter.logger.mark(`retry times is exceeded of ${config.max_reconnect_count}`);
+        this.logger.mark(`retry times is exceeded of ${config.max_reconnect_count}`);
       }
     });
   }
@@ -141,7 +147,7 @@ export class OneBotV11 extends EventEmitter {
         }
       };
       this.on('echo', receiveHandler);
-      this.adapter.logger.debug('send payload', payload);
+      this.logger.debug('send payload', payload);
       if (this.config.type === 'ws') return this.ws!.send(JSON.stringify(payload));
       for (const [name, server] of this.wss) {
         if (name === 'event_path') continue;
@@ -152,13 +158,13 @@ export class OneBotV11 extends EventEmitter {
     });
   }
 
-  async sendPrivateMsg(user_id: number, message: MessageV11.Sendable, message_id?: string) {
-    this.adapter.logger.info(`send [Private ${user_id}]: ${this.getBrief(message)}`);
+  async sendPrivateMsg(user_id: number, message: MessageV11.Sendable) {
+    this.logger.info(`send [Private ${user_id}]: ${this.getBrief(message)}`);
     const result = await this.sendPayload({
       action: 'send_private_msg',
-      params: { user_id, message, message_id },
+      params: { user_id, message },
     });
-    if (!result.message_id) return this.adapter.logger.error(`send failed:`, result);
+    if (!result.message_id) return this.logger.error(`send failed:`, result);
     return result.message_id;
   }
   getGroupList() {
@@ -210,13 +216,13 @@ export class OneBotV11 extends EventEmitter {
       },
     });
   }
-  async sendGroupMsg(group_id: number, message: MessageV11.Sendable, message_id?: string) {
-    this.adapter.logger.info(`send [Group ${group_id}]: ${this.getBrief(message)}`);
+  async sendGroupMsg(group_id: number, message: MessageV11.Sendable) {
+    this.logger.info(`send [Group ${group_id}]: ${this.getBrief(message)}`);
     const result = await this.sendPayload({
       action: 'send_group_msg',
-      params: { group_id, message, message_id },
+      params: { group_id, message },
     });
-    if (!result.message_id) return this.adapter.logger.error(`send failed:`, result);
+    if (!result.message_id) return this.logger.error(`send failed:`, result);
     return result.message_id;
   }
   getBrief(message: MessageV11.Sendable): string {

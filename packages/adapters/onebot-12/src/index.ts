@@ -33,8 +33,9 @@ const initBot = (configs: Adapter.BotConfig<OneBotV12.Config>[]) => {
 
     Object.defineProperties(bot, {
       unique_id: {
-        value: `OneBotV12:${configs.indexOf(config) + 1}`,
-        writable: false,
+        get() {
+          return bot.self_id;
+        },
       },
       quote_self: {
         value: config.quote_self,

@@ -66,8 +66,16 @@ export namespace MessageV11 {
     return result;
   }
 
-  export function formatSegments(message: Sendable): Segment[] {
+  export function formatSegments(message: Sendable, reply_id?: number): Segment[] {
     const result: Segment[] = [];
+    if (reply_id) {
+      result.push({
+        type: 'reply',
+        data: {
+          id: reply_id,
+        },
+      });
+    }
     if (!Array.isArray(message)) message = [message];
     for (const item of message) {
       if (typeof item === 'string') result.push(...parseFromTemplate(item));

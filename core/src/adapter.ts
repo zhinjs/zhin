@@ -16,9 +16,16 @@ export class Adapter<I extends object = object, M = {}> extends EventEmitter {
   bots: Adapter.Bot<I>[] = [];
   elements: Element[] = [];
   app: App | null = null;
-  private _logger?: Logger;
+  #loggers: Dict<Logger> = {};
+  getLogger(sub_type?: string | number): Logger {
+    const logger = (this.#loggers[sub_type || this.name] ||= getLogger(
+      `[${this.name}${sub_type ? ':' + sub_type : ''}]`,
+    ));
+    logger.level = this.app?.logger.level || 'info';
+    return logger;
+  }
   get logger() {
-    return (this._logger ||= getLogger(`[${this.name}]`));
+    return this.getLogger();
   }
   constructor(public name: string) {
     super();

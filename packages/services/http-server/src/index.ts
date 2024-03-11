@@ -7,10 +7,12 @@ import { Router } from '@/router';
 import * as process from 'process';
 export * from './router';
 const koa = new Koa();
+const username = process.env.username || 'admin';
+const password = process.env.password || '123456';
 koa.use(
   auth({
-    name: process.env.username || '',
-    pass: process.env.password || '',
+    name: username,
+    pass: password,
   }),
 );
 const server = createServer(koa.callback());
@@ -80,11 +82,19 @@ router.get('/api/commands', (ctx: Context) => {
 const httpServer = new Plugin('http-server');
 httpServer.service('server', server).service('koa', koa).service('router', router);
 koa.use(KoaBodyParser()).use(router.routes()).use(router.allowedMethods());
-server.listen(Number((process.env.port ||= '8086')), () => {
-  const address = server.address();
-  if (!address) return;
-  httpServer.app?.logger.mark('server start at', address);
-});
+server.listen(
+  {
+    host: '0.0.0.0',
+    port: Number((process.env.port ||= '8086')),
+  },
+  () => {
+    const address = server.address();
+    if (!address) return;
+    httpServer.app?.logger.mark('server start at', address);
+    httpServer.app?.logger.info('your username is：', username);
+    httpServer.app?.logger.info('your password is：', password);
+  },
+);
 httpServer.on('plugin-beforeUnmount', () => {
   server.close();
 });

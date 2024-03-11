@@ -14,12 +14,12 @@ declare module 'zhin' {
 oneBotV11.define('sendMsg', async (bot_id, target_id, target_type, message, source) => {
   const bot = oneBotV11.pick(bot_id);
   let msg: MessageV11.Sendable = await oneBotV11.app!.renderMessage(message as string, source);
-  msg = MessageV11.formatSegments(msg);
+  msg = MessageV11.formatSegments(msg, Number(source?.original?.message_id) || undefined);
   switch (target_type) {
     case 'group':
-      return bot.sendGroupMsg(parseInt(target_id), msg, source?.original?.message_id);
+      return bot.sendGroupMsg(parseInt(target_id), msg);
     case 'private':
-      return bot.sendPrivateMsg(parseInt(target_id), msg, source?.original?.message_id);
+      return bot.sendPrivateMsg(parseInt(target_id), msg);
     default:
       throw new Error(`OneBotV11适配器暂不支持发送${target_type}类型的消息`);
   }
@@ -34,11 +34,11 @@ const initBot = (configs: Adapter.BotConfig<OneBotV11.Config>[]) => {
     Object.defineProperties(bot, {
       unique_id: {
         value: `OneBotV11:${configs.indexOf(config) + 1}`,
-        writable: false,
       },
       quote_self: {
-        value: config.quote_self,
-        writable: false,
+        get() {
+          return bot.self_id;
+        },
       },
       forward_length: {
         value: config.forward_length,

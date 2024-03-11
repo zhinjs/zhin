@@ -2,18 +2,8 @@ import { MessageV11 } from '@/message';
 import { Dict } from 'zhin';
 
 export type OneBotMethodsV11 = {
-  send_private_msg(params: {
-    user_id: number;
-    message: MessageV11.Sendable;
-    auto_escape?: boolean;
-    message_id?: string;
-  }): MessageV11.Ret;
-  send_group_msg(params: {
-    group_id: number;
-    message: MessageV11.Sendable;
-    auto_escape?: boolean;
-    message_id?: string;
-  }): MessageV11.Ret;
+  send_private_msg(params: { user_id: number; message: MessageV11.Sendable; auto_escape?: boolean }): MessageV11.Ret;
+  send_group_msg(params: { group_id: number; message: MessageV11.Sendable; auto_escape?: boolean }): MessageV11.Ret;
   send_msg(params: {
     message_type: 'private' | 'group';
     user_id?: number;
