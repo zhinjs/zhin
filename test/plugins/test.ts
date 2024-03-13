@@ -48,7 +48,7 @@ test.mounted(() => {
   test.component({
     name: 'test2',
     render(_, context) {
-      return `<slot/>,我在这儿`;
+      return `<slot/>,一天天的就知道钓鱼，该上学上学，该上班上班`;
     },
   });
   test.component({
@@ -60,9 +60,13 @@ test.mounted(() => {
       },
     },
     render(props, context) {
-      return `hello!${context.who}`;
+      return `不务正业!${context.who}`;
     },
   });
 });
-test.command('钓鱼').action(() => '一天天的就知道钓鱼，该上学上学，该上班上班');
+test
+  .command('钓鱼')
+  .alias('🎣')
+  .sugar(/^.(钓鱼)|(🎣)$/)
+  .action(({ message }) => `<test2><test who="${message.sender.user_id}"/></test2>`);
 export default test;
