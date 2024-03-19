@@ -1,4 +1,5 @@
-# zhin
+![zhin](https://socialify.git.ci/zhinjs/zhin/image?description=1&descriptionEditable=a%20chat%20bot%20framework%20for%20Node.js%20developers%2C%20compatible%20with%20qq%E3%80%81icqq%E3%80%81wechat%E3%80%81discord%E3%80%81onebot(11%2F12)%E3%80%81dingtalk%E3%80%82&font=Rokkitt&forks=1&issues=1&language=1&name=1&owner=1&pattern=Overlapping%20Hexagons&stargazers=1&theme=Auto)
+
 [![CI](https://github.com/zhinjs/zhin/actions/workflows/ci.yml/badge.svg)](https://github.com/zhinjs/zhin/actions/workflows/ci.yml)
 ## 1. 快速上手
 - 安装 & 初始化
