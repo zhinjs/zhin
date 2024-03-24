@@ -1,5 +1,16 @@
 # @zhinjs/web
 
+## 1.0.9
+
+### Patch Changes
+
+- 83024ef: fix: 结构调整
+- Updated dependencies [793c122]
+- Updated dependencies [83024ef]
+  - zhin@3.0.9
+  - @zhinjs/plugin-http-server@1.0.9
+  - @zhinjs/client@1.0.7
+
 ## 1.0.8
 
 ### Patch Changes

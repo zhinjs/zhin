@@ -1,5 +1,32 @@
 # test
 
+## 2.0.10
+
+### Patch Changes
+
+- 793c122: support command_prefix
+- 83024ef: fix: 结构调整
+- Updated dependencies [793c122]
+- Updated dependencies [83024ef]
+  - @zhinjs/onebot-11@1.0.9
+  - @zhinjs/onebot-12@1.0.9
+  - @zhinjs/dingtalk@1.0.9
+  - @zhinjs/discord@1.0.9
+  - @zhinjs/wechat@1.0.9
+  - @zhinjs/plugin-drawer@1.0.9
+  - @zhinjs/icqq@1.0.10
+  - @zhinjs/qq@1.0.9
+  - zhin@3.0.9
+  - @zhinjs/plugin-http-server@1.0.9
+  - @zhinjs/plugin-group-manage@1.0.9
+  - @zhinjs/plugin-guild-manage@1.0.9
+  - @zhinjs/plugin-schedule@1.0.9
+  - @zhinjs/plugin-sandbox@1.0.9
+  - @zhinjs/client@1.0.7
+  - @zhinjs/plugin-upyun@1.0.9
+  - @zhinjs/web@1.0.9
+  - @zhinjs/plugin-qa@1.0.9
+
 ## 2.0.9
 
 ### Patch Changes
