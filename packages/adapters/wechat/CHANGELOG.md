@@ -1,5 +1,13 @@
 # @zhinjs/wechat
 
+## 1.0.11
+
+### Patch Changes
+
+- 18fab9e: 适配器优化
+- Updated dependencies [18fab9e]
+  - zhin@3.0.11
+
 ## 1.0.10
 
 ### Patch Changes

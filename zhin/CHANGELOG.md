@@ -1,5 +1,13 @@
 # zhin
 
+## 3.0.11
+
+### Patch Changes
+
+- 18fab9e: 适配器优化
+- Updated dependencies [18fab9e]
+  - @zhinjs/core@1.0.2
+
 ## 3.0.10
 
 ### Patch Changes

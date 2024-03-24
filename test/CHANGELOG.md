@@ -1,5 +1,29 @@
 # test
 
+## 2.0.12
+
+### Patch Changes
+
+- 18fab9e: 适配器优化
+- Updated dependencies [18fab9e]
+  - @zhinjs/onebot-11@1.0.11
+  - @zhinjs/onebot-12@1.0.11
+  - @zhinjs/dingtalk@1.0.11
+  - @zhinjs/discord@1.0.11
+  - @zhinjs/wechat@1.0.11
+  - @zhinjs/icqq@1.0.12
+  - @zhinjs/qq@1.0.11
+  - @zhinjs/plugin-qa@1.0.11
+  - zhin@3.0.11
+  - @zhinjs/plugin-group-manage@1.0.11
+  - @zhinjs/plugin-guild-manage@1.0.11
+  - @zhinjs/plugin-schedule@1.0.11
+  - @zhinjs/plugin-drawer@1.0.11
+  - @zhinjs/plugin-http-server@1.0.11
+  - @zhinjs/plugin-sandbox@1.0.11
+  - @zhinjs/plugin-upyun@1.0.11
+  - @zhinjs/web@1.0.11
+
 ## 2.0.11
 
 ### Patch Changes
