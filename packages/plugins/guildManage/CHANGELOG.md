@@ -1,5 +1,15 @@
 # @zhinjs/plugin-guild-manage
 
+## 1.0.9
+
+### Patch Changes
+
+- 83024ef: fix: 结构调整
+- Updated dependencies [793c122]
+- Updated dependencies [83024ef]
+  - @zhinjs/qq@1.0.9
+  - zhin@3.0.9
+
 ## 1.0.8
 
 ### Patch Changes

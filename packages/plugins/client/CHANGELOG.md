@@ -1,5 +1,11 @@
 # @zhinjs/client
 
+## 1.0.7
+
+### Patch Changes
+
+- 83024ef: fix: 结构调整
+
 ## 1.0.6
 
 ### Patch Changes
