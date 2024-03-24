@@ -1,5 +1,14 @@
 # @zhinjs/plugin-group-manage
 
+## 1.0.12
+
+### Patch Changes
+
+- cc5c801: 群管功能优化
+- Updated dependencies [dcfa4c7]
+  - zhin@3.0.12
+  - @zhinjs/onebot-12@1.0.12
+
 ## 1.0.11
 
 ### Patch Changes
