@@ -1,6 +1,6 @@
 packages:
-  - "packages/core"
-  - "packages/zhin"
+  - "core"
+  - "zhin"
   - "packages/adapters/*"
   - "packages/plugins/*"
   - "packages/services/*"

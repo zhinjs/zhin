@@ -12,8 +12,8 @@
     "skipLibCheck": true,
     "types": ["@types/node"],
     "paths": {
-      "@zhinjs/core": ["packages/core/src"],
-      "zhin": ["packages/zhin/src"],
+      "@zhinjs/core": ["core/src"],
+      "zhin": ["zhin/src"],
       "@zhinjs/plugin-*": ["packages/plugins/*/src"],
       "@zhinjs/service-*": ["packages/services/*/src"],
       "@zhinjs/*": ["packages/plugins/*/src"]

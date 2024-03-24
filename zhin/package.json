@@ -25,7 +25,7 @@
     "author": "凉菜",
     "repository": {
         "url": "https://github.com/zhinjs/zhin",
-        "directory": "packages/zhin"
+        "directory": "zhin"
     },
     "dependencies": {
         "@zhinjs/core": "workspace:^",
