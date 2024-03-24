@@ -1,5 +1,28 @@
 # test
 
+## 2.0.11
+
+### Patch Changes
+
+- Updated dependencies [55c5fb2]
+  - zhin@3.0.10
+  - @zhinjs/dingtalk@1.0.10
+  - @zhinjs/discord@1.0.10
+  - @zhinjs/icqq@1.0.11
+  - @zhinjs/onebot-11@1.0.10
+  - @zhinjs/onebot-12@1.0.10
+  - @zhinjs/qq@1.0.10
+  - @zhinjs/wechat@1.0.10
+  - @zhinjs/plugin-group-manage@1.0.10
+  - @zhinjs/plugin-guild-manage@1.0.10
+  - @zhinjs/plugin-qa@1.0.10
+  - @zhinjs/plugin-schedule@1.0.10
+  - @zhinjs/plugin-drawer@1.0.10
+  - @zhinjs/plugin-http-server@1.0.10
+  - @zhinjs/plugin-sandbox@1.0.10
+  - @zhinjs/plugin-upyun@1.0.10
+  - @zhinjs/web@1.0.10
+
 ## 2.0.10
 
 ### Patch Changes
