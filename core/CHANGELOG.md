@@ -1,5 +1,11 @@
 # @zhinjs/core
 
+## 1.0.3
+
+### Patch Changes
+
+- dcfa4c7: 指令解析
+
 ## 1.0.2
 
 ### Patch Changes
