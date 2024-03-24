@@ -5,7 +5,6 @@
 "@zhinjs/discord": patch
 "@zhinjs/wechat": patch
 "@zhinjs/plugin-drawer": patch
-"@zhinjs/plugin-helper": patch
 "@zhinjs/icqq": patch
 "@zhinjs/qq": patch
 "zhin": patch
