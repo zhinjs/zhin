@@ -1,13 +1,13 @@
 import { EventEmitter } from 'events';
 import { Logger, getLogger } from 'log4js';
-import { Middleware } from '@/middleware';
-import { Plugin, PluginMap } from '@/plugin';
+import { Middleware } from './middleware';
+import { Plugin, PluginMap } from './plugin';
 import { Bot, Dict, LogLevel } from './types';
-import { deepMerge, loadModule, remove } from '@/utils';
-import { APP_KEY, REQUIRED_KEY, WORK_DIR } from '@/constans';
+import { deepMerge, loadModule, remove } from './utils';
+import { APP_KEY, REQUIRED_KEY, WORK_DIR } from './constans';
 import path from 'path';
-import { Adapter, AdapterBot, AdapterReceive } from '@';
-import { Message } from '@/message';
+import { Adapter, AdapterBot, AdapterReceive } from './adapter';
+import { Message } from './message';
 import process from 'process';
 import { JsonDB } from './db';
 export function defineConfig(config: Partial<App.Config>): Partial<App.Config>;
@@ -57,6 +57,7 @@ export class App extends EventEmitter {
     const plugins = Array.isArray(pluginConfig)
       ? pluginConfig
           .map(item => {
+            if (item instanceof Plugin) return item;
             return {
               name: typeof item === 'string' ? item : item.name,
               install: typeof item !== 'string' ? (typeof item === 'function' ? item : item.install) : undefined,
@@ -72,7 +73,9 @@ export class App extends EventEmitter {
           };
         });
     for (const plugin of plugins) {
-      if (!plugin.install) {
+      if (plugin instanceof Plugin) {
+        this.mount(plugin);
+      } else if (!plugin?.install) {
         this.loadPlugin(plugin.name!);
       } else {
         this.use(plugin as Plugin.InstallObject);
@@ -418,7 +421,7 @@ export namespace App {
     pluginDirs?: string[];
     bots: BotConfig[];
     plugins:
-      | (string | Plugin.InstallObject | Plugin.InstallFn)[]
+      | (string | Plugin.InstallObject | Plugin | Plugin.InstallFn)[]
       | Dict<boolean | Plugin.InstallObject | Plugin.InstallFn>;
   }
   export const defaultConfig: Config = {

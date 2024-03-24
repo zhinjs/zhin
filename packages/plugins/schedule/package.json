@@ -1,10 +1,10 @@
 {
     "name": "@zhinjs/plugin-schedule",
-    "main": "lib/index.js",
+    "main": "lib/index.cjs",
     "types": "lib/index.d.ts",
     "version": "1.0.8",
     "scripts": {
-        "build": "tsc && tsc-alias"
+        "build": "tsup && tsc && tsc-alias"
     },
     "files": [
         "lib"
@@ -16,8 +16,7 @@
     },
     "dependencies": {
         "zhin": "workspace:^",
-        "node-cron": "^3.0.3",
-        "@zhinjs/plugin-jsondb": "workspace:^"
+        "node-cron": "^3.0.3"
     },
     "devDependencies": {
         "@types/node-cron": "^3.0.11"

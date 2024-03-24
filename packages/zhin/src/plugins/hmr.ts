@@ -1,15 +1,15 @@
 import { watch, FSWatcher } from 'chokidar';
-import { App, wrapExport, Plugin, WORK_DIR } from 'zhin';
+import { App, wrapExport, Plugin, WORK_DIR } from '@zhinjs/core';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as process from 'process';
 
-const HMR = new Plugin('HMR');
+const hmr = new Plugin('hmr');
 let watcher: FSWatcher;
-HMR.unmounted(() => {
+hmr.unmounted(() => {
   watcher?.close();
 });
-HMR.mounted(app => {
+hmr.mounted(app => {
   const configFiles = [
     `${process.env.cofnig}.js`,
     `${process.env.config}.ts`,
@@ -37,7 +37,7 @@ HMR.mounted(app => {
   const reloadPlugin = (filePath: string, plugin: Plugin) => {
     app.logger.debug(`plugin：${plugin.display_name} changed`);
     const oldCache = require.cache[filePath];
-    if (plugin === HMR) watcher.close();
+    if (plugin === hmr) watcher.close();
     app.unmount(plugin);
     delete require.cache[filePath];
     try {
@@ -87,4 +87,4 @@ HMR.mounted(app => {
   };
   watcher.on('change', changeListener);
 });
-export default HMR;
+export default hmr;

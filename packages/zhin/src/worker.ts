@@ -2,9 +2,8 @@ import dotEnv from 'dotenv';
 import { fork, ForkOptions } from 'child_process';
 import path from 'path';
 import * as fs from 'fs';
-import { deepMerge } from '@/utils';
+import { deepMerge, WORK_DIR } from '@zhinjs/core';
 import process from 'process';
-import { WORK_DIR } from '@/constans';
 interface Message {
   type: 'start' | 'queue';
   body: any;

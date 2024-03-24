@@ -38,7 +38,7 @@ if (defaultArgv.init) {
   fs.writeFileSync(
     path.resolve(process.cwd(), `bot.config.ts`),
     `
-import {defineConfig,processAdapter} from 'zhin';
+import {defineConfig,processAdapter,hmr,commandParser,pluginManager,setup} from 'zhin';
 import * as path from 'path';
 
 export default defineConfig((env)=>{
@@ -52,10 +52,10 @@ export default defineConfig((env)=>{
     ],
     pluginDirs: [path.resolve(__dirname, 'plugins')],
     plugins:[
-      'commandParser',
-      env.mode==='dev' && 'hmr',
-      'pluginManager',
-      'setup',
+      commandParser,
+      env.mode==='dev' && hmr,
+      pluginManager,
+      setup,
     ].filter(Boolean)
   }
 })
@@ -64,10 +64,12 @@ export default defineConfig((env)=>{
   fs.mkdirSync(path.resolve(process.cwd(), `plugins`));
   fs.writeFileSync(path.resolve(process.cwd(), `.env`), ``);
   fs.writeFileSync(path.resolve(process.cwd(), `.env.${defaultArgv.mode}`), ``);
+
   console.log(`请在.${defaultArgv.mode}.env中配置相应参数后再次调用\`npx zhin -m ${defaultArgv.mode}\` 启动`);
   process.exit(0);
 }
 const jiti = require('jiti')(__dirname);
+
 jiti(path.resolve(__dirname, defaultArgv.entry)).startAppWorker(
   path.resolve(process.cwd(), defaultArgv.config),
   defaultArgv.mode,

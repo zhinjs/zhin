@@ -1,4 +1,4 @@
-import { Plugin as Plugin } from 'zhin';
+import { Plugin as Plugin } from '@zhinjs/core';
 
 const echo = new Plugin('echo');
 echo

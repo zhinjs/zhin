@@ -1,15 +1,9 @@
 {
-  "name": "zhin",
-  "version": "3.0.8",
-  "main": "./lib/index.js",
+  "name": "@zhinjs/core",
+  "version": "1.0.0",
+  "main": "./lib/index.cjs",
   "module": "./lib/index.mjs",
   "types": "./lib/index.d.ts",
-  "exports": {
-    ".": {
-      "require": "./lib/index.js",
-      "import": "./lib/index.mjs"
-    }
-  },
   "bin": "./bin.js",
   "scripts": {
     "compile": "tsup",
@@ -20,11 +14,7 @@
     "node": ">=16"
   },
   "files": [
-    "lib",
-    "bin.js",
-    "start.js",
-    "LICENSE",
-    "README.md"
+    "lib"
   ],
   "keywords": [
     "zhin",
@@ -36,17 +26,15 @@
   "license": "MIT",
   "repository": {
     "url": "https://github.com/zhinjs/zhin",
-    "directory": "core"
+    "directory": "packages/core"
   },
   "dependencies": {
     "axios": "^1.6.1",
-    "dotenv": "^16.3.1",
     "jiti": "^1.21.0",
     "log4js": "^6.9.1",
     "tsconfig-paths": "^4.2.0",
     "ws": "^8.14.0",
-    "yaml": "^2.3.4",
-    "@zhinjs/built-in": "workspace:^"
+    "yaml": "^2.3.4"
   },
   "devDependencies": {
     "@types/ws": "^8.5.5",

@@ -1,10 +1,10 @@
-import { App } from '@/app';
+import { App } from './app';
 import { EventEmitter } from 'events';
-import { Message } from '@/message';
+import { Message } from './message';
 import path from 'path';
 import { getLogger, Logger } from 'log4js';
-import { Dict } from '@/types';
-import { WORK_DIR } from '@/constans';
+import { Dict } from './types';
+import { WORK_DIR } from './constans';
 
 export type AdapterBot<A extends Adapter> = A extends Adapter<infer B> ? B : unknown;
 export type AdapterReceive<A extends Adapter> = A extends Adapter<infer B, infer R> ? R : unknown;

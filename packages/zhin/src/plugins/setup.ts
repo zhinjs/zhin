@@ -1,6 +1,6 @@
-import { Adapter, App, ArgsType, Command, getCallerStack, Message, Middleware, Plugin, WORK_DIR } from 'zhin';
+import { Adapter, App, ArgsType, Command, getCallerStack, Message, Middleware, Plugin, WORK_DIR } from '@zhinjs/core';
 import * as path from 'path';
-const setupPlugin = new Plugin('setup');
+const setup = new Plugin('setup');
 const resolveCallerPlugin = (): [boolean, Plugin] => {
   const callerStack = getCallerStack().map(caller => caller.getFileName());
   callerStack.shift();
@@ -8,7 +8,7 @@ const resolveCallerPlugin = (): [boolean, Plugin] => {
   callerStack.shift();
   const filePath = callerStack.shift()!;
   const fileName = path.basename(filePath);
-  let plugin = setupPlugin.app!.plugins.getWithPath(filePath);
+  let plugin = setup.app!.plugins.getWithPath(filePath);
   if (plugin) return [false, plugin];
   plugin = new Plugin(fileName);
   plugin.setup = true;
@@ -17,7 +17,7 @@ const resolveCallerPlugin = (): [boolean, Plugin] => {
   const prefixArr = [
     path.join(__dirname),
     path.join(WORK_DIR, 'node_modules'),
-    ...(setupPlugin.app?.config.pluginDirs || []).map(dir => path.resolve(WORK_DIR, dir)),
+    ...(setup.app?.config.pluginDirs || []).map(dir => path.resolve(WORK_DIR, dir)),
   ];
   plugin.name = plugin.filePath;
   for (const prefix of prefixArr) {
@@ -39,10 +39,10 @@ const getOrCreatePlugin = (options?: Plugin.Options) => {
   if (!isNew) {
     return plugin;
   } else {
-    setupPlugin.app!.plugins.set(plugin.name, plugin);
-    setupPlugin.app!.plugin(plugin);
-    setupPlugin.beforeUnmount(() => {
-      setupPlugin.app!.plugins.delete(plugin.name);
+    setup.app!.plugins.set(plugin.name, plugin);
+    setup.app!.plugin(plugin);
+    setup.beforeUnmount(() => {
+      setup.app!.plugins.delete(plugin.name);
     });
     return plugin;
   }
@@ -65,7 +65,7 @@ export const useContext = {
     return getOrCreatePlugin();
   },
   adapter(platform: string) {
-    return setupPlugin.app?.adapters.get(platform);
+    return setup.app?.adapters.get(platform);
   },
   bot(platform: string, bot_id: string) {
     return this.adapter(platform)?.pick(bot_id);
@@ -83,14 +83,14 @@ export const useContext = {
     return this.adapter(platform)?.sendMsg(bot_id, guild_id, 'direct', message, source);
   },
   onMount(callback: Plugin.CallBack) {
-    setupPlugin.mounted(callback);
-    if (setupPlugin.isMounted) callback(setupPlugin.app!);
+    setup.mounted(callback);
+    if (setup.isMounted) callback(setup.app!);
     return this;
   },
   onUnmount(callback: Plugin.CallBack) {
     const plugin = getOrCreatePlugin();
     plugin.unmounted(callback);
-    if (!plugin.isMounted) callback(setupPlugin.app!);
+    if (!plugin.isMounted) callback(setup.app!);
     return this;
   },
 
@@ -120,4 +120,4 @@ export const onMount = useContext.onMount.bind(useContext);
 export const onUnmount = useContext.onUnmount.bind(useContext);
 export const listen = useContext.listen.bind(useContext);
 export const options = useContext.options.bind(useContext);
-export default setupPlugin;
+export default setup;

@@ -1,10 +1,10 @@
 {
     "name": "@zhinjs/onebot-11",
-    "main": "./lib/index.js",
+    "main": "./lib/index.cjs",
     "types": "./lib/index.d.ts",
     "version": "1.0.8",
     "scripts": {
-        "build": "tsc && tsc-alias"
+        "build": "tsup && tsc && tsc-alias"
     },
     "files": [
         "lib"

@@ -39,6 +39,10 @@ const initBot = (configs: Adapter.Bot<Bot.Options>[]) => {
         value: config.forward_length,
         writable: false,
       },
+      command_prefix: {
+        value: config.command_prefix,
+        writable: false,
+      },
     });
     dingTalkAdapter.bots.push(bot as Adapter.Bot<Bot>);
   }

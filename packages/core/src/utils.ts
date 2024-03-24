@@ -1,4 +1,4 @@
-import { Dict, Merge } from '@/types';
+import { Dict, Merge } from './types';
 
 export function isEmpty<T>(data: T) {
   if (!data) return true;

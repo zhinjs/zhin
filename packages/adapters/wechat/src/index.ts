@@ -39,6 +39,10 @@ const initBot = (configs: Adapter.BotConfig<BaseClient.Config>[]) => {
         value: config.forward_length,
         writable: false,
       },
+      command_prefix: {
+        value: config.command_prefix,
+        writable: false,
+      },
     });
     wechatAdapter.bots.push(bot as Adapter.Bot<Client>);
   }

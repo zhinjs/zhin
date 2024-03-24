@@ -1,4 +1,4 @@
-import { Adapter, AdapterBot } from '@/adapter';
+import { Adapter, AdapterBot } from './adapter';
 export { Logger } from 'log4js';
 export type Dict<T = any, K extends string | symbol = string> = Record<K, T>;
 export type Bot<AD extends Adapter> = Adapter.Bot<AdapterBot<AD>>;

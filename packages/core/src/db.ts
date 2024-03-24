@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { Dict } from '@/types';
+import { Dict } from './types';
 import { parseObjFromStr, stringifyObj } from './utils';
 export class JsonDB {
   private data: Dict = {};

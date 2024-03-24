@@ -143,6 +143,10 @@ const initBot = (configs: Adapter.BotConfig<QQConfig>[]) => {
         value: forward_length,
         writable: false,
       },
+      command_prefix: {
+        value: config.command_prefix,
+        writable: false,
+      },
     });
     icqq.bots.push(client as Adapter.Bot<Client>);
   }

@@ -1,8 +1,8 @@
-import { deepClone, findLastIndex, isEmpty, trimQuote } from '@/utils';
-import { Bot, Dict } from '@/types';
-import { Adapter } from '@/adapter';
-import { Message } from '@/message';
-import { Prompt } from '@/prompt';
+import { deepClone, findLastIndex, isEmpty, trimQuote } from './utils';
+import { Bot, Dict } from './types';
+import { Adapter } from './adapter';
+import { Message } from './message';
+import { Prompt } from './prompt';
 
 type Argv = {
   name: string;

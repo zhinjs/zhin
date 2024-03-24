@@ -1,2 +1,2 @@
-import { default as processAdp } from '@/adapters/processAdapter';
+import { default as processAdp } from './processAdapter';
 export const processAdapter = processAdp;

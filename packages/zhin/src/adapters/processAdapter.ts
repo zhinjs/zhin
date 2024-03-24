@@ -1,5 +1,4 @@
-import { Adapter } from '@';
-import { Message } from '@';
+import { Adapter, Message } from '@zhinjs/core';
 import process = require('process');
 const processAdapter = new Adapter<Adapter.Bot<NodeJS.Process>>('process');
 processAdapter.define('sendMsg', async (bot_id, target_id, target_type, message) => {

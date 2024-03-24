@@ -44,6 +44,10 @@ const initBot = (configs: Adapter.BotConfig<OneBotV11.Config>[]) => {
         value: config.forward_length,
         writable: false,
       },
+      command_prefix: {
+        value: config.command_prefix,
+        writable: false,
+      },
     });
     oneBotV11.bots.push(bot as Adapter.Bot<OneBotV11>);
   }

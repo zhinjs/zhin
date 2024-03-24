@@ -1,6 +1,6 @@
-import { Bot, Dict } from '@/types';
-import { Prompt } from '@/prompt';
-import { Adapter, AdapterReceive } from '@/adapter';
+import { Bot, Dict } from './types';
+import { Prompt } from './prompt';
+import { Adapter, AdapterReceive } from './adapter';
 export interface MessageBase {
   from_id: string;
   group_id?: string | number;
@@ -93,7 +93,7 @@ export namespace Message {
   export type Segment = `<${string},${string}>` | string;
   export type DefineSegment = {
     (type: string, data: Dict): string;
-    text(text: string): string;
+    text(text?: string): string;
     face(id: number): string;
     image(url: string): string;
     at(user_id: string | number): string;
@@ -122,7 +122,7 @@ export const segment: Message.DefineSegment = function (type, data) {
     })
     .join(' ')}/>`;
 } as Message.DefineSegment;
-segment.text = text => encodeURIComponent(text);
+segment.text = text => (text ? encodeURIComponent(text) : '');
 segment.face = (id: number) => `<face id='${encodeURIComponent(id)}'/>`;
 segment.image = (file: string) => `<image file='${encodeURIComponent(file)}'/>`;
 segment.at = user_id => `<at user_id='${encodeURIComponent(user_id)}'/>`;

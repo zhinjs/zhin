@@ -1,12 +1,12 @@
-import { ArgsType, Command, defineCommand } from '@/command';
+import { ArgsType, Command, defineCommand } from './command';
 import { EventEmitter } from 'events';
-import { Middleware } from '@/middleware';
-import { getCallerStack, remove } from '@/utils';
-import { App } from '@/app';
-import { APP_KEY, REQUIRED_KEY, WORK_DIR } from '@/constans';
-import { Dict } from '@/types';
+import { Middleware } from './middleware';
+import { getCallerStack, remove } from './utils';
+import { App } from './app';
+import { APP_KEY, REQUIRED_KEY, WORK_DIR } from './constans';
+import { Dict } from './types';
 import path from 'path';
-import { Adapter } from '@/adapter';
+import { Adapter } from './adapter';
 
 export interface Plugin extends Plugin.Options {}
 

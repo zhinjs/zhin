@@ -1,8 +1,10 @@
-import { Plugin } from 'zhin';
+import { Message, Plugin } from 'zhin';
 import * as path from 'path';
 import '@zhinjs/plugin-sandbox';
+import type {} from './functionParser';
 import type {} from '@zhinjs/client/src';
 const test = new Plugin('测试插件');
+test.required('functionManager');
 test.command('test-confirm').action(async runtime => {
   const isConfirm = await runtime.prompt.confirm('确认吗');
   return `${isConfirm ? '已确认' : '已取消'}:${isConfirm} ${typeof isConfirm}`;
@@ -64,9 +66,20 @@ test.mounted(() => {
     },
   });
 });
-test
-  .command('钓鱼')
-  .alias('🎣')
-  .sugar(/^.(钓鱼)|(🎣)$/)
-  .action(({ message }) => `<test2><test who="${message.sender.user_id}"/></test2>`);
+// test
+//   .command('钓鱼')
+//   .alias('🎣')
+//   .sugar(/^.(钓鱼)|(🎣)$/)
+//   .action(({ message }) => `<test2><test who="${message.sender.user_id}"/></test2>`);
+test.mounted(async () => {
+  test.register('hello', function (this: Message, foo, bar, isExist = false) {
+    return `receive from ${this.message_type},args is ${foo},${bar},${isExist}`;
+  });
+
+  test.middleware(async (_1, _2, event, next) => {
+    await next();
+    return test.functionManager.match(event);
+  });
+});
+
 export default test;

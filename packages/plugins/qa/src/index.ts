@@ -1,5 +1,4 @@
 import { Message, Plugin } from 'zhin';
-import type {} from '@zhinjs/plugin-jsondb';
 
 type QAInfo = {
   adapter: string; // 可用适配器
@@ -72,7 +71,6 @@ const getAnswer = (message: Message): undefined | QAInfo => {
   return getAnswer(message);
 };
 const qaPlugin = new Plugin('问答管理');
-qaPlugin.required('jsondb');
 qaPlugin.mounted(() => {
   const qaList = qaPlugin.jsondb.get('qa', []);
   if (!qaList) qaPlugin.jsondb.set('qa', []);

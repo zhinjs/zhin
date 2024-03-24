@@ -41,6 +41,10 @@ const initBot = (configs: Adapter.BotConfig<Bot.Options>[]) => {
         value: config.forward_length,
         writable: false,
       },
+      command_prefix: {
+        value: config.command_prefix,
+        writable: false,
+      },
     });
     discordAdapter.bots.push(bot as Adapter.Bot<Bot>);
   }

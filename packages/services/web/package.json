@@ -1,11 +1,11 @@
 {
     "name": "@zhinjs/web",
-    "main": "lib/index.js",
+    "main": "lib/index.cjs",
     "module": "browser/common.ts",
     "types": "lib/index.d.ts",
     "version": "1.0.8",
     "scripts": {
-        "build": "tsc && tsc-alias"
+        "build": "tsup && tsc && tsc-alias"
     },
     "files": [
         "lib",

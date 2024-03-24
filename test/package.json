@@ -4,8 +4,8 @@
     "version": "2.0.9",
     "scripts": {
         "start": "zhin",
-        "initial": "zhin init -m dev",
-        "dev": "zhin -m dev"
+        "init": "zhin init -m dev",
+        "dev": "zhin -m dev -e src"
     },
     "dependencies": {
         "icqq": "latest",
@@ -21,8 +21,6 @@
         "@zhinjs/web": "workspace:^",
         "@zhinjs/plugin-http-server": "workspace:^",
         "@zhinjs/plugin-drawer": "workspace:^",
-        "@zhinjs/plugin-game": "workspace:^",
-        "@zhinjs/plugin-jsondb": "workspace:^",
         "@zhinjs/plugin-upyun": "workspace:^",
         "@zhinjs/plugin-sandbox": "workspace:^",
         "@zhinjs/plugin-schedule": "workspace:^",

@@ -1,5 +1,4 @@
 import { MessageBase, Message, Plugin } from 'zhin';
-import {} from '@zhinjs/plugin-jsondb';
 import { CronDescriptors, ScheduleManager } from '@/scheduleManager';
 import { ScheduledTask } from 'node-cron';
 export type Schedule = {

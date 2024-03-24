@@ -84,6 +84,10 @@ const initBot = (configs: Adapter.BotConfig<QQConfig>[]) => {
         value: config.forward_length,
         writable: false,
       },
+      command_prefix: {
+        value: config.command_prefix,
+        writable: false,
+      },
     });
     qq.bots.push(bot as Adapter.Bot<Bot>);
   }

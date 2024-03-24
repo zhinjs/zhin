@@ -6,8 +6,8 @@ titleTemplate: :title - 知音 (Zhin)
 
 hero:
   name: 知音 (or Zhin)
-  text: 一个基于 icqq 协议的 QQ 机器人开发框架
-  tagline: 轻量、优雅、热更、拥抱 icqq
+  text: 一个基于 NodeJS的多平台机器人开发框架
+  tagline: 轻量、优雅、热更、统一
   actions:
     - theme: brand
       text: 快速开始
@@ -26,7 +26,7 @@ features:
     details: 知音的内部实现尽可能符合大众开发思维，无论是阅读源码，还是开发插件，都能事半功倍
   - title: 热更
     details: 知音内置热更插件，让开发者在开发时避免频繁重启进程，从而降低账号风险概率
-  - title: 拥抱 icqq
+  - title: 统一
     details:
-      知音内置了 icqq 适配器（Zhin 作者维护的 oicq 分支），快速对接 QQ 平台
+      知音通过适配器统一了机器人消息的收发以及事件规范，使得开发者可以只关注一种规范，即可完成机器人开发
 ---

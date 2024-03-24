@@ -1,14 +1,10 @@
 {
-    "extends": "../tsconfig.base",
+    "extends": "../../tsconfig.base",
     "compilerOptions": {
         "rootDir": "src",
         "declaration": false,
         "experimentalDecorators": true,
         "baseUrl": ".",
-        "paths": {
-            "@/*": ["src/*"],
-            "@": ["src"]
-        },
         "outDir": "lib"
     },
     "include": ["src"]

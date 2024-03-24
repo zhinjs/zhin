@@ -1,12 +1,27 @@
-import { Plugin } from 'zhin';
-export { default as commandParser } from '@/commandParser';
-export { default as echo } from '@/echo';
-export { default as hmr } from '@/hmr';
-export { default as pluginManager } from '@/pluginManager';
-export { default as setup } from '@/setup';
-const builtInPlugins = new Plugin({
-  name: '内置插件',
-  desc: '指令解析、热更新、插件管理、setup支持',
-});
-builtInPlugins.plugin('commandParser').plugin('echo').plugin('hmr').plugin('pluginManager').plugin('setup');
-export default builtInPlugins;
+import CM from './plugins/commandParser';
+import ECHO from './plugins/echo';
+import PM from './plugins/pluginManager';
+import HMR from './plugins/hmr';
+import SETUP from './plugins/setup';
+export * from '@zhinjs/core';
+export * from './adapters';
+export {
+  useContext,
+  adapter,
+  middleware,
+  command,
+  sendGroupMessage,
+  sendPrivateMessage,
+  sendGuildMessage,
+  sendDirectMessage,
+  onMount,
+  onUnmount,
+  listen,
+  options,
+} from './plugins/setup';
+export const commandParser = CM;
+export const echo = ECHO;
+export const pluginManager = PM;
+export const hmr = HMR;
+export const setup = SETUP;
+export * from './worker';
