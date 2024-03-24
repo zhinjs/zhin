@@ -1,5 +1,14 @@
 # zhin
 
+## 3.0.9
+
+### Patch Changes
+
+- 793c122: support command_prefix
+- 83024ef: fix: 结构调整
+- Updated dependencies [83024ef]
+  - @zhinjs/core@1.0.1
+
 ## 3.0.8
 
 ### Patch Changes
