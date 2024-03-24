@@ -1,0 +1,55 @@
+{
+  "name": "zhin",
+  "version": "3.0.8",
+  "main": "./lib/index.js",
+  "module": "./lib/index.mjs",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./lib/index.js",
+      "import": "./lib/index.mjs"
+    }
+  },
+  "bin": "./bin.js",
+  "scripts": {
+    "compile": "tsup",
+    "build": "npm run compile && npm run dtsc",
+    "dtsc": "dtsc --project tsconfig.dtsc.json"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "files": [
+    "lib",
+    "bin.js",
+    "start.js",
+    "LICENSE",
+    "README.md"
+  ],
+  "keywords": [
+    "zhin",
+    "qq-group-bot",
+    "bot",
+    "qq"
+  ],
+  "author": "凉菜",
+  "license": "MIT",
+  "repository": {
+    "url": "https://github.com/zhinjs/zhin",
+    "directory": "core"
+  },
+  "dependencies": {
+    "axios": "^1.6.1",
+    "dotenv": "^16.3.1",
+    "jiti": "^1.21.0",
+    "log4js": "^6.9.1",
+    "tsconfig-paths": "^4.2.0",
+    "ws": "^8.14.0",
+    "yaml": "^2.3.4",
+    "@zhinjs/built-in": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.5",
+    "dtsc": "^2.3.0"
+  }
+}

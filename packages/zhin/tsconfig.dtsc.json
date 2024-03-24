@@ -1,0 +1,13 @@
+{
+    "extends": "./tsconfig",
+    "compilerOptions": {
+        "emitDeclarationOnly": true,
+        "declaration": true,
+        "rootDir": "src",
+        "outFile": "lib/index.d.ts"
+    },
+    "dtsc": {
+        "inline": [
+        ],
+    }
+}

@@ -1,0 +1,47 @@
+{
+    "name": "@zhinjs/core",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "version": "1.0.0",
+    "scripts": {
+        "build": "tsup && tsc && tsc-alias"
+    },
+    "exports": {
+        ".": {
+            "require": "./lib/index.js",
+            "import": "./lib/index.mjs"
+        },
+        "./commandParser": {
+            "require": "./lib/commandParser.js",
+            "import": "./lib/commandParser.mjs"
+        },
+        "./echo": {
+            "require": "./lib/echo.js",
+            "import": "./lib/echo.mjs"
+        },
+        "./hmr": {
+            "require": "./lib/hmr.js",
+            "import": "./lib/hmr.mjs"
+        },
+        "./pluginManager": {
+            "require": "./lib/pluginManager.js",
+            "import": "./lib/pluginManager.mjs"
+        },
+        "./setup": {
+            "require": "./lib/setup.js",
+            "import": "./lib/setup.mjs"
+        }
+    },
+    "files": [
+        "lib"
+    ],
+    "author": "凉菜",
+    "repository": {
+        "url": "https://github.com/zhinjs/zhin",
+        "directory": "packages/plugins/built-in"
+    },
+    "dependencies": {
+        "zhin": "workspace:^",
+        "chokidar": "^3.5.3"
+    }
+}
