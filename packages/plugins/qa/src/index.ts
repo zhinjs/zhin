@@ -71,11 +71,7 @@ const getAnswer = (message: Message): undefined | QAInfo => {
   return getAnswer(message);
 };
 const qaPlugin = new Plugin('问答管理');
-qaPlugin.mounted(() => {
-  const qaList = qaPlugin.jsondb.get('qa', []);
-  if (!qaList) qaPlugin.jsondb.set('qa', []);
-});
-qaPlugin
+const qaCommand = qaPlugin
   .command('问答 <question:string> <answer:string>')
   .desc('添加问答')
   .option('-a <adapter:string> 可用适配器,默认*', '*')
@@ -107,7 +103,11 @@ qaPlugin
     });
     return `问答已添加`;
   });
-qaPlugin
+qaPlugin.mounted(() => {
+  const qaList = qaPlugin.jsondb.get('qa', []);
+  if (!qaList) qaPlugin.jsondb.set('qa', []);
+});
+qaCommand
   .command('问答列表')
   .option('-p <page:number> 页码', 1)
   .option('-f <full:boolean> 全作用域查询', false)
@@ -131,7 +131,7 @@ qaPlugin
         .join('\n') + `第${options.page}页，共${Math.ceil(qaList.length / pageSize)}页`
     );
   });
-qaPlugin
+qaCommand
   .command('修改问答 <no:number> [content:string] [answer:string]')
   .option('-a [adapter:string] 可用适配器')
   .option('-b [bot:string] 可用机器人,默认*')
@@ -154,7 +154,7 @@ qaPlugin
     });
     return `问答${no} 已更新`;
   });
-qaPlugin
+qaCommand
   .command('删除问答 <no:number>')
   .option('-y <confirm:boolean> 是否确认', false)
   .action(async ({ adapter, message, options, prompt }, no) => {
@@ -166,7 +166,7 @@ qaPlugin
     qaPlugin.jsondb.splice('qa', no - 1, 1);
     return `已删除问答：${no}`;
   });
-qaPlugin.command('问答详情 <no:number>').action((_, no) => {
+qaCommand.command('问答详情 <no:number>').action((_, no) => {
   const qa = qaPlugin.jsondb.get<QAInfo>(`qa.${no - 1}`);
   if (!qa) return `问答不存在`;
   return `问答${no}：\n${JSON.stringify(

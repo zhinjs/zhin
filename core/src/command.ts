@@ -144,7 +144,12 @@ export class Command<A extends any[] = [], O = {}> {
     this.checkers.push(callback);
     return this;
   }
-
+  get deepChildren() {
+    return this.children.reduce((result, child) => {
+      result.push(...child.deepChildren);
+      return result;
+    }, this.children);
+  }
   hidden() {
     this.config.hidden = true;
     return this;
@@ -220,7 +225,7 @@ export class Command<A extends any[] = [], O = {}> {
       output.push(' 子指令:');
       return output.concat(
         ...this.children
-          .filter(cmd => showHidden || (!cmd.config.hidden && allowList.includes(cmd)))
+          .filter(cmd => allowList.includes(cmd) && (showHidden || !cmd.config.hidden))
           .map(children =>
             children
               .help({

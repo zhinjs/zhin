@@ -1,7 +1,8 @@
 import { Plugin, segment } from '@zhinjs/core';
 
 const pluginManager = new Plugin('插件管理');
-pluginManager
+const pluginCommand = pluginManager.command('插件管理');
+pluginCommand
   .command('插件列表')
   .desc('查看已安装插件')
   .scope('private', 'group', 'guild', 'direct')
@@ -14,7 +15,7 @@ pluginManager
         .join('\n'),
     );
   });
-pluginManager
+pluginCommand
   .command('启用插件 [name:string]')
   .permission('admin')
   .scope('direct')
@@ -26,7 +27,7 @@ pluginManager
     plugin.enable();
     return '插件已启用';
   });
-pluginManager
+pluginCommand
   .command('禁用插件 [name:string]')
   .permission('admin')
   .scope('direct')

@@ -46,7 +46,8 @@ const addSchedule = (schedule: Schedule) => {
     result && message.reply(result);
   });
 };
-schedulePlugin.command('定时列表').action(({ adapter, bot, message }) => {
+const scheduleCommand = schedulePlugin.command('定时模块');
+scheduleCommand.command('定时列表').action(({ adapter, bot, message }) => {
   const schedules = schedulePlugin.jsondb.filter<Schedule>('schedule', schedule => {
     return (
       schedule.adapter === adapter.name &&
@@ -62,7 +63,7 @@ schedulePlugin.command('定时列表').action(({ adapter, bot, message }) => {
     })
     .join('\n')}`;
 });
-schedulePlugin.command('添加定时').action(async ({ adapter, prompt, bot, message }) => {
+scheduleCommand.command('添加定时').action(async ({ adapter, prompt, bot, message }) => {
   const cron = await prompt.text('请输入cron表达式');
   if (!cron) return;
   const template = await prompt.text('请输入需要执行的指令模板');
@@ -82,7 +83,7 @@ schedulePlugin.command('添加定时').action(async ({ adapter, prompt, bot, mes
   addSchedule(schedule);
   return '添加成功';
 });
-schedulePlugin
+scheduleCommand
   .command('删除定时 <no:number>')
   .option('-c <confirm:boolean> 是否确认', false)
   .action(async ({ prompt, options, bot, message }, no) => {

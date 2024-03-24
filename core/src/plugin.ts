@@ -44,7 +44,11 @@ export class Plugin extends EventEmitter {
   }
 
   get commandList() {
-    return [...this.commands.values()];
+    const commandList = [...this.commands.values()];
+    return commandList.reduce((result, command) => {
+      result.push(...command.deepChildren);
+      return result;
+    }, commandList);
   }
 
   constructor(name?: string);
