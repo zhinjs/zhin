@@ -4,7 +4,8 @@ const groupManage = new Plugin({
   name: '群管理',
   adapters: ['onebot-12'],
 });
-groupManage
+const groupCommand = groupManage.command('群管理').desc('群操作模块');
+groupCommand
   .command('thumbMe')
   .desc('给指定用户点赞')
   .alias('赞我')
@@ -19,7 +20,7 @@ groupManage
     const thumbSuccess = await bot.sendLike(message.sender.user_id + '', options.times);
     return thumbSuccess ? '给你赞好啦' : '不能赞了';
   });
-groupManage
+groupCommand
   .command('pin [message_id:string]')
   .desc('置顶群消息')
   .alias('置顶')
@@ -31,7 +32,7 @@ groupManage
     const result = await bot.setEssenceMessage(message_id);
     return result === message_id ? '已置顶' : '置顶失败';
   });
-groupManage
+groupCommand
   .command('unPin [message_id:string]')
   .desc('取消置顶群消息')
   .alias('取消置顶')
@@ -43,7 +44,7 @@ groupManage
     const result = await bot.removeEssenceMessage(message_id);
     return result === message_id ? '取消置顶失败' : '已取消置顶';
   });
-groupManage
+groupCommand
   .command('mute [user_id:user_id]')
   .desc('禁言群成员')
   .permission('admin')
@@ -53,7 +54,7 @@ groupManage
     await bot.setGroupBan(message.group_id + '', user_id + '', options.time as number);
     return `已尝试将(${user_id})禁言时长设为${options.time}秒`;
   });
-groupManage
+groupCommand
   .command('kick [user_id:user_id]')
   .desc('踢出群成员')
   .permission('admin')
@@ -62,7 +63,7 @@ groupManage
     const isSuccess = await bot.setGroupKick(message.group_id + '', user_id + '');
     return isSuccess ? `已踢出用户 ${user_id}` : '踢出失败';
   });
-groupManage
+groupCommand
   .command('setAdmin [user_id:user_id]')
   .desc('设置/取消设置群管理')
   .option('-c <cancel:boolean>', false)
@@ -72,7 +73,7 @@ groupManage
     const isSuccess = await bot.setGroupAdmin(message.group_id + '', user_id + '', !options.cancel);
     return isSuccess ? `已${options.cancel ? '取消' : ''}设置管理员 ${user_id}` : '设置管理员失败';
   });
-groupManage
+groupCommand
   .command('setTitle <user_id:user_id> <title:string>')
   .desc('设置/取消设置群头衔')
   .permission('admin')
@@ -84,7 +85,7 @@ groupManage
     const isSuccess = await bot.setGroupSpecialTitle(message.group_id + '', user_id, title, options.time);
     return isSuccess ? `已${options.cancel ? '取消' : ''}设置头衔 ${user_id}` : '设置头衔失败';
   });
-groupManage
+groupCommand
   .command('setNotice <notice:string>')
   .desc('设置设置群公告')
   .permission('admin')
@@ -93,7 +94,7 @@ groupManage
     const isSuccess = await bot.sendGroupNotice(message.group_id + '', notice);
     return isSuccess ? '设置公告成功' : '设置公告失败';
   });
-groupManage
+groupCommand
   .command('setAnonymous')
   .desc('开启/关闭群匿名')
   .permission('admin')
@@ -103,7 +104,7 @@ groupManage
     const isSuccess = await bot.setGroupAnonymous(message.group_id + '', !options.cancel);
     return isSuccess ? `已${options.cancel ? '开启' : '关闭'}群匿名` : '管理群匿名失败';
   });
-groupManage
+groupCommand
   .command('setCard [user_id:user_id] [card:string]')
   .desc('设置/取消设置群名片')
   .permission('admin')
@@ -112,7 +113,7 @@ groupManage
     const isSuccess = await bot.setGroupCard(message.group_id + '', user_id + '', card);
     return isSuccess ? `已${!card ? '取消' : ''}设置名片 ${user_id}` : '设置名片失败';
   });
-groupManage
+groupCommand
   .command('setName [name:string]')
   .desc('修改群名称')
   .permission('admin')
@@ -121,7 +122,7 @@ groupManage
     const isSuccess = await bot.setGroupName(message.group_id + '', name);
     return isSuccess ? '修改成功' : '修改失败';
   });
-groupManage
+groupCommand
   .command('sendPoke [user_id:user_id]')
   .desc('发送戳一戳')
   .alias('戳')
