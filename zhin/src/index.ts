@@ -24,4 +24,5 @@ export const echo = ECHO;
 export const pluginManager = PM;
 export const hmr = HMR;
 export const setup = SETUP;
+export const version = require('../package.json').version;
 export * from './worker';

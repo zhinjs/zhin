@@ -1,8 +1,8 @@
 import { watch, FSWatcher } from 'chokidar';
-import { App, wrapExport, Plugin, WORK_DIR } from '@zhinjs/core';
+import { App, wrapExport, Plugin, WORK_DIR, Bot } from '@zhinjs/core';
 import * as path from 'path';
 import * as fs from 'fs';
-import * as process from 'process';
+import { ProcessMessage, QueueInfo } from '../worker';
 
 const hmr = new Plugin('hmr');
 let watcher: FSWatcher;
@@ -87,4 +87,41 @@ hmr.mounted(app => {
   };
   watcher.on('change', changeListener);
 });
+hmr.on('start', () => {
+  process.send?.({
+    type: 'start',
+  });
+});
+process.on('message', (message: ProcessMessage) => {
+  if (message.type === 'queue') {
+    const { adapter: adapter_name, bot: bot_id, target_id, target_type, message: content } = message.body;
+    const adapter = hmr.app!.adapters.get(adapter_name);
+    const waitBotReady = (bot: Bot<any>) => {
+      console.log(bot_id);
+      if (bot.unique_id === bot_id) {
+        adapter?.sendMsg(bot_id, target_id, target_type, content);
+      }
+      adapter?.off('bot-ready', waitBotReady);
+    };
+    adapter?.on('bot-ready', waitBotReady);
+  }
+});
+hmr
+  .command('restart')
+  .desc('重启项目')
+  .permission('master')
+  .action(async ({ bot, adapter, message }) => {
+    await message.reply('正在重启');
+    process.send?.({
+      type: 'queue',
+      body: {
+        adapter: adapter.name,
+        bot: bot.unique_id,
+        target_id: message.from_id,
+        target_type: message.message_type,
+        message: `已完成重启`,
+      } as QueueInfo,
+    });
+    process.exit(51);
+  });
 export default hmr;

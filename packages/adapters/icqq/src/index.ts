@@ -251,6 +251,9 @@ const botLogin = async (bot: Adapter.Bot<Client>) => {
 };
 const startBots = async () => {
   for (const bot of icqq.bots) {
+    bot.once('system.online', () => {
+      icqq.emit('bot-ready', bot);
+    });
     await botLogin(bot);
   }
 };

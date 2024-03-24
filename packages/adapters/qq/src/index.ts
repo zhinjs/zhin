@@ -130,7 +130,9 @@ const messageHandler = (bot: Adapter.Bot<Bot>, event: QQMessageEvent) => {
 const startBots = () => {
   for (const bot of qq.bots) {
     bot.on('message', messageHandler.bind(global, bot));
-    bot.start();
+    bot.start().then(() => {
+      qq.emit('bot-ready', bot);
+    });
   }
 };
 const stopBots = () => {

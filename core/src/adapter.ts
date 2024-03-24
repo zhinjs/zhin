@@ -124,6 +124,7 @@ export interface Adapter {
 }
 export namespace Adapter {
   export interface EventMap {
+    'bot-ready'(bot: Bot<any>): void;
     'before-mount'(): void;
     'before-unmount'(): void;
     'mounted'(): void;

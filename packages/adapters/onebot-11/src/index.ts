@@ -68,7 +68,9 @@ const messageHandler = (bot: Adapter.Bot<OneBotV11>, event: MessageV11) => {
 const startBots = () => {
   for (const bot of oneBotV11.bots) {
     bot.on('message', messageHandler.bind(global, bot));
-    bot.start();
+    bot.start().then(() => {
+      oneBotV11.emit('bot-ready', bot);
+    });
   }
 };
 const stopBots = () => {

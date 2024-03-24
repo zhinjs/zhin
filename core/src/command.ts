@@ -95,7 +95,9 @@ export class Command<A extends any[] = [], O = {}> {
       if (!message.sender) return false;
       const perms = message.sender.permissions;
       if (!perms) return true;
-      return permissions.some(p => perms.includes(p));
+      return permissions.some(p => perms.includes(p))
+        ? true
+        : `权限不足: \n需要权限:${permissions.join('/')}\n当前：${perms.join(',')}`;
     });
   }
   /**

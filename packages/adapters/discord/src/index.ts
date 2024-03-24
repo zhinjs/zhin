@@ -65,7 +65,9 @@ const messageHandler = (bot: Adapter.Bot<Bot>, event: DingTalkMessageEvent) => {
 const startBots = () => {
   for (const bot of discordAdapter.bots) {
     bot.on('message', messageHandler.bind(global, bot));
-    bot.start();
+    bot.start().then(() => {
+      discordAdapter.emit('bot-ready', bot);
+    });
   }
 };
 const stopBots = () => {

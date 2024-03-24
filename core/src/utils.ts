@@ -74,7 +74,20 @@ export function getCallerStack() {
   stack.shift(); // 排除当前文件的调用
   return stack;
 }
-
+export function formatSize(size: number): string {
+  const units = [
+    { name: 'PB', value: 1024 * 1024 * 1024 * 1024 * 1024 },
+    { name: 'TB', value: 1024 * 1024 * 1024 * 1024 },
+    { name: 'GB', value: 1024 * 1024 * 1024 },
+    { name: 'MB', value: 1024 * 1024 },
+    { name: 'KB', value: 1024 },
+    { name: 'B', value: 1 },
+  ];
+  for (const unit of units) {
+    if (size > unit.value) return Number(size / unit.value).toFixed(2) + unit.name;
+  }
+  return '';
+}
 /**
  * 格式化秒数为时间类型
  * @param seconds 秒数
@@ -97,6 +110,15 @@ export function formatTime(seconds: number) {
     seconds %= unit.value;
   }
   return result.trimEnd();
+}
+export function formatDateTime(timestamp: number) {
+  return new Date(timestamp + 1000 * 60 * 60 * 8)
+    .toISOString()
+    .split('T')
+    .map(str => {
+      return str.split('.')[0];
+    })
+    .join(' ');
 }
 export function deepMerge<First, Second>(first: First, second: Second): Merge<First, Second> {
   if (!first || typeof first !== typeof second || typeof first !== 'object') return first as any;

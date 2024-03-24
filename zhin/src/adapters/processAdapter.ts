@@ -9,7 +9,7 @@ const initBots = (configs: Adapter.Bot[]) => {
     const bot = process as Adapter.Bot<NodeJS.Process>;
     Object.defineProperties(bot, {
       unique_id: {
-        value: config.unique_id,
+        value: `process${configs.indexOf(config)}`,
         writable: false,
       },
       quote_self: {
@@ -32,6 +32,9 @@ const initBots = (configs: Adapter.Bot[]) => {
 const startBots = () => {
   for (const bot of processAdapter.bots) {
     bot.stdin.on('data', messageHandler.bind(global, bot));
+    setTimeout(() => {
+      processAdapter.emit('bot-ready', bot);
+    }, 100);
   }
 };
 

@@ -5,45 +5,60 @@ import type {} from './functionParser';
 import type {} from '@zhinjs/client/src';
 const test = new Plugin('测试插件');
 test.required('functionManager');
-test.command('test-confirm').action(async runtime => {
-  const isConfirm = await runtime.prompt.confirm('确认吗');
-  return `${isConfirm ? '已确认' : '已取消'}:${isConfirm} ${typeof isConfirm}`;
-});
-test.command('test-text [test:number] [abc:boolean]').action(async ({ adapter, prompt }, text) => {
-  const input = await prompt.text('请输入文本');
-  return `inputResult:${input} ${typeof input}`;
-});
-test.command('test-number').action(async runtime => {
-  const input = await runtime.prompt.number('请输入数值');
-  return `inputResult:${input} ${typeof input}`;
-});
-test.command('test-list').action(async runtime => {
-  const input = await runtime.prompt.list('请输入', {
-    type: 'text',
+test
+  .command('test-confirm')
+  .hidden()
+  .action(async runtime => {
+    const isConfirm = await runtime.prompt.confirm('确认吗');
+    return `${isConfirm ? '已确认' : '已取消'}:${isConfirm} ${typeof isConfirm}`;
   });
-  return `inputResult:${input} ${typeof input}`;
-});
-test.command('test-pick').action(async ({ prompt }) => {
-  const input = await prompt.pick('请选择你喜欢的水果', {
-    type: 'text',
-    multiple: true,
-    options: [
-      {
-        label: '苹果',
-        value: 'apple',
-      },
-      {
-        label: '香蕉',
-        value: 'banana',
-      },
-      {
-        label: '橙子',
-        value: 'orange',
-      },
-    ],
+test
+  .command('test-text [test:number] [abc:boolean]')
+  .hidden()
+  .action(async ({ adapter, prompt }, text) => {
+    const input = await prompt.text('请输入文本');
+    return `inputResult:${input} ${typeof input}`;
   });
-  return `inputResult:${input} ${typeof input}`;
-});
+test
+  .command('test-number')
+  .hidden()
+  .action(async runtime => {
+    const input = await runtime.prompt.number('请输入数值');
+    return `inputResult:${input} ${typeof input}`;
+  });
+test
+  .command('test-list')
+  .hidden()
+  .action(async runtime => {
+    const input = await runtime.prompt.list('请输入', {
+      type: 'text',
+    });
+    return `inputResult:${input} ${typeof input}`;
+  });
+test
+  .command('test-pick')
+  .hidden()
+  .action(async ({ prompt }) => {
+    const input = await prompt.pick('请选择你喜欢的水果', {
+      type: 'text',
+      multiple: true,
+      options: [
+        {
+          label: '苹果',
+          value: 'apple',
+        },
+        {
+          label: '香蕉',
+          value: 'banana',
+        },
+        {
+          label: '橙子',
+          value: 'orange',
+        },
+      ],
+    });
+    return `inputResult:${input} ${typeof input}`;
+  });
 test.required('addEntry');
 test.mounted(() => {
   test.addEntry(path.resolve(__dirname, '../client/index.ts'));

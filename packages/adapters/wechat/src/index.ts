@@ -64,7 +64,9 @@ const messageHandler = (bot: Adapter.Bot<Client>, event: DingMsgEvent) => {
 const startBots = () => {
   for (const bot of wechatAdapter.bots) {
     bot.on('message', messageHandler.bind(global, bot));
-    bot.start();
+    bot.start().then(() => {
+      wechatAdapter.emit('bot-ready', bot);
+    });
   }
 };
 const stopBots = () => {

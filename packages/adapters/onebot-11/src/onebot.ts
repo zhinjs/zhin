@@ -73,6 +73,7 @@ export class OneBotV11 extends EventEmitter {
       if (['path', 'event_path'].includes(key))
         server.on('connection', (ws, req) => {
           this.logger.info(`已连接到协议端：${req.socket.remoteAddress}`);
+          this.adapter.emit('bot-ready', this);
           ws.on('error', err => {
             this.logger.error('连接出错：', err);
           });
@@ -92,29 +93,32 @@ export class OneBotV11 extends EventEmitter {
       max_reconnect_count: (cfg.max_reconnect_count ||= 10),
       reconnect_interval: (cfg.reconnect_interval ||= 3000),
     };
-    this.ws = new WebSocket(config.url, {
-      headers: {
-        Authorization: `Bearer ${cfg.access_token}`,
-      },
-    });
-    this.ws.on('open', () => {
-      this.logger.mark(`connected to ${config.url}`);
-      this.reTryCount = 0;
-    });
-    this.ws.on('message', this.dispatch);
-    this.ws.on('error', e => {
-      this.logger.error(e?.message);
-    });
-    this.ws.on('close', () => {
-      if (this.reTryCount < config.max_reconnect_count) {
-        this.logger.mark(`reconnect after ${config.reconnect_interval} ms`);
-        setTimeout(() => {
-          this.reTryCount++;
-          this.connectWs(cfg);
-        }, config.reconnect_interval);
-      } else {
-        this.logger.mark(`retry times is exceeded of ${config.max_reconnect_count}`);
-      }
+    return new Promise<void>(resolve => {
+      this.ws = new WebSocket(config.url, {
+        headers: {
+          Authorization: `Bearer ${cfg.access_token}`,
+        },
+      });
+      this.ws.on('open', () => {
+        this.logger.mark(`connected to ${config.url}`);
+        resolve();
+        this.reTryCount = 0;
+      });
+      this.ws.on('message', this.dispatch);
+      this.ws.on('error', e => {
+        this.logger.error(e?.message);
+      });
+      this.ws.on('close', () => {
+        if (this.reTryCount < config.max_reconnect_count) {
+          this.logger.mark(`reconnect after ${config.reconnect_interval} ms`);
+          setTimeout(() => {
+            this.reTryCount++;
+            this.connectWs(cfg);
+          }, config.reconnect_interval);
+        } else {
+          this.logger.mark(`retry times is exceeded of ${config.max_reconnect_count}`);
+        }
+      });
     });
   }
 

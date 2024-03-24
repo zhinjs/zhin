@@ -73,4 +73,5 @@ const jiti = require('jiti')(__dirname);
 jiti(path.resolve(__dirname, defaultArgv.entry)).startAppWorker(
   path.resolve(process.cwd(), defaultArgv.config),
   defaultArgv.mode,
+  defaultArgv.entry,
 );

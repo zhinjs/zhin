@@ -6,13 +6,13 @@ pluginManager
   .desc('查看已安装插件')
   .scope('private', 'group', 'guild', 'direct')
   .action(runtime => {
-    return segment('text', {
-      text: [...pluginManager.app!.pluginList]
+    return segment.text(
+      [...pluginManager.app!.pluginList]
         .map((plugin, index) => {
           return `${index + 1} ${plugin.display_name}(${plugin.statusText})`;
         })
         .join('\n'),
-    });
+    );
   });
 pluginManager
   .command('启用插件 [name:string]')

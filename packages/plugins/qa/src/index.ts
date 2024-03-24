@@ -77,6 +77,7 @@ qaPlugin.mounted(() => {
 });
 qaPlugin
   .command('问答 <question:string> <answer:string>')
+  .desc('添加问答')
   .option('-a <adapter:string> 可用适配器,默认*', '*')
   .option('-b <bot:string> 可用机器人,默认*', '*')
   .option('-x <regexp:boolean> 是否正则', false)
