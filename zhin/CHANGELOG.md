@@ -1,5 +1,11 @@
 # zhin
 
+## 3.0.10
+
+### Patch Changes
+
+- 55c5fb2: add types
+
 ## 3.0.9
 
 ### Patch Changes
