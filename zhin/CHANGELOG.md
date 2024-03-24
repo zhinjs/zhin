@@ -1,5 +1,13 @@
 # zhin
 
+## 3.0.12
+
+### Patch Changes
+
+- dcfa4c7: 指令解析
+- Updated dependencies [dcfa4c7]
+  - @zhinjs/core@1.0.3
+
 ## 3.0.11
 
 ### Patch Changes
