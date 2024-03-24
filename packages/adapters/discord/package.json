@@ -2,7 +2,7 @@
   "name": "@zhinjs/discord",
   "main": "lib/index.cjs",
   "types": "lib/index.d.ts",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "scripts": {
     "build": "tsup && tsc && tsc-alias"
   },
