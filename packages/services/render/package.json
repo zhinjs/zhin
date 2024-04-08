@@ -1,0 +1,24 @@
+{
+  "name": "@zhinjs/plugin-render",
+  "main": "lib/index.cjs",
+  "types": "lib/index.d.ts",
+  "version": "1.0.12",
+  "scripts": {
+    "build": "tsup && tsc && tsc-alias"
+  },
+  "files": [
+    "lib",
+    "README.md"
+  ],
+  "author": "凉菜",
+  "repository": {
+    "url": "https://github.com/zhinjs/zhin",
+    "directory": "packages/services/puppeteer"
+  },
+  "dependencies": {
+    "zhin": "workspace:^",
+    "puppeteer": "^22.6.1",
+    "@vue/server-renderer": "^3.4.21",
+    "vue": "^3.4.21"
+  }
+}
