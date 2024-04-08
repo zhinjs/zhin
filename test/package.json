@@ -1,6 +1,7 @@
 {
     "name": "test",
     "private": true,
+    "type": "module",
     "version": "2.0.13",
     "scripts": {
         "start": "zhin",
@@ -8,7 +9,7 @@
         "dev": "zhin -m dev -e src"
     },
     "dependencies": {
-        "icqq": "latest",
+        "@icqqjs/icqq": "latest",
         "zhin": "workspace:^",
         "@zhinjs/icqq": "workspace:^",
         "@zhinjs/qq": "workspace:^",
@@ -20,6 +21,7 @@
         "@zhinjs/client": "workspace:^",
         "@zhinjs/web": "workspace:^",
         "@zhinjs/plugin-http-server": "workspace:^",
+        "@zhinjs/plugin-render": "workspace:^",
         "@zhinjs/plugin-drawer": "workspace:^",
         "@zhinjs/plugin-upyun": "workspace:^",
         "@zhinjs/plugin-sandbox": "workspace:^",

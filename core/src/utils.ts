@@ -1,4 +1,32 @@
+import crypto, { BinaryLike } from 'crypto';
 import { Dict, Merge } from './types';
+/**
+ * AES encryption
+ * @param data {BinaryLike} The data to encrypt
+ * @param key {string|Buffer} The key to encrypt
+ * @param iv {string|Buffer} The iv to encrypt,default is key.slice(0,16)
+ * @return {Buffer} The encrypted data
+ */
+export function aesEncrypt(data: BinaryLike, key: string | Buffer, iv: string | Buffer = key.slice(0, 16)): Buffer {
+  const cipher = crypto.createCipheriv('aes-128-cbc', key, iv);
+  return Buffer.concat([cipher.update(data), cipher.final()]);
+}
+
+/**
+ * AES decryption
+ * @param encryptedData {ArrayBufferView} The data to decrypt
+ * @param key {string|Buffer} The key to decrypt
+ * @param iv  {string|Buffer} The iv to decrypt, default is key.slice(0,16)
+ * @return {Buffer} The decrypted data
+ */
+export function aesDecrypt(
+  encryptedData: NodeJS.ArrayBufferView,
+  key: string | Buffer,
+  iv: string | Buffer = key.slice(0, 16),
+): Buffer {
+  let decipher = crypto.createDecipheriv('aes-128-cbc', key, iv);
+  return Buffer.concat([decipher.update(encryptedData), decipher.final()]);
+}
 
 export function isEmpty<T>(data: T) {
   if (!data) return true;
@@ -6,8 +34,13 @@ export function isEmpty<T>(data: T) {
   return Reflect.ownKeys(data).length === 0;
 }
 
-export function remove<T>(list: T[], item: T) {
-  const index = list.indexOf(item);
+export function remove<T>(list: T[], fn: (item: T) => boolean): void;
+export function remove<T>(list: T[], item: T): void;
+export function remove<T>(list: T[], arg: T | ((item: T) => boolean)) {
+  const index =
+    typeof arg === 'function' && !list.every(item => typeof item === 'function')
+      ? list.findIndex(arg as (item: T) => boolean)
+      : list.indexOf(arg as T);
   if (index !== -1) list.splice(index, 1);
 }
 

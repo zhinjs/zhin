@@ -10,7 +10,7 @@ export class Prompt<T extends Adapter> {
     private event: Message<T>,
   ) {}
   private getChannelAddress<AD extends Adapter>(adapter: AD, bot: Bot<AD>, event: Message<AD>) {
-    return `${adapter.name}-${bot.toString()}-${event.message_type}:${event.sender!.user_id}`;
+    return `${adapter.name}-${bot.unique_id}-${event.message_type}:${event.sender!.user_id}`;
   }
   private prompt<T = unknown>(config: Prompt.Config) {
     return new Promise<T>((resolve, reject) => {

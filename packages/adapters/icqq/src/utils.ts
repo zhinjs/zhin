@@ -1,4 +1,4 @@
-import { MessageElem, Sendable } from 'icqq';
+import { MessageElem, Sendable } from '@icqqjs/icqq';
 import { parseFromTemplate } from 'zhin';
 
 export function sendableToString(message: Sendable) {

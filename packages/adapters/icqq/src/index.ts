@@ -5,12 +5,11 @@ import {
   DiscussMessageEvent,
   GroupMessageEvent,
   GuildMessageEvent,
-  Sendable,
   genDmMessageId,
   genGroupMessageId,
   Config,
   Quotable,
-} from 'icqq';
+} from '@icqqjs/icqq';
 import * as process from 'process';
 import { formatSendable, sendableToString } from '@/utils';
 

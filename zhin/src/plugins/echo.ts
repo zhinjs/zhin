@@ -26,10 +26,9 @@ echo
     const processMemory = process.memoryUsage.rss();
     return segment.text(
       [
-        `操作系统：${os.type()} ${os.release()}`,
-        `架构：${os.arch()}`,
+        `系统架构：${os.type()} ${os.release()} ${os.arch()}`,
         `开机时长：${formatTime(os.uptime())}`,
-        `CPU：${cpus_model}(${cpu_speed}MHz) x${cpus.length}`,
+        `CPU：${cpus.length}核 ${cpus_model}(${cpu_speed}MHz)`,
         `内存：${formatSize(usedMemory)}/${formatSize(totalMemory)} ${((usedMemory / totalMemory) * 100).toFixed(2)}%`,
         `运行环境：NodeJS ${process.version}`,
         `zhin v${version} (${process.env.mode} mode)`,

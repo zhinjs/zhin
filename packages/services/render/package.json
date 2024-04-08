@@ -13,12 +13,13 @@
   "author": "凉菜",
   "repository": {
     "url": "https://github.com/zhinjs/zhin",
-    "directory": "packages/services/puppeteer"
+    "directory": "packages/services/render"
   },
   "dependencies": {
     "zhin": "workspace:^",
     "puppeteer": "^22.6.1",
     "@vue/server-renderer": "^3.4.21",
+    "@vue/compiler-sfc": "^3.4.21",
     "vue": "^3.4.21"
   }
 }

@@ -16,7 +16,11 @@
       "zhin": ["zhin/src"],
       "@zhinjs/plugin-*": ["packages/plugins/*/src"],
       "@zhinjs/service-*": ["packages/services/*/src"],
-      "@zhinjs/*": ["packages/plugins/*/src"]
+      "@zhinjs/*": [
+        "packages/adapter/*/src",
+        "packages/services/*/src",
+        "packages/plugins/*/src"
+      ]
     }
   }
 }

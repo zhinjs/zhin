@@ -36,15 +36,14 @@ const readEnv = (filename: string) => {
   }
   return {};
 };
-export function startAppWorker(config: string, mode: string, entry: string) {
+export function startAppWorker(mode: string, init = false) {
   const commonEnv = readEnv(path.join(WORK_DIR, '.env'));
   const modeEnv = deepMerge(commonEnv, readEnv(path.join(WORK_DIR, `.env.${mode}`)));
   const forkOptions: ForkOptions = {
     env: {
       ...process.env,
       mode,
-      entry,
-      config,
+      init: init ? '1' : '0',
       ...modeEnv,
       PWD: WORK_DIR,
       START_TIME: start_time + '',
@@ -53,7 +52,7 @@ export function startAppWorker(config: string, mode: string, entry: string) {
     execArgv: ['-r', 'jiti/register', '-r', 'tsconfig-paths/register'],
     stdio: 'inherit',
   };
-  const cp = fork(path.resolve(__dirname, '../start.js'), ['-p tsconfig.json'], forkOptions);
+  const cp = fork(path.resolve(__dirname, `./start${path.extname(__filename)}`), ['-p tsconfig.json'], forkOptions);
   cp.on('message', (message: ProcessMessage) => {
     if (message.type === 'start') {
       if (buffer) {
@@ -70,6 +69,6 @@ export function startAppWorker(config: string, mode: string, entry: string) {
       process.exit(code);
     }
     restart_times++;
-    startAppWorker(config, mode, entry);
+    startAppWorker(mode, init);
   });
 }

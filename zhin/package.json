@@ -18,8 +18,9 @@
     },
     "files": [
         "lib",
-        "bin.js",
-        "start.js",
+        "src/bin.js",
+        "src/start.js",
+        "package.json",
         "README.md"
     ],
     "license": "MIT",
@@ -30,6 +31,7 @@
     },
     "dependencies": {
         "@zhinjs/core": "workspace:^",
+        "jiti": "^1.21.0",
         "dotenv": "^16.3.1",
         "chokidar": "^3.5.3"
     },

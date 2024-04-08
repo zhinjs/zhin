@@ -3,7 +3,7 @@ import { Logger, getLogger } from 'log4js';
 import { Middleware } from './middleware';
 import { Plugin, PluginMap } from './plugin';
 import { Bot, Dict, LogLevel } from './types';
-import { deepMerge, loadModule, remove } from './utils';
+import { loadModule, remove } from './utils';
 import { APP_KEY, REQUIRED_KEY, WORK_DIR } from './constans';
 import path from 'path';
 import { Adapter, AdapterBot, AdapterReceive } from './adapter';
@@ -21,17 +21,17 @@ export function defineConfig(
 }
 export class App extends EventEmitter {
   logger: Logger = getLogger(`[zhin]`);
+  config: App.Config = App.defaultConfig;
   adapters: Map<string, Adapter> = new Map<string, Adapter>();
   middlewares: Middleware[] = [];
   plugins: PluginMap = new PluginMap();
   renders: Message.Render[] = [];
   #db: JsonDB;
-  constructor(public config: App.Config) {
+  constructor() {
     super();
-    this.logger.level = config.logLevel;
     this.handleMessage = this.handleMessage.bind(this);
     this.on('message', this.handleMessage);
-    this.#db = new JsonDB(path.join(WORK_DIR, 'data', 'zhin.jsondb'));
+    this.#db = new JsonDB(path.join(WORK_DIR, 'data', 'zhin.runtime'));
     return new Proxy(this, {
       get(target: App, key) {
         if (Reflect.has(target.services, key)) return Reflect.get(target.services, key);
@@ -53,47 +53,16 @@ export class App extends EventEmitter {
     }
     return template;
   }
-  initPlugins(pluginConfig: App.Config['plugins']) {
-    const plugins = Array.isArray(pluginConfig)
-      ? pluginConfig
-          .map(item => {
-            if (item instanceof Plugin) return item;
-            return {
-              name: typeof item === 'string' ? item : item.name,
-              install: typeof item !== 'string' ? (typeof item === 'function' ? item : item.install) : undefined,
-              enable: true,
-            };
-          })
-          .filter(Boolean)
-      : Object.entries(this.config.plugins).map(([name, info]) => {
-          return {
-            name,
-            install: typeof info !== 'boolean' ? (typeof info === 'function' ? info : info.install) : undefined,
-            enable: typeof info === 'boolean' ? info : true,
-          };
-        });
+  initPlugins() {
+    const plugins = this.config.plugins;
     for (const plugin of plugins) {
-      if (plugin instanceof Plugin) {
-        this.mount(plugin);
-      } else if (!plugin?.install) {
-        this.loadPlugin(plugin.name!);
-      } else {
-        this.use(plugin as Plugin.InstallObject);
-      }
-      if (!plugin.enable) this.disable(plugin.name!);
+      this.loadPlugin(plugin);
     }
   }
-  initAdapter(adapters: Adapter[]) {
+  initAdapter() {
+    const adapters = this.config.adapters.filter(adapter => !this.config.disable_adapters.includes(adapter));
     for (const adapter of adapters) {
-      this.adapters.set(adapter.name, adapter);
-      try {
-        const bots = (this.config.bots ||= []).filter(bot => bot.adapter === adapter.name);
-        adapter.mount(this, bots);
-        this.logger.debug(`adapter： ${adapter.name} loaded`);
-      } catch (e) {
-        this.logger.error(`adapter： ${adapter.name} load err`, e);
-        this.adapters.delete(adapter.name);
-      }
+      this.loadAdapter(adapter);
     }
   }
 
@@ -106,7 +75,7 @@ export class App extends EventEmitter {
 
   get pluginList() {
     return [...this.plugins.values()]
-      .filter(p => p.status === 'enabled')
+      .filter(p => !this.config.disable_plugins.includes(p.id))
       .sort((a, b) => {
         return a.priority - b.priority;
       });
@@ -164,9 +133,9 @@ export class App extends EventEmitter {
         this.emit('service-register', name, service);
       }
       this.logger.info(`plugin：${plugin.display_name} loaded。`);
+      plugin.isMounted = true;
     });
     this.emit('plugin-mounted', plugin);
-    plugin.isMounted = true;
     return this;
   }
   enable(name: string): this;
@@ -177,7 +146,7 @@ export class App extends EventEmitter {
       if (!plugin) throw new Error('none plugin：' + plugin);
     }
     if (!(plugin instanceof Plugin)) throw new Error(`${plugin} 不是一个有效的插件`);
-    plugin.status = 'enabled';
+    if (this.config.disable_plugins.indexOf(plugin.id) >= 0) remove(this.config.disable_plugins, plugin.id);
     return this;
   }
 
@@ -189,7 +158,9 @@ export class App extends EventEmitter {
       if (!plugin) throw new Error('plugin：' + plugin + 'no init');
     }
     if (!(plugin instanceof Plugin)) throw new Error(`${plugin} 不是一个有效的插件`);
-    plugin.status = 'disabled';
+    if (!this.config.disable_plugins.includes(plugin.id)) {
+      this.config.disable_plugins.push(plugin.id);
+    }
     return this;
   }
 
@@ -243,13 +214,10 @@ export class App extends EventEmitter {
       else plugin = this.plugins.getWithPath(entry)!;
       if (typeof mod === 'function' || typeof mod['install'] === 'function') return this.use(mod);
       if (!plugin) throw new Error(`"${entry}" is not a valid plugin`);
-      if (this.plugins.has(plugin.name)) return this;
+      if (this.plugins.has(plugin.id)) return this;
     }
-    const userPluginDirs = (this.config.pluginDirs || []).map(dir => path.resolve(WORK_DIR, dir));
-    for (const pluginDir of userPluginDirs) {
-      plugin.name = plugin.name.replace(`${pluginDir}${path.sep}`, '');
-    }
-    this.plugins.set(plugin.name, plugin);
+    this.plugins.set(plugin.id, plugin);
+    if (this.config.disable_plugins.indexOf(plugin.id) >= 0) return this.disable(plugin);
     if (plugin[REQUIRED_KEY].length) {
       const requiredServices = plugin[REQUIRED_KEY];
       const mountFn = () => {
@@ -290,12 +258,12 @@ export class App extends EventEmitter {
       this.logger.warn(`${plugin} 不是一个有效的插件，将忽略其卸载。`);
       return this;
     }
-    if (!this.plugins.has(plugin.name)) {
+    if (!this.plugins.has(plugin.id)) {
       this.logger.warn(`${plugin} 尚未加载，将忽略其卸载。`);
       return this;
     }
     this.emit('plugin-beforeUnmount', plugin);
-    this.plugins.delete(plugin.name);
+    this.plugins.delete(plugin.id);
     plugin[APP_KEY] = null;
     for (const [name, service] of plugin.services) {
       this.emit('service-destroy', name, service);
@@ -306,23 +274,76 @@ export class App extends EventEmitter {
   }
 
   async start() {
-    this.initPlugins(this.config.plugins);
-    this.initAdapter((this.config.adapters ||= []));
+    const app = this;
+    const createProxy = <T extends object>(obj: T, prefix: string): T => {
+      return new Proxy(obj, {
+        get(target, key: string | symbol) {
+          if (typeof key === 'symbol') return Reflect.get(target, key);
+          const result = Reflect.get(target, key);
+          if (result && typeof result === 'object') return createProxy(result, `${prefix}${key}.`);
+          return result;
+        },
+        set(target, key: string | symbol, value) {
+          const result = Reflect.set(target, key, value);
+          if (typeof key === 'symbol') return result;
+          app.jsondb.set(`${prefix}${key}`, value);
+          return result;
+        },
+        deleteProperty(target, key: string | symbol): boolean {
+          const result = Reflect.deleteProperty(target, key);
+          if (typeof key === 'symbol') return result;
+          app.jsondb.delete(`${prefix}${key}`);
+          return result;
+        },
+      });
+    };
+    this.config = createProxy(this.jsondb.get<App.Config>('config', App.defaultConfig)!, `config.`);
+    this.logger.level = this.config.log_level;
+    this.initPlugins();
+    this.initAdapter();
     for (const [name, adapter] of this.adapters) {
       adapter.emit('start');
       this.logger.mark(`adapter： ${name} started`);
     }
     this.emit('start');
   }
-
+  loadAdapter(name: string) {
+    const maybePath = this.config.adapter_dirs.map(dir => {
+      return path.resolve(WORK_DIR, dir, name);
+    });
+    let loaded: boolean = false,
+      error: unknown,
+      loadName: string = '';
+    for (const loadPath of maybePath) {
+      if (loaded) break;
+      try {
+        const adapter = loadModule<any>(loadPath);
+        if (!(adapter instanceof Adapter)) throw new Error(`${loadPath} is not a valid adapter`);
+        this.adapters.set(adapter.name, adapter);
+        loadName = adapter.name;
+        const bots = this.config.bots.filter(
+          bot => bot.adapter === adapter.name && !this.config.disable_bots.includes(bot.unique_id),
+        );
+        adapter.mount(this, bots);
+        this.logger.debug(`adapter： ${adapter.name} loaded`);
+        loaded = true;
+      } catch (e) {
+        if (!error || String(Reflect.get(error, 'message')).startsWith('Cannot find')) error = e;
+        this.logger.debug(`try load adapter(${name}) failed. (from: ${loadPath})`);
+        this.logger.trace(e);
+        if (loadName) {
+          this.adapters.delete(loadName);
+          loadName = '';
+        }
+      }
+    }
+    if (!loaded) this.logger.warn(`load adapter "${name}" failed`, error);
+    return this;
+  }
   loadPlugin(name: string): this {
-    const maybePath = [
-      ...(this.config.pluginDirs || []).map(dir => {
-        return path.resolve(WORK_DIR, dir, name);
-      }), // 用户自己的插件
-      path.resolve(__dirname, 'plugins', name), // 内置插件
-      path.resolve(WORK_DIR, 'node_modules', name), //社区插件
-    ];
+    const maybePath = this.config.plugin_dirs.map(dir => {
+      return path.resolve(WORK_DIR, dir, name);
+    });
     let loaded: boolean = false,
       error: unknown;
     for (const loadPath of maybePath) {
@@ -393,8 +414,8 @@ export interface App extends App.Services {
 
   removeAllListeners<S extends string | symbol>(event: S & Exclude<string | symbol, keyof App.EventMap>): this;
 }
-export function createApp(options: Partial<App.Config>) {
-  return new App(deepMerge(options, App.defaultConfig) as App.Config);
+export function createApp() {
+  return new App();
 }
 export namespace App {
   export const adapters: Map<string, Adapter> = new Map<string, Adapter>();
@@ -416,20 +437,26 @@ export namespace App {
   }
 
   export interface Config {
-    logLevel: LogLevel | string;
-    adapters: Adapter[];
-    pluginDirs?: string[];
+    log_level: LogLevel | string;
+    disable_adapters: string[];
+    disable_bots: string[];
+    disable_plugins: string[];
+    adapter_dirs: string[];
+    plugin_dirs: string[];
+    adapters: string[];
     bots: BotConfig[];
-    plugins:
-      | (string | Plugin.InstallObject | Plugin | Plugin.InstallFn)[]
-      | Dict<boolean | Plugin.InstallObject | Plugin.InstallFn>;
+    plugins: string[];
   }
   export const defaultConfig: Config = {
-    logLevel: 'info',
+    log_level: 'info',
+    disable_adapters: [],
+    disable_bots: [],
+    disable_plugins: [],
+    adapter_dirs: [],
+    plugin_dirs: [],
     adapters: [],
     bots: [],
     plugins: [],
-    pluginDirs: [],
   };
   export interface Adapters {
     process: {
@@ -442,6 +469,7 @@ export namespace App {
   export type BotConfig<T extends keyof Adapters = keyof Adapters> =
     | ({
         adapter: T | string;
+        unique_id: string;
       } & Adapters[T])
     | Dict;
 }

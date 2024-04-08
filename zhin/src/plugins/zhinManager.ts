@@ -1,67 +1,411 @@
-import { Plugin, segment, WORK_DIR } from '@zhinjs/core';
+import { App, Plugin, remove, segment, WORK_DIR } from '@zhinjs/core';
+import { exec } from 'child_process';
 import * as fs from 'fs';
 import path from 'path';
-
-const pluginManager = new Plugin('插件管理');
-const pluginCommand = pluginManager.command('插件管理');
-pluginCommand
-  .command('插件列表')
+import process from 'process';
+const downloadGit = (url: string, savePath: string = '.') => {
+  return new Promise<string>((resolve, reject) => {
+    exec(
+      `git clone ${url} ${savePath}`,
+      {
+        cwd: WORK_DIR,
+      },
+      (err, stdout, stderr) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(stdout);
+        }
+      },
+    );
+  });
+};
+const isExistDir = (dir_name: string) => {
+  return fs.existsSync(path.resolve(WORK_DIR, dir_name));
+};
+const isExistPkg = (pkgName: string) => {
+  return fs.existsSync(path.resolve(WORK_DIR, 'node_modules', pkgName));
+};
+const isExistAdapter = (name: string) => {
+  return fs.existsSync(path.resolve(WORK_DIR, 'adapters', name)) || isExistPkg(name);
+};
+const isExistPlugin = (name: string) => {
+  return fs.existsSync(path.resolve(WORK_DIR, 'plugins', name)) || isExistPkg(name);
+};
+const installNpmPkg = (name: string, env?: Record<string, string>) => {
+  return new Promise<string>((resolve, reject) => {
+    exec(
+      `npm install ${name}`,
+      {
+        cwd: WORK_DIR,
+        env,
+      },
+      (err, stdout, stderr) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(stdout);
+        }
+      },
+    );
+  });
+};
+const uninstallNpmPkg = (name: string) => {
+  return new Promise<string>((resolve, reject) => {
+    exec(
+      `npm uninstall ${name}`,
+      {
+        cwd: WORK_DIR,
+      },
+      (err, stdout, stderr) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(stdout);
+        }
+      },
+    );
+  });
+};
+const unlinkLocalDir = (dir_path: string) => {
+  return new Promise((resolve, reject) => {
+    exec(
+      `rm -rf ${dir_path}`,
+      {
+        cwd: WORK_DIR,
+      },
+      (err, stdout, stderr) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(stdout);
+        }
+      },
+    );
+  });
+};
+const zhinManager = new Plugin('zhin管理');
+const pluginManage = zhinManager.command('plugin').hidden().desc('插件管理');
+pluginManage
+  .command('plugin.list')
   .desc('查看已安装插件')
   .scope('private', 'group', 'guild', 'direct')
   .action(({ adapter }) => {
     return segment.text(
-      [...pluginManager.app!.pluginList]
+      [...zhinManager.app!.pluginList]
         .map((plugin, index) => {
           return `${index + 1} ${plugin.display_name}(${plugin.id}) ${plugin.statusText}`;
         })
         .join('\n'),
     );
   });
-pluginCommand
-  .command('install [name:string]')
+pluginManage
+  .command('plugin.install [name:string]')
   .desc('安装插件')
+  .option('-e [env:string] node_env')
   .permission('master')
-  .action(async ({ message, prompt }, name) => {
+  .action(async ({ message, options, prompt }, name) => {
     if (!name) name = await prompt.text('请输入插件名或插件仓库地址');
     if (!name) return `输入错误`;
-    if (/^https?:\/\//.test(name)) return pluginManager.installPluginFromGit(name);
-    return pluginManager.installPluginFromNpm(name);
+    if (/^https?:\/\//.test(name)) {
+      try {
+        return await downloadGit(name, path.resolve(WORK_DIR, './plugins'));
+      } catch (e: unknown) {
+        return `安装失败\n${(e as Error).message}`;
+      }
+    }
+    try {
+      return await installNpmPkg(name, {
+        NODE_ENV: options.env!,
+      });
+    } catch (e) {
+      return `安装失败\n${(e as Error).message}`;
+    }
   });
-pluginCommand
-  .command('uninstall [name:string]')
+pluginManage
+  .command('plugin.uninstall [name:string]')
   .desc('卸载插件')
   .permission('master')
   .action(async ({ message, prompt }, name) => {
     if (!name) name = await prompt.text('请输入插件名或插件仓库名');
     if (!name) return `输入错误`;
     if (fs.existsSync(path.resolve(WORK_DIR, 'plugins', name))) {
-      fs.unlinkSync(path.resolve(WORK_DIR, 'plugins', name));
+      try {
+        await unlinkLocalDir(path.resolve(WORK_DIR, 'plugins', name));
+      } catch (e) {
+        return `卸载失败\n${(e as Error).message}`;
+      }
       return `${name} 已卸载`;
     }
-    return pluginManager.uninstallPluginFromNpm(name);
+    try {
+      await uninstallNpmPkg(name);
+    } catch (e) {
+      return `卸载失败\n${(e as Error).message}`;
+    }
   });
-pluginCommand
-  .command('启用插件 [name:string]')
+pluginManage
+  .command('plugin.enable [name:string]')
+  .desc('启用插件')
   .permission('master')
   .scope('direct')
   .action((runtime, name) => {
-    const plugin = pluginManager.app!.plugins.get(name);
+    const plugin = zhinManager.app!.plugins.get(name);
     if (!plugin) {
-      return '该插件不存在';
+      return '该插件未添加';
     }
-    plugin.enable();
+    remove(zhinManager.app!.config.disable_plugins, name);
     return '插件已启用';
   });
-pluginCommand
-  .command('禁用插件 [name:string]')
-  .permission('admin')
+pluginManage
+  .command('plugin.disable [name:string]')
+  .desc('禁用插件')
+  .permission('master')
   .scope('direct', 'private')
   .action((runtime, name) => {
-    const plugin = pluginManager.app!.plugins.get(name);
+    const plugin = zhinManager.app!.plugins.get(name);
     if (!plugin) {
-      return '插件不存在';
+      return '插件未添加';
     }
-    plugin.disable();
+    zhinManager.app!.config.disable_plugins.push(name);
     return '插件已禁用';
   });
-export default pluginManager;
+pluginManage
+  .command('plugin.add [name:string]')
+  .desc('添加插件')
+  .permission('master')
+  .action(async ({ prompt }, name) => {
+    if (!name) name = await prompt.text('请输入插件名');
+    if (!name) return `输入错误`;
+    if (!isExistPlugin(name)) return `插件(${name})不存在，你可能需要先安装它`;
+    zhinManager.app!.config.plugins.push(name);
+    zhinManager.app!.loadPlugin(name);
+    return `插件(${name})已添加`;
+  });
+pluginManage
+  .command('plugin.remove [name:string]')
+  .desc('移除插件')
+  .permission('master')
+  .action(async ({ prompt }, name) => {
+    if (!name) name = await prompt.text('请输入插件名');
+    if (!name) return `输入错误`;
+    if (!zhinManager.app!.config.plugins.includes(name)) return '插件尚未添加到zhin';
+    remove(zhinManager.app!.config.plugins, name);
+    zhinManager.app!.unmount(name);
+    return `插件(${name})已移除`;
+  });
+const adapterManage = zhinManager.command('adapter').desc('适配器管理').hidden();
+adapterManage
+  .command('adapter.install [name:string]')
+  .desc('安装适配器')
+  .permission('master')
+  .option('-e [env:string] node_env')
+  .action(async ({ message, options, prompt }) => {
+    const name = await prompt.text('请输入适配器名');
+    if (!name) return `输入错误`;
+    try {
+      await installNpmPkg(name, {
+        NODE_ENV: options.env!,
+      });
+    } catch (e) {
+      return `安装失败\n${(e as Error).message}`;
+    }
+  });
+adapterManage
+  .command('adapter.uninstall [name:string]')
+  .permission('master')
+  .desc('卸载适配器')
+  .permission('master')
+  .action(async ({ message, prompt }, name) => {
+    if (!name) name = await prompt.text('请输入适配器名');
+    if (!name) return `输入错误`;
+    try {
+      await uninstallNpmPkg(name);
+    } catch (e) {
+      return `卸载失败\n${(e as Error).message}`;
+    }
+  });
+adapterManage
+  .command('adapter.add [name:string]')
+  .permission('master')
+  .desc('添加适配器')
+  .permission('master')
+  .action(async ({ prompt }, name) => {
+    if (!name) name = await prompt.text('请输入适配器名');
+    if (!name) return `输入错误`;
+    if (!isExistAdapter(name)) return `适配器(${name})不存在，你可能需要先安装它`;
+    zhinManager.app!.config.adapters.push(name);
+    zhinManager.app!.loadAdapter(name);
+    return `适配器(${name})已添加`;
+  });
+adapterManage
+  .command('adapter.remove [name:string]')
+  .permission('master')
+  .desc('移除适配器')
+  .option('-r <restart:boolean>', false)
+  .permission('master')
+  .action(async ({ adapter, options, message, bot, prompt }, name) => {
+    if (!name) name = await prompt.text('请输入适配器名');
+    if (!name) return `输入错误`;
+    if (!zhinManager.app!.config.adapters.includes(name)) return '适配器尚未添加到zhin';
+    remove(zhinManager.app!.config.adapters, name);
+    if (!options.restart) return `适配器(${name})已移除，将在下次重启时生效`;
+    process.send?.({
+      type: 'queue',
+      body: {
+        adapter: adapter.name,
+        bot: bot.unique_id,
+        target_id: message.from_id,
+        target_type: message.message_type,
+        message: `适配器(${name})已移除`,
+      },
+    });
+    process.exit(51);
+  });
+const botManage = zhinManager.command('bot').desc('机器人管理').hidden();
+botManage
+  .command('bot.add <unique_id:string>')
+  .permission('master')
+  .action(async ({ prompt }, unique_id) => {
+    const botConfig: App.BotConfig = {
+      adapter: await prompt.text('请输入适配器名'),
+      unique_id,
+    };
+    while (await prompt.confirm('是否继续添加额外配置')) {
+      const key = await prompt.text('请输入配置项key');
+      let value = await prompt.any('请输入配置项value');
+      try {
+        value = JSON.parse(value);
+      } catch {}
+      Reflect.set(botConfig, key, value);
+    }
+    zhinManager.app!.config.bots.push(botConfig);
+    return `已添加，请重启`;
+  });
+botManage.command('bot.list').action(() => {
+  const bots = zhinManager.app!.config.bots;
+  if (!bots.length) {
+    return '暂无机器人';
+  }
+  const adapterInfos: { name: string; bots: string[] }[] = [];
+  for (const bot of bots) {
+    const adapter = adapterInfos.find(ad => ad.name === bot.adapter);
+    if (!adapter) {
+      adapterInfos.push({
+        name: bot.adapter,
+        bots: [bot.unique_id],
+      });
+      continue;
+    }
+    adapter.bots.push(bot.unique_id);
+  }
+  return adapterInfos
+    .map(adapter => {
+      return (
+        `${adapter.name}\n` +
+        adapter.bots
+          .map((unique_id, idx) => {
+            return `  ${unique_id}`;
+          })
+          .join('\n')
+      );
+    })
+    .join('\n');
+});
+
+botManage
+  .command('bot.edit [unique_id:string]')
+  .permission('master')
+  .action(async ({ prompt, options }, unique_id) => {
+    if (!unique_id) unique_id = await prompt.text('请输入机器人唯一id');
+    if (!unique_id) return '输入错误';
+    const botConfig = zhinManager.app!.config.bots.find(b => b.unique_id == unique_id);
+    if (!botConfig) return `机器人 ${unique_id} 不存在`;
+    const key = await prompt.text('请输入配置项key');
+    if (!key) return '输入错误';
+    let value = await prompt.any('请输入配置项value');
+    try {
+      value = JSON.parse(value);
+    } catch {}
+    Reflect.set(botConfig, key, value);
+  });
+botManage
+  .command('bot.remove [unique_id:string]')
+  .permission('master')
+  .option('-f <force:boolean>', false)
+  .action(async ({ prompt, options }, unique_id) => {
+    if (!unique_id) unique_id = await prompt.text('请输入机器人唯一id');
+    if (!unique_id) return '输入错误';
+    const isConfirm = options.force || (await prompt.confirm('确认移除么'));
+    if (isConfirm)
+      remove(zhinManager.app!.config.bots, (bot: App.BotConfig) => {
+        return bot.unique_id === unique_id;
+      });
+  });
+botManage
+  .command('bot.clean [name:string]')
+  .permission('master')
+  .option('-f <force:boolean>', false)
+  .action(async ({ prompt, options }, name) => {
+    if (!name) name = await prompt.text('请输入机器人适配器名称');
+    if (!name) return '输入错误';
+    const isConfirm = options.force || (await prompt.confirm('确认移除么'));
+    if (isConfirm)
+      remove(zhinManager.app!.config.bots, (bot: any) => {
+        return bot.adapter === name;
+      });
+  });
+const getObj = <T extends object>(parent: T, keys: string[]): any => {
+  const key: keyof T = keys.shift() as keyof T;
+  if (!key) return parent;
+  if (key && typeof parent[key] === 'object') return getObj(parent[key] as object, keys);
+  return parent[key];
+};
+const configManage = zhinManager
+  .command('config')
+  .desc('配置管理')
+  .permission('master')
+  .hidden()
+  .action(() => {
+    return JSON.stringify(zhinManager.app?.config, null, 2);
+  });
+configManage
+  .command('config.set <key:string> <value:any>')
+  .permission('master')
+  .action((_, key, value) => {
+    const keys = key.split('.').filter(Boolean);
+    try {
+      value = JSON.parse(value as string);
+    } catch {}
+    const lastKey = keys.pop();
+    if (!lastKey) return 'key is required';
+    const obj = getObj(zhinManager.app!.config, keys);
+    obj[lastKey as keyof object] = value;
+    return `config.${key} 已更新`;
+  });
+configManage
+  .command('config.push <key:string> <value:any>')
+  .permission('master')
+  .action((_, key, value) => {
+    const keys = key.split('.').filter(Boolean);
+    try {
+      value = JSON.parse(value as string);
+    } catch {}
+    if (!keys.length) return 'key is required';
+    const arr = getObj(zhinManager.app!.config, keys);
+    if (!Array.isArray(arr)) return `config.${key}} is not an array`;
+    arr.push(value);
+    return `config.${key} 已添加`;
+  });
+configManage
+  .command('config.delete <key:string>')
+  .permission('master')
+  .action((_, key) => {
+    const keys = key.split('.').filter(Boolean);
+    const lastKey = keys.pop();
+    if (!lastKey) return 'key is required';
+    const obj = getObj(zhinManager.app!.config, keys);
+    delete obj[lastKey as keyof object];
+    return `config.${keys} 已删除`;
+  });
+
+export default zhinManager;

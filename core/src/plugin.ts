@@ -7,11 +7,14 @@ import { APP_KEY, REQUIRED_KEY, WORK_DIR } from './constans';
 import { Dict } from './types';
 import path from 'path';
 import { Adapter } from './adapter';
+import process from 'process';
+import * as fs from 'fs';
 
 export interface Plugin extends Plugin.Options {}
 
 export class Plugin extends EventEmitter {
-  public name: string;
+  public id: string;
+  public name: string = '';
   disposes: Function[] = [];
   priority: number;
   isMounted: boolean = false;
@@ -19,12 +22,13 @@ export class Plugin extends EventEmitter {
   filePath: string;
   setup: boolean = false;
   private lifecycle: Dict<Plugin.CallBack[]> = {};
-  public adapters?: string[];
-  status: Plugin.Status = 'enabled';
+  public adapters?: string[] = [];
+  get status(): Plugin.Status {
+    return this.isMounted && !this.app!.config.disable_plugins.includes(this.id) ? 'enabled' : 'disabled';
+  }
   services: Map<string | symbol, any> = new Map<string | symbol, any>();
   commands: Map<string, Command> = new Map<string, Command>();
   middlewares: Middleware[] = [];
-  private _name?: string;
   [APP_KEY]: App | null = null;
 
   get app() {
@@ -32,11 +36,11 @@ export class Plugin extends EventEmitter {
   }
 
   get display_name() {
-    return this._name || this.name;
+    return this.name || this.id;
   }
 
   set display_name(name: string) {
-    this._name = name;
+    this.name = name;
   }
 
   get statusText() {
@@ -63,20 +67,29 @@ export class Plugin extends EventEmitter {
         : param;
     this.adapters = options.adapters;
     this.priority = options.priority || 1;
-    this.desc = options.desc;
+    this.desc = options.desc || '';
     const stack = getCallerStack();
     stack.shift(); // 排除当前文件调用
     this.filePath = stack[0]?.getFileName()!;
-    this.display_name = options.name!;
-    const prefixArr = [path.join(__dirname, 'plugins'), path.join(WORK_DIR, 'node_modules')];
-    this.name = this.filePath;
+    this.name = options.name!;
+    const prefixArr = [
+      path.join(WORK_DIR, 'node_modules'),
+      WORK_DIR,
+      path.resolve(__dirname, '../../zhin/src/plugins'),
+    ];
+    this.id = this.filePath;
     for (const prefix of prefixArr) {
-      this.name = this.name.replace(`${prefix}${path.sep}`, '');
+      this.id = this.id.replace(`${prefix}${path.sep}`, '');
     }
-    this.name = this.name
-      .replace(`${path.sep}index`, '')
-      .replace(/\.[cm]?[tj]s$/, '')
-      .replace(`${path.sep}lib`, '');
+    const reg = new RegExp(`${path.sep}lib${path.sep}index\\.[cm][tj]s$`);
+    if (reg.test(this.id) && fs.existsSync(path.resolve(this.id.replace(reg, ''), 'package.json'))) {
+      this.id = require(path.resolve(this.id.replace(reg, ''), 'package.json')).name;
+    } else {
+      this.id = this.id
+        .replace(`${path.sep}index`, '')
+        .replace(/\.[cm]?[tj]s$/, '')
+        .replace(`${path.sep}lib`, '');
+    }
     return new Proxy(this, {
       get(target: Plugin, key) {
         if (!target.app || Reflect.has(target, key)) return Reflect.get(target, key);
@@ -100,16 +113,6 @@ export class Plugin extends EventEmitter {
     }
     return this;
   }
-  enable() {
-    if (this.status === 'enabled') return;
-    this.status = 'enabled';
-  }
-
-  disable() {
-    if (this.status === 'disabled') return;
-    this.status = 'disabled';
-  }
-
   middleware<AD extends Adapter = Adapter>(middleware: Middleware<AD>, before?: boolean) {
     const method: 'push' | 'unshift' = before ? 'unshift' : 'push';
     this.middlewares[method](middleware as Middleware);
@@ -121,7 +124,7 @@ export class Plugin extends EventEmitter {
     const filePath = path.resolve(this.filePath, name);
     this.app?.once('plugin-mounted', p => {
       this.disposes.push(() => {
-        this.app?.unmount(p.name);
+        this.app?.unmount(p.id);
       });
     });
     this.app?.mount(filePath);

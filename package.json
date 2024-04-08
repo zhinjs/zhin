@@ -9,7 +9,7 @@
     "scripts": {
         "start": "pnpm start -C test start",
         "dev": "pnpm -C test dev",
-        "init": "pnpm -C test init",
+        "init": "pnpm -C test run init",
         "lint": "eslint packages --ext .ts",
         "lint:fix": "eslint packages --ext .ts --fix",
         "format": "prettier packages --write",

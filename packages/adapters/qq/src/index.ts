@@ -55,7 +55,7 @@ type QQConfig = {
 const initBot = (configs: Adapter.BotConfig<QQConfig>[]) => {
   for (const { private: isPrivate, group, public: isPublic, ...config } of configs) {
     const botConfig: Bot.Config = {
-      logLevel: qq.app!.config.logLevel as any,
+      logLevel: qq.app!.config.log_level as any,
       ...config,
       intents: [
         group && 'GROUP_AT_MESSAGE_CREATE',

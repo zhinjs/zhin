@@ -60,7 +60,7 @@ export class Adapter<I extends object = object, M = {}> extends EventEmitter {
   }
   mount(app: App, bots: App.BotConfig[]) {
     this.emit('before-mount');
-    this.logger.level = app.config.logLevel;
+    this.logger.level = app.config.log_level;
     this.app = app;
     this.emit('mounted', bots);
   }

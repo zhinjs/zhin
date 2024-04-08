@@ -18,7 +18,7 @@ hmr.mounted(app => {
   ].filter(filePath => fs.existsSync(filePath));
   const watchDirs = [
     // 只监听本地插件和内置插件的变更，模块的管不了
-    ...(app.config.pluginDirs || []).map(dir => {
+    ...(app.config.plugin_dirs || []).map(dir => {
       return path.resolve(WORK_DIR, dir);
     }), // 本地目录插件
     __dirname, // 内置插件
@@ -54,22 +54,6 @@ hmr.mounted(app => {
       reloadPlugin(filePath, plugin);
     }
   };
-  const changeConfig = (config: Partial<App.Config>) => {
-    const beforePlugins = Array.isArray(app.config.plugins) ? app.config.plugins : Object.keys(app.config.plugins);
-    const afterPlugins = Array.isArray(config.plugins) ? config.plugins : Object.keys(config.plugins || {});
-    const addPlugins = afterPlugins.filter(p => !beforePlugins.includes(p));
-    const removePlugins = beforePlugins.filter(p => !afterPlugins.includes(p));
-    app.initPlugins(addPlugins);
-    for (const plugin of removePlugins) {
-      const name = typeof plugin === 'string' ? plugin : plugin.name!;
-      const p = app.plugins.get(name);
-      if (p) {
-        app.unmount(p);
-        delete require.cache[p.filePath];
-      }
-    }
-    app.config.plugins = config.plugins || [];
-  };
 
   const changeListener = (filePath: string) => {
     if (filePath.startsWith('.env')) {
@@ -78,11 +62,6 @@ hmr.mounted(app => {
     const pluginFiles = app.pluginList.map(p => p.filePath);
     if (watchDirs.some(dir => filePath.startsWith(dir)) && pluginFiles.includes(filePath)) {
       return reloadPlugins(filePath);
-    }
-    if (filePath.startsWith(process.env.config as string)) {
-      delete require.cache[filePath];
-      const config = wrapExport(filePath);
-      return changeConfig(typeof config === 'function' ? config(process.env) : config);
     }
   };
   watcher.on('change', changeListener);
@@ -95,7 +74,7 @@ hmr.on('start', () => {
 process.on('message', (message: ProcessMessage) => {
   if (message.type === 'queue') {
     const { adapter: adapter_name, bot: bot_id, target_id, target_type, message: content } = message.body;
-    const adapter = hmr.app!.adapters.get(adapter_name);
+    const adapter = hmr.app?.adapters.get(adapter_name);
     const waitBotReady = (bot: Bot<any>) => {
       console.log(bot_id);
       if (bot.unique_id === bot_id) {

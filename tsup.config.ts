@@ -5,6 +5,10 @@ export default defineConfig(options => {
     clean: true,
     // minify: true,
     format: ['esm', 'cjs'],
+    jsxFactory: 'h',
+    jsxFragment: 'Fragment',
+    sourceMap: true,
+    splitting: false,
     entry: ['src'],
     outExtension({ format }) {
       return {

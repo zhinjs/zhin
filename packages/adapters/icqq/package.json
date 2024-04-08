@@ -16,10 +16,10 @@
     },
     "dependencies": {
         "zhin": "workspace:^",
-        "icqq": "latest"
+        "@icqqjs/icqq": "latest"
     },
     "peerDependencies": {
         "zhin": "workspace:^",
-        "icqq": "latest"
+        "@icqqjs/icqq": "latest"
     }
 }

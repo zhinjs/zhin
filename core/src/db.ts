@@ -1,24 +1,34 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { Dict } from './types';
-import { parseObjFromStr, stringifyObj } from './utils';
+import { aesDecrypt, aesEncrypt, parseObjFromStr, stringifyObj } from './utils';
 export class JsonDB {
   private data: Dict = {};
-  constructor(private readonly filePath: string) {
+  constructor(
+    private readonly filePath: string,
+    private key = Buffer.from(filePath).subarray(0, 16),
+  ) {
     const dir = path.dirname(this.filePath);
     if (fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    if (!this.filePath.endsWith('.jsondb')) this.filePath = this.filePath + '.jsondb';
+    if (!this.filePath.endsWith('.runtime')) this.filePath = this.filePath + '.runtime';
     if (!fs.existsSync(this.filePath)) this.write();
     this.init();
   }
   private init() {
     this.read();
   }
+  private get encryptedData() {
+    return aesEncrypt(stringifyObj(this.data), this.key).toString('hex');
+  }
+  #decryptData(rawData: Buffer | string) {
+    if (typeof rawData === 'string') rawData = Buffer.from(rawData, 'hex');
+    return parseObjFromStr(aesDecrypt(rawData, this.key).toString('utf8'));
+  }
   private write() {
-    fs.writeFileSync(this.filePath, stringifyObj(this.data), 'utf8');
+    fs.writeFileSync(this.filePath, this.encryptedData, 'hex');
   }
   private read() {
-    this.data = parseObjFromStr(fs.readFileSync(this.filePath, 'utf8'));
+    this.data = this.#decryptData(fs.readFileSync(this.filePath, 'hex'));
   }
   findIndex<T>(route: string, predicate: (value: T, index: number, obj: T[]) => unknown) {
     const arr = this.getArray<T>(route);

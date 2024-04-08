@@ -1,22 +1,10 @@
-import { defineComponent, h, createSSRApp } from 'vue';
-import { Plugin } from 'zhin';
+import { createSSRApp } from 'vue';
 import { renderToString } from '@vue/server-renderer';
+import TestCmp from './test';
+import { Plugin } from 'zhin';
 const shot = new Plugin('shot');
-const cmp = defineComponent({
-  name: 'App',
-  props: {
-    who: {
-      type: String,
-      default: '张三',
-    },
-  },
-  setup(props) {
-    return () => h('div', `Hello ${props.who}`);
-  },
-});
-
 shot.command('shot').action(async () => {
-  const template = await renderToString(createSSRApp(cmp, { who: '张三' }));
+  const template = await renderToString(createSSRApp(TestCmp, { who: '张三' }));
   console.log(template);
 });
 export default shot;

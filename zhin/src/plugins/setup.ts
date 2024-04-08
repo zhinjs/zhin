@@ -17,13 +17,13 @@ const resolveCallerPlugin = (): [boolean, Plugin] => {
   const prefixArr = [
     path.join(__dirname),
     path.join(WORK_DIR, 'node_modules'),
-    ...(setup.app?.config.pluginDirs || []).map(dir => path.resolve(WORK_DIR, dir)),
+    ...(setup.app?.config.plugin_dirs || []).map(dir => path.resolve(WORK_DIR, dir)),
   ];
-  plugin.name = plugin.filePath;
+  plugin.id = plugin.filePath;
   for (const prefix of prefixArr) {
-    plugin.name = plugin.name.replace(`${prefix}${path.sep}`, '');
+    plugin.id = plugin.id.replace(`${prefix}${path.sep}`, '');
   }
-  plugin.name = plugin.name
+  plugin.id = plugin.id
     .replace(`${path.sep}index`, '')
     .replace(/\.[cm]?[tj]s$/, '')
     .replace(`${path.sep}lib`, '');
@@ -39,10 +39,10 @@ const getOrCreatePlugin = (options?: Plugin.Options) => {
   if (!isNew) {
     return plugin;
   } else {
-    setup.app!.plugins.set(plugin.name, plugin);
+    setup.app!.plugins.set(plugin.id, plugin);
     setup.app!.plugin(plugin);
     setup.beforeUnmount(() => {
-      setup.app!.plugins.delete(plugin.name);
+      setup.app!.plugins.delete(plugin.id);
     });
     return plugin;
   }
