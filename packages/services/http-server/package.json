@@ -2,7 +2,7 @@
     "name": "@zhinjs/plugin-http-server",
     "main": "lib/index.cjs",
     "types": "lib/index.d.ts",
-    "version": "1.0.12",
+    "version": "1.0.13",
     "scripts": {
         "build": "tsup && tsc && tsc-alias"
     },
