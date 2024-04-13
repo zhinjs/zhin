@@ -32,7 +32,7 @@ qq.define('sendMsg', async (bot_id, target_id, target_type, message, source) => 
       if (sub_type === 'friend') {
         return bot.sendPrivateMessage(user_id, msg, quote);
       }
-      return bot.sendDirectMessage(user_id, message, quote);
+      return bot.sendDirectMessage(user_id, msg, quote);
     case 'direct':
       return bot.sendDirectMessage(target_id, msg, quote);
     case 'guild':

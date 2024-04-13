@@ -4,7 +4,6 @@
   "main": "./lib/index.cjs",
   "module": "./lib/index.mjs",
   "types": "./lib/index.d.ts",
-  "bin": "./bin.js",
   "scripts": {
     "compile": "tsup",
     "build": "npm run compile && npm run dtsc",

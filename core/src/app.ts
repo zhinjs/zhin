@@ -322,7 +322,7 @@ export class App extends EventEmitter {
         this.adapters.set(adapter.name, adapter);
         loadName = adapter.name;
         const bots = this.config.bots.filter(
-          bot => bot.adapter === adapter.name && !this.config.disable_bots.includes(bot.unique_id),
+          bot => bot?.adapter === adapter.name && !this.config.disable_bots.includes(bot.unique_id),
         );
         adapter.mount(this, bots);
         this.logger.debug(`adapter： ${adapter.name} loaded`);

@@ -329,6 +329,28 @@ botManage
     Reflect.set(botConfig, key, value);
   });
 botManage
+  .command('bot.enable <unique_id:string>')
+  .desc('启用bot')
+  .permission('master')
+  .action(async ({ prompt }, unique_id) => {
+    if (!unique_id) unique_id = await prompt.text('请输入机器人唯一id');
+    if (!unique_id) return '输入错误';
+    const botConfig = zhinManager.app!.config.bots.find(b => b.unique_id == unique_id);
+    if (!botConfig) return `机器人 ${unique_id} 不存在`;
+    remove(zhinManager.app!.config.disable_bots, unique_id);
+    return `已启用(${unique_id})，下次启动生效`;
+  });
+botManage
+  .command('bot.disable <unique_id:string>')
+  .desc('禁用bot')
+  .permission('master')
+  .action(async ({ prompt }, unique_id) => {
+    const botConfig = zhinManager.app!.config.bots.find(b => b.unique_id == unique_id);
+    if (!botConfig) return `机器人 ${unique_id} 不存在`;
+    zhinManager.app!.config.disable_bots.push(unique_id);
+    return `已禁用(${unique_id})，下次启动生效`;
+  });
+botManage
   .command('bot.remove [unique_id:string]')
   .permission('master')
   .option('-f <force:boolean>', false)
@@ -336,10 +358,13 @@ botManage
     if (!unique_id) unique_id = await prompt.text('请输入机器人唯一id');
     if (!unique_id) return '输入错误';
     const isConfirm = options.force || (await prompt.confirm('确认移除么'));
-    if (isConfirm)
+    if (isConfirm) {
       remove(zhinManager.app!.config.bots, (bot: App.BotConfig) => {
         return bot.unique_id === unique_id;
       });
+      return `已移除(${unique_id})，下次启动生效`;
+    }
+    return '已取消';
   });
 botManage
   .command('bot.clean [name:string]')
