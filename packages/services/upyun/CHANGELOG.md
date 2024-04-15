@@ -1,5 +1,11 @@
 # @zhinjs/plugin-upyun
 
+## 1.0.14
+
+### Patch Changes
+
+- zhin@3.0.14
+
 ## 1.0.13
 
 ### Patch Changes

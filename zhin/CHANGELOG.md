@@ -1,5 +1,12 @@
 # zhin
 
+## 3.0.14
+
+### Patch Changes
+
+- Updated dependencies [c5915d0]
+  - @zhinjs/core@1.0.5
+
 ## 3.0.13
 
 ### Patch Changes
