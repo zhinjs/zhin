@@ -1,5 +1,11 @@
 # @zhinjs/core
 
+## 1.0.5
+
+### Patch Changes
+
+- c5915d0: 结构优化
+
 ## 1.0.4
 
 ### Patch Changes
