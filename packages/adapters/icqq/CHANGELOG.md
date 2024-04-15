@@ -1,5 +1,12 @@
 # @zhinjs/icqq
 
+## 1.0.15
+
+### Patch Changes
+
+- c5915d0: 结构优化
+  - zhin@3.0.14
+
 ## 1.0.14
 
 ### Patch Changes
