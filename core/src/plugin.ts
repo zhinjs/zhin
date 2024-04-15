@@ -72,11 +72,7 @@ export class Plugin extends EventEmitter {
     stack.shift(); // 排除当前文件调用
     this.filePath = stack[0]?.getFileName()!;
     this.name = options.name!;
-    const prefixArr = [
-      path.join(WORK_DIR, 'node_modules'),
-      WORK_DIR,
-      path.resolve(__dirname, '../../zhin/src/plugins'),
-    ];
+    const prefixArr = [path.join(WORK_DIR, 'node_modules'), WORK_DIR, path.resolve(__dirname, '../..')];
     this.id = this.filePath;
     for (const prefix of prefixArr) {
       this.id = this.id.replace(`${prefix}${path.sep}`, '');
@@ -86,6 +82,7 @@ export class Plugin extends EventEmitter {
       this.id = require(path.resolve(this.id.replace(reg, ''), 'package.json')).name;
     } else {
       this.id = this.id
+        .replace(['zhin', 'lib', 'plugins'].join(path.sep), '内置插件')
         .replace(`${path.sep}index`, '')
         .replace(/\.[cm]?[tj]s$/, '')
         .replace(`${path.sep}lib`, '');

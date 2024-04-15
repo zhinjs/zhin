@@ -301,6 +301,15 @@ export class OneBotV12 extends EventEmitter {
     if (!result.message_id) return this.logger.error(`send failed:`, result);
     return result.message_id;
   }
+  async sendGuildMsg(guild_id: string, channel_id: string, message: MessageV12.Sendable, message_id?: string) {
+    this.logger.info(`send [Guild ${guild_id}]: ${this.getBrief(message)}`);
+    const result = await this.sendPayload({
+      action: 'send_guild_msg',
+      params: { guild_id, channel_id, message, message_id },
+    });
+    if (!result.message_id) return this.logger.error(`send failed:`, result);
+    return result.message_id;
+  }
   getBrief(message: MessageV12.Sendable): string {
     if (typeof message === 'string') {
       return message;
@@ -312,6 +321,12 @@ export class OneBotV12 extends EventEmitter {
       return message.data.text;
     }
     return `{${message.type},${Object.keys(message.data).join(',')}}`;
+  }
+  getForumUrl(guild_id: string, channel_id: string, forum_id: string) {
+    return this.sendPayload({
+      action: 'get_forum_url',
+      params: { guild_id, channel_id, forum_id },
+    });
   }
 }
 

@@ -16,6 +16,9 @@ oneBotV12.define('sendMsg', async (bot_id, target_id, target_type, message, sour
   let msg: MessageV12.Sendable = await oneBotV12.app!.renderMessage(message as string, source);
   msg = MessageV12.formatSegments(msg);
   switch (target_type) {
+    case 'guild':
+      const [guild_id, channel_id] = target_id.split('/');
+      return bot.sendGuildMsg(guild_id, channel_id, msg, source?.original?.message_id);
     case 'group':
       return bot.sendGroupMsg(target_id, msg, source?.original?.message_id);
     case 'private':
@@ -58,8 +61,13 @@ const initBot = (configs: Adapter.BotConfig<OneBotV12.Config>[]) => {
 const messageHandler = (bot: Adapter.Bot<OneBotV12>, event: MessageV12) => {
   const message = Message.fromEvent(oneBotV12, bot, event);
   message.raw_message = MessageV12.formatToString(event.message);
-  message.message_type = event.message_type;
-  message.from_id = event.message_type === 'private' ? event.user_id + '' : event.group_id + '';
+  message.message_type = event.detail_type;
+  message.from_id =
+    event.detail_type === 'private'
+      ? event.user_id + ''
+      : event.detail_type === 'group'
+      ? event.group_id + ''
+      : event.guild_id + '';
   message.sender = {
     user_id: event.user_id,
     user_name: event.nickname || '',

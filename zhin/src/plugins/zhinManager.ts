@@ -20,17 +20,23 @@ const downloadGit = (url: string, savePath: string = '.') => {
     );
   });
 };
-const isExistDir = (dir_name: string) => {
-  return fs.existsSync(path.resolve(WORK_DIR, dir_name));
-};
 const isExistPkg = (pkgName: string) => {
   return fs.existsSync(path.resolve(WORK_DIR, 'node_modules', pkgName));
 };
 const isExistAdapter = (name: string) => {
-  return fs.existsSync(path.resolve(WORK_DIR, 'adapters', name)) || isExistPkg(name);
+  return isExistMod(path.resolve(WORK_DIR, 'adapters'), name) || isExistPkg(name);
+};
+const isExistMod = (relativePath: string, name: string) => {
+  const filesInfo = fs.readdirSync(relativePath, { withFileTypes: true });
+  return filesInfo.some(dirent => {
+    if (dirent.isDirectory()) return dirent.name === name;
+    const extension = path.extname(path.resolve(relativePath, dirent.name));
+    const filename = dirent.name.replace(extension, '');
+    return filename === name && ['.js', '.cjs', '.mjs', '.ts', '.mts'].includes(extension);
+  });
 };
 const isExistPlugin = (name: string) => {
-  return fs.existsSync(path.resolve(WORK_DIR, 'plugins', name)) || isExistPkg(name);
+  return isExistMod(path.resolve(WORK_DIR, 'plugins'), name) || isExistPkg(name);
 };
 const installNpmPkg = (name: string, env?: Record<string, string>) => {
   return new Promise<string>((resolve, reject) => {

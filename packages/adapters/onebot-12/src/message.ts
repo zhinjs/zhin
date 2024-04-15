@@ -5,8 +5,10 @@ export interface MessageV12 {
   user_id: number;
   message_id: string;
   nickname?: string;
-  group_id: number;
-  message_type: 'group' | 'private';
+  guild_id?: string;
+  channel_id?: string;
+  group_id?: number;
+  detail_type: 'group' | 'private' | 'guild';
   message: string | (MessageV12.Segment | string)[];
 }
 export namespace MessageV12 {

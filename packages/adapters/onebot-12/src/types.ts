@@ -14,6 +14,13 @@ export type OneBotMethodsV12 = {
     auto_escape?: boolean;
     message_id?: string;
   }): MessageV12.Ret;
+  send_guild_msg(params: {
+    guild_id: string;
+    channel_id: string;
+    message: MessageV12.Sendable;
+    auto_escape?: boolean;
+    message_id?: string;
+  }): MessageV12.Ret;
   send_msg(params: {
     message_type: 'private' | 'group';
     user_id?: number;
@@ -77,6 +84,7 @@ export type OneBotMethodsV12 = {
   remove_essence_message(params: { message_id: string }): string;
   send_group_notice(params: { group_id: string; content: string }): boolean;
   send_group_poke(params: { group_id: string; user_id: string }): boolean;
+  get_forum_url(params: { guild_id: string; channel_id: string; forum_id: string }): string;
 };
 interface BaseInfo {
   user_id: string;

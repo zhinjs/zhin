@@ -14,6 +14,7 @@ export {
   onUnmount,
   listen,
   options,
+  required,
 } from './plugins/setup';
 export * from './constants';
 import {

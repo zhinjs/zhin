@@ -120,4 +120,5 @@ export const onMount = useContext.onMount.bind(useContext);
 export const onUnmount = useContext.onUnmount.bind(useContext);
 export const listen = useContext.listen.bind(useContext);
 export const options = useContext.options.bind(useContext);
+export const required = useContext.required.bind(useContext);
 export default setup;
