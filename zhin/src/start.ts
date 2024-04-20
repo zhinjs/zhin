@@ -1,11 +1,11 @@
 import { createApp } from '@zhinjs/core';
-let { init } = process.env;
-(async () => {
-  const errorHandler = (e: unknown) => console.error(e);
+import { initialApp } from '.';
+const errorHandler = (e: unknown) => console.error(e);
 
+(async () => {
+  let { init } = process.env;
   process.on('unhandledRejection', errorHandler);
   process.on('uncaughtException', errorHandler);
-  const { initialApp } = await import(__dirname);
   const app = createApp();
   if (init === '1') {
     await initialApp.apply(app);

@@ -1,4 +1,4 @@
-import { Adapter, Message } from 'zhin';
+import { Adapter, App, Message } from 'zhin';
 import '@zhinjs/plugin-http-server';
 import { OneBotV12 } from '@/onebot';
 import { MessageV12 } from '@/message';
@@ -27,7 +27,7 @@ oneBotV12.define('sendMsg', async (bot_id, target_id, target_type, message, sour
       throw new Error(`OneBotV12适配器暂不支持发送${target_type}类型的消息`);
   }
 });
-const initBot = (configs: Adapter.BotConfig<OneBotV12.Config>[]) => {
+const initBot = (configs: App.BotConfig<'onebot-12'>[]) => {
   if (!oneBotV12.app?.server)
     throw new Error('“oneBot V12 miss require service “http”, maybe you need install “ @zhinjs/plugin-http-server ”');
 
@@ -68,9 +68,17 @@ const messageHandler = (bot: Adapter.Bot<OneBotV12>, event: MessageV12) => {
       : event.detail_type === 'group'
       ? event.group_id + ''
       : event.guild_id + '';
+
+  const master = bot.config?.master;
+  const admins = bot.config.admins || [];
   message.sender = {
     user_id: event.user_id,
     user_name: event.nickname || '',
+    permissions: [
+      master && event.user_id === master && 'master',
+      admins && admins.includes(event.user_id) && 'admins',
+      ...(event.permissions || []),
+    ].filter(Boolean) as string[],
   };
   oneBotV12.app!.emit('message', oneBotV12, bot, message);
 };

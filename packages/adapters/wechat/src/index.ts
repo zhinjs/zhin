@@ -1,4 +1,4 @@
-import { Adapter, Message } from 'zhin';
+import { App, Adapter, Message } from 'zhin';
 import { Client, BaseClient, Sendable, PrivateMessageEvent, GroupMessageEvent } from 'lib-wechat';
 import { formatSendable, sendableToString } from '@/utils';
 type DingMsgEvent = PrivateMessageEvent | GroupMessageEvent;
@@ -23,7 +23,7 @@ wechatAdapter.define('sendMsg', async (bot_id, target_id, target_type, message, 
       throw new Error(`wechat适配器暂不支持发送${target_type}类型的消息`);
   }
 });
-const initBot = (configs: Adapter.BotConfig<BaseClient.Config>[]) => {
+const initBot = (configs: App.BotConfig<'wechat'>[]) => {
   for (const config of configs) {
     const bot = new Client(config);
     Object.defineProperties(bot, {
@@ -54,7 +54,15 @@ const messageHandler = (bot: Adapter.Bot<Client>, event: DingMsgEvent) => {
   message.raw_message = sendableToString(event.message).trim();
   message.from_id = event instanceof PrivateMessageEvent ? event.user_id : event.group_id;
   message.message_type = event.message_type;
-  message.sender = event.sender;
+  const master = wechatAdapter.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.master;
+  const admins = wechatAdapter.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.admins;
+  message.sender = {
+    ...event.sender,
+    permissions: [
+      master && event.sender.user_id === master && 'master',
+      admins && admins.includes(event.sender.user_id) && 'admins',
+    ].filter(Boolean) as string[],
+  };
 
   const commands = wechatAdapter.app!.getSupportCommands(wechatAdapter, bot, message);
   const matchReg = new RegExp(`^/(${commands.map(c => c.name).join('|')})`);

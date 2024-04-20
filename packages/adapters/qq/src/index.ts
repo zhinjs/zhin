@@ -1,4 +1,4 @@
-import { Adapter, Message } from 'zhin';
+import { Adapter, App, Message } from 'zhin';
 import { sendableToString, formatSendable } from './utils';
 import {
   Bot,
@@ -52,7 +52,7 @@ type QQConfig = {
   timeout?: number;
   public?: boolean;
 };
-const initBot = (configs: Adapter.BotConfig<QQConfig>[]) => {
+const initBot = (configs: App.BotConfig<'qq'>[]) => {
   for (const { private: isPrivate, group, public: isPublic, ...config } of configs) {
     const botConfig: Bot.Config = {
       logLevel: qq.app!.config.log_level as any,
@@ -98,7 +98,16 @@ const messageHandler = (bot: Adapter.Bot<Bot>, event: QQMessageEvent) => {
   const message = Message.fromEvent(qq, bot, event);
   message.raw_message = sendableToString(event.message).trim();
   message.message_type = event.message_type;
-  message.sender = event.sender as any;
+  const master = qq.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.master;
+  const admins = qq.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.admins;
+  message.sender = {
+    ...event.sender,
+    permissions: [
+      master && event.user_id === master && 'master',
+      admins && admins.includes(event.user_id) && 'admins',
+      ...(event.sender?.permissions as unknown as string[]),
+    ].filter(Boolean) as string[],
+  };
   if (event.source) {
     message.quote = event.source;
   }

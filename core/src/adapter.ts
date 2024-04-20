@@ -135,12 +135,6 @@ export namespace Adapter {
     name: T;
     bots: App.BotConfig<T>[];
   }
-  export type BotConfig<T> = {
-    master: number;
-    command_prefix?: string;
-    forward_length?: number;
-    quote_self?: boolean;
-  } & T;
   export type SendMsgFn = (
     bot_id: string,
     target_id: string,

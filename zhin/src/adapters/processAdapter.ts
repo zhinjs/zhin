@@ -1,5 +1,13 @@
 import { Adapter, Message } from '@zhinjs/core';
-import process = require('process');
+declare module '@zhinjs/core' {
+  namespace App {
+    interface Adapters {
+      process: {
+        title: string;
+      };
+    }
+  }
+}
 const processAdapter = new Adapter<Adapter.Bot<NodeJS.Process>>('process');
 processAdapter.define('sendMsg', async (bot_id, target_id, target_type, message) => {
   processAdapter.logger.info(`send [${target_type} ${target_id}]: ${decodeURIComponent(message)}`);

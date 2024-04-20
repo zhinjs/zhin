@@ -6,8 +6,11 @@ export interface MessageV12 {
   message_id: string;
   nickname?: string;
   guild_id?: string;
+  guild_name?: string;
   channel_id?: string;
+  channel_name?: string;
   group_id?: number;
+  permissions?: string[];
   detail_type: 'group' | 'private' | 'guild';
   message: string | (MessageV12.Segment | string)[];
 }

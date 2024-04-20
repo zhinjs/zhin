@@ -1,4 +1,4 @@
-import { Adapter, Message } from 'zhin';
+import { Adapter, App, Message } from 'zhin';
 import { Bot, GuildMessageEvent, DirectMessageEvent, Sendable } from 'ts-disc-bot';
 import { formatSendable, sendableToString } from '@/utils';
 const discordAdapter = new Adapter<Adapter.Bot<Bot>>('discord');
@@ -24,7 +24,7 @@ discordAdapter.define('sendMsg', async (bot_id, target_id, target_type, message,
 });
 type DingTalkMessageEvent = GuildMessageEvent | DirectMessageEvent;
 
-const initBot = (configs: Adapter.BotConfig<Bot.Options>[]) => {
+const initBot = (configs: App.BotConfig<'discord'>[]) => {
   for (const config of configs) {
     const bot = new Bot(config);
     Object.defineProperties(bot, {
@@ -55,7 +55,16 @@ const messageHandler = (bot: Adapter.Bot<Bot>, event: DingTalkMessageEvent) => {
   const message = Message.fromEvent(discordAdapter, bot, event);
   message.raw_message = sendableToString(event.message).trim();
   message.from_id = event instanceof DirectMessageEvent ? event.user_id : event.channel_id;
-  message.sender = event.sender as any;
+  const master = discordAdapter.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.master;
+  const admins = discordAdapter.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.admins;
+  message.sender = {
+    ...event.sender,
+    permissions: [
+      ...(event.sender?.permissions as unknown as string[]),
+      master && event.sender?.user_id === master && 'master',
+      admins && admins.includes(event.sender.user_id) && 'admins',
+    ].filter(Boolean) as string[],
+  };
   message.message_type = event.message_type;
   const commands = discordAdapter.app!.getSupportCommands(discordAdapter, bot, message);
   const matchReg = new RegExp(`^/(${commands.map(c => c.name).join('|')})`);

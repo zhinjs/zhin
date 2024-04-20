@@ -1,4 +1,4 @@
-import { Adapter, Message } from 'zhin';
+import { Adapter, App, Message } from 'zhin';
 import {
   Client,
   PrivateMessageEvent,
@@ -14,7 +14,7 @@ import * as process from 'process';
 import { formatSendable, sendableToString } from '@/utils';
 
 type QQMessageEvent = PrivateMessageEvent | GroupMessageEvent | DiscussMessageEvent | GuildMessageEvent;
-type ICQQAdapterConfig = Adapter.BotConfig<QQConfig>[];
+type ICQQAdapterConfig = App.BotConfig<'icqq'>[];
 export type ICQQAdapter = typeof icqq;
 const icqq = new Adapter<Adapter.Bot<Client>, QQMessageEvent>('icqq');
 icqq
@@ -125,7 +125,7 @@ type QQConfig = {
   password?: string;
 } & Config;
 let adapterConfig: ICQQAdapterConfig;
-const initBot = (configs: Adapter.BotConfig<QQConfig>[]) => {
+const initBot = (configs: App.BotConfig<'icqq'>[]) => {
   adapterConfig = configs;
   for (const { uin, password: _, quote_self, forward_length, ...config } of configs) {
     const client = new Client(uin, config);
@@ -163,12 +163,14 @@ const messageHandler = (bot: Adapter.Bot<Client>, event: QQMessageEvent) => {
         : event.message_type === 'group'
         ? event.group_id + ''
         : event.discuss_id + '';
-    const master = adapterConfig.find(b => b.uin === bot.uin)?.master;
+    const master = icqq.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.master;
+    const admins = icqq.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.admins;
     message.sender = {
       ...event.sender,
       permissions: [
-        master && event.user_id === master && 'master',
+        master && `${event.user_id}` === master && 'master',
         event.message_type === 'group' && event.member?.is_owner && 'owner',
+        admins && admins.includes(`${event.user_id}`) && 'admins',
         event.message_type === 'group' && event.member?.is_admin && 'admin',
       ].filter(Boolean) as string[],
     };

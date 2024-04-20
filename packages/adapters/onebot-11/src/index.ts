@@ -1,4 +1,4 @@
-import { Adapter, Message } from 'zhin';
+import { App, Adapter, Message } from 'zhin';
 import '@zhinjs/plugin-http-server';
 import { OneBotV11 } from '@/onebot';
 import { MessageV11 } from '@/message';
@@ -24,7 +24,7 @@ oneBotV11.define('sendMsg', async (bot_id, target_id, target_type, message, sour
       throw new Error(`OneBotV11适配器暂不支持发送${target_type}类型的消息`);
   }
 });
-const initBot = (configs: Adapter.BotConfig<OneBotV11.Config>[]) => {
+const initBot = (configs: App.BotConfig<'onebot-11'>[]) => {
   if (!oneBotV11.app?.server)
     throw new Error('“oneBot V11 miss require service “http”, maybe you need install “ @zhinjs/plugin-http-server ”');
 
@@ -59,9 +59,15 @@ const messageHandler = (bot: Adapter.Bot<OneBotV11>, event: MessageV11) => {
   message.raw_message = MessageV11.formatToString(event.message);
   message.message_type = event.message_type;
   message.from_id = event.message_type === 'private' ? event.user_id + '' : event.group_id + '';
+  const master = oneBotV11.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.master;
+  const admins = oneBotV11.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.admins;
   message.sender = {
     user_id: event.user_id,
     user_name: event.nickname || '',
+    permissions: [
+      master && event.user_id === master && 'master',
+      admins && admins.includes(event.user_id) && 'admins',
+    ].filter(Boolean) as string[],
   };
   oneBotV11.app!.emit('message', oneBotV11, bot, message);
 };

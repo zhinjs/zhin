@@ -2,7 +2,6 @@ import { App, Plugin, remove, segment, WORK_DIR } from '@zhinjs/core';
 import { exec } from 'child_process';
 import * as fs from 'fs';
 import path from 'path';
-import process from 'process';
 const downloadGit = (url: string, savePath: string = '.') => {
   return new Promise<string>((resolve, reject) => {
     exec(
@@ -274,6 +273,7 @@ botManage
   .action(async ({ prompt }, unique_id) => {
     const botConfig: App.BotConfig = {
       adapter: await prompt.text('请输入适配器名'),
+      title: process.title,
       unique_id,
     };
     while (await prompt.confirm('是否继续添加额外配置')) {

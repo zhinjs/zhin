@@ -11,7 +11,7 @@ export class OneBotV12 extends EventEmitter {
   self_id: string = '';
   constructor(
     private adapter: OneBotV12Adapter,
-    public config: OneBotV12.Config,
+    public config: OneBotV12.Config & Dict,
     private router: Router,
   ) {
     super();
@@ -47,7 +47,11 @@ export class OneBotV12 extends EventEmitter {
     const event: OneBotV12.EventPayload = result as OneBotV12.EventPayload;
     this.logger.debug('receive event', event);
     if (event.type === 'message') {
-      this.logger.info(`recv [${event.detail_type} ${event.group_id || event.user_id}]: ${event.raw_message}`);
+      if (event.detail_type === 'guild') {
+        this.logger.info(`recv [${event.detail_type} ${event.guild_id}/${event.channel_id}]: ${event.raw_message}`);
+      } else {
+        this.logger.info(`recv [${event.detail_type} ${event.group_id || event.user_id}]: ${event.raw_message}`);
+      }
     }
     this.emit(event.type, event);
   }
@@ -346,6 +350,7 @@ export namespace OneBotV12 {
     time: number;
     self_id: number;
     type: 'message' | 'notice' | 'request' | 'meta';
+    detail_type: string;
   } & Dict;
   type WsReverseConfig = {
     prefix?: string;

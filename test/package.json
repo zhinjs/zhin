@@ -9,7 +9,7 @@
         "dev": "zhin -m dev -e src"
     },
     "dependencies": {
-        "@icqqjs/icqq": "latest",
+        "@icqqjs/icqq": "1.1.6",
         "zhin": "workspace:^",
         "@zhinjs/icqq": "workspace:^",
         "@zhinjs/qq": "workspace:^",

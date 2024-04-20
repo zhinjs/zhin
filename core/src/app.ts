@@ -10,6 +10,7 @@ import { Adapter, AdapterBot, AdapterReceive } from './adapter';
 import { Message } from './message';
 import process from 'process';
 import { JsonDB } from './db';
+
 export function defineConfig(config: Partial<App.Config>): Partial<App.Config>;
 export function defineConfig(
   initialFn: (env: typeof process.env & { mode: string }) => Partial<App.Config>,
@@ -19,6 +20,7 @@ export function defineConfig(
 ) {
   return config;
 }
+
 export class App extends EventEmitter {
   logger: Logger = getLogger(`[zhin]`);
   config: App.Config = App.defaultConfig;
@@ -27,6 +29,7 @@ export class App extends EventEmitter {
   plugins: PluginMap = new PluginMap();
   renders: Message.Render[] = [];
   #db: JsonDB;
+
   constructor() {
     super();
     this.handleMessage = this.handleMessage.bind(this);
@@ -53,12 +56,14 @@ export class App extends EventEmitter {
     }
     return template;
   }
+
   initPlugins() {
     const plugins = this.config.plugins;
     for (const plugin of plugins) {
       this.loadPlugin(plugin);
     }
   }
+
   initAdapter() {
     const adapters = this.config.adapters.filter(adapter => !this.config.disable_adapters.includes(adapter));
     for (const adapter of adapters) {
@@ -124,6 +129,7 @@ export class App extends EventEmitter {
     const middleware = Middleware.compose(this.getSupportMiddlewares(adapter, bot, event));
     middleware(adapter, bot, event);
   }
+
   plugin(plugin: Plugin): this {
     this.emit('plugin-beforeMount', plugin);
     plugin[APP_KEY] = this;
@@ -138,6 +144,7 @@ export class App extends EventEmitter {
     this.emit('plugin-mounted', plugin);
     return this;
   }
+
   enable(name: string): this;
   enable(plugin: Plugin): this;
   enable(plugin: Plugin | string) {
@@ -307,6 +314,7 @@ export class App extends EventEmitter {
     }
     this.emit('start');
   }
+
   loadAdapter(name: string) {
     const maybePath = this.config.adapter_dirs.map(dir => {
       return path.resolve(WORK_DIR, dir, name);
@@ -340,6 +348,7 @@ export class App extends EventEmitter {
     if (!loaded) this.logger.warn(`load adapter "${name}" failed`, error);
     return this;
   }
+
   loadPlugin(name: string): this {
     const maybePath = this.config.plugin_dirs.map(dir => {
       return path.resolve(WORK_DIR, dir, name);
@@ -414,9 +423,11 @@ export interface App extends App.Services {
 
   removeAllListeners<S extends string | symbol>(event: S & Exclude<string | symbol, keyof App.EventMap>): this;
 }
+
 export function createApp() {
   return new App();
 }
+
 export namespace App {
   export const adapters: Map<string, Adapter> = new Map<string, Adapter>();
 
@@ -430,7 +441,9 @@ export namespace App {
     'plugin-beforeUnmount'(plugin: Plugin): void;
 
     'plugin-unmounted'(plugin: Plugin): void;
+
     'ready'(): void;
+
     'message': <AD extends Adapter>(adapter: AD, bot: AdapterBot<AD>, message: AdapterReceive<AD>) => void;
     'service-register': <T extends keyof App.Services>(name: T, service: App.Services[T]) => void;
     'service-destroy': <T extends keyof App.Services>(name: T, service: App.Services[T]) => void;
@@ -447,6 +460,7 @@ export namespace App {
     bots: BotConfig[];
     plugins: string[];
   }
+
   export const defaultConfig: Config = {
     log_level: 'info',
     disable_adapters: [],
@@ -458,18 +472,24 @@ export namespace App {
     bots: [],
     plugins: [],
   };
+
   export interface Adapters {
     process: {
       title: string;
     };
   }
+
   export interface Services {
     jsondb: JsonDB;
   }
-  export type BotConfig<T extends keyof Adapters = keyof Adapters> =
-    | ({
-        adapter: T | string;
-        unique_id: string;
-      } & Adapters[T])
-    | Dict;
+
+  export type BotConfig<T extends keyof Adapters = keyof Adapters> = {
+    adapter: T | string;
+    unique_id: string;
+    master?: string | number;
+    admins?: (string | number)[];
+    command_prefix?: string;
+    forward_length?: number;
+    quote_self?: boolean;
+  } & Adapters[T];
 }

@@ -1,6 +1,5 @@
 import path from 'path';
 import * as fs from 'fs';
-export * from './adapters';
 export {
   useContext,
   adapter,

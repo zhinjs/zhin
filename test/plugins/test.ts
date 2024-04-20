@@ -4,7 +4,7 @@ import '@zhinjs/plugin-sandbox';
 import type {} from './functionParser';
 import type {} from '@zhinjs/client/src';
 const test = new Plugin('测试插件');
-test.required('functionManager');
+test.required('functionManager', 'component');
 test
   .command('test-confirm')
   .hidden()
@@ -96,5 +96,4 @@ test.mounted(async () => {
     return test.functionManager.match(event);
   });
 });
-
 export default test;
