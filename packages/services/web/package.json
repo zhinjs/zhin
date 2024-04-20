@@ -3,7 +3,7 @@
     "main": "lib/index.cjs",
     "module": "browser/common.ts",
     "types": "lib/index.d.ts",
-    "version": "1.0.15",
+    "version": "1.0.16",
     "scripts": {
         "build": "tsup && tsc && tsc-alias"
     },
