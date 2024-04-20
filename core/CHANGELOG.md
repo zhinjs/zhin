@@ -1,5 +1,11 @@
 # @zhinjs/core
 
+## 1.0.8
+
+### Patch Changes
+
+- f61e645: 优化bot添加流程
+
 ## 1.0.7
 
 ### Patch Changes

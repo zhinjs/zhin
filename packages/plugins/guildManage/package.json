@@ -2,7 +2,7 @@
     "name": "@zhinjs/plugin-guild-manage",
     "main": "lib/index.cjs",
     "types": "lib/index.d.ts",
-    "version": "1.0.16",
+    "version": "1.0.17",
     "scripts": {
         "build": "tsup && tsc && tsc-alias"
     },
