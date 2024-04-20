@@ -1,5 +1,15 @@
 # zhin
 
+## 3.0.15
+
+### Patch Changes
+
+- 6f55d93: init error
+- db0f54a: 功能优化
+- Updated dependencies [6f55d93]
+- Updated dependencies [db0f54a]
+  - @zhinjs/core@1.0.6
+
 ## 3.0.14
 
 ### Patch Changes
