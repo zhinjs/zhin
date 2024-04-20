@@ -1,5 +1,29 @@
 # test
 
+## 2.0.17
+
+### Patch Changes
+
+- 9fe1308: db
+  - zhin@3.0.16
+  - @zhinjs/dingtalk@1.0.16
+  - @zhinjs/discord@1.0.16
+  - @zhinjs/icqq@1.0.17
+  - @zhinjs/onebot-11@1.0.16
+  - @zhinjs/onebot-12@1.0.16
+  - @zhinjs/qq@1.0.16
+  - @zhinjs/wechat@1.0.16
+  - @zhinjs/plugin-group-manage@1.0.16
+  - @zhinjs/plugin-guild-manage@1.0.16
+  - @zhinjs/plugin-qa@1.0.16
+  - @zhinjs/plugin-schedule@1.0.16
+  - @zhinjs/plugin-drawer@1.0.16
+  - @zhinjs/plugin-http-server@1.0.16
+  - @zhinjs/plugin-render@1.0.16
+  - @zhinjs/plugin-sandbox@1.0.16
+  - @zhinjs/plugin-upyun@1.0.16
+  - @zhinjs/web@1.0.16
+
 ## 2.0.16
 
 ### Patch Changes

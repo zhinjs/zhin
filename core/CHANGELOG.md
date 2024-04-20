@@ -1,5 +1,11 @@
 # @zhinjs/core
 
+## 1.0.7
+
+### Patch Changes
+
+- 9fe1308: db
+
 ## 1.0.6
 
 ### Patch Changes
