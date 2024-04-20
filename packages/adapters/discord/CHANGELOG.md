@@ -1,5 +1,13 @@
 # @zhinjs/discord
 
+## 1.0.17
+
+### Patch Changes
+
+- f61e645: 优化bot添加流程
+- Updated dependencies [f61e645]
+  - zhin@3.0.17
+
 ## 1.0.16
 
 ### Patch Changes

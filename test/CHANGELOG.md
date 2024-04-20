@@ -1,5 +1,30 @@
 # test
 
+## 2.0.18
+
+### Patch Changes
+
+- f61e645: 优化bot添加流程
+- Updated dependencies [f61e645]
+  - @zhinjs/onebot-11@1.0.17
+  - @zhinjs/onebot-12@1.0.17
+  - @zhinjs/dingtalk@1.0.17
+  - @zhinjs/discord@1.0.17
+  - @zhinjs/icqq@1.0.18
+  - @zhinjs/qq@1.0.17
+  - zhin@3.0.17
+  - @zhinjs/plugin-group-manage@1.0.17
+  - @zhinjs/plugin-guild-manage@1.0.17
+  - @zhinjs/wechat@1.0.17
+  - @zhinjs/plugin-qa@1.0.17
+  - @zhinjs/plugin-schedule@1.0.17
+  - @zhinjs/plugin-drawer@1.0.17
+  - @zhinjs/plugin-http-server@1.0.17
+  - @zhinjs/plugin-render@1.0.17
+  - @zhinjs/plugin-sandbox@1.0.17
+  - @zhinjs/plugin-upyun@1.0.17
+  - @zhinjs/web@1.0.17
+
 ## 2.0.17
 
 ### Patch Changes

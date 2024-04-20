@@ -1,5 +1,13 @@
 # zhin
 
+## 3.0.17
+
+### Patch Changes
+
+- f61e645: 优化bot添加流程
+- Updated dependencies [f61e645]
+  - @zhinjs/core@1.0.8
+
 ## 3.0.16
 
 ### Patch Changes
