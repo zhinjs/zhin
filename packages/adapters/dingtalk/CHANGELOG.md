@@ -1,5 +1,14 @@
 # @zhinjs/dingtalk
 
+## 1.0.15
+
+### Patch Changes
+
+- 6f55d93: init error
+- Updated dependencies [6f55d93]
+- Updated dependencies [db0f54a]
+  - zhin@3.0.15
+
 ## 1.0.14
 
 ### Patch Changes
