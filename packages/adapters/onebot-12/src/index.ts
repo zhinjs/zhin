@@ -11,6 +11,27 @@ declare module 'zhin' {
     }
   }
 }
+oneBotV12
+  .schema('type', {
+    method: 'const',
+    args: ['ws'],
+  })
+  .schema('url', {
+    method: 'text',
+    args: ['请输入服务端ws地址'],
+  })
+  .schema('access_token', {
+    method: 'text',
+    args: ['请输入access_token'],
+  })
+  .schema('max_reconnect_count', {
+    method: 'number',
+    args: ['请输入max_reconnect_count', undefined, '10'],
+  })
+  .schema('reconnect_interval', {
+    method: 'number',
+    args: ['请输入reconnect_interval', undefined, '3000'],
+  });
 oneBotV12.define('sendMsg', async (bot_id, target_id, target_type, message, source) => {
   const bot = oneBotV12.pick(bot_id);
   let msg: MessageV12.Sendable = await oneBotV12.app!.renderMessage(message as string, source);

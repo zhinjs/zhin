@@ -1,4 +1,4 @@
-import { App, Plugin, remove, segment, WORK_DIR } from '@zhinjs/core';
+import { App, Dict, Plugin, remove, segment, WORK_DIR } from '@zhinjs/core';
 import { exec } from 'child_process';
 import * as fs from 'fs';
 import path from 'path';
@@ -268,22 +268,17 @@ adapterManage
   });
 const botManage = zhinManager.command('bot').desc('机器人管理').hidden();
 botManage
-  .command('bot.add <unique_id:string>')
+  .command('bot.add <adapter:string>')
   .permission('master')
-  .action(async ({ prompt }, unique_id) => {
+  .action(async ({ prompt }, adapter) => {
+    if (!zhinManager.app?.adapters.get(adapter))
+      return `未找到名为“${adapter}”的适配器，请确认你是否安装并启用了“@zhinjs/${adapter}”`;
+    const schema: Dict = zhinManager.app!.getAdapterSchema(adapter);
     const botConfig: App.BotConfig = {
-      adapter: await prompt.text('请输入适配器名'),
+      adapter,
       title: process.title,
-      unique_id,
+      ...((await prompt.prompts(schema)) as any),
     };
-    while (await prompt.confirm('是否继续添加额外配置')) {
-      const key = await prompt.text('请输入配置项key');
-      let value = await prompt.any('请输入配置项value');
-      try {
-        value = JSON.parse(value);
-      } catch {}
-      Reflect.set(botConfig, key, value);
-    }
     zhinManager.app!.config.bots.push(botConfig);
     return `已添加，请重启`;
   });
@@ -326,13 +321,13 @@ botManage
     if (!unique_id) return '输入错误';
     const botConfig = zhinManager.app!.config.bots.find(b => b.unique_id == unique_id);
     if (!botConfig) return `机器人 ${unique_id} 不存在`;
+
+    const schema: Dict = zhinManager.app!.getAdapterSchema(botConfig.adapter);
     const key = await prompt.text('请输入配置项key');
+    if (!(key in schema)) return `无效的配置项“${schema}”,期望输入：${Object.keys(schema).join(',')}`;
     if (!key) return '输入错误';
-    let value = await prompt.any('请输入配置项value');
-    try {
-      value = JSON.parse(value);
-    } catch {}
-    Reflect.set(botConfig, key, value);
+    let value = await prompt.prompts({ [key]: schema[key] });
+    Reflect.set(botConfig, key, value[key]);
   });
 botManage
   .command('bot.enable <unique_id:string>')

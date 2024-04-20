@@ -10,6 +10,8 @@ import { Adapter, AdapterBot, AdapterReceive } from './adapter';
 import { Message } from './message';
 import process from 'process';
 import { JsonDB } from './db';
+import { Prompt } from './prompt';
+import { Schema } from 'yaml';
 
 export function defineConfig(config: Partial<App.Config>): Partial<App.Config>;
 export function defineConfig(
@@ -29,7 +31,6 @@ export class App extends EventEmitter {
   plugins: PluginMap = new PluginMap();
   renders: Message.Render[] = [];
   #db: JsonDB;
-
   constructor() {
     super();
     this.handleMessage = this.handleMessage.bind(this);
@@ -47,7 +48,11 @@ export class App extends EventEmitter {
     this.renders.push(render);
     return () => remove(this.renders, render);
   }
-
+  getAdapterSchema(name: string) {
+    const adapter = this.adapters.get(name);
+    if (!adapter) throw new Error(`cannot find adapter ${name}`);
+    return adapter.schemas;
+  }
   async renderMessage<T extends Message = Message>(template: string, message?: T) {
     for (const render of this.renders) {
       try {

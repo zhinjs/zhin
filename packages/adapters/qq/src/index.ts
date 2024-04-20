@@ -19,6 +19,26 @@ declare module 'zhin' {
     }
   }
 }
+qq.schema('appid', {
+  method: 'text',
+  args: ['请输入appid'],
+})
+  .schema('secret', {
+    method: 'text',
+    args: ['请输入secret'],
+  })
+  .schema('group', {
+    method: 'confirm',
+    args: ['是否拥有群聊能力'],
+  })
+  .schema('public', {
+    method: 'confirm',
+    args: ['是否公域机器人'],
+  })
+  .schema('sandbox', {
+    method: 'confirm',
+    args: ['是否开启沙箱模式'],
+  });
 qq.define('sendMsg', async (bot_id, target_id, target_type, message, source) => {
   const bot = qq.pick(bot_id);
   let msg: Sendable = await qq.app!.renderMessage(message as string, source);

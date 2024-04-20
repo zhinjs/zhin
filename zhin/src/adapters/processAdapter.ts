@@ -48,7 +48,7 @@ const startBots = () => {
 
 const messageHandler = (bot: Adapter.Bot<NodeJS.Process>, event: Buffer) => {
   const message = Message.fromEvent(processAdapter, bot, {});
-  message.raw_message = event.toString().replace(/\n$/, '');
+  message.raw_message = event.toString().trimEnd();
   message.from_id = 'developer';
   message.message_type = 'private';
   message.sender = {

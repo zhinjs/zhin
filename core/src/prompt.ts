@@ -1,9 +1,9 @@
 import { Adapter } from './adapter';
 import { Middleware } from './middleware';
-import { Bot } from './types';
+import { Bot, Dict } from './types';
 import { Message } from './message';
 
-export class Prompt<T extends Adapter> {
+export class Prompt<T extends Adapter = Adapter> {
   constructor(
     private adapter: T,
     private bot: Bot<T>,
@@ -110,6 +110,9 @@ export class Prompt<T extends Adapter> {
         }),
     });
   }
+  async const<T = any>(value: T): Promise<T> {
+    return value;
+  }
   async pick<T extends Prompt.SingleType, M extends boolean = false>(
     tips: string,
     config: Prompt.PickConfig<T, M>,
@@ -138,6 +141,16 @@ export class Prompt<T extends Adapter> {
           .map(o => o.value);
       },
     });
+  }
+  async prompts<T extends Dict<Prompt.Call>>(schemas: T) {
+    const result: Dict = {};
+    for (const key in schemas) {
+      const call = schemas[key];
+      const fn = this[call.method];
+      if (typeof fn !== 'function') continue;
+      result[key] = await (fn as Function).apply(this, call.args);
+    }
+    return result;
   }
 }
 export namespace Prompt {
@@ -173,5 +186,10 @@ export namespace Prompt {
     timeout?: number;
     timeoutText?: string;
     format: (input: string) => any;
+  };
+  type Methods = 'text' | 'number' | 'confirm' | 'list' | 'pick' | 'const';
+  export type Call<T extends Methods = Methods> = {
+    method: T;
+    args: Prompt[T] extends (...args: any[]) => any ? Parameters<Prompt[T]> : never;
   };
 }
