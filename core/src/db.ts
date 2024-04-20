@@ -9,7 +9,7 @@ export class JsonDB {
     private key = Buffer.from(filePath).subarray(0, 16),
   ) {
     const dir = path.dirname(this.filePath);
-    if (fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     if (!this.filePath.endsWith('.runtime')) this.filePath = this.filePath + '.runtime';
     if (!fs.existsSync(this.filePath)) this.write();
     this.init();
