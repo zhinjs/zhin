@@ -1,5 +1,31 @@
 # test
 
+## 2.0.16
+
+### Patch Changes
+
+- 6f55d93: init error
+- Updated dependencies [6f55d93]
+- Updated dependencies [db0f54a]
+  - @zhinjs/onebot-11@1.0.15
+  - @zhinjs/onebot-12@1.0.15
+  - @zhinjs/dingtalk@1.0.15
+  - @zhinjs/discord@1.0.15
+  - @zhinjs/wechat@1.0.15
+  - @zhinjs/icqq@1.0.16
+  - @zhinjs/qq@1.0.15
+  - zhin@3.0.15
+  - @zhinjs/plugin-group-manage@1.0.15
+  - @zhinjs/plugin-guild-manage@1.0.15
+  - @zhinjs/plugin-qa@1.0.15
+  - @zhinjs/plugin-schedule@1.0.15
+  - @zhinjs/plugin-drawer@1.0.15
+  - @zhinjs/plugin-http-server@1.0.15
+  - @zhinjs/plugin-render@1.0.15
+  - @zhinjs/plugin-sandbox@1.0.15
+  - @zhinjs/plugin-upyun@1.0.15
+  - @zhinjs/web@1.0.15
+
 ## 2.0.15
 
 ### Patch Changes

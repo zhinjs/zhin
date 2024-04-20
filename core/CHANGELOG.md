@@ -1,5 +1,12 @@
 # @zhinjs/core
 
+## 1.0.6
+
+### Patch Changes
+
+- 6f55d93: init error
+- db0f54a: 功能优化
+
 ## 1.0.5
 
 ### Patch Changes

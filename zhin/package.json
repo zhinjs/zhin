@@ -2,7 +2,7 @@
     "name": "zhin",
     "main": "lib/index.cjs",
     "types": "lib/index.d.ts",
-    "version": "3.0.14",
+    "version": "3.0.15",
     "bin": "./bin.js",
     "scripts": {
         "compile": "tsup",
