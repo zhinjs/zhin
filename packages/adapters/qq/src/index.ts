@@ -90,26 +90,29 @@ const initBot = (configs: App.BotConfig<'qq'>[]) => {
         isPublic && 'PUBLIC_GUILD_MESSAGES',
       ].filter(Boolean) as Intent[],
     };
-    const bot = new Bot(botConfig);
+    const bot = new Bot(botConfig) as Adapter.Bot<Bot>;
     Object.defineProperties(bot, {
       unique_id: {
-        value: config.appid,
+        value: config.unique_id,
         writable: false,
       },
       quote_self: {
-        value: config.quote_self,
-        writable: false,
+        get() {
+          return qq.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.quote_self;
+        },
       },
       forward_length: {
-        value: config.forward_length,
-        writable: false,
+        get() {
+          return qq.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.forward_length;
+        },
       },
       command_prefix: {
-        value: config.command_prefix,
-        writable: false,
+        get() {
+          return qq.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.command_prefix;
+        },
       },
     });
-    qq.bots.push(bot as Adapter.Bot<Bot>);
+    qq.bots.push(bot);
   }
   qq.on('start', startBots);
   qq.on('stop', stopBots);

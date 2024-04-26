@@ -76,7 +76,10 @@ export namespace MessageV12 {
       if (type === 'text') result += data.text || '';
       else
         result += `<${type} ${Object.entries(data)
-          .map(([key, value]) => `${key}='${JSON.stringify(value)}'`)
+          .map(([key, value]) => {
+            if (key === 'qq' && type === 'at') key = 'user_id';
+            return `${key}='${JSON.stringify(value)}'`;
+          })
           .join(' ')}>`;
     }
     return result;

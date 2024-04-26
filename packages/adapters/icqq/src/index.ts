@@ -161,26 +161,29 @@ let adapterConfig: ICQQAdapterConfig;
 const initBot = (configs: App.BotConfig<'icqq'>[]) => {
   adapterConfig = configs;
   for (const { uin, password: _, quote_self, forward_length, ...config } of configs) {
-    const client = new Client(uin, config);
-    Object.defineProperties(client, {
+    const bot = new Client(uin, config) as Adapter.Bot<Client>;
+    Object.defineProperties(bot, {
       unique_id: {
-        value: `${uin}`,
+        value: config.unique_id,
         writable: false,
       },
       quote_self: {
-        value: quote_self,
-        writable: false,
+        get() {
+          return icqq.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.quote_self;
+        },
       },
       forward_length: {
-        value: forward_length,
-        writable: false,
+        get() {
+          return icqq.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.forward_length;
+        },
       },
       command_prefix: {
-        value: config.command_prefix,
-        writable: false,
+        get() {
+          return icqq.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.command_prefix;
+        },
       },
     });
-    icqq.bots.push(client as Adapter.Bot<Client>);
+    icqq.bots.push(bot);
   }
   icqq.on('start', startBots);
   icqq.on('stop', stopBots);

@@ -43,7 +43,17 @@ export class App extends EventEmitter {
       },
     });
   }
-
+  importConfig(config: App.Config) {
+    this.jsondb.set('config', config);
+    this.loadConfig();
+  }
+  exportConfig(): App.Config {
+    return {
+      ...this.config,
+      adapter_dirs: this.config.adapter_dirs.map(dir => dir.replace(`${WORK_DIR}${path.sep}`, '')),
+      plugin_dirs: this.config.plugin_dirs.map(dir => dir.replace(`${WORK_DIR}${path.sep}`, '')),
+    };
+  }
   registerRender(render: Message.Render) {
     this.renders.push(render);
     return () => remove(this.renders, render);
@@ -284,9 +294,8 @@ export class App extends EventEmitter {
     this.emit('plugin-unmounted', plugin);
     return this;
   }
-
-  async start() {
-    const app = this;
+  private loadConfig() {
+    const app: App = this;
     const createProxy = <T extends object>(obj: T, prefix: string): T => {
       return new Proxy(obj, {
         get(target, key: string | symbol) {
@@ -310,6 +319,9 @@ export class App extends EventEmitter {
       });
     };
     this.config = createProxy(this.jsondb.get<App.Config>('config', App.defaultConfig)!, `config.`);
+  }
+  async start() {
+    this.loadConfig();
     this.logger.level = this.config.log_level;
     this.initPlugins();
     this.initAdapter();
@@ -363,6 +375,7 @@ export class App extends EventEmitter {
     for (const loadPath of maybePath) {
       if (loaded) break;
       try {
+        this.logger.debug(`try load plugin(${name}) from ${loadPath}`);
         this.mount(loadPath);
         loaded = true;
       } catch (e) {

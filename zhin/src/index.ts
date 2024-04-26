@@ -91,14 +91,14 @@ export async function initialApp(this: App) {
   this.jsondb.set('config.adapters', ['processAdapter']);
   this.jsondb.set('config.plugins', ['commandParser', 'echo', 'hmr', 'zhinManager', 'setup']);
   this.jsondb.set('config.plugin_dirs', [
-    path.join(__dirname, 'plugins'), // 内置
-    userPluginDir, // 用户自定义
-    path.join(WORK_DIR, 'node_modules'), // 社区
+    path.relative(WORK_DIR, path.join(__dirname, 'plugins')), // 内置
+    path.relative(WORK_DIR, userPluginDir), // 用户自定义
+    path.relative(WORK_DIR, path.join(WORK_DIR, 'node_modules')), // 社区
   ]);
   this.jsondb.set('config.adapter_dirs', [
-    path.join(__dirname, 'adapters'), // 内置
-    userAdapterDir, // 用户自定义
-    path.join(WORK_DIR, 'node_modules'), // 社区
+    path.relative(WORK_DIR, path.join(__dirname, 'adapters')), // 内置
+    path.relative(WORK_DIR, userAdapterDir), // 用户自定义
+    path.relative(WORK_DIR, path.join(WORK_DIR, 'node_modules')), // 社区
   ]);
   this.jsondb.set('config.bots', [{ adapter: 'process', unique_id: 'developer' }]);
   this.jsondb.set('config.disable_adapters', []);

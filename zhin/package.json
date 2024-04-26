@@ -4,6 +4,9 @@
     "types": "lib/index.d.ts",
     "version": "3.0.17",
     "bin": "./bin.js",
+    "engines": {
+        "node": ">=16"
+    },
     "scripts": {
         "compile": "tsup",
         "build": "npm run compile && npm run dtsc",

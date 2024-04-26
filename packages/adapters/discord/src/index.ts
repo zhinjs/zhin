@@ -56,27 +56,30 @@ type DingTalkMessageEvent = GuildMessageEvent | DirectMessageEvent;
 
 const initBot = (configs: App.BotConfig<'discord'>[]) => {
   for (const config of configs) {
-    const bot = new Bot(config);
+    const bot = new Bot(config) as Adapter.Bot<Bot>;
     Object.defineProperties(bot, {
       unique_id: {
         get() {
-          return bot.self_id;
+          return config.unique_id;
         },
       },
       quote_self: {
-        value: config.quote_self,
-        writable: false,
+        get() {
+          return discordAdapter.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.quote_self;
+        },
       },
       forward_length: {
-        value: config.forward_length,
-        writable: false,
+        get() {
+          return discordAdapter.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.forward_length;
+        },
       },
       command_prefix: {
-        value: config.command_prefix,
-        writable: false,
+        get() {
+          return discordAdapter.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.command_prefix;
+        },
       },
     });
-    discordAdapter.bots.push(bot as Adapter.Bot<Bot>);
+    discordAdapter.bots.push(bot);
   }
   discordAdapter.on('start', startBots);
   discordAdapter.on('stop', stopBots);

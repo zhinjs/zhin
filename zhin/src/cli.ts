@@ -1,16 +1,23 @@
 import path from 'path';
-import fs from 'fs';
 import JITI from 'jiti';
-const defaultArgv = {
-  mode: 'prod',
-  entry: 'lib',
-  init: false,
-};
+import os from 'os';
 const getValue = (list: string[], key: string, defaultValue: string) => {
   const value = list[list.indexOf(key) + 1];
   if (!value || value.startsWith('-')) return defaultValue;
   list.splice(list.indexOf(key) + 1, 1);
   return value;
+};
+const paddingToLength = (str: string | Buffer, length: number) => {
+  if (str.length === length) return str.toString();
+  if (typeof str === str) str = Buffer.from(str);
+  if (str.length > length) return str.slice(0, length).toString();
+  return str.toString().padEnd(length, '0');
+};
+const defaultArgv = {
+  mode: 'prod',
+  key: paddingToLength(os.userInfo({ encoding: 'utf8' }).username, 16),
+  entry: 'lib',
+  init: false,
 };
 const args = process.argv?.slice(2) || [];
 for (const key of args) {
@@ -25,11 +32,13 @@ for (const key of args) {
       break;
     case 'init':
       defaultArgv.init = true;
+      break;
+    default:
+      defaultArgv.key = paddingToLength(key, 16);
+      args.splice(args.indexOf(key), 1);
+      break;
   }
-}
-if (defaultArgv.init && !fs.existsSync(path.resolve(process.cwd(), `plugins`))) {
-  fs.mkdirSync(path.resolve(process.cwd(), `plugins`));
 }
 const jiti = JITI(__dirname);
 const entry = path.resolve(__dirname, `index${path.extname(__filename)}`);
-jiti(entry).startAppWorker(defaultArgv.mode, defaultArgv.init);
+jiti(entry).startAppWorker(defaultArgv.key, defaultArgv.mode, defaultArgv.init);

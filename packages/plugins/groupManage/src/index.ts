@@ -1,9 +1,11 @@
 import { Plugin } from 'zhin';
 import { OneBotV12Adapter } from '@zhinjs/onebot-12';
+import banRepeat from './banRepeat';
 const groupManage = new Plugin({
   name: '群管理',
   adapters: ['onebot-12'],
 });
+banRepeat(groupManage);
 const groupCommand = groupManage.command('群管理').desc('群操作模块');
 groupCommand
   .command('thumbMe')
@@ -24,7 +26,7 @@ groupCommand
   .command('pin [message_id:string]')
   .desc('置顶群消息')
   .alias('置顶')
-  .permission('admin')
+  .permission('admin', 'master')
   .scope('group')
   .action<OneBotV12Adapter>(async ({ bot, message }, message_id) => {
     if (!message_id) message_id = message.quote?.message_id!;
@@ -36,7 +38,7 @@ groupCommand
   .command('unPin [message_id:string]')
   .desc('取消置顶群消息')
   .alias('取消置顶')
-  .permission('admin')
+  .permission('admin', 'master')
   .scope('group')
   .action<OneBotV12Adapter>(async ({ bot, message }, message_id) => {
     if (!message_id) message_id = message.quote?.message_id!;
@@ -47,20 +49,20 @@ groupCommand
 groupCommand
   .command('mute [user_id:user_id]')
   .desc('禁言群成员')
-  .permission('admin')
+  .permission('admin', 'master')
   .scope('group')
   .option('-t [time:number] 禁言时长,单位秒', 10)
   .action<OneBotV12Adapter>(async ({ bot, message, options }, user_id) => {
-    await bot.setGroupBan(message.group_id + '', user_id + '', options.time as number);
+    await bot.setGroupBan(message.from_id + '', user_id + '', options.time as number);
     return `已尝试将(${user_id})禁言时长设为${options.time}秒`;
   });
 groupCommand
   .command('kick [user_id:user_id]')
   .desc('踢出群成员')
-  .permission('admin')
+  .permission('admin', 'master')
   .scope('group')
   .action<OneBotV12Adapter>(async ({ bot, message }, user_id) => {
-    const isSuccess = await bot.setGroupKick(message.group_id + '', user_id + '');
+    const isSuccess = await bot.setGroupKick(message.from_id + '', user_id + '');
     return isSuccess ? `已踢出用户 ${user_id}` : '踢出失败';
   });
 groupCommand
@@ -70,57 +72,64 @@ groupCommand
   .permission('master')
   .scope('group')
   .action<OneBotV12Adapter>(async ({ bot, message, options }, user_id) => {
-    const isSuccess = await bot.setGroupAdmin(message.group_id + '', user_id + '', !options.cancel);
+    const isSuccess = await bot.setGroupAdmin(message.from_id + '', user_id + '', !options.cancel);
     return isSuccess ? `已${options.cancel ? '取消' : ''}设置管理员 ${user_id}` : '设置管理员失败';
   });
 groupCommand
   .command('setTitle <user_id:user_id> <title:string>')
   .desc('设置/取消设置群头衔')
-  .permission('admin')
+  .permission('admin', 'master')
   .option('-t <time:number>', -1)
   .option('-c <cancel:boolean>', false)
   .scope('group')
   .action<OneBotV12Adapter>(async ({ bot, message, options }, user_id, title) => {
     if (options.cancel) options.time = 0;
-    const isSuccess = await bot.setGroupSpecialTitle(message.group_id + '', user_id, title, options.time);
+    const isSuccess = await bot.setGroupSpecialTitle(message.from_id + '', user_id, title, options.time);
     return isSuccess ? `已${options.cancel ? '取消' : ''}设置头衔 ${user_id}` : '设置头衔失败';
   });
 groupCommand
   .command('setNotice <notice:string>')
   .desc('设置设置群公告')
-  .permission('admin')
+  .permission('admin', 'master')
   .scope('group')
   .action<OneBotV12Adapter>(async ({ bot, message }, notice) => {
-    const isSuccess = await bot.sendGroupNotice(message.group_id + '', notice);
+    const isSuccess = await bot.sendGroupNotice(message.from_id + '', notice);
     return isSuccess ? '设置公告成功' : '设置公告失败';
   });
 groupCommand
   .command('setAnonymous')
   .desc('开启/关闭群匿名')
-  .permission('admin')
+  .permission('admin', 'master')
   .scope('group')
   .option('-c <cancel:boolean>', false)
   .action<OneBotV12Adapter>(async ({ bot, message, options }) => {
-    const isSuccess = await bot.setGroupAnonymous(message.group_id + '', !options.cancel);
+    const isSuccess = await bot.setGroupAnonymous(message.from_id + '', !options.cancel);
     return isSuccess ? `已${options.cancel ? '开启' : '关闭'}群匿名` : '管理群匿名失败';
   });
 groupCommand
   .command('setCard [user_id:user_id] [card:string]')
   .desc('设置/取消设置群名片')
-  .permission('admin')
+  .permission('admin', 'master')
   .scope('group')
   .action<OneBotV12Adapter>(async ({ bot, message }, user_id, card) => {
-    const isSuccess = await bot.setGroupCard(message.group_id + '', user_id + '', card);
+    const isSuccess = await bot.setGroupCard(message.from_id + '', user_id + '', card);
     return isSuccess ? `已${!card ? '取消' : ''}设置名片 ${user_id}` : '设置名片失败';
   });
 groupCommand
   .command('setName [name:string]')
   .desc('修改群名称')
-  .permission('admin')
+  .permission('admin', 'master')
   .scope('group')
   .action<OneBotV12Adapter>(async ({ bot, message }, name) => {
-    const isSuccess = await bot.setGroupName(message.group_id + '', name);
+    const isSuccess = await bot.setGroupName(message.from_id + '', name);
     return isSuccess ? '修改成功' : '修改失败';
+  });
+groupCommand
+  .command('申请群头衔 [name:string]')
+  .scope('group')
+  .action<OneBotV12Adapter>(async ({ bot, message, options }, name) => {
+    const isSuccess = await bot.setGroupSpecialTitle(message.from_id + '', message.sender.user_id + '', name);
+    return isSuccess ? `申请成功！你的头衔是:${name}` : '申请失败';
   });
 groupCommand
   .command('sendPoke [user_id:user_id]')
@@ -128,7 +137,7 @@ groupCommand
   .alias('戳')
   .scope('group')
   .action<OneBotV12Adapter>(async ({ bot, message }, user_id) => {
-    const isSuccess = await bot.sendGroupPoke(message.group_id + '', user_id + '');
+    const isSuccess = await bot.sendGroupPoke(message.from_id + '', user_id + '');
     return isSuccess ? '发送成功' : '发送失败';
   });
 export default groupManage;

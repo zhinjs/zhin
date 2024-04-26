@@ -22,6 +22,7 @@ declare module global {
   namespace NodeJS {
     interface ProcessEnv extends Dict<string> {
       PWD: string;
+      ZHIN_KEY: string;
       START_TIME: string;
       RESTART_TIMES: string;
     }
@@ -36,13 +37,14 @@ const readEnv = (filename: string) => {
   }
   return {};
 };
-export function startAppWorker(mode: string, init = false) {
+export function startAppWorker(key: string, mode: string, init = false) {
   const commonEnv = readEnv(path.join(WORK_DIR, '.env'));
   const modeEnv = deepMerge(commonEnv, readEnv(path.join(WORK_DIR, `.env.${mode}`)));
   const forkOptions: ForkOptions = {
     env: {
       ...process.env,
       mode,
+      ZHIN_KEY: key,
       init: init ? '1' : '0',
       ...modeEnv,
       PWD: WORK_DIR,
@@ -69,6 +71,6 @@ export function startAppWorker(mode: string, init = false) {
       process.exit(code);
     }
     restart_times++;
-    startAppWorker(mode, init);
+    startAppWorker(key, mode, init);
   });
 }

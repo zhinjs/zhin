@@ -54,26 +54,29 @@ dingTalkAdapter
   });
 const initBot = (configs: App.BotConfig<'dingtalk'>[]) => {
   for (const config of configs) {
-    const bot = new Bot(config);
+    const bot = new Bot(config) as Adapter.Bot<Bot>;
     Object.defineProperties(bot, {
       unique_id: {
-        value: config.clientId,
+        value: config.unique_id,
         writable: false,
       },
       quote_self: {
-        value: config.quote_self,
-        writable: false,
+        get() {
+          return dingTalkAdapter.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.quote_self;
+        },
       },
       forward_length: {
-        value: config.forward_length,
-        writable: false,
+        get() {
+          return dingTalkAdapter.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.forward_length;
+        },
       },
       command_prefix: {
-        value: config.command_prefix,
-        writable: false,
+        get() {
+          return dingTalkAdapter.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.command_prefix;
+        },
       },
     });
-    dingTalkAdapter.bots.push(bot as Adapter.Bot<Bot>);
+    dingTalkAdapter.bots.push(bot);
   }
   dingTalkAdapter.on('start', startBots);
   dingTalkAdapter.on('stop', stopBots);

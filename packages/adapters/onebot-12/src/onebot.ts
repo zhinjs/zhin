@@ -261,6 +261,7 @@ export class OneBotV12 extends EventEmitter {
     });
   }
   setGroupSpecialTitle(group_id: string, user_id: string, special_title?: string, duration?: number) {
+    console.log(group_id, user_id, special_title);
     return this.sendPayload({
       action: 'set_group_special_title',
       params: { group_id, user_id, special_title, duration },
@@ -284,10 +285,10 @@ export class OneBotV12 extends EventEmitter {
       params: { group_id, user_id, card },
     });
   }
-  setGroupName(group_id: string, group_name: string) {
+  setGroupName(group_id: string, name: string) {
     return this.sendPayload({
       action: 'set_group_name',
-      params: { group_id, group_name },
+      params: { group_id, name },
     });
   }
   sendGroupPoke(group_id: string, user_id: string) {

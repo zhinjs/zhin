@@ -1,7 +1,7 @@
 import { deepClone, findLastIndex, isEmpty, trimQuote } from './utils';
 import { Bot, Dict } from './types';
 import { Adapter } from './adapter';
-import { Message } from './message';
+import { Message, segment } from './message';
 import { Prompt } from './prompt';
 
 type Argv = {
@@ -257,7 +257,7 @@ export class Command<A extends any[] = [], O = {}> {
     try {
       runtime = this.parse(adapter, bot, message, template);
     } catch (e: any) {
-      return e.message;
+      return segment.text(e.message);
     }
     if (!runtime) return;
     for (const checker of runtime.command.checkers) {
@@ -396,7 +396,10 @@ export class Command<A extends any[] = [], O = {}> {
     message: Message<AD>,
     template: string,
   ): Command.RunTime<AD, A, O> | void {
-    if (bot.command_prefix) template = template.replace(bot.command_prefix, '');
+    if (bot.command_prefix) {
+      if (!template.startsWith(bot.command_prefix)) return;
+      template = template.replace(bot.command_prefix, '');
+    }
     let argv = this.parseSugar(template);
     if (!argv.name) argv = this.parseArgv(template);
     if (argv.name !== this.name) {
@@ -686,9 +689,7 @@ export namespace Command {
   registerDomain('regexp', source => new RegExp(source));
   registerDomain('user_id', {
     transform: source => {
-      const autoCloseMention = source.match(/^<at user_id="(\S+)"[^\/]*?\/>$/);
-      const twinningMention = source.match(/^<at user_id="(\S+)"[^>]*?>[^<]*?<\/at>$/);
-      const matched = autoCloseMention || twinningMention;
+      const matched = source.match(/^<at user_id=(["'])(\S+)\1[^>]*>$/);
       if (!matched) {
         if (!/^\d+$/.test(source))
           throw new Error(
@@ -696,7 +697,7 @@ export namespace Command {
           );
         return source;
       }
-      return matched[1];
+      return matched[2];
     },
     validate: value => {
       return ['string', 'number'].includes(getType(value));

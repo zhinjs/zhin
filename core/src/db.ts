@@ -24,6 +24,15 @@ export class JsonDB {
     if (typeof rawData === 'string') rawData = Buffer.from(rawData, 'hex');
     return parseObjFromStr(aesDecrypt(rawData, this.key).toString('utf8'));
   }
+  replace<T>(route: string, before: T, after: T) {
+    const index = this.indexOf<T>(route, before);
+    if (index < 0) return;
+    return this.splice(route, index, 1, after);
+  }
+  remove<T>(route: string, before: T) {
+    const index = this.indexOf(route, before);
+    return this.splice(route, index, 1);
+  }
   private write() {
     fs.writeFileSync(this.filePath, this.encryptedData, 'hex');
   }
@@ -35,7 +44,9 @@ export class JsonDB {
     return arr.findIndex(predicate);
   }
   indexOf<T>(route: string, item: T) {
-    return this.findIndex<T>(route, value => value === item);
+    return this.findIndex<T>(route, value => {
+      return stringifyObj(item) === stringifyObj(value);
+    });
   }
   get<T>(route: string, initialValue?: T): T | undefined {
     this.read();
@@ -45,13 +56,14 @@ export class JsonDB {
     let temp: Dict = this.data;
     while (parentPath.length) {
       const currentKey = parentPath.shift() as string;
-      if (!Reflect.has(temp, currentKey)) Reflect.set(temp, key, {});
+      if (!Reflect.has(temp, currentKey)) Reflect.set(temp, currentKey, {});
       temp = Reflect.get(temp, currentKey);
     }
-    if (temp[key] !== undefined) return temp[key];
-    temp[key] = initialValue;
-    this.write();
-    return initialValue;
+    if (!temp[key]) {
+      temp[key] = initialValue;
+      this.write();
+    }
+    return temp[key];
   }
   set<T>(route: string, data: T): T {
     const parentPath = route.split('.');

@@ -44,7 +44,7 @@ export type OneBotMethodsV12 = {
   set_group_admin(params: { group_id: string; user_id: string; enable?: boolean }): boolean;
   set_group_anonymous(params: { group_id: string; enable?: boolean }): boolean;
   set_group_card(params: { group_id: string; user_id: string; card?: string }): boolean;
-  set_group_name(params: { group_id: string; group_name: string }): boolean;
+  set_group_name(params: { group_id: string; name: string }): boolean;
   set_group_leave(params: { group_id: string; is_dismiss?: boolean }): void;
   set_group_special_title(params: {
     group_id: string;

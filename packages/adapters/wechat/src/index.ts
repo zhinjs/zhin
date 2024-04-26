@@ -25,26 +25,29 @@ wechatAdapter.define('sendMsg', async (bot_id, target_id, target_type, message, 
 });
 const initBot = (configs: App.BotConfig<'wechat'>[]) => {
   for (const config of configs) {
-    const bot = new Client(config);
+    const bot = new Client(config) as Adapter.Bot<Client>;
     Object.defineProperties(bot, {
       unique_id: {
-        value: bot.uin + '',
+        value: config.unique_id,
         writable: false,
       },
       quote_self: {
-        value: config.quote_self,
-        writable: false,
+        get() {
+          return wechatAdapter.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.command_prefix;
+        },
       },
       forward_length: {
-        value: config.forward_length,
-        writable: false,
+        get() {
+          return wechatAdapter.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.forward_length;
+        },
       },
       command_prefix: {
-        value: config.command_prefix,
-        writable: false,
+        get() {
+          return wechatAdapter.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.command_prefix;
+        },
       },
     });
-    wechatAdapter.bots.push(bot as Adapter.Bot<Client>);
+    wechatAdapter.bots.push(bot);
   }
   wechatAdapter.on('start', startBots);
   wechatAdapter.on('stop', stopBots);

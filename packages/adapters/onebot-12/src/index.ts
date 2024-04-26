@@ -53,28 +53,31 @@ const initBot = (configs: App.BotConfig<'onebot-12'>[]) => {
     throw new Error('“oneBot V12 miss require service “http”, maybe you need install “ @zhinjs/plugin-http-server ”');
 
   for (const config of configs) {
-    const bot = new OneBotV12(oneBotV12, config, oneBotV12.app!.router);
+    const bot = new OneBotV12(oneBotV12, config, oneBotV12.app!.router) as Adapter.Bot<OneBotV12>;
 
     Object.defineProperties(bot, {
       unique_id: {
         get() {
-          return bot.self_id;
+          return config.unique_id;
         },
       },
       quote_self: {
-        value: config.quote_self,
-        writable: false,
+        get() {
+          return oneBotV12.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.quote_self;
+        },
       },
       forward_length: {
-        value: config.forward_length,
-        writable: false,
+        get() {
+          return oneBotV12.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.forward_length;
+        },
       },
       command_prefix: {
-        value: config.command_prefix,
-        writable: false,
+        get() {
+          return oneBotV12.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.command_prefix;
+        },
       },
     });
-    oneBotV12.bots.push(bot as Adapter.Bot<OneBotV12>);
+    oneBotV12.bots.push(bot);
   }
   oneBotV12.on('start', startBots);
   oneBotV12.on('stop', stopBots);
