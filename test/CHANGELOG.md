@@ -1,5 +1,30 @@
 # test
 
+## 2.0.19
+
+### Patch Changes
+
+- ce1218f: release
+- Updated dependencies [ce1218f]
+  - @zhinjs/plugin-group-manage@1.0.18
+  - @zhinjs/onebot-11@1.0.18
+  - @zhinjs/onebot-12@1.0.18
+  - @zhinjs/dingtalk@1.0.18
+  - @zhinjs/discord@1.0.18
+  - @zhinjs/wechat@1.0.18
+  - @zhinjs/icqq@1.0.19
+  - @zhinjs/qq@1.0.18
+  - zhin@3.0.18
+  - @zhinjs/plugin-guild-manage@1.0.18
+  - @zhinjs/plugin-qa@1.0.18
+  - @zhinjs/plugin-schedule@1.0.18
+  - @zhinjs/plugin-drawer@1.0.18
+  - @zhinjs/plugin-http-server@1.0.18
+  - @zhinjs/plugin-render@1.0.18
+  - @zhinjs/plugin-sandbox@1.0.18
+  - @zhinjs/plugin-upyun@1.0.18
+  - @zhinjs/web@1.0.18
+
 ## 2.0.18
 
 ### Patch Changes

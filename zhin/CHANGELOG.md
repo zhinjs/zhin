@@ -1,5 +1,13 @@
 # zhin
 
+## 3.0.18
+
+### Patch Changes
+
+- ce1218f: release
+- Updated dependencies [ce1218f]
+  - @zhinjs/core@1.0.9
+
 ## 3.0.17
 
 ### Patch Changes
