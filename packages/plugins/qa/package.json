@@ -2,7 +2,7 @@
     "name": "@zhinjs/plugin-qa",
     "main": "lib/index.cjs",
     "types": "lib/index.d.ts",
-    "version": "1.0.17",
+    "version": "1.0.18",
     "scripts": {
         "build": "tsup && tsc && tsc-alias"
     },

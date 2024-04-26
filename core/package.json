@@ -1,6 +1,6 @@
 {
   "name": "@zhinjs/core",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "main": "./lib/index.cjs",
   "module": "./lib/index.mjs",
   "types": "./lib/index.d.ts",
