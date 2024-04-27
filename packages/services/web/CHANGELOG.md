@@ -1,5 +1,12 @@
 # @zhinjs/web
 
+## 1.0.19
+
+### Patch Changes
+
+- Updated dependencies [7e4d7f7]
+  - @zhinjs/client@1.0.8
+
 ## 1.0.18
 
 ### Patch Changes

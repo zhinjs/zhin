@@ -1,5 +1,11 @@
 # @zhinjs/client
 
+## 1.0.8
+
+### Patch Changes
+
+- 7e4d7f7: release
+
 ## 1.0.7
 
 ### Patch Changes
