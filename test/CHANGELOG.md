@@ -1,5 +1,15 @@
 # test
 
+## 2.0.20
+
+### Patch Changes
+
+- Updated dependencies [7e4d7f7]
+  - @zhinjs/onebot-12@1.0.19
+  - @zhinjs/client@1.0.8
+  - @zhinjs/plugin-group-manage@1.0.19
+  - @zhinjs/web@1.0.19
+
 ## 2.0.19
 
 ### Patch Changes

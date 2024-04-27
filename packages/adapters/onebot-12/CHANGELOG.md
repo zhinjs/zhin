@@ -1,5 +1,11 @@
 # @zhinjs/onebot-12
 
+## 1.0.19
+
+### Patch Changes
+
+- 7e4d7f7: release
+
 ## 1.0.18
 
 ### Patch Changes
