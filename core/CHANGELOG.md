@@ -1,5 +1,11 @@
 # @zhinjs/core
 
+## 1.0.9
+
+### Patch Changes
+
+- ce1218f: release
+
 ## 1.0.8
 
 ### Patch Changes

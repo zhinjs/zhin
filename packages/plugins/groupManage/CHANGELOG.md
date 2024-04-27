@@ -1,5 +1,14 @@
 # @zhinjs/plugin-group-manage
 
+## 1.0.18
+
+### Patch Changes
+
+- ce1218f: release
+- Updated dependencies [ce1218f]
+  - @zhinjs/onebot-12@1.0.18
+  - zhin@3.0.18
+
 ## 1.0.17
 
 ### Patch Changes
