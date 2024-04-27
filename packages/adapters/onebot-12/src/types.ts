@@ -65,6 +65,7 @@ export type OneBotMethodsV12 = {
   get_friend_list(params: object): FriendInfo[];
   get_group_info(params: { group_id: string; no_cache?: boolean }): GroupInfo;
   get_group_list(params: object): GroupInfo[];
+  get_guild_list(params: object): GuildInfo[];
   get_group_member_list(params: { group_id: string }): MemberInfo[];
   get_group_member_info(params: { group_id: string; user_id: string }): MemberInfo;
   get_group_honor_info(params: { group_id: string; type: string }): HonorInfo;
@@ -111,6 +112,10 @@ export interface MemberInfo extends BaseInfo {
   title: string;
   title_expire_time: string;
   card_changeable: boolean;
+}
+export interface GuildInfo {
+  guild_id: string;
+  guild_name: string;
 }
 export interface GroupInfo {
   group_id: string;

@@ -187,6 +187,12 @@ export class OneBotV12 extends EventEmitter {
       params: {},
     });
   }
+  getGuildList() {
+    return this.sendPayload({
+      action: 'get_guild_list',
+      params: {},
+    });
+  }
   getGroupInfo(group_id: string) {
     return this.sendPayload({
       action: 'get_group_info',

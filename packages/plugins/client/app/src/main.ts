@@ -6,7 +6,7 @@ import 'element-plus/dist/index.css';
 import { router, useCommonStore } from '@zhinjs/client';
 import App from './App.vue';
 const pinia = createPinia();
-const wsUrl = `${window.location.protocol.startsWith('https?') ? 'wss://' : 'ws://'}${window.location.host}/server`;
+const wsUrl = `${window.location.protocol.startsWith('https') ? 'wss://' : 'ws://'}${window.location.host}/server`;
 const ws = new WebSocket(wsUrl);
 ws.onopen = () => {
   console.log('connection to ' + wsUrl);
