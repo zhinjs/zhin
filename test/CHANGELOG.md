@@ -1,5 +1,30 @@
 # test
 
+## 2.0.21
+
+### Patch Changes
+
+- 612dc9a: fix remove esm
+- Updated dependencies [612dc9a]
+  - @zhinjs/plugin-http-server@1.0.19
+  - @zhinjs/plugin-group-manage@1.0.20
+  - @zhinjs/plugin-guild-manage@1.0.19
+  - @zhinjs/onebot-11@1.0.19
+  - @zhinjs/onebot-12@1.0.20
+  - @zhinjs/dingtalk@1.0.19
+  - @zhinjs/discord@1.0.19
+  - @zhinjs/plugin-schedule@1.0.19
+  - @zhinjs/plugin-sandbox@1.0.19
+  - @zhinjs/wechat@1.0.19
+  - @zhinjs/plugin-drawer@1.0.19
+  - @zhinjs/client@1.0.9
+  - @zhinjs/plugin-upyun@1.0.19
+  - @zhinjs/icqq@1.0.20
+  - @zhinjs/web@1.0.20
+  - @zhinjs/qq@1.0.19
+  - @zhinjs/plugin-qa@1.0.19
+  - zhin@3.0.19
+
 ## 2.0.20
 
 ### Patch Changes

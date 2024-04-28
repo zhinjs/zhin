@@ -1,5 +1,14 @@
 # @zhinjs/onebot-11
 
+## 1.0.19
+
+### Patch Changes
+
+- 612dc9a: fix remove esm
+- Updated dependencies [612dc9a]
+  - @zhinjs/plugin-http-server@1.0.19
+  - zhin@3.0.19
+
 ## 1.0.18
 
 ### Patch Changes

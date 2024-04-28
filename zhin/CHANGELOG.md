@@ -1,5 +1,14 @@
 # zhin
 
+## 3.0.19
+
+### Patch Changes
+
+- 612dc9a: fix remove esm
+- Updated dependencies [612dc9a]
+- Updated dependencies [856d855]
+  - @zhinjs/core@1.0.10
+
 ## 3.0.18
 
 ### Patch Changes
