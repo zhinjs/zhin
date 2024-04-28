@@ -1,5 +1,12 @@
 # @zhinjs/core
 
+## 1.0.10
+
+### Patch Changes
+
+- 612dc9a: fix remove esm
+- 856d855: fix: release
+
 ## 1.0.9
 
 ### Patch Changes
