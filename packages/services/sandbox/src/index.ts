@@ -96,19 +96,23 @@ sandbox.mounted(() => {
       } as Component.Context<{ result: axios.AxiosResponse }>);
     },
   });
-});
-sandbox.component({
-  name: 'eval',
-  async render(props, context) {
-    if (!context.children) return '';
-    const result = await renderWithRuntime(context.children, {}, context.$root);
-    const commands = sandbox.app!.getSupportCommands(context.$message.adapter, context.$message.bot, context.$message);
-    for (const command of commands) {
-      const res = await command.execute(context.$message.adapter, context.$message.bot, context.$message, result);
-      if (res) return res;
-    }
-    return result;
-  },
+  sandbox.component({
+    name: 'eval',
+    async render(props, context) {
+      if (!context.children) return '';
+      const result = await renderWithRuntime(context.children, {}, context.$root);
+      const commands = sandbox.app!.getSupportCommands(
+        context.$message.adapter,
+        context.$message.bot,
+        context.$message,
+      );
+      for (const command of commands) {
+        const res = await command.execute(context.$message.adapter, context.$message.bot, context.$message, result);
+        if (res) return res;
+      }
+      return result;
+    },
+  });
 });
 sandbox.beforeMount(() => {
   while (disposeArr.length) {

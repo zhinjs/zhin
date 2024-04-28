@@ -23,10 +23,6 @@
         "docs:build": "vitepress build docs",
         "docs:serve": "vitepress serve docs"
     },
-    "engines": {
-        "node": ">=16",
-        "pnpm": ">=8"
-    },
     "packageManager": "pnpm@9.0.2",
     "publishConfig": {
         "access": "public",
@@ -55,7 +51,6 @@
         "rimraf": "^5.0.5",
         "semver": "^7.5.4",
         "tsc-alias": "^1.8.8",
-        "tsup": "latest",
         "typescript": "^5.2.2",
         "vitepress": "1.0.0-rc.39",
         "vue": "^3.4.15"

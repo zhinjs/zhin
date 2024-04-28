@@ -29,8 +29,7 @@ npm install @zhinjs/decorator
 ```json
 {
   "compilerOptions": {
-    "emitDecoratorMetadata": true,
-    "experimentalDecorators": true
+    "emitDecoratorMetadata": true
   }
 }
 ```

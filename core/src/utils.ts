@@ -290,3 +290,42 @@ export function stringifyObj(value: any): string {
   _stringify(value, []);
   return JSON.stringify(result, null, 2);
 }
+const timeInfo = [
+  {
+    unit: 'w',
+    text: '周',
+    microSeconds: 1000 * 60 * 60 * 24 * 7,
+  },
+  {
+    unit: 'd',
+    text: '天',
+    microSeconds: 1000 * 60 * 60 * 24,
+  },
+  {
+    unit: 'h',
+    text: '小时',
+    microSeconds: 1000 * 60 * 60,
+  },
+  {
+    unit: 'm',
+    text: '分',
+    microSeconds: 1000 * 60,
+  },
+  {
+    unit: 's',
+    text: '秒',
+    microSeconds: 1000,
+  },
+];
+export function parseTimeFromStr(dateStr: string) {
+  const reg = /(\d+[wdhms])/g;
+  const matched = dateStr.match(reg);
+  if (!matched) throw new Error('invalid date str');
+  let result = 0;
+  for (const _temp of [...matched]) {
+    const num = parseInt(_temp);
+    const unit = _temp.replace(`${num}`, '');
+    result += timeInfo.find(item => item.unit === unit)!.microSeconds * num || 0;
+  }
+  return result;
+}

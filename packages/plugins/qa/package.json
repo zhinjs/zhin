@@ -1,10 +1,10 @@
 {
     "name": "@zhinjs/plugin-qa",
-    "main": "lib/index.cjs",
+    "main": "lib/index.js",
     "types": "lib/index.d.ts",
     "version": "1.0.18",
     "scripts": {
-        "build": "tsup && tsc && tsc-alias"
+        "build": "tsc && tsc-alias"
     },
     "files": [
         "lib"

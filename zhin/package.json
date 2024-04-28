@@ -1,6 +1,6 @@
 {
     "name": "zhin",
-    "main": "lib/index.cjs",
+    "main": "lib/index.js",
     "types": "lib/index.d.ts",
     "version": "3.0.18",
     "bin": "./bin.js",
@@ -8,16 +8,9 @@
         "node": ">=16"
     },
     "scripts": {
-        "compile": "tsup",
+        "compile": "tsc && tsc-alias",
         "build": "npm run compile && npm run dtsc",
         "dtsc": "dtsc --project tsconfig.dtsc.json"
-    },
-    "exports": {
-        ".": {
-            "types": "./lib/index.d.ts",
-            "require": "./lib/index.cjs",
-            "import": "./lib/index.mjs"
-        }
     },
     "files": [
         "lib",

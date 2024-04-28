@@ -5,7 +5,6 @@
     "noEmitOnError": true,
     "declaration": true,
     "esModuleInterop": true,
-    "emitDeclarationOnly": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "baseUrl": ".",
@@ -13,17 +12,6 @@
     "jsxFactory": "h",
     "jsxFragmentFactory": "Fragment",
     "skipLibCheck": true,
-    "types": ["@types/node"],
-    "paths": {
-      "@zhinjs/core": ["core/src"],
-      "zhin": ["zhin/src"],
-      "@zhinjs/plugin-*": ["packages/plugins/*/src"],
-      "@zhinjs/service-*": ["packages/services/*/src"],
-      "@zhinjs/*": [
-        "packages/adapter/*/src",
-        "packages/services/*/src",
-        "packages/plugins/*/src"
-      ]
-    }
+    "types": ["@types/node"]
   }
 }
