@@ -13,30 +13,30 @@ const sandbox = new Plugin('沙箱环境');
 sandbox.service('components', Component.components);
 sandbox.service('component', Component.define);
 const disposeArr: Function[] = [];
+const createContext = (runtime: Dict = {}, parent: Component.Context, $root: string): Component.Context => {
+  return {
+    $slots: {},
+    ...runtime,
+    $message: parent.$message,
+    $root,
+    parent,
+    render: (template: string, context) => {
+      return renderWithRuntime(template, context, context.$root);
+    },
+  };
+};
+const renderWithRuntime = async (template: string, runtime: Dict, $root: string) => {
+  const ctx = createContext(runtime, runtime as Component.Context, $root);
+  template = compiler(template, runtime);
+  for (const [name, comp] of sandbox.components) {
+    const match = comp.match(template);
+    if (!match) continue;
+    return await comp.render(match, ctx);
+  }
+  return template;
+};
 sandbox.mounted(() => {
   const dispose = sandbox.app!.registerRender(async (template, $message) => {
-    const createContext = (runtime: Dict = {}, parent: Component.Context, $root: string): Component.Context => {
-      return {
-        $slots: {},
-        ...runtime,
-        $message: parent.$message,
-        $root,
-        parent,
-        render: (template: string, context) => {
-          return renderWithRuntime(template, context, context.$root);
-        },
-      };
-    };
-    const renderWithRuntime = async (template: string, runtime: Dict, $root: string) => {
-      const ctx = createContext(runtime, runtime as Component.Context, $root);
-      template = compiler(template, runtime);
-      for (const [name, comp] of sandbox.components) {
-        const match = comp.match(template);
-        if (!match) continue;
-        return await comp.render(match, ctx);
-      }
-      return template;
-    };
     return await renderWithRuntime(template, { $message }, template);
   });
   disposeArr.push(dispose);
@@ -96,6 +96,19 @@ sandbox.mounted(() => {
       } as Component.Context<{ result: axios.AxiosResponse }>);
     },
   });
+});
+sandbox.component({
+  name: 'eval',
+  async render(props, context) {
+    if (!context.children) return '';
+    const result = await renderWithRuntime(context.children, {}, context.$root);
+    const commands = sandbox.app!.getSupportCommands(context.$message.adapter, context.$message.bot, context.$message);
+    for (const command of commands) {
+      const res = await command.execute(context.$message.adapter, context.$message.bot, context.$message, result);
+      if (res) return res;
+    }
+    return result;
+  },
 });
 sandbox.beforeMount(() => {
   while (disposeArr.length) {

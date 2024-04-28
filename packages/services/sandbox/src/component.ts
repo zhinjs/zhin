@@ -160,7 +160,7 @@ export namespace Component {
 
   export type Context<T = {}> = {
     $slots: Dict<Render<any, any>>;
-    $message?: Message;
+    $message: Message;
     $origin?: string;
     $root: string;
     parent: Context;

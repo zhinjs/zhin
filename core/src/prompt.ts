@@ -131,7 +131,7 @@ export class Prompt<T extends Adapter = Adapter> {
       format: (input: string) => {
         if (!config.multiple)
           return config.options.find((o, idx) => {
-            return idx === +input;
+            return idx + 1 === +input;
           })?.value;
         const pickIdx = input.split(separator).map(Number);
         return config.options
