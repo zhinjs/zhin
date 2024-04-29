@@ -1,5 +1,5 @@
 import { watch, FSWatcher } from 'chokidar';
-import { App, wrapExport, Plugin, WORK_DIR, Bot } from '@zhinjs/core';
+import { Plugin, WORK_DIR, Bot } from '@zhinjs/core';
 import * as path from 'path';
 import * as fs from 'fs';
 import { ProcessMessage, QueueInfo } from '../worker';
@@ -10,25 +10,24 @@ hmr.unmounted(() => {
   watcher?.close();
 });
 hmr.mounted(app => {
-  const configFiles = [
-    `${process.env.cofnig}.js`,
-    `${process.env.config}.ts`,
-    `${process.env.cofnig}.cjs`,
-    `${process.env.config}.mts`,
-  ].filter(filePath => fs.existsSync(filePath));
   const watchDirs = [
     // 只监听本地插件和内置插件的变更，模块的管不了
     ...(app.config.plugin_dirs || []).map(dir => {
-      return path.resolve(WORK_DIR, dir);
+      const result = path.resolve(WORK_DIR, dir);
     }), // 本地目录插件
     __dirname, // 内置插件
-    ...configFiles,
     path.resolve(WORK_DIR, `.${process.env.mode}.env`), // 环境变量
   ].filter(Boolean);
   watcher = watch(
-    watchDirs.filter(p => {
-      return fs.existsSync(p);
-    }),
+    watchDirs
+      .filter(p => {
+        return fs.existsSync(p);
+      })
+      .map(p => {
+        return p.endsWith('node_modules')
+          ? `${p}${path.sep}zhin-plugin-*${path.sep}lib${path.sep}*.{ts,js,cjs,mjs}`
+          : p;
+      }),
   );
   const reloadProject = (filename: string) => {
     app.logger.info(`\`${filename}\` changed restarting ...`);
