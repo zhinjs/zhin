@@ -1,5 +1,13 @@
 # @zhinjs/plugin-group-manage
 
+## 1.0.21
+
+### Patch Changes
+
+- Updated dependencies [fde92e6]
+  - zhin@3.0.20
+  - @zhinjs/onebot-12@1.0.21
+
 ## 1.0.20
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @zhinjs/icqq
 
+## 1.0.21
+
+### Patch Changes
+
+- Updated dependencies [fde92e6]
+  - zhin@3.0.20
+
 ## 1.0.20
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @zhinjs/dingtalk
 
+## 1.0.20
+
+### Patch Changes
+
+- Updated dependencies [fde92e6]
+  - zhin@3.0.20
+
 ## 1.0.19
 
 ### Patch Changes
