@@ -1,5 +1,11 @@
 # zhin
 
+## 3.0.21
+
+### Patch Changes
+
+- 4c792b1: fix release
+
 ## 3.0.20
 
 ### Patch Changes

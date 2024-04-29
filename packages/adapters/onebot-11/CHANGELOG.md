@@ -1,5 +1,13 @@
 # @zhinjs/onebot-11
 
+## 1.0.21
+
+### Patch Changes
+
+- Updated dependencies [4c792b1]
+  - zhin@3.0.21
+  - @zhinjs/plugin-http-server@1.0.21
+
 ## 1.0.20
 
 ### Patch Changes
