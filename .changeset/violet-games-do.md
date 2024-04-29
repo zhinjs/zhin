@@ -1,0 +1,5 @@
+---
+"zhin": patch
+---
+
+fix release
