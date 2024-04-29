@@ -17,7 +17,7 @@ hmr.mounted(app => {
     }), // 本地目录插件
     __dirname, // 内置插件
     path.resolve(WORK_DIR, `.${process.env.mode}.env`), // 环境变量
-  ].filter(Boolean);
+  ].filter(Boolean) as string[];
   watcher = watch(
     watchDirs
       .filter(p => {
