@@ -1,5 +1,28 @@
 # test
 
+## 2.0.23
+
+### Patch Changes
+
+- Updated dependencies [4c792b1]
+  - zhin@3.0.21
+  - @zhinjs/dingtalk@1.0.21
+  - @zhinjs/discord@1.0.21
+  - @zhinjs/icqq@1.0.22
+  - @zhinjs/onebot-11@1.0.21
+  - @zhinjs/onebot-12@1.0.22
+  - @zhinjs/qq@1.0.21
+  - @zhinjs/wechat@1.0.21
+  - @zhinjs/plugin-group-manage@1.0.22
+  - @zhinjs/plugin-guild-manage@1.0.21
+  - @zhinjs/plugin-qa@1.0.21
+  - @zhinjs/plugin-schedule@1.0.21
+  - @zhinjs/plugin-drawer@1.0.21
+  - @zhinjs/plugin-http-server@1.0.21
+  - @zhinjs/plugin-sandbox@1.0.21
+  - @zhinjs/plugin-upyun@1.0.21
+  - @zhinjs/web@1.0.22
+
 ## 2.0.22
 
 ### Patch Changes
