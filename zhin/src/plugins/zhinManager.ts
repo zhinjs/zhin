@@ -276,7 +276,6 @@ botManage
     const schema: Dict = zhinManager.app!.getAdapterSchema(adapter);
     const botConfig: App.BotConfig = {
       adapter,
-      title: process.title,
       ...((await prompt.prompts(schema)) as any),
     };
     zhinManager.app!.config.bots.push(botConfig);

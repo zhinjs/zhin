@@ -6,9 +6,10 @@ export class JsonDB {
   private data: Dict = {};
   constructor(
     private readonly filePath: string,
-    private key = Buffer.from(filePath).subarray(0, 16),
+    private key: string | Buffer = Buffer.from(filePath).subarray(0, 16),
   ) {
     const dir = path.dirname(this.filePath);
+    if (this.key.length < 16) this.key = Buffer.from(this.key.toString().padEnd(16, '0'));
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     if (!this.filePath.endsWith('.runtime')) this.filePath = this.filePath + '.runtime';
     if (!fs.existsSync(this.filePath)) this.write();
@@ -18,11 +19,11 @@ export class JsonDB {
     this.read();
   }
   private get encryptedData() {
-    return aesEncrypt(stringifyObj(this.data), this.key).toString('hex');
+    return aesEncrypt(stringifyObj(this.data), Buffer.from(this.key)).toString('hex');
   }
   #decryptData(rawData: Buffer | string) {
     if (typeof rawData === 'string') rawData = Buffer.from(rawData, 'hex');
-    return parseObjFromStr(aesDecrypt(rawData, this.key).toString('utf8'));
+    return parseObjFromStr(aesDecrypt(rawData, Buffer.from(this.key)).toString('utf8'));
   }
   replace<T>(route: string, before: T, after: T) {
     const index = this.indexOf<T>(route, before);

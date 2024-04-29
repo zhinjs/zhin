@@ -1,6 +1,5 @@
 import path from 'path';
 import JITI from 'jiti';
-import os from 'os';
 const getValue = (list: string[], key: string, defaultValue: string) => {
   const value = list[list.indexOf(key) + 1];
   if (!value || value.startsWith('-')) return defaultValue;
@@ -15,7 +14,7 @@ const paddingToLength = (str: string | Buffer, length: number) => {
 };
 const defaultArgv = {
   mode: 'prod',
-  key: paddingToLength(os.userInfo({ encoding: 'utf8' }).username, 16),
+  key: '',
   entry: 'lib',
   init: false,
 };

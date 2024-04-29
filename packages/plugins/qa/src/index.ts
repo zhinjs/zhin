@@ -146,7 +146,7 @@ qaCommand
     if (!existQa) return `问答${no} 不存在`;
     const editor = `${adapter.name}:${message.sender?.user_id}`;
     if (editor !== existQa?.authorId) return `仅作者本人：${existQa?.authorName} 才能更改哦`;
-    qaPlugin.jsondb.splice('qa', no - 1, 1, {
+    qaPlugin.jsondb.replace('qa', existQa, {
       ...existQa,
       content: content || existQa.content,
       answer: answer || existQa.answer,
@@ -163,7 +163,7 @@ qaCommand
     if (qa.authorId !== `${adapter.name}:${message.sender?.user_id}`) return `非作者本人(${qa.authorName})不可删除!`;
     const isConfirm = options.confirm || (await prompt.confirm('确认删除吗？'));
     if (!isConfirm) return '已取消删除';
-    qaPlugin.jsondb.splice('qa', no - 1, 1);
+    qaPlugin.jsondb.remove('qa', qa);
     return `已删除问答：${no}`;
   });
 qaCommand.command('问答详情 <no:number>').action((_, no) => {
@@ -189,7 +189,7 @@ qaPlugin.middleware(async (adapter, bot, message, next) => {
   if (!qa.regexp) return message.reply(qa.answer);
   const matchArr = message.raw_message.match(new RegExp(qa.content))!;
   matchArr.forEach((match, idx) => {
-    qa.answer = qa.answer.replace(new RegExp(`\\$${idx}`), match);
+    qa.answer = qa.answer.replace(new RegExp(`\\$${idx}`, 'g'), match);
   });
   return message.reply(qa.answer);
 });

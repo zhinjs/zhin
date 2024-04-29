@@ -101,16 +101,13 @@ sandbox.mounted(() => {
     async render(props, context) {
       if (!context.children) return '';
       const result = await renderWithRuntime(context.children, {}, context.$root);
-      const commands = sandbox.app!.getSupportCommands(
-        context.$message.adapter,
-        context.$message.bot,
-        context.$message,
-      );
+      const { adapter, bot } = context.$message;
+      const commands = sandbox.app!.getSupportCommands(adapter, bot, context.$message);
       for (const command of commands) {
-        const res = await command.execute(context.$message.adapter, context.$message.bot, context.$message, result);
+        const res = await command.execute(adapter, bot, context.$message, `${bot.command_prefix}${result}`);
         if (res) return res;
       }
-      return result;
+      throw new Error(`执行${context.children}失败，未找到合适的指令`);
     },
   });
 });

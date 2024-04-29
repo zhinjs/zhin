@@ -31,11 +31,11 @@ export class App extends EventEmitter {
   plugins: PluginMap = new PluginMap();
   renders: Message.Render[] = [];
   #db: JsonDB;
-  constructor() {
+  constructor(key?: string) {
     super();
     this.handleMessage = this.handleMessage.bind(this);
     this.on('message', this.handleMessage);
-    this.#db = new JsonDB(path.join(WORK_DIR, 'data', 'zhin.runtime'));
+    this.#db = new JsonDB(path.join(WORK_DIR, 'data', 'zhin.runtime'), key);
     return new Proxy(this, {
       get(target: App, key) {
         if (Reflect.has(target.services, key)) return Reflect.get(target.services, key);
@@ -67,7 +67,9 @@ export class App extends EventEmitter {
     for (const render of this.renders) {
       try {
         template = await render(template, message);
-      } catch {}
+      } catch (e: unknown) {
+        return `消息渲染失败:${(e as Error)?.message || '未知错误'}`;
+      }
     }
     return template;
   }
@@ -320,7 +322,7 @@ export class App extends EventEmitter {
     };
     this.config = createProxy(this.jsondb.get<App.Config>('config', App.defaultConfig)!, `config.`);
   }
-  async start() {
+  async start(mode: string = 'prod') {
     this.loadConfig();
     this.logger.level = this.config.log_level;
     this.initPlugins();
@@ -442,8 +444,8 @@ export interface App extends App.Services {
   removeAllListeners<S extends string | symbol>(event: S & Exclude<string | symbol, keyof App.EventMap>): this;
 }
 
-export function createApp() {
-  return new App();
+export function createApp(key?: string) {
+  return new App(key);
 }
 
 export namespace App {
