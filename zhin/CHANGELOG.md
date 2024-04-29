@@ -1,5 +1,13 @@
 # zhin
 
+## 3.0.20
+
+### Patch Changes
+
+- fde92e6: npm run release
+- Updated dependencies [fde92e6]
+  - @zhinjs/core@1.0.11
+
 ## 3.0.19
 
 ### Patch Changes

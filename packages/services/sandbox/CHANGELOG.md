@@ -1,5 +1,13 @@
 # @zhinjs/plugin-sandbox
 
+## 1.0.20
+
+### Patch Changes
+
+- fde92e6: npm run release
+- Updated dependencies [fde92e6]
+  - zhin@3.0.20
+
 ## 1.0.19
 
 ### Patch Changes

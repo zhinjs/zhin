@@ -1,5 +1,11 @@
 # @zhinjs/core
 
+## 1.0.11
+
+### Patch Changes
+
+- fde92e6: npm run release
+
 ## 1.0.10
 
 ### Patch Changes
