@@ -24,9 +24,9 @@ hmr.mounted(app => {
         return fs.existsSync(p);
       })
       .map(p => {
-        return p.endsWith('node_modules')
-          ? `${p}${path.sep}zhin-plugin-*${path.sep}lib${path.sep}*.{ts,js,cjs,mjs}`
-          : p;
+        if (p.endsWith('node_modules')) return `${p}${path.sep}zhin-plugin-*${path.sep}lib${path.sep}*.{,c,m}[tj]s`;
+        if (p.endsWith('@zhinjs')) return `${p}${path.sep}plugin-*${path.sep}lib${path.sep}*.{,c,m}[tj]s`;
+        return p;
       }),
   );
   const reloadProject = (filename: string) => {

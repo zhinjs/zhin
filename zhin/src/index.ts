@@ -92,6 +92,7 @@ export async function initialApp(this: App) {
   this.jsondb.set('config.plugins', ['commandParser', 'echo', 'hmr', 'zhinManager', 'setup']);
   this.jsondb.set('config.plugin_dirs', [
     path.relative(WORK_DIR, path.join(__dirname, 'plugins')), // 内置
+    path.relative(WORK_DIR, path.join(WORK_DIR, 'node_modules', '@zhinjs')), // 官方
     path.relative(WORK_DIR, userPluginDir), // 用户自定义
     path.relative(WORK_DIR, path.join(WORK_DIR, 'node_modules')), // 社区
   ]);
