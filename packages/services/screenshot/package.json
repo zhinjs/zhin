@@ -1,5 +1,5 @@
 {
-  "name": "@zhinjs/plugin-drawer",
+  "name": "@zhinjs/plugin-renderer",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "version": "1.0.21",
@@ -15,14 +15,13 @@
     "directory": "packages/services/drawer"
   },
   "dependencies": {
-    "@types/svgdom": "latest",
     "zhin": "workspace:^",
-    "@svgdotjs/svg.js": "latest",
-    "dom-to-svg": "latest",
-    "@resvg/resvg-js": "latest",
-    "svgdom": "latest"
+    "vue": "^3.4.29",
+    "esbuild": "^0.21.5",
+    "esbuild-plugin-vue3": "^0.4.2"
   },
   "peerDependencies": {
-    "zhin": "workspace:^"
+    "zhin": "workspace:^",
+    "puppeteer-core": "^22.11.2"
   }
 }
