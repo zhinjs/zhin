@@ -1,5 +1,14 @@
 # zhin
 
+## 3.0.22
+
+### Patch Changes
+
+- 50f44ad: fix: hmr: 监听官方插件
+- a57566c: fix: use esbuild replace jiti;add screenshot plugin
+- Updated dependencies [a57566c]
+  - @zhinjs/core@1.0.12
+
 ## 3.0.21
 
 ### Patch Changes

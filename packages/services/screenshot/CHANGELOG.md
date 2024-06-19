@@ -1,5 +1,14 @@
 # @zhinjs/plugin-drawer
 
+## 1.0.22
+
+### Patch Changes
+
+- a57566c: fix: use esbuild replace jiti;add screenshot plugin
+- Updated dependencies [50f44ad]
+- Updated dependencies [a57566c]
+  - zhin@3.0.22
+
 ## 1.0.21
 
 ### Patch Changes
