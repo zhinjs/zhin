@@ -1,5 +1,11 @@
 # @zhinjs/core
 
+## 1.0.12
+
+### Patch Changes
+
+- a57566c: fix: use esbuild replace jiti;add screenshot plugin
+
 ## 1.0.11
 
 ### Patch Changes

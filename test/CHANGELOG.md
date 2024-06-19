@@ -1,5 +1,30 @@
 # test
 
+## 2.0.24
+
+### Patch Changes
+
+- a57566c: fix: use esbuild replace jiti;add screenshot plugin
+- Updated dependencies [50f44ad]
+- Updated dependencies [a57566c]
+  - zhin@3.0.22
+  - @zhinjs/plugin-screenshot@1.0.22
+  - @zhinjs/dingtalk@1.0.22
+  - @zhinjs/discord@1.0.22
+  - @zhinjs/icqq@1.0.23
+  - @zhinjs/onebot-11@1.0.22
+  - @zhinjs/onebot-12@1.0.23
+  - @zhinjs/qq@1.0.22
+  - @zhinjs/wechat@1.0.22
+  - @zhinjs/plugin-group-manage@1.0.23
+  - @zhinjs/plugin-guild-manage@1.0.22
+  - @zhinjs/plugin-qa@1.0.22
+  - @zhinjs/plugin-schedule@1.0.22
+  - @zhinjs/plugin-http-server@1.0.22
+  - @zhinjs/plugin-sandbox@1.0.22
+  - @zhinjs/plugin-upyun@1.0.22
+  - @zhinjs/web@1.0.23
+
 ## 2.0.23
 
 ### Patch Changes

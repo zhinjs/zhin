@@ -2,7 +2,7 @@
     "name": "@zhinjs/plugin-group-manage",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
-    "version": "1.0.22",
+    "version": "1.0.23",
     "scripts": {
         "build": "tsc && tsc-alias"
     },
