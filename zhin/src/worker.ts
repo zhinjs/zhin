@@ -51,7 +51,7 @@ export function startAppWorker(key: string, mode: string, init = false) {
       START_TIME: start_time + '',
       RESTART_TIMES: restart_times + '',
     } as NodeJS.ProcessEnv,
-    execArgv: ['-r', 'jiti/register', '-r', 'tsconfig-paths/register'],
+    execArgv: ['-r', 'esbuild-register/dist/node', '-r', 'tsconfig-paths/register'],
     stdio: 'inherit',
   };
   const cp = fork(path.resolve(__dirname, `./start${path.extname(__filename)}`), ['-p tsconfig.json'], forkOptions);

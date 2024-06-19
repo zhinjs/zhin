@@ -1,5 +1,4 @@
 import path from 'path';
-import JITI from 'jiti';
 const getValue = (list: string[], key: string, defaultValue: string) => {
   const value = list[list.indexOf(key) + 1];
   if (!value || value.startsWith('-')) return defaultValue;
@@ -38,6 +37,6 @@ for (const key of args) {
       break;
   }
 }
-const jiti = JITI(__dirname);
+
 const entry = path.resolve(__dirname, `index${path.extname(__filename)}`);
-jiti(entry).startAppWorker(defaultArgv.key, defaultArgv.mode, defaultArgv.init);
+require(entry).startAppWorker(defaultArgv.key, defaultArgv.mode, defaultArgv.init);

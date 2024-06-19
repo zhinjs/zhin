@@ -10,8 +10,6 @@ import { Adapter, AdapterBot, AdapterReceive } from './adapter';
 import { Message } from './message';
 import process from 'process';
 import { JsonDB } from './db';
-import { Prompt } from './prompt';
-import { Schema } from 'yaml';
 
 export function defineConfig(config: Partial<App.Config>): Partial<App.Config>;
 export function defineConfig(

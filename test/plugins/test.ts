@@ -3,10 +3,10 @@ import * as path from 'path';
 import '@zhinjs/plugin-sandbox';
 import type {} from './functionParser';
 import type {} from '@zhinjs/client/src';
-const test = new Plugin('测试插件');
-test.required('functionManager', 'component');
+const test = new Plugin('测试插件'); // 定义插件
+test.required('functionManager', 'component'); // 声明插件必须依赖的服务
 test
-  .command('test-confirm')
+  .command('test-confirm') // 插件功能
   .hidden()
   .action(async runtime => {
     const isConfirm = await runtime.prompt.confirm('确认吗');
@@ -15,7 +15,7 @@ test
 test
   .command('test-text [test:number] [abc:boolean]')
   .hidden()
-  .action(async ({ adapter, prompt }, text) => {
+  .action(async ({ adapter, message, prompt }, text) => {
     const input = await prompt.text('请输入文本');
     return `inputResult:${input} ${typeof input}`;
   });
@@ -88,6 +88,7 @@ test.mounted(() => {
 //   .action(({ message }) => `<test2><test who="${message.sender.user_id}"/></test2>`);
 test.mounted(async () => {
   test.register('hello', function (this: Message, foo, bar, isExist = false) {
+    console.log(1111111);
     return `receive from ${this.message_type},args is ${foo},${bar},${isExist}`;
   });
 
@@ -96,4 +97,4 @@ test.mounted(async () => {
     return test.functionManager.match(event);
   });
 });
-export default test;
+export default test; // 最后导出

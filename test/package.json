@@ -21,7 +21,7 @@
         "@zhinjs/client": "workspace:^",
         "@zhinjs/web": "workspace:^",
         "@zhinjs/plugin-http-server": "workspace:^",
-        "@zhinjs/plugin-drawer": "workspace:^",
+        "@zhinjs/plugin-screenshot": "workspace:^",
         "@zhinjs/plugin-upyun": "workspace:^",
         "@zhinjs/plugin-sandbox": "workspace:^",
         "@zhinjs/plugin-schedule": "workspace:^",

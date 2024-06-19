@@ -1,5 +1,5 @@
 {
-  "name": "@zhinjs/plugin-renderer",
+  "name": "@zhinjs/plugin-screenshot",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "version": "1.0.21",
@@ -7,17 +7,19 @@
     "build": "tsc && tsc-alias"
   },
   "files": [
-    "lib"
+    "lib",
+    "template"
   ],
   "author": "凉菜",
   "repository": {
     "url": "https://github.com/zhinjs/zhin",
-    "directory": "packages/services/drawer"
+    "directory": "packages/services/screenshot"
   },
   "dependencies": {
     "zhin": "workspace:^",
     "vue": "^3.4.29",
-    "esbuild": "^0.21.5",
+    "esbuild": "^0.14.8",
+    "cheerio": "^1.0.0-rc.12",
     "esbuild-plugin-vue3": "^0.4.2"
   },
   "peerDependencies": {
