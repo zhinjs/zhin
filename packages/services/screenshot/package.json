@@ -18,6 +18,8 @@
   "dependencies": {
     "zhin": "workspace:^",
     "vue": "^3.4.29",
+    "sass": "latest",
+    "less": "latest",
     "esbuild": "^0.14.8",
     "cheerio": "^1.0.0-rc.12",
     "esbuild-plugin-vue3": "^0.4.2"

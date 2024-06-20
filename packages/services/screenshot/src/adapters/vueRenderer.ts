@@ -47,6 +47,11 @@ export class VueRenderer extends Renderer {
       // 6 生成入口html
       let entryHTMLContent = await readFile(path.join(templatePath, 'index.html'), 'utf8');
       const outputJS = await readFile(path.join(templatePath, 'app.js'), 'utf8');
+      if (existsSync(path.join(templatePath, 'app.css'))) {
+        const cssFile = path.join(templatePath, 'app.css');
+        entryHTMLContent = entryHTMLContent.replace('{{STYLE}}', await readFile(cssFile, 'utf8'));
+        needRemoveFiles.push(cssFile);
+      }
       entryHTMLContent = entryHTMLContent.replace('{{SCRIPT}}', outputJS);
       // 7. 渲染
       const result = await htmlRenderer.rendering(entryHTMLContent, options);

@@ -1,7 +1,14 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+defineProps<{
+  who: string;
+}>();
+</script>
 
 <template>
-  <div>hello world</div>
+  <div>hello {{ who }}</div>
 </template>
-
-<style scoped lang="less"></style>
+<style lang="scss">
+div {
+  color: red;
+}
+</style>
