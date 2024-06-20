@@ -1,5 +1,11 @@
 # @zhinjs/plugin-drawer
 
+## 1.0.23
+
+### Patch Changes
+
+- cffbba3: fix: add less/scss loader
+
 ## 1.0.22
 
 ### Patch Changes
