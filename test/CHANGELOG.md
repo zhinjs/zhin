@@ -1,5 +1,13 @@
 # test
 
+## 2.0.25
+
+### Patch Changes
+
+- cffbba3: fix: add less/scss loader
+- Updated dependencies [cffbba3]
+  - @zhinjs/plugin-screenshot@1.0.23
+
 ## 2.0.24
 
 ### Patch Changes
