@@ -1,5 +1,14 @@
 # @zhinjs/core
 
+## 1.0.13
+
+### Patch Changes
+
+- b213dbe: db
+- 007f178: a
+- 389c761: fix: use leveldb as built-in db
+- 4273643: config update
+
 ## 1.0.12
 
 ### Patch Changes

@@ -1,5 +1,18 @@
 # zhin
 
+## 3.0.23
+
+### Patch Changes
+
+- b213dbe: db
+- 389c761: fix: use leveldb as built-in db
+- 4273643: config update
+- Updated dependencies [b213dbe]
+- Updated dependencies [007f178]
+- Updated dependencies [389c761]
+- Updated dependencies [4273643]
+  - @zhinjs/core@1.0.13
+
 ## 3.0.22
 
 ### Patch Changes
