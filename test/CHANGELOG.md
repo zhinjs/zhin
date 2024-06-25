@@ -1,5 +1,33 @@
 # test
 
+## 2.0.26
+
+### Patch Changes
+
+- b213dbe: db
+- 389c761: fix: use leveldb as built-in db
+- 4273643: config update
+- Updated dependencies [b213dbe]
+- Updated dependencies [389c761]
+- Updated dependencies [4273643]
+  - @zhinjs/plugin-group-manage@1.0.24
+  - @zhinjs/plugin-screenshot@1.0.24
+  - @zhinjs/plugin-schedule@1.0.23
+  - @zhinjs/plugin-qa@1.0.23
+  - zhin@3.0.23
+  - @zhinjs/dingtalk@1.0.23
+  - @zhinjs/discord@1.0.23
+  - @zhinjs/icqq@1.0.24
+  - @zhinjs/onebot-11@1.0.23
+  - @zhinjs/onebot-12@1.0.24
+  - @zhinjs/qq@1.0.23
+  - @zhinjs/wechat@1.0.23
+  - @zhinjs/plugin-guild-manage@1.0.23
+  - @zhinjs/plugin-http-server@1.0.23
+  - @zhinjs/plugin-sandbox@1.0.23
+  - @zhinjs/plugin-upyun@1.0.23
+  - @zhinjs/web@1.0.24
+
 ## 2.0.25
 
 ### Patch Changes

@@ -1,5 +1,17 @@
 # @zhinjs/plugin-drawer
 
+## 1.0.24
+
+### Patch Changes
+
+- b213dbe: db
+- 389c761: fix: use leveldb as built-in db
+- 4273643: config update
+- Updated dependencies [b213dbe]
+- Updated dependencies [389c761]
+- Updated dependencies [4273643]
+  - zhin@3.0.23
+
 ## 1.0.23
 
 ### Patch Changes
