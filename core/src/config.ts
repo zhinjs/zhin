@@ -23,9 +23,11 @@ export class Config {
     }
     this.#data = this.#loadConfig();
     const watcher = fs.watch(this.#filename, 'buffer', () => {
-      console.log(`config changed, restarting...`);
-      watcher.close();
-      process.exit(51);
+      if (process.env.init !== '1') {
+        console.log(`config changed, restarting...`);
+        watcher.close();
+        process.exit(51);
+      }
     });
     return new Proxy<App.Config>(this.#data, {
       get: (target, p, receiver) => {
@@ -60,7 +62,7 @@ export class Config {
       throw new Error(`未找到配置文件${name}`);
     }
     const ext = path.extname(name);
-    this.#type = ['yaml', 'yml'].includes(ext) ? Config.Type.YAML : Config.Type.JSON;
+    this.#type = ['.yaml', '.yml'].includes(ext) ? Config.Type.YAML : Config.Type.JSON;
     return name;
   }
   #resolveExt() {
@@ -85,12 +87,11 @@ export class Config {
     }
   }
   #saveConfig(data: App.Config = this.#data) {
-    const content = JSON.stringify(data, null, 2);
     switch (this.#type) {
       case Config.Type.JSON:
-        return fs.writeFileSync(this.#filename, content);
+        return fs.writeFileSync(this.#filename, JSON.stringify(data, null, 2));
       case Config.Type.YAML:
-        return fs.writeFileSync(this.#filename, yaml.stringify(content));
+        return fs.writeFileSync(this.#filename, yaml.stringify(data));
       default:
         throw new Error(`不支持的配置文件类型${this.#type}`);
     }

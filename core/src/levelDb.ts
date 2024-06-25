@@ -3,9 +3,14 @@ import * as fs from 'fs/promises';
 import path from 'path';
 import { WORK_DIR } from './constans';
 import { Dict } from './types';
+import { sleep } from './utils';
 
 export class LevelDb extends Level {
   async get<T>(key: string, defaultValue?: T): Promise<T> {
+    if (this.status !== 'open') {
+      await sleep(80);
+      return this.get(key, defaultValue);
+    }
     try {
       return await super.get<string, T>(key, { valueEncoding: 'json' });
     } catch (e) {

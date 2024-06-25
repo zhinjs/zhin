@@ -36,7 +36,10 @@ export class App extends EventEmitter {
     this.handleMessage = this.handleMessage.bind(this);
     this.on('message', this.handleMessage);
     this.config = new Config(process.env.ZHIN_CONFIG || 'zhin.config', App.defaultConfig);
-    this.#db = new LevelDb(path.join(WORK_DIR, 'zhin.db'), { valueEncoding: 'json', createIfMissing: true });
+    this.#db = new LevelDb(path.join(WORK_DIR, 'zhin.db'), {
+      valueEncoding: 'json',
+      createIfMissing: true,
+    });
     this.logger.level = this.config.log_level;
     return new Proxy(this, {
       get(target: App, key) {
