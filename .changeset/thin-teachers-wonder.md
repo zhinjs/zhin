@@ -1,0 +1,5 @@
+---
+"@zhinjs/core": patch
+---
+
+a
