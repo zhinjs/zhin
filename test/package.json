@@ -1,12 +1,11 @@
 {
     "name": "test",
     "private": true,
-    "type": "module",
     "version": "2.0.25",
     "scripts": {
         "start": "zhin",
         "init": "zhin init -m dev",
-        "dev": "zhin -m dev -e src"
+        "dev": "zhin -m dev"
     },
     "dependencies": {
         "@icqqjs/icqq": "1.1.6",

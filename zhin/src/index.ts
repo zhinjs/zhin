@@ -87,24 +87,20 @@ export async function initialApp(this: App) {
   const userPluginDir = path.join(WORK_DIR, 'plugins');
   if (!fs.existsSync(userAdapterDir)) fs.mkdirSync(userAdapterDir);
   if (!fs.existsSync(userPluginDir)) fs.mkdirSync(userPluginDir);
-  this.jsondb.set('config.adapters', ['processAdapter']);
-  this.jsondb.set('config.plugins', ['commandParser', 'echo', 'hmr', 'zhinManager', 'setup']);
-  this.jsondb.set('config.plugin_dirs', [
+  this.config.adapters.push('processAdapter');
+  this.config.plugins.push('commandParser', 'echo', 'hmr', 'zhinManager', 'setup');
+  this.config.plugin_dirs.push(
     path.relative(WORK_DIR, path.join(__dirname, 'plugins')), // 内置
     path.relative(WORK_DIR, path.join(WORK_DIR, 'node_modules', '@zhinjs')), // 官方
     path.relative(WORK_DIR, userPluginDir), // 用户自定义
     path.relative(WORK_DIR, path.join(WORK_DIR, 'node_modules')), // 社区
-  ]);
-  this.jsondb.set('config.adapter_dirs', [
+  );
+  this.config.adapter_dirs.push(
     path.relative(WORK_DIR, path.join(__dirname, 'adapters')), // 内置
     path.relative(WORK_DIR, userAdapterDir), // 用户自定义
     path.relative(WORK_DIR, path.join(WORK_DIR, 'node_modules')), // 社区
-  ]);
-  this.jsondb.set('config.bots', [{ adapter: 'process', unique_id: 'developer' }]);
-  this.jsondb.set('config.disable_adapters', []);
-  this.jsondb.set('config.disable_bots', []);
-  this.jsondb.set('config.disable_plugins', []);
-  this.jsondb.set('config.log_level', 'info');
+  );
+  this.config.bots.push({ adapter: 'process', unique_id: 'developer', title: '终端' });
 }
 export {
   axios,

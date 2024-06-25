@@ -1,11 +1,19 @@
 import { build } from 'esbuild';
 import vuePlugin from 'esbuild-plugin-vue3';
-import { mkdir, cp, unlink, readFile, writeFile } from 'fs/promises';
+import { cp, readdir, readFile, rmdir, stat, unlink, writeFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import { Renderer } from '@/renderer';
 import htmlRenderer from '@/adapters/htmlRenderer';
 import * as path from 'path';
-
+export async function deleteWithPath(filePath: string) {
+  if (!existsSync(filePath)) throw new Error('Directory not found');
+  const targetStat = await stat(filePath);
+  if (!targetStat.isDirectory() || targetStat.isSymbolicLink()) return await unlink(filePath);
+  for (const item of await readdir(filePath)) {
+    await deleteWithPath(path.join(filePath, item));
+  }
+  await rmdir(filePath);
+}
 export class VueRenderer extends Renderer {
   constructor(endpoint: string = process.env.ENDPOINT || '') {
     super(endpoint);
@@ -19,7 +27,7 @@ export class VueRenderer extends Renderer {
     const needRemoveFiles: string[] = [];
     const cleanFiles = () => {
       for (const file of needRemoveFiles) {
-        unlink(file);
+        deleteWithPath(file);
       }
     };
     try {
@@ -29,6 +37,7 @@ export class VueRenderer extends Renderer {
       let entryTSContent = await readFile(path.join(templatePath, 'entry.ts'), 'utf8');
       // 4.1 如果有props，进行数据注入
       if (options.props) entryTSContent = entryTSContent.replace('{}', JSON.stringify(options.props, null, 2));
+      if (options.inject) entryTSContent = entryTSContent.replace('/**injectLibs*/', options.inject);
       await writeFile(entryTS, entryTSContent, 'utf8');
       needRemoveFiles.push(entryTS);
       await cp(input, path.join(templatePath, `EntryComponent.vue`));
@@ -77,6 +86,7 @@ export class VueRenderer extends Renderer {
 export namespace VueRenderer {
   export interface Options<T extends Renderer.OutputType> extends Renderer.Options<T> {
     props?: Record<string, any>;
+    inject?: string;
     files?: string[];
   }
 }

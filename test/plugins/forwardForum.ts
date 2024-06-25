@@ -16,8 +16,8 @@ forwardForum.middleware(async (adapter, bot, event, next) => {
   await next();
 });
 let configList: Config[] = [];
-forwardForum.mounted(app => {
-  const savedConfig = app.jsondb.get<Config[]>('forwardForumConfig', [])!;
+forwardForum.mounted(async app => {
+  const savedConfig = await app.jsondb.get<Config[]>('forwardForumConfig', [])!;
   configList.push(...(savedConfig || []));
 });
 forwardForum.command('查看订阅').action<OneBotV12Adapter>(({ bot }) => {

@@ -37,14 +37,13 @@ const fixWeight = (list: QAInfo[]) => {
     } as QAInfo;
   });
 };
-const getMatchedQuestion = (message: Message): undefined | QAInfo => {
+const getMatchedQuestion = async (message: Message): Promise<undefined | QAInfo> => {
+  const dataList = await qaPlugin.jsondb.filter<QAInfo[]>('qa', qa => {
+    if (!qa.adapter || qa.adapter === '*') return true;
+    return qa.adapter.includes(message.adapter.name);
+  });
   const qaList = fixWeight(
-    qaPlugin.jsondb
-      .get<QAInfo[]>('qa')!
-      .filter(qa => {
-        if (!qa.adapter || qa.adapter === '*') return true;
-        return qa.adapter.includes(message.adapter.name);
-      })
+    dataList
       .filter(qa => {
         if (!qa.bot || qa.bot === '*') return true;
         return qa.bot.includes(message.bot.unique_id);
@@ -64,8 +63,8 @@ const getMatchedQuestion = (message: Message): undefined | QAInfo => {
     return rand >= min && rand <= max;
   });
 };
-const getAnswer = (message: Message): undefined | QAInfo => {
-  const qa = getMatchedQuestion(message);
+const getAnswer = async (message: Message): Promise<undefined | QAInfo> => {
+  const qa = await getMatchedQuestion(message);
   if (!qa || !qa.redirect) return qa;
   message.raw_message = qa.answer;
   return getAnswer(message);
@@ -81,7 +80,7 @@ const qaCommand = qaPlugin
   .option('-s <scope:string> 作用域(private,group,direct,guild)，默认所有', 'private,group,direct,guild')
   .option('-p <weight:number> 权重', 1)
   .action(async ({ message, adapter, prompt, options }, content, answer) => {
-    const existQa = qaPlugin.jsondb.find<QAInfo>('qa', q => {
+    const existQa = await qaPlugin.jsondb.find<QAInfo[]>('qa', q => {
       return q.content === content;
     });
     if (existQa) {
@@ -89,7 +88,7 @@ const qaCommand = qaPlugin
       if (!confirmUpdate) return '已取消';
     }
 
-    qaPlugin.jsondb.push<QAInfo>('qa', {
+    await qaPlugin.jsondb.push<QAInfo>('qa', {
       content,
       adapter: options.adapter,
       bot: options.bot,
@@ -103,23 +102,19 @@ const qaCommand = qaPlugin
     });
     return `问答已添加`;
   });
-qaPlugin.mounted(() => {
-  const qaList = qaPlugin.jsondb.get('qa', []);
-  if (!qaList) qaPlugin.jsondb.set('qa', []);
-});
 qaCommand
   .command('问答列表')
   .option('-p <page:number> 页码', 1)
   .option('-f <full:boolean> 全作用域查询', false)
-  .action(({ adapter, bot, prompt, message, options }) => {
+  .action(async ({ adapter, bot, prompt, message, options }) => {
     const pageSize = 10;
-    const qaList = qaPlugin.jsondb
-      .filter<QAInfo>('qa', (qa, index) => {
+    const qaList = (
+      await qaPlugin.jsondb.filter<QAInfo[]>('qa', (qa, index) => {
         return options.full || qa.scope.includes(message.message_type);
       })
-      .filter((_, index) => {
-        return index >= (options.page - 1) * pageSize && index < options.page * pageSize;
-      });
+    ).filter((_, index) => {
+      return index >= (options.page - 1) * pageSize && index < options.page * pageSize;
+    });
     if (!qaList.length) return `没有更多问答数据`;
     return (
       qaList
@@ -139,14 +134,14 @@ qaCommand
   .option('-r [redirect:boolean] 重定向')
   .option('-s [scope:string] 作用域(private,group,direct,guild)')
   .option('-p [weight:number] 权重')
-  .action(({ message, adapter, options }, no, content, answer) => {
-    const existQa = qaPlugin.jsondb.find<QAInfo>('qa', (_, i) => {
+  .action(async ({ message, adapter, options }, no, content, answer) => {
+    const existQa = await qaPlugin.jsondb.find<QAInfo[]>('qa', (_, i) => {
       return i === no - 1;
     });
     if (!existQa) return `问答${no} 不存在`;
     const editor = `${adapter.name}:${message.sender?.user_id}`;
     if (editor !== existQa?.authorId) return `仅作者本人：${existQa?.authorName} 才能更改哦`;
-    qaPlugin.jsondb.replace('qa', existQa, {
+    await qaPlugin.jsondb.replace<QAInfo>('qa', item => JSON.stringify(item) === JSON.stringify(existQa), {
       ...existQa,
       content: content || existQa.content,
       answer: answer || existQa.answer,
@@ -158,16 +153,16 @@ qaCommand
   .command('删除问答 <no:number>')
   .option('-y <confirm:boolean> 是否确认', false)
   .action(async ({ adapter, message, options, prompt }, no) => {
-    const qa = qaPlugin.jsondb.get<QAInfo>(`qa.${no - 1}`);
+    const qa = await qaPlugin.jsondb.find<QAInfo[]>(`qa`, (_, index) => index === no - 1);
     if (!qa) return `问答不存在`;
     if (qa.authorId !== `${adapter.name}:${message.sender?.user_id}`) return `非作者本人(${qa.authorName})不可删除!`;
     const isConfirm = options.confirm || (await prompt.confirm('确认删除吗？'));
     if (!isConfirm) return '已取消删除';
-    qaPlugin.jsondb.remove('qa', qa);
+    await qaPlugin.jsondb.remove<QAInfo>('qa', qa);
     return `已删除问答：${no}`;
   });
-qaCommand.command('问答详情 <no:number>').action((_, no) => {
-  const qa = qaPlugin.jsondb.get<QAInfo>(`qa.${no - 1}`);
+qaCommand.command('问答详情 <no:number>').action(async (_, no) => {
+  const qa = await qaPlugin.jsondb.find<QAInfo[]>(`qa`, (_, idx) => idx === no - 1);
   if (!qa) return `问答不存在`;
   return `问答${no}：\n${JSON.stringify(
     Object.fromEntries(
@@ -184,7 +179,7 @@ qaPlugin.middleware(async (adapter, bot, message, next) => {
   await next();
   const afterMessage = message.raw_message;
   if (beforeMessage !== afterMessage) return;
-  const qa = getAnswer(message);
+  const qa = await getAnswer(message);
   if (!qa) return;
   if (!qa.regexp) return message.reply(qa.answer);
   const matchArr = message.raw_message.match(new RegExp(qa.content))!;

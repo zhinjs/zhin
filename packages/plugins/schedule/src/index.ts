@@ -28,8 +28,8 @@ schedulePlugin.service('addTask', (cron: CronDescriptors, callback: Function) =>
 schedulePlugin.service('removeTask', no => {
   return scheduleManager.removeTask(no);
 });
-const initialize = () => {
-  const schedules = schedulePlugin.jsondb.get<Schedule[]>('schedule', []);
+const initialize = async () => {
+  const schedules = await schedulePlugin.jsondb.get<Schedule[]>('schedule', []);
   if (!schedules) return;
   for (const schedule of schedules) {
     addSchedule(schedule);
@@ -47,8 +47,8 @@ const addSchedule = (schedule: Schedule) => {
   });
 };
 const scheduleCommand = schedulePlugin.command('定时模块');
-scheduleCommand.command('定时列表').action(({ adapter, bot, message }) => {
-  const schedules = schedulePlugin.jsondb.filter<Schedule>('schedule', schedule => {
+scheduleCommand.command('定时列表').action(async ({ adapter, bot, message }) => {
+  const schedules = await schedulePlugin.jsondb.filter<Schedule[]>('schedule', schedule => {
     return (
       schedule.adapter === adapter.name &&
       schedule.bot_id === bot.unique_id &&
@@ -87,12 +87,12 @@ scheduleCommand
   .command('删除定时 <no:number>')
   .option('-c <confirm:boolean> 是否确认', false)
   .action(async ({ prompt, options, bot, message }, no) => {
-    const schedule = schedulePlugin.jsondb.get<Schedule>(`schedule.${no - 1}`);
+    const schedule = await schedulePlugin.jsondb.get<Schedule>(`schedule.${no - 1}`);
     if (!schedule) return '无此定时任务';
     if (schedule.creator_id !== `${message.sender?.user_id}`) return `非作者本人(${schedule.creator_id})不可删除`;
     const isConfirm = options.confirm || (await prompt.confirm('确认删除吗？'));
     if (!isConfirm) return '已取消删除';
-    schedulePlugin.jsondb.splice('schedule', no - 1, 1);
+    await schedulePlugin.jsondb.splice('schedule', no - 1, 1);
     scheduleManager.removeTask(no);
     return '删除成功';
   });

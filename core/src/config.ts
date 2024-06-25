@@ -1,132 +1,126 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { Dict } from './types';
-import { aesDecrypt, aesEncrypt, parseObjFromStr, stringifyObj } from './utils';
-export class JsonDB {
-  private data: Dict = {};
-  constructor(
-    private readonly filePath: string,
-    private key: string | Buffer = Buffer.from(filePath).subarray(0, 16),
-  ) {
-    const dir = path.dirname(this.filePath);
-    if (this.key.length < 16) this.key = Buffer.from(this.key.toString().padEnd(16, '0'));
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    if (!this.filePath.endsWith('.runtime')) this.filePath = this.filePath + '.runtime';
-    if (!fs.existsSync(this.filePath)) this.write();
-    this.init();
+import * as yaml from 'yaml';
+import { WORK_DIR } from './constans';
+import { App } from './app';
+export class Config {
+  public static exts: string[] = ['.json', '.yaml', '.yml'];
+  #filename: string = '';
+  #type: Config.Type = Config.Type.YAML;
+  #saving: boolean = false;
+  #data: App.Config;
+  get #dir() {
+    return path.dirname(this.#filename);
   }
-  private init() {
-    this.read();
-  }
-  private get encryptedData() {
-    return aesEncrypt(stringifyObj(this.data), Buffer.from(this.key)).toString('hex');
-  }
-  #decryptData(rawData: Buffer | string) {
-    if (typeof rawData === 'string') rawData = Buffer.from(rawData, 'hex');
-    return parseObjFromStr(aesDecrypt(rawData, Buffer.from(this.key)).toString('utf8'));
-  }
-  replace<T>(route: string, before: T, after: T) {
-    const index = this.indexOf<T>(route, before);
-    if (index < 0) return;
-    return this.splice(route, index, 1, after);
-  }
-  remove<T>(route: string, before: T) {
-    const index = this.indexOf(route, before);
-    return this.splice(route, index, 1);
-  }
-  private write() {
-    fs.writeFileSync(this.filePath, this.encryptedData, 'hex');
-  }
-  private read() {
-    this.data = this.#decryptData(fs.readFileSync(this.filePath, 'hex'));
-  }
-  findIndex<T>(route: string, predicate: (value: T, index: number, obj: T[]) => unknown) {
-    const arr = this.getArray<T>(route);
-    return arr.findIndex(predicate);
-  }
-  indexOf<T>(route: string, item: T) {
-    return this.findIndex<T>(route, value => {
-      return stringifyObj(item) === stringifyObj(value);
+  constructor(name: string, defaultValue?: App.Config) {
+    try {
+      this.#filename = this.#resolveByName(name);
+    } catch (e) {
+      if (!defaultValue) throw e;
+      const ext = path.extname(name);
+      if (!Config.exts.includes(ext)) this.#filename = path.join(WORK_DIR, `${name}${this.#resolveExt()}`);
+      this.#saveConfig(defaultValue);
+    }
+    this.#data = this.#loadConfig();
+    const watcher = fs.watch(this.#filename, 'buffer', () => {
+      console.log(`config changed, restarting...`);
+      watcher.close();
+      process.exit(51);
     });
+    return new Proxy<App.Config>(this.#data, {
+      get: (target, p, receiver) => {
+        if (Reflect.has(this, p)) return Reflect.get(this, p, receiver);
+        return this.#proxied(target, p, receiver);
+      },
+      set: (target, p, value, receiver) => {
+        if (Reflect.has(this, p)) return Reflect.set(this, p, value, receiver);
+        const result = Reflect.set(target, p, receiver);
+        this.#saveConfig();
+        return result;
+      },
+      deleteProperty: (target, p) => {
+        if (Reflect.has(this, p)) return Reflect.deleteProperty(this, p);
+        const result = Reflect.deleteProperty(target, p);
+        this.#saveConfig();
+        return result;
+      },
+    }) as unknown as Config;
   }
-  get<T>(route: string, initialValue?: T): T | undefined {
-    this.read();
-    const parentPath = route.split('.').filter(p => p.length);
-    const key = parentPath.pop();
-    if (!key) return this.data as T;
-    let temp: Dict = this.data;
-    while (parentPath.length) {
-      const currentKey = parentPath.shift() as string;
-      if (!Reflect.has(temp, currentKey)) Reflect.set(temp, currentKey, {});
-      temp = Reflect.get(temp, currentKey);
+  #resolveByName(name: string): string {
+    if (!Config.exts.includes(path.extname(name))) {
+      for (const ext of Config.exts) {
+        try {
+          return this.#resolveByName(`${name}${ext}`);
+        } catch {}
+      }
+      throw new Error(`未找到配置文件${name}`);
     }
-    if (!temp[key]) {
-      temp[key] = initialValue;
-      this.write();
+    name = path.resolve(WORK_DIR, name);
+    if (!fs.existsSync(name)) {
+      throw new Error(`未找到配置文件${name}`);
     }
-    return temp[key];
+    const ext = path.extname(name);
+    this.#type = ['yaml', 'yml'].includes(ext) ? Config.Type.YAML : Config.Type.JSON;
+    return name;
   }
-  set<T>(route: string, data: T): T {
-    const parentPath = route.split('.');
-    const key = parentPath.pop();
-    if (!key) throw new SyntaxError(`route can't empty`);
-    const parentObj = this.get<Dict>(parentPath.join('.'), {});
-    if (!parentObj) throw new SyntaxError(`can't set property ${key} of undefined`);
-    parentObj[key] = data;
-    this.write();
-    return data;
+  #resolveExt() {
+    switch (this.#type) {
+      case Config.Type.JSON:
+        return '.json';
+      case Config.Type.YAML:
+        return '.yml';
+      default:
+        throw new Error(`不支持的配置文件类型${this.#type}`);
+    }
   }
-  delete(route: string): boolean {
-    const parentPath = route.split('.');
-    const key = parentPath.pop();
-    if (!key) throw new SyntaxError(`route can't empty`);
-    const parentObj = this.get<Dict>(parentPath.join('.'), {});
-    if (!parentObj) throw new SyntaxError(`property ${key} is not exist of undefined`);
-    const result = delete parentObj[key];
-    this.write();
-    return result;
+  #loadConfig() {
+    const content = fs.readFileSync(this.#filename, 'utf8');
+    switch (this.#type) {
+      case Config.Type.JSON:
+        return JSON.parse(content);
+      case Config.Type.YAML:
+        return yaml.parse(content);
+      default:
+        throw new Error(`不支持的配置文件类型${this.#type}`);
+    }
   }
-  private getArray<T>(route: string): T[] {
-    if (!route) throw new Error(`route can't empty`);
-    const arr = this.get<Dict>(route, []);
-    if (!arr) throw new SyntaxError(`route ${route} is not define`);
-    if (!Array.isArray(arr)) throw new TypeError(`data ${route} is not an Array`);
-    return arr;
+  #saveConfig(data: App.Config = this.#data) {
+    const content = JSON.stringify(data, null, 2);
+    switch (this.#type) {
+      case Config.Type.JSON:
+        return fs.writeFileSync(this.#filename, content);
+      case Config.Type.YAML:
+        return fs.writeFileSync(this.#filename, yaml.stringify(content));
+      default:
+        throw new Error(`不支持的配置文件类型${this.#type}`);
+    }
   }
-  unshift<T>(route: string, ...data: T[]): number {
-    const arr = this.getArray<T>(route);
-    const result = arr.unshift(...data);
-    this.write();
-    return result;
-  }
-  shift<T>(route: string) {
-    const arr = this.getArray<T>(route);
-    const result = arr.shift();
-    this.write();
-    return result;
-  }
-  push<T>(route: string, ...data: T[]): number {
-    const arr = this.getArray<T>(route);
-    const result = arr.push(...data);
-    this.write();
-    return result;
-  }
-  pop<T>(route: string) {
-    const arr = this.getArray<T>(route);
-    const result = arr.pop();
-    this.write();
-    return result;
-  }
-  splice<T>(route: string, index: number = 0, deleteCount: number = 0, ...data: T[]): T[] {
-    const arr = this.getArray<T>(route);
-    const result = arr.splice(index, deleteCount, ...data);
-    this.write();
-    return result;
-  }
-  find<T>(route: string, callback: (item: T, index: number) => boolean): T | undefined {
-    return this.getArray<T>(route).find(callback);
-  }
-  filter<T>(route: string, callback: (item: T, index: number) => boolean): T[] {
-    return this.getArray<T>(route).filter(callback);
+  #proxied<T extends object, R = any>(obj: T, p: string | symbol, receiver: any): R {
+    const result = Reflect.get(obj, p, receiver);
+    if (!result || typeof result !== 'object') return result as R;
+    return new Proxy(result, {
+      get: (target, p, receiver) => {
+        const result = Reflect.get(target, p, receiver);
+        if (typeof result !== 'object') return result;
+        return this.#proxied(target, p, receiver);
+      },
+      set: (target, p, value, receiver) => {
+        const result = Reflect.set(target, p, value, receiver);
+        this.#saveConfig();
+        return result;
+      },
+      deleteProperty: (target, p) => {
+        const result = Reflect.deleteProperty(target, p);
+        this.#saveConfig();
+        return result;
+      },
+    }) as R;
   }
 }
+export namespace Config {
+  export enum Type {
+    JSON = 'json',
+    YAML = 'yaml',
+  }
+}
+export interface Config extends App.Config {}

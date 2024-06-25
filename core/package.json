@@ -30,7 +30,9 @@
     "axios": "^1.6.1",
     "jiti": "^1.21.0",
     "log4js": "^6.9.1",
-    "tsconfig-paths": "^4.2.0"
+    "level": "^8.0.1",
+    "tsconfig-paths": "^4.2.0",
+    "yaml": "^2.4.5"
   },
   "devDependencies": {
     "dtsc": "^2.3.0"

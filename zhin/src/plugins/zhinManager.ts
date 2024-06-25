@@ -394,28 +394,26 @@ const configManage = zhinManager
     return JSON.stringify(zhinManager.app?.config, null, 2);
   });
 configManage
-  .command('config.import [filepath:string]')
-  .desc('导入配置')
+  .command('db.import [filepath:string]')
+  .desc('导入数据库')
   .permission('master')
   .hidden()
   .action(async ({ prompt }, filepath) => {
-    if (!filepath) filepath = await prompt.text('请输入要导入的配置文件路径');
+    if (!filepath) filepath = await prompt.text('请输入要导入的数据文件路径');
     if (!filepath) return '输入错误';
     try {
       const config = JSON.parse(fs.readFileSync(filepath, 'utf8'));
-      zhinManager.app!.importConfig(config);
+      await zhinManager.jsondb.import(config);
     } catch (e) {
       return (e as Error)?.message || '导入失败，未知错误';
     }
-    const isRestart = await prompt.confirm('导入成功，是否立即重启？', '是');
-    if (!isRestart) return;
-    process.exit(51);
+    return '导入成功';
   });
 configManage
-  .command('config.export [filename:string]')
-  .desc('导出配置文件')
-  .action(async (_, filename = 'zhin.config.json') => {
-    fs.writeFileSync(path.resolve(WORK_DIR, filename), JSON.stringify(zhinManager.app!.exportConfig(), null, 2));
+  .command('db.export [filename:string]')
+  .desc('导出数据库')
+  .action(async (_, filename = 'zhin.db.json') => {
+    await zhinManager.jsondb.export(filename);
     return '导出成功';
   });
 configManage

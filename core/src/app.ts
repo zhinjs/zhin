@@ -9,7 +9,9 @@ import path from 'path';
 import { Adapter, AdapterBot, AdapterReceive } from './adapter';
 import { Message } from './message';
 import process from 'process';
-import { JsonDB } from './db';
+import { Config } from './config';
+import { Level } from 'level';
+import { LevelDb } from './levelDb';
 
 export function defineConfig(config: Partial<App.Config>): Partial<App.Config>;
 export function defineConfig(
@@ -23,34 +25,25 @@ export function defineConfig(
 
 export class App extends EventEmitter {
   logger: Logger = getLogger(`[zhin]`);
-  config: App.Config = App.defaultConfig;
+  config: Config;
+  #db: LevelDb;
   adapters: Map<string, Adapter> = new Map<string, Adapter>();
   middlewares: Middleware[] = [];
   plugins: PluginMap = new PluginMap();
   renders: Message.Render[] = [];
-  #db: JsonDB;
   constructor(key?: string) {
     super();
     this.handleMessage = this.handleMessage.bind(this);
     this.on('message', this.handleMessage);
-    this.#db = new JsonDB(path.join(WORK_DIR, 'data', 'zhin.runtime'), key);
+    this.config = new Config(process.env.ZHIN_CONFIG || 'zhin.config', App.defaultConfig);
+    this.#db = new LevelDb(path.join(WORK_DIR, 'zhin.db'), { valueEncoding: 'json', createIfMissing: true });
+    this.logger.level = this.config.log_level;
     return new Proxy(this, {
       get(target: App, key) {
         if (Reflect.has(target.services, key)) return Reflect.get(target.services, key);
         return Reflect.get(target, key);
       },
     });
-  }
-  importConfig(config: App.Config) {
-    this.jsondb.set('config', config);
-    this.loadConfig();
-  }
-  exportConfig(): App.Config {
-    return {
-      ...this.config,
-      adapter_dirs: this.config.adapter_dirs.map(dir => dir.replace(`${WORK_DIR}${path.sep}`, '')),
-      plugin_dirs: this.config.plugin_dirs.map(dir => dir.replace(`${WORK_DIR}${path.sep}`, '')),
-    };
   }
   registerRender(render: Message.Render) {
     this.renders.push(render);
@@ -294,35 +287,7 @@ export class App extends EventEmitter {
     this.emit('plugin-unmounted', plugin);
     return this;
   }
-  private loadConfig() {
-    const app: App = this;
-    const createProxy = <T extends object>(obj: T, prefix: string): T => {
-      return new Proxy(obj, {
-        get(target, key: string | symbol) {
-          if (typeof key === 'symbol') return Reflect.get(target, key);
-          const result = Reflect.get(target, key);
-          if (result && typeof result === 'object') return createProxy(result, `${prefix}${key}.`);
-          return result;
-        },
-        set(target, key: string | symbol, value) {
-          const result = Reflect.set(target, key, value);
-          if (typeof key === 'symbol') return result;
-          app.jsondb.set(`${prefix}${key}`, value);
-          return result;
-        },
-        deleteProperty(target, key: string | symbol): boolean {
-          const result = Reflect.deleteProperty(target, key);
-          if (typeof key === 'symbol') return result;
-          app.jsondb.delete(`${prefix}${key}`);
-          return result;
-        },
-      });
-    };
-    this.config = createProxy(this.jsondb.get<App.Config>('config', App.defaultConfig)!, `config.`);
-  }
   async start(mode: string = 'prod') {
-    this.loadConfig();
-    this.logger.level = this.config.log_level;
     this.initPlugins();
     this.initAdapter();
     for (const [name, adapter] of this.adapters) {
@@ -498,7 +463,7 @@ export namespace App {
   }
 
   export interface Services {
-    jsondb: JsonDB;
+    jsondb: LevelDb;
   }
 
   export type BotConfig<T extends keyof Adapters = keyof Adapters> = {

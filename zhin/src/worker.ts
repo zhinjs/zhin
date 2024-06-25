@@ -40,6 +40,8 @@ const readEnv = (filename: string) => {
 export function startAppWorker(key: string, mode: string, init = false) {
   const commonEnv = readEnv(path.join(WORK_DIR, '.env'));
   const modeEnv = deepMerge(commonEnv, readEnv(path.join(WORK_DIR, `.env.${mode}`)));
+  const execArgv = [];
+  if (['dev', 'development'].includes(mode)) execArgv.push('-r', 'jiti/register', '-r', 'tsconfig-paths/register');
   const forkOptions: ForkOptions = {
     env: {
       ...process.env,
@@ -51,7 +53,7 @@ export function startAppWorker(key: string, mode: string, init = false) {
       START_TIME: start_time + '',
       RESTART_TIMES: restart_times + '',
     } as NodeJS.ProcessEnv,
-    execArgv: ['-r', 'esbuild-register/dist/node', '-r', 'tsconfig-paths/register'],
+    execArgv,
     stdio: 'inherit',
   };
   const cp = fork(path.resolve(__dirname, `./start${path.extname(__filename)}`), ['-p tsconfig.json'], forkOptions);
