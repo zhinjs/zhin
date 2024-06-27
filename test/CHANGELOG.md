@@ -1,5 +1,29 @@
 # test
 
+## 2.0.27
+
+### Patch Changes
+
+- e3534af: fix: screenshot 优化；依赖优化
+- Updated dependencies [e3534af]
+  - @zhinjs/plugin-screenshot@1.0.25
+  - zhin@3.0.24
+  - @zhinjs/dingtalk@1.0.24
+  - @zhinjs/discord@1.0.23
+  - @zhinjs/icqq@1.0.25
+  - @zhinjs/onebot-11@1.0.24
+  - @zhinjs/onebot-12@1.0.25
+  - @zhinjs/qq@1.0.24
+  - @zhinjs/wechat@1.0.24
+  - @zhinjs/plugin-group-manage@1.0.25
+  - @zhinjs/plugin-guild-manage@1.0.24
+  - @zhinjs/plugin-qa@1.0.24
+  - @zhinjs/plugin-schedule@1.0.24
+  - @zhinjs/plugin-http-server@1.0.24
+  - @zhinjs/plugin-sandbox@1.0.24
+  - @zhinjs/plugin-upyun@1.0.24
+  - @zhinjs/web@1.0.25
+
 ## 2.0.26
 
 ### Patch Changes
