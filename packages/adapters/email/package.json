@@ -1,0 +1,27 @@
+{
+  "name": "@zhinjs/discord",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "version": "1.0.22",
+  "scripts": {
+    "build": "tsc && tsc-alias"
+  },
+  "files": [
+    "lib"
+  ],
+  "author": "凉菜",
+  "repository": {
+    "url": "https://github.com/zhinjs/zhin",
+    "directory": "packages/adapters/discord"
+  },
+  "dependencies": {
+    "zhin": "workspace:^",
+    "ts-disc-bot": "latest"
+  },
+  "devDependencies": {
+    "zhin": "workspace:^",
+    "ts-disc-bot": "latest",
+    "@types/node": "latest",
+    "@types/ws": "latest"
+  }
+}
