@@ -1,5 +1,11 @@
 # zhin
 
+## 3.0.24
+
+### Patch Changes
+
+- e3534af: fix: screenshot 优化；依赖优化
+
 ## 3.0.23
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @zhinjs/plugin-drawer
 
+## 1.0.25
+
+### Patch Changes
+
+- e3534af: fix: screenshot 优化；依赖优化
+- Updated dependencies [e3534af]
+  - zhin@3.0.24
+
 ## 1.0.24
 
 ### Patch Changes
