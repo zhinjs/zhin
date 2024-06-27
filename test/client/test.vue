@@ -1,4 +1,6 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+document.head.appendChild();
+</script>
 
 <template>
   <div class="test">I'm test</div>

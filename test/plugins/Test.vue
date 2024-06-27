@@ -69,12 +69,12 @@ const headers = ref([
 </script>
 
 <template>
-  <div>
+  <div class="test">
     hello {{ who }}
     <v-table :data="data" :headers="headers" />
   </div>
 </template>
-<style lang="scss">
+<style lang="scss" scoped>
 div {
   color: red;
 }

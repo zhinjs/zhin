@@ -27,4 +27,9 @@ defineProps<{
   </table>
 </template>
 
-<style scoped lang="less"></style>
+<style lang="less" scoped>
+table {
+  border: 1px solid black;
+  border-collapse: collapse;
+}
+</style>

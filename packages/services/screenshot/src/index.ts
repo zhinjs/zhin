@@ -2,6 +2,7 @@ import { Plugin } from 'zhin';
 import { Renderer } from '@/renderer';
 import htmlRenderer from '@/adapters/htmlRenderer';
 import vueRenderer from '@/adapters/vueRenderer';
+import { Component } from 'vue';
 declare module 'zhin' {
   namespace App {
     interface Services {
@@ -10,7 +11,7 @@ declare module 'zhin' {
         options: Renderer.Options<T>,
       ): Promise<Renderer.Output<T>>;
       renderVue<T extends Renderer.OutputType>(
-        input: string,
+        input: Component,
         options: Renderer.Options<T>,
       ): Promise<Renderer.Output<T>>;
     }

@@ -27,8 +27,6 @@
     },
     "dependencies": {
         "@zhinjs/core": "workspace:^",
-        "tsx": "^4.15.6",
-        "esbuild-register": "^3.5.0",
         "dotenv": "^16.3.1",
         "chokidar": "^3.5.3"
     },
