@@ -1,3 +1,4 @@
-[submodule "packages/adapters/krior/src/kritor"]
-	path = packages/adapters/krior/src/kritor
+
+[submodule "packages/adapters/kritor/src/kritor"]
+	path = packages/adapters/kritor/src/kritor
 	url = https://github.com/KarinJS/kritor.git
