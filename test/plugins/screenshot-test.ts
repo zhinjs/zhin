@@ -1,6 +1,7 @@
 import { Plugin, segment } from 'zhin';
 import '@zhinjs/plugin-screenshot';
 import Test from './Test.vue';
+
 const screenshotTest = new Plugin('screenshot');
 screenshotTest.required('renderVue');
 screenshotTest.command('shot').action(async () => {

@@ -1,53 +1,36 @@
-# 安装 Zhin 机器人
+# 安装 zhin 机器人
 
 ::: tip
 阅读本节前，请确认你已正确配置 [Node.js](https://nodejs.org/zh-cn) 环境。
 :::
 
-## 创建项目（三选一）
+## 创建项目
 
-### 1. 通过 cli 指令创建
-
+### 1. 自行选择或新建一个文件夹，用于存储zhin机器人配置和插件信息
 ```shell
-# 安装 Zhin cli
-npm install -g @zhinjs/cli
-
-# 通过 Zhin 的 cli 初始化项目
-zhin init zhin-bot # `zhin-bot` 为你需要创建的项目名
-
-# 安装依赖
-cd zhin-bot && npm install
+# 建立zhin-app文件夹（若选择已有文件夹，则可跳过本步骤）
+mkdir zhin-app
+cd zhin-app
 ```
 
-### 2. 通过 npm 指令创建
-
+### 2. 初始化包管理器
 ```shell
-# 直接使用 npm 命令初始化一个 Zhin 项目，然后根据操作引导即可
-npm init zhin
+npm init -y # 初始化package.json
+
+npm install typescript -D # 安装ts开发环境依赖
+
+npx tsc --init # 初始化tsconfig.json文件
+
+```
+### 3. 安装zhin
+```shell
+npm install zhin # 安装zhin
 ```
 
-### 3. 通过模板仓库创建
-
-::: tip
-
-此方式要求你：
-
-- 能自行解决国内 GitHub 访问受限的问题
-- 有自己的 GitHub 账号
-- 电脑已安装 `Git` 代码版本管理工具
-
-:::
-
-1. 前往[模板仓库](https://github.com/zhinjs/boilerplate)，点击 `Use this template` 按钮创建一个新的仓库
-
-1. 使用 `git` 命令拉取 GitHub 仓库的代码到本地，并安装依赖
-
+### 4. 初始化项目
 ```shell
-# 拉取仓库代码
-git clone https://gitbub.com/[你的github用户名]/[仓库名].git
+npx zhin init # 生成zhin配置文件
 
-# 安装依赖
-cd [仓库名] && npm install
 ```
 
 ## 项目结构
@@ -58,7 +41,7 @@ cd [仓库名] && npm install
 .
 ├─ data/              资源目录
 ├─ plugins/           插件目录（存放编写好的插件）
-├─ zhin.yaml          配置文件
+├─ zhin.config.yml          配置文件
 ├─ node_modules/      项目依赖存放文件(npm自动生成，开发者无需关心)
 ├─ package.json       项目描述文件(一般情况下无需关心)
 └─ package-lock.json  项目依赖描述文件(npm自动生成，开发者无需关心)
@@ -68,69 +51,97 @@ cd [仓库名] && npm install
 `node_modules`、`package.json` 等都是由 npm 生成的，**仅开发者**需要了解，可参考 [插件开发](/plugin/start) 一节。
 :::
 
-## 添加第一个 Bot
+## 选择安装你所需添加机器人的适配器
 
-默认情况下，Zhin 没有任何机器人账号，我们需要手动配置后，才能正常使用。
-
-如果你是使用 cli 创建的， Zhin 已经引导你完成了第一个账号的配置，可以跳过当前步
-骤。
-
-打开配置文件 `zhin.yaml`，并增加你的机器人信息。
-
-```yaml
-adapters:
-  icqq: # 指定使用 icqq 适配器
-    bots: [] // [!code --]
-    bots: // [!code ++]
-      - self_id: 12345678 # 机器人账号 // [!code ++]
-        platform: 5 # 指定 qq 登录平台为 iPad （可不配置  1：安卓  2：安卓平板  3：手表  4：苹果电脑  5：苹果平板） // [!code ++]
-        password: abcdefg # 账号密码 (不配置则使用扫码登录) // [!code ++]
-        prefix: '' # 指令调用前缀，可不配置 // [!code ++]
-        master: 12345678 # 机器人主人账号 (拥有完整操作该机器人的权限，可不配置) // [!code ++]
-        admins: [] # 机器人管理员账号(可不配置) // [!code ++]
-plugins:
-  config: null
-  daemon: null
-  help: null
-  login: null
-  logs: null
-  plugin: null
-  status: null
-  watcher: /path/to/zhin-bot
-log_level: info
-plugin_dir: plugins
-data_dir: data
-delay:
-  prompt: 60000
+默认情况下，zhin仅基本提供命令行适配，添加对应机器人需先安装对应的适配器
+::: code-group
+```shell [ICQQ]
+npm install @zhinjs/icqq
 ```
-
-::: tip
-有关 Zhin 的详细配置说明，请前往 [配置](/config/common) 章节。
+```shell [QQ官方机器人]
+npm install @zhinjs/qq
+```
+```shell [onebot-11]
+npm install @zhinjs/onebot-11
+```
+```shell [onebot-12]
+npm install @zhinjs/onebot-12
+```
+```shell [Discord]
+npm install @zhinjs/discord
+```
+```shell [钉钉]
+npm install @zhinjs/dingtalk
+```
+```shell [微信]
+npm install @zhinjs/wechat
+```
 :::
 
-## 启动
+## 添加对应平台的机器人
 
-一切准备就绪，开始启动你的项目吧。
-
-```shell
-cd [你的项目目录]
-npm run start:zhin
+::: code-group
+```shell [ICQQ]
+npx zhin # 启动zhin
+# 等待启动完成...
+adapter.add @zhinjs/icqq # 注册适配器
+# 等待zhin 自动重启...
+bot.add icqq # 添加bot配置
+# 根据提示添加...
 ```
-
-如上述步骤无误，根据控制台的提示扫码或输入密码即可成功登录。
-
-账号登录成功后，会在根目录下的 `data` 自动生成账号的缓存及相关配置文件。
-
+```shell [QQ官方机器人]
+npx zhin # 启动zhin
+# 等待启动完成...
+adapter.add @zhinjs/qq # 注册适配器
+# 等待zhin 自动重启...
+bot.add qq # 添加bot配置
+# 根据提示添加...
+```
+```shell [onebot-11]
+npx zhin # 启动zhin
+# 等待启动完成...
+adapter.add @zhinjs/onebot-11 # 注册适配器
+# 等待zhin 自动重启...
+bot.add onebot-11 # 添加bot配置
+# 根据提示添加...
+```
+```shell [onebot-12]
+npx zhin # 启动zhin
+# 等待启动完成...
+adapter.add @zhinjs/onebot-12 # 注册适配器
+# 等待zhin 自动重启...
+bot.add onebot-12 # 添加bot配置
+# 根据提示添加...
+```
+```shell [Discord]
+npx zhin # 启动zhin
+# 等待启动完成...
+adapter.add @zhinjs/discord # 注册适配器
+# 等待zhin 自动重启...
+bot.add discord # 添加bot配置
+# 根据提示添加...
+```
+```shell [钉钉]
+npx zhin # 启动zhin
+# 等待启动完成...
+adapter.add @zhinjs/dingtalk # 注册适配器
+# 等待zhin 自动重启...
+bot.add dingtalk # 添加bot配置
+# 根据提示添加...
+```
+```shell [微信]
+npx zhin # 启动zhin
+# 等待启动完成...
+adapter.add @zhinjs/wechat # 注册适配器
+# 等待zhin 自动重启...
+bot.add wechat # 添加bot配置
+# 根据提示添加...
+```
+:::
 ## 测试一下
 
-正常启动后，往机器人发送第一条消息，测试一下是否正常吧
+- 至此，你已成功为 zhin 添加了你的第一个机器人
+- 你可通过向对应机器人发送 `status` 查看他是否正常工作(若添加机器人是配置了`command_prefix`,则需发送`[你配置的前缀] + status`)
 
-<ChatHistory>
-  <ChatMsg id="1659488338">help</ChatMsg>
-  <ChatMsg id="1689919782">
-    help [command:string] 查看某个指令的帮助文档<br/>
-    output &lt;msg:any&gt;回复“帮助 指令名”以查看对应指令帮助。
-  </ChatMsg>
-  <ChatMsg id="1659488338">output hello world</ChatMsg>
-  <ChatMsg id="1689919782">hello world</ChatMsg>
-</ChatHistory>
+## 更多
+若需熟练运用zhin，你还需了解如何编写插件，以及各种专有名词，你可访问后续章节学习到相关知识

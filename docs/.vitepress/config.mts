@@ -76,8 +76,8 @@ export default defineConfigWithTheme({
                         link: 'https://github.com/zhinjs/zhin/blob/main/CHANGELOG.md'
                     },
                     {
-                        text: '贡献',
-                        link: 'https://github.com/zhinjs/zhin/blob/main/.github/contributing.md'
+                        text: '贡献成员',
+                        link: 'https://github.com/zhinjs/zhin/graphs/contributors'
                     }
                 ]
             }
@@ -90,14 +90,14 @@ export default defineConfigWithTheme({
                     items: [
                         {text: `准备工作`, link: '/guide/prepare'},
                         {text: `安装`, link: '/guide/start'},
-                        {text: `HelloWorld`, link: '/guide/repeater'},
+                        {text: `编写第一个插件`, link: '/guide/plugin-guide'},
                     ]
                 },
                 {
                     text: '深入了解',
                     collapsible: true,
                     items: [
-                        {text: `插件 - Plugin`, link: '/guide/plugin'},
+                        {text: `插件 - Plugin`, link: '/guide/plugin-introduce'},
                         {text: `指令 - Command`, link: '/guide/command'},
                         {text: `可交互输入 - Prompt`, link: '/guide/prompt'},
                         {text: `组件 - Component`, link: '/guide/component'},

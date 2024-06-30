@@ -64,7 +64,7 @@ pusher.command('添加推送').action<OneBotV12Adapter>(async ({ bot, prompt }) 
 });
 pusher.mounted(app => {
   const receiveAndPush = async () => {
-    const configs = pusher.jsondb.get<PusherConfig[]>('functions.pusher.Configs', []) || [];
+    const configs = (await pusher.jsondb.get<PusherConfig[]>('functions.pusher.Configs', [])) || [];
     for (const config of configs) {
       const bot = app.adapters
         .get('onebot-12')
@@ -75,7 +75,7 @@ pusher.mounted(app => {
         const messages = await service(config.group_id);
         for (const message of messages) {
           await bot.sendGroupMsg(config.group_id, message);
-          pusher.jsondb.push<PushResult>('functions.pusher.infos', {
+          await pusher.jsondb.push<PushResult>('functions.pusher.infos', {
             unique_id: bot.unique_id,
             group_id: config.group_id,
             message,
@@ -95,6 +95,7 @@ pusher.mounted(app => {
     pushWithLoop(1000 * 60 * 60 * 3);
   });
 });
+
 pusher.beforeUnmount(() => {
   if (timer) clearTimeout(timer);
 });

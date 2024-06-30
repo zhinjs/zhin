@@ -4,13 +4,14 @@
     "version": "2.0.27",
     "scripts": {
         "start": "zhin",
-        "init": "zhin init -m dev",
+        "init": "zhin init",
         "dev": "zhin -m dev"
     },
     "dependencies": {
         "@icqqjs/icqq": "1.1.6",
         "zhin": "workspace:^",
         "@zhinjs/icqq": "workspace:^",
+        "@zhinjs/kritor": "workspace:^",
         "@zhinjs/qq": "workspace:^",
         "@zhinjs/dingtalk": "workspace:^",
         "@zhinjs/discord": "workspace:^",

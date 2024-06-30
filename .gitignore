@@ -25,3 +25,4 @@ test/data/
 /docs/dist
 /docs/.vitepress
 /pnpm-lock.yaml
+/**/kritor/src/generated/

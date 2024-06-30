@@ -26,7 +26,6 @@ defineProps<{
     </tr>
   </table>
 </template>
-
 <style lang="less" scoped>
 table {
   border: 1px solid black;

@@ -12,6 +12,7 @@
         "init": "pnpm -C test run init",
         "lint": "eslint packages --ext .ts",
         "lint:fix": "eslint packages --ext .ts --fix",
+        "sync": "git pull && git submodule update --remote",
         "format": "prettier packages --write",
         "build": "pnpm -r run build",
         "test": "pnpm -r run build",
