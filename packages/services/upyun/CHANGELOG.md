@@ -1,5 +1,13 @@
 # @zhinjs/plugin-upyun
 
+## 1.0.25
+
+### Patch Changes
+
+- 6f2e9e8: fix: add zhinManagerFn
+- Updated dependencies [6f2e9e8]
+  - zhin@3.0.25
+
 ## 1.0.24
 
 ### Patch Changes
