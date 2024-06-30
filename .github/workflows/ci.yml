@@ -42,8 +42,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
       - name: Upload embed as artifact.
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: ${{ steps.changesets.outputs.published }}
         with:
-          name: zhin@${{steps.changesets.outputs.publishedPackages[0].version}}
+          name: zhin
           path: search-widget/dist
