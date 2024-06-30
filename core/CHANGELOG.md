@@ -1,5 +1,11 @@
 # @zhinjs/core
 
+## 1.0.14
+
+### Patch Changes
+
+- 6f2e9e8: fix: add zhinManagerFn
+
 ## 1.0.13
 
 ### Patch Changes

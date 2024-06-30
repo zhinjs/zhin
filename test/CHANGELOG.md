@@ -1,5 +1,30 @@
 # test
 
+## 2.0.28
+
+### Patch Changes
+
+- 6f2e9e8: fix: add zhinManagerFn
+- Updated dependencies [6f2e9e8]
+  - @zhinjs/dingtalk@1.0.25
+  - @zhinjs/discord@1.0.24
+  - @zhinjs/icqq@1.0.26
+  - @zhinjs/onebot-11@1.0.25
+  - @zhinjs/onebot-12@1.0.26
+  - @zhinjs/qq@1.0.25
+  - @zhinjs/wechat@1.0.25
+  - @zhinjs/client@1.0.10
+  - @zhinjs/plugin-group-manage@1.0.26
+  - @zhinjs/plugin-guild-manage@1.0.25
+  - @zhinjs/plugin-qa@1.0.25
+  - @zhinjs/plugin-schedule@1.0.25
+  - @zhinjs/plugin-http-server@1.0.25
+  - @zhinjs/plugin-sandbox@1.0.25
+  - @zhinjs/plugin-screenshot@1.0.26
+  - @zhinjs/plugin-upyun@1.0.25
+  - @zhinjs/web@1.0.26
+  - zhin@3.0.25
+
 ## 2.0.27
 
 ### Patch Changes

@@ -1,5 +1,15 @@
 # @zhinjs/web
 
+## 1.0.26
+
+### Patch Changes
+
+- 6f2e9e8: fix: add zhinManagerFn
+- Updated dependencies [6f2e9e8]
+  - @zhinjs/client@1.0.10
+  - @zhinjs/plugin-http-server@1.0.25
+  - zhin@3.0.25
+
 ## 1.0.25
 
 ### Patch Changes
