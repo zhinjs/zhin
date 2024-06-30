@@ -11,7 +11,6 @@
         "@icqqjs/icqq": "1.1.6",
         "zhin": "workspace:^",
         "@zhinjs/icqq": "workspace:^",
-        "@zhinjs/kritor": "workspace:^",
         "@zhinjs/qq": "workspace:^",
         "@zhinjs/dingtalk": "workspace:^",
         "@zhinjs/discord": "workspace:^",
