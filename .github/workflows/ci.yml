@@ -6,9 +6,11 @@ on:
 env:
   CI: true
 jobs:
-  version:
+  publish:
     timeout-minutes: 15
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: setup node.js
         uses: actions/setup-node@v4
@@ -41,9 +43,8 @@ jobs:
           GITHUB_AUTH_TOKEN: ${{secrets.PERSONAL_TOKEN}}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
-      - name: Upload embed as artifact.
-        uses: actions/upload-artifact@v4
+      - name: Create Releases.
+        uses: ncipollo/release-action@v1
         if: ${{ steps.changesets.outputs.published }}
         with:
-          name: zhin
-          path: search-widget/dist
+          bodyFile: "zhin/CHANGELOG.md"
