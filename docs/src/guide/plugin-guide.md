@@ -9,7 +9,7 @@ plugin.new repeater # 此处 repeater 为插件名
 
 # 或者
 
-zhin new repeater -l ts # 如果你想使用 TS 进行开发，可增加 `-l` 选项，声明需要插件开发语言为ts
+zhin.new repeater -t # 如果你想使用 TS 进行开发，可增加 `-t` 选项，声明需要插件开发语言为ts
 ```
 
 ### - 手动创建
