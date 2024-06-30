@@ -1,8 +1,8 @@
 {
-  "name": "@zhinjs/discord",
+  "name": "@zhinjs/email",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
-  "version": "1.0.23",
+  "version": "0.0.1",
   "scripts": {
     "build": "tsc && tsc-alias"
   },
@@ -12,15 +12,13 @@
   "author": "凉菜",
   "repository": {
     "url": "https://github.com/zhinjs/zhin",
-    "directory": "packages/adapters/discord"
+    "directory": "packages/adapters/email"
   },
   "dependencies": {
-    "zhin": "workspace:^",
-    "ts-disc-bot": "latest"
+    "zhin": "workspace:^"
   },
   "devDependencies": {
     "zhin": "workspace:^",
-    "ts-disc-bot": "latest",
     "@types/node": "latest",
     "@types/ws": "latest"
   }
