@@ -1,5 +1,32 @@
 # test
 
+## 2.0.29
+
+### Patch Changes
+
+- 6fbc50a: fix add email adapter、com-wechat adapter、rename wechat adapter => web-wechat adapter
+- Updated dependencies [6fbc50a]
+  - @zhinjs/adapter-com-wechat@0.0.2
+  - @zhinjs/adapter-web-wechat@0.0.2
+  - @zhinjs/plugin-group-manage@1.0.27
+  - @zhinjs/plugin-guild-manage@1.0.26
+  - @zhinjs/adapter-onebot-11@0.0.2
+  - @zhinjs/adapter-onebot-12@0.0.2
+  - @zhinjs/adapter-dingtalk@0.0.2
+  - @zhinjs/adapter-discord@0.0.2
+  - @zhinjs/adapter-kritor@0.0.2
+  - @zhinjs/adapter-email@0.0.2
+  - @zhinjs/adapter-icqq@0.0.2
+  - @zhinjs/adapter-qq@0.0.2
+  - zhin@3.0.26
+  - @zhinjs/plugin-qa@1.0.26
+  - @zhinjs/plugin-schedule@1.0.26
+  - @zhinjs/plugin-http-server@1.0.26
+  - @zhinjs/plugin-sandbox@1.0.26
+  - @zhinjs/plugin-screenshot@1.0.27
+  - @zhinjs/plugin-upyun@1.0.26
+  - @zhinjs/web@1.0.27
+
 ## 2.0.28
 
 ### Patch Changes

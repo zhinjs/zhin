@@ -1,5 +1,11 @@
 # @zhinjs/core
 
+## 1.0.15
+
+### Patch Changes
+
+- 6fbc50a: fix add email adapter、com-wechat adapter、rename wechat adapter => web-wechat adapter
+
 ## 1.0.14
 
 ### Patch Changes

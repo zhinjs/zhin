@@ -1,5 +1,14 @@
 # @zhinjs/plugin-guild-manage
 
+## 1.0.26
+
+### Patch Changes
+
+- 6fbc50a: fix add email adapter、com-wechat adapter、rename wechat adapter => web-wechat adapter
+- Updated dependencies [6fbc50a]
+  - @zhinjs/adapter-qq@0.0.2
+  - zhin@3.0.26
+
 ## 1.0.25
 
 ### Patch Changes
