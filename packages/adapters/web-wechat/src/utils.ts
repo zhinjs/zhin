@@ -1,4 +1,4 @@
-import { Sendable, MessageElem, TextElem } from 'lib-wechat';
+import { Sendable, MessageElem, TextElem } from 'web-wechat';
 import { parseFromTemplate } from 'zhin';
 export function sendableToString(message: Sendable) {
   let result = '';

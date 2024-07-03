@@ -1,5 +1,5 @@
 import { App, Adapter, Message } from 'zhin';
-import { Client, BaseClient, Sendable, PrivateMessageEvent, GroupMessageEvent } from 'lib-wechat';
+import { Client, BaseClient, Sendable, PrivateMessageEvent, GroupMessageEvent } from 'web-wechat';
 import { formatSendable, sendableToString } from '@/utils';
 type DingMsgEvent = PrivateMessageEvent | GroupMessageEvent;
 const wechatAdapter = new Adapter<Adapter.Bot<Client>, DingMsgEvent>('wechat');
