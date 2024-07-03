@@ -17,7 +17,7 @@
 - [x] [钉钉机器人](https://open-dev.dingtalk.com/)
 - [x] [QQ官方机器人](https://q.qq.com/)
 - [ ] [kritor](https://github.com/KarinJS/kritor) (planned)
-- [x] Email (planned)
+- [x] Email
 - [ ] [Telegram](https://telegram.org) (planned)
 ## 快速上手
 ### 1. 初始化包管理器
