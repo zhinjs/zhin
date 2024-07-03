@@ -87,4 +87,4 @@ export const echo = ECHO;
 export const zhinManager = ZM;
 export const hmr = HMR;
 export const setup = SETUP;
-export const version = require('../package.json').version;
+export const { version } = JSON.parse(fs.readFileSync(path.resolve('../package.json'), 'utf8'));

@@ -16,6 +16,6 @@
     },
     "dependencies": {
         "zhin": "workspace:^",
-        "@zhinjs/onebot-12": "workspace:^"
+        "@zhinjs/adapter-onebot-12": "workspace:^"
     }
 }

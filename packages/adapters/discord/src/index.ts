@@ -54,7 +54,7 @@ discordAdapter.define('sendMsg', async (bot_id, target_id, target_type, message,
 });
 type DingTalkMessageEvent = GuildMessageEvent | DirectMessageEvent;
 
-const initBot = (configs: App.BotConfig<'discord'>[]) => {
+const startBots = (configs: App.BotConfig<'discord'>[]) => {
   for (const config of configs) {
     const bot = new Bot(config) as Adapter.Bot<Bot>;
     Object.defineProperties(bot, {
@@ -65,31 +65,33 @@ const initBot = (configs: App.BotConfig<'discord'>[]) => {
       },
       quote_self: {
         get() {
-          return discordAdapter.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.quote_self;
+          return discordAdapter.botConfig(bot)?.quote_self;
         },
       },
       forward_length: {
         get() {
-          return discordAdapter.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.forward_length;
+          return discordAdapter.botConfig(bot)?.forward_length;
         },
       },
       command_prefix: {
         get() {
-          return discordAdapter.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.command_prefix;
+          return discordAdapter.botConfig(bot)?.command_prefix;
         },
       },
     });
+    bot.on('message', messageHandler.bind(global, bot));
+    bot.start().then(() => {
+      discordAdapter.emit('bot-ready', bot);
+    });
     discordAdapter.bots.push(bot);
   }
-  discordAdapter.on('start', startBots);
-  discordAdapter.on('stop', stopBots);
 };
 const messageHandler = (bot: Adapter.Bot<Bot>, event: DingTalkMessageEvent) => {
   const message = Message.fromEvent(discordAdapter, bot, event);
   message.raw_message = sendableToString(event.message).trim();
   message.from_id = event instanceof DirectMessageEvent ? event.user_id : event.channel_id;
-  const master = discordAdapter.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.master;
-  const admins = discordAdapter.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.admins;
+  const master = discordAdapter.botConfig(bot)?.master;
+  const admins = discordAdapter.botConfig(bot)?.admins;
   message.sender = {
     ...event.sender,
     permissions: [
@@ -99,23 +101,13 @@ const messageHandler = (bot: Adapter.Bot<Bot>, event: DingTalkMessageEvent) => {
     ].filter(Boolean) as string[],
   };
   message.message_type = event.message_type;
-  const commands = discordAdapter.app!.getSupportCommands(discordAdapter, bot, message);
-  const matchReg = new RegExp(`^/(${commands.map(c => c.name).join('|')})`);
-  if (message.raw_message.match(matchReg)) message.raw_message = message.raw_message.slice(1);
   discordAdapter.app!.emit('message', discordAdapter, bot, message);
-};
-const startBots = () => {
-  for (const bot of discordAdapter.bots) {
-    bot.on('message', messageHandler.bind(global, bot));
-    bot.start().then(() => {
-      discordAdapter.emit('bot-ready', bot);
-    });
-  }
 };
 const stopBots = () => {
   for (const bot of discordAdapter.bots) {
     bot.stop();
   }
 };
-discordAdapter.on('mounted', initBot);
+discordAdapter.on('start', startBots);
+discordAdapter.on('stop', stopBots);
 export default discordAdapter;

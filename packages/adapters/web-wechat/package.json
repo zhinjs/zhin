@@ -12,14 +12,14 @@
     "author": "凉菜",
     "repository": {
         "url": "https://github.com/zhinjs/zhin",
-        "directory": "packages/adapters/wechat"
+        "directory": "packages/adapters/web-wechat"
     },
     "dependencies": {
         "zhin": "workspace:^",
-        "lib-wechat": "latest"
+        "web-wechat": "latest"
     },
     "peerDependencies": {
         "zhin": "workspace:^",
-        "lib-wechat": "latest"
+        "web-wechat": "latest"
     }
 }

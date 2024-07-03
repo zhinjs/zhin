@@ -2,31 +2,15 @@ import { MessageV12 } from '@/message';
 import { Dict } from 'zhin';
 
 export type OneBotMethodsV12 = {
-  send_private_msg(params: {
-    user_id: string;
+  send_message(params: {
+    user_id?: string;
+    group_id?: string;
+    guild_id?: string;
+    channel_id?: string;
+    detail_type: string;
     message: MessageV12.Sendable;
     auto_escape?: boolean;
     message_id?: string;
-  }): MessageV12.Ret;
-  send_group_msg(params: {
-    group_id: string;
-    message: MessageV12.Sendable;
-    auto_escape?: boolean;
-    message_id?: string;
-  }): MessageV12.Ret;
-  send_guild_msg(params: {
-    guild_id: string;
-    channel_id: string;
-    message: MessageV12.Sendable;
-    auto_escape?: boolean;
-    message_id?: string;
-  }): MessageV12.Ret;
-  send_msg(params: {
-    message_type: 'private' | 'group';
-    user_id?: number;
-    group_id?: number;
-    message: MessageV12.Sendable;
-    auto_escape?: boolean;
   }): MessageV12.Ret;
   delete_msg(params: { message_id: number }): void;
   get_forward_msg(params: { id: string }): MessageV12.Segment[];

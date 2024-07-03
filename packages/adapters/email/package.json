@@ -1,8 +1,8 @@
 {
-  "name": "@zhinjs/email",
+  "name": "@zhinjs/adapter-email",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
-  "version": "0.0.2",
+  "version": "0.0.1",
   "scripts": {
     "build": "tsc && tsc-alias"
   },
@@ -15,11 +15,17 @@
     "directory": "packages/adapters/email"
   },
   "dependencies": {
-    "zhin": "workspace:^"
+    "zhin": "workspace:^",
+    "node-imap": "^0.9.6",
+    "mailparser": "^3.7.1",
+    "html5parser": "^2.0.2",
+    "nodemailer": "^6.9.14"
   },
   "devDependencies": {
     "zhin": "workspace:^",
     "@types/node": "latest",
-    "@types/ws": "latest"
+    "@types/node-imap": "^0.9.3",
+    "@types/mailparser": "^3.4.4",
+    "@types/nodemailer": "^6.4.15"
   }
 }

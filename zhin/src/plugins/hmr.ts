@@ -10,23 +10,28 @@ hmr.unmounted(() => {
   watcher?.close();
 });
 hmr.mounted(app => {
-  const watchDirs = [
+  const watchPaths = [
     // 只监听本地插件和内置插件的变更，模块的管不了
-    ...(app.config.plugin_dirs || []).map(dir => {
-      const result = path.resolve(WORK_DIR, dir);
-    }), // 本地目录插件
+    ...app.config.plugin_dirs
+      .map(dir => {
+        return path.resolve(WORK_DIR, dir);
+      })
+      .filter(dir => !dir.startsWith(path.join(WORK_DIR, 'node_modules'))), // 本地目录插件
     __dirname, // 内置插件
+    app.config.filename, // 配置文件
     path.resolve(WORK_DIR, `.${process.env.mode}.env`), // 环境变量
   ].filter(Boolean) as string[];
   watcher = watch(
-    watchDirs
-      .filter(p => {
-        return fs.existsSync(p);
+    watchPaths
+      .filter(watchPath => {
+        return fs.existsSync(watchPath);
       })
-      .map(p => {
-        if (p.endsWith('node_modules')) return `${p}${path.sep}zhin-plugin-*${path.sep}lib${path.sep}*.{,c,m}[tj]s`;
-        if (p.endsWith('@zhinjs')) return `${p}${path.sep}plugin-*${path.sep}lib${path.sep}*.{,c,m}[tj]s`;
-        return p;
+      .map(watchPath => {
+        if (watchPath.endsWith('node_modules'))
+          return `${watchPath}${path.sep}zhin-plugin-*${path.sep}lib${path.sep}*.{,c,m}[tj]s`;
+        if (watchPath.endsWith('@zhinjs'))
+          return `${watchPath}${path.sep}plugin-*${path.sep}lib${path.sep}*.{,c,m}[tj]s`;
+        return watchPath;
       }),
   );
   const reloadProject = (filename: string) => {
@@ -55,11 +60,9 @@ hmr.mounted(app => {
   };
 
   const changeListener = (filePath: string) => {
-    if (filePath.startsWith('.env')) {
-      return reloadProject(filePath.replace(path.dirname(filePath) + '/', ''));
-    }
+    if (filePath.startsWith('.env') || filePath === app.config.filename) reloadProject(path.basename(filePath));
     const pluginFiles = app.pluginList.map(p => p.filePath);
-    if (watchDirs.some(dir => filePath.startsWith(dir)) && pluginFiles.includes(filePath)) {
+    if (watchPaths.some(watchPath => filePath.startsWith(watchPath)) && pluginFiles.includes(filePath)) {
       return reloadPlugins(filePath);
     }
   };

@@ -72,7 +72,7 @@ type QQConfig = {
   timeout?: number;
   public?: boolean;
 };
-const initBot = (configs: App.BotConfig<'qq'>[]) => {
+const startBots = (configs: App.BotConfig<'qq'>[]) => {
   for (const { private: isPrivate, group, public: isPublic, ...config } of configs) {
     const botConfig: Bot.Config = {
       logLevel: qq.app!.config.log_level as any,
@@ -98,31 +98,33 @@ const initBot = (configs: App.BotConfig<'qq'>[]) => {
       },
       quote_self: {
         get() {
-          return qq.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.quote_self;
+          return qq.botConfig(bot)?.quote_self;
         },
       },
       forward_length: {
         get() {
-          return qq.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.forward_length;
+          return qq.botConfig(bot)?.forward_length;
         },
       },
       command_prefix: {
         get() {
-          return qq.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.command_prefix;
+          return qq.botConfig(bot)?.command_prefix;
         },
       },
     });
+    bot.on('message', messageHandler.bind(global, bot));
+    bot.start().then(() => {
+      qq.emit('bot-ready', bot);
+    });
     qq.bots.push(bot);
   }
-  qq.on('start', startBots);
-  qq.on('stop', stopBots);
 };
 const messageHandler = (bot: Adapter.Bot<Bot>, event: QQMessageEvent) => {
   const message = Message.fromEvent(qq, bot, event);
   message.raw_message = sendableToString(event.message).trim();
   message.message_type = event.message_type;
-  const master = qq.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.master;
-  const admins = qq.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.admins;
+  const master = qq.botConfig(bot)?.master;
+  const admins = qq.botConfig(bot)?.admins;
   message.sender = {
     ...event.sender,
     permissions: [
@@ -159,19 +161,12 @@ const messageHandler = (bot: Adapter.Bot<Bot>, event: QQMessageEvent) => {
   if (message.raw_message.match(matchReg)) message.raw_message = message.raw_message.slice(1);
   qq.app!.emit('message', qq, bot, message);
 };
-const startBots = () => {
-  for (const bot of qq.bots) {
-    bot.on('message', messageHandler.bind(global, bot));
-    bot.start().then(() => {
-      qq.emit('bot-ready', bot);
-    });
-  }
-};
 const stopBots = () => {
   for (const bot of qq.bots) {
     bot.stop();
   }
 };
-qq.on('mounted', initBot);
 
+qq.on('start', startBots);
+qq.on('stop', stopBots);
 export default qq;

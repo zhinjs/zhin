@@ -42,15 +42,15 @@ export class OneBotV12 extends EventEmitter {
     const result: OneBotV12.EventPayload | OneBotV12.ApiResult = JSON.parse(message?.toString() || 'null');
     if (!result) return;
     let temp: OneBotV12.EventPayload = result as any;
-    if (temp.type === 'meta' && temp.detail_type === 'connect') this.self_id = temp.self.user_id;
+    if (temp.type === 'meta' && temp.detail_type === 'connect') this.self_id = temp.self?.user_id;
     if (result.retcode !== undefined && result.echo) return this.emit('echo', result.echo, result.data);
     const event: OneBotV12.EventPayload = result as OneBotV12.EventPayload;
     this.logger.debug('receive event', event);
     if (event.type === 'message') {
       if (event.detail_type === 'guild') {
-        this.logger.info(`recv [${event.detail_type} ${event.guild_id}/${event.channel_id}]: ${event.raw_message}`);
+        this.logger.info(`recv [${event.detail_type} ${event.guild_id}/${event.channel_id}]: ${event.alt_message}`);
       } else {
-        this.logger.info(`recv [${event.detail_type} ${event.group_id || event.user_id}]: ${event.raw_message}`);
+        this.logger.info(`recv [${event.detail_type} ${event.group_id || event.user_id}]: ${event.alt_message}`);
       }
     }
     this.emit(event.type, event);
@@ -107,7 +107,7 @@ export class OneBotV12 extends EventEmitter {
     };
     this.ws = new WebSocket(config.url, {
       headers: {
-        Authorization: `Bearer ${cfg.access_token}`,
+        authorization: `Bearer ${cfg.access_token}`,
       },
     });
     this.ws.on('open', () => {
@@ -175,8 +175,8 @@ export class OneBotV12 extends EventEmitter {
   async sendPrivateMsg(user_id: string, message: MessageV12.Sendable, message_id?: string) {
     this.logger.info(`send [Private ${user_id}]: ${this.getBrief(message)}`);
     const result = await this.sendPayload({
-      action: 'send_private_msg',
-      params: { user_id, message, message_id },
+      action: 'send_message',
+      params: { user_id, detail_type: 'private', message, message_id },
     });
     if (!result.message_id) return this.logger.error(`send failed:`, result);
     return result.message_id;
@@ -306,8 +306,8 @@ export class OneBotV12 extends EventEmitter {
   async sendGroupMsg(group_id: string, message: MessageV12.Sendable, message_id?: string) {
     this.logger.info(`send [Group ${group_id}]: ${this.getBrief(message)}`);
     const result = await this.sendPayload({
-      action: 'send_group_msg',
-      params: { group_id, message, message_id },
+      action: 'send_message',
+      params: { group_id, detail_type: 'group', message, message_id },
     });
     if (!result.message_id) return this.logger.error(`send failed:`, result);
     return result.message_id;
@@ -315,8 +315,8 @@ export class OneBotV12 extends EventEmitter {
   async sendGuildMsg(guild_id: string, channel_id: string, message: MessageV12.Sendable, message_id?: string) {
     this.logger.info(`send [Guild ${guild_id}]: ${this.getBrief(message)}`);
     const result = await this.sendPayload({
-      action: 'send_guild_msg',
-      params: { guild_id, channel_id, message, message_id },
+      action: 'send_message',
+      params: { guild_id, channel_id, detail_type: 'channel', message, message_id },
     });
     if (!result.message_id) return this.logger.error(`send failed:`, result);
     return result.message_id;

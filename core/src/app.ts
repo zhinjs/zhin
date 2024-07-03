@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 import { Logger, getLogger } from 'log4js';
 import { Middleware } from './middleware';
 import { Plugin, PluginMap } from './plugin';
-import { Bot, Dict, LogLevel } from './types';
+import { Bot, LogLevel } from './types';
 import { loadModule, remove } from './utils';
 import { APP_KEY, REQUIRED_KEY, WORK_DIR } from './constans';
 import path from 'path';
@@ -10,7 +10,6 @@ import { Adapter, AdapterBot, AdapterReceive } from './adapter';
 import { Message } from './message';
 import process from 'process';
 import { Config } from './config';
-import { Level } from 'level';
 import { LevelDb } from './levelDb';
 
 export function defineConfig(config: Partial<App.Config>): Partial<App.Config>;
@@ -294,7 +293,10 @@ export class App extends EventEmitter {
     this.initPlugins();
     this.initAdapter();
     for (const [name, adapter] of this.adapters) {
-      adapter.emit('start');
+      const bots = this.config.bots.filter(
+        bot => bot?.adapter === adapter.name && !this.config.disable_bots.includes(bot.unique_id),
+      );
+      adapter.emit('start', bots);
       this.logger.mark(`adapter： ${name} started`);
     }
     this.emit('start');
@@ -314,10 +316,7 @@ export class App extends EventEmitter {
         if (!(adapter instanceof Adapter)) throw new Error(`${loadPath} is not a valid adapter`);
         this.adapters.set(adapter.name, adapter);
         loadName = adapter.name;
-        const bots = this.config.bots.filter(
-          bot => bot?.adapter === adapter.name && !this.config.disable_bots.includes(bot.unique_id),
-        );
-        adapter.mount(this, bots);
+        adapter.mount(this);
         this.logger.debug(`adapter： ${adapter.name} loaded`);
         loaded = true;
       } catch (e) {

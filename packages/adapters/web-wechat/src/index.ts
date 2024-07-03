@@ -68,10 +68,6 @@ const messageHandler = (bot: Adapter.Bot<Client>, event: DingMsgEvent) => {
       admins && admins.includes(event.sender.user_id) && 'admins',
     ].filter(Boolean) as string[],
   };
-
-  const commands = wechatAdapter.app!.getSupportCommands(wechatAdapter, bot, message);
-  const matchReg = new RegExp(`^/(${commands.map(c => c.name).join('|')})`);
-  if (message.raw_message.match(matchReg)) message.raw_message = message.raw_message.slice(1);
   wechatAdapter.app!.emit('message', wechatAdapter, bot, message);
 };
 const stopBots = () => {

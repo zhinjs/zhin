@@ -12,7 +12,7 @@ const processAdapter = new Adapter<Adapter.Bot<NodeJS.Process>>('process');
 processAdapter.define('sendMsg', async (bot_id, target_id, target_type, message) => {
   processAdapter.logger.info(`send [${target_type} ${target_id}]: ${decodeURIComponent(message)}`);
 });
-const initBots = (configs: Adapter.Bot[]) => {
+const startBots = (configs: Adapter.Bot[]) => {
   for (const config of configs) {
     const bot = process as Adapter.Bot<NodeJS.Process>;
     Object.defineProperties(bot, {
@@ -33,17 +33,13 @@ const initBots = (configs: Adapter.Bot[]) => {
         writable: false,
       },
     });
-    processAdapter.bots.push(bot);
-  }
-  processAdapter.on('start', startBots);
-};
-const startBots = () => {
-  for (const bot of processAdapter.bots) {
     bot.stdin.on('data', messageHandler.bind(global, bot));
     setTimeout(() => {
       processAdapter.emit('bot-ready', bot);
     }, 100);
+    processAdapter.bots.push(bot);
   }
+  processAdapter.on('start', startBots);
 };
 
 const messageHandler = (bot: Adapter.Bot<NodeJS.Process>, event: Buffer) => {
@@ -62,5 +58,4 @@ const messageHandler = (bot: Adapter.Bot<NodeJS.Process>, event: Buffer) => {
   processAdapter.logger.info(`recv [${message.message_type} ${message.from_id}]: ${message.raw_message}`);
   processAdapter.app!.emit('message', processAdapter, bot, message);
 };
-processAdapter.on('mounted', initBots);
 export default processAdapter;

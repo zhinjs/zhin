@@ -1,17 +1,17 @@
 import { Adapter, App, Message } from 'zhin';
 import '@zhinjs/plugin-http-server';
-import { OneBotV12 } from '@/onebot';
-import { MessageV12 } from '@/message';
-export type OneBotV12Adapter = typeof oneBotV12;
-const oneBotV12 = new Adapter<Adapter.Bot<OneBotV12>, MessageV12>('onebot-12');
+import { Client } from '@/client';
+import { Message as ClientMessage } from '@/message';
+export type ComWechatAdapter = typeof adapter;
+const adapter = new Adapter<Adapter.Bot<Client>, ClientMessage>('com-wechat');
 declare module 'zhin' {
   namespace App {
     interface Adapters {
-      'onebot-12': OneBotV12.Config;
+      'com-wechat': Client.Config;
     }
   }
 }
-oneBotV12
+adapter
   .schema('type', {
     method: 'const',
     args: ['ws'],
@@ -32,28 +32,25 @@ oneBotV12
     method: 'number',
     args: ['请输入reconnect_interval', undefined, '3000'],
   });
-oneBotV12.define('sendMsg', async (bot_id, target_id, target_type, message, source) => {
-  const bot = oneBotV12.pick(bot_id);
-  let msg: MessageV12.Sendable = await oneBotV12.app!.renderMessage(message as string, source);
-  msg = MessageV12.formatSegments(msg);
+adapter.define('sendMsg', async (bot_id, target_id, target_type, message, source) => {
+  const bot = adapter.pick(bot_id);
+  let msg: ClientMessage.Sendable = await adapter.app!.renderMessage(message as string, source);
+  msg = ClientMessage.formatSegments(msg);
   switch (target_type) {
-    case 'guild':
-      const [guild_id, channel_id] = target_id.split('/');
-      return bot.sendGuildMsg(guild_id, channel_id, msg, source?.original?.message_id);
     case 'group':
-      return bot.sendGroupMsg(target_id, msg, source?.original?.message_id);
+      return bot.sendGroupMsg(target_id, msg);
     case 'private':
-      return bot.sendPrivateMsg(target_id, msg, source?.original?.message_id);
+      return bot.sendPrivateMsg(target_id, msg);
     default:
-      throw new Error(`OneBotV12适配器暂不支持发送${target_type}类型的消息`);
+      throw new Error(`com wechat 适配器暂不支持发送${target_type}类型的消息`);
   }
 });
-const startBots = (configs: App.BotConfig<'onebot-12'>[]) => {
-  if (!oneBotV12.app?.server)
-    throw new Error('“oneBot V12 miss require service “http”, maybe you need install “ @zhinjs/plugin-http-server ”');
+const startBots = (configs: App.BotConfig<'com-wechat'>[]) => {
+  if (!adapter.app?.server)
+    throw new Error('“com-wechat miss require service “http”, maybe you need install “ @zhinjs/plugin-http-server ”');
 
   for (const config of configs) {
-    const bot = new OneBotV12(oneBotV12, config, oneBotV12.app!.router) as Adapter.Bot<OneBotV12>;
+    const bot = new Client(adapter, config, adapter.app!.router) as Adapter.Bot<Client>;
 
     Object.defineProperties(bot, {
       unique_id: {
@@ -63,30 +60,30 @@ const startBots = (configs: App.BotConfig<'onebot-12'>[]) => {
       },
       quote_self: {
         get() {
-          return oneBotV12.botConfig(bot)?.quote_self;
+          return adapter.botConfig(bot)?.quote_self;
         },
       },
       forward_length: {
         get() {
-          return oneBotV12.botConfig(bot)?.forward_length;
+          return adapter.botConfig(bot)?.forward_length;
         },
       },
       command_prefix: {
         get() {
-          return oneBotV12.botConfig(bot)?.command_prefix;
+          return adapter.botConfig(bot)?.command_prefix;
         },
       },
     });
     bot.on('message', messageHandler.bind(global, bot));
     bot.start().then(() => {
-      oneBotV12.emit('bot-ready', bot);
+      adapter.emit('bot-ready', bot);
     });
-    oneBotV12.bots.push(bot);
+    adapter.bots.push(bot);
   }
 };
-const messageHandler = (bot: Adapter.Bot<OneBotV12>, event: MessageV12) => {
-  const message = Message.fromEvent(oneBotV12, bot, event);
-  message.raw_message = MessageV12.formatToString(event.message);
+const messageHandler = (bot: Adapter.Bot<Client>, event: ClientMessage) => {
+  const message = Message.fromEvent(adapter, bot, event);
+  message.raw_message = ClientMessage.formatToString(event.message);
   message.message_type = event.detail_type;
   message.from_id =
     event.detail_type === 'private'
@@ -106,18 +103,18 @@ const messageHandler = (bot: Adapter.Bot<OneBotV12>, event: MessageV12) => {
       ...(event.permissions || []),
     ].filter(Boolean) as string[],
   };
-  oneBotV12.app!.emit('message', oneBotV12, bot, message);
+  adapter.app!.emit('message', adapter, bot, message);
 };
 const stopBots = () => {
-  for (const bot of oneBotV12.bots) {
+  for (const bot of adapter.bots) {
     bot.stop();
   }
 };
 
-oneBotV12.on('start', startBots);
-oneBotV12.on('stop', stopBots);
+adapter.on('start', startBots);
+adapter.on('stop', stopBots);
 
-export default oneBotV12;
-export namespace OneBotV12Adapter {
-  export type Config = OneBotV12.Config[];
+export default adapter;
+export namespace ClientAdapter {
+  export type Config = Client.Config[];
 }

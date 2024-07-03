@@ -1,17 +1,17 @@
 import { EventEmitter } from 'events';
 import { WebSocketServer, WebSocket, MessageEvent } from 'ws';
-import { MessageV12 } from '@/message';
-import { OneBotMethodsV12 } from '@/types';
+import { Message } from '@/message';
+import { ComServerMethods, UploadFileParams } from '@/types';
 import { Router } from '@zhinjs/plugin-http-server';
-import { OneBotV12Adapter } from '@/index';
+import { ComWechatAdapter } from '@/index';
 import { Dict } from 'zhin';
 import { IncomingMessage } from 'http';
 
-export class OneBotV12 extends EventEmitter {
+export class Client extends EventEmitter {
   self_id: string = '';
   constructor(
-    private adapter: OneBotV12Adapter,
-    public config: OneBotV12.Config & Dict,
+    private adapter: ComWechatAdapter,
+    public config: Client.Config & Dict,
     private router: Router,
   ) {
     super();
@@ -30,33 +30,34 @@ export class OneBotV12 extends EventEmitter {
   async start() {
     switch (this.config.type) {
       case 'ws':
-        return this.connectWs(this.config as OneBotV12.Config<'ws'>);
+        return this.#connectWs(this.config as Client.Config<'ws'>);
       case 'ws_reverse':
-        return this.startWsServer(this.config as OneBotV12.Config<'ws_reverse'>);
+        return this.#startWsServer(this.config as Client.Config<'ws_reverse'>);
       default:
         throw new Error(`unsupported type:${this.config.type}, supported types:'ws', 'ws_reverse'`);
     }
   }
 
   private dispatch(message: MessageEvent) {
-    const result: OneBotV12.EventPayload | OneBotV12.ApiResult = JSON.parse(message?.toString() || 'null');
+    const result: Client.EventPayload | Client.ApiResult = JSON.parse(message?.toString() || 'null');
     if (!result) return;
-    let temp: OneBotV12.EventPayload = result as any;
+    let temp: Client.EventPayload = result as any;
     if (temp.type === 'meta' && temp.detail_type === 'connect') this.self_id = temp.self?.user_id;
+    this.logger.debug('recv source', result);
     if (result.retcode !== undefined && result.echo) return this.emit('echo', result.echo, result.data);
-    const event: OneBotV12.EventPayload = result as OneBotV12.EventPayload;
+    const event: Client.EventPayload = result as Client.EventPayload;
     this.logger.debug('receive event', event);
     if (event.type === 'message') {
       if (event.detail_type === 'guild') {
-        this.logger.info(`recv [${event.detail_type} ${event.guild_id}/${event.channel_id}]: ${event.raw_message}`);
+        this.logger.info(`recv [${event.detail_type} ${event.guild_id}/${event.channel_id}]: ${event.alt_message}`);
       } else {
-        this.logger.info(`recv [${event.detail_type} ${event.group_id || event.user_id}]: ${event.raw_message}`);
+        this.logger.info(`recv [${event.detail_type} ${event.group_id || event.user_id}]: ${event.alt_message}`);
       }
     }
     this.emit(event.type, event);
   }
 
-  private startWsServer(cfg: OneBotV12.Config<'ws_reverse'>) {
+  #startWsServer(cfg: Client.Config<'ws_reverse'>) {
     const config: Dict<string> = {
       path: `${cfg.prefix || '/onebot/v12'}`,
       api_path: `${cfg.prefix || '/onebot/v12'}/api`,
@@ -69,7 +70,7 @@ export class OneBotV12 extends EventEmitter {
             req: { headers },
           } = info;
           if (!headers['sec-websocket-protocol']?.startsWith('12')) {
-            this.logger.error('连接的协议不是有效的OneBotV12协议');
+            this.logger.error('连接的协议不是有效的Client协议');
           }
           const authorization = headers['authorization'] || '';
           if (this.config.access_token && authorization !== `Bearer ${this.config.access_token}`) {
@@ -99,8 +100,8 @@ export class OneBotV12 extends EventEmitter {
     });
   }
 
-  private connectWs(cfg: OneBotV12.Config<'ws'>) {
-    const config: Required<OneBotV12.ConfigMap['ws']> = {
+  #connectWs(cfg: Client.Config<'ws'>) {
+    const config: Required<Client.ConfigMap['ws']> = {
       url: cfg.url || 'ws://127.0.0.1:6700',
       max_reconnect_count: (cfg.max_reconnect_count ||= 10),
       reconnect_interval: (cfg.reconnect_interval ||= 3000),
@@ -124,7 +125,7 @@ export class OneBotV12 extends EventEmitter {
         this.logger.mark(`reconnect after ${config.reconnect_interval} ms`);
         setTimeout(() => {
           this.reTryCount++;
-          this.connectWs(cfg);
+          this.#connectWs(cfg);
         }, config.reconnect_interval);
       } else {
         this.logger.mark(`retry times is exceeded of ${config.max_reconnect_count}`);
@@ -139,13 +140,13 @@ export class OneBotV12 extends EventEmitter {
     }
   }
 
-  sendPayload<T extends keyof OneBotMethodsV12>(payload: {
+  sendPayload<T extends keyof ComServerMethods>(payload: {
     action: T;
-    params: Parameters<OneBotMethodsV12[T]>[0];
+    params: Parameters<ComServerMethods[T]>[0];
     echo?: number | string;
-  }): Promise<ReturnType<OneBotMethodsV12[T]>> {
-    return new Promise<ReturnType<OneBotMethodsV12[T]>>((resolve, reject) => {
-      payload.echo = payload.echo || Date.now();
+  }): Promise<ReturnType<ComServerMethods[T]>> {
+    return new Promise<ReturnType<ComServerMethods[T]>>((resolve, reject) => {
+      payload.echo = payload.echo || `${Date.now()}`;
       const timer = setTimeout(
         () => {
           this.off('echo', receiveHandler);
@@ -172,24 +173,23 @@ export class OneBotV12 extends EventEmitter {
     });
   }
 
-  async sendPrivateMsg(user_id: string, message: MessageV12.Sendable, message_id?: string) {
-    this.logger.info(`send [Private ${user_id}]: ${this.getBrief(message)}`);
-    const result = await this.sendPayload({
+  async sendPrivateMsg(user_id: string, message: Message.Sendable) {
+    await this.sendPayload({
       action: 'send_message',
-      params: { user_id, detail_type: 'private', message, message_id },
+      params: { user_id, detail_type: 'private', message: await this.processMessage(message) },
     });
-    if (!result.message_id) return this.logger.error(`send failed:`, result);
-    return result.message_id;
+    this.logger.info(`try send [Private ${user_id}]: ${this.getBrief(message)}`);
+  }
+  async sendGroupMsg(group_id: string, message: Message.Sendable) {
+    await this.sendPayload({
+      action: 'send_message',
+      params: { group_id, detail_type: 'group', message: await this.processMessage(message) },
+    });
+    this.logger.info(`try send [Group ${group_id}]: ${this.getBrief(message)}`);
   }
   getGroupList() {
     return this.sendPayload({
       action: 'get_group_list',
-      params: {},
-    });
-  }
-  getGuildList() {
-    return this.sendPayload({
-      action: 'get_guild_list',
       params: {},
     });
   }
@@ -205,40 +205,10 @@ export class OneBotV12 extends EventEmitter {
       params: {},
     });
   }
-  sendLike(user_id: string, times = 1) {
-    return this.sendPayload({
-      action: 'send_like',
-      params: { user_id, times },
-    });
-  }
-  getStrangerInfo(user_id: string) {
-    return this.sendPayload({
-      action: 'get_stranger_info',
-      params: { user_id },
-    });
-  }
   getGroupMemberList(group_id: string) {
     return this.sendPayload({
       action: 'get_group_member_list',
       params: { group_id },
-    });
-  }
-  setEssenceMessage(message_id: string) {
-    return this.sendPayload({
-      action: 'set_essence_message',
-      params: { message_id },
-    });
-  }
-  removeEssenceMessage(message_id: string) {
-    return this.sendPayload({
-      action: 'remove_essence_message',
-      params: { message_id },
-    });
-  }
-  setGroupBan(group_id: string, user_id: string, duration?: number) {
-    return this.sendPayload({
-      action: 'set_group_ban',
-      params: { group_id, user_id, duration },
     });
   }
   getGroupMemberInfo(group_id: string, user_id: string) {
@@ -250,78 +220,169 @@ export class OneBotV12 extends EventEmitter {
       },
     });
   }
-  setGroupKick(group_id: string, user_id: string, reject_add_request?: boolean) {
-    return this.sendPayload({
-      action: 'set_group_kick',
-      params: {
-        group_id,
-        user_id,
-        reject_add_request,
-      },
-    });
+  async searchContact(condition: string) {
+    return (
+      (await this.sendPayload({
+        action: 'wx.search_contact_by_remark',
+        params: { remark: condition },
+      })) ||
+      (await this.sendPayload({
+        action: 'wx.search_contact_by_wxnumber',
+        params: { wx_number: condition },
+      })) ||
+      (await this.sendPayload({
+        action: 'wx.search_contact_by_nickname',
+        params: { nickname: condition },
+      }))
+    );
   }
-  setGroupAdmin(group_id: string, user_id: string, enable?: boolean) {
-    return this.sendPayload({
-      action: 'set_group_admin',
-      params: { group_id, user_id, enable },
-    });
-  }
-  setGroupSpecialTitle(group_id: string, user_id: string, special_title?: string, duration?: number) {
-    console.log(group_id, user_id, special_title);
-    return this.sendPayload({
-      action: 'set_group_special_title',
-      params: { group_id, user_id, special_title, duration },
-    });
-  }
-  sendGroupNotice(group_id: string, content: string) {
-    return this.sendPayload({
-      action: 'send_group_notice',
-      params: { group_id, content },
-    });
-  }
-  setGroupAnonymous(group_id: string, enable?: boolean) {
-    return this.sendPayload({
-      action: 'set_group_anonymous',
-      params: { group_id, enable },
-    });
-  }
-  setGroupCard(group_id: string, user_id: string, card?: string) {
-    return this.sendPayload({
-      action: 'set_group_card',
-      params: { group_id, user_id, card },
-    });
-  }
-  setGroupName(group_id: string, name: string) {
+  setGroupName(group_id: string, group_name: string) {
     return this.sendPayload({
       action: 'set_group_name',
-      params: { group_id, name },
+      params: { group_id, group_name },
     });
   }
-  sendGroupPoke(group_id: string, user_id: string) {
-    return this.sendPayload({
-      action: 'send_group_poke',
+  async uploadFile(params: UploadFileParams) {
+    return await this.sendPayload({
+      action: 'upload_file',
+      params,
+    });
+  }
+  async getWechatVersion() {
+    return await this.sendPayload({
+      action: 'wx.get_wechat_version',
+      params: undefined,
+    });
+  }
+  async setWechatVersion(version: string) {
+    return await this.sendPayload({
+      action: 'wx.set_wechat_version',
+      params: { version },
+    });
+  }
+  async getPublicAccountList() {
+    return await this.sendPayload({
+      action: 'wx.get_public_account_list',
+      params: undefined,
+    });
+  }
+  async followPublicAccount(user_id: string) {
+    return await this.sendPayload({
+      action: 'wx.follow_public_account',
+      params: { user_id },
+    });
+  }
+  async approveFriendRequest(v3: string, v4: string) {
+    return await this.sendPayload({
+      action: 'wx.accept_friend',
+      params: { v3, v4 },
+    });
+  }
+  async checkFriendStatus(user_id: string) {
+    return await this.sendPayload({
+      action: 'wx.check_friend_status',
+      params: { user_id },
+    });
+  }
+  async deleteFriend(user_id: string) {
+    return await this.sendPayload({
+      action: 'wx.delete_friend',
+      params: { user_id },
+    });
+  }
+  async setGroupAnnouncement(group_id: string, content: string) {
+    return await this.sendPayload({
+      action: 'wx.set_group_announcement',
+      params: { group_id, announcement: content },
+    });
+  }
+  async addGroupMember(group_id: string, user_id: string) {
+    return await this.sendPayload({
+      action: 'wx.add_groupmember',
       params: { group_id, user_id },
     });
   }
-  async sendGroupMsg(group_id: string, message: MessageV12.Sendable, message_id?: string) {
-    this.logger.info(`send [Group ${group_id}]: ${this.getBrief(message)}`);
-    const result = await this.sendPayload({
-      action: 'send_message',
-      params: { group_id, detail_type: 'group', message, message_id },
+  async deleteGroupMember(group_id: string, user_id: string) {
+    return await this.sendPayload({
+      action: 'wx.delete_groupmember',
+      params: { group_id, user_id },
     });
-    if (!result.message_id) return this.logger.error(`send failed:`, result);
-    return result.message_id;
   }
-  async sendGuildMsg(guild_id: string, channel_id: string, message: MessageV12.Sendable, message_id?: string) {
-    this.logger.info(`send [Guild ${guild_id}]: ${this.getBrief(message)}`);
-    const result = await this.sendPayload({
-      action: 'send_message',
-      params: { guild_id, channel_id, detail_type: 'channel', message, message_id },
+  async getPublicHistory(public_id: string, offset: number) {
+    return await this.sendPayload({
+      action: 'wx.get_public_history',
+      params: { public_id, offset },
     });
-    if (!result.message_id) return this.logger.error(`send failed:`, result);
-    return result.message_id;
   }
-  getBrief(message: MessageV12.Sendable): string {
+  async setFriendRemark(friend_id: string, remark: string) {
+    return await this.sendPayload({
+      action: 'wx.set_remark',
+      params: { user_id: friend_id, remark },
+    });
+  }
+  async setGroupRemark(group_id: string, remark: string) {
+    return await this.sendPayload({
+      action: 'wx.set_remark',
+      params: { user_id: group_id, remark },
+    });
+  }
+  async setGroupNickname(group_id: string, nickname: string) {
+    return await this.sendPayload({
+      action: 'wx.set_group_nickname',
+      params: { group_id, nickname },
+    });
+  }
+  async sendForwardMsg(user_id: string, message_id: string) {
+    return await this.sendPayload({
+      action: 'wx.send_forward_msg',
+      params: { user_id, message_id },
+    });
+  }
+  async processMessage(message: Message.Sendable): Promise<Message.Segment[]> {
+    if (!Array.isArray(message)) message = [message];
+    const result: Message.Segment[] = [];
+    for (const item of message) {
+      if (typeof item === 'string')
+        result.push({
+          type: 'text',
+          data: { text: item.replace(/</g, '\\<').replace(/>/g, '\\>') },
+        });
+      else {
+        switch (item.type) {
+          case 'video':
+          case 'audio':
+          case 'image':
+          case 'file':
+            const { file, type } = item.data;
+            if (!file) {
+              this.logger.error(`file cannot be empty`);
+              continue;
+            }
+            const data = await this.uploadFile({
+              type: 'data',
+              name: `${Date.now()}.${type}`,
+              data: file.replace('base64://', ''),
+            });
+            result.push({
+              type: item.type,
+              data,
+            });
+            break;
+          case 'text':
+            result.push({
+              type: 'text',
+              data: { text: item.data.text.replace(/</g, '\\<').replace(/>/g, '\\>') },
+            });
+            break;
+          case 'location':
+          default:
+            result.push(item);
+        }
+      }
+    }
+    return result;
+  }
+  getBrief(message: Message.Sendable): string {
     if (typeof message === 'string') {
       return message;
     }
@@ -333,15 +394,9 @@ export class OneBotV12 extends EventEmitter {
     }
     return `{${message.type},${Object.keys(message.data).join(',')}}`;
   }
-  getForumUrl(guild_id: string, channel_id: string, forum_id: string) {
-    return this.sendPayload({
-      action: 'get_forum_url',
-      params: { guild_id, channel_id, forum_id },
-    });
-  }
 }
 
-export namespace OneBotV12 {
+export namespace Client {
   type WsConfig = {
     url?: string;
     max_reconnect_count?: number;

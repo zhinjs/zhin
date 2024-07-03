@@ -42,6 +42,9 @@ export class Adapter<I extends object = object, M = {}> extends EventEmitter {
   constructor(public name: string) {
     super();
   }
+  botConfig(bot: Adapter.Bot<I>) {
+    return this.app!.config.bots.find(config => config.unique_id === bot.unique_id);
+  }
   async sendMsg(
     bot_id: string,
     target_id: string,
@@ -70,14 +73,14 @@ export class Adapter<I extends object = object, M = {}> extends EventEmitter {
     this.elements.push(element);
     return this;
   }
-  mount(app: App, bots: App.BotConfig[]) {
+  mount(app: App) {
     this.emit('before-mount');
     this.logger.level = app.config.log_level;
     this.app = app;
-    this.emit('mounted', bots);
+    this.emit('mounted', app);
   }
   unmount() {
-    this.emit('before-unmount');
+    this.emit('before-unmount', this.app!);
     this.app = null;
     this.emit('unmounted');
   }
@@ -138,10 +141,10 @@ export namespace Adapter {
   export interface EventMap {
     'bot-ready'(bot: Bot<any>): void;
     'before-mount'(): void;
-    'before-unmount'(): void;
-    'mounted'(): void;
+    'before-unmount'(app: App): void;
+    'mounted'(app: App): void;
     'unmounted'(): void;
-    'start'(): void;
+    'start'(configs: App.BotConfig[]): void;
   }
   export interface Config<T extends keyof App.Adapters = keyof App.Adapters> {
     name: T;

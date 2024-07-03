@@ -6,7 +6,7 @@ const errorHandler = (e: unknown) => console.error(e);
   let { init } = process.env;
   process.on('unhandledRejection', errorHandler);
   process.on('uncaughtException', errorHandler);
-  const app = createApp(process.env.ZHIN_KEY || undefined);
+  const app = createApp();
   if (init === '1') {
     await initialApp.apply(app);
   }

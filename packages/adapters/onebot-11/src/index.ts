@@ -45,7 +45,7 @@ oneBotV11.define('sendMsg', async (bot_id, target_id, target_type, message, sour
       throw new Error(`OneBotV11适配器暂不支持发送${target_type}类型的消息`);
   }
 });
-const initBot = (configs: App.BotConfig<'onebot-11'>[]) => {
+const startBots = (configs: App.BotConfig<'onebot-11'>[]) => {
   if (!oneBotV11.app?.server)
     throw new Error('“oneBot V11 miss require service “http”, maybe you need install “ @zhinjs/plugin-http-server ”');
 
@@ -58,32 +58,34 @@ const initBot = (configs: App.BotConfig<'onebot-11'>[]) => {
       },
       quote_self: {
         get() {
-          return oneBotV11.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.quote_self;
+          return oneBotV11.botConfig(bot)?.quote_self;
         },
       },
       forward_length: {
         get() {
-          return oneBotV11.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.forward_length;
+          return oneBotV11.botConfig(bot)?.forward_length;
         },
       },
       command_prefix: {
         get() {
-          return oneBotV11.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.command_prefix;
+          return oneBotV11.botConfig(bot)?.command_prefix;
         },
       },
     });
+    bot.on('message', messageHandler.bind(global, bot));
+    bot.start().then(() => {
+      oneBotV11.emit('bot-ready', bot);
+    });
     oneBotV11.bots.push(bot);
   }
-  oneBotV11.on('start', startBots);
-  oneBotV11.on('stop', stopBots);
 };
 const messageHandler = (bot: Adapter.Bot<OneBotV11>, event: MessageV11) => {
   const message = Message.fromEvent(oneBotV11, bot, event);
   message.raw_message = MessageV11.formatToString(event.message);
   message.message_type = event.message_type;
   message.from_id = event.message_type === 'private' ? event.user_id + '' : event.group_id + '';
-  const master = oneBotV11.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.master;
-  const admins = oneBotV11.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.admins;
+  const master = oneBotV11.botConfig(bot)?.master;
+  const admins = oneBotV11.botConfig(bot)?.admins;
   message.sender = {
     user_id: event.user_id,
     user_name: event.nickname || '',
@@ -94,21 +96,14 @@ const messageHandler = (bot: Adapter.Bot<OneBotV11>, event: MessageV11) => {
   };
   oneBotV11.app!.emit('message', oneBotV11, bot, message);
 };
-const startBots = () => {
-  for (const bot of oneBotV11.bots) {
-    bot.on('message', messageHandler.bind(global, bot));
-    bot.start().then(() => {
-      oneBotV11.emit('bot-ready', bot);
-    });
-  }
-};
 const stopBots = () => {
   for (const bot of oneBotV11.bots) {
     bot.stop();
   }
 };
-oneBotV11.on('mounted', initBot);
 
+oneBotV11.on('start', startBots);
+oneBotV11.on('stop', stopBots);
 export default oneBotV11;
 export namespace OneBotV11Adapter {
   export type Config = OneBotV11.Config[];

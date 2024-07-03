@@ -48,7 +48,7 @@ oneBotV12.define('sendMsg', async (bot_id, target_id, target_type, message, sour
       throw new Error(`OneBotV12适配器暂不支持发送${target_type}类型的消息`);
   }
 });
-const initBot = (configs: App.BotConfig<'onebot-12'>[]) => {
+const startBots = (configs: App.BotConfig<'onebot-12'>[]) => {
   if (!oneBotV12.app?.server)
     throw new Error('“oneBot V12 miss require service “http”, maybe you need install “ @zhinjs/plugin-http-server ”');
 
@@ -63,24 +63,26 @@ const initBot = (configs: App.BotConfig<'onebot-12'>[]) => {
       },
       quote_self: {
         get() {
-          return oneBotV12.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.quote_self;
+          return oneBotV12.botConfig(bot)?.quote_self;
         },
       },
       forward_length: {
         get() {
-          return oneBotV12.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.forward_length;
+          return oneBotV12.botConfig(bot)?.forward_length;
         },
       },
       command_prefix: {
         get() {
-          return oneBotV12.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.command_prefix;
+          return oneBotV12.botConfig(bot)?.command_prefix;
         },
       },
     });
+    bot.on('message', messageHandler.bind(global, bot));
+    bot.start().then(() => {
+      oneBotV12.emit('bot-ready', bot);
+    });
     oneBotV12.bots.push(bot);
   }
-  oneBotV12.on('start', startBots);
-  oneBotV12.on('stop', stopBots);
 };
 const messageHandler = (bot: Adapter.Bot<OneBotV12>, event: MessageV12) => {
   const message = Message.fromEvent(oneBotV12, bot, event);
@@ -106,20 +108,14 @@ const messageHandler = (bot: Adapter.Bot<OneBotV12>, event: MessageV12) => {
   };
   oneBotV12.app!.emit('message', oneBotV12, bot, message);
 };
-const startBots = () => {
-  for (const bot of oneBotV12.bots) {
-    bot.on('message', messageHandler.bind(global, bot));
-    bot.start().then(() => {
-      oneBotV12.emit('bot-ready', bot);
-    });
-  }
-};
 const stopBots = () => {
   for (const bot of oneBotV12.bots) {
     bot.stop();
   }
 };
-oneBotV12.on('mounted', initBot);
+
+oneBotV12.on('start', startBots);
+oneBotV12.on('stop', stopBots);
 
 export default oneBotV12;
 export namespace OneBotV12Adapter {

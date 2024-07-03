@@ -1,8 +1,8 @@
 {
-  "name": "@zhinjs/kritor",
+  "name": "@zhinjs/adapter-kritor",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
-  "version": "0.0.2",
+  "version": "0.0.1",
   "scripts": {
     "build": "tsc && tsc-alias"
   },
@@ -15,11 +15,12 @@
     "directory": "packages/adapters/kritor"
   },
   "dependencies": {
-    "zhin": "workspace:^"
+    "zhin": "workspace:^",
+    "@grpc/grpc-js": "^1.10.10",
+    "@grpc/proto-loader": "^0.7.13"
   },
   "devDependencies": {
     "zhin": "workspace:^",
-    "@types/node": "latest",
-    "@types/ws": "latest"
+    "@types/node": "latest"
   }
 }

@@ -1,8 +1,8 @@
 {
-    "name": "@zhinjs/icqq",
+    "name": "@zhinjs/adapter-icqq",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
-    "version": "1.0.26",
+    "version": "0.0.1",
     "scripts": {
         "build": "tsc && tsc-alias"
     },

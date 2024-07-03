@@ -95,7 +95,9 @@ export namespace Message {
     (type: string, data: Dict): string;
     text(text?: string): string;
     face(id: number): string;
-    image(url: string): string;
+    image(base64: string, type?: string): string;
+    video(file: string, type?: string): string;
+    audio(file: string, type?: string): string;
     at(user_id: string | number): string;
   };
   export type Type = 'private' | 'group' | 'guild' | 'direct';
@@ -124,7 +126,9 @@ export const segment: Message.DefineSegment = function (type, data) {
 } as Message.DefineSegment;
 segment.text = text => (text ? encodeURIComponent(text) : '');
 segment.face = (id: number) => `<face id='${encodeURIComponent(id)}'/>`;
-segment.image = (file: string) => `<image file='${encodeURIComponent(file)}'/>`;
+segment.image = (file: string, type = 'png') => `<image file='${encodeURIComponent(file)}' type='${type}'/>`;
+segment.video = (file: string, type = 'mp4') => `<video file='${encodeURIComponent(file)}' type='${type}'>`;
+segment.audio = (file: string, type = 'mp3') => `<audio file='${encodeURIComponent(file)}' type='${type}'>`;
 segment.at = user_id => `<at user_id='${encodeURIComponent(user_id)}'/>`;
 type MessageSender = {
   user_id?: string | number;

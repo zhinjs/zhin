@@ -1,5 +1,5 @@
 import { Plugin, segment } from 'zhin';
-import { OneBotV12Adapter } from '@zhinjs/onebot-12';
+import { OneBotV12Adapter } from '@zhinjs/adapter-onebot-12';
 type RepeatInfo = {
   unique_id: string;
   group_id: string;

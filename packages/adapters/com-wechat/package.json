@@ -1,5 +1,5 @@
 {
-    "name": "@zhinjs/adapter-onebot-12",
+    "name": "@zhinjs/adapter-com-wechat",
     "main": "./lib/index.js",
     "types": "./lib/index.d.ts",
     "version": "0.0.1",
@@ -12,7 +12,7 @@
     "author": "凉菜",
     "repository": {
         "url": "https://github.com/zhinjs/zhin",
-        "directory": "packages/adapters/onebot-v12"
+        "directory": "packages/adapters/com-wechat"
     },
     "dependencies": {
         "zhin": "workspace:^",

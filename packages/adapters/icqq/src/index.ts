@@ -158,7 +158,7 @@ type QQConfig = {
   password?: string;
 } & Config;
 let adapterConfig: ICQQAdapterConfig;
-const initBot = (configs: App.BotConfig<'icqq'>[]) => {
+const startBots = async (configs: App.BotConfig<'icqq'>[]) => {
   adapterConfig = configs;
   for (const { uin, password: _, quote_self, forward_length, ...config } of configs) {
     const bot = new Client(uin, config) as Adapter.Bot<Client>;
@@ -169,24 +169,26 @@ const initBot = (configs: App.BotConfig<'icqq'>[]) => {
       },
       quote_self: {
         get() {
-          return icqq.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.quote_self;
+          return icqq.botConfig(bot)?.quote_self;
         },
       },
       forward_length: {
         get() {
-          return icqq.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.forward_length;
+          return icqq.botConfig(bot)?.forward_length;
         },
       },
       command_prefix: {
         get() {
-          return icqq.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.command_prefix;
+          return icqq.botConfig(bot)?.command_prefix;
         },
       },
     });
+    bot.once('system.online', () => {
+      icqq.emit('bot-ready', bot);
+    });
+    await botLogin(bot);
     icqq.bots.push(bot);
   }
-  icqq.on('start', startBots);
-  icqq.on('stop', stopBots);
 };
 const messageHandler = (bot: Adapter.Bot<Client>, event: QQMessageEvent) => {
   const message = Message.fromEvent(icqq, bot, event);
@@ -199,8 +201,8 @@ const messageHandler = (bot: Adapter.Bot<Client>, event: QQMessageEvent) => {
         : event.message_type === 'group'
         ? event.group_id + ''
         : event.discuss_id + '';
-    const master = icqq.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.master;
-    const admins = icqq.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.admins;
+    const master = icqq.botConfig(bot)?.master;
+    const admins = icqq.botConfig(bot)?.admins;
     message.sender = {
       ...event.sender,
       permissions: [
@@ -286,19 +288,12 @@ const botLogin = async (bot: Adapter.Bot<Client>) => {
     bot.login(password);
   });
 };
-const startBots = async () => {
-  for (const bot of icqq.bots) {
-    bot.once('system.online', () => {
-      icqq.emit('bot-ready', bot);
-    });
-    await botLogin(bot);
-  }
-};
 const stopBots = () => {
   for (const bot of icqq.bots) {
     bot.terminate();
   }
 };
-icqq.on('mounted', initBot);
 
+icqq.on('start', startBots);
+icqq.on('stop', stopBots);
 export default icqq;

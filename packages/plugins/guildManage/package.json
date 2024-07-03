@@ -16,6 +16,6 @@
     },
     "dependencies": {
         "zhin": "workspace:^",
-        "@zhinjs/qq": "workspace:^"
+        "@zhinjs/adapter-qq": "workspace:^"
     }
 }

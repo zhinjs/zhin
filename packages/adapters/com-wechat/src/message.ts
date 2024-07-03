@@ -1,6 +1,6 @@
 import { Dict, parseFromTemplate } from 'zhin';
 
-export interface MessageV12 {
+export interface Message {
   raw_message: string;
   user_id: number;
   message_id: string;
@@ -12,16 +12,14 @@ export interface MessageV12 {
   group_id?: number;
   permissions?: string[];
   detail_type: 'group' | 'private' | 'guild';
-  message: string | (MessageV12.Segment | string)[];
+  message: string | (Message.Segment | string)[];
 }
-export namespace MessageV12 {
+export namespace Message {
   export type Segment = {
     type: string;
     data: Dict;
   };
-  export type Ret = {
-    message_id: number;
-  };
+  export type Ret = null;
   export type Sendable = string | Segment | (string | Segment)[];
   export function parseSegmentsFromCqCode(template: string): Segment[] {
     const result: Segment[] = [];

@@ -1,8 +1,9 @@
-import { Message, Plugin } from 'zhin';
-import * as path from 'path';
+import { Plugin, Message } from 'zhin';
 import '@zhinjs/plugin-sandbox';
+import * as path from 'path';
 import type {} from './functionParser';
-import type {} from '@zhinjs/client/src';
+import type {} from '@zhinjs/client';
+
 const test = new Plugin('测试插件'); // 定义插件
 test.required('functionManager', 'component'); // 声明插件必须依赖的服务
 test

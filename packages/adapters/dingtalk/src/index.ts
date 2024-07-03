@@ -52,7 +52,7 @@ dingTalkAdapter
     method: 'confirm',
     args: ['请输入sandbox', undefined, 'true'],
   });
-const initBot = (configs: App.BotConfig<'dingtalk'>[]) => {
+const startBots = (configs: App.BotConfig<'dingtalk'>[]) => {
   for (const config of configs) {
     const bot = new Bot(config) as Adapter.Bot<Bot>;
     Object.defineProperties(bot, {
@@ -76,18 +76,20 @@ const initBot = (configs: App.BotConfig<'dingtalk'>[]) => {
         },
       },
     });
+    bot.on('message', messageHandler.bind(global, bot));
+    bot.start().then(() => {
+      dingTalkAdapter.emit('bot-ready', bot);
+    });
     dingTalkAdapter.bots.push(bot);
   }
-  dingTalkAdapter.on('start', startBots);
-  dingTalkAdapter.on('stop', stopBots);
 };
 const messageHandler = (bot: Adapter.Bot<Bot>, event: DingMsgEvent) => {
   const message = Message.fromEvent(dingTalkAdapter, bot, event);
   message.raw_message = sendableToString(event.message).trim();
   message.from_id = event instanceof PrivateMessageEvent ? event.user_id : event.group_id;
   message.message_type = event.message_type;
-  const master = dingTalkAdapter.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.master;
-  const admins = dingTalkAdapter.app!.config.bots.find(b => b.unique_id === bot.unique_id)?.admins;
+  const master = dingTalkAdapter.botConfig(bot)?.master;
+  const admins = dingTalkAdapter.botConfig(bot)?.admins;
   message.sender = {
     ...event.sender,
     permissions: [
@@ -95,24 +97,13 @@ const messageHandler = (bot: Adapter.Bot<Bot>, event: DingMsgEvent) => {
       admins && admins.includes(event.user_id) && 'admins',
     ].filter(Boolean) as string[],
   };
-
-  const commands = dingTalkAdapter.app!.getSupportCommands(dingTalkAdapter, bot, message);
-  const matchReg = new RegExp(`^/(${commands.map(c => c.name).join('|')})`);
-  if (message.raw_message.match(matchReg)) message.raw_message = message.raw_message.slice(1);
   dingTalkAdapter.app!.emit('message', dingTalkAdapter, bot, message);
-};
-const startBots = () => {
-  for (const bot of dingTalkAdapter.bots) {
-    bot.on('message', messageHandler.bind(global, bot));
-    bot.start().then(() => {
-      dingTalkAdapter.emit('bot-ready', bot);
-    });
-  }
 };
 const stopBots = () => {
   for (const bot of dingTalkAdapter.bots) {
     bot.stop();
   }
 };
-dingTalkAdapter.on('mounted', initBot);
+dingTalkAdapter.on('start', startBots);
+dingTalkAdapter.on('stop', stopBots);
 export default dingTalkAdapter;

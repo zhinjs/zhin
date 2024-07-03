@@ -1,5 +1,5 @@
 import { Plugin } from 'zhin';
-import { QQAdapter } from '@zhinjs/qq';
+import { QQAdapter } from '@zhinjs/adapter-qq';
 
 const guildManage = new Plugin({
   name: '频道管理',
