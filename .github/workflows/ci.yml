@@ -6,11 +6,9 @@ on:
 env:
   CI: true
 jobs:
-  publish:
+  pub:
     timeout-minutes: 15
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: setup node.js
         uses: actions/setup-node@v4
