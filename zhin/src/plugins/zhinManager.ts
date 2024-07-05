@@ -1,9 +1,8 @@
-import { App, Dict, Plugin, remove, segment, WORK_DIR } from '@zhinjs/core';
+import { App, Dict, Plugin, remove, segment, WORK_DIR, axios } from '@zhinjs/core';
 import { exec, execSync } from 'child_process';
 import * as fs from 'fs';
 import path from 'path';
 import { version } from '../constants';
-import { axios } from '../../lib';
 const downloadGit = (url: string, savePath: string = '.') => {
   return new Promise<string>((resolve, reject) => {
     exec(
@@ -103,7 +102,7 @@ zhinManager
     const afterVersion = await (async () => {
       const response = await axios.get('https://registry.npmjs.org/zhin');
       if (options.version === 'latest') return response.data['dist-tags'].latest;
-      return response.data['versions'][options.version];
+      return response.data['versions'][options.version!];
     })();
     if (!afterVersion) return `无效的版本号: ${options.version}`;
     if (afterVersion === beforeVersion) return `zhin 已是最新版(${afterVersion})`;
