@@ -1,5 +1,13 @@
 # zhin
 
+## 3.0.28
+
+### Patch Changes
+
+- 214e62e: fix: use Schema instead Prompt.Call
+- Updated dependencies [214e62e]
+  - @zhinjs/core@1.0.17
+
 ## 3.0.27
 
 ### Patch Changes
