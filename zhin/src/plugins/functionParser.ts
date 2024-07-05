@@ -104,9 +104,13 @@ namespace FunctionManager {
   }
   export function createFnMatch<T extends Message>(): (message: T) => string[] | undefined {
     return function (this: FunctionInfo, message: T) {
-      if (!message.raw_message.startsWith(this.name)) return;
+      let { raw_message, bot } = message;
+      if (!raw_message) return;
+      if (bot.command_prefix && !raw_message.startsWith(bot.command_prefix)) return;
+      raw_message = raw_message.replace(bot.command_prefix || '', '');
+      if (!raw_message.startsWith(this.name)) return;
       const execReg = new RegExp(`^${this.name}${this.argsInfo.map(createArgReg).join('')}`, 'm');
-      const result = execReg.exec(message.raw_message);
+      const result = execReg.exec(raw_message);
       if (!result) return;
       return this.argsInfo.map(arg => {
         const value =

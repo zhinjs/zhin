@@ -80,6 +80,14 @@ const builtInPlugins: typeof plugins = [
     keywords: ['setup'],
     repository: 'https://github.com/zhinjs/zhin',
   },
+  {
+    name: 'functionParser',
+    version: 'built-in',
+    author: 'zhinjs',
+    description: '提供 函数式 添加指令的能力',
+    keywords: ['setup'],
+    repository: 'https://github.com/zhinjs/zhin',
+  },
 ];
 export const officialPlugins = [...builtInPlugins, ...plugins, ...services];
 export const commandParser = CM;
