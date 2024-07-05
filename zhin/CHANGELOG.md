@@ -1,5 +1,13 @@
 # zhin
 
+## 3.0.27
+
+### Patch Changes
+
+- 82c817f: fix: bump version;fix error
+- Updated dependencies [82c817f]
+  - @zhinjs/core@1.0.16
+
 ## 3.0.26
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @zhinjs/plugin-drawer
 
+## 1.0.28
+
+### Patch Changes
+
+- 82c817f: fix: bump version;fix error
+- Updated dependencies [82c817f]
+  - zhin@3.0.27
+
 ## 1.0.27
 
 ### Patch Changes
