@@ -1,5 +1,11 @@
 # @zhinjs/core
 
+## 1.0.17
+
+### Patch Changes
+
+- 214e62e: fix: use Schema instead Prompt.Call
+
 ## 1.0.16
 
 ### Patch Changes

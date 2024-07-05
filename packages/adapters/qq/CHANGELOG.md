@@ -1,5 +1,13 @@
 # @zhinjs/qq
 
+## 0.0.4
+
+### Patch Changes
+
+- 214e62e: fix: use Schema instead Prompt.Call
+- Updated dependencies [214e62e]
+  - zhin@3.0.28
+
 ## 0.0.3
 
 ### Patch Changes
