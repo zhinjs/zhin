@@ -1,7 +1,6 @@
 import { Plugin, Message } from 'zhin';
 import '@zhinjs/plugin-sandbox';
 import * as path from 'path';
-import type {} from './functionParser';
 import type {} from '@zhinjs/client';
 
 const test = new Plugin('测试插件'); // 定义插件
@@ -89,13 +88,8 @@ test.mounted(() => {
 //   .action(({ message }) => `<test2><test who="${message.sender.user_id}"/></test2>`);
 test.mounted(async () => {
   test.register('hello', function (this: Message, foo, bar, isExist = false) {
-    console.log(1111111);
     return `receive from ${this.message_type},args is ${foo},${bar},${isExist}`;
   });
-
-  test.middleware(async (_1, _2, event, next) => {
-    await next();
-    return test.functionManager.match(event);
-  });
 });
+
 export default test; // 最后导出

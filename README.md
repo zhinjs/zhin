@@ -39,9 +39,10 @@ npx zhin init --key  #
 2. 【[icqq](https://github.com/icqqjs/icqq)】一个NodeJS的qq协议库
 3. 【[lib-wechat](https://github.com/lc-cn/lib-wechat)】基于 web 微信的协议库
 4. 【[node-dd-bot](https://github.com/lc-cn/dingtalk-bot)】NodeJS端钉钉机器人SDK
-5. 【[qq-group-bot](https://github.com/lc-cn/qq-group-bot)】NodeJS端QQ机器人SDK
+5. 【[qq-official-bot](https://github.com/zhinjs/qq-official-bot)】NodeJS端QQ机器人SDK
 6. 【[ts-disc-bot](https://github.com/lc-cn/ts-disc-bot)】NodeJS端Discord机器人SDK
 7. 【[kritor](https://github.com/KarinJS/kritor)】一个聊天机器人应用接口标准
+8. 【[ComWeChatBotClient](https://github.com/JustUndertaker/ComWeChatBotClient)】ComWeChatRobot的客户端封装，支持onebot12通信协议 
 
 ## 贡献者
 

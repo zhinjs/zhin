@@ -1,16 +1,20 @@
-import { command, options, middleware, listen } from 'zhin';
-options({
-  name: 'foo',
+import { registerCommand, useContext, definePluginOptions, registerMiddleware } from 'zhin';
+definePluginOptions({
+  name: 'setup 测试插件',
 });
-command('foo')
+registerCommand('foo')
   .hidden()
   .action(({ bot }) => {
     return 'bar';
   });
-command('bar')
+
+registerCommand('bar')
   .hidden()
   .action(() => {
     return '我不知道该说啥呀';
   });
 
-middleware((a, b, e) => {});
+registerMiddleware((_adapter, _bot, message, next) => {
+  // console.log(_adapter, _bot, message);
+  next();
+});

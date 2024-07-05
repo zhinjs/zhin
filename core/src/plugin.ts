@@ -7,7 +7,6 @@ import { APP_KEY, REQUIRED_KEY, WORK_DIR } from './constans';
 import { Dict } from './types';
 import path from 'path';
 import { Adapter } from './adapter';
-import process from 'process';
 import * as fs from 'fs';
 
 export interface Plugin extends Plugin.Options {}
@@ -127,7 +126,6 @@ export class Plugin extends EventEmitter {
     this.app?.mount(filePath);
     return this;
   }
-
   // @ts-ignore
   command<S extends Command.Declare>(
     decl: S,
@@ -147,7 +145,10 @@ export class Plugin extends EventEmitter {
     let parent: Command | undefined;
     while (nameArr.length) {
       parent = this.findCommand(nameArr.shift()!);
-      if (!parent) throw new Error(`找不到父指令:${nameArr.join('.')}`);
+      if (!parent) {
+        name = [nameArr.join('.'), name].filter(Boolean).join('.');
+        break;
+      }
     }
     const command = defineCommand(argsDecl.join(' '), ...(args as any));
     if (parent) {
@@ -158,7 +159,7 @@ export class Plugin extends EventEmitter {
     this.commands.set(name!, command);
     this.emit('command-add', command);
     this.disposes.push(() => {
-      this.commands.delete(name!);
+      this.commands.delete(command.name!);
       this.emit('command-remove', command);
     });
     return command as unknown as Command<ArgsType<Command.RemoveFirst<S>>>;
@@ -279,7 +280,6 @@ export namespace Plugin {
     install: InstallFn;
   };
   export type InstallFn = (plugin: Plugin) => void;
-  export type BuiltPlugins = 'commandParser' | 'guildManager' | 'hmr' | 'pluginManager';
 }
 
 export class PluginMap extends Map<string, Plugin> {

@@ -267,7 +267,6 @@ export class OneBotV12 extends EventEmitter {
     });
   }
   setGroupSpecialTitle(group_id: string, user_id: string, special_title?: string, duration?: number) {
-    console.log(group_id, user_id, special_title);
     return this.sendPayload({
       action: 'set_group_special_title',
       params: { group_id, user_id, special_title, duration },

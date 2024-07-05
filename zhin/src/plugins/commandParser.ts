@@ -10,10 +10,10 @@ commandParser.middleware(async (adapter, bot, message, next) => {
   return next();
 });
 commandParser
-  .command('提示 [name:string]')
+  .command('tip [name:string]')
   .scope('private', 'group', 'guild', 'direct')
-  .desc('显示指令文本')
-  .alias('tip')
+  .desc('输出指令提示文本')
+  .alias('提示')
   .sugar(/^(\S+)提示$/, { args: ['$1'] })
   .option('-H [showHidden:boolean] 显示隐藏指令')
   .action(({ options, adapter, bot, message }, target) => {
@@ -35,7 +35,7 @@ commandParser
           ),
         )
         .flat();
-      output.push('输入 “提示 [command name]” 展示指定指令提示');
+      output.push('输入 “tip [command name]” 展示指定指令提示');
       return segment.text(output.filter(Boolean).join('\n'));
     }
 
@@ -43,7 +43,7 @@ commandParser
       commandParser
         .app!.findCommand(target)
         ?.help({ ...options, dep: 1 }, supportCommands)
-        .concat('输入 “提示 [command name]” 展示指定指令提示')
+        .concat('输入 “tip [command name]” 展示指定指令提示')
         .join('\n'),
     );
   });

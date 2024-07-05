@@ -108,8 +108,11 @@ export class Bot extends EventEmitter {
       });
       this.#imap.on('close', () => {
         if (this.hasStop) return;
-        this.logger.debug('IMAP 已关闭，正在重连...');
-        this.#imap.connect();
+        this.logger.debug('IMAP 已断开，将在3秒后重连...');
+        setTimeout(() => {
+          if (this.hasStop) return;
+          this.#imap.connect();
+        }, 3000);
       });
       this.#imap.connect();
     });
@@ -117,6 +120,7 @@ export class Bot extends EventEmitter {
   stop() {
     this.hasStop = true;
     this.#imap.end();
+    this.logger.debug('已结束服务');
   }
 }
 export type SendAttachment = {

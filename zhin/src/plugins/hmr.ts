@@ -78,7 +78,6 @@ process.on('message', (message: ProcessMessage) => {
     const { adapter: adapter_name, bot: bot_id, target_id, target_type, message: content } = message.body;
     const adapter = hmr.app?.adapters.get(adapter_name);
     const waitBotReady = (bot: Bot<any>) => {
-      console.log(bot_id);
       if (bot.unique_id === bot_id) {
         adapter?.sendMsg(bot_id, target_id, target_type, content);
       }
@@ -88,7 +87,7 @@ process.on('message', (message: ProcessMessage) => {
   }
 });
 hmr
-  .command('restart')
+  .command('zhin.restart')
   .desc('重启项目')
   .permission('master')
   .action(async ({ bot, adapter, message }) => {

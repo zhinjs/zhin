@@ -17,6 +17,7 @@
         "src/bin.js",
         "src/start.js",
         "package.json",
+        "CHANGELOG.md",
         "README.md"
     ],
     "license": "MIT",

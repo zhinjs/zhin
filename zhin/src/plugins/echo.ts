@@ -10,7 +10,7 @@ echo
   .action((_, msg) => msg);
 
 echo
-  .command('status')
+  .command('zhin.status')
   .desc('查看知音运行状态')
   .alias('状态')
   .action(({ adapter }) => {

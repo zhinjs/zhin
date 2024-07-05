@@ -1,111 +1,53 @@
-# zhin
-## 1. 快速上手
-- 安装 & 初始化
+![zhin](https://socialify.git.ci/zhinjs/zhin/image?description=1&descriptionEditable=a%20chat%20bot%20framework%20for%20Node.js%20developers%2C%20compatible%20with%20qq%E3%80%81icqq%E3%80%81wechat%E3%80%81discord%E3%80%81onebot(11%2F12)%E3%80%81dingtalk%E3%80%82&font=Rokkitt&forks=1&issues=1&language=1&name=1&owner=1&pattern=Overlapping%20Hexagons&stargazers=1&theme=Auto)
+
+[![CI](https://github.com/zhinjs/zhin/actions/workflows/ci.yml/badge.svg)](https://github.com/zhinjs/zhin/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/zhin/latest.svg)](https://www.npmjs.com/package/zhin)
+[![dm](https://shields.io/npm/dm/zhin)](https://www.npmjs.com/package/zhin)
+[![node engine](https://img.shields.io/node/v/zhin/latest.svg)](https://nodejs.org)
+[![group:129043431](https://img.shields.io/badge/group-129043431-blue)](https://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=vGiaVXLVoNAlDKHTej7GOzQV1Q6U5jiK&authKey=J%2FtBMx99f%2FkPs%2FF3P3Z7bQyISLMB5%2FuTRSI9oVRKCPo5J4Gq4dtOK4XzQLUaAV4r&noverify=0&group_code=129043431)
+
+[Docs](https://zhin.pages.dev) (开发者必看)
+
+## 适配进度
+- [x] [onebot11](https://github.com/botuniverse/onebot-11)
+- [x] [onebot12](https://onebot.dev/)
+- [x] [icqq](https://github.com/icqqjs/icqq)
+- [x] [微信](https://github.com/lc-cn/lib-wechat)
+- [x] [Discord](https://discord.com/developers/applications)
+- [x] [钉钉机器人](https://open-dev.dingtalk.com/)
+- [x] [QQ官方机器人](https://q.qq.com/)
+- [ ] [kritor](https://github.com/KarinJS/kritor) (planned)
+- [x] Email
+- [ ] [Telegram](https://telegram.org) (planned)
+## 快速上手
+### 1. 初始化包管理器
 ```shell
-# 1. 安装依赖框架
-yarn add zhin # or pnpm add zhin
-# 2. 安装适配器(目前已支持qq官方机器人和icqq)
-yarn add @zhinjs/qq # 如果你需要使用 icqq , 可安装 @zhinjs/icqq
-# 2. 初始化配置文件
-npx zhin init -m dev
+npm init -y # 初始化 package.json 文件
+npm install typescript -D # 安装ts开发环境依赖
+npx tsc --init # 初始化 tsconfig.json 文件
 ```
-- 填写配置
-打开生成在根目录的 `.dev.env` 文件，填入相关环境变量
-```text
-adapters = qq                             # 使用的适配器，多个适配器可用 “,” 分隔
-builtPlugins = commandParser,hmr          # 启用的内置插件列表
-pluginDirs = plugins                      # 需要加载哪个本地文件夹下的插件，多个文件夹可用 “,” 分隔
+### 2. 安装zhin
+```shell
+npm install zhin
 ```
-- 目前已内置有 `commandParser`、`hmr`、`echo`、`pluginManager` 四个插件，其他插件请关注官方仓库和社区插件
-
-
-- 启动
-- 注意：首次启动会为你生成对应适配器的默认配置文件，需要您完成配置后再次启动
-```text
-npx zhin -m dev
+### 3. 初始化
+```shell
+npx zhin init --key  # 
 ```
+## 友链 (排名不分先后)
+1. 【[onebots](https://onebots.pages.dev)】 (OneBot V11/OneBot V12)
+2. 【[icqq](https://github.com/icqqjs/icqq)】一个NodeJS的qq协议库
+3. 【[lib-wechat](https://github.com/lc-cn/lib-wechat)】基于 web 微信的协议库
+4. 【[node-dd-bot](https://github.com/lc-cn/dingtalk-bot)】NodeJS端钉钉机器人SDK
+5. 【[qq-official-bot](https://github.com/zhinjs/qq-official-bot)】NodeJS端QQ机器人SDK
+6. 【[ts-disc-bot](https://github.com/lc-cn/ts-disc-bot)】NodeJS端Discord机器人SDK
+7. 【[kritor](https://github.com/KarinJS/kritor)】一个聊天机器人应用接口标准
+8. 【[ComWeChatBotClient](https://github.com/JustUndertaker/ComWeChatBotClient)】ComWeChatRobot的客户端封装，支持onebot12通信协议
 
-##  插件开发
-- 新建文件`testPlugin.js`
+## 贡献者
 
-```javascript
-const {Plugin} = require('zhin')
+[![贡献者](https://contributors-img.web.app/image?repo=zhinjs/zhin)](https://github.com/zhinjs/zhin/graphs/contributors)
+![Alt](https://repobeats.axiom.co/api/embed/26e79889b3756142f3145cd72ae19830e6b4c06a.svg "Repobeats analytics image")
 
-const testPlugin=new Plugin('test')
 
-// ... 在这儿实现你的逻辑
 
-module.exports=testPlugin
-```
-
-### 1.定义指令
-```javascript
-
-// 在省略号出调用 testPlugin.command 可以定义一个指令
-testPlugin
-	.command('/百科 <keyword:string>')
-	.action(async(_,keyword)=>{
-		const {data}=await axios.get(`https://baike.deno.dev/item/${encodeURIComponent(keyword)}?encoding=text`)
-		return data
-	})
-```
-### 2. 定义中间件
-```javascript
-
-// 在省略号出调用 testPlugin.middleware 可以往bot中注册一个中间件
-testPlugin.middleware((message,next)=>{
-	if(!message.raw_message.startsWith('hello')) return next()
-    return message.reply('world')
-})
-```
-### 3. 定义服务
-- 服务是一个虚拟概念，由插件开发者在插件中声明的特有属性，该属性可暴露给其他插件访问
-```javascript
-
-// 在省略号出调用 testPlugin.service 可以定义一个服务
-testPlugin.service('foo','bar')
-
-console.log(testPlugin.foo) // 输出 bar
-```
-- 注意：如果已有之前已加载同名的服务，将不可覆盖已有服务
-
-- 当插件被加载后，后续加载的插件即可访问到该服务
-```javascript
-const {Plugin} = require('zhin')
-
-const helloPlugin=new Plugin('hello')
-console.log(helloPlugin.foo) // 输出bar
-
-module.exports=testPlugin
-```
-- 可选：定义服务类型
-- 开发者为服务添加类型声明后，其他人在使用服务时，将获得类型提示
-```typescript
-declare module 'zhin'{
-    namespace Bot{
-        interface Services{
-            foo:string
-        }
-    }
-}
-```
-## 使用插件
-```javascript
-const {Bot} = require('zhin')
-const bot = new Bot({
-	// ...
-})
-bot.mount('[模块名]') // 按模块名称加载插件，将一次查找(./plugins>内置插件>官方插件库>社区插件库>node_modules)目录下对应名称的插件
-bot.mount(plugin) // 直接加载对应插件实例
-bot.loadFromDir('./plugins', './services') // 加载指定目录下的所有插件，可传入多个目录，将多次加载
-bot.loadFromModule('@zhinjs/pluign-guild-manager') // 从模块加载插件，需要你自行安装对应插件包
-bot.start()
-```
-## 卸载插件
-```javascript
-
-bot.unmount('[插件名]') // 按插件名卸载对应的插件
-bot.unmount(plugin) // 直接卸载对应插件实例
-bot.start()
-
-```

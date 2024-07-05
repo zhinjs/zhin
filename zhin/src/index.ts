@@ -2,18 +2,19 @@ import path from 'path';
 import * as fs from 'fs';
 export {
   useContext,
-  adapter,
-  middleware,
-  command,
+  getAdapter,
+  getBot,
+  registerCommand,
+  registerMiddleware,
   sendGroupMessage,
   sendPrivateMessage,
   sendGuildMessage,
   sendDirectMessage,
   onMount,
   onUnmount,
-  listen,
-  options,
-  required,
+  listenEvent,
+  definePluginOptions,
+  withService,
 } from './plugins/setup';
 export * from './constants';
 import {

@@ -1,5 +1,5 @@
 import { AdapterBot, Plugin } from 'zhin';
-import { OneBotV12Adapter } from '@zhinjs/onebot-12';
+import { OneBotV12Adapter } from '@zhinjs/adapter-onebot-12';
 const pusher = new Plugin('消息推送');
 type PusherConfig = {
   unique_id: string;
@@ -55,7 +55,7 @@ pusher.command('添加推送').action<OneBotV12Adapter>(async ({ bot, prompt }) 
       };
     }),
   });
-  pusher.jsondb.push('functions.pusher.Configs', {
+  await pusher.jsondb.push('pusher_config', {
     unique_id: bot.unique_id,
     group_id: pushGroup,
     service: useService,
@@ -64,7 +64,7 @@ pusher.command('添加推送').action<OneBotV12Adapter>(async ({ bot, prompt }) 
 });
 pusher.mounted(app => {
   const receiveAndPush = async () => {
-    const configs = (await pusher.jsondb.get<PusherConfig[]>('functions.pusher.Configs', [])) || [];
+    const configs = (await pusher.jsondb.get<PusherConfig[]>('pusher_config', [])) || [];
     for (const config of configs) {
       const bot = app.adapters
         .get('onebot-12')
@@ -75,7 +75,7 @@ pusher.mounted(app => {
         const messages = await service(config.group_id);
         for (const message of messages) {
           await bot.sendGroupMsg(config.group_id, message);
-          await pusher.jsondb.push<PushResult>('functions.pusher.infos', {
+          await pusher.jsondb.push<PushResult>('pusher_infos', {
             unique_id: bot.unique_id,
             group_id: config.group_id,
             message,
@@ -99,3 +99,4 @@ pusher.mounted(app => {
 pusher.beforeUnmount(() => {
   if (timer) clearTimeout(timer);
 });
+export default pusher;

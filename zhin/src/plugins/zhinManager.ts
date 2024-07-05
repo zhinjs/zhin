@@ -1,7 +1,9 @@
 import { App, Dict, Plugin, remove, segment, WORK_DIR } from '@zhinjs/core';
-import { exec } from 'child_process';
+import { exec, execSync } from 'child_process';
 import * as fs from 'fs';
 import path from 'path';
+import { version } from '../constants';
+import { axios } from '../../lib';
 const downloadGit = (url: string, savePath: string = '.') => {
   return new Promise<string>((resolve, reject) => {
     exec(
@@ -90,6 +92,45 @@ const unlinkLocalDir = (dir_path: string) => {
   });
 };
 const zhinManager = new Plugin('zhin管理');
+zhinManager
+  .command('update')
+  .option('-v [version:string] 更新到指定版本，默认嘴型', 'latest')
+  .option('-r [restart:boolean] 是否立即重启，默认不重启', false)
+  .permission('master')
+  .action(async ({ message, adapter, bot, options }) => {
+    const beforeVersion = version;
+    if (!options.version) options.version = 'latest';
+    const afterVersion = await (async () => {
+      const response = await axios.get('https://registry.npmjs.org/zhin');
+      if (options.version === 'latest') return response.data['dist-tags'].latest;
+      return response.data['versions'][options.version];
+    })();
+    if (!afterVersion) return `无效的版本号: ${options.version}`;
+    if (afterVersion === beforeVersion) return `zhin 已是最新版(${afterVersion})`;
+    execSync(`npm install zhin@${options.version}`, {
+      cwd: WORK_DIR,
+    });
+    const changeLogPath = path.join(path.dirname(require.resolve('zhin/package.json')), 'CHANGELOG.md');
+    const changeLogContent = fs.readFileSync(changeLogPath, 'utf8');
+    const oldContentIndex = changeLogContent.indexOf(`## ${beforeVersion}`);
+    const newContent = changeLogContent.slice(0, oldContentIndex);
+    if (options.restart) {
+      await message.reply('正在重启，使新功能生效...');
+      process.send?.({
+        type: 'queue',
+        body: {
+          adapter: adapter.name,
+          bot: bot.unique_id,
+          target_id: message.from_id,
+          target_type: message.message_type,
+          message: `重启完成，本次升级内容如下:\n${newContent}`,
+        },
+      });
+      return process.exit(51);
+    }
+    return segment.text(`zhin 已升级，将在下次重启时生效，本次升级内容如下：\n${newContent}`);
+  });
+
 const pluginManage = zhinManager.command('plugin').hidden().desc('插件管理');
 pluginManage
   .command('plugin.list')
@@ -374,10 +415,13 @@ botManage
     if (!name) name = await prompt.text('请输入机器人适配器名称');
     if (!name) return '输入错误';
     const isConfirm = options.force || (await prompt.confirm('确认移除么'));
-    if (isConfirm)
-      remove(zhinManager.app!.config.bots, (bot: any) => {
-        return bot.adapter === name;
+    if (isConfirm) {
+      zhinManager.app!.config.bots = zhinManager.app!.config.bots.filter(bot => {
+        return bot.adapter !== name;
       });
+      return `已移除 ${name} 机器人，下次启动生效`;
+    }
+    return '已取消';
   });
 const getObj = <T extends object>(parent: T, keys: string[]): any => {
   const key: keyof T = keys.shift() as keyof T;
@@ -385,15 +429,15 @@ const getObj = <T extends object>(parent: T, keys: string[]): any => {
   if (key && typeof parent[key] === 'object') return getObj(parent[key] as object, keys);
   return parent[key];
 };
-const configManage = zhinManager
-  .command('config')
+zhinManager
+  .command('zhin.config')
   .desc('配置管理')
   .permission('master')
   .hidden()
   .action(() => {
     return JSON.stringify(zhinManager.app?.config, null, 2);
   });
-configManage
+zhinManager
   .command('db.import [filepath:string]')
   .desc('导入数据库')
   .permission('master')
@@ -409,14 +453,14 @@ configManage
     }
     return '导入成功';
   });
-configManage
+zhinManager
   .command('db.export [filename:string]')
   .desc('导出数据库')
   .action(async (_, filename = 'zhin.db.json') => {
     await zhinManager.jsondb.export(filename);
     return '导出成功';
   });
-configManage
+zhinManager
   .command('config.set <key:string> <value:any>')
   .permission('master')
   .action((_, key, value) => {
@@ -430,7 +474,7 @@ configManage
     obj[lastKey as keyof object] = value;
     return `config.${key} 已更新`;
   });
-configManage
+zhinManager
   .command('config.push <key:string> <value:any>')
   .permission('master')
   .action((_, key, value) => {
@@ -444,7 +488,7 @@ configManage
     arr.push(value);
     return `config.${key} 已添加`;
   });
-configManage
+zhinManager
   .command('config.delete <key:string>')
   .command('config.delete <key:string>')
   .permission('master')

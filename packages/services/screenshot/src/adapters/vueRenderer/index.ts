@@ -42,7 +42,6 @@ export namespace VueRenderer {
   export interface Options<T extends Renderer.OutputType> extends Renderer.Options<T> {
     props?: Record<string, any>;
     components?: Component[];
-    inject?: string;
   }
 }
 export default new VueRenderer();

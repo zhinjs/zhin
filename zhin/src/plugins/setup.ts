@@ -93,14 +93,8 @@ export const useContext = {
     if (!plugin.isMounted) callback(setup.app!);
     return this;
   },
-
-  option<K extends keyof Plugin.Options>(prop: K, value: Plugin.Options[K]) {
-    const plugin = getOrCreatePlugin({ [prop]: value });
-    return this;
-  },
   options(options: Plugin.Options) {
-    const plugin = getOrCreatePlugin(options);
-    return this;
+    getOrCreatePlugin(options);
   },
   listen<E extends keyof App.EventMap>(event: E, callback: App.EventMap[E]) {
     const plugin = getOrCreatePlugin();
@@ -108,17 +102,17 @@ export const useContext = {
     return this;
   },
 };
-export const adapter = useContext.adapter.bind(useContext);
-export const bot = useContext.bot.bind(useContext);
-export const middleware = useContext.middleware.bind(useContext);
-export const command = useContext.command.bind(useContext);
+export const getAdapter = useContext.adapter.bind(useContext);
+export const getBot = useContext.bot.bind(useContext);
+export const registerMiddleware = useContext.middleware.bind(useContext);
+export const registerCommand = useContext.command.bind(useContext);
 export const sendGroupMessage = useContext.sendGroupMessage.bind(useContext);
 export const sendPrivateMessage = useContext.sendPrivateMessage.bind(useContext);
 export const sendGuildMessage = useContext.sendGuildMessage.bind(useContext);
 export const sendDirectMessage = useContext.sendDirectMessage.bind(useContext);
 export const onMount = useContext.onMount.bind(useContext);
 export const onUnmount = useContext.onUnmount.bind(useContext);
-export const listen = useContext.listen.bind(useContext);
-export const options = useContext.options.bind(useContext);
-export const required = useContext.required.bind(useContext);
+export const listenEvent = useContext.listen.bind(useContext);
+export const definePluginOptions = useContext.options.bind(useContext);
+export const withService = useContext.required.bind(useContext);
 export default setup;

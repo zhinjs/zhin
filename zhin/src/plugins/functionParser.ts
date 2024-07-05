@@ -1,6 +1,6 @@
-import { Plugin, Message } from 'zhin';
+import { Plugin, Message } from '@zhinjs/core';
 const plugin = new Plugin('功能定义与处理');
-declare module 'zhin' {
+declare module '@zhinjs/core' {
   namespace App {
     interface Services {
       functionManager: FunctionManager;
@@ -9,13 +9,7 @@ declare module 'zhin' {
     }
   }
 }
-plugin.mounted(app => {
-  const functionManager = new FunctionManager();
-  plugin.service('functionManager', functionManager);
-  plugin.service('functions', functionManager.functions);
-  plugin.service('register', functionManager.register);
-});
-export class FunctionManager {
+class FunctionManager {
   public functions: FunctionManager.FunctionInfo[] = [];
   register(fn: FunctionManager.Fn): this;
   register(name: string, fn: FunctionManager.Fn): this;
@@ -77,7 +71,7 @@ export class FunctionManager {
     }
   }
 }
-export namespace FunctionManager {
+namespace FunctionManager {
   type MaybePromise<T> = Promise<T> | T;
   export type Fn = (this: Message, ...args: any[]) => MaybePromise<any | void>;
   export interface FunctionInfo {
@@ -129,4 +123,14 @@ export namespace FunctionManager {
     return `(\\s"[^"]+?"|\\s'[^']+?'|\\s[^\\s]+?)${argInfo.required ? '' : '?'}`;
   }
 }
+const functionManager = new FunctionManager();
+plugin.mounted(app => {
+  plugin.service('functionManager', functionManager);
+  plugin.service('functions', functionManager.functions);
+  plugin.service('register', functionManager.register);
+});
+plugin.middleware(async (_1, _2, event, next) => {
+  await next();
+  return plugin.functionManager.match(event);
+});
 export default plugin;

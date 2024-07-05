@@ -39,9 +39,9 @@ const startBots = (configs: Adapter.Bot[]) => {
     }, 100);
     processAdapter.bots.push(bot);
   }
-  processAdapter.on('start', startBots);
 };
 
+processAdapter.on('start', startBots);
 const messageHandler = (bot: Adapter.Bot<NodeJS.Process>, event: Buffer) => {
   const message = Message.fromEvent(processAdapter, bot, {});
   message.raw_message = event.toString().trimEnd();
