@@ -1,5 +1,11 @@
 # @zhinjs/core
 
+## 1.0.16
+
+### Patch Changes
+
+- 82c817f: fix: bump version;fix error
+
 ## 1.0.15
 
 ### Patch Changes
