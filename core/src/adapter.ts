@@ -6,6 +6,7 @@ import { getLogger, Logger } from 'log4js';
 import { Dict } from './types';
 import { WORK_DIR } from './constans';
 import { Prompt } from './prompt';
+import { Schema } from './schema';
 
 export type AdapterBot<A extends Adapter> = A extends Adapter<infer B> ? B : unknown;
 export type AdapterReceive<A extends Adapter> = A extends Adapter<infer B, infer R> ? R : unknown;
@@ -17,13 +18,13 @@ export class Adapter<I extends object = object, M = {}> extends EventEmitter {
   bots: Adapter.Bot<I>[] = [];
   elements: Element[] = [];
   app: App | null = null;
-  schemas: Dict<Prompt.Call> = {
-    unique_id: { method: 'text', args: ['请输入机器人唯一标识'] },
-    master: { method: 'text', args: ['请输入主人id'] },
-    admins: { method: 'list', args: ['请输入管理员id', { type: 'text' }] },
-    command_prefix: { method: 'text', args: ['请输入指令前缀'] },
-    quote_self: { method: 'confirm', args: ['回复是否引用源消息', '是'] },
-  };
+  schemas: Schema = Schema.object({
+    unique_id: Schema.string('请输入机器人唯一标识'),
+    master: Schema.string('请输入主人id'),
+    admins: Schema.list(Schema.string(''), '请输入管理员id'),
+    command_prefix: Schema.string('请输入指令前缀'),
+    quote_self: Schema.boolean('回复是否引用源消息'),
+  });
   #loggers: Dict<Logger> = {};
   getLogger(sub_type?: string | number): Logger {
     const logger = (this.#loggers[sub_type || this.name] ||= getLogger(
@@ -32,8 +33,8 @@ export class Adapter<I extends object = object, M = {}> extends EventEmitter {
     logger.level = this.app?.logger.level || 'info';
     return logger;
   }
-  schema(key: string, call: Prompt.Call) {
-    this.schemas[key] = call;
+  schema<X extends Record<string, Schema>>(schema: X) {
+    Object.assign(this.schemas.options.object || {}, schema);
     return this;
   }
   get logger() {

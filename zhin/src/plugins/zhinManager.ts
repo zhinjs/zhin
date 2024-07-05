@@ -1,8 +1,20 @@
-import { App, Dict, Plugin, remove, segment, WORK_DIR, axios } from '@zhinjs/core';
+import {
+  App,
+  Dict,
+  Plugin,
+  remove,
+  segment,
+  WORK_DIR,
+  axios,
+  formatTime,
+  formatSize,
+  formatDateTime,
+} from '@zhinjs/core';
 import { exec, execSync } from 'child_process';
 import * as fs from 'fs';
 import path from 'path';
 import { version } from '../constants';
+import os from 'os';
 const downloadGit = (url: string, savePath: string = '.') => {
   return new Promise<string>((resolve, reject) => {
     exec(
@@ -92,8 +104,44 @@ const unlinkLocalDir = (dir_path: string) => {
 };
 const zhinManager = new Plugin('zhin管理');
 zhinManager
+  .command('status')
+  .desc('查看知音运行状态')
+  .alias('状态')
+  .action(({ adapter }) => {
+    const restartTimes = Number(process.env?.RESTART_TIMES);
+    const lastRestartTime = Date.now() - process.uptime() * 1000;
+    const startTime = Date.now() / 1000 - Number(process.env?.START_TIME);
+    const cpus = os.cpus();
+    const cpuInfo = cpus[0];
+    const cpus_model = cpuInfo.model;
+    const cpu_speed = cpuInfo.speed;
+    const totalMemory = os.totalmem();
+    const freeMemory = os.freemem();
+    const usedMemory = totalMemory - freeMemory;
+    const processMemory = process.memoryUsage.rss();
+    return segment.text(
+      [
+        `系统架构：${os.type()} ${os.release()} ${os.arch()}`,
+        `开机时长：${formatTime(os.uptime())}`,
+        `CPU：${cpus.length}核 ${cpus_model}(${cpu_speed}MHz)`,
+        `内存：${formatSize(usedMemory)}/${formatSize(totalMemory)} ${((usedMemory / totalMemory) * 100).toFixed(2)}%`,
+        `运行环境：NodeJS ${process.version}`,
+        `zhin v${version} (${process.env.mode} mode)`,
+        `适配器：${adapter.name}`,
+        `进程：${process.ppid}/${process.pid} ${formatSize(processMemory)} ${(
+          (processMemory / usedMemory) *
+          100
+        ).toFixed(2)}%`,
+        `持续运行：${formatTime(startTime)}`,
+        `重启次数：${restartTimes}`,
+        `上次重启：${formatDateTime(lastRestartTime)}`,
+      ].join('\n'),
+    );
+  });
+zhinManager
   .command('update')
-  .option('-v [version:string] 更新到指定版本，默认嘴型', 'latest')
+  .desc('升级zhi 到指定版本')
+  .option('-v [version:string] 更新到指定版本，默认最新', 'latest')
   .option('-r [restart:boolean] 是否立即重启，默认不重启', false)
   .permission('master')
   .action(async ({ message, adapter, bot, options }) => {
@@ -312,12 +360,12 @@ botManage
   .permission('master')
   .action(async ({ prompt }, adapter) => {
     if (!zhinManager.app?.adapters.get(adapter))
-      return `未找到名为“${adapter}”的适配器，请确认你是否安装并启用了“@zhinjs/${adapter}”`;
-    const schema: Dict = zhinManager.app!.getAdapterSchema(adapter);
+      return `未找到名为“${adapter}”的适配器，请确认你是否安装并启用了“@zhinjs/adapter-${adapter}”`;
+    const schema = zhinManager.app!.getAdapterSchema(adapter);
     const botConfig: App.BotConfig = {
       adapter,
-      ...((await prompt.prompts(schema)) as any),
-    };
+      ...(await prompt.getValueWithSchema(schema)),
+    } as App.BotConfig;
     zhinManager.app!.config.bots.push(botConfig);
     return `已添加，请重启`;
   });
@@ -365,7 +413,7 @@ botManage
     const key = await prompt.text('请输入配置项key');
     if (!(key in schema)) return `无效的配置项“${schema}”,期望输入：${Object.keys(schema).join(',')}`;
     if (!key) return '输入错误';
-    let value = await prompt.prompts({ [key]: schema[key] });
+    let value = await prompt.getValueWithSchemas({ [key]: schema[key] });
     Reflect.set(botConfig, key, value[key]);
   });
 botManage
@@ -488,7 +536,6 @@ zhinManager
     return `config.${key} 已添加`;
   });
 zhinManager
-  .command('config.delete <key:string>')
   .command('config.delete <key:string>')
   .permission('master')
   .action((_, key) => {

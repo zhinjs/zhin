@@ -1,4 +1,4 @@
-import { Adapter, App, Message } from 'zhin';
+import { Adapter, App, Message, Schema } from 'zhin';
 import {
   Client,
   PrivateMessageEvent,
@@ -80,39 +80,22 @@ icqq
       content: 'string',
     },
   });
-icqq
-  .schema('uin', {
-    method: 'number',
-    args: ['请输入机器人qq'],
-  })
-  .schema('password', {
-    method: 'text',
-    args: ['请输入机器人密码'],
-  })
-  .schema('ver', {
-    method: 'text',
-    args: ['请输入使用版本'],
-  })
-  .schema('platform', {
-    method: 'pick',
-    args: [
-      '请选择登录平台',
-      {
-        type: 'number',
-        options: [
-          { label: '安卓手机(Android)', value: 1 },
-          { label: '苹果平板(aPad)', value: 2 },
-          { label: '安卓手表(Watch)', value: 3 },
-          { label: 'MacOS(iMac)', value: 4 },
-          { label: 'iPad', value: 5 },
-        ],
-      },
-    ],
-  })
-  .schema('sign_api_addr', {
-    method: 'text',
-    args: ['请输入签名API地址'],
-  });
+icqq.schema({
+  uin: Schema.number('请输入机器人qq').required(),
+  password: Schema.string('请输入机器人密码').required(),
+  ver: Schema.string('请输入使用版本').required(),
+  platform: Schema.number('请选择登录平台')
+    .option([
+      { label: '安卓手机(Android)', value: 1 },
+      { label: '苹果平板(aPad)', value: 2 },
+      { label: '安卓手表(Watch)', value: 3 },
+      { label: 'MacOS(iMac)', value: 4 },
+      { label: 'iPad', value: 5 },
+    ])
+    .required()
+    .default(3),
+  sign_api_addr: Schema.string('请输入签名API地址').required(),
+});
 declare module 'zhin' {
   namespace App {
     interface Adapters {

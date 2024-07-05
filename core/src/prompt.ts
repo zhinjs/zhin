@@ -2,6 +2,7 @@ import { Adapter } from './adapter';
 import { Middleware } from './middleware';
 import { Bot, Dict } from './types';
 import { Message } from './message';
+import { Schema } from './schema';
 
 export class Prompt<T extends Adapter = Adapter> {
   constructor(
@@ -142,15 +143,63 @@ export class Prompt<T extends Adapter = Adapter> {
       },
     });
   }
-  async prompts<T extends Dict<Prompt.Call>>(schemas: T) {
+  async pickValueWithSchema<T extends Schema>(schema: T): Promise<Schema.Types<T>> {
+    return this.pick(schema.meta.description, {
+      type: '' as any,
+      options: schema.meta.options!.map(o => ({
+        label: o.label,
+        value: o.value,
+      })),
+      multiple: schema.meta.multiple,
+      defaultValue: schema.meta.default,
+    });
+  }
+  async getValueWithSchemas<T extends Record<string, Schema>>(schemas: T): Promise<Schema.RecordTypes<T>> {
     const result: Dict = {};
-    for (const key in schemas) {
-      const call = schemas[key];
-      const fn = this[call.method];
-      if (typeof fn !== 'function') continue;
-      result[key] = await (fn as Function).apply(this, call.args);
+    for (const key of Object.keys(schemas)) {
+      const schema = schemas[key];
+      result[key] = await this.getValueWithSchema(schema);
     }
-    return result;
+    return result as Schema.RecordTypes<T>;
+  }
+  async getValueWithSchema<T extends Schema>(schema: T): Promise<Schema.Types<T>> {
+    if (schema.meta.options) return this.pickValueWithSchema(schema);
+    switch (schema.meta.type) {
+      case 'number':
+        return (await this.number(schema.meta.description)) as Schema.Types<T>;
+      case 'string':
+        return (await this.text(schema.meta.description)) as Schema.Types<T>;
+      case 'boolean':
+        return (await this.confirm(schema.meta.description)) as Schema.Types<T>;
+      case 'object':
+        if (schema.meta.description) await this.event.reply(schema.meta.description);
+        return (await this.getValueWithSchemas(schema.options.object!)) as Schema.Types<T>;
+      case 'date':
+        return await this.prompt({
+          tips: schema.meta.description,
+          defaultValue: schema.meta.default || new Date(),
+          format: (input: string) => new Date(input),
+        });
+      case 'regexp':
+        return await this.prompt({
+          tips: schema.meta.description,
+          defaultValue: schema.meta.default || '',
+          format: (input: string) => new RegExp(input),
+        });
+      case 'const':
+        return await this.const(schema.meta.default!);
+      case 'list':
+        const inner = schema.options.inner!;
+        if (!['string', 'boolean', 'number'].includes(inner.meta.type))
+          throw new Error(`unsupported inner type :${inner.meta.type}`);
+        return (await this.list(schema.meta.description, {
+          type: inner.meta.type === 'string' ? 'text' : (inner.meta.type as Prompt.SingleType),
+          defaultValue: schema.meta.default,
+        })) as Schema.Types<T>;
+      case 'dict':
+      default:
+        throw new Error(`Unsupported schema input type: ${schema.meta.type}`);
+    }
   }
 }
 export namespace Prompt {
@@ -186,10 +235,5 @@ export namespace Prompt {
     timeout?: number;
     timeoutText?: string;
     format: (input: string) => any;
-  };
-  type Methods = 'text' | 'number' | 'confirm' | 'list' | 'pick' | 'const';
-  export type Call<T extends Methods = Methods> = {
-    method: T;
-    args: Prompt[T] extends (...args: any[]) => any ? Parameters<Prompt[T]> : never;
   };
 }

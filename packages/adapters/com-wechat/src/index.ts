@@ -1,4 +1,4 @@
-import { Adapter, App, Message } from 'zhin';
+import { Adapter, App, Message, Schema } from 'zhin';
 import '@zhinjs/plugin-http-server';
 import { Client } from '@/client';
 import { Message as ClientMessage } from '@/message';
@@ -11,27 +11,13 @@ declare module 'zhin' {
     }
   }
 }
-adapter
-  .schema('type', {
-    method: 'const',
-    args: ['ws'],
-  })
-  .schema('url', {
-    method: 'text',
-    args: ['请输入服务端ws地址'],
-  })
-  .schema('access_token', {
-    method: 'text',
-    args: ['请输入access_token'],
-  })
-  .schema('max_reconnect_count', {
-    method: 'number',
-    args: ['请输入max_reconnect_count', undefined, '10'],
-  })
-  .schema('reconnect_interval', {
-    method: 'number',
-    args: ['请输入reconnect_interval', undefined, '3000'],
-  });
+adapter.schema({
+  type: Schema.const('ws', '连接方式'),
+  url: Schema.string('请输入服务端ws地址'),
+  access_token: Schema.string('请输入access_token'),
+  max_reconnect_count: Schema.number('请输入max_reconnect_count').default(10),
+  reconnect_interval: Schema.number('请输入reconnect_interval').default(3000),
+});
 adapter.define('sendMsg', async (bot_id, target_id, target_type, message, source) => {
   const bot = adapter.pick(bot_id);
   let msg: ClientMessage.Sendable = await adapter.app!.renderMessage(message as string, source);

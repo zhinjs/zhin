@@ -1,7 +1,8 @@
-import { Adapter, App, Message } from 'zhin';
+import { Adapter, App, Message, Schema } from 'zhin';
 import '@zhinjs/plugin-http-server';
 import { OneBotV12 } from '@/onebot';
 import { MessageV12 } from '@/message';
+
 export type OneBotV12Adapter = typeof oneBotV12;
 const oneBotV12 = new Adapter<Adapter.Bot<OneBotV12>, MessageV12>('onebot-12');
 declare module 'zhin' {
@@ -11,27 +12,13 @@ declare module 'zhin' {
     }
   }
 }
-oneBotV12
-  .schema('type', {
-    method: 'const',
-    args: ['ws'],
-  })
-  .schema('url', {
-    method: 'text',
-    args: ['请输入服务端ws地址'],
-  })
-  .schema('access_token', {
-    method: 'text',
-    args: ['请输入access_token'],
-  })
-  .schema('max_reconnect_count', {
-    method: 'number',
-    args: ['请输入max_reconnect_count', undefined, '10'],
-  })
-  .schema('reconnect_interval', {
-    method: 'number',
-    args: ['请输入reconnect_interval', undefined, '3000'],
-  });
+oneBotV12.schema({
+  type: Schema.const('ws', '连接方式'),
+  url: Schema.string('请输入服务端ws地址'),
+  access_token: Schema.string('请输入access_token'),
+  max_reconnect_count: Schema.number('请输入max_reconnect_count').default(10),
+  reconnect_interval: Schema.number('请输入reconnect_interval').default(3000),
+});
 oneBotV12.define('sendMsg', async (bot_id, target_id, target_type, message, source) => {
   const bot = oneBotV12.pick(bot_id);
   let msg: MessageV12.Sendable = await oneBotV12.app!.renderMessage(message as string, source);

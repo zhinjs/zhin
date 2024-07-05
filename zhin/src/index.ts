@@ -81,6 +81,7 @@ import {
   OptionsType,
   OptionType,
   Element,
+  Schema,
 } from '@zhinjs/core';
 export * from './worker';
 export async function initialApp(this: App) {
@@ -167,4 +168,5 @@ export {
   OptionsType,
   OptionType,
   Element,
+  Schema,
 };

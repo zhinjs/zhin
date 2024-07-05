@@ -8,4 +8,5 @@ export * from './command';
 export * from './middleware';
 export * from './plugin';
 export * from './app';
+export * from './schema';
 export * from './constans';

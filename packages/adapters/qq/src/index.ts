@@ -1,4 +1,4 @@
-import { Adapter, App, Message } from 'zhin';
+import { Adapter, App, Message, Schema } from 'zhin';
 import { sendableToString, formatSendable } from './utils';
 import {
   Bot,
@@ -19,47 +19,12 @@ declare module 'zhin' {
     }
   }
 }
-qq.schema('appid', {
-  method: 'text',
-  args: ['请输入appid'],
-})
-  .schema('secret', {
-    method: 'text',
-    args: ['请输入secret'],
-  })
-  .schema('group', {
-    method: 'confirm',
-    args: ['是否拥有群聊能力'],
-  })
-  .schema('public', {
-    method: 'confirm',
-    args: ['是否公域机器人'],
-  })
-  .schema('sandbox', {
-    method: 'confirm',
-    args: ['是否开启沙箱模式'],
-  });
-qq.define('sendMsg', async (bot_id, target_id, target_type, message, source) => {
-  const bot = qq.pick(bot_id);
-  let msg: Sendable = await qq.app!.renderMessage(message as string, source);
-  msg = formatSendable(msg);
-  const quote: Quotable | undefined = source ? source.original : undefined;
-  switch (target_type) {
-    case 'group':
-      return bot.sendGroupMessage(target_id, msg, quote);
-    case 'private':
-      const [sub_type, user_id] = target_id.split(':');
-      if (sub_type === 'friend') {
-        return bot.sendPrivateMessage(user_id, msg, quote);
-      }
-      return bot.sendDirectMessage(user_id, msg, quote);
-    case 'direct':
-      return bot.sendDirectMessage(target_id, msg, quote);
-    case 'guild':
-      return bot.sendGuildMessage(target_id, msg, quote);
-    default:
-      throw new Error(`QQ适配器暂不支持发送${target_type}类型的消息`);
-  }
+qq.schema({
+  appid: Schema.string('请输入appid').required(),
+  secret: Schema.string('请输入secret').required(),
+  group: Schema.boolean('是否拥有群聊能力'),
+  public: Schema.boolean('是否公域机器人'),
+  sandbox: Schema.boolean('是否开启杀箱模式'),
 });
 type QQConfig = {
   appid: string;

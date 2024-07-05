@@ -1,4 +1,4 @@
-import { Adapter, App, Message } from 'zhin';
+import { Adapter, App, Message, Schema } from 'zhin';
 import { Bot } from './bot';
 declare module 'zhin' {
   namespace App {
@@ -8,6 +8,21 @@ declare module 'zhin' {
   }
 }
 const adapter = new Adapter<Adapter.Bot<Bot>, Bot.Message>('email');
+
+adapter.schema({
+  username: Schema.string('请输入邮箱账号').required(),
+  password: Schema.string('请输入邮箱密码或授权码').required(),
+  imap: Schema.object({
+    host: Schema.string('请输入邮箱IMAP服务器').required(),
+    port: Schema.number('请输入邮箱IMAP服务器端口').default(993),
+    tls: Schema.boolean('是否使用SSL/TLS').default(true),
+  }),
+  smtp: Schema.object({
+    host: Schema.string('请输入邮箱SMTP服务器').required(),
+    port: Schema.number('请输入邮箱SMTP服务器端口').default(465),
+    tls: Schema.boolean('是否使用SSL/TLS').default(true),
+  }),
+});
 adapter.define('sendMsg', async (bot_id, target_id, target_type, message, source) => {
   const bot = adapter.bots.find(bot => bot.unique_id === bot_id);
   if (!bot) throw new Error(`cannot find bot ${bot_id}`);

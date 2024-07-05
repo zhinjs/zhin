@@ -1,4 +1,4 @@
-import { App, Adapter, Message } from 'zhin';
+import { App, Adapter, Message, Schema } from 'zhin';
 import { Bot, Sendable, PrivateMessageEvent, GroupMessageEvent } from 'node-dd-bot';
 import { formatSendable, sendableToString } from '@/utils';
 type DingMsgEvent = PrivateMessageEvent | GroupMessageEvent;
@@ -23,35 +23,15 @@ dingTalkAdapter.define('sendMsg', async (bot_id, target_id, target_type, message
       throw new Error(`Dingtalk适配器暂不支持发送${target_type}类型的消息`);
   }
 });
-dingTalkAdapter
-  .schema('clientId', {
-    method: 'text',
-    args: ['请输入clientId'],
-  })
-  .schema('clientSecret', {
-    method: 'text',
-    args: ['请输入clientSecret'],
-  })
-  .schema('reconnect_interval', {
-    method: 'number',
-    args: ['请输入reconnect_interval', undefined, '3000'],
-  })
-  .schema('max_reconnect_count', {
-    method: 'number',
-    args: ['请输入max_reconnect_count', undefined, '10'],
-  })
-  .schema('heartbeat_interval', {
-    method: 'number',
-    args: ['请输入heartbeat_interval', undefined, '3000'],
-  })
-  .schema('request_timeout', {
-    method: 'number',
-    args: ['请输入request_timeout', undefined, '5000'],
-  })
-  .schema('sandbox', {
-    method: 'confirm',
-    args: ['请输入sandbox', undefined, 'true'],
-  });
+dingTalkAdapter.schema({
+  clientId: Schema.string('请输入clientId'),
+  clientSecret: Schema.string('请输入clientSecret'),
+  reconnect_interval: Schema.number('请输入重连间隔时间(ms)').default(3000),
+  max_reconnect_count: Schema.number('请输入最大重连次数').default(10),
+  heartbeat_interval: Schema.number('请输入心跳间隔时间(ms)').default(3000),
+  request_timeout: Schema.number('请输入请求超时时间(ms)').default(5000),
+  sandbox: Schema.boolean('是否沙箱环境').default(true),
+});
 const startBots = (configs: App.BotConfig<'dingtalk'>[]) => {
   for (const config of configs) {
     const bot = new Bot(config) as Adapter.Bot<Bot>;
