@@ -2,7 +2,7 @@
     "name": "@zhinjs/adapter-web-wechat",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
-    "version": "0.0.5",
+    "version": "0.0.6",
     "scripts": {
         "build": "tsc && tsc-alias"
     },
