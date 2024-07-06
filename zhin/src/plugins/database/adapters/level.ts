@@ -1,11 +1,10 @@
-import { Level } from 'level';
+import { DatabaseOptions, Level } from 'level';
+import { WORK_DIR, Dict, sleep } from '@zhinjs/core';
 import * as fs from 'fs/promises';
 import path from 'path';
-import { WORK_DIR } from './constans';
-import { Dict } from './types';
-import { sleep } from './utils';
+import { Database } from '../';
 
-export class LevelDb extends Level {
+export class LevelDb extends Level implements Database {
   async get<T>(key: string, defaultValue?: T): Promise<T> {
     if (this.status !== 'open') {
       await sleep(80);
@@ -19,22 +18,22 @@ export class LevelDb extends Level {
       return this.get(key);
     }
   }
-  async filter<T>(key: string, predicate: LevelDb.Predicate<T>): Promise<T> {
+  async filter<T>(key: string, predicate: Database.Predicate<T>): Promise<T> {
     const data = await this.get<T>(key, [] as T);
     if (!Array.isArray(data)) throw new Error(`${key} is not an array`);
     return (data as any).filter(predicate);
   }
-  async find<T>(key: string, predicate: LevelDb.Predicate<T>): Promise<LevelDb.ArrayItem<T>> {
+  async find<T>(key: string, predicate: Database.Predicate<T>): Promise<Database.ArrayItem<T>> {
     const data = await this.get<T>(key, [] as T);
     if (!Array.isArray(data)) throw new Error(`${key} is not an array`);
     return (data as any).find(predicate);
   }
-  async indexOf<T>(key: string, predicate: LevelDb.Predicate<T>): Promise<T> {
+  async indexOf<T>(key: string, predicate: Database.Predicate<T>): Promise<T> {
     const data = await this.get<T>(key, [] as T);
     if (!Array.isArray(data)) throw new Error(`${key} is not an array`);
     return (data as any).findIndex(predicate);
   }
-  async includes<T>(key: string, predicate: LevelDb.Predicate<T>): Promise<boolean> {
+  async includes<T>(key: string, predicate: Database.Predicate<T>): Promise<boolean> {
     const data = await this.get<T>(key, [] as T);
     if (!Array.isArray(data)) throw new Error(`${key} is not an array`);
     return (data as any).includes(predicate);
@@ -45,8 +44,8 @@ export class LevelDb extends Level {
     });
   }
   async replace<T>(key: string, oldValue: T, newValue: T): Promise<boolean>;
-  async replace<T>(key: string, predicate: LevelDb.Predicate<T[]>, value: T): Promise<boolean>;
-  async replace<T>(key: string, predicate: LevelDb.Predicate<T[]> | T, value: T): Promise<boolean> {
+  async replace<T>(key: string, predicate: Database.Predicate<T[]>, value: T): Promise<boolean>;
+  async replace<T>(key: string, predicate: Database.Predicate<T[]> | T, value: T): Promise<boolean> {
     if (typeof predicate !== 'function') predicate = (item: T) => JSON.stringify(item) === JSON.stringify(predicate);
     const data = await this.get<T[]>(key, [] as T[]);
     if (!Array.isArray(data)) throw new Error(`${key} is not an array`);
@@ -62,9 +61,7 @@ export class LevelDb extends Level {
     (data as any).splice(index, deleteCount, ...insert);
     await this.set(key, data);
   }
-  async remove<T>(key: string, predicate: T): Promise<void>;
-  async remove<T>(key: string, predicate: LevelDb.Predicate<T[]>): Promise<void>;
-  async remove<T>(key: string, predicate: LevelDb.Predicate<T[]> | T): Promise<void> {
+  async remove<T>(key: string, predicate: Database.Predicate<T[]> | T): Promise<void> {
     if (typeof predicate !== 'function') predicate = (item: T) => JSON.stringify(item) === JSON.stringify(predicate);
     const data = await this.get<T[]>(key, [] as T[]);
     if (!Array.isArray(data)) throw new Error(`${key} is not an array`);
@@ -82,16 +79,23 @@ export class LevelDb extends Level {
     for (const key of keys) {
       await this.set(key, Reflect.get(data, key));
     }
+    return true;
   }
   async export(filename: string) {
     const data: Dict = {};
     for await (const [key, value] of this.iterator()) {
       data[key] = value;
     }
-    return fs.writeFile(path.resolve(WORK_DIR, filename), JSON.stringify(data, null, 2), { encoding: 'utf8' });
+    await fs.writeFile(path.resolve(WORK_DIR, filename), JSON.stringify(data, null, 2), { encoding: 'utf8' });
+    return true;
+  }
+  async start() {
+    return this.open();
+  }
+  async stop() {
+    return this.close();
   }
 }
-export namespace LevelDb {
-  export type Predicate<T> = T extends (infer L)[] ? (item: L, index: number, list: T) => boolean : never;
-  export type ArrayItem<T> = T extends (infer L)[] ? L : unknown;
-}
+Database.factories.set('level', (filePath: string, options: DatabaseOptions<string, any>) => {
+  return new LevelDb(path.resolve(WORK_DIR, filePath), options);
+});
