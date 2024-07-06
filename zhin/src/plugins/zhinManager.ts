@@ -409,11 +409,12 @@ botManage
     const botConfig = zhinManager.app!.config.bots.find(b => b.unique_id == unique_id);
     if (!botConfig) return `机器人 ${unique_id} 不存在`;
 
-    const schema: Dict = zhinManager.app!.getAdapterSchema(botConfig.adapter);
+    const schema = zhinManager.app!.getAdapterSchema(botConfig.adapter);
     const key = await prompt.text('请输入配置项key');
-    if (!(key in schema)) return `无效的配置项“${schema}”,期望输入：${Object.keys(schema).join(',')}`;
+    if (!(key in schema.options.object!))
+      return `无效的配置项“${schema}”,期望输入：${Object.keys(schema.options.object!).join(',')}`;
     if (!key) return '输入错误';
-    let value = await prompt.getValueWithSchemas({ [key]: schema[key] });
+    let value = await prompt.getValueWithSchemas({ [key]: schema.options.object![key] });
     Reflect.set(botConfig, key, value[key]);
   });
 botManage

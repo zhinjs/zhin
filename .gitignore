@@ -25,3 +25,5 @@ test/data/
 /docs/.vitepress
 /**/kritor/src/generated/
 /pnpm-lock.yaml
+/test/zhin.db/
+/test/zhin.config.yml
