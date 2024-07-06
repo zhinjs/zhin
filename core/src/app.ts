@@ -338,7 +338,7 @@ export class App extends EventEmitter {
         loaded = true;
       } catch (e) {
         if (!error || String(Reflect.get(error, 'message')).startsWith('Cannot find')) error = e;
-        this.logger.debug(`try load plugin(${name}) failed. (from: ${loadPath})`);
+        this.logger.debug(`try load plugin(${name}) failed. (from: ${loadPath})`, e);
       }
     }
     if (!loaded) this.logger.warn(`load plugin "${name}" failed`, error);
