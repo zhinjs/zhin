@@ -33,5 +33,17 @@
     },
     "devDependencies": {
         "dtsc": "^2.3.0"
+    },
+    "peerDependencies": {
+        "level": "^8.0.1",
+        "redis": "^4.6.15"
+    },
+    "peerDependenciesMeta": {
+        "level": {
+            "optional": true
+        },
+        "redis": {
+            "optional": true
+        }
     }
 }

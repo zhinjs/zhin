@@ -8,12 +8,14 @@ import { Dict } from './types';
 import path from 'path';
 import { Adapter } from './adapter';
 import * as fs from 'fs';
+import { getLogger, Logger } from 'log4js';
 
 export interface Plugin extends Plugin.Options {}
 
 export class Plugin extends EventEmitter {
   public id: string;
   public name: string = '';
+  private _logger?: Logger;
   disposes: Function[] = [];
   priority: number;
   isMounted: boolean = false;
@@ -93,7 +95,11 @@ export class Plugin extends EventEmitter {
       },
     });
   }
-
+  get logger() {
+    const logger = (this._logger ||= getLogger(`[zhin:${this.display_name}]`));
+    logger.level = this.app?.config.log_level || 'info';
+    return logger;
+  }
   required<T extends keyof App.Services>(...services: (keyof App.Services)[]) {
     this[REQUIRED_KEY].push(...services);
   }

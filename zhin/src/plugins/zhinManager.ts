@@ -482,7 +482,7 @@ zhinManager
   .permission('master')
   .hidden()
   .action(() => {
-    return JSON.stringify(zhinManager.app?.config, null, 2);
+    return JSON.stringify(zhinManager.app?.config.data, null, 2);
   });
 zhinManager
   .command('db.import [filepath:string]')
@@ -494,7 +494,7 @@ zhinManager
     if (!filepath) return '输入错误';
     try {
       const config = JSON.parse(fs.readFileSync(filepath, 'utf8'));
-      await zhinManager.jsondb.import(config);
+      await zhinManager.database.import(config);
     } catch (e) {
       return (e as Error)?.message || '导入失败，未知错误';
     }
@@ -504,7 +504,7 @@ zhinManager
   .command('db.export [filename:string]')
   .desc('导出数据库')
   .action(async (_, filename = 'zhin.db.json') => {
-    await zhinManager.jsondb.export(filename);
+    await zhinManager.database.export(filename);
     return '导出成功';
   });
 zhinManager

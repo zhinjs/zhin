@@ -7,7 +7,10 @@ export class Config {
   public static exts: string[] = ['.json', '.yaml', '.yml'];
   filename: string = '';
   #type: Config.Type = Config.Type.YAML;
-  #data: App.Config;
+  private _data: App.Config;
+  get data() {
+    return this._data;
+  }
   constructor(name: string, defaultValue?: App.Config) {
     try {
       this.filename = this.#resolveByName(name);
@@ -17,8 +20,8 @@ export class Config {
       if (!Config.exts.includes(ext)) this.filename = path.join(WORK_DIR, `${name}${this.#resolveExt()}`);
       this.#saveConfig(defaultValue);
     }
-    this.#data = this.#loadConfig();
-    return new Proxy<App.Config>(this.#data, {
+    this._data = this.#loadConfig();
+    return new Proxy<App.Config>(this._data, {
       get: (target, p, receiver) => {
         if (Reflect.has(this, p)) return Reflect.get(this, p, receiver);
         return this.#proxied(target, p, receiver);
@@ -75,7 +78,7 @@ export class Config {
         throw new Error(`不支持的配置文件类型${this.#type}`);
     }
   }
-  #saveConfig(data: App.Config = this.#data) {
+  #saveConfig(data: App.Config = this._data) {
     switch (this.#type) {
       case Config.Type.JSON:
         return fs.writeFileSync(this.filename, JSON.stringify(data, null, 2));
@@ -85,13 +88,17 @@ export class Config {
         throw new Error(`不支持的配置文件类型${this.#type}`);
     }
   }
+  #replaceEnv<T>(data: T): T {
+    if (typeof data !== 'string') return data;
+    return data.replace(/\${([^}]+)}/g, (_, key) => process.env[key] || '') as T;
+  }
   #proxied<T extends object, R = any>(obj: T, p: string | symbol, receiver: any): R {
     const result = Reflect.get(obj, p, receiver);
-    if (!result || typeof result !== 'object') return result as R;
+    if (!result || typeof result !== 'object') return this.#replaceEnv(result as R);
     return new Proxy(result, {
       get: (target, p, receiver) => {
         const result = Reflect.get(target, p, receiver);
-        if (typeof result !== 'object') return result;
+        if (typeof result !== 'object') return this.#replaceEnv(result);
         return this.#proxied(target, p, receiver);
       },
       set: (target, p, value, receiver) => {

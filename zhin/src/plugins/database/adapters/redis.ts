@@ -1,8 +1,9 @@
 import { createClient, RedisClientOptions } from 'redis';
-import { Database } from '../';
+import { Database } from '../types';
 import { Dict, WORK_DIR } from '@zhinjs/core';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { dbFactories } from '../factory';
 export class RedisDb implements Database {
   #client: ReturnType<typeof createClient>;
   constructor(options: RedisClientOptions) {
@@ -115,6 +116,6 @@ export class RedisDb implements Database {
     await this.#client?.quit();
   }
 }
-Database.factories.set('redis', (options: RedisClientOptions) => {
+dbFactories.set('redis', (options: RedisClientOptions) => {
   return new RedisDb(options);
 });

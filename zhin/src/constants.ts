@@ -85,7 +85,15 @@ const builtInPlugins: typeof plugins = [
     version: 'built-in',
     author: 'zhinjs',
     description: '提供 函数式 添加指令的能力',
-    keywords: ['setup'],
+    keywords: ['functionParser'],
+    repository: 'https://github.com/zhinjs/zhin',
+  },
+  {
+    name: 'database',
+    version: 'built-in',
+    author: 'zhinjs',
+    description: '提供 数据 存储服务',
+    keywords: ['database'],
     repository: 'https://github.com/zhinjs/zhin',
   },
 ];

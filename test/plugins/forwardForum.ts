@@ -17,7 +17,7 @@ forwardForum.middleware(async (adapter, bot, event, next) => {
 });
 let configList: Config[] = [];
 forwardForum.mounted(async app => {
-  const savedConfig = await app.jsondb.get<Config[]>('forwardForumConfig', [])!;
+  const savedConfig = await app.database.get<Config[]>('forwardForumConfig', [])!;
   configList.push(...(savedConfig || []));
 });
 forwardForum.command('查看订阅').action<OneBotV12Adapter>(({ bot }) => {
@@ -40,7 +40,7 @@ forwardForum.command('新增订阅').action<OneBotV12Adapter>(async ({ bot, prom
   const group_id = await prompt.text('请输入接收的群号');
   const template = await prompt.text('请输入消息模板');
   configList.push({ guild_id, bot_id: bot.self_id, channel_id, group_id, template });
-  forwardForum.app!.jsondb.set<Config[]>('forwardForumConfig', configList);
+  forwardForum.app!.database.set<Config[]>('forwardForumConfig', configList);
   return '新增成功，请确保邀请我到对应的频道和群，不然订阅和转发将会失败';
 });
 forwardForum.command('修改订阅').action<OneBotV12Adapter>(async ({ bot, prompt }) => {
@@ -56,7 +56,7 @@ forwardForum.command('修改订阅').action<OneBotV12Adapter>(async ({ bot, prom
   );
   if (!config) return '未找到对应的订阅配置';
   config.template = await prompt.text('请输入消息模板');
-  forwardForum.app!.jsondb.set<Config[]>('forwardForumConfig', configList);
+  forwardForum.app!.database.set<Config[]>('forwardForumConfig', configList);
   return '修改模板成功';
 });
 forwardForum.command('删除订阅').action<OneBotV12Adapter>(async ({ bot, prompt }) => {
@@ -73,7 +73,7 @@ forwardForum.command('删除订阅').action<OneBotV12Adapter>(async ({ bot, prom
   });
   if (index === -1) return '删除失败';
   configList.splice(index, 1);
-  forwardForum.app!.jsondb.set<Config[]>('forwardForumConfig', configList);
+  forwardForum.app!.database.set<Config[]>('forwardForumConfig', configList);
   return '删除成功';
 });
 forwardForum.middleware<OneBotV12Adapter>(async (adapter, bot, event, next) => {
@@ -108,7 +108,7 @@ forwardForum.command('清空订阅').action<OneBotV12Adapter>(async ({ bot, prom
   const isConfirm = await prompt.confirm('清空后无法恢复，确认清空吗?');
   if (!isConfirm) return;
   configList = configList.filter(config => config.bot_id === bot.self_id);
-  forwardForum.app!.jsondb.set<Config[]>('forwardForumConfig', configList);
+  forwardForum.app!.database.set<Config[]>('forwardForumConfig', configList);
   return '清空成功';
 });
 export default forwardForum;

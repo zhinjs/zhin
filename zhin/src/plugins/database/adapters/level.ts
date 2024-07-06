@@ -2,7 +2,8 @@ import { DatabaseOptions, Level } from 'level';
 import { WORK_DIR, Dict, sleep } from '@zhinjs/core';
 import * as fs from 'fs/promises';
 import path from 'path';
-import { Database } from '../';
+import { Database } from '../types';
+import { dbFactories } from '../factory';
 
 export class LevelDb extends Level implements Database {
   async get<T>(key: string, defaultValue?: T): Promise<T> {
@@ -96,6 +97,6 @@ export class LevelDb extends Level implements Database {
     return this.close();
   }
 }
-Database.factories.set('level', (filePath: string, options: DatabaseOptions<string, any>) => {
+dbFactories.set('level', (filePath: string, options: DatabaseOptions<string, any>) => {
   return new LevelDb(path.resolve(WORK_DIR, filePath), options);
 });

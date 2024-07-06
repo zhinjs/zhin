@@ -90,6 +90,14 @@ export async function initialApp(this: App) {
   if (!fs.existsSync(userAdapterDir)) fs.mkdirSync(userAdapterDir);
   if (!fs.existsSync(userPluginDir)) fs.mkdirSync(userPluginDir);
   this.config.adapters.push('processAdapter');
+  this.config.db_driver = 'level';
+  this.config.db_init_args = [
+    'zhin.db',
+    {
+      valueEncoding: 'json',
+      createIfMissing: true,
+    },
+  ];
   this.config.plugins.push('commandParser', 'echo', 'hmr', 'zhinManager', 'setup');
   this.config.plugin_dirs.push(
     path.relative(WORK_DIR, path.join(__dirname, 'plugins')), // 内置

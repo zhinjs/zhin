@@ -10,7 +10,6 @@ import { Adapter, AdapterBot, AdapterReceive } from './adapter';
 import { Message } from './message';
 import process from 'process';
 import { Config } from './config';
-import { LevelDb } from './levelDb';
 
 export function defineConfig(config: Partial<App.Config>): Partial<App.Config>;
 export function defineConfig(
@@ -25,7 +24,6 @@ export function defineConfig(
 export class App extends EventEmitter {
   logger: Logger = getLogger(`[zhin]`);
   config: Config;
-  #db: LevelDb;
   adapters: Map<string, Adapter> = new Map<string, Adapter>();
   middlewares: Middleware[] = [];
   plugins: PluginMap = new PluginMap();
@@ -35,10 +33,6 @@ export class App extends EventEmitter {
     this.handleMessage = this.handleMessage.bind(this);
     this.on('message', this.handleMessage);
     this.config = new Config(process.env.ZHIN_CONFIG || 'zhin.config', App.defaultConfig);
-    this.#db = new LevelDb(path.join(WORK_DIR, 'zhin.db'), {
-      valueEncoding: 'json',
-      createIfMissing: true,
-    });
     this.logger.level = this.config.log_level;
     return new Proxy(this, {
       get(target: App, key) {
@@ -100,17 +94,14 @@ export class App extends EventEmitter {
     return this.pluginList.flatMap(plugin => plugin.commandList);
   }
 
-  get services() {
-    let result: App.Services = {
-      jsondb: this.#db,
-    };
-    this.pluginList.forEach(plugin => {
+  get services(): App.Services {
+    return this.pluginList.reduce((result, plugin) => {
       plugin.services.forEach((service, name) => {
-        if (Reflect.ownKeys(result).includes(name)) return;
+        if (Reflect.has(result, name)) return;
         Reflect.set(result, name, service);
       });
-    });
-    return result;
+      return result;
+    }, {});
   }
 
   findCommand(name: string) {
@@ -464,9 +455,7 @@ export namespace App {
     };
   }
 
-  export interface Services {
-    jsondb: LevelDb;
-  }
+  export interface Services {}
 
   export type BotConfig<T extends keyof Adapters = keyof Adapters> = {
     adapter: T | string;
