@@ -50,7 +50,7 @@ function loadDbDriver(dbName: string) {
     for (const loadPath of mayBePath) {
       try {
         require(loadPath);
-        resolve();
+        return resolve();
       } catch (error) {}
     }
     reject(new Error(`Cannot find driver for ${dbName}`));
