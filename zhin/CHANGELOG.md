@@ -1,5 +1,13 @@
 # zhin
 
+## 3.0.30
+
+### Patch Changes
+
+- 35ffaf6: fix: 加载数据库驱动错误
+- Updated dependencies [35ffaf6]
+  - @zhinjs/core@1.0.19
+
 ## 3.0.29
 
 ### Patch Changes
