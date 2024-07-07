@@ -1,5 +1,11 @@
 # @zhinjs/onebot-12
 
+## 0.0.8
+
+### Patch Changes
+
+- b3b61af: 修复确实user_name
+
 ## 0.0.7
 
 ### Patch Changes
