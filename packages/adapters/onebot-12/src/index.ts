@@ -85,8 +85,8 @@ const messageHandler = (bot: Adapter.Bot<OneBotV12>, event: MessageV12) => {
   const master = bot.config?.master;
   const admins = bot.config.admins || [];
   message.sender = {
-    user_id: event.user_id,
-    user_name: event.nickname || '',
+    user_id: event.sender.user_id,
+    user_name: event.sender.nickname || '',
     permissions: [
       master && event.user_id === master && 'master',
       admins && admins.includes(event.user_id) && 'admins',

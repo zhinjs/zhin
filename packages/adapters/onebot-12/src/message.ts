@@ -9,6 +9,10 @@ export interface MessageV12 {
   guild_name?: string;
   channel_id?: string;
   channel_name?: string;
+  sender: {
+    user_id: string;
+    nickname: string;
+  };
   group_id?: number;
   permissions?: string[];
   detail_type: 'group' | 'private' | 'guild';
