@@ -1,5 +1,13 @@
 # @zhinjs/qq
 
+## 0.0.7
+
+### Patch Changes
+
+- 1d1fb0a: ob 11、12缺失user_name
+- Updated dependencies [db9e632]
+  - zhin@3.0.31
+
 ## 0.0.6
 
 ### Patch Changes

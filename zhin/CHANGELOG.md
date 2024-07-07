@@ -1,5 +1,11 @@
 # zhin
 
+## 3.0.31
+
+### Patch Changes
+
+- db9e632: 修复配置修改bug
+
 ## 3.0.30
 
 ### Patch Changes
