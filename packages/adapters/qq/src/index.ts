@@ -121,9 +121,6 @@ const messageHandler = (bot: Adapter.Bot<Bot>, event: QQMessageEvent) => {
       });
       break;
   }
-  const commands = qq.app!.getSupportCommands(qq, bot, message);
-  const matchReg = new RegExp(`^/(${commands.map(c => c.name).join('|')})`);
-  if (message.raw_message.match(matchReg)) message.raw_message = message.raw_message.slice(1);
   qq.app!.emit('message', qq, bot, message);
 };
 const stopBots = () => {

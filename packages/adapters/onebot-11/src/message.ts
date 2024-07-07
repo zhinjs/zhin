@@ -7,6 +7,10 @@ export interface MessageV11 {
   nickname?: string;
   group_id: number;
   message_type: 'group' | 'private';
+  sender: {
+    user_id: number;
+    nickname: string;
+  };
   message: string | (MessageV11.Segment | string)[];
 }
 export namespace MessageV11 {
