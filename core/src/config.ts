@@ -1,27 +1,27 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'yaml';
-import { WORK_DIR } from './constans';
+import { CONFIG_DIR } from './constans';
 import { App } from './app';
-export class Config {
+export class Config<T extends object = object> {
   public static exts: string[] = ['.json', '.yaml', '.yml'];
   filename: string = '';
   #type: Config.Type = Config.Type.YAML;
-  private _data: App.Config;
+  private _data: T;
   get data() {
     return this._data;
   }
-  constructor(name: string, defaultValue?: App.Config) {
+  constructor(name: string, defaultValue?: T) {
     try {
       this.filename = this.#resolveByName(name);
     } catch (e) {
       if (!defaultValue) throw e;
       const ext = path.extname(name);
-      if (!Config.exts.includes(ext)) this.filename = path.join(WORK_DIR, `${name}${this.#resolveExt()}`);
+      if (!Config.exts.includes(ext)) this.filename = path.join(CONFIG_DIR, `${name}${this.#resolveExt()}`);
       this.#saveConfig(defaultValue);
     }
     this._data = this.#loadConfig();
-    return new Proxy<App.Config>(this._data, {
+    return new Proxy<T>(this._data, {
       get: (target, p, receiver) => {
         if (Reflect.has(this, p)) return Reflect.get(this, p, receiver);
         return this.#proxied(target, p, receiver);
@@ -38,7 +38,7 @@ export class Config {
         this.#saveConfig();
         return result;
       },
-    }) as unknown as Config;
+    }) as unknown as Config<T>;
   }
   #resolveByName(name: string): string {
     if (!Config.exts.includes(path.extname(name))) {
@@ -49,7 +49,7 @@ export class Config {
       }
       throw new Error(`未找到配置文件${name}`);
     }
-    name = path.resolve(WORK_DIR, name);
+    name = path.resolve(CONFIG_DIR, name);
     if (!fs.existsSync(name)) {
       throw new Error(`未找到配置文件${name}`);
     }
@@ -78,7 +78,7 @@ export class Config {
         throw new Error(`不支持的配置文件类型${this.#type}`);
     }
   }
-  #saveConfig(data: App.Config = this._data) {
+  #saveConfig(data: T = this._data) {
     switch (this.#type) {
       case Config.Type.JSON:
         return fs.writeFileSync(this.filename, JSON.stringify(data, null, 2));

@@ -1,3 +1,5 @@
+import { isEmpty } from '@zhinjs/shared';
+
 export class Schema<S = any, T = S> {
   public [Symbol.toStringTag] = 'Schema';
   constructor(
@@ -153,14 +155,6 @@ export namespace Schema {
       }
     : unknown;
   export function checkDefault<T>(schema: Schema, value: T, fallback: T = value) {
-    const isEmpty = (value: string | object | T) => {
-      if (typeof value === 'undefined') return true;
-      if (typeof value === 'string' && value === '') return true;
-      if (typeof value === 'object' && value === null) return true;
-      if (Array.isArray(value) && value.length === 0) return true;
-      if (value instanceof Date && isNaN(value.getTime())) return true;
-      return value && typeof value === 'object' && Reflect.ownKeys(value).length === 0;
-    };
     if (isEmpty(value)) {
       value = schema.meta.default || fallback;
     }

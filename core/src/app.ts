@@ -3,13 +3,15 @@ import { Logger, getLogger } from 'log4js';
 import { Middleware } from './middleware';
 import { Plugin, PluginMap } from './plugin';
 import { Bot, LogLevel } from './types';
-import { loadModule, remove } from './utils';
-import { APP_KEY, REQUIRED_KEY, WORK_DIR } from './constans';
+import { loadModule } from './utils';
+import { remove } from '@zhinjs/shared';
+import { APP_KEY, CONFIG_DIR, REQUIRED_KEY, WORK_DIR } from './constans';
 import path from 'path';
 import { Adapter, AdapterBot, AdapterReceive } from './adapter';
 import { Message } from './message';
 import process from 'process';
 import { Config } from './config';
+import * as fs from 'fs';
 
 export function defineConfig(config: Partial<App.Config>): Partial<App.Config>;
 export function defineConfig(
@@ -28,11 +30,12 @@ export class App extends EventEmitter {
   middlewares: Middleware[] = [];
   plugins: PluginMap = new PluginMap();
   renders: Message.Render[] = [];
-  constructor(key?: string) {
+  constructor() {
     super();
     this.handleMessage = this.handleMessage.bind(this);
+    if (!fs.existsSync(CONFIG_DIR)) fs.mkdirSync(CONFIG_DIR);
     this.on('message', this.handleMessage);
-    this.config = new Config(process.env.ZHIN_CONFIG || 'zhin.config', App.defaultConfig);
+    this.config = new Config<App.Config>(process.env.ZHIN_CONFIG || 'zhin.config', App.defaultConfig);
     this.logger.level = this.config.log_level;
     return new Proxy(this, {
       get(target: App, key) {
@@ -41,8 +44,9 @@ export class App extends EventEmitter {
       },
     });
   }
-  registerRender(render: Message.Render) {
-    this.renders.push(render);
+  registerRender(render: Message.Render, insertBefore?: boolean) {
+    if (insertBefore) this.renders.unshift(render);
+    else this.renders.push(render);
     return () => remove(this.renders, render);
   }
   getAdapterSchema(name: string) {
@@ -400,8 +404,8 @@ export interface App extends App.Services {
   removeAllListeners<S extends string | symbol>(event: S & Exclude<string | symbol, keyof App.EventMap>): this;
 }
 
-export function createApp(key?: string) {
-  return new App(key);
+export function createApp() {
+  return new App();
 }
 
 export namespace App {

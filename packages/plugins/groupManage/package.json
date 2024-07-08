@@ -15,7 +15,9 @@
         "directory": "packages/plugins/groupManage"
     },
     "dependencies": {
-        "zhin": "workspace:^",
         "@zhinjs/adapter-onebot-12": "workspace:^"
+    },
+    "peerDependencies": {
+        "zhin": "workspace:^"
     }
 }

@@ -15,9 +15,7 @@
         "directory": "packages/adapters/com-wechat"
     },
     "dependencies": {
-        "zhin": "workspace:^",
-        "ws": "latest",
-        "@zhinjs/plugin-http-server": "workspace:^"
+        "ws": "latest"
     },
     "peerDependencies": {
         "zhin": "workspace:^",

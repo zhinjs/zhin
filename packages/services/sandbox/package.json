@@ -15,7 +15,7 @@
     "url": "https://github.com/zhinjs/zhin",
     "directory": "packages/services/sandbox"
   },
-  "dependencies": {
+  "peerDependencies": {
     "zhin": "workspace:^"
   }
 }

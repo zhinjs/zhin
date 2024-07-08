@@ -8,8 +8,7 @@
     },
     "dtsc": {
         "inline": [
-            "@zhinjs/core",
-            "@zhinjs/shared"
+            "@zhinjs/core"
         ],
     }
 }

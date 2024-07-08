@@ -14,7 +14,7 @@
         "url": "https://github.com/zhinjs/zhin",
         "directory": "packages/plugins/qa"
     },
-    "dependencies": {
+    "peerDependencies": {
         "zhin": "workspace:^"
     }
 }

@@ -1,7 +1,6 @@
 {
-    "name": "@zhinjs/web",
+    "name": "@zhinjs/plugin-github",
     "main": "lib/index.js",
-    "module": "browser/common.ts",
     "types": "lib/index.d.ts",
     "version": "1.0.32",
     "scripts": {
@@ -14,18 +13,17 @@
     "author": "凉菜",
     "repository": {
         "url": "https://github.com/zhinjs/zhin",
-        "directory": "packages/services/web"
+        "directory": "packages/services/github"
     },
     "dependencies": {
-        "@vitejs/plugin-vue": "latest",
-        "vite": "latest"
+        "@octokit/webhooks": "^10.1.5",
+        "marked": "^4.1.0"
+    },
+    "devDependencies": {
+        "@types/marked": "^4.0.7"
     },
     "peerDependencies": {
         "zhin": "workspace:^",
-        "@zhinjs/plugin-http-server": "workspace:^",
-        "@zhinjs/client": "workspace:^"
-    },
-    "devDependencies": {
-        "@types/ws": "^8.5.5"
+        "@zhinjs/plugin-http-server": "workspace:^"
     }
 }

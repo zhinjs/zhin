@@ -1,4 +1,5 @@
-import { Bot, Dict } from './types';
+import { Bot } from './types';
+import { Dict } from '@zhinjs/shared';
 import { Prompt } from './prompt';
 import { Adapter, AdapterReceive } from './adapter';
 export interface MessageBase {
@@ -130,8 +131,8 @@ segment.image = (file: string, type = 'png') => `<image file='${encodeURICompone
 segment.video = (file: string, type = 'mp4') => `<video file='${encodeURIComponent(file)}' type='${type}'>`;
 segment.audio = (file: string, type = 'mp3') => `<audio file='${encodeURIComponent(file)}' type='${type}'>`;
 segment.at = user_id => `<at user_id='${encodeURIComponent(user_id)}'/>`;
-type MessageSender = {
+export interface MessageSender {
   user_id?: string | number;
   user_name?: string;
   permissions?: string[];
-};
+}

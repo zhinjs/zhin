@@ -15,8 +15,10 @@
         "directory": "packages/plugins/schedule"
     },
     "dependencies": {
-        "zhin": "workspace:^",
         "node-cron": "^3.0.3"
+    },
+    "peerDependencies": {
+        "zhin": "workspace:^"
     },
     "devDependencies": {
         "@types/node-cron": "^3.0.11"

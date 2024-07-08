@@ -2,7 +2,9 @@ import dotEnv from 'dotenv';
 import { fork, ForkOptions } from 'child_process';
 import path from 'path';
 import * as fs from 'fs';
-import { deepMerge, WORK_DIR, Dict } from '@zhinjs/core';
+import { WORK_DIR } from '@zhinjs/core';
+import { deepMerge, Dict } from '@zhinjs/shared';
+
 export type ProcessMessage = StartMessage | QueueMessage;
 type StartMessage = {
   type: 'start';

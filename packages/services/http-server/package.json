@@ -17,12 +17,14 @@
         "directory": "packages/services/http-server"
     },
     "dependencies": {
-        "zhin": "workspace:^",
         "koa": "latest",
         "koa-basic-auth": "latest",
         "@koa/router": "latest",
         "koa-bodyparser": "latest",
         "ws": "latest"
+    },
+    "peerDependencies": {
+        "zhin": "workspace:^"
     },
     "devDependencies": {
         "@types/koa": "latest",

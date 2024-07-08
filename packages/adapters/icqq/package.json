@@ -15,11 +15,9 @@
         "directory": "packages/adapters/icqq"
     },
     "dependencies": {
-        "zhin": "workspace:^",
         "@icqqjs/icqq": "latest"
     },
     "peerDependencies": {
-        "zhin": "workspace:^",
-        "@icqqjs/icqq": "latest"
+        "zhin": "workspace:^"
     }
 }

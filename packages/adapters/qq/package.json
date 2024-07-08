@@ -15,11 +15,9 @@
         "directory": "packages/adapters/qq"
     },
     "dependencies": {
-        "zhin": "workspace:^",
         "qq-group-bot": "latest"
     },
     "peerDependencies": {
-        "qq-group-bot": "latest",
         "zhin": "workspace:^"
     }
 }

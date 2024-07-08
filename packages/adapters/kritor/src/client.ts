@@ -4,7 +4,7 @@ import { loadSync, Long } from '@grpc/proto-loader';
 import { kritor, proto } from 'kritor-proto';
 import * as path from 'path';
 import { Adapter } from 'zhin';
-type ServiceConstruct<T> = new (host: string, credentials: grpc.ChannelCredentials) => T;
+
 export class Client extends EventEmitter {
   services: Client.Services;
   account?: kritor.core.GetCurrentAccountResponse;
@@ -15,6 +15,16 @@ export class Client extends EventEmitter {
   ) {
     super();
     this.#credential = grpc.credentials.createInsecure();
+    Reflect.set(
+      this.#credential,
+      'callCredentials',
+      grpc.credentials.createFromMetadataGenerator((callOptions, callback) => {
+        callOptions.service_url;
+        const metadata = new grpc.Metadata();
+        metadata.set('ticket', this.options.ticket || '');
+        callback(null, metadata);
+      }),
+    );
     this.services = this.#init();
   }
   get logger() {
@@ -62,36 +72,34 @@ export class Client extends EventEmitter {
       sub_peer: sub_peer || undefined,
     });
   }
-  #emitEvent(error: null | Error, event?: kritor.event.EventStructure) {
-    if (error) return this.emit('error', error);
-    switch (event?.event) {
-      case 'message':
-        return this.emit('message', event.message);
-      case 'notice':
-        return this.emit('notice', event.notice);
-      case 'request':
-        return this.emit('request', event.request);
-      default:
-        throw new Error('Unknown event ' + event?.toJSON());
-    }
+  #emitEvent(eventStream: NodeJS.ReadableStream) {
+    eventStream.on('error', e => {
+      this.adapter.logger.error('Event stream error:', e);
+    });
+    eventStream.on('data', event => {
+      console.log(event);
+    });
+    eventStream.on('end', () => {
+      this.adapter.logger.debug('Event stream end');
+    });
+    eventStream.on('status', status => {
+      this.adapter.logger.debug('Event stream status:', status);
+    });
   }
   #addListener(service: kritor.event.EventService) {
-    service.registerActiveListener({ type: kritor.event.EventType.EVENT_TYPE_CORE_EVENT }, this.#emitEvent.bind(this));
-    service.registerActiveListener({ type: kritor.event.EventType.EVENT_TYPE_MESSAGE }, this.#emitEvent.bind(this));
-    service.registerActiveListener({ type: kritor.event.EventType.EVENT_TYPE_NOTICE }, this.#emitEvent.bind(this));
-    service.registerActiveListener({ type: kritor.event.EventType.EVENT_TYPE_REQUEST }, this.#emitEvent.bind(this));
+    this.#emitEvent(service.registerActiveListener({ type: kritor.event.EventType.EVENT_TYPE_CORE_EVENT }) as any);
+    this.#emitEvent(service.registerActiveListener({ type: kritor.event.EventType.EVENT_TYPE_MESSAGE }) as any);
+    this.#emitEvent(service.registerActiveListener({ type: kritor.event.EventType.EVENT_TYPE_NOTICE }) as any);
+    this.#emitEvent(service.registerActiveListener({ type: kritor.event.EventType.EVENT_TYPE_REQUEST }) as any);
   }
   async start() {
-    const ticket = Math.random().toString(36);
-    await this.addTicket(undefined, 'superTicket', ticket);
-
-    const result = await this.authenticate(undefined, ticket);
-    console.log(result);
-    await this.deleteTicket(undefined, 'superTicket', ticket);
+    this.#addListener(this.services.event);
+    this.account = await this.getCurrentAccount();
+    this.adapter.logger.info(`${this.account?.account_name}(${this.account.account_uin}) connected`);
   }
   async stop() {
     for (const service of Object.values(this.services)) {
-      service.end();
+      service.end(true);
     }
   }
   /**
@@ -110,15 +118,21 @@ export class Client extends EventEmitter {
       loadSync(path.join(proto, filename), {
         includeDirs: [proto],
         longs: String,
+        keepCase: true,
         enums: String,
         defaults: true,
         oneofs: true,
       }),
-    );
+    )['kritor'] as grpc.GrpcObject;
     const Service = Reflect.get(Reflect.get(grpcObject, serviceKey), serviceName) as grpc.ServiceClientConstructor;
     return new Service(this.options.url, this.#credential) as T;
   }
 
+  /**
+   * 开始鉴权
+   * @param account
+   * @param ticket
+   */
   async authenticate(account?: string, ticket?: string) {
     return new Promise<kritor.authentication.AuthenticateResponse>((resolve, reject) => {
       this.services.authentication.authenticate({ account, ticket }, (err, res) => {
@@ -127,6 +141,11 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 获取鉴权状态
+   * @param account
+   */
   async getAuthenticationState(account: string) {
     return new Promise<kritor.authentication.GetAuthenticationStateResponse>((resolve, reject) => {
       this.services.authentication.getAuthenticationState({ account }, (err, res) => {
@@ -135,6 +154,12 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 通过账户和super_ticket获取ticket
+   * @param account
+   * @param super_ticket
+   */
   async getTicket(account: string, super_ticket: string) {
     return new Promise<kritor.authentication.GetTicketResponse>((resolve, reject) => {
       this.services.authentication.getTicket({ account, super_ticket }, (err, res) => {
@@ -143,6 +168,13 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 添加指定账户ticket
+   * @param account
+   * @param super_ticket
+   * @param ticket
+   */
   async addTicket(account?: string, super_ticket?: string, ticket?: string) {
     return new Promise<kritor.authentication.AddTicketResponse>((resolve, reject) => {
       this.services.authentication.addTicket({ account, super_ticket, ticket }, (err, res) => {
@@ -151,6 +183,13 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 删除指定账户ticket
+   * @param account
+   * @param super_ticket
+   * @param ticket
+   */
   async deleteTicket(account?: string, super_ticket?: string, ticket?: string) {
     return new Promise<kritor.authentication.DeleteTicketResponse>((resolve, reject) => {
       this.services.authentication.deleteTicket({ account, super_ticket, ticket }, (err, res) => {
@@ -159,6 +198,11 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 下载文件
+   * @param options
+   */
   async downloadFile(options: Parameters<typeof this.services.core.downloadFile>[0]) {
     return new Promise<kritor.core.DownloadFileResponse>((resolve, reject) => {
       this.services.core.downloadFile(options, (err, res) => {
@@ -167,6 +211,10 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 获取当前账户
+   */
   async getCurrentAccount() {
     return new Promise<kritor.core.GetCurrentAccountResponse>((resolve, reject) => {
       this.services.core.getCurrentAccount({}, (err, res) => {
@@ -175,6 +223,13 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 切换账户
+   * @param account_uid
+   * @param account_uin
+   * @param super_ticket
+   */
   async switchAccount(account_uid: string, account_uin: number, super_ticket: string) {
     return new Promise<kritor.core.SwitchAccountResponse>((resolve, reject) => {
       this.services.core.switchAccount({ account_uid, account_uin, super_ticket }, (err, res) => {
@@ -183,6 +238,11 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 调用原生方法
+   * @param options
+   */
   async callFunction(options: Parameters<typeof this.services.customization.callFunction>[0]) {
     return new Promise<kritor.common.Response | undefined>((resolve, reject) => {
       this.services.customization.callFunction(options, (err, res) => {
@@ -191,6 +251,12 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 执行shell命令
+   * @param command
+   * @param directory
+   */
   async shell(command: string[], directory: string) {
     return new Promise<kritor.developer.ShellResponse>((resolve, reject) => {
       this.services.developer.shell({ command, directory }, (err, res) => {
@@ -199,6 +265,12 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 获取日志
+   * @param start
+   * @param recent
+   */
   async getLog(start: number, recent?: boolean) {
     return new Promise<kritor.developer.GetLogResponse>((resolve, reject) => {
       this.services.developer.getLog({ start, recent }, (err, res) => {
@@ -207,6 +279,10 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 清理缓存
+   */
   async cleanCache() {
     return new Promise<kritor.developer.ClearCacheResponse>((resolve, reject) => {
       this.services.developer.clearCache({}, (err, res) => {
@@ -215,6 +291,10 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 获取设备电量
+   */
   async getDeviceBattery() {
     return new Promise<kritor.developer.GetDeviceBatteryResponse>((resolve, reject) => {
       this.services.developer.getDeviceBattery({}, (err, res) => {
@@ -223,6 +303,11 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 上传图片
+   * @param options
+   */
   async uploadImage(options: Parameters<typeof this.services.developer.uploadImage>[0]) {
     return new Promise<kritor.developer.UploadImageResponse>((resolve, reject) => {
       this.services.developer.uploadImage(options, (err, res) => {
@@ -231,6 +316,14 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 发包
+   * @param command
+   * @param request_buffer
+   * @param is_protobuf
+   * @param attrs
+   */
   sendPacket(command: string, request_buffer: Buffer, is_protobuf?: boolean, attrs?: Record<string, string>) {
     return new Promise<kritor.developer.SendPacketResponse>((resolve, reject) => {
       this.services.developer.sendPacket({ command, request_buffer, is_protobuf, attrs }, (err, res) => {
@@ -255,6 +348,10 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 获取cmd白名单
+   */
   async getCmdWhitelist() {
     return new Promise<kritor.developer.GetCmdWhitelistResponse>((resolve, reject) => {
       this.services.qsign.getCmdWhitelist({}, (err, res) => {
@@ -263,6 +360,12 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 创建群文件夹
+   * @param group_id
+   * @param name
+   */
   async createFolder(group_id: number, name: string) {
     return new Promise<kritor.file.CreateFolderResponse>((resolve, reject) => {
       this.services.groupFile.createFolder({ group_id, name }, (err, res) => {
@@ -271,6 +374,13 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 重命名群文件夹
+   * @param group_id
+   * @param folder_id
+   * @param name
+   */
   async renameFolder(group_id: number, folder_id: string, name: string) {
     return new Promise<kritor.file.RenameFolderResponse>((resolve, reject) => {
       this.services.groupFile.renameFolder({ group_id, folder_id, name }, (err, res) => {
@@ -279,6 +389,12 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 删除群文件夹
+   * @param group_id
+   * @param folder_id
+   */
   async deleteFolder(group_id: number, folder_id: string) {
     return new Promise<kritor.file.DeleteFolderResponse>((resolve, reject) => {
       this.services.groupFile.deleteFolder({ group_id, folder_id }, (err, res) => {
@@ -387,6 +503,11 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 通过uin获取uid
+   * @param target_uins
+   */
   async getUidByUin(...target_uins: number[]) {
     return new Promise<Record<string, string>>((resolve, reject) => {
       this.services.friend.getUidByUin({ target_uins }, (err, res) => {
@@ -395,6 +516,11 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 通过uid获取uin
+   * @param target_uids
+   */
   async getUinByUid(...target_uids: string[]) {
     return new Promise<Record<string, number | Long>>((resolve, reject) => {
       this.services.friend.getUinByUid({ target_uids }, (err, res) => {
@@ -403,6 +529,10 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 获取群列表
+   */
   async getGroupList() {
     return new Promise<kritor.group.IGroupInfo[]>((resolve, reject) => {
       this.services.group.getGroupList({}, (err, res) => {
@@ -411,6 +541,13 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 发送消息
+   * @param contact
+   * @param elements
+   * @param retry_count
+   */
   async sendMessage(contact: kritor.common.Contact, elements: kritor.common.Element[], retry_count = 1) {
     return new Promise<kritor.message.SendMessageResponse | undefined>((resolve, reject) => {
       for (let i = 0; i < retry_count; i++) {
@@ -419,11 +556,17 @@ export class Client extends EventEmitter {
             resolve(res);
             return;
           }
-          console.error(`sendMessage failed, retrying ${retry_count - i} times...`, err);
         });
       }
     });
   }
+
+  /**
+   * 通过消息res_id发送消息
+   * @param contact
+   * @param res_id
+   * @param retry_count
+   */
   async sendMessageByResId(contact: kritor.common.Contact, res_id: string, retry_count = 1) {
     return new Promise<kritor.message.SendMessageResponse | undefined>((resolve, reject) => {
       for (let i = 0; i < retry_count; i++) {
@@ -437,6 +580,11 @@ export class Client extends EventEmitter {
       }
     });
   }
+
+  /**
+   * 设置已读某个联系人的消息
+   * @param contact
+   */
   async setMessageReaded(contact: kritor.common.Contact) {
     return new Promise<kritor.message.SetMessageReadResponse | undefined>((resolve, reject) => {
       this.services.message.setMessageReaded({ contact }, (err, res) => {
@@ -445,6 +593,12 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 撤回消息
+   * @param contact
+   * @param message_id
+   */
   recallMessage(contact: kritor.common.Contact, message_id: string) {
     return new Promise<kritor.message.RecallMessageResponse | undefined>((resolve, reject) => {
       this.services.message.recallMessage({ contact, message_id }, (err, res) => {
@@ -453,6 +607,14 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 设置消息表态
+   * @param contact
+   * @param message_id
+   * @param face_id
+   * @param is_set
+   */
   async reactMessageWithEmoji(contact: kritor.common.Contact, message_id: string, face_id: number, is_set?: boolean) {
     return new Promise<kritor.message.ReactMessageWithEmojiResponse | undefined>((resolve, reject) => {
       this.services.message.reactMessageWithEmoji({ contact, message_id, face_id, is_set }, (err, res) => {
@@ -461,6 +623,12 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 通过消息id获取消息
+   * @param contact
+   * @param message_id
+   */
   async getMessage(contact: kritor.common.Contact, message_id: string) {
     return new Promise<kritor.message.GetMessageResponse | undefined>((resolve, reject) => {
       this.services.message.getMessage({ contact, message_id }, (err, res) => {
@@ -469,6 +637,12 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 通过消息seq获取消息
+   * @param contact
+   * @param message_seq
+   */
   async getMessageBySeq(contact: kritor.common.Contact, message_seq: number) {
     return new Promise<kritor.message.GetMessageResponse | undefined>((resolve, reject) => {
       this.services.message.getMessageBySeq({ contact, message_seq }, (err, res) => {
@@ -477,6 +651,13 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 通过消息id获取历史消息
+   * @param contact
+   * @param start_message_id
+   * @param count
+   */
   async getHistoryMessage(contact: kritor.common.Contact, start_message_id: string, count: number = 10) {
     return new Promise<kritor.message.GetHistoryMessageResponse | undefined>((resolve, reject) => {
       this.services.message.getHistoryMessage({ contact, start_message_id, count }, (err, res) => {
@@ -485,6 +666,13 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 通过消息seq获取历史消息
+   * @param contact
+   * @param start_message_seq
+   * @param count
+   */
   async getHistoryMessageBySeq(contact: kritor.common.Contact, start_message_seq: number, count = 10) {
     return new Promise<kritor.message.GetHistoryMessageResponse | undefined>((resolve, reject) => {
       this.services.message.getHistoryMessageBySeq({ contact, start_message_seq, count }, (err, res) => {
@@ -493,6 +681,13 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 上传转发消息
+   * @param contact
+   * @param messages
+   * @param retry_count
+   */
   async uploadForwardMessage(
     contact: kritor.common.Contact,
     messages: kritor.common.ForwardMessageBody[],
@@ -507,6 +702,11 @@ export class Client extends EventEmitter {
       }
     });
   }
+
+  /**
+   * 下载转发消息
+   * @param res_id
+   */
   async downloadForwardMessage(res_id: string) {
     return new Promise<kritor.message.DownloadForwardMessageResponse | undefined>((resolve, reject) => {
       this.services.message.downloadForwardMessage({ res_id }, (err, res) => {
@@ -515,6 +715,13 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 获取群精华消息列表
+   * @param group_id
+   * @param page
+   * @param page_size
+   */
   async getEssenceMessageList(group_id: number, page = 1, page_size = 10) {
     return new Promise<kritor.message.GetEssenceMessageListResponse | undefined>((resolve, reject) => {
       this.services.message.getEssenceMessageList({ group_id, page, page_size }, (err, res) => {
@@ -523,6 +730,12 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 加精群消息
+   * @param group_id
+   * @param message_id
+   */
   async setEssenceMessage(group_id: number, message_id: string) {
     return new Promise<kritor.message.SetEssenceMessageResponse | undefined>((resolve, reject) => {
       this.services.message.setEssenceMessage({ group_id, message_id }, (err, res) => {
@@ -531,6 +744,12 @@ export class Client extends EventEmitter {
       });
     });
   }
+
+  /**
+   * 取消加精群消息
+   * @param group_id
+   * @param message_id
+   */
   async deleteEssenceMessage(group_id: number, message_id: string) {
     return new Promise<kritor.message.DeleteEssenceMessageResponse | undefined>((resolve, reject) => {
       this.services.message.deleteEssenceMessage({ group_id, message_id }, (err, res) => {
@@ -575,7 +794,7 @@ export class Client extends EventEmitter {
 export namespace Client {
   export interface Options {
     url: string;
-    super_ticket?: string;
+    ticket?: string;
   }
   export type Services = {
     authentication: kritor.authentication.AuthenticationService;

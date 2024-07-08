@@ -3,9 +3,8 @@ import { EventEmitter } from 'events';
 import { Message } from './message';
 import path from 'path';
 import { getLogger, Logger } from 'log4js';
-import { Dict } from './types';
+import { Dict } from '@zhinjs/shared';
 import { WORK_DIR } from './constans';
-import { Prompt } from './prompt';
 import { Schema } from './schema';
 
 export type AdapterBot<A extends Adapter> = A extends Adapter<infer B> ? B : unknown;

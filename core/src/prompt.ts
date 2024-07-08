@@ -1,6 +1,7 @@
+import { Dict } from '@zhinjs/shared';
 import { Adapter } from './adapter';
 import { Middleware } from './middleware';
-import { Bot, Dict } from './types';
+import { Bot } from './types';
 import { Message } from './message';
 import { Schema } from './schema';
 

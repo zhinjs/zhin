@@ -26,4 +26,4 @@ test/data/
 /**/kritor/src/generated/
 /pnpm-lock.yaml
 /test/zhin.db/
-/test/zhin.config.yml
+/test/config/zhin.config.yml

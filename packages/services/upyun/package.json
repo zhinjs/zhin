@@ -15,7 +15,7 @@
         "url": "https://github.com/zhinjs/zhin",
         "directory": "packages/services/upyun"
     },
-    "dependencies": {
+    "peerDependencies": {
         "zhin": "workspace:^"
     }
 }

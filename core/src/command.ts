@@ -1,5 +1,6 @@
-import { deepClone, findLastIndex, isEmpty, trimQuote } from './utils';
-import { Bot, Dict } from './types';
+import { findLastIndex, trimQuote } from './utils';
+import { deepClone, Dict, isEmpty } from '@zhinjs/shared';
+import { Bot } from './types';
 import { Adapter } from './adapter';
 import { Message, segment } from './message';
 import { Prompt } from './prompt';

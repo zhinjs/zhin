@@ -32,8 +32,7 @@ for (const key of args) {
       defaultArgv.init = true;
       break;
     default:
-      defaultArgv.key = paddingToLength(key, 16);
-      args.splice(args.indexOf(key), 1);
+      console.warn(`unknown option ${key}`);
       break;
   }
 }

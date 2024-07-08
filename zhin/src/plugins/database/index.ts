@@ -1,4 +1,4 @@
-import { Plugin, WORK_DIR } from '@zhinjs/core';
+import { Message, MessageSender, Plugin, WORK_DIR } from '@zhinjs/core';
 import { Database } from './types';
 import { dbFactories, initFactories } from './factory';
 import path from 'path';
@@ -13,6 +13,10 @@ declare module '@zhinjs/core' {
       db_init_args: any[];
     }
   }
+}
+export interface UserInfo extends MessageSender {}
+export interface GroupInfo {
+  from_id: string;
 }
 const database = new Plugin({
   name: 'database',
@@ -31,11 +35,36 @@ database.mounted(async app => {
   database.logger.info(`${driverName} driver starting...`);
   database.logger.debug(`${driverName} driver starting with args`, initArgs);
   // 初始化数据库
-  const db = await factoryFn(...initArgs);
+  const db: Database = await factoryFn(...initArgs);
   // 启动数据库
   await db.start();
   database.logger.info(`${driverName} driver started`);
   database.service('database', db);
+  // 初始化用户、群表
+  await db.get('group', []);
+  await db.get('user', []);
+  app.middleware(async (_a, _b, message, next) => {
+    const userInfo = await db.find<UserInfo[]>('user', user => {
+      return user.user_id === message.sender.user_id;
+    });
+    if (!userInfo)
+      await db.push('user', {
+        user_id: message.sender.user_id,
+        user_name: message.sender.user_name,
+      });
+    Object.assign((message.sender ||= {}), userInfo);
+    if (message.message_type === 'group') {
+      const groupInfo = await db.find<GroupInfo[]>('group', group => {
+        return group.from_id === message.from_id;
+      });
+      Object.assign(message, groupInfo || {});
+      if (!groupInfo)
+        await db.push('group', {
+          from_id: message.from_id,
+        });
+    }
+    next();
+  });
 });
 database.beforeUnmount(async app => {
   await app.database.stop();

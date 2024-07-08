@@ -15,11 +15,13 @@
     "directory": "packages/adapters/email"
   },
   "dependencies": {
-    "zhin": "workspace:^",
     "node-imap": "^0.9.6",
     "mailparser": "^3.7.1",
     "html5parser": "^2.0.2",
     "nodemailer": "^6.9.14"
+  },
+  "peerDependencies": {
+    "zhin": "workspace:^"
   },
   "devDependencies": {
     "zhin": "workspace:^",

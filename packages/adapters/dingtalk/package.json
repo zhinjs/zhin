@@ -15,11 +15,9 @@
         "directory": "packages/adapters/dingtalk"
     },
     "dependencies": {
-        "zhin": "workspace:^",
         "node-dd-bot": "latest"
     },
     "peerDependencies": {
-        "zhin": "workspace:^",
-        "node-dd-bot": "latest"
+        "zhin": "workspace:^"
     }
 }

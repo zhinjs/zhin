@@ -1,5 +1,5 @@
 import crypto, { BinaryLike } from 'crypto';
-import { Dict, Merge } from './types';
+import { Dict, Merge } from '@zhinjs/shared';
 /**
  * AES encryption
  * @param data {BinaryLike} The data to encrypt
@@ -26,35 +26,6 @@ export function aesDecrypt(
 ): Buffer {
   let decipher = crypto.createDecipheriv('aes-128-cbc', key, iv);
   return Buffer.concat([decipher.update(encryptedData), decipher.final()]);
-}
-
-export function isEmpty<T>(data: T) {
-  if (!data) return true;
-  if (typeof data !== 'object') return false;
-  return Reflect.ownKeys(data).length === 0;
-}
-
-export function remove<T>(list: T[], fn: (item: T) => boolean): void;
-export function remove<T>(list: T[], item: T): void;
-export function remove<T>(list: T[], arg: T | ((item: T) => boolean)) {
-  const index =
-    typeof arg === 'function' && !list.every(item => typeof item === 'function')
-      ? list.findIndex(arg as (item: T) => boolean)
-      : list.indexOf(arg as T);
-  if (index !== -1) list.splice(index, 1);
-}
-
-export function deepClone<T>(obj: T): T {
-  if (typeof obj !== 'object') return obj;
-  if (Array.isArray(obj)) return obj.map(deepClone) as T;
-  if (!obj) return obj;
-  const Constructor = obj.constructor;
-
-  let newObj: T = Constructor() as T;
-  for (let key in obj) {
-    newObj[key] = deepClone(obj[key]) as any;
-  }
-  return newObj;
 }
 
 /**
@@ -153,20 +124,6 @@ export function formatDateTime(timestamp: number) {
     })
     .join(' ');
 }
-export function deepMerge<First, Second>(first: First, second: Second): Merge<First, Second> {
-  if (!first || typeof first !== typeof second || typeof first !== 'object') return first as any;
-  const result = (Array.isArray(first) ? [] : {}) as Merge<First, Second>;
-  for (const key of Reflect.ownKeys(first)) {
-    Reflect.set(result, key, Reflect.get(first, key));
-  }
-  for (const key of Reflect.ownKeys(second as object)) {
-    if (Reflect.has(result, key))
-      Reflect.set(result, key, deepMerge(Reflect.get(result, key), Reflect.get(second as object, key)));
-    else Reflect.set(result, key, Reflect.get(second as object, key));
-  }
-  return result;
-}
-
 export function getValueWithRuntime(template: string, ctx: Dict) {
   const result = evaluate(template, ctx);
   if (result === `return(${template})`) return template;
@@ -204,14 +161,6 @@ export function compiler(template: string, ctx: Dict) {
   }
   return template;
 }
-export const wrapExport = (filePath: string) => {
-  const result = require(filePath);
-  if (result.default) {
-    const { default: main, ...other } = result;
-    return Object.assign(main, other);
-  }
-  return result;
-};
 
 export function setValueToObj(obj: Dict, keys: string[], value: any): boolean;
 export function setValueToObj(obj: Dict, key: string, value: any): boolean;
@@ -328,7 +277,4 @@ export function parseTimeFromStr(dateStr: string) {
     result += timeInfo.find(item => item.unit === unit)!.microSeconds * num || 0;
   }
   return result;
-}
-export function sleep(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }

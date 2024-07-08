@@ -1,9 +1,8 @@
 {
-    "name": "zhin",
+    "name": "@zhinjs/shared",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
-    "version": "3.0.31",
-    "bin": "./bin.js",
+    "version": "0.0.7",
     "engines": {
         "node": ">=16"
     },
@@ -14,8 +13,6 @@
     },
     "files": [
         "lib",
-        "src/bin.js",
-        "src/start.js",
         "package.json",
         "CHANGELOG.md",
         "README.md"
@@ -24,27 +21,12 @@
     "author": "凉菜",
     "repository": {
         "url": "https://github.com/zhinjs/zhin",
-        "directory": "zhin"
+        "directory": "shared"
     },
     "dependencies": {
-        "@zhinjs/core": "workspace:^",
-        "@zhinjs/shared": "workspace:^",
-        "dotenv": "^16.3.1",
-        "chokidar": "^3.5.3"
+        "axios": "^1.7.2"
     },
     "devDependencies": {
         "dtsc": "^2.3.0"
-    },
-    "peerDependencies": {
-        "level": "^8.0.1",
-        "redis": "^4.6.15"
-    },
-    "peerDependenciesMeta": {
-        "level": {
-            "optional": true
-        },
-        "redis": {
-            "optional": true
-        }
     }
 }

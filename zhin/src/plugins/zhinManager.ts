@@ -1,15 +1,5 @@
-import {
-  App,
-  Dict,
-  Plugin,
-  remove,
-  segment,
-  WORK_DIR,
-  axios,
-  formatTime,
-  formatSize,
-  formatDateTime,
-} from '@zhinjs/core';
+import { App, Plugin, segment, WORK_DIR, formatTime, formatSize, formatDateTime } from '@zhinjs/core';
+import { axios, remove } from '@zhinjs/shared';
 import { exec, execSync } from 'child_process';
 import * as fs from 'fs';
 import path from 'path';
@@ -18,9 +8,9 @@ import os from 'os';
 const downloadGit = (url: string, savePath: string = '.') => {
   return new Promise<string>((resolve, reject) => {
     exec(
-      `git clone ${url} ${savePath}`,
+      `git clone ${url}`,
       {
-        cwd: WORK_DIR,
+        cwd: savePath,
       },
       (err, stdout, stderr) => {
         if (err) {

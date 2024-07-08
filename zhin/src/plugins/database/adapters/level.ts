@@ -1,5 +1,6 @@
 import { DatabaseOptions, Level } from 'level';
-import { WORK_DIR, Dict, sleep } from '@zhinjs/core';
+import { WORK_DIR } from '@zhinjs/core';
+import { Dict, sleep } from '@zhinjs/shared';
 import * as fs from 'fs/promises';
 import path from 'path';
 import { Database } from '../types';

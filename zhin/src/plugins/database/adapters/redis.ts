@@ -1,6 +1,7 @@
 import { createClient, RedisClientOptions } from 'redis';
 import { Database } from '../types';
-import { Dict, WORK_DIR } from '@zhinjs/core';
+import { WORK_DIR } from '@zhinjs/core';
+import { Dict } from '@zhinjs/shared';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { dbFactories } from '../factory';

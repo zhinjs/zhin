@@ -1,6 +1,5 @@
 export * from './adapter';
 export * from './message';
-export { default as axios } from 'axios';
 export * as yaml from 'yaml';
 export * from './types';
 export * from './utils';

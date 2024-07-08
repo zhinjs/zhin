@@ -15,11 +15,9 @@
         "directory": "packages/adapters/web-wechat"
     },
     "dependencies": {
-        "zhin": "workspace:^",
         "web-wechat": "latest"
     },
     "peerDependencies": {
-        "zhin": "workspace:^",
-        "web-wechat": "latest"
+        "zhin": "workspace:^"
     }
 }

@@ -15,11 +15,10 @@
     "url": "https://github.com/zhinjs/zhin",
     "directory": "packages/adapters/mock"
   },
-  "dependencies": {
+  "peerDependencies": {
     "zhin": "workspace:^"
   },
   "devDependencies": {
-    "zhin": "workspace:^",
     "@types/node": "latest",
     "@types/ws": "latest"
   }

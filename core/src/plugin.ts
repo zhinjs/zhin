@@ -1,14 +1,16 @@
 import { ArgsType, Command, defineCommand } from './command';
 import { EventEmitter } from 'events';
 import { Middleware } from './middleware';
-import { getCallerStack, remove } from './utils';
+import { getCallerStack } from './utils';
 import { App } from './app';
 import { APP_KEY, REQUIRED_KEY, WORK_DIR } from './constans';
-import { Dict } from './types';
+import { Dict, remove } from '@zhinjs/shared';
 import path from 'path';
 import { Adapter } from './adapter';
 import * as fs from 'fs';
 import { getLogger, Logger } from 'log4js';
+import { Schema } from './schema';
+import { Config } from './config';
 
 export interface Plugin extends Plugin.Options {}
 
@@ -31,7 +33,6 @@ export class Plugin extends EventEmitter {
   commands: Map<string, Command> = new Map<string, Command>();
   middlewares: Middleware[] = [];
   [APP_KEY]: App | null = null;
-
   get app() {
     return this[APP_KEY];
   }
@@ -43,7 +44,11 @@ export class Plugin extends EventEmitter {
   set display_name(name: string) {
     this.name = name;
   }
-
+  useConfig<T>(configPath: string, schema: Schema<T>): T | undefined {
+    if (schema.meta.type !== 'object') throw new Error(`config schema root must be type object`);
+    const config = new Config<T & object>(configPath, schema.meta.default as any);
+    return schema(config.data);
+  }
   get statusText() {
     return Plugin.StatusText[this.status];
   }

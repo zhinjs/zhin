@@ -1,0 +1,10 @@
+{
+    "extends": "../tsconfig.base",
+    "compilerOptions": {
+        "rootDir": "src",
+        "declaration": false,
+        "baseUrl": ".",
+        "outDir": "lib"
+    },
+    "include": ["src","@zhinjs/core"]
+}

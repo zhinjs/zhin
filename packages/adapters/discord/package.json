@@ -15,8 +15,10 @@
     "directory": "packages/adapters/discord"
   },
   "dependencies": {
-    "zhin": "workspace:^",
     "ts-disc-bot": "latest"
+  },
+  "peerDependencies": {
+    "zhin": "workspace:^"
   },
   "devDependencies": {
     "zhin": "workspace:^",

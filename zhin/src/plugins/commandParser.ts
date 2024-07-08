@@ -1,12 +1,25 @@
-import { Plugin, segment } from '@zhinjs/core';
-
-const commandParser = new Plugin('指令解析器');
-commandParser.middleware(async (adapter, bot, message, next) => {
-  const commands = commandParser.app!.getSupportCommands(adapter, bot, message);
-  for (const command of commands) {
-    const result = await command.execute(adapter, bot, message, message.raw_message);
-    if (result) return message.reply(result);
+import { Message, Plugin, segment } from '@zhinjs/core';
+declare module '@zhinjs/core' {
+  namespace App {
+    interface Services {
+      executeCommand: typeof executeCommand;
+    }
   }
+}
+const executeCommand = async (message: Message) => {
+  const commands = commandParser.app!.getSupportCommands(message.adapter, message.bot, message);
+  for (const command of commands) {
+    const result = await command.execute(message.adapter, message.bot, message, message.raw_message);
+    if (result) {
+      await message.reply(result);
+      return true;
+    }
+  }
+};
+const commandParser = new Plugin('指令解析器');
+commandParser.middleware(async (_a, _b, message, next) => {
+  const result = await executeCommand(message);
+  if (result) return;
   return next();
 });
 commandParser

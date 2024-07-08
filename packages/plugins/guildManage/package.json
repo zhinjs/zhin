@@ -15,7 +15,9 @@
         "directory": "packages/plugins/guildManage"
     },
     "dependencies": {
-        "zhin": "workspace:^",
         "@zhinjs/adapter-qq": "workspace:^"
+    },
+    "peerDependencies": {
+        "zhin": "workspace:^"
     }
 }

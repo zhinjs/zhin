@@ -16,16 +16,15 @@
     "directory": "packages/services/screenshot"
   },
   "dependencies": {
-    "zhin": "workspace:^",
     "vue": "^3.4.29",
     "sass": "latest",
     "less": "latest",
     "@vue/compiler-sfc": "^3.4.30",
     "jiti": "1.21.0",
-    "@vue/server-renderer": "^3.4.30"
+    "@vue/server-renderer": "^3.4.30",
+    "puppeteer-core": "^22.11.2"
   },
   "peerDependencies": {
-    "zhin": "workspace:^",
-    "puppeteer-core": "^22.11.2"
+    "zhin": "workspace:^"
   }
 }
