@@ -18,12 +18,15 @@ adapter.define('sendMsg', async (bot_id, target_id, target_type, message, source
   const bot = adapter.pick(bot_id);
   const contact = bot.createContact(target_id, target_type as any);
   await bot.sendMessage(contact, Client.createElementsFromTemplate(message));
+  bot.logger.info(`send [${target_type} ${target_id}]:${decodeURIComponent(message)}`);
 });
 const messageHandler = (bot: Adapter.Bot<Client>, event: kritor.common.IPushMessageBody) => {
   const message = Message.fromEvent(adapter, bot, event);
   message.raw_message = Client.eventMessageToString(event);
   message.message_type = Client.getMessageType(event) as Message.Type;
-  message.from_id = [event.contact?.peer, event.contact?.sub_peer].filter(Boolean).join(':');
+  message.from_id = Array.from(new Set([event.contact?.peer, event.contact?.sub_peer]))
+    .filter(Boolean)
+    .join(':');
   const master = adapter.botConfig(bot)?.master;
   const admins = adapter.botConfig(bot)?.admins;
   message.sender = {
@@ -34,6 +37,7 @@ const messageHandler = (bot: Adapter.Bot<Client>, event: kritor.common.IPushMess
       admins && admins.includes(event.sender?.uid || '') && 'admins',
     ].filter(Boolean) as string[],
   };
+  bot.logger.info(`recv [${message.message_type} ${message.from_id}]: ${message.raw_message}`);
   adapter.app!.emit('message', adapter, bot, message);
 };
 const startBots = (configs: App.BotConfig<'kritor'>[]) => {

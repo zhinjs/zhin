@@ -3,7 +3,7 @@ import * as grpc from '@grpc/grpc-js';
 import { loadSync, Long } from '@grpc/proto-loader';
 import { kritor, proto } from 'kritor-proto';
 import * as path from 'path';
-import { Adapter } from 'zhin';
+import { Adapter, Dict, parseFromTemplate, valueMap } from 'zhin';
 
 export class Client extends EventEmitter {
   services: Client.Services;
@@ -66,18 +66,18 @@ export class Client extends EventEmitter {
   }
   public createContact(target_id: string, target_type: 'guild' | 'group' | 'private' | 'temp_from_group' | 'temp') {
     const [peer, sub_peer] = target_id.split(':');
-    return new kritor.common.Contact({
+    return {
       scene: Client.sceneMap[target_type],
       peer,
       sub_peer: sub_peer || undefined,
-    });
+    };
   }
   #emitEvent(eventStream: NodeJS.ReadableStream) {
     eventStream.on('error', e => {
       this.adapter.logger.error('Event stream error:', e);
     });
-    eventStream.on('data', event => {
-      console.log(event);
+    eventStream.on('data', (event: kritor.event.EventStructure) => {
+      this.emit(event.event!, event.message || event.notice || event.request);
     });
     eventStream.on('end', () => {
       this.adapter.logger.debug('Event stream end');
@@ -119,7 +119,6 @@ export class Client extends EventEmitter {
         includeDirs: [proto],
         longs: String,
         keepCase: true,
-        enums: String,
         defaults: true,
         oneofs: true,
       }),
@@ -548,16 +547,12 @@ export class Client extends EventEmitter {
    * @param elements
    * @param retry_count
    */
-  async sendMessage(contact: kritor.common.Contact, elements: kritor.common.Element[], retry_count = 1) {
+  async sendMessage(contact: kritor.common.IContact, elements: kritor.common.Element[], retry_count = 1) {
     return new Promise<kritor.message.SendMessageResponse | undefined>((resolve, reject) => {
-      for (let i = 0; i < retry_count; i++) {
-        this.services.message.sendMessage({ contact, elements }, (err, res) => {
-          if (!err) {
-            resolve(res);
-            return;
-          }
-        });
-      }
+      this.services.message.sendMessage({ contact, elements, retry_count }, (err, res) => {
+        if (err) reject(err);
+        resolve(res);
+      });
     });
   }
 
@@ -568,16 +563,11 @@ export class Client extends EventEmitter {
    * @param retry_count
    */
   async sendMessageByResId(contact: kritor.common.Contact, res_id: string, retry_count = 1) {
-    return new Promise<kritor.message.SendMessageResponse | undefined>((resolve, reject) => {
-      for (let i = 0; i < retry_count; i++) {
-        this.services.message.sendMessageByResId({ contact, res_id }, (err, res) => {
-          if (!err) {
-            resolve(res);
-            return;
-          }
-          console.error(`sendMessageByResId failed, retrying ${retry_count - i} times...`, err);
-        });
-      }
+    return new Promise<kritor.message.SendMessageResponse | undefined>(async (resolve, reject) => {
+      this.services.message.sendMessageByResId({ contact, res_id, retry_count }, (err, res) => {
+        if (err) reject(err);
+        resolve(res);
+      });
     });
   }
 
@@ -812,15 +802,24 @@ export namespace Client {
     web: kritor.web.WebService;
   };
   export function createElementsFromTemplate(template: string): kritor.common.Element[] {
-    return [];
+    return parseFromTemplate(template).map(item => {
+      const { type, data } = item;
+      return Client.toKritorElement(type, data);
+    }) as kritor.common.Element[];
   }
   export function eventMessageToString(event: kritor.common.IPushMessageBody) {
     return (event.elements || [])
       .map(element => {
         const { type, ...attrs } = element;
-        return `<${element.type} ${Object.entries(attrs).map((key, valut) => {
-          return `${key}='${encodeURIComponent(JSON.stringify(valut))}'`;
-        })}>`;
+        const key = Reflect.get(attrs, 'data');
+        const data = Reflect.get(attrs, key);
+        if (type === kritor.common.Element.ElementType.TEXT) return data.text || '';
+        return `<${key} ${Object.entries(data)
+          .filter(([key]) => !key.startsWith('_'))
+          .map(([key, value]) => {
+            return `${key}='${encodeURIComponent(JSON.stringify(value))}'`;
+          })
+          .join(' ')}>`;
       })
       .join('');
   }
@@ -838,5 +837,90 @@ export namespace Client {
   ) as Record<kritor.common.Scene, string>;
   export function getMessageType(event: kritor.common.IPushMessageBody) {
     return messageTypeMap[event.contact?.scene!];
+  }
+  export const elementTypeMap = {
+    [kritor.common.Element.ElementType.TEXT]: 'text',
+    [kritor.common.Element.ElementType.RPS]: 'rps',
+    [kritor.common.Element.ElementType.DICE]: 'dice',
+    [kritor.common.Element.ElementType.IMAGE]: 'image',
+    [kritor.common.Element.ElementType.AT]: 'at',
+    [kritor.common.Element.ElementType.BASKETBALL]: 'basketball',
+    [kritor.common.Element.ElementType.BUBBLE_FACE]: 'bubble',
+    [kritor.common.Element.ElementType.CONTACT]: 'contact',
+    [kritor.common.Element.ElementType.FACE]: 'face',
+    [kritor.common.Element.ElementType.FILE]: 'file',
+    [kritor.common.Element.ElementType.FORWARD]: 'forward',
+    [kritor.common.Element.ElementType.GIFT]: 'gift',
+    [kritor.common.Element.ElementType.JSON]: 'json',
+    [kritor.common.Element.ElementType.LOCATION]: 'location',
+    [kritor.common.Element.ElementType.KEYBOARD]: 'keyboard',
+    [kritor.common.Element.ElementType.MARKDOWN]: 'markdown',
+    [kritor.common.Element.ElementType.POKE]: 'poke',
+    [kritor.common.Element.ElementType.REPLY]: 'reply',
+    [kritor.common.Element.ElementType.MUSIC]: 'music',
+    [kritor.common.Element.ElementType.SHARE]: 'share',
+    [kritor.common.Element.ElementType.WEATHER]: 'weather',
+    [kritor.common.Element.ElementType.VOICE]: 'voice',
+    [kritor.common.Element.ElementType.VIDEO]: 'video',
+    [kritor.common.Element.ElementType.XML]: 'xml',
+    [kritor.common.Element.ElementType.MARKET_FACE]: 'market_face',
+  };
+  type ElementTypeMap = typeof elementTypeMap;
+  export type ElementType = ElementTypeMap[keyof ElementTypeMap];
+  export function toKritorElement(type: ElementType, data: Dict) {
+    switch (type) {
+      case 'text':
+        return { text: data };
+      case 'rps':
+        return { rps: data };
+      case 'dice':
+        return { dice: data };
+      case 'image':
+        return { image: data };
+      case 'at':
+        return { at: data };
+      case 'basketball':
+        return { basketball: data };
+      case 'bubble':
+        return { bubble: data };
+      case 'contact':
+        return { contact: data };
+      case 'face':
+        return { face: data };
+      case 'file':
+        return { file: data };
+      case 'forward':
+        return { forward: data };
+      case 'gift':
+        return { gift: data };
+      case 'json':
+        return { json: data };
+      case 'location':
+        return { location: data };
+      case 'keyboard':
+        return { keyboard: data };
+      case 'markdown':
+        return { markdown: data };
+      case 'poke':
+        return { poke: data };
+      case 'reply':
+        return { reply: data };
+      case 'music':
+        return { music: data };
+      case 'share':
+        return { share: data };
+      case 'weather':
+        return { weather: data };
+      case 'voice':
+        return { voice: data };
+      case 'video':
+        return { video: data };
+      case 'xml':
+        return { xml: data };
+      case 'market_face':
+        return { market_face: data };
+      default:
+        throw new Error(`Unsupported element type: ${type}`);
+    }
   }
 }
