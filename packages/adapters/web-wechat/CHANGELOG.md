@@ -1,5 +1,12 @@
 # @zhinjs/wechat
 
+## 0.0.10
+
+### Patch Changes
+
+- Updated dependencies [996f061]
+  - zhin@3.0.34
+
 ## 0.0.9
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # zhin
 
+## 3.0.34
+
+### Patch Changes
+
+- 996f061: 数据库删除方法bug
+
 ## 3.0.33
 
 ### Patch Changes
