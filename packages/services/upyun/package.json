@@ -2,7 +2,7 @@
     "name": "@zhinjs/plugin-upyun",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
-    "version": "1.0.32",
+    "version": "1.0.33",
     "scripts": {
         "build": "tsc && tsc-alias"
     },
