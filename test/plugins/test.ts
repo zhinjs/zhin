@@ -1,7 +1,7 @@
 import { Plugin, Message } from 'zhin';
 import '@zhinjs/plugin-sandbox';
 import * as path from 'path';
-import type {} from '@zhinjs/client';
+import type {} from '@zhinjs/web';
 
 const test = new Plugin('测试插件'); // 定义插件
 test.required('functionManager', 'component'); // 声明插件必须依赖的服务
@@ -59,9 +59,9 @@ test
     });
     return `inputResult:${input} ${typeof input}`;
   });
-test.required('addEntry');
+test.required('web');
 test.mounted(() => {
-  test.addEntry(path.resolve(__dirname, '../client/index.ts'));
+  test.web.addEntry(path.resolve(__dirname, '../client/index.ts'));
   test.component({
     name: 'test2',
     render(_, context) {
