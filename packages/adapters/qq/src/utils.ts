@@ -1,4 +1,4 @@
-import { MessageElem, Sendable } from 'qq-group-bot';
+import { MessageElem, Sendable } from 'qq-official-bot';
 import { parseFromTemplate } from 'zhin';
 export function sendableToString(message: Sendable) {
   let result = '';
