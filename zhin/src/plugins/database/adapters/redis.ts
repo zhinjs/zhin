@@ -97,12 +97,14 @@ export class RedisDb implements Database {
     return true;
   }
   async remove<T>(key: string, predicate: T | Database.Predicate<T[]>): Promise<void> {
-    const data = await this.#getArray<T>(key);
+    const data = await this.get<T[]>(key, [] as T[]);
     if (!Array.isArray(data)) throw new Error(`${key} is not an array`);
-    const index = typeof predicate === 'function' ? data.findIndex(predicate as any) : data.indexOf(predicate);
-    if (index === -1) return;
-    data.splice(index, 1);
-    await this.set(key, data);
+    const needRemoveData = data.filter((item, idx, list) => {
+      if (typeof predicate === 'function') return (predicate as Database.Predicate<T[]>)(item, idx, list);
+      return JSON.stringify(item) === JSON.stringify(predicate);
+    });
+    const newData = (data as any).filter((item: T) => !needRemoveData.includes(item));
+    await this.set(key, newData);
   }
   async start(): Promise<void> {
     const client = this.client;

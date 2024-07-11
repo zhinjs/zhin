@@ -64,10 +64,14 @@ export class LevelDb extends Level implements Database {
     await this.set(key, data);
   }
   async remove<T>(key: string, predicate: Database.Predicate<T[]> | T): Promise<void> {
-    if (typeof predicate !== 'function') predicate = (item: T) => JSON.stringify(item) === JSON.stringify(predicate);
     const data = await this.get<T[]>(key, [] as T[]);
     if (!Array.isArray(data)) throw new Error(`${key} is not an array`);
-    await this.set(key, (data as any).filter(predicate));
+    const needRemoveData = data.filter((item, idx, list) => {
+      if (typeof predicate === 'function') return (predicate as Database.Predicate<T[]>)(item, idx, list);
+      return JSON.stringify(item) === JSON.stringify(predicate);
+    });
+    const newData = (data as any).filter((item: T) => !needRemoveData.includes(item));
+    await this.set(key, newData);
   }
   push<T>(key: string, ...value: T[]): Promise<void> {
     return this.get(key, [] as T).then(data => {
