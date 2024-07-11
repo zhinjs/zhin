@@ -1,5 +1,11 @@
 # @zhinjs/icqq
 
+## 0.0.8
+
+### Patch Changes
+
+- zhin@3.0.32
+
 ## 0.0.7
 
 ### Patch Changes
