@@ -1,5 +1,11 @@
 # zhin
 
+## 3.0.33
+
+### Patch Changes
+
+- 30883e6: 数据库存储错误
+
 ## 3.0.32
 
 ### Patch Changes

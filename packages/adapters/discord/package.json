@@ -2,7 +2,7 @@
   "name": "@zhinjs/adapter-discord",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "scripts": {
     "build": "tsc && tsc-alias"
   },
