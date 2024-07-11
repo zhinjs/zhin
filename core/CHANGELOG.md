@@ -1,5 +1,11 @@
 # @zhinjs/core
 
+## 1.0.20
+
+### Patch Changes
+
+- 17e00df: kritor适配
+
 ## 1.0.19
 
 ### Patch Changes

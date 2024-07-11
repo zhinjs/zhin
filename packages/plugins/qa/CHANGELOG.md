@@ -1,5 +1,11 @@
 # @zhinjs/plugin-qa
 
+## 1.0.32
+
+### Patch Changes
+
+- zhin@3.0.32
+
 ## 1.0.31
 
 ### Patch Changes

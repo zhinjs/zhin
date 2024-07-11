@@ -1,5 +1,12 @@
 # @zhinjs/kritor
 
+## 0.0.8
+
+### Patch Changes
+
+- 17e00df: kritor适配
+  - zhin@3.0.32
+
 ## 0.0.7
 
 ### Patch Changes
