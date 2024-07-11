@@ -1,5 +1,11 @@
 # @zhinjs/qq
 
+## 0.0.10
+
+### Patch Changes
+
+- 9687c5b: 官方适配发消息方法丢失
+
 ## 0.0.9
 
 ### Patch Changes
