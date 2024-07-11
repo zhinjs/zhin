@@ -8,15 +8,16 @@ import * as path from 'path';
 declare module 'zhin' {
   namespace App {
     interface Services {
-      viteServer: import('vite').ViteDevServer;
-
-      addEntry(entry: string): () => void;
-
-      wsServer: WebSocket.Server;
-      entries: Record<string, string>;
+      web: WebServer;
     }
   }
 }
+export type WebServer = {
+  vite: import('vite').ViteDevServer;
+  addEntry(entry: string): () => void;
+  ws: WebSocket.Server;
+  entries: Record<string, string>;
+};
 export const name = 'Web端';
 const plugin = new Plugin('Web端');
 const createSyncMsg = (key: string, value: any) => {
@@ -82,8 +83,8 @@ plugin.mounted(async () => {
       if (filename.endsWith('.ts')) ctx.type = 'text/javascript';
       return (ctx.body = fs.createReadStream(filename));
     };
-    if (Object.keys(plugin.entries).includes(name)) {
-      return sendFile(path.resolve(process.env.PWD!, plugin.entries[name]));
+    if (Object.keys(plugin.web.entries).includes(name)) {
+      return sendFile(path.resolve(process.env.PWD!, plugin.web.entries[name]));
     }
     const filename = path.resolve(root, name);
     if (!filename.startsWith(root) && !filename.includes('node_modules')) {
@@ -104,26 +105,26 @@ plugin.mounted(async () => {
         viteServer.middlewares(ctx.req, ctx.res, resolve);
       }),
   );
-  plugin.service('viteServer', viteServer);
-
-  plugin.service('entries', {});
-  plugin.service('addEntry', entry => {
-    const hash = Date.now().toString(16);
-    plugin.entries[hash] = `/vite/@fs/${entry}`;
-    for (const ws of plugin.wsServer?.clients || []) {
-      ws.send(JSON.stringify(createAddMsg('entries', plugin.entries[hash])));
-    }
-    return () => {
-      for (const ws of plugin.wsServer?.clients || []) {
-        ws.send(JSON.stringify(createDeleteMsg('entries', plugin.entries[hash])));
+  plugin.service('web', {
+    vite: viteServer,
+    entries: {},
+    addEntry(entry) {
+      const hash = Date.now().toString(16);
+      this.entries[hash] = `/vite/@fs/${entry}`;
+      for (const ws of this.ws.clients || []) {
+        ws.send(JSON.stringify(createAddMsg('entries', this.entries[hash])));
       }
-      delete plugin.entries[hash];
-    };
+      return () => {
+        for (const ws of this.ws.clients || []) {
+          ws.send(JSON.stringify(createDeleteMsg('entries', this.entries[hash])));
+        }
+        delete this.entries[hash];
+      };
+    },
+    ws: plugin.router.ws('/server'),
   });
-  const wss: WebSocket.Server = plugin.router.ws('/server');
-  plugin.service('wsServer', wss);
-  wss.on('connection', (ws: WebSocket) => {
-    ws.send(JSON.stringify(createSyncMsg('entries', Object.values(plugin.entries))));
+  plugin.web.ws.on('connection', (ws: WebSocket) => {
+    ws.send(JSON.stringify(createSyncMsg('entries', Object.values(plugin.web.entries))));
   });
 });
 plugin.required('koa', 'router', 'server');

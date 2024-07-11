@@ -4,7 +4,7 @@ import { Middleware } from './middleware';
 import { Plugin, PluginMap } from './plugin';
 import { Bot, LogLevel } from './types';
 import { loadModule } from './utils';
-import { remove } from '@zhinjs/shared';
+import { remove, sleep } from '@zhinjs/shared';
 import { APP_KEY, CONFIG_DIR, REQUIRED_KEY, WORK_DIR } from './constans';
 import path from 'path';
 import { Adapter, AdapterBot, AdapterReceive } from './adapter';
@@ -348,8 +348,16 @@ export class App extends EventEmitter {
     if (!loaded) this.logger.warn(`load plugin "${name}" failed`, error);
     return this;
   }
-
-  stop() {}
+  async stop() {
+    for (const [name, adapter] of this.adapters) {
+      adapter.emit('stop');
+      this.logger.mark(`adapter： ${name} stopped`);
+    }
+    this.emit('stop');
+    this.logger.info(`process exit after 3 seconds...`);
+    await sleep(3000);
+    process.exit();
+  }
 }
 
 export interface App extends App.Services {
@@ -430,6 +438,7 @@ export namespace App {
   }
 
   export interface Config {
+    has_init?: boolean;
     log_level: LogLevel | string;
     disable_adapters: string[];
     disable_bots: string[];

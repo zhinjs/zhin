@@ -5,12 +5,6 @@ const getValue = (list: string[], key: string, defaultValue: string) => {
   list.splice(list.indexOf(key) + 1, 1);
   return value;
 };
-const paddingToLength = (str: string | Buffer, length: number) => {
-  if (str.length === length) return str.toString();
-  if (typeof str === str) str = Buffer.from(str);
-  if (str.length > length) return str.slice(0, length).toString();
-  return str.toString().padEnd(length, '0');
-};
 const defaultArgv = {
   mode: 'prod',
   key: '',

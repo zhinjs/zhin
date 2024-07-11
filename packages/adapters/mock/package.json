@@ -16,7 +16,8 @@
     "directory": "packages/adapters/mock"
   },
   "peerDependencies": {
-    "zhin": "workspace:^"
+    "zhin": "workspace:^",
+    "@zhinjs/web": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "latest",

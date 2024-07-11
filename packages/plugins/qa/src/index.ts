@@ -72,7 +72,7 @@ const getAnswer = async (message: Message): Promise<undefined | QAInfo> => {
 const qaPlugin = new Plugin('问答管理');
 qaPlugin.required('database');
 const qaCommand = qaPlugin
-  .command('问答 <question:string> <answer:string>')
+  .command('问答 <question:string> <answer:any>')
   .desc('添加问答')
   .option('-a <adapter:string> 可用适配器,默认*', '*')
   .option('-b <bot:string> 可用机器人,默认*', '*')

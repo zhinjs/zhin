@@ -82,6 +82,7 @@ export async function initialApp(this: App) {
   const userPluginDir = path.join(WORK_DIR, 'plugins');
   if (!fs.existsSync(userAdapterDir)) fs.mkdirSync(userAdapterDir);
   if (!fs.existsSync(userPluginDir)) fs.mkdirSync(userPluginDir);
+  this.config.has_init = true;
   this.config.adapters.push('processAdapter');
   this.config.db_driver = 'level';
   this.config.db_init_args = [

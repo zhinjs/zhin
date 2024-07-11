@@ -7,7 +7,7 @@ import { Adapter, Dict, parseFromTemplate, valueMap } from 'zhin';
 
 export class Client extends EventEmitter {
   services: Client.Services;
-  account?: kritor.core.GetCurrentAccountResponse;
+  account?: kritor.core.IGetCurrentAccountResponse;
   #credential: grpc.ChannelCredentials;
   constructor(
     public adapter: Adapter,
@@ -15,20 +15,22 @@ export class Client extends EventEmitter {
   ) {
     super();
     this.#credential = grpc.credentials.createInsecure();
-    Reflect.set(
-      this.#credential,
-      'callCredentials',
-      grpc.credentials.createFromMetadataGenerator((callOptions, callback) => {
-        callOptions.service_url;
-        const metadata = new grpc.Metadata();
-        metadata.set('ticket', this.options.ticket || '');
-        callback(null, metadata);
-      }),
-    );
+    if (this.options.ticket) {
+      Reflect.set(
+        this.#credential,
+        'callCredentials',
+        grpc.credentials.createFromMetadataGenerator((callOptions, callback) => {
+          callOptions.service_url;
+          const metadata = new grpc.Metadata();
+          metadata.set('ticket', this.options.ticket || '');
+          callback(null, metadata);
+        }),
+      );
+    }
     this.services = this.#init();
   }
   get logger() {
-    return this.adapter.getLogger(this.account?.account_name);
+    return this.adapter.getLogger(this.account?.account_name!);
   }
   #init() {
     return {
@@ -133,7 +135,7 @@ export class Client extends EventEmitter {
    * @param ticket
    */
   async authenticate(account?: string, ticket?: string) {
-    return new Promise<kritor.authentication.AuthenticateResponse>((resolve, reject) => {
+    return new Promise<kritor.authentication.IAuthenticateResponse>((resolve, reject) => {
       this.services.authentication.authenticate({ account, ticket }, (err, res) => {
         if (err) reject(err);
         resolve(res!);
@@ -146,7 +148,7 @@ export class Client extends EventEmitter {
    * @param account
    */
   async getAuthenticationState(account: string) {
-    return new Promise<kritor.authentication.GetAuthenticationStateResponse>((resolve, reject) => {
+    return new Promise<kritor.authentication.IGetAuthenticationStateResponse>((resolve, reject) => {
       this.services.authentication.getAuthenticationState({ account }, (err, res) => {
         if (err) reject(err);
         resolve(res!);
@@ -160,7 +162,7 @@ export class Client extends EventEmitter {
    * @param super_ticket
    */
   async getTicket(account: string, super_ticket: string) {
-    return new Promise<kritor.authentication.GetTicketResponse>((resolve, reject) => {
+    return new Promise<kritor.authentication.IGetTicketResponse>((resolve, reject) => {
       this.services.authentication.getTicket({ account, super_ticket }, (err, res) => {
         if (err) reject(err);
         resolve(res!);
@@ -175,7 +177,7 @@ export class Client extends EventEmitter {
    * @param ticket
    */
   async addTicket(account?: string, super_ticket?: string, ticket?: string) {
-    return new Promise<kritor.authentication.AddTicketResponse>((resolve, reject) => {
+    return new Promise<kritor.authentication.IAddTicketResponse>((resolve, reject) => {
       this.services.authentication.addTicket({ account, super_ticket, ticket }, (err, res) => {
         if (err) reject(err);
         resolve(res!);
@@ -190,7 +192,7 @@ export class Client extends EventEmitter {
    * @param ticket
    */
   async deleteTicket(account?: string, super_ticket?: string, ticket?: string) {
-    return new Promise<kritor.authentication.DeleteTicketResponse>((resolve, reject) => {
+    return new Promise<kritor.authentication.IDeleteTicketResponse>((resolve, reject) => {
       this.services.authentication.deleteTicket({ account, super_ticket, ticket }, (err, res) => {
         if (err) reject(err);
         resolve(res!);
@@ -203,7 +205,7 @@ export class Client extends EventEmitter {
    * @param options
    */
   async downloadFile(options: Parameters<typeof this.services.core.downloadFile>[0]) {
-    return new Promise<kritor.core.DownloadFileResponse>((resolve, reject) => {
+    return new Promise<kritor.core.IDownloadFileResponse>((resolve, reject) => {
       this.services.core.downloadFile(options, (err, res) => {
         if (err) reject(err);
         resolve(res!);
@@ -215,7 +217,7 @@ export class Client extends EventEmitter {
    * 获取当前账户
    */
   async getCurrentAccount() {
-    return new Promise<kritor.core.GetCurrentAccountResponse>((resolve, reject) => {
+    return new Promise<kritor.core.IGetCurrentAccountResponse>((resolve, reject) => {
       this.services.core.getCurrentAccount({}, (err, res) => {
         if (err) reject(err);
         resolve(res!);
@@ -230,7 +232,7 @@ export class Client extends EventEmitter {
    * @param super_ticket
    */
   async switchAccount(account_uid: string, account_uin: number, super_ticket: string) {
-    return new Promise<kritor.core.SwitchAccountResponse>((resolve, reject) => {
+    return new Promise<kritor.core.ISwitchAccountResponse>((resolve, reject) => {
       this.services.core.switchAccount({ account_uid, account_uin, super_ticket }, (err, res) => {
         if (err) reject(err);
         resolve(res!);
@@ -243,7 +245,7 @@ export class Client extends EventEmitter {
    * @param options
    */
   async callFunction(options: Parameters<typeof this.services.customization.callFunction>[0]) {
-    return new Promise<kritor.common.Response | undefined>((resolve, reject) => {
+    return new Promise<kritor.common.IResponse | undefined>((resolve, reject) => {
       this.services.customization.callFunction(options, (err, res) => {
         if (err) reject(err);
         resolve(res);
@@ -257,7 +259,7 @@ export class Client extends EventEmitter {
    * @param directory
    */
   async shell(command: string[], directory: string) {
-    return new Promise<kritor.developer.ShellResponse>((resolve, reject) => {
+    return new Promise<kritor.developer.IShellResponse>((resolve, reject) => {
       this.services.developer.shell({ command, directory }, (err, res) => {
         if (err) reject(err);
         resolve(res!);
@@ -271,7 +273,7 @@ export class Client extends EventEmitter {
    * @param recent
    */
   async getLog(start: number, recent?: boolean) {
-    return new Promise<kritor.developer.GetLogResponse>((resolve, reject) => {
+    return new Promise<kritor.developer.IGetLogResponse>((resolve, reject) => {
       this.services.developer.getLog({ start, recent }, (err, res) => {
         if (err) reject(err);
         resolve(res!);
@@ -283,7 +285,7 @@ export class Client extends EventEmitter {
    * 清理缓存
    */
   async cleanCache() {
-    return new Promise<kritor.developer.ClearCacheResponse>((resolve, reject) => {
+    return new Promise<kritor.developer.IClearCacheResponse>((resolve, reject) => {
       this.services.developer.clearCache({}, (err, res) => {
         if (err) reject(err);
         resolve(res!);
@@ -295,7 +297,7 @@ export class Client extends EventEmitter {
    * 获取设备电量
    */
   async getDeviceBattery() {
-    return new Promise<kritor.developer.GetDeviceBatteryResponse>((resolve, reject) => {
+    return new Promise<kritor.developer.IGetDeviceBatteryResponse>((resolve, reject) => {
       this.services.developer.getDeviceBattery({}, (err, res) => {
         if (err) reject(err);
         resolve(res!);
@@ -308,7 +310,7 @@ export class Client extends EventEmitter {
    * @param options
    */
   async uploadImage(options: Parameters<typeof this.services.developer.uploadImage>[0]) {
-    return new Promise<kritor.developer.UploadImageResponse>((resolve, reject) => {
+    return new Promise<kritor.developer.IUploadImageResponse>((resolve, reject) => {
       this.services.developer.uploadImage(options, (err, res) => {
         if (err) reject(err);
         resolve(res!);
@@ -324,7 +326,7 @@ export class Client extends EventEmitter {
    * @param attrs
    */
   sendPacket(command: string, request_buffer: Buffer, is_protobuf?: boolean, attrs?: Record<string, string>) {
-    return new Promise<kritor.developer.SendPacketResponse>((resolve, reject) => {
+    return new Promise<kritor.developer.ISendPacketResponse>((resolve, reject) => {
       this.services.developer.sendPacket({ command, request_buffer, is_protobuf, attrs }, (err, res) => {
         if (err) reject(err);
         resolve(res!);
@@ -332,7 +334,7 @@ export class Client extends EventEmitter {
     });
   }
   sign(uin: string, command: string, seq: number, buffer: Buffer, qua: string) {
-    return new Promise<kritor.developer.SignResponse>((resolve, reject) => {
+    return new Promise<kritor.developer.ISignResponse>((resolve, reject) => {
       this.services.qsign.sign({ uin, command, seq, buffer, qua }, (err, res) => {
         if (err) reject(err);
         resolve(res!);
@@ -340,7 +342,7 @@ export class Client extends EventEmitter {
     });
   }
   async energy(data: string, salt: Buffer) {
-    return new Promise<kritor.developer.EnergyResponse>((resolve, reject) => {
+    return new Promise<kritor.developer.IEnergyResponse>((resolve, reject) => {
       this.services.qsign.energy({ data, salt }, (err, res) => {
         if (err) reject(err);
         resolve(res!);
@@ -352,7 +354,7 @@ export class Client extends EventEmitter {
    * 获取cmd白名单
    */
   async getCmdWhitelist() {
-    return new Promise<kritor.developer.GetCmdWhitelistResponse>((resolve, reject) => {
+    return new Promise<kritor.developer.IGetCmdWhitelistResponse>((resolve, reject) => {
       this.services.qsign.getCmdWhitelist({}, (err, res) => {
         if (err) reject(err);
         resolve(res!);
@@ -366,7 +368,7 @@ export class Client extends EventEmitter {
    * @param name
    */
   async createFolder(group_id: number, name: string) {
-    return new Promise<kritor.file.CreateFolderResponse>((resolve, reject) => {
+    return new Promise<kritor.file.ICreateFolderResponse>((resolve, reject) => {
       this.services.groupFile.createFolder({ group_id, name }, (err, res) => {
         if (err) reject(err);
         resolve(res!);
@@ -381,7 +383,7 @@ export class Client extends EventEmitter {
    * @param name
    */
   async renameFolder(group_id: number, folder_id: string, name: string) {
-    return new Promise<kritor.file.RenameFolderResponse>((resolve, reject) => {
+    return new Promise<kritor.file.IRenameFolderResponse>((resolve, reject) => {
       this.services.groupFile.renameFolder({ group_id, folder_id, name }, (err, res) => {
         if (err) reject(err);
         resolve(res!);
@@ -395,7 +397,7 @@ export class Client extends EventEmitter {
    * @param folder_id
    */
   async deleteFolder(group_id: number, folder_id: string) {
-    return new Promise<kritor.file.DeleteFolderResponse>((resolve, reject) => {
+    return new Promise<kritor.file.IDeleteFolderResponse>((resolve, reject) => {
       this.services.groupFile.deleteFolder({ group_id, folder_id }, (err, res) => {
         if (err) reject(err);
         resolve(res!);
@@ -403,7 +405,7 @@ export class Client extends EventEmitter {
     });
   }
   async deleteFile(group_id: number, file_id: string, bus_id: number) {
-    return new Promise<kritor.file.DeleteFileResponse>((resolve, reject) => {
+    return new Promise<kritor.file.IDeleteFileResponse>((resolve, reject) => {
       this.services.groupFile.deleteFile({ group_id, file_id, bus_id }, (err, res) => {
         if (err) reject(err);
         resolve(res!);
@@ -416,7 +418,7 @@ export class Client extends EventEmitter {
    * @param group_id
    */
   async getFileSystemInfo(group_id: number) {
-    return new Promise<kritor.file.GetFileSystemInfoResponse>((resolve, reject) => {
+    return new Promise<kritor.file.IGetFileSystemInfoResponse>((resolve, reject) => {
       this.services.groupFile.getFileSystemInfo({ group_id }, (err, res) => {
         if (err) reject(err);
         resolve(res!);
@@ -430,7 +432,7 @@ export class Client extends EventEmitter {
    * @param folder_id
    */
   async getFileList(group_id: number, folder_id: string) {
-    return new Promise<kritor.file.GetFileListResponse>((resolve, reject) => {
+    return new Promise<kritor.file.IGetFileListResponse>((resolve, reject) => {
       this.services.groupFile.getFileList({ group_id, folder_id }, (err, res) => {
         if (err) reject(err);
         resolve(res!);
@@ -495,7 +497,7 @@ export class Client extends EventEmitter {
    * @param vote_count
    */
   async voteUser(target_uid: string, vote_count = 10) {
-    return new Promise<kritor.friend.VoteUserResponse | undefined>((resolve, reject) => {
+    return new Promise<kritor.friend.IVoteUserResponse | undefined>((resolve, reject) => {
       this.services.friend.voteUser({ target_uid, vote_count }, (err, res) => {
         if (err) reject(err);
         resolve(res);
@@ -547,8 +549,8 @@ export class Client extends EventEmitter {
    * @param elements
    * @param retry_count
    */
-  async sendMessage(contact: kritor.common.IContact, elements: kritor.common.Element[], retry_count = 1) {
-    return new Promise<kritor.message.SendMessageResponse | undefined>((resolve, reject) => {
+  async sendMessage(contact: kritor.common.IContact, elements: kritor.common.IElement[], retry_count = 1) {
+    return new Promise<kritor.message.ISendMessageResponse | undefined>((resolve, reject) => {
       this.services.message.sendMessage({ contact, elements, retry_count }, (err, res) => {
         if (err) reject(err);
         resolve(res);
@@ -562,8 +564,8 @@ export class Client extends EventEmitter {
    * @param res_id
    * @param retry_count
    */
-  async sendMessageByResId(contact: kritor.common.Contact, res_id: string, retry_count = 1) {
-    return new Promise<kritor.message.SendMessageResponse | undefined>(async (resolve, reject) => {
+  async sendMessageByResId(contact: kritor.common.IContact, res_id: string, retry_count = 1) {
+    return new Promise<kritor.message.ISendMessageResponse | undefined>(async (resolve, reject) => {
       this.services.message.sendMessageByResId({ contact, res_id, retry_count }, (err, res) => {
         if (err) reject(err);
         resolve(res);
@@ -575,8 +577,8 @@ export class Client extends EventEmitter {
    * 设置已读某个联系人的消息
    * @param contact
    */
-  async setMessageReaded(contact: kritor.common.Contact) {
-    return new Promise<kritor.message.SetMessageReadResponse | undefined>((resolve, reject) => {
+  async setMessageReaded(contact: kritor.common.IContact) {
+    return new Promise<kritor.message.ISetMessageReadResponse | undefined>((resolve, reject) => {
       this.services.message.setMessageReaded({ contact }, (err, res) => {
         if (err) reject(err);
         resolve(res);
@@ -589,8 +591,8 @@ export class Client extends EventEmitter {
    * @param contact
    * @param message_id
    */
-  recallMessage(contact: kritor.common.Contact, message_id: string) {
-    return new Promise<kritor.message.RecallMessageResponse | undefined>((resolve, reject) => {
+  recallMessage(contact: kritor.common.IContact, message_id: string) {
+    return new Promise<kritor.message.IRecallMessageResponse | undefined>((resolve, reject) => {
       this.services.message.recallMessage({ contact, message_id }, (err, res) => {
         if (err) reject(err);
         resolve(res);
@@ -605,8 +607,8 @@ export class Client extends EventEmitter {
    * @param face_id
    * @param is_set
    */
-  async reactMessageWithEmoji(contact: kritor.common.Contact, message_id: string, face_id: number, is_set?: boolean) {
-    return new Promise<kritor.message.ReactMessageWithEmojiResponse | undefined>((resolve, reject) => {
+  async reactMessageWithEmoji(contact: kritor.common.IContact, message_id: string, face_id: number, is_set?: boolean) {
+    return new Promise<kritor.message.IReactMessageWithEmojiResponse | undefined>((resolve, reject) => {
       this.services.message.reactMessageWithEmoji({ contact, message_id, face_id, is_set }, (err, res) => {
         if (err) reject(err);
         resolve(res);
@@ -619,8 +621,8 @@ export class Client extends EventEmitter {
    * @param contact
    * @param message_id
    */
-  async getMessage(contact: kritor.common.Contact, message_id: string) {
-    return new Promise<kritor.message.GetMessageResponse | undefined>((resolve, reject) => {
+  async getMessage(contact: kritor.common.IContact, message_id: string) {
+    return new Promise<kritor.message.IGetMessageResponse | undefined>((resolve, reject) => {
       this.services.message.getMessage({ contact, message_id }, (err, res) => {
         if (err) reject(err);
         resolve(res);
@@ -633,8 +635,8 @@ export class Client extends EventEmitter {
    * @param contact
    * @param message_seq
    */
-  async getMessageBySeq(contact: kritor.common.Contact, message_seq: number) {
-    return new Promise<kritor.message.GetMessageResponse | undefined>((resolve, reject) => {
+  async getMessageBySeq(contact: kritor.common.IContact, message_seq: number) {
+    return new Promise<kritor.message.IGetMessageResponse | undefined>((resolve, reject) => {
       this.services.message.getMessageBySeq({ contact, message_seq }, (err, res) => {
         if (err) reject(err);
         resolve(res);
@@ -648,8 +650,8 @@ export class Client extends EventEmitter {
    * @param start_message_id
    * @param count
    */
-  async getHistoryMessage(contact: kritor.common.Contact, start_message_id: string, count: number = 10) {
-    return new Promise<kritor.message.GetHistoryMessageResponse | undefined>((resolve, reject) => {
+  async getHistoryMessage(contact: kritor.common.IContact, start_message_id: string, count: number = 10) {
+    return new Promise<kritor.message.IGetHistoryMessageResponse | undefined>((resolve, reject) => {
       this.services.message.getHistoryMessage({ contact, start_message_id, count }, (err, res) => {
         if (err) reject(err);
         resolve(res);
@@ -663,8 +665,8 @@ export class Client extends EventEmitter {
    * @param start_message_seq
    * @param count
    */
-  async getHistoryMessageBySeq(contact: kritor.common.Contact, start_message_seq: number, count = 10) {
-    return new Promise<kritor.message.GetHistoryMessageResponse | undefined>((resolve, reject) => {
+  async getHistoryMessageBySeq(contact: kritor.common.IContact, start_message_seq: number, count = 10) {
+    return new Promise<kritor.message.IGetHistoryMessageResponse | undefined>((resolve, reject) => {
       this.services.message.getHistoryMessageBySeq({ contact, start_message_seq, count }, (err, res) => {
         if (err) reject(err);
         resolve(res);
@@ -679,8 +681,8 @@ export class Client extends EventEmitter {
    * @param retry_count
    */
   async uploadForwardMessage(
-    contact: kritor.common.Contact,
-    messages: kritor.common.ForwardMessageBody[],
+    contact: kritor.common.IContact,
+    messages: kritor.common.IForwardMessageBody[],
     retry_count = 1,
   ) {
     return new Promise<string | undefined>((resolve, reject) => {
@@ -698,7 +700,7 @@ export class Client extends EventEmitter {
    * @param res_id
    */
   async downloadForwardMessage(res_id: string) {
-    return new Promise<kritor.message.DownloadForwardMessageResponse | undefined>((resolve, reject) => {
+    return new Promise<kritor.message.IDownloadForwardMessageResponse | undefined>((resolve, reject) => {
       this.services.message.downloadForwardMessage({ res_id }, (err, res) => {
         if (err) reject(err);
         resolve(res);
@@ -713,7 +715,7 @@ export class Client extends EventEmitter {
    * @param page_size
    */
   async getEssenceMessageList(group_id: number, page = 1, page_size = 10) {
-    return new Promise<kritor.message.GetEssenceMessageListResponse | undefined>((resolve, reject) => {
+    return new Promise<kritor.message.IGetEssenceMessageListResponse | undefined>((resolve, reject) => {
       this.services.message.getEssenceMessageList({ group_id, page, page_size }, (err, res) => {
         if (err) reject(err);
         resolve(res);
@@ -727,7 +729,7 @@ export class Client extends EventEmitter {
    * @param message_id
    */
   async setEssenceMessage(group_id: number, message_id: string) {
-    return new Promise<kritor.message.SetEssenceMessageResponse | undefined>((resolve, reject) => {
+    return new Promise<kritor.message.ISetEssenceMessageResponse | undefined>((resolve, reject) => {
       this.services.message.setEssenceMessage({ group_id, message_id }, (err, res) => {
         if (err) reject(err);
         resolve(res);
@@ -741,7 +743,7 @@ export class Client extends EventEmitter {
    * @param message_id
    */
   async deleteEssenceMessage(group_id: number, message_id: string) {
-    return new Promise<kritor.message.DeleteEssenceMessageResponse | undefined>((resolve, reject) => {
+    return new Promise<kritor.message.IDeleteEssenceMessageResponse | undefined>((resolve, reject) => {
       this.services.message.deleteEssenceMessage({ group_id, message_id }, (err, res) => {
         if (err) reject(err);
         resolve(res);
@@ -757,7 +759,7 @@ export class Client extends EventEmitter {
     });
   }
   async getCredentials(domain: string) {
-    return new Promise<kritor.web.GetCredentialsResponse | undefined>((resolve, reject) => {
+    return new Promise<kritor.web.IGetCredentialsResponse | undefined>((resolve, reject) => {
       this.services.web.getCredentials({ domain }, (err, res) => {
         if (err) reject(err);
         resolve(res);
@@ -801,11 +803,11 @@ export namespace Client {
     qsign: kritor.developer.QsignService;
     web: kritor.web.WebService;
   };
-  export function createElementsFromTemplate(template: string): kritor.common.Element[] {
+  export function createElementsFromTemplate(template: string): kritor.common.IElement[] {
     return parseFromTemplate(template).map(item => {
       const { type, data } = item;
       return Client.toKritorElement(type, data);
-    }) as kritor.common.Element[];
+    }) as kritor.common.IElement[];
   }
   export function eventMessageToString(event: kritor.common.IPushMessageBody) {
     return (event.elements || [])
@@ -819,7 +821,7 @@ export namespace Client {
           .map(([key, value]) => {
             return `${key}='${encodeURIComponent(JSON.stringify(value))}'`;
           })
-          .join(' ')}>`;
+          .join(' ')}/>`;
       })
       .join('');
   }

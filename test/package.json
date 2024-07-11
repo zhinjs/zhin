@@ -3,7 +3,7 @@
     "private": true,
     "version": "2.0.35",
     "scripts": {
-        "start": "zhin",
+        "start": "zhin init && zhin -m dev",
         "init": "zhin init",
         "dev": "zhin -m dev"
     },

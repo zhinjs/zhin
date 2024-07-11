@@ -16,8 +16,9 @@ adapter.schema({
 });
 adapter.define('sendMsg', async (bot_id, target_id, target_type, message, source) => {
   const bot = adapter.pick(bot_id);
+  let template: string = await adapter.app!.renderMessage(message as string, source);
   const contact = bot.createContact(target_id, target_type as any);
-  await bot.sendMessage(contact, Client.createElementsFromTemplate(message));
+  await bot.sendMessage(contact, Client.createElementsFromTemplate(template));
   bot.logger.info(`send [${target_type} ${target_id}]:${decodeURIComponent(message)}`);
 });
 const messageHandler = (bot: Adapter.Bot<Client>, event: kritor.common.IPushMessageBody) => {

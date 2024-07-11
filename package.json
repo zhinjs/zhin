@@ -7,7 +7,7 @@
         "url": "https://github.com/zhinjs/zhin"
     },
     "scripts": {
-        "start": "pnpm start -C test start",
+        "start": "pnpm -C test start",
         "dev": "pnpm -C test dev",
         "init": "pnpm -C test run init",
         "lint": "eslint packages --ext .ts",
