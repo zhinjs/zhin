@@ -1,5 +1,13 @@
 # test
 
+## 2.0.38
+
+### Patch Changes
+
+- Updated dependencies [9687c5b]
+  - @zhinjs/adapter-qq@0.0.10
+  - @zhinjs/plugin-guild-manage@1.0.34
+
 ## 2.0.37
 
 ### Patch Changes
