@@ -1,14 +1,14 @@
 import { Adapter, App, Message, Schema } from 'zhin';
-import { sendableToString, formatSendable } from './utils';
+import { formatSendable, sendableToString } from './utils';
 import {
   Bot,
   PrivateMessageEvent,
   GroupMessageEvent,
-  GuildMessageEvent,
   Sendable,
-  Quotable,
+  GuildMessageEvent,
   Intent,
-} from 'qq-group-bot';
+  Quotable,
+} from 'qq-official-bot';
 type QQMessageEvent = PrivateMessageEvent | GroupMessageEvent | GuildMessageEvent;
 export type QQAdapter = typeof qq;
 const qq = new Adapter<Adapter.Bot<Bot>, QQMessageEvent>('qq');
@@ -123,6 +123,28 @@ const messageHandler = (bot: Adapter.Bot<Bot>, event: QQMessageEvent) => {
   }
   qq.app!.emit('message', qq, bot, message);
 };
+qq.define('sendMsg', async (bot_id, target_id, target_type, message, source) => {
+  const bot = qq.pick(bot_id);
+  let msg: Sendable = await qq.app!.renderMessage(message as string, source);
+  msg = formatSendable(msg);
+  const quote: Quotable | undefined = source ? source.original : undefined;
+  switch (target_type) {
+    case 'group':
+      return bot.sendGroupMessage(target_id, msg, quote);
+    case 'private':
+      const [sub_type, user_id] = target_id.split(':');
+      if (sub_type === 'friend') {
+        return bot.sendPrivateMessage(user_id, msg, quote);
+      }
+      return bot.sendDirectMessage(user_id, msg, quote);
+    case 'direct':
+      return bot.sendDirectMessage(target_id, msg, quote);
+    case 'guild':
+      return bot.sendGuildMessage(target_id, msg, quote);
+    default:
+      throw new Error(`QQ适配器暂不支持发送${target_type}类型的消息`);
+  }
+});
 const stopBots = () => {
   for (const bot of qq.bots) {
     bot.stop();
