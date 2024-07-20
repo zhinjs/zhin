@@ -1,5 +1,13 @@
 # @zhinjs/qq
 
+## 0.0.12
+
+### Patch Changes
+
+- c79e65e: fix: 初始化失败
+- Updated dependencies [c79e65e]
+  - zhin@3.0.35
+
 ## 0.0.11
 
 ### Patch Changes
