@@ -1,5 +1,12 @@
 # @zhinjs/plugin-upyun
 
+## 1.0.35
+
+### Patch Changes
+
+- Updated dependencies [c79e65e]
+  - zhin@3.0.35
+
 ## 1.0.34
 
 ### Patch Changes

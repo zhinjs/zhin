@@ -1,5 +1,11 @@
 # @zhinjs/core
 
+## 1.0.21
+
+### Patch Changes
+
+- c79e65e: fix: 初始化失败
+
 ## 1.0.20
 
 ### Patch Changes

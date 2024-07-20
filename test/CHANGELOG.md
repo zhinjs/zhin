@@ -1,5 +1,31 @@
 # test
 
+## 2.0.40
+
+### Patch Changes
+
+- Updated dependencies [c79e65e]
+  - @zhinjs/adapter-qq@0.0.12
+  - zhin@3.0.35
+  - @zhinjs/plugin-guild-manage@1.0.36
+  - @zhinjs/adapter-com-wechat@0.0.11
+  - @zhinjs/adapter-dingtalk@0.0.11
+  - @zhinjs/adapter-discord@0.0.11
+  - @zhinjs/adapter-email@0.0.11
+  - @zhinjs/adapter-icqq@0.0.11
+  - @zhinjs/adapter-kritor@0.0.11
+  - @zhinjs/adapter-onebot-11@0.0.11
+  - @zhinjs/adapter-onebot-12@0.0.12
+  - @zhinjs/adapter-web-wechat@0.0.11
+  - @zhinjs/plugin-group-manage@1.0.37
+  - @zhinjs/plugin-qa@1.0.35
+  - @zhinjs/plugin-schedule@1.0.35
+  - @zhinjs/plugin-http-server@1.0.35
+  - @zhinjs/plugin-sandbox@1.0.35
+  - @zhinjs/plugin-screenshot@1.0.36
+  - @zhinjs/plugin-upyun@1.0.35
+  - @zhinjs/web@1.0.36
+
 ## 2.0.39
 
 ### Patch Changes

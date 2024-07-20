@@ -1,5 +1,13 @@
 # zhin
 
+## 3.0.35
+
+### Patch Changes
+
+- c79e65e: fix: 初始化失败
+- Updated dependencies [c79e65e]
+  - @zhinjs/core@1.0.21
+
 ## 3.0.34
 
 ### Patch Changes
