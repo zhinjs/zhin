@@ -28,7 +28,13 @@ export class Config<T extends object = object> {
       },
       set: (target, p, value, receiver) => {
         if (Reflect.has(this, p)) return Reflect.set(this, p, value, receiver);
-        const result = Reflect.set(target, p, receiver);
+        const result = Reflect.set(target, p, value, receiver);
+        this.#saveConfig();
+        return result;
+      },
+      defineProperty: (target: T, property: string | symbol, attributes: PropertyDescriptor) => {
+        if (Reflect.has(this, property)) return Reflect.defineProperty(target, property, attributes);
+        const result = Reflect.defineProperty(target, property, attributes);
         this.#saveConfig();
         return result;
       },

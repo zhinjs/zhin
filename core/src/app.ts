@@ -57,7 +57,7 @@ export class App extends EventEmitter {
   async renderMessage<T extends Message = Message>(template: string, message?: T) {
     for (const render of this.renders) {
       try {
-        template = await render(template, message);
+        template = <string>await render(template, message);
       } catch (e: unknown) {
         return `消息渲染失败:${(e as Error)?.message || '未知错误'}`;
       }

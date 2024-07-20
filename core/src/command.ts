@@ -397,12 +397,14 @@ export class Command<A extends any[] = [], O = {}> {
     message: Message<AD>,
     template: string,
   ): Command.RunTime<AD, A, O> | void {
-    if (bot.command_prefix) {
-      if (!template.startsWith(bot.command_prefix)) return;
-      template = template.replace(bot.command_prefix, '');
-    }
     let argv = this.parseSugar(template);
-    if (!argv.name) argv = this.parseArgv(template);
+    if (!argv.name) {
+      if (bot.command_prefix) {
+        if (!template.startsWith(bot.command_prefix)) return;
+        template = template.replace(bot.command_prefix, '');
+      }
+      argv = this.parseArgv(template);
+    }
     if (argv.name !== this.name) {
       if (this.aliasNames.includes(argv.name)) argv.name = this.name!;
       else return;

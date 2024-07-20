@@ -26,7 +26,7 @@ commandParser
   .command('tip [name:string]')
   .scope('private', 'group', 'guild', 'direct')
   .desc('输出指令提示文本')
-  .alias('提示')
+  .sugar('提示')
   .sugar(/^(\S+)提示$/, { args: ['$1'] })
   .option('-H [showHidden:boolean] 显示隐藏指令')
   .action(({ options, adapter, bot, message }, target) => {

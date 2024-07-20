@@ -96,7 +96,7 @@ const zhinManager = new Plugin('zhin管理');
 zhinManager
   .command('status')
   .desc('查看知音运行状态')
-  .alias('状态')
+  .sugar('状态')
   .action(({ adapter }) => {
     const restartTimes = Number(process.env?.RESTART_TIMES);
     const lastRestartTime = Date.now() - process.uptime() * 1000;

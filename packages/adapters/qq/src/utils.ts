@@ -38,8 +38,8 @@ export function formatSendable(message: Sendable) {
         ...parseFromTemplate(item).map(ele => {
           const { type, data } = ele;
           return {
-            type,
             ...data,
+            type,
           } as MessageElem;
         }),
       );
