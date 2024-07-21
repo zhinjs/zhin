@@ -22,21 +22,9 @@
 - [x] Email
 - [ ] [KOOK](https://www.kookapp.cn/) (planned)
 - [ ] [Telegram](https://telegram.org) (planned)
-## 快速上手
-### 1. 初始化包管理器
-```shell
-npm init -y # 初始化 package.json 文件
-npm install typescript -D # 安装ts开发环境依赖
-npx tsc --init # 初始化 tsconfig.json 文件
-```
-### 2. 安装zhin
-```shell
-npm install zhin
-```
-### 3. 初始化
-```shell
-npx zhin init --key  # 
-```
+
+## [快速上手](https://docs.zhin.dev/guide/start.html)
+
 ## 友链 (排名不分先后)
 1. 【[onebots](https://onebots.pages.dev)】 (OneBot V11/OneBot V12)
 2. 【[icqq](https://github.com/icqqjs/icqq)】一个NodeJS的qq协议库
