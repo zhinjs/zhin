@@ -18,10 +18,10 @@
         "directory": "packages/plugin/client"
     },
     "dependencies": {
-        "vue-router": "latest",
+        "@ionic/vue-router": "latest",
+        "vue-router": "^4.4.0",
         "pinia": "latest",
-        "element-plus": "latest",
-        "@element-plus/icons-vue": "latest",
+        "@ionic/vue": "latest",
         "vue": "latest"
     }
 }

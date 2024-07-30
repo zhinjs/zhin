@@ -1,10 +1,10 @@
 import { addPage } from '@zhinjs/client';
 import Test from './test.vue';
 addPage({
-  parentName: 'Admin',
+  parentName: 'Zhin',
   icon: 'edit',
   path: '/test',
-  name: '111233',
+  name: '测试',
   children: [],
   component: Test,
 });

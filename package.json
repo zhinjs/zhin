@@ -10,9 +10,6 @@
         "start": "pnpm -C test start",
         "dev": "pnpm -C test dev",
         "init": "pnpm -C test run init",
-        "lint": "eslint packages --ext .ts",
-        "lint:fix": "eslint packages --ext .ts --fix",
-        "sync": "git pull && git submodule update --remote",
         "format": "prettier packages --write",
         "build": "pnpm -r run build",
         "test": "pnpm -r run build",
@@ -37,15 +34,7 @@
     "author": "凉菜",
     "license": "MIT",
     "devDependencies": {
-        "@changesets/cli": "^2.27.1",
-        "@commitlint/cli": "^18.2.0",
-        "@commitlint/config-conventional": "^18.1.0",
-        "@types/node": "^20.5.9",
-        "@typescript-eslint/eslint-plugin": "latest",
-        "@typescript-eslint/parser": "latest",
-        "eslint": "latest",
-        "eslint-config-prettier": "latest",
-        "eslint-plugin-prettier": "latest",
+        "@types/node": "^20.14.11",
         "latest-version": "^5.0.0",
         "less": "^4.2.0",
         "prettier": "^3.1.0",
@@ -53,7 +42,13 @@
         "semver": "^7.5.4",
         "tsc-alias": "^1.8.8",
         "typescript": "^5.2.2",
-        "vitepress": "1.0.0-rc.39",
-        "vue": "^3.4.15"
+        "vitepress": "1.3.1",
+        "vue": "latest"
+    },
+    "dependencies": {
+        "@element-plus/icons-vue": "^2.3.1",
+        "element-plus": "^2.7.8",
+        "markdown-it": "^14.1.0",
+        "vue-markdown": "^2.2.4"
     }
 }

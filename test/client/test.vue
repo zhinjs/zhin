@@ -1,7 +1,11 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import { IonContent, IonPage } from '@ionic/vue';
+</script>
 
 <template>
-  <div class="test">I'm test</div>
+  <ion-page>
+    <ion-content> test </ion-content>
+  </ion-page>
 </template>
 
-<style scoped lang="less"></style>
+<style scoped></style>

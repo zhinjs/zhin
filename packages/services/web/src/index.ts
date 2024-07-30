@@ -67,7 +67,7 @@ plugin.mounted(async () => {
       },
     },
     optimizeDeps: {
-      include: ['vue', 'vue-router', 'pinia', 'element-plus'],
+      include: ['vue', '@ionic/vue-router', 'pinia', '@ionic/vue'],
     },
     build: {
       rollupOptions: {

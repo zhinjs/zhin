@@ -1,9 +1,8 @@
 import { createSSRApp, Component } from 'vue';
-import { renderToString } from '@vue/server-renderer';
+import { renderToString, SSRContext } from '@vue/server-renderer';
 import register from './register';
 import { Renderer } from '@/renderer';
 import htmlRenderer from '@/adapters/htmlRenderer';
-
 export class VueRenderer extends Renderer {
   constructor(endpoint: string = process.env.ENDPOINT || '') {
     super(endpoint);
@@ -21,13 +20,13 @@ export class VueRenderer extends Renderer {
         app.component(component.name, component);
       }
     }
-    const html = await renderToString(app);
+    const ctx: SSRContext = {};
+    const html = await renderToString(app, ctx);
     const entryHTMLContent = `<!DOCTYPE html>
     <html>
     <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>${Reflect.get(input, '__CSS__')}</style>
     </head>
     <body>
     ${html}

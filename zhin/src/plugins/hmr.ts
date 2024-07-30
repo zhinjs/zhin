@@ -104,4 +104,12 @@ hmr
     });
     process.exit(51);
   });
+hmr
+  .command('zhin.exit')
+  .desc('退出zhin')
+  .permission('master')
+  .action(async ({ bot, adapter, message }) => {
+    await message.reply('正在退出');
+    process.exit();
+  });
 export default hmr;

@@ -32,8 +32,8 @@ export function formatSendable(message: Sendable): MessageElem[] {
         ...parseFromTemplate(item).map(ele => {
           const { type, data } = ele;
           return {
-            type,
             ...data,
+            type,
           } as MessageElem;
         }),
       );

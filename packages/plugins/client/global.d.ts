@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-/// <reference types="element-plus/global" />
+/// <reference types="@ionic/vue" />
 
 declare module '*.vue' {
   import { Component } from 'vue';

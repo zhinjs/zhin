@@ -74,7 +74,7 @@ const headers = ref([
     <v-table :data="data" :headers="headers" />
   </div>
 </template>
-<style lang="scss" scoped>
+<style lang="scss">
 div {
   color: red;
 }

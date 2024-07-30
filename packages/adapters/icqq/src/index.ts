@@ -83,7 +83,7 @@ icqq
 icqq.schema({
   uin: Schema.number('请输入机器人qq').required(),
   password: Schema.string('请输入机器人密码').required(),
-  ver: Schema.string('请输入使用版本').required(),
+  ver: Schema.string('请输入使用版本(例如：8.9.80)').required(),
   platform: Schema.number('请选择登录平台')
     .option([
       { label: '安卓手机(Android)', value: 1 },
@@ -105,7 +105,7 @@ declare module 'zhin' {
 }
 icqq.define('sendMsg', async (bot_id, target_id, target_type, message, source) => {
   const bot = icqq.pick(bot_id);
-  let template: string = await icqq.app!.renderMessage(message as string, source);
+  let template: string = await icqq.app!.renderMessage(message, source);
   let msg = formatSendable(template);
   const quote: Quotable | undefined = target_type !== 'guild' && source ? (source.original as any) : undefined;
   const textLen = msg.filter(e => e.type === 'text').reduce((result, cur) => result + String(cur).length, 0);

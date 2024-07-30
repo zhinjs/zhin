@@ -26,6 +26,7 @@
         "@zhinjs/client": "workspace:^"
     },
     "devDependencies": {
+        "@types/node": "^20.14.11",
         "@types/ws": "^8.5.5"
     }
 }

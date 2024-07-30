@@ -12,7 +12,12 @@
 mkdir zhin-app
 cd zhin-app
 ```
-
+::: tip
+如果你是在`WSL`中运行，请在CMD下运行以下命令，使得UNC路径可用
+```shell
+reg add "HKEY_CURRENT_USER\Software\Microsoft\Command Processor" /v "DisableUNCCheck" /t "REG_DWORD" /d "1" /f
+```
+:::
 ### 2. 初始化包管理器
 ```shell
 npm init -y # 初始化package.json
