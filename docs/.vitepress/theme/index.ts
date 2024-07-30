@@ -3,6 +3,7 @@ import ElementPlus from 'element-plus';
 import zhCn from 'element-plus/es/locale/lang/zh-cn';
 import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import 'element-plus/dist/index.css';
+import 'element-plus/theme-chalk/dark/css-vars.css';
 import ChatHistory from './components/ChatHistory.vue';
 import UserAvatar from './components/UserAvatar.vue';
 import ChatMsg from './components/ChatMsg.vue';
