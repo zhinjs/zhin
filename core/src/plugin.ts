@@ -13,13 +13,13 @@ import { Schema } from './schema';
 import { Config } from './config';
 
 export interface Plugin extends Plugin.Options {}
-
 export class Plugin extends EventEmitter {
   public id: string;
   public name: string = '';
   private _logger?: Logger;
   disposes: Function[] = [];
   priority: number;
+  private __IS_ZHIN_PLUGIN__ = true;
   isMounted: boolean = false;
   [REQUIRED_KEY]: (keyof App.Services)[] = [];
   filePath: string;
@@ -28,6 +28,9 @@ export class Plugin extends EventEmitter {
   public adapters?: string[] = [];
   get status(): Plugin.Status {
     return this.isMounted && !this.app!.config.disable_plugins.includes(this.id) ? 'enabled' : 'disabled';
+  }
+  static isPlugin(obj: any): obj is Plugin {
+    return typeof obj === 'object' && !!obj['__IS_ZHIN_PLUGIN__'];
   }
   services: Map<string | symbol, any> = new Map<string | symbol, any>();
   commands: Map<string, Command> = new Map<string, Command>();

@@ -157,7 +157,7 @@ export class App extends EventEmitter {
       plugin = this.plugins.get(plugin)!;
       if (!plugin) throw new Error('none plugin：' + plugin);
     }
-    if (!(plugin instanceof Plugin)) throw new Error(`${plugin} 不是一个有效的插件`);
+    if (!Plugin.isPlugin(plugin)) throw new Error(`${plugin} 不是一个有效的插件`);
     if (this.config.disable_plugins.indexOf(plugin.id) >= 0) remove(this.config.disable_plugins, plugin.id);
     return this;
   }
@@ -169,7 +169,7 @@ export class App extends EventEmitter {
       plugin = this.plugins.get(plugin)!;
       if (!plugin) throw new Error('plugin：' + plugin + 'no init');
     }
-    if (!(plugin instanceof Plugin)) throw new Error(`${plugin} 不是一个有效的插件`);
+    if (!Plugin.isPlugin(plugin)) throw new Error(`${plugin} 不是一个有效的插件`);
     if (!this.config.disable_plugins.includes(plugin.id)) {
       this.config.disable_plugins.push(plugin.id);
     }
@@ -219,10 +219,10 @@ export class App extends EventEmitter {
   mount(plugin: Plugin): this;
   mount(entry: Plugin | string) {
     let plugin: Plugin;
-    if (entry instanceof Plugin) plugin = entry;
+    if (Plugin.isPlugin(entry)) plugin = entry;
     else {
       const mod = loadModule<any>(entry);
-      if (mod instanceof Plugin) plugin = mod;
+      if (Plugin.isPlugin(mod)) plugin = mod;
       else plugin = this.plugins.getWithPath(entry)!;
       if (typeof mod === 'function' || typeof mod['install'] === 'function') return this.use(mod);
       if (!plugin) throw new Error(`"${entry}" is not a valid plugin`);
@@ -266,7 +266,7 @@ export class App extends EventEmitter {
     if (typeof plugin === 'string') {
       plugin = this.plugins.get(plugin)!;
     }
-    if (!(plugin instanceof Plugin)) {
+    if (!Plugin.isPlugin(plugin)) {
       this.logger.warn(`${plugin} 不是一个有效的插件，将忽略其卸载。`);
       return this;
     }
@@ -308,7 +308,7 @@ export class App extends EventEmitter {
       if (loaded) break;
       try {
         const adapter = loadModule<any>(loadPath);
-        if (!(adapter instanceof Adapter)) throw new Error(`${loadPath} is not a valid adapter`);
+        if (!Adapter.isAdapter(adapter)) throw new Error(`${loadPath} is not a valid adapter`);
         this.adapters.set(adapter.name, adapter);
         loadName = adapter.name;
         adapter.mount(this);

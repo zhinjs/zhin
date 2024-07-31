@@ -37,13 +37,17 @@
     },
     "peerDependencies": {
         "level": "^8.0.1",
-        "redis": "^4.6.15"
+        "redis": "^4.6.15",
+        "mysql2": "^3.11.0"
     },
     "peerDependenciesMeta": {
         "level": {
             "optional": true
         },
         "redis": {
+            "optional": true
+        },
+        "mysql2": {
             "optional": true
         }
     }

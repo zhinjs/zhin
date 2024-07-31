@@ -16,7 +16,11 @@ export type Element = {
 export class Adapter<I extends object = object, M = {}> extends EventEmitter {
   bots: Adapter.Bot<I>[] = [];
   elements: Element[] = [];
+  private __IS_ZHIN_ADAPTER__ = true;
   app: App | null = null;
+  static isAdapter(obj: any): obj is Adapter {
+    return typeof obj === 'object' && !!obj['__IS_ZHIN_ADAPTER__'];
+  }
   schemas: Schema = Schema.object({
     unique_id: Schema.string('请输入机器人唯一标识'),
     master: Schema.string('请输入主人id'),
@@ -174,7 +178,7 @@ export namespace Adapter {
       } catch {}
       if (!result) continue;
       result = result.default || result;
-      if (!(result instanceof Adapter)) throw new Error(`${adapterPath} is not an adapter`);
+      if (!Adapter.isAdapter(result)) throw new Error(`${adapterPath} is not an adapter`);
       return result;
     }
     throw new Error(`can't find adapter ${name}`);
