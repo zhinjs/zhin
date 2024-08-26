@@ -61,25 +61,25 @@ npx zhin init # 生成zhin配置文件
 默认情况下，zhin仅基本提供命令行适配，添加对应机器人需先安装对应的适配器
 ::: code-group
 ```shell [ICQQ]
-npm install @zhinjs/adapter-icqq
+npm install @zhinjs/icqq
 ```
 ```shell [QQ官方机器人]
-npm install @zhinjs/adapter-qq
+npm install @zhinjs/qq
 ```
 ```shell [onebot-11]
-npm install @zhinjs/adapter-onebot-11
+npm install @zhinjs/onebot-11
 ```
 ```shell [onebot-12]
-npm install @zhinjs/adapter-onebot-12
+npm install @zhinjs/onebot-12
 ```
 ```shell [Discord]
-npm install @zhinjs/adapter-discord
+npm install @zhinjs/discord
 ```
 ```shell [钉钉]
-npm install @zhinjs/adapter-dingtalk
+npm install @zhinjs/dingtalk
 ```
 ```shell [微信]
-npm install @zhinjs/adapter-wechat
+npm install @zhinjs/wechat
 ```
 :::
 
@@ -89,7 +89,7 @@ npm install @zhinjs/adapter-wechat
 ```shell [ICQQ]
 npx zhin # 启动zhin
 # 等待启动完成...
-adapter.add @zhinjs/adapter-icqq # 注册适配器
+adapter.add @zhinjs/icqq # 注册适配器
 # 等待zhin 自动重启...
 bot.add icqq # 添加bot配置
 # 根据提示添加...
@@ -97,7 +97,7 @@ bot.add icqq # 添加bot配置
 ```shell [QQ官方机器人]
 npx zhin # 启动zhin
 # 等待启动完成...
-adapter.add @zhinjs/adapter-qq # 注册适配器
+adapter.add @zhinjs/qq # 注册适配器
 # 等待zhin 自动重启...
 bot.add qq # 添加bot配置
 # 根据提示添加...
@@ -105,7 +105,7 @@ bot.add qq # 添加bot配置
 ```shell [onebot-11]
 npx zhin # 启动zhin
 # 等待启动完成...
-adapter.add @zhinjs/adapter-onebot-11 # 注册适配器
+adapter.add @zhinjs/onebot-11 # 注册适配器
 # 等待zhin 自动重启...
 bot.add onebot-11 # 添加bot配置
 # 根据提示添加...
@@ -113,7 +113,7 @@ bot.add onebot-11 # 添加bot配置
 ```shell [onebot-12]
 npx zhin # 启动zhin
 # 等待启动完成...
-adapter.add @zhinjs/adapter-onebot-12 # 注册适配器
+adapter.add @zhinjs/onebot-12 # 注册适配器
 # 等待zhin 自动重启...
 bot.add onebot-12 # 添加bot配置
 # 根据提示添加...
@@ -121,7 +121,7 @@ bot.add onebot-12 # 添加bot配置
 ```shell [Discord]
 npx zhin # 启动zhin
 # 等待启动完成...
-adapter.add @zhinjs/adapter-discord # 注册适配器
+adapter.add @zhinjs/discord # 注册适配器
 # 等待zhin 自动重启...
 bot.add discord # 添加bot配置
 # 根据提示添加...
@@ -129,7 +129,7 @@ bot.add discord # 添加bot配置
 ```shell [钉钉]
 npx zhin # 启动zhin
 # 等待启动完成...
-adapter.add @zhinjs/adapter-dingtalk # 注册适配器
+adapter.add @zhinjs/dingtalk # 注册适配器
 # 等待zhin 自动重启...
 bot.add dingtalk # 添加bot配置
 # 根据提示添加...
@@ -137,7 +137,7 @@ bot.add dingtalk # 添加bot配置
 ```shell [微信]
 npx zhin # 启动zhin
 # 等待启动完成...
-adapter.add @zhinjs/adapter-wechat # 注册适配器
+adapter.add @zhinjs/wechat # 注册适配器
 # 等待zhin 自动重启...
 bot.add wechat # 添加bot配置
 # 根据提示添加...
