@@ -3,6 +3,14 @@ import { renderToString, SSRContext } from '@vue/server-renderer';
 import register from './register';
 import { Renderer } from '@/renderer';
 import htmlRenderer from '@/adapters/htmlRenderer';
+export type IComponent = Component & { __CSS__?: string[]; children?: IComponent[] };
+function getCss(component: IComponent): string {
+  let result: string = '';
+  if (component.__CSS__) {
+    result = component.__CSS__.join('\n');
+  }
+  return `<style>${result}\n${component.children?.map(getCss).join('\n')}</style>`;
+}
 export class VueRenderer extends Renderer {
   constructor(endpoint: string = process.env.ENDPOINT || '') {
     super(endpoint);
@@ -10,10 +18,11 @@ export class VueRenderer extends Renderer {
   }
 
   async rendering<T extends Renderer.OutputType>(
-    input: Component,
+    input: IComponent,
     options: VueRenderer.Options<T>,
   ): Promise<Renderer.Output<T>> {
     const app = createSSRApp(input, options.props);
+    const css = getCss(input);
     if (options.components) {
       for (const component of options.components) {
         if (!component.name) continue;
@@ -27,6 +36,7 @@ export class VueRenderer extends Renderer {
     <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    ${css}
     </head>
     <body>
     ${html}

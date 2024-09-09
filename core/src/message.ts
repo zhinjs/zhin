@@ -1,5 +1,5 @@
 import { Bot } from './types';
-import { Dict } from '@zhinjs/shared';
+import { Dict, escape, unescape } from '@zhinjs/shared';
 import { Prompt } from './prompt';
 import { Adapter, AdapterReceive } from './adapter';
 export interface MessageBase {
@@ -55,7 +55,7 @@ export function parseFromTemplate(template: string | MessageElem): MessageElem[]
       result.push({
         type: 'text',
         data: {
-          text: decodeURIComponent(prevText),
+          text: unescape(prevText),
         },
       });
     template = template.slice(index + matched.length);
@@ -64,9 +64,9 @@ export function parseFromTemplate(template: string | MessageElem): MessageElem[]
       attrArr.map(([source, key, v1, v2]) => {
         const value = v1 || v2;
         try {
-          return [key, JSON.parse(decodeURIComponent(value))];
+          return [key, JSON.parse(unescape(value))];
         } catch {
-          return [key, decodeURIComponent(value)];
+          return [key, unescape(value)];
         }
       }),
     );
@@ -79,7 +79,7 @@ export function parseFromTemplate(template: string | MessageElem): MessageElem[]
     result.push({
       type: 'text',
       data: {
-        text: decodeURIComponent(template),
+        text: unescape(template),
       },
     });
   }
@@ -121,16 +121,16 @@ export const segment: Message.DefineSegment = function (type, data) {
   if (type === 'text') return segment.text(data.text || '');
   return `<${type} ${Object.entries(data)
     .map(([key, value]) => {
-      return `${key}='${encodeURIComponent(JSON.stringify(value))}'`;
+      return `${key}='${escape(JSON.stringify(value))}'`;
     })
     .join(' ')}/>`;
 } as Message.DefineSegment;
-segment.text = text => (text ? encodeURIComponent(text) : '');
-segment.face = (id: number) => `<face id='${encodeURIComponent(id)}'/>`;
-segment.image = (file: string, type = 'png') => `<image file='${encodeURIComponent(file)}' type='${type}'/>`;
-segment.video = (file: string, type = 'mp4') => `<video file='${encodeURIComponent(file)}' type='${type}'>`;
-segment.audio = (file: string, type = 'mp3') => `<audio file='${encodeURIComponent(file)}' type='${type}'>`;
-segment.at = user_id => `<at user_id='${encodeURIComponent(user_id)}'/>`;
+segment.text = text => escape(text || '');
+segment.face = (id: number) => `<face id='${escape(id.toString())}'/>`;
+segment.image = (file: string, type = 'png') => `<image file='${escape(file)}' file_type='${type}'/>`;
+segment.video = (file: string, type = 'mp4') => `<video file='${escape(file)}' file_type='${type}'>`;
+segment.audio = (file: string, type = 'mp3') => `<audio file='${escape(file)}' file_type='${type}'>`;
+segment.at = user_id => `<at user_id='${escape(user_id.toString())}'/>`;
 export interface MessageSender {
   user_id?: string | number;
   user_name?: string;

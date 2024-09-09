@@ -9,20 +9,26 @@ plugin.new repeater # 此处 repeater 为插件名
 
 # 或者
 
-zhin.new repeater -t # 如果你想使用 TS 进行开发，可增加 `-t` 选项，声明需要插件开发语言为ts
+plugin.new repeater -t # 如果你想使用 TS 进行开发，可增加 `-t` 选项，声明需要插件开发语言为ts
 ```
 
 ### - 手动创建
 
 ```shell
-# 进入插件目录
+# 进入插件保存目录
 cd plugins
 
 #创建一个存放插件的目录
 mkdir repeater
 
+#进入刚刚创建的插件目录
+cd repeater
+
+#初始化插件仓库 (可选)
+npm init
+
 #创建入口文件
-touch index.js
+touch index.ts
 ```
 
 完成创建后，插件目录大体如下：
@@ -61,7 +67,7 @@ const repeater = new Plugin();
 
 // write your code here
 
-export default ${pluginName}
+export default repeater
 ```
 
 ```js [index.js]
@@ -71,7 +77,7 @@ const repeater = new Plugin();
 
 // write your code here
 
-export default ${pluginName}
+export default repeater
 ```
 
 :::
@@ -100,7 +106,7 @@ repeater.middleware((adapter,bot,message,next)=>{
   next()
 })
 
-export default ${pluginName}
+export default repeater
 
 ```
 
@@ -114,7 +120,7 @@ repeater.middleware((adapter,bot,message,next)=>{
   next()
 })
 
-export default ${pluginName}
+export default repeater
 ```
 
 :::

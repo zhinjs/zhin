@@ -3,7 +3,7 @@ import * as grpc from '@grpc/grpc-js';
 import { loadSync, Long } from '@grpc/proto-loader';
 import { kritor, proto } from 'kritor-proto';
 import * as path from 'path';
-import { Adapter, Dict, parseFromTemplate, valueMap } from 'zhin';
+import { Adapter, Dict, parseFromTemplate, escape, valueMap, unescape } from 'zhin';
 
 export class Client extends EventEmitter {
   services: Client.Services;
@@ -806,7 +806,7 @@ export namespace Client {
   export function createElementsFromTemplate(template: string): kritor.common.IElement[] {
     return parseFromTemplate(template).map(item => {
       const { type, data } = item;
-      return Client.toKritorElement(type, data);
+      return Client.toKritorElement(type, valueMap(data, unescape));
     }) as kritor.common.IElement[];
   }
   export function eventMessageToString(event: kritor.common.IPushMessageBody) {
@@ -819,7 +819,7 @@ export namespace Client {
         return `<${key} ${Object.entries(data)
           .filter(([key]) => !key.startsWith('_'))
           .map(([key, value]) => {
-            return `${key}='${encodeURIComponent(JSON.stringify(value))}'`;
+            return `${key}='${escape(JSON.stringify(value))}'`;
           })
           .join(' ')}/>`;
       })

@@ -166,11 +166,11 @@ export default defineConfigWithTheme({
             ]
         },
         footer: {
-            message: 'Released under the <a href="https://github.com/zhinjs/zhin/blob/master/LICENSE">MIT License</a>.',
+            message: 'Released under the <a href="https://github.com/zhinjs/zhin/blob/main/LICENSE">MIT License</a>.',
             copyright: 'Copyright © 2022-2023 <a href="https://github.com/lc-cn">凉菜</a>'
         },
         editLink: {
-            pattern: 'https://github.com/zhinjs/zhin/edit/master/docs/src/:path',
+            pattern: 'https://github.com/zhinjs/zhin/edit/main/docs/src/:path',
             text: '修正文档',
         },
         socialLinks: [

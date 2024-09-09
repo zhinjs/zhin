@@ -77,6 +77,7 @@ test.mounted(() => {
       },
     },
     render(props, context) {
+      context.$message.bot.unique_id;
       return `不务正业!${context.who}`;
     },
   });
@@ -91,5 +92,56 @@ test.mounted(async () => {
     return `receive from ${this.message_type},args is ${foo},${bar},${isExist}`;
   });
 });
-
+class Stack<T=any> extends Array<T>{
+  peek(){
+    return this[this.length-1]
+  }
+  get size(){
+    return this.length
+  }
+  get isEmpty(){
+    return !this.length
+  }
+}
+class Queue<T=any> extends Stack<T>{
+  override pop(){
+    return this.shift()
+  }
+}
+class ListNode<T=any>{
+  constructor(public val:T){}
+  next:ListNode|null=null
+}
+function removeRepeat(str:string){
+  /**
+   * use regexp
+   */
+  // return str.replace(/(.)\1+/g,'$1')
+  /**
+   * use endsWith
+   */
+  // let result=''
+  // for(let char of str){
+  //     if(!result.endsWith(char)) result+=char
+  // }
+  // return result
+  /**
+   * use stack
+   */
+  const stack=new Stack<string>()
+  for(const char of str){
+    if(stack.peek()!==char) stack.push(char)
+  }
+  return stack.join('')
+}
+console.log(removeRepeat('abbb  aac'))
+var t=[
+  [
+    0,9,10,19,//i+j*i
+    1,8,11,18,
+    2,7,12,17,
+    3,6,13,16,
+    4,5,14,15
+  ]
+]
 export default test; // 最后导出

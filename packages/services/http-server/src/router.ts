@@ -32,7 +32,7 @@ export class Router extends KoaRouter {
     remove(this.wsStack, wsServer);
   }
 
-  ws(path: string, options: Omit<ServerOptions, 'noServer' | 'path'> = {}) {
+  ws(path: string, options: Omit<ServerOptions, 'noServer' | 'path'> = {}): WebSocketServer {
     const wsServer = new WebSocketServer({
       noServer: true,
       path,

@@ -1,4 +1,4 @@
-import { Dict, parseFromTemplate } from 'zhin';
+import { Dict, escape, parseFromTemplate, unescape, valueMap } from 'zhin';
 
 export interface MessageV11 {
   raw_message: string;
@@ -51,7 +51,7 @@ export namespace MessageV11 {
       const data = Object.fromEntries(
         attrs.map(attrStr => {
           const [key, ...valueArr] = attrStr.split('=');
-          return [key, valueArr.join('=')];
+          return [key, unescape(valueArr.join('='))];
         }),
       );
       result.push({
@@ -83,7 +83,11 @@ export namespace MessageV11 {
     if (!Array.isArray(message)) message = [message];
     for (const item of message) {
       if (typeof item === 'string') result.push(...parseFromTemplate(item));
-      else result.push(item);
+      else
+        result.push({
+          type: item.type,
+          data: valueMap(item.data, unescape),
+        });
     }
     return result;
   }
@@ -99,7 +103,7 @@ export namespace MessageV11 {
         result += `<${type} ${Object.entries(data)
           .map(([key, value]) => {
             if (key === 'qq' && type === 'at') key = 'user_id';
-            return `${key}='${JSON.stringify(value)}'`;
+            return `${key}='${escape(JSON.stringify(value))}'`;
           })
           .join(' ')}>`;
     }

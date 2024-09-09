@@ -1,4 +1,4 @@
-import { Adapter, App, Message, Schema } from 'zhin';
+import { Adapter, App, Message, Schema, unescape } from 'zhin';
 import { Client } from '@/client';
 import { kritor } from 'kritor-proto';
 
@@ -19,7 +19,7 @@ adapter.define('sendMsg', async (bot_id, target_id, target_type, message, source
   let template: string = await adapter.app!.renderMessage(message as string, source);
   const contact = bot.createContact(target_id, target_type as any);
   await bot.sendMessage(contact, Client.createElementsFromTemplate(template));
-  bot.logger.info(`send [${target_type} ${target_id}]:${decodeURIComponent(message)}`);
+  bot.logger.info(`send [${target_type} ${target_id}]:${unescape(message)}`);
 });
 const messageHandler = (bot: Adapter.Bot<Client>, event: kritor.common.IPushMessageBody) => {
   const message = Message.fromEvent(adapter, bot, event);

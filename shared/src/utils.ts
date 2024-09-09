@@ -600,8 +600,8 @@ export function toArray<T>(source: T | T[]) {
   return Array.isArray(source) ? source : isNullable(source) ? [] : [source];
 }
 
-export function valueMap<T, U>(object: Dict<T>, transform: (value: T, key: string) => U): Dict<U> {
-  return Object.fromEntries(Object.entries(object).map(([key, value]) => [key, transform(value, key)]));
+export function valueMap<T extends object, U>(obj: T, transform: (value: T, key: string) => U): T {
+  return Object.fromEntries(Object.entries(obj).map(([key, value]) => [key, transform(value, key)])) as T;
 }
 
 export function defineProperty<T, K extends keyof T>(object: T, key: K, value: T[K]): void;
@@ -618,4 +618,23 @@ export function hide<T extends object, K extends keyof T>(object: T, ...keys: K[
   for (const key of keys) {
     Object.defineProperty(object, key, { enumerable: false });
   }
+}
+
+export function escape<T>(text: T): T {
+  if (typeof text !== 'string') return text;
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;') as T;
+}
+export function unescape<T>(text: T): T {
+  if (typeof text !== 'string') return text;
+  return text
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&') as T;
 }

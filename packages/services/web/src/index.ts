@@ -1,5 +1,5 @@
 import { Plugin } from 'zhin';
-import WebSocket from 'ws';
+import WebSocket, { WebSocketServer } from 'ws';
 import vue from '@vitejs/plugin-vue';
 import type {} from '@zhinjs/plugin-http-server';
 import * as fs from 'fs';
@@ -15,7 +15,7 @@ declare module 'zhin' {
 export type WebServer = {
   vite: import('vite').ViteDevServer;
   addEntry(entry: string): () => void;
-  ws: WebSocket.Server;
+  ws: WebSocketServer;
   entries: Record<string, string>;
 };
 export const name = 'Web端';

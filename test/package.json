@@ -5,7 +5,8 @@
     "scripts": {
         "start": "zhin init && zhin -m dev",
         "init": "zhin init",
-        "dev": "zhin -m dev"
+        "dev": "zhin -m dev",
+        "test":"ts-node plugins/matcher.ts"
     },
     "dependencies": {
         "@icqqjs/icqq": "1.1.6",

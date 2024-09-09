@@ -4,16 +4,16 @@ export {
   useContext,
   getAdapter,
   getBot,
-  registerCommand,
-  registerMiddleware,
+  useCommand,
+  useMiddleware,
   sendGroupMessage,
   sendPrivateMessage,
   sendGuildMessage,
   sendDirectMessage,
   onMount,
   onUnmount,
-  listenEvent,
-  definePluginOptions,
+  listen,
+  setOptions,
   withService,
 } from './plugins/setup';
 export * from './constants';
@@ -153,6 +153,8 @@ import {
   defineProperty,
   lock,
   hide,
+  escape,
+  unescape,
 } from '@zhinjs/shared';
 export {
   aesDecrypt,
@@ -257,4 +259,6 @@ export {
   defineProperty,
   lock,
   hide,
+  escape,
+  unescape,
 };

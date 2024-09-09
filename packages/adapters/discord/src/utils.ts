@@ -1,4 +1,4 @@
-import { parseFromTemplate } from 'zhin';
+import { escape, parseFromTemplate, unescape, valueMap } from 'zhin';
 import { Sendable, MessageElem, TextElem } from 'ts-disc-bot';
 export const toObject = <T = any>(data: any) => {
   if (Buffer.isBuffer(data)) return JSON.parse(data.toString()) as T;
@@ -21,7 +21,7 @@ export function sendableToString(message: Sendable) {
       continue;
     }
     const attrs = Object.entries(data).map(([key, value]) => {
-      return `${key}='${JSON.stringify(value)}'`;
+      return `${key}='${escape(JSON.stringify(value))}'`;
     });
     result += `<${type} ${attrs.join(' ')}/>`;
   }
@@ -32,7 +32,7 @@ export function formatSendable(message: Sendable) {
   if (!Array.isArray(message)) message = [message as any];
   for (const item of message) {
     if (typeof item !== 'string') {
-      result.push(item);
+      result.push(valueMap(item, unescape));
     } else {
       result.push(
         ...parseFromTemplate(item).map(ele => {

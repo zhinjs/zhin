@@ -1,4 +1,4 @@
-import { Message, MessageSender, Plugin, WORK_DIR } from '@zhinjs/core';
+import { MessageSender, Plugin, WORK_DIR } from '@zhinjs/core';
 import { Database } from './types';
 import { dbFactories, initFactories } from './factory';
 import path from 'path';

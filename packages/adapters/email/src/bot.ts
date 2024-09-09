@@ -3,7 +3,7 @@ import { createTransport, Transporter } from 'nodemailer';
 import { Stream } from 'stream';
 import { Attachment, HeaderValue, ParsedMail, simpleParser } from 'mailparser';
 import { parse, INode, SyntaxKind } from 'html5parser';
-import { Adapter, axios, Message } from 'zhin';
+import { Adapter, axios, escape, Message, unescape } from 'zhin';
 import { EventEmitter } from 'events';
 export class Bot extends EventEmitter {
   #transport: Transporter;
@@ -168,8 +168,7 @@ export namespace Bot {
       from_id: from_id.slice(0, -1),
       attachments: email.attachments,
       headers: email.headers,
-      raw_message:
-        HTMLToString(parse(email.html || '', { setAttributeMap: true })) || decodeURIComponent(email.text || ''),
+      raw_message: HTMLToString(parse(email.html || '', { setAttributeMap: true })) || escape(email.text || ''),
       message_type: 'private',
       subject: email.subject!,
       time: email.date!.getTime(),
@@ -188,7 +187,7 @@ export namespace Bot {
     let result = '';
     for (const htmlNode of htmlNodes) {
       if (htmlNode.type === SyntaxKind.Text) {
-        result += decodeURIComponent(htmlNode.value).trim();
+        result += escape(htmlNode.value).trim();
         continue;
       }
       switch (htmlNode.name) {
@@ -248,7 +247,7 @@ export namespace Bot {
       source = source.replace(originContent, '');
       if (/^https?:\/\//.test(url)) url = await getBase64ByUrl(url);
       attachment.push({
-        filename: decodeURIComponent(url.split('/').pop() || ''),
+        filename: escape(url.split('/').pop() || ''),
         content: Buffer.from(url, 'base64'),
         contentType: type,
         cid: `cid:${url.split('/').pop() || ''}`,
@@ -258,7 +257,7 @@ export namespace Bot {
     return source;
   }
   export function createEmailContent(message: string): string {
-    return decodeURIComponent(
+    return unescape(
       message.replace(/<image url="([^"]+)">/g, (match, url) => {
         return `<img src="cid:${url}">`;
       }),

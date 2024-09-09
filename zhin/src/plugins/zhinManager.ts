@@ -22,6 +22,24 @@ const downloadGit = (url: string, savePath: string = '.') => {
     );
   });
 };
+type PluginOptions={
+  setup?:boolean
+  typescript?:boolean
+}
+const templates={
+  typescript_setup:`
+  import {setOptions,useCommand} from 'zhin';
+  setOptions({name:'$PluginName'})
+  useCommand('foo')
+  .action(()=>'bar')
+  `,
+  setup:``,
+  typescript:``,
+  normal:``
+}
+const createPlugin=async (savePath:string,pluginName:string,options:PluginOptions)=>{
+
+}
 const isExistPkg = (pkgName: string) => {
   return fs.existsSync(path.resolve(WORK_DIR, 'node_modules', pkgName));
 };
@@ -264,6 +282,18 @@ pluginManage
     zhinManager.app!.loadPlugin(name);
     return `插件(${name})已添加`;
   });
+pluginManage.command('plugin.new [name:string]')
+.desc('新建插件')
+.option('-t [typescript:boolean]',false)
+.option('-s [setup:boolean]',false)
+.permission('master')
+.action(async ({prompt,options},name)=>{
+  if(!name) name=await prompt.text('请输入插件名')
+  const saveToDir=zhinManager.app!.config.plugin_dirs[0]
+  if(!saveToDir) return `您为定义插件存放目录，请先在'config/zhin.config.yaml'中定义'plugin_dirs`
+  const pluginPath=await createPlugin(saveToDir,name,options)
+  return `已创建插件'${pluginPath}'`
+})
 pluginManage
   .command('plugin.remove [name:string]')
   .desc('移除插件')

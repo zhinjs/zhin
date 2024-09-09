@@ -59,7 +59,7 @@ export class App extends EventEmitter {
       try {
         template = <string>await render(template, message);
       } catch (e: unknown) {
-        return `消息渲染失败:${(e as Error)?.message || '未知错误'}`;
+        return `消息渲染失败:${(e as Error)?.message || '未知错误'}\n${(e as Error)?.stack}`;
       }
     }
     return template;

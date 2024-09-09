@@ -7,6 +7,18 @@
     "engines": {
         "node": ">=16"
     },
+    "exports": {
+        ".": {
+            "import": "./lib/index.js",
+            "types": "./lib/index.d.ts",
+            "require": "./lib/index.js"
+        },
+        "./decorator": {
+            "import": "./lib/decorator.js",
+            "types": "./lib/decorator.d.ts",
+            "require": "./lib/decorator.js"
+        }
+    },
     "scripts": {
         "compile": "tsc && tsc-alias",
         "build": "npm run compile && npm run dtsc",

@@ -10,7 +10,7 @@ export class Component<T = {}, D = {}, P = Component.Props<T>> {
   constructor(private $options: Component.Options<T, D, P>) {
     this.formatProps();
     this[CapWithChild] = new RegExp(`<${$options.name}([^>]*)?>([^<])*?</${$options.name}>`);
-    this[CapWithClose] = new RegExp(`<${$options.name}([^/>])*?/>`);
+    this[CapWithClose] = new RegExp(`<${$options.name}([^>]*)?/>`);
   }
   isClosing(template: string) {
     return this[CapWithClose].test(template);

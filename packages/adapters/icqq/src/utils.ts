@@ -1,5 +1,5 @@
 import { MessageElem, Sendable } from '@icqqjs/icqq';
-import { parseFromTemplate } from 'zhin';
+import { escape, parseFromTemplate, unescape, valueMap } from 'zhin';
 
 export function sendableToString(message: Sendable) {
   let result = '';
@@ -15,7 +15,7 @@ export function sendableToString(message: Sendable) {
       continue;
     }
     const attrs = Object.entries(data).map(([key, value]) => {
-      return `${key}='${JSON.stringify(value)}'`;
+      return `${key}='${escape(JSON.stringify(value))}'`;
     });
     result += `<${type} ${attrs.join(' ')}/>`;
   }
@@ -26,7 +26,7 @@ export function formatSendable(message: Sendable): MessageElem[] {
   if (!Array.isArray(message)) message = [message];
   for (const item of message) {
     if (typeof item !== 'string') {
-      result.push(item);
+      result.push(valueMap(item, unescape));
     } else {
       result.push(
         ...parseFromTemplate(item).map(ele => {

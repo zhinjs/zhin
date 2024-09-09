@@ -46,7 +46,10 @@ npx zhin init # 生成zhin配置文件
 .
 ├─ data/              资源目录
 ├─ plugins/           插件目录（存放编写好的插件）
-├─ zhin.config.yml          配置文件
+├─ config/            配置文件目录
+  └─ zhin.config.yaml zhin配置文件
+├─tsconfig.json       typescript项目描述文件(一般情况下无需关心)
+├─ node_modules/      项目依赖存放文件(npm自动生成，开发者无需关心)
 ├─ node_modules/      项目依赖存放文件(npm自动生成，开发者无需关心)
 ├─ package.json       项目描述文件(一般情况下无需关心)
 └─ package-lock.json  项目依赖描述文件(npm自动生成，开发者无需关心)
