@@ -1,5 +1,11 @@
 # @zhinjs/core
 
+## 1.0.22
+
+### Patch Changes
+
+- a095453: fix：更改插件/适配器判断逻辑
+
 ## 1.0.21
 
 ### Patch Changes

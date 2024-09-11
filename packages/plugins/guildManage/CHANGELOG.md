@@ -1,5 +1,13 @@
 # @zhinjs/plugin-guild-manage
 
+## 1.0.37
+
+### Patch Changes
+
+- Updated dependencies [a095453]
+  - zhin@3.0.36
+  - @zhinjs/adapter-qq@0.0.13
+
 ## 1.0.36
 
 ### Patch Changes

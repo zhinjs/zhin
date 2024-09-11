@@ -1,12 +1,12 @@
 {
     "name": "test",
     "private": true,
-    "version": "2.0.40",
+    "version": "2.0.41",
     "scripts": {
         "start": "zhin init && zhin -m dev",
         "init": "zhin init",
         "dev": "zhin -m dev",
-        "test":"ts-node plugins/matcher.ts"
+        "test": "ts-node plugins/matcher.ts"
     },
     "dependencies": {
         "@icqqjs/icqq": "1.1.6",

@@ -1,5 +1,12 @@
 # @zhinjs/qq
 
+## 0.0.13
+
+### Patch Changes
+
+- Updated dependencies [a095453]
+  - zhin@3.0.36
+
 ## 0.0.12
 
 ### Patch Changes
