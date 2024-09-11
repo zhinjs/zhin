@@ -1,5 +1,13 @@
 # @zhinjs/discord
 
+## 0.0.12
+
+### Patch Changes
+
+- Updated dependencies [a095453]
+  - zhin@3.0.36
+  - @zhinjs/web@1.0.37
+
 ## 0.0.11
 
 ### Patch Changes

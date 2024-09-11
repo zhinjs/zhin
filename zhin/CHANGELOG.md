@@ -1,5 +1,13 @@
 # zhin
 
+## 3.0.36
+
+### Patch Changes
+
+- a095453: fix：更改插件/适配器判断逻辑
+- Updated dependencies [a095453]
+  - @zhinjs/core@1.0.22
+
 ## 3.0.35
 
 ### Patch Changes
