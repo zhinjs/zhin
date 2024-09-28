@@ -1,5 +1,11 @@
 # @zhinjs/dingtalk
 
+## 0.0.13
+
+### Patch Changes
+
+- zhin@3.0.37
+
 ## 0.0.12
 
 ### Patch Changes
