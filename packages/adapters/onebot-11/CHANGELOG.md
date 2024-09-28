@@ -1,5 +1,12 @@
 # @zhinjs/onebot-11
 
+## 0.0.13
+
+### Patch Changes
+
+- zhin@3.0.37
+- @zhinjs/plugin-http-server@1.0.37
+
 ## 0.0.12
 
 ### Patch Changes

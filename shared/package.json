@@ -2,7 +2,7 @@
     "name": "@zhinjs/shared",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
-    "version": "0.0.7",
+    "version": "0.1.0",
     "engines": {
         "node": ">=16"
     },

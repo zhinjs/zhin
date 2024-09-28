@@ -1,5 +1,13 @@
 # @zhinjs/core
 
+## 2.0.0
+
+### Patch Changes
+
+- Updated dependencies [528b1c6]
+- Updated dependencies [e433003]
+  - @zhinjs/shared@0.1.0
+
 ## 1.0.22
 
 ### Patch Changes
