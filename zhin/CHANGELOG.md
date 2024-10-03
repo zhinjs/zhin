@@ -1,5 +1,11 @@
 # zhin
 
+## 3.0.39
+
+### Patch Changes
+
+- 866efc5: fix: setup setOptions failed
+
 ## 3.0.38
 
 ### Patch Changes
