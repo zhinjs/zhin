@@ -1,6 +1,6 @@
 import { context, setOptions } from 'zhin';
 setOptions({
-  name: 'setup 测试插件',
+  name: 'foo',
 });
 const { useMiddleware, useCommand } = context;
 useCommand('foo')

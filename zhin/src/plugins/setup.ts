@@ -121,5 +121,7 @@ export const sendDirectMessage = context.sendDirectMessage;
 export const onMount = context.onMount;
 export const onUnmount = context.onUnmount;
 export const listen = context.listen;
-export const setOptions = getOrCreatePlugin;
+export const setOptions = (options: Plugin.Options) => {
+  return getOrCreatePlugin(options);
+};
 export default setup;

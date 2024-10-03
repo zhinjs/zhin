@@ -4,6 +4,7 @@ const forwardForum = new Plugin({
   name: '频道帖子转发插件',
   adapters: ['onebot-12'],
 });
+forwardForum.required('database');
 type Config = {
   guild_id: string;
   bot_id: string;
@@ -11,7 +12,6 @@ type Config = {
   group_id: string;
   template: string;
 };
-forwardForum.required('jsondb');
 forwardForum.middleware(async (adapter, bot, event, next) => {
   await next();
 });
@@ -82,7 +82,7 @@ forwardForum.middleware<OneBotV12Adapter>(async (adapter, bot, event, next) => {
   const message = event.original?.message;
   if (!message || !Array.isArray(message)) return;
   const [textSeg, forumSeg] = message;
-  if (!forumSeg || forumSeg.type !== 'forum') return;
+  if (!forumSeg || typeof forumSeg !== 'object' || forumSeg.type !== 'forum') return;
   const { user_id, user_name } = event.sender || {};
   const { guild_id, guild_name, channel_id, channel_name } = event.original;
   const configs = configList.filter(config => {
@@ -99,7 +99,7 @@ forwardForum.middleware<OneBotV12Adapter>(async (adapter, bot, event, next) => {
       .replace('{channel_id}', channel_id)
       .replace('{user_name}', user_name)
       .replace('{user_id}', user_id)
-      .replace('{title}', textSeg.data.text)
+      .replace('{title}', typeof textSeg === 'string' ? textSeg : textSeg.data.text)
       .replace('{url}', forumUrl);
     await bot.sendGroupMsg(group_id, message);
   }
