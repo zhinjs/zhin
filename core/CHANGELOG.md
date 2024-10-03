@@ -1,5 +1,11 @@
 # @zhinjs/core
 
+## 2.0.1
+
+### Patch Changes
+
+- 489cfe1: fix: allow disable plugin for any bot
+
 ## 2.0.0
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # zhin
 
+## 3.0.38
+
+### Patch Changes
+
+- 489cfe1: fix: allow disable plugin for any bot
+- Updated dependencies [489cfe1]
+  - @zhinjs/core@2.0.1
+
 ## 3.0.37
 
 ### Patch Changes

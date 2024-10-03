@@ -1,5 +1,13 @@
 # @zhinjs/icqq
 
+## 0.0.14
+
+### Patch Changes
+
+- 489cfe1: fix: allow disable plugin for any bot
+- Updated dependencies [489cfe1]
+  - zhin@3.0.38
+
 ## 0.0.13
 
 ### Patch Changes
