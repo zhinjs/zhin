@@ -2,7 +2,7 @@
   "name": "@zhinjs/plugin-screenshot",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
-  "version": "1.0.39",
+  "version": "1.0.40",
   "scripts": {
     "build": "tsc && tsc-alias"
   },
