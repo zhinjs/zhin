@@ -122,7 +122,9 @@ export class App extends EventEmitter {
         // 过滤不支持当前适配器的插件
         .filter(plugin => !plugin.adapters || plugin.adapters.includes(adapter.name))
         // 过滤bot禁用的插件
-        .filter(plugin => !adapter.botConfig(bot)?.disabled_plugins.includes(plugin.name))
+        .filter(
+          plugin => !adapter.botConfig(bot as Adapter.Bot<AdapterBot<A>>)?.disabled_plugins?.includes(plugin.name),
+        )
         .reduce(
           (result, plugin) => {
             result.push(...plugin.middlewares);

@@ -79,7 +79,7 @@ const messageHandler = (bot: Adapter.Bot<Client>, event: ClientMessage) => {
       : event.guild_id + '';
 
   const master = bot.config?.master;
-  const admins = bot.config.admins || [];
+  const admins = bot.config.admins?.filter(Boolean) || [];
   message.sender = {
     user_id: event.user_id,
     user_name: event.nickname || '',

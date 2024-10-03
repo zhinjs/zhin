@@ -29,7 +29,7 @@ const messageHandler = (bot: Adapter.Bot<Client>, event: kritor.common.IPushMess
     .filter(Boolean)
     .join(':');
   const master = adapter.botConfig(bot)?.master;
-  const admins = adapter.botConfig(bot)?.admins.filter(Boolean) || [];
+  const admins = adapter.botConfig(bot)?.admins?.filter(Boolean) || [];
   message.sender = {
     user_id: event.sender?.uid!,
     user_name: event.sender?.nick || '',

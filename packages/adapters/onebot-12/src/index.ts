@@ -83,7 +83,7 @@ const messageHandler = (bot: Adapter.Bot<OneBotV12>, event: MessageV12) => {
       : event.guild_id + '';
 
   const master = bot.config?.master;
-  const admins = bot.config.admins.filter(Boolean) || [];
+  const admins = bot.config.admins?.filter(Boolean) || [];
   message.sender = {
     user_id: event.sender.user_id,
     user_name: event.sender.nickname || '',

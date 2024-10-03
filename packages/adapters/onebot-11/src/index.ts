@@ -74,7 +74,7 @@ const messageHandler = (bot: Adapter.Bot<OneBotV11>, event: MessageV11) => {
   message.message_type = event.message_type;
   message.from_id = event.message_type === 'private' ? event.user_id + '' : event.group_id + '';
   const master = oneBotV11.botConfig(bot)?.master;
-  const admins = oneBotV11.botConfig(bot)?.admins.filter(Boolean) || [];
+  const admins = oneBotV11.botConfig(bot)?.admins?.filter(Boolean) || [];
   message.sender = {
     user_id: event.sender?.user_id,
     user_name: event.sender?.nickname || '',

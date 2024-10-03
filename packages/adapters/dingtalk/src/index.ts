@@ -69,7 +69,7 @@ const messageHandler = (bot: Adapter.Bot<Bot>, event: DingMsgEvent) => {
   message.from_id = event instanceof PrivateMessageEvent ? event.user_id : event.group_id;
   message.message_type = event.message_type;
   const master = dingTalkAdapter.botConfig(bot)?.master;
-  const admins = dingTalkAdapter.botConfig(bot)?.admins.filter(Boolean) || [];
+  const admins = dingTalkAdapter.botConfig(bot)?.admins?.filter(Boolean) || [];
   message.sender = {
     ...event.sender,
     permissions: [

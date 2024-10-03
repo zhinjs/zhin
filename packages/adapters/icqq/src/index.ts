@@ -185,7 +185,7 @@ const messageHandler = (bot: Adapter.Bot<Client>, event: QQMessageEvent) => {
         ? event.group_id + ''
         : event.discuss_id + '';
     const master = icqq.botConfig(bot)?.master;
-    const admins = icqq.botConfig(bot)?.admins.filter(Boolean) || [];
+    const admins = icqq.botConfig(bot)?.admins?.filter(Boolean) || [];
     message.sender = {
       ...event.sender,
       permissions: [
