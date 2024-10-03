@@ -87,11 +87,15 @@ export class App extends EventEmitter {
   }
 
   get pluginList() {
-    return [...this.plugins.values()]
-      .filter(p => !this.config.disable_plugins.includes(p.id))
-      .sort((a, b) => {
-        return a.priority - b.priority;
-      });
+    return (
+      [...this.plugins.values()]
+        // 过滤系统已禁用的插件
+        .filter(p => !this.config.disable_plugins.includes(p.id))
+        // 按插件优先级进行排序
+        .sort((a, b) => {
+          return a.priority - b.priority;
+        })
+    );
   }
 
   get commandList() {
@@ -113,15 +117,20 @@ export class App extends EventEmitter {
   }
 
   getSupportMiddlewares<A extends Adapter>(adapter: A, bot: AdapterBot<A>, event: Message<A>): Middleware[] {
-    return this.pluginList
-      .filter(plugin => !plugin.adapters || plugin.adapters.includes(adapter.name))
-      .reduce(
-        (result, plugin) => {
-          result.push(...plugin.middlewares);
-          return result;
-        },
-        [...this.middlewares],
-      );
+    return (
+      this.pluginList
+        // 过滤不支持当前适配器的插件
+        .filter(plugin => !plugin.adapters || plugin.adapters.includes(adapter.name))
+        // 过滤bot禁用的插件
+        .filter(plugin => !adapter.botConfig(bot)?.disabled_plugins.includes(plugin.name))
+        .reduce(
+          (result, plugin) => {
+            result.push(...plugin.middlewares);
+            return result;
+          },
+          [...this.middlewares],
+        )
+    );
   }
 
   getSupportCommands<A extends Adapter>(adapter: A, bot: Bot<A>, event: Message<A>) {
@@ -476,6 +485,7 @@ export namespace App {
     master?: string | number;
     admins?: (string | number)[];
     command_prefix?: string;
+    disabled_plugins?: string[];
     forward_length?: number;
     quote_self?: boolean;
   } & Adapters[T];

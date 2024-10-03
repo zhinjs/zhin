@@ -96,7 +96,52 @@ pusher.mounted(app => {
     pushWithLoop(1000 * 60 * 60 * 3);
   });
 });
-
+class Point {
+  constructor(
+    public x: number,
+    public y: number,
+  ) {}
+  getDistance(point: Point) {
+    return Math.sqrt(Math.pow(point.x - this.x, 2) + Math.pow(point.y - this.y, 2));
+  }
+}
+class Circle {
+  constructor(
+    public center: Point,
+    public radius: number,
+  ) {}
+  isIntersect(circle: Circle) {
+    return this.center.getDistance(circle.center) < this.radius + circle.radius;
+  }
+  get area() {
+    return Math.PI * Math.pow(this.radius, 2);
+  }
+  get perimeter() {
+    return 2 * this.radius * Math.PI;
+  }
+}
+class Rect {
+  constructor(
+    public x: Point,
+    public y: Point,
+  ) {}
+  isIntersect(rect: Rect) {}
+  get center() {
+    return new Point(Math.abs(this.x.x - this.y.x) / 2, Math.abs(this.x.y - this.y.y) / 2);
+  }
+  get width() {
+    return Math.abs(this.x.x - this.y.x);
+  }
+  get height() {
+    return Math.abs(this.x.y - this.y.y);
+  }
+  get area() {
+    return 2 * (this.width + this.height);
+  }
+  get perimeter() {
+    return this.width * this.height;
+  }
+}
 pusher.beforeUnmount(() => {
   if (timer) clearTimeout(timer);
 });

@@ -21,7 +21,10 @@ oneBotV11.schema({
 oneBotV11.define('sendMsg', async (bot_id, target_id, target_type, message, source) => {
   const bot = oneBotV11.pick(bot_id);
   let msg: MessageV11.Sendable = await oneBotV11.app!.renderMessage(message as string, source);
-  msg = MessageV11.formatSegments(msg, Number(source?.original?.message_id) || undefined);
+  msg = MessageV11.formatSegments(
+    msg,
+    oneBotV11.botConfig(bot)?.quote_self ? Number(source?.original?.message_id) : undefined,
+  );
   switch (target_type) {
     case 'group':
       return bot.sendGroupMsg(parseInt(target_id), msg);
@@ -71,7 +74,7 @@ const messageHandler = (bot: Adapter.Bot<OneBotV11>, event: MessageV11) => {
   message.message_type = event.message_type;
   message.from_id = event.message_type === 'private' ? event.user_id + '' : event.group_id + '';
   const master = oneBotV11.botConfig(bot)?.master;
-  const admins = oneBotV11.botConfig(bot)?.admins;
+  const admins = oneBotV11.botConfig(bot)?.admins.filter(Boolean) || [];
   message.sender = {
     user_id: event.sender?.user_id,
     user_name: event.sender?.nickname || '',

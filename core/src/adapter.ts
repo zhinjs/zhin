@@ -24,8 +24,9 @@ export class Adapter<I extends object = object, M = {}> extends EventEmitter {
   schemas: Schema = Schema.object({
     unique_id: Schema.string('请输入机器人唯一标识'),
     master: Schema.string('请输入主人id'),
-    admins: Schema.list(Schema.string(''), '请输入管理员id'),
+    admins: Schema.list(Schema.string('管理员qq'), '请输入管理员id'),
     command_prefix: Schema.string('请输入指令前缀'),
+    disabled_plugins: Schema.list(Schema.string('插件名'), '请输入禁用的插件').default([]),
     quote_self: Schema.boolean('回复是否引用源消息'),
   });
   #loggers: Dict<Logger> = {};

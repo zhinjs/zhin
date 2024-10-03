@@ -87,10 +87,10 @@ icqq.schema({
   platform: Schema.number('请选择登录平台')
     .option([
       { label: '安卓手机(Android)', value: 1 },
-      { label: '苹果平板(aPad)', value: 2 },
+      { label: '安卓平板(aPad)', value: 2 },
       { label: '安卓手表(Watch)', value: 3 },
-      { label: 'MacOS(iMac)', value: 4 },
-      { label: 'iPad', value: 5 },
+      { label: 'MacOS(Mac电脑)', value: 4 },
+      { label: 'iPad(苹果平板)', value: 5 },
     ])
     .required()
     .default(3),
@@ -185,7 +185,7 @@ const messageHandler = (bot: Adapter.Bot<Client>, event: QQMessageEvent) => {
         ? event.group_id + ''
         : event.discuss_id + '';
     const master = icqq.botConfig(bot)?.master;
-    const admins = icqq.botConfig(bot)?.admins;
+    const admins = icqq.botConfig(bot)?.admins.filter(Boolean) || [];
     message.sender = {
       ...event.sender,
       permissions: [

@@ -71,7 +71,7 @@ export class Client extends EventEmitter {
     return {
       scene: Client.sceneMap[target_type],
       peer,
-      sub_peer: sub_peer || undefined,
+      sub_peer: sub_peer||undefined,
     };
   }
   #emitEvent(eventStream: NodeJS.ReadableStream) {
@@ -872,55 +872,107 @@ export namespace Client {
   export function toKritorElement(type: ElementType, data: Dict) {
     switch (type) {
       case 'text':
-        return { text: data };
+        return {
+          type:kritor.common.Element.ElementType.TEXT, 
+          text: data,
+          data:'text' 
+        };
       case 'rps':
-        return { rps: data };
+        return { 
+          rps: data
+         };
       case 'dice':
-        return { dice: data };
+        return { 
+          dice: data
+         };
       case 'image':
-        return { image: data };
+        return { 
+          image: data
+         };
       case 'at':
-        return { at: data };
+        return { 
+          at: data
+         };
       case 'basketball':
-        return { basketball: data };
+        return { 
+          basketball: data
+         };
       case 'bubble':
-        return { bubble: data };
+        return { 
+          bubble: data
+         };
       case 'contact':
-        return { contact: data };
+        return { 
+          contact: data
+         };
       case 'face':
-        return { face: data };
+        return { 
+          face: data
+         };
       case 'file':
-        return { file: data };
+        return { 
+          file: data
+         };
       case 'forward':
-        return { forward: data };
+        return { 
+          forward: data
+         };
       case 'gift':
-        return { gift: data };
+        return { 
+          gift: data
+         };
       case 'json':
-        return { json: data };
+        return { 
+          json: data
+         };
       case 'location':
-        return { location: data };
+        return { 
+          location: data
+         };
       case 'keyboard':
-        return { keyboard: data };
+        return { 
+          keyboard: data
+         };
       case 'markdown':
-        return { markdown: data };
+        return { 
+          markdown: data
+         };
       case 'poke':
-        return { poke: data };
+        return { 
+          poke: data
+         };
       case 'reply':
-        return { reply: data };
+        return { 
+          reply: data
+         };
       case 'music':
-        return { music: data };
+        return {
+          music: data
+        };
       case 'share':
-        return { share: data };
+        return { 
+          share: data
+         };
       case 'weather':
-        return { weather: data };
+        return { 
+          weather: data
+         };
       case 'voice':
-        return { voice: data };
+        return { 
+          voice: data
+         };
       case 'video':
-        return { video: data };
+        return { 
+          video: data
+         };
       case 'xml':
-        return { xml: data };
+        return { 
+          xml: data
+         };
       case 'market_face':
-        return { market_face: data };
+        return { 
+          market_face: data
+         };
       default:
         throw new Error(`Unsupported element type: ${type}`);
     }

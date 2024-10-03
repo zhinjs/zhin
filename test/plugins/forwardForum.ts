@@ -1,5 +1,5 @@
 import { Plugin } from 'zhin';
-import { OneBotV12Adapter } from '@zhinjs/onebot-12';
+import { OneBotV12Adapter } from '@zhinjs/adapter-onebot-12';
 const forwardForum = new Plugin({
   name: '频道帖子转发插件',
   adapters: ['onebot-12'],

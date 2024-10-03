@@ -22,7 +22,7 @@ oneBotV12.schema({
 oneBotV12.define('sendMsg', async (bot_id, target_id, target_type, message, source) => {
   const bot = oneBotV12.pick(bot_id);
   let msg: MessageV12.Sendable = await oneBotV12.app!.renderMessage(message as string, source);
-  msg = MessageV12.formatSegments(msg);
+  msg = MessageV12.formatSegments(msg, oneBotV12.botConfig(bot)?.quote_self ? source?.original?.message_id : undefined);
   switch (target_type) {
     case 'guild':
       const [guild_id, channel_id] = target_id.split('/');
@@ -83,7 +83,7 @@ const messageHandler = (bot: Adapter.Bot<OneBotV12>, event: MessageV12) => {
       : event.guild_id + '';
 
   const master = bot.config?.master;
-  const admins = bot.config.admins || [];
+  const admins = bot.config.admins.filter(Boolean) || [];
   message.sender = {
     user_id: event.sender.user_id,
     user_name: event.sender.nickname || '',

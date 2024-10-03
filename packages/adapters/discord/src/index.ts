@@ -71,7 +71,7 @@ const messageHandler = (bot: Adapter.Bot<Bot>, event: DingTalkMessageEvent) => {
   message.raw_message = sendableToString(event.message).trim();
   message.from_id = event instanceof DirectMessageEvent ? event.user_id : event.channel_id;
   const master = discordAdapter.botConfig(bot)?.master;
-  const admins = discordAdapter.botConfig(bot)?.admins;
+  const admins = discordAdapter.botConfig(bot)?.admins.filter(Boolean) || [];
   message.sender = {
     ...event.sender,
     permissions: [

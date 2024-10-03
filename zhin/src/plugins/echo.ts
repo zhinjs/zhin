@@ -1,6 +1,4 @@
-import { formatDateTime, formatSize, formatTime, Plugin as Plugin, segment } from '@zhinjs/core';
-import os from 'os';
-import { version } from '../index';
+import { Plugin as Plugin } from '@zhinjs/core';
 const echo = new Plugin('echo');
 echo
   .command('发送 <msg:any>')

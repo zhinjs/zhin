@@ -1,6 +1,6 @@
 export class Matcher<A = [], O = {}> {
   #args_config: Matcher.ArgConfig[] = [];
-  #alias:string[]=[]
+  #alias: string[] = [];
   #options_config: Record<string, Matcher.OptionConfig> = {};
   constructor(
     public name: string,
@@ -8,12 +8,12 @@ export class Matcher<A = [], O = {}> {
   ) {
     this.#args_config = args_config;
   }
-  alias(...name:string[]){
-    this.#alias.push(...name)
-    return this
+  alias(...name: string[]) {
+    this.#alias.push(...name);
+    return this;
   }
-  get #nameMatcher(){
-    return new RegExp([this.name,...this.#alias].join('|'))
+  get #nameMatcher() {
+    return new RegExp([this.name, ...this.#alias].join('|'));
   }
   get argsMatcher() {
     return new RegExp(
@@ -22,31 +22,38 @@ export class Matcher<A = [], O = {}> {
           return `(${Matcher.typeRegs[arg_config.type]}${arg_config.required || '?'})`;
         })
         .join('s'),
-    'g');
+      'g',
+    );
   }
-  optionMatcher(key:string) {
+  optionMatcher(key: string) {
     const { short_name, type } = this.#options_config[key];
     return new RegExp(`(-${short_name} ${Matcher.typeRegs[type]})|(--${key} ${Matcher.typeRegs[type]}?)`);
   }
-  #matchOptions(message:string){
-    const options=[]
-    for(let key in this.#options_config){
-      const reg=this.optionMatcher(key)
-      const matches=message.match(reg)
-      if(matches){
-        const option=matches[0]
-        options.push(option)
-        message=message.replace(option,'')
+  #matchOptions(message: string) {
+    const options = [];
+    for (let key in this.#options_config) {
+      const reg = this.optionMatcher(key);
+      const matches = message.match(reg);
+      if (matches) {
+        const option = matches[0];
+        options.push(option);
+        message = message.replace(option, '');
       }
     }
-    return [options,message]
+    return [options, message];
   }
   async match(message: string): Promise<{ args: A; options: O } | undefined> {
-    const nameMatcher=this.#nameMatcher
+    const nameMatcher = this.#nameMatcher;
     if (!nameMatcher.test(message)) return;
-    message=message.replace(nameMatcher,'').trimStart()
-    const [options,newMessage]=this.#matchOptions(message)
-    console.log(options,newMessage)
+    message = message.replace(nameMatcher, '').trimStart();
+    const [options, newMessage] = this.#matchOptions(message);
+    const test = [
+      {
+        foo: '11',
+        bar: 333,
+      },
+      {},
+    ].filter(item => {});
     return {
       args: [] as A,
       options: {} as O,

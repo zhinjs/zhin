@@ -1,11 +1,9 @@
 import path from 'path';
 import * as fs from 'fs';
 export {
-  useContext,
+  context,
   getAdapter,
   getBot,
-  useCommand,
-  useMiddleware,
   sendGroupMessage,
   sendPrivateMessage,
   sendGuildMessage,
@@ -14,6 +12,8 @@ export {
   onUnmount,
   listen,
   setOptions,
+  useCommand,
+  useMiddleware,
   withService,
 } from './plugins/setup';
 export * from './constants';

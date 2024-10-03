@@ -89,7 +89,7 @@ const messageHandler = (bot: Adapter.Bot<Bot>, event: QQMessageEvent) => {
   message.raw_message = sendableToString(event.message).trim();
   message.message_type = event.message_type;
   const master = qq.botConfig(bot)?.master;
-  const admins = qq.botConfig(bot)?.admins;
+  const admins = qq.botConfig(bot)?.admins.filter(Boolean) || [];
   message.sender = {
     ...event.sender,
     permissions: [
