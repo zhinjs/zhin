@@ -158,9 +158,10 @@ export class Plugin extends EventEmitter {
     let name = nameArr.pop();
     let parent: Command | undefined;
     while (nameArr.length) {
-      parent = this.findCommand(nameArr.shift()!);
+      const n = nameArr.shift()!;
+      parent = this.findCommand(n);
       if (!parent) {
-        name = [nameArr.join('.'), name].filter(Boolean).join('.');
+        name = [n, nameArr.join('.'), name].filter(Boolean).join('.');
         break;
       }
     }
