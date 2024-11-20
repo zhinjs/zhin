@@ -155,7 +155,7 @@ export class Plugin extends EventEmitter {
     const [nameDecl, ...argsDecl] = decl.split(/\s+/);
     if (!nameDecl) throw new Error('nameDecl不能为空');
     const nameArr = nameDecl.split('.').filter(Boolean);
-    if (nameArr.length) throw new Error('command name cannot be empty or have dot character only')
+    if (nameArr.length === 0) throw new Error('command name cannot be empty or have dot character only')
     let parent: Command | undefined;
     for (let i = nameArr.length - 1; i > 0; i--) {
       const parentName = nameArr.slice(0, i).join('.')
