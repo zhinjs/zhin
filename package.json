@@ -21,7 +21,6 @@
         "docs:build": "vitepress build docs",
         "docs:serve": "vitepress serve docs"
     },
-    "packageManager": "pnpm@9.0.2",
     "publishConfig": {
         "access": "public",
         "registry": "https://registry.npmjs.org"
