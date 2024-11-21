@@ -155,22 +155,20 @@ export class Plugin extends EventEmitter {
     const [nameDecl, ...argsDecl] = decl.split(/\s+/);
     if (!nameDecl) throw new Error('nameDecl不能为空');
     const nameArr = nameDecl.split('.').filter(Boolean);
-    let name = nameArr.pop();
+    if (nameArr.length === 0) throw new Error('command name cannot be empty or have dot character only')
     let parent: Command | undefined;
-    while (nameArr.length) {
-      parent = this.findCommand(nameArr.shift()!);
-      if (!parent) {
-        name = [nameArr.join('.'), name].filter(Boolean).join('.');
-        break;
-      }
+    for (let i = nameArr.length - 1; i > 0; i--) {
+      const parentName = nameArr.slice(0, i).join('.')
+      parent = this.findCommand(parentName);
+      if (parent)  break
     }
     const command = defineCommand(argsDecl.join(' '), ...(args as any));
     if (parent) {
       command.parent = parent;
       parent.children.push(command as unknown as Command);
     }
-    command.name = name;
-    this.commands.set(name!, command);
+    command.name = nameArr.join('.');
+    this.commands.set(command.name, command);
     this.emit('command-add', command);
     this.disposes.push(() => {
       this.commands.delete(command.name!);

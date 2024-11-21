@@ -170,8 +170,13 @@ export function setValueToObj(obj: Dict, key: string | string[], value: any) {
   if (!lastKey) throw new SyntaxError(`key is empty`);
   while (keys.length) {
     const k = keys.shift() as string;
-    obj = Reflect.get(obj, k);
-    if (!obj) throw new SyntaxError(`can't set ${lastKey} to undefined`);
+    if (Reflect.get(obj, k) == null) {
+      setValueToObj(obj, k, {})
+    }
+    obj = Reflect.get(obj, k)
+    if (typeof obj !== 'object') {
+      throw new TypeError(`can not set ${keys[0] || lastKey} property on a non-object called ${k}`)
+    }
   }
   return Reflect.set(obj, lastKey, value);
 }
@@ -184,7 +189,7 @@ export function getValueOfObj(obj: Dict, key: string | string[]) {
   while (keys.length) {
     const k = keys.shift() as string;
     obj = Reflect.get(obj, k);
-    if (!obj) throw new SyntaxError(`can't set ${lastKey} to undefined`);
+    if (!obj) return null;
   }
   return Reflect.get(obj, lastKey);
 }
