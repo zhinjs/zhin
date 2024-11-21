@@ -27,7 +27,6 @@ jobs:
       - name: Deploy
         run: |
           echo "Deploying to demo..."
-          pm2 stop zhin
           pm2 delete zhin
           pm2 start --name zhin npm -- run dev
           echo "Deployed to demo"
