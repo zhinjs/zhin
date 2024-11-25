@@ -42,10 +42,10 @@ export class Message<AD extends Adapter> {
 export function parseFromTemplate(template: string | MessageElem): MessageElem[] {
   if (typeof template !== 'string') return [template];
   const result: MessageElem[] = [];
-  const closingReg = /<(\S+)(\s[^\/]+)?\/>/;
-  const twinningReg = /<(\S+)(\s[^>]+)?>([^<]*)<\/\1>/;
+  const closingReg = /^<(\S+)(\s[^>]+)?\/>/;
+  const twinningReg = /^<(\S+)(\s[^>]+)?>([\s\S]*?)<\/\1>/;
   while (template.length) {
-    const [_, type, attrStr = '', child = ''] = template.match(closingReg) || template.match(twinningReg) || [];
+    const [_, type, attrStr = '', child = ''] = template.match(twinningReg) || template.match(closingReg) || [];
     if (!type) break;
     const isClosing = closingReg.test(template);
     const matched = isClosing ? `<${type}${attrStr}/>` : `<${type}${attrStr}>${child}</${type}>`;
@@ -70,6 +70,10 @@ export function parseFromTemplate(template: string | MessageElem): MessageElem[]
         }
       }),
     );
+    if (child) {
+      // TODO temporarily use 'message' as the key of the child MessageElem
+      data.message = parseFromTemplate(child).map(({ type, data }) => ({ type, ...data }))
+    }
     result.push({
       type: type,
       data,
