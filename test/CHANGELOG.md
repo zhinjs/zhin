@@ -1,5 +1,12 @@
 # test
 
+## 2.0.46
+
+### Patch Changes
+
+- Updated dependencies [0aa7f8e]
+  - @zhinjs/plugin-qa@1.0.41
+
 ## 2.0.45
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @zhinjs/plugin-qa
 
+## 1.0.41
+
+### Patch Changes
+
+- 0aa7f8e: fix: qa-detail run error
+
 ## 1.0.40
 
 ### Patch Changes
