@@ -1,5 +1,13 @@
 # @zhinjs/plugin-github
 
+## 1.0.41
+
+### Patch Changes
+
+- Updated dependencies [5d58205]
+  - zhin@3.0.40
+  - @zhinjs/plugin-http-server@1.0.40
+
 ## 1.0.40
 
 ### Patch Changes
