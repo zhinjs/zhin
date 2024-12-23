@@ -1,5 +1,5 @@
 {
-    "name": "@zhinjs/plugin-transport",
+    "name": "@zhinjs/plugin-transfer",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
     "version": "1.0.0",
@@ -12,7 +12,7 @@
     "author": "凉菜",
     "repository": {
         "url": "https://github.com/zhinjs/zhin",
-        "directory": "packages/plugins/transport"
+        "directory": "packages/plugins/transfer"
     },
     "peerDependencies": {
         "zhin": "workspace:^"

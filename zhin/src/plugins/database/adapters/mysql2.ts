@@ -10,6 +10,7 @@ import {
 import { Database } from '../types';
 import { Dict } from '@zhinjs/shared';
 import { dbFactories } from '../factory';
+import * as fs from 'fs/promises';
 
 type ConnectOptions<T extends boolean = false> = {
   pool?: T;
@@ -36,10 +37,12 @@ export class MysqlDb<T extends boolean = false> implements Database {
   async export(filename: string): Promise<boolean> {
     const connection = this.connection;
     const data: Dict = {};
-    for (const key in (await connection.query('SHOW TABLES'))[0]) {
-      const result = await connection.query(`SELECT * FROM ${key}`);
-      data[key] = result[0];
+    const [tables] = await connection.query<RowDataPacket[]>('SHOW TABLES');
+    for (const table of tables) {
+      const [rows] = await connection.query(`SELECT * FROM ${table[this.#database!]}`);
+      data[table[this.#database!]] = rows;
     }
+    await fs.writeFile(filename, JSON.stringify(data, null, 2), 'utf8');
     return true;
   }
   async get<T = any>(key: string, defaultValue?: T): Promise<T> {
@@ -53,6 +56,9 @@ export class MysqlDb<T extends boolean = false> implements Database {
     this.connection.query(`CREATE TABLE IF NOT EXISTS ${key} (
       ${MysqlDb.getFieldsInfo(value as any)}
     )`);
+    await this.connection.query(
+      `INSERT INTO ${key} VALUES ${(value as T[]).map(v => `(${Object.values(v as any)})`).join(',')} `,
+    );
   }
 
   async import<T extends object>(data: T): Promise<boolean> {

@@ -14,7 +14,7 @@ export class Prompt<T extends Adapter = Adapter> {
   private getChannelAddress<AD extends Adapter>(adapter: AD, bot: Bot<AD>, event: Message<AD>) {
     return `${adapter.name}-${bot.unique_id}-${event.message_type}:${event.sender!.user_id}`;
   }
-  private prompt<T = unknown>(config: Prompt.Config) {
+  private prompt<T = any>(config: Prompt.Config<T>) {
     return new Promise<T>((resolve, reject) => {
       this.event.reply(config.tips);
       this.middleware(
@@ -109,7 +109,7 @@ export class Prompt<T extends Adapter = Adapter> {
             case 'text':
               return v;
           }
-        }),
+        }) as Prompt.Result<T>[],
     });
   }
   async const<T = any>(value: T): Promise<T> {
@@ -134,13 +134,13 @@ export class Prompt<T extends Adapter = Adapter> {
         if (!config.multiple)
           return config.options.find((o, idx) => {
             return idx + 1 === +input;
-          })?.value;
+          })?.value as Prompt.PickResult<T, M>;
         const pickIdx = input.split(separator).map(Number);
         return config.options
           .filter((o, idx) => {
             return pickIdx.includes(idx + 1);
           })
-          .map(o => o.value);
+          .map(o => o.value) as Prompt.PickResult<T, M>;
       },
     });
   }
@@ -179,13 +179,13 @@ export class Prompt<T extends Adapter = Adapter> {
         return await this.prompt({
           tips: schema.meta.description,
           defaultValue: schema.meta.default || new Date(),
-          format: (input: string) => new Date(input),
+          format: (input: string) => new Date(input) as Schema.Types<T>,
         });
       case 'regexp':
         return await this.prompt({
           tips: schema.meta.description,
           defaultValue: schema.meta.default || '',
-          format: (input: string) => new RegExp(input),
+          format: (input: string) => new RegExp(input) as Schema.Types<T>,
         });
       case 'const':
         return await this.const(schema.meta.default!);
@@ -230,11 +230,11 @@ export namespace Prompt {
   export type PickResult<T extends SingleType, M extends boolean> = M extends true ? Result<T>[] : Result<T>;
   export type SingleType = keyof SingleMap;
   export type Result<T extends SingleType> = SingleMap[T];
-  export type Config = {
+  export type Config<R = any> = {
     tips: string;
     defaultValue: any;
     timeout?: number;
     timeoutText?: string;
-    format: (input: string) => any;
+    format: (input: string) => R;
   };
 }

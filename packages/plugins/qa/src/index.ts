@@ -1,4 +1,4 @@
-import { Message, Plugin } from 'zhin';
+import { Message, Plugin, escape } from 'zhin';
 
 type QAInfo = {
   adapter: string; // 可用适配器
@@ -120,9 +120,7 @@ qaCommand
     return (
       qaList
         .map((qa, index) => {
-          return `${(options.page - 1) * pageSize + index + 1}：\n问:${qa.content}\n答:${encodeURIComponent(
-            qa.answer,
-          )}\n`;
+          return `${(options.page - 1) * pageSize + index + 1}：\n问:${qa.content}\n答:${escape(qa.answer)}\n`;
         })
         .join('\n') + `第${options.page}页，共${Math.ceil(qaList.length / pageSize)}页`
     );
