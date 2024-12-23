@@ -1,5 +1,13 @@
 # zhin
 
+## 3.0.40
+
+### Patch Changes
+
+- 5d58205: fix: types error,qa display
+- Updated dependencies [5d58205]
+  - @zhinjs/core@2.0.2
+
 ## 3.0.39
 
 ### Patch Changes

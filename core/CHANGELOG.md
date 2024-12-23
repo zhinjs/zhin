@@ -1,5 +1,11 @@
 # @zhinjs/core
 
+## 2.0.2
+
+### Patch Changes
+
+- 5d58205: fix: types error,qa display
+
 ## 2.0.1
 
 ### Patch Changes

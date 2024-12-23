@@ -1,5 +1,32 @@
 # test
 
+## 2.0.45
+
+### Patch Changes
+
+- 5d58205: fix: types error,qa display
+- Updated dependencies [5d58205]
+  - @zhinjs/plugin-qa@1.0.40
+  - zhin@3.0.40
+  - @zhinjs/adapter-com-wechat@0.0.16
+  - @zhinjs/adapter-dingtalk@0.0.16
+  - @zhinjs/adapter-discord@0.0.16
+  - @zhinjs/adapter-email@0.0.16
+  - @zhinjs/adapter-icqq@0.0.16
+  - @zhinjs/adapter-kritor@0.0.16
+  - @zhinjs/adapter-onebot-11@0.0.16
+  - @zhinjs/adapter-onebot-12@0.0.17
+  - @zhinjs/adapter-qq@0.0.17
+  - @zhinjs/adapter-web-wechat@0.0.16
+  - @zhinjs/plugin-group-manage@1.0.42
+  - @zhinjs/plugin-guild-manage@1.0.41
+  - @zhinjs/plugin-schedule@1.0.40
+  - @zhinjs/plugin-http-server@1.0.40
+  - @zhinjs/plugin-sandbox@1.0.40
+  - @zhinjs/plugin-screenshot@1.0.41
+  - @zhinjs/plugin-upyun@1.0.40
+  - @zhinjs/web@1.0.41
+
 ## 2.0.44
 
 ### Patch Changes

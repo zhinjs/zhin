@@ -1,5 +1,13 @@
 # @zhinjs/discord
 
+## 0.0.16
+
+### Patch Changes
+
+- Updated dependencies [5d58205]
+  - zhin@3.0.40
+  - @zhinjs/web@1.0.41
+
 ## 0.0.15
 
 ### Patch Changes
