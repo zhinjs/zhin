@@ -166,7 +166,7 @@ qaCommand.command('问答详情 <no:number>').action(async (_, no) => {
   return `问答${no}：\n${JSON.stringify(
     Object.fromEntries(
       Object.keys(qa).map(key => {
-        return [zhText[key] || key, qa[key as keyof QAInfo]];
+        return [zhText[key] || key, escape(qa[key as keyof QAInfo])];
       }),
     ),
     null,
