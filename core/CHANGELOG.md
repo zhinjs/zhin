@@ -1,5 +1,11 @@
 # @zhinjs/core
 
+## 2.0.3
+
+### Patch Changes
+
+- 72bc8ca: fix: qa detail run error
+
 ## 2.0.2
 
 ### Patch Changes
