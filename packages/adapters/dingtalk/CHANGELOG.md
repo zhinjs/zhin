@@ -1,5 +1,12 @@
 # @zhinjs/dingtalk
 
+## 0.0.18
+
+### Patch Changes
+
+- f917cb8: fix add keyword
+  - zhin@3.0.42
+
 ## 0.0.17
 
 ### Patch Changes

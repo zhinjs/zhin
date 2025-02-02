@@ -1,5 +1,11 @@
 # @zhinjs/client
 
+## 1.0.12
+
+### Patch Changes
+
+- f917cb8: fix add keyword
+
 ## 1.0.11
 
 ### Patch Changes
