@@ -1,5 +1,12 @@
 # @zhinjs/plugin-transfer
 
+## 1.0.3
+
+### Patch Changes
+
+- f917cb8: fix add keyword
+  - zhin@3.0.42
+
 ## 1.0.2
 
 ### Patch Changes
