@@ -1,4 +1,6 @@
 import { Adapter, Message } from '@zhinjs/core';
+import { unescape } from '@zhinjs/shared';
+
 declare module '@zhinjs/core' {
   namespace App {
     interface Adapters {
@@ -10,7 +12,7 @@ declare module '@zhinjs/core' {
 }
 const processAdapter = new Adapter<Adapter.Bot<NodeJS.Process>>('process');
 processAdapter.define('sendMsg', async (bot_id, target_id, target_type, message) => {
-  processAdapter.logger.info(`send [${target_type} ${target_id}]: ${decodeURIComponent(message)}`);
+  processAdapter.logger.info(`send [${target_type} ${target_id}]: ${unescape(message)}`);
 });
 const startBots = (configs: Adapter.Bot[]) => {
   for (const config of configs) {

@@ -81,7 +81,7 @@ export class Bot extends EventEmitter {
   async sendMessage(to: string, message: string) {
     if (this.hasStop) return;
     const attachments: SendAttachment[] = [];
-    const rawMessage = decodeURIComponent(message);
+    const rawMessage = unescape(message);
     message = Bot.createEmailContent(await Bot.getAttachment(attachments, message));
     await this.#transport.sendMail({
       from: this.options.username,
