@@ -1,5 +1,11 @@
 # zhin
 
+## 3.0.43
+
+### Patch Changes
+
+- 35c8293: fix unescape
+
 ## 3.0.42
 
 ### Patch Changes

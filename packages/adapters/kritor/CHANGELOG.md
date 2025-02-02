@@ -1,5 +1,12 @@
 # @zhinjs/kritor
 
+## 0.0.19
+
+### Patch Changes
+
+- Updated dependencies [35c8293]
+  - zhin@3.0.43
+
 ## 0.0.18
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @zhinjs/discord
 
+## 0.0.19
+
+### Patch Changes
+
+- 35c8293: fix unescape
+- Updated dependencies [35c8293]
+  - zhin@3.0.43
+
 ## 0.0.18
 
 ### Patch Changes
