@@ -1,5 +1,11 @@
 # @zhinjs/wechat
 
+## 0.0.18
+
+### Patch Changes
+
+- zhin@3.0.42
+
 ## 0.0.17
 
 ### Patch Changes

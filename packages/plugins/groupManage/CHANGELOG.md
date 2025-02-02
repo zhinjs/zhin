@@ -1,5 +1,14 @@
 # @zhinjs/plugin-group-manage
 
+## 1.0.44
+
+### Patch Changes
+
+- f917cb8: fix add keyword
+- Updated dependencies [f917cb8]
+  - @zhinjs/adapter-onebot-12@0.0.19
+  - zhin@3.0.42
+
 ## 1.0.43
 
 ### Patch Changes

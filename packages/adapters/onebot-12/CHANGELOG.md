@@ -1,5 +1,14 @@
 # @zhinjs/onebot-12
 
+## 0.0.19
+
+### Patch Changes
+
+- f917cb8: fix add keyword
+- Updated dependencies [f917cb8]
+  - @zhinjs/plugin-http-server@1.0.42
+  - zhin@3.0.42
+
 ## 0.0.18
 
 ### Patch Changes

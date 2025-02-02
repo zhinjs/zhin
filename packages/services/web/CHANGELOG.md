@@ -1,5 +1,15 @@
 # @zhinjs/web
 
+## 1.0.43
+
+### Patch Changes
+
+- f917cb8: fix add keyword
+- Updated dependencies [f917cb8]
+  - @zhinjs/plugin-http-server@1.0.42
+  - @zhinjs/client@1.0.12
+  - zhin@3.0.42
+
 ## 1.0.42
 
 ### Patch Changes
