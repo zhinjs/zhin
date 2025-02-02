@@ -11,6 +11,11 @@
         "dist",
         "client"
     ],
+    "keywords": [
+        "zhin",
+        "zhin-plugin",
+        "http-server"
+    ],
     "author": "凉菜",
     "repository": {
         "url": "https://github.com/zhinjs/zhin",

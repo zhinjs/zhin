@@ -7,6 +7,11 @@
     "scripts": {
         "build": "tsc && tsc-alias"
     },
+    "keywords": [
+        "zhin",
+        "zhin-service",
+        "web"
+    ],
     "files": [
         "lib",
         "client"

@@ -6,6 +6,11 @@
     "scripts": {
         "build": "tsc && tsc-alias"
     },
+    "keywords": [
+        "zhin",
+        "zhin-adapter",
+        "dingtalk"
+    ],
     "files": [
         "lib"
     ],

@@ -1,4 +1,3 @@
 ---
-layout: home
+layout: component-store
 ---
-<component-store/>

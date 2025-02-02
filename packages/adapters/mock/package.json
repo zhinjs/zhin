@@ -1,26 +1,31 @@
 {
-  "name": "@zhinjs/adapter-mock",
-  "main": "lib/index.js",
-  "types": "lib/index.d.ts",
-  "version": "0.0.17",
-  "scripts": {
-    "build": "tsc && tsc-alias"
-  },
-  "files": [
-    "lib",
-    "client"
-  ],
-  "author": "凉菜",
-  "repository": {
-    "url": "https://github.com/zhinjs/zhin",
-    "directory": "packages/adapters/mock"
-  },
-  "peerDependencies": {
-    "zhin": "workspace:^",
-    "@zhinjs/web": "workspace:^"
-  },
-  "devDependencies": {
-    "@types/node": "latest",
-    "@types/ws": "latest"
-  }
+	"name": "@zhinjs/adapter-mock",
+	"main": "lib/index.js",
+	"types": "lib/index.d.ts",
+	"version": "0.0.17",
+	"scripts": {
+		"build": "tsc && tsc-alias"
+	},
+	"keywords": [
+		"zhin",
+		"zhin-adapter",
+		"mock"
+	],
+	"files": [
+		"lib",
+		"client"
+	],
+	"author": "凉菜",
+	"repository": {
+		"url": "https://github.com/zhinjs/zhin",
+		"directory": "packages/adapters/mock"
+	},
+	"peerDependencies": {
+		"zhin": "workspace:^",
+		"@zhinjs/web": "workspace:^"
+	},
+	"devDependencies": {
+		"@types/node": "latest",
+		"@types/ws": "latest"
+	}
 }

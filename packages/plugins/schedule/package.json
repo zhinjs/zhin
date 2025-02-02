@@ -9,6 +9,11 @@
     "files": [
         "lib"
     ],
+    "keywords": [
+        "zhin",
+        "zhin-plugin",
+        "schedule"
+    ],
     "author": "凉菜",
     "repository": {
         "url": "https://github.com/zhinjs/zhin",

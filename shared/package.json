@@ -11,6 +11,10 @@
         "build": "npm run compile && npm run dtsc",
         "dtsc": "dtsc --project tsconfig.dtsc.json"
     },
+    "keywords": [
+        "zhin",
+        "shared"
+    ],
     "files": [
         "lib",
         "package.json",

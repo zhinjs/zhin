@@ -177,6 +177,7 @@ onMounted(() => search());
 </style>
 <style lang="less">
 .store-wrap {
+  margin: 10px;
   .el-card__footer {
     display: flex;
     flex-wrap: wrap;

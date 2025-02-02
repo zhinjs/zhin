@@ -3,6 +3,11 @@
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
     "version": "0.0.17",
+    "keywords": [
+        "zhin",
+        "zhin-adapter",
+        "icqq"
+    ],
     "scripts": {
         "build": "tsc && tsc-alias"
     },

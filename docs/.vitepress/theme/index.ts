@@ -23,7 +23,7 @@ export default {
     }
     app.component('UserAvatar', UserAvatar);
     app.component('ChatMsg', ChatMsg);
-    app.component('ComponentStore', ComponentStore);
+    app.component('component-store', ComponentStore);
     app.component('render-markdown', RenderMarkdown);
     app.component('ChatHistory', ChatHistory);
   },
