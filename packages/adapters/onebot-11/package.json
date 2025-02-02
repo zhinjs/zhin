@@ -2,7 +2,7 @@
     "name": "@zhinjs/adapter-onebot-11",
     "main": "./lib/index.js",
     "types": "./lib/index.d.ts",
-    "version": "0.0.16",
+    "version": "0.0.17",
     "scripts": {
         "build": "tsc && tsc-alias"
     },

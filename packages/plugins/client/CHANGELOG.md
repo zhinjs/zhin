@@ -1,5 +1,11 @@
 # @zhinjs/client
 
+## 1.0.11
+
+### Patch Changes
+
+- 72bc8ca: fix: qa detail run error
+
 ## 1.0.10
 
 ### Patch Changes
