@@ -16,7 +16,7 @@ import '@ionic/vue/css/text-alignment.css';
 import '@ionic/vue/css/text-transformation.css';
 import '@ionic/vue/css/flex-utils.css';
 import '@ionic/vue/css/display.css';
-import { router, useCommonStore } from '@zhinjs/client';
+import { addPage, router, useCommonStore } from '@zhinjs/client';
 import App from './App.vue';
 const pinia = createPinia();
 const wsUrl = `${window.location.protocol.replace(/^http?/, 'ws')}${window.location.host}/server`;
@@ -41,20 +41,18 @@ ws.onmessage = message => {
 ws.onclose = () => {
   console.log('connection closed');
 };
-
+const app = createApp(App);
+app.use(pinia).use(router).use(IonicVue);
+app.config.globalProperties.$ws = ws;
 router.addRoute({
   path: '/',
   name: 'Zhin',
   component: () => import('./pages/$.vue'),
-  children: [
-    {
-      path: '',
-      name: '首页',
-      component: () => import('./pages/dashboard.vue'),
-    },
-  ],
 });
-const app = createApp(App);
-app.use(pinia).use(router).use(IonicVue);
-app.config.globalProperties.$ws = ws;
+addPage({
+  parentName: 'Zhin',
+  path: '/',
+  name: 'Dashboard',
+  component: () => import('./pages/dashboard.vue'),
+});
 app.mount('#app');

@@ -51,13 +51,13 @@ export const context = {
   get plugin() {
     return getOrCreatePlugin();
   },
-  useCommand: <S extends Command.Declare>(decl: S, initialValue?: ArgsType<Command.RemoveFirst<S>>) => {
+  command: <S extends Command.Declare>(decl: S, initialValue?: ArgsType<Command.RemoveFirst<S>>) => {
     return context.plugin.command(decl, initialValue);
   },
-  withService: <T extends keyof App.Services>(...services: T[]) => {
+  service: <T extends keyof App.Services>(...services: T[]) => {
     return context.plugin.required(...services);
   },
-  useMiddleware: <AD extends Adapter = Adapter>(middleware: Middleware<AD>) => {
+  middleware: <AD extends Adapter = Adapter>(middleware: Middleware<AD>) => {
     return context.plugin.middleware(middleware);
   },
   get options(): Plugin.Options {
@@ -111,9 +111,9 @@ export const context = {
 };
 export const getAdapter = context.adapter;
 export const getBot = context.pickBot;
-export const useMiddleware = context.useMiddleware;
-export const useCommand = context.useCommand;
-export const withService = context.withService;
+export const useMiddleware = context.middleware;
+export const useCommand = context.command;
+export const withService = context.service;
 export const sendGroupMessage = context.sendGroupMessage;
 export const sendPrivateMessage = context.sendPrivateMessage;
 export const sendGuildMessage = context.sendGuildMessage;

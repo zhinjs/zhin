@@ -113,7 +113,7 @@ zhinManager
   .command('status')
   .desc('查看知音运行状态')
   .alias('状态')
-  .action(({ adapter }) => {
+  .action(({ message }) => {
     const restartTimes = Number(process.env?.RESTART_TIMES);
     const lastRestartTime = Date.now() - process.uptime() * 1000;
     const startTime = Date.now() / 1000 - Number(process.env?.START_TIME);
@@ -133,7 +133,7 @@ zhinManager
         `内存：${formatSize(usedMemory)}/${formatSize(totalMemory)} ${((usedMemory / totalMemory) * 100).toFixed(2)}%`,
         `运行环境：NodeJS ${process.version}`,
         `zhin v${version} (${process.env.mode} mode)`,
-        `适配器：${adapter.name}`,
+        `适配器：${message.adapter.name}`,
         `进程：${process.ppid}/${process.pid} ${formatSize(processMemory)} ${(
           (processMemory / usedMemory) *
           100
@@ -150,7 +150,7 @@ zhinManager
   .option('-v [version:string] 更新到指定版本，默认最新', 'latest')
   .option('-r [restart:boolean] 是否立即重启，默认不重启', false)
   .permission('master')
-  .action(async ({ message, adapter, bot, options }) => {
+  .action(async ({ message, options }) => {
     const beforeVersion = version;
     if (!options.version) options.version = 'latest';
     const afterVersion = await (async () => {
@@ -172,8 +172,8 @@ zhinManager
       process.send?.({
         type: 'queue',
         body: {
-          adapter: adapter.name,
-          bot: bot.unique_id,
+          adapter: message.adapter.name,
+          bot: message.bot.unique_id,
           target_id: message.from_id,
           target_type: message.message_type,
           message: `重启完成，本次升级内容如下:\n${newContent}`,

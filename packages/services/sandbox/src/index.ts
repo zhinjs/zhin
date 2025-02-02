@@ -102,9 +102,9 @@ sandbox.mounted(() => {
       if (!context.children) return '';
       const result = await renderWithRuntime(context.children, {}, context.$root);
       const { adapter, bot } = context.$message;
-      const commands = sandbox.app!.getSupportCommands(adapter, bot, context.$message);
+      const commands = sandbox.app!.getSupportCommands(adapter.name);
       for (const command of commands) {
-        const res = await command.execute(adapter, bot, context.$message, `${bot.command_prefix}${result}`);
+        const res = await command.execute(context.$message, result);
         if (res) return res;
       }
       throw new Error(`执行${context.children}失败，未找到合适的指令`);

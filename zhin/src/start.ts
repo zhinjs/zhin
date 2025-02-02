@@ -16,7 +16,7 @@ const errorHandler = (e: unknown) => console.error(e);
     }
     app.logger.info('initializing');
     await initialApp.apply(app);
-    const pkg = await import(`${WORK_DIR}/package.json`);
+    const pkg = JSON.parse(fs.readFileSync(`${WORK_DIR}/package.json`, 'utf-8'));
     pkg.scripts = pkg.scripts || {};
     pkg.scripts.start = 'zhin start';
     pkg.scripts['dev'] = 'zhin -m dev';

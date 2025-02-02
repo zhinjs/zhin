@@ -135,9 +135,9 @@ export class App extends EventEmitter {
     );
   }
 
-  getSupportCommands<A extends Adapter>(adapter: A, bot: Bot<A>, event: Message<A>) {
+  getSupportCommands(adapter: string) {
     return this.pluginList
-      .filter(plugin => !plugin.adapters || plugin.adapters.includes(adapter.name))
+      .filter(plugin => !plugin.adapters || plugin.adapters.includes(adapter))
       .flatMap(plugin => plugin.commandList);
   }
 

@@ -1,12 +1,11 @@
-import { context, setOptions } from 'zhin';
+import { useMiddleware, useCommand, setOptions } from 'zhin';
 setOptions({
   name: 'foo',
 });
-const { useMiddleware, useCommand } = context;
 useCommand('foo')
   .hidden()
   .action(({ bot }) => {
-    return 'bar';
+    return 'bar1';
   });
 
 useCommand('bar')

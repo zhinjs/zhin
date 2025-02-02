@@ -7,9 +7,14 @@ declare module '@zhinjs/core' {
   }
 }
 const executeCommand = async (message: Message) => {
-  const commands = commandParser.app!.getSupportCommands(message.adapter, message.bot, message);
+  let template = message.raw_message;
+  if (message.bot.command_prefix) {
+    if (!template.startsWith(message.bot.command_prefix)) return;
+    template = template.replace(message.bot.command_prefix, '');
+  }
+  const commands = commandParser.app!.getSupportCommands(message.adapter.name);
   for (const command of commands) {
-    const result = await command.execute(message.adapter, message.bot, message, message.raw_message);
+    const result = await command.execute(message, template);
     if (result) {
       await message.reply(result);
       return true;
@@ -28,8 +33,8 @@ commandParser
   .desc('输出指令提示文本')
   .alias('tip')
   .option('-H [showHidden:boolean] 显示隐藏指令')
-  .action(({ options, adapter, bot, message }, target) => {
-    const supportCommands = commandParser.app!.getSupportCommands(adapter, bot, message);
+  .action(({ options, message }, target) => {
+    const supportCommands = commandParser.app!.getSupportCommands(message.adapter.name);
     if (!target) {
       const commands = supportCommands.filter(cmd => {
         if (options.showHidden) return cmd.parent === null;

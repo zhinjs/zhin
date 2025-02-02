@@ -2,7 +2,7 @@
   <ion-menu content-id="main-content">
     <ion-header>
       <ion-toolbar>
-        <ion-title>菜单</ion-title>
+        <ion-title>Menus</ion-title>
       </ion-toolbar>
     </ion-header>
     <ion-content class="ion-padding">
@@ -31,13 +31,9 @@
 </template>
 
 <script setup lang="ts">
-import { useRouter } from 'vue-router';
-const menus = computed(() => {
-  return useRouter()
-    .getRoutes()
-    .filter(item => !item.children?.length);
-});
-console.log(useRouter().getRoutes());
+import { useCommonStore } from '@zhinjs/client';
+import { computed } from 'vue';
+
 import {
   IonContent,
   IonMenu,
@@ -52,5 +48,8 @@ import {
   IonTitle,
   IonToolbar,
 } from '@ionic/vue';
-import { computed } from 'vue';
+const menus = computed(() => {
+  return useCommonStore().store.menus || [];
+});
+console.log(menus);
 </script>

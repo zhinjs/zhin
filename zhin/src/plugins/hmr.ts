@@ -90,13 +90,13 @@ hmr
   .command('zhin.restart')
   .desc('重启项目')
   .permission('master')
-  .action(async ({ bot, adapter, message }) => {
+  .action(async ({ message }) => {
     await message.reply('正在重启');
     process.send?.({
       type: 'queue',
       body: {
-        adapter: adapter.name,
-        bot: bot.unique_id,
+        adapter: message.adapter.name,
+        bot: message.bot.unique_id,
         target_id: message.from_id,
         target_type: message.message_type,
         message: `已完成重启`,
@@ -108,7 +108,7 @@ hmr
   .command('zhin.exit')
   .desc('退出zhin')
   .permission('master')
-  .action(async ({ bot, adapter, message }) => {
+  .action(async ({ message }) => {
     await message.reply('正在退出');
     process.exit();
   });

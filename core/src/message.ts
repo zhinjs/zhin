@@ -72,7 +72,7 @@ export function parseFromTemplate(template: string | MessageElem): MessageElem[]
     );
     if (child) {
       // TODO temporarily use 'message' as the key of the child MessageElem
-      data.message = parseFromTemplate(child).map(({ type, data }) => ({ type, ...data }))
+      data.message = parseFromTemplate(child).map(({ type, data }) => ({ type, ...data }));
     }
     result.push({
       type: type,
@@ -108,7 +108,7 @@ export namespace Message {
   export type Type = 'private' | 'group' | 'guild' | 'direct';
   export function fromEvent<AD extends Adapter>(adapter: AD, bot: Bot<AD>, message: AdapterReceive<AD>) {
     const result = new Message(adapter, bot, message);
-    result.prompt = new Prompt(adapter, bot, result);
+    result.prompt = new Prompt(result);
     return result;
   }
   export function fromJSON<AD extends Adapter>(adapter: AD, bot: Bot<AD>, json: MessageBase) {
@@ -117,7 +117,7 @@ export namespace Message {
     result.sender = json.sender;
     result.message_type = json.message_type;
     result.raw_message = json.raw_message;
-    result.prompt = new Prompt(adapter, bot, result);
+    result.prompt = new Prompt(result);
     return result;
   }
 }

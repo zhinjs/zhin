@@ -4,6 +4,7 @@ import { Bot } from './types';
 import { Adapter } from './adapter';
 import { Message, segment } from './message';
 import { Prompt } from './prompt';
+import { App } from './app';
 
 type Argv = {
   name: string;
@@ -249,14 +250,12 @@ export class Command<A extends any[] = [], O = {}> {
   }
 
   async execute<AD extends Adapter>(
-    adapter: AD,
-    bot: Bot<AD>,
     message: Message<AD>,
     template = message.raw_message,
   ): Promise<Message.Segment | void> {
     let runtime: Command.RunTime<AD, A, O> | void;
     try {
-      runtime = this.parse(adapter, bot, message, template);
+      runtime = this.parse(template, message);
     } catch (e: any) {
       return segment.text(e.message);
     }
@@ -383,26 +382,17 @@ export class Command<A extends any[] = [], O = {}> {
     return argv;
   }
 
-  match<AD extends Adapter>(adapter: AD, bot: Bot<AD>, message: Message<AD>, template: string): boolean {
+  match<AD extends Adapter>(template: string, message: Message<AD>, app: App): boolean {
     try {
-      return !!this.parse(adapter, bot, message, template);
+      return !!this.parse(template, message);
     } catch {
       return false;
     }
   }
 
-  parse<AD extends Adapter>(
-    adapter: AD,
-    bot: Bot<AD>,
-    message: Message<AD>,
-    template: string,
-  ): Command.RunTime<AD, A, O> | void {
+  parse<AD extends Adapter>(template: string, message: Message<AD>): Command.RunTime<AD, A, O> | void {
     let argv = this.parseSugar(template);
     if (!argv.name) {
-      if (bot.command_prefix) {
-        if (!template.startsWith(bot.command_prefix)) return;
-        template = template.replace(bot.command_prefix, '');
-      }
       argv = this.parseArgv(template);
     }
     if (argv.name !== this.name) {
@@ -412,10 +402,10 @@ export class Command<A extends any[] = [], O = {}> {
     Command.checkArgv(argv, this.argsConfig, this.optionsConfig);
     return {
       args: argv.args as A,
+      adapter: message.adapter,
+      bot: message.bot,
       options: argv.options as O,
-      adapter,
-      bot,
-      prompt: new Prompt(adapter, bot, message),
+      prompt: new Prompt(message),
       command: this,
       message,
     };
@@ -434,10 +424,10 @@ export function defineCommand<S extends string>(
 ): Command<ArgsType<S>>;
 export function defineCommand<S extends string>(
   decl: S,
-  ...args: (ArgsType<S> | Command.Config)[]
+  ...args: [ArgsType<S> | Command.Config, Command.Config?]
 ): Command<ArgsType<S>> {
   const initialValue: ArgsType<S> | undefined = Array.isArray(args[0]) ? undefined : (args.shift() as ArgsType<S>);
-  const command = new Command<ArgsType<S>>(...(args as [Command.Config?]));
+  const command = new Command<ArgsType<S>>(...(args as [Command.Config]));
   const argDeclArr = decl.split(' ').filter(Boolean);
   for (let i = 0; i < argDeclArr.length; i++) {
     const argDecl = argDeclArr[i];
@@ -527,8 +517,8 @@ export namespace Command {
 
   export type RunTime<AD extends Adapter, A extends any[] = [], O = {}> = {
     args: A;
-    adapter: AD;
     options: O;
+    adapter: AD;
     bot: Bot<AD>;
     prompt: Prompt<AD>;
     message: Message<AD>;

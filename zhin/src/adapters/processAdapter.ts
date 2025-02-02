@@ -52,7 +52,7 @@ const messageHandler = (bot: Adapter.Bot<NodeJS.Process>, event: Buffer) => {
     user_name: bot.title,
     permissions: ['admin', 'master', 'normal'],
   };
-  const commands = processAdapter.app!.getSupportCommands(processAdapter, bot, message);
+  const commands = processAdapter.app!.getSupportCommands(processAdapter.name);
   const matchReg = new RegExp(`^/(${commands.map(c => c.name).join('|')})`);
   if (message.raw_message.match(matchReg)) message.raw_message = message.raw_message.slice(1);
   processAdapter.logger.info(`recv [${message.message_type} ${message.from_id}]: ${message.raw_message}`);

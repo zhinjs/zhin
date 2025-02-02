@@ -4,15 +4,15 @@ import { Middleware } from './middleware';
 import { Bot } from './types';
 import { Message } from './message';
 import { Schema } from './schema';
+import { App } from './app';
 
 export class Prompt<T extends Adapter = Adapter> {
-  constructor(
-    private adapter: T,
-    private bot: Bot<T>,
-    private event: Message<T>,
-  ) {}
-  private getChannelAddress<AD extends Adapter>(adapter: AD, bot: Bot<AD>, event: Message<AD>) {
-    return `${adapter.name}-${bot.unique_id}-${event.message_type}:${event.sender!.user_id}`;
+  constructor(private event: Message<T>) {}
+  get app() {
+    return this.event.adapter.app;
+  }
+  private getChannelAddress<AD extends Adapter>(event: Message<AD>) {
+    return `${event.adapter}-${event.bot.unique_id}-${event.message_type}:${event.sender!.user_id}`;
   }
   private prompt<T = any>(config: Prompt.Config<T>) {
     return new Promise<T>((resolve, reject) => {
@@ -34,13 +34,12 @@ export class Prompt<T extends Adapter = Adapter> {
   }
   middleware(callback: (input: string | Error) => any, timeout: number = 3 * 60 * 1000, timeoutText = '输入超时') {
     const middleware: Middleware = (adapter, bot, event, next) => {
-      if (this.getChannelAddress(adapter, bot, event) !== this.getChannelAddress(this.adapter, this.bot, this.event))
-        return next();
+      if (this.getChannelAddress(event) !== this.getChannelAddress(this.event)) return next();
       callback(event.raw_message);
       dispose();
       clearTimeout(timer);
     };
-    const dispose = this.adapter.app!.middleware(middleware);
+    const dispose = this.app!.middleware(middleware);
     const timer = setTimeout(() => {
       dispose();
       callback(new Error(timeoutText));

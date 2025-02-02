@@ -84,21 +84,21 @@ forwardForum.middleware<OneBotV12Adapter>(async (adapter, bot, event, next) => {
   const [textSeg, forumSeg] = message;
   if (!forumSeg || typeof forumSeg !== 'object' || forumSeg.type !== 'forum') return;
   const { user_id, user_name } = event.sender || {};
-  const { guild_id, guild_name, channel_id, channel_name } = event.original;
+  const { guild_id, guild_name, channel_id, channel_name } = event.original!;
   const configs = configList.filter(config => {
     return config.guild_id === String(guild_id) && config.channel_id === String(channel_id);
   });
   if (!configs.length) return;
-  const forumUrl = await bot.getForumUrl(guild_id, channel_id, forumSeg.data.id);
+  const forumUrl = await bot.getForumUrl(guild_id!, channel_id!, forumSeg.data.id);
   for (const config of configs) {
     const { group_id, template } = config;
     const message = template
-      .replace('{guild_name}', guild_name)
-      .replace('{guild_id}', guild_id)
-      .replace('{channel_name}', channel_name)
-      .replace('{channel_id}', channel_id)
-      .replace('{user_name}', user_name)
-      .replace('{user_id}', user_id)
+      .replace('{guild_name}', guild_name!)
+      .replace('{guild_id}', guild_id!)
+      .replace('{channel_name}', channel_name!)
+      .replace('{channel_id}', channel_id!)
+      .replace('{user_name}', user_name!)
+      .replace('{user_id}', `${user_id}`)
       .replace('{title}', typeof textSeg === 'string' ? textSeg : textSeg.data.text)
       .replace('{url}', forumUrl);
     await bot.sendGroupMsg(group_id, message);

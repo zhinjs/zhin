@@ -90,7 +90,8 @@ server.listen(
   () => {
     const address = server.address();
     if (!address) return;
-    httpServer.app?.logger.mark('server start at', address);
+    const visitAddress = typeof address === 'string' ? address : `${address.address}:${address.port}`;
+    httpServer.app?.logger.mark(`server is running at http://${visitAddress}`);
     httpServer.app?.logger.info('your username is：', username);
     httpServer.app?.logger.info('your password is：', password);
   },
