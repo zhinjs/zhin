@@ -8,6 +8,7 @@ import {
   GuildMessageEvent,
   Intent,
   Quotable,
+  Receiver,
 } from 'qq-official-bot';
 type QQMessageEvent = PrivateMessageEvent | GroupMessageEvent | GuildMessageEvent;
 export type QQAdapter = typeof qq;
@@ -39,9 +40,10 @@ type QQConfig = {
 };
 const startBots = (configs: App.BotConfig<'qq'>[]) => {
   for (const { private: isPrivate, group, public: isPublic, ...config } of configs) {
-    const botConfig: Bot.Config = {
+    const botConfig: Bot.Config<'websocket'> = {
       logLevel: qq.app!.config.log_level as any,
       ...config,
+      mode: 'websocket',
       intents: [
         group && 'GROUP_AT_MESSAGE_CREATE',
         isPrivate && 'C2C_MESSAGE_CREATE',
