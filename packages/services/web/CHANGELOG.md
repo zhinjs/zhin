@@ -1,5 +1,13 @@
 # @zhinjs/web
 
+## 1.0.45
+
+### Patch Changes
+
+- Updated dependencies [21db147]
+  - zhin@3.0.44
+  - @zhinjs/plugin-http-server@1.0.44
+
 ## 1.0.44
 
 ### Patch Changes

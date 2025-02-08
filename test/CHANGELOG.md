@@ -1,5 +1,32 @@
 # test
 
+## 2.0.50
+
+### Patch Changes
+
+- 21db147: fix: code upgrade
+- Updated dependencies [21db147]
+  - @zhinjs/adapter-com-wechat@0.0.20
+  - @zhinjs/adapter-web-wechat@0.0.20
+  - @zhinjs/plugin-group-manage@1.0.46
+  - @zhinjs/plugin-guild-manage@1.0.45
+  - @zhinjs/adapter-onebot-11@0.0.20
+  - @zhinjs/adapter-onebot-12@0.0.21
+  - @zhinjs/adapter-dingtalk@0.0.20
+  - @zhinjs/adapter-discord@0.0.20
+  - @zhinjs/plugin-schedule@1.0.44
+  - @zhinjs/adapter-kritor@0.0.20
+  - @zhinjs/adapter-email@0.0.20
+  - @zhinjs/adapter-icqq@0.0.20
+  - @zhinjs/adapter-qq@0.0.21
+  - zhin@3.0.44
+  - @zhinjs/plugin-qa@1.0.45
+  - @zhinjs/plugin-http-server@1.0.44
+  - @zhinjs/plugin-sandbox@1.0.44
+  - @zhinjs/plugin-screenshot@1.0.45
+  - @zhinjs/plugin-upyun@1.0.44
+  - @zhinjs/web@1.0.45
+
 ## 2.0.49
 
 ### Patch Changes
