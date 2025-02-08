@@ -1,5 +1,13 @@
 # @zhinjs/discord
 
+## 0.0.20
+
+### Patch Changes
+
+- 21db147: fix: code upgrade
+- Updated dependencies [21db147]
+  - zhin@3.0.44
+
 ## 0.0.19
 
 ### Patch Changes

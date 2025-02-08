@@ -1,5 +1,12 @@
 # @zhinjs/plugin-sandbox
 
+## 1.0.44
+
+### Patch Changes
+
+- Updated dependencies [21db147]
+  - zhin@3.0.44
+
 ## 1.0.43
 
 ### Patch Changes

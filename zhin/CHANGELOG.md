@@ -1,5 +1,13 @@
 # zhin
 
+## 3.0.44
+
+### Patch Changes
+
+- 21db147: fix: code upgrade
+- Updated dependencies [21db147]
+  - @zhinjs/core@2.0.5
+
 ## 3.0.43
 
 ### Patch Changes

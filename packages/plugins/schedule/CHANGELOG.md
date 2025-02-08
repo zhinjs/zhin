@@ -1,5 +1,13 @@
 # @zhinjs/plugin-schedule
 
+## 1.0.44
+
+### Patch Changes
+
+- 21db147: fix: code upgrade
+- Updated dependencies [21db147]
+  - zhin@3.0.44
+
 ## 1.0.43
 
 ### Patch Changes
