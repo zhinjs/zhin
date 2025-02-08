@@ -1,5 +1,12 @@
 # @zhinjs/adapter-com-wechat
 
+## 0.0.24
+
+### Patch Changes
+
+- zhin@3.0.48
+- @zhinjs/plugin-http-server@1.0.48
+
 ## 0.0.23
 
 ### Patch Changes
