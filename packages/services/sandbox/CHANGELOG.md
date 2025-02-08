@@ -1,5 +1,11 @@
 # @zhinjs/plugin-sandbox
 
+## 1.0.48
+
+### Patch Changes
+
+- zhin@3.0.48
+
 ## 1.0.47
 
 ### Patch Changes

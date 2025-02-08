@@ -1,5 +1,12 @@
 # @zhinjs/plugin-github
 
+## 1.0.49
+
+### Patch Changes
+
+- zhin@3.0.48
+- @zhinjs/plugin-http-server@1.0.48
+
 ## 1.0.48
 
 ### Patch Changes
