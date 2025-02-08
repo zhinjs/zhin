@@ -289,13 +289,11 @@ export namespace Plugin {
   export type InstallFn = (plugin: Plugin) => void;
   export function createIdByPath(filePath: string) {
     return filePath
-      .replace(path.resolve(WORK_DIR, 'node_modules', '@zhinjs'), '官方插件')
-      .replace(path.resolve(WORK_DIR, 'node_modules', 'zhin', 'plugins'), '内置插件')
-      .replace(path.resolve(WORK_DIR, 'node_modules'), '')
-      .replace(path.resolve(WORK_DIR, 'plugins'), '自定义插件')
+      .replace(path.resolve(WORK_DIR, 'node_modules', 'zhin', 'lib', 'plugins') + path.sep, '内置插件')
+      .replace(path.resolve(WORK_DIR, 'node_modules') + path.sep, '')
+      .replace(WORK_DIR + path.sep, '')
       .replace(/((lib)|(src)([\/\\]))?index\.[cm]?[tj]?s$/, '');
   }
-  console.log(createIdByPath(path.join(WORK_DIR, 'node_modules', '@zhinjs/test')));
 }
 
 export class PluginMap extends Map<string, Plugin> {
@@ -306,10 +304,6 @@ export class PluginMap extends Map<string, Plugin> {
   getWithPath(filePath: string) {
     const id = Plugin.createIdByPath(filePath);
     if (this.has(id)) return this.get(id);
-    for (const [_, plugin] of this) {
-      const result = plugin.filePath.replace(filePath, '');
-      if (!result || /^(lib\/)?(index)?\.[cm]?[tj]s$/.test(result)) return plugin;
-    }
   }
 
   get generateId() {
