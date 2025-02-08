@@ -1,5 +1,11 @@
 # @zhinjs/discord
 
+## 0.0.22
+
+### Patch Changes
+
+- zhin@3.0.46
+
 ## 0.0.21
 
 ### Patch Changes
