@@ -289,7 +289,7 @@ export namespace Plugin {
   export type InstallFn = (plugin: Plugin) => void;
   export function createIdByPath(filePath: string) {
     return filePath
-      .replace(path.resolve(WORK_DIR, 'node_modules', 'zhin', 'lib', 'plugins') + path.sep, '内置插件')
+      .replace(path.resolve(WORK_DIR, 'node_modules', 'zhin', 'lib', 'plugins') + path.sep, '')
       .replace(path.resolve(WORK_DIR, 'node_modules') + path.sep, '')
       .replace(WORK_DIR + path.sep, '')
       .replace(/([\/\\]+((lib)|(src)))?[\/\\]+index\.[cm]?[tj]?s$/, '');
