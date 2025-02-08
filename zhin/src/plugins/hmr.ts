@@ -1,12 +1,12 @@
 import { watch, FSWatcher } from 'chokidar';
-import { Plugin, WORK_DIR, Bot } from '@zhinjs/core';
+import { Plugin, WORK_DIR, App } from '@zhinjs/core';
 import * as path from 'path';
 import * as fs from 'fs';
 import { ProcessMessage, QueueInfo } from '../worker';
-
+import { Adapter } from '../../lib';
 const hmr = new Plugin('hmr');
 let watcher: FSWatcher;
-hmr.unmounted(() => {
+hmr.beforeUnmount(() => {
   watcher?.close();
 });
 hmr.mounted(app => {
@@ -75,11 +75,11 @@ hmr.on('start', () => {
 });
 process.on('message', (message: ProcessMessage) => {
   if (message.type === 'queue') {
-    const { adapter: adapter_name, bot: bot_id, target_id, target_type, message: content } = message.body;
-    const adapter = hmr.app?.adapters.get(adapter_name);
-    const waitBotReady = (bot: Bot<any>) => {
+    const { adapter: adapter_name, bot: bot_id, channel, message: content } = message.body;
+    const adapter = App.adapters.get(adapter_name);
+    const waitBotReady = (bot: Adapter.Bot) => {
       if (bot.unique_id === bot_id) {
-        adapter?.sendMsg(bot_id, target_id, target_type, content);
+        adapter?.sendMsg(bot_id, channel, content);
       }
       adapter?.off('bot-ready', waitBotReady);
     };
@@ -97,8 +97,7 @@ hmr
       body: {
         adapter: message.adapter.name,
         bot: message.bot.unique_id,
-        target_id: message.from_id,
-        target_type: message.message_type,
+        channel: message.channel,
         message: `已完成重启`,
       } as QueueInfo,
     });

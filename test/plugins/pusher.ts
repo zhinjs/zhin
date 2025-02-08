@@ -68,7 +68,7 @@ pusher.mounted(app => {
     const configs = (await pusher.database.get<PusherConfig[]>('pusher_config', [])) || [];
     for (const config of configs) {
       const bot = app.adapters
-        .get('onebot-12')
+        .get('onebot_12')
         ?.bots.find(b => b.unique_id === config.unique_id) as AdapterBot<OneBotV12Adapter>;
       if (!bot) return;
       const service = serviceMap.get(config.service);

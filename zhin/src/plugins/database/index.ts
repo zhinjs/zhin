@@ -1,4 +1,4 @@
-import { MessageSender, Plugin, WORK_DIR } from '@zhinjs/core';
+import { Message, Plugin, WORK_DIR } from '@zhinjs/core';
 import { Database } from './types';
 import { dbFactories, initFactories } from './factory';
 import path from 'path';
@@ -14,10 +14,7 @@ declare module '@zhinjs/core' {
     }
   }
 }
-export interface UserInfo extends MessageSender {}
-export interface GroupInfo {
-  from_id: string;
-}
+export interface UserInfo extends Message.Sender {}
 const database = new Plugin({
   name: 'database',
   desc: '数据库服务',
@@ -53,17 +50,6 @@ database.mounted(async app => {
         user_name: message.sender.user_name,
       });
     Object.assign((message.sender ||= {}), userInfo);
-    if (message.message_type === 'group') {
-      const groupInfo = await db.find<GroupInfo[]>('group', group => {
-        return group.from_id === message.from_id;
-      });
-      Reflect.deleteProperty(groupInfo || {}, 'from_id');
-      Object.assign(message, groupInfo || {});
-      if (!groupInfo)
-        await db.push('group', {
-          from_id: message.from_id,
-        });
-    }
     next();
   });
 });

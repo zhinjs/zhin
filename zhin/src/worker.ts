@@ -1,13 +1,30 @@
 import dotEnv from 'dotenv';
-import { fork, ForkOptions } from 'child_process';
+import { fork, ChildProcess, ForkOptions } from 'child_process';
 import path from 'path';
 import * as fs from 'fs';
-import { WORK_DIR } from '@zhinjs/core';
+import { Message, WORK_DIR } from '@zhinjs/core';
 import { deepMerge, Dict } from '@zhinjs/shared';
 
-export type ProcessMessage = StartMessage | QueueMessage;
+export type ProcessMessage = StartMessage | QueueMessage | WorkerMessage | CallMessage;
 type StartMessage = {
   type: 'start';
+};
+type CallMessage = {
+  type: 'call';
+  body: {
+    worker_id: string;
+    method: string;
+    args: any[];
+  };
+};
+type WorkerMessage = {
+  type: 'create_worker';
+  body: WorkerInfo;
+};
+type WorkerInfo = {
+  worker_id: string;
+  filename: string;
+  args?: string[];
 };
 type QueueMessage = {
   type: 'queue';
@@ -16,8 +33,7 @@ type QueueMessage = {
 export type QueueInfo = {
   adapter: string;
   bot: string;
-  target_id: string;
-  target_type: string;
+  channel: Message.Channel;
   message: string;
 };
 declare module global {
@@ -30,51 +46,75 @@ declare module global {
     }
   }
 }
-let buffer: any = null,
-  restart_times: number = 0,
-  start_time = Date.now() / 1000 - process.uptime();
+let buffer: any = null;
 const readEnv = (filename: string) => {
   if (fs.existsSync(filename)) {
     return dotEnv.config({ path: filename }).parsed || {};
   }
   return {};
 };
-export function startAppWorker(key: string, mode: string, init = false) {
-  const commonEnv = readEnv(path.join(WORK_DIR, '.env'));
-  const modeEnv = deepMerge(commonEnv, readEnv(path.join(WORK_DIR, `.env.${mode}`)));
-  const execArgv = [];
-  if (['dev', 'development'].includes(mode)) execArgv.push('-r', 'jiti/register', '-r', 'tsconfig-paths/register');
-  const forkOptions: ForkOptions = {
-    env: {
-      ...process.env,
-      mode,
-      ZHIN_KEY: key,
-      init: init ? '1' : '0',
-      ...modeEnv,
-      PWD: WORK_DIR,
-      START_TIME: start_time + '',
-      RESTART_TIMES: restart_times + '',
-    } as NodeJS.ProcessEnv,
-    execArgv,
-    stdio: 'inherit',
-  };
-  const cp = fork(path.resolve(__dirname, `./start${path.extname(__filename)}`), ['-p tsconfig.json'], forkOptions);
-  cp.on('message', (message: ProcessMessage) => {
-    if (message.type === 'start') {
-      if (buffer) {
-        cp.send({ type: 'queue', body: buffer });
-        buffer = null;
+export class Zhin {
+  restart_times: number = 0;
+  start_time: number = Date.now() / 1000 - process.uptime();
+  processMap: Map<string, ChildProcess> = new Map();
+  constructor() {}
+  startAppWorker(key: string, mode: string, init = false) {
+    const commonEnv = readEnv(path.join(WORK_DIR, '.env'));
+    const modeEnv = deepMerge(commonEnv, readEnv(path.join(WORK_DIR, `.env.${mode}`)));
+    const execArgv = [];
+    if (['dev', 'development'].includes(mode)) execArgv.push('-r', 'jiti/register', '-r', 'tsconfig-paths/register');
+    const forkOptions: ForkOptions = {
+      env: {
+        ...process.env,
+        mode,
+        ZHIN_KEY: key,
+        init: init ? '1' : '0',
+        ...modeEnv,
+        PWD: WORK_DIR,
+        START_TIME: this.start_time + '',
+        RESTART_TIMES: this.restart_times + '',
+      } as NodeJS.ProcessEnv,
+      execArgv,
+      stdio: 'inherit',
+    };
+    const cp = fork(path.resolve(__dirname, `./start${path.extname(__filename)}`), ['-p tsconfig.json'], forkOptions);
+
+    cp.on('message', (message: ProcessMessage) => {
+      switch (message.type) {
+        case 'create_worker':
+          const { worker_id, filename, args } = message.body;
+          if (this.processMap.has(worker_id)) return cp.send({ type: 'worker', body: worker_id });
+          const worker = fork(filename, args, forkOptions);
+          this.processMap.set(worker_id, worker);
+          break;
+        case 'queue':
+          buffer = message.body;
+          break;
+        case 'start':
+          if (buffer) {
+            cp.send({ type: 'queue', body: buffer });
+            buffer = null;
+          }
+          break;
+        default:
+          break;
       }
-    } else if (message.type === 'queue') {
-      buffer = message.body;
-    }
-  });
-  cp.on('exit', code => {
-    if (!code) return;
-    if (code !== 51) {
-      process.exit(code);
-    }
-    restart_times++;
-    startAppWorker(key, mode, init);
-  });
+    });
+    cp.on('exit', code => {
+      if (!code) return;
+      if (code !== 51) {
+        process.exit(code);
+      }
+      this.restart_times++;
+      this.processMap.delete('app');
+      this.startAppWorker(key, mode, init);
+    });
+    this.processMap.set('app', cp);
+  }
+  async start(key: string, mode: string, init = false) {
+    this.startAppWorker(key, mode, init);
+  }
+}
+export function createZhin() {
+  return new Zhin();
 }

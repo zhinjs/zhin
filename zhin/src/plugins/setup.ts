@@ -1,14 +1,25 @@
-import { Adapter, App, ArgsType, Command, getCallerStack, Message, Middleware, Plugin, WORK_DIR } from '@zhinjs/core';
+import {
+  Adapter,
+  Adapters,
+  App,
+  ArgsType,
+  Command,
+  getCallerStack,
+  Message,
+  Middleware,
+  Plugin,
+  WORK_DIR,
+} from '@zhinjs/core';
 import * as path from 'path';
 const setup = new Plugin('setup');
 const resolveCallerPlugin = (): [boolean, Plugin] => {
   const callerStack = getCallerStack().map(caller => caller.getFileName());
-  callerStack.shift();
-  callerStack.shift();
-  callerStack.shift();
-  const filePath = callerStack.shift()!;
+  const currentIndex = callerStack.indexOf(__filename);
+  const filePath = callerStack.slice(currentIndex).find(name => name !== __filename);
+  if (!filePath) throw new Error('can not find caller file');
   const fileName = path.basename(filePath);
-  let plugin = setup.app!.plugins.getWithPath(filePath);
+  if (!setup.app) throw new Error(`please mount "setup" plugin before plugin "${fileName}"`);
+  let plugin = setup.app?.plugins.getWithPath(filePath);
   if (plugin) return [false, plugin];
   plugin = new Plugin(fileName);
   plugin.setup = true;
@@ -39,10 +50,10 @@ const getOrCreatePlugin = (options?: Plugin.Options) => {
   if (!isNew) {
     return plugin;
   } else {
-    setup.app!.plugins.set(plugin.id, plugin);
-    setup.app!.plugin(plugin);
+    setup.app?.plugins.set(plugin.id, plugin);
+    setup.app?.plugin(plugin);
     setup.beforeUnmount(() => {
-      setup.app!.plugins.delete(plugin.id);
+      setup.app?.plugins.delete(plugin.id);
     });
     return plugin;
   }
@@ -54,10 +65,13 @@ export const context = {
   command: <S extends Command.Declare>(decl: S, initialValue?: ArgsType<Command.RemoveFirst<S>>) => {
     return context.plugin.command(decl, initialValue);
   },
-  service: <T extends keyof App.Services>(...services: T[]) => {
+  service<T extends keyof App.Services>(name: T, service?: App.Services[T]) {
+    return context.plugin.service(name, service!);
+  },
+  require: <T extends keyof App.Services>(...services: T[]) => {
     return context.plugin.required(...services);
   },
-  middleware: <AD extends Adapter = Adapter>(middleware: Middleware<AD>) => {
+  middleware: <AD extends Adapters = Adapters>(middleware: Middleware<AD>) => {
     return context.plugin.middleware(middleware);
   },
   get options(): Plugin.Options {
@@ -74,23 +88,28 @@ export const context = {
   get app() {
     return setup.app;
   },
-  adapter(platform: string) {
-    return setup.app?.adapters.get(platform);
+  pickAdapter(platform: string) {
+    return App.adapters.get(platform);
+  },
+  registerAdapter<P extends Adapters>(platform: P) {
+    const adapter = new Adapter<P>(platform);
+    context.plugin.adapter(adapter);
+    return adapter;
   },
   pickBot: (platform: string, bot_id: string) => {
-    return context.adapter(platform)?.pick(bot_id);
+    return context.pickAdapter(platform)?.pick(bot_id);
   },
   sendGroupMessage: (platform: string, bot_id: string, group_id: string, message: string, source?: Message) => {
-    return context.adapter(platform)?.sendMsg(bot_id, group_id, 'group', message, source);
+    return context.pickAdapter(platform)?.sendMsg(bot_id, `group:${group_id}`, message, source);
   },
   sendPrivateMessage: (platform: string, bot_id: string, user_id: string, message: string, source?: Message) => {
-    return context.adapter(platform)?.sendMsg(bot_id, user_id, 'private', message, source);
+    return context.pickAdapter(platform)?.sendMsg(bot_id, `private:${user_id}`, message, source);
   },
   sendGuildMessage: (platform: string, bot_id: string, channel_id: string, message: string, source?: Message) => {
-    return context.adapter(platform)?.sendMsg(bot_id, channel_id, 'guild', message, source);
+    return context.pickAdapter(platform)?.sendMsg(bot_id, `guild:${channel_id}`, message, source);
   },
   sendDirectMessage: (platform: string, bot_id: string, guild_id: string, message: string, source?: Message) => {
-    return context.adapter(platform)?.sendMsg(bot_id, guild_id, 'direct', message, source);
+    return context.pickAdapter(platform)?.sendMsg(bot_id, `direct:${guild_id}`, message, source);
   },
   onMount: (callback: Plugin.CallBack) => {
     setup.mounted(callback);
@@ -109,11 +128,13 @@ export const context = {
     return context;
   },
 };
-export const getAdapter = context.adapter;
+export const getAdapter = context.pickAdapter;
+export const registerAdapter = context.registerAdapter;
 export const getBot = context.pickBot;
-export const useMiddleware = context.middleware;
+export const registerMiddleware = context.middleware;
 export const useCommand = context.command;
-export const withService = context.service;
+export const withService = context.require;
+export const registerService = context.service;
 export const sendGroupMessage = context.sendGroupMessage;
 export const sendPrivateMessage = context.sendPrivateMessage;
 export const sendGuildMessage = context.sendGuildMessage;
@@ -121,7 +142,7 @@ export const sendDirectMessage = context.sendDirectMessage;
 export const onMount = context.onMount;
 export const onUnmount = context.onUnmount;
 export const listen = context.listen;
-export const setOptions = (options: Plugin.Options) => {
-  return getOrCreatePlugin(options);
+export const defineMetadata = (metadata: Plugin.Options) => {
+  return getOrCreatePlugin(metadata);
 };
 export default setup;

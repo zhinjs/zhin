@@ -4,7 +4,7 @@ import { ScheduledTask } from 'node-cron';
 export type Schedule = {
   adapter: string;
   bot_id: string;
-  from_id: string;
+  channel: string;
   from_type: string;
   creator_id: string;
   template: string;
@@ -42,7 +42,7 @@ const addSchedule = (schedule: Schedule) => {
   const bot = adapter?.bots.find(bot => bot.unique_id === schedule.bot_id);
   if (!bot) return;
   scheduleManager.addTask(schedule.cron as any, async () => {
-    const message = Message.fromJSON(adapter, bot, schedule.message);
+    const message = Message.from(adapter, bot, schedule.message);
     const result = await schedulePlugin.app!.renderMessage(schedule.template, message);
     result && message.reply(result);
   });
@@ -54,7 +54,7 @@ scheduleCommand.command('定时列表').action(async ({ adapter, bot, message })
       schedule.adapter === adapter.name &&
       schedule.bot_id === bot.unique_id &&
       schedule.from_type === message.message_type &&
-      schedule.from_id === message.from_id
+      schedule.channel === message.channel
     );
   });
   if (!schedules.length) return '暂无任务';
@@ -70,7 +70,7 @@ scheduleCommand.command('添加定时').action(async ({ adapter, prompt, bot, me
   const template = await prompt.text('请输入需要执行的指令模板');
   if (!template) return;
   const schedule: Schedule = {
-    from_id: message.from_id,
+    channel: message.channel,
     from_type: message.message_type,
     template,
     cron,

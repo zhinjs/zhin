@@ -3,6 +3,9 @@ import * as fs from 'fs';
 export {
   context,
   getAdapter,
+  registerAdapter,
+  registerMiddleware,
+  registerService,
   getBot,
   sendGroupMessage,
   sendPrivateMessage,
@@ -11,9 +14,8 @@ export {
   onMount,
   onUnmount,
   listen,
-  setOptions,
+  defineMetadata,
   useCommand,
-  useMiddleware,
   withService,
 } from './plugins/setup';
 export * from './constants';
@@ -49,8 +51,6 @@ import {
   Adapter,
   ArgsType,
   APP_KEY,
-  AdapterReceive,
-  AdapterBot,
   Command,
   Message,
   Middleware,
@@ -59,7 +59,6 @@ import {
   OptionValueType,
   PluginMap,
   ParseOptionType,
-  Bot,
   Compose,
   WORK_DIR,
   CONFIG_DIR,
@@ -78,12 +77,9 @@ import {
 } from '@zhinjs/core';
 export * from './worker';
 export async function initialApp(this: App) {
-  const userAdapterDir = path.join(WORK_DIR, 'adapters');
   const userPluginDir = path.join(WORK_DIR, 'plugins');
-  if (!fs.existsSync(userAdapterDir)) fs.mkdirSync(userAdapterDir);
   if (!fs.existsSync(userPluginDir)) fs.mkdirSync(userPluginDir);
   this.config.has_init = true;
-  this.config.adapters.push('processAdapter');
   this.config.db_driver = 'level';
   this.config.db_init_args = [
     'zhin.db',
@@ -92,16 +88,11 @@ export async function initialApp(this: App) {
       createIfMissing: true,
     },
   ];
-  this.config.plugins.push('commandParser', 'echo', 'hmr', 'zhinManager', 'setup');
+  this.config.plugins.push('setup', 'processAdapter', 'hmr', 'commandParser', 'echo', 'zhinManager');
   this.config.plugin_dirs.push(
     path.relative(WORK_DIR, path.join(__dirname, 'plugins')), // 内置
     path.relative(WORK_DIR, path.join(WORK_DIR, 'node_modules', '@zhinjs')), // 官方
     path.relative(WORK_DIR, userPluginDir), // 用户自定义
-    path.relative(WORK_DIR, path.join(WORK_DIR, 'node_modules')), // 社区
-  );
-  this.config.adapter_dirs.push(
-    path.relative(WORK_DIR, path.join(__dirname, 'adapters')), // 内置
-    path.relative(WORK_DIR, userAdapterDir), // 用户自定义
     path.relative(WORK_DIR, path.join(WORK_DIR, 'node_modules')), // 社区
   );
   this.config.bots.push({ adapter: 'process', unique_id: 'developer', title: '终端' });
@@ -188,8 +179,6 @@ export {
   Adapter,
   ArgsType,
   APP_KEY,
-  AdapterReceive,
-  AdapterBot,
   Command,
   Message,
   Middleware,
@@ -198,7 +187,6 @@ export {
   OptionValueType,
   PluginMap,
   ParseOptionType,
-  Bot,
   Compose,
   WORK_DIR,
   CONFIG_DIR,

@@ -1,4 +1,5 @@
 import path from 'path';
+import { createZhin } from './worker';
 const getValue = (list: string[], key: string, defaultValue: string) => {
   const value = list[list.indexOf(key) + 1];
   if (!value || value.startsWith('-')) return defaultValue;
@@ -32,4 +33,4 @@ for (const key of args) {
 }
 
 const entry = path.resolve(__dirname, `index${path.extname(__filename)}`);
-require(entry).startAppWorker(defaultArgv.key, defaultArgv.mode, defaultArgv.init);
+require(entry).createZhin().start(defaultArgv.key, defaultArgv.mode, defaultArgv.init);

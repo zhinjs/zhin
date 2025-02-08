@@ -2,7 +2,7 @@ import { Plugin } from 'zhin';
 import { OneBotV12Adapter } from '@zhinjs/adapter-onebot-12';
 const forwardForum = new Plugin({
   name: '频道帖子转发插件',
-  adapters: ['onebot-12'],
+  adapters: ['onebot_12'],
 });
 forwardForum.required('database');
 type Config = {
@@ -78,7 +78,7 @@ forwardForum.command('删除订阅').action<OneBotV12Adapter>(async ({ bot, prom
 });
 forwardForum.middleware<OneBotV12Adapter>(async (adapter, bot, event, next) => {
   await next();
-  if (adapter.name !== 'onebot-12' || event.message_type !== 'guild') return;
+  if (adapter.name !== 'onebot_12' || event.message_type !== 'guild') return;
   const message = event.original?.message;
   if (!message || !Array.isArray(message)) return;
   const [textSeg, forumSeg] = message;

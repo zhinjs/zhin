@@ -1,13 +1,17 @@
-import { Adapter, App, Message, Schema } from 'zhin';
-import { Bot } from './bot';
+import { Adapter, registerAdapter, Message, Schema, defineMetadata } from 'zhin';
+import { Client } from './client';
 declare module 'zhin' {
   namespace App {
     interface Adapters {
-      email: Bot.Options;
+      email: Client.Options;
+    }
+    interface Bots {
+      email: Client;
     }
   }
 }
-const adapter = new Adapter<Adapter.Bot<Bot>, Bot.Message>('email');
+defineMetadata({ name: 'email adapter' });
+const adapter = registerAdapter('email');
 
 adapter.schema({
   username: Schema.string('请输入邮箱账号').required(),
@@ -23,42 +27,31 @@ adapter.schema({
     tls: Schema.boolean('是否使用SSL/TLS').default(true),
   }),
 });
-adapter.define('sendMsg', async (bot_id, target_id, target_type, message, source) => {
-  const bot = adapter.bots.find(bot => bot.unique_id === bot_id);
-  if (!bot) throw new Error(`cannot find bot ${bot_id}`);
-  switch (target_type) {
-    case 'private':
-      return await bot.sendMessage(target_id, message);
-    default:
-      throw new Error(`unsupported target type ${target_type}`);
+class EmailClient extends Adapter.Bot<'email'> {
+  constructor(config: Adapter.BotConfig<'email'>) {
+    super(adapter, config.unique_id, new Client(adapter, config));
   }
-});
-const startBots = (configs: App.BotConfig<'email'>[]) => {
+  async handleSendMessage(
+    channel: Message.Channel,
+    message: string,
+    source?: Message<'email'> | undefined,
+  ): Promise<string> {
+    const msg = message;
+    const [target_type, ...other] = channel.split(':');
+    const target_id = other.join(':');
+    switch (target_type) {
+      case 'private':
+        return this.sendMessage(target_id, msg);
+      default:
+        throw new Error(`Email适配器暂不支持发送${target_type}类型的消息`);
+    }
+  }
+}
+interface EmailClient extends Client {}
+const startBots = (configs: Adapter.BotConfig<'email'>[]) => {
   for (const config of configs) {
-    const bot = new Bot(adapter, config) as Adapter.Bot<Bot>;
-    Object.defineProperties(bot, {
-      unique_id: {
-        get() {
-          return config.unique_id;
-        },
-      },
-      quote_self: {
-        get() {
-          return adapter.botConfig(bot)?.quote_self;
-        },
-      },
-      forward_length: {
-        get() {
-          return adapter.botConfig(bot)?.forward_length;
-        },
-      },
-      command_prefix: {
-        get() {
-          return adapter.botConfig(bot)?.command_prefix || '';
-        },
-      },
-    });
-    bot.on('message', (message: Message<typeof adapter>) => {
+    const bot = new EmailClient(config);
+    bot.on('message', (message: Message<'email'>) => {
       adapter.app?.emit('message', adapter, bot, message);
     });
     bot
@@ -74,7 +67,7 @@ const startBots = (configs: App.BotConfig<'email'>[]) => {
 };
 const stopBots = () => {
   for (const bot of adapter.bots) {
-    bot.stop();
+    bot.internal.stop();
   }
 };
 adapter.on('start', startBots);

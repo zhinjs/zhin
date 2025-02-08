@@ -2,12 +2,12 @@ import { EventEmitter } from 'events';
 import { Logger, getLogger } from 'log4js';
 import { Middleware } from './middleware';
 import { Plugin, PluginMap } from './plugin';
-import { Bot, LogLevel } from './types';
+import { LogLevel } from './types';
 import { loadModule } from './utils';
 import { remove, sleep } from '@zhinjs/shared';
 import { APP_KEY, CONFIG_DIR, REQUIRED_KEY, WORK_DIR } from './constans';
 import path from 'path';
-import { Adapter, AdapterBot, AdapterReceive } from './adapter';
+import { Adapter } from './adapter';
 import { Message } from './message';
 import process from 'process';
 import { Config } from './config';
@@ -26,10 +26,12 @@ export function defineConfig(
 export class App extends EventEmitter {
   logger: Logger = getLogger(`[zhin]`);
   config: Config;
-  adapters: Map<string, Adapter> = new Map<string, Adapter>();
-  middlewares: Middleware[] = [];
+  middlewares: Middleware<Adapters>[] = [];
   plugins: PluginMap = new PluginMap();
   renders: Message.Render[] = [];
+  get adapters() {
+    return App.adapters;
+  }
   constructor() {
     super();
     this.handleMessage = this.handleMessage.bind(this);
@@ -50,10 +52,11 @@ export class App extends EventEmitter {
     return () => remove(this.renders, render);
   }
   getAdapterSchema(name: string) {
-    const adapter = this.adapters.get(name);
+    const adapter = App.adapters.get(name);
     if (!adapter) throw new Error(`cannot find adapter ${name}`);
     return adapter.schemas;
   }
+
   async renderMessage<T extends Message = Message>(template: string, message?: T) {
     for (const render of this.renders) {
       try {
@@ -72,15 +75,8 @@ export class App extends EventEmitter {
     }
   }
 
-  initAdapter() {
-    const adapters = this.config.adapters.filter(adapter => !this.config.disable_adapters.includes(adapter));
-    for (const adapter of adapters) {
-      this.loadAdapter(adapter);
-    }
-  }
-
-  middleware<T extends Adapter>(middleware: Middleware<T>) {
-    this.middlewares.push(middleware as Middleware);
+  middleware(middleware: Middleware) {
+    this.middlewares.push(middleware);
     return () => {
       remove(this.middlewares, middleware);
     };
@@ -116,15 +112,17 @@ export class App extends EventEmitter {
     return this.commandList.find(command => command.name === name);
   }
 
-  getSupportMiddlewares<A extends Adapter>(adapter: A, bot: AdapterBot<A>, event: Message<A>): Middleware[] {
+  getSupportMiddlewares<P extends Adapters>(
+    adapter: Adapter<P>,
+    bot: Adapter.Bot<P>,
+    event: Message<P>,
+  ): Middleware<P>[] {
     return (
       this.pluginList
         // 过滤不支持当前适配器的插件
         .filter(plugin => !plugin.adapters || plugin.adapters.includes(adapter.name))
         // 过滤bot禁用的插件
-        .filter(
-          plugin => !adapter.botConfig(bot as Adapter.Bot<AdapterBot<A>>)?.disabled_plugins?.includes(plugin.name),
-        )
+        .filter(plugin => !adapter.botConfig(bot.unique_id)?.disabled_plugins?.includes(plugin.name))
         .reduce(
           (result, plugin) => {
             result.push(...plugin.middlewares);
@@ -141,7 +139,7 @@ export class App extends EventEmitter {
       .flatMap(plugin => plugin.commandList);
   }
 
-  handleMessage<A extends Adapter>(adapter: A, bot: Adapter.Bot<AdapterBot<A>>, event: Message<A>) {
+  handleMessage<P extends Adapters>(adapter: Adapter<P>, bot: Adapter.Bot<P>, event: Message<P>) {
     const middleware = Middleware.compose(this.getSupportMiddlewares(adapter, bot, event));
     middleware(adapter, bot, event);
   }
@@ -297,46 +295,15 @@ export class App extends EventEmitter {
   }
   async start(mode: string = 'prod') {
     this.initPlugins();
-    this.initAdapter();
-    for (const [name, adapter] of this.adapters) {
+    for (const [name, adapter] of App.adapters) {
       const bots = this.config.bots.filter(
         bot => bot?.adapter === adapter.name && !this.config.disable_bots.includes(bot.unique_id),
       );
+      adapter.app = this;
       adapter.emit('start', bots);
       this.logger.mark(`adapter： ${name} started`);
     }
     this.emit('start');
-  }
-
-  loadAdapter(name: string) {
-    const maybePath = this.config.adapter_dirs.map(dir => {
-      return path.resolve(WORK_DIR, dir, name);
-    });
-    let loaded: boolean = false,
-      error: unknown,
-      loadName: string = '';
-    for (const loadPath of maybePath) {
-      if (loaded) break;
-      try {
-        const adapter = loadModule<any>(loadPath);
-        if (!Adapter.isAdapter(adapter)) throw new Error(`${loadPath} is not a valid adapter`);
-        this.adapters.set(adapter.name, adapter);
-        loadName = adapter.name;
-        adapter.mount(this);
-        this.logger.debug(`adapter： ${adapter.name} loaded`);
-        loaded = true;
-      } catch (e) {
-        if (!error || String(Reflect.get(error, 'message')).startsWith('Cannot find')) error = e;
-        this.logger.debug(`try load adapter(${name}) failed. (from: ${loadPath})`);
-        this.logger.trace(e);
-        if (loadName) {
-          this.adapters.delete(loadName);
-          loadName = '';
-        }
-      }
-    }
-    if (!loaded) this.logger.warn(`load adapter "${name}" failed`, error);
-    return this;
   }
 
   loadPlugin(name: string): this {
@@ -344,7 +311,7 @@ export class App extends EventEmitter {
       return path.resolve(WORK_DIR, dir, name);
     });
     let loaded: boolean = false,
-      error: unknown;
+      error: Error | null = null;
     for (const loadPath of maybePath) {
       if (loaded) break;
       try {
@@ -352,15 +319,15 @@ export class App extends EventEmitter {
         this.mount(loadPath);
         loaded = true;
       } catch (e) {
-        if (!error || String(Reflect.get(error, 'message')).startsWith('Cannot find')) error = e;
+        if (!error || String(Reflect.get(error, 'message')).startsWith('Cannot find')) error = e as Error;
         this.logger.debug(`try load plugin(${name}) failed. (from: ${loadPath})`, e);
       }
     }
-    if (!loaded) this.logger.warn(`load plugin "${name}" failed`, error);
+    if (!loaded) this.logger.warn(`load plugin "${name}" failed`, error?.message || error);
     return this;
   }
   async stop() {
-    for (const [name, adapter] of this.adapters) {
+    for (const [name, adapter] of App.adapters) {
       adapter.emit('stop');
       this.logger.mark(`adapter： ${name} stopped`);
     }
@@ -443,7 +410,7 @@ export namespace App {
 
     'ready'(): void;
 
-    'message': <AD extends Adapter>(adapter: AD, bot: AdapterBot<AD>, message: AdapterReceive<AD>) => void;
+    'message': <P extends keyof Adapters>(adapter: Adapter<P>, bot: Adapter.Bot<P>, message: Message<P>) => void;
     'service-register': <T extends keyof App.Services>(name: T, service: App.Services[T]) => void;
     'service-destroy': <T extends keyof App.Services>(name: T, service: App.Services[T]) => void;
   }
@@ -451,24 +418,18 @@ export namespace App {
   export interface Config {
     has_init?: boolean;
     log_level: LogLevel | string;
-    disable_adapters: string[];
     disable_bots: string[];
     disable_plugins: string[];
-    adapter_dirs: string[];
     plugin_dirs: string[];
-    adapters: string[];
-    bots: BotConfig[];
+    bots: Adapter.BotConfig[];
     plugins: string[];
   }
 
   export const defaultConfig: Config = {
     log_level: 'info',
-    disable_adapters: [],
     disable_bots: [],
     disable_plugins: [],
-    adapter_dirs: [],
     plugin_dirs: [],
-    adapters: [],
     bots: [],
     plugins: [],
   };
@@ -478,17 +439,9 @@ export namespace App {
       title: string;
     };
   }
-
+  export interface Bots {
+    process: NodeJS.Process;
+  }
   export interface Services {}
-
-  export type BotConfig<T extends keyof Adapters = keyof Adapters> = {
-    adapter: T | string;
-    unique_id: string;
-    master?: string | number;
-    admins?: (string | number)[];
-    command_prefix?: string;
-    disabled_plugins?: string[];
-    forward_length?: number;
-    quote_self?: boolean;
-  } & Adapters[T];
 }
+export type Adapters = keyof App.Adapters;

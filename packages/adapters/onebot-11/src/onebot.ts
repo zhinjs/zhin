@@ -3,14 +3,13 @@ import { WebSocketServer, WebSocket, MessageEvent } from 'ws';
 import { MessageV11 } from '@/message';
 import { OneBotMethodsV11 } from '@/types';
 import { Router } from '@zhinjs/plugin-http-server';
-import { OneBotV11Adapter } from '@/index';
-import { Dict } from 'zhin';
+import { Adapter, Dict } from 'zhin';
 import { IncomingMessage } from 'http';
 
 export class OneBotV11 extends EventEmitter {
   self_id: string | number = '';
   constructor(
-    private adapter: OneBotV11Adapter,
+    public adapter: Adapter<'onebot_11'>,
     public config: OneBotV11.Config,
     private router: Router,
   ) {

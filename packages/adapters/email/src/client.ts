@@ -3,9 +3,9 @@ import { createTransport, Transporter } from 'nodemailer';
 import { Stream } from 'stream';
 import { Attachment, HeaderValue, ParsedMail, simpleParser } from 'mailparser';
 import { parse, INode, SyntaxKind } from 'html5parser';
-import { Adapter, axios, escape, Message, unescape } from 'zhin';
+import { Adapter, axios, escape, Message, MessageBase, unescape } from 'zhin';
 import { EventEmitter } from 'events';
-export class Bot extends EventEmitter {
+export class Client extends EventEmitter {
   #transport: Transporter;
   private hasStop = false;
   #imap: Imap;
@@ -13,8 +13,8 @@ export class Bot extends EventEmitter {
     return this.adapter.getLogger(this.options.username);
   }
   constructor(
-    public adapter: Adapter,
-    public options: Bot.Options,
+    public adapter: Adapter<'email'>,
+    public options: Client.Options,
   ) {
     super();
     this.#transport = createTransport({
@@ -59,7 +59,7 @@ export class Bot extends EventEmitter {
       });
       mails.on('message', async msg => {
         const event = await this.#formatMessage(msg);
-        this.logger.info(`recv [${event.message_type} ${event.from_id}]: ${event.raw_message}`);
+        this.logger.info(`recv [${event.channel}]: ${event.raw_message}`);
         this.emit('message', event);
       });
     });
@@ -73,16 +73,17 @@ export class Bot extends EventEmitter {
         });
       });
     });
-    return Object.assign(
-      Message.fromEvent(this.adapter, this as unknown as Adapter.Bot<Bot>, parsedMail),
-      Bot.formatMessageFromParsedMail.apply(this as unknown as Adapter.Bot<Bot>, [parsedMail]),
+    return Message.from(
+      this.adapter,
+      this as unknown as Adapter.Bot<'email'>,
+      Client.formatMessageFromParsedMail.apply(this as unknown as Adapter.Bot<'email'>, [parsedMail]),
     );
   }
   async sendMessage(to: string, message: string) {
-    if (this.hasStop) return;
+    if (this.hasStop) return '';
     const attachments: SendAttachment[] = [];
     const rawMessage = unescape(message);
-    message = Bot.createEmailContent(await Bot.getAttachment(attachments, message));
+    message = Client.createEmailContent(await Client.getAttachment(attachments, message));
     await this.#transport.sendMail({
       from: this.options.username,
       to,
@@ -91,6 +92,7 @@ export class Bot extends EventEmitter {
     });
 
     this.logger.info(`send [private ${to}]: ${rawMessage}`);
+    return '';
   }
   start() {
     return new Promise<void>((resolve, reject) => {
@@ -129,7 +131,7 @@ export type SendAttachment = {
   contentType: string;
   cid?: string;
 };
-export namespace Bot {
+export namespace Client {
   export interface Options {
     username: string;
     password: string;
@@ -146,26 +148,18 @@ export namespace Bot {
     port: number;
     tls?: boolean;
   }
-  export type Sender = {
-    user_id: string;
-    user_name: string;
-  };
-  export interface Message {
+  export interface Message extends MessageBase {
     message_id: string;
-    from_id: string;
     attachments: Attachment[];
-    raw_message: string;
     headers: Map<string, HeaderValue>;
-    message_type: 'private';
     subject: string;
     time: number;
-    sender: Sender & { permissions: string[] };
   }
-  export function formatMessageFromParsedMail(this: Adapter.Bot<Bot>, email: ParsedMail): Message {
+  export function formatMessageFromParsedMail(this: Adapter.Bot<'email'>, email: ParsedMail): Message {
     const [nickname, from_id] = email.from!.text.split('" <');
     return {
       message_id: email.messageId!,
-      from_id: from_id.slice(0, -1),
+      channel: `private:${from_id.slice(0, -1)}`,
       attachments: email.attachments,
       headers: email.headers,
       raw_message: HTMLToString(parse(email.html || '', { setAttributeMap: true })) || escape(email.text || ''),
@@ -176,8 +170,8 @@ export namespace Bot {
         user_id: from_id.slice(0, -1),
         user_name: nickname.slice(1),
         permissions: [
-          this.adapter.botConfig(this)?.master === from_id.slice(0, -1) && 'master',
-          this.adapter.botConfig(this)?.admins?.includes(from_id.slice(1)) && 'admins',
+          this.adapter.botConfig(this.unique_id)?.master === from_id.slice(0, -1) && 'master',
+          this.adapter.botConfig(this.unique_id)?.admins?.includes(from_id.slice(1)) && 'admins',
         ].filter(Boolean) as string[],
       },
     };

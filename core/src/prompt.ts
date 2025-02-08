@@ -1,17 +1,15 @@
 import { Dict } from '@zhinjs/shared';
-import { Adapter } from './adapter';
 import { Middleware } from './middleware';
-import { Bot } from './types';
 import { Message } from './message';
 import { Schema } from './schema';
-import { App } from './app';
+import { Adapters, App } from './app';
 
-export class Prompt<T extends Adapter = Adapter> {
-  constructor(private event: Message<T>) {}
+export class Prompt<P extends keyof App.Adapters> {
+  constructor(private event: Message<P>) {}
   get app() {
     return this.event.adapter.app;
   }
-  private getChannelAddress<AD extends Adapter>(event: Message<AD>) {
+  private getChannelAddress<P extends Adapters>(event: Message<P>) {
     return `${event.adapter}-${event.bot.unique_id}-${event.message_type}:${event.sender!.user_id}`;
   }
   private prompt<T = any>(config: Prompt.Config<T>) {

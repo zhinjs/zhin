@@ -1,44 +1,59 @@
-import { Bot } from './types';
 import { Dict, escape, unescape } from '@zhinjs/shared';
 import { Prompt } from './prompt';
-import { Adapter, AdapterReceive } from './adapter';
+import { Adapter } from './adapter';
+import { Adapters, App } from './app';
 export interface MessageBase {
-  from_id: string;
-  group_id?: string | number;
-  guild_id?: string | number;
-  channel_id?: string | number;
-  discuss_id?: string | number;
-  sender: MessageSender;
+  message_id?: string;
+  channel: Message.Channel;
+  sender: Message.Sender;
+  message_type: Message.Type;
   raw_message: string;
   quote?: {
     message_id: string;
     message?: string;
   };
-  message_type: Message.Type;
 }
-export interface Message<AD extends Adapter = Adapter> extends MessageBase {
-  prompt: Prompt<any>;
+export interface Message<P extends keyof App.Adapters = keyof App.Adapters> extends MessageBase {
+  prompt: Prompt<P>;
   reply(message: string): Promise<any>;
 }
-export class Message<AD extends Adapter> {
+export class Message<P extends keyof App.Adapters> {
   constructor(
-    public adapter: AD,
-    public bot: Bot<AD>,
-    public original?: AdapterReceive<AD>,
-  ) {}
+    public adapter: Adapter<P>,
+    public bot: Adapter.Bot<P>,
+    message_base: MessageBase,
+  ) {
+    Object.assign(this, message_base);
+  }
+  get group_id() {
+    if (this.message_type !== 'group') return undefined;
+    return this.channel.split(':')[1];
+  }
+  get user_id() {
+    return this.sender.user_id;
+  }
+  get channel_id() {
+    if (this.message_type !== 'guild') return undefined;
+    return this.channel.split(':')[1];
+  }
+  get guild_id() {
+    if (this.message_type !== 'direct') return undefined;
+    return this.channel.split(':')[1];
+  }
   async reply(message: string, quote: boolean = true) {
-    return this.adapter.sendMsg(this.bot.unique_id, this.from_id, this.message_type, message, quote ? this : undefined);
+    return this.bot.sendMsg(this.channel, message, quote ? this : undefined);
   }
   toJSON(): MessageBase {
     return {
-      from_id: this.from_id,
+      message_id: this.message_id,
+      channel: this.channel,
+      message_type: this.message_type,
       sender: this.sender,
       raw_message: this.raw_message,
-      message_type: this.message_type,
+      quote: this.quote,
     };
   }
 }
-
 export function parseFromTemplate(template: string | MessageElem): MessageElem[] {
   if (typeof template !== 'string') return [template];
   const result: MessageElem[] = [];
@@ -106,19 +121,16 @@ export namespace Message {
     at(user_id: string | number): string;
   };
   export type Type = 'private' | 'group' | 'guild' | 'direct';
-  export function fromEvent<AD extends Adapter>(adapter: AD, bot: Bot<AD>, message: AdapterReceive<AD>) {
-    const result = new Message(adapter, bot, message);
+  export function from<P extends Adapters>(adapter: Adapter<P>, bot: Adapter.Bot<P>, message: MessageBase) {
+    const result = new Message<P>(adapter, bot, message);
     result.prompt = new Prompt(result);
     return result;
   }
-  export function fromJSON<AD extends Adapter>(adapter: AD, bot: Bot<AD>, json: MessageBase) {
-    const result = new Message(adapter, bot);
-    result.from_id = json.from_id;
-    result.sender = json.sender;
-    result.message_type = json.message_type;
-    result.raw_message = json.raw_message;
-    result.prompt = new Prompt(result);
-    return result;
+  export type Channel = `${Type}:${string}`;
+  export interface Sender {
+    user_id?: string | number;
+    user_name?: string;
+    permissions?: string[];
   }
 }
 export const segment: Message.DefineSegment = function (type, data) {
@@ -135,8 +147,3 @@ segment.image = (file: string, type = 'png') => `<image file='${escape(file)}' f
 segment.video = (file: string, type = 'mp4') => `<video file='${escape(file)}' file_type='${type}'>`;
 segment.audio = (file: string, type = 'mp3') => `<audio file='${escape(file)}' file_type='${type}'>`;
 segment.at = user_id => `<at user_id='${escape(user_id.toString())}'/>`;
-export interface MessageSender {
-  user_id?: string | number;
-  user_name?: string;
-  permissions?: string[];
-}

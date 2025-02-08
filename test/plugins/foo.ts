@@ -1,5 +1,5 @@
-import { useMiddleware, useCommand, setOptions } from 'zhin';
-setOptions({
+import { registerMiddleware, useCommand, defineMetadata } from 'zhin';
+defineMetadata({
   name: 'foo',
 });
 useCommand('foo')
@@ -14,7 +14,7 @@ useCommand('bar')
     return '我不知道该说啥呀';
   });
 
-useMiddleware((_adapter, _bot, message, next) => {
+registerMiddleware((_adapter, _bot, message, next) => {
   // console.log(_adapter, _bot, message);
   next();
 });

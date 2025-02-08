@@ -10,7 +10,7 @@ import { IncomingMessage } from 'http';
 export class Client extends EventEmitter {
   self_id: string = '';
   constructor(
-    private adapter: ComWechatAdapter,
+    public adapter: ComWechatAdapter,
     public config: Client.Config & Dict,
     private router: Router,
   ) {
@@ -179,6 +179,7 @@ export class Client extends EventEmitter {
       params: { user_id, detail_type: 'private', message: await this.processMessage(message) },
     });
     this.logger.info(`try send [Private ${user_id}]: ${this.getBrief(message)}`);
+    return '';
   }
   async sendGroupMsg(group_id: string, message: Message.Sendable) {
     await this.sendPayload({
@@ -186,6 +187,7 @@ export class Client extends EventEmitter {
       params: { group_id, detail_type: 'group', message: await this.processMessage(message) },
     });
     this.logger.info(`try send [Group ${group_id}]: ${this.getBrief(message)}`);
+    return '';
   }
   getGroupList() {
     return this.sendPayload({

@@ -1,8 +1,10 @@
 import { Dict, Plugin, axios, Message, parseFromTemplate } from 'zhin';
 declare module 'zhin' {
-  interface MessageSender {
-    github_accessToken?: string;
-    github_refreshToken?: string;
+  namespace Message {
+    interface Sender {
+      github_accessToken?: string;
+      github_refreshToken?: string;
+    }
   }
 }
 export type ReplyPayloads = {

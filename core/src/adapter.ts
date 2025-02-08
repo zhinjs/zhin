@@ -1,26 +1,25 @@
-import { App } from './app';
-import { EventEmitter } from 'events';
+import { Adapters, App } from './app';
 import { Message } from './message';
 import path from 'path';
 import { getLogger, Logger } from 'log4js';
 import { Dict } from '@zhinjs/shared';
 import { WORK_DIR } from './constans';
 import { Schema } from './schema';
-
-export type AdapterBot<A extends Adapter> = A extends Adapter<infer B> ? B : unknown;
-export type AdapterReceive<A extends Adapter> = A extends Adapter<infer B, infer R> ? R : unknown;
+import { EventEmitter } from 'events';
+const adapterKey = '__IS_ZHIN_ADAPTER__';
 export type Element = {
   type: string;
   data: Dict;
 };
-export class Adapter<I extends object = object, M = {}> extends EventEmitter {
-  bots: Adapter.Bot<I>[] = [];
+export class Adapter<P extends keyof App.Adapters> extends EventEmitter {
+  bots: Adapter.Bot<P>[] = [];
   elements: Element[] = [];
-  private __IS_ZHIN_ADAPTER__ = true;
+  private [adapterKey] = true;
   app: App | null = null;
   static isAdapter(obj: any): obj is Adapter {
-    return typeof obj === 'object' && !!obj['__IS_ZHIN_ADAPTER__'];
+    return typeof obj === 'object' && !!obj[adapterKey];
   }
+
   schemas: Schema = Schema.object({
     unique_id: Schema.string('请输入机器人唯一标识'),
     master: Schema.string('请输入主人id'),
@@ -44,23 +43,16 @@ export class Adapter<I extends object = object, M = {}> extends EventEmitter {
   get logger() {
     return this.getLogger();
   }
-  constructor(public name: string) {
+  constructor(public name: P) {
     super();
   }
-  botConfig(bot: Adapter.Bot<I>) {
-    return this.app!.config.bots.find(config => config.unique_id === bot.unique_id);
+  botConfig(unique_id: string): Adapter.BotConfig<P> | undefined {
+    return this.app!.config.bots.find(config => config.unique_id === unique_id) as Adapter.BotConfig<P>;
   }
-  async sendMsg(
-    bot_id: string,
-    target_id: string,
-    target_type: string,
-    message: string,
-    source?: Message<Adapter<I, M>>,
-  ): Promise<any> {}
-  define<T extends keyof Adapter<I, M>>(name: T, value: Adapter<I, M>[T]): void {
-    Object.defineProperty(this, name, { value, writable: false, enumerable: false });
+  async sendMsg(bot_id: string, channel: Message.Channel, message: string, source?: Message<P>): Promise<any> {
+    return this.pick(bot_id)?.sendMsg(channel, message, source);
   }
-  pick(bot_id: string) {
+  pick(bot_id: string): Adapter.Bot<P> {
     const bot = this.bots.find(bot => bot.unique_id === bot_id);
     if (!bot) throw new Error(`未找到Bot:${bot_id}`);
     return bot;
@@ -91,82 +83,98 @@ export class Adapter<I extends object = object, M = {}> extends EventEmitter {
   }
 }
 
-export interface Adapter {
-  on<T extends keyof Adapter.EventMap>(event: T, listener: Adapter.EventMap[T]): this;
+export interface Adapter<P extends keyof App.Adapters = keyof App.Adapters> {
+  on<T extends keyof Adapter.EventMap<P>>(event: T, listener: Adapter.EventMap<P>[T]): this;
 
   on<S extends string | symbol>(
-    event: S & Exclude<string | symbol, keyof Adapter.EventMap>,
+    event: S & Exclude<string | symbol, keyof Adapter.EventMap<P>>,
     listener: (...args: any[]) => any,
   ): this;
 
-  off<T extends keyof Adapter.EventMap>(event: T, callback?: Adapter.EventMap[T]): this;
+  off<T extends keyof Adapter.EventMap<P>>(event: T, callback?: Adapter.EventMap<P>[T]): this;
 
   off<S extends string | symbol>(
-    event: S & Exclude<string | symbol, keyof Adapter.EventMap>,
+    event: S & Exclude<string | symbol, keyof Adapter.EventMap<P>>,
     callback?: (...args: any[]) => void,
   ): this;
 
-  once<T extends keyof Adapter.EventMap>(event: T, listener: Adapter.EventMap[T]): this;
+  once<T extends keyof Adapter.EventMap<P>>(event: T, listener: Adapter.EventMap<P>[T]): this;
 
   once<S extends string | symbol>(
-    event: S & Exclude<string | symbol, keyof Adapter.EventMap>,
+    event: S & Exclude<string | symbol, keyof Adapter.EventMap<P>>,
     listener: (...args: any[]) => any,
   ): this;
 
-  emit<T extends keyof Adapter.EventMap>(event: T, ...args: Parameters<Adapter.EventMap[T]>): boolean;
+  emit<T extends keyof Adapter.EventMap<P>>(event: T, ...args: Parameters<Adapter.EventMap<P>[T]>): boolean;
 
-  emit<S extends string | symbol>(event: S & Exclude<string | symbol, keyof Adapter.EventMap>, ...args: any[]): boolean;
+  emit<S extends string | symbol>(
+    event: S & Exclude<string | symbol, keyof Adapter.EventMap<P>>,
+    ...args: any[]
+  ): boolean;
 
-  addListener<T extends keyof Adapter.EventMap>(event: T, listener: Adapter.EventMap[T]): this;
+  addListener<T extends keyof Adapter.EventMap<P>>(event: T, listener: Adapter.EventMap<P>[T]): this;
 
   addListener<S extends string | symbol>(
-    event: S & Exclude<string | symbol, keyof Adapter.EventMap>,
+    event: S & Exclude<string | symbol, keyof Adapter.EventMap<P>>,
     listener: (...args: any[]) => any,
   ): this;
 
-  addListenerOnce<T extends keyof Adapter.EventMap>(event: T, callback: Adapter.EventMap[T]): this;
+  addListenerOnce<T extends keyof Adapter.EventMap<P>>(event: T, callback: Adapter.EventMap<P>[T]): this;
 
   addListenerOnce<S extends string | symbol>(
-    event: S & Exclude<string | symbol, keyof Adapter.EventMap>,
+    event: S & Exclude<string | symbol, keyof Adapter.EventMap<P>>,
     callback: (...args: any[]) => void,
   ): this;
 
-  removeListener<T extends keyof Adapter.EventMap>(event: T, callback?: Adapter.EventMap[T]): this;
+  removeListener<T extends keyof Adapter.EventMap<P>>(event: T, callback?: Adapter.EventMap<P>[T]): this;
 
   removeListener<S extends string | symbol>(
-    event: S & Exclude<string | symbol, keyof Adapter.EventMap>,
+    event: S & Exclude<string | symbol, keyof Adapter.EventMap<P>>,
     callback?: (...args: any[]) => void,
   ): this;
 
-  removeAllListeners<T extends keyof Adapter.EventMap>(event: T): this;
+  removeAllListeners<T extends keyof Adapter.EventMap<P>>(event: T): this;
 
-  removeAllListeners<S extends string | symbol>(event: S & Exclude<string | symbol, keyof Adapter.EventMap>): this;
+  removeAllListeners<S extends string | symbol>(event: S & Exclude<string | symbol, keyof Adapter.EventMap<P>>): this;
 }
 export namespace Adapter {
-  export interface EventMap {
-    'bot-ready'(bot: Bot<any>): void;
+  export interface EventMap<P extends keyof App.Adapters> {
+    'bot-ready'(bot: Bot<P>): void;
     'before-mount'(): void;
     'before-unmount'(app: App): void;
     'mounted'(app: App): void;
     'unmounted'(): void;
-    'start'(configs: App.BotConfig[]): void;
+    'start'(configs: BotConfig<P>[]): void;
   }
-  export interface Config<T extends keyof App.Adapters = keyof App.Adapters> {
-    name: T;
-    bots: App.BotConfig<T>[];
+  export abstract class Bot<P extends Adapters = Adapters> {
+    protected constructor(
+      public adapter: Adapter<P>,
+      public unique_id: string,
+      public internal: App.Bots[P],
+    ) {
+      const _this = this;
+      return new Proxy(_this, {
+        get(target, prop, receiver) {
+          if (prop in target) return Reflect.get(target, prop, receiver);
+          return Reflect.get(_this.internal, prop, receiver);
+        },
+      });
+    }
+    get command_prefix() {
+      return this.adapter.botConfig(this.unique_id)?.command_prefix;
+    }
+    abstract handleSendMessage(channel: Message.Channel, message: string, source?: Message<P>): Promise<string>;
+    async sendMsg(channel: Message.Channel, message: string, source?: Message<P>): Promise<string> {
+      const renderAfter = await this.adapter.app?.renderMessage(message, source);
+      return this.handleSendMessage(channel, renderAfter || message, source);
+    }
+    get quote_self() {
+      return this.adapter.botConfig(this.unique_id)?.quote_self;
+    }
+    get forward_length() {
+      return this.adapter.botConfig(this.unique_id)?.forward_length;
+    }
   }
-  export type SendMsgFn = (
-    bot_id: string,
-    target_id: string,
-    target_type: Message.Type,
-    message: string,
-  ) => Promise<any>;
-  export type Bot<T = object> = {
-    unique_id: string;
-    command_prefix?: string;
-    quote_self?: boolean;
-    forward_length?: number;
-  } & T;
   export function load(name: string) {
     const maybePath = [
       path.join(WORK_DIR, 'node_modules', `@zhinjs`, name), // 官方适配器
@@ -184,4 +192,17 @@ export namespace Adapter {
     }
     throw new Error(`can't find adapter ${name}`);
   }
+
+  export type BotConfig<T extends Adapters = Adapters> = {
+    adapter: T;
+    unique_id: string;
+    master?: string | number;
+    admins?: (string | number)[];
+    command_prefix?: string;
+    disabled_plugins?: string[];
+    forward_length?: number;
+    quote_self?: boolean;
+  } & App.Adapters[T];
+  export type InferAdapterPlatform<T extends Adapter> = T extends Adapter<infer P> ? P : never;
+  export type InternalBot<P extends keyof App.Adapters> = App.Bots[P];
 }

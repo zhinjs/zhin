@@ -1,12 +1,16 @@
-import { Adapter, App, Message, Schema } from 'zhin';
-import { Bot, GuildMessageEvent, DirectMessageEvent, Sendable } from 'ts-disc-bot';
+import { Adapter, registerAdapter, Message, Schema, defineMetadata } from 'zhin';
+import { Bot as Client, GuildMessageEvent, DirectMessageEvent } from 'ts-disc-bot';
 import { formatSendable, sendableToString } from '@/utils';
 
-const discordAdapter = new Adapter<Adapter.Bot<Bot>>('discord');
+defineMetadata({ name: 'discord adapter' });
+const discordAdapter = registerAdapter('discord');
 declare module 'zhin' {
   namespace App {
     interface Adapters {
-      discord: Bot.Options;
+      discord: Client.Options;
+    }
+    interface Bots {
+      discord: Client;
     }
   }
 }
@@ -19,46 +23,33 @@ discordAdapter.schema({
   request_timeout: Schema.number('请输入请求超时时间(ms)').default(5000),
   sandbox: Schema.boolean('是否沙箱环境').default(true),
 });
-discordAdapter.define('sendMsg', async (bot_id, target_id, target_type, message, source) => {
-  const bot = discordAdapter.pick(bot_id);
-  let msg: Sendable = await discordAdapter.app!.renderMessage(message as string, source);
-  msg = formatSendable(msg);
-  switch (target_type) {
-    case 'guild':
-      return bot.sendGuildMessage(target_id, msg);
-    case 'direct':
-      return bot.sendDirectMessage(target_id, msg);
-    default:
-      throw new Error(`Discord适配器暂不支持发送${target_type}类型的消息`);
+type DiscordMessageEvent = GuildMessageEvent | DirectMessageEvent;
+class DiscordClient extends Adapter.Bot<'discord'> {
+  constructor(config: Adapter.BotConfig<'discord'>) {
+    super(discordAdapter, config.unique_id, new Client(config));
   }
-});
-type DingTalkMessageEvent = GuildMessageEvent | DirectMessageEvent;
-
-const startBots = (configs: App.BotConfig<'discord'>[]) => {
+  async handleSendMessage(
+    channel: Message.Channel,
+    message: string,
+    source?: Message<'discord'> | undefined,
+  ): Promise<string> {
+    const msg = formatSendable(message);
+    const [target_type, ...other] = channel.split(':');
+    const target_id = other.join(':');
+    switch (target_type) {
+      case 'guild':
+        return this.sendGuildMessage(target_id, msg);
+      case 'direct':
+        return this.sendDirectMessage(target_id, msg);
+      default:
+        throw new Error(`Discord适配器暂不支持发送${target_type}类型的消息`);
+    }
+  }
+}
+interface DiscordClient extends Client {}
+const startBots = (configs: Adapter.BotConfig<'discord'>[]) => {
   for (const config of configs) {
-    const bot = new Bot(config) as Adapter.Bot<Bot>;
-    Object.defineProperties(bot, {
-      unique_id: {
-        get() {
-          return config.unique_id;
-        },
-      },
-      quote_self: {
-        get() {
-          return discordAdapter.botConfig(bot)?.quote_self;
-        },
-      },
-      forward_length: {
-        get() {
-          return discordAdapter.botConfig(bot)?.forward_length;
-        },
-      },
-      command_prefix: {
-        get() {
-          return discordAdapter.botConfig(bot)?.command_prefix;
-        },
-      },
-    });
+    const bot = new DiscordClient(config);
     bot.on('message', messageHandler.bind(global, bot));
     bot.start().then(() => {
       discordAdapter.emit('bot-ready', bot);
@@ -66,28 +57,29 @@ const startBots = (configs: App.BotConfig<'discord'>[]) => {
     discordAdapter.bots.push(bot);
   }
 };
-const messageHandler = (bot: Adapter.Bot<Bot>, event: DingTalkMessageEvent) => {
-  const message = Message.fromEvent(discordAdapter, bot, event);
-  message.raw_message = sendableToString(event.message).trim();
-  message.from_id = event instanceof DirectMessageEvent ? event.user_id : event.channel_id;
-  const master = discordAdapter.botConfig(bot)?.master;
-  const admins = discordAdapter.botConfig(bot)?.admins?.filter(Boolean) || [];
-  message.sender = {
-    ...event.sender,
-    permissions: [
-      ...(event.sender?.permissions as unknown as string[]),
-      master && event.sender?.user_id === master && 'master',
-      admins && admins.includes(event.sender.user_id) && 'admins',
-    ].filter(Boolean) as string[],
-  };
-  message.message_type = event.message_type;
+const messageHandler = (bot: Adapter.Bot<'discord'>, event: DiscordMessageEvent) => {
+  const master = discordAdapter.botConfig(bot.unique_id)?.master;
+  const admins = discordAdapter.botConfig(bot.unique_id)?.admins?.filter(Boolean) || [];
+  const message = Message.from(discordAdapter, bot, {
+    channel: `${event.message_type}:${event instanceof DirectMessageEvent ? event.user_id : event.channel_id}`,
+    sender: {
+      user_id: event.sender.user_id,
+      user_name: event.sender.user_name,
+      permissions: [
+        ...(event.sender?.permissions as unknown as string[]),
+        master && event.sender?.user_id === master && 'master',
+        admins && admins.includes(event.sender.user_id) && 'admins',
+      ].filter(Boolean) as string[],
+    },
+    raw_message: sendableToString(event.message).trim(),
+    message_type: event.message_type,
+  });
   discordAdapter.app!.emit('message', discordAdapter, bot, message);
 };
 const stopBots = () => {
   for (const bot of discordAdapter.bots) {
-    bot.stop();
+    bot.internal.stop();
   }
 };
 discordAdapter.on('start', startBots);
 discordAdapter.on('stop', stopBots);
-export default discordAdapter;

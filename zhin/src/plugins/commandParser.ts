@@ -21,7 +21,7 @@ const executeCommand = async (message: Message) => {
     }
   }
 };
-const commandParser = new Plugin('指令解析器');
+const commandParser = new Plugin('commandParser');
 commandParser.middleware(async (_a, _b, message, next) => {
   const result = await executeCommand(message);
   if (result) return;

@@ -34,7 +34,7 @@
 
 ### Patch Changes
 
-- 866efc5: fix: setup setOptions failed
+- 866efc5: fix: setup defineMetadata failed
 
 ## 3.0.38
 

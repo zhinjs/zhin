@@ -1,21 +1,21 @@
-import { Adapter, AdapterBot, AdapterReceive } from './adapter';
-import { Bot } from './types';
+import { Adapter } from './adapter';
 import { Message } from './message';
+import { Adapters } from './app';
 
 type Next = () => Promise<any | null>;
-export type Middleware<AD extends Adapter = Adapter> = Compose.Middleware<AD>;
+export type Middleware<P extends Adapters = Adapters> = Compose.Middleware<P>;
 export namespace Middleware {
-  export function compose<AD extends Adapter>(middlewares: Middleware[]): Compose.ComposedMiddleware<AD> {
+  export function compose<P extends Adapters>(middlewares: Middleware<P>[]): Compose.ComposedMiddleware<P> {
     if (!Array.isArray(middlewares)) throw new TypeError('Middleware stack must be an array!');
     for (const fn of middlewares) {
       if (typeof fn !== 'function') throw new TypeError('Middleware must be composed of functions!');
     }
-    return (adapter: AD, bot: Bot<AD>, event: Message<AD>, next?: Next) => {
+    return (adapter: Adapter<P>, bot: Adapter.Bot<P>, event: Message<P>, next?: Next) => {
       let index = -1;
-      const dispatch: (i: number, ctx?: Message<AD>) => Promise<any> = (i: number, ctx: Message<AD> = event) => {
+      const dispatch: (i: number, ctx?: Message<P>) => Promise<any> = (i: number, ctx: Message<P> = event) => {
         if (i <= index) return Promise.reject(new Error('next() called multiple times'));
         index = i;
-        let fn: Middleware<AD> | undefined = middlewares[i];
+        let fn: Middleware<P> | undefined = middlewares[i];
         if (i === middlewares.length) fn = next;
         if (!fn) return Promise.resolve();
         try {
@@ -29,11 +29,16 @@ export namespace Middleware {
   }
 }
 export namespace Compose {
-  export type Middleware<AD extends Adapter> = (adapter: AD, bot: Bot<AD>, event: Message<AD>, next: Next) => any;
-  export type ComposedMiddleware<AD extends Adapter> = (
-    adapter: AD,
-    bot: Bot<AD>,
-    event: Message<AD>,
+  export type Middleware<P extends Adapters> = (
+    adapter: Adapter<P>,
+    bot: Adapter.Bot<P>,
+    event: Message<P>,
+    next: Next,
+  ) => any;
+  export type ComposedMiddleware<P extends Adapters> = (
+    adapter: Adapter<P>,
+    bot: Adapter.Bot<P>,
+    event: Message<P>,
     next?: Next,
   ) => Promise<void>;
 }

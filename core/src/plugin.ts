@@ -2,7 +2,7 @@ import { ArgsType, Command, defineCommand } from './command';
 import { EventEmitter } from 'events';
 import { Middleware } from './middleware';
 import { getCallerStack } from './utils';
-import { App } from './app';
+import { Adapters, App } from './app';
 import { APP_KEY, REQUIRED_KEY, WORK_DIR } from './constans';
 import { Dict, remove } from '@zhinjs/shared';
 import path from 'path';
@@ -111,6 +111,15 @@ export class Plugin extends EventEmitter {
   required<T extends keyof App.Services>(...services: (keyof App.Services)[]) {
     this[REQUIRED_KEY].push(...services);
   }
+  adapter<T extends Adapters>(name: T): Adapter<T>;
+  adapter<T extends Adapters>(adapter: Adapter<T>): this;
+  adapter<T extends Adapters>(adapter: Adapter<T> | T) {
+    if (Adapter.isAdapter(adapter)) {
+      App.adapters.set(adapter.name, adapter);
+      return this;
+    }
+    return App.adapters.get(adapter) as Adapter<T>;
+  }
 
   service<T extends keyof App.Services>(name: T): App.Services[T];
   service<T extends keyof App.Services>(name: T, service: App.Services[T]): this;
@@ -123,7 +132,7 @@ export class Plugin extends EventEmitter {
     }
     return this;
   }
-  middleware<AD extends Adapter = Adapter>(middleware: Middleware<AD>, before?: boolean) {
+  middleware<AD extends Adapters = Adapters>(middleware: Middleware<AD>, before?: boolean) {
     const method: 'push' | 'unshift' = before ? 'unshift' : 'push';
     this.middlewares[method](middleware as Middleware);
     this.disposes.push(() => remove(this.middlewares, middleware));
@@ -155,12 +164,12 @@ export class Plugin extends EventEmitter {
     const [nameDecl, ...argsDecl] = decl.split(/\s+/);
     if (!nameDecl) throw new Error('nameDecl不能为空');
     const nameArr = nameDecl.split('.').filter(Boolean);
-    if (nameArr.length === 0) throw new Error('command name cannot be empty or have dot character only')
+    if (nameArr.length === 0) throw new Error('command name cannot be empty or have dot character only');
     let parent: Command | undefined;
     for (let i = nameArr.length - 1; i > 0; i--) {
-      const parentName = nameArr.slice(0, i).join('.')
+      const parentName = nameArr.slice(0, i).join('.');
       parent = this.findCommand(parentName);
-      if (parent)  break
+      if (parent) break;
     }
     const command = defineCommand(argsDecl.join(' '), ...(args as any));
     if (parent) {
@@ -302,7 +311,7 @@ export class PluginMap extends Map<string, Plugin> {
   getWithPath(filePath: string) {
     for (const [_, plugin] of this) {
       const result = plugin.filePath.replace(filePath, '');
-      if (!result || ['.ts', '.js', '.cjs', '.mts'].includes(result)) return plugin;
+      if (!result || /^(lib\/)?(index)?\.[cm]?[tj]s$/.test(result)) return plugin;
     }
   }
 

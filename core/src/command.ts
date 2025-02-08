@@ -1,10 +1,9 @@
 import { findLastIndex, trimQuote } from './utils';
 import { deepClone, Dict, isEmpty } from '@zhinjs/shared';
-import { Bot } from './types';
 import { Adapter } from './adapter';
 import { Message, segment } from './message';
 import { Prompt } from './prompt';
-import { App } from './app';
+import { Adapters, App } from './app';
 
 type Argv = {
   name: string;
@@ -76,8 +75,8 @@ export type OptionValueType<S extends string> = OptionType<S> extends {
 
 // 定义一个Command类
 export class Command<A extends any[] = [], O = {}> {
-  private callbacks: Command.CallBack<Adapter, A, O>[] = [];
-  private checkers: Command.CallBack<Adapter, A, O>[] = [];
+  private callbacks: Command.CallBack<Adapters, A, O>[] = [];
+  private checkers: Command.CallBack<Adapters, A, O>[] = [];
   public name?: string;
   public aliasNames: string[] = [];
   public parent: Command | null = null;
@@ -142,7 +141,7 @@ export class Command<A extends any[] = [], O = {}> {
     return command;
   }
 
-  check<S extends Adapter>(callback: Command.CallBack<S, A, O>): this {
+  check<S extends Adapters>(callback: Command.CallBack<S, A, O>): this {
     this.checkers.push(callback);
     return this;
   }
@@ -244,26 +243,26 @@ export class Command<A extends any[] = [], O = {}> {
     return output;
   }
 
-  action<AD extends Adapter = Adapter>(callback: Command.CallBack<AD, A, O>) {
+  action<P extends Adapters = Adapters>(callback: Command.CallBack<P, A, O>) {
     this.callbacks.push(callback);
     return this as Command<A, O>;
   }
 
-  async execute<AD extends Adapter>(
-    message: Message<AD>,
+  async execute<P extends Adapters>(
+    message: Message<P>,
     template = message.raw_message,
   ): Promise<Message.Segment | void> {
-    let runtime: Command.RunTime<AD, A, O> | void;
+    let runtime: Command.RunTime<P, A, O> | void;
     try {
-      runtime = this.parse(template, message);
+      runtime = this.parse<P>(template, message);
     } catch (e: any) {
       return segment.text(e.message);
     }
     if (!runtime) return;
     for (const checker of runtime.command.checkers) {
       const result = await checker.apply(this, [
-        runtime as Command.RunTime<AD, A, O>,
-        ...(runtime as Command.RunTime<AD, A, O>).args,
+        runtime as Command.RunTime<P, A, O>,
+        ...(runtime as Command.RunTime<P, A, O>).args,
       ]);
       if (typeof result === 'boolean') {
         // 验证器返回false时，退出
@@ -275,8 +274,8 @@ export class Command<A extends any[] = [], O = {}> {
     }
     for (const callback of runtime.command.callbacks) {
       const result = await callback.apply(runtime.command, [
-        runtime as Command.RunTime<AD, A, O>,
-        ...(runtime as Command.RunTime<AD, A, O>).args,
+        runtime as Command.RunTime<P, A, O>,
+        ...(runtime as Command.RunTime<P, A, O>).args,
       ]);
       if (result) {
         if (typeof result === 'boolean') return;
@@ -382,7 +381,7 @@ export class Command<A extends any[] = [], O = {}> {
     return argv;
   }
 
-  match<AD extends Adapter>(template: string, message: Message<AD>, app: App): boolean {
+  match<P extends Adapters>(template: string, message: Message<P>, app: App): boolean {
     try {
       return !!this.parse(template, message);
     } catch {
@@ -390,7 +389,7 @@ export class Command<A extends any[] = [], O = {}> {
     }
   }
 
-  parse<AD extends Adapter>(template: string, message: Message<AD>): Command.RunTime<AD, A, O> | void {
+  parse<P extends Adapters>(template: string, message: Message<P>): Command.RunTime<P, A, O> | void {
     let argv = this.parseSugar(template);
     if (!argv.name) {
       argv = this.parseArgv(template);
@@ -515,13 +514,13 @@ export namespace Command {
     };
   };
 
-  export type RunTime<AD extends Adapter, A extends any[] = [], O = {}> = {
+  export type RunTime<P extends keyof App.Adapters, A extends any[] = [], O = {}> = {
     args: A;
     options: O;
-    adapter: AD;
-    bot: Bot<AD>;
-    prompt: Prompt<AD>;
-    message: Message<AD>;
+    adapter: Adapter<P>;
+    bot: Adapter.Bot<P>;
+    prompt: Prompt<P>;
+    message: Message<P>;
     command: Command<A, O>;
   };
   export type ArgConfig<S extends string = any> = {
@@ -558,8 +557,8 @@ export namespace Command {
           [key: string]: OptionConfig<L>;
         } & OptionsConfig<R>
     : {};
-  export type CallBack<AD extends Adapter = Adapter, A extends any[] = [], O = {}> = (
-    runtime: RunTime<AD, A, O>,
+  export type CallBack<P extends Adapters = Adapters, A extends any[] = [], O = {}> = (
+    runtime: RunTime<P, A, O>,
     ...args: A
   ) => MayBePromise<Message.Segment | boolean | void>;
 

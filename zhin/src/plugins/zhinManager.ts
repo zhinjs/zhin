@@ -1,4 +1,4 @@
-import { App, Plugin, segment, WORK_DIR, formatTime, formatSize, formatDateTime } from '@zhinjs/core';
+import { App, Plugin, segment, WORK_DIR, formatTime, formatSize, formatDateTime, Adapter } from '@zhinjs/core';
 import { axios, remove } from '@zhinjs/shared';
 import { exec, execSync } from 'child_process';
 import * as fs from 'fs';
@@ -28,8 +28,8 @@ type PluginOptions = {
 };
 const templates = {
   typescript_setup: `
-  import {setOptions,useCommand} from 'zhin';
-  setOptions({name:'$PluginName'})
+  import {defineMetadata,useCommand} from 'zhin';
+  defineMetadata({name:'$PluginName'})
   useCommand('foo')
   .action(()=>'bar')
   `,
@@ -108,7 +108,7 @@ const unlinkLocalDir = (dir_path: string) => {
     );
   });
 };
-const zhinManager = new Plugin('zhin管理');
+const zhinManager = new Plugin('systemManage');
 zhinManager
   .command('status')
   .desc('查看知音运行状态')
@@ -174,8 +174,7 @@ zhinManager
         body: {
           adapter: message.adapter.name,
           bot: message.bot.unique_id,
-          target_id: message.from_id,
-          target_type: message.message_type,
+          channel: message.channel,
           message: `重启完成，本次升级内容如下:\n${newContent}`,
         },
       });
@@ -336,55 +335,18 @@ adapterManage
       return `卸载失败\n${(e as Error).message}`;
     }
   });
-adapterManage
-  .command('adapter.add [name:string]')
-  .permission('master')
-  .desc('添加适配器')
-  .permission('master')
-  .action(async ({ prompt }, name) => {
-    if (!name) name = await prompt.text('请输入适配器名');
-    if (!name) return `输入错误`;
-    if (!isExistAdapter(name)) return `适配器(${name})不存在，你可能需要先安装它`;
-    zhinManager.app!.config.adapters.push(name);
-    zhinManager.app!.loadAdapter(name);
-    return `适配器(${name})已添加`;
-  });
-adapterManage
-  .command('adapter.remove [name:string]')
-  .permission('master')
-  .desc('移除适配器')
-  .option('-r <restart:boolean>', false)
-  .permission('master')
-  .action(async ({ adapter, options, message, bot, prompt }, name) => {
-    if (!name) name = await prompt.text('请输入适配器名');
-    if (!name) return `输入错误`;
-    if (!zhinManager.app!.config.adapters.includes(name)) return '适配器尚未添加到zhin';
-    remove(zhinManager.app!.config.adapters, name);
-    if (!options.restart) return `适配器(${name})已移除，将在下次重启时生效`;
-    process.send?.({
-      type: 'queue',
-      body: {
-        adapter: adapter.name,
-        bot: bot.unique_id,
-        target_id: message.from_id,
-        target_type: message.message_type,
-        message: `适配器(${name})已移除`,
-      },
-    });
-    process.exit(51);
-  });
 const botManage = zhinManager.command('bot').desc('机器人管理').hidden();
 botManage
   .command('bot.add <adapter:string>')
   .permission('master')
   .action(async ({ prompt }, adapter) => {
-    if (!zhinManager.app?.adapters.get(adapter))
+    if (!App.adapters.get(adapter))
       return `未找到名为“${adapter}”的适配器，请确认你是否安装并启用了“@zhinjs/adapter-${adapter}”`;
     const schema = zhinManager.app!.getAdapterSchema(adapter);
-    const botConfig: App.BotConfig = {
+    const botConfig = {
       adapter,
       ...(await prompt.getValueWithSchema(schema)),
-    } as App.BotConfig;
+    } as Adapter.BotConfig;
     zhinManager.app!.config.bots.push(botConfig);
     return `已添加，请重启`;
   });
@@ -467,7 +429,7 @@ botManage
     if (!unique_id) return '输入错误';
     const isConfirm = options.force || (await prompt.confirm('确认移除么'));
     if (isConfirm) {
-      remove(zhinManager.app!.config.bots, (bot: App.BotConfig) => {
+      remove(zhinManager.app!.config.bots, (bot: Adapter.BotConfig) => {
         return bot.unique_id === unique_id;
       });
       return `已移除(${unique_id})，下次启动生效`;

@@ -1,23 +1,11 @@
-import { Adapter, App, Message, Schema } from 'zhin';
-import {
-  Client,
-  PrivateMessageEvent,
-  DiscussMessageEvent,
-  GroupMessageEvent,
-  GuildMessageEvent,
-  genDmMessageId,
-  genGroupMessageId,
-  Config,
-  Quotable,
-} from '@icqqjs/icqq';
+import { Adapter, Message, Schema, registerAdapter, defineMetadata } from 'zhin';
+import { Client, Config, Quotable } from '@icqqjs/icqq';
 import * as process from 'process';
-import { formatSendable, sendableToString } from '@/utils';
-
-type QQMessageEvent = PrivateMessageEvent | GroupMessageEvent | DiscussMessageEvent | GuildMessageEvent;
-type ICQQAdapterConfig = App.BotConfig<'icqq'>[];
-export type ICQQAdapter = typeof icqq;
-const icqq = new Adapter<Adapter.Bot<Client>, QQMessageEvent>('icqq');
-icqq
+import { createMessageBase, createQuote, formatSendable } from '@/utils';
+import { QQMessageEvent } from '@/types';
+defineMetadata({ name: 'icqq adapter' });
+const icqqAdapter = registerAdapter('icqq');
+icqqAdapter
   .element({
     type: 'text',
     data: {
@@ -80,7 +68,7 @@ icqq
       content: 'string',
     },
   });
-icqq.schema({
+icqqAdapter.schema({
   uin: Schema.number('请输入机器人qq').required(),
   password: Schema.string('请输入机器人密码').required(),
   ver: Schema.string('请输入使用版本(例如：8.9.80)').required(),
@@ -101,151 +89,91 @@ declare module 'zhin' {
     interface Adapters {
       icqq: QQConfig;
     }
+    interface Bots {
+      icqq: Client;
+    }
   }
 }
-icqq.define('sendMsg', async (bot_id, target_id, target_type, message, source) => {
-  const bot = icqq.pick(bot_id);
-  let template: string = await icqq.app!.renderMessage(message, source);
-  let msg = formatSendable(template);
-  const quote: Quotable | undefined = target_type !== 'guild' && source ? (source.original as any) : undefined;
-  const textLen = msg.filter(e => e.type === 'text').reduce((result, cur) => result + String(cur).length, 0);
-  if (bot.forward_length && textLen > bot.forward_length)
-    msg = [
-      {
-        type: 'node',
-        user_id: bot.uin,
-        nickname: bot.nickname,
-        time: Date.now() / 1000,
-        message: msg,
-      },
-    ];
-  const disabledQuote =
-    !bot.quote_self ||
-    msg.some(e => {
-      return ['node', 'music', 'share', 'reply', 'quote'].includes(e.type);
-    });
-  switch (target_type) {
-    case 'group':
-      return bot.sendGroupMsg(parseInt(target_id), msg, disabledQuote ? undefined : quote);
-    case 'private':
-      return bot.sendPrivateMsg(parseInt(target_id), msg, disabledQuote ? undefined : quote);
-    case 'guild':
-      const [guild_id, channel_id] = target_id.split(':');
-      return bot.sendGuildMsg(guild_id, channel_id, message);
-    default:
-      throw new Error(`ICQQ适配器暂不支持发送${target_type}类型的消息`);
-  }
-});
 type QQConfig = {
   uin: number;
   password?: string;
 } & Config;
-let adapterConfig: ICQQAdapterConfig;
-const startBots = async (configs: App.BotConfig<'icqq'>[]) => {
-  adapterConfig = configs;
-  for (const { uin, password: _, quote_self, forward_length, ...config } of configs) {
-    const bot = new Client(uin, config) as Adapter.Bot<Client>;
-    Object.defineProperties(bot, {
-      unique_id: {
-        value: config.unique_id,
-        writable: false,
-      },
-      quote_self: {
-        get() {
-          return icqq.botConfig(bot)?.quote_self;
+class QQClient extends Adapter.Bot<'icqq'> {
+  constructor(config: Adapter.BotConfig<'icqq'>) {
+    super(icqqAdapter, config.unique_id, new Client(config.uin, config));
+  }
+  async handleSendMessage(
+    channel: Message.Channel,
+    message: string,
+    source?: Message<'icqq'> | undefined,
+  ): Promise<string> {
+    const [target_type, ...other] = channel.split(':');
+    const target_id = other.join(':');
+    let msg = formatSendable(message);
+    const quote: Quotable | undefined = target_type !== 'guild' && source ? createQuote(source) : undefined;
+    const textLen = msg.filter(e => e.type === 'text').reduce((result, cur) => result + String(cur).length, 0);
+    if (this.forward_length && textLen > this.forward_length)
+      msg = [
+        {
+          type: 'node',
+          user_id: this.uin,
+          nickname: this.nickname,
+          time: Date.now() / 1000,
+          message: msg,
         },
-      },
-      forward_length: {
-        get() {
-          return icqq.botConfig(bot)?.forward_length;
-        },
-      },
-      command_prefix: {
-        get() {
-          return icqq.botConfig(bot)?.command_prefix;
-        },
-      },
-    });
+      ];
+    const disabledQuote =
+      !this.quote_self ||
+      msg.some(e => {
+        return ['node', 'music', 'share', 'reply', 'quote'].includes(e.type);
+      });
+    switch (target_type) {
+      case 'group':
+        return (await this.sendGroupMsg(parseInt(target_id), msg, disabledQuote ? undefined : quote)).message_id;
+      case 'private':
+        return (await this.sendPrivateMsg(parseInt(target_id), msg, disabledQuote ? undefined : quote)).message_id;
+      case 'guild':
+        const [guild_id, channel_id] = target_id.split(':');
+        const { time, seq, rand } = await this.sendGuildMsg(guild_id, channel_id, message);
+        return `${time}/${seq}/${rand}`;
+      default:
+        throw new Error(`ICQQ适配器暂不支持发送${target_type}类型的消息`);
+    }
+  }
+}
+interface QQClient extends Client {}
+const startBots = async (configs: Adapter.BotConfig<'icqq'>[]) => {
+  for (const config of configs) {
+    const bot = new QQClient(config);
     bot.once('system.online', () => {
-      icqq.emit('bot-ready', bot);
+      icqqAdapter.emit('bot-ready', bot);
     });
     await botLogin(bot);
-    icqq.bots.push(bot);
+    icqqAdapter.bots.push(bot);
   }
 };
-const messageHandler = (bot: Adapter.Bot<Client>, event: QQMessageEvent) => {
-  const message = Message.fromEvent(icqq, bot, event);
-  message.raw_message = sendableToString(event.message);
-  if (!(event instanceof GuildMessageEvent)) {
-    message.message_type = event.message_type as any;
-    message.from_id =
-      event.message_type === 'private'
-        ? event.sender.user_id + ''
-        : event.message_type === 'group'
-        ? event.group_id + ''
-        : event.discuss_id + '';
-    const master = icqq.botConfig(bot)?.master;
-    const admins = icqq.botConfig(bot)?.admins?.filter(Boolean) || [];
-    message.sender = {
-      ...event.sender,
-      permissions: [
-        master && `${event.user_id}` === master && 'master',
-        event.message_type === 'group' && event.member?.is_owner && 'owner',
-        admins && admins.includes(`${event.user_id}`) && 'admins',
-        event.message_type === 'group' && event.member?.is_admin && 'admin',
-      ].filter(Boolean) as string[],
-    };
-    if (event.source) {
-      message.quote = {
-        message_id:
-          event.message_type === 'private'
-            ? genDmMessageId(
-                event.source.user_id,
-                event.source.seq,
-                event.source.rand,
-                event.source.time,
-                event.source.user_id === bot.uin ? 1 : 0,
-              )
-            : event.message_type === 'group'
-            ? genGroupMessageId(
-                event.group_id,
-                event.source.user_id,
-                event.source.seq,
-                event.source.rand,
-                event.source.time,
-              )
-            : '',
-        message: event.source.message as string,
-      };
-    }
-  } else {
-    message.from_id = `${event.guild_id}:${event.channel_id}`;
-    message.sender = {
-      user_id: event.sender.tiny_id,
-      user_name: event.sender.nickname,
-    };
-    message.message_type = 'guild';
-  }
-  icqq.app!.emit('message', icqq, bot, message);
+const messageHandler = (bot: QQClient, event: QQMessageEvent) => {
+  const message = Message.from(icqqAdapter, bot, createMessageBase(event));
+  icqqAdapter.app!.emit('message', icqqAdapter, bot, message);
 };
-const botLogin = async (bot: Adapter.Bot<Client>) => {
+const botLogin = async (bot: QQClient) => {
   return new Promise<void>(resolve => {
     bot.on('system.online', () => {
       bot.on('message', messageHandler.bind(global, bot));
       resolve();
     });
     bot.on('system.login.device', e => {
-      icqq.app!.logger.mark('请选择设备验证方式：\n1.扫码验证\t其他.短信验证');
+      icqqAdapter.app!.logger.mark('请选择设备验证方式：\n1.扫码验证\t其他.短信验证');
       process.stdin.once('data', buf => {
         const input = buf.toString().trim();
         if (input === '1') {
-          icqq.app!.logger.mark('请点击上方链接完成验证后回车继续');
+          icqqAdapter.app!.logger.mark('请点击上方链接完成验证后回车继续');
           process.stdin.once('data', () => {
             bot.login();
           });
         } else {
           bot.sendSmsCode();
-          icqq.app!.logger.mark(`请输入手机号(${e.phone})收到的短信验证码：`);
+          icqqAdapter.app!.logger.mark(`请输入手机号(${e.phone})收到的短信验证码：`);
           process.stdin.once('data', buf => {
             bot.submitSmsCode(buf.toString().trim());
           });
@@ -253,13 +181,13 @@ const botLogin = async (bot: Adapter.Bot<Client>) => {
       });
     });
     bot.on('system.login.qrcode', () => {
-      icqq.app!.logger.mark('请扫描二维码后回车继续');
+      icqqAdapter.app!.logger.mark('请扫描二维码后回车继续');
       process.stdin.once('data', () => {
         bot.login();
       });
     });
     bot.on('system.login.slider', () => {
-      icqq.app!.logger.mark('请点击上方链接，完成滑块验证后，输入获取到的ticket后继续');
+      icqqAdapter.app!.logger.mark('请点击上方链接，完成滑块验证后，输入获取到的ticket后继续');
       process.stdin.once('data', buf => {
         bot.submitSlider(buf.toString().trim());
       });
@@ -267,16 +195,14 @@ const botLogin = async (bot: Adapter.Bot<Client>) => {
     bot.on('system.login.error', () => {
       resolve();
     });
-    const password = adapterConfig.find(c => c.uin === bot.uin)?.password;
-    bot.login(password);
+    bot.login(icqqAdapter.botConfig(bot.unique_id)?.password);
   });
 };
 const stopBots = () => {
-  for (const bot of icqq.bots) {
-    bot.terminate();
+  for (const bot of icqqAdapter.bots) {
+    bot.internal.terminate();
   }
 };
 
-icqq.on('start', startBots);
-icqq.on('stop', stopBots);
-export default icqq;
+icqqAdapter.on('start', startBots);
+icqqAdapter.on('stop', stopBots);
