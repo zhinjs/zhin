@@ -1,5 +1,11 @@
 # @zhinjs/core
 
+## 2.0.10
+
+### Patch Changes
+
+- 27e53ee: fix remove ext
+
 ## 2.0.9
 
 ### Patch Changes
