@@ -1,5 +1,30 @@
 # test
 
+## 2.0.53
+
+### Patch Changes
+
+- zhin@3.0.47
+- @zhinjs/adapter-com-wechat@0.0.23
+- @zhinjs/adapter-dingtalk@0.0.23
+- @zhinjs/adapter-discord@0.0.23
+- @zhinjs/adapter-email@0.0.23
+- @zhinjs/adapter-icqq@0.0.23
+- @zhinjs/adapter-kritor@0.0.23
+- @zhinjs/adapter-onebot-11@0.0.23
+- @zhinjs/adapter-onebot-12@0.0.24
+- @zhinjs/adapter-qq@0.0.24
+- @zhinjs/adapter-web-wechat@0.0.23
+- @zhinjs/plugin-group-manage@1.0.49
+- @zhinjs/plugin-guild-manage@1.0.48
+- @zhinjs/plugin-qa@1.0.48
+- @zhinjs/plugin-schedule@1.0.47
+- @zhinjs/plugin-http-server@1.0.47
+- @zhinjs/plugin-sandbox@1.0.47
+- @zhinjs/plugin-screenshot@1.0.48
+- @zhinjs/plugin-upyun@1.0.47
+- @zhinjs/web@1.0.48
+
 ## 2.0.52
 
 ### Patch Changes

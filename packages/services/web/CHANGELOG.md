@@ -1,5 +1,12 @@
 # @zhinjs/web
 
+## 1.0.48
+
+### Patch Changes
+
+- zhin@3.0.47
+- @zhinjs/plugin-http-server@1.0.47
+
 ## 1.0.47
 
 ### Patch Changes
