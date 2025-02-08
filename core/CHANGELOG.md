@@ -1,5 +1,11 @@
 # @zhinjs/core
 
+## 2.0.6
+
+### Patch Changes
+
+- 2ad72be: fix: load Plugin
+
 ## 2.0.5
 
 ### Patch Changes

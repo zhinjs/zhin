@@ -1,5 +1,13 @@
 # zhin
 
+## 3.0.45
+
+### Patch Changes
+
+- 2ad72be: fix: load Plugin
+- Updated dependencies [2ad72be]
+  - @zhinjs/core@2.0.6
+
 ## 3.0.44
 
 ### Patch Changes
