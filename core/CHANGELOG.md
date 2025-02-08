@@ -1,5 +1,11 @@
 # @zhinjs/core
 
+## 2.0.9
+
+### Patch Changes
+
+- 82478c1: fix: built
+
 ## 2.0.8
 
 ### Patch Changes
