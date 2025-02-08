@@ -2,7 +2,7 @@
     "name": "@zhinjs/adapter-icqq",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
-    "version": "0.0.20",
+    "version": "0.0.21",
     "keywords": [
         "zhin",
         "zhin-adapter",
