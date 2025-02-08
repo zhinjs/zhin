@@ -292,7 +292,7 @@ export namespace Plugin {
       .replace(path.resolve(WORK_DIR, 'node_modules', 'zhin', 'lib', 'plugins') + path.sep, '内置插件')
       .replace(path.resolve(WORK_DIR, 'node_modules') + path.sep, '')
       .replace(WORK_DIR + path.sep, '')
-      .replace(/((lib)|(src)([\/\\]))?index\.[cm]?[tj]?s$/, '');
+      .replace(/([\/\\]+((lib)|(src)))?[\/\\]+index\.[cm]?[tj]?s$/, '');
   }
 }
 
