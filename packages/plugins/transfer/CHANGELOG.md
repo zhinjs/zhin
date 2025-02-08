@@ -1,5 +1,11 @@
 # @zhinjs/plugin-transfer
 
+## 1.0.10
+
+### Patch Changes
+
+- zhin@3.0.49
+
 ## 1.0.9
 
 ### Patch Changes

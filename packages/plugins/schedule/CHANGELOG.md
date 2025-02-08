@@ -1,5 +1,11 @@
 # @zhinjs/plugin-schedule
 
+## 1.0.49
+
+### Patch Changes
+
+- zhin@3.0.49
+
 ## 1.0.48
 
 ### Patch Changes
