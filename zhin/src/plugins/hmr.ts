@@ -1,9 +1,8 @@
 import { watch, FSWatcher } from 'chokidar';
-import { Plugin, WORK_DIR, App } from '@zhinjs/core';
+import { Plugin, Adapter, WORK_DIR, App } from '@zhinjs/core';
 import * as path from 'path';
 import * as fs from 'fs';
 import { ProcessMessage, QueueInfo } from '../worker';
-import { Adapter } from '../../lib';
 const hmr = new Plugin('hmr');
 let watcher: FSWatcher;
 hmr.beforeUnmount(() => {
