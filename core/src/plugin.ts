@@ -14,7 +14,6 @@ import { Config } from './config';
 
 export interface Plugin extends Plugin.Options {}
 export class Plugin extends EventEmitter {
-  public id: string;
   public name: string = '';
   private _logger?: Logger;
   disposes: Function[] = [];
@@ -63,7 +62,9 @@ export class Plugin extends EventEmitter {
       return result;
     }, commandList);
   }
-
+  get id() {
+    return Plugin.createIdByPath(this.filePath);
+  }
   constructor(name?: string);
   constructor(options?: Plugin.Options);
   constructor(param: Plugin.Options | string = {}) {
@@ -77,25 +78,10 @@ export class Plugin extends EventEmitter {
     this.adapters = options.adapters;
     this.priority = options.priority || 1;
     this.desc = options.desc || '';
-    const stack = getCallerStack();
-    stack.shift(); // 排除当前文件调用
-    this.filePath = stack[0]?.getFileName()!;
+    const stack = getCallerStack().map(s => s.getFileName());
+    const currentIdx = stack.findIndex(s => s === __filename);
+    this.filePath = stack.slice(currentIdx).find(s => s !== __filename)!;
     this.name = options.name!;
-    const prefixArr = [path.join(WORK_DIR, 'node_modules'), WORK_DIR, path.resolve(__dirname, '../..')];
-    this.id = this.filePath;
-    for (const prefix of prefixArr) {
-      this.id = this.id.replace(`${prefix}${path.sep}`, '');
-    }
-    const reg = new RegExp(`${path.sep}lib${path.sep}index\\.[cm][tj]s$`);
-    if (reg.test(this.id) && fs.existsSync(path.resolve(this.id.replace(reg, ''), 'package.json'))) {
-      this.id = require(path.resolve(this.id.replace(reg, ''), 'package.json')).name;
-    } else {
-      this.id = this.id
-        .replace(['zhin', 'lib', 'plugins'].join(path.sep), '内置插件')
-        .replace(`${path.sep}index`, '')
-        .replace(/\.[cm]?[tj]s$/, '')
-        .replace(`${path.sep}lib`, '');
-    }
     return new Proxy(this, {
       get(target: Plugin, key) {
         if (!target.app || Reflect.has(target, key)) return Reflect.get(target, key);
@@ -301,6 +287,15 @@ export namespace Plugin {
     install: InstallFn;
   };
   export type InstallFn = (plugin: Plugin) => void;
+  export function createIdByPath(filePath: string) {
+    return filePath
+      .replace(path.resolve(WORK_DIR, 'node_modules', '@zhinjs'), '官方插件')
+      .replace(path.resolve(WORK_DIR, 'node_modules', 'zhin', 'plugins'), '内置插件')
+      .replace(path.resolve(WORK_DIR, 'node_modules'), '')
+      .replace(path.resolve(WORK_DIR, 'plugins'), '自定义插件')
+      .replace(/((lib)|(src)([\/\\]))?index\.[cm]?[tj]?s$/, '');
+  }
+  console.log(createIdByPath(path.join(WORK_DIR, 'node_modules', '@zhinjs/test')));
 }
 
 export class PluginMap extends Map<string, Plugin> {
@@ -309,6 +304,8 @@ export class PluginMap extends Map<string, Plugin> {
   }
 
   getWithPath(filePath: string) {
+    const id = Plugin.createIdByPath(filePath);
+    if (this.has(id)) return this.get(id);
     for (const [_, plugin] of this) {
       const result = plugin.filePath.replace(filePath, '');
       if (!result || /^(lib\/)?(index)?\.[cm]?[tj]s$/.test(result)) return plugin;

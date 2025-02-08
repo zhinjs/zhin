@@ -307,9 +307,13 @@ export class App extends EventEmitter {
   }
 
   loadPlugin(name: string): this {
-    const maybePath = this.config.plugin_dirs.map(dir => {
-      return path.resolve(WORK_DIR, dir, name);
-    });
+    const maybePath = this.config.plugin_dirs.reduce(
+      (result, dir) => {
+        result.push(path.resolve(WORK_DIR, dir, name));
+        return result;
+      },
+      [name],
+    );
     let loaded: boolean = false,
       error: Error | null = null;
     for (const loadPath of maybePath) {
@@ -320,7 +324,7 @@ export class App extends EventEmitter {
         loaded = true;
       } catch (e) {
         if (!error || String(Reflect.get(error, 'message')).startsWith('Cannot find')) error = e as Error;
-        this.logger.debug(`try load plugin(${name}) failed. (from: ${loadPath})`, e);
+        this.logger.debug(`try load plugin(${name}) failed. (from: ${loadPath})`, (e as Error)?.message || e);
       }
     }
     if (!loaded) this.logger.warn(`load plugin "${name}" failed`, error?.message || error);

@@ -24,20 +24,6 @@ const resolveCallerPlugin = (): [boolean, Plugin] => {
   plugin = new Plugin(fileName);
   plugin.setup = true;
   plugin.filePath = filePath;
-
-  const prefixArr = [
-    path.join(__dirname),
-    path.join(WORK_DIR, 'node_modules'),
-    ...(setup.app?.config.plugin_dirs || []).map(dir => path.resolve(WORK_DIR, dir)),
-  ];
-  plugin.id = plugin.filePath;
-  for (const prefix of prefixArr) {
-    plugin.id = plugin.id.replace(`${prefix}${path.sep}`, '');
-  }
-  plugin.id = plugin.id
-    .replace(`${path.sep}index`, '')
-    .replace(/\.[cm]?[tj]s$/, '')
-    .replace(`${path.sep}lib`, '');
   return [true, plugin];
 };
 const getOrCreatePlugin = (options?: Plugin.Options) => {
