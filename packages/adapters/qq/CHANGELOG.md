@@ -1,5 +1,11 @@
 # @zhinjs/qq
 
+## 0.0.23
+
+### Patch Changes
+
+- zhin@3.0.46
+
 ## 0.0.22
 
 ### Patch Changes
