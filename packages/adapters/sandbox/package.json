@@ -1,0 +1,28 @@
+{
+	"name": "@zhinjs/adapter-qq",
+	"main": "lib/index.js",
+	"types": "lib/index.d.ts",
+	"version": "0.0.26",
+	"scripts": {
+		"build": "tsc && tsc-alias"
+	},
+	"keywords": [
+		"zhin",
+		"zhin-adapter",
+		"qq"
+	],
+	"files": [
+		"lib"
+	],
+	"author": "凉菜",
+	"repository": {
+		"url": "https://github.com/zhinjs/zhin",
+		"directory": "packages/adapters/qq"
+	},
+	"dependencies": {
+		"qq-official-bot": "latest"
+	},
+	"peerDependencies": {
+		"zhin": "workspace:^"
+	}
+}
