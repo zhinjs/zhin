@@ -1,5 +1,12 @@
 # @zhinjs/plugin-http-server
 
+## 2.0.0
+
+### Patch Changes
+
+- Updated dependencies [d29ac3f]
+  - zhin@3.1.0
+
 ## 1.0.49
 
 ### Patch Changes

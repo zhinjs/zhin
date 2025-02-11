@@ -1,5 +1,11 @@
 # @zhinjs/core
 
+## 2.1.0
+
+### Minor Changes
+
+- d29ac3f: feat: 完整类型声明，setup全支持
+
 ## 2.0.10
 
 ### Patch Changes
