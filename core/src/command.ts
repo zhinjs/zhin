@@ -413,17 +413,16 @@ export class Command<A extends any[] = [], O = {}> {
 
 type MayBePromise<T> = T | Promise<T>;
 
-// @ts-ignore
 export function defineCommand<S extends string>(decl: S, initialValue?: ArgsType<S>): Command<ArgsType<S>>;
 export function defineCommand<S extends string>(decl: S, config?: Command.Config): Command<ArgsType<S>>;
 export function defineCommand<S extends string>(
   decl: S,
-  initialValue?: ArgsType<S>,
+  initialValue: ArgsType<S>,
   config?: Command.Config,
 ): Command<ArgsType<S>>;
 export function defineCommand<S extends string>(
   decl: S,
-  ...args: [ArgsType<S> | Command.Config, Command.Config?]
+  ...args: ([(ArgsType<S> | Command.Config)?]|[ArgsType<S>, Command.Config?])
 ): Command<ArgsType<S>> {
   const initialValue: ArgsType<S> | undefined = Array.isArray(args[0]) ? undefined : (args.shift() as ArgsType<S>);
   const command = new Command<ArgsType<S>>(...(args as [Command.Config]));

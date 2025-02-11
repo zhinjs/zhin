@@ -9,12 +9,12 @@ declare module 'zhin' {
     interface Adapters {
       'web-wechat': BaseClient.Config;
     }
-    interface Bots {
+    interface Clients {
       'web-wechat': Client;
     }
   }
 }
-class WechatClient extends Adapter.Bot<'web-wechat'> {
+class WechatClient extends Adapter.BaseBot<'web-wechat'> {
   constructor(config: Adapter.BotConfig<'web-wechat'>) {
     super(wechatAdapter, config.unique_id, new Client(config));
   }
@@ -39,7 +39,7 @@ class WechatClient extends Adapter.Bot<'web-wechat'> {
 interface WechatClient extends Client {}
 const startBots = (configs: Adapter.BotConfig<'web-wechat'>[]) => {
   for (const config of configs) {
-    const bot = new WechatClient(config);
+    const bot = new WechatClient(config) as Adapter.Bot<'web-wechat'>;
     bot.on('message', messageHandler.bind(global, bot));
     bot.start().then(() => {
       wechatAdapter.emit('bot-ready', bot);
@@ -67,7 +67,7 @@ const messageHandler = (bot: WechatClient, event: DingMsgEvent) => {
 };
 const stopBots = () => {
   for (const bot of wechatAdapter.bots) {
-    bot.internal.stop();
+    bot.stop();
   }
 };
 wechatAdapter.on('start', startBots);

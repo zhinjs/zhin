@@ -15,11 +15,25 @@ export class Adapter<P extends keyof App.Adapters> extends EventEmitter {
   bots: Adapter.Bot<P>[] = [];
   elements: Element[] = [];
   private [adapterKey] = true;
+  #is_started: boolean = false;
   app: App | null = null;
+  #configs: Adapter.BotConfig<P>[] = [];
   static isAdapter(obj: any): obj is Adapter {
     return typeof obj === 'object' && !!obj[adapterKey];
   }
-
+  start(app: App, config: Adapter.BotConfig<P>[]) {
+    this.app = app;
+    this.emit('start', config);
+    this.#configs = config;
+    this.#is_started = true;
+  }
+  onReady(callback: (config: Adapter.BotConfig<P>[]) => void) {
+    if (this.#is_started) {
+      callback(this.#configs);
+    } else {
+      this.once('start', callback);
+    }
+  }
   schemas: Schema = Schema.object({
     unique_id: Schema.string('请输入机器人唯一标识'),
     master: Schema.string('请输入主人id'),
@@ -69,17 +83,6 @@ export class Adapter<P extends keyof App.Adapters> extends EventEmitter {
         : args[0];
     this.elements.push(element);
     return this;
-  }
-  mount(app: App) {
-    this.emit('before-mount');
-    this.logger.level = app.config.log_level;
-    this.app = app;
-    this.emit('mounted', app);
-  }
-  unmount() {
-    this.emit('before-unmount', this.app!);
-    this.app = null;
-    this.emit('unmounted');
   }
 }
 
@@ -140,23 +143,21 @@ export interface Adapter<P extends keyof App.Adapters = keyof App.Adapters> {
 export namespace Adapter {
   export interface EventMap<P extends keyof App.Adapters> {
     'bot-ready'(bot: Bot<P>): void;
-    'before-mount'(): void;
-    'before-unmount'(app: App): void;
-    'mounted'(app: App): void;
-    'unmounted'(): void;
     'start'(configs: BotConfig<P>[]): void;
+    'stop'(): void;
   }
-  export abstract class Bot<P extends Adapters = Adapters> {
+  export type Bot<P extends Adapters = Adapters> = BaseBot<P> & App.Clients[P];
+  export abstract class BaseBot<P extends Adapters = Adapters> {
     protected constructor(
       public adapter: Adapter<P>,
       public unique_id: string,
-      public internal: App.Bots[P],
+      public client: App.Clients[P],
     ) {
       const _this = this;
       return new Proxy(_this, {
         get(target, prop, receiver) {
           if (prop in target) return Reflect.get(target, prop, receiver);
-          return Reflect.get(_this.internal, prop, receiver);
+          return Reflect.get(_this.client, prop, receiver);
         },
       });
     }
@@ -203,6 +204,4 @@ export namespace Adapter {
     forward_length?: number;
     quote_self?: boolean;
   } & App.Adapters[T];
-  export type InferAdapterPlatform<T extends Adapter> = T extends Adapter<infer P> ? P : never;
-  export type InternalBot<P extends keyof App.Adapters> = App.Bots[P];
 }

@@ -5,7 +5,7 @@ declare module 'zhin' {
     interface Adapters {
       email: Client.Options;
     }
-    interface Bots {
+    interface Clients {
       email: Client;
     }
   }
@@ -27,7 +27,7 @@ adapter.schema({
     tls: Schema.boolean('是否使用SSL/TLS').default(true),
   }),
 });
-class EmailClient extends Adapter.Bot<'email'> {
+class EmailClient extends Adapter.BaseBot<'email'> {
   constructor(config: Adapter.BotConfig<'email'>) {
     super(adapter, config.unique_id, new Client(adapter, config));
   }
@@ -50,7 +50,7 @@ class EmailClient extends Adapter.Bot<'email'> {
 interface EmailClient extends Client {}
 const startBots = (configs: Adapter.BotConfig<'email'>[]) => {
   for (const config of configs) {
-    const bot = new EmailClient(config);
+    const bot = new EmailClient(config) as Adapter.Bot<'email'>;
     bot.on('message', (message: Message<'email'>) => {
       adapter.app?.emit('message', adapter, bot, message);
     });
@@ -67,7 +67,7 @@ const startBots = (configs: Adapter.BotConfig<'email'>[]) => {
 };
 const stopBots = () => {
   for (const bot of adapter.bots) {
-    bot.internal.stop();
+    bot.stop();
   }
 };
 adapter.on('start', startBots);

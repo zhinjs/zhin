@@ -7,7 +7,7 @@ declare module 'zhin' {
     interface Adapters {
       kritor: Client.Options;
     }
-    interface Bots {
+    interface Clients {
       kritor: Client;
     }
   }
@@ -18,7 +18,7 @@ adapter.schema({
   url: Schema.string('请输入kritor服务端地址').required(),
   super_ticket: Schema.string('请输入super_ticket'),
 });
-class KritorClient extends Adapter.Bot<'kritor'> {
+class KritorClient extends Adapter.BaseBot<'kritor'> {
   constructor(config: Adapter.BotConfig<'kritor'>) {
     super(adapter, config.unique_id, new Client(adapter, config));
   }
@@ -36,7 +36,7 @@ class KritorClient extends Adapter.Bot<'kritor'> {
   }
 }
 interface KritorClient extends Client {}
-const messageHandler = (bot: KritorClient, event: kritor.common.IPushMessageBody) => {
+const messageHandler = (bot: Adapter.Bot<'kritor'>, event: kritor.common.IPushMessageBody) => {
   const master = adapter.botConfig(bot.unique_id)?.master;
   const admins = adapter.botConfig(bot.unique_id)?.admins?.filter(Boolean) || [];
   const message = Message.from(adapter, bot, {
@@ -59,7 +59,7 @@ const messageHandler = (bot: KritorClient, event: kritor.common.IPushMessageBody
 };
 const startBots = (configs: Adapter.BotConfig<'kritor'>[]) => {
   for (const config of configs) {
-    const bot = new KritorClient(config);
+    const bot = new KritorClient(config) as Adapter.Bot<'kritor'>;
     bot.on('message', messageHandler.bind(global, bot));
     bot.start().then(() => {
       adapter.emit('bot-ready', bot);
@@ -70,7 +70,7 @@ const startBots = (configs: Adapter.BotConfig<'kritor'>[]) => {
 
 const stopBots = () => {
   for (const bot of adapter.bots) {
-    bot.internal.stop();
+    bot.stop();
   }
 };
 adapter.on('start', startBots);

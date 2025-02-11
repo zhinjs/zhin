@@ -4,7 +4,6 @@ import * as path from 'path';
 import type {} from '@zhinjs/web';
 
 const test = new Plugin('测试插件'); // 定义插件
-test.required('functionManager', 'component'); // 声明插件必须依赖的服务
 test
   .command('test-confirm') // 插件功能
   .hidden()
@@ -59,7 +58,6 @@ test
     });
     return `inputResult:${input} ${typeof input}`;
   });
-test.required('web');
 test
   .command('域名比价 [domain:string]')
   .option('-t <type:string>', 'new')
@@ -86,15 +84,22 @@ test
       })
       .join('\n==============\n');
   });
-test.mounted(() => {
-  test.web.addEntry(path.resolve(__dirname, '../client/index.ts'));
-  test.component({
+test.with('web', app => {
+  app.web.addEntry(path.resolve(__dirname, '../client/index.ts'));
+});
+test.with('register', async app => {
+  app.register('hello', function (this: Message, foo, bar, isExist = false) {
+    return `receive from ${this.message_type},args is ${foo},${bar},${isExist}`;
+  });
+});
+test.with('component', app => {
+  app.component({
     name: 'test2',
     render(_, context) {
       return `<slot/>,一天天的就知道钓鱼，该上学上学，该上班上班`;
     },
   });
-  test.component({
+  app.component({
     name: 'test',
     props: {
       who: {
@@ -106,16 +111,6 @@ test.mounted(() => {
       context.$message.bot.unique_id;
       return `不务正业!${context.who}`;
     },
-  });
-});
-// test
-//   .command('钓鱼')
-//   .alias('🎣')
-//   .sugar(/^.(钓鱼)|(🎣)$/)
-//   .action(({ message }) => `<test2><test who="${message.sender.user_id}"/></test2>`);
-test.mounted(async () => {
-  test.register('hello', function (this: Message, foo, bar, isExist = false) {
-    return `receive from ${this.message_type},args is ${foo},${bar},${isExist}`;
   });
 });
 export default test; // 最后导出

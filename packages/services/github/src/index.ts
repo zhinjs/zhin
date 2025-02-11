@@ -1,7 +1,7 @@
 import { Plugin, Schema, segment } from 'zhin';
 import type {} from '@zhinjs/plugin-http-server';
 const plugin = new Plugin('Github');
-plugin.required('server', 'database');
+plugin.waitServices('server', 'database');
 const config = plugin.useConfig(
   'github',
   Schema.object({

@@ -3,11 +3,10 @@ import { EventEmitter } from 'events';
 import { Middleware } from './middleware';
 import { getCallerStack } from './utils';
 import { Adapters, App } from './app';
-import { APP_KEY, REQUIRED_KEY, WORK_DIR } from './constans';
-import { Dict, remove } from '@zhinjs/shared';
+import { APP_KEY, pluginKey, serviceCallbacksKey, WORK_DIR } from './constans';
+import { remove } from '@zhinjs/shared';
 import path from 'path';
 import { Adapter } from './adapter';
-import * as fs from 'fs';
 import { getLogger, Logger } from 'log4js';
 import { Schema } from './schema';
 import { Config } from './config';
@@ -18,18 +17,28 @@ export class Plugin extends EventEmitter {
   private _logger?: Logger;
   disposes: Function[] = [];
   priority: number;
-  private __IS_ZHIN_PLUGIN__ = true;
-  isMounted: boolean = false;
-  [REQUIRED_KEY]: (keyof App.Services)[] = [];
+  private [pluginKey] = true;
+  get isMounted() {
+    return !!this.app;
+  }
+  get need_services() {
+    const result: Set<keyof App.Services> = new Set<keyof App.Services>();
+    for (const serviceCallback of this[serviceCallbacksKey]) {
+      for (const service of serviceCallback.services) {
+        result.add(service);
+      }
+    }
+    return [...result];
+  }
+  private [serviceCallbacksKey]: Plugin.ServiceCallbackInfo[] = [];
   filePath: string;
   setup: boolean = false;
-  private lifecycle: Dict<Plugin.CallBack[]> = {};
   public adapters?: string[] = [];
   get status(): Plugin.Status {
     return this.isMounted && !this.app!.config.disable_plugins.includes(this.id) ? 'enabled' : 'disabled';
   }
   static isPlugin(obj: any): obj is Plugin {
-    return typeof obj === 'object' && !!obj['__IS_ZHIN_PLUGIN__'];
+    return typeof obj === 'object' && !!obj[pluginKey];
   }
   services: Map<string | symbol, any> = new Map<string | symbol, any>();
   commands: Map<string, Command> = new Map<string, Command>();
@@ -82,6 +91,10 @@ export class Plugin extends EventEmitter {
     const currentIdx = stack.findIndex(s => s === __filename);
     this.filePath = stack.slice(currentIdx).find(s => s !== __filename)!;
     this.name = options.name!;
+    this.on('service-register', name => {
+      if (!this.need_services.includes(name) || !this.isMounted) return;
+      Plugin.runCallbackWithService(this.app!, this);
+    });
     return new Proxy(this, {
       get(target: Plugin, key) {
         if (!target.app || Reflect.has(target, key)) return Reflect.get(target, key);
@@ -94,8 +107,21 @@ export class Plugin extends EventEmitter {
     logger.level = this.app?.config.log_level || 'info';
     return logger;
   }
-  required<T extends keyof App.Services>(...services: (keyof App.Services)[]) {
-    this[REQUIRED_KEY].push(...services);
+  set logger(logger: Logger) {
+    this._logger = logger;
+  }
+  waitServices(...services: (keyof App.Services)[] | [...(keyof App.Services)[], callabck: (app: App) => void]) {
+    const lastArg = services[services.length - 1];
+    const callback: undefined | ((app: App) => void) = typeof lastArg === 'function' ? lastArg : undefined;
+    if (callback) services = services.slice(0, -1) as (keyof App.Services)[];
+    this[serviceCallbacksKey].push({
+      services: services as (keyof App.Services)[],
+      is_run: false,
+      callback,
+    });
+    this.mounted(app => {
+      Plugin.runCallbackWithService(app, this);
+    });
   }
   adapter<T extends Adapters>(name: T): Adapter<T>;
   adapter<T extends Adapters>(adapter: Adapter<T>): this;
@@ -110,12 +136,12 @@ export class Plugin extends EventEmitter {
   service<T extends keyof App.Services>(name: T): App.Services[T];
   service<T extends keyof App.Services>(name: T, service: App.Services[T]): this;
   service<T extends keyof App.Services>(name: T, service?: App.Services[T]) {
-    if (!service) return this.app!.services[name];
+    if (!service) return this.app?.services[name];
     this.services.set(name, service);
-    if (this.isMounted) {
-      this.app!.logger.debug(`new service(${name}) register from plugin(${this.display_name})`);
-      this.app!.emit('service-register', name, service);
-    }
+    this.mounted(app => {
+      this.logger.info(`service：${name} registered`);
+      app.emit('service-register', name, service);
+    });
     return this;
   }
   middleware<AD extends Adapters = Adapters>(middleware: Middleware<AD>, before?: boolean) {
@@ -135,7 +161,7 @@ export class Plugin extends EventEmitter {
     this.app?.mount(filePath);
     return this;
   }
-  // @ts-ignore
+  command<A extends any[] = [], O = {}>(command: Command<A, O>): this;
   command<S extends Command.Declare>(
     decl: S,
     initialValue?: ArgsType<Command.RemoveFirst<S>>,
@@ -143,10 +169,23 @@ export class Plugin extends EventEmitter {
   command<S extends Command.Declare>(decl: S, config?: Command.Config): Command<ArgsType<Command.RemoveFirst<S>>>;
   command<S extends Command.Declare>(
     decl: S,
-    initialValue?: ArgsType<Command.RemoveFirst<S>>,
+    initialValue: ArgsType<Command.RemoveFirst<S>>,
     config?: Command.Config,
   ): Command<ArgsType<Command.RemoveFirst<S>>>;
-  command<S extends Command.Declare>(decl: S, ...args: (ArgsType<Command.RemoveFirst<S>> | Command.Config)[]) {
+  command<S extends Command.Declare>(
+    decl: S | Command,
+    ...args: [(ArgsType<S> | Command.Config)?] | [ArgsType<S>, Command.Config?]
+  ) {
+    if (typeof decl !== 'string') {
+      const command = decl;
+      this.commands.set(command.name!, command);
+      this.emit('command-add', command);
+      this.disposes.push(() => {
+        this.commands.delete(command.name!);
+        this.emit('command-remove', command);
+      });
+      return this;
+    }
     const [nameDecl, ...argsDecl] = decl.split(/\s+/);
     if (!nameDecl) throw new Error('nameDecl不能为空');
     const nameArr = nameDecl.split('.').filter(Boolean);
@@ -181,23 +220,19 @@ export class Plugin extends EventEmitter {
   }
 
   mounted(callback: Plugin.CallBack) {
-    const lifeCycles = (this.lifecycle['mounted'] ||= []);
-    lifeCycles.push(callback);
+    const listener = (p: Plugin) => {
+      if (p !== this) return;
+      callback(this.app!);
+      this.off('plugin-mounted', listener);
+    };
+    this.on('plugin-mounted', listener);
+    if (this.isMounted) return callback(this.app!);
   }
-
-  beforeMount(callback: Plugin.CallBack) {
-    const lifeCycles = this.lifecycle['beforeMount'] || [];
-    lifeCycles.push(callback);
-  }
-
-  unmounted(callback: Plugin.CallBack) {
-    const lifeCycles = this.lifecycle['unmounted'] || [];
-    lifeCycles.push(callback);
-  }
-
   beforeUnmount(callback: Plugin.CallBack) {
-    const lifeCycles = this.lifecycle['beforeUnmount'] || [];
-    lifeCycles.push(callback);
+    this.on('plugin-beforeUnmount', p => {
+      if (p !== this) return;
+      callback(this.app!);
+    });
   }
 }
 
@@ -281,7 +316,11 @@ export namespace Plugin {
     enabled = '✅',
     disabled = '❌',
   }
-
+  export interface ServiceCallbackInfo {
+    services: (keyof App.Services)[];
+    is_run: boolean;
+    callback?: (app: App) => void;
+  }
   export type InstallObject = {
     name?: string;
     install: InstallFn;
@@ -291,9 +330,24 @@ export namespace Plugin {
     return filePath
       .replace(path.resolve(WORK_DIR, 'node_modules', 'zhin', 'lib', 'plugins') + path.sep, '')
       .replace(path.resolve(WORK_DIR, 'node_modules') + path.sep, '')
+      .replace(path.resolve(WORK_DIR, '..', 'zhin', 'lib', 'plugins') + path.sep, '') // for dev
+      .replace(path.resolve(WORK_DIR, '..', 'packages', 'adapters') + path.sep, '@zhinjs/adapter-') // for dev
+      .replace(path.resolve(WORK_DIR, '..', 'packages', 'plugins') + path.sep, '@zhinjs/plugin-') // for dev
+      .replace(path.resolve(WORK_DIR, '..', 'packages', 'services') + path.sep, '@zhinjs/plugin-') // for dev
       .replace(WORK_DIR + path.sep, '')
       .replace(/([\/\\]+((lib)|(src)))?[\/\\]+index\.[cm]?[tj]?s$/, '')
       .replace(/\.[cm]?[tj]?s$/, '');
+  }
+  export function runCallbackWithService(app: App, plugin: Plugin) {
+    const serviceCallbacks = plugin[serviceCallbacksKey];
+    for (const serviceCallback of serviceCallbacks) {
+      const { services, callback, is_run } = serviceCallback;
+      if (is_run) continue;
+      if (services.every(s => Reflect.has(app.services, s))) {
+        callback?.(app);
+        serviceCallback.is_run = true;
+      }
+    }
   }
 }
 

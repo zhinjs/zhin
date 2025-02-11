@@ -1,7 +1,7 @@
-import { AdapterBot, Plugin } from 'zhin';
-import { OneBotV12Adapter } from '@zhinjs/adapter-onebot-12';
+import { Adapter, Plugin } from 'zhin';
+import type {} from '@zhinjs/adapter-onebot-12';
 const pusher = new Plugin('消息推送');
-pusher.required('database');
+pusher.waitServices('database');
 type PusherConfig = {
   unique_id: string;
   group_id: string;
@@ -36,7 +36,7 @@ serviceMap.set('四川农业大学通知服务', createSicauService('四川农�
 serviceMap.set('四川农业大学二课提醒', createSicauService('四川农业大学二课提醒'));
 
 let timer: NodeJS.Timeout;
-pusher.command('添加推送').action<OneBotV12Adapter>(async ({ bot, prompt }) => {
+pusher.command('添加推送').action<'onebot-12'>(async ({ bot, prompt }) => {
   const groupList = await bot.getGroupList();
   const pushGroup = await prompt.pick('请选择推送的群', {
     type: 'text',
@@ -68,8 +68,8 @@ pusher.mounted(app => {
     const configs = (await pusher.database.get<PusherConfig[]>('pusher_config', [])) || [];
     for (const config of configs) {
       const bot = app.adapters
-        .get('onebot_12')
-        ?.bots.find(b => b.unique_id === config.unique_id) as AdapterBot<OneBotV12Adapter>;
+        .get('onebot-12')
+        ?.bots.find(b => b.unique_id === config.unique_id) as unknown as Adapter.Bot<'onebot-12'>;
       if (!bot) return;
       const service = serviceMap.get(config.service);
       if (service) {

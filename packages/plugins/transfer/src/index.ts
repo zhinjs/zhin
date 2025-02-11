@@ -8,7 +8,9 @@ type TransportConfig = {
   from: Transport;
   to: Transport;
 };
-transferPlugin.required('database');
+transferPlugin.waitServices('database', async app => {
+  await app.database.get('transfer', []);
+});
 transferPlugin
   .command('transfer.add')
   .permission('master')
@@ -63,10 +65,6 @@ transferPlugin
       },
     });
   });
-transferPlugin.on('plugin-mounted', async () => {
-  await transferPlugin.database.get('transfer', []);
-});
-
 transferPlugin.middleware(async (adapter, bot, message, next) => {
   const transferList = await transferPlugin.database.get<TransportConfig[]>('transfer', []);
   const transfer = transferList.find(

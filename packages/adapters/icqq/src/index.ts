@@ -89,7 +89,7 @@ declare module 'zhin' {
     interface Adapters {
       icqq: QQConfig;
     }
-    interface Bots {
+    interface Clients {
       icqq: Client;
     }
   }
@@ -98,7 +98,7 @@ type QQConfig = {
   uin: number;
   password?: string;
 } & Config;
-class QQClient extends Adapter.Bot<'icqq'> {
+class QQClient extends Adapter.BaseBot<'icqq'> {
   constructor(config: Adapter.BotConfig<'icqq'>) {
     super(icqqAdapter, config.unique_id, new Client(config.uin, config));
   }
@@ -144,7 +144,7 @@ class QQClient extends Adapter.Bot<'icqq'> {
 interface QQClient extends Client {}
 const startBots = async (configs: Adapter.BotConfig<'icqq'>[]) => {
   for (const config of configs) {
-    const bot = new QQClient(config);
+    const bot = new QQClient(config) as Adapter.Bot<'icqq'>;
     bot.once('system.online', () => {
       icqqAdapter.emit('bot-ready', bot);
     });
@@ -200,7 +200,7 @@ const botLogin = async (bot: QQClient) => {
 };
 const stopBots = () => {
   for (const bot of icqqAdapter.bots) {
-    bot.internal.terminate();
+    bot.terminate();
   }
 };
 

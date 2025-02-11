@@ -9,7 +9,7 @@ import { IncomingMessage } from 'http';
 export class OneBotV11 extends EventEmitter {
   self_id: string | number = '';
   constructor(
-    public adapter: Adapter<'onebot_11'>,
+    public adapter: Adapter<'onebot-11'>,
     public config: OneBotV11.Config,
     private router: Router,
   ) {

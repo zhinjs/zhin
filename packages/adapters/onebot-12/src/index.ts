@@ -3,14 +3,14 @@ import '@zhinjs/plugin-http-server';
 import { OneBotV12 } from '@/onebot';
 import { MessageV12 } from '@/message';
 defineMetadata({ name: 'OneBot 12 adapter' });
-const oneBotV12Adapter = registerAdapter('onebot_12');
+const oneBotV12Adapter = registerAdapter('onebot-12');
 declare module 'zhin' {
   namespace App {
     interface Adapters {
-      onebot_12: OneBotV12.Config;
+      'onebot-12': OneBotV12.Config;
     }
-    interface Bots {
-      onebot_12: OneBotV12;
+    interface Clients {
+      'onebot-12': OneBotV12;
     }
   }
 }
@@ -21,14 +21,14 @@ oneBotV12Adapter.schema({
   max_reconnect_count: Schema.number('请输入max_reconnect_count').default(10),
   reconnect_interval: Schema.number('请输入reconnect_interval').default(3000),
 });
-class OneBotClient extends Adapter.Bot<'onebot_12'> {
-  constructor(config: Adapter.BotConfig<'onebot_12'>) {
+class OneBotClient extends Adapter.BaseBot<'onebot-12'> {
+  constructor(config: Adapter.BotConfig<'onebot-12'>) {
     super(oneBotV12Adapter, config.unique_id, new OneBotV12(oneBotV12Adapter, config, oneBotV12Adapter.app!.router));
   }
   async handleSendMessage(
     channel: Message.Channel,
     message: string,
-    source: Message<'onebot_12'> | undefined,
+    source: Message<'onebot-12'> | undefined,
   ): Promise<string> {
     const [target_type, ...other] = channel.split(':');
     const target_id = other.join(':');
@@ -44,12 +44,12 @@ class OneBotClient extends Adapter.Bot<'onebot_12'> {
   }
 }
 interface OneBotClient extends OneBotV12 {}
-const startBots = (configs: Adapter.BotConfig<'onebot_12'>[]) => {
+const startBots = (configs: Adapter.BotConfig<'onebot-12'>[]) => {
   if (!oneBotV12Adapter.app?.server)
     throw new Error('“oneBot V12 miss require service “http”, maybe you need install “ @zhinjs/plugin-http-server ”');
 
   for (const config of configs) {
-    const bot = new OneBotClient(config);
+    const bot = new OneBotClient(config) as Adapter.Bot<'onebot-12'>;
     bot.on('message', messageHandler.bind(global, bot));
     bot.start().then(() => {
       oneBotV12Adapter.emit('bot-ready', bot);
@@ -78,7 +78,7 @@ const messageHandler = (bot: OneBotClient, event: MessageV12) => {
 };
 const stopBots = () => {
   for (const bot of oneBotV12Adapter.bots) {
-    bot.internal.stop();
+    bot.stop();
   }
 };
 oneBotV12Adapter.on('start', startBots);

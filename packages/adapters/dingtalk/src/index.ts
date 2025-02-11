@@ -9,7 +9,7 @@ declare module 'zhin' {
     interface Adapters {
       dingtalk: Client.Options;
     }
-    interface Bots {
+    interface Clients {
       dingtalk: Client;
     }
   }
@@ -23,7 +23,7 @@ dingTalkAdapter.schema({
   request_timeout: Schema.number('请输入请求超时时间(ms)').default(5000),
   sandbox: Schema.boolean('是否沙箱环境').default(true),
 });
-class DingTalkClient extends Adapter.Bot<'dingtalk'> {
+class DingTalkClient extends Adapter.BaseBot<'dingtalk'> {
   constructor(config: Adapter.BotConfig<'dingtalk'>) {
     super(dingTalkAdapter, config.unique_id, new Client(config));
   }
@@ -48,7 +48,7 @@ class DingTalkClient extends Adapter.Bot<'dingtalk'> {
 interface DingTalkClient extends Client {}
 const startBots = (configs: Adapter.BotConfig<'dingtalk'>[]) => {
   for (const config of configs) {
-    const bot = new DingTalkClient(config);
+    const bot = new DingTalkClient(config) as Adapter.Bot<'dingtalk'>;
     bot.on('message', messageHandler.bind(global, bot));
     bot.start().then(() => {
       dingTalkAdapter.emit('bot-ready', bot);
@@ -75,7 +75,7 @@ const messageHandler = (bot: Adapter.Bot<'dingtalk'>, event: DingMsgEvent) => {
 };
 const stopBots = () => {
   for (const bot of dingTalkAdapter.bots) {
-    bot.internal.stop();
+    bot.stop();
   }
 };
 dingTalkAdapter.on('start', startBots);

@@ -47,7 +47,7 @@ const createDeleteMsg = (key: string, value: any) => {
     },
   };
 };
-plugin.mounted(async () => {
+plugin.waitServices('koa', 'router', 'server', async app => {
   const root = path.resolve(path.dirname(require.resolve('@zhinjs/client')), '../app');
   const vite: typeof import('vite') = await import('vite');
   const viteServer = await vite.createServer({
@@ -75,7 +75,7 @@ plugin.mounted(async () => {
       },
     },
   });
-  plugin.router.all('(/.+)*', async (ctx: any, next: Function) => {
+  app.router.all('/(.*)', async (ctx: any, next: Function) => {
     await next();
     const name = ctx.path.slice(1);
     const sendFile = (filename: string) => {
@@ -98,8 +98,8 @@ plugin.mounted(async () => {
     ctx.type = 'html';
     ctx.body = await viteServer.transformIndexHtml('', template);
   });
-  plugin.router.all(
-    '/vite(/.+)*',
+  app.router.all(
+    '/vite(.*)',
     (ctx: any) =>
       new Promise(resolve => {
         viteServer.middlewares(ctx.req, ctx.res, resolve);
@@ -123,9 +123,8 @@ plugin.mounted(async () => {
     },
     ws: plugin.router.ws('/server'),
   });
-  plugin.web.ws.on('connection', (ws: WebSocket) => {
-    ws.send(JSON.stringify(createSyncMsg('entries', Object.values(plugin.web.entries))));
+  app.web.ws.on('connection', (ws: WebSocket) => {
+    ws.send(JSON.stringify(createSyncMsg('entries', Object.values(app.web.entries))));
   });
 });
-plugin.required('koa', 'router', 'server');
 export default plugin;

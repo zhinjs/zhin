@@ -3,7 +3,7 @@ import { unescape } from '@zhinjs/shared';
 import { registerAdapter, defineMetadata } from './setup';
 defineMetadata({ name: `process adapter` });
 const processAdapter = registerAdapter('process');
-export class ProcessBot extends Adapter.Bot<'process'> {
+export class ProcessBot extends Adapter.BaseBot<'process'> {
   constructor(config: Adapter.BotConfig<'process'>) {
     process.title = config.title || 'process';
     super(processAdapter, config.unique_id, process);

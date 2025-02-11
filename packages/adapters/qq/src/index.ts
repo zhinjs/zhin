@@ -16,7 +16,7 @@ declare module 'zhin' {
     interface Adapters {
       qq: QQConfig;
     }
-    interface Bots {
+    interface Clients {
       qq: Client;
     }
   }
@@ -39,7 +39,7 @@ type QQConfig = {
   timeout?: number;
   public?: boolean;
 };
-class QQClient extends Adapter.Bot<'qq'> {
+class QQClient extends Adapter.BaseBot<'qq'> {
   constructor({ private: isPrivate, group, public: isPublic, ...config }: Adapter.BotConfig<'qq'>) {
     super(
       qqAdapter,
@@ -98,7 +98,7 @@ class QQClient extends Adapter.Bot<'qq'> {
 interface QQClient extends Client {}
 const startBots = (configs: Adapter.BotConfig<'qq'>[]) => {
   for (const config of configs) {
-    const bot = new QQClient(config);
+    const bot = new QQClient(config) as Adapter.Bot<'qq'>;
     bot.on('message', messageHandler.bind(global, bot));
     bot.start().then(() => {
       qqAdapter.emit('bot-ready', bot);
@@ -141,7 +141,7 @@ const messageHandler = (bot: QQClient, event: QQMessageEvent) => {
 };
 const stopBots = () => {
   for (const bot of qqAdapter.bots) {
-    bot.internal.stop();
+    bot.stop();
   }
 };
 

@@ -5,7 +5,8 @@ export {
   getAdapter,
   registerAdapter,
   registerMiddleware,
-  registerService,
+  provide,
+  inject,
   getBot,
   sendGroupMessage,
   sendPrivateMessage,
@@ -16,7 +17,8 @@ export {
   listen,
   defineMetadata,
   useCommand,
-  withService,
+  waitServices,
+  logger,
 } from './plugins/setup';
 export * from './constants';
 import {

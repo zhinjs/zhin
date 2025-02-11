@@ -3,7 +3,6 @@ export class HtmlRenderer extends Renderer {
   constructor(endpoint: string = process.env.ENDPOINT || '') {
     super('html', endpoint);
   }
-
   async rendering<T extends Renderer.OutputType>(
     input: string,
     options: Renderer.Options<T>,

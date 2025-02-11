@@ -4,7 +4,7 @@ import { IonContent, IonPage } from '@ionic/vue';
 
 <template>
   <ion-page>
-    <ion-content> test </ion-content>
+    <ion-content> sandbox </ion-content>
   </ion-page>
 </template>
 

@@ -10,7 +10,7 @@ declare module 'zhin' {
     interface Adapters {
       'com-wechat': Client.Config;
     }
-    interface Bots {
+    interface Clients {
       'com-wechat': Client;
     }
   }
@@ -22,7 +22,7 @@ adapter.schema({
   max_reconnect_count: Schema.number('请输入max_reconnect_count').default(10),
   reconnect_interval: Schema.number('请输入reconnect_interval').default(3000),
 });
-class WechatClient extends Adapter.Bot<'com-wechat'> {
+class WechatClient extends Adapter.BaseBot<'com-wechat'> {
   constructor(config: Adapter.BotConfig<'com-wechat'>) {
     super(adapter, config.unique_id, new Client(adapter, config, adapter.app!.router));
   }
@@ -50,7 +50,7 @@ const startBots = (configs: Adapter.BotConfig<'com-wechat'>[]) => {
     throw new Error('“com-wechat miss require service “http”, maybe you need install “ @zhinjs/plugin-http-server ”');
 
   for (const config of configs) {
-    const bot = new WechatClient(config);
+    const bot = new WechatClient(config) as Adapter.Bot<'com-wechat'>;
     bot.on('message', messageHandler.bind(global, bot));
     bot.start().then(() => {
       adapter.emit('bot-ready', bot);
@@ -79,7 +79,7 @@ const messageHandler = (bot: WechatClient, event: ClientMessage) => {
 };
 const stopBots = () => {
   for (const bot of adapter.bots) {
-    bot.internal.stop();
+    bot.stop();
   }
 };
 

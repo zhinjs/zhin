@@ -21,7 +21,13 @@ declare module 'zhin' {
   }
 }
 const schedulePlugin = new Plugin('定时任务');
-schedulePlugin.required('database');
+schedulePlugin.waitServices('database', async app => {
+  const schedules = await app.database.get<Schedule[]>('schedule', []);
+  if (!schedules) return;
+  for (const schedule of schedules) {
+    addSchedule(schedule);
+  }
+});
 const scheduleManager = new ScheduleManager();
 schedulePlugin.service('addTask', (cron: CronDescriptors, callback: Function) => {
   return scheduleManager.addTask(cron, callback);
@@ -29,13 +35,6 @@ schedulePlugin.service('addTask', (cron: CronDescriptors, callback: Function) =>
 schedulePlugin.service('removeTask', no => {
   return scheduleManager.removeTask(no);
 });
-const initialize = async () => {
-  const schedules = await schedulePlugin.database.get<Schedule[]>('schedule', []);
-  if (!schedules) return;
-  for (const schedule of schedules) {
-    addSchedule(schedule);
-  }
-};
 const addSchedule = (schedule: Schedule) => {
   const adapter = schedulePlugin.app!.adapters.get(schedule.adapter);
   if (!adapter) return;
@@ -98,10 +97,4 @@ scheduleCommand
     return '删除成功';
   });
 
-schedulePlugin.mounted(() => {
-  schedulePlugin.app!.on('ready', initialize);
-});
-schedulePlugin.beforeUnmount(() => {
-  schedulePlugin.app!.off('ready', initialize);
-});
 export default schedulePlugin;

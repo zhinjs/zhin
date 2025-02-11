@@ -5,7 +5,7 @@ import { Plugin, PluginMap } from './plugin';
 import { LogLevel } from './types';
 import { loadModule } from './utils';
 import { remove, sleep } from '@zhinjs/shared';
-import { APP_KEY, CONFIG_DIR, REQUIRED_KEY, WORK_DIR } from './constans';
+import { APP_KEY, CONFIG_DIR, serviceCallbacksKey, WORK_DIR } from './constans';
 import path from 'path';
 import { Adapter } from './adapter';
 import { Message } from './message';
@@ -56,7 +56,6 @@ export class App extends EventEmitter {
     if (!adapter) throw new Error(`cannot find adapter ${name}`);
     return adapter.schemas;
   }
-
   async renderMessage<T extends Message = Message>(template: string, message?: T) {
     for (const render of this.renders) {
       try {
@@ -145,16 +144,8 @@ export class App extends EventEmitter {
   }
 
   plugin(plugin: Plugin): this {
-    this.emit('plugin-beforeMount', plugin);
     plugin[APP_KEY] = this;
-    plugin.mounted(() => {
-      for (const [name, service] of (plugin as Plugin).services) {
-        this.logger.debug(`new service(${name.toString()}) register from from(${plugin.display_name})`);
-        this.emit('service-register', name, service);
-      }
-      this.logger.info(`plugin：${plugin.display_name} loaded。`);
-      plugin.isMounted = true;
-    });
+    this.logger.info(`plugin：${plugin.display_name} loaded。`);
     this.emit('plugin-mounted', plugin);
     return this;
   }
@@ -186,15 +177,6 @@ export class App extends EventEmitter {
   }
 
   emit(event: string, ...args: any[]) {
-    if (['plugin-beforeMount', 'plugin-mounted', 'plugin-beforeUnmount', 'plugin-unmounted'].includes(event)) {
-      const plugin: Plugin = args[0];
-      const method = event.split('-')[1];
-      if (plugin && plugin?.['lifecycle']?.[method]?.length) {
-        for (const lifecycle of plugin['lifecycle'][method]) {
-          lifecycle(this);
-        }
-      }
-    }
     const result = super.emit(event, ...args);
     for (const plugin of this.pluginList) {
       plugin.emit(event, ...args);
@@ -239,33 +221,7 @@ export class App extends EventEmitter {
     }
     this.plugins.set(plugin.id, plugin);
     if (this.config.disable_plugins.indexOf(plugin.id) >= 0) return this.disable(plugin);
-    if (plugin[REQUIRED_KEY].length) {
-      const requiredServices = plugin[REQUIRED_KEY];
-      const mountFn = () => {
-        if (requiredServices.every(key => !!this[key])) {
-          this.plugin(plugin);
-          this.off('service-register', mountFn);
-        }
-      };
-      const serviceDestroyListener = (name: string) => {
-        if (
-          requiredServices.some(s => {
-            return name === s;
-          })
-        )
-          this.emit('plugin-beforeUnmount', plugin);
-      };
-      this.on('service-register', mountFn);
-      this.on('service-destroy', serviceDestroyListener);
-      plugin.beforeUnmount(() => {
-        this.off('service-register', mountFn);
-        this.off('service-destroy', serviceDestroyListener);
-        (plugin as Plugin).isMounted = false;
-      });
-      mountFn();
-    } else {
-      this.plugin(plugin);
-    }
+    this.plugin(plugin);
     return this;
   }
 
@@ -299,8 +255,7 @@ export class App extends EventEmitter {
       const bots = this.config.bots.filter(
         bot => bot?.adapter === adapter.name && !this.config.disable_bots.includes(bot.unique_id),
       );
-      adapter.app = this;
-      adapter.emit('start', bots);
+      adapter.start(this, bots);
       this.logger.mark(`adapter： ${name} started`);
     }
     this.emit('start');
@@ -404,13 +359,9 @@ export namespace App {
   export interface EventMap {
     'start'(): void;
 
-    'plugin-beforeMount'(plugin: Plugin): void;
-
     'plugin-mounted'(plugin: Plugin): void;
 
     'plugin-beforeUnmount'(plugin: Plugin): void;
-
-    'plugin-unmounted'(plugin: Plugin): void;
 
     'ready'(): void;
 
@@ -443,7 +394,7 @@ export namespace App {
       title: string;
     };
   }
-  export interface Bots {
+  export interface Clients {
     process: NodeJS.Process;
   }
   export interface Services {}

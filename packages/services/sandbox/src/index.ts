@@ -41,77 +41,76 @@ sandbox.mounted(() => {
   });
   disposeArr.push(dispose);
 });
-sandbox.mounted(() => {
-  sandbox.component({
-    name: 'template',
-    render(props, context) {
-      const keys = Object.keys(props);
-      if (!keys.length) keys.push('#default');
-      for (const key of Object.keys(props)) {
-        if (key.startsWith('#')) {
-          context.parent.$slots[key.slice(1)] = async p => {
-            return await context.render(context.children || '', { ...context, ...p });
-          };
-        }
+
+Component.define({
+  name: 'template',
+  render(props, context) {
+    const keys = Object.keys(props);
+    if (!keys.length) keys.push('#default');
+    for (const key of Object.keys(props)) {
+      if (key.startsWith('#')) {
+        context.parent.$slots[key.slice(1)] = async p => {
+          return await context.render(context.children || '', { ...context, ...p });
+        };
       }
-      return '';
-    },
-  });
-  sandbox.component({
-    name: 'slot',
-    props: {
-      name: String,
-    },
-    render({ name, ...props }, context) {
-      name = name || 'default';
-      if (!context.parent) return '';
-      if (context.parent.$slots[name]) return context.parent.$slots[name](props, context) as string;
-      return context.children || '';
-    },
-  });
-  sandbox.component({
-    name: 'request',
-    props: {
-      method: {
-        type: String,
-        default: 'get',
-      },
-      url: String,
-      config: {
-        type: Object,
-        default() {
-          return {};
-        },
-      },
-    },
-    async render(props, context) {
-      if (!props.url) throw new SyntaxError('url is required');
-      const result = await axios.default(props.url, {
-        method: props.method,
-        ...props.config,
-      });
-      return context.render(context.children || '', {
-        ...context,
-        result: result.data,
-      } as Component.Context<{ result: axios.AxiosResponse }>);
-    },
-  });
-  sandbox.component({
-    name: 'eval',
-    async render(props, context) {
-      if (!context.children) return '';
-      const result = await renderWithRuntime(context.children, {}, context.$root);
-      const { adapter, bot } = context.$message;
-      const commands = sandbox.app!.getSupportCommands(adapter.name);
-      for (const command of commands) {
-        const res = await command.execute(context.$message, result);
-        if (res) return res;
-      }
-      throw new Error(`执行${context.children}失败，未找到合适的指令`);
-    },
-  });
+    }
+    return '';
+  },
 });
-sandbox.beforeMount(() => {
+Component.define({
+  name: 'slot',
+  props: {
+    name: String,
+  },
+  render({ name, ...props }, context) {
+    name = name || 'default';
+    if (!context.parent) return '';
+    if (context.parent.$slots[name]) return context.parent.$slots[name](props, context) as string;
+    return context.children || '';
+  },
+});
+Component.define({
+  name: 'request',
+  props: {
+    method: {
+      type: String,
+      default: 'get',
+    },
+    url: String,
+    config: {
+      type: Object,
+      default() {
+        return {};
+      },
+    },
+  },
+  async render(props, context) {
+    if (!props.url) throw new SyntaxError('url is required');
+    const result = await axios.default(props.url, {
+      method: props.method,
+      ...props.config,
+    });
+    return context.render(context.children || '', {
+      ...context,
+      result: result.data,
+    } as Component.Context<{ result: axios.AxiosResponse }>);
+  },
+});
+Component.define({
+  name: 'eval',
+  async render(props, context) {
+    if (!context.children) return '';
+    const result = await renderWithRuntime(context.children, {}, context.$root);
+    const { adapter, bot } = context.$message;
+    const commands = sandbox.app!.getSupportCommands(adapter.name);
+    for (const command of commands) {
+      const res = await command.execute(context.$message, result);
+      if (res) return res;
+    }
+    throw new Error(`执行${context.children}失败，未找到合适的指令`);
+  },
+});
+sandbox.beforeUnmount(() => {
   while (disposeArr.length) {
     disposeArr.shift()?.();
   }

@@ -1,12 +1,10 @@
-import { registerMiddleware, useCommand, defineMetadata } from 'zhin';
+import { registerMiddleware, useCommand, defineCommand, defineMetadata } from 'zhin';
+const testCommand = defineCommand('foo');
+
 defineMetadata({
   name: 'foo',
 });
-useCommand('foo')
-  .hidden()
-  .action(({ bot }) => {
-    return 'bar1';
-  });
+useCommand(testCommand);
 
 useCommand('bar')
   .hidden()

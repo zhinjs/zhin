@@ -1,28 +1,35 @@
 {
-	"name": "@zhinjs/adapter-qq",
+	"name": "@zhinjs/adapter-sandbox",
 	"main": "lib/index.js",
 	"types": "lib/index.d.ts",
-	"version": "0.0.26",
+	"version": "0.0.1",
 	"scripts": {
 		"build": "tsc && tsc-alias"
 	},
 	"keywords": [
 		"zhin",
 		"zhin-adapter",
-		"qq"
+		"sandbox"
 	],
 	"files": [
-		"lib"
+		"lib",
+		"client"
 	],
 	"author": "凉菜",
 	"repository": {
 		"url": "https://github.com/zhinjs/zhin",
-		"directory": "packages/adapters/qq"
+		"directory": "packages/adapters/sandbox"
 	},
 	"dependencies": {
-		"qq-official-bot": "latest"
+		"ws": "^8.18.0"
+	},
+	"devDependencies": {
+		"@types/ws": "^8.5.14"
 	},
 	"peerDependencies": {
-		"zhin": "workspace:^"
+		"zhin": "workspace:^",
+		"@zhinjs/plugin-http-server": "workspace:^",
+		"@zhinjs/web": "workspace:^",
+		"@zhinjs/client": "workspace:^"
 	}
 }

@@ -12,3 +12,5 @@ export const HOME_DIR = os.homedir();
 export const TEMP_DIR = os.tmpdir();
 export const WORK_DIR = process.env.PWD || process.cwd();
 export const CONFIG_DIR = path.join(WORK_DIR, 'config');
+export const pluginKey = `__ZHIN_PLUGIN__`;
+export const serviceCallbacksKey = `__ZHIN_SERVICE_CALLBACKS__`;

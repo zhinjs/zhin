@@ -70,7 +70,9 @@ const getAnswer = async (message: Message): Promise<undefined | QAInfo> => {
   return getAnswer(message);
 };
 const qaPlugin = new Plugin('问答管理');
-qaPlugin.required('database');
+qaPlugin.waitServices('database', app => {
+  app.database.get('qa', []);
+});
 const qaCommand = qaPlugin
   .command('问答 <question:string> <answer:any>')
   .desc('添加问答')

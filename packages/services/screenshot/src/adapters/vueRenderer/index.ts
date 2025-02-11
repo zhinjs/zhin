@@ -1,4 +1,4 @@
-import { createSSRApp, Component } from 'vue';
+import { createSSRApp, Component, ExtractPropTypes } from 'vue';
 import { renderToString, SSRContext } from '@vue/server-renderer';
 import register from './register';
 import { Renderer } from '@/renderer';
@@ -17,11 +17,11 @@ export class VueRenderer extends Renderer {
     register();
   }
 
-  async rendering<T extends Renderer.OutputType>(
-    input: IComponent,
-    options: VueRenderer.Options<T>,
+  async rendering<T extends Renderer.OutputType, C extends Component>(
+    input: C,
+    options: VueRenderer.Options<T, C>,
   ): Promise<Renderer.Output<T>> {
-    const app = createSSRApp(input, options.props);
+    const app = createSSRApp(input, options.props as any);
     const css = getCss(input);
     if (options.components) {
       for (const component of options.components) {
@@ -48,8 +48,11 @@ export class VueRenderer extends Renderer {
 }
 
 export namespace VueRenderer {
-  export interface Options<T extends Renderer.OutputType> extends Renderer.Options<T> {
-    props?: Record<string, any>;
+  export type InferComponentProps<C> = C extends Component<infer P>
+    ? Omit<ExtractPropTypes<P>, '$el'>
+    : Record<string, any>;
+  export interface Options<T extends Renderer.OutputType, C extends Component> extends Renderer.Options<T> {
+    props?: InferComponentProps<C>;
     components?: Component[];
   }
 }

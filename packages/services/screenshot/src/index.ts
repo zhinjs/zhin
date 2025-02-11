@@ -1,7 +1,8 @@
 import { Plugin } from 'zhin';
 import { Renderer } from '@/renderer';
 import htmlRenderer from '@/adapters/htmlRenderer';
-import vueRenderer, { IComponent } from '@/adapters/vueRenderer';
+import vueRenderer, { IComponent, VueRenderer } from '@/adapters/vueRenderer';
+import { Component, DefineComponent } from 'vue';
 declare module 'zhin' {
   namespace App {
     interface Services {
@@ -9,9 +10,9 @@ declare module 'zhin' {
         input: string,
         options: Renderer.Options<T>,
       ): Promise<Renderer.Output<T>>;
-      renderVue<T extends Renderer.OutputType>(
-        input: IComponent,
-        options: Renderer.Options<T>,
+      renderVue<T extends Renderer.OutputType, C extends Component>(
+        input: C,
+        options: VueRenderer.Options<T, C>,
       ): Promise<Renderer.Output<T>>;
     }
   }

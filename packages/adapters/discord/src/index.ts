@@ -9,7 +9,7 @@ declare module 'zhin' {
     interface Adapters {
       discord: Client.Options;
     }
-    interface Bots {
+    interface Clients {
       discord: Client;
     }
   }
@@ -24,7 +24,7 @@ discordAdapter.schema({
   sandbox: Schema.boolean('是否沙箱环境').default(true),
 });
 type DiscordMessageEvent = GuildMessageEvent | DirectMessageEvent;
-class DiscordClient extends Adapter.Bot<'discord'> {
+class DiscordClient extends Adapter.BaseBot<'discord'> {
   constructor(config: Adapter.BotConfig<'discord'>) {
     super(discordAdapter, config.unique_id, new Client(config));
   }
@@ -49,7 +49,7 @@ class DiscordClient extends Adapter.Bot<'discord'> {
 interface DiscordClient extends Client {}
 const startBots = (configs: Adapter.BotConfig<'discord'>[]) => {
   for (const config of configs) {
-    const bot = new DiscordClient(config);
+    const bot = new DiscordClient(config) as Adapter.Bot<'discord'>;
     bot.on('message', messageHandler.bind(global, bot));
     bot.start().then(() => {
       discordAdapter.emit('bot-ready', bot);
@@ -78,7 +78,7 @@ const messageHandler = (bot: Adapter.Bot<'discord'>, event: DiscordMessageEvent)
 };
 const stopBots = () => {
   for (const bot of discordAdapter.bots) {
-    bot.internal.stop();
+    bot.stop();
   }
 };
 discordAdapter.on('start', startBots);

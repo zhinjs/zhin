@@ -1,16 +1,16 @@
-import { App, Adapter, registerAdapter, Message, Schema, defineMetadata } from 'zhin';
+import { Adapter, registerAdapter, Message, Schema, defineMetadata } from 'zhin';
 import '@zhinjs/plugin-http-server';
 import { OneBotV11 } from '@/onebot';
 import { MessageV11 } from '@/message';
 defineMetadata({ name: 'OneBot 11 adapter' });
-const oneBotV11 = registerAdapter('onebot_11');
+const oneBotV11 = registerAdapter('onebot-11');
 declare module 'zhin' {
   namespace App {
     interface Adapters {
-      onebot_11: OneBotV11.Config;
+      'onebot-11': OneBotV11.Config;
     }
-    interface Bots {
-      onebot_11: OneBotV11;
+    interface Clients {
+      'onebot-11': OneBotV11;
     }
   }
 }
@@ -21,14 +21,14 @@ oneBotV11.schema({
   max_reconnect_count: Schema.number('请输入max_reconnect_count').default(10),
   reconnect_interval: Schema.number('请输入reconnect_interval').default(3000),
 });
-class OneBotClient extends Adapter.Bot<'onebot_11'> {
-  constructor(config: Adapter.BotConfig<'onebot_11'>) {
+class OneBotClient extends Adapter.BaseBot<'onebot-11'> {
+  constructor(config: Adapter.BotConfig<'onebot-11'>) {
     super(oneBotV11, config.unique_id, new OneBotV11(oneBotV11, config, oneBotV11.app!.router));
   }
   async handleSendMessage(
     channel: Message.Channel,
     message: string,
-    source: Message<'onebot_11'> | undefined,
+    source: Message<'onebot-11'> | undefined,
   ): Promise<string> {
     const [target_type, ...other] = channel.split(':');
     const target_id = other.join(':');
@@ -44,12 +44,12 @@ class OneBotClient extends Adapter.Bot<'onebot_11'> {
   }
 }
 interface OneBotClient extends OneBotV11 {}
-const startBots = (configs: Adapter.BotConfig<'onebot_11'>[]) => {
+const startBots = (configs: Adapter.BotConfig<'onebot-11'>[]) => {
   if (!oneBotV11.app?.server)
     throw new Error('“oneBot V11 miss require service “http”, maybe you need install “ @zhinjs/plugin-http-server ”');
 
   for (const config of configs) {
-    const bot = new OneBotClient(config);
+    const bot = new OneBotClient(config) as Adapter.Bot<'onebot-11'>;
     bot.on('message', messageHandler.bind(global, bot));
     bot.start().then(() => {
       oneBotV11.emit('bot-ready', bot);
@@ -77,7 +77,7 @@ const messageHandler = (bot: OneBotClient, event: MessageV11) => {
 };
 const stopBots = () => {
   for (const bot of oneBotV11.bots) {
-    bot.internal.stop();
+    bot.stop();
   }
 };
 
