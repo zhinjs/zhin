@@ -1,5 +1,35 @@
 # test
 
+## 2.1.0
+
+### Minor Changes
+
+- d29ac3f: feat: 完整类型声明，setup全支持
+
+### Patch Changes
+
+- Updated dependencies [d29ac3f]
+  - @zhinjs/adapter-com-wechat@1.0.0
+  - @zhinjs/adapter-web-wechat@1.0.0
+  - @zhinjs/plugin-group-manage@2.0.0
+  - @zhinjs/plugin-guild-manage@2.0.0
+  - @zhinjs/plugin-screenshot@2.0.0
+  - @zhinjs/adapter-onebot-11@1.0.0
+  - @zhinjs/adapter-onebot-12@1.0.0
+  - @zhinjs/adapter-dingtalk@1.0.0
+  - @zhinjs/adapter-discord@1.0.0
+  - @zhinjs/plugin-schedule@2.0.0
+  - @zhinjs/plugin-sandbox@2.0.0
+  - @zhinjs/adapter-kritor@1.0.0
+  - @zhinjs/adapter-email@1.0.0
+  - @zhinjs/adapter-icqq@1.0.0
+  - @zhinjs/web@2.0.0
+  - @zhinjs/adapter-qq@1.0.0
+  - @zhinjs/plugin-qa@2.0.0
+  - zhin@3.1.0
+  - @zhinjs/plugin-http-server@2.0.0
+  - @zhinjs/plugin-upyun@2.0.0
+
 ## 2.0.55
 
 ### Patch Changes

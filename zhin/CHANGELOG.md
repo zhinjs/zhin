@@ -1,5 +1,16 @@
 # zhin
 
+## 3.1.0
+
+### Minor Changes
+
+- d29ac3f: feat: 完整类型声明，setup全支持
+
+### Patch Changes
+
+- Updated dependencies [d29ac3f]
+  - @zhinjs/core@2.1.0
+
 ## 3.0.49
 
 ### Patch Changes
