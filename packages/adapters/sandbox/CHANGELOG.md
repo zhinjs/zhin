@@ -1,5 +1,14 @@
 # @zhinjs/adapter-sandbox
 
+## 1.0.1
+
+### Patch Changes
+
+- Updated dependencies [7ef7581]
+  - zhin@3.1.1
+  - @zhinjs/plugin-http-server@2.0.1
+  - @zhinjs/web@2.0.1
+
 ## 1.0.0
 
 ### Minor Changes
