@@ -1,5 +1,13 @@
 # @zhinjs/discord
 
+## 1.0.1
+
+### Patch Changes
+
+- 7ef7581: feat support more config file type
+- Updated dependencies [7ef7581]
+  - zhin@3.1.1
+
 ## 1.0.0
 
 ### Minor Changes

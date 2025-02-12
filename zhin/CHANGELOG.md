@@ -1,5 +1,13 @@
 # zhin
 
+## 3.1.1
+
+### Patch Changes
+
+- 7ef7581: feat support more config file type
+- Updated dependencies [7ef7581]
+  - @zhinjs/core@2.1.1
+
 ## 3.1.0
 
 ### Minor Changes

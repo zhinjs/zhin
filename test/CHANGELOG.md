@@ -1,5 +1,31 @@
 # test
 
+## 2.1.1
+
+### Patch Changes
+
+- Updated dependencies [7ef7581]
+  - @zhinjs/adapter-com-wechat@1.0.1
+  - @zhinjs/adapter-web-wechat@1.0.1
+  - @zhinjs/adapter-onebot-11@1.0.1
+  - @zhinjs/adapter-onebot-12@1.0.1
+  - @zhinjs/adapter-dingtalk@1.0.1
+  - @zhinjs/adapter-discord@1.0.1
+  - @zhinjs/adapter-kritor@1.0.1
+  - @zhinjs/adapter-email@1.0.1
+  - @zhinjs/adapter-icqq@1.0.1
+  - @zhinjs/adapter-qq@1.0.1
+  - zhin@3.1.1
+  - @zhinjs/plugin-group-manage@2.0.1
+  - @zhinjs/plugin-guild-manage@2.0.1
+  - @zhinjs/plugin-qa@2.0.1
+  - @zhinjs/plugin-schedule@2.0.1
+  - @zhinjs/plugin-http-server@2.0.1
+  - @zhinjs/plugin-sandbox@2.0.1
+  - @zhinjs/plugin-screenshot@2.0.1
+  - @zhinjs/plugin-upyun@2.0.1
+  - @zhinjs/web@2.0.1
+
 ## 2.1.0
 
 ### Minor Changes
