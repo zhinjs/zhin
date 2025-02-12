@@ -12,7 +12,6 @@ export type Element = {
   data: Dict;
 };
 export class Adapter<P extends keyof App.Adapters> extends EventEmitter {
-  bots: Adapter.Bot<P>[] = [];
   elements: Element[] = [];
   private [adapterKey] = true;
   #is_started: boolean = false;
@@ -20,6 +19,18 @@ export class Adapter<P extends keyof App.Adapters> extends EventEmitter {
   #configs: Adapter.BotConfig<P>[] = [];
   static isAdapter(obj: any): obj is Adapter {
     return typeof obj === 'object' && !!obj[adapterKey];
+  }
+  get bots(): Adapter.Bot<P>[] {
+    return (this.app?.bots.filter(bot => bot.adapter === this) || []) as unknown as Adapter.Bot<P>[];
+  }
+  set bots(bots: Adapter.Bot<P>[]) {
+    for (const bot of bots) {
+      if (bot.adapter !== this) throw new Error(`bot ${bot.unique_id} not belongs to adapter ${this.name}`);
+      const hasBot = (bot: Adapter.Bot<P>) => {
+        return this.app?.bots.some(b => b.unique_id === bot.unique_id);
+      };
+      if (!hasBot(bot)) this.app?.bots.push(bot as any);
+    }
   }
   start(app: App, config: Adapter.BotConfig<P>[]) {
     this.app = app;
@@ -89,64 +100,46 @@ export class Adapter<P extends keyof App.Adapters> extends EventEmitter {
 export interface Adapter<P extends keyof App.Adapters = keyof App.Adapters> {
   on<T extends keyof Adapter.EventMap<P>>(event: T, listener: Adapter.EventMap<P>[T]): this;
 
-  on<S extends string | symbol>(
-    event: S & Exclude<string | symbol, keyof Adapter.EventMap<P>>,
-    listener: (...args: any[]) => any,
-  ): this;
+  on<S extends string>(event: S & Exclude<S, keyof Adapter.EventMap<P>>, listener: (...args: any[]) => any): this;
 
-  off<T extends keyof Adapter.EventMap<P>>(event: T, callback?: Adapter.EventMap<P>[T]): this;
+  off<T extends keyof Adapter.EventMap<P>>(event: T, listener?: Adapter.EventMap<P>[T]): this;
 
-  off<S extends string | symbol>(
-    event: S & Exclude<string | symbol, keyof Adapter.EventMap<P>>,
-    callback?: (...args: any[]) => void,
-  ): this;
+  off<S extends string>(event: S & Exclude<S, keyof Adapter.EventMap<P>>, callback?: (...args: any[]) => void): this;
 
   once<T extends keyof Adapter.EventMap<P>>(event: T, listener: Adapter.EventMap<P>[T]): this;
 
-  once<S extends string | symbol>(
-    event: S & Exclude<string | symbol, keyof Adapter.EventMap<P>>,
-    listener: (...args: any[]) => any,
-  ): this;
+  once<S extends string>(event: S & Exclude<S, keyof Adapter.EventMap<P>>, listener: (...args: any[]) => any): this;
 
   emit<T extends keyof Adapter.EventMap<P>>(event: T, ...args: Parameters<Adapter.EventMap<P>[T]>): boolean;
 
-  emit<S extends string | symbol>(
-    event: S & Exclude<string | symbol, keyof Adapter.EventMap<P>>,
-    ...args: any[]
-  ): boolean;
+  emit<S extends string>(event: S & Exclude<S, keyof Adapter.EventMap<P>>, ...args: any[]): boolean;
 
   addListener<T extends keyof Adapter.EventMap<P>>(event: T, listener: Adapter.EventMap<P>[T]): this;
 
-  addListener<S extends string | symbol>(
-    event: S & Exclude<string | symbol, keyof Adapter.EventMap<P>>,
+  addListener<S extends string>(
+    event: S & Exclude<S, keyof Adapter.EventMap<P>>,
     listener: (...args: any[]) => any,
   ): this;
 
   addListenerOnce<T extends keyof Adapter.EventMap<P>>(event: T, callback: Adapter.EventMap<P>[T]): this;
 
-  addListenerOnce<S extends string | symbol>(
-    event: S & Exclude<string | symbol, keyof Adapter.EventMap<P>>,
+  addListenerOnce<S extends string>(
+    event: S & Exclude<S, keyof Adapter.EventMap<P>>,
     callback: (...args: any[]) => void,
   ): this;
 
   removeListener<T extends keyof Adapter.EventMap<P>>(event: T, callback?: Adapter.EventMap<P>[T]): this;
 
-  removeListener<S extends string | symbol>(
-    event: S & Exclude<string | symbol, keyof Adapter.EventMap<P>>,
+  removeListener<S extends string>(
+    event: S & Exclude<S, keyof Adapter.EventMap<P>>,
     callback?: (...args: any[]) => void,
   ): this;
 
   removeAllListeners<T extends keyof Adapter.EventMap<P>>(event: T): this;
 
-  removeAllListeners<S extends string | symbol>(event: S & Exclude<string | symbol, keyof Adapter.EventMap<P>>): this;
+  removeAllListeners<S extends string>(event: S & Exclude<S, keyof Adapter.EventMap<P>>): this;
 }
 export namespace Adapter {
-  export interface EventMap<P extends keyof App.Adapters> {
-    'bot-ready'(bot: Bot<P>): void;
-    'start'(configs: BotConfig<P>[]): void;
-    'stop'(): void;
-  }
-  export type Bot<P extends Adapters = Adapters> = BaseBot<P> & App.Clients[P];
   export abstract class BaseBot<P extends Adapters = Adapters> {
     protected constructor(
       public adapter: Adapter<P>,
@@ -154,6 +147,12 @@ export namespace Adapter {
       public client: App.Clients[P],
     ) {
       const _this = this;
+      const oldEmit = client.emit;
+      client.emit = function (event: string, ...args: any[]) {
+        const result = oldEmit.apply(client, [event, ...args] as any);
+        _this.adapter.app?.emit(`${_this.adapter.name}.${event}`, _this, ...args);
+        return result;
+      } as typeof oldEmit;
       return new Proxy(_this, {
         get(target, prop, receiver) {
           if (prop in target) return Reflect.get(target, prop, receiver);
@@ -175,6 +174,12 @@ export namespace Adapter {
     get forward_length() {
       return this.adapter.botConfig(this.unique_id)?.forward_length;
     }
+  }
+  export type Bot<P extends Adapters = Adapters> = BaseBot<P> & App.Clients[P];
+  export interface EventMap<P extends Adapters = Adapters> {
+    'bot-ready': (bot: Bot<P>) => void;
+    'start': (configs: BotConfig<P>[]) => void;
+    'stop': () => void;
   }
   export function load(name: string) {
     const maybePath = [

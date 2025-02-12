@@ -1,10 +1,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import smolToml from 'smol-toml';
 import * as yaml from 'yaml';
 import { CONFIG_DIR } from './constans';
 import { App } from './app';
 export class Config<T extends object = object> {
-  public static exts: string[] = ['.json', '.yaml', '.yml'];
+  public static exts: string[] = ['.cts', '.mts', '.ts', '.cjs', '.mjs', '.js', '.json', '.yaml', '.yml', '.toml'];
   filename: string = '';
   #type: Config.Type = Config.Type.YAML;
   private _data: T;
@@ -20,6 +21,7 @@ export class Config<T extends object = object> {
       if (!Config.exts.includes(ext)) this.filename = path.join(CONFIG_DIR, `${name}${this.#resolveExt()}`);
       this.#saveConfig(defaultValue);
     }
+    this.#type = Config.resolveType(path.extname(this.filename));
     this._data = this.#loadConfig();
     return new Proxy<T>(this._data, {
       get: (target, p, receiver) => {
@@ -59,8 +61,6 @@ export class Config<T extends object = object> {
     if (!fs.existsSync(name)) {
       throw new Error(`未找到配置文件${name}`);
     }
-    const ext = path.extname(name);
-    this.#type = ['.yaml', '.yml'].includes(ext) ? Config.Type.YAML : Config.Type.JSON;
     return name;
   }
   #resolveExt() {
@@ -69,6 +69,12 @@ export class Config<T extends object = object> {
         return '.json';
       case Config.Type.YAML:
         return '.yml';
+      case Config.Type.TOML:
+        return '.toml';
+      case Config.Type.JS:
+        return '.js';
+      case Config.Type.TS:
+        return '.ts';
       default:
         throw new Error(`不支持的配置文件类型${this.#type}`);
     }
@@ -80,6 +86,11 @@ export class Config<T extends object = object> {
         return JSON.parse(content);
       case Config.Type.YAML:
         return yaml.parse(content);
+      case Config.Type.TOML:
+        return smolToml.parse(content);
+      case Config.Type.JS:
+      case Config.Type.TS:
+        return require(this.filename).default;
       default:
         throw new Error(`不支持的配置文件类型${this.#type}`);
     }
@@ -90,6 +101,11 @@ export class Config<T extends object = object> {
         return fs.writeFileSync(this.filename, JSON.stringify(data, null, 2));
       case Config.Type.YAML:
         return fs.writeFileSync(this.filename, yaml.stringify(data));
+      case Config.Type.TOML:
+        return fs.writeFileSync(this.filename, smolToml.stringify(data));
+      case Config.Type.JS:
+      case Config.Type.TS:
+        return fs.writeFileSync(this.filename, `export default ${JSON.stringify(data, null, 2)}`);
       default:
         throw new Error(`不支持的配置文件类型${this.#type}`);
     }
@@ -124,6 +140,30 @@ export namespace Config {
   export enum Type {
     JSON = 'json',
     YAML = 'yaml',
+    TOML = 'toml',
+    TS = 'ts',
+    JS = 'js',
+  }
+  export function resolveType(ext: string): Config.Type {
+    switch (ext) {
+      case '.json':
+        return Config.Type.JSON;
+      case '.yaml':
+      case '.yml':
+        return Config.Type.YAML;
+      case '.toml':
+        return Config.Type.TOML;
+      case '.ts':
+      case '.cts':
+      case '.mts':
+        return Config.Type.TS;
+      case '.js':
+      case '.cjs':
+      case '.mjs':
+        return Config.Type.JS;
+      default:
+        throw new Error(`不支持的配置文件类型${ext}`);
+    }
   }
 }
 export interface Config extends App.Config {}

@@ -37,8 +37,6 @@ class KritorClient extends Adapter.BaseBot<'kritor'> {
 }
 interface KritorClient extends Client {}
 const messageHandler = (bot: Adapter.Bot<'kritor'>, event: kritor.common.IPushMessageBody) => {
-  const master = adapter.botConfig(bot.unique_id)?.master;
-  const admins = adapter.botConfig(bot.unique_id)?.admins?.filter(Boolean) || [];
   const message = Message.from(adapter, bot, {
     raw_message: Client.eventMessageToString(event),
     message_type: Client.getMessageType(event) as Message.Type,
@@ -48,10 +46,7 @@ const messageHandler = (bot: Adapter.Bot<'kritor'>, event: kritor.common.IPushMe
     sender: {
       user_id: event.sender?.uid!,
       user_name: event.sender?.nick || '',
-      permissions: [
-        master && event.sender?.uid === master && 'master',
-        admins && admins.includes(event.sender?.uid || '') && 'admins',
-      ].filter(Boolean) as string[],
+      permissions: [],
     },
   });
   bot.logger.info(`recv [${message.channel})]: ${message.raw_message}`);

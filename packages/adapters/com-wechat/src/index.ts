@@ -25,6 +25,9 @@ adapter.schema({
 class WechatClient extends Adapter.BaseBot<'com-wechat'> {
   constructor(config: Adapter.BotConfig<'com-wechat'>) {
     super(adapter, config.unique_id, new Client(adapter, config, adapter.app!.router));
+    this.on('ready', () => {
+      this.adapter.emit('bot-ready', this);
+    });
   }
   async handleSendMessage(
     channel: Message.Channel,
@@ -59,18 +62,12 @@ const startBots = (configs: Adapter.BotConfig<'com-wechat'>[]) => {
   }
 };
 const messageHandler = (bot: WechatClient, event: ClientMessage) => {
-  const master = bot.config?.master;
-  const admins = bot.config.admins?.filter(Boolean) || [];
   const message = Message.from(adapter, bot, {
     channel: `${event.detail_type}:${event.user_id}`,
     sender: {
       user_id: event.user_id,
       user_name: event.nickname || '',
-      permissions: [
-        master && event.user_id === master && 'master',
-        admins && admins.includes(event.user_id) && 'admins',
-        ...(event.permissions || []),
-      ].filter(Boolean) as string[],
+      permissions: [...(event.permissions || [])].filter(Boolean) as string[],
     },
     raw_message: ClientMessage.formatToString(event.message),
     message_type: event.detail_type as any,

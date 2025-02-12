@@ -119,19 +119,13 @@ const createChannel = (event: QQMessageEvent): Message.Channel => {
   }
 };
 const messageHandler = (bot: QQClient, event: QQMessageEvent) => {
-  const master = qqAdapter.botConfig(bot.unique_id)?.master;
-  const admins = qqAdapter.botConfig(bot.unique_id)?.admins?.filter(Boolean) || [];
   const message = Message.from(qqAdapter, bot, {
     raw_message: sendableToString(event.message).trim(),
     message_type: event.message_type,
     channel: createChannel(event),
     sender: {
       ...event.sender,
-      permissions: [
-        master && event.user_id === master && 'master',
-        admins && admins.includes(event.user_id) && 'admins',
-        ...event.sender?.permissions,
-      ].filter(Boolean) as string[],
+      permissions: [],
     },
   });
   if (event.source) {

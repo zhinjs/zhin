@@ -169,10 +169,7 @@ export namespace Client {
       sender: {
         user_id: from_id.slice(0, -1),
         user_name: nickname.slice(1),
-        permissions: [
-          this.adapter.botConfig(this.unique_id)?.master === from_id.slice(0, -1) && 'master',
-          this.adapter.botConfig(this.unique_id)?.admins?.includes(from_id.slice(1)) && 'admins',
-        ].filter(Boolean) as string[],
+        permissions: [],
       },
     };
   }

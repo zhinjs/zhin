@@ -24,6 +24,14 @@ export class Message<P extends keyof App.Adapters> {
     message_base: MessageBase,
   ) {
     Object.assign(this, message_base);
+    const permissions: Set<string> = new Set<string>(this.sender.permissions);
+    if (adapter.botConfig(bot.unique_id)?.master === this.sender.user_id) {
+      permissions.add('master');
+    }
+    if (adapter.botConfig(bot.unique_id)?.admins?.includes(this.sender.user_id!)) {
+      permissions.add('admin');
+    }
+    this.sender.permissions = [...permissions];
   }
   get group_id() {
     if (this.message_type !== 'group') return undefined;

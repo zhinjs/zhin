@@ -61,6 +61,7 @@ function createMessageBaseForGuild(event: GuildMessageEvent): MessageBase {
     sender: {
       user_id: event.sender.tiny_id,
       user_name: event.sender.nickname,
+      permissions: [],
     },
     raw_message: event.raw_message,
   };
@@ -90,6 +91,7 @@ export function createMessageBase(event: QQMessageEvent): MessageBase {
         sender: {
           user_id: event.sender.user_id,
           user_name: event.sender.nickname,
+          permissions: [],
         },
         quote: event.source ? createPrivateQuote(event) : undefined,
         raw_message: event.raw_message,
@@ -102,6 +104,7 @@ export function createMessageBase(event: QQMessageEvent): MessageBase {
         sender: {
           user_id: event.sender.user_id,
           user_name: event.sender.nickname,
+          permissions: [event.member.is_owner ? 'owner' : '', event.member.is_admin ? 'admin' : ''].filter(Boolean),
         },
         raw_message: event.raw_message,
         quote: event.source ? createGroupQuote(event) : undefined,
@@ -114,6 +117,7 @@ export function createMessageBase(event: QQMessageEvent): MessageBase {
         sender: {
           user_id: event.sender.user_id,
           user_name: event.sender.nickname,
+          permissions: [],
         },
         raw_message: event.raw_message,
       };

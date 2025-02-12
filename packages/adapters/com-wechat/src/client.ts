@@ -86,7 +86,7 @@ export class Client extends EventEmitter {
       if (['path', 'event_path'].includes(key))
         server.on('connection', (ws, req) => {
           this.logger.info(`已连接到协议端：${req.socket.remoteAddress}`);
-          this.adapter.emit('bot-ready', this);
+          this.emit('ready', this);
           ws.on('error', err => {
             this.logger.error('连接出错：', err);
           });
@@ -113,7 +113,7 @@ export class Client extends EventEmitter {
     });
     this.ws.on('open', () => {
       this.logger.mark(`connected to ${config.url}`);
-      this.adapter.emit('bot-ready', this);
+      this.emit('ready', this);
       this.reTryCount = 0;
     });
     this.ws.on('message', this.dispatch);

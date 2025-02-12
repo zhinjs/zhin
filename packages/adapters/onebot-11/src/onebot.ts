@@ -72,7 +72,7 @@ export class OneBotV11 extends EventEmitter {
       if (['path', 'event_path'].includes(key))
         server.on('connection', (ws, req) => {
           this.logger.info(`已连接到协议端：${req.socket.remoteAddress}`);
-          this.adapter.emit('bot-ready', this);
+          this.emit('ready');
           ws.on('error', err => {
             this.logger.error('连接出错：', err);
           });

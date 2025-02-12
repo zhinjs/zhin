@@ -5,7 +5,7 @@ import { Plugin, PluginMap } from './plugin';
 import { LogLevel } from './types';
 import { loadModule } from './utils';
 import { remove, sleep } from '@zhinjs/shared';
-import { APP_KEY, CONFIG_DIR, serviceCallbacksKey, WORK_DIR } from './constans';
+import { APP_KEY, CONFIG_DIR, WORK_DIR } from './constans';
 import path from 'path';
 import { Adapter } from './adapter';
 import { Message } from './message';
@@ -29,6 +29,7 @@ export class App extends EventEmitter {
   middlewares: Middleware<Adapters>[] = [];
   plugins: PluginMap = new PluginMap();
   renders: Message.Render[] = [];
+  bots: Adapter.Bot[] = [];
   get adapters() {
     return App.adapters;
   }
@@ -178,6 +179,7 @@ export class App extends EventEmitter {
 
   emit(event: string, ...args: any[]) {
     const result = super.emit(event, ...args);
+    this.logger.debug(`emit event: ${event}`);
     for (const plugin of this.pluginList) {
       plugin.emit(event, ...args);
     }
@@ -274,12 +276,11 @@ export class App extends EventEmitter {
     for (const loadPath of maybePath) {
       if (loaded) break;
       try {
-        this.logger.debug(`try load plugin(${name}) from ${loadPath}`);
         this.mount(loadPath);
         loaded = true;
       } catch (e) {
         if (!error || String(Reflect.get(error, 'message')).startsWith('Cannot find')) error = e as Error;
-        this.logger.debug(`try load plugin(${name}) failed. (from: ${loadPath})`, (e as Error)?.message || e);
+        this.logger.trace(`try load plugin(${name}) failed. (from: ${loadPath})`, (e as Error)?.message || e);
       }
     }
     if (!loaded) this.logger.warn(`load plugin "${name}" failed`, error?.message || error);
@@ -394,7 +395,7 @@ export namespace App {
       title: string;
     };
   }
-  export interface Clients {
+  export interface Clients extends Record<keyof Adapters, EventEmitter> {
     process: NodeJS.Process;
   }
   export interface Services {}

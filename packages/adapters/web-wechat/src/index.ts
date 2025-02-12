@@ -48,8 +48,6 @@ const startBots = (configs: Adapter.BotConfig<'web-wechat'>[]) => {
   }
 };
 const messageHandler = (bot: WechatClient, event: DingMsgEvent) => {
-  const master = wechatAdapter.botConfig(bot.unique_id)?.master;
-  const admins = wechatAdapter.botConfig(bot.unique_id)?.admins;
   const message = Message.from(wechatAdapter, bot, {
     channel: `${event.message_type}:${event instanceof PrivateMessageEvent ? event.user_id : event.group_id}`,
     message_id: event.message_id,
@@ -57,10 +55,7 @@ const messageHandler = (bot: WechatClient, event: DingMsgEvent) => {
     message_type: event.message_type,
     sender: {
       ...event.sender,
-      permissions: [
-        master && event.sender.user_id === master && 'master',
-        admins && admins.includes(event.sender.user_id) && 'admins',
-      ].filter(Boolean) as string[],
+      permissions: [],
     },
   });
   wechatAdapter.app!.emit('message', wechatAdapter, bot, message);

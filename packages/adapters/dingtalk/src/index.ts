@@ -57,18 +57,13 @@ const startBots = (configs: Adapter.BotConfig<'dingtalk'>[]) => {
   }
 };
 const messageHandler = (bot: Adapter.Bot<'dingtalk'>, event: DingMsgEvent) => {
-  const master = dingTalkAdapter.botConfig(bot.unique_id)?.master;
-  const admins = dingTalkAdapter.botConfig(bot.unique_id)?.admins?.filter(Boolean) || [];
   const message = Message.from(dingTalkAdapter, bot, {
     raw_message: sendableToString(event.message).trim(),
     channel: `${event.message_type}:${event instanceof PrivateMessageEvent ? event.user_id : event.group_id}`,
     message_type: event.message_type,
     sender: {
       ...event.sender,
-      permissions: [
-        master && event.user_id === master && 'master',
-        admins && admins.includes(event.user_id) && 'admins',
-      ].filter(Boolean) as string[],
+      permissions: [],
     },
   });
   dingTalkAdapter.app!.emit('message', dingTalkAdapter, bot, message);

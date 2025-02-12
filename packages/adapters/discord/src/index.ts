@@ -58,18 +58,12 @@ const startBots = (configs: Adapter.BotConfig<'discord'>[]) => {
   }
 };
 const messageHandler = (bot: Adapter.Bot<'discord'>, event: DiscordMessageEvent) => {
-  const master = discordAdapter.botConfig(bot.unique_id)?.master;
-  const admins = discordAdapter.botConfig(bot.unique_id)?.admins?.filter(Boolean) || [];
   const message = Message.from(discordAdapter, bot, {
     channel: `${event.message_type}:${event instanceof DirectMessageEvent ? event.user_id : event.channel_id}`,
     sender: {
       user_id: event.sender.user_id,
       user_name: event.sender.user_name,
-      permissions: [
-        ...(event.sender?.permissions as unknown as string[]),
-        master && event.sender?.user_id === master && 'master',
-        admins && admins.includes(event.sender.user_id) && 'admins',
-      ].filter(Boolean) as string[],
+      permissions: [...(event.sender?.permissions as unknown as string[])].filter(Boolean) as string[],
     },
     raw_message: sendableToString(event.message).trim(),
     message_type: event.message_type,

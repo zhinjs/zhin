@@ -24,6 +24,9 @@ oneBotV12Adapter.schema({
 class OneBotClient extends Adapter.BaseBot<'onebot-12'> {
   constructor(config: Adapter.BotConfig<'onebot-12'>) {
     super(oneBotV12Adapter, config.unique_id, new OneBotV12(oneBotV12Adapter, config, oneBotV12Adapter.app!.router));
+    this.on('ready', () => {
+      this.adapter.emit('bot-ready', this);
+    });
   }
   async handleSendMessage(
     channel: Message.Channel,
@@ -58,8 +61,6 @@ const startBots = (configs: Adapter.BotConfig<'onebot-12'>[]) => {
   }
 };
 const messageHandler = (bot: OneBotClient, event: MessageV12) => {
-  const master = bot.config?.master;
-  const admins = bot.config.admins?.filter(Boolean) || [];
   const message = Message.from(oneBotV12Adapter, bot, {
     message_id: event.message_id,
     channel: `${event.detail_type}:${event.group_id || event.user_id || event.guild_id}`,
@@ -67,10 +68,7 @@ const messageHandler = (bot: OneBotClient, event: MessageV12) => {
     sender: {
       user_id: event.sender.user_id,
       user_name: event.sender.nickname || '',
-      permissions: [
-        master && event.sender.user_id === master && 'master',
-        admins && admins.includes(event.sender.user_id) && 'admins',
-      ].filter(Boolean) as string[],
+      permissions: [],
     },
     raw_message: MessageV12.formatToString(event.message),
   });
