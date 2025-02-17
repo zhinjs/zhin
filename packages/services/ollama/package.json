@@ -1,0 +1,28 @@
+{
+    "name": "@zhinjs/plugin-ollama",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "version": "0.0.1",
+    "scripts": {
+        "build": "tsc && tsc-alias"
+    },
+    "files": [
+        "lib"
+    ],
+    "keywords": [
+        "zhin",
+        "zhin-plugin",
+        "ollama"
+    ],
+    "author": "凉菜",
+    "repository": {
+        "url": "https://github.com/zhinjs/zhin",
+        "directory": "packages/services/ollama"
+    },
+    "dependencies": {
+        "ollama": "^0.5.13"
+    },
+    "peerDependencies": {
+        "zhin": "workspace:^"
+    }
+}
