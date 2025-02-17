@@ -10,7 +10,7 @@ export namespace Middleware {
     for (const fn of middlewares) {
       if (typeof fn !== 'function') throw new TypeError('Middleware must be composed of functions!');
     }
-    return (adapter: Adapter<P>, bot: Adapter.Bot<P>, event: Message<P>, next?: Next) => {
+    return (event: Message<P>, next?: Next) => {
       let index = -1;
       const dispatch: (i: number, ctx?: Message<P>) => Promise<any> = (i: number, ctx: Message<P> = event) => {
         if (i <= index) return Promise.reject(new Error('next() called multiple times'));
@@ -19,7 +19,7 @@ export namespace Middleware {
         if (i === middlewares.length) fn = next;
         if (!fn) return Promise.resolve();
         try {
-          return Promise.resolve(fn(adapter, bot, ctx, dispatch.bind(null, i + 1)));
+          return Promise.resolve(fn(ctx, dispatch.bind(null, i + 1)));
         } catch (err) {
           return Promise.reject(err);
         }
@@ -29,16 +29,6 @@ export namespace Middleware {
   }
 }
 export namespace Compose {
-  export type Middleware<P extends Adapters> = (
-    adapter: Adapter<P>,
-    bot: Adapter.Bot<P>,
-    event: Message<P>,
-    next: Next,
-  ) => any;
-  export type ComposedMiddleware<P extends Adapters> = (
-    adapter: Adapter<P>,
-    bot: Adapter.Bot<P>,
-    event: Message<P>,
-    next?: Next,
-  ) => Promise<void>;
+  export type Middleware<P extends Adapters> = (event: Message<P>, next: Next) => any;
+  export type ComposedMiddleware<P extends Adapters> = (event: Message<P>, next?: Next) => Promise<void>;
 }

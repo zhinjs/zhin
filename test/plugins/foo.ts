@@ -12,7 +12,6 @@ useCommand('bar')
     return '我不知道该说啥呀';
   });
 
-registerMiddleware((_adapter, _bot, message, next) => {
-  // console.log(_adapter, _bot, message);
+registerMiddleware((message, next) => {
   next();
 });

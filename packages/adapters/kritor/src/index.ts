@@ -50,7 +50,7 @@ const messageHandler = (bot: Adapter.Bot<'kritor'>, event: kritor.common.IPushMe
     },
   });
   bot.logger.info(`recv [${message.channel})]: ${message.raw_message}`);
-  adapter.app!.emit('message', adapter, bot, message);
+  adapter.app!.emit('message', message);
 };
 const startBots = (configs: Adapter.BotConfig<'kritor'>[]) => {
   for (const config of configs) {

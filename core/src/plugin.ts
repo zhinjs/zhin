@@ -55,7 +55,7 @@ export class Plugin extends EventEmitter {
   set display_name(name: string) {
     this.name = name;
   }
-  useConfig<T>(configPath: string, schema: Schema<T>): T | undefined {
+  useConfig<T>(configPath: string, schema: Schema<T>): T {
     if (schema.meta.type !== 'object') throw new Error(`config schema root must be type object`);
     const config = new Config<T & object>(configPath, schema.meta.default as any);
     return schema(config.data);

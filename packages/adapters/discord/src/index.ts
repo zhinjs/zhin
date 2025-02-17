@@ -68,7 +68,7 @@ const messageHandler = (bot: Adapter.Bot<'discord'>, event: DiscordMessageEvent)
     raw_message: sendableToString(event.message).trim(),
     message_type: event.message_type,
   });
-  discordAdapter.app!.emit('message', discordAdapter, bot, message);
+  discordAdapter.app!.emit('message', message);
 };
 const stopBots = () => {
   for (const bot of discordAdapter.bots) {

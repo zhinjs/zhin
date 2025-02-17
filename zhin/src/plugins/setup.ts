@@ -1,4 +1,15 @@
-import { Adapter, Adapters, App, ArgsType, Command, getCallerStack, Message, Middleware, Plugin } from '@zhinjs/core';
+import {
+  Adapter,
+  Adapters,
+  App,
+  ArgsType,
+  Command,
+  getCallerStack,
+  Message,
+  Middleware,
+  Plugin,
+  Schema,
+} from '@zhinjs/core';
 import * as path from 'path';
 const setup = new Plugin('setup');
 const resolveCallerPlugin = (): [boolean, Plugin] => {
@@ -83,6 +94,7 @@ export interface Context {
     message: string,
     source?: Message,
   ): Promise<any>;
+  useConfig<T>(configPath: string, schema: Schema<T>): T;
   onMount(callback: Plugin.CallBack): Plugin;
   onUnmount(callback: Plugin.CallBack): Plugin;
   listen<E extends keyof App.EventMap>(event: E, callback: App.EventMap[E]): Plugin;
@@ -102,6 +114,9 @@ export const context = {
   },
   inject<T extends keyof App.Services>(name: T) {
     return context.plugin.service(name);
+  },
+  useConfig<T>(configPath: string, schema: Schema<T>): T {
+    return context.plugin.useConfig(configPath, schema);
   },
   waitServices<T extends keyof App.Services>(...args: [...T[], callabck: (app: App) => void]) {
     return context.plugin.waitServices(...args);
@@ -202,6 +217,7 @@ export const sendDirectMessage = context.sendDirectMessage;
 export const onMount = context.onMount;
 export const onUnmount = context.onUnmount;
 export const listen = context.listen;
+export const useConfig = context.useConfig;
 export const logger = {
   trace(message: any, ...args: any[]): void {
     context.plugin.logger.debug(message, ...args);

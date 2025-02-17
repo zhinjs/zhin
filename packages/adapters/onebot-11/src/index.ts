@@ -71,7 +71,7 @@ const messageHandler = (bot: OneBotClient, event: MessageV11) => {
     },
     message_type: event.message_type,
   });
-  oneBotV11.app!.emit('message', oneBotV11, bot, message);
+  oneBotV11.app!.emit('message', message);
 };
 const stopBots = () => {
   for (const bot of oneBotV11.bots) {

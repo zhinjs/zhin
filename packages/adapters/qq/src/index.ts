@@ -131,7 +131,7 @@ const messageHandler = (bot: QQClient, event: QQMessageEvent) => {
   if (event.source) {
     message.quote = event.source;
   }
-  qqAdapter.app!.emit('message', qqAdapter, bot, message);
+  qqAdapter.app!.emit('message', message);
 };
 const stopBots = () => {
   for (const bot of qqAdapter.bots) {

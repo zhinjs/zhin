@@ -19,6 +19,7 @@ export {
   useCommand,
   waitServices,
   logger,
+  useConfig,
 } from './plugins/setup';
 export * from './constants';
 import {

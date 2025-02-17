@@ -58,7 +58,7 @@ const messageHandler = (bot: WechatClient, event: DingMsgEvent) => {
       permissions: [],
     },
   });
-  wechatAdapter.app!.emit('message', wechatAdapter, bot, message);
+  wechatAdapter.app!.emit('message', message);
 };
 const stopBots = () => {
   for (const bot of wechatAdapter.bots) {

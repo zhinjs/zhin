@@ -27,7 +27,7 @@ processAdapter.on('start', () => {
       message_type: 'private',
     });
     processAdapter.logger.info(`recv [${message.channel}]: ${message.raw_message}`);
-    processAdapter.app!.emit('message', processAdapter, bot, message);
+    processAdapter.app!.emit('message', message);
   });
   setTimeout(() => {
     processAdapter.emit('bot-ready', bot);

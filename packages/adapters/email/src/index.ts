@@ -52,7 +52,7 @@ const startBots = (configs: Adapter.BotConfig<'email'>[]) => {
   for (const config of configs) {
     const bot = new EmailClient(config) as Adapter.Bot<'email'>;
     bot.on('message', (message: Message<'email'>) => {
-      adapter.app?.emit('message', adapter, bot, message);
+      adapter.app?.emit('message', message);
     });
     bot
       .start()

@@ -31,6 +31,7 @@
         "@zhinjs/plugin-schedule": "workspace:^",
         "@zhinjs/plugin-qa": "workspace:^",
         "@zhinjs/plugin-guild-manage": "workspace:^",
-        "@zhinjs/plugin-group-manage": "workspace:^"
+        "@zhinjs/plugin-group-manage": "workspace:^",
+        "@zhinjs/plugin-ollama": "workspace:^"
     }
 }

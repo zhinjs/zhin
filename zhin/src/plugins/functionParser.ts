@@ -133,7 +133,7 @@ plugin.mounted(app => {
   plugin.service('functions', functionManager.functions);
   plugin.service('register', functionManager.register);
 });
-plugin.middleware(async (_1, _2, event, next) => {
+plugin.middleware(async (event, next) => {
   await next();
   return plugin.functionManager.match(event);
 });

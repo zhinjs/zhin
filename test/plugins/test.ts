@@ -1,9 +1,11 @@
 import { Plugin, Message } from 'zhin';
 import '@zhinjs/plugin-sandbox';
+import type {} from '@zhinjs/plugin-ollama';
 import * as path from 'path';
 import type {} from '@zhinjs/web';
 
 const test = new Plugin('测试插件'); // 定义插件
+test.ollama.chat;
 test
   .command('test-confirm') // 插件功能
   .hidden()
@@ -84,15 +86,15 @@ test
       })
       .join('\n==============\n');
   });
-test.with('web', app => {
+test.waitServices('web', app => {
   app.web.addEntry(path.resolve(__dirname, '../client/index.ts'));
 });
-test.with('register', async app => {
+test.waitServices('register', async app => {
   app.register('hello', function (this: Message, foo, bar, isExist = false) {
     return `receive from ${this.message_type},args is ${foo},${bar},${isExist}`;
   });
 });
-test.with('component', app => {
+test.waitServices('component', app => {
   app.component({
     name: 'test2',
     render(_, context) {

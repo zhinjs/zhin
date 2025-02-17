@@ -154,7 +154,7 @@ const startBots = async (configs: Adapter.BotConfig<'icqq'>[]) => {
 };
 const messageHandler = (bot: QQClient, event: QQMessageEvent) => {
   const message = Message.from(icqqAdapter, bot, createMessageBase(event));
-  icqqAdapter.app!.emit('message', icqqAdapter, bot, message);
+  icqqAdapter.app!.emit('message', message);
 };
 const botLogin = async (bot: QQClient) => {
   return new Promise<void>(resolve => {

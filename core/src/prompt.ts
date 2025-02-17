@@ -31,7 +31,7 @@ export class Prompt<P extends keyof App.Adapters> {
     });
   }
   middleware(callback: (input: string | Error) => any, timeout: number = 3 * 60 * 1000, timeoutText = '输入超时') {
-    const middleware: Middleware = (adapter, bot, event, next) => {
+    const middleware: Middleware = (event, next) => {
       if (this.getChannelAddress(event) !== this.getChannelAddress(this.event)) return next();
       callback(event.raw_message);
       dispose();
@@ -214,7 +214,7 @@ export namespace Prompt {
   }
   export interface PickConfig<T extends SingleType = SingleType, M extends boolean = false> {
     type: T;
-    defaultValue?: M extends true ? SingleMap[T] : SingleMap[T][];
+    defaultValue?: PickResult<T, M>;
     separator?: string;
     timeout?: number;
     options: PickOption<T>[];
@@ -229,7 +229,7 @@ export namespace Prompt {
   export type Result<T extends SingleType> = SingleMap[T];
   export type Config<R = any> = {
     tips: string;
-    defaultValue: any;
+    defaultValue?: R;
     timeout?: number;
     timeoutText?: string;
     format: (input: string) => R;

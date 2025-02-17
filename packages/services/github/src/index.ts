@@ -16,7 +16,7 @@ const config = plugin.useConfig(
   }),
 );
 plugin.mounted(app => {
-  plugin.middleware(async (_a, _b, message, next) => {
+  plugin.middleware(async (message, next) => {
     await next();
     const mathReg = /^(?:https?:\/\/)?(?:www\.)?github\.com\/([^/]+)\/([^/]+)\/?$/;
     const match = message.raw_message.match(mathReg);

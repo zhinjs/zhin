@@ -66,7 +66,7 @@ const messageHandler = (bot: Adapter.Bot<'dingtalk'>, event: DingMsgEvent) => {
       permissions: [],
     },
   });
-  dingTalkAdapter.app!.emit('message', dingTalkAdapter, bot, message);
+  dingTalkAdapter.app!.emit('message', message);
 };
 const stopBots = () => {
   for (const bot of dingTalkAdapter.bots) {

@@ -72,7 +72,7 @@ const messageHandler = (bot: WechatClient, event: ClientMessage) => {
     raw_message: ClientMessage.formatToString(event.message),
     message_type: event.detail_type as any,
   });
-  adapter.app!.emit('message', adapter, bot, message);
+  adapter.app!.emit('message', message);
 };
 const stopBots = () => {
   for (const bot of adapter.bots) {

@@ -112,11 +112,7 @@ export class App extends EventEmitter {
     return this.commandList.find(command => command.name === name);
   }
 
-  getSupportMiddlewares<P extends Adapters>(
-    adapter: Adapter<P>,
-    bot: Adapter.Bot<P>,
-    event: Message<P>,
-  ): Middleware<P>[] {
+  getSupportMiddlewares<P extends Adapters>({ bot, adapter }: Message<P>): Middleware<P>[] {
     return (
       this.pluginList
         // 过滤不支持当前适配器的插件
@@ -139,9 +135,9 @@ export class App extends EventEmitter {
       .flatMap(plugin => plugin.commandList);
   }
 
-  handleMessage<P extends Adapters>(adapter: Adapter<P>, bot: Adapter.Bot<P>, event: Message<P>) {
-    const middleware = Middleware.compose(this.getSupportMiddlewares(adapter, bot, event));
-    middleware(adapter, bot, event);
+  handleMessage<P extends Adapters>(event: Message<P>) {
+    const middleware = Middleware.compose(this.getSupportMiddlewares(event));
+    middleware(event);
   }
 
   plugin(plugin: Plugin): this {

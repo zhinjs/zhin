@@ -175,7 +175,7 @@ qaCommand.command('问答详情 <no:number>').action(async (_, no) => {
     2,
   )}`;
 });
-qaPlugin.middleware(async (adapter, bot, message, next) => {
+qaPlugin.middleware(async (message, next) => {
   const beforeMessage = message.raw_message;
   await next();
   const afterMessage = message.raw_message;

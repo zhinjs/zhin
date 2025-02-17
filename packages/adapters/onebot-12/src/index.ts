@@ -72,7 +72,7 @@ const messageHandler = (bot: OneBotClient, event: MessageV12) => {
     },
     raw_message: MessageV12.formatToString(event.message),
   });
-  oneBotV12Adapter.app!.emit('message', oneBotV12Adapter, bot, message);
+  oneBotV12Adapter.app!.emit('message', message);
 };
 const stopBots = () => {
   for (const bot of oneBotV12Adapter.bots) {

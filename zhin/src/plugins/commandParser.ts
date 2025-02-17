@@ -22,7 +22,7 @@ const executeCommand = async (message: Message) => {
   }
 };
 const commandParser = new Plugin('commandParser');
-commandParser.middleware(async (_a, _b, message, next) => {
+commandParser.middleware(async (message, next) => {
   const result = await executeCommand(message);
   if (result) return;
   return next();

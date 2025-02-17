@@ -65,17 +65,17 @@ transferPlugin
       },
     });
   });
-transferPlugin.middleware(async (adapter, bot, message, next) => {
+transferPlugin.middleware(async (message, next) => {
   const transferList = await transferPlugin.database.get<TransportConfig[]>('transfer', []);
   const transfer = transferList.find(
-    transfer => transfer.from.adapter === adapter.name && transfer.from.bot_id === bot.unique_id,
+    transfer => transfer.from.adapter === message.adapter.name && transfer.from.bot_id === message.bot.unique_id,
   );
   if (!transfer) return next();
   const toAdapter = transferPlugin.app?.adapters.get(transfer.to.adapter);
   if (!toAdapter) return next();
   const toBot = toAdapter.bots.find(b => b.unique_id === transfer.to.bot_id);
   if (!toBot) return next();
-  adapter.app?.emit('message', toAdapter, toBot, message);
+  transferPlugin.app?.emit('message', message);
   return next();
 });
 export default transferPlugin;

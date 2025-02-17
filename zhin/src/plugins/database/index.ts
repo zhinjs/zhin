@@ -40,7 +40,7 @@ database.mounted(async app => {
   // 初始化用户、群表
   await db.get('group', []);
   await db.get('user', []);
-  app.middleware(async (_a, _b, message, next) => {
+  app.middleware(async (message, next) => {
     const userInfo = await db.find<UserInfo[]>('user', user => {
       return user.user_id === message.sender.user_id;
     });
