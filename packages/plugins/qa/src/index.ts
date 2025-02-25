@@ -1,4 +1,4 @@
-import { Message, Plugin, escape } from 'zhin';
+import { Message, Plugin, escape, unescape } from 'zhin';
 
 type QAInfo = {
   adapter: string; // 可用适配器
@@ -182,11 +182,11 @@ qaPlugin.middleware(async (message, next) => {
   if (beforeMessage !== afterMessage) return;
   const qa = await getAnswer(message);
   if (!qa) return;
-  if (!qa.regexp) return message.reply(qa.answer);
+  if (!qa.regexp) return message.reply(unescape(qa.answer));
   const matchArr = message.raw_message.match(new RegExp(qa.content))!;
   matchArr.forEach((match, idx) => {
     qa.answer = qa.answer.replace(new RegExp(`\\$${idx}`, 'g'), match);
   });
-  return message.reply(qa.answer);
+  return message.reply(unescape(qa.answer));
 });
 export default qaPlugin;

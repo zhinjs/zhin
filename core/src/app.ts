@@ -29,9 +29,14 @@ export class App extends EventEmitter {
   middlewares: Middleware<Adapters>[] = [];
   plugins: PluginMap = new PluginMap();
   renders: Message.Render[] = [];
-  bots: Adapter.Bot[] = [];
   get adapters() {
     return App.adapters;
+  }
+  get bots() {
+    return Array.from(App.adapters.values()).reduce((result, adapter) => {
+      result.push(...adapter.bots);
+      return result;
+    }, [] as Adapter.Bot[]);
   }
   constructor() {
     super();

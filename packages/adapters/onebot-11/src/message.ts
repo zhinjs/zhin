@@ -105,7 +105,7 @@ export namespace MessageV11 {
             if (key === 'qq' && type === 'at') key = 'user_id';
             return `${key}='${escape(JSON.stringify(value))}'`;
           })
-          .join(' ')}>`;
+          .join(' ')}/>`;
     }
     return result;
   }

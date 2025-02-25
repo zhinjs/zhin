@@ -275,8 +275,7 @@ export namespace OneBotV11 {
   } & ConfigMap[T];
   export const defaultConfig = {
     ws: {
-      host: '0.0.0.0',
-      port: 6700,
+      url: 'ws://localhost:8080',
       max_reconnect_count: 10,
       reconnect_interval: 3000,
     },

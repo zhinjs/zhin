@@ -1,8 +1,8 @@
 import { Plugin } from 'zhin';
 import { Renderer } from '@/renderer';
 import htmlRenderer from '@/adapters/htmlRenderer';
-import vueRenderer, { IComponent, VueRenderer } from '@/adapters/vueRenderer';
-import { Component, DefineComponent } from 'vue';
+import vueRenderer, { VueRenderer } from '@/adapters/vueRenderer';
+import { Component } from 'vue';
 declare module 'zhin' {
   namespace App {
     interface Services {
@@ -22,6 +22,5 @@ plugin.service('renderHtml', htmlRenderer.rendering.bind(htmlRenderer));
 plugin.service('renderVue', vueRenderer.rendering.bind(vueRenderer));
 plugin.mounted(() => {
   htmlRenderer.connect();
-  vueRenderer.connect();
 });
 export default plugin;

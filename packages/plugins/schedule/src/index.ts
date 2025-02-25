@@ -1,4 +1,4 @@
-import { MessageBase, Message, Plugin } from 'zhin';
+import { MessageBase, Message, Plugin, unescape } from 'zhin';
 import { CronDescriptors, ScheduleManager } from '@/scheduleManager';
 import { ScheduledTask } from 'node-cron';
 export type Schedule = {
@@ -59,7 +59,7 @@ scheduleCommand.command('定时列表').action(async ({ adapter, bot, message })
   if (!schedules.length) return '暂无任务';
   return `已有任务：\n${schedules
     .map((schedule, index) => {
-      return `${index + 1}.${schedule.cron} ${schedule.template}`;
+      return `${index + 1}.${schedule.cron} ${unescape(schedule.template)}`;
     })
     .join('\n')}`;
 });
@@ -86,8 +86,9 @@ scheduleCommand.command('添加定时').action(async ({ adapter, prompt, bot, me
 scheduleCommand
   .command('删除定时 <no:number>')
   .option('-c <confirm:boolean> 是否确认', false)
-  .action(async ({ prompt, options, bot, message }, no) => {
-    const schedule = await schedulePlugin.database.get<Schedule>(`schedule.${no - 1}`);
+  .action(async ({ prompt, options, message }, no) => {
+    const schedules = await schedulePlugin.database.get<Schedule[]>(`schedule`, []);
+    const schedule = schedules?.[no - 1];
     if (!schedule) return '无此定时任务';
     if (schedule.creator_id !== `${message.sender?.user_id}`) return `非作者本人(${schedule.creator_id})不可删除`;
     const isConfirm = options.confirm || (await prompt.confirm('确认删除吗？'));

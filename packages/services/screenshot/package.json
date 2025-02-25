@@ -27,7 +27,9 @@
     "vue-node-loader": "^0.0.6",
     "jiti": "1.21.0",
     "@vue/server-renderer": "^3.4.34",
-    "puppeteer-core": "^22.11.2"
+    "puppeteer-core": "^24.2.1"
+  },
+  "devDependencies": {
   },
   "peerDependencies": {
     "zhin": "workspace:^"

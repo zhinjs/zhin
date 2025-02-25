@@ -1,4 +1,5 @@
 import { defineConfigWithTheme } from 'vitepress';
+
 const pkg = require('../../zhin/package.json');
 export default defineConfigWithTheme({
   title: '知音(Zhin)',
@@ -63,9 +64,9 @@ export default defineConfigWithTheme({
       },
     },
     nav: [
-      { text: '开始', link: '/guide/start', activeMatch: '/guide/' },
-      { text: '配置', link: '/config/common', activeMatch: '/config/' },
-      { text: 'API', link: '/api/zhin', activeMatch: '/api/' },
+      { text: '开始', link: '/guide/intro', activeMatch: '/guide/' },
+      { text: '进阶', link: '/advance/plugin', activeMatch: '/advance/' },
+      { text: '开发', link: '/dev/intro', activeMatch: '/dev/' },
       { text: '插件商店', link: '/store', activeMatch: '/store' },
       // { text: 'Playground', link: 'https://playground.zhin.icu', activeMatch: '/playground/' },
       {
@@ -86,80 +87,53 @@ export default defineConfigWithTheme({
       '/guide/': [
         {
           text: '介绍',
+          link: '/guide/intro',
+        },
+        {
+          text: '安装',
           collapsible: true,
           items: [
-            { text: `准备工作`, link: '/guide/prepare' },
-            { text: `安装`, link: '/guide/start' },
-            { text: `编写第一个插件`, link: '/guide/plugin-guide' },
+            { text: `Android Phone`, link: '/guide/android' },
+            { text: `Windows PC`, link: '/guide/windows' },
+            { text: `Linux`, link: '/guide/linux' },
           ],
         },
         {
-          text: '深入了解',
+          text: '接入平台',
           collapsible: true,
           items: [
-            { text: `插件 - Plugin`, link: '/guide/plugin-introduce' },
-            { text: `指令 - Command`, link: '/guide/command' },
-            { text: `可交互输入 - Prompt`, link: '/guide/prompt' },
-            { text: `组件 - Component`, link: '/guide/component' },
-            { text: `Bot API`, link: '/guide/bot' },
-            { text: `装饰器（实验性）`, link: '/guide/decorator' },
+            { text: `QQ`, link: '/guide/qq' },
+            { text: `Icqq`, link: '/guide/icqq' },
+            { text: `Discord`, link: '/guide/discord' },
+            { text: `钉钉`, link: '/guide/dingtalk' },
+            { text: `微信(Web)`, link: '/guide/web-wechat' },
+            { text: `OneBot 11/12`, link: '/guide/onebot' },
+            { text: `Email`, link: '/guide/email' },
           ],
         },
         {
-          text: '部署',
-          link: '/guide/deploy',
+          text: '配置文件',
+          link: '/guide/config',
         },
       ],
-      '/api/': [
-        { text: `目录`, link: '/api/' },
+      '/advance/': [
+        {
+          text: '插件开发',
+          link: '/advance/plugin',
+        },
         {
           text: '核心模块',
           collapsible: true,
           items: [
-            { text: `知音`, link: '/api/zhin' },
-            { text: `服务`, link: '/api/service' },
-            { text: `适配器`, link: '/api/adapter' },
-            { text: `机器人`, link: '/api/bot' },
-            { text: `指令`, link: '/api/command' },
-            { text: `上下文`, link: '/api/context' },
-            { text: `会话`, link: '/api/session' },
+            { text: `服务`, link: '/advance/service' },
+            { text: `适配器`, link: '/advance/adapter' },
+            { text: `中间件`, link: '/advance/middleware' },
+            { text: `指令`, link: '/advance/command' },
           ],
         },
         {
-          text: '消息定义',
-          link: '/api/message',
-        },
-        {
-          text: '内置服务',
-          collapsible: true,
-          items: [
-            { text: `server`, link: '/api/service-server' },
-            { text: `router`, link: '/api/service-router' },
-            { text: `koa`, link: '/api/service-koa' },
-          ],
-        },
-        {
-          text: `事件系统`,
-          collapsible: true,
-          items: [{ text: `事件地图`, link: '/api/event/map' }],
-        },
-      ],
-      '/config': [
-        {
-          text: '通用配置',
-          link: '/config/common',
-        },
-        {
-          text: '适配器',
-          collapsible: true,
-          items: [
-            { text: `icqq`, link: '/config/adapter-icqq' },
-            { text: `onebot`, link: '/config/adapter-onebot' },
-          ],
-        },
-        {
-          text: '内置插件',
-          link: '/config/built-plugin',
+          text: '消息',
+          link: '/advance/message',
         },
       ],
     },

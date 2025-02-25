@@ -12,8 +12,8 @@ function getCss(component: IComponent): string {
   return `<style>${result}\n${component.children?.map(getCss).join('\n')}</style>`;
 }
 export class VueRenderer extends Renderer {
-  constructor(endpoint: string = process.env.ENDPOINT || '') {
-    super(endpoint);
+  constructor() {
+    super('vue');
     register();
   }
 

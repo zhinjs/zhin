@@ -2,6 +2,8 @@ import { Dict, escape, unescape } from '@zhinjs/shared';
 import { Prompt } from './prompt';
 import { Adapter } from './adapter';
 import { Adapters, App } from './app';
+import path from 'path';
+import * as fs from 'node:fs';
 export interface MessageBase {
   message_id?: string;
   channel: Message.Channel;
@@ -65,7 +67,7 @@ export class Message<P extends keyof App.Adapters> {
 export function parseFromTemplate(template: string | MessageElem): MessageElem[] {
   if (typeof template !== 'string') return [template];
   const result: MessageElem[] = [];
-  const closingReg = /^<(\S+)(\s[^>]+)?\/>/;
+  const closingReg = /^<(\S+)(\s[^>]+)?>/;
   const twinningReg = /^<(\S+)(\s[^>]+)?>([\s\S]*?)<\/\1>/;
   while (template.length) {
     const [_, type, attrStr = '', child = ''] = template.match(twinningReg) || template.match(closingReg) || [];
@@ -123,9 +125,18 @@ export namespace Message {
     (type: string, data: Dict): string;
     text(text?: string): string;
     face(id: number): string;
+    image(path: string, type?: string): string;
+    image(url: string, type?: string): string;
+    image(data: Uint8Array, type?: string): string;
     image(base64: string, type?: string): string;
-    video(file: string, type?: string): string;
-    audio(file: string, type?: string): string;
+    video(path: string, type?: string): string;
+    video(url: string, type?: string): string;
+    video(data: Uint8Array, type?: string): string;
+    video(base64: string, type?: string): string;
+    audio(path: string, type?: string): string;
+    audio(url: string, type?: string): string;
+    audio(data: Uint8Array, type?: string): string;
+    audio(base64: string, type?: string): string;
     at(user_id: string | number): string;
   };
   export type Type = 'private' | 'group' | 'guild' | 'direct';
@@ -149,9 +160,23 @@ export const segment: Message.DefineSegment = function (type, data) {
     })
     .join(' ')}/>`;
 } as Message.DefineSegment;
+function formatSourceDataTostring<T extends string | Uint8Array>(data: T): string {
+  const result: string = typeof data === 'string' ? data : `base64://${Buffer.from(data).toString('base64')}`;
+  if (fs.existsSync(result)) return `base64://${fs.readFileSync(result).toString('base64')}`;
+  return result;
+}
 segment.text = text => escape(text || '');
 segment.face = (id: number) => `<face id='${escape(id.toString())}'/>`;
-segment.image = (file: string, type = 'png') => `<image file='${escape(file)}' file_type='${type}'/>`;
-segment.video = (file: string, type = 'mp4') => `<video file='${escape(file)}' file_type='${type}'>`;
-segment.audio = (file: string, type = 'mp3') => `<audio file='${escape(file)}' file_type='${type}'>`;
+segment.image = (file: string | Uint8Array, type = 'png') => {
+  file = formatSourceDataTostring(file);
+  return `<image file='${escape(file)}' type='${type}'/>`;
+};
+segment.video = (file: string | Uint8Array, type = 'mp4') => {
+  file = formatSourceDataTostring(file);
+  return `<video file='${escape(file)}' file_type='${type}'/>`;
+};
+segment.audio = (file: string | Uint8Array, type = 'mp3') => {
+  file = formatSourceDataTostring(file);
+  return `<audio file='${escape(file)}' file_type='${type}'/>`;
+};
 segment.at = user_id => `<at user_id='${escape(user_id.toString())}'/>`;

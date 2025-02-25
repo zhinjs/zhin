@@ -8,7 +8,6 @@ const groupCommand = groupManage.command('群管理').desc('群操作模块');
 groupCommand
   .command('thumbMe')
   .desc('给指定用户点赞')
-  .alias('赞我')
   .sugar(/^赞我(\d+)次$/, {
     options: {
       times: '$1',

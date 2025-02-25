@@ -16,4 +16,4 @@ export class ScheduleManager {
 
 export type CronDescriptors =
   `${CronDescriptor} ${CronDescriptor} ${CronDescriptor} ${CronDescriptor} ${CronDescriptor} ${CronDescriptor}`;
-type CronDescriptor = `${number}` | '*' | `*/${number}` | `${number}-${number}` | NumString<','>;
+type CronDescriptor = '*' | `*/${number}` | `${number}-${number}` | NumString<','>;

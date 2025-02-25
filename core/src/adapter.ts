@@ -14,23 +14,12 @@ export type Element = {
 export class Adapter<P extends keyof App.Adapters> extends EventEmitter {
   elements: Element[] = [];
   private [adapterKey] = true;
+  bots: Adapter.Bot<P>[] = [];
   #is_started: boolean = false;
   app: App | null = null;
   #configs: Adapter.BotConfig<P>[] = [];
   static isAdapter(obj: any): obj is Adapter {
     return typeof obj === 'object' && !!obj[adapterKey];
-  }
-  get bots(): Adapter.Bot<P>[] {
-    return (this.app?.bots.filter(bot => bot.adapter === this) || []) as unknown as Adapter.Bot<P>[];
-  }
-  set bots(bots: Adapter.Bot<P>[]) {
-    for (const bot of bots) {
-      if (bot.adapter !== this) throw new Error(`bot ${bot.unique_id} not belongs to adapter ${this.name}`);
-      const hasBot = (bot: Adapter.Bot<P>) => {
-        return this.app?.bots.some(b => b.unique_id === bot.unique_id);
-      };
-      if (!hasBot(bot)) this.app?.bots.push(bot as any);
-    }
   }
   start(app: App, config: Adapter.BotConfig<P>[]) {
     this.app = app;
