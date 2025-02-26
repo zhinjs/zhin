@@ -1,5 +1,11 @@
 # @zhinjs/core
 
+## 2.1.2
+
+### Patch Changes
+
+- b76b874: fix: 适配器优化
+
 ## 2.1.1
 
 ### Patch Changes

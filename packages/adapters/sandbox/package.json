@@ -2,7 +2,7 @@
 	"name": "@zhinjs/adapter-sandbox",
 	"main": "lib/index.js",
 	"types": "lib/index.d.ts",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"scripts": {
 		"build": "tsc && tsc-alias"
 	},

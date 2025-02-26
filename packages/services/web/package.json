@@ -3,7 +3,7 @@
     "main": "lib/index.js",
     "module": "browser/common.ts",
     "types": "lib/index.d.ts",
-    "version": "2.0.1",
+    "version": "2.0.2",
     "scripts": {
         "build": "tsc && tsc-alias"
     },

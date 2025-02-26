@@ -2,7 +2,7 @@
     "name": "zhin",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
-    "version": "3.1.1",
+    "version": "3.1.2",
     "bin": "./bin.js",
     "engines": {
         "node": ">=16"
