@@ -93,9 +93,9 @@ export default defineConfigWithTheme({
           text: '安装',
           collapsible: true,
           items: [
-            { text: `Android Phone`, link: '/guide/android' },
-            { text: `Windows PC`, link: '/guide/windows' },
-            { text: `Linux`, link: '/guide/linux' },
+            { text: `安装到 安卓手机`, link: '/guide/android' },
+            { text: `安装到 Windows 电脑`, link: '/guide/windows' },
+            { text: `安装到 Linux / Mac`, link: '/guide/linux' },
           ],
         },
         {
