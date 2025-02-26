@@ -45,10 +45,11 @@
 - 你希望接入什么平台？
 - [QQ](/guide/qq)
 - [ICQQ](/guide/icqq)
-- [WeChat](/guide/wechat)
 - [Discord](/guide/discord)
-- [OneBot(11/12)](/guide/onebot)
 - [钉钉](/guide/dingtalk)
+- [微信](/guide/wechat)
+- [OneBot(11/12)](/guide/onebot)
+- [邮箱](/guide/email)
 
 ### 插件
 - 插件是知音的核心功能，通过插件，你可以扩展知音的功能。
