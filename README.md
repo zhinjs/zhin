@@ -7,6 +7,8 @@
 [![node engine](https://img.shields.io/node/v/zhin/latest.svg)](https://nodejs.org)
 [![install size](https://pkg-size.dev/badge/install/6801977)](https://pkg-size.dev/zhin)
 [![bundle size](https://pkg-size.dev/badge/bundle/1909710)](https://pkg-size.dev/zhin)
+[![discord:zhin](https://img.shields.io/discord/1344226569039773696
+)](https://discord.gg/CMge4ZeK4n)
 [![group:129043431](https://img.shields.io/badge/group-129043431-blue)](https://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=vGiaVXLVoNAlDKHTej7GOzQV1Q6U5jiK&authKey=J%2FtBMx99f%2FkPs%2FF3P3Z7bQyISLMB5%2FuTRSI9oVRKCPo5J4Gq4dtOK4XzQLUaAV4r&noverify=0&group_code=129043431)
 
 [Docs](https://docs.zhin.dev) (开发者必看)
