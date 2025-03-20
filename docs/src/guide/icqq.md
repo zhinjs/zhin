@@ -13,7 +13,7 @@ npm install @zhinjs/adapter-icqq
 bots:
   - adapter: icqq
     unique_id: 机器人唯一标识
-    qq: 你的qq号
+    uin: 你的qq号
     password: 你的qq密码 # 不填则扫码登录
     sign_api_addr: icqq签名api地址
     ver: 使用的qq版本 # 请与确保签名api支持该版本
