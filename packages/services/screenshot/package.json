@@ -2,7 +2,7 @@
   "name": "@zhinjs/plugin-screenshot",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "scripts": {
     "build": "tsc && tsc-alias"
   },
@@ -29,8 +29,7 @@
     "@vue/server-renderer": "^3.4.34",
     "puppeteer-core": "^24.2.1"
   },
-  "devDependencies": {
-  },
+  "devDependencies": {},
   "peerDependencies": {
     "zhin": "workspace:^"
   }

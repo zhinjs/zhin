@@ -1,5 +1,33 @@
 # test
 
+## 2.1.2
+
+### Patch Changes
+
+- b76b874: fix: 适配器优化
+- Updated dependencies [b76b874]
+  - @zhinjs/adapter-com-wechat@1.0.2
+  - @zhinjs/adapter-web-wechat@1.0.2
+  - @zhinjs/adapter-onebot-11@1.0.2
+  - @zhinjs/adapter-onebot-12@1.0.2
+  - @zhinjs/adapter-dingtalk@1.0.2
+  - @zhinjs/adapter-discord@1.0.2
+  - @zhinjs/adapter-kritor@1.0.2
+  - @zhinjs/plugin-ollama@0.0.2
+  - @zhinjs/adapter-email@1.0.2
+  - @zhinjs/adapter-icqq@1.0.2
+  - @zhinjs/adapter-qq@1.0.2
+  - @zhinjs/plugin-qa@2.0.2
+  - zhin@3.1.2
+  - @zhinjs/plugin-group-manage@2.0.2
+  - @zhinjs/plugin-guild-manage@2.0.2
+  - @zhinjs/plugin-schedule@2.0.2
+  - @zhinjs/plugin-http-server@2.0.2
+  - @zhinjs/plugin-sandbox@2.0.2
+  - @zhinjs/plugin-screenshot@2.0.2
+  - @zhinjs/plugin-upyun@2.0.2
+  - @zhinjs/web@2.0.2
+
 ## 2.1.1
 
 ### Patch Changes
