@@ -58,7 +58,7 @@ export function trimQuote(str: string) {
   return str;
 }
 export function loadModule<T = unknown>(name: string): T {
-  const result = require('jiti')(__filename)(name);
+  const result = require(name);
   if (result.default) {
     const { default: plugin, ...other } = result;
     Object.assign(plugin, other);

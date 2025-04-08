@@ -1,4 +1,5 @@
 import { ArgsType, Command, defineCommand } from './command';
+import {fileURLToPath} from 'url'
 import { EventEmitter } from 'events';
 import { Middleware } from './middleware';
 import { getCallerStack } from './utils';
@@ -327,16 +328,15 @@ export namespace Plugin {
   };
   export type InstallFn = (plugin: Plugin) => void;
   export function createIdByPath(filePath: string) {
-    return filePath
-      .replace(path.resolve(WORK_DIR, 'node_modules', 'zhin', 'lib', 'plugins') + path.sep, '')
+    return  filePath.replace(path.resolve(WORK_DIR, 'node_modules', 'zhin', 'lib', 'plugins') + path.sep, '')
       .replace(path.resolve(WORK_DIR, 'node_modules') + path.sep, '')
       .replace(path.resolve(WORK_DIR, '..', 'zhin', 'lib', 'plugins') + path.sep, '') // for dev
       .replace(path.resolve(WORK_DIR, '..', 'packages', 'adapters') + path.sep, '@zhinjs/adapter-') // for dev
       .replace(path.resolve(WORK_DIR, '..', 'packages', 'plugins') + path.sep, '@zhinjs/plugin-') // for dev
       .replace(path.resolve(WORK_DIR, '..', 'packages', 'services') + path.sep, '@zhinjs/plugin-') // for dev
       .replace(WORK_DIR + path.sep, '')
-      .replace(/([\/\\]+((lib)|(src)))?[\/\\]+index\.[cm]?[tj]?s$/, '')
-      .replace(/\.[cm]?[tj]?s$/, '');
+      .replace(/([\/\\]+((lib)|(src)))?[\/\\]+index\.[cm]?[tj]?sx?$/, '')
+      .replace(/\.[cm]?[tj]?sx?$/, '');
   }
   export function runCallbackWithService(app: App, plugin: Plugin) {
     const serviceCallbacks = plugin[serviceCallbacksKey];

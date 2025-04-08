@@ -54,7 +54,7 @@ export class RedisDb implements Database {
     const value = await this.client.get(key);
     if (!value && !defaultValue) throw new Error(`Cannot find ${key} in redis`);
     if (!value) await this.client.set(key, JSON.stringify(defaultValue));
-    return value ? JSON.parse(value) : defaultValue;
+    return value ? JSON.parse(value) : defaultValue!;
   }
 
   async includes<T>(key: string, predicate: Database.Predicate<T>): Promise<boolean> {

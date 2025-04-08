@@ -4,6 +4,10 @@
         "emitDeclarationOnly": true,
         "declaration": true,
         "rootDir": "src",
+        "jsx": "preserve",
+        "jsxFactory": "zhin.createElement",
+        "jsxFragmentFactory": "zhin.Fragment",
+        "jsxImportSource": "zhin",
         "outFile": "lib/index.d.ts"
     },
     "dtsc": {

@@ -4,6 +4,7 @@ import { Adapter } from './adapter';
 import { Message, segment } from './message';
 import { Prompt } from './prompt';
 import { Adapters, App } from './app';
+import { JSXChild, renderToString } from './jsx';
 
 type Argv = {
   name: string;
@@ -269,7 +270,7 @@ export class Command<A extends any[] = [], O = {}> {
         if (!result) return;
       } else {
         // 验证器返回内容时，退出并上报验证结果
-        if (result) return result;
+        if (result) return renderToString(result);
       }
     }
     for (const callback of runtime.command.callbacks) {
@@ -279,7 +280,7 @@ export class Command<A extends any[] = [], O = {}> {
       ]);
       if (result) {
         if (typeof result === 'boolean') return;
-        return result;
+        return renderToString(result);
       }
     }
   }
@@ -559,7 +560,7 @@ export namespace Command {
   export type CallBack<P extends Adapters = Adapters, A extends any[] = [], O = {}> = (
     runtime: RunTime<P, A, O>,
     ...args: A
-  ) => MayBePromise<Message.Segment | boolean | void>;
+  ) => MayBePromise<JSXChild>;
 
   export interface Domain {
     text: string;

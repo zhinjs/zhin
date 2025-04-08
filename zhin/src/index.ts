@@ -77,6 +77,12 @@ import {
   OptionType,
   Element,
   Schema,
+  h,
+  Fragment,
+  renderToString,
+  jsx,
+  jsxs,
+  jsxDEV
 } from '@zhinjs/core';
 export * from './worker';
 export async function initialApp(this: App) {
@@ -150,6 +156,11 @@ import {
   escape,
   unescape,
 } from '@zhinjs/shared';
+export default {
+  h,
+  Fragment,
+
+}
 export {
   aesDecrypt,
   aesEncrypt,
@@ -252,4 +263,10 @@ export {
   hide,
   escape,
   unescape,
+  h,
+  Fragment,
+  renderToString,
+  jsx,
+  jsxs,
+  jsxDEV
 };

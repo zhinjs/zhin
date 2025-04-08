@@ -8,10 +8,9 @@
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "baseUrl": ".",
-    "jsxImportSource": "vue",
-    "jsxFactory": "h",
-    "jsxFragmentFactory": "Fragment",
     "skipLibCheck": true,
-    "types": ["@types/node"]
+    "types": [
+      "@types/node",
+    ]
   }
 }

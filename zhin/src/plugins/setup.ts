@@ -10,18 +10,20 @@ import {
   Plugin,
   Schema,
 } from '@zhinjs/core';
+import {fileURLToPath} from 'url';
 import * as path from 'path';
 const setup = new Plugin('setup');
 const resolveCallerPlugin = (): [boolean, Plugin] => {
   const callerStack = getCallerStack().map(caller => caller.getFileName());
   const currentIndex = callerStack.indexOf(__filename);
-  const filePath = callerStack.slice(currentIndex).find(name => name !== __filename);
+  let filePath = callerStack.slice(currentIndex).find(name => name !== __filename);
+  if(filePath?.startsWith('file://')) filePath=fileURLToPath(filePath)
   if (!filePath) throw new Error('can not find caller file');
   const fileName = path.basename(filePath);
   if (!setup.app) throw new Error(`please mount "setup" plugin before plugin "${fileName}"`);
   let plugin = setup.app?.plugins.getWithPath(filePath);
   if (plugin) return [false, plugin];
-  plugin = new Plugin(fileName);
+  plugin = new Plugin(fileName.replace(path.extname(fileName),''));
   plugin.setup = true;
   plugin.filePath = filePath;
   return [true, plugin];

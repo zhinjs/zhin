@@ -25,7 +25,7 @@
     "sass": "latest",
     "less": "latest",
     "vue-node-loader": "^0.0.6",
-    "jiti": "1.21.0",
+    "jiti": "^2.4.2",
     "@vue/server-renderer": "^3.4.34",
     "puppeteer-core": "^24.2.1"
   },

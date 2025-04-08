@@ -1,4 +1,5 @@
 import { WORK_DIR, createApp } from '@zhinjs/core';
+import '@zhinjs/core/register';
 import { initialApp } from '.';
 import { sleep } from '@zhinjs/shared';
 import process from 'process';

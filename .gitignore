@@ -27,3 +27,4 @@ test/data/
 /pnpm-lock.yaml
 /test/zhin.db/
 /test/config/zhin.config.yml
+/core/register.js

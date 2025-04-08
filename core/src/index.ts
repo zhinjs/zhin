@@ -9,3 +9,4 @@ export * from './plugin';
 export * from './app';
 export * from './schema';
 export * from './constans';
+export * from './jsx'

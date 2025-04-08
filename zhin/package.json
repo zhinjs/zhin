@@ -12,11 +12,20 @@
             "import": "./lib/index.js",
             "types": "./lib/index.d.ts",
             "require": "./lib/index.js"
+        },
+        "./jsx-runtime": {
+            "default": "./lib/jsx-runtime.js",
+            "types": "./lib/jsx-runtime.d.ts"
+        },
+        "./jsx-dev-runtime": {
+            "default": "./lib/jsx-runtime.js",
+            "types": "./lib/jsx-runtime.d.ts"
         }
     },
     "scripts": {
         "compile": "tsc && tsc-alias",
-        "build": "npm run compile && npm run dtsc",
+        "build": "npm run compile && npm run dtsc && npm run runtime",
+        "runtime": "cp src/jsx-runtime.d.ts lib/jsx-runtime.d.ts",
         "dtsc": "dtsc --project tsconfig.dtsc.json"
     },
     "files": [

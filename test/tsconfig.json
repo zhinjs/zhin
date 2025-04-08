@@ -2,6 +2,13 @@
   "extends": "../tsconfig.base",
   "compilerOptions": {
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+    "emitDecoratorMetadata": true,
+    "module": "node16",
+    "jsx": "preserve",
+    "jsxImportSource": "zhin",
+    "moduleResolution": "node16",
+    "types": [
+      "zhin"
+    ]
   }
 }

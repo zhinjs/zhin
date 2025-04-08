@@ -265,9 +265,9 @@ export class App extends EventEmitter {
   }
 
   loadPlugin(name: string): this {
-    const maybePath = this.config.plugin_dirs.reduce(
+    const maybePath = this.plugin_dirs.reduce(
       (result, dir) => {
-        result.push(path.resolve(WORK_DIR, dir, name));
+        result.push(path.resolve( dir, name));
         return result;
       },
       [name],
@@ -286,6 +286,9 @@ export class App extends EventEmitter {
     }
     if (!loaded) this.logger.warn(`load plugin "${name}" failed`, error?.message || error);
     return this;
+  }
+  get plugin_dirs(){
+    return this.config.plugin_dirs.map((dir)=>path.resolve(WORK_DIR,dir))
   }
   async stop() {
     for (const [name, adapter] of App.adapters) {

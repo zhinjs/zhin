@@ -10,6 +10,8 @@ const adapterKey = '__IS_ZHIN_ADAPTER__';
 export type Element = {
   type: string;
   data: Dict;
+  props?: Dict;
+  children?: Array<Element | string>;
 };
 export class Adapter<P extends keyof App.Adapters> extends EventEmitter {
   elements: Element[] = [];

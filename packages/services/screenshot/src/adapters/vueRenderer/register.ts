@@ -1,8 +1,7 @@
 import * as fs from 'fs';
 import { compile } from 'vue-node-loader';
-import Jiti from 'jiti';
-const jiti = Jiti(__filename, {
-  esmResolve: true,
+import {createJiti} from 'jiti';
+const jiti = createJiti(__filename, {
 });
 const cssMap: Map<string, string[]> = new Map<string, string[]>();
 export default function register() {

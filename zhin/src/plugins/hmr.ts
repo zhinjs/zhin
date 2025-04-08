@@ -1,5 +1,5 @@
 import { watch, FSWatcher } from 'chokidar';
-import { Plugin, Adapter, WORK_DIR, App } from '@zhinjs/core';
+import { Plugin, Adapter, WORK_DIR, App, wrapExport } from '@zhinjs/core';
 import * as path from 'path';
 import * as fs from 'fs';
 import { ProcessMessage, QueueInfo } from '../worker';
@@ -8,6 +8,17 @@ let watcher: FSWatcher;
 hmr.beforeUnmount(() => {
   watcher?.close();
 });
+const hotModuleReplace=((isEsm:boolean)=>{
+  return isEsm?async <T>(filePath:string)=>{
+    const timestamp = Date.now();
+    const moduleUrl = `${filePath}?t=${timestamp}`;
+    const { default:obj={},...other } = await import(moduleUrl);
+    return Object.assign(obj,other) as T
+  }:async <T>(filePath:string)=>{
+    delete require.cache[require.resolve(filePath)];
+    return require(filePath) as T
+  }
+})(typeof require === 'undefined' || require.toString().indexOf('native code') > -1)
 hmr.mounted(app => {
   const watchPaths = [
     // 只监听本地插件和内置插件的变更，模块的管不了

@@ -62,7 +62,7 @@ export class Zhin {
     const commonEnv = readEnv(path.join(WORK_DIR, '.env'));
     const modeEnv = deepMerge(commonEnv, readEnv(path.join(WORK_DIR, `.env.${mode}`)));
     const execArgv = [];
-    if (['dev', 'development'].includes(mode)) execArgv.push('-r', 'jiti/register', '-r', 'tsconfig-paths/register');
+    if (['dev', 'development'].includes(mode)) execArgv.push('-r', '@zhinjs/core/register', '-r', 'tsconfig-paths/register');
     const forkOptions: ForkOptions = {
       env: {
         ...process.env,
