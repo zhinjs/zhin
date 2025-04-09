@@ -13,7 +13,7 @@ export default defineConfigWithTheme({
   ignoreDeadLinks: true,
   themeConfig: {
     socialLinks: [
-      { icon: 'github', link: 'https://girhub.com/zhinjs/zhin' },
+      { icon: 'github', link: 'https://github.com/zhinjs/zhin' },
       { icon: 'discord', link: 'https://discord.gg/CMge4ZeK4n' },
       {
         icon: {
