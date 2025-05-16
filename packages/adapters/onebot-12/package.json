@@ -20,11 +20,13 @@
 		"directory": "packages/adapters/onebot-v12"
 	},
 	"dependencies": {
+		"@zhinjs/plugin-screenshot": "^2.0.2",
+		"img-generator": "^0.0.3",
 		"ws": "latest"
 	},
 	"peerDependencies": {
-		"zhin": "workspace:^",
-		"@zhinjs/plugin-http-server": "workspace:^"
+		"@zhinjs/plugin-http-server": "workspace:^",
+		"zhin": "workspace:^"
 	},
 	"devDependencies": {
 		"@types/ws": "latest"

@@ -23,12 +23,14 @@
     },
     "dependencies": {
         "@vitejs/plugin-vue": "latest",
+        "@zhinjs/plugin-screenshot": "^2.0.2",
+        "img-generator": "^0.0.3",
         "vite": "latest"
     },
     "peerDependencies": {
-        "zhin": "workspace:^",
+        "@zhinjs/client": "workspace:^",
         "@zhinjs/plugin-http-server": "workspace:^",
-        "@zhinjs/client": "workspace:^"
+        "zhin": "workspace:^"
     },
     "devDependencies": {
         "@types/node": "^20.14.11",

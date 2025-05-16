@@ -1,9 +1,9 @@
 import { useCommand } from 'zhin';
 const Foo=({foo}:{foo:string})=>{
   return <>
-    <image url={foo}/>
+    <mention user_id={foo}/>
     hello world
-    <face id={'111'}/>
+    <face id={'121'}/>
   </>
 }
 const Bar=()=><>

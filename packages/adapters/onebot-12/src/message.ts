@@ -24,7 +24,7 @@ export namespace MessageV12 {
     data: Dict;
   };
   export type Ret = {
-    message_id: number;
+    message_id: string;
   };
   export type Sendable = string | Segment | (string | Segment)[];
   export function parseSegmentsFromCqCode(template: string): Segment[] {

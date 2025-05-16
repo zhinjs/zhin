@@ -21,15 +21,15 @@
     "directory": "packages/services/screenshot"
   },
   "dependencies": {
-    "vue": "latest",
-    "sass": "latest",
-    "less": "latest",
-    "vue-node-loader": "^0.0.6",
-    "jiti": "^2.4.2",
     "@vue/server-renderer": "^3.4.34",
-    "puppeteer-core": "^24.2.1"
+    "@zhinjs/plugin-screenshot": "^2.0.2",
+    "img-generator": "^0.0.3",
+    "jiti": "^2.4.2",
+    "less": "latest",
+    "sass": "latest",
+    "vue": "latest",
+    "vue-node-loader": "^0.0.6"
   },
-  "devDependencies": {},
   "peerDependencies": {
     "zhin": "workspace:^"
   }

@@ -20,15 +20,17 @@
     "directory": "packages/adapters/discord"
   },
   "dependencies": {
+    "@zhinjs/plugin-screenshot": "^2.0.2",
+    "img-generator": "^0.0.3",
     "ts-disc-bot": "latest"
   },
   "peerDependencies": {
     "zhin": "workspace:^"
   },
   "devDependencies": {
-    "zhin": "workspace:^",
-    "ts-disc-bot": "latest",
     "@types/node": "latest",
-    "@types/ws": "latest"
+    "@types/ws": "latest",
+    "ts-disc-bot": "latest",
+    "zhin": "workspace:^"
   }
 }

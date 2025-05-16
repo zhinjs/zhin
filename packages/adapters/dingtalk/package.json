@@ -20,6 +20,8 @@
         "directory": "packages/adapters/dingtalk"
     },
     "dependencies": {
+        "@zhinjs/plugin-screenshot": "^2.0.2",
+        "img-generator": "^0.0.3",
         "node-dd-bot": "latest"
     },
     "peerDependencies": {

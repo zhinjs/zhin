@@ -177,7 +177,10 @@ export class OneBotV12 extends EventEmitter {
       action: 'send_message',
       params: { user_id, detail_type: 'private', message, message_id },
     });
-    if (!result.message_id) return this.logger.error(`send failed:`, result);
+    if (!result.message_id) {
+      this.logger.error(`send failed:`, result);
+      return ''
+    }
     return result.message_id;
   }
   getGroupList() {
@@ -307,7 +310,10 @@ export class OneBotV12 extends EventEmitter {
       action: 'send_message',
       params: { group_id, detail_type: 'group', message, message_id },
     });
-    if (!result.message_id) return this.logger.error(`send failed:`, result);
+    if (!result.message_id){
+      this.logger.error(`send failed:`, result);
+      return ''
+    }
     return result.message_id;
   }
   async sendGuildMsg(guild_id: string, channel_id: string, message: MessageV12.Sendable, message_id?: string) {

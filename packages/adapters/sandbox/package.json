@@ -21,15 +21,17 @@
 		"directory": "packages/adapters/sandbox"
 	},
 	"dependencies": {
+		"@zhinjs/plugin-screenshot": "^2.0.2",
+		"img-generator": "^0.0.3",
 		"ws": "^8.18.0"
 	},
 	"devDependencies": {
 		"@types/ws": "^8.5.14"
 	},
 	"peerDependencies": {
-		"zhin": "workspace:^",
+		"@zhinjs/client": "workspace:^",
 		"@zhinjs/plugin-http-server": "workspace:^",
 		"@zhinjs/web": "workspace:^",
-		"@zhinjs/client": "workspace:^"
+		"zhin": "workspace:^"
 	}
 }

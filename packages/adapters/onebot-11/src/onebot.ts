@@ -167,8 +167,11 @@ export class OneBotV11 extends EventEmitter {
       action: 'send_private_msg',
       params: { user_id, message },
     });
-    if (!result.message_id) return this.logger.error(`send failed:`, result);
-    return result.message_id;
+    if (!result.message_id) {
+      this.logger.error(`send failed:`, result)
+      return ''
+    };
+    return `${result.message_id}`;
   }
   getGroupList() {
     return this.sendPayload({
@@ -225,8 +228,11 @@ export class OneBotV11 extends EventEmitter {
       action: 'send_group_msg',
       params: { group_id, message },
     });
-    if (!result.message_id) return this.logger.error(`send failed:`, result);
-    return result.message_id;
+    if (!result.message_id){
+      this.logger.error(`send failed:`, result)
+      return ''
+    };
+    return `${result.message_id}`;
   }
   getBrief(message: MessageV11.Sendable): string {
     if (typeof message === 'string') {

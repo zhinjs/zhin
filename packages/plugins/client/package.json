@@ -23,10 +23,12 @@
         "directory": "packages/plugin/client"
     },
     "dependencies": {
-        "@ionic/vue-router": "latest",
-        "vue-router": "^4.4.0",
-        "pinia": "latest",
         "@ionic/vue": "latest",
-        "vue": "latest"
+        "@ionic/vue-router": "latest",
+        "@zhinjs/plugin-screenshot": "^2.0.2",
+        "img-generator": "^0.0.3",
+        "pinia": "latest",
+        "vue": "latest",
+        "vue-router": "^4.4.0"
     }
 }

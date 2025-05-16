@@ -22,9 +22,11 @@
         "directory": "packages/services/http-server"
     },
     "dependencies": {
+        "@koa/router": "latest",
+        "@zhinjs/plugin-screenshot": "^2.0.2",
+        "img-generator": "^0.0.3",
         "koa": "latest",
         "koa-basic-auth": "latest",
-        "@koa/router": "latest",
         "koa-bodyparser": "latest",
         "ws": "latest"
     },
@@ -33,8 +35,8 @@
     },
     "devDependencies": {
         "@types/koa": "latest",
-        "@types/koa-bodyparser": "latest",
         "@types/koa-basic-auth": "latest",
+        "@types/koa-bodyparser": "latest",
         "@types/koa__router": "latest",
         "@types/ws": "latest"
     }

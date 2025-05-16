@@ -21,14 +21,16 @@
 	},
 	"dependencies": {
 		"@grpc/grpc-js": "^1.10.10",
-		"kritor-proto": "^1.0.2",
-		"@grpc/proto-loader": "^0.7.13"
+		"@grpc/proto-loader": "^0.7.13",
+		"@zhinjs/plugin-screenshot": "^2.0.2",
+		"img-generator": "^0.0.3",
+		"kritor-proto": "^1.0.2"
 	},
 	"peerDependencies": {
 		"zhin": "workspace:^"
 	},
 	"devDependencies": {
-		"zhin": "workspace:^",
-		"@types/node": "latest"
+		"@types/node": "latest",
+		"zhin": "workspace:^"
 	}
 }

@@ -20,7 +20,9 @@
         "directory": "packages/plugins/guildManage"
     },
     "dependencies": {
-        "@zhinjs/adapter-qq": "workspace:^"
+        "@zhinjs/adapter-qq": "workspace:^",
+        "@zhinjs/plugin-screenshot": "^2.0.2",
+        "img-generator": "^0.0.3"
     },
     "peerDependencies": {
         "zhin": "workspace:^"

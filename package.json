@@ -9,10 +9,9 @@
     "scripts": {
         "start": "pnpm -C test start",
         "dev": "pnpm -C test dev",
-        "init": "pnpm -C test run init",
         "format": "prettier packages --write",
         "build": "pnpm -r run build",
-        "test": "pnpm -C test run test",
+        "test": "pnpm -C test test",
         "release": "pnpm changeset",
         "clean": "rm -rf ./node_modules",
         "pub": "pnpm -r publish --access public --no-git-checks --registry https://registry.npmjs.org",
@@ -49,7 +48,6 @@
         "@changesets/cli": "^2.27.7",
         "@element-plus/icons-vue": "^2.3.1",
         "element-plus": "^2.7.8",
-        "markdown-it": "^14.1.0",
-        "vue-markdown": "^2.2.4"
+        "markdown-it": "^14.1.0"
     }
 }

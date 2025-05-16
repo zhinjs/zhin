@@ -20,6 +20,8 @@
         "directory": "packages/services/ollama"
     },
     "dependencies": {
+        "@zhinjs/plugin-screenshot": "^2.0.2",
+        "img-generator": "^0.0.3",
         "ollama": "^0.5.13"
     },
     "peerDependencies": {

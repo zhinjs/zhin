@@ -1,7 +1,6 @@
 packages:
-  - "shared"
-  - "core"
   - "zhin"
+  - "core/*"
   - "packages/adapters/*"
   - "packages/plugins/*"
   - "packages/services/*"

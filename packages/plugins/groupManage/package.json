@@ -20,7 +20,9 @@
         "directory": "packages/plugins/groupManage"
     },
     "dependencies": {
-        "@zhinjs/adapter-onebot-12": "workspace:^"
+        "@zhinjs/adapter-onebot-12": "workspace:^",
+        "@zhinjs/plugin-screenshot": "^2.0.2",
+        "img-generator": "^0.0.3"
     },
     "peerDependencies": {
         "zhin": "workspace:^"

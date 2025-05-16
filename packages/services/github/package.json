@@ -22,13 +22,15 @@
     },
     "dependencies": {
         "@octokit/webhooks": "^10.1.5",
+        "@zhinjs/plugin-screenshot": "^2.0.2",
+        "img-generator": "^0.0.3",
         "marked": "^4.1.0"
     },
     "devDependencies": {
         "@types/marked": "^4.0.7"
     },
     "peerDependencies": {
-        "zhin": "workspace:^",
-        "@zhinjs/plugin-http-server": "workspace:^"
+        "@zhinjs/plugin-http-server": "workspace:^",
+        "zhin": "workspace:^"
     }
 }
