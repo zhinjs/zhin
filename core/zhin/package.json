@@ -1,0 +1,72 @@
+{
+    "name": "zhin",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "version": "3.1.2",
+    "bin": "./bin.js",
+    "engines": {
+        "node": ">=16"
+    },
+    "exports": {
+        ".": {
+            "import": "./lib/index.js",
+            "types": "./lib/index.d.ts",
+            "require": "./lib/index.js"
+        },
+        "./jsx-runtime": {
+            "default": "./lib/jsx-runtime.js",
+            "types": "./lib/jsx-runtime.d.ts"
+        },
+        "./jsx-dev-runtime": {
+            "default": "./lib/jsx-runtime.js",
+            "types": "./lib/jsx-runtime.d.ts"
+        }
+    },
+    "scripts": {
+        "compile": "tsc && tsc-alias",
+        "build": "npm run compile && npm run dtsc && npm run runtime",
+        "runtime": "cp src/jsx-runtime.d.ts lib/jsx-runtime.d.ts",
+        "dtsc": "dtsc --project tsconfig.dtsc.json"
+    },
+    "files": [
+        "lib",
+        "src/bin.js",
+        "src/start.js",
+        "package.json",
+        "CHANGELOG.md",
+        "README.md"
+    ],
+    "license": "MIT",
+    "author": "凉菜",
+    "repository": {
+        "url": "https://github.com/zhinjs/zhin",
+        "directory": "zhin"
+    },
+    "dependencies": {
+        "@zhinjs/core": "workspace:^",
+        "@zhinjs/plugin-screenshot": "^2.0.2",
+        "@zhinjs/shared": "workspace:^",
+        "chokidar": "^3.5.3",
+        "dotenv": "^16.3.1",
+        "img-generator": "^0.0.3"
+    },
+    "devDependencies": {
+        "dtsc": "^2.3.0"
+    },
+    "peerDependencies": {
+        "level": "^8.0.1",
+        "mysql2": "^3.11.0",
+        "redis": "^4.6.15"
+    },
+    "peerDependenciesMeta": {
+        "level": {
+            "optional": true
+        },
+        "redis": {
+            "optional": true
+        },
+        "mysql2": {
+            "optional": true
+        }
+    }
+}
