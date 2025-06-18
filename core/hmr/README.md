@@ -1,6 +1,6 @@
 # JSX Hot Module Replacement (HMR) System
 
-[English](README.md) | [中文](README.zh-CN)
+[English](README.md) | [中文](README.zh-CN.md) | [example](example)
 
 A powerful and flexible Hot Module Replacement (HMR) system for Node.js applications, providing efficient module reloading and dependency management capabilities.
 

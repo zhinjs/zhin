@@ -1,6 +1,6 @@
 # JSX 热模块替换 (HMR) 系统
 
-[English](README.md) | [中文](README.zh-CN)
+[English](README.md) | [中文](README.zh-CN.md) | [example](example)
 
 一个强大而灵活的 Node.js 热模块替换系统，提供高效的模块重载和依赖管理功能。
 
