@@ -35,13 +35,13 @@ A powerful and flexible Hot Module Replacement (HMR) system for Node.js applicat
 ## Installation
 
 ```bash
-npm install @your-org/hmr
+npm install @zhinjs/hmr
 ```
 
 ## Quick Start
 
 ```typescript
-import { HMR } from '@your-org/hmr';
+import { HMR } from '@zhinjs/hmr';
 
 // Create a custom HMR implementation
 class MyHMR extends HMR {
@@ -117,7 +117,7 @@ interface HMRConfig {
 ### Custom Logger
 
 ```typescript
-import { Logger } from '@your-org/hmr';
+import { Logger } from '@zhinjs/hmr';
 
 class CustomLogger implements Logger {
   debug(message: string, ...args: unknown[]): void {

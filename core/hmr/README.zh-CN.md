@@ -35,13 +35,13 @@
 ## 安装
 
 ```bash
-npm install @your-org/hmr
+npm install @zhinjs/hmr
 ```
 
 ## 快速开始
 
 ```typescript
-import { HMR } from '@your-org/hmr';
+import { HMR } from '@zhinjs/hmr';
 
 // 创建自定义 HMR 实现
 class MyHMR extends HMR {
@@ -117,7 +117,7 @@ interface HMRConfig {
 ### 自定义日志记录器
 
 ```typescript
-import { Logger } from '@your-org/hmr';
+import { Logger } from '@zhinjs/hmr';
 
 class CustomLogger implements Logger {
   debug(message: string, ...args: unknown[]): void {
