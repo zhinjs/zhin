@@ -6,6 +6,7 @@ import {
   GroupMessageEvent,
   GuildMessageEvent,
   Intent,
+  ReceiverMode,
   Quotable,
 } from 'qq-official-bot';
 type QQMessageEvent = PrivateMessageEvent | GroupMessageEvent | GuildMessageEvent;
@@ -47,7 +48,7 @@ class QQClient extends Adapter.BaseBot<'qq'> {
       new Client({
         logLevel: qqAdapter.app!.config.log_level as any,
         ...config,
-        mode: 'websocket',
+        mode: ReceiverMode.WEBSOCKET,
         intents: [
           group && 'GROUP_AT_MESSAGE_CREATE',
           isPrivate && 'C2C_MESSAGE_CREATE',
