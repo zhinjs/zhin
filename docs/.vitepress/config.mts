@@ -1,6 +1,6 @@
 import { defineConfigWithTheme } from 'vitepress';
 
-const pkg = require('../../zhin/package.json');
+const pkg = require('../../core/zhin/package.json');
 export default defineConfigWithTheme({
   title: '知音(Zhin)',
   titleTemplate: ':title - 知音(Zhin)',
