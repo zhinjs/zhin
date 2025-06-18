@@ -1,0 +1,35 @@
+{
+    "name": "@zhinjs/hmr",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "version": "0.0.1",
+    "engines": {
+        "node": ">=16"
+    },
+    "scripts": {
+        "compile": "tsc && tsc-alias",
+        "build": "npm run compile && npm run dtsc",
+        "dtsc": "dtsc --project tsconfig.dtsc.json"
+    },
+    "keywords": [
+        "zhin",
+        "hmr"
+    ],
+    "files": [
+        "lib",
+        "package.json",
+        "CHANGELOG.md",
+        "README.md"
+    ],
+    "license": "MIT",
+    "author": "凉菜",
+    "repository": {
+        "url": "https://github.com/zhinjs/zhin",
+        "directory": "hmr"
+    },
+    "dependencies": {
+    },
+    "devDependencies": {
+        "dtsc": "^2.3.0"
+    }
+}
