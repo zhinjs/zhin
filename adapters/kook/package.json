@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-kook",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "zhin adapter for kook",
   "type": "module",
   "main": "./lib/index.js",
@@ -30,4 +30,4 @@
       "optional": true
     }
   }
-} 
+}
