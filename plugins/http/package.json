@@ -1,0 +1,36 @@
+{
+  "name": "@zhin.js/http",
+  "version": "1.0.0",
+  "description": "Zhin机器人框架HTTP工具",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf lib"
+  },
+  "dependencies": {
+    "@koa/router": "latest",
+    "koa": "latest",
+    "ws": "^8.18.3",
+    "koa-basic-auth": "latest",
+    "koa-bodyparser": "latest"
+  },
+  "peerDependencies": {
+    "@zhin.js/core": "workspace:^"
+  },
+  "devDependencies": {
+    "@zhin.js/types": "workspace:^",
+    "@types/koa": "latest",
+    "@types/koa-basic-auth": "latest",
+    "@types/koa-bodyparser": "latest",
+    "@types/koa__router": "latest",
+    "@types/ws": "latest"
+  }
+} 

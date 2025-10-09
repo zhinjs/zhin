@@ -1,0 +1,31 @@
+{
+  "name": "@zhin.js/client",
+  "version": "1.0.0",
+  "description": "Zhin 客户端",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "pinia": "latest",
+    "primevue": "^4.3.7",
+    "primeicons": "latest",
+    "@primeuix/themes": "^1.2.3",
+    "vue-router": "latest"
+  },
+  "files": [
+    "lib",
+    "src",
+    "global.d.ts",
+    "app"
+  ]
+} 

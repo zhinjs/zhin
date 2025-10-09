@@ -1,0 +1,46 @@
+{
+  "name": "@zhin.js/adapter-wechat-mp",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "WeChat Official Account adapter for zhin.js",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf lib"
+  },
+  "dependencies": {
+    "xml2js": "^0.6.2",
+    "axios": "^1.6.2",
+    "@types/xml2js": "^0.4.14"
+  },
+  "peerDependencies": {
+    "@zhin.js/types": "workspace:^",
+    "@zhin.js/http": "workspace:^",
+    "zhin.js": "workspace:^"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "@types/node": "^20.10.6",
+    "@types/koa": "^2.15.0"
+  },
+  "keywords": [
+    "zhin",
+    "adapter",
+    "wechat",
+    "weixin",
+    "official-account",
+    "mp"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zhinjs/zhin-next",
+    "directory": "adapters/wechat-mp"
+  },
+  "files": [
+    "lib"
+  ]
+}

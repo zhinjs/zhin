@@ -1,0 +1,35 @@
+{
+  "name": "@zhin.js/core",
+  "version": "1.0.0",
+  "description": "Zhin机器人核心框架",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf lib"
+  },
+  "dependencies": {
+    "@zhin.js/hmr": "workspace:*",
+    "@zhin.js/database": "workspace:*",
+    "segment-matcher": "^1.0.2",
+    "yaml": "^2.3.4",
+    "toml": "^3.0.0",
+    "dotenv": "^16.3.1",
+    "cron-parser": "latest"
+  },
+  "peerDependencies": {
+    "@zhin.js/logger": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "^5.3.0",
+    "@zhin.js/types": "workspace:*"
+  }
+} 

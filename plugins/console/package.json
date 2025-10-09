@@ -1,0 +1,45 @@
+{
+  "name": "@zhin.js/console",
+  "version": "1.0.0",
+  "description": "Zhin 控制台",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf lib"
+  },
+  "dependencies": {
+    "@vitejs/plugin-vue": "^6.0.1",
+    "koa-connect": "^2.1.0",
+    "ws": "^8.18.3",
+    "vue": "^3.5.18",
+    "vite": "^7.0.6"
+  },
+  "peerDependencies": {
+    "@types/ws": "^8.18.1",
+    "@zhin.js/client": "workspace:^",
+    "@zhin.js/http": "workspace:^",
+    "unplugin-vue-components": "^29.0.0",
+    "@primevue/auto-import-resolver": "^4.3.7",
+    "@zhin.js/core": "workspace:^",
+    "@zhin.js/types": "workspace:^"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/types": {
+      "optional": true
+    }
+  },
+  "files": [
+    "lib",
+    "src",
+    "global.d.ts",
+    "app"
+  ]
+} 

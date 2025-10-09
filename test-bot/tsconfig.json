@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "outDir": "./lib",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "allowSyntheticDefaultImports": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "verbatimModuleSyntax": false,
+    "types": [
+      "@types/node",
+      "@zhin.js/types",
+      "zhin.js",
+      "@zhin.js/adapter-icqq",
+      "@zhin.js/console",
+      "@zhin.js/client",
+      "@zhin.js/http",
+      "@zhin.js/adapter-kook",
+      "@zhin.js/adapter-onebot11",
+      "@zhin.js/adapter-qq",
+      "@zhin.js/adapter-process"
+    ]
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "lib",
+    "node_modules"
+  ]
+}

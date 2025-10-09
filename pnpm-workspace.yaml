@@ -1,7 +1,6 @@
 packages:
-  - "zhin"
-  - "core/*"
-  - "packages/adapters/*"
-  - "packages/plugins/*"
-  - "packages/services/*"
-  - "test"
+  - 'adapters/*'
+  - 'databases/*'
+  - 'packages/*'
+  - 'plugins/*'
+  - 'test-bot'

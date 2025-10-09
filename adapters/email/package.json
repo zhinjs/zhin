@@ -1,0 +1,47 @@
+{
+  "name": "@zhin.js/adapter-email",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Email adapter for zhin.js",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf lib"
+  },
+  "dependencies": {
+    "@types/imap": "^0.8.40",
+    "@types/nodemailer": "^6.4.14",
+    "imap": "^0.8.19",
+    "mailparser": "^3.6.5",
+    "nodemailer": "^6.9.8"
+  },
+  "peerDependencies": {
+    "@zhin.js/types": "workspace:^",
+    "zhin.js": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/mailparser": "^3.4.6",
+    "@types/node": "^20.10.6",
+    "typescript": "^5.3.3"
+  },
+  "keywords": [
+    "zhin",
+    "adapter",
+    "email",
+    "smtp",
+    "imap",
+    "mail"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zhinjs/zhin-next",
+    "directory": "adapters/email"
+  },
+  "files": [
+    "lib"
+  ]
+}

@@ -1,30 +1,95 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+test-bot/data
+docs/.vitepress
+# Testing
+coverage/
+
+# Production builds
+lib/
+build/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
 # Logs
+logs
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+lerna-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Optional npm cache directory
 .npm
+
+# Optional eslint cache
 .eslintcache
-.node_repl_history
+
+# Output of 'npm pack'
 *.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variables file
 .env
-.next
-.DS_Store
-.idea/
-*.iml
-node_modules/
-docs/.vitepress/cache/
-test/.*.env
-test/*.yaml
-test/*.config.js
-test/*.config.ts
-/**/*/node_modules/
-/**/*/lib/
-test/data/
-/docs/dist
-/docs/.vitepress
-/**/kritor/src/generated/
-/pnpm-lock.yaml
-/test/zhin.db/
-/test/config/zhin.config.yml
-/core/register.js
+.env.test
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn v2
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# Test directory - ignore config files and env files
+test/.env*
+test/zhin.config.*
+test/config.*
+!test/env.example
+
+# Apps directory - ignore config files and env files
+apps/**/.env*
+apps/**/zhin.config.*
+apps/**/config.*
+!apps/**/env.example 
+
+**/dist/**

@@ -1,53 +1,59 @@
 {
-    "name": "zhin-workspace",
-    "private": true,
-    "version": "3.0.2",
-    "description": "zhin机器人开发框架",
-    "repository": {
-        "url": "https://github.com/zhinjs/zhin"
-    },
-    "scripts": {
-        "start": "pnpm -C test start",
-        "dev": "pnpm -C test dev",
-        "format": "prettier packages --write",
-        "build": "pnpm -r run build",
-        "test": "pnpm -C test test",
-        "release": "pnpm changeset",
-        "clean": "rm -rf ./node_modules",
-        "pub": "pnpm -r publish --access public --no-git-checks --registry https://registry.npmjs.org",
-        "bump": "pnpm changeset version",
-        "docs:dev": "vitepress dev docs --port 5566",
-        "docs:build": "vitepress build docs",
-        "docs:serve": "vitepress serve docs"
-    },
-    "packageManager": "pnpm@9.0.2",
-    "publishConfig": {
-        "access": "public",
-        "registry": "https://registry.npmjs.org"
-    },
-    "keywords": [
-        "qq",
-        "group",
-        "bot"
-    ],
-    "author": "凉菜",
-    "license": "MIT",
-    "devDependencies": {
-        "@types/node": "^20.14.11",
-        "latest-version": "^5.0.0",
-        "less": "^4.2.0",
-        "prettier": "^3.1.0",
-        "rimraf": "^5.0.5",
-        "semver": "^7.5.4",
-        "tsc-alias": "^1.8.8",
-        "typescript": "^5.2.2",
-        "vitepress": "1.3.4",
-        "vue": "latest"
-    },
-    "dependencies": {
-        "@changesets/cli": "^2.27.7",
-        "@element-plus/icons-vue": "^2.3.1",
-        "element-plus": "^2.7.8",
-        "markdown-it": "^14.1.0"
-    }
+  "name": "zhin-next",
+  "version": "1.0.0",
+  "description": "TypeScript机器人框架",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "workspaces": [
+    "adapters/*",
+    "packages/*",
+    "plugins/*"
+  ],
+  "packageManager": "pnpm@9.0.2",
+  "scripts": {
+    "dev": "pnpm --filter test-bot dev",
+    "start": "pnpm --filter test-bot start",
+    "daemon": "pnpm --filter test-bot daemon",
+    "release": "pnpm changeset",
+    "bump": "pnpm changeset version",
+    "pub": "pnpm -r publish --access public --no-git-checks --registry https://registry.npmjs.org",
+    "stop": "pnpm --filter test-bot stop",
+    "init": "pnpm --filter test-bot initial && pnpm install",
+    "build": "pnpm -r build",
+    "clean": "pnpm -r clean",
+    "lint": "eslint . --ext .ts,.tsx",
+    "type-check": "tsc --noEmit",
+    "link": "pnpm --filter @zhin.js/cli exec npm link",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "create": "node packages/create-zhin/lib/index.js",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "@types/ws": "^8.18.1",
+    "@typescript-eslint/eslint-plugin": "^8.41.0",
+    "@typescript-eslint/parser": "^8.41.0",
+    "@vitest/coverage-v8": "^1.6.1",
+    "eslint": "^9.34.0",
+    "typescript": "^5.9.2",
+    "vitepress": "^1.6.4",
+    "vitest": "^1.6.1",
+    "vue": "^3.5.20"
+  },
+  "dependencies": {
+    "@changesets/cli": "^2.27.7",
+    "chalk": "^5.6.0",
+    "commander": "^14.0.0",
+    "cross-spawn": "^7.0.6",
+    "fs-extra": "^11.3.1",
+    "inquirer": "^12.9.4",
+    "ora": "^8.2.0"
+  }
 }

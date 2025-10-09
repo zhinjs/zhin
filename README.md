@@ -1,47 +1,191 @@
-![zhin](https://socialify.git.ci/zhinjs/zhin/image?description=1&descriptionEditable=a%20chat%20bot%20framework%20for%20Node.js%20developers%2C%20compatible%20with%20qq%E3%80%81icqq%E3%80%81wechat%E3%80%81discord%E3%80%81onebot(11%2F12)%E3%80%81dingtalk%E3%80%82&font=Rokkitt&forks=1&issues=1&language=1&name=1&owner=1&pattern=Overlapping%20Hexagons&stargazers=1&theme=Auto)
 
-[![CI](https://github.com/zhinjs/zhin/actions/workflows/ci.yml/badge.svg)](https://github.com/zhinjs/zhin/actions/workflows/ci.yml)
-[![Deploy Pages](https://github.com/zhinjs/zhin/actions/workflows/docs.yml/badge.svg)](https://github.com/zhinjs/zhin/actions/workflows/docs.yml)
-[![npm version](https://img.shields.io/npm/v/zhin/latest.svg)](https://www.npmjs.com/package/zhin)
-[![dm](https://shields.io/npm/dm/zhin)](https://www.npmjs.com/package/zhin)
-[![node engine](https://img.shields.io/node/v/zhin/latest.svg)](https://nodejs.org)
-[![install size](https://pkg-size.dev/badge/install/6801977)](https://pkg-size.dev/zhin)
-[![bundle size](https://pkg-size.dev/badge/bundle/1909710)](https://pkg-size.dev/zhin)
-[![discord:zhin](https://img.shields.io/discord/1344226569039773696
-)](https://discord.gg/CMge4ZeK4n)
-[![group:129043431](https://img.shields.io/badge/group-129043431-blue)](https://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=vGiaVXLVoNAlDKHTej7GOzQV1Q6U5jiK&authKey=J%2FtBMx99f%2FkPs%2FF3P3Z7bQyISLMB5%2FuTRSI9oVRKCPo5J4Gq4dtOK4XzQLUaAV4r&noverify=0&group_code=129043431)
+# Zhin.js
 
-[Docs](https://docs.zhin.dev) (开发者必看)
+现代 TypeScript 机器人框架，专注于插件化、热重载和多平台生态。
 
-## 适配进度
-- [x] [onebot11](https://github.com/botuniverse/onebot-11)
-- [x] [onebot12](https://onebot.dev/)
-- [x] [icqq](https://github.com/icqqjs/icqq)
-- [x] [微信](https://github.com/lc-cn/lib-wechat)
-- [x] [Discord](https://discord.com/developers/applications)
-- [x] [钉钉机器人](https://open-dev.dingtalk.com/)
-- [x] [QQ官方机器人](https://q.qq.com/)
-- [x] [kritor](https://github.com/KarinJS/kritor)
-- [x] Email
-- [ ] [KOOK](https://www.kookapp.cn/) (planned)
-- [ ] [Telegram](https://telegram.org) (planned)
+## 核心特性
 
-## [快速上手](https://docs.zhin.dev/guide/start.html)
+- **TypeScript 全量类型支持**
+- **热重载**：开发时代码/配置/插件变更自动生效
+- **插件化架构**：支持热插拔插件，灵活扩展
+- **Web 控制台**：浏览器实时监控、插件/数据库/日志管理
+- **命令行工具链**：一键创建/开发/调试/部署
+- **开箱即用**：内置控制台适配器、HTTP服务、Web控制台、SQLite数据库
+- **可选扩展**：支持 Telegram、Discord、QQ、KOOK、OneBot v11、MySQL、PostgreSQL 等（需手动安装）
 
-## 友链 (排名不分先后)
-1. 【[onebots](https://onebots.pages.dev)】 (OneBot V11/OneBot V12)
-2. 【[icqq](https://github.com/icqqjs/icqq)】一个NodeJS的qq协议库
-3. 【[lib-wechat](https://github.com/lc-cn/lib-wechat)】基于 web 微信的协议库
-4. 【[node-dd-bot](https://github.com/lc-cn/dingtalk-bot)】NodeJS端钉钉机器人SDK
-5. 【[qq-official-bot](https://github.com/zhinjs/qq-official-bot)】NodeJS端QQ机器人SDK
-6. 【[ts-disc-bot](https://github.com/lc-cn/ts-disc-bot)】NodeJS端Discord机器人SDK
-7. 【[kritor](https://github.com/KarinJS/kritor)】一个聊天机器人应用接口标准
-8. 【[ComWeChatBotClient](https://github.com/JustUndertaker/ComWeChatBotClient)】ComWeChatRobot的客户端封装，支持onebot12通信协议 
+## 项目结构
 
-## 贡献者
+## 项目结构
 
-[![贡献者](https://contributors-img.web.app/image?repo=zhinjs/zhin)](https://github.com/zhinjs/zhin/graphs/contributors)
-![Alt](https://repobeats.axiom.co/api/embed/26e79889b3756142f3145cd72ae19830e6b4c06a.svg "Repobeats analytics image")
+```
+zhin-next/
+├── adapters/           # 平台适配器
+│   ├── icqq/          # QQ 适配器 (基于 ICQQ)
+│   ├── kook/          # KOOK 适配器
+│   ├── onebot11/      # OneBot v11 协议适配器
+│   └── process/       # 控制台适配器
+├── packages/          # 核心包
+│   ├── cli/          # 命令行工具
+│   ├── core/         # 核心功能
+│   ├── hmr/          # 热重载系统
+│   ├── logger/       # 日志系统
+│   ├── types/        # 类型定义
+│   └── zhin/         # 主包
+├── plugins/           # 插件
+│   ├── client/       # Vue 客户端框架
+│   ├── console/      # Web 控制台
+│   └── http/         # HTTP 服务器
+└── test-bot/         # 示例机器人
+```
 
 
+## 快速开始
 
+```bash
+# 安装依赖
+pnpm install
+
+# 构建所有包
+pnpm build
+
+# 启动开发模式（热重载）
+pnpm dev
+
+# 或进入 test-bot 目录体验示例机器人
+cd test-bot && pnpm dev
+```
+
+
+### 创建新项目
+
+```bash
+# 使用 CLI 创建项目
+pnpm create zhin my-bot
+cd my-bot
+pnpm install
+pnpm dev
+```
+
+
+## 主要用法示例
+
+```typescript
+import { createZhinApp, addCommand, onMessage } from 'zhin.js'
+
+const app = await createZhinApp({
+  databases: [{
+    name: 'main',
+    type: 'sqlite',
+    database: './data/bot.db'
+  }],
+  bots: [{
+    name: 'console',
+    context: 'process' // 控制台适配器，适合开发/测试
+  }]
+})
+
+// 添加命令
+addCommand({
+  name: 'hello',
+  description: '打招呼',
+  async execute(message) {
+    await message.reply('Hello, World!')
+  }
+})
+
+// 监听消息
+onMessage(async (message) => {
+  if (message.content === 'ping') {
+    await message.reply('pong!')
+  }
+})
+
+await app.start()
+```
+
+
+## 常用命令
+
+```bash
+pnpm dev          # 启动开发服务器（热重载）
+pnpm build        # 构建所有包
+pnpm test         # 运行测试
+pnpm lint         # 代码检查
+pnpm start        # 启动生产环境
+pnpm daemon       # 后台运行
+pnpm stop         # 停止机器人
+```
+
+
+## Web 控制台
+
+启动后访问 `http://localhost:8086` 查看 Web 管理界面，支持：
+
+- 实时查看机器人状态和消息统计
+- 插件启用/禁用与管理
+- 数据库管理与查看
+- 日志实时查看
+- 配置热更新
+
+
+## 配置说明
+
+支持 TypeScript/JS/JSON 格式，推荐使用 `zhin.config.ts`：
+
+```typescript
+import { defineConfig } from 'zhin.js'
+
+export default defineConfig({
+  bots: [
+    { name: 'console', context: 'process' }
+  ],
+  plugins: [
+    'http',
+    'console',
+    'adapter-process',
+    // 其他插件...
+  ],
+  plugin_dirs: [
+    './src/plugins',
+    'node_modules'
+  ]
+})
+```
+
+
+## 热重载体验
+
+- 插件/配置/代码变更自动生效，无需重启
+- 保持机器人连接不中断
+
+
+## 生态系统与扩展
+
+### 开箱即用
+- `@zhin.js/adapter-process` - 控制台适配器（默认内置）
+- `@zhin.js/http` - HTTP 服务
+- `@zhin.js/console` - Web 控制台
+- SQLite 数据库（默认）
+
+### 可选扩展（需手动安装）
+- `@zhin.js/adapter-telegram` - Telegram 适配器
+- `@zhin.js/adapter-discord` - Discord 适配器
+- `@zhin.js/adapter-qq` - QQ 适配器
+- `@zhin.js/adapter-kook` - KOOK 适配器
+- `@zhin.js/adapter-onebot11` - OneBot v11 适配器
+- `@zhin.js/database-mysql` - MySQL 驱动
+- `@zhin.js/database-pg` - PostgreSQL 驱动
+
+
+## 开发要求
+- Node.js 20.19.0+ 或 22.12.0+
+- pnpm 9.0+
+
+
+## 📚 更多文档
+- [完整文档](./docs/)
+- [最佳实践](./docs/guide/best-practices.md)
+- [架构设计](./docs/guide/architecture.md)
+
+## 许可证
+MIT License

@@ -1,9 +1,0 @@
-.badge-wrap{
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-.badge-wrap p{
-    margin-block-start: 0;
-    margin-block-end: 0;
-}

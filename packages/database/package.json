@@ -1,0 +1,55 @@
+{
+  "name": "@zhin.js/database",
+  "version": "1.0.0",
+  "description": "Zhin机器人数据库模块",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js",
+      "require": "./lib/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf lib"
+  },
+  "dependencies": {
+  },
+  "peerDependencies": {
+    "sqlite3":"latest",
+    "mysql2":"latest",
+    "pg":"latest",
+    "mongodb":"latest",
+    "redis":"latest"
+  },
+  "peerDependenciesMeta": {
+    "sqlite3": {
+      "optional": true
+    },
+    "mysql2": {
+      "optional": true
+    },
+    "pg": {
+      "optional": true
+    },
+    "mongodb": {
+      "optional": true
+    },
+    "redis": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "sqlite3":"latest",
+    "mysql2":"latest",
+    "pg":"latest",
+    "mongodb":"latest",
+    "redis":"latest",
+    "@types/pg":"latest",
+    "@types/sqlite3":"latest"
+  }
+} 

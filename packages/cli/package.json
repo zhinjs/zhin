@@ -1,0 +1,38 @@
+{
+  "name": "@zhin.js/cli",
+  "version": "1.0.0",
+  "description": "Zhin机器人框架CLI工具",
+  "type": "module",
+  "main": "./lib/index.js",
+  "bin": {
+    "zhin": "./lib/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf lib"
+  },
+  "dependencies": {
+    "@zhin.js/logger": "workspace:*",
+    "commander": "^11.1.0",
+    "inquirer": "^9.2.12",
+    "chalk": "^5.3.0",
+    "ora": "^7.0.1",
+    "fs-extra": "^11.1.1",
+    "cross-spawn": "^7.0.3",
+    "dotenv": "^16.3.1",
+    "glob": "^10.3.10"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/cross-spawn": "^6.0.6",
+    "@types/inquirer": "^9.0.7",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  }
+} 

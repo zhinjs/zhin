@@ -1,0 +1,35 @@
+{
+  "name": "test-bot",
+  "private": true,
+  "version": "0.1.0",
+  "description": "test-bot 机器人",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "npx zhin dev",
+    "start": "npx zhin start",
+    "daemon": "npx zhin start --daemon",
+    "build": "npx zhin build",
+    "stop": "zhin stop"
+  },
+  "dependencies": {
+    "zhin.js": "workspace:*",
+    "@zhin.js/adapter-icqq": "workspace:*",
+    "@zhin.js/console": "workspace:*",
+    "@zhin.js/client": "workspace:*",
+    "@zhin.js/http": "workspace:*",
+    "@zhin.js/adapter-kook": "workspace:*",
+    "@zhin.js/adapter-onebot11": "workspace:*",
+    "@zhin.js/adapter-qq": "workspace:*",
+    "@zhin.js/adapter-process": "workspace:*",
+    "sqlite3":"latest"
+  },
+  "devDependencies": {
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/types": "workspace:*",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "name": "@zhin.js/adapter-discord",
+  "version": "1.0.0",
+  "description": "zhin adapter for discord",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "repository": {
+    "url": "git+https://github.com/lc-cn/zhin-next.git",
+    "type": "git",
+    "directory": "adapters/discord"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf lib"
+  },
+  "dependencies": {
+    "discord.js": "^14.15.3",
+    "tweetnacl": "^1.0.3"
+  },
+  "devDependencies": {
+    "@types/koa": "^3.0.0",
+    "@types/node": "^22.9.0",
+    "typescript": "^5.3.0"
+  },
+  "peerDependencies": {
+    "@zhin.js/types": "workspace:*",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/types": {
+      "optional": true
+    }
+  }
+}

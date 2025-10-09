@@ -1,0 +1,25 @@
+{
+  "name": "@zhin.js/hmr",
+  "version": "1.0.0",
+  "description": "Zhin热更替框架",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf lib"
+  },
+  "peerDependencies": {
+    "@zhin.js/logger": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "@zhin.js/types": "workspace:*"
+  }
+} 

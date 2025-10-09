@@ -1,0 +1,41 @@
+{
+  "name": "@zhin.js/adapter-telegram",
+  "version": "1.0.0",
+  "description": "zhin adapter for telegram",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "repository": {
+    "url": "git+https://github.com/lc-cn/zhin-next.git",
+    "type": "git",
+    "directory": "adapters/telegram"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf lib"
+  },
+  "dependencies": {
+    "node-telegram-bot-api": "^0.66.0",
+    "socks-proxy-agent": "^8.0.5"
+  },
+  "devDependencies": {
+    "@types/koa": "^3.0.0",
+    "@types/node-telegram-bot-api": "^0.64.10",
+    "typescript": "^5.3.0"
+  },
+  "peerDependencies": {
+    "@zhin.js/types": "workspace:*",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/types": {
+      "optional": true
+    }
+  }
+}

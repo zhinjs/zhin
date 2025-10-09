@@ -1,0 +1,23 @@
+{
+  "name": "@zhin.js/types",
+  "version": "1.0.0",
+  "description": "Zhin types for typescript",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf lib"
+  },
+  "peerDependenciesMeta": {
+    "@zhijs.hmr": {
+      "optional": true
+    }
+  }
+} 

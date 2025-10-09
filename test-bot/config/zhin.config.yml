@@ -1,0 +1,12 @@
+log_level: info
+disable_bots: []
+disable_plugins: []
+plugin_dirs: []
+bots: []
+plugins: []
+databases:
+  - name: main
+    type: sqlite
+    database: ./data/test.db
+    enableWal: true
+    enableForeignKeys: true
