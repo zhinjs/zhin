@@ -191,7 +191,7 @@ CONSOLE_PASSWORD=secret      # 控制台密码
 pnpm dev
 
 # 浏览器访问
-http://localhost:3000/console
+`http://localhost:3000/console`
 ```
 
 ### 控制台功能
@@ -757,7 +757,7 @@ lsof -ti:3000 | xargs kill -9
 
 ```bash
 # 检查插件是否正确启动
-curl http://localhost:3000/console
+curl `http://localhost:3000/console`
 
 # 检查认证配置
 CONSOLE_USERNAME=admin
