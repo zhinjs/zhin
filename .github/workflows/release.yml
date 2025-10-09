@@ -1,0 +1,115 @@
+name: Releases
+
+on: 
+  push:
+    tags:
+      - '*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+      
+      - name: Install dependencies
+        run: pnpm install
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Build packages
+        run: pnpm build
+      
+      - name: Run tests
+        run: pnpm test
+      
+      - name: Generate changelog
+        run: |
+          # 获取最新标签
+          LATEST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          CURRENT_TAG=$(git describe --tags --abbrev=0 HEAD)
+          
+          echo "# Release $CURRENT_TAG" > CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "## 🎉 What's New" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          
+          if [ -n "$LATEST_TAG" ]; then
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$LATEST_TAG...$CURRENT_TAG" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            echo "## 📝 Changes since $LATEST_TAG" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            
+            # 获取提交信息并分类
+            echo "### 🚀 Features" >> CHANGELOG.md
+            git log --pretty=format:"- %s (%h)" $LATEST_TAG..HEAD --grep="^feat" >> CHANGELOG.md || echo "- No new features" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            
+            echo "### 🐛 Bug Fixes" >> CHANGELOG.md
+            git log --pretty=format:"- %s (%h)" $LATEST_TAG..HEAD --grep="^fix" >> CHANGELOG.md || echo "- No bug fixes" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            
+            echo "### 🔧 Maintenance" >> CHANGELOG.md
+            git log --pretty=format:"- %s (%h)" $LATEST_TAG..HEAD --grep="^chore\|^refactor\|^style\|^docs" >> CHANGELOG.md || echo "- No maintenance changes" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            
+            echo "### 📦 Dependencies" >> CHANGELOG.md
+            git log --pretty=format:"- %s (%h)" $LATEST_TAG..HEAD --grep="^deps\|^depend" >> CHANGELOG.md || echo "- No dependency updates" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+          else
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/releases/tag/$CURRENT_TAG" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            echo "## 🎊 Initial Release" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            echo "This is the initial release of zhin.js - a TypeScript robot framework!" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            echo "### ✨ Features" >> CHANGELOG.md
+            echo "- 🏗️ Modular architecture with adapters and plugins" >> CHANGELOG.md
+            echo "- 🔌 Support for multiple platforms (QQ, WeChat, Telegram, etc.)" >> CHANGELOG.md
+            echo "- 🎯 TypeScript-first development experience" >> CHANGELOG.md
+            echo "- 🚀 Hot module replacement for development" >> CHANGELOG.md
+            echo "- 📊 Built-in database support" >> CHANGELOG.md
+            echo "- 🎨 Modern web-based management interface" >> CHANGELOG.md
+          fi
+          
+          echo "" >> CHANGELOG.md
+          echo "## 📦 Installation" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "\`\`\`bash" >> CHANGELOG.md
+          echo "# Install zhin.js" >> CHANGELOG.md
+          echo "npm install zhin.js" >> CHANGELOG.md
+          echo "# or" >> CHANGELOG.md
+          echo "pnpm add zhin.js" >> CHANGELOG.md
+          echo "# or" >> CHANGELOG.md
+          echo "yarn add zhin.js" >> CHANGELOG.md
+          echo "\`\`\`" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "## 🔗 Links" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "- 📖 [Documentation](https://zhin.js.org)" >> CHANGELOG.md
+          echo "- 🐛 [Report Issues](https://github.com/${{ github.repository }}/issues)" >> CHANGELOG.md
+          echo "- 💬 [Discussions](https://github.com/${{ github.repository }}/discussions)" >> CHANGELOG.md
+      
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          bodyFile: "CHANGELOG.md"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          draft: false
+          prerelease: false
+          generateReleaseNotes: true
+          makeLatest: true
