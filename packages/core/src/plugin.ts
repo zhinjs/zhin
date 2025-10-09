@@ -31,7 +31,7 @@ export type MessageMiddleware<P extends RegisteredAdapter=RegisteredAdapter> = (
 export class Plugin extends Dependency<Plugin> {
     middlewares: MessageMiddleware<any>[] = [];
     components: Map<string, Component<any, any, any>> = new Map();
-    schemas: Map<string,Schema>=new Map();
+    schemas: Map<string,Schema<any>>=new Map();
     commands:MessageCommand[]=[];
     crons:Cron[]=[];
     #logger?:Logger
