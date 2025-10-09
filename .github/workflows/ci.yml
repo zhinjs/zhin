@@ -46,7 +46,7 @@ jobs:
       - name: install dependencies
         run: pnpm install
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
+          NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
       - name: build packages
@@ -95,7 +95,7 @@ jobs:
       - name: install dependencies
         run: pnpm install
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
+          NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
       - name: build packages
@@ -111,4 +111,4 @@ jobs:
           publish: pnpm pub
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
