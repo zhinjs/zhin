@@ -67,6 +67,12 @@ jobs:
         with:
           fetch-depth: 0
       
+      - name: install cli dependencies
+        run: pnpm --filter @zhin.js/cli install
+
+      - name: build cli
+        run: pnpm --filter @zhin.js/cli build
+        
       - name: install dependencies
         run: pnpm install
         env:
