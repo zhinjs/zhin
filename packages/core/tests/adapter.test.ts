@@ -8,20 +8,27 @@ import type { BotConfig } from '../src/types'
 describe('适配器类测试', () => {
   // 创建测试用的Bot类
   class TestBot implements Bot {
-    connected = false
+    $connected = false
+    $config: BotConfig
 
-    constructor(public plugin: Plugin, public config: BotConfig) {}
-
-    async connect(): Promise<void> {
-      this.connected = true
+    constructor(public plugin: Plugin, config: BotConfig) {
+      this.$config = config
     }
 
-    async disconnect(): Promise<void> {
-      this.connected = false
+    async $connect(): Promise<void> {
+      this.$connected = true
     }
 
-    async sendMessage(): Promise<void> {
-      if (!this.connected) throw new Error('机器人未连接')
+    async $disconnect(): Promise<void> {
+      this.$connected = false
+    }
+
+    async $sendMessage(): Promise<void> {
+      if (!this.$connected) throw new Error('机器人未连接')
+    }
+
+    $formatMessage(message: any): any {
+      return message
     }
   }
 
@@ -68,8 +75,8 @@ describe('适配器类测试', () => {
       expect(adapter.bots.size).toBe(2)
       expect(adapter.bots.get('test-bot-1')).toBeDefined()
       expect(adapter.bots.get('test-bot-2')).toBeDefined()
-      expect(adapter.bots.get('test-bot-1')?.connected).toBe(true)
-      expect(adapter.bots.get('test-bot-2')?.connected).toBe(true)
+      expect(adapter.bots.get('test-bot-1')?.$connected).toBe(true)
+      expect(adapter.bots.get('test-bot-2')?.$connected).toBe(true)
 
       expect(loggerSpy).toHaveBeenCalledWith('bot test-bot-1 of adapter test-adapter connected')
       expect(loggerSpy).toHaveBeenCalledWith('bot test-bot-2 of adapter test-adapter connected')
@@ -106,7 +113,7 @@ describe('适配器类测试', () => {
   describe('错误处理测试', () => {
     it('应该处理机器人连接失败', async () => {
       class FailingBot extends TestBot {
-        async connect(): Promise<void> {
+        async $connect(): Promise<void> {
           throw new Error('连接失败')
         }
       }
@@ -123,7 +130,7 @@ describe('适配器类测试', () => {
 
     it('应该处理机器人断开连接失败', async () => {
       class FailingBot extends TestBot {
-        async disconnect(): Promise<void> {
+        async $disconnect(): Promise<void> {
           throw new Error('断开连接失败')
         }
       }
@@ -148,20 +155,27 @@ describe('适配器类测试', () => {
       }
 
       class ExtendedBot implements Bot<ExtendedBotConfig> {
-        connected = false
+        $connected = false
+        $config: ExtendedBotConfig
 
-        constructor(public plugin: Plugin, public config: ExtendedBotConfig) {}
-
-        async connect(): Promise<void> {
-          this.connected = true
+        constructor(public plugin: Plugin, config: ExtendedBotConfig) {
+          this.$config = config
         }
 
-        async disconnect(): Promise<void> {
-          this.connected = false
+        async $connect(): Promise<void> {
+          this.$connected = true
         }
 
-        async sendMessage(): Promise<void> {
-          if (!this.connected) throw new Error('机器人未连接')
+        async $disconnect(): Promise<void> {
+          this.$connected = false
+        }
+
+        async $sendMessage(): Promise<void> {
+          if (!this.$connected) throw new Error('机器人未连接')
+        }
+
+        $formatMessage(message: any): any {
+          return message
         }
       }
 
@@ -180,8 +194,8 @@ describe('适配器类测试', () => {
 
       const bot = extendedAdapter.bots.get('extended-bot')
       expect(bot).toBeDefined()
-      expect(bot?.config.token).toBe('test-token')
-      expect(bot?.config.platform).toBe('test-platform')
+      expect(bot?.$config.token).toBe('test-token')
+      expect(bot?.$config.platform).toBe('test-platform')
     })
   })
 })

@@ -46,7 +46,7 @@ describe('Template Security', () => {
 
   it('should return template string for unsafe access', () => {
     const result = evaluate('process', {})
-    expect(result).toBe('return(process)') // Should return original expression when blocked
+    expect(result).toBe(undefined) // Should return undefined when blocked
   })
 
   it('should allow safe Math expressions', () => {
@@ -74,7 +74,7 @@ describe('Template Functionality', () => {
   it('should handle template expressions that fail gracefully', () => {
     const template = 'Result: ${undefined.property}'
     const result = compiler(template, {})
-    // Should return original template when evaluation fails
-    expect(result).toBe('Result: ${undefined.property}')
+    // Should return template with undefined when evaluation fails
+    expect(result).toBe('Result: undefined')
   })
 })

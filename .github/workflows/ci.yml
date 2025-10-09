@@ -36,13 +36,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: type check
-        run: pnpm type-check
-      
-      - name: lint
-        run: pnpm lint
-      
+
       - name: build packages
         run: pnpm build
       

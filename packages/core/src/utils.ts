@@ -2,10 +2,15 @@ import {Dict, MessageSegment, SendContent} from "./types";
 
 export function getValueWithRuntime(template: string, ctx: Dict) {
     const result = evaluate(template, ctx);
-    if (result === `return(${template})`) return template;
+    if (result === `return(${template})`) return undefined;
     return result;
 }
-export const evaluate = <S, T = any>(exp: string, context: S) => execute<S, T>(`return(${exp})`, context);
+export const evaluate = <S, T = any>(exp: string, context: S) => {
+    const result = execute<S, T>(`return(${exp})`, context);
+    // 如果结果是原始表达式，说明访问被阻止，返回 undefined
+    if (result === `return(${exp})`) return undefined;
+    return result;
+};
 const evalCache: Record<string, Function> = Object.create(null);
 export const execute = <S, T = any>(exp: string, context: S):T => {
     const fn = evalCache[exp] || (evalCache[exp] = toFunction(exp));

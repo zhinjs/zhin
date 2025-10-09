@@ -195,9 +195,13 @@ export class App extends HMR<Plugin> {
     for (const [name, schema] of this.schemas) {
       schemas[name]=schema;
     }
-    this.database=Registry.create((this.config.database as any).dialect,this.config.database,schemas);
-    await this.database?.start();
-    this.logger.info(`database init success`);
+    if (this.config.database) {
+      this.database=Registry.create((this.config.database as any).dialect,this.config.database,schemas);
+      await this.database?.start();
+      this.logger.info(`database init success`);
+    } else {
+      this.logger.info(`database not configured, skipping database init`);
+    }
     this.dispatch("database.ready",this.database);
     // 等待所有插件就绪
     await this.waitForReady();
@@ -430,4 +434,11 @@ export function getAppInstance(): App {
 export function useLogger(): Logger {
   const plugin = usePlugin();
   return plugin.logger;
+}
+
+/** 创建App实例的工厂函数 */
+export async function createApp(config?: Partial<AppConfig>): Promise<App> {
+  const app = new App(config);
+  await app.start();
+  return app;
 }
