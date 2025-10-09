@@ -521,7 +521,7 @@ export default defineConfig(async (env) => {
 ## 📚 更多资源
 
 - 🏠 [回到首页](../index.md)
-- 🚀 [快速开始](../guide/getting-started.md)
+- 🚀 [快速开始](../guide/quick-start.md)
 - 🧩 [官方插件](./plugins.md)
 - 🔧 [自定义适配器开发](../adapter/)
 - 💡 [示例代码](../examples/)

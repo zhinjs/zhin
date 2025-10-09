@@ -808,9 +808,9 @@ export default defineConfig(async (env) => {
 
 ## 📚 更多资源
 
-- 📖 [完整 API 参考](../api/README.md) - 详细的接口文档
-- 🧩 [插件开发指南](../plugin/README.md) - 深入的插件开发教程
-- 🔌 [适配器开发指南](../adapter/README.md) - 创建自定义适配器
+- 📖 [完整 API 参考](../api/index.md) - 详细的接口文档
+- 🧩 [插件开发指南](../plugin/index.md) - 深入的插件开发教程
+- 🔌 [适配器开发指南](../adapter/index.md) - 创建自定义适配器
 - 🚀 [最佳实践指南](../guide/best-practices.md) - 生产环境优化建议
 - 💡 [test-bot 项目](../../test-bot) - 完整的实际项目示例
 

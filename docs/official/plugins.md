@@ -779,7 +779,7 @@ pnpm list vue
 
 - 🏠 [回到首页](../index.md)
 - 🔌 [官方适配器](./adapters.md)
-- 🚀 [快速开始](../guide/getting-started.md)
+- 🚀 [快速开始](../guide/quick-start.md)
 - 🧩 [插件开发指南](../plugin/)
 - 💡 [示例代码](../examples/)
 

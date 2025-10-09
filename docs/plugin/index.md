@@ -613,8 +613,8 @@ useContext('stats', (stats) => {
 - PostgreSQL（@zhin.js/database-pg）
 
 ## �📚 更多资源
-- 📖 [完整 API 参考](../api/README.md) - 详细的 API 文档
-- 💡 [实用示例集合](../examples/README.md) - 更多插件示例
+- 📖 [完整 API 参考](../api/index.md) - 详细的 API 文档
+- 💡 [实用示例集合](../examples/index.md) - 更多插件示例
 - 🚀 [最佳实践指南](../guide/best-practices.md) - 生产环境优化
 - 🌟 [社区插件库](https://github.com/zhinjs/awesome-zhin) - 优秀插件推荐
 

@@ -430,10 +430,10 @@ CMD ["pnpm", "start", "--daemon"]
 ### 📚 学习路径
 
 1. **📖 深入了解** - [框架核心概念](./concepts.md)
-2. **🔧 掌握 API** - [完整 API 参考](../api/README.md)
-3. **🧩 插件开发** - [插件开发指南](../plugin/README.md)
+2. **🔧 掌握 API** - [完整 API 参考](../api/index.md)
+3. **🧩 插件开发** - [插件开发指南](../plugin/index.md)
 4. **🚀 最佳实践** - [生产环境优化](./best-practices.md)
-5. **💡 获取灵感** - [实用示例集合](../examples/README.md)
+5. **💡 获取灵感** - [实用示例集合](../examples/index.md)
 
 ### 🌐 配置其他平台
 

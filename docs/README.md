@@ -20,12 +20,12 @@
 
 ## 文档结构
 
-- [入门指南](./guide/getting-started.md)
-- [API 参考](./api/README.md)
-- [插件开发](./plugin/README.md)
-- [适配器开发](./adapter/README.md)
+- [入门指南](./guide/quick-start.md)
+- [API 参考](./api/index.md)
+- [插件开发](./plugin/index.md)
+- [适配器开发](./adapter/index.md)
 - [最佳实践](./guide/best-practices.md)
-- [示例](./examples/README.md)
+- [示例](./examples/index.md)
 
 ## 快速开始
 
@@ -52,7 +52,7 @@ pnpm dev
 ## 文档导航
 
 ### 入门指南
-- [快速开始](./guide/getting-started.md)
+- [快速开始](./guide/quick-start.md)
 - [项目结构](./guide/project-structure.md)
 - [配置说明](./guide/configuration.md)
 - [基本概念](./guide/concepts.md)
@@ -79,10 +79,9 @@ pnpm dev
 - [事件处理](./adapter/event-handling.md)
 
 ### 示例
-- [基础示例](./examples/basic.md)
-- [插件示例](./examples/plugins.md)
-- [适配器示例](./examples/adapters.md)
-- [完整项目示例](./examples/full-project.md)
+- [基础示例](./examples/basic-usage.md)
+- [高级示例](./examples/advanced-usage.md)
+- [真实世界示例](./examples/real-world.md)
 
 ## 贡献指南
 
