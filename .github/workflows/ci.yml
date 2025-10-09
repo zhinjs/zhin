@@ -30,8 +30,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
-      
+
+      - name: install logger dependencies
+        run: pnpm --filter @zhin.js/logger install
+
+      - name: build logger
+        run: pnpm --filter @zhin.js/logger build
+
       - name: install cli dependencies
         run: pnpm --filter @zhin.js/cli install
 
@@ -74,6 +79,12 @@ jobs:
         with:
           fetch-depth: 0
       
+      - name: install logger dependencies
+        run: pnpm --filter @zhin.js/logger install
+
+      - name: build logger
+        run: pnpm --filter @zhin.js/logger build
+
       - name: install cli dependencies
         run: pnpm --filter @zhin.js/cli install
 
