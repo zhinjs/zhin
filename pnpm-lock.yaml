@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@changesets/cli':
-        specifier: ^2.27.7
-        version: 2.29.7(@types/node@24.7.0)
       chalk:
         specifier: ^5.6.0
         version: 5.6.2
@@ -30,6 +27,9 @@ importers:
         specifier: ^8.2.0
         version: 8.2.0
     devDependencies:
+      '@changesets/cli':
+        specifier: ^2.29.7
+        version: 2.29.7(@types/node@24.7.0)
       '@types/node':
         specifier: ^24.3.0
         version: 24.7.0

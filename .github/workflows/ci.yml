@@ -63,6 +63,7 @@ jobs:
     permissions:
       contents: write
       packages: write
+      pull-requests: write
     steps:
       - name: setup pnpm
         uses: pnpm/action-setup@v4
