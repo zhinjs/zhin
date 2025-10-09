@@ -591,7 +591,8 @@ function getConfigContent(format: string): string {
         ],
         plugin_dirs: [
           './src/plugins',
-          'node_modules'
+          'node_modules',
+          'node_modules/@zhin.js'
         ],
         plugins: [
           'adapter-process',
@@ -614,7 +615,7 @@ bots:
 plugin_dirs:
   - ./src/plugins
   - node_modules
-
+  - node_modules/@zhin.js
 # 要加载的插件列表
 plugins:
   - adapter-process
@@ -635,7 +636,7 @@ name = "\${process.pid}"
 context = "process"
 
 # 插件目录
-plugin_dirs = ["./src/plugins", "node_modules"]
+plugin_dirs = ["./src/plugins", "node_modules", "node_modules/@zhin.js"]
 
 # 要加载的插件列表
 plugins = ["adapter-process", "http", "console", "test-plugin"]
@@ -660,7 +661,8 @@ export default defineConfig(async (env) => {
     // 插件目录
     plugin_dirs: [
       env.PLUGIN_DIR || './src/plugins',
-      'node_modules'
+      'node_modules',
+      'node_modules/@zhin.js'
     ],
     
     // 要加载的插件列表
@@ -693,7 +695,8 @@ export default defineConfig(async (env) => {
     // 插件目录
     plugin_dirs: [
       env.PLUGIN_DIR || './src/plugins',
-      'node_modules'
+      'node_modules',
+      'node_modules/@zhin.js'
     ],
     
     // 要加载的插件列表
@@ -728,7 +731,8 @@ function getConfigExample(format: string): string {
   ],
   "plugin_dirs": [
     "./src/plugins",
-    "node_modules"
+    "node_modules",
+    "node_modules/@zhin.js"
   ],
   "plugins": [
     "adapter-process",
