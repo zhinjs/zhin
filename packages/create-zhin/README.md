@@ -1,4 +1,4 @@
-# create-zhin
+# create-zhin-app
 
 快速创建 Zhin 机器人项目的脚手架工具，提供一键创建和配置新项目的能力。
 
@@ -15,21 +15,21 @@
 
 ```bash
 # npm (推荐)
-npm create zhin my-awesome-bot
+npm create zhin-app my-awesome-bot
 
 # yarn
-yarn create zhin my-awesome-bot
+yarn create zhin-app my-awesome-bot
 
 # pnpm
-pnpm create zhin my-awesome-bot
+pnpm create zhin-app my-awesome-bot
 
 # 使用最新版本
-npx create-zhin@latest my-awesome-bot
+npx create-zhin-app@latest my-awesome-bot
 ```
 
 ## 工作原理
 
-`create-zhin` 是 `@zhin.js/cli` 的轻量级包装器，它的工作流程如下：
+`create-zhin-app` 是 `@zhin.js/cli` 的轻量级包装器，它的工作流程如下：
 
 1. **启动脚手架**: 当你运行 `npm create zhin` 时
 2. **参数解析**: 解析项目名称和所有命令行参数
@@ -38,7 +38,7 @@ npx create-zhin@latest my-awesome-bot
 5. **项目创建**: 完成项目初始化和配置
 
 ```javascript
-// create-zhin 内部实现概览
+// create-zhin-app 内部实现概览
 const args = process.argv.slice(2);
 const initArgs = ['init', ...args];
 
@@ -50,23 +50,23 @@ spawn('npx', ['zhin', ...initArgs], {
 
 ## 支持的参数
 
-所有 `zhin init` 支持的参数都可以通过 `create-zhin` 使用：
+所有 `zhin init` 支持的参数都可以通过 `create-zhin-app` 使用：
 
 ### 基础用法
 
 ```bash
 # 使用默认配置创建项目
-npm create zhin my-bot
+npm create zhin-app my-bot
 
 # 交互式创建（会提示选择配置）
-npm create zhin my-bot --interactive
+npm create zhin-app my-bot --interactive
 ```
 
 ### 高级配置
 
 ```bash
 # 完整配置示例
-npm create zhin my-bot -- \
+npm create zhin-app my-bot -- \
   --config ts \
   --package-manager pnpm \
   --runtime bun \
@@ -88,7 +88,7 @@ npm create zhin my-bot -- \
 
 ```bash
 # 使用默认配置快速创建
-npm create zhin quick-prototype -y
+npm create zhin-app quick-prototype -y
 cd quick-prototype
 npm run dev
 ```
@@ -97,14 +97,14 @@ npm run dev
 
 ```bash
 # 使用 TypeScript + pnpm + bun 的生产配置
-npm create zhin production-bot -- -c ts -p pnpm -r bun
+npm create zhin-app production-bot -- -c ts -p pnpm -r bun
 ```
 
 ### 3. 团队标准项目
 
 ```bash
 # 为团队创建标准化项目
-npm create zhin team-bot -- \
+npm create zhin-app team-bot -- \
   --config ts \
   --package-manager pnpm \
   --runtime node \
@@ -115,12 +115,12 @@ npm create zhin team-bot -- \
 
 ```bash
 # 使用最新技术栈
-npm create zhin experimental-bot -- -c ts -r bun -y
+npm create zhin-app experimental-bot -- -c ts -r bun -y
 ```
 
 ## 生成的项目结构
 
-执行 `create-zhin` 后会生成完整的项目结构：
+执行 `create-zhin-app` 后会生成完整的项目结构：
 
 ```
 my-awesome-bot/
@@ -237,7 +237,7 @@ npm run daemon
    ```bash
    # 使用国内镜像
    npm config set registry https://registry.npmmirror.com
-   npm create zhin my-bot
+   npm create zhin-app my-bot
    ```
 
 2. **权限问题**
@@ -246,7 +246,7 @@ npm run daemon
    sudo chown -R $USER ~/.npm
    
    # Windows (以管理员身份运行)
-   npm create zhin my-bot
+   npm create zhin-app my-bot
    ```
 
 3. **Node.js 版本问题**
@@ -266,7 +266,7 @@ npm run daemon
 
 ## 与其他工具对比
 
-| 特性 | create-zhin | create-react-app | create-vue |
+| 特性 | create-zhin-app | create-react-app | create-vue |
 |------|-------------|------------------|------------|
 | 零配置创建 | ✅ | ✅ | ✅ |
 | 多配置格式 | ✅ | ❌ | ✅ |  
@@ -278,11 +278,11 @@ npm run daemon
 
 ### 自定义模板
 
-虽然 `create-zhin` 主要调用 CLI 工具，但你可以通过环境变量自定义行为：
+虽然 `create-zhin-app` 主要调用 CLI 工具，但你可以通过环境变量自定义行为：
 
 ```bash
 # 设置自定义模板路径
-ZHIN_TEMPLATE_DIR=/path/to/custom/template npm create zhin my-bot
+ZHIN_TEMPLATE_DIR=/path/to/custom/template npm create zhin-app my-bot
 ```
 
 ### 批量创建
@@ -291,7 +291,7 @@ ZHIN_TEMPLATE_DIR=/path/to/custom/template npm create zhin my-bot
 #!/bin/bash
 # 批量创建多个项目
 for name in bot1 bot2 bot3; do
-  npm create zhin $name -- -y
+  npm create zhin-app $name -- -y
 done
 ```
 
@@ -299,9 +299,9 @@ done
 
 ```yaml
 # GitHub Actions 示例
-- name: Create Zhin Bot Project
+- name: create zhin-app Bot Project
   run: |
-    npm create zhin test-bot -- --yes
+    npm create zhin-app test-bot -- --yes
     cd test-bot
     npm run build
     npm run test
@@ -313,10 +313,10 @@ done
 
 ```bash
 # 启用详细日志
-DEBUG=create-zhin npm create zhin my-bot
+DEBUG=create-zhin-app npm create zhin-app my-bot
 
 # 检查参数传递
-npm create zhin my-bot -- --help
+npm create zhin-app my-bot -- --help
 ```
 
 ### 清理缓存
@@ -332,7 +332,7 @@ npm install
 
 ## 贡献指南
 
-`create-zhin` 是开源项目，欢迎贡献：
+`create-zhin-app` 是开源项目，欢迎贡献：
 
 1. Fork 项目
 2. 创建特性分支

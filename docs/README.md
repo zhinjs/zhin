@@ -31,7 +31,7 @@
 
 1. 创建新项目：
 ```bash
-pnpm create zhin my-bot
+pnpm create zhin-app my-bot
 ```
 
 2. 进入项目目录：

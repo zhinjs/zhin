@@ -56,10 +56,10 @@ features:
 
 ```bash
 # 🚀 一键创建项目（交互式）
-npm create zhin my-bot
+npm create zhin-app my-bot
 
 # 🎯 或者快速开始（跳过配置）
-npm create zhin my-bot -- --yes
+npm create zhin-app my-bot -- --yes
 
 # 📁 进入项目并启动
 cd my-bot && npm run dev
@@ -180,7 +180,7 @@ useContext('database', 'cache', (db, cache) => {
 
 ### 🛠️ **开发工具**
 - @zhin.js/cli - 命令行工具
-- create-zhin - 项目脚手架
+- create-zhin-app - 项目脚手架
 
 ## 💻 **真实使用案例**
 

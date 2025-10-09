@@ -60,7 +60,7 @@ cd test-bot && pnpm dev
 
 ```bash
 # 使用 CLI 创建项目
-pnpm create zhin my-bot
+pnpm create zhin-app my-bot
 cd my-bot
 pnpm install
 pnpm dev

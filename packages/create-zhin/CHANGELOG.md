@@ -1,4 +1,4 @@
-# create-zhin
+# create-zhin-app
 
 ## 1.0.1
 

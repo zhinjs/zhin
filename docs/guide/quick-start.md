@@ -6,7 +6,7 @@
 
 ```bash
 # 🎯 创建项目（自动配置）
-npm create zhin my-awesome-bot -- --yes
+npm create zhin-app my-awesome-bot -- --yes
 
 # 📁 进入目录并启动
 cd my-awesome-bot && npm run dev

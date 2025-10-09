@@ -48,12 +48,12 @@ pnpm add zhin.js
 - 构建工具
 - 进程管理
 
-### create-zhin
+### create-zhin-zpp
 
 项目创建工具，`@zhin.js/cli`的便捷包装。
 
 ```bash
-pnpm create zhin my-bot
+pnpm create zhin-app my-bot
 ```
 
 ## 开发指南

@@ -29,13 +29,13 @@ npm --version
 
 ```bash
 # 🎯 推荐方式（使用 npm）
-npm create zhin my-awesome-bot
+npm create zhin-app my-awesome-bot
 
 # 📦 使用 pnpm
-pnpm create zhin my-awesome-bot
+pnpm create zhin-app my-awesome-bot
 
 # 🧶 使用 yarn
-yarn create zhin my-awesome-bot
+yarn create zhin-app my-awesome-bot
 ```
 
 ### 🛠️ 交互式配置
@@ -56,10 +56,10 @@ yarn create zhin my-awesome-bot
 
 ```bash
 # 使用默认配置快速创建
-npm create zhin my-bot -- --yes
+npm create zhin-app my-bot -- --yes
 
 # 或指定具体配置
-npm create zhin my-bot -- \
+npm create zhin-app my-bot -- \
   --config js \
   --package-manager pnpm \
   --runtime bun \
