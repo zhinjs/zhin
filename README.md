@@ -2,7 +2,7 @@
 # Zhin.js
 
 现代 TypeScript 机器人框架，专注于插件化、热重载和多平台生态。
-
+[![CI](https://github.com/zhinjs/zhin/actions/workflows/ci.yml/badge.svg)](https://github.com/zhinjs/zhin/actions/workflows/ci.yml)
 ## 核心特性
 
 - **TypeScript 全量类型支持**
