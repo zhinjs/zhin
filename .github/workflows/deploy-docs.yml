@@ -43,8 +43,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install
         env:
-          GITHUB_AUTH_TOKEN: ${{secrets.PERSONAL_TOKEN}}
-          NODE_AUTH_TOKEN: ${{secrets.GITHUB_TOKEN}}
+          NODE_AUTH_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Build docs
         run: pnpm docs:build
