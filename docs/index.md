@@ -153,7 +153,7 @@ useContext('database', 'cache', (db, cache) => {
 ```
 
 ### 🌐 **Web 控制台预览**
-访问 `http://localhost:3000` 体验：
+访问 `http://localhost:3000` 体验（开发环境）：
 - 📊 实时性能监控
 - 🔧 插件管理界面  
 - 📝 日志查看器

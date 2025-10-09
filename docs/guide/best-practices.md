@@ -600,7 +600,7 @@ addCommand(new MessageCommand('health')
 
 ## 📚 参考资源
 
-- 🎯 [test-bot 示例](../../test-bot) - 完整的项目示例
+- 🎯 [test-bot 示例](https://github.com/zhinjs/zhin/tree/main/test-bot) - 完整的项目示例
 
 ---
 

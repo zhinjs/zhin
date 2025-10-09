@@ -711,7 +711,7 @@ logger.info('娱乐插件已加载')
 
 ### 📂 项目结构
 
-基于 [`test-bot`](../../test-bot) 目录的完整示例项目：
+基于 [`test-bot`](https://github.com/zhinjs/zhin/tree/main/test-bot) 目录的完整示例项目：
 
 ```
 test-bot/                    # 完整的机器人项目示例
@@ -812,7 +812,7 @@ export default defineConfig(async (env) => {
 - 🧩 [插件开发指南](../plugin/index.md) - 深入的插件开发教程
 - 🔌 [适配器开发指南](../adapter/index.md) - 创建自定义适配器
 - 🚀 [最佳实践指南](../guide/best-practices.md) - 生产环境优化建议
-- 💡 [test-bot 项目](../../test-bot) - 完整的实际项目示例
+- 💡 [test-bot 项目](https://github.com/zhinjs/zhin/tree/main/test-bot) - 完整的实际项目示例
 
 ---
 
