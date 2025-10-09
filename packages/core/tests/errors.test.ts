@@ -243,7 +243,8 @@ describe('错误处理系统', () => {
             })
             const endTime = Date.now()
             
-            expect(endTime - startTime).toBeGreaterThanOrEqual(100)
+            // 允许5毫秒的误差范围，因为JavaScript时间精度问题
+            expect(endTime - startTime).toBeGreaterThanOrEqual(95)
         })
     })
 
