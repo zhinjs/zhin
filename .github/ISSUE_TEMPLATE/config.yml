@@ -7,8 +7,8 @@ contact_links:
     url: https://github.com/zhinjs/zhin/discussions
     about: 在讨论区提问或分享想法
   - name: 🐛 Bug 报告
-    url: https://github.com/zhinjs/zhin/issues/new?assignees=&labels=bug&template=bug_report.yml
+    url: https://github.com/zhinjs/zhin/issues/new?assignees=&labels=bug&template=bug_report.md
     about: 报告 bug 或问题
   - name: ✨ 功能请求
-    url: https://github.com/zhinjs/zhin/issues/new?assignees=&labels=enhancement&template=feature_request.yml
+    url: https://github.com/zhinjs/zhin/issues/new?assignees=&labels=enhancement&template=feature_request.md
     about: 建议新功能或改进
