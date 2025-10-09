@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-onebot11",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "zhin adapter for onebot11",
   "type": "module",
   "main": "./lib/index.js",
@@ -29,11 +29,11 @@
     "@zhin.js/http": "workspace:*"
   },
   "peerDependenciesMeta": {
-    "@zhin.js/types":{
+    "@zhin.js/types": {
       "optional": true
     },
-    "@zhin.js/http":{
+    "@zhin.js/http": {
       "optional": true
     }
   }
-} 
+}

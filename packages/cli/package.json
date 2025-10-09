@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/cli",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Zhin机器人框架CLI工具",
   "type": "module",
   "main": "./lib/index.js",
@@ -35,4 +35,4 @@
     "@types/node": "^20.0.0",
     "typescript": "^5.3.0"
   }
-} 
+}

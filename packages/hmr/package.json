@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/hmr",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Zhin热更替框架",
   "type": "module",
   "main": "./lib/index.js",
@@ -22,4 +22,4 @@
     "typescript": "^5.3.0",
     "@zhin.js/types": "workspace:*"
   }
-} 
+}
