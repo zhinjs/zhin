@@ -8,7 +8,7 @@ import path from 'path';
 export const devCommand = new Command('dev')
   .option('-p, --port [port]', 'HMR服务端口', '3000')
   .option('--verbose', '显示详细日志', false)
-  .option('--bun', '使用 bun 运行（默认使用 node', false)
+  .option('--bun', '使用 bun 运行（默认使用 tsx）', false)
   .action(async (options: { port: string; verbose: boolean; bun: boolean }) => {
     try {
       const cwd = process.cwd();

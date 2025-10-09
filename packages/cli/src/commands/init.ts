@@ -17,13 +17,13 @@ export const initCommand = new Command('init')
   .argument('[project-name]', '项目名称')
   .option('-c, --config <format>', '配置文件格式 (json|yaml|toml|ts|js)', 'js')
   .option('-p, --package-manager <manager>', '包管理器 (npm|yarn|pnpm)', 'pnpm')
-  .option('-r, --runtime <runtime>', '运行时 (node|bun)', 'bun')
+  .option('-r, --runtime <runtime>', '运行时 (node|bun)', 'node')
   .option('-y, --yes', '自动回答所有问题')
   .action(async (projectName: string, options: InitOptions) => {
     if(options.yes) {
       options.config = 'js';
       options.packageManager = 'pnpm';
-      options.runtime = 'bun';
+      options.runtime = 'node';
     }
     try {
       let name = projectName;
@@ -55,10 +55,10 @@ export const initCommand = new Command('init')
             name: 'runtime',
             message: '选择运行时:',
             choices: [
-              { name: 'Bun (推荐)', value: 'bun' },
-              { name: 'Node.js', value: 'node' }
+              { name: 'Node.js (推荐)', value: 'node' },
+              { name: 'Bun', value: 'bun' }
             ],
-            default: options.runtime || 'bun'
+            default: options.runtime || 'node'
           },
         ])
         options.runtime=inputRuntime;

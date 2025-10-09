@@ -31,7 +31,7 @@ npx create-zhin-app@latest my-awesome-bot
 
 `create-zhin-app` 是 `@zhin.js/cli` 的轻量级包装器，它的工作流程如下：
 
-1. **启动脚手架**: 当你运行 `npm create zhin` 时
+1. **启动脚手架**: 当你运行 `npm create zhin-app` 时
 2. **参数解析**: 解析项目名称和所有命令行参数
 3. **调用 CLI**: 自动调用 `zhin init` 命令
 4. **参数转发**: 将所有参数原样传递给 CLI 工具
@@ -42,7 +42,7 @@ npx create-zhin-app@latest my-awesome-bot
 const args = process.argv.slice(2);
 const initArgs = ['init', ...args];
 
-spawn('npx', ['zhin', ...initArgs], {
+spawn('node', [cliPath, ...initArgs], {
   stdio: 'inherit',
   cwd: process.cwd()
 });
@@ -79,7 +79,7 @@ npm create zhin-app my-bot -- \
 |------|--------|------|--------|--------|
 | `--config` | `-c` | 配置文件格式 | `js`, `ts`, `json`, `yaml`, `toml` | `js` |
 | `--package-manager` | `-p` | 包管理器 | `npm`, `yarn`, `pnpm` | `pnpm` |
-| `--runtime` | `-r` | 运行时 | `node`, `bun` | `bun` |
+| `--runtime` | `-r` | 运行时 | `node`, `bun` | `node` |
 | `--yes` | `-y` | 跳过交互式配置 | 无 | `false` |
 
 ## 使用场景
@@ -96,8 +96,8 @@ npm run dev
 ### 2. 生产项目创建
 
 ```bash
-# 使用 TypeScript + pnpm + bun 的生产配置
-npm create zhin-app production-bot -- -c ts -p pnpm -r bun
+# 使用 TypeScript + pnpm + node 的生产配置
+npm create zhin-app production-bot -- -c ts -p pnpm -r node
 ```
 
 ### 3. 团队标准项目
@@ -115,7 +115,7 @@ npm create zhin-app team-bot -- \
 
 ```bash
 # 使用最新技术栈
-npm create zhin-app experimental-bot -- -c ts -r bun -y
+npm create zhin-app experimental-bot -- -c ts -r node -y
 ```
 
 ## 生成的项目结构
@@ -128,7 +128,7 @@ my-awesome-bot/
 │   ├── index.ts              # 主入口文件
 │   └── plugins/              # 插件目录
 │       └── test-plugin.ts    # 示例插件
-├── lib/                     # 构建输出目录
+├── dist/                    # 构建输出目录
 ├── data/                     # 数据存储目录
 ├── logs/                     # 日志目录（如果配置了）
 ├── zhin.config.[ext]         # 配置文件
@@ -146,7 +146,7 @@ my-awesome-bot/
 
 ```javascript
 // zhin.config.ts
-import { defineConfig } from '@zhin.js/core';
+import { defineConfig } from 'zhin.js';
 
 export default defineConfig(async (env) => {
   return {
@@ -167,19 +167,24 @@ export default defineConfig(async (env) => {
 
 ```typescript
 // zhin.config.ts
-import { defineConfig } from '@zhin.js/core';
-import type { AppConfig } from '@zhin.js/core';
+import { defineConfig } from 'zhin.js';
+import type { AppConfig } from 'zhin.js';
 
 export default defineConfig<AppConfig>(async (env) => {
   return {
     bots: [
       {
-        context: 'onebot11',
-        name: 'main-bot',
-        url: env.BOT_URL || 'ws://localhost:8080',
+        context: 'process',
+        name: `${process.pid}`,
       }
     ],
-    plugin_dirs: ['./src/plugins'],
+    plugin_dirs: ['./src/plugins', 'node_modules'],
+    plugins: [
+      'adapter-process',
+      'http',
+      'console',
+      'test-plugin'
+    ],
     debug: process.env.NODE_ENV === 'development'
   };
 });

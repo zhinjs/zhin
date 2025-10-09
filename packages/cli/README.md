@@ -24,7 +24,7 @@ zhin init [project-name] [options]
 **选项：**
 - `-c, --config <format>`: 配置文件格式 (json|yaml|toml|ts|js)，默认 js
 - `-p, --package-manager <manager>`: 包管理器 (npm|yarn|pnpm)，默认 pnpm  
-- `-r, --runtime <runtime>`: 运行时 (node|bun)，默认 bun
+- `-r, --runtime <runtime>`: 运行时 (node|bun)，默认 node
 - `-y, --yes`: 使用默认选项，跳过所有交互
 
 **生成的项目结构：**
@@ -34,7 +34,7 @@ my-bot/
 │   ├── index.ts          # 主入口文件
 │   └── plugins/          # 插件目录
 │       └── test-plugin.ts # 示例插件
-├── lib/                 # 构建输出目录
+├── dist/                # 构建输出目录
 ├── data/                 # 数据存储目录
 ├── zhin.config.[ext]     # 配置文件
 ├── package.json         # 项目配置
@@ -135,7 +135,7 @@ zhin stop
 
 **功能：**
 - 🛑 优雅停止进程
-- 🔧 强制终止选项
+- 🔍 自动检测运行状态
 - 🧹 清理 PID 文件
 - 📝 详细停止日志
 
@@ -218,7 +218,7 @@ zhin build && zhin restart
 
 ```javascript
 // zhin.config.ts
-import { defineConfig } from '@zhin.js/core';
+import { defineConfig } from 'zhin.js';
 
 export default defineConfig(async (env) => {
   const isProduction = env.NODE_ENV === 'production';
@@ -226,15 +226,19 @@ export default defineConfig(async (env) => {
   return {
     bots: [
       {
-        context: 'onebot11',
-        name: 'main-bot',
-        url: env.BOT_URL || 'ws://localhost:8080',
-        access_token: env.ACCESS_TOKEN,
+        context: 'process',
+        name: `${process.pid}`,
       }
     ],
     plugin_dirs: [
       './src/plugins',
       ...(isProduction ? [] : ['./dev-plugins'])
+    ],
+    plugins: [
+      'adapter-process',
+      'http',
+      'console',
+      'test-plugin'
     ],
     debug: !isProduction
   };

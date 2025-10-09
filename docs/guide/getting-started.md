@@ -62,7 +62,7 @@ npm create zhin-app my-bot -- --yes
 npm create zhin-app my-bot -- \
   --config js \
   --package-manager pnpm \
-  --runtime bun \
+  --runtime node \
   --yes
 ```
 

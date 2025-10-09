@@ -12,7 +12,7 @@ const program = new Command();
 program
   .name('zhin')
   .description('Zhin机器人框架CLI工具')
-  .version('1.0.0');
+  .version('1.0.1');
 
 // 注册命令
 program.addCommand(initCommand);
