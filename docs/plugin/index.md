@@ -34,6 +34,24 @@ graph TD
     K --> D
 ```
 
+## 📁 插件目录配置
+
+Zhin 支持从多个目录加载插件，推荐配置如下：
+
+```typescript
+// 📂 插件目录配置
+plugin_dirs: [
+  './src/plugins',           // 项目自定义插件目录
+  'node_modules',            // 第三方 npm 插件目录  
+  'node_modules/@zhin.js'    // Zhin 官方插件目录（推荐）
+]
+```
+
+**目录说明：**
+- `./src/plugins`: 存放项目自定义插件，便于开发和调试
+- `node_modules`: 存放通过 npm 安装的第三方插件
+- `node_modules/@zhin.js`: 存放 Zhin 官方插件，提供稳定可靠的功能
+
 ## 📁 现代插件结构
 
 基于实际项目生成的标准插件结构：

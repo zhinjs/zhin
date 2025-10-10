@@ -121,8 +121,14 @@ export default defineConfig(async (env) => {
     // 📂 插件目录配置
     plugin_dirs: [
       env.PLUGIN_DIR || './src/plugins',  // 自定义插件目录
-      'node_modules'                      // npm 插件目录
+      'node_modules',                     // npm 插件目录
+      'node_modules/@zhin.js'             // Zhin 官方插件目录
     ],
+    
+    // 💡 插件目录说明：
+    // - ./src/plugins: 项目自定义插件目录
+    // - node_modules: 第三方 npm 插件目录  
+    // - node_modules/@zhin.js: Zhin 官方插件目录（推荐）
     
     // 🧩 启用的插件列表
     plugins: [

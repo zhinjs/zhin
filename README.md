@@ -149,8 +149,9 @@ export default defineConfig({
     // 其他插件...
   ],
   plugin_dirs: [
-    './src/plugins',
-    'node_modules'
+    './src/plugins',           // 项目自定义插件
+    'node_modules',            // 第三方插件
+    'node_modules/@zhin.js'    // 官方插件（推荐）
   ]
 })
 ```

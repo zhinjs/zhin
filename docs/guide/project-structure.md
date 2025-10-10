@@ -54,7 +54,7 @@ export default defineConfig(async (env) => {
         context: 'process'
       }
     ],
-    plugin_dirs: ['./src/plugins', 'node_modules'],
+    plugin_dirs: ['./src/plugins', 'node_modules', 'node_modules/@zhin.js'],
     plugins: ['adapter-process', 'http', 'console'],
     debug: env.DEBUG === 'true'
   }

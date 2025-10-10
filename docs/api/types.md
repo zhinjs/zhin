@@ -16,6 +16,11 @@ interface AppConfig {
   debug?: boolean            // 调试模式
 }
 
+// 插件目录说明：
+// - './src/plugins': 项目自定义插件目录
+// - 'node_modules': 第三方 npm 插件目录
+// - 'node_modules/@zhin.js': Zhin 官方插件目录（推荐）
+
 // 机器人配置
 interface BotConfig {
   name: string               // 机器人名称
