@@ -1,3 +1,4 @@
+import { MaybePromise } from '@zhin.js/types';
 import { SendContent,MessageElement } from './types.js';
 import { MessageComponent } from './message.js';
 import { Component, ComponentContext } from './component.js';
@@ -50,6 +51,9 @@ export function jsxs(type: JSXElementType, props: JSXProps): MessageElement {
 // JSX 渲染函数
 export async function renderJSX(element: MessageComponent<any>, context?: ComponentContext): Promise<SendContent> {
     if (typeof element.type === 'string') {
+        if (element.type === 'Fragment') {
+            return await renderChildren(element.data.children, context);
+        }
         // 其他内置组件处理
         return await renderChildren(element.data.children, context);
     } else if (typeof element.type === 'function') {
@@ -86,6 +90,3 @@ async function renderChildren(children: JSXChildren, context?: ComponentContext)
     }
     return '';
 }
-
-// 类型辅助函数
-export type MaybePromise<T> = T | Promise<T>;

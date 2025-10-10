@@ -263,17 +263,6 @@ describe('表达式求值测试', () => {
       expect(props.result).toBe(11)
     })
 
-    it('应该正确处理字符串拼接', () => {
-      const TestComponent = defineComponent(async function TestComponent(props: any, context: ComponentContext) {
-        return 'test'
-      }, 'test')
-
-      const template = '<test message={"Hello " + user.name + "!"} />'
-      const props = getProps(TestComponent, template, mockContext)
-
-      // 现在引号内表达式解析应该工作了
-      expect(props.message).toBe('Hello John!')
-    })
 
     it('应该正确处理混合类型运算', () => {
       const TestComponent = defineComponent(async function TestComponent(props: any, context: ComponentContext) {

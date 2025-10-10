@@ -541,12 +541,20 @@ export async function renderComponents(
     }
 
 // 内置组件
-export const Fragment = defineComponent(async (props: { children?: string }, context: ComponentContext) => {
+export const Fragment = defineComponent(async (props: { children?: SendContent }, context: ComponentContext) => {
     let children = props.children || '';
-    try{
-        children=JSON.parse(segment.unescape(children));
-    }catch{}
-    return context.render(children || '', context);
+    if (Array.isArray(children)) {
+        return children.join('');
+    }
+    if (typeof children === 'string') {
+        try{
+            const parsed = JSON.parse(segment.unescape(children));
+            return context.render(parsed || '', context);
+        }catch{
+            return context.render(children || '', context);
+        }
+    }
+    return String(children);
 }, 'Fragment');
 export const Fetch = defineComponent(async ({ url }) => {
     return await fetch(url).then((r) => r.text());
