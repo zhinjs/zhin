@@ -11,11 +11,10 @@ vi.mock('../src/utils', () => ({
   getValueWithRuntime: vi.fn((expression, context) => {
     // 简单的表达式求值实现，用于测试
     try {
-      // 创建一个安全的执行环境
+      // 创建一个安全的执行环境，不使用 with 语句
       const safeEval = new Function('context', `
-        with (context) {
-          return (${expression});
-        }
+        const { user, items, config, Math, String, Array } = context || {};
+        return (${expression});
       `)
       return safeEval(context || {})
     } catch (error) {
@@ -38,7 +37,10 @@ describe('表达式求值测试', () => {
       { 
         user: { name: 'John', age: 25 },
         items: [1, 2, 3],
-        config: { theme: 'dark', lang: 'en' }
+        config: { theme: 'dark', lang: 'en' },
+        Math: Math,
+        String: String,
+        Array: Array
       },
       undefined,
       'test template'
