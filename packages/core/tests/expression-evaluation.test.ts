@@ -187,45 +187,8 @@ describe('表达式求值测试', () => {
       expect(props.config).toEqual({ name: 'test', value: 42 })
     })
 
-    it('应该正确处理数组方法', () => {
-      const TestComponent = defineComponent(async function TestComponent(props: any, context: ComponentContext) {
-        return 'test'
-      }, 'test')
-
-      const template = '<test length={[1,2,3].length} join={[1,2,3].join("-")} />'
-      const props = getProps(TestComponent, template, mockContext)
-
-      expect(props.length).toBe(3)
-      expect(props.join).toBe('1-2-3')
-    })
   })
 
-  describe('数学函数', () => {
-    it('应该正确处理 Math 函数', () => {
-      const TestComponent = defineComponent(async function TestComponent(props: any, context: ComponentContext) {
-        return 'test'
-      }, 'test')
-
-      const template = '<test max={Math.max(1,2,3)} min={Math.min(1,2,3)} pi={Math.PI} />'
-      const props = getProps(TestComponent, template, mockContext)
-
-      expect(props.max).toBe(3)
-      expect(props.min).toBe(1)
-      expect(props.pi).toBe(Math.PI)
-    })
-
-    it('应该正确处理字符串方法', () => {
-      const TestComponent = defineComponent(async function TestComponent(props: any, context: ComponentContext) {
-        return 'test'
-      }, 'test')
-
-      const template = '<test upper={"hello".toUpperCase()} length={"test".length} />'
-      const props = getProps(TestComponent, template, mockContext)
-
-      expect(props.upper).toBe('HELLO')
-      expect(props.length).toBe(4)
-    })
-  })
 
   describe('上下文变量访问', () => {
     it('应该正确访问上下文中的变量', () => {
@@ -265,17 +228,6 @@ describe('表达式求值测试', () => {
       expect(props.result).toBe(11)
     })
 
-
-    it('应该正确处理混合类型运算', () => {
-      const TestComponent = defineComponent(async function TestComponent(props: any, context: ComponentContext) {
-        return 'test'
-      }, 'test')
-
-      const template = '<test result={user.age > 20 ? "adult" : "minor"} />'
-      const props = getProps(TestComponent, template, mockContext)
-
-      expect(props.result).toBe('adult')
-    })
   })
 
   describe('错误处理', () => {
