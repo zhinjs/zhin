@@ -163,27 +163,20 @@ useContext('database', async (db) => {
   logger.info('用户偏好表已准备就绪')
 })
 
-// 🧩 定义可复用组件
-const WeatherCard = defineComponent({
-  name: 'weather-card',
-  props: {
-    city: String,
-    temperature: Number,
-    condition: String,
-    icon: String
-  },
-  
-  async render(props) {
-    return [
-      `🌡️ **${props.city}天气预报**`,
-      `温度：${props.temperature}°C`,
-      `天气：${props.condition} ${props.icon}`,
-      `更新时间：${new Date().toLocaleString()}`
-    ].join('\n')
-  }
-})
-
-addComponent(WeatherCard)
+// 🧩 定义函数式组件
+const WeatherCard = defineComponent(async function WeatherCard(props: {
+  city: string;
+  temperature: number;
+  condition: string;
+  icon: string;
+}, context: ComponentContext) {
+  return [
+    `🌡️ **${props.city}天气预报**`,
+    `温度：${props.temperature}°C`,
+    `天气：${props.condition} ${props.icon}`,
+    `更新时间：${new Date().toLocaleString()}`
+  ].join('\n');
+}, 'weather-card');
 
 // 🧹 插件销毁时的清理工作
 onDispose(() => {
@@ -632,6 +625,7 @@ useContext('stats', (stats) => {
 
 ## �📚 更多资源
 - 📖 [完整 API 参考](../api/index.md) - 详细的 API 文档
+- 🧩 [组件开发指南](./component-development.md) - 函数式组件开发
 - 💡 [实用示例集合](../examples/index.md) - 更多插件示例
 - 🚀 [最佳实践指南](../guide/best-practices.md) - 生产环境优化
 - 🌟 [社区插件库](https://github.com/zhinjs/awesome-zhin) - 优秀插件推荐

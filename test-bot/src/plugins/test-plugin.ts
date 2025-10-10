@@ -10,6 +10,8 @@ import {
   Adapter,
   onDatabaseReady,
   defineModel,
+  MessageElement,
+  ComponentContext,
 } from "zhin.js";
 import path from "node:path";
 import * as os from "node:os";
@@ -31,7 +33,7 @@ function formatMemoSize(size: number) {
   }
   return `${size.toFixed(2)}${sizes[0]}`;
 }
-addCommand(new MessageCommand("send").action((_, result) => result.remaining));
+addCommand(new MessageCommand("send").action((_, result) => result.remaining as MessageElement[]));
 addCommand(
   new MessageCommand("zt").action(() => {
     const totalmem = os.totalmem();
@@ -58,30 +60,15 @@ addCommand(
   })
 );
 
-const testComponent = defineComponent({
-  name: "test",
-  props: {
-    id: String,
-  },
-  async render({ id }, context) {
-    return "这是父组件" + id + (context.children || "");
-  },
-});
-const testComponent2 = defineComponent({
-  name: "fetch",
-  props: {
-    url: {
-      type: String,
-      default: "",
-    },
-  },
-  async render({ url }) {
-    const result: string = await fetch(url).then((r) => r.text());
-    return result;
-  },
-});
-addComponent(testComponent);
-addComponent(testComponent2);
+
+const foo = defineComponent(async function foo(props: {face: number}, context: ComponentContext) {
+  return "这是父组件" + props.face;
+}, 'foo');
+
+addComponent(foo);
+
+
+
 useContext("web", (web) => {
   web.addEntry(
     path.resolve(path.resolve(import.meta.dirname, "../../client/index.ts"))

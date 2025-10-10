@@ -1,318 +1,496 @@
-import {getValueWithRuntime, compiler, segment} from './utils.js';
-import {Dict, SendContent, SendOptions} from './types.js';
-import {Message} from "./message.js";
-import {MaybePromise} from "@zhin.js/types";
+import { getValueWithRuntime, compiler, segment } from './utils.js';
+import { Dict, SendContent, SendOptions } from './types.js';
+import { Message } from "./message.js";
+
+// 组件匹配符号
 export const CapWithChild = Symbol('CapWithChild');
 export const CapWithClose = Symbol('CapWithClose');
+
+// 函数式组件类型定义
+export type Component<P = any> = {
+    (props: P, context: ComponentContext): Promise<SendContent>;
+    name: string;
+}
+
+
+// 组件上下文接口 - 通过闭包严格控制可访问的信息
+export interface ComponentContext {
+    // 基础渲染能力
+    render: (template: string, context?: Partial<ComponentContext>) => Promise<SendContent>;
+
+    // 数据访问（只读）
+    props: Readonly<Dict>;
+
+    // 父组件上下文（只读）
+    parent?: Readonly<ComponentContext>;
+
+    // 根模板（只读）
+    root: string;
+
+    // 子组件内容（React 概念）
+    children?: string;
+    getValue: (template: string) => any;
+    compile: (template: string) => string;
+}
+
+// 组件定义函数 - 简化版，只支持函数式组件
+export function defineComponent<P = any>(
+    component: Component<P>,
+    name: string = component.name
+): Component<P> {
+    if (name) {
+        // 创建一个新的函数来避免修改只读属性
+        const namedComponent = component as Component<P>;
+        Object.defineProperty(namedComponent, 'name', {
+            value: name,
+            writable: false,
+            enumerable: false,
+            configurable: true
+        });
+        return namedComponent;
+    }
+    return component;
+}
+
+// 组件匹配函数
+export function matchComponent<P = any>(comp: Component<P>, template: string): string {
+    // 使用更复杂的正则表达式来正确处理大括号内的内容
+    const selfClosingRegex = new RegExp(`<${comp.name}((?:[^>]|{[^}]*})*)?/>`);
+    const closingRegex = new RegExp(`<${comp.name}((?:[^>]|{[^}]*})*)?>([^<]*?)</${comp.name}>`);
+
+    let match = template.match(selfClosingRegex);
+    if (!match) {
+        match = template.match(closingRegex);
+    }
+
+    return match ? match[0] : '';
+}
+
+// 属性解析函数 - 支持 children
+export function getProps<P = any>(comp: Component<P>, template: string, context?: ComponentContext): P {
+    // 1. 首先匹配组件标签，支持自闭合和闭合标签
+    const selfClosingRegex = new RegExp(`<${comp.name}((?:[^>]|{[^}]*})*)?/>`);
+    const closingRegex = new RegExp(`<${comp.name}((?:[^>]|{[^}]*})*)?>([^<]*?)</${comp.name}>`);
+
+    let match = template.match(selfClosingRegex);
+    let isSelfClosing = true;
+    let children = '';
+
+    if (!match) {
+        match = template.match(closingRegex);
+        isSelfClosing = false;
+        if (match) {
+            children = match[2] || '';
+        }
+    }
+
+    if (!match) {
+        return {} as P;
+    }
+
+    const attributesString = match[1] || '';
+
+    // 2. 解析属性，支持多种格式
+    const props: Record<string, any> = {};
+
+    // 如果有属性字符串，解析属性
+    if (attributesString.trim()) {
+        // 使用手动解析来处理复杂的嵌套结构
+        let i = 0;
+        while (i < attributesString.length) {
+            // 跳过空白字符
+            while (i < attributesString.length && /\s/.test(attributesString[i])) {
+                i++;
+            }
+
+            if (i >= attributesString.length) break;
+
+            // 解析属性名
+            let key = '';
+            while (i < attributesString.length && /[a-zA-Z0-9_$\-]/.test(attributesString[i])) {
+                key += attributesString[i];
+                i++;
+            }
+
+            if (!key) {
+                i++;
+                continue;
+            }
+
+            // 跳过空白字符
+            while (i < attributesString.length && /\s/.test(attributesString[i])) {
+                i++;
+            }
+
+            // 检查是否有等号
+            if (i < attributesString.length && attributesString[i] === '=') {
+                i++; // 跳过等号
+
+                // 跳过空白字符
+                while (i < attributesString.length && /\s/.test(attributesString[i])) {
+                    i++;
+                }
+
+                if (i >= attributesString.length) {
+                    props[key] = true;
+                    break;
+                }
+
+                // 解析属性值
+                const value = parseAttributeValue(attributesString, i, context);
+                props[key] = value.value;
+                i = value.nextIndex;
+            } else {
+                // 没有等号，是布尔属性
+                props[key] = true;
+            }
+        }
+    }
+
+    // 3. 处理 children（如果不是自闭合标签）
+    if (!isSelfClosing && children.trim()) {
+        props.children = children;
+    }
+
+    // 4. 处理 kebab-case 到 camelCase 的转换
+    const camelCaseProps: Record<string, any> = {};
+    for (const [key, value] of Object.entries(props)) {
+        const camelKey = key.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+        camelCaseProps[camelKey] = value;
+    }
+
+    return camelCaseProps as P;
+}
+
 /**
- * Component类：消息组件系统核心，支持模板渲染、属性解析、循环等。
- * 用于自定义消息结构和复用UI片段。
- * @template T 组件props类型
- * @template D 组件data类型
- * @template P 组件props配置类型
+ * 解析属性值
  */
-export class Component<T = {}, D = {}, P = Component.Props<T>> {
-    [CapWithClose]: RegExp;
-    [CapWithChild]: RegExp;
-    $props: Component.PropConfig[] = [];
-    get name(){
-        return this.$options.name;
-    }
-    set name(value:string){
-        this.$options.name=value;
-    }
-    /**
-     * 构造函数：初始化组件，生成属性正则
-     * @param $options 组件配置项
-     */
-    constructor(private $options: Component.Options<T, D, P>) {
-        this.formatProps();
-        this[CapWithChild] = new RegExp(`<${$options.name}([^>]*)?>([^<])*?</${$options.name}>`);
-        this[CapWithClose] = new RegExp(`<${$options.name}([^>]*)?/>`);
-    }
-    /**
-     * 判断模板是否为自闭合标签
-     * @param template 模板字符串
-     */
-    isClosing(template: string) {
-        return this[CapWithClose].test(template);
-    }
-    /**
-     * 匹配组件标签
-     * @param template 模板字符串
-     * @returns 匹配到的标签内容
-     */
-    match(template: string) {
-        let [match] = this[CapWithChild].exec(template) || [];
-        if (match) return match;
-        [match] = this[CapWithClose].exec(template) || [];
-        return match;
-    }
-    /**
-     * 格式化props配置，生成props数组
-     */
-    private formatProps() {
-        for (const [key, value] of Object.entries(this.$options.props || {})) {
-            this.formatProp(key, value as any);
+function parseAttributeValue(str: string, startIndex: number, context?: ComponentContext): { value: any; nextIndex: number } {
+    let i = startIndex;
+
+    // 处理引号包围的字符串
+    if (str[i] === '"' || str[i] === "'") {
+        const quote = str[i];
+        i++; // 跳过开始引号
+        let value = '';
+
+        while (i < str.length && str[i] !== quote) {
+            if (str[i] === '\\' && i + 1 < str.length) {
+                // 处理转义字符
+                i++;
+                value += str[i];
+            } else {
+                value += str[i];
+            }
+            i++;
         }
+
+        if (i < str.length) {
+            i++; // 跳过结束引号
+        }
+
+        return { value, nextIndex: i };
     }
 
-    /**
-     * 格式化单个prop配置
-     * @param name 属性名
-     * @param value 类型或配置
-     */
-    private formatProp(name: string, value: Exclude<Component.PropConfig, 'name'> | Component.TypeConstruct) {
-        if (typeof value === 'function') {
-            return this.$props.push({
-                name,
-                type: value,
-                default: undefined,
-            });
-        }
-        return this.$props.push({
-            name,
-            type: value.type,
-            default: value.default,
-        });
-    }
+    // 处理大括号包围的表达式
+    if (str[i] === '{') {
+        let braceCount = 0;
+        let value = '';
+        i++; // 跳过开始大括号
 
-    parseProps(template: string) {
-        const result = Object.fromEntries(
-            this.$props.map(prop => {
-                const generateDefault = typeof prop.default === 'function' ? prop.default : () => prop.default;
-                return [prop.name, generateDefault()];
-            }),
-        );
-        const matchedArr = [...template.matchAll(/([a-zA-Z\-:]+)\s*=\s*(['"])(.*?)\2/g)].filter(Boolean);
-        if (!matchedArr.length) return result;
-        for (const [_, key, __, value] of matchedArr) {
-            Object.defineProperty(result, key, {
-                enumerable: true,
-                writable: false,
-                value,
-            });
-        }
-        return result;
-    }
-    parseChildren(template: string): string {
-        if (this.isClosing(template)) return '';
-        const matched = template.match(/<[^>]+>([^<]*?)<\/[^?]+>/);
-        if (!matched) return '';
-        return matched[1];
-    }
-    async render(template: string, context: Component.Context): Promise<SendContent> {
-        const props = this.parseProps(template);
-        const assignValue = () => {
-            for (const key of keys) {
-                if (!key.startsWith(':')) continue;
-                Object.defineProperty(props, key.slice(1), {
-                    value: getValueWithRuntime(Reflect.get(props, key), context.parent),
-                });
-                Reflect.deleteProperty(props, key);
-            }
-        };
-        const keys = Object.keys(props).map(key => {
-            const newKey = key.replace(/(\w)+-(\w)/g, function (_, char, later) {
-                return `${char}${later.toUpperCase()}`;
-            });
-            if (key !== newKey) {
-                Object.defineProperty(props, newKey, {
-                    value: Reflect.get(props, key),
-                    enumerable: true,
-                });
-                Reflect.deleteProperty(props, key);
-            }
-            return newKey;
-        });
-        assignValue();
-        const data = this.$options.data ? this.$options.data.apply(props as P) : ({} as D);
-        for (const key of keys) {
-            if (key === 'vFor') {
-                const { 'vFor': expression, 'v-for': _, ...rest } = props as any;
-                const { name, value, ...other } = Component.fixLoop(expression);
-                const list = value === '__loop__' ? other[value] : getValueWithRuntime(value, context);
-                const fnStr = `
-                const result=[];\n
-                for(const ${name} of list){\n
-                  result.push(render(props,{\n
-                    ...context,\n
-                    children:'',\n
-                    $origin:'${template.replace(/'/g, "'")}',
-                    parent:{\n
-                      ...context.parent,\n
-                      ${name}:list[${name}]
-                    }\n
-                  }))\n
+        while (i < str.length) {
+            if (str[i] === '{') {
+                braceCount++;
+            } else if (str[i] === '}') {
+                if (braceCount === 0) {
+                    i++; // 跳过结束大括号
+                    break;
                 }
-                return result;`;
-                const fn = new Function('render,list,props,context', fnStr);
-                const newTpl = template
-                    .replace(`v-for="${expression}"`, '')
-                    .replace(`v-for='${expression}'`, '')
-                    .replace(`vFor="${expression}"`, '')
-                    .replace(`vFor='${expression}'`, '');
-                return (await Promise.all(fn(this.render.bind(this), list, newTpl, context))).join('');
+                braceCount--;
             }
-            if (key === 'vIf') {
-                const needRender = getValueWithRuntime(Reflect.get(props as object, 'vIf'), context);
-                if (!needRender) return '';
-            }
+            value += str[i];
+            i++;
         }
-        context.children = this.parseChildren(template) || context.children;
-        const ctx = {
-            $slots: context.$slots || {},
-            ...props,
-            ...data,
-            $message: context.$message,
-            render: context.render,
-            parent: context,
-            children: context.children,
-        } as Component.Context<D & P>;
-        const result = segment.toString(await this.$options.render(props as P, ctx));
-        context.$root = context.$root.replace(context.$origin || template,result.includes('<')?segment.escape(result):result);
-        return context.render(context.$root, context);
-    }
-}
-export function defineComponent<P>(render: Component.Render<P, {}>, name?: string): Component<{}, {}, P>;
-export function defineComponent<T, D = {}, P = Component.Props<T>>(options: Component.Options<T, D>): Component<T, D, P>;
-export function defineComponent<T = {}, D = {}, P = Component.Props<T>>(options: Component.Options<T, D, P> | Component.Render<P, D>, name = options.name) {
-    if (typeof options === 'function')
-        options = {
-            name,
-            render: options,
-        };
-    return new Component(options);
-}
 
-export namespace Component {
-    export type TypeConstruct<T = any> = {
-        new (): T;
-        readonly prototype: T;
-    };
-    export type PropConfig<T extends TypeConstruct = TypeConstruct> = {
-        name: string;
-        type: T;
-        default: Prop<T>;
-    };
-
-    export interface Options<T, D, P = Props<T>> {
-        name: string;
-        props?: T;
-        data?: (this: P) => D;
-        render: Render<P, D>;
+        return { value: parseExpressionValue(value, context), nextIndex: i };
     }
 
-    export type Context<T = {}> = {
-        $slots: Dict<Render<any, any>>;
-        $message: Message;
-        $origin?: string;
-        $root: string;
-        parent: Context;
-        render(template: string, context: Context): Promise<SendContent>;
-        children?: string;
-    } & T;
-    export type Render<P = {}, D = {}> = (props: P, context: Context<P & D>) => MaybePromise<SendContent>;
-    export type Props<T> = {
-        [P in keyof T]: Prop<T[P]>;
-    };
-    export type PropWithDefault<T> = {
-        type: T;
-        default?: DefaultValue<T>;
-    };
-    type DefaultValue<T> = T extends ObjectConstructor | ArrayConstructor ? () => Prop<T> : Prop<T>;
-    export type Prop<T> = T extends BooleanConstructor
-        ? boolean
-        : T extends StringConstructor
-            ? string
-            : T extends NumberConstructor
-                ? number
-                : T extends ArrayConstructor
-                    ? any[]
-                    : T extends ObjectConstructor
-                        ? Dict
-                        : T extends PropWithDefault<infer R>
-                            ? Prop<R>
-                            : unknown;
-    export const fixLoop = (loop: string) => {
-        let [_, name, value] = /(\S+)\sin\s(\S+)/.exec(loop) || [];
-        if (/\d+/.test(value))
-            value = `[${new Array(+value)
-                .fill(0)
-                .map((_, i) => i)
-                .join(',')}]`;
-        if (/^\[.+]$/.test(value)) {
-            return { name, value: '__loop__', __loop__: JSON.parse(value) };
-        }
-        return { name, value };
-    };
+    // 处理无引号的值
+    let value = '';
+    while (i < str.length && !/\s/.test(str[i]) && str[i] !== '>') {
+        value += str[i];
+        i++;
+    }
 
-    export async function render(componentMap:Map<string,Component>,options:SendOptions):Promise<SendOptions>{
-        if(!componentMap.size) return options;
-        const components=[
-            ...componentMap.values(),
-            Template,
-            Slot,
-        ]
-        const createContext = (runtime: Dict = {}, parent: Component.Context, $root: string): Component.Context => {
-            return {
-                $slots: {},
-                ...runtime,
-                $message: parent.$message,
-                $root,
-                parent,
-                render: (template: string, context) => {
-                    return renderWithRuntime(template, context, context.$root);
-                },
-            };
-        };
-        const renderWithRuntime = async (template: string, runtime: Dict, $root: string):Promise<SendContent> => {
-            const ctx = createContext(runtime, runtime as Component.Context, $root);
-            template = compiler(template, runtime);
-            for (const comp of components) {
-                const match = comp.match(template);
-                if (!match) continue;
-                return await comp.render(match, ctx);
+    return { value: parseUnquotedValue(value, context), nextIndex: i };
+}
+
+/**
+ * 解析表达式值
+ */
+function parseExpressionValue(expr: string, context?: ComponentContext): any {
+    expr = expr.trim();
+
+    // 处理字符串字面量
+    if ((expr.startsWith('"') && expr.endsWith('"')) ||
+        (expr.startsWith("'") && expr.endsWith("'"))) {
+        return expr.slice(1, -1);
+    }
+
+    // 处理数字
+    if (/^-?\d+(\.\d+)?$/.test(expr)) {
+        return parseFloat(expr);
+    }
+
+    // 处理布尔值
+    if (expr === 'true') return true;
+    if (expr === 'false') return false;
+    if (expr === 'null') return null;
+    if (expr === 'undefined') return undefined;
+
+    // 处理数组
+    if (expr.startsWith('[') && expr.endsWith(']')) {
+        try {
+            return JSON.parse(expr);
+        } catch {
+            // 如果JSON解析失败，尝试手动解析简单数组
+            const items = expr.slice(1, -1).split(',').map(item =>
+                parseExpressionValue(item.trim(), context)
+            );
+            return items;
+        }
+    }
+
+    // 处理对象 - 改进的嵌套大括号处理
+    if (expr.startsWith('{') && expr.endsWith('}')) {
+        try {
+            return JSON.parse(expr);
+        } catch {
+            // 如果JSON解析失败，尝试手动解析简单对象
+            try {
+                return parseSimpleObject(expr);
+            } catch {
+                // 如果都失败，返回原始字符串
+                return expr;
             }
+        }
+    }
+
+    // 处理表达式 - 在沙盒中执行
+    if (context) {
+        try {
+            const result = context.getValue(expr);
+            return result !== undefined ? result : expr;
+        } catch (error) {
+            // 如果执行失败，返回原始表达式
+            return expr;
+        }
+    }
+
+    // 如果没有上下文，返回原始表达式
+    return expr;
+}
+
+/**
+ * 解析简单对象（处理嵌套大括号和方括号）
+ */
+function parseSimpleObject(objStr: string): any {
+    const result: any = {};
+    let i = 1; // 跳过开始的 {
+    let depth = 0;
+    let bracketDepth = 0;
+    let key = '';
+    let value = '';
+    let inKey = true;
+    let inString = false;
+    let stringChar = '';
+
+    while (i < objStr.length - 1) { // 跳过结束的 }
+        const char = objStr[i];
+
+        if (!inString) {
+            if (char === '{') {
+                depth++;
+                value += char;
+            } else if (char === '}') {
+                depth--;
+                value += char;
+            } else if (char === '[') {
+                bracketDepth++;
+                value += char;
+            } else if (char === ']') {
+                bracketDepth--;
+                value += char;
+            } else if (char === ':' && depth === 0 && bracketDepth === 0) {
+                inKey = false;
+                i++;
+                continue;
+            } else if (char === ',' && depth === 0 && bracketDepth === 0) {
+                // 处理键值对
+                if (key.trim() && value.trim()) {
+                    const parsedValue = parseExpressionValue(value.trim());
+                    result[key.trim()] = parsedValue;
+                }
+                key = '';
+                value = '';
+                inKey = true;
+                i++;
+                continue;
+            } else if (char === '"' || char === "'") {
+                inString = true;
+                stringChar = char;
+                if (inKey) {
+                    key += char;
+                } else {
+                    value += char;
+                }
+            } else {
+                if (inKey) {
+                    key += char;
+                } else {
+                    value += char;
+                }
+            }
+        } else {
+            if (char === stringChar) {
+                inString = false;
+            }
+            if (inKey) {
+                key += char;
+            } else {
+                value += char;
+            }
+        }
+        i++;
+    }
+
+    // 处理最后一个键值对
+    if (key.trim() && value.trim()) {
+        const parsedValue = parseExpressionValue(value.trim());
+        result[key.trim()] = parsedValue;
+    }
+
+    return result;
+}
+
+/**
+ * 解析无引号的值
+ */
+function parseUnquotedValue(value: string, context?: ComponentContext): any {
+    // 检查是否是大括号表达式
+    if (value.startsWith('{') && value.endsWith('}')) {
+        const expr = value.slice(1, -1); // 移除大括号
+        return parseExpressionValue(expr, context);
+    }
+
+    // 处理布尔值
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+
+    // 处理数字
+    if (/^-?\d+(\.\d+)?$/.test(value)) {
+        return parseFloat(value);
+    }
+
+    // 处理 null/undefined
+    if (value === 'null') return null;
+    if (value === 'undefined') return undefined;
+
+    // 其他情况作为字符串处理
+    return value;
+}
+
+// 创建组件上下文的工厂函数
+export function createComponentContext(
+    props: Dict = {},
+    parent?: ComponentContext,
+    root: string = ''
+): ComponentContext {
+    return {
+        // 基础渲染能力
+        render: async (template: string, context?: Partial<ComponentContext>) => {
+            // 这里需要实现渲染逻辑
             return template;
-        };
-        const template=segment.toString(options.content);
-        const output=await renderWithRuntime(template, options, template)
-        const content=segment.from(output)
-        return {
-            ...options,
-            content
-        };
-    }
+        },
 
-    export const Template=defineComponent({
-        name: 'template',
-        render(props, context) {
-            const keys = Object.keys(props);
-            if (!keys.length) keys.push('#default');
-            for (const key of Object.keys(props)) {
-                if (key.startsWith('#')) {
-                    context.parent.$slots[key.slice(1)] = (async p => {
-                        return await context.render(context.children || '', { ...context, ...p });
-                    }) as Render;
-                }
-            }
-            return '';
-        },
-    })
-    export const Slot=defineComponent({
-        name: 'slot',
-        props: {
-            name: String,
-        },
-        render({ name, ...props }, context) {
-            name = name || 'default';
-            if (!context.parent) return '';
-            if (context.parent.$slots[name]) return context.parent.$slots[name](props, context) as string;
-            return context.children || '';
-        },
-    })
+        // 数据访问（只读）
+        props: Object.freeze({ ...props }),
+
+        // 父组件上下文（只读）
+        parent: parent ? Object.freeze(parent) : undefined,
+
+        // 根模板（只读）
+        root,
+
+
+        // 子组件内容（React 概念）
+        children: undefined,
+        getValue: (template: string) => getValueWithRuntime(template, props),
+        compile: (template: string) => compiler(template, props),
+    };
 }
-process.on('unhandledRejection',e=>{
-    // console.error 已替换为注释
-})
+export function renderComponent<P = any>(component: Component<P>, template: string, context: ComponentContext): Promise<SendContent> {
+    const props = getProps(component, template, context);
+    return component(props, context);
+}
+// 渲染函数 - 支持新的组件系统
+export async function renderComponents(
+    componentMap: Map<string, Component>,
+    options: SendOptions,
+): Promise<SendOptions> {
+    if (!componentMap.size) return options;
+
+    const components = [...Array.from(componentMap.values()), Fetch, Fragment];
+
+
+    // 创建根上下文
+    const rootContext = createComponentContext(
+        options,
+        undefined,
+        segment.toString(options.content)
+    );
+
+    // 实现渲染逻辑
+    const renderWithContext = async (template: string, context: ComponentContext): Promise<SendContent> => {
+        let result = template;
+
+        // 编译模板
+        result = context.compile(result);
+
+        // 查找并渲染组件
+        for (const comp of components) {
+            const match = matchComponent(comp, result);
+            if (match) {
+                const rendered = await renderComponent(comp, match, context);
+                result = result.replace(match, segment.toString(rendered));
+                break; // 一次只处理一个组件
+            }
+        }
+
+        return result;
+    };
+
+    // 更新根上下文的渲染函数
+    rootContext.render = async (template: string, context?: Partial<ComponentContext>) => {
+        return await renderWithContext(template, rootContext);
+    };
+
+    // 渲染模板
+    const output = await renderWithContext(rootContext.root, rootContext);
+    const content = segment.from(output);
+
+    return {
+        ...options,
+        content
+    };
+}
+
+// 内置组件
+export const Fragment = defineComponent(async (props: { children?: SendContent }, context: ComponentContext) => {
+    // Fragment 直接渲染 children，不添加任何包装
+    return context.render(segment.toString(props.children || ''), context);
+}, 'Fragment');
+export const Fetch = defineComponent(async ({ url }) => {
+    const result: string = await fetch(url).then((r) => r.text());
+    return result;
+}, 'fetch');

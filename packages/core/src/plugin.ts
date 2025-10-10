@@ -9,7 +9,7 @@ import {Message} from './message.js'
 import {Dependency, Logger,} from "@zhin.js/hmr";
 import {App} from "./app";
 import {MessageCommand} from "./command.js";
-import {Component} from "./component.js";
+import {Component, renderComponents} from "./component.js";
 import { PluginError, MessageError, errorManager } from './errors.js';
 import {remove} from "./utils.js";
 import {Prompt} from "./prompt.js";
@@ -30,7 +30,7 @@ export type MessageMiddleware<P extends RegisteredAdapter=RegisteredAdapter> = (
  */
 export class Plugin extends Dependency<Plugin> {
     middlewares: MessageMiddleware<any>[] = [];
-    components: Map<string, Component<any, any, any>> = new Map();
+    components: Map<string, Component<any>> = new Map();
     schemas: Map<string,Schema<any>>=new Map();
     commands:MessageCommand[]=[];
     crons:Cron[]=[];
@@ -54,7 +54,7 @@ export class Plugin extends Dependency<Plugin> {
             return next()
         });
         // 发送前渲染组件
-        this.beforeSend((options)=>Component.render(this.components,options))
+        this.beforeSend((options)=>renderComponents(this.components,options))
         // 资源清理：卸载时清空模型、定时任务等
         this.on('dispose',()=>{
             for(const name of this.schemas.keys()){
@@ -140,7 +140,7 @@ export class Plugin extends Dependency<Plugin> {
         return temp.getLogger(names.join('/'))
     }
     /** 添加组件 */
-    addComponent<T = {}, D = {}, P = Component.Props<T>>(component:Component<T,D,P>){
+    addComponent<T=any>(component:Component<T>){
         this.components.set(component.name,component);
     }
     /** 添加中间件 */

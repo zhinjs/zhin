@@ -359,8 +359,8 @@ export function addCommand(command: MessageCommand): void {
 }
 
 /** 添加组件 */
-export function addComponent<T = {}, D = {}, P = Component.Props<T>>(
-  component: Component<T, D, P>
+export function addComponent<P = any>(
+  component: Component<P>
 ): void {
   const plugin = usePlugin();
   plugin.addComponent(component);

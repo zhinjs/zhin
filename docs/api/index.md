@@ -259,49 +259,45 @@ register({
 - 📊 为系统监控和调试提供更多信息
 - 📚 自动生成系统文档时的描述信息
 
-### 组件系统 API
+### 函数式组件系统 API
 
-基于实际的 defineComponent 和 addComponent：
+基于新的函数式组件架构：
 
 ```typescript
-import { defineComponent, addComponent, segment } from 'zhin.js'
+import { defineComponent, segment } from 'zhin.js'
 
-// 🧩 定义可复用组件（来自 test-bot）
-const testComponent = defineComponent({
-  name: 'test',
-  props: {
-    id: String
-  },
-  async render({ id }, context) {
-    return '这是父组件' + id + (context.children || '')
-  }
-})
+// 🧩 定义函数式组件
+const TestComponent = defineComponent(async function TestComponent(props: { id: string }, context) {
+  return `这是父组件 ${props.id}${context.children || ''}`;
+}, 'test');
 
-// 🎨 更复杂的组件示例（来自 test-bot）
-const testComponent2 = defineComponent({
-  name: 'foo',
-  props: {
-    face: {
-      type: Number,
-      default: 1
+// 🎨 更复杂的组件示例
+const FaceComponent = defineComponent(async function FaceComponent(props: { face?: number }, context) {
+  const faceId = props.face || 1;
+  return [
+    segment.escape(`这是子组件<face id='${faceId}/>`),
+    {
+      type: 'face',
+      data: { id: faceId }
     }
-  },
-  async render({ face }) {
-    return [
-      segment.escape(`这是子组件<face id='${face}/>`),
-      {
-        type: 'face',
-        data: {
-          id: face
-        }
-      }
-    ]
-  }
-})
+  ];
+}, 'foo');
 
-// 📝 添加组件到全局
-addComponent(testComponent)
-addComponent(testComponent2)
+// 🎯 使用内置组件
+const CardComponent = defineComponent(async function CardComponent(props: { 
+  title: string; 
+  children?: string 
+}, context) {
+  return `┌─ ${props.title} ─┐\n│ ${props.children || 'No content'}\n└─────────────┘`;
+}, 'card');
+
+// 📡 使用 Fetch 组件
+const DataComponent = defineComponent(async function DataComponent(props: { 
+  url: string 
+}, context) {
+  // 使用内置的 Fetch 组件
+  return await context.render(`<Fetch url="${props.url}" />`, context);
+}, 'data');
 ```
 
 ## 🏷️ 类型定义

@@ -126,6 +126,26 @@ export class IcqqBot extends Client implements Bot<PrivateMessageEvent|GroupMess
 
 }
 export namespace IcqqBot{
+    const allowTypes=[
+        'text',
+        'face',
+        'image',
+        'record',
+        'audio',
+        'dice',
+        'rps',
+        'video',
+        'file',
+        'location',
+        'share',
+        'json',
+        'at',
+        'reply',
+        'long_msg',
+        'button',
+        'markdown',
+        'xml',
+    ]
     export function toSegments(message:Sendable):MessageSegment[]{
         if(!Array.isArray(message)) message=[message]
         return message.filter((item,index)=>{
@@ -138,9 +158,11 @@ export namespace IcqqBot{
     }
     export function toSendable(content:SendContent):Sendable{
         if(!Array.isArray(content)) content=[content]
-        return content.map((segment):MessageElem=>{
-            if(typeof segment==="string") return {type:'text',text:segment}
-            const {type,data}=segment
+        return content.map((seg):MessageElem=>{
+            if(typeof seg==="string") return {type:'text',text:seg}
+            let {type,data}=seg
+            if(typeof type==='function') type=type.name
+            if(!allowTypes.includes(type)) return {type:'text',text:segment.toString(seg)}
             return {type,...data} as MessageElem
         })
     }

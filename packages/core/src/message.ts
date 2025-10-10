@@ -1,10 +1,13 @@
-import {MaybePromise} from "@zhin.js/types";
-import {MessageSegment, MessageSender, RegisteredAdapter, SendContent} from "./types";
+import {MessageElement, MessageSender, SendContent} from "./types";
+import { Component } from "./component.js";
 
 /**
  * 消息组件类型：用于自定义消息结构
  */
-export type MessageComponent<T extends object>=(props:T&{children:SendContent})=>MaybePromise<SendContent>
+export type MessageComponent<T extends object>={
+    type:Component<T&{children?:SendContent}>
+    data:T
+}
 /**
  * 消息频道信息
  */
@@ -23,7 +26,7 @@ export interface MessageBase {
     $id: string;
     $adapter:string
     $bot:string
-    $content: MessageSegment[];
+    $content: MessageElement[];
     $sender: MessageSender;
     $reply(content:SendContent,quote?:boolean|string):Promise<void>
     $channel: MessageChannel;

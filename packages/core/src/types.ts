@@ -3,6 +3,7 @@ import {MessageChannel} from "./message.js";
 import {Adapter} from "./adapter.js";
 import {Bot,BotConfig} from "./bot.js";
 import { Databases,Registry } from "@zhin.js/database";
+import { MessageComponent } from "./message.js";
 
 /**
  * 类型定义文件：包含适配器、消息、数据库、配置等核心类型声明。
@@ -52,6 +53,7 @@ export interface MessageSegment {
   type: string;
   data: Record<string, any>;
 }
+export type MessageElement=MessageSegment|MessageComponent<any>
 /**
  * 单个或数组类型
  */
@@ -59,7 +61,7 @@ export type MaybeArray<T>=T|T[]
 /**
  * 消息发送内容类型
  */
-export type SendContent=MaybeArray<string|MessageSegment>
+export type SendContent=MaybeArray<string|MessageElement>
 /**
  * 消息发送者信息
  */

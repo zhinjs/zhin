@@ -219,28 +219,55 @@ interface OneBotBotConfig extends BotConfig {
 
 ## 🎨 组件相关类型
 
-### 组件定义
+### 函数式组件定义
 
 ```typescript
-// 组件定义
-interface ComponentDefinition<T = any> {
-  name: string
-  props?: Record<string, PropDefinition>
-  render: (props: T, context?: any) => string | MessageSegment[] | Promise<string | MessageSegment[]>
+// 函数式组件类型
+type FunctionComponent<P = any> = {
+  (props: P, context: ComponentContext): Promise<SendContent>;
+  name: string;
 }
 
-// 属性定义
-interface PropDefinition {
-  type: any
-  default?: any
-  required?: boolean
+// 组件类型别名
+type Component<P = any> = FunctionComponent<P>;
+
+// 组件上下文接口
+interface ComponentContext {
+  // 基础渲染能力
+  render: (template: string, context?: Partial<ComponentContext>) => Promise<SendContent>;
+  
+  // 数据访问（只读）
+  props: Readonly<Dict>;
+  
+  // 父组件上下文（只读）
+  parent?: Readonly<ComponentContext>;
+  
+  // 根模板（只读）
+  root: string;
+  
+  // 消息对象（只读）
+  message?: Readonly<Message>;
+  
+  // 子组件内容（React 概念）
+  children?: string;
+  
+  // 工具函数
+  utils: {
+    getValue: (template: string) => any;
+    compile: (template: string) => string;
+    escape: (content: string) => string;
+  };
 }
 
-// 组件实例
-interface Component {
-  name: string
-  render(props: any, context?: any): string | MessageSegment[]
-}
+// 组件定义函数
+function defineComponent<P = any>(
+  component: Component<P>,
+  name?: string
+): Component<P>
+
+// 内置组件
+const Fragment: Component<{ children?: SendContent }>;
+const Fetch: Component<{ url: string }>;
 ```
 
 ## 🛠️ 工具类型

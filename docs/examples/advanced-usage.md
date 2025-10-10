@@ -439,123 +439,162 @@ async function getCrossPlatformStats() {
 }
 ```
 
-## 🎨 自定义组件
+## 🎨 函数式组件系统
 
 ### 消息组件系统
 ```typescript
 // src/plugins/component-plugin.ts
-import { defineComponent, addComponent, segment } from 'zhin.js';
+import { defineComponent, segment } from 'zhin.js';
 
-// 卡片组件
-const CardComponent = defineComponent({
-  name: 'card',
-  props: {
-    title: String,
-    content: String,
-    color: { type: String, default: 'blue' }
-  },
-  async render({ title, content, color }) {
-    const colorMap = {
-      blue: '🔵',
-      green: '🟢',
-      red: '🔴',
-      yellow: '🟡'
-    };
-    
-    const icon = colorMap[color] || '🔵';
-    
-    return [
-      segment('text', { text: `${icon} **${title}**\n` }),
-      segment('text', { text: content }),
-      segment('text', { text: '\n' + '─'.repeat(20) })
-    ];
+// 卡片组件 - 函数式组件
+const CardComponent = defineComponent(async function CardComponent(props: {
+  title: string;
+  content: string;
+  color?: string;
+  children?: string;
+}, context) {
+  const colorMap = {
+    blue: '🔵',
+    green: '🟢',
+    red: '🔴',
+    yellow: '🟡'
+  };
+  
+  const icon = colorMap[props.color || 'blue'] || '🔵';
+  const content = props.children || props.content;
+  
+  return [
+    segment('text', { text: `${icon} **${props.title}**\n` }),
+    segment('text', { text: content }),
+    segment('text', { text: '\n' + '─'.repeat(20) })
+  ];
+}, 'card');
+
+// 进度条组件 - 函数式组件
+const ProgressComponent = defineComponent(async function ProgressComponent(props: {
+  value: number;
+  max?: number;
+  width?: number;
+}, context) {
+  const max = props.max || 100;
+  const width = props.width || 20;
+  const percentage = Math.min(100, Math.max(0, (props.value / max) * 100));
+  const filled = Math.floor((percentage / 100) * width);
+  const empty = width - filled;
+  
+  const bar = '█'.repeat(filled) + '░'.repeat(empty);
+  
+  return [
+    segment('text', { text: `进度: ${bar} ${percentage.toFixed(1)}%` })
+  ];
+}, 'progress');
+
+// 表格组件 - 函数式组件
+const TableComponent = defineComponent(async function TableComponent(props: {
+  headers: string[];
+  rows: string[][];
+  border?: boolean;
+}, context) {
+  if (!props.headers || !props.rows) {
+    return [segment('text', { text: '表格数据不完整' })];
   }
-});
-
-// 进度条组件
-const ProgressComponent = defineComponent({
-  name: 'progress',
-  props: {
-    value: Number,
-    max: { type: Number, default: 100 },
-    width: { type: Number, default: 20 }
-  },
-  async render({ value, max, width }) {
-    const percentage = Math.min(100, Math.max(0, (value / max) * 100));
-    const filled = Math.floor((percentage / 100) * width);
-    const empty = width - filled;
-    
-    const bar = '█'.repeat(filled) + '░'.repeat(empty);
-    
-    return [
-      segment('text', { text: `进度: ${bar} ${percentage.toFixed(1)}%` })
-    ];
+  
+  let table = '';
+  const border = props.border !== false;
+  
+  if (border) {
+    const separator = '┌' + '─'.repeat(20) + '┬' + '─'.repeat(20) + '┐\n';
+    table += separator;
   }
-});
-
-// 表格组件
-const TableComponent = defineComponent({
-  name: 'table',
-  props: {
-    headers: Array,
-    rows: Array,
-    border: { type: Boolean, default: true }
-  },
-  async render({ headers, rows, border }) {
-    if (!headers || !rows) {
-      return [segment('text', { text: '表格数据不完整' })];
-    }
-    
-    let table = '';
-    
-    if (border) {
-      const separator = '┌' + '─'.repeat(20) + '┬' + '─'.repeat(20) + '┐\n';
-      table += separator;
-    }
-    
-    // 表头
-    table += '│ ' + headers.join(' │ ') + ' │\n';
-    
-    if (border) {
-      table += '├' + '─'.repeat(20) + '┼' + '─'.repeat(20) + '┤\n';
-    }
-    
-    // 数据行
-    rows.forEach(row => {
-      table += '│ ' + row.join(' │ ') + ' │\n';
-    });
-    
-    if (border) {
-      table += '└' + '─'.repeat(20) + '┴' + '─'.repeat(20) + '┘';
-    }
-    
-    return [segment('text', { text: table })];
+  
+  // 表头
+  table += '│ ' + props.headers.join(' │ ') + ' │\n';
+  
+  if (border) {
+    table += '├' + '─'.repeat(20) + '┼' + '─'.repeat(20) + '┤\n';
   }
-});
+  
+  // 数据行
+  props.rows.forEach(row => {
+    table += '│ ' + row.join(' │ ') + ' │\n';
+  });
+  
+  if (border) {
+    table += '└' + '─'.repeat(20) + '┴' + '─'.repeat(20) + '┘';
+  }
+  
+  return [segment('text', { text: table })];
+}, 'table');
 
-// 注册组件
-addComponent(CardComponent);
-addComponent(ProgressComponent);
-addComponent(TableComponent);
+// 条件渲染组件 - 函数式组件
+const ConditionalComponent = defineComponent(async function ConditionalComponent(props: {
+  condition: boolean;
+  children?: string;
+  fallback?: string;
+}, context) {
+  if (props.condition) {
+    return props.children || '';
+  }
+  return props.fallback || '';
+}, 'conditional');
+
+// 列表组件 - 使用 Fragment 和 children
+const ListComponent = defineComponent(async function ListComponent(props: {
+  items: string[];
+  children?: string;
+}, context) {
+  const items = props.items.map((item, index) => `${index + 1}. ${item}`).join('\n');
+  const header = props.children ? `\n=== ${props.children} ===\n` : '';
+  return `${header}${items}`;
+}, 'list');
 
 // 使用示例命令
 addCommand(new MessageCommand('demo components')
   .action(async () => {
     return [
+      // 使用卡片组件
       segment('card', { 
         title: '组件演示', 
         content: '这是一个卡片组件示例',
         color: 'blue'
       }),
+      
+      // 使用进度条组件
       segment('progress', { value: 75, max: 100, width: 15 }),
+      
+      // 使用表格组件
       segment('table', {
         headers: ['姓名', '年龄'],
         rows: [
           ['张三', '25'],
           ['李四', '30']
         ]
+      }),
+      
+      // 使用条件渲染组件
+      segment('conditional', { 
+        condition: true,
+        children: '条件为真时显示的内容'
+      }),
+      
+      // 使用列表组件
+      segment('list', {
+        items: ['功能1', '功能2', '功能3'],
+        children: '功能列表'
       })
     ];
+  })
+);
+
+// 使用模板语法
+addCommand(new MessageCommand('demo template')
+  .action(async () => {
+    return `
+<Card title="用户信息" color="green">
+  <List items={["特性1", "特性2", "特性3"]}>功能列表</List>
+  <Progress value={60} max={100} width={20} />
+</Card>
+    `;
   })
 );
 ```

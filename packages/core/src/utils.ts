@@ -1,4 +1,4 @@
-import {Dict, MessageSegment, SendContent} from "./types";
+import {Dict, MessageElement, MessageSegment, SendContent} from "./types";
 
 export function getValueWithRuntime(template: string, ctx: Dict) {
     const result = evaluate(template, ctx);
@@ -79,10 +79,10 @@ export namespace segment{
     }
     export function from(content: SendContent): SendContent {
         if (!Array.isArray(content)) content=[content];
-        const toString=(template:string|MessageSegment)=>{
+        const toString=(template:string|MessageElement)=>{
             if(typeof template!=='string') return [template]
             template=unescape(template);
-            const result: MessageSegment[] = [];
+            const result: MessageElement[] = [];
             const closingReg = /<(\S+)(\s[^>]+)?\/>/;
             const twinningReg = /<(\S+)(\s[^>]+)?>([\s\S]*?)<\/\1>/;
             while (template.length) {
@@ -132,7 +132,7 @@ export namespace segment{
         return content.reduce((result,item)=>{
             result.push(...toString(item))
             return result;
-        },[] as MessageSegment[])
+        },[] as MessageElement[])
     }
     export function raw(content:SendContent){
         if(!Array.isArray(content)) content=[content]
@@ -147,7 +147,8 @@ export namespace segment{
         if(!Array.isArray(content)) content=[content]
         return content.map(item=>{
             if(typeof item==='string') return item
-            const {type,data}=item
+            let {type,data}=item
+            if(typeof type==='function') type=type.name
             if(type==='text') return data.text
             return `<${type} ${Object.keys(data).map(key=>`${key}='${escape(JSON.stringify(data[key]))}'`).join(' ')}/>`
         }).join('')
