@@ -101,7 +101,8 @@ export default defineConfig(async (env)=>{
       'adapter-qq', // QQ官方机器人适配器
       'console',        // 🖥️ 控制台最后加载，处理静态文件
       'adapter-kook',
-      'test-plugin'
+      'test-plugin',
+      'test-jsx'
     ],
 
     // 调试模式

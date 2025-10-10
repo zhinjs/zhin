@@ -98,10 +98,6 @@ useContext("icqq", (p) => {
     });
   addCommand(someUsers);
 });
-const testCommand = new MessageCommand("test").action(async (m) =>
-  usePrompt(m).text("请输入文本")
-);
-addCommand(testCommand);
 defineModel("test_model",{
   name: { type: "text", nullable: false },
   age: { type: "integer", default: 0 },

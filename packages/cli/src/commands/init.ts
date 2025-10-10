@@ -214,13 +214,12 @@ async function createProjectStructure(projectPath: string, projectName: string, 
       declaration: false,
       sourceMap: true,
       baseUrl: './src',
+      jsx: 'react-jsx',
+      jsxImportSource: 'zhin.js',
       types: [
         '@types/node',
         '@zhin.js/types',
-        'zhin.js',
-        '@zhin.js/http',
-        '@zhin.js/adapter-process',
-        '@zhin.js/console'
+        'zhin.js'
       ]
     },
     include: ['src/**/*'],

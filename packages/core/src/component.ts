@@ -1,5 +1,5 @@
 import { getValueWithRuntime, compiler, segment } from './utils.js';
-import { Dict, SendContent, SendOptions } from './types.js';
+import { Dict, SendContent, SendOptions, MessageElement } from './types.js';
 import { Message } from "./message.js";
 
 // 组件匹配符号
@@ -189,6 +189,13 @@ function parseAttributeValue(str: string, startIndex: number, context?: Componen
             i++; // 跳过结束引号
         }
 
+        // 检查引号内是否包含表达式（大括号）
+        if (value.includes('{') && value.includes('}')) {
+            // 包含表达式，进行求值
+            const evaluatedValue = evaluateQuotedExpression(value, context);
+            return { value: evaluatedValue, nextIndex: i };
+        }
+
         return { value, nextIndex: i };
     }
 
@@ -223,6 +230,33 @@ function parseAttributeValue(str: string, startIndex: number, context?: Componen
     }
 
     return { value: parseUnquotedValue(value, context), nextIndex: i };
+}
+
+/**
+ * 求值引号内的表达式
+ */
+function evaluateQuotedExpression(quotedValue: string, context?: ComponentContext): string {
+    if (!context) return quotedValue;
+    
+    // 处理引号内的表达式，将 {expr} 格式转换为 ${expr} 格式
+    let result = quotedValue;
+    const expressionRegex = /\{([^}]+)\}/g;
+    let match;
+    
+    while ((match = expressionRegex.exec(quotedValue)) !== null) {
+        const expr = match[1];
+        try {
+            const value = context.getValue(expr);
+            if (value !== undefined && value !== expr) {
+                const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
+                result = result.replace(match[0], stringValue);
+            }
+        } catch (error) {
+            // 如果求值失败，保持原始表达式
+        }
+    }
+    
+    return result;
 }
 
 /**
@@ -280,7 +314,11 @@ function parseExpressionValue(expr: string, context?: ComponentContext): any {
     if (context) {
         try {
             const result = context.getValue(expr);
-            return result !== undefined ? result : expr;
+            // 如果结果是 undefined，说明表达式被阻止或求值失败，返回原始表达式
+            if (result === undefined) {
+                return expr;
+            }
+            return result;
         } catch (error) {
             // 如果执行失败，返回原始表达式
             return expr;
@@ -406,7 +444,7 @@ export function createComponentContext(
     parent?: ComponentContext,
     root: string = ''
 ): ComponentContext {
-    return {
+            return {
         // 基础渲染能力
         render: async (template: string, context?: Partial<ComponentContext>) => {
             // 这里需要实现渲染逻辑
@@ -429,7 +467,7 @@ export function createComponentContext(
         compile: (template: string) => compiler(template, props),
     };
 }
-export function renderComponent<P = any>(component: Component<P>, template: string, context: ComponentContext): Promise<SendContent> {
+export async function renderComponent<P = any>(component: Component<P>, template: string, context: ComponentContext): Promise<SendContent> {
     const props = getProps(component, template, context);
     return component(props, context);
 }
@@ -437,33 +475,50 @@ export function renderComponent<P = any>(component: Component<P>, template: stri
 export async function renderComponents(
     componentMap: Map<string, Component>,
     options: SendOptions,
+    customContext?: ComponentContext
 ): Promise<SendOptions> {
     if (!componentMap.size) return options;
 
     const components = [...Array.from(componentMap.values()), Fetch, Fragment];
 
-
     // 创建根上下文
-    const rootContext = createComponentContext(
+    const rootContext = customContext || createComponentContext(
         options,
         undefined,
-        segment.toString(options.content)
+        typeof options.content === 'string' ? options.content : segment.toString(options.content as MessageElement)
     );
 
     // 实现渲染逻辑
     const renderWithContext = async (template: string, context: ComponentContext): Promise<SendContent> => {
         let result = template;
+        let hasChanges = true;
+        let iterations = 0;
+        const maxIterations = 10; // 防止无限循环
 
         // 编译模板
         result = context.compile(result);
 
-        // 查找并渲染组件
-        for (const comp of components) {
-            const match = matchComponent(comp, result);
-            if (match) {
-                const rendered = await renderComponent(comp, match, context);
-                result = result.replace(match, segment.toString(rendered));
-                break; // 一次只处理一个组件
+        // 递归处理所有组件，直到没有更多组件需要渲染
+        while (hasChanges && iterations < maxIterations) {
+            hasChanges = false;
+            iterations++;
+
+            for (const comp of components) {
+                const match = matchComponent(comp, result);
+                if (match) {
+                    // 创建组件特定的上下文
+                    const componentContext = createComponentContext(
+                        context.props,
+                        context,
+                        result
+                    );
+                    
+                    const rendered = await renderComponent(comp, match, componentContext);
+                    const renderedString = typeof rendered === 'string' ? rendered : segment.toString(rendered as MessageElement);
+                    result = result.replace(match, renderedString);
+                    hasChanges = true;
+                    break; // 处理一个组件后重新开始循环
+                }
             }
         }
 
@@ -477,20 +532,22 @@ export async function renderComponents(
 
     // 渲染模板
     const output = await renderWithContext(rootContext.root, rootContext);
-    const content = segment.from(output);
+    const content = typeof output === 'string' ? segment.from(output) : output as MessageElement[];
 
-    return {
-        ...options,
-        content
-    };
-}
+        return {
+            ...options,
+            content
+        };
+    }
 
 // 内置组件
-export const Fragment = defineComponent(async (props: { children?: SendContent }, context: ComponentContext) => {
-    // Fragment 直接渲染 children，不添加任何包装
-    return context.render(segment.toString(props.children || ''), context);
+export const Fragment = defineComponent(async (props: { children?: string }, context: ComponentContext) => {
+    let children = props.children || '';
+    try{
+        children=JSON.parse(segment.unescape(children));
+    }catch{}
+    return context.render(children || '', context);
 }, 'Fragment');
 export const Fetch = defineComponent(async ({ url }) => {
-    const result: string = await fetch(url).then((r) => r.text());
-    return result;
+    return await fetch(url).then((r) => r.text());
 }, 'fetch');

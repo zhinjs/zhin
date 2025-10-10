@@ -9,6 +9,14 @@
     ".": {
       "types": "./lib/index.d.ts",
       "import": "./lib/index.js"
+    },
+    "./jsx": {
+      "types": "./lib/jsx.d.ts",
+      "import": "./lib/jsx.js"
+    },
+    "./jsx-runtime": {
+      "types": "./lib/jsx-runtime.d.ts",
+      "import": "./lib/jsx-runtime.js"
     }
   },
   "scripts": {

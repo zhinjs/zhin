@@ -68,7 +68,7 @@ export class App extends HMR<Plugin> {
     super("Zhin", {
       logger,
       dirs: finalConfig.plugin_dirs || [],
-      extensions: new Set([".js", ".ts"]),
+      extensions: new Set([".js", ".ts",".jsx",".tsx"]),
       debug: finalConfig.debug,
     });
     this.on("message.send", this.sendMessage.bind(this));

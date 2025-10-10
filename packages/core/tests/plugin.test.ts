@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { Plugin } from '../src/plugin'
 import { App } from '../src/app'
 import { MessageCommand } from '../src/command'
-import { Component } from '../src/component'
+import { Component, defineComponent, ComponentContext } from '../src/component'
 import { Message } from '../src/message'
 import { PluginError, MessageError } from '../src/errors'
 
@@ -161,35 +161,44 @@ describe('Plugin系统测试', () => {
     })
   })
 
-  describe('组件系统测试', () => {
-    it('应该正确添加组件', () => {
-      const mockComponent = new Component({
-        name: 'test-component',
-        props: {},
-        render: (props) => props.children
-      })
+  describe('函数式组件系统测试', () => {
+    it('应该正确添加函数式组件', () => {
+      const mockComponent = defineComponent(async function TestComponent(props: { name: string }, context: ComponentContext) {
+        return `Hello ${props.name}`
+      }, 'test-component')
+      
       plugin.addComponent(mockComponent)
 
       expect(plugin.components.has('test-component')).toBe(true)
       expect(plugin.components.get('test-component')).toBe(mockComponent)
     })
 
-    it('应该在发送消息前渲染组件', async () => {
-      const renderSpy = vi.spyOn(Component, 'render').mockResolvedValue({ content: '渲染结果' })
+    it('应该正确处理组件渲染', async () => {
+      const mockComponent = defineComponent(async function TestComponent(props: { text: string }, context: ComponentContext) {
+        return `Rendered: ${props.text}`
+      }, 'test-component')
       
-      const mockComponent = new Component({
-        name: 'test-component',
-        props: {},
-        render: (props) => props.children
-      })
       plugin.addComponent(mockComponent)
 
       // 模拟app.sendMessage
       const appSendSpy = vi.spyOn(app, 'sendMessage').mockResolvedValue()
 
-      await plugin.sendMessage({ content: 'test' })
+      await plugin.sendMessage({ content: '<test-component text="Hello" />' })
 
-      // 由于beforeSend钩子的实现可能不直接调用Component.render，这里简化测试
+      expect(appSendSpy).toHaveBeenCalled()
+    })
+
+    it('应该正确处理表达式属性', async () => {
+      const mockComponent = defineComponent(async function TestComponent(props: { sum: number }, context: ComponentContext) {
+        return `Sum: ${props.sum}`
+      }, 'math-component')
+      
+      plugin.addComponent(mockComponent)
+
+      const appSendSpy = vi.spyOn(app, 'sendMessage').mockResolvedValue()
+
+      await plugin.sendMessage({ content: '<math-component sum={1+2+3} />' })
+
       expect(appSendSpy).toHaveBeenCalled()
     })
   })
