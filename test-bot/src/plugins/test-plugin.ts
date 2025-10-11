@@ -61,18 +61,18 @@ addCommand(
 );
 
 
-const foo = defineComponent(async function foo(props: {face: number}, context: ComponentContext) {
-  return "这是父组件" + props.face;
-}, 'foo');
 
-addComponent(foo);
+addComponent(async function foo(props: {face: number}, context: ComponentContext) {
+  return "这是父组件" + props.face;
+});
 
 
 
 useContext("web", (web) => {
-  web.addEntry(
-    path.resolve(path.resolve(import.meta.dirname, "../../client/index.ts"))
+  const dispose=web.addEntry(
+    path.resolve(path.resolve(import.meta.dirname, "../../client/index.tsx"))
   );
+  return dispose
 });
 // 依赖icqq上下文
 useContext("icqq", (p) => {
@@ -84,8 +84,8 @@ useContext("icqq", (p) => {
       const likeResult: string[] = [];
       for (const user_id of params.atUsers) {
         const userResult = await Promise.all(
-          new Array(3).fill(0).map(() => {
-            return p.bots.get(m.$bot)?.sendLike(user_id, 20);
+          new Array(5).fill(0).map(() => {
+            return p.bots.get(m.$bot)?.sendLike(user_id, 10);
           })
         );
         likeResult.push(

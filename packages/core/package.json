@@ -17,6 +17,10 @@
     "./jsx-runtime": {
       "types": "./lib/jsx-runtime.d.ts",
       "import": "./lib/jsx-runtime.js"
+    },
+    "./jsx-dev-runtime": {
+      "types": "./lib/jsx-dev-runtime.d.ts",
+      "import": "./lib/jsx-dev-runtime.js"
     }
   },
   "scripts": {

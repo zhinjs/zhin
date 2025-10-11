@@ -1,6 +1,11 @@
 {
     "compilerOptions": {
         "baseUrl": ".",
+        "target": "ES2020",
+        "lib": ["ES2020", "DOM", "DOM.Iterable"],
+        "moduleResolution": "bundler",
+        "module": "ESNext",
+        "jsx": "react-jsx",
         "paths": {
             "@/*": ["src/*"],
             "@zhin.js/client": [

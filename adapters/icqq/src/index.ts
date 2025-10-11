@@ -171,8 +171,10 @@ registerAdapter(new Adapter('icqq',IcqqBot))
 
 useContext('web', (web) => {
     // 注册ICQQ适配器的客户端入口文件
-    const clientEntryPath = path.resolve(import.meta.dirname, '../client/index.ts')
-    web.addEntry(clientEntryPath)
+    const clientEntryPath = path.resolve(import.meta.dirname, '../client/index.tsx')
+    const dispose = web.addEntry(clientEntryPath)
+    console.log('[ICQQ] Client entry registered:', clientEntryPath)
+    return dispose
 });
 useContext('router','icqq', (router,icqq) => {
     router.get('/api/icqq/bots', async (ctx) => {

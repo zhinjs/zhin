@@ -119,6 +119,10 @@ export class Dependency<P extends Dependency = any,O extends DependencyOptions=D
                 this.off('context.dispose',disposeFn)
             }
             this.on('context.dispose',disposeFn)
+            this.on('dispose',()=>{
+                this.off('context.dispose',disposeFn)
+                dispose(args[0])
+            })
         }
         const onContextMounted=async (name:string)=>{
             if(!this.#contextsIsReady(contexts)||!(contexts).includes(name)) return

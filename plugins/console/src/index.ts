@@ -1,13 +1,12 @@
-import {register, useContext, useLogger} from '@zhin.js/core';
+import {register, useContext} from '@zhin.js/core';
+import react from '@vitejs/plugin-react';
 import WebSocket,{WebSocketServer} from 'ws';
 import {createServer,ViteDevServer,searchForWorkspaceRoot} from 'vite';
-import Components from 'unplugin-vue-components/vite';
-import {PrimeVueResolver} from '@primevue/auto-import-resolver';
 import connect from 'koa-connect';
-import vuePlugin from "@vitejs/plugin-vue";
 import * as fs from 'fs';
 import * as path from 'path';
 import {fileURLToPath} from "node:url";
+import tailwindcss from '@tailwindcss/vite';
 
 declare module '@zhin.js/types' {
     interface GlobalContext {
@@ -51,7 +50,6 @@ const createDeleteMsg = (key: string, value: any) => {
         },
     };
 };
-const logger=useLogger();
 useContext('router', async (router) => {
     const root = path.join(process.cwd(),'node_modules','@zhin.js','client','app');
     const base='/vite/'
@@ -59,12 +57,8 @@ useContext('router', async (router) => {
         root,
         base,
         plugins: [
-            vuePlugin(),
-            Components({
-                resolvers: [
-                    PrimeVueResolver()
-                ]
-            })
+            react(),
+            tailwindcss(),
         ],
         server: {
             middlewareMode: true,
@@ -73,13 +67,14 @@ useContext('router', async (router) => {
             },
         },
         resolve: {
-            dedupe: ['vue', 'vue-router', 'pinia','primevue','primeicons'],
+            dedupe: ['react', 'react-dom'],
             alias: {
                 '@zhin.js/client': path.resolve(root, '../src'),
+                '@': path.resolve(root, 'src'),
             },
         },
         optimizeDeps: {
-            include: ['vue', 'pinia'],
+            include: ['react', 'react-dom'],
         },
         build: {
             rollupOptions: {
@@ -87,33 +82,48 @@ useContext('router', async (router) => {
             },
         },
     });
+    
+    // Vite 中间件 - 必须在其他路由之前
+    router.use((ctx: any, next: any) => {
+        if(ctx.request.originalUrl.startsWith('/api')) return next()
+        return connect(vite.middlewares)(ctx,next);
+    });
+    
+    // SPA 回退路由 - 处理所有未匹配的路由
     router.all('*all', async (ctx, next) => {
-        await next();
-        const url=ctx.request.originalUrl.replace(base,'')
+        const url = ctx.request.originalUrl.replace(base, '')
         const name = ctx.path.slice(1);
+        
         const sendFile = (filename: string) => {
             ctx.type = path.extname(filename);
             if (filename.endsWith('.ts')) ctx.type = 'text/javascript';
             return (ctx.body = fs.createReadStream(filename));
         };
+        
+        // 1. 检查是否是动态入口
         if (Object.keys(webServer.entries).includes(name)) {
             return sendFile(path.resolve(process.cwd(), webServer.entries[name]));
         }
+        
+        // 2. 检查是否是静态文件
         const filename = path.resolve(root, name);
-        if (!filename.startsWith(root) && !filename.includes('node_modules')) {
+        if (filename.startsWith(root) || filename.includes('node_modules')) {
+            if (fs.existsSync(filename)) {
+                const fileState = fs.statSync(filename);
+                if (fileState.isFile()) {
+                    return sendFile(filename);
+                }
+            }
+        } else {
+            // 安全检查：路径不在允许范围内
             return (ctx.status = 403);
         }
-        if (fs.existsSync(filename)) {
-            const fileState = fs.statSync(filename);
-            if (fileState.isFile()) return sendFile(filename);
-        }
+        
+        // 3. 所有其他路径（包括 SPA 路由）都返回 index.html
+        // 这样前端路由可以正确处理
         const template = fs.readFileSync(path.resolve(root, 'index.html'), 'utf8');
         ctx.type = 'html';
         ctx.body = await vite.transformIndexHtml(url, template);
-    });
-    router.use((ctx: any, next: any) => {
-        if(ctx.request.originalUrl.startsWith('/api')) return next()
-        return connect(vite.middlewares)(ctx,next);
     });
 
     const webServer:WebServer={

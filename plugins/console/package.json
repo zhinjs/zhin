@@ -16,18 +16,16 @@
     "clean": "rm -rf lib"
   },
   "dependencies": {
-    "@vitejs/plugin-vue": "^6.0.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "@tailwindcss/vite":"4.1.14",
     "koa-connect": "^2.1.0",
     "ws": "^8.18.3",
-    "vue": "^3.5.18",
     "vite": "^7.0.6"
   },
   "peerDependencies": {
     "@types/ws": "^8.18.1",
     "@zhin.js/client": "workspace:^",
     "@zhin.js/http": "workspace:^",
-    "unplugin-vue-components": "^29.0.0",
-    "@primevue/auto-import-resolver": "^4.3.7",
     "@zhin.js/core": "workspace:^",
     "@zhin.js/types": "workspace:^"
   },

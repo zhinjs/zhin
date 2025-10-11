@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // 计算CLI的绝对路径
-const cliPath = join(__dirname, '../../cli/lib/cli.js');
+const cliPath = join(__dirname, '..','node_modules','@zhin.js','cli','lib','cli.js');
 
 // 直接调用 CLI 的 init 命令
 const args = process.argv.slice(2);
