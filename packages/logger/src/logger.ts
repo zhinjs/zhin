@@ -718,10 +718,10 @@ export function setOptions(options: LoggerOptions={},logger:Logger=defaultLogger
   return logger.setOptions(options)
 }
 export function addTransport(transport: LogTransport,logger:Logger=defaultLogger) {
-  return logger.addTransport(transport)
+  return logger.addTransport(transport,true)
 }
 export function removeTransport(transport: LogTransport,logger:Logger=defaultLogger) {
-  return logger.removeTransport(transport)
+  return logger.removeTransport(transport,true)
 }
 export function setFormatter(formatter: LogFormatter,logger:Logger=defaultLogger) {
   return logger.setFormatter(formatter)

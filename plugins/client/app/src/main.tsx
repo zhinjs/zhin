@@ -1,12 +1,21 @@
 import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Provider } from 'react-redux'
-import { store, DynamicRouter, persistor, addPage, useSelector } from '@zhin.js/client'
+import { Provider as ReduxProvider } from 'react-redux'
+import { store, DynamicRouter, persistor, addPage, useSelector, Icons } from '@zhin.js/client'
 import DashboardLayout from './layouts/dashboard'
-import DashboardHome from './pages/dashboard-home' 
+import DashboardHome from './pages/dashboard-home'
+import DashboardPlugins from './pages/dashboard-plugins'
+import DashboardPluginDetail from './pages/dashboard-plugin-detail'
+import DashboardBots from './pages/dashboard-bots'
+import DashboardLogs from './pages/dashboard-logs'
+import { Theme } from '@radix-ui/themes';
+import '@radix-ui/themes/styles.css'
 import './style.css'
 import { PersistGate } from 'redux-persist/integration/react'
-import { Home } from 'lucide-react'
+import { initializeTheme } from './theme'
+
+// Initialize theme on app load
+initializeTheme()
 
 
 // 路由配置
@@ -16,19 +25,51 @@ const routes = [
         path: '/',
         title: 'Dashboard',
         element: <DashboardLayout />,
+        redirect: '/dashboard',
         meta: { order: 0 },
         children: [
             {
+                key: 'dashboard-home',
                 index: true,
-                key: 'dashboard',
                 path: '/dashboard',
-                title: '仪表盘',
-                icon: <Home className="w-5 h-5" />,
+                title: '系统概览',
+                icon: <Icons.Home className="w-5 h-5" />,
                 element: <DashboardHome />,
-                meta: { order: 1 }
+            },
+
+             {
+                 key: 'dashboard-plugins',
+                 path: '/plugins',
+                 title: '插件管理',
+                 icon: <Icons.Package className="w-5 h-5" />,
+                 element: <DashboardPlugins />,
+                 meta: { order: 2 }
+             },
+             {
+                 key: 'dashboard-plugin-detail',
+                 title: '插件详情',
+                 path: '/plugins/:name',
+                 element: <DashboardPluginDetail />,
+                 meta: { hideInMenu: true }
+             },
+            {
+                key: 'dashboard-bots',
+                path: '/bots',
+                title: '机器人',
+                icon: <Icons.Bot className="w-5 h-5" />,
+                element: <DashboardBots />,
+                meta: { order: 3 }
+            },
+            {
+                key: 'dashboard-logs',
+                path: '/logs',
+                title: '系统日志',
+                icon: <Icons.FileText className="w-5 h-5" />,
+                element: <DashboardLogs />,
+                meta: { order: 4 }
             }
         ]
-    },
+    }
 ]
 
 // 路由初始化组件
@@ -69,10 +110,12 @@ createRoot(
     document.getElementById('root'),
 ).render(
     <StrictMode>
-        <PersistGate loading={null} persistor={persistor}>
-            <Provider store={store}>
-                <RouteInitializer />
-            </Provider>
-        </PersistGate>
+        <Theme accentColor="blue" grayColor="slate" radius="large" scaling="100%">
+            <PersistGate loading={null} persistor={persistor}>
+                <ReduxProvider store={store}>
+                    <RouteInitializer />
+                </ReduxProvider>
+            </PersistGate>
+        </Theme>
     </StrictMode>,
 )

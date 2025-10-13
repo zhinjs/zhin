@@ -1,2 +1,471 @@
 @import "tailwindcss";
 @config "../tailwind.config.js";
+
+/* ============================================
+   Radix UI Themes - 主题定制
+   基于官方文档: https://www.radix-ui.com/themes/docs/overview/getting-started
+   ============================================ */
+
+/* ============================================
+   自定义 CSS Tokens (全局变量)
+   Radix UI Themes 使用 CSS 变量系统
+   ============================================ */
+
+:root,
+.light,
+.light-theme {
+  /* 动画和过渡 */
+  --transition-duration: 200ms;
+  --transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* 自定义阴影增强 */
+  --shadow-1: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-2: 0 2px 4px -1px rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-3: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.06);
+  --shadow-4: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+  --shadow-5: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.04);
+  
+  /* Glassmorphism 效果 */
+  --glass-bg: rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.2);
+  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+  
+  /* 自定义渐变 */
+  --gradient-primary: linear-gradient(135deg, var(--accent-9) 0%, var(--purple-9) 100%);
+  --gradient-success: linear-gradient(135deg, var(--green-9) 0%, var(--teal-9) 100%);
+  --gradient-warning: linear-gradient(135deg, var(--amber-9) 0%, var(--orange-9) 100%);
+  --gradient-danger: linear-gradient(135deg, var(--red-9) 0%, var(--crimson-9) 100%);
+  --gradient-info: linear-gradient(135deg, var(--blue-9) 0%, var(--cyan-9) 100%);
+}
+
+.dark,
+.dark-theme {
+  /* 暗色模式下的 Glassmorphism */
+  --glass-bg: rgba(0, 0, 0, 0.5);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  
+  /* 暗色模式阴影增强 */
+  --shadow-1: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-2: 0 2px 4px -1px rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.2);
+  --shadow-3: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-4: 0 10px 15px -3px rgb(0 0 0 / 0.6), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+  --shadow-5: 0 20px 25px -5px rgb(0 0 0 / 0.7), 0 8px 10px -6px rgb(0 0 0 / 0.5);
+}
+
+/* ============================================
+   全局样式优化
+   ============================================ */
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+}
+
+/* ============================================
+   滚动条美化 (适配明暗主题)
+   ============================================ */
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--gray-3);
+  border-radius: var(--radius-2);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--gray-8);
+  border-radius: var(--radius-2);
+  border: 2px solid var(--gray-3);
+  transition: background var(--transition-duration) var(--transition-timing);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gray-10);
+}
+
+/* ============================================
+   Radix UI 组件微调
+   使用 data-* 选择器覆盖，保持 Radix 原生样式
+   ============================================ */
+
+/* Card - 卡片增强 */
+.rt-Card {
+  transition: all var(--transition-duration) var(--transition-timing);
+}
+
+.rt-Card[data-accent-color]:hover {
+  box-shadow: var(--shadow-3);
+  transform: translateY(-2px);
+}
+
+/* Button - 按钮微动效 */
+.rt-Button {
+  transition: all var(--transition-duration) var(--transition-timing);
+  font-weight: 500;
+}
+
+.rt-Button:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-2);
+}
+
+.rt-Button:not(:disabled):active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-1);
+}
+
+.rt-Button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* TextField - 输入框聚焦增强 */
+.rt-TextFieldInput,
+.rt-TextAreaInput {
+  transition: all var(--transition-duration) var(--transition-timing);
+}
+
+.rt-TextFieldInput:focus-visible,
+.rt-TextAreaInput:focus-visible {
+  box-shadow: 0 0 0 3px var(--accent-a5);
+  outline: none;
+}
+
+/* Badge - 徽章微动效 */
+.rt-Badge {
+  font-weight: 600;
+  transition: transform var(--transition-duration) var(--transition-timing);
+}
+
+.rt-Badge:hover {
+  transform: scale(1.05);
+}
+
+/* Select - 选择器增强 */
+.rt-SelectTrigger {
+  transition: all var(--transition-duration) var(--transition-timing);
+}
+
+.rt-SelectTrigger:hover:not([data-disabled]) {
+  background-color: var(--gray-a3);
+}
+
+.rt-SelectContent {
+  box-shadow: var(--shadow-5);
+  animation: slideDownAndFade 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Checkbox - 复选框增强 */
+.rt-CheckboxButton {
+  transition: all var(--transition-duration) var(--transition-timing);
+}
+
+.rt-CheckboxButton:hover:not([data-disabled]) {
+  background-color: var(--accent-a3);
+}
+
+/* Switch - 开关增强 */
+.rt-SwitchButton {
+  transition: all var(--transition-duration) var(--transition-timing);
+}
+
+.rt-SwitchButton:hover:not([data-disabled]) {
+  box-shadow: var(--shadow-2);
+}
+
+/* Tabs - 标签页增强 */
+.rt-TabsList {
+  background-color: var(--gray-a2);
+  padding: 4px;
+  border-radius: calc(var(--radius-3) + 2px);
+}
+
+.rt-TabsTrigger {
+  transition: all var(--transition-duration) var(--transition-timing);
+  font-weight: 500;
+}
+
+.rt-TabsTrigger[data-state="active"] {
+  box-shadow: var(--shadow-1);
+}
+
+/* Dialog - 对话框动画 */
+.rt-DialogContent {
+  animation: contentShow 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* DropdownMenu - 下拉菜单动画 */
+.rt-DropdownMenuContent {
+  animation: slideDownAndFade 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--shadow-5);
+}
+
+/* Popover - 弹出框动画 */
+.rt-PopoverContent {
+  animation: slideDownAndFade 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--shadow-4);
+}
+
+/* Tooltip - 工具提示 */
+.rt-TooltipContent {
+  animation: slideDownAndFade 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--shadow-3);
+}
+
+/* Separator - 分隔线增强 */
+.rt-Separator[data-orientation="horizontal"] {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--gray-a6) 20%,
+    var(--gray-a6) 80%,
+    transparent
+  );
+}
+
+.rt-Separator[data-orientation="vertical"] {
+  background: linear-gradient(
+    180deg,
+    transparent,
+    var(--gray-a6) 20%,
+    var(--gray-a6) 80%,
+    transparent
+  );
+}
+
+/* ============================================
+   自定义动画关键帧
+   ============================================ */
+
+@keyframes slideDownAndFade {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUpAndFade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes contentShow {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* ============================================
+   工具类 (与 Tailwind 配合使用)
+   ============================================ */
+
+/* Glassmorphism 效果 */
+.glass {
+  background: var(--glass-bg) !important;
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+
+/* 渐变背景 */
+.gradient-primary {
+  background: var(--gradient-primary);
+  color: white;
+}
+
+.gradient-success {
+  background: var(--gradient-success);
+  color: white;
+}
+
+.gradient-warning {
+  background: var(--gradient-warning);
+  color: white;
+}
+
+.gradient-danger {
+  background: var(--gradient-danger);
+  color: white;
+}
+
+.gradient-info {
+  background: var(--gradient-info);
+  color: white;
+}
+
+/* 文本渐变 */
+.text-gradient {
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 悬停提升效果 */
+.hover-lift {
+  transition: transform var(--transition-duration) var(--transition-timing),
+              box-shadow var(--transition-duration) var(--transition-timing);
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-4);
+}
+
+/* 悬停发光效果 */
+.hover-glow:hover {
+  box-shadow: 0 0 20px var(--accent-a5);
+}
+
+/* 平滑过渡 */
+.transition-smooth {
+  transition: all var(--transition-duration) var(--transition-timing);
+}
+
+/* ============================================
+   响应式优化
+   ============================================ */
+
+@media (max-width: 768px) {
+  /* 移动端禁用悬停效果 */
+  .rt-Card[data-accent-color]:hover,
+  .rt-Button:not(:disabled):hover,
+  .hover-lift:hover {
+    transform: none;
+  }
+  
+  /* 减小阴影 */
+  .rt-Card[data-accent-color]:hover {
+    box-shadow: var(--shadow-2);
+  }
+}
+
+/* ============================================
+   无障碍优化
+   ============================================ */
+
+/* 聚焦可见性增强 */
+*:focus-visible {
+  outline: 2px solid var(--accent-9);
+  outline-offset: 2px;
+  border-radius: var(--radius-2);
+}
+
+/* 减少动画运动（用户偏好） */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* 高对比度模式 */
+@media (prefers-contrast: high) {
+  .rt-Card,
+  .rt-Button,
+  .rt-Badge {
+    border-width: 2px;
+  }
+}
+
+/* ============================================
+   打印样式
+   ============================================ */
+
+@media print {
+  * {
+    animation: none !important;
+    transition: none !important;
+    box-shadow: none !important;
+  }
+  
+  .rt-Card {
+    border: 1px solid var(--gray-6);
+  }
+  
+  /* 隐藏不必要的元素 */
+  .rt-Button,
+  .no-print {
+    display: none;
+  }
+}
+
+/* ============================================
+   深色模式特定优化
+   ============================================ */
+
+.dark .rt-Card {
+  /* 暗色模式下卡片背景稍微提亮 */
+  background-color: var(--gray-2);
+}
+
+.dark .rt-Button[data-variant="solid"] {
+  /* 暗色模式下实心按钮对比度增强 */
+  box-shadow: var(--shadow-2);
+}
+
+/* ============================================
+   性能优化
+   ============================================ */
+
+/* GPU 加速 */
+.rt-Card[data-accent-color],
+.rt-Button,
+.hover-lift {
+  will-change: transform;
+}
+
+/* 防止布局抖动 */
+.rt-Button {
+  contain: layout style paint;
+}

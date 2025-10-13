@@ -16,14 +16,28 @@
     "clean": "rm -rf lib"
   },
   "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.1",
     "typescript": "^5.3.0"
   },
   "peerDependencies": {
-    "@zhin.js/core": "workspace:*",
-    "@zhin.js/types": "workspace:*"
+    "zhin.js": "workspace:*",
+    "@zhin.js/client": "workspace:*",
+    "@zhin.js/http": "workspace:*",
+    "@zhin.js/types": "workspace:*",
+    "@zhin.js/console": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@zhin.js/types": {
+      "optional": true
+    },
+    "@zhin.js/http": {
+      "optional": true
+    },
+    "@zhin.js/console": {
+      "optional": true
+    },
+    "@zhin.js/client": {
       "optional": true
     }
   }

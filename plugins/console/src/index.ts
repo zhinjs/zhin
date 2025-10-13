@@ -70,6 +70,9 @@ useContext('router', async (router) => {
             dedupe: ['react', 'react-dom'],
             alias: {
                 '@zhin.js/client': path.resolve(root, '../src'),
+                'radix-ui':path.resolve(import.meta.dirname,'../node_modules/radix-ui'),
+                "@radix-ui/themes":path.resolve(import.meta.dirname,'../node_modules/@radix-ui/themes'),
+                "lucide-react":path.resolve(import.meta.dirname,'../node_modules/lucide-react'),
                 '@': path.resolve(root, 'src'),
             },
         },
@@ -130,7 +133,7 @@ useContext('router', async (router) => {
         vite,
         entries: {},
         addEntry(entry) {
-            const hash = Date.now().toString(16);
+            const hash = Date.now().toString(16)+Math.random().toString(16).slice(2,8);
             const entryFile=typeof entry==="string"?entry:entry[(process.env.NODE_ENV as 'development'|'production')||'development'];
             this.entries[hash] = `/vite/@fs/${entryFile}`;
             for (const ws of this.ws.clients || []) {

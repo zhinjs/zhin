@@ -27,6 +27,14 @@ import { Adapter } from "./adapter";
 import { MessageCommand } from "./command";
 import { Component } from "./component";
 import { RelatedDatabase,DocumentDatabase,KeyValueDatabase,Schema,Registry} from "@zhin.js/database";
+import { DatabaseLogTransport } from "./log-transport.js";
+import { SystemLog, SystemLogSchema } from "./models/system-log.js";
+import { addTransport, removeTransport } from "@zhin.js/logger";
+declare module "@zhin.js/types"{
+  interface Models{
+    SystemLog:SystemLog;
+  }
+}
 
 // ============================================================================
 // App 类（Zhin.js 应用主入口，负责插件热重载、配置管理、消息分发等）
@@ -40,6 +48,7 @@ export class App extends HMR<Plugin> {
   private config: AppConfig;
   adapters: string[] = [];
   database?: RelatedDatabase<any,Models>|DocumentDatabase<any,Models>|KeyValueDatabase<any,Models>;
+  private logTransport?: DatabaseLogTransport;
   /**
    * 构造函数：初始化应用，加载配置，注册全局异常处理
    * @param config 可选的应用配置，若为空则自动查找配置文件
@@ -176,7 +185,9 @@ export class App extends HMR<Plugin> {
         result.set(name, schema);
       });
       return result;
-    }, new Map<string,Schema<any>>());
+    }, new Map<string,Schema<any>>([
+      ['SystemLog', SystemLogSchema]
+    ]));
   }
   /** 使用插件 */
   use(filePath: string): void {
@@ -199,6 +210,11 @@ export class App extends HMR<Plugin> {
       this.database=Registry.create((this.config.database as any).dialect,this.config.database,schemas);
       await this.database?.start();
       this.logger.info(`database init success`);
+      
+      // 初始化日志传输器
+      this.logTransport = new DatabaseLogTransport(this);
+      addTransport(this.logTransport);
+      this.logger.info(`database log transport registered`);
     } else {
       this.logger.info(`database not configured, skipping database init`);
     }
@@ -212,6 +228,14 @@ export class App extends HMR<Plugin> {
   /** 停止App */
   async stop(): Promise<void> {
     this.logger.info("Stopping app...");
+    
+    // 停止日志清理任务并移除日志传输器
+    if (this.logTransport) {
+      this.logTransport.stopCleanup();
+      removeTransport(this.logTransport);
+      this.logger.info("database log transport removed");
+    }
+    
     // 销毁所有插件
     this.dispose();
 

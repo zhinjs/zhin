@@ -1,140 +1,301 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { 
-    Users,
-    BarChart3,
-    FileText,
-    Settings,
-    TrendingUp
-} from "lucide-react"
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router'
+import {Flex,Box,Spinner,Text,Callout,Heading,Badge,Grid,Card,Button} from '@radix-ui/themes'
+import { Bot, AlertCircle, Activity, Package, Clock, Cpu, MemoryStick, FileText, TrendingUp } from 'lucide-react'
+
+interface Stats {
+  plugins: { total: number; active: number }
+  bots: { total: number; online: number }
+  commands: number
+  components: number
+  uptime: number
+  memory: number
+}
+
+interface SystemStatus {
+  uptime: number
+  memory: {
+    rss: number
+    heapTotal: number
+    heapUsed: number
+    external: number
+  }
+  cpu: {
+    user: number
+    system: number
+  }
+  platform: string
+  nodeVersion: string
+}
 
 export default function DashboardHome() {
-    const stats = [
-        {
-            title: "总用户数",
-            value: "1,234",
-            change: "+12.5%",
-            icon: Users,
-            gradient: "from-blue-500 to-cyan-500",
-        },
-        {
-            title: "今日访问",
-            value: "5,678",
-            change: "+8.2%",
-            icon: BarChart3,
-            gradient: "from-green-500 to-emerald-500",
-        },
-        {
-            title: "文档数量",
-            value: "89",
-            change: "+3.1%",
-            icon: FileText,
-            gradient: "from-purple-500 to-pink-500",
-        },
-        {
-            title: "系统状态",
-            value: "正常",
-            change: "100%",
-            icon: Settings,
-            gradient: "from-orange-500 to-red-500",
-        }
-    ]
+  const navigate = useNavigate()
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
+  useEffect(() => {
+    fetchData()
+    const interval = setInterval(fetchData, 5000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const fetchData = async () => {
+    try {
+      const [statsRes, statusRes] = await Promise.all([
+        fetch('/api/stats', { credentials: 'include' }),
+        fetch('/api/system/status', { credentials: 'include' })
+      ])
+
+      if (!statsRes.ok || !statusRes.ok) throw new Error('API 请求失败')
+
+      const statsData = await statsRes.json()
+      const statusData = await statusRes.json()
+
+      if (statsData.success && statusData.success) {
+        setStats(statsData.data)
+        setSystemStatus(statusData.data)
+        setError(null)
+      }
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const formatUptime = (seconds: number) => {
+    const days = Math.floor(seconds / 86400)
+    const hours = Math.floor((seconds % 86400) / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    return `${days}天 ${hours}小时 ${minutes}分钟`
+  }
+
+  const formatMemory = (bytes: number) => {
+    return `${(bytes / 1024 / 1024).toFixed(2)} MB`
+  }
+
+  if (loading) {
     return (
-        <div className="space-y-8">
-            {/* 欢迎区域 */}
-            <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
-                    仪表板
-                </h1>
-                <p className="text-gray-500 mt-2">欢迎回来！这里是您的控制台概览</p>
-            </div>
-
-            {/* 现代化统计卡片 */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {stats.map((stat, index) => {
-                    const Icon = stat.icon
-                    return (
-                        <Card 
-                            key={index} 
-                            className="border-0 bg-white/60 backdrop-blur-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
-                        >
-                            <CardContent className="p-6">
-                                <div className="flex items-start justify-between mb-4">
-                                    <div className={`p-3 rounded-2xl bg-gradient-to-br ${stat.gradient} shadow-lg`}>
-                                        <Icon className="w-6 h-6 text-white" />
-                                    </div>
-                                    <div className="flex items-center space-x-1 text-green-600">
-                                        <TrendingUp className="w-4 h-4" />
-                                        <span className="text-sm font-semibold">{stat.change}</span>
-                                    </div>
-                                </div>
-                                <div>
-                                    <p className="text-sm font-medium text-gray-500 mb-1">{stat.title}</p>
-                                    <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )
-                })}
-            </div>
-
-            {/* 主要内容区域 - 现代化设计 */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* 最近活动 */}
-                <Card className="border-0 bg-white/60 backdrop-blur-xl shadow-lg">
-                    <CardHeader>
-                        <CardTitle>最近活动</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-4">
-                            {[
-                                { label: "新用户注册", time: "2 分钟前", color: "bg-green-500" },
-                                { label: "文档更新", time: "5 分钟前", color: "bg-blue-500" },
-                                { label: "系统维护", time: "1 小时前", color: "bg-yellow-500" },
-                                { label: "数据备份", time: "2 小时前", color: "bg-purple-500" }
-                            ].map((activity, index) => (
-                                <div key={index} className="flex items-center space-x-4 p-3 rounded-xl hover:bg-gray-50/50 transition-colors">
-                                    <div className={`w-2 h-2 ${activity.color} rounded-full animate-pulse`}></div>
-                                    <div className="flex-1">
-                                        <p className="text-sm font-semibold text-gray-900">{activity.label}</p>
-                                        <p className="text-xs text-gray-500">{activity.time}</p>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* 快速操作 */}
-                <Card className="border-0 bg-white/60 backdrop-blur-xl shadow-lg">
-                    <CardHeader>
-                        <CardTitle>快速操作</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="grid grid-cols-2 gap-4">
-                            {[
-                                { icon: Users, label: "用户管理", gradient: "from-blue-500 to-cyan-500" },
-                                { icon: FileText, label: "创建文档", gradient: "from-purple-500 to-pink-500" },
-                                { icon: BarChart3, label: "查看报告", gradient: "from-green-500 to-emerald-500" },
-                                { icon: Settings, label: "系统设置", gradient: "from-orange-500 to-red-500" }
-                            ].map((action, index) => {
-                                const ActionIcon = action.icon
-                                return (
-                                    <button 
-                                        key={index}
-                                        className="group p-6 rounded-2xl border-2 border-gray-100 hover:border-transparent bg-white hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
-                                    >
-                                        <div className={`w-12 h-12 mx-auto mb-3 rounded-2xl bg-gradient-to-br ${action.gradient} flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg`}>
-                                            <ActionIcon className="w-6 h-6 text-white" />
-                                        </div>
-                                        <p className="text-sm font-semibold text-gray-700 group-hover:text-gray-900">{action.label}</p>
-                                    </button>
-                                )
-                            })}
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-        </div>
+      <Flex align="center" justify="center" style={{ height: '100%' }}>
+        <Box>
+          <Spinner size="3" />
+          <Text size="2" color="gray" style={{ marginTop: '8px' }}>加载中...</Text>
+        </Box>
+      </Flex>
     )
+  }
+
+  if (error) {
+    return (
+      <Flex align="center" justify="center" style={{ height: '100%' }}>
+        <Callout.Root color="red">
+          <Callout.Icon>
+            <AlertCircle />
+          </Callout.Icon>
+          <Callout.Text>
+            加载失败: {error}
+          </Callout.Text>
+        </Callout.Root>
+      </Flex>
+    )
+  }
+
+  return (
+    <Box>
+      {/* 页面标题 */}
+      <Flex direction="column" gap="2" mb="6">
+        <Heading size="8">系统概览</Heading>
+        <Text color="gray">实时监控您的机器人框架运行状态</Text>
+      </Flex>
+
+      {/* 统计卡片 */}
+      <Grid columns={{ initial: '1', sm: '2', lg: '4' }} gap="4" mb="6">
+        <Card>
+          <Flex direction="column" gap="2">
+            <Flex justify="between" align="center">
+              <Text size="2" weight="medium" color="gray">插件总数</Text>
+              <Box p="2" style={{ borderRadius: '8px', backgroundColor: 'var(--purple-3)' }}>
+                <Package size={16} color="var(--purple-9)" />
+              </Box>
+            </Flex>
+            <Heading size="7">{stats?.plugins.total || 0}</Heading>
+            <Flex align="center" gap="1">
+              <Badge color="blue">{stats?.plugins.active || 0}</Badge>
+              <Text size="1" color="gray">个活跃</Text>
+            </Flex>
+          </Flex>
+        </Card>
+
+        <Card>
+          <Flex direction="column" gap="2">
+            <Flex justify="between" align="center">
+              <Text size="2" weight="medium" color="gray">机器人</Text>
+              <Bot size={16} color="var(--gray-9)" />
+            </Flex>
+            <Heading size="7">{stats?.bots.total || 0}</Heading>
+            <Text size="1" color="green">
+              {stats?.bots.online || 0} 个在线
+            </Text>
+          </Flex>
+        </Card>
+
+        <Card>
+          <Flex direction="column" gap="2">
+            <Flex justify="between" align="center">
+              <Text size="2" weight="medium" color="gray">命令数量</Text>
+              <Activity size={16} color="var(--gray-9)" />
+            </Flex>
+            <Heading size="7">{stats?.commands || 0}</Heading>
+            <Text size="1" color="gray">可用命令</Text>
+          </Flex>
+        </Card>
+
+        <Card>
+          <Flex direction="column" gap="2">
+            <Flex justify="between" align="center">
+              <Text size="2" weight="medium" color="gray">组件数量</Text>
+              <TrendingUp size={16} color="var(--gray-9)" />
+            </Flex>
+            <Heading size="7">{stats?.components || 0}</Heading>
+            <Text size="1" color="gray">已注册组件</Text>
+          </Flex>
+        </Card>
+      </Grid>
+
+      {/* 系统状态 */}
+      <Grid columns={{ initial: '1', md: '2' }} gap="4" mb="6">
+        <Card>
+          <Flex direction="column" gap="4">
+            <Box>
+              <Heading size="5" mb="1">系统信息</Heading>
+              <Text size="2" color="gray">服务器运行状态</Text>
+            </Box>
+
+            <Flex direction="column" gap="3">
+              <Flex justify="between" align="center">
+                <Flex align="center" gap="2">
+                  <Clock size={16} color="var(--gray-9)" />
+                  <Text size="2">运行时间</Text>
+                </Flex>
+                <Badge variant="soft">
+                  {systemStatus ? formatUptime(systemStatus.uptime) : '-'}
+                </Badge>
+              </Flex>
+
+              <Flex justify="between" align="center">
+                <Flex align="center" gap="2">
+                  <Cpu size={16} color="var(--gray-9)" />
+                  <Text size="2">平台</Text>
+                </Flex>
+                <Badge variant="soft">
+                  {systemStatus?.platform || '-'}
+                </Badge>
+              </Flex>
+
+              <Flex justify="between" align="center">
+                <Flex align="center" gap="2">
+                  <Activity size={16} color="var(--gray-9)" />
+                  <Text size="2">Node 版本</Text>
+                </Flex>
+                <Badge variant="soft">
+                  {systemStatus?.nodeVersion || '-'}
+                </Badge>
+              </Flex>
+            </Flex>
+          </Flex>
+        </Card>
+
+        <Card>
+          <Flex direction="column" gap="4">
+            <Box>
+              <Heading size="5" mb="1">资源使用</Heading>
+              <Text size="2" color="gray">内存使用情况</Text>
+            </Box>
+
+            <Flex direction="column" gap="3">
+              <Flex justify="between" align="center">
+                <Flex align="center" gap="2">
+                  <MemoryStick size={16} color="var(--gray-9)" />
+                  <Text size="2">堆内存使用</Text>
+                </Flex>
+                <Badge variant="soft">
+                  {stats ? `${stats.memory.toFixed(2)} MB` : '-'}
+                </Badge>
+              </Flex>
+
+              <Flex justify="between" align="center">
+                <Flex align="center" gap="2">
+                  <MemoryStick size={16} color="var(--gray-9)" />
+                  <Text size="2">总堆内存</Text>
+                </Flex>
+                <Badge variant="soft">
+                  {systemStatus ? formatMemory(systemStatus.memory.heapTotal) : '-'}
+                </Badge>
+              </Flex>
+
+              <Flex justify="between" align="center">
+                <Flex align="center" gap="2">
+                  <MemoryStick size={16} color="var(--gray-9)" />
+                  <Text size="2">RSS</Text>
+                </Flex>
+                <Badge variant="soft">
+                  {systemStatus ? formatMemory(systemStatus.memory.rss) : '-'}
+                </Badge>
+              </Flex>
+            </Flex>
+          </Flex>
+        </Card>
+      </Grid>
+
+      {/* 快速操作 */}
+      <Card>
+        <Flex direction="column" gap="4">
+          <Box>
+            <Heading size="5" mb="1">快速操作</Heading>
+            <Text size="2" color="gray">常用功能快捷入口</Text>
+          </Box>
+
+          <Grid columns={{ initial: '1', md: '3' }} gap="3">
+            <Button 
+              variant="outline"
+              onClick={() => navigate('/plugins')}
+              style={{ height: 'auto', padding: '16px', cursor: 'pointer' }}
+            >
+              <Flex direction="column" align="start" gap="2" style={{ width: '100%' }}>
+                <Package size={20} color="var(--blue-9)" />
+                <Text weight="medium">插件管理</Text>
+                <Text size="1" color="gray">查看和管理插件</Text>
+              </Flex>
+            </Button>
+
+            <Button 
+              variant="outline"
+              onClick={() => navigate('/bots')}
+              style={{ height: 'auto', padding: '16px', cursor: 'pointer' }}
+            >
+              <Flex direction="column" align="start" gap="2" style={{ width: '100%' }}>
+                <Bot size={20} color="var(--green-9)" />
+                <Text weight="medium">机器人状态</Text>
+                <Text size="1" color="gray">监控机器人运行</Text>
+              </Flex>
+            </Button>
+
+            <Button 
+              variant="outline"
+              onClick={() => navigate('/logs')}
+              style={{ height: 'auto', padding: '16px', cursor: 'pointer' }}
+            >
+              <Flex direction="column" align="start" gap="2" style={{ width: '100%' }}>
+                <FileText size={20} color="var(--purple-9)" />
+                <Text weight="medium">系统日志</Text>
+                <Text size="1" color="gray">查看运行日志</Text>
+              </Flex>
+            </Button>
+          </Grid>
+        </Flex>
+      </Card>
+    </Box>
+  )
 }

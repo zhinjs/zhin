@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { createBrowserRouter, RouterProvider as ReactRouterProvider, RouteObject, Outlet} from 'react-router'
 import { store, addRoute, removeRoute, updateRoute, clearRoutes, RouteMenuItem, useSelector } from '../store'
-export { useOutlet, Outlet, Link, useNavigate } from 'react-router'
+export { useOutlet, Outlet, Link, useNavigate, useParams } from 'react-router'
 
 
 

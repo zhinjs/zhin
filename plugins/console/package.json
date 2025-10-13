@@ -18,6 +18,9 @@
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",
     "@tailwindcss/vite":"4.1.14",
+    "radix-ui": "^1.4.3",
+    "@radix-ui/themes": "^3.2.1",
+    "lucide-react": "^0.469.0",
     "koa-connect": "^2.1.0",
     "ws": "^8.18.3",
     "vite": "^7.0.6"

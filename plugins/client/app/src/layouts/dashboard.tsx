@@ -1,27 +1,10 @@
 import { Outlet, Link, useSelector, useDispatch, toggleSidebar, setActiveMenu, useWebSocket } from "@zhin.js/client"
-import { Button } from "@/components/ui/button"
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { 
-    Bell,
-    Search,
-    Menu,
-    LogOut,
-    User,
-    HelpCircle,
-    BarChart3,
-    Users,
-} from "lucide-react"
-import { cn } from "@/lib/utils"
+import React from "react"
+import {Avatar,DropdownMenu,} from 'radix-ui'
+import {Button,Badge,TextField} from '@radix-ui/themes'
+import { Icons, cn } from "@zhin.js/client"
 import { useMemo } from "react"
+import { ThemeToggle } from "../components/ThemeToggle"
 
 export default function DashboardLayout() {
     const dispatch = useDispatch()
@@ -35,11 +18,10 @@ export default function DashboardLayout() {
         if (!dashboardRoute || !dashboardRoute.children) {
             return []
         }
-        
         return dashboardRoute.children
-            .filter(route => !route.meta?.hideInMenu)
-            .map(route => ({
-                key: route.key,
+            .filter(route => !route.meta?.hideInMenu && route.key !== 'dashboard-layout')
+            .map((route, index) => ({
+                key: route.key || `menu-item-${index}`,
                 title: route.title,
                 index: route.index,
                 icon: route.icon,
@@ -96,7 +78,7 @@ export default function DashboardLayout() {
                                     {isActive && (
                                         <div className="absolute inset-0 bg-gradient-to-r from-blue-400/10 to-purple-400/10" />
                                     )}
-                                    {item.icon && (
+                                    {item.icon && React.isValidElement(item.icon) && (
                                         <div className={cn(
                                             "w-5 h-5 flex-shrink-0 relative z-10 transition-transform",
                                             !isActive && "group-hover:scale-110"
@@ -124,10 +106,10 @@ export default function DashboardLayout() {
                         "flex items-center space-x-3 p-2.5 rounded-xl bg-gray-50/50 hover:bg-gray-100/80 transition-all duration-200 cursor-pointer",
                         !sidebarOpen && "justify-center"
                     )}>
-                        <Avatar className="h-8 w-8 ring-2 ring-gray-200">
-                            <AvatarImage src="https://i.pravatar.cc/150?u=admin" alt="管理员" />
-                            <AvatarFallback>管</AvatarFallback>
-                        </Avatar>
+                        <Avatar.Root className="h-8 w-8 ring-2 ring-gray-200">
+                            <Avatar.Image src="https://i.pravatar.cc/150?u=admin" alt="管理员" />
+                            <Avatar.Fallback>管</Avatar.Fallback>
+                        </Avatar.Root>
                         {sidebarOpen && (
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-semibold text-gray-900 truncate">管理员</p>
@@ -147,11 +129,11 @@ export default function DashboardLayout() {
                         <div className="flex items-center space-x-4">
                             <Button
                                 variant="ghost"
-                                size="icon"
+                                size="1"
                                 onClick={() => dispatch(toggleSidebar())}
                                 className="hover:bg-gray-100 rounded-xl transition-colors"
                             >
-                                <Menu className="w-5 h-5 text-gray-600" />
+                                <Icons.Menu className="w-5 h-5 text-gray-600" />
                             </Button>
                             <div>
                                 <h2 className="text-lg font-semibold text-gray-900">控制台</h2>
@@ -162,8 +144,8 @@ export default function DashboardLayout() {
                         {/* 中间 - 搜索栏 */}
                         <div className="hidden md:flex flex-1 max-w-xl mx-8">
                             <div className="relative w-full">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <Input
+                                <Icons.Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <TextField.Root
                                     placeholder="搜索功能、用户、设置..."
                                     className="pl-10 bg-gray-100/50"
                                 />
@@ -172,17 +154,20 @@ export default function DashboardLayout() {
 
                         {/* 右侧 */}
                         <div className="flex items-center space-x-3">
+                            {/* 主题切换 */}
+                            <ThemeToggle />
+
                             {/* 通知按钮 */}
                             <div className="relative">
                                 <Button 
                                     variant="ghost"
-                                    size="icon"
+                                    size="1"
                                     className="hover:bg-gray-100 rounded-xl"
                                 >
-                                    <Bell className="w-5 h-5 text-gray-600" />
+                                    <Icons.Bell className="w-5 h-5 text-gray-600" />
                                 </Button>
                                 <Badge 
-                                    variant="destructive"
+                                    variant="soft"
                                     className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-[10px]"
                                 >
                                     3
@@ -190,47 +175,47 @@ export default function DashboardLayout() {
                             </div>
 
                             {/* 用户菜单 */}
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
+                            <DropdownMenu.Root>
+                                <DropdownMenu.Trigger asChild>
                                     <button className="flex items-center space-x-3 px-3 py-2 rounded-2xl hover:bg-gray-100 transition-colors focus:outline-none">
-                                        <Avatar className="h-8 w-8 ring-2 ring-blue-500/20">
-                                            <AvatarImage src="https://i.pravatar.cc/150?u=admin" alt="管理员" />
-                                            <AvatarFallback>管</AvatarFallback>
-                                        </Avatar>
+                                        <Avatar.Root className="h-8 w-8 ring-2 ring-blue-500/20">
+                                            <Avatar.Image src="https://i.pravatar.cc/150?u=admin" alt="管理员" />
+                                            <Avatar.Fallback>管</Avatar.Fallback>
+                                        </Avatar.Root>
                                         <div className="hidden lg:block text-left">
                                             <p className="text-sm font-semibold text-gray-900">管理员</p>
                                             <p className="text-xs text-gray-500">admin@zhin.com</p>
                                         </div>
                                     </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-56">
+                                </DropdownMenu.Trigger>
+                                <DropdownMenu.Content align="end" className="w-56">
                                     <div className="px-3 py-3 border-b border-gray-200">
                                         <p className="text-sm font-semibold">登录为</p>
                                         <p className="text-xs text-gray-600">admin@zhin.com</p>
                                     </div>
-                                    <DropdownMenuItem>
-                                        <User className="mr-2 h-4 w-4" />
+                                    <DropdownMenu.Item>
+                                        <Icons.User className="mr-2 h-4 w-4" />
                                         <span>我的设置</span>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem>
-                                        <Users className="mr-2 h-4 w-4" />
+                                    </DropdownMenu.Item>
+                                    <DropdownMenu.Item>
+                                        <Icons.Users className="mr-2 h-4 w-4" />
                                         <span>团队设置</span>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem>
-                                        <BarChart3 className="mr-2 h-4 w-4" />
+                                    </DropdownMenu.Item>
+                                    <DropdownMenu.Item>
+                                        <Icons.BarChart3 className="mr-2 h-4 w-4" />
                                         <span>数据分析</span>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem>
-                                        <HelpCircle className="mr-2 h-4 w-4" />
+                                    </DropdownMenu.Item>
+                                    <DropdownMenu.Item>
+                                        <Icons.HelpCircle className="mr-2 h-4 w-4" />
                                         <span>帮助与反馈</span>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem className="text-red-600">
-                                        <LogOut className="mr-2 h-4 w-4" />
+                                    </DropdownMenu.Item>
+                                    <DropdownMenu.Separator />
+                                    <DropdownMenu.Item className="text-red-600">
+                                        <Icons.LogOut className="mr-2 h-4 w-4" />
                                         <span>退出登录</span>
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
+                                    </DropdownMenu.Item>
+                                </DropdownMenu.Content>
+                            </DropdownMenu.Root>
                         </div>
                     </div>
                 </header>

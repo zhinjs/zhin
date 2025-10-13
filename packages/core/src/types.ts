@@ -109,6 +109,15 @@ export interface AppConfig {
   disable_dependencies?: string[];
   /** 是否启用调试模式 */
   debug?: boolean;
+  /** 日志配置 */
+  log?: {
+    /** 最大日志保留天数，默认 7 天 */
+    maxDays?: number;
+    /** 最大日志条数，默认 10000 条 */
+    maxRecords?: number;
+    /** 自动清理间隔（小时），默认 24 小时 */
+    cleanupInterval?: number;
+  };
 }
 /**
  * defineConfig辅助类型，支持函数式/对象式配置
