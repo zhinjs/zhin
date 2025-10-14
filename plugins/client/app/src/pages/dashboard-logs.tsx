@@ -186,7 +186,7 @@ export default function DashboardLogs() {
               </Select.Content>
             </Select.Root>
 
-            <Flex as="label" align="center" gap="2">
+            <Flex as="span">
               <Checkbox 
                 checked={autoScroll} 
                 onCheckedChange={(checked) => setAutoScroll(checked as boolean)}

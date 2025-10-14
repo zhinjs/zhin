@@ -41,25 +41,44 @@ export class SQLiteDialect extends Dialect<SQLiteDialectConfig, string> {
   }
 
   async query<U = any>(sql: string, params?: any[]): Promise<U> {
+    const trimmedSql = sql.trim().toLowerCase();
+    const isSelectQuery = trimmedSql.startsWith('select');
+    const isInsertQuery = trimmedSql.startsWith('insert');
+    
     return new Promise((resolve, reject) => {
-      this.db.all(sql, params, (err: any, rows: any) => {
-        if (err) {
-          reject(err);
-        } else {
-          // 对查询结果进行后处理，移除多余的引号
-          const processedRows = this.processQueryResults(rows);
-          resolve(processedRows as U);
-        }
-      });
-      this.db.get(sql, params, (err: any, row: any) => {
-        if (err) {
-          reject(err);
-        } else {
-          // 对单行结果进行后处理
-          const processedRow = this.processQueryResults(row);
-          resolve(processedRow as U);
-        }
-      });
+      // SELECT 查询使用 db.all 获取所有结果
+      if (isSelectQuery) {
+        this.db.all(sql, params, (err: any, rows: any) => {
+          if (err) {
+            reject(err);
+          } else {
+            // 对查询结果进行后处理，移除多余的引号
+            const processedRows = this.processQueryResults(rows);
+            resolve(processedRows as U);
+          }
+        });
+      } 
+      // INSERT/UPDATE/DELETE 使用 db.run 执行
+      else if (isInsertQuery || trimmedSql.startsWith('update') || trimmedSql.startsWith('delete')) {
+        this.db.run(sql, params, function(this: any, err: any) {
+          if (err) {
+            reject(err);
+          } else {
+            // 返回插入的行 ID 和影响的行数
+            resolve({ lastID: this.lastID, changes: this.changes } as U);
+          }
+        });
+      }
+      // 其他查询（CREATE TABLE, ALTER TABLE 等）使用 db.run
+      else {
+        this.db.run(sql, params, (err: any) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(undefined as U);
+          }
+        });
+      }
     });
   }
 

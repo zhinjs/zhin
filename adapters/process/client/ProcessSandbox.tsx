@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { MessageSegment } from '@zhin.js/client';
+import { MessageSegment, cn } from '@zhin.js/client';
 import { Flex, Box, Heading, Text, Badge, Button, Card, Tabs, TextField, Grid } from '@radix-ui/themes';
-import { User, Users,Trash2,Send, Hash, MessageSquare, Wifi, WifiOff, Smile, Image, AtSign, X, Upload, Check, Info, Search, Bot } from 'lucide-react';
+import { User, Users, Trash2, Send, Hash, MessageSquare, Wifi, WifiOff, Smile, Image, AtSign, X, Upload, Check, Info, Search, Bot } from 'lucide-react';
+import RichTextEditor, { RichTextEditorRef } from './RichTextEditor';
 
 interface Message {
     id: string
@@ -48,12 +49,27 @@ export default function ProcessSandbox() {
     const [connected, setConnected] = useState(false)
     const [showFacePicker, setShowFacePicker] = useState(false)
     const [showImageUpload, setShowImageUpload] = useState(false)
+    const [showAtPicker, setShowAtPicker] = useState(false)
+    const [atPopoverPosition, setAtPopoverPosition] = useState<{ top: number; left: number } | null>(null)
+    const [atSearchQuery, setAtSearchQuery] = useState('')
     const [faceSearchQuery, setFaceSearchQuery] = useState('')
     const [imageUrl, setImageUrl] = useState('')
+    const [atUserName, setAtUserName] = useState('')
+    const [atSuggestions] = useState([
+        { id: '10001', name: '张三' },
+        { id: '10002', name: '李四' },
+        { id: '10003', name: '王五' },
+        { id: '10004', name: '赵六' },
+        { id: '10005', name: '测试用户' },
+        { id: '10086', name: 'Admin' },
+        { id: '10010', name: 'Test User' }
+    ])
     const [previewSegments, setPreviewSegments] = useState<MessageSegment[]>([])
+    const [showChannelList, setShowChannelList] = useState(false)
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const wsRef = useRef<WebSocket | null>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const editorRef = useRef<RichTextEditorRef>(null)
 
     // 获取表情列表
     const fetchFaceList = async () => {
@@ -217,8 +233,8 @@ export default function ProcessSandbox() {
     }
 
     // 发送消息
-    const sendMessage = async () => {
-        if (!inputText.trim() || previewSegments.length === 0) return
+    const handleSendMessage = (text: string, segments: MessageSegment[]) => {
+        if (!text.trim() || segments.length === 0) return
 
         const newMessage: Message = {
             id: `msg_${Date.now()}`,
@@ -228,7 +244,7 @@ export default function ProcessSandbox() {
             channelName: activeChannel.name,
             senderId: 'test_user',
             senderName: '测试用户',
-            content: previewSegments,
+            content: segments,
             timestamp: Date.now()
         }
 
@@ -236,10 +252,13 @@ export default function ProcessSandbox() {
         setInputText('')
         setPreviewSegments([])
 
+        // 清空编辑器
+        editorRef.current?.clear()
+
         wsRef.current?.send(JSON.stringify({
             type: activeChannel.type,
             id: activeChannel.id,
-            content: previewSegments,
+            content: segments,
             timestamp: Date.now()
         }))
     }
@@ -257,6 +276,10 @@ export default function ProcessSandbox() {
         setChannels((prev: Channel[]) =>
             prev.map((c: Channel) => (c.id === channel.id ? { ...c, unread: 0 } : c))
         )
+        // 移动端切换频道后自动关闭侧边栏
+        if (window.innerWidth < 768) {
+            setShowChannelList(false)
+        }
     }
 
     // 添加新频道
@@ -286,17 +309,65 @@ export default function ProcessSandbox() {
 
     // 插入表情
     const insertFace = (faceId: number) => {
-        setInputText(prev => prev + `[face:${faceId}]`)
+        editorRef.current?.insertFace(faceId)
         setShowFacePicker(false)
     }
 
-    // 插入图片URL
+    // 插入图片
     const insertImageUrl = () => {
-        if (imageUrl.trim()) {
-            setInputText(prev => prev + `[image:${imageUrl.trim()}]`)
-            setImageUrl('')
-            setShowImageUpload(false)
+        if (!imageUrl.trim()) return
+        editorRef.current?.insertImage(imageUrl.trim())
+        setImageUrl('')
+        setShowImageUpload(false)
+    }
+
+    // 插入 @ 某人（手动点击按钮）
+    const insertAtUser = () => {
+        if (!atUserName.trim()) return
+        editorRef.current?.insertAt(atUserName.trim())
+        setAtUserName('')
+        setShowAtPicker(false)
+    }
+
+    // 选择 @ 提及用户（自动触发）
+    const selectAtUser = (user: { id: string; name: string }) => {
+        editorRef.current?.replaceAtTrigger(user.name, user.id)
+        setAtPopoverPosition(null)
+        setAtSearchQuery('')
+    }
+
+    // 处理 @ 触发
+    const handleAtTrigger = (show: boolean, searchQuery: string, position?: { top: number; left: number }) => {
+        // 仅在群聊或频道中启用 @ 功能
+        if (activeChannel.type === 'private') {
+            setAtPopoverPosition(null)
+            setAtSearchQuery('')
+            return
         }
+
+        if (show && position) {
+            setAtPopoverPosition(position)
+            setAtSearchQuery(searchQuery)
+        } else {
+            setAtPopoverPosition(null)
+            setAtSearchQuery('')
+        }
+    }
+
+    // 过滤用户列表（根据 @ 后面输入的内容）
+    const filteredAtSuggestions = atSuggestions.filter((user) => {
+        if (!atSearchQuery.trim()) return true
+        const query = atSearchQuery.toLowerCase()
+        return (
+            user.name.toLowerCase().includes(query) ||
+            user.id.toLowerCase().includes(query)
+        )
+    })
+
+    // 处理编辑器内容变化
+    const handleEditorChange = (text: string, segments: MessageSegment[]) => {
+        setInputText(text)
+        setPreviewSegments(segments)
     }
 
     // 处理文件上传
@@ -304,8 +375,6 @@ export default function ProcessSandbox() {
         const file = e.target.files?.[0]
         if (!file) return
 
-        // 这里应该上传文件到服务器并获取URL
-        // 暂时使用本地预览URL作为示例
         const reader = new FileReader()
         reader.onload = (event) => {
             const dataUrl = event.target?.result as string
@@ -327,9 +396,18 @@ export default function ProcessSandbox() {
     )
 
     return (
-        <Flex style={{ height: 'calc(100vh - 4rem)' }} gap="4" p="4">
+        <div className="sandbox-container">
+            {/* 移动端频道列表切换按钮 */}
+            <button
+                className="mobile-channel-toggle md:hidden"
+                onClick={() => setShowChannelList(!showChannelList)}
+            >
+                <MessageSquare size={20} />
+                频道列表
+            </button>
+
             {/* 左侧频道列表 */}
-            <Card style={{ width: '256px', display: 'flex', flexDirection: 'column' }}>
+            <Card className={cn("channel-sidebar", showChannelList && "show")}>
                 <Box p="3" style={{ borderBottom: '1px solid var(--gray-6)' }}>
                     <Flex justify="between" align="center" mb="2">
                         <Flex align="center" gap="2">
@@ -347,33 +425,36 @@ export default function ProcessSandbox() {
                     </Flex>
                 </Box>
 
-                <Box style={{ flex: 1, overflowY: 'auto' }} p="2">
-                    <Flex direction="column" gap="1">
-                        {channels.map((channel: Channel) => (
-                            <Button
-                                key={channel.id}
-                                variant={activeChannel.id === channel.id ? 'solid' : 'ghost'}
-                                onClick={() => switchChannel(channel)}
-                                style={{ justifyContent: 'flex-start', position: 'relative' }}
-                            >
-                                <Flex align="center" gap="2" style={{ width: '100%' }}>
-                                    {getChannelIcon(channel.type)}
-                                    <Flex direction="column" align="start" style={{ flex: 1 }}>
-                                        <Text size="2" weight="medium">{channel.name}</Text>
-                                        <Text size="1" color="gray">
+                <Box style={{ flex: 1, overflowY: 'auto' }} p="3">
+                    <Flex direction="column" gap="2">
+                        {channels.map((channel: Channel) => {
+                            const isActive = activeChannel.id === channel.id
+                            return (
+                                <div
+                                    key={channel.id}
+                                    className={cn("channel-item", isActive && "active")}
+                                    onClick={() => switchChannel(channel)}
+                                >
+                                    <div className="icon">
+                                        {getChannelIcon(channel.type)}
+                                    </div>
+                                    <div className="text">
+                                        <div className="title">{channel.name}</div>
+                                        <div className="subtitle">
                                             {channel.type === 'private' && '私聊'}
                                             {channel.type === 'group' && '群聊'}
                                             {channel.type === 'channel' && '频道'}
-                                        </Text>
-                                    </Flex>
+                                        </div>
+                                    </div>
                                     {channel.unread > 0 && (
-                                        <Badge color="red" style={{ position: 'absolute', top: '4px', right: '4px' }}>
+                                        <Badge color="red" size="1" className="badge">
                                             {channel.unread}
                                         </Badge>
                                     )}
-                                </Flex>
-                            </Button>
-                        ))}
+                                    {isActive && <div className="indicator" />}
+                                </div>
+                            )
+                        })}
                     </Flex>
                 </Box>
 
@@ -384,8 +465,16 @@ export default function ProcessSandbox() {
                 </Box>
             </Card>
 
+            {/* 遮罩层 - 移动端点击关闭频道列表 */}
+            {showChannelList && (
+                <div
+                    className="channel-overlay md:hidden"
+                    onClick={() => setShowChannelList(false)}
+                />
+            )}
+
             {/* 右侧聊天区域 */}
-            <Flex direction="column" gap="3" style={{ flex: 1 }}>
+            <div className="chat-area">
                 {/* 顶部信息栏 */}
                 <Card>
                     <Flex justify="between" align="center" p="3">
@@ -496,16 +585,6 @@ export default function ProcessSandbox() {
                             >
                                 <Image size={16} />
                             </Button>
-
-                            <Button
-                                variant="outline"
-                                size="2"
-                                onClick={() => setInputText(prev => prev + '[@用户名]')}
-                                title="@某人"
-                            >
-                                <AtSign size={16} />
-                            </Button>
-
                             <Box style={{ flex: 1 }} />
 
                             {inputText && (
@@ -576,97 +655,131 @@ export default function ProcessSandbox() {
                                         <Tabs.Trigger value="upload">本地上传</Tabs.Trigger>
                                     </Tabs.List>
                                     <Box pt="3">
-                                        <Tabs.Content value="url">
-                                            <Flex direction="column" gap="2">
-                                                <TextField.Root
-                                                    value={imageUrl}
-                                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setImageUrl(e.target.value)}
-                                                    placeholder="输入图片 URL..."
-                                                    onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                                                        if (e.key === 'Enter') {
-                                                            e.preventDefault()
-                                                            insertImageUrl()
-                                                        }
-                                                    }}
-                                                />
-                                                <Button onClick={insertImageUrl} disabled={!imageUrl.trim()}>
-                                                    <Check size={16} />
-                                                    插入
-                                                </Button>
-                                            </Flex>
-                                        </Tabs.Content>
-                                        <Tabs.Content value="upload">
-                                            <Flex direction="column" gap="2">
-                                                <input
-                                                    ref={fileInputRef}
-                                                    type="file"
-                                                    accept="image/*"
-                                                    onChange={handleFileUpload}
-                                                    style={{ display: 'none' }}
-                                                />
-                                                <Button
-                                                    onClick={() => fileInputRef.current?.click()}
-                                                    variant="outline"
-                                                >
-                                                    <Upload size={16} />
-                                                    选择图片
-                                                </Button>
-                                                <Text size="1" color="gray" align="center">
-                                                    支持 JPG、PNG、GIF 格式
-                                                </Text>
-                                            </Flex>
-                                        </Tabs.Content>
+                                        <Flex direction="column" gap="2">
+                                            <TextField.Root
+                                                value={imageUrl}
+                                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setImageUrl(e.target.value)}
+                                                placeholder="输入图片 URL..."
+                                                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault()
+                                                        insertImageUrl()
+                                                    }
+                                                }}
+                                            />
+                                            <Button onClick={insertImageUrl} disabled={!imageUrl.trim()}>
+                                                <Check size={16} />
+                                                插入
+                                            </Button>
+                                        </Flex>
                                     </Box>
                                 </Tabs.Root>
                             </Box>
                         )}
 
-                        {/* 输入框和发送按钮 */}
+                        {/* @ 某人 */}
+                        {showAtPicker && (
+                            <Box p="3" style={{ border: '1px solid var(--gray-6)', borderRadius: '8px', backgroundColor: 'var(--gray-1)' }}>
+                                <Flex direction="column" gap="2">
+                                    <TextField.Root
+                                        value={atUserName}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAtUserName(e.target.value)}
+                                        placeholder="输入用户名..."
+                                        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault()
+                                                insertAtUser()
+                                            }
+                                        }}
+                                    />
+                                    <Button onClick={insertAtUser} disabled={!atUserName.trim()}>
+                                        <Check size={16} />
+                                        插入
+                                    </Button>
+                                </Flex>
+                            </Box>
+                        )}
+
+                        {/* 富文本编辑器和发送按钮 */}
                         <Flex gap="2" align="start">
                             <Box style={{ flex: 1, position: 'relative' }}>
-                                {/* 隐藏的真实输入框 */}
-                                <TextField.Root
-                                    value={inputText}
-                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInputText(e.target.value)}
-                                    onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                                        if (e.key === 'Enter' && !e.shiftKey) {
-                                            e.preventDefault()
-                                            sendMessage()
-                                        }
-                                    }}
+                                <RichTextEditor
+                                    ref={editorRef}
                                     placeholder={`向 ${activeChannel.name} 发送消息...`}
-                                    style={{
-                                        position: previewSegments.length > 0 ? 'absolute' : 'relative',
-                                        opacity: previewSegments.length > 0 ? 0 : 1,
-                                        pointerEvents: previewSegments.length > 0 ? 'none' : 'auto'
-                                    }}
+                                    onSend={handleSendMessage}
+                                    onChange={handleEditorChange}
+                                    onAtTrigger={handleAtTrigger}
+                                    minHeight="44px"
+                                    maxHeight="200px"
                                 />
-                                {/* 预览区域 */}
-                                {previewSegments.length > 0 && (
+                                
+                                {/* @ 用户选择 Popover */}
+                                {atPopoverPosition && (
                                     <Box
-                                        onClick={() => {
-                                            const input = document.querySelector('input[type="text"]') as HTMLInputElement
-                                            input?.focus()
-                                        }}
-                                        p="2"
                                         style={{
-                                            border: '1px solid var(--gray-6)',
-                                            borderRadius: '6px',
+                                            position: 'absolute',
+                                            top: `${atPopoverPosition.top}px`,
+                                            left: `${atPopoverPosition.left}px`,
+                                            zIndex: 1000,
                                             backgroundColor: 'var(--gray-1)',
-                                            minHeight: '44px',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            cursor: 'text'
+                                            border: '1px solid var(--gray-6)',
+                                            borderRadius: '8px',
+                                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                                            minWidth: '240px',
+                                            maxHeight: '280px',
+                                            overflowY: 'auto',
+                                            padding: '4px'
                                         }}
                                     >
-                                        <Text size="2" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
-                                            {renderMessageSegments(previewSegments)}
-                                        </Text>
+                                        {filteredAtSuggestions.length > 0 ? (
+                                            filteredAtSuggestions.map((user) => (
+                                                <Flex
+                                                    key={user.id}
+                                                    align="center"
+                                                    gap="2"
+                                                    p="2"
+                                                    onClick={() => selectAtUser(user)}
+                                                    style={{
+                                                        cursor: 'pointer',
+                                                        borderRadius: '6px',
+                                                        transition: 'background-color 0.2s'
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        e.currentTarget.style.backgroundColor = 'var(--blue-a3)'
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        e.currentTarget.style.backgroundColor = 'transparent'
+                                                    }}
+                                                >
+                                                    <User size={16} color="var(--blue-9)" />
+                                                    <Flex direction="column" gap="0" style={{ flex: 1 }}>
+                                                        <Text size="2" weight="medium">{user.name}</Text>
+                                                        <Text size="1" color="gray">ID: {user.id}</Text>
+                                                    </Flex>
+                                                </Flex>
+                                            ))
+                                        ) : (
+                                            <Flex
+                                                align="center"
+                                                justify="center"
+                                                p="4"
+                                                direction="column"
+                                                gap="2"
+                                            >
+                                                <Search size={20} color="var(--gray-8)" />
+                                                <Text size="1" color="gray">未找到匹配的用户</Text>
+                                            </Flex>
+                                        )}
                                     </Box>
                                 )}
                             </Box>
                             <Button
-                                onClick={sendMessage}
+                                onClick={() => {
+                                    const content = editorRef.current?.getContent()
+                                    if (content) {
+                                        handleSendMessage(content.text, content.segments)
+                                    }
+                                }}
                                 disabled={!inputText.trim() || previewSegments.length === 0}
                                 size="3"
                                 title="发送消息 (Enter)"
@@ -689,7 +802,7 @@ export default function ProcessSandbox() {
                         </Flex>
                     </Flex>
                 </Card>
-            </Flex>
-        </Flex>
+            </div>
+        </div>
     )
 }

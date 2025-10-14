@@ -70,9 +70,6 @@ useContext('router', async (router) => {
             dedupe: ['react', 'react-dom'],
             alias: {
                 '@zhin.js/client': path.resolve(root, '../src'),
-                'radix-ui':path.resolve(import.meta.dirname,'../node_modules/radix-ui'),
-                "@radix-ui/themes":path.resolve(import.meta.dirname,'../node_modules/@radix-ui/themes'),
-                "lucide-react":path.resolve(import.meta.dirname,'../node_modules/lucide-react'),
                 '@': path.resolve(root, 'src'),
             },
         },
