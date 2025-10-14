@@ -102,7 +102,8 @@ export default defineConfig(async (env)=>{
       'console',        // 🖥️ 控制台最后加载，处理静态文件
       'adapter-kook',
       'test-plugin',
-      'test-jsx'
+      'test-jsx',
+      'music'
     ],
 
     // 调试模式

@@ -13,6 +13,11 @@ import {
     SendContent,
     segment
 } from "zhin.js";
+declare module '@zhin.js/types'{
+    interface GlobalContext{
+        icqq:Adapter<IcqqBot>
+    }
+}
 declare module 'zhin.js'{
     interface RegisteredAdapters{
         icqq:Adapter<IcqqBot>
