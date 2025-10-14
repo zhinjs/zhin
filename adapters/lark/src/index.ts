@@ -13,12 +13,12 @@ import {
 } from "zhin.js";
 import type { Context } from 'koa';
 import axios, { AxiosInstance } from 'axios';
-import { createHash, createHmac } from 'crypto';
+import { createHash } from 'crypto';
 
 // 声明模块，注册飞书适配器类型
-declare module 'zhin.js' {
-    interface RegisteredAdapters {
-        lark: Adapter<LarkBot>
+declare module '@zhin.js/types'{
+    interface RegisteredAdapters{
+        lark:Adapter<LarkBot>
     }
 }
 

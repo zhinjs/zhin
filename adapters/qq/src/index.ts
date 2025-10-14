@@ -23,7 +23,8 @@ import {
     SendContent,
     segment
 } from "zhin.js";
-declare module 'zhin.js'{
+// 声明模块，注册 qq 适配器类型
+declare module '@zhin.js/types'{
     interface RegisteredAdapters{
         qq:Adapter<QQBot<ReceiverMode>>
     }

@@ -17,7 +17,12 @@ import {
 } from "zhin.js";
 import path from "path";
 import type {WebSocket} from "ws";
-import crypto from "crypto";
+declare module '@zhin.js/types'{
+    interface GlobalContext{
+        process:Adapter<ProcessBot>
+        sandbox:Adapter<SandboxBot>
+    }
+}
 
 declare module '@zhin.js/types'{
     interface RegisteredAdapters{

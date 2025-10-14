@@ -7,17 +7,16 @@ import {
   BotConfig,
   Message,
   registerAdapter,
-  User,
-  Group,
   MessageSegment,
   SendOptions,
-  MessageType, segment, useContext, SendContent
+  segment, useContext, SendContent
 } from 'zhin.js';
 import type {Router} from '@zhin.js/http'
 import {IncomingMessage} from "http";
 import {clearInterval} from "node:timers";
 
-declare module 'zhin.js'{
+// 声明模块，注册 onebot11 适配器类型
+declare module '@zhin.js/types'{
   interface RegisteredAdapters{
     'onebot11':Adapter<OneBot11WsClient>
     'onebot11.wss':Adapter<OneBot11WsServer>

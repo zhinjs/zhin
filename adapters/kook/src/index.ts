@@ -12,7 +12,7 @@ import {
     SendContent,
     segment
 } from "zhin.js";
-declare module 'zhin.js'{
+declare module '@zhin.js/types'{
     interface RegisteredAdapters{
         kook:Adapter<KookBot>
     }

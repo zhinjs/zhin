@@ -19,12 +19,11 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import https from 'https';
 import http from 'http';
-
 // 声明模块，注册 telegram 适配器类型
-declare module 'zhin.js'{
+declare module '@zhin.js/types'{
     interface RegisteredAdapters{
-        telegram: Adapter<TelegramBot>
-        'telegram-webhook': Adapter<TelegramWebhookBot>
+        telegram:Adapter<TelegramBot>
+        'telegram-webhook':Adapter<TelegramWebhookBot>
     }
 }
 

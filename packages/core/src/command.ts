@@ -1,5 +1,6 @@
 import {MatchResult, SegmentMatcher} from "segment-matcher";
-import {AdapterMessage, RegisteredAdapters, SendContent} from "./types.js";
+import {AdapterMessage, SendContent} from "./types.js";
+import {RegisteredAdapters} from "@zhin.js/types";
 import type {Message} from "./message.js";
 import {MaybePromise} from "@zhin.js/types";
 

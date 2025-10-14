@@ -1,4 +1,4 @@
-import type {RegisteredAdapters, SendOptions,AdapterConfig} from "./types.js";
+import type { SendOptions} from "./types.js";
 import {Message} from "./message.js";
 /**
  * Bot接口：所有平台机器人需实现的统一接口。

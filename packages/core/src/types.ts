@@ -1,21 +1,10 @@
-import {MaybePromise}from '@zhin.js/types'
+import {MaybePromise,RegisteredAdapters}from '@zhin.js/types'
 import {MessageChannel} from "./message.js";
 import {Adapter} from "./adapter.js";
 import {Bot,BotConfig} from "./bot.js";
 import { Databases,Registry } from "@zhin.js/database";
 import { MessageComponent } from "./message.js";
 
-/**
- * 类型定义文件：包含适配器、消息、数据库、配置等核心类型声明。
- * 协作者可通过本文件了解各主要数据结构的用途与关系。
- */
-declare module '@zhin.js/types'{
-  interface GlobalContext extends RegisteredAdapters{}
-}
-/**
- * 所有已注册适配器的类型映射（key为适配器名，value为Adapter实例）
- */
-export interface RegisteredAdapters extends Record<string, Adapter>{}
 /**
  * 数据库配置类型，支持多种数据库驱动
  */

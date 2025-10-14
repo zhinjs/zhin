@@ -29,7 +29,7 @@ export type MessageMiddleware<P extends RegisteredAdapter=RegisteredAdapter> = (
  * 支持命令注册、中间件、组件、定时任务、模型等。
  */
 export class Plugin extends Dependency<Plugin> {
-    middlewares: MessageMiddleware<any>[] = [];
+    middlewares: MessageMiddleware<RegisteredAdapter>[] = [];
     components: Map<string, Component<any>> = new Map();
     schemas: Map<string,Schema<any>>=new Map();
     commands:MessageCommand[]=[];

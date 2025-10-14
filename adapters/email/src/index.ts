@@ -18,7 +18,7 @@ import { createWriteStream, promises as fs } from 'fs';
 import path from 'path';
 
 // 声明模块，注册 email 适配器类型
-declare module 'zhin.js' {
+declare module '@zhin.js/types' {
     interface RegisteredAdapters {
         email: Adapter<EmailBot>
     }

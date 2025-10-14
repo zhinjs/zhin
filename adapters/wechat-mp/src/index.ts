@@ -17,19 +17,17 @@ import {
 } from "zhin.js";
 import type { Context } from 'koa';
 
+// 声明模块，注册微信公众号适配器类型
+declare module '@zhin.js/types'{
+    interface RegisteredAdapters{
+        'wechat-mp':Adapter<WeChatMPBot>
+    }
+}
 // Router 类型声明 (从 @koa/router)
 interface Router {
     get(path: string, handler: (ctx: Context) => void): void;
     post(path: string, handler: (ctx: Context) => void): void;
 }
-
-// 声明模块，注册微信公众号适配器类型
-declare module 'zhin.js' {
-    interface RegisteredAdapters {
-        'wechat-mp': Adapter<WeChatMPBot>
-    }
-}
-
 // 微信公众号配置
 export interface WeChatMPConfig extends BotConfig {
     context: 'wechat-mp'

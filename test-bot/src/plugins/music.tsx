@@ -1,10 +1,5 @@
 import { addCommand,MessageCommand, useContext } from "zhin.js";
 
-const m_ERR_CODE = Object.freeze({
-    ERR_SRC: "1",
-    ERR_404: "2",
-    ERR_API: "3",
-});
 async function musicQQ(keyword:string) {
     const url = new URL('https://c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg');
     url.searchParams.set('key', keyword);

@@ -1,6 +1,7 @@
 
 export type ArrayItem<T>=T extends Array<infer R>?R:unknown
-export interface GlobalContext extends Record<string, any>{
+export interface RegisteredAdapters{}
+export interface GlobalContext extends RegisteredAdapters,Record<string, any>{
 }
 export interface Models extends Record<string,object>{}
 export type SideEffect<A extends (keyof GlobalContext)[]>=(...args:Contexts<A>)=>MaybePromise<void|DisposeFn<Contexts<A>>>

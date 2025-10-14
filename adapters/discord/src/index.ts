@@ -40,10 +40,10 @@ import { promises as fs } from 'fs';
 import path from 'path';
 
 // 声明模块，注册 discord 适配器类型
-declare module 'zhin.js' {
-    interface RegisteredAdapters {
-        discord: Adapter<DiscordBot>
-        'discord-interactions': Adapter<DiscordInteractionsBot>
+declare module '@zhin.js/types'{
+    interface RegisteredAdapters{
+        discord:Adapter<DiscordBot>
+        'discord-interactions':Adapter<DiscordInteractionsBot>
     }
 }
 
