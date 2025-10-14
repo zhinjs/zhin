@@ -32,17 +32,18 @@ cd my-awesome-bot && npm run dev
   📊 内存使用: 42.15MB
   🔧 Node.js: v18.17.0
 
-> roll 20
-< 🎲 你掷出了 15 点！（20 面骰子）
+> 帮助
+< 可用命令：hello, status
+  输入命令即可使用！
 ```
 
 ---
 
 ## 🌐 **Web 控制台**
 
-同时打开浏览器访问：`http://localhost:3000`（开发时访问，生产环境请替换为实际域名）
+同时打开浏览器访问：`http://localhost:8086`（默认端口，可通过环境变量 `port` 修改）
 
-> **注意**: 这是开发环境的本地地址，生产环境请替换为实际的域名和端口。
+> **注意**: 这是默认端口 8086，生产环境请替换为实际的域名和端口。
 
 🎛️ **你将看到：**
 - 📊 **实时状态监控** - CPU、内存、消息统计
@@ -160,17 +161,15 @@ addCommand(new MessageCommand('status')
     ].join('\n')
   }))
 
-// 🎲 骰子游戏
-addCommand(new MessageCommand('roll [sides:number=6]')
-  .action((message, result) => {
-    const sides = result.args.sides || 6
-    const roll = Math.floor(Math.random() * sides) + 1
-    return `🎲 你掷出了 ${roll} 点！（${sides} 面骰子）`
+// 📋 帮助命令
+addCommand(new MessageCommand('help')
+  .action(() => {
+    return '可用命令：hello, status\n输入命令即可使用！'
   }))
 
 // 🔧 中间件示例
 addMiddleware(async (message, next) => {
-  logger.info(`收到消息: ${message.raw}`)
+  logger.info(`收到消息: ${message.$raw}`)
   await next()
 })
 
@@ -310,10 +309,10 @@ echo "TELEGRAM_TOKEN=your-bot-token" >> .env
 **Q: 端口被占用怎么办？**
 ```bash
 # 🔍 查找占用进程
-lsof -i :3000
+lsof -i :8086
 
 # ⚙️ 或者修改端口
-export PORT=3001 && npm run dev
+export port=8087 && npm run dev
 ```
 
 **Q: 热重载不生效？**

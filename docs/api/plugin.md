@@ -72,9 +72,9 @@ onDispose(() => {
 import { onMessage } from 'zhin.js'
 
 onMessage(async (message) => {
-  console.log('收到消息:', message.raw)
-  console.log('发送者:', message.sender.name)
-  console.log('频道类型:', message.channel.type)
+  console.log('收到消息:', message.$raw)
+  console.log('发送者:', message.$sender.name)
+  console.log('频道类型:', message.$channel.type)
 })
 ```
 
@@ -116,7 +116,7 @@ import { addMiddleware } from 'zhin.js'
 
 addMiddleware(async (message, next) => {
   const start = Date.now()
-  console.log(`开始处理消息: ${message.raw}`)
+  console.log(`开始处理消息: ${message.$raw}`)
   
   await next()
   
@@ -225,14 +225,14 @@ onMessage(async (message) => {
 
 // 群消息
 onMessage(async (message) => {
-  if (message.channel.type === 'group') {
+  if (message.$channel.type === 'group') {
     // 处理群消息
   }
 })
 
 // 私聊消息
 onMessage(async (message) => {
-  if (message.channel.type === 'private') {
+  if (message.$channel.type === 'private') {
     // 处理私聊消息
   }
 })

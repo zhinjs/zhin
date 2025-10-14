@@ -76,7 +76,7 @@ class MyBot implements Bot {
     this.plugin.emit('message.receive', message)
     
     // 根据消息类型触发特定事件
-    switch (message.channel.type) {
+    switch (message.$channel.type) {
       case 'private':
         this.plugin.emit('message.private.receive', message)
         break
@@ -84,7 +84,7 @@ class MyBot implements Bot {
         this.plugin.emit('message.group.receive', message)
         break
       case 'channel':
-        this.plugin.emit('message.channel.receive', message)
+        this.plugin.emit('message.$channel.receive', message)
         break
     }
     
@@ -115,20 +115,20 @@ class MyBot implements Bot {
   }
   
   private containsMention(message: Message): boolean {
-    return message.content.some(segment => segment.type === 'at')
+    return message.$content.some(segment => segment.type === 'at')
   }
   
   private containsImage(message: Message): boolean {
-    return message.content.some(segment => segment.type === 'image')
+    return message.$content.some(segment => segment.type === 'image')
   }
   
   private isCommand(message: Message): boolean {
-    return message.raw.startsWith('/') || message.raw.startsWith('!')
+    return message.$raw.startsWith('/') || message.$raw.startsWith('!')
   }
   
   private containsLink(message: Message): boolean {
     const urlRegex = /https?:\/\/[^\s]+/g
-    return urlRegex.test(message.raw)
+    return urlRegex.test(message.$raw)
   }
 }
 ```

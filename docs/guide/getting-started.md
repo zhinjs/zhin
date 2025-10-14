@@ -194,7 +194,7 @@ pnpm dev
 - ⚡ **实时热重载** - 代码修改立即生效，无需重启
 - 🔍 **详细日志** - 完整的调试信息和错误堆栈
 - 🎯 **自动类型检查** - TypeScript 实时错误提示
-- 🌐 **Web 控制台** - 浏览器访问 `http://localhost:3000` 查看状态（开发环境）
+- 🌐 **Web 控制台** - 浏览器访问 `http://localhost:8086` 查看状态（默认端口）
 
 ### 💬 测试机器人
 
@@ -238,7 +238,7 @@ const logger = useLogger();
 // 📋 添加命令
 addCommand(new MessageCommand('hello')
   .action(async (message) => {
-    logger.info('Hello command called by:', message.sender.name);
+    logger.info('Hello command called by:', message.$sender.name);
     return '你好！欢迎使用 Zhin 机器人框架！';
   })
 );
@@ -259,14 +259,14 @@ addCommand(new MessageCommand('status')
 
 // 🔧 添加中间件
 addMiddleware(async (message, next) => {
-  logger.info(`收到消息: ${message.raw}`);
+  logger.info(`收到消息: ${message.$raw}`);
   await next();
 });
 
 // 💬 监听消息
 onMessage(async (message) => {
-  if (message.raw.includes('帮助')) {
-    await message.reply('可用命令：hello, status\n输入命令即可使用！');
+  if (message.$raw.includes('帮助')) {
+    await message.$reply('可用命令：hello, status\n输入命令即可使用！');
   }
 });
 
@@ -311,19 +311,17 @@ import {
 
 const logger = useLogger();
 
-// 🎲 骰子命令
-addCommand(new MessageCommand('roll [sides:number=6]')
-  .action(async (message, result) => {
-    const sides = result.args.sides || 6;
-    const roll = Math.floor(Math.random() * sides) + 1;
-    return `🎲 你掷出了 ${roll} 点！（${sides} 面骰子）`;
+// 📋 帮助命令（扩展示例，CLI 不生成）
+addCommand(new MessageCommand('help')
+  .action(() => {
+    return '可用命令：hello, status\n输入命令即可使用！';
   })
 );
 
 // 🌍 问候插件
 onMessage(async (message) => {
   const greetings = ['你好', 'hello', 'hi', '早上好', '晚上好'];
-  const text = message.raw.toLowerCase();
+  const text = message.$raw.toLowerCase();
   
   if (greetings.some(greeting => text.includes(greeting))) {
     const responses = [
@@ -333,7 +331,7 @@ onMessage(async (message) => {
       '晚上好！休息得好吗？'
     ];
     const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-    await message.reply(randomResponse);
+    await message.$reply(randomResponse);
   }
 });
 
@@ -353,11 +351,9 @@ logger.info('我的第一个插件已加载 🎉');
 保存文件后，插件会自动重新加载，你可以立即测试新功能：
 
 ```bash
-> roll
-< 🎲 你掷出了 3 点！（6 面骰子）
-
-> roll 20
-< 🎲 你掷出了 15 点！（20 面骰子）
+> help
+< 可用命令：hello, status
+  输入命令即可使用！
 
 > 你好
 < 你好呀！👋

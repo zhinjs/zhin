@@ -39,18 +39,21 @@ interface SendOptions extends MessageChannel {
 ### 消息相关类型
 
 ```typescript
-// 消息接口
-interface Message {
-  id: string                    // 消息 ID
-  adapter: string               // 适配器名称
-  bot: string                   // 机器人名称
-  content: MessageSegment[]     // 消息段数组
-  sender: MessageSender         // 发送者信息
-  channel: MessageChannel       // 频道信息
-  timestamp: number             // 时间戳
-  raw: string                   // 原始消息内容
-  reply(content: SendContent, quote?: boolean|string): Promise<void>
+// 消息接口（基于实际代码 packages/core/src/message.ts）
+interface MessageBase {
+  $id: string                       // 消息 ID
+  $adapter: string                  // 适配器名称
+  $bot: string                      // 机器人名称
+  $content: MessageElement[]        // 消息元素数组
+  $sender: MessageSender            // 发送者信息
+  $channel: MessageChannel          // 频道信息
+  $timestamp: number                // 时间戳
+  $raw: string                      // 原始消息内容
+  $reply(content: SendContent, quote?: boolean|string): Promise<string>  // 返回消息ID
 }
+
+// 完整消息类型，支持扩展
+type Message<T extends object = {}> = MessageBase & T
 
 // 消息段
 interface MessageSegment {
@@ -359,19 +362,19 @@ type Readonly<T> = {
 
 ```typescript
 // 消息类型守卫
-function isGroupMessage(message: Message): message is Message & { channel: { type: 'group' } } {
-  return message.channel.type === 'group'
+function isGroupMessage(message: Message): message is Message & { $channel: { type: 'group' } } {
+  return message.$channel.type === 'group'
 }
 
-function isPrivateMessage(message: Message): message is Message & { channel: { type: 'private' } } {
-  return message.channel.type === 'private'
+function isPrivateMessage(message: Message): message is Message & { $channel: { type: 'private' } } {
+  return message.$channel.type === 'private'
 }
 
 // 使用类型守卫
 onMessage(async (message) => {
   if (isGroupMessage(message)) {
     // TypeScript 知道这是群消息
-    console.log('群ID:', message.channel.id)
+    console.log('群ID:', message.$channel.id)
   }
 })
 ```

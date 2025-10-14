@@ -169,28 +169,28 @@ import { onMessage, segment } from 'zhin.js'
 
 onMessage(async (message) => {
   // 文本消息
-  if (message.raw === 'hello') {
-    // 实际的 reply 方法签名：reply(content: SendContent, quote?: boolean|string)
-    await message.reply('你好！', false)
+  if (message.$raw === 'hello') {
+    // 实际的 reply 方法签名：$reply(content: SendContent, quote?: boolean|string)
+    await message.$reply('你好！', false)
   }
   
   // 图片消息
-  if (message.content.some(seg => seg.type === 'image')) {
-    await message.reply([
+  if (message.$content.some(seg => seg.type === 'image')) {
+    await message.$reply([
       segment('text', { text: '收到图片：' }),
       segment('image', { url: 'https://example.com/image.jpg' })
     ])
   }
   
   // @消息  
-  if (message.content.some(seg => seg.type === 'at')) {
-    await message.reply('有人@我了！')
+  if (message.$content.some(seg => seg.type === 'at')) {
+    await message.$reply('有人@我了！')
   }
   
   // 查看消息详细信息
   console.log('适配器:', message.adapter)  // 'icqq'
   console.log('机器人:', message.bot)
-  console.log('频道类型:', message.channel.type) // 'group' | 'private'
+  console.log('频道类型:', message.$channel.type) // 'group' | 'private'
   console.log('时间戳:', message.timestamp)
 })
 ```
@@ -273,7 +273,7 @@ KOOK_TOKEN=Bot_your_token_here  # KOOK机器人Token（需要Bot前缀）
   token: 'your_token',
   mode: 'webhook',
   webhook: {
-    port: 3000,
+    port: 8086,  // 使用 HTTP 插件端口
     path: '/kook/webhook',
     secret: 'your_webhook_secret'
   }
@@ -287,17 +287,17 @@ import { onMessage, segment } from 'zhin.js'
 
 onMessage(async (message) => {
   // 频道消息（实际的频道类型字段）
-  if (message.channel.type === 'channel') {
-    await message.reply(`在频道 ${message.channel.id} 收到消息`)
+  if (message.$channel.type === 'channel') {
+    await message.$reply(`在频道 ${message.$channel.id} 收到消息`)
   }
   
   // 私聊消息  
-  if (message.channel.type === 'private') {
-    await message.reply('收到私聊消息')
+  if (message.$channel.type === 'private') {
+    await message.$reply('收到私聊消息')
   }
   
   // 使用实际的 segment 函数
-  await message.reply([
+  await message.$reply([
     segment('text', { text: '这是一个消息：' }),
     // KOOK 特定的消息段类型需要根据实际的 KookBot.toSegments 来确定
     segment('image', { url: 'https://example.com/image.jpg' })
@@ -305,8 +305,8 @@ onMessage(async (message) => {
   
   // 查看KOOK特有信息
   console.log('适配器:', message.adapter)  // 'kook' 
-  console.log('作者ID:', message.sender.id)
-  console.log('作者名称:', message.sender.name)
+  console.log('作者ID:', message.$sender.id)
+  console.log('作者名称:', message.$sender.name)
 })
 ```
 
@@ -402,10 +402,10 @@ import { onMessage, segment } from 'zhin.js'
 
 onMessage(async (message) => {
   // OneBot 标准消息段
-  await message.reply([
+  await message.$reply([
     segment.text('文本消息'),
     segment.image('file:///path/to/image.jpg'),
-    segment.at(message.sender.id),
+    segment.at(message.$sender.id),
     segment.face(123),  // 表情
     segment.record('file:///path/to/audio.mp3')  // 语音
   ])
@@ -471,13 +471,13 @@ onMessage(async (message) => {
     case 'icqq':
       // QQ 特有功能
       if (message.type === 'group') {
-        await message.reply('这是QQ群消息')
+        await message.$reply('这是QQ群消息')
       }
       break
       
     case 'kook':
       // KOOK 特有功能
-      await message.reply({
+      await message.$reply({
         type: 'card',
         content: 'KOOK卡片消息'
       })
@@ -485,7 +485,7 @@ onMessage(async (message) => {
       
     case 'onebot11':
       // OneBot 标准处理
-      await message.reply('OneBot标准消息')
+      await message.$reply('OneBot标准消息')
       break
   }
 })

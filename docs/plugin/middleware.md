@@ -15,7 +15,7 @@
 import { addMiddleware } from 'zhin.js'
 
 addMiddleware(async (message, next) => {
-  console.log('处理消息前:', message.raw)
+  console.log('处理消息前:', message.$raw)
   await next()
   console.log('处理消息后')
 })
@@ -57,8 +57,8 @@ const adminUsers = new Set(['admin1', 'admin2'])
 
 addMiddleware(async (message, next) => {
   // 检查是否为管理员
-  if (!adminUsers.has(message.sender.id)) {
-    await message.reply('权限不足')
+  if (!adminUsers.has(message.$sender.id)) {
+    await message.$reply('权限不足')
     return // 不继续处理
   }
   
@@ -76,10 +76,10 @@ const groupPermissions = new Map([
 ])
 
 addMiddleware(async (message, next) => {
-  if (message.channel.type === 'group') {
-    const allowedUsers = groupPermissions.get(message.channel.id)
-    if (allowedUsers && !allowedUsers.includes(message.sender.id)) {
-      await message.reply('你在此群组中无权限')
+  if (message.$channel.type === 'group') {
+    const allowedUsers = groupPermissions.get(message.$channel.id)
+    if (allowedUsers && !allowedUsers.includes(message.$sender.id)) {
+      await message.$reply('你在此群组中无权限')
       return
     }
   }
@@ -97,11 +97,11 @@ addMiddleware(async (message, next) => {
 const sensitiveWords = ['敏感词1', '敏感词2']
 
 addMiddleware(async (message, next) => {
-  const content = message.raw.toLowerCase()
+  const content = message.$raw.toLowerCase()
   
   for (const word of sensitiveWords) {
     if (content.includes(word)) {
-      await message.reply('消息包含敏感内容，已删除')
+      await message.$reply('消息包含敏感内容，已删除')
       return // 不继续处理
     }
   }
@@ -117,13 +117,13 @@ addMiddleware(async (message, next) => {
 addMiddleware(async (message, next) => {
   // 检测重复消息
   if (isSpamMessage(message)) {
-    await message.reply('检测到垃圾信息')
+    await message.$reply('检测到垃圾信息')
     return
   }
   
   // 检测链接
-  if (containsSuspiciousLinks(message.raw)) {
-    await message.reply('消息包含可疑链接')
+  if (containsSuspiciousLinks(message.$raw)) {
+    await message.$reply('消息包含可疑链接')
     return
   }
   
@@ -152,7 +152,7 @@ import { useLogger } from 'zhin.js'
 const logger = useLogger()
 
 addMiddleware(async (message, next) => {
-  logger.info(`收到消息: ${message.raw} (用户: ${message.sender.name})`)
+  logger.info(`收到消息: ${message.$raw} (用户: ${message.$sender.name})`)
   
   const start = Date.now()
   await next()
@@ -176,7 +176,7 @@ addMiddleware(async (message, next) => {
     
     // 记录慢处理
     if (duration > 1000) {
-      logger.warn(`慢消息处理: ${message.raw} (${duration}ms)`)
+      logger.warn(`慢消息处理: ${message.$raw} (${duration}ms)`)
     }
     
     // 记录性能统计
@@ -204,7 +204,7 @@ addMiddleware(async (message, next) => {
       
       if (retries >= maxRetries) {
         logger.error(`消息处理失败，已重试 ${maxRetries} 次:`, error)
-        await message.reply('处理失败，请稍后重试')
+        await message.$reply('处理失败，请稍后重试')
         return
       }
       
@@ -223,10 +223,10 @@ addMiddleware(async (message, next) => {
 ```typescript
 addMiddleware(async (message, next) => {
   // 标准化消息内容
-  message.raw = message.raw.trim()
+  message.$raw = message.$raw.trim()
   
   // 转换表情符号
-  message.raw = convertEmojis(message.raw)
+  message.$raw = convertEmojis(message.$raw)
   
   await next()
 })
@@ -246,10 +246,10 @@ function convertEmojis(text: string): string {
 const userLanguages = new Map<string, string>()
 
 addMiddleware(async (message, next) => {
-  const userLang = userLanguages.get(message.sender.id) || 'zh-CN'
+  const userLang = userLanguages.get(message.$sender.id) || 'zh-CN'
   
   // 根据用户语言转换消息
-  message.raw = translateMessage(message.raw, userLang)
+  message.$raw = translateMessage(message.$raw, userLang)
   
   await next()
 })
@@ -273,7 +273,7 @@ function createConditionalMiddleware(condition: (message: Message) => boolean, m
 
 // 只对群消息应用特定中间件
 addMiddleware(createConditionalMiddleware(
-  (message) => message.channel.type === 'group',
+  (message) => message.$channel.type === 'group',
   async (message, next) => {
     console.log('群消息特殊处理')
     await next()
@@ -308,15 +308,15 @@ addMiddleware(combinedMiddleware)
 ```typescript
 addMiddleware(async (message, next) => {
   // 异步验证用户
-  const isValidUser = await validateUser(message.sender.id)
+  const isValidUser = await validateUser(message.$sender.id)
   
   if (!isValidUser) {
-    await message.reply('用户验证失败')
+    await message.$reply('用户验证失败')
     return
   }
   
   // 异步记录用户活动
-  await recordUserActivity(message.sender.id, message.raw)
+  await recordUserActivity(message.$sender.id, message.$raw)
   
   await next()
 })

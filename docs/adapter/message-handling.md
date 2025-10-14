@@ -368,24 +368,24 @@ class MyBot implements Bot {
 ```typescript
 class MessageFilters {
   static fromUser(userId: string) {
-    return (message: Message) => message.sender.id === userId
+    return (message: Message) => message.$sender.id === userId
   }
   
   static fromChannel(channelId: string) {
-    return (message: Message) => message.channel.id === channelId
+    return (message: Message) => message.$channel.id === channelId
   }
   
   static containsText(text: string) {
-    return (message: Message) => message.raw.includes(text)
+    return (message: Message) => message.$raw.includes(text)
   }
   
   static hasImage() {
     return (message: Message) => 
-      message.content.some(segment => segment.type === 'image')
+      message.$content.some(segment => segment.type === 'image')
   }
   
   static isCommand() {
-    return (message: Message) => message.raw.startsWith('/')
+    return (message: Message) => message.$raw.startsWith('/')
   }
 }
 ```

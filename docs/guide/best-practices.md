@@ -160,8 +160,8 @@ addCommand(new MessageCommand('echo <text:text>')
 
 // 👋 自动问候
 onMessage(async (message) => {
-  if (message.raw.match(/^(你好|hello|hi)$/i)) {
-    await message.reply('👋 你好！我是 Zhin 机器人，输入 help 查看可用命令')
+  if (message.$raw.match(/^(你好|hello|hi)$/i)) {
+    await message.$reply('👋 你好！我是 Zhin 机器人，输入 help 查看可用命令')
   }
 })
 
@@ -190,8 +190,8 @@ const bannedUsers = new Set<string>()
 // 🛡️ 权限检查中间件
 addMiddleware(async (message, next) => {
   // 检查是否被封禁
-  if (bannedUsers.has(message.sender.id)) {
-    logger.warn(`封禁用户尝试发言: ${message.sender.id}`)
+  if (bannedUsers.has(message.$sender.id)) {
+    logger.warn(`封禁用户尝试发言: ${message.$sender.id}`)
     return // 不处理被封禁用户的消息
   }
   
@@ -201,14 +201,14 @@ addMiddleware(async (message, next) => {
 // 👑 管理员命令 - 封禁用户
 addCommand(new MessageCommand('ban <user:text>')
   .action(async (message, result) => {
-    if (!admins.has(message.sender.id)) {
+    if (!admins.has(message.$sender.id)) {
       return '❌ 权限不足'
     }
     
     const userId = result.args.user
     bannedUsers.add(userId)
     
-    logger.warn(`管理员 ${message.sender.id} 封禁了用户 ${userId}`)
+    logger.warn(`管理员 ${message.$sender.id} 封禁了用户 ${userId}`)
     return `🔨 已封禁用户: ${userId}`
   })
 )
@@ -216,7 +216,7 @@ addCommand(new MessageCommand('ban <user:text>')
 // 👑 管理员命令 - 解封用户
 addCommand(new MessageCommand('unban <user:text>')
   .action(async (message, result) => {
-    if (!admins.has(message.sender.id)) {
+    if (!admins.has(message.$sender.id)) {
       return '❌ 权限不足'
     }
     
@@ -232,7 +232,7 @@ addCommand(new MessageCommand('unban <user:text>')
 // 📊 状态查询
 addCommand(new MessageCommand('status')
   .action(async (message) => {
-    if (!admins.has(message.sender.id)) {
+    if (!admins.has(message.$sender.id)) {
       return '❌ 权限不足'
     }
     
@@ -300,7 +300,7 @@ const games = new Map<string, { number: number, attempts: number }>()
 
 addCommand(new MessageCommand('guess [number:number]')
   .action(async (message, result) => {
-    const userId = message.sender.id
+    const userId = message.$sender.id
     
     // 如果没有提供数字，开始新游戏
     if (!result.args.number) {
@@ -383,7 +383,7 @@ logger.error('天气查询失败', {
 // 🐛 调试日志
 logger.debug('用户命令', {
   command: 'weather',
-  user: message.sender.id,
+  user: message.$sender.id,
   args: result.args
 })
 ```

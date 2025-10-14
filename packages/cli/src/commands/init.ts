@@ -277,7 +277,7 @@ const logger = useLogger();
 // 添加命令
 addCommand(new MessageCommand('hello')
   .action(async (message) => {
-    logger.info('Hello command called by:', message.sender.name);
+    logger.info('Hello command called by:', message.$sender.name);
     return '你好！欢迎使用 Zhin 机器人框架！';
   })
 );
@@ -297,14 +297,14 @@ addCommand(new MessageCommand('status')
 
 // 添加中间件
 addMiddleware(async (message, next) => {
-  logger.info(\`收到消息: \${message.raw}\`);
+  logger.info(\`收到消息: \${message.$raw}\`);
   await next();
 });
 
 // 监听消息
 onMessage(async (message) => {
-  if (message.raw.includes('帮助')) {
-    await message.reply('可用命令：hello, status\\n输入命令即可使用！');
+  if (message.$raw.includes('帮助')) {
+    await message.$reply('可用命令：hello, status\\n输入命令即可使用！');
   }
 });
 
@@ -545,17 +545,23 @@ DEBUG=true
 # 插件目录 (可选)
 # PLUGIN_DIR=./src/plugins
 
-# KOOK 机器人配置 (如果使用 KOOK 适配器)
+# QQ 官方机器人配置（如果使用 QQ 适配器）
+# QQ_APPID=your-app-id
+# QQ_SECRET=your-secret
+
+# KOOK 机器人配置（如果使用 KOOK 适配器）
 # KOOK_TOKEN=your-kook-token
 
-# ICQQ 机器人配置 (如果使用 ICQQ 适配器)  
+# ICQQ 机器人配置（如果使用 ICQQ 适配器）
 # ICQQ_SCAN_UIN=your-qq-number
 # ICQQ_LOGIN_UIN=your-qq-number
+# ICQQ_PASSWORD=your-password
 # ICQQ_SIGN_ADDR=http://localhost:8080
 
-# OneBot 机器人配置 (如果使用 OneBot 适配器)
-# BOT_URL=ws://localhost:8080
-# ACCESS_TOKEN=your-access-token
+# OneBot 机器人配置（如果使用 OneBot 适配器）
+# ONEBOT_NAME=my-bot
+# ONEBOT_TOKEN=your-access-token
+# ONEBOT_URL=ws://localhost:8080
 `;
   await fs.writeFile(path.join(projectPath, '.env.example'), envExampleContent);
 }
@@ -646,9 +652,16 @@ debug = false
       
     case 'ts':
       return `import { defineConfig } from 'zhin.js';
+import path from 'node:path';
 
 export default defineConfig(async (env) => {
   return {
+    // 数据库配置
+    database: {
+      dialect: 'sqlite',
+      filename: './data/bot.db'
+    },
+    
     // 机器人配置
     bots: [
       {
@@ -661,13 +674,13 @@ export default defineConfig(async (env) => {
     plugin_dirs: [
       env.PLUGIN_DIR || './src/plugins',
       'node_modules',
-      'node_modules/@zhin.js'
+      path.join('node_modules', '@zhin.js')
     ],
     
     // 要加载的插件列表
     plugins: [
-      'adapter-process',
       'http',
+      'adapter-process',
       'console',
       'test-plugin'
     ],
@@ -680,9 +693,16 @@ export default defineConfig(async (env) => {
       
     case 'js':
       return `import { defineConfig } from 'zhin.js';
+import path from 'node:path';
 
 export default defineConfig(async (env) => {
   return {
+    // 数据库配置
+    database: {
+      dialect: 'sqlite',
+      filename: './data/bot.db'
+    },
+    
     // 机器人配置
     bots: [
       {
@@ -695,13 +715,13 @@ export default defineConfig(async (env) => {
     plugin_dirs: [
       env.PLUGIN_DIR || './src/plugins',
       'node_modules',
-      'node_modules/@zhin.js'
+      path.join('node_modules', '@zhin.js')
     ],
     
     // 要加载的插件列表
     plugins: [
-      'adapter-process',
       'http',
+      'adapter-process',
       'console',
       'test-plugin'
     ],

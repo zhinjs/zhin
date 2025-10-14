@@ -473,7 +473,7 @@ export class MessageCommand {
   
   async handle(message: Message): Promise<any> {
     // 🎯 模板匹配和参数解析
-    const result = this.parseTemplate(message.raw)
+    const result = this.parseTemplate(message.$raw)
     if (!result) return null
     
     try {

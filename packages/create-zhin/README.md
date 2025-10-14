@@ -1,348 +1,381 @@
 # create-zhin-app
 
-快速创建 Zhin 机器人项目的脚手架工具，提供一键创建和配置新项目的能力。
+快速创建 Zhin 机器人项目的脚手架工具。
 
-## 核心特性
+## 特性
 
-- 🚀 **一键创建**: 使用标准的 `npm create` / `yarn create` / `pnpm create` 命令
-- 🔧 **智能配置**: 自动处理项目初始化和依赖安装
-- 📦 **零安装**: 无需全局安装，直接使用
-- 🎯 **参数透传**: 完美支持所有 CLI 参数和选项
+- 🚀 **快速创建** - 一条命令即可创建完整项目
+- 📦 **开箱即用** - 预配置好的项目结构
+- 🎨 **交互式** - 友好的命令行交互界面
+- 🔧 **灵活配置** - 支持自定义项目模板
+- 📝 **完整示例** - 包含示例插件和配置
 
-## 快速开始
+## 使用
 
-### 使用不同包管理器创建项目
-
-```bash
-# npm (推荐)
-npm create zhin-app my-awesome-bot
-
-# yarn
-yarn create zhin-app my-awesome-bot
-
-# pnpm
-pnpm create zhin-app my-awesome-bot
-
-# 使用最新版本
-npx create-zhin-app@latest my-awesome-bot
-```
-
-## 工作原理
-
-`create-zhin-app` 是 `@zhin.js/cli` 的轻量级包装器，它的工作流程如下：
-
-1. **启动脚手架**: 当你运行 `npm create zhin-app` 时
-2. **参数解析**: 解析项目名称和所有命令行参数
-3. **调用 CLI**: 自动调用 `zhin init` 命令
-4. **参数转发**: 将所有参数原样传递给 CLI 工具
-5. **项目创建**: 完成项目初始化和配置
-
-```javascript
-// create-zhin-app 内部实现概览
-const args = process.argv.slice(2);
-const initArgs = ['init', ...args];
-
-spawn('node', [cliPath, ...initArgs], {
-  stdio: 'inherit',
-  cwd: process.cwd()
-});
-```
-
-## 支持的参数
-
-所有 `zhin init` 支持的参数都可以通过 `create-zhin-app` 使用：
-
-### 基础用法
+### 使用 pnpm（推荐）
 
 ```bash
-# 使用默认配置创建项目
+pnpm create zhin-app my-bot
+```
+
+### 使用 npm
+
+```bash
 npm create zhin-app my-bot
-
-# 交互式创建（会提示选择配置）
-npm create zhin-app my-bot --interactive
 ```
 
-### 高级配置
+### 使用 yarn
 
 ```bash
-# 完整配置示例
-npm create zhin-app my-bot -- \
-  --config ts \
-  --package-manager pnpm \
-  --runtime bun \
-  --yes
+yarn create zhin-app my-bot
 ```
 
-### 参数详解
+## 交互式创建
 
-| 参数 | 短参数 | 说明 | 可选值 | 默认值 |
-|------|--------|------|--------|--------|
-| `--config` | `-c` | 配置文件格式 | `js`, `ts`, `json`, `yaml`, `toml` | `js` |
-| `--package-manager` | `-p` | 包管理器 | `npm`, `yarn`, `pnpm` | `pnpm` |
-| `--runtime` | `-r` | 运行时 | `node`, `bun` | `node` |
-| `--yes` | `-y` | 跳过交互式配置 | 无 | `false` |
-
-## 使用场景
-
-### 1. 快速原型开发
+不指定项目名称，将进入交互式创建模式：
 
 ```bash
-# 使用默认配置快速创建
-npm create zhin-app quick-prototype -y
-cd quick-prototype
-npm run dev
+pnpm create zhin-app
 ```
 
-### 2. 生产项目创建
+系统将提示你输入：
+
+1. **项目名称** - 你的机器人项目名称
+2. **项目描述** - 项目的简短描述
+3. **作者** - 你的名字
+4. **选择模板** - 选择项目模板（基础/完整）
+5. **包管理器** - 选择 pnpm/npm/yarn
+
+## 项目结构
+
+创建的项目具有以下结构：
+
+```
+my-bot/
+├── src/                    # 源代码目录
+│   ├── plugins/           # 自定义插件目录
+│   │   └── example.ts     # 示例插件
+│   └── index.ts           # 应用入口
+├── config/                 # 配置目录
+│   └── default.yml        # 默认配置文件
+├── data/                   # 数据目录
+│   └── .gitkeep          # Git占位文件
+├── logs/                   # 日志目录
+│   └── .gitkeep          # Git占位文件
+├── zhin.config.ts         # Zhin配置文件
+├── tsconfig.json          # TypeScript配置
+├── package.json           # 项目配置
+├── .gitignore             # Git忽略文件
+└── README.md              # 项目说明
+```
+
+## 项目模板
+
+### 基础模板
+
+最小化的项目配置，适合从零开始：
+
+- 控制台适配器
+- 基本插件结构
+- SQLite 数据库
+- 简单示例
+
+### 完整模板
+
+包含更多功能的模板：
+
+- HTTP 服务器
+- Web 控制台
+- 多个适配器
+- 完整示例插件
+- 数据库模型示例
+
+## 创建后的步骤
+
+1. **进入项目目录**
 
 ```bash
-# 使用 TypeScript + pnpm + node 的生产配置
-npm create zhin-app production-bot -- -c ts -p pnpm -r node
+cd my-bot
 ```
 
-### 3. 团队标准项目
+2. **安装依赖**
 
 ```bash
-# 为团队创建标准化项目
-npm create zhin-app team-bot -- \
-  --config ts \
-  --package-manager pnpm \
-  --runtime node \
-  --yes
-```
-
-### 4. 实验性项目
-
-```bash
-# 使用最新技术栈
-npm create zhin-app experimental-bot -- -c ts -r node -y
-```
-
-## 生成的项目结构
-
-执行 `create-zhin-app` 后会生成完整的项目结构：
-
-```
-my-awesome-bot/
-├── src/
-│   ├── index.ts              # 主入口文件
-│   └── plugins/              # 插件目录
-│       └── test-plugin.ts    # 示例插件
-├── dist/                    # 构建输出目录
-├── data/                     # 数据存储目录
-├── logs/                     # 日志目录（如果配置了）
-├── zhin.config.[ext]         # 配置文件
-├── package.json             # 项目依赖和脚本
-├── tsconfig.json            # TypeScript配置
-├── .gitignore               # Git忽略规则
-├── .env.example             # 环境变量模板
-├── pnpm-workspace.yaml      # pnpm工作空间（如果使用pnpm）
-└── README.md                # 项目说明文档
-```
-
-## 配置文件格式
-
-### JavaScript 配置 (推荐)
-
-```javascript
-// zhin.config.ts
-import { defineConfig } from 'zhin.js';
-
-export default defineConfig(async (env) => {
-  return {
-    bots: [
-      {
-        context: 'process',
-        name: `${process.pid}`,
-      }
-    ],
-    plugin_dirs: ['./src/plugins', 'node_modules'],
-    plugins: ['process', 'test-plugin'],
-    debug: env.DEBUG === 'true'
-  };
-});
-```
-
-### TypeScript 配置
-
-```typescript
-// zhin.config.ts
-import { defineConfig } from 'zhin.js';
-import type { AppConfig } from 'zhin.js';
-
-export default defineConfig<AppConfig>(async (env) => {
-  return {
-    bots: [
-      {
-        context: 'process',
-        name: `${process.pid}`,
-      }
-    ],
-    plugin_dirs: ['./src/plugins', 'node_modules'],
-    plugins: [
-      'adapter-process',
-      'http',
-      'console',
-      'test-plugin'
-    ],
-    debug: process.env.NODE_ENV === 'development'
-  };
-});
-```
-
-## 后续步骤
-
-项目创建完成后，可以执行以下操作：
-
-### 1. 进入项目目录
-
-```bash
-cd my-awesome-bot
-```
-
-### 2. 安装依赖（如果还没安装）
-
-```bash
-# 根据选择的包管理器
-npm install
-# 或
-yarn install  
-# 或
 pnpm install
 ```
 
-### 3. 开发模式启动
+3. **启动开发模式**
 
 ```bash
-npm run dev
-# 或
-yarn dev
-# 或  
 pnpm dev
 ```
 
-### 4. 生产环境部署
+4. **或启动生产模式**
 
 ```bash
-# 构建项目
-npm run build
+pnpm start
+```
 
-# 生产启动
-npm run start
+## 可用脚本
+
+创建的项目包含以下脚本：
+
+```bash
+# 开发模式（热重载）
+pnpm dev
+
+# 生产模式
+pnpm start
 
 # 后台运行
-npm run daemon
+pnpm daemon
+
+# 停止后台进程
+pnpm stop
+
+# 构建项目
+pnpm build
+
+# 清理构建产物
+pnpm clean
 ```
 
-## 错误处理
+## 配置文件
 
-### 常见错误及解决方案
+### zhin.config.ts
 
-1. **网络连接问题**
-   ```bash
-   # 使用国内镜像
-   npm config set registry https://registry.npmmirror.com
-   npm create zhin-app my-bot
-   ```
+主配置文件，定义机器人行为：
 
-2. **权限问题**
-   ```bash
-   # macOS/Linux
-   sudo chown -R $USER ~/.npm
-   
-   # Windows (以管理员身份运行)
-   npm create zhin-app my-bot
-   ```
+```typescript
+import { defineConfig } from 'zhin.js'
 
-3. **Node.js 版本问题**
-   ```bash
-   # 检查 Node.js 版本（需要 >= 18.0.0）
-   node --version
-   
-   # 升级 Node.js
-   # 使用 nvm 或从官网下载最新版本
-   ```
+export default defineConfig({
+  bots: [
+    {
+      name: 'console',
+      context: 'process'
+    }
+  ],
+  plugins: [
+    'http',
+    'console',
+    'adapter-process'
+  ],
+  plugin_dirs: [
+    './src/plugins'
+  ],
+  database: {
+    dialect: 'sqlite',
+    storage: './data/bot.db'
+  }
+})
+```
 
-## 环境要求
+### package.json
 
-- **Node.js**: >= 18.0.0
-- **npm**: >= 8.0.0 (或对应版本的 yarn/pnpm)
-- **操作系统**: Windows 10+, macOS 10.15+, Linux (现代发行版)
+项目依赖和脚本：
 
-## 与其他工具对比
+```json
+{
+  "name": "my-bot",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "zhin dev",
+    "start": "zhin start",
+    "build": "tsc",
+    "stop": "zhin stop"
+  },
+  "dependencies": {
+    "zhin.js": "^1.0.0"
+  }
+}
+```
 
-| 特性 | create-zhin-app | create-react-app | create-vue |
-|------|-------------|------------------|------------|
-| 零配置创建 | ✅ | ✅ | ✅ |
-| 多配置格式 | ✅ | ❌ | ✅ |  
-| 多运行时支持 | ✅ | ❌ | ❌ |
-| 机器人框架 | ✅ | ❌ | ❌ |
-| 热重载开发 | ✅ | ✅ | ✅ |
+## 自定义模板
 
-## 高级用法
-
-### 自定义模板
-
-虽然 `create-zhin-app` 主要调用 CLI 工具，但你可以通过环境变量自定义行为：
+你可以使用自己的模板：
 
 ```bash
-# 设置自定义模板路径
-ZHIN_TEMPLATE_DIR=/path/to/custom/template npm create zhin-app my-bot
+pnpm create zhin-app my-bot --template /path/to/template
 ```
 
-### 批量创建
+模板目录应包含以下文件：
+
+```
+template/
+├── template/              # 模板文件
+│   ├── src/
+│   ├── zhin.config.ts
+│   └── ...
+└── template.json          # 模板配置
+```
+
+### template.json
+
+```json
+{
+  "name": "my-template",
+  "description": "My custom template",
+  "prompts": [
+    {
+      "name": "feature",
+      "message": "Enable feature X?",
+      "type": "confirm",
+      "default": true
+    }
+  ]
+}
+```
+
+## 示例项目
+
+### 基础聊天机器人
+
+```typescript
+// src/index.ts
+import { createApp, onMessage, addCommand, MessageCommand } from 'zhin.js'
+
+const app = await createApp()
+
+// 添加命令
+addCommand(new MessageCommand('hello')
+  .action(async (message) => {
+    return 'Hello, World!'
+  }))
+
+// 监听消息
+onMessage(async (message) => {
+  console.log('收到消息:', message.$content)
+})
+```
+
+### 使用数据库
+
+```typescript
+// src/plugins/user-manager.ts
+import { 
+  defineModel, 
+  Schema, 
+  onDatabaseReady,
+  onMessage 
+} from 'zhin.js'
+
+interface User {
+  id: number
+  username: string
+  createdAt: Date
+}
+
+onDatabaseReady((db) => {
+  const UserModel = defineModel<User>('User', new Schema({
+    id: Schema.number().primary(),
+    username: Schema.string().required(),
+    createdAt: Schema.date().default(() => new Date())
+  }))
+  
+  onMessage(async (message) => {
+    if (message.$content === '/users') {
+      const users = await UserModel.select().execute()
+      await message.$reply(`共有 ${users.length} 个用户`)
+    }
+  })
+})
+```
+
+## 环境变量
+
+创建 `.env` 文件来存储敏感配置：
+
+```env
+# 机器人配置
+BOT_TOKEN=your_token_here
+
+# 数据库配置
+DB_HOST=localhost
+DB_PORT=3306
+
+# 其他配置
+NODE_ENV=development
+LOG_LEVEL=debug
+```
+
+## 常见问题
+
+### 如何添加新的适配器？
+
+1. 安装适配器包：
 
 ```bash
-#!/bin/bash
-# 批量创建多个项目
-for name in bot1 bot2 bot3; do
-  npm create zhin-app $name -- -y
-done
+pnpm add @zhin.js/adapter-discord
 ```
 
-### CI/CD 集成
+2. 在配置中添加：
 
-```yaml
-# GitHub Actions 示例
-- name: create zhin-app Bot Project
-  run: |
-    npm create zhin-app test-bot -- --yes
-    cd test-bot
-    npm run build
-    npm run test
+```typescript
+export default defineConfig({
+  plugins: [
+    'adapter-discord'
+  ],
+  bots: [
+    {
+      name: 'discord-bot',
+      context: 'discord',
+      token: process.env.DISCORD_TOKEN
+    }
+  ]
+})
 ```
 
-## 故障排查
+### 如何创建自定义插件？
 
-### 调试模式
+在 `src/plugins/` 目录下创建新文件：
+
+```typescript
+// src/plugins/my-plugin.ts
+import { onMessage, onMounted } from 'zhin.js'
+
+onMounted(() => {
+  console.log('插件已加载')
+})
+
+onMessage(async (message) => {
+  // 处理消息
+})
+```
+
+### 如何部署到生产环境？
+
+1. 构建项目：
 
 ```bash
-# 启用详细日志
-DEBUG=create-zhin-app npm create zhin-app my-bot
-
-# 检查参数传递
-npm create zhin-app my-bot -- --help
+pnpm build
 ```
 
-### 清理缓存
+2. 设置环境变量：
 
 ```bash
-# 清理 npm 缓存
-npm cache clean --force
-
-# 删除 node_modules 重新安装
-rm -rf node_modules package-lock.json
-npm install
+export NODE_ENV=production
 ```
 
-## 贡献指南
+3. 启动：
 
-`create-zhin-app` 是开源项目，欢迎贡献：
+```bash
+pnpm start
+```
 
-1. Fork 项目
-2. 创建特性分支
-3. 提交更改
-4. 创建 Pull Request
+或使用守护进程：
+
+```bash
+pnpm daemon
+```
+
+## 相关资源
+
+- [Zhin.js 文档](https://docs.zhin.dev)
+- [快速开始指南](https://docs.zhin.dev/guide/getting-started)
+- [插件开发](https://docs.zhin.dev/plugin/getting-started)
+- [GitHub 仓库](https://github.com/zhinjs/zhin)
 
 ## 许可证
 

@@ -125,7 +125,7 @@ useContext('my-service', (service) => {
 import { onMessage } from 'zhin.js'
 
 onMessage(async (message) => {
-  console.log('收到消息:', message.raw)
+  console.log('收到消息:', message.$raw)
 })
 ```
 
@@ -178,7 +178,7 @@ addCommand(new MessageCommand('hello <name:text>')
 import { addMiddleware } from 'zhin.js'
 
 addMiddleware(async (message, next) => {
-  console.log('处理消息前:', message.raw)
+  console.log('处理消息前:', message.$raw)
   await next()
   console.log('处理消息后')
 })

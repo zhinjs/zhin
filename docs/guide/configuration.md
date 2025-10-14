@@ -154,7 +154,7 @@ plugins: [
   {
     name: 'http',
     config: {
-      port: 3000,
+      port: 8086,  // 默认端口（可自定义）
       auth: {
         username: 'admin',
         password: 'secret'

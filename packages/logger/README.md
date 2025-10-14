@@ -1,501 +1,449 @@
 # @zhin.js/logger
 
-轻量级、高性能的日志库，为 Zhin Bot Framework 提供完整的日志记录功能。
+Zhin 机器人框架的结构化日志系统，提供多级别、多传输器、可格式化的日志功能。
 
-## ✨ 特性
+## 特性
 
-- 🎯 **轻量级**: 仅依赖 chalk，无额外第三方库
-- 🎨 **自定义格式**: 【date】【level】【name】：【message】
-- 🌈 **智能着色**: 自动为不同级别和名称分配颜色
-- 🎨 **颜色自定义**: 完全自定义级别、名称、日期颜色（新功能）
-- 📊 **多输出支持**: 控制台、文件、流等多种输出方式
-- ⚡ **性能监控**: 内置高精度计时功能
-- 🎯 **命名空间**: 支持分层次的 Logger 命名空间
-- 🛡️ **类型安全**: 完整的 TypeScript 类型支持
-- 🔄 **智能继承**: 子Logger自动继承父Logger配置
+- 📊 **多日志级别** - debug、info、success、warn、error
+- 🎨 **彩色输出** - 自动为不同级别添加颜色
+- 📝 **多种传输器** - Console、File、Stream等
+- 🔧 **可自定义格式化器** - 支持自定义日志格式
+- ⏱️ **性能计时** - 内置 time/timeEnd 计时功能
+- 🏷️ **命名日志器** - 为不同模块创建独立的日志器
+- 🔒 **类型安全** - 完整的 TypeScript 类型支持
 
-## 📦 安装
+## 安装
 
 ```bash
 pnpm add @zhin.js/logger
 ```
 
-## 🚀 快速开始
+## 快速开始
 
-### 基础用法
-
-```typescript
-import { createLogger, info, success, warn, error } from '@zhin.js/logger'
-
-// 使用便捷函数（默认 logger）
-info('应用启动')
-success('操作成功')
-warn('警告信息')
-error('错误信息')
-
-// 创建命名空间 Logger
-const logger = createLogger('MyApp')
-logger.info('这是来自 MyApp 的日志')
-```
-
-### 输出格式
-
-```
-[09-08 04:07:55.852] [INFO] [MyApp]: 应用启动
-[09-08 04:07:55.854] [WARN] [Database]: 连接超时
-[09-08 04:07:55.855] [ERROR] [Auth]: 用户验证失败
-```
-
-- **日期格式**: `MM-dd HH:MM:ss.SSS`
-- **级别着色**: DEBUG(灰), INFO(蓝), WARN(黄), ERROR(红)
-- **名称着色**: 自动为不同名称分配颜色，便于区分
-
-## 📖 详细用法
-
-### 1. 日志级别
+### 基本使用
 
 ```typescript
-import { createLogger, LogLevel } from '@zhin.js/logger'
+import logger from '@zhin.js/logger'
 
-const logger = createLogger('Test')
+// 不同级别的日志
+logger.debug('调试信息')
+logger.info('普通信息')
+logger.success('成功信息')
+logger.warn('警告信息')
+logger.error('错误信息')
 
-logger.debug('调试信息')   // 灰色
-logger.info('一般信息')    // 蓝色
-logger.warn('警告信息')    // 黄色
-logger.error('错误信息')   // 红色
-logger.success('成功信息') // INFO级别，带绿色✓标记
+// 带参数的日志
+logger.info('用户登录', { userId: 123, username: 'john' })
 
-// 设置日志级别
-logger.setLevel(LogLevel.WARN) // 只显示 WARN 和 ERROR
-```
-
-### 2. 命名空间和子 Logger
-
-```typescript
-const appLogger = createLogger('App')
-const dbLogger = appLogger.getLogger('Database')       // 自动继承父级配置
-const apiLogger = appLogger.getLogger('API')
-
-appLogger.info('主应用日志')         // [App]: ...
-dbLogger.info('数据库日志')         // [App:Database]: ...
-apiLogger.info('API日志')           // [App:API]: ...
-
-// 多层嵌套
-const httpLogger = apiLogger.getLogger('HTTP')
-const routerLogger = httpLogger.getLogger('Router')
-httpLogger.info('HTTP服务启动')      // [App:API:HTTP]: ...
-routerLogger.info('路由就绪')        // [App:API:HTTP:Router]: ...
-```
-
-### 3. 参数格式化
-
-```typescript
-const logger = createLogger('Format')
-
-// 支持 printf 风格的格式化，与 console.info 行为一致
-logger.info('用户 %s 登录成功，ID: %d', 'John', 123)
-logger.warn('连接超时，重试 %d/%d', 3, 5)
-logger.error('操作失败：%o', { code: 500, message: 'Server Error' })
-```
-
-### 4. 性能监控
-
-```typescript
-const logger = createLogger('Performance')
-
-// 方式1：使用返回的 Timer
-const timer = logger.time('数据处理')
-// ... 执行操作
-timer.end() // 输出: 数据处理 took 123.45ms
-
-// 方式2：使用 timeEnd
-logger.time('API调用')
-// ... 执行操作
-logger.timeEnd('API调用') // 输出: API调用 took 67.89ms
-```
-
-### 5. 配置继承与覆盖
-
-```typescript
-const appLogger = createLogger('App')
-
-// 子 Logger 自动继承父级配置
-const dbLogger = appLogger.getLogger('Database') 
-// dbLogger 继承了 appLogger 的级别、格式化器、输出器
-
-// 递归设置级别（影响所有子 Logger）
-appLogger.setLevel(LogLevel.WARN, true)
-
-// 创建时覆盖特定配置
-const debugLogger = appLogger.getLogger('Debug', {
-  level: LogLevel.DEBUG  // 覆盖父级的 WARN 级别
-})
-
-// 父子关系管理
-console.log(dbLogger.getParent()?.getName())     // 'App'
-console.log(appLogger.isRoot())                  // true
-console.log(appLogger.getChildLoggerNames())     // ['Database', 'Debug']
-```
-
-### 6. 文件输出
-
-```typescript
-import fs from 'node:fs'
-import { createLogger, FileTransport, ConsoleTransport } from '@zhin.js/logger'
-
-const logFile = fs.createWriteStream('./app.log', { flags: 'a' })
-
-const logger = createLogger('FileApp', {
-  transports: [
-    new ConsoleTransport(),           // 控制台输出（带颜色）
-    new FileTransport(logFile)        // 文件输出（无颜色）
-  ]
-})
-
-logger.info('这条日志会同时输出到控制台和文件')
-
-// 递归添加输出器到所有子 Logger
-logger.addTransport(new FileTransport(logFile), true)
-```
-
-### 7. 自定义格式化器
-
-```typescript
-import { createLogger, LogFormatter } from '@zhin.js/logger'
-
-class CustomFormatter implements LogFormatter {
-  format(entry) {
-    const { level, name, message, timestamp } = entry
-    return `${timestamp.toISOString()} [${name}] ${message}`
-  }
-}
-
-const logger = createLogger('Custom', {
-  formatter: new CustomFormatter()
-})
-
-// 递归设置格式化器到所有子 Logger
-logger.setFormatter(new CustomFormatter(), true)
-
-logger.info('自定义格式的日志')
-```
-
-### 8. 流输出
-
-```typescript
-import { createLogger, StreamTransport } from '@zhin.js/logger'
-
-const logger = createLogger('StreamApp', {
-  transports: [
-    new StreamTransport(process.stdout, false), // 保留颜色
-    new StreamTransport(process.stderr, true)   // 移除颜色
-  ]
-})
-```
-
-### 9. 自定义颜色配置 🎨
-
-完全自定义Logger的颜色方案，让不同模块、环境、团队成员拥有独特的视觉效果。
-
-#### 基础颜色自定义
-```typescript
-import { getLogger, LogLevel } from '@zhin.js/logger'
-import chalk from 'chalk'
-
-const logger = getLogger('MyApp', {
-  colors: {
-    // 自定义级别颜色
-    levelColors: {
-      [LogLevel.INFO]: chalk.magenta.bold,
-      [LogLevel.WARN]: chalk.cyan,
-      [LogLevel.ERROR]: chalk.green.bold.underline
-    },
-    // 自定义名称颜色（单色或多色循环）
-    nameColor: chalk.blue.bold,
-    // 自定义日期颜色
-    dateColor: chalk.yellow
-  }
-})
-```
-
-#### 团队协作颜色分配
-```typescript
-// 为不同开发者分配专属颜色
-const aliceLogger = getLogger('Alice', {
-  colors: { nameColor: chalk.magenta.bold }
-})
-const bobLogger = getLogger('Bob', {
-  colors: { nameColor: chalk.cyan.bold }
-})
-```
-
-#### 模块功能分类
-```typescript
-// 数据库模块 - 蓝色主题
-const dbLogger = getLogger('Database', {
-  colors: {
-    levelColors: { [LogLevel.INFO]: chalk.blue.bold },
-    nameColor: chalk.blue
-  }
-})
-
-// 安全模块 - 红色警告主题  
-const securityLogger = getLogger('Security', {
-  colors: {
-    levelColors: { 
-      [LogLevel.ERROR]: chalk.red.bold.bgYellow 
-    },
-    nameColor: chalk.red.bold
-  }
-})
-```
-
-#### 多色循环配置
-```typescript
-const multiColorLogger = getLogger('Development', {
-  colors: {
-    nameColor: [
-      chalk.red.bold,
-      chalk.green.bold, 
-      chalk.blue.bold,
-      chalk.magenta.bold
-    ]
-  }
-})
-
-// 每个子Logger将循环使用不同颜色
-const router = multiColorLogger.getLogger('Router')     // 红色
-const service = multiColorLogger.getLogger('Service')   // 绿色
-const utils = multiColorLogger.getLogger('Utils')       // 蓝色
-```
-
-#### 继承与覆盖
-```typescript
-// 父Logger配置
-const parent = getLogger('Parent', {
-  colors: {
-    dateColor: chalk.blue,
-    nameColor: chalk.magenta.bold
-  }
-})
-
-// 子Logger继承配置
-const child1 = parent.getLogger('Child1') // 完全继承
-
-// 子Logger部分覆盖
-const child2 = parent.getLogger('Child2', {
-  colors: {
-    levelColors: { [LogLevel.INFO]: chalk.red.bold }
-    // dateColor和nameColor继承自父Logger
-  }
-})
-```
-
-> 📖 **详细文档**: 查看 [CUSTOM_COLORS.md](./CUSTOM_COLORS.md) 了解更多颜色配置示例和最佳实践
-
-## ⚙️ 全局配置
-
-### 设置全局日志级别
-
-```typescript
-import { setGlobalLogLevel, LogLevel } from '@zhin.js/logger'
-
-// 所有新创建的 logger 都会使用此级别
-setGlobalLogLevel(LogLevel.WARN)
-```
-
-### 设置全局格式化器
-
-```typescript
-import { setGlobalFormatter, DefaultFormatter } from '@zhin.js/logger'
-
-const customFormatter = new DefaultFormatter()
-setGlobalFormatter(customFormatter)
-```
-
-### 添加全局输出器
-
-```typescript
-import { addGlobalTransport, FileTransport } from '@zhin.js/logger'
-import fs from 'node:fs'
-
-const globalLogFile = fs.createWriteStream('./global.log', { flags: 'a' })
-addGlobalTransport(new FileTransport(globalLogFile))
-```
-
-## 📚 API 参考
-
-### LogLevel 枚举
-
-```typescript
-enum LogLevel {
-  DEBUG = 0,
-  INFO = 1,
-  WARN = 2,
-  ERROR = 3,
-  SILENT = 4
-}
-```
-
-### Logger 类
-
-```typescript
-class Logger {
-  // 构造函数
-  constructor(name: string, options?: LoggerOptions, parent?: Logger)
-  
-  // 日志方法
-  debug(message: string, ...args: any[]): void
-  info(message: string, ...args: any[]): void
-  success(message: string, ...args: any[]): void
-  warn(message: string, ...args: any[]): void
-  error(message: string, ...args: any[]): void
-  
-  // 子 Logger 管理（新架构核心功能）
-  getLogger(namespace: string, options?: LoggerOptions): Logger
-  removeChildLogger(namespace: string): boolean
-  getChildLoggerNames(): string[]
-  getParent(): Logger | undefined
-  isRoot(): boolean
-  
-  // 配置管理（支持递归操作）
-  setLevel(level: LogLevel, recursive?: boolean): void
-  setFormatter(formatter: LogFormatter, recursive?: boolean): void
-  addTransport(transport: LogTransport, recursive?: boolean): void
-  removeTransport(transport: LogTransport, recursive?: boolean): void
-  
-  // 工具方法
-  getLevel(): LogLevel
-  isLevelEnabled(level: LogLevel): boolean
-  time(label: string): Timer
-  timeEnd(label: string): void
-  logIf(condition: boolean, level: LogLevel, message: string, ...args: any[]): void
-  getName(): string
+// 记录错误对象
+try {
+  throw new Error('Something went wrong')
+} catch (error) {
+  logger.error('操作失败', error)
 }
 ```
 
 ### 便捷函数
 
 ```typescript
-// Logger 管理（新架构）
-function createLogger(name: string, options?: LoggerOptions): Logger
-function getDefaultLogger(): Logger
-function getRootLogger(name: string, options?: LoggerOptions): Logger
+import { debug, info, success, warn, error } from '@zhin.js/logger'
 
-// 全局设置（递归应用）
-function setGlobalLogLevel(level: LogLevel): void
-
-// 根 Logger 管理
-function removeRootLogger(name: string): boolean
-function getRootLoggerNames(): string[]
-function clearLoggers(): void
-
-// 便捷日志方法（使用默认 logger）
-function debug(message: string, ...args: any[]): void
-function info(message: string, ...args: any[]): void
-function success(message: string, ...args: any[]): void
-function warn(message: string, ...args: any[]): void
-function error(message: string, ...args: any[]): void
-function time(label: string): Timer
-function timeEnd(label: string): void
+debug('调试信息')
+info('普通信息')
+success('成功信息')
+warn('警告信息')
+error('错误信息')
 ```
 
-## 🔧 在 Zhin 插件中使用
+## API 参考
+
+### Logger 类
 
 ```typescript
-import { Plugin } from 'zhin.js'
-import { createLogger } from '@zhin.js/logger'
+import { Logger } from '@zhin.js/logger'
 
-export default class MyPlugin extends Plugin {
-  private logger = createLogger(`Plugin:${this.name}`)
+// 创建日志器实例
+const logger = new Logger({
+  name: 'MyApp',
+  level: 'info',
+  transports: [
+    new ConsoleTransport(),
+    new FileTransport({ file: './logs/app.log' })
+  ]
+})
+```
 
-  async onMounted() {
-    this.logger.success('插件加载成功')
-    
-    this.logger.info('插件配置: %o', this.config)
+### 日志级别
 
-    // 创建子模块 Logger
-    const dbLogger = this.logger.getLogger('Database')
-    const apiLogger = this.logger.getLogger('API')
-    
-    dbLogger.info('数据库模块初始化')
-    apiLogger.info('API模块初始化')
+```typescript
+import { LogLevel } from '@zhin.js/logger'
+
+// 日志级别枚举
+LogLevel.DEBUG   // 0 - 调试信息
+LogLevel.INFO    // 1 - 普通信息
+LogLevel.SUCCESS // 2 - 成功信息
+LogLevel.WARN    // 3 - 警告信息
+LogLevel.ERROR   // 4 - 错误信息
+```
+
+### 日志方法
+
+```typescript
+// 基本日志方法
+logger.debug(message: string, ...args: any[])
+logger.info(message: string, ...args: any[])
+logger.success(message: string, ...args: any[])
+logger.warn(message: string, ...args: any[])
+logger.error(message: string, ...args: any[])
+
+// 计时方法
+logger.time(label: string)      // 开始计时
+logger.timeEnd(label: string)   // 结束计时并输出耗时
+```
+
+### 传输器（Transports）
+
+#### ConsoleTransport
+
+输出日志到控制台：
+
+```typescript
+import { ConsoleTransport } from '@zhin.js/logger'
+
+const transport = new ConsoleTransport({
+  level: 'debug',  // 最小日志级别
+  colors: true     // 启用颜色
+})
+```
+
+#### FileTransport
+
+输出日志到文件：
+
+```typescript
+import { FileTransport } from '@zhin.js/logger'
+
+const transport = new FileTransport({
+  file: './logs/app.log',
+  level: 'info',
+  maxSize: 10 * 1024 * 1024,  // 10MB
+  maxFiles: 5                  // 保留5个文件
+})
+```
+
+#### StreamTransport
+
+输出日志到流：
+
+```typescript
+import { StreamTransport } from '@zhin.js/logger'
+import * as fs from 'fs'
+
+const stream = fs.createWriteStream('./logs/app.log', { flags: 'a' })
+const transport = new StreamTransport({
+  stream,
+  level: 'info'
+})
+```
+
+### 自定义传输器
+
+```typescript
+import { LogTransport, LogEntry } from '@zhin.js/logger'
+
+class CustomTransport implements LogTransport {
+  log(entry: LogEntry): void {
+    // 自定义日志处理逻辑
+    console.log(`[${entry.level}] ${entry.message}`)
   }
+}
 
-  async handleMessage(message: Message) {
-    // 为每个消息创建独立的处理 Logger
-    const msgLogger = this.logger.getLogger('MessageHandler')
-    const timer = msgLogger.time('消息处理')
-    
-    try {
-      msgLogger.debug('收到消息: %s', message.content)
-      
-      // 使用不同子 Logger 处理不同逻辑
-      const validatorLogger = msgLogger.getLogger('Validator')
-      const processorLogger = msgLogger.getLogger('Processor')
-      
-      validatorLogger.debug('开始验证消息')
-      processorLogger.debug('开始处理消息')
-      
-      await this.processMessage(message)
-      
-      msgLogger.success('消息处理完成')
-      
-    } catch (error) {
-      msgLogger.error('消息处理失败: %s', error.message)
-      throw error
-      
-    } finally {
-      timer.end()
-    }
-  }
+logger.addTransport(new CustomTransport())
+```
+
+### 格式化器（Formatter）
+
+```typescript
+import { LogFormatter, LogEntry } from '@zhin.js/logger'
+
+const customFormatter: LogFormatter = (entry: LogEntry) => {
+  const timestamp = new Date(entry.timestamp).toISOString()
+  return `[${timestamp}] [${entry.level}] ${entry.message}`
+}
+
+logger.setFormatter(customFormatter)
+```
+
+### 命名日志器
+
+为不同模块创建独立的日志器：
+
+```typescript
+import { getLogger } from '@zhin.js/logger'
+
+const dbLogger = getLogger('Database')
+const apiLogger = getLogger('API')
+const pluginLogger = getLogger('Plugin')
+
+dbLogger.info('数据库连接成功')
+apiLogger.info('API服务器启动')
+pluginLogger.info('插件加载完成')
+```
+
+输出：
+
+```
+[Database] 数据库连接成功
+[API] API服务器启动
+[Plugin] 插件加载完成
+```
+
+### 全局配置
+
+```typescript
+import { setLevel, setName, setOptions, setFormatter } from '@zhin.js/logger'
+
+// 设置全局日志级别
+setLevel('info')
+
+// 设置全局日志器名称
+setName('MyApp')
+
+// 设置全局选项
+setOptions({
+  level: 'debug',
+  colors: true
+})
+
+// 设置全局格式化器
+setFormatter((entry) => {
+  return `${entry.timestamp} - ${entry.message}`
+})
+```
+
+### 添加/移除传输器
+
+```typescript
+import { addTransport, removeTransport, ConsoleTransport } from '@zhin.js/logger'
+
+const transport = new ConsoleTransport()
+
+// 添加传输器
+addTransport(transport)
+
+// 移除传输器
+removeTransport(transport)
+```
+
+### 检查日志级别
+
+```typescript
+import { isLevelEnabled, getLevel } from '@zhin.js/logger'
+
+// 检查某个级别是否启用
+if (isLevelEnabled('debug')) {
+  logger.debug('调试信息')
+}
+
+// 获取当前日志级别
+const level = getLevel()
+console.log('当前日志级别:', level)
+```
+
+## 高级用法
+
+### 性能计时
+
+```typescript
+// 测量代码块执行时间
+logger.time('数据库查询')
+
+// 执行耗时操作
+await db.query('SELECT * FROM users')
+
+logger.timeEnd('数据库查询')
+// 输出: 数据库查询: 123.45ms
+```
+
+### 结构化日志
+
+```typescript
+// 记录结构化数据
+logger.info('用户操作', {
+  action: 'login',
+  userId: 123,
+  ip: '192.168.1.1',
+  timestamp: Date.now()
+})
+```
+
+### 条件日志
+
+```typescript
+// 只在特定条件下记录日志
+if (process.env.NODE_ENV === 'development') {
+  logger.debug('开发环境调试信息')
+}
+
+// 使用日志级别控制
+setLevel(process.env.LOG_LEVEL || 'info')
+```
+
+## 日志级别说明
+
+| 级别 | 值 | 用途 | 颜色 |
+|------|-----|------|------|
+| DEBUG | 0 | 详细的调试信息 | 灰色 |
+| INFO | 1 | 一般信息 | 蓝色 |
+| SUCCESS | 2 | 成功信息 | 绿色 |
+| WARN | 3 | 警告信息 | 黄色 |
+| ERROR | 4 | 错误信息 | 红色 |
+
+## 类型定义
+
+### LogEntry
+
+```typescript
+interface LogEntry {
+  level: string
+  message: string
+  timestamp: number
+  args?: any[]
+  name?: string
 }
 ```
 
-## 🎯 设计特点
+### LogFormatter
 
-### 轻量级依赖
-- 仅依赖 `chalk` 用于颜色输出
-- 无其他第三方库，包体积小
-- 启动速度快，内存占用低
+```typescript
+type LogFormatter = (entry: LogEntry) => string
+```
 
-### 自管理架构（核心特色）
-- **层次化管理**: 每个 Logger 自管理其子 Logger
-- **getLogger 方法**: 直观的子 Logger 获取方式
-- **配置继承**: 子 Logger 自动继承父级配置
-- **配置覆盖**: 支持在创建时覆盖特定配置
-- **递归操作**: 支持递归设置级别、格式化器、输出器
-- **父子关系**: 完整的父子关系查询和管理
+### LogTransport
 
-### 智能着色系统
-- **级别颜色**: 固定的颜色方案，一目了然
-- **名称颜色**: 自动分配，相同名称始终相同颜色
-- **文件输出**: 自动去除颜色代码
+```typescript
+interface LogTransport {
+  log(entry: LogEntry): void
+}
+```
 
-### 高性能设计
-- 使用原生 `performance.now()` 进行高精度计时
-- 级别检查避免不必要的字符串处理
-- 最小化内存分配和垃圾回收
-- 缓存子 Logger 实例，避免重复创建
+### LoggerOptions
 
-## 🆚 对比优势
+```typescript
+interface LoggerOptions {
+  name?: string
+  level?: string
+  transports?: LogTransport[]
+  formatter?: LogFormatter
+  colors?: boolean
+}
+```
 
-| 特性 | @zhin.js/logger | pino | winston |
-|------|----------------|------|---------|
-| 包大小 | < 50KB | > 500KB | > 1MB |
-| 依赖数量 | 1 | 10+ | 20+ |
-| 启动时间 | 极快 | 快 | 中等 |
-| 自定义格式 | ✅ 简单 | ⚠️ 复杂 | ⚠️ 复杂 |
-| 颜色输出 | ✅ 内置 | ❌ 需插件 | ❌ 需插件 |
-| 子Logger管理 | ✅ **自管理** | ⚠️ 全局管理 | ⚠️ 全局管理 |
-| 配置继承 | ✅ **自动继承** | ❌ 手动配置 | ❌ 手动配置 |
-| 递归操作 | ✅ **内置支持** | ❌ 不支持 | ❌ 不支持 |
-| TypeScript | ✅ 原生 | ✅ 支持 | ✅ 支持 |
+## 最佳实践
 
-## 📄 许可证
+### 1. 使用命名日志器
 
-MIT
+为不同模块使用不同的日志器：
 
----
+```typescript
+// database.ts
+const logger = getLogger('Database')
 
-一个专为 Zhin Bot Framework 设计的轻量级、高性能日志库。🚀
+// api.ts
+const logger = getLogger('API')
+
+// plugin.ts
+const logger = getLogger('Plugin')
+```
+
+### 2. 适当的日志级别
+
+```typescript
+// ❌ 不好
+logger.info('变量值:', someVariable)
+
+// ✅ 好
+logger.debug('变量值:', someVariable)
+
+// ❌ 不好
+logger.error('用户登录成功')
+
+// ✅ 好
+logger.success('用户登录成功')
+```
+
+### 3. 记录错误上下文
+
+```typescript
+// ❌ 不好
+logger.error('操作失败')
+
+// ✅ 好
+logger.error('用户注册失败', {
+  username: 'john',
+  error: error.message,
+  stack: error.stack
+})
+```
+
+### 4. 使用计时器测量性能
+
+```typescript
+logger.time('数据处理')
+
+// 执行操作
+await processData(data)
+
+logger.timeEnd('数据处理')
+```
+
+### 5. 生产环境配置
+
+```typescript
+// 生产环境使用较高的日志级别
+if (process.env.NODE_ENV === 'production') {
+  setLevel('warn')
+} else {
+  setLevel('debug')
+}
+```
+
+## 常见问题
+
+### 如何禁用颜色？
+
+```typescript
+setOptions({ colors: false })
+```
+
+### 如何只输出到文件？
+
+```typescript
+import { removeTransport, ConsoleTransport } from '@zhin.js/logger'
+
+// 移除控制台传输器
+const consoleTransport = /* 获取控制台传输器实例 */
+removeTransport(consoleTransport)
+
+// 只添加文件传输器
+addTransport(new FileTransport({ file: './app.log' }))
+```
+
+### 如何获取所有日志器名称？
+
+```typescript
+import { getLoggerNames } from '@zhin.js/logger'
+
+const names = getLoggerNames()
+console.log('所有日志器:', names)
+```
+
+## 相关资源
+
+- [完整文档](https://docs.zhin.dev)
+- [API 参考](https://docs.zhin.dev/api/logger)
+- [示例代码](https://docs.zhin.dev/examples/logger)
+
+## 许可证
+
+MIT License

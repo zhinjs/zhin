@@ -1,134 +1,428 @@
-# zhin.js - 开箱即用的机器人框架
+# zhin.js
 
-🚀 **一个包，全功能** - 安装 `zhin.js` 即可获得完整的机器人开发体验。
+Zhin 机器人框架的主包，重新导出 `@zhin.js/core` 和 `@zhin.js/logger` 的所有功能，提供开箱即用的机器人开发体验。
 
-## ✨ 特性
+## 特性
 
-- 📦 **开箱即用** - 包含进程适配器、HTTP服务、Web控制台和SQLite数据库
-- 🔌 **插件化架构** - 需要更多功能时可安装对应的适配器和数据库驱动
-- ⚡ **热重载** - 开发时修改代码立即生效
-- 🌐 **Web控制台** - 浏览器中管理和监控机器人
-- 🗄️ **数据库支持** - 默认SQLite，可扩展MySQL/PostgreSQL
+- 📦 **开箱即用** - 一个包含所有核心功能
+- 🔌 **插件系统** - 强大的插件化架构
+- 🔥 **热重载** - 开发时自动重载代码
+- 🌐 **多平台支持** - 统一API支持多个聊天平台
+- 🗄️ **数据库集成** - 内置数据库抽象层
+- 📝 **类型安全** - 完整的 TypeScript 支持
+- 📊 **日志系统** - 结构化日志记录
 
-## 🚀 快速开始
-
-### 安装
+## 安装
 
 ```bash
-npm install zhin.js
-# 或
 pnpm add zhin.js
 ```
+
+## 快速开始
 
 ### 创建应用
 
 ```typescript
-import { createZhinApp } from 'zhin.js'
+import { createApp } from 'zhin.js'
 
-const app = await createZhinApp({
-  // 数据库配置
-  databases: [{
-    name: 'main',
-    type: 'sqlite', 
-    database: './data/bot.db'
-  }],
-  // 机器人配置
-  bots: [{
-    name: 'console',
-    context: 'process'  // 控制台机器人，用于测试
-  }]
+const app = await createApp({
+  bots: [
+    {
+      name: 'console',
+      context: 'process'
+    }
+  ]
 })
-
-// 启动应用
-await app.start()
 ```
 
-### 添加功能
+### 使用 Hooks API
 
 ```typescript
-import { addCommand, addMiddleware, onMessage } from 'zhin.js'
-
-// 添加命令
-addCommand({
-  name: 'hello',
-  description: '打招呼',
-  async execute(message) {
-    await message.reply('Hello, World!')
-  }
-})
-
-// 添加中间件
-addMiddleware(async (message, next) => {
-  console.log('收到消息:', message.content)
-  await next()
-})
+import { 
+  usePlugin,
+  onMessage, 
+  addCommand,
+  onMounted 
+} from 'zhin.js'
 
 // 监听消息
 onMessage(async (message) => {
-  if (message.content === 'ping') {
-    await message.reply('pong!')
+  if (message.$raw === 'ping') {
+    await message.$reply('pong!')
+  }
+})
+
+// 添加命令
+addCommand(new MessageCommand('hello <name>')
+  .action(async (message, result) => {
+    return `Hello, ${result.params.name}!`
+  }))
+
+// 生命周期钩子
+onMounted(() => {
+  console.log('插件已挂载')
+})
+```
+
+## 导出内容
+
+### 从 @zhin.js/core
+
+```typescript
+// 核心类
+export {
+  App,
+  Plugin,
+  Adapter,
+  Bot,
+  Message,
+  MessageCommand,
+  Component
+} from '@zhin.js/core'
+
+// Hooks API
+export {
+  useApp,
+  usePlugin,
+  useLogger,
+  useDatabase,
+  defineModel,
+  register,
+  registerAdapter,
+  useContext,
+  addMiddleware,
+  addCommand,
+  addComponent,
+  onEvent,
+  onMessage,
+  onGroupMessage,
+  onPrivateMessage,
+  onMounted,
+  onDispose,
+  onAppReady,
+  onDatabaseReady,
+  sendMessage,
+  beforeSend,
+  usePrompt
+} from '@zhin.js/core'
+
+// 工具
+export {
+  createApp
+} from '@zhin.js/core'
+
+// 配置
+export {
+  defineConfig
+} from '@zhin.js/core'
+
+// 错误处理
+export {
+  PluginError,
+  MessageError,
+  errorManager
+} from '@zhin.js/core'
+
+// Cron
+export {
+  Cron
+} from '@zhin.js/core'
+```
+
+### 从 @zhin.js/logger
+
+```typescript
+export {
+  Logger,
+  LogLevel,
+  ConsoleTransport,
+  FileTransport,
+  StreamTransport,
+  getLogger,
+  setLogger,
+  setLevel,
+  setName,
+  addTransport,
+  removeTransport
+} from '@zhin.js/logger'
+
+// 默认logger
+export {
+  default as logger,
+  debug,
+  info,
+  success,
+  warn,
+  error,
+  time,
+  timeEnd
+} from '@zhin.js/logger'
+```
+
+### 从 @zhin.js/database
+
+```typescript
+export {
+  RelatedDatabase,
+  DocumentDatabase,
+  KeyValueDatabase,
+  Schema,
+  Registry,
+  Model
+} from '@zhin.js/database'
+```
+
+### 从 @zhin.js/hmr
+
+```typescript
+export {
+  Dependency
+} from '@zhin.js/hmr'
+```
+
+### JSX 支持
+
+```typescript
+export {
+  h,
+  Fragment
+} from '@zhin.js/core/jsx'
+
+export {
+  jsx,
+  jsxDEV,
+  jsxs
+} from '@zhin.js/core/jsx-runtime'
+```
+
+## 示例
+
+### 完整的机器人
+
+```typescript
+import { createApp, onMessage, addCommand, MessageCommand } from 'zhin.js'
+
+// 创建应用
+const app = await createApp({
+  bots: [
+    {
+      name: 'my-bot',
+      context: 'process'
+    }
+  ],
+  plugins: [
+    'http',
+    'console',
+    'adapter-process'
+  ]
+})
+
+// 添加命令
+addCommand(new MessageCommand('echo <text...>')
+  .action(async (message, { text }) => {
+    return text.join(' ')
+  }))
+
+// 监听所有消息
+onMessage(async (message) => {
+  console.log('收到消息:', message.$content)
+})
+```
+
+### 使用数据库
+
+```typescript
+import { 
+  createApp, 
+  defineModel, 
+  Schema,
+  onDatabaseReady 
+} from 'zhin.js'
+
+// 定义模型
+interface User {
+  id: number
+  username: string
+  email: string
+}
+
+onDatabaseReady((db) => {
+  // 定义模型
+  const UserModel = defineModel<User>('User', new Schema({
+    id: Schema.number().primary(),
+    username: Schema.string().required(),
+    email: Schema.string().required()
+  }))
+  
+  // 使用模型
+  onMessage(async (message) => {
+    if (message.$content.startsWith('/register ')) {
+      const [, username, email] = message.$content.split(' ')
+      
+      const user = await UserModel.insert({
+        username,
+        email
+      }).execute()
+      
+      await message.$reply(`用户 ${username} 注册成功！`)
+    }
+  })
+})
+```
+
+### 使用 JSX
+
+```typescript
+/** @jsx h */
+import { h, onMessage } from 'zhin.js'
+
+onMessage(async (message) => {
+  if (message.$content === '/card') {
+    const card = (
+      <message>
+        <text>这是一张卡片</text>
+        <image url="https://example.com/image.jpg" />
+        <at id={message.$user.id} />
+      </message>
+    )
+    
+    await message.$reply(card)
   }
 })
 ```
 
-## 📦 包含的功能
+配置 `tsconfig.json`：
 
-| 功能 | 描述 |
-|------|------|
-| **@zhin.js/adapter-process** | 控制台适配器，支持命令行交互 |
-| **@zhin.js/http** | HTTP服务，提供API接口 |
-| **@zhin.js/console** | Web控制台，浏览器管理界面 |
-
-## 🔌 扩展功能
-
-需要连接其他平台或数据库时，安装对应的包：
-
-```bash
-# 更多适配器
-pnpm add @zhin.js/adapter-telegram  # Telegram机器人
-pnpm add @zhin.js/adapter-discord   # Discord机器人
-pnpm add @zhin.js/adapter-qq        # QQ机器人
-
+```json
+{
+  "compilerOptions": {
+    "jsx": "react",
+    "jsxFactory": "h",
+    "jsxFragmentFactory": "Fragment"
+  }
+}
 ```
 
-然后在代码中引入即可自动注册：
+### 创建插件
 
 ```typescript
-import '@zhin.js/adapter-telegram'
-import '@zhin.js/database-mysql'
+// plugins/greeting.ts
+import { onMessage, onMounted, onDispose } from 'zhin.js'
 
-const app = await createZhinApp({
-  databases: [{
-    name: 'main',
-    type: 'mysql',
-    host: 'localhost',
-    username: 'root',
-    password: 'password',
-    database: 'bot_db'
-  }],
-  bots: [{
-    name: 'telegram_bot',
-    context: 'telegram',
-    token: 'YOUR_BOT_TOKEN'
-  }]
+let messageCount = 0
+
+onMessage(async (message) => {
+  messageCount++
+  console.log('消息计数:', messageCount)
+})
+
+onMounted(() => {
+  console.log('问候插件已加载')
+})
+
+onDispose(() => {
+  console.log('问候插件已卸载，总消息数:', messageCount)
 })
 ```
 
-## 🌐 Web控制台
+在配置中使用：
 
-启动应用后，访问 http://localhost:8086 即可打开Web控制台：
+```typescript
+// zhin.config.ts
+import { defineConfig } from 'zhin.js'
 
-- 📊 **实时监控** - 查看机器人状态和消息统计
-- 🔧 **插件管理** - 启用/禁用插件功能
-- 📋 **数据库管理** - 查看和操作数据库
-- 📝 **日志查看** - 实时查看系统日志
+export default defineConfig({
+  plugins: [
+    './plugins/greeting'
+  ]
+})
+```
 
-## 📚 更多文档
+## 配置
 
-- [完整文档](../../docs/)
-- [最佳实践](../../docs/guide/best-practices.md)
-- [架构设计](../../docs/guide/architecture.md)
+### zhin.config.ts
 
-## 📄 许可证
+```typescript
+import { defineConfig } from 'zhin.js'
+
+export default defineConfig({
+  // 机器人配置
+  bots: [
+    {
+      name: 'my-bot',
+      context: 'process'
+    }
+  ],
+  
+  // 插件列表
+  plugins: [
+    'http',
+    'console',
+    'adapter-process'
+  ],
+  
+  // 插件目录
+  plugin_dirs: [
+    './plugins',
+    'node_modules/@zhin.js'
+  ],
+  
+  // 数据库配置
+  database: {
+    dialect: 'sqlite',
+    storage: './data/bot.db'
+  },
+  
+  // 调试模式
+  debug: false
+})
+```
+
+## 类型支持
+
+Zhin.js 提供完整的 TypeScript 类型支持：
+
+```typescript
+import type { 
+  App,
+  Plugin,
+  Message,
+  MessageCommand,
+  SendOptions
+} from 'zhin.js'
+
+// 所有API都有完整的类型提示
+```
+
+## 生态系统
+
+### 官方插件
+
+- `@zhin.js/http` - HTTP 服务器
+- `@zhin.js/console` - Web 控制台
+- `@zhin.js/client` - 前端框架
+
+### 官方适配器
+
+- `@zhin.js/adapter-process` - 控制台适配器
+- `@zhin.js/adapter-discord` - Discord 适配器
+- `@zhin.js/adapter-telegram` - Telegram 适配器
+- `@zhin.js/adapter-qq` - QQ 适配器
+- `@zhin.js/adapter-icqq` - ICQQ 适配器
+- `@zhin.js/adapter-kook` - KOOK 适配器
+- `@zhin.js/adapter-onebot11` - OneBot v11 适配器
+- `@zhin.js/adapter-lark` - 飞书适配器
+- `@zhin.js/adapter-wechat-mp` - 微信公众号适配器
+- `@zhin.js/adapter-email` - 邮件适配器
+
+## 相关资源
+
+- [完整文档](https://docs.zhin.dev)
+- [快速开始](https://docs.zhin.dev/guide/getting-started)
+- [API 参考](https://docs.zhin.dev/api/core)
+- [插件开发](https://docs.zhin.dev/plugin/getting-started)
+- [GitHub 仓库](https://github.com/zhinjs/zhin)
+
+## 许可证
 
 MIT License

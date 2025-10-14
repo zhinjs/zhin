@@ -1,477 +1,633 @@
 # @zhin.js/hmr
 
-企业级热模块替换 (HMR) 系统，为 Zhin 框架提供高性能的模块热重载能力。采用模块化架构设计，支持复杂的依赖关系管理和上下文系统。
+Zhin 机器人框架的热模块替换（Hot Module Replacement）系统，提供文件监听、模块加载、依赖管理和性能监控。
 
-## 核心特性
+## 特性
 
-- 🔥 **热模块替换**: 代码修改即时生效，无需重启
-- 📊 **性能监控**: 详细的重载时间统计和性能分析
-- 🎯 **依赖管理**: 完整的依赖树管理和生命周期控制
-- 🔍 **智能监听**: 基于文件扩展名的智能文件监听
-- 🧩 **上下文系统**: 强大的依赖注入和上下文管理
-- ⚡ **高性能**: 优化的重载算法和防抖机制
-- 🛠️ **可扩展**: 模块化设计，易于扩展和定制
+- 🔥 **热重载** - 文件变更自动重新加载模块
+- 📦 **模块加载器** - 智能的 ES 模块加载和缓存
+- 🎯 **依赖管理** - 完整的依赖树管理和生命周期
+- 📊 **性能监控** - 内置性能监控和计时器
+- 🔍 **文件监听** - 高效的文件变更监听
+- 🔄 **重载管理** - 智能的模块重载策略
+- 🛡️ **错误处理** - 完善的错误恢复机制
+- 🎨 **上下文系统** - 灵活的上下文注册和依赖注入
 
-## 架构组件
+## 安装
 
-### Dependency 类 - 依赖基类
-
-所有可热重载组件的基础类，提供完整的生命周期管理：
-
-```typescript
-import { Dependency } from '@zhin.js/hmr'
-
-class MyComponent extends Dependency {
-  constructor(parent: Dependency, name: string, filePath: string) {
-    super(parent, name, filePath)
-  }
-  
-  // 生命周期回调
-  async mounted() {
-    console.log('组件已挂载')
-  }
-  
-  dispose() {
-    console.log('组件正在销毁')
-    super.dispose()
-  }
-}
+```bash
+pnpm add @zhin.js/hmr
 ```
 
-**主要功能：**
-- 📋 生命周期管理 (`waiting` → `ready` → `disposed`)
-- 🌳 依赖树结构维护
-- 📡 事件系统和广播机制
-- 🔧 上下文注册和依赖注入
-- ⚙️ 配置管理和热更新
+`@zhin.js/hmr` 已内置在 `@zhin.js/core` 中，通常不需要单独安装。
 
-### HMR 类 - 热更新核心
+## 核心类
 
-抽象基类，继承自 `Dependency`，组合各个功能模块：
+### HMR
+
+HMR 基类，提供热模块替换功能。
 
 ```typescript
 import { HMR } from '@zhin.js/hmr'
 
-class MyHMRSystem extends HMR<MyComponent> {
-  // 抽象方法：创建依赖实例
-  createDependency(name: string, filePath: string): MyComponent {
-    return new MyComponent(this, name, filePath)
+class MyHMR extends HMR<MyDependency> {
+  createDependency(name: string, filePath: string): MyDependency {
+    return new MyDependency(this, name, filePath)
   }
 }
 
-const hmr = new MyHMRSystem('MySystem', {
-  dirs: ['./src', './plugins'],
-  extensions: new Set(['.js', '.ts', '.jsx', '.tsx']),
-  debug: process.env.NODE_ENV === 'development',
-  debounce: 100,
-  max_listeners: 50
+const hmr = new MyHMR('MyApp', {
+  dirs: ['./plugins'],
+  extensions: new Set(['.js', '.ts']),
+  debug: false
+})
+
+await hmr.start()
+```
+
+**主要方法：**
+
+- `hmr.start()` - 启动 HMR
+- `hmr.stop()` - 停止 HMR
+- `hmr.reload(filename)` - 重载指定文件
+- `hmr.dispose()` - 销毁 HMR
+- `hmr.addWatchDir(dir)` - 添加监听目录
+- `hmr.removeWatchDir(dir)` - 移除监听目录
+- `hmr.waitForReady()` - 等待所有依赖就绪
+
+**属性：**
+
+- `hmr.isReady` - 是否就绪
+- `hmr.dependencyList` - 依赖列表
+- `HMR.currentHMR` - 当前活动的 HMR 实例
+- `HMR.currentDependency` - 当前活动的依赖
+
+### Dependency
+
+依赖基类，提供事件系统和依赖层次结构管理。
+
+```typescript
+import { Dependency } from '@zhin.js/hmr'
+
+class MyDependency extends Dependency {
+  constructor(parent: Dependency | null, name: string, filename: string) {
+    super(parent, name, filename, {
+      enabled: true,
+      priority: 0
+    })
+  }
+}
+
+// 使用
+const dep = new MyDependency(null, 'my-dep', './dep.js')
+
+// 监听事件
+dep.on('mounted', () => {
+  console.log('依赖已挂载')
+})
+
+dep.on('dispose', () => {
+  console.log('依赖已销毁')
+})
+
+// 注册上下文
+dep.register({
+  name: 'myService',
+  async mounted(dep) {
+    return new MyService()
+  },
+  dispose() {
+    // 清理
+  }
+})
+
+// 使用上下文
+dep.useContext(['myService'], (myService) => {
+  // 使用服务
+  return (context) => {
+    // 清理函数
+  }
 })
 ```
 
-**内部组件：**
-- 🔍 `FileWatcher` - 文件系统监听
-- 📦 `ModuleLoader` - 模块加载和缓存
-- 📊 `PerformanceMonitor` - 性能监控统计
-- 🔄 `ReloadManager` - 重载调度管理
+**主要方法：**
 
-### FileWatcher - 文件监听器
+- `dep.register(context)` - 注册上下文
+- `dep.useContext(contexts, sideEffect)` - 使用上下文
+- `dep.before(event, listener)` - 前置事件监听
+- `dep.dispatch(event, ...args)` - 派发事件
+- `dep.mounted()` - 挂载依赖
+- `dep.dispose()` - 销毁依赖
+- `dep.findChild(filename)` - 查找子依赖
+- `dep.findPluginByName(name)` - 按名称查找插件
+- `dep.waitForReady()` - 等待依赖就绪
 
-高性能文件系统监听器，支持递归目录监听：
+**属性：**
+
+- `dep.parent` - 父依赖
+- `dep.name` - 依赖名称
+- `dep.filename` - 文件路径
+- `dep.contexts` - 上下文映射
+- `dep.dependencies` - 子依赖映射
+- `dep.isReady` - 是否就绪
+- `dep.isDispose` - 是否已销毁
+- `dep.options` - 依赖配置
+
+### FileWatcher
+
+文件监听器，监听文件变更。
 
 ```typescript
-const watcher = new FileWatcher(
-  ['./src', './plugins'],           // 监听目录
-  ['.js', '.ts', '.vue'],          // 监听扩展名
-  logger,                          // 日志记录器
-  ['node_modules']                 // 排除目录
-)
+import { FileWatcher } from '@zhin.js/hmr'
 
-watcher.on('file-change', (filePath, eventType) => {
-  console.log(`文件 ${filePath} 发生 ${eventType} 事件`)
+const watcher = new FileWatcher(['./src'], {
+  extensions: new Set(['.js', '.ts']),
+  ignored: /node_modules/
 })
 
-// 动态添加监听目录
-watcher.addWatchDir('./new-plugin')
+watcher.on('change', (filename) => {
+  console.log('文件变更:', filename)
+})
+
+watcher.on('unlink', (filename) => {
+  console.log('文件删除:', filename)
+})
+
+watcher.start()
 ```
 
-**特性：**
-- 🚀 支持 Node.js 和 Bun 运行时
-- 📁 递归目录监听
-- 🎯 智能文件过滤
-- 🔧 动态目录管理
+### ModuleLoader
 
-### ModuleLoader - 模块加载器
-
-智能模块加载器，支持缓存和哈希验证：
+模块加载器，负责加载和缓存 ES 模块。
 
 ```typescript
-const loader = new ModuleLoader(hmrInstance, logger, 'md5')
+import { ModuleLoader } from '@zhin.js/hmr'
+
+const loader = new ModuleLoader()
 
 // 加载模块
-const dependency = await loader.add('my-plugin', './plugins/my-plugin.ts')
+const module = await loader.load('./plugin.js')
 
-// 重载模块
-await loader.reload('./plugins/my-plugin.ts')
+// 卸载模块
+await loader.unload('./plugin.js')
 
-// 检查文件变化
-const hasChanged = loader.hasFileChanged('./plugins/my-plugin.ts')
+// 重新加载
+const newModule = await loader.reload('./plugin.js')
+
+// 获取缓存的模块
+const cached = loader.getModule('./plugin.js')
+
+// 清除所有缓存
+loader.clearCache()
 ```
 
-**功能：**
-- 🔐 文件哈希校验 (支持 md5, sha1, sha256)
-- 💾 智能模块缓存
-- 🔄 异步模块加载
-- 🧹 自动缓存清理
+### PerformanceMonitor
 
-### PerformanceMonitor - 性能监控
-
-详细的性能统计和监控工具：
+性能监控器，监控模块加载和重载性能。
 
 ```typescript
+import { PerformanceMonitor, Timer } from '@zhin.js/hmr'
+
 const monitor = new PerformanceMonitor()
 
-// 创建计时器
-const timer = monitor.createTimer()
-await performSomeWork()
-const duration = timer.stop()
+// 开始计时
+const timer = monitor.start('load-plugin')
 
-// 记录重载时间
-monitor.recordReloadTime(duration)
+// ... 执行操作
 
-// 记录错误
-monitor.recordError()
+// 结束计时
+const duration = timer.end()
+console.log('耗时:', duration, 'ms')
 
-// 获取性能报告
-console.log(monitor.getReport())
+// 获取统计信息
+const stats = monitor.getStats('load-plugin')
+console.log('平均耗时:', stats.average, 'ms')
+console.log('最大耗时:', stats.max, 'ms')
+console.log('最小耗时:', stats.min, 'ms')
 ```
 
-**统计信息：**
-- ⏱️ 重载时间统计 (平均/最小/最大)
-- 📈 重载次数计数
-- ❌ 错误次数统计
-- 📊 性能趋势分析
+### ReloadManager
 
-### ReloadManager - 重载管理器
-
-智能重载调度器，支持防抖和错误恢复：
+重载管理器，管理模块重载策略。
 
 ```typescript
-const reloadManager = new ReloadManager(logger, 300) // 300ms 防抖
+import { ReloadManager } from '@zhin.js/hmr'
 
-reloadManager.on('reload-file', async (filePath) => {
-  await handleFileReload(filePath)
+const manager = new ReloadManager({
+  debounce: 100,
+  maxRetries: 3
 })
 
-// 调度重载
-reloadManager.scheduleReload('./changed-file.ts')
-```
+manager.on('reload-start', (filename) => {
+  console.log('开始重载:', filename)
+})
 
-**特性：**
-- 🕐 重载防抖机制
-- 📋 重载队列管理
-- 🛠️ 错误恢复策略
-- 📊 状态监控
+manager.on('reload-end', (filename, duration) => {
+  console.log('重载完成:', filename, duration, 'ms')
+})
+
+manager.on('reload-error', (filename, error) => {
+  console.error('重载失败:', filename, error)
+})
+
+await manager.reload('./plugin.js')
+```
 
 ## 上下文系统
 
-强大的依赖注入系统，支持异步上下文管理：
+### 注册上下文
 
 ```typescript
+import { Dependency } from '@zhin.js/hmr'
+
+const dep = new Dependency(null, 'my-dep', './dep.js')
+
 // 注册上下文
-dependency.register({
-  name: 'database',
-  async mounted(dependency) {
-    const db = new Database()
-    await db.connect()
-    return db
+dep.register({
+  name: 'http',
+  description: 'HTTP 服务',
+  async mounted(dep) {
+    const server = new HttpServer()
+    await server.start()
+    return server
   },
-  async dispose(db) {
-    await db.disconnect()
-  }
-})
-
-// 使用上下文依赖
-dependency.useContext('database', 'config', async (db, config) => {
-  const users = await db.query('SELECT * FROM users')
-  console.log(`加载了 ${users.length} 个用户`)
-  
-  // 返回清理函数（可选）
-  return async (context) => {
-    console.log('上下文清理中...')
+  async dispose() {
+    await server.stop()
   }
 })
 ```
 
-## 完整使用示例
-
-### 创建自定义 HMR 系统
+### 使用上下文
 
 ```typescript
-import { HMR, Dependency } from '@zhin.js/hmr'
-
-// 定义组件类
-class PluginComponent extends Dependency {
-  private handler?: Function
+// 单个上下文
+dep.useContext(['http'], (http) => {
+  // 使用 HTTP 服务
+  http.get('/api', handler)
   
-  constructor(parent: Dependency, name: string, filePath: string) {
-    super(parent, name, filePath)
+  // 返回清理函数
+  return (http) => {
+    // 清理
   }
-  
-  async mounted() {
-    try {
-      // 动态导入模块
-      const module = await import(this.filename + '?t=' + Date.now())
-      this.handler = module.default || module
-      
-      console.log(`插件 ${this.name} 已加载`)
-    } catch (error) {
-      console.error(`插件 ${this.name} 加载失败:`, error)
-    }
-  }
-  
-  execute(...args: any[]) {
-    return this.handler?.(...args)
-  }
-  
-  dispose() {
-    this.handler = undefined
-    super.dispose()
-  }
-}
-
-// 创建 HMR 系统
-class PluginHMR extends HMR<PluginComponent> {
-  createDependency(name: string, filePath: string): PluginComponent {
-    return new PluginComponent(this, name, filePath)
-  }
-}
-
-// 初始化系统
-const pluginSystem = new PluginHMR('PluginSystem', {
-  dirs: ['./plugins'],
-  extensions: new Set(['.js', '.ts']),
-  debug: true,
-  debounce: 200,
-  algorithm: 'sha256'
 })
 
-// 事件监听
-pluginSystem.on('add', (plugin: PluginComponent) => {
-  console.log(`新插件: ${plugin.name}`)
+// 多个上下文
+dep.useContext(['http', 'database'], (http, database) => {
+  // 使用多个服务
+  
+  return (context) => {
+    // 清理
+  }
 })
-
-pluginSystem.on('reload', (filePath: string) => {
-  console.log(`文件重载: ${filePath}`)
-})
-
-pluginSystem.on('error', (error: Error) => {
-  console.error('系统错误:', error)
-})
-
-// 启动系统
-await pluginSystem.waitForReady()
-console.log('插件系统已就绪')
 ```
 
-### 高级配置
+### 检查上下文就绪
 
 ```typescript
-// 环境感知配置
-const hmrOptions: HMROptions = {
-  dirs: process.env.NODE_ENV === 'development' 
-    ? ['./src', './plugins', './dev-plugins'] 
-    : ['./plugins'],
-    
-  extensions: new Set(['.js', '.ts', '.jsx', '.tsx', '.vue']),
-  
-  debug: process.env.DEBUG === 'true',
-  
-  // 根据系统性能调整
-  debounce: process.env.NODE_ENV === 'production' ? 500 : 100,
-  
-  max_listeners: parseInt(process.env.MAX_LISTENERS || '30'),
-  
-  // 使用更安全的哈希算法
-  algorithm: 'sha256',
-  
-  // 自定义日志记录器
-  logger: new CustomLogger('[HMR]', {
-    level: process.env.LOG_LEVEL || 'info'
-  })
+// 检查上下文是否就绪
+if (dep.contextIsReady('http')) {
+  const http = dep.getContextValue('http')
+  // 使用服务
 }
 ```
 
-## 性能优化
+## 生命周期
 
-### 监听目录优化
+### 依赖生命周期
 
 ```typescript
-// 避免监听大型目录
-const optimizedDirs = [
-  './src',
-  './plugins',
-  // ❌ 避免: './node_modules' (太大)
-  // ❌ 避免: './' (根目录，文件太多)
-]
+const dep = new Dependency(null, 'my-dep', './dep.js')
 
-// 使用精确的文件扩展名
-const optimizedExtensions = new Set([
-  '.js', '.ts',    // 只监听需要的文件类型
-  // ❌ 避免: '*' (匹配所有文件)
-])
+// 等待状态
+console.log(dep.getLifecycleState()) // 'waiting'
+
+// 挂载
+dep.on('self.mounted', () => {
+  console.log('自身已挂载')
+})
+
+dep.on('mounted', () => {
+  console.log('依赖已挂载')
+})
+
+dep.mounted()
+console.log(dep.isReady) // true
+
+// 销毁
+dep.on('self.dispose', () => {
+  console.log('自身正在销毁')
+})
+
+dep.on('dispose', () => {
+  console.log('依赖已销毁')
+})
+
+dep.dispose()
+console.log(dep.isDispose) // true
 ```
 
-### 性能监控示例
+### 上下文生命周期
 
 ```typescript
-// 定期输出性能报告
-setInterval(() => {
-  const stats = hmr.getPerformanceStats()
-  console.log(`
-📊 性能统计:
-  - 重载次数: ${stats.reloadCount}
-  - 平均重载时间: ${stats.averageReloadTime}ms
-  - 错误次数: ${stats.errorCount}
-  - 内存使用: ${process.memoryUsage().heapUsed / 1024 / 1024}MB
-  `)
-}, 30000) // 每30秒输出一次
+dep.on('context.mounted', (name) => {
+  console.log('上下文已挂载:', name)
+})
+
+dep.on('context.dispose', (name) => {
+  console.log('上下文已销毁:', name)
+})
 ```
 
 ## 事件系统
 
-### 核心事件
+### 前置事件
 
 ```typescript
-hmr.on('add', (dependency) => {
-  console.log(`依赖已添加: ${dependency.name}`)
+// 注册前置事件监听器
+dep.before('message.send', (options) => {
+  console.log('消息发送前:', options)
+  // 可以修改 options
+  return modifiedOptions
 })
 
-hmr.on('remove', (dependency) => {
-  console.log(`依赖已移除: ${dependency.name}`)
-})
-
-hmr.on('reload', (filePath) => {
-  console.log(`文件已重载: ${filePath}`)
-})
-
-hmr.on('error', (error) => {
-  console.error(`系统错误:`, error)
-})
-
-hmr.on('file-change', (filePath, eventType) => {
-  console.log(`文件变化: ${filePath} (${eventType})`)
-})
+// 触发事件（会先触发前置事件）
+await dep.dispatch('message.send', options)
 ```
 
-### 生命周期事件
+### 事件监听
 
 ```typescript
-dependency.on('self.mounted', (dep) => {
-  console.log(`${dep.name} 已挂载`)
+// 监听事件
+dep.on('custom-event', (data) => {
+  console.log('自定义事件:', data)
 })
 
-dependency.on('self.dispose', (dep) => {
-  console.log(`${dep.name} 已销毁`)
+// 监听一次
+dep.once('custom-event', (data) => {
+  console.log('只触发一次')
 })
 
-dependency.on('lifecycle-changed', (oldState, newState) => {
-  console.log(`状态变更: ${oldState} → ${newState}`)
-})
+// 移除监听
+const handler = (data) => {}
+dep.on('custom-event', handler)
+dep.off('custom-event', handler)
+
+// 派发事件
+dep.dispatch('custom-event', { data: 'value' })
 ```
 
-## API 参考
+## 工具函数
 
-### HMROptions 接口
+### getCallerFile
+
+获取调用者的文件路径。
 
 ```typescript
-interface HMROptions extends DependencyOptions {
-  /** 监听目录列表 */
-  dirs?: string[]
-  
-  /** 监听的文件扩展名 */
-  extensions?: Set<string> | string[]
-  
-  /** 日志记录器 */
-  logger?: Logger
-  
-  /** 最大事件监听器数量 */
-  max_listeners?: number
-  
-  /** 重载防抖时间（毫秒） */
-  debounce?: number
-  
-  /** 文件哈希算法 */
-  algorithm?: 'md5' | 'sha1' | 'sha256'
-  
-  /** 调试模式 */
-  debug?: boolean
+import { getCallerFile } from '@zhin.js/hmr'
+
+const callerFile = getCallerFile(import.meta.url)
+console.log('调用文件:', callerFile)
+```
+
+### getCallerFiles
+
+获取调用堆栈中的所有文件路径。
+
+```typescript
+import { getCallerFiles } from '@zhin.js/hmr'
+
+const callerFiles = getCallerFiles(import.meta.url)
+console.log('调用堆栈:', callerFiles)
+```
+
+### Context 类型
+
+定义上下文。
+
+```typescript
+import { Context } from '@zhin.js/hmr'
+
+const httpContext: Context = {
+  name: 'http',
+  description: 'HTTP 服务',
+  async mounted(dep) {
+    return new HttpServer()
+  },
+  async dispose() {
+    // 清理
+  }
 }
 ```
 
-### 静态方法
+### Logger
+
+获取日志器。
 
 ```typescript
-// 获取当前活动的 HMR 实例
-const currentHMR = HMR.currentHMR
+import { Logger } from '@zhin.js/hmr'
 
-// 获取当前活动的依赖
-const currentDependency = HMR.currentDependency
+const logger = dep.getLogger('MyPlugin')
 
-// 获取调用者文件路径
-const callerFile = HMR.getCurrentFile()
-
-// 获取调用栈
-const callStack = HMR.getCurrentStack()
+logger.debug('调试信息')
+logger.info('普通信息')
+logger.warn('警告信息')
+logger.error('错误信息')
 ```
 
-## 故障排查
+## 配置选项
 
-### 常见问题
+### HMROptions
 
-1. **文件监听不工作**
-   ```typescript
-   // 检查文件扩展名配置
-   const extensions = hmr.options.extensions
-   console.log('监听的扩展名:', Array.from(extensions))
-   
-   // 检查监听目录
-   console.log('监听目录:', hmr.getWatchDirs())
-   ```
+```typescript
+interface HMROptions {
+  // 优先级
+  priority?: number
+  
+  // 监听目录
+  dirs?: string[]
+  
+  // 是否启用
+  enabled?: boolean
+  
+  // 监听的文件扩展名
+  extensions?: Set<string>
+  
+  // 最大监听器数量
+  max_listeners?: number
+  
+  // 防抖延迟
+  debounce?: number
+  
+  // 哈希算法
+  algorithm?: string
+  
+  // 是否调试模式
+  debug?: boolean
+  
+  // 版本
+  version?: string
+  
+  // 日志器
+  logger?: Logger
+}
+```
 
-2. **重载性能问题**
-   ```typescript
-   // 查看性能统计
-   console.log(hmr.getPerformanceReport())
-   
-   // 调整防抖时间
-   hmr.updateOptions({ debounce: 500 })
-   ```
+### DependencyOptions
 
-3. **内存泄漏**
-   ```typescript
-   // 定期清理
-   setInterval(() => {
-     hmr.performGC()
-   }, 60000)
-   
-   // 检查事件监听器
-   console.log('监听器数量:', hmr.listenerCount('reload'))
-   ```
+```typescript
+interface DependencyOptions {
+  // 是否启用
+  enabled?: boolean
+  
+  // 优先级
+  priority?: number
+}
+```
+
+## 完整示例
+
+### 基础 HMR 应用
+
+```typescript
+import { HMR, Dependency } from '@zhin.js/hmr'
+
+class Plugin extends Dependency {
+  constructor(parent: Dependency, name: string, filename: string) {
+    super(parent, name, filename)
+    
+    // 监听挂载
+    this.on('mounted', () => {
+      console.log(`插件 ${name} 已加载`)
+    })
+    
+    // 监听销毁
+    this.on('dispose', () => {
+      console.log(`插件 ${name} 已卸载`)
+    })
+  }
+}
+
+class App extends HMR<Plugin> {
+  createDependency(name: string, filename: string): Plugin {
+    return new Plugin(this, name, filename)
+  }
+}
+
+const app = new App('MyApp', {
+  dirs: ['./plugins'],
+  extensions: new Set(['.js', '.ts'])
+})
+
+await app.start()
+```
+
+### 使用上下文
+
+```typescript
+class Plugin extends Dependency {
+  constructor(parent: Dependency, name: string, filename: string) {
+    super(parent, name, filename)
+    
+    // 注册上下文
+    this.register({
+      name: 'database',
+      async mounted(dep) {
+        const db = new Database()
+        await db.connect()
+        return db
+      },
+      async dispose() {
+        await db.disconnect()
+      }
+    })
+    
+    // 使用上下文
+    this.useContext(['http'], (http) => {
+      http.get('/api', handler)
+      
+      return (http) => {
+        // 清理
+      }
+    })
+  }
+}
+```
+
+### 性能监控
+
+```typescript
+import { PerformanceMonitor } from '@zhin.js/hmr'
+
+const monitor = new PerformanceMonitor()
+
+class App extends HMR<Plugin> {
+  async reload(filename: string) {
+    const timer = monitor.start(`reload:${filename}`)
+    
+    try {
+      await super.reload(filename)
+    } finally {
+      const duration = timer.end()
+      console.log(`重载 ${filename} 耗时: ${duration}ms`)
+    }
+  }
+}
+```
 
 ## 最佳实践
 
-1. **合理设置防抖时间**: 开发环境 100-200ms，生产环境 300-500ms
-2. **精确配置文件扩展名**: 只监听必要的文件类型
-3. **避免监听大型目录**: 如 `node_modules`，会严重影响性能
-4. **及时清理事件监听器**: 防止内存泄漏
-5. **使用性能监控**: 定期检查重载性能
-6. **错误处理**: 为所有异步操作添加错误处理
+### 1. 正确清理资源
 
-## 依赖项
+```typescript
+class Plugin extends Dependency {
+  private timers: NodeJS.Timeout[] = []
+  
+  constructor(parent: Dependency, name: string, filename: string) {
+    super(parent, name, filename)
+    
+    // 添加定时器
+    const timer = setInterval(() => {}, 1000)
+    this.timers.push(timer)
+    
+    // 清理资源
+    this.on('dispose', () => {
+      this.timers.forEach(t => clearInterval(t))
+      this.timers = []
+    })
+  }
+}
+```
 
-- `@zhin.js/types` - TypeScript 类型定义
-- Node.js 内置模块：`fs`, `path`, `events`, `crypto`
+### 2. 使用依赖配置
+
+```typescript
+const plugin = new Plugin(parent, 'my-plugin', './plugin.js', {
+  enabled: true,
+  priority: 10
+})
+
+// 更新配置
+plugin.updateOptions({ enabled: false })
+```
+
+### 3. 等待就绪
+
+```typescript
+// 等待依赖就绪
+await plugin.waitForReady()
+
+// 等待所有依赖就绪
+await app.waitForReady()
+```
+
+## 相关资源
+
+- [完整文档](https://docs.zhin.dev)
+- [HMR 指南](https://docs.zhin.dev/guide/hmr)
+- [API 参考](https://docs.zhin.dev/api/hmr)
 
 ## 许可证
 
 MIT License
+
+

@@ -15,9 +15,9 @@ Zhin.js 基于 Node.js EventEmitter 构建了强大的事件系统，支持消�
 import { onMessage } from 'zhin.js'
 
 onMessage(async (message) => {
-  console.log('收到消息:', message.raw)
-  console.log('发送者:', message.sender.name)
-  console.log('频道:', message.channel.id)
+  console.log('收到消息:', message.$raw)
+  console.log('发送者:', message.$sender.name)
+  console.log('频道:', message.$channel.id)
 })
 ```
 
@@ -29,13 +29,13 @@ import { onMessage } from 'zhin.js'
 
 onMessage(async (message) => {
   // 群消息处理
-  if (message.channel.type === 'group') {
-    console.log('群消息:', message.raw)
+  if (message.$channel.type === 'group') {
+    console.log('群消息:', message.$raw)
   }
   
   // 私聊消息处理
-  if (message.channel.type === 'private') {
-    console.log('私聊消息:', message.raw)
+  if (message.$channel.type === 'private') {
+    console.log('私聊消息:', message.$raw)
   }
 })
 ```
@@ -50,21 +50,21 @@ onMessage(async (message) => {
   switch (message.adapter) {
     case 'icqq':
       // QQ 特有处理
-      if (message.content.some(seg => seg.type === 'at')) {
-        await message.reply('有人@我了！')
+      if (message.$content.some(seg => seg.type === 'at')) {
+        await message.$reply('有人@我了！')
       }
       break
       
     case 'kook':
       // KOOK 特有处理
-      if (message.channel.type === 'channel') {
-        await message.reply('频道消息')
+      if (message.$channel.type === 'channel') {
+        await message.$reply('频道消息')
       }
       break
       
     case 'onebot11':
       // OneBot 标准处理
-      await message.reply('OneBot 消息')
+      await message.$reply('OneBot 消息')
       break
   }
 })
@@ -178,11 +178,11 @@ const plugin = usePlugin()
 
 // 添加全局事件中间件
 plugin.on('message.receive', (message) => {
-  console.log(`[${new Date().toISOString()}] 收到消息: ${message.raw}`)
+  console.log(`[${new Date().toISOString()}] 收到消息: ${message.$raw}`)
 })
 
 plugin.on('message.send', (message) => {
-  console.log(`[${new Date().toISOString()}] 发送消息: ${message.content}`)
+  console.log(`[${new Date().toISOString()}] 发送消息: ${message.$content}`)
 })
 ```
 
@@ -194,13 +194,13 @@ import { onMessage } from 'zhin.js'
 
 onMessage(async (message) => {
   // 只处理包含特定关键词的消息
-  if (message.raw.includes('重要')) {
-    console.log('重要消息:', message.raw)
+  if (message.$raw.includes('重要')) {
+    console.log('重要消息:', message.$raw)
   }
   
   // 只处理特定用户的消息
-  if (message.sender.id === 'admin') {
-    console.log('管理员消息:', message.raw)
+  if (message.$sender.id === 'admin') {
+    console.log('管理员消息:', message.$raw)
   }
 })
 ```
@@ -246,7 +246,7 @@ onMessage(async (message) => {
     
     // 记录慢处理
     if (duration > 1000) {
-      console.warn(`慢消息处理: ${message.raw} (${duration}ms)`)
+      console.warn(`慢消息处理: ${message.$raw} (${duration}ms)`)
     }
   }
 })
@@ -262,12 +262,12 @@ import { onMessage } from 'zhin.js'
 
 onMessage(async (message) => {
   // 第一层：权限检查
-  if (!hasPermission(message.sender.id)) {
+  if (!hasPermission(message.$sender.id)) {
     return
   }
   
   // 第二层：内容过滤
-  if (containsSpam(message.raw)) {
+  if (containsSpam(message.$raw)) {
     return
   }
   

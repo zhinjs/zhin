@@ -43,7 +43,7 @@ register({
 addCommand(new MessageCommand('ticket <issue:text>')
   .action(async (message, result) => {
     const service = useContext('customer-service');
-    const ticketId = await service.createTicket(message.sender.id, result.args.issue);
+    const ticketId = await service.createTicket(message.$sender.id, result.args.issue);
     
     return `🎫 工单已创建！
 工单号：${ticketId}
@@ -75,8 +75,8 @@ onMessage(async (message) => {
   };
   
   for (const [keyword, reply] of Object.entries(keywords)) {
-    if (message.raw.includes(keyword)) {
-      await message.reply(`🤖 自动回复：${reply}`);
+    if (message.$raw.includes(keyword)) {
+      await message.$reply(`🤖 自动回复：${reply}`);
       break;
     }
   }
@@ -174,7 +174,7 @@ addCommand(new MessageCommand('task update <taskId:text> <status:text>')
 // 查看我的任务
 addCommand(new MessageCommand('my tasks')
   .action(async (message) => {
-    const tasks = projectManager.getTasksByAssignee(message.sender.id);
+    const tasks = projectManager.getTasksByAssignee(message.$sender.id);
     
     if (tasks.length === 0) {
       return '📝 您当前没有任务';
@@ -244,7 +244,7 @@ const gameSessions = new Map<string, GameSession>();
 // 开始游戏命令
 addCommand(new MessageCommand('guess start [max:number=100]')
   .action(async (message, result) => {
-    const userId = message.sender.id;
+    const userId = message.$sender.id;
     const max = result.args.max || 100;
     
     // 检查是否已有游戏进行中
@@ -272,7 +272,7 @@ addCommand(new MessageCommand('guess start [max:number=100]')
 // 猜测命令
 addCommand(new MessageCommand('guess <number:number>')
   .action(async (message, result) => {
-    const userId = message.sender.id;
+    const userId = message.$sender.id;
     const session = gameSessions.get(userId);
     
     if (!session) {
@@ -314,7 +314,7 @@ addCommand(new MessageCommand('guess <number:number>')
 // 放弃游戏命令
 addCommand(new MessageCommand('guess quit')
   .action(async (message) => {
-    const userId = message.sender.id;
+    const userId = message.$sender.id;
     const session = gameSessions.get(userId);
     
     if (!session) {
@@ -372,7 +372,7 @@ const gameMap = {
 // 开始冒险命令
 addCommand(new MessageCommand('adventure start')
   .action(async (message) => {
-    const userId = message.sender.id;
+    const userId = message.$sender.id;
     
     if (gameStates.has(userId)) {
       return '🎮 您已有冒险进行中，请先完成当前冒险';
@@ -403,7 +403,7 @@ ${gameMap[state.location].description}
 // 查看命令
 addCommand(new MessageCommand('look')
   .action(async (message) => {
-    const userId = message.sender.id;
+    const userId = message.$sender.id;
     const state = gameStates.get(userId);
     
     if (!state) {
@@ -432,7 +432,7 @@ addCommand(new MessageCommand('look')
 // 移动命令
 addCommand(new MessageCommand('go <direction:text>')
   .action(async (message, result) => {
-    const userId = message.sender.id;
+    const userId = message.$sender.id;
     const state = gameStates.get(userId);
     
     if (!state) {
@@ -470,7 +470,7 @@ addCommand(new MessageCommand('go <direction:text>')
 // 拾取物品命令
 addCommand(new MessageCommand('take <item:text>')
   .action(async (message, result) => {
-    const userId = message.sender.id;
+    const userId = message.$sender.id;
     const state = gameStates.get(userId);
     
     if (!state) {
@@ -494,7 +494,7 @@ addCommand(new MessageCommand('take <item:text>')
 // 查看背包命令
 addCommand(new MessageCommand('inventory')
   .action(async (message) => {
-    const userId = message.sender.id;
+    const userId = message.$sender.id;
     const state = gameStates.get(userId);
     
     if (!state) {
@@ -537,7 +537,7 @@ const globalStats = {
 
 // 消息统计中间件
 onMessage(async (message, next) => {
-  const userId = message.sender.id;
+  const userId = message.$sender.id;
   
   // 更新用户统计
   if (!userStats.has(userId)) {
@@ -558,7 +558,7 @@ onMessage(async (message, next) => {
   globalStats.totalMessages++;
   
   // 检查是否是命令
-  if (message.raw.startsWith('/') || message.raw.startsWith('!')) {
+  if (message.$raw.startsWith('/') || message.$raw.startsWith('!')) {
     userStat.commandCount++;
     globalStats.totalCommands++;
   }
@@ -569,7 +569,7 @@ onMessage(async (message, next) => {
 // 统计命令
 addCommand(new MessageCommand('stats')
   .action(async (message) => {
-    const userId = message.sender.id;
+    const userId = message.$sender.id;
     const userStat = userStats.get(userId);
     
     if (!userStat) {

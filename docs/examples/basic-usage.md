@@ -47,13 +47,13 @@ import { onMessage, useLogger } from 'zhin.js';
 const logger = useLogger();
 
 onMessage(async (message) => {
-  if (message.raw === '你好') {
-    await message.reply('你好！我是 Zhin 机器人！');
+  if (message.$raw === '你好') {
+    await message.$reply('你好！我是 Zhin 机器人！');
   }
   
-  if (message.raw.includes('时间')) {
+  if (message.$raw.includes('时间')) {
     const now = new Date().toLocaleString();
-    await message.reply(`现在时间是：${now}`);
+    await message.$reply(`现在时间是：${now}`);
   }
 });
 
@@ -69,14 +69,14 @@ const logger = useLogger();
 
 // 私聊消息处理
 onPrivateMessage(async (message) => {
-  logger.info(`收到私聊消息: ${message.raw}`);
-  await message.reply('这是私聊消息！');
+  logger.info(`收到私聊消息: ${message.$raw}`);
+  await message.$reply('这是私聊消息！');
 });
 
 // 群聊消息处理
 onGroupMessage(async (message) => {
-  if (message.raw.includes('@机器人')) {
-    await message.reply('我在！有什么可以帮助你的吗？');
+  if (message.$raw.includes('@机器人')) {
+    await message.$reply('我在！有什么可以帮助你的吗？');
   }
 });
 ```
@@ -283,7 +283,7 @@ const logger = useLogger();
 // 日志中间件
 addMiddleware(async (message, next) => {
   const start = Date.now();
-  logger.info(`收到消息: ${message.raw}`);
+  logger.info(`收到消息: ${message.$raw}`);
   
   await next();
   
@@ -296,8 +296,8 @@ addMiddleware(async (message, next) => {
   // 检查是否是管理员
   const adminUsers = ['123456789', '987654321'];
   
-  if (message.raw.startsWith('admin') && !adminUsers.includes(message.sender.id)) {
-    await message.reply('❌ 权限不足');
+  if (message.$raw.startsWith('admin') && !adminUsers.includes(message.$sender.id)) {
+    await message.$reply('❌ 权限不足');
     return;
   }
   
@@ -309,12 +309,12 @@ const userLastMessage = new Map<string, number>();
 const RATE_LIMIT = 1000; // 1秒
 
 addMiddleware(async (message, next) => {
-  const userId = message.sender.id;
+  const userId = message.$sender.id;
   const now = Date.now();
   const lastMessage = userLastMessage.get(userId);
   
   if (lastMessage && now - lastMessage < RATE_LIMIT) {
-    await message.reply('⏰ 消息发送过于频繁，请稍后再试');
+    await message.$reply('⏰ 消息发送过于频繁，请稍后再试');
     return;
   }
   
@@ -391,7 +391,7 @@ addCommand(new MessageCommand('rich')
     return [
       segment('text', { text: '🎨 富文本消息示例：\n\n' }),
       segment('text', { text: '📝 普通文本\n' }),
-      segment('at', { id: message.sender.id, name: message.sender.name }),
+      segment('at', { id: message.$sender.id, name: message.$sender.name }),
       segment('text', { text: ' 这是@你的消息\n' }),
       segment('face', { id: '1', name: '微笑' }),
       segment('text', { text: ' 这是表情\n' }),

@@ -58,7 +58,7 @@ const logger = useLogger();
 // 权限检查中间件
 const requireAdmin = (message: Message) => {
   const adminUsers = ['123456789', '987654321'];
-  if (!adminUsers.includes(message.sender.id)) {
+  if (!adminUsers.includes(message.$sender.id)) {
     throw new Error('权限不足');
   }
 };
@@ -91,17 +91,17 @@ addCommand(new MessageCommand('group mute <userId:text> [duration:number=300]')
     requireAdmin(message);
     
     const { userId, duration } = result.args;
-    const groupId = message.channel.id;
+    const groupId = message.$channel.id;
     
     try {
-      await message.reply(`🔇 用户 ${userId} 已被禁言 ${duration} 秒`);
+      await message.$reply(`🔇 用户 ${userId} 已被禁言 ${duration} 秒`);
       
       // 这里应该调用实际的禁言API
       // await bot.setGroupBan(groupId, userId, duration);
       
       // 记录操作日志
       await db.query('INSERT INTO admin_logs (action, target, operator, timestamp) VALUES (?, ?, ?, ?)',
-        ['mute', userId, message.sender.id, Date.now()]);
+        ['mute', userId, message.$sender.id, Date.now()]);
       
       return `✅ 禁言操作已记录`;
     } catch (error) {
@@ -376,17 +376,17 @@ const logger = useLogger();
 // 跨平台消息转发
 onMessage(async (message) => {
   // 只处理特定关键词的消息
-  if (message.raw.includes('转发')) {
-    const targetPlatform = message.raw.split('转发')[1]?.trim();
+  if (message.$raw.includes('转发')) {
+    const targetPlatform = message.$raw.split('转发')[1]?.trim();
     
     if (targetPlatform) {
       try {
         // 根据平台转发消息
         await forwardMessage(message, targetPlatform);
-        await message.reply(`✅ 消息已转发到 ${targetPlatform}`);
+        await message.$reply(`✅ 消息已转发到 ${targetPlatform}`);
       } catch (error) {
         logger.error('消息转发失败:', error);
-        await message.reply(`❌ 转发失败: ${error.message}`);
+        await message.$reply(`❌ 转发失败: ${error.message}`);
       }
     }
   }

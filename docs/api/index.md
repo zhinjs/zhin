@@ -96,15 +96,15 @@ onMessage((message) => {
   console.log('消息ID:', message.id)
   console.log('适配器:', message.adapter)  
   console.log('机器人:', message.bot)
-  console.log('原始消息:', message.raw)
-  console.log('消息段:', message.content) // MessageSegment[]
-  console.log('发送者:', message.sender)  // { id, name? }
-  console.log('频道:', message.channel)   // { id, type: 'private' | 'group' | 'channel' }
+  console.log('原始消息:', message.$raw)
+  console.log('消息段:', message.$content) // MessageSegment[]
+  console.log('发送者:', message.$sender)  // { id, name? }
+  console.log('频道:', message.$channel)   // { id, type: 'private' | 'group' | 'channel' }
   console.log('时间戳:', message.timestamp)
   
   // 回复消息 - 实际签名
-  if (message.raw === '你好') {
-    message.reply('你好呀！', false) // reply(content: SendContent, quote?: boolean|string)
+  if (message.$raw === '你好') {
+    message.$reply('你好呀！', false) // reply(content: SendContent, quote?: boolean|string)
   }
 })
 ```

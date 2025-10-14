@@ -76,7 +76,7 @@ const logger = useLogger()
 // 🎯 注册简单命令
 addCommand(new MessageCommand('hello')
   .action(async (message) => {
-    logger.info('Hello command called by:', message.sender.name)
+    logger.info('Hello command called by:', message.$sender.name)
     return '你好！欢迎使用 Zhin 机器人框架！'
   })
 )
@@ -93,7 +93,7 @@ addCommand(new MessageCommand('weather <city:text> [date:string]')
 // 🔧 添加中间件处理
 addMiddleware(async (message, next) => {
   const start = Date.now()
-  logger.debug(`处理消息: ${message.raw}`)
+  logger.debug(`处理消息: ${message.$raw}`)
   
   await next() // 继续处理管道
   
@@ -105,7 +105,7 @@ addMiddleware(async (message, next) => {
 onMessage(async (message) => {
   // 智能问候检测
   const greetings = ['你好', 'hello', 'hi', '早上好', '晚上好']
-  const text = message.raw.toLowerCase()
+  const text = message.$raw.toLowerCase()
   
   if (greetings.some(greeting => text.includes(greeting))) {
     const responses = [
@@ -115,7 +115,7 @@ onMessage(async (message) => {
       '晚上好！休息得好吗？🌙'
     ]
     const randomResponse = responses[Math.floor(Math.random() * responses.length)]
-    await message.reply(randomResponse)
+    await message.$reply(randomResponse)
   }
 })
 
@@ -222,8 +222,8 @@ addCommand(new MessageCommand('awesome')
 
 // 💬 智能消息响应
 onMessage(async (message) => {
-  if (message.raw.includes('插件')) {
-    await message.reply('🧩 插件开发很有趣！')
+  if (message.$raw.includes('插件')) {
+    await message.$reply('🧩 插件开发很有趣！')
   }
 })
 
@@ -587,7 +587,7 @@ register({
 
 useContext('stats', (stats) => {
   addMiddleware(async (message, next) => {
-    stats.increment('messageCount', message.sender.id)
+    stats.increment('messageCount', message.$sender.id)
     await next()
   })
   

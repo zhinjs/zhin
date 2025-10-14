@@ -213,7 +213,7 @@ CONSOLE_PASSWORD=secret      # 控制台密码
 pnpm dev
 
 # 浏览器访问
-`http://localhost:3000/console`
+`http://localhost:8086`
 ```
 
 ### 控制台功能
@@ -663,7 +663,7 @@ export default defineConfig(async (env) => {
       {
         name: 'http',
         config: {
-          port: 3000,
+          port: 8086,  // 默认端口
           auth: {
             username: env.HTTP_USERNAME,
             password: env.HTTP_PASSWORD
@@ -698,17 +698,17 @@ export default defineConfig(async (env) => {
       {
         name: 'http',
         config: {
-          port: 3000,
+          port: 8086,  // 默认端口
           prefix: '/api'
         }
       },
       
-      // 管理控制台
+      // 管理控制台（如需多端口）
       {
         name: 'http',
         alias: 'admin-http',
         config: {
-          port: 3001,
+          port: 8087,  // 第二个端口
           prefix: '/admin'
         }
       },
@@ -766,24 +766,24 @@ useContext('http', (http) => {
 #### HTTP 插件端口冲突
 
 ```bash
-# 错误：端口 3000 已被占用
-Error: listen EADDRINUSE :::3000
+# 错误：端口 8086 已被占用
+Error: listen EADDRINUSE :::8086
 
 # 解决：更改端口或停止占用进程
-HTTP_PORT=3001
+port=8087
 # 或
-lsof -ti:3000 | xargs kill -9
+lsof -ti:8086 | xargs kill -9
 ```
 
 #### Console 插件无法访问
 
 ```bash
 # 检查插件是否正确启动
-curl `http://localhost:3000/console`
+curl `http://localhost:8086`
 
 # 检查认证配置
-CONSOLE_USERNAME=admin
-CONSOLE_PASSWORD=secret
+username=admin
+password=123456
 ```
 
 #### Client 插件构建失败

@@ -15,8 +15,8 @@ const logger = useLogger()
 
 // 插件逻辑
 onMessage(async (message) => {
-  if (message.raw === 'hello') {
-    await message.reply('Hello from my awesome plugin!')
+  if (message.$raw === 'hello') {
+    await message.$reply('Hello from my awesome plugin!')
   }
 })
 
@@ -230,7 +230,7 @@ addMiddleware(async (message, next) => {
   } finally {
     const duration = Date.now() - start
     if (duration > 1000) {
-      logger.warn(`慢消息处理: ${message.raw} (${duration}ms)`)
+      logger.warn(`慢消息处理: ${message.$raw} (${duration}ms)`)
     }
   }
 })

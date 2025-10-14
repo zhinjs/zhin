@@ -24,10 +24,12 @@ export default {
   bots: [
     {
       context: 'kook',
-      name: '123456789', // 机器人ID
-      token: 'your-bot-token', // KOOK机器人Token
-      data_dir: './data', // 数据目录
-      // 其他KOOK配置项...
+      name: 'my-kook-bot',        // 机器人名称
+      token: 'your-bot-token',    // KOOK机器人Token
+      mode: 'websocket',          // 连接模式: 'websocket'
+      logLevel: 'off',            // 日志级别: 'off' | 'info' | 'warn' | 'error'
+      ignore: 'bot',              // 忽略消息: 'bot' | 'self' | 'all'
+      data_dir: './data',         // 数据目录（可选）
     }
   ]
 }

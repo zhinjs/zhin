@@ -18,9 +18,9 @@ import { onMessage, useLogger } from 'zhin.js'
 const logger = useLogger()
 
 onMessage(async (message) => {
-  if (message.raw.includes('hello')) {
-    logger.info(`用户 ${message.sender.name} 说了 hello`)
-    await message.reply('👋 Hello World! 欢迎使用 Zhin 框架！')
+  if (message.$raw.includes('hello')) {
+    logger.info(`用户 ${message.$sender.name} 说了 hello`)
+    await message.$reply('👋 Hello World! 欢迎使用 Zhin 框架！')
   }
 })
 
@@ -293,11 +293,11 @@ register({
 // 🛡️ 防骚扰中间件
 addMiddleware(async (message, next) => {
   // 仅对群消息进行检查
-  if (message.type === 'group' && message.channel) {
+  if (message.type === 'group' && message.$channel) {
     const admin = useContext('admin')
     
-    if (admin && admin.isBanned(message.channel.id, message.sender.id)) {
-      logger.warn(`被封禁用户尝试发言: ${message.sender.name} (${message.sender.id})`)
+    if (admin && admin.isBanned(message.$channel.id, message.$sender.id)) {
+      logger.warn(`被封禁用户尝试发言: ${message.$sender.name} (${message.$sender.id})`)
       return // 阻止处理被封禁用户的消息
     }
   }
@@ -310,19 +310,19 @@ useContext('admin', (admin) => {
   // 添加管理员
   addCommand(new MessageCommand('admin add <user:user>')
     .action(async (message, result) => {
-      if (message.type !== 'group' || !message.channel) {
+      if (message.type !== 'group' || !message.$channel) {
         return '❌ 此命令只能在群聊中使用'
       }
       
-      if (!admin.isSuperAdmin(message.sender.id)) {
+      if (!admin.isSuperAdmin(message.$sender.id)) {
         return '❌ 只有超级管理员才能添加群管理员'
       }
       
       const { user } = result.args
-      const success = admin.addGroupAdmin(message.channel.id, user)
+      const success = admin.addGroupAdmin(message.$channel.id, user)
       
       if (success) {
-        logger.info(`新增群管理员: ${user} (群: ${message.channel.id})`)
+        logger.info(`新增群管理员: ${user} (群: ${message.$channel.id})`)
         return `✅ 已添加群管理员: ${user}`
       } else {
         return '❌ 添加管理员失败'
@@ -333,19 +333,19 @@ useContext('admin', (admin) => {
   // 封禁用户
   addCommand(new MessageCommand('ban <user:user>')
     .action(async (message, result) => {
-      if (message.type !== 'group' || !message.channel) {
+      if (message.type !== 'group' || !message.$channel) {
         return '❌ 此命令只能在群聊中使用'
       }
       
-      if (!admin.isGroupAdmin(message.channel.id, message.sender.id)) {
+      if (!admin.isGroupAdmin(message.$channel.id, message.$sender.id)) {
         return '❌ 只有管理员才能封禁用户'
       }
       
       const { user } = result.args
-      const success = admin.banUser(message.channel.id, user)
+      const success = admin.banUser(message.$channel.id, user)
       
       if (success) {
-        logger.warn(`用户被封禁: ${user} (群: ${message.channel.id}, 操作者: ${message.sender.id})`)
+        logger.warn(`用户被封禁: ${user} (群: ${message.$channel.id}, 操作者: ${message.$sender.id})`)
         return `🔨 已封禁用户: ${user}`
       } else {
         return '❌ 封禁用户失败'
@@ -356,19 +356,19 @@ useContext('admin', (admin) => {
   // 解封用户
   addCommand(new MessageCommand('unban <user:user>')
     .action(async (message, result) => {
-      if (message.type !== 'group' || !message.channel) {
+      if (message.type !== 'group' || !message.$channel) {
         return '❌ 此命令只能在群聊中使用'
       }
       
-      if (!admin.isGroupAdmin(message.channel.id, message.sender.id)) {
+      if (!admin.isGroupAdmin(message.$channel.id, message.$sender.id)) {
         return '❌ 只有管理员才能解封用户'
       }
       
       const { user } = result.args
-      const success = admin.unbanUser(message.channel.id, user)
+      const success = admin.unbanUser(message.$channel.id, user)
       
       if (success) {
-        logger.info(`用户被解封: ${user} (群: ${message.channel.id}, 操作者: ${message.sender.id})`)
+        logger.info(`用户被解封: ${user} (群: ${message.$channel.id}, 操作者: ${message.$sender.id})`)
         return `✅ 已解封用户: ${user}`
       } else {
         return '❌ 解封用户失败或用户未被封禁'
@@ -379,7 +379,7 @@ useContext('admin', (admin) => {
   // 管理员统计
   addCommand(new MessageCommand('admin stats')
     .action(async (message) => {
-      if (!admin.isSuperAdmin(message.sender.id)) {
+      if (!admin.isSuperAdmin(message.$sender.id)) {
         return '❌ 只有超级管理员才能查看统计信息'
       }
       
@@ -689,18 +689,18 @@ const responses = {
 }
 
 onMessage(async (message) => {
-  const text = message.raw.toLowerCase()
+  const text = message.$raw.toLowerCase()
   
   // 问候响应
   if (['你好', 'hello', 'hi', '嗨'].some(word => text.includes(word))) {
     const response = responses.greetings[Math.floor(Math.random() * responses.greetings.length)]
-    await message.reply(response)
+    await message.$reply(response)
   }
   
   // 感谢响应
   if (['谢谢', 'thanks', '感谢'].some(word => text.includes(word))) {
     const response = responses.thanks[Math.floor(Math.random() * responses.thanks.length)]
-    await message.reply(response)
+    await message.$reply(response)
   }
 })
 

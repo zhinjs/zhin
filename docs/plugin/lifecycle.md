@@ -69,7 +69,7 @@ addCommand(new MessageCommand('hello')
 
 // ✅ 注册消息监听
 onMessage(async (message) => {
-  console.log('收到消息:', message.raw)
+  console.log('收到消息:', message.$raw)
 })
 ```
 
@@ -128,8 +128,8 @@ import { onMessage, addCommand, MessageCommand } from 'zhin.js'
 // 🎯 处理用户消息
 onMessage(async (message) => {
   // 插件的主要工作逻辑
-  if (message.raw.includes('天气')) {
-    await message.reply('今天天气很好！')
+  if (message.$raw.includes('天气')) {
+    await message.$reply('今天天气很好！')
   }
 })
 
