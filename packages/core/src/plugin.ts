@@ -178,6 +178,20 @@ export class Plugin extends Dependency<Plugin> {
             throw messageError
         }
     }
+    recallMessage(adapter:string,bot:string,id:string){
+        try{
+            this.app.recallMessage(adapter,bot,id)
+        }catch(error){
+            const messageError = new MessageError(
+                `撤回消息失败: ${(error as Error).message}`,
+                id,
+                undefined,
+                { originalError: error }
+            )
+            errorManager.handle(messageError)
+            throw messageError
+        }
+    }
 
     /** 销毁插件 */
     dispose(): void {

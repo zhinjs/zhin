@@ -119,6 +119,15 @@ export class App extends HMR<Plugin> {
       );
     return bot.$sendMessage(options);
   }
+  async recallMessage(adapter_name:string,bot_name:string,id:string){
+    const adapter = this.getContext<Adapter>(adapter_name);
+    if (!adapter)
+      throw new Error(`can't find adapter for name ${adapter_name}`);
+    const bot = adapter.bots.get(bot_name);
+    if (!bot)
+      throw new Error(`can't find bot ${bot_name} for adapter ${adapter_name}`);
+    return bot.$recallMessage(id);
+  }
   /** 同步加载配置文件 */
   /**
    * 同步加载配置文件（暂不支持，建议使用异步创建）

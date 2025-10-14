@@ -10,10 +10,6 @@ import {
     AttachmentBuilder,
     MessageCreateOptions,
     ChannelType,
-    User,
-    GuildMember,
-    SlashCommandBuilder,
-    CommandInteraction,
     REST,
     Routes,
     ApplicationCommandData,
@@ -252,7 +248,7 @@ export class DiscordBot extends Client implements Bot<DiscordChannelMessage, Dis
             $content: content,
             $raw: msg.content,
             $timestamp: msg.createdTimestamp,
-            $reply: async (content: SendContent, quote?: boolean | string): Promise<void> => {
+            $reply: async (content: SendContent, quote?: boolean | string): Promise<string> => {
                 if (!Array.isArray(content)) content = [content];
 
                 const sendOptions: MessageCreateOptions = {};
@@ -268,7 +264,8 @@ export class DiscordBot extends Client implements Bot<DiscordChannelMessage, Dis
                     }
                 }
 
-                await this.sendContentToChannel(msg.channel as any, content, sendOptions);
+                const res = await this.sendContentToChannel(msg.channel as any, content, sendOptions);
+                return res.id;
             }
         });
 
@@ -520,7 +517,7 @@ export class DiscordBot extends Client implements Bot<DiscordChannelMessage, Dis
         return segments;
     }
 
-    async $sendMessage(options: SendOptions): Promise<void> {
+    async $sendMessage(options: SendOptions): Promise<string> {
         options = await this.plugin.app.handleBeforeSend(options);
 
         try {
@@ -529,8 +526,9 @@ export class DiscordBot extends Client implements Bot<DiscordChannelMessage, Dis
                 throw new Error(`Channel ${options.id} is not a text channel`);
             }
 
-            await this.sendContentToChannel(channel as any, options.content);
+            const result = await this.sendContentToChannel(channel as any, options.content);
             this.plugin.logger.info(`send ${options.type}(${options.id}): ${segment.raw(options.content)}`);
+            return result.id;
         } catch (error) {
             this.plugin.logger.error('Failed to send Discord message:', error);
             throw error;
@@ -542,7 +540,7 @@ export class DiscordBot extends Client implements Bot<DiscordChannelMessage, Dis
         channel: TextChannel | DMChannel | NewsChannel | ThreadChannel,
         content: SendContent,
         extraOptions: MessageCreateOptions = {}
-    ): Promise<void> {
+    ): Promise<DiscordMessage<boolean>> {
         if (!Array.isArray(content)) content = [content];
 
         const messageOptions: MessageCreateOptions = { ...extraOptions };
@@ -610,9 +608,11 @@ export class DiscordBot extends Client implements Bot<DiscordChannelMessage, Dis
         }
 
         // 发送消息
-        await channel.send(messageOptions);
+        return await channel.send(messageOptions);
     }
-
+    async $recallMessage(id:string):Promise<void> {
+        
+    }
     // 处理文件段
     async handleFileSegment(data: any, files: AttachmentBuilder[], textContent: string): Promise<void> {
         if (data.file && await this.fileExists(data.file)) {
@@ -887,24 +887,27 @@ export class DiscordInteractionsBot extends Client implements Bot<any, DiscordIn
             $raw: JSON.stringify(interaction),
             $timestamp: Date.now(),
             $content: content,
-            $reply: async (content: SendContent): Promise<void> => {
+            $reply: async (content: SendContent): Promise<string> => {
                 // 通过 REST API 发送后续消息
-                await this.sendFollowUp(interaction, content);
+                const res = await this.sendFollowUp(interaction, content);
+                return res.id;
             }
         });
     }
 
-    private async sendFollowUp(interaction: any, content: SendContent): Promise<void> {
+    private async sendFollowUp(interaction: any, content: SendContent): Promise<DiscordMessage<boolean>> {
         try {
             const rest = new REST({ version: '10' }).setToken(this.$config.token);
             const messageContent = this.formatSendContent(content);
             
-            await rest.post(
+            const res = await rest.post(
                 `/webhooks/${this.$config.applicationId}/${interaction.token}`,
                 { body: messageContent }
             );
+            return res as DiscordMessage<boolean>;
         } catch (error) {
             this.plugin.logger.error('Failed to send follow-up message:', error);
+            throw error;
         }
     }
 
@@ -1037,7 +1040,7 @@ export class DiscordInteractionsBot extends Client implements Bot<any, DiscordIn
         return this.formatInteractionAsMessage(msg);
     }
 
-    async $sendMessage(options: SendOptions): Promise<void> {
+    async $sendMessage(options: SendOptions): Promise<string> {
         // 简化实现 - 通过 REST API 发送消息
         try {
             const rest = new REST({ version: '10' }).setToken(this.$config.token);
@@ -1050,6 +1053,10 @@ export class DiscordInteractionsBot extends Client implements Bot<any, DiscordIn
         } catch (error) {
             this.plugin.logger.error('Failed to send message:', error);
         }
+        return ''
+    }
+    async $recallMessage(id:string):Promise<void> {
+        
     }
 }
 

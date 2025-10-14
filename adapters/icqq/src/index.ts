@@ -92,10 +92,10 @@ export class IcqqBot extends Client implements Bot<PrivateMessageEvent|GroupMess
             $content: IcqqBot.toSegments(msg.message),
             $raw: msg.raw_message,
             $timestamp: msg.time,
-            $reply:async (content: SendContent, quote?: boolean|string):Promise<void>=> {
+            $reply:async (content: SendContent, quote?: boolean|string):Promise<string>=> {
                 if(!Array.isArray(content)) content=[content];
                 if(quote) content.unshift({type:'reply',data:{id:typeof quote==="boolean"?result.$id:quote}})
-                this.plugin.dispatch('message.send',{
+                return await this.$sendMessage({
                     ...result.$channel,
                     context:'icqq',
                     bot:`${this.uin}`,
@@ -105,18 +105,22 @@ export class IcqqBot extends Client implements Bot<PrivateMessageEvent|GroupMess
         })
         return result
     }
-
-    async $sendMessage(options: SendOptions): Promise<void> {
+    async $recallMessage(id:string):Promise<void> {
+        await this.deleteMsg(id)
+    }
+    async $sendMessage(options: SendOptions): Promise<string> {
         options=await this.plugin.app.handleBeforeSend(options)
         switch (options.type){
             case 'private':{
                 const result= await this.sendPrivateMsg(Number(options.id),IcqqBot.toSendable(options.content))
                 this.plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+                return result.message_id.toString()
                 break;
             }
             case "group":{
                 const result=await this.sendGroupMsg(Number(options.id),IcqqBot.toSendable(options.content))
                 this.plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+                return result.message_id.toString()
                 break;
             }
             default:

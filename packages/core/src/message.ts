@@ -28,7 +28,7 @@ export interface MessageBase {
     $bot:string
     $content: MessageElement[];
     $sender: MessageSender;
-    $reply(content:SendContent,quote?:boolean|string):Promise<void>
+    $reply(content:SendContent,quote?:boolean|string):Promise<string>
     $channel: MessageChannel;
     $timestamp: number;
     $raw: string;

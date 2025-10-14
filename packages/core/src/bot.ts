@@ -17,8 +17,10 @@ export interface Bot<M extends object={},T extends BotConfig=BotConfig> {
     $connect():Promise<void>
     /** 断开机器人 */
     $disconnect():Promise<void>
-    /** 发送消息 */
-    $sendMessage(options: SendOptions): Promise<void>
+    /** 撤回消息 */
+    $recallMessage(id:string):Promise<void>
+    /** 发送消息返回消息id */
+    $sendMessage(options: SendOptions): Promise<string>
 }
 /**
  * Bot配置类型，所有平台机器人通用

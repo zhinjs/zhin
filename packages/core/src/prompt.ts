@@ -27,8 +27,8 @@ export class Prompt<P extends RegisteredAdapter> {
      * @param config 提问配置
      */
     private prompt<T = any>(config: Prompt.Config<T>) {
-        return new Promise<T>((resolve, reject) => {
-            this.event.$reply(config.tips);
+        return new Promise<T>(async (resolve, reject) => {
+            const id = await this.event.$reply(config.tips);
             this.middleware(
                 input => {
                     if (input instanceof Error) {
@@ -37,6 +37,7 @@ export class Prompt<P extends RegisteredAdapter> {
                         else reject(input);
                         return;
                     }
+                    this.plugin.recallMessage(this.event.$adapter,this.event.$bot,id);
                     resolve(config.format(input));
                 },
                 config.timeout,

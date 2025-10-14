@@ -231,8 +231,8 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMessage, WeCh
             $raw: JSON.stringify(wechatMsg),
             $timestamp: wechatMsg.CreateTime * 1000,
             $content: content,
-            $reply: async (content: SendContent): Promise<void> => {
-                this.plugin.dispatch('message.send', {
+            $reply: async (content: SendContent): Promise<string> => {
+                return await this.$sendMessage({
                     context: this.$config.context,
                     bot: this.$config.name,
                     id: wechatMsg.FromUserName,
@@ -309,14 +309,18 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMessage, WeCh
         return segments.length > 0 ? segments : [segment.text('(空消息)')];
     }
 
-    async $sendMessage(options: SendOptions): Promise<void> {
+    async $sendMessage(options: SendOptions): Promise<string> {
         try {
             // 公众号主动发送消息需要通过模板消息或客服消息API
-            await this.sendCustomerServiceMessage(options);
+             await this.sendCustomerServiceMessage(options);
+            return ''
         } catch (error) {
             this.plugin.logger.error('Failed to send WeChat message:', error);
             throw error;
         }
+    }
+    async $recallMessage(id: string): Promise<void> {
+        // 公众号不支持撤回消息
     }
 
     private async sendCustomerServiceMessage(options: SendOptions): Promise<void> {

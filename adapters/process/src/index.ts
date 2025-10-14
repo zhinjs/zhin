@@ -77,10 +77,10 @@ export class ProcessBot extends EventEmitter implements Bot<{content:string,ts:n
             $content:[{type:'text',data:{text:content}}],
             $raw:content,
             $timestamp: ts,
-            $reply:async (content: SendContent, quote?: boolean|string):Promise<void>=> {
+            $reply:async (content: SendContent, quote?: boolean|string):Promise<string>=> {
                 if(!Array.isArray(content)) content=[content];
                 if(quote) content.unshift({type:'reply',data:{id:typeof quote==="boolean"?message.$id:quote}})
-                this.plugin.dispatch('message.send',{
+                return await this.$sendMessage({
                     ...message.$channel,
                     context:'process',
                     bot:`${process.pid}`,
@@ -91,12 +91,15 @@ export class ProcessBot extends EventEmitter implements Bot<{content:string,ts:n
         return message
     }
 
-    async $sendMessage(options: SendOptions){
+    async $sendMessage(options: SendOptions): Promise<string>{
         options=await this.plugin.app.handleBeforeSend(options)
-        if(!this.$connected) return
+        if(!this.$connected) return ''
         this.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+        return ''
     }
-
+    async $recallMessage(id: string): Promise<void> {
+        // 进程不支持撤回消息
+    }
     #listenInput:(data:Buffer<ArrayBufferLike>)=>void=function (this:ProcessBot,data){
         const content=data.toString().trim()
         const ts=Date.now()
@@ -124,10 +127,10 @@ export class ProcessBot extends EventEmitter implements Bot<{content:string,ts:n
             $content: [{ type: 'text', data: { text: content } }],
             $raw: content,
             $timestamp: ts,
-            $reply: async (replyContent: SendContent, quote?: boolean | string): Promise<void> => {
+            $reply: async (replyContent: SendContent, quote?: boolean | string): Promise<string> => {
                 if (!Array.isArray(replyContent)) replyContent = [replyContent];
                 if (quote) replyContent.unshift({ type: 'reply', data: { id: typeof quote === "boolean" ? message.$id : quote } })
-                this.plugin.dispatch('message.send', {
+                return await this.$sendMessage({
                     ...message.$channel,
                     context: 'process',
                     bot: this.$config.name,
@@ -175,10 +178,10 @@ export class SandboxBot extends EventEmitter implements Bot<{content:MessageElem
             $content:content,
             $raw:segment.raw(content),
             $timestamp: ts,
-            $reply:async (content: SendContent, quote?: boolean|string):Promise<void>=> {
+            $reply:async (content: SendContent, quote?: boolean|string):Promise<string>=> {
                 if(!Array.isArray(content)) content=[content];
                 if(quote) content.unshift({type:'reply',data:{id:typeof quote==="boolean"?message.$id:quote}})
-                this.plugin.dispatch('message.send',{
+                return await this.$sendMessage({
                     ...message.$channel,
                     context:'sandbox',
                     bot:`${this.$config.name}`,
@@ -188,9 +191,9 @@ export class SandboxBot extends EventEmitter implements Bot<{content:MessageElem
         })
         return message
     }
-    async $sendMessage(options: SendOptions){
+    async $sendMessage(options: SendOptions): Promise<string>{
         options=await this.plugin.app.handleBeforeSend(options)
-        if(!this.$connected) return
+        if(!this.$connected) return ''
         this.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
         options.bot=this.$config.name
         options.context='sandbox'
@@ -199,6 +202,10 @@ export class SandboxBot extends EventEmitter implements Bot<{content:MessageElem
             content:options.content, // 发送消息段数组
             timestamp:Date.now()
         }))
+        return ''
+    }
+    async $recallMessage(id: string): Promise<void> {
+        // 沙盒不支持撤回消息
     }
 }
 registerAdapter(new Adapter('process',ProcessBot))

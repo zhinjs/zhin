@@ -312,8 +312,8 @@ export class EmailBot extends EventEmitter implements Bot<EmailMessage, EmailBot
             $raw: JSON.stringify(emailMsg),
             $timestamp: emailMsg.date.getTime(),
             $content: content,
-            $reply: async (content: SendContent): Promise<void> => {
-                await this.$sendMessage({
+            $reply: async (content: SendContent): Promise<string> => {
+                return await this.$sendMessage({
                     context: this.$config.context,
                     bot: this.$config.name,
                     id: emailMsg.from,
@@ -376,7 +376,7 @@ export class EmailBot extends EventEmitter implements Bot<EmailMessage, EmailBot
         return segments.length > 0 ? segments : [segment.text('(Empty email)')];
     }
 
-    async $sendMessage(options: SendOptions): Promise<void> {
+    async $sendMessage(options: SendOptions): Promise<string> {
         if (!this.smtpTransporter) {
             throw new Error('SMTP transporter not initialized');
         }
@@ -389,6 +389,11 @@ export class EmailBot extends EventEmitter implements Bot<EmailMessage, EmailBot
             this.plugin.logger.error('Failed to send email:', error);
             throw error;
         }
+        return ''
+    }
+
+    async $recallMessage(id:string):Promise<void> {
+        // 邮件适配器暂时不支持撤回消息
     }
 
     private async formatSendContent(options: SendOptions): Promise<nodemailer.SendMailOptions> {

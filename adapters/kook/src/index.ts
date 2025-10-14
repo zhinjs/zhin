@@ -48,10 +48,10 @@ export class KookBot extends Client implements Bot<PrivateMessageEvent|ChannelMe
             $content: KookBot.toSegments(msg.message),
             $raw: msg.raw_message,
             $timestamp: msg.timestamp,
-            $reply:async (content: SendContent, quote?: boolean|string):Promise<void>=> {
+            $reply:async (content: SendContent, quote?: boolean|string):Promise<string>=> {
                 if(!Array.isArray(content)) content=[content];
                 if(quote) content.unshift({type:'reply',data:{id:typeof quote==="boolean"?message.$id:quote}})
-                this.plugin.dispatch('message.send',{
+                return await this.$sendMessage({
                     ...message.$channel,
                     context:'kook',
                     bot:`${this.$config.name}`,
@@ -73,22 +73,30 @@ export class KookBot extends Client implements Bot<PrivateMessageEvent|ChannelMe
         this.$connected=false;
     }
 
-    async $sendMessage(options: SendOptions): Promise<void> {
+    async $sendMessage(options: SendOptions): Promise<string> {
         options=await this.plugin.app.handleBeforeSend(options)
         switch (options.type){
             case 'private':{
                 const result= await this.sendPrivateMsg(options.id,KookBot.toSendable(options.content))
                 this.plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+                return `private-${options.id}:${result.message_id.toString()}`
                 break;
             }
             case "channel":{
                 const result=await this.sendChannelMsg(options.id,KookBot.toSendable(options.content))
                 this.plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+                return `channel-${options.id}:${result.message_id.toString()}`
                 break;
             }
             default:
                 throw new Error(`unsupported channel type ${options.type}`)
         }
+    }
+    async $recallMessage(id:string):Promise<void> {
+        if(!/^(private|channel)-([^\:]+):(.+)$/.test(id)) throw new Error(`invalid message id ${id}`)
+        const [target_type,target_id,message_id]=id.match(/^(private|channel)-([^\:]+):(.+)$/)!
+        if(target_type==='private') await this.recallPrivateMsg(target_id,message_id)
+        if(target_type==='channel') await this.recallChannelMsg(target_id,message_id)
     }
 
     private handleKookMessage(msg: PrivateMessageEvent|ChannelMessageEvent): void {

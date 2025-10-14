@@ -284,8 +284,8 @@ export class LarkBot implements Bot<LarkMessage, LarkBotConfig> {
             $content: content,
             $raw: JSON.stringify(msg),
             $timestamp: msg.create_time ? parseInt(msg.create_time) : Date.now(),
-            $reply: async (content: SendContent): Promise<void> => {
-                await this.$sendMessage({
+            $reply: async (content: SendContent): Promise<string> => {
+                return await this.$sendMessage({
                     context: 'lark',
                     bot: this.$config.name,
                     id: msg.chat_id || 'unknown',
@@ -411,7 +411,7 @@ export class LarkBot implements Bot<LarkMessage, LarkBotConfig> {
     // 消息发送
     // ================================================================================================
 
-    async $sendMessage(options: SendOptions): Promise<void> {
+    async $sendMessage(options: SendOptions): Promise<string> {
         const chatId = options.id;
         const content = this.formatSendContent(options.content);
         
@@ -428,10 +428,16 @@ export class LarkBot implements Bot<LarkMessage, LarkBotConfig> {
             }
             
             this.plugin.logger.debug('Message sent successfully:', response.data.data?.message_id);
+            return response.data.data?.message_id || '';
         } catch (error) {
             this.plugin.logger.error('Failed to send message:', error);
             throw error;
         }
+    }
+    async $recallMessage(id:string):Promise<void> {
+        await this.axiosInstance.post('/im/v1/messages/recall', {
+            message_id: id
+        });
     }
 
     private formatSendContent(content: SendContent): { msg_type: string, content: string } {

@@ -1,5 +1,5 @@
-import WebSocket, {WebSocketServer} from 'ws';
-import {EventEmitter} from "events";
+import WebSocket, { WebSocketServer } from 'ws';
+import { EventEmitter } from "events";
 import {
   Bot,
   Plugin,
@@ -11,15 +11,15 @@ import {
   SendOptions,
   segment, useContext, SendContent
 } from 'zhin.js';
-import type {Router} from '@zhin.js/http'
-import {IncomingMessage} from "http";
-import {clearInterval} from "node:timers";
+import type { Router } from '@zhin.js/http'
+import { IncomingMessage } from "http";
+import { clearInterval } from "node:timers";
 
 // 声明模块，注册 onebot11 适配器类型
-declare module '@zhin.js/types'{
-  interface RegisteredAdapters{
-    'onebot11':Adapter<OneBot11WsClient>
-    'onebot11.wss':Adapter<OneBot11WsServer>
+declare module '@zhin.js/types' {
+  interface RegisteredAdapters {
+    'onebot11': Adapter<OneBot11WsClient>
+    'onebot11.wss': Adapter<OneBot11WsServer>
   }
 }
 // ============================================================================
@@ -28,29 +28,29 @@ declare module '@zhin.js/types'{
 
 export interface OneBot11Config extends BotConfig {
   context: 'onebot11';
-  type:string
+  type: string
   access_token?: string;
 }
-export interface OneBot11WsClientConfig extends OneBot11Config{
-  type:'ws'
+export interface OneBot11WsClientConfig extends OneBot11Config {
+  type: 'ws'
   url: string;
   reconnect_interval?: number;
   heartbeat_interval?: number;
 }
-export interface OneBot11WsServerConfig extends OneBot11Config{
-  type:'ws_reverse'
-  path:string
+export interface OneBot11WsServerConfig extends OneBot11Config {
+  type: 'ws_reverse'
+  path: string
   heartbeat_interval?: number;
 }
-export interface OneBot11HTTPConfig extends OneBot11Config{
-  type:'http_sse'
-  port:number
-  path:string
+export interface OneBot11HTTPConfig extends OneBot11Config {
+  type: 'http_sse'
+  port: number
+  path: string
 }
 
 interface OneBot11Message {
   post_type: string;
-  self_id:string
+  self_id: string
   message_type?: string;
   sub_type?: string;
   message_id: number;
@@ -75,8 +75,8 @@ interface ApiResponse<T = any> {
 // OneBot11 适配器实现
 // ============================================================================
 
-export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11Message,OneBot11WsClientConfig> {
-  $connected?:boolean
+export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11Message, OneBot11WsClientConfig> {
+  $connected?: boolean
   private ws?: WebSocket;
   private reconnectTimer?: NodeJS.Timeout;
   private heartbeatTimer?: NodeJS.Timeout;
@@ -87,9 +87,9 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11Messag
     timeout: NodeJS.Timeout;
   }>();
 
-  constructor(public plugin:Plugin,public $config: OneBot11WsClientConfig) {
+  constructor(public plugin: Plugin, public $config: OneBot11WsClientConfig) {
     super();
-    this.$connected=false
+    this.$connected = false
   }
 
 
@@ -101,11 +101,11 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11Messag
       if (this.$config.access_token) {
         headers['Authorization'] = `Bearer ${this.$config.access_token}`;
       }
-      this.ws = new WebSocket(wsUrl,{headers});
+      this.ws = new WebSocket(wsUrl, { headers });
 
       this.ws.on('open', () => {
-        this.$connected=true;
-        if(!this.$config.access_token) this.plugin.logger.warn(`missing 'access_token', your OneBot protocol is not safely`)
+        this.$connected = true;
+        if (!this.$config.access_token) this.plugin.logger.warn(`missing 'access_token', your OneBot protocol is not safely`)
         this.startHeartbeat();
         resolve();
       });
@@ -115,13 +115,13 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11Messag
           const message = JSON.parse(data.toString());
           this.handleWebSocketMessage(message);
         } catch (error) {
-          this.emit('error',error)
+          this.emit('error', error)
         }
       });
 
-      this.ws.on('close', (code,reason) => {
-        this.$connected=false
-        reject({code,reason})
+      this.ws.on('close', (code, reason) => {
+        this.$connected = false
+        reject({ code, reason })
         this.scheduleReconnect();
       });
 
@@ -154,28 +154,28 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11Messag
       this.ws = undefined;
     }
   }
-  $formatMessage(onebotMsg: OneBot11Message){
-    const message=Message.from(onebotMsg,{
+  $formatMessage(onebotMsg: OneBot11Message) {
+    const message = Message.from(onebotMsg, {
       $id: onebotMsg.message_id.toString(),
-      $adapter:'onebot11',
-      $bot:`${this.$config.name}`,
-      $sender:{
-        id:onebotMsg.user_id.toString(),
-        name:onebotMsg.user_id.toString()
+      $adapter: 'onebot11',
+      $bot: `${this.$config.name}`,
+      $sender: {
+        id: onebotMsg.user_id.toString(),
+        name: onebotMsg.user_id.toString()
       },
-      $channel:{
+      $channel: {
         id: (onebotMsg.group_id || onebotMsg.user_id).toString(),
-        type:onebotMsg.group_id?'group':'private'
+        type: onebotMsg.group_id ? 'group' : 'private'
       },
       $content: onebotMsg.message,
       $raw: onebotMsg.raw_message,
       $timestamp: onebotMsg.time,
-      $reply:async (content: MessageSegment[], quote?: boolean|string):Promise<void>=> {
-        if(quote) content.unshift({type:'reply',data:{message_id:message.$id}})
-        this.plugin.dispatch('message.send',{
+      $reply: async (content: MessageSegment[], quote?: boolean | string): Promise<string> => {
+        if (quote) content.unshift({ type: 'reply', data: { message_id: message.$id } })
+        return await this.$sendMessage({
           ...message.$channel,
-          context:'onebot11',
-          bot:`${this.$config.name}`,
+          context: 'onebot11',
+          bot: `${this.$config.name}`,
           content
         })
       }
@@ -183,26 +183,34 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11Messag
     return message
   }
 
-  async $sendMessage(options: SendOptions): Promise<void> {
-    options=await this.plugin.app.handleBeforeSend(options)
+  async $sendMessage(options: SendOptions): Promise<string> {
+    options = await this.plugin.app.handleBeforeSend(options)
     const messageData: any = {
       message: options.content
     };
-    if (options.type==='group') {
-      await this.callApi('send_group_msg', {
+    if (options.type === 'group') {
+      const result = await this.callApi('send_group_msg', {
         group_id: parseInt(options.id),
         ...messageData
       });
       this.plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
-    } else if (options.type==='private') {
-      await this.callApi('send_private_msg', {
+      return result.message_id.toString();
+    } else if (options.type === 'private') {
+      const result = await this.callApi('send_private_msg', {
         user_id: parseInt(options.id),
         ...messageData
       });
       this.plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+      return result.message_id.toString();
     } else {
       throw new Error('Either group_id or user_id must be provided');
     }
+    return '';
+  }
+  async $recallMessage(id: string): Promise<void> {
+    await this.callApi('delete_msg', {
+      message_id: parseInt(id)
+    });
   }
   private async callApi(action: string, params: any = {}): Promise<any> {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
@@ -251,9 +259,9 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11Messag
 
   private handleOneBot11Message(onebotMsg: OneBot11Message): void {
     const message = this.$formatMessage(onebotMsg);
-    this.plugin.dispatch('message.receive',message)
+    this.plugin.dispatch('message.receive', message)
     this.plugin.logger.info(`recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`)
-    this.plugin.dispatch(`message.${message.$channel.type}.receive`,message)
+    this.plugin.dispatch(`message.${message.$channel.type}.receive`, message)
   }
 
   private startHeartbeat(): void {
@@ -276,16 +284,16 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11Messag
       try {
         await this.$connect();
       } catch (error) {
-        this.emit('error',new Error(`Reconnection failed: ${error}`));
+        this.emit('error', new Error(`Reconnection failed: ${error}`));
         this.scheduleReconnect();
       }
     }, interval);
   }
 }
-export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11Message,OneBot11WsServerConfig> {
-  $connected?:boolean
-  #wss?:WebSocketServer
-  #clientMap:Map<string,WebSocket>=new Map<string,WebSocket>()
+export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11Message, OneBot11WsServerConfig> {
+  $connected?: boolean
+  #wss?: WebSocketServer
+  #clientMap: Map<string, WebSocket> = new Map<string, WebSocket>()
   private heartbeatTimer?: NodeJS.Timeout;
   private requestId = 0;
   private pendingRequests = new Map<string, {
@@ -294,13 +302,14 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11Messag
     timeout: NodeJS.Timeout;
   }>();
 
-  constructor(public plugin:Plugin,public router:Router,public $config: OneBot11WsServerConfig) {
+  constructor(public plugin: Plugin, public router: Router, public $config: OneBot11WsServerConfig) {
     super();
-    this.$connected=false
+    this.$connected = false
   }
   async $connect(): Promise<void> {
-    if(!this.$config.access_token) this.plugin.logger.warn(`missing 'access_token', your OneBot protocol is not safely`)
-    this.#wss=this.router.ws(this.$config.path,{verifyClient:(info:{ origin: string; secure: boolean; req: IncomingMessage })=>{
+    if (!this.$config.access_token) this.plugin.logger.warn(`missing 'access_token', your OneBot protocol is not safely`)
+    this.#wss = this.router.ws(this.$config.path, {
+      verifyClient: (info: { origin: string; secure: boolean; req: IncomingMessage }) => {
         const {
           req: { headers },
         } = info;
@@ -310,10 +319,11 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11Messag
           return false;
         }
         return true;
-      }})
-    this.$connected=true;
+      }
+    })
+    this.$connected = true;
     this.plugin.logger.info(`ws server start at path:${this.$config.path}`)
-    this.#wss.on('connection', (client,req) => {
+    this.#wss.on('connection', (client, req) => {
       this.startHeartbeat();
       this.plugin.logger.info(`已连接到协议端：${req.socket.remoteAddress}`);
       client.on('error', err => {
@@ -321,16 +331,16 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11Messag
       });
       client.on('close', code => {
         this.plugin.logger.error(`与连接端(${req.socket.remoteAddress})断开，错误码：${code}`);
-        for(const [key,value] of this.#clientMap){
-          if(client===value) this.#clientMap.delete(key)
+        for (const [key, value] of this.#clientMap) {
+          if (client === value) this.#clientMap.delete(key)
         }
       });
-      client.on('message',(data) => {
+      client.on('message', (data) => {
         try {
           const message = JSON.parse(data.toString());
-          this.handleWebSocketMessage(client,message);
+          this.handleWebSocketMessage(client, message);
         } catch (error) {
-          this.emit('error',error)
+          this.emit('error', error)
         }
       })
     });
@@ -338,66 +348,75 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11Messag
 
   async $disconnect(): Promise<void> {
     this.#wss?.close();
-    if(this.heartbeatTimer){
+    if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer)
       delete this.heartbeatTimer;
     }
   }
-  $formatMessage(onebotMsg: OneBot11Message){
-    const message=Message.from(onebotMsg,{
+  $formatMessage(onebotMsg: OneBot11Message) {
+    const message = Message.from(onebotMsg, {
       $id: onebotMsg.message_id.toString(),
-      $adapter:'onebot11',
-      $bot:`${this.$config.name}`,
-      $sender:{
-        id:onebotMsg.user_id.toString(),
-        name:onebotMsg.user_id.toString()
+      $adapter: 'onebot11',
+      $bot: `${this.$config.name}`,
+      $sender: {
+        id: onebotMsg.user_id.toString(),
+        name: onebotMsg.user_id.toString()
       },
-      $channel:{
-        id:[onebotMsg.self_id,(onebotMsg.group_id||onebotMsg.user_id)].join(':'),
-        type:onebotMsg.group_id?'group':'private'
+      $channel: {
+        id: [onebotMsg.self_id, (onebotMsg.group_id || onebotMsg.user_id)].join(':'),
+        type: onebotMsg.group_id ? 'group' : 'private'
       },
       $content: onebotMsg.message,
       $raw: onebotMsg.raw_message,
       $timestamp: onebotMsg.time,
-      $reply:async (content: SendContent, quote?: boolean|string):Promise<void>=> {
-        if(!Array.isArray(content)) content=[content];
-        if(quote) content.unshift({type:'reply',data:{message_id:message.$id}})
-        this.plugin.dispatch('message.send',{
+      $reply: async (content: SendContent, quote?: boolean | string): Promise<string> => {
+        if (!Array.isArray(content)) content = [content];
+        if (quote) content.unshift({ type: 'reply', data: { message_id: message.$id } })
+        return await this.$sendMessage({
           ...message.$channel,
-          context:'onebot11',
-          bot:`${this.$config.name}`,
-          content
+          context: 'onebot11',
+          bot: `${this.$config.name}`,
+          content  
         })
       }
     })
     return message
   }
 
-  async $sendMessage(options: SendOptions): Promise<void> {
-    options=await this.plugin.app.handleBeforeSend(options)
+  async $sendMessage(options: SendOptions): Promise<string> {
+    options = await this.plugin.app.handleBeforeSend(options)
     const messageData: any = {
       message: options.content
     };
-    if (options.type==='group') {
-      const [self_id,id]=options.id.split(':')
-      await this.callApi(self_id,'send_group_msg', {
+    if (options.type === 'group') {
+      const [self_id, id] = options.id.split(':')
+      const result = await this.callApi(self_id, 'send_group_msg', {
         group_id: parseInt(id),
         ...messageData
       });
       this.plugin.logger.info(`send ${options.type}(${id}):${segment.raw(options.content)}`)
-    } else if (options.type==='private') {
-      const [self_id,id]=options.id.split(':')
-      await this.callApi(self_id,'send_private_msg', {
+      return result.message_id.toString();
+    } else if (options.type === 'private') {
+      const [self_id, id] = options.id.split(':')
+      const result = await this.callApi(self_id, 'send_private_msg', {
         user_id: parseInt(id),
         ...messageData
       });
       this.plugin.logger.info(`send ${options.type}(${id}):${segment.raw(options.content)}`)
+      return result.message_id.toString();
     } else {
       throw new Error('Either group_id or user_id must be provided');
     }
+    return '';
   }
-  private async callApi(self_id:string,action: string, params: any = {}): Promise<any> {
-    const client=this.#clientMap.get(self_id)
+  async $recallMessage(id: string): Promise<void> {
+    const [self_id, message_id] = id.split(':')
+    await this.callApi(self_id, 'delete_msg', {
+      message_id: parseInt(message_id)
+    });
+  }
+  private async callApi(self_id: string, action: string, params: any = {}): Promise<any> {
+    const client = this.#clientMap.get(self_id)
     if (!client || client.readyState !== WebSocket.OPEN) {
       throw new Error('WebSocket is not connected');
     }
@@ -420,7 +439,7 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11Messag
     });
   }
 
-  private handleWebSocketMessage(client:WebSocket,message: any): void {
+  private handleWebSocketMessage(client: WebSocket, message: any): void {
     // 处理API响应
     if (message.echo && this.pendingRequests.has(message.echo)) {
       const request = this.pendingRequests.get(message.echo)!;
@@ -433,11 +452,11 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11Messag
       }
       return request.reject(new Error(`API error: ${response.retcode}`));
     }
-    switch (message.post_type){
+    switch (message.post_type) {
       case 'message':
         return this.handleMessage(message);
       case 'meta_event':
-        return this.handleMetaEvent(client,message)
+        return this.handleMetaEvent(client, message)
     }
     // 处理事件消息
     if (message.post_type === 'message') {
@@ -445,27 +464,27 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11Messag
       // 心跳消息，暂时忽略
     }
   }
-  private handleMetaEvent(client:WebSocket,message:any){
-    switch (message.sub_type){
+  private handleMetaEvent(client: WebSocket, message: any) {
+    switch (message.sub_type) {
       case 'heartbeat':
         break;
       case 'connect':
-        this.#clientMap.set(message.self_id,client);
+        this.#clientMap.set(message.self_id, client);
         this.plugin.logger.info(`client ${message.self_id} of ${this.$config.name} by ${this.$config.context} connected`)
         break;
     }
   }
   private handleMessage(onebotMsg: OneBot11Message): void {
     const message = this.$formatMessage(onebotMsg);
-    this.plugin.dispatch('message.receive',message)
-    this.plugin.logger.info(`recv ${message.$channel.type}(${onebotMsg.group_id||onebotMsg.user_id}):${segment.raw(message.$content)}`)
-    this.plugin.dispatch(`message.${message.$channel.type}.receive`,message)
+    this.plugin.dispatch('message.receive', message)
+    this.plugin.logger.info(`recv ${message.$channel.type}(${onebotMsg.group_id || onebotMsg.user_id}):${segment.raw(message.$content)}`)
+    this.plugin.dispatch(`message.${message.$channel.type}.receive`, message)
   }
 
   private startHeartbeat(): void {
     const interval = this.$config.heartbeat_interval || 30000;
     this.heartbeatTimer = setInterval(() => {
-      for(const client of this.#wss?.clients||[]){
+      for (const client of this.#wss?.clients || []) {
         if (client && client.readyState === WebSocket.OPEN) {
           client.ping();
         }
@@ -473,7 +492,7 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11Messag
     }, interval);
   }
 }
-registerAdapter(new Adapter('onebot11',OneBot11WsClient))
-useContext('router',(router)=>{
-  registerAdapter(new Adapter('onebot11.wss',(p,c:OneBot11WsServerConfig)=>new OneBot11WsServer(p,router,c)));
+registerAdapter(new Adapter('onebot11', OneBot11WsClient))
+useContext('router', (router) => {
+  registerAdapter(new Adapter('onebot11.wss', (p, c: OneBot11WsServerConfig) => new OneBot11WsServer(p, router, c)));
 })

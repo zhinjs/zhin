@@ -81,10 +81,10 @@ export class QQBot<T extends ReceiverMode, M extends ApplicationPlatform = Appli
             $content: msg.message,
             $raw: msg.raw_message,
             $timestamp: Date.now(),
-            $reply:async (content: SendContent, quote: boolean|string=true):Promise<void>=> {
+            $reply:async (content: SendContent, quote: boolean|string=true):Promise<string>=> {
                 if(!Array.isArray(content)) content=[content];
                 if(quote) content.unshift({type:'reply',data:{id:typeof quote==="boolean"?result.$id:quote}})
-                this.plugin.dispatch('message.send',{
+                return await this.$sendMessage({
                     ...result.$channel,
                     context:'qq',
                     bot:this.$config.name,
@@ -95,33 +95,49 @@ export class QQBot<T extends ReceiverMode, M extends ApplicationPlatform = Appli
         return result
     }
 
-    async $sendMessage(options: SendOptions): Promise<void> {
+    async $sendMessage(options: SendOptions): Promise<string> {
         options=await this.plugin.app.handleBeforeSend(options)
         switch (options.type){
             case 'private':{
                 if(options.id.startsWith('direct:')){
                     const id=options.id.replace('direct:','')
-                    await this.sendDirectMessage(id,options.content)
+                    const result= await this.sendDirectMessage(id,options.content)
                     this.plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+                    this.plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+                    return `direct-${options.id}:${result.message_id.toString()}`
                 }else{
-                    await this.sendPrivateMessage(options.id,options.content)
+                    const result= await this.sendPrivateMessage(options.id,options.content)
                     this.plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+                    this.plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+                    return `private-${options.id}:${result.message_id.toString()}`
                 }
                 break;
             }
             case "group":{
-                await this.sendGroupMessage(options.id,options.content)
+                const result= await this.sendGroupMessage(options.id,options.content)
                 this.plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+                this.plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+                return `group-${options.id}:${result.message_id.toString()}`
                 break;
             }
             case 'channel':{
-                await this.sendGuildMessage(options.id,options.content)
+                const result= await this.sendGuildMessage(options.id,options.content)
                 this.plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+                this.plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+                return `channel-${options.id}:${result.message_id.toString()}`
                 break;
             }
             default:
                 throw new Error(`unsupported channel type ${options.type}`)
         }
+    }
+    async $recallMessage(id:string):Promise<void> {
+        if(!/^(private|group|channel|direct)-([^\:]+):(.+)$/.test(id)) throw new Error(`invalid message id ${id}`)
+        const [target_type,target_id,message_id]=id.match(/^(private|group|channel|direct)-([^\:]+):(.+)$/)!
+        if(target_type==='private') await this.recallPrivateMessage(target_id,message_id)
+        if(target_type==='group') await this.recallGroupMessage(target_id,message_id)
+        if(target_type==='channel') await this.recallGuildMessage(target_id,message_id)
+        if(target_type==='direct') await this.recallDirectMessage(target_id,message_id)
     }
 
 }
