@@ -1,5 +1,11 @@
 # @zhin.js/core
 
+## 1.0.5
+
+### Patch Changes
+
+- f347667: fix: runtime error
+
 ## 1.0.4
 
 ### Patch Changes
