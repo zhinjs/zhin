@@ -1,5 +1,11 @@
 # @zhin.js/console
 
+## 1.0.3
+
+### Patch Changes
+
+- 5e2bddc: fix: allow fs
+
 ## 1.0.2
 
 ### Patch Changes
