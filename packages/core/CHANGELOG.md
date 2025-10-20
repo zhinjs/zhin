@@ -1,5 +1,14 @@
 # @zhin.js/core
 
+## 1.0.3
+
+### Patch Changes
+
+- 89bc676: fix: 类型反射优化
+- Updated dependencies [727963c]
+  - @zhin.js/database@1.0.1
+  - @zhin.js/hmr@1.0.1
+
 ## 1.0.2
 
 ### Patch Changes

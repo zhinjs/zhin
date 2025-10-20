@@ -1,5 +1,17 @@
 # @zhin.js/adapter-icqq
 
+## 1.0.3
+
+### Patch Changes
+
+- 89bc676: fix: 类型反射优化
+- Updated dependencies [727963c]
+- Updated dependencies [89bc676]
+  - @zhin.js/console@1.0.1
+  - @zhin.js/client@1.0.1
+  - @zhin.js/types@1.0.2
+  - zhin.js@1.0.3
+
 ## 1.0.2
 
 ### Patch Changes
