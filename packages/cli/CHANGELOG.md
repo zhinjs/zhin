@@ -1,5 +1,11 @@
 # @zhin.js/cli
 
+## 1.0.3
+
+### Patch Changes
+
+- ffa9cbc: fix: create-zhin-app 查询 cli 路径错误
+
 ## 1.0.2
 
 ### Patch Changes
