@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/http",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Zhin机器人框架HTTP工具",
   "type": "module",
   "main": "./lib/index.js",

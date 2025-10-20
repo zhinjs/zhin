@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/console",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Zhin 控制台",
   "type": "module",
   "main": "./lib/index.js",
@@ -16,8 +16,8 @@
     "clean": "rm -rf lib"
   },
   "dependencies": {
-    "react":"19.2.0",
-    "react-dom":"19.2.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
     "@vitejs/plugin-react": "^4.3.4",
     "@tailwindcss/vite": "4.1.14",
     "radix-ui": "^1.4.3",
