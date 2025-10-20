@@ -86,10 +86,12 @@ export class App extends HMR<Plugin> {
     });
     this.on("message.send", this.sendMessage.bind(this));
     process.on("uncaughtException", (e) => {
-      this.logger.error(e);
+      const args=e instanceof Error ? [e.message,{stack:e.stack}] : [e];  
+      this.logger.error(...args);
     });
     process.on("unhandledRejection", (e) => {
-      this.logger.error(e);
+      const args=e instanceof Error ? [e.message,{stack:e.stack}] : [e];
+      this.logger.error(...args);
     });
     this.config = finalConfig;
   }

@@ -178,8 +178,9 @@ export default function ProcessSandbox() {
     }
 
     // 渲染消息段
-    const renderMessageSegments = (segments: MessageSegment[]) => {
+    const renderMessageSegments = (segments: (MessageSegment|string)[]) => {
         return segments.map((segment, index) => {
+            if(typeof segment==='string') return <span key={index}>{segment}</span>
             switch (segment.type) {
                 case 'text':
                     return <span key={index}>{segment.data.text}</span>

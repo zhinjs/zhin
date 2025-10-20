@@ -280,7 +280,7 @@ const logger = useLogger();
 // 添加命令
 addCommand(new MessageCommand('hello')
   .action(async (message) => {
-    logger.info('Hello command called by:', message.sender.name);
+    logger.info('Hello command called by:', message.$sender.name);
     return '你好！欢迎使用 Zhin 机器人框架！';
   })
 );
@@ -300,14 +300,14 @@ addCommand(new MessageCommand('status')
 
 // 添加中间件
 addMiddleware(async (message, next) => {
-  logger.info(\`收到消息: \${message.raw}\`);
+  logger.info(\`收到消息: \${message.$raw || 'undefined'}\`);
   await next();
 });
 
 // 监听消息
 onMessage(async (message) => {
-  if (message.raw.includes('帮助')) {
-    await message.reply('可用命令：hello, status\\n输入命令即可使用！');
+  if (message.$raw && message.$raw.includes('帮助')) {
+    await message.$reply('可用命令：hello, status\\n输入命令即可使用！');
   }
 });
 

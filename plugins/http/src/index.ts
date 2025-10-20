@@ -43,12 +43,6 @@ const username = process.env.username || getCurrentUsername();
 const password = process.env.password || generateRandomPassword();
 const app=useApp()
 
-// 输出生成的认证信息
-console.log(`🔐 HTTP 认证信息:`);
-console.log(`   用户名: ${username}`);
-console.log(`   密码: ${password}`);
-console.log(`   访问地址: http://localhost:${process.env.PORT || 3000}`);
-
 koa.use(
   auth({
     name: username,
