@@ -63,7 +63,7 @@ useContext('router', async (router) => {
         server: {
             middlewareMode: true,
             fs: {
-                allow: [searchForWorkspaceRoot(fileURLToPath(import.meta.url))],
+                allow: [process.cwd()],
             },
         },
         resolve: {
