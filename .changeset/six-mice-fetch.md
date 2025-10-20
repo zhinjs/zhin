@@ -1,7 +1,6 @@
 ---
 "@zhin.js/adapter-wechat-mp": patch
 "@zhin.js/adapter-onebot11": patch
-"@zhin.js/adapter-telegram": patch
 "@zhin.js/adapter-discord": patch
 "@zhin.js/adapter-process": patch
 "@zhin.js/adapter-email": patch
