@@ -1,5 +1,6 @@
 import {register, useApp,onDispose,onDatabaseReady,useDatabase} from '@zhin.js/core';
 import { createServer, Server } from 'http';
+import os from 'node:os';
 import Koa from 'koa';
 import auth from 'koa-basic-auth';
 import KoaBodyParser from 'koa-bodyparser';
@@ -19,9 +20,34 @@ declare module '@zhin.js/types'{
 const koa = new Koa();
 const server = createServer(koa.callback())
 const router = new Router(server, { prefix: process.env.routerPrefix || '' });
-const username = process.env.username || 'admin';
-const password = process.env.password || '123456';
+// 获取当前计算机登录用户名
+const getCurrentUsername = () => {
+  try {
+    return os.userInfo().username;
+  } catch {
+    return 'admin'; // 如果获取失败，使用默认用户名
+  }
+};
+
+// 生成6位随机密码
+const generateRandomPassword = () => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
+
+const username = process.env.username || getCurrentUsername();
+const password = process.env.password || generateRandomPassword();
 const app=useApp()
+
+// 输出生成的认证信息
+console.log(`🔐 HTTP 认证信息:`);
+console.log(`   用户名: ${username}`);
+console.log(`   密码: ${password}`);
+console.log(`   访问地址: http://localhost:${process.env.PORT || 3000}`);
 
 koa.use(
   auth({

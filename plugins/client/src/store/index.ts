@@ -10,7 +10,7 @@ import {
     REHYDRATE,
     createTransform,
   } from 'redux-persist';
-import createWebStorage from 'redux-persist/lib/storage/createWebStorage';
+import storage from 'redux-persist/es/storage';
 import {reducers, Reducers } from './reducers';
 import { useDispatch as useReduxDispatch, TypedUseSelectorHook, useSelector as useReduxSelector } from 'react-redux';
 
@@ -39,7 +39,7 @@ const scriptTransform = createTransform(
 
 const persistConfig: any = {
     key: 'root',
-    storage: createWebStorage('local'),
+    storage: storage,
     transforms: [routeTransform, scriptTransform],
 }
 const persistedReducer = persistReducer(persistConfig, combineReducers(reducers)) as any
