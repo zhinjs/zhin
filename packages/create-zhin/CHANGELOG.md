@@ -1,5 +1,12 @@
 # create-zhin-app
 
+## 1.0.6
+
+### Patch Changes
+
+- Updated dependencies [f347667]
+  - @zhin.js/cli@1.0.5
+
 ## 1.0.5
 
 ### Patch Changes
