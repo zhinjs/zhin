@@ -1,5 +1,11 @@
 # @zhin.js/core
 
+## 1.0.4
+
+### Patch Changes
+
+- 15be776: fix: 修改 cli 错误,增加 permit
+
 ## 1.0.3
 
 ### Patch Changes
