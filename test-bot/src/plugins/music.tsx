@@ -35,31 +35,29 @@ async function music163(keyword: string): Promise<{ type: '163', name: string, i
         }
     })
 }
-useContext('icqq', (adapter) => {
-    addCommand(new MessageCommand('点歌<keyword>')
-        .scope('icqq')
-        .action(async (message, result) => {
-            const keyword = result.params.keyword
-            const [musicFromQQ, musicFrom163] = await Promise.all([musicQQ(keyword), music163(keyword)])
-            const needSendList = [...musicFromQQ, ...musicFrom163].filter(Boolean)
-            const prompt = usePrompt(message)
-            const musicId = await prompt.pick('请选择搜索结果', {
-                type: 'text',
-                options: needSendList.map(music => ({
-                    label: music.name + `(from ${music.type})`,
-                    value: music.id,
-                })),
-            })
-            if (!musicId) return ;
-            const music = needSendList.find(music => music.id === musicId)!
-            switch (message.message_type) {
-                case 'private':
-                    await message.friend.shareMusic(music.type, music.id)
-                    break;
-                case 'group':
-                    await message.group.shareMusic(music.type, music.id)
-                    break
-            }
+addCommand(new MessageCommand<'icqq'>('点歌<keyword>')
+    .permit('adapter(icqq)')
+    .action(async (message, result) => {
+        const keyword = result.params.keyword
+        const [musicFromQQ, musicFrom163] = await Promise.all([musicQQ(keyword), music163(keyword)])
+        const needSendList = [...musicFromQQ, ...musicFrom163].filter(Boolean)
+        const prompt = usePrompt(message)
+        const musicId = await prompt.pick('请选择搜索结果', {
+            type: 'text',
+            options: needSendList.map(music => ({
+                label: music.name + `(from ${music.type})`,
+                value: music.id,
+            })),
         })
-    )
-})
+        if (!musicId) return;
+        const music = needSendList.find(music => music.id === musicId)!
+        switch (message.message_type) {
+            case 'private':
+                await message.friend.shareMusic(music.type, music.id)
+                break;
+            case 'group':
+                await message.group.shareMusic(music.type, music.id)
+                break
+        }
+    })
+)

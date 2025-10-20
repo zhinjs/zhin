@@ -1,5 +1,5 @@
 import {MaybePromise,RegisteredAdapters}from '@zhin.js/types'
-import {MessageChannel} from "./message.js";
+import {MessageChannel,Message} from "./message.js";
 import {Adapter} from "./adapter.js";
 import {Bot,BotConfig} from "./bot.js";
 import { Databases,Registry } from "@zhin.js/database";
@@ -57,6 +57,7 @@ export type SendContent=MaybeArray<string|MessageElement>
 export interface MessageSender{
   id: string;
   name?: string;
+  permissions?:string[]
 }
 /**
  * 通用字典类型

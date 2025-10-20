@@ -3,6 +3,8 @@ import {AdapterMessage, SendContent} from "./types.js";
 import {RegisteredAdapters} from "@zhin.js/types";
 import type {Message} from "./message.js";
 import {MaybePromise} from "@zhin.js/types";
+import { Plugin } from "./plugin.js";
+import { PluginError } from "./errors.js";
 
 /**
  * MessageCommand类：命令系统核心，基于segment-matcher实现。
@@ -10,15 +12,8 @@ import {MaybePromise} from "@zhin.js/types";
  */
 export class MessageCommand<T extends keyof RegisteredAdapters=keyof RegisteredAdapters> extends SegmentMatcher{
     #callbacks:MessageCommand.Callback<T>[]=[];
+    #permissions:string[]=[];
     #checkers:MessageCommand.Checker<T>[]=[]
-    /**
-     * 限定命令作用域（适配器名）
-     * @param scopes 适配器名列表
-     */
-    scope<R extends T>(...scopes:R[]):MessageCommand<R>{
-        this.#checkers.push((m)=>(scopes as string[]).includes(m.$adapter))
-        return this as MessageCommand<R>
-    }
     /**
      * 注册命令回调
      * @param callback 命令处理函数
@@ -27,12 +22,25 @@ export class MessageCommand<T extends keyof RegisteredAdapters=keyof RegisteredA
         this.#callbacks.push(callback)
         return this as MessageCommand<T>;
     }
+    permit(...permissions:string[]){
+        this.#permissions.push(...permissions)
+        return this as MessageCommand<T>;
+    }
     /**
      * 处理消息，自动匹配命令并执行回调
      * @param message 消息对象
+     * @param plugin 插件实例
      * @returns 命令返回内容或undefined
      */
-    async handle(message:Message<AdapterMessage<T>>):Promise<SendContent|undefined>{
+    async handle(message:Message<AdapterMessage<T>>,plugin:Plugin):Promise<SendContent|undefined>{
+        for(const permission of this.#permissions){
+            const permit=plugin.getPermit(permission)
+            if(!permit) {
+                throw new PluginError(`权限 ${permission} 不存在`,plugin.name)
+            }
+            const result=await permit.check(permission,message)
+            if(!result) return;
+        }
         for(const check of this.#checkers){
             const result=await check(message)
             if(!result) return;

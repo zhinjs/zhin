@@ -77,8 +77,8 @@ useContext("web", (web) => {
 // 依赖icqq上下文
 useContext("icqq", (p) => {
   // 指定某个上下文就绪时，需要做的事
-  const someUsers = new MessageCommand("赞[space][...atUsers:at]", { at: "qq" })
-    .scope("icqq")
+  const someUsers = new MessageCommand<"icqq">("赞[space][...atUsers:at]", { at: "qq" })
+    .permit("adapter(icqq)")
     .action(async (m, { params }) => {
       if (!params.atUsers?.length) params.atUsers = [+m.$sender.id];
       const likeResult: string[] = [];

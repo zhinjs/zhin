@@ -5,6 +5,7 @@
 
 import {MaybePromise} from '@zhin.js/types'
 import {AdapterMessage, BeforeSendHandler, RegisteredAdapter, SendOptions} from "./types.js";
+import { PermissionItem,PermissionChecker } from './permissions.js';
 import {Message} from './message.js'
 import {Dependency, Logger,} from "@zhin.js/hmr";
 import {App} from "./app";
@@ -31,6 +32,7 @@ export type MessageMiddleware<P extends RegisteredAdapter=RegisteredAdapter> = (
 export class Plugin extends Dependency<Plugin> {
     middlewares: MessageMiddleware<RegisteredAdapter>[] = [];
     components: Map<string, Component<any>> = new Map();
+    permissions: PermissionItem<RegisteredAdapter>[]=[];
     schemas: Map<string,Schema<any>>=new Map();
     commands:MessageCommand[]=[];
     crons:Cron[]=[];
@@ -48,7 +50,7 @@ export class Plugin extends Dependency<Plugin> {
         // 注册命令处理为默认中间件
         this.addMiddleware(async (message,next)=>{
             for(const command of this.commands){
-                const result=await command.handle(message);
+                const result=await command.handle(message,this);
                 if(result) message.$reply(result);
             }
             return next()
@@ -90,10 +92,15 @@ export class Plugin extends Dependency<Plugin> {
             try {
                 await message.$reply('抱歉，处理您的消息时出现了错误。')
             } catch (replyError) {
-                // 静默处理回复错误，避免错误循环
-                // console.error 已替换为注释
             }
         }
+    }
+    addPermit<T extends RegisteredAdapter>(name:string|RegExp,check:PermissionChecker<T>){
+        this.permissions.push({name,check});
+        return this;
+    }
+    getPermit<T extends RegisteredAdapter>(name:string):PermissionItem<T>|undefined{
+        return this.app.permissions.get(name);
     }
     cron(cronExpression:string,callback:()=>void){
         const cronJob = new Cron(cronExpression,callback);
@@ -101,9 +108,10 @@ export class Plugin extends Dependency<Plugin> {
         return this;
     }
     async #runMiddlewares(message: Message, index: number): Promise<void> {
-        if (index >= this.middlewares.length) return
+        const middlewareList=[...this.app.middlewares,...this.middlewares]
+        if (index >= middlewareList.length) return
         
-        const middleware = this.middlewares[index]
+        const middleware = middlewareList[index]
         
         try {
             await middleware(message, () => this.#runMiddlewares(message, index + 1))

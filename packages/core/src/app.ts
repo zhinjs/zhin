@@ -19,20 +19,22 @@ import { fileURLToPath } from "url";
 import { generateEnvTypes } from "./types-generator.js";
 import logger, { setName } from "@zhin.js/logger";
 import { sleep } from "./utils.js";
-
+import { PermissionChecker, Permissions } from "./permissions.js";
 // 创建静态logger用于配置加载等静态操作
 setName("Zhin");
 import { MessageMiddleware, Plugin } from "./plugin.js";
 import { Adapter } from "./adapter";
 import { MessageCommand } from "./command";
 import { Component } from "./component";
-import { RelatedDatabase,DocumentDatabase,KeyValueDatabase,Schema,Registry} from "@zhin.js/database";
+import { RelatedDatabase, DocumentDatabase, KeyValueDatabase, Schema, Registry } from "@zhin.js/database";
 import { DatabaseLogTransport } from "./log-transport.js";
 import { SystemLog, SystemLogSchema } from "./models/system-log.js";
+import { User, UserSchema } from './models/user.js'
 import { addTransport, removeTransport } from "@zhin.js/logger";
-declare module "@zhin.js/types"{
-  interface Models{
-    SystemLog:SystemLog;
+declare module "@zhin.js/types" {
+  interface Models {
+    SystemLog: SystemLog;
+    User: User
   }
 }
 
@@ -46,8 +48,10 @@ declare module "@zhin.js/types"{
 export class App extends HMR<Plugin> {
   static currentPlugin: Plugin;
   private config: AppConfig;
+  middlewares: MessageMiddleware[] = [];
   adapters: string[] = [];
-  database?: RelatedDatabase<any,Models>|DocumentDatabase<any,Models>|KeyValueDatabase<any,Models>;
+  database?: RelatedDatabase<any, Models> | DocumentDatabase<any, Models> | KeyValueDatabase<any, Models>;
+  permissions: Permissions = new Permissions(this);
   private logTransport?: DatabaseLogTransport;
   /**
    * 构造函数：初始化应用，加载配置，注册全局异常处理
@@ -77,7 +81,7 @@ export class App extends HMR<Plugin> {
     super("Zhin", {
       logger,
       dirs: finalConfig.plugin_dirs || [],
-      extensions: new Set([".js", ".ts",".jsx",".tsx"]),
+      extensions: new Set([".js", ".ts", ".jsx", ".tsx"]),
       debug: finalConfig.debug,
     });
     this.on("message.send", this.sendMessage.bind(this));
@@ -103,6 +107,9 @@ export class App extends HMR<Plugin> {
     bots: [],
     debug: false,
   };
+  middleware(middleware: MessageMiddleware) {
+    this.middlewares.push(middleware)
+  }
   /**
    * 发送消息到指定适配器和机器人
    * @param options 消息发送参数（包含 context、bot、内容等）
@@ -119,7 +126,7 @@ export class App extends HMR<Plugin> {
       );
     return bot.$sendMessage(options);
   }
-  async recallMessage(adapter_name:string,bot_name:string,id:string){
+  async recallMessage(adapter_name: string, bot_name: string, id: string) {
     const adapter = this.getContext<Adapter>(adapter_name);
     if (!adapter)
       throw new Error(`can't find adapter for name ${adapter_name}`);
@@ -188,14 +195,15 @@ export class App extends HMR<Plugin> {
 
     this.logger.info("App configuration updated", this.config);
   }
-  get schemas(){
+  get schemas() {
     return this.dependencyList.reduce((result, plugin) => {
       plugin.schemas.forEach((schema, name) => {
         result.set(name, schema);
       });
       return result;
-    }, new Map<string,Schema<any>>([
-      ['SystemLog', SystemLogSchema]
+    }, new Map<string, Schema<any>>([
+      ['SystemLog', SystemLogSchema],
+      ['User', UserSchema]
     ]));
   }
   /** 使用插件 */
@@ -211,15 +219,15 @@ export class App extends HMR<Plugin> {
       this.use(pluginName);
     }
     await sleep(200);
-    const schemas:Record<string,Schema>={};
+    const schemas: Record<string, Schema> = {};
     for (const [name, schema] of this.schemas) {
-      schemas[name]=schema;
+      schemas[name] = schema;
     }
     if (this.config.database) {
-      this.database=Registry.create((this.config.database as any).dialect,this.config.database,schemas);
+      this.database = Registry.create((this.config.database as any).dialect, this.config.database, schemas);
       await this.database?.start();
       this.logger.info(`database init success`);
-      
+
       // 初始化日志传输器
       this.logTransport = new DatabaseLogTransport(this);
       addTransport(this.logTransport);
@@ -227,7 +235,7 @@ export class App extends HMR<Plugin> {
     } else {
       this.logger.info(`database not configured, skipping database init`);
     }
-    this.dispatch("database.ready",this.database);
+    this.dispatch("database.ready", this.database);
     // 等待所有插件就绪
     await this.waitForReady();
     this.logger.info("started successfully");
@@ -237,14 +245,14 @@ export class App extends HMR<Plugin> {
   /** 停止App */
   async stop(): Promise<void> {
     this.logger.info("Stopping app...");
-    
+
     // 停止日志清理任务并移除日志传输器
     if (this.logTransport) {
       this.logTransport.stopCleanup();
       removeTransport(this.logTransport);
       this.logger.info("database log transport removed");
     }
-    
+
     // 销毁所有插件
     this.dispose();
 
@@ -315,7 +323,10 @@ export function defineModel<T extends Record<string, any>>(
   const plugin = usePlugin();
   return plugin.defineModel(name, schema);
 }
-
+export function addPermit<T extends RegisteredAdapter>(name: string | RegExp, checker: PermissionChecker<T>) {
+  const plugin = usePlugin()
+  return plugin.addPermit(name, checker)
+}
 /** 获取当前插件实例 */
 export function usePlugin(): Plugin {
   const hmr = HMR.currentHMR;
@@ -371,7 +382,7 @@ export function addMiddleware(middleware: MessageMiddleware): void {
   const plugin = usePlugin();
   plugin.addMiddleware(middleware);
 }
-export function onDatabaseReady(callback: (database: RelatedDatabase<any,Models>|DocumentDatabase<any,Models>|KeyValueDatabase<any,Models>) => PromiseLike<void>) {
+export function onDatabaseReady(callback: (database: RelatedDatabase<any, Models> | DocumentDatabase<any, Models> | KeyValueDatabase<any, Models>) => PromiseLike<void>) {
   const plugin = usePlugin();
   if (plugin.app.database?.isStarted) callback(plugin.app.database);
   plugin.on("database.ready", callback);
