@@ -156,8 +156,8 @@ describe('Plugin系统测试', () => {
 
       await plugin.emit('message.receive', mockMessage)
 
-      // 验证命令被调用
-      expect(handleSpy).toHaveBeenCalledWith(mockMessage)
+      // 验证命令被调用（handle 现在需要传入 plugin 作为第二个参数）
+      expect(handleSpy).toHaveBeenCalledWith(mockMessage, expect.any(Plugin))
     })
   })
 
