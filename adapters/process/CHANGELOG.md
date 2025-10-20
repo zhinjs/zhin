@@ -1,5 +1,14 @@
 # @zhin.js/adapter-process
 
+## 1.0.6
+
+### Patch Changes
+
+- f347667: fix: runtime error
+- Updated dependencies [f347667]
+  - @zhin.js/http@1.0.3
+  - zhin.js@1.0.5
+
 ## 1.0.5
 
 ### Patch Changes
