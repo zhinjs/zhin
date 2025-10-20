@@ -1,5 +1,11 @@
 # @zhin.js/cli
 
+## 1.0.4
+
+### Patch Changes
+
+- d291005: fix: 更新 cli,更新 http
+
 ## 1.0.3
 
 ### Patch Changes
