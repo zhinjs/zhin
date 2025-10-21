@@ -31,7 +31,7 @@ const routes = [
             {
                 key: 'dashboard-home',
                 index: true,
-                path: '/dashboard',
+                path: '',
                 title: '系统概览',
                 icon: <Icons.Home className="w-5 h-5" />,
                 element: <DashboardHome />,

@@ -91,6 +91,7 @@ export class App extends HMR<Plugin> {
     });
     process.on("unhandledRejection", (e) => {
       const args=e instanceof Error ? [e.message,{stack:e.stack}] : [e];
+      console.log(args);
       this.logger.error(...args);
     });
     this.config = finalConfig;

@@ -77,15 +77,15 @@ export class KookBot extends Client implements Bot<PrivateMessageEvent|ChannelMe
         options=await this.plugin.app.handleBeforeSend(options)
         switch (options.type){
             case 'private':{
-                const result= await this.sendPrivateMsg(options.id,KookBot.toSendable(options.content))
-                this.plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
-                return `private-${options.id}:${result.message_id.toString()}`
+                const result= await this.sendPrivateMsg(options.id,KookBot.toSendable(options.content));
+                this.plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`);
+                return `private-${options.id}:${result.msg_id.toString()}`
                 break;
             }
             case "channel":{
-                const result=await this.sendChannelMsg(options.id,KookBot.toSendable(options.content))
-                this.plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
-                return `channel-${options.id}:${result.message_id.toString()}`
+                const result=await this.sendChannelMsg(options.id,KookBot.toSendable(options.content));
+                this.plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`);
+                return `channel-${options.id}:${result.msg_id.toString()}`
                 break;
             }
             default:

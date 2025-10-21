@@ -26,6 +26,7 @@ export default {
       context: 'kook',
       name: '123456789', // 机器人ID
       token: 'your-bot-token', // KOOK机器人Token
+      mode: 'websocket', // websocket | webhook
       data_dir: './data', // 数据目录
       // 其他KOOK配置项...
     }

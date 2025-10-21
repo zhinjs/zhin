@@ -21,12 +21,12 @@ export default defineConfig(async (env)=>{
         logLevel:'off',
         ignore: 'bot',
       },
-      {
-        name: env.ICQQ_SCAN_UIN,
-        context:'icqq',
-        log_level:'off',
-        platform:4
-      },
+      // {
+      //   name: env.ICQQ_SCAN_UIN,
+      //   context:'icqq',
+      //   log_level:'off',
+      //   platform:4
+      // },
       // {
       //   name: env.ONEBOT_NAME,
       //   context:'onebot11.wss',
@@ -97,10 +97,10 @@ export default defineConfig(async (env)=>{
       'http',           // 🚀 HTTP先加载，注册基础API路由
       'adapter-process',
       'adapter-icqq',   // 🤖 ICQQ适配器注册 /api/icqq/* 路由
+      'adapter-kook',   // KOOK适配器
       'adapter-onebot11', // OneBot适配器
       'adapter-qq', // QQ官方机器人适配器
       'console',        // 🖥️ 控制台最后加载，处理静态文件
-      'adapter-kook',
       'test-plugin',
       'test-jsx',
       'music'
