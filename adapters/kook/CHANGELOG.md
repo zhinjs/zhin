@@ -1,5 +1,13 @@
 # @zhin.js/adapter-kook
 
+## 1.0.6
+
+### Patch Changes
+
+- c2d9047: fix: 优化中间件逻辑
+- b213bbc: fix: 更新 kook 报错
+  - zhin.js@1.0.6
+
 ## 1.0.5
 
 ### Patch Changes

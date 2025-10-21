@@ -1,5 +1,13 @@
 # @zhin.js/client
 
+## 1.0.3
+
+### Patch Changes
+
+- c2d9047: fix: 重复插件 bug
+- c2d9047: fix: 优化中间件逻辑
+- b213bbc: fix: 更新 kook 报错
+
 ## 1.0.2
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # @zhin.js/http
 
+## 1.0.4
+
+### Patch Changes
+
+- c2d9047: fix: 优化中间件逻辑
+- Updated dependencies [c2d9047]
+- Updated dependencies [c2d9047]
+  - @zhin.js/core@1.0.6
+
 ## 1.0.3
 
 ### Patch Changes

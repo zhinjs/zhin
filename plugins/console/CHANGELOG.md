@@ -1,5 +1,17 @@
 # @zhin.js/console
 
+## 1.0.4
+
+### Patch Changes
+
+- c2d9047: fix: 重复插件 bug
+- Updated dependencies [c2d9047]
+- Updated dependencies [c2d9047]
+- Updated dependencies [b213bbc]
+  - @zhin.js/client@1.0.3
+  - @zhin.js/core@1.0.6
+  - @zhin.js/http@1.0.4
+
 ## 1.0.3
 
 ### Patch Changes
