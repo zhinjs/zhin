@@ -5,6 +5,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { parse as parseToml } from 'toml';
 import { config as loadDotenv } from 'dotenv';
 import type {AppConfig, DefineConfig} from './types.js';
+import { LogLevel } from '@zhin.js/logger';
 
 export interface ConfigOptions {
   configPath?: string;
@@ -262,6 +263,7 @@ export function saveConfig(config: AppConfig, filePath: string): void {
  */
 export function createDefaultConfig(format: ConfigFormat = 'yaml'): AppConfig {
   return {
+    log_level: LogLevel.INFO,
     bots: [{
       name: 'onebot11',
       context: 'onebot11',

@@ -53,6 +53,7 @@ const createDeleteMsg = (key: string, value: any) => {
 useContext('router', async (router) => {
     const root = path.join(process.cwd(),'node_modules','@zhin.js','client','app');
     const base='/vite/'
+    
     const vite = await createServer({
         root,
         base,
@@ -63,7 +64,7 @@ useContext('router', async (router) => {
         server: {
             middlewareMode: true,
             fs: {
-                allow: [process.cwd()],
+                strict:false
             },
         },
         resolve: {

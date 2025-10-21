@@ -17,7 +17,7 @@ import {
 import { Message } from "./message.js";
 import { fileURLToPath } from "url";
 import { generateEnvTypes } from "./types-generator.js";
-import logger, { setName } from "@zhin.js/logger";
+import logger, { setName, setLevel, LogLevel } from "@zhin.js/logger";
 import { sleep } from "./utils.js";
 import { PermissionChecker, Permissions } from "./permissions.js";
 // 创建静态logger用于配置加载等静态操作
@@ -91,10 +91,10 @@ export class App extends HMR<Plugin> {
     });
     process.on("unhandledRejection", (e) => {
       const args=e instanceof Error ? [e.message,{stack:e.stack}] : [e];
-      console.log(args);
       this.logger.error(...args);
     });
     this.config = finalConfig;
+    setLevel(finalConfig.log_level);
   }
   /** 默认配置 */
   /**
@@ -105,6 +105,7 @@ export class App extends HMR<Plugin> {
    * - debug: 是否调试模式
    */
   static defaultConfig: AppConfig = {
+    log_level: LogLevel.INFO,
     plugin_dirs: ["./plugins"],
     plugins: [],
     bots: [],
@@ -300,7 +301,8 @@ function getPlugin(hmr: HMR<Plugin>, filename: string): Plugin {
   const childPlugin = hmr.findChild(filename);
   if (childPlugin) {
     return childPlugin;
-  }
+    }
+    logger.debug(`cant't find plugin for ${filename}, create new`);
   const parent = hmr.findParent(
     filename,
     getCallerFiles(fileURLToPath(import.meta.url))

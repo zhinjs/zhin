@@ -501,12 +501,18 @@ importers:
       '@types/react-dom':
         specifier: ^19.2.1
         version: 19.2.1(@types/react@19.2.2)
+      '@vitejs/plugin-react':
+        specifier: ^4.3.4
+        version: 4.7.0(vite@7.1.9(@types/node@24.7.1)(jiti@2.6.1)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2)(yaml@2.8.1))
       lucide-react:
         specifier: ^0.469.0
         version: 0.469.0(react@19.2.0)
       radix-ui:
         specifier: ^1.4.3
         version: 1.4.3(@types/react-dom@19.2.1(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      vite:
+        specifier: ^7.0.6
+        version: 7.1.9(@types/node@24.7.1)(jiti@2.6.1)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2)(yaml@2.8.1)
 
   plugins/console:
     dependencies:
@@ -598,6 +604,9 @@ importers:
 
   test-bot:
     dependencies:
+      '@zhin.js/adapter-discord':
+        specifier: workspace:*
+        version: link:../adapters/discord
       '@zhin.js/adapter-icqq':
         specifier: workspace:*
         version: link:../adapters/icqq

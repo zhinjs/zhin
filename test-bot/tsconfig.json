@@ -31,7 +31,8 @@
       "@zhin.js/adapter-kook",
       "@zhin.js/adapter-onebot11",
       "@zhin.js/adapter-qq",
-      "@zhin.js/adapter-process"
+      "@zhin.js/adapter-process",
+      "@zhin.js/adapter-discord"
     ]
   },
   "include": [

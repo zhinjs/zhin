@@ -13,5 +13,6 @@ export * from './utils.js'
 export * from './errors.js'  // 导出错误处理系统
 export * from './cron.js'
 export * from '@zhin.js/database'
+export * from '@zhin.js/logger'
 
 export { Dependency } from '@zhin.js/hmr'

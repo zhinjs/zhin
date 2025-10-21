@@ -1,4 +1,5 @@
 import {MaybePromise,RegisteredAdapters}from '@zhin.js/types'
+import { LogLevel } from '@zhin.js/logger';
 import {MessageChannel,Message} from "./message.js";
 import {Adapter} from "./adapter.js";
 import {Bot,BotConfig} from "./bot.js";
@@ -89,6 +90,7 @@ export interface Group {
 export interface AppConfig {
   /** 机器人配置列表 */
   bots?: BotConfig[];
+  log_level: LogLevel;
   /** 数据库配置列表 */
   database?: DatabaseConfig;
   /** 插件目录列表，默认为 ['./plugins', 'node_modules'] */

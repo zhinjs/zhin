@@ -1,8 +1,9 @@
-import { defineConfig } from 'zhin.js';
+import { defineConfig,LogLevel } from 'zhin.js';
 import path from "node:path";
 
 export default defineConfig(async (env)=>{
   return {
+    log_level: LogLevel.INFO,
     database: {
       dialect: 'sqlite',
       filename: './data/test.db'
@@ -20,6 +21,11 @@ export default defineConfig(async (env)=>{
         mode: 'websocket',
         logLevel:'off',
         ignore: 'bot',
+      },
+      {
+        name: 'zhinBot',
+        context:'discord',
+        token: env.DISCORD_ZHIN_TOKEN,
       },
       // {
       //   name: env.ICQQ_SCAN_UIN,
@@ -98,6 +104,7 @@ export default defineConfig(async (env)=>{
       'adapter-process',
       'adapter-icqq',   // 🤖 ICQQ适配器注册 /api/icqq/* 路由
       'adapter-kook',   // KOOK适配器
+      'adapter-discord', // Discord适配器
       'adapter-onebot11', // OneBot适配器
       'adapter-qq', // QQ官方机器人适配器
       'console',        // 🖥️ 控制台最后加载，处理静态文件

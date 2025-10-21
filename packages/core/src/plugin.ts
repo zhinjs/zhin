@@ -4,6 +4,7 @@
 
 
 import {MaybePromise} from '@zhin.js/types'
+import * as fs from 'fs';
 import {AdapterMessage, BeforeSendHandler, RegisteredAdapter, SendOptions} from "./types.js";
 import { PermissionItem,PermissionChecker } from './permissions.js';
 import {Message} from './message.js'
@@ -44,7 +45,9 @@ export class Plugin extends Dependency<Plugin> {
      * @param filePath 插件文件路径
      */
     constructor(parent: Dependency<Plugin>, name: string, filePath: string) {
+        filePath=fs.realpathSync(filePath);
         super(parent, name, filePath);
+        this.logger.debug(`plugin ${name} created at ${filePath}`);
         // 绑定消息事件，自动分发到命令和中间件
         this.on('message.receive',this.#handleMessage.bind(this))
         // 注册命令处理为默认中间件
