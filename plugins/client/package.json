@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/client",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Zhin 客户端",
   "type": "module",
   "main": "./dist/index.js",

@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-process",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "zhin adapter for process",
   "type": "module",
   "main": "./lib/index.js",

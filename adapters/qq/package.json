@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-qq",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "zhin adapter for qq",
   "type": "module",
   "main": "./lib/index.js",

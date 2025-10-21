@@ -1,5 +1,12 @@
 # @zhin.js/adapter-discord
 
+## 1.0.6
+
+### Patch Changes
+
+- c2d9047: fix: 优化中间件逻辑
+  - zhin.js@1.0.6
+
 ## 1.0.5
 
 ### Patch Changes
