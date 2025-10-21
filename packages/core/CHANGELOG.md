@@ -1,5 +1,13 @@
 # @zhin.js/core
 
+## 1.0.7
+
+### Patch Changes
+
+- 47845fb: fix: err
+- Updated dependencies [47845fb]
+  - @zhin.js/database@1.0.2
+
 ## 1.0.6
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @zhin.js/adapter-process
 
+## 1.0.9
+
+### Patch Changes
+
+- Updated dependencies [47845fb]
+  - @zhin.js/console@1.0.5
+  - zhin.js@1.0.7
+
 ## 1.0.8
 
 ### Patch Changes
