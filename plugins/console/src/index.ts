@@ -166,7 +166,7 @@ useContext('router', async (router) => {
     // WebSocket 连接处理
     webServer.ws.on('connection', (ws: WebSocket) => {
         // 发送初始数据
-        ws.send(JSON.stringify(createSyncMsg('entries', Object.values(webServer.entries))));
+        ws.send(JSON.stringify(createSyncMsg('entries', Array.from(new Set(Object.values(webServer.entries))))));
 
         // 通知客户端进行数据初始化
         ws.send(JSON.stringify({

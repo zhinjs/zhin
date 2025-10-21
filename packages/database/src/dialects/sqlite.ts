@@ -1,8 +1,10 @@
+import * as fs from 'node:fs';
 import {Dialect} from "../base";
 import {Registry} from "../registry";
 import {Database} from "../base";
 import {Column} from "../types";
 import {RelatedDatabase} from "../type/related/database";
+import path from 'node:path';
 
 
 export interface SQLiteDialectConfig {
@@ -25,6 +27,11 @@ export class SQLiteDialect extends Dialect<SQLiteDialectConfig, string> {
   async connect(): Promise<void> {
     try {
       const { default: sqlite3 } = await import('sqlite3');
+      const isExistDbFile=fs.existsSync(this.config.filename);
+      const dirname=path.dirname(this.config.filename);
+      if(!fs.existsSync(dirname)){
+        fs.mkdirSync(dirname,{recursive:true});
+      }
       this.db = new sqlite3.Database(this.config.filename);
     } catch (error) {
       console.error('forgot install sqlite3 ?');
