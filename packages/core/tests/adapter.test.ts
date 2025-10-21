@@ -4,6 +4,7 @@ import { Bot } from '../src/bot'
 import { Plugin } from '../src/plugin'
 import { App } from '../src/app'
 import type { BotConfig } from '../src/types'
+import * as path from 'path'
 
 describe('适配器类测试', () => {
   // 创建测试用的Bot类
@@ -45,7 +46,7 @@ describe('适配器类测试', () => {
         { name: 'other-bot', context: 'other-adapter' }
       ]
     })
-    plugin = app.createDependency('test-plugin', 'test-plugin.ts')
+    plugin = app.createDependency('test-plugin', '/mock/test-plugin.ts')
   })
 
   describe('构造函数工厂方法测试', () => {
@@ -188,7 +189,7 @@ describe('适配器类测试', () => {
         }]
       })
 
-      const extendedPlugin = extendedApp.createDependency('test-plugin', 'test-plugin.ts')
+      const extendedPlugin = extendedApp.createDependency('test-plugin', '/mock/test-plugin.ts')
       const extendedAdapter = new Adapter('extended-adapter', ExtendedBot)
       await extendedAdapter.start(extendedPlugin)
 

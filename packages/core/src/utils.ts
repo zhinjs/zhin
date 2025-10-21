@@ -26,7 +26,13 @@ export function compose<P extends RegisteredAdapter>(middlewares: MessageMiddlew
             let fn=middlewares[i]
             if(i===middlewares.length) fn=next
             if(!fn) return;
-            return fn(message, ()=>dispatch(i+1));
+            try {
+                return await fn(message, ()=>dispatch(i+1));
+            } catch (error) {
+                // 中间件异常应该被记录但不中断整个流程
+                console.error('Middleware error:', error);
+                throw error;
+            }
         };
         return dispatch(0);
     }

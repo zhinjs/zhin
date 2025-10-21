@@ -181,7 +181,10 @@ export class App extends HMR<Plugin> {
    * @param filePath 插件文件路径
    */
   createDependency(name: string, filePath: string): Plugin {
-    return new Plugin(this, name, filePath);
+    const plugin = new Plugin(this, name, filePath);
+    // 将插件添加到依赖列表中
+    this.dependencies.set(name, plugin);
+    return plugin;
   }
 
   /** 获取App配置 */

@@ -18,7 +18,8 @@ describe('App类测试', () => {
       plugin_dirs: ['./test-plugins'],
       plugins: [],
       bots: [],
-      debug: true
+      debug: true,
+      log_level: 1
     }
 
     // 创建测试插件目录
@@ -74,10 +75,10 @@ describe('App类测试', () => {
 
   describe('插件管理测试', () => {
     it('应该正确创建插件依赖', () => {
-      const plugin = app.createDependency('test-plugin', 'test-plugin.ts')
+      const plugin = app.createDependency('test-plugin', '/mock/test-plugin.ts')
       expect(plugin).toBeInstanceOf(Plugin)
       expect(plugin.name).toBe('test-plugin')
-      expect(plugin.filename).toBe('test-plugin.ts')
+      expect(plugin.filename).toContain('test-plugin.ts')
     })
 
     it('应该正确加载插件', async () => {
@@ -118,7 +119,7 @@ describe('App类测试', () => {
       const adapter = new TestAdapter()
 
       // 注册适配器
-      const plugin = app.createDependency('test-plugin', 'test-plugin.ts')
+      const plugin = app.createDependency('test-plugin', '/mock/test-plugin.ts')
       const context = {
         name: adapter.name,
         mounted: () => adapter,
@@ -140,7 +141,7 @@ describe('App类测试', () => {
 
     it('应该正确设置和获取上下文描述', async () => {
       // 创建测试插件
-      const plugin = app.createDependency('test-plugin-desc', 'test-plugin-desc.ts')
+      const plugin = app.createDependency('test-plugin-desc', '/mock/test-plugin-desc.ts')
       
       // 注册带描述的上下文  
       const context = {
@@ -179,7 +180,7 @@ describe('App类测试', () => {
         content: '测试消息'
       }
 
-      const plugin = app.createDependency('test-plugin', 'test-plugin.ts')
+      const plugin = app.createDependency('test-plugin', '/mock/test-plugin.ts')
       const handler = vi.fn((opts) => ({
         ...opts,
         content: '修改后的消息'

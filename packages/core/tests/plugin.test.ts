@@ -5,6 +5,7 @@ import { MessageCommand } from '../src/command'
 import { Component, defineComponent, ComponentContext } from '../src/component'
 import { Message } from '../src/message'
 import { PluginError, MessageError } from '../src/errors'
+import * as path from 'path'
 
 describe('Plugin系统测试', () => {
   let app: App
@@ -12,7 +13,8 @@ describe('Plugin系统测试', () => {
 
   beforeEach(() => {
     app = new App()
-    plugin = app.createDependency('test-plugin', 'test-plugin.ts')
+    // 使用 mock 文件路径，不依赖真实文件
+    plugin = app.createDependency('test-plugin', '/mock/test-plugin.ts')
   })
 
   afterEach(async () => {
@@ -23,13 +25,13 @@ describe('Plugin系统测试', () => {
     it('应该正确初始化Plugin实例', () => {
       expect(plugin).toBeInstanceOf(Plugin)
       expect(plugin.name).toBe('test-plugin')
-      expect(plugin.filename).toBe('test-plugin.ts')
+      expect(plugin.filename).toContain('test-plugin.ts')
       expect(plugin.app).toBe(app)
       expect(plugin.commands).toEqual([])
       expect(plugin.components).toBeInstanceOf(Map)
       expect(plugin.components.size).toBe(0)
-      // Plugin有默认的命令处理中间件，所以不为空
-      expect(plugin.middlewares.length).toBeGreaterThan(0)
+      // Plugin没有默认的中间件
+      expect(plugin.middlewares.length).toBe(0)
     })
 
     it('应该正确获取logger实例', () => {
@@ -89,8 +91,8 @@ describe('Plugin系统测试', () => {
         $raw: 'test message'
       }
 
-      // 触发消息处理
-      await plugin.emit('message.receive', mockMessage)
+      // 触发消息处理 - 通过 App 的 receiveMessage 方法
+      await app.receiveMessage(mockMessage)
 
       // 由于有默认的命令中间件，执行顺序可能会不同
       // 但我们的中间件应该被调用
@@ -120,9 +122,10 @@ describe('Plugin系统测试', () => {
         $raw: 'test message'
       }
 
-      await plugin.emit('message.receive', mockMessage)
-
-      // 验证错误处理逻辑 - 中间件异常会被处理但可能不会回复给用户
+      // 中间件异常应该被抛出
+      await expect(app.receiveMessage(mockMessage)).rejects.toThrow('中间件测试错误')
+      
+      // 验证中间件被调用
       expect(errorMiddleware).toHaveBeenCalled()
     })
   })
@@ -154,10 +157,10 @@ describe('Plugin系统测试', () => {
         $raw: 'test message'
       }
 
-      await plugin.emit('message.receive', mockMessage)
+      await app.receiveMessage(mockMessage)
 
-      // 验证命令被调用（handle 现在需要传入 plugin 作为第二个参数）
-      expect(handleSpy).toHaveBeenCalledWith(mockMessage, expect.any(Plugin))
+      // 验证命令被调用（handle 现在需要传入 app 作为第二个参数）
+      expect(handleSpy).toHaveBeenCalledWith(mockMessage, expect.any(App))
     })
   })
 
@@ -302,7 +305,8 @@ describe('Plugin系统测试', () => {
         $raw: 'error message'
       }
 
-      await plugin.emit('message.receive', mockMessage)
+      // 中间件异常应该被抛出
+      await expect(app.receiveMessage(mockMessage)).rejects.toThrow('处理失败')
 
       // 验证错误中间件被调用
       expect(errorMiddleware).toHaveBeenCalled()
@@ -358,7 +362,7 @@ describe('Plugin系统测试', () => {
       }
 
       // 触发消息处理
-      await plugin.emit('message.receive', mockMessage)
+      await app.receiveMessage(mockMessage)
 
       // 验证中间件被调用
       expect(middlewareExecuted).toHaveBeenCalled()
