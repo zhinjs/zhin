@@ -12,10 +12,6 @@ interface PluginDetail {
   description: string
   commands: Array<{
     name: string
-    pattern: string
-    description: string
-    alias: string[]
-    examples: string[]
   }>
   components: Array<{
     name: string
@@ -207,14 +203,7 @@ export default function DashboardPluginDetail() {
                     <Flex direction="column" gap="1">
                       <Flex align="center" gap="2">
                         <Code size="2">{cmd.name}</Code>
-                        {cmd.alias.length > 0 && (
-                          <Text size="1" color="gray">别名: {cmd.alias.join(', ')}</Text>
-                        )}
                       </Flex>
-                      <Text size="1" color="gray">{cmd.description}</Text>
-                      {cmd.examples.length > 0 && (
-                        <Text size="1" color="gray" className="italic">示例: {cmd.examples[0]}</Text>
-                      )}
                     </Flex>
                   </Box>
                 ))}

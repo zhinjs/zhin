@@ -83,6 +83,9 @@ export interface Group {
   member_count: number;
 }
 
+/** 消息中间件函数 */
+export type MessageMiddleware<P extends RegisteredAdapter=RegisteredAdapter> = (message: Message<AdapterMessage<P>>, next: () => Promise<void>) => MaybePromise<void>;
+
 
 /**
  * App配置类型，涵盖机器人、数据库、插件、调试等

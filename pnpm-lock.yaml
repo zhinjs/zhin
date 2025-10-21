@@ -350,8 +350,8 @@ importers:
         specifier: ^16.3.1
         version: 16.6.1
       segment-matcher:
-        specifier: 1.0.3
-        version: 1.0.3
+        specifier: 1.0.4
+        version: 1.0.4
       toml:
         specifier: ^3.0.0
         version: 3.0.0
@@ -5558,8 +5558,8 @@ packages:
   search-insights@2.17.3:
     resolution: {integrity: sha512-RQPdCYTa8A68uM2jwxoY842xDhvx3E5LFL1LxvxCNMev4o5mLuokczhzjAgGwUZBAmOKZknArSxLKmXtIi2AxQ==}
 
-  segment-matcher@1.0.3:
-    resolution: {integrity: sha512-cHqaQNYK7VLQSIy60r+K1oyrxQFZHedt1ijavuARRRE9xcz0FePciuSwLKrsWbRNlAsQwlu/w5LnpwvY8p/FHw==}
+  segment-matcher@1.0.4:
+    resolution: {integrity: sha512-dFyQlzXb8EoEEST0fEZ1ckBCA2m9VeIqttdIq/FUwgjGIC5nh9rrIE/HGj09ejEaaaUsubbg1rrtvefNxrYGEg==}
 
   selderee@0.11.0:
     resolution: {integrity: sha512-5TF+l7p4+OsnP8BCCvSyZiSPc4x4//p5uPwK8TCnVPJYRmU2aYKMpOXvw8zM5a5JvuuCGN1jmsMwuU2W02ukfA==}
@@ -11825,7 +11825,7 @@ snapshots:
 
   search-insights@2.17.3: {}
 
-  segment-matcher@1.0.3: {}
+  segment-matcher@1.0.4: {}
 
   selderee@0.11.0:
     dependencies:

@@ -30,7 +30,7 @@
   "dependencies": {
     "@zhin.js/hmr": "workspace:*",
     "@zhin.js/database": "workspace:*",
-    "segment-matcher": "1.0.3",
+    "segment-matcher": "1.0.4",
     "yaml": "^2.3.4",
     "toml": "^3.0.0",
     "dotenv": "^16.3.1",

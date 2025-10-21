@@ -1,5 +1,5 @@
-import {AdapterMessage, Dict, RegisteredAdapter} from './types.js';
-import { MessageMiddleware,Plugin } from './plugin.js';
+import {AdapterMessage, Dict, MessageMiddleware, RegisteredAdapter} from './types.js';
+import { Plugin } from './plugin.js';
 import { Message } from './message.js';
 import { Schema } from './schema.js';
 
@@ -52,7 +52,7 @@ export class Prompt<P extends RegisteredAdapter> {
      * @param timeoutText 超时提示
      */
     middleware(callback: (input: string | Error) => any, timeout: number = 3 * 60 * 1000, timeoutText = '输入超时') {
-        const middleware: MessageMiddleware<P> = (event, next) => {
+        const middleware: MessageMiddleware<P> = async (event, next) => {
             if (this.getChannelAddress<P>(event) !== this.getChannelAddress<P>(this.event)) return next();
             callback(event.$raw);
             dispose();

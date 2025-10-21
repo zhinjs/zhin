@@ -3,8 +3,8 @@ import {AdapterMessage, SendContent} from "./types.js";
 import {RegisteredAdapters} from "@zhin.js/types";
 import type {Message} from "./message.js";
 import {MaybePromise} from "@zhin.js/types";
-import { Plugin } from "./plugin.js";
-import { PluginError } from "./errors.js";
+import { ZhinError } from "./errors.js";
+import { App } from "./app.js";
 
 /**
  * MessageCommand类：命令系统核心，基于segment-matcher实现。
@@ -32,11 +32,11 @@ export class MessageCommand<T extends keyof RegisteredAdapters=keyof RegisteredA
      * @param plugin 插件实例
      * @returns 命令返回内容或undefined
      */
-    async handle(message:Message<AdapterMessage<T>>,plugin:Plugin):Promise<SendContent|undefined>{
+    async handle(message:Message<AdapterMessage<T>>,app:App):Promise<SendContent|undefined>{
         for(const permission of this.#permissions){
-            const permit=plugin.getPermit(permission)
+            const permit=app.permissions.get(permission)
             if(!permit) {
-                throw new PluginError(`权限 ${permission} 不存在`,plugin.name)
+                throw new ZhinError(`权限 ${permission} 不存在`)
             }
             const result=await permit.check(permission,message)
             if(!result) return;

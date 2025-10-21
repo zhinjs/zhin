@@ -3,9 +3,8 @@
 // ============================================================================
 
 
-import {MaybePromise} from '@zhin.js/types'
 import * as fs from 'fs';
-import {AdapterMessage, BeforeSendHandler, RegisteredAdapter, SendOptions} from "./types.js";
+import {AdapterMessage, BeforeSendHandler,MessageMiddleware, RegisteredAdapter, SendOptions} from "./types.js";
 import { PermissionItem,PermissionChecker } from './permissions.js';
 import {Message} from './message.js'
 import {Dependency, Logger,} from "@zhin.js/hmr";
@@ -17,9 +16,6 @@ import {remove} from "./utils.js";
 import {Prompt} from "./prompt.js";
 import { Schema } from '@zhin.js/database';
 import { Cron} from './cron.js';
-
-/** 消息中间件函数 */
-export type MessageMiddleware<P extends RegisteredAdapter=RegisteredAdapter> = (message: Message<AdapterMessage<P>>, next: () => Promise<void>) => MaybePromise<void>;
 
 
 // ============================================================================
@@ -49,15 +45,6 @@ export class Plugin extends Dependency<Plugin> {
         super(parent, name, filePath);
         this.logger.debug(`plugin ${name} created at ${filePath}`);
         // 绑定消息事件，自动分发到命令和中间件
-        this.on('message.receive',this.#handleMessage.bind(this))
-        // 注册命令处理为默认中间件
-        this.addMiddleware(async (message,next)=>{
-            for(const command of this.commands){
-                const result=await command.handle(message,this);
-                if(result) message.$reply(result);
-            }
-            return next()
-        });
         // 发送前渲染组件
         this.beforeSend((options)=>renderComponents(this.components,options))
         // 资源清理：卸载时清空模型、定时任务等
@@ -77,26 +64,6 @@ export class Plugin extends Dependency<Plugin> {
                 cron.run();
             }
         });
-    }
-    async #handleMessage(message: Message) {
-        try {
-            await this.#runMiddlewares(message, 0)
-        } catch (error) {
-            const messageError = new MessageError(
-                `消息处理失败: ${(error as Error).message}`,
-                message.$id,
-                message.$channel.id,
-                { pluginName: this.name, originalError: error }
-            )
-            
-            await errorManager.handle(messageError)
-            
-            // 可选：发送错误回复给用户
-            try {
-                await message.$reply('抱歉，处理您的消息时出现了错误。')
-            } catch (replyError) {
-            }
-        }
     }
     addPermit<T extends RegisteredAdapter>(name:string|RegExp,check:PermissionChecker<T>){
         this.permissions.push({name,check});

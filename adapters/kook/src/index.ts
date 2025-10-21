@@ -79,13 +79,13 @@ export class KookBot extends Client implements Bot<PrivateMessageEvent|ChannelMe
             case 'private':{
                 const result= await this.sendPrivateMsg(options.id,KookBot.toSendable(options.content));
                 this.plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`);
-                return `private-${options.id}:${result.msg_id.toString()}`
+                return `private-${options.id}:${(result as unknown as {msg_id:string}).msg_id.toString()}`
                 break;
             }
             case "channel":{
                 const result=await this.sendChannelMsg(options.id,KookBot.toSendable(options.content));
                 this.plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`);
-                return `channel-${options.id}:${result.msg_id.toString()}`
+                return `channel-${options.id}:${(result as unknown as {msg_id:string}).msg_id.toString()}`
                 break;
             }
             default:

@@ -1,4 +1,5 @@
-import {Dict, MessageElement, MessageSegment, SendContent} from "./types";
+import {AdapterMessage, Dict, MessageElement, MessageMiddleware, RegisteredAdapter, SendContent} from "./types";
+import { Message } from "./message.js";
 
 export function getValueWithRuntime(template: string, ctx: Dict) {
     const result = evaluate(template, ctx);
@@ -11,6 +12,25 @@ export const evaluate = <S, T = any>(exp: string, context: S) => {
     if (result === `return(${exp})`) return undefined;
     return result;
 };
+/**
+ * 组合中间件,洋葱模型
+ * @param middlewares 中间件列表
+ * @returns 中间件处理函数
+ */
+export function compose<P extends RegisteredAdapter>(middlewares: MessageMiddleware<P>[]){
+    return function(message: Message<AdapterMessage<P>>, next: () => Promise<void>=()=>Promise.resolve()){
+        let index = -1
+        const dispatch=async (i:number=0):Promise<void>=>{
+            if(i<=index) return Promise.reject(new Error('next() called multiple times'));
+            index=i
+            let fn=middlewares[i]
+            if(i===middlewares.length) fn=next
+            if(!fn) return;
+            return fn(message, ()=>dispatch(i+1));
+        };
+        return dispatch(0);
+    }
+}
 const evalCache: Record<string, Function> = Object.create(null);
 export const execute = <S, T = any>(exp: string, context: S):T => {
     const fn = evalCache[exp] || (evalCache[exp] = toFunction(exp));

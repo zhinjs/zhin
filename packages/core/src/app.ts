@@ -13,16 +13,17 @@ import {
   BeforeSendHandler,
   RegisteredAdapter,
   SendOptions,
+  MessageMiddleware,
 } from "./types.js";
 import { Message } from "./message.js";
 import { fileURLToPath } from "url";
 import { generateEnvTypes } from "./types-generator.js";
 import logger, { setName, setLevel, LogLevel } from "@zhin.js/logger";
-import { sleep } from "./utils.js";
+import { compose, sleep } from "./utils.js";
 import { PermissionChecker, Permissions } from "./permissions.js";
 // 创建静态logger用于配置加载等静态操作
 setName("Zhin");
-import { MessageMiddleware, Plugin } from "./plugin.js";
+import { Plugin } from "./plugin.js";
 import { Adapter } from "./adapter";
 import { MessageCommand } from "./command";
 import { Component } from "./component";
@@ -85,16 +86,39 @@ export class App extends HMR<Plugin> {
       debug: finalConfig.debug,
     });
     this.on("message.send", this.sendMessage.bind(this));
+    this.on('message.receive',this.receiveMessage.bind(this))
     process.on("uncaughtException", (e) => {
-      const args=e instanceof Error ? [e.message,{stack:e.stack}] : [e];  
+      const args = e instanceof Error ? [e.message, { stack: e.stack }] : [e];
       this.logger.error(...args);
     });
     process.on("unhandledRejection", (e) => {
-      const args=e instanceof Error ? [e.message,{stack:e.stack}] : [e];
+      const args = e instanceof Error ? [e.message, { stack: e.stack }] : [e];
       this.logger.error(...args);
     });
     this.config = finalConfig;
     setLevel(finalConfig.log_level);
+    this.middleware(this.messageMiddleware.bind(this))
+  }
+  async receiveMessage<P extends RegisteredAdapter>(message: Message<AdapterMessage<P>>) {
+    const middlewares=this.dependencyList.reduce((result, plugin) => {
+      result.push(...plugin.middlewares as MessageMiddleware<P>[]);
+      return result;
+    }, [...this.middlewares] as MessageMiddleware<P>[]);
+    const handle=compose(middlewares)
+    await handle(message)
+  }
+  async messageMiddleware(message: Message, next: () => Promise<void>) {
+    for (const command of this.commands) {
+      const result = await command.handle(message, this);
+      if (result) message.$reply(result);
+    }
+    return next();
+  }
+  get commands() {
+    return this.dependencyList.reduce((result, plugin) => {
+      result.push(...plugin.commands);
+      return result;
+    }, [] as MessageCommand[]);
   }
   /** 默认配置 */
   /**
@@ -301,8 +325,8 @@ function getPlugin(hmr: HMR<Plugin>, filename: string): Plugin {
   const childPlugin = hmr.findChild(filename);
   if (childPlugin) {
     return childPlugin;
-    }
-    logger.debug(`cant't find plugin for ${filename}, create new`);
+  }
+  logger.debug(`cant't find plugin for ${filename}, create new`);
   const parent = hmr.findParent(
     filename,
     getCallerFiles(fileURLToPath(import.meta.url))

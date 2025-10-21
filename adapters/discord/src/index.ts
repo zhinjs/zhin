@@ -888,27 +888,12 @@ export class DiscordInteractionsBot extends Client implements Bot<any, DiscordIn
             $timestamp: Date.now(),
             $content: content,
             $reply: async (content: SendContent): Promise<string> => {
-                // 通过 REST API 发送后续消息
-                const res = await this.sendFollowUp(interaction, content);
-                return res.id;
+                return this.$sendMessage({
+                    ...this.$formatMessage(interaction),
+                    content: content
+                });
             }
         });
-    }
-
-    private async sendFollowUp(interaction: any, content: SendContent): Promise<DiscordMessage<boolean>> {
-        try {
-            const rest = new REST({ version: '10' }).setToken(this.$config.token);
-            const messageContent = this.formatSendContent(content);
-            
-            const res = await rest.post(
-                `/webhooks/${this.$config.applicationId}/${interaction.token}`,
-                { body: messageContent }
-            );
-            return res as DiscordMessage<boolean>;
-        } catch (error) {
-            this.plugin.logger.error('Failed to send follow-up message:', error);
-            throw error;
-        }
     }
 
     private formatSendContent(content: SendContent): any {
