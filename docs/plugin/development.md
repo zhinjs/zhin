@@ -424,7 +424,6 @@ Schema.string('fieldName')
 - 实时保存到配置文件
 - 支持嵌套结构和复杂类型
 
-![Plugin Config Form](./assets/plugin-config-form.png)
 
 ## 🔗 相关链接
 

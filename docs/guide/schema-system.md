@@ -381,6 +381,6 @@ Schema.dict(Schema.string())  // { [key: string]: string }
 
 ## 相关文档
 
-- [Schema API 文档](../api/schema.md)
+- [类型定义文档](../api/types.md)
 - [插件开发指南](../plugin/development.md)
 - [配置文件格式](./configuration.md)

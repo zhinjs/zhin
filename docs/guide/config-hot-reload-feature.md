@@ -175,6 +175,6 @@ export default defineConfig({
 
 ## 相关文档
 
-- [配置热重载指南](../docs/guide/config-hot-reload.md)
-- [Schema 系统](../docs/guide/schema-system.md)
-- [最佳实践](../docs/guide/best-practices.md)
+- [配置热重载指南](./config-hot-reload.md)
+- [Schema 系统](./schema-system.md)
+- [最佳实践](./best-practices.md)
