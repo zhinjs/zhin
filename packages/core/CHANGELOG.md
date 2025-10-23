@@ -1,5 +1,14 @@
 # @zhin.js/core
 
+## 1.0.8
+
+### Patch Changes
+
+- 551c4d2: fix: 插件支持配置文件读取,优化 test 用例
+- Updated dependencies [551c4d2]
+  - @zhin.js/database@1.0.3
+  - @zhin.js/hmr@1.0.2
+
 ## 1.0.7
 
 ### Patch Changes

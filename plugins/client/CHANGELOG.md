@@ -1,10 +1,17 @@
 # @zhin.js/client
 
+## 1.0.4
+
+### Patch Changes
+
+- 551c4d2: fix: 插件支持配置文件读取,优化 test 用例
+
 ## 1.1.0 (2024-10-22)
 
 ### Major Features
 
 - ✨ **插件配置系统** - 基于 Schema 的自动化配置表单
+
   - 完整支持 15 种 Schema 数据类型
   - 智能 UI 组件自动选择
   - 支持任意深度的嵌套结构
@@ -18,6 +25,7 @@
 ### Improvements
 
 - 🎨 表单布局优化
+
   - 使用 ScrollArea 控制高度
   - 使用 Accordion 折叠复杂字段
   - 统一组件尺寸（size="1"）
