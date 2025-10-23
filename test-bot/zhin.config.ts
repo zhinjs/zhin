@@ -1,43 +1,115 @@
-import { defineConfig,LogLevel } from 'zhin.js';
-import path from "node:path";
-
-export default defineConfig(async (env)=>{
+import { defineConfig } from "zhin.js";
+export default defineConfig(async () => {
   return {
-    log_level: LogLevel.INFO,
     database: {
-      dialect: 'sqlite',
-      filename: './data/test.db'
+      dialect: "sqlite",
+      filename: "./data/test.db"
     },
-    // 机器人配置
     bots: [
       {
-        name:`${process.pid}`,
-        context:'process'
+        name: "40523",
+        context: "process"
       },
+      {
+        name: "zhin",
+        context: "kook",
+        token: "${KOOK_TOKEN}",
+        mode: "websocket",
+        logLevel: "off",
+        ignore: "bot",
+        data_dir: "./data"
+      },
+      {
+        name: "zhinBot",
+        context: "discord",
+        token: process.env.DISCORD_ZHIN_TOKEN
+      },
+      {
+        context: "qq",
+        name: "zhin",
+        appid: "102073979",
+        secret: process.env.ZHIN_SECRET,
+        intents: [
+          "GUILDS",
+          "GROUP_AT_MESSAGE_CREATE",
+          "PUBLIC_GUILD_MESSAGES",
+          "GUILD_MEMBERS",
+          "DIRECT_MESSAGE",
+          "C2C_MESSAGE_CREATE",
+          "GUILD_MESSAGE_REACTIONS"
+        ],
+        logLevel: "off",
+        mode: "websocket",
+        removeAt: true,
+        sandbox: true,
+        data_dir: "./data"
+      },
+      {
+        context: "qq",
+        name: "zhin2号",
+        appid: "102005927",
+        secret: process.env.ZHIN2_SECRET,
+        intents: [
+          "GUILDS",
+          "GROUP_AT_MESSAGE_CREATE",
+          "PUBLIC_GUILD_MESSAGES",
+          "GUILD_MEMBERS",
+          "DIRECT_MESSAGE",
+          "C2C_MESSAGE_CREATE",
+          "GUILD_MESSAGE_REACTIONS"
+        ],
+        logLevel: "off",
+        mode: "websocket",
+        removeAt: true,
+        data_dir: "./data"
+      },
+      {
+        name: process.env.ICQQ_LOGIN_UIN,
+        context: "icqq",
+        log_level: "off",
+        password: process.env.ONEBOT_TOKEN,
+        sign_api_addr: process.env.ICQQ_SIGN_ADDR,
+        platform: 2,
+        data_dir: "./data",
+        scope: "icqqjs"
+      }
     ],
-    // 插件目录
+    log_level: 1,
+    log: {
+      maxDays: 7,
+      maxRecords: 10000,
+      cleanupInterval: 24
+    },
     plugin_dirs: [
-      env.PLUGIN_DIR || './src/plugins',
-      'node_modules',
-        path.join('node_modules','@zhin.js'),
+      "./src/plugins",
+      "node_modules",
+      "node_modules/@zhin.js"
     ],
-    // 要加载的插件列表
     plugins: [
-      'http',           // 🚀 HTTP先加载，注册基础API路由
-      'adapter-process',
-      'adapter-icqq',   // 🤖 ICQQ适配器注册 /api/icqq/* 路由
-      'adapter-kook',   // KOOK适配器
-      'adapter-discord', // Discord适配器
-      'adapter-onebot11', // OneBot适配器
-      'adapter-qq', // QQ官方机器人适配器
-      'console',        // 🖥️ 控制台最后加载，处理静态文件
-      'test-plugin',
-      'test-jsx',
-      'music'
+      "http",
+      "adapter-process",
+      "adapter-icqq",
+      "adapter-kook",
+      "adapter-discord",
+      "adapter-onebot11",
+      "adapter-qq",
+      "console",
+      "test-plugin",
+      "test-jsx",
+      "music"
     ],
-
-    // 调试模式
-    debug: env.DEBUG === 'true'
+    debug: false,
+    'test-jsx': {
+      test: "test",
+      union: "option2",
+      testField: "defaultValue2",
+      testArray: [],
+      testTurple: [],
+      testObject: {
+        nestedField: "nestedDefault"
+      },
+      testNumber: 3,
+      testBoolean: true
+    }
   }
-})
-
+});

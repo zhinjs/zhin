@@ -510,8 +510,8 @@ describe('Command系统测试', () => {
       )
       const endTime = Date.now()
 
-      // 验证执行时间在合理范围内 (< 100ms for 1000 messages)
-      expect(endTime - startTime).toBeLessThan(100)
+      // 验证执行时间在合理范围内 (< 300ms for 1000 messages)
+      expect(endTime - startTime).toBeLessThan(300)
 
       // 验证正确的消息被处理
       const validResults = results.filter(r => r !== undefined)

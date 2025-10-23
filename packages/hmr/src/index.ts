@@ -8,6 +8,8 @@ export type * from './types.js';
 // 导出工具函数
 export * from './utils.js';
 
+// 导出Schema系统 (从@zhin.js/schema重新导出)
+export { Schema } from '@zhin.js/schema';
 
 // 导出基础类
 export { Dependency } from './dependency.js';

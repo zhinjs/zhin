@@ -1,6 +1,6 @@
 import type { Dialect } from './dialect.js';
 import { Model } from './model.js';
-import { Schema, QueryParams, AlterSchema, Condition, BuildQueryResult } from '../types.js';
+import { Definition, QueryParams, AlterDefinition, Condition, BuildQueryResult } from '../types.js';
 import * as QueryClasses from './query-classes.js';
 
 /**
@@ -12,7 +12,7 @@ export abstract class Database<D=any,S extends Record<string, object>=Record<str
   public readonly models: Map<string, Model<D,object,Q>> = new Map();
   constructor(
     public readonly dialect: Dialect<D,Q>,
-    public schemas?: Database.Schemas<S>,
+    public definitions?: Database.Definitions<S>,
   ) {}
   /**
    * 数据库是否已启动
@@ -86,11 +86,11 @@ export abstract class Database<D=any,S extends Record<string, object>=Record<str
    */
   create<T extends object>(
     name: string,
-    schema: Schema<T>
+    definition: Definition<T>
   ): QueryClasses.Creation<T,D,Q> {
-    return new QueryClasses.Creation<T,D,Q>(this, name, schema);
+    return new QueryClasses.Creation<T,D,Q>(this, name, definition);
   }
-  alter<T extends object>(name: string, alterations: AlterSchema<T>): QueryClasses.Alteration<T,D,Q>{
+  alter<T extends object>(name: string, alterations: AlterDefinition<T>): QueryClasses.Alteration<T,D,Q>{
     return new QueryClasses.Alteration<T,D,Q>(this, name, alterations);
   }
   select<T extends object, K extends keyof T>(name: string, fields: Array<K>): QueryClasses.Selection<Pick<T, K>, K,D,Q>{
@@ -122,7 +122,7 @@ export abstract class Database<D=any,S extends Record<string, object>=Record<str
   }
 }
 export namespace Database {
-  export type Schemas<S extends Record<string, object>> = {
-    [K in keyof S]: Schema<S[K]>;
+  export type Definitions<S extends Record<string, object>> = {
+    [K in keyof S]: Definition<S[K]>;
   };
 }

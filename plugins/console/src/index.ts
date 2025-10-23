@@ -1,4 +1,4 @@
-import {register, useContext} from '@zhin.js/core';
+import {register, useContext, useApp} from '@zhin.js/core';
 import react from '@vitejs/plugin-react';
 import WebSocket,{WebSocketServer} from 'ws';
 import {createServer,ViteDevServer,searchForWorkspaceRoot} from 'vite';
@@ -173,6 +173,170 @@ useContext('router', async (router) => {
             type: 'init-data',
             timestamp: Date.now()
         }));
+        
+        // 处理 WebSocket 消息
+        ws.on('message', async (data) => {
+            try {
+                const message = JSON.parse(data.toString());
+                const { type, pluginName, requestId } = message;
+
+                // 获取应用实例
+                const app = useApp();
+
+                switch (type) {
+                    case 'config:get':
+                        try {
+                            let config;
+                            if (pluginName === 'app') {
+                                config = app.getConfig();
+                            } else {
+                                const plugin = app.findPluginByName(pluginName);
+                                if (!plugin) {
+                                    throw new Error(`Plugin ${pluginName} not found`);
+                                }
+                                config = plugin.config;
+                            }
+
+                            ws.send(JSON.stringify({
+                                requestId,
+                                data: config
+                            }));
+                        } catch (error) {
+                            ws.send(JSON.stringify({
+                                requestId,
+                                error: (error as Error).message
+                            }));
+                        }
+                        break;
+
+                    case 'config:set':
+                        try {
+                            const { data: newConfig } = message;
+                            
+                            if (pluginName === 'app') {
+                                app.config = newConfig;
+                            } else {
+                                const plugin = app.findPluginByName(pluginName);
+                                if (!plugin) {
+                                    throw new Error(`Plugin ${pluginName} not found`);
+                                }
+                                plugin.config = newConfig;
+                            }
+
+                            // 响应成功
+                            ws.send(JSON.stringify({
+                                requestId,
+                                data: 'success'
+                            }));
+
+                            // 广播配置更新
+                            webServer.ws.clients.forEach((client) => {
+                                if (client.readyState === 1) { // WebSocket.OPEN
+                                    client.send(JSON.stringify({
+                                        type: 'config:updated',
+                                        pluginName,
+                                        data: newConfig
+                                    }));
+                                }
+                            });
+                        } catch (error) {
+                            ws.send(JSON.stringify({
+                                requestId,
+                                error: (error as Error).message
+                            }));
+                        }
+                        break;
+
+                    case 'schema:get':
+                        try {
+                            let schema;
+                            if (pluginName === 'app') {
+                                schema = app.schema?.toJSON();
+                            } else {
+                                const plugin = app.findPluginByName(pluginName);
+                                if (!plugin) {
+                                    throw new Error(`Plugin ${pluginName} not found`);
+                                }
+                                schema = plugin.schema?.toJSON();
+                            }
+
+                            ws.send(JSON.stringify({
+                                requestId,
+                                data: schema
+                            }));
+                        } catch (error) {
+                            ws.send(JSON.stringify({
+                                requestId,
+                                error: (error as Error).message
+                            }));
+                        }
+                        break;
+
+                    case 'config:get-all':
+                        try {
+                            const configs: Record<string, any> = {};
+                            
+                            // 获取 App 配置
+                            configs['app'] = app.getConfig();
+                            
+                            // 获取所有插件配置
+                            for (const plugin of app.dependencyList) {
+                                if (plugin.config && Object.keys(plugin.config).length > 0) {
+                                    configs[plugin.name] = plugin.config;
+                                }
+                            }
+
+                            ws.send(JSON.stringify({
+                                requestId,
+                                data: configs
+                            }));
+                        } catch (error) {
+                            ws.send(JSON.stringify({
+                                requestId,
+                                error: (error as Error).message
+                            }));
+                        }
+                        break;
+
+                    case 'schema:get-all':
+                        try {
+                            const schemas: Record<string, any> = {};
+                            
+                            // 获取 App Schema
+                            const appSchema = app.schema?.toJSON();
+                            if (appSchema) {
+                                schemas['app'] = appSchema;
+                            }
+                            
+                            // 获取所有插件 Schema
+                            for (const plugin of app.dependencyList) {
+                                const schema = plugin.schema?.toJSON();
+                                if (schema) {
+                                    schemas[plugin.name] = schema;
+                                }
+                            }
+
+                            ws.send(JSON.stringify({
+                                requestId,
+                                data: schemas
+                            }));
+                        } catch (error) {
+                            ws.send(JSON.stringify({
+                                requestId,
+                                error: (error as Error).message
+                            }));
+                        }
+                        break;
+
+                    // 其他消息类型保持不变，让 console 插件自己处理
+                }
+            } catch (error) {
+                console.error('WebSocket 消息处理错误:', error);
+                ws.send(JSON.stringify({
+                    error: 'Invalid message format'
+                }));
+            }
+        });
         
         ws.on('close', () => {
         });

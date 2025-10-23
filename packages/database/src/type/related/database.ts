@@ -13,9 +13,9 @@ import {
   DropIndexQueryParams,
   Condition,
   Column,
-  AddSchema,
-  ModifySchema,
-  DropSchema,
+  AddDefinition,
+  ModifyDefinition,
+  DropDefinition,
   isCreateQuery,
   isSelectQuery,
   isInsertQuery,
@@ -37,15 +37,15 @@ export class RelatedDatabase<
   
   constructor(
     dialect: Dialect<D,string>,
-    schemas?: Database.Schemas<S>,
+    definitions?: Database.Definitions<S>,
   ) {
-    super(dialect,schemas); 
+    super(dialect,definitions); 
   }
 
   protected async initialize(): Promise<void> {
     // 自动创建表
-    for (const [tableName, schema] of Object.entries(this.schemas || {})) {
-      await this.create(tableName, schema);
+    for (const [tableName, definition] of Object.entries(this.definitions || {})) {
+      await this.create(tableName, definition);
     }
   }
 
@@ -77,7 +77,7 @@ export class RelatedDatabase<
   // ========================================================================
   
   protected buildCreateQuery<T extends object>(params: CreateQueryParams<T>): BuildQueryResult<string> {
-    const columnDefs = Object.entries(params.schema).map(([field, column]) => this.formatColumnDefinition(field,column as Column));
+    const columnDefs = Object.entries(params.definition).map(([field, column]) => this.formatColumnDefinition(field,column as Column));
     const query = this.dialect.formatCreateTable(params.tableName, columnDefs);
     return { query, params: [] };
   }
@@ -194,7 +194,7 @@ export class RelatedDatabase<
   // ========================================================================
   
   protected buildAlterQuery<T extends object>(params: AlterQueryParams<T>): BuildQueryResult<string> {
-    const alterations = Object.entries(params.alterations).map(([field,alteration]) => this.formatAlteration(field, alteration as AddSchema<T> | ModifySchema<T> | DropSchema));
+    const alterations = Object.entries(params.alterations).map(([field,alteration]) => this.formatAlteration(field, alteration as AddDefinition<T> | ModifyDefinition<T> | DropDefinition));
     const query = this.dialect.formatAlterTable(params.tableName, alterations);
     return { query, params: [] };
   }
@@ -234,8 +234,8 @@ export class RelatedDatabase<
     
     return `${name} ${type}${length}${primary}${unique}${nullable}${defaultVal}`;
   }
-  
-  protected formatAlteration<T=any>(field:string,alteration: AddSchema<T> | ModifySchema<T> | DropSchema): string {
+
+  protected formatAlteration<T=any>(field:string,alteration: AddDefinition<T> | ModifyDefinition<T> | DropDefinition): string {
     const name = this.dialect.quoteIdentifier(field);
     
     switch (alteration.action) {
@@ -387,6 +387,6 @@ export class RelatedDatabase<
    * 获取所有模型名称
    */
   getModelNames(): string[] {
-    return Object.keys(this.schemas || {});
+    return Object.keys(this.definitions || {});
   }
 }

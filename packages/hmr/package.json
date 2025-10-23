@@ -18,6 +18,9 @@
   "peerDependencies": {
     "@zhin.js/logger": "workspace:*"
   },
+  "dependencies": {
+    "@zhin.js/schema": "workspace:*"
+  },
   "devDependencies": {
     "typescript": "^5.3.0",
     "@zhin.js/types": "workspace:*"

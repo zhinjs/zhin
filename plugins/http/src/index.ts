@@ -1,4 +1,4 @@
-import {register, useApp,onDispose,onDatabaseReady,useDatabase} from '@zhin.js/core';
+import {AppConfig, register, useApp,useDatabase} from '@zhin.js/core';
 import { createServer, Server } from 'http';
 import os from 'node:os';
 import Koa from 'koa';
@@ -6,6 +6,7 @@ import auth from 'koa-basic-auth';
 import KoaBodyParser from 'koa-bodyparser';
 import { Router } from './router.js';
 import * as process from 'process';
+import { config } from 'node:process';
 
 export * from './router.js';
 
@@ -198,9 +199,9 @@ router.get('/api/plugins/:name', async (ctx) => {
     }))
     
     // 获取数据模型详情
-    const schemas = Array.from(plugin.schemas.entries()).map(([name, schema]) => ({
+    const definitions = Array.from(plugin.definitions.entries()).map(([name, definition]) => ({
       name,
-      fields: Object.keys((schema as any).fields || {})
+      fields: Object.keys(definition)
     }))
     
     ctx.body = {
@@ -215,14 +216,14 @@ router.get('/api/plugins/:name', async (ctx) => {
         middlewares,
         contexts,
         crons,
-        schemas,
+        definitions,
         statistics: {
           commandCount: commands.length,
           componentCount: components.length,
           middlewareCount: middlewares.length,
           contextCount: contexts.length,
           cronCount: crons.length,
-          schemaCount: schemas.length
+          definitionCount: definitions.length
         }
       }
     }
@@ -274,6 +275,130 @@ router.get('/api/config', async (ctx) => {
     ctx.body = { success: false, error: (error as Error).message }
   }
 })
+
+// 获取所有插件的 Schema API
+router.get('/api/schemas', async (ctx) => {
+  try {
+    const schemas: Record<string, any> = {};
+    
+    // 获取 App 的 Schema
+    const appSchema = app.schema.toJSON();
+    if (appSchema) {
+      schemas['app'] = appSchema;
+    }
+    
+    // 获取所有插件的 Schema
+    for (const plugin of app.dependencyList) {
+      const schema = plugin.schema.toJSON();
+      if (schema) {
+        schemas[plugin.name] = schema;
+      }
+    }
+    
+    ctx.body = { success: true, data: schemas, total: Object.keys(schemas).length };
+  } catch (error) {
+    ctx.status = 500;
+    ctx.body = { success: false, error: (error as Error).message };
+  }
+});
+
+// 获取单个插件的 Schema API
+router.get('/api/schemas/:name', async (ctx) => {
+  try {
+    const { name } = ctx.params;
+    
+    if (name === 'app') {
+      const schema = app.schema?.toJSON()
+      if (!schema) {
+        ctx.status = 404;
+        ctx.body = { success: false, error: 'App schema not found' };
+        return;
+      }
+      ctx.body = { success: true, data: schema };
+      return;
+    }
+    
+    const plugin = app.findPluginByName(name);
+    if (!plugin) {
+      ctx.status = 404;
+      ctx.body = { success: false, error: `Plugin ${name} not found` };
+      return;
+    }
+    
+    const schema = plugin.schema.toJSON();
+    if (!schema) {
+      ctx.status = 404;
+      ctx.body = { success: false, error: `Schema for plugin ${name} not found` };
+      return;
+    }
+    
+    ctx.body = { success: true, data: schema };
+  } catch (error) {
+    ctx.status = 500;
+    ctx.body = { success: false, error: (error as Error).message };
+  }
+});
+
+// 获取插件配置 API
+router.get('/api/config/:name', async (ctx) => {
+  try {
+    const { name } = ctx.params;
+    
+    if (name === 'app') {
+      const config = app.getConfig();
+      ctx.body = { success: true, data: config };
+      return;
+    }
+    
+    const plugin = app.findPluginByName(name);
+    if (!plugin) {
+      ctx.status = 404;
+      ctx.body = { success: false, error: `Plugin ${name} not found` };
+      return;
+    }
+    
+    const config = plugin.config;
+    ctx.body = { success: true, data: config };
+  } catch (error) {
+    ctx.status = 500;
+    ctx.body = { success: false, error: (error as Error).message };
+  }
+});
+
+// 更新插件配置 API
+router.post('/api/config/:name', async (ctx) => {
+  try {
+    const { name } = ctx.params;
+    const newConfig = ctx.request.body;
+    
+    if (name === 'app') {
+      app.config = newConfig as AppConfig;
+      ctx.body = {
+        success: true,
+        message: 'App configuration updated successfully',
+        data: app.getConfig()
+      };
+      return;
+    }
+    
+    const plugin = app.findPluginByName(name);
+    if (!plugin) {
+      ctx.status = 404;
+      ctx.body = { success: false, error: `Plugin ${name} not found` };
+      return;
+    }
+
+    plugin.config = newConfig as Record<string, any>;
+    ctx.body = {
+      success: true,
+      message: `Plugin ${name} configuration updated successfully`,
+      data: plugin.config
+    };
+  } catch (error) {
+    ctx.status = 500;
+    ctx.body = { success: false, error: (error as Error).message };
+  }
+});
 
 // 消息发送 API
 router.post('/api/message/send', async (ctx) => {
@@ -554,3 +679,4 @@ register({
 })
 
 koa.use(KoaBodyParser()).use(router.routes()).use(router.allowedMethods());
+

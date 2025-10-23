@@ -25,8 +25,8 @@ export interface Databases<S extends Record<string, object> = Record<string, obj
 /**
  * 数据库注册表命名空间
  */
-export type Creator<D, S extends Record<string, object>> = (config: D, schemas?: Database.Schemas<S>) => Database<any, S, any>;
-export type Constructor<D, S extends Record<string, object>> = new (config: D, schemas?: Database.Schemas<S>) => Database<any, S, any>;
+export type Creator<D, S extends Record<string, object>> = (config: D, definitions?: Database.Definitions<S>) => Database<any, S, any>;
+export type Constructor<D, S extends Record<string, object>> = new (config: D, definitions?: Database.Definitions<S>) => Database<any, S, any>;
 export type Factory<D, S extends Record<string, object>> = Creator<any, S> | Constructor<any, S>;
 
 export namespace Registry {
@@ -44,13 +44,13 @@ export namespace Registry {
   export function create<D extends string, S extends Record<string, object>>(
     dialect: D,
     config: any,
-    schemas?: Database.Schemas<S>
+    definitions?: Database.Definitions<S>
   ): any {
     const factory = factories.get(dialect) as Factory<any, S> | undefined;
     if (!factory) {
       throw new Error(`database dialect ${dialect} not registered`);
     }
-    return (isConstructor(factory) ? new factory(config, schemas) : factory(config, schemas)) as any;
+    return (isConstructor(factory) ? new factory(config, definitions) : factory(config, definitions)) as any;
   }
   
   export function isConstructor<D, S extends Record<string, object>>(fn: Factory<D, S>): fn is Constructor<D, S> {

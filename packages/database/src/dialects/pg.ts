@@ -152,6 +152,6 @@ export class PostgreSQLDialect extends Dialect<PostgreSQLDialectConfig, string> 
   }
 }
 
-Registry.register('pg', (config: PostgreSQLDialectConfig, schemas?: Database.Schemas<Record<string, object>>) => {
-  return new RelatedDatabase(new PostgreSQLDialect(config), schemas);
+Registry.register('pg', (config: PostgreSQLDialectConfig, definitions?: Database.Definitions<Record<string, object>>) => {
+  return new RelatedDatabase(new PostgreSQLDialect(config), definitions);
 });

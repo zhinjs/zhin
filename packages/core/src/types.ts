@@ -1,8 +1,9 @@
 import {MaybePromise,RegisteredAdapters}from '@zhin.js/types'
+import { Schema } from '@zhin.js/hmr'
 import { LogLevel } from '@zhin.js/logger';
 import {MessageChannel,Message} from "./message.js";
 import {Adapter} from "./adapter.js";
-import {Bot,BotConfig} from "./bot.js";
+import {Bot} from "./bot.js";
 import { Databases,Registry } from "@zhin.js/database";
 import { MessageComponent } from "./message.js";
 
@@ -27,11 +28,11 @@ export type AdapterMessage<T extends keyof RegisteredAdapters=keyof RegisteredAd
 /**
  * 指定适配器的配置类型
  */
-export type AdapterConfig<T extends keyof RegisteredAdapters=keyof RegisteredAdapters>=RegisteredAdapters[T] extends Adapter<infer R>?PlatformConfig<R>:BotConfig
+export type AdapterConfig<T extends keyof RegisteredAdapters=keyof RegisteredAdapters>=RegisteredAdapters[T] extends Adapter<infer R>?PlatformConfig<R>:Bot.Config
 /**
  * Bot实例的配置类型
  */
-export type PlatformConfig<T>=T extends Bot<infer L,infer R>?R:BotConfig
+export type PlatformConfig<T>=T extends Bot<infer L,infer R>?R:Bot.Config
 /**
  * Bot实例的消息类型
  */
@@ -91,8 +92,7 @@ export type MessageMiddleware<P extends RegisteredAdapter=RegisteredAdapter> = (
  * App配置类型，涵盖机器人、数据库、插件、调试等
  */
 export interface AppConfig {
-  /** 机器人配置列表 */
-  bots?: BotConfig[];
+  bots?: Bot.Config[];
   log_level: LogLevel;
   /** 数据库配置列表 */
   database?: DatabaseConfig;
@@ -113,7 +113,10 @@ export interface AppConfig {
     /** 自动清理间隔（小时），默认 24 小时 */
     cleanupInterval?: number;
   };
+  /** 插件配置（键为插件名，值为配置对象） */
+  [key: string]: any;
 }
+
 /**
  * defineConfig辅助类型，支持函数式/对象式配置
  */

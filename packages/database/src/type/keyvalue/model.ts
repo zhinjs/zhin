@@ -1,6 +1,6 @@
-import { Model, Dialect, Database } from '../../base';
+import { Model, } from '../../base';
 import { KeyValueDatabase } from './database.js';
-import { Condition, KeyValueQueryResult } from '../../types.js';
+import { KeyValueQueryResult } from '../../types.js';
 
 /**
  * 键值模型类

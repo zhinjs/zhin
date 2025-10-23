@@ -1,4 +1,4 @@
-import {Bot,BotConfig} from "./bot.js";
+import {Bot} from "./bot.js";
 import {Plugin} from "./plugin.js";
 /**
  * Adapter类：适配器抽象，管理多平台Bot实例。
@@ -16,20 +16,26 @@ export class Adapter<R extends Bot=Bot>{
     constructor(public name:string,botFactory:Adapter.BotFactory<R>) {
         this.#botFactory=botFactory
     }
+    createBot(config: Adapter.Config<R>) {
+        const bot=Adapter.isBotConstructor(this.#botFactory)?
+            new this.#botFactory(config)
+            :this.#botFactory(config)
+        return bot
+    }
     /**
      * 启动适配器，自动根据配置创建并连接所有Bot
      * @param plugin 所属插件实例
      */
-    async start(plugin:Plugin){
-        const configs=plugin.app.getConfig().bots?.filter(c=>c.context===this.name)
-        if(!configs?.length) return
+    async mounted(plugin:Plugin){
+        const configs=plugin.app.config.bots?.filter(c=>c.context===this.name)
+        if(!configs?.length) return plugin.logger.warn(`no bot config for adapter ${this.name} found`)
         try {
             for(const config of configs){
                 let bot: R
                 if (Adapter.isBotConstructor(this.#botFactory)) {
-                    bot = new this.#botFactory(plugin,config) as R
+                    bot = new this.#botFactory(config) as R
                 } else {
-                    bot = this.#botFactory(plugin,config) as R
+                    bot = this.#botFactory(config) as R
                 }
                 try {
                     await bot.$connect()
@@ -41,7 +47,7 @@ export class Adapter<R extends Bot=Bot>{
                 }
             }
 
-            plugin.logger.info(`adapter ${this.name} started`)
+            plugin.logger.info(`adapter ${this.name} mounted`)
         } catch (error) {
             // 确保错误正确传播
             throw error
@@ -51,7 +57,7 @@ export class Adapter<R extends Bot=Bot>{
      * 停止适配器，断开并移除所有Bot实例
      * @param plugin 所属插件实例
      */
-    async stop(plugin:Plugin){
+    async dispose(plugin:Plugin){
         try {
             for(const [name,bot] of this.bots){
                 try {
@@ -72,14 +78,15 @@ export class Adapter<R extends Bot=Bot>{
 }
 export namespace Adapter {
     export type BotBotConstructor<T extends Bot>=T extends Bot<infer F,infer S> ? {
-        new(plugin:Plugin,config:S):T
+        new(config:S):T
     }: {
-        new(plugin:Plugin,config:BotConfig):T
+        new(config:Bot.Config):T
     }
     export function isBotConstructor<T extends Bot>(fn: BotFactory<T>): fn is BotBotConstructor<T> {
         return fn.prototype &&
             fn.prototype.constructor === fn
     }
-    export type BotCreator<T extends Bot>=T extends Bot<infer F,infer S> ? (plugin:Plugin,config: S) => T : (plugin:Plugin,config: BotConfig) => T
+    export type BotCreator<T extends Bot>=T extends Bot<infer F,infer S> ? (config: S) => T : (config: Bot.Config) => T
     export type BotFactory<T extends Bot> = BotBotConstructor<T>|BotCreator<T>
+    export type Config<T extends Bot>=T extends Bot<infer F,infer S>?S:Bot.Config
 }

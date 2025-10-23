@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router'
 import * as Themes from '@radix-ui/themes'
 import { Icons } from '@zhin.js/client'
+import {PluginConfigForm} from '../components/PluginConfigForm'
 
-const { Flex, Box, Spinner, Text, Callout, Heading, Badge, Grid, Card, Button, Code, Separator, ScrollArea } = Themes
+const { Flex, Box, Spinner, Text, Callout, Heading, Badge, Grid, Card, Button, Code, Separator, ScrollArea, Dialog } = Themes
 
 interface PluginDetail {
   name: string
@@ -31,7 +32,7 @@ interface PluginDetail {
     pattern: string
     running: boolean
   }>
-  schemas: Array<{
+  definitions: Array<{
     name: string
     fields: string[]
   }>
@@ -41,7 +42,7 @@ interface PluginDetail {
     middlewareCount: number
     contextCount: number
     cronCount: number
-    schemaCount: number
+    definitionCount: number
   }
 }
 
@@ -77,6 +78,8 @@ export default function DashboardPluginDetail() {
     }
   }
 
+
+
   if (loading) {
     return (
       <Flex align="center" justify="center" className="h-full">
@@ -111,7 +114,7 @@ export default function DashboardPluginDetail() {
     <Box>
       {/* 头部 */}
       <Flex direction="column" gap="3" mb="4">
-        <Button variant="ghost" onClick={() => navigate('/plugins')} size="2" className="self-start">
+        <Button variant="ghost" onClick={() => navigate('/plugins')} size="2">
           <Icons.ArrowLeft className="w-4 h-4" />
           返回
         </Button>
@@ -132,7 +135,15 @@ export default function DashboardPluginDetail() {
         </Flex>
       </Flex>
 
-      <Separator size="4" mb="4" />
+      {/* 插件配置折叠面板 */}
+      <PluginConfigForm
+        pluginName={plugin.name}
+        onSuccess={() => {
+          // 配置更新会通过 WebSocket 自动同步
+        }}
+      />
+
+      <Separator size="4" my="4" />
 
       {/* 统计概览 - 紧凑卡片 */}
       <Grid columns={{ initial: '2', sm: '3', md: '6' }} gap="2" mb="4">
@@ -179,7 +190,7 @@ export default function DashboardPluginDetail() {
         <Card size="1">
           <Flex direction="column" align="center" gap="1" p="2">
             <Icons.FileText className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
-            <Text size="4" weight="bold">{plugin.statistics.schemaCount}</Text>
+            <Text size="4" weight="bold">{plugin.statistics.definitionCount}</Text>
             <Text size="1" color="gray">数据模型</Text>
           </Flex>
         </Card>
@@ -319,22 +330,22 @@ export default function DashboardPluginDetail() {
         )}
 
         {/* 数据模型列表 */}
-        {plugin.schemas.length > 0 && (
+        {plugin.definitions.length > 0 && (
           <Card size="2">
             <Flex direction="column" gap="2" p="3">
               <Flex align="center" gap="2">
                 <Icons.FileText className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
                 <Heading size="3">数据模型</Heading>
-                <Badge size="1">{plugin.schemas.length}</Badge>
+                <Badge size="1">{plugin.definitions.length}</Badge>
               </Flex>
               <Separator size="4" />
               <Flex direction="column" gap="2" className="max-h-60 overflow-y-auto">
-                {plugin.schemas.map((schema, index) => (
+                {plugin.definitions.map((definition, index) => (
                   <Box key={index} className="rounded-lg bg-gray-50 dark:bg-gray-900 p-2">
                     <Flex direction="column" gap="1">
-                      <Code size="2">{schema.name}</Code>
+                      <Code size="2">{definition.name}</Code>
                       <Text size="1" color="gray">
-                        字段: {schema.fields.join(', ')}
+                        字段: {definition.fields.join(', ')}
                       </Text>
                     </Flex>
                   </Box>

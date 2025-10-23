@@ -1,8 +1,7 @@
 import {
     Bot,
-    BotConfig,
+    usePlugin,
     Adapter,
-    Plugin,
     registerAdapter,
     Message,
     SendOptions,
@@ -21,9 +20,9 @@ declare module '@zhin.js/types'{
         lark:Adapter<LarkBot>
     }
 }
-
+const plugin =usePlugin()
 // 飞书配置类型定义
-export interface LarkBotConfig extends BotConfig {
+export interface LarkBotConfig extends Bot.Config {
     context: 'lark'
     name: string
     appId: string          // 飞书应用 ID
@@ -102,7 +101,7 @@ export class LarkBot implements Bot<LarkMessage, LarkBotConfig> {
     private accessToken: AccessToken
     private axiosInstance: AxiosInstance
 
-    constructor(private plugin: Plugin, router: any, public $config: LarkBotConfig) {
+    constructor(router: any, public $config: LarkBotConfig) {
         this.router = router;
         this.$connected = false;
         this.accessToken = { token: '', expires_in: 0, timestamp: 0 };
@@ -148,7 +147,7 @@ export class LarkBot implements Bot<LarkMessage, LarkBotConfig> {
             if (this.$config.verificationToken) {
                 const token = headers['x-lark-request-token'] as string;
                 if (token !== this.$config.verificationToken) {
-                    this.plugin.logger.warn('Invalid verification token in webhook');
+                    plugin.logger.warn('Invalid verification token in webhook');
                     ctx.status = 403;
                     ctx.body = 'Forbidden';
                     return;
@@ -163,7 +162,7 @@ export class LarkBot implements Bot<LarkMessage, LarkBotConfig> {
                 const bodyStr = JSON.stringify(body);
                 
                 if (!this.verifySignature(timestamp, nonce, bodyStr, signature)) {
-                    this.plugin.logger.warn('Invalid signature in webhook');
+                    plugin.logger.warn('Invalid signature in webhook');
                     ctx.status = 403;
                     ctx.body = 'Forbidden';
                     return;
@@ -187,7 +186,7 @@ export class LarkBot implements Bot<LarkMessage, LarkBotConfig> {
             ctx.body = { code: 0, msg: 'success' };
             
         } catch (error) {
-            this.plugin.logger.error('Webhook error:', error);
+            plugin.logger.error('Webhook error:', error);
             ctx.status = 500;
             ctx.body = { code: -1, msg: 'Internal Server Error' };
         }
@@ -201,7 +200,7 @@ export class LarkBot implements Bot<LarkMessage, LarkBotConfig> {
             const calculatedSignature = createHash('sha256').update(stringToSign).digest('hex');
             return calculatedSignature === signature;
         } catch (error) {
-            this.plugin.logger.error('Signature verification error:', error);
+            plugin.logger.error('Signature verification error:', error);
             return false;
         }
     }
@@ -210,9 +209,9 @@ export class LarkBot implements Bot<LarkMessage, LarkBotConfig> {
         // 处理消息事件
         if (event.message) {
             const message = this.$formatMessage(event.message, event);
-            this.plugin.dispatch('message.receive', message);
-            this.plugin.logger.info(`recv ${message.$channel.type}(${message.$channel.id}): ${segment.raw(message.$content)}`);
-            this.plugin.dispatch(`message.${message.$channel.type}.receive`, message);
+            plugin.dispatch('message.receive', message);
+            plugin.logger.info(`recv ${message.$channel.type}(${message.$channel.id}): ${segment.raw(message.$content)}`);
+            plugin.dispatch(`message.${message.$channel.type}.receive`, message);
         }
     }
 
@@ -249,12 +248,12 @@ export class LarkBot implements Bot<LarkMessage, LarkBotConfig> {
                     expires_in: response.data.expire,
                     timestamp: Date.now()
                 };
-                this.plugin.logger.debug('Access token refreshed successfully');
+                plugin.logger.debug('Access token refreshed successfully');
             } else {
                 throw new Error(`Failed to get access token: ${response.data.msg}`);
             }
         } catch (error) {
-            this.plugin.logger.error('Failed to refresh access token:', error);
+            plugin.logger.error('Failed to refresh access token:', error);
             throw error;
         }
     }
@@ -379,7 +378,7 @@ export class LarkBot implements Bot<LarkMessage, LarkBotConfig> {
                     break;
             }
         } catch (error) {
-            this.plugin.logger.error('Failed to parse message content:', error);
+            plugin.logger.error('Failed to parse message content:', error);
             content.push(segment('text', { content: '[消息解析失败]' }));
         }
         
@@ -427,10 +426,10 @@ export class LarkBot implements Bot<LarkMessage, LarkBotConfig> {
                 throw new Error(`Failed to send message: ${response.data.msg}`);
             }
             
-            this.plugin.logger.debug('Message sent successfully:', response.data.data?.message_id);
+            plugin.logger.debug('Message sent successfully:', response.data.data?.message_id);
             return response.data.data?.message_id || '';
         } catch (error) {
-            this.plugin.logger.error('Failed to send message:', error);
+            plugin.logger.error('Failed to send message:', error);
             throw error;
         }
     }
@@ -532,11 +531,11 @@ export class LarkBot implements Bot<LarkMessage, LarkBotConfig> {
             await this.refreshAccessToken();
             
             this.$connected = true;
-            this.plugin.logger.info(`Lark bot connected: ${this.$config.name}`);
-            this.plugin.logger.info(`Webhook URL: ${this.$config.webhookPath}`);
+            plugin.logger.info(`Lark bot connected: ${this.$config.name}`);
+            plugin.logger.info(`Webhook URL: ${this.$config.webhookPath}`);
             
         } catch (error) {
-            this.plugin.logger.error('Failed to connect Lark bot:', error);
+            plugin.logger.error('Failed to connect Lark bot:', error);
             throw error;
         }
     }
@@ -544,9 +543,9 @@ export class LarkBot implements Bot<LarkMessage, LarkBotConfig> {
     async $disconnect(): Promise<void> {
         try {
             this.$connected = false;
-            this.plugin.logger.info('Lark bot disconnected');
+            plugin.logger.info('Lark bot disconnected');
         } catch (error) {
-            this.plugin.logger.error('Error disconnecting Lark bot:', error);
+            plugin.logger.error('Error disconnecting Lark bot:', error);
         }
     }
 
@@ -563,7 +562,7 @@ export class LarkBot implements Bot<LarkMessage, LarkBotConfig> {
             
             return response.data.data?.user;
         } catch (error) {
-            this.plugin.logger.error('Failed to get user info:', error);
+            plugin.logger.error('Failed to get user info:', error);
             return null;
         }
     }
@@ -574,7 +573,7 @@ export class LarkBot implements Bot<LarkMessage, LarkBotConfig> {
             const response = await this.axiosInstance.get(`/im/v1/chats/${chatId}`);
             return response.data.data;
         } catch (error) {
-            this.plugin.logger.error('Failed to get chat info:', error);
+            plugin.logger.error('Failed to get chat info:', error);
             return null;
         }
     }
@@ -601,7 +600,7 @@ export class LarkBot implements Bot<LarkMessage, LarkBotConfig> {
             
             throw new Error(`Upload failed: ${response.data.msg}`);
         } catch (error) {
-            this.plugin.logger.error('Failed to upload file:', error);
+            plugin.logger.error('Failed to upload file:', error);
             return null;
         }
     }
@@ -610,6 +609,6 @@ export class LarkBot implements Bot<LarkMessage, LarkBotConfig> {
 // 注册适配器（需要 router）
 useContext('router', (router) => {
     registerAdapter(new Adapter('lark', 
-        (plugin: Plugin, config: any) => new LarkBot(plugin, router, config as LarkBotConfig)
+        (config: any) => new LarkBot(router, config as LarkBotConfig)
     ));
 });

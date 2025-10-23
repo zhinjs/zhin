@@ -12,7 +12,6 @@ export * as Icons from 'lucide-react'
 
 // WebSocket
 export * from './websocket'
-export { useWebSocket } from './websocket/useWebSocket'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))

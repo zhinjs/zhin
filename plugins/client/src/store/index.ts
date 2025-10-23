@@ -108,4 +108,25 @@ export {
     unloadScript
 } from './reducers/script'
 
+// 导出 Config actions 和 selectors
+export { 
+    setConnected,
+    setLoading,
+    setError,
+    updateConfig,
+    updateSchema,
+    updateConfigs,
+    updateSchemas,
+    removeConfig,
+    clearConfigs,
+    selectConfig,
+    selectSchema,
+    selectConfigLoading,
+    selectConfigError,
+    selectConfigConnected,
+    selectAllConfigs,
+    selectAllSchemas
+} from './reducers/config'
+
 export type { RouteMenuItem } from './reducers/route'
+export type { ConfigMessage } from './reducers/config'

@@ -593,6 +593,6 @@ export class RedisDialect extends Dialect<RedisDialectConfig, KeyValueQueryResul
   }
 }
 
-Registry.register('redis', (config: RedisDialectConfig, schemas?: Database.Schemas<Record<string, object>>) => {
-  return new KeyValueDatabase(new RedisDialect(config), schemas);
+Registry.register('redis', (config: RedisDialectConfig, definitions?: Database.Definitions<Record<string, object>>) => {
+  return new KeyValueDatabase(new RedisDialect(config), definitions);
 });

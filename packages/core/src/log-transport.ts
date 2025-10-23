@@ -92,7 +92,7 @@ export class DatabaseLogTransport implements LogTransport {
       )
     } catch (error) {
       // 静默处理错误
-      this.app.logger.error('[DatabaseLogTransport] Cleanup error:', (error as Error).message)
+      this.app.logger.debug('[DatabaseLogTransport] Cleanup error:', (error as Error).message,(error as Error).stack)
     }
   }
 

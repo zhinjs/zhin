@@ -24,15 +24,12 @@ import {getLogger} from "@zhin.js/logger";
 const DEFAULT_HMR_OPTIONS: Required<Omit<HMROptions,'logger'>> & {
     logger: Logger;
 } = {
-    priority: 0,
     dirs: [],
-    enabled: true,
     extensions: DEFAULT_WATCHABLE_EXTENSIONS,
     max_listeners: DEFAULT_CONFIG.MAX_LISTENERS,
     debounce: DEFAULT_CONFIG.RELOAD_DEBOUNCE_MS,
     algorithm: DEFAULT_CONFIG.HASH_ALGORITHM,
     debug: DEFAULT_CONFIG.ENABLE_DEBUG,
-    version: '1.0.0',
     logger: getLogger('HMR')
 };
 
@@ -44,7 +41,7 @@ const DEFAULT_HMR_OPTIONS: Required<Omit<HMROptions,'logger'>> & {
  * HMR 基类：提供热模块替换功能
  * 继承自Dependency，内部组合各个功能模块
  */
-export abstract class HMR<P extends Dependency = Dependency> extends Dependency<P,HMROptions> {
+export abstract class HMR<P extends Dependency = Dependency> extends Dependency<P, HMROptions> {
     /** HMR 栈，用于跟踪当前活动的 HMR 实例 */
     private static _hmrStack?: HMR<any>[];
     /** 依赖栈，用于跟踪当前活动的依赖 */
@@ -53,7 +50,9 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
     private static _cachedExtensions?: string[];
     /** 正在加载的依赖集合 */
     private static _loadingDependencies?: Set<string>;
-
+    get watchDirs(): ReadonlyArray<string> {
+        return this.fileWatcher.dirs;
+    }
     /** 获取 HMR 栈 */
     static get hmrStack(): HMR<any>[] {
         if (!this._hmrStack) {
@@ -166,9 +165,9 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
     /** 私有日志记录器 */
     logger: Logger;
 
-    constructor(name: string,options: HMROptions = {}) {
+    constructor(options: HMROptions = {}) {
         const finalOptions = mergeConfig(DEFAULT_HMR_OPTIONS, options);
-        super(null, name, getCallerFile(), finalOptions);
+        super(null, 'HMR', getCallerFile(), finalOptions);
         this.logger = finalOptions.logger;
 
         // 初始化功能模块
@@ -358,8 +357,7 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
 
     /** 更新HMR配置 */
     updateOptions(options: Partial<HMROptions>): void {
-        super.updateOptions(options)
-        
+        this.options = { ...this.options, ...options };
         // 更新相关设置
         if (this.options.extensions) {
             // 更新文件监听器的扩展名
@@ -436,7 +434,7 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
         super.dispose();
         
         // 手动垃圾回收
-        performGC({ onDispose: true }, `HMR dispose: ${this.name}`);
+        performGC({ onDispose: true }, `HMR dispose: ${this.filename}`);
     }
 
 

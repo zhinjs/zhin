@@ -2,22 +2,22 @@ import { Client, PrivateMessageEvent,MessageSegment as MessageElem,ChannelMessag
 import path from "path";
 import {
     Bot,
-    BotConfig,
     Adapter,
-    Plugin,
     registerAdapter,
     Message,
     SendOptions,
     MessageSegment,
     SendContent,
-    segment
+    segment,
+    usePlugin
 } from "zhin.js";
 declare module '@zhin.js/types'{
     interface RegisteredAdapters{
         kook:Adapter<KookBot>
     }
 }
-export interface KookBotConfig extends BotConfig,Client.Config{
+const plugin =usePlugin()
+export interface KookBotConfig extends Bot.Config,Client.Config{
     context:'kook'
     name:`${number}`
 }
@@ -26,7 +26,7 @@ export interface KookBot{
 }
 export class KookBot extends Client implements Bot<PrivateMessageEvent|ChannelMessageEvent,KookBotConfig>{
     $connected?:boolean
-    constructor(private plugin:Plugin,config:KookBotConfig) {
+    constructor(config:KookBotConfig) {
         if(!config.data_dir) config.data_dir=path.join(process.cwd(),'data')
         super(config);
         this.$config=config;
@@ -74,17 +74,17 @@ export class KookBot extends Client implements Bot<PrivateMessageEvent|ChannelMe
     }
 
     async $sendMessage(options: SendOptions): Promise<string> {
-        options=await this.plugin.app.handleBeforeSend(options)
+        options=await plugin.app.handleBeforeSend(options)
         switch (options.type){
             case 'private':{
                 const result= await this.sendPrivateMsg(options.id,KookBot.toSendable(options.content));
-                this.plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`);
+                plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`);
                 return `private-${options.id}:${(result as unknown as {msg_id:string}).msg_id.toString()}`
                 break;
             }
             case "channel":{
                 const result=await this.sendChannelMsg(options.id,KookBot.toSendable(options.content));
-                this.plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`);
+                plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`);
                 return `channel-${options.id}:${(result as unknown as {msg_id:string}).msg_id.toString()}`
                 break;
             }
@@ -101,9 +101,9 @@ export class KookBot extends Client implements Bot<PrivateMessageEvent|ChannelMe
 
     private handleKookMessage(msg: PrivateMessageEvent|ChannelMessageEvent): void {
         const message=this.$formatMessage(msg)
-        this.plugin.dispatch('message.receive',message)
-        this.plugin.logger.info(`recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`)
-        this.plugin.dispatch(`message.${message.$channel.type}.receive`,message)
+        plugin.dispatch('message.receive',message)
+        plugin.logger.info(`recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`)
+        plugin.dispatch(`message.${message.$channel.type}.receive`,message)
     }
 
 }

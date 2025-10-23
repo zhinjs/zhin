@@ -340,9 +340,96 @@ npm test
 npm publish
 ```
 
+## 🎛️ 插件配置系统
+
+### 使用 Schema 定义配置
+
+Zhin.js 提供了强大的 Schema 系统，支持 15 种数据类型和自动表单生成。
+
+```typescript
+import { Schema } from 'zhin.js'
+
+// 定义插件配置
+export const config = Schema.object({
+  // 基础类型
+  apiKey: Schema.string('API密钥')
+    .required()
+    .description('服务API密钥'),
+  
+  maxRetries: Schema.number('最大重试次数')
+    .min(0)
+    .max(10)
+    .default(3),
+  
+  enabled: Schema.boolean('是否启用')
+    .default(true),
+  
+  // 特殊类型
+  timeout: Schema.percent('超时比例')
+    .default(0.8)
+    .description('请求超时占总时间的比例'),
+  
+  // 集合类型
+  whitelist: Schema.list(Schema.string(), '白名单')
+    .description('允许访问的用户ID列表'),
+  
+  server: Schema.object({
+    host: Schema.string('主机').default('localhost'),
+    port: Schema.number('端口').default(8080)
+  })
+})
+
+// 使用配置
+import { useConfig } from 'zhin.js'
+
+const config = useConfig('my-plugin')
+console.log(config.apiKey)  // 访问配置值
+```
+
+### 支持的 Schema 类型
+
+| 类型 | 说明 | UI 控件 |
+|------|------|---------|
+| `string` | 字符串 | TextField / TextArea / Select |
+| `number` | 数字 | NumberInput |
+| `boolean` | 布尔值 | Switch |
+| `percent` | 百分比 | Slider + NumberInput |
+| `date` | 日期 | DatePicker |
+| `regexp` | 正则表达式 | TextField (monospace) |
+| `list` | 列表 | TextArea / CardList |
+| `tuple` | 元组 | FixedFieldList |
+| `object` | 对象 | NestedFields |
+| `dict` | 字典 | JSONEditor |
+| `union` | 联合类型 | Select |
+| `intersect` | 交叉类型 | MultiFields |
+| `any` | 任意类型 | JSONEditor |
+
+### 配置元数据
+
+```typescript
+Schema.string('fieldName')
+  .required()                    // 必填
+  .default('defaultValue')       // 默认值
+  .description('Field help text') // 描述信息
+  .min(0).max(100)              // 数值范围
+  .pattern('^[a-z]+$')          // 正则验证
+  .enum(['a', 'b', 'c'])        // 枚举选项
+```
+
+### Web 控制台集成
+
+配置的 Schema 会自动在 Web 控制台的插件详情页生成配置表单，用户可以：
+- 查看所有配置项和说明
+- 通过友好的 UI 修改配置
+- 实时保存到配置文件
+- 支持嵌套结构和复杂类型
+
+![Plugin Config Form](./assets/plugin-config-form.png)
+
 ## 🔗 相关链接
 
 - [插件生命周期](./lifecycle.md)
 - [上下文系统](./context.md)
 - [中间件系统](./middleware.md)
 - [定时任务](./cron.md)
+- [Schema 系统](../api/types.md#schema)

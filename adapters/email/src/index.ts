@@ -3,7 +3,6 @@ import Imap from 'imap';
 import { simpleParser, ParsedMail, Attachment } from 'mailparser';
 import {
     Bot,
-    BotConfig,
     Adapter,
     Plugin,
     registerAdapter,
@@ -11,7 +10,8 @@ import {
     SendOptions,
     SendContent,
     MessageSegment,
-    segment
+    segment,
+    usePlugin
 } from "zhin.js";
 import { EventEmitter } from 'events';
 import { createWriteStream, promises as fs } from 'fs';
@@ -51,7 +51,7 @@ export interface ImapConfig {
 }
 
 // 配置类型定义
-export type EmailBotConfig = BotConfig & {
+export type EmailBotConfig = Bot.Config & {
     context: 'email'
     name: string
     smtp: SmtpConfig
@@ -79,21 +79,19 @@ export interface EmailMessage {
     date: Date
     uid: number
 }
-
+const plugin = usePlugin();
 // Bot 类实现
 export class EmailBot extends EventEmitter implements Bot<EmailMessage, EmailBotConfig> {
     $config: EmailBotConfig;
-    plugin: Plugin;
     
     private smtpTransporter: nodemailer.Transporter | null = null;
     private imapConnection: Imap | null = null;
     private checkTimer: NodeJS.Timeout | null = null;
     private isConnected = false;
 
-    constructor(plugin: Plugin, config: EmailBotConfig) {
+    constructor(config: EmailBotConfig) {
         super();
         this.$config = config;
-        this.plugin = plugin;
         
         // 设置默认值
         this.$config.imap.checkInterval = this.$config.imap.checkInterval || 60000; // 1分钟
@@ -118,7 +116,7 @@ export class EmailBot extends EventEmitter implements Bot<EmailMessage, EmailBot
 
             // 验证 SMTP 连接
             await this.smtpTransporter!.verify();
-            this.plugin.logger.info(`SMTP connection verified for ${this.$config.smtp.auth.user}`);
+            plugin.logger.info(`SMTP connection verified for ${this.$config.smtp.auth.user}`);
 
             // 初始化 IMAP 连接
             this.imapConnection = new Imap({
@@ -139,14 +137,14 @@ export class EmailBot extends EventEmitter implements Bot<EmailMessage, EmailBot
                 this.imapConnection!.connect();
             });
 
-            this.plugin.logger.info(`IMAP connection established for ${this.$config.imap.user}`);
+            plugin.logger.info(`IMAP connection established for ${this.$config.imap.user}`);
 
             // 开始检查邮件
             this.startEmailCheck();
             this.isConnected = true;
 
         } catch (error) {
-            this.plugin.logger.error('Failed to connect email services:', error);
+            plugin.logger.error('Failed to connect email services:', error);
             throw error;
         }
     }
@@ -172,23 +170,23 @@ export class EmailBot extends EventEmitter implements Bot<EmailMessage, EmailBot
             this.smtpTransporter = null;
         }
 
-        this.plugin.logger.info('Email bot disconnected');
+        plugin.logger.info('Email bot disconnected');
     }
 
     private setupImapListeners(): void {
         if (!this.imapConnection) return;
 
         this.imapConnection.on('mail', (numNewMsgs: number) => {
-            this.plugin.logger.debug(`Received ${numNewMsgs} new emails`);
+            plugin.logger.debug(`Received ${numNewMsgs} new emails`);
             this.checkForNewEmails();
         });
 
         this.imapConnection.on('error', (error: any) => {
-            this.plugin.logger.error('IMAP error:', error);
+            plugin.logger.error('IMAP error:', error);
         });
 
         this.imapConnection.on('end', () => {
-            this.plugin.logger.info('IMAP connection ended');
+            plugin.logger.info('IMAP connection ended');
         });
     }
 
@@ -235,7 +233,7 @@ export class EmailBot extends EventEmitter implements Bot<EmailMessage, EmailBot
                 });
             });
         } catch (error) {
-            this.plugin.logger.error('Error checking for new emails:', error);
+            plugin.logger.error('Error checking for new emails:', error);
         }
     }
 
@@ -260,7 +258,7 @@ export class EmailBot extends EventEmitter implements Bot<EmailMessage, EmailBot
                 const formattedMessage = this.$formatMessage(emailMessage);
                 this.emit('message.receive', formattedMessage);
             } catch (error) {
-                this.plugin.logger.error('Error parsing email:', error);
+                plugin.logger.error('Error parsing email:', error);
             }
         });
     }
@@ -384,9 +382,9 @@ export class EmailBot extends EventEmitter implements Bot<EmailMessage, EmailBot
         try {
             const mailOptions = await this.formatSendContent(options);
             const info = await this.smtpTransporter.sendMail(mailOptions);
-            this.plugin.logger.debug('Email sent:', info.messageId);
+            plugin.logger.debug('Email sent:', info.messageId);
         } catch (error) {
-            this.plugin.logger.error('Failed to send email:', error);
+            plugin.logger.error('Failed to send email:', error);
             throw error;
         }
         return ''

@@ -1,7 +1,7 @@
 import {AdapterMessage, Dict, MessageMiddleware, RegisteredAdapter} from './types.js';
 import { Plugin } from './plugin.js';
 import { Message } from './message.js';
-import { Schema } from './schema.js';
+import { Schema } from '@zhin.js/hmr';
 
 /**
  * Prompt类：用于实现机器人与用户的交互式提问与输入收集。
@@ -187,7 +187,7 @@ export class Prompt<P extends RegisteredAdapter> {
      * 基于Schema的选项选择
      */
     async pickValueWithSchema<T extends Schema>(schema: T): Promise<Schema.Types<T>> {
-        return this.pick(schema.meta.description, {
+        return this.pick(schema.meta.description || schema.meta.key || 'Select an option', {
             type: '' as any,
             options: schema.meta.options!.map(o => ({
                 label: o.label,
@@ -215,23 +215,24 @@ export class Prompt<P extends RegisteredAdapter> {
         if (schema.meta.options) return this.pickValueWithSchema(schema);
         switch (schema.meta.type) {
             case 'number':
-                return (await this.number(schema.meta.description)) as Schema.Types<T>;
+                return (await this.number(schema.meta.description || schema.meta.key || 'Enter a number')) as Schema.Types<T>;
             case 'string':
-                return (await this.text(schema.meta.description)) as Schema.Types<T>;
+                return (await this.text(schema.meta.description || schema.meta.key || 'Enter text')) as Schema.Types<T>;
             case 'boolean':
-                return (await this.confirm(schema.meta.description)) as Schema.Types<T>;
+                return (await this.confirm(schema.meta.description || schema.meta.key || 'Confirm')) as Schema.Types<T>;
             case 'object':
                 if (schema.meta.description) await this.event.$reply(schema.meta.description);
-                return (await this.getValueWithSchemas(schema.options.object!)) as Schema.Types<T>;
+                if (!schema.options.object) throw new Error('Object schema missing object definition');
+                return (await this.getValueWithSchemas(schema.options.object)) as Schema.Types<T>;
             case 'date':
                 return await this.prompt({
-                    tips: schema.meta.description,
+                    tips: schema.meta.description || schema.meta.key || 'Enter a date',
                     defaultValue: schema.meta.default || new Date(),
                     format: (input: string) => new Date(input) as Schema.Types<T>,
                 });
             case 'regexp':
                 return await this.prompt({
-                    tips: schema.meta.description,
+                    tips: schema.meta.description || schema.meta.key || 'Enter a regex pattern',
                     defaultValue: schema.meta.default || '',
                     format: (input: string) => new RegExp(input) as Schema.Types<T>,
                 });
@@ -241,7 +242,7 @@ export class Prompt<P extends RegisteredAdapter> {
                 const inner = schema.options.inner!;
                 if (!['string', 'boolean', 'number'].includes(inner.meta.type))
                     throw new Error(`unsupported inner type :${inner.meta.type}`);
-                return (await this.list(schema.meta.description, {
+                return (await this.list(schema.meta.description || schema.meta.key || 'Enter list items', {
                     type: inner.meta.type === 'string' ? 'text' : (inner.meta.type as Prompt.SingleType),
                     defaultValue: schema.meta.default,
                 })) as Schema.Types<T>;

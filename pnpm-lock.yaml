@@ -417,6 +417,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../logger
+      '@zhin.js/schema':
+        specifier: workspace:*
+        version: link:../schema
     devDependencies:
       '@zhin.js/types':
         specifier: workspace:*
@@ -436,6 +439,15 @@ importers:
         version: 24.7.0
       typescript:
         specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/schema:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.7.1
+      typescript:
+        specifier: ^5.3.0
         version: 5.9.3
 
   packages/types: {}

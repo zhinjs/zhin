@@ -14,7 +14,7 @@
 ### 使用不同包管理器创建项目
 
 ```bash
-# npm (推荐)
+# npm
 npm create zhin-app my-awesome-bot
 
 # yarn

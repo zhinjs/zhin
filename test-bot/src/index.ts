@@ -6,7 +6,6 @@ async function main() {
         // 异步创建机器人实例 (自动从配置文件加载)
         const app = await createApp();
         await app.start();
-        console.log(app.dependencies.size, '个插件已加载完成');
         
         // 优雅退出处理
         const shutdown = async (signal: string) => {

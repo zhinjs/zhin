@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import {AdapterMessage, BeforeSendHandler,MessageMiddleware, RegisteredAdapter, SendOptions} from "./types.js";
 import { PermissionItem,PermissionChecker } from './permissions.js';
 import {Message} from './message.js'
+import { Schema } from '@zhin.js/hmr';
 import {Dependency, Logger,} from "@zhin.js/hmr";
 import {App} from "./app";
 import {MessageCommand} from "./command.js";
@@ -14,7 +15,7 @@ import {Component, renderComponents} from "./component.js";
 import { PluginError, MessageError, errorManager } from './errors.js';
 import {remove} from "./utils.js";
 import {Prompt} from "./prompt.js";
-import { Schema } from '@zhin.js/database';
+import { Definition } from '@zhin.js/database';
 import { Cron} from './cron.js';
 
 
@@ -30,7 +31,7 @@ export class Plugin extends Dependency<Plugin> {
     middlewares: MessageMiddleware<RegisteredAdapter>[] = [];
     components: Map<string, Component<any>> = new Map();
     permissions: PermissionItem<RegisteredAdapter>[]=[];
-    schemas: Map<string,Schema<any>>=new Map();
+    definitions: Map<string,Definition<any>>=new Map();
     commands:MessageCommand[]=[];
     crons:Cron[]=[];
     #logger?:Logger
@@ -52,10 +53,10 @@ export class Plugin extends Dependency<Plugin> {
         this.beforeSend((options)=>renderComponents(this.components,options))
         // 资源清理：卸载时清空模型、定时任务等
         this.on('dispose',()=>{
-            for(const name of this.schemas.keys()){
+            for(const name of this.definitions.keys()){
                 this.app.database?.models.delete(name);
             }
-            this.schemas.clear();
+            this.definitions.clear();
             for(const cron of this.crons){
                 cron.dispose();
             }
@@ -67,6 +68,18 @@ export class Plugin extends Dependency<Plugin> {
                 cron.run();
             }
         });
+    }
+    get config(){
+        return this.app.getConfig(this.name as string) as Record<string,any>
+    }
+    defineSchema<S extends Schema>(rules: S): S {
+        const result= super.defineSchema(rules);
+        this.app.changeSchema(this.name as string, this.schema);
+
+        return result;
+    }
+    set config(newConfig:Record<string,any>){
+        this.app.setConfig(this.name,newConfig);
     }
     addPermit<T extends RegisteredAdapter>(name:string|RegExp,check:PermissionChecker<T>){
         this.permissions.push({name,check});
@@ -96,8 +109,8 @@ export class Plugin extends Dependency<Plugin> {
             )
         }
     }
-    defineModel<S extends Record<string,any>>(name:string,schema:Schema<S>){
-        this.schemas.set(name,schema);
+    defineModel<S extends Record<string,any>>(name:string,definition:Definition<S>){
+        this.definitions.set(name,definition);
         return this;
     }
     beforeSend(handler:BeforeSendHandler){

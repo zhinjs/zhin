@@ -2,7 +2,7 @@ import { Config, Client, PrivateMessageEvent, GroupMessageEvent, Sendable, Messa
 import path from "path";
 import {
     Bot,
-    BotConfig,
+    usePlugin,
     useContext,
     Adapter,
     Plugin,
@@ -18,7 +18,8 @@ declare module '@zhin.js/types'{
         icqq:Adapter<IcqqBot>
     }
 }
-export interface IcqqBotConfig extends BotConfig,Config{
+const plugin =usePlugin()
+export interface IcqqBotConfig extends Bot.Config,Config{
     context:'icqq'
     name:`${number}`
     password?:string
@@ -29,7 +30,7 @@ export interface IcqqBot{
 }
 export class IcqqBot extends Client implements Bot<PrivateMessageEvent|GroupMessageEvent,IcqqBotConfig>{
     $connected?:boolean
-    constructor(private plugin:Plugin,config:IcqqBotConfig) {
+    constructor(config:IcqqBotConfig) {
         if(!config.scope) config.scope='icqqjs'
         if(!config.data_dir) config.data_dir=path.join(process.cwd(),'data')
         if(config.scope.startsWith('@')) config.scope=config.scope.slice(1)
@@ -38,27 +39,27 @@ export class IcqqBot extends Client implements Bot<PrivateMessageEvent|GroupMess
     }
     private handleIcqqMessage(msg: PrivateMessageEvent|GroupMessageEvent): void {
         const message =this.$formatMessage(msg) ;
-        this.plugin.dispatch('message.receive',message)
-        this.plugin.logger.info(`recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`)
-        this.plugin.dispatch(`message.${message.$channel.type}.receive`,message)
+        plugin.dispatch('message.receive',message)
+        plugin.logger.info(`recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`)
+        plugin.dispatch(`message.${message.$channel.type}.receive`,message)
     }
     async $connect(): Promise<void> {
         this.on('message',this.handleIcqqMessage.bind(this))
         this.on('system.login.device',async (e:unknown)=>{
             await this.sendSmsCode()
-            this.plugin.logger.info('请输入短信验证码:')
+            plugin.logger.info('请输入短信验证码:')
             process.stdin.once('data',(data)=>{
                 this.submitSmsCode(data.toString().trim())
             })
         })
         this.on('system.login.qrcode',(e)=>{
-            this.plugin.logger.info(`取码地址：${e.image}\n请扫码完成后回车继续:`)
+            plugin.logger.info(`取码地址：${e.image}\n请扫码完成后回车继续:`)
             process.stdin.once('data',()=>{
                 this.login()
             })
         })
         this.on('system.login.slider',(e)=>{
-            this.plugin.logger.info(`取码地址：${e.url}\n请输入滑块验证ticket:`)
+            plugin.logger.info(`取码地址：${e.url}\n请输入滑块验证ticket:`)
             process.stdin.once('data',(e)=>{
                 this.submitSlider(e.toString().trim())
             })
@@ -109,17 +110,17 @@ export class IcqqBot extends Client implements Bot<PrivateMessageEvent|GroupMess
         await this.deleteMsg(id)
     }
     async $sendMessage(options: SendOptions): Promise<string> {
-        options=await this.plugin.app.handleBeforeSend(options)
+        options=await plugin.app.handleBeforeSend(options)
         switch (options.type){
             case 'private':{
                 const result= await this.sendPrivateMsg(Number(options.id),IcqqBot.toSendable(options.content))
-                this.plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+                plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
                 return result.message_id.toString()
                 break;
             }
             case "group":{
                 const result=await this.sendGroupMsg(Number(options.id),IcqqBot.toSendable(options.content))
-                this.plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+                plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
                 return result.message_id.toString()
                 break;
             }

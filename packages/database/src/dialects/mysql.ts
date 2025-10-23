@@ -152,6 +152,6 @@ export class MySQLDialect extends Dialect<MySQLDialectConfig, string> {
   }
 }
 
-Registry.register('mysql', (config: MySQLDialectConfig, schemas?: Database.Schemas<Record<string, object>>) => {
-  return new RelatedDatabase(new MySQLDialect(config), schemas);
+Registry.register('mysql', (config: MySQLDialectConfig, definitions?: Database.Definitions<Record<string, object>>) => {
+  return new RelatedDatabase(new MySQLDialect(config), definitions);
 });

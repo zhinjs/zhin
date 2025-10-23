@@ -1,6 +1,6 @@
 import type { Database } from './database.js';
 import type { Dialect } from './dialect.js';
-import { AlterSchema, Condition } from '../types.js';
+import { AlterDefinition, Condition } from '../types.js';
 import * as QueryClasses from './query-classes.js';
 
 
@@ -35,7 +35,7 @@ export abstract class Model<C=any,O extends object = object,Q = string> {
     return this.name;
   }
 
-  alter(alterations: AlterSchema<O>): QueryClasses.Alteration<O, C, Q> {
+  alter(alterations: AlterDefinition<O>): QueryClasses.Alteration<O, C, Q> {
     return this.database.alter<O>(this.name, alterations);
   }
   select<K extends keyof O>(...fields: Array<K>): QueryClasses.Selection<Pick<O, K>, K, C, Q> {

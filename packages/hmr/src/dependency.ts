@@ -1,6 +1,8 @@
 import { EventEmitter } from 'events';
+import * as path from 'path';
 import {getLogger} from "@zhin.js/logger";
 import { Contexts, GlobalContext, SideEffect} from '@zhin.js/types';
+import { Schema } from '@zhin.js/schema';
 import {Context, DependencyOptions,} from './types.js'
 import { createError, ERROR_MESSAGES, DEFAULT_CONFIG, performGC } from './utils.js';
 // ============================================================================
@@ -10,7 +12,7 @@ import { createError, ERROR_MESSAGES, DEFAULT_CONFIG, performGC } from './utils.
 /**
  * 依赖基类：提供事件系统和依赖层次结构管理
  */
-export class Dependency<P extends Dependency = any,O extends DependencyOptions=DependencyOptions> extends EventEmitter {
+export class Dependency<P extends Dependency<any> = any,O extends DependencyOptions=DependencyOptions> extends EventEmitter {
     /** 文件哈希值 */
     hash?: string;
     /** 文件修改时间 */
@@ -20,25 +22,36 @@ export class Dependency<P extends Dependency = any,O extends DependencyOptions=D
     /** 依赖映射 */
     dependencies: Map<string, P>;
     private readyPromise: Promise<void> | null = null;
-    /** 依赖配置 */
-    options: O;
+    #schema:Schema= Schema.any({} as any);
     /** 生命周期状态 */
     private lifecycleState: 'waiting' | 'ready' | 'disposed' = 'waiting';
-
     constructor(
         public parent: Dependency<P> | null,
         public name: string,
         public filename: string,
-        options: O = {} as O
+        public options:O={} as O
     ) {
         super();
         this.contexts = new Map();
         this.dependencies = new Map();
-        this.options = { ...options };
         this.setMaxListeners(DEFAULT_CONFIG.MAX_LISTENERS);
         // 初始化完成
         this.mounted();
     }
+    defineSchema<S extends Schema>(rules:S):S{
+        this.#schema=rules
+        return rules as S;
+    }
+    get schema(){
+        return this.#schema
+    }
+    validate(data: unknown): boolean {
+        return this.#schema(data);
+    }
+    format(data: unknown): unknown {
+        return this.#schema(data);
+    }
+
     getLogger(namespace:string){
         return getLogger(namespace)
     }
@@ -51,16 +64,6 @@ export class Dependency<P extends Dependency = any,O extends DependencyOptions=D
     }
     get isDispose(){
         return this.lifecycleState==='disposed'
-    }
-    /** 获取依赖配置 */
-    getOptions(): Readonly<O> {
-        return { ...this.options };
-    }
-
-    /** 更新依赖配置 */
-    updateOptions(options: Partial<O>): void {
-        this.options = { ...this.options, ...options };
-        this.emit('options.changed', options);
     }
 
     /** 获取生命周期状态 */
@@ -94,12 +97,12 @@ export class Dependency<P extends Dependency = any,O extends DependencyOptions=D
     }
 
     /** 按名称查找插件 */
-    findPluginByName<T extends P>(name: string): T | void {
+    findPluginByFilename<T extends P>(filename: string): T | void {
         for (const [key, child] of this.dependencies) {
-            if (child.name === name) {
+            if (child.filename === filename) {
                 return child as T;
             }
-            const found = child.findPluginByName<T>(name);
+            const found = child.findPluginByFilename<T>(filename);
             if (found) {
                 return found;
             }
@@ -131,24 +134,6 @@ export class Dependency<P extends Dependency = any,O extends DependencyOptions=D
         this.on('context.mounted',onContextMounted)
         if(!this.#contextsIsReady(contexts)) return
         contextReadyCallback()
-    }
-    /** 获取启用的依赖 */
-    getEnabledDependencies(): P[] {
-        const result: P[] = [];
-        for (const [key, dependency] of this.dependencies) {
-            if (dependency.options.enabled !== false) {
-                result.push(dependency);
-            }
-        }
-        
-        // 按优先级排序
-        result.sort((a, b) => {
-            const priorityA = a.options.priority || 0;
-            const priorityB = b.options.priority || 0;
-            return priorityB - priorityA;
-        });
-        
-        return result;
     }
 
     /** 分发事件，如果有上级，则继续上报，否则广播 */
@@ -297,6 +282,6 @@ export class Dependency<P extends Dependency = any,O extends DependencyOptions=D
         this.removeAllListeners();
         this.parent=null;
         // 手动垃圾回收
-        performGC({ onDispose: true }, `dispose: ${this.name}`);
+        performGC({ onDispose: true }, `dispose: ${this.filename}`);
     }
 } 

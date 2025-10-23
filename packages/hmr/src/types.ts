@@ -30,13 +30,7 @@ export interface PluginVersion {
 }
 
 /** 依赖配置接口 */
-export interface DependencyOptions {
-    /** 依赖是否启用 */
-    enabled?: boolean;
-    /** 依赖版本要求 */
-    version?: string;
-    priority?: number;
-}
+export interface DependencyOptions {}
 
 /** 监听器配置接口 */
 export interface HMROptions extends DependencyOptions {

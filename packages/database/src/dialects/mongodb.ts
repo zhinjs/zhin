@@ -528,6 +528,6 @@ export class MongoDBDialect extends Dialect<MongoDBDialectConfig, DocumentQueryR
   }
 }
 
-Registry.register('mongodb', (config: MongoDBDialectConfig, schemas?: Database.Schemas<Record<string, object>>) => {
-  return new DocumentDatabase(new MongoDBDialect(config), schemas);
+Registry.register('mongodb', (config: MongoDBDialectConfig, definitions?: Database.Definitions<Record<string, object>>) => {
+  return new DocumentDatabase(new MongoDBDialect(config), definitions);
 });

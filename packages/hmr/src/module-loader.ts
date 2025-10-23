@@ -183,11 +183,6 @@ export class ModuleLoader<P extends Dependency = Dependency> extends EventEmitte
         return undefined;
     }
 
-    /** 获取所有依赖名称 */
-    getDependencyNames(): string[] {
-        return Array.from(this.dependencies.values()).map(dep => dep.name);
-    }
-
     /** 清理所有依赖 */
     dispose(): void {
         for (const [filePath] of this.dependencies) {

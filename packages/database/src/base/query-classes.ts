@@ -1,13 +1,13 @@
 import type { Database } from './database.js';
 import type { Dialect } from './dialect.js';
 import { ThenableQuery } from './thenable.js';
-import { QueryParams, AlterSchema, Condition, Ordering, Schema } from '../types.js';
+import { QueryParams, AlterDefinition, Condition, Ordering, Definition } from '../types.js';
 
 export class Alteration<T extends object, C = any, D = string> extends ThenableQuery<void, C, D> {
   constructor(
     database: Database<C, Record<string, object>, D>,
     private readonly tableName: string,
-    private readonly alterations: AlterSchema<T>
+    private readonly alterations: AlterDefinition<T>
   ) {
     super(database, database.dialect as Dialect<C, D>);
   }
@@ -75,7 +75,7 @@ export class Creation<T extends object, C = any, D = string> extends ThenableQue
   constructor(
     database: Database<C, Record<string, object>, D>,
     private readonly tableName: string,
-    private readonly schema: Schema<T>
+    private readonly definition: Definition<T>
   ) {
     super(database, database.dialect as Dialect<C, D>);
   }
@@ -84,7 +84,7 @@ export class Creation<T extends object, C = any, D = string> extends ThenableQue
     return {
       type: 'create',
       tableName: this.tableName,
-      schema: this.schema
+      definition: this.definition
     };
   }
 }

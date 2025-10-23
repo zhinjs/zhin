@@ -15,4 +15,4 @@ export * from './cron.js'
 export * from '@zhin.js/database'
 export * from '@zhin.js/logger'
 
-export { Dependency } from '@zhin.js/hmr'
+export { Dependency, Schema } from '@zhin.js/hmr'

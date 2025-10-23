@@ -25,9 +25,9 @@ export class DocumentDatabase<
   
   constructor(
     dialect: Dialect<D,DocumentQueryResult>,
-    schemas?: Database.Schemas<S>,
+    definitions?: Database.Definitions<S>,
   ) {
-    super(dialect, schemas);
+    super(dialect, definitions);
   }
 
   protected async initialize(): Promise<void> {
@@ -277,7 +277,7 @@ export class DocumentDatabase<
    * 获取所有模型名称
    */
   getModelNames(): string[] {
-    return Object.keys(this.schemas || {});
+    return Object.keys(this.definitions || {});
   }
 }
 

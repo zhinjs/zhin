@@ -6,6 +6,10 @@ import * as fs from 'fs'
 
 // Create a concrete implementation of HMR for testing
 class TestHMR extends HMR {
+    constructor(options: any = {}) {
+        super(options)
+    }
+    
     createDependency(name: string, filePath: string): Dependency {
         return new Dependency(this, name, filePath)
     }
@@ -20,7 +24,7 @@ describe('HMR', () => {
         if (!fs.existsSync(testDir)) {
             fs.mkdirSync(testDir, { recursive: true })
         }
-        hmr = new TestHMR('test', {
+        hmr = new TestHMR({
             dirs: [testDir],
             extensions: new Set(['.ts', '.js']),
             debug: false

@@ -3,14 +3,13 @@ import {
     Bot,
     Adapter,
     Plugin,
-    BotConfig,
+    usePlugin,
     registerAdapter,
     useLogger,
     Message,
     SendOptions,
     segment,
     SendContent,
-    usePlugin,
     useContext,
     MessageType,
     MessageElement,
@@ -30,12 +29,12 @@ declare module '@zhin.js/types'{
         sandbox:Adapter<SandboxBot>
     }
 }
-export interface ProcessConfig extends BotConfig {
+export interface ProcessConfig extends Bot.Config {
     context: 'process';
     name: string;
 }
 
-export interface SandboxConfig extends BotConfig {
+export interface SandboxConfig extends Bot.Config {
     context: 'sandbox';
     ws:WebSocket;
     name: string;
@@ -46,7 +45,7 @@ export class ProcessBot extends EventEmitter implements Bot<{content:string,ts:n
     $connected?:boolean
     private logger = logger
 
-    constructor(private plugin:Plugin,public $config:ProcessConfig) {
+    constructor(public $config:ProcessConfig) {
         super();
         this.#listenInput=this.#listenInput.bind(this)
     }
@@ -92,7 +91,7 @@ export class ProcessBot extends EventEmitter implements Bot<{content:string,ts:n
     }
 
     async $sendMessage(options: SendOptions): Promise<string>{
-        options=await this.plugin.app.handleBeforeSend(options)
+        options=await plugin.app.handleBeforeSend(options)
         if(!this.$connected) return ''
         this.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
         return ''
@@ -105,8 +104,8 @@ export class ProcessBot extends EventEmitter implements Bot<{content:string,ts:n
         const ts=Date.now()
         const message =this.$formatMessage({content,ts});
         this.logger.info(`recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`)
-        this.plugin.dispatch('message.receive',message)
-        this.plugin.dispatch(`message.${message.$channel.type}.receive`,message)
+        plugin.dispatch('message.receive',message)
+        plugin.dispatch(`message.${message.$channel.type}.receive`,message)
     }
 
     // 新增：Web 沙盒消息接收接口
@@ -140,20 +139,20 @@ export class ProcessBot extends EventEmitter implements Bot<{content:string,ts:n
         })
         
         this.logger.info(`[Web] recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`)
-        this.plugin.dispatch('message.receive', message)
-        this.plugin.dispatch(`message.${message.$channel.type}.receive`, message)
+        plugin.dispatch('message.receive', message)
+        plugin.dispatch(`message.${message.$channel.type}.receive`, message)
     }
 }
 export class SandboxBot extends EventEmitter implements Bot<{content:MessageElement[],ts:number},SandboxConfig>{
     $connected?:boolean
     private logger = logger
-    constructor(private plugin:Plugin,public $config:SandboxConfig) {
+    constructor(public $config:SandboxConfig) {
         super();
         this.$config.ws.on('message',(data)=>{
             const message = JSON.parse(data.toString())
             this.logger.info(`recv ${message.type}(${message.id}):${segment.raw(message.content)}`)
-            this.plugin.dispatch('message.receive',this.$formatMessage({content:message.content,type:message.type,id:message.id,ts:message.timestamp}))
-            this.plugin.dispatch(`message.${message.type}.receive`,this.$formatMessage({content:message.content,type:message.type,id:message.id,ts:message.timestamp}))
+            plugin.dispatch('message.receive',this.$formatMessage({content:message.content,type:message.type,id:message.id,ts:message.timestamp}))
+            plugin.dispatch(`message.${message.type}.receive`,this.$formatMessage({content:message.content,type:message.type,id:message.id,ts:message.timestamp}))
         })
     }
     async $connect(): Promise<void> {
@@ -192,7 +191,7 @@ export class SandboxBot extends EventEmitter implements Bot<{content:MessageElem
         return message
     }
     async $sendMessage(options: SendOptions): Promise<string>{
-        options=await this.plugin.app.handleBeforeSend(options)
+        options=await plugin.app.handleBeforeSend(options)
         if(!this.$connected) return ''
         this.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
         options.bot=this.$config.name
@@ -222,7 +221,7 @@ useContext('web', (web) => {
 useContext('router', (router) => {
     const wss = router.ws('/sandbox')
     wss.on('connection', (ws) => {
-        const targetBot = new SandboxBot(plugin,{
+        const targetBot = new SandboxBot({
             context:'sandbox',
             name:`测试机器人${Math.random().toString(36).substring(2, 8)}`,
             ws

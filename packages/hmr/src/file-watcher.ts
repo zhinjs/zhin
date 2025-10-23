@@ -12,7 +12,9 @@ export class FileWatcher extends EventEmitter {
     readonly #dirWatchers: Map<string, fs.FSWatcher>;
     readonly #watchableExtensions: Set<string>;
     readonly #logger: Logger;
-
+    get dirs(){
+        return Object.freeze([...this.#dirs])
+    }
     constructor(
         dirs: string[],
         extensions: string[] | Set<string>,
@@ -84,19 +86,16 @@ export class FileWatcher extends EventEmitter {
         const absDir = resolvePath(dir);
         
         if (this.#dirs.includes(absDir)) {
-            this.#logger.warn('Directory already watched', { dir: absDir });
             return false;
         }
         
         if (!fs.existsSync(absDir)) {
-            this.#logger.error('Directory does not exist', { dir: absDir });
             return false;
         }
         
         this.#dirs.push(absDir);
         this.setupDirWatcher(absDir);
         
-        this.#logger.info('Directory added to watch list', { dir: absDir });
         this.emit('dir-added', absDir);
         
         return true;
@@ -108,7 +107,6 @@ export class FileWatcher extends EventEmitter {
         const index = this.#dirs.indexOf(absDir);
         
         if (index === -1) {
-            this.#logger.warn('Directory not in watch list', { dir: absDir });
             return false;
         }
         
@@ -119,8 +117,6 @@ export class FileWatcher extends EventEmitter {
         }
         
         this.#dirs.splice(index, 1);
-        
-        this.#logger.info('Directory removed from watch list', { dir: absDir });
         this.emit('dir-removed', absDir);
         
         return true;

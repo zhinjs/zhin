@@ -31,7 +31,7 @@ export interface Column<T = any> {
   length?: number;
 }
 
-export type Schema<T extends object=object> = {
+export type Definition<T extends object=object> = {
   [P in keyof T]: Column<T[P]>;
 }
 
@@ -39,7 +39,7 @@ export type Schema<T extends object=object> = {
 // Column Alteration Types
 // ============================================================================
 
-export interface AddSchema<T = any> {
+export interface AddDefinition<T = any> {
   action: "add";
   type: ColumnType;
   nullable?: boolean;
@@ -48,7 +48,7 @@ export interface AddSchema<T = any> {
   length?: number;
 }
 
-export interface ModifySchema<T = any> {
+export interface ModifyDefinition<T = any> {
   action: "modify";
   type?: ColumnType;
   nullable?: boolean;
@@ -56,12 +56,12 @@ export interface ModifySchema<T = any> {
   length?: number;
 }
 
-export interface DropSchema {
+export interface DropDefinition {
   action: "drop";
 }
 
-export type AlterSchema<T extends object> = {
-  [P in keyof T]?:AddSchema<T[P]> | ModifySchema<T[P]> | DropSchema
+export type AlterDefinition<T extends object> = {
+  [P in keyof T]?: AddDefinition<T[P]> | ModifyDefinition<T[P]> | DropDefinition
 };
 
 // ============================================================================
@@ -112,12 +112,12 @@ export interface BaseQueryParams {
 
 export interface CreateQueryParams<T extends object = any> extends BaseQueryParams {
   type: 'create';
-  schema: Schema<T>;
+  definition: Definition<T>;
 }
 
 export interface AlterQueryParams<T extends object = any> extends BaseQueryParams {
   type: 'alter';
-  alterations: AlterSchema<T>;
+  alterations: AlterDefinition<T>;
 }
 
 export interface DropTableQueryParams<T extends object = any> extends BaseQueryParams {

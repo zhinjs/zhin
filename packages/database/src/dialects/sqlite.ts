@@ -254,6 +254,6 @@ export class SQLiteDialect extends Dialect<SQLiteDialectConfig, string> {
     return `DROP INDEX ${ifExistsClause}${this.quoteIdentifier(indexName)}`;
   }
 }
-Registry.register('sqlite', (config: SQLiteDialectConfig, schemas?: Database.Schemas<Record<string, object>>) => {
-  return new RelatedDatabase(new SQLiteDialect(config), schemas);
+Registry.register('sqlite', (config: SQLiteDialectConfig, definitions?: Database.Definitions<Record<string, object>>) => {
+  return new RelatedDatabase(new SQLiteDialect(config), definitions);
 });

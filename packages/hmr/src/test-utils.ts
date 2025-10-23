@@ -119,7 +119,7 @@ export function waitForEvent(emitter: EventEmitter, event: string, timeout: numb
  */
 export function createTestHMR(options: { name?: string; logger?: Logger } = {}): TestHMR {
     const logger = options.logger || new TestLogger();
-    return new TestHMR(options.name || 'test-hmr', { logger });
+    return new TestHMR({ logger });
 }
 
 /**

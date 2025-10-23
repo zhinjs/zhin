@@ -13,7 +13,10 @@
     "forceConsistentCasingInFileNames": true,
     "moduleResolution": "node",
     "allowSyntheticDefaultImports": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "types": [
+      "@zhin.js/http",
+    ]
   },
   "include": [
     "src/**/*"

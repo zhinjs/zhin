@@ -4,7 +4,7 @@ import { createHash } from 'crypto';
 import { EventEmitter } from 'events';
 import {
     Bot,
-    BotConfig,
+    usePlugin,
     Adapter,
     Plugin,
     registerAdapter,
@@ -29,7 +29,7 @@ interface Router {
     post(path: string, handler: (ctx: Context) => void): void;
 }
 // 微信公众号配置
-export interface WeChatMPConfig extends BotConfig {
+export interface WeChatMPConfig extends Bot.Config {
     context: 'wechat-mp'
     name: string
     appId: string
@@ -76,7 +76,7 @@ interface WeChatAPIResponse {
     errcode?: number
     errmsg?: string
 }
-
+const plugin = usePlugin();
 export class WeChatMPBot extends EventEmitter implements Bot<WeChatMessage, WeChatMPConfig> {
     $config: WeChatMPConfig;
     plugin: Plugin;
@@ -86,7 +86,7 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMessage, WeCh
     private tokenExpireTime: number = 0;
     private isConnected = false;
 
-    constructor(plugin: Plugin, router: Router, config: WeChatMPConfig) {
+    constructor( router: Router, config: WeChatMPConfig) {
         super();
         this.$config = config;
         this.plugin = plugin;
@@ -122,18 +122,18 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMessage, WeCh
             this.startTokenRefreshTimer();
             
             this.isConnected = true;
-            this.plugin.logger.info(`WeChat MP bot connected: ${this.$config.name}`);
-            this.plugin.logger.info(`Webhook URL: ${this.$config.path}`);
+            plugin.logger.info(`WeChat MP bot connected: ${this.$config.name}`);
+            plugin.logger.info(`Webhook URL: ${this.$config.path}`);
             
         } catch (error) {
-            this.plugin.logger.error('Failed to connect WeChat MP bot:', error);
+            plugin.logger.error('Failed to connect WeChat MP bot:', error);
             throw error;
         }
     }
 
     async $disconnect(): Promise<void> {
         this.isConnected = false;
-        this.plugin.logger.info('WeChat MP bot disconnected');
+        plugin.logger.info('WeChat MP bot disconnected');
     }
 
     private handleVerification(ctx: Context): void {
@@ -144,10 +144,10 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMessage, WeCh
             timestamp as string, 
             nonce as string
         )) {
-            this.plugin.logger.info('WeChat verification successful');
+            plugin.logger.info('WeChat verification successful');
             ctx.body = echostr;
         } else {
-            this.plugin.logger.error('WeChat verification failed');
+            plugin.logger.error('WeChat verification failed');
             ctx.status = 403;
             ctx.body = 'Forbidden';
         }
@@ -163,7 +163,7 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMessage, WeCh
                 timestamp as string, 
                 nonce as string
             )) {
-                this.plugin.logger.error('Invalid signature');
+                plugin.logger.error('Invalid signature');
                 ctx.status = 403;
                 ctx.body = 'Forbidden';
                 return;
@@ -175,7 +175,7 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMessage, WeCh
             
             if (wechatMessage) {
                 const message = this.$formatMessage(wechatMessage);
-                this.plugin.dispatch('message.receive', message);
+                plugin.dispatch('message.receive', message);
                 
                 // 处理被动回复
                 const replyXML = await this.handlePassiveReply(wechatMessage, message);
@@ -185,7 +185,7 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMessage, WeCh
                 ctx.body = 'success';
             }
         } catch (error) {
-            this.plugin.logger.error('Error handling WeChat message:', error);
+            plugin.logger.error('Error handling WeChat message:', error);
             ctx.body = 'success';
         }
     }
@@ -204,7 +204,7 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMessage, WeCh
             const result = await parser.parseStringPromise(xmlString);
             return result.xml as WeChatMessage;
         } catch (error) {
-            this.plugin.logger.error('Error parsing XML:', error);
+            plugin.logger.error('Error parsing XML:', error);
             return null;
         }
     }
@@ -315,7 +315,7 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMessage, WeCh
              await this.sendCustomerServiceMessage(options);
             return ''
         } catch (error) {
-            this.plugin.logger.error('Failed to send WeChat message:', error);
+            plugin.logger.error('Failed to send WeChat message:', error);
             throw error;
         }
     }
@@ -450,12 +450,12 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMessage, WeCh
             if (data.access_token) {
                 this.accessToken = data.access_token;
                 this.tokenExpireTime = Date.now() + (data.expires_in - 300) * 1000; // 提前5分钟刷新
-                this.plugin.logger.info('Access token refreshed successfully');
+                plugin.logger.info('Access token refreshed successfully');
             } else {
                 throw new Error('Failed to get access token');
             }
         } catch (error) {
-            this.plugin.logger.error('Failed to refresh access token:', error);
+            plugin.logger.error('Failed to refresh access token:', error);
             throw error;
         }
     }
@@ -467,7 +467,7 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMessage, WeCh
                 try {
                     await this.refreshAccessToken();
                 } catch (error) {
-                    this.plugin.logger.error('Failed to refresh access token in timer:', error);
+                    plugin.logger.error('Failed to refresh access token in timer:', error);
                 }
             }
         }, 3600000); // 1小时
@@ -495,5 +495,5 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMessage, WeCh
 
 // 使用路由服务注册适配器
 useContext('router', (router: Router) => {
-    registerAdapter(new Adapter('wechat-mp', (plugin: Plugin, config: WeChatMPConfig) => new WeChatMPBot(plugin, router, config)));
+    registerAdapter(new Adapter('wechat-mp', (config: WeChatMPConfig) => new WeChatMPBot(router, config)));
 });

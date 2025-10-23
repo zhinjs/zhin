@@ -2,6 +2,7 @@ import {Dialect} from '../base';
 import {MemoryConfig} from "../types";
 import {RelatedDatabase} from "../type/related/database";
 import {Registry} from "../registry";
+import {Database} from "../base";
 
 interface MemoryTable {
   name: string;
@@ -875,6 +876,6 @@ export class MemoryDialect extends Dialect<MemoryConfig,string> {
     });
   }
 }
-Registry.register('memory', (config, schemas?: any) => {
-  return new RelatedDatabase(new MemoryDialect(config), schemas);
+Registry.register('memory', (config, definitions?: Database.Definitions<Record<string, object>>) => {
+  return new RelatedDatabase(new MemoryDialect(config), definitions);
 });

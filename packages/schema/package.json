@@ -1,0 +1,22 @@
+{
+  "name": "@zhin.js/schema",
+  "version": "1.0.0",
+  "description": "Zhin Schema 配置验证系统",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf lib"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "@types/node": "^24.3.0"
+  }
+}

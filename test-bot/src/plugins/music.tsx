@@ -1,4 +1,4 @@
-import { addCommand, MessageCommand, useContext, usePrompt } from "zhin.js";
+import { addCommand, MessageCommand, useApp, useContext, usePrompt } from "zhin.js";
 
 async function musicQQ(keyword: string): Promise<{ type: 'qq', id: string, name: string }[]> {
     const url = new URL('https://c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg');

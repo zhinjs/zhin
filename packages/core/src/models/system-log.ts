@@ -1,4 +1,4 @@
-import { Schema } from '@zhin.js/database'
+import { Definition } from '@zhin.js/database'
 
 export interface SystemLog {
   id?: number
@@ -9,7 +9,7 @@ export interface SystemLog {
   timestamp: Date
 }
 
-export const SystemLogSchema:Schema<SystemLog>={
+export const SystemLogDefinition:Definition<SystemLog>={
   id: { type: 'integer', autoIncrement: true, primary: true },
   level: { type: 'text', nullable: false },
   name: { type: 'text', nullable: false },
