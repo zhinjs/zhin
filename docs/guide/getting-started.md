@@ -25,7 +25,7 @@ npm --version
 
 ## ⚡ 快速创建项目
 
-使用官方脚手架一键创建新项目：
+### 方式一：使用脚手架（推荐）
 
 ```bash
 # 🎯 推荐方式（使用 npm）
@@ -36,6 +36,20 @@ pnpm create zhin-app my-awesome-bot
 
 # 🧶 使用 yarn
 yarn create zhin-app my-awesome-bot
+```
+
+### 方式二：克隆模板项目
+
+```bash
+# 克隆模板仓库
+git clone https://github.com/zhinjs/zhin-template.git my-awesome-bot
+cd my-awesome-bot
+
+# 安装依赖
+pnpm install  # 或 npm install
+
+# 启动开发服务器
+pnpm dev     # 或 npm run dev
 ```
 
 ### 🛠️ 交互式配置
@@ -194,7 +208,41 @@ pnpm dev
 - ⚡ **实时热重载** - 代码修改立即生效，无需重启
 - 🔍 **详细日志** - 完整的调试信息和错误堆栈
 - 🎯 **自动类型检查** - TypeScript 实时错误提示
-- 🌐 **Web 控制台** - 浏览器访问 `http://localhost:3000` 查看状态（开发环境）
+- 🌐 **Web 控制台** - 浏览器访问 `http://localhost:8086` 查看状态
+
+### 🎛️ Web 控制台功能
+
+启动项目后，访问 `http://localhost:8086` 体验强大的 Web 管理界面：
+
+#### 📊 实时监控
+- 🤖 机器人状态监控
+- 📈 消息统计图表
+- 💾 内存使用情况
+- ⏱️ 运行时间统计
+
+#### ⚙️ 配置管理
+- 🎨 **可视化配置编辑** - 基于 Schema 的表单界面
+- ✅ **实时配置验证** - 输入时即时检查配置有效性
+- 🔄 **热重载配置** - 配置修改立即生效，无需重启
+- 📋 **配置模板** - 预设的常用配置模板
+
+#### 🧩 插件管理
+- 📦 插件列表和状态查看
+- 🔄 插件启用/禁用切换
+- 📖 插件配置文档查看
+- 🛠️ 插件依赖关系图
+
+#### 📝 日志系统
+- 🔍 实时日志流查看
+- 🏷️ 日志级别过滤
+- 🔎 关键词搜索
+- 📥 日志导出功能
+
+#### 🗄️ 数据库管理
+- 📊 数据表结构查看
+- 🔍 SQL 查询执行
+- 📈 数据统计和分析
+- 🔧 数据备份恢复
 
 ### 💬 测试机器人
 
@@ -218,6 +266,85 @@ pnpm dev
 
 ## 🧩 编写插件
 
+### 📋 插件配置 Schema
+
+Zhin.js 提供了强大的 Schema 配置系统，让你可以定义类型安全的插件配置：
+
+```typescript
+import { Schema, defineSchema, usePlugin } from 'zhin.js';
+
+// 🎯 定义插件配置结构
+defineSchema(Schema.object({
+  // 基础类型
+  name: Schema.string()
+    .default('我的插件')
+    .description('插件名称'),
+  
+  enabled: Schema.boolean()
+    .default(true)
+    .description('是否启用插件'),
+  
+  timeout: Schema.number()
+    .default(5000)
+    .min(1000)
+    .max(30000)
+    .description('超时时间（毫秒）'),
+  
+  // 联合类型 - 新特性！
+  level: Schema.union([
+    Schema.const('debug'),
+    Schema.const('info'),
+    Schema.const('warn'),
+    Schema.const('error')
+  ]).default('info').description('日志级别'),
+  
+  // 复杂对象
+  api: Schema.object({
+    key: Schema.string().required().description('API 密钥'),
+    endpoint: Schema.string()
+      .default('https://api.example.com')
+      .description('API 端点'),
+    retries: Schema.number().default(3).min(0).max(10)
+  }).description('API 配置'),
+  
+  // 数组类型
+  features: Schema.list(Schema.string())
+    .default(['feature1', 'feature2'])
+    .description('启用的功能列表')
+}));
+
+// 🔧 使用配置
+const plugin = usePlugin();
+const config = plugin.config;
+
+console.log('插件名称:', config.name);
+console.log('API 配置:', config.api);
+```
+
+### 🎨 Schema 类型支持
+
+Zhin.js Schema 系统支持丰富的类型：
+
+```typescript
+// 基础类型
+Schema.string()     // 字符串
+Schema.number()     // 数字  
+Schema.boolean()    // 布尔值
+Schema.date()       // 日期
+Schema.regexp()     // 正则表达式
+
+// 容器类型
+Schema.list(Schema.string())           // 数组
+Schema.object({ key: Schema.string() }) // 对象
+Schema.dict(Schema.number())           // 字典
+
+// 高级类型
+Schema.union([Schema.string(), Schema.number()])  // 联合类型
+Schema.tuple([Schema.string(), Schema.number()])  // 元组
+Schema.const('constant')                          // 常量
+Schema.any()                                      // 任意类型
+```
+
 ### 查看示例插件
 
 生成的项目已包含一个完整的示例插件 `src/plugins/test-plugin.ts`：
@@ -231,7 +358,21 @@ import {
   MessageCommand,
   useContext,
   onDispose,
+  Schema,
+  defineSchema,
 } from 'zhin.js';
+
+// 🎯 定义插件配置
+defineSchema(Schema.object({
+  greeting: Schema.string()
+    .default('Hello')
+    .description('问候语'),
+  maxRetries: Schema.number()
+    .default(3)
+    .min(1)
+    .max(10)
+    .description('最大重试次数')
+}));
 
 const logger = useLogger();
 
