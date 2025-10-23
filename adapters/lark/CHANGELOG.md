@@ -1,5 +1,15 @@
 # @zhin.js/adapter-lark
 
+## 1.0.9
+
+### Patch Changes
+
+- 551c4d2: fix: 插件支持配置文件读取,优化 test 用例
+- Updated dependencies [551c4d2]
+  - @zhin.js/types@1.0.3
+  - zhin.js@1.0.8
+  - @zhin.js/http@1.0.5
+
 ## 1.0.8
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "zhin.js",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "开箱即用的机器人框架 - 包含进程适配器、HTTP服务、Web控制台和SQLite数据库",
   "type": "module",
   "main": "./lib/index.js",

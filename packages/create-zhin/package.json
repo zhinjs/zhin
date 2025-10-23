@@ -1,6 +1,6 @@
 {
   "name": "create-zhin-app",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Create a new zhin bot project",
   "type": "module",
   "bin": {
