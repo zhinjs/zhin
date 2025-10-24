@@ -1,5 +1,11 @@
 # @zhin.js/client
 
+## 1.0.5
+
+### Patch Changes
+
+- c490260: fix: 更新脚手架结构,优化包依赖
+
 ## 1.0.4
 
 ### Patch Changes
