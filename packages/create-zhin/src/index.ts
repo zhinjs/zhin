@@ -436,7 +436,8 @@ main().catch(console.error);
   
   // app/src/plugins/example.ts
   await fs.writeFile(path.join(projectPath, 'src', 'plugins', 'example.ts'),
-`import { useLogger, addCommand, MessageCommand, onDispose } from 'zhin.js';
+`import { useLogger, addCommand, MessageCommand, useContext, onDispose } from 'zhin.js';
+import * as path from 'path';
 
 const logger = useLogger();
 
@@ -463,6 +464,9 @@ onDispose(() => {
   logger.info('示例插件已卸载');
 });
 
+useContext('web',(web)=>{
+  web.addEntry(path.resolve(process.cwd(),'client/index.tsx'))
+});
 logger.info('示例插件已加载');
 `);
   
