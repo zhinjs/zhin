@@ -1,5 +1,12 @@
 # @zhin.js/adapter-discord
 
+## 1.0.9
+
+### Patch Changes
+
+- c490260: fix: 更新脚手架结构,优化包依赖
+  - zhin.js@1.0.9
+
 ## 1.0.8
 
 ### Patch Changes
