@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.9
+
+### Patch Changes
+
+- 59c84ba: fix: 优化 http 插件配置
+
 ## 1.0.8
 
 ### Patch Changes
