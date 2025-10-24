@@ -64,6 +64,24 @@ useContext("router", async (router) => {
       middlewareMode: true,
       fs: {
         strict: false,
+        // 添加文件访问过滤，避免访问特殊文件
+        allow: [
+          // 允许访问的目录
+          root,
+          searchForWorkspaceRoot(root),
+          path.resolve(process.cwd(), 'node_modules'),
+          path.resolve(process.cwd(), 'client'),
+          path.resolve(process.cwd(), 'src'),
+        ],
+        // 拒绝访问某些文件模式
+        deny: [
+          '**/.git/**',
+          '**/node_modules/.cache/**',
+          '**/*.socket',
+          '**/*.pipe',
+          '**/Dockerfile*',
+          '**/.env*',
+        ],
       },
     },
     resolve: {
@@ -104,6 +122,18 @@ useContext("router", async (router) => {
     const name = ctx.path.slice(1);
 
     const sendFile = (filename: string) => {
+      // 安全检查：确保是常规文件
+      try {
+        const stat = fs.statSync(filename);
+        if (!stat.isFile()) {
+          ctx.status = 404;
+          return;
+        }
+      } catch (error) {
+        ctx.status = 404;
+        return;
+      }
+      
       ctx.type = path.extname(filename);
       if (filename.endsWith(".ts")) ctx.type = "text/javascript";
       return (ctx.body = fs.createReadStream(filename));
@@ -117,11 +147,17 @@ useContext("router", async (router) => {
     // 2. 检查是否是静态文件
     const filename = path.resolve(root, name);
     if (filename.startsWith(root) || filename.includes("node_modules")) {
-      if (fs.existsSync(filename)) {
-        const fileState = fs.statSync(filename);
-        if (fileState.isFile()) {
-          return sendFile(filename);
+      try {
+        if (fs.existsSync(filename)) {
+          const fileState = fs.statSync(filename);
+          // 只处理常规文件，忽略目录、socket、符号链接等
+          if (fileState.isFile() && !fileState.isSocket() && !fileState.isFIFO()) {
+            return sendFile(filename);
+          }
         }
+      } catch (error) {
+        // 忽略文件系统错误，继续处理
+        console.warn(`文件访问错误: ${filename}`, (error as Error).message);
       }
     } else {
       // 安全检查：路径不在允许范围内

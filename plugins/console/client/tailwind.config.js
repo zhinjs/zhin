@@ -1,14 +1,27 @@
 /** @type {import('tailwindcss').Config} */
+import path from 'path';
 const cwd = process.cwd();
+
+// 安全的路径构建函数，避免扫描特殊文件
+const safePath = (...parts) => {
+  try {
+    return path.resolve(...parts);
+  } catch (error) {
+    console.warn(`Tailwind 路径构建失败: ${parts.join('/')}`, error.message);
+    return '';
+  }
+};
+
 export default {
     content: [
         "./index.html",
         './src/**/*.{js,ts,jsx,tsx,mdx}',
-        `${cwd}/**/radix-ui/**/*.{js,ts,jsx,tsx}`,
-        `${cwd}/**/@radix-ui/themes/**/*.{js,ts,jsx,tsx}`,
-        `${cwd}/client/**/*.{js,ts,jsx,tsx}`,
+        './node_modules/@radix-ui/**/*.{js,ts,jsx,tsx}',
+        `${cwd}/node_modules/@zhin.js/*/client/**/*.{js,ts,jsx,tsx}`,
+        `${cwd}/node_modules/@zhin.js/*/dist/**/*.{js,ts,jsx,tsx}`,
         `${cwd}/plugins/*/client/**/*.{js,ts,jsx,tsx}`,
-    ],
+        `${cwd}/client/**/*.{js,ts,jsx,tsx}`,
+    ].filter(Boolean), // 过滤掉空字符串
     theme: {
         extend: {
             colors: {
