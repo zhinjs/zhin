@@ -312,6 +312,18 @@ addPage({
 });
 `);
 
+  // app/client/tsconfig.json
+  await fs.writeJson(path.join(projectPath, 'client', 'tsconfig.json'), {
+    extends: '@zhin.js/console/browser.tsconfig.json',
+    compilerOptions: {
+      target: 'ES2022',
+      module: 'ESNext',
+      moduleResolution: 'bundler',
+      jsx: 'react-jsx',
+      baseUrl: '.'
+    }
+  }, { spaces: 2 });
+
   // 创建配置文件
   await createConfigFile(projectPath, options.config!, options);
 }

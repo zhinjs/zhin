@@ -234,6 +234,20 @@ export { ${capitalizedName}Page };
 `;
   
   await fs.writeFile(path.join(pluginDir, 'client', 'index.tsx'), clientContent);
+
+  // 创建 client/tsconfig.json
+  const clientTsConfig = {
+    extends: '@zhin.js/console/browser.tsconfig.json',
+    compilerOptions: {
+      target: 'ES2022',
+      module: 'ESNext',
+      moduleResolution: 'bundler',
+      jsx: 'react-jsx',
+      baseUrl: '.'
+    }
+  };
+  
+  await fs.writeJson(path.join(pluginDir, 'client', 'tsconfig.json'), clientTsConfig, { spaces: 2 });
   
   // 创建客户端页面组件
   await fs.ensureDir(path.join(pluginDir, 'client', 'pages'));

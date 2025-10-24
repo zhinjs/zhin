@@ -6,6 +6,8 @@ export default {
         './src/**/*.{js,ts,jsx,tsx,mdx}',
         `${cwd}/**/radix-ui/**/*.{js,ts,jsx,tsx}`,
         `${cwd}/**/@radix-ui/themes/**/*.{js,ts,jsx,tsx}`,
+        `${cwd}/client/**/*.{js,ts,jsx,tsx}`,
+        `${cwd}/plugins/*/client/**/*.{js,ts,jsx,tsx}`,
     ],
     theme: {
         extend: {
