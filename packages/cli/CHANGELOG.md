@@ -1,5 +1,11 @@
 # @zhin.js/cli
 
+## 1.0.7
+
+### Patch Changes
+
+- c1a539e: fix: cli 优化,console 优化
+
 ## 1.0.6
 
 ### Patch Changes
