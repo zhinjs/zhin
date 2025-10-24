@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.10
+
+### Patch Changes
+
+- 27eb109: fix: 模板项目增加 web 示例
+
 ## 1.0.9
 
 ### Patch Changes
