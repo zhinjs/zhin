@@ -1,4 +1,4 @@
-import { defineConfig } from "zhin.js";
+import { defineConfig,LogLevel } from "zhin.js";
 export default defineConfig(async () => {
   return {
     database: {
@@ -74,7 +74,7 @@ export default defineConfig(async () => {
         scope: "icqqjs"
       }
     ],
-    log_level: 1,
+    log_level: LogLevel.INFO,
     log: {
       maxDays: 7,
       maxRecords: 10000,

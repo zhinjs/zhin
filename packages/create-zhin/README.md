@@ -5,9 +5,12 @@
 ## 核心特性
 
 - 🚀 **一键创建**: 使用标准的 `npm create` / `yarn create` / `pnpm create` 命令
-- � **Workspace 结构**: 自动创建 pnpm workspace，支持插件开发
-- �🔧 **智能配置**: 自动安装 pnpm、项目依赖
-- 🎯 **交互式配置**: 选择运行时、配置格式
+- 📦 **Workspace 结构**: 自动创建 pnpm workspace，支持插件开发
+- 🔧 **智能配置**: 自动安装 pnpm、项目依赖
+- 🎯 **交互式配置**: 选择运行时、配置格式、数据库类型
+- 🗄️ **数据库支持**: 支持 SQLite、MySQL、PostgreSQL、MongoDB、Redis
+- 🔐 **安全配置**: 自动生成 HTTP 认证和环境变量管理
+- 📊 **日志配置**: 内置完整的日志等级和清理配置
 - 🌐 **零安装**: 无需全局安装，直接使用
 
 ## 快速开始
@@ -51,10 +54,15 @@ pnpm build
 4. **HTTP 认证配置**: 配置 Web 控制台登录信息
    - 默认用户名：当前系统用户名
    - 默认密码：随机生成 6 位字符串
-5. **创建 Workspace**: 生成 pnpm workspace 结构
-6. **生成 .env 文件**: 保存 HTTP 认证信息
-7. **自动安装依赖**: 在项目根目录执行 `pnpm install`
-8. **完成提示**: 显示登录信息和下一步操作
+5. **数据库配置**: 选择数据库类型和连接参数
+   - SQLite (默认，零配置)
+   - MySQL、PostgreSQL、MongoDB、Redis
+   - 自动安装对应的数据库驱动包
+6. **创建 Workspace**: 生成 pnpm workspace 结构
+7. **生成配置文件**: 包含数据库、日志等完整配置
+8. **生成 .env 文件**: 保存 HTTP 认证和数据库连接信息
+9. **自动安装依赖**: 在项目根目录执行 `pnpm install`
+10. **完成提示**: 显示登录信息、数据库配置和下一步操作
 
 ## 支持的参数
 
@@ -75,6 +83,12 @@ npm create zhin-app my-awesome-bot
 4. 🔐 配置 Web 控制台登录信息
    - 用户名（默认：当前系统用户名）
    - 密码（默认：随机 6 位字符）
+5. 🗄️ 配置数据库
+   - SQLite（推荐，零配置）
+   - MySQL（主机、端口、用户名、密码、数据库名）
+   - PostgreSQL（主机、端口、用户名、密码、数据库名）
+   - MongoDB（连接字符串、数据库名）
+   - Redis（主机、端口、密码、数据库索引）
 
 ### 快速创建（跳过交互）
 
@@ -96,8 +110,11 @@ npm create zhin-app my-bot --yes
 - 配置格式: TypeScript (`zhin.config.ts`)
 - 运行时: Node.js
 - 包管理器: pnpm（自动安装）
+- 数据库: SQLite (`./data/bot.db`, WAL 模式)
 - HTTP 用户名: 当前系统用户名
 - HTTP 密码: 随机生成 6 位字符
+- 日志等级: INFO
+- 日志清理: 7 天，10000 条记录
 
 ## 使用场景
 
