@@ -1,5 +1,15 @@
 # @zhin.js/console
 
+## 1.0.7
+
+### Patch Changes
+
+- c490260: fix: 更新脚手架结构,优化包依赖
+- Updated dependencies [c490260]
+  - @zhin.js/client@1.0.5
+  - @zhin.js/core@1.0.9
+  - @zhin.js/http@1.0.6
+
 ## 1.0.6
 
 ### Patch Changes
