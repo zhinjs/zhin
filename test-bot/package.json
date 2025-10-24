@@ -9,7 +9,7 @@
     "dev": "npx zhin dev",
     "start": "npx zhin start",
     "daemon": "npx zhin start --daemon",
-    "build": "npx zhin build",
+    "build": "echo 'skipping build for test-bot'",
     "stop": "zhin stop"
   },
   "dependencies": {
