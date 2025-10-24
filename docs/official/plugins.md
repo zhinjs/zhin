@@ -213,7 +213,7 @@ CONSOLE_PASSWORD=secret      # 控制台密码
 pnpm dev
 
 # 浏览器访问
-`http://localhost:3000/console`
+`http://localhost:8086`
 ```
 
 ### 控制台功能
@@ -659,20 +659,21 @@ useContext('client', (client) => {
 export default defineConfig(async (env) => {
   return {
     plugins: [
-      // 基础 HTTP 服务
-      {
-        name: 'http',
-        config: {
-          port: 3000,
-          auth: {
-            username: env.HTTP_USERNAME,
-            password: env.HTTP_PASSWORD
-          }
-        }
-      },
-      
-      // Web 控制台
-      {
+      'http',
+      'console'
+    ],
+    
+    // HTTP 服务配置
+    'http': {
+      port: 8086,
+      auth: {
+        username: env.HTTP_USERNAME || 'admin',
+        password: env.HTTP_PASSWORD || '123456'
+      }
+    },
+    
+    // Web 控制台配置
+    'console': {
         name: 'console',
         config: {
           title: 'My Bot Console',
@@ -694,19 +695,14 @@ export default defineConfig(async (env) => {
 export default defineConfig(async (env) => {
   return {
     plugins: [
-      // API 服务
-      {
-        name: 'http',
-        config: {
-          port: 3000,
-          prefix: '/api'
-        }
-      },
-      
-      // 管理控制台
-      {
-        name: 'http',
-        alias: 'admin-http',
+      'http'
+    ],
+    
+    // HTTP 服务配置
+    'http': {
+      port: 8086,
+      prefix: '/api'
+    }
         config: {
           port: 3001,
           prefix: '/admin'
@@ -766,20 +762,20 @@ useContext('http', (http) => {
 #### HTTP 插件端口冲突
 
 ```bash
-# 错误：端口 3000 已被占用
-Error: listen EADDRINUSE :::3000
+# 错误：端口 8086 已被占用
+Error: listen EADDRINUSE :::8086
 
 # 解决：更改端口或停止占用进程
-HTTP_PORT=3001
+HTTP_PORT=8087
 # 或
-lsof -ti:3000 | xargs kill -9
+lsof -ti:8086 | xargs kill -9
 ```
 
 #### Console 插件无法访问
 
 ```bash
 # 检查插件是否正确启动
-curl `http://localhost:3000/console`
+curl `http://localhost:8086`
 
 # 检查认证配置
 CONSOLE_USERNAME=admin

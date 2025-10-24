@@ -13,29 +13,41 @@ pnpm add @zhin.js/adapter-discord
 ### Gateway 模式配置（推荐常规使用）
 
 ```typescript
-import { DiscordBotConfig } from '@zhin.js/adapter-discord';
+// zhin.config.ts
+import { defineConfig } from 'zhin.js'
 
-const config: DiscordBotConfig = {
-  context: 'discord',
-  name: 'my-discord-bot',
-  token: 'YOUR_BOT_TOKEN', // 从 Discord Developer Portal 获取的 Bot Token
-}
+export default defineConfig({
+  bots: [
+    {
+      context: 'discord',
+      name: 'my-discord-bot',
+      token: process.env.DISCORD_TOKEN, // 从 Discord Developer Portal 获取的 Bot Token
+    }
+  ],
+  plugins: ['adapter-discord']
+})
 ```
 
 ### Interactions 端点模式配置（推荐高性能场景）
 
 ```typescript
-import { DiscordInteractionsConfig } from '@zhin.js/adapter-discord';
+// zhin.config.ts
+import { defineConfig } from 'zhin.js'
 
-const config: DiscordInteractionsConfig = {
-  context: 'discord-interactions',
-  name: 'my-discord-bot',
-  token: 'YOUR_BOT_TOKEN',
-  applicationId: 'YOUR_APPLICATION_ID', // Discord 应用 ID
-  publicKey: 'YOUR_PUBLIC_KEY', // Discord 应用的 Public Key
-  interactionsPath: '/discord/interactions', // 交互端点路径
-  useGateway: false // 是否同时使用 Gateway（可选）
-}
+export default defineConfig({
+  bots: [
+    {
+      context: 'discord-interactions',
+      name: 'my-discord-bot',
+      token: process.env.DISCORD_TOKEN,
+      applicationId: process.env.DISCORD_APPLICATION_ID, // Discord 应用 ID
+      publicKey: process.env.DISCORD_PUBLIC_KEY, // Discord 应用的 Public Key
+      interactionsPath: '/discord/interactions', // 交互端点路径
+      useGateway: false // 是否同时使用 Gateway（可选）
+    }
+  ],
+  plugins: ['adapter-discord']
+})
 ```
 
 ### 通用配置参数

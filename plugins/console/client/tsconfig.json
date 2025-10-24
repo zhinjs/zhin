@@ -8,9 +8,10 @@
         "jsx": "react-jsx",
         "paths": {
             "@/*": ["src/*"],
-            "@zhin.js/client": [
-                "../src"
-            ]
+            "lucide-react": ["../node_modules/lucide-react"],
+            "react": ["../node_modules/@types/react"],
+            "react-dom": ["../node_modules/@types/react-dom"]
         }
     }
 }
+

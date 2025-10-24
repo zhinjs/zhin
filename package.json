@@ -22,7 +22,7 @@
     "pub": "pnpm -r publish --access public --no-git-checks --registry https://registry.npmjs.org",
     "stop": "pnpm --filter test-bot stop",
     "init": "pnpm --filter test-bot initial && pnpm install",
-    "build": "pnpm -r build",
+    "build": "pnpm --filter @zhin.js/cli build && pnpm install && pnpm -r build",
     "clean": "pnpm -r clean",
     "lint": "eslint . --ext .ts,.tsx",
     "type-check": "tsc --noEmit",

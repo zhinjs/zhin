@@ -65,11 +65,21 @@ cd test-bot && pnpm dev
 ### 创建新项目
 
 ```bash
-# 使用 CLI 创建项目
+# 使用 create-zhin 创建项目（会自动安装 pnpm 和依赖）
+npm create zhin-app my-bot
+# 或
 pnpm create zhin-app my-bot
+
 cd my-bot
-pnpm install
+
+# 开发模式启动（支持热重载）
 pnpm dev
+
+# 创建新插件
+zhin new my-plugin
+
+# 构建插件
+pnpm build
 ```
 
 
@@ -144,14 +154,50 @@ useContext('database', 'cache', (db, cache) => {
 
 ## 常用命令
 
+### 项目级命令（在项目根目录执行）
+
 ```bash
-pnpm dev          # 启动开发服务器（热重载）
-pnpm build        # 构建所有包
-pnpm test         # 运行测试
-pnpm lint         # 代码检查
-pnpm start        # 启动生产环境
-pnpm daemon       # 后台运行
-pnpm stop         # 停止机器人
+pnpm dev              # 启动开发服务器（热重载）
+pnpm start            # 启动生产环境
+pnpm daemon           # 后台运行
+pnpm stop             # 停止机器人
+pnpm build            # 构建所有插件（不是 app）
+```
+
+### CLI 工具命令（全局可用）
+
+```bash
+zhin dev              # 启动开发模式（等同于 pnpm dev）
+zhin start            # 启动生产环境
+zhin stop             # 停止机器人
+zhin new <plugin>     # 创建新插件（自动添加到依赖）
+zhin build [plugin]   # 构建插件（不指定则构建所有）
+zhin build --clean    # 清理后构建
+```
+
+### 开发工作流
+
+```bash
+# 1. 创建项目
+npm create zhin-app my-bot
+
+# 2. 启动开发
+cd my-bot
+pnpm dev
+
+# 3. 创建插件
+zhin new my-plugin
+
+# 4. 开发插件（修改 plugins/my-plugin/app/index.ts）
+# 文件保存后自动重载 ⚡
+
+# 5. 构建插件
+pnpm build
+# 或只构建特定插件
+zhin build my-plugin
+
+# 6. 在配置文件中启用插件
+# 编辑 zhin.config.ts，添加 'my-plugin' 到 plugins 数组
 ```
 
 

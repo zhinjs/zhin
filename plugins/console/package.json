@@ -9,7 +9,12 @@
     ".": {
       "types": "./lib/index.d.ts",
       "import": "./lib/index.js"
-    }
+    },
+    "./client": {
+      "types": "./lib/client/index.d.ts",
+      "import": "./lib/client/index.js"
+    },
+    "./browser.tsconfig.json": "./client/tsconfig.json"
   },
   "scripts": {
     "build": "tsc",
@@ -22,8 +27,16 @@
     "@tailwindcss/vite": "4.1.14",
     "radix-ui": "^1.4.3",
     "@radix-ui/themes": "^3.2.1",
-    "lucide-react": "^0.469.0",
+    "@tailwindcss/postcss": "^4.1.11",
+    "tailwindcss": "latest",
     "koa-connect": "^2.1.0",
+    "@reduxjs/toolkit": "^2.9.0",
+    "lucide-react": "^0.469.0",
+    "clsx": "^2.1.1",
+    "react-redux": "9.2.0",
+    "react-router": "7.0.0",
+    "redux-persist": "6.0.0",
+    "tailwind-merge": "^3.3.1",
     "ws": "^8.18.3",
     "vite": "^7.0.6"
   },
@@ -41,8 +54,7 @@
   },
   "files": [
     "lib",
-    "src",
-    "global.d.ts",
-    "app"
+    "app",
+    "client"
   ]
 }

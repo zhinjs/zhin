@@ -18,20 +18,25 @@ npm install @zhin.js/adapter-icqq @icqqjs/icqq
 
 ## 配置
 
-```javascript
+```typescript
 // zhin.config.ts
-export default {
+import { defineConfig } from 'zhin.js'
+
+export default defineConfig({
   bots: [
     {
       context: 'icqq',
-      name: '123456789', // QQ号
-      password: 'your-password', // QQ密码（可选）
-      scope: 'icqqjs', // 作用域
+      name: process.env.ICQQ_LOGIN_UIN, // QQ号
+      password: process.env.ONEBOT_TOKEN, // QQ密码（可选，为空则扫码登录）
+      platform: 2, // 1: 安卓手机, 2: 安卓手表, 3: MacOS, 4: 企点
+      log_level: 'off', // 日志级别
       data_dir: './data', // 数据目录
-      // 其他ICQQ配置项...
+      scope: 'icqqjs', // 作用域
+      sign_api_addr: process.env.ICQQ_SIGN_ADDR // 签名API地址（可选）
     }
-  ]
-}
+  ],
+  plugins: ['adapter-icqq']
+})
 ```
 
 ## 使用方式

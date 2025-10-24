@@ -1,24 +1,22 @@
 # create-zhin-app
 
-快速创建 Zhin 机器人项目的脚手架工具，提供一键创建和配置新项目的能力。
+快速创建 Zhin 机器人 workspace 项目的脚手架工具，提供一键创建和配置新项目的能力。
 
 ## 核心特性
 
 - 🚀 **一键创建**: 使用标准的 `npm create` / `yarn create` / `pnpm create` 命令
-- 🔧 **智能配置**: 自动处理项目初始化和依赖安装
-- 📦 **零安装**: 无需全局安装，直接使用
-- 🎯 **参数透传**: 完美支持所有 CLI 参数和选项
+- � **Workspace 结构**: 自动创建 pnpm workspace，支持插件开发
+- �🔧 **智能配置**: 自动安装 pnpm、项目依赖
+- 🎯 **交互式配置**: 选择运行时、配置格式
+- 🌐 **零安装**: 无需全局安装，直接使用
 
 ## 快速开始
 
 ### 使用不同包管理器创建项目
 
 ```bash
-# npm
+# npm（推荐）
 npm create zhin-app my-awesome-bot
-
-# yarn
-yarn create zhin-app my-awesome-bot
 
 # pnpm
 pnpm create zhin-app my-awesome-bot
@@ -27,60 +25,65 @@ pnpm create zhin-app my-awesome-bot
 npx create-zhin-app@latest my-awesome-bot
 ```
 
-## 工作原理
+### 创建后的步骤
 
-`create-zhin-app` 是 `@zhin.js/cli` 的轻量级包装器，它的工作流程如下：
+```bash
+# 进入项目
+cd my-awesome-bot
 
-1. **启动脚手架**: 当你运行 `npm create zhin-app` 时
-2. **参数解析**: 解析项目名称和所有命令行参数
-3. **调用 CLI**: 自动调用 `zhin init` 命令
-4. **参数转发**: 将所有参数原样传递给 CLI 工具
-5. **项目创建**: 完成项目初始化和配置
+# 开发模式启动
+pnpm dev
 
-```javascript
-// create-zhin-app 内部实现概览
-const args = process.argv.slice(2);
-const initArgs = ['init', ...args];
+# 创建插件
+zhin new my-plugin
 
-spawn('node', [cliPath, ...initArgs], {
-  stdio: 'inherit',
-  cwd: process.cwd()
-});
+# 构建插件
+pnpm build
 ```
 
-## 支持的参数
+## 工作原理
 
-所有 `zhin init` 支持的参数都可以通过 `create-zhin-app` 使用：
+`create-zhin-app` 是独立的项目脚手架工具，它的工作流程如下：
+
+1. **启动脚手架**: 当你运行 `npm create zhin-app` 时
+2. **检测 pnpm**: 自动检测并安装 pnpm（如果未安装）
+3. **交互式配置**: 询问项目名称、运行时、配置格式
+4. **创建 Workspace**: 生成 pnpm workspace 结构
+5. **自动安装依赖**: 在项目根目录执行 `pnpm install`
+6. **完成提示**: 显示下一步操作指引
+
+## 支持的参数
 
 ### 基础用法
 
 ```bash
-# 使用默认配置创建项目
+# 交互式创建（推荐）
 npm create zhin-app my-bot
 
-# 交互式创建（会提示选择配置）
-npm create zhin-app my-bot --interactive
+# 指定项目名称
+npm create zhin-app my-awesome-bot
 ```
 
-### 高级配置
+### 快速创建（跳过交互）
 
 ```bash
-# 完整配置示例
-npm create zhin-app my-bot -- \
-  --config ts \
-  --package-manager pnpm \
-  --runtime bun \
-  --yes
+# 使用默认配置（TypeScript + Node.js）
+npm create zhin-app my-bot -y
+# 或
+npm create zhin-app my-bot --yes
 ```
 
 ### 参数详解
 
-| 参数 | 短参数 | 说明 | 可选值 | 默认值 |
-|------|--------|------|--------|--------|
-| `--config` | `-c` | 配置文件格式 | `js`, `ts`, `json`, `yaml`, `toml` | `js` |
-| `--package-manager` | `-p` | 包管理器 | `npm`, `yarn`, `pnpm` | `pnpm` |
-| `--runtime` | `-r` | 运行时 | `node`, `bun` | `node` |
-| `--yes` | `-y` | 跳过交互式配置 | 无 | `false` |
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `[project-name]` | 项目名称（可选，会提示输入） | `my-zhin-bot` |
+| `-y, --yes` | 跳过交互，使用默认配置 | `false` |
+
+**默认配置：**
+- 配置格式: TypeScript (`zhin.config.ts`)
+- 运行时: Node.js
+- 包管理器: pnpm（自动安装）
 
 ## 使用场景
 
@@ -120,24 +123,46 @@ npm create zhin-app experimental-bot -- -c ts -r node -y
 
 ## 生成的项目结构
 
-执行 `create-zhin-app` 后会生成完整的项目结构：
+执行 `create-zhin-app` 后会生成 pnpm workspace 项目结构：
 
 ```
 my-awesome-bot/
-├── src/
-│   ├── index.ts              # 主入口文件
-│   └── plugins/              # 插件目录
-│       └── test-plugin.ts    # 示例插件
-├── dist/                    # 构建输出目录
+├── src/                      # 应用源代码
+│   ├── index.ts             # 主入口文件
+│   └── plugins/             # 本地插件目录
+│       └── example.ts       # 示例插件
+├── client/                   # 客户端页面
+│   └── index.tsx            # 示例页面
 ├── data/                     # 数据存储目录
-├── logs/                     # 日志目录（如果配置了）
-├── zhin.config.[ext]         # 配置文件
-├── package.json             # 项目依赖和脚本
-├── tsconfig.json            # TypeScript配置
-├── .gitignore               # Git忽略规则
+├── plugins/                  # 插件开发目录（独立包）
+│   └── .gitkeep
+├── zhin.config.ts            # 配置文件
+├── package.json             # 根 package.json（包含依赖和脚本）
+├── tsconfig.json            # TypeScript 根配置
+├── pnpm-workspace.yaml      # workspace 配置
+├── .gitignore               # Git 忽略规则
 ├── .env.example             # 环境变量模板
-├── pnpm-workspace.yaml      # pnpm工作空间（如果使用pnpm）
 └── README.md                # 项目说明文档
+```
+
+**Workspace 配置 (`pnpm-workspace.yaml`):**
+```yaml
+packages:
+  - '.'              # 根目录即为主应用
+  - 'plugins/*'      # plugins 下的所有插件包
+```
+
+**根 package.json 脚本:**
+```json
+{
+  "scripts": {
+    "dev": "zhin dev",                          // 开发模式
+    "start": "zhin start",                      // 生产启动
+    "daemon": "zhin start --daemon",            // 后台运行
+    "stop": "zhin stop",                        // 停止服务
+    "build": "pnpm --filter \"./plugins/*\" build"  // 构建所有插件
+  }
+}
 ```
 
 ## 配置文件格式
@@ -190,7 +215,7 @@ export default defineConfig<AppConfig>(async (env) => {
 });
 ```
 
-## 后续步骤
+## 完整工作流
 
 项目创建完成后，可以执行以下操作：
 
@@ -200,38 +225,74 @@ export default defineConfig<AppConfig>(async (env) => {
 cd my-awesome-bot
 ```
 
-### 2. 安装依赖（如果还没安装）
+### 2. 开发模式启动（依赖已自动安装）
 
 ```bash
-# 根据选择的包管理器
-npm install
-# 或
-yarn install  
-# 或
-pnpm install
-```
-
-### 3. 开发模式启动
-
-```bash
-npm run dev
-# 或
-yarn dev
-# 或  
 pnpm dev
 ```
 
-### 4. 生产环境部署
+访问 `http://localhost:8086` 查看 Web 控制台
+
+### 3. 创建插件
 
 ```bash
-# 构建项目
-npm run build
+# 创建新插件（自动添加到依赖）
+zhin new my-awesome-plugin
+
+# 插件会创建在 plugins/my-awesome-plugin/
+# 自动添加到根 package.json 的 dependencies
+```
+
+### 4. 开发插件
+
+```bash
+# 编辑插件文件
+# plugins/my-awesome-plugin/app/index.ts  # 插件逻辑
+# plugins/my-awesome-plugin/client/       # 客户端页面
+
+# 保存后自动热重载 ⚡
+```
+
+### 5. 构建插件
+
+```bash
+# 构建所有插件
+pnpm build
+
+# 或只构建特定插件
+zhin build my-awesome-plugin
+```
+
+### 6. 在配置中启用插件
+
+编辑 `zhin.config.ts`：
+
+```typescript
+export default defineConfig({
+  plugins: [
+    'adapter-process',
+    'http',
+    'console',
+    'example',           // 内置示例
+    'my-awesome-plugin'  // 你的插件
+  ]
+});
+```
+
+### 7. 生产环境部署
+
+```bash
+# 确保插件已构建
+pnpm build
 
 # 生产启动
-npm run start
+pnpm start
 
-# 后台运行
-npm run daemon
+# 或后台运行
+pnpm daemon
+
+# 停止服务
+pnpm stop
 ```
 
 ## 错误处理

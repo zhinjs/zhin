@@ -18,20 +18,23 @@ npm install @zhin.js/adapter-kook kook-client
 
 ## 配置
 
-```javascript
+```typescript
 // zhin.config.ts
-export default {
+import { defineConfig } from 'zhin.js'
+
+export default defineConfig({
   bots: [
     {
       context: 'kook',
-      name: '123456789', // 机器人ID
-      token: 'your-bot-token', // KOOK机器人Token
+      name: 'my-kook-bot', // 机器人名称
+      token: process.env.KOOK_TOKEN, // KOOK机器人Token
       mode: 'websocket', // websocket | webhook
       data_dir: './data', // 数据目录
-      // 其他KOOK配置项...
+      endpoint: process.env.KOOK_ENDPOINT // Webhook端点（webhook模式下使用）
     }
-  ]
-}
+  ],
+  plugins: ['adapter-kook']
+})
 ```
 
 ## 使用方式

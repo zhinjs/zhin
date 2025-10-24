@@ -28,6 +28,11 @@
   "devDependencies": {
     "@zhin.js/cli": "workspace:*",
     "@zhin.js/types": "workspace:*",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.1",
+    "lucide-react": "^0.469.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "typescript": "^5.0.0"
   },
   "engines": {

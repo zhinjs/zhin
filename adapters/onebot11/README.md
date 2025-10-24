@@ -20,20 +20,23 @@ npm install @zhin.js/adapter-onebot11
 
 ## 配置
 
-```javascript
+```typescript
 // zhin.config.ts
-export default {
+import { defineConfig } from 'zhin.js'
+
+export default defineConfig({
   bots: [
     {
       context: 'onebot11',
       name: 'my-bot', // 机器人名称
-      url: 'ws://localhost:8080', // OneBot服务器地址
-      access_token: 'your-access-token', // 访问令牌（可选）
+      url: process.env.ONEBOT_URL || 'ws://localhost:8080', // OneBot服务器地址
+      access_token: process.env.ONEBOT_TOKEN, // 访问令牌（可选）
       reconnect_interval: 5000, // 重连间隔（毫秒）
       heartbeat_interval: 30000, // 心跳间隔（毫秒）
     }
-  ]
-}
+  ],
+  plugins: ['adapter-onebot11']
+})
 ```
 
 ## 支持的OneBot实现

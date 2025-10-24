@@ -64,7 +64,7 @@ export default defineConfig(async () => {
         data_dir: "./data"
       },
       {
-        name: process.env.ICQQ_LOGIN_UIN,
+        name: process.env.ICQQ_LOGIN_UIN!,
         context: "icqq",
         log_level: "off",
         password: process.env.ONEBOT_TOKEN,
@@ -110,6 +110,12 @@ export default defineConfig(async () => {
       },
       testNumber: 3,
       testBoolean: true
+    },
+    http:{
+      port: 8086,
+      username: process.env.username,
+      password: process.env.password,
+      base:'/api'
     }
   }
 });

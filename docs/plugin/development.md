@@ -342,87 +342,487 @@ npm publish
 
 ## 🎛️ 插件配置系统
 
-### 使用 Schema 定义配置
+Zhin.js 提供了强大的配置系统，支持 Schema 定义、类型验证和自动 UI 生成。
 
-Zhin.js 提供了强大的 Schema 系统，支持 15 种数据类型和自动表单生成。
+### 配置定义与使用流程
+
+#### 1. 使用 `defineSchema` 定义配置结构
+
+`defineSchema` 函数返回一个 schema 函数，用于类型安全的配置访问：
 
 ```typescript
-import { Schema } from 'zhin.js'
+import { defineSchema, Schema, usePlugin } from '@zhin.js/core'
 
-// 定义插件配置
-export const config = Schema.object({
+const plugin = usePlugin()
+
+// 定义配置 Schema（返回 schema 函数）
+const schema = defineSchema(Schema.object({
   // 基础类型
-  apiKey: Schema.string('API密钥')
-    .required()
-    .description('服务API密钥'),
+  port: Schema.number('port')
+    .default(8086)
+    .description('HTTP 服务端口'),
   
-  maxRetries: Schema.number('最大重试次数')
-    .min(0)
-    .max(10)
-    .default(3),
+  username: Schema.string('username')
+    .description('HTTP 基本认证用户名, 默认为当前系统用户名'),
   
-  enabled: Schema.boolean('是否启用')
-    .default(true),
+  password: Schema.string('password')
+    .description('HTTP 基本认证密码, 默认为随机生成的6位字符串'),
   
-  // 特殊类型
-  timeout: Schema.percent('超时比例')
-    .default(0.8)
-    .description('请求超时占总时间的比例'),
-  
-  // 集合类型
-  whitelist: Schema.list(Schema.string(), '白名单')
-    .description('允许访问的用户ID列表'),
-  
-  server: Schema.object({
-    host: Schema.string('主机').default('localhost'),
-    port: Schema.number('端口').default(8080)
-  })
+  base: Schema.string('base')
+    .default('/api')
+    .description('HTTP 路由前缀, 默认为 /api')
+}))
+```
+
+#### 2. 使用 schema 函数访问配置
+
+通过调用 schema 函数获取配置值，支持解构赋值、默认值和完整的类型提示：
+
+```typescript
+// 方式1: 使用 schema 函数 + 解构赋值 + 默认值
+const { 
+  port = 8086, 
+  username = getCurrentUsername(), 
+  password = generateRandomPassword(), 
+  base = '/api' 
+} = schema(plugin.config, 'http')
+
+// 方式2: 先获取配置对象
+const config = schema(plugin.config, 'http')
+const port = config.port
+const username = config.username
+
+// schema 函数的第二个参数是插件名称，用于从配置对象中提取对应的插件配置
+```
+
+**关键要点**：
+- `defineSchema` 返回一个 schema 函数
+- `schema(plugin.config, 'plugin-name')` 获取配置并提供类型推导
+- 支持解构赋值和默认值
+- 提供完整的 TypeScript 类型提示
+
+#### 3. 在配置文件中设置值
+
+用户可在 `zhin.config.ts` 中为插件提供配置：
+
+```typescript
+// zhin.config.ts
+import { defineConfig } from 'zhin.js'
+
+export default defineConfig(async () => {
+  return {
+    plugins: ['http', 'my-plugin'],
+    
+    // 使用插件名作为键配置插件
+    http: {
+      port: 8086,
+      username: process.env.HTTP_USERNAME,
+      password: process.env.HTTP_PASSWORD,
+      base: '/api'
+    },
+    
+    'my-plugin': {
+      apiKey: process.env.API_KEY,
+      timeout: 5000
+    }
+  }
 })
+```
 
-// 使用配置
-import { useConfig } from 'zhin.js'
+### 完整的配置示例
 
-const config = useConfig('my-plugin')
-console.log(config.apiKey)  // 访问配置值
+参考 HTTP 插件的配置实现：
+
+```typescript
+import { defineSchema, Schema, usePlugin } from '@zhin.js/core'
+import os from 'node:os'
+
+const plugin = usePlugin()
+
+// 辅助函数
+const getCurrentUsername = () => {
+  try {
+    return os.userInfo().username
+  } catch {
+    return 'admin'
+  }
+}
+
+const generateRandomPassword = () => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  let result = ''
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return result
+}
+
+// 定义 Schema（返回 schema 函数）
+const schema = defineSchema(Schema.object({
+  port: Schema.number('port')
+    .default(8086)
+    .description('HTTP 服务端口'),
+  
+  username: Schema.string('username')
+    .description('HTTP 基本认证用户名, 默认为当前系统用户名'),
+  
+  password: Schema.string('password')
+    .description('HTTP 基本认证密码, 默认为随机生成的6位字符串'),
+  
+  base: Schema.string('base')
+    .default('/api')
+    .description('HTTP 路由前缀, 默认为 /api')
+}))
+
+// 使用 schema 函数获取配置（支持默认值和计算值）
+const { 
+  port = 8086, 
+  username = getCurrentUsername(), 
+  password = generateRandomPassword(), 
+  base = '/api' 
+} = schema(plugin.config, 'http')
+
+// 在代码中使用
+console.log(`Server running on port ${port}`)
+console.log(`Username: ${username}`)
+console.log(`API base: ${base}`)
 ```
 
 ### 支持的 Schema 类型
 
-| 类型 | 说明 | UI 控件 |
-|------|------|---------|
-| `string` | 字符串 | TextField / TextArea / Select |
-| `number` | 数字 | NumberInput |
-| `boolean` | 布尔值 | Switch |
-| `percent` | 百分比 | Slider + NumberInput |
-| `date` | 日期 | DatePicker |
-| `regexp` | 正则表达式 | TextField (monospace) |
-| `list` | 列表 | TextArea / CardList |
-| `tuple` | 元组 | FixedFieldList |
-| `object` | 对象 | NestedFields |
-| `dict` | 字典 | JSONEditor |
-| `union` | 联合类型 | Select |
-| `intersect` | 交叉类型 | MultiFields |
-| `any` | 任意类型 | JSONEditor |
+Zhin.js Schema 系统支持丰富的数据类型：
 
-### 配置元数据
+| 类型 | 方法 | 说明 | Web UI 控件 |
+|------|------|------|-------------|
+| **基础类型** |
+| 字符串 | `Schema.string()` | 文本内容 | TextField / TextArea / Select |
+| 数字 | `Schema.number()` | 整数或浮点数 | NumberInput |
+| 布尔值 | `Schema.boolean()` | true/false | Switch |
+| **特殊类型** |
+| 百分比 | `Schema.percent()` | 0-1 之间的小数 | Slider + NumberInput |
+| 日期 | `Schema.date()` | Date 对象 | DatePicker |
+| 正则 | `Schema.regexp()` | 正则表达式 | TextField (monospace) |
+| **集合类型** |
+| 数组 | `Schema.list(T)` | 元素列表 | CardList / TextArea |
+| 元组 | `Schema.tuple([T1, T2])` | 固定长度数组 | FixedFieldList |
+| 对象 | `Schema.object({})` | 键值对 | NestedFields |
+| 字典 | `Schema.dict(T)` | 动态键值对 | JSONEditor |
+| **逻辑类型** |
+| 联合 | `Schema.union([T1, T2])` | 多选一 | Select / Radio |
+| 交叉 | `Schema.intersect([T1, T2])` | 合并类型 | MultiFields |
+| 任意 | `Schema.any()` | 任意类型 | JSONEditor |
+
+### Schema 方法链
+
+Schema 支持链式调用添加验证规则和元数据：
 
 ```typescript
-Schema.string('fieldName')
-  .required()                    // 必填
-  .default('defaultValue')       // 默认值
-  .description('Field help text') // 描述信息
-  .min(0).max(100)              // 数值范围
-  .pattern('^[a-z]+$')          // 正则验证
-  .enum(['a', 'b', 'c'])        // 枚举选项
+Schema.string('apiKey')
+  .required()                      // 必填字段
+  .default('sk-xxx')               // 默认值
+  .description('OpenAI API密钥')   // 字段描述（用于生成文档和UI）
+  .pattern(/^sk-[a-zA-Z0-9]+$/)   // 正则验证
+  .min(10)                         // 最小长度
+  .max(100)                        // 最大长度
+
+Schema.number('port')
+  .min(1024)                       // 最小值
+  .max(65535)                      // 最大值
+  .default(8080)
+  .description('服务端口号')
+
+Schema.list(Schema.string())
+  .default([])
+  .description('白名单列表')
+
+Schema.object({
+  host: Schema.string().default('localhost'),
+  port: Schema.number().default(3306)
+})
+  .description('数据库配置')
 ```
 
-### Web 控制台集成
+### 复杂配置示例
 
-配置的 Schema 会自动在 Web 控制台的插件详情页生成配置表单，用户可以：
-- 查看所有配置项和说明
-- 通过友好的 UI 修改配置
-- 实时保存到配置文件
-- 支持嵌套结构和复杂类型
+#### 嵌套对象配置
+
+```typescript
+defineSchema(Schema.object({
+  database: Schema.object({
+    host: Schema.string('host').default('localhost'),
+    port: Schema.number('port').default(3306),
+    username: Schema.string('username'),
+    password: Schema.string('password'),
+    database: Schema.string('database').default('mydb')
+  }).description('数据库配置'),
+  
+  cache: Schema.object({
+    enabled: Schema.boolean('enabled').default(true),
+    ttl: Schema.number('ttl').default(3600).description('缓存过期时间(秒)')
+  }).description('缓存配置')
+}))
+
+// 使用
+const { database, cache } = plugin.config
+console.log(`DB: ${database.host}:${database.port}`)
+console.log(`Cache TTL: ${cache.ttl}s`)
+```
+
+#### 数组和元组配置
+
+```typescript
+defineSchema(Schema.object({
+  // 字符串数组
+  whitelist: Schema.list(Schema.string())
+    .default([])
+    .description('用户白名单'),
+  
+  // 对象数组
+  servers: Schema.list(Schema.object({
+    name: Schema.string('name'),
+    url: Schema.string('url'),
+    weight: Schema.number('weight').default(1)
+  }))
+    .default([])
+    .description('服务器列表'),
+  
+  // 固定长度元组
+  coordinates: Schema.tuple([
+    Schema.number('latitude'),
+    Schema.number('longitude')
+  ])
+    .default([0, 0])
+    .description('地理坐标 [纬度, 经度]')
+}))
+```
+
+#### 联合类型配置
+
+```typescript
+defineSchema(Schema.object({
+  // 字符串或数字
+  timeout: Schema.union([
+    Schema.string('timeout'),
+    Schema.number('timeout')
+  ])
+    .default(5000)
+    .description('超时时间（毫秒或时间字符串）'),
+  
+  // 多个选项
+  logLevel: Schema.union([
+    Schema.const('debug'),
+    Schema.const('info'),
+    Schema.const('warn'),
+    Schema.const('error')
+  ])
+    .default('info')
+    .description('日志级别')
+}))
+```
+
+### 配置类型声明
+
+为配置定义 TypeScript 类型以获得完整的类型提示：
+
+```typescript
+// 定义配置接口
+interface MyPluginConfig {
+  port: number
+  username?: string
+  password?: string
+  base: string
+  database: {
+    host: string
+    port: number
+    username?: string
+    password?: string
+  }
+}
+
+// 扩展全局类型
+declare module '@zhin.js/types' {
+  interface AppConfig {
+    'my-plugin'?: Partial<MyPluginConfig>
+  }
+}
+
+// 使用时有完整的类型提示
+const config = plugin.config as MyPluginConfig
+```
+
+### Web 控制台自动 UI 生成
+
+定义的 Schema 会自动在 Web 控制台生成配置表单：
+
+1. **自动生成表单**: 基于 Schema 类型生成对应的表单控件
+2. **实时验证**: 用户输入时进行格式和范围验证
+3. **描述提示**: 显示字段描述和帮助信息
+4. **嵌套支持**: 支持多层嵌套的对象和数组
+5. **即时保存**: 修改后自动保存到配置文件
+
+访问 `http://localhost:8086/` 查看 Web 控制台，在插件详情页可以：
+- 查看所有配置项及其说明
+- 通过友好的表单修改配置
+- 实时预览配置的 JSON
+- 一键保存并重载
+
+### 配置的作用域
+
+配置有两个层级：
+
+#### 1. 全局应用配置 (AppConfig)
+
+在 `zhin.config.ts` 的根级别定义，所有插件共享：
+
+```typescript
+export default defineConfig({
+  log_level: 1,              // 应用级配置
+  database: { /* ... */ },   // 应用级配置
+  plugins: ['http'],
+  
+  http: {                    // 插件级配置
+    port: 8086
+  }
+})
+```
+
+#### 2. 插件配置
+
+使用插件名作为键，只对该插件生效：
+
+```typescript
+export default defineConfig({
+  plugins: ['http', 'my-plugin'],
+  
+  // HTTP 插件配置
+  http: {
+    port: 8086,
+    base: '/api'
+  },
+  
+  // my-plugin 插件配置
+  'my-plugin': {
+    apiKey: process.env.API_KEY,
+    timeout: 5000
+  }
+})
+```
+
+### 配置最佳实践
+
+1. **使用环境变量存储敏感信息**
+   ```typescript
+   username: process.env.HTTP_USERNAME,
+   password: process.env.HTTP_PASSWORD
+   ```
+
+2. **提供合理的默认值**
+   ```typescript
+   port: Schema.number('port').default(8086)
+   ```
+
+3. **添加清晰的描述**
+   ```typescript
+   .description('HTTP 服务端口，范围 1024-65535')
+   ```
+
+4. **使用辅助函数计算默认值**
+   ```typescript
+   const { username = getCurrentUsername() } = schema(plugin.config, 'my-plugin')
+   ```
+
+5. **验证配置的有效性**
+   ```typescript
+   .min(1024).max(65535)  // 端口范围
+   .pattern(/^sk-/)       // API 密钥格式
+   ```
+
+6. **为复杂配置添加类型声明**
+   ```typescript
+   interface MyConfig { /* ... */ }
+   const config = schema(plugin.config, 'my-plugin') as MyConfig
+   ```
+
+### TypeScript 类型提示
+
+`defineSchema` 返回的 schema 函数提供完整的 TypeScript 类型推导：
+
+```typescript
+const plugin = usePlugin()
+
+// 定义 schema
+const schema = defineSchema(Schema.object({
+  apiKey: Schema.string('apiKey'),
+  timeout: Schema.number('timeout').default(5000),
+  retries: Schema.number('retries').default(3)
+}))
+
+// schema 函数会自动推导返回类型
+const config = schema(plugin.config, 'my-plugin')
+// config 类型: { apiKey: string; timeout: number; retries: number }
+
+// 完整的类型提示和自动补全
+const apiKey: string = config.apiKey        // ✅ 类型正确
+const timeout: number = config.timeout      // ✅ 类型正确
+// const wrong: boolean = config.timeout    // ❌ TypeScript 错误
+```
+
+#### 定义配置接口
+
+为更复杂的配置定义专门的接口并扩展全局类型：
+
+```typescript
+// 1. 定义配置接口
+interface MyPluginConfig {
+  apiKey: string
+  timeout: number
+  retries: number
+  database?: {
+    host: string
+    port: number
+  }
+}
+
+// 2. 扩展全局类型
+declare module '@zhin.js/types' {
+  interface AppConfig {
+    'my-plugin'?: Partial<MyPluginConfig>
+  }
+}
+
+// 3. 定义 schema
+const schema = defineSchema(Schema.object({
+  apiKey: Schema.string('apiKey').required(),
+  timeout: Schema.number('timeout').default(5000),
+  retries: Schema.number('retries').default(3),
+  database: Schema.object({
+    host: Schema.string('host').default('localhost'),
+    port: Schema.number('port').default(3306)
+  }).optional()
+}))
+
+// 4. 使用 schema 函数（完整类型提示）
+const config = schema(plugin.config, 'my-plugin')
+
+// TypeScript 会提供智能提示和类型检查
+const apiKey: string = config.apiKey
+const timeout: number = config.timeout
+const dbHost: string | undefined = config.database?.host
+```
+
+现在在 `zhin.config.ts` 中也会有完整的类型提示：
+
+```typescript
+export default defineConfig({
+  plugins: ['my-plugin'],
+  
+  'my-plugin': {
+    apiKey: 'sk-xxx',      // ✅ 类型检查
+    timeout: 10000,        // ✅ 类型检查
+    // invalid: true       // ❌ TypeScript 会报错
+  }
+})
+```
 
 
 ## 🔗 相关链接

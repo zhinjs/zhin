@@ -20,31 +20,37 @@ pnpm add @zhin.js/adapter-email
 ### 基础配置
 
 ```typescript
-import { EmailBotConfig } from '@zhin.js/adapter-email'
+// zhin.config.ts
+import { defineConfig } from 'zhin.js'
 
-const emailConfig: EmailBotConfig = {
-  context: 'email',
-  name: 'my-email-bot',
-  smtp: {
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false, // true for 465, false for other ports
-    auth: {
-      user: 'your-email@gmail.com',
-      pass: 'your-app-password'
+export default defineConfig({
+  bots: [
+    {
+      context: 'email',
+      name: 'my-email-bot',
+      smtp: {
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false, // true for 465, false for other ports
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASSWORD
+        }
+      },
+      imap: {
+        host: 'imap.gmail.com',
+        port: 993,
+        tls: true,
+        user: process.env.EMAIL_USER,
+        password: process.env.EMAIL_PASSWORD,
+        checkInterval: 60000, // 检查新邮件间隔（毫秒）
+        mailbox: 'INBOX', // 监听的邮箱文件夹  
+        markSeen: true // 是否标记已读
+      }
     }
-  },
-  imap: {
-    host: 'imap.gmail.com',
-    port: 993,
-    tls: true,
-    user: 'your-email@gmail.com',
-    password: 'your-app-password',
-    checkInterval: 60000, // 检查新邮件间隔（毫秒）
-    mailbox: 'INBOX', // 监听的邮箱文件夹
-    markSeen: true // 是否标记已读
-  }
-}
+  ],
+  plugins: ['adapter-email']
+})
 ```
 
 ### 完整配置选项

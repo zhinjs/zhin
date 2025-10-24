@@ -19,16 +19,27 @@ Zhin 机器人框架核心包，基于 HMR（热模块替换）系统构建的�
 应用核心类，继承自 `HMR<Plugin>`：
 
 ```typescript
-import { createApp } from '@zhin.js/core'
+import { App } from '@zhin.js/core'
+
+// 直接使用 App 类创建实例
+const app = new App('./zhin.config.ts')
+
+// 启动应用
+await app.start()
+```
+
+或者使用主包的便捷方法：
+
+```typescript
+import { createApp } from 'zhin.js'
 
 // 创建应用实例
 const app = await createApp({
   plugin_dirs: ['./plugins'],
   plugins: ['my-plugin'],
   bots: [{
-    context: 'onebot11',
-    name: 'my-bot',
-    url: 'ws://localhost:8080'
+    context: 'process',
+    name: 'my-bot'
   }],
   debug: true
 })
@@ -337,19 +348,24 @@ addMiddleware(async (message, next) => {
 
 ```typescript
 // zhin.config.ts
-export default {
-  plugin_dirs: ['./plugins', './node_modules'],
-  plugins: ['my-plugin'],
+import { defineConfig } from 'zhin.js'
+
+export default defineConfig({
+  database: {
+    dialect: 'sqlite',
+    filename: './data/bot.db'
+  },
+  plugin_dirs: ['./src/plugins', 'node_modules', 'node_modules/@zhin.js'],
+  plugins: ['http', 'console', 'adapter-process'],
   bots: [
     {
-      context: 'onebot11',
-      name: 'bot1',
-      url: 'ws://localhost:8080',
-      access_token: 'your-token'
+      context: 'process',
+      name: 'console-bot'
     }
   ],
+  log_level: 1,
   debug: process.env.NODE_ENV === 'development'
-}
+})
 ```
 
 ## 开发工具
