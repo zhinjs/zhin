@@ -70,10 +70,18 @@ npm create zhin-app my-bot
 # 或
 pnpm create zhin-app my-bot
 
+# 交互式配置流程：
+# 1. 选择运行时（Node.js / Bun）
+# 2. 选择配置格式（TypeScript / JavaScript / YAML / JSON）
+# 3. 配置 Web 控制台登录信息（用户名/密码）
+
 cd my-bot
 
 # 开发模式启动（支持热重载）
 pnpm dev
+
+# 访问 Web 控制台：http://localhost:8086
+# 登录信息已保存在 .env 文件中
 
 # 创建新插件
 zhin new my-plugin
@@ -205,6 +213,14 @@ zhin build my-plugin
 
 启动后访问 `http://localhost:8086` 查看 Web 管理界面：
 
+**登录信息：**
+- 使用 `create-zhin-app` 创建项目时配置
+- 保存在项目的 `.env` 文件中
+- 可随时修改 `.env` 文件更新密码
+
+> 💡 **安全提示**: `.env` 文件已自动添加到 `.gitignore`，不会被提交到版本控制
+
+**功能特性：**
 - 📊 **实时监控** - 机器人状态、消息统计、性能指标
 - 🧩 **插件管理** - 启用/禁用插件、查看插件信息
 - ⚙️ **配置编辑** - 可视化配置编辑，支持 Schema 验证
@@ -246,6 +262,14 @@ export default defineConfig({
     'node_modules',            // 第三方插件
     'node_modules/@zhin.js'    // 官方插件
   ],
+  
+  // HTTP 服务配置
+  http: {
+    port: 8086,                // 服务端口
+    username: 'admin',         // 控制台用户名
+    password: '123456',        // 控制台密码
+    base: '/api'               // API 基础路径
+  },
   
   // 数据库配置
   database: {

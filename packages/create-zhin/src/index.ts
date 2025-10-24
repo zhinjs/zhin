@@ -7,6 +7,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
+import os from 'os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -16,6 +17,23 @@ interface InitOptions {
   config?: 'json' | 'yaml' | 'toml' | 'ts' | 'js';
   runtime?: 'node' | 'bun';
   yes?: boolean;
+  httpUsername?: string;
+  httpPassword?: string;
+}
+
+// 生成随机密码
+function generateRandomPassword(length: number = 6): string {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  let password = '';
+  for (let i = 0; i < length; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return password;
+}
+
+// 获取当前系统用户名
+function getCurrentUsername(): string {
+  return os.userInfo().username || 'admin';
 }
 
 async function main() {
@@ -30,6 +48,8 @@ async function main() {
   if (options.yes) {
     options.config = 'ts';
     options.runtime = 'node';
+    options.httpUsername = getCurrentUsername();
+    options.httpPassword = generateRandomPassword(6);
   }
   
   // 检测并安装 pnpm
@@ -90,6 +110,42 @@ async function main() {
       ]);
       options.config = configFormat;
     }
+    
+    // HTTP 认证配置
+    if (!options.httpUsername || !options.httpPassword) {
+      console.log('');
+      console.log(chalk.blue('🔐 配置 Web 控制台登录信息'));
+      
+      const defaultUsername = getCurrentUsername();
+      const defaultPassword = generateRandomPassword(6);
+      
+      const httpConfig = await inquirer.prompt([
+        {
+          type: 'input',
+          name: 'username',
+          message: 'Web 控制台用户名:',
+          default: defaultUsername,
+          validate: (input: string) => {
+            if (!input.trim()) return '用户名不能为空';
+            return true;
+          }
+        },
+        {
+          type: 'input',
+          name: 'password',
+          message: 'Web 控制台密码:',
+          default: defaultPassword,
+          validate: (input: string) => {
+            if (!input.trim()) return '密码不能为空';
+            if (input.length < 6) return '密码至少需要 6 个字符';
+            return true;
+          }
+        }
+      ]);
+      
+      options.httpUsername = httpConfig.username;
+      options.httpPassword = httpConfig.password;
+    }
 
     if (!name) {
       console.error(chalk.red('项目名称不能为空'));
@@ -116,6 +172,12 @@ async function main() {
     
     console.log('');
     console.log(chalk.green('🎉 项目初始化完成！'));
+    console.log('');
+    console.log(chalk.blue('🔐 Web 控制台登录信息：'));
+    console.log(`  ${chalk.gray('URL:')} ${chalk.cyan('http://localhost:8086')}`);
+    console.log(`  ${chalk.gray('用户名:')} ${chalk.cyan(options.httpUsername)}`);
+    console.log(`  ${chalk.gray('密码:')} ${chalk.cyan(options.httpPassword)}`);
+    console.log(`  ${chalk.yellow('⚠ 登录信息已保存到')} ${chalk.cyan('.env')} ${chalk.yellow('文件')}`);
     console.log('');
     console.log('📝 下一步操作：');
     console.log(`  ${chalk.cyan(`cd ${realName}`)}`);
@@ -320,6 +382,19 @@ async function createAppModule(projectPath: string, projectName: string, options
   await fs.ensureDir(path.join(projectPath, 'client'));
   await fs.ensureDir(path.join(projectPath, 'data'));
   
+  // 创建 .env 文件
+  await fs.writeFile(path.join(projectPath, '.env'),
+`# 调试模式
+DEBUG=true
+
+# 插件目录
+# PLUGIN_DIR=./src/plugins
+
+# HTTP 服务配置（Web 控制台登录信息）
+HTTP_USERNAME=${options.httpUsername}
+HTTP_PASSWORD=${options.httpPassword}
+`);
+  
   // app/tsconfig.json
   await fs.writeJson(path.join(projectPath, 'tsconfig.json'), {
     extends: '../tsconfig.json',
@@ -438,6 +513,10 @@ DEBUG=true
 
 # 插件目录
 # PLUGIN_DIR=./src/plugins
+
+# HTTP 服务配置
+# HTTP_USERNAME=admin
+# HTTP_PASSWORD=123456
 `);
 }
 
@@ -463,6 +542,12 @@ export default defineConfig(async (env) => {
       'console',
       'example'
     ],
+    http: {
+      port: 8086,
+      username: env.HTTP_USERNAME,
+      password: env.HTTP_PASSWORD,
+      base: '/api'
+    },
     debug: env.DEBUG === 'true'
   };
 });
@@ -487,6 +572,12 @@ export default defineConfig(async (env) => {
       'console',
       'example'
     ],
+    http: {
+      port: 8086,
+      username: env.HTTP_USERNAME,
+      password: env.HTTP_PASSWORD,
+      base: '/api'
+    },
     debug: env.DEBUG === 'true'
   };
 });
@@ -507,6 +598,12 @@ plugins:
   - console
   - example
 
+http:
+  port: 8086
+  username: \${HTTP_USERNAME}
+  password: \${HTTP_PASSWORD}
+  base: /api
+
 debug: false
 `],
     json: ['zhin.config.json',
@@ -526,6 +623,12 @@ debug: false
     "console",
     "example"
   ],
+  "http": {
+    "port": 8086,
+    "username": "\${HTTP_USERNAME}",
+    "password": "\${HTTP_PASSWORD}",
+    "base": "/api"
+  },
   "debug": false
 }
 `]

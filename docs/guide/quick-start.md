@@ -8,11 +8,19 @@
 # 🎯 创建项目（自动安装 pnpm 和依赖）
 npm create zhin-app my-awesome-bot
 
+# 交互式配置：
+# 1️⃣ 选择运行时（Node.js 推荐）
+# 2️⃣ 选择配置格式（TypeScript 推荐）
+# 3️⃣ 配置 Web 控制台登录
+#    - 用户名（默认：你的系统用户名）
+#    - 密码（默认：随机 6 位字符）
+#    ⚠️ 记住这个密码，它会保存在 .env 文件中
+
 # 📁 进入目录并启动
 cd my-awesome-bot && pnpm dev
 ```
 
-> 如果想跳过交互式配置，使用 `-y` 参数：
+> **快速模式**: 跳过交互式配置，使用默认值和随机密码：
 > ```bash
 > npm create zhin-app my-awesome-bot -y
 > ```
@@ -48,6 +56,13 @@ cd my-awesome-bot && pnpm dev
 同时打开浏览器访问：`http://localhost:8086`
 
 > **注意**: 默认端口是 8086，可以在配置文件中修改。
+
+**登录信息：**
+- 使用创建项目时配置的用户名和密码
+- 忘记密码？查看项目根目录的 `.env` 文件
+- 修改密码：编辑 `.env` 文件中的 `HTTP_USERNAME` 和 `HTTP_PASSWORD`
+
+> 💡 **安全提示**: `.env` 文件包含敏感信息，已自动添加到 `.gitignore`
 
 🎛️ **你将看到：**
 - 📊 **实时状态监控** - CPU、内存、消息统计
@@ -130,13 +145,23 @@ export default defineConfig(async (env) => ({
     'adapter-process',  // 控制台支持
     'http',            // HTTP 服务器
     'console',         // Web 控制台
-    'test-plugin'      // 你的测试插件
+    'example'          // 示例插件
   ],
+  
+  // 🌐 HTTP 服务配置
+  http: {
+    port: 8086,                    // 服务端口
+    username: env.HTTP_USERNAME || 'admin',  // 控制台用户名
+    password: env.HTTP_PASSWORD || '123456', // 控制台密码
+    base: '/api'                   // API 基础路径
+  },
   
   // 🐛 开发模式
   debug: env.DEBUG === 'true'
 }))
 ```
+
+> 💡 **提示**: 可以在 `.env` 文件中设置 `HTTP_USERNAME` 和 `HTTP_PASSWORD` 来覆盖默认值。
 
 ### 🧩 **功能丰富的示例插件**
 

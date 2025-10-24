@@ -48,9 +48,13 @@ pnpm build
 1. **启动脚手架**: 当你运行 `npm create zhin-app` 时
 2. **检测 pnpm**: 自动检测并安装 pnpm（如果未安装）
 3. **交互式配置**: 询问项目名称、运行时、配置格式
-4. **创建 Workspace**: 生成 pnpm workspace 结构
-5. **自动安装依赖**: 在项目根目录执行 `pnpm install`
-6. **完成提示**: 显示下一步操作指引
+4. **HTTP 认证配置**: 配置 Web 控制台登录信息
+   - 默认用户名：当前系统用户名
+   - 默认密码：随机生成 6 位字符串
+5. **创建 Workspace**: 生成 pnpm workspace 结构
+6. **生成 .env 文件**: 保存 HTTP 认证信息
+7. **自动安装依赖**: 在项目根目录执行 `pnpm install`
+8. **完成提示**: 显示登录信息和下一步操作
 
 ## 支持的参数
 
@@ -64,10 +68,18 @@ npm create zhin-app my-bot
 npm create zhin-app my-awesome-bot
 ```
 
+**交互式配置流程：**
+1. 📝 输入项目名称
+2. ⚙️ 选择运行时（Node.js / Bun）
+3. 📄 选择配置格式（TypeScript / JavaScript / YAML / JSON）
+4. 🔐 配置 Web 控制台登录信息
+   - 用户名（默认：当前系统用户名）
+   - 密码（默认：随机 6 位字符）
+
 ### 快速创建（跳过交互）
 
 ```bash
-# 使用默认配置（TypeScript + Node.js）
+# 使用默认配置（TypeScript + Node.js + 随机密码）
 npm create zhin-app my-bot -y
 # 或
 npm create zhin-app my-bot --yes
@@ -80,10 +92,12 @@ npm create zhin-app my-bot --yes
 | `[project-name]` | 项目名称（可选，会提示输入） | `my-zhin-bot` |
 | `-y, --yes` | 跳过交互，使用默认配置 | `false` |
 
-**默认配置：**
+**默认配置（使用 `-y` 时）：**
 - 配置格式: TypeScript (`zhin.config.ts`)
 - 运行时: Node.js
 - 包管理器: pnpm（自动安装）
+- HTTP 用户名: 当前系统用户名
+- HTTP 密码: 随机生成 6 位字符
 
 ## 使用场景
 
@@ -141,9 +155,12 @@ my-awesome-bot/
 ├── tsconfig.json            # TypeScript 根配置
 ├── pnpm-workspace.yaml      # workspace 配置
 ├── .gitignore               # Git 忽略规则
+├── .env                     # 环境变量（包含 HTTP 认证信息）
 ├── .env.example             # 环境变量模板
 └── README.md                # 项目说明文档
 ```
+
+**⚠️ 重要**: `.env` 文件包含敏感信息（登录密码），已自动添加到 `.gitignore`，不会被提交到版本控制。
 
 **Workspace 配置 (`pnpm-workspace.yaml`):**
 ```yaml
@@ -203,13 +220,19 @@ export default defineConfig<AppConfig>(async (env) => {
         name: `${process.pid}`,
       }
     ],
-    plugin_dirs: ['./src/plugins', 'node_modules'],
+    plugin_dirs: ['./src/plugins', 'node_modules', 'node_modules/@zhin.js'],
     plugins: [
       'adapter-process',
       'http',
       'console',
-      'test-plugin'
+      'example'
     ],
+    http: {
+      port: 8086,
+      username: process.env.HTTP_USERNAME || 'admin',
+      password: process.env.HTTP_PASSWORD || '123456',
+      base: '/api'
+    },
     debug: process.env.NODE_ENV === 'development'
   };
 });
@@ -232,6 +255,13 @@ pnpm dev
 ```
 
 访问 `http://localhost:8086` 查看 Web 控制台
+
+**登录信息：**
+- 用户名和密码在创建项目时已配置
+- 保存在 `.env` 文件中
+- 创建完成时会在终端显示
+
+> 💡 **修改密码**: 编辑 `.env` 文件中的 `HTTP_USERNAME` 和 `HTTP_PASSWORD`
 
 ### 3. 创建插件
 
