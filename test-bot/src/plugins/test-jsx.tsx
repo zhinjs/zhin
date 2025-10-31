@@ -42,7 +42,6 @@ defineSchema(
   }, "config")
 );
 const plugin = usePlugin();
-console.log(plugin.config);
 addCommand(
   new MessageCommand("test-jsx").action(async (message, result) => {
     return (

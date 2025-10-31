@@ -10,7 +10,7 @@ export const startCommand = new Command('start')
   .description('生产模式启动机器人')
   .option('-d, --daemon', '后台运行', false)
   .option('--log-file [file]', '日志文件路径')
-  .option('--bun', '使用 bun 运行（默认使用 node）', false)
+  .option('--bun', '使用 bun 运行（默认使用 tsx）', false)
   .action(async (options: { daemon: boolean; logFile?: string; bun: boolean }) => {
     try {
       const cwd = process.cwd();
@@ -27,7 +27,7 @@ export const startCommand = new Command('start')
       loadEnvFiles(cwd, 'production');
       
       // 检查构建产物
-      const distPath = path.join(cwd, 'dist');
+      const distPath = path.join(cwd, 'lib');
       const sourcePath = path.join(cwd, 'src');
       const sourceFile = path.join(sourcePath, 'index.ts');
       const distFile = path.join(distPath, 'index.js');
@@ -47,7 +47,6 @@ export const startCommand = new Command('start')
           ...process.env,
           NODE_ENV: 'production'
         };
-        
         // 配置stdio
         let stdio: any = 'inherit';
         if (options.daemon) {
@@ -57,11 +56,17 @@ export const startCommand = new Command('start')
         }
         
         // 选择运行时
-        const runtime = options.bun ? 'bun' : 'node';
+        const runtime = options.bun ? 'bun' : 'tsx';
         const args = options.bun ? [entryFile] : ['--expose-gc', entryFile];
         
         logger.info(`📦 启动命令: ${runtime} ${args.join(' ')}`);
-        return startProcess(runtime, args, cwd,options.daemon);
+        return startProcess(runtime, args, {
+          cwd,
+          env,
+          stdio,
+          shell:true,
+          detached: options.daemon,
+        });
       };
       
       let child = await startBot();

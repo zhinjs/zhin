@@ -1,8 +1,8 @@
-import {Dialect} from '../base';
-import {MemoryConfig} from "../types";
-import {RelatedDatabase} from "../type/related/database";
-import {Registry} from "../registry";
-import {Database} from "../base";
+import {Dialect} from '../base/index.js';
+import {MemoryConfig} from "../types.js";
+import {RelatedDatabase} from "../type/related/database.js";
+import {Registry} from "../registry.js";
+import {Database} from "../base/index.js";
 
 interface MemoryTable {
   name: string;

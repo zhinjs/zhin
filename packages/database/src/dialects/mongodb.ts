@@ -1,4 +1,4 @@
-import {Database, Dialect} from '../base';
+import {Database, Dialect} from '../base/index.js';
 import {
   AlterQueryParams,
   BuildQueryResult,
@@ -7,8 +7,8 @@ import {
   QueryParams,
   SelectQueryParams, UpdateQueryParams
 } from "../types";
-import {DocumentDatabase} from "../type/document/database";
-import {Registry} from "../registry";
+import {DocumentDatabase} from "../type/document/database.js";
+import {Registry} from "../registry.js";
 import type { MongoClientOptions } from 'mongodb';
 
 

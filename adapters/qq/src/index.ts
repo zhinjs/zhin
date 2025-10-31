@@ -47,7 +47,7 @@ export class QQBot<T extends ReceiverMode, M extends ApplicationPlatform = Appli
     private handleQQMessage(msg: PrivateMessageEvent|GroupMessageEvent): void {
         const message =this.$formatMessage(msg) ;
         plugin.dispatch('message.receive',message)
-        plugin.logger.info(`recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`)
+        plugin.logger.info(`${this.$config.name} recv  ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`)
         plugin.dispatch(`message.${message.$channel.type}.receive`,message)
     }
     async $connect(): Promise<void> {
@@ -103,28 +103,28 @@ export class QQBot<T extends ReceiverMode, M extends ApplicationPlatform = Appli
                 if(options.id.startsWith('direct:')){
                     const id=options.id.replace('direct:','')
                     const result= await this.sendDirectMessage(id,options.content)
-                    plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
-                    plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+                    plugin.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+                    plugin.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
                     return `direct-${options.id}:${result.message_id.toString()}`
                 }else{
                     const result= await this.sendPrivateMessage(options.id,options.content)
-                    plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
-                    plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+                    plugin.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+                    plugin.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
                     return `private-${options.id}:${result.message_id.toString()}`
                 }
                 break;
             }
             case "group":{
                 const result= await this.sendGroupMessage(options.id,options.content)
-                plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
-                plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+                plugin.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+                plugin.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
                 return `group-${options.id}:${result.message_id.toString()}`
                 break;
             }
             case 'channel':{
                 const result= await this.sendGuildMessage(options.id,options.content)
-                plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
-                plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+                plugin.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+                plugin.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
                 return `channel-${options.id}:${result.message_id.toString()}`
                 break;
             }

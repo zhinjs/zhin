@@ -1,9 +1,9 @@
 import * as fs from 'node:fs';
-import {Dialect} from "../base";
-import {Registry} from "../registry";
-import {Database} from "../base";
-import {Column} from "../types";
-import {RelatedDatabase} from "../type/related/database";
+import {Dialect} from "../base/index.js";
+import {Registry} from "../registry.js";
+import {Database} from "../base/index.js";
+import {Column} from "../types.js";
+import {RelatedDatabase} from "../type/related/database.js";
 import path from 'node:path';
 
 

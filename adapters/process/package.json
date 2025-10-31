@@ -12,13 +12,14 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && zhin-client build",
     "clean": "rm -rf lib"
   },
   "devDependencies": {
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.1",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "@zhin.js/console": "workspace:*"
   },
   "peerDependencies": {
     "zhin.js": "workspace:*",

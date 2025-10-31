@@ -128,7 +128,7 @@ export class DiscordBot
     const message = this.$formatMessage(msg);
     plugin.dispatch("message.receive", message);
     plugin.logger.info(
-      `recv ${message.$channel.type}(${message.$channel.id}): ${segment.raw(
+      `${this.$config.name} recv  ${message.$channel.type}(${message.$channel.id}): ${segment.raw(
         message.$content
       )}`
     );
@@ -573,7 +573,7 @@ export class DiscordBot
         options.content
       );
       plugin.logger.info(
-        `send ${options.type}(${options.id}): ${segment.raw(options.content)}`
+        `${this.$config.name} send ${options.type}(${options.id}): ${segment.raw(options.content)}`
       );
       return result.id;
     } catch (error) {

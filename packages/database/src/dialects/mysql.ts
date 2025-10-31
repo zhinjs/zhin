@@ -1,9 +1,9 @@
-import {Dialect} from '../base';
-import {RelatedDatabase} from "../type/related/database";
-import {Registry} from "../registry";
+import {Dialect} from '../base/index.js';
+import {RelatedDatabase} from "../type/related/database.js";
+import {Registry} from "../registry.js";
 import type { ConnectionOptions } from 'mysql2/promise';
-import {Database} from "../base";
-import {Column} from "../types";
+import {Database} from "../base/index.js";
+import {Column} from "../types.js";
 
 export interface MySQLDialectConfig extends ConnectionOptions {}
 

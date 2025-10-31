@@ -40,7 +40,7 @@ export class IcqqBot extends Client implements Bot<PrivateMessageEvent|GroupMess
     private handleIcqqMessage(msg: PrivateMessageEvent|GroupMessageEvent): void {
         const message =this.$formatMessage(msg) ;
         plugin.dispatch('message.receive',message)
-        plugin.logger.info(`recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`)
+        plugin.logger.info(`${this.$config.name} recv  ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`)
         plugin.dispatch(`message.${message.$channel.type}.receive`,message)
     }
     async $connect(): Promise<void> {
@@ -114,13 +114,13 @@ export class IcqqBot extends Client implements Bot<PrivateMessageEvent|GroupMess
         switch (options.type){
             case 'private':{
                 const result= await this.sendPrivateMsg(Number(options.id),IcqqBot.toSendable(options.content))
-                plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+                plugin.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
                 return result.message_id.toString()
                 break;
             }
             case "group":{
                 const result=await this.sendGroupMsg(Number(options.id),IcqqBot.toSendable(options.content))
-                plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+                plugin.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
                 return result.message_id.toString()
                 break;
             }

@@ -78,13 +78,13 @@ export class KookBot extends Client implements Bot<PrivateMessageEvent|ChannelMe
         switch (options.type){
             case 'private':{
                 const result= await this.sendPrivateMsg(options.id,KookBot.toSendable(options.content));
-                plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`);
+                plugin.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`);
                 return `private-${options.id}:${(result as unknown as {msg_id:string}).msg_id.toString()}`
                 break;
             }
             case "channel":{
                 const result=await this.sendChannelMsg(options.id,KookBot.toSendable(options.content));
-                plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`);
+                plugin.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`);
                 return `channel-${options.id}:${(result as unknown as {msg_id:string}).msg_id.toString()}`
                 break;
             }
@@ -102,7 +102,7 @@ export class KookBot extends Client implements Bot<PrivateMessageEvent|ChannelMe
     private handleKookMessage(msg: PrivateMessageEvent|ChannelMessageEvent): void {
         const message=this.$formatMessage(msg)
         plugin.dispatch('message.receive',message)
-        plugin.logger.info(`recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`)
+        plugin.logger.info(`${this.$config.name} recv  ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`)
         plugin.dispatch(`message.${message.$channel.type}.receive`,message)
     }
 

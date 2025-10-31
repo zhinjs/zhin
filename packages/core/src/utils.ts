@@ -42,7 +42,18 @@ export const execute = <S, T = any>(exp: string, context: S):T => {
     const fn = evalCache[exp] || (evalCache[exp] = toFunction(exp));
     context={
         ...context,
-        process:undefined,
+        process:{
+            version:process.version,
+            versions:process.versions,
+            platform:process.platform,
+            arch:process.arch,
+            release:process.release,
+            uptime:process.uptime(),
+            memoryUsage:process.memoryUsage(),
+            cpuUsage:process.cpuUsage(),
+            pid:process.pid,
+            ppid:process.ppid,
+        },
         global:undefined,
         Buffer:undefined,
         crypto:undefined

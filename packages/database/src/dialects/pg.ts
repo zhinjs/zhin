@@ -1,9 +1,9 @@
-import {Dialect} from '../base';
-import {RelatedDatabase} from "../type/related/database";
-import {Database} from "../base";
-import {Registry} from "../registry";
+import {Dialect} from '../base/index.js';
+import {RelatedDatabase} from "../type/related/database.js";
+import {Database} from "../base/index.js";
+import {Registry} from "../registry.js";
 import type { ClientConfig } from 'pg';
-import {Column} from "../types";
+import {Column} from "../types.js";
 
 export interface PostgreSQLDialectConfig extends ClientConfig {}
 

@@ -93,7 +93,7 @@ export class ProcessBot extends EventEmitter implements Bot<{content:string,ts:n
     async $sendMessage(options: SendOptions): Promise<string>{
         options=await plugin.app.handleBeforeSend(options)
         if(!this.$connected) return ''
-        this.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+        this.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
         return ''
     }
     async $recallMessage(id: string): Promise<void> {
@@ -103,7 +103,7 @@ export class ProcessBot extends EventEmitter implements Bot<{content:string,ts:n
         const content=data.toString().trim()
         const ts=Date.now()
         const message =this.$formatMessage({content,ts});
-        this.logger.info(`recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`)
+        this.logger.info(`${this.$config.name} recv  ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`)
         plugin.dispatch('message.receive',message)
         plugin.dispatch(`message.${message.$channel.type}.receive`,message)
     }
@@ -150,7 +150,7 @@ export class SandboxBot extends EventEmitter implements Bot<{content:MessageElem
         super();
         this.$config.ws.on('message',(data)=>{
             const message = JSON.parse(data.toString())
-            this.logger.info(`recv ${message.type}(${message.id}):${segment.raw(message.content)}`)
+            this.logger.info(`${this.$config.name} recv  ${message.type}(${message.id}):${segment.raw(message.content)}`)
             plugin.dispatch('message.receive',this.$formatMessage({content:message.content,type:message.type,id:message.id,ts:message.timestamp}))
             plugin.dispatch(`message.${message.type}.receive`,this.$formatMessage({content:message.content,type:message.type,id:message.id,ts:message.timestamp}))
         })
@@ -193,7 +193,7 @@ export class SandboxBot extends EventEmitter implements Bot<{content:MessageElem
     async $sendMessage(options: SendOptions): Promise<string>{
         options=await plugin.app.handleBeforeSend(options)
         if(!this.$connected) return ''
-        this.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+        this.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
         options.bot=this.$config.name
         options.context='sandbox'
         this.$config.ws.send(JSON.stringify({
@@ -213,8 +213,10 @@ registerAdapter(sandboxAdapter)
 
 useContext('web', (web) => {
     // 注册Process适配器的客户端入口文件
-    const clientEntryPath = path.resolve(import.meta.dirname, '../client/index.tsx')
-    const dispose = web.addEntry(clientEntryPath)
+    const dispose = web.addEntry({
+        development: path.resolve(import.meta.dirname, '../client/index.tsx'),
+        production: path.resolve(import.meta.dirname, '../dist/index.js'),
+    })
     return dispose
 })
 

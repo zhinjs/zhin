@@ -1,4 +1,4 @@
-import { Model, } from '../../base';
+import { Model, } from '../../base/index.js';
 import { KeyValueDatabase } from './database.js';
 import { KeyValueQueryResult } from '../../types.js';
 

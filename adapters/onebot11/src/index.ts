@@ -193,14 +193,14 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11Messag
         group_id: parseInt(options.id),
         ...messageData
       });
-      plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+      plugin.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
       return result.message_id.toString();
     } else if (options.type === 'private') {
       const result = await this.callApi('send_private_msg', {
         user_id: parseInt(options.id),
         ...messageData
       });
-      plugin.logger.info(`send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+      plugin.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
       return result.message_id.toString();
     } else {
       throw new Error('Either group_id or user_id must be provided');
@@ -260,7 +260,7 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11Messag
   private handleOneBot11Message(onebotMsg: OneBot11Message): void {
     const message = this.$formatMessage(onebotMsg);
     plugin.dispatch('message.receive', message)
-    plugin.logger.info(`recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`)
+    plugin.logger.info(`${this.$config.name} recv  ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`)
     plugin.dispatch(`message.${message.$channel.type}.receive`, message)
   }
 
@@ -394,7 +394,7 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11Messag
         group_id: parseInt(id),
         ...messageData
       });
-      plugin.logger.info(`send ${options.type}(${id}):${segment.raw(options.content)}`)
+      plugin.logger.info(`${this.$config.name} send ${options.type}(${id}):${segment.raw(options.content)}`)
       return result.message_id.toString();
     } else if (options.type === 'private') {
       const [self_id, id] = options.id.split(':')
@@ -402,7 +402,7 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11Messag
         user_id: parseInt(id),
         ...messageData
       });
-      plugin.logger.info(`send ${options.type}(${id}):${segment.raw(options.content)}`)
+      plugin.logger.info(`${this.$config.name} send ${options.type}(${id}):${segment.raw(options.content)}`)
       return result.message_id.toString();
     } else {
       throw new Error('Either group_id or user_id must be provided');
@@ -477,7 +477,7 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11Messag
   private handleMessage(onebotMsg: OneBot11Message): void {
     const message = this.$formatMessage(onebotMsg);
     plugin.dispatch('message.receive', message)
-    plugin.logger.info(`recv ${message.$channel.type}(${onebotMsg.group_id || onebotMsg.user_id}):${segment.raw(message.$content)}`)
+    plugin.logger.info(`${this.$config.name} recv  ${message.$channel.type}(${onebotMsg.group_id || onebotMsg.user_id}):${segment.raw(message.$content)}`)
     plugin.dispatch(`message.${message.$channel.type}.receive`, message)
   }
 

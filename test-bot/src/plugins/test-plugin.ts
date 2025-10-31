@@ -1,10 +1,8 @@
 import {
   useContext,
   addCommand,
-  usePrompt,
   Time,
   addComponent,
-  defineComponent,
   MessageCommand,
   useApp,
   Adapter,
@@ -12,6 +10,7 @@ import {
   defineModel,
   MessageElement,
   ComponentContext,
+  onMessage,
 } from "zhin.js";
 import path from "node:path";
 import * as os from "node:os";
@@ -25,6 +24,7 @@ declare module "@zhin.js/types" {
   }
 }
 const app = useApp();
+const isBun=typeof Bun!=='undefined'
 function formatMemoSize(size: number) {
   const sizes = ["B", "KB", "MB", "GB", "TB"];
   while (size > 1024) {
@@ -33,7 +33,11 @@ function formatMemoSize(size: number) {
   }
   return `${size.toFixed(2)}${sizes[0]}`;
 }
-addCommand(new MessageCommand("send").action((_, result) => result.remaining as MessageElement[]));
+addCommand(
+  new MessageCommand("send").action(
+    (_, result) => result.remaining as MessageElement[]
+  )
+);
 addCommand(
   new MessageCommand("zt").action(() => {
     const totalmem = os.totalmem();
@@ -46,7 +50,8 @@ addCommand(
         (usedmemo / totalmem) *
         100
       ).toFixed(2)}%`,
-      `运行环境：NodeJS ${process.version}`,
+      // bun or tsx
+      `运行环境：NodeJS ${process.version} ${isBun ? "Bun" : "TSX"}`,
       `运行时长：${Time.formatTime(process.uptime() * 1000)}`,
       `内存使用：${formatMemoSize(process.memoryUsage.rss())}`,
       "-------框架-------",
@@ -59,25 +64,44 @@ addCommand(
     ].join("\n");
   })
 );
-
-
-
-addComponent(async function foo(props: {face: number}, context: ComponentContext) {
+addCommand(new MessageCommand("我才是[...content:text]")
+.action(async (m, { params }) => {
+  return `好好好，你是${params.content.join(" ").replace(/[你|我]/g, (match:string) => {
+    return match === "你" ? "我" : "你"
+  })}`;
+}));
+addComponent(async function foo(
+  props: { face: number },
+  context: ComponentContext
+) {
   return "这是父组件" + props.face;
 });
-
-
+const randomUUID = () => {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+    const r = (Math.random() * 16) | 0,
+      v = c == "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+console.log("测试插件加载完成，唯一标识：" + randomUUID());
 
 useContext("web", (web) => {
-  const dispose=web.addEntry(
-    path.resolve(path.resolve(import.meta.dirname, "../../client/index.tsx"))
-  );
-  return dispose
-});
+  const dispose = web.addEntry({
+    development: path.resolve(
+      path.resolve(import.meta.dirname, "../../client/index.tsx")
+    ),
+    production: path.resolve(
+      path.resolve(import.meta.dirname, "../../dist/index.js")
+    ),
+  });
+  return dispose;
+})
 // 依赖icqq上下文
 useContext("icqq", (p) => {
   // 指定某个上下文就绪时，需要做的事
-  const someUsers = new MessageCommand<"icqq">("赞[space][...atUsers:at]", { at: "qq" })
+  const someUsers = new MessageCommand<"icqq">("赞[space][...atUsers:at]", {
+    at: "qq",
+  })
     .permit("adapter(icqq)")
     .action(async (m, { params }) => {
       if (!params.atUsers?.length) params.atUsers = [+m.$sender.id];
@@ -97,20 +121,35 @@ useContext("icqq", (p) => {
       return likeResult.join("\n");
     });
   addCommand(someUsers);
+  // onMessage(async (m) => {
+  //   if(m.$adapter==='process'){
+  //     const b=p.bots.get('1689919782')
+  //     if(b){
+  //       b.$sendMessage({
+  //         id:'860669870',
+  //         type:'group',
+  //         content:m.$content,
+  //         context:'icqq',
+  //         bot:'1689919782'
+  //       })
+  //     }
+  //   }
+  // });
 });
-defineModel("test_model",{
+defineModel("test_model", {
   name: { type: "text", nullable: false },
   age: { type: "integer", default: 0 },
   info: { type: "json" },
-} );
+});
 onDatabaseReady(async (db) => {
-    const model=db.model("test_model")
-    // await model.create({
-    //   name:'张三',
-    //   age:20,
-    //   info:{}
-    // });
-    // await model.delete({name:'张三'});
-    const result=await model.select();
-    console.log(result)
+  const model = db.model("test_model");
+  await model.delete({name:'张三'});
+  // await model.create({
+  //   name:'张三',
+  //   age:20,
+  //   info:{}
+  // });
+  // await model.delete({name:'张三'});
+  const result = await model.select();
+  console.log(result);
 });

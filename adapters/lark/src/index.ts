@@ -210,7 +210,7 @@ export class LarkBot implements Bot<LarkMessage, LarkBotConfig> {
         if (event.message) {
             const message = this.$formatMessage(event.message, event);
             plugin.dispatch('message.receive', message);
-            plugin.logger.info(`recv ${message.$channel.type}(${message.$channel.id}): ${segment.raw(message.$content)}`);
+            plugin.logger.info(`${this.$config.name} recv  ${message.$channel.type}(${message.$channel.id}): ${segment.raw(message.$content)}`);
             plugin.dispatch(`message.${message.$channel.type}.receive`, message);
         }
     }

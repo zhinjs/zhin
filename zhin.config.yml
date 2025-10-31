@@ -1,7 +1,0 @@
-log_level: 1
-plugin_dirs: []
-plugins: []
-bots: []
-debug: true
-test-plugin:
-  enabled: true

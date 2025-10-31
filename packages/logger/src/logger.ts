@@ -560,7 +560,7 @@ export class Logger {
     }
 
     // 处理参数格式化，与 console.info 行为一致
-    const formattedMessage = args.length > 0 ? format(message, ...args) : message
+    const formattedMessage = format(message, ...args)
 
     const entry: LogEntry = {
       level,

@@ -1,4 +1,4 @@
-import { Database,Dialect } from '../../base';
+import { Database,Dialect } from '../../base/index.js';
 import { RelatedModel } from './model.js';
 import {
   QueryParams,

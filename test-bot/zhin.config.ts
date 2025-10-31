@@ -64,7 +64,7 @@ export default defineConfig(async () => {
         data_dir: "./data"
       },
       {
-        name: process.env.ICQQ_LOGIN_UIN!,
+        name: process.env.ICQQ_LOGIN_UIN,
         context: "icqq",
         log_level: "off",
         password: process.env.ONEBOT_TOKEN,
@@ -72,9 +72,19 @@ export default defineConfig(async () => {
         platform: 2,
         data_dir: "./data",
         scope: "icqqjs"
+      },
+      {
+        name: process.env.ICQQ_SCAN_UIN,
+        context: "icqq",
+        log_level: "off",
+        password: process.env.ONEBOT_TOKEN,
+        sign_api_addr: process.env.ICQQ_SIGN_ADDR,
+        ver: "9.1.70",
+        platform: 2,
+        data_dir: "./data"
       }
     ],
-    log_level: LogLevel.INFO,
+    log_level: 1,
     log: {
       maxDays: 7,
       maxRecords: 10000,
@@ -111,11 +121,11 @@ export default defineConfig(async () => {
       testNumber: 3,
       testBoolean: true
     },
-    http:{
+    http: {
       port: 8086,
       username: process.env.username,
-      password: process.env.password,
-      base:'/api'
+      password: process.env.ONEBOT_TOKEN,
+      base: "/api"
     }
   }
 });

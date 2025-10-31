@@ -6,10 +6,10 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "npx zhin dev",
+    "dev": "npx zhin dev --bun",
     "start": "npx zhin start",
     "daemon": "npx zhin start --daemon",
-    "build": "echo 'skipping build for test-bot'",
+    "build": "tsc && zhin-client build",
     "stop": "zhin stop"
   },
   "dependencies": {

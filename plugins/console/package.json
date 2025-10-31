@@ -5,6 +5,9 @@
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
+  "bin": {
+    "zhin-client": "./lib/bin.js"
+  },
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",
@@ -18,11 +21,14 @@
   },
   "scripts": {
     "build": "tsc",
+    "build:app": "tsc",
+    "build:client": "node lib/bin.js build:console",
     "clean": "rm -rf lib"
   },
   "dependencies": {
     "react": "19.2.0",
     "react-dom": "19.2.0",
+    "mime": "^4.1.0",
     "@vitejs/plugin-react": "^4.3.4",
     "@tailwindcss/vite": "4.1.14",
     "radix-ui": "^1.4.3",

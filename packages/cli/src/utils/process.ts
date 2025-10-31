@@ -1,4 +1,4 @@
-import { spawn, ChildProcess, exec } from 'child_process';
+import { spawn, ChildProcess, exec, SpawnOptions } from 'child_process';
 import fs from 'fs-extra';
 import path from 'path';
 import { logger } from './logger.js';
@@ -60,21 +60,15 @@ async function killProcess(pid: number, signal: string = 'SIGTERM'): Promise<boo
   });
 }
 
-export async function startProcess(command: string, args: string[], cwd: string,daemon:boolean): Promise<ChildProcess> {
+export async function startProcess(command: string, args: string[], options:SpawnOptions): Promise<ChildProcess> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd,
-      detached: daemon,
-      stdio: 'inherit',
-      shell:true,
-      env: { ...process.env }
-    });
+    const child = spawn(command, args, options);
 
-    if(daemon) child.unref();
+    if(options.detached) child.unref();
 
     child.on('spawn', () => {
       // 保存进程ID
-      const pidFile = path.join(cwd, PID_FILE);
+      const pidFile = path.join((options.cwd!).toString(), PID_FILE);
       fs.writeFileSync(pidFile, child.pid!.toString());
       logger.success(`机器人已启动，PID: ${child.pid}`);
       resolve(child);

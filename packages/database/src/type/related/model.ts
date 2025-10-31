@@ -1,4 +1,4 @@
-import { Model} from '../../base';
+import { Model} from '../../base/index.js';
 import { RelatedDatabase } from './database.js';
 import { Condition } from '../../types.js';
 
