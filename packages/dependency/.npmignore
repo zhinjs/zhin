@@ -1,0 +1,20 @@
+# 源代码（已编译到 dist/）
+src/
+tsconfig.json
+
+# 测试和示例
+demo/
+*.test.ts
+*.spec.ts
+
+# 开发文件
+.git
+.gitignore
+node_modules/
+
+# 文档（保留核心文档，移除其他）
+IMPLEMENTATION.md
+CROSS_RUNTIME.md
+USAGE.md
+NATIVE_IMPORT.md
+
