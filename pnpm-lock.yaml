@@ -350,7 +350,7 @@ importers:
         specifier: ^16.3.1
         version: 16.6.1
       segment-matcher:
-        specifier: 1.0.5
+        specifier: latest
         version: 1.0.5
       toml:
         specifier: ^3.0.0
