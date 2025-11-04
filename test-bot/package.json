@@ -9,7 +9,7 @@
     "dev": "npx zhin dev --bun",
     "start": "npx zhin start",
     "daemon": "npx zhin start --daemon",
-    "build": "tsc && zhin-client build",
+    "build": "tsc",
     "stop": "zhin stop"
   },
   "dependencies": {

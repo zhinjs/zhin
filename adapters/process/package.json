@@ -12,7 +12,7 @@
     }
   },
   "scripts": {
-    "build": "tsc && zhin-client build",
+    "build": "tsc",
     "clean": "rm -rf lib"
   },
   "devDependencies": {
