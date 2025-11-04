@@ -112,6 +112,8 @@ export class Dependency<P extends Dependency<any> = any,O extends DependencyOpti
         const contexts=args.slice(0,-1) as T
         const sideEffect=args[args.length-1] as SideEffect<T>
         const contextReadyCallback=async ()=>{
+            if(sideEffect.finished) return;
+            sideEffect.finished=true;
             const args=contexts.map(item=>this.#use(item))
             const dispose=await sideEffect(...args as Contexts<T>)
             if(!dispose)return;
@@ -120,6 +122,7 @@ export class Dependency<P extends Dependency<any> = any,O extends DependencyOpti
                     await dispose(this.#use(name))
                 }
                 this.off('context.dispose',disposeFn)
+                sideEffect.finished=false;
             }
             this.on('context.dispose',disposeFn)
             this.on('dispose',()=>{

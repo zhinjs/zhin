@@ -539,7 +539,7 @@ export class Logger {
   /**
    * 记录日志的通用方法
    */
-  private log(level: LogLevel, message: string, ...args: any[]): void {
+  private log(level: LogLevel, ...args: any[]): void {
     if (!this.isLevelEnabled(level)) {
       return
     }
@@ -553,14 +553,13 @@ export class Logger {
       // 如果第一个参数是Error对象，使用其message作为主要消息
       if (args[0] instanceof Error) {
         const err = args[0] as Error
-        message = err.message || message
         error = err
         args = args.slice(1) // 移除Error对象，避免重复显示
       }
     }
 
     // 处理参数格式化，与 console.info 行为一致
-    const formattedMessage = format(message, ...args)
+    const formattedMessage = format(...args)
 
     const entry: LogEntry = {
       level,
@@ -587,30 +586,29 @@ export class Logger {
   /**
    * DEBUG 级别日志
    */
-  debug(message: string, ...args: any[]): void {
-    this.log(LogLevel.DEBUG, message, ...args)
+  debug(...args: any[]): void {
+    this.log(LogLevel.DEBUG, ...args)
   }
 
   /**
    * INFO 级别日志
    */
-  info(message: string, ...args: any[]): void {
-    this.log(LogLevel.INFO, message, ...args)
+  info(...args: any[]): void {
+    this.log(LogLevel.INFO, ...args)
   }
 
   /**
    * SUCCESS 日志（INFO 级别，带绿色 ✓ 标记）
    */
-  success(message: string, ...args: any[]): void {
-    const successMessage = chalk.green('✓ ') + message
-    this.log(LogLevel.INFO, successMessage, ...args)
+  success(...args: any[]): void {
+    this.log(LogLevel.INFO, chalk.green('✓ '), ...args)
   }
 
   /**
    * WARN 级别日志
    */
-  warn(message: string, ...args: any[]): void {
-    this.log(LogLevel.WARN, message, ...args)
+  warn(...args: any[]): void {
+    this.log(LogLevel.WARN, ...args)
   }
 
   /**
@@ -619,8 +617,8 @@ export class Logger {
    * @param message 错误消息
    * @param args 其他参数，如果第一个参数是Error对象，会使用其message并打印堆栈
    */
-  error(message: string, ...args: any[]): void {
-    this.log(LogLevel.ERROR, message, ...args)
+  error(...args: any[]): void {
+    this.log(LogLevel.ERROR,...args)
   }
 
   /**

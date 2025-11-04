@@ -30,13 +30,16 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
   public children: P[] = [];
 
   /** 是否已启动 */
-  private started: boolean = false;
+  started: boolean = false;
 
   /** 是否已挂载 */
-  private mounted: boolean = false;
+  mounted: boolean = false;
+
+  /** 是否已销毁 */
+  disposed: boolean = false;
 
   /** 是否正在重载 */
-  private reloading: boolean = false;
+  reloading: boolean = false;
 
   /** 已导入的模块缓存（避免循环依赖） */
   private static importedModules: Set<string> = new Set();
@@ -63,7 +66,7 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
    * 添加卸载钩子
    */
   addDisposeHook(hook: () => void | Promise<void>): void {
-    this.on('self.disposed', hook);
+    this.on('self.dispose', hook);
   }
 
   /**
@@ -74,7 +77,7 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
       return;
     }
 
-    this.dispatch('beforeStart', this);
+    this.dispatch('before-start', this);
 
     this.#filePath= this.resolveFilePath(this.#filePath);
 
@@ -110,7 +113,7 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
       this.started = true;
     }
 
-    this.dispatch('afterStart', this);
+    this.dispatch('after-start', this);
 
     await this.mount();
   }
@@ -123,18 +126,32 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
       return;
     }
     
-    this.dispatch('beforeMount', this);
+    await this.dispatchAsync('before-mount', this);
 
     await this.emitAsync('self.mounted', this);
 
     this.mounted = true;
+    this.disposed = false;
 
-    await this.dispatchAsync('afterMount', this);
-    await this.dispatchAsync('mounted', this); // 向后兼容
+    await this.dispatchAsync('after-mount', this);
+    await this.dispatchAsync('mounted', this);
+  }
+  emit(event: string, ...args: any[]): boolean {
+    const beforeListeners = this.listeners(`before-${event}`);
+    beforeListeners.forEach(listener => listener(...args));
+    const listeners = this.listeners(event);
+    listeners.forEach(listener => listener(...args));
+    const afterListeners = this.listeners(`after-${event}`);
+    afterListeners.forEach(listener => listener(...args));
+    return true;
   }
   async emitAsync(event: string, ...args: any[]): Promise<void> {
+    const beforeListeners = this.listeners(`before-${event}`);
+    await Promise.allSettled(beforeListeners.map(listener => listener(...args)));
     const listeners = this.listeners(event);
-    await Promise.allSettled(listeners.map(listener => Promise.resolve(listener(...args))));
+    await Promise.allSettled(listeners.map(listener => listener(...args)));
+    const afterListeners = this.listeners(`after-${event}`);
+    await Promise.allSettled(afterListeners.map(listener => listener(...args)));
   }
   async dispatchAsync(event: string, ...args: any[]): Promise<void> {
     if(this.parent) await this.parent.dispatchAsync(event, ...args);
@@ -150,18 +167,14 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
    * 卸载：执行所有卸载钩子
    */
   async dispose(): Promise<void> {
-    if (!this.mounted) {
+    if (!this.mounted || this.disposed) {
       return;
     }
-
-    await this.dispatchAsync('beforeDispose', this);
-
-    await this.emitAsync('self.disposed', this);
+    await this.emitAsync('dispose', this);
+    await this.emitAsync('self.dispose', this);
 
     this.mounted = false;
-
-    await this.dispatchAsync('afterDispose', this);
-    await this.dispatchAsync('disposed', this); // 向后兼容
+    this.disposed = true;
   }
 
   /**
@@ -200,7 +213,7 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
     try {
 
       // 发出 beforeReload 事件
-      this.dispatch('beforeReload',this);
+      this.dispatch('before-reload',this);
 
       // 1. 暂存当前节点的 children
       const savedChildren = [...this.children];
@@ -242,12 +255,12 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
 
 
       // 发出 afterReload 事件
-      newNode.dispatch('afterReload', newNode);
+      newNode.dispatch('after-reload', newNode);
       newNode.dispatch('reloaded', newNode); // 向后兼容
       return newNode;
     } catch (error) {
       this.dispatch('error',this, error);
-      this.dispatch('reloadError',this, error);
+      this.dispatch('reload.error',this, error);
       return this;
     } finally {
       this.reloading = false;
@@ -424,7 +437,7 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
     const prefix = isRoot ? '' : indent + (isLast ? '└── ' : '├── ');
     const events = this.eventNames().filter(e =>
       typeof e === 'string' &&
-      !['beforeStart', 'afterStart', 'beforeMount', 'afterMount', 'mounted', 'beforeDispose', 'afterDispose', 'disposed', 'beforeReload', 'afterReload', 'reloaded', 'error', 'fileChange', 'reloadError'].includes(e)
+      !['before-start', 'after-start', 'before-mount', 'after-mount', 'mounted', 'before-dispose', 'after-dispose', 'disposed', 'before-reload', 'after-reload', 'reloaded', 'error', 'fileChange', 'reload.error'].includes(e)
     );
     const totalListeners = events.reduce((sum, event) => sum + this.listenerCount(event), 0);
     let result = prefix + `${this.name} (${totalListeners} listeners)\n`;
@@ -444,7 +457,7 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
   toJSON(): object {
     const events = this.eventNames().filter(e =>
       typeof e === 'string' &&
-      !['beforeStart', 'afterStart', 'beforeMount', 'afterMount', 'mounted', 'beforeDispose', 'afterDispose', 'disposed', 'beforeReload', 'afterReload', 'reloaded', 'error', 'fileChange', 'reloadError'].includes(e)
+      !['before-start', 'after-start', 'before-mount', 'after-mount', 'mounted', 'before-dispose', 'after-dispose', 'disposed', 'before-reload', 'after-reload', 'reloaded', 'error', 'fileChange', 'reload.error'].includes(e)
     );
     const listeners = Object.fromEntries(
       events.map(event => [event.toString(), this.listenerCount(event)])

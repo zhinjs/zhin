@@ -4,7 +4,10 @@ export interface RegisteredAdapters{}
 export interface GlobalContext extends RegisteredAdapters,Record<string, any>{
 }
 export interface Models extends Record<string,object>{}
-export type SideEffect<A extends (keyof GlobalContext)[]>=(...args:Contexts<A>)=>MaybePromise<void|DisposeFn<Contexts<A>>>
+export type SideEffect<A extends (keyof GlobalContext)[]>={
+    (...args:Contexts<A>):MaybePromise<void|DisposeFn<Contexts<A>>>;
+    finished?:boolean
+}
 export type DisposeFn<A>=(context:ArrayItem<A>)=>MaybePromise<void>
 export type Contexts<CS extends (keyof GlobalContext)[]>=CS extends [infer L,...infer R]?R extends (keyof GlobalContext)[]?[ContextItem<L>,...Contexts<R>]:never[]:never[]
 type ContextItem<L>=L extends keyof GlobalContext?GlobalContext[L]:never

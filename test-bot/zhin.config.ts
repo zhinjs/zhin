@@ -122,7 +122,7 @@ export default defineConfig(async () => {
       testBoolean: true
     },
     http: {
-      port: 8086,
+      port: 8087,
       username: process.env.username,
       password: process.env.ONEBOT_TOKEN,
       base: "/api"
