@@ -22,6 +22,7 @@
     "jsxImportSource": "zhin.js",
     "types": [
       "@types/node",
+      "@types/bun",
       "@zhin.js/types",
       "zhin.js",
       "@zhin.js/adapter-icqq",

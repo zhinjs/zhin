@@ -26,6 +26,7 @@
     "sqlite3":"latest"
   },
   "devDependencies": {
+    "@types/bun": "latest",
     "@zhin.js/cli": "workspace:*",
     "@zhin.js/types": "workspace:*",
     "@types/react": "^19.2.2",
