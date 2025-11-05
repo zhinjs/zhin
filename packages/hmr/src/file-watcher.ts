@@ -22,7 +22,16 @@ export class FileWatcher extends EventEmitter {
         private exclude:string[]=[path.join(process.cwd(),'node_modules')]
     ) {
         super();
-        this.#dirs = dirs.map(dir => resolvePath(dir));
+        // 过滤掉 node_modules 目录，避免监听大量文件
+        this.#dirs = dirs
+            .map(dir => resolvePath(dir))
+            .filter(dir => {
+                const isNodeModules = dir.includes('node_modules');
+                if (isNodeModules) {
+                    logger.warn(`Skipping watch for node_modules directory: ${dir} (use specific plugin paths instead)`);
+                }
+                return !isNodeModules;
+            });
         this.#dirWatchers = new Map();
         this.#watchableExtensions = Array.isArray(extensions) ? new Set(extensions) : extensions;
         this.#logger = logger;

@@ -379,8 +379,23 @@ pnpm dev
 - pnpm 9.0+
 
 
+## ⚠️ 生产环境注意事项
+
+**重要**：在生产环境部署时，请注意以下配置以避免服务器卡死：
+
+```typescript
+// ❌ 错误配置（会导致监听大量文件）
+plugin_dirs: ['node_modules', 'node_modules/@zhin.js']
+
+// ✅ 正确配置（仅监听必要的目录）
+plugin_dirs: ['./plugins']
+```
+
+详细部署指南请参考 [生产环境部署文档](./docs/guide/production-deployment.md)。
+
 ## 📚 更多文档
 - [完整文档](./docs/)
+- [生产环境部署](./docs/guide/production-deployment.md)
 - [最佳实践](./docs/guide/best-practices.md)
 - [架构设计](./docs/guide/architecture.md)
 
