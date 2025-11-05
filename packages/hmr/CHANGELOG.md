@@ -1,5 +1,13 @@
 # @zhin.js/hmr
 
+## 1.0.3
+
+### Patch Changes
+
+- c8c3996: fix: 修复 segment-matcher
+- Updated dependencies [c8c3996]
+  - @zhin.js/logger@0.1.1
+
 ## 1.0.2
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # @zhin.js/console
 
+## 1.0.8
+
+### Patch Changes
+
+- c1a539e: fix: cli 优化,console 优化
+- Updated dependencies [c8c3996]
+  - @zhin.js/types@1.0.4
+  - @zhin.js/core@1.0.10
+
 ## 1.0.7
 
 ### Patch Changes

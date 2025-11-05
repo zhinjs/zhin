@@ -1,5 +1,11 @@
 # @zhin.js/types
 
+## 1.0.4
+
+### Patch Changes
+
+- c8c3996: fix: 修复 segment-matcher
+
 ## 1.0.3
 
 ### Patch Changes

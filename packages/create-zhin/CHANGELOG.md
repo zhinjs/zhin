@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.11
+
+### Patch Changes
+
+- c1a539e: fix: cli 优化,console 优化
+
 ## 1.0.10
 
 ### Patch Changes
