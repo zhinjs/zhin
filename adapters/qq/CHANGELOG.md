@@ -1,5 +1,11 @@
 # @zhin.js/adapter-qq
 
+## 1.0.11
+
+### Patch Changes
+
+- zhin.js@1.0.11
+
 ## 1.0.10
 
 ### Patch Changes
