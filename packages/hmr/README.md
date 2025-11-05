@@ -78,12 +78,17 @@ const hmr = new MyHMRSystem('MySystem', {
 
 高性能文件系统监听器，支持递归目录监听：
 
+⚠️ **重要警告**：避免监听包含大量文件的目录（如 `node_modules`），这会导致：
+- 资源耗尽（inotify 限制）
+- 服务器卡死或响应缓慢
+- CPU 和内存占用过高
+
 ```typescript
 const watcher = new FileWatcher(
-  ['./src', './plugins'],           // 监听目录
+  ['./src', './plugins'],           // ✅ 监听必要的目录
   ['.js', '.ts', '.vue'],          // 监听扩展名
   logger,                          // 日志记录器
-  ['node_modules']                 // 排除目录
+  ['node_modules']                 // ❌ 排除大型目录
 )
 
 watcher.on('file-change', (filePath, eventType) => {

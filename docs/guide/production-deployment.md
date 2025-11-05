@@ -444,9 +444,8 @@ pnpm update --latest
 ## 📚 相关文档
 
 - [配置系统](./configuration.md)
-- [安全政策](../../SECURITY.md)
 - [最佳实践](./best-practices.md)
-- [故障排查](./troubleshooting.md)
+- [安全政策](https://github.com/zhinjs/zhin/blob/main/SECURITY.md)
 
 ## 💡 最佳实践总结
 

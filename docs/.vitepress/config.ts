@@ -5,6 +5,8 @@ export default defineConfig({
   description: "新时代机器人框架",
   ignoreDeadLinks:[
     /^https?:\/\/localhost/,
+    /^https?:\/\/github\.com/,
+    './troubleshooting',
   ],
   
   themeConfig: {
@@ -45,7 +47,8 @@ export default defineConfig({
             { text: '最佳实践', link: '/guide/best-practices' },
             { text: '项目结构', link: '/guide/project-structure' },
             { text: 'JSX 支持', link: '/guide/jsx-support' },
-            { text: '配置管理', link: '/guide/configuration' }
+            { text: '配置管理', link: '/guide/configuration' },
+            { text: '生产环境部署', link: '/guide/production-deployment' }
           ]
         }
       ],

@@ -35,7 +35,8 @@
     "create": "node packages/create-zhin/lib/index.js",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
-    "docs:preview": "vitepress preview docs"
+    "docs:preview": "vitepress preview docs",
+    "check:prod": "node scripts/check-production-config.js"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.7",
