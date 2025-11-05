@@ -17,6 +17,7 @@
     "dev": "pnpm --filter test-bot dev",
     "start": "pnpm --filter test-bot start",
     "daemon": "pnpm --filter test-bot daemon",
+    "exp:dep": "pnpm --filter dependency-example dev",
     "release": "pnpm changeset",
     "bump": "pnpm changeset version",
     "pub": "pnpm -r publish --access public --no-git-checks --registry https://registry.npmjs.org",

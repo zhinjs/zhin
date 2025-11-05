@@ -1,0 +1,18 @@
+{
+  "name": "@zhin.js/dependency-example",
+  "version": "1.0.0",
+  "description": "完整的 @zhin.js/dependency 使用示例",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "tsx --import @zhin.js/dependency/register.mjs src/index.ts",
+    "dev:bun": "bun --preload @zhin.js/dependency/bun-preload.ts src/index.ts",
+    "dev:no-wrap": "DEPENDENCY_WRAP_EFFECTS=false tsx --import @zhin.js/dependency/register.mjs src/index.ts",
+    "clean": "rm -rf plugins/*.generated.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "@types/node": "^20.10.0"
+  }
+}
+

@@ -12,6 +12,62 @@ export function hasRelativeImports(source) {
 }
 
 /**
+ * 生成副作用包装代码
+ * 包装全局副作用函数，自动添加清理逻辑到 onDispose
+ */
+function generateEffectWrappers() {
+  return `
+const __global_effects__={
+  intervals:[],
+  timeouts:[],
+  immediates:[],
+}
+const __globalSetInterval = globalThis.setInterval;
+const __globalSetTimeout = globalThis.setTimeout;
+const __globalSetImmediate = typeof setImmediate !== 'undefined' ? globalThis.setImmediate : null;
+
+
+globalThis.setInterval = function(...args) {
+  const timerId = __globalSetInterval.apply(this, args);
+  __global_effects__.intervals.push(timerId);
+  return timerId;
+};
+
+globalThis.setTimeout = function(...args) {
+  const timerId = __globalSetTimeout.apply(this, args);
+  __global_effects__.timeouts.push(timerId);
+  return timerId;
+};
+
+if (__globalSetImmediate) {
+  globalThis.setImmediate = function(...args) {
+    const immediateId = __globalSetImmediate.apply(this, args);
+    __global_effects__.immediates.push(immediateId);
+    return immediateId;
+  };
+}
+onDispose(() => {
+  __global_effects__.intervals.forEach(intervalId => clearInterval(intervalId));
+  __global_effects__.timeouts.forEach(timeoutId => clearTimeout(timeoutId));
+  __global_effects__.immediates.forEach(immediateId => clearImmediate(immediateId));
+});
+`;
+}
+
+/**
+ * 检查是否启用副作用包装
+ * 通过环境变量 DEPENDENCY_WRAP_EFFECTS 控制
+ * 值为 'false' 或 '0' 时禁用，其他情况默认启用
+ */
+function shouldWrapEffects() {
+  const envValue = process.env.DEPENDENCY_WRAP_EFFECTS;
+  if (envValue === 'false' || envValue === '0') {
+    return false;
+  }
+  return true; // 默认启用
+}
+
+/**
  * 转换 import 语句
  * @param {string} source - 源代码
  * @param {string} currentPath - 当前文件路径
@@ -19,36 +75,52 @@ export function hasRelativeImports(source) {
  * @param {string} marker - 转换标记（如 '__LOADER_TRANSFORMED__' 或 '__BUN_PLUGIN_TRANSFORMED__'）
  */
 export function transformImports(source, currentPath, isHotReload = false, marker = '__LOADER_TRANSFORMED__') {
-  // 检查是否有相对路径的 import
-  if (!hasRelativeImports(source) && !isHotReload) {
+  // 检查是否需要转换
+  const needsImportTransform = hasRelativeImports(source);
+  const wrapEffects = shouldWrapEffects();
+
+  // 如果不需要任何转换，直接返回原始代码
+  if (!needsImportTransform && !isHotReload && !wrapEffects) {
     return source;
   }
-  
+
   // 添加标记（热重载时添加时间戳）
-  let result = isHotReload 
+  let result = isHotReload
     ? `/* ${marker} (Hot Reload: ${Date.now()}) */\n`
     : `/* ${marker} */\n`;
-  
-  // 检查是否已有 importModule 导入
-  const hasImportModule = /import.*importModule.*from.*hooks/.test(source);
-  
-  // 如果没有，添加 importModule 导入
-  if (!hasImportModule) {
-    const hooksPath = pkgJson.name;
+  const hasOnDispose = source.includes('onDispose');
+  const hooksPath = pkgJson.name;
+  if (!hasOnDispose) {
+    result = `import { onDispose } from '${hooksPath}';\n`+result;
+  }
+  if (wrapEffects) {
+    // 收集所有import 行
+    const importLines = source.match(/import\s+[^;]+from\s+(['"])([^'"]+)\1;\n/gm)||[];
+    const lastImportLine = importLines[importLines.length - 1];
+    source = source.replace(lastImportLine, lastImportLine+generateEffectWrappers());
+  }
+
+  // 2. 检查是否已有 importModule 导入
+  const hasImportModule = /import.*importModule.*from.*${hooksPath}/.test(source);
+
+  // 如果没有且需要转换 import，添加 importModule 导入
+  if (needsImportTransform && !hasImportModule) {
     result += `import { importModule } from '${hooksPath}';\n`;
   }
-  
-  // 转换相对路径的 import
-  // 注意：先转换 source，然后再拼接
-  const transformedSource = source.replace(
-    /^import\s+(['"])(\.[^'"]+)\1;?\s*$/gm,
-    (match, quote, importPath) => {
-      return `await importModule(${quote}${importPath}${quote});`;
-    }
-  );
-  
+
+  // 3. 转换相对路径的 import
+  let transformedSource = source;
+  if (needsImportTransform) {
+    transformedSource = source.replace(
+      /^import\s+(['"])(\.[^'"]+)\1;?\s*$/gm,
+      (match, quote, importPath) => {
+        return `await importModule(${quote}${importPath}${quote});`;
+      }
+    );
+  }
+
   result += transformedSource;
-  
+
   return result;
 }
 
@@ -73,13 +145,13 @@ export function transformImports(source, currentPath, isHotReload = false, marke
 export function shouldTransformPath(path, extensions = ['.ts', '.js']) {
   // 去除查询参数（如 ?t=timestamp）
   const [actualPath] = path.split('?');
-  
+
   // 检查扩展名
   const hasValidExtension = extensions.some(ext => actualPath.endsWith(ext));
   if (!hasValidExtension) {
     return false;
   }
-  
+
   // 1. 检查 INCLUDE 路径（优先级最高，即使在 node_modules 中也处理）
   const includePaths = process.env.DEPENDENCY_TREE_INCLUDE;
   if (includePaths) {
@@ -88,7 +160,7 @@ export function shouldTransformPath(path, extensions = ['.ts', '.js']) {
       return true; // 明确包含，直接返回 true
     }
   }
-  
+
   // 2. 检查 EXCLUDE 路径（优先级第二）
   const excludePaths = process.env.DEPENDENCY_TREE_EXCLUDE;
   if (excludePaths) {
@@ -97,12 +169,12 @@ export function shouldTransformPath(path, extensions = ['.ts', '.js']) {
       return false; // 明确排除
     }
   }
-  
+
   // 3. 默认规则：排除所有 node_modules，除非明确 INCLUDE
   if (actualPath.includes('/node_modules/')) {
     return false;
   }
-  
+
   return true;
 }
 

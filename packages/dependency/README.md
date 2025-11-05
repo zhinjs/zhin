@@ -13,6 +13,7 @@
 - [配置](#-配置)
   - [环境变量](#环境变量)
   - [运行时配置](#运行时配置)
+- [副作用自动管理](#-副作用自动管理)
 - [可扩展 Hook 系统](#-可扩展-hook-系统)
 - [热重载](#-热重载)
 - [类继承指南](#-类继承指南)
@@ -26,6 +27,7 @@
 - 🔄 **热重载支持** - 文件变更时自动重载，保留子依赖树
 - 🎯 **原生 import 支持** - 使用标准 ES 模块语法，无需自定义函数
 - 🪝 **可扩展 Hook 系统** - 注册自定义 hooks，支持自动类型推断
+- 🧹 **副作用自动管理** - 自动包装 `setInterval`、`setTimeout` 等副作用函数，自动清理
 - 📦 **跨运行时支持** - Node.js / tsx / Bun
 - 🎨 **生命周期管理** - `start`, `mount`, `dispose`, `stop` 生命周期方法
 - 🔔 **EventEmitter 集成** - 标准的事件系统
@@ -39,6 +41,8 @@ pnpm add @zhin.js/dependency
 ```
 
 ## 🚀 快速开始
+
+> 💡 **完整示例**: 查看 [example/](./example/) 目录获取完整的使用示例，包括多个插件演示。
 
 ### 基本用法
 
@@ -191,6 +195,181 @@ DEPENDENCY_TREE_EXCLUDE=plugins/__tests__,plugins/**/*.test.ts
   }
 }
 ```
+
+## 🧹 副作用自动管理
+
+`@zhin.js/dependency` 提供了强大的副作用自动管理功能，能够自动包装全局副作用函数，并在插件卸载时自动清理，避免内存泄漏和资源占用。
+
+### 支持的副作用函数
+
+以下副作用函数会被自动包装和管理：
+
+- ✅ `setInterval` - 定时器，自动 `clearInterval`
+- ✅ `setTimeout` - 延时器，自动 `clearTimeout`
+- ✅ `setImmediate` - 立即执行（Node.js），自动 `clearImmediate`
+
+### 工作原理
+
+当插件代码中调用这些副作用函数时，loader 会自动：
+
+1. **拦截调用** - 记录返回的 ID 或注册的监听器
+2. **注册清理** - 自动添加清理函数到 `onDispose`
+3. **自动清理** - 插件卸载时自动清理所有副作用
+
+### 使用示例
+
+#### 传统方式（手动管理）❌
+
+```typescript
+// plugins/my-plugin.ts
+import { onDispose } from '@zhin.js/dependency';
+
+// 需要手动管理清理
+const timerId = setInterval(() => {
+  console.log('定时任务');
+}, 1000);
+
+onDispose(() => {
+  clearInterval(timerId); // 手动清理
+});
+```
+
+#### 自动管理方式（推荐）✅
+
+```typescript
+// plugins/my-plugin.ts
+
+// 直接使用，自动清理！
+setInterval(() => {
+  console.log('定时任务');
+}, 1000);
+
+// 不需要手动调用 clearInterval
+// 插件卸载时会自动清理
+```
+
+### 实际场景示例
+
+#### 场景 1：轮询任务
+
+```typescript
+// plugins/polling-plugin.ts
+
+// 轮询 API
+setInterval(async () => {
+  const data = await fetchAPI();
+  processData(data);
+}, 5000);
+
+// 卸载时自动停止轮询，无需手动清理
+```
+
+#### 场景 2：立即执行任务
+
+```typescript
+// plugins/immediate-plugin.ts
+
+// 立即执行（在当前事件循环结束后）
+setImmediate(async () => {
+  await processNextTask();
+});
+
+// 适用于需要在当前操作完成后立即执行的任务
+setImmediate(() => {
+  // 确保在当前 I/O 回调之后执行
+  notifyCompletion();
+});
+
+// 卸载时自动清理
+```
+
+#### 场景 3：混合使用多种定时器
+
+```typescript
+// plugins/complex-plugin.ts
+
+// 定时器 - 周期性执行
+setInterval(() => console.log('每秒执行'), 1000);
+
+// 延时器 - 延迟执行
+setTimeout(() => console.log('5秒后执行'), 5000);
+
+// 立即执行 - 当前事件循环后立即执行
+setImmediate(() => console.log('立即执行'));
+
+// 插件卸载时，所有副作用自动清理！
+```
+
+### 配置选项
+
+#### 环境变量 `DEPENDENCY_WRAP_EFFECTS`
+
+控制是否启用副作用自动管理功能。
+
+```bash
+# 禁用副作用包装（默认启用）
+DEPENDENCY_WRAP_EFFECTS=false
+
+# 或
+DEPENDENCY_WRAP_EFFECTS=0
+```
+
+**使用场景：**
+
+```json
+{
+  "scripts": {
+    "dev": "tsx --import @zhin.js/dependency/register.mjs src/index.ts",
+    "dev:no-wrap": "DEPENDENCY_WRAP_EFFECTS=false tsx --import @zhin.js/dependency/register.mjs src/index.ts"
+  }
+}
+```
+
+### 注意事项
+
+#### 1. 非插件上下文
+
+如果在非插件上下文中调用副作用函数（没有 Dependency 实例），包装器会静默失败，不影响正常使用：
+
+```typescript
+// 在普通模块中（非插件）
+setInterval(() => {
+  console.log('正常工作');
+}, 1000);
+// 不会自动清理，但不会报错
+```
+
+#### 2. 手动清理优先级更高
+
+如果你手动调用了清理函数，自动清理会跳过：
+
+```typescript
+const timerId = setInterval(() => {}, 1000);
+clearInterval(timerId); // 手动清理
+
+// onDispose 时尝试再次清理是安全的（clearInterval 多次调用无副作用）
+```
+
+#### 3. 保留原始函数引用
+
+如果需要访问原始的（未包装的）函数：
+
+```typescript
+// 在包装之前保存引用
+const originalSetInterval = globalThis.setInterval;
+
+// 使用原始函数（不会自动清理）
+const timerId = originalSetInterval(() => {}, 1000);
+```
+
+### 优势
+
+- ✅ **零心智负担** - 不需要记住手动清理
+- ✅ **避免内存泄漏** - 自动清理所有副作用
+- ✅ **简化代码** - 减少样板代码
+- ✅ **类型安全** - 完整的 TypeScript 类型支持
+- ✅ **向后兼容** - 可以通过环境变量禁用
+- ✅ **非侵入式** - 在非插件上下文中正常工作
 
 ## 🪝 可扩展 Hook 系统
 

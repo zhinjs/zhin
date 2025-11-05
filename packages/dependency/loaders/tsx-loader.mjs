@@ -52,11 +52,12 @@ export async function load(url, context, nextLoad) {
       // 转换相对路径的 import 语句
       const transformed = transformImports(source, actualUrl, isHotReload, '__LOADER_TRANSFORMED__');
       
-      return {
+      // 不使用 shortCircuit，让 tsx 继续处理 TypeScript 转译
+      return nextLoad(url, {
+        ...context,
         format: 'module',
         source: transformed,
-        shortCircuit: true,
-      };
+      });
     } catch (error) {
       console.error('Loader error:', error);
       return nextLoad(url, context);
