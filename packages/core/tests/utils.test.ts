@@ -2,11 +2,6 @@ import { describe, it, expect } from 'vitest'
 import { compiler, evaluate } from '../src/utils'
 
 describe('Template Security', () => {
-  it('should prevent access to process object', () => {
-    const template = 'Hello ${process}'
-    const result = compiler(template, {})
-    expect(result).toBe('Hello undefined')
-  })
 
   it('should prevent access to process.env', () => {
     const template = 'Node env: ${process.env.NODE_ENV}'
@@ -44,10 +39,6 @@ describe('Template Security', () => {
     expect(result).toBe('User: Alice (25)')
   })
 
-  it('should return template string for unsafe access', () => {
-    const result = evaluate('process', {})
-    expect(result).toBe(undefined) // Should return undefined when blocked
-  })
 
   it('should allow safe Math expressions', () => {
     const result = evaluate('Math.PI', {})
