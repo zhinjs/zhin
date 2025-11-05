@@ -1,5 +1,11 @@
 # @zhin.js/hmr
 
+## 1.0.4
+
+### Patch Changes
+
+- ae680db: fix: 文件监听过多
+
 ## 1.0.3
 
 ### Patch Changes

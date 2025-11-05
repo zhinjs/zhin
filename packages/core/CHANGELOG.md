@@ -1,5 +1,12 @@
 # @zhin.js/core
 
+## 1.0.11
+
+### Patch Changes
+
+- Updated dependencies [ae680db]
+  - @zhin.js/hmr@1.0.4
+
 ## 1.0.10
 
 ### Patch Changes
