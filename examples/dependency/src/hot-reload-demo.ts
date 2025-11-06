@@ -6,7 +6,7 @@
 
 import { Dependency } from '@zhin.js/dependency';
 import { resolve } from 'path';
-import chokidar from 'chokidar';
+import {watch} from 'chokidar';
 
 // ANSI 颜色代码
 const colors = {
@@ -36,7 +36,7 @@ async function main() {
   const watchedFiles = new Map<string, Dependency>();
   
   // 创建文件监听器
-  const watcher = chokidar.watch([], {
+  const watcher = watch([], {
     persistent: true,
     ignoreInitial: true,
     awaitWriteFinish: {

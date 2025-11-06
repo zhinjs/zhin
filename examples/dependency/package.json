@@ -7,10 +7,13 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx --import @zhin.js/dependency/register.mjs src/index.ts",
-    "hot-reload": "tsx --import @zhin.js/dependency/register.mjs src/hot-reload-demo.ts",
+    "hot-reload": "bun --preload @zhin.js/dependency/bun-preload.ts src/hot-reload-demo.ts",
     "test:events": "tsx --import @zhin.js/dependency/register.mjs src/test-event-bubbling.ts",
+    "test:effects": "tsx --import @zhin.js/dependency/register.mjs src/test-effect-cleanup.ts",
+    "test:dedup": "tsx --import @zhin.js/dependency/register.mjs src/test-deduplication.ts",
+    "test:reload-refs": "tsx --import @zhin.js/dependency/register.mjs src/test-reload-refs.ts",
     "dev:bun": "bun --preload @zhin.js/dependency/bun-preload.ts src/index.ts",
-    "dev:no-wrap": "DEPENDENCY_WRAP_EFFECTS=false tsx --import @zhin.js/dependency/register.mjs src/index.ts"
+    "dev:no-wrap": "cross-env DEPENDENCY_WRAP_EFFECTS=false tsx --import @zhin.js/dependency/register.mjs src/index.ts"
   },
   "dependencies": {
     "chokidar": "^3.6.0",
@@ -18,7 +21,8 @@
   },
   "devDependencies": {
     "tsx": "^4.7.0",
-    "@types/node": "^20.10.0"
+    "@types/node": "^20.10.0",
+    "cross-env": "^7.0.3"
   }
 }
 

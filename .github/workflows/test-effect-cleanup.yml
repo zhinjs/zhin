@@ -1,0 +1,61 @@
+name: Test Effect Cleanup
+
+on:
+  push:
+    branches: [ main, dev ]
+    paths:
+      - 'packages/dependency/**'
+      - 'examples/dependency/**'
+      - '.github/workflows/test-effect-cleanup.yml'
+  pull_request:
+    branches: [ main, dev ]
+    paths:
+      - 'packages/dependency/**'
+      - 'examples/dependency/**'
+      - '.github/workflows/test-effect-cleanup.yml'
+  workflow_dispatch:
+
+jobs:
+  test-effect-cleanup:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node-version: [20.x]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'pnpm'
+      
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+      
+      - name: Build dependency package
+        run: pnpm --filter @zhin.js/dependency build
+      
+      - name: Run effect cleanup test
+        working-directory: examples/dependency
+        run: pnpm run test:effects
+        env:
+          DEPENDENCY_WRAP_EFFECTS: 'true'
+      
+      - name: Test with effect wrapping disabled
+        working-directory: examples/dependency
+        run: pnpm run dev:no-wrap
+        continue-on-error: true
+        env:
+          DEPENDENCY_WRAP_EFFECTS: 'false'
+

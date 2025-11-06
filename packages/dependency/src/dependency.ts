@@ -26,6 +26,9 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
   /** 父依赖 */
   public parent: P | null = null;
 
+  /** 引用者列表：后续导入该依赖的模块（不包括 parent） */
+  public refs: Set<P> = new Set();
+
   /** 子依赖 */
   public children: P[] = [];
 
@@ -41,6 +44,9 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
 
   /** 已导入的模块缓存（避免循环依赖） */
   private static importedModules: Set<string> = new Set();
+
+  /** 全局依赖池：用于依赖去重，key = 绝对路径，value = Dependency 实例 */
+  private static globalDepMap = new Map<string, Dependency>();
 
   /**
    * 构造函数
@@ -94,8 +100,13 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
       const fileUrl = pathToFileURL(this.#filePath).href;
       const importUrl: string = `${fileUrl}?t=${Date.now()}`;
       await import(importUrl);
+      // 启动子依赖（跳过已在全局池中的共享依赖，它们已经启动过了）
       for (const child of this.children) {
-        await child.start();
+        // 如果子依赖不在全局池中，或者在全局池中但 parent 是当前节点（首次导入），则启动
+        const existingChild = Dependency.globalDepMap.get(child.filePath);
+        if (!existingChild || existingChild.parent === this) {
+          await child.start();
+        }
       }
     } catch (error) {
       console.warn(`Failed to import module: ${this.#filePath}`, error);
@@ -170,9 +181,32 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
     const absolutePath = this.resolveFilePath(this.#filePath);
     Dependency.importedModules.delete(absolutePath);
     this.removeModuleCache(absolutePath);
+    
+    // 递归停止子依赖，处理引用关系
     for (let i = this.children.length - 1; i >= 0; i--) {
-      await this.children[i].stop();
+      const child = this.children[i];
+      
+      if (this === child.parent) {
+        // 当前是 parent，需要转移 parent
+        child.parent = null;
+        if (child.refs.size > 0) {
+          // 提升一个 ref 为新 parent
+          const newParent = Array.from(child.refs)[0];
+          child.parent = newParent as P;
+          child.refs.delete(newParent);
+        }
+      } else {
+        // 当前是 refs 之一
+        child.refs.delete(this);
+      }
+      
+      // 如果没有任何引用了，真正停止并清理
+      if (child.parent === null && child.refs.size === 0) {
+        await child.stop();
+        Dependency.globalDepMap.delete(child.filePath);
+      }
     }
+    
     await this.dispatchAsync('stopped', this);
     this.started = false;
   }
@@ -248,8 +282,58 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
       // 根节点：原地重启
       this.started = false;
       this.#cleanLifecycleListeners();
+      
+      // 1. 保存旧的 children
+      const savedChildren = [...this.children];
+      
+      // 2. 清理自己在所有子依赖中的引用关系
+      for (const child of savedChildren) {
+        if (this === child.parent) {
+          child.parent = null;
+        } else {
+          child.refs.delete(this as any);
+        }
+      }
+      
+      // 3. 清空 children，准备重新导入
       this.children = [];
+      
+      // 4. 重新 start（重新导入模块）
       await this.start();
+      
+      // 5. Diff: 比较新旧 children
+      const newChildren = this.children;
+      const removedChildren: P[] = [];
+      const keptChildren: P[] = [];
+      
+      // 找出被移除的和保留的
+      for (const savedChild of savedChildren) {
+        const newChild = newChildren.find(c => c.filePath === savedChild.filePath);
+        if (newChild) {
+          // 保留的：复用旧实例，保持状态
+          keptChildren.push(savedChild);
+          // 恢复引用关系：savedChild 原本就是 this 的 child，直接恢复 parent
+          savedChild.parent = this as any;
+        } else {
+          // 被移除的
+          removedChildren.push(savedChild);
+        }
+      }
+      
+      // 找出新增的
+      const addedChildren = newChildren.filter(newChild => 
+        !savedChildren.find(c => c.filePath === newChild.filePath)
+      ) as P[];
+      
+      // 6. 处理被移除的 children
+      for (const child of removedChildren) {
+        // 递归清理子树
+        await this.#cleanupRemovedChild(child);
+      }
+      
+      // 7. 用旧实例替换新实例，保持状态
+      this.children = [...keptChildren, ...addedChildren];
+      
       return this;
     } else {
       // 有父节点：通过父节点重新导入创建新节点
@@ -258,10 +342,44 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
     }
   }
 
+  /**
+   * 清理被移除的子依赖
+   */
+  async #cleanupRemovedChild(child: Dependency): Promise<void> {
+    // 递归清理所有孙子依赖
+    for (const grandchild of [...child.children]) {
+      if (grandchild.parent === child) {
+        grandchild.parent = null;
+      } else {
+        grandchild.refs.delete(child as any);
+      }
+      
+      // 如果孙子依赖没有任何引用了，从全局池移除并停止，并递归清理其子树
+      if (grandchild.parent === null && grandchild.refs.size === 0) {
+        await grandchild.stop();
+        Dependency.globalDepMap.delete(grandchild.filePath);
+        // 递归清理孙子的子树
+        await this.#cleanupRemovedChild(grandchild);
+      }
+      // 如果还有其他引用，不清理其子树（它还在被使用）
+    }
+    
+    child.children = [];
+    
+    // 如果 child 没有任何引用了，stop 它
+    if (child.parent === null && child.refs.size === 0) {
+      await child.stop();
+      Dependency.globalDepMap.delete(child.filePath);
+    }
+  }
+
   #cleanLifecycleListeners(): void {
     const lifecycleEvents = this.eventNames().filter(e => typeof e === 'string' && e.startsWith('self.'));
     for(const event of lifecycleEvents){
       this.removeAllListeners(event);
+    }
+    for(const dispose of this.#onSelfDispose){
+      dispose();
     }
     this.#onSelfDispose = [];
   }
@@ -403,16 +521,52 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
    * 这个方法在模块中调用，用于替代普通的 import
    * 
    * 支持继承：子节点会使用与父节点相同的类
+   * 支持去重：同一个文件路径只创建一个实例
    */
   async importChild(importPath: string): Promise<Dependency> {
     // 解析相对于当前文件的路径
     const absolutePath = this.resolveImportPath(this.#filePath, importPath);
+    
+    // 标准化路径：确保使用实际存在的文件路径
+    const normalizedPath = this.resolveFilePath(absolutePath);
 
-    // 使用 this.constructor 创建同类型的实例，支持继承
-    const child = new (this.constructor as Constructor<P>)(absolutePath);
-    child.parent = this;
-    this.children.push(child);
-    if (this.started) await child.start();
+    // 检查全局依赖池是否已存在
+    let child = Dependency.globalDepMap.get(normalizedPath) as P | undefined;
+
+    if (child) {
+      // 已存在：检查是否需要恢复 parent 或加入 refs
+      if (child.parent === null) {
+        // 没有 parent（可能是重载后被清空），恢复 parent
+        child.parent = this as any;
+        // 清理 refs：确保 this 不在 refs 中（重载前可能是 ref，现在变成 parent）
+        child.refs.delete(this as any);
+      } else if (child.parent !== this) {
+        // 已有不同的 parent，这是真正的二次导入，加入 refs
+        child.refs.add(this as any);
+      }
+      // 如果 child.parent === this，说明已经是正确的引用关系，无需操作
+      
+      // 添加到当前模块的 children 列表（避免重复）
+      if (!this.children.includes(child)) {
+        this.children.push(child);
+      }
+      // 注意：不重新 start（已经启动过了）
+    } else {
+      // 不存在：首次导入，创建新实例
+      child = new (this.constructor as Constructor<P>)(normalizedPath);
+      child.parent = this;
+      // 注意：parent 不加入 refs
+      this.children.push(child);
+      
+      // 添加到全局池
+      Dependency.globalDepMap.set(normalizedPath, child);
+      
+      // 启动新实例
+      if (this.started) {
+        await child.start();
+      }
+    }
+
     return child;
   }
 
@@ -509,7 +663,12 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
       !['before-start', 'started', 'before-mount', 'mounted', 'before-dispose', 'disposed', 'before-reload', 'reloading', 'reloaded', 'error', 'fileChange', 'reload.error'].includes(e)
     );
     const totalListeners = events.reduce((sum, event) => sum + this.listenerCount(event), 0);
-    let result = prefix + `${this.name} (${totalListeners} listeners)\n`;
+    
+    // 显示共享信息：parent(1) + refs.size
+    const totalRefs = (this.parent ? 1 : 0) + this.refs.size;
+    const sharedMark = totalRefs > 1 ? ` [shared ×${totalRefs}]` : '';
+    
+    let result = prefix + `${this.name} (${totalListeners} listeners)${sharedMark}\n`;
 
     const childIndent = isRoot ? '' : indent + (isLast ? '    ' : '│   ');
     this.children.forEach((child, index) => {

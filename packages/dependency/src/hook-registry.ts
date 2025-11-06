@@ -24,7 +24,7 @@ export function setCurrentDependency(dep: Dependency | null): void {
 /**
  * 获取当前正在加载的依赖
  */
-function getCurrentDependency(): Dependency | null {
+export function getCurrentDependency(): Dependency | null {
   return dependencyStack.length > 0 ? dependencyStack[dependencyStack.length - 1] : null;
 }
 
