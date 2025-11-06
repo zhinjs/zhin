@@ -123,3 +123,4 @@ async function main() {
     await watcher.close();
   }
 }
+main().catch(console.error);
