@@ -46,20 +46,14 @@ async function main() {
     }
   });
   
-  log('yellow', '📝 设置文件监听器...\n');
-  
   // 监听 afterStart 事件，动态收集文件
   root.on('started', (dep: Dependency) => {
-    console.log('dep start',dep.filePath);
     watchedFiles.set(dep.filePath, dep);
     watcher.add(dep.filePath);
-    log('green', `✅ 开始监听: ${dep.name} (${dep.filePath})`);
   });
   root.on("stopped",(dep:Dependency)=>{
-    console.log('dep stop',dep.filePath);
     watchedFiles.delete(dep.filePath);
     watcher.unwatch(dep.filePath);
-    log('red', `❌ 停止监听: ${dep.name} (${dep.filePath})`);
   })
   
   // 监听 after-reload 事件
@@ -93,8 +87,6 @@ async function main() {
         log('red', `❌ 重载失败: ${error instanceof Error ? error.message : error}`);
         console.timeEnd('⏱️  重载耗时');
       }
-      
-      log('yellow', '\n💡 继续监听文件变化...\n');
     }
   });
   

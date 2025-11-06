@@ -254,9 +254,6 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
       }
       // 11. 更新新节点的 children
       newNode.children=savedChildren;
-      newNode.dispatch('reload', newNode);
-      // 发出 afterReload 事件
-      newNode.dispatch('after-reload', newNode);
       if(!this.parent) {
         Object.assign(this,newNode);
         return this;
