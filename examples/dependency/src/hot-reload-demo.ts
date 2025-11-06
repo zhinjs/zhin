@@ -49,19 +49,21 @@ async function main() {
   log('yellow', '📝 设置文件监听器...\n');
   
   // 监听 afterStart 事件，动态收集文件
-  root.on('after-start', (dep: Dependency) => {
+  root.on('started', (dep: Dependency) => {
+    console.log('dep start',dep.filePath);
     watchedFiles.set(dep.filePath, dep);
     watcher.add(dep.filePath);
     log('green', `✅ 开始监听: ${dep.name} (${dep.filePath})`);
   });
-  root.on("after-stop",(dep:Dependency)=>{
+  root.on("stopped",(dep:Dependency)=>{
+    console.log('dep stop',dep.filePath);
     watchedFiles.delete(dep.filePath);
     watcher.unwatch(dep.filePath);
     log('red', `❌ 停止监听: ${dep.name} (${dep.filePath})`);
   })
   
   // 监听 after-reload 事件
-  root.on('after-reload', (dep: Dependency) => {
+  root.on('reloaded', (dep: Dependency) => {
     log('green', `✅ 热重载完成: ${dep.name}`);
     // 更新文件映射
     watchedFiles.set(dep.filePath, dep);

@@ -35,8 +35,8 @@ registerHook({
  */
 registerHook({
   name: 'onDispose',
-  handler: (dep: Dependency, hook: () => void | Promise<void>) => {
-    dep.addDisposeHook(hook);
+  handler: (dep: Dependency, hook: () => void | Promise<void>,inner:boolean=false) => {
+    dep.addDisposeHook(hook,inner);
   },
   description: 'registerHook a dispose hook for the current dependency'
 });
@@ -76,8 +76,8 @@ export function onMount(hook: () => void | Promise<void>): void {
  * 添加卸载钩子
  * 会在依赖停止时自动执行
  */
-export function onDispose(hook: () => void | Promise<void>): void {
-  return useHook('onDispose')(hook);
+export function onDispose(hook: () => void | Promise<void>,inner:boolean=false): void {
+  return useHook('onDispose')(hook,inner);
 }
 
 /**

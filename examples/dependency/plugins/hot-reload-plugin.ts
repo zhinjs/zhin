@@ -6,11 +6,14 @@
  */
 
 import { onMount, onDispose } from '@zhin.js/dependency';
-// import './logger-plugin.ts';
+import './logger-plugin.ts';
 
 // 插件版本（修改这个数字来测试热重载）
 const VERSION = 1
 
+// setInterval(() => {
+//   console.log('定时任务');
+// }, 1000);
 
 onMount(() => {
   console.log(`✅ [Hot Reload Plugin v${VERSION}] 插件已挂载`);

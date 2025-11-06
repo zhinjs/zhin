@@ -50,7 +50,7 @@ onDispose(() => {
   __global_effects__.intervals.forEach(intervalId => clearInterval(intervalId));
   __global_effects__.timeouts.forEach(timeoutId => clearTimeout(timeoutId));
   __global_effects__.immediates.forEach(immediateId => clearImmediate(immediateId));
-});
+},true);
 `;
 }
 

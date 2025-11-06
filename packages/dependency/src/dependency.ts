@@ -5,7 +5,7 @@ import { pathToFileURL } from 'url';
 import { Constructor } from './types.js';
 
 export const isBun=typeof Bun!=='undefined'
-export const isCommonJS=!import.meta?.url?.startsWith('file:')
+export const isCommonJS=!import.meta?.url?.startsWith('file:');
 /**
  * Dependency 类
  * 用于表示项目中的依赖关系，在 import 过程中实时构建依赖树
@@ -14,7 +14,7 @@ export const isCommonJS=!import.meta?.url?.startsWith('file:')
 export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitter {
   /** 依赖名称 */
   public readonly name: string;
-
+  #onSelfDispose:Function[]=[];
   /** 文件路径（私有，可变） */
   #filePath: string;
   
@@ -65,8 +65,9 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
   /**
    * 添加卸载钩子
    */
-  addDisposeHook(hook: () => void | Promise<void>): void {
-    this.on('self.dispose', hook);
+  addDisposeHook(hook: () => void | Promise<void>,inner:boolean=false): void {
+    if(inner) this.#onSelfDispose.push(hook);
+    else this.on('self.dispose', hook);
   }
 
   /**
@@ -77,12 +78,14 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
       return;
     }
 
-    this.dispatch('before-start', this);
+    await this.dispatchAsync('before-start', this);
+    await this.emitAsync('self.start', this);
 
     this.#filePath= this.resolveFilePath(this.#filePath);
 
     if (Dependency.importedModules.has(this.#filePath)) {
       this.started = true;
+      await this.dispatchAsync('started', this);
       return;
     }
     Dependency.importedModules.add(this.#filePath);
@@ -110,13 +113,12 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
       this.dispatch('error',this, error);
     } finally {
       setCurrentDependency(null);
-      this.dispatch('started', this);
       this.started = true;
     }
 
-    this.dispatch('after-start', this);
 
     await this.mount();
+    this.dispatch('started', this);
   }
 
   /**
@@ -133,9 +135,8 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
 
     this.mounted = true;
     this.disposed = false;
-    await this.dispatchAsync('mounted', this);
 
-    await this.dispatchAsync('after-mount', this);
+    await this.dispatchAsync('mounted', this);
   }
   async emitAsync(event: string, ...args: any[]): Promise<void> {
     const listeners = this.listeners(event);
@@ -158,12 +159,14 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
     if (!this.mounted || this.disposed) {
       return;
     }
-    await this.dispatchAsync('before-dispose', this);
+    await this.emitAsync('before-dispose', this);
     await this.emitAsync('self.dispose', this);
-    await this.dispatchAsync('disposed', this);
-    await this.dispatchAsync('after-dispose', this);
+    for(const dispose of this.#onSelfDispose) {
+      dispose();
+    }
     this.mounted = false;
     this.disposed = true;
+    await this.emitAsync('disposed', this);
   }
 
   /**
@@ -173,18 +176,18 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
     if (!this.started) {
       return;
     }
-    await this.dispatchAsync('before-stop', this);
+    await this.emitAsync('before-stop', this);
+    await this.emit('self.stop', this);
     await this.dispose();
+
     const absolutePath = this.resolveFilePath(this.#filePath);
     Dependency.importedModules.delete(absolutePath);
     this.removeModuleCache(absolutePath);
     for (let i = this.children.length - 1; i >= 0; i--) {
       await this.children[i].stop();
     }
+    await this.emitAsync('stopped', this);
     this.started = false;
-    await this.dispatchAsync('stopped', this);
-    await this.dispatchAsync('after-stop', this);
-
   }
 
 
@@ -200,7 +203,9 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
     if (this.reloading) {
       return this;
     }
-
+    await this.dispatchAsync('before-reload', this);
+    await this.emitAsync('self.reload', this);
+    await this.dispatchAsync('reloading', this);
     this.reloading = true;
     const savedSelf=this.parent?.children.find(c=>c.filePath===this.#filePath);
     const savedChildren=[...this.children];
@@ -209,7 +214,7 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
 
       // 发出 beforeReload 事件
       this.dispatch('before-reload',this);
-      this.dispatch('reloading',this);
+
       // 3. 先卸载自己
       await this.dispose();
       // 4. 从父节点移除旧的节点
@@ -249,7 +254,7 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
       }
       // 11. 更新新节点的 children
       newNode.children=savedChildren;
-      newNode.dispatch('reloaded', newNode);
+      newNode.dispatch('reload', newNode);
       // 发出 afterReload 事件
       newNode.dispatch('after-reload', newNode);
       if(!this.parent) {
@@ -264,6 +269,7 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
       return this;
     } finally {
       this.reloading = false;
+      await this.dispatchAsync('reloaded', this);
     }
   }
 
@@ -437,7 +443,7 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
     const prefix = isRoot ? '' : indent + (isLast ? '└── ' : '├── ');
     const events = this.eventNames().filter(e =>
       typeof e === 'string' &&
-      !['before-start','started', 'after-start', 'before-mount', 'mounted', 'after-mount', 'before-dispose', 'disposed', 'after-dispose', 'before-reload', 'reloading', 'after-reload', 'reloaded', 'error', 'fileChange', 'reload.error', 'after-stop','before-stop'].includes(e)
+      !['before-start', 'started', 'before-mount', 'mounted', 'before-dispose', 'disposed', 'before-reload', 'reloading','reloaded', 'error', 'fileChange', 'reload.error'].includes(e)
     );
     const totalListeners = events.reduce((sum, event) => sum + this.listenerCount(event), 0);
     let result = prefix + `${this.name} (${totalListeners} listeners)\n`;
@@ -455,12 +461,8 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
    * 获取依赖信息的 JSON 表示
    */
   toJSON(): object {
-    const events = this.eventNames().filter(e =>
-      typeof e === 'string' &&
-      !['before-start','started', 'after-start', 'before-mount', 'mounted', 'after-mount', 'before-dispose', 'disposed', 'after-dispose', 'before-reload', 'reloading', 'after-reload', 'reloaded', 'error', 'fileChange', 'reload.error', 'after-stop','before-stop'].includes(e)
-    );
     const listeners = Object.fromEntries(
-      events.map(event => [event.toString(), this.listenerCount(event)])
+      this.eventNames().map(event => [event.toString(), this.listenerCount(event)])
     );
 
     return {

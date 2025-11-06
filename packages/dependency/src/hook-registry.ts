@@ -51,7 +51,7 @@ export type HookFunction<T extends any[] = any[]> = (...args: T) => any;
 export interface Hooks {
   addListener: (event: string, listener: () => void) => () => void;
   onMount: (hook: () => void | Promise<void>) => void;
-  onDispose: (hook: () => void | Promise<void>) => void;
+  onDispose: (hook: () => void | Promise<void>,inner?:boolean) => void;
   importModule: (path: string) => Promise<void>;
 }
 
