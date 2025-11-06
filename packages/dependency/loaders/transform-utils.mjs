@@ -79,8 +79,14 @@ export function transformImports(source, currentPath, isHotReload = false, marke
   const needsImportTransform = hasRelativeImports(source);
   const wrapEffects = shouldWrapEffects();
 
+  if (wrapEffects) {
+    // 收集所有import 行
+    const importLines = source.match(/import\s+[^;]+from\s+(['"])([^'"]+)\1;\n/gm)||[];
+    const lastImportLine = importLines[importLines.length - 1];
+    source = source.replace(lastImportLine, lastImportLine+generateEffectWrappers());
+  }
   // 如果不需要任何转换，直接返回原始代码
-  if (!needsImportTransform && !isHotReload && !wrapEffects) {
+  if (!needsImportTransform && !isHotReload) {
     return source;
   }
 
@@ -92,12 +98,6 @@ export function transformImports(source, currentPath, isHotReload = false, marke
   const hooksPath = pkgJson.name;
   if (!hasOnDispose) {
     result = `import { onDispose } from '${hooksPath}';\n`+result;
-  }
-  if (wrapEffects) {
-    // 收集所有import 行
-    const importLines = source.match(/import\s+[^;]+from\s+(['"])([^'"]+)\1;\n/gm)||[];
-    const lastImportLine = importLines[importLines.length - 1];
-    source = source.replace(lastImportLine, lastImportLine+generateEffectWrappers());
   }
 
   // 2. 检查是否已有 importModule 导入

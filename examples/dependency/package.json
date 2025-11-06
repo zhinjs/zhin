@@ -6,9 +6,14 @@
   "private": true,
   "scripts": {
     "dev": "tsx --import @zhin.js/dependency/register.mjs src/index.ts",
+    "hot-reload": "tsx --import @zhin.js/dependency/register.mjs src/hot-reload-demo.ts",
     "dev:bun": "bun --preload @zhin.js/dependency/bun-preload.ts src/index.ts",
     "dev:no-wrap": "DEPENDENCY_WRAP_EFFECTS=false tsx --import @zhin.js/dependency/register.mjs src/index.ts",
     "clean": "rm -rf plugins/*.generated.ts"
+  },
+  "dependencies": {
+    "chokidar": "^3.6.0",
+    "@zhin.js/dependency": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.7.0",

@@ -23,15 +23,18 @@ example/
 ### 安装依赖
 
 ```bash
-cd packages/dependency/example
+cd examples/dependency
 pnpm install
 ```
 
 ### 运行示例
 
 ```bash
-# 使用 tsx 运行
+# 基础示例 - 完整功能演示
 pnpm dev
+
+# 热重载演示 - 实时代码更新
+pnpm hot-reload
 
 # 使用 Bun 运行
 pnpm dev:bun
@@ -70,14 +73,28 @@ pnpm dev:no-wrap
 - 子插件自动成为依赖节点
 - 级联停止
 
-### 5. 主入口 (`src/index.ts`)
+### 5. 热重载插件 (`plugins/hot-reload-plugin.ts`)
+
+展示热重载功能：
+- 修改代码实时生效
+- 自动清理旧插件
+- 保留子依赖树
+
+### 6. 主入口 (`src/index.ts`)
 
 展示完整的使用流程：
 - 创建根 Dependency
 - 启动插件系统
 - 监听生命周期事件
-- 热重载支持
 - 优雅停止
+
+### 7. 热重载演示 (`src/hot-reload-demo.ts`)
+
+展示热重载实现：
+- 使用 chokidar 监听文件
+- 动态收集依赖文件
+- 自动重载变化的插件
+- 实时查看效果
 
 ## 🎯 学习要点
 
@@ -220,10 +237,12 @@ logger('Hello', 'info');
 
 ## 📖 相关文档
 
-- [主文档](../README.md)
-- [API 文档](../README.md#-api-文档)
-- [热重载指南](../README.md#-热重载)
-- [类继承指南](../README.md#-类继承指南)
+- **[本目录 README](./README.md)** - 完整示例说明
+- **[热重载指南](./HOT-RELOAD-GUIDE.md)** - 热重载详细教程
+- **[运行指南](./RUNNING.md)** - 运行说明和预期输出
+- **[主文档](../../packages/dependency/README.md)** - 完整的 API 文档
+- **[热重载文档](../../packages/dependency/README.md#-热重载)** - 热重载 API
+- **[类继承指南](../../packages/dependency/README.md#-类继承指南)** - 继承用法
 
 ## 🤝 反馈
 

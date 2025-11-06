@@ -30,9 +30,8 @@ async function main() {
   // 插件列表
   const plugins = [
     'logger-plugin.ts',
-    // 'timer-plugin.ts',
     'database-plugin.ts',
-    // 'parent-plugin.ts'
+    'parent-plugin.ts'
   ];
   
   log('yellow', '📦 准备加载以下插件:');
