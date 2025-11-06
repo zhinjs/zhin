@@ -28,10 +28,9 @@ async function main() {
   log('bright', '\n' + '='.repeat(60));
   log('cyan', '🔥 @zhin.js/dependency 热重载演示');
   log('bright', '='.repeat(60) + '\n');
-  
+  const pluginPath=resolve(import.meta.dirname,'plugins', 'hot-reload-plugin');
   // 创建根依赖
-  const pluginPath = resolve(process.cwd(), 'plugins', 'hot-reload-plugin.ts');
-  let root = new Dependency(pluginPath);
+  const root = new Dependency(pluginPath);
   
   // 监听的文件映射
   const watchedFiles = new Map<string, Dependency>();
@@ -46,20 +45,32 @@ async function main() {
     }
   });
   
-  // 监听 afterStart 事件，动态收集文件
+  // 监听 started 事件，动态收集文件
   root.on('started', (dep: Dependency) => {
     watchedFiles.set(dep.filePath, dep);
     watcher.add(dep.filePath);
+    log('green', `  → 添加到监听: ${dep.name}`);
   });
-  root.on("stopped",(dep:Dependency)=>{
+  
+  // 监听 before-stop 事件，移除文件监听
+  root.on("before-stop", (dep: Dependency) => {
     watchedFiles.delete(dep.filePath);
     watcher.unwatch(dep.filePath);
-  })
+    log('yellow', `  → 移除监听: ${dep.name}`);
+  });
   
-  // 监听 after-reload 事件
+  const getMemoryUsage = () => {
+    const memoryUsage = process.memoryUsage();
+    return {
+      rss: `实际内存:${(memoryUsage.rss / 1024 / 1024).toFixed(2)}MB`,
+      heapTotal: `堆内存:${(memoryUsage.heapTotal / 1024 / 1024).toFixed(2)}MB`,
+      heapUsed: `已使用内存:${(memoryUsage.heapUsed / 1024 / 1024).toFixed(2)}MB`,
+    };
+  };
+  
+  // 监听 reloaded 事件
   root.on('reloaded', (dep: Dependency) => {
     log('green', `✅ 热重载完成: ${dep.name}`);
-    // 更新文件映射
     watchedFiles.set(dep.filePath, dep);
   });
   
@@ -68,21 +79,30 @@ async function main() {
     log('red', `❌ 错误 [${dep.name}]: ${error.message}`);
   });
   await root.start();
-  
+  console.log(root.printTree('', true, true));
   // 监听文件变化
   watcher.on('change', async (changedPath: string) => {
     const dep = watchedFiles.get(changedPath);
     if (dep) {
-      log('blue', `🔄 重载插件: ${dep.name}`);
+      log('bright', '\n' + '='.repeat(60));
+      log('blue', `🔄 检测到文件变化: ${dep.name}`);
+      log('bright', '='.repeat(60) + '\n');
       console.time('⏱️  重载耗时');
       
       try {
         const newDep = await dep.reload();
-        // if(root.filePath===dep.filePath) root=newDep;
         watchedFiles.set(newDep.filePath, newDep);
+        
+        log('bright', '\n' + '-'.repeat(60));
         log('green', `✅ 重载成功: ${newDep.name}`);
         console.timeEnd('⏱️  重载耗时');
+        
+        log('cyan', '\n📊 更新后的依赖树:');
         console.log(root.printTree('', true, true));
+        
+        log('yellow', '\n💾 内存使用:');
+        console.log(getMemoryUsage());
+        log('bright', '-'.repeat(60) + '\n');
       } catch (error) {
         log('red', `❌ 重载失败: ${error instanceof Error ? error.message : error}`);
         console.timeEnd('⏱️  重载耗时');
@@ -98,11 +118,22 @@ async function main() {
     log('green', '✅ 已停止\n');
     process.exit(0);
   });
+  return async ()=>{
+    await root.stop();
+    await watcher.close();
+  }
 }
-
-// 运行演示
-main().catch(error => {
-  console.error('\n❌ 发生错误:', error);
-  process.exit(1);
-});
-
+const start=async()=>{
+  try{
+    return await main();
+  }catch(error){
+    console.error('\n❌ 发生错误:', error);
+    process.exit(1);
+    return null;
+  }
+}
+const stop=await start();
+const restart=async()=>{
+  await stop?.();
+  return await start();
+}

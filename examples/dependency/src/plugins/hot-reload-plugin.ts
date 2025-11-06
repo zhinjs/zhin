@@ -1,5 +1,6 @@
 import { onMount, onDispose } from '@zhin.js/dependency';
-// import './logger-plugin.ts';
+import './logger-plugin.js';
+import './child-plugin.js';
 
 // setInterval(() => {
 //   console.log('定时任务');

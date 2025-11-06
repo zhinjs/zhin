@@ -6,6 +6,7 @@
  */
 
 import { onMount, onDispose } from '@zhin.js/dependency';
+import './timer-plugin.js';
 
 console.log('👶 [Child Plugin] 模块已加载');
 
@@ -13,9 +14,9 @@ onMount(() => {
   console.log('✅ [Child Plugin] 子插件已挂载');
   
   // 子插件的定时任务
-  setInterval(() => {
-    console.log('💫 [Child Plugin] 子插件定时任务执行');
-  }, 2000);
+  // setInterval(() => {
+  //   console.log('💫 [Child Plugin] 子插件定时任务执行');
+  // }, 2000);
 });
 
 onDispose(() => {

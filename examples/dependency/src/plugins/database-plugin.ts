@@ -10,7 +10,7 @@
 
 import { onMount, onDispose } from '@zhin.js/dependency';
 
-console.log('💾 [Database Plugin] 模块已加载');
+console.log('💾 [Database Plugin] 模块已加载')
 
 // 模拟数据库连接
 class DatabaseConnection {

@@ -78,8 +78,13 @@ export function transformImports(source, currentPath, isHotReload = false, marke
   // 检查是否需要转换
   const needsImportTransform = hasRelativeImports(source);
   const wrapEffects = shouldWrapEffects();
+  const hooksPath = pkgJson.name;
 
   if (wrapEffects) {
+    const hasOnDispose = source.includes('onDispose');
+    if (!hasOnDispose) {
+      source = `import { onDispose } from '${hooksPath}';\n`+source;
+    }
     // 收集所有import 行
     const importLines = source.match(/import\s+[^;]+from\s+(['"])([^'"]+)\1;\n/gm)||[];
     const lastImportLine = importLines[importLines.length - 1];
@@ -94,11 +99,6 @@ export function transformImports(source, currentPath, isHotReload = false, marke
   let result = isHotReload
     ? `/* ${marker} (Hot Reload: ${Date.now()}) */\n`
     : `/* ${marker} */\n`;
-  const hasOnDispose = source.includes('onDispose');
-  const hooksPath = pkgJson.name;
-  if (!hasOnDispose) {
-    result = `import { onDispose } from '${hooksPath}';\n`+result;
-  }
 
   // 2. 检查是否已有 importModule 导入
   const hasImportModule = /import.*importModule.*from.*${hooksPath}/.test(source);

@@ -5,11 +5,12 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "build": "tsc",
     "dev": "tsx --import @zhin.js/dependency/register.mjs src/index.ts",
     "hot-reload": "tsx --import @zhin.js/dependency/register.mjs src/hot-reload-demo.ts",
+    "test:events": "tsx --import @zhin.js/dependency/register.mjs src/test-event-bubbling.ts",
     "dev:bun": "bun --preload @zhin.js/dependency/bun-preload.ts src/index.ts",
-    "dev:no-wrap": "DEPENDENCY_WRAP_EFFECTS=false tsx --import @zhin.js/dependency/register.mjs src/index.ts",
-    "clean": "rm -rf plugins/*.generated.ts"
+    "dev:no-wrap": "DEPENDENCY_WRAP_EFFECTS=false tsx --import @zhin.js/dependency/register.mjs src/index.ts"
   },
   "dependencies": {
     "chokidar": "^3.6.0",
