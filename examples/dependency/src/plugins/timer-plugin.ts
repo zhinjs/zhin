@@ -13,8 +13,6 @@ import { onMount } from '@zhin.js/dependency';
 
 console.log('⏰ [Timer Plugin] 模块已加载');
 
-let tickCount = 0;
-
 onMount(() => {
   // console.log('✅ [Timer Plugin] 插件已挂载');
   

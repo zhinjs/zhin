@@ -123,17 +123,3 @@ async function main() {
     await watcher.close();
   }
 }
-const start=async()=>{
-  try{
-    return await main();
-  }catch(error){
-    console.error('\n❌ 发生错误:', error);
-    process.exit(1);
-    return null;
-  }
-}
-const stop=await start();
-const restart=async()=>{
-  await stop?.();
-  return await start();
-}
