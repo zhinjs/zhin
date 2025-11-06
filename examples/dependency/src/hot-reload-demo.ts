@@ -50,12 +50,15 @@ async function main() {
   
   // 监听 afterStart 事件，动态收集文件
   root.on('after-start', (dep: Dependency) => {
-    if (!watchedFiles.has(dep.filePath)) {
-      watchedFiles.set(dep.filePath, dep);
-      watcher.add(dep.filePath);
-      log('green', `✅ 开始监听: ${dep.name} (${dep.filePath})`);
-    }
+    watchedFiles.set(dep.filePath, dep);
+    watcher.add(dep.filePath);
+    log('green', `✅ 开始监听: ${dep.name} (${dep.filePath})`);
   });
+  root.on("after-stop",(dep:Dependency)=>{
+    watchedFiles.delete(dep.filePath);
+    watcher.unwatch(dep.filePath);
+    log('red', `❌ 停止监听: ${dep.name} (${dep.filePath})`);
+  })
   
   // 监听 after-reload 事件
   root.on('after-reload', (dep: Dependency) => {

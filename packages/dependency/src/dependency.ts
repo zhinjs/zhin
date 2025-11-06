@@ -110,6 +110,7 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
       this.dispatch('error',this, error);
     } finally {
       setCurrentDependency(null);
+      this.dispatch('started', this);
       this.started = true;
     }
 
@@ -132,9 +133,9 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
 
     this.mounted = true;
     this.disposed = false;
+    await this.dispatchAsync('mounted', this);
 
     await this.dispatchAsync('after-mount', this);
-    await this.dispatchAsync('mounted', this);
   }
   async emitAsync(event: string, ...args: any[]): Promise<void> {
     const listeners = this.listeners(event);
@@ -157,9 +158,10 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
     if (!this.mounted || this.disposed) {
       return;
     }
-    await this.emitAsync('dispose', this);
+    await this.dispatchAsync('before-dispose', this);
     await this.emitAsync('self.dispose', this);
-
+    await this.dispatchAsync('disposed', this);
+    await this.dispatchAsync('after-dispose', this);
     this.mounted = false;
     this.disposed = true;
   }
@@ -171,17 +173,18 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
     if (!this.started) {
       return;
     }
-
+    await this.dispatchAsync('before-stop', this);
     await this.dispose();
-
     const absolutePath = this.resolveFilePath(this.#filePath);
     Dependency.importedModules.delete(absolutePath);
     this.removeModuleCache(absolutePath);
     for (let i = this.children.length - 1; i >= 0; i--) {
       await this.children[i].stop();
     }
-
     this.started = false;
+    await this.dispatchAsync('stopped', this);
+    await this.dispatchAsync('after-stop', this);
+
   }
 
 
@@ -206,7 +209,7 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
 
       // 发出 beforeReload 事件
       this.dispatch('before-reload',this);
-
+      this.dispatch('reloading',this);
       // 3. 先卸载自己
       await this.dispose();
       // 4. 从父节点移除旧的节点
@@ -246,7 +249,7 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
       }
       // 11. 更新新节点的 children
       newNode.children=savedChildren;
-      newNode.dispatch('reload', newNode);
+      newNode.dispatch('reloaded', newNode);
       // 发出 afterReload 事件
       newNode.dispatch('after-reload', newNode);
       if(!this.parent) {
@@ -434,7 +437,7 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
     const prefix = isRoot ? '' : indent + (isLast ? '└── ' : '├── ');
     const events = this.eventNames().filter(e =>
       typeof e === 'string' &&
-      !['before-start', 'after-start', 'before-mount', 'after-mount', 'mounted', 'before-dispose', 'after-dispose', 'disposed', 'before-reload', 'after-reload', 'reload', 'error', 'fileChange', 'reload.error'].includes(e)
+      !['before-start','started', 'after-start', 'before-mount', 'mounted', 'after-mount', 'before-dispose', 'disposed', 'after-dispose', 'before-reload', 'reloading', 'after-reload', 'reloaded', 'error', 'fileChange', 'reload.error', 'after-stop','before-stop'].includes(e)
     );
     const totalListeners = events.reduce((sum, event) => sum + this.listenerCount(event), 0);
     let result = prefix + `${this.name} (${totalListeners} listeners)\n`;
@@ -454,7 +457,7 @@ export class Dependency<P extends Dependency=Dependency<any>> extends EventEmitt
   toJSON(): object {
     const events = this.eventNames().filter(e =>
       typeof e === 'string' &&
-      !['before-start', 'after-start', 'before-mount', 'after-mount', 'mounted', 'before-dispose', 'after-dispose', 'disposed', 'before-reload', 'after-reload', 'reload', 'error', 'fileChange', 'reload.error'].includes(e)
+      !['before-start','started', 'after-start', 'before-mount', 'mounted', 'after-mount', 'before-dispose', 'disposed', 'after-dispose', 'before-reload', 'reloading', 'after-reload', 'reloaded', 'error', 'fileChange', 'reload.error', 'after-stop','before-stop'].includes(e)
     );
     const listeners = Object.fromEntries(
       events.map(event => [event.toString(), this.listenerCount(event)])
