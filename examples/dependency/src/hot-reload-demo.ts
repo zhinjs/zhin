@@ -46,18 +46,18 @@ async function main() {
     }
   });
   
-  // 监听 started 事件，动态收集文件
-  root.on('started', (dep: Dependency) => {
+  // 监听 mounted 事件，动态收集文件
+  root.on('mounted', (dep: Dependency) => {
     watchedFiles.set(dep.filePath, dep);
     watcher.add(dep.filePath);
-    log('green', `  → 添加到监听: ${dep.name}`);
+    log('green', `  + 监听: ${dep.name}`);
   });
   
-  // 监听 before-stop 事件，移除文件监听
-  root.on("before-stop", (dep: Dependency) => {
+  // 监听 before-dispose 事件，移除文件监听
+  root.on("before-dispose", (dep: Dependency) => {
     watchedFiles.delete(dep.filePath);
     watcher.unwatch(dep.filePath);
-    log('yellow', `  → 移除监听: ${dep.name}`);
+    log('yellow', `  - 监听: ${dep.name}`);
   });
   
   const getMemoryUsage = () => {
@@ -69,7 +69,7 @@ async function main() {
     };
   };
   
-  // 监听 reloaded 事件
+  // 监听 disposed 事件
   root.on('reloaded', (dep: Dependency) => {
     log('green', `✅ 热重载完成: ${dep.name}`);
     watchedFiles.set(dep.filePath, dep);

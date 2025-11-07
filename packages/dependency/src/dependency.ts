@@ -113,7 +113,6 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
     await this.emitAsync('self.mounted', this);
 
     this.mounted = true;
-
     await this.dispatchAsync('mounted', this);
   }
   async emitAsync(event: string, ...args: any[]): Promise<void> {
@@ -183,7 +182,7 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
     await this.emitAsync('self.reload', this);
     await this.dispatchAsync('reloading', this);
     const savedChildren = [...this.children];
-    const parent = this.parent;
+    const parent=this.parent;
     try {
       // 1. 卸载并清理
       await this.#cleanupBeforeReload();
@@ -193,8 +192,8 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
 
       // 3. 处理子依赖变化
       await this.#updateChildren(newNode, savedChildren);
+      if(parent) newNode.refs.add(parent.filePath);
       await newNode.start();
-      parent?.addChild(newNode);
       return newNode;
     } catch (error) {
       this.#handleReloadError(error);
@@ -236,7 +235,12 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
     } else {
       // 有父节点：通过父节点重新导入创建新节点
       const relativePath = this.getRelativePathFromParent(this.parent);
-      return await this.parent!.importChild(relativePath) as Dependency<P>;
+      const newNode= await this.parent!.importChild(relativePath) as Dependency<P>;
+      this.parent!.addChild(newNode);
+      newNode.refs.add(this.parent!.filePath);
+      console.log(this.parent!.name,this.parent?.children.map(c=>c.name));
+      console.log(newNode.name,newNode.refs);
+      return newNode;
     }
   }
 
@@ -515,10 +519,7 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
    */
   printTree(indent: string = '', isLast: boolean = true, isRoot: boolean = false): string {
     const prefix = isRoot ? '' : indent + (isLast ? '└── ' : '├── ');
-    const events = this.eventNames().filter(e =>
-      typeof e === 'string' &&
-      !['before-start', 'started', 'before-mount', 'mounted', 'before-dispose', 'disposed', 'before-reload', 'reloading', 'reloaded', 'error', 'fileChange', 'reload.error'].includes(e)
-    );
+    const events = this.eventNames();
     const totalListeners = events.reduce((sum, event) => sum + this.listenerCount(event), 0);
 
     // 显示共享信息：refs.size

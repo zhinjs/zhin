@@ -15,10 +15,10 @@ console.log('👨 [Parent Plugin] 模块已加载');
 onMount(() => {
   console.log('✅ [Parent Plugin] 父插件已挂载');
   
-  // 父插件的定时任务
-  setInterval(() => {
-    console.log('🌟 [Parent Plugin] 父插件定时任务执行');
-  }, 1000);
+  // // 父插件的定时任务
+  // setInterval(() => {
+  //   console.log('🌟 [Parent Plugin] 父插件定时任务执行');
+  // }, 1000);
 });
 
 onDispose(() => {
