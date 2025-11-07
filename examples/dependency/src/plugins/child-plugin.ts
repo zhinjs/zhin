@@ -7,7 +7,6 @@
 
 import { onMount, onDispose } from '@zhin.js/dependency';
 import './timer-plugin.js';
-// import './parent-plugin.js'
 
 console.log('👶 [Child Plugin] 模块已加载');
 

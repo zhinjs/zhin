@@ -31,6 +31,7 @@ async function main() {
   const pluginPath=resolve(import.meta.dirname,'plugins', 'hot-reload-plugin');
   // 创建根依赖
   const root = new Dependency(pluginPath);
+  await root.init()
   
   // 监听的文件映射
   const watchedFiles = new Map<string, Dependency>();

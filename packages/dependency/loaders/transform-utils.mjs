@@ -17,40 +17,31 @@ export function hasRelativeImports(source) {
  */
 function generateEffectWrappers() {
   return `
-const __global_effects__={
-  intervals:[],
-  timeouts:[],
-  immediates:[],
-}
+const __DEP_CURRENT__ = globalThis.__CURRENT_DEPENDENCY__;
 const __globalSetInterval = globalThis.setInterval;
 const __globalSetTimeout = globalThis.setTimeout;
 const __globalSetImmediate = typeof setImmediate !== 'undefined' ? globalThis.setImmediate : null;
 
 
-globalThis.setInterval = function(...args) {
+const setInterval = function(...args) {
   const timerId = __globalSetInterval.apply(this, args);
-  __global_effects__.intervals.push(timerId);
+  __DEP_CURRENT__.addDisposeHook(() => clearInterval(timerId),true);
   return timerId;
 };
 
-globalThis.setTimeout = function(...args) {
+const setTimeout = function(...args) {
   const timerId = __globalSetTimeout.apply(this, args);
-  __global_effects__.timeouts.push(timerId);
+  __DEP_CURRENT__.addDisposeHook(() => clearTimeout(timerId),true);
   return timerId;
 };
 
 if (__globalSetImmediate) {
-  globalThis.setImmediate = function(...args) {
+  const setImmediate = function(...args) {
     const immediateId = __globalSetImmediate.apply(this, args);
-    __global_effects__.immediates.push(immediateId);
+    __DEP_CURRENT__.addDisposeHook(() => clearImmediate(immediateId),true);
     return immediateId;
   };
 }
-onDispose(() => {
-  __global_effects__.intervals.forEach(intervalId => clearInterval(intervalId));
-  __global_effects__.timeouts.forEach(timeoutId => clearTimeout(timeoutId));
-  __global_effects__.immediates.forEach(immediateId => clearImmediate(immediateId));
-},true);
 `;
 }
 

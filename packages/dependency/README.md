@@ -1,38 +1,28 @@
-# 🌲 @zhin.js/dependency
+# @zhin.js/dependency
 
-一个强大的依赖树分析工具，支持动态导入、热重载、生命周期管理和可扩展的 Hook 系统。
+基于运行时依赖树分析的模块管理系统，提供自动依赖去重、热重载和生命周期管理功能。
 
-## 📋 目录
+## ✨ 核心特性
 
-- [主要特性](#-主要特性)
-- [安装](#-安装)
-- [快速开始](#-快速开始)
-  - [基本用法](#基本用法)
-  - [在插件中使用 Hooks](#在插件中使用-hooks)
-  - [继承 Dependency 类](#继承-dependency-类)
-- [配置](#-配置)
-  - [环境变量](#环境变量)
-  - [运行时配置](#运行时配置)
-- [副作用自动管理](#-副作用自动管理)
-- [可扩展 Hook 系统](#-可扩展-hook-系统)
-- [热重载](#-热重载)
-- [类继承指南](#-类继承指南)
-- [插件生态系统](#-插件生态系统)
-- [API 文档](#-api-文档)
-- [生命周期](#-生命周期)
+### 1. **自动依赖去重**
+- 全局唯一实例：同一文件路径在整个依赖树中只有一个实例
+- 引用计数：通过 `refs` 集合追踪所有引用者
+- 智能共享：自动识别共享依赖并显示引用计数
 
-## ✨ 主要特性
+### 2. **热重载 (Hot Reload)**
+- 原地重载：根节点重载时保持引用不变
+- 智能 Diff：自动比较新旧子依赖，保留未变化的子树
+- 状态保持：共享依赖在重载时保持状态和监听器
 
-- 🌲 **依赖树构建** - 自动构建模块依赖关系树
-- 🔄 **热重载支持** - 文件变更时自动重载，保留子依赖树
-- 🎯 **原生 import 支持** - 使用标准 ES 模块语法，无需自定义函数
-- 🪝 **可扩展 Hook 系统** - 注册自定义 hooks，支持自动类型推断
-- 🧹 **副作用自动管理** - 自动包装 `setInterval`、`setTimeout` 等副作用函数，自动清理
-- 📦 **跨运行时支持** - Node.js / tsx / Bun
-- 🎨 **生命周期管理** - `start`, `mount`, `dispose`, `stop` 生命周期方法
-- 🔔 **EventEmitter 集成** - 标准的事件系统
-- 🎯 **TypeScript 类型支持** - 完整的类型定义和类型推断
-- 🧬 **继承支持** - 完全支持类继承，创建自定义插件类
+### 3. **生命周期管理**
+- 细粒度生命周期钩子
+- 事件冒泡机制：从叶子节点向根节点传播
+- 自动清理：停止时自动清理子依赖和副作用
+
+### 4. **副作用自动管理**
+- 自动包装全局副作用函数（`setInterval`, `setTimeout`, `setImmediate`）
+- 模块卸载时自动清理副作用
+- 通过环境变量 `DEPENDENCY_WRAP_EFFECTS` 控制开关
 
 ## 📦 安装
 
@@ -42,983 +32,539 @@ pnpm add @zhin.js/dependency
 
 ## 🚀 快速开始
 
-> 💡 **完整示例**: 查看 [example/](./example/) 目录获取完整的使用示例，包括多个插件演示。
-
-### 基本用法
+### 基础用法
 
 ```typescript
-import { Dependency } from '@zhin.js/dependency';
+import { Dependency, onMount, onDispose, getCurrentDependency } from '@zhin.js/dependency';
 
-// 创建并启动依赖树
-const root = new Dependency('./entry.js');
-await root.start();
+// 插件代码 (plugin.ts)
+export const name = 'my-plugin';
 
-// 打印依赖树
-console.log(root.printTree('', true, true));
-
-// 停止依赖树
-await root.stop();
-```
-
-### 在插件中使用 Hooks
-
-```typescript
-// plugins/my-plugin.ts
-import { onMount, onDispose, addListener } from '@zhin.js/dependency';
-
-// 挂载钩子
 onMount(() => {
-  console.log('插件已挂载！');
+  console.log('插件已挂载');
 });
 
-// 添加事件监听器
-const unsubscribe = addListener('my-event', () => {
-  console.log('事件触发');
-});
-
-// 卸载钩子
 onDispose(() => {
-  unsubscribe();
   console.log('插件已卸载');
 });
 
-// 使用原生 import 导入子模块
-import './child-plugin';
-
-export default {};
-```
-
-### 继承 Dependency 类
-
-完全支持类继承，创建自定义插件类：
-
-```typescript
-import { Dependency } from '@zhin.js/dependency';
-
-class Plugin extends Dependency {
-  public version: string = '1.0.0';
-  
-  constructor(filePath: string) {
-    super(filePath);
-  }
-  
-  getInfo(): string {
-    return `${this.name} v${this.version}`;
-  }
+// 导入子依赖
+const dep = getCurrentDependency();
+if (dep) {
+  await dep.importChild('./child-plugin');
 }
 
-// 使用自定义类
-const root = new Plugin('./entry.js');
+// 主程序
+const root = new Dependency('./plugin.ts');
 await root.start();
 
-// 所有子节点也是 Plugin 实例！
-console.log(root.children[0] instanceof Plugin); // true
-console.log(root.children[0].getInfo()); // 可以使用自定义方法
+console.log(root.printTree('', true, true));
+// my-plugin (0 listeners)
+// └── child-plugin (0 listeners)
+
+await root.stop();
 ```
 
-## 🔧 配置
-
-### 环境变量
-
-#### `DEPENDENCY_TREE_INCLUDE`
-
-指定需要处理的路径（优先级最高，即使在 `node_modules` 中也会处理）。
-
-**使用场景：**
-
-1. **包含 npm 包中的插件** ⭐
-
-```bash
-# 场景：你的插件发布为 npm 包，用户安装后需要被依赖树系统处理
-DEPENDENCY_TREE_INCLUDE=node_modules/@my-org/my-plugin
-```
-
-2. **混合本地和 npm 插件**
-
-```bash
-# 同时包含本地插件和多个 npm 包
-DEPENDENCY_TREE_INCLUDE=src/plugins,node_modules/@org/plugin1,node_modules/@org/plugin2
-```
-
-3. **包含包内特定目录**
-
-```bash
-# 只处理包内的 plugins 目录
-DEPENDENCY_TREE_INCLUDE=node_modules/@my-org/my-plugin/plugins
-```
-
-4. **支持插件生态系统**（社区插件 + 官方插件）⭐
-
-```bash
-# 同时支持社区插件 (zhin.js-*) 和官方插件 (@zhin.js/*)
-DEPENDENCY_TREE_INCLUDE=node_modules/zhin.js-,node_modules/@zhin.js/
-```
-
-#### `DEPENDENCY_TREE_EXCLUDE`
-
-指定需要排除的路径（优先级第二）。
-
-```bash
-# 排除测试文件
-DEPENDENCY_TREE_EXCLUDE=plugins/__tests__,plugins/**/*.test.ts
-```
-
-### 运行时配置
-
-#### Bun
-
-```json
-{
-  "scripts": {
-    "start": "bun --preload @zhin.js/dependency/bun-preload.ts src/index.ts"
-  }
-}
-```
-
-#### tsx
-
-```json
-{
-  "scripts": {
-    "start": "tsx --import @zhin.js/dependency/register.mjs src/index.ts"
-  }
-}
-```
-
-#### Node.js（编译后）
-
-```json
-{
-  "scripts": {
-    "build": "tsc",
-    "start": "node --import @zhin.js/dependency/register.mjs dist/index.js"
-  }
-}
-```
-
-## 🧹 副作用自动管理
-
-`@zhin.js/dependency` 提供了强大的副作用自动管理功能，能够自动包装全局副作用函数，并在插件卸载时自动清理，避免内存泄漏和资源占用。
-
-### 支持的副作用函数
-
-以下副作用函数会被自动包装和管理：
-
-- ✅ `setInterval` - 定时器，自动 `clearInterval`
-- ✅ `setTimeout` - 延时器，自动 `clearTimeout`
-- ✅ `setImmediate` - 立即执行（Node.js），自动 `clearImmediate`
-
-### 工作原理
-
-当插件代码中调用这些副作用函数时，loader 会自动：
-
-1. **拦截调用** - 记录返回的 ID 或注册的监听器
-2. **注册清理** - 自动添加清理函数到 `onDispose`
-3. **自动清理** - 插件卸载时自动清理所有副作用
-
-### 使用示例
-
-#### 传统方式（手动管理）❌
-
-```typescript
-// plugins/my-plugin.ts
-import { onDispose } from '@zhin.js/dependency';
-
-// 需要手动管理清理
-const timerId = setInterval(() => {
-  console.log('定时任务');
-}, 1000);
-
-onDispose(() => {
-  clearInterval(timerId); // 手动清理
-});
-```
-
-#### 自动管理方式（推荐）✅
-
-```typescript
-// plugins/my-plugin.ts
-
-// 直接使用，自动清理！
-setInterval(() => {
-  console.log('定时任务');
-}, 1000);
-
-// 不需要手动调用 clearInterval
-// 插件卸载时会自动清理
-```
-
-### 实际场景示例
-
-#### 场景 1：轮询任务
-
-```typescript
-// plugins/polling-plugin.ts
-
-// 轮询 API
-setInterval(async () => {
-  const data = await fetchAPI();
-  processData(data);
-}, 5000);
-
-// 卸载时自动停止轮询，无需手动清理
-```
-
-#### 场景 2：立即执行任务
-
-```typescript
-// plugins/immediate-plugin.ts
-
-// 立即执行（在当前事件循环结束后）
-setImmediate(async () => {
-  await processNextTask();
-});
-
-// 适用于需要在当前操作完成后立即执行的任务
-setImmediate(() => {
-  // 确保在当前 I/O 回调之后执行
-  notifyCompletion();
-});
-
-// 卸载时自动清理
-```
-
-#### 场景 3：混合使用多种定时器
-
-```typescript
-// plugins/complex-plugin.ts
-
-// 定时器 - 周期性执行
-setInterval(() => console.log('每秒执行'), 1000);
-
-// 延时器 - 延迟执行
-setTimeout(() => console.log('5秒后执行'), 5000);
-
-// 立即执行 - 当前事件循环后立即执行
-setImmediate(() => console.log('立即执行'));
-
-// 插件卸载时，所有副作用自动清理！
-```
-
-### 配置选项
-
-#### 环境变量 `DEPENDENCY_WRAP_EFFECTS`
-
-控制是否启用副作用自动管理功能。
-
-```bash
-# 禁用副作用包装（默认启用）
-DEPENDENCY_WRAP_EFFECTS=false
-
-# 或
-DEPENDENCY_WRAP_EFFECTS=0
-```
-
-**使用场景：**
-
-```json
-{
-  "scripts": {
-    "dev": "tsx --import @zhin.js/dependency/register.mjs src/index.ts",
-    "dev:no-wrap": "DEPENDENCY_WRAP_EFFECTS=false tsx --import @zhin.js/dependency/register.mjs src/index.ts"
-  }
-}
-```
-
-### 注意事项
-
-#### 1. 非插件上下文
-
-如果在非插件上下文中调用副作用函数（没有 Dependency 实例），包装器会静默失败，不影响正常使用：
-
-```typescript
-// 在普通模块中（非插件）
-setInterval(() => {
-  console.log('正常工作');
-}, 1000);
-// 不会自动清理，但不会报错
-```
-
-#### 2. 手动清理优先级更高
-
-如果你手动调用了清理函数，自动清理会跳过：
-
-```typescript
-const timerId = setInterval(() => {}, 1000);
-clearInterval(timerId); // 手动清理
-
-// onDispose 时尝试再次清理是安全的（clearInterval 多次调用无副作用）
-```
-
-#### 3. 保留原始函数引用
-
-如果需要访问原始的（未包装的）函数：
-
-```typescript
-// 在包装之前保存引用
-const originalSetInterval = globalThis.setInterval;
-
-// 使用原始函数（不会自动清理）
-const timerId = originalSetInterval(() => {}, 1000);
-```
-
-### 优势
-
-- ✅ **零心智负担** - 不需要记住手动清理
-- ✅ **避免内存泄漏** - 自动清理所有副作用
-- ✅ **简化代码** - 减少样板代码
-- ✅ **类型安全** - 完整的 TypeScript 类型支持
-- ✅ **向后兼容** - 可以通过环境变量禁用
-- ✅ **非侵入式** - 在非插件上下文中正常工作
-
-## 🪝 可扩展 Hook 系统
-
-### 自动类型推断
-
-通过 **Module Augmentation** 扩展 `Hooks` interface，实现自动类型推断：
-
-```typescript
-import { registerHook, useHook } from '@zhin.js/dependency';
-
-// 1️⃣ 扩展类型定义
-declare module '@zhin.js/dependency' {
-  interface Hooks {
-    logger: (message: string, level?: 'info' | 'warn' | 'error') => void;
-    onBeforeMount: (callback: () => void) => void;
-  }
-}
-
-// 2️⃣ 注册 hook
-registerHook({
-  name: 'logger',
-  handler: (dep, message, level = 'info') => {
-    console[level](`[${dep.name}] ${message}`);
-  }
-});
-
-// 3️⃣ 使用（类型自动推断！）
-export const logger = useHook('logger'); // (message: string, level?: 'info' | 'warn' | 'error') => void
-
-// ✅ TypeScript 提供完整的类型检查和智能提示
-logger('Hello', 'info');
-```
-
-### 内置 Hooks
-
-- `addListener(event, listener)` - 添加事件监听器
-- `onMount(hook)` - 添加挂载钩子
-- `onDispose(hook)` - 添加卸载钩子
-- `importModule(path)` - 导入子模块
-
-### 自定义 Hooks API
-
-- `registerHook(config)` - 注册自定义 hook
-- `unregisterHook(name)` - 取消注册 hook
-- `useHook(name)` - 创建 hook 函数（支持类型推断）
-- `hasHook(name)` - 检查 hook 是否存在
-- `getAllHooks()` - 获取所有已注册 hooks
-
-## 🔥 热重载
-
-`Dependency` 提供了 `reload()` 方法来支持热重载。你可以使用 `chokidar` 监听文件变化，然后调用 `reload()` 来重新加载模块。
-
-### 基本示例
-
-使用**事件驱动**的方式动态收集文件路径：
+### 热重载
 
 ```typescript
 import { Dependency } from '@zhin.js/dependency';
 import chokidar from 'chokidar';
 
-// 1. 创建依赖树和文件监听器
-const root = new Dependency('./entry.js');
-const watchedFiles = new Map<string, Dependency>();
-
-// 2. 创建空的 watcher，准备动态添加文件
-const watcher = chokidar.watch([], {
-  persistent: true,
-  ignoreInitial: true,
-  awaitWriteFinish: {
-    stabilityThreshold: 100,
-    pollInterval: 100
-  }
-});
-
-// 3. 监听 started 事件，动态收集文件路径
-root.on('started', (dep: Dependency) => {
-  watchedFiles.set(dep.filePath, dep);
-  watcher.add(dep.filePath);
-});
-
-// 监听 stopped 事件，移除文件监听
-root.on('stopped', (dep: Dependency) => {
-  watchedFiles.delete(dep.filePath);
-  watcher.unwatch(dep.filePath);
-});
-
-// 4. 启动依赖树（会触发 started 事件）
+const root = new Dependency('./plugin.ts');
 await root.start();
 
-// 5. 监听文件变化
-watcher.on('change', async (changedPath: string) => {
-  const dep = watchedFiles.get(changedPath);
-    if (dep) {
-      console.log(`📝 文件变更: ${dep.name}`);
-      console.time('reload');
-      
-      try {
-        const newDep = await dep.reload();
-        watchedFiles.set(newDep.filePath, newDep);
-      } catch (error) {
-        console.error(`❌ [${dep.name}] 重载失败:`, error);
-      }
-      
-      console.timeEnd('reload');
-    }
+// 监听文件变化
+chokidar.watch('./plugin.ts').on('change', async () => {
+  console.log('🔄 检测到文件变化，重载中...');
+  await root.reload();
+  console.log('✅ 重载完成');
 });
 ```
 
-### 热重载工作原理
+## 🔧 核心 API
 
-当调用 `dep.reload()` 时，会自动：
+### Dependency 类
 
-1. **暂存子依赖** - 保存当前节点的 children
-2. **卸载当前节点** - 调用 `dispose()`
-3. **清除模块缓存** - 清除 require/import 缓存
-4. **重新导入** - 父节点重新 import 该文件（或根节点重新 start）
-5. **恢复子依赖** - 将暂存的 children 赋值给新节点
-6. **重新挂载** - 调用新节点的 `mount()`
-7. **返回新实例** - `reload()` 返回新的 `Dependency` 实例
-
-### 关键特性
-
-- ✅ **支持根节点热重载** - 即使没有 parent 也能 reload
-- ✅ **返回新实例** - `reload()` 返回 `Promise<Dependency>`
-- ✅ **事件驱动** - 使用 `afterStart` 事件动态收集依赖
-- ✅ **保留子树** - 子依赖会自动迁移到新实例
-- ✅ **灵活可控** - 完全控制监听策略和重载时机
-
-### 事件说明
-
-**`started` vs `self.start`**：
-- `self.start` - 仅在当前节点触发（不冒泡）
-- `started` - 在节点及其所有子节点启动完成后触发（冒泡到根节点）
-
-**`stopped` vs `self.stop`**：
-- `self.stop` - 仅在当前节点触发（不冒泡）
-- `stopped` - 在节点停止后触发（冒泡到根节点）
-
-**`reloaded`**：
-- 重载完成后触发（包括成功和失败）
-- 在 `finally` 块中触发，确保无论成功失败都会执行
-
-### 优势
-
-- 🚀 **性能优化** - 只监听实际需要的文件
-- 🎯 **精确控制** - 可以根据需求定制监听策略
-- 🔄 **增量更新** - 无需重新收集所有文件
-- 💾 **内存友好** - 及时更新监听映射，避免内存泄漏
-- 🛠️ **可扩展** - 可以结合其他工具（如 nodemon、pm2）
-- 🔍 **细粒度事件** - 区分 `self.*` 和广播事件，灵活控制
-
-## 🧬 类继承指南
-
-### 核心特性
-
-- ✅ **完整继承支持** - 子节点自动使用父节点的类
-- ✅ **类型安全** - 完整的 TypeScript 类型支持
-- ✅ **生命周期保留** - 所有生命周期方法正常工作
-- ✅ **热重载兼容** - 重载后的节点保持相同类型
-
-### 基本继承
-
+#### 构造函数
 ```typescript
-import { Dependency } from '@zhin.js/dependency';
-
-class Plugin extends Dependency {
-  public version: string = '1.0.0';
-  public author: string = 'unknown';
-
-  constructor(filePath: string) {
-    super(filePath);
-  }
-
-  // 添加自定义方法
-  getInfo(): string {
-    return `${this.name} v${this.version} by ${this.author}`;
-  }
-}
-
-// 使用自定义类
-const root = new Plugin('./entry.js');
-await root.start();
-
-// 所有子节点也是 Plugin 实例！
-console.log(root.children[0] instanceof Plugin); // true
+constructor(filePath: string)
 ```
 
-### 实际示例
+#### 生命周期方法
 
-#### 示例 1：添加配置系统
+| 方法 | 说明 | 返回值 |
+|------|------|--------|
+| `start()` | 启动依赖：初始化模块、挂载、启动子依赖 | `Promise<void>` |
+| `mount()` | 挂载：执行 `onMount` 钩子 | `Promise<void>` |
+| `dispose()` | 卸载：执行 `onDispose` 钩子和副作用清理 | `Promise<void>` |
+| `stop()` | 停止：卸载、清理缓存、递归停止子依赖 | `Promise<void>` |
+| `reload()` | 重载：卸载、清理、重新导入、Diff 子依赖 | `Promise<Dependency>` |
 
+#### 依赖管理方法
+
+| 方法 | 说明 | 返回值 |
+|------|------|--------|
+| `importChild(path)` | 导入子依赖（自动去重） | `Promise<P>` |
+| `removeChild(child)` | 移除子依赖（引用计数减 1） | `Promise<void>` |
+| `init()` | 初始化模块（导入代码并注册到全局池） | `Promise<void>` |
+
+#### 属性 & Getter
+
+| 属性 | 类型 | 说明 |
+|------|------|------|
+| `name` | `string` | 依赖名称（从文件名提取） |
+| `filePath` | `string` | 文件绝对路径 |
+| `children` | `P[]` | 子依赖列表（通过 Symbol 实现） |
+| `refs` | `Set<string>` | 引用者文件路径集合 |
+| `parent` | `P \| null` | 父依赖（`refs` 的第一个元素） |
+| `root` | `P` | 根依赖 |
+| `isRoot` | `boolean` | 是否为根节点（`refs.size === 0`） |
+| `started` | `boolean` | 是否已启动 |
+| `mounted` | `boolean` | 是否已挂载 |
+| `reloading` | `boolean` | 是否正在重载 |
+
+#### 工具方法
+
+| 方法 | 说明 | 返回值 |
+|------|------|--------|
+| `getPath()` | 获取从根到当前节点的路径 | `Dependency[]` |
+| `getDepth()` | 获取当前节点深度 | `number` |
+| `printTree()` | 打印依赖树 | `string` |
+| `toJSON()` | 序列化为 JSON | `object` |
+
+### Hooks API
+
+#### onMount
+在依赖挂载时执行
 ```typescript
-interface PluginConfig {
-  enabled: boolean;
-  priority: number;
-  dependencies?: string[];
-}
+onMount(() => {
+  console.log('已挂载');
+});
+```
 
-class ConfigurablePlugin extends Dependency {
-  private config: PluginConfig = {
-    enabled: true,
-    priority: 0
-  };
+#### onDispose
+在依赖卸载时执行
+```typescript
+onDispose(() => {
+  console.log('已卸载');
+});
 
-  constructor(filePath: string, config?: Partial<PluginConfig>) {
-    super(filePath);
-    if (config) {
-      this.config = { ...this.config, ...config };
-    }
-  }
+// 内部清理（在生命周期监听器清理前执行）
+onDispose(() => {
+  console.log('内部清理');
+}, true);
+```
 
-  getConfig(): PluginConfig {
-    return { ...this.config };
-  }
-
-  updateConfig(config: Partial<PluginConfig>): void {
-    this.config = { ...this.config, ...config };
-  }
-
-  isEnabled(): boolean {
-    return this.config.enabled;
-  }
+#### getCurrentDependency
+获取当前模块的 Dependency 实例
+```typescript
+const dep = getCurrentDependency();
+if (dep) {
+  await dep.importChild('./child');
 }
 ```
 
-#### 示例 2：添加性能监控
+## 📋 生命周期详解
 
-```typescript
-class MonitoredPlugin extends Dependency {
-  private metrics = {
-    loadTime: 0,
-    mountTime: 0,
-    childCount: 0
-  };
+### 启动流程 (start)
 
-  async start(): Promise<void> {
-    const startTime = Date.now();
-    await super.start();
-    this.metrics.loadTime = Date.now() - startTime;
-  }
-
-  async mount(): Promise<void> {
-    const startTime = Date.now();
-    await super.mount();
-    this.metrics.mountTime = Date.now() - startTime;
-    this.metrics.childCount = this.children.length;
-  }
-
-  getMetrics() {
-    return { ...this.metrics };
-  }
-
-  printMetrics(): void {
-    console.log(`📊 ${this.name} 性能指标:`);
-    console.log(`   加载时间: ${this.metrics.loadTime}ms`);
-    console.log(`   挂载时间: ${this.metrics.mountTime}ms`);
-    console.log(`   子节点数: ${this.metrics.childCount}`);
-  }
-}
+```
+1. before-start  ──▶ 向上冒泡
+2. self.start    ──▶ 本节点监听器
+3. init()        ──▶ 导入模块代码（如果未初始化）
+4. mount()       ──▶ 挂载钩子
+   ├─ before-mount ──▶ 向上冒泡
+   ├─ self.mounted ──▶ onMount 钩子
+   └─ mounted      ──▶ 向上冒泡
+5. children.start() ──▶ 递归启动子依赖
+6. started       ──▶ 向上冒泡
 ```
 
-### 工作原理
+### 卸载流程 (dispose)
 
-当父节点导入子模块时，`importChild()` 方法会自动使用 `this.constructor` 来创建子节点：
+```
+1. before-dispose ──▶ 向上冒泡
+2. self.dispose   ──▶ onDispose 钩子
+3. #onSelfDispose ──▶ 内部副作用清理
+4. disposed       ──▶ 向上冒泡
+```
 
+### 停止流程 (stop)
+
+```
+检查: refs.size > 0 ? 返回（还有引用者）
+├─ before-stop     ──▶ 向上冒泡
+├─ self.stop       ──▶ 本节点监听器
+├─ dispose()       ──▶ 卸载
+├─ 清理全局池      ──▶ globalDepMap.delete()
+├─ 清理模块缓存    ──▶ removeModuleCache()
+├─ removeChild()   ──▶ 递归移除子依赖（refs-1）
+├─ stopped         ──▶ 向上冒泡
+└─ started = false
+```
+
+### 重载流程 (reload)
+
+```
+1. before-reload   ──▶ 向上冒泡
+2. self.reload     ──▶ 本节点监听器
+3. reloading       ──▶ 向上冒泡
+4. 保存子依赖      ──▶ savedChildren = [...this.children]
+
+5. #cleanupBeforeReload()
+   ├─ dispose()    ──▶ 卸载
+   ├─ parent?.removeChild(this) ──▶ 从父节点移除
+   └─ removeModuleCache() ──▶ 清理缓存
+
+6. #reloadNode()
+   ├─ 如果是根节点:
+   │  ├─ this.#cleanLifecycleListeners() ──▶ 清理生命周期监听器
+   │  ├─ this[childrenKey].clear()       ──▶ 清空子依赖
+   │  ├─ await this.init()               ──▶ 重新导入模块
+   │  └─ return this                     ──▶ 返回自己
+   └─ 如果有父节点:
+      └─ return await this.parent.importChild(path) ──▶ 父节点重新导入
+
+7. #updateChildren(newNode, savedChildren)
+   ├─ #diffChildren()      ──▶ 比较新旧子依赖
+   │  ├─ removedChildren  ──▶ 旧的但新的没有
+   │  └─ addedChildren    ──▶ 新的但旧的没有
+   ├─ #removeChildren()    ──▶ 移除已删除的子依赖
+   ├─ #addChildren()       ──▶ 添加新增的子依赖
+   └─ 更新 childrenKey    ──▶ 用 savedChildren 覆盖
+
+8. await newNode.start()  ──▶ 启动新节点
+9. reloaded              ──▶ 向上冒泡
+```
+
+## 🎯 核心机制详解
+
+### 1. 依赖去重机制
+
+#### 全局依赖池
 ```typescript
-async importChild(importPath: string): Promise<Dependency> {
-  const absolutePath = this.resolveImportPath(this.#filePath, importPath);
+private static globalDepMap = new Map<string, Dependency>();
+```
+- **Key**: 文件绝对路径（标准化后）
+- **Value**: Dependency 实例
+- **作用**: 确保同一文件只有一个实例
+
+#### 引用计数 (refs)
+```typescript
+public refs: Set<string> = new Set();
+```
+- 存储所有引用者的文件路径
+- 首次导入者也在 `refs` 中
+- `refs.size` 即为总引用计数
+
+#### parent (Getter)
+```typescript
+get parent(): P | null {
+  return this.refs.size > 0 
+    ? Dependency.globalDepMap.get(this.refs.values().next().value!) as P 
+    : null;
+}
+```
+- 动态计算，返回 `refs` 的第一个元素
+- 代表首次导入者
+- Set 迭代顺序稳定，保证 `parent` 始终是第一个
+
+#### importChild 逻辑
+```typescript
+async importChild(importPath: string): Promise<P> {
+  const normalizedPath = this.resolveFilePath(absolutePath);
+  let child = Dependency.globalDepMap.get(normalizedPath);
   
-  // 使用父节点的构造函数创建子节点
-  const child = new (this.constructor as typeof Dependency)(absolutePath);
+  if (!child) {
+    // 首次导入：创建实例并初始化
+    child = new (this.constructor as Constructor<P>)(normalizedPath);
+    await child.init();  // 导入模块代码
+  }
   
-  child.parent = this;
-  this.children.push(child);
-  await child.start();
+  // 建立引用关系
+  child.refs.add(this.#filePath);
+  this[childrenKey].add(child.filePath);
   
   return child;
 }
 ```
 
-这确保了：
-- ✅ 子节点使用与父节点相同的类
-- ✅ 整个依赖树保持类型一致
-- ✅ 自定义属性和方法在所有节点上可用
+#### removeChild 逻辑
+```typescript
+async removeChild(child: P): Promise<void> {
+  child.refs.delete(this.#filePath);
+  this[childrenKey].delete(child.filePath);
+  
+  if (!child.refs.size) {
+    await child.stop();  // 引用计数归零，停止
+  }
+}
+```
 
-### 注意事项
+### 2. 热重载机制
 
-#### 1. 构造函数参数
+#### Clone-Diff-Merge 策略
 
-如果你的自定义类需要额外的构造函数参数，需要确保只使用 `filePath` 作为必需参数：
+**根节点重载**：
+```
+保存 children → dispose → 清理 → 重新 init → diff → 恢复 children → start
+```
+
+**非根节点重载**：
+```
+保存 children → dispose → 父节点重新 importChild → diff → 恢复 children → start
+```
+
+#### Diff 算法
+```typescript
+#diffChildren(newNode, savedChildren) {
+  // Removed: 在 saved 中但不在 new 中
+  const removedChildren = savedChildren.filter(
+    child => !newNode.children.find(c => c.filePath === child.filePath)
+  );
+  
+  // Added: 在 new 中但不在 saved 中
+  const addedChildren = newNode.children.filter(
+    child => !savedChildren.find(c => c.filePath === child.filePath)
+  );
+  
+  // Kept: 都存在的会被自动保留（不在 removed 中）
+  return { removedChildren, addedChildren };
+}
+```
+
+#### 状态保持
+- **Kept 子依赖**: 不重新创建，保持原实例
+- **Added 子依赖**: 新创建或从全局池复用
+- **Removed 子依赖**: 调用 `removeChild`，引用计数减 1
+
+### 3. children 的 Symbol 实现
 
 ```typescript
-// ✅ 正确：额外参数都是可选的
-class MyPlugin extends Dependency {
-  constructor(filePath: string, config?: MyConfig) {
-    super(filePath);
-    // ...
-  }
-}
+const childrenKey = Symbol('children');
 
-// ❌ 错误：必需的额外参数会导致子节点创建失败
-class MyPlugin extends Dependency {
-  constructor(filePath: string, config: MyConfig) { // config 是必需的
-    super(filePath);
-    // ...
-  }
+[childrenKey]: Set<string> = new Set();  // 存储子依赖的文件路径
+
+get children(): P[] {
+  return Array.from(this[childrenKey])
+    .map(filePath => Dependency.globalDepMap.get(filePath) as P);
 }
 ```
 
-**解决方案：** 使用默认值或可选参数：
+**优势**：
+- 通过文件路径间接引用，避免循环引用
+- 从全局池动态获取，保证始终是最新实例
+- 支持 Diff 和更新操作
 
+### 4. 事件系统
+
+#### 事件冒泡
 ```typescript
-class MyPlugin extends Dependency {
-  constructor(
-    filePath: string,
-    config: MyConfig = { /* 默认值 */ }
-  ) {
-    super(filePath);
-    // ...
-  }
+async dispatchAsync(event: string, ...args: any[]): Promise<void> {
+  if (this.parent) 
+    await this.parent.dispatchAsync(event, ...args);
+  else 
+    await this.broadcastAsync(event, ...args);
 }
 ```
+- 有父节点：向父节点传播
+- 无父节点（根节点）：广播到整个子树
 
-#### 2. 异步初始化
-
-如果需要异步初始化，使用生命周期方法而不是构造函数：
-
+#### 事件广播
 ```typescript
-class AsyncPlugin extends Dependency {
-  private initialized: boolean = false;
-
-  // ✅ 使用 start 方法
-  async start(): Promise<void> {
-    await this.initialize();
-    await super.start();
-  }
-
-  private async initialize(): Promise<void> {
-    // 异步初始化逻辑
-    this.initialized = true;
+async broadcastAsync(event: string, ...args: any[]): Promise<void> {
+  await this.emitAsync(event, ...args);  // 触发自己的监听器
+  for (const child of this.children) {
+    await child.broadcastAsync(event, ...args);  // 递归广播
   }
 }
 ```
 
-## 🔌 插件生态系统
+## 🔌 Loader 使用
 
-### 支持多种命名规范
-
-#### 1. 社区插件（前缀命名）
-
-```
-zhin.js-plugin1
-zhin.js-my-plugin
-zhin.js-awesome-feature
-```
-
-#### 2. 官方插件（组织命名）
-
-```
-@zhin.js/core
-@zhin.js/plugin1
-@zhin.js/database
-```
-
-### 配置方法
-
-#### 方法 1：环境变量（推荐）
-
-在 `.env` 文件或启动脚本中设置：
+### Tsx (Node.js)
 
 ```bash
-# 同时支持两种插件
-DEPENDENCY_TREE_INCLUDE=node_modules/zhin.js-,node_modules/@zhin.js/
+tsx --import @zhin.js/dependency/register.mjs index.ts
 ```
 
-#### 方法 2：package.json 脚本
-
+或在 `package.json` 中：
 ```json
 {
   "scripts": {
-    "dev": "DEPENDENCY_TREE_INCLUDE=node_modules/zhin.js-,node_modules/@zhin.js/ bun src/index.ts",
-    "start": "DEPENDENCY_TREE_INCLUDE=node_modules/zhin.js-,node_modules/@zhin.js/ tsx src/index.ts"
+    "dev": "tsx --import @zhin.js/dependency/register.mjs src/index.ts"
   }
 }
 ```
 
-#### 方法 3：使用 dotenv
+### Bun
 
 ```bash
-# .env
-DEPENDENCY_TREE_INCLUDE=node_modules/zhin.js-,node_modules/@zhin.js/
+bun --preload @zhin.js/dependency/bun-preload.ts index.ts
 ```
 
+或在 `package.json` 中：
+```json
+{
+  "scripts": {
+    "dev": "bun --preload @zhin.js/dependency/bun-preload.ts src/index.ts"
+  }
+}
+```
+
+### 环境变量
+
+```bash
+# 禁用副作用自动管理
+DEPENDENCY_WRAP_EFFECTS=false tsx --import @zhin.js/dependency/register.mjs index.ts
+```
+
+## 📊 生命周期事件完整列表
+
+### 本节点事件 (self.*)
+- `self.start`: 启动开始
+- `self.mounted`: 挂载完成（onMount 钩子）
+- `self.dispose`: 卸载开始（onDispose 钩子）
+- `self.stop`: 停止开始
+- `self.reload`: 重载开始
+
+### 冒泡事件
+- `before-start`: 启动前
+- `started`: 启动完成
+- `before-mount`: 挂载前
+- `mounted`: 挂载完成
+- `before-dispose`: 卸载前
+- `disposed`: 卸载完成
+- `before-stop`: 停止前
+- `stopped`: 停止完成
+- `before-reload`: 重载前
+- `reloading`: 重载中
+- `reloaded`: 重载完成
+
+### 错误事件
+- `error`: 通用错误
+- `reload.error`: 重载错误
+
+## 🎨 实用场景
+
+### 插件系统
 ```typescript
-// index.ts
-import 'dotenv/config';
+class PluginDependency extends Dependency {
+  async enable() {
+    await this.start();
+  }
+  
+  async disable() {
+    await this.stop();
+  }
+  
+  async reload() {
+    return super.reload() as Promise<PluginDependency>;
+  }
+}
+
+const plugin = new PluginDependency('./plugin.ts');
+await plugin.enable();
+```
+
+### 微服务热重载
+```typescript
 import { Dependency } from '@zhin.js/dependency';
+import chokidar from 'chokidar';
 
-const root = new Dependency('./entry.js');
+const services = new Map<string, Dependency>();
+
+async function loadService(servicePath: string) {
+  const service = new Dependency(servicePath);
+  await service.start();
+  services.set(servicePath, service);
+  
+  chokidar.watch(servicePath).on('change', async () => {
+    await service.reload();
+  });
+}
+```
+
+### 依赖树可视化
+```typescript
+const root = new Dependency('./main.ts');
 await root.start();
+
+console.log(root.printTree('', true, true));
+// main (3 listeners)
+// ├── logger (1 listeners) [shared ×2]
+// ├── child (2 listeners)
+// │   └── timer (1 listeners)
+// └── parent (2 listeners)
+//     └── child (2 listeners) [shared ×2]
 ```
 
-### 实际场景
+## 🔍 调试技巧
 
-#### 场景 1：纯官方插件生态
-
-如果你的项目只使用官方插件（如 `@zhin.js/*`）：
-
-```bash
-DEPENDENCY_TREE_INCLUDE=node_modules/@zhin.js/
+### 打印依赖树
+```typescript
+console.log(dep.printTree('', true, true));
 ```
 
-#### 场景 2：纯社区插件生态
+### 监听所有事件
+```typescript
+const events = [
+  'before-start', 'started', 'before-mount', 'mounted',
+  'before-dispose', 'disposed', 'before-stop', 'stopped',
+  'before-reload', 'reloading', 'reloaded', 'error'
+];
 
-如果你的项目只使用社区插件（如 `zhin.js-*`）：
-
-```bash
-DEPENDENCY_TREE_INCLUDE=node_modules/zhin.js-
+events.forEach(event => {
+  root.on(event, (dep) => {
+    console.log(`[${event}] ${dep.name}`);
+  });
+});
 ```
 
-#### 场景 3：混合生态 ⭐
-
-同时支持官方和社区插件（推荐）：
-
-```bash
-DEPENDENCY_TREE_INCLUDE=node_modules/zhin.js-,node_modules/@zhin.js/
+### 查看引用关系
+```typescript
+console.log('引用者数量:', dep.refs.size);
+console.log('引用者路径:', Array.from(dep.refs));
+console.log('父节点:', dep.parent?.name);
+console.log('子节点:', dep.children.map(c => c.name));
 ```
 
-#### 场景 4：本地插件 + npm 插件
+## ⚙️ 高级配置
 
-同时支持本地开发和 npm 安装的插件：
-
-```bash
-DEPENDENCY_TREE_INCLUDE=src/plugins,node_modules/zhin.js-,node_modules/@zhin.js/
-```
-
-#### 场景 5：选择性包含
-
-只包含特定的插件：
-
-```bash
-DEPENDENCY_TREE_INCLUDE=node_modules/@zhin.js/core,node_modules/zhin.js-auth,node_modules/zhin.js-database
-```
-
-### 排除特定插件
-
-使用 `DEPENDENCY_TREE_EXCLUDE` 排除不需要的插件：
-
-```bash
-# 包含所有 zhin.js 插件，但排除测试和开发插件
-DEPENDENCY_TREE_INCLUDE=node_modules/zhin.js-,node_modules/@zhin.js/
-DEPENDENCY_TREE_EXCLUDE=node_modules/zhin.js-dev,node_modules/@zhin.js/testing
-```
-
-### 发布插件为 npm 包
-
-#### 插件包作者（发布方）
-
-在你的插件包 README 中说明：
-
-```markdown
-## 使用方法
-
-安装插件：
-
-\`\`\`bash
-npm install @your-org/your-plugin
-\`\`\`
-
-配置环境变量以启用依赖树转换：
-
-\`\`\`bash
-DEPENDENCY_TREE_INCLUDE=node_modules/@your-org/your-plugin
-\`\`\`
-
-或者在 `package.json` 中：
-
-\`\`\`json
-{
-  "scripts": {
-    "start": "DEPENDENCY_TREE_INCLUDE=node_modules/@your-org/your-plugin tsx src/index.ts"
-  }
-}
-\`\`\`
-```
-
-#### 插件使用者
-
-```bash
-# .env 文件
-DEPENDENCY_TREE_INCLUDE=node_modules/@my-org/plugin1,node_modules/@my-org/plugin2
-```
-
-或者在启动命令中：
-
-```json
-{
-  "scripts": {
-    "start": "DEPENDENCY_TREE_INCLUDE=node_modules/@my-org/my-plugin tsx src/index.ts"
+### 自定义路径解析
+```typescript
+class CustomDependency extends Dependency {
+  protected resolveFilePath(filePath: string): string {
+    // 自定义路径解析逻辑
+    return super.resolveFilePath(filePath);
   }
 }
 ```
 
-## 📚 API 文档
-
-### `Dependency` 类
-
-#### 构造函数
-
+### 自定义模块初始化
 ```typescript
-new Dependency(filePath: string)
+class CustomDependency extends Dependency {
+  async init() {
+    // 自定义初始化逻辑
+    await super.init();
+    // 额外处理
+  }
+}
 ```
 
-#### 方法
+## 📝 注意事项
 
-- `async start()` - 启动依赖（导入模块并构建树）
-- `async mount()` - 挂载（执行 onMount hooks）
-- `async dispose()` - 卸载（执行 onDispose hooks）
-- `async stop()` - 停止（dispose 并级联卸载子节点）
-- `async reload(): Promise<Dependency>` - 热重载，返回新的 Dependency 实例（支持根节点）
-- `printTree(prefix?, showListeners?, showPaths?)` - 打印树结构
-- `toJSON()` - 导出为 JSON
-- `dispatch(event, ...args)` - 触发当前节点的事件
-- `broadcast(event, ...args)` - 广播事件到整个子树
+1. **循环依赖**: 自动处理，通过全局池去重
+2. **内存泄漏**: `stop()` 时自动清理缓存和副作用
+3. **热重载**: 根节点重载保持引用，非根节点创建新实例
+4. **共享依赖**: 通过 `refs.size` 追踪，引用计数归零时才停止
+5. **Symbol children**: 通过文件路径间接引用，避免实例循环引用
 
-#### 属性
+## 📄 License
 
-- `name` - 依赖名称
-- `filePath` - 文件路径
-- `parent` - 父依赖
-- `children` - 子依赖数组
-
-#### 继承自 EventEmitter
-
-```typescript
-// 监听事件
-dep.on('mounted', (dep) => console.log('挂载完成'));
-dep.on('started', (dep) => console.log('启动完成'));
-dep.on('stopped', (dep) => console.log('停止完成'));
-
-// 监听自身事件（不冒泡）
-dep.on('self.mounted', (dep) => console.log('本节点挂载'));
-
-// 触发事件
-dep.emit('custom-event', data);
-
-// 其他 EventEmitter 方法
-dep.once(event, listener);
-dep.off(event, listener);
-dep.removeAllListeners(event);
-```
-
-## 🎨 生命周期
-
-```
-┌─────────────┐
-│   create    │  new Dependency()
-└──────┬──────┘
-       │
-┌──────▼──────────────┐
-│    start()          │  导入模块，构建树
-│  before-start  ───→ │
-│  self.start    ───→ │
-│  [import module]    │
-│  mount()       ───→ │
-│  started       ───→ │  (在 mount 之后)
-└──────┬──────────────┘
-       │
-┌──────▼──────────────┐
-│    mount()          │  执行 onMount hooks
-│  before-mount  ───→ │
-│  self.mounted  ───→ │
-│  mounted       ───→ │
-└──────┬──────────────┘
-       │
-   ┌───▼────┐
-   │ active │  运行中...
-   └───┬────┘
-       │
-┌──────▼──────────────┐
-│    dispose()        │  执行 onDispose hooks
-│  before-dispose ─→  │
-│  self.dispose   ─→  │
-│  disposed       ─→  │
-└──────┬──────────────┘
-       │
-┌──────▼──────────────┐
-│    stop()           │  级联停止子节点
-│  before-stop   ───→ │
-│  self.stop     ───→ │
-│  dispose()     ───→ │
-│  [stop children] ─→ │
-│  stopped       ───→ │
-└─────────────────────┘
-```
-
-### 重载生命周期
-
-```
-┌──────────────────────┐
-│    reload()          │  热重载
-│  before-reload  ───→ │
-│  self.reload    ───→ │
-│  reloading      ───→ │
-│  dispose()      ───→ │
-│  [clear cache]  ───→ │
-│  [re-import]    ───→ │
-│  reloaded       ───→ │  (成功或失败都触发)
-└──────────────────────┘
-```
-
-### 生命周期事件
-
-Dependency 类继承自 EventEmitter，在生命周期的各个阶段会触发相应事件：
-
-**启动阶段**：
-- `before-start` - 开始启动前
-- `self.start` - 当前节点启动时（仅自身）
-- `started` - 启动完成后（在 mount 之后）
-
-**挂载阶段**：
-- `before-mount` - 开始挂载前
-- `self.mounted` - 当前节点挂载时（仅自身）
-- `mounted` - 挂载完成后
-
-**卸载阶段**：
-- `before-dispose` - 开始卸载前
-- `self.dispose` - 当前节点卸载时（仅自身）
-- `disposed` - 卸载完成后
-
-**停止阶段**：
-- `before-stop` - 开始停止前
-- `self.stop` - 当前节点停止时（仅自身）
-- `stopped` - 停止完成后
-
-**重载阶段**：
-- `before-reload` - 开始重载前
-- `self.reload` - 当前节点重载时（仅自身）
-- `reloading` - 正在重载中
-- `reloaded` - 重载完成后（成功或失败都触发）
-
-**错误处理**：
-- `error` - 发生错误时
-- `reload.error` - 重载错误时
+MIT
 
 ## 🤝 贡献
 
-欢迎提交 Issue 和 Pull Request！
-
-## 📄 许可证
-
-MIT
+欢迎提交 Issue 和 PR！
