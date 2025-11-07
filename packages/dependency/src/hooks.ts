@@ -28,6 +28,13 @@ registerHook({
   },
   description: 'registerHook a mount hook for the current dependency'
 });
+registerHook({
+  name: 'useDependency',
+  handler: (dep: Dependency) => {
+    return dep;
+  },
+  description: 'use the current dependency'
+})
 
 /**
  * 内置 Hook: onDispose
@@ -47,8 +54,8 @@ registerHook({
  */
 registerHook({
   name: 'importModule',
-  handler: async (dep: Dependency, importPath: string) => {
-    await dep.importChild(importPath);
+  handler: async (dep: Dependency, importPath: string,importModulePath?:string) => {
+    await dep.importChild(importPath,importModulePath);
   },
   description: 'Import a module and create a child dependency'
 });
@@ -63,7 +70,9 @@ registerHook({
 export function addListener(event: string, listener: () => void): () => void {
   return useHook('addListener')(event, listener);
 }
-
+export function useDependency(): Dependency {
+  return useHook('useDependency')();
+}
 /**
  * 添加挂载钩子
  * 会在依赖启动后自动执行
@@ -84,8 +93,8 @@ export function onDispose(hook: () => void | Promise<void>,inner:boolean=false):
  * 导入模块并自动创建子 Dependency
  * 在模块中使用此函数替代普通的 import
  */
-export async function importModule(importPath: string): Promise<void> {
-  return useHook('importModule')(importPath);
+export async function importModule(importPath: string,importModulePath?:string): Promise<void> {
+  return useHook('importModule')(importPath,importModulePath);
 }
 
 // ==================== 导出 Hook 系统 API ====================

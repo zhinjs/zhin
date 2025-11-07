@@ -1,12 +1,17 @@
 /**
- * @zhin.js/dependency 完整示例
+ * @zhin.js/dependency 热重载演示
  * 
- * 这个示例展示了如何使用 dependency 模块构建一个完整的插件系统
+ * 这个示例展示如何使用 chokidar 监听文件变化并实现热重载
  */
 
-import { Dependency } from '@zhin.js/dependency';
-import { resolve } from 'path';
+import { Dependency, onDispose, onMount, useDependency } from '@zhin.js/dependency';
+import { watch } from 'chokidar';
+import './plugins/logger-plugin.js';
+import './plugins/timer-plugin.js';
+import './plugins/parent-plugin.js';
 
+const root = useDependency();
+// console.log(root.name)
 // ANSI 颜色代码
 const colors = {
   reset: '\x1b[0m',
@@ -15,101 +20,86 @@ const colors = {
   green: '\x1b[32m',
   yellow: '\x1b[33m',
   red: '\x1b[31m',
-  magenta: '\x1b[35m'
+  magenta: '\x1b[35m',
+  blue: '\x1b[34m'
 };
-
 function log(color: keyof typeof colors, message: string) {
   console.log(`${colors[color]}${message}${colors.reset}`);
 }
 
-async function main() {
-  log('bright', '\n' + '='.repeat(60));
-  log('cyan', '🌲 @zhin.js/dependency 完整示例');
-  log('bright', '='.repeat(60) + '\n');
-  
-  // 插件列表
-  const plugins = [
-    'logger-plugin.ts',
-    'database-plugin.ts',
-    'parent-plugin.ts'
-  ];
-  
-  log('yellow', '📦 准备加载以下插件:');
-  plugins.forEach((plugin, index) => {
-    console.log(`   ${index + 1}. ${plugin}`);
-  });
-  console.log();
-  
-  // 创建插件依赖树
-  const roots: Dependency[] = [];
-  
-  for (const plugin of plugins) {
-    const pluginPath = resolve(process.cwd(), 'plugins', plugin);
-    const root = new Dependency(pluginPath);
-    
-    // 监听生命周期事件
-    root.on('after-start', (dep: Dependency) => {
-      log('green', `✅ [Lifecycle] ${dep.name} 已启动`);
-    });
-    
-    root.on('after-mount', (dep: Dependency) => {
-      log('green', `✅ [Lifecycle] ${dep.name} 已挂载`);
-    });
-    
-    root.on('error', (dep: Dependency, error: Error) => {
-      log('red', `❌ [Lifecycle] ${dep.name} 发生错误: ${error.message}`);
-    });
-    
-    roots.push(root);
+// 监听的文件映射
+const watchedFiles = new Map<string, Dependency>()
+const getMemoryUsage = () => {
+  const memoryUsage = process.memoryUsage();
+  return {
+    rss: `实际内存:${(memoryUsage.rss / 1024 / 1024).toFixed(2)}MB`,
+    heapTotal: `堆内存:${(memoryUsage.heapTotal / 1024 / 1024).toFixed(2)}MB`,
+    heapUsed: `已使用内存:${(memoryUsage.heapUsed / 1024 / 1024).toFixed(2)}MB`,
   }
-  
-  // 启动所有插件
-  log('yellow', '\n🚀 启动所有插件...\n');
-  
-  for (const root of roots) {
-    await root.start();
-  }
-  
-  log('green', '\n✅ 所有插件已启动\n');
-  
-  // 打印依赖树
-  log('cyan', '📊 依赖树结构:\n');
-  
-  for (const root of roots) {
-    console.log(root.printTree('', true, true));
-  }
-  
-  // 运行一段时间
-  log('yellow', '\n⏳ 插件运行中... (10秒后自动停止)\n');
-  
-  await new Promise(resolve => setTimeout(resolve, 10000));
-  
-  // 停止所有插件
-  log('yellow', '\n🛑 停止所有插件...\n');
-  
-  for (const root of roots) {
-    await root.stop();
-  }
-  
-  log('green', '\n✅ 所有插件已停止');
-  
-  // 验证清理
-  log('yellow', '\n⏳ 等待 2 秒验证清理...\n');
-  
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  
-  log('green', '✅ 清理验证完成');
-  log('magenta', '   如果没有看到定时器继续执行，说明自动清理成功！');
-  
-  log('bright', '\n' + '='.repeat(60));
-  log('cyan', '🎉 示例演示完成！');
-  log('bright', '='.repeat(60) + '\n');
 }
+const showMemoryUsage = () => {
+  log('yellow', '\n💾 内存使用:');
+  console.log(getMemoryUsage());
+}
+// 创建文件监听器
+const watcher = watch([], {
+  persistent: true,
+  ignoreInitial: true,
+  awaitWriteFinish: {
+    stabilityThreshold: 300,
+    pollInterval: 100
+  }
+})
 
-// 运行主函数
-main().catch(error => {
-  log('red', `\n❌ 发生错误: ${error.message}`);
-  console.error(error);
-  process.exit(1);
+// 监听 mounted 事件，动态收集文件
+root.on('mounted', (dep: Dependency) => {
+  watchedFiles.set(dep.filePath, dep);
+  watcher.add(dep.filePath);
 });
 
+// 监听 before-dispose 事件，移除文件监听
+root.on("before-dispose", (dep: Dependency) => {
+  watchedFiles.delete(dep.filePath);
+  watcher.unwatch(dep.filePath);
+});
+
+
+// 监听 disposed 事件
+root.on('reloaded', (dep: Dependency) => {
+  log('green', `✅ 热重载完成: ${dep.name}`);
+  watchedFiles.set(dep.filePath, dep);
+});
+
+// 监听错误事件
+root.on('error', (dep: Dependency, error: Error) => {
+  log('red', `❌ 错误 [${dep.name}]: ${error.message}`);
+});
+onMount(()=>{
+  showMemoryUsage();
+});
+// 监听文件变化
+watcher.on('change', async (changedPath: string) => {
+  const dep = watchedFiles.get(changedPath);
+  if (dep) {
+    try {
+      const newDep = await dep.reload();
+      watchedFiles.set(newDep.filePath, newDep);
+    } catch (error) {
+      log('red', `❌ 重载失败: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+})
+onDispose(async () => {
+  watcher.unwatch([...watchedFiles.keys()])
+  watchedFiles.clear();
+  await watcher.close()
+  log('yellow', '🛑 entry point disposed')
+})
+await root.start();
+// 保持进程运行
+process.on('SIGINT', async () => {
+  log('yellow', '\n\n🛑 正在停止...');
+  await root.stop();
+  log('green', '✅ 已停止\n');
+  process.exit(0);
+});

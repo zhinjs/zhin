@@ -105,7 +105,7 @@ export function transformImports(source, currentPath, isHotReload = false, marke
     transformedSource = source.replace(
       /^import\s+(['"])(\.[^'"]+)\1;?\s*$/gm,
       (match, quote, importPath) => {
-        return `await importModule(${quote}${importPath}${quote});`;
+        return `await importModule(${quote}${importPath}${quote},${quote}${currentPath}${quote});`;
       }
     );
   }

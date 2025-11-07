@@ -8,7 +8,7 @@ declare global {
   var __CURRENT_DEPENDENCY__: Dependency | null;
 }
 export const isBun = typeof Bun !== 'undefined'
-const childrenKey=Symbol('children');
+const childrenKey = Symbol('children');
 export const isCommonJS = !import.meta?.url?.startsWith('file:');
 /**
  * Dependency 类
@@ -83,17 +83,15 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
   /**
    * 启动依赖：导入模块，构建依赖树，然后执行挂载
    */
-  async start(): Promise<void> {
-    if (this.started) {
+  async start(force: boolean = false): Promise<void> {
+    if (this.started && !force) {
       return;
     }
-
     await this.dispatchAsync('before-start', this);
     await this.emitAsync('self.start', this);
-    if(!Dependency.globalDepMap.has(this.#filePath)){}
-    await this.mount();
+    await this.mount(force);
     for (const child of this.children) {
-      await child.start();
+      await child.start(force);
     }
     this.started = true;
 
@@ -103,8 +101,8 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
   /**
    * 挂载：执行所有挂载钩子
    */
-  async mount(): Promise<void> {
-    if (this.mounted) {
+  async mount(force: boolean = false): Promise<void> {
+    if (this.mounted && !force) {
       return;
     }
 
@@ -126,7 +124,7 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
   async broadcastAsync(event: string, ...args: any[]): Promise<void> {
     await this.emitAsync(event, ...args);
     for (const child of this.children) {
-      await child.broadcastAsync(event, ...args);
+      child && await child.broadcastAsync(event, ...args);
     }
   }
   /**
@@ -149,7 +147,7 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
    * 停止：卸载自己，然后级联停止所有子依赖
    */
   async stop(): Promise<void> {
-    if (!this.started || this.refs.size > 0) {
+    if (!this.started) {
       return;
     }
     await this.dispatchAsync('before-stop', this);
@@ -158,8 +156,8 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
     Dependency.globalDepMap.delete(this.filePath);
     const absolutePath = this.resolveFilePath(this.#filePath);
     this.removeModuleCache(absolutePath);
-    for(const child of this.children){
-      await this.removeChild(child);
+    for (const child of this.children) {
+      child && await this.removeChild(child);
     }
 
     await this.dispatchAsync('stopped', this);
@@ -182,18 +180,24 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
     await this.emitAsync('self.reload', this);
     await this.dispatchAsync('reloading', this);
     const savedChildren = [...this.children];
-    const parent=this.parent;
+    const parent = this.parent;
     try {
-      // 1. 卸载并清理
-      await this.#cleanupBeforeReload();
-
-      // 2. 重新导入/启动
+      // 1. dispose
+      await this.dispose();
+      // 2. clean cache
+      const absolutePath = this.resolveFilePath(this.#filePath);
+      this.removeModuleCache(absolutePath);
+      // 3. remove from globalDepMap
+      Dependency.globalDepMap.delete(this.filePath);
+      // 4. reload node
       const newNode = await this.#reloadNode();
+      // 5. set to globalDepMap
+      Dependency.globalDepMap.set(newNode.filePath, newNode);
 
-      // 3. 处理子依赖变化
+      // 6. update children
       await this.#updateChildren(newNode, savedChildren);
-      if(parent) newNode.refs.add(parent.filePath);
-      await newNode.start();
+      parent && newNode.refs.add(parent.filePath);
+      await newNode.start(this.isRoot);
       return newNode;
     } catch (error) {
       this.#handleReloadError(error);
@@ -203,57 +207,18 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
       await this.dispatchAsync('reloaded', this);
     }
   }
-  addChild(child: P): void {
-    this[childrenKey].add(child.filePath);
-  }
-
-  /**
-   * 重载前的清理工作
-   */
-  async #cleanupBeforeReload(): Promise<void> {
-    // 卸载自己
-    await this.dispose();
-    this.parent?.removeChild(this);
-    // 清除模块缓存
-    const absolutePath = this.resolveFilePath(this.#filePath);
-    this.removeModuleCache(absolutePath);
-  }
 
   /**
    * 重新加载节点
    */
   async #reloadNode(): Promise<Dependency<P>> {
     if (this.isRoot) {
-      // 根节点：原地重启
-      this.started = false;
-      this.#cleanLifecycleListeners();
-      // 1. 清空 children，准备重新导入
-      this[childrenKey].clear();
-      // 2. 重新 start（重新导入模块）
-      await this.init();
-      return this;
+      const newNode = new (this.constructor as Constructor<Dependency<P>>)(this.filePath)
+      await newNode.init()
+      return newNode
     } else {
-      // 有父节点：通过父节点重新导入创建新节点
-      const relativePath = this.getRelativePathFromParent(this.parent);
-      const newNode= await this.parent!.importChild(relativePath) as Dependency<P>;
-      this.parent!.addChild(newNode);
-      newNode.refs.add(this.parent!.filePath);
-      console.log(this.parent!.name,this.parent?.children.map(c=>c.name));
-      console.log(newNode.name,newNode.refs);
-      return newNode;
+      return await this.parent!.importChild(this.filePath) as Dependency<P>;
     }
-  }
-
-
-  #cleanLifecycleListeners(): void {
-    const lifecycleEvents = this.eventNames().filter(e => typeof e === 'string' && e.startsWith('self.'));
-    for (const event of lifecycleEvents) {
-      this.removeAllListeners(event);
-    }
-    for (const dispose of this.#onSelfDispose) {
-      dispose();
-    }
-    this.#onSelfDispose = [];
   }
 
   /**
@@ -276,6 +241,7 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
     newNode[childrenKey].clear();
     for (const child of savedChildren) {
       newNode[childrenKey].add(child.filePath);
+      child.refs.add(newNode.filePath);
     }
   }
 
@@ -287,12 +253,12 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
     savedChildren: P[]
   ): { removedChildren: P[]; addedChildren: P[] } {
     const removedChildren = savedChildren.filter(child => {
-      return !newNode.children.find(c => c.filePath === child.filePath);
+      return !newNode[childrenKey].has(child.filePath);
     });
 
-    const addedChildren = newNode.children.filter(child => {
-      return !savedChildren.find(c => c.filePath === child.filePath);
-    }) as P[];
+    const addedChildren = [...newNode[childrenKey]].filter(child => {
+      return !savedChildren.find(c => c.filePath === child);
+    }).map(filePath => Dependency.globalDepMap.get(filePath) as P);
 
     return { removedChildren, addedChildren };
   }
@@ -329,11 +295,7 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
 
     // 恢复错误前的状态
     if (this.parent) {
-      this.parent.children.splice(
-        this.parent.children.findIndex(c => c.filePath === this.#filePath),
-        1,
-        this
-      );
+      Dependency.globalDepMap.set(this.#filePath, this);
     }
   }
 
@@ -368,28 +330,10 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
     } else {
       this.emit(event, ...args);
     }
-    this.children.forEach(child => child.broadcast(event, ...args));
+    this.children.forEach(child => child && child.broadcast(event, ...args));
   }
 
-  /**
-   * 获取相对于父节点的导入路径
-   */
-  private getRelativePathFromParent(parent: Dependency | null): string {
-    if (!parent) {
-      return this.#filePath;
-    }
-    const parentDir = path.dirname(parent.#filePath);
-    const extname = path.extname(this.#filePath);
-    const currentPath = this.#filePath;
-    let relativePath = path.relative(parentDir, currentPath);
-
-    if (!relativePath.startsWith('.')) {
-      relativePath = './' + relativePath;
-    }
-
-    return relativePath.replace(extname, '');
-  }
-  async init(){
+  async init() {
     setCurrentDependency(this);
     const fileUrl = pathToFileURL(this.#filePath).href;
     const importUrl: string = `${fileUrl}?t=${Date.now()}`;
@@ -406,9 +350,9 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
    * 支持继承：子节点会使用与父节点相同的类
    * 支持去重：同一个文件路径只创建一个实例
    */
-  async importChild(importPath: string): Promise<P> {
+  async importChild(importPath: string, importModulePath = this.#filePath): Promise<P> {
     // 解析相对于当前文件的路径
-    const absolutePath = this.resolveImportPath(this.#filePath, importPath);
+    const absolutePath = this.resolveImportPath(importModulePath, importPath);
 
     // 标准化路径：确保使用实际存在的文件路径
     const normalizedPath = this.resolveFilePath(absolutePath);
@@ -420,15 +364,16 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
       await child.init();
     }
     child.refs.add(this.#filePath);
+    Dependency.globalDepMap.set(child.filePath, child);
     this[childrenKey].add(child.filePath);
     return child;
   }
   async removeChild(child: P): Promise<void> {
-    child.refs.delete(this.#filePath);
-    this[childrenKey].delete(child.filePath);
-    if(!child.refs.size){
+    if (child.refs.size === 1) {
       await child.stop();
     }
+    child.refs.delete(this.#filePath);
+    this[childrenKey].delete(child.filePath);
   }
 
   /**
@@ -529,7 +474,7 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
     let result = prefix + `${this.name} (${totalListeners} listeners)${sharedMark}\n`;
 
     const childIndent = isRoot ? '' : indent + (isLast ? '    ' : '│   ');
-    this.children.forEach((child, index) => {
+    this.children.filter(Boolean).forEach((child, index) => {
       const childIsLast = index === this.children.length - 1;
       result += child.printTree(childIndent, childIsLast, false);
     });
@@ -549,7 +494,7 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
       name: this.name,
       filePath: this.#filePath,
       listeners,
-      children: this.children.map(child => child.toJSON()),
+      children: this.children.filter(Boolean).map(child => child.toJSON()),
     };
   }
 }

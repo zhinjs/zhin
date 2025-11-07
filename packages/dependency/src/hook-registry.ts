@@ -4,7 +4,7 @@
  */
 
 import { Dependency } from './dependency.js';
-
+import path from 'path';
 /**
  * 当前正在加载的依赖栈
  */
@@ -27,7 +27,6 @@ export function setCurrentDependency(dep: Dependency | null): void {
 export function getCurrentDependency(): Dependency | null {
   return dependencyStack.length > 0 ? dependencyStack[dependencyStack.length - 1] : null;
 }
-
 /**
  * Hook 函数类型定义
  */
@@ -51,8 +50,9 @@ export type HookFunction<T extends any[] = any[]> = (...args: T) => any;
 export interface Hooks {
   addListener: (event: string, listener: () => void) => () => void;
   onMount: (hook: () => void | Promise<void>) => void;
-  onDispose: (hook: () => void | Promise<void>,inner?:boolean) => void;
-  importModule: (path: string) => Promise<void>;
+  useDependency: () => Dependency;
+  onDispose: (hook: () => void | Promise<void>, inner?: boolean) => void;
+  importModule: (path: string, importModulePath?: string) => Promise<void>;
 }
 
 /**
@@ -135,10 +135,15 @@ class HookRegistry {
         throw new Error(`Hook "${name}" is not registered. Please registerHook it first using registerHook().`);
       }
 
-      const currentDep = this.getCurrentDependency();
+      let currentDep = this.getCurrentDependency();
       if (!currentDep) {
-        console.warn(`No current dependency context for hook "${name}".`);
-        return;
+        if (name !== 'importModule') {
+          console.warn(`No current dependency context for hook "${name}".`);
+          return;
+        }
+        currentDep = new Dependency(args[1]||path.join(process.cwd(), './src/index'));
+        Dependency['globalDepMap'].set(currentDep.filePath, currentDep);
+        setCurrentDependency(currentDep);
       }
 
       return config.handler(currentDep, ...args);
