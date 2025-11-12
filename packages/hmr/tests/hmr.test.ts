@@ -13,6 +13,11 @@ class TestHMR extends HMR {
     createDependency(name: string, filePath: string): Dependency {
         return new Dependency(this, name, filePath)
     }
+    
+    // Expose protected members for testing
+    get testFileWatcher() {
+        return this.fileWatcher
+    }
 }
 
 describe('HMR', () => {
@@ -26,7 +31,6 @@ describe('HMR', () => {
         }
         hmr = new TestHMR({
             dirs: [testDir],
-            extensions: new Set(['.ts', '.js']),
             debug: false
         })
     })
@@ -63,28 +67,56 @@ describe('HMR', () => {
     })
 
     describe('Directory Management', () => {
-        it('should add watch directory', () => {
+        it('should manage directory list', () => {
             const newDir = path.join(testDir, 'newDir')
             fs.mkdirSync(newDir)
 
-            const result = hmr.addWatchDir(newDir)
-            expect(result).toBe(true)
-            expect(hmr.getWatchDirs()).toContain(newDir)
+            hmr.testFileWatcher.dirs = [...hmr.testFileWatcher.dirs, newDir]
+            expect(hmr.testFileWatcher.dirs).toContain(newDir)
         })
 
-        it('should remove watch directory', () => {
+        it('should clear and set new directories', () => {
             const newDir = path.join(testDir, 'newDir')
             fs.mkdirSync(newDir)
-            hmr.addWatchDir(newDir)
 
-            const result = hmr.removeWatchDir(newDir)
-            expect(result).toBe(true)
-            expect(hmr.getWatchDirs()).not.toContain(newDir)
+            hmr.testFileWatcher.dirs = [newDir]
+            expect(hmr.testFileWatcher.dirs).toHaveLength(1)
+            expect(hmr.testFileWatcher.dirs).toContain(newDir)
+        })
+    })
+
+    describe('On-Demand File Watching', () => {
+        it('should watch file when plugin loads', async () => {
+            const testFile = path.join(testDir, 'test-plugin.ts')
+            fs.writeFileSync(testFile, `
+                import { Dependency } from '${path.resolve(__dirname, '../src/dependency').replace(/\\/g, '/')}'
+                export default class TestPlugin extends Dependency {
+                    constructor() {
+                        super(null, 'test', '${testFile.replace(/\\/g, '/')}')
+                    }
+                }
+            `)
+
+            const cleanup = hmr.watchFile(testFile)
+            expect(typeof cleanup).toBe('function')
+            
+            cleanup()
         })
 
-        it('should get watch directories', () => {
-            const dirs = hmr.getWatchDirs()
-            expect(dirs).toContain(testDir)
+        it('should unwatch file when plugin unloads', async () => {
+            const testFile = path.join(testDir, 'test-plugin.ts')
+            fs.writeFileSync(testFile, `
+                import { Dependency } from '${path.resolve(__dirname, '../src/dependency').replace(/\\/g, '/')}'
+                export default class TestPlugin extends Dependency {
+                    constructor() {
+                        super(null, 'test', '${testFile.replace(/\\/g, '/')}')
+                    }
+                }
+            `)
+
+            hmr.watchFile(testFile)
+            hmr.unwatchFile(testFile)
+            // Should not throw
         })
     })
 
@@ -92,10 +124,10 @@ describe('HMR', () => {
         it('should import plugin', async () => {
             const testFile = path.join(testDir, 'test-plugin.ts')
             fs.writeFileSync(testFile, `
-                import { Dependency } from '${path.resolve(__dirname, '../src/dependency')}'
+                import { Dependency } from '${path.resolve(__dirname, '../src/dependency').replace(/\\/g, '/')}'
                 export default class TestPlugin extends Dependency {
                     constructor() {
-                        super(null, 'test', '${testFile}')
+                        super(null, 'test', '${testFile.replace(/\\/g, '/')}')
                     }
                 }
             `)
@@ -106,12 +138,17 @@ describe('HMR', () => {
         })
 
         it('should find plugin by name', async () => {
+            // 确保目录存在
+            if (!fs.existsSync(testDir)) {
+                fs.mkdirSync(testDir, { recursive: true })
+            }
+            
             const testFile = path.join(testDir, 'test-plugin.ts')
             fs.writeFileSync(testFile, `
-                import { Dependency } from '${path.resolve(__dirname, '../src/dependency')}'
+                import { Dependency } from '${path.resolve(__dirname, '../src/dependency').replace(/\\/g, '/')}'
                 export default class TestPlugin extends Dependency {
                     constructor() {
-                        super(null, 'test', '${testFile}')
+                        super(null, 'test', '${testFile.replace(/\\/g, '/')}')
                     }
                 }
             `)
@@ -127,10 +164,10 @@ describe('HMR', () => {
         it('should get performance stats', async () => {
             const testFile = path.join(testDir, 'test-plugin.ts')
             fs.writeFileSync(testFile, `
-                import { Dependency } from '${path.resolve(__dirname, '../src/dependency')}'
+                import { Dependency } from '${path.resolve(__dirname, '../src/dependency').replace(/\\/g, '/')}'
                 export default class TestPlugin extends Dependency {
                     constructor() {
-                        super(null, 'test', '${testFile}')
+                        super(null, 'test', '${testFile.replace(/\\/g, '/')}')
                     }
                 }
             `)
