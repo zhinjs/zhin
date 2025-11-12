@@ -1,5 +1,13 @@
 # @zhin.js/core
 
+## 1.0.12
+
+### Patch Changes
+
+- ff5a7ed: fix: 文件监听
+- Updated dependencies [ff5a7ed]
+  - @zhin.js/hmr@1.0.5
+
 ## 1.0.11
 
 ### Patch Changes
