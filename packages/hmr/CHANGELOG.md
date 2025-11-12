@@ -1,5 +1,11 @@
 # @zhin.js/hmr
 
+## 1.0.5
+
+### Patch Changes
+
+- ff5a7ed: fix: 文件监听
+
 ## 1.0.4
 
 ### Patch Changes

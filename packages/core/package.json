@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/core",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "description": "Zhin机器人核心框架",
   "type": "module",
   "main": "./lib/index.js",
