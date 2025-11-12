@@ -3,138 +3,90 @@ import * as path from 'path';
 import { EventEmitter } from 'events';
 import { Logger } from './types.js';
 import { resolvePath,isBun } from './utils.js';
+
 /**
  * 文件监听管理器
  * 负责监听目录变化和文件变化检测
  */
 export class FileWatcher extends EventEmitter {
-    readonly #dirs: string[];
-    readonly #dirWatchers: Map<string, fs.FSWatcher>;
-    readonly #watchableExtensions: Set<string>;
+    readonly #fileWatchers: Map<string, fs.FSWatcher>;  // 文件级监听器
     readonly #logger: Logger;
-    get dirs(){
-        return Object.freeze([...this.#dirs])
-    }
+    readonly #dirs: string[] = [];
     constructor(
-        dirs: string[],
-        extensions: string[] | Set<string>,
         logger: Logger,
-        private exclude:string[]=[path.join(process.cwd(),'node_modules')]
     ) {
         super();
-        // 过滤掉 node_modules 目录，避免监听大量文件
-        this.#dirs = dirs
-            .map(dir => resolvePath(dir))
-            .filter(dir => {
-                const isNodeModules = dir.includes('node_modules');
-                if (isNodeModules) {
-                    logger.warn(`Skipping watch for node_modules directory: ${dir} (use specific plugin paths instead)`);
-                }
-                return !isNodeModules;
-            });
-        this.#dirWatchers = new Map();
-        this.#watchableExtensions = Array.isArray(extensions) ? new Set(extensions) : extensions;
+        this.#fileWatchers = new Map();
         this.#logger = logger;
     }
 
-    /** 启动监听 */
-    startWatching(): void {
-        for (const dir of this.#dirs) {
-            this.setupDirWatcher(dir);
+    get dirs(){
+        return this.#dirs
+    }
+    set dirs(dirs:string[]){
+        this.#dirs.length=0
+        for(const dir of dirs){
+            this.#dirs.push(resolvePath(dir))
         }
     }
-
-    /** 停止监听 */
-    stopWatching(): void {
-        for (const watcher of this.#dirWatchers.values()) {
+    /** 
+     * 监听单个文件（按需监听）
+     * @param filePath 文件路径
+     * @returns 清理函数
+     */
+    watchFile(filePath: string): () => void {
+        const absPath = resolvePath(filePath);
+        
+        // 如果已经在监听，返回空函数
+        if (this.#fileWatchers.has(absPath)) {
+            this.#logger.debug(`File already being watched: ${absPath}`);
+            return () => {};
+        }
+        
+        if (!fs.existsSync(absPath)) {
+            this.#logger.warn(`File does not exist: ${absPath}`);
+            return () => {};
+        }
+        
+        try {
+            const watcher = fs.watch(absPath, (eventType) => {
+                this.emit('file-change', absPath, eventType);
+            });
+            
+            this.#fileWatchers.set(absPath, watcher);
+            this.#logger.debug(`Started watching file: ${path.relative(process.cwd(), absPath)}`);
+            
+            // 返回清理函数
+            return () => {
+                this.unwatchFile(absPath);
+            };
+        } catch (error) {
+            this.#logger.error('Failed to watch file', { file: absPath, error });
+            return () => {};
+        }
+    }
+    
+    /** 
+     * 停止监听单个文件
+     * @param filePath 文件路径
+     */
+    unwatchFile(filePath: string): void {
+        const absPath = resolvePath(filePath);
+        const watcher = this.#fileWatchers.get(absPath);
+        
+        if (watcher) {
             watcher.close();
+            this.#fileWatchers.delete(absPath);
+            this.#logger.debug(`Stopped watching file: ${path.relative(process.cwd(), absPath)}`);
         }
-        this.#dirWatchers.clear();
     }
+    
     watching(filePath:string,callback:()=>void):()=>void{
         const watcher=fs.watch(filePath,{recursive:true},callback)
         return ()=>watcher.close()
     }
-    /** 设置目录监听器 */
-    private setupDirWatcher(dir: string): void {
-        if (this.exclude.includes(dir)||this.#dirWatchers.has(dir)) {
-            return;
-        }
 
-        if (!fs.existsSync(dir)) {
-            this.#logger.warn(`Directory does not exist: ${dir}`);
-            return;
-        }
 
-        try {
-            const listener=(eventType:fs.WatchEventType, filename:string) => {
-                if (!filename) return;
-
-                const filePath = path.join(dir, filename);
-                
-                if (this.isWatchableFile(filePath)) {
-                    this.emit('file-change', filePath, eventType);
-                }
-            }
-            const watcher = fs.watch(dir, { recursive: true,persistent:isBun });
-            watcher.on('change',listener)
-            this.#dirWatchers.set(dir, watcher);
-        } catch (error) {
-            this.#logger.error('Failed to watch directory', { dir, error });
-        }
-    }
-
-    /** 检查文件是否可监听 */
-    private isWatchableFile(filename: string): boolean {
-        const ext = path.extname(filename);
-        return this.#watchableExtensions.has(ext);
-    }
-
-    /** 添加监听目录 */
-    addWatchDir(dir: string): boolean {
-        const absDir = resolvePath(dir);
-        
-        if (this.#dirs.includes(absDir)) {
-            return false;
-        }
-        
-        if (!fs.existsSync(absDir)) {
-            return false;
-        }
-        
-        this.#dirs.push(absDir);
-        this.setupDirWatcher(absDir);
-        
-        this.emit('dir-added', absDir);
-        
-        return true;
-    }
-
-    /** 移除监听目录 */
-    removeWatchDir(dir: string): boolean {
-        const absDir = resolvePath(dir);
-        const index = this.#dirs.indexOf(absDir);
-        
-        if (index === -1) {
-            return false;
-        }
-        
-        const watcher = this.#dirWatchers.get(absDir);
-        if (watcher) {
-            watcher.close();
-            this.#dirWatchers.delete(absDir);
-        }
-        
-        this.#dirs.splice(index, 1);
-        this.emit('dir-removed', absDir);
-        
-        return true;
-    }
-
-    /** 获取监听目录列表 */
-    getWatchDirs(): ReadonlyArray<string> {
-        return [...this.#dirs];
-    }
 
     /** 解析文件路径 */
     resolve(filePath: string): string {
@@ -145,7 +97,9 @@ export class FileWatcher extends EventEmitter {
                 if(stat.isFile()) return resolvedPath
                 return this.resolve(FileWatcher.getDirDep(resolvedPath))
             }
-            for (const ext of this.#watchableExtensions) {
+            // 尝试常见的文件扩展名
+            const extensions = ['.js', '.ts', '.jsx', '.tsx', '.mjs', '.cjs'];
+            for (const ext of extensions) {
                 const fullPath = resolvedPath + ext;
                 if (fs.existsSync(fullPath)) {
                     return fullPath;
@@ -157,9 +111,10 @@ export class FileWatcher extends EventEmitter {
 
     /** 销毁监听器 */
     dispose(): void {
-        this.stopWatching();
+        for (const watcher of this.#fileWatchers.values()) {
+            watcher.close();
+        }
         this.removeAllListeners();
-        this.#dirs.length = 0;
     }
     static getDirDep(filePath:string){
         const pkgPath=path.join(filePath,'package.json')

@@ -16,8 +16,8 @@ export function hasRelativeImports(source) {
  * 包装全局副作用函数，自动添加清理逻辑到 onDispose
  */
 function generateEffectWrappers() {
-  return `
-const __DEP_CURRENT__ = globalThis.__CURRENT_DEPENDENCY__;
+  return [`
+const __EFFECTS__=[];
 const __globalSetInterval = globalThis.setInterval;
 const __globalSetTimeout = globalThis.setTimeout;
 const __globalSetImmediate = typeof setImmediate !== 'undefined' ? globalThis.setImmediate : null;
@@ -25,24 +25,29 @@ const __globalSetImmediate = typeof setImmediate !== 'undefined' ? globalThis.se
 
 const setInterval = function(...args) {
   const timerId = __globalSetInterval.apply(this, args);
-  __DEP_CURRENT__.addDisposeHook(() => clearInterval(timerId),true);
+  __EFFECTS__.push(() => clearInterval(timerId));
   return timerId;
 };
 
 const setTimeout = function(...args) {
   const timerId = __globalSetTimeout.apply(this, args);
-  __DEP_CURRENT__.addDisposeHook(() => clearTimeout(timerId),true);
+  __EFFECTS__.push(() => clearTimeout(timerId));
   return timerId;
 };
 
 if (__globalSetImmediate) {
   const setImmediate = function(...args) {
     const immediateId = __globalSetImmediate.apply(this, args);
-    __DEP_CURRENT__.addDisposeHook(() => clearImmediate(immediateId),true);
+    __EFFECTS__.push(() => clearImmediate(immediateId));
     return immediateId;
   };
-}
-`;
+}`,
+`onDispose(async () => {
+  while(__EFFECTS__.length>0){
+    await __EFFECTS__.shift()();
+  }
+}, true);`,
+];
 }
 
 /**
@@ -74,14 +79,27 @@ export function transformImports(source, currentPath, isHotReload = false, marke
   if (wrapEffects) {
     const hasOnDispose = source.includes('onDispose');
     if (!hasOnDispose) {
-      source = `import { onDispose } from '${hooksPath}';\n`+source;
+      source = `import { onDispose } from '${hooksPath}';\n` + source;
     }
-    // 收集所有import 行
-    const importLines = source.match(/import\s+[^;]+from\s+(['"])([^'"]+)\1;\n/gm)||[];
+    // 收集所有import 行（改为可选换行符，支持不同操作系统）
+    const importLines = source.match(/import\s+[^;]+from\s+(['"])([^'"]+)\1;[\r\n]*/gm) || [];
     const lastImportLine = importLines[importLines.length - 1];
-    source = source.replace(lastImportLine, lastImportLine+generateEffectWrappers());
+    const [before,after] = generateEffectWrappers();
+    if (lastImportLine) {
+      source = source.replace(lastImportLine, lastImportLine + before);
+    } else {
+      // 没有 import 语句，在文件开头添加
+      source = before + source;
+    }
+    source = source + after;
   }
   // 如果不需要任何转换，直接返回原始代码
+  // 注意：如果启用了副作用包装，即使没有相对引用也需要继续处理
+  if (!needsImportTransform && !isHotReload && !wrapEffects) {
+    return source;
+  }
+
+  // 如果只启用了副作用包装，没有其他转换，直接返回已注入副作用包装的代码
   if (!needsImportTransform && !isHotReload) {
     return source;
   }

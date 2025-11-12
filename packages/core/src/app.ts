@@ -92,7 +92,6 @@ export class App extends HMR<Plugin> {
     super({
       logger,
       dirs: config.get("plugin_dirs") || [],
-      extensions: new Set([".js", ".ts", ".jsx", ".tsx"]),
       debug: config.get("debug"),
     });
     this.watching(config.filepath,()=>config.reload());
@@ -198,6 +197,7 @@ export class App extends HMR<Plugin> {
     // 找出需要添加的目录
     const dirsToAdd = newResolved.filter((dir) => !oldResolved.includes(dir));
 
+    // 按需监听模式：仍需要更新目录列表用于路径解析，但不启动目录监听
     // 移除过时的监听目录
     for (const dir of dirsToRemove) {
       this.removeWatchDir(dir);
@@ -396,7 +396,7 @@ export class App extends HMR<Plugin> {
     this.#config.config = newConfig;
     if (newConfig.plugin_dirs) {
       // 动态更新监听目录
-      const currentDirs = this.getWatchDirs();
+      const currentDirs = this.watchDirs;
       const newDirs = newConfig.plugin_dirs;
 
       // 移除不再需要的目录
@@ -405,7 +405,6 @@ export class App extends HMR<Plugin> {
           this.removeWatchDir(dir);
         }
       }
-
       // 添加新的目录
       for (const dir of newDirs) {
         if (!currentDirs.includes(dir)) {

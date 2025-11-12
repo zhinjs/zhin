@@ -6,10 +6,8 @@
  * - 父插件导入子插件
  * - 级联停止
  */
-
 import { onMount, onDispose } from '@zhin.js/dependency';
 import './child-plugin.js';
-
 console.log('👨 [Parent Plugin] 模块已加载');
 
 onMount(() => {

@@ -34,9 +34,7 @@ export interface DependencyOptions {}
 
 /** 监听器配置接口 */
 export interface HMROptions extends DependencyOptions {
-    /** 可监听的文件扩展名 */
-    extensions?: Set<string>;
-    /** 要监听的目录列表 */
+    /** 要监听的目录列表（用于生成 glob 模式） */
     dirs?: string[];
     /** 最大事件监听器数量 */
     max_listeners?: number;
@@ -48,6 +46,8 @@ export interface HMROptions extends DependencyOptions {
     debug?: boolean;
     /** 自定义日志记录器 */
     logger?: Logger;
+    /** 自定义 glob 模式（可选，如果不提供则自动生成） */
+    patterns?: string[];
 }
 
 /** 依赖解析结果 */

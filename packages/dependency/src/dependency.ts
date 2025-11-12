@@ -71,13 +71,18 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
   addMountHook(hook: () => void | Promise<void>): void {
     this.on('self.mounted', hook);
   }
-
+  
   /**
    * 添加卸载钩子
+   * @param hook - 卸载钩子函数
+   * @param inner - 是否为内部钩子（在生命周期监听器清理前执行，用于副作用清理）
    */
   addDisposeHook(hook: () => void | Promise<void>, inner: boolean = false): void {
-    if (inner) this.#onSelfDispose.push(hook);
-    else this.on('self.dispose', hook);
+    if (inner) {
+      this.#onSelfDispose.push(hook);
+    } else {
+      this.on('self.dispose', hook);
+    }
   }
 
   /**
@@ -132,14 +137,17 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
    */
   async dispose(): Promise<void> {
     if (!this.mounted) {
+      console.log(`[dispose] ${this.name} - 未挂载，跳过`);
       return;
     }
+    console.log(`[dispose] ${this.name} - 开始卸载，#onSelfDispose 数量: ${this.#onSelfDispose.length}`);
     await this.dispatchAsync('before-dispose', this);
     await this.emitAsync('self.dispose', this);
-    for (const dispose of this.#onSelfDispose) {
-      dispose();
+    for (const fn of this.#onSelfDispose) {
+      await fn();
     }
     this.mounted = false;
+    console.log(`[dispose] ${this.name} - 卸载完成`);
     await this.dispatchAsync('disposed', this);
   }
 
@@ -172,34 +180,54 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
    */
   async reload(): Promise<Dependency> {
     if (this.reloading) {
+      console.log(`[reload] ${this.name} - 已在重载中，跳过`);
       return this;
     }
-
+    
+    console.log(`\n[reload] ${this.name} - 开始重载 (isRoot: ${this.isRoot})`);
     this.reloading = true;
     await this.dispatchAsync('before-reload', this);
     await this.emitAsync('self.reload', this);
     await this.dispatchAsync('reloading', this);
     const savedChildren = [...this.children];
+    console.log(`[reload] ${this.name} - 保存的子依赖:`, savedChildren.map(c => c.name));
     const parent = this.parent;
     try {
       // 1. dispose
+      console.log(`[reload] ${this.name} - 1. 执行 dispose`);
       await this.dispose();
+      
       // 2. clean cache
+      console.log(`[reload] ${this.name} - 2. 清理模块缓存`);
       const absolutePath = this.resolveFilePath(this.#filePath);
       this.removeModuleCache(absolutePath);
+      
       // 3. remove from globalDepMap
+      console.log(`[reload] ${this.name} - 3. 从全局池删除`);
       Dependency.globalDepMap.delete(this.filePath);
+      
       // 4. reload node
+      console.log(`[reload] ${this.name} - 4. 重新加载节点`);
       const newNode = await this.#reloadNode();
+      console.log(`[reload] ${this.name} - newNode.children:`, newNode.children.map(c => c.name));
+      
       // 5. set to globalDepMap
+      console.log(`[reload] ${this.name} - 5. 加入全局池`);
       Dependency.globalDepMap.set(newNode.filePath, newNode);
 
       // 6. update children
+      console.log(`[reload] ${this.name} - 6. 更新子依赖`);
       await this.#updateChildren(newNode, savedChildren);
+      console.log(`[reload] ${this.name} - 更新后 newNode.children:`, newNode.children.map(c => c.name));
+      
       parent && newNode.refs.add(parent.filePath);
+      
+      console.log(`[reload] ${this.name} - 7. 启动新节点`);
       await newNode.start(this.isRoot);
+      console.log(`[reload] ${this.name} - ✅ 重载完成\n`);
       return newNode;
     } catch (error) {
+      console.error(`[reload] ${this.name} - ❌ 重载失败:`, error);
       this.#handleReloadError(error);
       return this;
     } finally {
@@ -213,10 +241,14 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
    */
   async #reloadNode(): Promise<Dependency<P>> {
     if (this.isRoot) {
+      console.log(`[#reloadNode] ${this.name} - 根节点，创建新实例`);
       const newNode = new (this.constructor as Constructor<Dependency<P>>)(this.filePath)
+      console.log(`[#reloadNode] ${this.name} - 执行 init()`);
       await newNode.init()
+      console.log(`[#reloadNode] ${this.name} - init() 完成，children:`, newNode.children.map(c => c.name));
       return newNode
     } else {
+      console.log(`[#reloadNode] ${this.name} - 非根节点，通过父节点导入`);
       return await this.parent!.importChild(this.filePath) as Dependency<P>;
     }
   }
@@ -228,8 +260,14 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
     newNode: Dependency<P>,
     savedChildren: P[],
   ): Promise<void> {
+    console.log(`[#updateChildren] ${newNode.name} - 开始 Diff`);
     // 比较新旧子依赖
     const { removedChildren, addedChildren } = this.#diffChildren(newNode, savedChildren);
+    console.log(`[#updateChildren] ${newNode.name} - removed:`, removedChildren.map(c => c.name));
+    console.log(`[#updateChildren] ${newNode.name} - added:`, addedChildren.map(c => c.name));
+    console.log(`[#updateChildren] ${newNode.name} - kept:`, savedChildren.filter(c => 
+      !removedChildren.includes(c) && !addedChildren.includes(c)
+    ).map(c => c.name));
 
     // 停止移除的子依赖
     await this.#removeChildren(savedChildren, removedChildren);
@@ -238,11 +276,13 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
     this.#addChildren(savedChildren, addedChildren);
 
     // 更新子依赖列表
+    console.log(`[#updateChildren] ${newNode.name} - 更新 childrenKey`);
     newNode[childrenKey].clear();
     for (const child of savedChildren) {
       newNode[childrenKey].add(child.filePath);
       child.refs.add(newNode.filePath);
     }
+    console.log(`[#updateChildren] ${newNode.name} - 完成，最终 children:`, savedChildren.map(c => c.name));
   }
 
   /**
@@ -334,14 +374,18 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
   }
 
   async init() {
+    console.log(`[init] ${this.name} - 开始初始化模块`);
     setCurrentDependency(this);
     const fileUrl = pathToFileURL(this.#filePath).href;
     const importUrl: string = `${fileUrl}?t=${Date.now()}`;
+    console.log(`[init] ${this.name} - 导入 URL:`, importUrl);
     globalThis.__CURRENT_DEPENDENCY__ = this;
     await import(importUrl);
+    console.log(`[init] ${this.name} - 模块导入完成，children:`, this.children.map(c => c.name));
     Dependency.globalDepMap.set(this.#filePath, this);
     globalThis.__CURRENT_DEPENDENCY__ = null;
     setCurrentDependency(null);
+    console.log(`[init] ${this.name} - 初始化完成`);
   }
   /**
    * 创建子依赖并启动

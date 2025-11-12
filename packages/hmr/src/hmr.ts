@@ -25,11 +25,11 @@ const DEFAULT_HMR_OPTIONS: Required<Omit<HMROptions,'logger'>> & {
     logger: Logger;
 } = {
     dirs: [],
-    extensions: DEFAULT_WATCHABLE_EXTENSIONS,
     max_listeners: DEFAULT_CONFIG.MAX_LISTENERS,
     debounce: DEFAULT_CONFIG.RELOAD_DEBOUNCE_MS,
     algorithm: DEFAULT_CONFIG.HASH_ALGORITHM,
     debug: DEFAULT_CONFIG.ENABLE_DEBUG,
+    patterns: [],  // 默认为空，将自动生成
     logger: getLogger('HMR')
 };
 
@@ -50,9 +50,6 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
     private static _cachedExtensions?: string[];
     /** 正在加载的依赖集合 */
     private static _loadingDependencies?: Set<string>;
-    get watchDirs(): ReadonlyArray<string> {
-        return this.fileWatcher.dirs;
-    }
     /** 获取 HMR 栈 */
     static get hmrStack(): HMR<any>[] {
         if (!this._hmrStack) {
@@ -171,11 +168,7 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
         this.logger = finalOptions.logger;
 
         // 初始化功能模块
-        this.fileWatcher = new FileWatcher(
-            finalOptions.dirs || [],
-            finalOptions.extensions || DEFAULT_WATCHABLE_EXTENSIONS,
-            this.logger
-        );
+        this.fileWatcher = new FileWatcher(this.logger);
 
         this.moduleLoader = new ModuleLoader<P>(
             this,
@@ -195,7 +188,6 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
 
         // 设置事件监听
         this.setupEventListeners();
-        this.fileWatcher.startWatching();
         // 设置内部事件监听
         this.on('internal.add', (filePath: string) => {
             this.#add(filePath);
@@ -205,7 +197,9 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
         HMR.hmrStack.push(this);
         HMR.dependencyStack.push(this);
     }
-
+    get watchDirs(): ReadonlyArray<string> {
+        return this.fileWatcher.dirs;
+    }
     /** 设置事件监听器 */
     private setupEventListeners(): void {
         // 文件变化监听
@@ -265,6 +259,10 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
             this.#remove(resolvedPath);
         }
         this.pendingDependencies.add(resolvedPath);
+        
+        // 按需监听：为这个插件文件添加监听
+        const unwatchFile = this.watchFile(resolvedPath);
+        
         // 异步导入模块
         this.moduleLoader.add(name,resolvedPath).catch((error) => {
             this.logger.error(`Failed to load plugin: ${name}`, { 
@@ -273,6 +271,8 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
             });
             this.performanceMonitor.recordError();
             this.emit('error', error);
+            // 如果加载失败，移除监听
+            unwatchFile();
         }).finally(()=>{
             this.pendingDependencies.delete(resolvedPath);
         })
@@ -280,6 +280,9 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
 
     /** 移除插件 */
     #remove(filePath: string): void {
+        // 移除监听
+        this.unwatchFile(filePath);
+        // 移除模块
         this.moduleLoader.remove(filePath);
     }
 
@@ -341,49 +344,45 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
     }
 
     /** 添加监听目录 */
-    addWatchDir(dir: string): boolean {
-        return this.fileWatcher.addWatchDir(dir);
+    addWatchDir(dir: string): void {
+        this.fileWatcher.dirs=[
+            ...this.fileWatcher.dirs,
+            dir
+        ]
     }
 
     /** 移除监听目录 */
     removeWatchDir(dir: string): boolean {
-        return this.fileWatcher.removeWatchDir(dir);
+        const resolvedDir = path.resolve(dir);
+        if (!this.fileWatcher.dirs.includes(resolvedDir)) {
+            return false;
+        }
+        this.fileWatcher.dirs = this.fileWatcher.dirs.filter(d => d !== resolvedDir);
+        return true;
+    }
+    
+    /**
+     * 监听单个文件（按需监听）
+     * @param filePath 文件路径
+     * @returns 清理函数
+     */
+    watchFile(filePath: string): () => void {
+        return this.fileWatcher.watchFile(filePath);
+    }
+    
+    /**
+     * 停止监听单个文件
+     * @param filePath 文件路径
+     */
+    unwatchFile(filePath: string): void {
+        this.fileWatcher.unwatchFile(filePath);
     }
 
-    /** 获取监听目录列表 */
-    getWatchDirs(): ReadonlyArray<string> {
-        return this.fileWatcher.getWatchDirs();
-    }
 
     /** 更新HMR配置 */
     updateOptions(options: Partial<HMROptions>): void {
         this.options = { ...this.options, ...options };
-        // 更新相关设置
-        if (this.options.extensions) {
-            // 更新文件监听器的扩展名
-            // 注意：这里需要重新创建文件监听器或者添加更新方法
-        }
-        
-        if (this.options.dirs) {
-            // 更新监听目录
-            const currentDirs = this.getWatchDirs();
-            const newDirs = this.options.dirs;
-            
-            // 移除不再需要的目录
-            for (const dir of currentDirs) {
-                if (!newDirs.includes(dir)) {
-                    this.removeWatchDir(dir);
-                }
-            }
-            
-            // 添加新的目录
-            for (const dir of newDirs) {
-                if (!currentDirs.includes(dir)) {
-                    this.addWatchDir(dir);
-                }
-            }
-        }
-        
+        this.fileWatcher.dirs= this.options.dirs?.map(dir=>path.resolve(dir))||[]
         if (this.options.max_listeners) {
             this.setMaxListeners(this.options.max_listeners);
         }

@@ -14,6 +14,7 @@ import {
 } from "zhin.js";
 import path from "node:path";
 import * as os from "node:os";
+
 declare module "@zhin.js/types" {
   interface Models {
     test_model: {
@@ -23,7 +24,7 @@ declare module "@zhin.js/types" {
     };
   }
 }
-const app = useApp();
+const app = useApp()
 const isBun=typeof Bun!=='undefined'
 function formatMemoSize(size: number) {
   const sizes = ["B", "KB", "MB", "GB", "TB"];
