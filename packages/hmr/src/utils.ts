@@ -77,7 +77,7 @@ export class ConsoleLogger implements Logger {
 // ============================================================================
 
 /** 默认的可监听文件扩展名集合 */
-export const DEFAULT_WATCHABLE_EXTENSIONS = new Set(['.js', '.ts', '.mjs', '.mts', '.json']);
+export const DEFAULT_WATCHABLE_EXTENSIONS = new Set(['.js','.jsx','.tsx','.cjs', '.ts', '.mjs', '.mts', '.json']);
 
 /** 堆栈跟踪解析正则表达式 */
 export const STACK_TRACE_REGEX = /at\s+.*\s+\((.+):\d+:\d+\)/;

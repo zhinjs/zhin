@@ -18,7 +18,6 @@ describe('FileWatcher', () => {
         fs.writeFileSync(path.join(testDir, 'test.ts'), '// test file')
         fs.writeFileSync(path.join(testDir, 'test.js'), '// test file')
         watcher = new FileWatcher(logger)
-        watcher.dirs = [testDir]
     })
 
     afterEach(() => {
@@ -90,56 +89,6 @@ describe('FileWatcher', () => {
             const cleanup = watcher.watchFile(testFile)
             expect(typeof cleanup).toBe('function')
             cleanup() // Should not throw
-        })
-    })
-
-    describe('File Resolution', () => {
-        it('should resolve relative paths', () => {
-            const relativePath = './test.ts'
-            const resolved = watcher.resolve(relativePath)
-            expect(resolved).toBe(path.resolve(testDir, relativePath))
-        })
-
-        it('should resolve files without extension', () => {
-            const withoutExt = './test'
-            const resolved = watcher.resolve(withoutExt)
-            expect(resolved).toMatch(/test\.(ts|js)$/)
-        })
-
-        it('should resolve package.json main entry', () => {
-            const pkgDir = path.join(testDir, 'package-dir')
-            fs.mkdirSync(pkgDir)
-            fs.writeFileSync(path.join(pkgDir, 'package.json'), JSON.stringify({ main: 'index.js' }))
-            fs.writeFileSync(path.join(pkgDir, 'index.js'), '// package entry')
-            
-            watcher.dirs = [...watcher.dirs, pkgDir]
-            const resolved = watcher.resolve('package-dir')
-            expect(resolved).toContain('index.js')
-        })
-
-        it('should throw for non-existent files', () => {
-            expect(() => {
-                watcher.resolve('nonexistent-file')
-            }).toThrow('File not found')
-        })
-    })
-
-    describe('Directory Management', () => {
-        it('should manage directory list', () => {
-            const newDir = path.join(testDir, 'newDir')
-            fs.mkdirSync(newDir)
-            
-            watcher.dirs = [...watcher.dirs, newDir]
-            expect(watcher.dirs).toContain(newDir)
-        })
-
-        it('should clear and set new directories', () => {
-            const newDir = path.join(testDir, 'newDir')
-            fs.mkdirSync(newDir)
-            
-            watcher.dirs = [newDir]
-            expect(watcher.dirs).toHaveLength(1)
-            expect(watcher.dirs).toContain(newDir)
         })
     })
 

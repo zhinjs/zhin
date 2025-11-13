@@ -200,12 +200,12 @@ export class App extends HMR<Plugin> {
     // 按需监听模式：仍需要更新目录列表用于路径解析，但不启动目录监听
     // 移除过时的监听目录
     for (const dir of dirsToRemove) {
-      this.removeWatchDir(dir);
+      this.removeDir(dir);
     }
 
     // 添加新的监听目录
     for (const dir of dirsToAdd) {
-      this.addWatchDir(dir);
+      this.addDir(dir);
     }
   }
 
@@ -396,19 +396,19 @@ export class App extends HMR<Plugin> {
     this.#config.config = newConfig;
     if (newConfig.plugin_dirs) {
       // 动态更新监听目录
-      const currentDirs = this.watchDirs;
+      const currentDirs = this.dirs;
       const newDirs = newConfig.plugin_dirs;
 
       // 移除不再需要的目录
       for (const dir of currentDirs) {
         if (!newDirs.includes(dir)) {
-          this.removeWatchDir(dir);
+          this.removeDir(dir);
         }
       }
       // 添加新的目录
       for (const dir of newDirs) {
         if (!currentDirs.includes(dir)) {
-          this.addWatchDir(dir);
+          this.addDir(dir);
         }
       }
     }

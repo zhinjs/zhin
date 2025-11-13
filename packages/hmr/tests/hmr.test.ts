@@ -71,20 +71,50 @@ describe('HMR', () => {
             const newDir = path.join(testDir, 'newDir')
             fs.mkdirSync(newDir)
 
-            hmr.testFileWatcher.dirs = [...hmr.testFileWatcher.dirs, newDir]
-            expect(hmr.testFileWatcher.dirs).toContain(newDir)
+            hmr.dirs = [...hmr.dirs, newDir]
+            expect(hmr.dirs).toContain(newDir)
         })
 
         it('should clear and set new directories', () => {
             const newDir = path.join(testDir, 'newDir')
             fs.mkdirSync(newDir)
 
-            hmr.testFileWatcher.dirs = [newDir]
-            expect(hmr.testFileWatcher.dirs).toHaveLength(1)
-            expect(hmr.testFileWatcher.dirs).toContain(newDir)
+            hmr.dirs = [newDir]
+            expect(hmr.dirs).toHaveLength(1)
+            expect(hmr.dirs).toContain(newDir)
         })
     })
 
+    describe('File Resolution', () => {
+        it('should resolve relative paths', () => {
+            const relativePath = './test.ts'
+            const resolved = hmr.resolve(relativePath)
+            expect(resolved).toBe(path.resolve(testDir, relativePath))
+        })
+
+        it('should resolve files without extension', () => {
+            const withoutExt = './test'
+            const resolved = hmr.resolve(withoutExt)
+            expect(resolved).toMatch(/test\.(ts|js)$/)
+        })
+
+        it('should resolve package.json main entry', () => {
+            const pkgDir = path.join(testDir, 'package-dir')
+            fs.mkdirSync(pkgDir)
+            fs.writeFileSync(path.join(pkgDir, 'package.json'), JSON.stringify({ main: 'index.js' }))
+            fs.writeFileSync(path.join(pkgDir, 'index.js'), '// package entry')
+            
+            hmr.dirs = [...hmr.dirs, pkgDir]
+            const resolved = hmr.resolve('package-dir')
+            expect(resolved).toContain('index.js')
+        })
+
+        it('should throw for non-existent files', () => {
+            expect(() => {
+                hmr.resolve('nonexistent-file')
+            }).toThrow('File not found')
+        })
+    })
     describe('On-Demand File Watching', () => {
         it('should watch file when plugin loads', async () => {
             const testFile = path.join(testDir, 'test-plugin.ts')

@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { EventEmitter } from 'events';
 import { Logger } from './types.js';
-import { resolvePath,isBun } from './utils.js';
+import { resolvePath } from './utils.js';
 
 /**
  * 文件监听管理器
@@ -11,7 +11,6 @@ import { resolvePath,isBun } from './utils.js';
 export class FileWatcher extends EventEmitter {
     readonly #fileWatchers: Map<string, fs.FSWatcher>;  // 文件级监听器
     readonly #logger: Logger;
-    readonly #dirs: string[] = [];
     constructor(
         logger: Logger,
     ) {
@@ -20,15 +19,6 @@ export class FileWatcher extends EventEmitter {
         this.#logger = logger;
     }
 
-    get dirs(){
-        return this.#dirs
-    }
-    set dirs(dirs:string[]){
-        this.#dirs.length=0
-        for(const dir of dirs){
-            this.#dirs.push(resolvePath(dir))
-        }
-    }
     /** 
      * 监听单个文件（按需监听）
      * @param filePath 文件路径
@@ -84,29 +74,6 @@ export class FileWatcher extends EventEmitter {
     watching(filePath:string,callback:()=>void):()=>void{
         const watcher=fs.watch(filePath,{recursive:true},callback)
         return ()=>watcher.close()
-    }
-
-
-
-    /** 解析文件路径 */
-    resolve(filePath: string): string {
-        for (const dir of this.#dirs) {
-            const resolvedPath = resolvePath(filePath, dir);
-            if(fs.existsSync(resolvedPath)){
-                const stat=fs.statSync(resolvedPath)
-                if(stat.isFile()) return resolvedPath
-                return this.resolve(FileWatcher.getDirDep(resolvedPath))
-            }
-            // 尝试常见的文件扩展名
-            const extensions = ['.js', '.ts', '.jsx', '.tsx', '.mjs', '.cjs'];
-            for (const ext of extensions) {
-                const fullPath = resolvedPath + ext;
-                if (fs.existsSync(fullPath)) {
-                    return fullPath;
-                }
-            }
-        }
-        throw new Error(`File not found: ${filePath}\n${this.#dirs.join('\n')}`);
     }
 
     /** 销毁监听器 */

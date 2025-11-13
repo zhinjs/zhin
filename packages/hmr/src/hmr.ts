@@ -1,4 +1,5 @@
 import * as path from 'path';
+import * as fs from 'fs';
 import { Dependency } from './dependency.js';
 import {HMROptions, Logger} from './types.js';
 import {
@@ -14,6 +15,7 @@ import { FileWatcher } from './file-watcher.js';
 import { ModuleLoader } from './module-loader.js';
 import { PerformanceMonitor } from './performance.js';
 import { ReloadManager } from './reload-manager.js';
+import { resolvePath } from './utils.js';
 import { fileURLToPath } from 'url';
 import {getLogger} from "@zhin.js/logger";
 
@@ -46,8 +48,9 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
     private static _hmrStack?: HMR<any>[];
     /** 依赖栈，用于跟踪当前活动的依赖 */
     private static _dependencyStack?: Dependency[];
+    #dirs:string[]=[];
     /** 缓存的扩展名 */
-    private static _cachedExtensions?: string[];
+    private static _cachedExtensions?: Set<string>;
     /** 正在加载的依赖集合 */
     private static _loadingDependencies?: Set<string>;
     /** 获取 HMR 栈 */
@@ -67,12 +70,12 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
     }
 
     /** 获取缓存的扩展名 */
-    static get cachedExtensions(): string[] | null {
-        return this._cachedExtensions || null;
+    static get cachedExtensions(): Set<string> {
+        return this._cachedExtensions|| DEFAULT_WATCHABLE_EXTENSIONS;
     }
 
     /** 设置缓存的扩展名 */
-    static set cachedExtensions(value: string[] | null) {
+    static set cachedExtensions(value: Set<string> | null) {
         this._cachedExtensions = value || undefined;
     }
 
@@ -169,6 +172,7 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
 
         // 初始化功能模块
         this.fileWatcher = new FileWatcher(this.logger);
+        this.#dirs=finalOptions.dirs?.map(dir=>path.resolve(dir))||[]
 
         this.moduleLoader = new ModuleLoader<P>(
             this,
@@ -197,8 +201,11 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
         HMR.hmrStack.push(this);
         HMR.dependencyStack.push(this);
     }
-    get watchDirs(): ReadonlyArray<string> {
-        return this.fileWatcher.dirs;
+    get dirs(){
+        return this.#dirs
+    }
+    set dirs(value:string[]){
+        this.#dirs=value
     }
     /** 设置事件监听器 */
     private setupEventListeners(): void {
@@ -252,7 +259,7 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
 
     /** 添加插件 */
     #add(filePath: string): void {
-        const resolvedPath = this.fileWatcher.resolve(filePath);
+        const resolvedPath = this.resolve(filePath);
         const name = path.basename(filePath, path.extname(filePath));
         // 如果已经存在，先移除
         if (this.dependencies.has(resolvedPath)) {
@@ -344,20 +351,20 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
     }
 
     /** 添加监听目录 */
-    addWatchDir(dir: string): void {
-        this.fileWatcher.dirs=[
-            ...this.fileWatcher.dirs,
+    addDir(dir: string): void {
+        this.#dirs=[
+            ...this.#dirs,
             dir
         ]
     }
 
     /** 移除监听目录 */
-    removeWatchDir(dir: string): boolean {
+    removeDir(dir: string): boolean {
         const resolvedDir = path.resolve(dir);
-        if (!this.fileWatcher.dirs.includes(resolvedDir)) {
+        if (!this.#dirs.includes(resolvedDir)) {
             return false;
         }
-        this.fileWatcher.dirs = this.fileWatcher.dirs.filter(d => d !== resolvedDir);
+        this.#dirs = this.#dirs.filter(d => d !== resolvedDir);
         return true;
     }
     
@@ -382,7 +389,7 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
     /** 更新HMR配置 */
     updateOptions(options: Partial<HMROptions>): void {
         this.options = { ...this.options, ...options };
-        this.fileWatcher.dirs= this.options.dirs?.map(dir=>path.resolve(dir))||[]
+        this.#dirs= this.options.dirs?.map(dir=>path.resolve(dir))||[]
         if (this.options.max_listeners) {
             this.setMaxListeners(this.options.max_listeners);
         }
@@ -393,6 +400,27 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
         return this.performanceMonitor.stats;
     }
 
+    /** 解析文件路径 */
+    resolve(filePath: string): string {
+        const dirs=this.#dirs
+        for (const dir of this.#dirs) {
+            const resolvedPath = resolvePath(filePath, dir);
+            if(fs.existsSync(resolvedPath)){
+                const stat=fs.statSync(resolvedPath)
+                if(stat.isFile()) return resolvedPath
+                return this.resolve(FileWatcher.getDirDep(resolvedPath))
+            }
+            // 尝试常见的文件扩展名
+            const extensions =HMR.cachedExtensions;
+            for (const ext of extensions) {
+                const fullPath = resolvedPath + ext;
+                if (fs.existsSync(fullPath)) {
+                    return fullPath;
+                }
+            }
+        }
+        throw new Error(`File not found: ${filePath}\n${this.#dirs.join('\n')}`);
+    }
     /** 获取性能报告 */
     getPerformanceReport(): string {
         return this.performanceMonitor.getReport();
@@ -453,3 +481,4 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
         };
     }
 } 
+HMR.cachedExtensions = DEFAULT_WATCHABLE_EXTENSIONS;
