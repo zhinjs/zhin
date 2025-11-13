@@ -29,6 +29,9 @@ describe('HMR', () => {
         if (!fs.existsSync(testDir)) {
             fs.mkdirSync(testDir, { recursive: true })
         }
+        // 创建测试文件
+        fs.writeFileSync(path.join(testDir, 'test.ts'), '// test file')
+        fs.writeFileSync(path.join(testDir, 'test.js'), '// test file')
         hmr = new TestHMR({
             dirs: [testDir],
             debug: false
