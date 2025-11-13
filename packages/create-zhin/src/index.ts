@@ -188,6 +188,9 @@ async function main() {
     console.log('');
     console.log('📝 下一步操作：');
     console.log(`  ${chalk.cyan(`cd ${realName}`)}`);
+    if(options.database.dialect ==='sqlite'){
+      console.log(`  ${chalk.cyan('pnpm approve-builds sqlite3')} ${chalk.gray('# 批准 sqlite3 原生模块构建如遇错误，请检查系统是否已安装C++编译器(g++)')}`);
+    }
     console.log(`  ${chalk.cyan('pnpm dev')} ${chalk.gray('# 开发环境启动')}`);
     console.log(`  ${chalk.cyan('pnpm start')} ${chalk.gray('# 生产环境启动')}`);
     console.log(`  ${chalk.cyan('pnpm stop')} ${chalk.gray('# 停止机器人')}`);
