@@ -33,6 +33,7 @@ export async function createViteDevServer(
     plugins: [react(), tailwindcss()],
     server: {
       middlewareMode: true,
+      allowedHosts: true,
       fs: {
         strict: false,
         // 添加文件访问过滤，避免访问特殊文件
