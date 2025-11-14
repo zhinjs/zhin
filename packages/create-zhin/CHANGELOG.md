@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.12
+
+### Patch Changes
+
+- a86424e: fix: 增加 sqlite3 构建提示
+
 ## 1.0.11
 
 ### Patch Changes

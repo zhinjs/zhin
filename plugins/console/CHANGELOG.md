@@ -1,5 +1,13 @@
 # @zhin.js/console
 
+## 1.0.9
+
+### Patch Changes
+
+- 4034b94: fix: allow host
+- Updated dependencies [a2e1ebc]
+  - @zhin.js/core@1.0.13
+
 ## 1.0.8
 
 ### Patch Changes
