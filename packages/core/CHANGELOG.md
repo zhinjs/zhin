@@ -1,5 +1,13 @@
 # @zhin.js/core
 
+## 1.0.13
+
+### Patch Changes
+
+- a2e1ebc: fix: 优化监听
+- Updated dependencies [a2e1ebc]
+  - @zhin.js/hmr@1.0.6
+
 ## 1.0.12
 
 ### Patch Changes
