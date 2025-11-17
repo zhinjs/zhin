@@ -1,0 +1,82 @@
+{
+  "name": "@zhin.js/console",
+  "version": "1.0.9",
+  "description": "Zhin 控制台",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "bin": {
+    "zhin-console": "./lib/bin.js"
+  },
+  "keywords": [
+    "zhin",
+    "service",
+    "console"
+  ],
+  "author": "lc-cn",
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "type": "git",
+    "directory": "plugins/services/console"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/client/index.d.ts",
+      "import": "./lib/client/index.js"
+    },
+    "./browser.tsconfig.json": "./broswer.tsconfig.json",
+    "./node.tsconfig.json": "./node.tsconfig.json"
+  },
+  "scripts": {
+    "build": "pnpm build:node && pnpm build:client",
+    "build:client": "node scripts/client.js",
+    "clean": "rm -rf lib dist",
+    "build:node": "tsc"
+  },
+  "dependencies": {
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "mime": "^4.1.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "@tailwindcss/vite": "4.1.14",
+    "radix-ui": "^1.4.3",
+    "@radix-ui/themes": "^3.2.1",
+    "@tailwindcss/postcss": "^4.1.11",
+    "tailwindcss": "latest",
+    "koa-connect": "^2.1.0",
+    "@reduxjs/toolkit": "^2.9.0",
+    "lucide-react": "^0.469.0",
+    "clsx": "^2.1.1",
+    "react-redux": "9.2.0",
+    "react-router": "7.0.0",
+    "redux-persist": "6.0.0",
+    "tailwind-merge": "^3.3.1",
+    "ws": "^8.18.3",
+    "vite": "^7.0.6"
+  },
+  "peerDependencies": {
+    "@types/ws": "^8.18.1",
+    "@zhin.js/client": "workspace:^",
+    "@zhin.js/http": "workspace:^",
+    "@zhin.js/core": "workspace:^",
+    "@zhin.js/types": "workspace:^"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/types": {
+      "optional": true
+    }
+  },
+  "files": [
+    "lib",
+    "node",
+    "README.md",
+    "dist",
+    "client",
+    "CHANGELOG.md"
+  ]
+}

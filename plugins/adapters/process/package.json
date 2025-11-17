@@ -1,0 +1,59 @@
+{
+  "name": "@zhin.js/adapter-process",
+  "version": "1.0.15",
+  "description": "zhin adapter for process",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "keywords": [
+    "zhin",
+    "adapter",
+    "process"
+  ],
+  "author": "lc-cn",
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "type": "git",
+    "directory": "plugins/adapters/process"
+  },
+  "scripts": {
+    "build": "tsc && (zhin-console build || echo 'Skipping client build: zhin-console not found')",
+    "clean": "rm -rf lib"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.1",
+    "radix-ui": "^1.4.3",
+    "@radix-ui/themes": "^3.2.1",
+    "lucide-react": "^0.469.0",
+    "typescript": "^5.3.0"
+  },
+  "peerDependencies": {
+    "zhin.js": "workspace:*",
+    "@zhin.js/client": "workspace:*",
+    "@zhin.js/http": "workspace:*",
+    "@zhin.js/types": "workspace:*",
+    "@zhin.js/console": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/types": {
+      "optional": true
+    },
+    "@zhin.js/http": {
+      "optional": true
+    },
+    "@zhin.js/console": {
+      "optional": true
+    },
+    "@zhin.js/client": {
+      "optional": true
+    }
+  }
+}

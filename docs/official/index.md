@@ -164,7 +164,7 @@ export default defineConfig({
 
 ## 📞 联系我们
 
-- 🌐 [官方网站](https://zhin.dev)
+- 🌐 [官方网站](https://zhin.pages.dev)
 - 📧 [邮件联系](mailto:contact@zhin.dev)
 - 💬 [社区讨论](https://github.com/zhinjs/zhin/discussions)
 - 🐛 [问题反馈](https://github.com/zhinjs/zhin/issues)

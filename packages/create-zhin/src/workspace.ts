@@ -104,55 +104,186 @@ data/
   await fs.writeFile(path.join(projectPath, 'README.md'),
 `# ${projectName}
 
-使用 Zhin.js 框架创建的 pnpm workspace 项目。
+使用 Zhin.js 框架创建的机器人项目。
 
 ## 📁 项目结构
 
 \`\`\`
-${projectName}/
-├── src/                 # 应用源代码
-│   └── plugins/        # 本地插件
-├── client/              # 客户端页面
-├── data/                # 数据目录
-├── plugins/             # 插件开发目录（独立包）
-├── zhin.config.${options.config}    # 配置文件
-└── pnpm-workspace.yaml
+${projectName}/                  # 根目录（项目主模块）
+├── src/                        # 应用源代码
+│   ├── index.ts               # 入口文件
+│   └── plugins/               # 本地插件（简单插件）
+│       └── example.ts         # 示例插件
+│
+├── client/                     # 客户端页面
+│   ├── index.tsx              # 客户端入口
+│   └── tsconfig.json          # 客户端 TS 配置
+│
+├── plugins/                    # 插件模块（独立包）
+│   └── my-plugin/             # 使用 zhin new 创建的插件
+│       ├── src/               # 插件源码
+│       ├── client/            # 插件客户端
+│       ├── lib/               # 构建输出
+│       ├── package.json       # 插件包配置
+│       └── tsconfig.json      # 插件 TS 配置
+│
+├── data/                       # 数据目录（自动生成）
+├── zhin.config.${options.config}         # 机器人配置文件
+├── package.json                # 项目依赖配置
+├── pnpm-workspace.yaml         # Workspace 配置
+└── tsconfig.json               # TypeScript 配置
 \`\`\`
+
+## 🎯 项目模块说明
+
+### 根目录（项目主模块）
+- 作为主应用程序模块
+- 包含机器人的核心代码和简单插件
+- \`src/plugins/\` 下的插件直接被加载，适合简单功能
+
+### plugins 目录（插件模块）
+- 存放使用 \`zhin new\` 命令创建的独立插件包
+- 每个插件都是独立的 npm 包，有自己的 \`package.json\`
+- 适合复杂功能、可复用的插件
+- 可以独立发布到 npm
 
 ## 🚀 快速开始
 
 \`\`\`bash
-pnpm dev        # 开发环境
+pnpm dev        # 开发环境（自动监听文件变化）
 pnpm start      # 生产环境
-pnpm stop       # 停止
-pnpm build      # 构建所有插件
+pnpm daemon     # 后台运行
+pnpm stop       # 停止后台服务
+\`\`\`
+
+## 📦 安装插件
+
+### 安装 npm 插件
+
+\`\`\`bash
+# 交互式安装
+zhin install
+
+# 安装官方插件
+zhin install @zhin.js/plugin-name
+
+# 安装第三方插件
+zhin add third-party-plugin
+
+# 安装到 devDependencies
+zhin install plugin-name -D
+\`\`\`
+
+### 安装 Git 插件
+
+\`\`\`bash
+# GitHub 简写（推荐）
+zhin install username/repo
+
+# 完整 GitHub URL
+zhin install https://github.com/username/repo.git
+
+# GitLab
+zhin install https://gitlab.com/username/repo.git
+
+# 其他 Git 仓库
+zhin install git+https://example.com/repo.git
+
+# 指定分支或标签
+zhin install username/repo#branch-name
+zhin install username/repo#v1.0.0
 \`\`\`
 
 ## 🔌 插件开发
 
+### 简单插件（src/plugins/）
+
+直接在 \`src/plugins/\` 下创建 \`.ts\` 文件，会自动被加载：
+
 \`\`\`bash
-# 创建新插件
+# 创建简单插件
+echo 'import { addCommand } from "zhin.js";
+addCommand("test").action(() => "测试成功");
+' > src/plugins/test.ts
+\`\`\`
+
+### 独立插件（plugins/）
+
+使用 CLI 创建独立的插件包：
+
+\`\`\`bash
+# 创建新插件包
 zhin new my-plugin
+
+# 进入插件目录
+cd plugins/my-plugin
+
+# 开发插件
+pnpm dev
 
 # 构建插件
 pnpm build
-
-# 构建特定插件
-pnpm --filter @zhin.js/my-plugin build
 \`\`\`
 
-插件创建后会自动添加到 package.json，在配置文件中启用即可：
+插件创建后会自动添加到根 package.json 的依赖中。
+
+### 启用插件
+
+在 \`zhin.config.${options.config}\` 中启用插件：
 
 \`\`\`typescript
 export default defineConfig({
-  plugins: ['my-plugin']
+  plugins: [
+    'http',          // 官方插件
+    'console',       // 官方插件
+    'my-plugin'      // 你的插件
+  ]
 });
 \`\`\`
+
+### 构建所有插件
+
+\`\`\`bash
+pnpm build        # 构建 plugins/ 下的所有插件
+\`\`\`
+
+### 发布插件到 npm
+
+\`\`\`bash
+# 发布插件（会自动构建）
+zhin pub my-plugin
+
+# 发布指定插件
+zhin pub my-plugin --access public
+
+# 试运行（不实际发布）
+zhin pub my-plugin --dry-run
+
+# 跳过构建步骤
+zhin pub my-plugin --skip-build
+
+# 发布到自定义 registry
+zhin pub my-plugin --registry https://registry.example.com
+\`\`\`
+
+发布选项：
+- \`--access <public|restricted>\` - 访问级别（默认: public）
+- \`--tag <tag>\` - 发布标签（默认: latest）
+- \`--registry <url>\` - 自定义 npm registry
+- \`--dry-run\` - 试运行，不实际发布
+- \`--skip-build\` - 跳过构建步骤
 
 ## 📚 文档
 
 - [官方文档](https://zhinjs.github.io)
+- [插件开发指南](https://zhinjs.github.io/plugin/)
 - [GitHub](https://github.com/zhinjs/zhin)
+
+## 💡 提示
+
+- **src/plugins/** - 适合简单的、项目专用的插件
+- **plugins/** - 适合复杂的、可复用的、需要独立发布的插件
+- 两种插件可以并存，根据需求选择合适的方式
 `);
 }
 

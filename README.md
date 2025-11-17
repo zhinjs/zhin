@@ -3,7 +3,7 @@
 
 🚀 现代 TypeScript 机器人框架，专注于插件化、热重载和多平台生态
 
-[![文档](https://img.shields.io/badge/文档-docs.zhin.dev-blue)](https://docs.zhin.dev)
+[![文档](https://img.shields.io/badge/文档-zhin.pages.dev-blue)](https://zhin.pages.dev)
 [![CI](https://github.com/zhinjs/zhin/actions/workflows/ci.yml/badge.svg)](https://github.com/zhinjs/zhin/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/codecov/c/github/zhinjs/zhin)](https://codecov.io/gh/zhinjs/zhin)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
@@ -24,24 +24,41 @@
 ## 项目结构
 
 ```
-zhin-next/
-├── adapters/           # 平台适配器
-│   ├── icqq/          # QQ 适配器 (基于 ICQQ)
-│   ├── kook/          # KOOK 适配器
-│   ├── onebot11/      # OneBot v11 协议适配器
-│   └── process/       # 控制台适配器
-├── packages/          # 核心包
-│   ├── cli/          # 命令行工具
-│   ├── core/         # 核心功能
-│   ├── hmr/          # 热重载系统
-│   ├── logger/       # 日志系统
-│   ├── types/        # 类型定义
-│   └── zhin/         # 主包
-├── plugins/           # 插件
-│   ├── client/       # Vue 客户端框架
-│   ├── console/      # Web 控制台
-│   └── http/         # HTTP 服务器
-└── test-bot/         # 示例机器人
+zhin/
+├── basic/                  # 基础层 - 底层工具和类型
+│   ├── types/             # TypeScript 类型定义
+│   ├── logger/            # 日志系统
+│   ├── database/          # 数据库抽象层
+│   ├── schema/            # Schema 系统
+│   ├── dependency/        # 依赖管理
+│   ├── cli/               # 命令行工具
+│   └── hmr/               # 热模块替换
+│
+├── packages/               # 核心层 - 框架核心
+│   ├── core/              # 核心框架
+│   ├── client/            # 客户端库
+│   ├── create-zhin/       # 项目脚手架
+│   └── zhin/              # 主入口包
+│
+├── plugins/                # 插件层 - 扩展生态
+│   ├── services/          # 功能服务插件
+│   │   ├── console/      # Web 控制台
+│   │   └── http/         # HTTP 服务
+│   │
+│   ├── adapters/          # 平台适配器
+│   │   ├── icqq/         # QQ 适配器 (基于 ICQQ)
+│   │   ├── kook/         # KOOK 适配器
+│   │   ├── onebot11/     # OneBot v11 协议适配器
+│   │   ├── discord/      # Discord 适配器
+│   │   ├── process/      # 进程管理适配器
+│   │   └── ...
+│   │
+│   ├── games/             # 游戏娱乐插件
+│   └── utils/             # 工具类插件
+│
+└── examples/               # 示例项目
+    ├── test-bot/          # 示例机器人
+    └── dependency/        # 依赖系统示例
 ```
 
 

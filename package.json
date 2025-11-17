@@ -25,7 +25,7 @@
     "init": "pnpm --filter test-bot initial && pnpm install",
     "prepare:logger": "pnpm --filter @zhin.js/logger build && pnpm --filter @zhin.js/cli install",
     "prepare:cli": "pnpm --filter @zhin.js/cli build && pnpm install",
-    "build": "pnpm run prepare:logger && pnpm run prepare:cli && pnpm -r build",
+    "build": "pnpm -r --filter './basic/**' build && pnpm -r --filter './packages/**' build && pnpm -r --filter './plugins/services/**' build && pnpm -r --filter './plugins/adapters/**' build && pnpm -r --filter './plugins/games/**' build && pnpm -r --filter './plugins/utils/**' build",
     "clean": "pnpm -r clean",
     "lint": "eslint . --ext .ts,.tsx",
     "type-check": "tsc --noEmit",

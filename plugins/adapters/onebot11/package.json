@@ -1,0 +1,53 @@
+{
+  "name": "@zhin.js/adapter-onebot11",
+  "version": "1.0.14",
+  "description": "zhin adapter for onebot11",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "keywords": [
+    "zhin",
+    "adapter",
+    "onebot11"
+  ],
+  "author": "lc-cn",
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "type": "git",
+    "directory": "plugins/adapters/onebot11"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.3.0"
+  },
+  "peerDependencies": {
+    "zhin.js": "workspace:*",
+    "@zhin.js/types": "workspace:*",
+    "@zhin.js/http": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/types": {
+      "optional": true
+    },
+    "@zhin.js/http": {
+      "optional": true
+    }
+  },
+  "files": [
+    "lib",
+    "node",
+    "README.md",
+    "CHANGELOG.md"
+  ]
+}

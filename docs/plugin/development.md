@@ -310,7 +310,7 @@ my-weather-plugin/
 ### package.json 配置
 ```json
 {
-  "name": "@your-org/zhin-plugin-weather",
+  "name": "zhin.js-weather",
   "version": "1.0.0",
   "description": "天气查询插件",
   "main": "dist/index.js",

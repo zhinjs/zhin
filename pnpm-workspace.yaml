@@ -1,7 +1,8 @@
 packages:
-  - 'adapters/*'
-  - 'databases/*'
+  - 'basic/*'
   - 'packages/*'
+  - 'plugins/adapters/*'
+  - 'plugins/services/*'
+  - 'plugins/games/*'
+  - 'plugins/utils/*'
   - 'examples/*'
-  - 'plugins/*'
-  - 'test-bot'

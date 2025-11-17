@@ -311,7 +311,7 @@ Error: Message parsing failed
 ### 社区支持
 - 💬 [Discussions](https://github.com/zhinjs/zhin/discussions)
 - 📧 邮件支持
-- 📖 [文档](https://zhin.js.org)
+- 📖 [文档](https://zhin.pages.dev)
 
 ### 开发支持
 - 🔧 开发环境问题

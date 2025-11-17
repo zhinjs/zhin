@@ -501,7 +501,7 @@ onDispose(() => {
 
 ### 1️⃣ NPM 包结构
 ```
-my-awesome-zhin-plugin/
+my-awesome-plugin/
 ├── src/
 │   ├── index.ts          # 主插件文件
 │   └── utils/            # 工具函数
@@ -514,7 +514,7 @@ my-awesome-zhin-plugin/
 ### 2️⃣ package.json 配置
 ```json
 {
-  "name": "@your-org/zhin-plugin-awesome",
+  "name": "zhin.js-awesome",
   "version": "1.0.0",
   "description": "一个超棒的 Zhin 插件",
   "main": "dist/index.js",

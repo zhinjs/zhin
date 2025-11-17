@@ -1,0 +1,58 @@
+{
+  "name": "@zhin.js/adapter-lark",
+  "version": "1.0.14",
+  "description": "zhin adapter for lark/feishu",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "keywords": [
+    "zhin",
+    "adapter",
+    "lark"
+  ],
+  "author": "lc-cn",
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "type": "git",
+    "directory": "plugins/adapters/lark"
+  },
+  "scripts": {
+    "build": "pnpm build:node",
+    "clean": "rm -rf lib",
+    "build:node": "tsc"
+  },
+  "dependencies": {
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "@types/node": "^22.9.0",
+    "@types/koa": "^2.15.0"
+  },
+  "peerDependencies": {
+    "zhin.js": "workspace:*",
+    "@zhin.js/types": "workspace:*",
+    "@zhin.js/http": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/types": {
+      "optional": true
+    },
+    "@zhin.js/http": {
+      "optional": false
+    }
+  },
+  "files": [
+    "lib",
+    "node",
+    "README.md",
+    "CHANGELOG.md"
+  ]
+}
