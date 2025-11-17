@@ -13,7 +13,7 @@ function findModulePath(id) {
 }
 
 const cwd = resolve(import.meta.dirname, '../../..')
-const dist = cwd + '/plugins/console/dist'
+const dist = cwd + '/plugins//services/console/dist'
 
 export async function build(root, config = {}) {
   const { rollupOptions = {} } = config.build || {}
@@ -24,7 +24,7 @@ export async function build(root, config = {}) {
       ...config.define,
     },
     build: {
-      outDir: cwd + '/plugins/console/dist',
+      outDir: cwd + '/plugins//services/console/dist',
       emptyOutDir: true,
       cssCodeSplit: false,
       ...config.build,
@@ -79,13 +79,13 @@ export async function build(root, config = {}) {
 
  async function main () {
   // build for console main
-  const { output } = await build(cwd + '/plugins/console/client', {
+  const { output } = await build(cwd + '/plugins//services/console/client', {
     plugins: [
       tailwindcss(),
     ],
   })
 
-  const wrapperDir = cwd + '/plugins/console/scripts/wrappers'
+  const wrapperDir = cwd + '/plugins//services/console/scripts/wrappers'
 
   await Promise.all([
     vite.build({
