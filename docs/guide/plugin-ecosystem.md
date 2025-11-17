@@ -268,7 +268,6 @@ zhin pub my-plugin
 ## 📚 相关资源
 
 - 🏠 [官方网站](https://zhin.pages.dev)
-- 📖 [插件开发指南](./plugin-development.md)
 - 🔌 [插件市场](https://zhin.pages.dev/plugins)
 - 💬 [Discord 社区](https://discord.gg/zhinjs)
 - 📝 [GitHub Discussions](https://github.com/zhinjs/zhin/discussions)
