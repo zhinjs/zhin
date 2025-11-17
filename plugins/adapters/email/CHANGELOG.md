@@ -1,5 +1,14 @@
 # @zhin.js/adapter-email
 
+## 0.1.4
+
+### Patch Changes
+
+- 547028f: fix: 优化包结构,优化客户端支持
+- Updated dependencies [547028f]
+  - @zhin.js/types@1.0.5
+  - zhin.js@1.0.14
+
 ## 0.1.3
 
 ### Patch Changes
