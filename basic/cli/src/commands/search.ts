@@ -76,7 +76,7 @@ export const searchCommand = new Command('search')
         });
 
         // 限制结果数量
-        const limit = parseInt(options.limit || '20');
+        const limit = parseInt(String(options.limit) || '20');
         if (filteredResults.length > limit) {
           filteredResults = filteredResults.slice(0, limit);
         }
