@@ -1,6 +1,5 @@
 ---
 "create-zhin-app": patch
-"@zhin.js/adapter-wechat-mp": patch
 "@zhin.js/adapter-onebot11": patch
 "@zhin.js/database": patch
 "@zhin.js/adapter-discord": patch
