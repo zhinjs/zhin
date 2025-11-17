@@ -7,16 +7,17 @@ import { execSync } from 'node:child_process';
 
 interface NewPluginOptions {
   skipInstall?: boolean;
+  isOfficial?: boolean;
 }
 
 export const newCommand = new Command('new')
   .description('创建插件包模板')
   .argument('[plugin-name]', '插件名称（如: my-plugin）')
+  .option('--is-official', '是否为官方插件', false)
   .option('--skip-install', '跳过依赖安装', false)
   .action(async (pluginName: string, options: NewPluginOptions) => {
     try {
       let name = pluginName;
-      
       if (!name) {
         const { pluginName: inputName } = await inquirer.prompt([
           {
@@ -53,7 +54,7 @@ export const newCommand = new Command('new')
       await createPluginPackage(pluginDir, name, options);
       
       // 自动添加到 app/package.json
-      await addPluginToApp(name);
+      await addPluginToApp(name, options.isOfficial);
       
       logger.success(`✓ 插件包 ${name} 创建成功！`);
       logger.log('');
@@ -76,11 +77,11 @@ export const newCommand = new Command('new')
 
 async function createPluginPackage(pluginDir: string, pluginName: string, options: NewPluginOptions) {
   const capitalizedName = pluginName.charAt(0).toUpperCase() + pluginName.slice(1).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-  const packageName = `@zhin.js/${pluginName}`;
+  const packageName = options.isOfficial ? `@zhin.js/${pluginName}` : `zhin.js-${pluginName}`;
   
   // 创建目录结构
   await fs.ensureDir(pluginDir);
-  await fs.ensureDir(path.join(pluginDir, 'app'));
+  await fs.ensureDir(path.join(pluginDir, 'src'));
   await fs.ensureDir(path.join(pluginDir, 'client'));
   await fs.ensureDir(path.join(pluginDir, 'lib'));
   await fs.ensureDir(path.join(pluginDir, 'dist'));
@@ -104,23 +105,23 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
     },
     files: [
       'lib',
-      'app',
+      'src',
       'dist',
       'client',
       'README.md',
       'CHANGELOG.md'
     ],
     scripts: {
-      build: 'pnpm build:app && pnpm build:client',
-      'build:app': 'tsc --project tsconfig.app.json',
-      'build:client': 'tsc --project tsconfig.client.json',
-      dev: 'tsc --project tsconfig.app.json --watch',
+      build: 'pnpm build:node && pnpm build:client',
+      'build:node': 'tsc --project node.tsconfig.json',
+      'build:client': 'zhin-console build',
+      dev: 'tsc --project node.tsconfig.json --watch',
       clean: 'rm -rf lib dist',
       prepublishOnly: 'pnpm build'
     },
     keywords: [
-      'zhin',
-      'zhin-plugin',
+      'zhin.js',
+      'plugin',
       pluginName
     ],
     author: '',
@@ -135,62 +136,77 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
       '@zhin.js/types': 'workspace:*',
       '@types/node': 'latest',
       '@types/react': 'latest',
+      '@types/react-dom': 'latest',
       'typescript': 'latest',
       'react': 'latest',
       'react-dom': 'latest',
-      'lucide-react': 'latest'
+      "@zhin.js/client":"workspace:*",
+      'lucide-react': 'latest',
+      'radix-ui': 'latest',
+      '@radix-ui/themes': 'latest'
     }
   };
   
   await fs.writeJson(path.join(pluginDir, 'package.json'), packageJson, { spaces: 2 });
   
-  // 创建 tsconfig.app.json (插件代码)
-  const tsConfigApp = {
-    extends: '../../tsconfig.json',
-    compilerOptions: {
-      rootDir: './app',
-      outDir: './lib',
-      declaration: true,
-      noEmit: false
-    },
-    include: ['app/**/*'],
-    exclude: ['node_modules', 'lib', 'dist']
-  };
-  
-  await fs.writeJson(path.join(pluginDir, 'tsconfig.app.json'), tsConfigApp, { spaces: 2 });
-  
-  // 创建 tsconfig.client.json (客户端代码)
-  const tsConfigClient = {
-    compilerOptions: {
-      target: 'ES2022',
-      module: 'ESNext',
-      moduleResolution: 'bundler',
-      rootDir: './client',
-      outDir: './dist',
-      declaration: false,
-      jsx: 'react-jsx',
-      baseUrl: '.',
-      skipLibCheck: true,
-      esModuleInterop: true,
-      allowSyntheticDefaultImports: true
-    },
-    include: ['client/**/*'],
-    exclude: ['node_modules', 'lib', 'dist']
-  };
-  
-  await fs.writeJson(path.join(pluginDir, 'tsconfig.client.json'), tsConfigClient, { spaces: 2 });
-  
-  // 创建 tsconfig.json (编辑器支持)
+  // 创建 tsconfig.json (服务端主配置)
   const tsConfig = {
-    extends: '../../tsconfig.json',
-    include: ['app/**/*', 'client/**/*'],
-    exclude: ['node_modules', 'lib', 'dist']
-  };
+    "compilerOptions": {
+      "target": "ES2022",
+      "module": "ESNext",
+      "moduleResolution": "bundler",
+      "outDir": "./lib",
+      "rootDir": "./src",
+      "strict": true,
+      "esModuleInterop": true,
+      "skipLibCheck": true,
+      "forceConsistentCasingInFileNames": true,
+      "resolveJsonModule": true,
+      "isolatedModules": true,
+      "allowSyntheticDefaultImports": true,
+      "experimentalDecorators": true,
+      "emitDecoratorMetadata": true,
+      "declaration": true,
+      "declarationMap": true,
+      "sourceMap": true,
+      "verbatimModuleSyntax": false,
+      "types": [
+        "@zhin.js/http"
+      ]
+    },
+    "include": ["src/**/*"],
+    "exclude": ["lib", "node_modules", "client"]
+  } 
+  ;
   
   await fs.writeJson(path.join(pluginDir, 'tsconfig.json'), tsConfig, { spaces: 2 });
   
-  // 创建插件主入口文件 app/index.ts
-  const appContent = `import {
+  
+  // 创建 client/tsconfig.json (客户端主配置)
+  const clientTsConfig = {
+    "compilerOptions": {
+      "outDir": "../dist",
+      "baseUrl": ".",
+      "declaration": true,
+      "module": "ESNext",
+      "moduleResolution": "bundler",
+      "target": "ES2022",
+      "jsx":"react-jsx",
+      "declarationMap": true,
+      "sourceMap": true,
+      "skipLibCheck": true,
+      "noEmit": false
+    },
+    "include": [
+      "./**/*"
+    ]
+  }
+  ;
+  
+  await fs.writeJson(path.join(pluginDir, 'client', 'tsconfig.json'), clientTsConfig, { spaces: 2 });
+  
+  // 创建服务端入口文件 src/index.ts
+  const indexContent = `import {
   useLogger,
   useContext,
   onDispose,
@@ -201,9 +217,10 @@ const logger = useLogger();
 
 // 注册客户端入口（如果有客户端代码）
 useContext('web', (web) => {
-  const dispose = web.addEntry(
-    path.resolve(import.meta.dirname, '../client/index.tsx')
-  );
+  const dispose = web.addEntry({
+    production: path.resolve(import.meta.dirname, '../dist/index.js'),
+    development: path.resolve(import.meta.dirname, '../client/index.tsx')
+  });
   return dispose;
 });
 
@@ -215,7 +232,7 @@ onDispose(() => {
 logger.info('${capitalizedName} 插件已加载');
 `;
   
-  await fs.writeFile(path.join(pluginDir, 'app', 'index.ts'), appContent);
+  await fs.writeFile(path.join(pluginDir, 'src', 'index.ts'), indexContent);
   
   // 创建客户端入口文件 client/index.tsx
   const clientContent = `import { addPage } from '@zhin.js/client';
@@ -235,20 +252,6 @@ export { ${capitalizedName}Page };
   
   await fs.writeFile(path.join(pluginDir, 'client', 'index.tsx'), clientContent);
 
-  // 创建 client/tsconfig.json
-  const clientTsConfig = {
-    extends: '@zhin.js/console/browser.tsconfig.json',
-    compilerOptions: {
-      target: 'ES2022',
-      module: 'ESNext',
-      moduleResolution: 'bundler',
-      jsx: 'react-jsx',
-      baseUrl: '.'
-    }
-  };
-  
-  await fs.writeJson(path.join(pluginDir, 'client', 'tsconfig.json'), clientTsConfig, { spaces: 2 });
-  
   // 创建客户端页面组件
   await fs.ensureDir(path.join(pluginDir, 'client', 'pages'));
   const pageContent = `import { useEffect } from 'react';
@@ -349,7 +352,7 @@ dist/
   }
 }
 
-async function addPluginToApp(pluginName: string) {
+async function addPluginToApp(pluginName: string, isOfficial?: boolean) {
   try {
     const rootPackageJsonPath = path.resolve(process.cwd(), 'package.json');
     
@@ -360,7 +363,7 @@ async function addPluginToApp(pluginName: string) {
     }
     
     const packageJson = await fs.readJson(rootPackageJsonPath);
-    const packageName = `@zhin.js/${pluginName}`;
+    const packageName = isOfficial ? `@zhin.js/${pluginName}` : `zhin.js-${pluginName}`;
     
     // 初始化 dependencies
     if (!packageJson.dependencies) {

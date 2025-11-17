@@ -25,7 +25,7 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
   }
   /** 文件路径（私有，可变） */
   #filePath: string;
-
+  
   /** 获取文件路径 */
   get filePath(): string {
     return this.#filePath;
@@ -59,7 +59,7 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
    * @param filePath - 文件路径（name 会自动从文件路径中提取）
    */
   constructor(filePath: string) {
-    super();
+    super(); 
     this.#filePath = this.resolveFilePath(filePath);
     const basename = path.basename(this.#filePath);
     this.name = path.basename(basename, path.extname(basename));
@@ -71,7 +71,7 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
   addMountHook(hook: () => void | Promise<void>): void {
     this.on('self.mounted', hook);
   }
-  
+
   /**
    * 添加卸载钩子
    * @param hook - 卸载钩子函数
@@ -98,7 +98,7 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
     for (const child of this.children) {
       await child.start(force);
     }
-    this.started = true;
+      this.started = true;
 
     await this.dispatchAsync('started', this);
   }
@@ -110,7 +110,7 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
     if (this.mounted && !force) {
       return;
     }
-
+    
     await this.dispatchAsync('before-mount', this);
 
     await this.emitAsync('self.mounted', this);
@@ -346,7 +346,7 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
         delete require.cache[filePath];
       }
     }
-
+    
     // @ts-ignore
     if (typeof import.meta.cache !== 'undefined') {
       // @ts-ignore
@@ -397,7 +397,7 @@ export class Dependency<P extends Dependency = Dependency<any>> extends EventEmi
   async importChild(importPath: string, importModulePath = this.#filePath): Promise<P> {
     // 解析相对于当前文件的路径
     const absolutePath = this.resolveImportPath(importModulePath, importPath);
-
+    
     // 标准化路径：确保使用实际存在的文件路径
     const normalizedPath = this.resolveFilePath(absolutePath);
     // 检查全局依赖池是否已存在

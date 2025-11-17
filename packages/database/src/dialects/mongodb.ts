@@ -6,7 +6,7 @@ import {
   DocumentQueryResult, DropIndexQueryParams, DropTableQueryParams, InsertQueryParams,
   QueryParams,
   SelectQueryParams, UpdateQueryParams
-} from "../types";
+} from "../types.js";
 import {DocumentDatabase} from "../type/document/database.js";
 import {Registry} from "../registry.js";
 import type { MongoClientOptions } from 'mongodb';

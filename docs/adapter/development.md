@@ -440,7 +440,7 @@ export class MessageQueue {
 ```typescript
 // tests/adapter.test.ts
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { MyAdapter, MyBot } from '../src/adapter'
+import { MyAdapter, MyBot } from '../node/adapter'
 
 describe('MyAdapter', () => {
   let adapter: MyAdapter

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import * as Themes from '@radix-ui/themes'
-import { Icons } from '@zhin.js/client'
+import { AlertCircle, Package, Terminal, Box as IconBox, Layers, Database, Clock, FileText } from 'lucide-react'
 
 const { Flex, Box, Spinner, Text, Callout, Heading, Badge, Grid, Card, Separator } = Themes
 
@@ -62,7 +62,7 @@ export default function DashboardPlugins() {
       <Flex align="center" justify="center" className="h-full">
         <Callout.Root color="red">
           <Callout.Icon>
-            <Icons.AlertCircle />
+            <AlertCircle />
           </Callout.Icon>
           <Callout.Text>
             加载失败: {error}
@@ -97,7 +97,7 @@ export default function DashboardPlugins() {
               <Flex justify="between" align="center">
                 <Flex align="center" gap="2">
                   <Flex align="center" justify="center" className="w-8 h-8 rounded-lg bg-blue-500/10 dark:bg-blue-400/10">
-                    <Icons.Package className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <Package className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                   </Flex>
                   <Heading size="3">{plugin.name}</Heading>
                 </Flex>
@@ -119,25 +119,25 @@ export default function DashboardPlugins() {
               {/* 统计信息 - 紧凑网格 */}
               <Grid columns={{ initial: '1', sm: '2', lg: '4' }} gap="1">
                 <Flex gap="2" justify="center" align="center" className="rounded-md bg-blue-500/5 dark:bg-blue-400/5 p-1.5">
-                  <Icons.Terminal className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+                  <Terminal className="w-3 h-3 text-blue-600 dark:text-blue-400" />
                   <Text size="2" weight="bold" className="mt-0.5">{plugin.commandCount}</Text>
                   <Text size="1" color="gray">命令</Text>
                 </Flex>
 
                 <Flex gap="2" justify="center" align="center" className="rounded-md bg-green-500/5 dark:bg-green-400/5 p-1.5">
-                  <Icons.Box className="w-3 h-3 text-green-600 dark:text-green-400" />
+                  <IconBox className="w-3 h-3 text-green-600 dark:text-green-400" />
                   <Text size="2" weight="bold" className="mt-0.5">{plugin.componentCount}</Text>
                   <Text size="1" color="gray">组件</Text>
                 </Flex>
 
                 <Flex gap="2" justify="center" align="center" className="rounded-md bg-purple-500/5 dark:bg-purple-400/5 p-1.5">
-                  <Icons.Layers className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+                  <Layers className="w-3 h-3 text-purple-600 dark:text-purple-400" />
                   <Text size="2" weight="bold" className="mt-0.5">{plugin.middlewareCount}</Text>
                   <Text size="1" color="gray">中间件</Text>
                 </Flex>
 
                 <Flex gap="2" justify="center" align="center" className="rounded-md bg-orange-500/5 dark:bg-orange-400/5 p-1.5">
-                  <Icons.Database className="w-3 h-3 text-orange-600 dark:text-orange-400" />
+                  <Database className="w-3 h-3 text-orange-600 dark:text-orange-400" />
                   <Text size="2" weight="bold" className="mt-0.5">{plugin.contextCount}</Text>
                   <Text size="1" color="gray">上下文</Text>
                 </Flex>
@@ -152,7 +152,7 @@ export default function DashboardPlugins() {
         <Card className="mt-6">
           <Flex direction="column" align="center" gap="3" py="8">
             <Flex align="center" justify="center" className="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800">
-              <Icons.Package className="w-8 h-8 text-gray-400" />
+              <Package className="w-8 h-8 text-gray-400" />
             </Flex>
             <Flex direction="column" align="center" gap="1">
               <Heading size="4">暂无插件</Heading>

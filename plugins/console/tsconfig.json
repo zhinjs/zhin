@@ -4,7 +4,7 @@
     "module": "NodeNext",
     "moduleResolution": "nodenext",
     "outDir": "./lib",
-    "rootDir": "./app",
+    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -22,6 +22,6 @@
       "@zhin.js/http"
     ]
   },
-  "include": ["app/**/*"],
+  "include": ["src/**/*"],
   "exclude": ["lib", "node_modules", "client", "dist"]
 } 

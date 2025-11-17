@@ -4,9 +4,8 @@
  */
 
 import { Flex, Box, Text, TextField, TextArea, Switch, Select, Badge, Callout } from '@radix-ui/themes'
-import { Icons } from '@zhin.js/client'
 import type { FieldRendererProps } from './types.js'
-
+import { Calendar, Info, Lock, Code } from 'lucide-react'
 export function StringFieldRenderer({ field, value, onChange }: FieldRendererProps) {
   // 枚举类型 - 下拉选择 - 优化样式
   if (field.enum) {
@@ -153,7 +152,7 @@ export function DateFieldRenderer({ field, value, onChange }: FieldRendererProps
         className="hover:border-blue-500 dark:hover:border-blue-400 transition-colors focus-within:ring-2 focus-within:ring-blue-500/20"
       >
         <TextField.Slot side="left">
-          <Icons.Calendar className="w-4 h-4 text-gray-500" />
+          <Calendar className="w-4 h-4 text-gray-500" />
         </TextField.Slot>
       </TextField.Root>
     </div>
@@ -189,7 +188,7 @@ export function RegexpFieldRenderer({ field, value, onChange }: FieldRendererPro
           </TextField.Slot>
         </TextField.Root>
         <Flex align="center" gap="2">
-          <Icons.Info className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+          <Info className="w-3 h-3 text-amber-600 dark:text-amber-400" />
           <Text size="1" className="text-amber-700 dark:text-amber-300">
             输入正则表达式模式 (省略斜杠)
           </Text>
@@ -205,7 +204,7 @@ export function ConstFieldRenderer({ field, value }: FieldRendererProps) {
   return (
     <div className="p-3 rounded-lg bg-gray-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-700">
       <Flex align="center" gap="3">
-        <Icons.Lock className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+        <Lock className="w-4 h-4 text-gray-500 dark:text-gray-400" />
         <Badge variant="soft" size="2" className="font-mono">
           {String(constValue)}
         </Badge>
@@ -222,7 +221,7 @@ export function AnyFieldRenderer({ field, value, onChange }: FieldRendererProps)
     <div className="p-3 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
       <Flex direction="column" gap="3">
         <Flex align="center" gap="2">
-          <Icons.Code className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+          <Code className="w-4 h-4 text-purple-600 dark:text-purple-400" />
           <Text size="1" weight="bold" className="text-purple-700 dark:text-purple-300">
             JSON 格式输入
           </Text>
@@ -242,7 +241,7 @@ export function AnyFieldRenderer({ field, value, onChange }: FieldRendererProps)
           className="font-mono text-sm bg-white dark:bg-gray-950 hover:border-purple-500 dark:hover:border-purple-400 transition-colors"
         />
         <Flex align="center" gap="2">
-          <Icons.Info className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+          <Info className="w-3 h-3 text-purple-600 dark:text-purple-400" />
           <Text size="1" className="text-purple-700 dark:text-purple-300">
             支持: 字符串、数字、布尔值、对象、数组
           </Text>

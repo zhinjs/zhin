@@ -266,9 +266,8 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
             this.#remove(resolvedPath);
         }
         this.pendingDependencies.add(resolvedPath);
-        
         // 按需监听：为这个插件文件添加监听
-        const unwatchFile = this.watchFile(resolvedPath);
+        const unwatchFile = process.env.NODE_ENV === 'development' ? this.watchFile(resolvedPath) : ()=>{};
         
         // 异步导入模块
         this.moduleLoader.add(name,resolvedPath).catch((error) => {
@@ -279,7 +278,7 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
             this.performanceMonitor.recordError();
             this.emit('error', error);
             // 如果加载失败，移除监听
-            unwatchFile();
+            if(process.env.NODE_ENV === 'development') unwatchFile();
         }).finally(()=>{
             this.pendingDependencies.delete(resolvedPath);
         })

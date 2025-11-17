@@ -244,7 +244,7 @@ addMiddleware(async (message, next) => {
 ```typescript
 // tests/weather-service.test.ts
 import { describe, it, expect, beforeEach } from 'vitest'
-import { WeatherService } from '../src/plugins/weather/weather-service'
+import { WeatherService } from '../node/plugins/weather/weather-service'
 
 describe('WeatherService', () => {
   let weatherService: WeatherService

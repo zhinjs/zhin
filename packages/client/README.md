@@ -33,24 +33,21 @@ pnpm add react-router@7.0.0 events @types/events
 // main.tsx
 import { addPage, DynamicRouter } from '@zhin.js/client'
 
-// 导入图标
-import { Home, LayoutDashboard } from 'lucide-react'
-
-// 添加页面
+// 添加页面 - 使用 Component 而不是 element，icon 使用字符串
 addPage({
   key: 'home',
   path: '/',
   title: '首页',
-  icon: <Home className="w-5 h-5" />,
-  element: <HomePage />
+  icon: 'Home',  // 图标名称对应 lucide-react 的组件名
+  Component: HomePage
 })
 
 addPage({
   key: 'dashboard',
   path: '/dashboard',
   title: '仪表盘',
-  icon: <LayoutDashboard className="w-5 h-5" />,
-  element: <DashboardPage />
+  icon: 'LayoutDashboard',
+  Component: DashboardPage
 })
 
 // 渲染应用
@@ -68,15 +65,13 @@ createRoot(document.getElementById('root')).render(
 ```tsx
 import { addPage, removePage, updatePage } from '@zhin.js/client'
 
-import { Settings } from 'lucide-react'
-
 // 添加页面
 addPage({
   key: 'settings',
   path: '/settings',
   title: '设置',
-  icon: <Settings className="w-5 h-5" />,
-  element: <SettingsPage />
+  icon: 'Settings',
+  Component: SettingsPage
 })
 
 // 删除页面
@@ -108,15 +103,15 @@ addPage({
   key: 'home',
   path: '/',
   title: '首页',
-  icon: <Home className="w-5 h-5" />,
-  element: <HomePage />
+  icon: 'Home',
+  Component: HomePage
 })
 
 addPage({
   key: 'admin',
   path: '/admin',
   title: '管理',
-  element: <AdminLayout />
+  Component: AdminLayout
 })
 
 // 2. 自动查找父路由：/admin/users
@@ -125,16 +120,16 @@ addPage({
   key: 'admin-users',
   path: '/admin/users',
   title: '用户管理',
-  icon: <Users className="w-5 h-5" />,
-  element: <UsersPage />
+  icon: 'Users',
+  Component: UsersPage
 })
 
 addPage({
   key: 'admin-settings',
   path: '/admin/settings',
   title: '系统设置',
-  icon: <Settings className="w-5 h-5" />,
-  element: <AdminSettingsPage />
+  icon: 'Settings',
+  Component: AdminSettingsPage
 })
 
 // 3. 自动查找父路由：/admin/users/detail
@@ -143,7 +138,7 @@ addPage({
   key: 'user-detail',
   path: '/admin/users/detail',
   title: '用户详情',
-  element: <UserDetailPage />
+  Component: UserDetailPage
 })
 
 // 4. 动态添加嵌套页面
@@ -153,7 +148,7 @@ setTimeout(() => {
     key: 'admin-analytics',
     path: '/admin/analytics',
     title: '分析',
-    element: <AnalyticsPage />
+    Component: AnalyticsPage
   })
 }, 2000)
 
@@ -164,7 +159,7 @@ setTimeout(() => {
     key: 'analytics-reports',
     path: '/admin/analytics/reports',
     title: '分析报告',
-    element: <ReportsPage />
+    Component: ReportsPage
   })
 }, 4000)
 ```
@@ -275,21 +270,23 @@ import { addPage, updatePage, removePage } from '@zhin.js/client'
 
 // 运行时动态添加页面
 setTimeout(() => {
+  const DynamicPage = () => <div>Dynamic Page</div>
   addPage({
     key: 'dynamic',
     path: '/dynamic',
     title: '动态页面',
-    element: <div>Dynamic Page</div>
+    Component: DynamicPage
   })
 }, 2000)
 
 // 动态更新页面
 setTimeout(() => {
+  const UpdatedPage = () => <div>Updated Page</div>
   updatePage('/dynamic', {
     key: 'dynamic',
     path: '/dynamic',
     title: '动态页面（已更新）',
-    element: <div>Updated Page</div>
+    Component: UpdatedPage
   })
 }, 4000)
 
@@ -323,14 +320,13 @@ function App() {
 
 // 插件入口脚本示例（my-plugin-entry.ts）
 import { addPage } from '@zhin.js/client'
-import { Puzzle } from 'lucide-react'
 
 addPage({
   key: 'my-plugin',
   path: '/my-plugin',
   title: '我的插件',
-  icon: <Puzzle className="w-5 h-5" />,
-  element: <MyPluginPage />
+  icon: 'Puzzle',
+  Component: MyPluginPage
 })
 ```
 

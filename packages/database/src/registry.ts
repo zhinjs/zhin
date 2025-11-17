@@ -1,13 +1,13 @@
 import { Database } from './base/database.js';
-import type {MongoDBDialectConfig} from './dialects/mongodb';
-import {RelatedDatabase} from "./type/related/database";
-import {MemoryConfig} from "./types";
-import {DocumentDatabase} from "./type/document/database";
-import {MySQLDialectConfig} from "./dialects/mysql";
-import {PostgreSQLDialectConfig} from "./dialects/pg";
-import {RedisDialectConfig} from "./dialects/redis";
-import {SQLiteDialectConfig} from "./dialects/sqlite";
-import {KeyValueDatabase} from "./type/keyvalue/database";
+import type {MongoDBDialectConfig} from './dialects/mongodb.js';
+import {RelatedDatabase} from "./type/related/database.js";
+import {MemoryConfig} from "./types.js";
+import {DocumentDatabase} from "./type/document/database.js";
+import {MySQLDialectConfig} from "./dialects/mysql.js";
+import {PostgreSQLDialectConfig} from "./dialects/pg.js";
+import {RedisDialectConfig} from "./dialects/redis.js";
+import {SQLiteDialectConfig} from "./dialects/sqlite.js";
+import {KeyValueDatabase} from "./type/keyvalue/database.js";
 
 /**
  * 数据库注册表接口

@@ -6,12 +6,11 @@
         "moduleResolution": "bundler",
         "module": "ESNext",
         "jsx": "react-jsx",
+        "jsxImportSource": "react",
+        "esModuleInterop": true,
+        "skipLibCheck": true,
         "paths": {
-            "@/*": ["src/*"],
-            "lucide-react": ["../node_modules/lucide-react"],
-            "react": ["../node_modules/@types/react"],
-            "react-dom": ["../node_modules/@types/react-dom"]
+            "@/*": ["src/*"]
         }
     }
 }
-

@@ -17,8 +17,9 @@
     "directory": "adapters/qq"
   },
   "scripts": {
-    "build": "tsc",
-    "clean": "rm -rf lib"
+    "build": "pnpm build:node",
+    "clean": "rm -rf lib",
+    "build:node": "tsc"
   },
   "dependencies": {
     "qq-official-bot": "^1.0.11"
@@ -34,5 +35,11 @@
     "@zhin.js/types": {
       "optional": true
     }
-  }
+  },
+  "files": [
+    "lib",
+    "node",
+    "README.md",
+    "CHANGELOG.md"
+  ]
 }

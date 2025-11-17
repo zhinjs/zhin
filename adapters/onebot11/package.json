@@ -12,8 +12,9 @@
     }
   },
   "scripts": {
-    "build": "tsc",
-    "clean": "rm -rf lib"
+    "build": "pnpm build:node",
+    "clean": "rm -rf lib",
+    "build:node": "tsc"
   },
   "dependencies": {
     "ws": "^8.18.3"
@@ -35,5 +36,11 @@
     "@zhin.js/http": {
       "optional": true
     }
-  }
+  },
+  "files": [
+    "lib",
+    "node",
+    "README.md",
+    "CHANGELOG.md"
+  ]
 }

@@ -8,7 +8,6 @@ export * from './store'
 
 // Router
 export * from './router'
-export * as Icons from 'lucide-react'
 
 // WebSocket
 export * from './websocket'

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router'
 import * as Themes from '@radix-ui/themes'
-import { Icons } from '@zhin.js/client'
+import { ArrowLeft, AlertCircle, Package, Terminal, Box as IconBox, Layers, Database, Clock, FileText } from 'lucide-react'
 import {PluginConfigForm} from '../components/PluginConfigForm'
 
 const { Flex, Box, Spinner, Text, Callout, Heading, Badge, Grid, Card, Button, Code, Separator, ScrollArea, Dialog } = Themes
@@ -95,12 +95,12 @@ export default function DashboardPluginDetail() {
     return (
       <Box>
         <Button variant="ghost" onClick={() => navigate('/plugins')} mb="4" size="2">
-          <Icons.ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-4 h-4" />
           返回
         </Button>
         <Callout.Root color="red">
           <Callout.Icon>
-            <Icons.AlertCircle />
+            <AlertCircle />
           </Callout.Icon>
           <Callout.Text>
             加载失败: {error || '插件不存在'}
@@ -115,13 +115,13 @@ export default function DashboardPluginDetail() {
       {/* 头部 */}
       <Flex direction="column" gap="3" mb="4">
         <Button variant="ghost" onClick={() => navigate('/plugins')} size="2">
-          <Icons.ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-4 h-4" />
           返回
         </Button>
 
         <Flex align="center" gap="3">
           <Flex align="center" justify="center" className="w-12 h-12 rounded-xl bg-blue-500/10 dark:bg-blue-400/10">
-            <Icons.Package className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            <Package className="w-6 h-6 text-blue-600 dark:text-blue-400" />
           </Flex>
           <Flex direction="column" gap="1">
             <Flex align="center" gap="2">
@@ -149,7 +149,7 @@ export default function DashboardPluginDetail() {
       <Grid columns={{ initial: '2', sm: '3', md: '6' }} gap="2" mb="4">
         <Card size="1">
           <Flex direction="column" align="center" gap="1" p="2">
-            <Icons.Terminal className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <Terminal className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             <Text size="4" weight="bold">{plugin.statistics.commandCount}</Text>
             <Text size="1" color="gray">命令</Text>
           </Flex>
@@ -157,7 +157,7 @@ export default function DashboardPluginDetail() {
 
         <Card size="1">
           <Flex direction="column" align="center" gap="1" p="2">
-            <Icons.Box className="w-4 h-4 text-green-600 dark:text-green-400" />
+            <IconBox className="w-4 h-4 text-green-600 dark:text-green-400" />
             <Text size="4" weight="bold">{plugin.statistics.componentCount}</Text>
             <Text size="1" color="gray">组件</Text>
           </Flex>
@@ -165,7 +165,7 @@ export default function DashboardPluginDetail() {
 
         <Card size="1">
           <Flex direction="column" align="center" gap="1" p="2">
-            <Icons.Layers className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+            <Layers className="w-4 h-4 text-purple-600 dark:text-purple-400" />
             <Text size="4" weight="bold">{plugin.statistics.middlewareCount}</Text>
             <Text size="1" color="gray">中间件</Text>
           </Flex>
@@ -173,7 +173,7 @@ export default function DashboardPluginDetail() {
 
         <Card size="1">
           <Flex direction="column" align="center" gap="1" p="2">
-            <Icons.Database className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+            <Database className="w-4 h-4 text-orange-600 dark:text-orange-400" />
             <Text size="4" weight="bold">{plugin.statistics.contextCount}</Text>
             <Text size="1" color="gray">上下文</Text>
           </Flex>
@@ -181,7 +181,7 @@ export default function DashboardPluginDetail() {
 
         <Card size="1">
           <Flex direction="column" align="center" gap="1" p="2">
-            <Icons.Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
             <Text size="4" weight="bold">{plugin.statistics.cronCount}</Text>
             <Text size="1" color="gray">定时任务</Text>
           </Flex>
@@ -189,7 +189,7 @@ export default function DashboardPluginDetail() {
 
         <Card size="1">
           <Flex direction="column" align="center" gap="1" p="2">
-            <Icons.FileText className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+            <FileText className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
             <Text size="4" weight="bold">{plugin.statistics.definitionCount}</Text>
             <Text size="1" color="gray">数据模型</Text>
           </Flex>
@@ -203,7 +203,7 @@ export default function DashboardPluginDetail() {
           <Card size="2">
             <Flex direction="column" gap="2" p="3">
               <Flex align="center" gap="2">
-                <Icons.Terminal className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                <Terminal className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                 <Heading size="3">命令</Heading>
                 <Badge size="1">{plugin.commands.length}</Badge>
               </Flex>
@@ -228,7 +228,7 @@ export default function DashboardPluginDetail() {
           <Card size="2">
             <Flex direction="column" gap="2" p="3">
               <Flex align="center" gap="2">
-                <Icons.Box className="w-4 h-4 text-green-600 dark:text-green-400" />
+                <Box className="w-4 h-4 text-green-600 dark:text-green-400" />
                 <Heading size="3">组件</Heading>
                 <Badge size="1">{plugin.components.length}</Badge>
               </Flex>
@@ -257,7 +257,7 @@ export default function DashboardPluginDetail() {
           <Card size="2">
             <Flex direction="column" gap="2" p="3">
               <Flex align="center" gap="2">
-                <Icons.Layers className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                <Layers className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                 <Heading size="3">中间件</Heading>
                 <Badge size="1">{plugin.middlewares.length}</Badge>
               </Flex>
@@ -281,7 +281,7 @@ export default function DashboardPluginDetail() {
           <Card size="2">
             <Flex direction="column" gap="2" p="3">
               <Flex align="center" gap="2">
-                <Icons.Database className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                <Database className="w-4 h-4 text-orange-600 dark:text-orange-400" />
                 <Heading size="3">上下文</Heading>
                 <Badge size="1">{plugin.contexts.length}</Badge>
               </Flex>
@@ -305,7 +305,7 @@ export default function DashboardPluginDetail() {
           <Card size="2">
             <Flex direction="column" gap="2" p="3">
               <Flex align="center" gap="2">
-                <Icons.Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                 <Heading size="3">定时任务</Heading>
                 <Badge size="1">{plugin.crons.length}</Badge>
               </Flex>
@@ -334,7 +334,7 @@ export default function DashboardPluginDetail() {
           <Card size="2">
             <Flex direction="column" gap="2" p="3">
               <Flex align="center" gap="2">
-                <Icons.FileText className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                <FileText className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
                 <Heading size="3">数据模型</Heading>
                 <Badge size="1">{plugin.definitions.length}</Badge>
               </Flex>

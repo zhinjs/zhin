@@ -1,23 +1,29 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
+    "outDir": "./lib",
+    "baseUrl": ".",
+    "declaration": true,
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "outDir": "./lib",
-    "rootDir": "./src",
+    "target": "ES2022",
+    "declarationMap": true,
+    "sourceMap": true,
+    "skipLibCheck": true,
+    "noEmit": false,
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "allowSyntheticDefaultImports": true,
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true
+    "emitDecoratorMetadata": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["lib", "node_modules"]
-} 
+  "include": [
+    "./src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "./lib"
+  ]
+}

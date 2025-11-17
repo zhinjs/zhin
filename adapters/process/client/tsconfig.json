@@ -1,14 +1,19 @@
 {
-  "compilerOptions": {
-    "jsx": "react-jsx",
-    "jsxImportSource": "react",
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["react", "react-dom"],
-    "esModuleInterop": true,
-    "skipLibCheck": true
+    "compilerOptions": {
+      "outDir": "../dist",
+      "baseUrl": ".",
+      "declaration": true,
+      "module": "ESNext",
+      "moduleResolution": "bundler",
+      "target": "ES2022",
+      "jsx":"react-jsx",
+      "declarationMap": true,
+      "sourceMap": true,
+      "skipLibCheck": true,
+      "noEmit": false
+    },
+    "include": [
+      "./**/*"
+    ]
   }
-}
-
+  

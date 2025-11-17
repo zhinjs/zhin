@@ -1,32 +1,42 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import type { Bot } from '../src/bot'
-import type { BotConfig, SendOptions } from '../src/types'
+import type {SendOptions } from '../src/types'
+import { Message } from '../src/message'
 
 describe('Bot接口测试', () => {
   // 创建一个测试用的Bot实现类
-  class TestBot implements Bot {
+  class TestBot implements Bot<any, Bot.Config> {
     connected = false
+    $config: Bot.Config
+    constructor(public config: Bot.Config) {
+      this.$config = config
+    }
 
-    constructor(public config: BotConfig) {}
-
-    async connect(): Promise<void> {
+    async $connect(): Promise<void> {
       this.connected = true
     }
 
-    async disconnect(): Promise<void> {
+    async $disconnect(): Promise<void> {
       this.connected = false
     }
 
-    async sendMessage(options: SendOptions): Promise<void> {
+    async $sendMessage(options: SendOptions): Promise<string> {
       if (!this.connected) {
         throw new Error('机器人未连接')
       }
       // 模拟发送消息
+      return '123'
+    }
+    async $recallMessage(id: string): Promise<void> {
+      // 模拟撤回消息
+    }
+    $formatMessage(message: any): Message<any> {
+      return message
     }
   }
 
   let bot: TestBot
-  let testConfig: BotConfig
+  let testConfig: Bot.Config
 
   beforeEach(() => {
     testConfig = {
@@ -48,13 +58,13 @@ describe('Bot接口测试', () => {
 
   describe('连接管理测试', () => {
     it('应该正确处理连接', async () => {
-      await bot.connect()
+      await bot.$connect()
       expect(bot.connected).toBe(true)
     })
 
     it('应该正确处理断开连接', async () => {
-      await bot.connect()
-      await bot.disconnect()
+      await bot.$connect()
+      await bot.$disconnect()
       expect(bot.connected).toBe(false)
     })
   })
@@ -69,7 +79,7 @@ describe('Bot接口测试', () => {
         content: '测试消息'
       }
 
-      await expect(bot.sendMessage(options)).rejects.toThrow('机器人未连接')
+      await expect(bot.$sendMessage(options)).rejects.toThrow('机器人未连接')
     })
 
     it('连接后应该正确发送消息', async () => {
@@ -81,38 +91,47 @@ describe('Bot接口测试', () => {
         content: '测试消息'
       }
 
-      const sendSpy = vi.spyOn(bot, 'sendMessage')
-      await bot.connect()
-      await bot.sendMessage(options)
+      const sendSpy = vi.spyOn(bot, '$sendMessage')
+      await bot.$connect()
+      await bot.$sendMessage(options)
       expect(sendSpy).toHaveBeenCalledWith(options)
     })
   })
 
   describe('自定义配置测试', () => {
     it('应该支持扩展的配置类型', () => {
-      interface ExtendedConfig extends BotConfig {
+      interface ExtendedConfig extends Bot.Config {
         token: string
         platform: string
       }
 
       class ExtendedBot implements Bot<ExtendedConfig> {
         connected = false
+        $config: ExtendedConfig
+        constructor(public config: ExtendedConfig) {
+          this.$config = config
+        }
 
-        constructor(public config: ExtendedConfig) {}
-
-        async connect(): Promise<void> {
+        async $connect(): Promise<void> {
           this.connected = true
         }
 
-        async disconnect(): Promise<void> {
+        async $disconnect(): Promise<void> {
           this.connected = false
         }
 
-        async sendMessage(options: SendOptions): Promise<void> {
+        async $sendMessage(options: SendOptions): Promise<string> {
           if (!this.connected) {
             throw new Error('机器人未连接')
           }
+          return '123'
           // 模拟发送消息
+        }
+        async $recallMessage(id: string): Promise<void> {
+          // 模拟撤回消息
+        }
+        $formatMessage(message: any): Message<any> {
+          return message
         }
       }
 

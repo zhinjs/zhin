@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { App, createApp } from '../src/app'
-import { LogLevel } from '@zhin.js/logger'
+import { LogLevel } from 'packages/logger/src'
 import path from 'path'
 import fs from 'fs'
 

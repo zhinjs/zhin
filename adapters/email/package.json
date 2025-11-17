@@ -6,9 +6,9 @@
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
-    "clean": "rm -rf lib"
+    "build": "pnpm build:node",
+    "clean": "rm -rf lib",
+    "build:node": "tsc"
   },
   "dependencies": {
     "@types/imap": "^0.8.40",
@@ -42,6 +42,9 @@
     "directory": "adapters/email"
   },
   "files": [
-    "lib"
+    "lib",
+    "node",
+    "README.md",
+    "CHANGELOG.md"
   ]
 }

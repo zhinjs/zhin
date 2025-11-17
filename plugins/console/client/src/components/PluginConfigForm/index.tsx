@@ -18,8 +18,9 @@ import {
   Card
 } from '@radix-ui/themes'
 import { Accordion } from 'radix-ui'
-import { Icons, useConfig } from '@zhin.js/client'
+import { useConfig } from '../../../../../../packages/client/dist/index.js'
 import type { PluginConfigFormProps, SchemaField, Schema } from './types.js'
+import { Settings, ChevronDown, CheckCircle, AlertCircle, X, Save } from 'lucide-react'
 import { FieldRenderer, isComplexField } from './FieldRenderer.js'
 import { NestedFieldRenderer } from './NestedFieldRenderer.js'
 
@@ -128,13 +129,13 @@ export function PluginConfigForm({ pluginName, onSuccess }: Omit<PluginConfigFor
                 className="w-full p-3 hover:bg-gray-50 dark:hover:bg-gray-900/50 rounded-lg transition-colors"
               >
                 <Flex align="center" gap="2">
-                  <Icons.Settings className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  <Settings className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                   <Text size="3" weight="bold">插件配置</Text>
                   <Badge size="1" color="gray" variant="soft">
                     {Object.keys(fields).length} 项
                   </Badge>
                 </Flex>
-                <Icons.ChevronDown 
+                <ChevronDown 
                   className="w-5 h-5 text-gray-500 transition-transform duration-200 group-data-[state=open]:rotate-180" 
                 />
               </Flex>
@@ -147,7 +148,7 @@ export function PluginConfigForm({ pluginName, onSuccess }: Omit<PluginConfigFor
               {successMessage && (
                 <div className="mb-3 animate-in fade-in slide-in-from-top-2 duration-300">
                   <Callout.Root color="green" size="1" className="shadow-sm">
-                    <Callout.Icon><Icons.CheckCircle /></Callout.Icon>
+                    <Callout.Icon><CheckCircle /></Callout.Icon>
                     <Callout.Text className="font-medium">{successMessage}</Callout.Text>
                   </Callout.Root>
                 </div>
@@ -157,7 +158,7 @@ export function PluginConfigForm({ pluginName, onSuccess }: Omit<PluginConfigFor
               {error && (
                 <div className="mb-3 animate-in fade-in slide-in-from-top-2 duration-300">
                   <Callout.Root color="red" size="1" className="shadow-sm">
-                    <Callout.Icon><Icons.AlertCircle /></Callout.Icon>
+                    <Callout.Icon><AlertCircle /></Callout.Icon>
                     <Callout.Text className="font-medium">{error}</Callout.Text>
                   </Callout.Root>
                 </div>
@@ -206,7 +207,7 @@ export function PluginConfigForm({ pluginName, onSuccess }: Omit<PluginConfigFor
                   disabled={loading}
                   className="hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
                 >
-                  <Icons.X className="w-4 h-4" />
+                  <X className="w-4 h-4" />
                   取消
                 </Button>
                 <Button 
@@ -222,7 +223,7 @@ export function PluginConfigForm({ pluginName, onSuccess }: Omit<PluginConfigFor
                     </>
                   ) : (
                     <>
-                      <Icons.Save className="w-4 h-4" />
+                      <Save className="w-4 h-4" />
                       <span>保存配置</span>
                     </>
                   )}

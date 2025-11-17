@@ -14,7 +14,6 @@ import auth from "koa-basic-auth";
 import KoaBodyParser from "koa-bodyparser";
 import { Router } from "./router.js";
 import * as process from "process";
-import { config } from "node:process";
 
 export * from "./router.js";
 

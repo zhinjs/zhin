@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
+import  {Text} from '@radix-ui/themes'
 export default function TestPage() {
   useEffect(() => {
-    console.log('TestPage')
   }, [])
-  return <div>TestPage</div>
+  return <div><Text>TestPage</Text></div>
 }

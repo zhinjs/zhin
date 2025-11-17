@@ -115,7 +115,6 @@ useContext("router", async (router) => {
     const url = ctx.request.originalUrl.replace(base, "");
     const name = isDev ? ctx.path.slice(1) : ctx.path.slice(1);
     const sendFile = (filename: string) => {
-      console.log(`发送文件: ${filename}`);
       // 安全检查：确保是常规文件
       try {
         const stat = fs.statSync(filename);

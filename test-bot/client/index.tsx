@@ -1,6 +1,6 @@
 import {addPage} from '@zhin.js/client';
-import {Trash2} from 'lucide-react';
 import TestPage from './TestPage'
+import { Trash2 } from 'lucide-react'
 addPage({
   key: 'test-page',
   path: '/test',

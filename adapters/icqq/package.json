@@ -17,13 +17,18 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && zhin-console build",
     "clean": "rm -rf lib"
   },
   "dependencies": {
     "@icqqjs/icqq": "latest"
   },
   "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.1",
+    "radix-ui": "^1.4.3",
+    "@radix-ui/themes": "^3.2.1",
+    "lucide-react": "^0.469.0",
     "typescript": "^5.3.0"
   },
   "peerDependencies": {

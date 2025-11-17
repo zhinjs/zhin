@@ -6,6 +6,6 @@ addPage({
   path: '/sandbox',
   title: '沙盒',
   icon: <Terminal className="w-5 h-5" />,
-  element: <ProcessSandbox />
+  element: <ProcessSandbox/>
 })
 

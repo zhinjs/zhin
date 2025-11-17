@@ -12,8 +12,9 @@
     }
   },
   "scripts": {
-    "build": "tsc",
-    "clean": "rm -rf lib"
+    "build": "pnpm build:node",
+    "clean": "rm -rf lib",
+    "build:node": "tsc"
   },
   "dependencies": {
     "@koa/router": "latest",
@@ -35,6 +36,8 @@
   },
   "files": [
     "lib",
-    "app"
+    "node",
+    "README.md",
+    "CHANGELOG.md"
   ]
 }

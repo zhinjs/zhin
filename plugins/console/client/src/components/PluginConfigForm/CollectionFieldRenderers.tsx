@@ -4,7 +4,7 @@
  */
 
 import { Flex, Box, Text, TextArea, Button, Badge, Card, Separator } from '@radix-ui/themes'
-import { Icons } from '@zhin.js/client'
+import { List, Trash2, Plus, Package, Code, Info } from 'lucide-react'
 import type { FieldRendererProps, SchemaField } from './types.js'
 
 interface CollectionFieldProps extends FieldRendererProps {
@@ -33,7 +33,7 @@ export function ListFieldRenderer({
       <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
         <Flex direction="column" gap="2">
           <Flex align="center" gap="2">
-            <Icons.List className="w-4 h-4 text-green-600 dark:text-green-400" />
+            <List className="w-4 h-4 text-green-600 dark:text-green-400" />
             <Text size="1" weight="bold" className="text-green-700 dark:text-green-300">
               列表输入 (每行一个值)
             </Text>
@@ -85,7 +85,7 @@ export function ListFieldRenderer({
                   }}
                   className="opacity-0 group-hover:opacity-100 transition-opacity"
                 >
-                  <Icons.Trash2 className="w-3 h-3" />
+                  <Trash2 className="w-3 h-3" />
                 </Button>
               </Flex>
               <div className="pl-2 border-l-2 border-blue-200 dark:border-blue-800">
@@ -106,7 +106,7 @@ export function ListFieldRenderer({
         }}
         className="w-full hover:bg-blue-100 dark:hover:bg-blue-900/30 border-2 border-dashed border-blue-300 dark:border-blue-700 hover:border-blue-500 dark:hover:border-blue-500 transition-colors"
       >
-        <Icons.Plus className="w-4 h-4" />
+        <Plus className="w-4 h-4" />
         添加项
       </Button>
     </Flex>
@@ -119,7 +119,7 @@ export function ArrayFieldRenderer({ field, value, onChange }: FieldRendererProp
     <div className="p-3 rounded-lg bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-800">
       <Flex direction="column" gap="2">
         <Flex align="center" gap="2">
-          <Icons.List className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+          <List className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
           <Text size="1" weight="bold" className="text-cyan-700 dark:text-cyan-300">
             数组输入 (每行一个值)
           </Text>
@@ -189,7 +189,7 @@ export function ObjectFieldRenderer({
     <div className="rounded-lg border-2 border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50/50 to-cyan-50/50 dark:from-blue-900/10 dark:to-cyan-900/10 overflow-hidden">
       <div className="px-4 py-2 bg-blue-100 dark:bg-blue-900/30 border-b border-blue-200 dark:border-blue-800">
         <Flex align="center" gap="2">
-          <Icons.Package className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+          <Package className="w-4 h-4 text-blue-600 dark:text-blue-400" />
         </Flex>
       </div>
       <div className="p-4 space-y-3">
@@ -232,7 +232,7 @@ export function DictFieldRenderer({ field, value, onChange }: FieldRendererProps
     <div className="p-3 rounded-lg bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800">
       <Flex direction="column" gap="3">
         <Flex align="center" gap="2">
-          <Icons.Code className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+          <Code className="w-4 h-4 text-violet-600 dark:text-violet-400" />
         </Flex>
         <TextArea
           size="2"
@@ -250,7 +250,7 @@ export function DictFieldRenderer({ field, value, onChange }: FieldRendererProps
           className="font-mono text-sm bg-white dark:bg-gray-950 hover:border-violet-500 dark:hover:border-violet-400 transition-colors"
         />
         <Flex align="center" gap="2">
-          <Icons.Info className="w-3 h-3 text-violet-600 dark:text-violet-400" />
+          <Info className="w-3 h-3 text-violet-600 dark:text-violet-400" />
           <Text size="1" className="text-violet-700 dark:text-violet-300">
             键值对格式: &#123;"key": "value"&#125;
           </Text>

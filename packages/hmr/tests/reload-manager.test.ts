@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { ReloadManager } from '../src/reload-manager'
-import {getLogger, Logger} from "@zhin.js/logger";
+import {getLogger, Logger} from "packages/logger/src";
 
 describe('ReloadManager', () => {
     let reloadManager: ReloadManager

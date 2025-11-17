@@ -35,7 +35,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
 
             let text = ''
             const segments: MessageSegment[] = []
-            const nodes = editorRef.current.childNodes
+            const nodes = Array.from(editorRef.current.childNodes)
 
             for (const node of nodes) {
                 if (node.nodeType === Node.TEXT_NODE) {

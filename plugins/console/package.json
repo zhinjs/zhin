@@ -6,7 +6,7 @@
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
   "bin": {
-    "zhin-client": "./lib/bin.js"
+    "zhin-console": "./lib/bin.js"
   },
   "exports": {
     ".": {
@@ -17,13 +17,14 @@
       "types": "./lib/client/index.d.ts",
       "import": "./lib/client/index.js"
     },
-    "./browser.tsconfig.json": "./client/tsconfig.json"
+    "./browser.tsconfig.json": "./broswer.tsconfig.json",
+    "./node.tsconfig.json": "./node.tsconfig.json"
   },
   "scripts": {
-    "build": "tsc",
-    "build:app": "tsc",
-    "build:client": "node lib/bin.js build:console",
-    "clean": "rm -rf lib"
+    "build": "pnpm build:node && pnpm build:client",
+    "build:client": "tsx scripts/client.ts",
+    "clean": "rm -rf lib dist",
+    "build:node": "tsc"
   },
   "dependencies": {
     "react": "19.2.0",
@@ -60,7 +61,10 @@
   },
   "files": [
     "lib",
-    "app",
-    "client"
+    "node",
+    "README.md",
+    "dist",
+    "client",
+    "CHANGELOG.md"
   ]
 }

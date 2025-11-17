@@ -1,28 +1,24 @@
 {
-  "extends": "../../tsconfig.json",
   "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "outDir": "./lib",
     "rootDir": "./src",
-    "composite": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "moduleResolution": "node",
-    "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
-    "types": [
-      "@zhin.js/http",
-    ]
+    "isolatedModules": true,
+    "allowSyntheticDefaultImports": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "verbatimModuleSyntax": false
   },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "lib",
-    "node_modules"
-  ],
-}
+  "include": ["src/**/*"],
+  "exclude": ["lib", "node_modules"]
+} 

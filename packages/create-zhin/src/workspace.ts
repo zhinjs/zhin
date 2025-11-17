@@ -93,7 +93,7 @@ dist/
 lib/
 *.log
 .env
-.env.local
+.env.*
 .DS_Store
 .zhin.pid
 .zhin-dev.pid
@@ -166,15 +166,21 @@ async function createAppModule(projectPath: string, projectName: string, options
   // 创建 .env 文件
   const databaseEnvVars = options.database ? generateDatabaseEnvVars(options.database) : '';
   await fs.writeFile(path.join(projectPath, '.env'),
-`# 调试模式
-DEBUG=true
-
-# 插件目录
-# PLUGIN_DIR=./src/plugins
+`# 插件目录
 
 # HTTP 服务配置（Web 控制台登录信息）
 HTTP_USERNAME=${options.httpUsername}
 HTTP_PASSWORD=${options.httpPassword}${databaseEnvVars}
+`);
+await fs.writeFile(path.join(projectPath, '.env.development'),
+`# 调试模式
+DEBUG=true
+NODE_ENV=development
+`);
+await fs.writeFile(path.join(projectPath, '.env.production'),
+`# 调试模式
+DEBUG=false
+NODE_ENV=production
 `);
   
   // app/tsconfig.json

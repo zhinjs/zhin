@@ -1,8 +1,8 @@
 import { EventEmitter } from 'events';
 import * as path from 'path';
 import {getLogger} from "@zhin.js/logger";
-import { Contexts, GlobalContext, SideEffect} from '@zhin.js/types';
-import { Schema } from '@zhin.js/schema';
+import { Contexts, GlobalContext, SideEffect} from "@zhin.js/types";
+import { Schema } from "@zhin.js/schema";
 import {Context, DependencyOptions,} from './types.js'
 import { createError, ERROR_MESSAGES, DEFAULT_CONFIG, performGC } from './utils.js';
 // ============================================================================

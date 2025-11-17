@@ -1,5 +1,5 @@
 import { useTheme } from '../hooks/useTheme'
-import { Icons } from '@zhin.js/client'
+import { Moon, Sun } from 'lucide-react'
 
 export function ThemeToggle() {
   const { theme, toggleTheme } = useTheme()
@@ -11,9 +11,9 @@ export function ThemeToggle() {
       title={theme === 'light' ? '切换到暗色模式' : '切换到亮色模式'}
     >
       {theme === 'light' ? (
-        <Icons.Moon className="w-5 h-5" />
+        <Moon className="w-5 h-5" />
       ) : (
-        <Icons.Sun className="w-5 h-5" />
+        <Sun className="w-5 h-5" />
       )}
     </button>
   )

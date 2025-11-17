@@ -9,7 +9,7 @@ export type * from './types.js';
 export * from './utils.js';
 
 // 导出Schema系统 (从@zhin.js/schema重新导出)
-export { Schema } from '@zhin.js/schema';
+export { Schema } from "@zhin.js/schema";
 
 // 导出基础类
 export { Dependency } from './dependency.js';

@@ -4,7 +4,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "outDir": "./lib",
-    "rootDir": "./app",
+    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -18,6 +18,6 @@
     "declarationMap": true,
     "sourceMap": true
   },
-  "include": ["app/**/*"],
+  "include": ["src/**/*"],
   "exclude": ["lib", "node_modules", "client", "dist"]
 } 

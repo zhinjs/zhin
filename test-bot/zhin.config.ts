@@ -81,7 +81,8 @@ export default defineConfig(async () => {
         sign_api_addr: process.env.ICQQ_SIGN_ADDR,
         ver: "9.1.70",
         platform: 2,
-        data_dir: "./data"
+        data_dir: "./data",
+        scope: "icqqjs"
       }
     ],
     log_level: 1,

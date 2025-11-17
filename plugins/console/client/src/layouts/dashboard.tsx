@@ -2,7 +2,8 @@ import { Outlet, Link, useSelector, useDispatch, toggleSidebar, setActiveMenu, u
 import React, { useMemo } from "react"
 import { Avatar, DropdownMenu } from 'radix-ui'
 import * as Themes from '@radix-ui/themes'
-import { Icons, cn } from "@zhin.js/client"
+import {Menu, Search,Bell,User,Users,BarChart3,HelpCircle,LogOut} from 'lucide-react'
+import { cn } from "@zhin.js/client"
 import { ThemeToggle } from "../components/ThemeToggle"
 
 const { Box, Flex, Text, Heading, IconButton, Badge, TextField, ScrollArea, Container } = Themes
@@ -83,11 +84,9 @@ export default function DashboardLayout() {
                                         onClick={() => dispatch(setActiveMenu(item.key))}
                                         className={cn("menu-item", isActive && "active")}
                                     >
-                                        {item.icon && React.isValidElement(item.icon) && (
-                                            <div className="icon">
-                                                {item.icon}
-                                            </div>
-                                        )}
+                                        <div className="icon">
+                                            {item.icon}
+                                        </div>
                                         {sidebarOpen && (
                                             <div className="text">
                                                 <div className="title">{item.title}</div>
@@ -143,7 +142,7 @@ export default function DashboardLayout() {
                                 onClick={() => dispatch(toggleSidebar())}
                                 className="hover-lift rounded-xl"
                             >
-                                <Icons.Menu className="w-5 h-5" />
+                                <Menu className="w-5 h-5" />
                             </IconButton>
                             <Flex direction="column" gap="0">
                                 <Heading size="3" className="text-gray-900 dark:text-gray-100">控制台</Heading>
@@ -154,7 +153,7 @@ export default function DashboardLayout() {
                         {/* 中间搜索栏 */}
                         <Flex className="hidden md:flex flex-1 max-w-xl mx-6">
                             <Box className="relative">
-                                <Icons.Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
                                 <TextField.Root
                                     placeholder="搜索功能、用户、设置..."
                                     size="2"
@@ -175,7 +174,7 @@ export default function DashboardLayout() {
                                     size="2"
                                     className="hover-lift rounded-xl"
                                 >
-                                    <Icons.Bell className="w-5 h-5" />
+                                    <Bell className="w-5 h-5" />
                                 </IconButton>
                                 <Badge
                                     color="red"
@@ -221,24 +220,24 @@ export default function DashboardLayout() {
                                         </Text>
                                     </Box>
                                     <DropdownMenu.Item>
-                                        <Icons.User className="mr-2 h-4 w-4" />
+                                        <User className="mr-2 h-4 w-4" />
                                         我的设置
                                     </DropdownMenu.Item>
                                     <DropdownMenu.Item>
-                                        <Icons.Users className="mr-2 h-4 w-4" />
+                                        <Users className="mr-2 h-4 w-4" />
                                         团队设置
                                     </DropdownMenu.Item>
                                     <DropdownMenu.Item>
-                                        <Icons.BarChart3 className="mr-2 h-4 w-4" />
+                                        <BarChart3 className="mr-2 h-4 w-4" />
                                         数据分析
                                     </DropdownMenu.Item>
                                     <DropdownMenu.Item>
-                                        <Icons.HelpCircle className="mr-2 h-4 w-4" />
+                                        <HelpCircle className="mr-2 h-4 w-4" />
                                         帮助与反馈
                                     </DropdownMenu.Item>
                                     <DropdownMenu.Separator />
                                     <DropdownMenu.Item color="red">
-                                        <Icons.LogOut className="mr-2 h-4 w-4" />
+                                        <LogOut className="mr-2 h-4 w-4" />
                                         退出登录
                                     </DropdownMenu.Item>
                                 </DropdownMenu.Content>
@@ -250,7 +249,7 @@ export default function DashboardLayout() {
                 {/* 主内容区域 */}
                 <Flex className="flex-1 overflow-auto">
                     <Container size="4" p="6">
-            <Outlet />
+                        <Outlet />
                     </Container>
                 </Flex>
             </Flex>

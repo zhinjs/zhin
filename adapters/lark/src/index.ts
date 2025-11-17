@@ -123,7 +123,7 @@ export class LarkBot implements Bot<LarkMessage, LarkBotConfig> {
         // 设置请求拦截器，自动添加 access_token
         this.axiosInstance.interceptors.request.use(async (config) => {
             await this.ensureAccessToken();
-            config.headers = config.headers || {};
+            config.headers = config.headers;
             config.headers['Authorization'] = `Bearer ${this.accessToken.token}`;
             return config;
         });

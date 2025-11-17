@@ -16,7 +16,7 @@ import {
   AlterQueryParams,
   DropTableQueryParams,
   DropIndexQueryParams
-} from "../types";
+} from "../types.js";
 
 export interface RedisDialectConfig extends RedisClientOptions {}
 export class RedisDialect extends Dialect<RedisDialectConfig, KeyValueQueryResult> {

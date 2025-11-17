@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import {getLogger, Logger} from "@zhin.js/logger";
+import {getLogger, Logger} from "packages/logger/src";
 import { FileWatcher } from '../src/file-watcher'
 import * as path from 'path'
 import * as fs from 'fs'

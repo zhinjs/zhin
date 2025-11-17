@@ -4,7 +4,6 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "outDir": "./dist",
-    "rootDir": "./client",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -21,9 +20,16 @@
     "jsxImportSource": "react",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./client/*"]
+      "@/*": [
+        "./client/*"
+      ]
     }
   },
-  "include": ["client/**/*"],
-  "exclude": ["dist", "node_modules"]
-} 
+  "include": [
+    "client/**/*"
+  ],
+  "exclude": [
+    "dist",
+    "node_modules"
+  ]
+}

@@ -138,8 +138,8 @@ class HookRegistry {
       let currentDep = this.getCurrentDependency();
       if (!currentDep) {
         if (name !== 'importModule') {
-          console.warn(`No current dependency context for hook "${name}".`);
-          return;
+        console.warn(`No current dependency context for hook "${name}".`);
+        return;
         }
         currentDep = new Dependency(args[1]||path.join(process.cwd(), './src/index'));
         Dependency['globalDepMap'].set(currentDep.filePath, currentDep);

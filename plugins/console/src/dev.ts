@@ -68,7 +68,7 @@ export async function createViteDevServer(
         "redux-persist",
       ],
       alias: {
-        "@zhin.js/client": path.resolve(root, "../../client/client"),
+        "@zhin.js/client": path.resolve(root, "../../../packages/client/client"),
         "@": path.resolve(root, "../client/src"),
       },
     },

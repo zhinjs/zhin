@@ -99,15 +99,14 @@ your-bot/
 ```typescript
 // client/index.tsx
 import { addPage } from '@zhin.js/client'
-import { Home } from 'lucide-react'
 import MyPage from './MyPage'
 
 addPage({
   key: 'my-page',
   path: '/my-page',
   title: '我的页面',
-  icon: <Home className="w-5 h-5" />,
-  element: <MyPage />
+  icon: 'Home',  // 使用字符串，对应 lucide-react 的图标名称
+  Component: MyPage  // 使用 Component 而不是 element
 })
 ```
 

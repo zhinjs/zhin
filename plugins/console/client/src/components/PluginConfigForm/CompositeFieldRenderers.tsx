@@ -4,7 +4,7 @@
  */
 
 import { Flex, Box, Text, TextField, Select, Card, Badge } from '@radix-ui/themes'
-import { Icons } from '@zhin.js/client'
+import { GitBranch, Layers } from 'lucide-react'
 import type { FieldRendererProps, SchemaField } from './types.js'
 
 interface CompositeFieldProps extends FieldRendererProps {
@@ -38,7 +38,7 @@ export function UnionFieldRenderer({ field, value, onChange }: FieldRendererProp
     <div className="p-3 rounded-lg bg-gradient-to-br from-pink-50 to-rose-50 dark:from-pink-900/20 dark:to-rose-900/20 border border-pink-200 dark:border-pink-800">
       <Flex direction="column" gap="2">
         <Flex align="center" gap="2">
-          <Icons.GitBranch className="w-4 h-4 text-pink-600 dark:text-pink-400" />
+          <GitBranch className="w-4 h-4 text-pink-600 dark:text-pink-400" />
         </Flex>
         <Select.Root
           size="2"
@@ -78,7 +78,7 @@ export function IntersectFieldRenderer({
     <div className="rounded-lg border-2 border-teal-200 dark:border-teal-800 bg-gradient-to-br from-teal-50/50 to-emerald-50/50 dark:from-teal-900/10 dark:to-emerald-900/10 overflow-hidden">
       <div className="px-4 py-2 bg-teal-100 dark:bg-teal-900/30 border-b border-teal-200 dark:border-teal-800">
         <Flex align="center" gap="2">
-          <Icons.Layers className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+          <Layers className="w-4 h-4 text-teal-600 dark:text-teal-400" />
         </Flex>
       </div>
       <div className="p-4 space-y-3">

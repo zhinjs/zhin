@@ -9,7 +9,7 @@
     "dev": "npx zhin dev --bun",
     "start": "npx zhin start",
     "daemon": "npx zhin start --daemon",
-    "build": "tsc",
+    "build": "tsc && zhin-console build",
     "stop": "zhin stop"
   },
   "dependencies": {
@@ -23,7 +23,7 @@
     "@zhin.js/adapter-discord": "workspace:*",
     "@zhin.js/adapter-qq": "workspace:*",
     "@zhin.js/adapter-process": "workspace:*",
-    "sqlite3":"latest"
+    "sqlite3": "latest"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -31,9 +31,9 @@
     "@zhin.js/types": "workspace:*",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.1",
+    "radix-ui": "^1.4.3",
+    "@radix-ui/themes": "^3.2.1",
     "lucide-react": "^0.469.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
     "typescript": "^5.0.0"
   },
   "engines": {
