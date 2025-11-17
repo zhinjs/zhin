@@ -1,0 +1,16 @@
+# test-bot
+
+## 0.1.1
+
+### Patch Changes
+
+- Updated dependencies [547028f]
+  - @zhin.js/adapter-onebot11@1.0.15
+  - @zhin.js/adapter-discord@1.0.14
+  - @zhin.js/adapter-process@1.0.16
+  - @zhin.js/console@1.0.10
+  - @zhin.js/adapter-icqq@1.0.16
+  - @zhin.js/adapter-kook@1.0.14
+  - @zhin.js/http@1.0.7
+  - @zhin.js/adapter-qq@1.0.14
+  - zhin.js@1.0.14

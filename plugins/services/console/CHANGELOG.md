@@ -1,5 +1,15 @@
 # @zhin.js/console
 
+## 1.0.10
+
+### Patch Changes
+
+- 547028f: fix: 优化包结构,优化客户端支持
+- Updated dependencies [547028f]
+  - @zhin.js/types@1.0.5
+  - @zhin.js/core@1.0.14
+  - @zhin.js/http@1.0.7
+
 ## 1.0.9
 
 ### Patch Changes

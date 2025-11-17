@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/types",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Zhin types for typescript",
   "type": "module",
   "main": "./lib/index.js",

@@ -1,5 +1,14 @@
 # @zhin.js/core
 
+## 1.0.14
+
+### Patch Changes
+
+- 547028f: fix: 优化包结构,优化客户端支持
+- Updated dependencies [547028f]
+  - @zhin.js/database@1.0.4
+  - @zhin.js/hmr@1.0.7
+
 ## 1.0.13
 
 ### Patch Changes

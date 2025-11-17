@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/schema",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Zhin Schema 配置验证系统",
   "type": "module",
   "main": "./lib/index.js",

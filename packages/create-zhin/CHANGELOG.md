@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.13
+
+### Patch Changes
+
+- 547028f: fix: 优化包结构,优化客户端支持
+
 ## 1.0.12
 
 ### Patch Changes

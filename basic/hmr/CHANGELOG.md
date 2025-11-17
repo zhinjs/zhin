@@ -1,5 +1,13 @@
 # @zhin.js/hmr
 
+## 1.0.7
+
+### Patch Changes
+
+- 547028f: fix: 优化包结构,优化客户端支持
+- Updated dependencies [547028f]
+  - @zhin.js/schema@1.0.1
+
 ## 1.0.6
 
 ### Patch Changes
