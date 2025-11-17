@@ -22,7 +22,7 @@
   },
   "scripts": {
     "build": "pnpm build:node && pnpm build:client",
-    "build:client": "tsx scripts/client.ts",
+    "build:client": "node scripts/client.js",
     "clean": "rm -rf lib dist",
     "build:node": "tsc"
   },

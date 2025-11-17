@@ -1,12 +1,12 @@
 
-import { appendFile, copyFile } from 'fs/promises'
+import { appendFile } from 'fs/promises'
 import { resolve } from 'path'
 import { createRequire } from 'module'
 import * as vite from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from "@tailwindcss/vite";
 const require=createRequire(import.meta.url)
-function findModulePath(id: string) {
+function findModulePath(id) {
   const path = require.resolve(id).replace(/\\/g, '/')
   const keyword = `/node_modules/${id}/`
   return path.slice(0, path.indexOf(keyword)) + keyword.slice(0, -1)
@@ -15,7 +15,7 @@ function findModulePath(id: string) {
 const cwd = resolve(import.meta.dirname, '../../..')
 const dist = cwd + '/plugins/console/dist'
 
-export async function build(root: string, config: vite.UserConfig = {}) {
+export async function build(root, config = {}) {
   const { rollupOptions = {} } = config.build || {}
   return await vite.build({
     root,
@@ -74,7 +74,7 @@ export async function build(root: string, config: vite.UserConfig = {}) {
         '@zhin.js/client': root + '/client.js'
       },
     },
-  }) as vite.Rollup.RollupOutput
+  })
 }
 
  async function main () {
