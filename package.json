@@ -28,7 +28,7 @@
     "prepare:console": "pnpm --filter @zhin.js/console build:node",
     "prepare:http": "pnpm --filter @zhin.js/http build",
     "prepare:types": "pnpm --filter @zhin.js/types build",
-    "prepare": "pnpm run prepare:logger && pnpm run prepare:cli && pnpm run prepare:console && pnpm run prepare:http && pnpm run prepare:types && pnpm install",
+    "prepare": "pnpm run prepare:logger && pnpm run prepare:cli && pnpm run prepare:console && pnpm run prepare:types && pnpm run prepare:http && pnpm install",
     "build": "pnpm run prepare && pnpm -r build",
     "clean": "pnpm -r clean",
     "lint": "eslint . --ext .ts,.tsx",
