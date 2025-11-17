@@ -13,7 +13,9 @@
     "plugins/adapters/*",
     "plugins/services/*",
     "plugins/games/*",
-    "plugins/utils/*"
+    "plugins/utils/*",
+    "examples/*",
+    "docs"
   ],
   "packageManager": "pnpm@9.0.2",
   "scripts": {
@@ -37,9 +39,9 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "create": "node packages/create-zhin/lib/index.js",
-    "docs:dev": "vitepress dev docs",
-    "docs:build": "vitepress build docs",
-    "docs:preview": "vitepress preview docs",
+    "docs:dev": "pnpm --filter @zhin.js/docs dev",
+    "docs:build": "pnpm --filter @zhin.js/docs build",
+    "docs:preview": "pnpm --filter @zhin.js/docs preview",
     "check:prod": "node scripts/check-production-config.js"
   },
   "devDependencies": {
@@ -51,9 +53,7 @@
     "@vitest/coverage-v8": "^1.6.1",
     "eslint": "^9.39.1",
     "typescript": "^5.9.3",
-    "vitepress": "^1.6.4",
-    "vitest": "^1.6.1",
-    "vue": "^3.5.23"
+    "vitest": "^1.6.1"
   },
   "dependencies": {
     "chalk": "^5.6.2",
