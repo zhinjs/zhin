@@ -18,7 +18,7 @@ import {
   Card
 } from '@radix-ui/themes'
 import { Accordion } from 'radix-ui'
-import { useConfig } from '../../../../../../packages/client/dist/index.js'
+import { useConfig } from '@zhin.js/client'
 import type { PluginConfigFormProps, SchemaField, Schema } from './types.js'
 import { Settings, ChevronDown, CheckCircle, AlertCircle, X, Save } from 'lucide-react'
 import { FieldRenderer, isComplexField } from './FieldRenderer.js'
