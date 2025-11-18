@@ -1,5 +1,13 @@
 # test-bot
 
+## 0.1.2
+
+### Patch Changes
+
+- Updated dependencies [f4a7dd7]
+  - @zhin.js/adapter-process@1.0.17
+  - @zhin.js/adapter-icqq@1.0.17
+
 ## 0.1.1
 
 ### Patch Changes

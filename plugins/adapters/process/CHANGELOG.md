@@ -1,5 +1,11 @@
 # @zhin.js/adapter-process
 
+## 1.0.17
+
+### Patch Changes
+
+- f4a7dd7: fix: force build
+
 ## 1.0.16
 
 ### Patch Changes
