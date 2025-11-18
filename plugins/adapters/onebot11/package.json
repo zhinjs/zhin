@@ -11,6 +11,16 @@
       "import": "./lib/index.js"
     }
   },
+  "scripts": {
+    "build": "tsc && zhin-console build",
+    "clean": "rm -rf lib"
+  },
+  "files": [
+    "lib",
+    "src",
+    "README.md",
+    "CHANGELOG.md"
+  ],
   "keywords": [
     "zhin",
     "adapter",
@@ -43,11 +53,5 @@
     "@zhin.js/http": {
       "optional": true
     }
-  },
-  "files": [
-    "lib",
-    "node",
-    "README.md",
-    "CHANGELOG.md"
-  ]
+  }
 }
