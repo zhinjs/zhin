@@ -1,5 +1,12 @@
 # test-bot
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies [0ed27a7]
+  - @zhin.js/adapter-onebot11@1.0.16
+
 ## 0.1.2
 
 ### Patch Changes
