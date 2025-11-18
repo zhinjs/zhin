@@ -87,7 +87,6 @@ useContext("router", async (router) => {
   const root = isDev
     ? path.join(import.meta.dirname, "../client")
     : path.join(import.meta.dirname, "../dist");
-  logger.info({isDev,root})
   if (isDev) {
     webServer.vite = await await createViteDevServer({
       root,

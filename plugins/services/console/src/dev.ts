@@ -30,7 +30,6 @@ export async function createViteDevServer(
   if (!fs.existsSync(clientPath)) {
     throw new Error('@zhin.js/client not found')
   }
-  console.log('clientPath',clientPath)
   return await await createServer({
     root,
     base,
