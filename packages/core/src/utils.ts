@@ -54,6 +54,7 @@ export const execute = <S, T = any>(exp: string, context: S):T => {
             pid:process.pid,
             ppid:process.ppid,
         },
+        Bun:'你想干嘛',
         global:undefined,
         Buffer:undefined,
         crypto:undefined

@@ -19,6 +19,7 @@
     "@zhin.js/client": "workspace:*",
     "@zhin.js/http": "workspace:*",
     "@zhin.js/mcp": "workspace:*",
+    "@zhin.js/plugin-github-notify": "workspace:*",
     "@zhin.js/adapter-kook": "workspace:*",
     "@zhin.js/adapter-onebot11": "workspace:*",
     "@zhin.js/adapter-discord": "workspace:*",

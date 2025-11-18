@@ -240,6 +240,9 @@ importers:
       '@zhin.js/mcp':
         specifier: workspace:*
         version: link:../../plugins/services/mcp
+      '@zhin.js/plugin-github-notify':
+        specifier: workspace:*
+        version: link:../../plugins/services/github-notify
       sqlite3:
         specifier: latest
         version: 5.1.7

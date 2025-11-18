@@ -34,7 +34,8 @@
       "@zhin.js/adapter-qq",
       "@zhin.js/adapter-process",
       "@zhin.js/adapter-discord",
-      "@zhin.js/mcp"
+      "@zhin.js/mcp",
+      "@zhin.js/plugin-github-notify"
     ]
   },
   "include": [
