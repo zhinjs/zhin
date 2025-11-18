@@ -11,86 +11,91 @@ interface InstallOptions {
   global?: boolean;
 }
 
+/**
+ * 安装插件的核心逻辑
+ */
+async function installPluginAction(plugin: string, options: InstallOptions) {
+  try {
+    let pluginToInstall = plugin;
+
+    // 如果没有指定插件，交互式输入
+    if (!pluginToInstall) {
+      const { input } = await inquirer.prompt([
+        {
+          type: 'input',
+          name: 'input',
+          message: '请输入插件名称或 git 地址:',
+          validate: (input: string) => {
+            if (!input.trim()) {
+              return '插件名称或地址不能为空';
+            }
+            return true;
+          }
+        }
+      ]);
+      pluginToInstall = input;
+    }
+
+    // 判断插件类型
+    const pluginType = detectPluginType(pluginToInstall);
+    
+    logger.info(`检测到插件类型: ${pluginType}`);
+    logger.info(`正在安装: ${pluginToInstall}`);
+    logger.log('');
+
+    // 构建安装命令
+    const installCmd = buildInstallCommand(pluginToInstall, pluginType, options);
+    
+    logger.log(`执行命令: ${installCmd}`);
+    logger.log('');
+
+    // 执行安装
+    try {
+      execSync(installCmd, {
+        cwd: process.cwd(),
+        stdio: 'inherit'
+      });
+
+      logger.success('✓ 插件安装成功！');
+      logger.log('');
+
+      // 如果是 git 插件，提供额外说明
+      if (pluginType === 'git') {
+        logger.log('📝 Git 插件已安装到 node_modules/');
+        logger.log('');
+      }
+
+      // 提示如何启用插件
+      const pluginName = extractPluginName(pluginToInstall, pluginType);
+      if (pluginName) {
+        logger.log('🔌 启用插件：');
+        logger.log(`在 zhin.config.ts 中添加：`);
+        logger.log('');
+        logger.log('  export default defineConfig({');
+        logger.log('    plugins: [');
+        logger.log(`      '${pluginName}'`);
+        logger.log('    ]');
+        logger.log('  });');
+      }
+
+    } catch (error) {
+      logger.error('安装失败');
+      throw error;
+    }
+
+  } catch (error: any) {
+    logger.error(`安装插件失败: ${error.message}`);
+    process.exit(1);
+  }
+}
+
 export const installCommand = new Command('install')
   .description('安装插件（npm 包或 git 仓库）')
   .argument('[plugin]', '插件名称或 git 地址')
   .option('-S, --save', '安装到 dependencies（默认）', true)
   .option('-D, --save-dev', '安装到 devDependencies', false)
   .option('-g, --global', '全局安装', false)
-  .action(async (plugin: string, options: InstallOptions) => {
-    try {
-      let pluginToInstall = plugin;
-
-      // 如果没有指定插件，交互式输入
-      if (!pluginToInstall) {
-        const { input } = await inquirer.prompt([
-          {
-            type: 'input',
-            name: 'input',
-            message: '请输入插件名称或 git 地址:',
-            validate: (input: string) => {
-              if (!input.trim()) {
-                return '插件名称或地址不能为空';
-              }
-              return true;
-            }
-          }
-        ]);
-        pluginToInstall = input;
-      }
-
-      // 判断插件类型
-      const pluginType = detectPluginType(pluginToInstall);
-      
-      logger.info(`检测到插件类型: ${pluginType}`);
-      logger.info(`正在安装: ${pluginToInstall}`);
-      logger.log('');
-
-      // 构建安装命令
-      const installCmd = buildInstallCommand(pluginToInstall, pluginType, options);
-      
-      logger.log(`执行命令: ${installCmd}`);
-      logger.log('');
-
-      // 执行安装
-      try {
-        execSync(installCmd, {
-          cwd: process.cwd(),
-          stdio: 'inherit'
-        });
-
-        logger.success('✓ 插件安装成功！');
-        logger.log('');
-
-        // 如果是 git 插件，提供额外说明
-        if (pluginType === 'git') {
-          logger.log('📝 Git 插件已安装到 node_modules/');
-          logger.log('');
-        }
-
-        // 提示如何启用插件
-        const pluginName = extractPluginName(pluginToInstall, pluginType);
-        if (pluginName) {
-          logger.log('🔌 启用插件：');
-          logger.log(`在 zhin.config.ts 中添加：`);
-          logger.log('');
-          logger.log('  export default defineConfig({');
-          logger.log('    plugins: [');
-          logger.log(`      '${pluginName}'`);
-          logger.log('    ]');
-          logger.log('  });');
-        }
-
-      } catch (error) {
-        logger.error('安装失败');
-        throw error;
-      }
-
-    } catch (error: any) {
-      logger.error(`安装插件失败: ${error.message}`);
-      process.exit(1);
-    }
-  });
+  .action(installPluginAction);
 
 // 别名命令
 export const addCommand = new Command('add')
@@ -99,9 +104,7 @@ export const addCommand = new Command('add')
   .option('-S, --save', '安装到 dependencies（默认）', true)
   .option('-D, --save-dev', '安装到 devDependencies', false)
   .option('-g, --global', '全局安装', false)
-  .action(async (plugin: string, options: InstallOptions) => {
-    await installCommand.parseAsync(['node', 'zhin', 'install', plugin || '', ...buildOptionsArray(options)], { from: 'user' });
-  });
+  .action(installPluginAction);
 
 /**
  * 检测插件类型
@@ -130,6 +133,36 @@ function detectPluginType(plugin: string): 'npm' | 'git' | 'github' | 'gitlab' |
 }
 
 /**
+ * 检查是否在 workspace root
+ */
+function isWorkspaceRoot(): boolean {
+  try {
+    const cwd = process.cwd();
+    const pkgJsonPath = path.join(cwd, 'package.json');
+    const workspacePath = path.join(cwd, 'pnpm-workspace.yaml');
+    
+    // 检查是否存在 pnpm-workspace.yaml
+    if (!fs.existsSync(workspacePath)) {
+      return false;
+    }
+    
+    // 检查 package.json 是否存在
+    if (!fs.existsSync(pkgJsonPath)) {
+      return false;
+    }
+    
+    const pkgJson = fs.readJsonSync(pkgJsonPath);
+    
+    // 如果 package.json 有 workspaces 字段或者存在 pnpm-workspace.yaml，
+    // 并且 package.json 中没有明确表示这是一个子包（没有 workspace:* 依赖），
+    // 则认为当前在 workspace root
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
  * 构建安装命令
  */
 function buildInstallCommand(plugin: string, type: string, options: InstallOptions): string {
@@ -142,6 +175,9 @@ function buildInstallCommand(plugin: string, type: string, options: InstallOptio
 
   if (options.global) {
     parts.push('-g');
+  } else if (isWorkspaceRoot()) {
+    // 如果在 workspace root 且不是全局安装，添加 -w 标志
+    parts.push('-w');
   }
 
   // 处理不同类型的插件
@@ -228,15 +264,5 @@ function extractPluginName(plugin: string, type: string): string | null {
     default:
       return null;
   }
-}
-
-/**
- * 构建选项数组
- */
-function buildOptionsArray(options: InstallOptions): string[] {
-  const arr: string[] = [];
-  if (options.saveDev) arr.push('-D');
-  if (options.global) arr.push('-g');
-  return arr;
 }
 
