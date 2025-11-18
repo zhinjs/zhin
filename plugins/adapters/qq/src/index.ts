@@ -82,6 +82,9 @@ export class QQBot<T extends ReceiverMode, M extends ApplicationPlatform = Appli
             $content: msg.message,
             $raw: msg.raw_message,
             $timestamp: Date.now(),
+            $recall: async () => {
+                await this.$recallMessage(result.$id)
+            },
             $reply:async (content: SendContent, quote: boolean|string=true):Promise<string>=> {
                 if(!Array.isArray(content)) content=[content];
                 if(quote) content.unshift({type:'reply',data:{id:typeof quote==="boolean"?result.$id:quote}})

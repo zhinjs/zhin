@@ -15,9 +15,9 @@ Zhin.js 基于 Node.js EventEmitter 构建了强大的事件系统，支持消�
 import { onMessage } from 'zhin.js'
 
 onMessage(async (message) => {
-  console.log('收到消息:', message.raw)
-  console.log('发送者:', message.sender.name)
-  console.log('频道:', message.channel.id)
+  console.log('收到消息:', message.$raw)
+  console.log('发送者:', message.$sender.name)
+  console.log('频道:', message.$channel.id)
 })
 ```
 
@@ -29,13 +29,13 @@ import { onMessage } from 'zhin.js'
 
 onMessage(async (message) => {
   // 群消息处理
-  if (message.channel.type === 'group') {
-    console.log('群消息:', message.raw)
+  if (message.$channel.type === 'group') {
+    console.log('群消息:', message.$raw)
   }
   
   // 私聊消息处理
-  if (message.channel.type === 'private') {
-    console.log('私聊消息:', message.raw)
+  if (message.$channel.type === 'private') {
+    console.log('私聊消息:', message.$raw)
   }
 })
 ```
@@ -47,25 +47,30 @@ onMessage(async (message) => {
 import { onMessage } from 'zhin.js'
 
 onMessage(async (message) => {
-  switch (message.adapter) {
+  switch (message.$adapter) {
     case 'icqq':
       // QQ 特有处理
-      if (message.content.some(seg => seg.type === 'at')) {
-        await message.reply('有人@我了！')
+      if (message.$content.some(seg => seg.type === 'at')) {
+        await message.$reply('有人@我了！')
       }
       break
       
     case 'kook':
       // KOOK 特有处理
-      if (message.channel.type === 'channel') {
-        await message.reply('频道消息')
+      if (message.$channel.type === 'channel') {
+        await message.$reply('频道消息')
       }
       break
       
     case 'onebot11':
       // OneBot 标准处理
-      await message.reply('OneBot 消息')
+      await message.$reply('OneBot 消息')
       break
+  }
+  
+  // 撤回不当消息
+  if (containsBadWords(message.$raw)) {
+    await message.$recall()
   }
 })
 ```
@@ -80,9 +85,10 @@ import { onMounted } from 'zhin.js'
 
 onMounted(() => {
   console.log('插件已挂载，所有依赖已就绪')
-  
-  // 可以安全使用其他服务
-  const db = useContext('database')
+})
+
+// 使用上下文服务
+useContext('database', (db) => {
   console.log('数据库已就绪:', db)
 })
 ```

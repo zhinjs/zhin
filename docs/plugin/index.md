@@ -84,7 +84,7 @@ addCommand(new MessageCommand('hello')
 // 📊 带参数的复杂命令
 addCommand(new MessageCommand('weather <city:text> [date:string]')
   .action(async (message, result) => {
-    const { city, date = 'today' } = result.args
+    const { city, date = 'today' } = result.params
     const weather = await getWeatherData(city, date)
     return `${city} ${date}的天气：${weather}`
   })
@@ -311,12 +311,14 @@ const logger = useLogger()  // 获取日志记录器
 ```typescript
 import { onMounted, useContext } from 'zhin.js'
 
-onMounted(async () => {
-  // ✅ 所有上下文都已就绪，可以安全使用
-  const db = useContext('database')
-  await db.query('SELECT 1')  // 现在可以安全使用数据库
-  
-  logger.info('插件挂载完成，所有依赖就绪')
+onMounted(() => {
+  logger.info('插件挂载完成')
+})
+
+// ✅ 使用数据库上下文
+useContext('database', async (db) => {
+  await db.query('SELECT 1')  // 所有上下文都已就绪，可以安全使用
+  logger.info('数据库连接成功')
 })
 ```
 

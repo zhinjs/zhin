@@ -169,26 +169,37 @@ export class MyPlatformClient extends PlatformClient {
 ```typescript
 // message-converter.ts
 export class MessageConverter {
-  static toZhinMessage(platformMsg: MyPlatformMessage): Message {
-    return {
-      id: platformMsg.id,
-      adapter: 'my-platform',
-      bot: 'my-bot',
-      content: this.parseContent(platformMsg.content),
-      sender: {
+  static toZhinMessage(platformMsg: MyPlatformMessage, bot: MyBot): Message {
+    const result: Message = {
+      $id: platformMsg.id,
+      $adapter: 'my-platform',
+      $bot: 'my-bot',
+      $content: this.parseContent(platformMsg.content),
+      $sender: {
         id: platformMsg.author.id,
         name: platformMsg.author.name
       },
-      channel: {
+      $channel: {
         id: platformMsg.channel.id,
         type: platformMsg.channel.type === 'text' ? 'group' : 'private'
       },
-      timestamp: Date.now(),
-      raw: platformMsg.content,
-      reply: async (content: string) => {
+      $timestamp: Date.now(),
+      $raw: platformMsg.content,
+      $reply: async (content: SendContent, quote?: boolean|string): Promise<string> => {
         // 实现回复逻辑
+        return await bot.$sendMessage({
+          ...result.$channel,
+          context: 'my-platform',
+          bot: bot.config.name,
+          content
+        })
+      },
+      $recall: async (): Promise<void> => {
+        // 实现撤回逻辑
+        await bot.$recallMessage(result.$id)
       }
     }
+    return result
   }
   
   static toPlatformMessage(zhinMsg: SendOptions): any {
@@ -219,7 +230,7 @@ export class MyBot implements Bot<MyBotConfig> {
   }
   
   private handleMessage(platformMsg: MyPlatformMessage) {
-    const message = MessageConverter.toZhinMessage(platformMsg)
+    const message = MessageConverter.toZhinMessage(platformMsg, this)
     this.plugin.emit('message.receive', message)
   }
   

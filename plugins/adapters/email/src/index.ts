@@ -310,6 +310,9 @@ export class EmailBot extends EventEmitter implements Bot<EmailMessage, EmailBot
             $raw: JSON.stringify(emailMsg),
             $timestamp: emailMsg.date.getTime(),
             $content: content,
+            $recall: async () => {
+                // 邮件适配器暂时不支持撤回消息
+            },
             $reply: async (content: SendContent): Promise<string> => {
                 return await this.$sendMessage({
                     context: this.$config.context,

@@ -170,6 +170,10 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11Messag
       $content: onebotMsg.message,
       $raw: onebotMsg.raw_message,
       $timestamp: onebotMsg.time,
+      $recall: async () => {
+        await this.$recallMessage(message.$id)
+      },
+
       $reply: async (content: MessageSegment[], quote?: boolean | string): Promise<string> => {
         if (quote) content.unshift({ type: 'reply', data: { message_id: message.$id } })
         return await this.$sendMessage({
@@ -369,6 +373,9 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11Messag
       $content: onebotMsg.message,
       $raw: onebotMsg.raw_message,
       $timestamp: onebotMsg.time,
+      $recall: async () => {
+        await this.$recallMessage(message.$id)
+      },
       $reply: async (content: SendContent, quote?: boolean | string): Promise<string> => {
         if (!Array.isArray(content)) content = [content];
         if (quote) content.unshift({ type: 'reply', data: { message_id: message.$id } })

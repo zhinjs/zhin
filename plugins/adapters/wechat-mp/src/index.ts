@@ -231,6 +231,9 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMessage, WeCh
             $raw: JSON.stringify(wechatMsg),
             $timestamp: wechatMsg.CreateTime * 1000,
             $content: content,
+            $recall: async () => {
+                await this.$recallMessage(result.$id)
+            },
             $reply: async (content: SendContent): Promise<string> => {
                 return await this.$sendMessage({
                     context: this.$config.context,

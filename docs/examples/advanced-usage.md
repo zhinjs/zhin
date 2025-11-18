@@ -38,7 +38,7 @@ useContext('database', async (db) => {
   // 注册天气查询命令
   addCommand(new MessageCommand('weather <city:text>')
     .action(async (message, result) => {
-      const weather = await plugin.getContext('weather').getWeather(result.args.city);
+      const weather = await plugin.getContext('weather').getWeather(result.params.city);
       await db.query('INSERT INTO weather_history (city, temperature, timestamp) VALUES (?, ?, ?)', 
         [weather.city, weather.temperature, Date.now()]);
       
@@ -68,7 +68,7 @@ addCommand(new MessageCommand('user list [page:number=1]')
   .action(async (message, result) => {
     requireAdmin(message);
     
-    const page = result.args.page || 1;
+    const page = result.params.page ?? 1;
     const limit = 10;
     const offset = (page - 1) * limit;
     
@@ -90,7 +90,7 @@ addCommand(new MessageCommand('group mute <userId:text> [duration:number=300]')
   .action(async (message, result) => {
     requireAdmin(message);
     
-    const { userId, duration } = result.args;
+    const { userId, duration } = result.params;
     const groupId = message.channel.id;
     
     try {

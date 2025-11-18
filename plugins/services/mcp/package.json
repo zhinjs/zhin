@@ -1,0 +1,51 @@
+{
+  "name": "@zhin.js/mcp",
+  "version": "1.0.0",
+  "description": "Zhin MCP Server - 让 AI 助手能够理解和生成 Zhin 插件",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "keywords": [
+    "zhin",
+    "service",
+    "mcp",
+    "model-context-protocol",
+    "ai",
+    "assistant"
+  ],
+  "author": "lc-cn",
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "type": "git",
+    "directory": "plugins/services/mcp"
+  },
+  "scripts": {
+    "build": "pnpm build:node",
+    "clean": "rm -rf lib",
+    "build:node": "tsc"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.22.0",
+    "zod": "^3.24.1"
+  },
+  "peerDependencies": {
+    "@zhin.js/http": "workspace:^",
+    "zhin.js": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@zhin.js/types": "workspace:^"
+  },
+  "files": [
+    "lib",
+    "README.md",
+    "CHANGELOG.md"
+  ]
+}

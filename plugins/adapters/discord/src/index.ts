@@ -272,6 +272,9 @@ export class DiscordBot
       $content: content,
       $raw: msg.content,
       $timestamp: msg.createdTimestamp,
+      $recall:async ()=> {
+        await msg.delete();  
+      },
       $reply: async (
         content: SendContent,
         quote?: boolean | string
@@ -960,6 +963,9 @@ export class DiscordInteractionsBot
       $raw: JSON.stringify(interaction),
       $timestamp: Date.now(),
       $content: content,
+      $recall:async ()=> {
+        // Interactions 消息无法撤回
+      },
       $reply: async (content: SendContent): Promise<string> => {
         return this.$sendMessage({
           ...this.$formatMessage(interaction),

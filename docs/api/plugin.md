@@ -72,9 +72,9 @@ onDispose(() => {
 import { onMessage } from 'zhin.js'
 
 onMessage(async (message) => {
-  console.log('收到消息:', message.raw)
-  console.log('发送者:', message.sender.name)
-  console.log('频道类型:', message.channel.type)
+  console.log('收到消息:', message.$raw)
+  console.log('发送者:', message.$sender.name)
+  console.log('频道类型:', message.$channel.type)
 })
 ```
 
@@ -94,14 +94,14 @@ addCommand(new MessageCommand('ping')
 // 带参数的命令
 addCommand(new MessageCommand('echo <text:text>')
   .action(async (message, result) => {
-    return `回声: ${result.args.text}`
+    return `回声: ${result.params.text}`
   })
 )
 
 // 带可选参数的命令
 addCommand(new MessageCommand('roll [sides:number=6]')
   .action(async (message, result) => {
-    const sides = result.args.sides || 6
+    const sides = result.params.sides ?? 6
     const roll = Math.floor(Math.random() * sides) + 1
     return `掷出了 ${roll} 点！`
   })
@@ -116,7 +116,7 @@ import { addMiddleware } from 'zhin.js'
 
 addMiddleware(async (message, next) => {
   const start = Date.now()
-  console.log(`开始处理消息: ${message.raw}`)
+  console.log(`开始处理消息: ${message.$raw}`)
   
   await next()
   
@@ -185,20 +185,15 @@ useContext('database', 'cache', (db, cache) => {
 ```typescript
 import { defineComponent, addComponent } from 'zhin.js'
 
-const WeatherCard = defineComponent({
-  name: 'weather-card',
-  props: {
-    city: String,
-    temperature: Number,
-    condition: String
-  },
-  async render(props) {
-    return [
-      `🌡️ **${props.city}天气**`,
-      `温度：${props.temperature}°C`,
-      `天气：${props.condition}`
-    ].join('\n')
-  }
+const WeatherCard = defineComponent(async function WeatherCard(
+  props: { city: string; temperature: number; condition: string },
+  context
+) {
+  return [
+    `🌡️ **${props.city}天气**`,
+    `温度：${props.temperature}°C`,
+    `天气：${props.condition}`
+  ].join('\n')
 })
 
 addComponent(WeatherCard)
@@ -225,14 +220,14 @@ onMessage(async (message) => {
 
 // 群消息
 onMessage(async (message) => {
-  if (message.channel.type === 'group') {
+  if (message.$channel.type === 'group') {
     // 处理群消息
   }
 })
 
 // 私聊消息
 onMessage(async (message) => {
-  if (message.channel.type === 'private') {
+  if (message.$channel.type === 'private') {
     // 处理私聊消息
   }
 })

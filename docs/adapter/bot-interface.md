@@ -172,6 +172,27 @@ class MyBot implements Bot {
 }
 ```
 
+### 撤回消息
+实现消息撤回功能（必须实现 $recallMessage 方法）。
+
+```typescript
+class MyBot implements Bot {
+  async $recallMessage(messageId: string) {
+    if (!this.connected) {
+      throw new Error('Bot 未连接')
+    }
+    
+    try {
+      await this.client.deleteMessage(messageId)
+      this.plugin.logger.debug('消息撤回成功:', messageId)
+    } catch (error) {
+      this.plugin.logger.error('消息撤回失败:', error)
+      throw error
+    }
+  }
+}
+```
+
 ### 接收消息
 处理接收到的消息。
 

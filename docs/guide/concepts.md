@@ -165,7 +165,7 @@ import { addCommand, MessageCommand } from 'zhin.js'
 
 addCommand(new MessageCommand('hello <name:text>')
   .action(async (message, result) => {
-    const { name } = result.args
+    const { name } = result.params
     return `Hello, ${name}!`
   })
 )

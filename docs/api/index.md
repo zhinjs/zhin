@@ -90,21 +90,26 @@ onDispose(() => {
 ```typescript
 import { onMessage } from 'zhin.js'
 
-// 💬 消息监听 - 实际消息接口
+// 💬 消息监听 - MessageBase 接口
 onMessage((message) => {
-  // 实际的 Message 接口：
-  console.log('消息ID:', message.id)
-  console.log('适配器:', message.adapter)  
-  console.log('机器人:', message.bot)
-  console.log('原始消息:', message.raw)
-  console.log('消息段:', message.content) // MessageSegment[]
-  console.log('发送者:', message.sender)  // { id, name? }
-  console.log('频道:', message.channel)   // { id, type: 'private' | 'group' | 'channel' }
-  console.log('时间戳:', message.timestamp)
+  // MessageBase 接口字段（带 $ 前缀）：
+  console.log('消息ID:', message.$id)
+  console.log('适配器:', message.$adapter)  
+  console.log('机器人:', message.$bot)
+  console.log('原始消息:', message.$raw)
+  console.log('消息段:', message.$content) // MessageElement[]
+  console.log('发送者:', message.$sender)  // { id, name? }
+  console.log('频道:', message.$channel)   // { id, type: 'private' | 'group' | 'channel' }
+  console.log('时间戳:', message.$timestamp)
   
-  // 回复消息 - 实际签名
-  if (message.raw === '你好') {
-    message.reply('你好呀！', false) // reply(content: SendContent, quote?: boolean|string)
+  // 回复消息
+  if (message.$raw === '你好') {
+    message.$reply('你好呀！', false) // $reply(content: SendContent, quote?: boolean|string)
+  }
+  
+  // 撤回消息（例如：管理员命令）
+  if (message.$raw === '撤回' && isAdmin(message.$sender.id)) {
+    message.$recall() // $recall(): Promise<void>
   }
 })
 ```
@@ -127,7 +132,7 @@ addCommand(new MessageCommand('hello')
 addCommand(new MessageCommand('echo <content:text>')
   .action(async (message, result) => {
     // result 是 MatchResult 类型
-    return `回声: ${result.args.content}`
+    return `回声: ${result.params.content}`
   })
 )
 
@@ -305,21 +310,25 @@ const DataComponent = defineComponent(async function DataComponent(props: {
 ### 消息相关类型（实际接口）
 
 ```typescript
-// 实际的消息接口
-interface Message {
-  id: string                    // 消息 ID
-  adapter: string               // 适配器名称
-  bot: string                   // 机器人名称
-  content: MessageSegment[]     // 消息段数组
-  sender: MessageSender         // 发送者信息
-  channel: MessageChannel       // 频道信息
-  timestamp: number             // 时间戳
-  raw: string                   // 原始消息内容
-  reply(content: SendContent, quote?: boolean|string): Promise<void>  // 回复方法
+// 消息基础结构（MessageBase）
+interface MessageBase {
+  $id: string                   // 消息 ID
+  $adapter: string              // 适配器名称
+  $bot: string                  // 机器人名称
+  $content: MessageElement[]    // 消息段数组
+  $sender: MessageSender        // 发送者信息
+  $channel: MessageChannel      // 频道信息
+  $timestamp: number            // 时间戳
+  $raw: string                  // 原始消息内容
+  $reply(content: SendContent, quote?: boolean|string): Promise<string>  // 回复消息
+  $recall(): Promise<void>      // 撤回消息
 }
 
+// 完整消息类型，支持扩展
+type Message<T extends object = {}> = MessageBase & T
+
 // 消息段
-interface MessageSegment {
+interface MessageElement {
   type: string    // 段类型：text, image, at, face 等
   data: Record<string, any>       // 段数据
 }
@@ -485,14 +494,11 @@ addCommand(new MessageCommand('status')
   }))
 
 // 实际的组件定义
-const testComponent = defineComponent({
-  name: 'test',
-  props: {
-    id: String
-  },
-  async render({ id }, context) {
-    return '这是父组件' + id + context.children || ''
-  }
+const testComponent = defineComponent(async function test(
+  props: { id: string },
+  context
+) {
+  return '这是父组件' + props.id + (context.children || '')
 })
 
 // 实际的上下文使用

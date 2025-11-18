@@ -81,12 +81,14 @@ onMessage(async (message) => {
 ```typescript
 import { onMounted, useContext } from 'zhin.js'
 
-onMounted(async () => {
-  // ✅ 所有上下文都已就绪，可以安全使用
-  const db = useContext('database')
-  await db.query('SELECT 1')  // 现在可以安全使用数据库
-  
-  logger.info('插件挂载完成，所有依赖就绪')
+onMounted(() => {
+  logger.info('插件挂载完成')
+})
+
+// ✅ 使用上下文依赖
+useContext('database', async (db) => {
+  await db.query('SELECT 1')  // 数据库已就绪，可以安全使用
+  logger.info('数据库连接成功')
 })
 ```
 

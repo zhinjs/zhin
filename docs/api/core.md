@@ -98,8 +98,8 @@ onDispose(() => {
 import { onMessage } from 'zhin.js'
 
 onMessage(async (message) => {
-  console.log('收到消息:', message.raw)
-  await message.reply('你好！')
+  console.log('收到消息:', message.$raw)
+  await message.$reply('你好！')
 })
 ```
 

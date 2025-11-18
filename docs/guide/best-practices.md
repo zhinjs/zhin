@@ -154,7 +154,7 @@ addCommand(new MessageCommand('time')
 // 📢 回声命令
 addCommand(new MessageCommand('echo <text:text>')
   .action(async (message, result) => {
-    return `📢 ${result.args.text}`
+    return `📢 ${result.params.text}`
   })
 )
 
@@ -205,7 +205,7 @@ addCommand(new MessageCommand('ban <user:text>')
       return '❌ 权限不足'
     }
     
-    const userId = result.args.user
+    const userId = result.params.user
     bannedUsers.add(userId)
     
     logger.warn(`管理员 ${message.sender.id} 封禁了用户 ${userId}`)
@@ -220,7 +220,7 @@ addCommand(new MessageCommand('unban <user:text>')
       return '❌ 权限不足'
     }
     
-    const userId = result.args.user
+    const userId = result.params.user
     if (bannedUsers.delete(userId)) {
       return `✅ 已解封用户: ${userId}`
     } else {
@@ -272,7 +272,7 @@ const logger = useLogger()
 // 🎲 掷骰子
 addCommand(new MessageCommand('roll [sides:number=6]')
   .action(async (message, result) => {
-    const sides = result.args.sides || 6
+    const sides = result.params.sides ?? 6
     const roll = Math.floor(Math.random() * sides) + 1
     return `🎲 你掷出了 ${roll} 点！（${sides}面骰子）`
   })
@@ -281,7 +281,7 @@ addCommand(new MessageCommand('roll [sides:number=6]')
 // 🔮 随机选择
 addCommand(new MessageCommand('choose <choices:text>')
   .action(async (message, result) => {
-    const choices = result.args.choices
+    const choices = result.params.choices
       .split(/[,，|｜]/)
       .map(s => s.trim())
       .filter(s => s)
@@ -303,7 +303,7 @@ addCommand(new MessageCommand('guess [number:number]')
     const userId = message.sender.id
     
     // 如果没有提供数字，开始新游戏
-    if (!result.args.number) {
+    if (!result.params.number) {
       const targetNumber = Math.floor(Math.random() * 100) + 1
       games.set(userId, { number: targetNumber, attempts: 0 })
       return '🎯 猜数字游戏开始！我想了一个1-100的数字，你来猜猜看！'
@@ -314,7 +314,7 @@ addCommand(new MessageCommand('guess [number:number]')
       return '🎯 请先输入 guess 开始游戏'
     }
     
-    const guess = result.args.number
+    const guess = result.params.number
     game.attempts++
     
     if (guess === game.number) {
@@ -384,7 +384,7 @@ logger.error('天气查询失败', {
 logger.debug('用户命令', {
   command: 'weather',
   user: message.sender.id,
-  args: result.args
+  params: result.params
 })
 ```
 
@@ -413,7 +413,7 @@ addCommand(new MessageCommand('weather <city:text>')
   .action(async (message, result) => {
     return await safeExecute(
       async () => {
-        const weather = await fetchWeather(result.args.city)
+        const weather = await fetchWeather(result.params.city)
         return formatWeatherMessage(weather)
       },
       '天气查询失败',
@@ -458,7 +458,7 @@ const weatherCache = new SimpleCache<any>()
 
 addCommand(new MessageCommand('weather <city:text>')
   .action(async (message, result) => {
-    const city = result.args.city
+    const city = result.params.city
     const cacheKey = `weather:${city.toLowerCase()}`
     
     // 检查缓存

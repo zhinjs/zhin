@@ -121,7 +121,7 @@ import { MessageCommand } from '@zhin.js/core'
 
 const command = new MessageCommand('echo <content:text>')
   .action(async (message, result) => {
-    const content = result.args.content
+    const content = result.params.content
     return `你说了：${content}`
   })
 

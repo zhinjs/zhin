@@ -40,30 +40,31 @@ register({
 });
 
 // 工单创建命令
-addCommand(new MessageCommand('ticket <issue:text>')
-  .action(async (message, result) => {
-    const service = useContext('customer-service');
-    const ticketId = await service.createTicket(message.sender.id, result.args.issue);
-    
-    return `🎫 工单已创建！
+useContext('customer-service', (service) => {
+  addCommand(new MessageCommand('ticket <issue:text>')
+    .action(async (message, result) => {
+      const ticketId = await service.createTicket(message.$sender.id, result.params.issue);
+      
+      return `🎫 工单已创建！
 工单号：${ticketId}
-问题：${result.args.issue}
+问题：${result.params.issue}
 状态：已提交，客服将在24小时内回复`;
-  })
-);
+    })
+  );
+});
 
-// 工单查询命令
-addCommand(new MessageCommand('status <ticketId:text>')
-  .action(async (message, result) => {
-    const service = useContext('customer-service');
-    const status = await service.getTicketStatus(result.args.ticketId);
+  // 工单查询命令
+  addCommand(new MessageCommand('status <ticketId:text>')
+    .action(async (message, result) => {
+      const status = await service.getTicketStatus(result.params.ticketId);
     
-    return `📋 工单状态：
-工单号：${result.args.ticketId}
+      return `📋 工单状态：
+工单号：${result.params.ticketId}
 状态：${status.status}
 优先级：${status.priority}`;
-  })
-);
+    })
+  );
+});
 
 // 智能回复
 onMessage(async (message) => {
@@ -75,8 +76,8 @@ onMessage(async (message) => {
   };
   
   for (const [keyword, reply] of Object.entries(keywords)) {
-    if (message.raw.includes(keyword)) {
-      await message.reply(`🤖 自动回复：${reply}`);
+    if (message.$raw.includes(keyword)) {
+      await message.$reply(`🤖 自动回复：${reply}`);
       break;
     }
   }
@@ -140,7 +141,7 @@ const projectManager = new ProjectManager();
 // 创建任务命令
 addCommand(new MessageCommand('task create <title:text> <assignee:text> [priority:text=medium]')
   .action(async (message, result) => {
-    const { title, assignee, priority } = result.args;
+    const { title, assignee, priority } = result.params;
     const task = projectManager.createTask(title, assignee, priority as any);
     
     return `✅ 任务已创建！
@@ -155,7 +156,7 @@ ID: ${task.id}
 // 更新任务状态
 addCommand(new MessageCommand('task update <taskId:text> <status:text>')
   .action(async (message, result) => {
-    const { taskId, status } = result.args;
+    const { taskId, status } = result.params;
     const validStatuses = ['todo', 'in-progress', 'done'];
     
     if (!validStatuses.includes(status)) {
@@ -245,7 +246,7 @@ const gameSessions = new Map<string, GameSession>();
 addCommand(new MessageCommand('guess start [max:number=100]')
   .action(async (message, result) => {
     const userId = message.sender.id;
-    const max = result.args.max || 100;
+    const max = result.params.max ?? 100;
     
     // 检查是否已有游戏进行中
     if (gameSessions.has(userId)) {
@@ -279,7 +280,7 @@ addCommand(new MessageCommand('guess <number:number>')
       return '❌ 请先开始游戏：guess start';
     }
     
-    const guess = result.args.number;
+    const guess = result.params.number;
     session.attempts++;
     
     if (guess === session.number) {
@@ -439,7 +440,7 @@ addCommand(new MessageCommand('go <direction:text>')
       return '❌ 请先开始冒险：adventure start';
     }
     
-    const direction = result.args.direction;
+    const direction = result.params.direction;
     const location = gameMap[state.location];
     
     if (!location.exits.includes(direction)) {
@@ -477,7 +478,7 @@ addCommand(new MessageCommand('take <item:text>')
       return '❌ 请先开始冒险：adventure start';
     }
     
-    const item = result.args.item;
+    const item = result.params.item;
     const location = gameMap[state.location];
     
     if (!location.items.includes(item)) {
@@ -608,7 +609,7 @@ addCommand(new MessageCommand('stats global')
 // 排行榜命令
 addCommand(new MessageCommand('leaderboard [type:text=messages]')
   .action(async (message, result) => {
-    const type = result.args.type;
+    const type = result.params.type;
     
     let sortedUsers: Array<{ userId: string; value: number; name?: string }> = [];
     

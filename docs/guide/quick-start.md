@@ -198,7 +198,7 @@ addCommand(new MessageCommand('status')
 // 🎲 骰子游戏
 addCommand(new MessageCommand('roll [sides:number=6]')
   .action((message, result) => {
-    const sides = result.args.sides || 6
+    const sides = result.params.sides ?? 6
     const roll = Math.floor(Math.random() * sides) + 1
     return `🎲 你掷出了 ${roll} 点！（${sides} 面骰子）`
   }))
@@ -228,7 +228,7 @@ useContext('process', () => {
 // 在 test-plugin.ts 中添加
 addCommand(new MessageCommand('weather <city>')
   .action(async (message, result) => {
-    const city = result.args.city
+    const city = result.params.city
     // 🌤️ 这里可以调用真实的天气 API
     return `${city} 今天天气：☀️ 晴朗，25°C`
   }))
@@ -242,14 +242,14 @@ useContext('process', () => {
   
   addCommand(new MessageCommand('save <key> <value>')
     .action((message, result) => {
-      userData.set(result.args.key, result.args.value)
-      return `✅ 已保存: ${result.args.key} = ${result.args.value}`
+      userData.set(result.params.key, result.params.value)
+      return `✅ 已保存: ${result.params.key} = ${result.params.value}`
     }))
     
   addCommand(new MessageCommand('get <key>')
     .action((message, result) => {
-      const value = userData.get(result.args.key)
-      return value ? `📝 ${result.args.key} = ${value}` : `❌ 未找到 ${result.args.key}`
+      const value = userData.get(result.params.key)
+      return value ? `📝 ${result.params.key} = ${value}` : `❌ 未找到 ${result.params.key}`
     }))
 })
 ```

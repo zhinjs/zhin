@@ -121,7 +121,7 @@ const logger = useLogger();
 // 天气查询命令
 addCommand(new MessageCommand('weather <city:text>')
   .action(async (message, result) => {
-    const city = result.args.city;
+    const city = result.params.city;
     
     // 模拟天气查询
     const weather = await getWeather(city);
@@ -137,10 +137,10 @@ addCommand(new MessageCommand('weather <city:text>')
 addCommand(new MessageCommand('calc <expression:text>')
   .action(async (message, result) => {
     try {
-      const expression = result.args.expression;
-      const result = eval(expression); // 注意：生产环境中应该使用安全的表达式解析器
+      const expression = result.params.expression;
+      const calcResult = eval(expression); // 注意：生产环境中应该使用安全的表达式解析器
       
-      return `🧮 计算结果：${expression} = ${result}`;
+      return `🧮 计算结果：${expression} = ${calcResult}`;
     } catch (error) {
       return '❌ 计算表达式无效';
     }
@@ -167,9 +167,9 @@ import { addCommand, MessageCommand, useLogger } from 'zhin.js';
 const logger = useLogger();
 
 // 骰子命令
-addCommand(new MessageCommand('roll [sides:number=6]')
+addCommand(new MessageCommand('dice [sides:number=6]')
   .action(async (message, result) => {
-    const sides = result.args.sides || 6;
+    const sides = result.params.sides ?? 6;
     const roll = Math.floor(Math.random() * sides) + 1;
     
     return `🎲 你掷出了 ${roll} 点！（${sides} 面骰子）`;
@@ -179,8 +179,8 @@ addCommand(new MessageCommand('roll [sides:number=6]')
 // 随机数命令
 addCommand(new MessageCommand('random [min:number=1] [max:number=100]')
   .action(async (message, result) => {
-    const min = result.args.min || 1;
-    const max = result.args.max || 100;
+    const min = result.params.min ?? 1;
+    const max = result.params.max ?? 100;
     const random = Math.floor(Math.random() * (max - min + 1)) + min;
     
     return `🎯 随机数：${random} (范围: ${min}-${max})`;
@@ -337,7 +337,7 @@ const storage = new Map<string, any>();
 
 addCommand(new MessageCommand('set <key:text> <value:text>')
   .action(async (message, result) => {
-    const { key, value } = result.args;
+    const { key, value } = result.params;
     storage.set(key, value);
     
     return `✅ 已设置 ${key} = ${value}`;
@@ -346,7 +346,7 @@ addCommand(new MessageCommand('set <key:text> <value:text>')
 
 addCommand(new MessageCommand('get <key:text>')
   .action(async (message, result) => {
-    const key = result.args.key;
+    const key = result.params.key;
     const value = storage.get(key);
     
     if (value === undefined) {

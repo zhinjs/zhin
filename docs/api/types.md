@@ -39,21 +39,25 @@ interface SendOptions extends MessageChannel {
 ### 消息相关类型
 
 ```typescript
-// 消息接口
-interface Message {
-  id: string                    // 消息 ID
-  adapter: string               // 适配器名称
-  bot: string                   // 机器人名称
-  content: MessageSegment[]     // 消息段数组
-  sender: MessageSender         // 发送者信息
-  channel: MessageChannel       // 频道信息
-  timestamp: number             // 时间戳
-  raw: string                   // 原始消息内容
-  reply(content: SendContent, quote?: boolean|string): Promise<void>
+// 消息基础结构（MessageBase）
+interface MessageBase {
+  $id: string                   // 消息 ID
+  $adapter: string              // 适配器名称
+  $bot: string                  // 机器人名称
+  $content: MessageElement[]    // 消息段数组
+  $sender: MessageSender        // 发送者信息
+  $channel: MessageChannel      // 频道信息
+  $timestamp: number            // 时间戳
+  $raw: string                  // 原始消息内容
+  $reply(content: SendContent, quote?: boolean|string): Promise<string>  // 回复消息
+  $recall(): Promise<void>      // 撤回消息
 }
 
+// 完整消息类型，支持扩展
+type Message<T extends object = {}> = MessageBase & T
+
 // 消息段
-interface MessageSegment {
+interface MessageElement {
   type: string                  // 段类型：text, image, at, face 等
   data: Record<string, any>     // 段数据
 }
@@ -122,11 +126,17 @@ interface CommandOptions {
 // 动作处理器
 type ActionHandler = (message: Message, result: MatchResult) => Promise<any> | any
 
-// 匹配结果
+// 匹配结果（来自 segment-matcher）
 interface MatchResult {
-  args: Record<string, any>    // 解析的参数
-  params: Record<string, any>  // 原始参数
-  remaining: string           // 剩余文本
+  matched: MessageSegment[]        // 匹配到的消息段
+  params: Record<string, any>      // 解析的参数（对象形式）
+  remaining: MessageSegment[]      // 剩余的消息段
+}
+
+// 消息段
+interface MessageSegment {
+  type: string
+  data: Record<string, any>
 }
 ```
 
@@ -359,19 +369,19 @@ type Readonly<T> = {
 
 ```typescript
 // 消息类型守卫
-function isGroupMessage(message: Message): message is Message & { channel: { type: 'group' } } {
-  return message.channel.type === 'group'
+function isGroupMessage(message: Message): message is Message & { $channel: { type: 'group' } } {
+  return message.$channel.type === 'group'
 }
 
-function isPrivateMessage(message: Message): message is Message & { channel: { type: 'private' } } {
-  return message.channel.type === 'private'
+function isPrivateMessage(message: Message): message is Message & { $channel: { type: 'private' } } {
+  return message.$channel.type === 'private'
 }
 
 // 使用类型守卫
 onMessage(async (message) => {
   if (isGroupMessage(message)) {
     // TypeScript 知道这是群消息
-    console.log('群ID:', message.channel.id)
+    console.log('群ID:', message.$channel.id)
   }
 })
 ```

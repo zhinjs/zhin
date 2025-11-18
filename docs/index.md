@@ -266,13 +266,13 @@ useContext('openai', 'database', (ai, db) => {
   addCommand(new Command('ask <question>')
     .action(async (msg, result) => {
       const response = await ai.chat({
-        messages: [{ role: 'user', content: result.args.question }]
+        messages: [{ role: 'user', content: result.params.question }]
       })
       
       // 对话历史存储
       await db.model('conversations').create({
         user: msg.$sender.id,
-        question: result.args.question,
+        question: result.params.question,
         answer: response.content
       })
       

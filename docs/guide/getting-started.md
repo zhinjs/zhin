@@ -455,7 +455,7 @@ const logger = useLogger();
 // 🎲 骰子命令
 addCommand(new MessageCommand('roll [sides:number=6]')
   .action(async (message, result) => {
-    const sides = result.args.sides || 6;
+    const sides = result.params.sides ?? 6;
     const roll = Math.floor(Math.random() * sides) + 1;
     return `🎲 你掷出了 ${roll} 点！（${sides} 面骰子）`;
   })

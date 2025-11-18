@@ -1,0 +1,45 @@
+{
+  "name": "@zhin.js/plugin-github-notify",
+  "version": "0.0.1",
+  "description": "GitHub notification plugin for Zhin.js",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rm -rf lib"
+  },
+  "keywords": [
+    "zhin",
+    "plugin",
+    "github",
+    "webhook",
+    "notification"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@zhin.js/types":"workspace:*",
+    "typescript": "^5.3.3"
+  },
+  "peerDependencies": {
+    "zhin.js": "workspace:*",
+    "@zhin.js/http": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/http": {
+        "optional": true
+    }
+  }
+}

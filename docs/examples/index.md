@@ -70,7 +70,7 @@ addCommand(new MessageCommand('ping')
 // 🔢 带参数的命令
 addCommand(new MessageCommand('echo <message:text>')
   .action(async (message, result) => {
-    const { message: text } = result.args
+    const { message: text } = result.params
     return `📢 回声: ${text}`
   })
 )
@@ -86,7 +86,7 @@ addCommand(new MessageCommand('time')
 // 🎲 随机数命令
 addCommand(new MessageCommand('random [min:number=1] [max:number=100]')
   .action(async (message, result) => {
-    const { min = 1, max = 100 } = result.args
+    const { min = 1, max = 100 } = result.params
     const random = Math.floor(Math.random() * (max - min + 1)) + min
     return `🎲 随机数 (${min}-${max}): ${random}`
   })
@@ -175,7 +175,7 @@ register({
 useContext('weather', (weather) => {
   addCommand(new MessageCommand('weather <city:text>')
     .action(async (message, result) => {
-      const { city } = result.args
+      const { city } = result.params
       
       try {
         const weatherData = await weather.getWeather(city)
@@ -291,18 +291,18 @@ register({
 })
 
 // 🛡️ 防骚扰中间件
-addMiddleware(async (message, next) => {
-  // 仅对群消息进行检查
-  if (message.type === 'group' && message.channel) {
-    const admin = useContext('admin')
-    
-    if (admin && admin.isBanned(message.channel.id, message.sender.id)) {
-      logger.warn(`被封禁用户尝试发言: ${message.sender.name} (${message.sender.id})`)
-      return // 阻止处理被封禁用户的消息
+useContext('admin', (admin) => {
+  addMiddleware(async (message, next) => {
+    // 仅对群消息进行检查
+    if (message.type === 'group' && message.channel) {
+      if (admin.isBanned(message.channel.id, message.sender.id)) {
+        logger.warn(`被封禁用户尝试发言: ${message.sender.name} (${message.sender.id})`)
+        return // 阻止处理被封禁用户的消息
+      }
     }
-  }
-  
-  await next()
+    
+    await next()
+  })
 })
 
 // 👥 管理命令
@@ -318,7 +318,7 @@ useContext('admin', (admin) => {
         return '❌ 只有超级管理员才能添加群管理员'
       }
       
-      const { user } = result.args
+      const { user } = result.params
       const success = admin.addGroupAdmin(message.channel.id, user)
       
       if (success) {
@@ -341,7 +341,7 @@ useContext('admin', (admin) => {
         return '❌ 只有管理员才能封禁用户'
       }
       
-      const { user } = result.args
+      const { user } = result.params
       const success = admin.banUser(message.channel.id, user)
       
       if (success) {
@@ -364,7 +364,7 @@ useContext('admin', (admin) => {
         return '❌ 只有管理员才能解封用户'
       }
       
-      const { user } = result.args
+      const { user } = result.params
       const success = admin.unbanUser(message.channel.id, user)
       
       if (success) {
@@ -648,7 +648,7 @@ const logger = useLogger()
 // 🎲 掷骰子
 addCommand(new MessageCommand('roll [sides:number=6] [count:number=1]')
   .action(async (message, result) => {
-    const { sides = 6, count = 1 } = result.args
+    const { sides = 6, count = 1 } = result.params
     
     if (count > 10) return '❌ 最多只能掷10个骰子'
     
@@ -667,7 +667,7 @@ addCommand(new MessageCommand('roll [sides:number=6] [count:number=1]')
 // 🔮 随机选择
 addCommand(new MessageCommand('choose <choices:text>')
   .action(async (message, result) => {
-    const choices = result.args.choices
+    const choices = result.params.choices
       .split(/[,，|｜]/)
       .map(choice => choice.trim())
       .filter(choice => choice)

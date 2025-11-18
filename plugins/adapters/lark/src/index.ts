@@ -283,6 +283,9 @@ export class LarkBot implements Bot<LarkMessage, LarkBotConfig> {
             $content: content,
             $raw: JSON.stringify(msg),
             $timestamp: msg.create_time ? parseInt(msg.create_time) : Date.now(),
+            $recall: async () => {
+                await this.$recallMessage(msg.message_id || '');
+            },
             $reply: async (content: SendContent): Promise<string> => {
                 return await this.$sendMessage({
                     context: 'lark',

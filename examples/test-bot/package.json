@@ -18,6 +18,7 @@
     "@zhin.js/console": "workspace:*",
     "@zhin.js/client": "workspace:*",
     "@zhin.js/http": "workspace:*",
+    "@zhin.js/mcp": "workspace:*",
     "@zhin.js/adapter-kook": "workspace:*",
     "@zhin.js/adapter-onebot11": "workspace:*",
     "@zhin.js/adapter-discord": "workspace:*",

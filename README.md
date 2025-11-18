@@ -136,7 +136,7 @@ defineSchema(Schema.object({
 addCommand(new MessageCommand('hello <name>')
   .action(async (message, result) => {
     const config = usePlugin().config
-    return `${config.greeting}, ${result.args.name}!`
+    return `${config.greeting}, ${result.params.name}!`
   })
 )
 
@@ -164,11 +164,11 @@ useContext('database', 'cache', (db, cache) => {
   addCommand(new MessageCommand('user <id>')
     .action(async (message, result) => {
       // 先查缓存
-      let user = await cache.get(`user:${result.args.id}`)
+      let user = await cache.get(`user:${result.params.id}`)
       if (!user) {
         // 缓存未命中，查数据库
-        user = await db.model('users').findByPk(result.args.id)
-        await cache.set(`user:${result.args.id}`, user, 300)
+        user = await db.model('users').findByPk(result.params.id)
+        await cache.set(`user:${result.params.id}`, user, 300)
       }
       return `用户信息: ${user.name}`
     })

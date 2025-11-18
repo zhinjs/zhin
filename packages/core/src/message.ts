@@ -29,6 +29,7 @@ export interface MessageBase {
     $content: MessageElement[];
     $sender: MessageSender;
     $reply(content:SendContent,quote?:boolean|string):Promise<string>
+    $recall():Promise<void>
     $channel: MessageChannel;
     $timestamp: number;
     $raw: string;

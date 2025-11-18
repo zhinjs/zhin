@@ -72,28 +72,121 @@ const logger = useLogger()
 
 addCommand(new MessageCommand('hello <name:text>')
   .action(async (message, result) => {
-    logger.info(`Hello command from ${result.args.name}`)
-    return `Hello, ${result.args.name}!`
+    logger.info(`Hello command from ${result.params.name}`)
+    return `Hello, ${result.params.name}!`
   })
 )
 ```
 
 ### 4. 适配器开发
-实现 `Bot` 接口和注册适配器：
+**Bot 接口定义**：
+```typescript
+interface Bot<C extends Bot.Config = Bot.Config, M = any> {
+  config: C
+  connected: boolean
+  $connect(): Promise<void>
+  $disconnect(): Promise<void>
+  $sendMessage(options: SendOptions): Promise<string>
+  $recallMessage(messageId: string): Promise<void>
+  $formatMessage(raw: M): Message<M>
+}
+```
 
+**完整实现**：
 ```typescript
 // adapters/my-adapter/src/index.ts
-import { Adapter, Bot, registerAdapter } from 'zhin.js'
+import { Adapter, Bot, registerAdapter, Message, SendOptions, segment, Plugin } from 'zhin.js'
 
-class MyBot implements Bot<MyConfig> {
-  async $connect() { /* 连接逻辑 */ }
-  async $disconnect() { /* 断开连接 */ }
-  async $sendMessage(options: SendOptions) { /* 发送消息 */ }
-  $formatMessage(raw) { return Message.from(...) }
+// 1. 定义配置
+interface MyConfig extends Bot.Config {
+  name: string
+  context: string
+  token: string
+  apiUrl: string
 }
 
+// 2. 定义原始消息格式
+interface RawMessage {
+  id: string
+  content: string
+  author: { id: string; name: string }
+  timestamp: number
+}
+
+// 3. 实现 Bot 类
+class MyBot implements Bot<MyConfig, RawMessage> {
+  public connected = false
+  
+  constructor(
+    private plugin: Plugin,
+    public config: MyConfig
+  ) {}
+  
+  async $connect(): Promise<void> {
+    // 连接逻辑
+    this.connected = true
+  }
+  
+  async $disconnect(): Promise<void> {
+    this.connected = false
+  }
+  
+  async $sendMessage(options: SendOptions): Promise<string> {
+    // 发送消息，返回消息 ID
+    const response = await fetch(`${this.config.apiUrl}/send`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${this.config.token}` },
+      body: JSON.stringify({ content: options.content })
+    })
+    const { message_id } = await response.json()
+    return message_id
+  }
+  
+  async $recallMessage(messageId: string): Promise<void> {
+    // 撤回消息
+    await fetch(`${this.config.apiUrl}/messages/${messageId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${this.config.token}` }
+    })
+  }
+  
+  $formatMessage(raw: RawMessage): Message<RawMessage> {
+    // 格式化消息（必须包含 $recall 方法）
+    const result: Message<RawMessage> = {
+      $id: raw.id,
+      $adapter: this.config.context,
+      $bot: this.config.name,
+      $content: [segment.text(raw.content)],
+      $sender: { id: raw.author.id, name: raw.author.name },
+      $channel: { id: 'default', type: 'private' },
+      $timestamp: raw.timestamp,
+      $raw: raw.content,
+      $reply: async (content, quote?) => {
+        return await this.$sendMessage({ ...result.$channel, context: this.config.context, bot: this.config.name, content })
+      },
+      $recall: async () => {
+        await this.$recallMessage(result.$id)
+      }
+    }
+    return result
+  }
+}
+
+// 4. 注册适配器
 registerAdapter(new Adapter('my-platform', MyBot))
+
+// 5. 类型扩展
+declare module '@zhin.js/types' {
+  interface RegisteredAdapters {
+    'my-platform': Adapter<MyBot>
+  }
+}
 ```
+
+**关键要点**：
+- `$sendMessage` 必须返回消息 ID
+- `$formatMessage` 返回的 Message 必须包含 `$recall` 方法
+- 正确触发事件：`message.receive`, `message.private.receive`, `message.group.receive`
 
 ### 5. JSX 支持
 使用 JSX 构建消息组件（非 HTML）：
@@ -110,12 +203,10 @@ registerAdapter(new Adapter('my-platform', MyBot))
 // 使用 JSX
 import { defineComponent } from 'zhin.js'
 
-const MyComp = defineComponent({
-  name: 'my-comp',
-  props: { title: String, count: Number },
-  render(props) {
-    return <text>{props.title}: {props.count}</text>
-  }
+const MyComp = defineComponent(async function MyComp(
+  props: { title: string; count: number }
+) {
+  return `${props.title}: ${props.count}`
 })
 ```
 
@@ -167,15 +258,11 @@ addComponent(async function myComp(props: { title: string }, context: ComponentC
 })
 
 // 定义组件
-const MyComp = defineComponent({
-  name: 'my-comp',
-  props: { title: String, count: Number },
-  data() {
-    return { message: `${this.title}: ${this.count}` }
-  },
-  render(props, context) {
-    return `<text>${context.message}</text>`
-  }
+const MyComp = defineComponent(async function MyComp(
+  props: { title: string; count: number }
+) {
+  const message = `${props.title}: ${props.count}`
+  return message
 })
 ```
 
@@ -216,18 +303,145 @@ pnpm pub                # 发布到 npm
 - `broadcast(event, ...args)`: 向下广播（到所有子依赖）
 - `emit(event, ...args)`: 仅触发自身监听器
 
-### 2. 中间件
-洋葱模型，按注册顺序执行：
-
+### 2. 中间件系统
+**类型定义**：
 ```typescript
+type MessageMiddleware<P extends RegisteredAdapter=RegisteredAdapter> = 
+  (message: Message<AdapterMessage<P>>, next: () => Promise<void>) => MaybePromise<void>
+```
+
+**洋葱模型**，按注册顺序执行：
+```typescript
+// 基础中间件
 addMiddleware(async (message, next) => {
   console.log('before')
   await next()
   console.log('after')
 })
+
+// 日志中间件
+addMiddleware(async (message, next) => {
+  const start = Date.now()
+  console.log(`[收到] ${message.$raw}`)
+  await next()
+  console.log(`[完成] 耗时 ${Date.now() - start}ms`)
+})
+
+// 过滤中间件（拦截消息）
+addMiddleware(async (message, next) => {
+  if (message.$raw.includes('广告')) {
+    await message.$recall() // 撤回消息
+    return // 不调用 next()，中断后续处理
+  }
+  await next()
+})
+
+// 平台特定中间件（类型安全）
+addMiddleware<'icqq'>(async (message: Message<AdapterMessage<'icqq'>>, next) => {
+  console.log(`QQ群: ${message.group_id}`)
+  await next()
+})
 ```
 
-### 3. 数据库模型
+### 3. 组件系统
+**类型定义**：
+```typescript
+type Component<P = any> = {
+  (props: P, context: ComponentContext): Promise<SendContent>
+  name: string
+}
+```
+
+**定义和使用组件**：
+```typescript
+// 函数式组件
+addComponent(async function UserCard(
+  props: { userId: string; name: string },
+  context: ComponentContext
+) {
+  return `👤 ${props.name} (ID: ${props.userId})`
+})
+
+// 使用 defineComponent
+const Avatar = defineComponent(async function Avatar(
+  props: { url: string; size?: number }
+) {
+  return `[image,file=${props.url}]`
+}, 'Avatar')
+
+addComponent(Avatar)
+
+// 在命令中使用
+addCommand(new MessageCommand('profile <userId:text>')
+  .action(async (message, result) => {
+    return `<UserCard userId="${result.params.userId}" name="张三" />`
+  })
+)
+
+// 组件属性支持多种类型
+<MyComp 
+  text="string" 
+  count={42} 
+  enabled={true} 
+  items={[1,2,3]}
+  config={{key:"value"}}
+/>
+```
+
+### 4. 定时任务（Cron）
+**类型定义**：
+```typescript
+class Cron {
+  constructor(cronExpression: string, callback: () => void | Promise<void>)
+  run(): void
+  stop(): void
+  dispose(): void
+}
+```
+
+**Cron 表达式格式**: `"秒 分 时 日 月 周"`
+
+**常用示例**：
+```typescript
+import { usePlugin } from 'zhin.js'
+
+const plugin = usePlugin()
+
+// 每天午夜执行
+plugin.cron('0 0 0 * * *', async () => {
+  console.log('每日任务')
+})
+
+// 每15分钟
+plugin.cron('0 */15 * * * *', async () => {
+  console.log('定时检查')
+})
+
+// 工作日早上9点
+plugin.cron('0 0 9 * * 1-5', async () => {
+  console.log('工作日提醒')
+})
+
+// 带数据库操作
+useContext('database', (db) => {
+  plugin.cron('0 0 2 * * *', async () => {
+    // 凌晨2点清理数据
+    await db.model('logs').delete({ 
+      timestamp: { $lt: Date.now() - 3*24*60*60*1000 } 
+    })
+  })
+})
+
+// 常用表达式
+'0 0 0 * * *'      // 每天午夜
+'0 0 */2 * * *'    // 每2小时
+'0 */30 * * * *'   // 每30分钟
+'0 0 12 * * *'     // 每天中午12点
+'0 0 0 * * 0'      // 每周日
+'0 0 0 1 * *'      // 每月1号
+```
+
+### 5. 数据库模型
 使用 `defineModel` 定义表结构：
 
 ```typescript
@@ -243,7 +457,7 @@ onDatabaseReady(async (db) => {
 })
 ```
 
-### 4. HTTP 路由
+### 6. HTTP 路由
 依赖 `http` 插件和 `router` Context：
 
 ```typescript

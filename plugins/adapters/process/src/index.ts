@@ -76,6 +76,9 @@ export class ProcessBot extends EventEmitter implements Bot<{content:string,ts:n
             $content:[{type:'text',data:{text:content}}],
             $raw:content,
             $timestamp: ts,
+            $recall: async () => {
+                await this.$recallMessage(message.$id)
+            },
             $reply:async (content: SendContent, quote?: boolean|string):Promise<string>=> {
                 if(!Array.isArray(content)) content=[content];
                 if(quote) content.unshift({type:'reply',data:{id:typeof quote==="boolean"?message.$id:quote}})
@@ -126,6 +129,9 @@ export class ProcessBot extends EventEmitter implements Bot<{content:string,ts:n
             $content: [{ type: 'text', data: { text: content } }],
             $raw: content,
             $timestamp: ts,
+            $recall: async () => {
+                await this.$recallMessage(message.$id)
+            },
             $reply: async (replyContent: SendContent, quote?: boolean | string): Promise<string> => {
                 if (!Array.isArray(replyContent)) replyContent = [replyContent];
                 if (quote) replyContent.unshift({ type: 'reply', data: { id: typeof quote === "boolean" ? message.$id : quote } })
@@ -177,6 +183,9 @@ export class SandboxBot extends EventEmitter implements Bot<{content:MessageElem
             $content:content,
             $raw:segment.raw(content),
             $timestamp: ts,
+            $recall: async () => {
+                await this.$recallMessage(message.$id)
+            },
             $reply:async (content: SendContent, quote?: boolean|string):Promise<string>=> {
                 if(!Array.isArray(content)) content=[content];
                 if(quote) content.unshift({type:'reply',data:{id:typeof quote==="boolean"?message.$id:quote}})
