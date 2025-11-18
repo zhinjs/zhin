@@ -1,5 +1,11 @@
 # @zhin.js/adapter-onebot11
 
+## 1.0.16
+
+### Patch Changes
+
+- 0ed27a7: fix: build ob11
+
 ## 1.0.15
 
 ### Patch Changes
