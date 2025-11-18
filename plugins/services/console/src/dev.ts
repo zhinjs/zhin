@@ -2,7 +2,7 @@ import { ViteDevServer, createServer, searchForWorkspaceRoot } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
-
+import fs from "fs";
 export interface DevServerOptions {
   /** 客户端代码根目录 */
   root: string;
@@ -26,7 +26,11 @@ export async function createViteDevServer(
   if (enableTailwind) {
     plugins.push(tailwindcss());
   }
-
+  const clientPath = path.resolve(process.cwd(), 'node_modules/@zhin.js/client/client')
+  if (!fs.existsSync(clientPath)) {
+    throw new Error('@zhin.js/client not found')
+  }
+  console.log('clientPath',clientPath)
   return await await createServer({
     root,
     base,
@@ -68,7 +72,7 @@ export async function createViteDevServer(
         "redux-persist",
       ],
       alias: {
-        "@zhin.js/client": path.resolve(root, "../../../packages/client/client"),
+        "@zhin.js/client": path.resolve(process.cwd(), "node_modules/@zhin.js/client/client"),
         "@": path.resolve(root, "../client/src"),
       },
     },
