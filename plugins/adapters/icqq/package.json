@@ -5,11 +5,6 @@
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
-  "files": [
-    "lib",
-    "client",
-    "README.md"
-  ],
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",
@@ -28,8 +23,16 @@
     "type": "git",
     "directory": "plugins/adapters/icqq"
   },
+  "files": [
+    "lib",
+    "README.md",
+    "CHANGELOG.md",
+    "client",
+    "src",
+    "dist"
+  ],
   "scripts": {
-    "build": "tsc && (zhin-console build || echo 'Skipping client build: zhin-console not found')",
+    "build": "tsc && zhin-console build",
     "clean": "rm -rf lib"
   },
   "dependencies": {

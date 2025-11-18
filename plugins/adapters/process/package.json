@@ -11,6 +11,14 @@
       "import": "./lib/index.js"
     }
   },
+  "files": [
+    "lib",
+    "README.md",
+    "CHANGELOG.md",
+    "client",
+    "src",
+    "dist"
+  ],
   "keywords": [
     "zhin",
     "adapter",
@@ -24,7 +32,7 @@
     "directory": "plugins/adapters/process"
   },
   "scripts": {
-    "build": "tsc && (zhin-console build || echo 'Skipping client build: zhin-console not found')",
+    "build": "tsc && zhin-console build",
     "clean": "rm -rf lib"
   },
   "devDependencies": {
