@@ -1,5 +1,11 @@
 # @zhin.js/console
 
+## 1.0.11
+
+### Patch Changes
+
+- 8f75b7f: fix: production
+
 ## 1.0.10
 
 ### Patch Changes
