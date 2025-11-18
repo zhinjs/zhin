@@ -1,5 +1,11 @@
 # @zhin.js/console
 
+## 1.0.12
+
+### Patch Changes
+
+- 9bc8dc4: fix: remove log,find client
+
 ## 1.0.11
 
 ### Patch Changes
