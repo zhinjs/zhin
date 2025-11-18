@@ -1,5 +1,13 @@
 # @zhin.js/core
 
+## 1.0.15
+
+### Patch Changes
+
+- f9e75ce: fix: 一致性调整,文档调整
+- e783f90: fix:保护 bun
+- f9e75ce: fix: recall,文档统一,mcp,githubnotifiy
+
 ## 1.0.14
 
 ### Patch Changes

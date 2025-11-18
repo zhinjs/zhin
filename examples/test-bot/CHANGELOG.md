@@ -1,5 +1,23 @@
 # test-bot
 
+## 0.1.6
+
+### Patch Changes
+
+- f9e75ce: fix: 一致性调整,文档调整
+- e783f90: fix:保护 bun
+- f9e75ce: fix: recall,文档统一,mcp,githubnotifiy
+- Updated dependencies [f9e75ce]
+- Updated dependencies [f9e75ce]
+  - @zhin.js/adapter-onebot11@1.0.17
+  - @zhin.js/adapter-discord@1.0.15
+  - @zhin.js/adapter-process@1.0.20
+  - @zhin.js/adapter-icqq@1.0.20
+  - @zhin.js/adapter-kook@1.0.15
+  - @zhin.js/adapter-qq@1.0.15
+  - zhin.js@1.0.15
+  - @zhin.js/plugin-github-notify@0.0.2
+
 ## 0.1.5
 
 ### Patch Changes
