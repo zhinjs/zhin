@@ -1,5 +1,15 @@
 # test-bot
 
+## 0.1.5
+
+### Patch Changes
+
+- 9bc8dc4: fix: remove log,find client
+- Updated dependencies [9bc8dc4]
+  - @zhin.js/console@1.0.12
+  - @zhin.js/adapter-icqq@1.0.19
+  - @zhin.js/adapter-process@1.0.19
+
 ## 0.1.4
 
 ### Patch Changes
