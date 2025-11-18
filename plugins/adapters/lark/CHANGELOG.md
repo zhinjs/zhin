@@ -1,5 +1,13 @@
 # @zhin.js/adapter-lark
 
+## 1.0.16
+
+### Patch Changes
+
+- f9e75ce: fix: 一致性调整,文档调整
+- f9e75ce: fix: recall,文档统一,mcp,githubnotifiy
+  - zhin.js@1.0.15
+
 ## 1.0.15
 
 ### Patch Changes
