@@ -1,5 +1,5 @@
 import { Telegraf, Context as TelegrafContext } from "telegraf";
-import type { Message as TelegramMessage, Update } from "telegraf/types";
+import type { Message as TelegramMessage, Update, MessageEntity, ExtraReplyMessage } from "telegraf/types";
 import {
   Bot,
   Adapter,
@@ -145,7 +145,12 @@ export class TelegramBot extends Telegraf implements Bot<TelegramMessage, Telegr
       $raw: "text" in msg ? msg.text || "" : "",
       $timestamp: msg.date * 1000,
       $recall: async () => {
-        await this.$recallMessage(result.$id);
+        try {
+          await this.telegram.deleteMessage(parseInt(channelId), parseInt(result.$id));
+        } catch (error) {
+          plugin.logger.error("Error recalling Telegram message:", error);
+          throw error;
+        }
       },
       $reply: async (
         content: SendContent,
@@ -153,12 +158,12 @@ export class TelegramBot extends Telegraf implements Bot<TelegramMessage, Telegr
       ): Promise<string> => {
         if (!Array.isArray(content)) content = [content];
 
-        const sendOptions: any = {};
+        const sendOptions: Partial<ExtraReplyMessage> = {};
 
         // Handle reply
         if (quote) {
           const replyToMessageId = typeof quote === "boolean" ? result.$id : quote;
-          sendOptions.reply_to_message_id = parseInt(replyToMessageId);
+          sendOptions.reply_parameters = { message_id: parseInt(replyToMessageId) };
         }
 
         const sentMsg = await this.sendContentToChat(
@@ -350,7 +355,7 @@ export class TelegramBot extends Telegraf implements Bot<TelegramMessage, Telegr
 
   private parseTextWithEntities(
     text: string,
-    entities: any[]
+    entities: MessageEntity[]
   ): MessageSegment[] {
     const segments: MessageSegment[] = [];
     let lastOffset = 0;
@@ -449,12 +454,11 @@ export class TelegramBot extends Telegraf implements Bot<TelegramMessage, Telegr
   private async sendContentToChat(
     chatId: number,
     content: SendContent,
-    extraOptions: any = {}
+    extraOptions: Partial<ExtraReplyMessage> = {}
   ): Promise<TelegramMessage> {
     if (!Array.isArray(content)) content = [content];
 
     let textContent = "";
-    const mediaGroup: any[] = [];
     let hasMedia = false;
 
     for (const segment of content) {
@@ -600,14 +604,13 @@ export class TelegramBot extends Telegraf implements Bot<TelegramMessage, Telegr
           break;
 
         case "sticker":
-          hasMedia = true;
           if (data.file_id) {
+            hasMedia = true;
             return await this.telegram.sendSticker(chatId, data.file_id, extraOptions);
           }
           break;
 
         case "location":
-          hasMedia = true;
           return await this.telegram.sendLocation(
             chatId,
             data.latitude,
@@ -626,22 +629,18 @@ export class TelegramBot extends Telegraf implements Bot<TelegramMessage, Telegr
       return await this.telegram.sendMessage(chatId, textContent.trim(), extraOptions);
     }
 
-    // Return a dummy message if nothing was sent
-    return { message_id: 0 } as TelegramMessage;
+    // If neither media nor text was sent, this is an error
+    throw new Error("TelegramBot.$sendMessage: No media or text content to send.");
   }
 
   async $recallMessage(id: string): Promise<void> {
-    try {
-      // Telegram doesn't provide message recall in the same way
-      // We can delete the message if the bot has permission
-      // However, we need chat_id which we don't have from just the message_id
-      // This is a limitation - we'd need to store message metadata
-      plugin.logger.warn(
-        "Message recall not fully supported in Telegram adapter - requires chat_id"
-      );
-    } catch (error) {
-      plugin.logger.error("Error recalling Telegram message:", error);
-    }
+    // Telegram requires both chat_id and message_id to delete a message
+    // The Bot interface only provides message_id, making recall impossible
+    // Users should use message.$recall() instead, which has the full context
+    throw new Error(
+      "TelegramBot.$recallMessage: Message recall not supported without chat_id. " +
+      "Use message.$recall() method instead, which contains the required context."
+    );
   }
 }
 

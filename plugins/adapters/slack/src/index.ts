@@ -1,5 +1,5 @@
 import { App as SlackApp, LogLevel } from "@slack/bolt";
-import { WebClient } from "@slack/web-api";
+import { WebClient, ChatPostMessageArguments } from "@slack/web-api";
 import type {
   MessageEvent,
   GenericMessageEvent,
@@ -156,7 +156,15 @@ export class SlackBot implements Bot<GenericMessageEvent, SlackBotConfig> {
       $raw: msg.text || "",
       $timestamp: parseFloat(msg.ts) * 1000,
       $recall: async () => {
-        await this.$recallMessage(result.$id);
+        try {
+          await this.client.chat.delete({
+            channel: channelId,
+            ts: result.$id,
+          });
+        } catch (error) {
+          plugin.logger.error("Error recalling Slack message:", error);
+          throw error;
+        }
       },
       $reply: async (
         content: SendContent,
@@ -164,7 +172,7 @@ export class SlackBot implements Bot<GenericMessageEvent, SlackBotConfig> {
       ): Promise<string> => {
         if (!Array.isArray(content)) content = [content];
 
-        const sendOptions: any = {
+        const sendOptions: Partial<ChatPostMessageArguments> = {
           channel: channelId,
         };
 
@@ -383,12 +391,11 @@ export class SlackBot implements Bot<GenericMessageEvent, SlackBotConfig> {
   private async sendContentToChannel(
     channel: string,
     content: SendContent,
-    extraOptions: any = {}
+    extraOptions: Partial<ChatPostMessageArguments> = {}
   ): Promise<any> {
     if (!Array.isArray(content)) content = [content];
 
     let textContent = "";
-    const blocks: any[] = [];
     const attachments: any[] = [];
 
     for (const segment of content) {
@@ -450,7 +457,7 @@ export class SlackBot implements Bot<GenericMessageEvent, SlackBotConfig> {
     }
 
     // Send message
-    const messageOptions: any = {
+    const messageOptions: Partial<ChatPostMessageArguments> = {
       channel,
       text: textContent.trim() || "Message",
       ...extraOptions,
@@ -460,25 +467,18 @@ export class SlackBot implements Bot<GenericMessageEvent, SlackBotConfig> {
       messageOptions.attachments = attachments;
     }
 
-    if (blocks.length > 0) {
-      messageOptions.blocks = blocks;
-    }
-
     const result = await this.client.chat.postMessage(messageOptions);
     return result.message || {};
   }
 
   async $recallMessage(id: string): Promise<void> {
-    try {
-      // Slack doesn't support message recall in the traditional sense
-      // We can delete messages, but we need the channel
-      // This is a limitation - we'd need to store message metadata
-      plugin.logger.warn(
-        "Message recall not fully supported in Slack adapter - requires channel information"
-      );
-    } catch (error) {
-      plugin.logger.error("Error recalling Slack message:", error);
-    }
+    // Slack requires both channel and ts (timestamp) to delete a message
+    // The Bot interface only provides message ID (ts), making recall impossible  
+    // Users should use message.$recall() instead, which has the full context
+    throw new Error(
+      "SlackBot.$recallMessage: Message recall not supported without channel information. " +
+      "Use message.$recall() method instead, which contains the required context."
+    );
   }
 }
 
