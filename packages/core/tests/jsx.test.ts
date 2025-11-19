@@ -218,15 +218,15 @@ describe('JSX消息组件系统测试', () => {
   })
 
   describe('错误处理', () => {
-    it('应该处理组件执行错误', async () => {
+    it('应该捕获组件执行错误并返回错误消息', async () => {
       const ErrorComponent: Component<{}> = async () => {
         throw new Error('Component error')
       }
 
       const element = jsx(ErrorComponent, {})
       
-      await expect(renderJSX(element as MessageComponent<any>, mockContext))
-        .rejects.toThrow('Component error')
+      const result = await renderJSX(element as MessageComponent<any>, mockContext)
+      expect(result).toBe('❌ 组件渲染失败: Component error')
     })
 
     it('应该处理无效的元素类型', async () => {
@@ -235,9 +235,28 @@ describe('JSX消息组件系统测试', () => {
         data: { children: 'test' }
       }
       
-      // 由于实现中会尝试调用type作为函数，这里应该处理错误
-      await expect(renderJSX(invalidElement as MessageComponent<any>, mockContext))
-        .rejects.toThrow()
+      const result = await renderJSX(invalidElement as MessageComponent<any>, mockContext)
+      expect(result).toMatch(/❌ 组件渲染失败/)
+    })
+    
+    it('应该处理异步组件返回 Promise 的情况', async () => {
+      const AsyncPromiseComponent: Component<{ text: string }> = async (props) => {
+        // 返回一个 Promise（会被自动 await）
+        return Promise.resolve(`Async: ${props.text}`)
+      }
+
+      const element = jsx(AsyncPromiseComponent, { text: 'test' })
+      const result = await renderJSX(element as MessageComponent<any>, mockContext)
+      
+      expect(result).toBe('Async: test')
+    })
+    
+    it('应该处理子组件为 Promise 的情况', async () => {
+      const AsyncChild = Promise.resolve('Async Child Content')
+      const element = jsx('div', { children: [AsyncChild] })
+      
+      const result = await renderJSX(element as MessageComponent<any>, mockContext)
+      expect(result).toBe('Async Child Content')
     })
   })
 

@@ -3,7 +3,7 @@ import {
   MessageCommand,
   addComponent,
 } from "zhin.js";
-const TestError=async function TestError(){
+const Test=async function Test(){
   return new Promise<string>((resolve,reject)=>{
     setTimeout(() => {
       reject(new Error("测试异步组件错误处理"));
@@ -13,9 +13,9 @@ const TestError=async function TestError(){
     }, 2000);
   })
 }
-addComponent(TestError);
+addComponent(Test);
 addCommand(
   new MessageCommand("test-error").action(async (message, result) => {
-    return <TestError />;
+    return <Test />;
   })
 );

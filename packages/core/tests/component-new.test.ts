@@ -342,7 +342,9 @@ describe('函数式组件系统测试', () => {
         bot: 'test'
       }
 
-      await expect(renderComponents(componentMap, options)).rejects.toThrow('Test error')
+      const result = await renderComponents(componentMap, options)
+      // 错误会被捕获并转换为错误消息
+      expect(result.content).toMatch(/\[error Error: Test error\]/)
     })
   })
 })
