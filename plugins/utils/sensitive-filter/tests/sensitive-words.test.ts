@@ -6,6 +6,7 @@ import {
   politicalWords,
   violenceWords,
   pornWords,
+  homophoneWords,
 } from '../src/sensitive-words'
 
 describe('敏感词过滤测试', () => {
@@ -45,6 +46,7 @@ describe('敏感词过滤测试', () => {
         political: true,
         violence: true,
         porn: true,
+        homophone: true,
       }
       
       const words = getEnabledWords(options)
@@ -53,6 +55,7 @@ describe('敏感词过滤测试', () => {
       expect(words).toContain(politicalWords[0])
       expect(words).toContain(violenceWords[0])
       expect(words).toContain(pornWords[0])
+      expect(words).toContain(homophoneWords[0])
     })
 
     it('应该只返回启用类别的敏感词', () => {
@@ -60,6 +63,7 @@ describe('敏感词过滤测试', () => {
         political: true,
         violence: false,
         porn: false,
+        homophone: false,
       }
       
       const words = getEnabledWords(options)
@@ -78,6 +82,24 @@ describe('敏感词过滤测试', () => {
       
       expect(words).toContain('自定义词1')
       expect(words).toContain('自定义词2')
+    })
+    
+    it('应该正确过滤谐音词', () => {
+      const options: SensitiveFilterOptions = {
+        political: false,
+        violence: false,
+        porn: false,
+        prohibited: false,
+        fraud: false,
+        illegal: false,
+        homophone: true,
+      }
+      
+      const words = getEnabledWords(options)
+      
+      expect(words).toContain('GCD')
+      expect(words).toContain('sb')
+      expect(words).toContain('cao')
     })
   })
 
@@ -127,6 +149,50 @@ describe('敏感词过滤测试', () => {
       
       // 文本共8个字符（每个中文字符算1个）："测试"(2) + "敏感"(2) + "测试"(2) + "敏感"(2) = 8
       expect(result).toBe('********')
+    })
+  })
+
+  describe('谐音词和变体词过滤', () => {
+    it('应该检测拼音缩写', () => {
+      const words = ['GCD', 'FLG', 'CNM']
+      const regex = createSensitiveWordRegex(words)
+      
+      expect('这是GCD的东西'.match(regex)).toBeTruthy()
+      expect('flg是邪教'.match(regex)).toBeTruthy()
+      expect('cnm骂人'.match(regex)).toBeTruthy()
+    })
+
+    it('应该检测谐音变体', () => {
+      const words = ['共惨党', '政腐', '尼玛']
+      const regex = createSensitiveWordRegex(words)
+      
+      expect('共惨党说法'.match(regex)).toBeTruthy()
+      expect('政腐机关'.match(regex)).toBeTruthy()
+      expect('尼玛真是'.match(regex)).toBeTruthy()
+    })
+
+    it('应该检测符号分隔词', () => {
+      const words = ['法_轮_功', '六_四', '毒_品']
+      const regex = createSensitiveWordRegex(words)
+      
+      expect('法_轮_功邪教'.match(regex)).toBeTruthy()
+      expect('六_四事件'.match(regex)).toBeTruthy()
+      expect('毒_品交易'.match(regex)).toBeTruthy()
+    })
+
+    it('应该替换谐音词', () => {
+      const words = ['sb', 'cao', 'fuck']
+      const regex = createSensitiveWordRegex(words)
+      
+      const text = '你个sb，去cao，fuck off'
+      const result = text.replace(regex, (match) => '*'.repeat(match.length))
+      
+      expect(result).toContain('**')
+      expect(result).toContain('***')
+      expect(result).toContain('****')
+      expect(result).not.toContain('sb')
+      expect(result).not.toContain('cao')
+      expect(result).not.toContain('fuck')
     })
   })
 })
