@@ -4,6 +4,8 @@
 
 ### Patch Changes
 
+- 修复 $sendMessage 方法中重复的日志输出
+- 添加完整的 README 文档和使用指南
 - zhin.js@1.0.16
 
 ## 1.0.15

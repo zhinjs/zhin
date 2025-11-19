@@ -107,11 +107,9 @@ export class QQBot<T extends ReceiverMode, M extends ApplicationPlatform = Appli
                     const id=options.id.replace('direct:','')
                     const result= await this.sendDirectMessage(id,options.content)
                     plugin.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
-                    plugin.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
                     return `direct-${options.id}:${result.message_id.toString()}`
                 }else{
                     const result= await this.sendPrivateMessage(options.id,options.content)
-                    plugin.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
                     plugin.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
                     return `private-${options.id}:${result.message_id.toString()}`
                 }
@@ -120,13 +118,11 @@ export class QQBot<T extends ReceiverMode, M extends ApplicationPlatform = Appli
             case "group":{
                 const result= await this.sendGroupMessage(options.id,options.content)
                 plugin.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
-                plugin.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
                 return `group-${options.id}:${result.message_id.toString()}`
                 break;
             }
             case 'channel':{
                 const result= await this.sendGuildMessage(options.id,options.content)
-                plugin.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
                 plugin.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
                 return `channel-${options.id}:${result.message_id.toString()}`
                 break;
