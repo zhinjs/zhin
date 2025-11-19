@@ -11,7 +11,6 @@ import {
     useContext
 } from "zhin.js";
 import type { Context } from 'koa';
-import axios, { AxiosInstance } from 'axios';
 import { createHmac } from 'crypto';
 
 // 声明模块，注册钉钉适配器类型
@@ -94,7 +93,7 @@ export class DingTalkBot implements Bot<DingTalkMessage, DingTalkBotConfig> {
     $connected?: boolean
     private router: any
     private accessToken: AccessToken
-    private axiosInstance: AxiosInstance
+    private baseURL: string
     private sessionWebhooks: Map<string, string> = new Map() // conversationId -> webhook
 
     constructor(router: any, public $config: DingTalkBotConfig) {
@@ -103,29 +102,43 @@ export class DingTalkBot implements Bot<DingTalkMessage, DingTalkBotConfig> {
         this.accessToken = { token: '', expires_in: 0, timestamp: 0 };
         
         // 设置 API 基础 URL
-        const baseURL = $config.apiBaseUrl || 'https://oapi.dingtalk.com';
-        
-        this.axiosInstance = axios.create({
-            baseURL,
-            timeout: 30000,
-            headers: {
-                'Content-Type': 'application/json; charset=utf-8'
-            }
-        });
-        
-        // 设置请求拦截器，自动添加 access_token
-        this.axiosInstance.interceptors.request.use(async (config: any) => {
-            await this.ensureAccessToken();
-            // 钉钉使用查询参数传递 access_token
-            config.params = {
-                ...config.params,
-                access_token: this.accessToken.token
-            };
-            return config;
-        });
+        this.baseURL = $config.apiBaseUrl || 'https://oapi.dingtalk.com';
         
         // 设置 webhook 路由
         this.setupWebhookRoute();
+    }
+
+    // 封装 fetch 请求方法
+    private async request(path: string, options: {
+        method?: 'GET' | 'POST',
+        params?: Record<string, any>,
+        body?: any
+    } = {}): Promise<any> {
+        await this.ensureAccessToken();
+        
+        const { method = 'GET', params = {}, body } = options;
+        
+        // 添加 access_token 到查询参数
+        const urlParams = new URLSearchParams({
+            ...params,
+            access_token: this.accessToken.token
+        });
+        
+        const url = `${this.baseURL}${path}?${urlParams.toString()}`;
+        
+        const fetchOptions: RequestInit = {
+            method,
+            headers: {
+                'Content-Type': 'application/json; charset=utf-8'
+            }
+        };
+        
+        if (body && method === 'POST') {
+            fetchOptions.body = JSON.stringify(body);
+        }
+        
+        const response = await fetch(url, fetchOptions);
+        return await response.json();
     }
 
     private setupWebhookRoute(): void {
@@ -211,25 +224,25 @@ export class DingTalkBot implements Bot<DingTalkMessage, DingTalkBotConfig> {
 
     private async refreshAccessToken(): Promise<void> {
         try {
-            const response = await axios.get(
-                `${this.$config.apiBaseUrl || 'https://oapi.dingtalk.com'}/gettoken`,
-                {
-                    params: {
-                        appkey: this.$config.appKey,
-                        appsecret: this.$config.appSecret
-                    }
-                }
-            );
+            const baseURL = this.$config.apiBaseUrl || 'https://oapi.dingtalk.com';
+            const params = new URLSearchParams({
+                appkey: this.$config.appKey,
+                appsecret: this.$config.appSecret
+            });
             
-            if (response.data.errcode === 0) {
+            const url = `${baseURL}/gettoken?${params.toString()}`;
+            const response = await fetch(url);
+            const data = await response.json();
+            
+            if (data.errcode === 0) {
                 this.accessToken = {
-                    token: response.data.access_token,
-                    expires_in: response.data.expires_in,
+                    token: data.access_token,
+                    expires_in: data.expires_in,
                     timestamp: Date.now()
                 };
                 plugin.logger.debug('Access token refreshed successfully');
             } else {
-                throw new Error(`Failed to get access token: ${response.data.errmsg}`);
+                throw new Error(`Failed to get access token: ${data.errmsg}`);
             }
         } catch (error) {
             plugin.logger.error('Failed to refresh access token:', error);
@@ -384,30 +397,37 @@ export class DingTalkBot implements Bot<DingTalkMessage, DingTalkBotConfig> {
             // 优先使用会话 webhook 发送消息（更快，更准确）
             const sessionWebhook = this.sessionWebhooks.get(conversationId);
             if (sessionWebhook) {
-                const response = await axios.post(sessionWebhook, content);
-                if (response.data.errcode !== 0) {
-                    throw new Error(`Failed to send message via session webhook: ${response.data.errmsg}`);
+                const response = await fetch(sessionWebhook, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json; charset=utf-8'
+                    },
+                    body: JSON.stringify(content)
+                });
+                const data = await response.json();
+                
+                if (data.errcode !== 0) {
+                    throw new Error(`Failed to send message via session webhook: ${data.errmsg}`);
                 }
                 plugin.logger.debug('Message sent via session webhook');
-                return response.data.msgId || Date.now().toString();
+                return data.msgId || Date.now().toString();
             }
             
             // 否则使用普通机器人发送接口
-            const response = await this.axiosInstance.post('/robot/send', {
-                ...content,
-                robotCode: this.$config.robotCode
-            }, {
-                params: {
-                    access_token: this.accessToken.token
+            const data = await this.request('/robot/send', {
+                method: 'POST',
+                body: {
+                    ...content,
+                    robotCode: this.$config.robotCode
                 }
             });
             
-            if (response.data.errcode !== 0) {
-                throw new Error(`Failed to send message: ${response.data.errmsg}`);
+            if (data.errcode !== 0) {
+                throw new Error(`Failed to send message: ${data.errmsg}`);
             }
             
             plugin.logger.debug('Message sent successfully');
-            return response.data.msgId || Date.now().toString();
+            return data.msgId || Date.now().toString();
         } catch (error) {
             plugin.logger.error('Failed to send message:', error);
             throw error;
@@ -562,15 +582,18 @@ export class DingTalkBot implements Bot<DingTalkMessage, DingTalkBotConfig> {
     // 获取用户信息
     async getUserInfo(userId: string): Promise<any> {
         try {
-            const response = await this.axiosInstance.post('/topapi/v2/user/get', {
-                userid: userId
+            const data = await this.request('/topapi/v2/user/get', {
+                method: 'POST',
+                body: {
+                    userid: userId
+                }
             });
             
-            if (response.data.errcode === 0) {
-                return response.data.result;
+            if (data.errcode === 0) {
+                return data.result;
             }
             
-            throw new Error(`Failed to get user info: ${response.data.errmsg}`);
+            throw new Error(`Failed to get user info: ${data.errmsg}`);
         } catch (error) {
             plugin.logger.error('Failed to get user info:', error);
             return null;
@@ -580,15 +603,18 @@ export class DingTalkBot implements Bot<DingTalkMessage, DingTalkBotConfig> {
     // 获取部门用户列表
     async getDepartmentUsers(deptId: number): Promise<any[]> {
         try {
-            const response = await this.axiosInstance.post('/topapi/user/listid', {
-                dept_id: deptId
+            const data = await this.request('/topapi/user/listid', {
+                method: 'POST',
+                body: {
+                    dept_id: deptId
+                }
             });
             
-            if (response.data.errcode === 0) {
-                return response.data.result.userid_list || [];
+            if (data.errcode === 0) {
+                return data.result.userid_list || [];
             }
             
-            throw new Error(`Failed to get department users: ${response.data.errmsg}`);
+            throw new Error(`Failed to get department users: ${data.errmsg}`);
         } catch (error) {
             plugin.logger.error('Failed to get department users:', error);
             return [];
@@ -598,18 +624,21 @@ export class DingTalkBot implements Bot<DingTalkMessage, DingTalkBotConfig> {
     // 发送工作通知
     async sendWorkNotice(userIdList: string[], content: any): Promise<boolean> {
         try {
-            const response = await this.axiosInstance.post('/topapi/message/corpconversation/asyncsend_v2', {
-                agent_id: this.$config.robotCode,
-                userid_list: userIdList.join(','),
-                msg: content
+            const data = await this.request('/topapi/message/corpconversation/asyncsend_v2', {
+                method: 'POST',
+                body: {
+                    agent_id: this.$config.robotCode,
+                    userid_list: userIdList.join(','),
+                    msg: content
+                }
             });
             
-            if (response.data.errcode === 0) {
+            if (data.errcode === 0) {
                 plugin.logger.debug('Work notice sent successfully');
                 return true;
             }
             
-            throw new Error(`Failed to send work notice: ${response.data.errmsg}`);
+            throw new Error(`Failed to send work notice: ${data.errmsg}`);
         } catch (error) {
             plugin.logger.error('Failed to send work notice:', error);
             return false;

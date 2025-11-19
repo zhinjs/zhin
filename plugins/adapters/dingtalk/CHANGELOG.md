@@ -13,3 +13,7 @@
 * **adapter-dingtalk**: 自动管理 access_token
 * **adapter-dingtalk**: 提供用户信息、部门用户等 API 接口
 * **adapter-dingtalk**: 支持发送工作通知
+
+### Changes
+
+* **adapter-dingtalk**: 使用 fetch 替代 axios，减少依赖
