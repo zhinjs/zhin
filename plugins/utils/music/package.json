@@ -1,0 +1,48 @@
+{
+  "name": "@zhin.js/plugin-music",
+  "version": "0.0.1",
+  "description": "Music search and sharing plugin for Zhin.js",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rm -rf lib"
+  },
+  "keywords": [
+    "zhin",
+    "plugin",
+    "music",
+    "qq-music",
+    "netease-music"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "zhin.js": "workspace:*",
+    "@zhin.js/types": "workspace:*",
+    "@zhin.js/adapter-icqq": "workspace:*"
+  },
+  "peerDependencies": {
+    "@zhin.js/adapter-icqq": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/adapter-icqq":{
+        "optional": true
+    }
+  }
+}

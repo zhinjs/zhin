@@ -512,9 +512,13 @@ export async function renderComponents(
                         context,
                         result
                     );
-                    
-                    const rendered = await renderComponent(comp, match, componentContext);
-                    const renderedString = typeof rendered === 'string' ? rendered : segment.toString(rendered as MessageElement);
+                    let SendContent;
+                    try{
+                        SendContent = await renderComponent(comp, match, componentContext);
+                    }catch(error){
+                        SendContent = `[${comp.name} Error: ${(error as Error)?.message||String(error)}]`
+                    }
+                    const renderedString = typeof SendContent === 'string' ? SendContent : segment.toString(SendContent as MessageElement);
                     result = result.replace(match, renderedString);
                     hasChanges = true;
                     break; // 处理一个组件后重新开始循环

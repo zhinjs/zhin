@@ -29,8 +29,7 @@ export default defineConfig(async () => {
       "mcp",
       "test-plugin",
       'plugin-github-notify',
-      "test-jsx",
-      "music"
+      "test-jsx"
     ],
     debug: false,
     'test-jsx': {

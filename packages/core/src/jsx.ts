@@ -18,7 +18,9 @@ export {Fragment} from './component.js'
 // 全局 JSX 命名空间
 declare global {
     namespace JSX {
-        interface Element extends MessageComponent<any> {}
+        // 支持同步和异步组件 - Element 可以是 MessageComponent
+        // TypeScript 会在编译时允许异步组件，运行时会自动 await
+        type Element = MessageComponent<any> | Promise<MessageComponent<any>> | Promise<SendContent>
         interface ElementClass {
             render(props: any, context?: ComponentContext): MaybePromise<SendContent>;
         }
@@ -31,15 +33,19 @@ declare global {
         interface IntrinsicElements {
             [elemName: string]: any;
         }
+        // 添加对异步组件的支持
+        interface IntrinsicAttributes {
+            key?: string | number;
+        }
     }
 }
 
-// JSX 运行时函数
-export function jsx(type: JSXElementType, data: JSXProps): MessageElement {
+// JSX 运行时函数 - 支持异步组件
+export function jsx(type: JSXElementType, data: JSXProps): MessageComponent<any> {
     return {
         type,
         data,
-    } as MessageElement;
+    } as MessageComponent<any>;
 }
 
 // JSX Fragment 支持
@@ -50,20 +56,40 @@ export function jsxs(type: JSXElementType, props: JSXProps): MessageElement {
 
 // JSX 渲染函数
 export async function renderJSX(element: MessageComponent<any>, context?: ComponentContext): Promise<SendContent> {
-    if (typeof element.type === 'string') {
-        if (element.type === 'Fragment') {
+    try {
+        if (typeof element.type === 'string') {
+            if (element.type === 'Fragment') {
+                return await renderChildren(element.data.children, context);
+            }
+            // 其他内置组件处理
             return await renderChildren(element.data.children, context);
+        } else if (typeof element.type === 'function') {
+            // 函数组件
+            const component = element.type as Component<any>;
+            const result = await component(element.data, context || {} as ComponentContext);
+            
+            // 如果组件返回 Promise，自动 await
+            if (result && typeof result === 'object' && 'then' in result) {
+                return await result;
+            }
+            
+            return result;
+        } else {
+            // 类组件或其他类型
+            const component = element.type as Component<any>;
+            const result = await component(element.data, context || {} as ComponentContext);
+            
+            // 如果组件返回 Promise，自动 await
+            if (result && typeof result === 'object' && 'then' in result) {
+                return await result;
+            }
+            
+            return result;
         }
-        // 其他内置组件处理
-        return await renderChildren(element.data.children, context);
-    } else if (typeof element.type === 'function') {
-        // 函数组件
-        const component = element.type as Component<any>;
-        return await component(element.data, context || {} as ComponentContext);
-    } else {
-        // 类组件或其他类型
-        const component = element.type as Component<any>;
-        return await component(element.data, context || {} as ComponentContext);
+    } catch (error) {
+        // 渲染错误时返回错误信息
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return `❌ 组件渲染失败: ${errorMessage}`;
     }
 }
 
@@ -81,12 +107,30 @@ async function renderChildren(children: JSXChildren, context?: ComponentContext)
             if (child && typeof child === 'object' && 'type' in child) {
                 return await renderJSX(child as MessageComponent<any>, context);
             }
+            // 如果子元素是 Promise，自动 await
+            if (child && typeof child === 'object' && 'then' in child) {
+                try {
+                    return await child;
+                } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    return `❌ 组件渲染失败: ${errorMessage}`;
+                }
+            }
             return '';
         }));
         return results.join('');
     }
     if (children && typeof children === 'object' && 'type' in children) {
         return await renderJSX(children as MessageComponent<any>, context);
+    }
+    // 如果子元素是 Promise，自动 await
+    if (children && typeof children === 'object' && 'then' in children) {
+        try {
+            return await children;
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            return `❌ 组件渲染失败: ${errorMessage}`;
+        }
     }
     return '';
 }

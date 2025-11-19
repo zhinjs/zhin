@@ -786,6 +786,21 @@ importers:
         specifier: workspace:^
         version: link:../../../basic/types
 
+  plugins/utils/music:
+    devDependencies:
+      '@zhin.js/adapter-icqq':
+        specifier: workspace:*
+        version: link:../../adapters/icqq
+      '@zhin.js/types':
+        specifier: workspace:*
+        version: link:../../../basic/types
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
+
 packages:
 
   '@algolia/abtesting@1.8.0':

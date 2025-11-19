@@ -54,6 +54,6 @@ export class MessageCommand<T extends keyof RegisteredAdapters=keyof RegisteredA
     }
 }
 export namespace MessageCommand{
-    export type Callback<T extends keyof RegisteredAdapters>=(message:Message<AdapterMessage<T>>,result:MatchResult)=>MaybePromise<SendContent|void>;
+    export type Callback<T extends keyof RegisteredAdapters>=(message:Message<AdapterMessage<T>>,result:MatchResult)=>SendContent|undefined|Promise<SendContent|undefined>;
     export type Checker<T extends keyof RegisteredAdapters>=(message:Message<AdapterMessage<T>>)=>MaybePromise<boolean>
 }

@@ -3,9 +3,10 @@ import { Component } from "./component.js";
 
 /**
  * 消息组件类型：用于自定义消息结构
+ * 支持同步和异步组件
  */
 export type MessageComponent<T extends object>={
-    type:Component<T&{children?:SendContent}>
+    type:Component<T&{children?:SendContent}> | ((props: T & {children?: SendContent}) => Promise<SendContent>)
     data:T
 }
 /**
