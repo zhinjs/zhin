@@ -231,6 +231,8 @@ export function createSensitiveWordRegex(words: string[]): RegExp {
   const escapedWords = words.map(word => 
     word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   );
+  // 使用 'gi' 标志：g 用于全局匹配（match 方法），i 用于不区分大小写
+  // 注意：对于 test() 方法，使用 'g' 会导致状态问题，但这里主要用于 match() 和 replace()
   return new RegExp(escapedWords.join('|'), 'gi');
 }
 

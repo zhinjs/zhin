@@ -15,26 +15,27 @@ describe('敏感词过滤测试', () => {
       const regex = createSensitiveWordRegex(words)
       
       expect(regex).toBeInstanceOf(RegExp)
-      expect(regex.test('这是测试')).toBe(true)
-      expect(regex.test('这是敏感词')).toBe(true)
-      expect(regex.test('这是正常内容')).toBe(false)
+      // 使用 match 方法测试，因为正则表达式带有 'g' 标志，test() 方法会有状态问题
+      expect('这是测试'.match(regex)).toBeTruthy()
+      expect('这是敏感词'.match(regex)).toBeTruthy()
+      expect('这是正常内容'.match(regex)).toBeNull()
     })
 
     it('应该转义特殊字符', () => {
       const words = ['$test', '.*word']
       const regex = createSensitiveWordRegex(words)
       
-      expect(regex.test('$test')).toBe(true)
-      expect(regex.test('.*word')).toBe(true)
+      expect('$test'.match(regex)).toBeTruthy()
+      expect('.*word'.match(regex)).toBeTruthy()
     })
 
     it('应该不区分大小写', () => {
       const words = ['Test']
       const regex = createSensitiveWordRegex(words)
       
-      expect(regex.test('test')).toBe(true)
-      expect(regex.test('TEST')).toBe(true)
-      expect(regex.test('TeSt')).toBe(true)
+      expect('test'.match(regex)).toBeTruthy()
+      expect('TEST'.match(regex)).toBeTruthy()
+      expect('TeSt'.match(regex)).toBeTruthy()
     })
   })
 
@@ -124,7 +125,8 @@ describe('敏感词过滤测试', () => {
       const text = '测试敏感测试敏感'
       const result = text.replace(regex, (match) => '*'.repeat(match.length))
       
-      expect(result).toBe('************')
+      // 文本共8个字符（每个中文字符算1个）："测试"(2) + "敏感"(2) + "测试"(2) + "敏感"(2) = 8
+      expect(result).toBe('********')
     })
   })
 })
