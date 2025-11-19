@@ -1,5 +1,13 @@
 # test-bot
 
+## 0.1.8
+
+### Patch Changes
+
+- 960e2ee: fix: 增加敏感词过滤插件
+- Updated dependencies [960e2ee]
+  - @zhin.js/sensitive-filter@0.0.2
+
 ## 0.1.7
 
 ### Patch Changes
