@@ -1,5 +1,18 @@
 # test-bot
 
+## 0.1.7
+
+### Patch Changes
+
+- zhin.js@1.0.16
+- @zhin.js/adapter-discord@1.0.16
+- @zhin.js/adapter-icqq@1.0.21
+- @zhin.js/adapter-kook@1.0.16
+- @zhin.js/adapter-onebot11@1.0.18
+- @zhin.js/adapter-process@1.0.21
+- @zhin.js/adapter-qq@1.0.16
+- @zhin.js/plugin-github-notify@0.0.3
+
 ## 0.1.6
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-music",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Music search and sharing plugin for Zhin.js",
   "type": "module",
   "main": "./lib/index.js",
@@ -29,8 +29,7 @@
   ],
   "author": "",
   "license": "MIT",
-  "dependencies": {
-  },
+  "dependencies": {},
   "devDependencies": {
     "typescript": "^5.3.3",
     "zhin.js": "workspace:*",
@@ -41,8 +40,8 @@
     "@zhin.js/adapter-icqq": "workspace:*"
   },
   "peerDependenciesMeta": {
-    "@zhin.js/adapter-icqq":{
-        "optional": true
+    "@zhin.js/adapter-icqq": {
+      "optional": true
     }
   }
 }

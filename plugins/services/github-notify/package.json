@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-github-notify",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "GitHub notification plugin for Zhin.js",
   "type": "module",
   "main": "./lib/index.js",
