@@ -6,7 +6,7 @@ hero:
   text: "新时代机器人框架"
   tagline: 🚀 插件化 • ⚡ 热重载 • 🎯 TypeScript • 🌟 多平台生态
   image:
-    src: /logo.png
+    src: /logo.svg
     alt: Zhin
   actions:
     - theme: brand
