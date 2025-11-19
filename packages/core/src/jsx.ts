@@ -1,4 +1,3 @@
-import { MaybePromise } from '@zhin.js/types';
 import { SendContent,MessageElement } from './types.js';
 import { MessageComponent } from './message.js';
 import { Component, ComponentContext } from './component.js';
@@ -20,9 +19,9 @@ declare global {
     namespace JSX {
         // 支持同步和异步组件 - Element 可以是 MessageComponent
         // TypeScript 会在编译时允许异步组件，运行时会自动 await
-        type Element = MessageComponent<any> | Promise<MessageComponent<any>> | Promise<SendContent>
+        type Element = SendContent | Promise<SendContent>
         interface ElementClass {
-            render(props: any, context?: ComponentContext): MaybePromise<SendContent>;
+            render(props: any, context?: ComponentContext): Element;
         }
         interface ElementAttributesProperty {
             data: {};

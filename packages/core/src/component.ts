@@ -8,7 +8,7 @@ export const CapWithClose = Symbol('CapWithClose');
 
 // 函数式组件类型定义
 export type Component<P = any> = {
-    (props: P, context: ComponentContext): Promise<SendContent>;
+    (props: P, context: ComponentContext): SendContent | Promise<SendContent>;
     name: string;
 }
 

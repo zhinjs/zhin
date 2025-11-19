@@ -16,6 +16,6 @@ const Test=async function Test(){
 addComponent(Test);
 addCommand(
   new MessageCommand("test-error").action(async (message, result) => {
-    return <Test />;
+    return <share />;
   })
 );
