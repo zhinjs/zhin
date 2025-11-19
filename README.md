@@ -50,6 +50,8 @@ zhin/
 │   │   ├── kook/         # KOOK 适配器
 │   │   ├── onebot11/     # OneBot v11 协议适配器
 │   │   ├── discord/      # Discord 适配器
+│   │   ├── telegram/     # Telegram 适配器
+│   │   ├── slack/        # Slack 适配器
 │   │   ├── dingtalk/     # 钉钉适配器
 │   │   ├── lark/         # 飞书适配器
 │   │   ├── process/      # 进程管理适配器
@@ -392,9 +394,10 @@ pnpm dev
 | QQ | `@zhin.js/adapter-icqq` | ✅ 可用 |
 | KOOK | `@zhin.js/adapter-kook` | ✅ 可用 |
 | Discord | `@zhin.js/adapter-discord` | ✅ 可用 |
+| Telegram | `@zhin.js/adapter-telegram` | ✅ 可用 |
+| Slack | `@zhin.js/adapter-slack` | ✅ 可用 |
 | 钉钉 | `@zhin.js/adapter-dingtalk` | ✅ 可用 |
 | 飞书 | `@zhin.js/adapter-lark` | ✅ 可用 |
-| Telegram | `@zhin.js/adapter-telegram` | 🚧 开发中 |
 | OneBot v11 | `@zhin.js/adapter-onebot11` | ✅ 可用 |
 | 微信公众号 | `@zhin.js/adapter-wechat-mp` | ✅ 可用 |
 

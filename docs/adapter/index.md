@@ -748,6 +748,7 @@ describe('MyAdapter', () => {
 
 ### 🔌 可选扩展（需手动安装）
 - Telegram（@zhin.js/adapter-telegram）
+- Slack（@zhin.js/adapter-slack）
 - Discord（@zhin.js/adapter-discord）
 - QQ（@zhin.js/adapter-qq）
 - KOOK（@zhin.js/adapter-kook）
