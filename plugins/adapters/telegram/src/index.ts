@@ -3,7 +3,6 @@ import type { Message as TelegramMessage, Update } from "telegraf/types";
 import {
   Bot,
   Adapter,
-  Plugin,
   registerAdapter,
   Message,
   SendOptions,

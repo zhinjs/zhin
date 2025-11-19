@@ -8,7 +8,6 @@ import type {
 import {
   Bot,
   Adapter,
-  Plugin,
   registerAdapter,
   Message,
   SendOptions,
