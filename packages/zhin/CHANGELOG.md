@@ -1,5 +1,12 @@
 # zhin.js
 
+## 1.0.16
+
+### Patch Changes
+
+- Updated dependencies [e733fab]
+  - @zhin.js/core@1.0.16
+
 ## 1.0.15
 
 ### Patch Changes

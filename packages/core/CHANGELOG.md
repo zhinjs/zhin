@@ -1,5 +1,11 @@
 # @zhin.js/core
 
+## 1.0.16
+
+### Patch Changes
+
+- e733fab: fix: 异步组件优化
+
 ## 1.0.15
 
 ### Patch Changes

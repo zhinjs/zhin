@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-icqq",
-  "version": "1.0.20",
+  "version": "1.0.21",
   "description": "zhin adapter for icqq",
   "type": "module",
   "main": "./lib/index.js",
