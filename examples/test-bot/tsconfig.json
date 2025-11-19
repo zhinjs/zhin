@@ -35,7 +35,8 @@
       "@zhin.js/adapter-process",
       "@zhin.js/adapter-discord",
       "@zhin.js/mcp",
-      "@zhin.js/plugin-github-notify"
+      "@zhin.js/plugin-github-notify",
+      "@zhin.js/sensitive-filter"
     ]
   },
   "include": [

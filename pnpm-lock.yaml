@@ -243,6 +243,9 @@ importers:
       '@zhin.js/plugin-github-notify':
         specifier: workspace:*
         version: link:../../plugins/services/github-notify
+      '@zhin.js/sensitive-filter':
+        specifier: workspace:*
+        version: link:../../plugins/utils/sensitive-filter
       sqlite3:
         specifier: latest
         version: 5.1.7
@@ -800,6 +803,16 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/zhin
+
+  plugins/utils/sensitive-filter:
+    dependencies:
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
+    devDependencies:
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
 
 packages:
 

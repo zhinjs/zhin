@@ -28,6 +28,7 @@ export default defineConfig(async () => {
       "console",
       "mcp",
       "test-plugin",
+      "sensitive-filter",
       'plugin-github-notify',
       "test-jsx"
     ],
@@ -53,6 +54,17 @@ export default defineConfig(async () => {
     mcp: {
       enabled: true,
       path: "/mcp"
+    },
+    'sensitive-filter': {
+      political: true,
+      violence: true,
+      porn: true,
+      prohibited: true,
+      fraud: true,
+      illegal: true,
+      custom: [],
+      replacement: "*",
+      block: false
     }
   }
 });
