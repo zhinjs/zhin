@@ -11,12 +11,12 @@ export default defineConfig({
   
   themeConfig: {
     nav: [
-      { text: '首页', link: '/' },
-      { text: '快速开始', link: '/guide/getting-started' },
       { text: '指南', link: '/guide/' },
-      { text: '插件开发', link: '/plugin/' },
-      { text: '插件市场', link: '/plugins/' },
-      { text: '适配器', link: '/adapter/' },
+      { text: '插件', items:[
+        { text: '开发插件', link: '/plugin/' },
+        { text: '适配器', link: '/adapter/' },
+        { text: '插件市场', link: '/plugins/' },
+      ] },
       { text: 'API', link: '/api/' },
       { text: '示例', link: '/examples/' }
     ],
