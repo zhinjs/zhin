@@ -95,6 +95,7 @@ export class DingTalkBot implements Bot<DingTalkMessage, DingTalkBotConfig> {
     private router: any
     private accessToken: AccessToken
     private axiosInstance: AxiosInstance
+    private sessionWebhooks: Map<string, string> = new Map() // conversationId -> webhook
 
     constructor(router: any, public $config: DingTalkBotConfig) {
         this.router = router;
@@ -182,6 +183,11 @@ export class DingTalkBot implements Bot<DingTalkMessage, DingTalkBotConfig> {
     }
 
     private async handleEvent(event: DingTalkEvent): Promise<void> {
+        // 存储会话 webhook（用于回复消息）
+        if (event.sessionWebhook && event.conversationId) {
+            this.sessionWebhooks.set(event.conversationId, event.sessionWebhook);
+        }
+        
         // 处理消息事件
         const message = this.$formatMessage(event as any);
         plugin.dispatch('message.receive', message);
@@ -375,7 +381,18 @@ export class DingTalkBot implements Bot<DingTalkMessage, DingTalkBotConfig> {
         const content = this.formatSendContent(options.content);
         
         try {
-            // 使用机器人发送消息接口
+            // 优先使用会话 webhook 发送消息（更快，更准确）
+            const sessionWebhook = this.sessionWebhooks.get(conversationId);
+            if (sessionWebhook) {
+                const response = await axios.post(sessionWebhook, content);
+                if (response.data.errcode !== 0) {
+                    throw new Error(`Failed to send message via session webhook: ${response.data.errmsg}`);
+                }
+                plugin.logger.debug('Message sent via session webhook');
+                return response.data.msgId || Date.now().toString();
+            }
+            
+            // 否则使用普通机器人发送接口
             const response = await this.axiosInstance.post('/robot/send', {
                 ...content,
                 robotCode: this.$config.robotCode
