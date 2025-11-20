@@ -1,5 +1,11 @@
 # @zhin.js/cli
 
+## 1.0.10
+
+### Patch Changes
+
+- cda76be: fix: add adapters
+
 ## 1.0.9
 
 ### Patch Changes

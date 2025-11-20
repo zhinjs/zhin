@@ -1,5 +1,11 @@
 # test-bot
 
+## 0.1.9
+
+### Patch Changes
+
+- cda76be: fix: add adapters
+
 ## 0.1.8
 
 ### Patch Changes

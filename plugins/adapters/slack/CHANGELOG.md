@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1
+
+### Patch Changes
+
+- cda76be: fix: add adapters
+
 ## 1.0.0 (2025-01-19)
 
 ### Features
