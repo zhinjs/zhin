@@ -32,11 +32,13 @@ export async function createWorkspace(projectPath: string, projectName: string, 
     type: 'module',
     description: `${projectName} - Zhin.js Workspace`,
     scripts: {
-      dev: 'zhin dev',
+      dev: options.runtime === 'bun' ? 'zhin dev --bun' : 'zhin dev',
       start: options.runtime === 'bun' ? 'zhin start --bun' : 'zhin start',
       daemon: options.runtime === 'bun' ? 'zhin start --bun --daemon' : 'zhin start --daemon',
       stop: 'zhin stop',
-      build: 'pnpm --filter "./plugins/*" build'
+      build: 'pnpm build:client && tsc',
+      'build:client': 'zhin-console build',
+      'build:plugins': 'pnpm --filter "./plugins/*" build'
     },
     dependencies: {
       'zhin.js': 'latest',
@@ -91,9 +93,12 @@ export async function createWorkspace(projectPath: string, projectName: string, 
 `node_modules/
 dist/
 lib/
+client/dist/
 *.log
 .env
 .env.*
+!.env.development
+!.env.production
 .DS_Store
 .zhin.pid
 .zhin-dev.pid
@@ -150,11 +155,14 @@ ${projectName}/                  # 根目录（项目主模块）
 ## 🚀 快速开始
 
 \`\`\`bash
-pnpm dev        # 开发环境（自动监听文件变化）
-pnpm start      # 生产环境
-pnpm daemon     # 后台运行
-pnpm stop       # 停止后台服务
+pnpm dev              # 开发环境（自动监听文件变化）
+pnpm build            # 构建所有代码（不包括插件模块）
+pnpm start            # 生产环境（使用编译后的代码）
+pnpm daemon           # 后台运行
+pnpm stop             # 停止后台服务
 \`\`\`
+
+**注意：** 生产环境运行前需要先执行 \`pnpm build\` 构建客户端代码。
 
 ## 📦 安装插件
 
@@ -162,16 +170,14 @@ pnpm stop       # 停止后台服务
 
 \`\`\`bash
 # 交互式安装
-zhin install
+zhin install # 别名：zhin add
 
-# 安装官方插件
+# 安装插件
 zhin install @zhin.js/plugin-name
 
-# 安装第三方插件
-zhin add third-party-plugin
 
 # 安装到 devDependencies
-zhin install plugin-name -D
+zhin install @zhin.js/plugin-name -D
 \`\`\`
 
 ### 安装 Git 插件
@@ -241,10 +247,12 @@ export default defineConfig({
 });
 \`\`\`
 
-### 构建所有插件
+### 构建项目
 
 \`\`\`bash
-pnpm build        # 构建 plugins/ 下的所有插件
+pnpm build              # 构建所有代码（不包括插件模块）
+pnpm build:client       # 只构建客户端代码
+pnpm build:plugins      # 只构建 plugins/ 下的所有插件
 \`\`\`
 
 ### 发布插件到 npm
@@ -314,18 +322,41 @@ DEBUG=false
 NODE_ENV=production
 `);
   
-  // app/tsconfig.json
+  // src/tsconfig.json
   await fs.writeJson(path.join(projectPath, 'tsconfig.json'), {
-    extends: '../tsconfig.json',
-    compilerOptions: {
-      baseUrl: './src',
-      jsx: 'react-jsx',
-      jsxImportSource: 'zhin.js',
-      noEmit: false,
-      types: ['@types/node', '@zhin.js/types', 'zhin.js']
+    "compilerOptions": {
+      "target": "ES2022",
+      "module": "ESNext",
+      "moduleResolution": "bundler",
+      "outDir": "./lib",
+      "rootDir": "src",
+      "strict": true,
+      "esModuleInterop": true,
+      "skipLibCheck": true,
+      "forceConsistentCasingInFileNames": true,
+      "resolveJsonModule": true,
+      "isolatedModules": true,
+      "allowSyntheticDefaultImports": true,
+      "experimentalDecorators": true,
+      "emitDecoratorMetadata": true,
+      "declaration": true,
+      "declarationMap": true,
+      "sourceMap": true,
+      "verbatimModuleSyntax": false,
+      "jsx": "react-jsx",
+      "jsxImportSource": "zhin.js",
+      "types": [
+        "@zhin.js/types",
+        "zhin.js"
+      ]
     },
-    include: ['src/**/*'],
-    exclude: ['node_modules', 'data']
+    "include": [
+      "src/**/*"
+    ],
+    "exclude": [
+      "lib",
+      "node_modules"
+    ]
   }, { spaces: 2 });
   
   // app/src/index.ts
@@ -384,7 +415,12 @@ onDispose(() => {
 });
 
 useContext('web',(web)=>{
-  web.addEntry(path.resolve(process.cwd(),'client/index.tsx'))
+  // 开发环境使用 tsx 文件，生产环境使用编译后的 js 文件
+  const isDev = process.env.NODE_ENV === 'development';
+  const clientEntry = isDev 
+    ? path.resolve(process.cwd(),'client/index.tsx')
+    : path.resolve(process.cwd(),'dist/index.js');
+  web.addEntry(clientEntry);
 });
 logger.info('示例插件已加载');
 `);
@@ -451,14 +487,22 @@ addPage({
 
   // app/client/tsconfig.json
   await fs.writeJson(path.join(projectPath, 'client', 'tsconfig.json'), {
-    extends: '@zhin.js/console/browser.tsconfig.json',
-    compilerOptions: {
-      target: 'ES2022',
-      module: 'ESNext',
-      moduleResolution: 'bundler',
-      jsx: 'react-jsx',
-      baseUrl: '.'
-    }
+    "compilerOptions": {
+      "outDir": "../dist",
+      "baseUrl": ".",
+      "declaration": true,
+      "module": "ESNext",
+      "moduleResolution": "bundler",
+      "target": "ES2022",
+      "jsx": "react-jsx",
+      "declarationMap": true,
+      "sourceMap": true,
+      "skipLibCheck": true,
+      "noEmit": false
+    },
+    "include": [
+      "./**/*"
+    ]
   }, { spaces: 2 });
 
   // 创建配置文件

@@ -191,10 +191,17 @@ async function main() {
     if(options.database.dialect ==='sqlite'){
       console.log(`  ${chalk.cyan('pnpm approve-builds sqlite3')} ${chalk.gray('# 批准 sqlite3 原生模块构建如遇错误，请检查系统是否已安装C++编译器(g++)')}`);
     }
-    console.log(`  ${chalk.cyan('pnpm dev')} ${chalk.gray('# 开发环境启动')}`);
+    console.log('');
+    console.log(chalk.yellow('开发环境：'));
+    console.log(`  ${chalk.cyan('pnpm dev')} ${chalk.gray('# 开发模式（自动监听，使用 tsx 文件）')}`);
+    console.log('');
+    console.log(chalk.yellow('生产环境：'));
+    console.log(`  ${chalk.cyan('pnpm build')} ${chalk.gray('# 构建客户端代码和所有插件')}`);
     console.log(`  ${chalk.cyan('pnpm start')} ${chalk.gray('# 生产环境启动')}`);
-    console.log(`  ${chalk.cyan('pnpm stop')} ${chalk.gray('# 停止机器人')}`);
-    console.log(`  ${chalk.cyan('pnpm build')} ${chalk.gray('# 构建所有插件')}`);
+    console.log(`  ${chalk.cyan('pnpm daemon')} ${chalk.gray('# 后台运行')}`);
+    console.log(`  ${chalk.cyan('pnpm stop')} ${chalk.gray('# 停止后台服务')}`);
+    console.log('');
+    console.log(chalk.yellow('插件开发：'));
     console.log(`  ${chalk.cyan('zhin new <plugin-name>')} ${chalk.gray('# 创建新插件')}`);
     
     console.log('');

@@ -1,10 +1,6 @@
 import { App as SlackApp, LogLevel } from "@slack/bolt";
 import { WebClient, ChatPostMessageArguments } from "@slack/web-api";
-import type {
-  MessageEvent,
-  GenericMessageEvent,
-  FileShareMessageEvent,
-} from "@slack/bolt";
+import type { KnownEventFromType } from "@slack/bolt";
 import {
   Bot,
   Adapter,
@@ -42,7 +38,10 @@ export interface SlackBot {
 
 const plugin = usePlugin();
 
-export class SlackBot implements Bot<GenericMessageEvent, SlackBotConfig> {
+// Type definitions for Slack message events
+type SlackMessageEvent = KnownEventFromType<"message">;
+
+export class SlackBot implements Bot<SlackMessageEvent, SlackBotConfig> {
   $connected?: boolean;
   private app: SlackApp;
   private client: WebClient;
@@ -77,7 +76,7 @@ export class SlackBot implements Bot<GenericMessageEvent, SlackBotConfig> {
     try {
       // Set up message event handler
       this.app.message(async ({ message, say }) => {
-        await this.handleSlackMessage(message as GenericMessageEvent);
+        await this.handleSlackMessage(message as SlackMessageEvent);
       });
 
       // Set up app mention handler
@@ -87,7 +86,11 @@ export class SlackBot implements Bot<GenericMessageEvent, SlackBotConfig> {
 
       // Start the app
       const port = this.$config.port || 3000;
-      await this.app.start(this.$config.socketMode ? undefined : port);
+      if (this.$config.socketMode) {
+        await this.app.start();
+      } else {
+        await this.app.start(port);
+      }
 
       this.$connected = true;
 
@@ -118,9 +121,9 @@ export class SlackBot implements Bot<GenericMessageEvent, SlackBotConfig> {
     }
   }
 
-  private async handleSlackMessage(msg: GenericMessageEvent): Promise<void> {
+  private async handleSlackMessage(msg: SlackMessageEvent): Promise<void> {
     // Ignore bot messages and message changes
-    if (msg.subtype === "bot_message" || msg.subtype === "message_changed") {
+    if ("subtype" in msg && (msg.subtype === "bot_message" || msg.subtype === "message_changed")) {
       return;
     }
 
@@ -132,28 +135,33 @@ export class SlackBot implements Bot<GenericMessageEvent, SlackBotConfig> {
     plugin.dispatch(`message.${message.$channel.type}.receive`, message);
   }
 
-  $formatMessage(msg: GenericMessageEvent): Message<GenericMessageEvent> {
+  $formatMessage(msg: SlackMessageEvent): Message<SlackMessageEvent> {
     // Determine channel type based on channel ID
-    const channelType = msg.channel_type === "im" ? "private" : "group";
+    const channelType = "channel_type" in msg && msg.channel_type === "im" ? "private" : "group";
     const channelId = msg.channel;
 
     // Parse message content
     const content = this.parseMessageContent(msg);
+
+    // Extract user info safely
+    const userId = ("user" in msg ? msg.user : "") || "";
+    const userName = ("username" in msg ? msg.username : null) || userId || "Unknown";
+    const messageText = ("text" in msg ? msg.text : "") || "";
 
     const result = Message.from(msg, {
       $id: msg.ts,
       $adapter: "slack",
       $bot: this.$config.name,
       $sender: {
-        id: msg.user || "",
-        name: msg.username || msg.user || "Unknown",
+        id: userId,
+        name: userName,
       },
       $channel: {
         id: channelId,
         type: channelType,
       },
       $content: content,
-      $raw: msg.text || "",
+      $raw: messageText,
       $timestamp: parseFloat(msg.ts) * 1000,
       $recall: async () => {
         try {
@@ -194,11 +202,11 @@ export class SlackBot implements Bot<GenericMessageEvent, SlackBotConfig> {
     return result;
   }
 
-  private parseMessageContent(msg: GenericMessageEvent): MessageSegment[] {
+  private parseMessageContent(msg: SlackMessageEvent): MessageSegment[] {
     const segments: MessageSegment[] = [];
 
     // Handle text
-    if (msg.text) {
+    if ("text" in msg && msg.text) {
       // Parse Slack formatting
       segments.push(...this.parseSlackText(msg.text));
     }
@@ -255,7 +263,7 @@ export class SlackBot implements Bot<GenericMessageEvent, SlackBotConfig> {
     }
 
     // Handle attachments
-    if (msg.attachments) {
+    if ("attachments" in msg && msg.attachments) {
       for (const attachment of msg.attachments) {
         if (attachment.image_url) {
           segments.push({
@@ -457,7 +465,7 @@ export class SlackBot implements Bot<GenericMessageEvent, SlackBotConfig> {
     }
 
     // Send message
-    const messageOptions: Partial<ChatPostMessageArguments> = {
+    const messageOptions: any = {
       channel,
       text: textContent.trim() || "Message",
       ...extraOptions,
@@ -467,7 +475,7 @@ export class SlackBot implements Bot<GenericMessageEvent, SlackBotConfig> {
       messageOptions.attachments = attachments;
     }
 
-    const result = await this.client.chat.postMessage(messageOptions);
+    const result = await this.client.chat.postMessage(messageOptions as ChatPostMessageArguments);
     return result.message || {};
   }
 

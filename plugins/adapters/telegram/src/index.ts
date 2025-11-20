@@ -1,5 +1,5 @@
 import { Telegraf, Context as TelegrafContext } from "telegraf";
-import type { Message as TelegramMessage, Update, MessageEntity, ExtraReplyMessage } from "telegraf/types";
+import type { Message as TelegramMessage, Update, MessageEntity } from "telegraf/types";
 import {
   Bot,
   Adapter,
@@ -70,7 +70,7 @@ export class TelegramBot extends Telegraf implements Bot<TelegramMessage, Telegr
       if (this.$config.polling !== false) {
         // Use polling by default
         await this.launch({
-          allowedUpdates: this.$config.allowedUpdates,
+          allowedUpdates: this.$config.allowedUpdates as any,
         });
       } else if (this.$config.webhook) {
         // Use webhook
@@ -81,7 +81,7 @@ export class TelegramBot extends Telegraf implements Bot<TelegramMessage, Telegr
             port,
             hookPath: path,
           },
-          allowedUpdates: this.$config.allowedUpdates,
+          allowedUpdates: this.$config.allowedUpdates as any,
         });
       } else {
         throw new Error("Either polling must be enabled or webhook configuration must be provided");
@@ -158,7 +158,7 @@ export class TelegramBot extends Telegraf implements Bot<TelegramMessage, Telegr
       ): Promise<string> => {
         if (!Array.isArray(content)) content = [content];
 
-        const sendOptions: Partial<ExtraReplyMessage> = {};
+        const sendOptions: any = {};
 
         // Handle reply
         if (quote) {
@@ -380,8 +380,8 @@ export class TelegramBot extends Telegraf implements Bot<TelegramMessage, Telegr
           segments.push({
             type: "at",
             data: {
-              id: entity.user?.id.toString() || entityText.slice(1),
-              name: entity.user?.username || entityText,
+              id: ("user" in entity && entity.user?.id.toString()) || entityText.slice(1),
+              name: ("user" in entity && entity.user?.username) || entityText,
               text: entityText,
             },
           });
@@ -392,7 +392,7 @@ export class TelegramBot extends Telegraf implements Bot<TelegramMessage, Telegr
           segments.push({
             type: "link",
             data: {
-              url: entity.url || entityText,
+              url: ("url" in entity && entity.url) || entityText,
               text: entityText,
             },
           });
@@ -454,7 +454,7 @@ export class TelegramBot extends Telegraf implements Bot<TelegramMessage, Telegr
   private async sendContentToChat(
     chatId: number,
     content: SendContent,
-    extraOptions: Partial<ExtraReplyMessage> = {}
+    extraOptions: any = {}
   ): Promise<TelegramMessage> {
     if (!Array.isArray(content)) content = [content];
 

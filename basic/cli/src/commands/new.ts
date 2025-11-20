@@ -113,9 +113,9 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
     ],
     scripts: {
       build: 'pnpm build:node && pnpm build:client',
-      'build:node': 'tsc --project node.tsconfig.json',
+      'build:node': 'tsc',
       'build:client': 'zhin-console build',
-      dev: 'tsc --project node.tsconfig.json --watch',
+      dev: 'tsc --watch',
       clean: 'rm -rf lib dist',
       prepublishOnly: 'pnpm build'
     },
@@ -127,9 +127,7 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
     author: '',
     license: 'MIT',
     peerDependencies: {
-      'zhin.js': 'workspace:*'
-    },
-    dependencies: {
+      'zhin.js': 'workspace:*',
       '@zhin.js/client': 'workspace:*'
     },
     devDependencies: {
@@ -217,10 +215,12 @@ const logger = useLogger();
 
 // 注册客户端入口（如果有客户端代码）
 useContext('web', (web) => {
-  const dispose = web.addEntry({
-    production: path.resolve(import.meta.dirname, '../dist/index.js'),
-    development: path.resolve(import.meta.dirname, '../client/index.tsx')
-  });
+  // 开发环境使用 tsx 文件，生产环境使用编译后的 js 文件
+  const isDev = process.env.NODE_ENV === 'development';
+  const clientEntry = isDev 
+    ? path.resolve(import.meta.dirname, '../client/index.tsx')
+    : path.resolve(import.meta.dirname, '../dist/index.js');
+  const dispose = web.addEntry(clientEntry);
   return dispose;
 });
 
