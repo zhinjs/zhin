@@ -1,0 +1,53 @@
+{
+  "name": "@zhin.js/adapter-slack",
+  "version": "1.0.0",
+  "description": "zhin adapter for slack",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "keywords": [
+    "zhin",
+    "adapter",
+    "slack"
+  ],
+  "author": "lc-cn",
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "type": "git",
+    "directory": "plugins/adapters/slack"
+  },
+  "scripts": {
+    "build": "pnpm build:node",
+    "clean": "rm -rf lib",
+    "build:node": "tsc"
+  },
+  "dependencies": {
+    "@slack/bolt": "^3.22.1",
+    "@slack/web-api": "^7.10.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "^5.3.0"
+  },
+  "peerDependencies": {
+    "zhin.js": "workspace:*",
+    "@zhin.js/types": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/types": {
+      "optional": true
+    }
+  },
+  "files": [
+    "lib",
+    "README.md",
+    "CHANGELOG.md"
+  ]
+}
