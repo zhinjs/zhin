@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.14
+
+### Patch Changes
+
+- cda76be: fix: add adapters
+
 ## 1.0.13
 
 ### Patch Changes

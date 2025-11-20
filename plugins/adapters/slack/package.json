@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-slack",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "zhin adapter for slack",
   "type": "module",
   "main": "./lib/index.js",
