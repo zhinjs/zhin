@@ -2,116 +2,82 @@
 
 本指南帮助您安全、高效地将 Zhin.js 应用部署到生产环境。
 
-## 🚨 关键问题：文件监听导致服务器卡死
+## ✅ 自动环境优化
 
-### 问题描述
+**好消息！** Zhin.js 已自动处理开发和生产环境的差异：
 
-在默认配置下，Zhin.js 的热重载系统会监听 `plugin_dirs` 中配置的所有目录。如果配置了 `node_modules`，将导致：
+### 自动优化特性
 
-- **监听大量文件**：node_modules 通常包含数万个文件（示例：21,876 个 JS/TS 文件）
-- **资源耗尽**：Linux 服务器的 inotify 监听器数量有限
-- **服务器卡死**：大量文件监听占用 CPU 和内存，导致系统响应缓慢甚至崩溃
+使用 `create-zhin-app` 创建的项目会自动：
 
-### 解决方案
+1. **🔄 环境检测**
+   - 开发环境 (`NODE_ENV=development`)：启用热重载、详细日志
+   - 生产环境 (`NODE_ENV=production`)：禁用热重载、优化性能
 
-#### 1. **修改配置文件（推荐）**
+2. **⚡ 性能优化**
+   - 生产环境使用编译后的 JavaScript 代码
+   - 自动跳过不必要的文件监听
+   - 优化内存和 CPU 使用
 
-不要在生产环境的 `plugin_dirs` 中包含 `node_modules`：
+3. **📦 简单部署**
+   ```bash
+   # 构建应用
+   pnpm build
+   
+   # 生产环境启动（自动检测）
+   pnpm start
+   ```
 
-```typescript
-// zhin.config.ts
-export default defineConfig({
-  plugin_dirs: [
-    './src/plugins',           // ✅ 仅监听项目插件
-    './plugins',               // ✅ 自定义插件目录
-    // 'node_modules',         // ❌ 移除此配置
-    // 'node_modules/@zhin.js' // ❌ 也要移除
-  ],
-  
-  // 其他配置...
-})
-```
+### 环境变量配置
 
-#### 2. **使用环境变量区分配置**
+项目已包含环境变量文件：
 
-创建不同环境的配置：
-
-```typescript
-// zhin.config.ts
-export default defineConfig(async () => {
-  const isDev = process.env.NODE_ENV !== 'production';
-  
-  return {
-    debug: isDev,
-    
-    plugin_dirs: isDev 
-      ? ['./src/plugins', 'node_modules']  // 开发环境可以监听
-      : ['./plugins'],                      // 生产环境仅监听必要目录
-    
-    plugins: [
-      'http',
-      'adapter-process',
-      // 其他插件...
-    ],
-    
-    // 其他配置...
-  };
-});
-```
-
-启动命令：
+- `.env` - 通用配置（登录信息、数据库等）
+- `.env.development` - 开发环境专用
+- `.env.production` - 生产环境专用
 
 ```bash
-# 开发环境
-NODE_ENV=development pnpm dev
+# .env.development
+DEBUG=true
+NODE_ENV=development
 
-# 生产环境
-NODE_ENV=production pnpm start
+# .env.production
+DEBUG=false
+NODE_ENV=production
 ```
 
-#### 3. **调整系统 inotify 限制（临时方案）**
-
-如果必须监听大量文件，可以增加系统限制（仅限 Linux）：
+### 启动命令对比
 
 ```bash
-# 查看当前限制
-cat /proc/sys/fs/inotify/max_user_watches
+# 开发环境（自动热重载）
+pnpm dev
 
-# 临时增加限制（重启后失效）
-sudo sysctl fs.inotify.max_user_watches=524288
-
-# 永久修改（添加到 /etc/sysctl.conf）
-echo "fs.inotify.max_user_watches=524288" | sudo tee -a /etc/sysctl.conf
-sudo sysctl -p
+# 生产环境（优化性能）
+pnpm build   # 先构建
+pnpm start   # 再启动
 ```
-
-⚠️ **注意**：这只是临时方案，根本解决办法是避免监听 node_modules。
 
 ## 📋 生产环境检查清单
 
 ### 1. 配置优化
 
-- [ ] 移除 `plugin_dirs` 中的 `node_modules`
-- [ ] 设置 `debug: false`
+- [x] ~~移除 `plugin_dirs` 中的 `node_modules`~~ （已自动处理）
+- [x] ~~设置 `debug: false`~~ （生产环境自动设置）
 - [ ] 配置合适的 `log_level`（建议 `warn` 或 `error`）
 - [ ] 禁用不需要的插件
-- [ ] 使用环境变量管理敏感信息
+- [ ] 使用环境变量管理敏感信息（已内置 `.env` 支持）
 
 示例配置：
 
 ```typescript
+// zhin.config.ts
 export default defineConfig({
   log_level: LogLevel.WARN,
-  debug: false,
-  
-  plugin_dirs: [
-    './plugins'  // 仅加载生产插件
-  ],
   
   plugins: [
     'http',
+    'console',
     'adapter-process',
-    'adapter-icqq',
     // 只启用必要的插件
   ],
   
@@ -127,6 +93,8 @@ export default defineConfig({
   }
 });
 ```
+
+> 💡 **提示**：使用 `create-zhin-app` 创建的项目已包含优化的默认配置
 
 ### 2. 安全配置
 
@@ -363,20 +331,20 @@ cp data/bot.db data/backups/bot-$(date +%Y%m%d).db
 
 ## 🔧 故障排查
 
-### 问题：服务器卡死或响应缓慢
+### 问题：服务器响应缓慢
 
-**原因**：监听了 node_modules 导致资源耗尽
+**可能原因**：
+1. 内存占用过高
+2. 数据库查询慢
+3. 插件性能问题
 
-**解决**：
-1. 检查配置文件中的 `plugin_dirs`
-2. 移除 `node_modules` 相关配置
-3. 重启应用
-
+**诊断**：
 ```bash
-# 查看当前监听的文件数
-lsof -p $(pgrep -f zhin) | wc -l
+# 查看进程状态
+pm2 monit
 
-# 如果数量异常大（>1000），说明监听了过多文件
+# 查看日志
+pm2 logs zhin-bot --lines 100
 ```
 
 ### 问题：内存占用过高
@@ -449,14 +417,18 @@ pnpm update --latest
 
 ## 💡 最佳实践总结
 
-1. ✅ **永远不要在生产环境监听 node_modules**
-2. ✅ 使用环境变量区分开发和生产配置
-3. ✅ 配置进程守护（PM2/systemd）
-4. ✅ 限制资源使用（内存/CPU）
-5. ✅ 配置日志轮转和清理
-6. ✅ 使用反向代理和 HTTPS
-7. ✅ 定期备份数据库
-8. ✅ 监控应用性能和错误
-9. ✅ 定期更新依赖包
-10. ✅ 准备应急回滚方案
+### 自动优化（已内置）
+1. ✅ 环境自动检测和优化
+2. ✅ 生产环境自动禁用热重载
+3. ✅ 自动使用编译后的代码
+
+### 需要配置
+4. ✅ 配置进程守护（PM2/systemd）
+5. ✅ 限制资源使用（内存/CPU）
+6. ✅ 配置日志轮转和清理
+7. ✅ 使用反向代理和 HTTPS
+8. ✅ 定期备份数据库
+9. ✅ 监控应用性能和错误
+10. ✅ 定期更新依赖包
+11. ✅ 准备应急回滚方案
 

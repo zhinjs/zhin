@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/database",
   "version": "1.0.4",
-  "description": "Zhin机器人数据库模块",
+  "description": "Universal database abstraction layer with support for SQLite, MySQL, PostgreSQL, MongoDB, Redis and in-memory storage",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
