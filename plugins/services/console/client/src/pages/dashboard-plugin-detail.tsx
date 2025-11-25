@@ -13,6 +13,10 @@ interface PluginDetail {
   description: string
   commands: Array<{
     name: string
+    desc?: string[]
+    usage?: string[]
+    examples?: string[]
+    help?: string
   }>
   components: Array<{
     name: string
@@ -210,11 +214,35 @@ export default function DashboardPluginDetail() {
               <Separator size="4" />
               <Flex direction="column" gap="2" className="max-h-60 overflow-y-auto">
                 {plugin.commands.map((cmd, index) => (
-                  <Box key={index} className="rounded-lg bg-gray-50 dark:bg-gray-900 p-2">
-                    <Flex direction="column" gap="1">
-                      <Flex align="center" gap="2">
-                        <Code size="2">{cmd.name}</Code>
-                      </Flex>
+                  <Box key={index} className="rounded-lg bg-gray-50 dark:bg-gray-900 p-3">
+                    <Flex direction="column" gap="2">
+                      <Code size="2" weight="bold">{cmd.name}</Code>
+                      
+                      {cmd.desc && cmd.desc.length > 0 && (
+                        <Flex direction="column" gap="1">
+                          {cmd.desc.map((desc, i) => (
+                            <Text key={i} size="1" color="gray">{desc}</Text>
+                          ))}
+                        </Flex>
+                      )}
+                      
+                      {cmd.usage && cmd.usage.length > 0 && (
+                        <Flex direction="column" gap="1">
+                          <Text size="1" weight="bold" color="blue">用法:</Text>
+                          {cmd.usage.map((usage, i) => (
+                            <Code key={i} size="1" variant="soft">{usage}</Code>
+                          ))}
+                        </Flex>
+                      )}
+                      
+                      {cmd.examples && cmd.examples.length > 0 && (
+                        <Flex direction="column" gap="1">
+                          <Text size="1" weight="bold" color="green">示例:</Text>
+                          {cmd.examples.map((example, i) => (
+                            <Code key={i} size="1" variant="soft" color="green">{example}</Code>
+                          ))}
+                        </Flex>
+                      )}
                     </Flex>
                   </Box>
                 ))}

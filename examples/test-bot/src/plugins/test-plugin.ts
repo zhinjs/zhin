@@ -10,12 +10,10 @@ import {
   defineModel,
   MessageElement,
   ComponentContext,
-  onMessage,
 } from "zhin.js";
 import path from "node:path";
 import * as os from "node:os";
 import { writeHeapSnapshot } from "node:v8";
-import { writeFileSync } from "node:fs";
 
 declare module "@zhin.js/types" {
   interface Models {
@@ -47,7 +45,11 @@ addCommand(
   )
 );
 addCommand(
-  new MessageCommand("zt").action(() => {
+  new MessageCommand("zt")
+    .desc("查看系统状态", "显示操作系统、CPU、内存、运行时和框架的完整状态信息")
+    .usage("zt")
+    .examples("zt")
+    .action(() => {
     // ============================================
     // 系统信息
     // ============================================
@@ -148,7 +150,11 @@ addCommand(
 // 内存分析命令
 // ============================================
 addCommand(
-  new MessageCommand("mem").action(() => {
+  new MessageCommand("mem")
+    .desc("查看内存详情", "显示进程的详细内存使用情况，包括 RSS、堆内存、外部内存等")
+    .usage("mem")
+    .examples("mem")
+    .action(() => {
     const memUsage = process.memoryUsage();
     
     // 基础内存信息
@@ -309,7 +315,11 @@ function getMemoryOptimizationTips(rss: number, heapUsed: number, heapTotal: num
 // 堆快照命令 - 生成内存快照文件
 // ============================================
 addCommand(
-  new MessageCommand("heap").action(() => {
+  new MessageCommand("heap")
+    .desc("生成堆快照", "生成 V8 堆内存快照文件，用于内存分析")
+    .usage("heap")
+    .examples("heap")
+    .action(() => {
     try {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const filename = `heap-${timestamp}.heapsnapshot`;
@@ -346,7 +356,11 @@ addCommand(
 // 实时内存分析命令 - 分析当前内存中的对象
 // ============================================
 addCommand(
-  new MessageCommand("memtop").action(() => {
+  new MessageCommand("memtop")
+    .desc("实时内存监控", "显示进程的实时内存使用趋势（需要 --expose-gc 标志）")
+    .usage("memtop")
+    .examples("memtop")
+    .action(() => {
     if (!global.gc) {
       return [
         "❌ 需要启动 GC 暴露才能详细分析",
@@ -489,10 +503,6 @@ function analyzeCommonMemoryPatterns() {
   return patterns.join("\n");
 }
 
-// 类型声明
-declare global {
-  var gc: (() => void) | undefined;
-}
 
 addCommand(new MessageCommand("我才是[...content:text]")
 .action(async (m, { params }) => {
@@ -583,3 +593,80 @@ onDatabaseReady(async (db) => {
   const result = await model.select();
   console.log(result);
 });
+
+// ============================================================================
+// 性能监控命令
+// ============================================================================
+
+// 获取性能监控器实例
+const performanceMonitor = app.performanceMonitor;
+
+// 性能报告命令
+addCommand(
+  new MessageCommand("perf")
+    .desc("查看性能监控报告", "显示应用的性能统计信息")
+    .usage("perf")
+    .examples("perf")
+    .action(() => {
+      return performanceMonitor.getReport();
+    })
+);
+
+// 详细性能报告命令
+addCommand(
+  new MessageCommand("perf.full")
+    .desc("查看完整性能监控报告", "显示详细的性能统计和分析")
+    .usage("perf.full")
+    .examples("perf.full")
+    .action(() => {
+      return performanceMonitor.getFullReport();
+    })
+);
+
+// 实时性能统计命令
+addCommand(
+  new MessageCommand("perf.stats")
+    .desc("查看实时性能统计", "显示格式化的实时性能数据")
+    .usage("perf.stats")
+    .examples("perf.stats")
+    .action(() => {
+      const stats = performanceMonitor.stats;
+      
+      return [
+        "╔═══════════ 实时性能统计 ═══════════╗",
+        "",
+        "【内存使用】",
+        `  RSS: ${formatMemoSize(stats.memoryUsage.rss)}`,
+        `  堆内存 (Used): ${formatMemoSize(stats.memoryUsage.heapUsed)}`,
+        `  堆内存 (Total): ${formatMemoSize(stats.memoryUsage.heapTotal)}`,
+        `  使用率: ${((stats.memoryUsage.heapUsed / stats.memoryUsage.heapTotal) * 100).toFixed(2)}%`,
+        `  外部内存: ${formatMemoSize(stats.memoryUsage.external)}`,
+        `  ArrayBuffer: ${formatMemoSize(stats.memoryUsage.arrayBuffers)}`,
+        "",
+        "【峰值】",
+        `  内存峰值: ${formatMemoSize(stats.memoryPeak.value)}`,
+        `  发生时间: ${new Date(stats.memoryPeak.timestamp).toLocaleString('zh-CN')}`,
+        "",
+        "【运行时间】",
+        `  启动时间: ${new Date(stats.startTime).toLocaleString('zh-CN')}`,
+        `  运行时长: ${Time.formatTime(stats.uptime)}`,
+        "",
+        ...(stats.gcEvents > 0 ? [
+          "【GC 统计】",
+          `  GC 次数: ${stats.gcEvents} 次`,
+          `  GC 总耗时: ${(stats.gcEventDuration / 1000).toFixed(2)} 秒`,
+          "",
+        ] : []),
+        "【重载统计】",
+        `  重载次数: ${stats.reloadCount} 次`,
+        ...(stats.lastReloadTime ? [
+          `  最后重载: ${new Date(stats.lastReloadTime).toLocaleString('zh-CN')}`,
+          `  重载耗时: ${stats.lastReloadDuration?.toFixed(2) || 'N/A'} ms`,
+        ] : [
+          `  尚未重载`,
+        ]),
+        "",
+        "╚═════════════════════════════════════╝",
+      ].join("\n");
+    })
+);

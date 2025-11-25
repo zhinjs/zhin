@@ -156,7 +156,7 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
     protected readonly moduleLoader: ModuleLoader<P>;
     
     /** 性能监控器 */
-    protected readonly performanceMonitor: PerformanceMonitor;
+    public readonly performanceMonitor: PerformanceMonitor;
     
     /** 重载管理器 */
     protected readonly reloadManager: ReloadManager;

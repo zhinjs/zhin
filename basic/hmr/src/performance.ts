@@ -8,12 +8,16 @@ export interface PerformanceStats {
     totalReloadTime: number;
     /** 上次重载时间 */
     lastReloadTime: number;
+    /** 上次重载耗时 */
+    lastReloadDuration?: number;
     /** 重载次数 */
     reloadCount: number;
     /** 错误次数 */
     errors: number;
     /** 启动时间 */
     startTime: number;
+    /** 运行时长（毫秒） */
+    uptime: number;
     /** 内存使用情况 */
     memoryUsage: {
         rss: number;
@@ -24,16 +28,13 @@ export interface PerformanceStats {
     };
     /** 内存峰值 */
     memoryPeak: {
-        rss: number;
-        heapUsed: number;
+        value: number;  // 峰值内存（RSS）
         timestamp: number;
     };
-    /** GC 统计（如果可用） */
-    gcStats?: {
-        count: number;
-        totalDuration: number;
-        lastDuration: number;
-    };
+    /** GC 事件次数 */
+    gcEvents: number;
+    /** GC 总耗时（毫秒） */
+    gcEventDuration: number;
 }
 
 /**
@@ -80,9 +81,11 @@ export class PerformanceMonitor {
             totalLoadTime: 0,
             totalReloadTime: 0,
             lastReloadTime: 0,
+            lastReloadDuration: undefined,
             reloadCount: 0,
             errors: 0,
             startTime: Date.now(),
+            uptime: 0,
             memoryUsage: {
                 rss: mem.rss,
                 heapTotal: mem.heapTotal,
@@ -91,10 +94,11 @@ export class PerformanceMonitor {
                 arrayBuffers: mem.arrayBuffers
             },
             memoryPeak: {
-                rss: mem.rss,
-                heapUsed: mem.heapUsed,
+                value: mem.rss,
                 timestamp: Date.now()
-            }
+            },
+            gcEvents: 0,
+            gcEventDuration: 0
         };
         
         // 启动 GC 监控（如果配置了）
@@ -107,6 +111,8 @@ export class PerformanceMonitor {
     get stats(): Readonly<PerformanceStats> {
         // 更新当前内存使用
         this.updateMemoryUsage();
+        // 更新运行时长
+        this.#stats.uptime = Date.now() - this.#stats.startTime;
         return { ...this.#stats };
     }
     
@@ -156,12 +162,9 @@ export class PerformanceMonitor {
         };
         
         // 更新峰值
-        if (mem.rss > this.#stats.memoryPeak.rss) {
-            this.#stats.memoryPeak.rss = mem.rss;
+        if (mem.rss > this.#stats.memoryPeak.value) {
+            this.#stats.memoryPeak.value = mem.rss;
             this.#stats.memoryPeak.timestamp = Date.now();
-        }
-        if (mem.heapUsed > this.#stats.memoryPeak.heapUsed) {
-            this.#stats.memoryPeak.heapUsed = mem.heapUsed;
         }
     }
     
@@ -196,20 +199,11 @@ export class PerformanceMonitor {
         try {
             const { PerformanceObserver } = require('perf_hooks');
             
-            this.#stats.gcStats = {
-                count: 0,
-                totalDuration: 0,
-                lastDuration: 0
-            };
-            
             this.gcObserver = new PerformanceObserver((list: any) => {
                 const entries = list.getEntries();
                 for (const entry of entries) {
-                    if (this.#stats.gcStats) {
-                        this.#stats.gcStats.count++;
-                        this.#stats.gcStats.lastDuration = entry.duration;
-                        this.#stats.gcStats.totalDuration += entry.duration;
-                    }
+                    this.#stats.gcEvents++;
+                    this.#stats.gcEventDuration += entry.duration;
                 }
             });
             
@@ -231,7 +225,8 @@ export class PerformanceMonitor {
 
     /** 记录重载时间 */
     recordReloadTime(duration: number): void {
-        this.#stats.lastReloadTime = duration;
+        this.#stats.lastReloadTime = Date.now();
+        this.#stats.lastReloadDuration = duration;
         this.#stats.totalReloadTime += duration;
         this.#stats.reloadCount++;
     }
@@ -273,22 +268,19 @@ export class PerformanceMonitor {
         
         const lines = [
             `Memory Report:`,
-            `  RSS: ${this.formatBytes(mem.rss)} (Peak: ${this.formatBytes(peak.rss)})`,
+            `  RSS: ${this.formatBytes(mem.rss)} (Peak: ${this.formatBytes(peak.value)})`,
             `  Heap: ${this.formatBytes(mem.heapUsed)} / ${this.formatBytes(mem.heapTotal)} (${heapPercent.toFixed(2)}%)`,
             `  External: ${this.formatBytes(mem.external)}`,
             `  ArrayBuffers: ${this.formatBytes(mem.arrayBuffers)}`
         ];
         
-        if (this.#stats.gcStats) {
-            const avgGC = this.#stats.gcStats.count > 0 
-                ? this.#stats.gcStats.totalDuration / this.#stats.gcStats.count 
-                : 0;
+        if (this.#stats.gcEvents > 0) {
+            const avgGC = this.#stats.gcEventDuration / this.#stats.gcEvents;
             
             lines.push(
-                `  GC Count: ${this.#stats.gcStats.count}`,
-                `  GC Total Time: ${this.#stats.gcStats.totalDuration.toFixed(2)}ms`,
-                `  GC Avg Time: ${avgGC.toFixed(2)}ms`,
-                `  GC Last: ${this.#stats.gcStats.lastDuration.toFixed(2)}ms`
+                `  GC Count: ${this.#stats.gcEvents}`,
+                `  GC Total Time: ${this.#stats.gcEventDuration.toFixed(2)}ms`,
+                `  GC Avg Time: ${avgGC.toFixed(2)}ms`
             );
         }
         
@@ -410,3 +402,41 @@ export class Timer {
  * monitor.stopMonitoring();
  * ```
  */ 
+
+// ============================================================================
+// Performance Monitor Hook
+// ============================================================================
+
+import { HMR } from './hmr.js';
+
+/**
+ * 获取当前 HMR 实例的性能监控器
+ * 
+ * @returns {PerformanceMonitor} 性能监控器实例
+ * @throws {Error} 如果在 HMR 上下文之外调用
+ * 
+ * @example
+ * ```typescript
+ * import { usePerformanceMonitor } from '@zhin.js/hmr';
+ * 
+ * // 在插件中使用
+ * export default function() {
+ *   const monitor = usePerformanceMonitor();
+ *   
+ *   // 获取实时统计
+ *   const stats = monitor.getStats();
+ *   console.log(`Memory: ${stats.memoryUsage.rss} bytes`);
+ *   
+ *   // 获取报告
+ *   const report = monitor.getReport();
+ *   console.log(report);
+ * }
+ * ```
+ */
+export function usePerformanceMonitor(): PerformanceMonitor {
+    const hmr = HMR.currentHMR;
+    if (!hmr) {
+        throw new Error('usePerformanceMonitor() must be called within an HMR context');
+    }
+    return (hmr as any).performanceMonitor;
+}

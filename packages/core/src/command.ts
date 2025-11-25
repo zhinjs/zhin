@@ -12,8 +12,39 @@ import { App } from "./app.js";
  */
 export class MessageCommand<T extends keyof RegisteredAdapters=keyof RegisteredAdapters> extends SegmentMatcher{
     #callbacks:MessageCommand.Callback<T>[]=[];
+    #desc:string[]=[];
+    #usage:string[]=[];
+    #examples:string[]=[];
     #permissions:string[]=[];
     #checkers:MessageCommand.Checker<T>[]=[]
+    get helpInfo():MessageCommand.HelpInfo{
+        return {
+            pattern: this.pattern,
+            desc: this.#desc,
+            usage: this.#usage,
+            examples: this.#examples
+        }
+    }
+    get help(){
+        return [
+            this.pattern,
+            ...this.#desc,
+            ...this.#usage,
+            ...this.#examples
+        ].join("\n");
+    }
+    desc(...desc:string[]){
+        this.#desc.push(...desc)
+        return this as MessageCommand<T>;
+    }
+    usage(...usage:string[]){
+        this.#usage.push(...usage)
+        return this as MessageCommand<T>;
+    }
+    examples(...examples:string[]){
+        this.#examples.push(...examples)
+        return this as MessageCommand<T>;
+    }
     /**
      * 注册命令回调
      * @param callback 命令处理函数
@@ -56,4 +87,10 @@ export class MessageCommand<T extends keyof RegisteredAdapters=keyof RegisteredA
 export namespace MessageCommand{
     export type Callback<T extends keyof RegisteredAdapters>=(message:Message<AdapterMessage<T>>,result:MatchResult)=>SendContent|undefined|Promise<SendContent|undefined>;
     export type Checker<T extends keyof RegisteredAdapters>=(message:Message<AdapterMessage<T>>)=>MaybePromise<boolean>
+    export type HelpInfo={
+        pattern:string;
+        desc:string[];
+        usage:string[];
+        examples:string[];
+    }
 }

@@ -20,5 +20,5 @@ export { HMR } from './hmr.js';
 // 导出新的模块化组件
 export { FileWatcher } from './file-watcher.js';
 export { ModuleLoader } from './module-loader.js';
-export { PerformanceMonitor, Timer } from './performance.js';
+export { PerformanceMonitor, Timer, usePerformanceMonitor } from './performance.js';
 export { ReloadManager } from './reload-manager.js';

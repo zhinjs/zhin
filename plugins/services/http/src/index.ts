@@ -198,6 +198,9 @@ router.get("/api/plugins/:name", async (ctx) => {
     // 获取命令详情
     const commands = plugin.commands.map((cmd) => ({
       name: cmd.pattern,
+      desc: cmd.helpInfo.desc,
+      usage: cmd.helpInfo.usage,
+      examples: cmd.helpInfo.examples,
     }));
 
     // 获取组件详情
