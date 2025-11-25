@@ -1,5 +1,13 @@
 # @zhin.js/core
 
+## 1.0.17
+
+### Patch Changes
+
+- 3bc5d56: fix: 内存优化
+- Updated dependencies [3bc5d56]
+  - @zhin.js/hmr@1.0.8
+
 ## 1.0.16
 
 ### Patch Changes

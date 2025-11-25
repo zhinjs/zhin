@@ -1,5 +1,13 @@
 # @zhin.js/console
 
+## 1.0.13
+
+### Patch Changes
+
+- 3bc5d56: fix: 内存优化
+- Updated dependencies [3bc5d56]
+  - @zhin.js/core@1.0.17
+
 ## 1.0.12
 
 ### Patch Changes
