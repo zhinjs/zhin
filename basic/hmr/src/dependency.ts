@@ -263,11 +263,17 @@ export class Dependency<P extends Dependency<any> = any,O extends DependencyOpti
             return;
         }
         this.setLifecycleState('disposed');
+        
         // 销毁所有子依赖
         for (const [key, child] of this.dependencies) {
-            child.dispose();
+            try {
+                child.dispose();
+            } catch (error) {
+                this.emit('error', error);
+            }
         }
         this.dependencies.clear();
+        
         // 销毁所有Context
         for (const context of this.contextList) {
             if (context.dispose && context.value) {
@@ -280,11 +286,19 @@ export class Dependency<P extends Dependency<any> = any,O extends DependencyOpti
             }
         }
         this.contexts.clear();
+        
+        // 触发事件
         this.emit('dependency.dispose',this);
-        this.emit('self.dispose',this)
+        this.emit('self.dispose',this);
+        
+        // 清理所有监听器
         this.removeAllListeners();
-        this.parent=null;
-        // 手动垃圾回收
-        performGC({ onDispose: true }, `dispose: ${this.filename}`);
+        
+        // 显式清空引用
+        this.parent = null;
+        this.options = null as any;
+        
+        // ✅ 移除手动 GC，让 V8 自动处理
+        // performGC({ onDispose: true }, `dispose: ${this.filename}`);
     }
 } 

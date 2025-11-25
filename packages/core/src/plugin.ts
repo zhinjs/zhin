@@ -9,7 +9,7 @@ import { PermissionItem,PermissionChecker } from './permissions.js';
 import {Message} from './message.js'
 import { Schema } from '@zhin.js/hmr';
 import {Dependency, Logger,} from "@zhin.js/hmr";
-import {App} from "./app";
+import {App} from "./app.js";
 import {MessageCommand} from "./command.js";
 import {Component, renderComponents} from "./component.js";
 import { PluginError, MessageError, errorManager } from './errors.js';
@@ -194,7 +194,25 @@ export class Plugin extends Dependency<Plugin> {
             for (const middleware of this.middlewares) {
                 this.dispatch('middleware.remove', middleware)
             }
-            this.middlewares = []
+            this.middlewares.length = 0;  // 清空数组但保持引用
+            
+            // 清理 commands
+            this.commands.length = 0;
+            
+            // 清理权限
+            this.permissions.length = 0;
+            
+            // 清理组件 Map
+            this.components.clear();
+            
+            // 清理定义 Map
+            this.definitions.clear();
+            
+            // 清理 crons（在 dispose 事件中已处理，这里确保清空）
+            this.crons.length = 0;
+            
+            // 清空 logger 引用
+            this.#logger = undefined;
             
             // 调用父类的dispose方法
             super.dispose()

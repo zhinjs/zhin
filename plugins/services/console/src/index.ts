@@ -1,12 +1,22 @@
 import { register, useContext,useLogger } from "@zhin.js/core";
 import  { WebSocketServer } from "ws";
-import { ViteDevServer } from "vite";
+import type { ViteDevServer } from "vite";
 import mime from "mime";
-import connect from "koa-connect";
 import * as fs from "fs";
 import * as path from "path";
-import { createViteDevServer } from "./dev.js";
 import { setupWebSocket,notifyDataUpdate } from "./websocket.js";
+
+// 条件导入 - 生产环境会被 tree-shake
+let createViteDevServer: ((options: any) => Promise<ViteDevServer>) | undefined;
+let connect: ((handler: any) => any) | undefined;
+
+if (process.env.NODE_ENV === 'development') {
+  // 动态导入开发依赖
+  const devModule = await import('./dev.js');
+  createViteDevServer = devModule.createViteDevServer;
+  const koaConnectModule = await import('koa-connect');
+  connect = koaConnectModule.default;
+}
 
 declare module "@zhin.js/types" {
   interface GlobalContext {
@@ -87,8 +97,8 @@ useContext("router", async (router) => {
   const root = isDev
     ? path.join(import.meta.dirname, "../client")
     : path.join(import.meta.dirname, "../dist");
-  if (isDev) {
-    webServer.vite = await await createViteDevServer({
+  if (isDev && createViteDevServer && connect) {
+    webServer.vite = await createViteDevServer({
       root,
       base,
       enableTailwind: true,
@@ -96,7 +106,7 @@ useContext("router", async (router) => {
     // Vite 中间件 - 必须在其他路由之前
     router.use((ctx, next) => {
       if (ctx.request.originalUrl.startsWith("/api")) return next();
-      return connect(webServer.vite!.middlewares)(ctx as any, next);
+      return connect!(webServer.vite!.middlewares)(ctx as any, next);
     });
   }else{
     router.use((ctx, next) => {

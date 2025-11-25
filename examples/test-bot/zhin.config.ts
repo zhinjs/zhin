@@ -28,7 +28,7 @@ export default defineConfig(async () => {
       "console",
       "mcp",
       "test-plugin",
-      "sensitive-filter",
+      // "sensitive-filter",
       'plugin-github-notify',
       "test-jsx"
     ],

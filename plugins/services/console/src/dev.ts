@@ -1,4 +1,4 @@
-import { ViteDevServer, createServer, searchForWorkspaceRoot } from "vite";
+import type { ViteDevServer } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
@@ -21,7 +21,7 @@ export async function createViteDevServer(
   options: DevServerOptions
 ): Promise<ViteDevServer> {
   const { root, base = "/vite/", enableTailwind = true } = options;
-
+  const { createServer, searchForWorkspaceRoot}= await import('vite')
   const plugins = [react()];
   if (enableTailwind) {
     plugins.push(tailwindcss());

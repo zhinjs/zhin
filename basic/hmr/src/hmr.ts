@@ -180,7 +180,29 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
             finalOptions.algorithm || 'md5'
         );
 
-        this.performanceMonitor = new PerformanceMonitor();
+        // 初始化性能监控器（遵循"监控不干预"原则）
+        this.performanceMonitor = new PerformanceMonitor({
+            checkInterval: 60000,  // 每分钟检查一次
+            highMemoryThreshold: 90,  // 90% 阈值
+            monitorGC: finalOptions.debug || process.env.NODE_ENV === 'development',  // 开发环境或 debug 模式启用 GC 监控
+            gcOnlyInDev: true  // 只在开发环境监控 GC
+        });
+        
+        // 启动性能监控
+        this.performanceMonitor.startMonitoring((stats) => {
+            const heapPercent = (stats.memoryUsage.heapUsed / stats.memoryUsage.heapTotal) * 100;
+            const rssMB = (stats.memoryUsage.rss / 1024 / 1024).toFixed(2);
+            
+            this.logger.warn(`⚠️  High memory usage detected: ${heapPercent.toFixed(2)}%`);
+            this.logger.warn(`   RSS: ${rssMB} MB`);
+            this.logger.warn(`   Heap: ${(stats.memoryUsage.heapUsed / 1024 / 1024).toFixed(2)} MB / ${(stats.memoryUsage.heapTotal / 1024 / 1024).toFixed(2)} MB`);
+            
+            // ✅ 只记录日志，不手动 GC
+            // ❌ 不要: if (global.gc) global.gc();
+            
+            // 发出事件，让使用者可以响应
+            this.emit('memory.high', stats);
+        });
 
         this.reloadManager = new ReloadManager(
             this.logger,
@@ -445,6 +467,9 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
         this.fileWatcher.dispose();
         this.moduleLoader.dispose();
         this.reloadManager.dispose();
+        
+        // 停止性能监控
+        this.performanceMonitor.stopMonitoring();
 
         // 从 HMR 栈中移除
         const hmrIndex = HMR.hmrStack.indexOf(this);
@@ -459,8 +484,8 @@ export abstract class HMR<P extends Dependency = Dependency> extends Dependency<
 
         super.dispose();
         
-        // 手动垃圾回收
-        performGC({ onDispose: true }, `HMR dispose: ${this.filename}`);
+        // ✅ V8 会自动处理 GC，不需要手动调用
+        // ❌ 不要: performGC({ onDispose: true }, `HMR dispose: ${this.filename}`);
     }
 
 

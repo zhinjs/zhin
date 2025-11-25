@@ -120,21 +120,37 @@ export interface GCConfig {
 
 /**
  * 默认垃圾回收配置
+ * 注意：生产环境不建议启用手动 GC，V8 的自动 GC 已经足够智能
  */
 export const DEFAULT_GC_CONFIG: GCConfig = {
-    enabled: true,
+    enabled: process.env.NODE_ENV === 'development',  // 只在开发环境启用
     delay: 0,
-    onReload: true,
-    onDispose: true
+    onReload: false,  // 不在重载时 GC
+    onDispose: false  // 不在销毁时 GC
 };
 
 /**
  * 执行手动垃圾回收
  * @param config 垃圾回收配置
  * @param context 上下文信息（用于日志）
+ * 
+ * ⚠️ 注意：不建议在生产环境频繁调用此函数
+ * V8 的自动 GC 已经足够智能，手动 GC 可能会:
+ * 1. 打断正常执行流程
+ * 2. 造成不必要的性能损失
+ * 3. 干扰 V8 的优化算法
+ * 
+ * 只在以下情况考虑使用：
+ * - 调试/分析内存问题
+ * - 大批量数据处理后 (>1000 次操作)
  */
 export function performGC(config: Partial<GCConfig> = {}, context?: string): void {
     const finalConfig = { ...DEFAULT_GC_CONFIG, ...config };
+    
+    // 生产环境直接返回
+    if (process.env.NODE_ENV === 'production') {
+        return;
+    }
     
     if (!finalConfig.enabled || !global.gc) {
         return;

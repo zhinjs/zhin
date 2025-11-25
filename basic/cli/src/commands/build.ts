@@ -8,7 +8,9 @@ export const buildCommand = new Command('build')
   .description('构建插件项目')
   .argument('[plugin]', '插件名称（默认构建所有插件）')
   .option('--clean', '清理输出目录', false)
-  .action(async (pluginName: string | undefined, options: { clean: boolean }) => {
+  .option('--production', '生产构建（启用 Tree Shaking）', true)
+  .option('--analyze', '分析包体积', false)
+  .action(async (pluginName: string | undefined, options: { clean: boolean; production: boolean; analyze: boolean }) => {
     try {
       const cwd = process.cwd();
       
@@ -34,7 +36,7 @@ export const buildCommand = new Command('build')
           process.exit(1);
         }
         
-        await buildPlugin(pluginPath, pluginName, options.clean);
+        await buildPlugin(pluginPath, pluginName, options);
       } else {
         // 构建所有插件
         const plugins = await fs.readdir(pluginsDir);
@@ -53,7 +55,7 @@ export const buildCommand = new Command('build')
         
         for (const plugin of validPlugins) {
           const pluginPath = path.join(pluginsDir, plugin);
-          await buildPlugin(pluginPath, plugin, options.clean);
+          await buildPlugin(pluginPath, plugin, options);
         }
       }
       
@@ -63,12 +65,12 @@ export const buildCommand = new Command('build')
     }
   });
 
-async function buildPlugin(pluginPath: string, pluginName: string, clean: boolean): Promise<void> {
+async function buildPlugin(pluginPath: string, pluginName: string, options: { clean: boolean; production: boolean; analyze: boolean }): Promise<void> {
   return new Promise((resolve, reject) => {
     logger.info(`正在构建插件: ${pluginName}...`);
     
     // 清理输出目录
-    if (clean) {
+    if (options.clean) {
       const libPath = path.join(pluginPath, 'lib');
       const distPath = path.join(pluginPath, 'dist');
       
@@ -83,11 +85,22 @@ async function buildPlugin(pluginPath: string, pluginName: string, clean: boolea
       }
     }
     
+    // 设置环境变量
+    const env = {
+      ...process.env,
+      NODE_ENV: options.production ? 'production' : 'development',
+    };
+    
+    if (options.production) {
+      logger.info(`📦 生产构建模式 (启用 Tree Shaking)`);
+    }
+    
     // 使用 pnpm build 构建插件
     const child = spawn('pnpm', ['build'], {
       cwd: pluginPath,
       stdio: 'inherit',
       shell: true,
+      env,
     });
     
     child.on('close', (code) => {

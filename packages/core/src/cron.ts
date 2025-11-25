@@ -1,15 +1,14 @@
-import { CronExpressionParser, CronExpression } from 'cron-parser';
+import { Cron as Croner } from 'croner';
 
 /**
  * Cron 定时任务类
- * 基于 cron-parser 实现的定时任务调度器
+ * 基于 croner 实现的定时任务调度器 (无需 Luxon，内存占用更小)
  */
 export class Cron {
-  private expression: CronExpression;
+  private job: Croner | null = null;
   private callback: () => void | Promise<void>;
-  private timeoutId?: NodeJS.Timeout;
-  private isRunning = false;
   private isDisposed = false;
+  private _cronExpression: string;
 
   /**
    * 创建一个新的 Cron 实例
@@ -18,8 +17,12 @@ export class Cron {
    */
   constructor(cronExpression: string, callback: () => void | Promise<void>) {
     try {
-      this.expression = CronExpressionParser.parse(cronExpression);
+      this._cronExpression = cronExpression;
       this.callback = callback;
+      
+      // 验证 cron 表达式是否有效 (不启动)
+      const testJob = new Croner(cronExpression, { paused: true });
+      testJob.stop();
     } catch (error) {
       throw new Error(`Invalid cron expression "${cronExpression}": ${(error as Error).message}`);
     }
@@ -33,23 +36,28 @@ export class Cron {
       throw new Error('Cannot run a disposed cron job');
     }
 
-    if (this.isRunning) {
+    if (this.job) {
       return; // 已经在运行中
     }
 
-    this.isRunning = true;
-    this.scheduleNext();
+    // 创建并启动任务
+    this.job = new Croner(this._cronExpression, async () => {
+      try {
+        await this.callback();
+      } catch (error) {
+        console.error(`Error executing cron callback: ${(error as Error).message}`);
+      }
+    });
   }
 
   /**
    * 停止定时任务
    */
   stop(): void {
-    if (this.timeoutId) {
-      clearTimeout(this.timeoutId);
-      this.timeoutId = undefined;
+    if (this.job) {
+      this.job.stop();
+      this.job = null;
     }
-    this.isRunning = false;
   }
 
   /**
@@ -68,16 +76,23 @@ export class Cron {
       throw new Error('Cannot get next execution time for a disposed cron job');
     }
     
-    // 重置表达式到当前时间
-    this.expression.reset();
-    return this.expression.next().toDate();
+    // 创建临时任务来获取下次执行时间
+    const tempJob = new Croner(this._cronExpression, { paused: true });
+    const nextRun = tempJob.nextRun();
+    tempJob.stop();
+    
+    if (!nextRun) {
+      throw new Error('Cannot determine next execution time');
+    }
+    
+    return nextRun;
   }
 
   /**
    * 检查任务是否正在运行
    */
   get running(): boolean {
-    return this.isRunning;
+    return this.job !== null;
   }
 
   /**
@@ -91,59 +106,7 @@ export class Cron {
    * 获取原始的 cron 表达式字符串
    */
   get cronExpression(): string {
-    return this.expression.stringify();
-  }
-
-  /**
-   * 调度下一次执行
-   */
-  private scheduleNext(): void {
-    if (!this.isRunning || this.isDisposed) {
-      return;
-    }
-
-    try {
-      // 重置到当前时间并获取下一次执行时间
-      this.expression.reset();
-      const nextDate = this.expression.next().toDate();
-      const now = new Date();
-      const delay = nextDate.getTime() - now.getTime();
-
-      // 如果延迟时间为负数或0，说明应该立即执行
-      if (delay <= 0) {
-        this.executeCallback();
-        return;
-      }
-
-      // 设置定时器
-      this.timeoutId = setTimeout(() => {
-        this.executeCallback();
-      }, delay);
-
-    } catch (error) {
-      console.error(`Error scheduling next cron execution: ${(error as Error).message}`);
-      // 如果出错，停止任务
-      this.stop();
-    }
-  }
-
-  /**
-   * 执行回调函数并调度下一次执行
-   */
-  private async executeCallback(): Promise<void> {
-    if (!this.isRunning || this.isDisposed) {
-      return;
-    }
-
-    try {
-      // 执行回调函数
-      await this.callback();
-    } catch (error) {
-      console.error(`Error executing cron callback: ${(error as Error).message}`);
-    }
-
-    // 调度下一次执行
-    this.scheduleNext();
+    return this._cronExpression;
   }
 }
 

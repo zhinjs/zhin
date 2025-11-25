@@ -28,20 +28,20 @@
     "clean": "rm -rf lib"
   },
   "dependencies": {
-    "@zhin.js/hmr": "workspace:*",
     "@zhin.js/database": "workspace:*",
-    "segment-matcher": "latest",
-    "yaml": "^2.3.4",
-    "toml": "^3.0.0",
+    "@zhin.js/hmr": "workspace:*",
+    "croner": "^9.1.0",
     "dotenv": "^16.3.1",
-    "cron-parser": "latest"
+    "segment-matcher": "latest",
+    "toml": "^3.0.0",
+    "yaml": "^2.3.4"
   },
   "peerDependencies": {
     "@zhin.js/logger": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
-    "typescript": "^5.3.0",
-    "@zhin.js/types": "workspace:*"
+    "@zhin.js/types": "workspace:*",
+    "typescript": "^5.3.0"
   }
 }

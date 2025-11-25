@@ -34,36 +34,38 @@
   },
   "scripts": {
     "build": "pnpm build:node && pnpm build:client",
+    "build:prod": "NODE_ENV=production pnpm build",
+    "build:dev": "NODE_ENV=development pnpm build",
     "build:client": "node scripts/client.js",
     "clean": "rm -rf lib dist",
-    "build:node": "tsc"
+    "build:node": "tsup"
   },
   "dependencies": {
+    "@radix-ui/themes": "^3.2.1",
+    "@reduxjs/toolkit": "^2.9.0",
+    "@tailwindcss/postcss": "^4.1.11",
+    "@tailwindcss/vite": "4.1.14",
+    "@vitejs/plugin-react": "^4.3.4",
+    "clsx": "^2.1.1",
+    "koa-connect": "^2.1.0",
+    "lucide-react": "^0.469.0",
+    "mime": "^4.1.0",
+    "radix-ui": "^1.4.3",
     "react": "19.2.0",
     "react-dom": "19.2.0",
-    "mime": "^4.1.0",
-    "@vitejs/plugin-react": "^4.3.4",
-    "@tailwindcss/vite": "4.1.14",
-    "radix-ui": "^1.4.3",
-    "@radix-ui/themes": "^3.2.1",
-    "@tailwindcss/postcss": "^4.1.11",
-    "tailwindcss": "latest",
-    "koa-connect": "^2.1.0",
-    "@reduxjs/toolkit": "^2.9.0",
-    "lucide-react": "^0.469.0",
-    "clsx": "^2.1.1",
     "react-redux": "9.2.0",
     "react-router": "7.0.0",
     "redux-persist": "6.0.0",
     "tailwind-merge": "^3.3.1",
-    "ws": "^8.18.3",
-    "vite": "^7.0.6"
+    "tailwindcss": "latest",
+    "vite": "^7.0.6",
+    "ws": "^8.18.3"
   },
   "peerDependencies": {
     "@types/ws": "^8.18.1",
     "@zhin.js/client": "workspace:^",
-    "@zhin.js/http": "workspace:^",
     "@zhin.js/core": "workspace:^",
+    "@zhin.js/http": "workspace:^",
     "@zhin.js/types": "workspace:^"
   },
   "peerDependenciesMeta": {
@@ -78,5 +80,8 @@
     "dist",
     "client",
     "CHANGELOG.md"
-  ]
+  ],
+  "devDependencies": {
+    "tsup": "^8.5.1"
+  }
 }

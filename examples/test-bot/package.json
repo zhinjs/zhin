@@ -6,7 +6,7 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "npx zhin dev --bun",
+    "dev": "npx zhin dev",
     "start": "npx zhin start",
     "daemon": "npx zhin start --daemon",
     "build": "tsc && zhin-console build",
