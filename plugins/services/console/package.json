@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/console",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "Zhin 控制台",
   "type": "module",
   "main": "./lib/index.js",

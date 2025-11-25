@@ -1,5 +1,11 @@
 # @zhin.js/hmr
 
+## 1.0.8
+
+### Patch Changes
+
+- 3bc5d56: fix: 内存优化
+
 ## 1.0.7
 
 ### Patch Changes

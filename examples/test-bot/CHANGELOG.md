@@ -1,5 +1,22 @@
 # test-bot
 
+## 0.1.10
+
+### Patch Changes
+
+- 3bc5d56: fix: 内存优化
+- Updated dependencies [3bc5d56]
+  - @zhin.js/console@1.0.13
+  - @zhin.js/adapter-icqq@1.0.22
+  - @zhin.js/adapter-process@1.0.22
+  - zhin.js@1.0.17
+  - @zhin.js/adapter-discord@1.0.17
+  - @zhin.js/adapter-kook@1.0.17
+  - @zhin.js/adapter-onebot11@1.0.19
+  - @zhin.js/adapter-qq@1.0.17
+  - @zhin.js/plugin-github-notify@0.0.4
+  - @zhin.js/sensitive-filter@0.0.3
+
 ## 0.1.9
 
 ### Patch Changes
