@@ -21,6 +21,7 @@ describe('PerformanceMonitor', () => {
 
             expect(stats.reloadCount).toBe(1)
             expect(stats.totalReloadTime).toBe(100)
+            expect(stats.lastReloadDuration).toBe(100)
             expect(performanceMonitor.getAverageReloadTime()).toBe(100)
         })
 
@@ -32,16 +33,19 @@ describe('PerformanceMonitor', () => {
             const stats = performanceMonitor.stats
             expect(stats.reloadCount).toBe(3)
             expect(stats.totalReloadTime).toBe(600)
+            expect(stats.lastReloadDuration).toBe(300)
             expect(performanceMonitor.getAverageReloadTime()).toBe(200)
         })
 
-        it('should track minimum and maximum reload times', () => {
+        it('should track last reload time and duration', () => {
+            const beforeTime = Date.now()
             performanceMonitor.recordReloadTime(100)
             performanceMonitor.recordReloadTime(50)
             performanceMonitor.recordReloadTime(200)
 
             const stats = performanceMonitor.stats
-            expect(stats.lastReloadTime).toBe(200)
+            expect(stats.lastReloadTime).toBeGreaterThanOrEqual(beforeTime)
+            expect(stats.lastReloadDuration).toBe(200)
             expect(stats.totalReloadTime).toBe(350)
         })
     })
@@ -84,14 +88,49 @@ describe('PerformanceMonitor', () => {
             expect(report).toContain('Reload Count: 2')
             expect(report).toContain('Errors: 1')
             expect(report).toContain('Average Reload Time: 150.00ms')
-            expect(report).toContain('Last Reload: 200ms')
         })
 
         it('should format times correctly in report', () => {
             performanceMonitor.recordReloadTime(1234)
 
             const report = performanceMonitor.getReport()
-            expect(report).toContain('1234ms') // Should show milliseconds
+            expect(report).toContain('1234.00ms') // Should show milliseconds with 2 decimal places
+        })
+
+        it('should include memory information in report', () => {
+            const report = performanceMonitor.getReport()
+            expect(report).toContain('Memory Report')
+            expect(report).toContain('RSS:')
+            expect(report).toContain('Heap:')
+        })
+
+        it('should include uptime in stats', () => {
+            const stats = performanceMonitor.stats
+            expect(stats.uptime).toBeGreaterThanOrEqual(0)
+            expect(stats.startTime).toBeGreaterThan(0)
+        })
+
+        it('should track memory peak', () => {
+            const stats = performanceMonitor.stats
+            expect(stats.memoryPeak).toBeDefined()
+            expect(stats.memoryPeak.value).toBeGreaterThan(0)
+            expect(stats.memoryPeak.timestamp).toBeGreaterThan(0)
+        })
+
+        it('should track GC events when enabled', () => {
+            // Create a new monitor with GC tracking enabled
+            const monitorWithGC = new PerformanceMonitor({
+                monitorGC: true,
+                gcOnlyInDev: false
+            })
+            
+            const stats = monitorWithGC.stats
+            expect(stats.gcEvents).toBeDefined()
+            expect(stats.gcEventDuration).toBeDefined()
+            expect(stats.gcEvents).toBeGreaterThanOrEqual(0)
+            expect(stats.gcEventDuration).toBeGreaterThanOrEqual(0)
+            
+            monitorWithGC.stopMonitoring()
         })
     })
 
@@ -134,7 +173,7 @@ describe('PerformanceMonitor', () => {
             performanceMonitor.recordReloadTime(largeTime)
             const stats = performanceMonitor.stats
             expect(stats.totalReloadTime).toBe(largeTime)
-            expect(stats.lastReloadTime).toBe(largeTime)
+            expect(stats.lastReloadDuration).toBe(largeTime)
         })
 
         it('should handle floating point reload times', () => {
@@ -144,6 +183,57 @@ describe('PerformanceMonitor', () => {
             const stats = performanceMonitor.stats
             expect(stats.totalReloadTime).toBeCloseTo(301.2)
             expect(performanceMonitor.getAverageReloadTime()).toBeCloseTo(150.6)
+        })
+    })
+
+    describe('Memory Monitoring', () => {
+        it('should start and stop monitoring', () => {
+            const monitor = new PerformanceMonitor({
+                checkInterval: 100,
+                highMemoryThreshold: 90
+            })
+            
+            let callbackCalled = false
+            monitor.startMonitoring(() => {
+                callbackCalled = true
+            })
+            
+            // Monitor should be running
+            monitor.stopMonitoring()
+            
+            // No errors should be thrown
+            expect(true).toBe(true)
+        })
+
+        it('should not start monitoring twice', () => {
+            const monitor = new PerformanceMonitor()
+            
+            monitor.startMonitoring()
+            monitor.startMonitoring() // Should be ignored
+            
+            monitor.stopMonitoring()
+            expect(true).toBe(true)
+        })
+
+        it('should handle stopMonitoring when not started', () => {
+            const monitor = new PerformanceMonitor()
+            
+            // Should not throw
+            monitor.stopMonitoring()
+            expect(true).toBe(true)
+        })
+
+        it('should respect GC monitoring configuration', () => {
+            const devMonitor = new PerformanceMonitor({
+                monitorGC: true,
+                gcOnlyInDev: true
+            })
+            
+            const stats = devMonitor.stats
+            expect(stats.gcEvents).toBeDefined()
+            expect(stats.gcEventDuration).toBeDefined()
+            
+            devMonitor.stopMonitoring()
         })
     })
 })

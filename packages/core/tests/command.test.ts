@@ -611,6 +611,83 @@ describe('Command系统测试', () => {
     })
   })
 
+  describe('帮助系统测试', () => {
+    it('应该正确设置和获取描述信息', () => {
+      const command = new MessageCommand('help')
+        .desc('这是命令描述', '可以有多行描述')
+
+      expect(command.helpInfo.desc).toEqual(['这是命令描述', '可以有多行描述'])
+    })
+
+    it('应该正确设置和获取用法信息', () => {
+      const command = new MessageCommand('help')
+        .usage('help', 'help <command>')
+
+      expect(command.helpInfo.usage).toEqual(['help', 'help <command>'])
+    })
+
+    it('应该正确设置和获取示例信息', () => {
+      const command = new MessageCommand('help')
+        .examples('help', 'help echo', 'help admin')
+
+      expect(command.helpInfo.examples).toEqual(['help', 'help echo', 'help admin'])
+    })
+
+    it('应该支持链式调用设置帮助信息', () => {
+      const command = new MessageCommand('test')
+        .desc('测试命令', '用于测试功能')
+        .usage('test', 'test <arg>')
+        .examples('test', 'test hello')
+        .action(() => 'Test response')
+
+      expect(command.helpInfo.pattern).toBe('test')
+      expect(command.helpInfo.desc).toEqual(['测试命令', '用于测试功能'])
+      expect(command.helpInfo.usage).toEqual(['test', 'test <arg>'])
+      expect(command.helpInfo.examples).toEqual(['test', 'test hello'])
+    })
+
+    it('应该正确生成帮助文本', () => {
+      const command = new MessageCommand('greet')
+        .desc('打招呼命令')
+        .usage('greet <name>')
+        .examples('greet Alice')
+
+      const help = command.help
+      
+      expect(help).toContain('greet')
+      expect(help).toContain('打招呼命令')
+      expect(help).toContain('greet <name>')
+      expect(help).toContain('greet Alice')
+    })
+
+    it('应该处理没有帮助信息的情况', () => {
+      const command = new MessageCommand('simple')
+
+      expect(command.helpInfo.desc).toEqual([])
+      expect(command.helpInfo.usage).toEqual([])
+      expect(command.helpInfo.examples).toEqual([])
+      expect(command.help).toBe('simple')
+    })
+
+    it('应该正确返回 helpInfo 对象结构', () => {
+      const command = new MessageCommand('info')
+        .desc('信息命令')
+        .usage('info')
+        .examples('info')
+
+      const helpInfo = command.helpInfo
+
+      expect(helpInfo).toHaveProperty('pattern')
+      expect(helpInfo).toHaveProperty('desc')
+      expect(helpInfo).toHaveProperty('usage')
+      expect(helpInfo).toHaveProperty('examples')
+      expect(typeof helpInfo.pattern).toBe('string')
+      expect(Array.isArray(helpInfo.desc)).toBe(true)
+      expect(Array.isArray(helpInfo.usage)).toBe(true)
+      expect(Array.isArray(helpInfo.examples)).toBe(true)
+    })
+  })
+
   describe('权限系统测试', () => {
     it('应该正确处理权限检查失败', async () => {
       const command = new MessageCommand('admin')
