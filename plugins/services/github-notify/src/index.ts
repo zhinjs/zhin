@@ -1,7 +1,6 @@
 import type {} from "@zhin.js/http";
 import {
   usePlugin,
-  addCommand,
   MessageCommand,
   useLogger,
   defineModel,
@@ -12,6 +11,7 @@ import type { EventType, GitHubWebhookPayload, Subscription } from "./types.js";
 import crypto from "node:crypto";
 
 const plugin = usePlugin();
+const { addCommand } = plugin;
 const logger = useLogger();
 
 // 定义数据库模型
@@ -38,6 +38,7 @@ onDatabaseReady(async (db) => {
   const events = db.model("github_events");
 
   // 订阅仓库命令
+  // 使用解构出来的 addCommand
   addCommand(
     new MessageCommand("github.subscribe <repo:text> [...events:text]").action(
       async (message, result) => {
@@ -211,7 +212,11 @@ onDatabaseReady(async (db) => {
   );
 
   // 注册 Webhook 路由
-  useContext("router", (router) => {
+  // 使用 plugin.useContext (因为 useContext 并不是 plugin 类的自有方法，而是全局导出，但 plugin 实例有自己的上下文管理逻辑)
+  // 如果 Plugin 类实现了 useContext 方法，那么可以像 addCommand 一样解构
+  // 经检查 Plugin 类没有直接的 useContext 方法，但它继承自 Dependency，而 Dependency 有上下文管理
+  // 这里我们还是用 plugin.useContext
+  plugin.useContext("router", (router) => {
     router.post("/api/github/webhook", async (ctx) => {
       try {
         const signature = ctx.request.headers["x-hub-signature-256"] as string;

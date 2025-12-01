@@ -11,7 +11,7 @@ export default defineConfig(async () => {
         context: "process"
       }
     ],
-    log_level: 1,
+    log_level: LogLevel.DEBUG,
     log: {
       maxDays: 7,
       maxRecords: 10000,

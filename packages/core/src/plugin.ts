@@ -41,7 +41,7 @@ export class Plugin extends Dependency<Plugin> {
      * @param name 插件名
      * @param filePath 插件文件路径
      */
-    constructor(parent: Dependency<Plugin>, name: string, filePath: string) {
+    constructor(parent: Dependency<Plugin> | null, name: string, filePath: string) {
         // 在测试环境中跳过文件检查
         if (process.env.NODE_ENV !== 'test' && !filePath.startsWith('/mock/')) {
             filePath = fs.realpathSync(filePath);
@@ -68,13 +68,35 @@ export class Plugin extends Dependency<Plugin> {
                 cron.run();
             }
         });
+        
+        // Auto-bind all methods on the instance to ensure 'this' context is preserved
+        let proto = Object.getPrototypeOf(this);
+        while (proto && proto !== Object.prototype) {
+            for (const key of Object.getOwnPropertyNames(proto)) {
+                if (key === 'constructor') continue;
+                const descriptor = Object.getOwnPropertyDescriptor(proto, key);
+                // Check if it's a method (value is function) and writable/configurable
+                if (descriptor && typeof descriptor.value === 'function') {
+                    // Avoid rebinding if already bound (though typically on prototype it's not)
+                    // and ensure we don't break getters/setters (which don't have value property)
+                    try {
+                        (this as any)[key] = (this as any)[key].bind(this);
+                    } catch (e) {
+                        // Ignore errors (e.g. read-only properties)
+                    }
+                }
+            }
+            proto = Object.getPrototypeOf(proto);
+        }
     }
     get config(){
         return this.app.getConfig(this.name as string) as Record<string,any>
     }
     defineSchema<S extends Schema>(rules: S): S {
         const result= super.defineSchema(rules);
+        if(this !== this.app as unknown as Plugin){
         this.app.changeSchema(this.name as string, this.schema);
+        }
 
         return result;
     }
@@ -121,7 +143,8 @@ export class Plugin extends Dependency<Plugin> {
     }
     /** 获取所属的App实例 */
     get app(): App {
-        return this.parent as App;
+        // App is always the root dependency
+        return this.root as unknown as App;
     }
     get logger(): Logger {
         if(this.#logger) return this.#logger
@@ -157,9 +180,9 @@ export class Plugin extends Dependency<Plugin> {
 
 
     /** 发送消息 */
-    async sendMessage(options: SendOptions): Promise<void> {
+    async sendMessage(options: SendOptions): Promise<string> {
         try {
-            await this.app.sendMessage(options);
+            return await this.app.sendMessage(options);
         } catch (error) {
             const messageError = new MessageError(
                 `发送消息失败: ${(error as Error).message}`,

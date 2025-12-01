@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 import { Logger } from './types.js';
 import { Dependency } from './dependency.js';
-import { HMR } from './hmr.js';
+import { HMRManager } from './hmr.js';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -46,11 +46,80 @@ export class TestDependency extends Dependency {
 }
 
 /**
- * 测试用HMR类
+ * 测试用HMR类 (模拟App)
  */
-export class TestHMR extends HMR {
+export class TestHMR extends Dependency {
+    public hmrManager: HMRManager<TestDependency>;
+    
+    constructor(options: { logger?: Logger; dirs?: string[]; debug?: boolean } = {}) {
+        super(null, 'TestHMR', '/test/hmr');
+        this.hmrManager = new HMRManager(this as any, options);
+    }
+
     createDependency(name: string, filePath: string): TestDependency {
         return new TestDependency(this, name, filePath);
+    }
+
+    get dirs() {
+        return this.hmrManager.dirs;
+    }
+
+    set dirs(value: string[]) {
+        this.hmrManager.dirs = value;
+    }
+
+    resolve(filePath: string) {
+        return this.hmrManager.resolve(filePath);
+    }
+
+    watchFile(filePath: string) {
+        return this.hmrManager.watchFile(filePath);
+    }
+
+    unwatchFile(filePath: string) {
+        this.hmrManager.unwatchFile(filePath);
+    }
+
+    async import(name: string, filePath: string) {
+        return this.hmrManager.import(name, filePath);
+    }
+
+    findPluginByName(name: string) {
+        return this.hmrManager.findPluginByName(name);
+    }
+
+    getPerformanceStats() {
+        return this.hmrManager.getPerformanceStats();
+    }
+
+    getPerformanceReport() {
+        return this.hmrManager.getPerformanceReport();
+    }
+
+    getReloadStatus() {
+        return this.hmrManager.getReloadStatus();
+    }
+
+    updateOptions(options: any) {
+        this.hmrManager.updateOptions(options);
+    }
+
+    setDebugMode(enabled: boolean) {
+        this.hmrManager.setDebugMode(enabled);
+    }
+
+    getTestInterface() {
+        return this.hmrManager.getTestInterface();
+    }
+    
+    // Proxy fileWatcher getter for tests
+    get fileWatcher() {
+        return this.hmrManager.fileWatcher;
+    }
+
+    dispose() {
+        this.hmrManager.dispose();
+        super.dispose();
     }
 }
 

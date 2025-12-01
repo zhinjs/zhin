@@ -96,3 +96,14 @@ export interface HmrOptions {
     /** 是否启用调试模式 */
     debug?: boolean;
 }
+
+/**
+ * HMR 入口接口
+ * 宿主对象必须实现此接口
+ */
+export interface HMREntry<T extends Dependency = Dependency> {
+    dependencies: Map<string, T>;
+    createDependency(name: string, filePath: string): T;
+    findChild(filename: string): T | void;
+    findParent(filename: string, callerFiles: string[]): Dependency;
+}

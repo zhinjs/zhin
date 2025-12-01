@@ -583,7 +583,6 @@ defineModel("test_model", {
 });
 onDatabaseReady(async (db) => {
   const model = db.model("test_model");
-  await model.delete({name:'张三'});
   // await model.create({
   //   name:'张三',
   //   age:20,
@@ -599,7 +598,7 @@ onDatabaseReady(async (db) => {
 // ============================================================================
 
 // 获取性能监控器实例
-const performanceMonitor = app.performanceMonitor;
+const performanceMonitor = app.hmrManager.performanceMonitor;
 
 // 性能报告命令
 addCommand(

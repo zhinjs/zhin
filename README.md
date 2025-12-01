@@ -1,7 +1,7 @@
 
 # Zhin.js
 
-🚀 现代 TypeScript 机器人框架，专注于插件化、热重载和多平台生态
+🚀 现代 TypeScript 机器人框架，专注于插件化、热重载和极致开发体验
 
 [![文档](https://img.shields.io/badge/文档-zhin.pages.dev-blue)](https://zhin.pages.dev)
 [![CI](https://github.com/zhinjs/zhin/actions/workflows/ci.yml/badge.svg)](https://github.com/zhinjs/zhin/actions/workflows/ci.yml)
@@ -11,15 +11,14 @@
 ## 🌟 核心特性
 
 - 🎯 **TypeScript 全量类型支持** - 完整类型推导，极致开发体验
-- ⚡ **热重载系统** - 代码/配置/插件变更自动生效，无需重启
-- 🧩 **插件化架构** - 热插拔插件系统，灵活扩展
-- 🎨 **Schema 配置系统** - 类型安全的配置管理，支持可视化编辑
+- ⚡ **智能热重载系统** - 代码变更、配置更新、依赖注入均自动热更，无需重启
+- 🏗️ **三层架构设计** - Dependency -> Plugin -> App，结构清晰，高内聚低耦合
+- 🧩 **插件化架构** - 热插拔插件系统，支持本地/模块/云端插件
+- 🎨 **Schema 配置系统** - 类型安全的配置管理，支持自动重载插件
 - 🌐 **Web 控制台** - 实时监控、插件管理、配置编辑
-- 🛠️ **命令行工具链** - 一键创建/开发/调试/部署
+- 📊 **智能性能监控** - 实时内存分析，避免误报，精准定位性能瓶颈
 - 📦 **开箱即用** - 内置控制台适配器、HTTP服务、Web控制台、SQLite数据库
 - 🔌 **多平台扩展** - 支持 QQ、KOOK、Discord、Telegram、OneBot v11 等
-
-## 项目结构
 
 ## 项目结构
 
@@ -30,12 +29,12 @@ zhin/
 │   ├── logger/            # 日志系统
 │   ├── database/          # 数据库抽象层
 │   ├── schema/            # Schema 系统
-│   ├── dependency/        # 依赖管理
+│   ├── dependency/        # 依赖管理 (Dependency基类)
 │   ├── cli/               # 命令行工具
-│   └── hmr/               # 热模块替换
+│   └── hmr/               # 热模块替换 (HMRManager)
 │
 ├── packages/               # 核心层 - 框架核心
-│   ├── core/              # 核心框架
+│   ├── core/              # 核心框架 (App, Plugin)
 │   ├── client/            # 客户端库
 │   ├── create-zhin/       # 项目脚手架
 │   └── zhin/              # 主入口包
@@ -46,25 +45,8 @@ zhin/
 │   │   └── http/         # HTTP 服务
 │   │
 │   ├── adapters/          # 平台适配器
-│   │   ├── icqq/         # QQ 适配器 (基于 ICQQ)
-│   │   ├── kook/         # KOOK 适配器
-│   │   ├── onebot11/     # OneBot v11 协议适配器
-│   │   ├── discord/      # Discord 适配器
-│   │   ├── telegram/     # Telegram 适配器
-│   │   ├── slack/        # Slack 适配器
-│   │   ├── dingtalk/     # 钉钉适配器
-│   │   ├── lark/         # 飞书适配器
-│   │   ├── process/      # 进程管理适配器
-│   │   └── ...
-│   │
-│   ├── games/             # 游戏娱乐插件
-│   └── utils/             # 工具类插件
-│
-└── examples/               # 示例项目
-    ├── test-bot/          # 示例机器人
-    └── dependency/        # 依赖系统示例
+...
 ```
-
 
 ## 🎓 渐进式学习路径
 
@@ -157,6 +139,7 @@ defineSchema(Schema.object({
 // 添加命令
 addCommand(new MessageCommand('hello <name>')
   .action(async (message, result) => {
+    // 获取当前插件实例
     const config = usePlugin().config
     return `${config.greeting}, ${result.params.name}!`
   })
@@ -165,34 +148,20 @@ addCommand(new MessageCommand('hello <name>')
 await app.start()
 ```
 
-### 高级功能 - 依赖注入
+### 高级功能 - 依赖注入与数据库
 
 ```typescript
-import { register, useContext } from 'zhin.js'
+import { register, useContext, onDatabaseReady } from 'zhin.js'
 
-// 注册服务
-register({
-  name: 'cache',
-  async mounted() {
-    return new RedisCache()
-  },
-  async dispose(cache) {
-    await cache.disconnect()
-  }
-})
-
-// 使用依赖
-useContext('database', 'cache', (db, cache) => {
+// 使用依赖 (当数据库就绪时执行)
+onDatabaseReady((db) => {
+  const User = db.model('users');
+  
   addCommand(new MessageCommand('user <id>')
     .action(async (message, result) => {
-      // 先查缓存
-      let user = await cache.get(`user:${result.params.id}`)
-      if (!user) {
-        // 缓存未命中，查数据库
-        user = await db.model('users').findByPk(result.params.id)
-        await cache.set(`user:${result.params.id}`, user, 300)
-      }
-      return `用户信息: ${user.name}`
+      // 查询数据库
+      const user = await User.findByPk(result.params.id)
+      return `用户信息: ${user ? user.name : '未知'}`
     })
   )
 })
@@ -221,32 +190,6 @@ zhin new <plugin>     # 创建新插件（自动添加到依赖）
 zhin build [plugin]   # 构建插件（不指定则构建所有）
 zhin build --clean    # 清理后构建
 ```
-
-### 开发工作流
-
-```bash
-# 1. 创建项目
-npm create zhin-app my-bot
-
-# 2. 启动开发
-cd my-bot
-pnpm dev
-
-# 3. 创建插件
-zhin new my-plugin
-
-# 4. 开发插件（修改 plugins/my-plugin/app/index.ts）
-# 文件保存后自动重载 ⚡
-
-# 5. 构建插件
-pnpm build
-# 或只构建特定插件
-zhin build my-plugin
-
-# 6. 在配置文件中启用插件
-# 编辑 zhin.config.ts，添加 'my-plugin' 到 plugins 数组
-```
-
 
 ## 🌐 Web 控制台
 
@@ -295,22 +238,13 @@ export default defineConfig({
     // 'adapter-icqq',   // QQ 适配器（需额外安装）
   ],
   
-  // 插件目录
-  plugin_dirs: [
-    './src/plugins',           // 项目自定义插件
-    'node_modules',            // 第三方插件
-    'node_modules/@zhin.js'    // 官方插件
-  ],
-  
-  // HTTP 服务配置
+  // 插件具体配置 (修改此处将自动重载对应插件) ⚡
   http: {
-    port: 8086,                // 服务端口
-    username: 'admin',         // 控制台用户名
-    password: '123456',        // 控制台密码
-    base: '/api'               // API 基础路径
+    port: 8086,
+    base: '/api'
   },
   
-  // 数据库配置
+  // 数据库配置 (修改此处将自动重启数据库) 🔄
   database: {
     dialect: 'sqlite',
     filename: './data/bot.db'
@@ -318,45 +252,14 @@ export default defineConfig({
 })
 ```
 
-### Schema 配置系统
-
-插件可以定义配置 Schema，支持类型验证和 Web 界面编辑：
-
-```typescript
-import { Schema, defineSchema } from 'zhin.js'
-
-// 定义插件配置结构
-defineSchema(Schema.object({
-  apiKey: Schema.string()
-    .required()
-    .description('API 密钥'),
-  
-  timeout: Schema.number()
-    .default(5000)
-    .min(1000)
-    .description('请求超时时间（毫秒）'),
-  
-  features: Schema.union([
-    Schema.string(),
-    Schema.list(Schema.string())
-  ]).description('启用的功能'),
-  
-  advanced: Schema.object({
-    retries: Schema.number().default(3),
-    cache: Schema.boolean().default(true)
-  }).description('高级设置')
-}))
-```
-
-
 ## ⚡ 热重载体验
 
 Zhin.js 提供了业界领先的热重载系统：
 
-### 📂 文件变更自动检测
-- 插件代码修改 → 自动重载插件
-- 配置文件变更 → 自动应用配置
-- 依赖关系更新 → 智能重新注入
+### 📂 全方位变更检测
+- **代码修改** → 自动重载插件文件，重新挂载副作用
+- **配置变更** → 自动应用新配置，智能重载受影响的插件
+- **数据库变更** → 自动重建连接，无缝恢复
 
 ### 🔄 零停机更新
 - 保持机器人连接不中断
@@ -367,16 +270,6 @@ Zhin.js 提供了业界领先的热重载系统：
 - 语法错误自动回滚
 - 依赖冲突智能处理
 - 详细错误日志提示
-
-```bash
-# 开发模式启动热重载
-pnpm dev
-
-# 修改插件文件，立即生效 ⚡
-# 更新配置文件，自动应用 🔄
-# 添加新插件，自动加载 🚀
-```
-
 
 ## 🌍 生态系统与扩展
 

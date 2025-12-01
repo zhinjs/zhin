@@ -2,12 +2,13 @@ import path from "path";
 import { SideEffect, GlobalContext, Models } from "@zhin.js/types";
 import { Schema } from '@zhin.js/hmr';
 import {
-  HMR,
+  HMRManager,
   Context,
   Logger,
   getCallerFile,
   getCallerFiles,
   mergeConfig,
+  Dependency
 } from "@zhin.js/hmr";
 import {
   AdapterMessage,
@@ -53,9 +54,10 @@ declare module "@zhin.js/types" {
 // ============================================================================
 /**
  * App类：Zhin.js 应用主入口，负责插件热重载、配置管理、消息分发等。
- * 继承自 HMR，支持插件生命周期、适配器管理、数据库集成等。
+ * 继承自 Plugin，支持插件生命周期、适配器管理、数据库集成等。
+ * 组合了 HMRManager 来实现热重载功能。
  */
-export class App extends HMR<Plugin> {
+export class App extends Plugin {
   static currentPlugin: Plugin;
   middlewares: MessageMiddleware[] = [];
   adapters: string[] = [];
@@ -68,6 +70,15 @@ export class App extends HMR<Plugin> {
   private logTransport?: DatabaseLogTransport;
   /** 配置变更处理锁 */
   private configChangeLock: Promise<void> | null = null;
+  // 缓存
+  private _middlewareCache: MessageMiddleware[] | null = null;
+  private _commandCache: MessageCommand[] | null = null;
+  private _definitionCache: Map<string, Definition<any>> | null = null;
+  private _processListeners: Map<string, any> = new Map();
+
+  /** HMR 管理器 */
+  public readonly hmrManager: HMRManager<Plugin>;
+
   /**
    * 构造函数：初始化应用，加载配置，注册全局异常处理
    * @param config 可选，应用配置，若为空则自动查找配置文件
@@ -88,23 +99,37 @@ export class App extends HMR<Plugin> {
       App.schema,
       mergeConfig(App.defaultConfig, config_obj)
     );
-    // 调用父类构造函数
-    super({
-      logger,
+    
+    // 初始化父类 (Plugin)
+    // App 是根插件，没有 parent
+    super(null as any, 'App', getCallerFile());
+
+    // 初始化 HMRManager
+    this.hmrManager = new HMRManager(this, {
+      logger: this.logger,
       dirs: config.get("plugin_dirs") || [],
       debug: config.get("debug"),
     });
-    this.watching(config.filepath,()=>config.reload());
+
+    this.hmrManager.watching(config.filepath,()=>config.reload());
     this.on("message.send", this.sendMessage.bind(this));
     this.on("message.receive", this.receiveMessage.bind(this));
-    process.on("uncaughtException", (e) => {
+    
+    const uncaughtHandler = (e: any) => {
       const args = e instanceof Error ? [e.message, { stack: e.stack }] : [e];
       this.logger.error(...args);
-    });
-    process.on("unhandledRejection", (e) => {
+    };
+    const unhandledHandler = (e: any) => {
       const args = e instanceof Error ? [e.message, { stack: e.stack }] : [e];
       this.logger.error(...args);
-    });
+    };
+
+    process.on("uncaughtException", uncaughtHandler);
+    process.on("unhandledRejection", unhandledHandler);
+    
+    this._processListeners.set("uncaughtException", uncaughtHandler);
+    this._processListeners.set("unhandledRejection", unhandledHandler);
+
     this.#config = config;
     // 监听配置变更
     config.on("change", (before, after) => {
@@ -112,8 +137,57 @@ export class App extends HMR<Plugin> {
       this.broadcast("config.change", before, after);
     });
     this.defineSchema(App.schema);
-    setLevel(config.get("log_level") || LogLevel.INFO);
+    
     this.middleware(this.messageMiddleware.bind(this));
+    
+    // 监听依赖变化清理缓存
+    const clearCache = () => {
+      this._middlewareCache = null;
+      this._commandCache = null;
+      this._definitionCache = null;
+    };
+    
+    this.hmrManager.on('add', clearCache);
+    this.hmrManager.on('remove', clearCache);
+    this.hmrManager.on('reload', clearCache);
+  }
+
+  /**
+   * 查找插件
+   * @param name 插件名称
+   */
+  findPluginByName(name: string): Plugin | void {
+    return this.hmrManager.findPluginByName(name);
+  }
+
+  /**
+   * 代理 HMRManager 的方法
+   */
+  get dirs() {
+    return this.hmrManager.dirs;
+  }
+  
+  addDir(dir: string) {
+    this.hmrManager.addDir(dir);
+  }
+  
+  removeDir(dir: string) {
+    return this.hmrManager.removeDir(dir);
+  }
+  
+  watching(filePath: string | string[], callback: () => void) {
+    return this.hmrManager.watching(filePath, callback);
+  }
+  
+  async waitForReady() {
+    await super.waitForReady();
+    await this.hmrManager.waitForReady();
+  }
+
+  // 覆盖 dispose
+  dispose(): void {
+    this.hmrManager.dispose();
+    super.dispose();
   }
 
   /**
@@ -132,7 +206,7 @@ export class App extends HMR<Plugin> {
     }
 
     // 创建新的锁
-    this.configChangeLock = this.applyConfigChanges(before, after);
+    this.configChangeLock = this.restart();
 
     try {
       await this.configChangeLock;
@@ -142,152 +216,132 @@ export class App extends HMR<Plugin> {
   }
 
   /**
-   * 应用配置变更
+   * 根据配置初始化应用
    */
-  private async applyConfigChanges(
-    before: AppConfig,
-    after: AppConfig
-  ): Promise<void> {
+  private async loadFromConfig(config: AppConfig): Promise<void> {
     try {
-      // 1. 更新日志级别
-      if (after.log_level !== before.log_level) {
-        setLevel(after.log_level || LogLevel.INFO);
+      // 1. 设置日志级别
+      setLevel(config.log_level || LogLevel.INFO);
+
+      // 2. 更新 HMR 配置
+      this.hmrManager.updateOptions({
+        dirs: config.plugin_dirs || [],
+        debug: config.debug
+      });
+
+      // 3. 动态更新监听目录
+      // HMRManager 的 updateOptions 只是更新了 options 对象和 #dirs 属性，
+      // 并不会自动去重新扫描目录或启动新的 watch。
+      // 所以如果 plugin_dirs 变化了，我们需要手动处理
+      // 这里为了简单，我们先手动清理和添加
+      const currentDirs = this.dirs;
+      const newDirs = (config.plugin_dirs || []).map(d => path.resolve(process.cwd(), d));
+      
+      for(const dir of currentDirs) {
+          if(!newDirs.includes(dir)) this.removeDir(dir);
       }
-
-      // 2. 更新监听目录
-      await this.updateWatchDirs(
-        before.plugin_dirs || [],
-        after.plugin_dirs || []
-      );
-
-      // 3. 更新插件加载
-      await this.updatePlugins(before.plugins || [], after.plugins || []);
-    } catch (error) {
-      this.logger.error("Failed to apply configuration changes:", error);
-      throw error;
+      for(const dir of newDirs) {
+          if(!currentDirs.includes(dir)) this.addDir(dir);
     }
-    // 4. 更新数据库连接
-    if (JSON.stringify(before.database) !== JSON.stringify(after.database)) {
-      this.database?.stop();
-      if (after.database) {
+
+      // 4. 加载插件
+      for (const pluginName of (config.plugins || [])) {
+        this.use(pluginName);
+      }
+      
+      // 5. 等待所有插件就绪
+      await this.waitForReady();
+
+      // 6. 初始化数据库
+      if (config.database) {
         this.database = Registry.create(
-          (this.config.database as any).dialect,
-          this.config.database,
-          Object.fromEntries(this.definitions)
+          (config.database as any).dialect,
+          config.database,
+          Object.fromEntries(this.allDefinitions)
         );
         await this.database!.start();
+        this.logger.debug(`Database started`);
+        this.dispatch("database.ready", this.database);
+
+        // 初始化日志传输器
+        this.logTransport = new DatabaseLogTransport(this);
+        addTransport(this.logTransport);
+        this.logger.info(`database log transport registered`);
       }
+      
+      this.dispatch('app.ready');
+
+    } catch (error) {
+      this.logger.error("Failed to load configuration:", error);
+      throw error;
     }
   }
 
   /**
-   * 更新监听目录
+   * 重启应用
+   * 清理运行时资源（插件、数据库），保留基础设施（监听器、HMRManager实例），然后重新加载配置
    */
-  private async updateWatchDirs(
-    oldDirs: string[],
-    newDirs: string[]
-  ): Promise<void> {
-    const oldResolved = oldDirs.map((dir) => path.resolve(process.cwd(), dir));
-    const newResolved = newDirs.map((dir) => path.resolve(process.cwd(), dir));
+  async restart(): Promise<void> {
+    this.logger.info('Restarting app...');
 
-    // 找出需要移除的目录
-    const dirsToRemove = oldResolved.filter(
-      (dir) => !newResolved.includes(dir)
-    );
-    // 找出需要添加的目录
-    const dirsToAdd = newResolved.filter((dir) => !oldResolved.includes(dir));
-
-    // 按需监听模式：仍需要更新目录列表用于路径解析，但不启动目录监听
-    // 移除过时的监听目录
-    for (const dir of dirsToRemove) {
-      this.removeDir(dir);
+    // 1. 停止数据库及日志传输
+    if (this.logTransport) {
+      this.logTransport.stopCleanup();
+      removeTransport(this.logTransport);
+      this.logTransport = undefined;
     }
 
-    // 添加新的监听目录
-    for (const dir of dirsToAdd) {
-      this.addDir(dir);
-    }
+    if (this.database) {
+      await this.database.stop();
+      this.database = undefined;
   }
 
-  /**
-   * 更新插件加载
-   */
-  private async updatePlugins(
-    oldPlugins: string[],
-    newPlugins: string[]
-  ): Promise<void> {
-    // 找出需要卸载的插件
-    const pluginsToUnload = oldPlugins.filter(
-      (plugin) => !newPlugins.includes(plugin)
-    );
-    // 找出需要加载的插件
-    const pluginsToLoad = newPlugins.filter(
-      (plugin) => !oldPlugins.includes(plugin)
-    );
-
-    // 卸载不再需要的插件
-    for (const pluginName of pluginsToUnload) {
-      await this.unloadPlugin(pluginName);
+    // 2. 卸载所有插件 (除了 App 自身)
+    // 注意：不能直接清空 dependencyList，因为这只是 getter。
+    // 我们需要通过 ModuleLoader 移除模块，这会触发 Dependency dispose
+    const pluginsToRemove = [...this.dependencyList].filter(dep => dep !== this);
+    for(const dep of pluginsToRemove) {
+        // 使用 HMRManager 的移除机制，这会处理缓存和 dispose
+        this.hmrManager.moduleLoader.remove(dep.filename);
+    }
+    // 确保依赖列表干净了 (HMRManager.moduleLoader.remove 应该已经处理了 this.dependencies)
+    
+    // 3. 重新加载配置并启动
+    // 注意：this.config 已经是新的了，因为 Config 对象在 emit change 之前已经 reload 了
+    await this.loadFromConfig(this.config);
+    
+    this.logger.info('App restarted successfully');
     }
 
-    // 加载新插件
-    for (const pluginName of pluginsToLoad) {
-      this.use(pluginName);
-    }
-
-    // 等待新插件加载完成
-    if (pluginsToLoad.length > 0) {
-      await sleep(200);
-      await this.waitForReady();
-    }
-  }
-
-  /**
-   * 卸载插件
-   */
-  private async unloadPlugin(pluginName: string): Promise<void> {
-    // 尝试找到插件 (使用 HMR 提供的方法)
-    const plugin = this.findPluginByName<Plugin>(pluginName);
-    if (plugin) {
-      // 找到插件的文件路径
-      const filePath = plugin.filename;
-
-      // 销毁插件
-      plugin.dispose();
-
-      // 从依赖映射中移除
-      this.dependencies.delete(filePath);
-
-      this.logger.info(`Plugin ${pluginName} unloaded successfully`);
-    } else {
-      this.logger.warn(`Plugin ${pluginName} not found, skipping unload`);
-    }
-  }
   async receiveMessage<P extends RegisteredAdapter>(
     message: Message<AdapterMessage<P>>
   ) {
-    const middlewares = this.dependencyList.reduce(
+    if (!this._middlewareCache) {
+      this._middlewareCache = this.dependencyList.reduce(
       (result, plugin) => {
         result.push(...(plugin.middlewares as MessageMiddleware<P>[]));
         return result;
       },
       [...this.middlewares] as MessageMiddleware<P>[]
     );
-    const handle = compose(middlewares);
+    }
+    const handle = compose(this._middlewareCache);
     await handle(message);
   }
   async messageMiddleware(message: Message, next: () => Promise<void>) {
-    for (const command of this.commands) {
+    for (const command of this.allCommands) {
       const result = await command.handle(message, this);
       if (result) message.$reply(result);
     }
     return next();
   }
-  get commands() {
-    return this.dependencyList.reduce((result, plugin) => {
+  get allCommands() {
+    if (this._commandCache) return this._commandCache;
+    this._commandCache = this.dependencyList.reduce((result, plugin) => {
       result.push(...plugin.commands);
       return result;
     }, [] as MessageCommand[]);
+    return this._commandCache;
   }
   /** 默认配置 */
   /**
@@ -394,28 +448,13 @@ export class App extends HMR<Plugin> {
   }
   set config(newConfig: AppConfig) {
     this.#config.config = newConfig;
-    if (newConfig.plugin_dirs) {
-      // 动态更新监听目录
-      const currentDirs = this.dirs;
-      const newDirs = newConfig.plugin_dirs;
-
-      // 移除不再需要的目录
-      for (const dir of currentDirs) {
-        if (!newDirs.includes(dir)) {
-          this.removeDir(dir);
-        }
-      }
-      // 添加新的目录
-      for (const dir of newDirs) {
-        if (!currentDirs.includes(dir)) {
-          this.addDir(dir);
-        }
-      }
-    }
+    // 不再这里处理动态更新，统一由 config.on('change') -> restart -> loadFromConfig 处理
+    // 只有日志提示
     this.logger.info("App configuration updated", this.config);
   }
-  get definitions() {
-    return this.dependencyList.reduce(
+  get allDefinitions() {
+    if (this._definitionCache) return this._definitionCache;
+    this._definitionCache = this.dependencyList.reduce(
       (result, plugin) => {
         plugin.definitions.forEach((definition, name) => {
           result.set(name, definition);
@@ -427,53 +466,31 @@ export class App extends HMR<Plugin> {
         ["User", UserDefinition],
       ])
     );
+    return this._definitionCache;
   }
   /** 使用插件 */
   use(filePath: string): void {
-    this.emit("internal.add", filePath);
+    // App 本身没有 emit('internal.add') 的逻辑了，这是 HMRManager 监听的。
+    // 我们需要调用 HMRManager.emit
+    this.hmrManager.emit("internal.add", filePath);
   }
-  async #init() {
-    // 首次初始化时，执行配置应用逻辑
-    await this.handleConfigChange(App.defaultConfig, this.config);
 
-    // 初始化数据库
-    const definitions: Record<string, Definition> = {};
-    for (const [name, schema] of this.definitions) {
-      definitions[name] = schema;
-    }
-    if (this.config.database) {
-      this.database = Registry.create(
-        (this.config.database as any).dialect,
-        this.config.database,
-        definitions
-      );
-      this.logger.info(`database init...`);
-      await this.database?.start();
-      this.logger.info(`database init success`);
-      this.dispatch("database.ready", this.database);
-    } else {
-      this.logger.info(`database not configured, skipping database init`);
-    }
-    // 等待所有插件就绪
-    await this.waitForReady();
-  }
   /** 启动App */
   async start(mode: "dev" | "prod" = "prod"): Promise<void> {
     await generateEnvTypes(process.cwd());
-    await this.#init();
-    if (this.database) {
-      // 初始化日志传输器
-      this.logTransport = new DatabaseLogTransport(this);
-      addTransport(this.logTransport);
-      this.logger.info(`database log transport registered`);
-    }
+    // 首次启动，加载配置
+    await this.loadFromConfig(this.config);
     this.logger.info("started successfully");
-    this.dispatch("app.ready");
   }
 
   /** 停止App */
   async stop(): Promise<void> {
     this.logger.info("Stopping app...");
+
+    this._processListeners.forEach((listener, event) => {
+      process.removeListener(event, listener);
+    });
+    this._processListeners.clear();
 
     // 停止日志清理任务并移除日志传输器
     if (this.logTransport) {
@@ -563,7 +580,7 @@ export namespace App {
 // Hooks API
 // ============================================================================
 
-function getPlugin(hmr: HMR<Plugin>, filename: string): Plugin {
+function getPlugin(hmr: HMRManager<Plugin>, filename: string): Plugin {
   const name = path.basename(filename).replace(path.extname(filename), "");
 
   // 尝试从当前依赖中查找插件
@@ -577,7 +594,7 @@ function getPlugin(hmr: HMR<Plugin>, filename: string): Plugin {
     getCallerFiles(fileURLToPath(import.meta.url))
   );
   // 创建新的插件实例
-  const newPlugin = new Plugin(parent, name, filename);
+  const newPlugin = new Plugin(parent as unknown as Dependency<Plugin>, name, filename);
 
   // 添加到当前依赖的子依赖中
   parent.dependencies.set(filename, newPlugin);
@@ -586,9 +603,21 @@ function getPlugin(hmr: HMR<Plugin>, filename: string): Plugin {
 }
 /** 获取App实例 */
 export function useApp(): App {
-  const hmr = HMR.currentHMR;
-  if (!hmr) throw new Error("useApp must be called within a App Context");
-  return hmr as unknown as App;
+    // Find the current App by traversing up from the current dependency
+    // Or check if currentDependency is App
+    let current = Dependency.currentDependency;
+    while(current && current.parent) {
+        current = current.parent;
+    }
+    
+    if (current && (current instanceof App)) {
+        return current;
+    }
+    // If not found, check stack directly for App?
+    // App is always the root.
+    if (current && current.name === 'App') return current as unknown as App;
+    
+    throw new Error("useApp must be called within a App Context");
 }
 export function defineModel<T extends Record<string, any>>(
   name: string,
@@ -606,18 +635,15 @@ export function addPermit<T extends RegisteredAdapter>(
 }
 /** 获取当前插件实例 */
 export function usePlugin(): Plugin {
-  const hmr = HMR.currentHMR;
-  if (!hmr) throw new Error("usePlugin must be called within a App Context");
-
+  // Use Dependency.currentDependency which is now statically available
   try {
-    const currentFile = getCallerFile(import.meta.url);
-    return getPlugin(hmr as unknown as HMR<Plugin>, currentFile);
-  } catch (error) {
-    // 如果无法获取当前文件，尝试从当前依赖获取
-    if (HMR.currentDependency) {
-      return HMR.currentDependency as unknown as Plugin;
-    }
-    throw error;
+      const dep = Dependency.currentDependency;
+      if (dep instanceof Plugin) return dep;
+      // If it's App, it's also a Plugin
+      return dep as unknown as Plugin;
+  } catch (e) {
+      // Fallback logic if needed, but usually currentDependency should be set
+      throw e;
   }
 }
 export function beforeSend(handler: BeforeSendHandler) {

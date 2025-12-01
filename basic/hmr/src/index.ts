@@ -15,7 +15,7 @@ export { Schema } from "@zhin.js/schema";
 export { Dependency } from './dependency.js';
 
 // 导出HMR系统
-export { HMR } from './hmr.js';
+export { HMRManager } from './hmr.js';
 
 // 导出新的模块化组件
 export { FileWatcher } from './file-watcher.js';

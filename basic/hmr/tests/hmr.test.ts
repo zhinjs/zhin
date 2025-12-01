@@ -1,24 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { HMR } from '../src/hmr'
+import { HMRManager } from '../src/hmr'
 import { Dependency } from '../src/dependency'
+import { TestHMR } from '../src/test-utils'
 import * as path from 'path'
 import * as fs from 'fs'
-
-// Create a concrete implementation of HMR for testing
-class TestHMR extends HMR {
-    constructor(options: any = {}) {
-        super(options)
-    }
-    
-    createDependency(name: string, filePath: string): Dependency {
-        return new Dependency(this, name, filePath)
-    }
-    
-    // Expose protected members for testing
-    get testFileWatcher() {
-        return this.fileWatcher
-    }
-}
 
 describe('HMR', () => {
     let hmr: TestHMR
@@ -46,24 +31,19 @@ describe('HMR', () => {
     })
 
     describe('Static Utilities', () => {
-        it('should manage HMR stack', () => {
-            expect(HMR.hmrStack).toContain(hmr)
-            expect(HMR.currentHMR).toBe(hmr)
-        })
-
         it('should manage dependency stack', () => {
-            expect(HMR.dependencyStack).toContain(hmr)
-            expect(HMR.currentDependency).toBe(hmr)
+            expect(Dependency.dependencyStack).toContain(hmr)
+            expect(Dependency.currentDependency).toBe(hmr)
         })
 
         it('should get current file', () => {
-            const currentFile = HMR.getCurrentFile()
+            const currentFile = HMRManager.getCurrentFile()
             expect(currentFile).toBeTruthy()
             expect(typeof currentFile).toBe('string')
         })
 
         it('should get current stack', () => {
-            const stack = HMR.getCurrentStack()
+            const stack = HMRManager.getCurrentStack()
             expect(Array.isArray(stack)).toBe(true)
             expect(stack.length).toBeGreaterThan(0)
         })
@@ -237,13 +217,13 @@ describe('HMR', () => {
             }
 
             hmr.updateOptions(newOptions)
-            expect(hmr.options.debug).toBe(true)
-            expect(hmr.options.max_listeners).toBe(20)
+            expect(hmr.hmrManager.options.debug).toBe(true)
+            expect(hmr.hmrManager.options.max_listeners).toBe(20)
         })
 
         it('should set debug mode', () => {
             hmr.setDebugMode(true)
-            expect(hmr.options.debug).toBe(true)
+            expect(hmr.hmrManager.options.debug).toBe(true)
         })
     })
 
@@ -259,8 +239,7 @@ describe('HMR', () => {
             expect(fileWatcherDisposeSpy).toHaveBeenCalled()
             expect(moduleLoaderDisposeSpy).toHaveBeenCalled()
             expect(reloadManagerDisposeSpy).toHaveBeenCalled()
-            expect(HMR.hmrStack).not.toContain(hmr)
-            expect(HMR.dependencyStack).not.toContain(hmr)
+            expect(Dependency.dependencyStack).not.toContain(hmr)
         })
     })
 })

@@ -49,6 +49,8 @@ export interface MemoryMonitorConfig {
     monitorGC?: boolean;
     /** 是否只在开发环境启用 GC 监控 */
     gcOnlyInDev?: boolean;
+    /** 最小触发告警的堆大小（MB），默认 100MB。避免在低内存占用时因 V8 紧凑策略导致的误报 */
+    minHeapUsedThreshold?: number;
 }
 
 /**
@@ -74,7 +76,8 @@ export class PerformanceMonitor {
             checkInterval: config.checkInterval ?? 60000,
             highMemoryThreshold: config.highMemoryThreshold ?? 90,
             monitorGC: config.monitorGC ?? false,
-            gcOnlyInDev: config.gcOnlyInDev ?? true
+            gcOnlyInDev: config.gcOnlyInDev ?? true,
+            minHeapUsedThreshold: config.minHeapUsedThreshold ?? 100
         };
         
         this.#stats = {
@@ -177,9 +180,12 @@ export class PerformanceMonitor {
         
         const mem = this.#stats.memoryUsage;
         const heapPercent = (mem.heapUsed / mem.heapTotal) * 100;
+        const heapUsedMB = mem.heapUsed / 1024 / 1024;
         
-        // 如果内存使用超过阈值，触发回调（但不手动 GC）
-        if (heapPercent > this.config.highMemoryThreshold) {
+        // 只有当堆内存使用超过最小阈值（默认100MB）且比例超过阈值时，才触发回调
+        const minThreshold = this.config.minHeapUsedThreshold ?? 100;
+        
+        if (heapUsedMB > minThreshold && heapPercent > this.config.highMemoryThreshold) {
             if (this.onHighMemory) {
                 this.onHighMemory(this.#stats);
             }
@@ -407,7 +413,7 @@ export class Timer {
 // Performance Monitor Hook
 // ============================================================================
 
-import { HMR } from './hmr.js';
+import { Dependency } from './dependency.js';
 
 /**
  * 获取当前 HMR 实例的性能监控器
@@ -434,9 +440,16 @@ import { HMR } from './hmr.js';
  * ```
  */
 export function usePerformanceMonitor(): PerformanceMonitor {
-    const hmr = HMR.currentHMR;
-    if (!hmr) {
-        throw new Error('usePerformanceMonitor() must be called within an HMR context');
+    // 查找根依赖 (App)
+    let current = Dependency.currentDependency;
+    while(current && current.parent) {
+        current = current.parent;
     }
-    return (hmr as any).performanceMonitor;
+    
+    // 检查是否有性能监控器
+    if (current && (current as any).hmrManager && (current as any).hmrManager.performanceMonitor) {
+         return (current as any).hmrManager.performanceMonitor;
+    }
+    
+    throw new Error('PerformanceMonitor not found. Ensure you are running within an App context.');
 }

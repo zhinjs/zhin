@@ -4,7 +4,7 @@ import * as crypto from 'crypto';
 import { pathToFileURL } from 'url';
 import { EventEmitter } from 'events';
 import { Dependency } from './dependency.js';
-import { HMR } from './hmr.js';
+import { HMRManager } from './hmr.js';
 import { Logger } from './types.js';
 import {createError, ERROR_MESSAGES, isBun, isCommonJS, performGC} from './utils.js';
 
@@ -17,8 +17,9 @@ export class ModuleLoader<P extends Dependency = Dependency> extends EventEmitte
     readonly #hashAlgorithm: string;
     readonly #loadingDependencies: Set<string>=new Set();
     readonly #reloadDependencies: Set<string>=new Set();
+    private static loadedFiles = new Set<string>();
     constructor(
-        private readonly hmr: HMR<P>,
+        private readonly hmr: HMRManager<P>,
         logger: Logger,
         hashAlgorithm: string,
     ) {
@@ -107,10 +108,17 @@ export class ModuleLoader<P extends Dependency = Dependency> extends EventEmitte
                 // 动态导入模块 - 针对 bun 的缓存清除
                 const fileUrl = pathToFileURL(filePath).href;
                 
+                // 仅在重载时添加时间戳，初次加载使用原始 URL 以节省内存（减少 Module Map 增长）
+                const hasLoaded = ModuleLoader.loadedFiles.has(filePath);
+                if (!hasLoaded) ModuleLoader.loadedFiles.add(filePath);
                 
-                const importUrl: string=`${fileUrl}?t=${Date.now()}`;
+                const importUrl: string = hasLoaded ? `${fileUrl}?t=${Date.now()}` : fileUrl;
                 
+                // 使用 Dependency.runWith 确保在 import 期间 currentDependency 指向当前依赖
+                // 这解决了并发加载插件时的上下文混乱问题
+                await Dependency.runWith(dependency, async () => {
                 await import(importUrl);
+                });
 
                 this.emit('add', this);
                 return dependency;

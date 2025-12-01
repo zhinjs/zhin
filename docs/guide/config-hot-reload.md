@@ -6,8 +6,9 @@ Zhin.js 支持配置文件的热重载。当配置文件发生变化时，框架
 
 - **监听目录管理**：自动添加新的插件目录监听，移除不再需要的目录监听
 - **插件生命周期管理**：自动加载新插件，卸载移除的插件
+- **插件智能重载**：当检测到具体插件的配置项变更时，自动重载该插件以应用新配置
+- **数据库热重启**：检测数据库配置变更，自动重启数据库连接并通知插件
 - **并发控制**：使用锁机制确保配置变更按顺序处理，避免竞态条件
-- **数据库配置**：检测数据库配置变更（需要重启）
 
 ## 工作原理
 
@@ -26,391 +27,109 @@ App.applyConfigChanges()
     ├─ 更新日志级别
     ├─ 更新监听目录 (updateWatchDirs)
     ├─ 更新插件加载 (updatePlugins)
-    └─ 检测数据库配置变更
-    ↓
-更新 previousConfig
+    ├─ 更新 HMR 配置
+    ├─ 检测数据库配置变更 (重启并 dispatch 'database.ready')
+    └─ 检测插件配置变更 (reloadPluginsOnConfigChange)
     ↓
 完成，释放锁
 ```
 
-### 锁机制
+### 智能插件重载
 
-使用 `configChangeLock` 属性实现配置变更的串行化：
+框架会深度比较新旧配置中每个插件的配置项：
 
 ```typescript
-private configChangeLock: Promise<void> | null = null;
-private previousConfig: AppConfig | null = null;
-
-private async handleConfigChange(newConfig: AppConfig): Promise<void> {
-  // 等待上一次配置变更处理完成
-  if (this.configChangeLock) {
-    await this.configChangeLock;
-  }
-
-  // 创建新的锁
-  this.configChangeLock = this.applyConfigChanges(newConfig);
-  
-  try {
-    await this.configChangeLock;
-  } finally {
-    this.configChangeLock = null;
+// 伪代码逻辑
+for (const plugin of plugins) {
+  if (JSON.stringify(oldConfig[plugin.name]) !== JSON.stringify(newConfig[plugin.name])) {
+    // 配置变了，重载插件！
+    await hmrManager.reload(plugin.filename);
   }
 }
 ```
 
+这意味着你无需手动重启应用，甚至无需手动修改插件文件，只需调整配置文件，插件就会自动以新配置重启。
+
 ## 使用场景
 
-### 场景 1：添加新的插件目录
+### 场景 1：调整插件参数
 
 **修改前的配置：**
 ```typescript
 export default defineConfig({
-  plugin_dirs: [
-    './src/plugins',
-    'node_modules'
-  ],
-  plugins: ['http', 'console']
-})
-```
-
-**修改后的配置：**
-```typescript
-export default defineConfig({
-  plugin_dirs: [
-    './src/plugins',
-    './src/custom-plugins',  // 新增
-    'node_modules'
-  ],
-  plugins: ['http', 'console']
-})
-```
-
-**效果：**
-- 框架自动开始监听 `./src/custom-plugins` 目录
-- 该目录下的插件可以被热重载
-
-### 场景 2：启用新插件
-
-**修改前的配置：**
-```typescript
-export default defineConfig({
-  plugin_dirs: ['./src/plugins'],
-  plugins: ['http']
-})
-```
-
-**修改后的配置：**
-```typescript
-export default defineConfig({
-  plugin_dirs: ['./src/plugins'],
-  plugins: ['http', 'console']  // 新增 console 插件
-})
-```
-
-**效果：**
-- 框架自动加载 `console` 插件
-- 无需重启应用
-
-### 场景 3：禁用插件
-
-**修改前的配置：**
-```typescript
-export default defineConfig({
-  plugin_dirs: ['./src/plugins'],
-  plugins: ['http', 'console', 'database-admin']
-})
-```
-
-**修改后的配置：**
-```typescript
-export default defineConfig({
-  plugin_dirs: ['./src/plugins'],
-  plugins: ['http', 'console']  // 移除 database-admin
-})
-```
-
-**效果：**
-- 框架自动卸载 `database-admin` 插件
-- 调用插件的 `dispose()` 方法清理资源
-- 从依赖映射中移除
-
-### 场景 4：更新日志级别
-
-**修改前的配置：**
-```typescript
-export default defineConfig({
-  log_level: LogLevel.INFO,
-  plugins: ['http']
-})
-```
-
-**修改后的配置：**
-```typescript
-export default defineConfig({
-  log_level: LogLevel.DEBUG,  // 改为 DEBUG
-  plugins: ['http']
-})
-```
-
-**效果：**
-- 日志级别立即生效
-- 开始输出 DEBUG 级别日志
-
-## 注意事项
-
-### 数据库配置不支持热重载
-
-数据库配置变更需要重启应用：
-
-```typescript
-// 修改数据库配置
-export default defineConfig({
-  database: {
-    dialect: 'mysql',  // 从 sqlite 改为 mysql
-    host: 'localhost',
-    port: 3306
+  plugins: ['http'],
+  http: {
+    port: 8080
   }
 })
 ```
 
-框架会输出警告：
+**修改后的配置：**
+```typescript
+export default defineConfig({
+  plugins: ['http'],
+  http: {
+    port: 9090 // 修改端口
+  }
+})
 ```
-[WARN] Database configuration changed, but hot reload is not supported. Please restart the app.
+
+**效果：**
+- 框架检测到 `http` 插件的配置发生变化。
+- 自动卸载 `http` 插件（关闭旧端口）。
+- 重新加载 `http` 插件（监听 9090 端口）。
+- 服务无缝切换。
+
+### 场景 2：数据库切换
+
+**修改配置：**
+```typescript
+// 从 sqlite 切换到 mysql
+export default defineConfig({
+  database: {
+    dialect: 'mysql',
+    // ...
+  }
+})
 ```
 
-### 插件加载顺序
+**效果：**
+- 框架检测到 `database` 配置变更。
+- 自动停止旧数据库连接。
+- 创建并启动新数据库连接。
+- 广播 `database.ready` 事件。
+- 依赖数据库的插件（如 `test-plugin`）会通过 `onDatabaseReady` 钩子自动响应，重新获取 Model 或执行初始化逻辑。
 
-插件卸载和加载是按顺序执行的：
+### 场景 3：添加/移除插件
 
-1. 先卸载移除的插件
-2. 再加载新增的插件
-3. 等待新插件就绪后才完成配置变更
-
-### 插件依赖关系
-
-如果插件 B 依赖插件 A，确保：
-
-1. 不要单独移除插件 A（会导致插件 B 出错）
-2. 先加载依赖项，再加载依赖它的插件
-3. 建议使用 `useContext` 来声明依赖关系
+同原文档，自动加载新插件或卸载旧插件。
 
 ## 最佳实践
 
-### 1. 渐进式配置变更
+### 1. 使用配置验证
+插件应使用 `defineSchema` 定义配置结构，这不仅用于类型检查，也能确保配置变更的比较是准确的。
 
-**不推荐：**
-```typescript
-// 一次性修改大量配置
-export default defineConfig({
-  plugin_dirs: ['./new-dir-1', './new-dir-2', './new-dir-3'],
-  plugins: ['new-1', 'new-2', 'new-3', 'new-4', 'new-5']
-})
-```
-
-**推荐：**
-```typescript
-// 分步骤修改配置
-// 第一步：添加一个新目录
-export default defineConfig({
-  plugin_dirs: ['./src/plugins', './new-dir-1'],
-  plugins: ['http']
-})
-
-// 第二步：启用一个新插件
-export default defineConfig({
-  plugin_dirs: ['./src/plugins', './new-dir-1'],
-  plugins: ['http', 'new-1']
-})
-```
-
-### 2. 使用配置验证
-
-通过 Schema 定义配置结构，框架会自动验证：
+### 2. 响应数据库事件
+如果插件依赖数据库，务必使用 `onDatabaseReady` 钩子，而不是在顶层直接使用。这样可以确保在数据库热重启时，插件能正确重新连接。
 
 ```typescript
-const MyPluginSchema = Schema.object({
-  apiKey: Schema.string().required(),
-  timeout: Schema.number().default(5000),
-  retries: Schema.number().min(0).max(5).default(3)
-})
+// ✅ 正确做法
+onDatabaseReady((db) => {
+  const model = db.model('users');
+  // ...
+});
 
-// 配置错误会在变更时被检测
-export default defineConfig({
-  plugins: {
-    'my-plugin': {
-      apiKey: 'xxx',
-      timeout: 'invalid',  // ❌ 类型错误，会被拒绝
-      retries: 10          // ❌ 超出范围，会被拒绝
-    }
-  }
-})
+// ❌ 错误做法（数据库重启后会失效）
+const db = useDatabase();
+const model = db.model('users');
 ```
-
-### 3. 监控配置变更日志
-
-框架会输出详细的配置变更日志：
-
-```
-[INFO] App configuration changed
-[INFO] Updating log level: INFO -> DEBUG
-[INFO] Adding watch directory: src/custom-plugins
-[INFO] Loading plugin: my-new-plugin
-[INFO] Plugin my-new-plugin loaded successfully
-[INFO] Configuration changes applied successfully
-```
-
-### 4. 使用环境变量
-
-支持在配置文件中使用环境变量：
-
-```typescript
-export default defineConfig({
-  log_level: process.env.LOG_LEVEL === 'debug' 
-    ? LogLevel.DEBUG 
-    : LogLevel.INFO,
-  
-  plugins: process.env.ENABLE_ADMIN === 'true'
-    ? ['http', 'console', 'admin']
-    : ['http', 'console']
-})
-```
-
-修改环境变量并保存配置文件即可触发热重载。
 
 ## 故障排查
 
-### 问题 1：插件未能卸载
+### 问题：配置修改后没反应
+1. 检查日志，看是否有 `[App] Configuration changed` 消息。
+2. 检查 `zhin.config.ts` 语法是否正确。
+3. 如果是数据库配置，检查是否触发了 `database.ready` 事件。
 
-**症状：**
-- 修改配置移除插件后，插件仍在运行
-
-**可能原因：**
-1. 插件名称匹配失败
-2. 插件未正确实现 `dispose()` 方法
-
-**解决方案：**
-```typescript
-// 在插件中正确实现清理逻辑
-useContext('http', (http) => {
-  const dispose = http.router.get('/api/test', handler)
-  
-  // 返回清理函数
-  return () => {
-    dispose()
-  }
-})
-```
-
-### 问题 2：配置变更未生效
-
-**症状：**
-- 修改配置文件保存后，没有任何变化
-
-**可能原因：**
-1. 配置文件格式错误
-2. 上一次配置变更未完成
-
-**解决方案：**
-1. 检查配置文件语法
-2. 等待上一次变更完成（查看日志中的 "Waiting for previous config change"）
-
-### 问题 3：频繁配置变更导致性能问题
-
-**症状：**
-- 快速连续修改配置导致应用响应缓慢
-
-**解决方案：**
-- 框架已经实现了串行化处理，但建议避免在短时间内频繁修改配置
-- 使用防抖保存配置文件（编辑器功能）
-
-## API 参考
-
-### App 类新增方法
-
-#### handleConfigChange(newConfig: AppConfig)
-
-处理配置变更的入口方法。
-
-**参数：**
-- `newConfig`: 新的配置对象
-
-**返回：**
-- `Promise<void>`
-
-**特性：**
-- 自动等待上次变更完成
-- 使用锁机制防止并发
-
-#### applyConfigChanges(newConfig: AppConfig)
-
-应用配置变更的核心逻辑。
-
-**参数：**
-- `newConfig`: 新的配置对象
-
-**返回：**
-- `Promise<void>`
-
-**内部流程：**
-1. 对比新旧配置
-2. 更新日志级别
-3. 更新监听目录
-4. 更新插件加载
-5. 检测数据库配置变更
-
-#### updateWatchDirs(oldDirs: string[], newDirs: string[])
-
-更新监听目录。
-
-**参数：**
-- `oldDirs`: 旧的监听目录列表
-- `newDirs`: 新的监听目录列表
-
-**返回：**
-- `Promise<void>`
-
-**逻辑：**
-- 移除不再需要的目录
-- 添加新的监听目录
-
-#### updatePlugins(oldPlugins: string[], newPlugins: string[])
-
-更新插件加载。
-
-**参数：**
-- `oldPlugins`: 旧的插件列表
-- `newPlugins`: 新的插件列表
-
-**返回：**
-- `Promise<void>`
-
-**逻辑：**
-- 先卸载移除的插件
-- 再加载新增的插件
-- 等待新插件就绪
-
-#### unloadPlugin(pluginName: string)
-
-卸载指定插件。
-
-**参数：**
-- `pluginName`: 插件名称
-
-**返回：**
-- `Promise<void>`
-
-**逻辑：**
-1. 查找插件实例
-2. 调用 `dispose()` 清理资源
-3. 从依赖映射中移除
-
-## 总结
-
-配置热重载是 Zhin.js 的重要特性，它使得开发和运维更加灵活：
-
-- ✅ 无需重启即可调整插件配置
-- ✅ 安全的并发控制，避免竞态条件
-- ✅ 智能的差异检测，只更新变化的部分
-- ✅ 完整的日志记录，方便调试和监控
-
-遵循最佳实践，可以充分利用这一特性提升开发效率。
+### 问题：插件重载后状态丢失
+这是预期行为。HMR 的本质是销毁旧实例、创建新实例。如果需要持久化状态，请使用数据库或外部存储。
