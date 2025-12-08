@@ -17,7 +17,7 @@ export class DatabaseLogTransport implements LogTransport {
   constructor(plugin: Plugin) {
     this.plugin = plugin
     const configService=plugin.inject('config')
-    const appConfig=configService.get<AppConfig>()
+    const appConfig=configService.getData<AppConfig>('zhin.config.yml')
     // 从配置读取日志清理策略
     const logConfig = appConfig.log || {}
     this.maxDays = logConfig.maxDays || 7 // 默认保留 7 天
@@ -75,10 +75,8 @@ export class DatabaseLogTransport implements LogTransport {
         const excessCount = totalCount - this.maxRecords
         
         // 查找最旧的 excessCount 条日志的 ID
-        const oldestLogs = await LogModel
-          .select('id','timestamp')
-          .orderBy('timestamp', 'ASC')
-          .limit(excessCount)
+        // @ts-expect-error - 数据库类型系统限制
+        const oldestLogs: any[] = await LogModel.select('id','timestamp').orderBy('timestamp', 'ASC').limit(excessCount)
         
         const idsToDelete = oldestLogs.map((log: any) => log.id)
         

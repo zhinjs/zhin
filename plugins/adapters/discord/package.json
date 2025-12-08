@@ -38,13 +38,7 @@
     "typescript": "^5.3.0"
   },
   "peerDependencies": {
-    "@zhin.js/types": "workspace:*",
     "zhin.js": "workspace:*"
-  },
-  "peerDependenciesMeta": {
-    "@zhin.js/types": {
-      "optional": true
-    }
   },
   "files": [
     "lib",

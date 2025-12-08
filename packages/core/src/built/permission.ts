@@ -1,4 +1,4 @@
-import { MaybePromise } from "@zhin.js/types";
+import { MaybePromise } from "../types.js";
 import { RegisteredAdapter } from "../types.js";
 import { Message } from "../message.js";
 import { AdapterMessage } from "../types.js";

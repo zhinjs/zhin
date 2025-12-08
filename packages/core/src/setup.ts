@@ -43,7 +43,7 @@ provide({
   description: '配置服务',
   mounted: async () => {
     const config = new ConfigService()
-    config.load('zhin.config', {
+    await config.load('zhin.config.yml', {
       log_level: LogLevel.INFO,
       database: {
         dialect: "sqlite",
@@ -66,9 +66,8 @@ provide({
   value: new PermissionService()
 });
 
-await importPlugin('./plugins/adapter-process');
 useContext('config', async (service) => {
-  const config = service.get<AppConfig>();
+  const config = service.getData<AppConfig>('zhin.config.yml');
   // 4. 设置日志级别
   setLevel(config.log_level || LogLevel.INFO);
   if (config.database) {
@@ -90,7 +89,7 @@ useContext('config', async (service) => {
   }
   // 加载插件
   for (const pluginName of config.plugins || []) {
-    const dir = config.plugin_dirs?.find(dir => fs.existsSync(path.join(dir, pluginName)));
+    const dir = config.plugin_dirs?.find((dir: string) => fs.existsSync(path.join(dir, pluginName)));
     if (dir) await importPlugin(path.join(process.cwd(), dir, pluginName));
   }
   logger.info(`${children.length} plugins loaded`);

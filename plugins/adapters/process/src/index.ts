@@ -92,8 +92,8 @@ export class ProcessBot extends EventEmitter implements Bot<ProcessConfig,{conte
         const ts=Date.now()
         const message =this.$formatMessage({content,ts});
         this.logger.info(`${this.$config.name} recv  ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`)
-        plugin.dispatch('message.receive',message)
-        plugin.dispatch(`message.${message.$channel.type}.receive`,message)
+        plugin.emit('message.receive',message)
+        plugin.emit(`message.${message.$channel.type}.receive`,message)
     }
 
     // 新增：Web 沙盒消息接收接口
@@ -130,8 +130,8 @@ export class ProcessBot extends EventEmitter implements Bot<ProcessConfig,{conte
         })
         
         this.logger.info(`[Web] recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`)
-        plugin.dispatch('message.receive', message)
-        plugin.dispatch(`message.${message.$channel.type}.receive`, message)
+        plugin.emit('message.receive', message)
+        plugin.emit(`message.${message.$channel.type}.receive`, message)
     }
 }
 export class SandboxBot extends EventEmitter implements Bot<SandboxConfig,{content:MessageElement[],ts:number}>{
@@ -145,8 +145,8 @@ export class SandboxBot extends EventEmitter implements Bot<SandboxConfig,{conte
         this.$config.ws.on('message',(data)=>{
             const message = JSON.parse(data.toString())
             this.logger.info(`${this.$config.name} recv  ${message.type}(${message.id}):${segment.raw(message.content)}`)
-            plugin.dispatch('message.receive',this.$formatMessage({content:message.content,type:message.type,id:message.id,ts:message.timestamp}))
-            plugin.dispatch(`message.${message.type as MessageType}.receive`,this.$formatMessage({content:message.content,type:message.type,id:message.id,ts:message.timestamp}))
+            plugin.emit('message.receive',this.$formatMessage({content:message.content,type:message.type,id:message.id,ts:message.timestamp}))
+            plugin.emit(`message.${message.type as MessageType}.receive`,this.$formatMessage({content:message.content,type:message.type,id:message.id,ts:message.timestamp}))
         })
     }
     async $connect(): Promise<void> {
@@ -205,8 +205,8 @@ export class SandboxBot extends EventEmitter implements Bot<SandboxConfig,{conte
     }
 }
 class ProcessAdapter extends Adapter<ProcessBot>{
-    constructor(config:ProcessConfig[]){
-        super('process',config)
+    constructor(plugin: any, config:ProcessConfig[]){
+        super(plugin, 'process', config)
     }
     createBot(config: ProcessConfig): ProcessBot {
         return new ProcessBot(config);

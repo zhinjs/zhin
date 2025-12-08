@@ -48,13 +48,9 @@
     "zhin.js": "workspace:*",
     "@zhin.js/client": "workspace:*",
     "@zhin.js/http": "workspace:*",
-    "@zhin.js/types": "workspace:*",
     "@zhin.js/console": "workspace:*"
   },
   "peerDependenciesMeta": {
-    "@zhin.js/types": {
-      "optional": true
-    },
     "@zhin.js/http": {
       "optional": true
     },

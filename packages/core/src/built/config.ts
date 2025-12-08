@@ -3,6 +3,9 @@ import fs from "node:fs";
 import { stringify as stringifyYaml,parse as parseYaml } from "yaml";
 export class ConfigLoader<T extends object>{
     #data: T;
+    get data(): T {
+        return this.#data;
+    }
     get extension() {
         return path.extname(this.filename).toLowerCase();
     }
@@ -60,5 +63,18 @@ export class ConfigService{
         this.configs.set(filename, config);
         return config;
     }
-    async get<T extends object>(filename: string) {}
+    async get<T extends object>(filename: string): Promise<T> {
+        const config = this.configs.get(filename);
+        if (!config) {
+            throw new Error(`配置文件 ${filename} 未加载`);
+        }
+        return config.data as T;
+    }
+    getData<T extends object>(filename: string): T {
+        const config = this.configs.get(filename);
+        if (!config) {
+            throw new Error(`配置文件 ${filename} 未加载`);
+        }
+        return config.data as T;
+    }
 }

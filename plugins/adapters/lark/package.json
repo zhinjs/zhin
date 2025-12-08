@@ -38,13 +38,9 @@
   },
   "peerDependencies": {
     "zhin.js": "workspace:*",
-    "@zhin.js/types": "workspace:*",
     "@zhin.js/http": "workspace:*"
   },
   "peerDependenciesMeta": {
-    "@zhin.js/types": {
-      "optional": true
-    },
     "@zhin.js/http": {
       "optional": false
     }

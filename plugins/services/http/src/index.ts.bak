@@ -13,7 +13,7 @@ import * as process from "process";
 
 export * from "./router.js";
 
-declare module "@zhin.js/core" {
+declare module "zhin.js" {
   namespace Plugin {
     interface Contexts {
       koa: Koa;
@@ -69,9 +69,6 @@ const {
   base = "/api",
 } = httpConfig;
 
-// app 为根插件
-const app = plugin.root;
-
 koa.use(
   auth({
     name: username,
@@ -116,14 +113,16 @@ router.get(`${base}/health`, async (ctx) => {
 router.get(`${base}/stats`, async (ctx) => {
   try {
     // 统计插件数量
-    const allPlugins = app.children;
-    const pluginCount = allPlugins.length;
-    const activePluginCount = allPlugins.length; // 所有加载的插件都是 active 的
+    const pluginCount = app.dependencyList.length;
+    const activePluginCount = app.dependencyList.filter(
+      (dep) => (dep as any).mounted
+    ).length;
 
     // 统计机器人数量
     let botCount = 0;
     let onlineBotCount = 0;
-    for (const [contextName, adapter] of app.contexts.entries()) {
+    for (const context of app.contextList) {
+      const adapter = app.getContext(context.name);
       if (adapter && typeof adapter === "object" && "bots" in adapter) {
         const adapterBots = (adapter as any).bots;
         if (adapterBots && adapterBots instanceof Map) {
@@ -136,11 +135,11 @@ router.get(`${base}/stats`, async (ctx) => {
     }
 
     // 统计命令和组件
-    const commandService = app.inject('command');
-    const commandCount = commandService.length;
+    let commandCount = 0;
     let componentCount = 0;
-    for (const p of allPlugins) {
-      componentCount += p.components.size;
+    for (const dep of app.dependencyList) {
+      commandCount += dep.commands.length;
+      componentCount += dep.components.size;
     }
 
     ctx.body = {
@@ -164,14 +163,15 @@ router.get(`${base}/stats`, async (ctx) => {
 router.get(`${base}/plugins`, async (ctx) => {
   try {
     // 获取详细的插件数据
-    const plugins = app.children.map((p) => {
+    const plugins = app.dependencyList.map((dep) => {
       return {
-        name: p.name,
-        status: "active", // 所有加载的插件都是 active
-        componentCount: p.components.size,
-        contextCount: p.contexts.size,
-        filePath: p.filePath,
-        description: p.name, // 使用名称作为描述
+        name: dep.name,
+        status: (dep as any).mounted ? "active" : "inactive",
+        commandCount: dep.commands.length,
+        componentCount: dep.components.size,
+        middlewareCount: dep.middlewares.length,
+        contextCount: dep.contexts.size,
+        description: (dep as any).description || "无描述",
       };
     });
 
@@ -186,7 +186,7 @@ router.get(`${base}/plugins`, async (ctx) => {
 router.get("/api/plugins/:name", async (ctx) => {
   try {
     const pluginName = ctx.params.name;
-    const plugin = app.children.find((p) => p.name === pluginName);
+    const plugin = app.dependencyList.find((dep) => dep.name === pluginName);
 
     if (!plugin) {
       ctx.status = 404;
@@ -194,29 +194,34 @@ router.get("/api/plugins/:name", async (ctx) => {
       return;
     }
 
-    // 获取所有命令（从 CommandService 中过滤当前插件的命令）
-    const commandService = app.inject('command');
-    const commands = commandService
-      .filter((cmd: any) => true) // TODO: 需要添加插件信息到命令中
-      .map((cmd) => ({
-        name: cmd.pattern,
-        desc: cmd.helpInfo.desc,
-        usage: cmd.helpInfo.usage,
-        examples: cmd.helpInfo.examples,
-      }));
+    // 获取命令详情
+    const commands = plugin.commands.map((cmd) => ({
+      name: cmd.pattern,
+      desc: cmd.helpInfo.desc,
+      usage: cmd.helpInfo.usage,
+      examples: cmd.helpInfo.examples,
+    }));
 
     // 获取组件详情
     const components = Array.from(plugin.components.entries()).map(
       ([name, comp]) => ({
         name,
+        props: (comp as any).props || {},
         type: typeof comp,
       })
     );
 
+    // 获取中间件详情
+    const middlewares = plugin.middlewares.map((_, index) => ({
+      id: `middleware-${index}`,
+      type: "function",
+    }));
+
     // 获取上下文详情
     const contexts = Array.from(plugin.contexts.entries()).map(
-      ([name]) => ({
+      ([name, ctx]) => ({
         name,
+        description: (ctx as any).description || "无描述",
       })
     );
 
@@ -224,23 +229,37 @@ router.get("/api/plugins/:name", async (ctx) => {
     const crons = plugin.crons.map((cron, index) => ({
       id: `cron-${index}`,
       pattern: (cron as any).pattern || "unknown",
+      running: (cron as any).running || false,
     }));
+
+    // 获取数据模型详情
+    const definitions = Array.from(plugin.definitions.entries()).map(
+      ([name, definition]) => ({
+        name,
+        fields: Object.keys(definition),
+      })
+    );
 
     ctx.body = {
       success: true,
       data: {
         name: plugin.name,
-        filePath: plugin.filePath,
-        status: "active",
+        filename: plugin.filename,
+        status: (plugin as any).mounted ? "active" : "inactive",
+        description: (plugin as any).description || "无描述",
         commands,
         components,
+        middlewares,
         contexts,
         crons,
+        definitions,
         statistics: {
           commandCount: commands.length,
           componentCount: components.length,
+          middlewareCount: middlewares.length,
           contextCount: contexts.length,
           cronCount: crons.length,
+          definitionCount: definitions.length,
         },
       },
     };
@@ -256,16 +275,18 @@ router.get(`${base}/bots`, async (ctx) => {
     const bots: any[] = [];
 
     // 遍历所有上下文，查找适配器
-    for (const [contextName, adapter] of app.contexts.entries()) {
+    for (const context of app.contextList) {
+      const adapter = app.getContext(context.name);
       if (adapter && typeof adapter === "object" && "bots" in adapter) {
         const adapterBots = (adapter as any).bots;
         if (adapterBots && adapterBots instanceof Map) {
           for (const [botName, bot] of adapterBots.entries()) {
             bots.push({
               name: botName,
-              adapter: contextName,
+              adapter: context.name,
               connected: bot.$connected || false,
               status: bot.$connected ? "online" : "offline",
+              // 移除 config 字段以保护隐私
             });
           }
         }
@@ -282,10 +303,79 @@ router.get(`${base}/bots`, async (ctx) => {
 // 框架配置信息 API
 router.get(`${base}/config`, async (ctx) => {
   try {
-    const configService = app.inject('config');
-    const config = configService.getData('zhin.config.yml');
+    const config = app.getConfig();
 
     ctx.body = { success: true, data: config };
+  } catch (error) {
+    ctx.status = 500;
+    ctx.body = { success: false, error: (error as Error).message };
+  }
+});
+
+// 获取所有插件的 Schema API
+router.get(`${base}/schemas`, async (ctx) => {
+  try {
+    const schemas: Record<string, any> = {};
+
+    // 获取 App 的 Schema
+    const appSchema = app.schema.toJSON();
+    if (appSchema) {
+      schemas["app"] = appSchema;
+    }
+
+    // 获取所有插件的 Schema
+    for (const plugin of app.dependencyList) {
+      const schema = plugin.schema.toJSON();
+      if (schema) {
+        schemas[plugin.name] = schema;
+      }
+    }
+
+    ctx.body = {
+      success: true,
+      data: schemas,
+      total: Object.keys(schemas).length,
+    };
+  } catch (error) {
+    ctx.status = 500;
+    ctx.body = { success: false, error: (error as Error).message };
+  }
+});
+
+// 获取单个插件的 Schema API
+router.get(`${base}/schemas/:name`, async (ctx) => {
+  try {
+    const { name } = ctx.params;
+
+    if (name === "app") {
+      const schema = app.schema?.toJSON();
+      if (!schema) {
+        ctx.status = 404;
+        ctx.body = { success: false, error: "App schema not found" };
+        return;
+      }
+      ctx.body = { success: true, data: schema };
+      return;
+    }
+
+    const plugin = app.findPluginByName(name);
+    if (!plugin) {
+      ctx.status = 404;
+      ctx.body = { success: false, error: `Plugin ${name} not found` };
+      return;
+    }
+
+    const schema = plugin.schema.toJSON();
+    if (!schema) {
+      ctx.status = 404;
+      ctx.body = {
+        success: false,
+        error: `Schema for plugin ${name} not found`,
+      };
+      return;
+    }
+
+    ctx.body = { success: true, data: schema };
   } catch (error) {
     ctx.status = 500;
     ctx.body = { success: false, error: (error as Error).message };
@@ -298,21 +388,20 @@ router.get(`${base}/config/:name`, async (ctx) => {
     const { name } = ctx.params;
 
     if (name === "app") {
-      const configService = app.inject('config');
-      const config = configService.getData('zhin.config.yml');
+      const config = app.getConfig();
       ctx.body = { success: true, data: config };
       return;
     }
 
-    const plugin = app.children.find((p) => p.name === name);
+    const plugin = app.findPluginByName(name);
     if (!plugin) {
       ctx.status = 404;
       ctx.body = { success: false, error: `Plugin ${name} not found` };
       return;
     }
 
-    // 返回插件基本信息
-    ctx.body = { success: true, data: { name: plugin.name, filePath: plugin.filePath } };
+    const config = plugin.config;
+    ctx.body = { success: true, data: config };
   } catch (error) {
     ctx.status = 500;
     ctx.body = { success: false, error: (error as Error).message };
@@ -326,25 +415,27 @@ router.post(`${base}/config/:name`, async (ctx) => {
     const newConfig = ctx.request.body;
 
     if (name === "app") {
-      const configService = app.inject('config');
-      // 注：实际更新需要重新实现 ConfigService 的更新方法
+      app.config = newConfig as AppConfig;
       ctx.body = {
         success: true,
-        message: "App configuration update not implemented yet",
+        message: "App configuration updated successfully",
+        data: app.getConfig(),
       };
       return;
     }
 
-    const plugin = app.children.find((p) => p.name === name);
+    const plugin = app.findPluginByName(name);
     if (!plugin) {
       ctx.status = 404;
       ctx.body = { success: false, error: `Plugin ${name} not found` };
       return;
     }
 
+    plugin.config = newConfig as Record<string, any>;
     ctx.body = {
       success: true,
-      message: `Plugin configuration update not implemented yet`,
+      message: `Plugin ${name} configuration updated successfully`,
+      data: plugin.config,
     };
   } catch (error) {
     ctx.status = 500;
@@ -402,7 +493,7 @@ router.get(`${base}/logs`, async (ctx) => {
     const limit = parseInt(ctx.query.limit as string) || 100;
     const level = ctx.query.level as string;
 
-    const LogModel = database.models.get("SystemLog");
+    const LogModel = database.model("SystemLog");
     if (!LogModel) {
       ctx.status = 500;
       ctx.body = { success: false, error: "SystemLog model not found" };
@@ -418,7 +509,6 @@ router.get(`${base}/logs`, async (ctx) => {
     }
 
     // 按时间倒序，限制数量
-    // @ts-expect-error - Database type inference issue
     const logs = await selection.orderBy("timestamp", "DESC").limit(limit);
 
     // 格式化返回数据
@@ -454,7 +544,7 @@ router.delete(`${base}/logs`, async (ctx) => {
       return;
     }
 
-    const LogModel = database.models.get("SystemLog");
+    const LogModel = database.model("SystemLog");
     if (!LogModel) {
       ctx.status = 500;
       ctx.body = { success: false, error: "SystemLog model not found" };
@@ -484,7 +574,7 @@ router.get(`${base}/logs/stats`, async (ctx) => {
       return;
     }
 
-    const LogModel = database.models.get("SystemLog");
+    const LogModel = database.model("SystemLog");
     if (!LogModel) {
       ctx.status = 500;
       ctx.body = { success: false, error: "SystemLog model not found" };
@@ -504,19 +594,14 @@ router.get(`${base}/logs/stats`, async (ctx) => {
     }
 
     // 获取最旧日志时间
-    // @ts-expect-error - Database type inference issue
     const oldestLog = await LogModel.select("timestamp")
-      // @ts-expect-error - Database type inference issue
       .orderBy("timestamp", "ASC")
       .limit(1);
 
     const oldestTimestamp =
       oldestLog.length > 0
-        // @ts-expect-error - Database type inference issue
         ? oldestLog[0].timestamp instanceof Date
-          // @ts-expect-error - Database type inference issue
           ? oldestLog[0].timestamp.toISOString()
-          // @ts-expect-error - Database type inference issue
           : oldestLog[0].timestamp
         : null;
 
@@ -544,7 +629,7 @@ router.post(`${base}/logs/cleanup`, async (ctx) => {
       return;
     }
 
-    const LogModel = database.models.get("SystemLog");
+    const LogModel = database.model("SystemLog");
     if (!LogModel) {
       ctx.status = 500;
       ctx.body = { success: false, error: "SystemLog model not found" };
@@ -561,7 +646,7 @@ router.post(`${base}/logs/cleanup`, async (ctx) => {
       cutoffDate.setDate(cutoffDate.getDate() - days);
 
       const deleted = await LogModel.delete({ timestamp: { $lt: cutoffDate } });
-      // @ts-expect-error - Database delete return type issue
+
       deletedCount += deleted || 0;
     }
 
@@ -571,9 +656,8 @@ router.post(`${base}/logs/cleanup`, async (ctx) => {
 
       if (totalCount.length > maxRecords) {
         const excessCount = totalCount - maxRecords;
-        // @ts-expect-error - Database type inference issue
+
         const oldestLogs = await LogModel.select("id", "timestamp")
-          // @ts-expect-error - Database type inference issue
           .orderBy("timestamp", "ASC")
           .limit(excessCount);
 

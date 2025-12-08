@@ -1,7 +1,7 @@
 import {AdapterMessage, Dict, MessageMiddleware, RegisteredAdapter} from './types.js';
 import { Plugin } from './plugin.js';
 import { Message } from './message.js';
-import { Schema } from '@zhin.js/hmr';
+import { Schema } from '@zhin.js/schema';
 import { Adapter } from './adapter.js';
 /**
  * Prompt类：用于实现机器人与用户的交互式提问与输入收集。

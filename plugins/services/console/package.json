@@ -65,13 +65,7 @@
     "@types/ws": "^8.18.1",
     "@zhin.js/client": "workspace:^",
     "@zhin.js/core": "workspace:^",
-    "@zhin.js/http": "workspace:^",
-    "@zhin.js/types": "workspace:^"
-  },
-  "peerDependenciesMeta": {
-    "@zhin.js/types": {
-      "optional": true
-    }
+    "@zhin.js/http": "workspace:^"
   },
   "files": [
     "lib",

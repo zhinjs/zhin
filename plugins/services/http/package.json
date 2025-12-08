@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@koa/router": "latest",
+    "@zhin.js/schema": "workspace:*",
     "koa": "latest",
     "ws": "^8.18.3",
     "koa-basic-auth": "latest",
@@ -39,7 +40,6 @@
     "@zhin.js/core": "workspace:^"
   },
   "devDependencies": {
-    "@zhin.js/types": "workspace:^",
     "@types/koa": "latest",
     "@types/koa-basic-auth": "latest",
     "@types/koa-bodyparser": "latest",

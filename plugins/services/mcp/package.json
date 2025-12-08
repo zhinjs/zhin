@@ -40,8 +40,7 @@
     "zhin.js": "workspace:^"
   },
   "devDependencies": {
-    "@types/node": "latest",
-    "@zhin.js/types": "workspace:^"
+    "@types/node": "latest"
   },
   "files": [
     "lib",
