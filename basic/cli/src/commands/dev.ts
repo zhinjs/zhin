@@ -24,20 +24,15 @@ export const devCommand = new Command('dev')
       logger.info('🔍 正在加载环境变量...');
       loadEnvFiles(cwd, 'development');
 
-      // 检查src目录是否存在
+      // 检查src目录是否存在，不存在则创建
       const srcPath = path.join(cwd, 'src');
       if (!fs.existsSync(srcPath)) {
-        logger.error('src目录不存在');
-        logger.info('请确保项目结构正确，src目录包含入口文件');
-        process.exit(1);
+        fs.mkdirSync(srcPath, { recursive: true });
       }
 
-      // 检查入口文件
+      // 检查入口文件是否存在，决定启动方式
       const entryFile = path.join(srcPath, 'index.ts');
-      if (!fs.existsSync(entryFile)) {
-        logger.error('入口文件 src/index.ts 不存在');
-        process.exit(1);
-      }
+      const hasEntryFile = fs.existsSync(entryFile);
 
       logger.info('📦 开发模式启动中...');
 
@@ -49,21 +44,34 @@ export const devCommand = new Command('dev')
           NODE_ENV: 'development',
           ZHIN_DEV_MODE: 'true',
           ZHIN_HMR_PORT: options.port,
-          ZHIN_VERBOSE: options.verbose ? 'true' : 'false'
+          ZHIN_VERBOSE: options.verbose ? 'true' : 'false',
+          // 添加 development 条件，让 Node.js 优先加载 package.json 中的 development 字段
+          NODE_OPTIONS: (process.env.NODE_OPTIONS || '') + ' --conditions=development'
         };
         
-        // 选择运行时
-        const runtime = options.bun ? 'bun' : 'tsx';
-        const args = options.bun ? ['src/index.ts'] : ['--expose-gc', 'src/index.ts'];
+        // 选择运行时和参数
+        const runtime = options.bun ? 'bun' : 'node';
+        let args: string[];
         
-        logger.info(`📦 启动命令: ${runtime} ${args.join(' ')}`);
+        if (hasEntryFile) {
+          // 有入口文件，直接运行
+          args = options.bun 
+            ? ['src/index.ts'] 
+            : ['--import', 'tsx/esm','src/index.ts'];
+          logger.info(`📦 启动命令: ${runtime} ${args.join(' ')}`);
+        } else {
+          // 没有入口文件，使用 -e 参数直接执行代码
+          args = options.bun 
+            ? ['-e', "import('zhin.js/setup')"]
+            : ['--import', 'tsx/esm','-e', "import('zhin.js/setup')"];
+          logger.info(`📦 启动命令: ${runtime} ${args.join(' ')}`);
+        }
         
         // 启动机器人
         return spawn(runtime, args, {
           cwd,
           stdio: 'inherit',
           env,
-          shell:true,
         });
       };
 

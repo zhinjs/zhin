@@ -1,23 +1,25 @@
 import { LogTransport } from '@zhin.js/logger'
-import { App } from './app.js'
+import { Plugin } from './plugin.js'
+import { AppConfig } from './types.js'
 
 /**
  * 数据库日志传输器
  * 将日志存储到数据库，并自动清理旧日志
  */
 export class DatabaseLogTransport implements LogTransport {
-  private app: App
+  private plugin: Plugin
   private stripAnsiRegex = /\x1b\[[0-9;]*m/g
   private cleanupTimer?: NodeJS.Timeout
   private maxDays: number
   private maxRecords: number
   private cleanupInterval: number
 
-  constructor(app: App) {
-    this.app = app
-    
+  constructor(plugin: Plugin) {
+    this.plugin = plugin
+    const configService=plugin.inject('config')
+    const appConfig=configService.get<AppConfig>()
     // 从配置读取日志清理策略
-    const logConfig = app['config']?.log || {}
+    const logConfig = appConfig.log || {}
     this.maxDays = logConfig.maxDays || 7 // 默认保留 7 天
     this.maxRecords = logConfig.maxRecords || 10000 // 默认最多 10000 条
     this.cleanupInterval = logConfig.cleanupInterval || 24 // 默认 24 小时清理一次
@@ -32,13 +34,13 @@ export class DatabaseLogTransport implements LogTransport {
   private startCleanup(): void {
     // 立即执行一次清理
     this.cleanupOldLogs().catch(err => {
-      this.app.logger.error('[DatabaseLogTransport] Initial cleanup failed:', err.message)
+      this.plugin.logger.error('[DatabaseLogTransport] Initial cleanup failed:', err.message)
     })
 
     // 设置定时任务
     this.cleanupTimer = setInterval(() => {
       this.cleanupOldLogs().catch(err => {
-        this.app.logger.error('[DatabaseLogTransport] Scheduled cleanup failed:', err.message)
+        this.plugin.logger.error('[DatabaseLogTransport] Scheduled cleanup failed:', err.message)
       })
     }, this.cleanupInterval * 60 * 60 * 1000) // 转换为毫秒
   }
@@ -47,12 +49,13 @@ export class DatabaseLogTransport implements LogTransport {
    * 清理旧日志
    */
   private async cleanupOldLogs(): Promise<void> {
-    if (!this.app.database) {
+    const db=this.plugin.inject('database')
+    if (!db) {
       return
     }
 
     try {
-      const LogModel = this.app.database.model('SystemLog')
+      const LogModel = db.models.get('SystemLog')
       if (!LogModel) {
         return
       }
@@ -61,13 +64,13 @@ export class DatabaseLogTransport implements LogTransport {
       const cutoffDate = new Date()
       cutoffDate.setDate(cutoffDate.getDate() - this.maxDays)
       
-      const deletedByDate = await LogModel
+      const deletedData = await LogModel
         .delete({ timestamp: { $lt: cutoffDate } })
       
       // 2. 按数量清理：如果日志总数超过 maxRecords，删除最旧的
       const total = await LogModel.select()
       const totalCount = total.length
-      
+
       if (totalCount > this.maxRecords) {
         const excessCount = totalCount - this.maxRecords
         
@@ -85,14 +88,14 @@ export class DatabaseLogTransport implements LogTransport {
         }
       }
 
-      this.app.logger.info(
+      this.plugin.logger.info(
         `[DatabaseLogTransport] Log cleanup completed. ` +
-        `Deleted ${deletedByDate || 0} logs older than ${this.maxDays} days. ` +
-        `Current total: ${Math.max(0, totalCount - (deletedByDate || 0))} logs.`
+        `Deleted ${deletedData.length || 0} logs older than ${this.maxDays} days. ` +
+        `Current total: ${Math.max(0, totalCount - (deletedData.length || 0))} logs.`
       )
     } catch (error) {
       // 静默处理错误
-      this.app.logger.debug('[DatabaseLogTransport] Cleanup error:', (error as Error).message,(error as Error).stack)
+      this.plugin.logger.debug('[DatabaseLogTransport] Cleanup error:', (error as Error).message,(error as Error).stack)
     }
   }
 
@@ -138,17 +141,18 @@ export class DatabaseLogTransport implements LogTransport {
    * 保存日志到数据库
    */
   private async saveToDatabase(level: string, name: string, message: string, source: string): Promise<void> {
-    if (!this.app.database) {
+    const databaseService=this.plugin.inject('database')
+    if (!databaseService) {
       return // 没有数据库则跳过
     }
 
     try {
-      const LogModel = this.app.database.model('SystemLog')
+      const LogModel = databaseService.models.get('SystemLog')
       if (!LogModel) {
         return // 模型不存在则跳过
       }
 
-      await LogModel.create({
+      await LogModel.insert({
         level,
         name,
         message,

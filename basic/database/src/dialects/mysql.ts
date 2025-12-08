@@ -7,7 +7,7 @@ import {Column} from "../types.js";
 
 export interface MySQLDialectConfig extends ConnectionOptions {}
 
-export class MySQLDialect extends Dialect<MySQLDialectConfig, string> {
+export class MySQLDialect<S extends Record<string, object> = Record<string, object>> extends Dialect<MySQLDialectConfig, S, string> {
   private connection: any = null;
 
   constructor(config: MySQLDialectConfig) {
@@ -118,8 +118,8 @@ export class MySQLDialect extends Dialect<MySQLDialectConfig, string> {
     return `LIMIT ${offset}, ${limit}`;
   }
 
-  formatCreateTable(tableName: string, columns: string[]): string {
-    return `CREATE TABLE IF NOT EXISTS ${this.quoteIdentifier(tableName)} (${columns.join(', ')}) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`;
+  formatCreateTable<T extends keyof S>(tableName: T, columns: string[]): string {
+    return `CREATE TABLE IF NOT EXISTS ${this.quoteIdentifier(String(tableName))} (${columns.join(', ')}) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`;
   }
 
   formatColumnDefinition(field: string, column: Column<any>): string {
@@ -137,21 +137,23 @@ export class MySQLDialect extends Dialect<MySQLDialectConfig, string> {
     return `${name} ${type}${length}${primary}${unique}${autoIncrement}${nullable}${defaultVal}`;
   }
 
-  formatAlterTable(tableName: string, alterations: string[]): string {
-    return `ALTER TABLE ${this.quoteIdentifier(tableName)} ${alterations.join(', ')}`;
+  formatAlterTable<T extends keyof S>(tableName: T, alterations: string[]): string {
+    return `ALTER TABLE ${this.quoteIdentifier(String(tableName))} ${alterations.join(', ')}`;
   }
 
-  formatDropTable(tableName: string, ifExists?: boolean): string {
+  formatDropTable<T extends keyof S>(tableName: T, ifExists?: boolean): string {
     const ifExistsClause = ifExists ? 'IF EXISTS ' : '';
-    return `DROP TABLE ${ifExistsClause}${this.quoteIdentifier(tableName)}`;
+    return `DROP TABLE ${ifExistsClause}${this.quoteIdentifier(String(tableName))}`;
   }
 
-  formatDropIndex(indexName: string, tableName: string, ifExists?: boolean): string {
+  formatDropIndex<T extends keyof S>(indexName: string, tableName: T, ifExists?: boolean): string {
     const ifExistsClause = ifExists ? 'IF EXISTS ' : '';
-    return `DROP INDEX ${ifExistsClause}${this.quoteIdentifier(indexName)} ON ${this.quoteIdentifier(tableName)}`;
+    return `DROP INDEX ${ifExistsClause}${this.quoteIdentifier(indexName)} ON ${this.quoteIdentifier(String(tableName))}`;
   }
 }
-
-Registry.register('mysql', (config: MySQLDialectConfig, definitions?: Database.Definitions<Record<string, object>>) => {
-  return new RelatedDatabase(new MySQLDialect(config), definitions);
-});
+export class MySQL<S extends Record<string, object> = Record<string, object>> extends RelatedDatabase<MySQLDialectConfig, S> {
+  constructor(config: MySQLDialectConfig, definitions?: Database.DefinitionObj<S>) {
+    super(new MySQLDialect<S>(config), definitions);
+  }
+}
+Registry.register('mysql', MySQL);

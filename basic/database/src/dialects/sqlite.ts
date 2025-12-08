@@ -12,7 +12,7 @@ export interface SQLiteDialectConfig {
   mode?:string
 }
 
-export class SQLiteDialect extends Dialect<SQLiteDialectConfig, string> {
+export class SQLiteDialect<S extends Record<string, object> = Record<string, object>> extends Dialect<SQLiteDialectConfig, S, string> {
   private db: any = null;
 
   constructor(config: SQLiteDialectConfig) {
@@ -222,8 +222,8 @@ export class SQLiteDialect extends Dialect<SQLiteDialectConfig, string> {
     return `LIMIT ${limit} OFFSET ${offset}`;
   }
   
-  formatCreateTable(tableName: string, columns: string[]): string {
-    return `CREATE TABLE IF NOT EXISTS ${this.quoteIdentifier(tableName)} (${columns.join(', ')})`;
+  formatCreateTable<T extends keyof S>(tableName: T, columns: string[]): string {
+    return `CREATE TABLE IF NOT EXISTS ${this.quoteIdentifier(String(tableName))} (${columns.join(', ')})`;
   }
   
   formatColumnDefinition(field: string, column: Column<any>): string {
@@ -240,20 +240,23 @@ export class SQLiteDialect extends Dialect<SQLiteDialectConfig, string> {
     return `${name} ${type}${length}${primary}${unique}${nullable}${defaultVal}`;
   }
   
-  formatAlterTable(tableName: string, alterations: string[]): string {
-    return `ALTER TABLE ${this.quoteIdentifier(tableName)} ${alterations.join(', ')}`;
+  formatAlterTable<T extends keyof S>(tableName: T, alterations: string[]): string {
+    return `ALTER TABLE ${this.quoteIdentifier(String(tableName))} ${alterations.join(', ')}`;
   }
   
-  formatDropTable(tableName: string, ifExists?: boolean): string {
+  formatDropTable<T extends keyof S>(tableName: T, ifExists?: boolean): string {
     const ifExistsClause = ifExists ? 'IF EXISTS ' : '';
-    return `DROP TABLE ${ifExistsClause}${this.quoteIdentifier(tableName)}`;
+    return `DROP TABLE ${ifExistsClause}${this.quoteIdentifier(String(tableName))}`;
   }
   
-  formatDropIndex(indexName: string, tableName: string, ifExists?: boolean): string {
+  formatDropIndex<T extends keyof S>(indexName: string, tableName: T, ifExists?: boolean): string {
     const ifExistsClause = ifExists ? 'IF EXISTS ' : '';
     return `DROP INDEX ${ifExistsClause}${this.quoteIdentifier(indexName)}`;
   }
 }
-Registry.register('sqlite', (config: SQLiteDialectConfig, definitions?: Database.Definitions<Record<string, object>>) => {
-  return new RelatedDatabase(new SQLiteDialect(config), definitions);
-});
+export class Sqlite<S extends Record<string, object> = Record<string, object>> extends RelatedDatabase<SQLiteDialectConfig, S> {
+  constructor(config: SQLiteDialectConfig, definitions?: Database.DefinitionObj<S>) {
+    super(new SQLiteDialect<S>(config), definitions);
+  }
+}
+Registry.register('sqlite', Sqlite);

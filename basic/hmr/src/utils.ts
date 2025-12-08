@@ -91,6 +91,8 @@ export const ERROR_MESSAGES = {
     MODULE_NOT_FOUND: 'Module not found in dirs',
     PLUGIN_NOT_FOUND: 'Plugin not found',
     INVALID_CONFIG: 'Invalid configuration',
+    DEPENDENCY_NOT_FOUND: 'Dependency not found',
+    DEPENDENCY_DISPOSED: 'Dependency has been disposed',
 } as const;
 
 /** 默认配置常量 */

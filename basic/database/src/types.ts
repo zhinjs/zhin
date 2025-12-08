@@ -106,66 +106,66 @@ export interface Ordering<T extends object> {
 // Query Parameter Types (Discriminated Union)
 // ============================================================================
 
-export interface BaseQueryParams {
-  tableName: string;
+export interface BaseQueryParams<S extends Record<string, object> = Record<string, object>, T extends keyof S = keyof S>  {
+  tableName: T;
 }
 
-export interface CreateQueryParams<T extends object = any> extends BaseQueryParams {
+export interface CreateQueryParams<S extends Record<string, object>, T extends keyof S> extends BaseQueryParams<S,T> {
   type: 'create';
-  definition: Definition<T>;
+  definition: Definition<S[T]>;
 }
 
-export interface AlterQueryParams<T extends object = any> extends BaseQueryParams {
+export interface AlterQueryParams<S extends Record<string, object>, T extends keyof S> extends BaseQueryParams<S,T> {
   type: 'alter';
-  alterations: AlterDefinition<T>;
+  alterations: AlterDefinition<S[T]>;
 }
 
-export interface DropTableQueryParams<T extends object = any> extends BaseQueryParams {
+export interface DropTableQueryParams<S extends Record<string, object>, T extends keyof S> extends BaseQueryParams<S,T> {
   type: 'drop_table';
-  conditions?: Condition<T>;
+  conditions?: Condition<S[T]>;
 }
 
-export interface DropIndexQueryParams extends BaseQueryParams {
+export interface DropIndexQueryParams<S extends Record<string, object>, T extends keyof S> extends BaseQueryParams<S,T> {
   type: 'drop_index';
   indexName: string;
   conditions?: Condition<any>;
 }
 
-export interface SelectQueryParams<T extends object = any> extends BaseQueryParams {
+export interface SelectQueryParams<S extends Record<string, object>, T extends keyof S> extends BaseQueryParams<S,T> {
   type: 'select';
-  fields?: (keyof T)[];
-  conditions?: Condition<T>;
-  groupings?: (keyof T)[];
-  orderings?: Ordering<T>[];
+  fields?: (keyof S[T])[];
+  conditions?: Condition<S[T]>;
+  groupings?: (keyof S[T])[];
+  orderings?: Ordering<S[T]>[];
   limitCount?: number;
   offsetCount?: number;
 }
 
-export interface InsertQueryParams<T extends object = any> extends BaseQueryParams {
+export interface InsertQueryParams<S extends Record<string, object>, T extends keyof S> extends BaseQueryParams<S,T> {
   type: 'insert';
-  data: T;
+  data: S[T];
 }
 
-export interface UpdateQueryParams<T extends object = any> extends BaseQueryParams {
+export interface UpdateQueryParams<S extends Record<string, object>, T extends keyof S> extends BaseQueryParams<S,T> {
   type: 'update';
-  update: Partial<T>;
-  conditions?: Condition<T>;
+  update: Partial<S[T]>;
+  conditions?: Condition<S[T]>;
 }
 
-export interface DeleteQueryParams<T extends object = any> extends BaseQueryParams {
+export interface DeleteQueryParams<S extends Record<string, object>, T extends keyof S> extends BaseQueryParams<S,T> {
   type: 'delete';
-  conditions?: Condition<T>;
+  conditions?: Condition<S[T]>;
 }
 
-export type QueryParams<T extends object = any> = 
-  | CreateQueryParams<T>
-  | AlterQueryParams<T>
-  | DropTableQueryParams<T>
-  | DropIndexQueryParams
-  | SelectQueryParams<T>
-  | InsertQueryParams<T>
-  | UpdateQueryParams<T>
-  | DeleteQueryParams<T>;
+export type QueryParams<S extends Record<string, object>,T extends keyof S> = 
+  | CreateQueryParams<S,T>
+  | AlterQueryParams<S,T>
+  | DropTableQueryParams<S,T>
+  | DropIndexQueryParams<S,T>
+  | SelectQueryParams<S,T>
+  | InsertQueryParams<S,T>
+  | UpdateQueryParams<S,T>
+  | DeleteQueryParams<S,T>;
 
 // ============================================================================
 // Query Result Types
@@ -271,8 +271,6 @@ export interface BaseDriverConfig {
 }
 
 
-export interface MemoryConfig{
-}
 
 
 // ============================================================================
@@ -296,7 +294,7 @@ export interface DriverSchema {
 }
 
 export interface DriverQueryBuilder<R> {
-  buildQuery<T extends object = any>(params: QueryParams<T>): BuildQueryResult<R>;
+  buildQuery<S extends Record<string, object>, T extends keyof S>(params: QueryParams<S, T>): BuildQueryResult<R>;
 }
 
 export interface DriverLifecycle {
@@ -370,34 +368,34 @@ export type DeepRequired<T> = {
 // Type Guards
 // ============================================================================
 
-export function isCreateQuery<T extends object>(params: QueryParams<T>): params is CreateQueryParams<T> {
+export function isCreateQuery<S extends Record<string, object>, T extends keyof S>(params: QueryParams<S, T>): params is CreateQueryParams<S, T> {
   return params.type === 'create';
 }
 
-export function isAlterQuery<T extends object>(params: QueryParams<T>): params is AlterQueryParams<T> {
+export function isAlterQuery<S extends Record<string, object>, T extends keyof S>(params: QueryParams<S, T>): params is AlterQueryParams<S, T> {
   return params.type === 'alter';
 }
 
-export function isSelectQuery<T extends object>(params: QueryParams<T>): params is SelectQueryParams<T> {
+export function isSelectQuery<S extends Record<string, object>, T extends keyof S>(params: QueryParams<S, T>): params is SelectQueryParams<S, T> {
   return params.type === 'select';
 }
 
-export function isInsertQuery<T extends object>(params: QueryParams<T>): params is InsertQueryParams<T> {
+export function isInsertQuery<S extends Record<string, object>, T extends keyof S>(params: QueryParams<S, T>): params is InsertQueryParams<S, T> {
   return params.type === 'insert';
 }
 
-export function isUpdateQuery<T extends object>(params: QueryParams<T>): params is UpdateQueryParams<T> {
+export function isUpdateQuery<S extends Record<string, object>, T extends keyof S>(params: QueryParams<S, T>): params is UpdateQueryParams<S, T> {
   return params.type === 'update';
 }
 
-export function isDeleteQuery<T extends object>(params: QueryParams<T>): params is DeleteQueryParams<T> {
+export function isDeleteQuery<S extends Record<string, object>, T extends keyof S>(params: QueryParams<S, T>): params is DeleteQueryParams<S, T> {
   return params.type === 'delete';
 }
 
-export function isDropTableQuery<T extends object>(params: QueryParams<T>): params is DropTableQueryParams<T> {
+export function isDropTableQuery<S extends Record<string, object>, T extends keyof S>(params: QueryParams<S, T>): params is DropTableQueryParams<S, T> {
   return params.type === 'drop_table';
 }
 
-export function isDropIndexQuery(params: QueryParams): params is DropIndexQueryParams {
+export function isDropIndexQuery<S extends Record<string, object>, T extends keyof S>(params: QueryParams<S, T>): params is DropIndexQueryParams<S,T> {
   return params.type === 'drop_index';
 }

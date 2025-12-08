@@ -25,8 +25,8 @@ export class KeyValueDatabase<
 > extends Database<D, S, KeyValueQueryResult> {
   
   constructor(
-    dialect: Dialect<D,KeyValueQueryResult>,
-    definitions?: Database.Definitions<S>,
+    dialect: Dialect<D, S, KeyValueQueryResult>,
+    definitions?: Database.DefinitionObj<S>,
   ) {
     super(dialect, definitions);
   }
@@ -39,24 +39,24 @@ export class KeyValueDatabase<
   /**
    * 构建查询（重写基类方法）
    */
-  buildQuery<U extends object = any>(params: QueryParams<U>): BuildQueryResult<KeyValueQueryResult> {
+  buildQuery<T extends keyof S>(params: QueryParams<S, T>): BuildQueryResult<KeyValueQueryResult> {
     switch (params.type) {
       case 'create':
-        return this.buildCreateQuery(params as CreateQueryParams<U>);
+        return this.buildCreateQuery(params as CreateQueryParams<S, T>);
       case 'select':
-        return this.buildSelectQuery(params as SelectQueryParams<U>);
+        return this.buildSelectQuery(params as SelectQueryParams<S, T>);
       case 'insert':
-        return this.buildInsertQuery(params as InsertQueryParams<U>);
+        return this.buildInsertQuery(params as InsertQueryParams<S, T>);
       case 'update':
-        return this.buildUpdateQuery(params as UpdateQueryParams<U>);
+        return this.buildUpdateQuery(params as UpdateQueryParams<S, T>);
       case 'delete':
-        return this.buildDeleteQuery(params as DeleteQueryParams<U>);
+        return this.buildDeleteQuery(params as DeleteQueryParams<S, T>);
       case 'alter':
-        return this.buildAlterQuery(params as AlterQueryParams<U>);
+        return this.buildAlterQuery(params as AlterQueryParams<S, T>);
       case 'drop_table':
-        return this.buildDropTableQuery(params as DropTableQueryParams<U>);
+        return this.buildDropTableQuery(params as DropTableQueryParams<S, T>);
       case 'drop_index':
-        return this.buildDropIndexQuery(params as DropIndexQueryParams);
+        return this.buildDropIndexQuery(params as DropIndexQueryParams<S, T>);
       default:
         throw new Error(`Unsupported query type: ${(params as any).type}`);
     }
@@ -65,10 +65,10 @@ export class KeyValueDatabase<
   /**
    * 构建创建桶查询
    */
-  protected buildCreateQuery<T extends object>(params: CreateQueryParams<T>): BuildQueryResult<KeyValueQueryResult> {
+  protected buildCreateQuery<T extends keyof S>(params: CreateQueryParams<S, T>): BuildQueryResult<KeyValueQueryResult> {
     return {
       query: {
-        bucket: params.tableName,
+        bucket: params.tableName as string,
         operation: 'keys'
       },
       params: []
@@ -78,10 +78,10 @@ export class KeyValueDatabase<
   /**
    * 构建查询键值查询
    */
-  protected buildSelectQuery<T extends object>(params: SelectQueryParams<T>): BuildQueryResult<KeyValueQueryResult> {
+  protected buildSelectQuery<T extends keyof S>(params: SelectQueryParams<S, T>): BuildQueryResult<KeyValueQueryResult> {
     // 键值数据库的查询通常是获取所有键或特定键
     const query: KeyValueQueryResult = {
-      bucket: params.tableName,
+      bucket: params.tableName as string,
       operation: 'keys'
     };
 
@@ -103,12 +103,12 @@ export class KeyValueDatabase<
   /**
    * 构建插入键值查询
    */
-  protected buildInsertQuery<T extends object>(params: InsertQueryParams<T>): BuildQueryResult<KeyValueQueryResult> {
+  protected buildInsertQuery<T extends keyof S>(params: InsertQueryParams<S, T>): BuildQueryResult<KeyValueQueryResult> {
     const key = this.extractKeyFromData(params.data);
     
     return {
       query: {
-        bucket: params.tableName,
+        bucket: params.tableName as string,
         operation: 'set',
         key: key || 'default',
         value: params.data
@@ -120,12 +120,12 @@ export class KeyValueDatabase<
   /**
    * 构建更新键值查询
    */
-  protected buildUpdateQuery<T extends object>(params: UpdateQueryParams<T>): BuildQueryResult<KeyValueQueryResult> {
+  protected buildUpdateQuery<T extends keyof S>(params: UpdateQueryParams<S, T>): BuildQueryResult<KeyValueQueryResult> {
     const key = this.extractKeyFromCondition(params.conditions);
     
     return {
       query: {
-        bucket: params.tableName,
+        bucket: params.tableName as string,
         operation: 'set',
         key: key || 'default',
         value: params.update
@@ -137,12 +137,12 @@ export class KeyValueDatabase<
   /**
    * 构建删除键值查询
    */
-  protected buildDeleteQuery<T extends object>(params: DeleteQueryParams<T>): BuildQueryResult<KeyValueQueryResult> {
+  protected buildDeleteQuery<T extends keyof S>(params: DeleteQueryParams<S, T>): BuildQueryResult<KeyValueQueryResult> {
     const key = this.extractKeyFromCondition(params.conditions);
     
     return {
       query: {
-        bucket: params.tableName,
+        bucket: params.tableName as string,
         operation: 'delete',
         key: key || 'default'
       },
@@ -153,10 +153,10 @@ export class KeyValueDatabase<
   /**
    * 构建修改桶查询
    */
-  protected buildAlterQuery<T extends object>(params: AlterQueryParams<T>): BuildQueryResult<KeyValueQueryResult> {
+  protected buildAlterQuery<T extends keyof S>(params: AlterQueryParams<S, T>): BuildQueryResult<KeyValueQueryResult> {
     return {
       query: {
-        bucket: params.tableName,
+        bucket: params.tableName as string,
         operation: 'keys'
       },
       params: [params.alterations]
@@ -166,10 +166,10 @@ export class KeyValueDatabase<
   /**
    * 构建删除桶查询
    */
-  protected buildDropTableQuery<T extends object>(params: DropTableQueryParams<T>): BuildQueryResult<KeyValueQueryResult> {
+  protected buildDropTableQuery<T extends keyof S>(params: DropTableQueryParams<S, T>): BuildQueryResult<KeyValueQueryResult> {
     return {
       query: {
-        bucket: params.tableName,
+        bucket: params.tableName as string,
         operation: 'clear'
       },
       params: []
@@ -179,10 +179,10 @@ export class KeyValueDatabase<
   /**
    * 构建删除索引查询
    */
-  protected buildDropIndexQuery(params: DropIndexQueryParams): BuildQueryResult<KeyValueQueryResult> {
+  protected buildDropIndexQuery<T extends keyof S>(params: DropIndexQueryParams<S, T>): BuildQueryResult<KeyValueQueryResult> {
     return {
       query: {
-        bucket: params.tableName,
+        bucket: params.tableName as string,
         operation: 'keys'
       },
       params: [params.indexName]
@@ -242,13 +242,13 @@ export class KeyValueDatabase<
   /**
    * 获取模型
    */
-  model<T extends keyof S>(name: T): KeyValueModel<S[T], D> {
-    let model = this.models.get(name as string);
+  model<T extends keyof S>(name: T): KeyValueModel<D, S, T> {
+    let model = this.models.get(name) as KeyValueModel<D, S, T> | undefined;
     if (!model) {
-      model = new KeyValueModel(this as unknown as KeyValueDatabase<D>, name as string);
-      this.models.set(name as string, model);
+      model = new KeyValueModel<D, S, T>(this, name);
+      this.models.set(name, model as any);
     }
-    return model as unknown as KeyValueModel<S[T], D>;
+    return model as KeyValueModel<D, S, T>;
   }
 
   /**

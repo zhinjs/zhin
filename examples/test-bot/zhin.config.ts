@@ -48,7 +48,7 @@ export default defineConfig(async () => {
     http: {
       port: 8087,
       username: process.env.username,
-      password: process.env.ONEBOT_TOKEN,
+      password: process.env.password,
       base: "/api"
     },
     mcp: {

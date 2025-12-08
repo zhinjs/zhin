@@ -257,26 +257,12 @@ export class Dependency<P extends Dependency<any> = any,O extends DependencyOpti
         return context.value;
     }
     /** 等待就绪 */
-    async waitForReady(): Promise<void> {
-        if (this.lifecycleState === 'ready') {
-            return;
-        }
-        
-        if (this.lifecycleState === 'disposed') {
-            throw new Error('Dependency has been disposed');
-        }
-        if (!this.readyPromise) {
-            this.readyPromise = new Promise<void>((resolve) => {
-                const listener = (parent: Dependency<P>) => {
-                    if (parent === this) {
-                        this.off('mounted', listener);
-                        resolve();
-                    }
-                };
-                this.on('mounted', listener);
-            });
-        }
-        return this.readyPromise;
+    get waitMounted(): Promise<void> {
+        if(this.lifecycleState==='ready') return Promise.resolve();
+        if(this.lifecycleState==='disposed') throw createError(ERROR_MESSAGES.DEPENDENCY_DISPOSED);
+        return new Promise<void>((resolve) => {
+            this.on('self.mounted', resolve);
+        });
     }
     contextIsReady<T extends keyof GlobalContext>(name:T){
         return this.allContextList.find(context=>context.name===name)?.value!==undefined

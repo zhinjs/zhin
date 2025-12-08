@@ -81,7 +81,7 @@ export class TestHMR extends Dependency {
     }
 
     async import(name: string, filePath: string) {
-        return this.hmrManager.import(name, filePath);
+        return this.hmrManager.import(name, filePath,this);
     }
 
     findPluginByName(name: string) {

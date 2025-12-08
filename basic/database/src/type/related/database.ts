@@ -1,4 +1,4 @@
-import { Database,Dialect } from '../../base/index.js';
+import { Database,Dialect,Model } from '../../base/index.js';
 import { RelatedModel } from './model.js';
 import {
   QueryParams,
@@ -36,8 +36,8 @@ export class RelatedDatabase<
 > extends Database<D,S,string> {
   
   constructor(
-    dialect: Dialect<D,string>,
-    definitions?: Database.Definitions<S>,
+    dialect: Dialect<D,S,string>,
+    definitions?: Database.DefinitionObj<S>,
   ) {
     super(dialect,definitions); 
   }
@@ -50,7 +50,7 @@ export class RelatedDatabase<
   }
 
   // SQL generation method
-  buildQuery<U extends object = any>(params: QueryParams<U>): BuildQueryResult<string> {
+  buildQuery<T extends keyof S>(params: QueryParams<S,T>): BuildQueryResult<string> {
     if (isCreateQuery(params)) {
       return this.buildCreateQuery(params);
     } else if (isSelectQuery(params)) {
@@ -76,7 +76,7 @@ export class RelatedDatabase<
   // CREATE TABLE Query
   // ========================================================================
   
-  protected buildCreateQuery<T extends object>(params: CreateQueryParams<T>): BuildQueryResult<string> {
+  protected buildCreateQuery<T extends keyof S>(params: CreateQueryParams<S,T>): BuildQueryResult<string> {
     const columnDefs = Object.entries(params.definition).map(([field, column]) => this.formatColumnDefinition(field,column as Column));
     const query = this.dialect.formatCreateTable(params.tableName, columnDefs);
     return { query, params: [] };
@@ -86,7 +86,7 @@ export class RelatedDatabase<
   // SELECT Query
   // ========================================================================
   
-  protected buildSelectQuery<T extends object>(params: SelectQueryParams<T>): BuildQueryResult<string> {
+  protected buildSelectQuery<T extends keyof S>(params: SelectQueryParams<S,T>): BuildQueryResult<string> {
     const fields = params.fields && params.fields.length
       ? params.fields.map(f => this.dialect.quoteIdentifier(String(f))).join(', ')
       : '*';
@@ -133,7 +133,7 @@ export class RelatedDatabase<
   // INSERT Query
   // ========================================================================
   
-  protected buildInsertQuery<T extends object>(params: InsertQueryParams<T>): BuildQueryResult<string> {
+  protected buildInsertQuery<T extends keyof S>(params: InsertQueryParams<S,T>): BuildQueryResult<string> {
     const keys = Object.keys(params.data);
     const columns = keys.map(k => this.dialect.quoteIdentifier(k)).join(', ');
     const placeholders = keys.map((_, index) => this.dialect.getParameterPlaceholder(index)).join(', ');
@@ -148,7 +148,7 @@ export class RelatedDatabase<
   // UPDATE Query
   // ========================================================================
   
-  protected buildUpdateQuery<T extends object>(params: UpdateQueryParams<T>): BuildQueryResult<string> {
+  protected buildUpdateQuery<T extends keyof S>(params: UpdateQueryParams<S,T>): BuildQueryResult<string> {
     const updateKeys = Object.keys(params.update);
     const setClause = updateKeys
       .map((k, index) => `${this.dialect.quoteIdentifier(k)} = ${this.dialect.getParameterPlaceholder(index)}`)
@@ -173,7 +173,7 @@ export class RelatedDatabase<
   // DELETE Query
   // ========================================================================
   
-  protected buildDeleteQuery<T extends object>(params: DeleteQueryParams<T>): BuildQueryResult<string> {
+  protected buildDeleteQuery<T extends keyof S>(params: DeleteQueryParams<S,T>): BuildQueryResult<string> {
     let query = `DELETE FROM ${this.dialect.quoteIdentifier(params.tableName)}`;
     const queryParams: any[] = [];
     
@@ -193,7 +193,7 @@ export class RelatedDatabase<
   // ALTER TABLE Query
   // ========================================================================
   
-  protected buildAlterQuery<T extends object>(params: AlterQueryParams<T>): BuildQueryResult<string> {
+  protected buildAlterQuery<T extends keyof S>(params: AlterQueryParams<S,T>): BuildQueryResult<string> {
     const alterations = Object.entries(params.alterations).map(([field,alteration]) => this.formatAlteration(field, alteration as AddDefinition<T> | ModifyDefinition<T> | DropDefinition));
     const query = this.dialect.formatAlterTable(params.tableName, alterations);
     return { query, params: [] };
@@ -203,7 +203,7 @@ export class RelatedDatabase<
   // DROP TABLE Query
   // ========================================================================
   
-  protected buildDropTableQuery<T extends object>(params: DropTableQueryParams<T>): BuildQueryResult<string> {
+  protected buildDropTableQuery<T extends keyof S>(params: DropTableQueryParams<S,T>): BuildQueryResult<string> {
     const query = this.dialect.formatDropTable(params.tableName, true);
     return { query, params: [] };
   }
@@ -212,7 +212,7 @@ export class RelatedDatabase<
   // DROP INDEX Query
   // ========================================================================
   
-  protected buildDropIndexQuery(params: DropIndexQueryParams): BuildQueryResult<string> {
+  protected buildDropIndexQuery<T extends keyof S>(params: DropIndexQueryParams<S,T>): BuildQueryResult<string> {
     const query = this.dialect.formatDropIndex(params.indexName, params.tableName, true);
     return { query, params: [] };
   }
@@ -374,13 +374,13 @@ export class RelatedDatabase<
   /**
    * 获取模型
    */
-  model<T extends keyof S>(name: T): RelatedModel<S[T], Dialect<D,string>> {
-    let model = this.models.get(name as string);
+  model<T extends keyof S>(name: T): RelatedModel<D,S,T> {
+    let model = this.models.get(name) as RelatedModel<D,S,T> | undefined;
     if (!model) {
-      model = new RelatedModel(this as unknown as RelatedDatabase<D>, name as string);
-      this.models.set(name as string, model);
+      model = new RelatedModel(this, name);
+      this.models.set(name, model as any);
     }
-    return model as unknown as RelatedModel<S[T], Dialect<D,string>>;
+    return model as RelatedModel<D,S,T>;
   }
 
   /**

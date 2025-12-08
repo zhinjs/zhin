@@ -9,11 +9,16 @@ import * as QueryClasses from './query-classes.js';
  */
 export abstract class Database<D=any,S extends Record<string, object>=Record<string, object>,Q=string> {
   protected hasStarted = false;
-  public readonly models: Map<string, Model<D,object,Q>> = new Map();
+  public readonly definitions: Database.Definitions<S>=new Database.Definitions<S>();
+  public readonly models: Database.Models<S,D,Q> = new Database.Models<S,D,Q>();
   constructor(
-    public readonly dialect: Dialect<D,Q>,
-    public definitions?: Database.Definitions<S>,
-  ) {}
+    public readonly dialect: Dialect<D,S,Q>,
+    definitions?: Database.DefinitionObj<S>,
+  ) {
+    for (const key in definitions) {
+      this.definitions.set(key, definitions[key]);
+    }
+  }
   /**
    * 数据库是否已启动
    */
@@ -27,6 +32,7 @@ export abstract class Database<D=any,S extends Record<string, object>=Record<str
   async start(): Promise<void> {
     await this.dialect.connect();
     await this.initialize();
+    console.log(`Database connected using dialect: ${this.dialect.name}`);
     this.hasStarted = true;
   }
 
@@ -36,6 +42,7 @@ export abstract class Database<D=any,S extends Record<string, object>=Record<str
   async stop(): Promise<void> {
     await this.dialect.disconnect();
     this.hasStarted = false;
+    console.log(`Database disconnected from dialect: ${this.dialect.name}`);
   }
 
   /**
@@ -54,7 +61,7 @@ export abstract class Database<D=any,S extends Record<string, object>=Record<str
     }
     return this.dialect.query<U>(sql, params);
   }
-  abstract buildQuery<U extends object = any>(params: QueryParams<U>): BuildQueryResult<Q>;
+  abstract buildQuery<T extends keyof S>(params: QueryParams<S,T>): BuildQueryResult<Q>;
   /**
    * 获取数据库方言名称
    */
@@ -79,31 +86,36 @@ export abstract class Database<D=any,S extends Record<string, object>=Record<str
    * 抽象方法：初始化数据库
    */
   protected abstract initialize(): Promise<void>;
-
+  define<K extends keyof S>(name: K, definition: Definition<S[K]>) {
+    this.definitions.set(name, definition);
+  }
+  desstory<K extends keyof S>(name: K) {
+    this.definitions.delete(name);
+  }
   
   /**
    * 创建表
    */
-  create<T extends object>(
-    name: string,
-    definition: Definition<T>
-  ): QueryClasses.Creation<T,D,Q> {
-    return new QueryClasses.Creation<T,D,Q>(this, name, definition);
+  create<T extends keyof S>(
+    name: T,
+    definition: Definition<S[T]>
+  ): QueryClasses.Creation<S,T,D,Q> {
+    return new QueryClasses.Creation<S,T,D,Q>(this, name, definition);
   }
-  alter<T extends object>(name: string, alterations: AlterDefinition<T>): QueryClasses.Alteration<T,D,Q>{
-    return new QueryClasses.Alteration<T,D,Q>(this, name, alterations);
+  alter<T extends keyof S>(name: T, alterations: AlterDefinition<S[T]>): QueryClasses.Alteration<S,T,D,Q>{
+    return new QueryClasses.Alteration<S,T,D,Q>(this, name, alterations);
   }
-  select<T extends object, K extends keyof T>(name: string, fields: Array<K>): QueryClasses.Selection<Pick<T, K>, K,D,Q>{
-    return new QueryClasses.Selection<Pick<T, K>, K,D,Q>(this, name, fields);
+  select<T extends keyof S, K extends keyof S[T]>(name: T, fields: Array<K>): QueryClasses.Selection<S,T,K,D,Q>{
+    return new QueryClasses.Selection<S,T,K,D,Q>(this, name, fields);
   }
-  insert<T extends object>(name: string, data: T): QueryClasses.Insertion<T,D,Q>{
-    return new QueryClasses.Insertion<T,D,Q>(this, name, data);
+  insert<T extends keyof S>(name: T, data: S[T]): QueryClasses.Insertion<S,T,D,Q>{
+    return new QueryClasses.Insertion<S,T,D,Q>(this, name, data);
   }
-  update<T extends object>(name: string, update: Partial<T>): QueryClasses.Updation<T,D,Q>{
-    return new QueryClasses.Updation<T,D,Q>(this, name, update);
+  update<T extends keyof S>(name: T, update: Partial<S[T]>): QueryClasses.Updation<S,T,D,Q>{
+    return new QueryClasses.Updation<S,T,D,Q>(this, name, update);
   }
-  delete<T extends object>(name: string, condition: Condition<T>): QueryClasses.Deletion<T,D,Q>{
-    return new QueryClasses.Deletion<T,D,Q>(this, name).where(condition);
+  delete<T extends keyof S>(name: T, condition: Condition<S[T]>): QueryClasses.Deletion<S,T,D,Q>{
+    return new QueryClasses.Deletion<S,T,D,Q>(this, name).where(condition);
   }
   /**
    * 抽象方法：获取所有模型名称
@@ -122,7 +134,20 @@ export abstract class Database<D=any,S extends Record<string, object>=Record<str
   }
 }
 export namespace Database {
-  export type Definitions<S extends Record<string, object>> = {
+  export class Definitions<S extends Record<string, object>> extends Map<keyof S, Definition<S[keyof S]>> {
+    constructor() {
+      super();
+    }
+  }
+  export class Models<S extends Record<string, object>,D=any,Q=string> extends Map<keyof S, Model<D,S,Q,keyof S>> {
+    constructor() {
+      super();
+    }
+    get<K extends keyof S>(key: K): Model<D,S,Q,K> | undefined {
+      return super.get(key) as Model<D,S,Q,K> | undefined;
+    }
+  }
+  export type DefinitionObj<S extends Record<string, object>> = {
     [K in keyof S]: Definition<S[K]>;
   };
 }

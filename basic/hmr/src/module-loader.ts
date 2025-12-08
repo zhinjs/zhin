@@ -39,7 +39,7 @@ export class ModuleLoader<P extends Dependency = Dependency> extends EventEmitte
     }
 
     /** 添加模块 */
-    async add(name:string,filePath: string): Promise<void> {
+    async load(name:string,filePath: string,parent:P): Promise<P> {
         // 如果已经存在，先移除
         if (this.dependencies.has(filePath)) {
             this.remove(filePath);
@@ -47,7 +47,7 @@ export class ModuleLoader<P extends Dependency = Dependency> extends EventEmitte
         }
         
         try {
-            await this.import(name, filePath);
+            return await this.import(name, filePath,parent);
         } catch (error) {
             this.#logger.error(error);
             this.emit('error', error);
@@ -86,7 +86,7 @@ export class ModuleLoader<P extends Dependency = Dependency> extends EventEmitte
     }
 
     /** 导入模块 */
-    async import(name: string, filePath: string): Promise<P> {
+    async import(name: string, filePath: string,parent:P): Promise<P> {
         // 检查循环依赖
         if (this.#loadingDependencies.has(filePath)) {
             throw createError(ERROR_MESSAGES.CIRCULAR_DEPENDENCY, { filePath });
@@ -97,7 +97,8 @@ export class ModuleLoader<P extends Dependency = Dependency> extends EventEmitte
             
             // 创建新的依赖
             const dependency = this.hmr.createDependency(name, filePath);
-            this.hmr.dependencies.set(filePath, dependency);
+            parent.dependencies.set(dependency.filename, dependency);
+            this.dependencies.set(dependency.filename, dependency);
             
             // 记录文件信息
             const stats = fs.statSync(filePath);
@@ -117,14 +118,15 @@ export class ModuleLoader<P extends Dependency = Dependency> extends EventEmitte
                 // 使用 Dependency.runWith 确保在 import 期间 currentDependency 指向当前依赖
                 // 这解决了并发加载插件时的上下文混乱问题
                 await Dependency.runWith(dependency, async () => {
-                await import(importUrl);
+                    await import(importUrl);
+                    dependency.parent = parent;
                 });
 
                 this.emit('add', this);
                 return dependency;
             } catch (error) {
                 // 导入失败，清理依赖
-                this.dependencies.delete(filePath);
+                this.dependencies.delete(dependency.filename);
                 throw error;
             }
         } finally {
@@ -133,16 +135,18 @@ export class ModuleLoader<P extends Dependency = Dependency> extends EventEmitte
     }
 
     /** 重新加载模块 */
-    async reload(filePath: string): Promise<void> {
+    async reload(filePath: string): Promise<P> {
         if(!this.dependencies.has(filePath) && !this.#reloadDependencies.has(filePath)){
-            return;
+            throw createError(ERROR_MESSAGES.DEPENDENCY_NOT_FOUND, { filePath });
         }
         this.#reloadDependencies.add(filePath);
         const dep=this.hmr.dependencies.get(filePath)!
         // 重新导入
-        await this.add(dep?.name,filePath);
+        const newDep = await this.load(dep?.name,filePath,dep!.parent!);
+        this.dependencies.set(filePath, newDep);
         this.#reloadDependencies.delete(filePath);
-        this.emit('reload', filePath);
+        this.emit('reload', newDep);
+        return newDep;
     }
 
     /** 检查文件是否已更改 */

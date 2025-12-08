@@ -6,10 +6,10 @@ import { Condition } from '../../types.js';
  * 关系型模型类
  * 继承自 BaseModel，提供关系型数据库特有的操作
  */
-export class RelatedModel<T extends object = object,D=any> extends Model<D,T,string> {
+export class RelatedModel<D=any,S extends Record<string, object> = Record<string, object>,T extends keyof S = keyof S> extends Model<D,S,string,T> {
   constructor(
-    database: RelatedDatabase<D>,
-    name: string
+    database: RelatedDatabase<D,S>,
+    name: T
   ) {
     super(database, name);
   }
@@ -17,13 +17,13 @@ export class RelatedModel<T extends object = object,D=any> extends Model<D,T,str
   /**
    * 创建数据
    */
-  async create(data: Partial<T>): Promise<T> {
+  async create(data: Partial<S[T]>): Promise<S[T]> {
     if (!this.validateData(data)) {
       throw new Error('Invalid data provided');
     }
     try {
-      const result = await (this.database as RelatedDatabase<D>).insert<T>(this.name, data as T);
-      return result as T;
+      const result = await this.database.insert<keyof S>(this.name, data as S[keyof S]);
+      return result as S[T];
     } catch (error) {
       this.handleError(error as Error, 'create');
     }
@@ -32,7 +32,7 @@ export class RelatedModel<T extends object = object,D=any> extends Model<D,T,str
   /**
    * 批量创建数据
    */
-  async createMany(data: Partial<T>[]): Promise<T[]> {
+  async createMany(data: Partial<S[T]>[]): Promise<S[T][]> {
     if (!Array.isArray(data) || data.length === 0) {
       throw new Error('Invalid data array provided');
     }
@@ -51,14 +51,14 @@ export class RelatedModel<T extends object = object,D=any> extends Model<D,T,str
   /**
    * 查找单个数据
    */
-  async selectOne(query?: Condition<T>): Promise<T | null> {
+  async selectOne(query?: Condition<S[T]>): Promise<S[T] | null> {
     try {
       const selection = this.select();
       if (query) {
         selection.where(query);
       }
       const results = await selection.limit(1);
-      return results.length > 0 ? results[0] : null;
+      return results.length > 0 ? results[0] as S[T] : null;
     } catch (error) {
       this.handleError(error as Error, 'selectOne');
     }
@@ -67,14 +67,14 @@ export class RelatedModel<T extends object = object,D=any> extends Model<D,T,str
   /**
    * 根据ID查找
    */
-  async selectById(id: any): Promise<T | null> {
-    return this.selectOne({ id } as Condition<T>);
+  async selectById(id: any): Promise<S[T] | null> {
+    return this.selectOne({ id } as Condition<S[T]>);
   }
 
   /**
    * 更新单个数据
    */
-  async updateOne(query: Condition<T>, data: Partial<T>): Promise<boolean> {
+  async updateOne(query: Condition<S[T]>, data: Partial<S[T]>): Promise<boolean> {
     try {
       const result = await this.update(data).where(query);
       return result > 0;
@@ -86,8 +86,8 @@ export class RelatedModel<T extends object = object,D=any> extends Model<D,T,str
   /**
    * 根据ID更新
    */
-  async updateById(id: any, data: Partial<T>): Promise<boolean> {
-    return this.updateOne({ id } as Condition<T>, data);
+  async updateById(id: any, data: Partial<S[T]>): Promise<boolean> {
+    return this.updateOne({ id } as Condition<S[T]>, data);
   }
 
 
@@ -95,16 +95,16 @@ export class RelatedModel<T extends object = object,D=any> extends Model<D,T,str
    * 根据ID删除
    */
   async deleteById(id: any): Promise<boolean> {
-    const result=await this.delete({ id } as Condition<T>);
-    return result>0
+    const result=await this.delete({ id } as Condition<S[T]>);
+    return result.length > 0;
   }
 
   /**
    * 统计数量
    */
-  async count(query?: Condition<T>): Promise<number> {
+  async count(query?: Condition<S[T]>): Promise<number> {
     try {
-      const selection = this.select('*' as keyof T);
+      const selection = this.select();
       if (query) {
         selection.where(query);
       }

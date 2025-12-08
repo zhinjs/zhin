@@ -1,15 +1,8 @@
 import {
-  useContext,
-  addCommand,
+  usePlugin,
   Time,
-  addComponent,
   MessageCommand,
-  useApp,
-  Adapter,
-  onDatabaseReady,
-  defineModel,
   MessageElement,
-  ComponentContext,
 } from "zhin.js";
 import path from "node:path";
 import * as os from "node:os";
@@ -24,12 +17,11 @@ declare module "@zhin.js/types" {
     };
   }
 }
-
+const {addCommand,addComponent,root}=usePlugin()
 // 全局内存历史记录
 declare global {
   var _memoryHistory: Array<{ time: number; rss: number; heapUsed: number }> | undefined;
 }
-const app = useApp()
 const isBun=typeof Bun!=='undefined'
 function formatMemoSize(size: number) {
   const sizes = ["B", "KB", "MB", "GB", "TB"];
@@ -134,13 +126,9 @@ addCommand(
       "╠═══════════ 框架状态 ═══════════╣",
       "",
       "【框架信息】",
-      `  适配器：${app.adapters.length} 个`,
-      `  插件：${app.dependencyList.length} 个`,
+      `  适配器：${root.adapters.size} 个`,
+      `  插件：${root.children.length} 个`,
       "",
-      "【机器人列表】",
-      ...app.adapters.map((name) => {
-        return `  ${name}：${app.getContext<Adapter>(name).bots.size} 个`;
-      }),
       "",
       "╚════════════════════════════════╝",
     ].join("\n");
@@ -352,157 +340,6 @@ addCommand(
   })
 );
 
-// ============================================
-// 实时内存分析命令 - 分析当前内存中的对象
-// ============================================
-addCommand(
-  new MessageCommand("memtop")
-    .desc("实时内存监控", "显示进程的实时内存使用趋势（需要 --expose-gc 标志）")
-    .usage("memtop")
-    .examples("memtop")
-    .action(() => {
-    if (!global.gc) {
-      return [
-        "❌ 需要启动 GC 暴露才能详细分析",
-        "",
-        "请使用以下方式启动：",
-        "• Node.js: node --expose-gc",
-        "• Bun: bun --expose-gc",
-        "• 或在启动命令中添加该参数",
-        "",
-        "当前只能显示基础统计信息：",
-        analyzeHeapBasic()
-      ].join("\n");
-    }
-    
-    // 先执行 GC 清理
-    global.gc();
-    
-    return [
-      "╔═══════════ 堆内存 TOP 分析 ═══════════╗",
-      "",
-      "【GC 后内存状态】",
-      analyzeHeapBasic(),
-      "",
-      "【详细分析】",
-      "💡 要查看具体对象分布，请使用 'heap' 命令生成快照",
-      "   然后在 Chrome DevTools 中分析",
-      "",
-      "【常见内存占用】",
-      analyzeCommonMemoryPatterns(),
-      "",
-      "╚═════════════════════════════════════╝"
-    ].join("\n");
-  })
-);
-
-// ============================================
-// 手动 GC 命令
-// ============================================
-addCommand(
-  new MessageCommand("gc").action(() => {
-    if (!global.gc) {
-      return [
-        "❌ GC 未暴露",
-        "",
-        "请使用以下方式启动：",
-        "• Node.js: node --expose-gc your-app.js",
-        "• Bun: bun --expose-gc your-app.js",
-        "• tsx: tsx --expose-gc your-app.ts"
-      ].join("\n");
-    }
-    
-    const before = process.memoryUsage();
-    
-    // 执行垃圾回收
-    global.gc();
-    
-    const after = process.memoryUsage();
-    
-    const rssFreed = before.rss - after.rss;
-    const heapFreed = before.heapUsed - after.heapUsed;
-    const externalFreed = before.external - after.external;
-    
-    return [
-      "✅ 垃圾回收完成！",
-      "",
-      "【回收前】",
-      `  物理内存：${formatMemoSize(before.rss)}`,
-      `  堆内存：${formatMemoSize(before.heapUsed)}`,
-      `  外部内存：${formatMemoSize(before.external)}`,
-      "",
-      "【回收后】",
-      `  物理内存：${formatMemoSize(after.rss)}`,
-      `  堆内存：${formatMemoSize(after.heapUsed)}`,
-      `  外部内存：${formatMemoSize(after.external)}`,
-      "",
-      "【释放量】",
-      `  物理内存：${rssFreed > 0 ? '-' : '+'}${formatMemoSize(Math.abs(rssFreed))}`,
-      `  堆内存：${heapFreed > 0 ? '-' : '+'}${formatMemoSize(Math.abs(heapFreed))}`,
-      `  外部内存：${externalFreed > 0 ? '-' : '+'}${formatMemoSize(Math.abs(externalFreed))}`,
-      "",
-      rssFreed > 1024 * 1024 
-        ? "💡 释放了较多内存，说明之前有未使用对象" 
-        : "ℹ️  释放量较少，内存使用健康"
-    ].join("\n");
-  })
-);
-
-// 基础堆分析
-function analyzeHeapBasic() {
-  const mem = process.memoryUsage();
-  const heapPercent = ((mem.heapUsed / mem.heapTotal) * 100).toFixed(2);
-  
-  return [
-    `  堆总大小：${formatMemoSize(mem.heapTotal)}`,
-    `  堆已使用：${formatMemoSize(mem.heapUsed)} (${heapPercent}%)`,
-    `  堆可用：${formatMemoSize(mem.heapTotal - mem.heapUsed)}`,
-  ].join("\n");
-}
-
-// 分析常见内存模式
-function analyzeCommonMemoryPatterns() {
-  const patterns = [];
-  
-  // 分析 App 状态
-  const app = useApp();
-  
-  // 插件数量
-  const pluginCount = app.dependencyList.length;
-  const avgMemPerPlugin = process.memoryUsage().heapUsed / pluginCount;
-  patterns.push(`  插件数量：${pluginCount} 个`);
-  patterns.push(`  单插件平均内存：~${formatMemoSize(avgMemPerPlugin)}`);
-  
-  // 适配器数量
-  const adapterCount = app.adapters.length;
-  if (adapterCount > 0) {
-    patterns.push(`  适配器数量：${adapterCount} 个`);
-    
-    // Bot 数量
-    let totalBots = 0;
-    for (const name of app.adapters) {
-      const adapter = app.getContext<Adapter>(name);
-      totalBots += adapter.bots.size;
-    }
-    patterns.push(`  Bot 数量：${totalBots} 个`);
-    
-    if (totalBots > 0) {
-      const avgMemPerBot = process.memoryUsage().heapUsed / totalBots;
-      patterns.push(`  单 Bot 平均内存：~${formatMemoSize(avgMemPerBot)}`);
-    }
-  }
-  
-  // 建议
-  patterns.push("");
-  patterns.push("💡 内存主要分布：");
-  patterns.push("  • 框架核心 (~20-40MB)");
-  patterns.push("  • 插件代码和状态 (~10-30MB)");
-  patterns.push("  • 适配器和 Bot (~30-60MB)");
-  patterns.push("  • V8 运行时 (~20-40MB)");
-  
-  return patterns.join("\n");
-}
-
 
 addCommand(new MessageCommand("我才是[...content:text]")
 .action(async (m, { params }) => {
@@ -512,7 +349,6 @@ addCommand(new MessageCommand("我才是[...content:text]")
 }));
 addComponent(async function foo(
   props: { face: number },
-  context: ComponentContext
 ) {
   return "这是父组件" + props.face;
 });

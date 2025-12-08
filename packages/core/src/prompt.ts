@@ -2,7 +2,7 @@ import {AdapterMessage, Dict, MessageMiddleware, RegisteredAdapter} from './type
 import { Plugin } from './plugin.js';
 import { Message } from './message.js';
 import { Schema } from '@zhin.js/hmr';
-
+import { Adapter } from './adapter.js';
 /**
  * Prompt类：用于实现机器人与用户的交互式提问与输入收集。
  * 支持文本、数字、确认、列表、选项、Schema等多种输入类型，自动处理超时、默认值、格式化等。
@@ -37,7 +37,8 @@ export class Prompt<P extends RegisteredAdapter> {
                         else reject(input);
                         return;
                     }
-                    this.plugin.recallMessage(this.event.$adapter,this.event.$bot,id);
+                    const adapter = this.plugin.inject(this.event.$adapter) as Adapter;
+                    adapter.emit('call.recallMessage',this.event.$bot, id);
                     resolve(config.format(input));
                 },
                 config.timeout,

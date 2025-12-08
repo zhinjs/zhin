@@ -1,15 +1,14 @@
 import { MaybePromise } from "@zhin.js/types";
-import { RegisteredAdapter } from "./types.js";
-import { Message } from "./message.js";
-import { AdapterMessage } from "./types.js";
-import { App } from "./app.js";
+import { RegisteredAdapter } from "../types.js";
+import { Message } from "../message.js";
+import { AdapterMessage } from "../types.js";
 export type PermissionItem<T extends RegisteredAdapter = RegisteredAdapter> = {
     name: string | RegExp
     check: PermissionChecker<T>
 }
 export type PermissionChecker<T extends RegisteredAdapter = RegisteredAdapter> = (name: string, message: Message<AdapterMessage<T>>) => MaybePromise<boolean>
-export class Permissions extends Array<PermissionItem>{
-    constructor(private readonly app: App) {
+export class PermissionService extends Array<PermissionItem>{
+    constructor() {
         super();
         this.add(Permissions.define(/^adapter\([^)]+\)$/, (name, message) => {
             return message.$adapter === name.replace(/^adapter\(([^)]+)\)$/, '$1');
@@ -48,11 +47,12 @@ export class Permissions extends Array<PermissionItem>{
     add(permission: PermissionItem) {
         this.push(permission);
     }
-    get(name: string): PermissionItem | undefined {
-        return this.app.dependencyList.reduce((result,dep)=>{
-            result.push(...dep.permissions)
-            return result;
-        },[...this]).find(p => new RegExp(p.name).test(name));
+    async check(name: string, message: Message<AdapterMessage<RegisteredAdapter>>):Promise<boolean> {
+        for(const permission of this){
+            const passed=await permission.check(name,message);
+            if(passed) return true;
+        }
+        return false;
     }
 }
 export namespace Permissions{

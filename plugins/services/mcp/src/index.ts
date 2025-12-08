@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import type {} from '@zhin.js/http'
+import type { } from '@zhin.js/http'
 import { register, usePlugin, defineSchema, Schema, useContext } from "zhin.js";
 import { registerTools } from "./tools.js";
 import { registerResources } from "./resources.js";
@@ -62,6 +62,7 @@ function createMCPServer(): McpServer {
 let mcpServer: McpServer;
 let cleanup: (() => void) | undefined;
 
+mcpServer = createMCPServer();
 register({
   name: "mcpServer",
   description: "MCP Server for Zhin development",
@@ -70,40 +71,6 @@ register({
       p.logger.info("MCP Server is disabled");
       return null as any;
     }
-
-    mcpServer = createMCPServer();
-
-    // HTTP Stream 传输
-    useContext("router", (router) => {
-      const mcpPath = config.path || "/mcp";
-      
-      // 创建 StreamableHTTPServerTransport (无状态模式)
-      const httpTransport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined, // 无状态模式
-      });
-      
-      // 连接 transport
-      mcpServer.connect(httpTransport).then(() => {
-        p.logger.info(`✅ MCP Server started at ${mcpPath}`);
-      }).catch((err) => {
-        p.logger.error("Failed to connect HTTP transport:", err);
-      });
-      
-      // 处理 GET 和 POST 请求
-      router.get(mcpPath, async (ctx) => {
-        await httpTransport.handleRequest(ctx.req, ctx.res);
-      });
-
-      router.post(mcpPath, async (ctx: any) => {
-        await httpTransport.handleRequest(ctx.req, ctx.res, ctx.request.body);
-      });
-
-      cleanup = () => {
-        httpTransport.close();
-        p.logger.info("MCP Server HTTP transport closed");
-      };
-    });
-
     return mcpServer;
   },
   async dispose() {
@@ -114,5 +81,38 @@ register({
       cleanup();
     }
   },
+});
+
+// HTTP Stream 传输
+useContext("router", (router) => {
+  plugin.logger.info(`MCP Config: enabled=${config.enabled}, path=${config.path}`);
+  const mcpPath = config.path || "/mcp";
+
+  // 创建 StreamableHTTPServerTransport (无状态模式)
+  const httpTransport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: undefined, // 无状态模式
+  });
+
+  // 连接 transport
+  mcpServer.connect(httpTransport).then(() => {
+    plugin.logger.info(`✅ MCP Server started at ${mcpPath}`);
+  }).catch((err) => {
+    plugin.logger.error("Failed to connect HTTP transport:", err);
+  });
+
+
+  // 处理 GET 和 POST 请求
+  router.get(mcpPath, async (ctx) => {
+    await httpTransport.handleRequest(ctx.req, ctx.res);
+  });
+
+  router.post(mcpPath, async (ctx: any) => {
+    await httpTransport.handleRequest(ctx.req, ctx.res, ctx.request.body);
+  });
+
+  cleanup = () => {
+    httpTransport.close();
+    plugin.logger.info("MCP Server HTTP transport closed");
+  };
 });
 

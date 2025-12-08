@@ -1,18 +1,23 @@
-import {MaybePromise,RegisteredAdapters}from '@zhin.js/types'
-import { Schema } from '@zhin.js/hmr'
 import { LogLevel } from '@zhin.js/logger';
 import {MessageChannel,Message} from "./message.js";
 import {Adapter} from "./adapter.js";
+import { ProcessAdapter } from "./built/adapter-process.js";
 import {Bot} from "./bot.js";
 import { Databases,Registry } from "@zhin.js/database";
 import { MessageComponent } from "./message.js";
 
+export type ArrayItem<T>=T extends Array<infer R>?R:unknown
+export interface Models extends Record<string,object>{}
+export type MaybePromise<T> = T extends Promise<infer U> ? T|U : T|Promise<T>;
+export type RegisteredAdapters={
+  process: ProcessAdapter;
+}
 /**
  * 数据库配置类型，支持多种数据库驱动
  */
 export type DatabaseConfig<T extends keyof Databases=keyof Databases>={
   dialect:T
-} & Registry.Config<Databases[T]>
+} & Registry.Config[T]
 /**
  * 获取对象所有value类型
  */
@@ -91,11 +96,11 @@ export type MessageMiddleware<P extends RegisteredAdapter=RegisteredAdapter> = (
 /**
  * App配置类型，涵盖机器人、数据库、插件、调试等
  */
-export interface AppConfig {
+export interface AppConfig<T extends keyof Databases = keyof Databases> {
   bots?: Bot.Config[];
   log_level: LogLevel;
   /** 数据库配置列表 */
-  database?: DatabaseConfig;
+  database?: DatabaseConfig<T>;
   /** 插件目录列表，默认为 ['./plugins', 'node_modules'] */
   plugin_dirs?: string[];
   /** 需要加载的插件列表 */
@@ -127,4 +132,19 @@ export interface SendOptions extends MessageChannel{
   bot:string
   content:SendContent
 }
+
+export type PermissionChecker<T extends RegisteredAdapter = RegisteredAdapter> = (name: string, message: Message<AdapterMessage<T>>) => MaybePromise<boolean>
+export type PermissionItem<T extends RegisteredAdapter = RegisteredAdapter> = {
+    name: string | RegExp
+    check: PermissionChecker<T>
+}
+export interface ProcessMessage {
+  type: string;
+  pid?: number;
+  body: any;
+}
+export type QueueItem = {
+  action: string;
+  payload: any;
+};
 export type BeforeSendHandler=(options:SendOptions)=>MaybePromise<SendOptions|void>

@@ -8,16 +8,16 @@ import * as QueryClasses from './query-classes.js';
  * 基础模型抽象类
  * 定义所有模型类型的通用接口和行为
  */
-export abstract class Model<C=any,O extends object = object,Q = string> {
+export abstract class Model<C=any,S extends Record<string,object>=Record<string, object>,Q = string,T extends keyof S=keyof S> {
   constructor(
-    public readonly database: Database<C, any, Q>,
-    public readonly name: string
+    public readonly database: Database<any, S, Q>,
+    public readonly name: T
   ) {}
 
   /**
    * 获取数据库方言
    */
-  get dialect(): Dialect<C,Q> {
+  get dialect(): Dialect<C,S,Q> {
     return this.database.dialect;
   }
 
@@ -31,27 +31,27 @@ export abstract class Model<C=any,O extends object = object,Q = string> {
   /**
    * 获取模型名称
    */
-  get modelName(): string {
+  get modelName(): T {
     return this.name;
   }
 
-  alter(alterations: AlterDefinition<O>): QueryClasses.Alteration<O, C, Q> {
-    return this.database.alter<O>(this.name, alterations);
+  alter(alterations: AlterDefinition<S[T]>): QueryClasses.Alteration<S,T, C, Q> {
+    return this.database.alter<T>(this.name, alterations);
   }
-  select<K extends keyof O>(...fields: Array<K>): QueryClasses.Selection<Pick<O, K>, K, C, Q> {
-    return this.database.select<O, K>(this.name, fields);
-  }
-  
-  insert(data: O): QueryClasses.Insertion<O, C, Q> {
-    return this.database.insert<O>(this.name, data);
+  select<K extends keyof S[T]>(...fields: Array<K>): QueryClasses.Selection<S,T,K, C, Q> {
+    return this.database.select<T, K>(this.name, fields);
   }
   
-  update(update: Partial<O>): QueryClasses.Updation<O, C, Q> {
-    return this.database.update<O>(this.name, update);
+  insert(data: S[T]): QueryClasses.Insertion<S,T, C, Q> {
+    return this.database.insert<T>(this.name, data);
   }
   
-  delete(condition: Condition<O>): QueryClasses.Deletion<O, C, Q> {
-    return this.database.delete<O>(this.name, condition);
+  update(update: Partial<S[T]>): QueryClasses.Updation<S,T, C, Q> {
+    return this.database.update<T>(this.name, update);
+  }
+  
+  delete(condition: Condition<S[T]>): QueryClasses.Deletion<S,T, C, Q> {
+    return this.database.delete<T>(this.name, condition);
   }
   /**
    * 验证查询条件
@@ -71,7 +71,7 @@ export abstract class Model<C=any,O extends object = object,Q = string> {
    * 处理错误
    */
   protected handleError(error: Error, operation: string): never {
-    const message = `Model ${this.name} ${operation} failed: ${error.message}`;
+    const message = `Model ${String(this.name)} ${operation} failed: ${error.message}`;
     throw new Error(message);
   }
 }

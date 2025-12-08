@@ -8,18 +8,22 @@
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
       "import": "./lib/index.js"
     },
     "./jsx": {
       "types": "./lib/jsx.d.ts",
+      "development": "./src/jsx.ts",
       "import": "./lib/jsx.js"
     },
     "./jsx-runtime": {
       "types": "./lib/jsx-runtime.d.ts",
+      "development": "./src/jsx-runtime.ts",
       "import": "./lib/jsx-runtime.js"
     },
     "./jsx-dev-runtime": {
       "types": "./lib/jsx-dev-runtime.d.ts",
+      "development": "./src/jsx-dev-runtime.ts",
       "import": "./lib/jsx-dev-runtime.js"
     }
   },

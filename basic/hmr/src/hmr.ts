@@ -190,10 +190,6 @@ export class HMRManager<P extends Dependency = Dependency> extends EventEmitter 
 
         // 设置事件监听
         this.setupEventListeners();
-        // 设置内部事件监听
-        this.on('internal.add', (filePath: string) => {
-            this.#add(filePath);
-        });
     }
 
     get dependencies() {
@@ -234,8 +230,8 @@ export class HMRManager<P extends Dependency = Dependency> extends EventEmitter 
             this.emit('remove', dependency);
         });
 
-        this.moduleLoader.on('reload', (filePath: string) => {
-            this.emit('reload', filePath);
+        this.moduleLoader.on('reload', (dependency: P) => {
+            this.emit('reload', dependency);
         });
 
         this.moduleLoader.on('error', (error: any) => {
@@ -257,40 +253,9 @@ export class HMRManager<P extends Dependency = Dependency> extends EventEmitter 
             }
         })
     }
-
-    /** 添加插件 */
-    #add(filePath: string): void {
-        const resolvedPath = this.resolve(filePath);
-        const name = path.basename(filePath, path.extname(filePath));
-        
-        // Prevent concurrent loading of the same plugin
-        if (this.pendingDependencies.has(resolvedPath)) {
-            return;
-        }
-
-        // 如果已经存在，先移除
-        if (this.dependencies.has(resolvedPath)) {
-            this.#remove(resolvedPath);
-        }
-        this.pendingDependencies.add(resolvedPath);
-        // 按需监听：为这个插件文件添加监听
-        const unwatchFile = process.env.NODE_ENV === 'development' ? this.watchFile(resolvedPath) : ()=>{};
-        
-        // 异步导入模块
-        this.moduleLoader.add(name,resolvedPath).catch((error) => {
-            this.logger.error(`Failed to load plugin: ${name}`, { 
-                filePath: resolvedPath, 
-                error 
-            });
-            this.performanceMonitor.recordError();
-            this.emit('error', error);
-            // 如果加载失败，移除监听
-            if(process.env.NODE_ENV === 'development') unwatchFile();
-        }).finally(()=>{
-            this.pendingDependencies.delete(resolvedPath);
-        })
+    reload(filePath: string): Promise<P> {
+        return this.moduleLoader.reload(filePath);
     }
-
     /** 移除插件 */
     #remove(filePath: string): void {
         // 移除监听
@@ -322,20 +287,6 @@ export class HMRManager<P extends Dependency = Dependency> extends EventEmitter 
         }
     }
 
-    /** 等待所有依赖就绪 */
-    async waitForReady(): Promise<void> {
-        await new Promise(resolve=>{
-            const interval = setInterval(()=>{
-                if(this.pendingDependencies.size === 0){
-                    clearInterval(interval);
-                    resolve(void 0);
-                }
-            },100)
-        })
-        const promises = this.dependencies.values();
-        await Promise.all(Array.from(promises).map(dep => dep.waitForReady()));
-
-    }
 
     /** 获取依赖列表 */
     get dependencyList(): P[] {
@@ -438,8 +389,8 @@ export class HMRManager<P extends Dependency = Dependency> extends EventEmitter 
     }
 
     /** 导入插件 */
-    async import(name: string, filePath: string): Promise<P> {
-        return await this.moduleLoader.import(name, filePath);
+    async import(name: string, filePath: string,parent:P): Promise<P> {
+        return await this.moduleLoader.import(name, filePath,parent);
     }
 
     /** 检查文件是否有变化 */
@@ -484,7 +435,37 @@ export class HMRManager<P extends Dependency = Dependency> extends EventEmitter 
     findChild(filename: string) {
         return this.entry.findChild(filename);
     }
-    
+    async loadChildWithParent(filePath: string, parent: P): Promise<void> {
+        const resolvedPath = this.resolve(filePath);
+        const name = path.basename(filePath, path.extname(filePath));
+        
+        // Prevent concurrent loading of the same plugin
+        if (this.pendingDependencies.has(resolvedPath)) {
+            return;
+        }
+
+        // 如果已经存在，先移除
+        if (this.dependencies.has(resolvedPath)) {
+            this.#remove(resolvedPath);
+        }
+        this.pendingDependencies.add(resolvedPath);
+        // 按需监听：为这个插件文件添加监听
+        const unwatchFile = process.env.NODE_ENV === 'development' ? this.watchFile(resolvedPath) : ()=>{};
+        
+        // 异步导入模块
+        await this.moduleLoader.load(name,resolvedPath,parent).catch((error) => {
+            this.logger.error(`Failed to load plugin: ${name}`, { 
+                filePath: resolvedPath, 
+                error 
+            });
+            this.performanceMonitor.recordError();
+            // 如果加载失败，移除监听
+            if(process.env.NODE_ENV === 'development') unwatchFile();
+            throw error;
+        }).finally(()=>{
+            this.pendingDependencies.delete(resolvedPath);
+        })
+    }
     findParent(filename: string, callerFiles: string[]) {
         return this.entry.findParent(filename, callerFiles);
     }

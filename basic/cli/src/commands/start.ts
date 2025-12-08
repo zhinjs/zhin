@@ -26,16 +26,35 @@ export const startCommand = new Command('start')
       logger.info('🔍 正在加载环境变量...');
       loadEnvFiles(cwd, 'production');
       
-      // 检查构建产物
-      const distPath = path.join(cwd, 'lib');
+      // 检查src目录和入口文件
       const sourcePath = path.join(cwd, 'src');
       const sourceFile = path.join(sourcePath, 'index.ts');
-      const distFile = path.join(distPath, 'index.js');
-      const entryFile = options.bun ? path.relative(cwd,sourceFile) : path.relative(cwd,distFile);
+      const hasEntryFile = fs.existsSync(sourceFile);
       
-      if (!fs.existsSync(entryFile)) {
-        logger.error('构建产物不存在，请先运行 zhin build');
-        process.exit(1);
+      // 检查构建产物
+      const distPath = path.join(cwd, 'lib');
+      const distFile = path.join(distPath, 'index.js');
+      
+      // 确定入口文件
+      let entryFile: string;
+      let useEval = false;
+      
+      if (options.bun) {
+        // bun 模式：优先使用源文件
+        if (hasEntryFile) {
+          entryFile = path.relative(cwd, sourceFile);
+        } else {
+          useEval = true;
+          entryFile = '';
+        }
+      } else {
+        // tsx/node 模式：使用构建产物
+        if (fs.existsSync(distFile)) {
+          entryFile = path.relative(cwd, distFile);
+        } else {
+          logger.error('构建产物不存在，请先运行 zhin build');
+          process.exit(1);
+        }
       }
       
       logger.info('🚀 正在生产模式启动机器人...');
@@ -55,16 +74,24 @@ export const startCommand = new Command('start')
             'ignore';
         }
         
-        // 选择运行时
+        // 选择运行时和参数
         const runtime = options.bun ? 'bun' : 'tsx';
-        const args = options.bun ? [entryFile] : ['--expose-gc', entryFile];
+        let args: string[];
         
-        logger.info(`📦 启动命令: ${runtime} ${args.join(' ')}`);
-        return startProcess(runtime, args, {
+        if (useEval) {
+          // 没有入口文件，使用 -e 参数
+          args = options.bun 
+            ? ['-e', "import('zhin.js/setup')"]
+            : ['--expose-gc', '-e', "import('zhin.js/setup')"];
+          logger.info(`📦 启动命令: ${runtime} -e "import('zhin.js/setup')"`);
+        } else {
+          // 有入口文件，直接运行
+          args = options.bun ? [entryFile] : ['--expose-gc', entryFile];
+          logger.info(`📦 启动命令: ${runtime} ${args.join(' ')}`);
+        }        return startProcess(runtime, args, {
           cwd,
           env,
           stdio,
-          shell:true,
           detached: options.daemon,
         });
       };

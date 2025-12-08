@@ -84,6 +84,9 @@ importers:
       ora:
         specifier: ^7.0.1
         version: 7.0.1
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../packages/zhin
     devDependencies:
       '@types/cross-spawn':
         specifier: ^6.0.6
@@ -277,6 +280,9 @@ importers:
       radix-ui:
         specifier: ^1.4.3
         version: 1.4.3(@types/react-dom@19.2.3(@types/react@19.2.5))(@types/react@19.2.5)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      tsx:
+        specifier: ^4.7.0
+        version: 4.20.6
       typescript:
         specifier: ^5.0.0
         version: 5.9.3

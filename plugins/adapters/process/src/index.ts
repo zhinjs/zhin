@@ -2,55 +2,40 @@ import {EventEmitter} from "events";
 import {
     Bot,
     Adapter,
-    Plugin,
     usePlugin,
-    registerAdapter,
-    useLogger,
     Message,
     SendOptions,
     segment,
     SendContent,
-    useContext,
     MessageType,
     MessageElement,
 } from "zhin.js";
-import path from "path";
 import type {WebSocket} from "ws";
-declare module '@zhin.js/types'{
-    interface GlobalContext{
-        process:Adapter<ProcessBot>
-        sandbox:Adapter<SandboxBot>
-    }
-}
-
-declare module '@zhin.js/types'{
-    interface RegisteredAdapters{
-        process:Adapter<ProcessBot>
-        sandbox:Adapter<SandboxBot>
-    }
-}
-export interface ProcessConfig extends Bot.Config {
-    context: 'process';
+export interface ProcessConfig{
     name: string;
 }
 
-export interface SandboxConfig extends Bot.Config {
+export interface SandboxConfig {
     context: 'sandbox';
     ws:WebSocket;
     name: string;
 }
 const plugin=usePlugin()
-const logger = useLogger()
-export class ProcessBot extends EventEmitter implements Bot<{content:string,ts:number},ProcessConfig>{
+const logger = plugin.logger;
+export class ProcessBot extends EventEmitter implements Bot<ProcessConfig,{content:string,ts:number}>{
     $connected?:boolean
     private logger = logger
-
+    get $id(){
+        return `${process.pid}`
+    }
     constructor(public $config:ProcessConfig) {
         super();
         this.#listenInput=this.#listenInput.bind(this)
     }
 
     async $connect(): Promise<void> {
+        console.log('connect')
+        if(this.$connected) return;
         process.stdin.on('data',this.#listenInput);
         this.$connected=true
     }
@@ -94,7 +79,7 @@ export class ProcessBot extends EventEmitter implements Bot<{content:string,ts:n
     }
 
     async $sendMessage(options: SendOptions): Promise<string>{
-        options=await plugin.app.handleBeforeSend(options)
+        // options=await plugin.handleBeforeSend(options)
         if(!this.$connected) return ''
         this.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
         return ''
@@ -149,8 +134,11 @@ export class ProcessBot extends EventEmitter implements Bot<{content:string,ts:n
         plugin.dispatch(`message.${message.$channel.type}.receive`, message)
     }
 }
-export class SandboxBot extends EventEmitter implements Bot<{content:MessageElement[],ts:number},SandboxConfig>{
+export class SandboxBot extends EventEmitter implements Bot<SandboxConfig,{content:MessageElement[],ts:number}>{
     $connected?:boolean
+    get $id(){
+        return this.$config.name
+    }
     private logger = logger
     constructor(public $config:SandboxConfig) {
         super();
@@ -158,7 +146,7 @@ export class SandboxBot extends EventEmitter implements Bot<{content:MessageElem
             const message = JSON.parse(data.toString())
             this.logger.info(`${this.$config.name} recv  ${message.type}(${message.id}):${segment.raw(message.content)}`)
             plugin.dispatch('message.receive',this.$formatMessage({content:message.content,type:message.type,id:message.id,ts:message.timestamp}))
-            plugin.dispatch(`message.${message.type}.receive`,this.$formatMessage({content:message.content,type:message.type,id:message.id,ts:message.timestamp}))
+            plugin.dispatch(`message.${message.type as MessageType}.receive`,this.$formatMessage({content:message.content,type:message.type,id:message.id,ts:message.timestamp}))
         })
     }
     async $connect(): Promise<void> {
@@ -200,7 +188,7 @@ export class SandboxBot extends EventEmitter implements Bot<{content:MessageElem
         return message
     }
     async $sendMessage(options: SendOptions): Promise<string>{
-        options=await plugin.app.handleBeforeSend(options)
+        // options=await plugin.app.handleBeforeSend(options)
         if(!this.$connected) return ''
         this.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
         options.bot=this.$config.name
@@ -216,35 +204,11 @@ export class SandboxBot extends EventEmitter implements Bot<{content:MessageElem
         // 沙盒不支持撤回消息
     }
 }
-registerAdapter(new Adapter('process',ProcessBot))
-const sandboxAdapter=new Adapter('sandbox',SandboxBot)
-registerAdapter(sandboxAdapter)
-
-useContext('web', (web) => {
-    // 注册Process适配器的客户端入口文件
-    const dispose = web.addEntry({
-        development: path.resolve(import.meta.dirname, '../client/index.tsx'),
-        production: path.resolve(import.meta.dirname, '../dist/index.js'),
-    })
-    return dispose
-})
-
-useContext('router', (router) => {
-    const wss = router.ws('/sandbox')
-    wss.on('connection', (ws) => {
-        const targetBot = new SandboxBot({
-            context:'sandbox',
-            name:`测试机器人${Math.random().toString(36).substring(2, 8)}`,
-            ws
-        })
-        targetBot.$connect()
-        sandboxAdapter.bots.set(targetBot.$config.name,targetBot)
-        ws.on('close', () => {
-            targetBot.$disconnect()
-            sandboxAdapter.bots.delete(targetBot.$config.name)
-        })
-    })
-    return () => {
-        wss.close()
+class ProcessAdapter extends Adapter<ProcessBot>{
+    constructor(config:ProcessConfig[]){
+        super('process',config)
     }
-})
+    createBot(config: ProcessConfig): ProcessBot {
+        return new ProcessBot(config);
+    }
+}

@@ -1,8 +1,6 @@
 import {Dialect} from '../base/index.js';
-import {MemoryConfig} from "../types.js";
 import {RelatedDatabase} from "../type/related/database.js";
 import {Registry} from "../registry.js";
-import {Database} from "../base/index.js";
 
 interface MemoryTable {
   name: string;
@@ -16,8 +14,8 @@ interface MemoryIndex {
   columns: string[];
   unique: boolean;
 }
-
-export class MemoryDialect extends Dialect<MemoryConfig,string> {
+export interface MemoryConfig{}
+export class MemoryDialect<S extends Record<string, object>> extends Dialect<MemoryConfig,S, string> {
   private connected = false;
   private tables: Map<string, MemoryTable> = new Map();
   private autoIncrementCounters: Map<string, Map<string, number>> = new Map();
@@ -96,8 +94,8 @@ export class MemoryDialect extends Dialect<MemoryConfig,string> {
     return typeMap[type.toLowerCase()] || 'TEXT';
   }
   
-  quoteIdentifier(identifier: string): string {
-    return `"${identifier}"`;
+  quoteIdentifier(identifier: string|symbol|number): string {
+    return `"${String(identifier)}"`;
   }
   
   getParameterPlaceholder(index: number): string {
@@ -152,20 +150,20 @@ export class MemoryDialect extends Dialect<MemoryConfig,string> {
     return `LIMIT ${limit} OFFSET ${offset}`;
   }
   
-  formatCreateTable(tableName: string, columns: string[]): string {
+  formatCreateTable(tableName: keyof S, columns: string[]): string {
     return `CREATE TABLE ${this.quoteIdentifier(tableName)} (${columns.join(', ')})`;
   }
   
-  formatAlterTable(tableName: string, alterations: string[]): string {
+  formatAlterTable(tableName: keyof S, alterations: string[]): string {
     return `ALTER TABLE ${this.quoteIdentifier(tableName)} ${alterations.join(', ')}`;
   }
   
-  formatDropTable(tableName: string, ifExists?: boolean): string {
+  formatDropTable(tableName: keyof S, ifExists?: boolean): string {
     const ifExistsClause = ifExists ? 'IF EXISTS ' : '';
     return `DROP TABLE ${ifExistsClause}${this.quoteIdentifier(tableName)}`;
   }
   
-  formatDropIndex(indexName: string, tableName: string, ifExists?: boolean): string {
+  formatDropIndex(indexName: string, tableName: keyof S, ifExists?: boolean): string {
     const ifExistsClause = ifExists ? 'IF EXISTS ' : '';
     return `DROP INDEX ${ifExistsClause}${this.quoteIdentifier(indexName)} ON ${this.quoteIdentifier(tableName)}`;
   }
@@ -876,6 +874,9 @@ export class MemoryDialect extends Dialect<MemoryConfig,string> {
     });
   }
 }
-Registry.register('memory', (config, definitions?: Database.Definitions<Record<string, object>>) => {
-  return new RelatedDatabase(new MemoryDialect(config), definitions);
-});
+export class Memory<S extends Record<string, object>> extends RelatedDatabase<MemoryConfig, S> {
+  constructor(config: MemoryConfig = {}) {
+    super(new MemoryDialect<S>(config));
+  }
+}
+Registry.register('memory', Memory);
