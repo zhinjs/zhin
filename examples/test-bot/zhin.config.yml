@@ -4,5 +4,7 @@ database:
   filename: ./data/test.db
 plugin_dirs:
   - node_modules/@zhin.js
-  - ./plugins
-plugins: []
+  - ./src/plugins
+plugins:
+  - test-plugin
+  - test-jsx

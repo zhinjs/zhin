@@ -1,8 +1,4 @@
-import { MessageCommand } from "../command.js";
-import { RegisteredAdapter,AdapterMessage } from "../types.js";
-import { Message } from "../message.js";
-import { Plugin } from "../plugin.js";
-import { remove } from "../utils";
+import { MessageCommand, RegisteredAdapter, AdapterMessage, Message, Plugin, remove } from "@zhin.js/core";
 export class CommandService extends Array<MessageCommand<RegisteredAdapter>>{
     constructor() {
         super();

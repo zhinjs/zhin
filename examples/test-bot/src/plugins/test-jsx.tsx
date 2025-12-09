@@ -1,8 +1,8 @@
 import {
-  addCommand,
+  usePlugin,
   MessageCommand,
-  addComponent,
 } from "zhin.js";
+const {addCommand,addComponent}=usePlugin()
 const Test=async function Test(){
   return new Promise<string>((resolve,reject)=>{
     setTimeout(() => {

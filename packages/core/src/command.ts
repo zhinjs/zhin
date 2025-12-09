@@ -1,6 +1,6 @@
 import {MatchResult, SegmentMatcher} from "segment-matcher";
 import {AdapterMessage, SendContent} from "./types.js";
-import {RegisteredAdapters} from "./types.js";
+import {RegisteredAdapter} from "./types.js";
 import type {Message} from "./message.js";
 import {MaybePromise} from "./types.js";
 import {Plugin} from "./plugin.js";
@@ -9,7 +9,7 @@ import {Plugin} from "./plugin.js";
  * MessageCommand类：命令系统核心，基于segment-matcher实现。
  * 支持多平台命令注册、作用域限制、参数解析、异步处理等。
  */
-export class MessageCommand<T extends keyof RegisteredAdapters=keyof RegisteredAdapters> extends SegmentMatcher{
+export class MessageCommand<T extends RegisteredAdapter=RegisteredAdapter> extends SegmentMatcher{
     #callbacks:MessageCommand.Callback<T>[]=[];
     #desc:string[]=[];
     #usage:string[]=[];
@@ -76,8 +76,8 @@ export class MessageCommand<T extends keyof RegisteredAdapters=keyof RegisteredA
     }
 }
 export namespace MessageCommand{
-    export type Callback<T extends keyof RegisteredAdapters>=(message:Message<AdapterMessage<T>>,result:MatchResult)=>SendContent|undefined|Promise<SendContent|undefined>;
-    export type Checker<T extends keyof RegisteredAdapters>=(message:Message<AdapterMessage<T>>)=>MaybePromise<boolean>
+    export type Callback<T extends RegisteredAdapter>=(message:Message<AdapterMessage<T>>,result:MatchResult)=>SendContent|undefined|Promise<SendContent|undefined>;
+    export type Checker<T extends RegisteredAdapter>=(message:Message<AdapterMessage<T>>)=>MaybePromise<boolean>
     export type HelpInfo={
         pattern:string;
         desc:string[];

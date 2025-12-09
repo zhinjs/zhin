@@ -11,11 +11,6 @@
       "development": "./src/index.ts",
       "import": "./lib/index.js"
     },
-    "./setup": {
-      "types": "./lib/setup.d.ts",
-      "development": "./src/setup.ts",
-      "import": "./lib/setup.js"
-    },
     "./jsx": {
       "types": "./lib/jsx.d.ts",
       "development": "./src/jsx.ts",
@@ -41,9 +36,7 @@
     "@zhin.js/dependency": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/schema": "workspace:*",
-    "commander": "^14.0.0",
     "croner": "^9.1.0",
-    "dotenv": "^16.3.1",
     "segment-matcher": "latest",
     "toml": "^3.0.0",
     "yaml": "^2.3.4"

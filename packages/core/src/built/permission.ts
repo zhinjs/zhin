@@ -1,7 +1,4 @@
-import { MaybePromise } from "../types.js";
-import { RegisteredAdapter } from "../types.js";
-import { Message } from "../message.js";
-import { AdapterMessage } from "../types.js";
+import { MaybePromise, RegisteredAdapter, Message, AdapterMessage } from "@zhin.js/core";
 export type PermissionItem<T extends RegisteredAdapter = RegisteredAdapter> = {
     name: string | RegExp
     check: PermissionChecker<T>

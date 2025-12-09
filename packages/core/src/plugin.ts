@@ -16,10 +16,7 @@ import { MessageCommand } from "./command.js";
 import { Component } from "./component.js";
 import { Cron } from "./cron.js";
 import { compose, remove, resolveEntry } from "./utils.js";
-import type { ConfigService } from "./built/config.js";
-import type { PermissionService } from "./built/permission.js";
-import type { CommandService } from "./built/command.js";
-import { MessageMiddleware, RegisteredAdapter,MaybePromise,ArrayItem } from "./types.js";
+import { MessageMiddleware, RegisteredAdapter,MaybePromise,ArrayItem, ConfigService, PermissionService, CommandService } from "./types.js";
 import { Adapter } from "./adapter.js";
 import { createHash } from "crypto";
 const contextsKey = Symbol("contexts");
@@ -142,6 +139,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
 
   #messageMiddleware: MessageMiddleware<RegisteredAdapter> = async (message, next) => {
     const commandService = this.inject('command');
+    if(!commandService) return await next();
     const result = await commandService.handle(message,this);
     if(!result) return await next();
     const adapter = this.inject(message.$adapter) as Adapter;
@@ -181,7 +179,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     this.#bindMethods();
     return new Proxy(this, {
       get(target, prop, receiver) {
-        if (Plugin[contextsKey].includes(prop as keyof Plugin.Contexts)) {
+        if (typeof prop === 'string' && Plugin[contextsKey].includes(prop)) {
           return target.inject(prop as keyof Plugin.Contexts);
         }
         return Reflect.get(target, prop, receiver);
@@ -198,6 +196,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   }
   addCommand<T extends RegisteredAdapter>(command: MessageCommand<T>) {
     const commandService = this.inject('command');
+    if(!commandService) return () => {};
     commandService.addCommand(command);
     return () => commandService.removeCommand(command);
   }
@@ -256,7 +255,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
         if(!dispose)return;
         const disposeFn=async (name:keyof Plugin.Contexts)=>{
             if(contexts.includes(name)){
-                await dispose(this.inject(name) as ArrayItem<ContextList<T>>)
+                await dispose(this.inject(name) as any)
             }
             this.off('context.dispose',disposeFn)
             sideEffect.finished=false;
@@ -264,7 +263,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
         this.on('context.dispose',disposeFn)
         this.on('dispose',()=>{
             this.off('context.dispose',disposeFn)
-            dispose(this.inject(args[0] as any))
+            dispose(this.inject(args[0] as any) as any)
         })
     }
     const onContextMounted=async (name:keyof Plugin.Contexts)=>{
@@ -276,9 +275,9 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     contextReadyCallback()
 }
 inject<T extends keyof Plugin.Contexts>(name: T): Plugin.Contexts[T]{
-    const context = this.root.contexts.get(name);
+    const context = this.root.contexts.get(name as string);
     if (!context) {
-        throw new Error(`Context "${name}" not found`);
+        throw new Error(`Context "${name as string}" not found`);
     }
     return context.value as Plugin.Contexts[T];
 }
@@ -413,11 +412,11 @@ contextIsReady<T extends keyof Plugin.Contexts>(name:T){
    * 注册上下文
    */
   provide<T extends keyof Plugin.Contexts>(context: Context<T>): this {
-    if (!Plugin[contextsKey].includes(context.name)) {
-      Plugin[contextsKey].push(context.name);
+    if (!Plugin[contextsKey].includes(context.name as string)) {
+      Plugin[contextsKey].push(context.name as string);
     }
-    this.logger.info(`Context "${context.name}" provided`);
-    this.$contexts.set(context.name, context);
+    this.logger.info(`Context "${context.name as string}" provided`);
+    this.$contexts.set(context.name as string, context);
     return this;
   }
 

@@ -1,10 +1,4 @@
-import { Adapter } from "../adapter.js";
-import { Plugin } from "../plugin.js";
-import { Bot } from "../bot.js";
-import { SendContent,SendOptions } from "../types.js";
-import { MessageBase, Message } from "../message.js";
-import { segment } from "../utils.js";
-
+import { Adapter, Plugin, Bot, SendContent, SendOptions, MessageBase, Message, segment } from "@zhin.js/core";
 export class ProcessBot implements Bot<{},{content:string,ts:number}>{
     $id=`${process.pid}`;
     get logger() {
@@ -74,5 +68,10 @@ export class ProcessAdapter extends Adapter<ProcessBot>{
     }
     createBot(): ProcessBot {
         return new ProcessBot(this);
+    }
+}
+declare module '@zhin.js/core'{
+    interface RegisteredAdapters{
+        process:ProcessAdapter
     }
 }

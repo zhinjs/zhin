@@ -8,7 +8,7 @@ import path from "node:path";
 import * as os from "node:os";
 import { writeHeapSnapshot } from "node:v8";
 
-declare module "@zhin.js/types" {
+declare module "@zhin.js/core" {
   interface Models {
     test_model: {
       name: string;
@@ -17,7 +17,7 @@ declare module "@zhin.js/types" {
     };
   }
 }
-const {addCommand,addComponent,root}=usePlugin()
+const {addCommand,addComponent,root,useContext}=usePlugin()
 // 全局内存历史记录
 declare global {
   var _memoryHistory: Array<{ time: number; rss: number; heapUsed: number }> | undefined;
@@ -126,7 +126,7 @@ addCommand(
       "╠═══════════ 框架状态 ═══════════╣",
       "",
       "【框架信息】",
-      `  适配器：${root.adapters.size} 个`,
+      `  适配器：${root.children.length} 个`,
       `  插件：${root.children.length} 个`,
       "",
       "",
@@ -361,147 +361,21 @@ const randomUUID = () => {
 };
 console.log("测试插件加载完成，唯一标识：" + randomUUID());
 
-useContext("web", (web) => {
-  const dispose = web.addEntry({
-    development: path.resolve(
-      path.resolve(import.meta.dirname, "../../client/index.tsx")
-    ),
-    production: path.resolve(
-      path.resolve(import.meta.dirname, "../../dist/index.js")
-    ),
+useContext("database", async (db) => {
+  db.define("test_model", {
+    name: { type: "text", nullable: false },
+    age: { type: "integer", default: 0 },
+    info: { type: "json" },
   });
-  return dispose;
-})
-// 依赖icqq上下文
-useContext("icqq", (p) => {
-  // 指定某个上下文就绪时，需要做的事
-  const someUsers = new MessageCommand<"icqq">("赞[space][...atUsers:at]", {
-    at: "qq",
-  })
-    .permit("adapter(icqq)")
-    .action(async (m, { params }) => {
-      if (!params.atUsers?.length) params.atUsers = [+m.$sender.id];
-      const likeResult: string[] = [];
-      for (const user_id of params.atUsers) {
-        const userResult = await Promise.all(
-          new Array(5).fill(0).map(() => {
-            return p.bots.get(m.$bot)?.sendLike(user_id, 10);
-          })
-        );
-        likeResult.push(
-          `为用户(${user_id})赞${
-            userResult.filter(Boolean).length ? "成功" : "失败"
-          }`
-        );
-      }
-      return likeResult.join("\n");
-    });
-  addCommand(someUsers);
-  // onMessage(async (m) => {
-  //   if(m.$adapter==='process'){
-  //     const b=p.bots.get('1689919782')
-  //     if(b){
-  //       b.$sendMessage({
-  //         id:'860669870',
-  //         type:'group',
-  //         content:m.$content,
-  //         context:'icqq',
-  //         bot:'1689919782'
-  //       })
-  //     }
-  //   }
-  // });
-});
-defineModel("test_model", {
-  name: { type: "text", nullable: false },
-  age: { type: "integer", default: 0 },
-  info: { type: "json" },
-});
-onDatabaseReady(async (db) => {
-  const model = db.model("test_model");
+  const model = db.models.get("test_model");
   // await model.create({
   //   name:'张三',
   //   age:20,
   //   info:{}
   // });
   // await model.delete({name:'张三'});
-  const result = await model.select();
-  console.log(result);
+  if (model) {
+    const result = await model.select();
+    console.log(result);
+  }
 });
-
-// ============================================================================
-// 性能监控命令
-// ============================================================================
-
-// 获取性能监控器实例
-const performanceMonitor = app.hmrManager.performanceMonitor;
-
-// 性能报告命令
-addCommand(
-  new MessageCommand("perf")
-    .desc("查看性能监控报告", "显示应用的性能统计信息")
-    .usage("perf")
-    .examples("perf")
-    .action(() => {
-      return performanceMonitor.getReport();
-    })
-);
-
-// 详细性能报告命令
-addCommand(
-  new MessageCommand("perf.full")
-    .desc("查看完整性能监控报告", "显示详细的性能统计和分析")
-    .usage("perf.full")
-    .examples("perf.full")
-    .action(() => {
-      return performanceMonitor.getFullReport();
-    })
-);
-
-// 实时性能统计命令
-addCommand(
-  new MessageCommand("perf.stats")
-    .desc("查看实时性能统计", "显示格式化的实时性能数据")
-    .usage("perf.stats")
-    .examples("perf.stats")
-    .action(() => {
-      const stats = performanceMonitor.stats;
-      
-      return [
-        "╔═══════════ 实时性能统计 ═══════════╗",
-        "",
-        "【内存使用】",
-        `  RSS: ${formatMemoSize(stats.memoryUsage.rss)}`,
-        `  堆内存 (Used): ${formatMemoSize(stats.memoryUsage.heapUsed)}`,
-        `  堆内存 (Total): ${formatMemoSize(stats.memoryUsage.heapTotal)}`,
-        `  使用率: ${((stats.memoryUsage.heapUsed / stats.memoryUsage.heapTotal) * 100).toFixed(2)}%`,
-        `  外部内存: ${formatMemoSize(stats.memoryUsage.external)}`,
-        `  ArrayBuffer: ${formatMemoSize(stats.memoryUsage.arrayBuffers)}`,
-        "",
-        "【峰值】",
-        `  内存峰值: ${formatMemoSize(stats.memoryPeak.value)}`,
-        `  发生时间: ${new Date(stats.memoryPeak.timestamp).toLocaleString('zh-CN')}`,
-        "",
-        "【运行时间】",
-        `  启动时间: ${new Date(stats.startTime).toLocaleString('zh-CN')}`,
-        `  运行时长: ${Time.formatTime(stats.uptime)}`,
-        "",
-        ...(stats.gcEvents > 0 ? [
-          "【GC 统计】",
-          `  GC 次数: ${stats.gcEvents} 次`,
-          `  GC 总耗时: ${(stats.gcEventDuration / 1000).toFixed(2)} 秒`,
-          "",
-        ] : []),
-        "【重载统计】",
-        `  重载次数: ${stats.reloadCount} 次`,
-        ...(stats.lastReloadTime ? [
-          `  最后重载: ${new Date(stats.lastReloadTime).toLocaleString('zh-CN')}`,
-          `  重载耗时: ${stats.lastReloadDuration?.toFixed(2) || 'N/A'} ms`,
-        ] : [
-          `  尚未重载`,
-        ]),
-        "",
-        "╚═════════════════════════════════════╝",
-      ].join("\n");
-    })
-);
