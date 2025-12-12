@@ -1,6 +1,10 @@
 
 import { setLevel, LogLevel } from '@zhin.js/logger';
-import { usePlugin, Models, SystemLogDefinition,resolveEntry, UserDefinition, ConfigService, PermissionService, CommandService, ProcessAdapter, Registry, Database } from '@zhin.js/core';
+import {
+  usePlugin, Models, SystemLogDefinition, resolveEntry,
+  UserDefinition, ConfigService, PermissionService,
+  CommandService, ProcessAdapter, Registry, Database
+} from '@zhin.js/core';
 import { AppConfig } from './types.js';
 import { DatabaseLogTransport } from './log-transport.js';
 import * as path from 'path';
@@ -15,12 +19,12 @@ provide({
   name: 'process',
   description: 'Process Adapter',
   mounted: async (plugin) => {
-      const adapter = new ProcessAdapter(plugin)
-      await adapter.start()
-      return adapter
+    const adapter = new ProcessAdapter(plugin)
+    await adapter.start()
+    return adapter
   },
   dispose: async (adapter) => {
-      await adapter.stop()
+    await adapter.stop()
   }
 })
 // 注册配置服务
