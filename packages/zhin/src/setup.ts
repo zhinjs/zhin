@@ -1,18 +1,12 @@
-/**
- * Worker 入口 - 基于 zhinjs/next 设计
- * 直接使用 usePlugin() 作为入口，移除 App 类
- */
 
 import { setLevel, LogLevel } from '@zhin.js/logger';
-import { usePlugin, MessageCommand, Models, SystemLogDefinition, UserDefinition, ConfigService, PermissionService, CommandService, ProcessAdapter, Registry, Database } from '@zhin.js/core';
+import { usePlugin, Models, SystemLogDefinition,resolveEntry, UserDefinition, ConfigService, PermissionService, CommandService, ProcessAdapter, Registry, Database } from '@zhin.js/core';
 import { AppConfig } from './types.js';
 import { DatabaseLogTransport } from './log-transport.js';
-import * as fs from 'fs';
 import * as path from 'path';
 
-
 const {
-  useContext, addCommand, provide,
+  useContext, provide,
   start, stop, watch,
   logger, children,
   import: importPlugin } = usePlugin();
@@ -29,7 +23,7 @@ provide({
       await adapter.stop()
   }
 })
-// 创建并注册配置服务
+// 注册配置服务
 provide({
   name: 'config',
   description: '配置服务',
@@ -47,11 +41,13 @@ provide({
     return config
   }
 });
+// 注册指令服务
 provide({
   name: 'command',
   description: '命令服务',
   value: new CommandService()
 });
+// 注册权限服务
 provide({
   name: 'permission',
   description: '权限管理',
@@ -84,8 +80,7 @@ useContext('config', async (configService) => {
   }
   // 加载插件
   for (const pluginName of config.plugins || []) {
-    const dir = config.plugin_dirs?.find((dir: string) => fs.existsSync(path.resolve(process.cwd(),dir, pluginName)));
-    console.log(config.plugin_dirs,dir,pluginName);
+    const dir = config.plugin_dirs?.find((dir: string) => resolveEntry(path.join(dir, pluginName)));
     if (dir) await importPlugin(path.join(process.cwd(), dir, pluginName));
   }
   logger.info(`${children.length} plugins loaded`);

@@ -8,7 +8,7 @@ import path from "node:path";
 import * as os from "node:os";
 import { writeHeapSnapshot } from "node:v8";
 
-declare module "@zhin.js/core" {
+declare module "zhin.js" {
   interface Models {
     test_model: {
       name: string;
