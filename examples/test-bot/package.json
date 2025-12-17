@@ -17,7 +17,7 @@
     "@zhin.js/adapter-icqq": "workspace:*",
     "@zhin.js/adapter-kook": "workspace:*",
     "@zhin.js/adapter-onebot11": "workspace:*",
-    "@zhin.js/adapter-process": "workspace:*",
+    "@zhin.js/adapter-sandbox": "workspace:*",
     "@zhin.js/adapter-qq": "workspace:*",
     "@zhin.js/client": "workspace:*",
     "@zhin.js/console": "workspace:*",

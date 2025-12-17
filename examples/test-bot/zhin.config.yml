@@ -3,8 +3,16 @@ database:
   dialect: sqlite
   filename: ./data/test.db
 plugin_dirs:
-  - node_modules/@zhin.js
+  - node_modules
   - ./src/plugins
 plugins:
   - test-plugin
   - test-jsx
+  - "@zhin.js/http"
+  - "@zhin.js/console"
+  - "@zhin.js/adapter-sandbox"
+http:
+  port: 8086
+  username: admin
+  password: admin123
+  base: /api

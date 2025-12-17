@@ -46,12 +46,6 @@ addCommand(
     // 系统信息
     // ============================================
     
-    // 操作系统
-    const osType = os.type();
-    const osRelease = os.release();
-    const osArch = os.arch();
-    const platform = os.platform();
-    
     // 系统内存
     const totalmem = os.totalmem();
     const freemem = os.freemem();
@@ -62,14 +56,9 @@ addCommand(
     const processRealMem = memUsage.rss;           // 真实物理内存（Resident Set Size）
     const processHeapTotal = memUsage.heapTotal;   // V8 堆总大小
     const processHeapUsed = memUsage.heapUsed;     // V8 堆已使用
-    const processExternal = memUsage.external;     // C++ 对象内存
-    const memUsagePercent = ((usedSystemMem / totalmem) * 100).toFixed(2);
     
     const processMemPercent = ((processRealMem / totalmem) * 100).toFixed(2);
     const isHighMemoryPressure = parseFloat(processMemPercent) > 80;
-    
-    // 系统运行时长（秒）
-    const systemUptime = os.uptime();
     
     // ============================================
     // 进程信息
@@ -84,13 +73,6 @@ addCommand(
     const processUptime = process.uptime();
     
     
-    // （已在上面计算）
-    
-    // CPU 信息
-    const cpus = os.cpus();
-    const cpuModel = cpus[0]?.model || 'Unknown';
-    const cpuCores = cpus.length;
-    
     // ============================================
     // 格式化输出
     // ============================================
@@ -98,37 +80,13 @@ addCommand(
     return [
       "╔═══════════ 系统状态 ═══════════╗",
       "",
-      "【操作系统】",
-      `  系统：${osType} ${osRelease}`,
-      `  平台：${platform} (${osArch})`,
-      `  开机时长：${Time.formatTime(systemUptime * 1000)}`,
+      `运行时：${runtime} | 架构：${process.arch} | PID：${process.pid}`,
+      `运行时长：${Time.formatTime(processUptime * 1000)}`,
       "",
-      "【CPU 信息】",
-      `  型号：${cpuModel}`,
-      `  核心数：${cpuCores} 核`,
+      `物理内存：${formatMemoSize(processRealMem)} (${processMemPercent}%) ${isHighMemoryPressure ? '⚠️' : '✅'}`,
+      `堆内存：${formatMemoSize(processHeapUsed)} / ${formatMemoSize(processHeapTotal)}`,
       "",
-      "【系统内存】",
-      `  总内存：${formatMemoSize(totalmem)}`,
-      `  已使用：${formatMemoSize(usedSystemMem)} (${memUsagePercent}%)`,
-      `  可用：${formatMemoSize(freemem)}`,
-      "",
-      "【运行环境】",
-      `  运行时：${runtime}`,
-      `  架构：${process.arch}`,
-      `  PID：${process.pid}`,
-      "",
-      "【进程状态】",
-      `  运行时长：${Time.formatTime(processUptime * 1000)}`,
-      `  物理内存：${formatMemoSize(processRealMem)} (${processMemPercent}%) ${isHighMemoryPressure ? '⚠️ 高' : '✅ 正常'}`,
-      `  堆内存：${formatMemoSize(processHeapUsed)} / ${formatMemoSize(processHeapTotal)}`,
-      `  外部内存：${formatMemoSize(processExternal)}`,
-      "",
-      "╠═══════════ 框架状态 ═══════════╣",
-      "",
-      "【框架信息】",
-      `  适配器：${root.children.length} 个`,
-      `  插件：${root.children.length} 个`,
-      "",
+      `适配器：${root.adapters.length} 个 | 插件：${root.children.length} 个`,
       "",
       "╚════════════════════════════════╝",
     ].join("\n");
@@ -352,15 +310,6 @@ addComponent(async function foo(
 ) {
   return "这是父组件" + props.face;
 });
-const randomUUID = () => {
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
-    const r = (Math.random() * 16) | 0,
-      v = c == "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-};
-console.log("测试插件加载完成，唯一标识：" + randomUUID());
-
 useContext("database", async (db) => {
   db.define("test_model", {
     name: { type: "text", nullable: false },

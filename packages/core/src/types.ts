@@ -2,14 +2,20 @@ import { LogLevel } from '@zhin.js/logger';
 import {MessageChannel,Message} from "./message.js";
 import {Adapter} from "./adapter.js";
 import {Bot} from "./bot.js";
+import { SystemLog } from "./models/system-log.js";
+import { User } from "./models/user.js";
 import { Databases,Registry } from "@zhin.js/database";
 import { MessageComponent } from "./message.js";
 import { ProcessAdapter } from "./built/adapter-process.js";
 import type { CommandService } from "./built/command.js";
-export { CommandService };
+import type { ComponentService } from "./built/component.js";
+export type { CommandService, ComponentService };
 
 export type ArrayItem<T>=T extends Array<infer R>?R:unknown
-export interface Models extends Record<string,object>{}
+export interface Models extends Record<string,object>{
+  SystemLog: SystemLog
+  User: User,
+}
 export type MaybePromise<T> = T extends Promise<infer U> ? T|U : T|Promise<T>;
 export interface RegisteredAdapters {
   process: ProcessAdapter;

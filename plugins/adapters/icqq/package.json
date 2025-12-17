@@ -47,7 +47,7 @@
     "typescript": "^5.3.0"
   },
   "peerDependencies": {
-    "zhin.js": "workspace:*",
+    "@zhin.js/core": "workspace:*",
     "@zhin.js/client": "workspace:*",
     "@zhin.js/http": "workspace:*",
     "@zhin.js/console": "workspace:*"

@@ -1,7 +1,7 @@
 {
-  "name": "@zhin.js/adapter-process",
+  "name": "@zhin.js/adapter-sandbox",
   "version": "1.0.22",
-  "description": "zhin adapter for process",
+  "description": "zhin adapter for sandbox",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -45,7 +45,7 @@
     "typescript": "^5.3.0"
   },
   "peerDependencies": {
-    "zhin.js": "workspace:*",
+    "@zhin.js/core": "workspace:*",
     "@zhin.js/client": "workspace:*",
     "@zhin.js/http": "workspace:*",
     "@zhin.js/console": "workspace:*"

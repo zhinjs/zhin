@@ -13,6 +13,7 @@ export * from './built/config.js'
 export * from './built/command.js'
 export * from './built/permission.js'
 export * from './built/adapter-process.js'
+export * from './built/component.js'
 
 export * from './types.js'
 export * from './utils.js'

@@ -18,9 +18,7 @@
     "declarationMap": true,
     "sourceMap": true,
     "verbatimModuleSyntax": false,
-    "types": [
-      "@zhin.js/http"
-    ]
+    "types": []
   },
   "include": ["src/**/*"],
   "exclude": ["lib", "node_modules", "client"]

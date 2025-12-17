@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MessageSegment, cn } from '@zhin.js/client';
 import { Flex, Box, Heading, Text, Badge, Button, Card, Tabs, TextField, Grid } from '@radix-ui/themes';
 import { User, Users, Trash2, Send, Hash, MessageSquare, Wifi, WifiOff, Smile, Image, AtSign, X, Upload, Check, Info, Search, Bot } from 'lucide-react';
 import RichTextEditor, { RichTextEditorRef } from './RichTextEditor';
+
 
 interface Message {
     id: string
@@ -35,7 +36,7 @@ interface Face {
     lottie: boolean
 }
 
-export default function ProcessSandbox() {
+export default function Sandbox() {
     const [messages, setMessages] = useState<Message[]>([])
     const [channels, setChannels] = useState<Channel[]>([
         { id: 'user_1001', name: '测试用户', type: 'private', unread: 0 },
@@ -92,32 +93,62 @@ export default function ProcessSandbox() {
         wsRef.current = new WebSocket(`${protocol}//${window.location.host}/sandbox`)
 
         wsRef.current.onopen = () => {
-            console.log('[ProcessSandbox] WebSocket connected')
             setConnected(true)
         }
 
         wsRef.current.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data)
+                
+                // 如果 content 是字符串，转换为消息段数组
+                let content: MessageSegment[] = []
+                if (typeof data.content === 'string') {
+                    content = parseTextToSegments(data.content)
+                } else if (Array.isArray(data.content)) {
+                    content = data.content
+                } else {
+                    // 如果都不是，尝试转换为字符串再解析
+                    content = parseTextToSegments(String(data.content))
+                }
+                
+                // 检查频道是否存在，如果不存在则创建
+                let targetChannel = channels.find((c: Channel) => c.id === data.id);
+                if (!targetChannel) {
+                    // 根据消息类型创建新频道
+                    const channelName = data.type === 'private' 
+                        ? `私聊-${data.bot || botName}`
+                        : data.type === 'group'
+                        ? `群组-${data.id}`
+                        : `频道-${data.id}`;
+                    targetChannel = {
+                        id: data.id,
+                        name: channelName,
+                        type: data.type,
+                        unread: 0
+                    };
+                    setChannels((prev: Channel[]) => [...prev, targetChannel!]);
+                    // 自动切换到新频道
+                    setActiveChannel(targetChannel);
+                }
+
                 const botMessage: Message = {
                     id: `bot_${data.timestamp}`,
                     type: 'received',
                     channelType: data.type,
                     channelId: data.id,
-                    channelName: channels.find((c: Channel) => c.id === data.id)?.name || data.id,
+                    channelName: targetChannel.name,
                     senderId: 'bot',
                     senderName: data.bot || botName,
-                    content: data.content,
+                    content: content,
                     timestamp: data.timestamp
                 }
                 setMessages((prev: Message[]) => [...prev, botMessage])
             } catch (err) {
-                console.error('[ProcessSandbox] Failed to parse message:', err)
+                console.error('[Sandbox] Failed to parse message:', err)
             }
         }
 
         wsRef.current.onclose = () => {
-            console.log('[ProcessSandbox] WebSocket disconnected')
             setConnected(false)
         }
 
@@ -174,16 +205,40 @@ export default function ProcessSandbox() {
             }
         }
 
-        return segments.length > 0 ? segments : [{ type: 'text', data: { text: text } }]
+        return segments.length > 0 ? segments : [{ type: 'text' as const, data: { text: text } }]
     }
 
     // 渲染消息段
     const renderMessageSegments = (segments: (MessageSegment|string)[]) => {
         return segments.map((segment, index) => {
-            if(typeof segment==='string') return <span key={index}>{segment}</span>
+            if(typeof segment==='string') {
+                // 将字符串中的换行符转换为 <br />
+                const parts = segment.split('\n')
+                return (
+                    <span key={index}>
+                        {parts.map((part, i) => (
+                            <React.Fragment key={i}>
+                                {part}
+                                {i < parts.length - 1 && <br />}
+                            </React.Fragment>
+                        ))}
+                    </span>
+                )
+            }
             switch (segment.type) {
                 case 'text':
-                    return <span key={index}>{segment.data.text}</span>
+                    // 将文本中的换行符转换为 <br />
+                    const textParts = segment.data.text.split('\n')
+                    return (
+                        <span key={index}>
+                            {textParts.map((part, i) => (
+                                <React.Fragment key={i}>
+                                    {part}
+                                    {i < textParts.length - 1 && <br />}
+                                </React.Fragment>
+                            ))}
+                        </span>
+                    )
                 case 'at':
                     return (
                         <Badge key={index} color="blue" variant="soft" style={{ margin: '0 2px' }}>

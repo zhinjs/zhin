@@ -1,23 +1,30 @@
-import { remove } from '@zhin.js/core';
-import { Layer, RouterOptions } from '@koa/router';
+import { Layer, RouterOptions } from "@koa/router";
 import KoaRouter from "@koa/router";
-import * as http from 'http';
-import { ServerOptions, WebSocketServer } from 'ws';
-import { parse } from 'url';
+import * as http from "http";
+import { ServerOptions, WebSocketServer } from "ws";
+import { parse } from "url";
 
 type Path = string | RegExp;
 
+// 工具函数：从数组中移除元素
+const remove = <T>(arr: T[], item: T): boolean => {
+  const index = arr.indexOf(item);
+  if (index !== -1) {
+    arr.splice(index, 1);
+    return true;
+  }
+  return false;
+};
+
 export class Router extends KoaRouter {
   wsStack: WebSocketServer[] = [];
-  whiteList: Path[] = []; //用于historyApi排除
-  constructor(
-    public server: http.Server,
-    options?: RouterOptions,
-  ) {
+  whiteList: Path[] = [];
+
+  constructor(public server: http.Server, options?: RouterOptions) {
     super(options);
   }
 
-  register(...args: Parameters<KoaRouter['register']>) {
+  register(...args: Parameters<KoaRouter["register"]>) {
     const path: Path = args[0] as any;
     this.whiteList.push(path);
     return super.register(...args);
@@ -32,7 +39,7 @@ export class Router extends KoaRouter {
     remove(this.wsStack, wsServer);
   }
 
-  ws(path: string, options: Omit<ServerOptions, 'noServer' | 'path'> = {}): WebSocketServer {
+  ws(path: string, options: Omit<ServerOptions, "noServer" | "path"> = {}): WebSocketServer {
     const wsServer = new WebSocketServer({
       noServer: true,
       path,
@@ -40,13 +47,13 @@ export class Router extends KoaRouter {
     });
     this.wsStack.push(wsServer);
 
-    this.server!.on('upgrade', (request, socket, head) => {
+    this.server.on("upgrade", (request, socket, head) => {
       const { pathname } = parse(request.url!);
-      if (this.wsStack.findIndex(wss => wss.options.path === path) === -1) {
+      if (this.wsStack.findIndex((wss) => wss.options.path === path) === -1) {
         socket.destroy();
       } else if (pathname === path) {
-        wsServer.handleUpgrade(request, socket, head, ws => {
-          wsServer.emit('connection', ws, request);
+        wsServer.handleUpgrade(request, socket, head, (ws) => {
+          wsServer.emit("connection", ws, request);
         });
       }
     });

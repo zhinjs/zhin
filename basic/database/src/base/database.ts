@@ -32,7 +32,6 @@ export abstract class Database<D=any,S extends Record<string, object>=Record<str
   async start(): Promise<void> {
     await this.dialect.connect();
     await this.initialize();
-    console.log(`Database connected using dialect: ${this.dialect.name}`);
     this.hasStarted = true;
   }
 

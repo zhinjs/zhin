@@ -75,7 +75,6 @@ export class DatabaseLogTransport implements LogTransport {
         const excessCount = totalCount - this.maxRecords
         
         // 查找最旧的 excessCount 条日志的 ID
-        // @ts-expect-error - 数据库类型系统限制
         const oldestLogs: any[] = await LogModel.select('id','timestamp').orderBy('timestamp', 'ASC').limit(excessCount)
         
         const idsToDelete = oldestLogs.map((log: any) => log.id)

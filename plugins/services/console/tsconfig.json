@@ -17,10 +17,7 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "types": [
-      "@zhin.js/types",
-      "@zhin.js/http"
-    ]
+    "types": []
   },
   "include": ["src/**/*"],
   "exclude": ["lib", "node_modules", "client", "dist"]

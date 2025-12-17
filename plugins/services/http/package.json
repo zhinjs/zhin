@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/http",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Zhin机器人框架HTTP工具",
   "type": "module",
   "main": "./lib/index.js",
@@ -8,6 +8,7 @@
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
       "import": "./lib/index.js"
     }
   },
@@ -37,7 +38,7 @@
     "koa-bodyparser": "latest"
   },
   "peerDependencies": {
-    "@zhin.js/core": "workspace:^"
+    "@zhin.js/core": "workspace:*"
   },
   "devDependencies": {
     "@types/koa": "latest",

@@ -53,7 +53,6 @@ export class ProcessBot implements Bot<{},{content:string,ts:number}>{
     async $recallMessage(id: string) {
     }
     async $sendMessage(options: SendOptions) {
-        this.logger.info(`${this.$id} send: ${segment.raw(options.content)}`);
         return `${Date.now()}`;
     }
     $connect(): Promise<void> {

@@ -16,20 +16,21 @@ import { MessageCommand } from "./command.js";
 import { Component } from "./component.js";
 import { Cron } from "./cron.js";
 import { compose, remove, resolveEntry } from "./utils.js";
-import { MessageMiddleware, RegisteredAdapter,MaybePromise,ArrayItem, ConfigService, PermissionService, CommandService } from "./types.js";
+import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, ConfigService, PermissionService, CommandService, SendOptions } from "./types.js";
 import { Adapter } from "./adapter.js";
 import { createHash } from "crypto";
+import type { ComponentService } from "./built/component.js";
 const contextsKey = Symbol("contexts");
 const require = createRequire(import.meta.url);
 
 
-export type SideEffect<A extends (keyof Plugin.Contexts)[]>={
-  (...args:ContextList<A>):MaybePromise<void|DisposeFn<ContextList<A>>>;
-  finished?:boolean
+export type SideEffect<A extends (keyof Plugin.Contexts)[]> = {
+  (...args: ContextList<A>): MaybePromise<void | DisposeFn<ContextList<A>>>;
+  finished?: boolean
 }
-export type DisposeFn<A>=(context:ArrayItem<A>)=>MaybePromise<void>
-export type ContextList<CS extends (keyof Plugin.Contexts)[]>=CS extends [infer L,...infer R]?R extends (keyof Plugin.Contexts)[]?[ContextItem<L>,...ContextList<R>]:never[]:never[]
-type ContextItem<L>=L extends keyof Plugin.Contexts?Plugin.Contexts[L]:never
+export type DisposeFn<A> = (context: ArrayItem<A>) => MaybePromise<void>
+export type ContextList<CS extends (keyof Plugin.Contexts)[]> = CS extends [infer L, ...infer R] ? R extends (keyof Plugin.Contexts)[] ? [ContextItem<L>, ...ContextList<R>] : never[] : never[]
+type ContextItem<L> = L extends keyof Plugin.Contexts ? Plugin.Contexts[L] : never
 // ============================================================================
 // AsyncLocalStorage 上下文
 // ============================================================================
@@ -102,17 +103,17 @@ function getFileHash(filePath: string): string {
 function watchFile(filePath: string, callback: () => void): () => void {
   try {
     const watcher = fs.watch(filePath, callback);
-    watcher.on("error", (_error) => {});
+    watcher.on("error", (_error) => { });
     return () => watcher.close();
   } catch (error) {
-    return () => {};
+    return () => { };
   }
 }
 
 // ============================================================================
 // Plugin 类
 // ============================================================================
-export interface Plugin extends Plugin.Contexts {}
+export interface Plugin extends Plugin.Contexts { }
 /**
  * Plugin 类 - 核心插件系统
  * 直接继承 EventEmitter，不依赖 Dependency
@@ -120,7 +121,7 @@ export interface Plugin extends Plugin.Contexts {}
 export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   static [contextsKey] = [] as string[];
   #cachedName?: string;
-  $adaptersDirty = true;
+  adapters: string[] = [];
   started = false;
 
   // 上下文存储
@@ -139,22 +140,23 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
 
   #messageMiddleware: MessageMiddleware<RegisteredAdapter> = async (message, next) => {
     const commandService = this.inject('command');
-    if(!commandService) return await next();
-    const result = await commandService.handle(message,this);
-    if(!result) return await next();
+    if (!commandService) return await next();
+    const result = await commandService.handle(message, this);
+    if (!result) return await next();
     const adapter = this.inject(message.$adapter) as Adapter;
-    if(!adapter|| !(adapter instanceof Adapter)) return await next();
+    if (!adapter || !(adapter instanceof Adapter)) return await next();
     await adapter.emit('call.sendMessage', message.$bot, {
       context: message.$adapter,
       bot: message.$bot,
       content: result,
-      id: message.$id,
+      id: message.$channel.id,
       type: message.$channel.type,
     });
     await next();
   };
   // 插件功能
   #middlewares: MessageMiddleware<RegisteredAdapter>[] = [this.#messageMiddleware];
+  // components 已弃用，使用 inject('component') 获取 ComponentService
   components: Map<string, Component<any>> = new Map();
   crons: Cron[] = [];
   get middleware(): MessageMiddleware<RegisteredAdapter> {
@@ -172,7 +174,6 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     // 自动添加到父节点
     if (parent && !parent.children.includes(this)) {
       parent.children.push(this);
-      parent.$adaptersDirty = true;
     }
 
     // 自动绑定所有方法
@@ -191,12 +192,17 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     return () => remove(this.crons, cron);
   }
   addComponent<T extends Component<any>>(component: T) {
+    const componentService = this.inject('component');
+    if (componentService) {
+      return componentService.add(component);
+    }
+    // 兼容旧方式
     this.components.set(component.name, component);
     return () => this.components.delete(component.name);
   }
   addCommand<T extends RegisteredAdapter>(command: MessageCommand<T>) {
     const commandService = this.inject('command');
-    if(!commandService) return () => {};
+    if (!commandService) return () => { };
     commandService.addCommand(command);
     return () => commandService.removeCommand(command);
   }
@@ -244,54 +250,54 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   }
 
 
-  useContext<T extends (keyof Plugin.Contexts)[]>(...args:[...T,SideEffect<T>]){
-    const contexts=args.slice(0,-1) as T
-    const sideEffect=args[args.length-1] as SideEffect<T>
-    const contextReadyCallback=async ()=>{
-        if(sideEffect.finished) return;
-        sideEffect.finished=true;
-        const args=contexts.map(item=>this.inject(item))
-        const dispose=await sideEffect(...args as ContextList<T>)
-        if(!dispose)return;
-        const disposeFn=async (name:keyof Plugin.Contexts)=>{
-            if(contexts.includes(name)){
-                await dispose(this.inject(name) as any)
-            }
-            this.off('context.dispose',disposeFn)
-            sideEffect.finished=false;
+  useContext<T extends (keyof Plugin.Contexts)[]>(...args: [...T, SideEffect<T>]) {
+    const contexts = args.slice(0, -1) as T
+    const sideEffect = args[args.length - 1] as SideEffect<T>
+    const contextReadyCallback = async () => {
+      if (sideEffect.finished) return;
+      sideEffect.finished = true;
+      const args = contexts.map(item => this.inject(item))
+      const dispose = await sideEffect(...args as ContextList<T>)
+      if (!dispose) return;
+      const disposeFn = async (name: keyof Plugin.Contexts) => {
+        if (contexts.includes(name)) {
+          await dispose(this.inject(name) as any)
         }
-        this.on('context.dispose',disposeFn)
-        this.on('dispose',()=>{
-            this.off('context.dispose',disposeFn)
-            dispose(this.inject(args[0] as any) as any)
-        })
+        this.off('context.dispose', disposeFn)
+        sideEffect.finished = false;
+      }
+      this.on('context.dispose', disposeFn)
+      this.on('dispose', () => {
+        this.off('context.dispose', disposeFn)
+        dispose(this.inject(args[0] as any) as any)
+      })
     }
-    const onContextMounted=async (name:keyof Plugin.Contexts)=>{
-        if(!this.#contextsIsReady(contexts)||!(contexts).includes(name)) return
-        await contextReadyCallback()
+    const onContextMounted = async (name: keyof Plugin.Contexts) => {
+      if (!this.#contextsIsReady(contexts) || !(contexts).includes(name)) return
+      await contextReadyCallback()
     }
-    this.on('context.mounted',onContextMounted)
-    if(!this.#contextsIsReady(contexts)) return
+    this.on('context.mounted', onContextMounted)
+    if (!this.#contextsIsReady(contexts)) return
     contextReadyCallback()
-}
-inject<T extends keyof Plugin.Contexts>(name: T): Plugin.Contexts[T]{
+  }
+  inject<T extends keyof Plugin.Contexts>(name: T): Plugin.Contexts[T] {
     const context = this.root.contexts.get(name as string);
     if (!context) {
-        throw new Error(`Context "${name as string}" not found`);
+      throw new Error(`Context "${name as string}" not found`);
     }
     return context.value as Plugin.Contexts[T];
-}
-#contextsIsReady<CS extends (keyof Plugin.Contexts)[]>(contexts:CS){
-    if(!contexts.length) return true
-    return contexts.every(name=>this.contextIsReady(name))
-}
-contextIsReady<T extends keyof Plugin.Contexts>(name:T){
-    try{
-        return !!this.inject(name)
-    }catch{
-        return false
+  }
+  #contextsIsReady<CS extends (keyof Plugin.Contexts)[]>(contexts: CS) {
+    if (!contexts.length) return true
+    return contexts.every(name => this.contextIsReady(name))
+  }
+  contextIsReady<T extends keyof Plugin.Contexts>(name: T) {
+    try {
+      return !!this.inject(name)
+    } catch {
+      return false
     }
-}
+  }
   // ============================================================================
   // 生命周期方法
   // ============================================================================
@@ -299,21 +305,22 @@ contextIsReady<T extends keyof Plugin.Contexts>(name:T){
   /**
    * 启动插件
    */
-  async start(): Promise<void> {
+  async start(t?:number): Promise<void> {
     if (this.started) return;
-    this.started = true;
     // 启动所有服务
     for (const context of this.$contexts.values()) {
-      if (typeof context.mounted === "function"&&!context.value) {
-        context.value=await context.mounted(this);
+      if (typeof context.mounted === "function" && !context.value) {
+        context.value = await context.mounted(this);
       }
-      this.dispatch('context.mounted',context.name)
+      this.dispatch('context.mounted', context.name)
     }
     await this.broadcast("mounted");
-    for(const child of this.children) {
-      await child.start();
+    // 先启动子插件，再打印当前插件启动日志
+    for (const child of this.children) {
+      await child.start(t);
     }
-    this.logger.info(`Plugin "${this.name}" started`);
+    this.started = true;
+    this.logger.info(`Plugin "${this.name}" ${t ? `reloaded in ${Date.now() - t}ms` : "started"}`);
   }
   info(): Record<string, any> {
     return {
@@ -326,7 +333,7 @@ contextIsReady<T extends keyof Plugin.Contexts>(name:T){
    */
   async stop(): Promise<void> {
     if (!this.started) return;
-    this.logger.info(`Stopping plugin "${this.name}"`);
+    this.logger.debug(`Stopping plugin "${this.name}"`);
     this.started = false;
 
 
@@ -355,7 +362,7 @@ contextIsReady<T extends keyof Plugin.Contexts>(name:T){
       remove(this.parent?.children, this);
     }
     this.removeAllListeners();
-    this.logger.info(`Plugin "${this.name}" stopped`);
+    this.logger.debug(`Plugin "${this.name}" stopped`);
   }
 
   // ============================================================================
@@ -415,7 +422,7 @@ contextIsReady<T extends keyof Plugin.Contexts>(name:T){
     if (!Plugin[contextsKey].includes(context.name as string)) {
       Plugin[contextsKey].push(context.name as string);
     }
-    this.logger.info(`Context "${context.name as string}" provided`);
+    this.logger.debug(`Context "${context.name as string}" provided`);
     this.$contexts.set(context.name as string, context);
     return this;
   }
@@ -427,13 +434,17 @@ contextIsReady<T extends keyof Plugin.Contexts>(name:T){
   /**
    * 导入插件
    */
-  async import(entry: string): Promise<Plugin> {
-    if(!entry) throw new Error(`Plugin entry not found: ${entry}`);
+  async import(entry: string,t?:number): Promise<Plugin> {
+    if (!entry) throw new Error(`Plugin entry not found: ${entry}`);
     entry = resolveEntry(path.isAbsolute(entry) ?
-     entry : 
-     path.resolve(path.dirname(this.filePath), entry))||entry;
+      entry :
+      path.resolve(path.dirname(this.filePath), entry)) || entry;
     const plugin = await Plugin.create(entry, this);
-    this.$adaptersDirty = true;
+    if (this.started) await plugin.start(t);
+
+    if (process.env.NODE_ENV === 'development') {
+      plugin.watch((p) => p.reload())
+    }
     return plugin;
   }
 
@@ -441,15 +452,17 @@ contextIsReady<T extends keyof Plugin.Contexts>(name:T){
    * 重载插件
    */
   async reload(plugin: Plugin = this): Promise<void> {
+    this.logger.info(`Plugin "${plugin.name}" reloading...`);
+    const now=Date.now();
     if (!plugin.parent) {
       // 根插件重载 = 退出进程（由 CLI 重启）
       return process.exit(51);
     }
 
     await plugin.stop();
-    await plugin.parent.import(plugin.filePath);
+    await plugin.parent.import(plugin.filePath, now);
     await plugin.broadcast("mounted");
-    this.logger.info(`Plugin "${plugin.name}" reloaded`);
+    this.logger.debug(`Plugin "${plugin.name}" reloaded`);
   }
 
   /**
@@ -465,7 +478,7 @@ contextIsReady<T extends keyof Plugin.Contexts>(name:T){
       const newHash = getFileHash(this.filePath);
       if (newHash === this.fileHash) return;
 
-      this.logger.info(`Plugin "${this.name}" file changed, reloading...`);
+      this.logger.debug(`Plugin "${this.name}" file changed, reloading...`);
       callback(this);
       this.fileHash = newHash;
     });
@@ -523,9 +536,9 @@ contextIsReady<T extends keyof Plugin.Contexts>(name:T){
     return plugin;
   }
 }
-export interface Context<T extends keyof Plugin.Contexts=keyof Plugin.Contexts> {
+export interface Context<T extends keyof Plugin.Contexts = keyof Plugin.Contexts> {
   name: T;
-  description:string
+  description: string
   value?: Plugin.Contexts[T];
   mounted?: (parent: Plugin) => Plugin.Contexts[T] | Promise<Plugin.Contexts[T]>;
   dispose?: (value: Plugin.Contexts[T]) => void;
@@ -545,6 +558,7 @@ export namespace Plugin {
     "before-mount": [Plugin];
     "before-dispose": [Plugin];
     "call.recallMessage": [string, string, string];
+    'before.sendMessage': [SendOptions];
     "context.mounted": [keyof Plugin.Contexts];
     "context.dispose": [keyof Plugin.Contexts];
   }
@@ -557,5 +571,6 @@ export namespace Plugin {
     permission: PermissionService;
     database: Database<any, Models>;
     command: CommandService;
+    component: ComponentService;
   }
 }

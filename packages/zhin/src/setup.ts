@@ -3,7 +3,7 @@ import { setLevel, LogLevel } from '@zhin.js/logger';
 import {
   usePlugin, Models, SystemLogDefinition, resolveEntry,
   UserDefinition, ConfigService, PermissionService,
-  CommandService, ProcessAdapter, Registry, Database
+  CommandService, ComponentService, ProcessAdapter, Registry, Database
 } from '@zhin.js/core';
 import { AppConfig } from './types.js';
 import { DatabaseLogTransport } from './log-transport.js';
@@ -11,13 +11,13 @@ import * as path from 'path';
 
 const {
   useContext, provide,
-  start, stop, watch,
+  start, stop,
   logger, children,
   import: importPlugin } = usePlugin();
 // 1. 加载服务插件
 provide({
   name: 'process',
-  description: 'Process Adapter',
+  description: '命令行适配器',
   mounted: async (plugin) => {
     const adapter = new ProcessAdapter(plugin)
     await adapter.start()
@@ -51,6 +51,12 @@ provide({
   description: '命令服务',
   value: new CommandService()
 });
+// 注册组件服务
+provide({
+  name: 'component',
+  description: '组件服务',
+  mounted: (plugin) => new ComponentService(plugin)
+});
 // 注册权限服务
 provide({
   name: 'permission',
@@ -67,7 +73,7 @@ useContext('config', async (configService) => {
     const { dialect, ...rest } = config.database
     const db = Registry.create<Models, typeof dialect>(dialect, rest, {
       SystemLog: SystemLogDefinition,
-      user: UserDefinition,
+      User: UserDefinition,
       // Add models here
     }) as Database<any, Models>;
     await db.start()
@@ -87,15 +93,12 @@ useContext('config', async (configService) => {
     const dir = config.plugin_dirs?.find((dir: string) => resolveEntry(path.join(dir, pluginName)));
     if (dir) await importPlugin(path.join(process.cwd(), dir, pluginName));
   }
-  logger.info(`${children.length} plugins loaded`);
+  logger.debug(`${children.length} plugins loaded`);
 })
 
 
 // 5. 启动
 await start();
-if (process.env.NODE_ENV === 'development') {
-  watch((p) => p.reload(), true)
-}
 // 6. 优雅关闭
 process.on('SIGTERM', () => {
   logger.info('Received SIGTERM, shutting down gracefully...');
