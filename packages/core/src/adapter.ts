@@ -30,7 +30,7 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
       await bot.$recallMessage(id);
     })
     this.on('call.sendMessage', async (bot_id:string,options:SendOptions) => {
-      const fns=this.plugin.listeners('before.sendMessage') as BeforeSendHandler[];
+      const fns=this.plugin.root.listeners('before.sendMessage') as BeforeSendHandler[];
       for(const fn of fns){
         const result=await fn(options);
         if(result) options=result;

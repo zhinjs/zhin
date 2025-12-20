@@ -2,6 +2,7 @@
 // Database Dialect Interface
 // ============================================================================
 
+import { Transaction, TransactionOptions, IsolationLevel } from '../types.js';
 
 // ============================================================================
 // SQL Builder Base Class
@@ -39,6 +40,44 @@ export abstract class Dialect<T,S extends Record<string, object>,Q> {
   abstract formatDropTable<T extends keyof S>(tableName: T, ifExists?: boolean): string;
   abstract formatDropIndex<T extends keyof S>(indexName: string, tableName: T, ifExists?: boolean): string;
   abstract dispose(): Promise<void>;
+  
+  // ============================================================================
+  // Transaction Support (optional, default implementations)
+  // ============================================================================
+  
+  /**
+   * 是否支持事务
+   */
+  supportsTransactions(): boolean {
+    return false;
+  }
+  
+  /**
+   * 开始事务
+   */
+  async beginTransaction(options?: TransactionOptions): Promise<Transaction> {
+    throw new Error(`Dialect ${this.name} does not support transactions`);
+  }
+  
+  /**
+   * 格式化事务隔离级别
+   */
+  formatIsolationLevel(level: IsolationLevel): string {
+    return level.replace(/_/g, ' ');
+  }
+  
+  // ============================================================================
+  // Aggregation Support
+  // ============================================================================
+  
+  /**
+   * 格式化聚合函数
+   */
+  formatAggregate(fn: string, field: string, alias?: string): string {
+    const fnUpper = fn.toUpperCase();
+    const aliasClause = alias ? ` AS ${this.quoteIdentifier(alias)}` : '';
+    return `${fnUpper}(${field === '*' ? '*' : this.quoteIdentifier(field)})${aliasClause}`;
+  }
 }
 export namespace Dialect {
   export type Creator<D,S extends Record<string, object>,Q> = (config: D) => Dialect<D,S,Q>;

@@ -6,11 +6,13 @@ import {
   CreateQueryParams,
   SelectQueryParams,
   InsertQueryParams,
+  InsertManyQueryParams,
   UpdateQueryParams,
   DeleteQueryParams,
   AlterQueryParams,
   DropTableQueryParams,
   DropIndexQueryParams,
+  AggregateQueryParams,
   Condition,
   Column,
   AddDefinition,
@@ -19,11 +21,13 @@ import {
   isCreateQuery,
   isSelectQuery,
   isInsertQuery,
+  isInsertManyQuery,
   isUpdateQuery,
   isDeleteQuery,
   isAlterQuery,
   isDropTableQuery,
   isDropIndexQuery,
+  isAggregateQuery,
 } from '../../types.js';
 
 /**
@@ -57,6 +61,8 @@ export class RelatedDatabase<
       return this.buildSelectQuery(params);
     } else if (isInsertQuery(params)) {
       return this.buildInsertQuery(params);
+    } else if (isInsertManyQuery(params)) {
+      return this.buildInsertManyQuery(params);
     } else if (isUpdateQuery(params)) {
       return this.buildUpdateQuery(params);
     } else if (isDeleteQuery(params)) {
@@ -67,6 +73,8 @@ export class RelatedDatabase<
       return this.buildDropTableQuery(params);
     } else if (isDropIndexQuery(params)) {
       return this.buildDropIndexQuery(params);
+    } else if (isAggregateQuery(params)) {
+      return this.buildAggregateQuery(params);
     } else {
       throw new Error(`Unsupported query type: ${(params as any).type}`);
     }
@@ -145,6 +153,37 @@ export class RelatedDatabase<
   }
   
   // ========================================================================
+  // INSERT MANY Query (Batch Insert)
+  // ========================================================================
+  
+  protected buildInsertManyQuery<T extends keyof S>(params: InsertManyQueryParams<S,T>): BuildQueryResult<string> {
+    if (!params.data.length) {
+      throw new Error('Cannot insert empty array');
+    }
+    
+    const keys = Object.keys(params.data[0]);
+    const columns = keys.map(k => this.dialect.quoteIdentifier(k)).join(', ');
+    
+    const allValues: any[] = [];
+    const valueRows: string[] = [];
+    
+    params.data.forEach((row, rowIndex) => {
+      const placeholders = keys.map((_, colIndex) => 
+        this.dialect.getParameterPlaceholder(rowIndex * keys.length + colIndex)
+      ).join(', ');
+      valueRows.push(`(${placeholders})`);
+      
+      keys.forEach(key => {
+        allValues.push(this.dialect.formatDefaultValue((row as any)[key]));
+      });
+    });
+    
+    const query = `INSERT INTO ${this.dialect.quoteIdentifier(params.tableName)} (${columns}) VALUES ${valueRows.join(', ')}`;
+    
+    return { query, params: allValues };
+  }
+  
+  // ========================================================================
   // UPDATE Query
   // ========================================================================
   
@@ -215,6 +254,60 @@ export class RelatedDatabase<
   protected buildDropIndexQuery<T extends keyof S>(params: DropIndexQueryParams<S,T>): BuildQueryResult<string> {
     const query = this.dialect.formatDropIndex(params.indexName, params.tableName, true);
     return { query, params: [] };
+  }
+  
+  // ========================================================================
+  // AGGREGATE Query
+  // ========================================================================
+  
+  protected buildAggregateQuery<T extends keyof S>(params: AggregateQueryParams<S,T>): BuildQueryResult<string> {
+    if (!params.aggregates.length) {
+      throw new Error('At least one aggregate function is required');
+    }
+    
+    // Build SELECT fields with aggregate functions
+    const selectFields: string[] = [];
+    
+    // Add grouping fields to select
+    if (params.groupings && params.groupings.length) {
+      params.groupings.forEach(field => {
+        selectFields.push(this.dialect.quoteIdentifier(String(field)));
+      });
+    }
+    
+    // Add aggregate functions
+    params.aggregates.forEach(agg => {
+      selectFields.push(this.dialect.formatAggregate(agg.fn, String(agg.field), agg.alias));
+    });
+    
+    let query = `SELECT ${selectFields.join(', ')} FROM ${this.dialect.quoteIdentifier(params.tableName)}`;
+    const queryParams: any[] = [];
+    
+    // WHERE clause
+    if (params.conditions) {
+      const [condition, conditionParams] = this.parseCondition(params.conditions);
+      if (condition) {
+        query += ` WHERE ${condition}`;
+        queryParams.push(...conditionParams);
+      }
+    }
+    
+    // GROUP BY clause
+    if (params.groupings && params.groupings.length) {
+      const groupings = params.groupings.map(f => this.dialect.quoteIdentifier(String(f))).join(', ');
+      query += ` GROUP BY ${groupings}`;
+    }
+    
+    // HAVING clause
+    if (params.havingConditions && Object.keys(params.havingConditions).length) {
+      const [havingCondition, havingParams] = this.parseCondition(params.havingConditions);
+      if (havingCondition) {
+        query += ` HAVING ${havingCondition}`;
+        queryParams.push(...havingParams);
+      }
+    }
+    
+    return { query, params: queryParams };
   }
   
   // ========================================================================

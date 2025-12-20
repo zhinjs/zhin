@@ -1,28 +1,50 @@
 import {Dialect} from '../base/index.js';
 import {RelatedDatabase} from "../type/related/database.js";
 import {Registry} from "../registry.js";
-import type { ConnectionOptions } from 'mysql2/promise';
+import type { ConnectionOptions, PoolOptions } from 'mysql2/promise';
 import {Database} from "../base/index.js";
-import {Column} from "../types.js";
+import {Column, Transaction, TransactionOptions, IsolationLevel, PoolConfig} from "../types.js";
 
-export interface MySQLDialectConfig extends ConnectionOptions {}
+export interface MySQLDialectConfig extends ConnectionOptions {
+  /**
+   * 连接池配置
+   * 如果提供此选项，将使用连接池而不是单连接
+   */
+  pool?: PoolConfig;
+}
 
 export class MySQLDialect<S extends Record<string, object> = Record<string, object>> extends Dialect<MySQLDialectConfig, S, string> {
   private connection: any = null;
+  private pool: any = null;
+  private usePool: boolean = false;
 
   constructor(config: MySQLDialectConfig) {
     super('mysql', config);
+    this.usePool = !!config.pool;
   }
 
   // Connection management
   isConnected(): boolean {
-    return this.connection !== null;
+    return this.usePool ? this.pool !== null : this.connection !== null;
   }
 
   async connect(): Promise<void> {
     try {
-      const { createConnection } = await import('mysql2/promise');
-      this.connection = await createConnection(this.config);
+      if (this.usePool) {
+        const { createPool } = await import('mysql2/promise');
+        const poolConfig: PoolOptions = {
+          ...this.config,
+          waitForConnections: true,
+          connectionLimit: this.config.pool?.max ?? 10,
+          queueLimit: 0,
+          idleTimeout: this.config.pool?.idleTimeoutMillis ?? 60000,
+        };
+        this.pool = createPool(poolConfig);
+        console.log(`MySQL 连接池已创建 (max: ${poolConfig.connectionLimit})`);
+      } else {
+        const { createConnection } = await import('mysql2/promise');
+        this.connection = await createConnection(this.config);
+      }
     } catch (error) {
       console.error('forgot install mysql2 ?');
       throw new Error(`MySQL 连接失败: ${error}`);
@@ -30,23 +52,50 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
   }
 
   async disconnect(): Promise<void> {
-    this.connection = null;
-  }
-
-  async healthCheck(): Promise<boolean> {
-    return this.isConnected();
-  }
-
-  async query<U = any>(sql: string, params?: any[]): Promise<U> {
-    const [rows] = await this.connection.execute(sql, params);
-    return rows as U;
-  }
-
-  async dispose(): Promise<void> {
-    if (this.connection) {
+    if (this.usePool && this.pool) {
+      await this.pool.end();
+      this.pool = null;
+      console.log('MySQL 连接池已关闭');
+    } else if (this.connection) {
       await this.connection.end();
       this.connection = null;
     }
+  }
+
+  async healthCheck(): Promise<boolean> {
+    if (!this.isConnected()) return false;
+    try {
+      await this.query('SELECT 1');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async query<U = any>(sql: string, params?: any[]): Promise<U> {
+    if (this.usePool) {
+      const [rows] = await this.pool.execute(sql, params);
+      return rows as U;
+    } else {
+      const [rows] = await this.connection.execute(sql, params);
+      return rows as U;
+    }
+  }
+
+  async dispose(): Promise<void> {
+    await this.disconnect();
+  }
+  
+  /**
+   * 获取连接池统计信息（仅在使用连接池时有效）
+   */
+  getPoolStats(): { total: number; idle: number; waiting: number } | null {
+    if (!this.usePool || !this.pool) return null;
+    return {
+      total: this.pool.pool?._allConnections?.length ?? 0,
+      idle: this.pool.pool?._freeConnections?.length ?? 0,
+      waiting: this.pool.pool?._connectionQueue?.length ?? 0,
+    };
   }
 
   // SQL generation methods
@@ -149,6 +198,84 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
   formatDropIndex<T extends keyof S>(indexName: string, tableName: T, ifExists?: boolean): string {
     const ifExistsClause = ifExists ? 'IF EXISTS ' : '';
     return `DROP INDEX ${ifExistsClause}${this.quoteIdentifier(indexName)} ON ${this.quoteIdentifier(String(tableName))}`;
+  }
+  
+  // ============================================================================
+  // Transaction Support
+  // ============================================================================
+  
+  /**
+   * MySQL 支持事务
+   */
+  supportsTransactions(): boolean {
+    return true;
+  }
+  
+  /**
+   * 开始事务
+   * 在连接池模式下，会获取一个专用连接用于事务
+   */
+  async beginTransaction(options?: TransactionOptions): Promise<Transaction> {
+    if (this.usePool) {
+      // 从连接池获取一个连接用于事务
+      const connection = await this.pool.getConnection();
+      
+      // 设置隔离级别
+      if (options?.isolationLevel) {
+        await connection.execute(`SET TRANSACTION ISOLATION LEVEL ${this.formatIsolationLevel(options.isolationLevel)}`);
+      }
+      
+      // 开始事务
+      await connection.execute('START TRANSACTION');
+      
+      return {
+        async commit(): Promise<void> {
+          try {
+            await connection.execute('COMMIT');
+          } finally {
+            connection.release(); // 归还连接到池
+          }
+        },
+        
+        async rollback(): Promise<void> {
+          try {
+            await connection.execute('ROLLBACK');
+          } finally {
+            connection.release(); // 归还连接到池
+          }
+        },
+        
+        async query<T = any>(sql: string, params?: any[]): Promise<T> {
+          const [rows] = await connection.execute(sql, params);
+          return rows as T;
+        }
+      };
+    } else {
+      // 单连接模式
+      const dialect = this;
+      
+      // 设置隔离级别
+      if (options?.isolationLevel) {
+        await this.query(`SET TRANSACTION ISOLATION LEVEL ${this.formatIsolationLevel(options.isolationLevel)}`);
+      }
+      
+      // 开始事务
+      await this.query('START TRANSACTION');
+      
+      return {
+        async commit(): Promise<void> {
+          await dialect.query('COMMIT');
+        },
+        
+        async rollback(): Promise<void> {
+          await dialect.query('ROLLBACK');
+        },
+        
+        async query<T = any>(sql: string, params?: any[]): Promise<T> {
+          return dialect.query<T>(sql, params);
+        }
+      };
+    }
   }
 }
 export class MySQL<S extends Record<string, object> = Record<string, object>> extends RelatedDatabase<MySQLDialectConfig, S> {

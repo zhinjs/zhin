@@ -5,9 +5,23 @@ export type QueryType =
   | 'drop_table' 
   | 'drop_index' 
   | 'select' 
-  | 'insert' 
+  | 'insert'
+  | 'insert_many'
   | 'update' 
-  | 'delete';
+  | 'delete'
+  | 'aggregate';
+
+// ============================================================================
+// Aggregation Types
+// ============================================================================
+
+export type AggregateFunction = 'count' | 'sum' | 'avg' | 'min' | 'max';
+
+export interface AggregateField<T extends object> {
+  fn: AggregateFunction;
+  field: keyof T | '*';
+  alias?: string;
+}
 
 // ============================================================================
 // Column Type Definitions
@@ -146,6 +160,11 @@ export interface InsertQueryParams<S extends Record<string, object>, T extends k
   data: S[T];
 }
 
+export interface InsertManyQueryParams<S extends Record<string, object>, T extends keyof S> extends BaseQueryParams<S,T> {
+  type: 'insert_many';
+  data: S[T][];
+}
+
 export interface UpdateQueryParams<S extends Record<string, object>, T extends keyof S> extends BaseQueryParams<S,T> {
   type: 'update';
   update: Partial<S[T]>;
@@ -157,6 +176,14 @@ export interface DeleteQueryParams<S extends Record<string, object>, T extends k
   conditions?: Condition<S[T]>;
 }
 
+export interface AggregateQueryParams<S extends Record<string, object>, T extends keyof S> extends BaseQueryParams<S,T> {
+  type: 'aggregate';
+  aggregates: AggregateField<S[T]>[];
+  conditions?: Condition<S[T]>;
+  groupings?: (keyof S[T])[];
+  havingConditions?: Condition<S[T]>;
+}
+
 export type QueryParams<S extends Record<string, object>,T extends keyof S> = 
   | CreateQueryParams<S,T>
   | AlterQueryParams<S,T>
@@ -164,8 +191,10 @@ export type QueryParams<S extends Record<string, object>,T extends keyof S> =
   | DropIndexQueryParams<S,T>
   | SelectQueryParams<S,T>
   | InsertQueryParams<S,T>
+  | InsertManyQueryParams<S,T>
   | UpdateQueryParams<S,T>
-  | DeleteQueryParams<S,T>;
+  | DeleteQueryParams<S,T>
+  | AggregateQueryParams<S,T>;
 
 // ============================================================================
 // Query Result Types
@@ -284,6 +313,91 @@ export interface DriverConnection {
   healthCheck(): Promise<boolean>;
 }
 
+// ============================================================================
+// Transaction Types
+// ============================================================================
+
+export type IsolationLevel = 'READ_UNCOMMITTED' | 'READ_COMMITTED' | 'REPEATABLE_READ' | 'SERIALIZABLE';
+
+export interface TransactionOptions {
+  isolationLevel?: IsolationLevel;
+  timeout?: number;
+}
+
+export interface Transaction {
+  commit(): Promise<void>;
+  rollback(): Promise<void>;
+  query<T = any>(sql: string, params?: any[]): Promise<T>;
+}
+
+/**
+ * 增强的事务接口，支持链式调用
+ */
+export interface TransactionContext<S extends Record<string, object> = Record<string, object>> extends Transaction {
+  /**
+   * 插入单条数据
+   */
+  insert<T extends keyof S>(tableName: T, data: S[T]): Promise<S[T]>;
+  
+  /**
+   * 批量插入数据
+   */
+  insertMany<T extends keyof S>(tableName: T, data: S[T][]): Promise<{ affectedRows: number }>;
+  
+  /**
+   * 查询数据
+   */
+  select<T extends keyof S>(tableName: T, fields?: (keyof S[T])[]): TransactionSelection<S, T>;
+  
+  /**
+   * 更新数据
+   */
+  update<T extends keyof S>(tableName: T, data: Partial<S[T]>): TransactionUpdation<S, T>;
+  
+  /**
+   * 删除数据
+   */
+  delete<T extends keyof S>(tableName: T): TransactionDeletion<S, T>;
+}
+
+/**
+ * 事务查询选择器
+ */
+export interface TransactionSelection<S extends Record<string, object>, T extends keyof S> {
+  where(condition: Condition<S[T]>): this;
+  orderBy(field: keyof S[T], direction?: 'ASC' | 'DESC'): this;
+  limit(count: number): this;
+  offset(count: number): this;
+  then<R>(onfulfilled?: (value: S[T][]) => R | PromiseLike<R>): Promise<R>;
+}
+
+/**
+ * 事务更新器
+ */
+export interface TransactionUpdation<S extends Record<string, object>, T extends keyof S> {
+  where(condition: Condition<S[T]>): this;
+  then<R>(onfulfilled?: (value: number) => R | PromiseLike<R>): Promise<R>;
+}
+
+/**
+ * 事务删除器
+ */
+export interface TransactionDeletion<S extends Record<string, object>, T extends keyof S> {
+  where(condition: Condition<S[T]>): this;
+  then<R>(onfulfilled?: (value: number) => R | PromiseLike<R>): Promise<R>;
+}
+
+// ============================================================================
+// Connection Pool Types
+// ============================================================================
+
+export interface PoolConfig {
+  min?: number;
+  max?: number;
+  acquireTimeoutMillis?: number;
+  idleTimeoutMillis?: number;
+}
+
 export interface DriverQuery {
   query<T = any>(sql: string, params?: any[]): Promise<T>;
 }
@@ -398,4 +512,12 @@ export function isDropTableQuery<S extends Record<string, object>, T extends key
 
 export function isDropIndexQuery<S extends Record<string, object>, T extends keyof S>(params: QueryParams<S, T>): params is DropIndexQueryParams<S,T> {
   return params.type === 'drop_index';
+}
+
+export function isInsertManyQuery<S extends Record<string, object>, T extends keyof S>(params: QueryParams<S, T>): params is InsertManyQueryParams<S, T> {
+  return params.type === 'insert_many';
+}
+
+export function isAggregateQuery<S extends Record<string, object>, T extends keyof S>(params: QueryParams<S, T>): params is AggregateQueryParams<S, T> {
+  return params.type === 'aggregate';
 }

@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import {Dialect} from "../base/index.js";
 import {Registry} from "../registry.js";
 import {Database} from "../base/index.js";
-import {Column} from "../types.js";
+import {Column, Transaction, TransactionOptions} from "../types.js";
 import {RelatedDatabase} from "../type/related/database.js";
 import path from 'node:path';
 
@@ -40,7 +40,18 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
   }
 
   async disconnect(): Promise<void> {
-    this.db = null;
+    if (this.db) {
+      return new Promise((resolve, reject) => {
+        this.db.close((err: any) => {
+          if (err) {
+            reject(err);
+          } else {
+            this.db = null;
+            resolve();
+          }
+        });
+      });
+    }
   }
 
   async healthCheck(): Promise<boolean> {
@@ -252,6 +263,41 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
   formatDropIndex<T extends keyof S>(indexName: string, tableName: T, ifExists?: boolean): string {
     const ifExistsClause = ifExists ? 'IF EXISTS ' : '';
     return `DROP INDEX ${ifExistsClause}${this.quoteIdentifier(indexName)}`;
+  }
+  
+  // ============================================================================
+  // Transaction Support
+  // ============================================================================
+  
+  /**
+   * SQLite 支持事务
+   */
+  supportsTransactions(): boolean {
+    return true;
+  }
+  
+  /**
+   * 开始事务
+   */
+  async beginTransaction(options?: TransactionOptions): Promise<Transaction> {
+    const dialect = this;
+    
+    // 开始事务
+    await this.query('BEGIN TRANSACTION');
+    
+    return {
+      async commit(): Promise<void> {
+        await dialect.query('COMMIT');
+      },
+      
+      async rollback(): Promise<void> {
+        await dialect.query('ROLLBACK');
+      },
+      
+      async query<T = any>(sql: string, params?: any[]): Promise<T> {
+        return dialect.query<T>(sql, params);
+      }
+    };
   }
 }
 export class Sqlite<S extends Record<string, object> = Record<string, object>> extends RelatedDatabase<SQLiteDialectConfig, S> {

@@ -53,6 +53,21 @@ export abstract class Model<C=any,S extends Record<string,object>=Record<string,
   delete(condition: Condition<S[T]>): QueryClasses.Deletion<S,T, C, Q> {
     return this.database.delete<T>(this.name, condition);
   }
+  
+  /**
+   * 批量插入
+   */
+  insertMany(data: S[T][]): QueryClasses.BatchInsertion<S,T, C, Q> {
+    return this.database.insertMany<T>(this.name, data);
+  }
+  
+  /**
+   * 聚合查询
+   */
+  aggregate(): QueryClasses.Aggregation<S,T, C, Q> {
+    return this.database.aggregate<T>(this.name);
+  }
+  
   /**
    * 验证查询条件
    */

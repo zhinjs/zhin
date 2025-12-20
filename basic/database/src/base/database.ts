@@ -1,7 +1,8 @@
 import type { Dialect } from './dialect.js';
 import { Model } from './model.js';
-import { Definition, QueryParams, AlterDefinition, Condition, BuildQueryResult } from '../types.js';
+import { Definition, QueryParams, AlterDefinition, Condition, BuildQueryResult, Transaction, TransactionOptions, TransactionContext } from '../types.js';
 import * as QueryClasses from './query-classes.js';
+import { TransactionContextImpl } from './transaction.js';
 
 /**
  * 基础数据库抽象类
@@ -88,7 +89,10 @@ export abstract class Database<D=any,S extends Record<string, object>=Record<str
   define<K extends keyof S>(name: K, definition: Definition<S[K]>) {
     this.definitions.set(name, definition);
   }
-  desstory<K extends keyof S>(name: K) {
+  /**
+   * 删除表定义
+   */
+  destroy<K extends keyof S>(name: K) {
     this.definitions.delete(name);
   }
   
@@ -116,6 +120,53 @@ export abstract class Database<D=any,S extends Record<string, object>=Record<str
   delete<T extends keyof S>(name: T, condition: Condition<S[T]>): QueryClasses.Deletion<S,T,D,Q>{
     return new QueryClasses.Deletion<S,T,D,Q>(this, name).where(condition);
   }
+  
+  /**
+   * 批量插入
+   */
+  insertMany<T extends keyof S>(name: T, data: S[T][]): QueryClasses.BatchInsertion<S,T,D,Q>{
+    return new QueryClasses.BatchInsertion<S,T,D,Q>(this, name, data);
+  }
+  
+  /**
+   * 聚合查询
+   */
+  aggregate<T extends keyof S>(name: T): QueryClasses.Aggregation<S,T,D,Q>{
+    return new QueryClasses.Aggregation<S,T,D,Q>(this, name);
+  }
+  
+  // ============================================================================
+  // Transaction Support
+  // ============================================================================
+  
+  /**
+   * 是否支持事务
+   */
+  supportsTransactions(): boolean {
+    return this.dialect.supportsTransactions();
+  }
+  
+  /**
+   * 在事务中执行操作
+   * 自动处理 commit 和 rollback
+   * 支持链式调用：trx.insert(), trx.select(), trx.update(), trx.delete()
+   */
+  async transaction<R>(callback: (trx: TransactionContext<S>) => Promise<R>, options?: TransactionOptions): Promise<R> {
+    if (!this.isStarted) {
+      throw new Error('Database not started');
+    }
+    const trx = await this.dialect.beginTransaction(options);
+    const trxContext = new TransactionContextImpl<S>(this as any, trx);
+    try {
+      const result = await callback(trxContext);
+      await trxContext.commit();
+      return result;
+    } catch (error) {
+      await trxContext.rollback();
+      throw error;
+    }
+  }
+  
   /**
    * 抽象方法：获取所有模型名称
    */
