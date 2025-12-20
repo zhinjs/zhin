@@ -5,6 +5,25 @@ import * as QueryClasses from './query-classes.js';
 import { TransactionContextImpl } from './transaction.js';
 
 /**
+ * 查询日志处理器类型
+ */
+export type QueryLogger = (info: {
+  sql: string;
+  params?: any[];
+  duration: number;
+  error?: Error;
+}) => void;
+
+/**
+ * 默认查询日志处理器
+ */
+const defaultLogger: QueryLogger = ({ sql, params, duration, error }) => {
+  const paramStr = params?.length ? ` [${JSON.stringify(params)}]` : '';
+  const status = error ? `❌ ERROR: ${error.message}` : `✅ ${duration}ms`;
+  console.log(`[SQL] ${sql}${paramStr} → ${status}`);
+};
+
+/**
  * 基础数据库抽象类
  * 定义所有数据库类型的通用接口和行为
  */
@@ -12,12 +31,54 @@ export abstract class Database<D=any,S extends Record<string, object>=Record<str
   protected hasStarted = false;
   public readonly definitions: Database.Definitions<S>=new Database.Definitions<S>();
   public readonly models: Database.Models<S,D,Q> = new Database.Models<S,D,Q>();
+  
+  private _logger?: QueryLogger;
+  private _logging = false;
+  
   constructor(
     public readonly dialect: Dialect<D,S,Q>,
     definitions?: Database.DefinitionObj<S>,
   ) {
     for (const key in definitions) {
       this.definitions.set(key, definitions[key]);
+    }
+  }
+  
+  // ============================================================================
+  // Query Logging
+  // ============================================================================
+  
+  /**
+   * 启用查询日志
+   * @param handler 自定义日志处理器，不传则使用默认控制台输出
+   */
+  enableLogging(handler?: QueryLogger): this {
+    this._logging = true;
+    this._logger = handler ?? defaultLogger;
+    return this;
+  }
+  
+  /**
+   * 禁用查询日志
+   */
+  disableLogging(): this {
+    this._logging = false;
+    return this;
+  }
+  
+  /**
+   * 查询日志是否启用
+   */
+  get isLogging(): boolean {
+    return this._logging;
+  }
+  
+  /**
+   * 记录查询日志
+   */
+  protected log(sql: string, params?: any[], duration?: number, error?: Error): void {
+    if (this._logging && this._logger) {
+      this._logger({ sql: String(sql), params, duration: duration ?? 0, error });
     }
   }
   /**
@@ -59,7 +120,15 @@ export abstract class Database<D=any,S extends Record<string, object>=Record<str
     if (!this.isStarted) {
       throw new Error('Database not started');
     }
-    return this.dialect.query<U>(sql, params);
+    const start = Date.now();
+    try {
+      const result = await this.dialect.query<U>(sql, params);
+      this.log(String(sql), params, Date.now() - start);
+      return result;
+    } catch (error) {
+      this.log(String(sql), params, Date.now() - start, error as Error);
+      throw error;
+    }
   }
   abstract buildQuery<T extends keyof S>(params: QueryParams<S,T>): BuildQueryResult<Q>;
   /**

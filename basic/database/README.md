@@ -729,6 +729,193 @@ await db.transaction(async (trx) => {
 | `trx.delete(table)` | 删除 | `.where()` |
 | `trx.query(sql, params)` | 原生 SQL | - |
 
+### JOIN 关联查询
+
+支持 `INNER JOIN`、`LEFT JOIN`、`RIGHT JOIN`，**返回类型自动推断**：
+
+```typescript
+interface Schema {
+  users: { id: number; name: string; status: string };
+  orders: { id: number; userId: number; amount: number };
+}
+
+// INNER JOIN - 返回类型自动扩展
+const result = await db.select('users', ['id', 'name'])
+  .join('orders', 'id', 'userId')
+  .where({ status: 'active' });
+
+// ✅ 类型推断正确！
+// result 类型: { users: { id: number; name: string }, orders: { id: number; userId: number; amount: number } }[]
+result[0].users.id;      // number ✅
+result[0].users.name;    // string ✅
+result[0].orders.amount; // number ✅
+
+// LEFT JOIN - 右表可能为 null
+const leftResult = await db.select('users', ['id', 'name'])
+  .leftJoin('orders', 'id', 'userId');
+// leftResult 类型: { users: {...}, orders: {...} | null }[]
+leftResult[0].orders?.amount;  // number | undefined ✅
+
+// RIGHT JOIN - 左表可能为 null  
+const rightResult = await db.select('users', ['id', 'name'])
+  .rightJoin('orders', 'id', 'userId');
+// rightResult 类型: { users: Partial<...>, orders: {...} }[]
+
+// 多表 JOIN - 链式调用
+const multiJoin = await db.select('orders', ['id', 'amount'])
+  .join('users', 'userId', 'id')
+  .leftJoin('products', 'productId', 'id')
+  .where({ amount: { $gt: 100 } });
+```
+
+**JOIN 方法：**
+
+| 方法 | SQL | 返回类型 |
+|------|-----|----------|
+| `.join(table, left, right)` | `INNER JOIN` | `{ 主表: {...}, 关联表: {...} }` |
+| `.leftJoin(table, left, right)` | `LEFT JOIN` | `{ 主表: {...}, 关联表: {...} \| null }` |
+| `.rightJoin(table, left, right)` | `RIGHT JOIN` | `{ 主表: Partial<...>, 关联表: {...} }` |
+
+### 软删除
+
+启用软删除后，`delete()` 不会物理删除数据，而是设置 `deletedAt` 字段：
+
+```typescript
+import { RelatedModel } from '@zhin.js/database';
+
+// 创建带软删除的模型
+const userModel = new RelatedModel(db, 'users', { 
+  softDelete: true,
+  deletedAtField: 'deletedAt'  // 可选，默认 'deletedAt'
+});
+
+// 删除 → 实际执行: UPDATE users SET deletedAt = NOW() WHERE id = 1
+await userModel.delete({ id: 1 });
+
+// 普通查询 → 自动排除已删除: SELECT * FROM users WHERE deletedAt IS NULL
+const activeUsers = await userModel.select('id', 'name');
+
+// 查询包含已删除的记录
+const allUsers = await userModel.selectWithTrashed('id', 'name');
+
+// 仅查询已删除的记录
+const deletedUsers = await userModel.selectOnlyTrashed('id', 'name');
+
+// 恢复已删除的记录 → UPDATE users SET deletedAt = NULL WHERE id = 1
+await userModel.restore({ id: 1 });
+
+// 强制物理删除（忽略软删除设置）
+await userModel.forceDelete({ id: 1 });
+```
+
+**软删除方法：**
+
+| 方法 | 说明 |
+|------|------|
+| `model.delete(condition)` | 软删除（设置 deletedAt） |
+| `model.select(...)` | 自动排除已删除 |
+| `model.selectWithTrashed(...)` | 包含已删除 |
+| `model.selectOnlyTrashed(...)` | 仅已删除 |
+| `model.restore(condition)` | 恢复软删除 |
+| `model.forceDelete(condition)` | 物理删除 |
+
+### 自动时间戳
+
+启用后自动管理 `createdAt` 和 `updatedAt` 字段：
+
+```typescript
+const userModel = new RelatedModel(db, 'users', { 
+  timestamps: true,
+  createdAtField: 'createdAt',  // 可选
+  updatedAtField: 'updatedAt'   // 可选
+});
+
+// 插入时自动设置 createdAt 和 updatedAt
+await userModel.insert({ name: 'John' });
+// INSERT INTO users (name, createdAt, updatedAt) VALUES ('John', NOW(), NOW())
+
+// 更新时自动更新 updatedAt
+await userModel.update({ name: 'Jane' }).where({ id: 1 });
+// UPDATE users SET name = 'Jane', updatedAt = NOW() WHERE id = 1
+```
+
+### 子查询
+
+支持在 `$in` 和 `$nin` 操作符中使用子查询，**带完整类型推断**：
+
+```typescript
+interface Schema {
+  users: { id: number; name: string; status: string };
+  orders: { id: number; userId: number; amount: number };
+}
+
+// 查询购买过高价商品的用户
+const users = await db.select('users', ['id', 'name'])
+  .where({
+    id: {
+      $in: db.select('orders', ['userId']).where({ amount: { $gt: 1000 } })
+    }
+  });
+// SQL: SELECT id, name FROM users WHERE id IN (SELECT userId FROM orders WHERE amount > 1000)
+
+// 查询没有下过订单的用户
+const inactiveUsers = await db.select('users', ['id', 'name'])
+  .where({
+    id: {
+      $nin: db.select('orders', ['userId'])
+    }
+  });
+// SQL: SELECT id, name FROM users WHERE id NOT IN (SELECT userId FROM orders)
+
+// ✅ 类型安全：子查询返回类型必须与字段类型匹配
+db.select('users', ['id']).where({
+  id: { $in: db.select('orders', ['userId']) }  // ✅ number 匹配 number
+});
+
+db.select('users', ['id']).where({
+  id: { $in: db.select('users', ['name']) }     // ❌ 类型错误！string 不能匹配 number
+});
+```
+
+### 查询日志
+
+启用查询日志，方便调试和性能分析：
+
+```typescript
+// 启用默认日志（输出到控制台）
+db.enableLogging();
+
+// 执行查询时自动输出日志
+await db.select('users', ['id', 'name']).where({ status: 'active' });
+// [SQL] SELECT id, name FROM users WHERE status = ? ["active"] → ✅ 3ms
+
+await db.insert('logs', { message: 'test' });
+// [SQL] INSERT INTO logs (message) VALUES (?) ["test"] → ✅ 1ms
+
+// 错误时也会记录
+await db.query('SELECT * FROM not_exist');
+// [SQL] SELECT * FROM not_exist → ❌ ERROR: no such table: not_exist
+
+// 自定义日志处理器
+db.enableLogging(({ sql, params, duration, error }) => {
+  if (error) {
+    logger.error(`Query failed: ${sql}`, { params, error });
+  } else if (duration > 100) {
+    logger.warn(`Slow query: ${sql}`, { params, duration });
+  } else {
+    logger.debug(`Query: ${sql}`, { params, duration });
+  }
+});
+
+// 禁用日志
+db.disableLogging();
+
+// 检查日志状态
+if (db.isLogging) {
+  console.log('Query logging is enabled');
+}
+```
+
 ### 连接池
 
 MySQL 和 PostgreSQL 支持连接池，提高高并发场景下的性能：

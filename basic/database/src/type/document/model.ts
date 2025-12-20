@@ -71,10 +71,10 @@ export class DocumentModel<D=any, S extends Record<string, object> = Record<stri
   /**
    * 根据ID删除文档
    */
-  async deleteById(id: string): Promise<S[T][]> {
+  async deleteById(id: string): Promise<S[T][] | number> {
     return this.delete({
       _id: id,
-    } as Condition<S[T]>)
+    } as Condition<S[T]>) as Promise<S[T][] | number>;
   }
 
   /**

@@ -50,6 +50,23 @@ export type Definition<T extends object=object> = {
 }
 
 // ============================================================================
+// Model Options
+// ============================================================================
+
+export interface ModelOptions {
+  /** 启用软删除（需要表中有 deletedAt 字段） */
+  softDelete?: boolean;
+  /** 软删除字段名，默认 'deletedAt' */
+  deletedAtField?: string;
+  /** 启用自动时间戳（createdAt, updatedAt） */
+  timestamps?: boolean;
+  /** createdAt 字段名，默认 'createdAt' */
+  createdAtField?: string;
+  /** updatedAt 字段名，默认 'updatedAt' */
+  updatedAtField?: string;
+}
+
+// ============================================================================
 // Column Alteration Types
 // ============================================================================
 
@@ -79,6 +96,21 @@ export type AlterDefinition<T extends object> = {
 };
 
 // ============================================================================
+// Subquery Types
+// ============================================================================
+
+/**
+ * 子查询标识接口
+ * @template T 子查询返回的字段类型
+ */
+export interface Subquery<T = any> {
+  readonly __isSubquery: true;
+  /** 子查询返回值类型标记（仅用于类型推断，运行时不存在） */
+  readonly __returnType?: T;
+  toSQL(): { sql: string; params: any[] };
+}
+
+// ============================================================================
 // Condition Types
 // ============================================================================
 
@@ -89,8 +121,10 @@ export interface ComparisonOperators<T> {
   $gte?: T;
   $lt?: T;
   $lte?: T;
-  $in?: T[];
-  $nin?: T[];
+  /** 值在数组中或子查询结果中 */
+  $in?: T[] | Subquery<T>;
+  /** 值不在数组中或子查询结果中 */
+  $nin?: T[] | Subquery<T>;
   $like?: string;
   $nlike?: string;
 }
@@ -114,6 +148,35 @@ export type SortDirection = "ASC" | "DESC";
 export interface Ordering<T extends object> {
   field: keyof T;
   direction: SortDirection;
+}
+
+// ============================================================================
+// JOIN Types
+// ============================================================================
+
+export type JoinType = 'INNER' | 'LEFT' | 'RIGHT' | 'FULL';
+
+/**
+ * JOIN 子句定义
+ * @template S Schema 类型
+ * @template T 主表
+ * @template J 关联表
+ */
+export interface JoinClause<
+  S extends Record<string, object>,
+  T extends keyof S,
+  J extends keyof S
+> {
+  /** JOIN 类型 */
+  type: JoinType;
+  /** 关联表名 */
+  table: J;
+  /** 主表字段 */
+  leftField: keyof S[T];
+  /** 关联表字段 */
+  rightField: keyof S[J];
+  /** 表别名（可选） */
+  alias?: string;
 }
 
 // ============================================================================
@@ -153,6 +216,8 @@ export interface SelectQueryParams<S extends Record<string, object>, T extends k
   orderings?: Ordering<S[T]>[];
   limitCount?: number;
   offsetCount?: number;
+  /** JOIN 子句列表 */
+  joins?: JoinClause<S, T, keyof S>[];
 }
 
 export interface InsertQueryParams<S extends Record<string, object>, T extends keyof S> extends BaseQueryParams<S,T> {

@@ -76,14 +76,23 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
           }
         });
       } 
-      // INSERT/UPDATE/DELETE 使用 db.run 执行
-      else if (isInsertQuery || trimmedSql.startsWith('update') || trimmedSql.startsWith('delete')) {
+      // INSERT 使用 db.run 执行，返回 { lastID, changes }
+      else if (isInsertQuery) {
         this.db.run(sql, params, function(this: any, err: any) {
           if (err) {
             reject(err);
           } else {
-            // 返回插入的行 ID 和影响的行数
             resolve({ lastID: this.lastID, changes: this.changes } as U);
+          }
+        });
+      }
+      // UPDATE/DELETE 返回受影响的行数
+      else if (trimmedSql.startsWith('update') || trimmedSql.startsWith('delete')) {
+        this.db.run(sql, params, function(this: any, err: any) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(this.changes as U);
           }
         });
       }

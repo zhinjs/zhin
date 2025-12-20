@@ -45,15 +45,15 @@ export namespace Registry {
     factories.set(dialect, factory as Factory<Config[D], S,any>);
   }
   
-  export function create<S extends Record<string, object>,D extends keyof Databases<S>>(
+  export function create<S extends Record<string, object>, D extends keyof Databases<S>>(
     dialect: D,
     config: Config[D],
     definitions?: Database.DefinitionObj<S>
-  ): Database<Config[D], S, any> {
-    const factory = factories.get(dialect) as Factory<Config[D], S,Database<Config[D],S,any>>;
+  ): Databases<S>[D] {
+    const factory = factories.get(dialect);
     if (!factory) {
       throw new Error(`database dialect ${dialect} not registered`);
     }
-    return new factory(config, definitions)
+    return new factory(config, definitions) as Databases<S>[D];
   }
 }

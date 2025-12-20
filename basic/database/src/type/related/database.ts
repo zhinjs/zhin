@@ -18,6 +18,8 @@ import {
   AddDefinition,
   ModifyDefinition,
   DropDefinition,
+  Subquery,
+  JoinClause,
   isCreateQuery,
   isSelectQuery,
   isInsertQuery,
@@ -29,6 +31,13 @@ import {
   isDropIndexQuery,
   isAggregateQuery,
 } from '../../types.js';
+
+/**
+ * 判断是否为子查询对象
+ */
+function isSubquery(value: any): value is Subquery {
+  return value && typeof value === 'object' && value.__isSubquery === true;
+}
 
 /**
  * 关系型数据库类
@@ -95,16 +104,32 @@ export class RelatedDatabase<
   // ========================================================================
   
   protected buildSelectQuery<T extends keyof S>(params: SelectQueryParams<S,T>): BuildQueryResult<string> {
-    const fields = params.fields && params.fields.length
-      ? params.fields.map(f => this.dialect.quoteIdentifier(String(f))).join(', ')
-      : '*';
+    const tableName = String(params.tableName);
+    const hasJoins = params.joins && params.joins.length > 0;
     
-    let query = `SELECT ${fields} FROM ${this.dialect.quoteIdentifier(params.tableName)}`;
+    // 构建字段列表（有 JOIN 时需要加表名前缀）
+    const fields = params.fields && params.fields.length
+      ? params.fields.map(f => {
+          const fieldName = this.dialect.quoteIdentifier(String(f));
+          return hasJoins 
+            ? `${this.dialect.quoteIdentifier(tableName)}.${fieldName}`
+            : fieldName;
+        }).join(', ')
+      : hasJoins ? `${this.dialect.quoteIdentifier(tableName)}.*` : '*';
+    
+    let query = `SELECT ${fields} FROM ${this.dialect.quoteIdentifier(tableName)}`;
     const queryParams: any[] = [];
+    
+    // JOIN clauses
+    if (hasJoins) {
+      for (const join of params.joins!) {
+        query += ` ${this.formatJoinClause(tableName, join)}`;
+      }
+    }
     
     // WHERE clause
     if (params.conditions) {
-      const [condition, conditionParams] = this.parseCondition(params.conditions);
+      const [condition, conditionParams] = this.parseCondition(params.conditions, hasJoins ? tableName : undefined);
       if (condition) {
         query += ` WHERE ${condition}`;
         queryParams.push(...conditionParams);
@@ -113,14 +138,25 @@ export class RelatedDatabase<
     
     // GROUP BY clause
     if (params.groupings && params.groupings.length) {
-      const groupings = params.groupings.map(f => this.dialect.quoteIdentifier(String(f))).join(', ');
+      const groupings = params.groupings.map(f => {
+        const fieldName = this.dialect.quoteIdentifier(String(f));
+        return hasJoins 
+          ? `${this.dialect.quoteIdentifier(tableName)}.${fieldName}`
+          : fieldName;
+      }).join(', ');
       query += ` GROUP BY ${groupings}`;
     }
     
     // ORDER BY clause
     if (params.orderings && params.orderings.length) {
       const orderings = params.orderings
-        .map(o => `${this.dialect.quoteIdentifier(String(o.field))} ${o.direction}`)
+        .map(o => {
+          const fieldName = this.dialect.quoteIdentifier(String(o.field));
+          const fullField = hasJoins 
+            ? `${this.dialect.quoteIdentifier(tableName)}.${fieldName}`
+            : fieldName;
+          return `${fullField} ${o.direction}`;
+        })
         .join(', ');
       query += ` ORDER BY ${orderings}`;
     }
@@ -137,6 +173,20 @@ export class RelatedDatabase<
     return { query, params: queryParams };
   }
   
+  /**
+   * 格式化 JOIN 子句
+   */
+  protected formatJoinClause<T extends keyof S>(
+    mainTable: string, 
+    join: JoinClause<S, T, keyof S>
+  ): string {
+    const joinTable = this.dialect.quoteIdentifier(String(join.table));
+    const leftField = `${this.dialect.quoteIdentifier(mainTable)}.${this.dialect.quoteIdentifier(String(join.leftField))}`;
+    const rightField = `${joinTable}.${this.dialect.quoteIdentifier(String(join.rightField))}`;
+    
+    return `${join.type} JOIN ${joinTable} ON ${leftField} = ${rightField}`;
+  }
+  
   // ========================================================================
   // INSERT Query
   // ========================================================================
@@ -147,7 +197,8 @@ export class RelatedDatabase<
     const placeholders = keys.map((_, index) => this.dialect.getParameterPlaceholder(index)).join(', ');
     
     const query = `INSERT INTO ${this.dialect.quoteIdentifier(params.tableName)} (${columns}) VALUES (${placeholders})`;
-    const values = Object.values(params.data).map(v => this.dialect.formatDefaultValue(v));
+    // 直接传值，不要格式化（参数化查询由驱动处理）
+    const values = Object.values(params.data);
     
     return { query, params: values };
   }
@@ -174,7 +225,8 @@ export class RelatedDatabase<
       valueRows.push(`(${placeholders})`);
       
       keys.forEach(key => {
-        allValues.push(this.dialect.formatDefaultValue((row as any)[key]));
+        // 直接传值，不要格式化（参数化查询由驱动处理）
+        allValues.push((row as any)[key]);
       });
     });
     
@@ -359,15 +411,28 @@ export class RelatedDatabase<
     }
   }
   
-  protected parseCondition<T extends object>(condition: Condition<T>): [string, any[]] {
+  /**
+   * 解析条件对象为 SQL WHERE 子句
+   * @param condition 条件对象
+   * @param tablePrefix 表名前缀（用于 JOIN 查询）
+   */
+  protected parseCondition<T extends object>(condition: Condition<T>, tablePrefix?: string): [string, any[]] {
     const clauses: string[] = [];
     const params: any[] = [];
+    
+    // 辅助函数：生成带前缀的字段名
+    const formatField = (field: string): string => {
+      const quotedField = this.dialect.quoteIdentifier(field);
+      return tablePrefix 
+        ? `${this.dialect.quoteIdentifier(tablePrefix)}.${quotedField}`
+        : quotedField;
+    };
 
     for (const key in condition) {
       if (key === '$and' && Array.isArray((condition as any).$and)) {
         const subClauses: string[] = [];
         for (const subCondition of (condition as any).$and) {
-          const [subClause, subParams] = this.parseCondition(subCondition);
+          const [subClause, subParams] = this.parseCondition(subCondition, tablePrefix);
           if (subClause) {
             subClauses.push(`(${subClause})`);
             params.push(...subParams);
@@ -379,7 +444,7 @@ export class RelatedDatabase<
       } else if (key === '$or' && Array.isArray((condition as any).$or)) {
         const subClauses: string[] = [];
         for (const subCondition of (condition as any).$or) {
-          const [subClause, subParams] = this.parseCondition(subCondition);
+          const [subClause, subParams] = this.parseCondition(subCondition, tablePrefix);
           if (subClause) {
             subClauses.push(`(${subClause})`);
             params.push(...subParams);
@@ -389,7 +454,7 @@ export class RelatedDatabase<
           clauses.push(subClauses.join(' OR '));
         }
       } else if (key === '$not' && (condition as any).$not) {
-        const [subClause, subParams] = this.parseCondition((condition as any).$not);
+        const [subClause, subParams] = this.parseCondition((condition as any).$not, tablePrefix);
         if (subClause) {
           clauses.push(`NOT (${subClause})`);
           params.push(...subParams);
@@ -398,17 +463,25 @@ export class RelatedDatabase<
         const value = (condition as any)[key];
         if (value && typeof value === 'object' && !Array.isArray(value)) {
           for (const op in value) {
-            const quotedKey = this.dialect.quoteIdentifier(key);
+            const quotedKey = formatField(key);
             const placeholder = this.dialect.getParameterPlaceholder(params.length);
             
             switch (op) {
               case '$eq':
-                clauses.push(`${quotedKey} = ${placeholder}`);
-                params.push(value[op]);
+                if (value[op] === null) {
+                  clauses.push(`${quotedKey} IS NULL`);
+                } else {
+                  clauses.push(`${quotedKey} = ${placeholder}`);
+                  params.push(value[op]);
+                }
                 break;
               case '$ne':
-                clauses.push(`${quotedKey} <> ${placeholder}`);
-                params.push(value[op]);
+                if (value[op] === null) {
+                  clauses.push(`${quotedKey} IS NOT NULL`);
+                } else {
+                  clauses.push(`${quotedKey} <> ${placeholder}`);
+                  params.push(value[op]);
+                }
                 break;
               case '$gt':
                 clauses.push(`${quotedKey} > ${placeholder}`);
@@ -427,8 +500,13 @@ export class RelatedDatabase<
                 params.push(value[op]);
                 break;
               case '$in':
-                if (Array.isArray(value[op]) && value[op].length) {
-                  const placeholders = value[op].map(() => this.dialect.getParameterPlaceholder(params.length + value[op].indexOf(value[op])));
+                if (isSubquery(value[op])) {
+                  // 子查询
+                  const subquery = value[op].toSQL();
+                  clauses.push(`${quotedKey} IN (${subquery.sql})`);
+                  params.push(...subquery.params);
+                } else if (Array.isArray(value[op]) && value[op].length) {
+                  const placeholders = value[op].map((_: any, i: number) => this.dialect.getParameterPlaceholder(params.length + i));
                   clauses.push(`${quotedKey} IN (${placeholders.join(', ')})`);
                   params.push(...value[op]);
                 } else {
@@ -436,8 +514,13 @@ export class RelatedDatabase<
                 }
                 break;
               case '$nin':
-                if (Array.isArray(value[op]) && value[op].length) {
-                  const placeholders = value[op].map(() => this.dialect.getParameterPlaceholder(params.length + value[op].indexOf(value[op])));
+                if (isSubquery(value[op])) {
+                  // 子查询
+                  const subquery = value[op].toSQL();
+                  clauses.push(`${quotedKey} NOT IN (${subquery.sql})`);
+                  params.push(...subquery.params);
+                } else if (Array.isArray(value[op]) && value[op].length) {
+                  const placeholders = value[op].map((_: any, i: number) => this.dialect.getParameterPlaceholder(params.length + i));
                   clauses.push(`${quotedKey} NOT IN (${placeholders.join(', ')})`);
                   params.push(...value[op]);
                 }
@@ -453,10 +536,15 @@ export class RelatedDatabase<
             }
           }
         } else {
-          const quotedKey = this.dialect.quoteIdentifier(key);
-          const placeholder = this.dialect.getParameterPlaceholder(params.length);
-          clauses.push(`${quotedKey} = ${placeholder}`);
-          params.push(value);
+          const quotedKey = formatField(key);
+          // null 值使用 IS NULL / IS NOT NULL
+          if (value === null) {
+            clauses.push(`${quotedKey} IS NULL`);
+          } else {
+            const placeholder = this.dialect.getParameterPlaceholder(params.length);
+            clauses.push(`${quotedKey} = ${placeholder}`);
+            params.push(value);
+          }
         }
       }
     }
@@ -466,8 +554,15 @@ export class RelatedDatabase<
 
   /**
    * 获取模型
+   * @param name 模型名称
+   * @param options 可选的模型选项（如 softDelete, timestamps）
    */
-  model<T extends keyof S>(name: T): RelatedModel<D,S,T> {
+  model<T extends keyof S>(name: T, options?: import('../../types.js').ModelOptions): RelatedModel<D,S,T> {
+    // 如果有 options，每次都创建新的实例（因为选项可能不同）
+    if (options) {
+      return new RelatedModel(this, name, options);
+    }
+    // 无选项时使用缓存
     let model = this.models.get(name) as RelatedModel<D,S,T> | undefined;
     if (!model) {
       model = new RelatedModel(this, name);

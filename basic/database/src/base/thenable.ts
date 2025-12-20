@@ -23,7 +23,8 @@ export abstract class ThenableQuery<R,S extends Record<string, object>, T extend
   ): Promise<TResult1 | TResult2> {
     const params = this.getQueryParams();
     const { query, params: queryParams } = this.database.buildQuery(params);
-    return this.dialect.query<R>(query, queryParams).then(onfulfilled, onrejected);
+    // 使用 database.query 以支持日志记录
+    return this.database.query<R>(query, queryParams).then(onfulfilled, onrejected);
   }
   
   catch<TResult = never>(
@@ -34,19 +35,19 @@ export abstract class ThenableQuery<R,S extends Record<string, object>, T extend
   ): Promise<any | TResult> {
     const params = this.getQueryParams();
     const { query, params: queryParams } = this.database.buildQuery(params);
-    return this.dialect.query(query, queryParams).catch(onrejected);
+    return this.database.query(query, queryParams).catch(onrejected);
   }
   
   finally(onfinally?: (() => void) | undefined | null): Promise<any> {
     const params = this.getQueryParams();
     const { query, params: queryParams } = this.database.buildQuery(params);
-    return this.dialect.query(query, queryParams).finally(onfinally);
+    return this.database.query(query, queryParams).finally(onfinally);
   }
   
   async *[Symbol.asyncIterator](): AsyncIterator<R, void, unknown> {
     const params = this.getQueryParams();
     const { query, params: queryParams } = this.database.buildQuery(params);
-    const rows = await this.dialect.query(query, queryParams);
+    const rows = await this.database.query(query, queryParams);
     for (const row of Array.isArray(rows) ? rows : [rows]) {
       yield row;
     }
