@@ -970,6 +970,450 @@ await db.transaction(async (trx) => {
 | 事务隔离 | 自然隔离 | 自动获取专用连接 |
 | 资源利用 | 简单 | 高效复用 |
 
+## 关联关系 (Relations)
+
+支持定义和查询模型之间的关联关系，解决 N+1 查询问题。
+
+### 方式一：预定义关系配置（推荐）
+
+类似 Sequelize，在数据库层面一次性定义所有关系：
+
+```typescript
+const db = Registry.create<MySchema, 'sqlite'>('sqlite', { filename: ':memory:' });
+
+// 预定义关系配置
+db.defineRelations({
+  users: {
+    hasMany: { orders: 'userId', posts: 'authorId' },
+    hasOne: { profile: 'userId' }
+  },
+  orders: {
+    belongsTo: { users: 'userId' }
+  },
+  posts: {
+    belongsTo: { users: 'authorId' }
+  }
+});
+
+// 获取模型时自动应用关系，无需手动调用 hasMany/belongsTo
+const userModel = db.model('users');
+const usersWithOrders = await userModel.with('orders', 'profile');
+```
+
+### 方式二：模型实例定义关系
+
+```typescript
+const userModel = db.model('users');
+const orderModel = db.model('orders');
+const profileModel = db.model('profiles');
+
+// 一对多: User hasMany Orders (orders.userId -> users.id)
+userModel.hasMany(orderModel, 'userId');
+
+// 多对一: Order belongsTo User (orders.userId -> users.id)
+orderModel.belongsTo(userModel, 'userId');
+
+// 一对一: User hasOne Profile (profiles.userId -> users.id)
+userModel.hasOne(profileModel, 'userId');
+```
+
+**类型安全**：传入模型实例而不是字符串，确保外键字段名正确：
+```typescript
+// ✅ 类型检查通过
+orderModel.belongsTo(userModel, 'userId');
+
+// ❌ 类型错误：'wrongKey' 不存在于 orders 表
+orderModel.belongsTo(userModel, 'wrongKey');
+```
+
+### 加载单条记录的关联
+
+```typescript
+const user = await userModel.selectById(1);
+const userWithOrders = await userModel.loadRelation(user, 'orders');
+
+console.log(userWithOrders.orders); 
+// [{ id: 1, productName: 'A' }, { id: 2, productName: 'B' }]
+```
+
+### 批量预加载（解决 N+1）
+
+```typescript
+const users = await userModel.select();
+const usersWithOrders = await userModel.loadRelations(users, ['orders']);
+
+// 只执行 2 次查询：
+// 1. SELECT * FROM users
+// 2. SELECT * FROM orders WHERE userId IN (1, 2, 3...)
+```
+
+### 链式调用 `.with()`
+
+```typescript
+const usersWithOrders = await userModel.with('orders')
+  .where({ status: 'active' })
+  .orderBy('id', 'ASC')
+  .limit(10);
+
+// 每个 user 都自动带有 orders 数组
+usersWithOrders.forEach(user => {
+  console.log(`${user.name} has ${user.orders.length} orders`);
+});
+```
+
+### 关系类型
+
+| 方法 | 描述 | 返回值 |
+|------|------|--------|
+| `hasMany(targetModel, foreignKey)` | 一对多 | `T[]` |
+| `belongsTo(targetModel, foreignKey)` | 多对一 | `T \| null` |
+| `hasOne(targetModel, foreignKey)` | 一对一 | `T \| null` |
+| `belongsToMany(targetModel, pivot, fk, rk)` | 多对多 | `T[]` |
+
+### 多对多关系 (belongsToMany)
+
+多对多关系需要一个中间表（pivot table）来存储两个表之间的关联。
+
+#### 基本用法
+
+```typescript
+const userModel = db.model('users');
+const roleModel = db.model('roles');
+
+// User belongsToMany Roles (通过 user_roles 中间表)
+// user_roles 表结构: { user_id, role_id }
+userModel.belongsToMany(
+  roleModel,           // 目标模型
+  'user_roles',        // 中间表名
+  'user_id',           // 中间表中指向本表的外键
+  'role_id'            // 中间表中指向目标表的外键
+);
+
+// 双向关系
+roleModel.belongsToMany(userModel, 'user_roles', 'role_id', 'user_id');
+```
+
+#### 加载关联数据
+
+```typescript
+// 单条记录加载
+const user = await userModel.findById(1);
+const userWithRoles = await userModel.loadRelation(user, 'roles');
+console.log(userWithRoles.roles); // [{ id: 1, name: 'admin' }, { id: 2, name: 'editor' }]
+
+// 批量加载（with）
+const usersWithRoles = await userModel.with('roles');
+usersWithRoles.forEach(user => {
+  console.log(`${user.name} has roles: ${user.roles.map(r => r.name).join(', ')}`);
+});
+```
+
+#### 访问中间表数据
+
+如果中间表有额外字段（如 `created_at`、`sort_order` 等），可以通过 `pivotFields` 参数获取：
+
+```typescript
+// 中间表: post_tags { post_id, tag_id, sort_order }
+postModel.belongsToMany(
+  tagModel,
+  'post_tags',
+  'post_id',
+  'tag_id',
+  'id',              // 本表主键
+  'id',              // 目标表主键
+  ['sort_order']     // 需要获取的中间表字段
+);
+
+const postWithTags = await postModel.loadRelation(post, 'tags');
+postWithTags.tags.forEach(tag => {
+  console.log(`${tag.name} - sort: ${tag.pivot.sort_order}`);
+});
+```
+
+#### Schema 预定义多对多关系
+
+```typescript
+db.defineRelations({
+  users: {
+    belongsToMany: {
+      roles: {
+        pivot: 'user_roles',
+        foreignKey: 'user_id',
+        relatedKey: 'role_id',
+        pivotFields: ['assigned_at']  // 可选
+      }
+    }
+  },
+  roles: {
+    belongsToMany: {
+      users: {
+        pivot: 'user_roles',
+        foreignKey: 'role_id',
+        relatedKey: 'user_id'
+      }
+    }
+  }
+});
+```
+
+## 生命周期钩子 (Lifecycle Hooks)
+
+在 CRUD 操作的关键节点执行自定义逻辑。
+
+### 支持的钩子
+
+| 钩子名称 | 触发时机 | 可取消操作 |
+|---------|---------|-----------|
+| `beforeCreate` | 创建前 | ✅ 返回 `false` |
+| `afterCreate` | 创建后 | - |
+| `beforeFind` | 查询前 | ✅ 返回 `false` |
+| `afterFind` | 查询后 | - |
+| `beforeUpdate` | 更新前 | ✅ 返回 `false` |
+| `afterUpdate` | 更新后 | - |
+| `beforeDelete` | 删除前 | ✅ 返回 `false` |
+| `afterDelete` | 删除后 | - |
+
+### 注册钩子
+
+```typescript
+const userModel = db.model('users');
+
+// 方式一：addHook（链式调用）
+userModel
+  .addHook('beforeCreate', (ctx) => {
+    // 自动生成 slug
+    ctx.data.slug = slugify(ctx.data.name);
+  })
+  .addHook('afterCreate', async (ctx) => {
+    // 记录日志
+    await logService.log('User created', ctx.result);
+  });
+
+// 方式二：on（别名）
+userModel.on('beforeDelete', (ctx) => {
+  console.log('About to delete:', ctx.where);
+});
+
+// 方式三：批量注册
+userModel.registerHooks({
+  beforeCreate: (ctx) => { /* ... */ },
+  afterUpdate: [
+    (ctx) => { /* hook 1 */ },
+    (ctx) => { /* hook 2 */ }
+  ]
+});
+```
+
+### 钩子上下文
+
+```typescript
+interface HookContext<T> {
+  modelName: string;      // 模型名称
+  data?: Partial<T>;      // 创建/更新的数据
+  where?: Condition<T>;   // 查询/更新/删除条件
+  result?: T | T[] | number; // 操作结果（after 钩子）
+}
+```
+
+### 取消操作
+
+`before` 钩子返回 `false` 可以取消操作：
+
+```typescript
+userModel.addHook('beforeDelete', async (ctx) => {
+  // 禁止删除管理员
+  const user = await userModel.findOne(ctx.where);
+  if (user?.role === 'admin') {
+    return false; // 取消删除
+  }
+});
+
+await userModel.deleteById(1); // 如果是管理员，返回 false
+```
+
+### 修改数据
+
+`beforeCreate` 和 `beforeUpdate` 可以修改数据：
+
+```typescript
+userModel.addHook('beforeCreate', (ctx) => {
+  // 统一处理
+  ctx.data.status = 'pending';
+  ctx.data.name = ctx.data.name?.trim().toLowerCase();
+});
+
+userModel.addHook('beforeUpdate', (ctx) => {
+  // 自动更新时间
+  ctx.data.updatedAt = new Date();
+});
+```
+
+### 转换结果
+
+`afterFind` 可以转换查询结果：
+
+```typescript
+userModel.addHook('afterFind', (ctx) => {
+  if (ctx.result && !Array.isArray(ctx.result)) {
+    // 添加计算属性
+    ctx.result.fullName = `${ctx.result.firstName} ${ctx.result.lastName}`;
+  }
+});
+```
+
+### 移除钩子
+
+```typescript
+const myHook = (ctx) => { /* ... */ };
+userModel.addHook('beforeCreate', myHook);
+
+// 移除特定钩子
+userModel.removeHook('beforeCreate', myHook);
+
+// 移除某类型的所有钩子
+userModel.removeHook('beforeCreate');
+
+// 清除所有钩子
+userModel.clearHooks();
+```
+
+### 使用钩子的 CRUD 方法
+
+| 方法 | 触发的钩子 |
+|------|-----------|
+| `create(data)` | beforeCreate → afterCreate |
+| `findOne(where)` / `findById(id)` | beforeFind → afterFind |
+| `findAll(where)` | beforeFind → afterFind |
+| `updateWhere(where, data)` / `updateById(id, data)` | beforeUpdate → afterUpdate |
+| `deleteWhere(where)` / `deleteById(id)` | beforeDelete → afterDelete |
+
+> 注意：直接使用 `insert()`, `select()`, `update()`, `delete()` 链式查询 **不会** 触发钩子，需要使用上述便捷方法。
+
+## 数据迁移 (Migration)
+
+版本化的数据库结构变更管理，支持升级和回滚。**`down` 操作可自动生成，无需手动编写。**
+
+### 基本用法
+
+```typescript
+import { MigrationRunner, defineMigration } from '@zhin.js/database';
+
+const runner = new MigrationRunner(db);
+
+// 定义迁移 - 只需写 up，down 会自动生成！
+runner.add(defineMigration({
+  name: '001_create_users',
+  up: async (ctx) => {
+    await ctx.createTable('users', {
+      id: { type: 'integer', primary: true, autoIncrement: true },
+      name: { type: 'text', nullable: false },
+      email: { type: 'text', unique: true },
+      createdAt: { type: 'date' }
+    });
+  }
+  // down 自动生成: ctx.dropTable('users')
+}));
+
+runner.add(defineMigration({
+  name: '002_add_user_status',
+  up: async (ctx) => {
+    await ctx.addColumn('users', 'status', { type: 'text', default: 'active' });
+    await ctx.addIndex('users', 'idx_status', ['status']);
+  }
+  // down 自动生成: 
+  //   ctx.dropIndex('users', 'idx_status')
+  //   ctx.dropColumn('users', 'status')
+}));
+
+// 运行所有待执行的迁移
+await runner.migrate();
+```
+
+### 自动生成 Down 的规则
+
+系统会记录 `up` 中执行的操作，并自动生成反向操作：
+
+| up 操作 | 自动生成的 down 操作 |
+|---------|---------------------|
+| `createTable(name, columns)` | `dropTable(name)` |
+| `addColumn(table, col, def)` | `dropColumn(table, col)` |
+| `addIndex(table, idx, cols)` | `dropIndex(table, idx)` |
+| `renameColumn(table, old, new)` | `renameColumn(table, new, old)` |
+
+以下操作**无法自动生成** down（需要手动提供）：
+- `dropTable` - 需要原始表结构才能恢复
+- `dropColumn` - 需要原始列定义才能恢复
+- `dropIndex` - 需要原始索引定义才能恢复
+- `query` - 原生 SQL 无法自动反向
+
+### 手动提供 down
+
+对于复杂场景或无法自动反向的操作，可以显式提供 `down`：
+
+```typescript
+runner.add(defineMigration({
+  name: '003_seed_settings',
+  up: async (ctx) => {
+    // 原生 SQL 无法自动反向
+    await ctx.query(`INSERT INTO settings VALUES (?, ?)`, ['theme', 'dark']);
+  },
+  down: async (ctx) => {
+    await ctx.query(`DELETE FROM settings WHERE key = ?`, ['theme']);
+  }
+}));
+```
+
+### 迁移操作
+
+```typescript
+// 运行所有待执行的迁移
+const migrated = await runner.migrate();
+console.log('已迁移:', migrated);
+
+// 回滚最后一批迁移
+const rolledBack = await runner.rollback();
+console.log('已回滚:', rolledBack);
+
+// 回滚所有迁移
+await runner.reset();
+
+// 重新运行所有迁移 (reset + migrate)
+const { rolledBack, migrated } = await runner.refresh();
+
+// 查看迁移状态
+const status = await runner.status();
+// [
+//   { name: '001_create_users', status: 'executed', batch: 1 },
+//   { name: '002_add_status', status: 'pending' }
+// ]
+```
+
+### 迁移上下文 API
+
+| 方法 | 描述 |
+|------|------|
+| `createTable(name, columns)` | 创建表 |
+| `dropTable(name)` | 删除表 |
+| `addColumn(table, column, definition)` | 添加列 |
+| `dropColumn(table, column)` | 删除列 |
+| `renameColumn(table, oldName, newName)` | 重命名列 |
+| `addIndex(table, indexName, columns, unique?)` | 添加索引 |
+| `dropIndex(table, indexName)` | 删除索引 |
+| `query(sql, params?)` | 执行原生 SQL |
+
+### 批量添加迁移
+
+```typescript
+runner.addAll([
+  defineMigration({ name: '001_users', up: async (ctx) => { /* ... */ } }),
+  defineMigration({ name: '002_orders', up: async (ctx) => { /* ... */ } }),
+  defineMigration({ name: '003_products', up: async (ctx) => { /* ... */ } }),
+]);
+
+// 同一批次的迁移会一起执行/回滚
+await runner.migrate();
+```
+
 ## License
 
 MIT

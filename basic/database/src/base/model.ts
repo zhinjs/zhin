@@ -1,6 +1,6 @@
 import type { Database } from './database.js';
 import type { Dialect } from './dialect.js';
-import { AlterDefinition, Condition, ModelOptions } from '../types.js';
+import { AlterDefinition, Condition, ModelOptions, HookName, HookFn, HookContext, HooksConfig } from '../types.js';
 import * as QueryClasses from './query-classes.js';
 
 /** 默认软删除字段名 */
@@ -13,11 +13,13 @@ const DEFAULT_UPDATED_AT = 'updatedAt';
 /**
  * 基础模型抽象类
  * 定义所有模型类型的通用接口和行为
- * 支持软删除和自动时间戳
+ * 支持软删除、自动时间戳和生命周期钩子
  */
 export abstract class Model<C=any,S extends Record<string,object>=Record<string, object>,Q = string,T extends keyof S=keyof S> {
   /** 模型配置选项 */
   public readonly options: ModelOptions;
+  /** 生命周期钩子注册表 */
+  private readonly hooks: Map<HookName, HookFn<S[T]>[]> = new Map();
   
   constructor(
     public readonly database: Database<any, S, Q>,
@@ -25,6 +27,116 @@ export abstract class Model<C=any,S extends Record<string,object>=Record<string,
     options?: ModelOptions
   ) {
     this.options = options ?? {};
+  }
+  
+  // ============================================================================
+  // Lifecycle Hooks
+  // ============================================================================
+  
+  /**
+   * 注册生命周期钩子
+   * @param hookName 钩子名称
+   * @param fn 钩子函数
+   * @returns this（支持链式调用）
+   * 
+   * @example
+   * ```ts
+   * userModel
+   *   .addHook('beforeCreate', (ctx) => {
+   *     ctx.data.createdBy = 'system';
+   *   })
+   *   .addHook('afterDelete', async (ctx) => {
+   *     await logService.log('User deleted', ctx.result);
+   *   });
+   * ```
+   */
+  addHook(hookName: HookName, fn: HookFn<S[T]>): this {
+    const fns = this.hooks.get(hookName) ?? [];
+    fns.push(fn);
+    this.hooks.set(hookName, fns);
+    return this;
+  }
+  
+  /**
+   * addHook 的别名
+   */
+  on(hookName: HookName, fn: HookFn<S[T]>): this {
+    return this.addHook(hookName, fn);
+  }
+  
+  /**
+   * 批量注册钩子
+   * @example
+   * ```ts
+   * userModel.registerHooks({
+   *   beforeCreate: (ctx) => { ... },
+   *   afterUpdate: [(ctx) => { ... }, (ctx) => { ... }]
+   * });
+   * ```
+   */
+  registerHooks(hooks: HooksConfig<S[T]>): this {
+    for (const [name, fn] of Object.entries(hooks)) {
+      if (Array.isArray(fn)) {
+        fn.forEach(f => this.addHook(name as HookName, f));
+      } else if (fn) {
+        this.addHook(name as HookName, fn);
+      }
+    }
+    return this;
+  }
+  
+  /**
+   * 移除指定钩子
+   */
+  removeHook(hookName: HookName, fn?: HookFn<S[T]>): this {
+    if (!fn) {
+      this.hooks.delete(hookName);
+    } else {
+      const fns = this.hooks.get(hookName);
+      if (fns) {
+        const index = fns.indexOf(fn);
+        if (index > -1) {
+          fns.splice(index, 1);
+        }
+      }
+    }
+    return this;
+  }
+  
+  /**
+   * 清除所有钩子
+   */
+  clearHooks(): this {
+    this.hooks.clear();
+    return this;
+  }
+  
+  /**
+   * 触发钩子
+   * @returns 如果任何 before 钩子返回 false，则返回 false
+   */
+  protected async runHooks(hookName: HookName, context: HookContext<S[T]>): Promise<boolean> {
+    const fns = this.hooks.get(hookName);
+    if (!fns || fns.length === 0) return true;
+    
+    for (const fn of fns) {
+      const result = await fn(context);
+      // before 钩子返回 false 可以取消操作
+      if (hookName.startsWith('before') && result === false) {
+        return false;
+      }
+    }
+    return true;
+  }
+  
+  /**
+   * 创建钩子上下文
+   */
+  protected createHookContext(options: Partial<HookContext<S[T]>> = {}): HookContext<S[T]> {
+    return {
+      modelName: String(this.name),
+      ...options
+    };
   }
 
   /**

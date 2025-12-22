@@ -67,6 +67,53 @@ export interface ModelOptions {
 }
 
 // ============================================================================
+// Lifecycle Hooks Types
+// ============================================================================
+
+/**
+ * 生命周期钩子上下文
+ * 包含当前操作的相关信息
+ */
+export interface HookContext<T extends object = object> {
+  /** 模型名称 */
+  modelName: string;
+  /** 当前操作的数据（create/update 时） */
+  data?: Partial<T>;
+  /** 查询条件（find/update/delete 时） */
+  where?: Condition<T>;
+  /** 操作结果（after 钩子时） */
+  result?: T | T[] | number;
+}
+
+/**
+ * 钩子函数类型
+ * 返回 false 可以取消操作（仅 before 钩子）
+ */
+export type HookFn<T extends object = object> = (
+  context: HookContext<T>
+) => void | boolean | Promise<void | boolean>;
+
+/**
+ * 生命周期钩子名称
+ */
+export type HookName = 
+  | 'beforeCreate'
+  | 'afterCreate'
+  | 'beforeUpdate'
+  | 'afterUpdate'
+  | 'beforeDelete'
+  | 'afterDelete'
+  | 'beforeFind'
+  | 'afterFind';
+
+/**
+ * 钩子配置
+ */
+export type HooksConfig<T extends object = object> = {
+  [K in HookName]?: HookFn<T> | HookFn<T>[];
+};
+
+// ============================================================================
 // Column Alteration Types
 // ============================================================================
 
@@ -585,4 +632,287 @@ export function isInsertManyQuery<S extends Record<string, object>, T extends ke
 
 export function isAggregateQuery<S extends Record<string, object>, T extends keyof S>(params: QueryParams<S, T>): params is AggregateQueryParams<S, T> {
   return params.type === 'aggregate';
+}
+
+// ============================================================================
+// Relations Types
+// ============================================================================
+
+/**
+ * 关联关系类型
+ */
+export type RelationType = 'hasOne' | 'hasMany' | 'belongsTo' | 'belongsToMany';
+
+/**
+ * Schema 中的关系声明
+ * 
+ * @example
+ * ```ts
+ * interface MySchema {
+ *   users: {
+ *     id: number;
+ *     name: string;
+ *     $hasMany: { orders: 'userId' };
+ *     $hasOne: { profile: 'userId' };
+ *   };
+ *   orders: {
+ *     id: number;
+ *     userId: number;
+ *     $belongsTo: { users: 'userId' };
+ *   };
+ * }
+ * ```
+ */
+export interface SchemaRelations<S extends Record<string, object>> {
+  /** 一对多关系: { 目标表名: '外键字段' } */
+  $hasMany?: { [K in keyof S]?: string };
+  /** 一对一关系: { 目标表名: '外键字段' } */
+  $hasOne?: { [K in keyof S]?: string };
+  /** 多对一关系: { 目标表名: '本表外键字段' } */
+  $belongsTo?: { [K in keyof S]?: string };
+}
+
+/**
+ * 从 Schema 表定义中提取纯数据字段（排除关系声明）
+ */
+export type SchemaFields<T> = Omit<T, '$hasMany' | '$hasOne' | '$belongsTo'>;
+
+/**
+ * 关联关系定义
+ */
+export interface RelationDefinition<
+  S extends Record<string, object>,
+  From extends keyof S,
+  To extends keyof S
+> {
+  /** 关联类型 */
+  type: RelationType;
+  /** 目标表名 */
+  target: To;
+  /** 本表外键字段 */
+  foreignKey: keyof S[From] | keyof S[To];
+  /** 目标表主键字段（默认 'id'） */
+  targetKey?: keyof S[To];
+  /** 本表主键字段（默认 'id'） */
+  localKey?: keyof S[From];
+  /** 中间表配置（仅 belongsToMany） */
+  pivot?: PivotConfig;
+}
+
+/**
+ * 中间表（Pivot Table）配置
+ * 用于多对多关系
+ */
+export interface PivotConfig {
+  /** 中间表名 */
+  table: string;
+  /** 中间表中指向源表的外键 */
+  foreignPivotKey: string;
+  /** 中间表中指向目标表的外键 */
+  relatedPivotKey: string;
+  /** 中间表额外字段（可选） */
+  pivotFields?: string[];
+  /** 是否包含时间戳 */
+  timestamps?: boolean;
+}
+
+/**
+ * 带关联数据的结果类型
+ */
+export type WithRelation<
+  T extends object,
+  RelName extends string,
+  RelType extends 'hasOne' | 'belongsTo' | 'hasMany' | 'belongsToMany',
+  RelData extends object
+> = T & {
+  [K in RelName]: RelType extends ('hasMany' | 'belongsToMany') ? RelData[] : RelData | null;
+};
+
+/**
+ * 带中间表数据的关联结果
+ */
+export type WithPivot<T extends object, PivotData extends object = Record<string, any>> = T & {
+  pivot: PivotData;
+};
+
+/**
+ * 关联查询选项
+ */
+export interface RelationQueryOptions<S extends Record<string, object>, T extends keyof S> {
+  /** 要加载的关联名称 */
+  relations?: string[];
+  /** 关联数据的筛选条件 */
+  where?: Condition<S[T]>;
+}
+
+/**
+ * 关系配置中的外键字段类型
+ * 表名是强类型的，字段名是 string（运行时验证）
+ */
+export type RelationForeignKey = string;
+
+/**
+ * hasMany 关系配置：{ 目标表名: 外键字段名 }
+ */
+export type HasManyConfig<S extends Record<string, object>> = {
+  [K in Extract<keyof S, string>]?: RelationForeignKey;
+};
+
+/**
+ * hasOne 关系配置：{ 目标表名: 外键字段名 }
+ */
+export type HasOneConfig<S extends Record<string, object>> = {
+  [K in Extract<keyof S, string>]?: RelationForeignKey;
+};
+
+/**
+ * belongsTo 关系配置：{ 目标表名: 本表外键字段名 }
+ */
+export type BelongsToConfig<S extends Record<string, object>> = {
+  [K in Extract<keyof S, string>]?: RelationForeignKey;
+};
+
+/**
+ * belongsToMany 关系配置
+ * { 目标表名: { pivot: 中间表名, foreignKey: 源外键, relatedKey: 目标外键, pivotFields?: 额外字段 } }
+ */
+export interface BelongsToManyRelationConfig {
+  /** 中间表名 */
+  pivot: string;
+  /** 中间表中指向源表的外键 */
+  foreignKey: string;
+  /** 中间表中指向目标表的外键 */
+  relatedKey: string;
+  /** 要获取的中间表额外字段 */
+  pivotFields?: string[];
+}
+
+export type BelongsToManyConfig<S extends Record<string, object>> = {
+  [K in Extract<keyof S, string>]?: BelongsToManyRelationConfig;
+};
+
+/**
+ * 单个表的关系配置
+ */
+export interface TableRelationsConfig<S extends Record<string, object>> {
+  hasMany?: HasManyConfig<S>;
+  hasOne?: HasOneConfig<S>;
+  belongsTo?: BelongsToConfig<S>;
+  belongsToMany?: BelongsToManyConfig<S>;
+}
+
+/**
+ * 关系配置对象（用于 Database 构造）
+ * 
+ * 表名是强类型的（必须是 Schema 中定义的表），
+ * 字段名是字符串（在运行时通过模型方法验证）
+ * 
+ * @example
+ * ```ts
+ * interface Schema {
+ *   users: { id: number; name: string };
+ *   orders: { id: number; userId: number };
+ * }
+ * 
+ * db.defineRelations({
+ *   users: {
+ *     hasMany: { orders: 'userId' }  // ✅ 'orders' 是有效表名
+ *   },
+ *   orders: {
+ *     belongsTo: { users: 'userId' } // ✅ 'users' 是有效表名
+ *   },
+ *   // wrongTable: {}  // ❌ 类型错误：'wrongTable' 不在 Schema 中
+ * });
+ * ```
+ */
+export type RelationsConfig<S extends Record<string, object>> = {
+  [T in Extract<keyof S, string>]?: TableRelationsConfig<S>;
+};
+
+// ============================================================================
+// Migration Types
+// ============================================================================
+
+/**
+ * 迁移上下文 - 提供迁移操作所需的数据库方法
+ */
+export interface MigrationContext {
+  /** 创建表 */
+  createTable(tableName: string, columns: Record<string, Column>): Promise<void>;
+  /** 删除表 */
+  dropTable(tableName: string): Promise<void>;
+  /** 添加列 */
+  addColumn(tableName: string, columnName: string, column: Column): Promise<void>;
+  /** 删除列 */
+  dropColumn(tableName: string, columnName: string): Promise<void>;
+  /** 修改列 */
+  modifyColumn(tableName: string, columnName: string, column: Column): Promise<void>;
+  /** 重命名列 */
+  renameColumn(tableName: string, oldName: string, newName: string): Promise<void>;
+  /** 添加索引 */
+  addIndex(tableName: string, indexName: string, columns: string[], unique?: boolean): Promise<void>;
+  /** 删除索引 */
+  dropIndex(tableName: string, indexName: string): Promise<void>;
+  /** 执行原生 SQL */
+  query<T = any>(sql: string, params?: any[]): Promise<T>;
+}
+
+/**
+ * 迁移定义
+ */
+/**
+ * 迁移操作记录（用于自动生成 down）
+ */
+export type MigrationOperation = 
+  | { type: 'createTable'; tableName: string; columns: Record<string, Column> }
+  | { type: 'dropTable'; tableName: string }
+  | { type: 'addColumn'; tableName: string; columnName: string; column: Column }
+  | { type: 'dropColumn'; tableName: string; columnName: string }
+  | { type: 'addIndex'; tableName: string; indexName: string; columns: string[]; unique?: boolean }
+  | { type: 'dropIndex'; tableName: string; indexName: string }
+  | { type: 'renameColumn'; tableName: string; oldName: string; newName: string }
+  | { type: 'query'; sql: string; params?: any[] };
+
+export interface Migration {
+  /** 迁移名称（唯一标识） */
+  name: string;
+  /** 迁移版本（时间戳或序号） */
+  version?: string | number;
+  /** 升级操作 */
+  up(context: MigrationContext): Promise<void>;
+  /** 
+   * 降级操作（可选）
+   * 如果不提供，将自动根据 up 操作生成反向操作
+   */
+  down?(context: MigrationContext): Promise<void>;
+}
+
+/**
+ * 迁移记录（存储在数据库中）
+ */
+export interface MigrationRecord {
+  id: number;
+  name: string;
+  batch: number;
+  executedAt: Date;
+}
+
+/**
+ * 迁移状态
+ */
+export interface MigrationStatus {
+  name: string;
+  status: 'pending' | 'executed';
+  batch?: number;
+  executedAt?: Date;
+}
+
+/**
+ * 迁移运行器配置
+ */
+export interface MigrationRunnerConfig {
+  /** 迁移记录表名 */
+  tableName?: string;
+  /** 迁移文件目录 */
+  migrationsPath?: string;
 }

@@ -15,6 +15,5 @@ export * from './dialects/pg.js';
 export * from './dialects/redis.js';
 export * from './dialects/sqlite.js';
 export * from './dialects/mongodb.js';
-
-
+export * from './migration.js';
 

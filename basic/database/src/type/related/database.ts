@@ -20,6 +20,7 @@ import {
   DropDefinition,
   Subquery,
   JoinClause,
+  RelationsConfig,
   isCreateQuery,
   isSelectQuery,
   isInsertQuery,
@@ -48,11 +49,38 @@ export class RelatedDatabase<
   S extends Record<string, object> = Record<string, object>
 > extends Database<D,S,string> {
   
+  /** 关系配置 */
+  protected relationsConfig?: RelationsConfig<S>;
+  
   constructor(
     dialect: Dialect<D,S,string>,
     definitions?: Database.DefinitionObj<S>,
+    relations?: RelationsConfig<S>,
   ) {
-    super(dialect,definitions); 
+    super(dialect,definitions);
+    this.relationsConfig = relations;
+  }
+  
+  /**
+   * 设置关系配置
+   * @example
+   * ```ts
+   * db.defineRelations({
+   *   users: {
+   *     hasMany: { orders: 'userId' },
+   *     hasOne: { profile: 'userId' }
+   *   },
+   *   orders: {
+   *     belongsTo: { users: 'userId' }
+   *   }
+   * });
+   * ```
+   */
+  defineRelations(config: RelationsConfig<S>): this {
+    this.relationsConfig = config;
+    // 清除模型缓存，以便重新应用关系
+    this.models.clear();
+    return this;
   }
 
   protected async initialize(): Promise<void> {
@@ -560,15 +588,74 @@ export class RelatedDatabase<
   model<T extends keyof S>(name: T, options?: import('../../types.js').ModelOptions): RelatedModel<D,S,T> {
     // 如果有 options，每次都创建新的实例（因为选项可能不同）
     if (options) {
-      return new RelatedModel(this, name, options);
+      const model = new RelatedModel(this, name, options);
+      this.applyRelationsToModel(model, name);
+      return model;
     }
     // 无选项时使用缓存
     let model = this.models.get(name) as RelatedModel<D,S,T> | undefined;
     if (!model) {
       model = new RelatedModel(this, name);
+      this.applyRelationsToModel(model, name);
       this.models.set(name, model as any);
     }
     return model as RelatedModel<D,S,T>;
+  }
+  
+  /**
+   * 应用关系配置到模型
+   */
+  private applyRelationsToModel<T extends keyof S>(model: RelatedModel<D, S, T>, tableName: T): void {
+    const tableConfig = this.relationsConfig?.[String(tableName) as Extract<keyof S, string>];
+    if (!tableConfig) return;
+    
+    // 应用 hasMany 关系
+    if (tableConfig.hasMany) {
+      for (const [target, foreignKey] of Object.entries(tableConfig.hasMany)) {
+        if (foreignKey) {
+          const targetModel = new RelatedModel(this, target as keyof S);
+          model.hasMany(targetModel as any, foreignKey as any);
+        }
+      }
+    }
+    
+    // 应用 hasOne 关系
+    if (tableConfig.hasOne) {
+      for (const [target, foreignKey] of Object.entries(tableConfig.hasOne)) {
+        if (foreignKey) {
+          const targetModel = new RelatedModel(this, target as keyof S);
+          model.hasOne(targetModel as any, foreignKey as any);
+        }
+      }
+    }
+    
+    // 应用 belongsTo 关系
+    if (tableConfig.belongsTo) {
+      for (const [target, foreignKey] of Object.entries(tableConfig.belongsTo)) {
+        if (foreignKey) {
+          const targetModel = new RelatedModel(this, target as keyof S);
+          model.belongsTo(targetModel as any, foreignKey as any);
+        }
+      }
+    }
+    
+    // 应用 belongsToMany 关系
+    if (tableConfig.belongsToMany) {
+      for (const [target, config] of Object.entries(tableConfig.belongsToMany)) {
+        if (config) {
+          const targetModel = new RelatedModel(this, target as keyof S);
+          model.belongsToMany(
+            targetModel as any,
+            config.pivot,
+            config.foreignKey,
+            config.relatedKey,
+            'id' as any,
+            'id' as any,
+            config.pivotFields
+          );
+        }
+      }
+    }
   }
 
   /**
