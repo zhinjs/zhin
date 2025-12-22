@@ -26,6 +26,9 @@ export class DatabaseLogTransport implements LogTransport {
     
     // 启动定时清理
     this.startCleanup()
+    
+    // 插件销毁时停止清理任务
+    plugin.onDispose(() => this.stopCleanup())
   }
 
   /**
@@ -66,7 +69,7 @@ export class DatabaseLogTransport implements LogTransport {
       
       const deletedData = await LogModel
         .delete({ timestamp: { $lt: cutoffDate } })
-      
+      const deletedCount = typeof deletedData === 'number' ? deletedData : deletedData.length
       // 2. 按数量清理：如果日志总数超过 maxRecords，删除最旧的
       const total = await LogModel.select()
       const totalCount = total.length
@@ -87,8 +90,8 @@ export class DatabaseLogTransport implements LogTransport {
 
       this.plugin.logger.info(
         `[DatabaseLogTransport] Log cleanup completed. ` +
-        `Deleted ${deletedData.length || 0} logs older than ${this.maxDays} days. ` +
-        `Current total: ${Math.max(0, totalCount - (deletedData.length || 0))} logs.`
+        `Deleted ${deletedData || 0} logs older than ${this.maxDays} days. ` +
+        `Current total: ${Math.max(0, totalCount - (deletedCount || 0))} logs.`
       )
     } catch (error) {
       // 静默处理错误

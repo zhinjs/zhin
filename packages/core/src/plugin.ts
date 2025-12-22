@@ -16,7 +16,7 @@ import { MessageCommand } from "./command.js";
 import { Component } from "./component.js";
 import { Cron } from "./cron.js";
 import { compose, remove, resolveEntry } from "./utils.js";
-import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, ConfigService, PermissionService, CommandService, SendOptions } from "./types.js";
+import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, ConfigService, PermissionService, CommandService, SendOptions, CronService } from "./types.js";
 import { Adapter } from "./adapter.js";
 import { createHash } from "crypto";
 import type { ComponentService } from "./built/component.js";
@@ -156,9 +156,12 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   };
   // 插件功能
   #middlewares: MessageMiddleware<RegisteredAdapter>[] = [this.#messageMiddleware];
-  // components 已弃用，使用 inject('component') 获取 ComponentService
-  components: Map<string, Component<any>> = new Map();
-  crons: Cron[] = [];
+  
+  // 插件提供的功能追踪（用于 status 接口）
+  $commands: Set<string> = new Set();
+  $components: Set<string> = new Set();
+  $crons: Set<string> = new Set();
+  $middlewares: Set<string> = new Set();
   get middleware(): MessageMiddleware<RegisteredAdapter> {
     return compose<RegisteredAdapter>(this.#middlewares);
   }
@@ -187,28 +190,60 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
       },
     });
   }
-  addCron<T extends Cron>(cron: T) {
-    this.crons.push(cron);
-    return () => remove(this.crons, cron);
+  addCron(cron: Cron, name?: string) {
+    const cronName = name || cron.cronExpression;
+    this.$crons.add(cronName);
+    
+    const cronService = this.inject('cron');
+    cronService.addCron(cron);
+    const dispose = () => {
+      cronService.removeCron(cron);
+      this.$crons.delete(cronName);
+    };
+    this.onDispose(dispose);
+    return dispose;
   }
   addComponent<T extends Component<any>>(component: T) {
+    this.$components.add(component.name);
+    
     const componentService = this.inject('component');
-    if (componentService) {
-      return componentService.add(component);
-    }
-    // 兼容旧方式
-    this.components.set(component.name, component);
-    return () => this.components.delete(component.name);
+    const serviceDispose = componentService.add(component);
+    const dispose = () => {
+      serviceDispose();
+      this.$components.delete(component.name);
+    };
+    this.onDispose(dispose);
+    return dispose;
   }
   addCommand<T extends RegisteredAdapter>(command: MessageCommand<T>) {
+    this.$commands.add(command.pattern);
+    
     const commandService = this.inject('command');
-    if (!commandService) return () => { };
+    if (!commandService) {
+      this.$commands.delete(command.pattern);
+      return () => { };
+    }
     commandService.addCommand(command);
-    return () => commandService.removeCommand(command);
+    const dispose = () => {
+      commandService.removeCommand(command);
+      this.$commands.delete(command.pattern);
+    };
+    // 插件销毁时自动移除命令
+    this.onDispose(dispose);
+    return dispose;
   }
-  addMiddleware<T extends RegisteredAdapter>(middleware: MessageMiddleware<T>) {
+  addMiddleware<T extends RegisteredAdapter>(middleware: MessageMiddleware<T>, name?: string) {
+    const middlewareName = name || middleware.name || `middleware_${this.$middlewares.size}`;
+    this.$middlewares.add(middlewareName);
+    
     this.#middlewares.push(middleware as MessageMiddleware<RegisteredAdapter>);
-    return () => remove(this.#middlewares, middleware);
+    const dispose = () => {
+      remove(this.#middlewares, middleware);
+      this.$middlewares.delete(middlewareName);
+    };
+    // 插件销毁时自动移除中间件
+    this.onDispose(dispose);
+    return dispose;
   }
   /**
    * 插件名称
@@ -267,16 +302,20 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
         sideEffect.finished = false;
       }
       this.on('context.dispose', disposeFn)
-      this.on('dispose', () => {
+      // 确保 dispose 时清理监听器（只注册一次）
+      const cleanupOnDispose = () => {
         this.off('context.dispose', disposeFn)
         dispose(this.inject(args[0] as any) as any)
-      })
+      }
+      this.once('dispose', cleanupOnDispose)
     }
     const onContextMounted = async (name: keyof Plugin.Contexts) => {
       if (!this.#contextsIsReady(contexts) || !(contexts).includes(name)) return
       await contextReadyCallback()
     }
     this.on('context.mounted', onContextMounted)
+    // 插件销毁时移除 context.mounted 监听器
+    this.once('dispose', () => this.off('context.mounted', onContextMounted))
     if (!this.#contextsIsReady(contexts)) return
     contextReadyCallback()
   }
@@ -322,9 +361,24 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     this.started = true;
     this.logger.info(`Plugin "${this.name}" ${t ? `reloaded in ${Date.now() - t}ms` : "started"}`);
   }
+  /**
+   * 获取插件提供的功能
+   */
+  get features(): Plugin.Features {
+    return {
+      commands: Array.from(this.$commands || []),
+      components: Array.from(this.$components || []),
+      crons: Array.from(this.$crons || []),
+      middlewares: Array.from(this.$middlewares || []),
+    };
+  }
+
   info(): Record<string, any> {
     return {
-      [this.name]: this.children.map(child => child.info())
+      [this.name]: {
+        features: this.features,
+        children: this.children.map(child => child.info())
+      }
     }
   }
 
@@ -336,7 +390,6 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     this.logger.debug(`Stopping plugin "${this.name}"`);
     this.started = false;
 
-
     // 停止服务
     for (const [name, context] of this.$contexts) {
       remove(Plugin[contextsKey], name);
@@ -344,11 +397,8 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
         await context.dispose(context.value);
       }
     }
-
-    // 停止定时任务
-    for (const cron of this.crons) {
-      cron.dispose();
-    }
+    // 清理 contexts Map
+    this.$contexts.clear();
 
     // 清理子插件
     for (const child of this.children) {
@@ -358,6 +408,16 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     this.#cachedName = undefined;
 
     this.emit("dispose");
+    
+    // 清理功能追踪 Set
+    this.$commands.clear();
+    this.$components.clear();
+    this.$crons.clear();
+    this.$middlewares.clear();
+    
+    // 清理 middlewares 数组（保留默认的消息中间件）
+    this.#middlewares.length = 1;
+    
     if (this.parent) {
       remove(this.parent?.children, this);
     }
@@ -548,6 +608,16 @@ export interface Context<T extends keyof Plugin.Contexts = keyof Plugin.Contexts
 // ============================================================================
 export namespace Plugin {
   /**
+   * 插件提供的功能
+   */
+  export interface Features {
+    commands: string[];
+    components: string[];
+    crons: string[];
+    middlewares: string[];
+  }
+
+  /**
    * 生命周期事件
    */
   export interface Lifecycle {
@@ -572,5 +642,6 @@ export namespace Plugin {
     database: Database<any, Models>;
     command: CommandService;
     component: ComponentService;
+    cron: CronService;
   }
 }

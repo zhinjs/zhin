@@ -3,7 +3,7 @@ import { setLevel, LogLevel } from '@zhin.js/logger';
 import {
   usePlugin, Models, SystemLogDefinition, resolveEntry,
   UserDefinition, ConfigService, PermissionService,
-  CommandService, ComponentService, ProcessAdapter, Registry, Database
+  CommandService, ComponentService, CronService, ProcessAdapter, Registry, Database
 } from '@zhin.js/core';
 import { AppConfig } from './types.js';
 import { DatabaseLogTransport } from './log-transport.js';
@@ -61,7 +61,16 @@ provide({
 provide({
   name: 'permission',
   description: '权限管理',
-  value: new PermissionService()
+  value: new PermissionService(),
+});
+// 注册定时任务服务
+provide({
+  name: 'cron',
+  description: '定时任务服务',
+  value: new CronService(),
+  dispose: async (cronService) => {
+    await cronService.stopAll()
+  }
 });
 
 useContext('config', async (configService) => {
@@ -99,28 +108,41 @@ useContext('config', async (configService) => {
 
 // 5. 启动
 await start();
-// 6. 优雅关闭
-process.on('SIGTERM', () => {
+
+// 6. 优雅关闭（使用 once 防止重复注册）
+const handleSIGTERM = () => {
   logger.info('Received SIGTERM, shutting down gracefully...');
   stop();
   process.exit(0);
-});
+};
 
-process.on('SIGINT', () => {
+const handleSIGINT = () => {
   logger.info('Received SIGINT, shutting down gracefully...');
   stop();
   process.exit(0);
-});
+};
 
 // 7. 异常处理
-process.on('uncaughtException', (error) => {
+const handleUncaughtException = (error: Error) => {
   logger.error('Uncaught exception:', error);
   stop();
   process.exit(1);
-});
+};
 
-process.on('unhandledRejection', (reason) => {
+const handleUnhandledRejection = (reason: unknown) => {
   logger.error('Unhandled rejection:', reason);
   stop();
   process.exit(1);
-});
+};
+
+// 移除可能存在的旧监听器（防止热重载时累积）
+process.removeListener('SIGTERM', handleSIGTERM);
+process.removeListener('SIGINT', handleSIGINT);
+process.removeListener('uncaughtException', handleUncaughtException);
+process.removeListener('unhandledRejection', handleUnhandledRejection);
+
+// 注册新监听器
+process.once('SIGTERM', handleSIGTERM);
+process.once('SIGINT', handleSIGINT);
+process.on('uncaughtException', handleUncaughtException);
+process.on('unhandledRejection', handleUnhandledRejection);

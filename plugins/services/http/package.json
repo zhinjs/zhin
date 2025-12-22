@@ -38,7 +38,7 @@
     "koa-bodyparser": "latest"
   },
   "peerDependencies": {
-    "@zhin.js/core": "workspace:*"
+    "zhin.js": "workspace:*"
   },
   "devDependencies": {
     "@types/koa": "latest",

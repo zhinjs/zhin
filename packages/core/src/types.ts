@@ -9,7 +9,8 @@ import { MessageComponent } from "./message.js";
 import { ProcessAdapter } from "./built/adapter-process.js";
 import type { CommandService } from "./built/command.js";
 import type { ComponentService } from "./built/component.js";
-export type { CommandService, ComponentService };
+import type { CronService } from "./built/cron.js";
+export type { CommandService, ComponentService, CronService };
 
 export type ArrayItem<T>=T extends Array<infer R>?R:unknown
 export interface Models extends Record<string,object>{

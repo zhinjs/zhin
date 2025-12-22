@@ -3,6 +3,7 @@ import {
   Time,
   MessageCommand,
   MessageElement,
+  Cron,
 } from "zhin.js";
 import path from "node:path";
 import * as os from "node:os";
@@ -310,6 +311,205 @@ addComponent(async function foo(
 ) {
   return "这是父组件" + props.face;
 });
+
+// ============================================
+// 自动清理功能测试
+// ============================================
+
+// 获取当前插件实例用于测试
+const plugin = usePlugin();
+
+// 存储动态添加的 dispose 函数
+const dynamicDisposes: (() => void)[] = [];
+
+addCommand(
+  new MessageCommand("test-add")
+    .desc("测试动态添加命令", "添加一个临时命令，用于测试自动清理功能")
+    .usage("test-add [name]")
+    .examples("test-add hello")
+    .action((_, result) => {
+      const name = (result.remaining as any[])?.[0]?.data?.text || `temp-${Date.now()}`;
+      
+      // 动态添加一个命令
+      const dispose = plugin.addCommand(
+        new MessageCommand(name).action(() => `我是动态命令: ${name}`)
+      );
+      dynamicDisposes.push(dispose);
+      
+      const commandService = plugin.inject('command');
+      const count = commandService?.length || 0;
+      
+      return [
+        `✅ 已添加命令: ${name}`,
+        `📊 当前命令总数: ${count}`,
+        "",
+        "💡 提示:",
+        "• 使用 'test-list' 查看所有命令",
+        "• 使用 'test-remove' 手动移除最后添加的命令",
+        "• 热重载此插件后，动态命令会自动移除"
+      ].join("\n");
+    })
+);
+
+addCommand(
+  new MessageCommand("test-list")
+    .desc("列出命令统计", "显示当前注册的命令数量和动态命令数")
+    .usage("test-list")
+    .action(() => {
+      const commandService = plugin.inject('command');
+      const count = commandService?.length || 0;
+      
+      return [
+        "╔═══════════ 命令统计 ═══════════╗",
+        "",
+        `📋 已注册命令总数: ${count}`,
+        `🔄 本插件动态添加: ${dynamicDisposes.length}`,
+        "",
+        "╚════════════════════════════════╝"
+      ].join("\n");
+    })
+);
+
+addCommand(
+  new MessageCommand("test-remove")
+    .desc("移除动态命令", "手动移除最后一个动态添加的命令")
+    .usage("test-remove")
+    .action(() => {
+      if (dynamicDisposes.length === 0) {
+        return "❌ 没有可移除的动态命令";
+      }
+      
+      const dispose = dynamicDisposes.pop()!;
+      dispose();
+      
+      const commandService = plugin.inject('command');
+      const count = commandService?.length || 0;
+      
+      return [
+        "✅ 已移除最后添加的动态命令",
+        `📊 当前命令总数: ${count}`,
+        `🔄 剩余动态命令: ${dynamicDisposes.length}`
+      ].join("\n");
+    })
+);
+
+addCommand(
+  new MessageCommand("test-component")
+    .desc("测试动态组件", "添加一个临时组件")
+    .usage("test-component [name]")
+    .action((_, result) => {
+      const name = (result.remaining as any[])?.[0]?.data?.text || `comp-${Date.now()}`;
+      
+      // 动态添加一个组件
+      plugin.addComponent(async function dynamicComp(props: { text: string }) {
+        return `动态组件[${name}]: ${props.text}`;
+      });
+      
+      const componentService = plugin.inject('component');
+      const count = componentService?.size || 0;
+      
+      return [
+        `✅ 已添加组件: dynamicComp`,
+        `📊 当前组件总数: ${count}`,
+        "",
+        "💡 热重载插件后，此组件会自动移除"
+      ].join("\n");
+    })
+);
+
+addCommand(
+  new MessageCommand("test-middleware")
+    .desc("测试动态中间件", "添加一个临时中间件")
+    .usage("test-middleware")
+    .action(() => {
+      // 添加一个计数中间件
+      let count = 0;
+      plugin.addMiddleware(async (message, next) => {
+        count++;
+        console.log(`[Test Middleware] 消息计数: ${count}`);
+        return next();
+      });
+      
+      return [
+        "✅ 已添加测试中间件",
+        "📊 中间件会在每条消息时打印计数",
+        "",
+        "💡 热重载插件后，此中间件会自动移除"
+      ].join("\n");
+    })
+);
+
+addCommand(
+  new MessageCommand("test-cron")
+    .desc("测试动态定时任务", "添加一个每10秒执行一次的定时任务")
+    .usage("test-cron")
+    .action(() => {
+      // 每10秒执行一次
+      const cron = new Cron("*/10 * * * * *", () => {
+        console.log(`[Test Cron] 定时任务执行: ${new Date().toLocaleTimeString()}`);
+      });
+      
+      plugin.addCron(cron);
+      
+      // 使用类型断言访问 CronService（需要先 provide）
+      const cronService = plugin.inject('cron' as any) as any;
+      const count = cronService?.length || plugin.crons.length;
+      const runningCount = cronService?.runningCount || plugin.crons.filter((c: any) => c.running).length;
+      
+      return [
+        "✅ 已添加测试定时任务",
+        `📊 当前定时任务总数: ${count}`,
+        `🏃 运行中任务数: ${runningCount}`,
+        "",
+        "💡 每10秒会在控制台打印一次",
+        "💡 热重载插件后，此任务会自动停止"
+      ].join("\n");
+    })
+);
+
+addCommand(
+  new MessageCommand("test-cron-list")
+    .desc("查看定时任务状态", "显示所有定时任务的状态")
+    .usage("test-cron-list")
+    .action(() => {
+      const cronService = plugin.inject('cron' as any) as any;
+      const crons = cronService || plugin.crons;
+      
+      if (!crons || crons.length === 0) {
+        return "📋 暂无定时任务";
+      }
+      
+      const runningCount = cronService?.runningCount || crons.filter((c: any) => c.running).length;
+      const lines = [
+        "╔═══════════ 定时任务状态 ═══════════╗",
+        "",
+        `📋 总数: ${crons.length} | 运行中: ${runningCount}`,
+        ""
+      ];
+      
+      crons.forEach((cron: any, index: number) => {
+        lines.push(`[${index + 1}] ${cron.cronExpression || cron._cronExpression}`);
+        lines.push(`    状态: ${cron.running ? '🏃 运行中' : '⏸️ 已停止'}`);
+        if (cron.running) {
+          try {
+            lines.push(`    下次执行: ${cron.getNextExecutionTime().toLocaleString()}`);
+          } catch {}
+        }
+        lines.push("");
+      });
+      
+      lines.push("╚════════════════════════════════════╝");
+      
+      return lines.join("\n");
+    })
+);
+
+// 插件销毁时的日志
+plugin.onDispose(() => {
+  console.log('[Test Plugin] 插件正在销毁...');
+  console.log(`[Test Plugin] 动态命令数: ${dynamicDisposes.length} (将自动清理)`);
+});
+
 useContext("database", async (db) => {
   db.define("test_model", {
     name: { type: "text", nullable: false },

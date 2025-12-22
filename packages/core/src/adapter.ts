@@ -73,12 +73,23 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
         try {
           await bot.$disconnect();
           this.logger.debug(`bot ${id} of adapter ${this.name} disconnected`);
-          this.bots.delete(id);
         } catch (error) {
           // 如果断开连接失败，确保错误正确传播
           throw error;
         }
       }
+      // 清理 bots Map
+      this.bots.clear();
+      
+      // 从 adapters 数组中移除
+      const idx = this.plugin.root.adapters.indexOf(this.name);
+      if (idx !== -1) {
+        this.plugin.root.adapters.splice(idx, 1);
+      }
+      
+      // 移除所有事件监听器
+      this.removeAllListeners();
+      
       this.logger.info(`adapter ${this.name} stopped`);
     } catch (error) {
       // 确保错误正确传播

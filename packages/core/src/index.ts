@@ -11,6 +11,7 @@ export * from './models/user.js'
 // Services
 export * from './built/config.js'
 export * from './built/command.js'
+export * from './built/cron.js'
 export * from './built/permission.js'
 export * from './built/adapter-process.js'
 export * from './built/component.js'

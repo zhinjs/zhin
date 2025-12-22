@@ -163,7 +163,7 @@ useContext("config", (configService) => {
     // 统计命令和组件
     const commandService = root.inject("command");
     const commandCount = commandService?.length || 0;
-    const componentCount = allPlugins.reduce((sum, p) => sum + p.components.size, 0);
+    const componentCount = allPlugins.reduce((sum, p) => sum + (p.$components?.size || 0), 0);
 
     ctx.body = {
       success: true,
@@ -180,14 +180,23 @@ useContext("config", (configService) => {
 
   // 插件列表 API
   router.get(`${base}/plugins`, async (ctx) => {
-    const plugins = root.children.map((p) => ({
-      name: p.name,
-      status: "active",
-      componentCount: p.components.size,
-      contextCount: p.contexts.size,
-      filePath: p.filePath,
-      description: p.name,
-    }));
+    const plugins = root.children.map((p) => {
+      const features = p.features;
+      return {
+        name: p.name,
+        status: "active",
+        // 向后兼容：返回各项数量
+        commandCount: features.commands.length,
+        componentCount: features.components.length,
+        middlewareCount: features.middlewares.length,
+        cronCount: features.crons.length,
+        contextCount: p.contexts.size,
+        filePath: p.filePath,
+        description: p.name,
+        // 新格式：也返回 features 对象
+        features,
+      };
+    });
     ctx.body = { success: true, data: plugins, total: plugins.length };
   });
 
@@ -210,33 +219,51 @@ useContext("config", (configService) => {
       examples: cmd.helpInfo?.examples,
     }));
 
-    const components = Array.from(plugin.components.entries()).map(([name, comp]) => ({
-      name,
-      type: typeof comp,
-    }));
-
     const contexts = Array.from(plugin.contexts.entries()).map(([name]) => ({ name }));
-
-    const crons = plugin.crons.map((cron, index) => ({
+    const features = plugin.features;
+    
+    // 构建组件列表
+    const components = features.components.map((name) => ({
+      name,
+      type: 'component',
+      props: {},
+    }));
+    
+    // 构建中间件列表
+    const middlewares = features.middlewares.map((name, index) => ({
+      id: `middleware-${index}`,
+      type: name,
+    }));
+    
+    // 构建定时任务列表
+    const crons = features.crons.map((expression, index) => ({
       id: `cron-${index}`,
-      pattern: (cron as { pattern?: string }).pattern || "unknown",
+      pattern: expression,
+      running: true,
     }));
 
     ctx.body = {
       success: true,
       data: {
         name: plugin.name,
+        filename: plugin.filePath,
         filePath: plugin.filePath,
         status: "active",
+        description: plugin.name,
+        features,
+        contexts,
         commands,
         components,
-        contexts,
+        middlewares,
         crons,
+        definitions: [],
         statistics: {
-          commandCount: commands.length,
-          componentCount: components.length,
+          commandCount: features.commands.length,
+          componentCount: features.components.length,
           contextCount: contexts.length,
-          cronCount: crons.length,
+          cronCount: features.crons.length,
+          middlewareCount: features.middlewares.length,
+          definitionCount: 0,
         },
       },
     };
@@ -435,7 +462,7 @@ useContext("database", (database: Database<any, Models>) => {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - days);
       const deleted = await LogModel.delete({ timestamp: { $lt: cutoffDate } });
-      deletedCount += deleted.length || 0;
+      deletedCount += typeof deleted === 'number' ? deleted : (deleted?.length || 0);
     }
 
     if (maxRecords && typeof maxRecords === "number" && maxRecords > 0) {
@@ -447,7 +474,7 @@ useContext("database", (database: Database<any, Models>) => {
 
         if (idsToDelete.length > 0) {
           const deleted = await LogModel.delete({ id: { $in: idsToDelete } });
-          deletedCount += (deleted?.length || 0);
+          deletedCount += typeof deleted === 'number' ? deleted : (deleted?.length || 0);
         }
       }
     }
