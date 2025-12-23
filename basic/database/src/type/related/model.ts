@@ -121,7 +121,7 @@ export class RelationQueryBuilder<
  */
 export class RelatedModel<D=any,S extends Record<string, object> = Record<string, object>,T extends keyof S = keyof S> extends Model<D,S,string,T> {
   /** 关系定义存储 */
-  private relations = new Map<string, RelationDefinition<S, T, keyof S>>();
+  private relations = new Map<string, RelationDefinition<S, T, any>>();
   
   constructor(
     database: RelatedDatabase<D,S>,
@@ -255,16 +255,16 @@ export class RelatedModel<D=any,S extends Record<string, object> = Record<string
     this.relations.set(relationName, {
       type: 'belongsToMany',
       target: targetModel.name,
-      foreignKey: localKey,
-      targetKey: relatedKey,
-      localKey,
+      foreignKey: localKey as keyof S[T],
+      targetKey: relatedKey as keyof S[To],
+      localKey: localKey as keyof S[T],
       pivot: {
         table: pivotTable,
         foreignPivotKey,
         relatedPivotKey,
         pivotFields,
       },
-    } as RelationDefinition<S, T, keyof S>);
+    } as RelationDefinition<S, T, To>);
     return this;
   }
   

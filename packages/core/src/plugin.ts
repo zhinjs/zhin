@@ -170,6 +170,10 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
    */
   constructor(filePath: string = "", public parent?: Plugin) {
     super();
+    
+    // 增加 EventEmitter 监听器限制，避免警告
+    // 因为插件可能注册多个命令/组件/中间件，每个都会添加 dispose 监听器
+    this.setMaxListeners(50);
 
     this.filePath = filePath.replace(/\?t=\d+$/, "");
     this.logger = this.name ? logger.getLogger(this.name) : logger;
