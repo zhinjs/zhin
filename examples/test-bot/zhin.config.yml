@@ -5,6 +5,13 @@ database:
 plugin_dirs:
   - node_modules
   - ./src/plugins
+services:
+  - process
+  - config
+  - command
+  - component
+  - permission
+  - cron
 plugins:
   # 本地测试插件
   - test-plugin

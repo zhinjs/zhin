@@ -3,111 +3,121 @@ import { setLevel, LogLevel } from '@zhin.js/logger';
 import {
   usePlugin, Models, SystemLogDefinition, resolveEntry,
   UserDefinition, ConfigService, PermissionService,
-  CommandService, ComponentService, CronService, ProcessAdapter, Registry, Database
+  createCommandService, createComponentService, createCronService,
+  ProcessAdapter, Registry, Database
 } from '@zhin.js/core';
 import { AppConfig } from './types.js';
 import { DatabaseLogTransport } from './log-transport.js';
 import * as path from 'path';
 
+const plugin = usePlugin();
 const {
-  useContext, provide,
+  provide,
   start, stop,
   logger, children,
-  import: importPlugin } = usePlugin();
-// 1. 加载服务插件
-provide({
-  name: 'process',
-  description: '命令行适配器',
-  mounted: async (plugin) => {
-    const adapter = new ProcessAdapter(plugin)
-    await adapter.start()
-    return adapter
+  import: importPlugin } = plugin;
+
+// 1. 先加载配置，用户在 zhin.config 中决定启用哪些服务
+const configService = new ConfigService();
+await configService.load('zhin.config.yml', {
+  log_level: LogLevel.INFO,
+  database: {
+    dialect: "sqlite",
+    filename: "./data/test.db"
   },
-  dispose: async (adapter) => {
-    await adapter.stop()
-  }
-})
-// 注册配置服务
+  plugin_dirs: [path.relative(process.cwd(), import.meta.dirname), 'node_modules/@zhin.js', './plugins',],
+  plugins: [],
+  services: ['process', 'config', 'command', 'component', 'permission', 'cron'],
+});
+const appConfig = configService.get<AppConfig>('zhin.config.yml');
+const enabledServices = new Set(appConfig.services || ['process', 'config', 'command', 'component', 'permission', 'cron']);
+
+// 注册配置服务（必须）
 provide({
   name: 'config',
   description: '配置服务',
-  mounted: async () => {
-    const config = new ConfigService()
-    await config.load('zhin.config.yml', {
-      log_level: LogLevel.INFO,
-      database: {
-        dialect: "sqlite",
-        filename: "./data/test.db"
-      },
-      plugin_dirs: [path.relative(process.cwd(), import.meta.dirname), 'node_modules/@zhin.js', './plugins',],
-      plugins: [],
-    })
-    return config
-  }
-});
-// 注册指令服务
-provide({
-  name: 'command',
-  description: '命令服务',
-  value: new CommandService()
-});
-// 注册组件服务
-provide({
-  name: 'component',
-  description: '组件服务',
-  mounted: (plugin) => new ComponentService(plugin)
-});
-// 注册权限服务
-provide({
-  name: 'permission',
-  description: '权限管理',
-  value: new PermissionService(),
-});
-// 注册定时任务服务
-provide({
-  name: 'cron',
-  description: '定时任务服务',
-  value: new CronService(),
-  dispose: async (cronService) => {
-    await cronService.stopAll()
-  }
+  value: configService,
 });
 
-useContext('config', async (configService) => {
-  const plugin = usePlugin();
-  const config = configService.get<AppConfig>('zhin.config.yml');
-  // 4. 设置日志级别
-  setLevel(config.log_level || LogLevel.INFO);
-  if (config.database) {
-    const { dialect, ...rest } = config.database
-    const db = Registry.create<Models, typeof dialect>(dialect, rest, {
-      SystemLog: SystemLogDefinition,
-      User: UserDefinition,
-      // Add models here
-    }) as Database<any, Models>;
-    await db.start()
-    provide({
-      name: 'database',
-      description: '数据库服务',
-      value: db,
-      dispose: async (db) => {
-        await db.stop()
-      }
-    })
-    const logTransport = new DatabaseLogTransport(plugin)
-    logger.addTransport(logTransport)
-  }
-  // 加载插件
-  for (const pluginName of config.plugins || []) {
-    const dir = config.plugin_dirs?.find((dir: string) => resolveEntry(path.join(dir, pluginName)));
-    if (dir) await importPlugin(path.join(process.cwd(), dir, pluginName));
-  }
-  logger.debug(`${children.length} plugins loaded`);
-})
+// 2. 可选服务按配置注册
+if (enabledServices.has('process')) {
+  provide({
+    name: 'process',
+    description: '命令行适配器',
+    mounted: async (plugin) => {
+      const adapter = new ProcessAdapter(plugin);
+      await adapter.start();
+      return adapter;
+    },
+    dispose: async (adapter) => {
+      await adapter.stop();
+    }
+  });
+}
 
+if (enabledServices.has('command')) {
+  provide(createCommandService());
+}
 
-// 5. 启动
+if (enabledServices.has('component')) {
+  provide(createComponentService());
+}
+
+if (enabledServices.has('permission')) {
+  provide({
+    name: 'permission',
+    description: '权限管理',
+    value: new PermissionService(),
+  });
+}
+
+if (enabledServices.has('cron')) {
+  provide(createCronService());
+}
+
+// 3. 配置生效：日志、数据库、插件加载
+setLevel(appConfig.log_level || LogLevel.INFO);
+
+if (appConfig.database) {
+  const { dialect, ...rest } = appConfig.database;
+  const db = Registry.create<Models, typeof dialect>(dialect, rest, {
+    User: UserDefinition,
+    SystemLog: SystemLogDefinition,
+    // Add models here
+  }) as Database<any, Models>;
+  await db.start();
+  provide({
+    name: 'database',
+    description: '数据库服务',
+    value: db,
+    dispose: async (database) => {
+      await database.stop();
+    }
+  });
+  // 添加数据库日志传输（只添加到根 logger，不递归）
+  const logTransport = new DatabaseLogTransport(plugin);
+  // 直接访问 logger 实例的 transports 数组，或使用非递归方式
+  if (!logger['transports'].some((t: any) => t instanceof DatabaseLogTransport)) {
+    logger['transports'].push(logTransport);
+  }
+}
+
+// 4. 启动核心上下文（确保扩展方法可用，比如 addCommand）
 await start();
+
+// 5. 加载插件（父插件已启动，会自动 start 子插件）
+// 先去重插件列表，避免重复加载
+const pluginNames = new Set(appConfig.plugins || []);
+logger.debug(`Plugin list: ${Array.from(pluginNames).join(', ')}`);
+for (const pluginName of pluginNames) {
+  const dir = appConfig.plugin_dirs?.find((dir: string) => resolveEntry(path.join(dir, pluginName)));
+  if (dir) {
+    const pluginPath = path.join(process.cwd(), dir, pluginName);
+    logger.debug(`Importing plugin: ${pluginName} from ${pluginPath}`);
+    await importPlugin(pluginPath);
+  }
+}
+logger.debug(`${children.length} plugins loaded`);
 
 // 6. 优雅关闭（使用 once 防止重复注册）
 const handleSIGTERM = () => {

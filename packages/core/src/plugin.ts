@@ -18,6 +18,7 @@ import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, ConfigSe
 import { Adapter } from "./adapter.js";
 import { createHash } from "crypto";
 const contextsKey = Symbol("contexts");
+const loadedModules = new Map<string, Plugin>(); // 记录已加载的模块
 const require = createRequire(import.meta.url);
 
 
@@ -306,6 +307,8 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
    */
   async start(t?:number): Promise<void> {
     if (this.started) return;
+    this.started = true; // 提前设置，防止重复启动
+    
     // 启动所有服务
     for (const context of this.$contexts.values()) {
       if (typeof context.mounted === "function" && !context.value) {
@@ -326,7 +329,6 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     for (const child of this.children) {
       await child.start(t);
     }
-    this.started = true;
     this.logger.info(`Plugin "${this.name}" ${t ? `reloaded in ${Date.now() - t}ms` : "started"}`);
   }
   /**
@@ -485,10 +487,28 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
    */
   async import(entry: string,t?:number): Promise<Plugin> {
     if (!entry) throw new Error(`Plugin entry not found: ${entry}`);
-    entry = resolveEntry(path.isAbsolute(entry) ?
+    const resolved = resolveEntry(path.isAbsolute(entry) ?
       entry :
       path.resolve(path.dirname(this.filePath), entry)) || entry;
-    const plugin = await Plugin.create(entry, this);
+    let realPath: string;
+    try {
+      realPath = fs.realpathSync(resolved);
+    } catch {
+      realPath = resolved;
+    }
+
+    // 避免重复加载同一路径的插件
+    const normalized = realPath.replace(/\?t=\d+$/, '').replace(/\\/g, '/');
+    const existing = this.children.find(child => 
+      child.filePath.replace(/\?t=\d+$/, '').replace(/\\/g, '/') === normalized
+    );
+    if (existing) {
+      this.logger.debug(`Plugin "${entry}" already loaded, skipping...`);
+      if (this.started && !existing.started) await existing.start(t);
+      return existing;
+    }
+
+    const plugin = await Plugin.create(realPath, this);
     if (this.started) await plugin.start(t);
 
     if (process.env.NODE_ENV === 'development') {
@@ -581,9 +601,19 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
       entry
     );
     const entryFile = fs.existsSync(entry) ? entry : require.resolve(entry);
+    const realPath = fs.realpathSync(entryFile);
 
-    const plugin = new Plugin(fs.realpathSync(entryFile), parent);
+    // 检查模块是否已加载
+    const existing = loadedModules.get(realPath);
+    if (existing) {
+      return existing;
+    }
+
+    const plugin = new Plugin(realPath, parent);
     plugin.fileHash = getFileHash(entryFile);
+    
+    // 先记录，防止循环依赖时重复加载
+    loadedModules.set(realPath, plugin);
 
     await storage.run(plugin, async () => {
       await import(`${import.meta.resolve(entryFile)}?t=${Date.now()}`);
