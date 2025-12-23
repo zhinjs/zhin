@@ -4,6 +4,7 @@ export class ProcessBot implements Bot<{},{content:string,ts:number}>{
     get logger() {
         return this.adapter.logger;
     }
+    $connected=false;
     constructor(public adapter: ProcessAdapter, public $config={}) {
         this.$listenInput=this.$listenInput.bind(this);
     }
@@ -14,10 +15,8 @@ export class ProcessBot implements Bot<{},{content:string,ts:number}>{
         }
     }
     async connect() {
-        process.stdin.on('data', this.$listenInput);
     }
     async disconnect() {
-        process.stdin.removeListener('data', this.$listenInput);
     }
     $formatMessage(event: {content:string,ts:number}): Message<{content:string,ts:number}> {
         const base:MessageBase={
@@ -55,10 +54,12 @@ export class ProcessBot implements Bot<{},{content:string,ts:number}>{
     async $sendMessage(options: SendOptions) {
         return `${Date.now()}`;
     }
-    $connect(): Promise<void> {
-        return this.connect();
+    async $connect(): Promise<void> {
+        process.stdin.on('data', this.$listenInput);
+        this.$connected = true;
     }
     async $disconnect() {
+        process.stdin.removeListener('data', this.$listenInput);
     }
 }
 export class ProcessAdapter extends Adapter<ProcessBot>{

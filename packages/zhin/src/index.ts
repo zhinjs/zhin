@@ -6,3 +6,20 @@
 export * from '@zhin.js/core'
 // 重新导出 logger（作为独立的工具）
 export { default as logger } from '@zhin.js/logger'
+
+// ================================================================================================
+// 模块声明 - 允许插件通过 declare module "zhin.js" 扩展类型
+// ================================================================================================
+// 重新声明可扩展接口，使得 declare module "zhin.js" 可以正确合并类型
+// 这些接口会与 @zhin.js/core 中的原始定义合并
+declare module "zhin.js" {
+  // 重新导出 Plugin 命名空间中的可扩展接口
+  namespace Plugin {
+    // 可扩展的 Context 注册表
+    interface Contexts {}
+  }
+  // 可扩展的适配器注册表
+  interface RegisteredAdapters {}
+  // 可扩展的数据模型注册表
+  interface Models {}
+}

@@ -111,4 +111,16 @@ export class ConfigService{
         if(!config) throw new Error(`配置文件 ${filename} 未加载`);
         return config.raw as T;
     }
+    /**
+     * 更新配置文件内容
+     * @param filename 配置文件名
+     * @param data 新的配置数据
+     */
+    set<T extends object>(filename: string, data: T): void {
+        const config = this.configs.get(filename);
+        if(!config) throw new Error(`配置文件 ${filename} 未加载`);
+        // 直接更新内部数据（会触发 Proxy 的 set 拦截器并自动保存）
+        Object.assign(config.raw, data);
+        config.save(path.resolve(process.cwd(), filename));
+    }
 }

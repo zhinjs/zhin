@@ -6,20 +6,17 @@
 import { AsyncLocalStorage } from "async_hooks";
 import { EventEmitter } from "events";
 import { createRequire } from "module";
-import type { Database } from "@zhin.js/database";
+import type { Database, Definition } from "@zhin.js/database";
+import { Schema } from "@zhin.js/schema";
 import type { Models, RegisteredAdapters } from "./types.js";
 import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
 import logger, { Logger } from "@zhin.js/logger";
-import { MessageCommand } from "./command.js";
-import { Component } from "./component.js";
-import { Cron } from "./cron.js";
 import { compose, remove, resolveEntry } from "./utils.js";
-import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, ConfigService, PermissionService, CommandService, SendOptions, CronService } from "./types.js";
+import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, ConfigService, PermissionService, SendOptions } from "./types.js";
 import { Adapter } from "./adapter.js";
 import { createHash } from "crypto";
-import type { ComponentService } from "./built/component.js";
 const contextsKey = Symbol("contexts");
 const require = createRequire(import.meta.url);
 
@@ -67,16 +64,23 @@ function getCurrentFile(metaUrl = import.meta.url): string {
  * 类似 React Hooks 的设计，根据调用文件自动创建插件树
  */
 export function usePlugin(): Plugin {
-  const plugin = storage.getStore();
   const callerFile = getCurrentFile();
-
-  if (plugin && callerFile === plugin.filePath) {
-    return plugin;
-  }
-
-  const newPlugin = new Plugin(callerFile, plugin);
+  const parentPlugin = storage.getStore();
+  const newPlugin = new Plugin(callerFile, parentPlugin);
   storage.enterWith(newPlugin);
   return newPlugin;
+}
+
+/**
+ * getPlugin - 获取当前 AsyncLocalStorage 中的插件实例
+ * 用于 extensions 等场景，不创建新插件
+ */
+export function getPlugin(): Plugin {
+  const plugin = storage.getStore();
+  if (!plugin) {
+    throw new Error('getPlugin() must be called within a plugin context');
+  }
+  return plugin;
 }
 
 // ============================================================================
@@ -113,15 +117,17 @@ function watchFile(filePath: string, callback: () => void): () => void {
 // ============================================================================
 // Plugin 类
 // ============================================================================
-export interface Plugin extends Plugin.Contexts { }
+
+export interface Plugin extends Plugin.Extensions { }
 /**
  * Plugin 类 - 核心插件系统
- * 直接继承 EventEmitter，不依赖 Dependency
+ * 直接继承 EventEmitter
  */
 export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   static [contextsKey] = [] as string[];
+  
   #cachedName?: string;
-  adapters: string[] = [];
+  adapters: (keyof Plugin.Contexts)[] = [];
   started = false;
 
   // 上下文存储
@@ -157,11 +163,9 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   // 插件功能
   #middlewares: MessageMiddleware<RegisteredAdapter>[] = [this.#messageMiddleware];
   
-  // 插件提供的功能追踪（用于 status 接口）
-  $commands: Set<string> = new Set();
-  $components: Set<string> = new Set();
-  $crons: Set<string> = new Set();
-  $middlewares: Set<string> = new Set();
+  // 统一的清理函数集合
+  #disposables: Set<() => void | Promise<void>> = new Set();
+  
   get middleware(): MessageMiddleware<RegisteredAdapter> {
     return compose<RegisteredAdapter>(this.#middlewares);
   }
@@ -182,73 +186,28 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     if (parent && !parent.children.includes(this)) {
       parent.children.push(this);
     }
+    
+    // 绑定方法以支持解构使用
+    this.$bindMethods();
+  }
+  
+  // 标记是否已绑定方法
+  #methodsBound = false;
 
-    // 自动绑定所有方法
-    this.#bindMethods();
-    return new Proxy(this, {
-      get(target, prop, receiver) {
-        if (typeof prop === 'string' && Plugin[contextsKey].includes(prop)) {
-          return target.inject(prop as keyof Plugin.Contexts);
-        }
-        return Reflect.get(target, prop, receiver);
-      },
-    });
-  }
-  addCron(cron: Cron, name?: string) {
-    const cronName = name || cron.cronExpression;
-    this.$crons.add(cronName);
-    
-    const cronService = this.inject('cron');
-    cronService.addCron(cron);
-    const dispose = () => {
-      cronService.removeCron(cron);
-      this.$crons.delete(cronName);
-    };
-    this.onDispose(dispose);
-    return dispose;
-  }
-  addComponent<T extends Component<any>>(component: T) {
-    this.$components.add(component.name);
-    
-    const componentService = this.inject('component');
-    const serviceDispose = componentService.add(component);
-    const dispose = () => {
-      serviceDispose();
-      this.$components.delete(component.name);
-    };
-    this.onDispose(dispose);
-    return dispose;
-  }
-  addCommand<T extends RegisteredAdapter>(command: MessageCommand<T>) {
-    this.$commands.add(command.pattern);
-    
-    const commandService = this.inject('command');
-    if (!commandService) {
-      this.$commands.delete(command.pattern);
-      return () => { };
-    }
-    commandService.addCommand(command);
-    const dispose = () => {
-      commandService.removeCommand(command);
-      this.$commands.delete(command.pattern);
-    };
-    // 插件销毁时自动移除命令
-    this.onDispose(dispose);
-    return dispose;
-  }
+  /**
+   * 添加中间件
+   * 中间件用于处理消息流转
+   */
   addMiddleware<T extends RegisteredAdapter>(middleware: MessageMiddleware<T>, name?: string) {
-    const middlewareName = name || middleware.name || `middleware_${this.$middlewares.size}`;
-    this.$middlewares.add(middlewareName);
-    
     this.#middlewares.push(middleware as MessageMiddleware<RegisteredAdapter>);
     const dispose = () => {
       remove(this.#middlewares, middleware);
-      this.$middlewares.delete(middlewareName);
+      this.#disposables.delete(dispose);
     };
-    // 插件销毁时自动移除中间件
-    this.onDispose(dispose);
+    this.#disposables.add(dispose);
     return dispose;
   }
+
   /**
    * 插件名称
    */
@@ -323,12 +282,9 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     if (!this.#contextsIsReady(contexts)) return
     contextReadyCallback()
   }
-  inject<T extends keyof Plugin.Contexts>(name: T): Plugin.Contexts[T] {
+  inject<T extends keyof Plugin.Contexts>(name: T): Plugin.Contexts[T]|undefined {
     const context = this.root.contexts.get(name as string);
-    if (!context) {
-      throw new Error(`Context "${name as string}" not found`);
-    }
-    return context.value as Plugin.Contexts[T];
+    return context?.value as Plugin.Contexts[T];
   }
   #contextsIsReady<CS extends (keyof Plugin.Contexts)[]>(contexts: CS) {
     if (!contexts.length) return true
@@ -355,6 +311,14 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
       if (typeof context.mounted === "function" && !context.value) {
         context.value = await context.mounted(this);
       }
+      // 注册扩展方法到 Plugin.prototype
+      if (context.extensions) {
+        for (const [name, fn] of Object.entries(context.extensions)) {
+          if (typeof fn === 'function') {
+            Reflect.set(Plugin.prototype, name, fn);
+          }
+        }
+      }
       this.dispatch('context.mounted', context.name)
     }
     await this.broadcast("mounted");
@@ -367,13 +331,18 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   }
   /**
    * 获取插件提供的功能
+   * 从各个服务中获取数据
    */
   get features(): Plugin.Features {
+    const commandService = this.inject('command');
+    const componentService = this.inject('component')
+    const cronService = this.inject('cron');
+    
     return {
-      commands: Array.from(this.$commands || []),
-      components: Array.from(this.$components || []),
-      crons: Array.from(this.$crons || []),
-      middlewares: Array.from(this.$middlewares || []),
+      commands: commandService ? commandService.items.map(c => c.pattern) : [],
+      components: componentService ? componentService.getAllNames() : [],
+      crons: cronService ? cronService.items.map(c => c.cronExpression) : [],
+      middlewares: this.#middlewares.map((m, i) => m.name || `middleware_${i}`),
     };
   }
 
@@ -394,9 +363,21 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     this.logger.debug(`Stopping plugin "${this.name}"`);
     this.started = false;
 
+    // 停止子插件
+    for (const child of this.children) {
+      await child.stop();
+    }
+    this.children = [];
+
     // 停止服务
     for (const [name, context] of this.$contexts) {
       remove(Plugin[contextsKey], name);
+      // 移除扩展方法
+      if (context.extensions) {
+        for (const key of Object.keys(context.extensions)) {
+          delete (Plugin.prototype as any)[key];
+        }
+      }
       if (typeof context.dispose === "function") {
         await context.dispose(context.value);
       }
@@ -404,20 +385,21 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     // 清理 contexts Map
     this.$contexts.clear();
 
-    // 清理子插件
-    for (const child of this.children) {
-      await child.stop();
-    }
-    this.children = [];
+// 清空缓存的名称
     this.#cachedName = undefined;
 
+    // 触发 dispose 事件
     this.emit("dispose");
     
-    // 清理功能追踪 Set
-    this.$commands.clear();
-    this.$components.clear();
-    this.$crons.clear();
-    this.$middlewares.clear();
+    // 执行所有清理函数
+    for (const dispose of this.#disposables) {
+      try {
+        await dispose();
+      } catch (e) {
+        this.logger.warn(`Dispose callback failed: ${e}`);
+      }
+    }
+    this.#disposables.clear();
     
     // 清理 middlewares 数组（保留默认的消息中间件）
     this.#middlewares.length = 1;
@@ -437,8 +419,11 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     this.on("mounted", callback);
   }
 
-  onDispose(callback: () => void | Promise<void>): void {
-    this.on("dispose", callback);
+  onDispose(callback: () => void | Promise<void>): () => void {
+    this.#disposables.add(callback);
+    return () => {
+      this.#disposables.delete(callback);
+    };
   }
 
   // ============================================================================
@@ -560,16 +545,23 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   // 辅助方法
   // ============================================================================
 
+  // 核心方法列表（需要绑定的方法）
+  static #coreMethods = new Set([
+    'addMiddleware', 'useContext', 'inject', 'contextIsReady',
+    'start', 'stop', 'onMounted', 'onDispose',
+    'dispatch', 'broadcast', 'provide', 'import', 'reload', 'watch', 'info'
+  ]);
+
   /**
-   * 自动绑定所有方法
+   * 自动绑定核心方法（只在构造函数中调用一次）
    */
-  #bindMethods(): void {
+  $bindMethods(): void {
+    if (this.#methodsBound) return;
+    this.#methodsBound = true;
+    
     const proto = Object.getPrototypeOf(this);
-    for (const key of Object.getOwnPropertyNames(proto)) {
-      const desc = Object.getOwnPropertyDescriptor(proto, key);
-      if (key === "constructor") continue;
-      if (desc?.get || desc?.set) continue;
-      const value = (this as any)[key];
+    for (const key of Plugin.#coreMethods) {
+      const value = proto[key];
       if (typeof value === "function") {
         (this as any)[key] = value.bind(this);
       }
@@ -600,12 +592,17 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     return plugin;
   }
 }
-export interface Context<T extends keyof Plugin.Contexts = keyof Plugin.Contexts> {
+export function defineContext<T extends keyof Plugin.Contexts, E extends Partial<Plugin.Extensions> = {}>(options: Context<T, E>): Context<T, E> {
+  return options;
+}
+export interface Context<T extends keyof Plugin.Contexts = keyof Plugin.Contexts, E extends Partial<Plugin.Extensions> = {}> {
   name: T;
   description: string
   value?: Plugin.Contexts[T];
   mounted?: (parent: Plugin) => Plugin.Contexts[T] | Promise<Plugin.Contexts[T]>;
   dispose?: (value: Plugin.Contexts[T]) => void;
+  /** 扩展方法，会自动挂载到 Plugin.prototype 上 */
+  extensions?: E;
 }
 // ============================================================================
 // 类型定义
@@ -639,13 +636,18 @@ export namespace Plugin {
 
   /**
    * 服务类型扩展点
+   * 各个 Context 通过 declare module 扩展此接口
    */
   export interface Contexts extends RegisteredAdapters {
     config: ConfigService;
     permission: PermissionService;
     database: Database<any, Models>;
-    command: CommandService;
-    component: ComponentService;
-    cron: CronService;
   }
+  
+  /**
+   * Service 扩展方法类型
+   * 这些方法由各个 Context 的 extensions 提供
+   * 在 Plugin.start() 时自动注册到 Plugin.prototype
+   */
+  export interface Extensions {}
 }

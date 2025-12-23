@@ -18,11 +18,10 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
    */
   constructor(
     public plugin: Plugin,
-    public name: string,
+    public name: keyof Plugin.Contexts,
     public config: Adapter.BotConfig<R>[]
   ) {
     super();
-    this.plugin.root.adapters.push(this.name);
     this.on('call.recallMessage', async(bot_id, id) => {
       const bot = this.bots.get(bot_id);
       if(!bot) throw new Error(`Bot ${bot_id} not found`);
@@ -54,7 +53,9 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
     this.plugin = plugin;
   }
   async start() {
+    this.plugin.root.adapters.push(this.name);
     if (!this.config?.length) return;
+
     for (const config of this.config) {
       const bot = this.createBot(config);
       await bot.$connect();

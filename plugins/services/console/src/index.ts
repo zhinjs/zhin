@@ -6,22 +6,27 @@ import * as fs from "fs";
 import * as path from "path";
 import { setupWebSocket, notifyDataUpdate } from "./websocket.js";
 
-// 条件导入 - 生产环境会被 tree-shake
-let createViteDevServer: ((options: ViteDevServerOptions) => Promise<ViteDevServer>) | undefined;
-let connect: ((handler: any) => any) | undefined;
-
 interface ViteDevServerOptions {
   root: string;
   base: string;
   enableTailwind: boolean;
 }
 
-if (process.env.NODE_ENV === "development") {
-  // 动态导入开发依赖
-  const devModule = await import("./dev.js");
-  createViteDevServer = devModule.createViteDevServer;
-  const koaConnectModule = await import("koa-connect");
-  connect = koaConnectModule.default;
+// 动态导入开发依赖的函数（运行时调用）
+async function loadDevDependencies(): Promise<{
+  createViteDevServer: (options: ViteDevServerOptions) => Promise<ViteDevServer>;
+  connect: (handler: any) => any;
+} | null> {
+  try {
+    const devModule = await import("./dev.js");
+    const koaConnectModule = await import("koa-connect");
+    return {
+      createViteDevServer: devModule.createViteDevServer,
+      connect: koaConnectModule.default,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export type WebEntry =
@@ -125,8 +130,11 @@ useContext("router", async (router) => {
     ? path.join(import.meta.dirname, "../client")
     : path.join(import.meta.dirname, "../dist");
 
-  if (isDev && createViteDevServer && connect) {
-    webServer.vite = await createViteDevServer({
+  // 在开发模式下动态加载开发依赖
+  const devDeps = isDev ? await loadDevDependencies() : null;
+
+  if (isDev && devDeps) {
+    webServer.vite = await devDeps.createViteDevServer({
       root: rootDir,
       base,
       enableTailwind: true,
@@ -134,8 +142,14 @@ useContext("router", async (router) => {
     // Vite 中间件 - 必须在其他路由之前
     router.use((ctx, next) => {
       if (ctx.request.originalUrl.startsWith("/api")) return next();
-      return connect!(webServer.vite!.middlewares)(ctx as any, next);
+      return devDeps.connect(webServer.vite!.middlewares)(ctx as any, next);
     });
+    logger.info("╔════════════════════════════════════════╗");
+    logger.info("║      Web 控制台已启动                  ║");
+    logger.info("╠════════════════════════════════════════╣");
+    logger.info("║  地址: http://localhost:8086/          ║");
+    logger.info("║  模式: 开发模式 (Vite HMR)             ║");
+    logger.info("╚════════════════════════════════════════╝");
   } else {
     router.use((ctx, next) => {
       if (ctx.request.originalUrl.startsWith("/api")) return next();
@@ -145,6 +159,12 @@ useContext("router", async (router) => {
       ctx.type = mime.getType(filename) || path.extname(filename);
       ctx.body = fs.createReadStream(filename);
     });
+    logger.info("╔════════════════════════════════════════╗");
+    logger.info("║      Web 控制台已启动                  ║");
+    logger.info("╠════════════════════════════════════════╣");
+    logger.info("║  地址: http://localhost:8086/          ║");
+    logger.info("║  模式: 生产模式                        ║");
+    logger.info("╚════════════════════════════════════════╝");
   }
 
   // SPA 回退路由 - 处理所有未匹配的路由

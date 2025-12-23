@@ -10,10 +10,10 @@ import {
   MessageSegment,
   SendContent,
   segment,
-} from "@zhin.js/core";
+} from "zhin.js";
 import { Router } from "@zhin.js/http";
 
-declare module "@zhin.js/core" {
+declare module "zhin.js" {
   namespace Plugin {
     interface Contexts {
       icqq: IcqqAdapter;
@@ -42,7 +42,7 @@ export interface IcqqBot {
 }
 
 export class IcqqBot extends Client implements Bot<IcqqBotConfig, PrivateMessageEvent | GroupMessageEvent> {
-  $connected?: boolean;
+  $connected: boolean = false;
 
   get $id() {
     return this.$config.name;

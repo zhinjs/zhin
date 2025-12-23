@@ -1,4 +1,4 @@
-import { usePlugin, Database, Models, Adapter, SystemLog } from "zhin.js";
+import { usePlugin, Database, Models, Adapter, SystemLog, Plugin } from "zhin.js";
 import { Schema } from "@zhin.js/schema";
 import { createServer, Server } from "http";
 import os from "node:os";
@@ -22,9 +22,15 @@ declare module "zhin.js" {
 // Schema 定义
 export const httpSchema = Schema.object({
   port: Schema.number().default(8086).description("HTTP 服务端口"),
-  username: Schema.string().description("HTTP 基本认证用户名, 默认为当前系统用户名"),
-  password: Schema.string().description("HTTP 基本认证密码, 默认为随机生成的6位字符串"),
-  base: Schema.string().default("/api").description("HTTP 路由前缀, 默认为 /api"),
+  username: Schema.string().description(
+    "HTTP 基本认证用户名, 默认为当前系统用户名"
+  ),
+  password: Schema.string().description(
+    "HTTP 基本认证密码, 默认为随机生成的6位字符串"
+  ),
+  base: Schema.string()
+    .default("/api")
+    .description("HTTP 路由前缀, 默认为 /api"),
 });
 
 export interface HttpConfig {
@@ -45,8 +51,11 @@ const getCurrentUsername = () => {
 
 // 生成6位随机密码
 const generateRandomPassword = () => {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  return Array.from({ length: 6 }, () => chars.charAt(Math.floor(Math.random() * chars.length))).join("");
+  const chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  return Array.from({ length: 6 }, () =>
+    chars.charAt(Math.floor(Math.random() * chars.length))
+  ).join("");
 };
 
 const { provide, root, useContext, logger } = usePlugin();
@@ -60,42 +69,7 @@ const router = new Router(server, { prefix: process.env.routerPrefix || "" });
 provide({
   name: "server",
   description: "http server",
-  async mounted(p) {
-    // 在 mounted 中等待配置加载
-    const configService = root.inject("config");
-    const appConfig = configService.get<{ http?: HttpConfig }>("zhin.config.yml");
-    const httpConfig = appConfig.http || {};
-    const {
-      port = 8086,
-      username = getCurrentUsername(),
-      password = generateRandomPassword(),
-      base = "/api",
-    } = httpConfig;
-
-    // 设置基本认证
-    koa.use(auth({ name: username, pass: password }));
-
-    // 启动服务器
-    return new Promise<Server>((resolve) => {
-      server.listen({ host: "0.0.0.0", port }, () => {
-        const address = server.address();
-        if (!address) return resolve(server);
-        const visitAddress = typeof address === "string" ? address : `${address.address}:${address.port}`;
-        const apiUrl = `http://${visitAddress}${base}`;
-        
-        logger.info("╔════════════════════════════════════════╗");
-        logger.info("║      HTTP 服务已启动                  ║");
-        logger.info("╠════════════════════════════════════════╣");
-        logger.info(`║  监听端口: ${port.toString().padEnd(32)}║`);
-        logger.info(`║  API 地址: ${apiUrl.padEnd(32)}║`);
-        logger.info(`║  基础认证: ${username.padEnd(32)}║`);
-        logger.info(`║  密码:     ${password.padEnd(32)}║`);
-        logger.info("╚════════════════════════════════════════╝");
-        
-        resolve(server);
-      });
-    });
-  },
+  value: server,
   dispose(s) {
     s.close();
   },
@@ -151,7 +125,8 @@ useContext("config", (configService) => {
     // 统计机器人数量
     let botCount = 0;
     let onlineBotCount = 0;
-    for (const [, adapter] of root.contexts.entries()) {
+    for (const adapterName of root.adapters) {
+      const adapter=root.inject(adapterName)
       if (adapter instanceof Adapter) {
         botCount += adapter.bots.size;
         for (const bot of adapter.bots.values()) {
@@ -162,8 +137,9 @@ useContext("config", (configService) => {
 
     // 统计命令和组件
     const commandService = root.inject("command");
-    const commandCount = commandService?.length || 0;
-    const componentCount = allPlugins.reduce((sum, p) => sum + (p.$components?.size || 0), 0);
+    const componentService = root.inject("component");
+    const commandCount = commandService?.items.length || 0;
+    const componentCount = componentService?.byName.size || 0;
 
     ctx.body = {
       success: true,
@@ -212,29 +188,31 @@ useContext("config", (configService) => {
     }
 
     const commandService = root.inject("command");
-    const commands = (commandService || []).map((cmd: any) => ({
+    const commands = (commandService?.items || []).map((cmd: any) => ({
       name: cmd.pattern,
       desc: cmd.helpInfo?.desc,
       usage: cmd.helpInfo?.usage,
       examples: cmd.helpInfo?.examples,
     }));
 
-    const contexts = Array.from(plugin.contexts.entries()).map(([name]) => ({ name }));
+    const contexts = Array.from(plugin.contexts.entries()).map(([name]) => ({
+      name,
+    }));
     const features = plugin.features;
-    
+
     // 构建组件列表
     const components = features.components.map((name) => ({
       name,
-      type: 'component',
+      type: "component",
       props: {},
     }));
-    
+
     // 构建中间件列表
     const middlewares = features.middlewares.map((name, index) => ({
       id: `middleware-${index}`,
       type: name,
     }));
-    
+
     // 构建定时任务列表
     const crons = features.crons.map((expression, index) => ({
       id: `cron-${index}`,
@@ -279,12 +257,13 @@ useContext("config", (configService) => {
     }
     const bots: BotInfo[] = [];
 
-    for (const [contextName, adapter] of root.contexts.entries()) {
+    for (const name of root.adapters) {
+      const adapter = root.inject(name);
       if (adapter instanceof Adapter) {
         for (const [botName, bot] of adapter.bots.entries()) {
           bots.push({
             name: botName,
-            adapter: contextName,
+            adapter: name,
             connected: bot.$connected || false,
             status: bot.$connected ? "online" : "offline",
           });
@@ -315,14 +294,20 @@ useContext("config", (configService) => {
       return;
     }
 
-    ctx.body = { success: true, data: { name: plugin.name, filePath: plugin.filePath } };
+    ctx.body = {
+      success: true,
+      data: { name: plugin.name, filePath: plugin.filePath },
+    };
   });
 
   router.post(`${base}/config/:name`, async (ctx) => {
     const { name } = ctx.params;
 
     if (name === "app") {
-      ctx.body = { success: true, message: "App configuration update not implemented yet" };
+      ctx.body = {
+        success: true,
+        message: "App configuration update not implemented yet",
+      };
       return;
     }
 
@@ -333,7 +318,36 @@ useContext("config", (configService) => {
       return;
     }
 
-    ctx.body = { success: true, message: "Plugin configuration update not implemented yet" };
+    ctx.body = {
+      success: true,
+      message: "Plugin configuration update not implemented yet",
+    };
+  });
+
+  // Schema API - 获取所有插件 Schema
+  router.get(`${base}/schemas`, async (ctx) => {
+    const schemaService = root.inject('schema');
+    const schemas: Record<string, any> = {};
+    if (schemaService) {
+      for (const [name, schema] of schemaService.items.entries()) {
+        schemas[name] = schema.toJSON();
+      }
+    }
+    ctx.body = { success: true, data: schemas };
+  });
+
+  // Schema API - 获取单个插件 Schema
+  router.get(`${base}/schema/:name`, async (ctx) => {
+    const schemaService = root.inject('schema');
+    const { name } = ctx.params;
+    const schema = schemaService?.get(name);
+    
+    if (!schema) {
+      ctx.body = { success: true, data: null };
+      return;
+    }
+    
+    ctx.body = { success: true, data: schema.toJSON() };
   });
 
   // 消息发送 API
@@ -360,15 +374,39 @@ useContext("config", (configService) => {
     ctx.body = {
       success: true,
       message: "Message sent successfully",
-      data: { context, bot, id, type, content, timestamp: new Date().toISOString() },
+      data: {
+        context,
+        bot,
+        id,
+        type,
+        content,
+        timestamp: new Date().toISOString(),
+      },
     };
   });
+  server.listen({ host: "0.0.0.0", port }, () => {
+    const address = server.address();
+    if (!address) return;
+    const visitAddress =
+      typeof address === "string"
+        ? address
+        : `${address.address}:${address.port}`;
+    const apiUrl = `http://${visitAddress}${base}`;
 
+    logger.info("╔════════════════════════════════════════╗");
+    logger.info("║      HTTP 服务已启动                  ║");
+    logger.info("╠════════════════════════════════════════╣");
+    logger.info(`║  监听端口: ${port.toString().padEnd(32)}║`);
+    logger.info(`║  API 地址: ${apiUrl.padEnd(32)}║`);
+    logger.info(`║  基础认证: ${username.padEnd(32)}║`);
+    logger.info(`║  密码:     ${password.padEnd(32)}║`);
+    logger.info("╚════════════════════════════════════════╝");
+  });
 });
 
 // 使用数据库服务（可选）
 useContext("database", (database: Database<any, Models>) => {
-  const configService = root.inject("config");
+  const configService = root.inject("config")!;
   const appConfig = configService.get<{ http?: HttpConfig }>("zhin.config.yml");
   const base = appConfig.http?.base || "/api";
 
@@ -398,7 +436,10 @@ useContext("database", (database: Database<any, Models>) => {
         name: log.name,
         message: log.message,
         source: log.source,
-        timestamp: log.timestamp instanceof Date ? log.timestamp.toISOString() : log.timestamp,
+        timestamp:
+          log.timestamp instanceof Date
+            ? log.timestamp.toISOString()
+            : log.timestamp,
       })),
       total: logs.length,
     };
@@ -435,10 +476,15 @@ useContext("database", (database: Database<any, Models>) => {
       levelCounts[level] = count.length;
     }
 
-    const oldestLog = await LogModel.select("timestamp").orderBy("timestamp", "ASC").limit(1);
-    const oldestTimestamp = oldestLog.length > 0
-      ? (oldestLog[0].timestamp instanceof Date ? oldestLog[0].timestamp.toISOString() : oldestLog[0].timestamp)
-      : null;
+    const oldestLog = await LogModel.select("timestamp")
+      .orderBy("timestamp", "ASC")
+      .limit(1);
+    const oldestTimestamp =
+      oldestLog.length > 0
+        ? oldestLog[0].timestamp instanceof Date
+          ? oldestLog[0].timestamp.toISOString()
+          : oldestLog[0].timestamp
+        : null;
 
     ctx.body = {
       success: true,
@@ -455,31 +501,42 @@ useContext("database", (database: Database<any, Models>) => {
       return;
     }
 
-    const { days, maxRecords } = (ctx.request.body as { days?: number; maxRecords?: number }) || {};
+    const { days, maxRecords } =
+      (ctx.request.body as { days?: number; maxRecords?: number }) || {};
     let deletedCount = 0;
 
     if (days && typeof days === "number" && days > 0) {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - days);
       const deleted = await LogModel.delete({ timestamp: { $lt: cutoffDate } });
-      deletedCount += typeof deleted === 'number' ? deleted : (deleted?.length || 0);
+      deletedCount +=
+        typeof deleted === "number" ? deleted : deleted?.length || 0;
     }
 
     if (maxRecords && typeof maxRecords === "number" && maxRecords > 0) {
       const totalLogs = await LogModel.select();
       if (totalLogs.length > maxRecords) {
         const excessCount = totalLogs.length - maxRecords;
-        const oldestLogs = await LogModel.select("id", "timestamp").orderBy("timestamp", "ASC").limit(excessCount);
-        const idsToDelete = oldestLogs.map((log: Pick<SystemLog, "id" | "timestamp">) => log.id);
+        const oldestLogs = await LogModel.select("id", "timestamp")
+          .orderBy("timestamp", "ASC")
+          .limit(excessCount);
+        const idsToDelete = oldestLogs.map(
+          (log: Pick<SystemLog, "id" | "timestamp">) => log.id
+        );
 
         if (idsToDelete.length > 0) {
           const deleted = await LogModel.delete({ id: { $in: idsToDelete } });
-          deletedCount += typeof deleted === 'number' ? deleted : (deleted?.length || 0);
+          deletedCount +=
+            typeof deleted === "number" ? deleted : deleted?.length || 0;
         }
       }
     }
 
-    ctx.body = { success: true, message: `已清理 ${deletedCount} 条日志`, deletedCount };
+    ctx.body = {
+      success: true,
+      message: `已清理 ${deletedCount} 条日志`,
+      deletedCount,
+    };
   });
 });
 

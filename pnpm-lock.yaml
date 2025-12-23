@@ -195,15 +195,24 @@ importers:
 
   examples/test-bot:
     dependencies:
+      '@zhin.js/adapter-dingtalk':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/dingtalk
       '@zhin.js/adapter-discord':
         specifier: workspace:*
         version: link:../../plugins/adapters/discord
+      '@zhin.js/adapter-email':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/email
       '@zhin.js/adapter-icqq':
         specifier: workspace:*
         version: link:../../plugins/adapters/icqq
       '@zhin.js/adapter-kook':
         specifier: workspace:*
         version: link:../../plugins/adapters/kook
+      '@zhin.js/adapter-lark':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/lark
       '@zhin.js/adapter-onebot11':
         specifier: workspace:*
         version: link:../../plugins/adapters/onebot11
@@ -213,6 +222,15 @@ importers:
       '@zhin.js/adapter-sandbox':
         specifier: workspace:*
         version: link:../../plugins/adapters/sandbox
+      '@zhin.js/adapter-slack':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/slack
+      '@zhin.js/adapter-telegram':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/telegram
+      '@zhin.js/adapter-wechat-mp':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/wechat-mp
       '@zhin.js/client':
         specifier: workspace:*
         version: link:../../packages/client
@@ -228,6 +246,9 @@ importers:
       '@zhin.js/plugin-github-notify':
         specifier: workspace:*
         version: link:../../plugins/services/github-notify
+      '@zhin.js/plugin-music':
+        specifier: workspace:*
+        version: link:../../plugins/utils/music
       '@zhin.js/sensitive-filter':
         specifier: workspace:*
         version: link:../../plugins/utils/sensitive-filter
@@ -399,6 +420,9 @@ importers:
 
   plugins/adapters/discord:
     dependencies:
+      '@zhin.js/http':
+        specifier: workspace:*
+        version: link:../../services/http
       discord.js:
         specifier: ^14.15.3
         version: 14.23.2
@@ -437,7 +461,7 @@ importers:
         specifier: ^6.9.8
         version: 6.10.1
       zhin.js:
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../packages/zhin
     devDependencies:
       '@types/mailparser':
@@ -467,6 +491,9 @@ importers:
       '@zhin.js/http':
         specifier: workspace:*
         version: link:../../services/http
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
     devDependencies:
       '@radix-ui/themes':
         specifier: ^3.2.1
@@ -495,6 +522,9 @@ importers:
       kook-client:
         specifier: latest
         version: 1.0.0
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
     devDependencies:
       typescript:
         specifier: ^5.3.0
@@ -552,6 +582,9 @@ importers:
       qq-official-bot:
         specifier: ^1.0.11
         version: 1.0.11
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
     devDependencies:
       typescript:
         specifier: ^5.3.0
@@ -571,6 +604,9 @@ importers:
       '@zhin.js/http':
         specifier: workspace:*
         version: link:../../services/http
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
     devDependencies:
       '@radix-ui/themes':
         specifier: ^3.2.1
@@ -618,6 +654,9 @@ importers:
       telegraf:
         specifier: ^4.16.3
         version: 4.16.3(encoding@0.1.13)
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
     devDependencies:
       '@types/node':
         specifier: ^22.9.0
@@ -632,7 +671,7 @@ importers:
         specifier: ^0.4.14
         version: 0.4.14
       '@zhin.js/http':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../services/http
       axios:
         specifier: ^1.6.2
@@ -641,7 +680,7 @@ importers:
         specifier: ^0.6.2
         version: 0.6.2
       zhin.js:
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../packages/zhin
     devDependencies:
       '@types/koa':

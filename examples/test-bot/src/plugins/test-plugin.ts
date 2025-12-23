@@ -337,7 +337,7 @@ addCommand(
       dynamicDisposes.push(dispose);
       
       const commandService = plugin.inject('command');
-      const count = commandService?.length || 0;
+      const count = commandService?.items?.length || 0;
       
       return [
         `✅ 已添加命令: ${name}`,
@@ -357,7 +357,7 @@ addCommand(
     .usage("test-list")
     .action(() => {
       const commandService = plugin.inject('command');
-      const count = commandService?.length || 0;
+      const count = commandService?.items.length || 0;
       
       return [
         "╔═══════════ 命令统计 ═══════════╗",
@@ -383,7 +383,7 @@ addCommand(
       dispose();
       
       const commandService = plugin.inject('command');
-      const count = commandService?.length || 0;
+      const count = commandService?.items.length || 0;
       
       return [
         "✅ 已移除最后添加的动态命令",
@@ -406,11 +406,9 @@ addCommand(
       });
       
       const componentService = plugin.inject('component');
-      const count = componentService?.size || 0;
       
       return [
         `✅ 已添加组件: dynamicComp`,
-        `📊 当前组件总数: ${count}`,
         "",
         "💡 热重载插件后，此组件会自动移除"
       ].join("\n");
@@ -451,44 +449,48 @@ addCommand(
       
       plugin.addCron(cron);
       
-      // 使用类型断言访问 CronService（需要先 provide）
-      const cronService = plugin.inject('cron' as any) as any;
-      const count = cronService?.length || plugin.crons.length;
-      const runningCount = cronService?.runningCount || plugin.crons.filter((c: any) => c.running).length;
+      const cronService = plugin.inject('cron');
+      const count = cronService?.items.length
       
       return [
         "✅ 已添加测试定时任务",
         `📊 当前定时任务总数: ${count}`,
-        `🏃 运行中任务数: ${runningCount}`,
         "",
         "💡 每10秒会在控制台打印一次",
         "💡 热重载插件后，此任务会自动停止"
       ].join("\n");
     })
 );
-
 addCommand(
-  new MessageCommand("test-cron-list")
+  new MessageCommand("cron-stop[name:text]")
+    .desc("停止测试定时任务")
+    .usage("cron-stop <name>")
+    .action((_, { params }) => {
+      const name = params.name;
+      const crons = plugin.inject('cron');
+      crons?.remove(name);
+    })
+);
+addCommand(
+  new MessageCommand("cron-list")
     .desc("查看定时任务状态", "显示所有定时任务的状态")
     .usage("test-cron-list")
     .action(() => {
-      const cronService = plugin.inject('cron' as any) as any;
-      const crons = cronService || plugin.crons;
+      const crons = plugin.inject('cron');
       
-      if (!crons || crons.length === 0) {
+      if (!crons || crons.items.length === 0) {
         return "📋 暂无定时任务";
       }
       
-      const runningCount = cronService?.runningCount || crons.filter((c: any) => c.running).length;
       const lines = [
         "╔═══════════ 定时任务状态 ═══════════╗",
         "",
-        `📋 总数: ${crons.length} | 运行中: ${runningCount}`,
+        `📋 总数: ${crons.items.length}`,
         ""
       ];
       
-      crons.forEach((cron: any, index: number) => {
-        lines.push(`[${index + 1}] ${cron.cronExpression || cron._cronExpression}`);
+      crons.items.forEach((cron: any, index: number) => {
+        lines.push(`[${cron.id}] ${cron.cronExpression || cron._cronExpression}`);
         lines.push(`    状态: ${cron.running ? '🏃 运行中' : '⏸️ 已停止'}`);
         if (cron.running) {
           try {

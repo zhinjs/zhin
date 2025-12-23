@@ -6,6 +6,7 @@ import { Cron as Croner } from 'croner';
  */
 export class Cron {
   private job: Croner | null = null;
+  id:string = '';
   private callback: () => void | Promise<void>;
   private isDisposed = false;
   private _cronExpression: string;
@@ -16,6 +17,7 @@ export class Cron {
    * @param callback - 要执行的回调函数
    */
   constructor(cronExpression: string, callback: () => void | Promise<void>) {
+    this.id=Math.random().toString(36).substring(2, 10);
     try {
       this._cronExpression = cronExpression;
       this.callback = callback;

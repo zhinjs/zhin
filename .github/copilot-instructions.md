@@ -816,8 +816,7 @@ async function setup() {
 import { register, defineSchema, Schema, useApp, useDatabase } from "@zhin.js/core"
 
 // ✅ 新版
-import { usePlugin } from "@zhin.js/core"
-import { Schema } from "@zhin.js/schema"
+import { usePlugin, defineSchema, Schema } from "zhin.js"
 ```
 
 **获取实例**：
@@ -838,10 +837,20 @@ const db = plugin.inject('database')  // 注入 Context
 const schema = defineSchema(Schema.object({ ... }))
 const config = schema(plugin.config, 'pluginName')
 
-// ✅ 新版
-const schema = Schema.object({ ... })
+// ✅ 新版（推荐）- Schema 自动注册到全局，用于 Web 控制台表单渲染
+const getConfig = plugin.defineSchema(Schema.object({
+  port: Schema.number().default(8080).description('服务端口'),
+  enabled: Schema.boolean().default(true).description('是否启用'),
+}))
+const config = getConfig()
+
+// ✅ 或使用便捷函数
+const getConfig = defineSchema(Schema.object({ ... }))
+const config = getConfig()
+
+// ✅ 手动获取配置（不需要 Schema 验证时）
 const configService = plugin.inject('config')
-const appConfig = configService.getData('zhin.config.yml')
+const appConfig = configService.get('zhin.config.yml')
 const config = appConfig.pluginName || {}
 ```
 

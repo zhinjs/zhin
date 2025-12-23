@@ -14,16 +14,6 @@ export default defineConfig({
   treeshake: true,
   splitting: false,
   sourcemap: false,
-  // 设置环境变量
-  env: {
-    NODE_ENV: process.env.NODE_ENV || 'production'
-  },
-  // 定义替换
-  define: {
-    'process.env.NODE_ENV': process.env.NODE_ENV === 'development' 
-      ? '"development"' 
-      : '"production"'
-  },
   // 外部依赖 - 这些不会被打包
   external: [
     // 开发时依赖 - 生产环境不需要

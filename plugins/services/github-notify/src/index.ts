@@ -1,20 +1,43 @@
-import type {} from "@zhin.js/http";
-import {
-  usePlugin,
-  MessageCommand,
-  useLogger,
-  defineModel,
-  onDatabaseReady,
-  useContext,
-} from "zhin.js";
+import type { Router } from "@zhin.js/http";
+import { usePlugin, MessageCommand, Plugin } from "zhin.js";
 import type { EventType, GitHubWebhookPayload, Subscription } from "./types.js";
 import crypto from "node:crypto";
 
-const plugin = usePlugin();
-const { addCommand } = plugin;
-const logger = useLogger();
+// 类型扩展 - 使用新的模式
+declare module "zhin.js" {
+  namespace Plugin {
+    interface Contexts {
+      router: Router;
+    }
+  }
+  interface Models {
+    github_subscriptions: {
+      id: number;
+      repo: string;
+      events: EventType[];
+      target_id: string;
+      target_type: "private" | "group" | "channel";
+      adapter: string;
+      bot: string;
+    };
+    github_events: {
+      id: number;
+      repo: string;
+      event_type: string;
+      payload: any;
+    };
+  }
+}
 
-// 定义数据库模型
+const plugin = usePlugin();
+const { addCommand, useContext, root, logger, defineModel } = plugin;
+
+// 获取配置
+const configService = root.inject("config");
+const appConfig = configService?.get<{ "github-notify"?: { webhook_secret?: string } }>("zhin.config.yml") ?? {};
+const config = appConfig["github-notify"] || {};
+
+// 定义数据模型（插件自己定义，无需在 setup.ts 中手动添加）
 defineModel("github_subscriptions", {
   id: { type: "integer", primary: true },
   repo: { type: "text", nullable: false },
@@ -29,13 +52,18 @@ defineModel("github_events", {
   id: { type: "integer", primary: true },
   repo: { type: "text", nullable: false },
   event_type: { type: "text", nullable: false },
-  payload: { type: "json" },
+  payload: { type: "json", default: {} },
 });
 
 // 等待数据库和路由就绪
-onDatabaseReady(async (db) => {
-  const subscriptions = db.model("github_subscriptions");
-  const events = db.model("github_events");
+useContext("database", (db: any) => {
+  const subscriptions = db.models.get("github_subscriptions") as any;
+  const events = db.models.get("github_events") as any;
+  
+  if (!subscriptions || !events) {
+    logger.warn("github-notify: 数据库初始化失败，模型未创建");
+    return;
+  }
 
   // 订阅仓库命令
   // 使用解构出来的 addCommand
@@ -199,7 +227,7 @@ onDatabaseReady(async (db) => {
       }
 
       const list = subs
-        .map((sub, index: number) => {
+        .map((sub: any, index: number) => {
           const events = Array.isArray(sub.events)
             ? sub.events.join(", ")
             : "无";
@@ -216,8 +244,9 @@ onDatabaseReady(async (db) => {
   // 如果 Plugin 类实现了 useContext 方法，那么可以像 addCommand 一样解构
   // 经检查 Plugin 类没有直接的 useContext 方法，但它继承自 Dependency，而 Dependency 有上下文管理
   // 这里我们还是用 plugin.useContext
-  plugin.useContext("router", (router) => {
-    router.post("/api/github/webhook", async (ctx) => {
+  // @ts-expect-error - router 类型在 @zhin.js/http 中声明
+  plugin.useContext("router", (router: Router) => {
+    router.post("/api/github/webhook", async (ctx: any) => {
       try {
         const signature = ctx.request.headers["x-hub-signature-256"] as string;
         const event = ctx.request.headers["x-github-event"] as string;
@@ -228,7 +257,7 @@ onDatabaseReady(async (db) => {
         );
 
         // 验证签名（如果配置了 secret）
-        const secret = plugin.config.webhook_secret;
+        const secret = config.webhook_secret;
         if (secret && signature) {
           const expectedSignature = `sha256=${crypto
             .createHmac("sha256", secret)
@@ -309,16 +338,22 @@ onDatabaseReady(async (db) => {
           }
 
           try {
-            await plugin.sendMessage({
-              context: subscription.adapter,
-              bot: subscription.bot,
-              id: subscription.target_id,
-              type: subscription.target_type,
-              content: message,
-            });
-            logger.info(
-              `已发送通知到 ${subscription.target_type}:${subscription.target_id}`
-            );
+            // 获取适配器并发送消息
+            const adapter = root.inject(subscription.adapter as any) as any;
+            if (adapter && typeof adapter.emit === 'function') {
+              await adapter.emit('call.sendMessage', subscription.bot, {
+                context: subscription.adapter,
+                bot: subscription.bot,
+                id: subscription.target_id,
+                type: subscription.target_type,
+                content: message,
+              });
+              logger.info(
+                `已发送通知到 ${subscription.target_type}:${subscription.target_id}`
+              );
+            } else {
+              logger.warn(`适配器 ${subscription.adapter} 未找到`);
+            }
           } catch (error) {
             logger.error(`发送通知失败:`, error);
           }
@@ -415,33 +450,6 @@ function formatGitHubEvent(
 
     default:
       return `📬 ${repo}\n${event} by ${sender}`;
-  }
-}
-
-// 扩展类型声明
-declare module "@zhin.js/types" {
-  interface Models {
-    github_subscriptions: {
-      id: number;
-      repo: string;
-      events: EventType[];
-      target_id: string;
-      target_type: "private" | "group" | "channel";
-      adapter: string;
-      bot: string;
-    };
-    github_events: {
-      id: number;
-      repo: string;
-      event_type: string;
-      payload: any;
-    };
-  }
-
-  interface PluginConfig {
-    "github-notify"?: {
-      webhook_secret?: string;
-    };
   }
 }
 

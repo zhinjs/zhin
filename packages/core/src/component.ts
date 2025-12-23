@@ -1,6 +1,5 @@
 import { getValueWithRuntime, compiler, segment } from './utils.js';
 import { Dict, SendContent, SendOptions, MessageElement } from './types.js';
-import { Message } from "./message.js";
 
 // 组件匹配符号
 export const CapWithChild = Symbol('CapWithChild');

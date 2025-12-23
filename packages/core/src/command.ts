@@ -62,9 +62,9 @@ export class MessageCommand<T extends RegisteredAdapter=RegisteredAdapter> exten
      * @returns 命令返回内容或undefined
      */
     async handle(message:Message<AdapterMessage<T>>,plugin:Plugin):Promise<SendContent|undefined>{
-        const auth=plugin.permission
+        const auth = plugin.contextIsReady('permission') ? plugin.inject('permission') : null
         for(const permit of this.#permissions){
-            const passed=await auth.check(permit,message)
+            const passed=await auth?.check(permit,message)
             if(!passed) return;
         }
         const matched=this.match(message.$content);

@@ -50,7 +50,8 @@
     "@zhin.js/core": "workspace:*",
     "@zhin.js/client": "workspace:*",
     "@zhin.js/http": "workspace:*",
-    "@zhin.js/console": "workspace:*"
+    "@zhin.js/console": "workspace:*",
+    "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@zhin.js/client": {

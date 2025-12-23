@@ -12,7 +12,7 @@ export interface Bot<Config extends object= {},Event extends object = {}> {
   /** 机器人配置 */
   $config: Config;
   /** 是否已连接 */
-  $connected?: boolean;
+  $connected: boolean;
   /** 格式化平台消息为标准Message结构 */
   $formatMessage(event: Event): Message<Event>;
   /** 连接机器人 */

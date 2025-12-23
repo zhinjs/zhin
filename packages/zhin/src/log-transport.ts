@@ -16,8 +16,8 @@ export class DatabaseLogTransport implements LogTransport {
 
   constructor(plugin: Plugin) {
     this.plugin = plugin
-    const configService=plugin.inject('config')
-    const appConfig=configService.get<AppConfig>('zhin.config.yml')
+    const configService = plugin.inject('config')!
+    const appConfig = configService.get<AppConfig>('zhin.config.yml')
     // 从配置读取日志清理策略
     const logConfig = appConfig.log || {}
     this.maxDays = logConfig.maxDays || 7 // 默认保留 7 天

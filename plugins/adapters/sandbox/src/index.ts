@@ -10,7 +10,7 @@ import {
   MessageType,
   MessageElement,
   Plugin,
-} from "@zhin.js/core";
+} from "zhin.js";
 import type { WebSocket } from "ws";
 import { Router } from "@zhin.js/http";
 import path from "path";
@@ -21,7 +21,7 @@ export interface SandboxConfig {
   name: string;
 }
 
-declare module "@zhin.js/core" {
+declare module "zhin.js" {
   namespace Plugin {
     interface Contexts {
       sandbox: SandboxAdapter;
@@ -46,7 +46,7 @@ interface WebSocketMessage {
 }
 
 export class SandboxBot extends EventEmitter implements Bot<SandboxConfig, { content: MessageElement[]; ts: number }> {
-  $connected?: boolean;
+  $connected: boolean = false;
 
   get $id() {
     return this.$config.name;
