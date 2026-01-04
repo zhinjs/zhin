@@ -16,6 +16,7 @@ export * from './built/cron.js'
 export * from './built/permission.js'
 export * from './built/adapter-process.js'
 export * from './built/component.js'
+export * from './built/database.js'
 
 export * from './types.js'
 export * from './utils.js'

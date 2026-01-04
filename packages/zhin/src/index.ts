@@ -17,6 +17,15 @@ declare module "zhin.js" {
   namespace Plugin {
     // 可扩展的 Context 注册表
     interface Contexts {}
+    // 扩展方法
+    interface Extensions {
+      /**
+       * 定义数据库模型
+       * @param name 模型名称
+       * @param definition 模型定义
+       */
+      defineModel<K extends keyof Models>(name: K, definition: import('@zhin.js/core').Definition<Models[K]>): void;
+    }
   }
   // 可扩展的适配器注册表
   interface RegisteredAdapters {}

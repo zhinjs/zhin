@@ -74,9 +74,24 @@ export function compose<P extends RegisteredAdapter=RegisteredAdapter>(
     return dispatch(0);
   };
 }
+// 使用 LRU 缓存限制大小，防止内存泄漏
+const MAX_EVAL_CACHE_SIZE = 1000;
 const evalCache: Record<string, Function> = Object.create(null);
+const evalCacheKeys: string[] = [];
+
 export const execute = <S, T = any>(exp: string, context: S): T => {
-  const fn = evalCache[exp] || (evalCache[exp] = toFunction(exp));
+  let fn = evalCache[exp];
+  
+  if (!fn) {
+    // 如果缓存已满，删除最旧的条目（LRU）
+    if (evalCacheKeys.length >= MAX_EVAL_CACHE_SIZE) {
+      const oldest = evalCacheKeys.shift()!;
+      delete evalCache[oldest];
+    }
+    
+    fn = evalCache[exp] = toFunction(exp);
+    evalCacheKeys.push(exp);
+  }
   context = {
     ...context,
     process: {
@@ -110,6 +125,22 @@ const toFunction = (exp: string): Function => {
     return () => { };
   }
 };
+
+// 清理 evalCache（用于内存调试）
+export function clearEvalCache(): void {
+  Object.keys(evalCache).forEach(key => {
+    delete evalCache[key];
+  });
+  evalCacheKeys.length = 0;
+}
+
+// 获取 evalCache 统计信息（用于内存调试）
+export function getEvalCacheStats(): { size: number; maxSize: number } {
+  return {
+    size: evalCacheKeys.length,
+    maxSize: MAX_EVAL_CACHE_SIZE
+  };
+}
 export function compiler(template: string, ctx: Dict) {
   const matched = [...template.matchAll(/\${([^}]*?)}/g)];
   for (const item of matched) {

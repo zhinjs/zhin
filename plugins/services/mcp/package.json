@@ -27,9 +27,8 @@
     "directory": "plugins/services/mcp"
   },
   "scripts": {
-    "build": "echo 'Skipping build for mcp (needs API migration)'",
-    "clean": "rm -rf lib",
-    "build:node": "tsc"
+    "build": "tsc",
+    "clean": "rm -rf lib"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.22.0",

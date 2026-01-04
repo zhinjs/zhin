@@ -30,33 +30,32 @@ declare module "zhin.js" {
 }
 
 const plugin = usePlugin();
-const { addCommand, useContext, root, logger, defineModel } = plugin;
+const { addCommand, useContext, root, logger } = plugin;
 
 // 获取配置
 const configService = root.inject("config");
 const appConfig = configService?.get<{ "github-notify"?: { webhook_secret?: string } }>("zhin.config.yml") ?? {};
 const config = appConfig["github-notify"] || {};
 
-// 定义数据模型（插件自己定义，无需在 setup.ts 中手动添加）
-defineModel("github_subscriptions", {
-  id: { type: "integer", primary: true },
-  repo: { type: "text", nullable: false },
-  events: { type: "json", default: [] },
-  target_id: { type: "text", nullable: false },
-  target_type: { type: "text", nullable: false },
-  adapter: { type: "text", nullable: false },
-  bot: { type: "text", nullable: false },
-});
-
-defineModel("github_events", {
-  id: { type: "integer", primary: true },
-  repo: { type: "text", nullable: false },
-  event_type: { type: "text", nullable: false },
-  payload: { type: "json", default: {} },
-});
-
-// 等待数据库和路由就绪
+// 等待数据库就绪后定义模型
 useContext("database", (db: any) => {
+  // 定义数据模型（必须在数据库服务启动后调用）
+  (plugin as any).defineModel("github_subscriptions", {
+    id: { type: "integer", primary: true },
+    repo: { type: "text", nullable: false },
+    events: { type: "json", default: [] },
+    target_id: { type: "text", nullable: false },
+    target_type: { type: "text", nullable: false },
+    adapter: { type: "text", nullable: false },
+    bot: { type: "text", nullable: false },
+  });
+
+  (plugin as any).defineModel("github_events", {
+    id: { type: "integer", primary: true },
+    repo: { type: "text", nullable: false },
+    event_type: { type: "text", nullable: false },
+    payload: { type: "json", default: {} },
+  });
   const subscriptions = db.models.get("github_subscriptions") as any;
   const events = db.models.get("github_events") as any;
   

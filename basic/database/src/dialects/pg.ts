@@ -42,9 +42,9 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
         this.pool = new Pool(poolConfig);
         console.log(`PostgreSQL 连接池已创建 (max: ${poolConfig.max})`);
       } else {
-        const { Client } = await import('pg');
-        this.connection = new Client(this.config);
-        await this.connection.connect();
+      const { Client } = await import('pg');
+      this.connection = new Client(this.config);
+      await this.connection.connect();
       }
     } catch (error) {
       console.error('forgot install pg ?');
@@ -59,7 +59,7 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
       console.log('PostgreSQL 连接池已关闭');
     } else if (this.connection) {
       await this.connection.end();
-      this.connection = null;
+    this.connection = null;
     }
   }
 
@@ -78,8 +78,8 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
       const result = await this.pool.query(sql, params);
       return result.rows as U;
     } else {
-      const result = await this.connection.query(sql, params);
-      return result.rows as U;
+    const result = await this.connection.query(sql, params);
+    return result.rows as U;
     }
   }
 

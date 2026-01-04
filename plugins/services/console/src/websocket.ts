@@ -129,8 +129,8 @@ async function handleWebSocketMessage(
     case "schema:get":
       // 获取插件 Schema
       try {
-        const schemaService = root.inject('schema');
-        const schema = pluginName && schemaService ? schemaService.get(pluginName) : null;
+        const schemaService = root.inject('schema' as any);
+        const schema = pluginName && schemaService ? (schemaService as any).get(pluginName) : null;
         if (schema) {
           ws.send(JSON.stringify({ requestId, data: schema.toJSON() }));
         } else {
@@ -144,10 +144,10 @@ async function handleWebSocketMessage(
     case "schema:get-all":
       // 获取所有插件 Schema
       try {
-        const schemaService = root.inject('schema');
+        const schemaService = root.inject('schema' as any);
         const schemas: Record<string, any> = {};
         if (schemaService) {
-          for (const [name, schema] of schemaService.items.entries()) {
+          for (const [name, schema] of (schemaService as any).items.entries()) {
             schemas[name] = schema.toJSON();
           }
         }

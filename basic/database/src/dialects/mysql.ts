@@ -42,8 +42,8 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
         this.pool = createPool(poolConfig);
         console.log(`MySQL 连接池已创建 (max: ${poolConfig.connectionLimit})`);
       } else {
-        const { createConnection } = await import('mysql2/promise');
-        this.connection = await createConnection(this.config);
+      const { createConnection } = await import('mysql2/promise');
+      this.connection = await createConnection(this.config);
       }
     } catch (error) {
       console.error('forgot install mysql2 ?');
@@ -58,7 +58,7 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
       console.log('MySQL 连接池已关闭');
     } else if (this.connection) {
       await this.connection.end();
-      this.connection = null;
+    this.connection = null;
     }
   }
 
@@ -77,8 +77,8 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
       const [rows] = await this.pool.execute(sql, params);
       return rows as U;
     } else {
-      const [rows] = await this.connection.execute(sql, params);
-      return rows as U;
+    const [rows] = await this.connection.execute(sql, params);
+    return rows as U;
     }
   }
 

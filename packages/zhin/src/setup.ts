@@ -1,10 +1,11 @@
 
 import { setLevel, LogLevel } from '@zhin.js/logger';
 import {
-  usePlugin, Models, SystemLogDefinition, resolveEntry,
-  UserDefinition, ConfigService, PermissionService,
+  usePlugin, resolveEntry,
+  ConfigService, PermissionService,
   createCommandService, createComponentService, createCronService,
-  ProcessAdapter, Registry, Database
+  defineDatabaseService,
+  ProcessAdapter,
 } from '@zhin.js/core';
 import { AppConfig } from './types.js';
 import { DatabaseLogTransport } from './log-transport.js';
@@ -79,24 +80,10 @@ if (enabledServices.has('cron')) {
 setLevel(appConfig.log_level || LogLevel.INFO);
 
 if (appConfig.database) {
-  const { dialect, ...rest } = appConfig.database;
-  const db = Registry.create<Models, typeof dialect>(dialect, rest, {
-    User: UserDefinition,
-    SystemLog: SystemLogDefinition,
-    // Add models here
-  }) as Database<any, Models>;
-  await db.start();
-  provide({
-    name: 'database',
-    description: '数据库服务',
-    value: db,
-    dispose: async (database) => {
-      await database.stop();
-    }
-  });
-  // 添加数据库日志传输（只添加到根 logger，不递归）
+  provide(defineDatabaseService(appConfig.database));
   const logTransport = new DatabaseLogTransport(plugin);
   // 直接访问 logger 实例的 transports 数组，或使用非递归方式
+  // 检查是否已存在 DatabaseLogTransport（避免重复添加）
   if (!logger['transports'].some((t: any) => t instanceof DatabaseLogTransport)) {
     logger['transports'].push(logTransport);
   }

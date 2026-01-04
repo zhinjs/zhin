@@ -5,7 +5,7 @@ export type QueryType =
   | 'drop_table' 
   | 'drop_index' 
   | 'select' 
-  | 'insert'
+  | 'insert' 
   | 'insert_many'
   | 'update' 
   | 'delete'

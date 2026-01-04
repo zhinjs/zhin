@@ -46,7 +46,7 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
           if (err) {
             reject(err);
           } else {
-            this.db = null;
+    this.db = null;
             resolve();
           }
         });

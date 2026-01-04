@@ -57,7 +57,7 @@ export class RelatedDatabase<
     definitions?: Database.DefinitionObj<S>,
     relations?: RelationsConfig<S>,
   ) {
-    super(dialect,definitions);
+    super(dialect,definitions); 
     this.relationsConfig = relations;
   }
   
@@ -499,16 +499,16 @@ export class RelatedDatabase<
                 if (value[op] === null) {
                   clauses.push(`${quotedKey} IS NULL`);
                 } else {
-                  clauses.push(`${quotedKey} = ${placeholder}`);
-                  params.push(value[op]);
+                clauses.push(`${quotedKey} = ${placeholder}`);
+                params.push(value[op]);
                 }
                 break;
               case '$ne':
                 if (value[op] === null) {
                   clauses.push(`${quotedKey} IS NOT NULL`);
                 } else {
-                  clauses.push(`${quotedKey} <> ${placeholder}`);
-                  params.push(value[op]);
+                clauses.push(`${quotedKey} <> ${placeholder}`);
+                params.push(value[op]);
                 }
                 break;
               case '$gt':
@@ -569,9 +569,9 @@ export class RelatedDatabase<
           if (value === null) {
             clauses.push(`${quotedKey} IS NULL`);
           } else {
-            const placeholder = this.dialect.getParameterPlaceholder(params.length);
-            clauses.push(`${quotedKey} = ${placeholder}`);
-            params.push(value);
+          const placeholder = this.dialect.getParameterPlaceholder(params.length);
+          clauses.push(`${quotedKey} = ${placeholder}`);
+          params.push(value);
           }
         }
       }

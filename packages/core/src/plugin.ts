@@ -187,7 +187,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     if (parent && !parent.children.includes(this)) {
       parent.children.push(this);
     }
-    
+
     // 绑定方法以支持解构使用
     this.$bindMethods();
   }
@@ -329,7 +329,13 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     for (const child of this.children) {
       await child.start(t);
     }
+    // 输出启动日志（使用 debug 级别，避免重复输出）
+    // 只在根插件或重要插件时使用 info 级别
+    if (!this.parent || this.name === 'setup') {
     this.logger.info(`Plugin "${this.name}" ${t ? `reloaded in ${Date.now() - t}ms` : "started"}`);
+    } else {
+      this.logger.debug(`Plugin "${this.name}" ${t ? `reloaded in ${Date.now() - t}ms` : "started"}`);
+    }
   }
   /**
    * 获取插件提供的功能
@@ -409,6 +415,17 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     if (this.parent) {
       remove(this.parent?.children, this);
     }
+    
+    // 从全局 loadedModules Map 中移除，防止内存泄漏
+    if (this.filePath) {
+      try {
+        const realPath = fs.realpathSync(this.filePath);
+        loadedModules.delete(realPath);
+      } catch {
+        // 文件可能已不存在，忽略错误
+      }
+    }
+    
     this.removeAllListeners();
     this.logger.debug(`Plugin "${this.name}" stopped`);
   }
@@ -671,7 +688,6 @@ export namespace Plugin {
   export interface Contexts extends RegisteredAdapters {
     config: ConfigService;
     permission: PermissionService;
-    database: Database<any, Models>;
   }
   
   /**

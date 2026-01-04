@@ -326,10 +326,10 @@ useContext("config", (configService) => {
 
   // Schema API - 获取所有插件 Schema
   router.get(`${base}/schemas`, async (ctx) => {
-    const schemaService = root.inject('schema');
+    const schemaService = root.inject('schema' as any);
     const schemas: Record<string, any> = {};
     if (schemaService) {
-      for (const [name, schema] of schemaService.items.entries()) {
+      for (const [name, schema] of (schemaService as any).items.entries()) {
         schemas[name] = schema.toJSON();
       }
     }
@@ -338,9 +338,9 @@ useContext("config", (configService) => {
 
   // Schema API - 获取单个插件 Schema
   router.get(`${base}/schema/:name`, async (ctx) => {
-    const schemaService = root.inject('schema');
+    const schemaService = root.inject('schema' as any);
     const { name } = ctx.params;
-    const schema = schemaService?.get(name);
+    const schema = (schemaService as any)?.get(name);
     
     if (!schema) {
       ctx.body = { success: true, data: null };
@@ -384,13 +384,13 @@ useContext("config", (configService) => {
       },
     };
   });
-  server.listen({ host: "0.0.0.0", port }, () => {
+  server.listen({ host: "127.0.0.1", port }, () => {
     const address = server.address();
     if (!address) return;
     const visitAddress =
       typeof address === "string"
         ? address
-        : `${address.address}:${address.port}`;
+        : `localhost:${address.port}`;
     const apiUrl = `http://${visitAddress}${base}`;
 
     logger.info("╔════════════════════════════════════════╗");
