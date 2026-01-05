@@ -1,10 +1,11 @@
-import { addCommand, MessageCommand, usePrompt, useLogger, addComponent, defineComponent } from "zhin.js";
+import { MessageCommand, usePlugin, defineComponent, Prompt } from "zhin.js";
 import type {} from '@zhin.js/adapter-icqq'
 import { musicServices } from "./sources/index.js";
 import { sourceConfigMap } from "./config.js";
 import type { MusicSource } from "./types.js";
 
-const logger = useLogger();
+const plugin = usePlugin();
+const { logger, addCommand, addComponent} = plugin;
 
 // 异步组件：分享音乐
 const ShareMusic = defineComponent(async function ShareMusic({ platform, musicId }: { platform: MusicSource, musicId: string }) {
@@ -69,8 +70,8 @@ addCommand(
         return;
       }
 
-      // 使用 prompt 让用户选择
-      const prompt = usePrompt(message);
+      // 使用 Prompt 让用户选择
+      const prompt = new Prompt(plugin, message);
       const musicUrl = await prompt.pick("请选择搜索结果", {
         type: "text",
         options: allMusic.map((music) => ({

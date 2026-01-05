@@ -2,12 +2,13 @@
 // Database Dialect Interface
 // ============================================================================
 
+import { Transaction, TransactionOptions, IsolationLevel } from '../types.js';
 
 // ============================================================================
 // SQL Builder Base Class
 // ============================================================================
 
-export abstract class Dialect<T,Q> {
+export abstract class Dialect<T,S extends Record<string, object>,Q> {
   public readonly name: string;
   public readonly config: T;
   
@@ -23,7 +24,7 @@ export abstract class Dialect<T,Q> {
   abstract healthCheck(): Promise<boolean>;
   abstract query<U = any>(query: Q, params?: any[]): Promise<U>;
   abstract mapColumnType(type: string): string;
-  abstract quoteIdentifier(identifier: string): string;
+  abstract quoteIdentifier(identifier: string|number|symbol): string;
   abstract getParameterPlaceholder(index: number): string;
   abstract getStatementTerminator(): string;
   abstract formatBoolean(value: boolean): string;
@@ -34,17 +35,55 @@ export abstract class Dialect<T,Q> {
   abstract formatLimit(limit: number): string;
   abstract formatOffset(offset: number): string;
   abstract formatLimitOffset(limit: number, offset: number): string;
-  abstract formatCreateTable(tableName: string, columns: string[]): string;
-  abstract formatAlterTable(tableName: string, alterations: string[]): string;
-  abstract formatDropTable(tableName: string, ifExists?: boolean): string;
-  abstract formatDropIndex(indexName: string, tableName: string, ifExists?: boolean): string;
+  abstract formatCreateTable<T extends keyof S>(tableName: T, columns: string[]): string;
+  abstract formatAlterTable<T extends keyof S>(tableName: T, alterations: string[]): string;
+  abstract formatDropTable<T extends keyof S>(tableName: T, ifExists?: boolean): string;
+  abstract formatDropIndex<T extends keyof S>(indexName: string, tableName: T, ifExists?: boolean): string;
   abstract dispose(): Promise<void>;
+  
+  // ============================================================================
+  // Transaction Support (optional, default implementations)
+  // ============================================================================
+  
+  /**
+   * 是否支持事务
+   */
+  supportsTransactions(): boolean {
+    return false;
+  }
+  
+  /**
+   * 开始事务
+   */
+  async beginTransaction(options?: TransactionOptions): Promise<Transaction> {
+    throw new Error(`Dialect ${this.name} does not support transactions`);
+  }
+  
+  /**
+   * 格式化事务隔离级别
+   */
+  formatIsolationLevel(level: IsolationLevel): string {
+    return level.replace(/_/g, ' ');
+  }
+  
+  // ============================================================================
+  // Aggregation Support
+  // ============================================================================
+  
+  /**
+   * 格式化聚合函数
+   */
+  formatAggregate(fn: string, field: string, alias?: string): string {
+    const fnUpper = fn.toUpperCase();
+    const aliasClause = alias ? ` AS ${this.quoteIdentifier(alias)}` : '';
+    return `${fnUpper}(${field === '*' ? '*' : this.quoteIdentifier(field)})${aliasClause}`;
+  }
 }
 export namespace Dialect {
-  export type Creator<D,Q> = (config: D) => Dialect<D,Q>;
-  export type Constructor<D,Q> = new (config: D) => Dialect<D,Q>;
-  export type Factory<D,Q> = Creator<D,Q> | Constructor<D,Q>;
-  export function isConstructor<D,Q>(fn: Factory<D,Q>): fn is Constructor<D,Q> {
+  export type Creator<D,S extends Record<string, object>,Q> = (config: D) => Dialect<D,S,Q>;
+  export type Constructor<D,S extends Record<string, object>,Q> = new (config: D) => Dialect<D,S,Q>;
+  export type Factory<D,S extends Record<string, object>,Q> = Creator<D,S,Q> | Constructor<D,S,Q>;
+  export function isConstructor<D,S extends Record<string, object>,Q>(fn: Factory<D,S,Q>): fn is Constructor<D,S,Q> {
     return fn.prototype && fn.prototype.constructor === fn;
   }
 }

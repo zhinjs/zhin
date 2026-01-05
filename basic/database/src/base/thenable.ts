@@ -3,17 +3,17 @@ import type { Dialect } from "./dialect.js";
 import { QueryParams } from "../types.js";
 
 
-export abstract class ThenableQuery<T = any,C=any,D=string>
-  implements PromiseLike<T>, AsyncIterable<T>
+export abstract class ThenableQuery<R,S extends Record<string, object>, T extends keyof S,C=any,D=string>
+  implements PromiseLike<R>, AsyncIterable<R>
 {
-  protected constructor(protected readonly database: Database<C,Record<string, object>,D>,protected readonly dialect: Dialect<C,D>) {}
+  protected constructor(protected readonly database: Database<C,S,D>,protected readonly dialect: Dialect<C,S,D>) {}
   
   // Abstract method to get query parameters
-  protected abstract getQueryParams(): QueryParams;
+  protected abstract getQueryParams(): QueryParams<S,T>;
   [Symbol.toStringTag] = 'ThenableQuery';
-  then<TResult1 = T, TResult2 = never>(
+  then<TResult1 = R, TResult2 = never>(
     onfulfilled?:
-      | ((value: T) => TResult1 | PromiseLike<TResult1>)
+      | ((value: R) => TResult1 | PromiseLike<TResult1>)
       | undefined
       | null,
     onrejected?:
@@ -23,7 +23,8 @@ export abstract class ThenableQuery<T = any,C=any,D=string>
   ): Promise<TResult1 | TResult2> {
     const params = this.getQueryParams();
     const { query, params: queryParams } = this.database.buildQuery(params);
-    return this.dialect.query<T>(query, queryParams).then(onfulfilled, onrejected);
+    // 使用 database.query 以支持日志记录
+    return this.database.query<R>(query, queryParams).then(onfulfilled, onrejected);
   }
   
   catch<TResult = never>(
@@ -34,19 +35,19 @@ export abstract class ThenableQuery<T = any,C=any,D=string>
   ): Promise<any | TResult> {
     const params = this.getQueryParams();
     const { query, params: queryParams } = this.database.buildQuery(params);
-    return this.dialect.query(query, queryParams).catch(onrejected);
+    return this.database.query(query, queryParams).catch(onrejected);
   }
   
   finally(onfinally?: (() => void) | undefined | null): Promise<any> {
     const params = this.getQueryParams();
     const { query, params: queryParams } = this.database.buildQuery(params);
-    return this.dialect.query(query, queryParams).finally(onfinally);
+    return this.database.query(query, queryParams).finally(onfinally);
   }
   
-  async *[Symbol.asyncIterator](): AsyncIterator<T, void, unknown> {
+  async *[Symbol.asyncIterator](): AsyncIterator<R, void, unknown> {
     const params = this.getQueryParams();
     const { query, params: queryParams } = this.database.buildQuery(params);
-    const rows = await this.dialect.query(query, queryParams);
+    const rows = await this.database.query(query, queryParams);
     for (const row of Array.isArray(rows) ? rows : [rows]) {
       yield row;
     }

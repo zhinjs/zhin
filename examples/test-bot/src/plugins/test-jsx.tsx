@@ -1,8 +1,8 @@
 import {
-  addCommand,
+  usePlugin,
   MessageCommand,
-  addComponent,
 } from "zhin.js";
+const {addCommand,addComponent}=usePlugin()
 const Test=async function Test(){
   return new Promise<string>((resolve,reject)=>{
     setTimeout(() => {
@@ -16,6 +16,6 @@ const Test=async function Test(){
 addComponent(Test);
 addCommand(
   new MessageCommand("test-error").action(async (message, result) => {
-    return <share />;
+    return <Test/>;
   })
 );

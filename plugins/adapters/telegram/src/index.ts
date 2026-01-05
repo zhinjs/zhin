@@ -3,7 +3,7 @@ import type { Message as TelegramMessage, Update, MessageEntity } from "telegraf
 import {
   Bot,
   Adapter,
-  registerAdapter,
+  Plugin,
   Message,
   SendOptions,
   SendContent,
@@ -12,13 +12,21 @@ import {
   usePlugin,
 } from "zhin.js";
 
-declare module "@zhin.js/types" {
+// 类型扩展 - 使用 zhin.js 模式
+declare module "zhin.js" {
+  namespace Plugin {
+    interface Contexts {
+      telegram: TelegramAdapter;
+    }
+  }
+
   interface RegisteredAdapters {
-    telegram: Adapter<TelegramBot>;
+    telegram: TelegramAdapter;
   }
 }
 
-export type TelegramBotConfig = Bot.Config & {
+// 定义配置接口 (直接定义完整接口)
+export interface TelegramBotConfig {
   context: "telegram";
   token: string;
   name: string;
@@ -30,20 +38,24 @@ export type TelegramBotConfig = Bot.Config & {
     port?: number;
   };
   allowedUpdates?: string[];
-};
+}
 
 export interface TelegramBot {
   $config: TelegramBotConfig;
 }
 
 const plugin = usePlugin();
+const { provide, useContext } = plugin;
 
-export class TelegramBot extends Telegraf implements Bot<TelegramMessage, TelegramBotConfig> {
-  $connected?: boolean;
+export class TelegramBot extends Telegraf implements Bot<TelegramBotConfig, TelegramMessage> {
+  $connected: boolean = false;
 
-  constructor(public $config: TelegramBotConfig) {
+  get $id() {
+    return this.$config.name;
+  }
+
+  constructor(public adapter: TelegramAdapter, public $config: TelegramBotConfig) {
     super($config.token);
-    this.$connected = false;
   }
 
   async $connect(): Promise<void> {
@@ -58,11 +70,10 @@ export class TelegramBot extends Telegraf implements Bot<TelegramMessage, Telegr
         // Handle callback queries as special messages
         if (ctx.callbackQuery && "data" in ctx.callbackQuery) {
           const message = this.$formatCallbackQuery(ctx);
-          plugin.dispatch("message.receive", message);
-          plugin.logger.info(
+          this.adapter.emit("message.receive", message);
+          plugin.logger.debug(
             `${this.$config.name} recv callback ${message.$channel.type}(${message.$channel.id}): ${segment.raw(message.$content)}`
           );
-          plugin.dispatch(`message.${message.$channel.type}.receive`, message);
         }
       });
 
@@ -114,11 +125,10 @@ export class TelegramBot extends Telegraf implements Bot<TelegramMessage, Telegr
     if (!ctx.message) return;
 
     const message = this.$formatMessage(ctx.message as TelegramMessage);
-    plugin.dispatch("message.receive", message);
-    plugin.logger.info(
+    this.adapter.emit("message.receive", message);
+    plugin.logger.debug(
       `${this.$config.name} recv  ${message.$channel.type}(${message.$channel.id}): ${segment.raw(message.$content)}`
     );
-    plugin.dispatch(`message.${message.$channel.type}.receive`, message);
   }
 
   $formatMessage(msg: TelegramMessage): Message<TelegramMessage> {
@@ -436,12 +446,10 @@ export class TelegramBot extends Telegraf implements Bot<TelegramMessage, Telegr
   }
 
   async $sendMessage(options: SendOptions): Promise<string> {
-    options = await plugin.app.handleBeforeSend(options);
-
     try {
       const chatId = parseInt(options.id);
       const result = await this.sendContentToChat(chatId, options.content);
-      plugin.logger.info(
+      plugin.logger.debug(
         `${this.$config.name} send ${options.type}(${options.id}): ${segment.raw(options.content)}`
       );
       return result.message_id.toString();
@@ -644,7 +652,26 @@ export class TelegramBot extends Telegraf implements Bot<TelegramMessage, Telegr
   }
 }
 
-// Register the adapter
-registerAdapter(
-  new Adapter("telegram", (config: any) => new TelegramBot(config as TelegramBotConfig))
-);
+class TelegramAdapter extends Adapter<TelegramBot> {
+  constructor(plugin: Plugin) {
+    super(plugin, "telegram", []);
+  }
+
+  createBot(config: TelegramBotConfig): TelegramBot {
+    return new TelegramBot(this, config);
+  }
+}
+
+// 使用新的 provide() API 注册适配器
+provide({
+  name: "telegram",
+  description: "Telegram Bot Adapter",
+  mounted: async (p) => {
+    const adapter = new TelegramAdapter(p);
+    await adapter.start();
+    return adapter;
+  },
+  dispose: async (adapter) => {
+    await adapter.stop();
+  },
+});

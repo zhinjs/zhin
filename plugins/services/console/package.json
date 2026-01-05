@@ -23,10 +23,12 @@
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
       "import": "./lib/index.js"
     },
     "./client": {
       "types": "./lib/client/index.d.ts",
+      "development": "./client/index.tsx",
       "import": "./lib/client/index.js"
     },
     "./browser.tsconfig.json": "./broswer.tsconfig.json",
@@ -41,6 +43,10 @@
     "build:node": "tsup"
   },
   "dependencies": {
+    "mime": "^4.1.0",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
     "@radix-ui/themes": "^3.2.1",
     "@reduxjs/toolkit": "^2.9.0",
     "@tailwindcss/postcss": "^4.1.11",
@@ -49,7 +55,6 @@
     "clsx": "^2.1.1",
     "koa-connect": "^2.1.0",
     "lucide-react": "^0.469.0",
-    "mime": "^4.1.0",
     "radix-ui": "^1.4.3",
     "react": "19.2.0",
     "react-dom": "19.2.0",
@@ -58,20 +63,14 @@
     "redux-persist": "6.0.0",
     "tailwind-merge": "^3.3.1",
     "tailwindcss": "latest",
-    "vite": "^7.0.6",
-    "ws": "^8.18.3"
+    "tsup": "^8.5.1",
+    "vite": "^7.0.6"
   },
   "peerDependencies": {
     "@types/ws": "^8.18.1",
     "@zhin.js/client": "workspace:^",
     "@zhin.js/core": "workspace:^",
-    "@zhin.js/http": "workspace:^",
-    "@zhin.js/types": "workspace:^"
-  },
-  "peerDependenciesMeta": {
-    "@zhin.js/types": {
-      "optional": true
-    }
+    "@zhin.js/http": "workspace:^"
   },
   "files": [
     "lib",
@@ -81,7 +80,7 @@
     "client",
     "CHANGELOG.md"
   ],
-  "devDependencies": {
-    "tsup": "^8.5.1"
+  "optionalDependencies": {
+    "koa-connect": "^2.1.0"
   }
 }

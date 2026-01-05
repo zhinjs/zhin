@@ -1,58 +1,119 @@
 # Zhin.js AI Coding Agent Instructions
 
-Zhin.js 是一个现代化的 TypeScript 机器人框架，采用创新的热重载系统和函数式依赖注入架构。
+Zhin.js 是一个现代化的 TypeScript 机器人框架，采用 AsyncLocalStorage 上下文管理和热重载系统。
 
 ## 项目架构
 
-### 四层抽象设计
+### 核心架构设计
 ```
-App 层 (应用入口)
+setup.ts (应用入口，使用 usePlugin())
   ↓
-HMR 层 (热重载引擎)
+Plugin 层 (AsyncLocalStorage 上下文管理)
   ↓
-Dependency 层 (依赖注入基类)
-  ↓
-Plugin 层 (业务逻辑)
+  ├─ Context 系统 (provide/useContext/inject)
+  ├─ 中间件系统 (addMiddleware)
+  ├─ 命令系统 (addCommand)
+  ├─ 组件系统 (addComponent)
+  └─ Adapter 系统 (管理 Bot 实例)
 ```
 
-- **App** (`packages/core/src/app.ts`): 继承自 HMR，管理适配器、机器人实例、消息路由
-- **HMR** (`packages/hmr/src/hmr.ts`): 组合 FileWatcher、ModuleLoader、PerformanceMonitor、ReloadManager 四大模块
-- **Dependency** (`packages/hmr/src/dependency.ts`): 提供生命周期管理、Context 系统、事件广播机制
-- **Plugin** (`packages/core/src/plugin.ts`): 继承 Dependency，处理中间件、命令、组件
+**关键概念**：
+- **Plugin** (`packages/core/src/plugin.ts`): 基于 AsyncLocalStorage 的上下文管理，自动创建插件树
+- **usePlugin()**: Hooks 风格 API，根据调用文件自动获取或创建插件实例
+- **Context**: 依赖注入系统，通过 `provide()` 注册，`inject()` 或 `useContext()` 使用
+- **Adapter**: 平台适配器抽象，管理多个 Bot 实例，处理消息接收和发送
+- **setup.ts**: 应用入口，移除 App 类，直接使用 usePlugin() 初始化
 
 ### Monorepo 结构 (pnpm workspace)
 ```
-adapters/       # 平台适配器 (icqq, kook, discord, onebot11, process)
-packages/       # 核心包 (core, hmr, cli, database, logger, types)
-plugins/        # 内置插件 (http, console, client)
-test-bot/       # 示例机器人
+basic/          # 基础层 - 底层工具和类型系统
+├── logger/     # 结构化日志系统 (chalk 颜色输出)
+├── database/   # 数据库抽象层 (SQLite/MySQL)
+├── schema/     # Schema 配置系统 (类型安全配置)
+└── cli/        # CLI 工具 (zhin 命令行入口)
+
+packages/       # 核心层 - 框架核心
+├── core/       # 核心框架 (App, Plugin, Adapter, Bot, Types)
+├── client/     # 客户端库 (React Router 7, Redux)
+├── create-zhin/# 项目脚手架 (交互式创建项目)
+└── zhin/       # 主入口包 (统一导出)
+
+plugins/        # 插件层 - 扩展生态
+├── services/   # 功能服务插件 (http, console, mcp)
+├── adapters/   # 平台适配器 (icqq, kook, discord, qq, onebot11, process)
+├── utils/      # 工具插件 (music, sensitive-filter)
+└── games/      # 游戏插件
+
+examples/       # 示例项目
+└── test-bot/   # 完整示例机器人 (开发测试用)
 ```
 
 ## 核心开发模式
 
-### 1. 函数式依赖注入
-使用声明式 API 注入依赖，框架自动管理生命周期和初始化顺序：
+### 1. Plugin 系统 (AsyncLocalStorage + Hooks)
+Plugin 使用 AsyncLocalStorage 管理上下文，通过 `usePlugin()` 获取当前插件实例：
 
 ```typescript
-// 注册 Context
-register({
+import { usePlugin } from 'zhin.js'
+
+// 自动根据调用文件创建插件实例
+const plugin = usePlugin()
+const { addCommand, addMiddleware, provide, useContext, inject } = plugin
+
+// 插件自动在 start() 时挂载，stop() 时卸载
+// 使用 useContext 添加生命周期逻辑
+useContext('database', (db) => {
+  // database 就绪时执行
+  console.log('数据库已连接')
+  
+  // 返回清理函数
+  return () => {
+    console.log('清理资源')
+  }
+})
+```
+
+### 2. Context 系统 (依赖注入)
+使用 `provide()` 注册 Context，`useContext()` 或 `inject()` 使用：
+
+```typescript
+const plugin = usePlugin()
+
+// 注册 Context（异步挂载）
+plugin.provide({
   name: 'database',
-  async mounted(plugin) {
+  description: '数据库服务',
+  mounted: async (plugin) => {
     const db = new Database()
     await db.connect()
     return db
   },
-  async dispose(db) {
+  dispose: async (db) => {
     await db.disconnect()
   }
 })
 
-// 使用 Context (自动等待依赖就绪)
-useContext('database', 'http', (db, http) => {
-  http.router.get('/api/users', async (ctx) => {
-    ctx.body = await db.model('users').select()
-  })
+// 注册 Context（同步值）
+plugin.provide({
+  name: 'myService',
+  value: new MyService()
 })
+
+// 使用 Context（等待多个依赖）
+plugin.useContext('database', 'router', (db, router) => {
+  router.get('/api/users', async (ctx) => {
+    const model = db.models.get('users')
+    ctx.body = await model.select()
+  })
+  
+  // 返回清理函数（可选）
+  return () => {
+    console.log('清理路由')
+  }
+})
+
+// 直接注入 Context（同步）
+const db = plugin.inject('database')
 ```
 
 ### 2. 热重载机制
@@ -95,12 +156,13 @@ interface Bot<C extends Bot.Config = Bot.Config, M = any> {
 **完整实现**：
 ```typescript
 // adapters/my-adapter/src/index.ts
-import { Adapter, Bot, registerAdapter, Message, SendOptions, segment, Plugin } from 'zhin.js'
+import { Adapter, Bot, Message, SendOptions, segment, usePlugin } from 'zhin.js'
+
+const plugin = usePlugin()
 
 // 1. 定义配置
-interface MyConfig extends Bot.Config {
+interface MyConfig {
   name: string
-  context: string
   token: string
   apiUrl: string
 }
@@ -115,27 +177,35 @@ interface RawMessage {
 
 // 3. 实现 Bot 类
 class MyBot implements Bot<MyConfig, RawMessage> {
-  public connected = false
+  $connected = false
+  $id: string
   
   constructor(
-    private plugin: Plugin,
-    public config: MyConfig
-  ) {}
+    public adapter: MyAdapter,
+    public $config: MyConfig
+  ) {
+    this.$id = $config.name
+  }
+  
+  get logger() {
+    return this.adapter.logger
+  }
   
   async $connect(): Promise<void> {
     // 连接逻辑
-    this.connected = true
+    this.$connected = true
+    this.logger.info(`Bot ${this.$id} connected`)
   }
   
   async $disconnect(): Promise<void> {
-    this.connected = false
+    this.$connected = false
   }
   
   async $sendMessage(options: SendOptions): Promise<string> {
     // 发送消息，返回消息 ID
-    const response = await fetch(`${this.config.apiUrl}/send`, {
+    const response = await fetch(`${this.$config.apiUrl}/send`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${this.config.token}` },
+      headers: { 'Authorization': `Bearer ${this.$config.token}` },
       body: JSON.stringify({ content: options.content })
     })
     const { message_id } = await response.json()
@@ -143,42 +213,68 @@ class MyBot implements Bot<MyConfig, RawMessage> {
   }
   
   async $recallMessage(messageId: string): Promise<void> {
-    // 撤回消息
-    await fetch(`${this.config.apiUrl}/messages/${messageId}`, {
+    await fetch(`${this.$config.apiUrl}/messages/${messageId}`, {
       method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${this.config.token}` }
+      headers: { 'Authorization': `Bearer ${this.$config.token}` }
     })
   }
   
   $formatMessage(raw: RawMessage): Message<RawMessage> {
-    // 格式化消息（必须包含 $recall 方法）
-    const result: Message<RawMessage> = {
+    const base = {
       $id: raw.id,
-      $adapter: this.config.context,
-      $bot: this.config.name,
-      $content: [segment.text(raw.content)],
+      $adapter: 'my-platform' as const,
+      $bot: this.$config.name,
+      $content: [{ type: 'text' as const, data: { text: raw.content } }],
       $sender: { id: raw.author.id, name: raw.author.name },
-      $channel: { id: 'default', type: 'private' },
+      $channel: { id: 'default', type: 'private' as const },
       $timestamp: raw.timestamp,
       $raw: raw.content,
-      $reply: async (content, quote?) => {
-        return await this.$sendMessage({ ...result.$channel, context: this.config.context, bot: this.config.name, content })
+      $reply: async (content: any) => {
+        return await this.$sendMessage({
+          context: 'my-platform',
+          bot: this.$config.name,
+          content,
+          id: base.$channel.id,
+          type: base.$channel.type
+        })
       },
       $recall: async () => {
-        await this.$recallMessage(result.$id)
+        await this.$recallMessage(base.$id)
       }
     }
-    return result
+    return Message.from(raw, base)
   }
 }
 
-// 4. 注册适配器
-registerAdapter(new Adapter('my-platform', MyBot))
+// 4. 实现 Adapter 类
+class MyAdapter extends Adapter<MyBot> {
+  constructor(plugin: any, config: MyConfig[]) {
+    super(plugin, 'my-platform', config)
+  }
+  
+  createBot(config: MyConfig): MyBot {
+    return new MyBot(this, config)
+  }
+}
 
-// 5. 类型扩展
-declare module '@zhin.js/types' {
+// 5. 注册为 Context（新方式）
+plugin.provide({
+  name: 'my-adapter',
+  mounted: async (p) => {
+    const config = p.inject('config').getData('zhin.config.yml')
+    const adapter = new MyAdapter(p, config.bots?.filter(b => b.context === 'my-platform') || [])
+    await adapter.start()
+    return adapter
+  },
+  dispose: async (adapter) => {
+    await adapter.stop()
+  }
+})
+
+// 6. 类型扩展
+declare module 'zhin.js' {
   interface RegisteredAdapters {
-    'my-platform': Adapter<MyBot>
+    'my-platform': MyAdapter
   }
 }
 ```
@@ -215,15 +311,18 @@ const MyComp = defineComponent(async function MyComp(
 ### 1. 导入路径
 - 使用 `.js` 扩展名导入 TS 文件: `import { foo } from './bar.js'`
 - TypeScript 配置使用 `moduleResolution: "bundler"`
-- 核心包别名: `@zhin.js/core`, `@zhin.js/hmr`, `@zhin.js/types`
-
+- 核心包别名: `@zhin.js/core`, `@zhin.js/logger`, `@zhin.js/database`
+- **类型定义**: 所有类型现在统一在 `@zhin.js/core` 中 (`packages/core/src/types.ts`)
+- **注意**: `console` 插件使用 `moduleResolution: "nodenext"` (Vite 兼容性)
 ### 2. 类型扩展
-通过模块声明扩展全局类型：
+通过模块声明扩展全局类型 (在 `@zhin.js/core` 中定义)：
 
 ```typescript
-declare module '@zhin.js/types' {
-  interface GlobalContext {
-    myService: MyService
+declare module 'zhin.js' {
+  namespace Plugin {
+    interface Contexts {
+      myService: MyService
+    }
   }
   interface RegisteredAdapters {
     myAdapter: Adapter<MyBot>
@@ -233,13 +332,44 @@ declare module '@zhin.js/types' {
   }
 }
 ```
+```
 
-### 3. 生命周期钩子
-- `onMounted()`: 插件挂载完成
-- `onDispose()`: 插件销毁前清理
-- `onMessage()`: 监听所有消息
-- `onGroupMessage()` / `onPrivateMessage()`: 分类消息监听
-- `onDatabaseReady()`: 数据库就绪
+### 3. 生命周期管理
+通过 `useContext` 和返回清理函数管理生命周期：
+
+```typescript
+const plugin = usePlugin()
+
+// 插件自动在 start() 时挂载
+plugin.useContext('database', (db) => {
+  console.log('数据库就绪，执行初始化')
+  
+  const timer = setInterval(() => {
+    // 定时任务
+  }, 1000)
+  
+  // 返回清理函数，stop() 时执行
+  return () => {
+    clearInterval(timer)
+    console.log('清理资源')
+  }
+})
+
+// 监听所有消息
+plugin.addMiddleware(async (message, next) => {
+  console.log('收到消息:', message.$raw)
+  await next()
+})
+
+// 监听特定类型消息
+plugin.on('message.private.receive', (message) => {
+  console.log('私聊消息:', message.$raw)
+})
+
+plugin.on('message.group.receive', (message) => {
+  console.log('群聊消息:', message.$raw)
+})
+```
 
 ### 4. 命令系统
 使用 `segment-matcher` 解析命令模板：
@@ -268,40 +398,95 @@ const MyComp = defineComponent(async function MyComp(
 
 ## 开发工作流
 
-### 构建流程
-```bash
-pnpm build              # 构建所有包
-pnpm build --filter @zhin.js/core  # 构建单个包
-```
+### 关键构建顺序
+**重要**: 由于依赖关系，必须先构建 `logger` 和 `cli`，然后再构建其他包。
 
-**重要**: logger 和 cli 必须先构建（CI 中有体现）
+```bash
+# 完整构建流程 (按依赖顺序)
+pnpm build  # 自动按正确顺序构建：basic/* -> packages/* -> plugins/*
+
+# 单独构建某个包
+pnpm --filter @zhin.js/logger build
+pnpm --filter @zhin.js/core build
+
+# 构建流程（CI 中的实际顺序）
+# 1. basic/** (logger, schema, cli, database)
+# 2. packages/** (core, client, zhin, create-zhin)  
+# 3. plugins/services/** (http, console, mcp)
+# 4. plugins/adapters/** (icqq, kook, discord, qq, onebot11, process)
+# 5. plugins/utils/** (music, sensitive-filter 等工具插件)
+```
 
 ### 测试
 ```bash
-pnpm test               # 运行 Vitest 测试
+pnpm test               # 运行 Vitest 测试 (globals: true, node 环境)
+pnpm test:watch         # 监听模式
 pnpm test:coverage      # 生成覆盖率报告
 ```
 
+测试配置 (`vitest.config.ts`):
+- 环境: Node.js
+- 全局 API: `describe`, `it`, `expect` 等自动注入
+- 隔离: `isolate: false` (共享状态以提高性能)
+- 超时: 10s (测试和钩子)
+
 ### 开发模式
 ```bash
-pnpm dev                # 启动 test-bot，支持热重载
-cd test-bot && pnpm dev # 直接在 test-bot 运行
+# 启动 test-bot 进行开发（支持热重载）
+pnpm dev                # 在根目录执行，实际运行 test-bot
+cd examples/test-bot && pnpm dev  # 或直接在 test-bot 运行
+
+# 其他开发命令
+pnpm start              # 生产模式启动
+pnpm daemon             # 后台守护进程模式
+pnpm stop               # 停止守护进程
 ```
 
 ### 发布流程
-使用 Changesets 管理版本：
+使用 Changesets 管理版本（自动化 CI/CD）：
 ```bash
-pnpm release            # 创建 changeset
-pnpm bump               # 更新版本号
-pnpm pub                # 发布到 npm
+pnpm release            # 创建 changeset (本地开发)
+pnpm bump               # 更新版本号 (CI 自动执行)
+pnpm pub                # 发布到 npm (CI 自动执行，需要 NPM_TOKEN)
 ```
+
+CI 自动发布流程 (`.github/workflows/ci.yml`):
+1. 推送到 `main` 分支触发
+2. 自动测试 (`pnpm test`)
+3. 构建所有包 (`pnpm build`)
+4. Changesets Action 检测版本变化
+5. 自动发布到 npm (如有 changeset)
 
 ## 常见模式
 
 ### 1. 事件系统
-- `dispatch(event, ...args)`: 向上冒泡（到父依赖或广播）
-- `broadcast(event, ...args)`: 向下广播（到所有子依赖）
-- `emit(event, ...args)`: 仅触发自身监听器
+Plugin 继承 EventEmitter，支持三种事件传播方式：
+
+```typescript
+const plugin = usePlugin()
+
+// emit: 仅触发自身监听器
+plugin.emit('custom.event', data)
+
+// dispatch: 向上冒泡（到父插件）和广播（到所有子插件）
+plugin.dispatch('message.receive', message)
+
+// broadcast: 只向下广播（到所有子插件）
+plugin.broadcast('config.update', newConfig)
+
+// 监听事件
+plugin.on('message.receive', (message) => {
+  console.log('收到消息:', message.$raw)
+})
+
+// 内置事件
+// - message.receive: 消息接收
+// - message.private.receive: 私聊消息
+// - message.group.receive: 群聊消息
+// - message.channel.receive: 频道消息
+// - context.mounted: Context 挂载
+// - context.disposed: Context 销毁
+```
 
 ### 2. 中间件系统
 **类型定义**：
@@ -442,18 +627,36 @@ useContext('database', (db) => {
 ```
 
 ### 5. 数据库模型
-使用 `defineModel` 定义表结构：
+在 setup.ts 中定义模型，在插件中使用：
 
 ```typescript
-defineModel('users', {
-  name: { type: 'text', nullable: false },
-  age: { type: 'integer', default: 0 },
-  info: { type: 'json' }
+// setup.ts 中注册数据库
+const db = Registry.create('sqlite', config.database, {
+  users: {
+    id: { type: 'integer', primary: true },
+    name: { type: 'text', nullable: false },
+    age: { type: 'integer', default: 0 },
+    info: { type: 'json' }
+  },
+  logs: {
+    id: { type: 'integer', primary: true },
+    message: { type: 'text' },
+    timestamp: { type: 'integer' }
+  }
 })
 
-onDatabaseReady(async (db) => {
-  const users = db.model('users')
+plugin.provide({ name: 'database', value: db })
+
+// 插件中使用
+plugin.useContext('database', async (db) => {
+  // 获取模型
+  const users = db.models.get('users')
+  
+  // CRUD 操作
   await users.create({ name: 'Alice', age: 25 })
+  const allUsers = await users.select()
+  await users.update({ age: 26 }, { name: 'Alice' })
+  await users.delete({ name: 'Alice' })
 })
 ```
 
@@ -579,6 +782,155 @@ plugins: [
   'my-plugin'          // 最后加载依赖上述插件的插件
 ]
 ```
+
+### 5. AsyncLocalStorage 上下文
+Plugin 使用 AsyncLocalStorage 管理上下文，确保在正确的作用域调用 `usePlugin()`：
+```typescript
+// ✅ 正确：在模块顶层调用
+const plugin = usePlugin()
+
+// ❌ 错误：在异步函数中调用可能导致上下文丢失
+async function setup() {
+  const plugin = usePlugin() // 可能无法获取正确的上下文
+}
+```
+
+## 插件重构指南
+
+### 重构优先级
+**按以下顺序进行重构**（从高到低）：
+1. **packages/** - 核心框架层，所有插件的基础
+   - core, client, create-zhin, zhin
+2. **plugins/services/** - 基础服务插件，其他插件的依赖
+   - http, console, mcp
+3. **plugins/adapters/** - 平台适配器
+   - process (已内置到 core), icqq, kook, discord, qq, onebot11, telegram, slack 等
+4. **plugins/utils/** - 工具插件
+   - music, sensitive-filter 等
+
+### 旧 API → 新 API 映射
+
+**核心导入**：
+```typescript
+// ❌ 旧版
+import { register, defineSchema, Schema, useApp, useDatabase } from "@zhin.js/core"
+
+// ✅ 新版
+import { usePlugin, defineSchema, Schema } from "zhin.js"
+```
+
+**获取实例**：
+```typescript
+// ❌ 旧版
+const app = useApp()
+const db = useDatabase()
+
+// ✅ 新版
+const plugin = usePlugin()
+const root = plugin.root  // 根插件
+const db = plugin.inject('database')  // 注入 Context
+```
+
+**配置Schema**：
+```typescript
+// ❌ 旧版
+const schema = defineSchema(Schema.object({ ... }))
+const config = schema(plugin.config, 'pluginName')
+
+// ✅ 新版（推荐）- Schema 自动注册到全局，用于 Web 控制台表单渲染
+const getConfig = plugin.defineSchema(Schema.object({
+  port: Schema.number().default(8080).description('服务端口'),
+  enabled: Schema.boolean().default(true).description('是否启用'),
+}))
+const config = getConfig()
+
+// ✅ 或使用便捷函数
+const getConfig = defineSchema(Schema.object({ ... }))
+const config = getConfig()
+
+// ✅ 手动获取配置（不需要 Schema 验证时）
+const configService = plugin.inject('config')
+const appConfig = configService.get('zhin.config.yml')
+const config = appConfig.pluginName || {}
+```
+
+**Context 注册**：
+```typescript
+// ❌ 旧版
+register({ name: 'myContext', value: myValue })
+
+// ✅ 新版（同步值）
+plugin.provide({
+  name: 'myContext',
+  value: myValue
+})
+
+// ✅ 新版（异步挂载）
+plugin.provide({
+  name: 'myContext',
+  mounted: async (plugin) => {
+    const value = await createMyService()
+    return value
+  },
+  dispose: async (value) => {
+    await value.cleanup()
+  }
+})
+```
+
+**数据库操作**：
+```typescript
+// ❌ 旧版
+const model = db.model('tableName')
+
+// ✅ 新版
+const model = db.models.get('tableName')
+```
+
+**类型扩展**：
+```typescript
+// ❌ 旧版
+declare module '@zhin.js/types' {
+  interface GlobalContext {
+    myContext: MyType
+  }
+}
+
+// ✅ 新版
+declare module 'zhin.js' {
+  namespace Plugin {
+    interface Contexts {
+      myContext: MyType
+    }
+  }
+}
+```
+
+### Plugin API 变化
+
+**属性访问**：
+- `app.dependencyList` → `plugin.children` (所有子插件)
+- `app.contextList` → `plugin.contexts` (Map<string, any>)
+- `app.getContext(name)` → `plugin.inject(name)`
+- `app.getConfig()` → `plugin.inject('config').getData('zhin.config.yml')`
+- `plugin.findPluginByName(name)` → 遍历 `plugin.children` 或使用文件路径判断
+- `plugin.schema` → 已移除，直接使用 `@zhin.js/schema`
+
+**方法调用**：
+- `plugin.commands` → `plugin.commands` (仍然存在，Map<string, MessageCommand>)
+- `plugin.components` → `plugin.components` (仍然存在，Map<string, Component>)
+- `plugin.addMiddleware()` → `plugin.addMiddleware()` (仍然存在)
+- `plugin.addCommand()` → `plugin.addCommand()` (仍然存在)
+- `plugin.definitions` → 已移除，使用 `database.models.get('tableName')`
+
+**新增方法**：
+- `plugin.provide()` - 注册 Context
+- `plugin.useContext()` - 使用多个 Context
+- `plugin.inject()` - 直接注入单个 Context
+- `plugin.import()` - 动态导入插件
+- `plugin.start()` - 启动插件
+- `plugin.stop()` - 停止插件
+- `plugin.reload()` - 重载插件
 
 ## 插件系统
 

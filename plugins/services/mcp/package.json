@@ -27,9 +27,8 @@
     "directory": "plugins/services/mcp"
   },
   "scripts": {
-    "build": "pnpm build:node",
-    "clean": "rm -rf lib",
-    "build:node": "tsc"
+    "build": "tsc",
+    "clean": "rm -rf lib"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.22.0",
@@ -40,8 +39,7 @@
     "zhin.js": "workspace:^"
   },
   "devDependencies": {
-    "@types/node": "latest",
-    "@zhin.js/types": "workspace:^"
+    "@types/node": "latest"
   },
   "files": [
     "lib",

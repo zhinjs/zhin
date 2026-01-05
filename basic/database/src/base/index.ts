@@ -3,3 +3,4 @@ export * from './database.js';
 export * from './model.js';
 export * from './thenable.js';
 export * from './query-classes.js';
+export * from './transaction.js';

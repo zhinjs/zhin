@@ -6,16 +6,16 @@
 
 ### 1. 定义配置 Schema（插件开发者）
 
-在插件代码中使用 `defineSchema` 定义配置结构，它会返回一个 schema 函数用于类型安全的配置访问：
+在插件代码中使用 `defineSchema` 定义配置结构，它会返回一个获取配置的函数：
 
 ```typescript
 // plugins/my-plugin/src/index.ts
-import { defineSchema, Schema, usePlugin } from '@zhin.js/core'
+import { defineSchema, Schema, usePlugin } from 'zhin.js'
 
 const plugin = usePlugin()
 
-// 定义配置 Schema（返回 schema 函数）
-const schema = defineSchema(Schema.object({
+// 定义配置 Schema（返回配置获取函数）
+const getConfig = plugin.defineSchema(Schema.object({
   apiKey: Schema.string('apiKey')
     .required()
     .description('API 访问密钥'),
@@ -33,19 +33,34 @@ const schema = defineSchema(Schema.object({
     .description('失败重试次数')
 }))
 
-// 使用 schema 函数获取配置（带类型提示和默认值）
-const { apiKey, timeout = 5000, retries = 3 } = schema(plugin.config, 'my-plugin')
+// 使用获取函数获取配置（带类型提示和默认值）
+const config = getConfig()
 
-console.log(`API Key: ${apiKey}`)
-console.log(`Timeout: ${timeout}ms`)
-console.log(`Retries: ${retries}`)
+console.log(`API Key: ${config.apiKey}`)
+console.log(`Timeout: ${config.timeout}ms`)
+console.log(`Retries: ${config.retries}`)
+```
+
+或者使用便捷函数 `defineSchema`：
+
+```typescript
+import { defineSchema, Schema } from 'zhin.js'
+
+// 使用便捷函数（自动获取当前插件上下文）
+const getConfig = defineSchema(Schema.object({
+  port: Schema.number().default(8080).description('服务端口'),
+  enabled: Schema.boolean().default(true).description('是否启用'),
+}))
+
+const config = getConfig()
+console.log(`Port: ${config.port}`)
 ```
 
 **关键要点**：
-- `defineSchema` 返回一个 schema 函数
-- 使用 `schema(plugin.config, 'plugin-name')` 获取配置
-- 第二个参数是插件名称，用于从配置对象中提取对应的插件配置
-- 支持解构赋值和默认值
+- `plugin.defineSchema()` 或 `defineSchema()` 返回一个配置获取函数
+- 调用返回的函数获取配置
+- Schema 会自动从 `zhin.config.yml` 中读取对应插件的配置
+- Schema 会被注册到全局注册表，供 Web 控制台渲染表单
 - 提供完整的 TypeScript 类型提示
 
 ### 2. 提供配置值（用户）
@@ -73,7 +88,7 @@ export default defineConfig({
 ### 插件定义（plugins/http/src/index.ts）
 
 ```typescript
-import { defineSchema, Schema, usePlugin } from '@zhin.js/core'
+import { defineSchema, Schema, usePlugin } from 'zhin.js'
 import os from 'node:os'
 
 const plugin = usePlugin()

@@ -8,18 +8,22 @@
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
       "import": "./lib/index.js"
     },
     "./jsx": {
       "types": "./lib/jsx.d.ts",
+      "development": "./src/jsx.ts",
       "import": "./lib/jsx.js"
     },
     "./jsx-runtime": {
       "types": "./lib/jsx-runtime.d.ts",
+      "development": "./src/jsx-runtime.ts",
       "import": "./lib/jsx-runtime.js"
     },
     "./jsx-dev-runtime": {
       "types": "./lib/jsx-dev-runtime.d.ts",
+      "development": "./src/jsx-dev-runtime.ts",
       "import": "./lib/jsx-dev-runtime.js"
     }
   },
@@ -29,19 +33,16 @@
   },
   "dependencies": {
     "@zhin.js/database": "workspace:*",
-    "@zhin.js/hmr": "workspace:*",
+    "@zhin.js/dependency": "workspace:*",
+    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/schema": "workspace:*",
     "croner": "^9.1.0",
-    "dotenv": "^16.3.1",
     "segment-matcher": "latest",
     "toml": "^3.0.0",
     "yaml": "^2.3.4"
   },
-  "peerDependencies": {
-    "@zhin.js/logger": "workspace:*"
-  },
   "devDependencies": {
     "@types/node": "^24.3.0",
-    "@zhin.js/types": "workspace:*",
     "typescript": "^5.3.0"
   }
 }

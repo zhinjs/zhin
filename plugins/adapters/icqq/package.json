@@ -47,11 +47,11 @@
     "typescript": "^5.3.0"
   },
   "peerDependencies": {
-    "zhin.js": "workspace:*",
+    "@zhin.js/core": "workspace:*",
     "@zhin.js/client": "workspace:*",
     "@zhin.js/http": "workspace:*",
-    "@zhin.js/types": "workspace:*",
-    "@zhin.js/console": "workspace:*"
+    "@zhin.js/console": "workspace:*",
+    "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@zhin.js/client": {
@@ -61,9 +61,6 @@
       "optional": true
     },
     "@zhin.js/console": {
-      "optional": true
-    },
-    "@zhin.js/types": {
       "optional": true
     }
   }

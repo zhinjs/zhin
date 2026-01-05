@@ -24,8 +24,8 @@ export class DocumentDatabase<
 > extends Database<D, S, DocumentQueryResult> {
   
   constructor(
-    dialect: Dialect<D,DocumentQueryResult>,
-    definitions?: Database.Definitions<S>,
+    dialect: Dialect<D, S, DocumentQueryResult>,
+    definitions?: Database.DefinitionObj<S>,
   ) {
     super(dialect, definitions);
   }
@@ -38,24 +38,24 @@ export class DocumentDatabase<
   /**
    * 构建查询（重写基类方法）
    */
-  buildQuery<U extends object = any>(params: QueryParams<U>): BuildQueryResult<DocumentQueryResult> {
+  buildQuery<T extends keyof S>(params: QueryParams<S, T>): BuildQueryResult<DocumentQueryResult> {
     switch (params.type) {
       case 'create':
-        return this.buildCreateQuery(params as CreateQueryParams<U>);
+        return this.buildCreateQuery(params as CreateQueryParams<S, T>);
       case 'select':
-        return this.buildSelectQuery(params as SelectQueryParams<U>);
+        return this.buildSelectQuery(params as SelectQueryParams<S, T>);
       case 'insert':
-        return this.buildInsertQuery(params as InsertQueryParams<U>);
+        return this.buildInsertQuery(params as InsertQueryParams<S, T>);
       case 'update':
-        return this.buildUpdateQuery(params as UpdateQueryParams<U>);
+        return this.buildUpdateQuery(params as UpdateQueryParams<S, T>);
       case 'delete':
-        return this.buildDeleteQuery(params as DeleteQueryParams<U>);
+        return this.buildDeleteQuery(params as DeleteQueryParams<S, T>);
       case 'alter':
-        return this.buildAlterQuery(params as AlterQueryParams<U>);
+        return this.buildAlterQuery(params as AlterQueryParams<S, T>);
       case 'drop_table':
-        return this.buildDropTableQuery(params as DropTableQueryParams<U>);
+        return this.buildDropTableQuery(params as DropTableQueryParams<S, T>);
       case 'drop_index':
-        return this.buildDropIndexQuery(params as DropIndexQueryParams);
+        return this.buildDropIndexQuery(params as DropIndexQueryParams<S, T>);
       default:
         throw new Error(`Unsupported query type: ${(params as any).type}`);
     }
@@ -64,10 +64,10 @@ export class DocumentDatabase<
   /**
    * 构建创建集合查询
    */
-  protected buildCreateQuery<T extends object>(params: CreateQueryParams<T>): BuildQueryResult<DocumentQueryResult> {
+  protected buildCreateQuery<T extends keyof S>(params: CreateQueryParams<S, T>): BuildQueryResult<DocumentQueryResult> {
     return {
       query: {
-        collection: params.tableName,
+        collection: params.tableName as string,
         filter: {},
         projection: {}
       },
@@ -78,7 +78,7 @@ export class DocumentDatabase<
   /**
    * 构建查询文档查询
    */
-  protected buildSelectQuery<T extends object>(params: SelectQueryParams<T>): BuildQueryResult<DocumentQueryResult> {
+  protected buildSelectQuery<T extends keyof S>(params: SelectQueryParams<S, T>): BuildQueryResult<DocumentQueryResult> {
     const filter: Record<string, any> = {};
     
     // 转换条件为文档查询格式
@@ -87,7 +87,7 @@ export class DocumentDatabase<
     }
 
     const query: DocumentQueryResult = {
-      collection: params.tableName,
+      collection: params.tableName as string,
       filter
     };
 
@@ -122,10 +122,10 @@ export class DocumentDatabase<
   /**
    * 构建插入文档查询
    */
-  protected buildInsertQuery<T extends object>(params: InsertQueryParams<T>): BuildQueryResult<DocumentQueryResult> {
+  protected buildInsertQuery<T extends keyof S>(params: InsertQueryParams<S, T>): BuildQueryResult<DocumentQueryResult> {
     return {
       query: {
-        collection: params.tableName,
+        collection: params.tableName as string,
         filter: {},
         projection: {}
       },
@@ -136,7 +136,7 @@ export class DocumentDatabase<
   /**
    * 构建更新文档查询
    */
-  protected buildUpdateQuery<T extends object>(params: UpdateQueryParams<T>): BuildQueryResult<DocumentQueryResult> {
+  protected buildUpdateQuery<T extends keyof S>(params: UpdateQueryParams<S, T>): BuildQueryResult<DocumentQueryResult> {
     const filter: Record<string, any> = {};
     
     if (params.conditions) {
@@ -145,7 +145,7 @@ export class DocumentDatabase<
 
     return {
       query: {
-        collection: params.tableName,
+        collection: params.tableName as string,
         filter,
         projection: {}
       },
@@ -156,7 +156,7 @@ export class DocumentDatabase<
   /**
    * 构建删除文档查询
    */
-  protected buildDeleteQuery<T extends object>(params: DeleteQueryParams<T>): BuildQueryResult<DocumentQueryResult> {
+  protected buildDeleteQuery<T extends keyof S>(params: DeleteQueryParams<S, T>): BuildQueryResult<DocumentQueryResult> {
     const filter: Record<string, any> = {};
     
     if (params.conditions) {
@@ -165,7 +165,7 @@ export class DocumentDatabase<
 
     return {
       query: {
-        collection: params.tableName,
+        collection: params.tableName as string,
         filter,
         projection: {}
       },
@@ -176,10 +176,10 @@ export class DocumentDatabase<
   /**
    * 构建修改集合查询
    */
-  protected buildAlterQuery<T extends object>(params: AlterQueryParams<T>): BuildQueryResult<DocumentQueryResult> {
+  protected buildAlterQuery<T extends keyof S>(params: AlterQueryParams<S, T>): BuildQueryResult<DocumentQueryResult> {
     return {
       query: {
-        collection: params.tableName,
+        collection: params.tableName as string,
         filter: {},
         projection: {}
       },
@@ -190,10 +190,10 @@ export class DocumentDatabase<
   /**
    * 构建删除集合查询
    */
-  protected buildDropTableQuery<T extends object>(params: DropTableQueryParams<T>): BuildQueryResult<DocumentQueryResult> {
+  protected buildDropTableQuery<T extends keyof S>(params: DropTableQueryParams<S, T>): BuildQueryResult<DocumentQueryResult> {
     return {
       query: {
-        collection: params.tableName,
+        collection: params.tableName as string,
         filter: {},
         projection: {}
       },
@@ -204,10 +204,10 @@ export class DocumentDatabase<
   /**
    * 构建删除索引查询
    */
-  protected buildDropIndexQuery(params: DropIndexQueryParams): BuildQueryResult<DocumentQueryResult> {
+  protected buildDropIndexQuery<T extends keyof S>(params: DropIndexQueryParams<S, T>): BuildQueryResult<DocumentQueryResult> {
     return {
       query: {
-        collection: params.tableName,
+        collection: params.tableName as string,
         filter: {},
         projection: {}
       },
@@ -264,13 +264,13 @@ export class DocumentDatabase<
   /**
    * 获取模型
    */
-  model<T extends keyof S>(name: T): DocumentModel<S[T], D> {
-    let model = this.models.get(name as string);
+  model<T extends keyof S>(name: T): DocumentModel<D, S, T> {
+    let model = this.models.get(name) as DocumentModel<D, S, T> | undefined;
     if (!model) {
-      model = new DocumentModel(this as unknown as DocumentDatabase<D>, name as string);
-      this.models.set(name as string, model);
+      model = new DocumentModel<D, S, T>(this, name);
+      this.models.set(name, model as any);
     }
-    return model as unknown as DocumentModel<S[T], D>;
+    return model as DocumentModel<D, S, T>;
   }
 
   /**

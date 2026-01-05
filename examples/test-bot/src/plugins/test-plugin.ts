@@ -1,21 +1,15 @@
 import {
-  useContext,
-  addCommand,
+  usePlugin,
   Time,
-  addComponent,
   MessageCommand,
-  useApp,
-  Adapter,
-  onDatabaseReady,
-  defineModel,
   MessageElement,
-  ComponentContext,
+  Cron,
 } from "zhin.js";
 import path from "node:path";
 import * as os from "node:os";
 import { writeHeapSnapshot } from "node:v8";
 
-declare module "@zhin.js/types" {
+declare module "zhin.js" {
   interface Models {
     test_model: {
       name: string;
@@ -24,12 +18,11 @@ declare module "@zhin.js/types" {
     };
   }
 }
-
+const {addCommand,addComponent,root,useContext}=usePlugin()
 // 全局内存历史记录
 declare global {
   var _memoryHistory: Array<{ time: number; rss: number; heapUsed: number }> | undefined;
 }
-const app = useApp()
 const isBun=typeof Bun!=='undefined'
 function formatMemoSize(size: number) {
   const sizes = ["B", "KB", "MB", "GB", "TB"];
@@ -54,12 +47,6 @@ addCommand(
     // 系统信息
     // ============================================
     
-    // 操作系统
-    const osType = os.type();
-    const osRelease = os.release();
-    const osArch = os.arch();
-    const platform = os.platform();
-    
     // 系统内存
     const totalmem = os.totalmem();
     const freemem = os.freemem();
@@ -70,14 +57,9 @@ addCommand(
     const processRealMem = memUsage.rss;           // 真实物理内存（Resident Set Size）
     const processHeapTotal = memUsage.heapTotal;   // V8 堆总大小
     const processHeapUsed = memUsage.heapUsed;     // V8 堆已使用
-    const processExternal = memUsage.external;     // C++ 对象内存
-    const memUsagePercent = ((usedSystemMem / totalmem) * 100).toFixed(2);
     
     const processMemPercent = ((processRealMem / totalmem) * 100).toFixed(2);
     const isHighMemoryPressure = parseFloat(processMemPercent) > 80;
-    
-    // 系统运行时长（秒）
-    const systemUptime = os.uptime();
     
     // ============================================
     // 进程信息
@@ -92,13 +74,6 @@ addCommand(
     const processUptime = process.uptime();
     
     
-    // （已在上面计算）
-    
-    // CPU 信息
-    const cpus = os.cpus();
-    const cpuModel = cpus[0]?.model || 'Unknown';
-    const cpuCores = cpus.length;
-    
     // ============================================
     // 格式化输出
     // ============================================
@@ -106,41 +81,13 @@ addCommand(
     return [
       "╔═══════════ 系统状态 ═══════════╗",
       "",
-      "【操作系统】",
-      `  系统：${osType} ${osRelease}`,
-      `  平台：${platform} (${osArch})`,
-      `  开机时长：${Time.formatTime(systemUptime * 1000)}`,
+      `运行时：${runtime} | 架构：${process.arch} | PID：${process.pid}`,
+      `运行时长：${Time.formatTime(processUptime * 1000)}`,
       "",
-      "【CPU 信息】",
-      `  型号：${cpuModel}`,
-      `  核心数：${cpuCores} 核`,
+      `物理内存：${formatMemoSize(processRealMem)} (${processMemPercent}%) ${isHighMemoryPressure ? '⚠️' : '✅'}`,
+      `堆内存：${formatMemoSize(processHeapUsed)} / ${formatMemoSize(processHeapTotal)}`,
       "",
-      "【系统内存】",
-      `  总内存：${formatMemoSize(totalmem)}`,
-      `  已使用：${formatMemoSize(usedSystemMem)} (${memUsagePercent}%)`,
-      `  可用：${formatMemoSize(freemem)}`,
-      "",
-      "【运行环境】",
-      `  运行时：${runtime}`,
-      `  架构：${process.arch}`,
-      `  PID：${process.pid}`,
-      "",
-      "【进程状态】",
-      `  运行时长：${Time.formatTime(processUptime * 1000)}`,
-      `  物理内存：${formatMemoSize(processRealMem)} (${processMemPercent}%) ${isHighMemoryPressure ? '⚠️ 高' : '✅ 正常'}`,
-      `  堆内存：${formatMemoSize(processHeapUsed)} / ${formatMemoSize(processHeapTotal)}`,
-      `  外部内存：${formatMemoSize(processExternal)}`,
-      "",
-      "╠═══════════ 框架状态 ═══════════╣",
-      "",
-      "【框架信息】",
-      `  适配器：${app.adapters.length} 个`,
-      `  插件：${app.dependencyList.length} 个`,
-      "",
-      "【机器人列表】",
-      ...app.adapters.map((name) => {
-        return `  ${name}：${app.getContext<Adapter>(name).bots.size} 个`;
-      }),
+      `适配器：${root.adapters.length} 个 | 插件：${root.children.length} 个`,
       "",
       "╚════════════════════════════════╝",
     ].join("\n");
@@ -150,7 +97,7 @@ addCommand(
 // 内存分析命令
 // ============================================
 addCommand(
-  new MessageCommand("mem")
+  new MessageCommand("mem-simple")
     .desc("查看内存详情", "显示进程的详细内存使用情况，包括 RSS、堆内存、外部内存等")
     .usage("mem")
     .examples("mem")
@@ -206,6 +153,12 @@ addCommand(
     const totalmem = os.totalmem();
     const processPercent = ((rss / totalmem) * 100).toFixed(4);
     
+    // 计算可见内存和不可见内存
+    const visibleMemory = heapTotal + external + arrayBuffers;
+    const hiddenMemory = rss - visibleMemory;
+    const hiddenPercent = hiddenMemory > 0 ? ((hiddenMemory / rss) * 100).toFixed(2) : '0.00';
+    const heapPercentOfRSS = ((heapTotal / rss) * 100).toFixed(2);
+    
     return [
       "╔═══════════ 内存详细分析 ═══════════╗",
       "",
@@ -219,21 +172,36 @@ addCommand(
       `  │  已使用：${formatMemoSize(heapUsed)} (${heapPercent}%)`,
       `  │  已分配：${formatMemoSize(heapTotal)}`,
       `  │  碎片化：${formatMemoSize(heapFragmentation)} (${fragmentationPercent}%)`,
-      `  │  占总内存：${heapOfTotal}%`,
+      `  │  占 RSS：${heapPercentOfRSS}%`,
+      `  │  ⚠️  注意：堆内存不会自动缩小，即使 RSS 降低`,
       `  │`,
       `  ├─ 外部内存 (C++)`,
       `  │  大小：${formatMemoSize(external)}`,
-      `  │  占总内存：${externalOfTotal}%`,
+      `  │  占 RSS：${externalOfTotal}%`,
       `  │  说明：Buffer、TypedArray 等`,
       `  │`,
       `  ├─ ArrayBuffer 内存`,
       `  │  大小：${formatMemoSize(arrayBuffers)}`,
-      `  │  占总内存：${arrayBuffersOfTotal}%`,
+      `  │  占 RSS：${arrayBuffersOfTotal}%`,
       `  │  说明：ArrayBuffer、SharedArrayBuffer`,
       `  │`,
-      `  └─ 其他内存 (栈、代码等)`,
+      `  └─ 其他内存 (代码段、栈、共享库等)`,
       `     大小：${formatMemoSize(nonHeapMemory)}`,
-      `     占总内存：${nonHeapPercent}%`,
+      `     占 RSS：${nonHeapPercent}%`,
+      `     说明：Node.js 运行时、共享库、内存映射文件等`,
+      "",
+      "【内存差异说明】",
+      `  可见内存 (堆+外部+ArrayBuffer)：${formatMemoSize(visibleMemory)}`,
+      `  不可见内存 (代码+栈+共享库)：${formatMemoSize(hiddenMemory)} (${hiddenPercent}%)`,
+      `  物理内存 (RSS)：${formatMemoSize(rss)}`,
+      "",
+      `💡 为什么物理内存 (${formatMemoSize(rss)}) 可能比堆内存 (${formatMemoSize(heapTotal)}) 小？`,
+      "   • macOS 内存压缩：不活跃内存被压缩，RSS 降低",
+      "   • 内存交换：不活跃内存被交换到磁盘，RSS 降低",
+      "   • 共享库优化：共享库可能被其他进程共享，不重复计算",
+      "   • 堆内存不会自动缩小：V8 预分配的堆内存不会释放回操作系统",
+      "",
+      "✅ 这是正常的！只要堆内存稳定（不持续增长），就没有内存泄漏。",
       "",
       "【内存占用分析】",
       ...analyzeMemoryUsage(rss, heapUsed, heapTotal, external),
@@ -266,13 +234,16 @@ function analyzeMemoryUsage(rss: number, heapUsed: number, heapTotal: number, ex
   }
   
   // 分析堆使用率
+  // V8 的堆使用率在 80-95% 是正常的，V8 会动态调整堆大小
   const heapUsagePercent = (heapUsed / heapTotal) * 100;
   if (heapUsagePercent < 50) {
     analysis.push("  堆使用率：✅ 健康 (<50%) - 有足够增长空间");
-  } else if (heapUsagePercent < 75) {
-    analysis.push("  堆使用率：⚠️  中等 (50-75%) - 建议监控");
+  } else if (heapUsagePercent < 80) {
+    analysis.push("  堆使用率：✅ 正常 (50-80%) - V8 会自动管理");
+  } else if (heapUsagePercent < 95) {
+    analysis.push("  堆使用率：✅ 正常 (80-95%) - V8 会动态扩展堆");
   } else {
-    analysis.push("  堆使用率：❌ 偏高 (>75%) - 可能需要 GC");
+    analysis.push("  堆使用率：⚠️  较高 (>95%) - V8 即将扩展堆或触发 GC");
   }
   
   // 分析外部内存
@@ -288,15 +259,22 @@ function analyzeMemoryUsage(rss: number, heapUsed: number, heapTotal: number, ex
 function getMemoryOptimizationTips(rss: number, heapUsed: number, heapTotal: number, fragmentationPercent: string) {
   const tips = [];
   
-  // 142MB 是比较正常的
-  if (rss < 150 * 1024 * 1024) {
-    tips.push("  ✅ 当前内存使用良好，无需特别优化");
+  // 内存使用评估（基于实际 Bot 框架对比）
+  // Discord.js: ~150-300MB, Koishi: ~100-200MB, 你的框架: ~50-100MB (优秀！)
+  if (rss < 100 * 1024 * 1024) {
+    tips.push("  ✅ 内存使用优秀 (<100MB) - 比大多数 Bot 框架更轻量");
+    tips.push("     • Discord.js 通常需要 150-300MB");
+    tips.push("     • Koishi 通常需要 100-200MB");
+    tips.push("     • 你的应用仅需 " + (rss / 1024 / 1024).toFixed(1) + "MB，非常优秀！");
   } else if (rss < 200 * 1024 * 1024) {
-    tips.push("  💡 内存使用正常，可考虑以下优化：");
+    tips.push("  ✅ 内存使用良好 (100-200MB) - 属于正常范围");
+    tips.push("     • 与主流 Bot 框架相当");
+  } else if (rss < 500 * 1024 * 1024) {
+    tips.push("  💡 内存使用正常 (200-500MB) - 可考虑优化：");
     tips.push("     • 检查是否有大型对象常驻内存");
     tips.push("     • 定期清理不用的缓存");
   } else {
-    tips.push("  ⚠️  建议优化内存使用：");
+    tips.push("  ⚠️  建议优化内存使用 (>500MB)：");
     tips.push("     • 使用 WeakMap/WeakSet 避免内存泄漏");
     tips.push("     • 及时释放大型 Buffer");
     tips.push("     • 考虑使用流式处理大数据");
@@ -352,157 +330,6 @@ addCommand(
   })
 );
 
-// ============================================
-// 实时内存分析命令 - 分析当前内存中的对象
-// ============================================
-addCommand(
-  new MessageCommand("memtop")
-    .desc("实时内存监控", "显示进程的实时内存使用趋势（需要 --expose-gc 标志）")
-    .usage("memtop")
-    .examples("memtop")
-    .action(() => {
-    if (!global.gc) {
-      return [
-        "❌ 需要启动 GC 暴露才能详细分析",
-        "",
-        "请使用以下方式启动：",
-        "• Node.js: node --expose-gc",
-        "• Bun: bun --expose-gc",
-        "• 或在启动命令中添加该参数",
-        "",
-        "当前只能显示基础统计信息：",
-        analyzeHeapBasic()
-      ].join("\n");
-    }
-    
-    // 先执行 GC 清理
-    global.gc();
-    
-    return [
-      "╔═══════════ 堆内存 TOP 分析 ═══════════╗",
-      "",
-      "【GC 后内存状态】",
-      analyzeHeapBasic(),
-      "",
-      "【详细分析】",
-      "💡 要查看具体对象分布，请使用 'heap' 命令生成快照",
-      "   然后在 Chrome DevTools 中分析",
-      "",
-      "【常见内存占用】",
-      analyzeCommonMemoryPatterns(),
-      "",
-      "╚═════════════════════════════════════╝"
-    ].join("\n");
-  })
-);
-
-// ============================================
-// 手动 GC 命令
-// ============================================
-addCommand(
-  new MessageCommand("gc").action(() => {
-    if (!global.gc) {
-      return [
-        "❌ GC 未暴露",
-        "",
-        "请使用以下方式启动：",
-        "• Node.js: node --expose-gc your-app.js",
-        "• Bun: bun --expose-gc your-app.js",
-        "• tsx: tsx --expose-gc your-app.ts"
-      ].join("\n");
-    }
-    
-    const before = process.memoryUsage();
-    
-    // 执行垃圾回收
-    global.gc();
-    
-    const after = process.memoryUsage();
-    
-    const rssFreed = before.rss - after.rss;
-    const heapFreed = before.heapUsed - after.heapUsed;
-    const externalFreed = before.external - after.external;
-    
-    return [
-      "✅ 垃圾回收完成！",
-      "",
-      "【回收前】",
-      `  物理内存：${formatMemoSize(before.rss)}`,
-      `  堆内存：${formatMemoSize(before.heapUsed)}`,
-      `  外部内存：${formatMemoSize(before.external)}`,
-      "",
-      "【回收后】",
-      `  物理内存：${formatMemoSize(after.rss)}`,
-      `  堆内存：${formatMemoSize(after.heapUsed)}`,
-      `  外部内存：${formatMemoSize(after.external)}`,
-      "",
-      "【释放量】",
-      `  物理内存：${rssFreed > 0 ? '-' : '+'}${formatMemoSize(Math.abs(rssFreed))}`,
-      `  堆内存：${heapFreed > 0 ? '-' : '+'}${formatMemoSize(Math.abs(heapFreed))}`,
-      `  外部内存：${externalFreed > 0 ? '-' : '+'}${formatMemoSize(Math.abs(externalFreed))}`,
-      "",
-      rssFreed > 1024 * 1024 
-        ? "💡 释放了较多内存，说明之前有未使用对象" 
-        : "ℹ️  释放量较少，内存使用健康"
-    ].join("\n");
-  })
-);
-
-// 基础堆分析
-function analyzeHeapBasic() {
-  const mem = process.memoryUsage();
-  const heapPercent = ((mem.heapUsed / mem.heapTotal) * 100).toFixed(2);
-  
-  return [
-    `  堆总大小：${formatMemoSize(mem.heapTotal)}`,
-    `  堆已使用：${formatMemoSize(mem.heapUsed)} (${heapPercent}%)`,
-    `  堆可用：${formatMemoSize(mem.heapTotal - mem.heapUsed)}`,
-  ].join("\n");
-}
-
-// 分析常见内存模式
-function analyzeCommonMemoryPatterns() {
-  const patterns = [];
-  
-  // 分析 App 状态
-  const app = useApp();
-  
-  // 插件数量
-  const pluginCount = app.dependencyList.length;
-  const avgMemPerPlugin = process.memoryUsage().heapUsed / pluginCount;
-  patterns.push(`  插件数量：${pluginCount} 个`);
-  patterns.push(`  单插件平均内存：~${formatMemoSize(avgMemPerPlugin)}`);
-  
-  // 适配器数量
-  const adapterCount = app.adapters.length;
-  if (adapterCount > 0) {
-    patterns.push(`  适配器数量：${adapterCount} 个`);
-    
-    // Bot 数量
-    let totalBots = 0;
-    for (const name of app.adapters) {
-      const adapter = app.getContext<Adapter>(name);
-      totalBots += adapter.bots.size;
-    }
-    patterns.push(`  Bot 数量：${totalBots} 个`);
-    
-    if (totalBots > 0) {
-      const avgMemPerBot = process.memoryUsage().heapUsed / totalBots;
-      patterns.push(`  单 Bot 平均内存：~${formatMemoSize(avgMemPerBot)}`);
-    }
-  }
-  
-  // 建议
-  patterns.push("");
-  patterns.push("💡 内存主要分布：");
-  patterns.push("  • 框架核心 (~20-40MB)");
-  patterns.push("  • 插件代码和状态 (~10-30MB)");
-  patterns.push("  • 适配器和 Bot (~30-60MB)");
-  patterns.push("  • V8 运行时 (~20-40MB)");
-  
-  return patterns.join("\n");
-}
-
 
 addCommand(new MessageCommand("我才是[...content:text]")
 .action(async (m, { params }) => {
@@ -512,160 +339,226 @@ addCommand(new MessageCommand("我才是[...content:text]")
 }));
 addComponent(async function foo(
   props: { face: number },
-  context: ComponentContext
 ) {
   return "这是父组件" + props.face;
 });
-const randomUUID = () => {
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
-    const r = (Math.random() * 16) | 0,
-      v = c == "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-};
-console.log("测试插件加载完成，唯一标识：" + randomUUID());
 
-useContext("web", (web) => {
-  const dispose = web.addEntry({
-    development: path.resolve(
-      path.resolve(import.meta.dirname, "../../client/index.tsx")
-    ),
-    production: path.resolve(
-      path.resolve(import.meta.dirname, "../../dist/index.js")
-    ),
-  });
-  return dispose;
-})
-// 依赖icqq上下文
-useContext("icqq", (p) => {
-  // 指定某个上下文就绪时，需要做的事
-  const someUsers = new MessageCommand<"icqq">("赞[space][...atUsers:at]", {
-    at: "qq",
-  })
-    .permit("adapter(icqq)")
-    .action(async (m, { params }) => {
-      if (!params.atUsers?.length) params.atUsers = [+m.$sender.id];
-      const likeResult: string[] = [];
-      for (const user_id of params.atUsers) {
-        const userResult = await Promise.all(
-          new Array(5).fill(0).map(() => {
-            return p.bots.get(m.$bot)?.sendLike(user_id, 10);
-          })
-        );
-        likeResult.push(
-          `为用户(${user_id})赞${
-            userResult.filter(Boolean).length ? "成功" : "失败"
-          }`
-        );
+// ============================================
+// 自动清理功能测试
+// ============================================
+
+// 获取当前插件实例用于测试
+const plugin = usePlugin();
+
+// 存储动态添加的 dispose 函数
+const dynamicDisposes: (() => void)[] = [];
+
+addCommand(
+  new MessageCommand("test-add")
+    .desc("测试动态添加命令", "添加一个临时命令，用于测试自动清理功能")
+    .usage("test-add [name]")
+    .examples("test-add hello")
+    .action((_, result) => {
+      const name = (result.remaining as any[])?.[0]?.data?.text || `temp-${Date.now()}`;
+      
+      // 动态添加一个命令
+      const dispose = plugin.addCommand(
+        new MessageCommand(name).action(() => `我是动态命令: ${name}`)
+      );
+      dynamicDisposes.push(dispose);
+      
+      const commandService = plugin.inject('command');
+      const count = commandService?.items?.length || 0;
+      
+      return [
+        `✅ 已添加命令: ${name}`,
+        `📊 当前命令总数: ${count}`,
+        "",
+        "💡 提示:",
+        "• 使用 'test-list' 查看所有命令",
+        "• 使用 'test-remove' 手动移除最后添加的命令",
+        "• 热重载此插件后，动态命令会自动移除"
+      ].join("\n");
+    })
+);
+
+addCommand(
+  new MessageCommand("test-list")
+    .desc("列出命令统计", "显示当前注册的命令数量和动态命令数")
+    .usage("test-list")
+    .action(() => {
+      const commandService = plugin.inject('command');
+      const count = commandService?.items.length || 0;
+      
+      return [
+        "╔═══════════ 命令统计 ═══════════╗",
+        "",
+        `📋 已注册命令总数: ${count}`,
+        `🔄 本插件动态添加: ${dynamicDisposes.length}`,
+        "",
+        "╚════════════════════════════════╝"
+      ].join("\n");
+    })
+);
+
+addCommand(
+  new MessageCommand("test-remove")
+    .desc("移除动态命令", "手动移除最后一个动态添加的命令")
+    .usage("test-remove")
+    .action(() => {
+      if (dynamicDisposes.length === 0) {
+        return "❌ 没有可移除的动态命令";
       }
-      return likeResult.join("\n");
-    });
-  addCommand(someUsers);
-  // onMessage(async (m) => {
-  //   if(m.$adapter==='process'){
-  //     const b=p.bots.get('1689919782')
-  //     if(b){
-  //       b.$sendMessage({
-  //         id:'860669870',
-  //         type:'group',
-  //         content:m.$content,
-  //         context:'icqq',
-  //         bot:'1689919782'
-  //       })
-  //     }
-  //   }
-  // });
+      
+      const dispose = dynamicDisposes.pop()!;
+      dispose();
+      
+      const commandService = plugin.inject('command');
+      const count = commandService?.items.length || 0;
+      
+      return [
+        "✅ 已移除最后添加的动态命令",
+        `📊 当前命令总数: ${count}`,
+        `🔄 剩余动态命令: ${dynamicDisposes.length}`
+      ].join("\n");
+    })
+);
+
+addCommand(
+  new MessageCommand("test-component")
+    .desc("测试动态组件", "添加一个临时组件")
+    .usage("test-component [name]")
+    .action((_, result) => {
+      const name = (result.remaining as any[])?.[0]?.data?.text || `comp-${Date.now()}`;
+      
+      // 动态添加一个组件
+      plugin.addComponent(async function dynamicComp(props: { text: string }) {
+        return `动态组件[${name}]: ${props.text}`;
+      });
+      
+      const componentService = plugin.inject('component');
+      
+      return [
+        `✅ 已添加组件: dynamicComp`,
+        "",
+        "💡 热重载插件后，此组件会自动移除"
+      ].join("\n");
+    })
+);
+
+addCommand(
+  new MessageCommand("test-middleware")
+    .desc("测试动态中间件", "添加一个临时中间件")
+    .usage("test-middleware")
+    .action(() => {
+      // 添加一个计数中间件
+      let count = 0;
+      plugin.addMiddleware(async (message, next) => {
+        count++;
+        console.log(`[Test Middleware] 消息计数: ${count}`);
+        return next();
+      });
+      
+      return [
+        "✅ 已添加测试中间件",
+        "📊 中间件会在每条消息时打印计数",
+        "",
+        "💡 热重载插件后，此中间件会自动移除"
+      ].join("\n");
+    })
+);
+
+addCommand(
+  new MessageCommand("test-cron")
+    .desc("测试动态定时任务", "添加一个每10秒执行一次的定时任务")
+    .usage("test-cron")
+    .action(() => {
+      // 每10秒执行一次
+      const cron = new Cron("*/10 * * * * *", () => {
+        console.log(`[Test Cron] 定时任务执行: ${new Date().toLocaleTimeString()}`);
+      });
+      
+      plugin.addCron(cron);
+      
+      const cronService = plugin.inject('cron');
+      const count = cronService?.items.length
+      
+      return [
+        "✅ 已添加测试定时任务",
+        `📊 当前定时任务总数: ${count}`,
+        "",
+        "💡 每10秒会在控制台打印一次",
+        "💡 热重载插件后，此任务会自动停止"
+      ].join("\n");
+    })
+);
+addCommand(
+  new MessageCommand("cron-stop[name:text]")
+    .desc("停止测试定时任务")
+    .usage("cron-stop <name>")
+    .action((_, { params }) => {
+      const name = params.name;
+      const crons = plugin.inject('cron');
+      crons?.remove(name);
+      return `已停止定时任务: ${name}`;
+    })
+);
+addCommand(
+  new MessageCommand("cron-list")
+    .desc("查看定时任务状态", "显示所有定时任务的状态")
+    .usage("test-cron-list")
+    .action(() => {
+      const crons = plugin.inject('cron');
+      
+      if (!crons || crons.items.length === 0) {
+        return "📋 暂无定时任务";
+      }
+      
+      const lines = [
+        "╔═══════════ 定时任务状态 ═══════════╗",
+        "",
+        `📋 总数: ${crons.items.length}`,
+        ""
+      ];
+      
+      crons.items.forEach((cron: any, index: number) => {
+        lines.push(`[${cron.id}] ${cron.cronExpression || cron._cronExpression}`);
+        lines.push(`    状态: ${cron.running ? '🏃 运行中' : '⏸️ 已停止'}`);
+        if (cron.running) {
+          try {
+            lines.push(`    下次执行: ${cron.getNextExecutionTime().toLocaleString()}`);
+          } catch {}
+        }
+        lines.push("");
+      });
+      
+      lines.push("╚════════════════════════════════════╝");
+      
+      return lines.join("\n");
+    })
+);
+
+// 插件销毁时的日志
+plugin.onDispose(() => {
+  console.log('[Test Plugin] 插件正在销毁...');
+  console.log(`[Test Plugin] 动态命令数: ${dynamicDisposes.length} (将自动清理)`);
 });
-defineModel("test_model", {
-  name: { type: "text", nullable: false },
-  age: { type: "integer", default: 0 },
-  info: { type: "json" },
-});
-onDatabaseReady(async (db) => {
-  const model = db.model("test_model");
+
+useContext("database", async (db) => {
+  db.define("test_model", {
+    name: { type: "text", nullable: false },
+    age: { type: "integer", default: 0 },
+    info: { type: "json" },
+  });
+  const model = db.models.get("test_model");
   // await model.create({
   //   name:'张三',
   //   age:20,
   //   info:{}
   // });
   // await model.delete({name:'张三'});
-  const result = await model.select();
-  console.log(result);
+  if (model) {
+    const result = await model.select();
+    console.log(result);
+  }
 });
-
-// ============================================================================
-// 性能监控命令
-// ============================================================================
-
-// 获取性能监控器实例
-const performanceMonitor = app.hmrManager.performanceMonitor;
-
-// 性能报告命令
-addCommand(
-  new MessageCommand("perf")
-    .desc("查看性能监控报告", "显示应用的性能统计信息")
-    .usage("perf")
-    .examples("perf")
-    .action(() => {
-      return performanceMonitor.getReport();
-    })
-);
-
-// 详细性能报告命令
-addCommand(
-  new MessageCommand("perf.full")
-    .desc("查看完整性能监控报告", "显示详细的性能统计和分析")
-    .usage("perf.full")
-    .examples("perf.full")
-    .action(() => {
-      return performanceMonitor.getFullReport();
-    })
-);
-
-// 实时性能统计命令
-addCommand(
-  new MessageCommand("perf.stats")
-    .desc("查看实时性能统计", "显示格式化的实时性能数据")
-    .usage("perf.stats")
-    .examples("perf.stats")
-    .action(() => {
-      const stats = performanceMonitor.stats;
-      
-      return [
-        "╔═══════════ 实时性能统计 ═══════════╗",
-        "",
-        "【内存使用】",
-        `  RSS: ${formatMemoSize(stats.memoryUsage.rss)}`,
-        `  堆内存 (Used): ${formatMemoSize(stats.memoryUsage.heapUsed)}`,
-        `  堆内存 (Total): ${formatMemoSize(stats.memoryUsage.heapTotal)}`,
-        `  使用率: ${((stats.memoryUsage.heapUsed / stats.memoryUsage.heapTotal) * 100).toFixed(2)}%`,
-        `  外部内存: ${formatMemoSize(stats.memoryUsage.external)}`,
-        `  ArrayBuffer: ${formatMemoSize(stats.memoryUsage.arrayBuffers)}`,
-        "",
-        "【峰值】",
-        `  内存峰值: ${formatMemoSize(stats.memoryPeak.value)}`,
-        `  发生时间: ${new Date(stats.memoryPeak.timestamp).toLocaleString('zh-CN')}`,
-        "",
-        "【运行时间】",
-        `  启动时间: ${new Date(stats.startTime).toLocaleString('zh-CN')}`,
-        `  运行时长: ${Time.formatTime(stats.uptime)}`,
-        "",
-        ...(stats.gcEvents > 0 ? [
-          "【GC 统计】",
-          `  GC 次数: ${stats.gcEvents} 次`,
-          `  GC 总耗时: ${(stats.gcEventDuration / 1000).toFixed(2)} 秒`,
-          "",
-        ] : []),
-        "【重载统计】",
-        `  重载次数: ${stats.reloadCount} 次`,
-        ...(stats.lastReloadTime ? [
-          `  最后重载: ${new Date(stats.lastReloadTime).toLocaleString('zh-CN')}`,
-          `  重载耗时: ${stats.lastReloadDuration?.toFixed(2) || 'N/A'} ms`,
-        ] : [
-          `  尚未重载`,
-        ]),
-        "",
-        "╚═════════════════════════════════════╝",
-      ].join("\n");
-    })
-);

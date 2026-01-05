@@ -6,10 +6,10 @@ import { DocumentQueryResult, Condition } from '../../types.js';
  * 文档型模型类
  * 继承自 Model，提供文档型数据库特有的操作
  */
-export class DocumentModel<T extends object = object, D =any> extends Model<D, T, DocumentQueryResult> {
+export class DocumentModel<D=any, S extends Record<string, object> = Record<string, object>, T extends keyof S = keyof S> extends Model<D, S, DocumentQueryResult, T> {
   constructor(
-    database: DocumentDatabase<D>,
-    name: string
+    database: DocumentDatabase<D, S>,
+    name: T
   ) {
     super(database, name);
   }
@@ -17,9 +17,9 @@ export class DocumentModel<T extends object = object, D =any> extends Model<D, T
   /**
    * 创建文档
    */
-  async create(document: T): Promise<T & { _id: string }>;
-  async create(documents: T[]): Promise<(T & { _id: string })[]>;
-  async create(documents: T | T[]): Promise<(T & { _id: string }) | (T & { _id: string })[]> {
+  async create(document: S[T]): Promise<S[T] & { _id: string }>;
+  async create(documents: S[T][]): Promise<(S[T] & { _id: string })[]>;
+  async create(documents: S[T] | S[T][]): Promise<(S[T] & { _id: string }) | (S[T] & { _id: string })[]> {
     const isArray = Array.isArray(documents);
     const docs = isArray ? documents : [documents];
     
@@ -33,7 +33,7 @@ export class DocumentModel<T extends object = object, D =any> extends Model<D, T
           operation: 'insertOne',
           filter: {},
           projection: {},
-          collection: this.name,
+          collection: this.name as string,
         },
         [docWithId]
       );
@@ -46,9 +46,9 @@ export class DocumentModel<T extends object = object, D =any> extends Model<D, T
   /**
    * 查找单个文档
    */
-  async selectOne<K extends keyof T>(...fields: Array<K>): Promise<(Pick<T, K> & { _id: string }) | null> {
+  async selectOne<K extends keyof S[T]>(...fields: Array<K>): Promise<(Pick<S[T], K> & { _id: string }) | null> {
     const results = await this.select(...fields).limit(1);
-    return results.length > 0 ? results[0] as (Pick<T, K> & { _id: string }) : null;
+    return results.length > 0 ? results[0] as (Pick<S[T], K> & { _id: string }) : null;
   }
 
   /**
@@ -57,24 +57,24 @@ export class DocumentModel<T extends object = object, D =any> extends Model<D, T
   async selectById(id: string){
     return this.select('_id' as any).where({
       _id: id,
-    }).limit(1).then((results: any) => results[0] || null);
+    } as Condition<S[T]>).limit(1).then((results: any) => results[0] || null);
   }
   /**
    * 根据ID更新文档
    */
-  async updateById(id: string, update: Partial<T>): Promise<number> {
+  async updateById(id: string, update: Partial<S[T]>): Promise<number> {
     return this.update(update).where({
       _id: id,
-    } as Condition<T>)
+    } as Condition<S[T]>)
   }
 
   /**
    * 根据ID删除文档
    */
-  async deleteById(id: string): Promise<number> {
+  async deleteById(id: string): Promise<S[T][] | number> {
     return this.delete({
       _id: id,
-    } as Condition<T>)
+    } as Condition<S[T]>) as Promise<S[T][] | number>;
   }
 
   /**

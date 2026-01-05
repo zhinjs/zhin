@@ -2,28 +2,35 @@ import {
     Bot,
     usePlugin,
     Adapter,
-    registerAdapter,
+    Plugin,
     Message,
     SendOptions,
     SendContent,
     MessageSegment,
     segment,
-    useContext
 } from "zhin.js";
 import type { Context } from 'koa';
 import { createHmac } from 'crypto';
 
-// 声明模块，注册钉钉适配器类型
-declare module '@zhin.js/types'{
-    interface RegisteredAdapters{
-        dingtalk: Adapter<DingTalkBot>
+// 类型扩展 - 使用 zhin.js 模式
+declare module "zhin.js" {
+    namespace Plugin {
+        interface Contexts {
+            dingtalk: DingTalkAdapter;
+            router: import("@zhin.js/http").Router;
+        }
+    }
+
+    interface RegisteredAdapters {
+        dingtalk: DingTalkAdapter;
     }
 }
 
-const plugin = usePlugin()
+const plugin = usePlugin();
+const { provide, useContext } = plugin;
 
 // 钉钉配置类型定义
-export interface DingTalkBotConfig extends Bot.Config {
+export interface DingTalkBotConfig {
     context: 'dingtalk'
     name: string
     appKey: string          // 钉钉应用 AppKey
@@ -89,14 +96,18 @@ interface AccessToken {
 // DingTalkBot 类
 // ================================================================================================
 
-export class DingTalkBot implements Bot<DingTalkMessage, DingTalkBotConfig> {
-    $connected?: boolean
+export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
+    $connected: boolean
     private router: any
     private accessToken: AccessToken
     private baseURL: string
     private sessionWebhooks: Map<string, string> = new Map() // conversationId -> webhook
 
-    constructor(router: any, public $config: DingTalkBotConfig) {
+    get $id() {
+        return this.$config.name;
+    }
+
+    constructor(public adapter: DingTalkAdapter, router: any, public $config: DingTalkBotConfig) {
         this.router = router;
         this.$connected = false;
         this.accessToken = { token: '', expires_in: 0, timestamp: 0 };
@@ -203,9 +214,8 @@ export class DingTalkBot implements Bot<DingTalkMessage, DingTalkBotConfig> {
         
         // 处理消息事件
         const message = this.$formatMessage(event as any);
-        plugin.dispatch('message.receive', message);
+        this.adapter.emit('message.receive', message);
         plugin.logger.info(`${this.$config.name} recv  ${message.$channel.type}(${message.$channel.id}): ${segment.raw(message.$content)}`);
-        plugin.dispatch(`message.${message.$channel.type}.receive`, message);
     }
 
     // ================================================================================================
@@ -646,9 +656,32 @@ export class DingTalkBot implements Bot<DingTalkMessage, DingTalkBotConfig> {
     }
 }
 
-// 注册适配器（需要 router）
+// 定义 Adapter 类
+class DingTalkAdapter extends Adapter<DingTalkBot> {
+    #router: any;
+
+    constructor(plugin: Plugin, router: any) {
+        super(plugin, 'dingtalk', []);
+        this.#router = router;
+    }
+
+    createBot(config: DingTalkBotConfig): DingTalkBot {
+        return new DingTalkBot(this, this.#router, config);
+    }
+}
+
+// 使用新的 provide() API 注册适配器
 useContext('router', (router: any) => {
-    registerAdapter(new Adapter('dingtalk', 
-        (config: any) => new DingTalkBot(router, config as DingTalkBotConfig)
-    ));
+    provide({
+        name: "dingtalk",
+        description: "DingTalk Bot Adapter",
+        mounted: async (p) => {
+            const adapter = new DingTalkAdapter(p, router);
+            await adapter.start();
+            return adapter;
+        },
+        dispose: async (adapter) => {
+            await adapter.stop();
+        },
+    });
 });

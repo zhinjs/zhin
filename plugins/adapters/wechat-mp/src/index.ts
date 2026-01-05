@@ -7,29 +7,30 @@ import {
     usePlugin,
     Adapter,
     Plugin,
-    registerAdapter,
     Message,
     SendOptions,
     SendContent,
     MessageSegment,
     segment,
-    useContext
 } from "zhin.js";
 import type { Context } from 'koa';
+import type { Router } from '@zhin.js/http';
 
-// 声明模块，注册微信公众号适配器类型
-declare module '@zhin.js/types'{
-    interface RegisteredAdapters{
-        'wechat-mp':Adapter<WeChatMPBot>
+// 类型扩展 - 使用 zhin.js 模式
+declare module "zhin.js" {
+    namespace Plugin {
+        interface Contexts {
+            'wechat-mp': WeChatMPAdapter;
+            router: import("@zhin.js/http").Router;
+        }
+    }
+
+    interface RegisteredAdapters {
+        'wechat-mp': WeChatMPAdapter;
     }
 }
-// Router 类型声明 (从 @koa/router)
-interface Router {
-    get(path: string, handler: (ctx: Context) => void): void;
-    post(path: string, handler: (ctx: Context) => void): void;
-}
 // 微信公众号配置
-export interface WeChatMPConfig extends Bot.Config {
+export interface WeChatMPConfig {
     context: 'wechat-mp'
     name: string
     appId: string
@@ -77,16 +78,22 @@ interface WeChatAPIResponse {
     errmsg?: string
 }
 const plugin = usePlugin();
-export class WeChatMPBot extends EventEmitter implements Bot<WeChatMessage, WeChatMPConfig> {
+const { provide, useContext } = plugin;
+
+export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeChatMessage> {
     $config: WeChatMPConfig;
     plugin: Plugin;
+    $connected: boolean= false;
     router: Router;
     
     private accessToken: string | null = null;
     private tokenExpireTime: number = 0;
-    private isConnected = false;
 
-    constructor( router: Router, config: WeChatMPConfig) {
+    get $id() {
+        return this.$config.name;
+    }
+
+    constructor(public adapter: WeChatMPAdapter, router: Router, config: WeChatMPConfig) {
         super();
         this.$config = config;
         this.plugin = plugin;
@@ -121,10 +128,9 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMessage, WeCh
             // 定期刷新access_token
             this.startTokenRefreshTimer();
             
-            this.isConnected = true;
             plugin.logger.info(`WeChat MP bot connected: ${this.$config.name}`);
             plugin.logger.info(`Webhook URL: ${this.$config.path}`);
-            
+            this.$connected= true;
         } catch (error) {
             plugin.logger.error('Failed to connect WeChat MP bot:', error);
             throw error;
@@ -132,7 +138,7 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMessage, WeCh
     }
 
     async $disconnect(): Promise<void> {
-        this.isConnected = false;
+        this.$connected = false;
         plugin.logger.info('WeChat MP bot disconnected');
     }
 
@@ -175,7 +181,7 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMessage, WeCh
             
             if (wechatMessage) {
                 const message = this.$formatMessage(wechatMessage);
-                plugin.dispatch('message.receive', message);
+                this.adapter.emit('message.receive', message);
                 
                 // 处理被动回复
                 const replyXML = await this.handlePassiveReply(wechatMessage, message);
@@ -496,7 +502,32 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMessage, WeCh
     }
 }
 
-// 使用路由服务注册适配器
+// 定义 Adapter 类
+class WeChatMPAdapter extends Adapter<WeChatMPBot> {
+    #router: Router;
+
+    constructor(plugin: Plugin, router: Router) {
+        super(plugin, 'wechat-mp', []);
+        this.#router = router;
+    }
+
+    createBot(config: WeChatMPConfig): WeChatMPBot {
+        return new WeChatMPBot(this, this.#router, config);
+    }
+}
+
+// 使用新的 provide() API 注册适配器
 useContext('router', (router: Router) => {
-    registerAdapter(new Adapter('wechat-mp', (config: WeChatMPConfig) => new WeChatMPBot(router, config)));
+    provide({
+        name: "wechat-mp",
+        description: "WeChat MP Bot Adapter",
+        mounted: async (p) => {
+            const adapter = new WeChatMPAdapter(p, router);
+            await adapter.start();
+            return adapter;
+        },
+        dispose: async (adapter) => {
+            await adapter.stop();
+        },
+    });
 });

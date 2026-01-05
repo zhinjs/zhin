@@ -2,27 +2,35 @@ import {
     Bot,
     usePlugin,
     Adapter,
-    registerAdapter,
+    Plugin,
     Message,
     SendOptions,
     SendContent,
     MessageSegment,
     segment,
-    useContext
 } from "zhin.js";
 import type { Context } from 'koa';
 import axios, { AxiosInstance } from 'axios';
 import { createHash } from 'crypto';
 
-// 声明模块，注册飞书适配器类型
-declare module '@zhin.js/types'{
-    interface RegisteredAdapters{
-        lark:Adapter<LarkBot>
+// 类型扩展 - 使用 zhin.js 模式
+declare module "zhin.js" {
+    namespace Plugin {
+        interface Contexts {
+            lark: LarkAdapter;
+            router: import("@zhin.js/http").Router;
+        }
+    }
+
+    interface RegisteredAdapters {
+        lark: LarkAdapter;
     }
 }
-const plugin =usePlugin()
+
+const plugin = usePlugin();
+const { provide, useContext } = plugin;
 // 飞书配置类型定义
-export interface LarkBotConfig extends Bot.Config {
+export interface LarkBotConfig {
     context: 'lark'
     name: string
     appId: string          // 飞书应用 ID
@@ -95,13 +103,17 @@ export interface LarkBot {
 // LarkBot 类
 // ================================================================================================
 
-export class LarkBot implements Bot<LarkMessage, LarkBotConfig> {
-    $connected?: boolean
+export class LarkBot implements Bot<LarkBotConfig, LarkMessage> {
+    $connected: boolean
     private router: any
     private accessToken: AccessToken
     private axiosInstance: AxiosInstance
 
-    constructor(router: any, public $config: LarkBotConfig) {
+    get $id() {
+        return this.$config.name;
+    }
+
+    constructor(public adapter: LarkAdapter, router: any, public $config: LarkBotConfig) {
         this.router = router;
         this.$connected = false;
         this.accessToken = { token: '', expires_in: 0, timestamp: 0 };
@@ -209,9 +221,8 @@ export class LarkBot implements Bot<LarkMessage, LarkBotConfig> {
         // 处理消息事件
         if (event.message) {
             const message = this.$formatMessage(event.message, event);
-            plugin.dispatch('message.receive', message);
+            this.adapter.emit('message.receive', message);
             plugin.logger.info(`${this.$config.name} recv  ${message.$channel.type}(${message.$channel.id}): ${segment.raw(message.$content)}`);
-            plugin.dispatch(`message.${message.$channel.type}.receive`, message);
         }
     }
 
@@ -609,9 +620,32 @@ export class LarkBot implements Bot<LarkMessage, LarkBotConfig> {
     }
 }
 
-// 注册适配器（需要 router）
+// 定义 Adapter 类
+class LarkAdapter extends Adapter<LarkBot> {
+    #router: any;
+
+    constructor(plugin: Plugin, router: any) {
+        super(plugin, 'lark', []);
+        this.#router = router;
+    }
+
+    createBot(config: LarkBotConfig): LarkBot {
+        return new LarkBot(this, this.#router, config);
+    }
+}
+
+// 使用新的 provide() API 注册适配器
 useContext('router', (router) => {
-    registerAdapter(new Adapter('lark', 
-        (config: any) => new LarkBot(router, config as LarkBotConfig)
-    ));
+    provide({
+        name: "lark",
+        description: "Lark/Feishu Bot Adapter",
+        mounted: async (p) => {
+            const adapter = new LarkAdapter(p, router);
+            await adapter.start();
+            return adapter;
+        },
+        dispose: async (adapter) => {
+            await adapter.stop();
+        },
+    });
 });

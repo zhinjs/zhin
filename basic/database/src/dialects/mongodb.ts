@@ -16,7 +16,7 @@ export interface MongoDBDialectConfig extends MongoClientOptions {
   url: string;
   dbName: string;
 }
-export class MongoDBDialect extends Dialect<MongoDBDialectConfig, DocumentQueryResult> {
+export class MongoDBDialect<S extends Record<string, object> = Record<string, object>> extends Dialect<MongoDBDialectConfig, S, DocumentQueryResult> {
   private client: any = null;
   private db: any = null;
 
@@ -139,24 +139,24 @@ export class MongoDBDialect extends Dialect<MongoDBDialectConfig, DocumentQueryR
   /**
    * 构建查询
    */
-  buildQuery<U extends object = any>(params: QueryParams<U>): BuildQueryResult<DocumentQueryResult> {
+  buildQuery<T extends keyof S>(params: QueryParams<S,T>): BuildQueryResult<DocumentQueryResult> {
     switch (params.type) {
       case 'create':
-        return this.buildCreateQuery(params as CreateQueryParams<U>);
+        return this.buildCreateQuery(params as CreateQueryParams<S,T>);
       case 'select':
-        return this.buildSelectQuery(params as SelectQueryParams<U>);
+        return this.buildSelectQuery(params as SelectQueryParams<S,T>);
       case 'insert':
-        return this.buildInsertQuery(params as InsertQueryParams<U>);
+        return this.buildInsertQuery(params as InsertQueryParams<S,T>);
       case 'update':
-        return this.buildUpdateQuery(params as UpdateQueryParams<U>);
+        return this.buildUpdateQuery(params as UpdateQueryParams<S,T>);
       case 'delete':
-        return this.buildDeleteQuery(params as DeleteQueryParams<U>);
+        return this.buildDeleteQuery(params as DeleteQueryParams<S,T>);
       case 'alter':
-        return this.buildAlterQuery(params as AlterQueryParams<U>);
+        return this.buildAlterQuery(params as AlterQueryParams<S,T>);
       case 'drop_table':
-        return this.buildDropTableQuery(params as DropTableQueryParams<U>);
+        return this.buildDropTableQuery(params as DropTableQueryParams<S,T>);
       case 'drop_index':
-        return this.buildDropIndexQuery(params as DropIndexQueryParams);
+        return this.buildDropIndexQuery(params as DropIndexQueryParams<S,T>);
       default:
         throw new Error(`不支持的查询类型: ${(params as any).type}`);
     }
@@ -214,20 +214,20 @@ export class MongoDBDialect extends Dialect<MongoDBDialectConfig, DocumentQueryR
     return `${limit},${offset}`;
   }
 
-  formatCreateTable(tableName: string, columns: string[]): string {
-    return `CREATE TABLE ${tableName} (${columns.join(',')})`;
+  formatCreateTable(tableName: keyof S, columns: string[]): string {
+    return `CREATE TABLE ${String(tableName)} (${columns.join(',')})`;
   }
 
-  formatAlterTable(tableName: string, alterations: string[]): string {
-    return `ALTER TABLE ${tableName} ${alterations.join(',')}`;
+  formatAlterTable(tableName: keyof S, alterations: string[]): string {
+    return `ALTER TABLE ${String(tableName)} ${alterations.join(',')}`;
   }
 
-  formatDropTable(tableName: string, ifExists?: boolean): string {
-    return `DROP TABLE ${tableName} ${ifExists ? 'IF EXISTS' : ''}`;
+  formatDropTable(tableName: keyof S  , ifExists?: boolean): string {
+    return `DROP TABLE ${String(tableName)} ${ifExists ? 'IF EXISTS' : ''}`;
   }
 
-  formatDropIndex(indexName: string, tableName: string, ifExists?: boolean): string {
-    return `DROP INDEX ${indexName} ON ${tableName} ${ifExists ? 'IF EXISTS' : ''}`;
+  formatDropIndex(indexName: string, tableName: keyof S, ifExists?: boolean): string {
+    return `DROP INDEX ${indexName} ON ${String(tableName)} ${ifExists ? 'IF EXISTS' : ''}`;
   } 
 
   quoteIdentifier(identifier: string): string {
@@ -243,10 +243,10 @@ export class MongoDBDialect extends Dialect<MongoDBDialectConfig, DocumentQueryR
   }
 
   // MongoDB 特定的查询构建方法
-  private buildCreateQuery<T extends object>(params: CreateQueryParams<T>): BuildQueryResult<DocumentQueryResult> {
+  private buildCreateQuery<T extends keyof S>(params: CreateQueryParams<S,T>): BuildQueryResult<DocumentQueryResult> {
     return {
       query: {
-        collection: params.tableName,
+        collection: String(params.tableName),
         operation: 'createCollection',
         filter: {},
         projection: {}
@@ -255,7 +255,7 @@ export class MongoDBDialect extends Dialect<MongoDBDialectConfig, DocumentQueryR
     };
   }
 
-  private buildSelectQuery<T extends object>(params: SelectQueryParams<T>): BuildQueryResult<DocumentQueryResult> {
+  private buildSelectQuery<T extends keyof S>(params: SelectQueryParams<S,T>): BuildQueryResult<DocumentQueryResult> {
     const filter: Record<string, any> = {};
     
     // 转换条件为 MongoDB 查询格式
@@ -264,7 +264,7 @@ export class MongoDBDialect extends Dialect<MongoDBDialectConfig, DocumentQueryR
     }
 
     const query: DocumentQueryResult = {
-      collection: params.tableName,
+      collection: String(params.tableName),
       operation: 'find',
       filter
     };
@@ -297,10 +297,10 @@ export class MongoDBDialect extends Dialect<MongoDBDialectConfig, DocumentQueryR
     };
   }
 
-  private buildInsertQuery<T extends object>(params: InsertQueryParams<T>): BuildQueryResult<DocumentQueryResult> {
+  private buildInsertQuery<T extends keyof S>(params: InsertQueryParams<S,T>): BuildQueryResult<DocumentQueryResult> {
     return {
       query: {
-        collection: params.tableName,
+        collection: String(params.tableName),
         operation: 'insertOne',
         filter: {},
         projection: {}
@@ -309,7 +309,7 @@ export class MongoDBDialect extends Dialect<MongoDBDialectConfig, DocumentQueryR
     };
   }
 
-  private buildUpdateQuery<T extends object>(params: UpdateQueryParams<T>): BuildQueryResult<DocumentQueryResult> {
+  private buildUpdateQuery<T extends keyof S>(params: UpdateQueryParams<S,T>): BuildQueryResult<DocumentQueryResult> {
     const filter: Record<string, any> = {};
     
     if (params.conditions) {
@@ -318,7 +318,7 @@ export class MongoDBDialect extends Dialect<MongoDBDialectConfig, DocumentQueryR
 
     return {
       query: {
-        collection: params.tableName,
+        collection: String(params.tableName),
         operation: 'updateMany',
         filter,
         projection: {}
@@ -327,7 +327,7 @@ export class MongoDBDialect extends Dialect<MongoDBDialectConfig, DocumentQueryR
     };
   }
 
-  private buildDeleteQuery<T extends object>(params: DeleteQueryParams<T>): BuildQueryResult<DocumentQueryResult> {
+  private buildDeleteQuery<T extends keyof S>(params: DeleteQueryParams<S,T>): BuildQueryResult<DocumentQueryResult> {
     const filter: Record<string, any> = {};
     
     if (params.conditions) {
@@ -336,7 +336,7 @@ export class MongoDBDialect extends Dialect<MongoDBDialectConfig, DocumentQueryR
 
     return {
       query: {
-        collection: params.tableName,
+        collection: String(params.tableName),
         operation: 'deleteMany',
         filter,
         projection: {}
@@ -345,10 +345,10 @@ export class MongoDBDialect extends Dialect<MongoDBDialectConfig, DocumentQueryR
     };
   }
 
-  private buildAlterQuery<T extends object>(params: AlterQueryParams<T>): BuildQueryResult<DocumentQueryResult> {
+  private buildAlterQuery<T extends keyof S>(params: AlterQueryParams<S,T>): BuildQueryResult<DocumentQueryResult> {
     return {
       query: {
-        collection: params.tableName,
+        collection: String(params.tableName),
         operation: 'createIndex',
         filter: {},
         projection: {}
@@ -357,10 +357,10 @@ export class MongoDBDialect extends Dialect<MongoDBDialectConfig, DocumentQueryR
     };
   }
 
-  private buildDropTableQuery<T extends object>(params: DropTableQueryParams<T>): BuildQueryResult<DocumentQueryResult> {
+  private buildDropTableQuery<T extends keyof S>(params: DropTableQueryParams<S,T>): BuildQueryResult<DocumentQueryResult> {
     return {
       query: {
-        collection: params.tableName,
+        collection: String(params.tableName),
         operation: 'dropCollection',
         filter: {},
         projection: {}
@@ -369,10 +369,10 @@ export class MongoDBDialect extends Dialect<MongoDBDialectConfig, DocumentQueryR
     };
   }
 
-  private buildDropIndexQuery(params: DropIndexQueryParams): BuildQueryResult<DocumentQueryResult> {
+  private buildDropIndexQuery<T extends keyof S>(params: DropIndexQueryParams<S,T>): BuildQueryResult<DocumentQueryResult> {
     return {
       query: {
-        collection: params.tableName,
+        collection: String(params.tableName),
         operation: 'dropIndex',
         filter: {},
         projection: {}
@@ -527,7 +527,9 @@ export class MongoDBDialect extends Dialect<MongoDBDialectConfig, DocumentQueryR
     };
   }
 }
-
-Registry.register('mongodb', (config: MongoDBDialectConfig, definitions?: Database.Definitions<Record<string, object>>) => {
-  return new DocumentDatabase(new MongoDBDialect(config), definitions);
-});
+export class MongoDB<S extends Record<string, object> = Record<string, object>> extends DocumentDatabase<MongoDBDialectConfig, S> {
+  constructor(config: MongoDBDialectConfig, definitions?: Database.DefinitionObj<S>) {
+    super(new MongoDBDialect<S>(config), definitions);
+  }
+}
+Registry.register('mongodb', MongoDB);

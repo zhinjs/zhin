@@ -1,8 +1,7 @@
 import type { ViteDevServer } from "vite";
-import react from "@vitejs/plugin-react";
-import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import fs from "fs";
+
 export interface DevServerOptions {
   /** 客户端代码根目录 */
   root: string;
@@ -21,7 +20,19 @@ export async function createViteDevServer(
   options: DevServerOptions
 ): Promise<ViteDevServer> {
   const { root, base = "/vite/", enableTailwind = true } = options;
-  const { createServer, searchForWorkspaceRoot}= await import('vite')
+  
+  try {
+    // 动态导入所有 Vite 相关依赖（避免提前加载）
+    const [
+      { createServer, searchForWorkspaceRoot },
+      { default: react },
+      { default: tailwindcss }
+    ] = await Promise.all([
+      import('vite'),
+      import('@vitejs/plugin-react'),
+      import('@tailwindcss/vite')
+    ]);
+    
   const plugins = [react()];
   if (enableTailwind) {
     plugins.push(tailwindcss());
@@ -30,7 +41,7 @@ export async function createViteDevServer(
   if (!fs.existsSync(clientPath)) {
     throw new Error('@zhin.js/client not found')
   }
-  return await await createServer({
+    return await createServer({
     root,
     base,
     plugins: [react(), tailwindcss()],
@@ -84,4 +95,13 @@ export async function createViteDevServer(
       },
     },
   });
+  } catch (error) {
+    throw new Error(
+      `Failed to create Vite dev server. ` +
+      `Make sure all development dependencies are installed: ` +
+      `vite, @vitejs/plugin-react, @tailwindcss/vite. ` +
+      `Run: pnpm install --include=optional\n` +
+      `Original error: ${(error as Error).message}`
+    );
+  }
 }

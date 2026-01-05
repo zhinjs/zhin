@@ -4,7 +4,7 @@ import type { KnownEventFromType } from "@slack/bolt";
 import {
   Bot,
   Adapter,
-  registerAdapter,
+  Plugin,
   Message,
   SendOptions,
   SendContent,
@@ -13,13 +13,21 @@ import {
   usePlugin,
 } from "zhin.js";
 
-declare module "@zhin.js/types" {
+// 类型扩展 - 使用 zhin.js 模式
+declare module "zhin.js" {
+  namespace Plugin {
+    interface Contexts {
+      slack: SlackAdapter;
+    }
+  }
+
   interface RegisteredAdapters {
-    slack: Adapter<SlackBot>;
+    slack: SlackAdapter;
   }
 }
 
-export type SlackBotConfig = Bot.Config & {
+// 定义配置接口 (直接定义完整接口)
+export interface SlackBotConfig {
   context: "slack";
   token: string; // Bot User OAuth Token
   name: string;
@@ -37,16 +45,21 @@ export interface SlackBot {
 }
 
 const plugin = usePlugin();
+const { provide, useContext } = plugin;
 
 // Type definitions for Slack message events
 type SlackMessageEvent = KnownEventFromType<"message">;
 
-export class SlackBot implements Bot<SlackMessageEvent, SlackBotConfig> {
-  $connected?: boolean;
+export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
+  $connected: boolean;
   private app: SlackApp;
   private client: WebClient;
 
-  constructor(public $config: SlackBotConfig) {
+  get $id() {
+    return this.$config.name;
+  }
+
+  constructor(public adapter: SlackAdapter, public $config: SlackBotConfig) {
     this.$connected = false;
 
     // Initialize Slack app
@@ -128,11 +141,10 @@ export class SlackBot implements Bot<SlackMessageEvent, SlackBotConfig> {
     }
 
     const message = this.$formatMessage(msg);
-    plugin.dispatch("message.receive", message);
-    plugin.logger.info(
+    this.adapter.emit("message.receive", message);
+    plugin.logger.debug(
       `${this.$config.name} recv  ${message.$channel.type}(${message.$channel.id}): ${segment.raw(message.$content)}`
     );
-    plugin.dispatch(`message.${message.$channel.type}.receive`, message);
   }
 
   $formatMessage(msg: SlackMessageEvent): Message<SlackMessageEvent> {
@@ -379,14 +391,12 @@ export class SlackBot implements Bot<SlackMessageEvent, SlackBotConfig> {
   }
 
   async $sendMessage(options: SendOptions): Promise<string> {
-    options = await plugin.app.handleBeforeSend(options);
-
     try {
       const result = await this.sendContentToChannel(
         options.id,
         options.content
       );
-      plugin.logger.info(
+      plugin.logger.debug(
         `${this.$config.name} send ${options.type}(${options.id}): ${segment.raw(options.content)}`
       );
       return result.ts || "";
@@ -490,7 +500,26 @@ export class SlackBot implements Bot<SlackMessageEvent, SlackBotConfig> {
   }
 }
 
-// Register the adapter
-registerAdapter(
-  new Adapter("slack", (config: any) => new SlackBot(config as SlackBotConfig))
-);
+class SlackAdapter extends Adapter<SlackBot> {
+  constructor(plugin: Plugin) {
+    super(plugin, "slack", []);
+  }
+
+  createBot(config: SlackBotConfig): SlackBot {
+    return new SlackBot(this, config);
+  }
+}
+
+// 使用新的 provide() API 注册适配器
+provide({
+  name: "slack",
+  description: "Slack Bot Adapter",
+  mounted: async (p) => {
+    const adapter = new SlackAdapter(p);
+    await adapter.start();
+    return adapter;
+  },
+  dispose: async (adapter) => {
+    await adapter.stop();
+  },
+});

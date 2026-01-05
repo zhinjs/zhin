@@ -5,7 +5,6 @@ import {
     Bot,
     Adapter,
     Plugin,
-    registerAdapter,
     Message,
     SendOptions,
     SendContent,
@@ -17,10 +16,16 @@ import { EventEmitter } from 'events';
 import { createWriteStream, promises as fs } from 'fs';
 import path from 'path';
 
-// 声明模块，注册 email 适配器类型
-declare module '@zhin.js/types' {
+// 类型扩展 - 使用 zhin.js 模式
+declare module "zhin.js" {
+    namespace Plugin {
+        interface Contexts {
+            email: EmailAdapter;
+        }
+    }
+
     interface RegisteredAdapters {
-        email: Adapter<EmailBot>
+        email: EmailAdapter;
     }
 }
 
@@ -51,7 +56,7 @@ export interface ImapConfig {
 }
 
 // 配置类型定义
-export type EmailBotConfig = Bot.Config & {
+export interface EmailBotConfig {
     context: 'email'
     name: string
     smtp: SmtpConfig
@@ -80,16 +85,21 @@ export interface EmailMessage {
     uid: number
 }
 const plugin = usePlugin();
+const { provide, useContext } = plugin;
+
 // Bot 类实现
-export class EmailBot extends EventEmitter implements Bot<EmailMessage, EmailBotConfig> {
+export class EmailBot extends EventEmitter implements Bot<EmailBotConfig, EmailMessage> {
     $config: EmailBotConfig;
-    
+    $connected: boolean = false;
     private smtpTransporter: nodemailer.Transporter | null = null;
     private imapConnection: Imap | null = null;
     private checkTimer: NodeJS.Timeout | null = null;
-    private isConnected = false;
 
-    constructor(config: EmailBotConfig) {
+    get $id() {
+        return this.$config.name;
+    }
+
+    constructor(public adapter: EmailAdapter, config: EmailBotConfig) {
         super();
         this.$config = config;
         
@@ -141,7 +151,7 @@ export class EmailBot extends EventEmitter implements Bot<EmailMessage, EmailBot
 
             // 开始检查邮件
             this.startEmailCheck();
-            this.isConnected = true;
+            this.$connected = true;
 
         } catch (error) {
             plugin.logger.error('Failed to connect email services:', error);
@@ -150,7 +160,7 @@ export class EmailBot extends EventEmitter implements Bot<EmailMessage, EmailBot
     }
 
     async $disconnect(): Promise<void> {
-        this.isConnected = false;
+        this.$connected = false;
 
         // 停止定时检查
         if (this.checkTimer) {
@@ -202,7 +212,7 @@ export class EmailBot extends EventEmitter implements Bot<EmailMessage, EmailBot
     }
 
     private async checkForNewEmails(): Promise<void> {
-        if (!this.imapConnection || !this.isConnected) return;
+        if (!this.imapConnection || !this.$connected) return;
 
         try {
             await new Promise<void>((resolve, reject) => {
@@ -256,7 +266,7 @@ export class EmailBot extends EventEmitter implements Bot<EmailMessage, EmailBot
                 const parsed = await simpleParser(body);
                 const emailMessage = this.parseEmailMessage(parsed, uid);
                 const formattedMessage = this.$formatMessage(emailMessage);
-                this.emit('message.receive', formattedMessage);
+                this.adapter.emit('message.receive', formattedMessage);
             } catch (error) {
                 plugin.logger.error('Error parsing email:', error);
             }
@@ -483,11 +493,26 @@ export class EmailBot extends EventEmitter implements Bot<EmailMessage, EmailBot
 }
 
 // 创建和注册适配器
-export default class EmailAdapter extends Adapter<EmailBot> {
-    constructor() {
-        super('email', EmailBot);
+class EmailAdapter extends Adapter<EmailBot> {
+    constructor(plugin: Plugin) {
+        super(plugin, 'email', []);
+    }
+
+    createBot(config: EmailBotConfig): EmailBot {
+        return new EmailBot(this, config);
     }
 }
 
-// 注册适配器到全局
-registerAdapter(new EmailAdapter());
+// 使用新的 provide() API 注册适配器
+provide({
+    name: "email",
+    description: "Email Bot Adapter",
+    mounted: async (p) => {
+        const adapter = new EmailAdapter(p);
+        await adapter.start();
+        return adapter;
+    },
+    dispose: async (adapter) => {
+        await adapter.stop();
+    },
+});

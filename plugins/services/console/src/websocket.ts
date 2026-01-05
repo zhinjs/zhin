@@ -1,5 +1,8 @@
 import WebSocket from "ws";
+import { Plugin, usePlugin } from "@zhin.js/core";
 import type { WebServer } from "./index.js";
+
+const { root, logger } = usePlugin();
 
 /**
  * 设置 WebSocket 连接处理
@@ -58,7 +61,7 @@ async function handleWebSocketMessage(
   message: any,
   webServer: WebServer
 ) {
-  const { type, requestId } = message;
+  const { type, requestId, pluginName } = message;
 
   switch (type) {
     case "ping":
@@ -74,6 +77,84 @@ async function handleWebSocketMessage(
           data: Object.values(webServer.entries),
         })
       );
+      break;
+
+    case "config:get":
+      // 获取插件配置
+      try {
+        const configService = root.inject('config')!;
+        const appConfig = configService.get<Record<string, any>>('zhin.config.yml');
+        const config = pluginName ? (appConfig[pluginName] || {}) : appConfig;
+        ws.send(JSON.stringify({ requestId, data: config }));
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: `Failed to get config: ${(error as Error).message}` }));
+      }
+      break;
+
+    case "config:get-all":
+      // 获取所有配置
+      try {
+        const configService = root.inject('config')!;
+        const appConfig = configService.get<Record<string, any>>('zhin.config.yml');
+        ws.send(JSON.stringify({ requestId, data: appConfig }));
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: `Failed to get all configs: ${(error as Error).message}` }));
+      }
+      break;
+
+    case "config:set":
+      // 设置插件配置
+      try {
+        const { data } = message;
+        if (!pluginName) {
+          ws.send(JSON.stringify({ requestId, error: 'Plugin name is required' }));
+          break;
+        }
+        const configService = root.inject('config')!;
+        const appConfig = configService.get<Record<string, any>>('zhin.config.yml');
+        appConfig[pluginName] = data;
+        configService.set('zhin.config.yml', appConfig);
+        ws.send(JSON.stringify({ requestId, success: true }));
+        
+        // 广播配置更新
+        broadcastToAll(webServer, {
+          type: 'config:updated',
+          data: { pluginName, config: data }
+        });
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: `Failed to set config: ${(error as Error).message}` }));
+      }
+      break;
+
+    case "schema:get":
+      // 获取插件 Schema
+      try {
+        const schemaService = root.inject('schema' as any);
+        const schema = pluginName && schemaService ? (schemaService as any).get(pluginName) : null;
+        if (schema) {
+          ws.send(JSON.stringify({ requestId, data: schema.toJSON() }));
+        } else {
+          ws.send(JSON.stringify({ requestId, data: null }));
+        }
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: `Failed to get schema: ${(error as Error).message}` }));
+      }
+      break;
+
+    case "schema:get-all":
+      // 获取所有插件 Schema
+      try {
+        const schemaService = root.inject('schema' as any);
+        const schemas: Record<string, any> = {};
+        if (schemaService) {
+          for (const [name, schema] of (schemaService as any).items.entries()) {
+            schemas[name] = schema.toJSON();
+          }
+        }
+        ws.send(JSON.stringify({ requestId, data: schemas }));
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: `Failed to get all schemas: ${(error as Error).message}` }));
+      }
       break;
 
     default:

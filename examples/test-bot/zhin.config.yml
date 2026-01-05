@@ -1,0 +1,49 @@
+log_level: 1
+database:
+  dialect: sqlite
+  filename: ./data/test.db
+plugin_dirs:
+  - node_modules
+  - ./src/plugins
+services:
+  - process
+  - config
+  - command
+  - component
+  - permission
+  - cron
+plugins:
+  # 本地测试插件
+  - test-plugin
+  - test-jsx
+  - memory-debug
+  - plugin-memory-profiler
+  # 服务插件
+  - "@zhin.js/http"
+  # - "@zhin.js/console"
+  - "@zhin.js/mcp"
+  - "@zhin.js/plugin-github-notify"
+  # 适配器插件
+  - "@zhin.js/adapter-sandbox"
+  # - "@zhin.js/adapter-icqq"      # 需要 QQ 账号配置
+  # - "@zhin.js/adapter-kook"      # 需要 Kook token 配置
+  # - "@zhin.js/adapter-qq"        # 需要 QQ 官方机器人配置
+  # - "@zhin.js/adapter-discord"   # 需要 Discord token 配置
+  # - "@zhin.js/adapter-telegram"  # 需要 Telegram token 配置
+  # - "@zhin.js/adapter-slack"     # 需要 Slack 配置
+  # - "@zhin.js/adapter-email"     # 需要邮箱配置
+  # - "@zhin.js/adapter-onebot11"  # 需要 OneBot 实现端
+  # - "@zhin.js/adapter-dingtalk"  # 需要钉钉配置
+  # - "@zhin.js/adapter-lark"      # 需要飞书配置
+  # - "@zhin.js/adapter-wechat-mp" # 需要微信公众号配置
+  # # 工具插件
+  # - "@zhin.js/plugin-music"
+  # - "@zhin.js/sensitive-filter"
+http:
+  port: 8086
+  username: ${username}
+  password: ${password}
+  base: /api
+console:
+  enabled: true
+  lazyLoad: true  # 延迟加载模式（默认）

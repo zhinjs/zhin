@@ -26,17 +26,9 @@ export const startCommand = new Command('start')
       logger.info('🔍 正在加载环境变量...');
       loadEnvFiles(cwd, 'production');
       
-      // 检查构建产物
-      const distPath = path.join(cwd, 'lib');
-      const sourcePath = path.join(cwd, 'src');
-      const sourceFile = path.join(sourcePath, 'index.ts');
-      const distFile = path.join(distPath, 'index.js');
-      const entryFile = options.bun ? path.relative(cwd,sourceFile) : path.relative(cwd,distFile);
-      
-      if (!fs.existsSync(entryFile)) {
-        logger.error('构建产物不存在，请先运行 zhin build');
-        process.exit(1);
-      }
+      // 新架构: 始终使用 import('zhin.js/setup') 方式启动
+      // 不再依赖 lib/index.js 入口文件
+      const useEval = true;
       
       logger.info('🚀 正在生产模式启动机器人...');
       
@@ -55,16 +47,17 @@ export const startCommand = new Command('start')
             'ignore';
         }
         
-        // 选择运行时
+        // 选择运行时和参数
         const runtime = options.bun ? 'bun' : 'tsx';
-        const args = options.bun ? [entryFile] : ['--expose-gc', entryFile];
-        
-        logger.info(`📦 启动命令: ${runtime} ${args.join(' ')}`);
+        // 使用 -e 参数启动 zhin.js/setup
+        const args = options.bun 
+          ? ['-e', "import('zhin.js/setup')"]
+          : ['--expose-gc', '-e', "import('zhin.js/setup')"];
+        logger.info(`📦 启动命令: ${runtime} -e "import('zhin.js/setup')"`);
         return startProcess(runtime, args, {
           cwd,
           env,
           stdio,
-          shell:true,
           detached: options.daemon,
         });
       };

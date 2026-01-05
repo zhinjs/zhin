@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import {Dialect} from "../base/index.js";
 import {Registry} from "../registry.js";
 import {Database} from "../base/index.js";
-import {Column} from "../types.js";
+import {Column, Transaction, TransactionOptions} from "../types.js";
 import {RelatedDatabase} from "../type/related/database.js";
 import path from 'node:path';
 
@@ -12,7 +12,7 @@ export interface SQLiteDialectConfig {
   mode?:string
 }
 
-export class SQLiteDialect extends Dialect<SQLiteDialectConfig, string> {
+export class SQLiteDialect<S extends Record<string, object> = Record<string, object>> extends Dialect<SQLiteDialectConfig, S, string> {
   private db: any = null;
 
   constructor(config: SQLiteDialectConfig) {
@@ -40,7 +40,18 @@ export class SQLiteDialect extends Dialect<SQLiteDialectConfig, string> {
   }
 
   async disconnect(): Promise<void> {
+    if (this.db) {
+      return new Promise((resolve, reject) => {
+        this.db.close((err: any) => {
+          if (err) {
+            reject(err);
+          } else {
     this.db = null;
+            resolve();
+          }
+        });
+      });
+    }
   }
 
   async healthCheck(): Promise<boolean> {
@@ -65,14 +76,23 @@ export class SQLiteDialect extends Dialect<SQLiteDialectConfig, string> {
           }
         });
       } 
-      // INSERT/UPDATE/DELETE 使用 db.run 执行
-      else if (isInsertQuery || trimmedSql.startsWith('update') || trimmedSql.startsWith('delete')) {
+      // INSERT 使用 db.run 执行，返回 { lastID, changes }
+      else if (isInsertQuery) {
         this.db.run(sql, params, function(this: any, err: any) {
           if (err) {
             reject(err);
           } else {
-            // 返回插入的行 ID 和影响的行数
             resolve({ lastID: this.lastID, changes: this.changes } as U);
+          }
+        });
+      }
+      // UPDATE/DELETE 返回受影响的行数
+      else if (trimmedSql.startsWith('update') || trimmedSql.startsWith('delete')) {
+        this.db.run(sql, params, function(this: any, err: any) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(this.changes as U);
           }
         });
       }
@@ -222,8 +242,8 @@ export class SQLiteDialect extends Dialect<SQLiteDialectConfig, string> {
     return `LIMIT ${limit} OFFSET ${offset}`;
   }
   
-  formatCreateTable(tableName: string, columns: string[]): string {
-    return `CREATE TABLE IF NOT EXISTS ${this.quoteIdentifier(tableName)} (${columns.join(', ')})`;
+  formatCreateTable<T extends keyof S>(tableName: T, columns: string[]): string {
+    return `CREATE TABLE IF NOT EXISTS ${this.quoteIdentifier(String(tableName))} (${columns.join(', ')})`;
   }
   
   formatColumnDefinition(field: string, column: Column<any>): string {
@@ -240,20 +260,58 @@ export class SQLiteDialect extends Dialect<SQLiteDialectConfig, string> {
     return `${name} ${type}${length}${primary}${unique}${nullable}${defaultVal}`;
   }
   
-  formatAlterTable(tableName: string, alterations: string[]): string {
-    return `ALTER TABLE ${this.quoteIdentifier(tableName)} ${alterations.join(', ')}`;
+  formatAlterTable<T extends keyof S>(tableName: T, alterations: string[]): string {
+    return `ALTER TABLE ${this.quoteIdentifier(String(tableName))} ${alterations.join(', ')}`;
   }
   
-  formatDropTable(tableName: string, ifExists?: boolean): string {
+  formatDropTable<T extends keyof S>(tableName: T, ifExists?: boolean): string {
     const ifExistsClause = ifExists ? 'IF EXISTS ' : '';
-    return `DROP TABLE ${ifExistsClause}${this.quoteIdentifier(tableName)}`;
+    return `DROP TABLE ${ifExistsClause}${this.quoteIdentifier(String(tableName))}`;
   }
   
-  formatDropIndex(indexName: string, tableName: string, ifExists?: boolean): string {
+  formatDropIndex<T extends keyof S>(indexName: string, tableName: T, ifExists?: boolean): string {
     const ifExistsClause = ifExists ? 'IF EXISTS ' : '';
     return `DROP INDEX ${ifExistsClause}${this.quoteIdentifier(indexName)}`;
   }
+  
+  // ============================================================================
+  // Transaction Support
+  // ============================================================================
+  
+  /**
+   * SQLite 支持事务
+   */
+  supportsTransactions(): boolean {
+    return true;
+  }
+  
+  /**
+   * 开始事务
+   */
+  async beginTransaction(options?: TransactionOptions): Promise<Transaction> {
+    const dialect = this;
+    
+    // 开始事务
+    await this.query('BEGIN TRANSACTION');
+    
+    return {
+      async commit(): Promise<void> {
+        await dialect.query('COMMIT');
+      },
+      
+      async rollback(): Promise<void> {
+        await dialect.query('ROLLBACK');
+      },
+      
+      async query<T = any>(sql: string, params?: any[]): Promise<T> {
+        return dialect.query<T>(sql, params);
+      }
+    };
+  }
 }
-Registry.register('sqlite', (config: SQLiteDialectConfig, definitions?: Database.Definitions<Record<string, object>>) => {
-  return new RelatedDatabase(new SQLiteDialect(config), definitions);
-});
+export class Sqlite<S extends Record<string, object> = Record<string, object>> extends RelatedDatabase<SQLiteDialectConfig, S> {
+  constructor(config: SQLiteDialectConfig, definitions?: Database.DefinitionObj<S>) {
+    super(new SQLiteDialect<S>(config), definitions);
+  }
+}
+Registry.register('sqlite', Sqlite);

@@ -1,4 +1,4 @@
-import { Database,Dialect } from '../../base/index.js';
+import { Database,Dialect,Model } from '../../base/index.js';
 import { RelatedModel } from './model.js';
 import {
   QueryParams,
@@ -6,25 +6,39 @@ import {
   CreateQueryParams,
   SelectQueryParams,
   InsertQueryParams,
+  InsertManyQueryParams,
   UpdateQueryParams,
   DeleteQueryParams,
   AlterQueryParams,
   DropTableQueryParams,
   DropIndexQueryParams,
+  AggregateQueryParams,
   Condition,
   Column,
   AddDefinition,
   ModifyDefinition,
   DropDefinition,
+  Subquery,
+  JoinClause,
+  RelationsConfig,
   isCreateQuery,
   isSelectQuery,
   isInsertQuery,
+  isInsertManyQuery,
   isUpdateQuery,
   isDeleteQuery,
   isAlterQuery,
   isDropTableQuery,
   isDropIndexQuery,
+  isAggregateQuery,
 } from '../../types.js';
+
+/**
+ * 判断是否为子查询对象
+ */
+function isSubquery(value: any): value is Subquery {
+  return value && typeof value === 'object' && value.__isSubquery === true;
+}
 
 /**
  * 关系型数据库类
@@ -35,11 +49,38 @@ export class RelatedDatabase<
   S extends Record<string, object> = Record<string, object>
 > extends Database<D,S,string> {
   
+  /** 关系配置 */
+  protected relationsConfig?: RelationsConfig<S>;
+  
   constructor(
-    dialect: Dialect<D,string>,
-    definitions?: Database.Definitions<S>,
+    dialect: Dialect<D,S,string>,
+    definitions?: Database.DefinitionObj<S>,
+    relations?: RelationsConfig<S>,
   ) {
     super(dialect,definitions); 
+    this.relationsConfig = relations;
+  }
+  
+  /**
+   * 设置关系配置
+   * @example
+   * ```ts
+   * db.defineRelations({
+   *   users: {
+   *     hasMany: { orders: 'userId' },
+   *     hasOne: { profile: 'userId' }
+   *   },
+   *   orders: {
+   *     belongsTo: { users: 'userId' }
+   *   }
+   * });
+   * ```
+   */
+  defineRelations(config: RelationsConfig<S>): this {
+    this.relationsConfig = config;
+    // 清除模型缓存，以便重新应用关系
+    this.models.clear();
+    return this;
   }
 
   protected async initialize(): Promise<void> {
@@ -50,13 +91,15 @@ export class RelatedDatabase<
   }
 
   // SQL generation method
-  buildQuery<U extends object = any>(params: QueryParams<U>): BuildQueryResult<string> {
+  buildQuery<T extends keyof S>(params: QueryParams<S,T>): BuildQueryResult<string> {
     if (isCreateQuery(params)) {
       return this.buildCreateQuery(params);
     } else if (isSelectQuery(params)) {
       return this.buildSelectQuery(params);
     } else if (isInsertQuery(params)) {
       return this.buildInsertQuery(params);
+    } else if (isInsertManyQuery(params)) {
+      return this.buildInsertManyQuery(params);
     } else if (isUpdateQuery(params)) {
       return this.buildUpdateQuery(params);
     } else if (isDeleteQuery(params)) {
@@ -67,6 +110,8 @@ export class RelatedDatabase<
       return this.buildDropTableQuery(params);
     } else if (isDropIndexQuery(params)) {
       return this.buildDropIndexQuery(params);
+    } else if (isAggregateQuery(params)) {
+      return this.buildAggregateQuery(params);
     } else {
       throw new Error(`Unsupported query type: ${(params as any).type}`);
     }
@@ -76,7 +121,7 @@ export class RelatedDatabase<
   // CREATE TABLE Query
   // ========================================================================
   
-  protected buildCreateQuery<T extends object>(params: CreateQueryParams<T>): BuildQueryResult<string> {
+  protected buildCreateQuery<T extends keyof S>(params: CreateQueryParams<S,T>): BuildQueryResult<string> {
     const columnDefs = Object.entries(params.definition).map(([field, column]) => this.formatColumnDefinition(field,column as Column));
     const query = this.dialect.formatCreateTable(params.tableName, columnDefs);
     return { query, params: [] };
@@ -86,17 +131,33 @@ export class RelatedDatabase<
   // SELECT Query
   // ========================================================================
   
-  protected buildSelectQuery<T extends object>(params: SelectQueryParams<T>): BuildQueryResult<string> {
-    const fields = params.fields && params.fields.length
-      ? params.fields.map(f => this.dialect.quoteIdentifier(String(f))).join(', ')
-      : '*';
+  protected buildSelectQuery<T extends keyof S>(params: SelectQueryParams<S,T>): BuildQueryResult<string> {
+    const tableName = String(params.tableName);
+    const hasJoins = params.joins && params.joins.length > 0;
     
-    let query = `SELECT ${fields} FROM ${this.dialect.quoteIdentifier(params.tableName)}`;
+    // 构建字段列表（有 JOIN 时需要加表名前缀）
+    const fields = params.fields && params.fields.length
+      ? params.fields.map(f => {
+          const fieldName = this.dialect.quoteIdentifier(String(f));
+          return hasJoins 
+            ? `${this.dialect.quoteIdentifier(tableName)}.${fieldName}`
+            : fieldName;
+        }).join(', ')
+      : hasJoins ? `${this.dialect.quoteIdentifier(tableName)}.*` : '*';
+    
+    let query = `SELECT ${fields} FROM ${this.dialect.quoteIdentifier(tableName)}`;
     const queryParams: any[] = [];
+    
+    // JOIN clauses
+    if (hasJoins) {
+      for (const join of params.joins!) {
+        query += ` ${this.formatJoinClause(tableName, join)}`;
+      }
+    }
     
     // WHERE clause
     if (params.conditions) {
-      const [condition, conditionParams] = this.parseCondition(params.conditions);
+      const [condition, conditionParams] = this.parseCondition(params.conditions, hasJoins ? tableName : undefined);
       if (condition) {
         query += ` WHERE ${condition}`;
         queryParams.push(...conditionParams);
@@ -105,14 +166,25 @@ export class RelatedDatabase<
     
     // GROUP BY clause
     if (params.groupings && params.groupings.length) {
-      const groupings = params.groupings.map(f => this.dialect.quoteIdentifier(String(f))).join(', ');
+      const groupings = params.groupings.map(f => {
+        const fieldName = this.dialect.quoteIdentifier(String(f));
+        return hasJoins 
+          ? `${this.dialect.quoteIdentifier(tableName)}.${fieldName}`
+          : fieldName;
+      }).join(', ');
       query += ` GROUP BY ${groupings}`;
     }
     
     // ORDER BY clause
     if (params.orderings && params.orderings.length) {
       const orderings = params.orderings
-        .map(o => `${this.dialect.quoteIdentifier(String(o.field))} ${o.direction}`)
+        .map(o => {
+          const fieldName = this.dialect.quoteIdentifier(String(o.field));
+          const fullField = hasJoins 
+            ? `${this.dialect.quoteIdentifier(tableName)}.${fieldName}`
+            : fieldName;
+          return `${fullField} ${o.direction}`;
+        })
         .join(', ');
       query += ` ORDER BY ${orderings}`;
     }
@@ -129,26 +201,73 @@ export class RelatedDatabase<
     return { query, params: queryParams };
   }
   
+  /**
+   * 格式化 JOIN 子句
+   */
+  protected formatJoinClause<T extends keyof S>(
+    mainTable: string, 
+    join: JoinClause<S, T, keyof S>
+  ): string {
+    const joinTable = this.dialect.quoteIdentifier(String(join.table));
+    const leftField = `${this.dialect.quoteIdentifier(mainTable)}.${this.dialect.quoteIdentifier(String(join.leftField))}`;
+    const rightField = `${joinTable}.${this.dialect.quoteIdentifier(String(join.rightField))}`;
+    
+    return `${join.type} JOIN ${joinTable} ON ${leftField} = ${rightField}`;
+  }
+  
   // ========================================================================
   // INSERT Query
   // ========================================================================
   
-  protected buildInsertQuery<T extends object>(params: InsertQueryParams<T>): BuildQueryResult<string> {
+  protected buildInsertQuery<T extends keyof S>(params: InsertQueryParams<S,T>): BuildQueryResult<string> {
     const keys = Object.keys(params.data);
     const columns = keys.map(k => this.dialect.quoteIdentifier(k)).join(', ');
     const placeholders = keys.map((_, index) => this.dialect.getParameterPlaceholder(index)).join(', ');
     
     const query = `INSERT INTO ${this.dialect.quoteIdentifier(params.tableName)} (${columns}) VALUES (${placeholders})`;
-    const values = Object.values(params.data).map(v => this.dialect.formatDefaultValue(v));
+    // 直接传值，不要格式化（参数化查询由驱动处理）
+    const values = Object.values(params.data);
     
     return { query, params: values };
+  }
+  
+  // ========================================================================
+  // INSERT MANY Query (Batch Insert)
+  // ========================================================================
+  
+  protected buildInsertManyQuery<T extends keyof S>(params: InsertManyQueryParams<S,T>): BuildQueryResult<string> {
+    if (!params.data.length) {
+      throw new Error('Cannot insert empty array');
+    }
+    
+    const keys = Object.keys(params.data[0]);
+    const columns = keys.map(k => this.dialect.quoteIdentifier(k)).join(', ');
+    
+    const allValues: any[] = [];
+    const valueRows: string[] = [];
+    
+    params.data.forEach((row, rowIndex) => {
+      const placeholders = keys.map((_, colIndex) => 
+        this.dialect.getParameterPlaceholder(rowIndex * keys.length + colIndex)
+      ).join(', ');
+      valueRows.push(`(${placeholders})`);
+      
+      keys.forEach(key => {
+        // 直接传值，不要格式化（参数化查询由驱动处理）
+        allValues.push((row as any)[key]);
+      });
+    });
+    
+    const query = `INSERT INTO ${this.dialect.quoteIdentifier(params.tableName)} (${columns}) VALUES ${valueRows.join(', ')}`;
+    
+    return { query, params: allValues };
   }
   
   // ========================================================================
   // UPDATE Query
   // ========================================================================
   
-  protected buildUpdateQuery<T extends object>(params: UpdateQueryParams<T>): BuildQueryResult<string> {
+  protected buildUpdateQuery<T extends keyof S>(params: UpdateQueryParams<S,T>): BuildQueryResult<string> {
     const updateKeys = Object.keys(params.update);
     const setClause = updateKeys
       .map((k, index) => `${this.dialect.quoteIdentifier(k)} = ${this.dialect.getParameterPlaceholder(index)}`)
@@ -173,7 +292,7 @@ export class RelatedDatabase<
   // DELETE Query
   // ========================================================================
   
-  protected buildDeleteQuery<T extends object>(params: DeleteQueryParams<T>): BuildQueryResult<string> {
+  protected buildDeleteQuery<T extends keyof S>(params: DeleteQueryParams<S,T>): BuildQueryResult<string> {
     let query = `DELETE FROM ${this.dialect.quoteIdentifier(params.tableName)}`;
     const queryParams: any[] = [];
     
@@ -193,7 +312,7 @@ export class RelatedDatabase<
   // ALTER TABLE Query
   // ========================================================================
   
-  protected buildAlterQuery<T extends object>(params: AlterQueryParams<T>): BuildQueryResult<string> {
+  protected buildAlterQuery<T extends keyof S>(params: AlterQueryParams<S,T>): BuildQueryResult<string> {
     const alterations = Object.entries(params.alterations).map(([field,alteration]) => this.formatAlteration(field, alteration as AddDefinition<T> | ModifyDefinition<T> | DropDefinition));
     const query = this.dialect.formatAlterTable(params.tableName, alterations);
     return { query, params: [] };
@@ -203,7 +322,7 @@ export class RelatedDatabase<
   // DROP TABLE Query
   // ========================================================================
   
-  protected buildDropTableQuery<T extends object>(params: DropTableQueryParams<T>): BuildQueryResult<string> {
+  protected buildDropTableQuery<T extends keyof S>(params: DropTableQueryParams<S,T>): BuildQueryResult<string> {
     const query = this.dialect.formatDropTable(params.tableName, true);
     return { query, params: [] };
   }
@@ -212,9 +331,63 @@ export class RelatedDatabase<
   // DROP INDEX Query
   // ========================================================================
   
-  protected buildDropIndexQuery(params: DropIndexQueryParams): BuildQueryResult<string> {
+  protected buildDropIndexQuery<T extends keyof S>(params: DropIndexQueryParams<S,T>): BuildQueryResult<string> {
     const query = this.dialect.formatDropIndex(params.indexName, params.tableName, true);
     return { query, params: [] };
+  }
+  
+  // ========================================================================
+  // AGGREGATE Query
+  // ========================================================================
+  
+  protected buildAggregateQuery<T extends keyof S>(params: AggregateQueryParams<S,T>): BuildQueryResult<string> {
+    if (!params.aggregates.length) {
+      throw new Error('At least one aggregate function is required');
+    }
+    
+    // Build SELECT fields with aggregate functions
+    const selectFields: string[] = [];
+    
+    // Add grouping fields to select
+    if (params.groupings && params.groupings.length) {
+      params.groupings.forEach(field => {
+        selectFields.push(this.dialect.quoteIdentifier(String(field)));
+      });
+    }
+    
+    // Add aggregate functions
+    params.aggregates.forEach(agg => {
+      selectFields.push(this.dialect.formatAggregate(agg.fn, String(agg.field), agg.alias));
+    });
+    
+    let query = `SELECT ${selectFields.join(', ')} FROM ${this.dialect.quoteIdentifier(params.tableName)}`;
+    const queryParams: any[] = [];
+    
+    // WHERE clause
+    if (params.conditions) {
+      const [condition, conditionParams] = this.parseCondition(params.conditions);
+      if (condition) {
+        query += ` WHERE ${condition}`;
+        queryParams.push(...conditionParams);
+      }
+    }
+    
+    // GROUP BY clause
+    if (params.groupings && params.groupings.length) {
+      const groupings = params.groupings.map(f => this.dialect.quoteIdentifier(String(f))).join(', ');
+      query += ` GROUP BY ${groupings}`;
+    }
+    
+    // HAVING clause
+    if (params.havingConditions && Object.keys(params.havingConditions).length) {
+      const [havingCondition, havingParams] = this.parseCondition(params.havingConditions);
+      if (havingCondition) {
+        query += ` HAVING ${havingCondition}`;
+        queryParams.push(...havingParams);
+      }
+    }
+    
+    return { query, params: queryParams };
   }
   
   // ========================================================================
@@ -266,15 +439,28 @@ export class RelatedDatabase<
     }
   }
   
-  protected parseCondition<T extends object>(condition: Condition<T>): [string, any[]] {
+  /**
+   * 解析条件对象为 SQL WHERE 子句
+   * @param condition 条件对象
+   * @param tablePrefix 表名前缀（用于 JOIN 查询）
+   */
+  protected parseCondition<T extends object>(condition: Condition<T>, tablePrefix?: string): [string, any[]] {
     const clauses: string[] = [];
     const params: any[] = [];
+    
+    // 辅助函数：生成带前缀的字段名
+    const formatField = (field: string): string => {
+      const quotedField = this.dialect.quoteIdentifier(field);
+      return tablePrefix 
+        ? `${this.dialect.quoteIdentifier(tablePrefix)}.${quotedField}`
+        : quotedField;
+    };
 
     for (const key in condition) {
       if (key === '$and' && Array.isArray((condition as any).$and)) {
         const subClauses: string[] = [];
         for (const subCondition of (condition as any).$and) {
-          const [subClause, subParams] = this.parseCondition(subCondition);
+          const [subClause, subParams] = this.parseCondition(subCondition, tablePrefix);
           if (subClause) {
             subClauses.push(`(${subClause})`);
             params.push(...subParams);
@@ -286,7 +472,7 @@ export class RelatedDatabase<
       } else if (key === '$or' && Array.isArray((condition as any).$or)) {
         const subClauses: string[] = [];
         for (const subCondition of (condition as any).$or) {
-          const [subClause, subParams] = this.parseCondition(subCondition);
+          const [subClause, subParams] = this.parseCondition(subCondition, tablePrefix);
           if (subClause) {
             subClauses.push(`(${subClause})`);
             params.push(...subParams);
@@ -296,7 +482,7 @@ export class RelatedDatabase<
           clauses.push(subClauses.join(' OR '));
         }
       } else if (key === '$not' && (condition as any).$not) {
-        const [subClause, subParams] = this.parseCondition((condition as any).$not);
+        const [subClause, subParams] = this.parseCondition((condition as any).$not, tablePrefix);
         if (subClause) {
           clauses.push(`NOT (${subClause})`);
           params.push(...subParams);
@@ -305,17 +491,25 @@ export class RelatedDatabase<
         const value = (condition as any)[key];
         if (value && typeof value === 'object' && !Array.isArray(value)) {
           for (const op in value) {
-            const quotedKey = this.dialect.quoteIdentifier(key);
+            const quotedKey = formatField(key);
             const placeholder = this.dialect.getParameterPlaceholder(params.length);
             
             switch (op) {
               case '$eq':
+                if (value[op] === null) {
+                  clauses.push(`${quotedKey} IS NULL`);
+                } else {
                 clauses.push(`${quotedKey} = ${placeholder}`);
                 params.push(value[op]);
+                }
                 break;
               case '$ne':
+                if (value[op] === null) {
+                  clauses.push(`${quotedKey} IS NOT NULL`);
+                } else {
                 clauses.push(`${quotedKey} <> ${placeholder}`);
                 params.push(value[op]);
+                }
                 break;
               case '$gt':
                 clauses.push(`${quotedKey} > ${placeholder}`);
@@ -334,8 +528,13 @@ export class RelatedDatabase<
                 params.push(value[op]);
                 break;
               case '$in':
-                if (Array.isArray(value[op]) && value[op].length) {
-                  const placeholders = value[op].map(() => this.dialect.getParameterPlaceholder(params.length + value[op].indexOf(value[op])));
+                if (isSubquery(value[op])) {
+                  // 子查询
+                  const subquery = value[op].toSQL();
+                  clauses.push(`${quotedKey} IN (${subquery.sql})`);
+                  params.push(...subquery.params);
+                } else if (Array.isArray(value[op]) && value[op].length) {
+                  const placeholders = value[op].map((_: any, i: number) => this.dialect.getParameterPlaceholder(params.length + i));
                   clauses.push(`${quotedKey} IN (${placeholders.join(', ')})`);
                   params.push(...value[op]);
                 } else {
@@ -343,8 +542,13 @@ export class RelatedDatabase<
                 }
                 break;
               case '$nin':
-                if (Array.isArray(value[op]) && value[op].length) {
-                  const placeholders = value[op].map(() => this.dialect.getParameterPlaceholder(params.length + value[op].indexOf(value[op])));
+                if (isSubquery(value[op])) {
+                  // 子查询
+                  const subquery = value[op].toSQL();
+                  clauses.push(`${quotedKey} NOT IN (${subquery.sql})`);
+                  params.push(...subquery.params);
+                } else if (Array.isArray(value[op]) && value[op].length) {
+                  const placeholders = value[op].map((_: any, i: number) => this.dialect.getParameterPlaceholder(params.length + i));
                   clauses.push(`${quotedKey} NOT IN (${placeholders.join(', ')})`);
                   params.push(...value[op]);
                 }
@@ -360,10 +564,15 @@ export class RelatedDatabase<
             }
           }
         } else {
-          const quotedKey = this.dialect.quoteIdentifier(key);
+          const quotedKey = formatField(key);
+          // null 值使用 IS NULL / IS NOT NULL
+          if (value === null) {
+            clauses.push(`${quotedKey} IS NULL`);
+          } else {
           const placeholder = this.dialect.getParameterPlaceholder(params.length);
           clauses.push(`${quotedKey} = ${placeholder}`);
           params.push(value);
+          }
         }
       }
     }
@@ -373,14 +582,80 @@ export class RelatedDatabase<
 
   /**
    * 获取模型
+   * @param name 模型名称
+   * @param options 可选的模型选项（如 softDelete, timestamps）
    */
-  model<T extends keyof S>(name: T): RelatedModel<S[T], Dialect<D,string>> {
-    let model = this.models.get(name as string);
-    if (!model) {
-      model = new RelatedModel(this as unknown as RelatedDatabase<D>, name as string);
-      this.models.set(name as string, model);
+  model<T extends keyof S>(name: T, options?: import('../../types.js').ModelOptions): RelatedModel<D,S,T> {
+    // 如果有 options，每次都创建新的实例（因为选项可能不同）
+    if (options) {
+      const model = new RelatedModel(this, name, options);
+      this.applyRelationsToModel(model, name);
+      return model;
     }
-    return model as unknown as RelatedModel<S[T], Dialect<D,string>>;
+    // 无选项时使用缓存
+    let model = this.models.get(name) as RelatedModel<D,S,T> | undefined;
+    if (!model) {
+      model = new RelatedModel(this, name);
+      this.applyRelationsToModel(model, name);
+      this.models.set(name, model as any);
+    }
+    return model as RelatedModel<D,S,T>;
+  }
+  
+  /**
+   * 应用关系配置到模型
+   */
+  private applyRelationsToModel<T extends keyof S>(model: RelatedModel<D, S, T>, tableName: T): void {
+    const tableConfig = this.relationsConfig?.[String(tableName) as Extract<keyof S, string>];
+    if (!tableConfig) return;
+    
+    // 应用 hasMany 关系
+    if (tableConfig.hasMany) {
+      for (const [target, foreignKey] of Object.entries(tableConfig.hasMany)) {
+        if (foreignKey) {
+          const targetModel = new RelatedModel(this, target as keyof S);
+          model.hasMany(targetModel as any, foreignKey as any);
+        }
+      }
+    }
+    
+    // 应用 hasOne 关系
+    if (tableConfig.hasOne) {
+      for (const [target, foreignKey] of Object.entries(tableConfig.hasOne)) {
+        if (foreignKey) {
+          const targetModel = new RelatedModel(this, target as keyof S);
+          model.hasOne(targetModel as any, foreignKey as any);
+        }
+      }
+    }
+    
+    // 应用 belongsTo 关系
+    if (tableConfig.belongsTo) {
+      for (const [target, foreignKey] of Object.entries(tableConfig.belongsTo)) {
+        if (foreignKey) {
+          const targetModel = new RelatedModel(this, target as keyof S);
+          model.belongsTo(targetModel as any, foreignKey as any);
+        }
+      }
+    }
+    
+    // 应用 belongsToMany 关系
+    if (tableConfig.belongsToMany) {
+      for (const [target, config] of Object.entries(tableConfig.belongsToMany)) {
+        if (config) {
+          const targetModel = new RelatedModel(this, target as keyof S);
+          model.belongsToMany(
+            targetModel as any,
+            config.pivot,
+            config.foreignKey,
+            config.relatedKey,
+            'id' as any,
+            'id' as any,
+            config.pivotFields
+          );
+        }
+      }
+    }
   }
 
   /**

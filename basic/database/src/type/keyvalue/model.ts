@@ -6,10 +6,10 @@ import { KeyValueQueryResult } from '../../types.js';
  * 键值模型类
  * 继承自 Model，提供键值数据库特有的操作
  */
-export class KeyValueModel<T extends object = object, D=any> extends Model<D, T, KeyValueQueryResult> {
+export class KeyValueModel<D=any, S extends Record<string, object> = Record<string, object>, T extends keyof S = keyof S> extends Model<D, S, KeyValueQueryResult, T> {
   constructor(
-    database: KeyValueDatabase<D>,
-    name: string
+    database: KeyValueDatabase<D, S>,
+    name: T
   ) {
     super(database, name);
   }
@@ -20,7 +20,7 @@ export class KeyValueModel<T extends object = object, D=any> extends Model<D, T,
   async set(key: string, value: any, ttl?: number): Promise<void> {
     await this.dialect.query({
       operation: 'set',
-      bucket: this.name,
+      bucket: this.name as string,
       key,
       value,
       ttl,
@@ -34,7 +34,7 @@ export class KeyValueModel<T extends object = object, D=any> extends Model<D, T,
     const results = await this.dialect.query(
       {
         operation: 'get',
-        bucket: this.name,
+        bucket: this.name as string,
         key,
       },
       [key]
@@ -62,7 +62,7 @@ export class KeyValueModel<T extends object = object, D=any> extends Model<D, T,
     const result = await this.dialect.query(
       {
         operation: 'delete',
-        bucket: this.name,
+        bucket: this.name as string,
         key,
       },
       [key]
@@ -77,7 +77,7 @@ export class KeyValueModel<T extends object = object, D=any> extends Model<D, T,
     const results = await this.dialect.query(
       {
         operation: 'has',
-        bucket: this.name,
+        bucket: this.name as string,
         key,
       },
       [key, Date.now()]
@@ -92,7 +92,7 @@ export class KeyValueModel<T extends object = object, D=any> extends Model<D, T,
     const results = await this.dialect.query(
       {
         operation: 'keys',
-        bucket: this.name,
+        bucket: this.name as string,
       },
       [Date.now()]
     );
@@ -106,7 +106,7 @@ export class KeyValueModel<T extends object = object, D=any> extends Model<D, T,
     const results = await this.dialect.query(
       {
         operation: 'values',
-        bucket: this.name,
+        bucket: this.name as string,
       },
       [Date.now()]
     );
@@ -120,7 +120,7 @@ export class KeyValueModel<T extends object = object, D=any> extends Model<D, T,
     const results = await this.dialect.query(
       {
         operation: 'entries',
-        bucket: this.name,
+        bucket: this.name as string,
       },
       [Date.now()]
     );
@@ -133,7 +133,7 @@ export class KeyValueModel<T extends object = object, D=any> extends Model<D, T,
   async clear(): Promise<void> {
     await this.dialect.query({
       operation: 'clear',
-      bucket: this.name,
+      bucket: this.name as string,
     });
   }
 
@@ -144,7 +144,7 @@ export class KeyValueModel<T extends object = object, D=any> extends Model<D, T,
     const results = await this.dialect.query(
       {
         operation: 'size',
-        bucket: this.name,
+        bucket: this.name as string,
       },
       [Date.now()]
     );
@@ -161,7 +161,7 @@ export class KeyValueModel<T extends object = object, D=any> extends Model<D, T,
       await this.dialect.query(
         {
           operation: 'set',
-          bucket: this.name,
+          bucket: this.name as string,
           key,
           value,
           ttl,
@@ -179,7 +179,7 @@ export class KeyValueModel<T extends object = object, D=any> extends Model<D, T,
     const result = await this.dialect.query(
       {
         operation: 'expire',
-        bucket: this.name,
+        bucket: this.name as string,
         key,
         ttl,
       },
@@ -195,7 +195,7 @@ export class KeyValueModel<T extends object = object, D=any> extends Model<D, T,
     const results = await this.dialect.query(
       {
         operation: 'ttl',
-        bucket: this.name,
+        bucket: this.name as string,
         key,
       },
       [key]
@@ -221,7 +221,7 @@ export class KeyValueModel<T extends object = object, D=any> extends Model<D, T,
     const result = await this.dialect.query(
       {
         operation: 'persist',
-        bucket: this.name,
+        bucket: this.name as string,
         key,
       },
       [key]
@@ -236,7 +236,7 @@ export class KeyValueModel<T extends object = object, D=any> extends Model<D, T,
     const result = await this.dialect.query(
       {
         operation: 'cleanup',
-        bucket: this.name,
+        bucket: this.name as string,
       },
       [Date.now()]
     );
@@ -252,7 +252,7 @@ export class KeyValueModel<T extends object = object, D=any> extends Model<D, T,
     const results = await this.dialect.query(
       {
         operation: 'keysByPattern',
-        bucket: this.name,
+        bucket: this.name as string,
         pattern: sqlPattern,
       },
       [sqlPattern, Date.now()]

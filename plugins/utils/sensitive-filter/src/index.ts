@@ -1,11 +1,6 @@
 import {
   usePlugin,
-  useLogger,
-  defineModel,
-  onDatabaseReady,
   segment,
-  defineSchema,
-  Schema,
 } from "zhin.js";
 import type { SendOptions } from "zhin.js";
 import {
@@ -13,47 +8,37 @@ import {
   createSensitiveWordRegex,
 } from "./sensitive-words.js";
 
-const logger = useLogger();
 const plugin = usePlugin();
-const schema = defineSchema(
-  Schema.object({
-    political: Schema.boolean("political")
-      .default(true)
-      .description("启用政治类敏感词过滤"),
-    violence: Schema.boolean("violence")
-      .default(true)
-      .description("启用暴力类敏感词过滤"),
-    porn: Schema.boolean("porn")
-      .default(true)
-      .description("启用色情类敏感词过滤"),
-    prohibited: Schema.boolean("prohibited")
-      .default(true)
-      .description("启用禁用类敏感词过滤"),
-    fraud: Schema.boolean("fraud")
-      .default(true)
-      .description("启用诈骗类敏感词过滤"),
-    illegal: Schema.boolean("illegal")
-      .default(true)
-      .description("启用违法类敏感词过滤"),
-    custom: Schema.list(Schema.string()).default([]).description("自定义敏感词"),
-    replacement: Schema.string("replacement")
-      .default("*")
-      .description("替换字符"),
-    block: Schema.boolean("block").default(false).description("是否拦截消息"),
-  }).default({
-    political: true,
-    violence: true, 
-    porn: true,
-    prohibited: true,
-    fraud: true,
-    illegal: true,
-    custom: [],
-    replacement: "*",
-    block: false,
-  })
-);
-// 插件配置
-const config = schema(plugin.config, "sensitive-filter");
+const { root, logger } = plugin;
+
+// 敏感词过滤配置接口
+export interface SensitiveFilterConfig {
+  political?: boolean;
+  violence?: boolean;
+  porn?: boolean;
+  prohibited?: boolean;
+  fraud?: boolean;
+  illegal?: boolean;
+  custom?: string[];
+  replacement?: string;
+  block?: boolean;
+}
+
+// 获取配置
+const configService = root.inject("config");
+const appConfig = configService?.get<{ "sensitive-filter"?: SensitiveFilterConfig }>("zhin.config.yml") ?? {};
+const config: SensitiveFilterConfig = {
+  political: true,
+  violence: true,
+  porn: true,
+  prohibited: true,
+  fraud: true,
+  illegal: true,
+  custom: [],
+  replacement: "*",
+  block: false,
+  ...appConfig["sensitive-filter"],
+};
 
 /**
  * 检测文本中的敏感词
@@ -136,8 +121,9 @@ function filterContent(
 // 初始化敏感词过滤
 const sensitiveWords = getEnabledWords(config);
 const sensitiveRegex = createSensitiveWordRegex(sensitiveWords);
-plugin.beforeSend(async (options: SendOptions) => {
-    
+
+// 注册发送前过滤器
+plugin.on('before.sendMessage', async (options: SendOptions) => {
     const { content } = options;
 
     // 如果内容为空，直接返回
@@ -182,5 +168,5 @@ plugin.beforeSend(async (options: SendOptions) => {
     };
   });
 
-  logger.info("敏感词过滤功能已启用");
+logger.info("敏感词过滤功能已启用");
 logger.info(`敏感词过滤插件已加载，共 ${sensitiveWords.length} 个敏感词`);

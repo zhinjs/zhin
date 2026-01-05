@@ -1,22 +1,20 @@
 import {MatchResult, SegmentMatcher} from "segment-matcher";
 import {AdapterMessage, SendContent} from "./types.js";
-import {RegisteredAdapters} from "@zhin.js/types";
+import {RegisteredAdapter} from "./types.js";
 import type {Message} from "./message.js";
-import {MaybePromise} from "@zhin.js/types";
-import { ZhinError } from "./errors.js";
-import { App } from "./app.js";
+import {MaybePromise} from "./types.js";
+import {Plugin} from "./plugin.js";
 
 /**
  * MessageCommand类：命令系统核心，基于segment-matcher实现。
  * 支持多平台命令注册、作用域限制、参数解析、异步处理等。
  */
-export class MessageCommand<T extends keyof RegisteredAdapters=keyof RegisteredAdapters> extends SegmentMatcher{
+export class MessageCommand<T extends RegisteredAdapter=RegisteredAdapter> extends SegmentMatcher{
     #callbacks:MessageCommand.Callback<T>[]=[];
     #desc:string[]=[];
     #usage:string[]=[];
     #examples:string[]=[];
     #permissions:string[]=[];
-    #checkers:MessageCommand.Checker<T>[]=[]
     get helpInfo():MessageCommand.HelpInfo{
         return {
             pattern: this.pattern,
@@ -63,18 +61,11 @@ export class MessageCommand<T extends keyof RegisteredAdapters=keyof RegisteredA
      * @param plugin 插件实例
      * @returns 命令返回内容或undefined
      */
-    async handle(message:Message<AdapterMessage<T>>,app:App):Promise<SendContent|undefined>{
-        for(const permission of this.#permissions){
-            const permit=app.permissions.get(permission)
-            if(!permit) {
-                throw new ZhinError(`权限 ${permission} 不存在`)
-            }
-            const result=await permit.check(permission,message)
-            if(!result) return;
-        }
-        for(const check of this.#checkers){
-            const result=await check(message)
-            if(!result) return;
+    async handle(message:Message<AdapterMessage<T>>,plugin:Plugin):Promise<SendContent|undefined>{
+        const auth = plugin.contextIsReady('permission') ? plugin.inject('permission') : null
+        for(const permit of this.#permissions){
+            const passed=await auth?.check(permit,message)
+            if(!passed) return;
         }
         const matched=this.match(message.$content);
         if(!matched) return
@@ -85,8 +76,8 @@ export class MessageCommand<T extends keyof RegisteredAdapters=keyof RegisteredA
     }
 }
 export namespace MessageCommand{
-    export type Callback<T extends keyof RegisteredAdapters>=(message:Message<AdapterMessage<T>>,result:MatchResult)=>SendContent|undefined|Promise<SendContent|undefined>;
-    export type Checker<T extends keyof RegisteredAdapters>=(message:Message<AdapterMessage<T>>)=>MaybePromise<boolean>
+    export type Callback<T extends RegisteredAdapter>=(message:Message<AdapterMessage<T>>,result:MatchResult)=>SendContent|undefined|Promise<SendContent|undefined>;
+    export type Checker<T extends RegisteredAdapter>=(message:Message<AdapterMessage<T>>)=>MaybePromise<boolean>
     export type HelpInfo={
         pattern:string;
         desc:string[];

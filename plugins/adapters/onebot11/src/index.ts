@@ -6,28 +6,36 @@ import {
   Adapter,
   usePlugin,
   Message,
-  registerAdapter,
   MessageSegment,
   SendOptions,
-  segment, useContext, SendContent
+  segment,
+  SendContent
 } from 'zhin.js';
 import type { Router } from '@zhin.js/http'
 import { IncomingMessage } from "http";
 import { clearInterval } from "node:timers";
 
-// 声明模块，注册 onebot11 适配器类型
-declare module '@zhin.js/types' {
+// 类型扩展 - 使用 zhin.js 模式
+declare module 'zhin.js' {
+  namespace Plugin {
+    interface Contexts {
+      'onebot11': OneBot11Adapter;
+      'onebot11.wss': OneBot11WssAdapter;
+    }
+  }
+
   interface RegisteredAdapters {
-    'onebot11': Adapter<OneBot11WsClient>
-    'onebot11.wss': Adapter<OneBot11WsServer>
+    'onebot11': OneBot11Adapter;
+    'onebot11.wss': OneBot11WssAdapter;
   }
 }
 // ============================================================================
 // OneBot11 配置和类型
 // ============================================================================
 
-export interface OneBot11Config extends Bot.Config {
+export interface OneBot11Config {
   context: 'onebot11';
+  name: string;
   type: string
   access_token?: string;
 }
@@ -70,13 +78,15 @@ interface ApiResponse<T = any> {
   data: T;
   echo?: string;
 }
-const plugin =usePlugin()
+const plugin = usePlugin();
+const { provide, useContext } = plugin;
+
 // ============================================================================
 // OneBot11 适配器实现
 // ============================================================================
 
-export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11Message, OneBot11WsClientConfig> {
-  $connected?: boolean
+export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11WsClientConfig, OneBot11Message> {
+  $connected: boolean
   private ws?: WebSocket;
   private reconnectTimer?: NodeJS.Timeout;
   private heartbeatTimer?: NodeJS.Timeout;
@@ -87,9 +97,13 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11Messag
     timeout: NodeJS.Timeout;
   }>();
 
-  constructor(public $config: OneBot11WsClientConfig) {
+  constructor(public adapter: OneBot11Adapter, public $config: OneBot11WsClientConfig) {
     super();
     this.$connected = false
+  }
+
+  get $id() {
+    return this.$config.name;
   }
 
 
@@ -188,7 +202,6 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11Messag
   }
 
   async $sendMessage(options: SendOptions): Promise<string> {
-    options = await plugin.app.handleBeforeSend(options)
     const messageData: any = {
       message: options.content
     };
@@ -197,14 +210,14 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11Messag
         group_id: parseInt(options.id),
         ...messageData
       });
-      plugin.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+      plugin.logger.debug(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
       return result.message_id.toString();
     } else if (options.type === 'private') {
       const result = await this.callApi('send_private_msg', {
         user_id: parseInt(options.id),
         ...messageData
       });
-      plugin.logger.info(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
+      plugin.logger.debug(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`)
       return result.message_id.toString();
     } else {
       throw new Error('Either group_id or user_id must be provided');
@@ -263,9 +276,8 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11Messag
 
   private handleOneBot11Message(onebotMsg: OneBot11Message): void {
     const message = this.$formatMessage(onebotMsg);
-    plugin.dispatch('message.receive', message)
-    plugin.logger.info(`${this.$config.name} recv  ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`)
-    plugin.dispatch(`message.${message.$channel.type}.receive`, message)
+    this.adapter.emit('message.receive', message);
+    plugin.logger.debug(`${this.$config.name} recv  ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`);
   }
 
   private startHeartbeat(): void {
@@ -294,8 +306,8 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11Messag
     }, interval);
   }
 }
-export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11Message, OneBot11WsServerConfig> {
-  $connected?: boolean
+export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11WsServerConfig, OneBot11Message> {
+  $connected: boolean
   #wss?: WebSocketServer
   #clientMap: Map<string, WebSocket> = new Map<string, WebSocket>()
   private heartbeatTimer?: NodeJS.Timeout;
@@ -306,7 +318,11 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11Messag
     timeout: NodeJS.Timeout;
   }>();
 
-  constructor(public router: Router, public $config: OneBot11WsServerConfig) {
+  get $id() {
+    return this.$config.name;
+  }
+
+  constructor(public adapter: OneBot11WssAdapter, public router: Router, public $config: OneBot11WsServerConfig) {
     super();
     this.$connected = false
   }
@@ -391,7 +407,6 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11Messag
   }
 
   async $sendMessage(options: SendOptions): Promise<string> {
-    options = await plugin.app.handleBeforeSend(options)
     const messageData: any = {
       message: options.content
     };
@@ -401,7 +416,7 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11Messag
         group_id: parseInt(id),
         ...messageData
       });
-      plugin.logger.info(`${this.$config.name} send ${options.type}(${id}):${segment.raw(options.content)}`)
+      plugin.logger.debug(`${this.$config.name} send ${options.type}(${id}):${segment.raw(options.content)}`)
       return result.message_id.toString();
     } else if (options.type === 'private') {
       const [self_id, id] = options.id.split(':')
@@ -409,7 +424,7 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11Messag
         user_id: parseInt(id),
         ...messageData
       });
-      plugin.logger.info(`${this.$config.name} send ${options.type}(${id}):${segment.raw(options.content)}`)
+      plugin.logger.debug(`${this.$config.name} send ${options.type}(${id}):${segment.raw(options.content)}`)
       return result.message_id.toString();
     } else {
       throw new Error('Either group_id or user_id must be provided');
@@ -483,9 +498,8 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11Messag
   }
   private handleMessage(onebotMsg: OneBot11Message): void {
     const message = this.$formatMessage(onebotMsg);
-    plugin.dispatch('message.receive', message)
-    plugin.logger.info(`${this.$config.name} recv  ${message.$channel.type}(${onebotMsg.group_id || onebotMsg.user_id}):${segment.raw(message.$content)}`)
-    plugin.dispatch(`message.${message.$channel.type}.receive`, message)
+    this.adapter.emit('message.receive', message);
+    plugin.logger.debug(`${this.$config.name} recv  ${message.$channel.type}(${onebotMsg.group_id || onebotMsg.user_id}):${segment.raw(message.$content)}`);
   }
 
   private startHeartbeat(): void {
@@ -499,7 +513,56 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11Messag
     }, interval);
   }
 }
-registerAdapter(new Adapter('onebot11', OneBot11WsClient))
+
+// 定义 Adapter 类
+class OneBot11Adapter extends Adapter<OneBot11WsClient> {
+  constructor(plugin: Plugin) {
+    super(plugin, 'onebot11', []);
+  }
+
+  createBot(config: OneBot11WsClientConfig): OneBot11WsClient {
+    return new OneBot11WsClient(this, config);
+  }
+}
+
+class OneBot11WssAdapter extends Adapter<OneBot11WsServer> {
+  #router: Router;
+
+  constructor(plugin: Plugin, router: Router) {
+    super(plugin, 'onebot11.wss', []);
+    this.#router = router;
+  }
+
+  createBot(config: OneBot11WsServerConfig): OneBot11WsServer {
+    return new OneBot11WsServer(this, this.#router, config);
+  }
+}
+
+// 使用新的 provide() API 注册适配器
+provide({
+  name: "onebot11",
+  description: "OneBot11 WebSocket Client Adapter",
+  mounted: async (p) => {
+    const adapter = new OneBot11Adapter(p);
+    await adapter.start();
+    return adapter;
+  },
+  dispose: async (adapter) => {
+    await adapter.stop();
+  },
+});
+
 useContext('router', (router) => {
-  registerAdapter(new Adapter('onebot11.wss', (c: OneBot11WsServerConfig) => new OneBot11WsServer(router, c)));
-})
+  provide({
+    name: "onebot11.wss",
+    description: "OneBot11 WebSocket Server Adapter",
+    mounted: async (p) => {
+      const adapter = new OneBot11WssAdapter(p, router);
+      await adapter.start();
+      return adapter;
+    },
+    dispose: async (adapter) => {
+      await adapter.stop();
+    },
+  });
+});

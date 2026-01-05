@@ -1,4 +1,4 @@
-import {MessageElement, MessageSender, SendContent} from "./types";
+import {MessageElement, MessageSender, RegisteredAdapter, SendContent} from "./types";
 import { Component } from "./component.js";
 
 /**
@@ -24,7 +24,7 @@ export type MessageType = 'group' | 'private' | 'channel'
  */
 export interface MessageBase {
     $id: string;
-    $adapter:string
+    $adapter:RegisteredAdapter
     $bot:string
     $content: MessageElement[];
     $sender: MessageSender;

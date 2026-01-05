@@ -2,28 +2,50 @@ import {Dialect} from '../base/index.js';
 import {RelatedDatabase} from "../type/related/database.js";
 import {Database} from "../base/index.js";
 import {Registry} from "../registry.js";
-import type { ClientConfig } from 'pg';
-import {Column} from "../types.js";
+import type { ClientConfig, PoolConfig as PgPoolConfig } from 'pg';
+import {Column, Transaction, TransactionOptions, PoolConfig} from "../types.js";
 
-export interface PostgreSQLDialectConfig extends ClientConfig {}
+export interface PostgreSQLDialectConfig extends ClientConfig {
+  /**
+   * 连接池配置
+   * 如果提供此选项，将使用连接池而不是单连接
+   */
+  pool?: PoolConfig;
+}
 
-export class PostgreSQLDialect extends Dialect<PostgreSQLDialectConfig, string> {
+export class PostgreSQLDialect<S extends Record<string, object> = Record<string, object>> extends Dialect<PostgreSQLDialectConfig, S, string> {
   private connection: any = null;
+  private pool: any = null;
+  private usePool: boolean = false;
 
   constructor(config: PostgreSQLDialectConfig) {
     super('pg', config);
+    this.usePool = !!config.pool;
   }
 
   // Connection management
   isConnected(): boolean {
-    return this.connection !== null;
+    return this.usePool ? this.pool !== null : this.connection !== null;
   }
 
   async connect(): Promise<void> {
     try {
+      if (this.usePool) {
+        const { Pool } = await import('pg');
+        const poolConfig: PgPoolConfig = {
+          ...this.config,
+          max: this.config.pool?.max ?? 10,
+          min: this.config.pool?.min ?? 2,
+          idleTimeoutMillis: this.config.pool?.idleTimeoutMillis ?? 30000,
+          connectionTimeoutMillis: this.config.pool?.acquireTimeoutMillis ?? 10000,
+        };
+        this.pool = new Pool(poolConfig);
+        console.log(`PostgreSQL 连接池已创建 (max: ${poolConfig.max})`);
+      } else {
       const { Client } = await import('pg');
       this.connection = new Client(this.config);
       await this.connection.connect();
+      }
     } catch (error) {
       console.error('forgot install pg ?');
       throw new Error(`PostgreSQL 连接失败: ${error}`);
@@ -31,23 +53,50 @@ export class PostgreSQLDialect extends Dialect<PostgreSQLDialectConfig, string> 
   }
 
   async disconnect(): Promise<void> {
+    if (this.usePool && this.pool) {
+      await this.pool.end();
+      this.pool = null;
+      console.log('PostgreSQL 连接池已关闭');
+    } else if (this.connection) {
+      await this.connection.end();
     this.connection = null;
+    }
   }
 
   async healthCheck(): Promise<boolean> {
-    return this.isConnected();
+    if (!this.isConnected()) return false;
+    try {
+      await this.query('SELECT 1');
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async query<U = any>(sql: string, params?: any[]): Promise<U> {
+    if (this.usePool) {
+      const result = await this.pool.query(sql, params);
+      return result.rows as U;
+    } else {
     const result = await this.connection.query(sql, params);
     return result.rows as U;
+    }
   }
 
   async dispose(): Promise<void> {
-    if (this.connection) {
-      await this.connection.end();
-      this.connection = null;
-    }
+    await this.disconnect();
+  }
+  
+  /**
+   * 获取连接池统计信息（仅在使用连接池时有效）
+   */
+  getPoolStats(): { total: number; idle: number; waiting: number } | null {
+    if (!this.usePool || !this.pool) return null;
+    return {
+      total: this.pool.totalCount ?? 0,
+      idle: this.pool.idleCount ?? 0,
+      waiting: this.pool.waitingCount ?? 0,
+    };
   }
 
   // SQL generation methods
@@ -119,8 +168,8 @@ export class PostgreSQLDialect extends Dialect<PostgreSQLDialectConfig, string> 
     return `LIMIT ${limit} OFFSET ${offset}`;
   }
   
-  formatCreateTable(tableName: string, columns: string[]): string {
-    return `CREATE TABLE IF NOT EXISTS ${this.quoteIdentifier(tableName)} (${columns.join(', ')})`;
+  formatCreateTable<T extends keyof S>(tableName: T, columns: string[]): string {
+    return `CREATE TABLE IF NOT EXISTS ${this.quoteIdentifier(String(tableName))} (${columns.join(', ')})`;
   }
   
   formatColumnDefinition(field: string, column: Column<any>): string {
@@ -137,21 +186,99 @@ export class PostgreSQLDialect extends Dialect<PostgreSQLDialectConfig, string> 
     return `${name} ${type}${length}${primary}${unique}${nullable}${defaultVal}`;
   }
   
-  formatAlterTable(tableName: string, alterations: string[]): string {
-    return `ALTER TABLE ${this.quoteIdentifier(tableName)} ${alterations.join(', ')}`;
+  formatAlterTable<T extends keyof S>(tableName: T, alterations: string[]): string {
+    return `ALTER TABLE ${this.quoteIdentifier(String(tableName))} ${alterations.join(', ')}`;
   }
   
-  formatDropTable(tableName: string, ifExists?: boolean): string {
+  formatDropTable<T extends keyof S>(tableName: T, ifExists?: boolean): string {
     const ifExistsClause = ifExists ? 'IF EXISTS ' : '';
-    return `DROP TABLE ${ifExistsClause}${this.quoteIdentifier(tableName)}`;
+    return `DROP TABLE ${ifExistsClause}${this.quoteIdentifier(String(tableName))}`;
   }
   
-  formatDropIndex(indexName: string, tableName: string, ifExists?: boolean): string {
+  formatDropIndex<T extends keyof S>(indexName: string, tableName: T, ifExists?: boolean): string {
     const ifExistsClause = ifExists ? 'IF EXISTS ' : '';
     return `DROP INDEX ${ifExistsClause}${this.quoteIdentifier(indexName)}`;
   }
+  
+  // ============================================================================
+  // Transaction Support
+  // ============================================================================
+  
+  /**
+   * PostgreSQL 支持事务
+   */
+  supportsTransactions(): boolean {
+    return true;
+  }
+  
+  /**
+   * 开始事务
+   * 在连接池模式下，会获取一个专用连接用于事务
+   */
+  async beginTransaction(options?: TransactionOptions): Promise<Transaction> {
+    if (this.usePool) {
+      // 从连接池获取一个连接用于事务
+      const client = await this.pool.connect();
+      
+      // 开始事务（可以带隔离级别）
+      let beginSql = 'BEGIN';
+      if (options?.isolationLevel) {
+        beginSql = `BEGIN ISOLATION LEVEL ${this.formatIsolationLevel(options.isolationLevel)}`;
+      }
+      await client.query(beginSql);
+      
+      return {
+        async commit(): Promise<void> {
+          try {
+            await client.query('COMMIT');
+          } finally {
+            client.release(); // 归还连接到池
+          }
+        },
+        
+        async rollback(): Promise<void> {
+          try {
+            await client.query('ROLLBACK');
+          } finally {
+            client.release(); // 归还连接到池
+          }
+        },
+        
+        async query<T = any>(sql: string, params?: any[]): Promise<T> {
+          const result = await client.query(sql, params);
+          return result.rows as T;
+        }
+      };
+    } else {
+      // 单连接模式
+      const dialect = this;
+      
+      // 开始事务（可以带隔离级别）
+      let beginSql = 'BEGIN';
+      if (options?.isolationLevel) {
+        beginSql = `BEGIN ISOLATION LEVEL ${this.formatIsolationLevel(options.isolationLevel)}`;
+      }
+      await this.query(beginSql);
+      
+      return {
+        async commit(): Promise<void> {
+          await dialect.query('COMMIT');
+        },
+        
+        async rollback(): Promise<void> {
+          await dialect.query('ROLLBACK');
+        },
+        
+        async query<T = any>(sql: string, params?: any[]): Promise<T> {
+          return dialect.query<T>(sql, params);
+        }
+      };
+    }
+  }
 }
-
-Registry.register('pg', (config: PostgreSQLDialectConfig, definitions?: Database.Definitions<Record<string, object>>) => {
-  return new RelatedDatabase(new PostgreSQLDialect(config), definitions);
-});
+export class PG<S extends Record<string, object> = Record<string, object>> extends RelatedDatabase<PostgreSQLDialectConfig, S> {
+  constructor(config: PostgreSQLDialectConfig, definitions?: Database.DefinitionObj<S>) {
+    super(new PostgreSQLDialect<S>(config), definitions);
+  }
+}
+Registry.register('pg', PG);

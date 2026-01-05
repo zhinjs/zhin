@@ -21,13 +21,11 @@ import {
   Bot,
   Adapter,
   Plugin,
-  registerAdapter,
   Message,
   SendOptions,
   SendContent,
   MessageSegment,
   segment,
-  useContext,
   usePlugin,
 } from "zhin.js";
 import type { Context } from "koa";
@@ -35,16 +33,24 @@ import { createReadStream } from "fs";
 import { promises as fs } from "fs";
 import path from "path";
 
-// 声明模块，注册 discord 适配器类型
-declare module "@zhin.js/types" {
+// 类型扩展 - 使用 zhin.js 模式
+declare module "zhin.js" {
+  namespace Plugin {
+    interface Contexts {
+      discord: DiscordAdapter;
+      "discord-interactions": DiscordInteractionsAdapter;
+      router: import("@zhin.js/http").Router;
+    }
+  }
+
   interface RegisteredAdapters {
-    discord: Adapter<DiscordBot>;
-    "discord-interactions": Adapter<DiscordInteractionsBot>;
+    discord: DiscordAdapter;
+    "discord-interactions": DiscordInteractionsAdapter;
   }
 }
 
 // Discord Gateway 模式配置
-export type DiscordBotConfig = Bot.Config & {
+export interface DiscordBotConfig {
   context: "discord";
   token: string;
   name: string;
@@ -59,10 +65,10 @@ export type DiscordBotConfig = Bot.Config & {
   };
   // Slash Commands 定义
   slashCommands?: ApplicationCommandData[];
-};
+}
 
 // Discord Interactions 模式配置
-export interface DiscordInteractionsConfig extends Bot.Config {
+export interface DiscordInteractionsConfig {
   context: "discord-interactions";
   token: string;
   name: string;
@@ -94,18 +100,23 @@ export interface DiscordInteractionsBot {
 // Discord 消息类型
 type DiscordChannelMessage = DiscordMessage<boolean>;
 const plugin = usePlugin();
+const { provide, useContext } = plugin;
+
 // 主要的 DiscordBot 类
 export class DiscordBot
   extends Client
-  implements Bot<DiscordChannelMessage, DiscordBotConfig>
+  implements Bot<DiscordBotConfig, DiscordChannelMessage>
 {
-  $connected?: boolean;
   private slashCommandHandlers: Map<
     string,
     (interaction: ChatInputCommandInteraction) => Promise<void>
   > = new Map();
+  $connected: boolean = false;
+  get $id() {
+    return this.$config.name;
+  }
 
-  constructor(public $config: DiscordBotConfig) {
+  constructor(public adapter: DiscordAdapter, public $config: DiscordBotConfig) {
     const intents = $config.intents || [
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMessages,
@@ -126,13 +137,12 @@ export class DiscordBot
     if (msg.author.bot) return;
 
     const message = this.$formatMessage(msg);
-    plugin.dispatch("message.receive", message);
-    plugin.logger.info(
+    this.adapter.emit("message.receive", message);
+    plugin.logger.debug(
       `${this.$config.name} recv  ${message.$channel.type}(${message.$channel.id}): ${segment.raw(
         message.$content
       )}`
     );
-    plugin.dispatch(`message.${message.$channel.type}.receive`, message);
   }
 
   private async handleSlashCommand(
@@ -563,8 +573,6 @@ export class DiscordBot
   }
 
   async $sendMessage(options: SendOptions): Promise<string> {
-    options = await plugin.app.handleBeforeSend(options);
-
     try {
       const channel = await this.channels.fetch(options.id);
       if (!channel || !channel.isTextBased()) {
@@ -575,7 +583,7 @@ export class DiscordBot
         channel as any,
         options.content
       );
-      plugin.logger.info(
+      plugin.logger.debug(
         `${this.$config.name} send ${options.type}(${options.id}): ${segment.raw(options.content)}`
       );
       return result.id;
@@ -821,16 +829,20 @@ import * as nacl from "tweetnacl";
 
 export class DiscordInteractionsBot
   extends Client
-  implements Bot<any, DiscordInteractionsConfig>
+  implements Bot<DiscordInteractionsConfig, any>
 {
-  $connected?: boolean;
+  $connected: boolean;
   private router: any;
   private slashCommandHandlers: Map<
     string,
     (interaction: any) => Promise<void>
   > = new Map();
 
-  constructor(router: any, public $config: DiscordInteractionsConfig) {
+  get $id() {
+    return this.$config.name;
+  }
+
+  constructor(public adapter: DiscordInteractionsAdapter, router: any, public $config: DiscordInteractionsConfig) {
     const intents = $config.intents || [
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMessages,
@@ -911,7 +923,7 @@ export class DiscordInteractionsBot
 
     // 转换为标准消息格式并分发
     const message = this.formatInteractionAsMessage(interaction);
-    plugin.dispatch("message.receive", message);
+    this.adapter.emit("message.receive", message);
 
     // 查找自定义处理器
     const handler = this.slashCommandHandlers.get(commandName);
@@ -1131,21 +1143,56 @@ export class DiscordInteractionsBot
   async $recallMessage(id: string): Promise<void> {}
 }
 
-// 注册 Gateway 模式适配器
-registerAdapter(
-  new Adapter(
-    "discord",
-    (config: any) => new DiscordBot(config as DiscordBotConfig)
-  )
-);
+// 定义 Adapter 类
+class DiscordAdapter extends Adapter<DiscordBot> {
+  constructor(plugin: Plugin) {
+    super(plugin, "discord", []);
+  }
+
+  createBot(config: DiscordBotConfig): DiscordBot {
+    return new DiscordBot(this, config);
+  }
+}
+
+class DiscordInteractionsAdapter extends Adapter<DiscordInteractionsBot> {
+  #router: any;
+
+  constructor(plugin: Plugin, router: any) {
+    super(plugin, "discord-interactions", []);
+    this.#router = router;
+  }
+
+  createBot(config: DiscordInteractionsConfig): DiscordInteractionsBot {
+    return new DiscordInteractionsBot(this, this.#router, config);
+  }
+}
+
+// 使用新的 provide() API 注册适配器
+provide({
+  name: "discord",
+  description: "Discord Gateway Adapter",
+  mounted: async (p) => {
+    const adapter = new DiscordAdapter(p);
+    await adapter.start();
+    return adapter;
+  },
+  dispose: async (adapter) => {
+    await adapter.stop();
+  },
+});
 
 // 注册 Interactions 端点模式适配器（需要 router）
 useContext("router", (router) => {
-  registerAdapter(
-    new Adapter(
-      "discord-interactions",
-      (config: any) =>
-        new DiscordInteractionsBot(router, config as DiscordInteractionsConfig)
-    )
-  );
+  provide({
+    name: "discord-interactions",
+    description: "Discord Interactions Endpoint Adapter",
+    mounted: async (p) => {
+      const adapter = new DiscordInteractionsAdapter(p, router);
+      await adapter.start();
+      return adapter;
+    },
+    dispose: async (adapter) => {
+      await adapter.stop();
+    },
+  });
 });

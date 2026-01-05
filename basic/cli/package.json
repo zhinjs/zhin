@@ -28,6 +28,14 @@
     "glob": "^10.3.10",
     "inquirer": "^9.2.12"
   },
+  "peerDependencies": {
+    "zhin.js":"workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "zhin.js":{
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
     "@types/cross-spawn": "^6.0.6",

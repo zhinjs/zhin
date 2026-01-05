@@ -1,8 +1,9 @@
 import path from "node:path";
 import fs from "node:fs/promises";
-import { useApp } from "zhin.js";
+import { usePlugin } from "zhin.js";
 
-const app = useApp();
+const plugin = usePlugin();
+const root = plugin.root;
 
 /**
  * 创建插件文件
@@ -225,25 +226,23 @@ export default ${name};
  */
 export function queryPlugin(args: { pluginName: string }): any {
   const { pluginName } = args;
-  const targetPlugin = app.findPluginByName(pluginName);
+  // 在子插件树中查找
+  const targetPlugin = root.children.find((p: any) => p.name === pluginName || p.$filename?.includes(pluginName));
   
   if (!targetPlugin) {
     throw new Error(`插件 ${pluginName} 不存在`);
   }
   
+  const p = targetPlugin as any;
   return {
-    name: targetPlugin.name,
-    filename: targetPlugin.filename,
-    status: (targetPlugin as any).mounted ? "active" : "inactive",
-    commands: targetPlugin.commands.map((cmd) => ({
-      pattern: cmd.pattern,
-      description: (cmd as any).description || "无描述",
-    })),
-    components: Array.from(targetPlugin.components.keys()),
-    middlewares: targetPlugin.middlewares.length,
-    contexts: Array.from(targetPlugin.contexts.keys()),
-    crons: targetPlugin.crons.length,
-    models: Array.from(targetPlugin.definitions.keys()),
+    name: p.name,
+    filename: p.$filename || p.filename,
+    status: p.$mounted ? "active" : "inactive",
+    commands: Array.from(p.$commands || []),
+    components: Array.from(p.$components || []),
+    middlewares: p.$middlewares?.size || 0,
+    contexts: Array.from(p.contexts?.keys() || []),
+    crons: p.$crons?.size || 0,
   };
 }
 
@@ -251,11 +250,11 @@ export function queryPlugin(args: { pluginName: string }): any {
  * 列出所有插件
  */
 export function listPlugins(): any {
-  return app.dependencyList.map((dep) => ({
+  return root.children.map((dep: any) => ({
     name: dep.name,
-    status: (dep as any).mounted ? "active" : "inactive",
-    commandCount: dep.commands.length,
-    componentCount: dep.components.size,
+    status: dep.$mounted ? "active" : "inactive",
+    commandCount: dep.$commands?.size || 0,
+    componentCount: dep.$components?.size || 0,
   }));
 }
 

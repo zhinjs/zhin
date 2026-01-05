@@ -16,9 +16,8 @@
     "@types/xml2js": "^0.4.14"
   },
   "peerDependencies": {
-    "@zhin.js/types": "workspace:^",
-    "@zhin.js/http": "workspace:^",
-    "zhin.js": "workspace:^"
+    "@zhin.js/http": "workspace:*",
+    "zhin.js": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.3.3",

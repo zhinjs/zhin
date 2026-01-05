@@ -177,6 +177,14 @@ ${databaseConfig ? `    ${databaseConfig.replace(/^    /, '')}` : ''}
       'node_modules',
       'node_modules/@zhin.js'
     ],
+    services: [
+      'process',
+      'config',
+      'command',
+      'component',
+      'permission',
+      'cron'
+    ],
     plugins: [
       'adapter-process',
       'http',
@@ -214,6 +222,14 @@ ${databaseConfig ? `    ${databaseConfig.replace(/^    /, '')}` : ''}
       'node_modules',
       'node_modules/@zhin.js'
     ],
+    services: [
+      'process',
+      'config',
+      'command',
+      'component',
+      'permission',
+      'cron'
+    ],
     plugins: [
       'adapter-process',
       'http',
@@ -246,6 +262,14 @@ plugin_dirs:
   - node_modules
   - node_modules/@zhin.js
 
+services:
+  - process
+  - config
+  - command
+  - component
+  - permission
+  - cron
+
 plugins:
   - adapter-process
   - http
@@ -277,6 +301,14 @@ ${databaseConfig ? `${databaseConfig}` : ''}
     "./src/plugins",
     "node_modules",
     "node_modules/@zhin.js"
+  ],
+  "services": [
+    "process",
+    "config",
+    "command",
+    "component",
+    "permission",
+    "cron"
   ],
   "plugins": [
     "adapter-process",

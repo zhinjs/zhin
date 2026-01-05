@@ -84,6 +84,9 @@ importers:
       ora:
         specifier: ^7.0.1
         version: 7.0.1
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../packages/zhin
     devDependencies:
       '@types/cross-spawn':
         specifier: ^6.0.6
@@ -140,22 +143,6 @@ importers:
         specifier: ^5.3.0
         version: 5.9.3
 
-  basic/hmr:
-    dependencies:
-      '@zhin.js/logger':
-        specifier: workspace:*
-        version: link:../logger
-      '@zhin.js/schema':
-        specifier: workspace:*
-        version: link:../schema
-    devDependencies:
-      '@zhin.js/types':
-        specifier: workspace:*
-        version: link:../types
-      typescript:
-        specifier: ^5.3.0
-        version: 5.9.3
-
   basic/logger:
     dependencies:
       chalk:
@@ -178,13 +165,11 @@ importers:
         specifier: ^5.3.0
         version: 5.9.3
 
-  basic/types: {}
-
   docs:
     devDependencies:
       vitepress:
         specifier: ^1.6.4
-        version: 1.6.4(@algolia/client-search@5.42.0)(@types/node@24.10.1)(@types/react@19.2.5)(axios@1.12.2)(lightningcss@1.30.1)(postcss@8.5.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass-embedded@1.93.2)(sass@1.93.2)(search-insights@2.17.3)(typescript@5.9.3)
+        version: 1.6.4(@algolia/client-search@5.42.0)(@types/node@20.19.19)(@types/react@19.2.5)(axios@1.12.2)(lightningcss@1.30.1)(postcss@8.5.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass-embedded@1.93.2)(sass@1.93.2)(search-insights@2.17.3)(typescript@5.9.3)
       vue:
         specifier: ^3.5.23
         version: 3.5.23(typescript@5.9.3)
@@ -210,24 +195,42 @@ importers:
 
   examples/test-bot:
     dependencies:
+      '@zhin.js/adapter-dingtalk':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/dingtalk
       '@zhin.js/adapter-discord':
         specifier: workspace:*
         version: link:../../plugins/adapters/discord
+      '@zhin.js/adapter-email':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/email
       '@zhin.js/adapter-icqq':
         specifier: workspace:*
         version: link:../../plugins/adapters/icqq
       '@zhin.js/adapter-kook':
         specifier: workspace:*
         version: link:../../plugins/adapters/kook
+      '@zhin.js/adapter-lark':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/lark
       '@zhin.js/adapter-onebot11':
         specifier: workspace:*
         version: link:../../plugins/adapters/onebot11
-      '@zhin.js/adapter-process':
-        specifier: workspace:*
-        version: link:../../plugins/adapters/process
       '@zhin.js/adapter-qq':
         specifier: workspace:*
         version: link:../../plugins/adapters/qq
+      '@zhin.js/adapter-sandbox':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/sandbox
+      '@zhin.js/adapter-slack':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/slack
+      '@zhin.js/adapter-telegram':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/telegram
+      '@zhin.js/adapter-wechat-mp':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/wechat-mp
       '@zhin.js/client':
         specifier: workspace:*
         version: link:../../packages/client
@@ -243,6 +246,9 @@ importers:
       '@zhin.js/plugin-github-notify':
         specifier: workspace:*
         version: link:../../plugins/services/github-notify
+      '@zhin.js/plugin-music':
+        specifier: workspace:*
+        version: link:../../plugins/utils/music
       '@zhin.js/sensitive-filter':
         specifier: workspace:*
         version: link:../../plugins/utils/sensitive-filter
@@ -268,15 +274,15 @@ importers:
       '@zhin.js/cli':
         specifier: workspace:*
         version: link:../../basic/cli
-      '@zhin.js/types':
-        specifier: workspace:*
-        version: link:../../basic/types
       lucide-react:
         specifier: ^0.469.0
         version: 0.469.0(react@19.2.0)
       radix-ui:
         specifier: ^1.4.3
         version: 1.4.3(@types/react-dom@19.2.3(@types/react@19.2.5))(@types/react@19.2.5)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      tsx:
+        specifier: ^4.7.0
+        version: 4.20.6
       typescript:
         specifier: ^5.0.0
         version: 5.9.3
@@ -314,18 +320,18 @@ importers:
       '@zhin.js/database':
         specifier: workspace:*
         version: link:../../basic/database
-      '@zhin.js/hmr':
+      '@zhin.js/dependency':
         specifier: workspace:*
-        version: link:../../basic/hmr
+        version: link:../../basic/dependency
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../basic/logger
+      '@zhin.js/schema':
+        specifier: workspace:*
+        version: link:../../basic/schema
       croner:
         specifier: ^9.1.0
         version: 9.1.0
-      dotenv:
-        specifier: ^16.3.1
-        version: 16.6.1
       segment-matcher:
         specifier: latest
         version: 1.0.5
@@ -339,9 +345,6 @@ importers:
       '@types/node':
         specifier: ^24.3.0
         version: 24.7.0
-      '@zhin.js/types':
-        specifier: workspace:*
-        version: link:../../basic/types
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
@@ -367,9 +370,6 @@ importers:
       '@types/node':
         specifier: ^24.3.0
         version: 24.7.0
-      '@zhin.js/types':
-        specifier: workspace:*
-        version: link:../../basic/types
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
@@ -382,7 +382,19 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../basic/logger
+      '@zhin.js/schema':
+        specifier: workspace:*
+        version: link:../../basic/schema
+      dotenv:
+        specifier: ^16.3.1
+        version: 16.6.1
+      yaml:
+        specifier: ^2.3.4
+        version: 2.8.1
     devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.10.2
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
@@ -392,9 +404,6 @@ importers:
       '@zhin.js/http':
         specifier: workspace:*
         version: link:../../services/http
-      '@zhin.js/types':
-        specifier: workspace:*
-        version: link:../../../basic/types
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/zhin
@@ -411,9 +420,9 @@ importers:
 
   plugins/adapters/discord:
     dependencies:
-      '@zhin.js/types':
+      '@zhin.js/http':
         specifier: workspace:*
-        version: link:../../../basic/types
+        version: link:../../services/http
       discord.js:
         specifier: ^14.15.3
         version: 14.23.2
@@ -442,9 +451,6 @@ importers:
       '@types/nodemailer':
         specifier: ^6.4.14
         version: 6.4.20
-      '@zhin.js/types':
-        specifier: workspace:^
-        version: link:../../../basic/types
       imap:
         specifier: ^0.8.19
         version: 0.8.19
@@ -455,7 +461,7 @@ importers:
         specifier: ^6.9.8
         version: 6.10.1
       zhin.js:
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../packages/zhin
     devDependencies:
       '@types/mailparser':
@@ -479,12 +485,12 @@ importers:
       '@zhin.js/console':
         specifier: workspace:*
         version: link:../../services/console
+      '@zhin.js/core':
+        specifier: workspace:*
+        version: link:../../../packages/core
       '@zhin.js/http':
         specifier: workspace:*
         version: link:../../services/http
-      '@zhin.js/types':
-        specifier: workspace:*
-        version: link:../../../basic/types
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/zhin
@@ -510,9 +516,9 @@ importers:
 
   plugins/adapters/kook:
     dependencies:
-      '@zhin.js/types':
+      '@zhin.js/logger':
         specifier: workspace:*
-        version: link:../../../basic/types
+        version: link:../../../basic/logger
       kook-client:
         specifier: latest
         version: 1.0.0
@@ -529,9 +535,6 @@ importers:
       '@zhin.js/http':
         specifier: workspace:*
         version: link:../../services/http
-      '@zhin.js/types':
-        specifier: workspace:*
-        version: link:../../../basic/types
       axios:
         specifier: ^1.6.0
         version: 1.12.2
@@ -554,9 +557,6 @@ importers:
       '@zhin.js/http':
         specifier: workspace:*
         version: link:../../services/http
-      '@zhin.js/types':
-        specifier: workspace:*
-        version: link:../../../basic/types
       ws:
         specifier: ^8.18.3
         version: 8.18.3
@@ -574,7 +574,23 @@ importers:
         specifier: ^5.3.0
         version: 5.9.3
 
-  plugins/adapters/process:
+  plugins/adapters/qq:
+    dependencies:
+      '@zhin.js/logger':
+        specifier: workspace:*
+        version: link:../../../basic/logger
+      qq-official-bot:
+        specifier: ^1.0.11
+        version: 1.0.11
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
+    devDependencies:
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+
+  plugins/adapters/sandbox:
     dependencies:
       '@zhin.js/client':
         specifier: workspace:*
@@ -582,12 +598,12 @@ importers:
       '@zhin.js/console':
         specifier: workspace:*
         version: link:../../services/console
+      '@zhin.js/core':
+        specifier: workspace:*
+        version: link:../../../packages/core
       '@zhin.js/http':
         specifier: workspace:*
         version: link:../../services/http
-      '@zhin.js/types':
-        specifier: workspace:*
-        version: link:../../../basic/types
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/zhin
@@ -611,22 +627,6 @@ importers:
         specifier: ^5.3.0
         version: 5.9.3
 
-  plugins/adapters/qq:
-    dependencies:
-      '@zhin.js/types':
-        specifier: workspace:*
-        version: link:../../../basic/types
-      qq-official-bot:
-        specifier: ^1.0.11
-        version: 1.0.11
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/zhin
-    devDependencies:
-      typescript:
-        specifier: ^5.3.0
-        version: 5.9.3
-
   plugins/adapters/slack:
     dependencies:
       '@slack/bolt':
@@ -635,9 +635,6 @@ importers:
       '@slack/web-api':
         specifier: ^7.10.0
         version: 7.12.0
-      '@zhin.js/types':
-        specifier: workspace:*
-        version: link:../../../basic/types
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/zhin
@@ -651,9 +648,9 @@ importers:
 
   plugins/adapters/telegram:
     dependencies:
-      '@zhin.js/types':
+      '@zhin.js/logger':
         specifier: workspace:*
-        version: link:../../../basic/types
+        version: link:../../../basic/logger
       telegraf:
         specifier: ^4.16.3
         version: 4.16.3(encoding@0.1.13)
@@ -674,11 +671,8 @@ importers:
         specifier: ^0.4.14
         version: 0.4.14
       '@zhin.js/http':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../services/http
-      '@zhin.js/types':
-        specifier: workspace:^
-        version: link:../../../basic/types
       axios:
         specifier: ^1.6.2
         version: 1.12.2
@@ -686,7 +680,7 @@ importers:
         specifier: ^0.6.2
         version: 0.6.2
       zhin.js:
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../packages/zhin
     devDependencies:
       '@types/koa':
@@ -712,13 +706,13 @@ importers:
         version: 4.1.11
       '@tailwindcss/vite':
         specifier: 4.1.14
-        version: 4.1.14(vite@7.1.9(@types/node@24.10.1)(jiti@2.6.1)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2)(tsx@4.20.6)(yaml@2.8.1))
+        version: 4.1.14(vite@7.1.9(@types/node@20.19.19)(jiti@2.6.1)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2)(tsx@4.20.6)(yaml@2.8.1))
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
       '@vitejs/plugin-react':
         specifier: ^4.3.4
-        version: 4.7.0(vite@7.1.9(@types/node@24.10.1)(jiti@2.6.1)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2)(tsx@4.20.6)(yaml@2.8.1))
+        version: 4.7.0(vite@7.1.9(@types/node@20.19.19)(jiti@2.6.1)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2)(tsx@4.20.6)(yaml@2.8.1))
       '@zhin.js/client':
         specifier: workspace:^
         version: link:../../../packages/client
@@ -728,9 +722,6 @@ importers:
       '@zhin.js/http':
         specifier: workspace:^
         version: link:../http
-      '@zhin.js/types':
-        specifier: workspace:^
-        version: link:../../../basic/types
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -769,7 +760,7 @@ importers:
         version: 4.1.17
       vite:
         specifier: ^7.0.6
-        version: 7.1.9(@types/node@24.10.1)(jiti@2.6.1)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2)(tsx@4.20.6)(yaml@2.8.1)
+        version: 7.1.9(@types/node@20.19.19)(jiti@2.6.1)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2)(tsx@4.20.6)(yaml@2.8.1)
       ws:
         specifier: ^8.18.3
         version: 8.18.3
@@ -787,9 +778,6 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/zhin
     devDependencies:
-      '@zhin.js/types':
-        specifier: workspace:*
-        version: link:../../../basic/types
       typescript:
         specifier: ^5.3.3
         version: 5.9.3
@@ -799,9 +787,9 @@ importers:
       '@koa/router':
         specifier: latest
         version: 14.0.0
-      '@zhin.js/core':
-        specifier: workspace:^
-        version: link:../../../packages/core
+      '@zhin.js/schema':
+        specifier: workspace:*
+        version: link:../../../basic/schema
       koa:
         specifier: latest
         version: 3.1.1
@@ -814,6 +802,9 @@ importers:
       ws:
         specifier: ^8.18.3
         version: 8.18.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
     devDependencies:
       '@types/koa':
         specifier: latest
@@ -830,9 +821,6 @@ importers:
       '@types/ws':
         specifier: latest
         version: 8.18.1
-      '@zhin.js/types':
-        specifier: workspace:^
-        version: link:../../../basic/types
 
   plugins/services/mcp:
     dependencies:
@@ -852,18 +840,12 @@ importers:
       '@types/node':
         specifier: latest
         version: 24.10.1
-      '@zhin.js/types':
-        specifier: workspace:^
-        version: link:../../../basic/types
 
   plugins/utils/music:
     devDependencies:
       '@zhin.js/adapter-icqq':
         specifier: workspace:*
         version: link:../../adapters/icqq
-      '@zhin.js/types':
-        specifier: workspace:*
-        version: link:../../../basic/types
       typescript:
         specifier: ^5.3.3
         version: 5.9.3
@@ -3570,6 +3552,9 @@ packages:
 
   '@types/node@24.10.1':
     resolution: {integrity: sha512-GNWcUTRBgIRJD5zj+Tq0fKOJ5XZajIiBroOF0yvj2bSU1WvNdYS/dn9UxwsujGW4JX06dnHyjV2y9rRaybH0iQ==}
+
+  '@types/node@24.10.2':
+    resolution: {integrity: sha512-WOhQTZ4G8xZ1tjJTvKOpyEVSGgOTvJAfDK3FNFgELyaTpzhdgHVHeqW8V+UJvzF5BT+/B54T/1S2K6gd9c7bbA==}
 
   '@types/node@24.7.0':
     resolution: {integrity: sha512-IbKooQVqUBrlzWTi79E8Fw78l8k1RNtlDDNWsFZs7XonuQSJ8oNYfEeclhprUldXISRMLzBpILuKgPlIxm+/Yw==}
@@ -9577,14 +9562,14 @@ snapshots:
 
   '@slack/logger@4.0.0':
     dependencies:
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
 
   '@slack/oauth@3.0.4':
     dependencies:
       '@slack/logger': 4.0.0
       '@slack/web-api': 7.12.0
       '@types/jsonwebtoken': 9.0.10
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
       jsonwebtoken: 9.0.2
     transitivePeerDependencies:
       - debug
@@ -9593,7 +9578,7 @@ snapshots:
     dependencies:
       '@slack/logger': 4.0.0
       '@slack/web-api': 7.12.0
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
       '@types/ws': 8.18.1
       eventemitter3: 5.0.1
       ws: 8.18.3
@@ -9608,7 +9593,7 @@ snapshots:
     dependencies:
       '@slack/logger': 4.0.0
       '@slack/types': 2.18.0
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
       '@types/retry': 0.12.0
       axios: 1.12.2
       eventemitter3: 5.0.1
@@ -10040,12 +10025,12 @@ snapshots:
       postcss: 8.5.6
       tailwindcss: 4.1.11
 
-  '@tailwindcss/vite@4.1.14(vite@7.1.9(@types/node@24.10.1)(jiti@2.6.1)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2)(tsx@4.20.6)(yaml@2.8.1))':
+  '@tailwindcss/vite@4.1.14(vite@7.1.9(@types/node@20.19.19)(jiti@2.6.1)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2)(tsx@4.20.6)(yaml@2.8.1))':
     dependencies:
       '@tailwindcss/node': 4.1.14
       '@tailwindcss/oxide': 4.1.14
       tailwindcss: 4.1.14
-      vite: 7.1.9(@types/node@24.10.1)(jiti@2.6.1)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2)(tsx@4.20.6)(yaml@2.8.1)
+      vite: 7.1.9(@types/node@20.19.19)(jiti@2.6.1)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2)(tsx@4.20.6)(yaml@2.8.1)
 
   '@telegraf/types@7.1.0': {}
 
@@ -10054,7 +10039,7 @@ snapshots:
 
   '@types/accepts@1.3.7':
     dependencies:
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
 
   '@types/babel__core@7.20.5':
     dependencies:
@@ -10080,7 +10065,7 @@ snapshots:
   '@types/body-parser@1.19.6':
     dependencies:
       '@types/connect': 3.4.38
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
 
   '@types/bun@1.3.2(@types/react@19.2.5)':
     dependencies:
@@ -10090,7 +10075,7 @@ snapshots:
 
   '@types/connect@3.4.38':
     dependencies:
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
 
   '@types/content-disposition@0.5.9': {}
 
@@ -10101,7 +10086,7 @@ snapshots:
       '@types/connect': 3.4.38
       '@types/express': 5.0.3
       '@types/keygrip': 1.0.6
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
 
   '@types/cross-spawn@6.0.6':
     dependencies:
@@ -10111,7 +10096,7 @@ snapshots:
 
   '@types/express-serve-static-core@5.1.0':
     dependencies:
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
       '@types/qs': 6.14.0
       '@types/range-parser': 1.2.7
       '@types/send': 1.2.0
@@ -10137,7 +10122,7 @@ snapshots:
 
   '@types/imap@0.8.42':
     dependencies:
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
 
   '@types/inquirer@9.0.9':
     dependencies:
@@ -10148,12 +10133,12 @@ snapshots:
 
   '@types/jsonfile@6.1.4':
     dependencies:
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
 
   '@types/jsonwebtoken@9.0.10':
     dependencies:
       '@types/ms': 2.1.0
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
 
   '@types/keygrip@1.0.6': {}
 
@@ -10178,7 +10163,7 @@ snapshots:
       '@types/http-errors': 2.0.5
       '@types/keygrip': 1.0.6
       '@types/koa-compose': 3.2.8
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
 
   '@types/koa@3.0.1':
     dependencies:
@@ -10189,7 +10174,7 @@ snapshots:
       '@types/http-errors': 2.0.5
       '@types/keygrip': 1.0.6
       '@types/koa-compose': 3.2.8
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
 
   '@types/koa__router@12.0.5':
     dependencies:
@@ -10201,7 +10186,7 @@ snapshots:
 
   '@types/mailparser@3.4.6':
     dependencies:
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
       iconv-lite: 0.6.3
 
   '@types/markdown-it@14.1.2':
@@ -10237,6 +10222,10 @@ snapshots:
     dependencies:
       undici-types: 7.16.0
 
+  '@types/node@24.10.2':
+    dependencies:
+      undici-types: 7.16.0
+
   '@types/node@24.7.0':
     dependencies:
       undici-types: 7.14.0
@@ -10244,7 +10233,7 @@ snapshots:
   '@types/nodemailer@6.4.20':
     dependencies:
       '@aws-sdk/client-ses': 3.906.0
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
     transitivePeerDependencies:
       - aws-crt
 
@@ -10271,16 +10260,16 @@ snapshots:
   '@types/send@0.17.5':
     dependencies:
       '@types/mime': 1.3.5
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
 
   '@types/send@1.2.0':
     dependencies:
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
 
   '@types/serve-static@1.15.9':
     dependencies:
       '@types/http-errors': 2.0.5
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
       '@types/send': 0.17.5
 
   '@types/sqlite3@5.1.0':
@@ -10292,7 +10281,7 @@ snapshots:
 
   '@types/through@0.0.33':
     dependencies:
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
 
   '@types/unist@3.0.3': {}
 
@@ -10308,11 +10297,11 @@ snapshots:
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
 
   '@types/xml2js@0.4.14':
     dependencies:
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
 
   '@typescript-eslint/eslint-plugin@8.46.3(@typescript-eslint/parser@8.46.3(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3)':
     dependencies:
@@ -10409,7 +10398,7 @@ snapshots:
 
   '@ungap/structured-clone@1.3.0': {}
 
-  '@vitejs/plugin-react@4.7.0(vite@7.1.9(@types/node@24.10.1)(jiti@2.6.1)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2)(tsx@4.20.6)(yaml@2.8.1))':
+  '@vitejs/plugin-react@4.7.0(vite@7.1.9(@types/node@20.19.19)(jiti@2.6.1)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2)(tsx@4.20.6)(yaml@2.8.1))':
     dependencies:
       '@babel/core': 7.28.4
       '@babel/plugin-transform-react-jsx-self': 7.27.1(@babel/core@7.28.4)
@@ -10417,13 +10406,13 @@ snapshots:
       '@rolldown/pluginutils': 1.0.0-beta.27
       '@types/babel__core': 7.20.5
       react-refresh: 0.17.0
-      vite: 7.1.9(@types/node@24.10.1)(jiti@2.6.1)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2)(tsx@4.20.6)(yaml@2.8.1)
+      vite: 7.1.9(@types/node@20.19.19)(jiti@2.6.1)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2)(tsx@4.20.6)(yaml@2.8.1)
     transitivePeerDependencies:
       - supports-color
 
-  '@vitejs/plugin-vue@5.2.4(vite@5.4.21(@types/node@24.10.1)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2))(vue@3.5.23(typescript@5.9.3))':
+  '@vitejs/plugin-vue@5.2.4(vite@5.4.21(@types/node@20.19.19)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2))(vue@3.5.23(typescript@5.9.3))':
     dependencies:
-      vite: 5.4.21(@types/node@24.10.1)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2)
+      vite: 5.4.21(@types/node@20.19.19)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2)
       vue: 3.5.23(typescript@5.9.3)
 
   '@vitest/coverage-v8@1.6.1(vitest@1.6.1(@types/node@24.10.0)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2))':
@@ -10831,7 +10820,7 @@ snapshots:
 
   bun-types@1.3.2(@types/react@19.2.5):
     dependencies:
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
       '@types/react': 19.2.5
 
   bundle-require@5.1.0(esbuild@0.27.0):
@@ -12890,7 +12879,7 @@ snapshots:
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.0
       '@types/long': 4.0.2
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
       long: 4.0.0
 
   proxy-addr@2.0.7:
@@ -13925,6 +13914,18 @@ snapshots:
       - supports-color
       - terser
 
+  vite@5.4.21(@types/node@20.19.19)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2):
+    dependencies:
+      esbuild: 0.21.5
+      postcss: 8.5.6
+      rollup: 4.52.5
+    optionalDependencies:
+      '@types/node': 20.19.19
+      fsevents: 2.3.3
+      lightningcss: 1.30.1
+      sass: 1.93.2
+      sass-embedded: 1.93.2
+
   vite@5.4.21(@types/node@24.10.0)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2):
     dependencies:
       esbuild: 0.21.5
@@ -13937,19 +13938,7 @@ snapshots:
       sass: 1.93.2
       sass-embedded: 1.93.2
 
-  vite@5.4.21(@types/node@24.10.1)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2):
-    dependencies:
-      esbuild: 0.21.5
-      postcss: 8.5.6
-      rollup: 4.52.5
-    optionalDependencies:
-      '@types/node': 24.10.1
-      fsevents: 2.3.3
-      lightningcss: 1.30.1
-      sass: 1.93.2
-      sass-embedded: 1.93.2
-
-  vite@7.1.9(@types/node@24.10.1)(jiti@2.6.1)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2)(tsx@4.20.6)(yaml@2.8.1):
+  vite@7.1.9(@types/node@20.19.19)(jiti@2.6.1)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2)(tsx@4.20.6)(yaml@2.8.1):
     dependencies:
       esbuild: 0.25.10
       fdir: 6.5.0(picomatch@4.0.3)
@@ -13958,7 +13947,7 @@ snapshots:
       rollup: 4.52.5
       tinyglobby: 0.2.15
     optionalDependencies:
-      '@types/node': 24.10.1
+      '@types/node': 20.19.19
       fsevents: 2.3.3
       jiti: 2.6.1
       lightningcss: 1.30.1
@@ -13967,7 +13956,7 @@ snapshots:
       tsx: 4.20.6
       yaml: 2.8.1
 
-  vitepress@1.6.4(@algolia/client-search@5.42.0)(@types/node@24.10.1)(@types/react@19.2.5)(axios@1.12.2)(lightningcss@1.30.1)(postcss@8.5.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass-embedded@1.93.2)(sass@1.93.2)(search-insights@2.17.3)(typescript@5.9.3):
+  vitepress@1.6.4(@algolia/client-search@5.42.0)(@types/node@20.19.19)(@types/react@19.2.5)(axios@1.12.2)(lightningcss@1.30.1)(postcss@8.5.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass-embedded@1.93.2)(sass@1.93.2)(search-insights@2.17.3)(typescript@5.9.3):
     dependencies:
       '@docsearch/css': 3.8.2
       '@docsearch/js': 3.8.2(@algolia/client-search@5.42.0)(@types/react@19.2.5)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(search-insights@2.17.3)
@@ -13976,7 +13965,7 @@ snapshots:
       '@shikijs/transformers': 2.5.0
       '@shikijs/types': 2.5.0
       '@types/markdown-it': 14.1.2
-      '@vitejs/plugin-vue': 5.2.4(vite@5.4.21(@types/node@24.10.1)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2))(vue@3.5.23(typescript@5.9.3))
+      '@vitejs/plugin-vue': 5.2.4(vite@5.4.21(@types/node@20.19.19)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2))(vue@3.5.23(typescript@5.9.3))
       '@vue/devtools-api': 7.7.7
       '@vue/shared': 3.5.23
       '@vueuse/core': 12.8.2(typescript@5.9.3)
@@ -13985,7 +13974,7 @@ snapshots:
       mark.js: 8.11.1
       minisearch: 7.2.0
       shiki: 2.5.0
-      vite: 5.4.21(@types/node@24.10.1)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2)
+      vite: 5.4.21(@types/node@20.19.19)(lightningcss@1.30.1)(sass-embedded@1.93.2)(sass@1.93.2)
       vue: 3.5.23(typescript@5.9.3)
     optionalDependencies:
       postcss: 8.5.6

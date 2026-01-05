@@ -1,18 +1,28 @@
-import {MaybePromise,RegisteredAdapters}from '@zhin.js/types'
-import { Schema } from '@zhin.js/hmr'
-import { LogLevel } from '@zhin.js/logger';
+
 import {MessageChannel,Message} from "./message.js";
 import {Adapter} from "./adapter.js";
 import {Bot} from "./bot.js";
+import { SystemLog } from "./models/system-log.js";
+import { User } from "./models/user.js";
 import { Databases,Registry } from "@zhin.js/database";
 import { MessageComponent } from "./message.js";
+import { ProcessAdapter } from "./built/adapter-process.js";
 
+export type ArrayItem<T>=T extends Array<infer R>?R:unknown
+export interface Models extends Record<string,object>{
+  SystemLog: SystemLog
+  User: User,
+}
+export type MaybePromise<T> = T extends Promise<infer U> ? T|U : T|Promise<T>;
+export interface RegisteredAdapters {
+  process: ProcessAdapter;
+}
 /**
  * 数据库配置类型，支持多种数据库驱动
  */
 export type DatabaseConfig<T extends keyof Databases=keyof Databases>={
   dialect:T
-} & Registry.Config<Databases[T]>
+} & Registry.Config[T]
 /**
  * 获取对象所有value类型
  */
@@ -20,7 +30,7 @@ export type ObjectItem<T extends object>=T[keyof T]
 /**
  * 已注册适配器名类型
  */
-export type RegisteredAdapter=keyof RegisteredAdapters
+export type RegisteredAdapter=Extract<keyof RegisteredAdapters, string>
 /**
  * 指定适配器的消息类型
  */
@@ -68,13 +78,23 @@ export type Dict<V=any,K extends string|symbol=string>=Record<K, V>;
 /**
  * 用户信息结构
  */
-export interface User {
+export interface UserInfo {
   user_id: string;
   nickname: string;
   card?: string;
   role?: string;
 }
 
+/**
+ * 权限服务接口
+ */
+import type { PermissionService } from './built/permission.js';
+/**
+ * 配置服务接口
+ */
+import type { ConfigService } from './built/config.js';
+
+export { PermissionService, ConfigService };
 /**
  * 群组信息结构
  */
@@ -89,35 +109,6 @@ export type MessageMiddleware<P extends RegisteredAdapter=RegisteredAdapter> = (
 
 
 /**
- * App配置类型，涵盖机器人、数据库、插件、调试等
- */
-export interface AppConfig {
-  bots?: Bot.Config[];
-  log_level: LogLevel;
-  /** 数据库配置列表 */
-  database?: DatabaseConfig;
-  /** 插件目录列表，默认为 ['./plugins', 'node_modules'] */
-  plugin_dirs?: string[];
-  /** 需要加载的插件列表 */
-  plugins?: string[];
-  /** 禁用的依赖列表 */
-  disable_dependencies?: string[];
-  /** 是否启用调试模式 */
-  debug?: boolean;
-  /** 日志配置 */
-  log?: {
-    /** 最大日志保留天数，默认 7 天 */
-    maxDays?: number;
-    /** 最大日志条数，默认 10000 条 */
-    maxRecords?: number;
-    /** 自动清理间隔（小时），默认 24 小时 */
-    cleanupInterval?: number;
-  };
-  /** 插件配置（键为插件名，值为配置对象） */
-  [key: string]: any;
-}
-
-/**
  * defineConfig辅助类型，支持函数式/对象式配置
  */
 export type DefineConfig<T> = T | ((env:Record<string,string>)=>MaybePromise<T>);
@@ -127,4 +118,19 @@ export interface SendOptions extends MessageChannel{
   bot:string
   content:SendContent
 }
+
+// export type PermissionChecker<T extends RegisteredAdapter = RegisteredAdapter> = (name: string, message: Message<AdapterMessage<T>>) => MaybePromise<boolean>
+// export type PermissionItem<T extends RegisteredAdapter = RegisteredAdapter> = {
+//    name: string | RegExp
+//    check: PermissionChecker<T>
+// }
+export interface ProcessMessage {
+  type: string;
+  pid?: number;
+  body: any;
+}
+export type QueueItem = {
+  action: string;
+  payload: any;
+};
 export type BeforeSendHandler=(options:SendOptions)=>MaybePromise<SendOptions|void>

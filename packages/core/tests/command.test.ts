@@ -49,55 +49,58 @@ vi.mock('segment-matcher', () => {
 })
 
 // Mock App with permissions
+const mockPermissionService = {
+  check: vi.fn(async (perm: string, message: any) => {
+    if (perm === 'adapter(discord)') {
+      return message.$adapter === 'discord'
+    }
+    if (perm === 'adapter(telegram)') {
+      return message.$adapter === 'telegram'
+    }
+    if (perm === 'adapter(email)') {
+      return message.$adapter === 'email'
+    }
+    if (perm === 'adapter(test)') {
+      return message.$adapter === 'test'
+    }
+    return true
+  })
+}
+
 const mockApp = {
-  permissions: {
-    get: vi.fn((permission: string) => {
-      // Mock permit checker
-      return {
-        check: vi.fn(async (perm: string, message: any) => {
-          if (permission === 'adapter(discord)') {
-            return message.$adapter === 'discord'
-          }
-          if (permission === 'adapter(telegram)') {
-            return message.$adapter === 'telegram'
-          }
-          if (permission === 'adapter(email)') {
-            return message.$adapter === 'email'
-          }
-          if (permission === 'adapter(test)') {
-            return message.$adapter === 'test'
-          }
-          return true
-        })
-      }
-    })
-  }
+  contextIsReady: vi.fn((name: string) => name === 'permission'),
+  inject: vi.fn((name: string) => {
+    if (name === 'permission') return mockPermissionService
+    return null
+  })
 } as any
 
 // 为多个权限测试创建特殊的 mock app
+const multiPermitPermissionService = {
+  check: vi.fn(async (perm: string, message: any) => {
+    // 对于多个权限，只要有一个匹配就返回 true
+    if (perm === 'adapter(discord)' && message.$adapter === 'discord') {
+      return true
+    }
+    if (perm === 'adapter(telegram)' && message.$adapter === 'telegram') {
+      return true
+    }
+    if (perm === 'adapter(email)' && message.$adapter === 'email') {
+      return true
+    }
+    if (perm === 'adapter(test)' && message.$adapter === 'test') {
+      return true
+    }
+    return false
+  })
+}
+
 const multiPermitMockApp = {
-  permissions: {
-    get: vi.fn((permission: string) => {
-      return {
-        check: vi.fn(async (perm: string, message: any) => {
-          // 对于多个权限，只要有一个匹配就返回 true
-          if (permission === 'adapter(discord)' && message.$adapter === 'discord') {
-            return true
-          }
-          if (permission === 'adapter(telegram)' && message.$adapter === 'telegram') {
-            return true
-          }
-          if (permission === 'adapter(email)' && message.$adapter === 'email') {
-            return true
-          }
-          if (permission === 'adapter(test)' && message.$adapter === 'test') {
-            return true
-          }
-          return false
-        })
-      }
-    })
-  }
+  contextIsReady: vi.fn((name: string) => name === 'permission'),
+  inject: vi.fn((name: string) => {
+    if (name === 'permission') return multiPermitPermissionService
+    return null
+  })
 } as any
 
 describe('Command系统测试', () => {
