@@ -20,6 +20,20 @@
 - 📦 **开箱即用** - 内置控制台适配器、HTTP服务、Web控制台、SQLite数据库
 - 🔌 **多平台扩展** - 支持 QQ、KOOK、Discord、Telegram、OneBot v11 等
 
+## 🔄 升级到 2.0
+
+Zhin.js 2.0 是一次重大架构升级，带来更简洁的 API 和更强大的功能。
+
+**主要变更**：
+- ✅ 移除 `@zhin.js/hmr` 依赖，使用 Node.js 原生模块系统
+- ✅ 简化的插件系统（基于 `AsyncLocalStorage`）
+- ✅ 配置文件从 `zhin.config.ts` 改为 `zhin.config.yml`
+- ✅ API 变更：`useApp()` → `usePlugin()`，`defineModel()` → `plugin.defineModel()`
+- ✅ 增强的数据库功能（事务、迁移、生命周期钩子、多对多关系）
+- ✅ 自动资源清理，内存优化
+
+**快速升级**：查看 [CHANGELOG.md](./CHANGELOG.md) 了解详细变更和升级步骤。
+
 ## 项目结构
 
 ```
