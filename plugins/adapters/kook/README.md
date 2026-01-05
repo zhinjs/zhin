@@ -154,7 +154,7 @@ addCommand(new MessageCommand('card')
                 size: "lg",
                 modules: [
                     msgMod.section(
-                        element.markdown("(font)测试信息！(font)[purple](font)还能变颜色)font)[warning]")
+                        element.markdown("(font) 卡片信息(font)[purple](font) Card信息(font)[warning]")
                     ),
                     msgMod.container(
                         [
