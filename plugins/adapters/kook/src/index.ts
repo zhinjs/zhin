@@ -4,6 +4,7 @@ import {
   Adapter, 
   registerAdapter, 
   Message, 
+  segment, 
   usePlugin,
   register,
   useContext
@@ -19,6 +20,7 @@ const plugin = usePlugin();
 export class KookBot extends Client {
     $connected;  // 连接状态标记
     $config;     // 适配器配置
+    $listeners = {};  // 存储监听器引用
 
     /**
      * 构造函数 - 初始化 KOOK 机器人实例
@@ -96,7 +98,12 @@ export class KookBot extends Client {
     async $connect() {
         try {
             await super.connect();
-            
+
+            this.$removeListeners();
+
+            this.$listeners.message = (m) => this.handleKookMessage(m);
+            this.$listeners.error = (error) => this.handleClientError(error);
+            this.$listeners.disconnected = () => this.handleDisconnected();
             this.on('message', (m) => this.handleKookMessage(m));
             this.on('error', (error) => this.handleClientError(error));
             
@@ -128,8 +135,8 @@ export class KookBot extends Client {
      */
     async $disconnect() {
         try {
-            plugin.logger.info(`正在断开 KOOK 机器人连接: ${this.$config.name}`);
-            
+            this.$removeListeners();
+
             await super.disconnect();
             this.$connected = false;
             
@@ -144,11 +151,39 @@ export class KookBot extends Client {
                 bot: this.$config.name,
                 error: error.message
             });
-            
+
+            this.$removeListeners();
             this.$connected = false;
             
             throw error;
         }
+    }
+    /**
+     * 移除所有监听器
+     */
+    $removeListeners() {
+        // ✅ 移除消息监听器
+        if (this.$listeners.message) {
+            this.off('message', this.$listeners.message);
+            delete this.$listeners.message;
+        }
+        
+        // ✅ 移除错误监听器
+        if (this.$listeners.error) {
+            this.off('error', this.$listeners.error);
+            delete this.$listeners.error;
+        }
+        
+        // ✅ 移除断开连接监听器
+        if (this.$listeners.disconnected) {
+            this.off('disconnected', this.$listeners.disconnected);
+            delete this.$listeners.disconnected;
+        }
+        
+        // ✅ 清空所有其他可能存在的监听器
+        this.removeAllListeners?.();  // 如果父类支持此方法
+        
+        plugin.logger.debug(`已移除所有监听器: ${this.$config.name}`);
     }
 
     /**
@@ -718,7 +753,7 @@ register({
             
             for (const msg of messages) {
                 try {
-                    const result = await sendRawMessage(msg);
+                    const result = await sendRawMessage(msg);  // ✅ 直接调用局部函数
                     results.push({ success: true, result });
                 } catch (error) {
                     results.push({ success: false, error: error.message });
