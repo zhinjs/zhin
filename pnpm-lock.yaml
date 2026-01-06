@@ -477,7 +477,7 @@ importers:
         specifier: ^3.6.5
         version: 3.9.1
       nodemailer:
-        specifier: '>=7.0.11'
+        specifier: ^7.0.11
         version: 7.0.12
       zhin.js:
         specifier: workspace:*
@@ -771,8 +771,8 @@ importers:
         specifier: 9.2.0
         version: 9.2.0(@types/react@19.2.7)(react@19.2.0)(redux@5.0.1)
       react-router:
-        specifier: '>=7.5.2'
-        version: 7.11.0(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+        specifier: 7.5.2
+        version: 7.5.2(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       redux-persist:
         specifier: 6.0.0
         version: 6.0.0(react@19.2.0)(redux@5.0.1)
@@ -811,7 +811,7 @@ importers:
         specifier: workspace:*
         version: link:../../../basic/schema
       koa:
-        specifier: latest
+        specifier: ^3.1.1
         version: 3.1.1
       koa-basic-auth:
         specifier: latest
@@ -5747,6 +5747,16 @@ packages:
       react-dom:
         optional: true
 
+  react-router@7.5.2:
+    resolution: {integrity: sha512-9Rw8r199klMnlGZ8VAsV/I8WrIF6IyJ90JQUdboupx1cdkgYqwnrYjH+I/nY/7cA1X5zia4mDJqH36npP7sxGQ==}
+    engines: {node: '>=20.0.0'}
+    peerDependencies:
+      react: '>=18'
+      react-dom: '>=18'
+    peerDependenciesMeta:
+      react-dom:
+        optional: true
+
   react-style-singleton@2.2.3:
     resolution: {integrity: sha512-b6jSvxvVnyptAiLjbkWLE/lOnR4lfTtDAl+eUC7RZy+QQWc6wRzIV2CE6xBuMmDxc2qIihtDCZD5NPOFl7fRBQ==}
     engines: {node: '>=10'}
@@ -6284,6 +6294,9 @@ packages:
 
   tunnel-agent@0.6.0:
     resolution: {integrity: sha512-McnNiV1l8RYeY8tBgEpuodCC1mLUdbSN+CYBL7kJsJNInOP8UjDDEwdk6Mw60vdLLrr5NHKZhMAOSrR2NZuQ+w==}
+
+  turbo-stream@2.4.0:
+    resolution: {integrity: sha512-FHncC10WpBd2eOmGwpmQsWLDoK4cqsA/UT/GqNoaKOQnT8uzhtCbg3EoUDMvqpOSAI0S26mr0rkjzbOO6S3v1g==}
 
   tweetnacl@1.0.3:
     resolution: {integrity: sha512-6rt+RN7aOi1nGMyC4Xa5DdYiukl2UWCbcJft7YhxReBGQD7OAM8Pbxw6YMo4r2diNEA8FEmu32YOn9rhaiE5yw==}
@@ -12285,6 +12298,15 @@ snapshots:
     optionalDependencies:
       react-dom: 19.2.0(react@19.2.0)
 
+  react-router@7.5.2(react-dom@19.2.0(react@19.2.0))(react@19.2.0):
+    dependencies:
+      cookie: 1.1.1
+      react: 19.2.0
+      set-cookie-parser: 2.7.2
+      turbo-stream: 2.4.0
+    optionalDependencies:
+      react-dom: 19.2.0(react@19.2.0)
+
   react-style-singleton@2.2.3(@types/react@19.2.7)(react@19.2.0):
     dependencies:
       get-nonce: 1.0.1
@@ -12877,6 +12899,8 @@ snapshots:
   tunnel-agent@0.6.0:
     dependencies:
       safe-buffer: 5.2.1
+
+  turbo-stream@2.4.0: {}
 
   tweetnacl@1.0.3: {}
 

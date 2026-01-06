@@ -19,9 +19,9 @@
   "dependencies": {},
   "peerDependencies": {
     "sqlite3": "latest",
-    "mysql2": "latest",
-    "pg": "latest",
-    "mongodb": "latest",
+    "mysql2": "^3.9.8",
+    "pg": "^7.1.2",
+    "mongodb": "^3.1.13",
     "redis": "latest"
   },
   "peerDependenciesMeta": {
