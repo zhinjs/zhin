@@ -29,10 +29,10 @@
     "inquirer": "^9.2.12"
   },
   "peerDependencies": {
-    "zhin.js":"workspace:*"
+    "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {
-    "zhin.js":{
+    "zhin.js": {
       "optional": true
     }
   },
@@ -42,5 +42,10 @@
     "@types/node": "^20.0.0",
     "@types/inquirer": "^9.0.7",
     "typescript": "^5.3.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "basic/cli"
   }
 }

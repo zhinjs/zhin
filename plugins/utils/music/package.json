@@ -42,5 +42,10 @@
     "@zhin.js/adapter-icqq": {
       "optional": true
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "plugins/utils/music"
   }
 }

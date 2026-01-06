@@ -40,5 +40,10 @@
     "@zhin.js/http": {
       "optional": true
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "plugins/services/github-notify"
   }
 }

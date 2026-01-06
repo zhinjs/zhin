@@ -37,5 +37,10 @@
     "template"
   ],
   "author": "zhin team",
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/create-zhin"
+  }
 }

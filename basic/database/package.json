@@ -50,5 +50,10 @@
     "redis": "latest",
     "@types/pg": "latest",
     "@types/sqlite3": "latest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "basic/database"
   }
 }

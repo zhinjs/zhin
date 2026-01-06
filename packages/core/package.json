@@ -44,5 +44,10 @@
   "devDependencies": {
     "@types/node": "^24.3.0",
     "typescript": "^5.3.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/core"
   }
 }

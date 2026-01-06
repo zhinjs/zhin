@@ -23,5 +23,10 @@
   "devDependencies": {
     "typescript": "^5.3.3"
   },
-  "type": "module"
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "plugins/utils/sensitive-filter"
+  }
 }
