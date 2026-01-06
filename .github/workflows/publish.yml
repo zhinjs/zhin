@@ -5,6 +5,12 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+  packages: write
+  pull-requests: write
+  id-token: write  # Required for OIDC trusted publishing
+
 env:
   CI: true
 
@@ -12,11 +18,6 @@ jobs:
   publish:
     timeout-minutes: 15
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      packages: write
-      pull-requests: write
-      id-token: write  # Required for OIDC trusted publishing
     steps:
       - name: setup pnpm
         uses: pnpm/action-setup@v4
@@ -45,7 +46,6 @@ jobs:
       
       - name: bump versions and publish
         uses: changesets/action@v1
-        id: changesets
         with:
           version: pnpm bump
           commit: "chore: update versions"
