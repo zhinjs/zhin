@@ -32,13 +32,13 @@ jobs:
       - name: Setup Node.js with npm registry
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
         run: pnpm install
         env:
-          # Use GitHub token for private dependencies if needed
+          NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build packages
