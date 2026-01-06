@@ -28,5 +28,9 @@
     "type": "git",
     "url": "git+https://github.com/zhinjs/zhin.git",
     "directory": "plugins/utils/sensitive-filter"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
   }
 }

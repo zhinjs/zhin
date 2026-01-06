@@ -23,5 +23,9 @@
     "type": "git",
     "url": "git+https://github.com/zhinjs/zhin.git",
     "directory": "basic/schema"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
   }
 }

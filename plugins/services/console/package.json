@@ -82,5 +82,9 @@
   ],
   "optionalDependencies": {
     "koa-connect": "^2.1.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
   }
 }

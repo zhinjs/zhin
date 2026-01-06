@@ -36,5 +36,9 @@
     "type": "git",
     "url": "git+https://github.com/zhinjs/zhin.git",
     "directory": "packages/client"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
   }
 }

@@ -45,5 +45,9 @@
     "type": "git",
     "url": "git+https://github.com/zhinjs/zhin.git",
     "directory": "plugins/services/github-notify"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
   }
 }
