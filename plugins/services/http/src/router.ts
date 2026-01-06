@@ -1,5 +1,5 @@
 import { Layer, RouterOptions } from "@koa/router";
-import KoaRouter from "@koa/router";
+import KoaRouter, { RouterContext as KoaRouterContext } from "@koa/router";
 import * as http from "http";
 import { ServerOptions, WebSocketServer } from "ws";
 import { parse } from "url";
@@ -15,7 +15,11 @@ const remove = <T>(arr: T[], item: T): boolean => {
   }
   return false;
 };
-
+export type RouterContext = KoaRouterContext & {
+    request: Request & {
+        body: any;
+    };
+};
 export class Router extends KoaRouter {
   wsStack: WebSocketServer[] = [];
   whiteList: Path[] = [];
@@ -24,7 +28,7 @@ export class Router extends KoaRouter {
     super(options);
   }
 
-  register(...args: Parameters<KoaRouter["register"]>) {
+  register(...args: Parameters<KoaRouter["register"]>): ReturnType<KoaRouter["register"]> {
     const path: Path = args[0] as any;
     this.whiteList.push(path);
     return super.register(...args);
