@@ -1,5 +1,11 @@
 # @zhin.js/schema
 
+## 1.0.3
+
+### Patch Changes
+
+- f9faa1d: fix: test release
+
 ## 1.0.2
 
 ### Patch Changes

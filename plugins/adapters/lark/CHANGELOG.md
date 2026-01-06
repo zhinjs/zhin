@@ -1,5 +1,14 @@
 # @zhin.js/adapter-lark
 
+## 1.0.20
+
+### Patch Changes
+
+- f9faa1d: fix: test release
+- Updated dependencies [f9faa1d]
+  - zhin.js@1.0.19
+  - @zhin.js/http@1.0.10
+
 ## 1.0.19
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # @zhin.js/http
 
+## 1.0.10
+
+### Patch Changes
+
+- f9faa1d: fix: test release
+- Updated dependencies [f9faa1d]
+  - @zhin.js/schema@1.0.3
+  - zhin.js@1.0.19
+
 ## 1.0.9
 
 ### Patch Changes

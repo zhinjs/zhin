@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.4
+
+### Patch Changes
+
+- f9faa1d: fix: test release
+- Updated dependencies [f9faa1d]
+  - zhin.js@1.0.19
+
 ## 1.0.3
 
 ### Patch Changes

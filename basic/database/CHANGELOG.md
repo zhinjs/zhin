@@ -1,5 +1,11 @@
 # @zhin.js/database
 
+## 1.0.6
+
+### Patch Changes
+
+- f9faa1d: fix: test release
+
 ## 1.0.5
 
 ### Patch Changes

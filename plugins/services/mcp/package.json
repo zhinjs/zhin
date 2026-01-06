@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/mcp",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Zhin MCP Server - 让 AI 助手能够理解和生成 Zhin 插件",
   "type": "module",
   "main": "./lib/index.js",

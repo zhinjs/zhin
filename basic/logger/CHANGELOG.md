@@ -1,5 +1,11 @@
 # @zhin.js/logger
 
+## 0.1.3
+
+### Patch Changes
+
+- f9faa1d: fix: test release
+
 ## 0.1.2
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @zhin.js/client
 
+## 1.0.7
+
+### Patch Changes
+
+- f9faa1d: fix: test release
+
 ## 1.0.6
 
 ### Patch Changes

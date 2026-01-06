@@ -1,5 +1,16 @@
 # @zhin.js/core
 
+## 1.0.19
+
+### Patch Changes
+
+- f9faa1d: fix: test release
+- Updated dependencies [f9faa1d]
+  - @zhin.js/database@1.0.6
+  - @zhin.js/dependency@1.0.4
+  - @zhin.js/logger@0.1.3
+  - @zhin.js/schema@1.0.3
+
 ## 1.0.18
 
 ### Patch Changes

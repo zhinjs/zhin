@@ -1,5 +1,32 @@
 # test-bot
 
+## 0.1.12
+
+### Patch Changes
+
+- f9faa1d: fix: test release
+- Updated dependencies [f9faa1d]
+  - @zhin.js/client@1.0.7
+  - zhin.js@1.0.19
+  - @zhin.js/adapter-dingtalk@1.0.4
+  - @zhin.js/adapter-discord@1.0.19
+  - @zhin.js/adapter-email@0.1.7
+  - @zhin.js/adapter-icqq@1.0.24
+  - @zhin.js/adapter-kook@1.0.19
+  - @zhin.js/adapter-lark@1.0.20
+  - @zhin.js/adapter-onebot11@1.0.21
+  - @zhin.js/adapter-qq@1.0.19
+  - @zhin.js/adapter-sandbox@1.0.24
+  - @zhin.js/adapter-slack@1.0.4
+  - @zhin.js/adapter-telegram@1.0.4
+  - @zhin.js/adapter-wechat-mp@0.1.5
+  - @zhin.js/console@1.0.15
+  - @zhin.js/plugin-github-notify@0.0.6
+  - @zhin.js/http@1.0.10
+  - @zhin.js/mcp@1.0.2
+  - @zhin.js/plugin-music@0.0.5
+  - @zhin.js/sensitive-filter@0.0.5
+
 ## 0.1.11
 
 ### Patch Changes
