@@ -103,9 +103,6 @@ importers:
       ora:
         specifier: ^7.0.1
         version: 7.0.1
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../packages/zhin
     devDependencies:
       '@types/cross-spawn':
         specifier: ^6.0.6
@@ -122,6 +119,9 @@ importers:
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../packages/zhin
 
   basic/database:
     devDependencies:
@@ -149,6 +149,9 @@ importers:
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../packages/zhin
 
   basic/dependency:
     devDependencies:
@@ -161,6 +164,9 @@ importers:
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../packages/zhin
 
   basic/logger:
     dependencies:
@@ -174,6 +180,9 @@ importers:
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../packages/zhin
 
   basic/schema:
     devDependencies:
@@ -183,6 +192,9 @@ importers:
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../packages/zhin
 
   docs:
     devDependencies:
@@ -423,9 +435,6 @@ importers:
       '@zhin.js/http':
         specifier: workspace:*
         version: link:../../services/http
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/zhin
     devDependencies:
       '@types/koa':
         specifier: ^2.15.0
@@ -436,6 +445,9 @@ importers:
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/discord:
     dependencies:
@@ -448,9 +460,6 @@ importers:
       tweetnacl:
         specifier: ^1.0.3
         version: 1.0.3
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/zhin
     devDependencies:
       '@types/koa':
         specifier: ^3.0.0
@@ -461,6 +470,9 @@ importers:
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/email:
     dependencies:
@@ -479,9 +491,6 @@ importers:
       nodemailer:
         specifier: ^7.0.11
         version: 7.0.12
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/zhin
     devDependencies:
       '@types/mailparser':
         specifier: ^3.4.6
@@ -492,6 +501,9 @@ importers:
       typescript:
         specifier: ^5.3.3
         version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/icqq:
     dependencies:
@@ -510,9 +522,6 @@ importers:
       '@zhin.js/http':
         specifier: workspace:*
         version: link:../../services/http
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/zhin
     devDependencies:
       '@radix-ui/themes':
         specifier: ^3.2.1
@@ -532,6 +541,9 @@ importers:
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/kook:
     dependencies:
@@ -541,13 +553,13 @@ importers:
       kook-client:
         specifier: latest
         version: 1.0.4
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/zhin
     devDependencies:
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/lark:
     dependencies:
@@ -557,9 +569,6 @@ importers:
       axios:
         specifier: '>=1.12.0'
         version: 1.13.2
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/zhin
     devDependencies:
       '@types/koa':
         specifier: ^2.15.0
@@ -570,6 +579,9 @@ importers:
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/onebot11:
     dependencies:
@@ -579,9 +591,6 @@ importers:
       ws:
         specifier: ^8.18.3
         version: 8.18.3
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/zhin
     devDependencies:
       '@types/node':
         specifier: ^24.3.0
@@ -592,6 +601,9 @@ importers:
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/qq:
     dependencies:
@@ -601,13 +613,13 @@ importers:
       qq-official-bot:
         specifier: ^1.0.11
         version: 1.0.11
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/zhin
     devDependencies:
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/sandbox:
     dependencies:
@@ -623,9 +635,6 @@ importers:
       '@zhin.js/http':
         specifier: workspace:*
         version: link:../../services/http
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/zhin
     devDependencies:
       '@radix-ui/themes':
         specifier: ^3.2.1
@@ -645,6 +654,9 @@ importers:
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/slack:
     dependencies:
@@ -654,9 +666,6 @@ importers:
       '@slack/web-api':
         specifier: ^7.10.0
         version: 7.13.0
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/zhin
     devDependencies:
       '@types/node':
         specifier: ^22.9.0
@@ -664,6 +673,9 @@ importers:
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/telegram:
     dependencies:
@@ -673,9 +685,6 @@ importers:
       telegraf:
         specifier: ^4.16.3
         version: 4.16.3(encoding@0.1.13)
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/zhin
     devDependencies:
       '@types/node':
         specifier: ^22.9.0
@@ -683,6 +692,9 @@ importers:
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/wechat-mp:
     dependencies:
@@ -698,9 +710,6 @@ importers:
       xml2js:
         specifier: ^0.6.2
         version: 0.6.2
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/zhin
     devDependencies:
       '@types/koa':
         specifier: ^2.15.0
@@ -711,6 +720,9 @@ importers:
       typescript:
         specifier: ^5.3.3
         version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/services/console:
     dependencies:
@@ -788,19 +800,22 @@ importers:
       vite:
         specifier: '>=7.1.11'
         version: 7.3.0(@types/node@20.19.27)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)(yaml@2.8.2)
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/services/github-notify:
     dependencies:
       '@zhin.js/http':
         specifier: workspace:*
         version: link:../http
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/zhin
     devDependencies:
       typescript:
         specifier: ^5.3.3
         version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/services/http:
     dependencies:
@@ -822,9 +837,6 @@ importers:
       ws:
         specifier: ^8.18.3
         version: 8.18.3
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/zhin
     devDependencies:
       '@types/koa':
         specifier: latest
@@ -841,6 +853,9 @@ importers:
       '@types/ws':
         specifier: latest
         version: 8.18.1
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/services/mcp:
     dependencies:
@@ -850,9 +865,6 @@ importers:
       '@zhin.js/http':
         specifier: workspace:^
         version: link:../http
-      zhin.js:
-        specifier: workspace:^
-        version: link:../../../packages/zhin
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -860,6 +872,9 @@ importers:
       '@types/node':
         specifier: latest
         version: 25.0.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/utils/music:
     devDependencies:
@@ -874,14 +889,13 @@ importers:
         version: link:../../../packages/zhin
 
   plugins/utils/sensitive-filter:
-    dependencies:
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/zhin
     devDependencies:
       typescript:
         specifier: ^5.3.3
         version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
 packages:
 
