@@ -268,9 +268,9 @@ NODE_ENV=production pnpm start
 
 ## 📚 相关文档
 
-- [内存性能指南](./memory-performance.md)
-- [Next.js 性能优化](./nextjs-performance.md)
-- [Console 插件 README](../../plugins/services/console/README.md)
+- [Console 插件源码](https://github.com/zhinjs/zhin/tree/main/plugins/services/console)
+- [Vite 官方文档](https://vitejs.dev/)
+- [动态 Import 指南](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/import)
 
 ## 🎉 总结
 
