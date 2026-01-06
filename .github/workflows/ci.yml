@@ -31,7 +31,7 @@ jobs:
       - name: install dependencies
         run: pnpm install
         env:
-          NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
       - name: build packages
