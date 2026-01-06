@@ -115,7 +115,7 @@ console.log('   c. 填写以下信息：');
 console.log('      - Provider: GitHub Actions');
 console.log('      - Repository owner: zhinjs');
 console.log('      - Repository name: zhin');
-console.log('      - Workflow filename: publish.yml');
+console.log('      - Workflow filename: ci.yml');
 console.log('      - Environment name: (留空)');
 console.log('   d. 点击 "Add trusted publisher"');
 console.log('3. (推荐) 在 Publishing access 页面选择');
@@ -130,7 +130,9 @@ for (const pkg of packages) {
   console.log(`${pkg.name},${pkg.version},${pkg.path},https://www.npmjs.com/package/${pkg.name}/access`);
 }
 
-console.log('\n✅ 配置完成后，可以通过以下方式触发发布：');
-console.log('   git tag v2.0.0');
-console.log('   git push origin v2.0.0\n');
+console.log('\n✅ 配置完成后，使用 Changesets 工作流发布：');
+console.log('   pnpm changeset              # 创建变更记录');
+console.log('   git add . && git commit -m "chore: add changeset"');
+console.log('   git push origin main        # 推送后 CI 自动创建版本 PR');
+console.log('   # 合并 PR 后自动发布到 npm\n');
 

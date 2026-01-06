@@ -45,7 +45,7 @@ node scripts/list-packages-for-trusted-publishing.mjs
 | Provider | `GitHub Actions` |
 | Repository owner | `zhinjs` |
 | Repository name | `zhin` |
-| Workflow filename | `publish.yml` ⚠️ 必须包含 `.yml` |
+| Workflow filename | `ci.yml` ⚠️ 必须包含 `.yml` |
 | Environment name | (留空) |
 
 4. 保存后，建议启用：**"Require 2FA and disallow tokens"**
@@ -60,22 +60,25 @@ node scripts/list-packages-for-trusted-publishing.mjs
 
 ### 第三步：触发发布
 
-#### 方式 1：推送标签（推荐）
+使用 **Changesets 工作流**（推荐）：
 
 ```bash
-# 创建标签
-git tag v2.0.0
+# 1. 创建 changeset
+pnpm changeset
 
-# 推送标签（自动触发发布）
-git push origin v2.0.0
+# 2. 提交并推送
+git add .
+git commit -m "chore: add changeset"
+git push origin main
+
+# 3. CI 自动创建 "Version Packages" PR
+# 4. 审查并合并 PR → 自动发布
 ```
 
-#### 方式 2：手动触发
-
-1. 访问：https://github.com/zhinjs/zhin/actions
-2. 选择：**Publish to npm**
-3. 点击：**Run workflow**
-4. 输入：标签名（如 `v2.0.0`）
+**工作原理**：
+- Push 到 main → CI 运行测试
+- 如果有 changeset → 创建版本更新 PR
+- 合并 PR → 自动发布到 npm（使用 OIDC）
 
 ## 🎯 核心包列表（优先配置）
 
@@ -135,23 +138,23 @@ git push origin v2.0.0
 
 ### 2. 测试发布流程
 
-建议先用一个测试包验证：
+建议先用一个测试 changeset 验证：
 
 ```bash
-# 1. 确保所有测试通过
-pnpm test
+# 1. 创建测试 changeset
+pnpm changeset
+# 选择一个包，选择 patch，输入 "test: verify trusted publishing"
 
-# 2. 构建所有包
-pnpm build
+# 2. 提交并推送
+git add .
+git commit -m "chore: test changeset"
+git push origin main
 
-# 3. 创建测试标签
-git tag v2.0.0-test
-
-# 4. 推送并观察 Actions
-git push origin v2.0.0-test
-
-# 5. 检查 Actions 日志
+# 3. 观察 CI
 # 访问：https://github.com/zhinjs/zhin/actions
+# 应该看到 "Version Packages" PR 被创建
+
+# 4. 合并 PR 并观察自动发布
 ```
 
 ### 3. 验证 Provenance

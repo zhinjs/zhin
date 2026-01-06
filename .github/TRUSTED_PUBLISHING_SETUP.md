@@ -117,7 +117,7 @@ npm publish --access public
    - **Provider**: 选择 `GitHub Actions`
    - **Repository owner**: `zhinjs`
    - **Repository name**: `zhin`
-   - **Workflow filename**: `publish.yml`  
+   - **Workflow filename**: `ci.yml`  
      ⚠️ **重要**：必须包含 `.yml` 扩展名
    - **Environment name**: 留空（可选）
 
@@ -135,30 +135,48 @@ npm publish --access public
 
 ### 2. GitHub Actions 配置
 
-✅ **已完成**！工作流文件 `.github/workflows/publish.yml` 已配置好：
+✅ **已完成**！工作流文件 `.github/workflows/ci.yml` 已配置好：
 
 - ✅ 添加了 `id-token: write` 权限
 - ✅ 配置了 `registry-url: 'https://registry.npmjs.org'`
 - ✅ 移除了 `NODE_AUTH_TOKEN` 环境变量（使用 OIDC 自动认证）
+- ✅ 集成了 Changesets 自动版本管理
 
 ### 3. 触发发布
 
-配置完成后，有两种方式触发发布：
+配置完成后，使用 **Changesets 工作流**发布：
 
-#### 方式 1：推送标签（自动）
+#### 标准发布流程（推荐）
 
 ```bash
-# 创建并推送标签
-git tag v2.0.0
-git push origin v2.0.0
+# 1. 创建 changeset（记录变更）
+pnpm changeset
+
+# 2. 提交并推送到 main
+git add .
+git commit -m "chore: add changeset"
+git push origin main
+
+# 3. CI 会自动创建 "Version Packages" PR
+# 4. 审查并合并 PR
+# 5. 合并后自动发布到 npm
 ```
 
-#### 方式 2：手动触发
+#### 工作流程说明
 
-1. 访问 GitHub Actions 页面
-2. 选择 **"Publish to npm"** 工作流
-3. 点击 **"Run workflow"**
-4. 输入标签名称（如 `v2.0.0`）
+1. **开发阶段**：
+   - 每次有重要改动，运行 `pnpm changeset`
+   - 选择变更类型（major/minor/patch）
+   - 填写变更说明
+
+2. **版本更新**：
+   - CI 自动创建 PR 更新版本号和 CHANGELOG
+   - PR 标题：`chore: update versions`
+
+3. **自动发布**：
+   - 合并 PR 后，CI 自动发布到 npm
+   - 使用 OIDC 可信发布
+   - 自动生成 Provenance
 
 ## 自动 Provenance 生成
 
