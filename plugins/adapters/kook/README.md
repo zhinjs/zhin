@@ -139,6 +139,36 @@ addCommand(new MessageCommand('md')
   })
 )
 ```
+### Card 消息 (卡片消息)
+
+```typescript
+addCommand(new MessageCommand('card')
+    .action(async (message) => {
+        logger.info(message);
+        if (message.$adapter === 'icqq') {
+            return "暂未适配平台！";
+        } else if (message.$adapter === 'kook') {
+            const cardMessage = [{
+                type: 'card',
+                theme: "secondary",
+                size: "lg",
+                modules: [
+                    msgMod.section(
+                        element.markdown("(font) 卡片信息(font)[purple](font) Card信息(font)[warning]")
+                    ),
+                    msgMod.container(
+                        [
+                            element.image('https://api.owii.cn/gif/cache/2026-01-03_07-17-15.gif')
+                        ]
+                    )
+                ]
+            }];
+            return cardMessage;
+        }
+        return `当前平台：${message.adapter}`;
+    })
+)
+```
 
 ## 消息类型支持
 
