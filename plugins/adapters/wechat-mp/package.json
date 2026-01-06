@@ -22,7 +22,8 @@
   "devDependencies": {
     "typescript": "^5.3.3",
     "@types/node": "^20.10.6",
-    "@types/koa": "^2.15.0"
+    "@types/koa": "^2.15.0",
+    "zhin.js": "workspace:*"
   },
   "keywords": [
     "zhin",

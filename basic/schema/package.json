@@ -17,7 +17,8 @@
   },
   "devDependencies": {
     "typescript": "^5.3.0",
-    "@types/node": "^24.3.0"
+    "@types/node": "^24.3.0",
+    "zhin.js": "workspace:*"
   },
   "repository": {
     "type": "git",
@@ -27,5 +28,8 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
+  },
+  "peerDependencies": {
+    "zhin.js": "workspace:*"
   }
 }

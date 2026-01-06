@@ -45,7 +45,8 @@
     "@types/koa-basic-auth": "latest",
     "@types/koa-bodyparser": "latest",
     "@types/koa__router": "latest",
-    "@types/ws": "latest"
+    "@types/ws": "latest",
+    "zhin.js": "workspace:*"
   },
   "files": [
     "lib",

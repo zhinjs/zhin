@@ -36,10 +36,11 @@
   },
   "peerDependencies": {
     "@zhin.js/http": "workspace:^",
-    "zhin.js": "workspace:^"
+    "zhin.js": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "latest"
+    "@types/node": "latest",
+    "zhin.js": "workspace:*"
   },
   "files": [
     "lib",

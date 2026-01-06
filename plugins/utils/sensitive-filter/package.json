@@ -17,11 +17,12 @@
   ],
   "author": "Zhin Team",
   "license": "MIT",
-  "dependencies": {
+  "peerDependencies": {
     "zhin.js": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "zhin.js": "workspace:*"
   },
   "type": "module",
   "repository": {

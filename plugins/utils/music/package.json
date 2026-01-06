@@ -36,7 +36,8 @@
     "@zhin.js/adapter-icqq": "workspace:*"
   },
   "peerDependencies": {
-    "@zhin.js/adapter-icqq": "workspace:*"
+    "@zhin.js/adapter-icqq": "workspace:*",
+    "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@zhin.js/adapter-icqq": {

@@ -44,7 +44,8 @@
     "radix-ui": "^1.4.3",
     "@radix-ui/themes": "^3.2.1",
     "lucide-react": "^0.469.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "zhin.js": "workspace:*"
   },
   "peerDependencies": {
     "@zhin.js/core": "workspace:*",

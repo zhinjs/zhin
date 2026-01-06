@@ -22,7 +22,8 @@
     "mysql2": "^3.9.8",
     "pg": "^7.1.2",
     "mongodb": "^3.1.13",
-    "redis": "latest"
+    "redis": "latest",
+    "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {
     "sqlite3": {
@@ -49,7 +50,8 @@
     "mongodb": "latest",
     "redis": "latest",
     "@types/pg": "latest",
-    "@types/sqlite3": "latest"
+    "@types/sqlite3": "latest",
+    "zhin.js": "workspace:*"
   },
   "repository": {
     "type": "git",

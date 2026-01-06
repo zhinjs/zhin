@@ -30,7 +30,8 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "zhin.js": "workspace:*"
   },
   "peerDependencies": {
     "zhin.js": "workspace:*",

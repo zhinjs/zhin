@@ -23,7 +23,8 @@
   "devDependencies": {
     "@types/mailparser": "^3.4.6",
     "@types/node": "^20.10.6",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "zhin.js": "workspace:*"
   },
   "keywords": [
     "zhin",
