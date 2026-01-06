@@ -1,5 +1,32 @@
 # test-bot
 
+## 0.1.11
+
+### Patch Changes
+
+- aff88bd: fix: test trust publish
+- Updated dependencies [aff88bd]
+  - @zhin.js/client@1.0.6
+  - zhin.js@1.0.18
+  - @zhin.js/adapter-dingtalk@1.0.3
+  - @zhin.js/adapter-discord@1.0.18
+  - @zhin.js/adapter-email@0.1.6
+  - @zhin.js/adapter-icqq@1.0.23
+  - @zhin.js/adapter-kook@1.0.18
+  - @zhin.js/adapter-lark@1.0.19
+  - @zhin.js/adapter-onebot11@1.0.20
+  - @zhin.js/adapter-qq@1.0.18
+  - @zhin.js/adapter-sandbox@1.0.23
+  - @zhin.js/adapter-slack@1.0.3
+  - @zhin.js/adapter-telegram@1.0.3
+  - @zhin.js/adapter-wechat-mp@0.1.4
+  - @zhin.js/console@1.0.14
+  - @zhin.js/plugin-github-notify@0.0.5
+  - @zhin.js/http@1.0.9
+  - @zhin.js/mcp@1.0.1
+  - @zhin.js/plugin-music@0.0.4
+  - @zhin.js/sensitive-filter@0.0.4
+
 ## 0.1.10
 
 ### Patch Changes

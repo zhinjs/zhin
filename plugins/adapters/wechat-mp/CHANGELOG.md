@@ -1,5 +1,14 @@
 # @zhin.js/adapter-wechat-mp
 
+## 0.1.4
+
+### Patch Changes
+
+- aff88bd: fix: test trust publish
+- Updated dependencies [aff88bd]
+  - zhin.js@1.0.18
+  - @zhin.js/http@1.0.9
+
 ## 0.1.3
 
 ### Patch Changes

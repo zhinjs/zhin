@@ -1,5 +1,13 @@
 # @zhin.js/adapter-email
 
+## 0.1.6
+
+### Patch Changes
+
+- aff88bd: fix: test trust publish
+- Updated dependencies [aff88bd]
+  - zhin.js@1.0.18
+
 ## 0.1.5
 
 ### Patch Changes

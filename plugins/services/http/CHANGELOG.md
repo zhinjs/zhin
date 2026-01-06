@@ -1,5 +1,14 @@
 # @zhin.js/http
 
+## 1.0.9
+
+### Patch Changes
+
+- aff88bd: fix: test trust publish
+- Updated dependencies [aff88bd]
+  - @zhin.js/schema@1.0.2
+  - zhin.js@1.0.18
+
 ## 1.0.7
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @zhin.js/sensitive-filter
 
+## 0.0.4
+
+### Patch Changes
+
+- aff88bd: fix: test trust publish
+- Updated dependencies [aff88bd]
+  - zhin.js@1.0.18
+
 ## 0.0.3
 
 ### Patch Changes

@@ -1,5 +1,16 @@
 # @zhin.js/core
 
+## 1.0.18
+
+### Patch Changes
+
+- aff88bd: fix: test trust publish
+- Updated dependencies [aff88bd]
+  - @zhin.js/database@1.0.5
+  - @zhin.js/dependency@1.0.3
+  - @zhin.js/logger@0.1.2
+  - @zhin.js/schema@1.0.2
+
 ## 1.0.17
 
 ### Patch Changes

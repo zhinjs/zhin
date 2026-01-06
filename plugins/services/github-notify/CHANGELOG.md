@@ -1,5 +1,14 @@
 # @zhin.js/plugin-github-notify
 
+## 0.0.5
+
+### Patch Changes
+
+- aff88bd: fix: test trust publish
+- Updated dependencies [aff88bd]
+  - zhin.js@1.0.18
+  - @zhin.js/http@1.0.9
+
 ## 0.0.4
 
 ### Patch Changes

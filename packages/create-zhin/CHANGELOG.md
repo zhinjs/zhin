@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.15
+
+### Patch Changes
+
+- aff88bd: fix: test trust publish
+
 ## 1.0.14
 
 ### Patch Changes

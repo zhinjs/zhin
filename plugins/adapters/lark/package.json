@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-lark",
-  "version": "1.0.18",
+  "version": "1.0.19",
   "description": "zhin adapter for lark/feishu",
   "type": "module",
   "main": "./lib/index.js",

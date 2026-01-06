@@ -1,5 +1,15 @@
 # @zhin.js/console
 
+## 1.0.14
+
+### Patch Changes
+
+- aff88bd: fix: test trust publish
+- Updated dependencies [aff88bd]
+  - @zhin.js/client@1.0.6
+  - @zhin.js/core@1.0.18
+  - @zhin.js/http@1.0.9
+
 ## 1.0.13
 
 ### Patch Changes

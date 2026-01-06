@@ -1,5 +1,14 @@
 # @zhin.js/cli
 
+## 1.0.12
+
+### Patch Changes
+
+- aff88bd: fix: test trust publish
+- Updated dependencies [aff88bd]
+  - @zhin.js/logger@0.1.2
+  - zhin.js@1.0.18
+
 ## 1.0.11
 
 ### Patch Changes
