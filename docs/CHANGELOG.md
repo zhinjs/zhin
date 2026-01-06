@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.4
+
+### Patch Changes
+
+- f9faa1d: fix: test release
+
 ## 1.0.3
 
 ### Patch Changes

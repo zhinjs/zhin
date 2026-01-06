@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.16
+
+### Patch Changes
+
+- f9faa1d: fix: test release
+
 ## 1.0.15
 
 ### Patch Changes

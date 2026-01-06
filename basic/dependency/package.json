@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/dependency",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "A TypeScript dependency tree analyzer with ESM support",
   "type": "module",
   "main": "./dist/index.js",

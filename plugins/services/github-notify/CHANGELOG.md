@@ -1,5 +1,14 @@
 # @zhin.js/plugin-github-notify
 
+## 0.0.6
+
+### Patch Changes
+
+- f9faa1d: fix: test release
+- Updated dependencies [f9faa1d]
+  - zhin.js@1.0.19
+  - @zhin.js/http@1.0.10
+
 ## 0.0.5
 
 ### Patch Changes
