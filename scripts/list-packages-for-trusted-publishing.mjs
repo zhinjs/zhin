@@ -65,6 +65,25 @@ console.log('╚═════════════════════�
 
 console.log(`📦 共找到 ${packages.length} 个需要配置的包\n`);
 
+// 标记未发布的包（通常是 0.x 版本或特定包名）
+const unpublishedPackages = [
+  '@zhin.js/adapter-sandbox',
+  // 可以根据需要添加其他未发布的包
+];
+
+const hasUnpublished = packages.some(p => unpublishedPackages.includes(p.name));
+if (hasUnpublished) {
+  console.log('⚠️  注意：以下包可能未发布到 npm，需要先发布才能配置可信发布者：');
+  console.log('─'.repeat(60));
+  packages
+    .filter(p => unpublishedPackages.includes(p.name))
+    .forEach(p => console.log(`  ⚠️  ${p.name.padEnd(40)} v${p.version}`));
+  console.log('\n💡 解决方案：');
+  console.log('   1. 本地发布：npm login && cd <path> && npm publish --access public');
+  console.log('   2. 或使用 GitHub Actions "First Publish" 工作流');
+  console.log('   3. 发布后立即配置可信发布者\n');
+}
+
 // 按类别分组
 const groups = {
   '核心包': packages.filter(p => p.path.startsWith('packages/')),
@@ -108,7 +127,7 @@ console.log('\n📄 CSV 格式（可用于批量处理）:');
 console.log('─'.repeat(60));
 console.log('Package Name,Version,Path,npm URL');
 for (const pkg of packages) {
-  console.log(`${pkg.name},${pkg.version},${pkg.path},https://www.npmjs.com/package/${pkg.name}`);
+  console.log(`${pkg.name},${pkg.version},${pkg.path},https://www.npmjs.com/package/${pkg.name}/access`);
 }
 
 console.log('\n✅ 配置完成后，可以通过以下方式触发发布：');

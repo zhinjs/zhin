@@ -15,6 +15,44 @@
 
 ## 配置步骤
 
+### 0. 处理未发布的包（如果有）
+
+⚠️ **重要**：可信发布只能在包**已经存在于 npm**后才能配置。
+
+对于从未发布过的包（如 `@zhin.js/adapter-sandbox`），有两种方案：
+
+#### 方案 A：本地首次发布（推荐）
+
+```bash
+# 1. 登录 npm（如果还未登录）
+npm login
+
+# 2. 进入包目录
+cd plugins/adapters/sandbox
+
+# 3. 构建包
+pnpm build
+
+# 4. 首次发布
+npm publish --access public
+
+# 5. 发布成功后，立即在 npmjs.com 上配置可信发布者
+```
+
+#### 方案 B：使用 GitHub Actions 首次发布
+
+使用专门的 `first-publish.yml` 工作流：
+
+1. 访问 GitHub Actions
+2. 选择 **"First Publish (for new packages)"**
+3. 点击 **"Run workflow"**
+4. 填写：
+   - Package name: `@zhin.js/adapter-sandbox`
+   - Package path: `plugins/adapters/sandbox`
+5. 运行完成后，立即在 npmjs.com 上配置可信发布者
+
+**注意**：此工作流需要在 GitHub Secrets 中配置 `NPM_TOKEN`，仅用于首次发布。
+
 ### 1. 在 npmjs.com 上配置可信发布者
 
 对于 Zhin 项目中的**每个需要发布的包**，你需要在 npmjs.com 上配置可信发布者：
