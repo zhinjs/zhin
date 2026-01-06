@@ -45,14 +45,13 @@ jobs:
         run: pnpm build
       
       - name: bump versions and publish
-        id: changesets
         uses: changesets/action@v1
         with:
           version: pnpm bump
           commit: "chore: update versions"
           title: "chore: update versions"
           publish: pnpm pub
-          createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # OIDC authentication is automatic - no NPM_TOKEN needed!
+          # createGithubReleases defaults to true - will auto create releases
