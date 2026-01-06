@@ -1,5 +1,17 @@
 # @zhin.js/adapter-icqq
 
+## 1.0.23
+
+### Patch Changes
+
+- d16a69c: fix: test trust publish
+- Updated dependencies [d16a69c]
+  - @zhin.js/client@1.0.6
+  - @zhin.js/core@1.0.18
+  - zhin.js@1.0.18
+  - @zhin.js/console@1.0.14
+  - @zhin.js/http@1.0.9
+
 ## 1.0.22
 
 ### Patch Changes

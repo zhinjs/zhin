@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.3
+
+### Patch Changes
+
+- d16a69c: fix: test trust publish
+- Updated dependencies [d16a69c]
+  - zhin.js@1.0.18
+
 ## 1.0.2
 
 ### Patch Changes

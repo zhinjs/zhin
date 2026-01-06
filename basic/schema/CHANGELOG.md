@@ -1,5 +1,11 @@
 # @zhin.js/schema
 
+## 1.0.2
+
+### Patch Changes
+
+- d16a69c: fix: test trust publish
+
 ## 1.0.1
 
 ### Patch Changes

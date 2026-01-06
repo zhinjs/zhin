@@ -1,5 +1,15 @@
 # zhin.js
 
+## 1.0.18
+
+### Patch Changes
+
+- d16a69c: fix: test trust publish
+- Updated dependencies [d16a69c]
+  - @zhin.js/logger@0.1.2
+  - @zhin.js/schema@1.0.2
+  - @zhin.js/core@1.0.18
+
 ## 1.0.17
 
 ### Patch Changes
