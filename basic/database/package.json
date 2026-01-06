@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/database",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Universal database abstraction layer with support for SQLite, MySQL, PostgreSQL, MongoDB, Redis and in-memory storage",
   "type": "module",
   "main": "./lib/index.js",

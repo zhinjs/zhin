@@ -1,5 +1,11 @@
 # @zhin.js/database
 
+## 1.0.5
+
+### Patch Changes
+
+- d16a69c: fix: test trust publish
+
 ## 1.0.4
 
 ### Patch Changes
