@@ -38,7 +38,7 @@ jobs:
       - name: install dependencies
         run: pnpm install
         env:
-          NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
       - name: build packages
@@ -54,4 +54,3 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # OIDC authentication is automatic - no NPM_TOKEN needed!
-          # createGithubReleases defaults to true - will auto create releases
