@@ -55,7 +55,7 @@ export const unloadScript = createAsyncThunk(
     }
 )
 
-export const scriptSlice = createSlice({
+const scriptSlice = createSlice({
     name: 'script',
     initialState,
     reducers: {

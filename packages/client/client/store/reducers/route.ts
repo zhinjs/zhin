@@ -45,7 +45,7 @@ const calculateRelativePath = (parentPath: string, fullPath: string): string => 
     return fullPath.replace(parentPath + '/', '')
 }
 
-export const routeSlice = createSlice({
+const routeSlice = createSlice({
     name: 'route',
     initialState,
     reducers: {

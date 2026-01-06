@@ -10,7 +10,7 @@ const initialState: UIState = {
     activeMenu: 'home'
 }
 
-export const uiSlice = createSlice({
+const uiSlice = createSlice({
     name: 'ui',
     initialState,
     reducers: {
