@@ -4,8 +4,8 @@ import { createServer, Server } from "http";
 import os from "node:os";
 import Koa from "koa";
 import auth from "koa-basic-auth";
-import KoaBodyParser from "koa-bodyparser";
-import { Router } from "./router.js";
+import body, { KoaBodyMiddlewareOptionsSchema } from "koa-body";
+import { Router, RouterContext} from "./router.js";
 
 export * from "./router.js";
 
@@ -337,7 +337,7 @@ useContext("config", (configService) => {
   });
 
   // Schema API - 获取单个插件 Schema
-  router.get(`${base}/schema/:name`, async (ctx) => {
+  router.get(`${base}/schema/:name`, async (ctx:RouterContext) => {
     const schemaService = root.inject('schema' as any);
     const { name } = ctx.params;
     const schema = (schemaService as any)?.get(name);
@@ -351,7 +351,7 @@ useContext("config", (configService) => {
   });
 
   // 消息发送 API
-  router.post(`${base}/message/send`, async (ctx) => {
+  router.post(`${base}/message/send`, async (ctx:RouterContext) => {
     interface SendMessageBody {
       context: string;
       bot: string;
@@ -493,7 +493,7 @@ useContext("database", (database: Database<any, Models>) => {
   });
 
   // 日志清理 API
-  router.post(`${base}/logs/cleanup`, async (ctx) => {
+  router.post(`${base}/logs/cleanup`, async (ctx:RouterContext) => {
     const LogModel = database.models.get("SystemLog");
     if (!LogModel) {
       ctx.status = 500;
@@ -553,4 +553,4 @@ provide({
   value: router,
 });
 // 应用中间件
-koa.use(KoaBodyParser()).use(router.routes()).use(router.allowedMethods());
+koa.use(body()).use(router.routes()).use(router.allowedMethods());
