@@ -51,16 +51,18 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
+      id-token: write  # Required for OIDC trusted publishing
     steps:
       - name: setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 9
       
-      - name: setup node.js
+      - name: setup node.js with npm registry
         uses: actions/setup-node@v4
         with:
           node-version: 20.x
+          registry-url: 'https://registry.npmjs.org'
       
       - name: checkout repository
         uses: actions/checkout@v4
@@ -70,7 +72,6 @@ jobs:
       - name: install dependencies
         run: pnpm install
         env:
-          NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
       - name: build packages
@@ -86,4 +87,4 @@ jobs:
           publish: pnpm pub
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # OIDC authentication is automatic - no NPM_TOKEN needed!
