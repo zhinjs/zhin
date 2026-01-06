@@ -25,7 +25,7 @@
     "exp:dep": "pnpm --filter dependency-example dev",
     "release": "pnpm changeset",
     "bump": "pnpm changeset version",
-    "pub": "pnpm -r publish --access public --no-git-checks --registry https://registry.npmjs.org",
+    "pub": "changeset publish",
     "stop": "pnpm --filter test-bot stop",
     "init": "pnpm --filter test-bot initial && pnpm install",
     "prepare:logger": "pnpm --filter @zhin.js/logger build && pnpm --filter @zhin.js/cli install",
