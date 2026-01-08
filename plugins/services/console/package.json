@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/console",
   "version": "1.0.15",
-  "description": "Zhin 控制台",
+  "description": "Web console service for Zhin.js with real-time monitoring",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -10,10 +10,19 @@
   },
   "keywords": [
     "zhin",
+    "bot",
     "service",
-    "console"
+    "console",
+    "web",
+    "dashboard",
+    "monitoring",
+    "admin"
   ],
-  "author": "lc-cn",
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
   "license": "MIT",
   "repository": {
     "url": "git+https://github.com/zhinjs/zhin.git",

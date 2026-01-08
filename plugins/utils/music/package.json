@@ -22,12 +22,19 @@
   },
   "keywords": [
     "zhin",
+    "bot",
     "plugin",
     "music",
     "qq-music",
-    "netease-music"
+    "netease-music",
+    "search",
+    "share"
   ],
-  "author": "",
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
   "license": "MIT",
   "dependencies": {},
   "devDependencies": {

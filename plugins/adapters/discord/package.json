@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/adapter-discord",
   "version": "1.0.19",
-  "description": "zhin adapter for discord",
+  "description": "Zhin.js adapter for Discord",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -13,10 +13,16 @@
   },
   "keywords": [
     "zhin",
+    "bot",
     "adapter",
-    "discord"
+    "discord",
+    "chatbot"
   ],
-  "author": "lc-cn",
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
   "license": "MIT",
   "repository": {
     "url": "git+https://github.com/zhinjs/zhin.git",

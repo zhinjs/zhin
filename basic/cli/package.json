@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/cli",
   "version": "1.0.13",
-  "description": "Zhin机器人框架CLI工具",
+  "description": "Command-line interface for Zhin.js bot framework",
   "type": "module",
   "main": "./lib/index.js",
   "bin": {
@@ -52,5 +52,12 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
-  }
+  },
+  "keywords": [
+    "zhin",
+    "bot",
+    "cli",
+    "command-line",
+    "tool"
+  ]
 }

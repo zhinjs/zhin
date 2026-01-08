@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/sensitive-filter",
   "version": "0.0.5",
-  "description": "敏感词过滤插件，过滤不符合中国国情的敏感内容",
+  "description": "Content moderation plugin for Zhin.js - filters sensitive words",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "scripts": {
@@ -10,12 +10,19 @@
   },
   "keywords": [
     "zhin",
+    "bot",
     "plugin",
     "sensitive",
     "filter",
-    "content-moderation"
+    "moderation",
+    "content",
+    "security"
   ],
-  "author": "Zhin Team",
+  "author": {
+    "name": "Zhin Team",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/zhinjs"
+  },
   "license": "MIT",
   "peerDependencies": {
     "zhin.js": "workspace:*"

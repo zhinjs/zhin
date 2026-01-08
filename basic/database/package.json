@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/database",
   "version": "1.0.6",
-  "description": "Universal database abstraction layer with support for SQLite, MySQL, PostgreSQL, MongoDB, Redis and in-memory storage",
+  "description": "Universal database abstraction layer for Zhin.js - supports SQLite, MySQL, PostgreSQL, MongoDB, Redis",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -61,5 +61,16 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
-  }
+  },
+  "keywords": [
+    "zhin",
+    "bot",
+    "database",
+    "orm",
+    "sqlite",
+    "mysql",
+    "postgresql",
+    "mongodb",
+    "redis"
+  ]
 }

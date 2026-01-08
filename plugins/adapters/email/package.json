@@ -2,7 +2,7 @@
   "name": "@zhin.js/adapter-email",
   "version": "0.1.7",
   "type": "module",
-  "description": "Email adapter for zhin.js",
+  "description": "Zhin.js adapter for Email (SMTP/IMAP)",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "scripts": {
@@ -28,13 +28,18 @@
   },
   "keywords": [
     "zhin",
+    "bot",
     "adapter",
     "email",
     "smtp",
     "imap",
     "mail"
   ],
-  "author": "",
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
   "license": "MIT",
   "repository": {
     "url": "git+https://github.com/zhinjs/zhin.git",

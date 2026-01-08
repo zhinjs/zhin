@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/adapter-sandbox",
   "version": "1.0.24",
-  "description": "zhin adapter for sandbox",
+  "description": "Zhin.js adapter for local testing and development",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -22,10 +22,18 @@
   ],
   "keywords": [
     "zhin",
+    "bot",
     "adapter",
-    "process"
+    "sandbox",
+    "test",
+    "development",
+    "local"
   ],
-  "author": "lc-cn",
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
   "license": "MIT",
   "repository": {
     "url": "git+https://github.com/zhinjs/zhin.git",

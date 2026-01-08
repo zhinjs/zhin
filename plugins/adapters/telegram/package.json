@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/adapter-telegram",
   "version": "1.0.4",
-  "description": "zhin adapter for telegram",
+  "description": "Zhin.js adapter for Telegram",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -13,10 +13,16 @@
   },
   "keywords": [
     "zhin",
+    "bot",
     "adapter",
-    "telegram"
+    "telegram",
+    "chatbot"
   ],
-  "author": "lc-cn",
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
   "license": "MIT",
   "repository": {
     "url": "git+https://github.com/zhinjs/zhin.git",

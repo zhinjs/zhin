@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/schema",
   "version": "1.0.3",
-  "description": "Zhin Schema 配置验证系统",
+  "description": "Configuration validation and schema system for Zhin.js",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -31,5 +31,13 @@
   },
   "peerDependencies": {
     "zhin.js": "workspace:*"
-  }
+  },
+  "keywords": [
+    "zhin",
+    "bot",
+    "schema",
+    "validation",
+    "config",
+    "type-checking"
+  ]
 }

@@ -2,7 +2,7 @@
   "name": "@zhin.js/adapter-wechat-mp",
   "version": "0.1.5",
   "type": "module",
-  "description": "WeChat Official Account adapter for zhin.js",
+  "description": "Zhin.js adapter for WeChat Official Account (微信公众号)",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "scripts": {
@@ -27,13 +27,20 @@
   },
   "keywords": [
     "zhin",
+    "bot",
     "adapter",
     "wechat",
     "weixin",
+    "微信",
     "official-account",
-    "mp"
+    "mp",
+    "chatbot"
   ],
-  "author": "lc-cn",
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
   "license": "MIT",
   "repository": {
     "url": "git+https://github.com/zhinjs/zhin.git",

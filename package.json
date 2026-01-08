@@ -42,7 +42,8 @@
     "docs:dev": "pnpm --filter @zhin.js/docs dev",
     "docs:build": "pnpm --filter @zhin.js/docs build",
     "docs:preview": "pnpm --filter @zhin.js/docs preview",
-    "check:prod": "node scripts/check-production-config.js"
+    "check:prod": "node scripts/check-production-config.js",
+    "check:plugin": "node scripts/check-plugin-spec.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.7",

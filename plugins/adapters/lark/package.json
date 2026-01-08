@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/adapter-lark",
   "version": "1.0.20",
-  "description": "zhin adapter for lark/feishu",
+  "description": "Zhin.js adapter for Lark/Feishu (飞书)",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -13,10 +13,18 @@
   },
   "keywords": [
     "zhin",
+    "bot",
     "adapter",
-    "lark"
+    "lark",
+    "feishu",
+    "飞书",
+    "chatbot"
   ],
-  "author": "lc-cn",
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
   "license": "MIT",
   "repository": {
     "url": "git+https://github.com/zhinjs/zhin.git",

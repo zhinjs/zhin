@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/adapter-onebot11",
   "version": "1.0.21",
-  "description": "zhin adapter for onebot11",
+  "description": "Zhin.js adapter for OneBot v11 protocol",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -23,10 +23,18 @@
   ],
   "keywords": [
     "zhin",
+    "bot",
     "adapter",
-    "onebot11"
+    "onebot",
+    "onebot11",
+    "qq",
+    "chatbot"
   ],
-  "author": "lc-cn",
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
   "license": "MIT",
   "repository": {
     "url": "git+https://github.com/zhinjs/zhin.git",

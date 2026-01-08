@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/http",
   "version": "1.0.10",
-  "description": "Zhin机器人框架HTTP工具",
+  "description": "HTTP server service for Zhin.js with routing and WebSocket support",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -14,10 +14,19 @@
   },
   "keywords": [
     "zhin",
+    "bot",
     "service",
-    "http"
+    "http",
+    "server",
+    "router",
+    "websocket",
+    "api"
   ],
-  "author": "lc-cn",
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
   "license": "MIT",
   "repository": {
     "url": "git+https://github.com/zhinjs/zhin.git",

@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/mcp",
   "version": "1.0.2",
-  "description": "Zhin MCP Server - 让 AI 助手能够理解和生成 Zhin 插件",
+  "description": "Model Context Protocol (MCP) service for Zhin.js - AI assistant integration",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -13,13 +13,19 @@
   },
   "keywords": [
     "zhin",
+    "bot",
     "service",
     "mcp",
     "model-context-protocol",
     "ai",
-    "assistant"
+    "assistant",
+    "llm"
   ],
-  "author": "lc-cn",
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
   "license": "MIT",
   "repository": {
     "url": "git+https://github.com/zhinjs/zhin.git",

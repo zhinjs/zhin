@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/logger",
   "version": "0.1.3",
-  "description": "Structured logging system for Zhin Bot Framework",
+  "description": "Structured logging system for Zhin.js bot framework",
   "main": "lib/index.js",
   "type": "module",
   "module": "lib/index.js",
@@ -22,10 +22,10 @@
   "keywords": [
     "zhin",
     "bot",
-    "framework",
     "logger",
     "logging",
-    "structured"
+    "structured",
+    "debug"
   ],
   "author": "Zhin Team",
   "license": "MIT",

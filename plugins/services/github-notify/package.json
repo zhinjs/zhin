@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/plugin-github-notify",
   "version": "0.0.6",
-  "description": "GitHub notification plugin for Zhin.js",
+  "description": "GitHub webhook notification service for Zhin.js",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -22,12 +22,18 @@
   },
   "keywords": [
     "zhin",
-    "plugin",
+    "bot",
+    "service",
     "github",
     "webhook",
-    "notification"
+    "notification",
+    "ci-cd"
   ],
-  "author": "",
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
   "license": "MIT",
   "devDependencies": {
     "typescript": "^5.3.3",

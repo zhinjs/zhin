@@ -2,127 +2,80 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   title: "Zhin.js",
-  description: "新时代机器人框架",
-  ignoreDeadLinks:[
+  description: "新时代 TypeScript 机器人框架",
+  
+  ignoreDeadLinks: [
     /^https?:\/\/localhost/,
     /^https?:\/\/github\.com/,
-    './troubleshooting',
   ],
   
   themeConfig: {
     nav: [
-      { text: '指南', link: '/guide/' },
-      { text: '插件', items:[
-        { text: '开发插件', link: '/plugin/' },
-        { text: '适配器', link: '/adapter/' },
-        { text: '插件市场', link: '/plugins/' },
-      ] },
-      { text: 'API', link: '/api/' },
-      { text: '示例', link: '/examples/' }
+      { text: '快速开始', link: '/getting-started/' },
+      { text: '核心基础', link: '/essentials/' },
+      { text: '高级特性', link: '/advanced/' },
+      { text: 'API 参考', link: '/api/' },
+      { text: '插件市场', link: '/plugins/' }
     ],
 
     sidebar: {
-      '/guide/': [
+      '/getting-started/': [
         {
-          text: '入门指南',
+          text: '快速开始',
           items: [
-            { text: '快速开始', link: '/guide/getting-started' },
-            { text: '60秒体验', link: '/guide/quick-start' },
-            { text: 'Schema 配置入门', link: '/guide/schema-quick-start' }
-          ]
-        },
-        {
-          text: '核心概念',
-          items: [
-            { text: '核心创新', link: '/guide/innovations' },
-            { text: '架构设计', link: '/guide/architecture' },
-            { text: 'Schema 系统', link: '/guide/schema-system' },
-            { text: '配置热重载', link: '/guide/config-hot-reload' },
-            { text: '配置热重载功能', link: '/guide/config-hot-reload-feature' },
-            { text: '核心概念', link: '/guide/concepts' }
-          ]
-        },
-        {
-          text: '进阶指南',
-          items: [
-            { text: '最佳实践', link: '/guide/best-practices' },
-            { text: '项目结构', link: '/guide/project-structure' },
-            { text: 'JSX 支持', link: '/guide/jsx-support' },
-            { text: '配置管理', link: '/guide/configuration' },
-            { text: '生产环境部署', link: '/guide/production-deployment' }
+            { text: '安装与启动', link: '/getting-started/' }
           ]
         }
       ],
-      '/plugin/': [
+      
+      '/essentials/': [
         {
-          text: '插件开发',
+          text: '核心基础',
           items: [
-            { text: '插件概述', link: '/plugin/' },
-            { text: '插件开发指南', link: '/plugin/development' },
-            { text: '组件开发', link: '/plugin/component-development' },
-            { text: '中间件开发', link: '/plugin/middleware' },
-            { text: '上下文系统', link: '/plugin/context' },
-            { text: '生命周期', link: '/plugin/lifecycle' },
-            { text: '定时任务', link: '/plugin/cron' }
+            { text: '核心概念', link: '/essentials/' },
+            { text: '配置文件', link: '/essentials/configuration' },
+            { text: '命令系统', link: '/essentials/commands' },
+            { text: '插件系统', link: '/essentials/plugins' },
+            { text: '中间件', link: '/essentials/middleware' },
+            { text: '适配器', link: '/essentials/adapters' }
           ]
         }
       ],
-      '/adapter/': [
+      
+      '/advanced/': [
         {
-          text: '适配器开发',
+          text: '高级特性',
           items: [
-            { text: '适配器概述', link: '/adapter/' },
-            { text: 'Bot 接口', link: '/adapter/bot-interface' },
-            { text: '适配器开发', link: '/adapter/development' },
-            { text: '消息处理', link: '/adapter/message-handling' },
-            { text: '事件处理', link: '/adapter/event-handling' },
-            { text: '错误处理', link: '/adapter/error-handling' }
+            { text: '概述', link: '/advanced/' },
+            { text: '组件系统', link: '/advanced/components' },
+            { text: '定时任务', link: '/advanced/cron' },
+            { text: '数据库', link: '/advanced/database' },
+            { text: '热重载', link: '/advanced/hot-reload' }
           ]
         }
       ],
+      
       '/api/': [
         {
           text: 'API 参考',
           items: [
-            { text: 'API 概述', link: '/api/' },
-            { text: '核心 API', link: '/api/core' },
-            { text: '插件 API', link: '/api/plugin' },
-            { text: '适配器 API', link: '/api/adapter' },
-            { text: '事件系统', link: '/api/events' },
-            { text: '类型定义', link: '/api/types' }
+            { text: 'API 总览', link: '/api/' }
           ]
-        }
-      ],
-      '/examples/': [
-        {
-          text: '实用示例',
-          items: [
-            { text: '示例概述', link: '/examples/' },
-            { text: '基础用法', link: '/examples/basic-usage' },
-            { text: '高级用法', link: '/examples/advanced-usage' },
-            { text: '实际应用', link: '/examples/real-world' }
-          ]
-        }
-      ],
-      '/official/': [
-        {
-          text: '官方资源',
-          items: [
-            { text: '官方资源概述', link: '/official/' },
-            { text: '官方插件', link: '/official/plugins' },
-            { text: '官方适配器', link: '/official/adapters' }
-          ]
-        }
-      ],
-      '/plugins/': [
-        {
-          text: '插件市场'
         }
       ]
     },
 
     socialLinks: [
       { icon: 'github', link: 'https://github.com/zhinjs/zhin' }
-    ]
+    ],
+    
+    footer: {
+      message: '基于 MIT 许可发布',
+      copyright: 'Copyright © 2024-present lc-cn'
+    },
+    
+    search: {
+      provider: 'local'
+    }
   }
 })
