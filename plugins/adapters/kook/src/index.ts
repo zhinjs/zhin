@@ -1,14 +1,14 @@
 import { Client } from "kook-client";
 import path from "path";
-import {
+import { 
   Bot,
-  Adapter,
+  Adapter, 
   Plugin,
-  Message,
+  Message, 
   SendOptions,
   SendContent,
   MessageElement,
-  segment,
+  segment, 
   usePlugin,
   MessageType,
 } from "zhin.js";
@@ -132,64 +132,146 @@ export class KookBot extends Client implements Bot<KookBotConfig, KookRawMessage
    */
   $formatMessage(msg: KookRawMessage): Message<KookRawMessage> {
     const message: Message<KookRawMessage> = Message.from(msg, {
-      $id: msg.message_id.toString(),
+            $id: msg.message_id.toString(),
       $adapter: "kook" as const,
       $bot: this.$id,
-
-      $sender: {
-        id: msg.author_id.toString(),
-        name: msg.author.info.nickname.toString(),
-      },
-
-      $channel: {
+            
+            $sender: {
+                id: msg.author_id.toString(),
+                name: msg.author.info.nickname.toString(),
+            },
+            
+            $channel: {
         id: msg.message_type === "channel" ? msg.channel_id.toString() : msg.author_id.toString(),
         type: msg.message_type,
-      },
-
+            },
+            
       $content: this.parseMessageContent(msg.message),
-      $raw: msg.raw_message,
-      $timestamp: msg.timestamp,
-
-      $recall: async () => {
-        await this.$recallMessage(message.$id);
-      },
-
+            $raw: msg.raw_message,
+            $timestamp: msg.timestamp,
+            
+            $recall: async () => {
+                await this.$recallMessage(message.$id);
+            },
+            
       $reply: async (content: SendContent, quote?: string | boolean): Promise<string> => {
         const elements = Array.isArray(content) ? content : [content];
         const finalContent: MessageElement[] = [];
-
+                
         if (quote) {
           finalContent.push({
             type: "reply",
-            data: {
+                    data: { 
               id: typeof quote === "boolean" ? message.$id : quote,
             },
           });
-        }
+                    } 
 
         finalContent.push(...elements.map(el => 
           typeof el === 'string' ? { type: 'text' as const, data: { text: el } } : el
         ));
-
-        return await this.$sendMessage({
-          ...message.$channel,
+                
+                return await this.$sendMessage({
+                    ...message.$channel,
           context: "kook",
           bot: this.$id,
           content: finalContent,
         });
       },
-    });
+        });
+        
+        return message;
+    }
 
-    return message;
-  }
-
-  /**
+    /**
    * 解析消息内容为消息段数组
+   * 支持 KMarkdown 格式：文本、图片、表情、@提及等
    */
   private parseMessageContent(content: string): MessageElement[] {
-    // 简化的消息解析，实际应该根据 KOOK 的消息格式解析
-    // TODO: 实现完整的 KOOK 消息格式解析
-    return [{ type: "text", data: { text: content } }];
+    const elements: MessageElement[] = [];
+    
+    // KMarkdown 图片格式: ![alt](url)
+    const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+    // KMarkdown @提及格式: (met)userId(met) 或 @用户名
+    const mentionRegex = /\(met\)(\d+)\(met\)|@([^\s]+)/g;
+    // KMarkdown 表情格式: (emj)表情名(emj)[表情ID]
+    const emojiRegex = /\(emj\)([^(]+)\(emj\)\[([^\]]+)\]/g;
+    // KMarkdown 频道格式: (chn)channelId(chn)
+    const channelRegex = /\(chn\)(\d+)\(chn\)/g;
+    
+    let lastIndex = 0;
+    const matches: Array<{ index: number; length: number; element: MessageElement }> = [];
+    
+    // 解析图片
+    let match: RegExpExecArray | null;
+    while ((match = imageRegex.exec(content)) !== null) {
+      matches.push({
+        index: match.index,
+        length: match[0].length,
+        element: { type: "image", data: { url: match[2], alt: match[1] } }
+      });
+    }
+    
+    // 解析 @提及
+    while ((match = mentionRegex.exec(content)) !== null) {
+      const userId = match[1] || match[2];
+      matches.push({
+        index: match.index,
+        length: match[0].length,
+        element: { type: "at", data: { id: userId } }
+      });
+    }
+    
+    // 解析表情
+    while ((match = emojiRegex.exec(content)) !== null) {
+      matches.push({
+        index: match.index,
+        length: match[0].length,
+        element: { type: "face", data: { id: match[2], name: match[1] } }
+      });
+    }
+    
+    // 解析频道引用
+    while ((match = channelRegex.exec(content)) !== null) {
+      matches.push({
+        index: match.index,
+        length: match[0].length,
+        element: { type: "text", data: { text: `#频道:${match[1]}` } }
+      });
+    }
+    
+    // 按位置排序
+    matches.sort((a, b) => a.index - b.index);
+    
+    // 组装消息段
+    for (const match of matches) {
+      // 添加之前的文本
+      if (match.index > lastIndex) {
+        const text = content.slice(lastIndex, match.index);
+        if (text) {
+          elements.push({ type: "text", data: { text } });
+        }
+      }
+      
+      // 添加特殊元素
+      elements.push(match.element);
+      lastIndex = match.index + match.length;
+    }
+    
+    // 添加剩余文本
+    if (lastIndex < content.length) {
+      const text = content.slice(lastIndex);
+      if (text) {
+        elements.push({ type: "text", data: { text } });
+      }
+    }
+    
+    // 如果没有解析到任何特殊元素，返回纯文本
+    if (elements.length === 0) {
+      elements.push({ type: "text", data: { text: content } });
+    }
+    
+    return elements;
   }
 
   /**
@@ -200,13 +282,13 @@ export class KookBot extends Client implements Bot<KookBotConfig, KookRawMessage
       await this.connect();
       this.$connected = true;
       logger.info(`KOOK Bot ${this.$id} 连接成功`);
-    } catch (error) {
+        } catch (error) {
       logger.error(`KOOK Bot ${this.$id} 连接失败:`, error);
       throw error;
+        }
     }
-  }
 
-  /**
+    /**
    * 断开连接
    */
   async $disconnect(): Promise<void> {
@@ -214,13 +296,13 @@ export class KookBot extends Client implements Bot<KookBotConfig, KookRawMessage
       await this.disconnect();
       this.$connected = false;
       logger.info(`KOOK Bot ${this.$id} 已断开连接`);
-    } catch (error) {
+        } catch (error) {
       logger.error(`KOOK Bot ${this.$id} 断开连接失败:`, error);
       throw error;
+        }
     }
-  }
 
-  /**
+    /**
    * 发送消息
    */
   async $sendMessage(options: SendOptions): Promise<string> {
@@ -243,39 +325,95 @@ export class KookBot extends Client implements Bot<KookBotConfig, KookRawMessage
       }
       
       return result?.msg_id || "";
-    } catch (error) {
+        } catch (error) {
       logger.error(`KOOK Bot ${this.$id} 发送消息失败:`, error);
       throw error;
+        }
     }
-  }
 
-  /**
+    /**
    * 撤回消息
-   */
+     */
   async $recallMessage(messageId: string): Promise<void> {
-    try {
+        try {
       await (this as any).deleteMsg(messageId);
       logger.debug(`KOOK Bot ${this.$id} 撤回消息: ${messageId}`);
-    } catch (error) {
+        } catch (error) {
       logger.error(`KOOK Bot ${this.$id} 撤回消息失败:`, error);
       throw error;
+        }
     }
-  }
 
-  /**
-   * 将消息段转换为 KOOK 格式
+    /**
+   * 将消息段转换为 KOOK KMarkdown 格式
+   * 支持：文本、图片、@提及、表情、引用等
    */
   private convertToKookFormat(content: MessageElement[]): string {
-    // 简化的转换，实际应该根据 KOOK 的消息格式转换
-    // TODO: 实现完整的消息段到 KOOK 格式的转换
     return content
       .map((el) => {
-        if (el.type === "text") {
-          return el.data.text;
+        switch (el.type) {
+          case "text":
+            // 纯文本，转义特殊字符
+            return el.data.text.replace(/[\\`*_{}[\]()#+\-.!]/g, '\\$&');
+          
+          case "image":
+            // 图片：![alt](url)
+            return `![${el.data.alt || '图片'}](${el.data.url || el.data.file})`;
+          
+          case "at":
+            // @提及：(met)userId(met) 或 @all
+            if (el.data.id === "all") {
+              return "(met)all(met)";
+            }
+            return `(met)${el.data.id}(met)`;
+          
+          case "face":
+            // 表情：(emj)表情名(emj)[表情ID]
+            return `(emj)${el.data.name || 'emoji'}(emj)[${el.data.id}]`;
+          
+          case "reply":
+            // 引用消息（KOOK 使用 quote 参数，不在消息内容中）
+            return "";
+          
+          case "video":
+            // 视频：使用链接形式
+            return `[视频](${el.data.url || el.data.file})`;
+          
+          case "audio":
+            // 音频：使用链接形式
+            return `[音频](${el.data.url || el.data.file})`;
+          
+          case "file":
+            // 文件：使用链接形式
+            return `[文件: ${el.data.name || '未命名'}](${el.data.url || el.data.file})`;
+          
+          case "link":
+            // 链接：[文本](url)
+            return `[${el.data.text || el.data.url}](${el.data.url})`;
+          
+          case "bold":
+            // 粗体：**文本**
+            return `**${el.data.text}**`;
+          
+          case "italic":
+            // 斜体：*文本*
+            return `*${el.data.text}*`;
+          
+          case "code":
+            // 行内代码：`代码`
+            return `\`${el.data.text}\``;
+          
+          case "code_block":
+            // 代码块：```语言\n代码\n```
+            return `\`\`\`${el.data.language || ''}\n${el.data.text}\n\`\`\``;
+          
+          default:
+            // 未知类型，尝试转换为文本
+            logger.warn(`未知的消息段类型: ${el.type}`);
+            return el.data.text || JSON.stringify(el.data);
         }
-        // 处理其他类型的消息段
-        return "";
       })
+      .filter(Boolean)
       .join("");
   }
 }

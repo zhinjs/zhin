@@ -13,7 +13,8 @@
   "dependencies": {
     "xml2js": "^0.6.2",
     "axios": "^1.6.2",
-    "@types/xml2js": "^0.4.14"
+    "@types/xml2js": "^0.4.14",
+    "form-data": "^4.0.0"
   },
   "peerDependencies": {
     "@zhin.js/http": "workspace:*",

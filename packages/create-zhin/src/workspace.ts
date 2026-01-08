@@ -42,7 +42,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
     },
     dependencies: {
       'zhin.js': 'latest',
-      '@zhin.js/adapter-process': 'latest',
+      '@zhin.js/adapter-sandbox': 'latest',
       '@zhin.js/http': 'latest',
       '@zhin.js/client': 'latest',
       '@zhin.js/console': 'latest',

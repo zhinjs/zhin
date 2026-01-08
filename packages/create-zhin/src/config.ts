@@ -161,13 +161,8 @@ export async function createConfigFile(appPath: string, format: string, options:
 
 export default defineConfig(async (env) => {
   return {
-${databaseConfig ? `    ${databaseConfig.replace(/^    /, '')}` : ''}
-    bots: [{
-      name: \`\${process.pid}\`,
-      context: 'process'
-    }],
     log_level: LogLevel.INFO,
-    log: {
+${databaseConfig ? `    ${databaseConfig}` : ''}    log: {
       maxDays: 7,
       maxRecords: 10000,
       cleanupInterval: 24
@@ -186,9 +181,9 @@ ${databaseConfig ? `    ${databaseConfig.replace(/^    /, '')}` : ''}
       'cron'
     ],
     plugins: [
-      'adapter-process',
-      'http',
-      'console',
+      '@zhin.js/adapter-sandbox',
+      '@zhin.js/http',
+      '@zhin.js/console',
       'example'
     ],
     http: {
@@ -196,6 +191,10 @@ ${databaseConfig ? `    ${databaseConfig.replace(/^    /, '')}` : ''}
       username: env.HTTP_USERNAME,
       password: env.HTTP_PASSWORD,
       base: '/api'
+    },
+    console: {
+      enabled: true,
+      lazyLoad: false
     },
     debug: env.DEBUG === 'true'
   };
@@ -206,13 +205,8 @@ ${databaseConfig ? `    ${databaseConfig.replace(/^    /, '')}` : ''}
 
 export default defineConfig(async (env) => {
   return {
-${databaseConfig ? `    ${databaseConfig.replace(/^    /, '')}` : ''}
-    bots: [{
-      name: \`\${process.pid}\`,
-      context: 'process'
-    }],
     log_level: LogLevel.INFO,
-    log: {
+${databaseConfig ? `    ${databaseConfig}` : ''}    log: {
       maxDays: 7,
       maxRecords: 10000,
       cleanupInterval: 24
@@ -231,9 +225,9 @@ ${databaseConfig ? `    ${databaseConfig.replace(/^    /, '')}` : ''}
       'cron'
     ],
     plugins: [
-      'adapter-process',
-      'http',
-      'console',
+      '@zhin.js/adapter-sandbox',
+      '@zhin.js/http',
+      '@zhin.js/console',
       'example'
     ],
     http: {
@@ -242,17 +236,17 @@ ${databaseConfig ? `    ${databaseConfig.replace(/^    /, '')}` : ''}
       password: env.HTTP_PASSWORD,
       base: '/api'
     },
+    console: {
+      enabled: true,
+      lazyLoad: false
+    },
     debug: env.DEBUG === 'true'
   };
 });
 `],
     yaml: ['zhin.config.yml',
-`${databaseConfig ? `database:\n${databaseConfig}\n\n` : ''}bots:
-  - name: \${process.pid}
-    context: process
-
-log_level: 1
-log:
+`log_level: 1
+${databaseConfig ? `database:\n${databaseConfig}\n` : ''}log:
   maxDays: 7
   maxRecords: 10000
   cleanupInterval: 24
@@ -271,9 +265,9 @@ services:
   - cron
 
 plugins:
-  - adapter-process
-  - http
-  - console
+  - "@zhin.js/adapter-sandbox"
+  - "@zhin.js/http"
+  - "@zhin.js/console"
   - example
 
 http:
@@ -282,16 +276,16 @@ http:
   password: \${HTTP_PASSWORD}
   base: /api
 
+console:
+  enabled: true
+  lazyLoad: false
+
 debug: false
 `],
     json: ['zhin.config.json',
 `{
-${databaseConfig ? `${databaseConfig}` : ''}
-  "bots": [{
-    "name": "\${process.pid}",
-    "context": "process"
-  }],
   "log_level": 1,
+${databaseConfig ? `  ${databaseConfig},` : ''}
   "log": {
     "maxDays": 7,
     "maxRecords": 10000,
@@ -311,9 +305,9 @@ ${databaseConfig ? `${databaseConfig}` : ''}
     "cron"
   ],
   "plugins": [
-    "adapter-process",
-    "http",
-    "console",
+    "@zhin.js/adapter-sandbox",
+    "@zhin.js/http",
+    "@zhin.js/console",
     "example"
   ],
   "http": {
@@ -321,6 +315,10 @@ ${databaseConfig ? `${databaseConfig}` : ''}
     "username": "\${HTTP_USERNAME}",
     "password": "\${HTTP_PASSWORD}",
     "base": "/api"
+  },
+  "console": {
+    "enabled": true,
+    "lazyLoad": false
   },
   "debug": false
 }

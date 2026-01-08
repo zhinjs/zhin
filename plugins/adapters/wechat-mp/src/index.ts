@@ -2,6 +2,7 @@ import axios from 'axios';
 import * as xml2js from 'xml2js';
 import { createHash } from 'crypto';
 import { EventEmitter } from 'events';
+import FormData from 'form-data';
 import {
     Bot,
     usePlugin,
@@ -78,7 +79,7 @@ interface WeChatAPIResponse {
     errmsg?: string
 }
 const plugin = usePlugin();
-const { provide, useContext } = plugin;
+const { provide, useContext, logger } = plugin;
 
 export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeChatMessage> {
     $config: WeChatMPConfig;
@@ -494,11 +495,93 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
         return response.data;
     }
 
-    // 上传多媒体文件 (暂时禁用，需要处理 FormData 兼容性)
-    async uploadMedia(type: 'image' | 'voice' | 'video' | 'thumb', buffer: Buffer): Promise<string> {
-        // TODO: 实现文件上传功能
-        // 需要处理 Node.js FormData 与浏览器 FormData 的兼容性问题
-        throw new Error('Media upload feature is not implemented yet');
+    /**
+     * 上传多媒体文件到微信服务器
+     * @param type 媒体类型：image(图片)、voice(语音)、video(视频)、thumb(缩略图)
+     * @param buffer 文件 Buffer
+     * @param filename 文件名（可选，用于确定文件类型）
+     * @returns 微信服务器返回的 media_id
+     */
+    async uploadMedia(
+        type: 'image' | 'voice' | 'video' | 'thumb',
+        buffer: Buffer,
+        filename?: string
+    ): Promise<string> {
+        try {
+            // 确保有有效的 access_token
+            if (!this.accessToken) {
+                await this.refreshAccessToken();
+            }
+            const token = this.accessToken;
+            const url = `https://api.weixin.qq.com/cgi-bin/media/upload?access_token=${token}&type=${type}`;
+            
+            // 创建 FormData
+            const form = new FormData();
+            
+            // 根据类型确定文件扩展名
+            const ext = this.getFileExtension(type, filename);
+            const mediaFilename = filename || `media.${ext}`;
+            
+            // 添加文件到 FormData
+            form.append('media', buffer, {
+                filename: mediaFilename,
+                contentType: this.getContentType(type),
+            });
+            
+            // 发送上传请求
+            const response = await axios.post(url, form, {
+                headers: {
+                    ...form.getHeaders(),
+                },
+                maxBodyLength: Infinity,
+                maxContentLength: Infinity,
+            });
+            
+            if (response.data.errcode) {
+                throw new Error(
+                    `微信媒体上传失败: ${response.data.errmsg} (错误码: ${response.data.errcode})`
+                );
+            }
+            
+            return response.data.media_id;
+        } catch (error) {
+            logger.error('上传媒体文件失败:', error);
+            throw error;
+        }
+    }
+    
+    /**
+     * 获取文件扩展名
+     */
+    private getFileExtension(type: string, filename?: string): string {
+        if (filename) {
+            const match = filename.match(/\.([^.]+)$/);
+            if (match) return match[1];
+        }
+        
+        // 默认扩展名
+        const defaultExt: Record<string, string> = {
+            image: 'jpg',
+            voice: 'mp3',
+            video: 'mp4',
+            thumb: 'jpg',
+        };
+        
+        return defaultExt[type] || 'bin';
+    }
+    
+    /**
+     * 获取 Content-Type
+     */
+    private getContentType(type: string): string {
+        const contentTypes: Record<string, string> = {
+            image: 'image/jpeg',
+            voice: 'audio/mpeg',
+            video: 'video/mp4',
+            thumb: 'image/jpeg',
+        };
+        
+        return contentTypes[type] || 'application/octet-stream';
     }
 }
 
