@@ -1,5 +1,15 @@
 # @zhin.js/cli
 
+## 1.0.14
+
+### Patch Changes
+
+- a3b7673: fix: 调整依赖项
+- Updated dependencies [a3b7673]
+- Updated dependencies [5141137]
+  - @zhin.js/logger@0.1.4
+  - zhin.js@1.0.20
+
 ## 1.0.13
 
 ### Patch Changes

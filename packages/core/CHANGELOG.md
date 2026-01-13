@@ -1,5 +1,16 @@
 # @zhin.js/core
 
+## 1.0.20
+
+### Patch Changes
+
+- 5141137: fix: 修复适配器读取配置 bug
+- Updated dependencies [a3b7673]
+  - @zhin.js/dependency@1.0.5
+  - @zhin.js/database@1.0.7
+  - @zhin.js/logger@0.1.4
+  - @zhin.js/schema@1.0.4
+
 ## 1.0.19
 
 ### Patch Changes
