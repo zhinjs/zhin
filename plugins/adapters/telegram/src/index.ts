@@ -14,13 +14,7 @@ import {
 
 // 类型扩展 - 使用 zhin.js 模式
 declare module "zhin.js" {
-  namespace Plugin {
-    interface Contexts {
-      telegram: TelegramAdapter;
-    }
-  }
-
-  interface RegisteredAdapters {
+  interface Adapters {
     telegram: TelegramAdapter;
   }
 }

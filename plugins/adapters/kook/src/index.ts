@@ -15,13 +15,7 @@ import {
 
 // 类型扩展
 declare module "zhin.js" {
-  namespace Plugin {
-    interface Contexts {
-      kook: KookAdapter;
-    }
-  }
-
-  interface RegisteredAdapters {
+  interface Adapters {
     kook: KookAdapter;
   }
 }

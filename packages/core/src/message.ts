@@ -1,6 +1,6 @@
-import {MessageElement, MessageSender, RegisteredAdapter, SendContent} from "./types";
+import {MessageElement, MessageSender, SendContent} from "./types";
 import { Component } from "./component.js";
-
+import { Adapters } from "./adapter.js";
 /**
  * 消息组件类型：用于自定义消息结构
  */
@@ -24,7 +24,7 @@ export type MessageType = 'group' | 'private' | 'channel'
  */
 export interface MessageBase {
     $id: string;
-    $adapter:RegisteredAdapter
+    $adapter:keyof Adapters
     $bot:string
     $content: MessageElement[];
     $sender: MessageSender;

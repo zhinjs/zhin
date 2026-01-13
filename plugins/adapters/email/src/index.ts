@@ -18,13 +18,7 @@ import path from 'path';
 
 // 类型扩展 - 使用 zhin.js 模式
 declare module "zhin.js" {
-    namespace Plugin {
-        interface Contexts {
-            email: EmailAdapter;
-        }
-    }
-
-    interface RegisteredAdapters {
+    interface Adapters {
         email: EmailAdapter;
     }
 }
@@ -102,12 +96,12 @@ export class EmailBot extends EventEmitter implements Bot<EmailBotConfig, EmailM
     constructor(public adapter: EmailAdapter, config: EmailBotConfig) {
         super();
         this.$config = config;
-        
+
         // 设置默认值
         this.$config.imap.checkInterval = this.$config.imap.checkInterval || 60000; // 1分钟
         this.$config.imap.mailbox = this.$config.imap.mailbox || 'INBOX';
         this.$config.imap.markSeen = this.$config.imap.markSeen !== false;
-        
+
         if (this.$config.attachments?.enabled) {
             this.$config.attachments.downloadPath = this.$config.attachments.downloadPath || './downloads/email';
             this.$config.attachments.maxFileSize = this.$config.attachments.maxFileSize || 10 * 1024 * 1024; // 10MB
@@ -361,7 +355,7 @@ export class EmailBot extends EventEmitter implements Bot<EmailBotConfig, EmailM
                 .replace(/&gt;/g, '>')
                 .replace(/&quot;/g, '"')
                 .trim();
-            
+
             if (textFromHtml) {
                 segments.push(segment.text(textFromHtml));
             }
@@ -403,7 +397,7 @@ export class EmailBot extends EventEmitter implements Bot<EmailBotConfig, EmailM
         return ''
     }
 
-    async $recallMessage(id:string):Promise<void> {
+    async $recallMessage(id: string): Promise<void> {
         // 邮件适配器暂时不支持撤回消息
     }
 
@@ -485,7 +479,7 @@ export class EmailBot extends EventEmitter implements Bot<EmailBotConfig, EmailM
             const writeStream = createWriteStream(filepath);
             writeStream.write(attachment.content);
             writeStream.end();
-            
+
             writeStream.on('finish', () => resolve(filepath));
             writeStream.on('error', reject);
         });

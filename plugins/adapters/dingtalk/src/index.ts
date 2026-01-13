@@ -16,12 +16,11 @@ import { createHmac } from 'crypto';
 declare module "zhin.js" {
     namespace Plugin {
         interface Contexts {
-            dingtalk: DingTalkAdapter;
             router: import("@zhin.js/http").Router;
         }
     }
 
-    interface RegisteredAdapters {
+    interface Adapters {
         dingtalk: DingTalkAdapter;
     }
 }
@@ -111,10 +110,10 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
         this.router = router;
         this.$connected = false;
         this.accessToken = { token: '', expires_in: 0, timestamp: 0 };
-        
+
         // 设置 API 基础 URL
         this.baseURL = $config.apiBaseUrl || 'https://oapi.dingtalk.com';
-        
+
         // 设置 webhook 路由
         this.setupWebhookRoute();
     }
@@ -126,28 +125,28 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
         body?: any
     } = {}): Promise<any> {
         await this.ensureAccessToken();
-        
+
         const { method = 'GET', params = {}, body } = options;
-        
+
         // 添加 access_token 到查询参数
         const urlParams = new URLSearchParams({
             ...params,
             access_token: this.accessToken.token
         });
-        
+
         const url = `${this.baseURL}${path}?${urlParams.toString()}`;
-        
+
         const fetchOptions: RequestInit = {
             method,
             headers: {
                 'Content-Type': 'application/json; charset=utf-8'
             }
         };
-        
+
         if (body && method === 'POST') {
             fetchOptions.body = JSON.stringify(body);
         }
-        
+
         const response = await fetch(url, fetchOptions);
         return await response.json();
     }
@@ -162,11 +161,11 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
         try {
             const body = (ctx.request as any).body;
             const headers = ctx.request.headers;
-            
+
             // 钉钉签名验证
             const timestamp = headers['timestamp'] as string;
             const sign = headers['sign'] as string;
-            
+
             if (timestamp && sign) {
                 if (!this.verifySignature(timestamp, sign)) {
                     plugin.logger.warn('Invalid signature in webhook');
@@ -175,17 +174,17 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
                     return;
                 }
             }
-            
+
             const event: DingTalkEvent = body;
-            
+
             // 处理消息事件
             if (event.msgtype) {
                 await this.handleEvent(event);
             }
-            
+
             ctx.status = 200;
             ctx.body = { code: 0, msg: 'success' };
-            
+
         } catch (error) {
             plugin.logger.error('Webhook error:', error);
             ctx.status = 500;
@@ -211,7 +210,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
         if (event.sessionWebhook && event.conversationId) {
             this.sessionWebhooks.set(event.conversationId, event.sessionWebhook);
         }
-        
+
         // 处理消息事件
         const message = this.$formatMessage(event as any);
         this.adapter.emit('message.receive', message);
@@ -228,7 +227,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
         if (this.accessToken.token && now < (this.accessToken.timestamp + (this.accessToken.expires_in - 300) * 1000)) {
             return;
         }
-        
+
         await this.refreshAccessToken();
     }
 
@@ -239,11 +238,11 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
                 appkey: this.$config.appKey,
                 appsecret: this.$config.appSecret
             });
-            
+
             const url = `${baseURL}/gettoken?${params.toString()}`;
             const response = await fetch(url);
             const data = await response.json();
-            
+
             if (data.errcode === 0) {
                 this.accessToken = {
                     token: data.access_token,
@@ -266,10 +265,10 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
 
     $formatMessage(msg: DingTalkMessage): Message<DingTalkMessage> {
         const content = this.parseMessageContent(msg);
-        
+
         // 确定聊天类型: '1'为单聊, '2'为群聊
         const chatType = msg.conversationType === '2' ? 'group' : 'private';
-        
+
         return Message.from(msg, {
             $id: msg.msgId || Date.now().toString(),
             $adapter: 'dingtalk',
@@ -302,17 +301,17 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
 
     private parseMessageContent(msg: DingTalkMessage): MessageSegment[] {
         const content: MessageSegment[] = [];
-        
+
         if (!msg.msgtype) {
             return content;
         }
-        
+
         try {
             switch (msg.msgtype) {
                 case 'text':
                     if (msg.text?.content) {
                         content.push(segment('text', { content: msg.text.content }));
-                        
+
                         // 处理 @提及
                         if (msg.atUsers && msg.atUsers.length > 0) {
                             for (const atUser of msg.atUsers) {
@@ -324,7 +323,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
                         }
                     }
                     break;
-                    
+
                 case 'picture':
                     if (msg.content) {
                         content.push(segment('image', {
@@ -333,7 +332,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
                         }));
                     }
                     break;
-                    
+
                 case 'file':
                     if (msg.content) {
                         content.push(segment('file', {
@@ -343,7 +342,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
                         }));
                     }
                     break;
-                    
+
                 case 'audio':
                     if (msg.content) {
                         content.push(segment('audio', {
@@ -352,7 +351,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
                         }));
                     }
                     break;
-                    
+
                 case 'video':
                     if (msg.content) {
                         content.push(segment('video', {
@@ -362,7 +361,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
                         }));
                     }
                     break;
-                    
+
                 case 'richText':
                     // 富文本消息处理（简化）
                     if (msg.content?.richText) {
@@ -373,7 +372,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
                         }
                     }
                     break;
-                    
+
                 case 'markdown':
                     if (msg.content?.text) {
                         content.push(segment('markdown', {
@@ -382,7 +381,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
                         }));
                     }
                     break;
-                    
+
                 default:
                     content.push(segment('text', { content: `[不支持的消息类型: ${msg.msgtype}]` }));
                     break;
@@ -391,7 +390,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
             plugin.logger.error('Failed to parse message content:', error);
             content.push(segment('text', { content: '[消息解析失败]' }));
         }
-        
+
         return content;
     }
 
@@ -402,7 +401,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
     async $sendMessage(options: SendOptions): Promise<string> {
         const conversationId = options.id;
         const content = this.formatSendContent(options.content);
-        
+
         try {
             // 优先使用会话 webhook 发送消息（更快，更准确）
             const sessionWebhook = this.sessionWebhooks.get(conversationId);
@@ -415,14 +414,14 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
                     body: JSON.stringify(content)
                 });
                 const data = await response.json();
-                
+
                 if (data.errcode !== 0) {
                     throw new Error(`Failed to send message via session webhook: ${data.errmsg}`);
                 }
                 plugin.logger.debug('Message sent via session webhook');
                 return data.msgId || Date.now().toString();
             }
-            
+
             // 否则使用普通机器人发送接口
             const data = await this.request('/robot/send', {
                 method: 'POST',
@@ -431,11 +430,11 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
                     robotCode: this.$config.robotCode
                 }
             });
-            
+
             if (data.errcode !== 0) {
                 throw new Error(`Failed to send message: ${data.errmsg}`);
             }
-            
+
             plugin.logger.debug('Message sent successfully');
             return data.msgId || Date.now().toString();
         } catch (error) {
@@ -456,14 +455,14 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
                 text: { content }
             };
         }
-        
+
         if (Array.isArray(content)) {
             const textParts: string[] = [];
             const atMobiles: string[] = [];
             const atUserIds: string[] = [];
             let hasMedia = false;
             let mediaContent: any = null;
-            
+
             for (const item of content) {
                 if (typeof item === 'string') {
                     textParts.push(item);
@@ -473,7 +472,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
                         case 'text':
                             textParts.push(segment.data.content || segment.data.text || '');
                             break;
-                            
+
                         case 'at':
                             const userId = segment.data.id || segment.data.userId;
                             if (userId) {
@@ -481,7 +480,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
                                 textParts.push(`@${segment.data.name || userId} `);
                             }
                             break;
-                            
+
                         case 'image':
                             if (!hasMedia) {
                                 hasMedia = true;
@@ -493,7 +492,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
                                 };
                             }
                             break;
-                            
+
                         case 'markdown':
                             if (!hasMedia) {
                                 hasMedia = true;
@@ -506,7 +505,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
                                 };
                             }
                             break;
-                            
+
                         case 'link':
                             if (!hasMedia) {
                                 hasMedia = true;
@@ -524,12 +523,12 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
                     }
                 }
             }
-            
+
             // 优先发送媒体内容
             if (hasMedia && mediaContent) {
                 return mediaContent;
             }
-            
+
             // 否则发送文本内容
             const result: any = {
                 msgtype: 'text',
@@ -537,7 +536,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
                     content: textParts.join('')
                 }
             };
-            
+
             // 添加 @ 信息
             if (atUserIds.length > 0) {
                 result.at = {
@@ -545,10 +544,10 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
                     isAtAll: false
                 };
             }
-            
+
             return result;
         }
-        
+
         return {
             msgtype: 'text',
             text: {
@@ -565,11 +564,11 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
         try {
             // 获取 access token
             await this.refreshAccessToken();
-            
+
             this.$connected = true;
             plugin.logger.info(`DingTalk bot connected: ${this.$config.name}`);
             plugin.logger.info(`Webhook URL: ${this.$config.webhookPath}`);
-            
+
         } catch (error) {
             plugin.logger.error('Failed to connect DingTalk bot:', error);
             throw error;
@@ -598,11 +597,11 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
                     userid: userId
                 }
             });
-            
+
             if (data.errcode === 0) {
                 return data.result;
             }
-            
+
             throw new Error(`Failed to get user info: ${data.errmsg}`);
         } catch (error) {
             plugin.logger.error('Failed to get user info:', error);
@@ -619,11 +618,11 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
                     dept_id: deptId
                 }
             });
-            
+
             if (data.errcode === 0) {
                 return data.result.userid_list || [];
             }
-            
+
             throw new Error(`Failed to get department users: ${data.errmsg}`);
         } catch (error) {
             plugin.logger.error('Failed to get department users:', error);
@@ -642,12 +641,12 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
                     msg: content
                 }
             });
-            
+
             if (data.errcode === 0) {
                 plugin.logger.debug('Work notice sent successfully');
                 return true;
             }
-            
+
             throw new Error(`Failed to send work notice: ${data.errmsg}`);
         } catch (error) {
             plugin.logger.error('Failed to send work notice:', error);

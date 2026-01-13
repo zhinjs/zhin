@@ -24,13 +24,12 @@ export interface SandboxConfig {
 declare module "zhin.js" {
   namespace Plugin {
     interface Contexts {
-      sandbox: SandboxAdapter;
       router: Router;
       web: any;
     }
   }
 
-  interface RegisteredAdapters {
+  interface Adapters {
     sandbox: SandboxAdapter;
   }
 }

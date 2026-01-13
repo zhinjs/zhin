@@ -2,6 +2,7 @@
 import { setLevel, LogLevel } from '@zhin.js/logger';
 import {
   usePlugin, resolveEntry,
+  Adapter,
   ConfigService, PermissionService,
   createCommandService, createComponentService, createCronService,
   defineDatabaseService,
@@ -15,6 +16,7 @@ const plugin = usePlugin();
 const {
   provide,
   start, stop,
+  useContext,
   logger, children,
   import: importPlugin } = plugin;
 
@@ -22,6 +24,7 @@ const {
 const configService = new ConfigService();
 await configService.load('zhin.config.yml', {
   log_level: LogLevel.INFO,
+  bots: [],
   database: {
     dialect: "sqlite",
     filename: "./data/test.db"
@@ -88,7 +91,18 @@ if (appConfig.database) {
     logger['transports'].push(logTransport);
   }
 }
-
+const contexts=new Set(appConfig.bots?.map((bot) => bot.context) || []);
+for(const context of contexts){
+  useContext(context,async (adapter)=>{
+    if(!(adapter instanceof Adapter)) throw new Error(`Adapter ${context} not found`);
+    for(const config of appConfig.bots?.filter((bot) => bot.context === context) || []) {
+      const bot=adapter.createBot(config);
+      await bot.$connect();
+      adapter.bots.set(bot.$id, bot);
+      adapter.logger.debug(`bot ${bot.$id} of adapter ${adapter.name} connected`);
+    }
+  });
+}
 // 4. 启动核心上下文（确保扩展方法可用，比如 addCommand）
 await start();
 

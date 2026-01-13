@@ -25,5 +25,7 @@ export interface Bot<Config extends object= {},Event extends object = {}> {
   $sendMessage(options: SendOptions): Promise<string>;
 }
 export namespace Bot {
-  export type Config =Adapter.BotConfig<Adapters[keyof Adapters]>
+  export type Config<K extends keyof Adapters = keyof Adapters> =Adapter.BotConfig<Adapter.InferBot<Adapters[K]>> & {
+    context: K;
+  }
 }

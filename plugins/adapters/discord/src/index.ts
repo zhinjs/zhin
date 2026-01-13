@@ -37,13 +37,11 @@ import path from "path";
 declare module "zhin.js" {
   namespace Plugin {
     interface Contexts {
-      discord: DiscordAdapter;
-      "discord-interactions": DiscordInteractionsAdapter;
       router: import("@zhin.js/http").Router;
     }
-  }
 
-  interface RegisteredAdapters {
+  }
+  interface Adapters {
     discord: DiscordAdapter;
     "discord-interactions": DiscordInteractionsAdapter;
   }
@@ -105,8 +103,7 @@ const { provide, useContext } = plugin;
 // 主要的 DiscordBot 类
 export class DiscordBot
   extends Client
-  implements Bot<DiscordBotConfig, DiscordChannelMessage>
-{
+  implements Bot<DiscordBotConfig, DiscordChannelMessage> {
   private slashCommandHandlers: Map<
     string,
     (interaction: ChatInputCommandInteraction) => Promise<void>
@@ -282,8 +279,8 @@ export class DiscordBot
       $content: content,
       $raw: msg.content,
       $timestamp: msg.createdTimestamp,
-      $recall:async ()=> {
-        await msg.delete();  
+      $recall: async () => {
+        await msg.delete();
       },
       $reply: async (
         content: SendContent,
@@ -486,9 +483,8 @@ export class DiscordBot
               id: emojiId,
               name: emojiName,
               animated: isAnimated,
-              url: `https://cdn.discordapp.com/emojis/${emojiId}.${
-                isAnimated ? "gif" : "png"
-              }`,
+              url: `https://cdn.discordapp.com/emojis/${emojiId}.${isAnimated ? "gif" : "png"
+                }`,
               text: match[0],
             },
           });
@@ -670,7 +666,7 @@ export class DiscordBot
     // 发送消息
     return await channel.send(messageOptions);
   }
-  async $recallMessage(id: string): Promise<void> {}
+  async $recallMessage(id: string): Promise<void> { }
   // 处理文件段
   async handleFileSegment(
     data: any,
@@ -829,8 +825,7 @@ import * as nacl from "tweetnacl";
 
 export class DiscordInteractionsBot
   extends Client
-  implements Bot<DiscordInteractionsConfig, any>
-{
+  implements Bot<DiscordInteractionsConfig, any> {
   $connected: boolean;
   private router: any;
   private slashCommandHandlers: Map<
@@ -975,7 +970,7 @@ export class DiscordInteractionsBot
       $raw: JSON.stringify(interaction),
       $timestamp: Date.now(),
       $content: content,
-      $recall:async ()=> {
+      $recall: async () => {
         // Interactions 消息无法撤回
       },
       $reply: async (content: SendContent): Promise<string> => {
@@ -1140,7 +1135,7 @@ export class DiscordInteractionsBot
     }
     return "";
   }
-  async $recallMessage(id: string): Promise<void> {}
+  async $recallMessage(id: string): Promise<void> { }
 }
 
 // 定义 Adapter 类

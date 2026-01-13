@@ -17,14 +17,8 @@ import { clearInterval } from "node:timers";
 
 // 类型扩展 - 使用 zhin.js 模式
 declare module 'zhin.js' {
-  namespace Plugin {
-    interface Contexts {
-      'onebot11': OneBot11Adapter;
-      'onebot11.wss': OneBot11WssAdapter;
-    }
-  }
 
-  interface RegisteredAdapters {
+  interface Adapters {
     'onebot11': OneBot11Adapter;
     'onebot11.wss': OneBot11WssAdapter;
   }

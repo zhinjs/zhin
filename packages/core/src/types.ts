@@ -4,6 +4,7 @@ import {Adapter} from "./adapter.js";
 import {Bot} from "./bot.js";
 import { SystemLog } from "./models/system-log.js";
 import { User } from "./models/user.js";
+import { Adapters } from "./adapter.js";
 import { Databases,Registry } from "@zhin.js/database";
 import { MessageComponent } from "./message.js";
 import { ProcessAdapter } from "./built/adapter-process.js";
@@ -30,7 +31,7 @@ export type ObjectItem<T extends object>=T[keyof T]
 /**
  * 已注册适配器名类型
  */
-export type RegisteredAdapter=Extract<keyof RegisteredAdapters, string>
+export type RegisteredAdapter=Extract<keyof Adapters, string>
 /**
  * 指定适配器的消息类型
  */

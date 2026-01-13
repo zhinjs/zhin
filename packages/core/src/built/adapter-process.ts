@@ -66,12 +66,12 @@ export class ProcessAdapter extends Adapter<ProcessBot>{
     constructor(plugin: Plugin) {
         super(plugin, 'process', [{}]);
     }
-    createBot(): ProcessBot {
-        return new ProcessBot(this);
+    createBot(config: Adapter.BotConfig<ProcessBot>): ProcessBot {
+        return new ProcessBot(this, config);
     }
 }
-declare module '@zhin.js/core'{
-    interface RegisteredAdapters{
+declare module '../adapter.js'{
+    interface Adapters{
         process:ProcessAdapter
     }
 }

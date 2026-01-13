@@ -17,12 +17,11 @@ import { createHash } from 'crypto';
 declare module "zhin.js" {
     namespace Plugin {
         interface Contexts {
-            lark: LarkAdapter;
             router: import("@zhin.js/http").Router;
         }
     }
 
-    interface RegisteredAdapters {
+    interface Adapters {
         lark: LarkAdapter;
     }
 }

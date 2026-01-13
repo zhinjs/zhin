@@ -21,12 +21,11 @@ import type { Router } from '@zhin.js/http';
 declare module "zhin.js" {
     namespace Plugin {
         interface Contexts {
-            'wechat-mp': WeChatMPAdapter;
             router: import("@zhin.js/http").Router;
         }
     }
 
-    interface RegisteredAdapters {
+    interface Adapters {
         'wechat-mp': WeChatMPAdapter;
     }
 }

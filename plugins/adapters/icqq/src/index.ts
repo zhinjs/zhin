@@ -16,13 +16,12 @@ import { Router } from "@zhin.js/http";
 declare module "zhin.js" {
   namespace Plugin {
     interface Contexts {
-      icqq: IcqqAdapter;
       web: any;
       router: Router;
     }
   }
   
-  interface RegisteredAdapters {
+  interface Adapters {
     icqq: IcqqAdapter;
   }
 }

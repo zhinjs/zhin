@@ -15,13 +15,8 @@ import {
 
 // 类型扩展 - 使用 zhin.js 模式
 declare module "zhin.js" {
-  namespace Plugin {
-    interface Contexts {
-      slack: SlackAdapter;
-    }
-  }
 
-  interface RegisteredAdapters {
+  interface Adapters {
     slack: SlackAdapter;
   }
 }

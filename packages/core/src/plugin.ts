@@ -15,7 +15,7 @@ import { fileURLToPath } from "url";
 import logger, { Logger } from "@zhin.js/logger";
 import { compose, remove, resolveEntry } from "./utils.js";
 import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, ConfigService, PermissionService, SendOptions } from "./types.js";
-import { Adapter } from "./adapter.js";
+import { Adapter, Adapters } from "./adapter.js";
 import { createHash } from "crypto";
 const contextsKey = Symbol("contexts");
 const loadedModules = new Map<string, Plugin>(); // 记录已加载的模块
@@ -685,7 +685,7 @@ export namespace Plugin {
    * 服务类型扩展点
    * 各个 Context 通过 declare module 扩展此接口
    */
-  export interface Contexts extends RegisteredAdapters {
+  export interface Contexts extends Adapters {
     config: ConfigService;
     permission: PermissionService;
   }
