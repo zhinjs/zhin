@@ -47,19 +47,19 @@
     "@icqqjs/icqq": "latest"
   },
   "devDependencies": {
+    "@radix-ui/themes": "^3.2.1",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.1",
-    "radix-ui": "^1.4.3",
-    "@radix-ui/themes": "^3.2.1",
     "lucide-react": "^0.469.0",
+    "radix-ui": "^1.4.3",
     "typescript": "^5.3.0",
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {
-    "@zhin.js/core": "workspace:*",
     "@zhin.js/client": "workspace:*",
-    "@zhin.js/http": "workspace:*",
     "@zhin.js/console": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/http": "workspace:*",
     "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {

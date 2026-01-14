@@ -274,4 +274,15 @@ describe('Cron定时任务系统测试', () => {
       expect(mockCallback).toHaveBeenCalledTimes(1)
     })
   })
+
+  describe('Cron错误处理', () => {
+    it('should throw error for invalid cron expression that cannot determine next run', () => {
+      // 创建一个永远不会执行的 cron 表达式
+      // 例如：2月30日（不存在的日期）
+      expect(() => {
+        cron = new Cron('0 0 30 2 *', mockCallback)
+        cron.start()
+      }).toThrow()
+    })
+  })
 })
