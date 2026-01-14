@@ -3,8 +3,8 @@
 
 🚀 现代 TypeScript 机器人框架，专注于插件化、热重载和极致开发体验
 
-[![文档](https://img.shields.io/badge/文档-zhin.pages.dev-blue)](https://zhin.pages.dev)
-[![CI](https://github.com/zhinjs/zhin/actions/workflows/ci.yml/badge.svg)](https://github.com/zhinjs/zhin/actions/workflows/ci.yml)
+[![文档](https://img.shields.io/badge/文档-zhin.js.org-blue)](https://zhin.js.org)
+[![CI](https://github.com/zhinjs/zhin/actions/workflows/publish.yml/badge.svg)](https://github.com/zhinjs/zhin/actions/workflows/publish.yml)
 [![Coverage](https://img.shields.io/codecov/c/github/zhinjs/zhin)](https://codecov.io/gh/zhinjs/zhin)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
