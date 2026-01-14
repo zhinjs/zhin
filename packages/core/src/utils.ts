@@ -187,11 +187,25 @@ export namespace segment {
     if (!Array.isArray(content)) content = [content];
     const toString = (template: string | MessageElement) => {
       if (typeof template !== "string") return [template];
+      
+      // 安全检查：限制输入长度，防止 ReDoS 攻击
+      const MAX_TEMPLATE_LENGTH = 100000; // 100KB
+      if (template.length > MAX_TEMPLATE_LENGTH) {
+        throw new Error(`Template too large: ${template.length} > ${MAX_TEMPLATE_LENGTH}`);
+      }
+      
       template = unescape(template);
       const result: MessageElement[] = [];
-      const closingReg = /<(\S+)(\s[^>]+)?\/>/;
-      const twinningReg = /<(\S+)(\s[^>]+)?>([\s\S]*?)<\/\1>/;
-      while (template.length) {
+      // 修复 ReDoS 漏洞：使用更安全的正则表达式
+      // 原: /<(\S+)(\s[^>]+)?\/>/  可能导致回溯
+      const closingReg = /<(\w+)(?:\s+[^>]*?)?\/>/;
+      // 原: /<(\S+)(\s[^>]+)?>([\s\S]*?)<\/\1>/  可能导致回溯
+      const twinningReg = /<(\w+)(?:\s+[^>]*?)?>([^]*?)<\/\1>/;
+      
+      let iterations = 0;
+      const MAX_ITERATIONS = 1000; // 防止无限循环
+      
+      while (template.length && iterations++ < MAX_ITERATIONS) {
         const [_, type, attrStr = "", child = ""] =
           template.match(twinningReg) || template.match(closingReg) || [];
         if (!type) break;
@@ -209,8 +223,10 @@ export namespace segment {
             },
           });
         template = template.slice(index + matched.length);
+        // 修复 ReDoS 漏洞：使用更简单的正则表达式
+        // 原: /\s([^=]+)(?=(?=="([^"]+)")|(?=='([^']+)'))/g  嵌套前瞻断言
         const attrArr = [
-          ...attrStr.matchAll(/\s([^=]+)(?=(?=="([^"]+)")|(?=='([^']+)'))/g),
+          ...attrStr.matchAll(/\s+([^=\s]+)=(?:"([^"]*)"|'([^']*)')/g),
         ];
         const data = Object.fromEntries(
           attrArr.map(([source, key, v1, v2]) => {
