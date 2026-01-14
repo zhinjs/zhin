@@ -1,5 +1,15 @@
 # @zhin.js/plugin-music
 
+## 0.0.6
+
+### Patch Changes
+
+- a3b7673: fix: 调整依赖项
+- Updated dependencies [a3b7673]
+- Updated dependencies [5141137]
+  - @zhin.js/adapter-icqq@1.0.25
+  - zhin.js@1.0.20
+
 ## 0.0.5
 
 ### Patch Changes

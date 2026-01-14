@@ -1,5 +1,15 @@
 # @zhin.js/mcp
 
+## 1.0.3
+
+### Patch Changes
+
+- a3b7673: fix: 调整依赖项
+- Updated dependencies [a3b7673]
+- Updated dependencies [5141137]
+  - @zhin.js/http@1.0.11
+  - zhin.js@1.0.20
+
 ## 1.0.2
 
 ### Patch Changes

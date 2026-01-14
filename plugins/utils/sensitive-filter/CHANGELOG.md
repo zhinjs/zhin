@@ -1,5 +1,13 @@
 # @zhin.js/sensitive-filter
 
+## 0.0.6
+
+### Patch Changes
+
+- a3b7673: fix: 调整依赖项
+- Updated dependencies [5141137]
+  - zhin.js@1.0.20
+
 ## 0.0.5
 
 ### Patch Changes

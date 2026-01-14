@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.5
+
+### Patch Changes
+
+- a3b7673: fix: 调整依赖项
+- 5141137: fix: 修复适配器读取配置 bug
+- Updated dependencies [a3b7673]
+- Updated dependencies [5141137]
+  - @zhin.js/logger@0.1.4
+  - zhin.js@1.0.20
+
 ## 1.0.4
 
 ### Patch Changes

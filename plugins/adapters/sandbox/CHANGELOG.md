@@ -1,5 +1,18 @@
 # @zhin.js/adapter-process
 
+## 1.0.25
+
+### Patch Changes
+
+- a3b7673: fix: 调整依赖项
+- 5141137: fix: 修复适配器读取配置 bug
+- Updated dependencies [a3b7673]
+- Updated dependencies [5141137]
+  - @zhin.js/console@1.0.16
+  - @zhin.js/http@1.0.11
+  - @zhin.js/core@1.0.20
+  - zhin.js@1.0.20
+
 ## 1.0.24
 
 ### Patch Changes

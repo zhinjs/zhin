@@ -1,5 +1,13 @@
 # @zhin.js/database
 
+## 1.0.7
+
+### Patch Changes
+
+- a3b7673: fix: 调整依赖项
+- Updated dependencies [5141137]
+  - zhin.js@1.0.20
+
 ## 1.0.6
 
 ### Patch Changes

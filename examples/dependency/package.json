@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/dependency-example",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "完整的 @zhin.js/dependency 使用示例",
   "type": "module",
   "private": true,

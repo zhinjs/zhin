@@ -1,5 +1,16 @@
 # @zhin.js/adapter-lark
 
+## 1.0.21
+
+### Patch Changes
+
+- a3b7673: fix: 调整依赖项
+- 5141137: fix: 修复适配器读取配置 bug
+- Updated dependencies [a3b7673]
+- Updated dependencies [5141137]
+  - @zhin.js/http@1.0.11
+  - zhin.js@1.0.20
+
 ## 1.0.20
 
 ### Patch Changes
