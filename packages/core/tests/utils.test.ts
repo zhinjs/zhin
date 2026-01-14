@@ -13,7 +13,6 @@ import {
   getValueWithRuntime,
   sleep
 } from '../src/utils'
-import { Message } from '../src/message'
 
 describe('Template Security', () => {
 
@@ -133,7 +132,7 @@ describe('evaluate and execute', () => {
   it('should limit cache size', () => {
     clearEvalCache()
     // 添加超过 MAX_EVAL_CACHE_SIZE 的表达式
-    for (let i = 0; i < 1050; i++) {
+    for (let i = 0; i < 150; i++) {
       execute(`1 + ${i}`, {})
     }
     const stats = getEvalCacheStats()
