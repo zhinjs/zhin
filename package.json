@@ -36,7 +36,7 @@
     "type-check": "tsc --noEmit",
     "link": "pnpm --filter @zhin.js/cli exec npm link",
     "test": "vitest run",
-    "test:watch": "vitest",
+    "test:watch": "vitest --reporter=junit --outputFile=test-report.junit.xml",
     "test:coverage": "vitest run --coverage",
     "create": "node packages/create-zhin/lib/index.js",
     "docs:dev": "pnpm --filter @zhin.js/docs dev",

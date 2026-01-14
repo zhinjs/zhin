@@ -5,7 +5,7 @@
 
 [![文档](https://img.shields.io/badge/文档-zhin.js.org-blue)](https://zhin.js.org)
 [![CI](https://github.com/zhinjs/zhin/actions/workflows/publish.yml/badge.svg)](https://github.com/zhinjs/zhin/actions/workflows/publish.yml)
-[![Coverage](https://img.shields.io/codecov/c/github/zhinjs/zhin)](https://codecov.io/gh/zhinjs/zhin)
+[![codecov](https://codecov.io/github/zhinjs/zhin/graph/badge.svg?token=37OE7DHMAI)](https://codecov.io/github/zhinjs/zhin)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
 ## 🌟 核心特性
