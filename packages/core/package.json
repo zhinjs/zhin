@@ -33,7 +33,6 @@
   },
   "dependencies": {
     "@zhin.js/database": "workspace:*",
-    "@zhin.js/dependency": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/schema": "workspace:*",
     "croner": "^9.1.0",

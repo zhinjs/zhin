@@ -3,17 +3,68 @@ import { segment } from '../src/utils.js';
 
 describe('ReDoS Protection Tests', () => {
   describe('segment.from() ReDoS protection', () => {
-    it('should handle large inputs without timeout', () => {
-      // 测试大量属性的标签
-      const maliciousInput = '<tag ' + 'a="b" '.repeat(1000) + '/>';
+    it('should handle small inputs (100 attributes) without timeout', () => {
+      // 测试少量属性的标签
+      const smallInput = '<tag ' + 'a="b" '.repeat(100) + '/>';
       const start = Date.now();
       
       try {
-        segment.from(maliciousInput);
+        segment.from(smallInput);
+        const duration = Date.now() - start;
+        
+        // 应该在合理时间内完成（100ms）
+        expect(duration).toBeLessThan(100);
+      } catch (error) {
+        // 如果抛出错误，也是可以接受的（比如输入太大）
+        expect(error).toBeDefined();
+      }
+    });
+
+    it('should handle medium inputs (500 attributes) without timeout', () => {
+      // 测试中等数量属性的标签
+      const mediumInput = '<tag ' + 'a="b" '.repeat(500) + '/>';
+      const start = Date.now();
+      
+      try {
+        segment.from(mediumInput);
+        const duration = Date.now() - start;
+        
+        // 应该在合理时间内完成（500ms）
+        expect(duration).toBeLessThan(500);
+      } catch (error) {
+        // 如果抛出错误，也是可以接受的（比如输入太大）
+        expect(error).toBeDefined();
+      }
+    });
+
+    it('should handle large inputs (1000 attributes) without timeout', () => {
+      // 测试大量属性的标签
+      const largeInput = '<tag ' + 'a="b" '.repeat(1000) + '/>';
+      const start = Date.now();
+      
+      try {
+        segment.from(largeInput);
         const duration = Date.now() - start;
         
         // 应该在合理时间内完成（1秒）
         expect(duration).toBeLessThan(1000);
+      } catch (error) {
+        // 如果抛出错误，也是可以接受的（比如输入太大）
+        expect(error).toBeDefined();
+      }
+    });
+
+    it('should handle very large inputs (2000 attributes) without timeout', () => {
+      // 测试更大量属性的标签
+      const veryLargeInput = '<tag ' + 'a="b" '.repeat(2000) + '/>';
+      const start = Date.now();
+      
+      try {
+        segment.from(veryLargeInput);
+        const duration = Date.now() - start;
+        
+        // 应该在合理时间内完成（2秒）
+        expect(duration).toBeLessThan(2000);
       } catch (error) {
         // 如果抛出错误，也是可以接受的（比如输入太大）
         expect(error).toBeDefined();

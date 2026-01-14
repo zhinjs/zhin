@@ -140,7 +140,7 @@ describe('Plugin Core Functionality', () => {
 
     it('should get contexts including children', () => {
       const parent = new Plugin('/test/parent.ts')
-      const child = new Plugin('/test/child.ts', parent)
+      new Plugin('/test/child.ts', parent)
       
       const contexts = parent.contexts
       expect(contexts).toBeInstanceOf(Map)
@@ -239,6 +239,54 @@ describe('Plugin AsyncLocalStorage', () => {
         
         expect(child.parent).toBe(parent)
         expect(parent.children).toContain(child)
+      })
+    })
+
+    it('should handle nested contexts correctly', () => {
+      storage.run(undefined, () => {
+        const parent = usePlugin()
+        
+        storage.run(undefined, () => {
+          const nested = usePlugin()
+          // 嵌套上下文应该创建新的独立插件
+          expect(nested).toBeInstanceOf(Plugin)
+          expect(nested).not.toBe(parent)
+          expect(storage.getStore()).toBe(nested)
+        })
+        
+        // 返回外层上下文后，应该恢复原来的插件
+        expect(storage.getStore()).toBe(parent)
+      })
+    })
+
+    it('should handle storage disabled during execution', () => {
+      storage.run(undefined, () => {
+        const plugin = usePlugin()
+        expect(plugin).toBeInstanceOf(Plugin)
+        
+        // 禁用 storage
+        storage.disable()
+        
+        // 再次调用应该创建新插件
+        const newPlugin = usePlugin()
+        expect(newPlugin).toBeInstanceOf(Plugin)
+        expect(storage.getStore()).toBeUndefined()
+      })
+    })
+
+    it('should handle errors in nested contexts', () => {
+      storage.run(undefined, () => {
+        const parent = usePlugin()
+        
+        expect(() => {
+          storage.run(undefined, () => {
+            usePlugin()
+            throw new Error('Test error')
+          })
+        }).toThrow('Test error')
+        
+        // 错误后，外层上下文应该保持不变
+        expect(storage.getStore()).toBe(parent)
       })
     })
   })
@@ -611,7 +659,7 @@ describe('Plugin Info', () => {
 
   it('should include children info', () => {
     const parent = new Plugin('/test/parent.ts')
-    const child = new Plugin('/test/child.ts', parent)
+    new Plugin('/test/child.ts', parent)
     
     const info = parent.info()
     expect(info[parent.name].children).toHaveLength(1)
