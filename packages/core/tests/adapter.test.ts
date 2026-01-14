@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { Adapter } from '../src/adapter'
 import { Bot } from '../src/bot'
 import { Plugin } from '../src/plugin'
-import { Message } from '../src/message'
+import { Message, MessageBase } from '../src/message'
 import { EventEmitter } from 'events'
 
 // Mock Bot 实现用于测试
@@ -19,7 +19,19 @@ class MockBot implements Bot<any, any> {
   }
 
   $formatMessage(event: any): Message<any> {
-    return Message.from(event as any)
+    const base: MessageBase = {
+      $id: event.id || 'mock-id',
+      $adapter: 'test' as any,
+      $bot: this.$id,
+      $content: [],
+      $sender: { id: 'mock-sender', name: 'Mock Sender' },
+      $channel: { id: 'mock-channel', type: 'private' },
+      $timestamp: Date.now(),
+      $raw: JSON.stringify(event),
+      $reply: async (content: any) => 'mock-reply-id',
+      $recall: async () => {}
+    }
+    return Message.from(event, base)
   }
 
   async $connect(): Promise<void> {
