@@ -27,7 +27,7 @@ class MockBot implements Bot<any, any> {
       $sender: { id: 'mock-sender', name: 'Mock Sender' },
       $channel: { id: 'mock-channel', type: 'private' },
       $timestamp: Date.now(),
-      $raw: JSON.stringify(event),
+      $raw: event.raw || event,
       $reply: async (content: any) => 'mock-reply-id',
       $recall: async () => {}
     }
