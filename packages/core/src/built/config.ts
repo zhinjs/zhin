@@ -19,8 +19,24 @@ export class ConfigLoader<T extends object>{
     #proxy<R extends object>(data: R, loader: ConfigLoader<T>) {
         return new Proxy(data, {
             get(target, prop, receiver) {
+                // 对于特殊属性（如 Symbol、prototype 等），直接返回原始值
+                if (typeof prop === 'symbol' || prop === 'constructor' || prop === 'prototype') {
+                    return Reflect.get(target, prop, receiver);
+                }
+                
                 const result= Reflect.get(target, prop, receiver);
-                if(result instanceof Object && result!==null) return loader.#proxy(result,loader);
+                
+                // 对于函数属性（如数组的 map、filter 等），直接返回，不进行代理
+                if (typeof result === 'function') {
+                    return result;
+                }
+                
+                // 对于对象和数组，递归代理（但排除函数）
+                if(result instanceof Object && result!==null && typeof result !== 'function') {
+                    return loader.#proxy(result,loader);
+                }
+                
+                // 处理环境变量占位符
                 if(typeof result==='string') {
                     if(result.startsWith('\\${') && result.endsWith('}')) return result.slice(1);
                     if(/^\$\{(.*)\}$/.test(result)){
