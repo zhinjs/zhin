@@ -2,7 +2,7 @@ import { execSync } from 'node:child_process';
 import chalk from 'chalk';
 import path from 'path';
 
-export async function ensurePnpmInstalled() {
+export async function ensurePnpmInstalled(): Promise<void> {
   try {
     execSync('pnpm --version', { stdio: 'ignore' });
     console.log(chalk.green('✓ 检测到 pnpm 已安装'));
@@ -13,7 +13,11 @@ export async function ensurePnpmInstalled() {
       execSync('npm install -g pnpm', { stdio: 'inherit' });
       console.log(chalk.green('✓ pnpm 安装成功！'));
     } catch (installError) {
+      const errorMessage = installError instanceof Error ? installError.message : String(installError);
       console.error(chalk.red('✗ pnpm 安装失败，请手动安装:'));
+      if (process.env.DEBUG) {
+        console.error(chalk.gray(`错误详情: ${errorMessage}`));
+      }
       console.log(chalk.cyan('  npm install -g pnpm'));
       console.log(chalk.gray('或访问: https://pnpm.io/installation'));
       process.exit(1);
@@ -21,7 +25,7 @@ export async function ensurePnpmInstalled() {
   }
 }
 
-export async function installDependencies(projectPath: string) {
+export async function installDependencies(projectPath: string): Promise<void> {
   try {
     console.log(chalk.gray('执行: pnpm install'));
     execSync('pnpm install', {
@@ -30,8 +34,12 @@ export async function installDependencies(projectPath: string) {
     });
     console.log(chalk.green('✓ 依赖安装成功！'));
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     console.log('');
     console.log(chalk.yellow('⚠ 依赖安装失败'));
+    if (process.env.DEBUG) {
+      console.log(chalk.gray(`错误详情: ${errorMessage}`));
+    }
     console.log(chalk.gray('你可以稍后手动安装:'));
     console.log(chalk.cyan(`  cd ${path.basename(projectPath)}`));
     console.log(chalk.cyan('  pnpm install'));

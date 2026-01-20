@@ -52,10 +52,16 @@ export function generateDatabaseEnvVars(config: DatabaseConfig): string {
   return envVars.length > 0 ? `\n\n${envVars.join('\n')}` : '';
 }
 
+// 数据库配置对象类型
+type DatabaseConfigObject = {
+  dialect: string;
+  [key: string]: string | number | { [key: string]: string | number } | undefined;
+};
+
 // 生成数据库配置代码
 export function generateDatabaseConfig(config: DatabaseConfig, format: 'ts' | 'js' | 'yaml' | 'json'): string {
   // 根据数据库类型生成使用环境变量的配置
-  let configObj: any = { dialect: config.dialect };
+  let configObj: DatabaseConfigObject = { dialect: config.dialect };
   
   switch (config.dialect) {
     case 'mysql':
@@ -152,8 +158,9 @@ export function generateDatabaseConfig(config: DatabaseConfig, format: 'ts' | 'j
 }
 
 // 创建配置文件
-export async function createConfigFile(appPath: string, format: string, options: InitOptions) {
-  const databaseConfig = options.database ? generateDatabaseConfig(options.database, format as any) : '';
+export async function createConfigFile(appPath: string, format: string, options: InitOptions): Promise<void> {
+  const configFormat = format as 'ts' | 'js' | 'yaml' | 'json';
+  const databaseConfig = options.database ? generateDatabaseConfig(options.database, configFormat) : '';
   
   const configMap: Record<string, [string, string]> = {
     ts: ['zhin.config.ts', 
@@ -162,15 +169,9 @@ export async function createConfigFile(appPath: string, format: string, options:
 export default defineConfig(async (env) => {
   return {
     log_level: LogLevel.INFO,
-${databaseConfig ? `    ${databaseConfig}` : ''}    log: {
-      maxDays: 7,
-      maxRecords: 10000,
-      cleanupInterval: 24
-    },
-    plugin_dirs: [
-      env.PLUGIN_DIR || './src/plugins',
+${databaseConfig ? `    ${databaseConfig}` : ''}    plugin_dirs: [
       'node_modules',
-      'node_modules/@zhin.js'
+      './src/plugins'
     ],
     services: [
       'process',
@@ -188,15 +189,14 @@ ${databaseConfig ? `    ${databaseConfig}` : ''}    log: {
     ],
     http: {
       port: 8086,
-      username: env.HTTP_USERNAME,
-      password: env.HTTP_PASSWORD,
+      username: '\${username}',
+      password: '\${password}',
       base: '/api'
     },
     console: {
       enabled: true,
-      lazyLoad: false
-    },
-    debug: env.DEBUG === 'true'
+      lazyLoad: true
+    }
   };
 });
 `],
@@ -206,15 +206,9 @@ ${databaseConfig ? `    ${databaseConfig}` : ''}    log: {
 export default defineConfig(async (env) => {
   return {
     log_level: LogLevel.INFO,
-${databaseConfig ? `    ${databaseConfig}` : ''}    log: {
-      maxDays: 7,
-      maxRecords: 10000,
-      cleanupInterval: 24
-    },
-    plugin_dirs: [
-      env.PLUGIN_DIR || './src/plugins',
+${databaseConfig ? `    ${databaseConfig}` : ''}    plugin_dirs: [
       'node_modules',
-      'node_modules/@zhin.js'
+      './src/plugins'
     ],
     services: [
       'process',
@@ -232,29 +226,22 @@ ${databaseConfig ? `    ${databaseConfig}` : ''}    log: {
     ],
     http: {
       port: 8086,
-      username: env.HTTP_USERNAME,
-      password: env.HTTP_PASSWORD,
+      username: '\${username}',
+      password: '\${password}',
       base: '/api'
     },
     console: {
       enabled: true,
-      lazyLoad: false
-    },
-    debug: env.DEBUG === 'true'
+      lazyLoad: true
+    }
   };
 });
 `],
     yaml: ['zhin.config.yml',
 `log_level: 1
-${databaseConfig ? `database:\n${databaseConfig}\n` : ''}log:
-  maxDays: 7
-  maxRecords: 10000
-  cleanupInterval: 24
-
-plugin_dirs:
-  - ./src/plugins
+${databaseConfig ? `database:\n${databaseConfig}\n` : ''}plugin_dirs:
   - node_modules
-  - node_modules/@zhin.js
+  - ./src/plugins
 
 services:
   - process
@@ -272,29 +259,21 @@ plugins:
 
 http:
   port: 8086
-  username: \${HTTP_USERNAME}
-  password: \${HTTP_PASSWORD}
+  username: \${username}
+  password: \${password}
   base: /api
 
 console:
   enabled: true
-  lazyLoad: false
-
-debug: false
+  lazyLoad: true
 `],
     json: ['zhin.config.json',
 `{
   "log_level": 1,
 ${databaseConfig ? `  ${databaseConfig},` : ''}
-  "log": {
-    "maxDays": 7,
-    "maxRecords": 10000,
-    "cleanupInterval": 24
-  },
   "plugin_dirs": [
-    "./src/plugins",
     "node_modules",
-    "node_modules/@zhin.js"
+    "./src/plugins"
   ],
   "services": [
     "process",
@@ -312,15 +291,14 @@ ${databaseConfig ? `  ${databaseConfig},` : ''}
   ],
   "http": {
     "port": 8086,
-    "username": "\${HTTP_USERNAME}",
-    "password": "\${HTTP_PASSWORD}",
+    "username": "\${username}",
+    "password": "\${password}",
     "base": "/api"
   },
   "console": {
     "enabled": true,
-    "lazyLoad": false
-  },
-  "debug": false
+    "lazyLoad": true
+  }
 }
 `]
   };
