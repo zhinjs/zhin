@@ -29,8 +29,8 @@ await configService.load('zhin.config.yml', {
     dialect: "sqlite",
     filename: "./data/test.db"
   },
-  plugin_dirs: [path.relative(process.cwd(), import.meta.dirname), 'node_modules/@zhin.js', './plugins',],
-  plugins: [],
+  plugin_dirs: ['node_modules', './src/plugins'],
+  plugins: ['@zhin.js/http', '@zhin.js/console', '@zhin.js/adapter-sandbox'],
   services: ['process', 'config', 'command', 'component', 'permission', 'cron'],
 });
 const appConfig = configService.get<AppConfig>('zhin.config.yml');
