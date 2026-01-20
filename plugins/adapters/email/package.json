@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-email",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "type": "module",
   "description": "Zhin.js adapter for Email (SMTP/IMAP)",
   "main": "lib/index.js",

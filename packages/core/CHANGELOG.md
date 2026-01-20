@@ -1,5 +1,14 @@
 # @zhin.js/core
 
+## 1.0.21
+
+### Patch Changes
+
+- 3960e70: fix: runtime err
+  - @zhin.js/database@1.0.8
+  - @zhin.js/logger@0.1.5
+  - @zhin.js/schema@1.0.5
+
 ## 1.0.20
 
 ### Patch Changes
