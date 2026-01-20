@@ -90,7 +90,13 @@ export const newCommand = new Command('new')
       logger.log(`  pnpm publish`);
       
     } catch (error) {
-      logger.error(`创建插件失败: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      
+      logger.error(`创建插件失败: ${errorMessage}`);
+      if (errorStack && process.env.DEBUG) {
+        logger.error(errorStack);
+      }
       process.exit(1);
     }
   });
@@ -928,7 +934,8 @@ async function addPluginToApp(pluginName: string, isOfficial?: boolean) {
     } catch (error) {
       logger.warn('⚠ 依赖更新失败，请手动执行 pnpm install');
     }
-  } catch (error) {
-    logger.warn(`⚠ 添加到 package.json 失败: ${error}`);
-  }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.warn(`⚠ 添加到 package.json 失败: ${errorMessage}`);
+    }
 }
