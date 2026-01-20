@@ -182,10 +182,10 @@ ${databaseConfig ? `    ${databaseConfig}` : ''}    plugin_dirs: [
       'cron'
     ],
     plugins: [
-      '@zhin.js/adapter-sandbox',
+      'example',
       '@zhin.js/http',
       '@zhin.js/console',
-      'example'
+      '@zhin.js/adapter-sandbox'
     ],
     http: {
       port: 8086,
@@ -219,10 +219,10 @@ ${databaseConfig ? `    ${databaseConfig}` : ''}    plugin_dirs: [
       'cron'
     ],
     plugins: [
-      '@zhin.js/adapter-sandbox',
+      'example',
       '@zhin.js/http',
       '@zhin.js/console',
-      'example'
+      '@zhin.js/adapter-sandbox'
     ],
     http: {
       port: 8086,
@@ -252,10 +252,10 @@ services:
   - cron
 
 plugins:
-  - "@zhin.js/adapter-sandbox"
+  - example
   - "@zhin.js/http"
   - "@zhin.js/console"
-  - example
+  - "@zhin.js/adapter-sandbox"
 
 http:
   port: 8086
@@ -284,10 +284,10 @@ ${databaseConfig ? `  ${databaseConfig},` : ''}
     "cron"
   ],
   "plugins": [
-    "@zhin.js/adapter-sandbox",
+    "example",
     "@zhin.js/http",
     "@zhin.js/console",
-    "example"
+    "@zhin.js/adapter-sandbox"
   ],
   "http": {
     "port": 8086,
