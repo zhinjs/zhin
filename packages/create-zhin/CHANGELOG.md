@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.17
+
+### Patch Changes
+
+- 7aa94b1: fix: 更新 create-bot
+
 ## 1.0.16
 
 ### Patch Changes
