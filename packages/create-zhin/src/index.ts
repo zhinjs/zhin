@@ -136,7 +136,7 @@ async function main() {
       options.database = databaseConfig;
     }
 
-    if (!name) {
+    if (!name?.trim()) {
       console.error(chalk.red('项目名称不能为空'));
       process.exit(1);
     }
@@ -188,7 +188,7 @@ async function main() {
     console.log('');
     console.log('📝 下一步操作：');
     console.log(`  ${chalk.cyan(`cd ${realName}`)}`);
-    if(options.database.dialect ==='sqlite'){
+    if (options.database?.dialect === 'sqlite') {
       console.log(`  ${chalk.cyan('pnpm approve-builds sqlite3')} ${chalk.gray('# 批准 sqlite3 原生模块构建如遇错误，请检查系统是否已安装C++编译器(g++)')}`);
     }
     console.log('');
@@ -210,7 +210,13 @@ async function main() {
     console.log(`  ${chalk.cyan('https://zhinjs.github.io')}`);
     
   } catch (error) {
-    console.error(chalk.red(`创建项目失败: ${error}`));
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
+    console.error(chalk.red(`创建项目失败: ${errorMessage}`));
+    if (errorStack && process.env.DEBUG) {
+      console.error(chalk.gray(errorStack));
+    }
     process.exit(1);
   }
 }

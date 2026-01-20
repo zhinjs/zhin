@@ -1,13 +1,14 @@
 import os from 'os';
+import { webcrypto } from 'node:crypto';
 
 // 生成随机密码
 export function generateRandomPassword(length: number = 6): string {
-  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-  let password = '';
-  for (let i = 0; i < length; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  if (length < 1) {
+    throw new Error('密码长度必须大于 0');
   }
-  return password;
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  const randomValues = webcrypto.getRandomValues(new Uint32Array(length));
+  return Array.from(randomValues, (value) => chars[value % chars.length]).join('');
 }
 
 // 获取当前系统用户名
