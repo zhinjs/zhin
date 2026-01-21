@@ -2,6 +2,10 @@ log_level: 1
 database:
   dialect: sqlite
   filename: ./data/test.db
+bots:
+  - context: kook
+    name: kook-bot
+    token: ${KOOK_TOKEN}
 plugin_dirs:
   - node_modules
   - ./src/plugins
@@ -26,7 +30,7 @@ plugins:
   # 适配器插件
   - "@zhin.js/adapter-sandbox"
   # - "@zhin.js/adapter-icqq"      # 需要 QQ 账号配置
-  # - "@zhin.js/adapter-kook"      # 需要 Kook token 配置
+  - "@zhin.js/adapter-kook"      # 需要 Kook token 配置
   # - "@zhin.js/adapter-qq"        # 需要 QQ 官方机器人配置
   # - "@zhin.js/adapter-discord"   # 需要 Discord token 配置
   # - "@zhin.js/adapter-telegram"  # 需要 Telegram token 配置
