@@ -1,5 +1,14 @@
 # @zhin.js/plugin-github-notify
 
+## 0.0.10
+
+### Patch Changes
+
+- 52ae08a: fix: 更新消息处理流程
+- Updated dependencies [52ae08a]
+  - zhin.js@1.0.23
+  - @zhin.js/http@1.0.14
+
 ## 0.0.9
 
 ### Patch Changes

@@ -1,5 +1,16 @@
 # @zhin.js/adapter-process
 
+## 1.0.28
+
+### Patch Changes
+
+- 52ae08a: fix: 更新消息处理流程
+- Updated dependencies [52ae08a]
+  - @zhin.js/core@1.0.23
+  - zhin.js@1.0.23
+  - @zhin.js/console@1.0.19
+  - @zhin.js/http@1.0.14
+
 ## 1.0.27
 
 ### Patch Changes

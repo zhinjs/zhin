@@ -1,5 +1,31 @@
 # test-bot
 
+## 0.1.16
+
+### Patch Changes
+
+- 52ae08a: fix: 更新消息处理流程
+- Updated dependencies [52ae08a]
+  - @zhin.js/plugin-github-notify@0.0.10
+  - @zhin.js/adapter-wechat-mp@0.1.9
+  - @zhin.js/adapter-dingtalk@1.0.8
+  - @zhin.js/adapter-onebot11@1.0.25
+  - @zhin.js/adapter-telegram@1.0.8
+  - @zhin.js/adapter-discord@1.0.23
+  - @zhin.js/adapter-sandbox@1.0.28
+  - @zhin.js/adapter-email@0.1.11
+  - @zhin.js/adapter-slack@1.0.8
+  - @zhin.js/adapter-icqq@1.0.28
+  - @zhin.js/adapter-kook@1.0.23
+  - @zhin.js/adapter-lark@1.0.24
+  - @zhin.js/adapter-qq@1.0.23
+  - zhin.js@1.0.23
+  - @zhin.js/plugin-music@0.0.9
+  - @zhin.js/console@1.0.19
+  - @zhin.js/http@1.0.14
+  - @zhin.js/mcp@1.0.6
+  - @zhin.js/sensitive-filter@0.0.9
+
 ## 0.1.15
 
 ### Patch Changes

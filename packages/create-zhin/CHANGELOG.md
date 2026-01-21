@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.19
+
+### Patch Changes
+
+- 52ae08a: fix: 更新消息处理流程
+
 ## 1.0.18
 
 ### Patch Changes
