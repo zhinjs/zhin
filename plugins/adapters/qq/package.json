@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-qq",
-  "version": "1.0.23",
+  "version": "1.0.24",
   "description": "Zhin.js adapter for QQ Official Bot",
   "type": "module",
   "main": "./lib/index.js",
