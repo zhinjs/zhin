@@ -1,5 +1,14 @@
 # @zhin.js/core
 
+## 1.0.24
+
+### Patch Changes
+
+- 6108e5d: fix: component
+  - @zhin.js/database@1.0.11
+  - @zhin.js/logger@0.1.8
+  - @zhin.js/schema@1.0.8
+
 ## 1.0.23
 
 ### Patch Changes

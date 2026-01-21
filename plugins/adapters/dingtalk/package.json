@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-dingtalk",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Zhin.js adapter for DingTalk (钉钉)",
   "type": "module",
   "main": "./lib/index.js",
