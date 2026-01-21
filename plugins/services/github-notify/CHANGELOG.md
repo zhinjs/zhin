@@ -1,5 +1,13 @@
 # @zhin.js/plugin-github-notify
 
+## 0.0.9
+
+### Patch Changes
+
+- Updated dependencies [26aba27]
+  - zhin.js@1.0.22
+  - @zhin.js/http@1.0.13
+
 ## 0.0.8
 
 ### Patch Changes

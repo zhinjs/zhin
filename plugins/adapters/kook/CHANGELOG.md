@@ -1,5 +1,14 @@
 # @zhin.js/adapter-kook
 
+## 1.0.22
+
+### Patch Changes
+
+- d75fb55: fix: chagne segment convert
+- Updated dependencies [26aba27]
+  - zhin.js@1.0.22
+  - @zhin.js/logger@0.1.6
+
 ## 1.0.21
 
 ### Patch Changes

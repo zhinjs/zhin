@@ -1,5 +1,12 @@
 # @zhin.js/adapter-email
 
+## 0.1.10
+
+### Patch Changes
+
+- Updated dependencies [26aba27]
+  - zhin.js@1.0.22
+
 ## 0.1.9
 
 ### Patch Changes

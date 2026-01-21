@@ -1,5 +1,14 @@
 # zhin.js
 
+## 1.0.22
+
+### Patch Changes
+
+- 26aba27: fix: error default config
+  - @zhin.js/logger@0.1.6
+  - @zhin.js/schema@1.0.6
+  - @zhin.js/core@1.0.22
+
 ## 1.0.21
 
 ### Patch Changes
