@@ -28,17 +28,6 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
       this.logger.info(`${bot_id} recall ${id}`);
       await bot.$recallMessage(id);
     })
-    this.on('call.sendMessage', async (bot_id:string,options:SendOptions) => {
-      const fns=this.plugin.root.listeners('before.sendMessage') as BeforeSendHandler[];
-      for(const fn of fns){
-        const result=await fn(options);
-        if(result) options=result;
-      }
-      const bot = this.bots.get(bot_id);
-      if(!bot) throw new Error(`Bot ${bot_id} not found`);
-      this.logger.info(`${bot_id} send ${options.type}(${options.id}):${segment.raw(options.content)}`);
-      return await bot.$sendMessage(options);
-    });
     this.on('message.receive', (message) => {
       this.logger.info(`${message.$bot} recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`);
       this.plugin?.middleware(message, async ()=>{});
@@ -51,6 +40,21 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
   }
   binding(plugin: Plugin) {
     this.plugin = plugin;
+  }
+  private async renderSendMessage(options:SendOptions):Promise<SendOptions>{
+    const fns=this.plugin.root.listeners('before.sendMessage') as BeforeSendHandler[];
+    for(const fn of fns){
+      const result=await fn(options);
+      if(result) options=result;
+    }
+    return options;
+  }
+  async sendMessage(options:SendOptions):Promise<string>{
+    options=await this.renderSendMessage(options);
+    const bot = this.bots.get(options.bot);
+    if(!bot) throw new Error(`Bot ${options.bot} not found`);
+    this.logger.info(`${options.bot} send ${options.type}(${options.id}):${segment.raw(options.content)}`);
+    return await bot.$sendMessage(options);
   }
   async start() {
     this.plugin.root.adapters.push(this.name);
@@ -113,7 +117,6 @@ export namespace Adapter {
     'message.group.receive': [Message];
     'message.channel.receive': [Message];
     'call.recallMessage': [string, string];
-    'call.sendMessage': [string, SendOptions];
   }
   /**
    * 适配器工厂注册表

@@ -102,7 +102,7 @@ export class QQBot<T extends ReceiverMode, M extends ApplicationPlatform = Appli
       $reply: async (content: SendContent, quote: boolean | string = true): Promise<string> => {
         if (!Array.isArray(content)) content = [content];
         if (quote) content.unshift({ type: "reply", data: { id: typeof quote === "boolean" ? result.$id : quote } });
-        return await this.$sendMessage({
+        return await this.adapter.sendMessage({
           ...result.$channel,
           context: "qq",
           bot: this.$config.name,
@@ -120,22 +120,22 @@ export class QQBot<T extends ReceiverMode, M extends ApplicationPlatform = Appli
           const id = options.id.replace("direct:", "");
           const result = await this.sendDirectMessage(id, options.content);
           plugin.logger.debug(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`);
-          return `direct-${options.id}:${result.message_id.toString()}`;
+          return `direct-${options.id}:${result.id.toString()}`;
         } else {
           const result = await this.sendPrivateMessage(options.id, options.content);
           plugin.logger.debug(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`);
-          return `private-${options.id}:${result.message_id.toString()}`;
+          return `private-${options.id}:${result.id.toString()}`;
         }
       }
       case "group": {
         const result = await this.sendGroupMessage(options.id, options.content);
         plugin.logger.debug(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`);
-        return `group-${options.id}:${result.message_id.toString()}`;
+        return `group-${options.id}:${result.id.toString()}`;
       }
       case "channel": {
         const result = await this.sendGuildMessage(options.id, options.content);
         plugin.logger.debug(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`);
-        return `channel-${options.id}:${result.message_id.toString()}`;
+        return `channel-${options.id}:${result.id.toString()}`;
       }
       default:
         throw new Error(`unsupported channel type ${options.type}`);

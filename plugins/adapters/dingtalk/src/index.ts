@@ -288,7 +288,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
                 await this.$recallMessage(msg.msgId || '');
             },
             $reply: async (content: SendContent): Promise<string> => {
-                return await this.$sendMessage({
+                return await this.adapter.sendMessage({
                     context: 'dingtalk',
                     bot: this.$config.name,
                     id: msg.conversationId || msg.senderId || 'unknown',

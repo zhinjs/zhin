@@ -28,7 +28,28 @@ class MockBot implements Bot<any, any> {
       $channel: { id: 'mock-channel', type: 'private' },
       $timestamp: Date.now(),
       $raw: event.raw || event,
-      $reply: async (content: any) => 'mock-reply-id',
+      $reply: async (content: any, quote?: boolean | string) => {
+        const elements = Array.isArray(content) ? content : [content]
+        const finalContent: any[] = []
+        
+        if (quote) {
+          finalContent.push({
+            type: 'reply',
+            data: { id: typeof quote === 'boolean' ? base.$id : quote }
+          })
+        }
+        
+        finalContent.push(...elements.map((el: any) => 
+          typeof el === 'string' ? { type: 'text', data: { text: el } } : el
+        ))
+        
+        return await this.adapter.sendMessage({
+          ...base.$channel,
+          context: 'test',
+          bot: this.$id,
+          content: finalContent,
+        })
+      },
       $recall: async () => {}
     }
     return Message.from(event, base)
@@ -91,14 +112,13 @@ describe('Adapter Core Functionality', () => {
       expect(listeners.length).toBeGreaterThan(0)
     })
 
-    it('should register call.sendMessage listener', () => {
-      const listeners = adapter.listeners('call.sendMessage')
-      expect(listeners.length).toBeGreaterThan(0)
-    })
-
     it('should register call.recallMessage listener', () => {
       const listeners = adapter.listeners('call.recallMessage')
       expect(listeners.length).toBeGreaterThan(0)
+    })
+
+    it('should have sendMessage method', () => {
+      expect(typeof adapter.sendMessage).toBe('function')
     })
   })
 
@@ -234,7 +254,7 @@ describe('Adapter Core Functionality', () => {
       })
     })
 
-    describe('call.sendMessage', () => {
+    describe('sendMessage', () => {
       it('should send message through bot', async () => {
         const config = [{ id: 'bot1' }]
         const adapter = new MockAdapter(plugin, 'test', config)
@@ -251,18 +271,22 @@ describe('Adapter Core Functionality', () => {
           type: 'text' as const
         }
         
-        await adapter.emit('call.sendMessage', 'bot1', options)
+        const messageId = await adapter.sendMessage(options)
         
         expect(sendSpy).toHaveBeenCalledWith(options)
+        expect(messageId).toBe('mock-message-id')
       })
 
-      it('should validate bot existence before sending', () => {
-        // 验证发送消息前应该检查 bot 是否存在
-        expect(adapter.bots.has('non-existent-bot')).toBe(false)
+      it('should throw error if bot not found', async () => {
+        const options = {
+          context: 'test',
+          bot: 'non-existent-bot',
+          content: 'Hello',
+          id: 'channel-id',
+          type: 'text' as const
+        }
         
-        // 在实际使用中，应该先检查 bot 是否存在
-        const botExists = adapter.bots.has('bot1')
-        expect(botExists).toBe(false) // 因为还没有 start
+        await expect(adapter.sendMessage(options)).rejects.toThrow('Bot non-existent-bot not found')
       })
 
       it('should call before.sendMessage handlers', async () => {
@@ -271,8 +295,50 @@ describe('Adapter Core Functionality', () => {
         await adapter.start()
         
         let handlerCalled = false
+        let modifiedContent = false
+        
         plugin.root.on('before.sendMessage', (options) => {
           handlerCalled = true
+          // 修改消息内容
+          return {
+            ...options,
+            content: 'Modified: ' + options.content
+          }
+        })
+        
+        const bot = adapter.bots.get('bot1')!
+        const sendSpy = vi.spyOn(bot, '$sendMessage')
+        
+        const options = {
+          context: 'test',
+          bot: 'bot1',
+          content: 'Hello',
+          id: 'channel-id',
+          type: 'text' as const
+        }
+        
+        await adapter.sendMessage(options)
+        
+        expect(handlerCalled).toBe(true)
+        expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
+          content: 'Modified: Hello'
+        }))
+      })
+
+      it('should handle multiple before.sendMessage handlers', async () => {
+        const config = [{ id: 'bot1' }]
+        const adapter = new MockAdapter(plugin, 'test', config)
+        await adapter.start()
+        
+        const handlers: string[] = []
+        
+        plugin.root.on('before.sendMessage', (options) => {
+          handlers.push('handler1')
+          return options
+        })
+        
+        plugin.root.on('before.sendMessage', (options) => {
+          handlers.push('handler2')
           return options
         })
         
@@ -284,8 +350,29 @@ describe('Adapter Core Functionality', () => {
           type: 'text' as const
         }
         
-        await adapter.emit('call.sendMessage', 'bot1', options)
-        expect(handlerCalled).toBe(true)
+        await adapter.sendMessage(options)
+        
+        expect(handlers).toEqual(['handler1', 'handler2'])
+      })
+
+      it('should log message sending', async () => {
+        const config = [{ id: 'bot1' }]
+        const adapter = new MockAdapter(plugin, 'test', config)
+        await adapter.start()
+        
+        const logSpy = vi.spyOn(adapter.logger, 'info')
+        
+        const options = {
+          context: 'test',
+          bot: 'bot1',
+          content: [{ type: 'text', data: { text: 'Hello' } }],
+          id: 'channel-id',
+          type: 'private' as const
+        }
+        
+        await adapter.sendMessage(options)
+        
+        expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('bot1 send private(channel-id):Hello'))
       })
     })
 
@@ -355,6 +442,109 @@ describe('Adapter Core Functionality', () => {
       const bot = adapter.bots.get('bot1')
       expect(bot).toBeDefined()
       expect(bot!.$id).toBe('bot1')
+    })
+  })
+
+  describe('Message $reply', () => {
+    it('should send reply through adapter.sendMessage', async () => {
+      const config = [{ id: 'bot1' }]
+      const adapter = new MockAdapter(plugin, 'test', config)
+      await adapter.start()
+      
+      const bot = adapter.bots.get('bot1')!
+      const message = bot.$formatMessage({ id: 'msg-1', raw: 'Hello' })
+      
+      const sendSpy = vi.spyOn(adapter, 'sendMessage')
+      
+      await message.$reply('Reply content')
+      
+      expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
+        bot: 'bot1',
+        content: expect.arrayContaining([
+          expect.objectContaining({ type: 'text', data: { text: 'Reply content' } })
+        ])
+      }))
+    })
+
+    it('should support quote reply', async () => {
+      const config = [{ id: 'bot1' }]
+      const adapter = new MockAdapter(plugin, 'test', config)
+      await adapter.start()
+      
+      const bot = adapter.bots.get('bot1')!
+      const message = bot.$formatMessage({ id: 'msg-1', raw: 'Hello' })
+      
+      const sendSpy = vi.spyOn(adapter, 'sendMessage')
+      
+      await message.$reply('Reply content', true)
+      
+      expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
+        content: expect.arrayContaining([
+          expect.objectContaining({ type: 'reply', data: { id: 'msg-1' } }),
+          expect.objectContaining({ type: 'text', data: { text: 'Reply content' } })
+        ])
+      }))
+    })
+
+    it('should support custom quote id', async () => {
+      const config = [{ id: 'bot1' }]
+      const adapter = new MockAdapter(plugin, 'test', config)
+      await adapter.start()
+      
+      const bot = adapter.bots.get('bot1')!
+      const message = bot.$formatMessage({ id: 'msg-1', raw: 'Hello' })
+      
+      const sendSpy = vi.spyOn(adapter, 'sendMessage')
+      
+      await message.$reply('Reply content', 'custom-msg-id')
+      
+      expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
+        content: expect.arrayContaining([
+          expect.objectContaining({ type: 'reply', data: { id: 'custom-msg-id' } })
+        ])
+      }))
+    })
+
+    it('should handle array content', async () => {
+      const config = [{ id: 'bot1' }]
+      const adapter = new MockAdapter(plugin, 'test', config)
+      await adapter.start()
+      
+      const bot = adapter.bots.get('bot1')!
+      const message = bot.$formatMessage({ id: 'msg-1', raw: 'Hello' })
+      
+      const sendSpy = vi.spyOn(adapter, 'sendMessage')
+      
+      await message.$reply([
+        { type: 'text', data: { text: 'Part 1' } },
+        { type: 'text', data: { text: 'Part 2' } }
+      ])
+      
+      expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
+        content: expect.arrayContaining([
+          expect.objectContaining({ type: 'text', data: { text: 'Part 1' } }),
+          expect.objectContaining({ type: 'text', data: { text: 'Part 2' } })
+        ])
+      }))
+    })
+
+    it('should trigger before.sendMessage hooks', async () => {
+      const config = [{ id: 'bot1' }]
+      const adapter = new MockAdapter(plugin, 'test', config)
+      await adapter.start()
+      
+      let hookCalled = false
+      plugin.root.on('before.sendMessage', (options) => {
+        hookCalled = true
+        return options
+      })
+      
+      const bot = adapter.bots.get('bot1')!
+      const message = bot.$formatMessage({ id: 'msg-1', raw: 'Hello' })
+      
+      await message.$reply('Reply content')
+      
+      expect(hookCalled).toBe(true)
     })
   })
 })

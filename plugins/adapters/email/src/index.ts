@@ -318,7 +318,7 @@ export class EmailBot extends EventEmitter implements Bot<EmailBotConfig, EmailM
                 // 邮件适配器暂时不支持撤回消息
             },
             $reply: async (content: SendContent): Promise<string> => {
-                return await this.$sendMessage({
+                return await this.adapter.sendMessage({
                     context: this.$config.context,
                     bot: this.$config.name,
                     id: emailMsg.from,

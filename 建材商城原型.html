@@ -1,0 +1,1629 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>建材商城 - 完整原型设计</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap');
+        
+        :root {
+            /* 主色调 - 深邃蓝灰色系 */
+            --primary-color: #2C3E50;
+            --primary-light: #34495E;
+            --primary-dark: #1A252F;
+            
+            /* 辅助色 - 优雅金色 */
+            --accent-color: #D4AF37;
+            --accent-light: #E8C870;
+            --accent-dark: #B8941F;
+            
+            /* 中性色 */
+            --text-primary: #1A1A1A;
+            --text-secondary: #6B7280;
+            --text-tertiary: #9CA3AF;
+            
+            /* 背景色 */
+            --bg-primary: #FFFFFF;
+            --bg-secondary: #F8F9FA;
+            --bg-tertiary: #F3F4F6;
+            
+            /* 边框色 */
+            --border-light: #E5E7EB;
+            --border-medium: #D1D5DB;
+            
+            /* 功能色 */
+            --success-color: #10B981;
+            --warning-color: #F59E0B;
+            --error-color: #EF4444;
+            --info-color: #3B82F6;
+        }
+        
+        * {
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+        
+        .phone-frame {
+            width: 375px;
+            height: 812px;
+            margin: 20px auto;
+            border: 12px solid #1f2937;
+            border-radius: 40px;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            position: relative;
+            background: white;
+        }
+        
+        .phone-notch {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 150px;
+            height: 30px;
+            background: #1f2937;
+            border-radius: 0 0 20px 20px;
+            z-index: 100;
+        }
+        
+        .screen-content {
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background: var(--bg-secondary);
+        }
+        
+        .status-bar {
+            height: 44px;
+            background: var(--primary-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            color: white;
+            font-size: 12px;
+        }
+        
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            max-width: 375px;
+            background: white;
+            border-top: 1px solid var(--border-light);
+            display: flex;
+            justify-content: space-around;
+            padding: 8px 0 20px;
+            z-index: 50;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+        }
+        
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            color: var(--text-tertiary);
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+        
+        .nav-item:active {
+            transform: scale(0.95);
+        }
+        
+        .nav-item.active {
+            color: var(--primary-color);
+        }
+        
+        .nav-item.active::before {
+            content: '';
+            position: absolute;
+            top: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 32px;
+            height: 3px;
+            background: var(--accent-color);
+            border-radius: 2px;
+        }
+        
+        .nav-item i {
+            font-size: 22px;
+        }
+        
+        .fab-button {
+            position: fixed;
+            bottom: 100px;
+            right: calc(50% - 187px + 20px);
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            box-shadow: 0 8px 24px rgba(44, 62, 80, 0.3);
+            cursor: pointer;
+            z-index: 40;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .fab-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(44, 62, 80, 0.4);
+        }
+        
+        .product-card {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid var(--border-light);
+        }
+        
+        .product-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(0,0,0,0.1);
+            border-color: var(--accent-light);
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 0.3px;
+        }
+        
+        .badge-primary {
+            background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-dark) 100%);
+            color: white;
+        }
+        
+        .badge-success {
+            background: #ECFDF5;
+            color: var(--success-color);
+            border: 1px solid #A7F3D0;
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+        }
+        
+        .accent-gradient {
+            background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-dark) 100%);
+        }
+        
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            letter-spacing: -0.3px;
+        }
+        
+        .order-status-tabs {
+            display: flex;
+            gap: 12px;
+            overflow-x: auto;
+            padding: 16px;
+            background: white;
+            border-bottom: 1px solid var(--border-light);
+        }
+        
+        .order-status-tabs::-webkit-scrollbar {
+            display: none;
+        }
+        
+        .order-status-tab {
+            flex-shrink: 0;
+            padding: 10px 20px;
+            border-radius: 24px;
+            font-size: 14px;
+            color: var(--text-secondary);
+            background: var(--bg-tertiary);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-weight: 500;
+            border: 2px solid transparent;
+        }
+        
+        .order-status-tab:active {
+            transform: scale(0.95);
+        }
+        
+        .order-status-tab.active {
+            background: var(--primary-color);
+            color: white;
+            box-shadow: 0 4px 12px rgba(44, 62, 80, 0.2);
+        }
+        
+        .map-container {
+            width: 100%;
+            height: 200px;
+            background: var(--bg-tertiary);
+            border-radius: 16px;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid var(--border-light);
+        }
+        
+        .store-card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 12px;
+            border: 2px solid var(--border-light);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+        }
+        
+        .store-card:hover {
+            border-color: var(--accent-light);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+        }
+        
+        .store-card.selected {
+            border-color: var(--accent-color);
+            background: linear-gradient(135deg, #FFFBF0 0%, #FFF9E6 100%);
+            box-shadow: 0 4px 16px rgba(212, 175, 55, 0.15);
+        }
+        
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: flex-end;
+            z-index: 100;
+        }
+        
+        .modal-overlay.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 24px 24px 0 0;
+            padding: 24px;
+            width: 100%;
+            max-width: 375px;
+            animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        @keyframes slideUp {
+            from {
+                transform: translateY(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        .screen {
+            display: none;
+        }
+        
+        .screen.active {
+            display: block;
+        }
+        
+        /* 按钮样式优化 */
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 12px rgba(44, 62, 80, 0.2);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(44, 62, 80, 0.3);
+        }
+        
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+        
+        .btn-accent {
+            background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-dark) 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
+        }
+        
+        .btn-accent:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(212, 175, 55, 0.4);
+        }
+        
+        /* 价格标签优化 */
+        .price-tag {
+            color: var(--accent-dark);
+            font-weight: 700;
+        }
+        
+        /* 卡片阴影层次 */
+        .card-elevated {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.06);
+        }
+        
+        /* 输入框优化 */
+        .input-field {
+            border: 2px solid var(--border-light);
+            border-radius: 12px;
+            padding: 12px 16px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .input-field:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 4px rgba(44, 62, 80, 0.1);
+            outline: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="max-w-7xl mx-auto p-4">
+        <h1 class="text-3xl font-bold text-center mb-8 text-gray-800">建材商城 - 完整原型设计</h1>
+        
+        <!-- 页面导航 -->
+        <div class="flex flex-wrap justify-center gap-4 mb-8">
+            <button onclick="showScreen('home')" class="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">首页</button>
+            <button onclick="showScreen('category')" class="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">分类</button>
+            <button onclick="showScreen('orders')" class="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">订单</button>
+            <button onclick="showScreen('cart')" class="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">购物车</button>
+            <button onclick="showScreen('profile')" class="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">个人中心</button>
+            <button onclick="showScreen('product-detail')" class="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">商品详情</button>
+            <button onclick="showScreen('delivery-method')" class="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">提货方式</button>
+            <button onclick="showScreen('store-select')" class="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">选择门店</button>
+            <button onclick="showScreen('checkout')" class="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">确认订单</button>
+        </div>
+
+        <!-- 手机框架容器 -->
+        <div class="phone-frame">
+            <div class="phone-notch"></div>
+            
+            <!-- 屏幕1: 首页 -->
+            <div id="home" class="screen active">
+                <div class="screen-content">
+                    <!-- 状态栏 -->
+                    <div class="status-bar">
+                        <span>15:01</span>
+                        <span class="text-sm font-semibold">建材商城</span>
+                        <div class="flex gap-2">
+                            <i class="fas fa-signal"></i>
+                            <i class="fas fa-wifi"></i>
+                            <i class="fas fa-battery-three-quarters"></i>
+                        </div>
+                    </div>
+
+                    <!-- 搜索栏 -->
+                    <div class="p-4 gradient-bg">
+                        <div class="bg-white/95 backdrop-blur-sm rounded-2xl px-5 py-3.5 flex items-center gap-3 shadow-lg">
+                            <i class="fas fa-search" style="color: var(--text-tertiary);"></i>
+                            <input type="text" placeholder="搜索建材商品..." class="flex-1 outline-none text-sm" style="color: var(--text-primary);">
+                            <i class="fas fa-qrcode" style="color: var(--text-tertiary);"></i>
+                        </div>
+                    </div>
+
+                    <!-- Banner轮播 -->
+                    <div class="px-4 py-3">
+                        <div class="relative rounded-3xl overflow-hidden h-44 shadow-xl">
+                            <img src="https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800" class="w-full h-full object-cover">
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
+                            <div class="absolute bottom-5 left-5 right-5">
+                                <div class="bg-white/95 backdrop-blur-md rounded-2xl p-4 shadow-2xl">
+                                    <p class="text-base font-semibold" style="color: var(--text-primary);">企业采购通道开启</p>
+                                    <p class="text-xs mt-1.5" style="color: var(--text-secondary);">批量采购享优惠，专属客户经理服务</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 快捷入口 -->
+                    <div class="px-4 py-3">
+                        <div class="grid grid-cols-4 gap-4">
+                            <div class="flex flex-col items-center gap-2.5 cursor-pointer transition-transform active:scale-95">
+                                <div class="w-16 h-16 rounded-3xl flex items-center justify-center text-white text-xl shadow-lg" style="background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);">
+                                    <i class="fas fa-box"></i>
+                                </div>
+                                <span class="text-xs font-medium" style="color: var(--text-secondary);">水泥</span>
+                            </div>
+                            <div class="flex flex-col items-center gap-2.5 cursor-pointer transition-transform active:scale-95">
+                                <div class="w-16 h-16 rounded-3xl flex items-center justify-center text-white text-xl shadow-lg" style="background: linear-gradient(135deg, #475569 0%, #334155 100%);">
+                                    <i class="fas fa-layer-group"></i>
+                                </div>
+                                <span class="text-xs font-medium" style="color: var(--text-secondary);">砂浆</span>
+                            </div>
+                            <div class="flex flex-col items-center gap-2.5 cursor-pointer transition-transform active:scale-95">
+                                <div class="w-16 h-16 rounded-3xl flex items-center justify-center text-white text-xl shadow-lg" style="background: linear-gradient(135deg, #64748B 0%, #475569 100%);">
+                                    <i class="fas fa-cubes"></i>
+                                </div>
+                                <span class="text-xs font-medium" style="color: var(--text-secondary);">混凝土</span>
+                            </div>
+                            <div class="flex flex-col items-center gap-2.5 cursor-pointer transition-transform active:scale-95">
+                                <div class="w-16 h-16 rounded-3xl flex items-center justify-center shadow-lg" style="background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-dark) 100%);">
+                                    <i class="fas fa-truck" style="color: white;"></i>
+                                </div>
+                                <span class="text-xs font-medium" style="color: var(--text-secondary);">物流</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 商品推荐 -->
+                    <div class="px-4 py-3">
+                        <div class="section-title">
+                            <div class="w-1 h-5 rounded-full" style="background: var(--accent-color);"></div>
+                            商品推荐
+                        </div>
+
+                        <!-- 商品列表 -->
+                        <div class="space-y-3 mb-24">
+                            <div class="product-card">
+                                <div class="flex gap-4 p-4">
+                                    <img src="https://images.unsplash.com/photo-1590874103328-eac38a683ce7?w=200" class="w-28 h-28 rounded-2xl object-cover">
+                                    <div class="flex-1">
+                                        <div class="flex items-start justify-between mb-2">
+                                            <h3 class="font-semibold text-sm" style="color: var(--text-primary);">M32.5(50KG包装)专业装修</h3>
+                                            <span class="badge badge-primary">热销</span>
+                                        </div>
+                                        <p class="text-xs mb-3" style="color: var(--text-tertiary);">百年品牌 | 质量保证</p>
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <span class="price-tag text-xl">¥25</span>
+                                                <span class="text-xs" style="color: var(--text-tertiary);">/包</span>
+                                            </div>
+                                            <button class="px-5 py-2 text-white text-xs rounded-xl font-medium transition-all active:scale-95" style="background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%); box-shadow: 0 2px 8px rgba(44, 62, 80, 0.2);">
+                                                加购
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="product-card">
+                                <div class="flex gap-4 p-4">
+                                    <img src="https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=200" class="w-28 h-28 rounded-2xl object-cover">
+                                    <div class="flex-1">
+                                        <div class="flex items-start justify-between mb-2">
+                                            <h3 class="font-semibold text-sm" style="color: var(--text-primary);">P·C42.5(50KG包装)砌筑结构</h3>
+                                            <span class="badge badge-success">新品</span>
+                                        </div>
+                                        <p class="text-xs mb-3" style="color: var(--text-tertiary);">百年品牌 | 质量保证</p>
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <span class="price-tag text-xl">¥28</span>
+                                                <span class="text-xs" style="color: var(--text-tertiary);">/包</span>
+                                            </div>
+                                            <button class="px-5 py-2 text-white text-xs rounded-xl font-medium transition-all active:scale-95" style="background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%); box-shadow: 0 2px 8px rgba(44, 62, 80, 0.2);">
+                                                加购
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="product-card">
+                                <div class="flex gap-4 p-4">
+                                    <img src="https://images.unsplash.com/photo-1513467535987-fd81bc7d62f8?w=200" class="w-28 h-28 rounded-2xl object-cover">
+                                    <div class="flex-1">
+                                        <div class="flex items-start justify-between mb-2">
+                                            <h3 class="font-semibold text-sm" style="color: var(--text-primary);">P·O42.5(50kg包装)</h3>
+                                        </div>
+                                        <p class="text-xs mb-3" style="color: var(--text-tertiary);">百年品牌 | 质量保证</p>
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <span class="price-tag text-xl">¥30</span>
+                                                <span class="text-xs" style="color: var(--text-tertiary);">/包</span>
+                                            </div>
+                                            <button class="px-5 py-2 text-white text-xs rounded-xl font-medium transition-all active:scale-95" style="background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%); box-shadow: 0 2px 8px rgba(44, 62, 80, 0.2);">
+                                                加购
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="product-card">
+                                <div class="flex gap-4 p-4">
+                                    <img src="https://images.unsplash.com/photo-1581094271901-8022df4466f9?w=200" class="w-28 h-28 rounded-2xl object-cover">
+                                    <div class="flex-1">
+                                        <div class="flex items-start justify-between mb-2">
+                                            <h3 class="font-semibold text-sm" style="color: var(--text-primary);">M32.5(50KG包装)精品装修</h3>
+                                            <span class="badge badge-primary">优选</span>
+                                        </div>
+                                        <p class="text-xs mb-3" style="color: var(--text-tertiary);">百年品牌 | 质量保证</p>
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <span class="price-tag text-xl">¥26</span>
+                                                <span class="text-xs" style="color: var(--text-tertiary);">/包</span>
+                                            </div>
+                                            <button class="px-5 py-2 text-white text-xs rounded-xl font-medium transition-all active:scale-95" style="background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%); box-shadow: 0 2px 8px rgba(44, 62, 80, 0.2);">
+                                                加购
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 底部导航 -->
+                    <div class="bottom-nav">
+                        <div class="nav-item active">
+                            <i class="fas fa-home"></i>
+                            <span>首页</span>
+                        </div>
+                        <div class="nav-item" onclick="showScreen('orders')">
+                            <i class="fas fa-file-alt"></i>
+                            <span>订单</span>
+                        </div>
+                        <div class="nav-item">
+                            <i class="fas fa-shopping-cart"></i>
+                            <span>立即购买</span>
+                        </div>
+                        <div class="nav-item" onclick="showScreen('cart')">
+                            <i class="fas fa-shopping-bag"></i>
+                            <span>购物车</span>
+                        </div>
+                        <div class="nav-item" onclick="showScreen('profile')">
+                            <i class="fas fa-user"></i>
+                            <span>我的</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 屏幕2: 订单列表 -->
+            <div id="orders" class="screen">
+                <div class="screen-content">
+                    <div class="status-bar">
+                        <span>15:02</span>
+                        <span class="text-sm font-semibold">订单列表</span>
+                        <div class="flex gap-2">
+                            <i class="fas fa-signal"></i>
+                            <i class="fas fa-wifi"></i>
+                            <i class="fas fa-battery-three-quarters"></i>
+                        </div>
+                    </div>
+
+                    <!-- 订单状态标签 -->
+                    <div class="order-status-tabs">
+                        <div class="order-status-tab active">全部</div>
+                        <div class="order-status-tab">待付款</div>
+                        <div class="order-status-tab">待收货</div>
+                        <div class="order-status-tab">待提货</div>
+                        <div class="order-status-tab">提货中</div>
+                        <div class="order-status-tab">已完成</div>
+                    </div>
+
+                    <!-- 空状态 -->
+                    <div class="flex flex-col items-center justify-center py-32">
+                        <i class="fas fa-inbox text-gray-300 text-6xl mb-4"></i>
+                        <p class="text-gray-400 text-sm">没有更多了</p>
+                    </div>
+
+                    <div class="bottom-nav">
+                        <div class="nav-item" onclick="showScreen('home')">
+                            <i class="fas fa-home"></i>
+                            <span>首页</span>
+                        </div>
+                        <div class="nav-item active">
+                            <i class="fas fa-file-alt"></i>
+                            <span>订单</span>
+                        </div>
+                        <div class="nav-item">
+                            <i class="fas fa-shopping-cart"></i>
+                            <span>立即购买</span>
+                        </div>
+                        <div class="nav-item" onclick="showScreen('cart')">
+                            <i class="fas fa-shopping-bag"></i>
+                            <span>购物车</span>
+                        </div>
+                        <div class="nav-item" onclick="showScreen('profile')">
+                            <i class="fas fa-user"></i>
+                            <span>我的</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 屏幕3: 个人中心 -->
+            <div id="profile" class="screen">
+                <div class="screen-content">
+                    <div class="status-bar">
+                        <span>15:02</span>
+                        <span class="text-sm font-semibold">个人中心</span>
+                        <div class="flex gap-2">
+                            <i class="fas fa-signal"></i>
+                            <i class="fas fa-wifi"></i>
+                            <i class="fas fa-battery-three-quarters"></i>
+                        </div>
+                    </div>
+
+                    <!-- 用户信息卡片 -->
+                    <div class="gradient-bg p-8 pb-12">
+                        <div class="flex items-center gap-4">
+                            <div class="w-20 h-20 bg-white/20 backdrop-blur-sm rounded-3xl flex items-center justify-center border-2 border-white/30">
+                                <i class="fas fa-user text-white text-3xl"></i>
+                            </div>
+                            <div class="text-white flex-1">
+                                <h3 class="font-semibold text-xl mb-1">用户昵称</h3>
+                                <p class="text-sm opacity-90">企业认证会员</p>
+                            </div>
+                            <button class="px-4 py-2 bg-white/20 backdrop-blur-sm rounded-xl text-white text-xs font-medium border border-white/30">
+                                编辑
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 我的订单 -->
+                    <div class="bg-white mx-4 -mt-8 rounded-3xl p-5 shadow-xl mb-4" style="border: 1px solid var(--border-light);">
+                        <div class="flex items-center justify-between mb-5">
+                            <h3 class="font-semibold text-base" style="color: var(--text-primary);">我的订单</h3>
+                            <span class="text-xs cursor-pointer" style="color: var(--text-secondary);" onclick="showScreen('orders')">全部订单 <i class="fas fa-chevron-right"></i></span>
+                        </div>
+                        <div class="grid grid-cols-5 gap-3">
+                            <div class="flex flex-col items-center gap-2.5 cursor-pointer transition-transform active:scale-95">
+                                <div class="relative">
+                                    <i class="fas fa-wallet text-3xl" style="color: var(--primary-color);"></i>
+                                    <span class="absolute -top-1 -right-1 w-5 h-5 text-white text-xs rounded-full flex items-center justify-center font-semibold" style="background: var(--error-color);">0</span>
+                                </div>
+                                <span class="text-xs font-medium" style="color: var(--text-secondary);">待支付</span>
+                            </div>
+                            <div class="flex flex-col items-center gap-2.5 cursor-pointer transition-transform active:scale-95">
+                                <i class="fas fa-truck text-3xl" style="color: var(--primary-color);"></i>
+                                <span class="text-xs font-medium" style="color: var(--text-secondary);">待收货</span>
+                            </div>
+                            <div class="flex flex-col items-center gap-2.5 cursor-pointer transition-transform active:scale-95">
+                                <i class="fas fa-box-open text-3xl" style="color: var(--primary-color);"></i>
+                                <span class="text-xs font-medium" style="color: var(--text-secondary);">待提货</span>
+                            </div>
+                            <div class="flex flex-col items-center gap-2.5 cursor-pointer transition-transform active:scale-95">
+                                <i class="fas fa-shipping-fast text-3xl" style="color: var(--primary-color);"></i>
+                                <span class="text-xs font-medium" style="color: var(--text-secondary);">提货中</span>
+                            </div>
+                            <div class="flex flex-col items-center gap-2.5 cursor-pointer transition-transform active:scale-95">
+                                <i class="fas fa-history text-3xl" style="color: var(--primary-color);"></i>
+                                <span class="text-xs font-medium" style="color: var(--text-secondary);">售后</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 功能菜单 -->
+                    <div class="px-4 mb-24">
+                        <div class="bg-white rounded-3xl p-2 shadow-sm" style="border: 1px solid var(--border-light);">
+                            <div class="p-4 flex items-center justify-between cursor-pointer transition-all active:bg-gray-50 rounded-2xl">
+                                <div class="flex items-center gap-4">
+                                    <div class="w-10 h-10 rounded-2xl flex items-center justify-center" style="background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);">
+                                        <i class="fas fa-map-marker-alt text-xl" style="color: var(--accent-dark);"></i>
+                                    </div>
+                                    <span class="font-medium" style="color: var(--text-primary);">我的地址</span>
+                                </div>
+                                <i class="fas fa-chevron-right" style="color: var(--text-tertiary);"></i>
+                            </div>
+
+                            <div class="p-4 flex items-center justify-between cursor-pointer transition-all active:bg-gray-50 rounded-2xl">
+                                <div class="flex items-center gap-4">
+                                    <div class="w-10 h-10 rounded-2xl flex items-center justify-center" style="background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%);">
+                                        <i class="fas fa-truck-moving text-xl" style="color: #1E40AF;"></i>
+                                    </div>
+                                    <span class="font-medium" style="color: var(--text-primary);">我的车辆</span>
+                                </div>
+                                <i class="fas fa-chevron-right" style="color: var(--text-tertiary);"></i>
+                            </div>
+
+                            <div class="p-4 flex items-center justify-between cursor-pointer transition-all active:bg-gray-50 rounded-2xl">
+                                <div class="flex items-center gap-4">
+                                    <div class="w-10 h-10 rounded-2xl flex items-center justify-center" style="background: linear-gradient(135deg, #E0E7FF 0%, #C7D2FE 100%);">
+                                        <i class="fas fa-shield-alt text-xl" style="color: #4338CA;"></i>
+                                    </div>
+                                    <span class="font-medium" style="color: var(--text-primary);">隐私管理</span>
+                                </div>
+                                <i class="fas fa-chevron-right" style="color: var(--text-tertiary);"></i>
+                            </div>
+
+                            <div class="p-4 flex items-center justify-between cursor-pointer transition-all active:bg-gray-50 rounded-2xl">
+                                <div class="flex items-center gap-4">
+                                    <div class="w-10 h-10 rounded-2xl flex items-center justify-center" style="background: linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%);">
+                                        <i class="fas fa-file-invoice text-xl" style="color: #065F46;"></i>
+                                    </div>
+                                    <span class="font-medium" style="color: var(--text-primary);">发票管理</span>
+                                </div>
+                                <i class="fas fa-chevron-right" style="color: var(--text-tertiary);"></i>
+                            </div>
+
+                            <div class="p-4 flex items-center justify-between cursor-pointer transition-all active:bg-gray-50 rounded-2xl">
+                                <div class="flex items-center gap-4">
+                                    <div class="w-10 h-10 rounded-2xl flex items-center justify-center" style="background: linear-gradient(135deg, #FCE7F3 0%, #FBCFE8 100%);">
+                                        <i class="fas fa-headset text-xl" style="color: #BE185D;"></i>
+                                    </div>
+                                    <span class="font-medium" style="color: var(--text-primary);">联系客服</span>
+                                </div>
+                                <i class="fas fa-chevron-right" style="color: var(--text-tertiary);"></i>
+                            </div>
+
+                            <div class="p-4 flex items-center justify-between cursor-pointer transition-all active:bg-gray-50 rounded-2xl">
+                                <div class="flex items-center gap-4">
+                                    <div class="w-10 h-10 rounded-2xl flex items-center justify-center" style="background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%);">
+                                        <i class="fas fa-cog text-xl" style="color: var(--text-secondary);"></i>
+                                    </div>
+                                    <span class="font-medium" style="color: var(--text-primary);">设置</span>
+                                </div>
+                                <i class="fas fa-chevron-right" style="color: var(--text-tertiary);"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bottom-nav">
+                        <div class="nav-item" onclick="showScreen('home')">
+                            <i class="fas fa-home"></i>
+                            <span>首页</span>
+                        </div>
+                        <div class="nav-item" onclick="showScreen('orders')">
+                            <i class="fas fa-file-alt"></i>
+                            <span>订单</span>
+                        </div>
+                        <div class="nav-item">
+                            <i class="fas fa-shopping-cart"></i>
+                            <span>立即购买</span>
+                        </div>
+                        <div class="nav-item" onclick="showScreen('cart')">
+                            <i class="fas fa-shopping-bag"></i>
+                            <span>购物车</span>
+                        </div>
+                        <div class="nav-item active">
+                            <i class="fas fa-user"></i>
+                            <span>我的</span>
+                        </div>
+                    </div>
+
+                    <!-- 客服悬浮按钮 -->
+                    <div class="fab-button">
+                        <i class="fas fa-headset"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 屏幕4: 提货方式选择 -->
+            <div id="delivery-method" class="screen">
+                <div class="screen-content">
+                    <div class="status-bar">
+                        <span>15:03</span>
+                        <span class="text-sm font-semibold">选择购买方式</span>
+                        <div class="flex gap-2">
+                            <i class="fas fa-signal"></i>
+                            <i class="fas fa-wifi"></i>
+                            <i class="fas fa-battery-three-quarters"></i>
+                        </div>
+                    </div>
+
+                    <div class="p-6 flex flex-col items-center justify-center h-full">
+                        <div class="mb-8 text-center">
+                            <h2 class="text-2xl font-bold mb-2" style="color: var(--text-primary);">选择购买方式</h2>
+                            <p class="text-sm" style="color: var(--text-secondary);">请选择您方便的提货方式</p>
+                        </div>
+                        
+                        <div class="space-y-4 w-full px-2">
+                            <button onclick="showScreen('store-select')" class="w-full py-8 text-white rounded-3xl font-semibold text-lg shadow-xl hover:shadow-2xl transition-all active:scale-98 flex flex-col items-center justify-center gap-3" style="background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);">
+                                <i class="fas fa-box-open text-4xl"></i>
+                                <div>
+                                    <div class="text-lg font-bold">自行提货</div>
+                                    <div class="text-xs opacity-90 mt-1">到指定工厂/门店自提</div>
+                                </div>
+                            </button>
+                            
+                            <button onclick="showScreen('checkout')" class="w-full py-8 text-white rounded-3xl font-semibold text-lg shadow-xl hover:shadow-2xl transition-all active:scale-98 flex flex-col items-center justify-center gap-3" style="background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-dark) 100%);">
+                                <i class="fas fa-shipping-fast text-4xl"></i>
+                                <div>
+                                    <div class="text-lg font-bold">送货上门</div>
+                                    <div class="text-xs opacity-90 mt-1">配送到指定地址</div>
+                                </div>
+                            </button>
+                        </div>
+
+                        <div class="mt-10 p-4 rounded-2xl" style="background: var(--bg-tertiary);">
+                            <div class="flex items-start gap-3 text-xs" style="color: var(--text-secondary);">
+                                <i class="fas fa-info-circle mt-0.5"></i>
+                                <div>
+                                    <p class="font-medium mb-1">温馨提示</p>
+                                    <p class="leading-relaxed">自行提货可享受更优惠的价格，送货上门需支付相应运费</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bottom-nav">
+                        <div class="nav-item" onclick="showScreen('home')">
+                            <i class="fas fa-home"></i>
+                            <span>首页</span>
+                        </div>
+                        <div class="nav-item" onclick="showScreen('orders')">
+                            <i class="fas fa-file-alt"></i>
+                            <span>订单</span>
+                        </div>
+                        <div class="nav-item active">
+                            <i class="fas fa-shopping-cart"></i>
+                            <span>立即购买</span>
+                        </div>
+                        <div class="nav-item" onclick="showScreen('cart')">
+                            <i class="fas fa-shopping-bag"></i>
+                            <span>购物车</span>
+                        </div>
+                        <div class="nav-item" onclick="showScreen('profile')">
+                            <i class="fas fa-user"></i>
+                            <span>我的</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 屏幕5: 选择工厂/门店 -->
+            <div id="store-select" class="screen">
+                <div class="screen-content">
+                    <div class="status-bar">
+                        <span>16:03</span>
+                        <span class="text-sm font-semibold">选择工厂/门店</span>
+                        <div class="flex gap-2">
+                            <i class="fas fa-signal"></i>
+                            <i class="fas fa-wifi"></i>
+                            <i class="fas fa-battery-three-quarters"></i>
+                        </div>
+                    </div>
+
+                    <!-- 返回按钮 -->
+                    <div class="p-4 bg-white border-b">
+                        <button onclick="showScreen('delivery-method')" class="text-gray-600">
+                            <i class="fas fa-chevron-left"></i> 返回
+                        </button>
+                    </div>
+
+                    <!-- 提货方式切换 -->
+                    <div class="flex bg-white border-b">
+                        <div class="flex-1 py-3 text-center font-semibold text-red-500 border-b-2 border-red-500">
+                            自行提货
+                        </div>
+                        <div class="flex-1 py-3 text-center text-gray-500" onclick="showScreen('checkout')">
+                            配送上门
+                        </div>
+                    </div>
+
+                    <!-- 地图 -->
+                    <div class="p-4">
+                        <div class="map-container">
+                            <img src="https://images.unsplash.com/photo-1524661135-423995f22d0b?w=800" class="w-full h-full object-cover">
+                            <div class="absolute top-4 left-4 right-4">
+                                <div class="bg-white rounded-lg px-4 py-2 shadow-lg flex items-center gap-2">
+                                    <i class="fas fa-map-marker-alt text-red-500"></i>
+                                    <input type="text" placeholder="输入地址搜索" class="flex-1 outline-none text-sm" value="资阳市">
+                                </div>
+                            </div>
+                            <div class="absolute bottom-4 right-4">
+                                <button class="w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center">
+                                    <i class="fas fa-crosshairs text-red-500"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 门店列表 -->
+                    <div class="px-4 pb-24 space-y-3">
+                        <div class="store-card selected">
+                            <div class="flex items-start justify-between mb-2">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <h3 class="font-semibold text-gray-800">参天工厂-华新安岳前直仓</h3>
+                                        <span class="badge badge-primary">当前选择</span>
+                                    </div>
+                                    <p class="text-xs text-gray-500 mb-2">
+                                        <i class="fas fa-phone text-red-500"></i> 19980333788
+                                    </p>
+                                    <p class="text-xs text-gray-600">
+                                        <i class="fas fa-map-marker-alt text-red-500"></i> 
+                                        四川省资阳市安岳县永顺镇岳庆街103号昌运农业
+                                    </p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-xs text-gray-500 mb-2">8.2km</p>
+                                    <button onclick="showScreen('checkout')" class="px-4 py-1.5 bg-red-500 text-white text-xs rounded-full">
+                                        去下单
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="store-card">
+                            <div class="flex items-start justify-between mb-2">
+                                <div class="flex-1">
+                                    <h3 class="font-semibold text-gray-800 mb-1">华新水泥-内江盛发砂石堆场</h3>
+                                    <p class="text-xs text-gray-500 mb-2">
+                                        <i class="fas fa-phone text-red-500"></i> 15983250999
+                                    </p>
+                                    <p class="text-xs text-gray-600 mb-1">
+                                        <i class="fas fa-clock text-red-500"></i> 营业时间: 06:00-18:00
+                                    </p>
+                                    <p class="text-xs text-gray-600">
+                                        <i class="fas fa-map-marker-alt text-red-500"></i> 
+                                        四川省内江市市中区靖民镇汉安大道西段1866号四合镇中心幼儿园
+                                    </p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-xs text-gray-500 mb-2">65.1km</p>
+                                    <button class="px-4 py-1.5 bg-red-500 text-white text-xs rounded-full">
+                                        去下单
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="store-card">
+                            <div class="flex items-start justify-between mb-2">
+                                <div class="flex-1">
+                                    <h3 class="font-semibold text-gray-800 mb-1">参天工厂-华新内江前直仓</h3>
+                                    <p class="text-xs text-gray-500 mb-2">
+                                        <i class="fas fa-phone text-red-500"></i> 19980333788
+                                    </p>
+                                    <p class="text-xs text-gray-600">
+                                        <i class="fas fa-map-marker-alt text-red-500"></i> 
+                                        四川省内江市市中区靖民镇汉安大道西段1866号四合镇中心幼儿园
+                                    </p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-xs text-gray-500 mb-2">65.1km</p>
+                                    <button class="px-4 py-1.5 bg-red-500 text-white text-xs rounded-full">
+                                        去下单
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 屏幕6: 购物车 -->
+            <div id="cart" class="screen">
+                <div class="screen-content">
+                    <div class="status-bar">
+                        <span>15:04</span>
+                        <span class="text-sm font-semibold">购物车</span>
+                        <div class="flex gap-2">
+                            <i class="fas fa-signal"></i>
+                            <i class="fas fa-wifi"></i>
+                            <i class="fas fa-battery-three-quarters"></i>
+                        </div>
+                    </div>
+
+                    <div class="p-4 space-y-3 mb-32">
+                        <div class="bg-white rounded-xl p-4">
+                            <div class="flex items-start gap-3">
+                                <input type="checkbox" class="mt-1 w-5 h-5 text-red-500 rounded">
+                                <img src="https://images.unsplash.com/photo-1590874103328-eac38a683ce7?w=200" class="w-20 h-20 rounded-lg object-cover">
+                                <div class="flex-1">
+                                    <h3 class="font-semibold text-sm text-gray-800 mb-1">M32.5(50KG包装)专业装修</h3>
+                                    <p class="text-xs text-gray-500 mb-2">50KG/包</p>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-red-500 font-bold">¥25</span>
+                                        <div class="flex items-center gap-3 border rounded-full px-3 py-1">
+                                            <button class="text-gray-500">-</button>
+                                            <span class="text-sm">10</span>
+                                            <button class="text-red-500">+</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-xl p-4">
+                            <div class="flex items-start gap-3">
+                                <input type="checkbox" class="mt-1 w-5 h-5 text-red-500 rounded">
+                                <img src="https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=200" class="w-20 h-20 rounded-lg object-cover">
+                                <div class="flex-1">
+                                    <h3 class="font-semibold text-sm text-gray-800 mb-1">P·C42.5(50KG包装)</h3>
+                                    <p class="text-xs text-gray-500 mb-2">50KG/包</p>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-red-500 font-bold">¥28</span>
+                                        <div class="flex items-center gap-3 border rounded-full px-3 py-1">
+                                            <button class="text-gray-500">-</button>
+                                            <span class="text-sm">5</span>
+                                            <button class="text-red-500">+</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 底部结算栏 -->
+                    <div class="fixed bottom-0 left-0 right-0 bg-white border-t p-4 pb-8" style="max-width: 375px; margin: 0 auto;">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" class="w-5 h-5 text-red-500 rounded">
+                                <span class="text-sm">全选</span>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-xs text-gray-500">合计:</p>
+                                <p class="text-red-500 font-bold text-xl">¥390</p>
+                            </div>
+                        </div>
+                        <button onclick="showScreen('delivery-method')" class="w-full py-3 gradient-bg text-white rounded-full font-semibold">
+                            去结算 (2)
+                        </button>
+                    </div>
+
+                    <div class="bottom-nav">
+                        <div class="nav-item" onclick="showScreen('home')">
+                            <i class="fas fa-home"></i>
+                            <span>首页</span>
+                        </div>
+                        <div class="nav-item" onclick="showScreen('orders')">
+                            <i class="fas fa-file-alt"></i>
+                            <span>订单</span>
+                        </div>
+                        <div class="nav-item">
+                            <i class="fas fa-shopping-cart"></i>
+                            <span>立即购买</span>
+                        </div>
+                        <div class="nav-item active">
+                            <i class="fas fa-shopping-bag"></i>
+                            <span>购物车</span>
+                        </div>
+                        <div class="nav-item" onclick="showScreen('profile')">
+                            <i class="fas fa-user"></i>
+                            <span>我的</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 屏幕7: 确认订单 -->
+            <div id="checkout" class="screen">
+                <div class="screen-content">
+                    <div class="status-bar">
+                        <span>15:05</span>
+                        <span class="text-sm font-semibold">确认订单</span>
+                        <div class="flex gap-2">
+                            <i class="fas fa-signal"></i>
+                            <i class="fas fa-wifi"></i>
+                            <i class="fas fa-battery-three-quarters"></i>
+                        </div>
+                    </div>
+
+                    <div class="p-4 space-y-3 mb-32">
+                        <!-- 收货地址 -->
+                        <div class="bg-white rounded-xl p-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="font-semibold text-gray-800">收货地址</h3>
+                                <button class="text-red-500 text-sm">
+                                    <i class="fas fa-plus"></i> 新增
+                                </button>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <i class="fas fa-map-marker-alt text-red-500 mt-1"></i>
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="font-semibold">张三</span>
+                                        <span class="text-sm text-gray-600">138****8888</span>
+                                    </div>
+                                    <p class="text-sm text-gray-600">四川省成都市武侯区天府大道中段666号</p>
+                                </div>
+                                <i class="fas fa-chevron-right text-gray-400"></i>
+                            </div>
+                        </div>
+
+                        <!-- 提货方式 -->
+                        <div class="bg-white rounded-xl p-4">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <i class="fas fa-truck text-red-500"></i>
+                                    <span class="font-semibold text-gray-800">配送方式</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-sm text-gray-600">送货上门</span>
+                                    <i class="fas fa-chevron-right text-gray-400"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 商品列表 -->
+                        <div class="bg-white rounded-xl p-4">
+                            <h3 class="font-semibold text-gray-800 mb-3">商品清单</h3>
+                            <div class="space-y-3">
+                                <div class="flex gap-3">
+                                    <img src="https://images.unsplash.com/photo-1590874103328-eac38a683ce7?w=200" class="w-16 h-16 rounded-lg object-cover">
+                                    <div class="flex-1">
+                                        <h4 class="text-sm font-semibold text-gray-800 mb-1">M32.5(50KG包装)专业装修</h4>
+                                        <p class="text-xs text-gray-500 mb-1">50KG/包</p>
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-red-500 font-semibold">¥25</span>
+                                            <span class="text-sm text-gray-600">x10</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex gap-3">
+                                    <img src="https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=200" class="w-16 h-16 rounded-lg object-cover">
+                                    <div class="flex-1">
+                                        <h4 class="text-sm font-semibold text-gray-800 mb-1">P·C42.5(50KG包装)</h4>
+                                        <p class="text-xs text-gray-500 mb-1">50KG/包</p>
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-red-500 font-semibold">¥28</span>
+                                            <span class="text-sm text-gray-600">x5</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 订单备注 -->
+                        <div class="bg-white rounded-xl p-4">
+                            <h3 class="font-semibold text-gray-800 mb-2">订单备注</h3>
+                            <textarea class="w-full border rounded-lg p-3 text-sm outline-none focus:border-red-500" rows="3" placeholder="选填，请输入订单备注信息"></textarea>
+                        </div>
+
+                        <!-- 费用明细 -->
+                        <div class="bg-white rounded-xl p-4">
+                            <h3 class="font-semibold text-gray-800 mb-3">费用明细</h3>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">商品总价</span>
+                                    <span class="text-gray-800">¥390.00</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">运费</span>
+                                    <span class="text-gray-800">¥50.00</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">优惠券</span>
+                                    <span class="text-red-500">-¥20.00</span>
+                                </div>
+                                <div class="border-t pt-2 mt-2 flex justify-between items-center">
+                                    <span class="font-semibold text-gray-800">实付款</span>
+                                    <span class="text-red-500 font-bold text-xl">¥420.00</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 底部提交按钮 -->
+                    <div class="fixed bottom-0 left-0 right-0 bg-white border-t p-4 pb-8" style="max-width: 375px; margin: 0 auto;">
+                        <div class="flex items-center justify-between mb-3">
+                            <div>
+                                <p class="text-xs text-gray-500">实付款:</p>
+                                <p class="text-red-500 font-bold text-2xl">¥420.00</p>
+                            </div>
+                            <button class="px-8 py-3 gradient-bg text-white rounded-full font-semibold text-lg">
+                                提交订单
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 屏幕8: 商品详情 -->
+            <div id="product-detail" class="screen">
+                <div class="screen-content">
+                    <div class="status-bar">
+                        <span>15:06</span>
+                        <span class="text-sm font-semibold">商品详情</span>
+                        <div class="flex gap-2">
+                            <i class="fas fa-signal"></i>
+                            <i class="fas fa-wifi"></i>
+                            <i class="fas fa-battery-three-quarters"></i>
+                        </div>
+                    </div>
+
+                    <!-- 商品图片 -->
+                    <div class="relative">
+                        <img src="https://images.unsplash.com/photo-1590874103328-eac38a683ce7?w=800" class="w-full h-80 object-cover">
+                        <button onclick="showScreen('home')" class="absolute top-4 left-4 w-10 h-10 bg-black/30 backdrop-blur-sm rounded-full flex items-center justify-center text-white">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <div class="absolute top-4 right-4 flex gap-2">
+                            <button class="w-10 h-10 bg-black/30 backdrop-blur-sm rounded-full flex items-center justify-center text-white">
+                                <i class="fas fa-share-alt"></i>
+                            </button>
+                        </div>
+                        <div class="absolute bottom-4 right-4 bg-black/50 backdrop-blur-sm text-white text-xs px-3 py-1 rounded-full">
+                            1/5
+                        </div>
+                    </div>
+
+                    <div class="p-4 space-y-4 mb-32">
+                        <!-- 价格和标题 -->
+                        <div>
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="text-red-500 font-bold text-3xl">¥25</span>
+                                <span class="text-gray-400 text-sm line-through">¥30</span>
+                                <span class="badge badge-primary">热销</span>
+                            </div>
+                            <h1 class="text-xl font-bold text-gray-800 mb-2">M32.5(50KG包装)专业装修</h1>
+                            <p class="text-sm text-gray-600">百年华新 源自1907 | 已售1.2万+包</p>
+                        </div>
+
+                        <!-- 规格选择 -->
+                        <div class="bg-white rounded-xl p-4 border">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="font-semibold text-gray-800">选择规格</span>
+                                <i class="fas fa-chevron-right text-gray-400"></i>
+                            </div>
+                            <div class="flex gap-2">
+                                <button class="px-4 py-2 border-2 border-red-500 text-red-500 rounded-lg text-sm font-semibold">
+                                    50KG/包
+                                </button>
+                                <button class="px-4 py-2 border text-gray-600 rounded-lg text-sm">
+                                    25KG/包
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 服务保障 -->
+                        <div class="bg-white rounded-xl p-4 border">
+                            <h3 class="font-semibold text-gray-800 mb-3">服务保障</h3>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="flex items-center gap-2">
+                                    <i class="fas fa-check-circle text-green-500"></i>
+                                    <span class="text-sm text-gray-600">正品保证</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <i class="fas fa-check-circle text-green-500"></i>
+                                    <span class="text-sm text-gray-600">极速发货</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <i class="fas fa-check-circle text-green-500"></i>
+                                    <span class="text-sm text-gray-600">7天退换</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <i class="fas fa-check-circle text-green-500"></i>
+                                    <span class="text-sm text-gray-600">售后无忧</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 商品详情 -->
+                        <div class="bg-white rounded-xl p-4 border">
+                            <h3 class="font-semibold text-gray-800 mb-3">商品详情</h3>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex">
+                                    <span class="text-gray-500 w-20">品牌:</span>
+                                    <span class="text-gray-800">华新水泥</span>
+                                </div>
+                                <div class="flex">
+                                    <span class="text-gray-500 w-20">型号:</span>
+                                    <span class="text-gray-800">M32.5</span>
+                                </div>
+                                <div class="flex">
+                                    <span class="text-gray-500 w-20">规格:</span>
+                                    <span class="text-gray-800">50KG/包</span>
+                                </div>
+                                <div class="flex">
+                                    <span class="text-gray-500 w-20">用途:</span>
+                                    <span class="text-gray-800">专业装修</span>
+                                </div>
+                                <div class="flex">
+                                    <span class="text-gray-500 w-20">产地:</span>
+                                    <span class="text-gray-800">四川</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 产品介绍 -->
+                        <div class="bg-white rounded-xl p-4 border">
+                            <h3 class="font-semibold text-gray-800 mb-3">产品介绍</h3>
+                            <p class="text-sm text-gray-600 leading-relaxed">
+                                华新水泥M32.5专业装修水泥，采用优质原料精心配制，强度高、凝结快、施工性能优异。适用于各类建筑装修工程，是您装修的理想选择。百年华新，品质保证。
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- 底部操作栏 -->
+                    <div class="fixed bottom-0 left-0 right-0 bg-white border-t p-4 pb-8 flex items-center gap-3" style="max-width: 375px; margin: 0 auto;">
+                        <button class="flex flex-col items-center justify-center text-gray-600">
+                            <i class="fas fa-store text-xl mb-1"></i>
+                            <span class="text-xs">店铺</span>
+                        </button>
+                        <button class="flex flex-col items-center justify-center text-gray-600">
+                            <i class="fas fa-heart text-xl mb-1"></i>
+                            <span class="text-xs">收藏</span>
+                        </button>
+                        <button onclick="showScreen('cart')" class="flex-1 py-3 border-2 border-red-500 text-red-500 rounded-full font-semibold">
+                            加入购物车
+                        </button>
+                        <button onclick="showScreen('delivery-method')" class="flex-1 py-3 gradient-bg text-white rounded-full font-semibold">
+                            立即购买
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 屏幕9: 分类页 -->
+            <div id="category" class="screen">
+                <div class="screen-content">
+                    <div class="status-bar">
+                        <span>15:07</span>
+                        <span class="text-sm font-semibold">商品分类</span>
+                        <div class="flex gap-2">
+                            <i class="fas fa-signal"></i>
+                            <i class="fas fa-wifi"></i>
+                            <i class="fas fa-battery-three-quarters"></i>
+                        </div>
+                    </div>
+
+                    <div class="flex h-full">
+                        <!-- 左侧分类 -->
+                        <div class="w-24 bg-gray-50 border-r">
+                            <div class="py-4 px-3 bg-white border-l-4 border-red-500 text-red-500 font-semibold text-sm">
+                                水泥
+                            </div>
+                            <div class="py-4 px-3 text-gray-600 text-sm">
+                                砂浆
+                            </div>
+                            <div class="py-4 px-3 text-gray-600 text-sm">
+                                混凝土
+                            </div>
+                            <div class="py-4 px-3 text-gray-600 text-sm">
+                                骨料
+                            </div>
+                            <div class="py-4 px-3 text-gray-600 text-sm">
+                                添加剂
+                            </div>
+                        </div>
+
+                        <!-- 右侧商品 -->
+                        <div class="flex-1 p-4 overflow-y-auto mb-20">
+                            <h3 class="font-semibold text-gray-800 mb-3">水泥系列</h3>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="bg-white rounded-xl overflow-hidden shadow-sm">
+                                    <img src="https://images.unsplash.com/photo-1590874103328-eac38a683ce7?w=300" class="w-full h-32 object-cover">
+                                    <div class="p-3">
+                                        <h4 class="text-sm font-semibold text-gray-800 mb-1">M32.5装修</h4>
+                                        <p class="text-xs text-gray-500 mb-2">50KG/包</p>
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-red-500 font-bold">¥25</span>
+                                            <button class="w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center">
+                                                <i class="fas fa-plus text-xs"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="bg-white rounded-xl overflow-hidden shadow-sm">
+                                    <img src="https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300" class="w-full h-32 object-cover">
+                                    <div class="p-3">
+                                        <h4 class="text-sm font-semibold text-gray-800 mb-1">P·C42.5</h4>
+                                        <p class="text-xs text-gray-500 mb-2">50KG/包</p>
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-red-500 font-bold">¥28</span>
+                                            <button class="w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center">
+                                                <i class="fas fa-plus text-xs"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="bg-white rounded-xl overflow-hidden shadow-sm">
+                                    <img src="https://images.unsplash.com/photo-1513467535987-fd81bc7d62f8?w=300" class="w-full h-32 object-cover">
+                                    <div class="p-3">
+                                        <h4 class="text-sm font-semibold text-gray-800 mb-1">P·O42.5</h4>
+                                        <p class="text-xs text-gray-500 mb-2">50KG/包</p>
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-red-500 font-bold">¥30</span>
+                                            <button class="w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center">
+                                                <i class="fas fa-plus text-xs"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="bg-white rounded-xl overflow-hidden shadow-sm">
+                                    <img src="https://images.unsplash.com/photo-1581094271901-8022df4466f9?w=300" class="w-full h-32 object-cover">
+                                    <div class="p-3">
+                                        <h4 class="text-sm font-semibold text-gray-800 mb-1">M32.5师傅</h4>
+                                        <p class="text-xs text-gray-500 mb-2">50KG/包</p>
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-red-500 font-bold">¥26</span>
+                                            <button class="w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center">
+                                                <i class="fas fa-plus text-xs"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bottom-nav">
+                        <div class="nav-item" onclick="showScreen('home')">
+                            <i class="fas fa-home"></i>
+                            <span>首页</span>
+                        </div>
+                        <div class="nav-item" onclick="showScreen('orders')">
+                            <i class="fas fa-file-alt"></i>
+                            <span>订单</span>
+                        </div>
+                        <div class="nav-item">
+                            <i class="fas fa-shopping-cart"></i>
+                            <span>立即购买</span>
+                        </div>
+                        <div class="nav-item" onclick="showScreen('cart')">
+                            <i class="fas fa-shopping-bag"></i>
+                            <span>购物车</span>
+                        </div>
+                        <div class="nav-item" onclick="showScreen('profile')">
+                            <i class="fas fa-user"></i>
+                            <span>我的</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 功能说明 -->
+        <div class="mt-12 max-w-4xl mx-auto bg-white rounded-3xl shadow-xl p-10" style="border: 1px solid var(--border-light);">
+            <h2 class="text-3xl font-bold mb-8" style="color: var(--text-primary);">📱 建材商城 App 设计说明</h2>
+            
+            <div class="space-y-8">
+                <div>
+                    <h3 class="text-xl font-semibold mb-4 flex items-center gap-3" style="color: var(--primary-color);">
+                        <div class="w-1 h-6 rounded-full" style="background: var(--accent-color);"></div>
+                        🎨 全新配色方案
+                    </h3>
+                    <div class="grid grid-cols-2 gap-4 text-sm" style="color: var(--text-secondary);">
+                        <div class="p-4 rounded-2xl" style="background: var(--bg-tertiary);">
+                            <div class="font-semibold mb-2" style="color: var(--text-primary);">主色调 - 深邃蓝灰</div>
+                            <p>专业、稳重、可信赖的企业形象</p>
+                        </div>
+                        <div class="p-4 rounded-2xl" style="background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);">
+                            <div class="font-semibold mb-2" style="color: var(--accent-dark);">辅助色 - 优雅金色</div>
+                            <p>高端、品质、尊贵的品牌定位</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <h3 class="text-xl font-semibold mb-4 flex items-center gap-3" style="color: var(--primary-color);">
+                        <div class="w-1 h-6 rounded-full" style="background: var(--accent-color);"></div>
+                        ✨ 交互优化升级
+                    </h3>
+                    <ul class="space-y-3 text-sm" style="color: var(--text-secondary);">
+                        <li class="flex items-start gap-3">
+                            <i class="fas fa-check-circle mt-1" style="color: var(--success-color);"></i>
+                            <div><strong>按压反馈：</strong>所有可点击元素添加 active:scale-95 效果，提供即时触觉反馈</div>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <i class="fas fa-check-circle mt-1" style="color: var(--success-color);"></i>
+                            <div><strong>导航指示：</strong>底部导航激活状态增加顶部金色指示条，更清晰的视觉引导</div>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <i class="fas fa-check-circle mt-1" style="color: var(--success-color);"></i>
+                            <div><strong>卡片悬浮：</strong>商品卡片 hover 时边框变为金色，提升交互趣味性</div>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <i class="fas fa-check-circle mt-1" style="color: var(--success-color);"></i>
+                            <div><strong>毛玻璃效果：</strong>搜索栏、用户信息卡使用 backdrop-blur，现代感十足</div>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <i class="fas fa-check-circle mt-1" style="color: var(--success-color);"></i>
+                            <div><strong>圆角升级：</strong>从 12px 升级到 16-24px，更柔和的视觉体验</div>
+                        </li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h3 class="text-xl font-semibold mb-4 flex items-center gap-3" style="color: var(--primary-color);">
+                        <div class="w-1 h-6 rounded-full" style="background: var(--accent-color);"></div>
+                        🏠 核心功能模块
+                    </h3>
+                    <div class="grid grid-cols-2 gap-4 text-sm" style="color: var(--text-secondary);">
+                        <div class="p-4 rounded-2xl" style="background: var(--bg-tertiary);">
+                            <div class="font-semibold mb-2" style="color: var(--text-primary);">📱 首页</div>
+                            <p>商品推荐、快捷入口、搜索、Banner</p>
+                        </div>
+                        <div class="p-4 rounded-2xl" style="background: var(--bg-tertiary);">
+                            <div class="font-semibold mb-2" style="color: var(--text-primary);">🏷️ 分类</div>
+                            <p>左右分栏，快速浏览不同品类</p>
+                        </div>
+                        <div class="p-4 rounded-2xl" style="background: var(--bg-tertiary);">
+                            <div class="font-semibold mb-2" style="color: var(--text-primary);">📦 商品详情</div>
+                            <p>图片展示、规格选择、服务保障</p>
+                        </div>
+                        <div class="p-4 rounded-2xl" style="background: var(--bg-tertiary);">
+                            <div class="font-semibold mb-2" style="color: var(--text-primary);">🛒 购物车</div>
+                            <p>商品管理、数量调整、全选结算</p>
+                        </div>
+                        <div class="p-4 rounded-2xl" style="background: var(--bg-tertiary);">
+                            <div class="font-semibold mb-2" style="color: var(--text-primary);">📋 订单</div>
+                            <p>多状态跟踪、物流查询</p>
+                        </div>
+                        <div class="p-4 rounded-2xl" style="background: var(--bg-tertiary);">
+                            <div class="font-semibold mb-2" style="color: var(--text-primary);">👤 个人中心</div>
+                            <p>地址、车辆、隐私、发票管理</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <h3 class="text-xl font-semibold mb-4 flex items-center gap-3" style="color: var(--primary-color);">
+                        <div class="w-1 h-6 rounded-full" style="background: var(--accent-color);"></div>
+                        🚚 特色功能
+                    </h3>
+                    <div class="space-y-3 text-sm" style="color: var(--text-secondary);">
+                        <div class="flex items-start gap-3 p-4 rounded-2xl" style="background: var(--bg-tertiary);">
+                            <i class="fas fa-truck text-xl mt-1" style="color: var(--accent-color);"></i>
+                            <div>
+                                <div class="font-semibold mb-1" style="color: var(--text-primary);">双提货模式</div>
+                                <p>支持自行提货和送货上门，满足不同需求</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3 p-4 rounded-2xl" style="background: var(--bg-tertiary);">
+                            <i class="fas fa-map-marked-alt text-xl mt-1" style="color: var(--accent-color);"></i>
+                            <div>
+                                <div class="font-semibold mb-1" style="color: var(--text-primary);">智能门店定位</div>
+                                <p>地图展示附近工厂/门店，显示距离和联系方式</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3 p-4 rounded-2xl" style="background: var(--bg-tertiary);">
+                            <i class="fas fa-building text-xl mt-1" style="color: var(--accent-color);"></i>
+                            <div>
+                                <div class="font-semibold mb-1" style="color: var(--text-primary);">企业采购通道</div>
+                                <p>支持大宗采购，专属客户经理服务</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-6 rounded-3xl" style="background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);">
+                    <h3 class="text-xl font-semibold mb-4 text-white">💡 设计理念</h3>
+                    <p class="text-white/90 leading-relaxed">
+                        摒弃传统建材行业的"红色"刻板印象，采用<strong>深邃蓝灰</strong>作为主色调，搭配<strong>优雅金色</strong>点缀，
+                        打造更具国际范、更专业、更高端的品牌形象。通过精致的圆角、细腻的阴影、流畅的动画，
+                        为用户带来媲美高端电商的使用体验。
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showScreen(screenId) {
+            // 隐藏所有屏幕
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+            
+            // 显示目标屏幕
+            document.getElementById(screenId).classList.add('active');
+            
+            // 滚动到顶部
+            document.getElementById(screenId).querySelector('.screen-content').scrollTop = 0;
+        }
+    </script>
+</body>
+</html>

@@ -297,7 +297,7 @@ export class LarkBot implements Bot<LarkBotConfig, LarkMessage> {
                 await this.$recallMessage(msg.message_id || '');
             },
             $reply: async (content: SendContent): Promise<string> => {
-                return await this.$sendMessage({
+                return await this.adapter.sendMessage({
                     context: 'lark',
                     bot: this.$config.name,
                     id: msg.chat_id || 'unknown',

@@ -303,12 +303,14 @@ export class DiscordBot
           }
         }
 
-        const res = await this.sendContentToChannel(
-          msg.channel as any,
-          content,
-          sendOptions
-        );
-        return res.id;
+        const res = await this.adapter.sendMessage({
+          context: "discord",
+          bot: this.$config.name,
+          id: msg.channel.id,
+          type: msg.channel.type as any,
+          content: content,
+        });
+        return res;
       },
     });
 

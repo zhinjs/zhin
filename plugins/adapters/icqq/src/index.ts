@@ -118,7 +118,7 @@ export class IcqqBot extends Client implements Bot<IcqqBotConfig, PrivateMessage
       $reply: async (content: SendContent, quote?: boolean | string): Promise<string> => {
         if (!Array.isArray(content)) content = [content];
         if (quote) content.unshift({ type: "reply", data: { id: typeof quote === "boolean" ? result.$id : quote } });
-        return await this.$sendMessage({
+        return await this.adapter.sendMessage({
           ...result.$channel,
           context: "icqq",
           bot: `${this.uin}`,

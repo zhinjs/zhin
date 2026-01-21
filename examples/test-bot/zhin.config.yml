@@ -6,6 +6,22 @@ bots:
   - context: kook
     name: kook-bot
     token: ${KOOK_TOKEN}
+  - name: zhin-qq
+    context: qq
+    appid: ${QQ_APPID}
+    secret: ${QQ_SECRET}
+    removeAt: true
+    sandbox: false
+    mode: websocket
+    intents:
+      - GUILDS
+      - PUBLIC_GUILD_MESSAGES
+      - GUILD_MESSAGE_REACTIONS
+      - DIRECT_MESSAGE
+      - GROUP_AT_MESSAGE_CREATE
+      - C2C_MESSAGE_CREATE
+      - INTERACTION
+    data_dir: /Users/liuchunlang/IdeaProjects/zhin/examples/test-bot/data
 plugin_dirs:
   - node_modules
   - ./src/plugins
@@ -17,32 +33,16 @@ services:
   - permission
   - cron
 plugins:
-  # 本地测试插件
   - test-plugin
   - test-jsx
   - memory-debug
   - plugin-memory-profiler
-  # 服务插件
   - "@zhin.js/http"
-  # - "@zhin.js/console"
   - "@zhin.js/mcp"
   - "@zhin.js/plugin-github-notify"
-  # 适配器插件
   - "@zhin.js/adapter-sandbox"
-  # - "@zhin.js/adapter-icqq"      # 需要 QQ 账号配置
-  - "@zhin.js/adapter-kook"      # 需要 Kook token 配置
-  # - "@zhin.js/adapter-qq"        # 需要 QQ 官方机器人配置
-  # - "@zhin.js/adapter-discord"   # 需要 Discord token 配置
-  # - "@zhin.js/adapter-telegram"  # 需要 Telegram token 配置
-  # - "@zhin.js/adapter-slack"     # 需要 Slack 配置
-  # - "@zhin.js/adapter-email"     # 需要邮箱配置
-  # - "@zhin.js/adapter-onebot11"  # 需要 OneBot 实现端
-  # - "@zhin.js/adapter-dingtalk"  # 需要钉钉配置
-  # - "@zhin.js/adapter-lark"      # 需要飞书配置
-  # - "@zhin.js/adapter-wechat-mp" # 需要微信公众号配置
-  # # 工具插件
-  # - "@zhin.js/plugin-music"
-  # - "@zhin.js/sensitive-filter"
+  - "@zhin.js/adapter-kook"
+  - "@zhin.js/adapter-qq"
 http:
   port: 8086
   username: ${username}
@@ -50,4 +50,4 @@ http:
   base: /api
 console:
   enabled: true
-  lazyLoad: true  # 延迟加载模式（默认）
+  lazyLoad: true

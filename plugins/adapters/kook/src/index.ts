@@ -157,7 +157,7 @@ export class KookBot extends Client implements Bot<KookBotConfig, KookRawMessage
           typeof el === 'string' ? { type: 'text' as const, data: { text: el } } : el
         ));
         
-        return await this.$sendMessage({
+        return await this.adapter.sendMessage({
           ...message.$channel,
           context: "kook",
           bot: this.$id,
@@ -254,21 +254,76 @@ export class KookBot extends Client implements Bot<KookBotConfig, KookRawMessage
 
     return elements;
   }
-    /**
-   * 解析消息内容为消息段数组（已废弃，使用 convertKookSegmentsToZhin）
-   * 保留此方法以防需要从 raw_message 字符串解析
+  /**
+   * 将 kook-client 的 MessageSegment[] 转换为 Zhin 的 MessageElement[]
    */
-  private parseMessageContent(content: MessageSegment[]): MessageElement[] {
+  private parseMessageContent(segments: MessageSegment[]): MessageElement[] {
     const elements: MessageElement[] = [];
-    for(const segment of content){
-      if(segment.type === "markdown"){
-        elements.push(...this.parseMarkdown(segment.text));
-      }else{
-        const { type, ...data } = segment;
-        elements.push({ type, data });
+    
+    for (const segment of segments) {
+      switch (segment.type) {
+        case "markdown":
+          // 检查是否包含特殊语法，如果是纯文本则直接转换
+          if (this.hasKMarkdownSyntax(segment.text)) {
+            elements.push(...this.parseMarkdown(segment.text));
+          } else {
+            elements.push({ type: "text", data: { text: segment.text } });
+          }
+          break;
+          
+        case "text":
+          elements.push({ type: "text", data: { text: segment.text } });
+          break;
+          
+        case "at":
+          elements.push({ type: "at", data: { id: segment.user_id } });
+          break;
+          
+        case "image":
+          elements.push({ 
+            type: "image", 
+            data: { url: segment.url, alt: segment.title || "图片" } 
+          });
+          break;
+          
+        case "video":
+          elements.push({ type: "video", data: { url: segment.url } });
+          break;
+          
+        case "audio":
+          elements.push({ type: "audio", data: { url: segment.url } });
+          break;
+          
+        case "file":
+          elements.push({ 
+            type: "file", 
+            data: { url: segment.url, name: segment.name } 
+          });
+          break;
+          
+        case "reply":
+          elements.push({ type: "reply", data: { id: segment.id } });
+          break;
+          
+        case "card":
+          // Card 消息暂不支持，转为提示文本
+          elements.push({ type: "text", data: { text: "[卡片消息]" } });
+          break;
+          
+        default:
+          logger.warn(`未知的 KOOK 消息段类型: ${(segment as any).type}`);
+          break;
       }
     }
-    return elements;
+    
+    return elements.length > 0 ? elements : [{ type: "text", data: { text: "" } }];
+  }
+  
+  /**
+   * 检查文本是否包含 KMarkdown 特殊语法
+   */
+  private hasKMarkdownSyntax(text: string): boolean {
+    return /!\[.*?\]\(.*?\)|\(met\)|\(emj\)|\(chn\)|@\S+/.test(text);
   }
 
   /**
