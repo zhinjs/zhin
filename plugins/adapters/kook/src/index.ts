@@ -1,5 +1,4 @@
 import { Client, LogLevel, PrivateMessageEvent, ChannelMessageEvent, MessageSegment } from "kook-client";
-import { type } from "os";
 import path from "path";
 import {
   Bot,
@@ -117,8 +116,6 @@ export class KookBot extends Client implements Bot<KookBotConfig, KookRawMessage
     const channelId = msg.message_type === "channel" 
       ? (msg as ChannelMessageEvent).channel_id 
       : msg.author_id;
-    
-    logger.debug(`[Kook] msg.message:`, JSON.stringify(msg.message, null, 2));
     
     const message: Message<KookRawMessage> = Message.from(msg, {
       $id: msg.message_id.toString(),
