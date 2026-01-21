@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.18
+
+### Patch Changes
+
+- 26aba27: fix: error default config
+
 ## 1.0.17
 
 ### Patch Changes
