@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.8
+
+### Patch Changes
+
+- 52ae08a: fix: 更新消息处理流程
+- Updated dependencies [52ae08a]
+  - zhin.js@1.0.23
+  - @zhin.js/logger@0.1.7
+
 ## 1.0.7
 
 ### Patch Changes
