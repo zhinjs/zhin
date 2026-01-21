@@ -152,13 +152,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     if (!result) return await next();
     const adapter = this.inject(message.$adapter) as Adapter;
     if (!adapter || !(adapter instanceof Adapter)) return await next();
-    await adapter.emit('call.sendMessage', message.$bot, {
-      context: message.$adapter,
-      bot: message.$bot,
-      content: result,
-      id: message.$channel.id,
-      type: message.$channel.type,
-    });
+    await message.$reply(result);
     await next();
   };
   // 插件功能

@@ -340,7 +340,7 @@ useContext("database", (db: any) => {
             // 获取适配器并发送消息
             const adapter = root.inject(subscription.adapter as any) as any;
             if (adapter && typeof adapter.emit === 'function') {
-              await adapter.emit('call.sendMessage', subscription.bot, {
+              await adapter.sendMessage({
                 context: subscription.adapter,
                 bot: subscription.bot,
                 id: subscription.target_id,

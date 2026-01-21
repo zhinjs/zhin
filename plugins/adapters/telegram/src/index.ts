@@ -161,21 +161,19 @@ export class TelegramBot extends Telegraf implements Bot<TelegramBotConfig, Tele
         quote?: boolean | string
       ): Promise<string> => {
         if (!Array.isArray(content)) content = [content];
-
-        const sendOptions: any = {};
-
         // Handle reply
         if (quote) {
           const replyToMessageId = typeof quote === "boolean" ? result.$id : quote;
-          sendOptions.reply_parameters = { message_id: parseInt(replyToMessageId) };
+          content.unshift({ type: "reply", data: { id: replyToMessageId } });
         }
 
-        const sentMsg = await this.sendContentToChat(
-          parseInt(channelId),
-          content,
-          sendOptions
-        );
-        return sentMsg.message_id.toString();
+        return await this.adapter.sendMessage({
+          context: "telegram",
+          bot: this.$config.name,
+          id: channelId,
+          type: "private",
+          content: content,
+        });
       },
     });
 
@@ -619,7 +617,11 @@ export class TelegramBot extends Telegraf implements Bot<TelegramBotConfig, Tele
             data.longitude,
             extraOptions
           );
-
+          case "reply":
+            return await this.telegram.sendMessage(chatId, data.id, {
+              reply_parameters: { message_id: parseInt(data.id) },
+              ...extraOptions,
+            });
         default:
           // Unknown segment type, add as text
           textContent += data.text || `[${type}]`;

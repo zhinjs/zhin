@@ -160,7 +160,6 @@ describe('MyService Service', () => {
 
 #### Event Handling
 - ✅ 监听 call.recallMessage 事件
-- ✅ 监听 call.sendMessage 事件
 - ✅ 监听 message.receive 事件
 - ✅ 停止时移除所有监听器
 

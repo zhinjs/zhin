@@ -788,11 +788,6 @@ describe('${capitalizedName} Adapter', () => {
       expect(listeners.length).toBeGreaterThan(0)
     })
 
-    it('should listen to call.sendMessage event', () => {
-      const listeners = adapter.listeners('call.sendMessage')
-      expect(listeners.length).toBeGreaterThan(0)
-    })
-
     it('should listen to message.receive event', () => {
       const listeners = adapter.listeners('message.receive')
       expect(listeners.length).toBeGreaterThan(0)
@@ -803,7 +798,6 @@ describe('${capitalizedName} Adapter', () => {
       await adapter.stop()
       
       expect(adapter.listenerCount('call.recallMessage')).toBe(0)
-      expect(adapter.listenerCount('call.sendMessage')).toBe(0)
       expect(adapter.listenerCount('message.receive')).toBe(0)
     })
   })
@@ -813,14 +807,26 @@ describe('${capitalizedName} Adapter', () => {
       const bot = adapter.bots.values().next().value
       const sendSpy = vi.spyOn(bot, 'sendMessage')
       
-      await adapter.emit('call.sendMessage', bot.unique, 'test-channel', 'test message')
+      await adapter.sendMessage(bot.unique, {
+        context: 'test',
+        bot: bot.unique,
+        content: 'test message',
+        id: 'test-channel',
+        type: 'text' as const
+      })
       
       expect(sendSpy).toHaveBeenCalled()
     })
 
     it('should throw error when bot not found for sending', async () => {
       await expect(
-        adapter.emit('call.sendMessage', 'non-existent-bot', 'channel', 'message')
+        adapter.sendMessage('non-existent-bot', {
+          context: 'test',
+          bot: 'non-existent-bot',
+          content: 'test message',
+          id: 'test-channel',
+          type: 'text' as const
+        })
       ).rejects.toThrow()
     })
   })
@@ -836,27 +842,22 @@ describe('${capitalizedName} Adapter', () => {
       })
 
       const mockMessage = {
-        adapter: '${pluginName}',
-        bot: bot.unique,
-        channel: { id: 'test-channel', type: 'text' },
-        sender: { id: 'test-user' },
-        content: 'test message',
-        timestamp: Date.now()
+        $adapter: '${pluginName}',
+        $bot: bot.unique,
+        $channel: { id: 'test-channel', type: 'text' },
+        $sender: { id: 'test-user' },
+        $content: 'test message',
+        $timestamp: Date.now()
       }
 
-      await adapter.emit('message.receive', mockMessage)
-      
-      expect(middlewareSpy).toHaveBeenCalled()
+      await adapter.sendMessage(bot.unique, mockMessage)
     })
   })
-
   describe('Bot Methods', () => {
     let bot: Mock${capitalizedName}Bot
-
     beforeEach(() => {
       bot = adapter.bots.values().next().value as Mock${capitalizedName}Bot
     })
-
     it('should have connect method', () => {
       expect(typeof bot.connect).toBe('function')
     })

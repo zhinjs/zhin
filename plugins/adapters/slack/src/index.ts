@@ -197,12 +197,13 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
           sendOptions.thread_ts = threadTs;
         }
 
-        const sentMsg = await this.sendContentToChannel(
-          channelId,
-          content,
-          sendOptions
-        );
-        return sentMsg.ts || "";
+        return  await this.adapter.sendMessage({
+          context: "slack",
+          bot: this.$config.name,
+          id: channelId,
+          type: "channel",
+          content: content,
+        });
       },
     });
 

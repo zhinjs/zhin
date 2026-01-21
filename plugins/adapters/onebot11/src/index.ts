@@ -184,7 +184,7 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11WsClie
 
       $reply: async (content: MessageSegment[], quote?: boolean | string): Promise<string> => {
         if (quote) content.unshift({ type: 'reply', data: { message_id: message.$id } })
-        return await this.$sendMessage({
+        return await this.adapter.sendMessage({
           ...message.$channel,
           context: 'onebot11',
           bot: `${this.$config.name}`,

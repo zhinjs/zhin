@@ -38,7 +38,7 @@ export class ProcessBot implements Bot<{},{content:string,ts:number}>{
                 await this.$recallMessage(base.$id)
             },
             $reply: async (content: SendContent) => {
-                return await this.$sendMessage({
+                return await this.adapter.sendMessage({
                     context: 'process',
                     bot: base.$bot,
                     content,

@@ -107,7 +107,7 @@ export class SandboxBot extends EventEmitter implements Bot<SandboxConfig, { con
         $reply: async (content: SendContent, quote?: boolean | string): Promise<string> => {
           if (!Array.isArray(content)) content = [content];
           if (quote) content.unshift({ type: "reply", data: { id: typeof quote === "boolean" ? message.$id : quote } });
-          return await this.$sendMessage({
+          return await this.adapter.sendMessage({
             ...message.$channel,
             context: "sandbox",
             bot: `${this.$config.name}`,
