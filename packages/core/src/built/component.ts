@@ -79,7 +79,6 @@ export function createComponentService(): Context<'component', ComponentContextE
   return {
     name: 'component',
     description: '组件服务',
-    value,
     
     mounted(plugin: Plugin) {
       rootPlugin = plugin;

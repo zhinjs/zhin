@@ -12,7 +12,7 @@
 
 - 🎯 **TypeScript 全量类型支持** - 完整类型推导，极致开发体验
 - ⚡ **智能热重载系统** - 代码变更、配置更新、依赖注入均自动热更，无需重启
-- 🏗️ **三层架构设计** - Dependency -> Plugin -> App，结构清晰，高内聚低耦合
+- 🏗️ **简洁的插件架构** - 基于 AsyncLocalStorage 的上下文管理，React Hooks 风格的 API
 - 🧩 **插件化架构** - 热插拔插件系统，支持本地/模块/云端插件
 - 🎨 **Schema 配置系统** - 类型安全的配置管理，支持自动重载插件
 - 🌐 **Web 控制台** - 实时监控、插件管理、配置编辑
@@ -43,12 +43,10 @@ zhin/
 │   ├── logger/            # 日志系统
 │   ├── database/          # 数据库抽象层
 │   ├── schema/            # Schema 系统
-│   ├── dependency/        # 依赖管理 (Dependency基类)
-│   ├── cli/               # 命令行工具
-│   └── hmr/               # 热模块替换 (HMRManager)
+│   └── cli/               # 命令行工具
 │
 ├── packages/               # 核心层 - 框架核心
-│   ├── core/              # 核心框架 (App, Plugin)
+│   ├── core/              # 核心框架 (Plugin, Adapter, Bot)
 │   ├── client/            # 客户端库
 │   ├── create-zhin/       # 项目脚手架
 │   └── zhin/              # 主入口包
@@ -131,52 +129,38 @@ pnpm build
 ### 基础使用
 
 ```typescript
-import { createApp, addCommand, MessageCommand, Schema, defineSchema } from 'zhin.js'
+import { usePlugin, MessageCommand } from 'zhin.js'
 
-// 创建应用
-const app = await createApp({
-  bots: [{ name: 'console', context: 'process' }],
-  plugins: ['http', 'console', 'adapter-process']
-})
-
-// 定义插件配置 Schema
-defineSchema(Schema.object({
-  greeting: Schema.string()
-    .default('Hello')
-    .description('问候语'),
-  maxRetries: Schema.number()
-    .default(3)
-    .min(1).max(10)
-    .description('最大重试次数')
-}))
+// 获取插件实例（自动根据文件路径创建）
+const { addCommand } = usePlugin()
 
 // 添加命令
-addCommand(new MessageCommand('hello <name>')
-  .action(async (message, result) => {
-    // 获取当前插件实例
-    const config = usePlugin().config
-    return `${config.greeting}, ${result.params.name}!`
-  })
+addCommand(
+  new MessageCommand('hello <name>')
+    .action(async (message, result) => {
+      return `Hello, ${result.params.name}!`
+    })
 )
-
-await app.start()
 ```
 
 ### 高级功能 - 依赖注入与数据库
 
 ```typescript
-import { register, useContext, onDatabaseReady } from 'zhin.js'
+import { usePlugin, MessageCommand } from 'zhin.js'
 
-// 使用依赖 (当数据库就绪时执行)
-onDatabaseReady((db) => {
-  const User = db.model('users');
+const { addCommand, useContext } = usePlugin()
+
+// 使用数据库上下文（当数据库就绪时执行）
+useContext('database', async (db) => {
+  const User = db.model('users')
   
-  addCommand(new MessageCommand('user <id>')
-    .action(async (message, result) => {
-      // 查询数据库
-      const user = await User.findByPk(result.params.id)
-      return `用户信息: ${user ? user.name : '未知'}`
-    })
+  addCommand(
+    new MessageCommand('user <id>')
+      .action(async (message, result) => {
+        // 查询数据库
+        const user = await User.findByPk(result.params.id)
+        return `用户信息: ${user ? user.name : '未知'}`
+      })
   )
 })
 ```
@@ -229,41 +213,39 @@ zhin build --clean    # 清理后构建
 
 ### 配置文件
 
-支持 TypeScript/JS/JSON/YAML 格式，推荐使用 `zhin.config.ts`：
+支持 YAML/JSON/TypeScript/JS 格式，推荐使用 `zhin.config.yml`：
 
-```typescript
-import { defineConfig, LogLevel } from 'zhin.js'
+```yaml
+# 基础配置
+log_level: 1  # LogLevel.INFO
+debug: false
 
-export default defineConfig({
-  // 基础配置
-  log_level: LogLevel.INFO,
-  debug: false,
-  
-  // 机器人实例
-  bots: [
-    { name: 'console', context: 'process' }
-  ],
-  
-  // 插件配置
-  plugins: [
-    'http',              // HTTP 服务
-    'console',           // Web 控制台
-    'adapter-process',   // 控制台适配器
-    // 'adapter-icqq',   // QQ 适配器（需额外安装）
-  ],
-  
-  // 插件具体配置 (修改此处将自动重载对应插件) ⚡
-  http: {
-    port: 8086,
-    base: '/api'
-  },
-  
-  // 数据库配置 (修改此处将自动重启数据库) 🔄
-  database: {
-    dialect: 'sqlite',
-    filename: './data/bot.db'
-  }
-})
+# 机器人实例
+bots:
+  - name: console
+    context: process
+
+# 插件配置
+plugins:
+  - '@zhin.js/http'           # HTTP 服务
+  - '@zhin.js/console'        # Web 控制台
+  - '@zhin.js/adapter-sandbox' # 控制台适配器
+  # - '@zhin.js/adapter-icqq'  # QQ 适配器（需额外安装）
+
+# 插件目录
+plugin_dirs:
+  - node_modules
+  - ./src/plugins
+
+# 插件具体配置 (修改此处将自动重载对应插件) ⚡
+http:
+  port: 8086
+  base: /api
+
+# 数据库配置 (修改此处将自动重启数据库) 🔄
+database:
+  dialect: sqlite
+  filename: ./data/bot.db
 ```
 
 ## ⚡ 热重载体验
@@ -290,7 +272,7 @@ Zhin.js 提供了业界领先的热重载系统：
 ### 📦 开箱即用
 | 包名 | 功能 | 状态 |
 |------|------|------|
-| `@zhin.js/adapter-process` | 控制台适配器 | ✅ 内置 |
+| `@zhin.js/adapter-sandbox` | 控制台适配器 | ✅ 内置 |
 | `@zhin.js/http` | HTTP 服务器 | ✅ 内置 |
 | `@zhin.js/console` | Web 控制台 | ✅ 内置 |
 | SQLite 数据库 | 本地数据存储 | ✅ 内置 |
