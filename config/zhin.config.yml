@@ -4,3 +4,36 @@ disable_plugins: []
 plugin_dirs: []
 bots: []
 plugins: []
+
+# AI 服务配置（可选）
+# ai:
+#   enabled: true
+#   defaultProvider: openai  # 默认提供商: openai, anthropic, deepseek, ollama
+#   providers:
+#     openai:
+#       apiKey: sk-xxx  # OpenAI API Key
+#       # baseUrl: https://api.openai.com/v1  # 可选，自定义 API 地址
+#     anthropic:
+#       apiKey: sk-ant-xxx  # Anthropic API Key
+#     deepseek:
+#       apiKey: sk-xxx  # DeepSeek API Key
+#     ollama:
+#       host: http://localhost:11434  # Ollama 本地地址
+#   sessions:
+#     maxHistory: 200  # 最大历史消息数（数据库模式）
+#     expireMs: 604800000  # 会话过期时间（7天）
+#     useDatabase: true  # 使用数据库持久化存储（默认开启）
+#   context:
+#     enabled: true  # 启用消息记录和智能上下文
+#     maxRecentMessages: 100  # 读取最近消息数量
+#     summaryThreshold: 50  # 触发自动总结的消息数量
+#     keepAfterSummary: 10  # 总结后保留的最近消息数
+#     maxContextTokens: 4000  # 上下文最大 token 估算
+#   trigger:  # AI 触发配置
+#     enabled: true  # 是否启用
+#     prefixes: ['#', 'AI:']  # 触发前缀
+#     respondToAt: true  # 响应 @机器人
+#     respondToPrivate: true  # 私聊直接对话
+#     ignorePrefixes: ['/', '!']  # 忽略的前缀（避免与命令冲突）
+#     timeout: 60000  # 超时时间（毫秒）
+#     # thinkingMessage: '🤔 思考中...'  # 思考中提示语（可选）

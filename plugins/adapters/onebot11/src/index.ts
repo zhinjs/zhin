@@ -9,7 +9,9 @@ import {
   MessageSegment,
   SendOptions,
   segment,
-  SendContent
+  SendContent,
+  Tool,
+  ToolPermissionLevel,
 } from 'zhin.js';
 import type { Router } from '@zhin.js/http'
 import { IncomingMessage } from "http";
@@ -22,6 +24,22 @@ declare module 'zhin.js' {
     'onebot11': OneBot11Adapter;
     'onebot11.wss': OneBot11WssAdapter;
   }
+}
+
+// OneBot11 发送者权限信息
+export interface OneBot11SenderInfo {
+  id: string;
+  name: string;
+  /** 群角色 */
+  role?: 'owner' | 'admin' | 'member';
+  /** 是否为群主 */
+  isOwner?: boolean;
+  /** 是否为管理员 */
+  isAdmin?: boolean;
+  /** 群名片 */
+  card?: string;
+  /** 头衔 */
+  title?: string;
 }
 // ============================================================================
 // OneBot11 配置和类型
@@ -223,6 +241,158 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11WsClie
       message_id: parseInt(id)
     });
   }
+
+  // ==================== 群管理 API ====================
+
+  /**
+   * 踢出群成员
+   */
+  async kickMember(groupId: number, userId: number, rejectAddRequest: boolean = false): Promise<boolean> {
+    try {
+      await this.callApi('set_group_kick', {
+        group_id: groupId,
+        user_id: userId,
+        reject_add_request: rejectAddRequest,
+      });
+      plugin.logger.info(`OneBot11 Bot ${this.$id} 踢出成员 ${userId}（群 ${groupId}）`);
+      return true;
+    } catch (error) {
+      plugin.logger.error(`OneBot11 Bot ${this.$id} 踢出成员失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 禁言群成员
+   */
+  async muteMember(groupId: number, userId: number, duration: number = 600): Promise<boolean> {
+    try {
+      await this.callApi('set_group_ban', {
+        group_id: groupId,
+        user_id: userId,
+        duration,
+      });
+      plugin.logger.info(`OneBot11 Bot ${this.$id} ${duration > 0 ? `禁言成员 ${userId} ${duration}秒` : `解除成员 ${userId} 禁言`}（群 ${groupId}）`);
+      return true;
+    } catch (error) {
+      plugin.logger.error(`OneBot11 Bot ${this.$id} 禁言操作失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 全员禁言
+   */
+  async muteAll(groupId: number, enable: boolean = true): Promise<boolean> {
+    try {
+      await this.callApi('set_group_whole_ban', {
+        group_id: groupId,
+        enable,
+      });
+      plugin.logger.info(`OneBot11 Bot ${this.$id} ${enable ? '开启' : '关闭'}全员禁言（群 ${groupId}）`);
+      return true;
+    } catch (error) {
+      plugin.logger.error(`OneBot11 Bot ${this.$id} 全员禁言操作失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 设置管理员
+   */
+  async setAdmin(groupId: number, userId: number, enable: boolean = true): Promise<boolean> {
+    try {
+      await this.callApi('set_group_admin', {
+        group_id: groupId,
+        user_id: userId,
+        enable,
+      });
+      plugin.logger.info(`OneBot11 Bot ${this.$id} ${enable ? '设置' : '取消'}管理员 ${userId}（群 ${groupId}）`);
+      return true;
+    } catch (error) {
+      plugin.logger.error(`OneBot11 Bot ${this.$id} 设置管理员失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 设置群名片
+   */
+  async setCard(groupId: number, userId: number, card: string): Promise<boolean> {
+    try {
+      await this.callApi('set_group_card', {
+        group_id: groupId,
+        user_id: userId,
+        card,
+      });
+      plugin.logger.info(`OneBot11 Bot ${this.$id} 设置成员 ${userId} 群名片为 "${card}"（群 ${groupId}）`);
+      return true;
+    } catch (error) {
+      plugin.logger.error(`OneBot11 Bot ${this.$id} 设置群名片失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 设置群头衔
+   */
+  async setTitle(groupId: number, userId: number, title: string, duration: number = -1): Promise<boolean> {
+    try {
+      await this.callApi('set_group_special_title', {
+        group_id: groupId,
+        user_id: userId,
+        special_title: title,
+        duration,
+      });
+      plugin.logger.info(`OneBot11 Bot ${this.$id} 设置成员 ${userId} 头衔为 "${title}"（群 ${groupId}）`);
+      return true;
+    } catch (error) {
+      plugin.logger.error(`OneBot11 Bot ${this.$id} 设置头衔失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 设置群名
+   */
+  async setGroupName(groupId: number, name: string): Promise<boolean> {
+    try {
+      await this.callApi('set_group_name', {
+        group_id: groupId,
+        group_name: name,
+      });
+      plugin.logger.info(`OneBot11 Bot ${this.$id} 设置群名为 "${name}"（群 ${groupId}）`);
+      return true;
+    } catch (error) {
+      plugin.logger.error(`OneBot11 Bot ${this.$id} 设置群名失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取群成员列表
+   */
+  async getMemberList(groupId: number): Promise<any[]> {
+    try {
+      return await this.callApi('get_group_member_list', { group_id: groupId });
+    } catch (error) {
+      plugin.logger.error(`OneBot11 Bot ${this.$id} 获取群成员列表失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取群信息
+   */
+  async getGroupInfo(groupId: number): Promise<any> {
+    try {
+      return await this.callApi('get_group_info', { group_id: groupId });
+    } catch (error) {
+      plugin.logger.error(`OneBot11 Bot ${this.$id} 获取群信息失败:`, error);
+      throw error;
+    }
+  }
+
   private async callApi(action: string, params: any = {}): Promise<any> {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       throw new Error('WebSocket is not connected');
@@ -516,6 +686,270 @@ class OneBot11Adapter extends Adapter<OneBot11WsClient> {
 
   createBot(config: OneBot11WsClientConfig): OneBot11WsClient {
     return new OneBot11WsClient(this, config);
+  }
+
+  async start(): Promise<void> {
+    this.registerOneBot11Tools();
+    await super.start();
+  }
+
+  /**
+   * 注册 OneBot11 平台群管理工具
+   */
+  private registerOneBot11Tools(): void {
+    // 踢出成员工具
+    this.addTool({
+      name: 'onebot11_kick_member',
+      description: '将成员踢出 QQ 群（需要管理员权限）',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          group_id: { type: 'number', description: '群号' },
+          user_id: { type: 'number', description: '要踢出的成员 QQ 号' },
+          reject: { type: 'boolean', description: '是否拒绝再次加群，默认 false' },
+        },
+        required: ['bot', 'group_id', 'user_id'],
+      },
+      platforms: ['onebot11'],
+      scopes: ['group'],
+      permissionLevel: 'group_admin',
+      execute: async (args) => {
+        const { bot: botId, group_id, user_id, reject = false } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const success = await bot.kickMember(group_id, user_id, reject);
+        return { success, message: success ? `已将 ${user_id} 踢出群` : '操作失败' };
+      },
+    });
+
+    // 禁言成员工具
+    this.addTool({
+      name: 'onebot11_mute_member',
+      description: '禁言 QQ 群成员',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          group_id: { type: 'number', description: '群号' },
+          user_id: { type: 'number', description: '要禁言的成员 QQ 号' },
+          duration: { type: 'number', description: '禁言时长（秒），0 表示解除禁言，默认 600' },
+        },
+        required: ['bot', 'group_id', 'user_id'],
+      },
+      platforms: ['onebot11'],
+      scopes: ['group'],
+      permissionLevel: 'group_admin',
+      execute: async (args) => {
+        const { bot: botId, group_id, user_id, duration = 600 } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const success = await bot.muteMember(group_id, user_id, duration);
+        return { 
+          success, 
+          message: success 
+            ? (duration > 0 ? `已禁言 ${user_id} ${duration} 秒` : `已解除 ${user_id} 的禁言`)
+            : '操作失败' 
+        };
+      },
+    });
+
+    // 全员禁言工具
+    this.addTool({
+      name: 'onebot11_mute_all',
+      description: '开启/关闭 QQ 群全员禁言',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          group_id: { type: 'number', description: '群号' },
+          enable: { type: 'boolean', description: '是否开启全员禁言，默认 true' },
+        },
+        required: ['bot', 'group_id'],
+      },
+      platforms: ['onebot11'],
+      scopes: ['group'],
+      permissionLevel: 'group_admin',
+      execute: async (args) => {
+        const { bot: botId, group_id, enable = true } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const success = await bot.muteAll(group_id, enable);
+        return { success, message: success ? (enable ? '已开启全员禁言' : '已关闭全员禁言') : '操作失败' };
+      },
+    });
+
+    // 设置管理员工具
+    this.addTool({
+      name: 'onebot11_set_admin',
+      description: '设置/取消 QQ 群管理员（需要群主权限）',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          group_id: { type: 'number', description: '群号' },
+          user_id: { type: 'number', description: '成员 QQ 号' },
+          enable: { type: 'boolean', description: '是否设为管理员，默认 true' },
+        },
+        required: ['bot', 'group_id', 'user_id'],
+      },
+      platforms: ['onebot11'],
+      scopes: ['group'],
+      permissionLevel: 'group_owner',
+      execute: async (args) => {
+        const { bot: botId, group_id, user_id, enable = true } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const success = await bot.setAdmin(group_id, user_id, enable);
+        return { 
+          success, 
+          message: success 
+            ? (enable ? `已将 ${user_id} 设为管理员` : `已取消 ${user_id} 的管理员`)
+            : '操作失败' 
+        };
+      },
+    });
+
+    // 设置群名片工具
+    this.addTool({
+      name: 'onebot11_set_card',
+      description: '设置群成员的群名片',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          group_id: { type: 'number', description: '群号' },
+          user_id: { type: 'number', description: '成员 QQ 号' },
+          card: { type: 'string', description: '新的群名片' },
+        },
+        required: ['bot', 'group_id', 'user_id', 'card'],
+      },
+      platforms: ['onebot11'],
+      scopes: ['group'],
+      permissionLevel: 'group_admin',
+      execute: async (args) => {
+        const { bot: botId, group_id, user_id, card } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const success = await bot.setCard(group_id, user_id, card);
+        return { success, message: success ? `已将 ${user_id} 的群名片设为 "${card}"` : '操作失败' };
+      },
+    });
+
+    // 设置头衔工具
+    this.addTool({
+      name: 'onebot11_set_title',
+      description: '设置群成员的专属头衔（需要群主权限）',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          group_id: { type: 'number', description: '群号' },
+          user_id: { type: 'number', description: '成员 QQ 号' },
+          title: { type: 'string', description: '头衔名称' },
+        },
+        required: ['bot', 'group_id', 'user_id', 'title'],
+      },
+      platforms: ['onebot11'],
+      scopes: ['group'],
+      permissionLevel: 'group_owner',
+      execute: async (args) => {
+        const { bot: botId, group_id, user_id, title } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const success = await bot.setTitle(group_id, user_id, title);
+        return { success, message: success ? `已将 ${user_id} 的头衔设为 "${title}"` : '操作失败' };
+      },
+    });
+
+    // 设置群名工具
+    this.addTool({
+      name: 'onebot11_set_group_name',
+      description: '修改 QQ 群名称',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          group_id: { type: 'number', description: '群号' },
+          name: { type: 'string', description: '新的群名称' },
+        },
+        required: ['bot', 'group_id', 'name'],
+      },
+      platforms: ['onebot11'],
+      scopes: ['group'],
+      permissionLevel: 'group_admin',
+      execute: async (args) => {
+        const { bot: botId, group_id, name } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const success = await bot.setGroupName(group_id, name);
+        return { success, message: success ? `已将群名修改为 "${name}"` : '操作失败' };
+      },
+    });
+
+    // 获取群成员列表工具
+    this.addTool({
+      name: 'onebot11_list_members',
+      description: '获取 QQ 群成员列表',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          group_id: { type: 'number', description: '群号' },
+        },
+        required: ['bot', 'group_id'],
+      },
+      platforms: ['onebot11'],
+      scopes: ['group'],
+      permissionLevel: 'user',
+      execute: async (args) => {
+        const { bot: botId, group_id } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const members = await bot.getMemberList(group_id);
+        return { 
+          members: members.map((m: any) => ({
+            user_id: m.user_id,
+            nickname: m.nickname,
+            card: m.card,
+            role: m.role,
+            title: m.title,
+          })),
+          count: members.length,
+        };
+      },
+    });
+
+    // 获取群信息工具
+    this.addTool({
+      name: 'onebot11_group_info',
+      description: '获取 QQ 群信息',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          group_id: { type: 'number', description: '群号' },
+        },
+        required: ['bot', 'group_id'],
+      },
+      platforms: ['onebot11'],
+      scopes: ['group'],
+      permissionLevel: 'user',
+      execute: async (args) => {
+        const { bot: botId, group_id } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const info = await bot.getGroupInfo(group_id);
+        return {
+          group_id: info.group_id,
+          group_name: info.group_name,
+          member_count: info.member_count,
+          max_member_count: info.max_member_count,
+        };
+      },
+    });
+
+    plugin.logger.debug('已注册 OneBot11 平台群管理工具');
   }
 }
 

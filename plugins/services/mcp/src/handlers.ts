@@ -48,9 +48,7 @@ function generatePluginCode(
   if (features.includes("context")) {
     imports.push("useContext");
   }
-  if (features.includes("database")) {
-    imports.push("defineModel", "onDatabaseReady");
-  }
+  // database 功能通过 plugin.defineModel 和 useContext 实现，不需要额外导入
   
   let result = `/**
  * ${description}
@@ -108,7 +106,7 @@ addComponent(MyComponent);
 
   if (features.includes("database")) {
     result += `// 示例数据模型
-declare module "@zhin.js/types" {
+declare module "zhin.js" {
   interface Models {
     ${name}_data: {
       id?: number;
@@ -118,14 +116,18 @@ declare module "@zhin.js/types" {
   }
 }
 
+const { defineModel, useContext } = plugin;
+
 defineModel("${name}_data", {
   name: { type: "text", nullable: false },
   created_at: { type: "timestamp", default: () => new Date() },
 });
 
-onDatabaseReady(async (db) => {
-  const model = db.model("${name}_data");
-  plugin.logger.info("数据库已就绪");
+useContext("database", async (db) => {
+  const model = db.models.get("${name}_data");
+  if (model) {
+    plugin.logger.info("数据库已就绪");
+  }
 });
 
 `;
@@ -393,9 +395,10 @@ export function createModelCode(args: {
     fieldDefs.push(`    ${key}: ${JSON.stringify(value)},`);
   }
 
-  return `import { defineModel, onDatabaseReady } from "zhin.js";
+  return `import { usePlugin } from "zhin.js";
 
-declare module "@zhin.js/types" {
+// 声明模型类型
+declare module "zhin.js" {
   interface Models {
     ${name}: {
 ${fieldTypes.join("\n")}
@@ -403,13 +406,21 @@ ${fieldTypes.join("\n")}
   }
 }
 
+const plugin = usePlugin();
+const { defineModel, useContext } = plugin;
+
+// 定义模型结构
 defineModel("${name}", {
 ${fieldDefs.join("\n")}
 });
 
-onDatabaseReady(async (db) => {
-  const model = db.model("${name}");
-  // 在这里使用模型
+// 数据库就绪后使用模型
+useContext("database", async (db) => {
+  const model = db.models.get("${name}");
+  if (model) {
+    // 在这里使用模型
+    // 例如: const items = await model.select();
+  }
 });
 `;
 }

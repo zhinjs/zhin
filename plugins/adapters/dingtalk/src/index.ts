@@ -8,6 +8,8 @@ import {
     SendContent,
     MessageSegment,
     segment,
+    Tool,
+    ToolPermissionLevel,
 } from "zhin.js";
 import type { Context } from 'koa';
 import { createHmac } from 'crypto';
@@ -653,6 +655,127 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
             return false;
         }
     }
+
+    // ==================== 企业管理 API ====================
+
+    /**
+     * 获取部门列表
+     * @param deptId 父部门 ID，默认为根部门 1
+     */
+    async getDepartmentList(deptId: number = 1): Promise<any[]> {
+        try {
+            const data = await this.request('/topapi/v2/department/listsub', {
+                method: 'POST',
+                body: { dept_id: deptId }
+            });
+
+            if (data.errcode === 0) {
+                return data.result || [];
+            }
+            throw new Error(`Failed to get department list: ${data.errmsg}`);
+        } catch (error) {
+            plugin.logger.error('Failed to get department list:', error);
+            return [];
+        }
+    }
+
+    /**
+     * 获取部门详情
+     * @param deptId 部门 ID
+     */
+    async getDepartmentInfo(deptId: number): Promise<any> {
+        try {
+            const data = await this.request('/topapi/v2/department/get', {
+                method: 'POST',
+                body: { dept_id: deptId }
+            });
+
+            if (data.errcode === 0) {
+                return data.result;
+            }
+            throw new Error(`Failed to get department info: ${data.errmsg}`);
+        } catch (error) {
+            plugin.logger.error('Failed to get department info:', error);
+            return null;
+        }
+    }
+
+    /**
+     * 创建群聊
+     * @param name 群名
+     * @param ownerUserId 群主用户 ID
+     * @param userIdList 成员用户 ID 列表
+     */
+    async createChat(name: string, ownerUserId: string, userIdList: string[]): Promise<string | null> {
+        try {
+            const data = await this.request('/topapi/chat/create', {
+                method: 'POST',
+                body: {
+                    name,
+                    owner: ownerUserId,
+                    useridlist: userIdList
+                }
+            });
+
+            if (data.errcode === 0) {
+                plugin.logger.info(`创建群聊成功: ${data.chatid}`);
+                return data.chatid;
+            }
+            throw new Error(`Failed to create chat: ${data.errmsg}`);
+        } catch (error) {
+            plugin.logger.error('Failed to create chat:', error);
+            return null;
+        }
+    }
+
+    /**
+     * 获取群聊信息
+     * @param chatId 群聊 ID
+     */
+    async getChatInfo(chatId: string): Promise<any> {
+        try {
+            const data = await this.request('/topapi/chat/get', {
+                method: 'POST',
+                body: { chatid: chatId }
+            });
+
+            if (data.errcode === 0) {
+                return data.chat_info;
+            }
+            throw new Error(`Failed to get chat info: ${data.errmsg}`);
+        } catch (error) {
+            plugin.logger.error('Failed to get chat info:', error);
+            return null;
+        }
+    }
+
+    /**
+     * 更新群聊（添加/移除成员等）
+     * @param chatId 群聊 ID
+     * @param options 更新选项
+     */
+    async updateChat(chatId: string, options: {
+        name?: string;
+        owner?: string;
+        add_useridlist?: string[];
+        del_useridlist?: string[];
+    }): Promise<boolean> {
+        try {
+            const data = await this.request('/topapi/chat/update', {
+                method: 'POST',
+                body: { chatid: chatId, ...options }
+            });
+
+            if (data.errcode === 0) {
+                plugin.logger.info(`更新群聊成功: ${chatId}`);
+                return true;
+            }
+            throw new Error(`Failed to update chat: ${data.errmsg}`);
+        } catch (error) {
+            plugin.logger.error('Failed to update chat:', error);
+            return false;
+        }
+    }
 }
 
 // 定义 Adapter 类
@@ -666,6 +789,217 @@ class DingTalkAdapter extends Adapter<DingTalkBot> {
 
     createBot(config: DingTalkBotConfig): DingTalkBot {
         return new DingTalkBot(this, this.#router, config);
+    }
+
+    async start(): Promise<void> {
+        this.registerDingTalkTools();
+        await super.start();
+    }
+
+    /**
+     * 注册钉钉平台管理工具
+     */
+    private registerDingTalkTools(): void {
+        // 获取用户信息工具
+        this.addTool({
+            name: 'dingtalk_get_user',
+            description: '获取钉钉用户信息',
+            parameters: {
+                type: 'object',
+                properties: {
+                    bot: { type: 'string', description: 'Bot 名称' },
+                    user_id: { type: 'string', description: '用户 ID' },
+                },
+                required: ['bot', 'user_id'],
+            },
+            platforms: ['dingtalk'],
+            scopes: ['group', 'private'],
+            permissionLevel: 'user',
+            execute: async (args) => {
+                const { bot: botId, user_id } = args;
+                const bot = this.bots.get(botId);
+                if (!bot) throw new Error(`Bot ${botId} 不存在`);
+                return await bot.getUserInfo(user_id);
+            },
+        });
+
+        // 获取部门用户列表工具
+        this.addTool({
+            name: 'dingtalk_get_dept_users',
+            description: '获取钉钉部门用户列表',
+            parameters: {
+                type: 'object',
+                properties: {
+                    bot: { type: 'string', description: 'Bot 名称' },
+                    dept_id: { type: 'number', description: '部门 ID' },
+                },
+                required: ['bot', 'dept_id'],
+            },
+            platforms: ['dingtalk'],
+            scopes: ['group', 'private'],
+            permissionLevel: 'user',
+            execute: async (args) => {
+                const { bot: botId, dept_id } = args;
+                const bot = this.bots.get(botId);
+                if (!bot) throw new Error(`Bot ${botId} 不存在`);
+                const users = await bot.getDepartmentUsers(dept_id);
+                return { users, count: users.length };
+            },
+        });
+
+        // 获取部门列表工具
+        this.addTool({
+            name: 'dingtalk_list_departments',
+            description: '获取钉钉部门列表',
+            parameters: {
+                type: 'object',
+                properties: {
+                    bot: { type: 'string', description: 'Bot 名称' },
+                    dept_id: { type: 'number', description: '父部门 ID，默认 1（根部门）' },
+                },
+                required: ['bot'],
+            },
+            platforms: ['dingtalk'],
+            scopes: ['group', 'private'],
+            permissionLevel: 'user',
+            execute: async (args) => {
+                const { bot: botId, dept_id = 1 } = args;
+                const bot = this.bots.get(botId);
+                if (!bot) throw new Error(`Bot ${botId} 不存在`);
+                const departments = await bot.getDepartmentList(dept_id);
+                return { departments, count: departments.length };
+            },
+        });
+
+        // 发送工作通知工具
+        this.addTool({
+            name: 'dingtalk_send_work_notice',
+            description: '向指定用户发送钉钉工作通知',
+            parameters: {
+                type: 'object',
+                properties: {
+                    bot: { type: 'string', description: 'Bot 名称' },
+                    user_ids: { type: 'array', items: { type: 'string' }, description: '用户 ID 列表' },
+                    content: { type: 'string', description: '通知内容' },
+                },
+                required: ['bot', 'user_ids', 'content'],
+            },
+            platforms: ['dingtalk'],
+            scopes: ['group', 'private'],
+            permissionLevel: 'group_admin',
+            execute: async (args) => {
+                const { bot: botId, user_ids, content } = args;
+                const bot = this.bots.get(botId);
+                if (!bot) throw new Error(`Bot ${botId} 不存在`);
+                const msgContent = {
+                    msgtype: 'text',
+                    text: { content }
+                };
+                const success = await bot.sendWorkNotice(user_ids, msgContent);
+                return { success, message: success ? '工作通知已发送' : '发送失败' };
+            },
+        });
+
+        // 创建群聊工具
+        this.addTool({
+            name: 'dingtalk_create_chat',
+            description: '创建钉钉群聊',
+            parameters: {
+                type: 'object',
+                properties: {
+                    bot: { type: 'string', description: 'Bot 名称' },
+                    name: { type: 'string', description: '群名' },
+                    owner: { type: 'string', description: '群主用户 ID' },
+                    members: { type: 'array', items: { type: 'string' }, description: '成员用户 ID 列表' },
+                },
+                required: ['bot', 'name', 'owner', 'members'],
+            },
+            platforms: ['dingtalk'],
+            scopes: ['group', 'private'],
+            permissionLevel: 'group_admin',
+            execute: async (args) => {
+                const { bot: botId, name, owner, members } = args;
+                const bot = this.bots.get(botId);
+                if (!bot) throw new Error(`Bot ${botId} 不存在`);
+                const chatId = await bot.createChat(name, owner, members);
+                return { success: !!chatId, chat_id: chatId, message: chatId ? `群聊创建成功: ${chatId}` : '创建失败' };
+            },
+        });
+
+        // 获取群聊信息工具
+        this.addTool({
+            name: 'dingtalk_chat_info',
+            description: '获取钉钉群聊信息',
+            parameters: {
+                type: 'object',
+                properties: {
+                    bot: { type: 'string', description: 'Bot 名称' },
+                    chat_id: { type: 'string', description: '群聊 ID' },
+                },
+                required: ['bot', 'chat_id'],
+            },
+            platforms: ['dingtalk'],
+            scopes: ['group'],
+            permissionLevel: 'user',
+            execute: async (args) => {
+                const { bot: botId, chat_id } = args;
+                const bot = this.bots.get(botId);
+                if (!bot) throw new Error(`Bot ${botId} 不存在`);
+                return await bot.getChatInfo(chat_id);
+            },
+        });
+
+        // 添加群成员工具
+        this.addTool({
+            name: 'dingtalk_add_chat_members',
+            description: '向钉钉群聊添加成员',
+            parameters: {
+                type: 'object',
+                properties: {
+                    bot: { type: 'string', description: 'Bot 名称' },
+                    chat_id: { type: 'string', description: '群聊 ID' },
+                    user_ids: { type: 'array', items: { type: 'string' }, description: '要添加的用户 ID 列表' },
+                },
+                required: ['bot', 'chat_id', 'user_ids'],
+            },
+            platforms: ['dingtalk'],
+            scopes: ['group'],
+            permissionLevel: 'group_admin',
+            execute: async (args) => {
+                const { bot: botId, chat_id, user_ids } = args;
+                const bot = this.bots.get(botId);
+                if (!bot) throw new Error(`Bot ${botId} 不存在`);
+                const success = await bot.updateChat(chat_id, { add_useridlist: user_ids });
+                return { success, message: success ? '成员添加成功' : '添加失败' };
+            },
+        });
+
+        // 移除群成员工具
+        this.addTool({
+            name: 'dingtalk_remove_chat_members',
+            description: '从钉钉群聊移除成员',
+            parameters: {
+                type: 'object',
+                properties: {
+                    bot: { type: 'string', description: 'Bot 名称' },
+                    chat_id: { type: 'string', description: '群聊 ID' },
+                    user_ids: { type: 'array', items: { type: 'string' }, description: '要移除的用户 ID 列表' },
+                },
+                required: ['bot', 'chat_id', 'user_ids'],
+            },
+            platforms: ['dingtalk'],
+            scopes: ['group'],
+            permissionLevel: 'group_admin',
+            execute: async (args) => {
+                const { bot: botId, chat_id, user_ids } = args;
+                const bot = this.bots.get(botId);
+                if (!bot) throw new Error(`Bot ${botId} 不存在`);
+                const success = await bot.updateChat(chat_id, { del_useridlist: user_ids });
+                return { success, message: success ? '成员移除成功' : '移除失败' };
+            },
+        });
+
+        plugin.logger.debug('已注册钉钉平台管理工具');
     }
 }
 

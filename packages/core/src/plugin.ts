@@ -8,7 +8,7 @@ import { EventEmitter } from "events";
 import { createRequire } from "module";
 import type { Database, Definition } from "@zhin.js/database";
 import { Schema } from "@zhin.js/schema";
-import type { Models, RegisteredAdapters } from "./types.js";
+import type { Models, RegisteredAdapters, Tool, ToolContext } from "./types.js";
 import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
@@ -126,7 +126,7 @@ export interface Plugin extends Plugin.Extensions { }
  */
 export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   static [contextsKey] = [] as string[];
-  
+
   #cachedName?: string;
   adapters: (keyof Plugin.Contexts)[] = [];
   started = false;
@@ -157,10 +157,13 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   };
   // 插件功能
   #middlewares: MessageMiddleware<RegisteredAdapter>[] = [this.#messageMiddleware];
-  
+
+  // 本地工具存储（当 ToolService 不可用时使用）
+  #tools: Map<string, Tool> = new Map();
+
   // 统一的清理函数集合
   #disposables: Set<() => void | Promise<void>> = new Set();
-  
+
   get middleware(): MessageMiddleware<RegisteredAdapter> {
     return compose<RegisteredAdapter>(this.#middlewares);
   }
@@ -169,7 +172,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
    */
   constructor(filePath: string = "", public parent?: Plugin) {
     super();
-    
+
     // 增加 EventEmitter 监听器限制，避免警告
     // 因为插件可能注册多个命令/组件/中间件，每个都会添加 dispose 监听器
     this.setMaxListeners(50);
@@ -185,15 +188,24 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     // 绑定方法以支持解构使用
     this.$bindMethods();
   }
-  
+
   // 标记是否已绑定方法
   #methodsBound = false;
 
   /**
    * 添加中间件
    * 中间件用于处理消息流转
+   * @param middleware 中间件函数
    */
-  addMiddleware<T extends RegisteredAdapter>(middleware: MessageMiddleware<T>, name?: string) {
+  addMiddleware<T extends RegisteredAdapter>(middleware: MessageMiddleware<T>): () => void {
+    if(this.parent){
+      const dispose= this.parent.addMiddleware(middleware);
+      this.#disposables.add(dispose);
+      return () => {
+        dispose();
+        this.#disposables.delete(dispose);
+      };
+    }
     this.#middlewares.push(middleware as MessageMiddleware<RegisteredAdapter>);
     const dispose = () => {
       remove(this.#middlewares, middleware);
@@ -201,6 +213,106 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     };
     this.#disposables.add(dispose);
     return dispose;
+  }
+
+  /**
+   * 添加工具
+   * 工具可以被 AI 服务调用，也会自动生成对应的命令
+   * @param tool 工具定义
+   * @param generateCommand 是否生成对应命令（默认 true）
+   * @returns 返回一个移除工具的函数
+   */
+  addTool(
+    tool: Tool,
+    generateCommand: boolean = true
+  ): () => void {
+    // 尝试使用 ToolService
+    const toolService = this.root.inject('tool' as any) as any;
+    if (toolService && typeof toolService.add === 'function') {
+      const dispose = toolService.add(tool, this.name, generateCommand);
+      this.#disposables.add(dispose);
+      return () => {
+        dispose();
+        this.#disposables.delete(dispose);
+      };
+    }
+
+    // 回退到本地存储
+    const toolWithSource: Tool = {
+      ...tool,
+      source: tool.source || `plugin:${this.name}`,
+      tags: [...(tool.tags || []), 'plugin', this.name],
+    };
+    this.#tools.set(tool.name, toolWithSource);
+    const dispose = () => {
+      this.#tools.delete(tool.name);
+      this.#disposables.delete(dispose);
+    };
+    this.#disposables.add(dispose);
+    return dispose;
+  }
+
+  /**
+   * 获取当前插件注册的所有工具
+   */
+  getTools(): Tool[] {
+    return Array.from(this.#tools.values());
+  }
+
+  /**
+   * 获取当前插件及所有子插件注册的工具
+   */
+  getAllTools(): Tool[] {
+    const tools: Tool[] = [...this.getTools()];
+    for (const child of this.children) {
+      tools.push(...child.getAllTools());
+    }
+    return tools;
+  }
+
+  /**
+   * 根据名称获取工具
+   */
+  getTool(name: string): Tool | undefined {
+    // 先在当前插件查找
+    const tool = this.#tools.get(name);
+    if (tool) return tool;
+    // 再在子插件中查找
+    for (const child of this.children) {
+      const childTool = child.getTool(name);
+      if (childTool) return childTool;
+    }
+    return undefined;
+  }
+
+  /**
+   * 收集所有可用的工具
+   * 优先使用 ToolService，否则回退到本地收集
+   */
+  collectAllTools(): Tool[] {
+    // 尝试使用 ToolService
+    const toolService = this.root.inject('tool' as any) as any;
+    if (toolService && typeof toolService.collectAll === 'function') {
+      return toolService.collectAll(this.root);
+    }
+
+    // 回退到本地收集
+    const tools: Tool[] = [];
+
+    // 收集插件树中的所有工具
+    const rootPlugin = this.root;
+    tools.push(...rootPlugin.getAllTools());
+
+    // 收集所有适配器的工具
+    for (const [name, context] of rootPlugin.contexts) {
+      const value = context.value;
+      if (value && typeof value === 'object' && 'getTools' in value) {
+        const adapter = value as Adapter;
+        tools.push(...adapter.getTools());
+      }
+    }
+
+    return tools;
   }
 
   /**
@@ -277,7 +389,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     if (!this.#contextsIsReady(contexts)) return
     contextReadyCallback()
   }
-  inject<T extends keyof Plugin.Contexts>(name: T): Plugin.Contexts[T]|undefined {
+  inject<T extends keyof Plugin.Contexts>(name: T): Plugin.Contexts[T] | undefined {
     const context = this.root.contexts.get(name as string);
     return context?.value as Plugin.Contexts[T];
   }
@@ -299,22 +411,14 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   /**
    * 启动插件
    */
-  async start(t?:number): Promise<void> {
+  async start(t?: number): Promise<void> {
     if (this.started) return;
     this.started = true; // 提前设置，防止重复启动
-    
+
     // 启动所有服务
     for (const context of this.$contexts.values()) {
       if (typeof context.mounted === "function" && !context.value) {
         context.value = await context.mounted(this);
-      }
-      // 注册扩展方法到 Plugin.prototype
-      if (context.extensions) {
-        for (const [name, fn] of Object.entries(context.extensions)) {
-          if (typeof fn === 'function') {
-            Reflect.set(Plugin.prototype, name, fn);
-          }
-        }
       }
       this.dispatch('context.mounted', context.name)
     }
@@ -326,7 +430,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     // 输出启动日志（使用 debug 级别，避免重复输出）
     // 只在根插件或重要插件时使用 info 级别
     if (!this.parent || this.name === 'setup') {
-    this.logger.info(`Plugin "${this.name}" ${t ? `reloaded in ${Date.now() - t}ms` : "started"}`);
+      this.logger.info(`Plugin "${this.name}" ${t ? `reloaded in ${Date.now() - t}ms` : "started"}`);
     } else {
       this.logger.debug(`Plugin "${this.name}" ${t ? `reloaded in ${Date.now() - t}ms` : "started"}`);
     }
@@ -339,7 +443,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     const commandService = this.inject('command');
     const componentService = this.inject('component')
     const cronService = this.inject('cron');
-    
+
     return {
       commands: commandService ? commandService.items.map(c => c.pattern) : [],
       components: componentService ? componentService.getAllNames() : [],
@@ -387,12 +491,12 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     // 清理 contexts Map
     this.$contexts.clear();
 
-// 清空缓存的名称
+    // 清空缓存的名称
     this.#cachedName = undefined;
 
     // 触发 dispose 事件
     this.emit("dispose");
-    
+
     // 执行所有清理函数
     for (const dispose of this.#disposables) {
       try {
@@ -402,14 +506,14 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
       }
     }
     this.#disposables.clear();
-    
+
     // 清理 middlewares 数组（保留默认的消息中间件）
     this.#middlewares.length = 1;
-    
+
     if (this.parent) {
       remove(this.parent?.children, this);
     }
-    
+
     // 从全局 loadedModules Map 中移除，防止内存泄漏
     if (this.filePath) {
       try {
@@ -419,7 +523,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
         // 文件可能已不存在，忽略错误
       }
     }
-    
+
     this.removeAllListeners();
     this.logger.debug(`Plugin "${this.name}" stopped`);
   }
@@ -485,6 +589,14 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
       Plugin[contextsKey].push(context.name as string);
     }
     this.logger.debug(`Context "${context.name as string}" provided`);
+    // 注册扩展方法到 Plugin.prototype
+    if (context.extensions) {
+      for (const [name, fn] of Object.entries(context.extensions)) {
+        if (typeof fn === 'function') {
+          Reflect.set(Plugin.prototype, name, fn);
+        }
+      }
+    }
     this.$contexts.set(context.name as string, context);
     return this;
   }
@@ -496,7 +608,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   /**
    * 导入插件
    */
-  async import(entry: string,t?:number): Promise<Plugin> {
+  async import(entry: string, t?: number): Promise<Plugin> {
     if (!entry) throw new Error(`Plugin entry not found: ${entry}`);
     const resolved = resolveEntry(path.isAbsolute(entry) ?
       entry :
@@ -510,7 +622,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
 
     // 避免重复加载同一路径的插件
     const normalized = realPath.replace(/\?t=\d+$/, '').replace(/\\/g, '/');
-    const existing = this.children.find(child => 
+    const existing = this.children.find(child =>
       child.filePath.replace(/\?t=\d+$/, '').replace(/\\/g, '/') === normalized
     );
     if (existing) {
@@ -533,7 +645,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
    */
   async reload(plugin: Plugin = this): Promise<void> {
     this.logger.info(`Plugin "${plugin.name}" reloading...`);
-    const now=Date.now();
+    const now = Date.now();
     if (!plugin.parent) {
       // 根插件重载 = 退出进程（由 CLI 重启）
       return process.exit(51);
@@ -589,7 +701,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   $bindMethods(): void {
     if (this.#methodsBound) return;
     this.#methodsBound = true;
-    
+
     const proto = Object.getPrototypeOf(this);
     for (const key of Plugin.#coreMethods) {
       const value = proto[key];
@@ -622,7 +734,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
 
     const plugin = new Plugin(realPath, parent);
     plugin.fileHash = getFileHash(entryFile);
-    
+
     // 先记录，防止循环依赖时重复加载
     loadedModules.set(realPath, plugin);
 
@@ -683,11 +795,11 @@ export namespace Plugin {
     config: ConfigService;
     permission: PermissionService;
   }
-  
+
   /**
    * Service 扩展方法类型
    * 这些方法由各个 Context 的 extensions 提供
    * 在 Plugin.start() 时自动注册到 Plugin.prototype
    */
-  export interface Extensions {}
+  export interface Extensions { }
 }

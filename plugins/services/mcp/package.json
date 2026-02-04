@@ -41,8 +41,14 @@
     "zod": "^3.24.1"
   },
   "peerDependencies": {
+    "@zhin.js/ai": "workspace:^",
     "@zhin.js/http": "workspace:^",
     "zhin.js": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/ai": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/node": "latest",

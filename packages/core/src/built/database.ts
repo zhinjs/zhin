@@ -21,7 +21,8 @@ export function defineDatabaseService<K extends keyof Databases>(config: Databas
     return defineContext({
         name: 'database',
         description: '数据库服务',
-        mounted: async () => {
+        mounted: async (plugin) => {
+            plugin.logger.info(`Database service started`);
             await db.start();
             return db;
         },
@@ -31,7 +32,6 @@ export function defineDatabaseService<K extends keyof Databases>(config: Databas
         extensions: {
             defineModel<K extends keyof Models>(this:Plugin,name: K, definition: Definition<Models[K]>) {
                 db.define(name, definition);
-                this.logger.debug(`Model "${String(name)}" defined by plugin "${this.name}"`);
             }
         },
     });

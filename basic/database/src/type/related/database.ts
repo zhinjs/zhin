@@ -85,8 +85,9 @@ export class RelatedDatabase<
 
   protected async initialize(): Promise<void> {
     // 自动创建表
-    for (const [tableName, definition] of Object.entries(this.definitions || {})) {
+    for (const [tableName, definition] of this.definitions.entries()) {
       await this.create(tableName, definition);
+      this.models.set(tableName, new RelatedModel(this, tableName, definition));
     }
   }
 
