@@ -200,11 +200,24 @@ export class Agent {
         if (choice.message.tool_calls?.length) {
           this.emit('thinking', '正在执行工具调用...');
 
-          // 将 assistant 消息加入会话上下文，但清理掉可能包含的工具调用原始 JSON，避免被直接展示
+          // 将 assistant 消息加入会话上下文，但避免直接展示纯 JSON 的工具调用原始内容
           let assistantContent = '';
           if (typeof choice.message.content === 'string' && choice.message.content) {
-            // 移除从第一个 {"name" 起的 JSON 段（常见模型将工具调用以 JSON 形式附在消息末尾）
-            assistantContent = choice.message.content.replace(/\{\s*"name"[\s\S]*$/m, '').trim();
+            const rawContent = choice.message.content;
+            const trimmed = rawContent.trim();
+            // 如果内容整体看起来是 JSON（常见于模型将工具调用以 JSON 形式返回），则不暴露给上层
+            if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+              try {
+                JSON.parse(trimmed);
+                // 解析成功，说明是纯 JSON；保持 assistantContent 为空字符串
+              } catch {
+                // 解析失败，当作普通文本保留
+                assistantContent = rawContent;
+              }
+            } else {
+              // 非纯 JSON 内容，直接保留
+              assistantContent = rawContent;
+            }
           }
 
           state.messages.push({

@@ -64,7 +64,7 @@ ai:
   providers:
     # 本地 Ollama - 快速响应 + 工具调用
     ollama:
-      baseUrl: http://172.25.70.73:11434
+      baseUrl: ${OLLAMA_BASE_URL:http://localhost:11434}
       models:
         - qwen2.5:7b      # 推荐：工具调用能力强
         - qwen3:8b        # 备选：更强的理解和生成能力

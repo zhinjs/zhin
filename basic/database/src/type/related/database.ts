@@ -84,11 +84,13 @@ export class RelatedDatabase<
   }
 
   protected async initialize(): Promise<void> {
-    // 自动创建表
-    for (const [tableName, definition] of this.definitions.entries()) {
-      await this.create(tableName, definition);
-      this.models.set(tableName, new RelatedModel(this, tableName, definition));
-    }
+    // 并行创建所有表以提高性能
+    await Promise.all(
+      Array.from(this.definitions.entries()).map(async ([tableName, definition]) => {
+        await this.create(tableName, definition);
+        this.models.set(tableName, new RelatedModel(this, tableName, definition));
+      })
+    );
   }
 
   // SQL generation method
