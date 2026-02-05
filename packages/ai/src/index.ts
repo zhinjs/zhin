@@ -831,9 +831,12 @@ const { provide, useContext, defineModel, root, logger } = plugin;
 if (!globalState[AI_INIT_KEY]) {
   globalState[AI_INIT_KEY] = true;
   
-  defineModel('chat_messages', CHAT_MESSAGE_MODEL);
-  defineModel('context_summaries', CONTEXT_SUMMARY_MODEL);
-  defineModel('ai_sessions', AI_SESSION_MODEL);
+  // 注册数据模型（如果数据库服务可用）
+  if (typeof defineModel === 'function') {
+    defineModel('chat_messages', CHAT_MESSAGE_MODEL);
+    defineModel('context_summaries', CONTEXT_SUMMARY_MODEL);
+    defineModel('ai_sessions', AI_SESSION_MODEL);
+  }
 
   // 注册 Tool Service
   provide(createToolService());

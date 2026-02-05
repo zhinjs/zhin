@@ -1,0 +1,50 @@
+# ===========================================
+# Docker 构建忽略文件
+# ===========================================
+
+# Git
+.git
+.gitignore
+
+# 依赖（容器内安装）
+node_modules
+**/node_modules
+
+# 构建产物
+**/lib
+**/dist
+
+# 测试
+**/test
+**/tests
+**/*.test.ts
+coverage
+vitest.*
+
+# 文档（保留 README）
+docs
+*.md
+!README.md
+!DOCKER.md
+
+# 开发配置
+.vscode
+.idea
+
+# 环境变量
+.env
+.env.*
+
+# 示例项目
+examples
+
+# 日志
+*.log
+
+# CI/CD（保留入口脚本）
+.github
+.changeset
+
+# 其他
+*.tgz
+LICENSE
