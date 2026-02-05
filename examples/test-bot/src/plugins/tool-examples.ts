@@ -177,7 +177,7 @@ const systemInfoTool = defineTool<{ type?: string }>({
 });
 
 // 仅注册工具，不生成命令
-plugin.addTool(systemInfoTool, false);
+plugin.addTool(systemInfoTool, false /* generateCommand: 不为该工具创建聊天命令，仅供 AI 调用 */);
 logger.info('[工具示例] 系统信息工具已注册（仅 AI 可用）');
 
 // ============================================================================

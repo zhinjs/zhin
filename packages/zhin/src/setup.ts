@@ -104,7 +104,7 @@ for(const context of contexts){
   });
 }
 
-// 4. 加载插件（父插件已启动，会自动 start 子插件）
+// 4. 加载插件定义（在调用 start() 之前导入插件，start 时统一挂载）
 // 先去重插件列表，避免重复加载
 const pluginNames = new Set(appConfig.plugins || []);
 logger.debug(`Plugin list: ${Array.from(pluginNames).join(', ')}`);

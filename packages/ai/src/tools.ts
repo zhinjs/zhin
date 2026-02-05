@@ -16,7 +16,7 @@ export const calculatorTool = new ZhinTool('calculator')
     try {
       // 安全的数学表达式求值
       const sanitized = (expression as string)
-        .replace(/[^0-9+\-*/().^sincoqrtablepowlogxMthPIE\s]/g, '')
+        .replace(/[^0-9+\-*/().^sincosqrtabspowlogxMathPIE\s]/g, '')
         .replace(/\bsqrt\b/g, 'Math.sqrt')
         .replace(/\bsin\b/g, 'Math.sin')
         .replace(/\bcos\b/g, 'Math.cos')

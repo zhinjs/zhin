@@ -84,9 +84,15 @@ export class RelatedDatabase<
   }
 
   protected async initialize(): Promise<void> {
-    // 自动创建表
-    for (const [tableName, definition] of this.definitions.entries()) {
-      await this.create(tableName, definition);
+    // 并行创建所有表以提高性能
+    const tableEntries = Array.from(this.definitions.entries());
+    await Promise.all(
+      tableEntries.map(async ([tableName, definition]) => {
+        await this.create(tableName, definition);
+      })
+    );
+    // 创建完成后，统一设置 models（避免并发竞争）
+    for (const [tableName, definition] of tableEntries) {
       this.models.set(tableName, new RelatedModel(this, tableName, definition));
     }
   }
