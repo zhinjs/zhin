@@ -61,7 +61,8 @@ function toAnthropicMessages(messages: ChatMessage[]): {
           const url = part.image_url.url;
           if (url.startsWith('data:')) {
             const [meta, data] = url.split(',');
-            const mediaType = meta.match(/data:(.*?);/)?.[1] || 'image/png';
+            // 使用更安全的正则表达式，避免 ReDoS
+            const mediaType = meta.match(/^data:([^;]+);/)?.[1] || 'image/png';
             return {
               type: 'image',
               source: { type: 'base64', media_type: mediaType, data },

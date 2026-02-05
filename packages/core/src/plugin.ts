@@ -321,16 +321,29 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   get name(): string {
     if (this.#cachedName) return this.#cachedName;
 
-    this.#cachedName = path
+    let name = path
       .relative(process.cwd(), this.filePath)
       .replace(/\?t=\d+$/, "")
       .replace(/\\/g, "/")
       .replace(/\/index\.(js|ts)x?$/, "")
-      .replace(/\/(lib|src|dist)$/, "")
-      .replace(/.*\/node_modules\//, "")
-      .replace(/.*\//, "")
-      .replace(/\.(js|ts)x?$/, "");
-
+      .replace(/\/(lib|src|dist)$/, "");
+    
+    // 安全地提取 node_modules 后的包名或最后的文件名
+    const nodeModulesIndex = name.indexOf('node_modules/');
+    if (nodeModulesIndex !== -1) {
+      name = name.substring(nodeModulesIndex + 'node_modules/'.length);
+    }
+    
+    // 提取最后一个路径段
+    const lastSlash = name.lastIndexOf('/');
+    if (lastSlash !== -1) {
+      name = name.substring(lastSlash + 1);
+    }
+    
+    // 移除文件扩展名
+    name = name.replace(/\.(js|ts)x?$/, "");
+    
+    this.#cachedName = name;
     return this.#cachedName;
   }
 
