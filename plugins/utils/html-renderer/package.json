@@ -1,0 +1,62 @@
+{
+  "name": "@zhin.js/plugin-html-renderer",
+  "version": "0.0.1",
+  "description": "HTML to image rendering plugin for Zhin.js using @zhinjs/satori",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rm -rf lib"
+  },
+  "keywords": [
+    "zhin",
+    "bot",
+    "plugin",
+    "html",
+    "image",
+    "render",
+    "satori",
+    "svg",
+    "png"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@zhinjs/satori": "workspace:*",
+    "@resvg/resvg-js": "^2.6.2",
+    "jsdom": "^24.0.0"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^21.1.6",
+    "typescript": "^5.3.3",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependencies": {
+    "zhin.js": "workspace:*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "plugins/utils/html-renderer"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

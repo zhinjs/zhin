@@ -132,4 +132,117 @@ export function registerTools(server: McpServer) {
       };
     }
   );
+
+  // ============================================================================
+  // AI 相关工具
+  // ============================================================================
+
+  server.registerTool(
+    "ai_chat",
+    {
+      description: "与 AI 对话，获取智能回复",
+      inputSchema: z.object({
+        message: z.string().describe("用户消息"),
+        systemPrompt: z.string().optional().describe("系统提示词（可选）"),
+        model: z.string().optional().describe("模型名称（可选）"),
+        provider: z.string().optional().describe("提供商名称（可选）"),
+      }),
+    },
+    async (args) => {
+      const { aiChat } = await import("./ai-handlers.js");
+      const result = await aiChat(args);
+      return {
+        content: [{ type: "text" as const, text: result }],
+      };
+    }
+  );
+
+  server.registerTool(
+    "ai_agent",
+    {
+      description: "让 AI Agent 执行复杂任务，可使用工具（计算器、时间查询等）",
+      inputSchema: z.object({
+        task: z.string().describe("任务描述"),
+        model: z.string().optional().describe("模型名称（可选）"),
+      }),
+    },
+    async (args) => {
+      const { aiAgent } = await import("./ai-handlers.js");
+      const result = await aiAgent(args);
+      return {
+        content: [{ type: "text" as const, text: result }],
+      };
+    }
+  );
+
+  server.registerTool(
+    "ai_code_review",
+    {
+      description: "让 AI 审查代码，提供改进建议",
+      inputSchema: z.object({
+        code: z.string().describe("要审查的代码"),
+        language: z.string().optional().describe("编程语言"),
+        focus: z.string().optional().describe("审查重点（性能/安全/可读性/最佳实践）"),
+      }),
+    },
+    async (args) => {
+      const { aiCodeReview } = await import("./ai-handlers.js");
+      const result = await aiCodeReview(args);
+      return {
+        content: [{ type: "text" as const, text: result }],
+      };
+    }
+  );
+
+  server.registerTool(
+    "ai_explain_code",
+    {
+      description: "让 AI 解释代码的功能和逻辑",
+      inputSchema: z.object({
+        code: z.string().describe("要解释的代码"),
+        language: z.string().optional().describe("编程语言"),
+        detail: z.enum(["brief", "detailed"]).optional().describe("解释详细程度"),
+      }),
+    },
+    async (args) => {
+      const { aiExplainCode } = await import("./ai-handlers.js");
+      const result = await aiExplainCode(args);
+      return {
+        content: [{ type: "text" as const, text: result }],
+      };
+    }
+  );
+
+  server.registerTool(
+    "ai_generate_code",
+    {
+      description: "让 AI 根据需求生成代码",
+      inputSchema: z.object({
+        requirement: z.string().describe("功能需求描述"),
+        language: z.string().optional().describe("目标编程语言"),
+        framework: z.string().optional().describe("使用的框架"),
+      }),
+    },
+    async (args) => {
+      const { aiGenerateCode } = await import("./ai-handlers.js");
+      const result = await aiGenerateCode(args);
+      return {
+        content: [{ type: "text" as const, text: result }],
+      };
+    }
+  );
+
+  server.registerTool(
+    "ai_list_models",
+    {
+      description: "列出所有可用的 AI 模型",
+    },
+    async () => {
+      const { aiListModels } = await import("./ai-handlers.js");
+      const result = await aiListModels();
+      return {
+        content: [{ type: "text" as const, text: result }],
+      };
+    }
+  );
 }

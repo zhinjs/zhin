@@ -8,6 +8,8 @@ import {
     SendContent,
     MessageSegment,
     segment,
+    Tool,
+    ToolPermissionLevel,
 } from "zhin.js";
 import type { Context } from 'koa';
 import axios, { AxiosInstance } from 'axios';
@@ -617,6 +619,181 @@ export class LarkBot implements Bot<LarkBotConfig, LarkMessage> {
             return null;
         }
     }
+
+    // ==================== 群组管理 API ====================
+
+    /**
+     * 创建群聊
+     * @param name 群名
+     * @param userIds 成员 open_id 列表
+     * @param ownerId 群主 open_id
+     */
+    async createChat(name: string, userIds: string[], ownerId?: string): Promise<string | null> {
+        try {
+            const response = await this.axiosInstance.post('/im/v1/chats', {
+                name,
+                user_id_list: userIds,
+                owner_id: ownerId
+            });
+
+            if (response.data.code === 0) {
+                plugin.logger.info(`创建群聊成功: ${response.data.data.chat_id}`);
+                return response.data.data.chat_id;
+            }
+            throw new Error(`Failed to create chat: ${response.data.msg}`);
+        } catch (error) {
+            plugin.logger.error('Failed to create chat:', error);
+            return null;
+        }
+    }
+
+    /**
+     * 更新群信息
+     * @param chatId 群聊 ID
+     * @param options 更新选项
+     */
+    async updateChatInfo(chatId: string, options: {
+        name?: string;
+        description?: string;
+    }): Promise<boolean> {
+        try {
+            const response = await this.axiosInstance.put(`/im/v1/chats/${chatId}`, options);
+
+            if (response.data.code === 0) {
+                plugin.logger.info(`更新群信息成功: ${chatId}`);
+                return true;
+            }
+            throw new Error(`Failed to update chat: ${response.data.msg}`);
+        } catch (error) {
+            plugin.logger.error('Failed to update chat:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 添加群成员
+     * @param chatId 群聊 ID
+     * @param userIds 用户 ID 列表
+     */
+    async addChatMembers(chatId: string, userIds: string[]): Promise<boolean> {
+        try {
+            const response = await this.axiosInstance.post(`/im/v1/chats/${chatId}/members`, {
+                id_list: userIds
+            });
+
+            if (response.data.code === 0) {
+                plugin.logger.info(`添加群成员成功: ${chatId}`);
+                return true;
+            }
+            throw new Error(`Failed to add members: ${response.data.msg}`);
+        } catch (error) {
+            plugin.logger.error('Failed to add chat members:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 移除群成员
+     * @param chatId 群聊 ID
+     * @param userIds 用户 ID 列表
+     */
+    async removeChatMembers(chatId: string, userIds: string[]): Promise<boolean> {
+        try {
+            const response = await this.axiosInstance.delete(`/im/v1/chats/${chatId}/members`, {
+                data: { id_list: userIds }
+            });
+
+            if (response.data.code === 0) {
+                plugin.logger.info(`移除群成员成功: ${chatId}`);
+                return true;
+            }
+            throw new Error(`Failed to remove members: ${response.data.msg}`);
+        } catch (error) {
+            plugin.logger.error('Failed to remove chat members:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 获取群成员列表
+     * @param chatId 群聊 ID
+     */
+    async getChatMembers(chatId: string): Promise<any[]> {
+        try {
+            const response = await this.axiosInstance.get(`/im/v1/chats/${chatId}/members`);
+
+            if (response.data.code === 0) {
+                return response.data.data.items || [];
+            }
+            throw new Error(`Failed to get members: ${response.data.msg}`);
+        } catch (error) {
+            plugin.logger.error('Failed to get chat members:', error);
+            return [];
+        }
+    }
+
+    /**
+     * 解散群聊
+     * @param chatId 群聊 ID
+     */
+    async dissolveChat(chatId: string): Promise<boolean> {
+        try {
+            const response = await this.axiosInstance.delete(`/im/v1/chats/${chatId}`);
+
+            if (response.data.code === 0) {
+                plugin.logger.info(`解散群聊成功: ${chatId}`);
+                return true;
+            }
+            throw new Error(`Failed to dissolve chat: ${response.data.msg}`);
+        } catch (error) {
+            plugin.logger.error('Failed to dissolve chat:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 设置群管理员
+     * @param chatId 群聊 ID
+     * @param userIds 用户 ID 列表
+     */
+    async setChatManagers(chatId: string, userIds: string[]): Promise<boolean> {
+        try {
+            const response = await this.axiosInstance.post(`/im/v1/chats/${chatId}/managers/add_managers`, {
+                manager_ids: userIds
+            });
+
+            if (response.data.code === 0) {
+                plugin.logger.info(`设置群管理员成功: ${chatId}`);
+                return true;
+            }
+            throw new Error(`Failed to set managers: ${response.data.msg}`);
+        } catch (error) {
+            plugin.logger.error('Failed to set chat managers:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 移除群管理员
+     * @param chatId 群聊 ID
+     * @param userIds 用户 ID 列表
+     */
+    async removeChatManagers(chatId: string, userIds: string[]): Promise<boolean> {
+        try {
+            const response = await this.axiosInstance.post(`/im/v1/chats/${chatId}/managers/delete_managers`, {
+                manager_ids: userIds
+            });
+
+            if (response.data.code === 0) {
+                plugin.logger.info(`移除群管理员成功: ${chatId}`);
+                return true;
+            }
+            throw new Error(`Failed to remove managers: ${response.data.msg}`);
+        } catch (error) {
+            plugin.logger.error('Failed to remove chat managers:', error);
+            return false;
+        }
+    }
 }
 
 // 定义 Adapter 类
@@ -630,6 +807,264 @@ class LarkAdapter extends Adapter<LarkBot> {
 
     createBot(config: LarkBotConfig): LarkBot {
         return new LarkBot(this, this.#router, config);
+    }
+
+    async start(): Promise<void> {
+        this.registerLarkTools();
+        await super.start();
+    }
+
+    /**
+     * 注册飞书平台群组管理工具
+     */
+    private registerLarkTools(): void {
+        // 获取用户信息工具
+        this.addTool({
+            name: 'lark_get_user',
+            description: '获取飞书用户信息',
+            parameters: {
+                type: 'object',
+                properties: {
+                    bot: { type: 'string', description: 'Bot 名称' },
+                    user_id: { type: 'string', description: '用户 ID (open_id)' },
+                },
+                required: ['bot', 'user_id'],
+            },
+            platforms: ['lark'],
+            scopes: ['group', 'private'],
+            permissionLevel: 'user',
+            execute: async (args) => {
+                const { bot: botId, user_id } = args;
+                const bot = this.bots.get(botId);
+                if (!bot) throw new Error(`Bot ${botId} 不存在`);
+                return await bot.getUserInfo(user_id);
+            },
+        });
+
+        // 获取群聊信息工具
+        this.addTool({
+            name: 'lark_chat_info',
+            description: '获取飞书群聊信息',
+            parameters: {
+                type: 'object',
+                properties: {
+                    bot: { type: 'string', description: 'Bot 名称' },
+                    chat_id: { type: 'string', description: '群聊 ID' },
+                },
+                required: ['bot', 'chat_id'],
+            },
+            platforms: ['lark'],
+            scopes: ['group'],
+            permissionLevel: 'user',
+            execute: async (args) => {
+                const { bot: botId, chat_id } = args;
+                const bot = this.bots.get(botId);
+                if (!bot) throw new Error(`Bot ${botId} 不存在`);
+                return await bot.getChatInfo(chat_id);
+            },
+        });
+
+        // 创建群聊工具
+        this.addTool({
+            name: 'lark_create_chat',
+            description: '创建飞书群聊',
+            parameters: {
+                type: 'object',
+                properties: {
+                    bot: { type: 'string', description: 'Bot 名称' },
+                    name: { type: 'string', description: '群名' },
+                    members: { type: 'array', items: { type: 'string' }, description: '成员 open_id 列表' },
+                    owner: { type: 'string', description: '群主 open_id（可选）' },
+                },
+                required: ['bot', 'name', 'members'],
+            },
+            platforms: ['lark'],
+            scopes: ['group', 'private'],
+            permissionLevel: 'group_admin',
+            execute: async (args) => {
+                const { bot: botId, name, members, owner } = args;
+                const bot = this.bots.get(botId);
+                if (!bot) throw new Error(`Bot ${botId} 不存在`);
+                const chatId = await bot.createChat(name, members, owner);
+                return { success: !!chatId, chat_id: chatId, message: chatId ? `群聊创建成功: ${chatId}` : '创建失败' };
+            },
+        });
+
+        // 更新群信息工具
+        this.addTool({
+            name: 'lark_update_chat',
+            description: '更新飞书群聊信息（群名、描述）',
+            parameters: {
+                type: 'object',
+                properties: {
+                    bot: { type: 'string', description: 'Bot 名称' },
+                    chat_id: { type: 'string', description: '群聊 ID' },
+                    name: { type: 'string', description: '新群名（可选）' },
+                    description: { type: 'string', description: '新描述（可选）' },
+                },
+                required: ['bot', 'chat_id'],
+            },
+            platforms: ['lark'],
+            scopes: ['group'],
+            permissionLevel: 'group_admin',
+            execute: async (args) => {
+                const { bot: botId, chat_id, name, description } = args;
+                const bot = this.bots.get(botId);
+                if (!bot) throw new Error(`Bot ${botId} 不存在`);
+                const success = await bot.updateChatInfo(chat_id, { name, description });
+                return { success, message: success ? '群信息更新成功' : '更新失败' };
+            },
+        });
+
+        // 添加群成员工具
+        this.addTool({
+            name: 'lark_add_members',
+            description: '添加飞书群成员',
+            parameters: {
+                type: 'object',
+                properties: {
+                    bot: { type: 'string', description: 'Bot 名称' },
+                    chat_id: { type: 'string', description: '群聊 ID' },
+                    user_ids: { type: 'array', items: { type: 'string' }, description: '用户 open_id 列表' },
+                },
+                required: ['bot', 'chat_id', 'user_ids'],
+            },
+            platforms: ['lark'],
+            scopes: ['group'],
+            permissionLevel: 'group_admin',
+            execute: async (args) => {
+                const { bot: botId, chat_id, user_ids } = args;
+                const bot = this.bots.get(botId);
+                if (!bot) throw new Error(`Bot ${botId} 不存在`);
+                const success = await bot.addChatMembers(chat_id, user_ids);
+                return { success, message: success ? '成员添加成功' : '添加失败' };
+            },
+        });
+
+        // 移除群成员工具
+        this.addTool({
+            name: 'lark_remove_members',
+            description: '移除飞书群成员',
+            parameters: {
+                type: 'object',
+                properties: {
+                    bot: { type: 'string', description: 'Bot 名称' },
+                    chat_id: { type: 'string', description: '群聊 ID' },
+                    user_ids: { type: 'array', items: { type: 'string' }, description: '用户 open_id 列表' },
+                },
+                required: ['bot', 'chat_id', 'user_ids'],
+            },
+            platforms: ['lark'],
+            scopes: ['group'],
+            permissionLevel: 'group_admin',
+            execute: async (args) => {
+                const { bot: botId, chat_id, user_ids } = args;
+                const bot = this.bots.get(botId);
+                if (!bot) throw new Error(`Bot ${botId} 不存在`);
+                const success = await bot.removeChatMembers(chat_id, user_ids);
+                return { success, message: success ? '成员移除成功' : '移除失败' };
+            },
+        });
+
+        // 获取群成员列表工具
+        this.addTool({
+            name: 'lark_list_members',
+            description: '获取飞书群成员列表',
+            parameters: {
+                type: 'object',
+                properties: {
+                    bot: { type: 'string', description: 'Bot 名称' },
+                    chat_id: { type: 'string', description: '群聊 ID' },
+                },
+                required: ['bot', 'chat_id'],
+            },
+            platforms: ['lark'],
+            scopes: ['group'],
+            permissionLevel: 'user',
+            execute: async (args) => {
+                const { bot: botId, chat_id } = args;
+                const bot = this.bots.get(botId);
+                if (!bot) throw new Error(`Bot ${botId} 不存在`);
+                const members = await bot.getChatMembers(chat_id);
+                return { members, count: members.length };
+            },
+        });
+
+        // 设置群管理员工具
+        this.addTool({
+            name: 'lark_set_managers',
+            description: '设置飞书群管理员',
+            parameters: {
+                type: 'object',
+                properties: {
+                    bot: { type: 'string', description: 'Bot 名称' },
+                    chat_id: { type: 'string', description: '群聊 ID' },
+                    user_ids: { type: 'array', items: { type: 'string' }, description: '用户 open_id 列表' },
+                },
+                required: ['bot', 'chat_id', 'user_ids'],
+            },
+            platforms: ['lark'],
+            scopes: ['group'],
+            permissionLevel: 'group_owner',
+            execute: async (args) => {
+                const { bot: botId, chat_id, user_ids } = args;
+                const bot = this.bots.get(botId);
+                if (!bot) throw new Error(`Bot ${botId} 不存在`);
+                const success = await bot.setChatManagers(chat_id, user_ids);
+                return { success, message: success ? '管理员设置成功' : '设置失败' };
+            },
+        });
+
+        // 移除群管理员工具
+        this.addTool({
+            name: 'lark_remove_managers',
+            description: '移除飞书群管理员',
+            parameters: {
+                type: 'object',
+                properties: {
+                    bot: { type: 'string', description: 'Bot 名称' },
+                    chat_id: { type: 'string', description: '群聊 ID' },
+                    user_ids: { type: 'array', items: { type: 'string' }, description: '用户 open_id 列表' },
+                },
+                required: ['bot', 'chat_id', 'user_ids'],
+            },
+            platforms: ['lark'],
+            scopes: ['group'],
+            permissionLevel: 'group_owner',
+            execute: async (args) => {
+                const { bot: botId, chat_id, user_ids } = args;
+                const bot = this.bots.get(botId);
+                if (!bot) throw new Error(`Bot ${botId} 不存在`);
+                const success = await bot.removeChatManagers(chat_id, user_ids);
+                return { success, message: success ? '管理员移除成功' : '移除失败' };
+            },
+        });
+
+        // 解散群聊工具
+        this.addTool({
+            name: 'lark_dissolve_chat',
+            description: '解散飞书群聊（需要群主权限）',
+            parameters: {
+                type: 'object',
+                properties: {
+                    bot: { type: 'string', description: 'Bot 名称' },
+                    chat_id: { type: 'string', description: '群聊 ID' },
+                },
+                required: ['bot', 'chat_id'],
+            },
+            platforms: ['lark'],
+            scopes: ['group'],
+            permissionLevel: 'group_owner',
+            execute: async (args) => {
+                const { bot: botId, chat_id } = args;
+                const bot = this.bots.get(botId);
+                if (!bot) throw new Error(`Bot ${botId} 不存在`);
+                const success = await bot.dissolveChat(chat_id);
+                return { success, message: success ? '群聊已解散' : '解散失败' };
+            },
+        });
+
+        plugin.logger.debug('已注册飞书平台群组管理工具');
     }
 }
 

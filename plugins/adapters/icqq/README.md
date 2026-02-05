@@ -11,6 +11,8 @@ Zhin.js ICQQ 适配器，基于 ICQQ 库实现的 QQ 机器人适配器，支持
 - 📁 自动数据目录管理
 - 🖼️ 支持图片、语音、视频等多媒体消息
 - 🎯 支持 @ 提及和引用回复
+- 🔧 **群管理工具**：踢人、禁言、设置管理员、群名片、头衔等（AI 可调用）
+- 🔒 **权限控制**：基于群角色的工具权限过滤
 
 ## 安装
 
@@ -239,6 +241,128 @@ const friendList = bot.getFriendList()
 
 // 获取群成员信息
 const memberInfo = bot.getGroupMemberInfo(groupId, userId)
+```
+
+## 🔧 群管理工具（AI 可调用）
+
+适配器自动注册了一系列群管理工具，这些工具可以被 AI 调用，实现智能化的群管理。
+
+### 工具列表
+
+| 工具 | 所需权限 | 说明 |
+|------|----------|------|
+| `icqq_kick_member` | 管理员 | 踢出群成员（可选拉黑） |
+| `icqq_mute_member` | 管理员 | 禁言群成员 |
+| `icqq_mute_all` | 管理员 | 全员禁言 |
+| `icqq_set_admin` | 群主 | 设置/取消管理员 |
+| `icqq_set_card` | 管理员 | 设置群名片 |
+| `icqq_set_title` | 群主 | 设置专属头衔 |
+| `icqq_set_group_name` | 管理员 | 修改群名称 |
+| `icqq_announce` | 管理员 | 发送群公告 |
+| `icqq_poke` | 普通用户 | 戳一戳 |
+| `icqq_list_members` | 普通用户 | 获取群成员列表 |
+| `icqq_list_muted` | 普通用户 | 获取被禁言成员列表 |
+| `icqq_set_anonymous` | 管理员 | 开启/关闭匿名聊天 |
+
+### 使用示例
+
+#### 通过 AI 对话管理群
+
+```
+用户（群主）：把 @小明 踢出群并拉黑
+AI：已将 小明 踢出群并拉黑。
+
+用户（管理员）：禁言 @捣蛋鬼 1小时
+AI：已禁言 捣蛋鬼 3600 秒。
+
+用户（管理员）：发个群公告：明天下午3点开会
+AI：群公告已发送。
+
+用户：戳一戳 @朋友
+AI：已戳了戳 朋友。
+```
+
+#### 编程调用
+
+```typescript
+// 获取 ICQQ Bot 实例
+const icqqAdapter = app.adapters.get('icqq')
+const bot = icqqAdapter?.bots.get('你的QQ号')
+
+// 踢出成员
+await bot.kickMember(groupId, userId, true) // 第三个参数为是否拉黑
+
+// 禁言成员（单位：秒）
+await bot.muteMember(groupId, userId, 600) // 禁言 10 分钟
+await bot.muteMember(groupId, userId, 0)   // 解除禁言
+
+// 全员禁言
+await bot.muteAll(groupId, true)  // 开启
+await bot.muteAll(groupId, false) // 关闭
+
+// 设置管理员
+await bot.setAdmin(groupId, userId, true)  // 设为管理员
+await bot.setAdmin(groupId, userId, false) // 取消管理员
+
+// 设置群名片
+await bot.setCard(groupId, userId, '新名片')
+
+// 设置专属头衔
+await bot.setTitle(groupId, userId, '大佬', -1) // -1 表示永久
+
+// 修改群名
+await bot.setGroupName(groupId, '新群名')
+
+// 发送群公告
+await bot.sendAnnounce(groupId, '公告内容')
+
+// 戳一戳
+await bot.pokeMember(groupId, userId)
+
+// 获取群成员列表
+const members = await bot.getMemberList(groupId)
+
+// 获取被禁言成员列表
+const mutedList = await bot.getMutedMembers(groupId)
+
+// 开启/关闭匿名
+await bot.setAnonymous(groupId, true)
+```
+
+### 发送者权限信息
+
+消息中的 `$sender` 包含 ICQQ 特有的权限信息：
+
+```typescript
+interface IcqqSenderInfo {
+  id: string;           // QQ 号
+  name: string;         // 昵称
+  role?: GroupRole;     // 'owner' | 'admin' | 'member'
+  isOwner?: boolean;    // 是否为群主
+  isAdmin?: boolean;    // 是否为管理员
+  card?: string;        // 群名片
+  title?: string;       // 专属头衔
+}
+```
+
+#### 在插件中检查权限
+
+```typescript
+onGroupMessage(async (message) => {
+  const sender = message.$sender as IcqqSenderInfo;
+  
+  if (sender.isOwner) {
+    console.log('这是群主的消息');
+  }
+  
+  if (sender.isAdmin) {
+    console.log('这是管理员的消息');
+  }
+  
+  if (sender.role === 'member') {
+    console.log('这是普通成员的消息');
+  }
+})
 ```
 
 ## 签名服务器

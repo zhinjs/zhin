@@ -1,0 +1,66 @@
+{
+  "name": "@zhin.js/ai",
+  "version": "1.0.0",
+  "description": "AI Service for Zhin.js - Multi-model LLM integration with Agent capabilities",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    },
+    "./providers/*": {
+      "types": "./lib/providers/*.d.ts",
+      "import": "./lib/providers/*.js"
+    }
+  },
+  "keywords": [
+    "zhin",
+    "bot",
+    "service",
+    "ai",
+    "llm",
+    "openai",
+    "claude",
+    "anthropic",
+    "deepseek",
+    "ollama",
+    "agent",
+    "tool-use",
+    "function-calling"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "type": "git",
+    "directory": "packages/ai"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf lib"
+  },
+  "dependencies": {
+    "eventsource-parser": "^3.0.0",
+    "segment-matcher": "latest"
+  },
+  "peerDependencies": {
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/logger": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "typescript": "^5.3.0",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/logger": "workspace:*"
+  }
+}

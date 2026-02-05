@@ -240,10 +240,43 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
   useLogger,
   useContext,
   onDispose,
+  ZhinTool,
+  type Message,
 } from 'zhin.js';
 import path from 'node:path';
 
 const logger = useLogger();
+
+// ============================================================================
+// 工具定义示例 (使用 ZhinTool)
+// ============================================================================
+
+// 示例工具：问候
+const greetTool = new ZhinTool('${pluginName}.greet')
+  .desc('发送问候消息')
+  .tag('${pluginName}')
+  .param('name', { type: 'string', description: '要问候的名字' })
+  .execute(async ({ name }) => {
+    const greeting = name ? \`你好，\${name}！\` : '你好！';
+    return { success: true, message: greeting };
+  })
+  .action(async (message: Message, result: any) => {
+    const name = result.params?.name;
+    return name ? \`👋 你好，\${name}！\` : '👋 你好！';
+  });
+
+// 注册工具
+useContext('tool', (toolService) => {
+  if (!toolService) return;
+  
+  const disposers = [
+    toolService.add(greetTool, '${pluginName}'),
+  ];
+  
+  logger.debug('${capitalizedName} 工具已注册');
+  
+  return () => disposers.forEach(d => d());
+});
 
 // 注册客户端入口（如果有客户端代码）
 useContext('web', (web) => {

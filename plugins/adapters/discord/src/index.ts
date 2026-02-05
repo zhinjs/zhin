@@ -16,6 +16,8 @@ import {
   ChatInputCommandInteraction,
   InteractionType,
   InteractionResponseType,
+  GuildMember,
+  PermissionsBitField,
 } from "discord.js";
 import {
   Bot,
@@ -27,6 +29,8 @@ import {
   MessageSegment,
   segment,
   usePlugin,
+  Tool,
+  ToolPermissionLevel,
 } from "zhin.js";
 import type { Context } from "koa";
 import { createReadStream } from "fs";
@@ -669,6 +673,211 @@ export class DiscordBot
     return await channel.send(messageOptions);
   }
   async $recallMessage(id: string): Promise<void> { }
+
+  // ==================== 服务器管理 API ====================
+
+  /**
+   * 踢出成员
+   * @param guildId 服务器 ID
+   * @param userId 用户 ID
+   * @param reason 原因
+   */
+  async kickMember(guildId: string, userId: string, reason?: string): Promise<boolean> {
+    try {
+      const guild = await this.guilds.fetch(guildId);
+      const member = await guild.members.fetch(userId);
+      await member.kick(reason);
+      plugin.logger.info(`Discord Bot ${this.$id} 踢出成员 ${userId}（服务器 ${guildId}）`);
+      return true;
+    } catch (error) {
+      plugin.logger.error(`Discord Bot ${this.$id} 踢出成员失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 封禁成员
+   * @param guildId 服务器 ID
+   * @param userId 用户 ID
+   * @param reason 原因
+   * @param deleteMessageDays 删除消息天数
+   */
+  async banMember(guildId: string, userId: string, reason?: string, deleteMessageDays?: number): Promise<boolean> {
+    try {
+      const guild = await this.guilds.fetch(guildId);
+      await guild.members.ban(userId, { reason, deleteMessageSeconds: deleteMessageDays ? deleteMessageDays * 86400 : undefined });
+      plugin.logger.info(`Discord Bot ${this.$id} 封禁成员 ${userId}（服务器 ${guildId}）`);
+      return true;
+    } catch (error) {
+      plugin.logger.error(`Discord Bot ${this.$id} 封禁成员失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 解除封禁
+   * @param guildId 服务器 ID
+   * @param userId 用户 ID
+   * @param reason 原因
+   */
+  async unbanMember(guildId: string, userId: string, reason?: string): Promise<boolean> {
+    try {
+      const guild = await this.guilds.fetch(guildId);
+      await guild.members.unban(userId, reason);
+      plugin.logger.info(`Discord Bot ${this.$id} 解除封禁 ${userId}（服务器 ${guildId}）`);
+      return true;
+    } catch (error) {
+      plugin.logger.error(`Discord Bot ${this.$id} 解除封禁失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 超时（禁言）成员
+   * @param guildId 服务器 ID
+   * @param userId 用户 ID
+   * @param duration 超时时长（秒），0 表示取消超时
+   * @param reason 原因
+   */
+  async timeoutMember(guildId: string, userId: string, duration: number = 600, reason?: string): Promise<boolean> {
+    try {
+      const guild = await this.guilds.fetch(guildId);
+      const member = await guild.members.fetch(userId);
+      if (duration === 0) {
+        await member.timeout(null, reason);
+        plugin.logger.info(`Discord Bot ${this.$id} 取消成员 ${userId} 超时（服务器 ${guildId}）`);
+      } else {
+        await member.timeout(duration * 1000, reason);
+        plugin.logger.info(`Discord Bot ${this.$id} 超时成员 ${userId} ${duration}秒（服务器 ${guildId}）`);
+      }
+      return true;
+    } catch (error) {
+      plugin.logger.error(`Discord Bot ${this.$id} 超时操作失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 修改成员昵称
+   * @param guildId 服务器 ID
+   * @param userId 用户 ID
+   * @param nickname 新昵称
+   */
+  async setNickname(guildId: string, userId: string, nickname: string): Promise<boolean> {
+    try {
+      const guild = await this.guilds.fetch(guildId);
+      const member = await guild.members.fetch(userId);
+      await member.setNickname(nickname);
+      plugin.logger.info(`Discord Bot ${this.$id} 设置成员 ${userId} 昵称为 "${nickname}"（服务器 ${guildId}）`);
+      return true;
+    } catch (error) {
+      plugin.logger.error(`Discord Bot ${this.$id} 设置昵称失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 添加角色
+   * @param guildId 服务器 ID
+   * @param userId 用户 ID
+   * @param roleId 角色 ID
+   */
+  async addRole(guildId: string, userId: string, roleId: string): Promise<boolean> {
+    try {
+      const guild = await this.guilds.fetch(guildId);
+      const member = await guild.members.fetch(userId);
+      await member.roles.add(roleId);
+      plugin.logger.info(`Discord Bot ${this.$id} 给成员 ${userId} 添加角色 ${roleId}（服务器 ${guildId}）`);
+      return true;
+    } catch (error) {
+      plugin.logger.error(`Discord Bot ${this.$id} 添加角色失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 移除角色
+   * @param guildId 服务器 ID
+   * @param userId 用户 ID
+   * @param roleId 角色 ID
+   */
+  async removeRole(guildId: string, userId: string, roleId: string): Promise<boolean> {
+    try {
+      const guild = await this.guilds.fetch(guildId);
+      const member = await guild.members.fetch(userId);
+      await member.roles.remove(roleId);
+      plugin.logger.info(`Discord Bot ${this.$id} 移除成员 ${userId} 的角色 ${roleId}（服务器 ${guildId}）`);
+      return true;
+    } catch (error) {
+      plugin.logger.error(`Discord Bot ${this.$id} 移除角色失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取服务器角色列表
+   * @param guildId 服务器 ID
+   */
+  async getRoles(guildId: string): Promise<any[]> {
+    try {
+      const guild = await this.guilds.fetch(guildId);
+      await guild.roles.fetch();
+      return guild.roles.cache.map(role => ({
+        id: role.id,
+        name: role.name,
+        color: role.hexColor,
+        position: role.position,
+        permissions: role.permissions.bitfield.toString(),
+      }));
+    } catch (error) {
+      plugin.logger.error(`Discord Bot ${this.$id} 获取角色列表失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取成员列表
+   * @param guildId 服务器 ID
+   * @param limit 数量限制
+   */
+  async getMembers(guildId: string, limit: number = 100): Promise<any[]> {
+    try {
+      const guild = await this.guilds.fetch(guildId);
+      const members = await guild.members.fetch({ limit });
+      return Array.from(members.values()).map(member => ({
+        id: member.id,
+        username: member.user.username,
+        nickname: member.nickname,
+        roles: member.roles.cache.map(r => r.id),
+        joined_at: member.joinedAt?.toISOString(),
+      }));
+    } catch (error) {
+      plugin.logger.error(`Discord Bot ${this.$id} 获取成员列表失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取服务器信息
+   * @param guildId 服务器 ID
+   */
+  async getGuildInfo(guildId: string): Promise<any> {
+    try {
+      const guild = await this.guilds.fetch(guildId);
+      return {
+        id: guild.id,
+        name: guild.name,
+        icon: guild.iconURL(),
+        owner_id: guild.ownerId,
+        member_count: guild.memberCount,
+        created_at: guild.createdAt?.toISOString(),
+      };
+    } catch (error) {
+      plugin.logger.error(`Discord Bot ${this.$id} 获取服务器信息失败:`, error);
+      throw error;
+    }
+  }
+
   // 处理文件段
   async handleFileSegment(
     data: any,
@@ -1148,6 +1357,279 @@ class DiscordAdapter extends Adapter<DiscordBot> {
 
   createBot(config: DiscordBotConfig): DiscordBot {
     return new DiscordBot(this, config);
+  }
+
+  async start(): Promise<void> {
+    this.registerDiscordTools();
+    await super.start();
+  }
+
+  /**
+   * 注册 Discord 平台服务器管理工具
+   */
+  private registerDiscordTools(): void {
+    // 踢出成员工具
+    this.addTool({
+      name: 'discord_kick_member',
+      description: '将成员踢出 Discord 服务器（需要管理员权限）',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          guild_id: { type: 'string', description: '服务器 ID' },
+          user_id: { type: 'string', description: '用户 ID' },
+          reason: { type: 'string', description: '原因（可选）' },
+        },
+        required: ['bot', 'guild_id', 'user_id'],
+      },
+      platforms: ['discord'],
+      scopes: ['channel'],
+      permissionLevel: 'group_admin',
+      execute: async (args) => {
+        const { bot: botId, guild_id, user_id, reason } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const success = await bot.kickMember(guild_id, user_id, reason);
+        return { success, message: success ? `已将用户 ${user_id} 踢出服务器` : '操作失败' };
+      },
+    });
+
+    // 封禁成员工具
+    this.addTool({
+      name: 'discord_ban_member',
+      description: '封禁 Discord 服务器成员',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          guild_id: { type: 'string', description: '服务器 ID' },
+          user_id: { type: 'string', description: '用户 ID' },
+          reason: { type: 'string', description: '原因（可选）' },
+          delete_days: { type: 'number', description: '删除消息天数（可选，1-7）' },
+        },
+        required: ['bot', 'guild_id', 'user_id'],
+      },
+      platforms: ['discord'],
+      scopes: ['channel'],
+      permissionLevel: 'group_admin',
+      execute: async (args) => {
+        const { bot: botId, guild_id, user_id, reason, delete_days } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const success = await bot.banMember(guild_id, user_id, reason, delete_days);
+        return { success, message: success ? `已封禁用户 ${user_id}` : '操作失败' };
+      },
+    });
+
+    // 解除封禁工具
+    this.addTool({
+      name: 'discord_unban_member',
+      description: '解除 Discord 服务器成员封禁',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          guild_id: { type: 'string', description: '服务器 ID' },
+          user_id: { type: 'string', description: '用户 ID' },
+          reason: { type: 'string', description: '原因（可选）' },
+        },
+        required: ['bot', 'guild_id', 'user_id'],
+      },
+      platforms: ['discord'],
+      scopes: ['channel'],
+      permissionLevel: 'group_admin',
+      execute: async (args) => {
+        const { bot: botId, guild_id, user_id, reason } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const success = await bot.unbanMember(guild_id, user_id, reason);
+        return { success, message: success ? `已解除用户 ${user_id} 的封禁` : '操作失败' };
+      },
+    });
+
+    // 超时（禁言）工具
+    this.addTool({
+      name: 'discord_timeout_member',
+      description: '超时（禁言）Discord 服务器成员',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          guild_id: { type: 'string', description: '服务器 ID' },
+          user_id: { type: 'string', description: '用户 ID' },
+          duration: { type: 'number', description: '超时时长（秒），0 表示取消超时，默认 600' },
+          reason: { type: 'string', description: '原因（可选）' },
+        },
+        required: ['bot', 'guild_id', 'user_id'],
+      },
+      platforms: ['discord'],
+      scopes: ['channel'],
+      permissionLevel: 'group_admin',
+      execute: async (args) => {
+        const { bot: botId, guild_id, user_id, duration = 600, reason } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const success = await bot.timeoutMember(guild_id, user_id, duration, reason);
+        return { 
+          success, 
+          message: success 
+            ? (duration > 0 ? `已超时用户 ${user_id} ${duration} 秒` : `已取消用户 ${user_id} 的超时`)
+            : '操作失败' 
+        };
+      },
+    });
+
+    // 设置昵称工具
+    this.addTool({
+      name: 'discord_set_nickname',
+      description: '修改成员在 Discord 服务器中的昵称',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          guild_id: { type: 'string', description: '服务器 ID' },
+          user_id: { type: 'string', description: '用户 ID' },
+          nickname: { type: 'string', description: '新昵称' },
+        },
+        required: ['bot', 'guild_id', 'user_id', 'nickname'],
+      },
+      platforms: ['discord'],
+      scopes: ['channel'],
+      permissionLevel: 'group_admin',
+      execute: async (args) => {
+        const { bot: botId, guild_id, user_id, nickname } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const success = await bot.setNickname(guild_id, user_id, nickname);
+        return { success, message: success ? `已将用户 ${user_id} 的昵称设为 "${nickname}"` : '操作失败' };
+      },
+    });
+
+    // 添加角色工具
+    this.addTool({
+      name: 'discord_add_role',
+      description: '给成员添加 Discord 角色',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          guild_id: { type: 'string', description: '服务器 ID' },
+          user_id: { type: 'string', description: '用户 ID' },
+          role_id: { type: 'string', description: '角色 ID' },
+        },
+        required: ['bot', 'guild_id', 'user_id', 'role_id'],
+      },
+      platforms: ['discord'],
+      scopes: ['channel'],
+      permissionLevel: 'group_admin',
+      execute: async (args) => {
+        const { bot: botId, guild_id, user_id, role_id } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const success = await bot.addRole(guild_id, user_id, role_id);
+        return { success, message: success ? `已给用户 ${user_id} 添加角色` : '操作失败' };
+      },
+    });
+
+    // 移除角色工具
+    this.addTool({
+      name: 'discord_remove_role',
+      description: '移除成员的 Discord 角色',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          guild_id: { type: 'string', description: '服务器 ID' },
+          user_id: { type: 'string', description: '用户 ID' },
+          role_id: { type: 'string', description: '角色 ID' },
+        },
+        required: ['bot', 'guild_id', 'user_id', 'role_id'],
+      },
+      platforms: ['discord'],
+      scopes: ['channel'],
+      permissionLevel: 'group_admin',
+      execute: async (args) => {
+        const { bot: botId, guild_id, user_id, role_id } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const success = await bot.removeRole(guild_id, user_id, role_id);
+        return { success, message: success ? `已移除用户 ${user_id} 的角色` : '操作失败' };
+      },
+    });
+
+    // 获取角色列表工具
+    this.addTool({
+      name: 'discord_list_roles',
+      description: '获取 Discord 服务器角色列表',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          guild_id: { type: 'string', description: '服务器 ID' },
+        },
+        required: ['bot', 'guild_id'],
+      },
+      platforms: ['discord'],
+      scopes: ['channel'],
+      permissionLevel: 'user',
+      execute: async (args) => {
+        const { bot: botId, guild_id } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const roles = await bot.getRoles(guild_id);
+        return { roles, count: roles.length };
+      },
+    });
+
+    // 获取成员列表工具
+    this.addTool({
+      name: 'discord_list_members',
+      description: '获取 Discord 服务器成员列表',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          guild_id: { type: 'string', description: '服务器 ID' },
+          limit: { type: 'number', description: '获取数量，默认 100' },
+        },
+        required: ['bot', 'guild_id'],
+      },
+      platforms: ['discord'],
+      scopes: ['channel'],
+      permissionLevel: 'user',
+      execute: async (args) => {
+        const { bot: botId, guild_id, limit = 100 } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const members = await bot.getMembers(guild_id, limit);
+        return { members, count: members.length };
+      },
+    });
+
+    // 获取服务器信息工具
+    this.addTool({
+      name: 'discord_guild_info',
+      description: '获取 Discord 服务器信息',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          guild_id: { type: 'string', description: '服务器 ID' },
+        },
+        required: ['bot', 'guild_id'],
+      },
+      platforms: ['discord'],
+      scopes: ['channel'],
+      permissionLevel: 'user',
+      execute: async (args) => {
+        const { bot: botId, guild_id } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        return await bot.getGuildInfo(guild_id);
+      },
+    });
+
+    plugin.logger.debug('已注册 Discord 平台服务器管理工具');
   }
 }
 

@@ -23,7 +23,6 @@
     "types": [
       "@types/node",
       "@types/bun",
-      "@zhin.js/types",
       "zhin.js",
       "@zhin.js/adapter-icqq",
       "@zhin.js/console",
@@ -32,7 +31,6 @@
       "@zhin.js/adapter-kook",
       "@zhin.js/adapter-onebot11",
       "@zhin.js/adapter-qq",
-      "@zhin.js/adapter-process",
       "@zhin.js/adapter-discord",
       "@zhin.js/mcp",
       "@zhin.js/plugin-github-notify",

@@ -1,5 +1,5 @@
 import { Telegraf, Context as TelegrafContext } from "telegraf";
-import type { Message as TelegramMessage, Update, MessageEntity } from "telegraf/types";
+import type { Message as TelegramMessage, Update, MessageEntity, ChatMember } from "telegraf/types";
 import {
   Bot,
   Adapter,
@@ -10,6 +10,8 @@ import {
   MessageSegment,
   segment,
   usePlugin,
+  Tool,
+  ToolPermissionLevel,
 } from "zhin.js";
 
 // 类型扩展 - 使用 zhin.js 模式
@@ -17,6 +19,20 @@ declare module "zhin.js" {
   interface Adapters {
     telegram: TelegramAdapter;
   }
+}
+
+// Telegram 发送者权限信息
+export interface TelegramSenderInfo {
+  id: string;
+  name: string;
+  /** 用户名 */
+  username?: string;
+  /** 是否为群主 */
+  isOwner?: boolean;
+  /** 是否为管理员 */
+  isAdmin?: boolean;
+  /** 聊天成员状态 */
+  status?: string;
 }
 
 // 定义配置接口 (直接定义完整接口)
@@ -646,6 +662,296 @@ export class TelegramBot extends Telegraf implements Bot<TelegramBotConfig, Tele
       "Use message.$recall() method instead, which contains the required context."
     );
   }
+  // ==================== 群组管理 API ====================
+
+  /**
+   * 踢出用户
+   * @param chatId 聊天 ID
+   * @param userId 用户 ID
+   * @param untilDate 封禁截止时间（Unix 时间戳），0 表示永久
+   */
+  async kickMember(chatId: number, userId: number, untilDate?: number): Promise<boolean> {
+    try {
+      await this.telegram.banChatMember(chatId, userId, untilDate);
+      plugin.logger.info(`Telegram Bot ${this.$id} 踢出用户 ${userId} 从聊天 ${chatId}`);
+      return true;
+    } catch (error) {
+      plugin.logger.error(`Telegram Bot ${this.$id} 踢出用户失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 解除封禁
+   * @param chatId 聊天 ID
+   * @param userId 用户 ID
+   */
+  async unbanMember(chatId: number, userId: number): Promise<boolean> {
+    try {
+      await this.telegram.unbanChatMember(chatId, userId, { only_if_banned: true });
+      plugin.logger.info(`Telegram Bot ${this.$id} 解除用户 ${userId} 的封禁（聊天 ${chatId}）`);
+      return true;
+    } catch (error) {
+      plugin.logger.error(`Telegram Bot ${this.$id} 解除封禁失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 限制用户权限（禁言等）
+   * @param chatId 聊天 ID
+   * @param userId 用户 ID
+   * @param permissions 权限设置
+   * @param untilDate 限制截止时间
+   */
+  async restrictMember(chatId: number, userId: number, permissions: {
+    can_send_messages?: boolean;
+    can_send_media_messages?: boolean;
+    can_send_polls?: boolean;
+    can_send_other_messages?: boolean;
+    can_add_web_page_previews?: boolean;
+    can_change_info?: boolean;
+    can_invite_users?: boolean;
+    can_pin_messages?: boolean;
+  }, untilDate?: number): Promise<boolean> {
+    try {
+      await this.telegram.restrictChatMember(chatId, userId, {
+        permissions,
+        until_date: untilDate,
+      });
+      plugin.logger.info(`Telegram Bot ${this.$id} 限制用户 ${userId} 权限（聊天 ${chatId}）`);
+      return true;
+    } catch (error) {
+      plugin.logger.error(`Telegram Bot ${this.$id} 限制权限失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 禁言用户
+   * @param chatId 聊天 ID
+   * @param userId 用户 ID
+   * @param duration 禁言时长（秒），0 表示解除禁言
+   */
+  async muteMember(chatId: number, userId: number, duration: number = 600): Promise<boolean> {
+    try {
+      if (duration === 0) {
+        // 解除禁言 - 恢复发送消息权限
+        await this.telegram.restrictChatMember(chatId, userId, {
+          permissions: {
+            can_send_messages: true,
+            can_send_audios: true,
+            can_send_documents: true,
+            can_send_photos: true,
+            can_send_videos: true,
+            can_send_video_notes: true,
+            can_send_voice_notes: true,
+            can_send_polls: true,
+            can_send_other_messages: true,
+            can_add_web_page_previews: true,
+          },
+        });
+        plugin.logger.info(`Telegram Bot ${this.$id} 解除用户 ${userId} 禁言（聊天 ${chatId}）`);
+      } else {
+        const untilDate = Math.floor(Date.now() / 1000) + duration;
+        await this.telegram.restrictChatMember(chatId, userId, {
+          permissions: {
+            can_send_messages: false,
+            can_send_audios: false,
+            can_send_documents: false,
+            can_send_photos: false,
+            can_send_videos: false,
+            can_send_video_notes: false,
+            can_send_voice_notes: false,
+            can_send_polls: false,
+            can_send_other_messages: false,
+            can_add_web_page_previews: false,
+          },
+          until_date: untilDate,
+        });
+        plugin.logger.info(`Telegram Bot ${this.$id} 禁言用户 ${userId} ${duration}秒（聊天 ${chatId}）`);
+      }
+      return true;
+    } catch (error) {
+      plugin.logger.error(`Telegram Bot ${this.$id} 禁言操作失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 提升/降级管理员
+   * @param chatId 聊天 ID
+   * @param userId 用户 ID
+   * @param promote 是否提升为管理员
+   */
+  async setAdmin(chatId: number, userId: number, promote: boolean = true): Promise<boolean> {
+    try {
+      if (promote) {
+        await this.telegram.promoteChatMember(chatId, userId, {
+          can_manage_chat: true,
+          can_delete_messages: true,
+          can_manage_video_chats: true,
+          can_restrict_members: true,
+          can_promote_members: false,
+          can_change_info: true,
+          can_invite_users: true,
+          can_pin_messages: true,
+        });
+      } else {
+        await this.telegram.promoteChatMember(chatId, userId, {
+          can_manage_chat: false,
+          can_delete_messages: false,
+          can_manage_video_chats: false,
+          can_restrict_members: false,
+          can_promote_members: false,
+          can_change_info: false,
+          can_invite_users: false,
+          can_pin_messages: false,
+        });
+      }
+      plugin.logger.info(`Telegram Bot ${this.$id} ${promote ? '提升' : '降级'}用户 ${userId} 为管理员（聊天 ${chatId}）`);
+      return true;
+    } catch (error) {
+      plugin.logger.error(`Telegram Bot ${this.$id} 设置管理员失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 设置聊天标题
+   * @param chatId 聊天 ID
+   * @param title 新标题
+   */
+  async setChatTitle(chatId: number, title: string): Promise<boolean> {
+    try {
+      await this.telegram.setChatTitle(chatId, title);
+      plugin.logger.info(`Telegram Bot ${this.$id} 设置聊天 ${chatId} 标题为 "${title}"`);
+      return true;
+    } catch (error) {
+      plugin.logger.error(`Telegram Bot ${this.$id} 设置标题失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 设置聊天描述
+   * @param chatId 聊天 ID
+   * @param description 新描述
+   */
+  async setChatDescription(chatId: number, description: string): Promise<boolean> {
+    try {
+      await this.telegram.setChatDescription(chatId, description);
+      plugin.logger.info(`Telegram Bot ${this.$id} 设置聊天 ${chatId} 描述`);
+      return true;
+    } catch (error) {
+      plugin.logger.error(`Telegram Bot ${this.$id} 设置描述失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 置顶消息
+   * @param chatId 聊天 ID
+   * @param messageId 消息 ID
+   */
+  async pinMessage(chatId: number, messageId: number): Promise<boolean> {
+    try {
+      await this.telegram.pinChatMessage(chatId, messageId);
+      plugin.logger.info(`Telegram Bot ${this.$id} 置顶消息 ${messageId}（聊天 ${chatId}）`);
+      return true;
+    } catch (error) {
+      plugin.logger.error(`Telegram Bot ${this.$id} 置顶消息失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 取消置顶消息
+   * @param chatId 聊天 ID
+   * @param messageId 消息 ID（可选，不提供则取消所有置顶）
+   */
+  async unpinMessage(chatId: number, messageId?: number): Promise<boolean> {
+    try {
+      if (messageId) {
+        await this.telegram.unpinChatMessage(chatId, messageId);
+      } else {
+        await this.telegram.unpinAllChatMessages(chatId);
+      }
+      plugin.logger.info(`Telegram Bot ${this.$id} 取消置顶消息（聊天 ${chatId}）`);
+      return true;
+    } catch (error) {
+      plugin.logger.error(`Telegram Bot ${this.$id} 取消置顶失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取聊天信息
+   * @param chatId 聊天 ID
+   */
+  async getChatInfo(chatId: number): Promise<any> {
+    try {
+      return await this.telegram.getChat(chatId);
+    } catch (error) {
+      plugin.logger.error(`Telegram Bot ${this.$id} 获取聊天信息失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取聊天成员
+   * @param chatId 聊天 ID
+   * @param userId 用户 ID
+   */
+  async getChatMember(chatId: number, userId: number): Promise<ChatMember> {
+    try {
+      return await this.telegram.getChatMember(chatId, userId);
+    } catch (error) {
+      plugin.logger.error(`Telegram Bot ${this.$id} 获取成员信息失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取管理员列表
+   * @param chatId 聊天 ID
+   */
+  async getChatAdmins(chatId: number): Promise<ChatMember[]> {
+    try {
+      return await this.telegram.getChatAdministrators(chatId);
+    } catch (error) {
+      plugin.logger.error(`Telegram Bot ${this.$id} 获取管理员列表失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取聊天成员数量
+   * @param chatId 聊天 ID
+   */
+  async getChatMemberCount(chatId: number): Promise<number> {
+    try {
+      return await this.telegram.getChatMembersCount(chatId);
+    } catch (error) {
+      plugin.logger.error(`Telegram Bot ${this.$id} 获取成员数量失败:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 创建邀请链接
+   * @param chatId 聊天 ID
+   */
+  async createInviteLink(chatId: number): Promise<string> {
+    try {
+      const link = await this.telegram.createChatInviteLink(chatId, {});
+      plugin.logger.info(`Telegram Bot ${this.$id} 创建邀请链接（聊天 ${chatId}）`);
+      return link.invite_link;
+    } catch (error) {
+      plugin.logger.error(`Telegram Bot ${this.$id} 创建邀请链接失败:`, error);
+      throw error;
+    }
+  }
 }
 
 class TelegramAdapter extends Adapter<TelegramBot> {
@@ -655,6 +961,316 @@ class TelegramAdapter extends Adapter<TelegramBot> {
 
   createBot(config: TelegramBotConfig): TelegramBot {
     return new TelegramBot(this, config);
+  }
+
+  async start(): Promise<void> {
+    this.registerTelegramTools();
+    await super.start();
+  }
+
+  /**
+   * 注册 Telegram 平台特有的群组管理工具
+   */
+  private registerTelegramTools(): void {
+    // 踢出用户工具
+    this.addTool({
+      name: 'telegram_kick_user',
+      description: '将用户踢出 Telegram 群组（需要管理员权限）',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          chat_id: { type: 'number', description: '聊天 ID' },
+          user_id: { type: 'number', description: '用户 ID' },
+        },
+        required: ['bot', 'chat_id', 'user_id'],
+      },
+      platforms: ['telegram'],
+      scopes: ['group'],
+      permissionLevel: 'group_admin',
+      execute: async (args) => {
+        const { bot: botId, chat_id, user_id } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const success = await bot.kickMember(chat_id, user_id);
+        return { success, message: success ? `已将用户 ${user_id} 踢出群组` : '操作失败' };
+      },
+    });
+
+    // 解除封禁工具
+    this.addTool({
+      name: 'telegram_unban_user',
+      description: '解除用户在 Telegram 群组的封禁',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          chat_id: { type: 'number', description: '聊天 ID' },
+          user_id: { type: 'number', description: '用户 ID' },
+        },
+        required: ['bot', 'chat_id', 'user_id'],
+      },
+      platforms: ['telegram'],
+      scopes: ['group'],
+      permissionLevel: 'group_admin',
+      execute: async (args) => {
+        const { bot: botId, chat_id, user_id } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const success = await bot.unbanMember(chat_id, user_id);
+        return { success, message: success ? `已解除用户 ${user_id} 的封禁` : '操作失败' };
+      },
+    });
+
+    // 禁言用户工具
+    this.addTool({
+      name: 'telegram_mute_user',
+      description: '禁言 Telegram 群组成员',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          chat_id: { type: 'number', description: '聊天 ID' },
+          user_id: { type: 'number', description: '用户 ID' },
+          duration: { type: 'number', description: '禁言时长（秒），0 表示解除禁言，默认 600' },
+        },
+        required: ['bot', 'chat_id', 'user_id'],
+      },
+      platforms: ['telegram'],
+      scopes: ['group'],
+      permissionLevel: 'group_admin',
+      execute: async (args) => {
+        const { bot: botId, chat_id, user_id, duration = 600 } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const success = await bot.muteMember(chat_id, user_id, duration);
+        return { 
+          success, 
+          message: success 
+            ? (duration > 0 ? `已禁言用户 ${user_id} ${duration} 秒` : `已解除用户 ${user_id} 的禁言`)
+            : '操作失败' 
+        };
+      },
+    });
+
+    // 设置管理员工具
+    this.addTool({
+      name: 'telegram_set_admin',
+      description: '提升/降级 Telegram 群组管理员（需要群主权限）',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          chat_id: { type: 'number', description: '聊天 ID' },
+          user_id: { type: 'number', description: '用户 ID' },
+          promote: { type: 'boolean', description: '是否提升为管理员，默认 true' },
+        },
+        required: ['bot', 'chat_id', 'user_id'],
+      },
+      platforms: ['telegram'],
+      scopes: ['group'],
+      permissionLevel: 'group_owner',
+      execute: async (args) => {
+        const { bot: botId, chat_id, user_id, promote = true } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const success = await bot.setAdmin(chat_id, user_id, promote);
+        return { 
+          success, 
+          message: success 
+            ? (promote ? `已将用户 ${user_id} 提升为管理员` : `已降级用户 ${user_id}`)
+            : '操作失败' 
+        };
+      },
+    });
+
+    // 设置群标题工具
+    this.addTool({
+      name: 'telegram_set_title',
+      description: '设置 Telegram 群组标题',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          chat_id: { type: 'number', description: '聊天 ID' },
+          title: { type: 'string', description: '新标题' },
+        },
+        required: ['bot', 'chat_id', 'title'],
+      },
+      platforms: ['telegram'],
+      scopes: ['group'],
+      permissionLevel: 'group_admin',
+      execute: async (args) => {
+        const { bot: botId, chat_id, title } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const success = await bot.setChatTitle(chat_id, title);
+        return { success, message: success ? `已将群标题设为 "${title}"` : '操作失败' };
+      },
+    });
+
+    // 置顶消息工具
+    this.addTool({
+      name: 'telegram_pin_message',
+      description: '置顶 Telegram 群组消息',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          chat_id: { type: 'number', description: '聊天 ID' },
+          message_id: { type: 'number', description: '消息 ID' },
+        },
+        required: ['bot', 'chat_id', 'message_id'],
+      },
+      platforms: ['telegram'],
+      scopes: ['group'],
+      permissionLevel: 'group_admin',
+      execute: async (args) => {
+        const { bot: botId, chat_id, message_id } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const success = await bot.pinMessage(chat_id, message_id);
+        return { success, message: success ? '消息已置顶' : '操作失败' };
+      },
+    });
+
+    // 取消置顶工具
+    this.addTool({
+      name: 'telegram_unpin_message',
+      description: '取消置顶 Telegram 群组消息',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          chat_id: { type: 'number', description: '聊天 ID' },
+          message_id: { type: 'number', description: '消息 ID（可选，不提供则取消所有置顶）' },
+        },
+        required: ['bot', 'chat_id'],
+      },
+      platforms: ['telegram'],
+      scopes: ['group'],
+      permissionLevel: 'group_admin',
+      execute: async (args) => {
+        const { bot: botId, chat_id, message_id } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const success = await bot.unpinMessage(chat_id, message_id);
+        return { success, message: success ? '已取消置顶' : '操作失败' };
+      },
+    });
+
+    // 获取管理员列表工具
+    this.addTool({
+      name: 'telegram_list_admins',
+      description: '获取 Telegram 群组管理员列表',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          chat_id: { type: 'number', description: '聊天 ID' },
+        },
+        required: ['bot', 'chat_id'],
+      },
+      platforms: ['telegram'],
+      scopes: ['group'],
+      permissionLevel: 'user',
+      execute: async (args) => {
+        const { bot: botId, chat_id } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const admins = await bot.getChatAdmins(chat_id);
+        return { 
+          admins: admins.map(a => ({
+            user_id: a.user.id,
+            username: a.user.username,
+            first_name: a.user.first_name,
+            status: a.status,
+          })),
+          count: admins.length,
+        };
+      },
+    });
+
+    // 获取成员数量工具
+    this.addTool({
+      name: 'telegram_member_count',
+      description: '获取 Telegram 群组成员数量',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          chat_id: { type: 'number', description: '聊天 ID' },
+        },
+        required: ['bot', 'chat_id'],
+      },
+      platforms: ['telegram'],
+      scopes: ['group'],
+      permissionLevel: 'user',
+      execute: async (args) => {
+        const { bot: botId, chat_id } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const count = await bot.getChatMemberCount(chat_id);
+        return { count, message: `群组共有 ${count} 名成员` };
+      },
+    });
+
+    // 创建邀请链接工具
+    this.addTool({
+      name: 'telegram_create_invite',
+      description: '创建 Telegram 群组邀请链接',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          chat_id: { type: 'number', description: '聊天 ID' },
+        },
+        required: ['bot', 'chat_id'],
+      },
+      platforms: ['telegram'],
+      scopes: ['group'],
+      permissionLevel: 'group_admin',
+      execute: async (args) => {
+        const { bot: botId, chat_id } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const link = await bot.createInviteLink(chat_id);
+        return { invite_link: link, message: `邀请链接: ${link}` };
+      },
+    });
+
+    // 获取群信息工具
+    this.addTool({
+      name: 'telegram_chat_info',
+      description: '获取 Telegram 聊天/群组信息',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          chat_id: { type: 'number', description: '聊天 ID' },
+        },
+        required: ['bot', 'chat_id'],
+      },
+      platforms: ['telegram'],
+      scopes: ['group', 'private'],
+      permissionLevel: 'user',
+      execute: async (args) => {
+        const { bot: botId, chat_id } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const info = await bot.getChatInfo(chat_id);
+        return {
+          id: info.id,
+          type: info.type,
+          title: info.title,
+          username: info.username,
+          description: info.description,
+          member_count: (info as any).member_count,
+        };
+      },
+    });
+
+    plugin.logger.debug('已注册 Telegram 平台群组管理工具');
   }
 }
 

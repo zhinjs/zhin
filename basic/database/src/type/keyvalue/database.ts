@@ -32,8 +32,9 @@ export class KeyValueDatabase<
   }
 
   protected async initialize(): Promise<void> {
-    // 键值数据库不需要预定义表结构
-    // 桶会在第一次使用时自动创建
+    for (const tableName of this.definitions.keys()) {
+      this.models.set(tableName, new KeyValueModel(this, tableName));
+    }
   }
 
   /**

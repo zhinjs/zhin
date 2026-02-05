@@ -31,8 +31,9 @@ export class DocumentDatabase<
   }
 
   protected async initialize(): Promise<void> {
-    // 文档数据库不需要预定义表结构
-    // 集合会在第一次使用时自动创建
+    for (const tableName of this.definitions.keys()) {
+      this.models.set(tableName, new DocumentModel(this, tableName));
+    }
   }
 
   /**

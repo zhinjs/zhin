@@ -103,10 +103,8 @@ for(const context of contexts){
     }
   });
 }
-// 4. 启动核心上下文（确保扩展方法可用，比如 addCommand）
-await start();
 
-// 5. 加载插件（父插件已启动，会自动 start 子插件）
+// 4. 加载插件定义（在调用 start() 之前导入插件，start 时统一挂载）
 // 先去重插件列表，避免重复加载
 const pluginNames = new Set(appConfig.plugins || []);
 logger.debug(`Plugin list: ${Array.from(pluginNames).join(', ')}`);
@@ -120,6 +118,8 @@ for (const pluginName of pluginNames) {
 }
 logger.debug(`${children.length} plugins loaded`);
 
+// 5. 启动核心上下文（确保扩展方法可用，比如 addCommand）
+await start();
 // 6. 优雅关闭（使用 once 防止重复注册）
 const handleSIGTERM = () => {
   logger.info('Received SIGTERM, shutting down gracefully...');

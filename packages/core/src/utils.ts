@@ -197,23 +197,46 @@ export namespace segment {
       template = unescape(template);
       const result: MessageElement[] = [];
       // 修复 ReDoS 漏洞：使用更安全的正则表达式
-      // 原: /<(\S+)(\s[^>]+)?\/>/  可能导致回溯
-      const closingReg = /<(\w+)(?:\s+[^>]*?)?\/>/;
-      // 原: /<(\S+)(\s[^>]+)?>([\s\S]*?)<\/\1>/  可能导致回溯
-      const twinningReg = /<(\w+)(?:\s+[^>]*?)?>([^]*?)<\/\1>/;
+      // 注意：需要使用捕获组来获取属性字符串，否则无法正确重建原始标签
+      // closingReg: 自闭合标签 <type attr="val"/>
+      const closingReg = /<(\w+)(\s+[^>]*?)?\/>/;
+      // twinningReg: 成对标签 <type attr="val">child</type>
+      const twinningReg = /<(\w+)(\s+[^>]*?)?>([^]*?)<\/\1>/;
       
       let iterations = 0;
       const MAX_ITERATIONS = 1000; // 防止无限循环
       
       while (template.length && iterations++ < MAX_ITERATIONS) {
-        const [_, type, attrStr = "", child = ""] =
-          template.match(twinningReg) || template.match(closingReg) || [];
-        if (!type) break;
-        const isClosing = closingReg.test(template);
-        const matched = isClosing
-          ? `<${type}${attrStr}/>`
-          : `<${type}${attrStr}>${child}</${type}>`;
-        const index = template.indexOf(matched);
+        const twinMatch = template.match(twinningReg);
+        const closeMatch = template.match(closingReg);
+        
+        // 选择位置更靠前的匹配
+        let match: RegExpMatchArray | null = null;
+        let isClosing = false;
+        
+        if (twinMatch && closeMatch) {
+          const twinIndex = template.indexOf(twinMatch[0]);
+          const closeIndex = template.indexOf(closeMatch[0]);
+          if (closeIndex <= twinIndex) {
+            match = closeMatch;
+            isClosing = true;
+          } else {
+            match = twinMatch;
+          }
+        } else if (closeMatch) {
+          match = closeMatch;
+          isClosing = true;
+        } else if (twinMatch) {
+          match = twinMatch;
+        }
+        
+        if (!match) break;
+        
+        const [fullMatch, type, attrStr = "", child = ""] = isClosing 
+          ? [match[0], match[1], match[2] || ""]
+          : [match[0], match[1], match[2] || "", match[3] || ""];
+        const index = template.indexOf(fullMatch);
+        if (index === -1) break; // 安全检查
         const prevText = template.slice(0, index);
         if (prevText)
           result.push({
@@ -222,7 +245,7 @@ export namespace segment {
               text: unescape(prevText),
             },
           });
-        template = template.slice(index + matched.length);
+        template = template.slice(index + fullMatch.length);
         // 修复 ReDoS 漏洞：使用更简单的正则表达式
         // 原: /\s([^=]+)(?=(?=="([^"]+)")|(?=='([^']+)'))/g  嵌套前瞻断言
         const attrArr = [
@@ -271,6 +294,7 @@ export namespace segment {
         if (typeof item === "string") return item;
         const { type, data } = item;
         if (type === "text") return data.text;
+        if (type === "at") return `@${data.user_id||data.qq}`;
         return data.text ? `{${type}}(${data.text})` : `{${type}}`;
       })
       .join("");
