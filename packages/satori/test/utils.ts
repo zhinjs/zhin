@@ -1,11 +1,15 @@
 import { beforeAll, expect } from 'vitest'
-import { join } from 'path'
+import { join, dirname } from 'path'
+import { fileURLToPath } from 'url'
 import { Resvg } from '@resvg/resvg-js'
 import { toMatchImageSnapshot } from 'jest-image-snapshot'
 import { readFile } from 'node:fs/promises'
 import yoga from 'yoga-wasm-web/auto'
 
 import { init, type SatoriOptions } from '../src/index.js'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const ASSETS_DIR = join(__dirname, 'assets')
 
 export function initYogaWasm() {
   beforeAll(async () => {
@@ -14,7 +18,7 @@ export function initYogaWasm() {
 }
 
 export async function getDynamicAsset(text: string): Promise<Buffer> {
-  const fontPath = join(process.cwd(), 'test', 'assets', text)
+  const fontPath = join(ASSETS_DIR, text)
   return await readFile(fontPath)
 }
 
@@ -32,10 +36,10 @@ export async function loadDynamicAsset(code: string, text: string) {
 
 export function initFonts(callback: (fonts: SatoriOptions['fonts']) => void) {
   beforeAll(async () => {
-    const robotoPath = join(process.cwd(), 'test', 'assets', 'Roboto-Regular.ttf')
+    const robotoPath = join(ASSETS_DIR, 'Roboto-Regular.ttf')
     const robotoData = await readFile(robotoPath)
     
-    const chineseFontPath = join(process.cwd(), 'test', 'assets', '你好')
+    const chineseFontPath = join(ASSETS_DIR, '你好')
     const chineseFontData = await readFile(chineseFontPath)
     
     callback([
@@ -65,7 +69,7 @@ export function toImage(svg: string, width = 100) {
     font: {
       // As system fallback font
       fontFiles: [
-        join(process.cwd(), 'test', 'assets', 'playfair-display.ttf'),
+        join(ASSETS_DIR, 'playfair-display.ttf'),
       ],
       loadSystemFonts: false,
       defaultFontFamily: 'Playfair Display',

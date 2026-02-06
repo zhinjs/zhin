@@ -10,7 +10,17 @@ import {
   Fetch
 } from '../src/component'
 import { Message } from '../src/message'
-import { SendOptions } from '../src/types'
+import { SendOptions, SendContent } from '../src/types'
+import { segment } from '../src/utils'
+
+// Helper to convert content to string for assertions
+function contentToString(content: SendContent): string {
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content.map(c => typeof c === 'string' ? c : segment.toString(c)).join('')
+  }
+  return segment.toString(content)
+}
 
 // Mock utils functions
 vi.mock('../src/utils', () => ({
@@ -212,7 +222,7 @@ describe('函数式组件系统测试', () => {
       }
 
       const result = await renderComponents(componentMap, options)
-      expect(result.content).toContain('Hello John')
+      expect(contentToString(result.content)).toContain('Hello John')
     })
 
     it('应该正确渲染多个组件', async () => {
@@ -237,8 +247,9 @@ describe('函数式组件系统测试', () => {
       }
 
       const result = await renderComponents(componentMap, options)
-      expect(result.content).toContain('[Hello]')
-      expect(result.content).toContain('{42}')
+      const contentStr = contentToString(result.content)
+      expect(contentStr).toContain('[Hello]')
+      expect(contentStr).toContain('{42}')
     })
 
     it('应该正确处理嵌套组件', async () => {
@@ -264,7 +275,7 @@ describe('函数式组件系统测试', () => {
 
       const result = await renderComponents(componentMap, options)
       // 现在嵌套组件渲染应该工作了
-      expect(result.content).toContain('标题: Test')
+      expect(contentToString(result.content)).toContain('标题: Test')
     })
   })
 
@@ -344,7 +355,7 @@ describe('函数式组件系统测试', () => {
 
       const result = await renderComponents(componentMap, options)
       // 错误会被捕获并转换为错误消息
-      expect(result.content).toMatch(/\[error Error: Test error\]/)
+      expect(contentToString(result.content)).toMatch(/\[error Error: Test error\]/)
     })
   })
 })
