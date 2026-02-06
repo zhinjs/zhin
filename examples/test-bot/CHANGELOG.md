@@ -1,5 +1,36 @@
 # test-bot
 
+## 0.1.18
+
+### Patch Changes
+
+- 26d2942: fix: ai
+- 6b02c41: fix: ai
+- Updated dependencies [26d2942]
+- Updated dependencies [6b02c41]
+  - @zhin.js/ai@0.0.2
+  - @zhin.js/client@1.0.8
+  - zhin.js@1.0.25
+  - @zhin.js/adapter-dingtalk@1.0.10
+  - @zhin.js/adapter-discord@1.0.25
+  - @zhin.js/adapter-email@0.1.13
+  - @zhin.js/adapter-icqq@1.0.30
+  - @zhin.js/adapter-kook@1.0.25
+  - @zhin.js/adapter-lark@1.0.26
+  - @zhin.js/adapter-onebot11@1.0.27
+  - @zhin.js/adapter-qq@1.0.25
+  - @zhin.js/adapter-sandbox@1.0.30
+  - @zhin.js/adapter-slack@1.0.10
+  - @zhin.js/adapter-telegram@1.0.10
+  - @zhin.js/adapter-wechat-mp@0.1.11
+  - @zhin.js/console@1.0.21
+  - @zhin.js/plugin-github-notify@0.0.12
+  - @zhin.js/http@1.0.16
+  - @zhin.js/mcp@1.0.8
+  - @zhin.js/plugin-html-renderer@0.0.2
+  - @zhin.js/plugin-music@0.0.11
+  - @zhin.js/sensitive-filter@0.0.11
+
 ## 0.1.17
 
 ### Patch Changes
