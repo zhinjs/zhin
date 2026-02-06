@@ -9,7 +9,7 @@
 "@zhin.js/client": patch
 "@zhin.js/core": patch
 "create-zhin-app": patch
-"@zhinjs/satori": patch
+"@zhin.js/satori": patch
 "zhin.js": patch
 "@zhin.js/adapter-dingtalk": patch
 "@zhin.js/adapter-discord": patch
