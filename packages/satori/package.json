@@ -55,7 +55,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vercel/satori.git"
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/satori"
   },
   "keywords": [
     "HTML",
@@ -65,9 +66,9 @@
   ],
   "author": "Shu Ding <g@shud.in>",
   "bugs": {
-    "url": "https://github.com/vercel/satori/issues"
+    "url": "https://github.com/zhinjs/zhin/issues"
   },
-  "homepage": "https://github.com/vercel/satori#readme",
+  "homepage": "https://github.com/zhinjs/zhin#readme",
   "devDependencies": {
     "@types/jsdom": "^21.1.6",
     "@types/node": "^16",
