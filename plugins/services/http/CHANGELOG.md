@@ -1,5 +1,16 @@
 # @zhin.js/http
 
+## 1.0.16
+
+### Patch Changes
+
+- 26d2942: fix: ai
+- 6b02c41: fix: ai
+- Updated dependencies [26d2942]
+- Updated dependencies [6b02c41]
+  - @zhin.js/schema@1.0.9
+  - zhin.js@1.0.25
+
 ## 1.0.15
 
 ### Patch Changes

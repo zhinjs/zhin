@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/ai",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "AI Service for Zhin.js - Multi-model LLM integration with Agent capabilities",
   "type": "module",
   "main": "./lib/index.js",
