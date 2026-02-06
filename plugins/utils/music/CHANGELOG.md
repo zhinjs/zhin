@@ -1,5 +1,16 @@
 # @zhin.js/plugin-music
 
+## 0.0.11
+
+### Patch Changes
+
+- 26d2942: fix: ai
+- 6b02c41: fix: ai
+- Updated dependencies [26d2942]
+- Updated dependencies [6b02c41]
+  - zhin.js@1.0.25
+  - @zhin.js/adapter-icqq@1.0.30
+
 ## 0.0.10
 
 ### Patch Changes

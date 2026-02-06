@@ -1,5 +1,17 @@
 # @zhin.js/mcp
 
+## 1.0.8
+
+### Patch Changes
+
+- 26d2942: fix: ai
+- 6b02c41: fix: ai
+- Updated dependencies [26d2942]
+- Updated dependencies [6b02c41]
+  - @zhin.js/ai@0.0.2
+  - zhin.js@1.0.25
+  - @zhin.js/http@1.0.16
+
 ## 1.0.7
 
 ### Patch Changes

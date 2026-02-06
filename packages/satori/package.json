@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/satori",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "type": "module",
   "description": "Enlightened library to convert JSDOM to SVG.",
   "module": "./dist/index.js",
@@ -39,7 +39,6 @@
     "dev": "concurrently \"pnpm dev:default\" \"pnpm dev:wasm\"",
     "dev:default": "NODE_ENV=development tsup src/index.ts --watch",
     "dev:wasm": "WASM=1 NODE_ENV=development tsup src/index.ts --watch",
-
     "build": "NODE_ENV=production pnpm run build:default && pnpm run build:wasm",
     "build:default": "tsup",
     "build:wasm": "WASM=1 tsup",
