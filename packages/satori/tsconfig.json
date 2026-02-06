@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "module": "node16",
+    "moduleResolution": "node16",
+    "esModuleInterop": true,
+    "target": "ES2021",
+    "lib": ["esnext", "dom"],
+    "baseUrl": ".",
+    "skipLibCheck": true,
+    "paths": {
+      "@yoga": ["src/yoga/yoga-prebuilt.ts"]
+    }
+  },
+  "include": ["src/*", "test/*"]
+}
