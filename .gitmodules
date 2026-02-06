@@ -1,3 +1,0 @@
-[submodule "packages/satori"]
-    path = packages/satori
-    url = https://github.com/zhinjs/satori.git

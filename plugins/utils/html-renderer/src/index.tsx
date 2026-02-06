@@ -1,12 +1,12 @@
 /**
  * HTML 渲染器插件
  * 
- * 使用 @zhinjs/satori 将 HTML/CSS 转换为 SVG，
+ * 使用 @zhin.js/satori 将 HTML/CSS 转换为 SVG，
  * 使用 @resvg/resvg-js 将 SVG 转换为 PNG
  */
 
 import { usePlugin, defineComponent, ZhinTool } from "zhin.js";
-import satori, { getDefaultFonts, type BuiltinFont } from '@zhinjs/satori';
+import satori, { getDefaultFonts, type BuiltinFont } from '@zhin.js/satori';
 import { Resvg } from '@resvg/resvg-js';
 import { JSDOM } from 'jsdom';
 import type { 
@@ -48,7 +48,7 @@ const fontCache: Map<string, FontConfig> = new Map();
 let defaultFontLoaded = false;
 
 /**
- * 加载默认字体（使用 @zhinjs/satori 内置字体）
+ * 加载默认字体（使用 @zhin.js/satori 内置字体）
  */
 async function loadDefaultFont(): Promise<FontConfig | null> {
   if (defaultFontLoaded) {
@@ -57,7 +57,7 @@ async function loadDefaultFont(): Promise<FontConfig | null> {
   }
 
   try {
-    // 使用 @zhinjs/satori 内置的字体
+    // 使用 @zhin.js/satori 内置的字体
     const builtinFonts = getDefaultFonts();
     
     if (builtinFonts.length > 0) {
@@ -85,7 +85,7 @@ async function loadDefaultFont(): Promise<FontConfig | null> {
       fontCache.set('default', defaultFontConfig);
       defaultFontLoaded = true;
       
-      logger.info(`Default fonts loaded from @zhinjs/satori: ${builtinFonts.map(f => f.name).join(', ')}`);
+      logger.info(`Default fonts loaded from @zhin.js/satori: ${builtinFonts.map(f => f.name).join(', ')}`);
       return defaultFontConfig;
     }
   } catch (error) {
@@ -246,7 +246,7 @@ function wrapHtml(html: string, backgroundColor: string = '#ffffff'): string {
 }
 
 /**
- * 渲染 HTML 为 SVG（使用 @zhinjs/satori 的 JSDOM 方式）
+ * 渲染 HTML 为 SVG（使用 @zhin.js/satori 的 JSDOM 方式）
  */
 async function renderHtmlToSvg(
   html: string,
@@ -274,7 +274,7 @@ async function renderHtmlToSvg(
   // 使用 JSDOM 解析 HTML
   const dom = new JSDOM(wrappedHtml);
 
-  // 使用 @zhinjs/satori 渲染
+  // 使用 @zhin.js/satori 渲染
   const satoriOptions: any = {
     width,
     fonts: finalFonts.map(f => ({
@@ -482,11 +482,11 @@ const rendererService = createHtmlRendererService(pluginConfig);
 // 注册为 Context
 (provide as any)({
   name: 'html-renderer',
-  description: 'HTML to image rendering service using @zhinjs/satori',
+  description: 'HTML to image rendering service using @zhin.js/satori',
   value: rendererService,
 });
 
-logger.info('HTML Renderer service registered (using @zhinjs/satori)');
+logger.info('HTML Renderer service registered (using @zhin.js/satori)');
 
 // ============================================================================
 // JSX 组件

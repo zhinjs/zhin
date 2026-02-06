@@ -2,7 +2,7 @@
  * Type declarations for @zhinjs/satori
  */
 
-declare module '@zhinjs/satori' {
+declare module '@zhin.js/satori' {
   import type { JSDOM } from 'jsdom';
 
   export interface FontOptions {
