@@ -6,7 +6,8 @@
 
 - 🚀 **基于 JSDOM** - 直接解析 HTML/CSS，无需 React
 - 🎨 **CSS 支持** - 支持 Flexbox、渐变、阴影等常用 CSS 属性
-- 📝 **中文支持** - 自动加载 Noto Sans SC 字体
+- ✨ **内置字体** - 包含 Roboto 字体，开箱即用
+- 📝 **中文支持** - 支持中文字符渲染
 - 🤖 **AI 集成** - 提供 `html.render` 和 `html.card` 工具供 AI 使用
 
 ## 安装

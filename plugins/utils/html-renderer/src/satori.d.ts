@@ -40,18 +40,23 @@ declare module '@zhin.js/satori' {
   // 内置字体
   export interface BuiltinFont {
     name: string;
-    data: ArrayBuffer;
-    weight: 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900;
-    style: 'normal' | 'italic';
+    data: ArrayBuffer | Buffer;
+    weight?: 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900;
+    style?: 'normal' | 'italic';
   }
 
-  export function getRobotoRegular(): BuiltinFont | null;
-  export function getRobotoBold(): BuiltinFont | null;
+  export function getPoppinsRegular(): BuiltinFont | null;
+  export function getPoppinsBold(): BuiltinFont | null;
   export function getNotoSansCJK(): BuiltinFont | null;
+  export function getNotoSansSC(): BuiltinFont | null;
   export function getNotoSansJP(): BuiltinFont | null;
   export function getNotoSansKR(): BuiltinFont | null;
+  export function getNotoColorEmoji(): BuiltinFont | null;
   export function getAllBuiltinFonts(): BuiltinFont[];
   export function getDefaultFonts(): BuiltinFont[];
+  export function getExtendedFonts(): BuiltinFont[];
+  export function getCJKFonts(): BuiltinFont[];
+  export function getCompleteFonts(): BuiltinFont[];
 }
 
 declare module '@resvg/resvg-js' {
