@@ -6,10 +6,18 @@
 
 Satori 支持将 HTML 和 CSS 转换为高质量的 SVG 图像。它使用 JSDOM 来解析 HTML，并实现了自己的布局引擎来生成与浏览器渲染结果一致的 SVG。
 
+## 特性
+
+- ✅ **内置字体**: 包含 Roboto 字体，开箱即用
+- 🎨 完整的 CSS 支持
+- 📦 支持 ESM 和 CommonJS
+- 🚀 高性能渲染引擎
+- 💪 TypeScript 支持
+
 ## 基本用法
 
 ```javascript
-import satori from '@zhinjs/satori'
+import satori, { getDefaultFonts } from '@zhinjs/satori'
 import { JSDOM } from 'jsdom'
 
 // 创建 HTML 内容
@@ -26,6 +34,9 @@ const html = `
 
 // 使用 JSDOM 解析 HTML
 const dom = new JSDOM(html)
+
+// 使用内置字体
+const fonts = getDefaultFonts()
 
 // 转换为 SVG
 const svg = await satori(dom, {

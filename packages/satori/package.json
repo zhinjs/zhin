@@ -16,7 +16,10 @@
   "license": "MPL-2.0",
   "files": [
     "dist/**",
-    "wasm.js"
+    "wasm.js",
+    "fonts/**/*.ttf",
+    "fonts/**/*.otf",
+    "fonts/**/*.md"
   ],
   "exports": {
     "./package.json": "./package.json",

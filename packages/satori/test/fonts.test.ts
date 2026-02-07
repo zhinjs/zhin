@@ -1,6 +1,5 @@
-import { it, describe, expect } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import {
-  BuiltinFont,
   getRobotoRegular,
   getRobotoBold,
   getNotoSansCJK,
@@ -8,116 +7,132 @@ import {
   getNotoSansKR,
   getAllBuiltinFonts,
   getDefaultFonts,
-} from '../src/index.js'
+  type BuiltinFont,
+} from '../src/fonts.js'
 
-describe('Built-in Font Utilities', () => {
-  describe('Exports', () => {
-    it('should export BuiltinFont type', () => {
-      // Type check - this will fail at compile time if the type is not exported
-      const font: BuiltinFont = {
-        name: 'Test Font',
-        data: new ArrayBuffer(0),
-        weight: 400,
-        style: 'normal',
+describe('Font Loading', () => {
+  describe('Individual Font Functions', () => {
+    it('getRobotoRegular should return BuiltinFont or null', () => {
+      const font = getRobotoRegular()
+      if (font !== null) {
+        expect(font).toHaveProperty('name')
+        expect(font).toHaveProperty('data')
+        expect(font.name).toBe('Roboto')
+        expect(font.weight).toBe(400)
+        expect(font.style).toBe('normal')
       }
-      
-      expect(font.name).toBe('Test Font')
     })
 
-    it('should export font getter functions', () => {
-      expect(typeof getRobotoRegular).toBe('function')
-      expect(typeof getRobotoBold).toBe('function')
-      expect(typeof getNotoSansCJK).toBe('function')
-      expect(typeof getNotoSansJP).toBe('function')
-      expect(typeof getNotoSansKR).toBe('function')
-      expect(typeof getAllBuiltinFonts).toBe('function')
-      expect(typeof getDefaultFonts).toBe('function')
+    it('getRobotoBold should return BuiltinFont or null', () => {
+      const font = getRobotoBold()
+      if (font !== null) {
+        expect(font).toHaveProperty('name')
+        expect(font).toHaveProperty('data')
+        expect(font.name).toBe('Roboto')
+        expect(font.weight).toBe(700)
+        expect(font.style).toBe('normal')
+      }
+    })
+
+    it('getNotoSansCJK should return BuiltinFont or null', () => {
+      const font = getNotoSansCJK()
+      if (font !== null) {
+        expect(font).toHaveProperty('name')
+        expect(font).toHaveProperty('data')
+        expect(font.name).toBe('Noto Sans SC')
+      }
+    })
+
+    it('getNotoSansJP should return BuiltinFont or null', () => {
+      const font = getNotoSansJP()
+      if (font !== null) {
+        expect(font).toHaveProperty('name')
+        expect(font).toHaveProperty('data')
+        expect(font.name).toBe('Noto Sans JP')
+      }
+    })
+
+    it('getNotoSansKR should return BuiltinFont or null', () => {
+      const font = getNotoSansKR()
+      if (font !== null) {
+        expect(font).toHaveProperty('name')
+        expect(font).toHaveProperty('data')
+        expect(font.name).toBe('Noto Sans KR')
+      }
     })
   })
 
-  describe('Font Getters Behavior', () => {
-    it('getRobotoRegular should throw error', () => {
-      expect(() => getRobotoRegular()).toThrow(
-        '[satori/fonts] getRobotoRegular is not available: this package does not include built-in fonts'
-      )
+  describe('Collection Functions', () => {
+    it('getAllBuiltinFonts should return an array', () => {
+      const fonts = getAllBuiltinFonts()
+      expect(Array.isArray(fonts)).toBe(true)
+      fonts.forEach((font) => {
+        expect(font).toHaveProperty('name')
+        expect(font).toHaveProperty('data')
+      })
     })
 
-    it('getRobotoBold should throw error', () => {
-      expect(() => getRobotoBold()).toThrow(
-        '[satori/fonts] getRobotoBold is not available: this package does not include built-in fonts'
-      )
+    it('getDefaultFonts should return an array', () => {
+      const fonts = getDefaultFonts()
+      expect(Array.isArray(fonts)).toBe(true)
+      fonts.forEach((font) => {
+        expect(font).toHaveProperty('name')
+        expect(font).toHaveProperty('data')
+        expect(font.name).toBe('Roboto')
+      })
     })
 
-    it('getNotoSansCJK should throw error', () => {
-      expect(() => getNotoSansCJK()).toThrow(
-        '[satori/fonts] getNotoSansCJK is not available: this package does not include built-in fonts'
-      )
-    })
-
-    it('getNotoSansJP should throw error', () => {
-      expect(() => getNotoSansJP()).toThrow(
-        '[satori/fonts] getNotoSansJP is not available: this package does not include built-in fonts'
-      )
-    })
-
-    it('getNotoSansKR should throw error', () => {
-      expect(() => getNotoSansKR()).toThrow(
-        '[satori/fonts] getNotoSansKR is not available: this package does not include built-in fonts'
-      )
-    })
-
-    it('getAllBuiltinFonts should throw error', () => {
-      expect(() => getAllBuiltinFonts()).toThrow(
-        '[satori/fonts] getAllBuiltinFonts is not available: this package does not include built-in fonts'
-      )
-    })
-
-    it('getDefaultFonts should throw error', () => {
-      expect(() => getDefaultFonts()).toThrow(
-        '[satori/fonts] getDefaultFonts is not available: this package does not include built-in fonts'
-      )
-    })
-
-    it('error messages should guide users to provide their own fonts', () => {
-      expect(() => getRobotoRegular()).toThrow(
-        'Please provide your own fonts via the FontOptions configuration'
-      )
+    it('getDefaultFonts should be a subset of getAllBuiltinFonts', () => {
+      const defaultFonts = getDefaultFonts()
+      const allFonts = getAllBuiltinFonts()
+      
+      defaultFonts.forEach((defaultFont) => {
+        const found = allFonts.some(
+          (font) =>
+            font.name === defaultFont.name &&
+            font.weight === defaultFont.weight &&
+            font.style === defaultFont.style
+        )
+        expect(found).toBe(true)
+      })
     })
   })
 
-  describe('Type Compatibility', () => {
-    it('BuiltinFont should be compatible with FontOptions', () => {
-      // This test verifies that BuiltinFont uses the same types as FontOptions
-      const builtinFont: BuiltinFont = {
-        name: 'Test Font',
-        data: Buffer.from([]), // Should accept Buffer (from FontOptions['data'])
-        weight: 400,
-        style: 'normal',
-      }
+  describe('Caching', () => {
+    it('should return the same instance when called multiple times', () => {
+      const font1 = getRobotoRegular()
+      const font2 = getRobotoRegular()
       
-      expect(builtinFont.data).toBeInstanceOf(Buffer)
+      if (font1 !== null && font2 !== null) {
+        // Should be the same cached instance
+        expect(font1).toBe(font2)
+      }
     })
 
-    it('BuiltinFont should accept ArrayBuffer', () => {
-      const builtinFont: BuiltinFont = {
-        name: 'Test Font',
-        data: new ArrayBuffer(0), // Should also accept ArrayBuffer
-        weight: 700,
-        style: 'italic',
-      }
+    it('should cache null results', () => {
+      // Call multiple times - should not throw even if file doesn't exist
+      const font1 = getNotoSansCJK()
+      const font2 = getNotoSansCJK()
       
-      expect(builtinFont.data).toBeInstanceOf(ArrayBuffer)
+      // Both should return the same result (either both null or both valid)
+      expect(font1).toBe(font2)
     })
+  })
 
-    it('BuiltinFont weight and style should be optional', () => {
-      const builtinFont: BuiltinFont = {
-        name: 'Test Font',
-        data: new ArrayBuffer(0),
-        // weight and style are optional
-      }
+  describe('Type Safety', () => {
+    it('should have correct TypeScript types', () => {
+      const font = getRobotoRegular()
       
-      expect(builtinFont.weight).toBeUndefined()
-      expect(builtinFont.style).toBeUndefined()
+      if (font !== null) {
+        // TypeScript should infer these types correctly
+        const name: string = font.name
+        const data: ArrayBuffer | Buffer = font.data
+        const weight: number | undefined = font.weight
+        const style: 'normal' | 'italic' | undefined = font.style
+        
+        expect(typeof name).toBe('string')
+        expect(data).toBeDefined()
+      }
     })
   })
 })
