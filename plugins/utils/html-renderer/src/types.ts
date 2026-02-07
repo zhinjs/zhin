@@ -13,8 +13,8 @@ export type OutputFormat = 'svg' | 'png';
 export interface FontConfig {
   /** 字体名称 */
   name: string;
-  /** 字体数据 (ArrayBuffer) */
-  data: ArrayBuffer;
+  /** 字体数据 (ArrayBuffer 或 Buffer) */
+  data: ArrayBuffer | Buffer;
   /** 字体粗细 */
   weight?: 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900;
   /** 字体样式 */

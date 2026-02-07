@@ -40,9 +40,9 @@ declare module '@zhin.js/satori' {
   // 内置字体
   export interface BuiltinFont {
     name: string;
-    data: ArrayBuffer;
-    weight: 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900;
-    style: 'normal' | 'italic';
+    data: ArrayBuffer | Buffer;
+    weight?: 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900;
+    style?: 'normal' | 'italic';
   }
 
   export function getRobotoRegular(): BuiltinFont | null;
