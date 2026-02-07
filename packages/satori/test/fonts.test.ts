@@ -129,7 +129,7 @@ describe('Font Loading', () => {
         // TypeScript should infer these types correctly
         const name: string = font.name
         const data: ArrayBuffer | Buffer = font.data
-        
+
         expect(typeof name).toBe('string')
         expect(data).toBeDefined()
       }

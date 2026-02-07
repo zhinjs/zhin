@@ -64,7 +64,7 @@ function loadFont(
     return font
   } catch (error) {
     const err = error as NodeJS.ErrnoException
-    if (err && (err.code === 'ENOENT' || err.code === 'ENOTDIR')) {
+    if (err && typeof err === 'object' && (err.code === 'ENOENT' || err.code === 'ENOTDIR')) {
       // Font file not found, cache null to avoid repeated attempts
       fontCache.set(cacheKey, null)
       return null
