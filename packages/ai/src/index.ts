@@ -146,8 +146,8 @@ export class AIService {
     this.triggerConfig = config.trigger || {};
     // 先用内存会话管理器，后续通过 setSessionManager 切换到数据库
     this.sessions = createMemorySessionManager(this.sessionConfig);
-    // 将 ZhinTool 转换为 Tool 格式（与 AgentTool 兼容）
-    this.builtinTools = getBuiltinTools().map(tool => tool.toTool());
+    // 将 ZhinTool 转换为 AgentTool 格式（通过 convertToolToAgentTool 保留元数据）
+    this.builtinTools = getBuiltinTools().map(tool => this.convertToolToAgentTool(tool.toTool()));
 
     // 初始化提供商
     if (config.providers?.openai?.apiKey) {
@@ -186,14 +186,24 @@ export class AIService {
     return this.providers.size > 0;
   }
 
+  /** 预执行超时 (ms) */
+  private static readonly PRE_EXEC_TIMEOUT = 10_000;
+
   /**
    * 处理 AI 请求
    * 这是 AI 触发中间件调用的主入口
-   * 
-   * 采用三步处理架构：
-   * 1. 意图分析：分析用户意图，筛选相关工具
-   * 2. 工具执行：用筛选的工具让模型决策和执行
-   * 3. 结果总结：基于结果生成友好回复
+   *
+   * 优化后的处理架构——根据工具类型自动选择最快路径：
+   *
+   * ┌─ 快速路径（1 次 AI 往返）──────────────────────────────┐
+   * │  命中的全是无参数工具 → 程序直接预执行 → 结果注入 prompt │
+   * │  AI 一次生成回答                                        │
+   * └────────────────────────────────────────────────────────┘
+   *
+   * ┌─ Agent 路径（2 次 AI 往返）────────────────────────────┐
+   * │  存在需要参数的工具 → Agent 调用工具 → 同一对话生成回答  │
+   * │  提示词保证模型在最后一轮**必须**输出完整文本            │
+   * └────────────────────────────────────────────────────────┘
    */
   async process(
     content: string,
@@ -201,83 +211,178 @@ export class AIService {
     tools: Tool[]
   ): Promise<string | AsyncIterable<string>> {
     const { platform, senderId, sceneId } = context;
-    
+
     // 生成会话 ID
     const sessionId = SessionManager.generateId(platform || '', senderId || '', sceneId);
-    
+
     // 收集所有可用工具
     const allTools = this.collectAllToolsWithExternal(tools);
-    
-    // 基础系统提示（包含富媒体格式说明）
+
+    // 基础系统提示
     const baseSystemPrompt = `你是一个友好的中文 AI 助手，请始终使用中文回复。
 ${RICH_MEDIA_GUIDE}`;
-    
-    // 如果没有工具，直接进入简单对话模式
+
+    // 如果没有工具，直接对话
     if (allTools.length === 0) {
-      const response = await this.simpleChat(content, baseSystemPrompt);
-      await this.sessions.addMessage(sessionId, { role: 'user', content });
-      await this.sessions.addMessage(sessionId, { role: 'assistant', content: response });
-      return response;
+      return this.finishAndSave(sessionId, content, baseSystemPrompt, sceneId);
     }
-    
+
     aiLogger.debug(`处理开始，可用工具: ${allTools.length}`);
-    
-    // ========== 第一步：工具匹配 ==========
-    // 先用关键词匹配（快速且准确）
-    let relevantTools = this.matchToolsByKeywords(content, allTools);
-    aiLogger.debug(`关键词匹配工具: ${relevantTools.length}`);
-    
-    // 如果关键词没匹配到，再用 AI 分析
-    if (relevantTools.length === 0) {
-      relevantTools = await this.analyzeIntentAndSelectTools(content, allTools);
-      aiLogger.debug(`AI 意图分析工具: ${relevantTools.length}`);
-    }
-    
-    // 如果仍然没有相关工具，直接对话
-    if (relevantTools.length === 0) {
-      const response = await this.simpleChat(content, baseSystemPrompt);
-      await this.sessions.addMessage(sessionId, { role: 'user', content });
-      await this.sessions.addMessage(sessionId, { role: 'assistant', content: response });
-      return response;
-    }
-    
-    // ========== 第二步：工具执行 ==========
-    const toolSystemPrompt = `你是一个 AI 助手。根据用户的问题，决定是否需要调用工具来获取信息。
-如果需要调用工具，请直接调用，不要解释。
-如果不需要工具，请直接用中文回答。`;
-    
-    const agent = this.createAgent({
-      systemPrompt: toolSystemPrompt,
-      tools: relevantTools,
-      useBuiltinTools: false,
-      collectExternalTools: false,
-      maxIterations: 3, // 限制迭代次数
+
+    // ========== 1. 程序化工具过滤 ==========
+    const callerPermissionLevel = context.senderPermissionLevel
+      ? (AIService.PERM_MAP[context.senderPermissionLevel] ?? 0)
+      : (context.isOwner ? 4 : context.isBotAdmin ? 3 : context.isGroupOwner ? 2 : context.isGroupAdmin ? 1 : 0);
+
+    const relevantTools = Agent.filterTools(content, allTools, {
+      callerPermissionLevel,
+      maxTools: 8,
+      minScore: 0.1,
     });
-    
-    const agentResult = await agent.run(content);
-    
-    // ========== 第三步：结果总结 ==========
-    let finalResponse: string;
-    
-    if (agentResult.toolCalls.length > 0) {
-      // 有工具调用，需要总结结果
-      aiLogger.debug(`工具调用: ${agentResult.toolCalls.map(t => t.tool).join(', ')}`);
-      finalResponse = await this.summarizeToolResults(content, agentResult.toolCalls);
-    } else {
-      // 没有工具调用，直接使用模型回复
-      finalResponse = agentResult.content || await this.simpleChat(content, baseSystemPrompt);
+    aiLogger.debug(`程序化过滤: ${allTools.length} -> ${relevantTools.length} (${relevantTools.map(t => t.name).join(', ')})`);
+
+    if (relevantTools.length === 0) {
+      return this.finishAndSave(sessionId, content, baseSystemPrompt, sceneId);
     }
-    
+
+    // ========== 2. 拆分工具：无参数 vs 需要参数 ==========
+    const noParamTools: AgentTool[] = [];
+    const paramTools: AgentTool[] = [];
+    for (const tool of relevantTools) {
+      const required = tool.parameters?.required;
+      if (!required || required.length === 0) {
+        noParamTools.push(tool);
+      } else {
+        paramTools.push(tool);
+      }
+    }
+
+    // ========== 3. 预执行无参数工具 ==========
+    let preExecutedData = '';
+    const preExecutedCalls: { tool: string; args: Record<string, any>; result: any }[] = [];
+
+    if (noParamTools.length > 0) {
+      aiLogger.debug(`预执行无参数工具: ${noParamTools.map(t => t.name).join(', ')}`);
+      const results = await Promise.allSettled(
+        noParamTools.map(async (tool) => {
+          const result = await Promise.race([
+            tool.execute({}),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('预执行超时')), AIService.PRE_EXEC_TIMEOUT),
+            ),
+          ]);
+          return { name: tool.name, result };
+        }),
+      );
+
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          const { name, result } = r.value;
+          const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
+          preExecutedData += `\n【${name}】${resultStr}`;
+          preExecutedCalls.push({ tool: name, args: {}, result });
+        }
+      }
+    }
+
+    // ========== 4. 选择路径 ==========
+    let finalResponse: string;
+
+    if (paramTools.length === 0 && preExecutedData) {
+      // ── 快速路径：所有工具都已预执行 → 1 次 AI 往返 ──
+      aiLogger.debug('快速路径: 预执行完成，单次 AI 生成回答');
+
+      const singleShotPrompt = `你是一个友好的中文 AI 助手。
+
+以下是根据用户问题自动获取的实时数据：
+${preExecutedData}
+
+请基于以上数据回答用户的问题。要求：
+- 用自然流畅的中文组织信息，不要直接输出原始数据
+- 突出重点，适当使用 emoji 增加趣味性
+- 如果数据包含错误或为空，如实告知并给出建议
+${RICH_MEDIA_GUIDE}`;
+
+      finalResponse = await this.simpleChat(content, singleShotPrompt);
+
+    } else {
+      // ── Agent 路径：存在需要参数的工具 → 2 次 AI 往返 ──
+      aiLogger.debug(`Agent 路径: ${paramTools.length} 个需参数工具, ${preExecutedCalls.length} 个已预执行`);
+
+      const agentSystemPrompt = `你是一个友好的中文 AI 助手。
+${preExecutedData ? `\n以下数据已自动获取：${preExecutedData}\n` : ''}
+## 工作流程
+1. 分析用户的问题
+2. 如果已获取的数据能回答问题，直接作答
+3. 如果还需要更多信息，调用工具获取（直接调用，不要解释）
+4. 获取工具结果后，**务必**生成一条完整、自然的中文回答
+
+## 关键要求
+- 调用工具后你**必须**基于结果给出完整回答，绝不能返回空内容
+- 用自然语言总结工具结果，突出关键信息
+- 适当使用 emoji 让回答更生动
+- 如果工具返回了错误，告知用户并给出建议
+${RICH_MEDIA_GUIDE}`;
+
+      const agent = this.createAgent({
+        systemPrompt: agentSystemPrompt,
+        tools: paramTools.length > 0 ? paramTools : relevantTools,
+        useBuiltinTools: false,
+        collectExternalTools: false,
+        maxIterations: 3,
+      });
+
+      const agentResult = await agent.run(content);
+
+      // 直接使用 Agent 输出（forceAnswer 保证最后一轮有文本），不再额外调 summarize
+      finalResponse = agentResult.content || this.formatToolCallsFallback(
+        [...preExecutedCalls, ...agentResult.toolCalls],
+      );
+    }
+
     // 保存到会话
     await this.sessions.addMessage(sessionId, { role: 'user', content });
     await this.sessions.addMessage(sessionId, { role: 'assistant', content: finalResponse });
-    
+
     // 异步检查是否需要总结
     if (this.contextManager && sceneId) {
       this.contextManager.autoSummarizeIfNeeded(sceneId).catch(() => {});
     }
-    
+
     return finalResponse;
+  }
+
+  /**
+   * 简单对话 + 保存会话（复用逻辑）
+   */
+  private async finishAndSave(
+    sessionId: string,
+    content: string,
+    systemPrompt: string,
+    sceneId?: string,
+  ): Promise<string> {
+    const response = await this.simpleChat(content, systemPrompt);
+    await this.sessions.addMessage(sessionId, { role: 'user', content });
+    await this.sessions.addMessage(sessionId, { role: 'assistant', content: response });
+    if (this.contextManager && sceneId) {
+      this.contextManager.autoSummarizeIfNeeded(sceneId).catch(() => {});
+    }
+    return response;
+  }
+
+  /**
+   * 工具结果本地格式化（纯文本兜底，不调用 AI）
+   */
+  private formatToolCallsFallback(
+    toolCalls: { tool: string; args: any; result: any }[],
+  ): string {
+    if (toolCalls.length === 0) return '处理完成。';
+    return toolCalls.map(tc => {
+      const resultStr = typeof tc.result === 'string'
+        ? tc.result
+        : JSON.stringify(tc.result, null, 2);
+      return `【${tc.tool}】\n${resultStr}`;
+    }).join('\n\n');
   }
 
   /**
@@ -297,10 +402,13 @@ ${RICH_MEDIA_GUIDE}`;
   }
 
   /**
-   * 第一步：意图分析，筛选相关工具
+   * @deprecated 已被 Agent.filterTools() 程序化过滤替代，不再从 process() 中调用。
+   * 保留此方法以供外部调用者使用（如果需要 AI 辅助选择工具）。
+   *
+   * 意图分析，筛选相关工具
    * 使用 AI 分析用户意图，选择最相关的工具
    */
-  private async analyzeIntentAndSelectTools(
+  async analyzeIntentAndSelectTools(
     userContent: string,
     allTools: AgentTool[]
   ): Promise<AgentTool[]> {
@@ -378,9 +486,12 @@ ${userContent}
   }
 
   /**
-   * 基于关键词匹配工具（降级方案）
+   * @deprecated 已被 Agent.filterTools() 程序化过滤替代。
+   * 保留此方法以供外部调用者使用。
+   *
+   * 基于硬编码关键词匹配工具
    */
-  private matchToolsByKeywords(content: string, tools: AgentTool[]): AgentTool[] {
+  matchToolsByKeywords(content: string, tools: AgentTool[]): AgentTool[] {
     const keywords = content.toLowerCase();
     
     // Debug: 输出可用工具列表
@@ -520,15 +631,44 @@ ${RICH_MEDIA_GUIDE}` },
   }
 
   /**
-   * 将 Tool 转换为 AgentTool
+   * 权限级别字符串 → 数字映射
+   */
+  private static readonly PERM_MAP: Record<string, number> = {
+    'user': 0,
+    'group_admin': 1,
+    'group_owner': 2,
+    'bot_admin': 3,
+    'owner': 4,
+  };
+
+  /**
+   * 将 Tool 转换为 AgentTool（保留 tags / keywords / permissionLevel 元数据）
    */
   private convertToolToAgentTool(tool: Tool): AgentTool {
-    return {
+    const agentTool: AgentTool = {
       name: tool.name,
       description: tool.description,
       parameters: tool.parameters as any,
       execute: tool.execute,
     };
+
+    // 携带标签 → 用于程序化过滤
+    if (tool.tags?.length) {
+      agentTool.tags = tool.tags;
+    }
+
+    // 携带权限级别 → 用于程序化过滤
+    if (tool.permissionLevel) {
+      agentTool.permissionLevel = AIService.PERM_MAP[tool.permissionLevel] ?? 0;
+    }
+
+    // 从 name + description 中自动提取关键词（如果工具未显式声明 keywords）
+    // 这里通过 (tool as any).keywords 来支持扩展字段
+    if ((tool as any).keywords?.length) {
+      agentTool.keywords = (tool as any).keywords;
+    }
+
+    return agentTool;
   }
 
   // ============================================================================
@@ -1114,6 +1254,7 @@ useContext('ai', 'tool', (ai: AIService | undefined, toolService: any) => {
   // 列出模型工具
   const listModelsTool = new ZhinTool('ai.models')
     .desc('列出所有可用的 AI 模型')
+    .keyword('模型', '可用模型', 'ai模型', 'model', 'models')
     .tag('ai', 'management')
     .execute(async () => {
       const models = await ai.listModels();
@@ -1147,6 +1288,7 @@ useContext('ai', 'tool', (ai: AIService | undefined, toolService: any) => {
   // 清除会话工具
   const clearSessionTool = new ZhinTool('ai.clear')
     .desc('清除当前对话的历史记录')
+    .keyword('清除', '清空', '重置', '清理', 'clear', 'reset')
     .tag('ai', 'session')
     .execute(async (_args, context) => {
       if (!context?.message) return { success: false, error: '无法获取消息上下文' };
@@ -1175,6 +1317,7 @@ useContext('ai', 'tool', (ai: AIService | undefined, toolService: any) => {
   // 场景统计工具
   const sceneStatsTool = new ZhinTool('ai.stats')
     .desc('查看当前场景的消息统计')
+    .keyword('统计', '消息数', '场景统计', 'stats', 'analytics')
     .tag('ai', 'analytics')
     .execute(async (_args, context) => {
       if (!context?.message) return { error: '无法获取消息上下文' };
@@ -1216,6 +1359,7 @@ useContext('ai', 'tool', (ai: AIService | undefined, toolService: any) => {
   // 列出工具工具
   const listToolsTool = new ZhinTool('ai.tools')
     .desc('列出所有可用的 AI 工具')
+    .keyword('工具', '可用工具', 'tools', '功能')
     .tag('ai', 'management')
     .execute(async () => {
       const allTools = ai.collectAllTools();
@@ -1278,6 +1422,7 @@ useContext('ai', 'tool', (ai: AIService | undefined, toolService: any) => {
   // 对话总结工具
   const summarizeTool = new ZhinTool('ai.summary')
     .desc('生成当前场景的对话总结')
+    .keyword('总结', '摘要', '概括', 'summary', 'summarize')
     .tag('ai', 'context')
     .execute(async (_args, context) => {
       if (!context?.message) return { error: '无法获取消息上下文' };
@@ -1312,6 +1457,7 @@ useContext('ai', 'tool', (ai: AIService | undefined, toolService: any) => {
   // 健康检查工具
   const healthCheckTool = new ZhinTool('ai.health')
     .desc('检查 AI 服务的健康状态')
+    .keyword('健康', '状态', '检查', 'health', 'status')
     .tag('ai', 'management')
     .execute(async () => {
       const health = await ai.healthCheck();

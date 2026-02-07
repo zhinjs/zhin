@@ -12,10 +12,14 @@ import type {
   ChatMessage,
   ToolDefinition,
   ToolCall,
+  ToolFilterOptions,
   Usage,
 } from './types.js';
 
 const logger = new Logger(null, 'Agent');
+
+/** 工具执行默认超时时间 (ms) */
+const DEFAULT_TOOL_TIMEOUT = 30_000;
 
 /**
  * Agent 执行状态
@@ -121,7 +125,7 @@ export class Agent {
   }
 
   /**
-   * 获取工具定义
+   * 获取工具定义（缓存在第一次调用后保持不变）
    */
   private getToolDefinitions(): ToolDefinition[] {
     return Array.from(this.tools.values()).map(tool => ({
@@ -135,7 +139,122 @@ export class Agent {
   }
 
   /**
-   * 执行工具调用
+   * 生成工具调用的去重 key
+   */
+  private static toolCallKey(name: string, args: string): string {
+    return `${name}::${args}`;
+  }
+
+  /**
+   * 安全解析 JSON，失败则返回原始字符串
+   */
+  private static safeParse(str: string): any {
+    try {
+      return JSON.parse(str);
+    } catch {
+      return str;
+    }
+  }
+
+  /**
+   * 程序化工具过滤 —— 替代 AI 意图分析的高效方案
+   *
+   * 评分规则（按权重从高到低）：
+   * 1. keywords 精确匹配: +1.0 per hit   —— 工具声明的触发关键词
+   * 2. tags 匹配:          +0.5 per hit   —— 工具分类标签
+   * 3. 工具名 token 匹配:  +0.3 per hit   —— 工具名按 `.` `_` `-` 拆词
+   * 4. description 关键词:  +0.15 per hit  —— 描述中的词/短语
+   *
+   * 权限过滤发生在评分之前，直接跳过无权使用的工具。
+   *
+   * @param message      用户消息原文
+   * @param tools        候选工具列表
+   * @param options      过滤选项
+   * @returns            按相关性降序排列的工具子集
+   */
+  static filterTools(
+    message: string,
+    tools: AgentTool[],
+    options?: ToolFilterOptions,
+  ): AgentTool[] {
+    if (tools.length === 0) return [];
+
+    const maxTools = options?.maxTools ?? 10;
+    const minScore = options?.minScore ?? 0.1;
+    const callerPerm = options?.callerPermissionLevel ?? Infinity;
+
+    const msgLower = message.toLowerCase();
+
+    const scored: { tool: AgentTool; score: number }[] = [];
+
+    for (const tool of tools) {
+      // ── 权限过滤 ──
+      if (tool.permissionLevel != null && tool.permissionLevel > callerPerm) {
+        continue;
+      }
+
+      let score = 0;
+
+      // ── 1. keywords 匹配（最高权重） ──
+      if (tool.keywords?.length) {
+        for (const kw of tool.keywords) {
+          if (kw && msgLower.includes(kw.toLowerCase())) {
+            score += 1.0;
+          }
+        }
+      }
+
+      // ── 2. tags 匹配 ──
+      if (tool.tags?.length) {
+        for (const tag of tool.tags) {
+          if (tag && tag.length > 1 && msgLower.includes(tag.toLowerCase())) {
+            score += 0.5;
+          }
+        }
+      }
+
+      // ── 3. 工具名 token 匹配 ──
+      const nameTokens = tool.name.toLowerCase().split(/[._\-]+/);
+      for (const nt of nameTokens) {
+        if (nt.length > 1 && msgLower.includes(nt)) {
+          score += 0.3;
+        }
+      }
+
+      // ── 4. 描述双向匹配（对中文友好） ──
+      // 4a. 描述词 → 出现在用户消息中？
+      const descLower = tool.description.toLowerCase();
+      const descWords = descLower
+        .split(/[\s,.:;!?，。：；！？、()（）【】\[\]]+/)
+        .filter(w => w.length >= 2);
+      for (const dw of descWords) {
+        if (msgLower.includes(dw)) {
+          score += 0.15;
+        }
+      }
+      // 4b. 用户消息词 → 出现在描述中？（中文无空格分词，逆向补偿）
+      const msgWords = msgLower
+        .split(/[\s,.:;!?，。：；！？、()（）【】\[\]]+/)
+        .filter(w => w.length >= 2);
+      for (const mw of msgWords) {
+        if (descLower.includes(mw)) {
+          score += 0.2;
+        }
+      }
+
+      if (score >= minScore) {
+        scored.push({ tool, score });
+      }
+    }
+
+    // 按分数降序
+    scored.sort((a, b) => b.score - a.score);
+
+    return scored.slice(0, maxTools).map(s => s.tool);
+  }
+
+  /**
+   * 执行单个工具调用（带超时保护）
    */
   private async executeToolCall(toolCall: ToolCall): Promise<string> {
     const tool = this.tools.get(toolCall.function.name);
@@ -146,21 +265,85 @@ export class Agent {
     try {
       const args = JSON.parse(toolCall.function.arguments);
       this.emit('tool_call', tool.name, args);
-      
-      const result = await tool.execute(args);
+
+      // 带超时的工具执行
+      const result = await Promise.race([
+        tool.execute(args),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`工具 ${tool.name} 执行超时`)), DEFAULT_TOOL_TIMEOUT),
+        ),
+      ]);
+
       this.emit('tool_result', tool.name, result);
-      
       return typeof result === 'string' ? result : JSON.stringify(result);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.warn(`工具 ${toolCall.function.name} 执行失败: ${errorMsg}`);
       return JSON.stringify({ error: errorMsg });
     }
   }
 
   /**
-   * 运行 Agent
+   * 并行执行多个工具调用（跳过重复的）
+   * @returns 新执行的工具调用结果列表；如果全部重复则返回空数组
    */
-  async run(userMessage: string, context?: ChatMessage[]): Promise<AgentResult> {
+  private async executeToolCalls(
+    toolCalls: ToolCall[],
+    seenKeys: Set<string>,
+    state: AgentState,
+  ): Promise<{ toolCall: ToolCall; result: string; args: Record<string, any> }[]> {
+    // 分离：新调用 vs 重复调用
+    const fresh: ToolCall[] = [];
+    for (const tc of toolCalls) {
+      const key = Agent.toolCallKey(tc.function.name, tc.function.arguments);
+      if (seenKeys.has(key)) {
+        logger.debug(`跳过重复工具调用: ${tc.function.name}`);
+      } else {
+        fresh.push(tc);
+      }
+    }
+
+    if (fresh.length === 0) return [];
+
+    // 并行执行所有新工具调用
+    const tasks = fresh.map(async (tc) => {
+      const result = await this.executeToolCall(tc);
+      const args = Agent.safeParse(tc.function.arguments);
+      const parsedResult = Agent.safeParse(result);
+
+      // 记录到状态
+      const key = Agent.toolCallKey(tc.function.name, tc.function.arguments);
+      seenKeys.add(key);
+      state.toolCalls.push({
+        tool: tc.function.name,
+        args: typeof args === 'object' ? args : { raw: args },
+        result: parsedResult,
+      });
+
+      return { toolCall: tc, result, args };
+    });
+
+    return Promise.all(tasks);
+  }
+
+  /**
+   * 累加 token 用量
+   */
+  private static addUsage(target: Usage, source?: Usage): void {
+    if (!source) return;
+    target.prompt_tokens += source.prompt_tokens;
+    target.completion_tokens += source.completion_tokens;
+    target.total_tokens += source.total_tokens;
+  }
+
+  /**
+   * 运行 Agent
+   *
+   * @param userMessage    用户消息
+   * @param context        对话上下文
+   * @param filterOptions  工具过滤选项 —— 启用后在 AI 调用之前程序化筛选工具，省去额外的 AI 意图分析往返
+   */
+  async run(userMessage: string, context?: ChatMessage[], filterOptions?: ToolFilterOptions): Promise<AgentResult> {
     const state: AgentState = {
       messages: [
         { role: 'system', content: this.config.systemPrompt },
@@ -172,94 +355,100 @@ export class Agent {
       iterations: 0,
     };
 
-    const toolDefinitions = this.getToolDefinitions();
+    // 程序化工具预过滤：只把相关工具传给 AI，减少 token 消耗和误选
+    let toolDefinitions: ToolDefinition[];
+    if (filterOptions) {
+      const allTools = Array.from(this.tools.values());
+      const filtered = Agent.filterTools(userMessage, allTools, filterOptions);
+      logger.debug(`工具预过滤: ${allTools.length} -> ${filtered.length}`);
+      toolDefinitions = filtered.map(tool => ({
+        type: 'function' as const,
+        function: {
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.parameters,
+        },
+      }));
+    } else {
+      toolDefinitions = this.getToolDefinitions();
+    }
+    const hasTools = toolDefinitions.length > 0;
+    // O(1) 去重集合
+    const seenToolKeys = new Set<string>();
+    // 连续全重复计数器
+    let consecutiveDuplicateRounds = 0;
 
     while (state.iterations < this.config.maxIterations) {
       state.iterations++;
+
+      // 强制文本回答的条件：
+      // 1. 检测到连续重复工具调用
+      // 2. 最后一轮迭代且已有工具结果 —— 保证 Agent 始终输出文本，不再需要额外的 summary 往返
+      const isLastIteration = state.iterations >= this.config.maxIterations;
+      const forceAnswer = consecutiveDuplicateRounds > 0 ||
+        (isLastIteration && state.toolCalls.length > 0);
 
       try {
         const response = await this.provider.chat({
           model: this.config.model,
           messages: state.messages,
-          tools: toolDefinitions.length > 0 ? toolDefinitions : undefined,
-          tool_choice: toolDefinitions.length > 0 ? 'auto' : undefined,
+          tools: hasTools && !forceAnswer ? toolDefinitions : undefined,
+          tool_choice: hasTools && !forceAnswer ? 'auto' : undefined,
           temperature: this.config.temperature,
         });
 
-        // 更新用量
-        if (response.usage) {
-          state.usage.prompt_tokens += response.usage.prompt_tokens;
-          state.usage.completion_tokens += response.usage.completion_tokens;
-          state.usage.total_tokens += response.usage.total_tokens;
-        }
+        Agent.addUsage(state.usage, response.usage);
 
         const choice = response.choices[0];
         if (!choice) break;
 
-        // 如果包含工具调用，不立即将模型原始内容暴露给上层
+        // ── 分支 1: 模型想调用工具 ──
         if (choice.message.tool_calls?.length) {
           this.emit('thinking', '正在执行工具调用...');
 
-          // 将 assistant 消息加入会话上下文，但避免直接展示纯 JSON 的工具调用原始内容
-          let assistantContent = '';
-          if (typeof choice.message.content === 'string' && choice.message.content) {
-            const rawContent = choice.message.content;
-            const trimmed = rawContent.trim();
-            // 如果内容整体看起来是 JSON（常见于模型将工具调用以 JSON 形式返回），则不暴露给上层
-            if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-              try {
-                JSON.parse(trimmed);
-                // 解析成功，说明是纯 JSON；保持 assistantContent 为空字符串
-              } catch {
-                // 解析失败，当作普通文本保留
-                assistantContent = rawContent;
-              }
-            } else {
-              // 非纯 JSON 内容，直接保留
-              assistantContent = rawContent;
-            }
-          }
-
+          // 将 assistant 消息加入上下文
+          // 当存在 tool_calls 时，content 通常是模型的内部思考或原始 JSON，
+          // 不需要暴露给最终用户，但需要保留在消息历史中以维持对话完整性
           state.messages.push({
             role: 'assistant',
-            content: assistantContent,
+            content: typeof choice.message.content === 'string' ? choice.message.content : '',
             tool_calls: choice.message.tool_calls,
           });
 
-          // 检测重复工具调用
-          let hasDuplicateCall = false;
-          for (const toolCall of choice.message.tool_calls) {
-            const toolName = toolCall.function.name;
-            const toolArgs = toolCall.function.arguments;
-            
-            // 检查是否重复调用相同工具（相同名称和参数）
-            const isDuplicate = state.toolCalls.some(
-              tc => tc.tool === toolName && JSON.stringify(tc.args) === toolArgs
-            );
-            
-            if (isDuplicate) {
-              logger.debug(`重复工具调用: ${toolName}，跳过`);
-              hasDuplicateCall = true;
-              continue;
-            }
-            
-            const result = await this.executeToolCall(toolCall);
-            
-            // 尝试解析 JSON，如果失败则使用原始字符串
-            let parsedResult: any;
-            try {
-              parsedResult = JSON.parse(result);
-            } catch {
-              parsedResult = result;
-            }
-            
-            state.toolCalls.push({
-              tool: toolName,
-              args: JSON.parse(toolArgs),
-              result: parsedResult,
-            });
+          // 并行执行所有新工具调用，自动跳过重复
+          const results = await this.executeToolCalls(
+            choice.message.tool_calls,
+            seenToolKeys,
+            state,
+          );
 
-            // 添加工具结果消息（供模型下一步使用）
+          if (results.length === 0) {
+            // 本轮全部重复
+            consecutiveDuplicateRounds++;
+
+            // 为每个重复的 tool_call 补上 tool 消息，保持协议完整性
+            for (const tc of choice.message.tool_calls) {
+              const key = Agent.toolCallKey(tc.function.name, tc.function.arguments);
+              const previous = state.toolCalls.find(
+                stc => Agent.toolCallKey(stc.tool, JSON.stringify(stc.args)) === key ||
+                       Agent.toolCallKey(stc.tool, tc.function.arguments) === key,
+              );
+              state.messages.push({
+                role: 'tool',
+                content: previous ? JSON.stringify(previous.result) : '结果已获取',
+                tool_call_id: tc.id,
+              });
+            }
+
+            // 下一轮将 forceAnswer=true，通过不传 tools 参数来禁止工具调用
+            continue;
+          }
+
+          // 有新的工具调用被执行
+          consecutiveDuplicateRounds = 0;
+
+          // 将工具结果加入消息历史
+          for (const { toolCall, result } of results) {
             state.messages.push({
               role: 'tool',
               content: result,
@@ -267,34 +456,13 @@ export class Agent {
             });
           }
 
-          // 如果所有调用都是重复的，强制模型生成最终回答
-          if (hasDuplicateCall && choice.message.tool_calls.every(tc => 
-            state.toolCalls.some(stc => stc.tool === tc.function.name && JSON.stringify(stc.args) === tc.function.arguments)
-          )) {
-            // 添加提示让模型总结结果
-            state.messages.push({
-              role: 'user',
-              content: '请根据已获取的工具结果，用中文总结回答我的问题。',
-            });
-          }
-
-          // 继续循环，让模型处理工具结果并生成最终回答
           continue;
         }
 
-        // 没有工具调用，返回结果
-        let content = typeof choice.message.content === 'string'
+        // ── 分支 2: 模型返回文本回答 ──
+        const content = typeof choice.message.content === 'string'
           ? choice.message.content
           : '';
-
-        // 如果内容为空但有工具调用结果，生成基于工具结果的回复
-        if (!content.trim() && state.toolCalls.length > 0) {
-          const lastToolCall = state.toolCalls[state.toolCalls.length - 1];
-          const resultStr = typeof lastToolCall.result === 'string' 
-            ? lastToolCall.result 
-            : JSON.stringify(lastToolCall.result, null, 2);
-          content = `根据查询结果:\n\n${resultStr}`;
-        }
 
         const result: AgentResult = {
           content,
@@ -313,9 +481,13 @@ export class Agent {
       }
     }
 
-    // 达到最大迭代次数
+    // 达到最大迭代次数，尝试从已有工具结果中构建回复
+    const fallbackContent = state.toolCalls.length > 0
+      ? `处理完成，共执行了 ${state.toolCalls.length} 个工具调用。`
+      : '达到最大迭代次数，任务可能未完成。';
+
     const result: AgentResult = {
-      content: '达到最大迭代次数，任务可能未完成。',
+      content: fallbackContent,
       toolCalls: state.toolCalls,
       usage: state.usage,
       iterations: state.iterations,
@@ -327,8 +499,12 @@ export class Agent {
 
   /**
    * 流式运行 Agent
+   *
+   * @param userMessage    用户消息
+   * @param context        对话上下文
+   * @param filterOptions  工具过滤选项 —— 启用后在 AI 调用之前程序化筛选工具
    */
-  async *runStream(userMessage: string, context?: ChatMessage[]): AsyncIterable<{
+  async *runStream(userMessage: string, context?: ChatMessage[], filterOptions?: ToolFilterOptions): AsyncIterable<{
     type: 'content' | 'tool_call' | 'tool_result' | 'done';
     data: any;
   }> {
@@ -338,10 +514,29 @@ export class Agent {
       { role: 'user', content: userMessage },
     ];
 
-    const toolDefinitions = this.getToolDefinitions();
+    // 程序化工具预过滤
+    let toolDefinitions: ToolDefinition[];
+    if (filterOptions) {
+      const allTools = Array.from(this.tools.values());
+      const filtered = Agent.filterTools(userMessage, allTools, filterOptions);
+      logger.debug(`流式工具预过滤: ${allTools.length} -> ${filtered.length}`);
+      toolDefinitions = filtered.map(tool => ({
+        type: 'function' as const,
+        function: {
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.parameters,
+        },
+      }));
+    } else {
+      toolDefinitions = this.getToolDefinitions();
+    }
+    const hasTools = toolDefinitions.length > 0;
     let iterations = 0;
     const toolCallHistory: { tool: string; args: any; result: any }[] = [];
     const usage: Usage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+    const seenToolKeys = new Set<string>();
+    let consecutiveDuplicateRounds = 0;
 
     while (iterations < this.config.maxIterations) {
       iterations++;
@@ -349,28 +544,33 @@ export class Agent {
       let content = '';
       const pendingToolCalls: ToolCall[] = [];
       let finishReason: string | null = null;
+      const isLastIteration = iterations >= this.config.maxIterations;
+      const forceAnswer = consecutiveDuplicateRounds > 0 ||
+        (isLastIteration && toolCallHistory.length > 0);
 
       // 流式获取响应
       for await (const chunk of this.provider.chatStream({
         model: this.config.model,
         messages,
-        tools: toolDefinitions.length > 0 ? toolDefinitions : undefined,
-        tool_choice: toolDefinitions.length > 0 ? 'auto' : undefined,
+        tools: hasTools && !forceAnswer ? toolDefinitions : undefined,
+        tool_choice: hasTools && !forceAnswer ? 'auto' : undefined,
         temperature: this.config.temperature,
       })) {
         const choice = chunk.choices[0];
         if (!choice) continue;
 
-        // 处理内容
+        // 处理内容片段
         if (choice.delta.content) {
           content += choice.delta.content;
-          yield { type: 'content', data: choice.delta.content };
+          // 仅在非工具调用阶段输出内容给消费者
+          if (pendingToolCalls.length === 0) {
+            yield { type: 'content', data: choice.delta.content };
+          }
         }
 
-        // 处理工具调用
+        // 合并工具调用片段
         if (choice.delta.tool_calls) {
           for (const tc of choice.delta.tool_calls) {
-            // 合并工具调用片段
             let existing = pendingToolCalls.find(p => p.id === tc.id);
             if (!existing && tc.id) {
               existing = {
@@ -387,42 +587,82 @@ export class Agent {
           }
         }
 
-        if (choice.finish_reason) {
-          finishReason = choice.finish_reason;
-        }
+        if (choice.finish_reason) finishReason = choice.finish_reason;
 
-        if (chunk.usage) {
-          usage.prompt_tokens += chunk.usage.prompt_tokens;
-          usage.completion_tokens += chunk.usage.completion_tokens;
-          usage.total_tokens += chunk.usage.total_tokens;
-        }
+        Agent.addUsage(usage, chunk.usage);
       }
 
-      // 添加 assistant 消息。若存在 pendingToolCalls，则不要在流式期间把模型原始包含工具调用的内容直接发送给消费者。
-      const assistantMessage: ChatMessage = {
+      // 将 assistant 消息加入上下文
+      messages.push({
         role: 'assistant',
         content,
         tool_calls: pendingToolCalls.length > 0 ? pendingToolCalls : undefined,
-      };
-      messages.push(assistantMessage);
+      });
 
-      // 处理工具调用（流式模式）
+      // 处理工具调用
       if (pendingToolCalls.length > 0 && finishReason === 'tool_calls') {
-        for (const toolCall of pendingToolCalls) {
-          // 通知上层开始执行工具（上层可用于显示“正在执行工具”而非工具原始内容）
-          yield { type: 'tool_call', data: { name: toolCall.function.name, args: toolCall.function.arguments } };
+        // 分离新调用和重复调用
+        const freshCalls: ToolCall[] = [];
+        const duplicateCalls: ToolCall[] = [];
 
-          const result = await this.executeToolCall(toolCall);
+        for (const tc of pendingToolCalls) {
+          const key = Agent.toolCallKey(tc.function.name, tc.function.arguments);
+          if (seenToolKeys.has(key)) {
+            duplicateCalls.push(tc);
+          } else {
+            freshCalls.push(tc);
+          }
+        }
 
-          toolCallHistory.push({
-            tool: toolCall.function.name,
-            args: JSON.parse(toolCall.function.arguments),
-            result: JSON.parse(result),
-          });
+        if (freshCalls.length === 0) {
+          // 全部重复
+          consecutiveDuplicateRounds++;
 
-          // 返回工具结果（上层可选择把工具执行过程隐藏，仅在最终完成时展示润色结果）
+          // 补上 tool 消息保持协议完整
+          for (const tc of pendingToolCalls) {
+            const key = Agent.toolCallKey(tc.function.name, tc.function.arguments);
+            const previous = toolCallHistory.find(
+              h => Agent.toolCallKey(h.tool, JSON.stringify(h.args)) === key ||
+                   Agent.toolCallKey(h.tool, tc.function.arguments) === key,
+            );
+            messages.push({
+              role: 'tool',
+              content: previous ? JSON.stringify(previous.result) : '结果已获取',
+              tool_call_id: tc.id,
+            });
+          }
+          continue;
+        }
+
+        consecutiveDuplicateRounds = 0;
+
+        // 先通知上层所有工具调用开始
+        for (const tc of freshCalls) {
+          yield { type: 'tool_call', data: { name: tc.function.name, args: tc.function.arguments } };
+        }
+
+        // 并行执行所有新工具调用
+        const results = await Promise.all(
+          freshCalls.map(async (toolCall) => {
+            const result = await this.executeToolCall(toolCall);
+            const args = Agent.safeParse(toolCall.function.arguments);
+            const parsedResult = Agent.safeParse(result);
+
+            const key = Agent.toolCallKey(toolCall.function.name, toolCall.function.arguments);
+            seenToolKeys.add(key);
+            toolCallHistory.push({
+              tool: toolCall.function.name,
+              args: typeof args === 'object' ? args : { raw: args },
+              result: parsedResult,
+            });
+
+            return { toolCall, result };
+          }),
+        );
+
+        // yield 工具结果并加入消息历史
+        for (const { toolCall, result } of results) {
           yield { type: 'tool_result', data: { name: toolCall.function.name, result } };
-
           messages.push({
             role: 'tool',
             content: result,
@@ -430,7 +670,20 @@ export class Agent {
           });
         }
 
-        // 继续循环，让模型以工具结果为上下文生成最终回答
+        // 为重复的调用也补上 tool 消息
+        for (const tc of duplicateCalls) {
+          const key = Agent.toolCallKey(tc.function.name, tc.function.arguments);
+          const previous = toolCallHistory.find(
+            h => Agent.toolCallKey(h.tool, JSON.stringify(h.args)) === key ||
+                 Agent.toolCallKey(h.tool, tc.function.arguments) === key,
+          );
+          messages.push({
+            role: 'tool',
+            content: previous ? JSON.stringify(previous.result) : '结果已获取',
+            tool_call_id: tc.id,
+          });
+        }
+
         continue;
       }
 
@@ -451,7 +704,9 @@ export class Agent {
     yield {
       type: 'done',
       data: {
-        content: '达到最大迭代次数',
+        content: toolCallHistory.length > 0
+          ? `处理完成，共执行了 ${toolCallHistory.length} 个工具调用。`
+          : '达到最大迭代次数',
         toolCalls: toolCallHistory,
         usage,
         iterations,

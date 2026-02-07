@@ -106,6 +106,7 @@ export interface MockToolOptions {
   scopes?: ('group' | 'private' | 'guild')[];
   permissionLevel?: 'user' | 'group_admin' | 'group_owner' | 'bot_admin' | 'owner';
   tags?: string[];
+  keywords?: string[];
   executeResult?: any;
   executeError?: Error;
 }
@@ -120,6 +121,7 @@ export const createMockTool = (options: MockToolOptions): Tool => {
     scopes,
     permissionLevel,
     tags = [],
+    keywords = [],
     executeResult = 'success',
     executeError,
   } = options;
@@ -132,7 +134,7 @@ export const createMockTool = (options: MockToolOptions): Tool => {
     };
   }
 
-  return {
+  const tool: any = {
     name,
     description,
     parameters: {
@@ -148,6 +150,8 @@ export const createMockTool = (options: MockToolOptions): Tool => {
       ? vi.fn().mockRejectedValue(executeError)
       : vi.fn().mockResolvedValue(executeResult),
   };
+  if (keywords.length > 0) tool.keywords = keywords;
+  return tool;
 };
 
 // ============================================================================

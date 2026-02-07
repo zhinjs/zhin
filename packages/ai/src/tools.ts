@@ -11,6 +11,8 @@ import { ZhinTool, type Tool } from '@zhin.js/core';
  */
 export const calculatorTool = new ZhinTool('calculator')
   .desc('执行数学计算。支持基本运算（+、-、*、/、^）和数学函数（sin、cos、sqrt 等）')
+  .keyword('计算', '算', 'calc', '数学', '求值', '运算')
+  .tag('math', 'utility')
   .param('expression', { type: 'string', description: '数学表达式，例如 "2 + 3 * 4" 或 "sqrt(16)"' }, true)
   .execute(async ({ expression }) => {
     try {
@@ -41,6 +43,8 @@ export const calculatorTool = new ZhinTool('calculator')
  */
 export const timeTool = new ZhinTool('get_time')
   .desc('获取当前时间和日期信息')
+  .keyword('时间', '日期', '几点', '今天', '现在', 'time', 'date')
+  .tag('time', 'utility')
   .param('timezone', { type: 'string', description: '时区，例如 "Asia/Shanghai" 或 "UTC"' })
   .param('format', { type: 'string', description: '输出格式: full(完整), date(日期), time(时间), timestamp(时间戳)' })
   .execute(async ({ timezone, format = 'full' }) => {
@@ -76,6 +80,8 @@ export const timeTool = new ZhinTool('get_time')
  */
 export const searchTool = new ZhinTool('web_search')
   .desc('在互联网上搜索信息（需要配置搜索 API）')
+  .keyword('搜索', '搜一下', '查找', '查一查', 'search', 'google')
+  .tag('search', 'web')
   .param('query', { type: 'string', description: '搜索关键词' }, true)
   .param('limit', { type: 'number', description: '返回结果数量（默认 5）' })
   .execute(async ({ query, limit = 5 }) => {
@@ -93,6 +99,8 @@ export const searchTool = new ZhinTool('web_search')
  */
 export const codeRunnerTool = new ZhinTool('run_code')
   .desc('执行 JavaScript 代码（在安全沙箱中）')
+  .keyword('代码', '执行', '运行', 'code', 'js', 'javascript')
+  .tag('code', 'dev')
   .param('code', { type: 'string', description: 'JavaScript 代码' }, true)
   .execute(async ({ code }) => {
     try {
@@ -121,6 +129,8 @@ export const codeRunnerTool = new ZhinTool('run_code')
  */
 export const httpTool = new ZhinTool('http_request')
   .desc('发送 HTTP 请求获取数据')
+  .keyword('http', 'api', '请求', '接口', 'url', 'fetch')
+  .tag('http', 'web')
   .param('url', { type: 'string', description: '请求 URL' }, true)
   .param('method', { type: 'string', description: 'HTTP 方法: GET, POST, PUT, DELETE（默认 GET）' })
   .param('headers', { type: 'object', description: '请求头（JSON 对象）' })
@@ -167,6 +177,8 @@ export const httpTool = new ZhinTool('http_request')
  */
 export const memoryTool = new ZhinTool('remember')
   .desc('记住用户告诉你的重要信息，以便后续对话中使用')
+  .keyword('记住', '记忆', '记下', 'remember', '别忘了')
+  .tag('memory', 'context')
   .param('key', { type: 'string', description: '记忆的标识符，如 "user_name", "preference"' }, true)
   .param('value', { type: 'string', description: '要记住的内容' }, true)
   .execute(async ({ key, value }, context) => {

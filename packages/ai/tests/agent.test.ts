@@ -425,6 +425,136 @@ describe('Agent 配置测试', () => {
   });
 });
 
+describe('Agent.filterTools 程序化过滤', () => {
+  it('应该通过 keywords 匹配工具', () => {
+    const tools = [
+      createMockTool({ name: 'weather', description: '查询天气', keywords: ['天气', 'weather'] }),
+      createMockTool({ name: 'calculator', description: '计算器', keywords: ['计算', 'calc'] }),
+      createMockTool({ name: 'news', description: '新闻', keywords: ['新闻', 'news'] }),
+    ] as any[];
+
+    const result = Agent.filterTools('今天天气怎么样', tools);
+    
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('weather');
+  });
+
+  it('应该通过 tags 匹配工具', () => {
+    const tools = [
+      createMockTool({ name: 'ai.models', description: '列出模型', tags: ['ai', 'management'] }),
+      createMockTool({ name: 'weather', description: '天气', tags: ['weather', 'utility'] }),
+    ] as any[];
+
+    const result = Agent.filterTools('ai 相关功能', tools);
+
+    expect(result.length).toBeGreaterThanOrEqual(1);
+    expect(result[0].name).toBe('ai.models');
+  });
+
+  it('应该通过工具名 token 匹配', () => {
+    const tools = [
+      createMockTool({ name: 'gold_price', description: '查询金价' }),
+      createMockTool({ name: 'fuel_price', description: '查询油价' }),
+    ] as any[];
+
+    const result = Agent.filterTools('gold 价格', tools);
+
+    expect(result.length).toBeGreaterThanOrEqual(1);
+    expect(result[0].name).toBe('gold_price');
+  });
+
+  it('应该按权限过滤工具', () => {
+    const tools = [
+      createMockTool({ name: 'public_tool', description: '公共工具' }),
+      createMockTool({ name: 'admin_tool', description: '管理员工具' }),
+    ] as any[];
+    // 设置权限级别
+    tools[0].permissionLevel = 0;
+    tools[1].permissionLevel = 3;
+
+    const result = Agent.filterTools('管理', tools, { callerPermissionLevel: 1 });
+
+    // admin_tool 需要 3，用户只有 1，应该被过滤掉
+    const names = result.map((t: any) => t.name);
+    expect(names).not.toContain('admin_tool');
+  });
+
+  it('应该按分数排序并限制数量', () => {
+    const tools = [
+      createMockTool({ name: 'tool1', description: '天气查询', keywords: ['天气'] }),
+      createMockTool({ name: 'tool2', description: '天气预报', keywords: ['天气', '预报'] }),
+      createMockTool({ name: 'tool3', description: '无关工具' }),
+    ] as any[];
+
+    const result = Agent.filterTools('天气预报', tools, { maxTools: 2 });
+
+    expect(result.length).toBeLessThanOrEqual(2);
+    // tool2 应该排更前面（匹配了两个 keywords）
+    if (result.length >= 2) {
+      expect(result[0].name).toBe('tool2');
+    }
+  });
+
+  it('空消息应该返回空结果', () => {
+    const tools = [
+      createMockTool({ name: 'tool1', description: '工具', keywords: ['关键词'] }),
+    ] as any[];
+
+    const result = Agent.filterTools('', tools);
+
+    expect(result).toHaveLength(0);
+  });
+
+  it('无工具时应该返回空结果', () => {
+    const result = Agent.filterTools('测试消息', []);
+
+    expect(result).toHaveLength(0);
+  });
+
+  it('应该支持中文描述双向匹配', () => {
+    const tools = [
+      createMockTool({ name: 'get_time', description: '获取当前时间和日期信息' }),
+      createMockTool({ name: 'weather', description: '查询天气信息' }),
+    ] as any[];
+
+    // "时间" 出现在 get_time 的描述中（双向匹配）
+    const result = Agent.filterTools('时间', tools);
+
+    expect(result.length).toBeGreaterThanOrEqual(1);
+    expect(result[0].name).toBe('get_time');
+  });
+});
+
+describe('Agent run 带过滤选项', () => {
+  let mockProvider: ReturnType<typeof createMockProvider>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockProvider = createMockProvider();
+  });
+
+  it('应该用过滤后的工具调用 AI', async () => {
+    mockProvider.chat.mockResolvedValue(createChatResponse('ok'));
+
+    const relevantTool = createMockTool({ name: 'weather', description: '天气', keywords: ['天气'] });
+    const irrelevantTool = createMockTool({ name: 'calculator', description: '计算', keywords: ['计算'] });
+
+    const agent = createAgent(mockProvider as any, {
+      tools: [relevantTool, irrelevantTool] as any[],
+    });
+
+    await agent.run('天气怎么样', undefined, { maxTools: 5, minScore: 0.1 });
+
+    // 应该只传递匹配的工具给 AI
+    const chatCall = mockProvider.chat.mock.calls[0][0];
+    if (chatCall.tools) {
+      const toolNames = chatCall.tools.map((t: any) => t.function.name);
+      expect(toolNames).toContain('weather');
+      expect(toolNames).not.toContain('calculator');
+    }
+  });
+});
+
 describe('Agent 类', () => {
   it('应该正确创建实例', () => {
     const mockProvider = createMockProvider();

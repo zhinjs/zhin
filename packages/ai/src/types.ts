@@ -164,6 +164,26 @@ export interface AgentTool {
   description: string;
   parameters: JsonSchema;
   execute: (args: Record<string, any>) => Promise<any>;
+  /** 工具标签，用于分类和快速匹配 */
+  tags?: string[];
+  /** 触发关键词，用户消息包含这些词时优先选择此工具 */
+  keywords?: string[];
+  /** 所需权限级别 (0=所有人, 1=群管理, 2=群主, 3=Bot管理员, 4=拥有者) */
+  permissionLevel?: number;
+}
+
+/**
+ * 工具过滤选项
+ * 在 Agent.run() / runStream() 中启用程序化工具预过滤，
+ * 省去额外的 AI 意图分析往返
+ */
+export interface ToolFilterOptions {
+  /** 调用者权限级别 (0-4)，高于工具要求才能使用 */
+  callerPermissionLevel?: number;
+  /** 最大返回工具数量 (默认 10) */
+  maxTools?: number;
+  /** 最低相关性得分阈值，低于此分数的工具被过滤掉 (默认 0.1) */
+  minScore?: number;
 }
 
 /** Agent 配置 */

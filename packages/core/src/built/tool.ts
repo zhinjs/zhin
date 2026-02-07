@@ -225,6 +225,7 @@ export class ZhinTool {
   #permissionLevel: ToolPermissionLevel = 'user';
   #permissions: string[] = [];
   #tags: string[] = [];
+  #keywords: string[] = [];
   /** 命令回调（入参是 message, matchResult） */
   #commandCallback?: MessageCommand.Callback<RegisteredAdapter>;
   /** 命令配置 */
@@ -323,6 +324,16 @@ export class ZhinTool {
    */
   tag(...tags: string[]): this {
     this.#tags.push(...tags);
+    return this;
+  }
+
+  /**
+   * 添加触发关键词（用于程序化工具过滤，Agent.filterTools 使用）
+   * 用户消息包含这些关键词时，此工具会被优先选中
+   * @param keywords 关键词列表（支持中英文）
+   */
+  keyword(...keywords: string[]): this {
+    this.#keywords.push(...keywords);
     return this;
   }
 
@@ -472,6 +483,7 @@ export class ZhinTool {
     if (this.#tags.length > 0) tool.tags = this.#tags;
     if (this.#hidden) tool.hidden = this.#hidden;
     if (this.#source) tool.source = this.#source;
+    if (this.#keywords.length > 0) (tool as any).keywords = this.#keywords;
 
     // 命令配置：如果没有定义 command 回调，则不生成命令
     if (!this.#commandCallback) {
