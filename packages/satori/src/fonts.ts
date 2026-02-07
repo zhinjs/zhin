@@ -32,7 +32,7 @@ function throwNoBuiltinFontsError(apiName: string): never {
  *
  * @throws Error Always throws because no built-in fonts are bundled in this package.
  */
-export function getRobotoRegular(): BuiltinFont | null {
+export function getRobotoRegular(): never {
   return throwNoBuiltinFontsError('getRobotoRegular')
 }
 
@@ -41,7 +41,7 @@ export function getRobotoRegular(): BuiltinFont | null {
  *
  * @throws Error Always throws because no built-in fonts are bundled in this package.
  */
-export function getRobotoBold(): BuiltinFont | null {
+export function getRobotoBold(): never {
   return throwNoBuiltinFontsError('getRobotoBold')
 }
 
@@ -50,7 +50,7 @@ export function getRobotoBold(): BuiltinFont | null {
  *
  * @throws Error Always throws because no built-in fonts are bundled in this package.
  */
-export function getNotoSansCJK(): BuiltinFont | null {
+export function getNotoSansCJK(): never {
   return throwNoBuiltinFontsError('getNotoSansCJK')
 }
 
@@ -59,7 +59,7 @@ export function getNotoSansCJK(): BuiltinFont | null {
  *
  * @throws Error Always throws because no built-in fonts are bundled in this package.
  */
-export function getNotoSansJP(): BuiltinFont | null {
+export function getNotoSansJP(): never {
   return throwNoBuiltinFontsError('getNotoSansJP')
 }
 
@@ -68,7 +68,7 @@ export function getNotoSansJP(): BuiltinFont | null {
  *
  * @throws Error Always throws because no built-in fonts are bundled in this package.
  */
-export function getNotoSansKR(): BuiltinFont | null {
+export function getNotoSansKR(): never {
   return throwNoBuiltinFontsError('getNotoSansKR')
 }
 
@@ -77,7 +77,7 @@ export function getNotoSansKR(): BuiltinFont | null {
  *
  * @throws Error Always throws because no built-in fonts are bundled in this package.
  */
-export function getAllBuiltinFonts(): BuiltinFont[] {
+export function getAllBuiltinFonts(): never {
   return throwNoBuiltinFontsError('getAllBuiltinFonts')
 }
 
@@ -86,6 +86,6 @@ export function getAllBuiltinFonts(): BuiltinFont[] {
  *
  * @throws Error Always throws because no built-in fonts are bundled in this package.
  */
-export function getDefaultFonts(): BuiltinFont[] {
+export function getDefaultFonts(): never {
   return throwNoBuiltinFontsError('getDefaultFonts')
 }
