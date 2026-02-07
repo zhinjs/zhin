@@ -17,9 +17,7 @@
   "files": [
     "dist/**",
     "wasm.js",
-    "fonts/**/*.ttf",
-    "fonts/**/*.otf",
-    "fonts/**/*.md",
+    "fonts/**",
     "NOTICE",
     "LICENSE"
   ],

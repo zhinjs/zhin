@@ -63,9 +63,14 @@ function loadFont(
     fontCache.set(cacheKey, font)
     return font
   } catch (error) {
-    // Font file not found, cache null to avoid repeated attempts
-    fontCache.set(cacheKey, null)
-    return null
+    const err = error as NodeJS.ErrnoException
+    if (err && typeof err === 'object' && (err.code === 'ENOENT' || err.code === 'ENOTDIR')) {
+      // Font file not found, cache null to avoid repeated attempts
+      fontCache.set(cacheKey, null)
+      return null
+    }
+    // Unexpected I/O error: rethrow so callers can handle or log it
+    throw error
   }
 }
 
