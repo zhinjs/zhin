@@ -5,65 +5,87 @@
  * Users should provide their own fonts via the FontOptions.
  */
 
+import type { FontOptions, Weight, FontStyle } from './font.js'
+
 export interface BuiltinFont {
   name: string
-  data: ArrayBuffer
-  weight: 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900
-  style: 'normal' | 'italic'
+  data: FontOptions['data']
+  weight?: Weight
+  style?: FontStyle
 }
 
 /**
- * Get Roboto Regular font
- * @returns null - No built-in fonts available
+ * Helper to signal that this build does not ship with bundled fonts.
+ *
+ * All "get*Font" helpers intentionally throw instead of returning `null`/`[]`
+ * to avoid silent missing-glyph rendering when consumers assume fonts exist.
  */
-export function getRobotoRegular(): BuiltinFont | null {
-  return null
+function throwNoBuiltinFontsError(apiName: string): never {
+  throw new Error(
+    `[satori/fonts] ${apiName} is not available: this package does not include built-in fonts. ` +
+      'Please provide your own fonts via the FontOptions configuration.',
+  )
 }
 
 /**
- * Get Roboto Bold font
- * @returns null - No built-in fonts available
+ * Get Roboto Regular font.
+ *
+ * @throws Error Always throws because no built-in fonts are bundled in this package.
  */
-export function getRobotoBold(): BuiltinFont | null {
-  return null
+export function getRobotoRegular(): never {
+  return throwNoBuiltinFontsError('getRobotoRegular')
 }
 
 /**
- * Get Noto Sans CJK font
- * @returns null - No built-in fonts available
+ * Get Roboto Bold font.
+ *
+ * @throws Error Always throws because no built-in fonts are bundled in this package.
  */
-export function getNotoSansCJK(): BuiltinFont | null {
-  return null
+export function getRobotoBold(): never {
+  return throwNoBuiltinFontsError('getRobotoBold')
 }
 
 /**
- * Get Noto Sans JP font
- * @returns null - No built-in fonts available
+ * Get Noto Sans CJK font.
+ *
+ * @throws Error Always throws because no built-in fonts are bundled in this package.
  */
-export function getNotoSansJP(): BuiltinFont | null {
-  return null
+export function getNotoSansCJK(): never {
+  return throwNoBuiltinFontsError('getNotoSansCJK')
 }
 
 /**
- * Get Noto Sans KR font
- * @returns null - No built-in fonts available
+ * Get Noto Sans JP font.
+ *
+ * @throws Error Always throws because no built-in fonts are bundled in this package.
  */
-export function getNotoSansKR(): BuiltinFont | null {
-  return null
+export function getNotoSansJP(): never {
+  return throwNoBuiltinFontsError('getNotoSansJP')
 }
 
 /**
- * Get all built-in fonts
- * @returns Empty array - No built-in fonts available
+ * Get Noto Sans KR font.
+ *
+ * @throws Error Always throws because no built-in fonts are bundled in this package.
  */
-export function getAllBuiltinFonts(): BuiltinFont[] {
-  return []
+export function getNotoSansKR(): never {
+  return throwNoBuiltinFontsError('getNotoSansKR')
 }
 
 /**
- * Get default fonts
- * @returns Empty array - No built-in fonts available
+ * Get all built-in fonts.
+ *
+ * @throws Error Always throws because no built-in fonts are bundled in this package.
  */
-export function getDefaultFonts(): BuiltinFont[] {
-  return []
+export function getAllBuiltinFonts(): never {
+  return throwNoBuiltinFontsError('getAllBuiltinFonts')
+}
+
+/**
+ * Get default fonts.
+ *
+ * @throws Error Always throws because no built-in fonts are bundled in this package.
+ */
+export function getDefaultFonts(): never {
+  return throwNoBuiltinFontsError('getDefaultFonts')
 }
