@@ -19,7 +19,9 @@
     "wasm.js",
     "fonts/**/*.ttf",
     "fonts/**/*.otf",
-    "fonts/**/*.md"
+    "fonts/**/*.md",
+    "NOTICE",
+    "LICENSE"
   ],
   "exports": {
     "./package.json": "./package.json",

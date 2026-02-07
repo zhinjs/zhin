@@ -1,0 +1,83 @@
+@zhin.js/satori
+Copyright (c) 2024 Zhin.js Contributors
+
+This package contains code and assets from multiple sources:
+
+================================================================================
+
+1. Satori
+   License: Mozilla Public License 2.0 (MPL-2.0)
+   Copyright (c) Vercel
+   Source: https://github.com/vercel/satori
+   
+   This package is a modified version of Vercel's Satori library.
+   Modifications include:
+   - Added JSDOM support for HTML/CSS parsing
+   - Added built-in font loading utilities
+   - Added font management system
+   
+   The original Satori library and all modifications are licensed under MPL-2.0.
+
+================================================================================
+
+2. Poppins Fonts
+   License: SIL Open Font License 1.1 (OFL)
+   Copyright (c) 2014, Indian Type Foundry (info@indiantypefoundry.com)
+   Source: https://fonts.google.com/specimen/Poppins
+   
+   Files:
+   - fonts/Poppins-Regular.ttf
+   - fonts/Poppins-Bold.ttf
+   
+   This Font Software is licensed under the SIL Open Font License, Version 1.1.
+   This license is available with a FAQ at: https://openfontlicense.org
+   
+   The font may be used, studied, modified and redistributed freely as long as
+   they are not sold by themselves.
+
+================================================================================
+
+3. Noto Sans CJK Fonts (Simplified Chinese, Japanese, Korean)
+   License: SIL Open Font License 1.1 (OFL)
+   Copyright (c) Google
+   Source: https://fonts.google.com/noto
+   
+   Files:
+   - fonts/NotoSansSC-Regular.ttf (Simplified Chinese)
+   - fonts/NotoSansJP-Regular.ttf (Japanese)
+   - fonts/NotoSansKR-Regular.ttf (Korean)
+   
+   This Font Software is licensed under the SIL Open Font License, Version 1.1.
+   This license is available with a FAQ at: https://openfontlicense.org
+   
+   The font may be used, studied, modified and redistributed freely as long as
+   they are not sold by themselves.
+
+================================================================================
+
+4. Noto Color Emoji Font
+   License: SIL Open Font License 1.1 (OFL)
+   Copyright (c) Google
+   Source: https://github.com/googlefonts/noto-emoji
+   
+   Files:
+   - fonts/NotoColorEmoji.ttf
+   
+   This Font Software is licensed under the SIL Open Font License, Version 1.1.
+   This license is available with a FAQ at: https://openfontlicense.org
+   
+   The font may be used, studied, modified and redistributed freely as long as
+   they are not sold by themselves.
+
+================================================================================
+
+5. Dependencies
+   
+   This package depends on several open source libraries. See package.json
+   for a complete list of dependencies and their licenses.
+
+================================================================================
+
+For the full text of the Mozilla Public License 2.0, see the LICENSE file
+in this distribution or visit:
+https://www.mozilla.org/en-US/MPL/2.0/

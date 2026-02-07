@@ -11,11 +11,16 @@ export { default } from './satori.js'
 // Export built-in font utilities
 export type { BuiltinFont } from './fonts.js'
 export {
-  getRobotoRegular,
-  getRobotoBold,
+  getPoppinsRegular,
+  getPoppinsBold,
   getNotoSansCJK,
+  getNotoSansSC,
   getNotoSansJP,
   getNotoSansKR,
+  getNotoColorEmoji,
   getAllBuiltinFonts,
   getDefaultFonts,
+  getExtendedFonts,
+  getCJKFonts,
+  getCompleteFonts,
 } from './fonts.js'

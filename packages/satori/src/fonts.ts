@@ -1,6 +1,10 @@
 /**
  * Built-in font utilities
  * 
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ * 
  * This module provides utilities to load fonts for use with Satori.
  * Fonts can be loaded from the fonts directory if available.
  */
@@ -66,27 +70,19 @@ function loadFont(
 }
 
 /**
- * Get Roboto Regular font (400 weight)
- * @returns BuiltinFont or null if not available
- */
-export function getRobotoRegular(): BuiltinFont | null {
-  return loadFont('Roboto-Regular.ttf', 'Roboto', 400, 'normal')
-}
-
-/**
- * Get Roboto Bold font (700 weight)
- * @returns BuiltinFont or null if not available
- */
-export function getRobotoBold(): BuiltinFont | null {
-  return loadFont('Roboto-Bold.ttf', 'Roboto', 700, 'normal')
-}
-
-/**
- * Get Noto Sans CJK Simplified Chinese font
+ * Get Noto Sans Simplified Chinese font
  * @returns BuiltinFont or null if not available
  */
 export function getNotoSansCJK(): BuiltinFont | null {
-  return loadFont('NotoSansSC-Regular.otf', 'Noto Sans SC', 400, 'normal')
+  return loadFont('NotoSansSC-Regular.ttf', 'Noto Sans SC', 400, 'normal')
+}
+
+/**
+ * Alias for getNotoSansCJK
+ * @returns BuiltinFont or null if not available
+ */
+export function getNotoSansSC(): BuiltinFont | null {
+  return getNotoSansCJK()
 }
 
 /**
@@ -94,7 +90,7 @@ export function getNotoSansCJK(): BuiltinFont | null {
  * @returns BuiltinFont or null if not available
  */
 export function getNotoSansJP(): BuiltinFont | null {
-  return loadFont('NotoSansJP-Regular.otf', 'Noto Sans JP', 400, 'normal')
+  return loadFont('NotoSansJP-Regular.ttf', 'Noto Sans JP', 400, 'normal')
 }
 
 /**
@@ -102,7 +98,31 @@ export function getNotoSansJP(): BuiltinFont | null {
  * @returns BuiltinFont or null if not available
  */
 export function getNotoSansKR(): BuiltinFont | null {
-  return loadFont('NotoSansKR-Regular.otf', 'Noto Sans KR', 400, 'normal')
+  return loadFont('NotoSansKR-Regular.ttf', 'Noto Sans KR', 400, 'normal')
+}
+
+/**
+ * Get Noto Color Emoji font
+ * @returns BuiltinFont or null if not available
+ */
+export function getNotoColorEmoji(): BuiltinFont | null {
+  return loadFont('NotoColorEmoji.ttf', 'Noto Color Emoji', 400, 'normal')
+}
+
+/**
+ * Get Poppins Regular font
+ * @returns BuiltinFont or null if not available
+ */
+export function getPoppinsRegular(): BuiltinFont | null {
+  return loadFont('Poppins-Regular.ttf', 'Poppins', 400, 'normal')
+}
+
+/**
+ * Get Poppins Bold font
+ * @returns BuiltinFont or null if not available
+ */
+export function getPoppinsBold(): BuiltinFont | null {
+  return loadFont('Poppins-Bold.ttf', 'Poppins', 700, 'normal')
 }
 
 /**
@@ -111,9 +131,49 @@ export function getNotoSansKR(): BuiltinFont | null {
  */
 export function getAllBuiltinFonts(): BuiltinFont[] {
   const fonts = [
-    getRobotoRegular(),
-    getRobotoBold(),
+    getPoppinsRegular(),
+    getPoppinsBold(),
     getNotoSansCJK(),
+    getNotoSansJP(),
+    getNotoSansKR(),
+    getNotoColorEmoji(),
+  ]
+  
+  return fonts.filter((font): font is BuiltinFont => font !== null)
+}
+
+/**
+ * Get default fonts (Poppins Regular and Bold)
+ * Falls back to empty array if fonts are not available
+ * @returns Array of default BuiltinFont objects
+ */
+export function getDefaultFonts(): BuiltinFont[] {
+  const fonts = [getPoppinsRegular(), getPoppinsBold()]
+  
+  return fonts.filter((font): font is BuiltinFont => font !== null)
+}
+
+/**
+ * Get extended default fonts (includes Poppins and Noto Sans SC)
+ * @returns Array of default BuiltinFont objects with extended coverage
+ */
+export function getExtendedFonts(): BuiltinFont[] {
+  const fonts = [
+    getPoppinsRegular(),
+    getPoppinsBold(),
+    getNotoSansSC(),
+  ]
+  
+  return fonts.filter((font): font is BuiltinFont => font !== null)
+}
+
+/**
+ * Get CJK fonts (Chinese, Japanese, Korean)
+ * @returns Array of CJK BuiltinFont objects
+ */
+export function getCJKFonts(): BuiltinFont[] {
+  const fonts = [
+    getNotoSansSC(),
     getNotoSansJP(),
     getNotoSansKR(),
   ]
@@ -122,12 +182,19 @@ export function getAllBuiltinFonts(): BuiltinFont[] {
 }
 
 /**
- * Get default fonts (Roboto Regular and Bold)
- * Falls back to empty array if fonts are not available
- * @returns Array of default BuiltinFont objects
+ * Get complete font set (Latin + CJK + Emoji)
+ * Recommended for maximum language and emoji support
+ * @returns Array of all recommended BuiltinFont objects
  */
-export function getDefaultFonts(): BuiltinFont[] {
-  const fonts = [getRobotoRegular(), getRobotoBold()]
+export function getCompleteFonts(): BuiltinFont[] {
+  const fonts = [
+    getPoppinsRegular(),
+    getPoppinsBold(),
+    getNotoSansSC(),
+    getNotoSansJP(),
+    getNotoSansKR(),
+    getNotoColorEmoji(),
+  ]
   
   return fonts.filter((font): font is BuiltinFont => font !== null)
 }

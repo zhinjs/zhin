@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
-  getRobotoRegular,
-  getRobotoBold,
+  getPoppinsRegular,
+  getPoppinsBold,
   getNotoSansCJK,
   getNotoSansJP,
   getNotoSansKR,
@@ -12,23 +12,23 @@ import {
 
 describe('Font Loading', () => {
   describe('Individual Font Functions', () => {
-    it('getRobotoRegular should return BuiltinFont or null', () => {
-      const font = getRobotoRegular()
+    it('getPoppinsRegular should return BuiltinFont or null', () => {
+      const font = getPoppinsRegular()
       if (font !== null) {
         expect(font).toHaveProperty('name')
         expect(font).toHaveProperty('data')
-        expect(font.name).toBe('Roboto')
+        expect(font.name).toBe('Poppins')
         expect(font.weight).toBe(400)
         expect(font.style).toBe('normal')
       }
     })
 
-    it('getRobotoBold should return BuiltinFont or null', () => {
-      const font = getRobotoBold()
+    it('getPoppinsBold should return BuiltinFont or null', () => {
+      const font = getPoppinsBold()
       if (font !== null) {
         expect(font).toHaveProperty('name')
         expect(font).toHaveProperty('data')
-        expect(font.name).toBe('Roboto')
+        expect(font.name).toBe('Poppins')
         expect(font.weight).toBe(700)
         expect(font.style).toBe('normal')
       }
@@ -78,7 +78,7 @@ describe('Font Loading', () => {
       fonts.forEach((font) => {
         expect(font).toHaveProperty('name')
         expect(font).toHaveProperty('data')
-        expect(font.name).toBe('Roboto')
+        expect(font.name).toBe('Poppins')
       })
     })
 
@@ -100,8 +100,8 @@ describe('Font Loading', () => {
 
   describe('Caching', () => {
     it('should return the same instance when called multiple times', () => {
-      const font1 = getRobotoRegular()
-      const font2 = getRobotoRegular()
+      const font1 = getPoppinsRegular()
+      const font2 = getPoppinsRegular()
       
       if (font1 !== null && font2 !== null) {
         // Should be the same cached instance
@@ -121,7 +121,7 @@ describe('Font Loading', () => {
 
   describe('Type Safety', () => {
     it('should have correct TypeScript types', () => {
-      const font = getRobotoRegular()
+      const font = getPoppinsRegular()
       
       if (font !== null) {
         // TypeScript should infer these types correctly
