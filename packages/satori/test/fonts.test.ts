@@ -12,26 +12,26 @@ import {
 
 describe('Font Loading', () => {
   describe('Individual Font Functions', () => {
-    it('getPoppinsRegular should return BuiltinFont or null', () => {
+    it('getPoppinsRegular should return BuiltinFont', () => {
       const font = getPoppinsRegular()
-      if (font !== null) {
-        expect(font).toHaveProperty('name')
-        expect(font).toHaveProperty('data')
-        expect(font.name).toBe('Poppins')
-        expect(font.weight).toBe(400)
-        expect(font.style).toBe('normal')
-      }
+      // Poppins Regular is a bundled font and must be available
+      expect(font).not.toBeNull()
+      expect(font).toHaveProperty('name')
+      expect(font).toHaveProperty('data')
+      expect(font!.name).toBe('Poppins')
+      expect(font!.weight).toBe(400)
+      expect(font!.style).toBe('normal')
     })
 
-    it('getPoppinsBold should return BuiltinFont or null', () => {
+    it('getPoppinsBold should return BuiltinFont', () => {
       const font = getPoppinsBold()
-      if (font !== null) {
-        expect(font).toHaveProperty('name')
-        expect(font).toHaveProperty('data')
-        expect(font.name).toBe('Poppins')
-        expect(font.weight).toBe(700)
-        expect(font.style).toBe('normal')
-      }
+      // Poppins Bold is a bundled font and must be available
+      expect(font).not.toBeNull()
+      expect(font).toHaveProperty('name')
+      expect(font).toHaveProperty('data')
+      expect(font!.name).toBe('Poppins')
+      expect(font!.weight).toBe(700)
+      expect(font!.style).toBe('normal')
     })
 
     it('getNotoSansCJK should return BuiltinFont or null', () => {
@@ -72,9 +72,11 @@ describe('Font Loading', () => {
       })
     })
 
-    it('getDefaultFonts should return an array', () => {
+    it('getDefaultFonts should return an array with bundled fonts', () => {
       const fonts = getDefaultFonts()
       expect(Array.isArray(fonts)).toBe(true)
+      // Default fonts (Poppins) must be available
+      expect(fonts.length).toBeGreaterThan(0)
       fonts.forEach((font) => {
         expect(font).toHaveProperty('name')
         expect(font).toHaveProperty('data')
@@ -127,8 +129,6 @@ describe('Font Loading', () => {
         // TypeScript should infer these types correctly
         const name: string = font.name
         const data: ArrayBuffer | Buffer = font.data
-        const weight: number | undefined = font.weight
-        const style: 'normal' | 'italic' | undefined = font.style
         
         expect(typeof name).toBe('string')
         expect(data).toBeDefined()

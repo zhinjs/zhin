@@ -17,7 +17,7 @@ Satori 支持将 HTML 和 CSS 转换为高质量的 SVG 图像。它使用 JSDOM
 ## 基本用法
 
 ```javascript
-import satori, { getDefaultFonts } from '@zhinjs/satori'
+import satori, { getDefaultFonts } from '@zhin.js/satori'
 import { JSDOM } from 'jsdom'
 
 // 创建 HTML 内容
@@ -134,11 +134,11 @@ Satori 支持以下字体格式：
 ## 安装
 
 ```bash
-npm install @zhinjs/satori
+npm install @zhin.js/satori
 # 或
-yarn add @zhinjs/satori
+yarn add @zhin.js/satori
 # 或
-pnpm add @zhinjs/satori
+pnpm add @zhin.js/satori
 ```
 
 ## 环境要求
