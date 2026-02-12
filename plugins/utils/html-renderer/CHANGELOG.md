@@ -1,5 +1,13 @@
 # @zhin.js/plugin-html-renderer
 
+## 0.0.4
+
+### Patch Changes
+
+- 106d357: fix: ai
+- Updated dependencies [106d357]
+  - zhin.js@1.0.26
+
 ## 0.0.3
 
 ### Patch Changes

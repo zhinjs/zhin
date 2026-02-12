@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.11
+
+### Patch Changes
+
+- 106d357: fix: ai
+- Updated dependencies [106d357]
+  - zhin.js@1.0.26
+  - @zhin.js/logger@0.1.10
+
 ## 1.0.10
 
 ### Patch Changes

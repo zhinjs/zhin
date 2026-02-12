@@ -1,5 +1,13 @@
 # @zhin.js/sensitive-filter
 
+## 0.0.12
+
+### Patch Changes
+
+- 106d357: fix: ai
+- Updated dependencies [106d357]
+  - zhin.js@1.0.26
+
 ## 0.0.11
 
 ### Patch Changes

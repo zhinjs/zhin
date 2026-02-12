@@ -1,5 +1,15 @@
 # @zhin.js/core
 
+## 1.0.26
+
+### Patch Changes
+
+- 106d357: fix: ai
+- Updated dependencies [106d357]
+  - @zhin.js/database@1.0.13
+  - @zhin.js/logger@0.1.10
+  - @zhin.js/schema@1.0.10
+
 ## 1.0.25
 
 ### Patch Changes
