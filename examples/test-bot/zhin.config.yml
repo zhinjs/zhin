@@ -9,7 +9,7 @@ bots:
     platform: ${ICQQ_PLATFORM}
     sign_api_addr: ${ICQQ_SIGN_API_ADDR}
     ver: '9.1.70'
-    data_dir: /Users/liuchunlang/IdeaProjects/zhin/examples/test-bot/data
+    data_dir: ./data
     scope: icqqjs
 plugin_dirs:
   - node_modules
@@ -47,7 +47,7 @@ ai:
   defaultProvider: ollama
   providers:
     ollama:
-      host: http://172.25.70.73:11434
+      host: ${OLLAMA_HOST:-http://localhost:11434}
       models:
         - qwen3:8b
   sessions:

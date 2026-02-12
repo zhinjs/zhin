@@ -20,6 +20,7 @@ const items = [
     <button
       v-for="item in items"
       :key="item.label"
+      type="button"
       class="stat-card"
       @click="emit('filter', item.keyword)"
       :title="`搜索${item.label}`"

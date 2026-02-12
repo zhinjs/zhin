@@ -71,8 +71,9 @@ class RecordingMigrationContext implements MigrationContext {
 
 /**
  * 根据 up 操作自动生成 down 操作
+ * @internal 仅用于测试
  */
-function generateReverseOperations(operations: MigrationOperation[]): MigrationOperation[] {
+export function generateReverseOperations(operations: MigrationOperation[]): MigrationOperation[] {
   const reversed: MigrationOperation[] = [];
   
   // 反向遍历操作列表

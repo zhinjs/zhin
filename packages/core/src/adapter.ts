@@ -42,10 +42,14 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
       // 优先使用 MessageDispatcher（新架构），回退到旧中间件链（兼容）
       const dispatcher = rootPlugin?.inject('dispatcher' as any) as any;
       if (dispatcher && typeof dispatcher.dispatch === 'function') {
-        dispatcher.dispatch(message);
+        void dispatcher.dispatch(message).catch((err: unknown) => {
+          this.logger.error('dispatcher.dispatch(message) failed', err);
+        });
       } else {
         // 旧中间件链回退
-        rootPlugin?.middleware(message, async ()=>{});
+        void Promise.resolve(rootPlugin?.middleware(message, async () => {})).catch((err: unknown) => {
+          this.logger.error('rootPlugin.middleware(message, next) failed', err);
+        });
       }
     });
   }
