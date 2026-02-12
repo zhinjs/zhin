@@ -122,7 +122,7 @@ class DatabaseProfileStore implements IProfileStore {
   async delete(userId: string, key: string): Promise<boolean> {
     const existing = await this.model.select().where({ user_id: userId, key });
     if (existing.length === 0) return false;
-    await this.model.delete().where({ user_id: userId, key });
+    await this.model.delete({ user_id: userId, key });
     return true;
   }
 
