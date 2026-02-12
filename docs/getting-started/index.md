@@ -26,27 +26,51 @@ npm install -g pnpm
 
 ### 方式一：一键安装（推荐）
 
-使用一键安装脚本，自动检测环境并启动配置向导：
+使用一键安装脚本，自动检测环境并启动配置向导。
 
-```bash
+::: code-group
+
+```bash [macOS / Linux / WSL]
 curl -fsSL https://zhin.js.org/install.sh | bash
 ```
 
+```powershell [Windows PowerShell]
+irm https://zhin.js.org/install.ps1 | iex
+```
+
+:::
+
 你也可以直接指定项目名称：
 
-```bash
+::: code-group
+
+```bash [macOS / Linux / WSL]
 curl -fsSL https://zhin.js.org/install.sh | bash -s -- my-bot
 ```
 
+```powershell [Windows PowerShell]
+irm https://zhin.js.org/install.ps1 | iex -Args "my-bot"
+```
+
+:::
+
 快速模式（跳过所有交互，使用默认配置）：
 
-```bash
+::: code-group
+
+```bash [macOS / Linux / WSL]
 curl -fsSL https://zhin.js.org/install.sh | bash -s -- my-bot -y
 ```
 
+```powershell [Windows PowerShell]
+irm https://zhin.js.org/install.ps1 | iex -Args "my-bot","-y"
+```
+
+:::
+
 脚本会自动完成以下检查：
 - 检测 Node.js 版本（>= 20.19.0 或 >= 22.12.0）
-- 检测并安装 pnpm
+- 检测并安装 pnpm（Bash 版）/ 检测并安装 pnpm（PowerShell 版）
 - 启动 Zhin.js 交互式配置向导
 
 ### 方式二：手动创建

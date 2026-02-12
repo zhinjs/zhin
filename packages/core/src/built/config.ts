@@ -49,8 +49,24 @@ export class ConfigLoader<T extends object> {
           if (result.startsWith('\\${') && result.endsWith('}')) return result.slice(1);
           if (/^\$\{(.*)\}$/.test(result)) {
             const content = result.slice(2, -1);
-            const [key, ...rest] = content.split(':');
-            const defaultValue = rest.length > 0 ? rest.join(':') : undefined;
+            // 支持 bash 风格的默认值语法：${VAR:-default} 和 ${VAR:=default}
+            // 同时兼容简单语法 ${VAR:default}
+            let key: string;
+            let defaultValue: string | undefined;
+            const bashDefaultMatch = content.match(/^([^:}]+):[-=](.*)$/);
+            if (bashDefaultMatch) {
+              // ${VAR:-default} 或 ${VAR:=default}
+              key = bashDefaultMatch[1];
+              defaultValue = bashDefaultMatch[2];
+            } else if (content.includes(':')) {
+              // ${VAR:default}（旧的简单语法）
+              const [k, ...rest] = content.split(':');
+              key = k;
+              defaultValue = rest.join(':');
+            } else {
+              key = content;
+              defaultValue = undefined;
+            }
             return process.env[key] ?? defaultValue ?? (loader.initial as any)[key] ?? result;
           }
         }
