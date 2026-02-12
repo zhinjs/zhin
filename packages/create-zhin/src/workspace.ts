@@ -53,6 +53,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
     },
     dependencies: {
       'zhin.js': 'latest',
+      "@zhin.js/types": "latest",
       '@zhin.js/http': 'latest',
       '@zhin.js/client': 'latest',
       '@zhin.js/console': 'latest',

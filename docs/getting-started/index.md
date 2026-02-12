@@ -62,13 +62,14 @@ irm https://zhin.js.org/install.ps1 | iex -Args "my-bot"
 curl -fsSL https://zhin.js.org/install.sh | bash -s -- my-bot -y
 ```
 
-```powershell [Windows PowerShell]
-irm https://zhin.js.org/install.ps1 | iex -Args "my-bot","-y"
+windows（powershell） 下使用：
+
+```powershell
+irm https://zhin.js.org/install.ps1 | iex
 ```
 
-:::
-
 脚本会自动完成以下检查：
+
 - 检测 Node.js 版本（>= 20.19.0 或 >= 22.12.0）
 - 检测并安装 pnpm（Bash 版）/ 检测并安装 pnpm（PowerShell 版）
 - 启动 Zhin.js 交互式配置向导
@@ -160,6 +161,7 @@ npm create zhin-app my-bot
 ### 7. 等待安装
 
 脚手架会自动：
+
 - 创建项目目录
 - 生成配置文件
 - 安装依赖包
@@ -226,18 +228,18 @@ npx zhin stop
 
 Zhin.js 提供了丰富的命令行工具：
 
-| 命令 | 说明 |
-|------|------|
-| `zhin dev` | 开发模式启动（热重载），支持 `--verbose`、`--bun` |
-| `zhin start` | 生产模式启动，支持 `-d/--daemon`（后台运行）、`--bun` |
-| `zhin restart` | 重启后台运行的机器人 |
-| `zhin stop` | 停止后台运行的机器人 |
-| `zhin build` | 构建 workspace 下的插件，支持 `--clean`、`--production` |
-| `zhin new` | 创建插件模板（normal/service/adapter），支持 `--type` |
-| `zhin pub` | 发布插件到 npm，支持 `--tag`、`--dry-run` |
-| `zhin install` | 安装插件（npm 或 git），支持 `-S/--save` |
-| `zhin search` | 搜索 npm 上的 Zhin 插件 |
-| `zhin info` | 查看某个插件的详细信息 |
+| 命令           | 说明                                                    |
+| -------------- | ------------------------------------------------------- |
+| `zhin dev`     | 开发模式启动（热重载），支持 `--verbose`、`--bun`       |
+| `zhin start`   | 生产模式启动，支持 `-d/--daemon`（后台运行）、`--bun`   |
+| `zhin restart` | 重启后台运行的机器人                                    |
+| `zhin stop`    | 停止后台运行的机器人                                    |
+| `zhin build`   | 构建 workspace 下的插件，支持 `--clean`、`--production` |
+| `zhin new`     | 创建插件模板（normal/service/adapter），支持 `--type`   |
+| `zhin pub`     | 发布插件到 npm，支持 `--tag`、`--dry-run`               |
+| `zhin install` | 安装插件（npm 或 git），支持 `-S/--save`                |
+| `zhin search`  | 搜索 npm 上的 Zhin 插件                                 |
+| `zhin info`    | 查看某个插件的详细信息                                  |
 
 ## 测试机器人
 
@@ -273,17 +275,13 @@ Zhin.js 提供了丰富的命令行工具：
 在 `src/plugins/` 目录下创建 `hello.ts`：
 
 ```typescript
-import { usePlugin, MessageCommand } from 'zhin.js'
+import { usePlugin, MessageCommand } from "zhin.js";
 
 // 获取插件 API
-const { addCommand } = usePlugin()
+const { addCommand } = usePlugin();
 
 // 添加一个简单的命令
-addCommand(
-  new MessageCommand('hello')
-    .desc('打个招呼')
-    .action(() => '你好！')
-)
+addCommand(new MessageCommand("hello").desc("打个招呼").action(() => "你好！"));
 ```
 
 ### 2. 启用插件
@@ -303,10 +301,10 @@ plugins: [
 
 ```yaml [zhin.config.yml]
 plugins:
-  - hello                    # 你的新插件
-  - "@zhin.js/http"         # HTTP 服务
-  - "@zhin.js/console"      # Web 控制台
-  - "@zhin.js/adapter-sandbox"  # 终端适配器
+  - hello # 你的新插件
+  - "@zhin.js/http" # HTTP 服务
+  - "@zhin.js/console" # Web 控制台
+  - "@zhin.js/adapter-sandbox" # 终端适配器
 ```
 
 :::
@@ -325,35 +323,31 @@ plugins:
 让我们创建一个更实用的命令：
 
 ```typescript
-import { usePlugin, MessageCommand } from 'zhin.js'
+import { usePlugin, MessageCommand } from "zhin.js";
 
-const { addCommand } = usePlugin()
+const { addCommand } = usePlugin();
 
 // 简单命令
-addCommand(
-  new MessageCommand('hello')
-    .desc('打个招呼')
-    .action(() => '你好！')
-)
+addCommand(new MessageCommand("hello").desc("打个招呼").action(() => "你好！"));
 
 // 带参数的命令
 addCommand(
-  new MessageCommand('echo <message:string>')
-    .desc('回显消息')
+  new MessageCommand("echo <message:string>")
+    .desc("回显消息")
     .action((_, result) => {
-      return `你说：${result.params.message}`
-    })
-)
+      return `你说：${result.params.message}`;
+    }),
+);
 
 // 带可选参数的命令
 addCommand(
-  new MessageCommand('greet [name:string]')
-    .desc('向某人问好')
+  new MessageCommand("greet [name:string]")
+    .desc("向某人问好")
     .action((_, result) => {
-      const name = result.params.name || '陌生人'
-      return `你好，${name}！`
-    })
-)
+      const name = result.params.name || "陌生人";
+      return `你好，${name}！`;
+    }),
+);
 ```
 
 测试：
@@ -377,7 +371,7 @@ addCommand(
 
 ```yaml
 http:
-  port: 3000  # 改成其他端口
+  port: 3000 # 改成其他端口
 ```
 
 ### 热重载不生效
@@ -387,6 +381,7 @@ http:
 ### 找不到命令
 
 检查：
+
 1. 插件文件是否在 `src/plugins/` 目录下
 2. 插件是否在配置文件的 `plugins` 列表中
 3. 终端是否显示插件加载成功的日志
