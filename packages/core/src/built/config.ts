@@ -210,7 +210,7 @@ export class ConfigFeature extends Feature<ConfigRecord> {
       count: list.length,
       items: list.map(r => ({
         name: r.key,
-        defaultValue: r.defaultValue,
+        // 不暴露 defaultValue 以防止泄露密钥/令牌
       })),
     };
   }

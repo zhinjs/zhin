@@ -17,7 +17,7 @@ export interface ModelRecord {
   definition: Definition<any>;
 }
 
-declare module "../plugin" {
+declare module "../plugin.js" {
   namespace Plugin {
     interface Extensions {
       defineModel<K extends keyof Models>(name: K, definition: Definition<Models[K]>): void;

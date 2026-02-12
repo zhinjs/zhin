@@ -123,7 +123,7 @@ export function parseOutput(raw: string): OutputElement[] {
       // 解析卡片 JSON
       try {
         const cardData = JSON.parse(cardMatch[2]);
-        elements.push({ type: 'card', ...cardData });
+        elements.push({ ...cardData, type: 'card' });
       } catch {
         elements.push({ type: 'text', content: cardMatch[2], format: 'plain' });
       }

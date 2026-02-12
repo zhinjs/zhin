@@ -4,47 +4,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import type { MigrationOperation, Column } from '../src/types.js';
-
-// 复制 generateReverseOperations 核心逻辑以便独立测试
-function generateReverseOperations(operations: MigrationOperation[]): MigrationOperation[] {
-  const reversed: MigrationOperation[] = [];
-
-  for (let i = operations.length - 1; i >= 0; i--) {
-    const op = operations[i];
-
-    switch (op.type) {
-      case 'createTable':
-        reversed.push({ type: 'dropTable', tableName: op.tableName });
-        break;
-
-      case 'dropTable':
-        throw new Error(`Cannot auto-reverse 'dropTable("${op.tableName}")'. Please provide explicit 'down' function.`);
-
-      case 'addColumn':
-        reversed.push({ type: 'dropColumn', tableName: op.tableName, columnName: op.columnName });
-        break;
-
-      case 'dropColumn':
-        throw new Error(`Cannot auto-reverse 'dropColumn("${op.tableName}", "${op.columnName}")'. Please provide explicit 'down' function.`);
-
-      case 'addIndex':
-        reversed.push({ type: 'dropIndex', tableName: op.tableName, indexName: op.indexName });
-        break;
-
-      case 'dropIndex':
-        throw new Error(`Cannot auto-reverse 'dropIndex("${op.tableName}", "${op.indexName}")'. Please provide explicit 'down' function.`);
-
-      case 'renameColumn':
-        reversed.push({ type: 'renameColumn', tableName: op.tableName, oldName: op.newName, newName: op.oldName });
-        break;
-
-      case 'query':
-        throw new Error(`Cannot auto-reverse raw query. Please provide explicit 'down' function.`);
-    }
-  }
-
-  return reversed;
-}
+import { generateReverseOperations } from '../src/migration.js';
 
 describe('generateReverseOperations', () => {
   it('createTable 应反转为 dropTable', () => {
