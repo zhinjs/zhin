@@ -131,7 +131,7 @@ addTool({
     },
     required: ['city'],
   },
-  // 同时生成命令 "get_weather <city:string>"
+  // 同时生成命令 "weather <city:string>"
   command: { pattern: 'weather <city:string>' },
   execute: async (args) => {
     return await fetchWeather(args.city)
