@@ -1,5 +1,11 @@
 # @zhin.js/client
 
+## 1.0.9
+
+### Patch Changes
+
+- 106d357: fix: ai
+
 ## 1.0.8
 
 ### Patch Changes

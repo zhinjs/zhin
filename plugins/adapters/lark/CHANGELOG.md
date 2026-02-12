@@ -1,5 +1,14 @@
 # @zhin.js/adapter-lark
 
+## 1.0.27
+
+### Patch Changes
+
+- 106d357: fix: ai
+- Updated dependencies [106d357]
+  - @zhin.js/http@1.0.17
+  - zhin.js@1.0.26
+
 ## 1.0.26
 
 ### Patch Changes

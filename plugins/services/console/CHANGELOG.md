@@ -1,5 +1,16 @@
 # @zhin.js/console
 
+## 1.0.22
+
+### Patch Changes
+
+- 106d357: fix: ai
+- Updated dependencies [106d357]
+  - @zhin.js/http@1.0.17
+  - @zhin.js/client@1.0.9
+  - @zhin.js/core@1.0.26
+  - zhin.js@1.0.26
+
 ## 1.0.21
 
 ### Patch Changes

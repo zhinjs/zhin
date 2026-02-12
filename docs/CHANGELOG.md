@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.6
+
+### Patch Changes
+
+- 106d357: fix: ai
+
 ## 1.0.5
 
 ### Patch Changes

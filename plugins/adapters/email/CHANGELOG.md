@@ -1,5 +1,13 @@
 # @zhin.js/adapter-email
 
+## 0.1.14
+
+### Patch Changes
+
+- 106d357: fix: ai
+- Updated dependencies [106d357]
+  - zhin.js@1.0.26
+
 ## 0.1.13
 
 ### Patch Changes

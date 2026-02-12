@@ -1,5 +1,13 @@
 # @zhin.js/database
 
+## 1.0.13
+
+### Patch Changes
+
+- 106d357: fix: ai
+- Updated dependencies [106d357]
+  - zhin.js@1.0.26
+
 ## 1.0.12
 
 ### Patch Changes
