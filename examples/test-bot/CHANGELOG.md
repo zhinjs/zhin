@@ -1,5 +1,11 @@
 # test-bot
 
+## 0.1.19
+
+### Patch Changes
+
+- @zhin.js/plugin-html-renderer@0.0.3
+
 ## 0.1.18
 
 ### Patch Changes

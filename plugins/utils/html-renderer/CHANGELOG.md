@@ -1,5 +1,12 @@
 # @zhin.js/plugin-html-renderer
 
+## 0.0.3
+
+### Patch Changes
+
+- Updated dependencies [404feeb]
+  - @zhin.js/satori@0.1.0
+
 ## 0.0.2
 
 ### Patch Changes

@@ -207,7 +207,7 @@ Zhin.js 团队和社区非常重视安全问题。我们感谢您帮助我们保
 - [ ] 审计日志（记录敏感操作）
 - [ ] 双因素认证（增强控制台安全）
 - [ ] 沙箱环境（隔离插件执行）
-- [ ] 自动安全扫描（CI/CD 集成）
+- [x] 自动安全扫描（CI/CD 集成）
 
 ### 📞 联系方式
 
@@ -421,7 +421,7 @@ We plan to introduce in future versions:
 - [ ] Audit logging (record sensitive operations)
 - [ ] Two-factor authentication (enhance console security)
 - [ ] Sandbox environment (isolate plugin execution)
-- [ ] Automated security scanning (CI/CD integration)
+- [x] Automated security scanning (CI/CD integration)
 
 ### 📞 Contact
 
