@@ -14,11 +14,18 @@ function detectPluginType(plugin: string): 'npm' | 'git' | 'github' | 'gitlab' |
   if (plugin.startsWith('git://') || plugin.startsWith('git+')) {
     return 'git';
   }
-  if (plugin.includes('github.com') || plugin.includes('gitlab.com') || plugin.includes('bitbucket.org')) {
-    if (plugin.includes('github.com')) return 'github';
-    if (plugin.includes('gitlab.com')) return 'gitlab';
-    if (plugin.includes('bitbucket.org')) return 'bitbucket';
-    return 'git';
+  // Prefer URL parsing when possible to avoid substring-based host detection
+  if (plugin.startsWith('http://') || plugin.startsWith('https://')) {
+    try {
+      const url = new URL(plugin);
+      const host = url.hostname;
+      if (host === 'github.com') return 'github';
+      if (host === 'gitlab.com') return 'gitlab';
+      if (host === 'bitbucket.org') return 'bitbucket';
+      return 'git';
+    } catch {
+      // fall through to non-URL heuristics
+    }
   }
   if (/^[\w-]+\/[\w-]+$/.test(plugin)) {
     return 'github';
