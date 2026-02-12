@@ -768,6 +768,12 @@ export class KookAdapter extends Adapter<KookBot> {
   async start(): Promise<void> {
     // 注册 KOOK 特有的管理工具
     this.registerKookTools();
+    this.declareSkill({
+      description: 'KOOK 服务器管理能力，包括成员管理（踢人、封禁、解封、改昵称）、角色管理（创建、删除、授予、撤销角色）、成员列表查询。',
+      keywords: ['KOOK', '开黑啦', '服务器管理', '角色'],
+      tags: ['kook', '服务器管理', '社交平台'],
+      conventions: '用户和服务器均使用字符串 ID 标识。guild_id 为服务器 ID，user_id 为用户 ID。调用工具时 bot 参数应填当前上下文的 Bot ID。',
+    });
     logger.info("KOOK 适配器已启动");
   }
 

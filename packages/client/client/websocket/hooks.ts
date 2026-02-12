@@ -3,7 +3,7 @@
  * 提供在 React 组件中使用 WebSocket 功能的便捷接口
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { 
   useSelector, 
   useDispatch,
@@ -18,7 +18,7 @@ import {
   setError
 } from '../store'
 import { getWebSocketManager } from './instance'
-import type { UseConfigOptions, UseWebSocketOptions, ConnectionState } from './types'
+import type { UseConfigOptions, UseWebSocketOptions } from './types'
 
 // ============================================================================
 // WebSocket 连接 Hook
@@ -121,7 +121,7 @@ export function useConfig(pluginName: string, options: UseConfigOptions = {}) {
       const result = await wsManager.getConfig(pluginName)
       return result
     } catch (error) {
-        console.log('getConfig',error)
+      console.error('[useConfig] getConfig failed:', error)
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       dispatch(setError({ pluginName, error: errorMessage }))
       throw error
@@ -137,7 +137,7 @@ export function useConfig(pluginName: string, options: UseConfigOptions = {}) {
     try {
       await wsManager.setConfig(pluginName, newConfig)
     } catch (error) {
-        console.log('setConfig',error)
+      console.error('[useConfig] setConfig failed:', error)
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       dispatch(setError({ pluginName, error: errorMessage }))
       throw error
@@ -233,48 +233,4 @@ export function useAllConfigs() {
     connected,
     refreshAll
   }), [allConfigs, allSchemas, connected, refreshAll])
-}
-
-// ============================================================================
-// 高级 Hook
-// ============================================================================
-
-/**
- * WebSocket 连接状态监听 Hook
- */
-export function useWebSocketState() {
-  const wsManager = getWebSocketManager()
-  const [state, setState] = useState(wsManager.getState())
-  
-  useEffect(() => {
-    const checkState = () => {
-      const newState = wsManager.getState()
-      if (newState !== state) {
-        setState(newState)
-      }
-    }
-    
-    const interval = setInterval(checkState, 1000)
-    return () => clearInterval(interval)
-  }, [wsManager, state])
-  
-  return state
-}
-
-/**
- * WebSocket 消息监听 Hook
- */
-export function useWebSocketMessages<T = any>(
-  filter?: (message: any) => boolean,
-  handler?: (message: T) => void
-) {
-  const [messages, setMessages] = useState<T[]>([])
-  
-  useEffect(() => {
-    const wsManager = getWebSocketManager()
-    // 这里需要扩展 WebSocketManager 来支持消息监听
-    // 暂时留空，后续可以扩展
-  }, [filter, handler])
-  
-  return messages
 }

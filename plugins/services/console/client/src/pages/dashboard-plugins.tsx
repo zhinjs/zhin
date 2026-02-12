@@ -1,18 +1,45 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
-import * as Themes from '@radix-ui/themes'
-import { AlertCircle, Package, Terminal, Box as IconBox, Layers, Database, Clock, FileText } from 'lucide-react'
+import { AlertCircle, Package, Terminal, Box as IconBox, Layers, Clock, Brain, Wrench, Database, Shield, Settings, Plug, Server, type LucideIcon } from 'lucide-react'
+import { Card, CardContent } from '../components/ui/card'
+import { Badge } from '../components/ui/badge'
+import { Alert, AlertDescription } from '../components/ui/alert'
+import { Skeleton } from '../components/ui/skeleton'
+import { Separator } from '../components/ui/separator'
 
-const { Flex, Box, Spinner, Text, Callout, Heading, Badge, Grid, Card, Separator } = Themes
+/** Feature 序列化格式（与后端 FeatureJSON 一致） */
+interface FeatureJSON {
+  name: string
+  icon: string
+  desc: string
+  count: number
+  items: any[]
+}
 
 interface Plugin {
   name: string
   status: 'active' | 'inactive'
-  commandCount: number
-  componentCount: number
-  middlewareCount: number
-  contextCount: number
   description: string
+  features: FeatureJSON[]
+}
+
+/** 根据后端返回的 icon 名称映射到 lucide-react 图标组件 */
+const iconMap: Record<string, LucideIcon> = {
+  Terminal,
+  Box: IconBox,
+  Layers,
+  Clock,
+  Brain,
+  Wrench,
+  Database,
+  Shield,
+  Settings,
+  Plug,
+  Server,
+}
+
+function getIcon(iconName: string): LucideIcon {
+  return iconMap[iconName] || Package
 }
 
 export default function DashboardPlugins() {
@@ -31,14 +58,9 @@ export default function DashboardPlugins() {
     try {
       const res = await fetch('/api/plugins', { credentials: 'include' })
       if (!res.ok) throw new Error('API 请求失败')
-
       const data = await res.json()
-      if (data.success) {
-        setPlugins(data.data)
-        setError(null)
-      } else {
-        throw new Error('数据格式错误')
-      }
+      if (data.success) { setPlugins(data.data); setError(null) }
+      else throw new Error('数据格式错误')
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -48,119 +70,100 @@ export default function DashboardPlugins() {
 
   if (loading) {
     return (
-      <Flex align="center" justify="center" className="h-full">
-        <Flex direction="column" align="center" gap="3">
-          <Spinner size="3" />
-          <Text size="2" color="gray">加载中...</Text>
-        </Flex>
-      </Flex>
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-40" />)}
+        </div>
+      </div>
     )
   }
 
   if (error) {
     return (
-      <Flex align="center" justify="center" className="h-full">
-        <Callout.Root color="red">
-          <Callout.Icon>
-            <AlertCircle />
-          </Callout.Icon>
-          <Callout.Text>
-            加载失败: {error}
-          </Callout.Text>
-        </Callout.Root>
-      </Flex>
+      <div className="flex items-center justify-center h-full">
+        <Alert variant="destructive" className="max-w-md">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>加载失败: {error}</AlertDescription>
+        </Alert>
+      </div>
     )
   }
 
   return (
-    <Box>
-      {/* 页面标题 */}
-      <Flex direction="column" gap="2" mb="4">
-        <Heading size="6">插件管理</Heading>
-        <Flex align="center" gap="2">
-          <Text size="2" color="gray">共 {plugins.length} 个插件</Text>
-          <Badge color="green" size="1">{plugins.filter(p => p.status === 'active').length}</Badge>
-          <Text size="2" color="gray">个运行中</Text>
-        </Flex>
-      </Flex>
+    <div className="space-y-4">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">插件管理</h1>
+        <div className="flex items-center gap-2 mt-1">
+          <span className="text-sm text-muted-foreground">共 {plugins.length} 个插件</span>
+          <Badge variant="success">{plugins.filter(p => p.status === 'active').length}</Badge>
+          <span className="text-sm text-muted-foreground">个运行中</span>
+        </div>
+      </div>
 
-      {/* 插件列表 - 紧凑网格 */}
-      <Grid columns={{ initial: '1', sm: '2', lg: '3' }} gap="3">
+      {/* Plugin grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {plugins.map((plugin, index) => (
-          <Card 
+          <Card
             key={`${plugin.name}-${index}`}
-            className="cursor-pointer hover-lift transition-smooth"
+            className="cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5"
             onClick={() => navigate(`/plugins/${encodeURIComponent(plugin.name)}`)}
           >
-            <Flex direction="column" gap="2" p="2">
-              {/* 头部 - 紧凑布局 */}
-              <Flex justify="between" align="center">
-                <Flex align="center" gap="2">
-                  <Flex align="center" justify="center" className="w-8 h-8 rounded-lg bg-blue-500/10 dark:bg-blue-400/10">
-                    <Package className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                  </Flex>
-                  <Heading size="3">{plugin.name}</Heading>
-                </Flex>
-                <Badge 
-                  color={plugin.status === 'active' ? 'green' : 'gray'}
-                  size="1"
-                >
+            <CardContent className="p-4 space-y-3">
+              {/* Header */}
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-md bg-secondary">
+                    <Package className="w-4 h-4" />
+                  </div>
+                  <span className="font-semibold text-sm">{plugin.name}</span>
+                </div>
+                <Badge variant={plugin.status === 'active' ? 'success' : 'secondary'}>
                   {plugin.status === 'active' ? '运行中' : '已停止'}
                 </Badge>
-              </Flex>
+              </div>
 
-              {/* 描述 - 限制两行 */}
-              <Text size="1" color="gray" className="line-clamp-2">
+              <p className="text-xs text-muted-foreground line-clamp-2">
                 {plugin.description || '暂无描述'}
-              </Text>
+              </p>
 
-              <Separator size="4" my="1" />
+              <Separator />
 
-              {/* 统计信息 - 紧凑网格 */}
-              <Grid columns={{ initial: '1', sm: '2', lg: '4' }} gap="1">
-                <Flex gap="2" justify="center" align="center" className="rounded-md bg-blue-500/5 dark:bg-blue-400/5 p-1.5">
-                  <Terminal className="w-3 h-3 text-blue-600 dark:text-blue-400" />
-                  <Text size="2" weight="bold" className="mt-0.5">{plugin.commandCount}</Text>
-                  <Text size="1" color="gray">命令</Text>
-                </Flex>
-
-                <Flex gap="2" justify="center" align="center" className="rounded-md bg-green-500/5 dark:bg-green-400/5 p-1.5">
-                  <IconBox className="w-3 h-3 text-green-600 dark:text-green-400" />
-                  <Text size="2" weight="bold" className="mt-0.5">{plugin.componentCount}</Text>
-                  <Text size="1" color="gray">组件</Text>
-                </Flex>
-
-                <Flex gap="2" justify="center" align="center" className="rounded-md bg-purple-500/5 dark:bg-purple-400/5 p-1.5">
-                  <Layers className="w-3 h-3 text-purple-600 dark:text-purple-400" />
-                  <Text size="2" weight="bold" className="mt-0.5">{plugin.middlewareCount}</Text>
-                  <Text size="1" color="gray">中间件</Text>
-                </Flex>
-
-                <Flex gap="2" justify="center" align="center" className="rounded-md bg-orange-500/5 dark:bg-orange-400/5 p-1.5">
-                  <Database className="w-3 h-3 text-orange-600 dark:text-orange-400" />
-                  <Text size="2" weight="bold" className="mt-0.5">{plugin.contextCount}</Text>
-                  <Text size="1" color="gray">上下文</Text>
-                </Flex>
-              </Grid>
-            </Flex>
+              {/* Features - 动态渲染，每个 Feature 自带 icon/name/count */}
+              {plugin.features.length > 0 ? (
+                <div className={`grid gap-1`} style={{ gridTemplateColumns: `repeat(${Math.min(plugin.features.length, 4)}, 1fr)` }}>
+                  {plugin.features.map((feature) => {
+                    const Icon = getIcon(feature.icon)
+                    return (
+                      <div key={feature.name} className="flex flex-col items-center gap-0.5 rounded-md bg-secondary/50 p-1.5">
+                        <Icon className="w-3 h-3 text-muted-foreground" />
+                        <span className="text-sm font-bold">{feature.count}</span>
+                        <span className="text-[10px] text-muted-foreground">{feature.desc}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground text-center py-1">无注册功能</p>
+              )}
+            </CardContent>
           </Card>
         ))}
-      </Grid>
+      </div>
 
-      {/* 空状态 */}
+      {/* Empty state */}
       {plugins.length === 0 && (
         <Card className="mt-6">
-          <Flex direction="column" align="center" gap="3" py="8">
-            <Flex align="center" justify="center" className="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800">
-              <Package className="w-8 h-8 text-gray-400" />
-            </Flex>
-            <Flex direction="column" align="center" gap="1">
-              <Heading size="4">暂无插件</Heading>
-              <Text size="2" color="gray">请先安装并启用插件</Text>
-            </Flex>
-          </Flex>
+          <CardContent className="flex flex-col items-center gap-3 py-12">
+            <div className="flex items-center justify-center w-16 h-16 rounded-full bg-muted">
+              <Package className="w-8 h-8 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-semibold">暂无插件</h3>
+            <p className="text-sm text-muted-foreground">请先安装并启用插件</p>
+          </CardContent>
         </Card>
       )}
-    </Box>
+    </div>
   )
 }

@@ -1,83 +1,36 @@
-# Zhin Bot Framework Packages
+# Zhin.js Packages
 
-Zhin框架的核心包集合。
+核心包目录，包含框架运行所必需的模块。
 
-## 包说明
+## 包列表
 
-### zhin.js
+| 包名 | 路径 | 说明 |
+|------|------|------|
+| [`zhin.js`](./zhin/) | `packages/zhin` | 主入口包，重新导出 `@zhin.js/core` 全部 API |
+| [`@zhin.js/core`](./core/) | `packages/core` | 核心框架：Plugin、Feature、Adapter、AI、MessageDispatcher |
+| [`@zhin.js/client`](./client/) | `packages/client` | Web 控制台 React 客户端 |
+| [`@zhin.js/satori`](./satori/) | `packages/satori` | HTML/CSS → SVG/PNG 渲染引擎 |
+| [`create-zhin-app`](./create-zhin/) | `packages/create-zhin` | 项目脚手架 CLI |
 
-主包，重导出`@zhin.js/core`的所有功能。这是用户使用框架时应该安装的包。
+## 架构概览
 
-```bash
-pnpm add zhin.js
+```
+zhin.js (主入口)
+  └── @zhin.js/core (核心框架)
+        ├── Plugin 插件系统
+        ├── Feature 架构 (Command, Tool, Skill, Cron, Database, Component, Config, Permission)
+        ├── Adapter 适配器抽象
+        ├── MessageDispatcher 消息路由
+        └── AI 模块 (ZhinAgent, Provider, SessionManager, ConversationMemory ...)
 ```
 
-### @zhin.js/core
+## 基础层依赖
 
-框架的核心实现，提供：
-- 插件系统
-- 适配器管理
-- 事件系统
-- 消息处理
-- 配置管理
-- 热更新支持
+核心包依赖 `basic/` 目录下的基础模块：
 
-### @zhin.js/hmr
-
-热模块替换系统的实现，提供：
-- 文件监听
-- 模块加载
-- 依赖管理
-- 性能监控
-- 重载管理
-
-### @zhin.js/types
-
-框架的类型定义包，提供：
-- 全局上下文类型
-- 消息类型
-- 配置类型
-- 插件类型
-- 适配器类型
-
-### @zhin.js/cli
-
-命令行工具，提供：
-- 项目创建
-- 开发服务器
-- 构建工具
-- 进程管理
-
-### create-zhin-zpp
-
-项目创建工具，`@zhin.js/cli`的便捷包装。
-
-```bash
-pnpm create zhin-app my-bot
-```
-
-## 开发指南
-
-1. 安装依赖：
-```bash
-pnpm install
-```
-
-2. 构建所有包：
-```bash
-pnpm build
-```
-
-3. 运行测试：
-```bash
-pnpm test
-```
-
-4. 开发模式：
-```bash
-pnpm dev
-```
-
-## 许可证
-
-MIT License
+| 包名 | 路径 | 说明 |
+|------|------|------|
+| `@zhin.js/cli` | `basic/cli` | 命令行工具（dev、start、new、build、pub） |
+| `@zhin.js/database` | `basic/database` | 数据库抽象层（SQLite、MySQL、MongoDB 等） |
+| `@zhin.js/logger` | `basic/logger` | 日志系统 |
+| `@zhin.js/schema` | `basic/schema` | Schema 校验与序列化 |

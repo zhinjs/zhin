@@ -1361,6 +1361,12 @@ class DiscordAdapter extends Adapter<DiscordBot> {
 
   async start(): Promise<void> {
     this.registerDiscordTools();
+    this.declareSkill({
+      description: 'Discord 服务器管理能力，包括成员管理（踢人、封禁、解封、超时、改昵称）、角色管理（添加/移除角色、角色列表）、服务器信息查询（成员列表、服务器信息）。',
+      keywords: ['Discord', 'DC', '服务器管理', '角色'],
+      tags: ['discord', '服务器管理', '社交平台'],
+      conventions: '服务器和用户均使用字符串 Snowflake ID 标识。guild_id 为服务器 ID，user_id 为用户 ID。调用工具时 bot 参数应填当前上下文的 Bot ID，guild_id 应填当前场景 ID。',
+    });
     await super.start();
   }
 

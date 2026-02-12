@@ -86,16 +86,8 @@ export interface UserInfo {
   role?: string;
 }
 
-/**
- * 权限服务接口
- */
-import type { PermissionService } from './built/permission.js';
-/**
- * 配置服务接口
- */
-import type { ConfigService } from './built/config.js';
-
-export { PermissionService, ConfigService };
+// PermissionService and ConfigService are now exported from their respective
+// built files as backward-compatible aliases for PermissionFeature / ConfigFeature.
 /**
  * 群组信息结构
  */
@@ -327,6 +319,9 @@ export interface Tool {
   
   /** 工具标签（用于分类和过滤） */
   tags?: string[];
+
+  /** 触发关键词（用户消息包含这些词时优先选择此工具） */
+  keywords?: string[];
   
   /** 
    * 命令配置（可选）
@@ -379,6 +374,7 @@ export interface ToolDefinition<TArgs extends Record<string, any> = Record<strin
   execute: (args: TArgs, context?: ToolContext) => MaybePromise<any>;
   source?: string;
   tags?: string[];
+  keywords?: string[];
   command?: Tool.CommandConfig | false;
   permissions?: string[];
   /** 支持的平台列表（不填则支持所有平台） */

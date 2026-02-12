@@ -1,4 +1,4 @@
-import { usePlugin, Database, Models, Adapter, SystemLog, Plugin } from "zhin.js";
+import { usePlugin, DatabaseFeature, Models, Adapter, SystemLog, Plugin } from "zhin.js";
 import { Schema } from "@zhin.js/schema";
 import { createServer, Server } from "http";
 import os from "node:os";
@@ -156,23 +156,12 @@ useContext("config", (configService) => {
 
   // 插件列表 API
   router.get(`${base}/plugins`, async (ctx) => {
-    const plugins = root.children.map((p) => {
-      const features = p.features;
-      return {
-        name: p.name,
-        status: "active",
-        // 向后兼容：返回各项数量
-        commandCount: features.commands.length,
-        componentCount: features.components.length,
-        middlewareCount: features.middlewares.length,
-        cronCount: features.crons.length,
-        contextCount: p.contexts.size,
-        filePath: p.filePath,
-        description: p.name,
-        // 新格式：也返回 features 对象
-        features,
-      };
-    });
+    const plugins = root.children.map((p) => ({
+      name: p.name,
+      status: "active",
+      description: p.name,
+      features: p.getFeatures(),
+    }));
     ctx.body = { success: true, data: plugins, total: plugins.length };
   });
 
@@ -187,38 +176,21 @@ useContext("config", (configService) => {
       return;
     }
 
-    const commandService = root.inject("command");
-    const commands = (commandService?.items || []).map((cmd: any) => ({
-      name: cmd.pattern,
-      desc: cmd.helpInfo?.desc,
-      usage: cmd.helpInfo?.usage,
-      examples: cmd.helpInfo?.examples,
-    }));
+    const features = plugin.getFeatures();
 
-    const contexts = Array.from(plugin.contexts.entries()).map(([name]) => ({
-      name,
-    }));
-    const features = plugin.features;
-
-    // 构建组件列表
-    const components = features.components.map((name) => ({
-      name,
-      type: "component",
-      props: {},
-    }));
-
-    // 构建中间件列表
-    const middlewares = features.middlewares.map((name, index) => ({
-      id: `middleware-${index}`,
-      type: name,
-    }));
-
-    // 构建定时任务列表
-    const crons = features.crons.map((expression, index) => ({
-      id: `cron-${index}`,
-      pattern: expression,
-      running: true,
-    }));
+    // 收集 features 中已展示的上下文名（adapter/service items 的 name）
+    const shownContextNames = new Set<string>();
+    for (const f of features) {
+      if (f.name === 'adapter' || f.name === 'service') {
+        for (const item of f.items) {
+          if (item.name) shownContextNames.add(item.name);
+        }
+      }
+    }
+    // 过滤掉已在 features 中展示的上下文
+    const contexts = Array.from(plugin.contexts.entries())
+      .filter(([name]) => !shownContextNames.has(name))
+      .map(([name]) => ({ name }));
 
     ctx.body = {
       success: true,
@@ -230,19 +202,6 @@ useContext("config", (configService) => {
         description: plugin.name,
         features,
         contexts,
-        commands,
-        components,
-        middlewares,
-        crons,
-        definitions: [],
-        statistics: {
-          commandCount: features.commands.length,
-          componentCount: features.components.length,
-          contextCount: contexts.length,
-          cronCount: features.crons.length,
-          middlewareCount: features.middlewares.length,
-          definitionCount: 0,
-        },
       },
     };
   });
@@ -393,19 +352,12 @@ useContext("config", (configService) => {
         : `localhost:${address.port}`;
     const apiUrl = `http://${visitAddress}${base}`;
 
-    logger.info("╔════════════════════════════════════════╗");
-    logger.info("║      HTTP 服务已启动                  ║");
-    logger.info("╠════════════════════════════════════════╣");
-    logger.info(`║  监听端口: ${port.toString().padEnd(32)}║`);
-    logger.info(`║  API 地址: ${apiUrl.padEnd(32)}║`);
-    logger.info(`║  基础认证: ${username.padEnd(32)}║`);
-    logger.info(`║  密码:     ${password.padEnd(32)}║`);
-    logger.info("╚════════════════════════════════════════╝");
+    logger.info(`HTTP 服务已启动 (port=${port}, api=${apiUrl}, user=${username})`);
   });
 });
 
 // 使用数据库服务（可选）
-useContext("database", (database: Database<any, Models>) => {
+useContext("database", (database: DatabaseFeature) => {
   const configService = root.inject("config")!;
   const appConfig = configService.get<{ http?: HttpConfig }>("zhin.config.yml");
   const base = appConfig.http?.base || "/api";

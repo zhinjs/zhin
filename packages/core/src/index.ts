@@ -1,4 +1,5 @@
 // Core exports
+export * from './feature.js'
 export * from './bot.js'
 export * from './plugin.js'
 export * from './command.js'
@@ -21,6 +22,12 @@ export * from './built/database.js'
 export * from './built/tool.js'
 // AI Trigger Service (纯工具，无副作用)
 export * from './built/ai-trigger.js'
+// MessageDispatcher (消息调度器)
+export * from './built/dispatcher.js'
+// Skill 系统 (AI 能力描述)
+export * from './built/skill.js'
+// AI 模块 (原 @zhin.js/ai，已合并至 core)
+export * from './ai/index.js'
 
 export * from './types.js'
 export * from './utils.js'

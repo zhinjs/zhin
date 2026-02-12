@@ -72,7 +72,19 @@ interface SensitiveFilterOptions {
 
 ### 自定义配置
 
-修改 `src/index.ts` 中的配置：
+在 `zhin.config.yml` 中配置 `sensitive-filter`：
+
+```yaml
+sensitive-filter:
+  mode: replace
+  replacement: '***'
+  categories:
+    - politics
+    - porn
+    - violence
+```
+
+或通过 TypeScript 配置：
 
 ```typescript
 const config: SensitiveFilterOptions = {

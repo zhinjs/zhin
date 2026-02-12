@@ -28,18 +28,16 @@ zhin new [plugin-name] [options]
 **生成的插件结构：**
 ```
 plugins/my-plugin/
-├── app/                    # 插件逻辑代码
+├── src/                    # 插件逻辑代码
 │   └── index.ts           # 插件入口
-├── client/                 # 客户端页面
+├── client/                 # 客户端页面（可选）
 │   ├── index.tsx          # 页面入口
 │   └── pages/             # React 组件
 │       └── index.tsx
-├── lib/                    # app 构建输出
+├── lib/                    # 构建输出
 ├── dist/                   # client 构建输出
 ├── package.json           # 插件配置
-├── tsconfig.json          # TypeScript 根配置
-├── tsconfig.app.json      # app 构建配置
-├── tsconfig.client.json   # client 构建配置
+├── tsconfig.json          # TypeScript 配置
 ├── README.md              # 插件文档
 └── CHANGELOG.md           # 变更日志
 ```
@@ -229,7 +227,7 @@ zhin new my-awesome-plugin
 
 # 插件会自动添加到 package.json 依赖
 # 在配置文件中启用插件
-# 编辑 zhin.config.ts，添加到 plugins 数组：
+# 编辑 zhin.config.yml，添加到 plugins 数组：
 # plugins: ['adapter-process', 'http', 'console', 'my-awesome-plugin']
 ```
 

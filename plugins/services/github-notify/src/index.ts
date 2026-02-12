@@ -305,9 +305,9 @@ useContext("database", "tool", (db, toolService) => {
   // 注册所有工具
   if (toolService) {
     const disposers = [
-      toolService.add(subscribeTool, 'github-notify'),
-      toolService.add(unsubscribeTool, 'github-notify'),
-      toolService.add(listTool, 'github-notify'),
+      toolService.addTool(subscribeTool, 'github-notify'),
+      toolService.addTool(unsubscribeTool, 'github-notify'),
+      toolService.addTool(listTool, 'github-notify'),
     ];
 
     logger.debug('GitHub 订阅工具已注册');
@@ -446,7 +446,7 @@ plugin.useContext("router", (router: Router) => {
     }
   });
 
-  logger.info("GitHub Webhook 路由已注册: POST /api/github/webhook");
+  logger.debug("GitHub Webhook 路由已注册: POST /api/github/webhook");
 });
 
 // 格式化 GitHub 事件为消息
@@ -515,4 +515,4 @@ function formatGitHubEvent(event: string, payload: GitHubWebhookPayload): string
   }
 }
 
-logger.info("GitHub 通知插件已加载");
+logger.info("GitHub 通知插件已加载 (webhook: POST /api/github/webhook)");

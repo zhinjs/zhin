@@ -690,6 +690,12 @@ class OneBot11Adapter extends Adapter<OneBot11WsClient> {
 
   async start(): Promise<void> {
     this.registerOneBot11Tools();
+    this.declareSkill({
+      description: 'OneBot11 QQ群管理能力，包括成员管理（踢人、禁言、设管理员、改名片、设头衔）、群设置（改群名）、群信息查询（成员列表、群信息）以及全员禁言。',
+      keywords: ['QQ', '群管理', '群聊', 'OneBot'],
+      tags: ['onebot11', 'qq', '群管理', '社交平台'],
+      conventions: '用户和群均使用数字 QQ号标识。调用工具时 bot 参数应填当前上下文的 Bot ID，group_id 应填当前场景 ID。user_id 为要操作的目标成员 QQ号。',
+    });
     await super.start();
   }
 

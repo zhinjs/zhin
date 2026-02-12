@@ -1,6 +1,6 @@
 # 配置文件
 
-Zhin.js 使用 `zhin.config.yml` 作为主配置文件。这个文件控制机器人的所有行为。
+Zhin.js 使用 `zhin.config.yml` 作为主配置文件。支持 YAML（`.yml` / `.yaml`）和 JSON（`.json`）格式。
 
 ## 配置文件位置
 
@@ -8,7 +8,8 @@ Zhin.js 使用 `zhin.config.yml` 作为主配置文件。这个文件控制机�
 
 ```
 my-bot/
-├── zhin.config.yml  ← 配置文件
+├── zhin.config.yml  ← 主配置文件
+├── .env             ← 环境变量（密码等敏感信息）
 ├── src/
 └── package.json
 ```
@@ -30,7 +31,11 @@ log_level: 1
 - `2` (warn) - 只输出警告和错误
 - `3` (error) - 只输出错误信息
 
-**示例**：开发时设置为 `0`，生产环境设置为 `1` 或 `2`。
+### 调试模式
+
+```yaml
+debug: true  # 启用调试模式，会输出更多内部信息
+```
 
 ### 插件目录
 
@@ -45,6 +50,7 @@ plugin_dirs:
 **说明**：
 - `node_modules` - 通过 npm/pnpm 安装的插件包
 - `./src/plugins` - 你自己编写的插件文件
+- 框架按列表顺序搜索，先找到即加载
 
 ### 核心服务
 
@@ -52,7 +58,7 @@ plugin_dirs:
 
 ```yaml
 services:
-  - process      # 进程管理
+  - process      # 进程管理（终端适配器）
   - config       # 配置管理
   - command      # 命令系统
   - component    # 组件系统
@@ -60,7 +66,7 @@ services:
   - cron         # 定时任务
 ```
 
-**说明**：这些是框架的核心功能，通常不需要修改。
+**说明**：这些是框架的核心功能，通常不需要修改。框架还会自动注册 `dispatcher`（消息调度）和 `skill`（AI 技能）服务。
 
 ### 插件列表
 
@@ -71,12 +77,49 @@ plugins:
   - "@zhin.js/http"            # HTTP 服务
   - "@zhin.js/console"         # Web 控制台
   - "@zhin.js/adapter-sandbox" # 终端适配器
+  - "@zhin.js/adapter-icqq"   # ICQQ 适配器
   - my-plugin                  # 你的本地插件
 ```
 
 **注意**：
 - npm 插件使用完整包名（如 `@zhin.js/http`）
 - 本地插件使用文件名（如 `my-plugin` 对应 `src/plugins/my-plugin.ts`）
+
+## 机器人配置（bots）
+
+`bots` 数组定义了每个平台的机器人实例。每个 bot 通过 `context` 字段关联到对应的适配器：
+
+```yaml
+bots:
+  # ICQQ (QQ) 机器人
+  - context: icqq
+    name: "${ICQQ_ACCOUNT}"       # QQ 号
+    password: "${ICQQ_PASSWORD}"   # 密码（可选，不填则扫码）
+    platform: 5                    # 登录平台
+    scope: icqqjs
+    data_dir: ./data
+
+  # QQ 官方机器人
+  - context: qq
+    name: qq-bot
+    appid: "${QQ_APPID}"
+    secret: "${QQ_SECRET}"
+
+  # KOOK 机器人
+  - context: kook
+    name: kook-bot
+    token: "${KOOK_TOKEN}"
+
+  # Discord 机器人
+  - context: discord
+    name: discord-bot
+    token: "${DISCORD_TOKEN}"
+```
+
+**说明**：
+- `context` 必须与适配器名称匹配（如 `icqq`、`qq`、`kook`、`discord`）
+- 使用 `${VAR}` 引用 `.env` 文件中的环境变量
+- 一个适配器可以配置多个 bot（不同账号）
 
 ## 数据库配置
 
@@ -111,6 +154,50 @@ database:
   database: zhin
 ```
 
+## AI 配置
+
+配置 AI 大模型集成：
+
+```yaml
+ai:
+  enabled: true                 # 是否启用 AI
+  defaultProvider: ollama        # 默认 AI 提供者
+
+  # AI 提供者配置
+  providers:
+    ollama:
+      baseURL: "http://localhost:11434"
+      model: "qwen2.5:7b"
+    openai:
+      apiKey: "${OPENAI_API_KEY}"
+      baseURL: "https://api.openai.com/v1"
+      model: "gpt-4o-mini"
+
+  # 会话配置
+  sessions:
+    useDatabase: true           # 使用数据库持久化会话
+    maxHistory: 20              # 最大历史消息数
+    expireMs: 3600000           # 会话过期时间（毫秒）
+
+  # 上下文管理
+  context:
+    maxMessagesBeforeSummary: 10  # 触发摘要的消息数
+    summaryRetentionDays: 30     # 摘要保留天数
+
+  # 触发配置
+  trigger:
+    respondToAt: true           # 是否响应 @机器人
+    respondToPrivate: true      # 是否响应私聊
+    prefixes: ["ai "]           # AI 触发前缀
+    ignorePrefixes: ["/", "!"]  # 忽略的前缀（通常是命令前缀）
+    timeout: 60000              # AI 处理超时（毫秒）
+```
+
+**说明**：
+- AI 模块需要配置至少一个 provider 才能工作
+- 支持 Ollama（本地模型）、OpenAI、以及其他兼容 OpenAI API 的服务
+- 详见 [AI 模块文档](/advanced/ai)
+
 ## HTTP 服务配置
 
 配置 Web 服务器和 API：
@@ -123,29 +210,6 @@ http:
   base: /api               # API 基础路径
 ```
 
-**环境变量**：
-
-在项目根目录的 `.env` 文件中设置：
-
-```bash
-username=admin
-password=your_secure_password
-```
-
-**为什么使用环境变量？**
-- ✅ 安全 - 密码不会提交到 Git
-- ✅ 灵活 - 不同环境使用不同配置
-- ✅ 标准 - 符合 12-Factor App 原则
-
-**修改端口**：
-
-如果 8086 端口被占用，可以改成其他端口：
-
-```yaml
-http:
-  port: 3000  # 改成 3000
-```
-
 ## Web 控制台配置
 
 配置 Web 管理界面：
@@ -156,11 +220,31 @@ console:
   lazyLoad: false    # 是否延迟加载（开发时建议 false）
 ```
 
-**配置说明**：
-- `enabled: true` - 启用 Web 控制台
-- `enabled: false` - 禁用 Web 控制台（生产环境可选）
-- `lazyLoad: false` - 立即加载（开发推荐）
-- `lazyLoad: true` - 延迟加载（节省内存）
+## 环境变量
+
+Zhin.js 支持在配置文件中通过 `${VAR}` 引用环境变量：
+
+```yaml
+# 基础用法
+password: ${MY_PASSWORD}
+
+# 带默认值
+port: ${PORT:8086}          # 如果 PORT 未设置，使用 8086
+```
+
+在项目根目录的 `.env` 文件中设置：
+
+```bash
+username=admin
+password=your_secure_password
+ICQQ_ACCOUNT=123456789
+ICQQ_PASSWORD=your_qq_password
+```
+
+**为什么使用环境变量？**
+- 安全 - 密码不会提交到 Git
+- 灵活 - 不同环境使用不同配置
+- 标准 - 符合 12-Factor App 原则
 
 ## 插件配置
 
@@ -186,10 +270,6 @@ plugins:
   - todo             # 加载 src/plugins/todo.ts
 ```
 
-**说明**：
-- 插件名对应文件名（不含 `.ts` 扩展名）
-- 支持 TypeScript (`.ts`) 和 JavaScript (`.js`)
-
 ### npm 插件
 
 npm 插件是通过包管理器安装的插件。
@@ -206,11 +286,24 @@ plugins:
   - "@zhin.js/plugin-music"  # 音乐插件
 ```
 
-**官方插件列表**：
-- `@zhin.js/http` - HTTP 服务
-- `@zhin.js/console` - Web 控制台
-- `@zhin.js/plugin-music` - 音乐播放
-- `@zhin.js/plugin-github-notify` - GitHub 通知
+### 插件级配置
+
+部分插件支持在主配置文件中设置自己的配置，键名为插件名：
+
+```yaml
+# HTTP 插件配置
+http:
+  port: 8086
+
+# 控制台插件配置
+console:
+  enabled: true
+
+# 自定义插件配置（通过 addConfig 注册）
+my-plugin:
+  apiKey: "${MY_API_KEY}"
+  timeout: 5000
+```
 
 ### 禁用插件
 
@@ -222,37 +315,27 @@ plugins:
   # - "@zhin.js/plugin-music"  # 已禁用
 ```
 
-或者直接删除该行。
-
 ## 热重载
 
-Zhin.js 支持配置热重载，修改配置文件后自动生效。
+Zhin.js 支持配置热重载，修改配置文件后自动生效（仅在 `zhin dev` 模式下）。
 
 ### 自动重载的配置
 
-- ✅ **插件列表** - 添加/删除插件自动重载
-- ✅ **插件配置** - 修改插件配置自动重载
-- ✅ **日志级别** - 修改日志级别立即生效
+- **插件列表** - 添加/删除插件自动重载
+- **插件配置** - 修改插件配置自动重载
+- **日志级别** - 修改日志级别立即生效
 
 ### 需要重启的配置
 
-- ⚠️ **端口号** - 修改 HTTP 端口需要重启
-- ⚠️ **数据库连接** - 修改数据库配置需要重启
-- ⚠️ **核心服务** - 修改 `services` 列表需要重启
-
-**重启方法**：
-```bash
-# 停止机器人
-Ctrl + C
-
-# 重新启动
-pnpm dev
-```
+- **端口号** - 修改 HTTP 端口需要重启
+- **数据库连接** - 修改数据库配置需要重启
+- **核心服务** - 修改 `services` 列表需要重启
 
 ## 完整示例
 
 ```yaml
 log_level: 1
+debug: false
 
 database:
   dialect: sqlite
@@ -275,15 +358,32 @@ plugins:
   - "@zhin.js/http"
   - "@zhin.js/console"
   - "@zhin.js/adapter-sandbox"
+  - "@zhin.js/adapter-icqq"
+
+bots:
+  - context: icqq
+    name: "${ICQQ_ACCOUNT}"
+    password: "${ICQQ_PASSWORD}"
+    platform: 5
+    scope: icqqjs
 
 http:
   port: 8086
   username: ${username}
   password: ${password}
-  base: /api
 
 console:
   enabled: true
   lazyLoad: false
-```
 
+ai:
+  enabled: true
+  defaultProvider: ollama
+  providers:
+    ollama:
+      baseURL: "http://localhost:11434"
+      model: "qwen2.5:7b"
+  trigger:
+    respondToAt: true
+    respondToPrivate: true
+```

@@ -71,8 +71,9 @@ class RecordingMigrationContext implements MigrationContext {
 
 /**
  * 根据 up 操作自动生成 down 操作
+ * @internal 仅用于测试
  */
-function generateReverseOperations(operations: MigrationOperation[]): MigrationOperation[] {
+export function generateReverseOperations(operations: MigrationOperation[]): MigrationOperation[] {
   const reversed: MigrationOperation[] = [];
   
   // 反向遍历操作列表
@@ -251,7 +252,9 @@ export class MigrationRunner<D = any, S extends Record<string, object> = Record<
     if (result.length === 0 || !result[0].operations) {
       return null;
     }
-    return JSON.parse(result[0].operations);
+    const ops = result[0].operations;
+    // processFieldValue 可能已经自动解析了 JSON 字符串
+    return typeof ops === 'string' ? JSON.parse(ops) : ops as unknown as MigrationOperation[];
   }
   
   /**

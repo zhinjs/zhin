@@ -41,8 +41,8 @@ export async function build(root, config = {}) {
           root + '/react-dom-client.js',
           root + '/react-jsx-dev-runtime.js',
           root + '/radix-ui.js',
-          root + '/radix-ui-themes.js',
           root + '/lucide-react.js',
+          root + '/cva.js',
           root + '/client.js',
         ],
         output: {
@@ -69,10 +69,7 @@ export async function build(root, config = {}) {
         'react-dom': root + '/react-dom.js',
         'lucide-react': root + '/lucide-react.js',
         'radix-ui': root + '/radix-ui.js',
-        '@radix-ui/themes/styles.css': findModulePath('@radix-ui/themes') + '/styles.css',
-        '@radix-ui/themes/tokens.css': findModulePath('@radix-ui/themes') + '/tokens.css',
-        '@radix-ui/themes/utilities.css': findModulePath('@radix-ui/themes') + '/utilities.css',
-        '@radix-ui/themes': root + '/radix-ui-themes.js',
+        'class-variance-authority': root + '/cva.js',
         '@zhin.js/client': root + '/client.js'
       },
     },
@@ -138,24 +135,25 @@ export async function build(root, config = {}) {
         },
       },
     }),
+    // Build class-variance-authority wrapper
     vite.build({
-      root: findModulePath('@radix-ui/themes'),
+      root: wrapperDir,
       define: {
         'process.env.NODE_ENV': JSON.stringify('production'),
       },
       build: {
         outDir: dist,
         emptyOutDir: false,
-        rollupOptions:{
-          external: ['react','react-router','react-dom',],
-          output: {
-            entryFileNames: '[name].js',
-          },
-        },
         lib: {
-          formats: ['es'],
           entry: {
-            'radix-ui-themes': findModulePath('@radix-ui/themes') + '/dist/esm/index.js',
+            'cva': wrapperDir + '/cva.js',
+          },
+          formats: ['es'],
+        },
+        rollupOptions: {
+          output: {
+            preserveModules: false,
+            entryFileNames: '[name].js',
           },
         },
       },
@@ -279,7 +277,7 @@ export async function build(root, config = {}) {
         input: {
           'client': cwd + '/packages/client/client/index.ts',
         },
-        external: ['react', 'react-dom', 'react-dom/client', 'react-router', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'lucide-react', 'radix-ui', '@radix-ui/themes'],
+        external: ['react', 'react-dom', 'react-dom/client', 'react-router', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'lucide-react', 'radix-ui', 'class-variance-authority'],
         output: {
           paths: {
             'react': './react.js',
@@ -289,7 +287,7 @@ export async function build(root, config = {}) {
             'react/jsx-runtime': './react-jsx-runtime.js',
             'react/jsx-dev-runtime': './react-jsx-dev-runtime.js',
             'radix-ui': './radix-ui.js',
-            '@radix-ui/themes': './radix-ui-themes.js',
+            'class-variance-authority': './cva.js',
             'lucide-react': './lucide-react.js',
           },
         },

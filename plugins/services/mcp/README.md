@@ -303,7 +303,7 @@ node lib/index.js
 
 - [Model Context Protocol](https://modelcontextprotocol.io)
 - [Zhin 框架文档](https://zhin.js.org)
-- [插件开发指南](../../docs/plugin/development.md)
+- [插件开发指南](https://zhin.js.org/essentials/plugins)
 
 ## 🤝 贡献
 

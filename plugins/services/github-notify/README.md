@@ -19,21 +19,27 @@ pnpm add @zhin.js/plugin-github-notify
 
 ## 配置
 
-在 `zhin.config.ts` 中添加插件：
+在 `zhin.config.yml` 中添加插件：
+
+```yaml
+plugins:
+  - http               # 必需：提供 HTTP 服务
+  - github-notify      # GitHub 通知插件
+
+# GitHub Notify 配置
+github-notify:
+  webhook_secret: your-webhook-secret   # 可选：Webhook 签名密钥
+```
+
+或使用 TypeScript 配置：
 
 ```typescript
+import { defineConfig } from 'zhin.js'
+
 export default defineConfig({
-  plugins: [
-    'http',              // 必需：提供 HTTP 服务
-    'adapter-process',   // 或其他适配器
-    'github-notify'      // GitHub 通知插件
-  ],
-  plugin_config: {
-    'github-notify': {
-      webhook_secret: 'your-webhook-secret' // 可选：Webhook 签名密钥
-    }
-  }
+  plugins: ['http', 'github-notify'],
 })
+```
 ```
 
 ## 使用方法

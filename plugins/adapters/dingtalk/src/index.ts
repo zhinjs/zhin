@@ -793,6 +793,12 @@ class DingTalkAdapter extends Adapter<DingTalkBot> {
 
     async start(): Promise<void> {
         this.registerDingTalkTools();
+        this.declareSkill({
+            description: '钉钉管理能力，包括用户信息查询、部门信息查询、工作通知发送、群聊管理（创建群、查看群信息、添加/移除群成员）。',
+            keywords: ['钉钉', 'DingTalk', '企业管理', '工作通知'],
+            tags: ['dingtalk', '企业管理', '办公协作'],
+            conventions: '用户使用 userId 标识，群聊使用 chatId 标识。调用工具时 bot 参数应填当前上下文的 Bot ID。',
+        });
         await super.start();
     }
 

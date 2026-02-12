@@ -106,8 +106,9 @@ export const DEFAULT_AI_TRIGGER_CONFIG: Required<AITriggerConfig> = {
  * 检查消息是否 @ 了机器人
  */
 export function isAtBot<T extends object>(message: Message<T>): boolean {
+  const botId = String(message.$bot);
   return message.$content.some(seg =>  {
-    return seg.data?.qq === message.$bot || seg.data?.user_id === message.$bot;
+    return String(seg.data?.qq) === botId || String(seg.data?.user_id) === botId;
   });
 }
 
@@ -142,10 +143,12 @@ export function parseRichMediaContent(content: string): MessageElement[] {
  * 移除 @ 机器人的部分
  */
 export function removeAtBot<T extends object>(message: Message<T>): MessageElement[] {
+  const botId = String(message.$bot);
   return message.$content.filter(seg => {
     const { type, data } = seg;
-    const userId = data?.user_id || data?.qq;
-    return type !== "at" && userId !== message.$bot;
+    if (type !== "at") return true; // 非 at 段全部保留
+    const userId = String(data?.user_id || data?.qq);
+    return userId !== botId; // 只移除 @机器人 的段，保留 @其他人
   });
 }
 

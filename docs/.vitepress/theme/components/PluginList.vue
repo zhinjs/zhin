@@ -3,19 +3,25 @@ import { computed } from 'vue'
 import { data } from '../plugins.data'
 
 const props = defineProps<{
-  category?: ('game' | 'util' | 'ai' | 'framework' | 'service' | 'adapter')
+  category?: string
   limit?: number
 }>()
 
 const filteredPlugins = computed(() => {
-  let result = props.category 
-    ? data.plugins.filter(p => p.category.includes(props.category!))
-    : data.plugins
-  
+  let result = data.plugins
+
+  if (props.category) {
+    result = result.filter(p => {
+      // 支持 "official" 作为虚拟分类
+      if (props.category === 'official') return p.isOfficial
+      return p.category.includes(props.category as any)
+    })
+  }
+
   if (props.limit) {
     result = result.slice(0, props.limit)
   }
-  
+
   return result
 })
 
@@ -24,70 +30,68 @@ function openLink(url?: string) {
     window.open(url, '_blank')
   }
 }
+
+function formatDate(dateStr?: string) {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  return d.toLocaleDateString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' })
+}
 </script>
 
 <template>
   <div class="plugin-list">
     <div v-if="filteredPlugins.length === 0" class="empty-state">
-      <p>暂无插件</p>
+      <p>暂无此分类的插件</p>
     </div>
-    
+
     <div v-else class="plugin-grid">
-      <div 
-        v-for="plugin in filteredPlugins" 
+      <div
+        v-for="plugin in filteredPlugins"
         :key="plugin.name"
         class="plugin-card"
+        @click="openLink(plugin.npm)"
       >
-        <div class="plugin-header">
-          <span class="plugin-icon">{{ plugin.icon || '📦' }}</span>
-          <div class="plugin-info">
-            <h3 class="plugin-name">{{ plugin.displayName }}</h3>
-            <code class="plugin-package">{{ plugin.name }}</code>
-          </div>
+        <div class="card-header">
+          <h3 class="card-title">{{ plugin.displayName }}</h3>
+          <span v-if="plugin.version" class="card-version">v{{ plugin.version }}</span>
         </div>
-        
-        <p class="plugin-description">{{ plugin.description }}</p>
-        
-        <div class="plugin-meta">
-          <span class="plugin-author">👤 {{ plugin.author }}</span>
-          <span v-if="plugin.version" class="plugin-version">v{{ plugin.version }}</span>
+
+        <p class="card-package">{{ plugin.name }}</p>
+
+        <p class="card-desc">{{ plugin.description || '暂无描述' }}</p>
+
+        <div class="card-tags" v-if="plugin.category.length">
+          <span
+            v-for="cat in plugin.category"
+            :key="cat"
+            class="card-tag"
+          >{{ cat }}</span>
         </div>
-        
-        <div v-if="plugin.tags && plugin.tags.length" class="plugin-tags">
-          <span v-for="tag in plugin.tags" :key="tag" class="tag">
-            {{ tag }}
-          </span>
+
+        <div class="card-footer">
+          <span class="card-author">{{ plugin.author }}</span>
+          <span v-if="plugin.lastUpdate" class="card-date">{{ formatDate(plugin.lastUpdate) }}</span>
         </div>
-        
-        <div class="plugin-actions">
-          <button 
-            v-if="plugin.npm" 
-            @click="openLink(plugin.npm)"
-            class="action-btn npm-btn"
-            title="查看 npm"
-          >
-            📦 npm
-          </button>
-          <button 
-            v-if="plugin.github" 
-            @click="openLink(plugin.github)"
-            class="action-btn github-btn"
-            title="查看 GitHub"
-          >
-            ⭐ GitHub
-          </button>
-          <button 
-            v-if="plugin.homepage" 
-            @click="openLink(plugin.homepage)"
-            class="action-btn home-btn"
-            title="访问主页"
-          >
-            🏠 主页
-          </button>
+
+        <div class="card-actions">
+          <a
+            v-if="plugin.npm"
+            :href="plugin.npm"
+            target="_blank"
+            class="card-link"
+            @click.stop
+          >npm</a>
+          <a
+            v-if="plugin.github"
+            :href="plugin.github"
+            target="_blank"
+            class="card-link"
+            @click.stop
+          >GitHub</a>
         </div>
-        
-        <div class="plugin-install">
-          <code>zhin install {{ plugin.name }}</code>
+
+        <div class="card-install">
+          <code>pnpm add {{ plugin.name }}</code>
         </div>
       </div>
     </div>
@@ -96,24 +100,22 @@ function openLink(url?: string) {
 
 <style scoped>
 .plugin-list {
-  margin: 24px 0;
+  margin: 16px 0;
 }
 
 .plugin-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
 }
 
-/* 平板：3列 */
-@media (max-width: 1200px) {
+@media (max-width: 960px) {
   .plugin-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
-/* 手机：1列 */
-@media (max-width: 768px) {
+@media (max-width: 640px) {
   .plugin-grid {
     grid-template-columns: 1fr;
   }
@@ -122,151 +124,138 @@ function openLink(url?: string) {
 .plugin-card {
   background: var(--vp-c-bg-soft);
   border: 1px solid var(--vp-c-divider);
-  border-radius: 8px;
-  padding: 16px;
-  transition: all 0.25s ease;
+  border-radius: 12px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   cursor: pointer;
+  transition: border-color 0.25s, box-shadow 0.25s;
 }
 
 .plugin-card:hover {
   border-color: var(--vp-c-brand);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  transform: translateY(-2px);
+  box-shadow: 0 2px 12px rgba(60, 60, 67, 0.08);
 }
 
-.plugin-header {
+.card-header {
   display: flex;
-  align-items: center;
+  align-items: baseline;
+  justify-content: space-between;
   gap: 8px;
 }
 
-.plugin-icon {
-  font-size: 24px;
-  line-height: 1;
+.card-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--vp-c-text-1);
+  line-height: 1.4;
+}
+
+.card-version {
+  font-size: 12px;
+  color: var(--vp-c-text-3);
+  white-space: nowrap;
   flex-shrink: 0;
 }
 
-.plugin-info {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.plugin-name {
+.card-package {
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--vp-c-text-1);
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.plugin-package {
-  display: block;
-  font-size: 11px;
+  font-size: 13px;
+  font-family: var(--vp-font-family-mono);
   color: var(--vp-c-text-3);
-  margin-top: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.plugin-description {
+.card-desc {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.6;
   color: var(--vp-c-text-2);
-  font-size: 12px;
-  line-height: 1.5;
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  min-height: 36px;
+  overflow: hidden;
+  flex: 1;
 }
 
-.plugin-meta {
+.card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.card-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--vp-c-brand);
+  background: var(--vp-c-brand-soft);
+  border-radius: 6px;
+}
+
+.card-footer {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 11px;
+  justify-content: space-between;
+  font-size: 13px;
   color: var(--vp-c-text-3);
+  margin-top: 4px;
 }
 
-.plugin-author,
-.plugin-version {
-  display: flex;
-  align-items: center;
-  gap: 2px;
+.card-author,
+.card-date {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.plugin-tags {
+.card-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  max-height: 20px;
-  overflow: hidden;
+  gap: 8px;
+  margin-top: 4px;
 }
 
-.tag {
-  display: inline-block;
-  padding: 1px 6px;
-  font-size: 10px;
-  background: var(--vp-c-bg);
-  border-radius: 3px;
-  color: var(--vp-c-text-3);
-}
-
-.plugin-actions {
-  display: flex;
-  gap: 6px;
-  margin-top: auto;
-}
-
-.action-btn {
-  flex: 1;
-  padding: 4px 8px;
-  font-size: 11px;
+.card-link {
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 500;
   border: 1px solid var(--vp-c-divider);
-  border-radius: 4px;
-  background: var(--vp-c-bg);
+  border-radius: 8px;
   color: var(--vp-c-text-2);
-  cursor: pointer;
-  transition: all 0.2s;
-  white-space: nowrap;
+  text-decoration: none;
+  transition: border-color 0.25s, color 0.25s;
 }
 
-.action-btn:hover {
+.card-link:hover {
   border-color: var(--vp-c-brand);
   color: var(--vp-c-brand);
-  background: var(--vp-c-bg-soft);
 }
 
-.plugin-install {
+.card-install {
+  margin-top: 4px;
+  padding: 8px 12px;
   background: var(--vp-c-bg);
   border: 1px solid var(--vp-c-divider);
-  border-radius: 4px;
-  padding: 6px 8px;
+  border-radius: 8px;
 }
 
-.plugin-install code {
-  font-size: 10px;
-  color: var(--vp-c-text-3);
+.card-install code {
+  font-size: 13px;
+  color: var(--vp-c-text-2);
+  font-family: var(--vp-font-family-mono);
   word-break: break-all;
 }
 
 .empty-state {
   text-align: center;
-  padding: 40px;
+  padding: 48px 20px;
   color: var(--vp-c-text-3);
-  grid-column: 1 / -1;
+  font-size: 14px;
 }
 </style>
-

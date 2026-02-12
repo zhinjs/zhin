@@ -1,10 +1,12 @@
 /**
- * 嵌套字段渲染器
- * 用于渲染数组项、元组项等嵌套字段
+ * Nested field renderer for array items, tuple slots, etc.
  */
 
-import { Flex, Box, Text, TextField, TextArea, Switch, Card } from '@radix-ui/themes'
 import type { SchemaField } from './types.js'
+import { Input } from '../ui/input'
+import { Textarea } from '../ui/textarea'
+import { Switch } from '../ui/switch'
+import { Card } from '../ui/card'
 
 interface NestedFieldRendererProps {
   fieldName: string
@@ -17,78 +19,56 @@ export function NestedFieldRenderer({ field, value, onChange }: NestedFieldRende
   switch (field.type) {
     case 'string':
       return (
-        <TextField.Root
-          size="1"
-          value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={field.description || '请输入'}
+        <Input
+          value={value || ''} onChange={(e) => onChange(e.target.value)}
+          placeholder={field.description || '请输入'} className="h-8 text-sm"
         />
       )
-    
+
     case 'number':
     case 'integer':
       return (
-        <TextField.Root
-          size="1"
-          type="number"
-          value={value?.toString() || ''}
+        <Input
+          type="number" value={value?.toString() || ''}
           onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
           placeholder={field.description || '请输入数字'}
-          min={field.min}
-          max={field.max}
+          min={field.min} max={field.max} className="h-8 text-sm"
         />
       )
-    
+
     case 'boolean':
       return (
-        <Flex align="center" gap="2">
-          <Switch
-            checked={value === true}
-            onCheckedChange={onChange}
-          />
-          <Text size="2" color={value ? 'green' : 'gray'}>
+        <div className="flex items-center gap-2">
+          <Switch checked={value === true} onCheckedChange={onChange} />
+          <span className={`text-sm ${value ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
             {value ? '已启用' : '已禁用'}
-          </Text>
-        </Flex>
+          </span>
+        </div>
       )
-    
+
     case 'object': {
       const objectFields = field.dict || field.properties || {}
       return (
-        <Card size="1">
-          <Flex direction="column" gap="2" p="2">
-            {Object.entries(objectFields).map(([key, nestedField]: [string, any]) => (
-              <Box key={key}>
-                <Text size="1" weight="bold">{key}</Text>
-                <NestedFieldRenderer
-                  fieldName={key}
-                  field={nestedField}
-                  value={value?.[key]}
-                  onChange={(val) => {
-                    onChange({ ...value, [key]: val })
-                  }}
-                />
-              </Box>
-            ))}
-          </Flex>
+        <Card className="p-2 space-y-2">
+          {Object.entries(objectFields).map(([key, nestedField]: [string, any]) => (
+            <div key={key} className="space-y-1">
+              <span className="text-xs font-semibold">{key}</span>
+              <NestedFieldRenderer
+                fieldName={key} field={nestedField} value={value?.[key]}
+                onChange={(val) => onChange({ ...value, [key]: val })}
+              />
+            </div>
+          ))}
         </Card>
       )
     }
-    
+
     default:
       return (
-        <TextArea
-          size="1"
+        <Textarea
           value={typeof value === 'object' ? JSON.stringify(value, null, 2) : value || ''}
-          onChange={(e) => {
-            try {
-              onChange(JSON.parse(e.target.value))
-            } catch {
-              onChange(e.target.value)
-            }
-          }}
-          rows={3}
-          className="font-mono text-xs"
+          onChange={(e) => { try { onChange(JSON.parse(e.target.value)) } catch { onChange(e.target.value) } }}
+          rows={3} className="font-mono text-xs"
         />
       )
   }

@@ -5,8 +5,9 @@ export default defineConfig({
     'index': 'src/index.ts',
     'bin': 'src/bin.ts',
     'build': 'src/build.ts',
-    'dev': 'src/dev.ts',
     'websocket': 'src/websocket.ts',
+    'transform': 'src/transform.ts',
+    // dev.ts 不再需要打包（Vite 仅作为构建工具在 build.ts 中使用，运行时不加载）
   },
   format: ['esm'],
   dts: true,
@@ -14,13 +15,18 @@ export default defineConfig({
   treeshake: true,
   splitting: false,
   sourcemap: false,
+  // 构建产物统一为生产模式：
+  // process.env.NODE_ENV 替换为 "production"，isDev=false，
+  // 文件监听等 dev 分支会被 treeshake 剪除。
+  define: {
+    'process.env.NODE_ENV': '"production"',
+  },
   // 外部依赖 - 这些不会被打包
   external: [
-    // 开发时依赖 - 生产环境不需要
+    // Vite 相关（仅在 build.ts 中使用，index.ts 运行时不需要）
     'vite',
     '@vitejs/plugin-react',
     '@tailwindcss/vite',
-    'koa-connect',
     // Runtime 依赖 - 由用户安装
     '@zhin.js/core',
     '@zhin.js/http',
@@ -36,6 +42,8 @@ export default defineConfig({
     'react-dom',
     'ws',
     'mime',
+    // esbuild 用于运行时按需转译 TSX/TS，保持 external
+    'esbuild',
   ],
   // 不打包 node_modules，保持为 require/import
   noExternal: [],
@@ -44,4 +52,3 @@ export default defineConfig({
   // TypeScript 配置
   tsconfig: './tsconfig.json',
 })
-

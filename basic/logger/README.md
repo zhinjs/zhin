@@ -25,7 +25,7 @@ pnpm add @zhin.js/logger
 ### 基础用法
 
 ```typescript
-import { createLogger, info, success, warn, error } from '@zhin.js/logger'
+import { getLogger, info, success, warn, error } from '@zhin.js/logger'
 
 // 使用便捷函数（默认 logger）
 info('应用启动')
@@ -34,7 +34,7 @@ warn('警告信息')
 error('错误信息')
 
 // 创建命名空间 Logger
-const logger = createLogger('MyApp')
+const logger = getLogger('MyApp')
 logger.info('这是来自 MyApp 的日志')
 ```
 
@@ -55,9 +55,9 @@ logger.info('这是来自 MyApp 的日志')
 ### 1. 日志级别
 
 ```typescript
-import { createLogger, LogLevel } from '@zhin.js/logger'
+import { getLogger, LogLevel } from '@zhin.js/logger'
 
-const logger = createLogger('Test')
+const logger = getLogger('Test')
 
 logger.debug('调试信息')   // 灰色
 logger.info('一般信息')    // 蓝色
@@ -72,7 +72,7 @@ logger.setLevel(LogLevel.WARN) // 只显示 WARN 和 ERROR
 ### 2. 命名空间和子 Logger
 
 ```typescript
-const appLogger = createLogger('App')
+const appLogger = getLogger('App')
 const dbLogger = appLogger.getLogger('Database')       // 自动继承父级配置
 const apiLogger = appLogger.getLogger('API')
 
@@ -90,7 +90,7 @@ routerLogger.info('路由就绪')        // [App:API:HTTP:Router]: ...
 ### 3. 参数格式化
 
 ```typescript
-const logger = createLogger('Format')
+const logger = getLogger('Format')
 
 // 支持 printf 风格的格式化，与 console.info 行为一致
 logger.info('用户 %s 登录成功，ID: %d', 'John', 123)
@@ -101,7 +101,7 @@ logger.error('操作失败：%o', { code: 500, message: 'Server Error' })
 ### 4. 性能监控
 
 ```typescript
-const logger = createLogger('Performance')
+const logger = getLogger('Performance')
 
 // 方式1：使用返回的 Timer
 const timer = logger.time('数据处理')
@@ -117,7 +117,7 @@ logger.timeEnd('API调用') // 输出: API调用 took 67.89ms
 ### 5. 配置继承与覆盖
 
 ```typescript
-const appLogger = createLogger('App')
+const appLogger = getLogger('App')
 
 // 子 Logger 自动继承父级配置
 const dbLogger = appLogger.getLogger('Database') 
@@ -141,11 +141,11 @@ console.log(appLogger.getChildLoggerNames())     // ['Database', 'Debug']
 
 ```typescript
 import fs from 'node:fs'
-import { createLogger, FileTransport, ConsoleTransport } from '@zhin.js/logger'
+import { getLogger, FileTransport, ConsoleTransport } from '@zhin.js/logger'
 
 const logFile = fs.createWriteStream('./app.log', { flags: 'a' })
 
-const logger = createLogger('FileApp', {
+const logger = getLogger('FileApp', {
   transports: [
     new ConsoleTransport(),           // 控制台输出（带颜色）
     new FileTransport(logFile)        // 文件输出（无颜色）
@@ -161,7 +161,7 @@ logger.addTransport(new FileTransport(logFile), true)
 ### 7. 自定义格式化器
 
 ```typescript
-import { createLogger, LogFormatter } from '@zhin.js/logger'
+import { getLogger, LogFormatter } from '@zhin.js/logger'
 
 class CustomFormatter implements LogFormatter {
   format(entry) {
@@ -170,7 +170,7 @@ class CustomFormatter implements LogFormatter {
   }
 }
 
-const logger = createLogger('Custom', {
+const logger = getLogger('Custom', {
   formatter: new CustomFormatter()
 })
 
@@ -183,9 +183,9 @@ logger.info('自定义格式的日志')
 ### 8. 流输出
 
 ```typescript
-import { createLogger, StreamTransport } from '@zhin.js/logger'
+import { getLogger, StreamTransport } from '@zhin.js/logger'
 
-const logger = createLogger('StreamApp', {
+const logger = getLogger('StreamApp', {
   transports: [
     new StreamTransport(process.stdout, false), // 保留颜色
     new StreamTransport(process.stderr, true)   // 移除颜色
@@ -298,19 +298,19 @@ const child2 = parent.getLogger('Child2', {
 ### 设置全局日志级别
 
 ```typescript
-import { setGlobalLogLevel, LogLevel } from '@zhin.js/logger'
+import { setLevel, LogLevel } from '@zhin.js/logger'
 
-// 所有新创建的 logger 都会使用此级别
-setGlobalLogLevel(LogLevel.WARN)
+// 设置默认 logger 的日志级别
+setLevel(LogLevel.WARN)
 ```
 
 ### 设置全局格式化器
 
 ```typescript
-import { setGlobalFormatter, DefaultFormatter } from '@zhin.js/logger'
+import { setFormatter, DefaultFormatter } from '@zhin.js/logger'
 
 const customFormatter = new DefaultFormatter()
-setGlobalFormatter(customFormatter)
+setFormatter(customFormatter)
 ```
 
 ### 添加全局输出器
@@ -378,17 +378,18 @@ class Logger {
 
 ```typescript
 // Logger 管理（新架构）
-function createLogger(name: string, options?: LoggerOptions): Logger
+function getLogger(name: string, options?: LoggerOptions): Logger
 function getDefaultLogger(): Logger
-function getRootLogger(name: string, options?: LoggerOptions): Logger
+function getLogger(name: string, options?: LoggerOptions, parent?: Logger): Logger
+function setLogger(name: string, options?: LoggerOptions, parent?: Logger): Logger
 
-// 全局设置（递归应用）
-function setGlobalLogLevel(level: LogLevel): void
-
-// 根 Logger 管理
-function removeRootLogger(name: string): boolean
-function getRootLoggerNames(): string[]
-function clearLoggers(): void
+// 全局设置（应用到默认 logger）
+function setLevel(level: LogLevel, logger?: Logger): void
+function setFormatter(formatter: LogFormatter, logger?: Logger): void
+function addTransport(transport: LogTransport, logger?: Logger): void
+function removeTransport(transport: LogTransport, logger?: Logger): void
+function setOptions(options: LoggerOptions, logger?: Logger): void
+function getLoggerNames(logger?: Logger): string[]
 
 // 便捷日志方法（使用默认 logger）
 function debug(message: string, ...args: any[]): void
@@ -404,10 +405,10 @@ function timeEnd(label: string): void
 
 ```typescript
 import { Plugin } from 'zhin.js'
-import { createLogger } from '@zhin.js/logger'
+import { getLogger } from '@zhin.js/logger'
 
 export default class MyPlugin extends Plugin {
-  private logger = createLogger(`Plugin:${this.name}`)
+  private logger = getLogger(`Plugin:${this.name}`)
 
   async onMounted() {
     this.logger.success('插件加载成功')

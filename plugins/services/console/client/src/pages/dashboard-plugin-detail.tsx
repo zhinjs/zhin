@@ -1,53 +1,50 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router'
-import * as Themes from '@radix-ui/themes'
-import { ArrowLeft, AlertCircle, Package, Terminal, Box as IconBox, Layers, Database, Clock, FileText } from 'lucide-react'
-import {PluginConfigForm} from '../components/PluginConfigForm'
+import { ArrowLeft, AlertCircle, Package, Terminal, Box as IconBox, Layers, Clock, Database, Brain, Wrench, Shield, Settings, Plug, Server, type LucideIcon } from 'lucide-react'
+import { PluginConfigForm } from '../components/PluginConfigForm'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { Badge } from '../components/ui/badge'
+import { Button } from '../components/ui/button'
+import { Alert, AlertDescription } from '../components/ui/alert'
+import { Skeleton } from '../components/ui/skeleton'
+import { Separator } from '../components/ui/separator'
 
-const { Flex, Box, Spinner, Text, Callout, Heading, Badge, Grid, Card, Button, Code, Separator, ScrollArea, Dialog } = Themes
+
+/** Feature 序列化格式（与后端 FeatureJSON 一致） */
+interface FeatureJSON {
+  name: string
+  icon: string
+  desc: string
+  count: number
+  items: any[]
+}
 
 interface PluginDetail {
   name: string
   filename: string
   status: 'active' | 'inactive'
   description: string
-  commands: Array<{
-    name: string
-    desc?: string[]
-    usage?: string[]
-    examples?: string[]
-    help?: string
-  }>
-  components: Array<{
-    name: string
-    props: Record<string, any>
-    type: string
-  }>
-  middlewares: Array<{
-    id: string
-    type: string
-  }>
-  contexts: Array<{
-    name: string
-    description: string
-  }>
-  crons: Array<{
-    id: string
-    pattern: string
-    running: boolean
-  }>
-  definitions: Array<{
-    name: string
-    fields: string[]
-  }>
-  statistics: {
-    commandCount: number
-    componentCount: number
-    middlewareCount: number
-    contextCount: number
-    cronCount: number
-    definitionCount: number
-  }
+  features: FeatureJSON[]
+  contexts: Array<{ name: string }>
+}
+
+/** 根据后端返回的 icon 名称映射到 lucide-react 图标组件 */
+const iconMap: Record<string, LucideIcon> = {
+  Terminal,
+  Box: IconBox,
+  Layers,
+  Clock,
+  Brain,
+  Wrench,
+  Database,
+  Shield,
+  Settings,
+  Plug,
+  Server,
+}
+
+function getIcon(iconName: string): LucideIcon {
+  return iconMap[iconName] || Package
 }
 
 export default function DashboardPluginDetail() {
@@ -58,23 +55,16 @@ export default function DashboardPluginDetail() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (name) {
-      fetchPluginDetail(name)
-    }
+    if (name) fetchPluginDetail(name)
   }, [name])
 
   const fetchPluginDetail = async (pluginName: string) => {
     try {
       const res = await fetch(`/api/plugins/${encodeURIComponent(pluginName)}`, { credentials: 'include' })
       if (!res.ok) throw new Error('API 请求失败')
-
       const data = await res.json()
-      if (data.success) {
-        setPlugin(data.data)
-        setError(null)
-      } else {
-        throw new Error('数据格式错误')
-      }
+      if (data.success) { setPlugin(data.data); setError(null) }
+      else throw new Error('数据格式错误')
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -82,307 +72,249 @@ export default function DashboardPluginDetail() {
     }
   }
 
-
-
   if (loading) {
     return (
-      <Flex align="center" justify="center" className="h-full">
-        <Flex direction="column" align="center" gap="3">
-          <Spinner size="3" />
-          <Text size="2" color="gray">加载中...</Text>
-        </Flex>
-      </Flex>
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-24" />
+        <div className="flex items-center gap-3"><Skeleton className="h-12 w-12 rounded-xl" /><div><Skeleton className="h-6 w-48" /><Skeleton className="h-4 w-64 mt-1" /></div></div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">{[...Array(6)].map((_, i) => <Skeleton key={i} className="h-20" />)}</div>
+      </div>
     )
   }
 
   if (error || !plugin) {
     return (
-      <Box>
-        <Button variant="ghost" onClick={() => navigate('/plugins')} mb="4" size="2">
-          <ArrowLeft className="w-4 h-4" />
-          返回
+      <div>
+        <Button variant="ghost" onClick={() => navigate('/plugins')} className="mb-4">
+          <ArrowLeft className="w-4 h-4 mr-1" /> 返回
         </Button>
-        <Callout.Root color="red">
-          <Callout.Icon>
-            <AlertCircle />
-          </Callout.Icon>
-          <Callout.Text>
-            加载失败: {error || '插件不存在'}
-          </Callout.Text>
-        </Callout.Root>
-      </Box>
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>加载失败: {error || '插件不存在'}</AlertDescription>
+        </Alert>
+      </div>
     )
   }
 
   return (
-    <Box>
-      {/* 头部 */}
-      <Flex direction="column" gap="3" mb="4">
-        <Button variant="ghost" onClick={() => navigate('/plugins')} size="2">
-          <ArrowLeft className="w-4 h-4" />
-          返回
-        </Button>
+    <div className="space-y-4">
+      {/* Header */}
+      <Button variant="ghost" size="sm" onClick={() => navigate('/plugins')}>
+        <ArrowLeft className="w-4 h-4 mr-1" /> 返回
+      </Button>
 
-        <Flex align="center" gap="3">
-          <Flex align="center" justify="center" className="w-12 h-12 rounded-xl bg-blue-500/10 dark:bg-blue-400/10">
-            <Package className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-          </Flex>
-          <Flex direction="column" gap="1">
-            <Flex align="center" gap="2">
-              <Heading size="5">{plugin.name}</Heading>
-              <Badge color={plugin.status === 'active' ? 'green' : 'gray'} size="1">
-                {plugin.status === 'active' ? '运行中' : '已停止'}
-              </Badge>
-            </Flex>
-            <Text size="2" color="gray">{plugin.description || '暂无描述'}</Text>
-          </Flex>
-        </Flex>
-      </Flex>
+      <div className="flex items-center gap-3">
+        <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-secondary">
+          <Package className="w-6 h-6" />
+        </div>
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold">{plugin.name}</h1>
+            <Badge variant={plugin.status === 'active' ? 'success' : 'secondary'}>
+              {plugin.status === 'active' ? '运行中' : '已停止'}
+            </Badge>
+          </div>
+          <p className="text-sm text-muted-foreground">{plugin.description || '暂无描述'}</p>
+        </div>
+      </div>
 
-      {/* 插件配置折叠面板 */}
-      <PluginConfigForm
-        pluginName={plugin.name}
-        onSuccess={() => {
-          // 配置更新会通过 WebSocket 自动同步
-        }}
-      />
+      {/* Config form */}
+      <PluginConfigForm pluginName={plugin.name} onSuccess={() => {}} />
 
-      <Separator size="4" my="4" />
+      <Separator />
 
-      {/* 统计概览 - 紧凑卡片 */}
-      <Grid columns={{ initial: '2', sm: '3', md: '6' }} gap="2" mb="4">
-        <Card size="1">
-          <Flex direction="column" align="center" gap="1" p="2">
-            <Terminal className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-            <Text size="4" weight="bold">{plugin.statistics.commandCount}</Text>
-            <Text size="1" color="gray">命令</Text>
-          </Flex>
-        </Card>
+      {/* Stats grid - 动态渲染 features 摘要 */}
+      {plugin.features.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+          {plugin.features.map((feature) => {
+            const Icon = getIcon(feature.icon)
+            return (
+              <Card key={feature.name}>
+                <CardContent className="flex flex-col items-center gap-1 p-3">
+                  <Icon className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-2xl font-bold">{feature.count}</span>
+                  <span className="text-xs text-muted-foreground">{feature.desc}</span>
+                </CardContent>
+              </Card>
+            )
+          })}
+          {/* Contexts card */}
+          {plugin.contexts.length > 0 && (
+            <Card>
+              <CardContent className="flex flex-col items-center gap-1 p-3">
+                <Database className="w-4 h-4 text-muted-foreground" />
+                <span className="text-2xl font-bold">{plugin.contexts.length}</span>
+                <span className="text-xs text-muted-foreground">上下文</span>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
 
-        <Card size="1">
-          <Flex direction="column" align="center" gap="1" p="2">
-            <IconBox className="w-4 h-4 text-green-600 dark:text-green-400" />
-            <Text size="4" weight="bold">{plugin.statistics.componentCount}</Text>
-            <Text size="1" color="gray">组件</Text>
-          </Flex>
-        </Card>
+      {/* Detail sections - 动态渲染每个 Feature 的 items */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {plugin.features.map((feature) => {
+          if (feature.items.length === 0) return null
+          const Icon = getIcon(feature.icon)
 
-        <Card size="1">
-          <Flex direction="column" align="center" gap="1" p="2">
-            <Layers className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-            <Text size="4" weight="bold">{plugin.statistics.middlewareCount}</Text>
-            <Text size="1" color="gray">中间件</Text>
-          </Flex>
-        </Card>
+          return (
+            <Card key={feature.name}>
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <Icon className="w-4 h-4 text-muted-foreground" />
+                  <CardTitle className="text-base">{feature.desc}</CardTitle>
+                  <Badge variant="secondary">{feature.count}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="max-h-60 overflow-y-auto pr-1 space-y-2">
+                  {feature.items.map((item, index) => (
+                    <FeatureItemCard key={index} featureName={feature.name} item={item} />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })}
 
-        <Card size="1">
-          <Flex direction="column" align="center" gap="1" p="2">
-            <Database className="w-4 h-4 text-orange-600 dark:text-orange-400" />
-            <Text size="4" weight="bold">{plugin.statistics.contextCount}</Text>
-            <Text size="1" color="gray">上下文</Text>
-          </Flex>
-        </Card>
-
-        <Card size="1">
-          <Flex direction="column" align="center" gap="1" p="2">
-            <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-            <Text size="4" weight="bold">{plugin.statistics.cronCount}</Text>
-            <Text size="1" color="gray">定时任务</Text>
-          </Flex>
-        </Card>
-
-        <Card size="1">
-          <Flex direction="column" align="center" gap="1" p="2">
-            <FileText className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
-            <Text size="4" weight="bold">{plugin.statistics.definitionCount}</Text>
-            <Text size="1" color="gray">数据模型</Text>
-          </Flex>
-        </Card>
-      </Grid>
-
-      {/* 详细信息 - 紧凑布局 */}
-      <Grid columns={{ initial: '1', md: '2' }} gap="3">
-        {/* 命令列表 */}
-        {plugin.commands.length > 0 && (
-          <Card size="2">
-            <Flex direction="column" gap="2" p="3">
-              <Flex align="center" gap="2">
-                <Terminal className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                <Heading size="3">命令</Heading>
-                <Badge size="1">{plugin.commands.length}</Badge>
-              </Flex>
-              <Separator size="4" />
-              <Flex direction="column" gap="2" className="max-h-60 overflow-y-auto">
-                {plugin.commands.map((cmd, index) => (
-                  <Box key={index} className="rounded-lg bg-gray-50 dark:bg-gray-900 p-3">
-                    <Flex direction="column" gap="2">
-                      <Code size="2" weight="bold">{cmd.name}</Code>
-                      
-                      {cmd.desc && cmd.desc.length > 0 && (
-                        <Flex direction="column" gap="1">
-                          {cmd.desc.map((desc, i) => (
-                            <Text key={i} size="1" color="gray">{desc}</Text>
-                          ))}
-                        </Flex>
-                      )}
-                      
-                      {cmd.usage && cmd.usage.length > 0 && (
-                        <Flex direction="column" gap="1">
-                          <Text size="1" weight="bold" color="blue">用法:</Text>
-                          {cmd.usage.map((usage, i) => (
-                            <Code key={i} size="1" variant="soft">{usage}</Code>
-                          ))}
-                        </Flex>
-                      )}
-                      
-                      {cmd.examples && cmd.examples.length > 0 && (
-                        <Flex direction="column" gap="1">
-                          <Text size="1" weight="bold" color="green">示例:</Text>
-                          {cmd.examples.map((example, i) => (
-                            <Code key={i} size="1" variant="soft" color="green">{example}</Code>
-                          ))}
-                        </Flex>
-                      )}
-                    </Flex>
-                  </Box>
-                ))}
-              </Flex>
-            </Flex>
-          </Card>
-        )}
-
-        {/* 组件列表 */}
-        {plugin.components.length > 0 && (
-          <Card size="2">
-            <Flex direction="column" gap="2" p="3">
-              <Flex align="center" gap="2">
-                <Box className="w-4 h-4 text-green-600 dark:text-green-400" />
-                <Heading size="3">组件</Heading>
-                <Badge size="1">{plugin.components.length}</Badge>
-              </Flex>
-              <Separator size="4" />
-              <Flex direction="column" gap="2" className="max-h-60 overflow-y-auto">
-                {plugin.components.map((comp, index) => (
-                  <Box key={index} className="rounded-lg bg-gray-50 dark:bg-gray-900 p-2">
-                    <Flex direction="column" gap="1">
-                      <Flex align="center" gap="2">
-                        <Code size="2">{comp.name}</Code>
-                        <Badge size="1" variant="soft">{comp.type}</Badge>
-                      </Flex>
-                      <Text size="1" color="gray">
-                        属性数: {Object.keys(comp.props).length}
-                      </Text>
-                    </Flex>
-                  </Box>
-                ))}
-              </Flex>
-            </Flex>
-          </Card>
-        )}
-
-        {/* 中间件列表 */}
-        {plugin.middlewares.length > 0 && (
-          <Card size="2">
-            <Flex direction="column" gap="2" p="3">
-              <Flex align="center" gap="2">
-                <Layers className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                <Heading size="3">中间件</Heading>
-                <Badge size="1">{plugin.middlewares.length}</Badge>
-              </Flex>
-              <Separator size="4" />
-              <Flex direction="column" gap="2" className="max-h-60 overflow-y-auto">
-                {plugin.middlewares.map((mw, index) => (
-                  <Box key={index} className="rounded-lg bg-gray-50 dark:bg-gray-900 p-2">
-                    <Flex align="center" gap="2">
-                      <Code size="2">{mw.id}</Code>
-                      <Badge size="1" variant="soft">{mw.type}</Badge>
-                    </Flex>
-                  </Box>
-                ))}
-              </Flex>
-            </Flex>
-          </Card>
-        )}
-
-        {/* 上下文列表 */}
+        {/* Contexts section */}
         {plugin.contexts.length > 0 && (
-          <Card size="2">
-            <Flex direction="column" gap="2" p="3">
-              <Flex align="center" gap="2">
-                <Database className="w-4 h-4 text-orange-600 dark:text-orange-400" />
-                <Heading size="3">上下文</Heading>
-                <Badge size="1">{plugin.contexts.length}</Badge>
-              </Flex>
-              <Separator size="4" />
-              <Flex direction="column" gap="2" className="max-h-60 overflow-y-auto">
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <Database className="w-4 h-4 text-muted-foreground" />
+                <CardTitle className="text-base">上下文</CardTitle>
+                <Badge variant="secondary">{plugin.contexts.length}</Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="max-h-60 overflow-y-auto pr-1 space-y-2">
                 {plugin.contexts.map((ctx, index) => (
-                  <Box key={index} className="rounded-lg bg-gray-50 dark:bg-gray-900 p-2">
-                    <Flex direction="column" gap="1">
-                      <Code size="2">{ctx.name}</Code>
-                      <Text size="1" color="gray">{ctx.description}</Text>
-                    </Flex>
-                  </Box>
+                  <div key={index} className="rounded-md bg-muted/50 p-2">
+                    <code className="text-sm">{ctx.name}</code>
+                  </div>
                 ))}
-              </Flex>
-            </Flex>
+              </div>
+            </CardContent>
           </Card>
         )}
-
-        {/* 定时任务列表 */}
-        {plugin.crons.length > 0 && (
-          <Card size="2">
-            <Flex direction="column" gap="2" p="3">
-              <Flex align="center" gap="2">
-                <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                <Heading size="3">定时任务</Heading>
-                <Badge size="1">{plugin.crons.length}</Badge>
-              </Flex>
-              <Separator size="4" />
-              <Flex direction="column" gap="2" className="max-h-60 overflow-y-auto">
-                {plugin.crons.map((cron, index) => (
-                  <Box key={index} className="rounded-lg bg-gray-50 dark:bg-gray-900 p-2">
-                    <Flex justify="between" align="center">
-                      <Flex direction="column" gap="1">
-                        <Code size="2">{cron.id}</Code>
-                        <Text size="1" color="gray">{cron.pattern}</Text>
-                      </Flex>
-                      <Badge color={cron.running ? 'green' : 'gray'} size="1">
-                        {cron.running ? '运行中' : '已停止'}
-                      </Badge>
-                    </Flex>
-                  </Box>
-                ))}
-              </Flex>
-            </Flex>
-          </Card>
-        )}
-
-        {/* 数据模型列表 */}
-        {plugin.definitions.length > 0 && (
-          <Card size="2">
-            <Flex direction="column" gap="2" p="3">
-              <Flex align="center" gap="2">
-                <FileText className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
-                <Heading size="3">数据模型</Heading>
-                <Badge size="1">{plugin.definitions.length}</Badge>
-              </Flex>
-              <Separator size="4" />
-              <Flex direction="column" gap="2" className="max-h-60 overflow-y-auto">
-                {plugin.definitions.map((definition, index) => (
-                  <Box key={index} className="rounded-lg bg-gray-50 dark:bg-gray-900 p-2">
-                    <Flex direction="column" gap="1">
-                      <Code size="2">{definition.name}</Code>
-                      <Text size="1" color="gray">
-                        字段: {definition.fields.join(', ')}
-                      </Text>
-                    </Flex>
-                  </Box>
-                ))}
-              </Flex>
-            </Flex>
-          </Card>
-        )}
-      </Grid>
-    </Box>
+      </div>
+    </div>
   )
+}
+
+/** 根据 Feature 类型渲染不同样式的 item 卡片 */
+function FeatureItemCard({ featureName, item }: { featureName: string; item: any }) {
+  switch (featureName) {
+    case 'command':
+      return (
+        <div className="rounded-md bg-muted/50 p-3 space-y-1">
+          <code className="text-sm font-semibold">{item.name}</code>
+          {item.desc?.map((desc: string, i: number) => (
+            <p key={i} className="text-xs text-muted-foreground">{desc}</p>
+          ))}
+          {item.usage && item.usage.length > 0 && (
+            <div>
+              <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">用法:</span>
+              {item.usage.map((u: string, i: number) => (
+                <code key={i} className="block text-xs bg-muted rounded px-1 py-0.5 mt-0.5">{u}</code>
+              ))}
+            </div>
+          )}
+          {item.examples && item.examples.length > 0 && (
+            <div>
+              <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">示例:</span>
+              {item.examples.map((e: string, i: number) => (
+                <code key={i} className="block text-xs bg-muted rounded px-1 py-0.5 mt-0.5">{e}</code>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    case 'cron':
+      return (
+        <div className="flex justify-between items-center rounded-md bg-muted/50 p-2">
+          <code className="text-sm">{item.expression}</code>
+          <Badge variant={item.running ? 'success' : 'secondary'}>
+            {item.running ? '运行中' : '已停止'}
+          </Badge>
+        </div>
+      )
+    case 'tool':
+      return (
+        <div className="rounded-md bg-muted/50 p-3 space-y-1">
+          <code className="text-sm font-semibold">{item.name}</code>
+          {item.desc && <p className="text-xs text-muted-foreground">{item.desc}</p>}
+          {item.platforms && item.platforms.length > 0 && (
+            <div className="flex gap-1 flex-wrap">
+              {item.platforms.map((p: string, i: number) => (
+                <Badge key={i} variant="outline" className="text-[10px]">{p}</Badge>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    case 'skill':
+      return (
+        <div className="rounded-md bg-muted/50 p-3 space-y-1">
+          <code className="text-sm font-semibold">{item.name}</code>
+          {item.desc && <p className="text-xs text-muted-foreground">{item.desc}</p>}
+          {item.toolCount != null && (
+            <span className="text-xs text-muted-foreground">工具: {item.toolCount}</span>
+          )}
+        </div>
+      )
+    case 'config':
+      return (
+        <div className="flex justify-between items-center rounded-md bg-muted/50 p-2">
+          <code className="text-sm">{item.name}</code>
+          {item.defaultValue !== undefined && (
+            <span className="text-xs text-muted-foreground">默认: {JSON.stringify(item.defaultValue)}</span>
+          )}
+        </div>
+      )
+    case 'permission':
+      return (
+        <div className="rounded-md bg-muted/50 p-2">
+          <code className="text-sm">{item.name}</code>
+        </div>
+      )
+    case 'database':
+      return (
+        <div className="rounded-md bg-muted/50 p-2">
+          <code className="text-sm">{item.name}</code>
+        </div>
+      )
+    case 'adapter':
+      return (
+        <div className="rounded-md bg-muted/50 p-3 space-y-1">
+          <div className="flex items-center gap-2">
+            <Plug className="w-3.5 h-3.5 text-muted-foreground" />
+            <code className="text-sm font-semibold">{item.name}</code>
+          </div>
+          <div className="flex gap-3 text-xs text-muted-foreground">
+            <span>Bot: {item.bots ?? 0}</span>
+            <span>在线: {item.online ?? 0}</span>
+            {item.tools > 0 && <span>工具: {item.tools}</span>}
+          </div>
+        </div>
+      )
+    case 'service':
+      return (
+        <div className="rounded-md bg-muted/50 p-2 flex items-center gap-2">
+          <Server className="w-3.5 h-3.5 text-muted-foreground" />
+          <code className="text-sm">{item.name}</code>
+          {item.desc && item.desc !== item.name && (
+            <span className="text-xs text-muted-foreground">- {item.desc}</span>
+          )}
+        </div>
+      )
+    default:
+      // 通用渲染：显示 item.name 或 JSON
+      return (
+        <div className="rounded-md bg-muted/50 p-2">
+          <code className="text-sm">{item.name || JSON.stringify(item)}</code>
+        </div>
+      )
+  }
 }

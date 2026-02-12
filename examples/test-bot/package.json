@@ -25,7 +25,7 @@
     "@zhin.js/adapter-slack": "workspace:*",
     "@zhin.js/adapter-telegram": "workspace:*",
     "@zhin.js/adapter-wechat-mp": "workspace:*",
-    "@zhin.js/ai": "workspace:*",
+    "@zhin.js/plugin-60s": "workspace:*",
     "@zhin.js/client": "workspace:*",
     "@zhin.js/console": "workspace:*",
     "@zhin.js/http": "workspace:*",

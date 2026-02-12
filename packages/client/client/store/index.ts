@@ -28,11 +28,11 @@ const routeTransform = createTransform(
 
 const scriptTransform = createTransform(
     (inboundState: any) => {
-        const { entries, loadedScripts, ...rest } = inboundState
+        const { entries, loadedScripts, synced, ...rest } = inboundState
         return rest
     },
     (outboundState: any) => {
-        return { ...outboundState, entries: [], loadedScripts: [] }
+        return { ...outboundState, entries: [], loadedScripts: [], synced: false }
     },
     { whitelist: ['script'] }
 )

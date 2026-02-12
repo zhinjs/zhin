@@ -231,9 +231,6 @@ importers:
       '@zhin.js/adapter-wechat-mp':
         specifier: workspace:*
         version: link:../../plugins/adapters/wechat-mp
-      '@zhin.js/ai':
-        specifier: workspace:*
-        version: link:../../packages/ai
       '@zhin.js/client':
         specifier: workspace:*
         version: link:../../packages/client
@@ -246,6 +243,9 @@ importers:
       '@zhin.js/mcp':
         specifier: workspace:*
         version: link:../../plugins/services/mcp
+      '@zhin.js/plugin-60s':
+        specifier: workspace:*
+        version: link:../../plugins/utils/60s
       '@zhin.js/plugin-github-notify':
         specifier: workspace:*
         version: link:../../plugins/services/github-notify
@@ -291,28 +291,6 @@ importers:
         version: 4.21.0
       typescript:
         specifier: ^5.0.0
-        version: 5.9.3
-
-  packages/ai:
-    dependencies:
-      eventsource-parser:
-        specifier: ^3.0.0
-        version: 3.0.6
-      segment-matcher:
-        specifier: latest
-        version: 1.0.5
-    devDependencies:
-      '@types/node':
-        specifier: latest
-        version: 25.1.0
-      '@zhin.js/core':
-        specifier: workspace:*
-        version: link:../core
-      '@zhin.js/logger':
-        specifier: workspace:*
-        version: link:../../basic/logger
-      typescript:
-        specifier: ^5.3.0
         version: 5.9.3
 
   packages/client:
@@ -495,9 +473,6 @@ importers:
 
   packages/zhin:
     dependencies:
-      '@zhin.js/ai':
-        specifier: workspace:*
-        version: link:../ai
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../core
@@ -599,7 +574,7 @@ importers:
   plugins/adapters/icqq:
     dependencies:
       '@icqqjs/icqq':
-        specifier: latest
+        specifier: ^1.10.18
         version: 1.10.18
       '@zhin.js/client':
         specifier: workspace:*
@@ -727,9 +702,6 @@ importers:
         specifier: workspace:*
         version: link:../../services/http
     devDependencies:
-      '@radix-ui/themes':
-        specifier: ^3.2.1
-        version: 3.2.1(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       '@types/react':
         specifier: ^19.2.2
         version: 19.2.7
@@ -832,6 +804,9 @@ importers:
       '@zhin.js/http':
         specifier: workspace:^
         version: link:../http
+      esbuild:
+        specifier: '>=0.25.0'
+        version: 0.27.2
       mime:
         specifier: ^4.1.0
         version: 4.1.0
@@ -843,9 +818,6 @@ importers:
         specifier: ^2.1.0
         version: 2.1.0
     devDependencies:
-      '@radix-ui/themes':
-        specifier: ^3.2.1
-        version: 3.2.1(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       '@reduxjs/toolkit':
         specifier: ^2.9.0
         version: 2.11.2(react-redux@9.2.0(@types/react@19.2.7)(react@19.2.0)(redux@5.0.1))(react@19.2.0)
@@ -858,6 +830,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.3.4
         version: 4.7.0(vite@7.3.0(@types/node@24.10.4)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -956,9 +931,6 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: '>=1.25.2'
         version: 1.26.0(zod@3.25.76)
-      '@zhin.js/ai':
-        specifier: workspace:^
-        version: link:../../../packages/ai
       '@zhin.js/http':
         specifier: workspace:^
         version: link:../http
@@ -969,6 +941,15 @@ importers:
       '@types/node':
         specifier: latest
         version: 25.0.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
+
+  plugins/utils/60s:
+    devDependencies:
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/zhin
@@ -1008,6 +989,15 @@ importers:
         version: link:../../../packages/zhin
 
   plugins/utils/sensitive-filter:
+    devDependencies:
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
+
+  plugins/utils/voice:
     devDependencies:
       typescript:
         specifier: ^5.3.3
@@ -3673,9 +3663,6 @@ packages:
   '@types/node@25.0.3':
     resolution: {integrity: sha512-W609buLVRVmeW693xKfzHeIV6nJGGz98uCPfeXI1ELMLXVeKYZ9m15fAMSaUPBHYLGFsVRcMmSCksQOrZV9BYA==}
 
-  '@types/node@25.1.0':
-    resolution: {integrity: sha512-t7frlewr6+cbx+9Ohpl0NOTKXZNV9xHRmNOvql47BFJKcEG1CxtxlPEEe+gR9uhVWM4DwhnvTF110mIL4yP9RA==}
-
   '@types/nodemailer@6.4.21':
     resolution: {integrity: sha512-Eix+sb/Nj28MNnWvO2X1OLrk5vuD4C9SMnb2Vf4itWnxphYeSceqkFX7IdmxTzn+dvmnNz7paMbg4Uc60wSfJg==}
 
@@ -4362,6 +4349,9 @@ packages:
   ci-info@3.9.0:
     resolution: {integrity: sha512-NIxF55hv4nSqQswkAeiOi1r83xy8JldOFDTWiug55KBu9Jnblncd2U6ViHmYgHf01TPZS77NJBhBMKdWj9HQMQ==}
     engines: {node: '>=8'}
+
+  class-variance-authority@0.7.1:
+    resolution: {integrity: sha512-Ka+9Trutv7G8M6WT6SeiRWz792K5qEqIGEGzXKhAE6xOWAY6pPH8U+9IY3oCMv6kqTmLsv7Xh/2w2RigkePMsg==}
 
   classnames@2.5.1:
     resolution: {integrity: sha512-saHYOzhIQs6wy2sVxTM6bUDsQO4F50V9RQ22qBpEdCW+I+/Wmke2HOl6lS6dTpdxVhb88/I6+Hs+438c3lfUow==}
@@ -11217,10 +11207,6 @@ snapshots:
     dependencies:
       undici-types: 7.16.0
 
-  '@types/node@25.1.0':
-    dependencies:
-      undici-types: 7.16.0
-
   '@types/nodemailer@6.4.21':
     dependencies:
       '@aws-sdk/client-ses': 3.962.0
@@ -12115,6 +12101,10 @@ snapshots:
   ci-info@2.0.0: {}
 
   ci-info@3.9.0: {}
+
+  class-variance-authority@0.7.1:
+    dependencies:
+      clsx: 2.1.1
 
   classnames@2.5.1: {}
 

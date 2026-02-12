@@ -221,7 +221,7 @@ Console 插件采用智能的构建优化策略，显著减少重复打包：
   - 浏览器缓存复用，提升加载速度
   - 开发和生产环境统一体验
 
-详见 [BUILD_OPTIMIZATION.md](./BUILD_OPTIMIZATION.md)
+<!-- 构建优化详见源码中的 build 逻辑 -->
 
 ### 实时数据同步
 
@@ -295,11 +295,11 @@ node ../../plugins/console/lib/bin.js build
 
 ```
 console/
-├── app/                 # 构建工具
+├── src/                 # 服务端源码
 │   ├── index.ts        # Console 插件主入口
-│   ├── build.ts        # 构建逻辑 (buildConsoleClient, buildPluginClient)
+│   ├── build.ts        # 构建逻辑
 │   ├── dev.ts          # Vite 开发服务器
-│   ├── websocket.ts    # WebSocket 管理
+│   ├── transform.ts    # TS/TSX/JSX 按需转译
 │   └── bin.ts          # CLI 工具
 ├── client/             # 前端应用
 │   ├── src/            # React 应用源码

@@ -1,333 +1,228 @@
 
 # Zhin.js
 
-🚀 现代 TypeScript 机器人框架，专注于插件化、热重载和极致开发体验
+现代 TypeScript 聊天机器人框架 —— AI 驱动、插件化、热重载、多平台
 
 [![文档](https://img.shields.io/badge/文档-zhin.js.org-blue)](https://zhin.js.org)
 [![CI](https://github.com/zhinjs/zhin/actions/workflows/publish.yml/badge.svg)](https://github.com/zhinjs/zhin/actions/workflows/publish.yml)
 [![codecov](https://codecov.io/github/zhinjs/zhin/graph/badge.svg?token=37OE7DHMAI)](https://codecov.io/github/zhinjs/zhin)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
-## 🌟 核心特性
+## 核心特性
 
-- 🎯 **TypeScript 全量类型支持** - 完整类型推导，极致开发体验
-- ⚡ **智能热重载系统** - 代码变更、配置更新、依赖注入均自动热更，无需重启
-- 🏗️ **简洁的插件架构** - 基于 AsyncLocalStorage 的上下文管理，React Hooks 风格的 API
-- 🧩 **插件化架构** - 热插拔插件系统，支持本地/模块/云端插件
-- 🎨 **Schema 配置系统** - 类型安全的配置管理，支持自动重载插件
-- 🌐 **Web 控制台** - 实时监控、插件管理、配置编辑
-- 📊 **智能性能监控** - 实时内存分析，避免误报，精准定位性能瓶颈
-- 📦 **开箱即用** - 内置控制台适配器、HTTP服务、Web控制台、SQLite数据库
-- 🔌 **多平台扩展** - 支持 QQ、KOOK、Discord、Telegram、OneBot v11 等
+- **AI 驱动** — 内置 ZhinAgent 智能体，接入 OpenAI / Ollama 等大模型，支持多轮对话、流式输出、工具调用（Function Calling）
+- **Tool / Skill 能力体系** — 插件通过 `addTool` 注册可调用工具，通过 `declareSkill` 将工具聚合为语义化技能，AI 按权限和关键词自动路由
+- **Feature 可扩展架构** — CommandFeature、ToolFeature、SkillFeature、CronFeature、DatabaseFeature… 所有能力统一抽象，插件按需组合
+- **TypeScript 全量类型** — 完整的类型推导和提示，极致开发体验
+- **智能热重载** — 代码、配置、依赖变更自动生效，无需重启，错误自动回滚
+- **插件化架构** — 基于 AsyncLocalStorage 的上下文管理，React Hooks 风格的 `usePlugin()` API
+- **多平台生态** — 统一 API 接口，支持 QQ、Discord、Telegram、KOOK、Slack、钉钉、飞书等 12 个平台
+- **Web 控制台** — 实时监控、插件管理、Feature 统计、日志查看
 
-## 🔄 升级到 2.0
+## 快速开始
 
-Zhin.js 2.0 是一次重大架构升级，带来更简洁的 API 和更强大的功能。
+### 创建新项目
 
-**主要变更**：
-- ✅ 移除 `@zhin.js/hmr` 依赖，使用 Node.js 原生模块系统
-- ✅ 简化的插件系统（基于 `AsyncLocalStorage`）
-- ✅ 配置文件从 `zhin.config.ts` 改为 `zhin.config.yml`
-- ✅ API 变更：`useApp()` → `usePlugin()`，`defineModel()` → `plugin.defineModel()`
-- ✅ 增强的数据库功能（事务、迁移、生命周期钩子、多对多关系）
-- ✅ 自动资源清理，内存优化
+```bash
+npm create zhin-app my-bot
+cd my-bot
+pnpm dev          # 开发模式（热重载）
+```
 
-**快速升级**：查看 [CHANGELOG.md](./CHANGELOG.md) 了解详细变更和升级步骤。
+访问 Web 控制台：`http://localhost:8086`
+
+### 贡献者（开发框架本身）
+
+```bash
+pnpm install && pnpm build
+pnpm dev
+```
+
+## 基础用法
+
+```typescript
+import { usePlugin, MessageCommand } from 'zhin.js'
+
+const { addCommand } = usePlugin()
+
+addCommand(
+  new MessageCommand('hello <name:string>')
+    .desc('打个招呼')
+    .action((_, result) => `Hello, ${result.params.name}!`)
+)
+```
+
+## AI 智能体
+
+Zhin.js 内置 AI 智能体系统（ZhinAgent），让机器人具备大模型对话和工具调用能力。
+
+### 启用 AI
+
+```yaml
+# zhin.config.yml
+ai:
+  enabled: true
+  providers:
+    - type: openai
+      model: gpt-4o
+      api_key: ${OPENAI_API_KEY}
+```
+
+### 注册工具（Tool）
+
+插件可以注册 AI 可调用的工具：
+
+```typescript
+import { usePlugin } from 'zhin.js'
+
+const { addTool } = usePlugin()
+
+addTool({
+  name: 'get_weather',
+  description: '查询指定城市的天气',
+  parameters: {
+    city: { type: 'string', description: '城市名称', required: true }
+  },
+  execute: async ({ city }) => {
+    return `${city}：晴，25°C`
+  }
+})
+```
+
+### 声明技能（Skill）
+
+将多个工具聚合为一个语义化技能，提供调用约定：
+
+```typescript
+import { usePlugin } from 'zhin.js'
+
+const { addTool, declareSkill } = usePlugin()
+
+// 注册若干工具...
+addTool({ name: 'mute_member', /* ... */ })
+addTool({ name: 'kick_member', /* ... */ })
+
+// 声明技能
+declareSkill({
+  description: '群管理能力，包括禁言、踢人等',
+  keywords: ['群管理', '禁言', '踢人'],
+  tags: ['群管理'],
+  conventions: 'user_id 为目标成员 QQ 号，group_id 为群号'
+})
+```
+
+AI 会根据用户消息自动匹配相关 Skill，筛选可用 Tool，并在权限允许时执行调用。
+
+## Feature 系统
+
+Feature 是 Zhin.js 的核心扩展机制。所有内置功能均基于 Feature 实现，每个 Feature 自动管理注册/注销、插件追踪和 JSON 序列化。
+
+| Feature | 插件扩展方法 | 说明 |
+|---------|-------------|------|
+| CommandFeature | `addCommand()` | 消息命令 |
+| ToolFeature | `addTool()` | AI 可调用工具 |
+| SkillFeature | `declareSkill()` | 工具聚合为技能 |
+| CronFeature | `addCron()` | 定时任务 |
+| DatabaseFeature | `defineModel()` | 数据模型 |
+| ComponentFeature | `addComponent()` | 消息组件 |
+| ConfigFeature | `addConfig()` | 插件级配置 |
+| PermissionFeature | — | 权限管理 |
+
+```typescript
+import { usePlugin, MessageCommand, Cron } from 'zhin.js'
+
+const { addCommand, addTool, addCron, defineModel } = usePlugin()
+
+// 一个插件可同时使用多种 Feature
+addCommand(new MessageCommand('ping').action(() => 'pong'))
+addTool({ name: 'dice', description: '掷骰子', parameters: {}, execute: async () => String(Math.ceil(Math.random() * 6)) })
+addCron(new Cron('0 8 * * *', () => console.log('早上好')))
+```
+
+## 多平台适配器
+
+| 平台 | 包名 | 说明 |
+|------|------|------|
+| QQ (ICQQ) | `@zhin.js/adapter-icqq` | QQ 非官方协议，功能最全 |
+| QQ 官方 | `@zhin.js/adapter-qq` | QQ 官方机器人 API |
+| KOOK | `@zhin.js/adapter-kook` | KOOK（开黑啦）|
+| Discord | `@zhin.js/adapter-discord` | Discord |
+| Telegram | `@zhin.js/adapter-telegram` | Telegram |
+| Slack | `@zhin.js/adapter-slack` | Slack |
+| 钉钉 | `@zhin.js/adapter-dingtalk` | 钉钉 |
+| 飞书 | `@zhin.js/adapter-lark` | 飞书 / Lark |
+| OneBot v11 | `@zhin.js/adapter-onebot11` | OneBot v11 协议 |
+| 微信公众号 | `@zhin.js/adapter-wechat-mp` | 微信公众号 |
+| Sandbox | `@zhin.js/adapter-sandbox` | 终端测试适配器（内置）|
+| Email | `@zhin.js/adapter-email` | 邮件 |
+
+每个适配器都可以通过 `addTool()` + `declareSkill()` 将平台能力暴露给 AI。
 
 ## 项目结构
 
 ```
 zhin/
-├── basic/                  # 基础层 - 底层工具和类型
-│   ├── types/             # TypeScript 类型定义
-│   ├── logger/            # 日志系统
+├── basic/                  # 基础层
+│   ├── cli/               # 命令行工具
 │   ├── database/          # 数据库抽象层
-│   ├── schema/            # Schema 系统
-│   └── cli/               # 命令行工具
+│   ├── logger/            # 日志系统
+│   └── schema/            # Schema 系统
 │
-├── packages/               # 核心层 - 框架核心
-│   ├── core/              # 核心框架 (Plugin, Adapter, Bot)
-│   ├── client/            # 客户端库
+├── packages/               # 核心层
+│   ├── core/              # 核心框架
+│   │   └── src/
+│   │       ├── ai/        # AI 模块（ZhinAgent、Provider）
+│   │       ├── built/     # 内置 Feature（Command、Tool、Skill、Cron…）
+│   │       └── ...
+│   ├── client/            # Web 控制台客户端
 │   ├── create-zhin/       # 项目脚手架
 │   └── zhin/              # 主入口包
 │
-├── plugins/                # 插件层 - 扩展生态
-│   ├── services/          # 功能服务插件
-│   │   ├── console/      # Web 控制台
-│   │   └── http/         # HTTP 服务
-│   │
+├── plugins/                # 插件生态
+│   ├── services/          # 功能服务（http、console…）
 │   ├── adapters/          # 平台适配器
-...
+│   └── utils/             # 工具插件
+│
+├── docs/                   # VitePress 文档站
+└── examples/               # 示例项目
 ```
-
-## 🎓 渐进式学习路径
-
-**为初学者设计！** 我们提供了从零基础到专家的完整学习路径：
-
-| 学习阶段 | 时间 | 你将学到 | 开始 |
-|---------|------|----------|------|
-| 🌱 **Level 0** | 15 分钟 | 快速启动、发送消息、体验热重载 | [零基础教程](./docs/tutorials/level0-quickstart.md) |
-| 💻 **Level 1** | 2-3 小时 | 命令系统、消息监听、日志使用 | [基础应用](./docs/tutorials/level1-basics.md) |
-| 🚀 **Level 2** | 4-6 小时 | 中间件、依赖注入、配置系统 | [进阶功能](./docs/tutorials/level2-advanced.md) |
-| 🧠 **Level 3** | 6-8 小时 | 架构设计、热重载原理、性能优化 | [架构深入](./docs/guide/architecture.md) |
-| 🏆 **Level 4** | 8+ 小时 | 自定义适配器、复杂插件、生产部署 | [专家进阶](./docs/guide/best-practices.md) |
-
-📖 **[查看完整学习指南](./docs/QUICK_LEARN.md)** - 选择适合你的学习路径
-
----
-
-## 快速开始
-
-### 对于贡献者（开发框架本身）
-
-```bash
-# 安装依赖
-pnpm install
-
-# 构建所有包
-pnpm build
-
-# 启动开发模式（热重载）
-pnpm dev
-
-# 或进入 test-bot 目录体验示例机器人
-cd test-bot && pnpm dev
-```
-
-
-### 创建新项目（推荐用户使用）
-
-```bash
-# 使用 create-zhin 创建项目（会自动安装 pnpm 和依赖）
-npm create zhin-app my-bot
-# 或
-pnpm create zhin-app my-bot
-
-# 交互式配置流程：
-# 1. 选择运行时（Node.js / Bun）
-# 2. 选择配置格式（TypeScript / JavaScript / YAML / JSON）
-# 3. 配置 Web 控制台登录信息（用户名/密码）
-
-cd my-bot
-
-# 开发模式启动（支持热重载）
-pnpm dev
-
-# 访问 Web 控制台：http://localhost:8086
-# 登录信息已保存在 .env 文件中
-
-# 创建新插件
-zhin new my-plugin
-
-# 构建插件
-pnpm build
-```
-
-
-## 💡 主要用法示例
-
-### 基础使用
-
-```typescript
-import { usePlugin, MessageCommand } from 'zhin.js'
-
-// 获取插件实例（自动根据文件路径创建）
-const { addCommand } = usePlugin()
-
-// 添加命令
-addCommand(
-  new MessageCommand('hello <name>')
-    .action(async (message, result) => {
-      return `Hello, ${result.params.name}!`
-    })
-)
-```
-
-### 高级功能 - 依赖注入与数据库
-
-```typescript
-import { usePlugin, MessageCommand } from 'zhin.js'
-
-const { addCommand, useContext } = usePlugin()
-
-// 使用数据库上下文（当数据库就绪时执行）
-useContext('database', async (db) => {
-  const User = db.model('users')
-  
-  addCommand(
-    new MessageCommand('user <id>')
-      .action(async (message, result) => {
-        // 查询数据库
-        const user = await User.findByPk(result.params.id)
-        return `用户信息: ${user ? user.name : '未知'}`
-      })
-  )
-})
-```
-
 
 ## 常用命令
 
-### 项目级命令（在项目根目录执行）
-
 ```bash
-pnpm dev              # 启动开发服务器（热重载）
-pnpm start            # 启动生产环境
-pnpm daemon           # 后台运行
-pnpm stop             # 停止机器人
-pnpm build            # 构建所有插件（不是 app）
+# 开发
+pnpm dev                    # 开发模式（热重载）
+pnpm start                  # 生产模式
+pnpm start -- -d            # 后台守护进程模式
+npx zhin stop               # 停止后台进程
+
+# 插件管理
+npx zhin new <name>         # 创建插件模板
+npx zhin build              # 构建插件（--clean 清理后构建）
+npx zhin pub                # 发布插件到 npm
+
+# 搜索与安装
+npx zhin search <keyword>   # 搜索 npm 上的 Zhin 插件
+npx zhin install <name>     # 安装插件
+npx zhin info <name>        # 查看插件信息
 ```
 
-### CLI 工具命令（全局可用）
+## 文档导航
 
-```bash
-zhin dev              # 启动开发模式（等同于 pnpm dev）
-zhin start            # 启动生产环境
-zhin stop             # 停止机器人
-zhin new <plugin>     # 创建新插件（自动添加到依赖）
-zhin build [plugin]   # 构建插件（不指定则构建所有）
-zhin build --clean    # 清理后构建
-```
-
-## 🌐 Web 控制台
-
-启动后访问 `http://localhost:8086` 查看 Web 管理界面：
-
-**登录信息：**
-- 使用 `create-zhin-app` 创建项目时配置
-- 保存在项目的 `.env` 文件中
-- 可随时修改 `.env` 文件更新密码
-
-> 💡 **安全提示**: `.env` 文件已自动添加到 `.gitignore`，不会被提交到版本控制
-
-**功能特性：**
-- 📊 **实时监控** - 机器人状态、消息统计、性能指标
-- 🧩 **插件管理** - 启用/禁用插件、查看插件信息
-- ⚙️ **配置编辑** - 可视化配置编辑，支持 Schema 验证
-- 📝 **日志查看** - 实时日志流、过滤和搜索
-- 🗄️ **数据库管理** - 数据表查看、SQL 查询
-- 🔄 **热重载监控** - 文件变更监控、重载状态
-
-
-## ⚙️ 配置系统
-
-### 配置文件
-
-支持 YAML/JSON/TypeScript/JS 格式，推荐使用 `zhin.config.yml`：
-
-```yaml
-# 基础配置
-log_level: 1  # LogLevel.INFO
-debug: false
-
-# 机器人实例
-bots:
-  - name: console
-    context: process
-
-# 插件配置
-plugins:
-  - '@zhin.js/http'           # HTTP 服务
-  - '@zhin.js/console'        # Web 控制台
-  - '@zhin.js/adapter-sandbox' # 控制台适配器
-  # - '@zhin.js/adapter-icqq'  # QQ 适配器（需额外安装）
-
-# 插件目录
-plugin_dirs:
-  - node_modules
-  - ./src/plugins
-
-# 插件具体配置 (修改此处将自动重载对应插件) ⚡
-http:
-  port: 8086
-  base: /api
-
-# 数据库配置 (修改此处将自动重启数据库) 🔄
-database:
-  dialect: sqlite
-  filename: ./data/bot.db
-```
-
-## ⚡ 热重载体验
-
-Zhin.js 提供了业界领先的热重载系统：
-
-### 📂 全方位变更检测
-- **代码修改** → 自动重载插件文件，重新挂载副作用
-- **配置变更** → 自动应用新配置，智能重载受影响的插件
-- **数据库变更** → 自动重建连接，无缝恢复
-
-### 🔄 零停机更新
-- 保持机器人连接不中断
-- 依赖服务平滑切换
-- 状态数据自动迁移
-
-### 🛡️ 错误恢复机制
-- 语法错误自动回滚
-- 依赖冲突智能处理
-- 详细错误日志提示
-
-## 🌍 生态系统与扩展
-
-### 📦 开箱即用
-| 包名 | 功能 | 状态 |
-|------|------|------|
-| `@zhin.js/adapter-sandbox` | 控制台适配器 | ✅ 内置 |
-| `@zhin.js/http` | HTTP 服务器 | ✅ 内置 |
-| `@zhin.js/console` | Web 控制台 | ✅ 内置 |
-| SQLite 数据库 | 本地数据存储 | ✅ 内置 |
-
-### 🔌 平台适配器
-| 平台 | 包名 | 状态 |
-|------|------|------|
-| QQ | `@zhin.js/adapter-icqq` | ✅ 可用 |
-| KOOK | `@zhin.js/adapter-kook` | ✅ 可用 |
-| Discord | `@zhin.js/adapter-discord` | ✅ 可用 |
-| Telegram | `@zhin.js/adapter-telegram` | ✅ 可用 |
-| Slack | `@zhin.js/adapter-slack` | ✅ 可用 |
-| 钉钉 | `@zhin.js/adapter-dingtalk` | ✅ 可用 |
-| 飞书 | `@zhin.js/adapter-lark` | ✅ 可用 |
-| OneBot v11 | `@zhin.js/adapter-onebot11` | ✅ 可用 |
-| 微信公众号 | `@zhin.js/adapter-wechat-mp` | ✅ 可用 |
-
-### 🗄️ 数据库扩展
-| 数据库 | 包名 | 状态 |
-|-------|------|------|
-| MySQL | `@zhin.js/database-mysql` | 🚧 开发中 |
-| PostgreSQL | `@zhin.js/database-pg` | 🚧 开发中 |
-| MongoDB | `@zhin.js/database-mongo` | 📋 计划中 |
-
-### 🛠️ 开发工具
-| 工具 | 包名 | 功能 |
-|------|------|------|
-| CLI 工具 | `@zhin.js/cli` | 项目管理、构建部署 |
-| 项目脚手架 | `create-zhin-app` | 快速创建项目 |
-| VS Code 扩展 | `zhin-vscode` | 语法高亮、调试支持 |
-
+- [快速开始](./docs/getting-started/index.md) — 安装、创建项目、第一个插件
+- [核心概念](./docs/essentials/index.md) — 插件、命令、中间件、适配器
+- [配置文件](./docs/essentials/configuration.md) — zhin.config.yml 详解
+- [AI 模块](./docs/advanced/ai.md) — ZhinAgent、Provider、触发条件、会话管理
+- [工具与技能](./docs/advanced/tools-skills.md) — Tool 注册、Skill 声明、权限控制
+- [Feature 系统](./docs/advanced/features.md) — Feature 抽象、内置 Feature、自定义扩展
+- [API 参考](./docs/api/index.md) — 完整 API 文档
+- [贡献指南](./docs/contributing.md) — 开发环境、代码规范、PR 流程
 
 ## 开发要求
+
 - Node.js 20.19.0+ 或 22.12.0+
 - pnpm 9.0+
 
-## 📚 文档导航
-
-### 🎓 学习资源
-- 🚀 **[快速学习指南](./docs/QUICK_LEARN.md)** - 选择适合你的学习路径
-- 📘 **[零基础教程](./docs/tutorials/level0-quickstart.md)** - 15分钟快速上手
-- 📙 **[基础应用](./docs/tutorials/level1-basics.md)** - 命令和插件开发
-- 📕 **[进阶功能](./docs/tutorials/level2-advanced.md)** - 中间件和服务
-- 📗 **[完整学习路径](./docs/guide/learning-path.md)** - 系统化学习指南
-
-### 📖 技术文档
-- [架构设计](./docs/guide/architecture.md) - 深入理解框架设计
-- [核心创新](./docs/guide/innovations.md) - 技术亮点和创新
-- [最佳实践](./docs/guide/best-practices.md) - 生产环境指南
-- [API 参考](./docs/api/index.md) - 完整 API 文档
-
-### 💡 实用资源
-- [示例集合](./docs/examples/) - 实用代码示例
-- [插件开发](./docs/plugin/development.md) - 插件开发指南
-- [适配器开发](./docs/adapter/development.md) - 适配器开发指南
-
 ## 许可证
+
 MIT License

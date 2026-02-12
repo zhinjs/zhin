@@ -268,8 +268,7 @@ const testRenderTool = new ZhinTool('test.render')
 // 注册工具
 const toolService = plugin.root.inject('tool' as any) as any;
 if (toolService) {
-  toolService.add(testRenderTool, plugin.name, true);
-  logger.info('HTML render test tool registered');
+  toolService.addTool(testRenderTool, plugin.name, true);
 }
 
-logger.info('HTML test plugin loaded');
+logger.debug('HTML test plugin loaded');

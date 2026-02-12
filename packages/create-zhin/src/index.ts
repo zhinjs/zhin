@@ -10,6 +10,8 @@ import { generateRandomPassword, getCurrentUsername, getDatabaseDisplayName } fr
 import { configureDatabaseOptions } from './database.js';
 import { createWorkspace } from './workspace.js';
 import { ensurePnpmInstalled, installDependencies } from './install.js';
+import { configureAdapters } from './adapter.js';
+import { configureAI } from './ai.js';
 
 async function main() {
   const args = process.argv.slice(2);
@@ -136,6 +138,31 @@ async function main() {
       options.database = databaseConfig;
     }
 
+    // 适配器选择
+    if (!options.adapters) {
+      if (options.yes) {
+        // -y 模式：只使用 Sandbox
+        options.adapters = {
+          packages: ['@zhin.js/adapter-sandbox'],
+          plugins: ['@zhin.js/adapter-sandbox'],
+          bots: [],
+          envVars: {},
+        };
+      } else {
+        options.adapters = await configureAdapters();
+      }
+    }
+
+    // AI 配置引导
+    if (!options.ai) {
+      if (options.yes) {
+        // -y 模式：不启用 AI
+        options.ai = { enabled: false };
+      } else {
+        options.ai = await configureAI();
+      }
+    }
+
     if (!name?.trim()) {
       console.error(chalk.red('项目名称不能为空'));
       process.exit(1);
@@ -183,6 +210,34 @@ async function main() {
         console.log(`  ${chalk.yellow('⚠ 数据库连接信息已保存到')} ${chalk.cyan('.env')} ${chalk.yellow('文件')}`);
         console.log(`  ${chalk.gray('请根据实际情况修改数据库连接参数')}`);
       }
+    }
+
+    // 显示适配器信息
+    if (options.adapters && options.adapters.plugins.length > 0) {
+      console.log('');
+      console.log(chalk.blue('🔌 已配置适配器：'));
+      for (const plugin of options.adapters.plugins) {
+        const adapterName = plugin.replace('@zhin.js/adapter-', '');
+        console.log(`  ${chalk.gray('•')} ${chalk.cyan(adapterName)}`);
+      }
+      if (Object.keys(options.adapters.envVars).length > 0) {
+        console.log(`  ${chalk.yellow('⚠ 适配器凭据已保存到')} ${chalk.cyan('.env')} ${chalk.yellow('文件')}`);
+      }
+    }
+
+    // 显示 AI 配置信息
+    if (options.ai?.enabled) {
+      console.log('');
+      console.log(chalk.blue('🤖 AI 智能体配置：'));
+      console.log(`  ${chalk.gray('提供商:')} ${chalk.cyan(options.ai.defaultProvider || 'N/A')}`);
+      if (options.ai.trigger) {
+        const triggers: string[] = [];
+        if (options.ai.trigger.respondToAt) triggers.push('@机器人');
+        if (options.ai.trigger.respondToPrivate) triggers.push('私聊');
+        if (options.ai.trigger.prefixes.length > 0) triggers.push(`前缀 ${options.ai.trigger.prefixes.join('/')}`);
+        console.log(`  ${chalk.gray('触发方式:')} ${chalk.cyan(triggers.join('、'))}`);
+      }
+      console.log(`  ${chalk.yellow('⚠ API Key 已保存到')} ${chalk.cyan('.env')} ${chalk.yellow('文件')}`);
     }
     
     console.log('');

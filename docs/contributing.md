@@ -38,7 +38,7 @@ npm install
 pnpm build
 
 # 构建特定包
-pnpm build --filter @zhinjs/core
+pnpm build --filter @zhin.js/core
 ```
 
 ### 4. 运行测试
@@ -47,7 +47,7 @@ pnpm build --filter @zhinjs/core
 pnpm test
 
 # 运行特定包的测试
-pnpm test --filter @zhinjs/core
+pnpm test --filter @zhin.js/core
 ```
 
 ### 5. 开发模式
@@ -152,12 +152,14 @@ git push origin feature/your-feature-name
 ```typescript
 // tests/example.test.ts
 import { describe, it, expect } from 'vitest';
-import { createApp } from '@zhinjs/core';
+import { MessageCommand } from 'zhin.js';
 
-describe('App', () => {
-  it('should create app instance', async () => {
-    const app = await createApp();
-    expect(app).toBeDefined();
+describe('MessageCommand', () => {
+  it('should create command instance', () => {
+    const cmd = new MessageCommand('test')
+      .desc('测试命令')
+      .action(() => '测试');
+    expect(cmd).toBeDefined();
   });
 });
 ```
@@ -166,20 +168,13 @@ describe('App', () => {
 ```typescript
 // tests/integration.test.ts
 import { describe, it, expect } from 'vitest';
-import { createApp } from '@zhinjs/core';
+import { Plugin } from '@zhin.js/core';
 
-describe('Integration Tests', () => {
-  it('should handle message flow', async () => {
-    const app = await createApp({
-      bots: [{ name: 'test-bot', context: 'process' }]
-    });
-    
-    await app.start();
-    
-    // 测试消息处理逻辑
-    // ...
-    
-    await app.stop();
+describe('Plugin', () => {
+  it('should have correct name', () => {
+    // 插件名由文件路径自动推导
+    const plugin = new Plugin('/test/plugins/my-plugin.ts');
+    expect(plugin.name).toBe('my-plugin');
   });
 });
 ```
@@ -196,12 +191,12 @@ pnpm test:coverage
 ### 文档结构
 ```
 docs/
-├── guide/           # 指南文档
-├── api/            # API 文档
-├── plugin/         # 插件开发文档
-├── adapter/        # 适配器开发文档
-├── examples/       # 示例代码
-└── contributing.md # 贡献指南
+├── getting-started/ # 快速开始
+├── essentials/      # 核心基础（配置、命令、插件、中间件、适配器）
+├── advanced/        # 高级特性（AI、Feature、工具与技能、组件、定时任务、数据库、热重载）
+├── api/             # API 参考
+├── plugins/         # 插件市场
+└── contributing.md  # 贡献指南
 ```
 
 ### 文档规范

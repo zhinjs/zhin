@@ -229,7 +229,7 @@ export class WebSocketManager {
     const oldState = this.state
     this.state = newState
     
-    console.log(`[WebSocket] State changed: ${oldState} -> ${newState}`)
+    console.debug(`[WebSocket] State changed: ${oldState} -> ${newState}`)
   }
 
   /**
@@ -336,6 +336,7 @@ export class WebSocketManager {
    * 处理连接错误
    */
   private handleConnectionError(error: Error): void {
+    this.clearReconnectTimer()
     this.setState(ConnectionState.ERROR)
     console.error('[WebSocket] Connection error:', error)
     this.callbacks.onError?.(error as any)
@@ -354,7 +355,7 @@ export class WebSocketManager {
     this.reconnectAttempts++
     const delay = this.config.reconnectInterval * this.reconnectAttempts
 
-    console.log(`[WebSocket] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.config.maxReconnectAttempts})`)
+    console.debug(`[WebSocket] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.config.maxReconnectAttempts})`)
 
     this.reconnectTimer = setTimeout(() => {
       if (this.state === ConnectionState.RECONNECTING) {
