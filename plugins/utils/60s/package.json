@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-60s",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "60s API aggregation plugin for Zhin.js — news, weather, hot searches, utilities and more",
   "type": "module",
   "main": "./lib/index.js",

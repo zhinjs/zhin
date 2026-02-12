@@ -1,5 +1,12 @@
 # test-bot
 
+## 0.1.21
+
+### Patch Changes
+
+- Updated dependencies [3327141]
+  - @zhin.js/plugin-60s@0.0.2
+
 ## 0.1.20
 
 ### Patch Changes
