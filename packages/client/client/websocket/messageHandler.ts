@@ -5,10 +5,12 @@
 
 import {
   store,
+  syncEntries,
+  addEntry,
+  removeEntry,
   loadScripts,
   loadScript,
   unloadScript,
-  setConnected,
   updateConfig,
   updateSchema,
   updateConfigs,
@@ -54,6 +56,11 @@ export class MessageHandler {
           this.handleSchemaBatch(message)
           break
 
+        // 轻量 HMR：文件变更时刷新页面
+        case 'hmr:reload':
+          this.handleHmrReload(message)
+          break
+
         // 系统消息
         case 'init-data':
         case 'data-update':
@@ -77,7 +84,7 @@ export class MessageHandler {
         ? message.data.value 
         : [message.data.value]
       
-      store.dispatch({ type: 'script/syncEntries', payload: entries })
+      store.dispatch(syncEntries(entries))
       store.dispatch(loadScripts(entries))
     }
   }
@@ -87,7 +94,7 @@ export class MessageHandler {
    */
   private static handleScriptAdd(message: any): void {
     if (message.data?.key === 'entries') {
-      store.dispatch({ type: 'script/addEntry', payload: message.data.value })
+      store.dispatch(addEntry(message.data.value))
       store.dispatch(loadScript(message.data.value))
     }
   }
@@ -97,7 +104,7 @@ export class MessageHandler {
    */
   private static handleScriptDelete(message: any): void {
     if (message.data?.key === 'entries') {
-      store.dispatch({ type: 'script/removeEntry', payload: message.data.value })
+      store.dispatch(removeEntry(message.data.value))
       store.dispatch(unloadScript(message.data.value))
     }
   }
@@ -154,6 +161,16 @@ export class MessageHandler {
     if (message.data) {
       store.dispatch(updateSchemas(message.data))
     }
+  }
+
+  /**
+   * 处理轻量 HMR 刷新通知
+   * 服务端监听到入口目录文件变更后发送此消息，客户端直接刷新页面
+   */
+  private static handleHmrReload(message: any): void {
+    const file = message.data?.file || ''
+    console.info(`[HMR] 文件变更: ${file}，正在刷新页面...`)
+    window.location.reload()
   }
 
   /**

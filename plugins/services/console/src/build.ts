@@ -46,7 +46,7 @@ export async function build(root: string, config: vite.UserConfig = {}) {
           'react/jsx-runtime',
           'react/jsx-dev-runtime',
           'radix-ui',
-          '@radix-ui/themes',
+          'class-variance-authority',
           'lucide-react',
           "@zhin.js/client",
         ],
@@ -57,7 +57,7 @@ export async function build(root: string, config: vite.UserConfig = {}) {
             'react': root + '/react.js',
             'react-dom': root + '/react-dom.js',
             'radix-ui': root + '/radix-ui.js',
-            '@radix-ui/themes': root + '/radix-ui-themes.js',
+            'class-variance-authority': root + '/cva.js',
           },
         },
         output: {

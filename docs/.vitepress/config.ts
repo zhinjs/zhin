@@ -2,7 +2,7 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   title: "Zhin.js",
-  description: "新时代 TypeScript 机器人框架",
+  description: "AI 驱动的 TypeScript 机器人框架",
   
   ignoreDeadLinks: [
     /^https?:\/\/localhost/,
@@ -13,6 +13,7 @@ export default defineConfig({
     nav: [
       { text: '快速开始', link: '/getting-started/' },
       { text: '核心基础', link: '/essentials/' },
+      { text: 'AI 智能', link: '/advanced/ai' },
       { text: '高级特性', link: '/advanced/' },
       { text: 'API 参考', link: '/api/' },
       { text: '插件市场', link: '/plugins/' }
@@ -38,6 +39,37 @@ export default defineConfig({
             { text: '插件系统', link: '/essentials/plugins' },
             { text: '中间件', link: '/essentials/middleware' },
             { text: '适配器', link: '/essentials/adapters' }
+          ]
+        }
+      ],
+      
+      '/advanced/ai': [
+        {
+          text: 'AI 智能',
+          items: [
+            { text: 'AI 模块', link: '/advanced/ai' },
+            { text: '工具与技能', link: '/advanced/tools-skills' },
+            { text: 'Feature 系统', link: '/advanced/features' }
+          ]
+        }
+      ],
+      '/advanced/tools-skills': [
+        {
+          text: 'AI 智能',
+          items: [
+            { text: 'AI 模块', link: '/advanced/ai' },
+            { text: '工具与技能', link: '/advanced/tools-skills' },
+            { text: 'Feature 系统', link: '/advanced/features' }
+          ]
+        }
+      ],
+      '/advanced/features': [
+        {
+          text: 'AI 智能',
+          items: [
+            { text: 'AI 模块', link: '/advanced/ai' },
+            { text: '工具与技能', link: '/advanced/tools-skills' },
+            { text: 'Feature 系统', link: '/advanced/features' }
           ]
         }
       ],

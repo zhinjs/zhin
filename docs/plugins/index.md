@@ -4,85 +4,74 @@ sidebar: false
 aside: false
 ---
 
-<div class="plugin-market-container">
+<div class="plugin-page">
 
-# 🔌 插件市场
+# 插件市场
 
-<div class="market-header">
-  <p class="market-desc">探索 Zhin.js 生态系统</p>
-</div>
+<p class="page-desc">探索 Zhin.js 生态系统中的插件和适配器</p>
 
 <ClientOnly>
 <PluginMarket />
 </ClientOnly>
 
-## ✨ 官方插件
+## 平台适配器
 
 <ClientOnly>
-<PluginList category="official" />
+<PluginList category="adapter" />
 </ClientOnly>
 
-## 🔌 平台适配器
+## 服务插件
 
 <ClientOnly>
-<PluginList category="adapters" />
+<PluginList category="service" />
 </ClientOnly>
 
-## 🎮 游戏娱乐
-
-<ClientOnly>
-<PluginList category="games" />
-</ClientOnly>
-
-## 🛠️ 实用工具
-
-<ClientOnly>
-<PluginList category="utils" />
-</ClientOnly>
-
-## 🤖 AI 集成
+## AI 集成
 
 <ClientOnly>
 <PluginList category="ai" />
 </ClientOnly>
 
-## 📊 数据服务
+## 框架核心
 
 <ClientOnly>
-<PluginList category="services" />
+<PluginList category="framework" />
+</ClientOnly>
+
+## 全部插件
+
+<ClientOnly>
+<PluginList />
 </ClientOnly>
 
 </div>
 
 <style scoped>
-.plugin-market-container {
-  max-width: 1400px;
+.plugin-page {
+  max-width: 1152px;
   margin: 0 auto;
   padding: 0 24px;
 }
 
-.market-header {
+.page-desc {
   text-align: center;
-  margin: 2rem 0 3rem;
-}
-
-.market-desc {
-  font-size: 1.1rem;
+  font-size: 16px;
   color: var(--vp-c-text-2);
-  margin: 0.5rem 0 2rem;
+  margin: 8px 0 32px;
 }
 
-/* 标题样式 */
-.plugin-market-container h1 {
+.plugin-page h1 {
   text-align: center;
-  font-size: 2.5rem;
-  margin-bottom: 0.5rem;
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 4px;
 }
 
-.plugin-market-container h2 {
-  font-size: 1.5rem;
-  margin: 3rem 0 1.5rem;
-  padding-bottom: 0.5rem;
+.plugin-page h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 40px 0 16px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--vp-c-divider);
 }
 </style>

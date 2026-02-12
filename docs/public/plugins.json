@@ -1,0 +1,707 @@
+{
+  "plugins": [
+    {
+      "name": "@zhin.js/adapter-dingtalk",
+      "displayName": "dingtalk",
+      "description": "Zhin.js adapter for DingTalk (钉钉)",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [
+        "adapter"
+      ],
+      "version": "1.0.10",
+      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-dingtalk",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "adapter",
+        "dingtalk",
+        "钉钉",
+        "chatbot"
+      ],
+      "lastUpdate": "2026-02-06T14:15:50.888Z"
+    },
+    {
+      "name": "@zhin.js/adapter-discord",
+      "displayName": "discord",
+      "description": "Zhin.js adapter for Discord",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [
+        "adapter"
+      ],
+      "version": "1.0.25",
+      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-discord",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "adapter",
+        "discord",
+        "chatbot"
+      ],
+      "lastUpdate": "2026-02-06T14:15:52.856Z"
+    },
+    {
+      "name": "@zhin.js/adapter-email",
+      "displayName": "email",
+      "description": "Zhin.js adapter for Email (SMTP/IMAP)",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [
+        "adapter",
+        "ai"
+      ],
+      "version": "0.1.13",
+      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-email",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "adapter",
+        "email",
+        "smtp",
+        "imap",
+        "mail"
+      ],
+      "lastUpdate": "2026-02-06T14:15:52.780Z"
+    },
+    {
+      "name": "@zhin.js/adapter-icqq",
+      "displayName": "icqq",
+      "description": "Zhin.js adapter for ICQQ (QQ Bot)",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [
+        "adapter"
+      ],
+      "version": "1.0.30",
+      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-icqq",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "adapter",
+        "icqq",
+        "qq",
+        "tencent",
+        "chatbot"
+      ],
+      "lastUpdate": "2026-02-06T14:15:53.336Z"
+    },
+    {
+      "name": "@zhin.js/adapter-kook",
+      "displayName": "kook",
+      "description": "Zhin.js adapter for KOOK (开黑啦)",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [
+        "adapter"
+      ],
+      "version": "1.0.25",
+      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-kook",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "adapter",
+        "kook",
+        "开黑啦",
+        "chatbot"
+      ],
+      "lastUpdate": "2026-02-06T14:15:52.792Z"
+    },
+    {
+      "name": "@zhin.js/adapter-lark",
+      "displayName": "lark",
+      "description": "Zhin.js adapter for Lark/Feishu (飞书)",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [
+        "adapter"
+      ],
+      "version": "1.0.26",
+      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-lark",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "adapter",
+        "lark",
+        "feishu",
+        "飞书",
+        "chatbot"
+      ],
+      "lastUpdate": "2026-02-06T14:15:53.527Z"
+    },
+    {
+      "name": "@zhin.js/adapter-onebot11",
+      "displayName": "onebot11",
+      "description": "Zhin.js adapter for OneBot v11 protocol",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [
+        "adapter"
+      ],
+      "version": "1.0.27",
+      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-onebot11",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "adapter",
+        "onebot",
+        "onebot11",
+        "qq",
+        "chatbot"
+      ],
+      "lastUpdate": "2026-02-06T14:15:53.332Z"
+    },
+    {
+      "name": "@zhin.js/adapter-process",
+      "displayName": "process",
+      "description": "zhin adapter for process",
+      "author": "lc_cn",
+      "isOfficial": true,
+      "category": [
+        "adapter"
+      ],
+      "version": "1.0.22",
+      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-process",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "adapter",
+        "process"
+      ],
+      "lastUpdate": "2025-11-25T02:06:34.673Z"
+    },
+    {
+      "name": "@zhin.js/adapter-qq",
+      "displayName": "qq",
+      "description": "Zhin.js adapter for QQ Official Bot",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [
+        "adapter"
+      ],
+      "version": "1.0.25",
+      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-qq",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "adapter",
+        "qq",
+        "tencent",
+        "official",
+        "chatbot"
+      ],
+      "lastUpdate": "2026-02-06T14:15:53.534Z"
+    },
+    {
+      "name": "@zhin.js/adapter-sandbox",
+      "displayName": "sandbox",
+      "description": "Zhin.js adapter for local testing and development",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [
+        "adapter"
+      ],
+      "version": "1.0.30",
+      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-sandbox",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "adapter",
+        "sandbox",
+        "test",
+        "development",
+        "local"
+      ],
+      "lastUpdate": "2026-02-06T14:15:54.099Z"
+    },
+    {
+      "name": "@zhin.js/adapter-slack",
+      "displayName": "slack",
+      "description": "Zhin.js adapter for Slack",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [
+        "adapter"
+      ],
+      "version": "1.0.10",
+      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-slack",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "adapter",
+        "slack",
+        "chatbot"
+      ],
+      "lastUpdate": "2026-02-06T14:15:56.081Z"
+    },
+    {
+      "name": "@zhin.js/adapter-telegram",
+      "displayName": "telegram",
+      "description": "Zhin.js adapter for Telegram",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [
+        "adapter"
+      ],
+      "version": "1.0.10",
+      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-telegram",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "adapter",
+        "telegram",
+        "chatbot"
+      ],
+      "lastUpdate": "2026-02-06T14:15:54.916Z"
+    },
+    {
+      "name": "@zhin.js/adapter-wechat-mp",
+      "displayName": "wechat-mp",
+      "description": "Zhin.js adapter for WeChat Official Account (微信公众号)",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [
+        "adapter"
+      ],
+      "version": "0.1.11",
+      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-wechat-mp",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "adapter",
+        "wechat",
+        "weixin",
+        "微信",
+        "official-account",
+        "mp",
+        "chatbot"
+      ],
+      "lastUpdate": "2026-02-06T14:15:58.061Z"
+    },
+    {
+      "name": "@zhin.js/ai",
+      "displayName": "ai",
+      "description": "AI Service for Zhin.js - Multi-model LLM integration with Agent capabilities",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [
+        "service",
+        "ai"
+      ],
+      "version": "0.0.2",
+      "npm": "https://www.npmjs.com/package/@zhin.js/ai",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "service",
+        "ai",
+        "llm",
+        "openai",
+        "claude",
+        "anthropic",
+        "deepseek",
+        "ollama",
+        "agent",
+        "tool-use",
+        "function-calling"
+      ],
+      "lastUpdate": "2026-02-06T14:15:47.322Z"
+    },
+    {
+      "name": "@zhin.js/cli",
+      "displayName": "cli",
+      "description": "Command-line interface for Zhin.js bot framework",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [
+        "framework"
+      ],
+      "version": "1.0.20",
+      "npm": "https://www.npmjs.com/package/@zhin.js/cli",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "cli",
+        "command-line",
+        "tool"
+      ],
+      "lastUpdate": "2026-02-06T14:15:46.873Z"
+    },
+    {
+      "name": "@zhin.js/client",
+      "displayName": "client",
+      "description": "Zhin 客户端",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [
+        "framework"
+      ],
+      "version": "1.0.8",
+      "npm": "https://www.npmjs.com/package/@zhin.js/client",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [],
+      "lastUpdate": "2026-02-06T14:15:47.307Z"
+    },
+    {
+      "name": "@zhin.js/console",
+      "displayName": "console",
+      "description": "Web console service for Zhin.js with real-time monitoring",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [
+        "service"
+      ],
+      "version": "1.0.21",
+      "npm": "https://www.npmjs.com/package/@zhin.js/console",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "service",
+        "console",
+        "web",
+        "dashboard",
+        "monitoring",
+        "admin"
+      ],
+      "lastUpdate": "2026-02-06T14:15:58.551Z"
+    },
+    {
+      "name": "@zhin.js/core",
+      "displayName": "core",
+      "description": "Zhin机器人核心框架",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [
+        "framework"
+      ],
+      "version": "1.0.25",
+      "npm": "https://www.npmjs.com/package/@zhin.js/core",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [],
+      "lastUpdate": "2026-02-06T14:15:47.624Z"
+    },
+    {
+      "name": "@zhin.js/database",
+      "displayName": "database",
+      "description": "Universal database abstraction layer for Zhin.js - supports SQLite, MySQL, PostgreSQL, MongoDB, Redis",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [],
+      "version": "1.0.12",
+      "npm": "https://www.npmjs.com/package/@zhin.js/database",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "database",
+        "orm",
+        "sqlite",
+        "mysql",
+        "postgresql",
+        "mongodb",
+        "redis"
+      ],
+      "lastUpdate": "2026-02-06T14:15:48.099Z"
+    },
+    {
+      "name": "@zhin.js/dependency",
+      "displayName": "dependency",
+      "description": "TypeScript dependency tree analyzer with ESM support for Zhin.js",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [],
+      "version": "1.0.5",
+      "npm": "https://www.npmjs.com/package/@zhin.js/dependency",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "dependency",
+        "tree",
+        "module",
+        "import",
+        "typescript",
+        "esm"
+      ],
+      "lastUpdate": "2026-01-14T01:12:52.702Z"
+    },
+    {
+      "name": "@zhin.js/hmr",
+      "displayName": "hmr",
+      "description": "Zhin热更替框架",
+      "author": "lc_cn",
+      "isOfficial": true,
+      "category": [],
+      "version": "1.0.8",
+      "npm": "https://www.npmjs.com/package/@zhin.js/hmr",
+      "github": "",
+      "homepage": "",
+      "tags": [],
+      "lastUpdate": "2025-11-25T02:06:05.080Z"
+    },
+    {
+      "name": "@zhin.js/http",
+      "displayName": "http",
+      "description": "HTTP server service for Zhin.js with routing and WebSocket support",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [
+        "service"
+      ],
+      "version": "1.0.16",
+      "npm": "https://www.npmjs.com/package/@zhin.js/http",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "service",
+        "http",
+        "server",
+        "router",
+        "websocket",
+        "api"
+      ],
+      "lastUpdate": "2026-02-06T14:15:58.501Z"
+    },
+    {
+      "name": "@zhin.js/logger",
+      "displayName": "logger",
+      "description": "Structured logging system for Zhin.js bot framework",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [],
+      "version": "0.1.9",
+      "npm": "https://www.npmjs.com/package/@zhin.js/logger",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "logger",
+        "logging",
+        "structured",
+        "debug"
+      ],
+      "lastUpdate": "2026-02-06T14:15:47.297Z"
+    },
+    {
+      "name": "@zhin.js/mcp",
+      "displayName": "mcp",
+      "description": "Model Context Protocol (MCP) service for Zhin.js - AI assistant integration",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [
+        "service",
+        "ai"
+      ],
+      "version": "1.0.8",
+      "npm": "https://www.npmjs.com/package/@zhin.js/mcp",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "service",
+        "mcp",
+        "model-context-protocol",
+        "ai",
+        "assistant",
+        "llm"
+      ],
+      "lastUpdate": "2026-02-06T14:15:58.992Z"
+    },
+    {
+      "name": "@zhin.js/plugin-github-notify",
+      "displayName": "plugin-github-notify",
+      "description": "GitHub webhook notification service for Zhin.js",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [
+        "service"
+      ],
+      "version": "0.0.12",
+      "npm": "https://www.npmjs.com/package/@zhin.js/plugin-github-notify",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "service",
+        "github",
+        "webhook",
+        "notification",
+        "ci-cd"
+      ],
+      "lastUpdate": "2026-02-06T14:15:57.894Z"
+    },
+    {
+      "name": "@zhin.js/plugin-html-renderer",
+      "displayName": "plugin-html-renderer",
+      "description": "HTML to image rendering plugin for Zhin.js using @zhinjs/satori",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [],
+      "version": "0.0.3",
+      "npm": "https://www.npmjs.com/package/@zhin.js/plugin-html-renderer",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "plugin",
+        "html",
+        "image",
+        "render",
+        "satori",
+        "svg",
+        "png"
+      ],
+      "lastUpdate": "2026-02-07T08:24:45.522Z"
+    },
+    {
+      "name": "@zhin.js/plugin-music",
+      "displayName": "plugin-music",
+      "description": "Music search and sharing plugin for Zhin.js",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [],
+      "version": "0.0.11",
+      "npm": "https://www.npmjs.com/package/@zhin.js/plugin-music",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "plugin",
+        "music",
+        "qq-music",
+        "netease-music",
+        "search",
+        "share"
+      ],
+      "lastUpdate": "2026-02-06T14:15:59.462Z"
+    },
+    {
+      "name": "@zhin.js/satori",
+      "displayName": "satori",
+      "description": "Enlightened library to convert JSDOM to SVG.",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [],
+      "version": "0.1.0",
+      "npm": "https://www.npmjs.com/package/@zhin.js/satori",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "HTML",
+        "SVG",
+        "converter",
+        "renderer"
+      ],
+      "lastUpdate": "2026-02-07T08:24:47.214Z"
+    },
+    {
+      "name": "@zhin.js/schema",
+      "displayName": "schema",
+      "description": "Configuration validation and schema system for Zhin.js",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [
+        "framework"
+      ],
+      "version": "1.0.9",
+      "npm": "https://www.npmjs.com/package/@zhin.js/schema",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "schema",
+        "validation",
+        "config",
+        "type-checking"
+      ],
+      "lastUpdate": "2026-02-06T14:15:46.971Z"
+    },
+    {
+      "name": "@zhin.js/sensitive-filter",
+      "displayName": "sensitive-filter",
+      "description": "Content moderation plugin for Zhin.js - filters sensitive words",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": [],
+      "version": "0.0.11",
+      "npm": "https://www.npmjs.com/package/@zhin.js/sensitive-filter",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "bot",
+        "plugin",
+        "sensitive",
+        "filter",
+        "moderation",
+        "content",
+        "security"
+      ],
+      "lastUpdate": "2026-02-06T14:15:58.953Z"
+    },
+    {
+      "name": "@zhin.js/types",
+      "displayName": "types",
+      "description": "Zhin types for typescript",
+      "author": "lc_cn",
+      "isOfficial": true,
+      "category": [],
+      "version": "1.0.5",
+      "npm": "https://www.npmjs.com/package/@zhin.js/types",
+      "github": "",
+      "homepage": "",
+      "tags": [],
+      "lastUpdate": "2025-11-17T15:12:30.927Z"
+    }
+  ],
+  "stats": {
+    "total": 31,
+    "official": 31,
+    "adapters": 13,
+    "community": 0
+  },
+  "updatedAt": "2026-02-12T06:13:01.817Z"
+}

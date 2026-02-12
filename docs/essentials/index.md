@@ -97,7 +97,7 @@ const { addMiddleware } = usePlugin()
 
 addMiddleware(async (message, next) => {
   // 在命令执行前
-  console.log('收到消息:', message.content)
+  console.log('收到消息:', message.$raw)
   
   // 调用下一个中间件或命令
   const result = await next()
@@ -114,7 +114,7 @@ addMiddleware(async (message, next) => {
 ```typescript
 addMiddleware(async (message, next) => {
   // 只允许管理员使用
-  if (message.user_id !== 'admin') {
+  if (message.$sender?.id !== 'admin') {
     return '权限不足'
   }
   
@@ -247,7 +247,7 @@ onMounted(() => {
 
 // 2. 中间件（记录所有命令）
 addMiddleware(async (message, next) => {
-  logger.debug(`用户 ${message.user_id} 发送: ${message.content}`)
+  logger.debug(`用户 ${message.$sender?.id} 发送: ${message.$raw}`)
   return next()
 })
 
@@ -278,13 +278,14 @@ onDispose(() => {
 ```
 用户消息
    ↓
-中间件 1 (权限检查)
+MessageDispatcher
+   ├── Guardrail（权限检查、速率限制）
    ↓
-中间件 2 (日志记录)
+   ├── Route（路由判定）
+   │     ├── 命令匹配 → CommandFeature 处理
+   │     └── AI 触发  → ZhinAgent 处理（工具调用 / 对话）
    ↓
-命令匹配
-   ↓
-命令执行 → 使用上下文 → 调用服务
+   └── Handle（执行 + 使用上下文 + 调用服务）
    ↓
 返回结果
 ```

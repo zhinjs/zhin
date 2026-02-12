@@ -364,7 +364,7 @@ pnpm stop
 
 3. **Node.js 版本问题**
    ```bash
-   # 检查 Node.js 版本（需要 >= 18.0.0）
+   # 检查 Node.js 版本（需要 ^20.19.0 或 >=22.12.0）
    node --version
    
    # 升级 Node.js
@@ -373,7 +373,7 @@ pnpm stop
 
 ## 环境要求
 
-- **Node.js**: >= 18.0.0
+- **Node.js**: ^20.19.0 或 >=22.12.0
 - **npm**: >= 8.0.0 (或对应版本的 yarn/pnpm)
 - **操作系统**: Windows 10+, macOS 10.15+, Linux (现代发行版)
 

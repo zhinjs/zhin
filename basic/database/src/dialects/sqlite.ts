@@ -163,6 +163,15 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
       return unquoted;
     }
     
+    // 尝试解析没有引号包裹但看起来像 JSON 的值（SQLite 驱动返回的 json 类型字段）
+    if (value.startsWith('{') || value.startsWith('[')) {
+      try {
+        return JSON.parse(value);
+      } catch {
+        // 解析失败，返回原始字符串
+      }
+    }
+    
     return value;
   }
 

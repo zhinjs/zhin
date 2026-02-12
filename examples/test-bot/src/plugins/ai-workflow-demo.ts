@@ -334,14 +334,5 @@ plugin.addTool(travelAdviceTool);
 // 日志
 // ============================================================================
 
-logger.info('========================================');
-logger.info('[AI 工作流示例] 已加载');
-logger.info('');
-logger.info('演示场景:');
-logger.info('  1. "# 帮我查一下 Zhin 是什么"');
-logger.info('  2. "# 帮我记一下：明天开会"');
-logger.info('  3. "# 查看我的笔记"');
-logger.info('  4. "# 今天适合出门吗"');
-logger.info('  5. "# 计算一下 2的10次方"');
-logger.info('========================================');
+logger.info('[AI 工作流示例] 已注册 5 个工具: search_knowledge, save_note, get_note, run_javascript, travel_advice');
 

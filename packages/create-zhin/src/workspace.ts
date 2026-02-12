@@ -2,6 +2,8 @@ import fs from 'fs-extra';
 import path from 'path';
 import { InitOptions, DATABASE_PACKAGES } from './types.js';
 import { createConfigFile, generateDatabaseEnvVars } from './config.js';
+import { generateAdapterEnvVars, getAdapterDependencies } from './adapter.js';
+import { generateAIEnvVars } from './ai.js';
 
 export async function createWorkspace(projectPath: string, projectName: string, options: InitOptions): Promise<void> {
   await fs.ensureDir(projectPath);
@@ -23,6 +25,17 @@ export async function createWorkspace(projectPath: string, projectName: string, 
     databaseDeps['@zhin.js/database'] = 'latest';
   }
 
+  // 根据适配器选择添加依赖
+  const adapterDeps: Record<string, string> = {};
+  if (options.adapters) {
+    const deps = getAdapterDependencies(options.adapters);
+    Object.assign(adapterDeps, deps);
+  }
+  // 确保 sandbox 始终包含
+  if (!adapterDeps['@zhin.js/adapter-sandbox']) {
+    adapterDeps['@zhin.js/adapter-sandbox'] = 'latest';
+  }
+
   // 创建根 package.json（与 test-bot 结构一致）
   await fs.writeJson(path.join(projectPath, 'package.json'), {
     name: projectName,
@@ -40,10 +53,10 @@ export async function createWorkspace(projectPath: string, projectName: string, 
     },
     dependencies: {
       'zhin.js': 'latest',
-      '@zhin.js/adapter-sandbox': 'latest',
       '@zhin.js/http': 'latest',
       '@zhin.js/client': 'latest',
       '@zhin.js/console': 'latest',
+      ...adapterDeps,
       ...databaseDeps
     },
     devDependencies: {
@@ -55,32 +68,15 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       'lucide-react': 'latest',
       'tsx': 'latest'
     },
+    pnpm: {
+      onlyBuiltDependencies: ['esbuild', 'sqlite3']
+    },
     engines: {
       node: '>=18.0.0'
     }
   }, { spaces: 2 });
   
-  // 创建根 tsconfig.json
-  await fs.writeJson(path.join(projectPath, 'tsconfig.json'), {
-    compilerOptions: {
-      target: 'ES2022',
-      module: 'ESNext',
-      moduleResolution: 'bundler',
-      strict: true,
-      esModuleInterop: true,
-      skipLibCheck: true,
-      forceConsistentCasingInFileNames: true,
-      resolveJsonModule: true,
-      isolatedModules: true,
-      allowSyntheticDefaultImports: true,
-      experimentalDecorators: true,
-      emitDecoratorMetadata: true,
-      declaration: true,
-      sourceMap: true
-    }
-  }, { spaces: 2 });
-  
-  // 创建 app 模块
+  // 创建 app 模块（内部会写入完整的 tsconfig.json）
   await createAppModule(projectPath, projectName, options);
   
   // 创建 plugins 目录
@@ -201,10 +197,12 @@ async function createAppModule(projectPath: string, projectName: string, options
   
   // 创建 .env 文件（使用简单的变量名，与 test-bot 一致）
   const databaseEnvVars = options.database ? generateDatabaseEnvVars(options.database) : '';
+  const adapterEnvVars = options.adapters ? generateAdapterEnvVars(options.adapters) : '';
+  const aiEnvVars = options.ai ? generateAIEnvVars(options.ai) : '';
   await fs.writeFile(path.join(projectPath, '.env'),
 `# HTTP 服务配置（Web 控制台登录信息）
 username=${options.httpUsername}
-password=${options.httpPassword}${databaseEnvVars}
+password=${options.httpPassword}${databaseEnvVars}${adapterEnvVars}${aiEnvVars}
 `);
 await fs.writeFile(path.join(projectPath, '.env.development'),
 `# 调试模式

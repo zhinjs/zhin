@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Bot, AlertCircle, Wifi, WifiOff, Activity, Package, Zap } from 'lucide-react'
-import {Flex,Box,Spinner,Text,Callout,Heading,Badge,Separator,Grid,Card} from '@radix-ui/themes'
+import { Card, CardContent } from '../components/ui/card'
+import { Badge } from '../components/ui/badge'
+import { Alert, AlertDescription } from '../components/ui/alert'
+import { Skeleton } from '../components/ui/skeleton'
+import { Separator } from '../components/ui/separator'
 
 interface BotInfo {
   name: string
@@ -24,14 +28,9 @@ export default function DashboardBots() {
     try {
       const res = await fetch('/api/bots', { credentials: 'include' })
       if (!res.ok) throw new Error('API 请求失败')
-
       const data = await res.json()
-      if (data.success) {
-        setBots(data.data)
-        setError(null)
-      } else {
-        throw new Error('数据格式错误')
-      }
+      if (data.success) { setBots(data.data); setError(null) }
+      else throw new Error('数据格式错误')
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -41,158 +40,113 @@ export default function DashboardBots() {
 
   if (loading) {
     return (
-      <Flex align="center" justify="center" style={{ height: '100%' }}>
-        <Box>
-          <Spinner size="3" />
-          <Text size="2" color="gray" style={{ marginTop: '8px' }}>加载中...</Text>
-        </Box>
-      </Flex>
+      <div className="space-y-6">
+        <Skeleton className="h-8 w-48" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-48" />)}
+        </div>
+      </div>
     )
   }
 
   if (error) {
     return (
-      <Flex align="center" justify="center" style={{ height: '100%' }}>
-        <Callout.Root color="red">
-            <Callout.Icon>
-            <AlertCircle />
-          </Callout.Icon>
-          <Callout.Text>
-            加载失败: {error}
-          </Callout.Text>
-        </Callout.Root>
-      </Flex>
+      <div className="flex items-center justify-center h-full">
+        <Alert variant="destructive" className="max-w-md">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>加载失败: {error}</AlertDescription>
+        </Alert>
+      </div>
     )
   }
 
   return (
-    <Box>
-      {/* 页面标题 */}
-      <Flex direction="column" gap="2" mb="6">
-        <Heading size="8">机器人管理</Heading>
-        <Flex align="center" gap="2">
-          <Text color="gray">共 {bots.length} 个机器人，</Text>
-          <Badge color="green">{bots.filter(b => b.connected).length}</Badge>
-          <Text color="gray">个在线</Text>
-        </Flex>
-      </Flex>
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">机器人管理</h1>
+        <div className="flex items-center gap-2 mt-1">
+          <span className="text-sm text-muted-foreground">共 {bots.length} 个机器人，</span>
+          <Badge variant="success">{bots.filter(b => b.connected).length}</Badge>
+          <span className="text-sm text-muted-foreground">个在线</span>
+        </div>
+      </div>
 
-      <Separator size="4" mb="6" />
+      <Separator />
 
-      {/* 机器人列表 */}
-      <Grid columns={{ initial: '1', sm: '2', lg: '3' }} gap="4">
+      {/* Bot grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {bots.map((bot, index) => (
           <Card key={`${bot.adapter}-${bot.name}-${index}`}>
-            <Flex direction="column" gap="3">
-              {/* 头部 */}
-              <Flex justify="between" align="center">
-                <Flex align="center" gap="2">
-                  <Box
-                    style={{
-                      padding: '8px',
-                      borderRadius: '8px',
-                      backgroundColor: bot.connected ? 'var(--green-3)' : 'var(--gray-3)'
-                    }}
-                  >
-                    <Bot 
-                      size={20}
-                      color={bot.connected ? 'var(--green-9)' : 'var(--gray-9)'}
-                    />
-                  </Box>
-                  <Text size="4" weight="bold">{bot.name}</Text>
-                </Flex>
-                
-                <Box style={{ position: 'relative' }}>
-                  <Badge color={bot.connected ? 'green' : 'gray'}>
-                    <Flex align="center" gap="1">
-                      {bot.connected ? (
-                        <>
-                          <Wifi size={12} />
-                          在线
-                        </>
-                      ) : (
-                        <>
-                          <WifiOff size={12} />
-                          离线
-                        </>
-                      )}
-                    </Flex>
+            <CardContent className="p-5 space-y-4">
+              {/* Header */}
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <div className={`p-2 rounded-md ${bot.connected ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-muted'}`}>
+                    <Bot className={`w-5 h-5 ${bot.connected ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`} />
+                  </div>
+                  <span className="text-lg font-bold">{bot.name}</span>
+                </div>
+                <div className="relative">
+                  <Badge variant={bot.connected ? 'success' : 'secondary'}>
+                    {bot.connected ? <><Wifi className="w-3 h-3 mr-1" />在线</> : <><WifiOff className="w-3 h-3 mr-1" />离线</>}
                   </Badge>
-                  {bot.connected && (
-                    <Box
-                      style={{
-                        position: 'absolute',
-                        top: '-4px',
-                        right: '-4px',
-                        width: '8px',
-                        height: '8px',
-                        borderRadius: '50%',
-                        backgroundColor: 'var(--green-9)',
-                        animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
-                      }}
-                    />
-                  )}
-                </Box>
-              </Flex>
+                </div>
+              </div>
 
-              {/* 适配器信息 */}
-              <Flex align="center" gap="2">
-                <Text size="2" color="gray">适配器:</Text>
+              {/* Adapter */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">适配器:</span>
                 <Badge variant="outline">{bot.adapter}</Badge>
-              </Flex>
+              </div>
 
-              <Separator size="4" />
+              <Separator />
 
-              {/* 详细信息 */}
-              <Flex direction="column" gap="2">
-                <Flex justify="between" align="center" p="2" style={{ borderRadius: '6px', backgroundColor: 'var(--gray-2)' }}>
-                  <Flex align="center" gap="2">
-                    <Activity 
-                      size={16}
-                      color={bot.status === 'online' ? 'var(--green-9)' : 'var(--gray-9)'}
-                    />
-                    <Text size="2" color="gray">运行状态</Text>
-                  </Flex>
-                  <Badge color={bot.status === 'online' ? 'green' : 'gray'}>
+              {/* Details */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center p-2 rounded-md bg-muted/50">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Activity className={`w-4 h-4 ${bot.status === 'online' ? 'text-emerald-500' : 'text-muted-foreground'}`} />
+                    <span className="text-muted-foreground">运行状态</span>
+                  </div>
+                  <Badge variant={bot.status === 'online' ? 'success' : 'secondary'}>
                     {bot.status === 'online' ? '运行中' : '已停止'}
                   </Badge>
-                </Flex>
-
-                <Flex justify="between" align="center" p="2" style={{ borderRadius: '6px', backgroundColor: 'var(--gray-2)' }}>
-                  <Flex align="center" gap="2">
-                    <Package size={16} color="var(--blue-9)" />
-                    <Text size="2" color="gray">适配器类型</Text>
-                  </Flex>
-                  <Text size="2" weight="medium">{bot.adapter}</Text>
-                </Flex>
-
-                <Flex justify="between" align="center" p="2" style={{ borderRadius: '6px', backgroundColor: 'var(--gray-2)' }}>
-                  <Flex align="center" gap="2">
-                    <Zap size={16} color="var(--purple-9)" />
-                    <Text size="2" color="gray">连接状态</Text>
-                  </Flex>
-                  <Text size="2" weight="medium" color={bot.connected ? 'green' : 'gray'}>
+                </div>
+                <div className="flex justify-between items-center p-2 rounded-md bg-muted/50">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Package className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">适配器类型</span>
+                  </div>
+                  <span className="text-sm font-medium">{bot.adapter}</span>
+                </div>
+                <div className="flex justify-between items-center p-2 rounded-md bg-muted/50">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Zap className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">连接状态</span>
+                  </div>
+                  <span className={`text-sm font-medium ${bot.connected ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
                     {bot.connected ? '已连接' : '未连接'}
-                  </Text>
-                </Flex>
-              </Flex>
-            </Flex>
+                  </span>
+                </div>
+              </div>
+            </CardContent>
           </Card>
         ))}
-      </Grid>
+      </div>
 
-      {/* 空状态 */}
+      {/* Empty state */}
       {bots.length === 0 && (
         <Card>
-          <Flex direction="column" align="center" gap="4" py="9">
-            <Bot size={64} color="var(--gray-6)" />
-            <Flex direction="column" align="center" gap="2">
-              <Heading size="4">暂无机器人</Heading>
-              <Text color="gray">请先配置并启动机器人</Text>
-            </Flex>
-          </Flex>
+          <CardContent className="flex flex-col items-center gap-4 py-12">
+            <Bot className="w-16 h-16 text-muted-foreground/30" />
+            <div className="text-center">
+              <h3 className="text-lg font-semibold">暂无机器人</h3>
+              <p className="text-sm text-muted-foreground">请先配置并启动机器人</p>
+            </div>
+          </CardContent>
         </Card>
       )}
-    </Box>
+    </div>
   )
 }

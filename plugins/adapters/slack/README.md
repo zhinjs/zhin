@@ -97,7 +97,9 @@ export default defineConfig({
 ### Basic Message Handling
 
 ```typescript
-import { addCommand, MessageCommand } from 'zhin.js'
+import { usePlugin, MessageCommand } from 'zhin.js'
+
+const { addCommand } = usePlugin()
 
 addCommand(new MessageCommand('hello')
   .action(async (message) => {

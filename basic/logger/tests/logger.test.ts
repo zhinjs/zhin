@@ -186,3 +186,42 @@ describe('Logger', () => {
     })
   })
 })
+
+// ============================================================================
+// LogSanitizer / DefaultFormatter 补全测试
+// ============================================================================
+describe('DefaultFormatter', () => {
+  it('should format log entry', async () => {
+    const { DefaultFormatter } = await import('../src/logger.js')
+    const formatter = new DefaultFormatter()
+    
+    const entry = {
+      level: 2,  // INFO
+      name: 'test',
+      message: 'hello world',
+      timestamp: new Date(),
+      args: [],
+    }
+    
+    const result = formatter.format(entry)
+    expect(typeof result).toBe('string')
+    expect(result).toContain('hello world')
+  })
+})
+
+describe('Logger 安全特性', () => {
+  it('Logger 实例应可设置日志级别', () => {
+    const logger = new Logger(null, 'test-security')
+    logger.setLevel(LogLevel.ERROR)
+    expect(logger.getLevel()).toBe(LogLevel.ERROR)
+  })
+
+  it('Logger 实例应支持计时器', () => {
+    const logger = new Logger(null, 'test-timer')
+    // time 和 timeEnd 不应抛错
+    expect(() => {
+      const timer = logger.time('test')
+      timer.end()
+    }).not.toThrow()
+  })
+})

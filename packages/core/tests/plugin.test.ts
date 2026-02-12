@@ -232,13 +232,12 @@ describe('Plugin AsyncLocalStorage', () => {
       })
     })
 
-    it('should create child plugin when called within parent context', () => {
+    it('should return same instance when called twice from same file', () => {
       storage.run(undefined, () => {
-        const parent = usePlugin()
-        const child = usePlugin()
+        const first = usePlugin()
+        const second = usePlugin()
         
-        expect(child.parent).toBe(parent)
-        expect(parent.children).toContain(child)
+        expect(second).toBe(first)
       })
     })
 
@@ -561,6 +560,82 @@ describe('Plugin Event Broadcasting', () => {
   })
 })
 
+describe('Plugin Context mounted Behavior', () => {
+  it('should always call mounted callback even when value is preset', async () => {
+    const plugin = new Plugin('/test/plugin.ts')
+    let mountedCalled = false
+
+    plugin.provide({
+      name: 'test-ctx' as any,
+      description: 'Test context with both value and mounted',
+      value: { original: true },
+      mounted(_p: any) {
+        mountedCalled = true
+        return { fromMounted: true }
+      },
+    } as any)
+
+    await plugin.start()
+    expect(mountedCalled).toBe(true)
+  })
+
+  it('should NOT overwrite preset value with mounted return', async () => {
+    const plugin = new Plugin('/test/plugin.ts')
+    const presetValue = { original: true }
+
+    plugin.provide({
+      name: 'test-ctx' as any,
+      description: 'Test context with both value and mounted',
+      value: presetValue,
+      mounted(_p: any) {
+        return { fromMounted: true }
+      },
+    } as any)
+
+    await plugin.start()
+    const injected = plugin.inject('test-ctx' as any)
+    expect(injected).toBe(presetValue)
+    expect(injected).toEqual({ original: true })
+  })
+
+  it('should assign mounted return value when context.value is not set', async () => {
+    const plugin = new Plugin('/test/plugin.ts')
+    const mountedValue = { fromMounted: true }
+
+    plugin.provide({
+      name: 'test-ctx' as any,
+      description: 'Test context with mounted only',
+      mounted(_p: any) {
+        return mountedValue
+      },
+    } as any)
+
+    await plugin.start()
+    const injected = plugin.inject('test-ctx' as any)
+    expect(injected).toBe(mountedValue)
+  })
+
+  it('mounted side effects should run even when value is preset', async () => {
+    const plugin = new Plugin('/test/plugin.ts')
+    let sideEffectCounter = 0
+
+    plugin.provide({
+      name: 'test-ctx' as any,
+      description: 'Test mounted side effects',
+      value: { data: 'preset' },
+      mounted(_p: any) {
+        sideEffectCounter++
+        return { data: 'mounted' }
+      },
+    } as any)
+
+    await plugin.start()
+    expect(sideEffectCounter).toBe(1)
+    // value should remain preset
+    expect(plugin.inject('test-ctx' as any)).toEqual({ data: 'preset' })
+  })
+})
+
 describe('Plugin Context Management', () => {
   describe('provide', () => {
     it('should register context', () => {
@@ -631,20 +706,19 @@ describe('Plugin Context Management', () => {
 describe('Plugin Features', () => {
   it('should return empty features by default', () => {
     const plugin = new Plugin('/test/plugin.ts')
-    const features = plugin.features
+    const features = plugin.getFeatures()
     
-    expect(features.commands).toEqual([])
-    expect(features.components).toEqual([])
-    expect(features.crons).toEqual([])
-    expect(Array.isArray(features.middlewares)).toBe(true)
+    expect(features).toEqual([])
   })
 
-  it('should include middleware names', () => {
+  it('should include middleware in getFeatures', () => {
     const plugin = new Plugin('/test/plugin.ts')
-    plugin.addMiddleware(async (msg: any, next: any) => await next(), 'test-middleware')
+    plugin.addMiddleware(async (msg: any, next: any) => await next())
     
-    const features = plugin.features
-    expect(features.middlewares.length).toBeGreaterThan(0)
+    const features = plugin.getFeatures()
+    const middlewareFeature = features.find(f => f.name === 'middleware')
+    expect(middlewareFeature).toBeDefined()
+    expect(middlewareFeature!.count).toBeGreaterThan(0)
   })
 })
 

@@ -1,134 +1,110 @@
-# zhin.js - 开箱即用的机器人框架
+# zhin.js
 
-🚀 **一个包，全功能** - 安装 `zhin.js` 即可获得完整的机器人开发体验。
+Zhin.js 主入口包 —— 现代 TypeScript 聊天机器人框架，AI 驱动、插件化、多平台。
 
-## ✨ 特性
+本包是 Zhin.js 框架的统一入口，重新导出 `@zhin.js/core` 全部 API 并注入框架级类型声明。
 
-- 📦 **开箱即用** - 包含进程适配器、HTTP服务、Web控制台和SQLite数据库
-- 🔌 **插件化架构** - 需要更多功能时可安装对应的适配器和数据库驱动
-- ⚡ **热重载** - 开发时修改代码立即生效
-- 🌐 **Web控制台** - 浏览器中管理和监控机器人
-- 🗄️ **数据库支持** - 默认SQLite，可扩展MySQL/PostgreSQL
+## 快速开始
 
-## 🚀 快速开始
-
-### 安装
+### 创建项目
 
 ```bash
-npm install zhin.js
-# 或
-pnpm add zhin.js
+npm create zhin-app my-bot
+cd my-bot
+pnpm install
+pnpm dev          # 开发模式（热重载）
 ```
 
-### 创建应用
+### 配置文件
+
+```yaml
+# zhin.config.yml
+bots:
+  - context: icqq
+    name: '123456789'
+    password: ''
+    platform: 2
+
+plugins:
+  - adapter-icqq
+  - http
+  - console
+
+ai:
+  enabled: true
+  providers:
+    - type: openai
+      model: gpt-4o
+      api_key: ${OPENAI_API_KEY}
+```
+
+## 编写插件
 
 ```typescript
-import { createZhinApp } from 'zhin.js'
+import { usePlugin, MessageCommand, ZhinTool } from 'zhin.js'
 
-const app = await createZhinApp({
-  // 数据库配置
-  databases: [{
-    name: 'main',
-    type: 'sqlite', 
-    database: './data/bot.db'
-  }],
-  // 机器人配置
-  bots: [{
-    name: 'console',
-    context: 'process'  // 控制台机器人，用于测试
-  }]
+const { addCommand, addTool, declareSkill, addCron } = usePlugin()
+
+// 注册命令
+addCommand(
+  new MessageCommand('hello <name:string>')
+    .desc('打招呼')
+    .action((_, result) => `Hello, ${result.params.name}!`)
+)
+
+// 注册 AI 工具
+addTool(
+  new ZhinTool('get_weather')
+    .desc('查询天气')
+    .param('city', { type: 'string', description: '城市名' }, true)
+    .tag('天气', '生活')
+    .keyword('天气', '气温')
+    .execute(async ({ city }) => `${city}：晴，25°C`)
+)
+
+// 声明技能（将插件内的工具聚合）
+declareSkill({
+  description: '天气查询服务',
+  keywords: ['天气', '气温'],
+  tags: ['生活'],
 })
-
-// 启动应用
-await app.start()
 ```
 
-### 添加功能
+## 导出内容
 
 ```typescript
-import { addCommand, addMiddleware, onMessage } from 'zhin.js'
+// 重新导出 @zhin.js/core 全部 API
+export * from '@zhin.js/core'
 
-// 添加命令
-addCommand({
-  name: 'hello',
-  description: '打招呼',
-  async execute(message) {
-    await message.reply('Hello, World!')
-  }
-})
-
-// 添加中间件
-addMiddleware(async (message, next) => {
-  console.log('收到消息:', message.content)
-  await next()
-})
-
-// 监听消息
-onMessage(async (message) => {
-  if (message.content === 'ping') {
-    await message.reply('pong!')
-  }
-})
+// 日志模块
+export { default as logger } from '@zhin.js/logger'
 ```
 
-## 📦 包含的功能
+## 核心概念
 
-| 功能 | 描述 |
-|------|------|
-| **@zhin.js/adapter-process** | 控制台适配器，支持命令行交互 |
-| **@zhin.js/http** | HTTP服务，提供API接口 |
-| **@zhin.js/console** | Web控制台，浏览器管理界面 |
+- **Plugin** — 基本组织单位，通过 `usePlugin()` Hook 访问框架 API
+- **Feature** — 统一抽象（Command、Tool、Skill、Cron、Database、Component、Config、Permission）
+- **Adapter** — 多平台适配器（QQ、Discord、Telegram、KOOK 等 12 个平台）
+- **MessageDispatcher** — 三阶段消息处理管线（Guardrail → Route → Handle）
+- **ZhinAgent** — 内置 AI 智能体，支持工具调用和多轮对话
 
-## 🔌 扩展功能
-
-需要连接其他平台或数据库时，安装对应的包：
+## 常用命令
 
 ```bash
-# 更多适配器
-pnpm add @zhin.js/adapter-telegram  # Telegram机器人
-pnpm add @zhin.js/adapter-discord   # Discord机器人
-pnpm add @zhin.js/adapter-qq        # QQ机器人
-
+pnpm dev          # 开发模式（热重载 + 文件监听）
+pnpm start        # 生产模式
+npx zhin stop     # 停止守护进程
+npx zhin new      # 创建插件模板
+npx zhin build    # 构建插件
 ```
 
-然后在代码中引入即可自动注册：
+## 文档
 
-```typescript
-import '@zhin.js/adapter-telegram'
-import '@zhin.js/database-mysql'
+- [快速开始](https://zhin.js.org/getting-started/)
+- [核心概念](https://zhin.js.org/essentials/)
+- [AI 模块](https://zhin.js.org/advanced/ai)
+- [API 参考](https://zhin.js.org/api/)
 
-const app = await createZhinApp({
-  databases: [{
-    name: 'main',
-    type: 'mysql',
-    host: 'localhost',
-    username: 'root',
-    password: 'password',
-    database: 'bot_db'
-  }],
-  bots: [{
-    name: 'telegram_bot',
-    context: 'telegram',
-    token: 'YOUR_BOT_TOKEN'
-  }]
-})
-```
-
-## 🌐 Web控制台
-
-启动应用后，访问 http://localhost:8086 即可打开Web控制台：
-
-- 📊 **实时监控** - 查看机器人状态和消息统计
-- 🔧 **插件管理** - 启用/禁用插件功能
-- 📋 **数据库管理** - 查看和操作数据库
-- 📝 **日志查看** - 实时查看系统日志
-
-## 📚 更多文档
-
-- [完整文档](../../docs/)
-- [最佳实践](../../docs/guide/best-practices.md)
-- [架构设计](../../docs/guide/architecture.md)
-
-## 📄 许可证
+## 许可证
 
 MIT License

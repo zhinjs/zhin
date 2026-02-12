@@ -5,7 +5,6 @@ import PluginSearch from './PluginSearch.vue'
 
 const searchRef = ref<InstanceType<typeof PluginSearch>>()
 
-// 处理统计项点击
 function handleFilter(keyword: string) {
   if (searchRef.value) {
     searchRef.value.setSearchKeyword(keyword)
@@ -16,26 +15,15 @@ function handleFilter(keyword: string) {
 <template>
   <div class="plugin-market">
     <PluginStats @filter="handleFilter" />
-    
-    <div class="search-section">
-      <h2>🔍 搜索插件</h2>
-      <PluginSearch ref="searchRef" />
-    </div>
+    <PluginSearch ref="searchRef" />
   </div>
 </template>
 
 <style scoped>
 .plugin-market {
-  margin: 2rem 0;
-}
-
-.search-section {
-  margin-top: 3rem;
-}
-
-.search-section h2 {
-  font-size: 1.5rem;
-  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin: 24px 0;
 }
 </style>
-

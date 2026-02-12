@@ -1,10 +1,11 @@
 /**
- * Component Context
- * 管理所有插件注册的组件
+ * ComponentFeature
+ * 管理所有插件注册的组件，继承自 Feature 抽象类
  */
+import { Feature, FeatureJSON } from "../feature.js";
 import { Component, renderComponents } from "../component.js";
 import { SendOptions, MaybePromise } from "../types.js";
-import { Context, Plugin, getPlugin } from "../plugin.js";
+import { Plugin, getPlugin } from "../plugin.js";
 
 type Listener = (options: SendOptions) => MaybePromise<SendOptions>;
 
@@ -21,90 +22,107 @@ declare module "../plugin.js" {
   namespace Plugin {
     interface Extensions extends ComponentContextExtensions {}
     interface Contexts {
-      component: ComponentService;
+      component: ComponentFeature;
     }
   }
 }
 
 /**
- * 组件服务数据
+ * 组件服务 Feature
  */
-export interface ComponentService {
-  /** 按名称索引 */
-  readonly byName: Map<string, Component<any>>;
-  /** 添加组件 */
-  add(component: Component<any>, pluginName: string): () => void;
-  /** 获取所有组件名称 */
-  getAllNames(): string[];
-  /** 移除组件 */
-  remove(component: Component<any>): boolean;
-  /** 按名称获取 */
-  get(name: string): Component<any> | undefined;
-}
+export class ComponentFeature extends Feature<Component<any>> {
+  readonly name = 'component' as const;
+  readonly icon = 'Box';
+  readonly desc = '组件';
 
-/**
- * 创建组件 Context
- */
-export function createComponentService(): Context<'component', ComponentContextExtensions> {
-  const byName = new Map<string, Component<any>>();
-  const pluginMap = new Map<Component<any>, string>();
-  let listener: Listener | undefined;
-  let rootPlugin: Plugin | undefined;
-  
-  const value: ComponentService = {
-    byName,
-    
-    add(component, pluginName) {
-      byName.set(component.name, component);
-      pluginMap.set(component, pluginName);
-      return () => value.remove(component);
-    },
-    getAllNames() {
-      return Array.from(byName.keys());
-    },
-    remove(component) {
-      if (byName.has(component.name)) {
-        byName.delete(component.name);
-        pluginMap.delete(component);
-        return true;
-      }
-      return false;
-    },
-    
-    get(name) {
-      return byName.get(name);
+  /** 按名称索引 */
+  readonly byName = new Map<string, Component<any>>();
+
+  /** 内部状态：消息渲染监听器 & 宿主插件 */
+  #listener?: Listener;
+  #rootPlugin?: Plugin;
+
+  /**
+   * 添加组件
+   */
+  add(component: Component<any>, pluginName: string): () => void {
+    this.byName.set(component.name, component);
+    return super.add(component, pluginName);
+  }
+
+  /**
+   * 移除组件
+   */
+  remove(component: Component<any>): boolean {
+    this.byName.delete(component.name);
+    return super.remove(component);
+  }
+
+  /**
+   * 获取所有组件名称
+   */
+  getAllNames(): string[] {
+    return Array.from(this.byName.keys());
+  }
+
+  /**
+   * 按名称获取组件
+   */
+  get(name: string): Component<any> | undefined {
+    return this.byName.get(name);
+  }
+
+  /**
+   * 生命周期: 挂载时注册消息渲染监听器
+   */
+  mounted(plugin: Plugin): void {
+    this.#rootPlugin = plugin;
+    this.#listener = (options: SendOptions) => {
+      return renderComponents(this.byName, options);
+    };
+    plugin.root.on('before.sendMessage', this.#listener);
+  }
+
+  /**
+   * 生命周期: 销毁时移除监听器
+   */
+  dispose(): void {
+    if (this.#listener && this.#rootPlugin) {
+      this.#rootPlugin.root.off('before.sendMessage', this.#listener);
+      this.#listener = undefined;
     }
-  };
-  
-  return {
-    name: 'component',
-    description: '组件服务',
-    
-    mounted(plugin: Plugin) {
-      rootPlugin = plugin;
-      // 创建消息渲染监听器
-      listener = (options: SendOptions) => {
-        return renderComponents(byName, options);
-      };
-      plugin.root.on('before.sendMessage', listener);
-      return value;
-    },
-    
-    dispose() {
-      if (listener && rootPlugin) {
-        rootPlugin.root.off('before.sendMessage', listener);
-        listener = undefined;
-      }
-    },
-    
-    extensions: {
+  }
+
+  /**
+   * 序列化为 JSON
+   */
+  toJSON(pluginName?: string): FeatureJSON {
+    const list = pluginName ? this.getByPlugin(pluginName) : this.items;
+    return {
+      name: this.name,
+      icon: this.icon,
+      desc: this.desc,
+      count: list.length,
+      items: list.map(c => ({
+        name: c.name,
+        type: 'component',
+      })),
+    };
+  }
+
+  /**
+   * 提供给 Plugin.prototype 的扩展方法
+   */
+  get extensions() {
+    const feature = this;
+    return {
       addComponent<T extends Component<any>>(component: T) {
         const plugin = getPlugin();
-        const dispose = value.add(component, plugin.name);
+        const dispose = feature.add(component, plugin.name);
+        plugin.recordFeatureContribution(feature.name, component.name);
         plugin.onDispose(dispose);
         return dispose;
-      }
-    }
-  };
+      },
+    };
+  }
 }
-

@@ -3,11 +3,14 @@ import { createSlice, PayloadAction, createAsyncThunk } from "@reduxjs/toolkit"
 export interface ScriptState {
     entries: string[]
     loadedScripts: string[]
+    /** 是否已收到 WebSocket 的首次 entries 同步 */
+    synced: boolean
 }
 
 const initialState: ScriptState = {
     entries: [],
-    loadedScripts: []
+    loadedScripts: [],
+    synced: false
 }
 
 // AsyncThunk: 加载单个脚本
@@ -61,6 +64,7 @@ const scriptSlice = createSlice({
     reducers: {
         syncEntries: (state, action: PayloadAction<string[]>) => {
             state.entries = action.payload
+            state.synced = true
         },
         
         addEntry: (state, action: PayloadAction<string>) => {

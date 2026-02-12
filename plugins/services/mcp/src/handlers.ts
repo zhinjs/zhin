@@ -254,9 +254,8 @@ export function queryPlugin(args: { pluginName: string }): any {
 export function listPlugins(): any {
   return root.children.map((dep: any) => ({
     name: dep.name,
-    status: dep.$mounted ? "active" : "inactive",
-    commandCount: dep.$commands?.size || 0,
-    componentCount: dep.$components?.size || 0,
+    status: "active",
+    features: dep.getFeatures?.() || [],
   }));
 }
 

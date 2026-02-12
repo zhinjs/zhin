@@ -1,6 +1,8 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { InitOptions, DatabaseConfig } from './types.js';
+import { generateAIConfigYaml, generateAIConfigTS, generateAIConfigJSON } from './ai.js';
+import { generateBotsConfigYaml, generateBotsConfigTS, generateBotsConfigJSON } from './adapter.js';
 
 // 生成数据库环境变量
 export function generateDatabaseEnvVars(config: DatabaseConfig): string {
@@ -124,18 +126,14 @@ export function generateDatabaseConfig(config: DatabaseConfig, format: 'ts' | 'j
           if (typeof value === 'object' && value !== null) {
             configLines.push(`      ${key}: {`);
             Object.entries(value).forEach(([subKey, subValue]) => {
-              if (typeof subValue === 'string' && subValue.startsWith('env.')) {
-                configLines.push(`        ${subKey}: ${subValue},`);
-              } else if (typeof subValue === 'string' && subValue.includes('parseInt(')) {
+              if (typeof subValue === 'string' && (subValue.includes('env.') || subValue.includes('parseInt('))) {
                 configLines.push(`        ${subKey}: ${subValue},`);
               } else {
                 configLines.push(`        ${subKey}: '${subValue}',`);
               }
             });
             configLines.push('      },');
-          } else if (typeof value === 'string' && value.startsWith('env.')) {
-            configLines.push(`      ${key}: ${value},`);
-          } else if (typeof value === 'string' && value.includes('parseInt(')) {
+          } else if (typeof value === 'string' && (value.includes('env.') || value.includes('parseInt('))) {
             configLines.push(`      ${key}: ${value},`);
           } else {
             configLines.push(`      ${key}: '${value}',`);
@@ -145,10 +143,20 @@ export function generateDatabaseConfig(config: DatabaseConfig, format: 'ts' | 'j
         
         return `database: ${configLines.join('\n    ')},`;
       }
-    case 'yaml':
-      return Object.entries(configObj)
-        .map(([key, value]) => `  ${key}: ${typeof value === 'object' ? JSON.stringify(value).replace(/"/g, '') : value}`)
-        .join('\n');
+    case 'yaml': {
+      const yamlLines: string[] = [];
+      Object.entries(configObj).forEach(([key, value]) => {
+        if (typeof value === 'object' && value !== null) {
+          yamlLines.push(`  ${key}:`);
+          Object.entries(value).forEach(([subKey, subValue]) => {
+            yamlLines.push(`    ${subKey}: ${subValue}`);
+          });
+        } else {
+          yamlLines.push(`  ${key}: ${value}`);
+        }
+      });
+      return yamlLines.join('\n');
+    }
     case 'json':
       const jsonStr = JSON.stringify(configObj, null, 2).replace(/^/gm, '  ');
       return `  "database": ${jsonStr},`;
@@ -157,11 +165,64 @@ export function generateDatabaseConfig(config: DatabaseConfig, format: 'ts' | 'j
   }
 }
 
+// 构建 plugins 列表（根据用户选择的适配器）
+function buildPluginsList(options: InitOptions): string[] {
+  const plugins: string[] = ['example', '@zhin.js/http', '@zhin.js/console'];
+
+  if (options.adapters?.plugins) {
+    for (const plugin of options.adapters.plugins) {
+      if (!plugins.includes(plugin)) {
+        plugins.push(plugin);
+      }
+    }
+  } else {
+    // 默认只添加 sandbox
+    if (!plugins.includes('@zhin.js/adapter-sandbox')) {
+      plugins.push('@zhin.js/adapter-sandbox');
+    }
+  }
+
+  return plugins;
+}
+
 // 创建配置文件
 export async function createConfigFile(appPath: string, format: string, options: InitOptions): Promise<void> {
   const configFormat = format as 'ts' | 'js' | 'yaml' | 'json';
   const databaseConfig = options.database ? generateDatabaseConfig(options.database, configFormat) : '';
-  
+  const plugins = buildPluginsList(options);
+
+  // 生成 bots 和 AI 配置
+  const botsYaml = options.adapters ? generateBotsConfigYaml(options.adapters) : '';
+  const botsTS = options.adapters ? generateBotsConfigTS(options.adapters) : '';
+  const botsJSON = options.adapters ? generateBotsConfigJSON(options.adapters) : '';
+  const aiYaml = options.ai ? generateAIConfigYaml(options.ai) : '';
+  const aiTS = options.ai ? generateAIConfigTS(options.ai) : '';
+  const aiJSON = options.ai ? generateAIConfigJSON(options.ai) : '';
+
+  // TS/JS 格式的 plugins 列表
+  const pluginsTSLines = plugins.map(p => `      '${p}'`).join(',\n');
+
+  // YAML 格式的 plugins 列表
+  const pluginsYamlLines = plugins.map(p => `  - "${p}"`).join('\n');
+
+  // JSON 格式的 plugins 列表
+  const pluginsJsonLines = plugins.map(p => `    "${p}"`).join(',\n');
+
+  // 构建 TS/JS 的额外段（bots + ai）
+  let tsExtraConfig = '';
+  if (botsTS) tsExtraConfig += `\n${botsTS}`;
+  if (aiTS) tsExtraConfig += `\n${aiTS}`;
+
+  // 构建 YAML 的额外段（bots + ai）
+  let yamlExtraConfig = '';
+  if (botsYaml) yamlExtraConfig += botsYaml;
+  if (aiYaml) yamlExtraConfig += aiYaml;
+
+  // 构建 JSON 的额外段（bots + ai）
+  let jsonExtraConfig = '';
+  if (botsJSON) jsonExtraConfig += `\n  ${botsJSON}`;
+  if (aiJSON) jsonExtraConfig += `\n  ${aiJSON}`;
+
   const configMap: Record<string, [string, string]> = {
     ts: ['zhin.config.ts', 
 `import { defineConfig, LogLevel } from 'zhin.js';
@@ -169,7 +230,7 @@ export async function createConfigFile(appPath: string, format: string, options:
 export default defineConfig(async (env) => {
   return {
     log_level: LogLevel.INFO,
-${databaseConfig ? `    ${databaseConfig}` : ''}    plugin_dirs: [
+${databaseConfig ? `    ${databaseConfig}\n` : ''}    plugin_dirs: [
       'node_modules',
       './src/plugins'
     ],
@@ -182,10 +243,7 @@ ${databaseConfig ? `    ${databaseConfig}` : ''}    plugin_dirs: [
       'cron'
     ],
     plugins: [
-      'example',
-      '@zhin.js/http',
-      '@zhin.js/console',
-      '@zhin.js/adapter-sandbox'
+${pluginsTSLines}
     ],
     http: {
       port: 8086,
@@ -196,7 +254,7 @@ ${databaseConfig ? `    ${databaseConfig}` : ''}    plugin_dirs: [
     console: {
       enabled: true,
       lazyLoad: true
-    }
+    },${tsExtraConfig}
   };
 });
 `],
@@ -206,7 +264,7 @@ ${databaseConfig ? `    ${databaseConfig}` : ''}    plugin_dirs: [
 export default defineConfig(async (env) => {
   return {
     log_level: LogLevel.INFO,
-${databaseConfig ? `    ${databaseConfig}` : ''}    plugin_dirs: [
+${databaseConfig ? `    ${databaseConfig}\n` : ''}    plugin_dirs: [
       'node_modules',
       './src/plugins'
     ],
@@ -219,10 +277,7 @@ ${databaseConfig ? `    ${databaseConfig}` : ''}    plugin_dirs: [
       'cron'
     ],
     plugins: [
-      'example',
-      '@zhin.js/http',
-      '@zhin.js/console',
-      '@zhin.js/adapter-sandbox'
+${pluginsTSLines}
     ],
     http: {
       port: 8086,
@@ -233,7 +288,7 @@ ${databaseConfig ? `    ${databaseConfig}` : ''}    plugin_dirs: [
     console: {
       enabled: true,
       lazyLoad: true
-    }
+    },${tsExtraConfig}
   };
 });
 `],
@@ -252,10 +307,7 @@ services:
   - cron
 
 plugins:
-  - example
-  - "@zhin.js/http"
-  - "@zhin.js/console"
-  - "@zhin.js/adapter-sandbox"
+${pluginsYamlLines}
 
 http:
   port: 8086
@@ -266,12 +318,12 @@ http:
 console:
   enabled: true
   lazyLoad: true
+${yamlExtraConfig}
 `],
     json: ['zhin.config.json',
 `{
   "log_level": 1,
-${databaseConfig ? `  ${databaseConfig},` : ''}
-  "plugin_dirs": [
+${databaseConfig ? `  ${databaseConfig}\n` : ''}  "plugin_dirs": [
     "node_modules",
     "./src/plugins"
   ],
@@ -284,10 +336,7 @@ ${databaseConfig ? `  ${databaseConfig},` : ''}
     "cron"
   ],
   "plugins": [
-    "example",
-    "@zhin.js/http",
-    "@zhin.js/console",
-    "@zhin.js/adapter-sandbox"
+${pluginsJsonLines}
   ],
   "http": {
     "port": 8086,
@@ -298,7 +347,7 @@ ${databaseConfig ? `  ${databaseConfig},` : ''}
   "console": {
     "enabled": true,
     "lazyLoad": true
-  }
+  }${jsonExtraConfig ? `,${jsonExtraConfig}` : ''}
 }
 `]
   };

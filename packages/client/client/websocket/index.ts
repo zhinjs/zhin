@@ -29,20 +29,11 @@ export {
 export { 
   useWebSocket,
   useConfig,
-  useAllConfigs,
-  useWebSocketState,
-  useWebSocketMessages
+  useAllConfigs
 } from './hooks'
 
 // ============================================================================
-// 向后兼容的导出（保持与旧代码的兼容性）
+// 默认导出
 // ============================================================================
-
-// 为了保持与现有代码的兼容性，重新导出一些常用的接口
 import { getWebSocketManager } from './instance'
-
-// 兼容旧的 useConfig 导出
-export { useConfig as useConfigLegacy } from './hooks'
-
-// 兼容旧的 WebSocketManager 默认导出
 export default getWebSocketManager

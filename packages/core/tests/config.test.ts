@@ -324,3 +324,49 @@ describe('ConfigLoader', () => {
     })
   })
 })
+
+// ============================================================================
+// ConfigFeature 补全测试
+// ============================================================================
+describe('ConfigFeature', () => {
+  let feature: import('../src/built/config.js').ConfigFeature
+
+  beforeEach(async () => {
+    const { ConfigFeature } = await import('../src/built/config.js')
+    feature = new ConfigFeature()
+  })
+
+  it('应有正确的元数据', () => {
+    expect(feature.name).toBe('config')
+    expect(feature.icon).toBe('Settings')
+    expect(feature.desc).toBe('配置')
+  })
+
+  it('add 应添加配置记录', () => {
+    const record = { key: 'debug', defaultValue: false }
+    const dispose = feature.add(record, 'test-plugin')
+    expect(feature.items).toHaveLength(1)
+    expect(feature.items[0]).toBe(record)
+    expect(typeof dispose).toBe('function')
+  })
+
+  it('toJSON 应返回正确结构', () => {
+    feature.add({ key: 'debug', defaultValue: false }, 'test-plugin')
+    feature.add({ key: 'port', defaultValue: 8080 }, 'test-plugin')
+
+    const json = feature.toJSON()
+    expect(json.name).toBe('config')
+    expect(json.count).toBe(2)
+    expect(json.items[0]).toEqual({ name: 'debug', defaultValue: false })
+    expect(json.items[1]).toEqual({ name: 'port', defaultValue: 8080 })
+  })
+
+  it('toJSON(pluginName) 应按插件过滤', () => {
+    feature.add({ key: 'a', defaultValue: 1 }, 'plugin-a')
+    feature.add({ key: 'b', defaultValue: 2 }, 'plugin-b')
+
+    const json = feature.toJSON('plugin-a')
+    expect(json.count).toBe(1)
+    expect(json.items[0].name).toBe('a')
+  })
+})

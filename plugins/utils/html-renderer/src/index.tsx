@@ -604,7 +604,7 @@ const renderHtmlTool = new ZhinTool('html.render')
 // 注册工具
 const toolService = plugin.root.inject('tool');
 if (toolService) {
-  toolService.add(renderHtmlTool, plugin.name);
+  toolService.addTool(renderHtmlTool, plugin.name);
   logger.debug('HTML render tool registered');
 }
 
@@ -697,7 +697,7 @@ const generateCardTool = new ZhinTool('html.card')
 
 // 注册卡片工具
 if (toolService) {
-  toolService.add(generateCardTool, plugin.name);
+  toolService.addTool(generateCardTool, plugin.name);
   logger.debug('HTML card tool registered');
 }
 

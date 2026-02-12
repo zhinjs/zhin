@@ -3,10 +3,12 @@ import { setLevel, LogLevel } from '@zhin.js/logger';
 import {
   usePlugin, resolveEntry,
   Adapter,
-  ConfigService, PermissionService,
-  createCommandService, createComponentService, createCronService,
-  defineDatabaseService,
+  ConfigFeature, PermissionFeature,
+  CommandFeature, ComponentFeature, CronFeature,
+  SkillFeature, DatabaseFeature,
+  createMessageDispatcher,
   ProcessAdapter,
+  initAIModule,
 } from '@zhin.js/core';
 import { AppConfig } from './types.js';
 import { DatabaseLogTransport } from './log-transport.js';
@@ -21,8 +23,8 @@ const {
   import: importPlugin } = plugin;
 
 // 1. 先加载配置，用户在 zhin.config 中决定启用哪些服务
-const configService = new ConfigService();
-await configService.load('zhin.config.yml', {
+const configFeature = new ConfigFeature();
+await configFeature.load('zhin.config.yml', {
   log_level: LogLevel.INFO,
   bots: [],
   database: {
@@ -33,15 +35,11 @@ await configService.load('zhin.config.yml', {
   plugins: ['@zhin.js/http', '@zhin.js/console', '@zhin.js/adapter-sandbox'],
   services: ['process', 'config', 'command', 'component', 'permission', 'cron'],
 });
-const appConfig = configService.get<AppConfig>('zhin.config.yml');
+const appConfig = configFeature.get<AppConfig>('zhin.config.yml');
 const enabledServices = new Set(appConfig.services || ['process', 'config', 'command', 'component', 'permission', 'cron']);
 
 // 注册配置服务（必须）
-provide({
-  name: 'config',
-  description: '配置服务',
-  value: configService,
-});
+provide(configFeature);
 
 // 2. 可选服务按配置注册
 if (enabledServices.has('process')) {
@@ -60,30 +58,32 @@ if (enabledServices.has('process')) {
 }
 
 if (enabledServices.has('command')) {
-  provide(createCommandService());
+  provide(new CommandFeature());
 }
 
 if (enabledServices.has('component')) {
-  provide(createComponentService());
+  provide(new ComponentFeature());
 }
 
 if (enabledServices.has('permission')) {
-  provide({
-    name: 'permission',
-    description: '权限管理',
-    value: new PermissionService(),
-  });
+  provide(new PermissionFeature());
 }
 
 if (enabledServices.has('cron')) {
-  provide(createCronService());
+  provide(new CronFeature());
 }
+
+// 消息调度器（AI 驱动架构核心）
+provide(createMessageDispatcher());
+
+// Skill 注册表（AI 能力描述）
+provide(new SkillFeature());
 
 // 3. 配置生效：日志、数据库、插件加载
 setLevel(appConfig.log_level || LogLevel.INFO);
 
 if (appConfig.database) {
-  provide(defineDatabaseService(appConfig.database));
+  provide(new DatabaseFeature(appConfig.database));
   const logTransport = new DatabaseLogTransport(plugin);
   // 直接访问 logger 实例的 transports 数组，或使用非递归方式
   // 检查是否已存在 DatabaseLogTransport（避免重复添加）
@@ -91,6 +91,10 @@ if (appConfig.database) {
     logger['transports'].push(logTransport);
   }
 }
+
+// AI 模块初始化（原 @zhin.js/ai，已合并至 core）
+// 必须在 provide(DatabaseFeature) 之后，这样 defineModel 才可用
+initAIModule();
 const contexts=new Set(appConfig.bots?.map((bot) => bot.context) || []);
 for(const context of contexts){
   useContext(context,async (adapter)=>{

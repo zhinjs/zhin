@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
 import { Schema } from '../src/index'
 
 describe('Schema', () => {
@@ -160,6 +160,84 @@ describe('Schema', () => {
       
       expect(intersect).toBeDefined()
       expect(intersect.meta.type).toBe('intersect')
+    })
+  })
+})
+
+// ============================================================================
+// Schema 工具函数补全
+// ============================================================================
+describe('Schema utils', () => {
+  let isEmpty: (v: any) => boolean;
+  let deepMerge: <T>(target: T, source: Partial<T>) => T;
+
+  beforeAll(async () => {
+    const utils = await import('../src/utils.js');
+    isEmpty = utils.isEmpty;
+    deepMerge = utils.deepMerge;
+  });
+
+  describe('isEmpty', () => {
+    it('null 应为空', () => {
+      expect(isEmpty(null)).toBe(true)
+    })
+
+    it('undefined 应为空', () => {
+      expect(isEmpty(undefined)).toBe(true)
+    })
+
+    it('空字符串应为空', () => {
+      expect(isEmpty('')).toBe(true)
+    })
+
+    it('0 不应为空', () => {
+      expect(isEmpty(0)).toBe(false)
+    })
+
+    it('false 不应为空', () => {
+      expect(isEmpty(false)).toBe(false)
+    })
+
+    it('非空字符串不应为空', () => {
+      expect(isEmpty('hello')).toBe(false)
+    })
+
+    it('空数组不应为空', () => {
+      expect(isEmpty([])).toBe(false)
+    })
+  })
+
+  describe('deepMerge', () => {
+    it('应合并简单对象', () => {
+      const target = { a: 1, b: 2 }
+      const source = { b: 3, c: 4 }
+      const result = deepMerge(target, source)
+      expect(result).toEqual({ a: 1, b: 3, c: 4 })
+    })
+
+    it('应深度合并嵌套对象', () => {
+      const target = { a: { x: 1, y: 2 }, b: 3 }
+      const source = { a: { y: 5, z: 6 } }
+      const result = deepMerge(target, source)
+      expect(result).toEqual({ a: { x: 1, y: 5, z: 6 }, b: 3 })
+    })
+
+    it('数组应直接覆盖而非合并', () => {
+      const target = { a: [1, 2] }
+      const source = { a: [3, 4, 5] }
+      const result = deepMerge(target, source)
+      expect(result).toEqual({ a: [3, 4, 5] })
+    })
+
+    it('undefined 值不应覆盖', () => {
+      const target = { a: 1, b: 2 }
+      const source = { a: undefined, b: 3 }
+      const result = deepMerge(target, source)
+      expect(result).toEqual({ a: 1, b: 3 })
+    })
+
+    it('null target 应返回 target', () => {
+      expect(deepMerge(null, { a: 1 })).toBeNull()
     })
   })
 })

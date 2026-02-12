@@ -375,6 +375,12 @@ class QQAdapter extends Adapter<QQBot<ReceiverMode>> {
 
   async start(): Promise<void> {
     this.registerQQTools();
+    this.declareSkill({
+      description: 'QQ 频道管理能力，包括频道/子频道管理、成员管理（踢人、禁言）、身份组管理（创建、分配、撤销角色）、频道信息查询。',
+      keywords: ['QQ', '频道', '频道管理', '身份组'],
+      tags: ['qq', '频道管理', '社交平台'],
+      conventions: '频道和用户均使用字符串 ID 标识。guild_id 为频道 ID，channel_id 为子频道 ID。调用工具时 bot 参数应填当前上下文的 Bot ID。',
+    });
     await super.start();
   }
 

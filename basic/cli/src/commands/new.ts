@@ -171,7 +171,7 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
       "@zhin.js/client":"workspace:*",
       'lucide-react': 'latest',
       'radix-ui': 'latest',
-      '@radix-ui/themes': 'latest',
+      'class-variance-authority': 'latest',
       'vitest': 'latest',
       '@vitest/coverage-v8': 'latest'
     }
@@ -270,7 +270,7 @@ useContext('tool', (toolService) => {
   if (!toolService) return;
   
   const disposers = [
-    toolService.add(greetTool, '${pluginName}'),
+    toolService.addTool(greetTool, '${pluginName}'),
   ];
   
   logger.debug('${capitalizedName} 工具已注册');

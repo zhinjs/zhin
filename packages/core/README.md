@@ -1,396 +1,138 @@
 # @zhin.js/core
 
-Zhin 机器人框架核心包，基于 HMR（热模块替换）系统构建的现代化机器人开发框架。
+Zhin.js 核心框架包，提供插件系统、Feature 架构、AI 智能体、消息路由等全部核心能力。
 
-## 核心特性
+## 核心概念
 
-- 🔥 **热模块替换**: 基于 @zhin.js/hmr 的热更新系统
-- 🔌 **插件化架构**: 完整的插件生命周期管理
-- 🤖 **多平台适配**: 支持多种聊天平台适配器
-- 🎯 **命令系统**: 基于 segment-matcher 的智能消息匹配
-- 🧩 **组件系统**: 支持模板渲染、属性绑定、插槽的组件化开发
-- ⚡ **中间件链**: 灵活的消息处理中间件机制
-- 🔧 **TypeScript**: 完整的类型支持
+### Plugin（插件）
 
-## 核心组件
-
-### App 类
-
-应用核心类，继承自 `HMR<Plugin>`：
+插件是 Zhin.js 的基本组织单位。每个插件拥有独立的生命周期和上下文，通过 `usePlugin()` Hook 访问框架能力。
 
 ```typescript
-import { App } from '@zhin.js/core'
+import { usePlugin, MessageCommand } from '@zhin.js/core'
 
-// 直接使用 App 类创建实例
-const app = new App('./zhin.config.ts')
+const { addCommand, addTool, addCron, onMounted, onDispose } = usePlugin()
 
-// 启动应用
-await app.start()
-```
+onMounted(() => console.log('插件已挂载'))
+onDispose(() => console.log('插件已卸载'))
 
-或者使用主包的便捷方法：
-
-```typescript
-import { createApp } from 'zhin.js'
-
-// 创建应用实例
-const app = await createApp({
-  plugin_dirs: ['./plugins'],
-  plugins: ['my-plugin'],
-  bots: [{
-    context: 'process',
-    name: 'my-bot'
-  }],
-  debug: true
-})
-
-// 启动应用
-await app.start()
-```
-
-**主要功能**：
-- 插件生命周期管理
-- 配置文件加载和管理
-- 适配器和机器人实例管理
-- 消息路由和分发
-- 热更新监听
-
-### Plugin 类
-
-插件基类，继承自 `Dependency<Plugin>`：
-
-```typescript
-import { usePlugin, addMiddleware, addCommand, addComponent } from '@zhin.js/core'
-
-const plugin = usePlugin()
-
-// 添加中间件
-addMiddleware(async (message, next) => {
-  console.log(`[${plugin.name}] 收到消息:`, message.raw)
-  await next()
-})
-
-// 添加命令
-addCommand(new MessageCommand('hello')
-  .action(async (message) => {
-    return '你好！'
-  })
+addCommand(
+  new MessageCommand('hello <name:string>')
+    .desc('打招呼')
+    .action((_, result) => `Hello, ${result.params.name}!`)
 )
 ```
 
-**主要功能**：
-- 中间件链管理
-- 命令注册和处理
-- 组件管理
-- 事件监听和分发
-- 消息发送前处理 (beforeSend)
+### Feature（特性抽象）
 
-### Adapter 类
+Feature 是 Zhin.js 的核心扩展机制。所有内置功能均继承自 `Feature` 抽象基类，提供统一的注册/注销、插件归属追踪和 JSON 序列化能力。
 
-适配器基类，用于连接不同聊天平台：
-
-```typescript
-import { Adapter, Bot, Plugin } from '@zhin.js/core'
-
-class MyBot implements Bot {
-  constructor(public plugin: Plugin, public config: BotConfig) {}
-  
-  async connect() {
-    // 连接逻辑
-  }
-  
-  async disconnect() {
-    // 断开连接逻辑
-  }
-  
-  async sendMessage(options: SendOptions) {
-    // 发送消息逻辑
-  }
-}
-
-// 注册适配器
-const adapter = new Adapter('my-platform', MyBot)
+```
+Feature (抽象基类)
+├── CommandFeature    — 消息命令       addCommand()
+├── ToolFeature       — AI 可调用工具   addTool()
+├── SkillFeature      — 技能聚合       declareSkill()
+├── CronFeature       — 定时任务       addCron()
+├── DatabaseFeature   — 数据模型       defineModel()
+├── ComponentFeature  — 消息组件       addComponent()
+├── ConfigFeature     — 插件配置       addConfig()
+└── PermissionFeature — 权限管理
 ```
 
-### MessageCommand 类
+每个 Feature 都会在 `Plugin.prototype` 上注入对应的扩展方法（如 `addCommand`、`addTool`），插件通过 `usePlugin()` 获取这些方法。
 
-基于 `SegmentMatcher` 的命令处理器：
+### Adapter（适配器）
 
-```typescript
-import { MessageCommand } from '@zhin.js/core'
-
-const command = new MessageCommand('echo <content:text>')
-  .action(async (message, result) => {
-    const content = result.params.content
-    return `你说了：${content}`
-  })
-
-addCommand(command)
-```
-
-### Component 系统
-
-强大的组件渲染系统：
+适配器将不同聊天平台接入 Zhin.js，统一消息收发接口。
 
 ```typescript
-import { defineComponent, addComponent } from '@zhin.js/core'
-
-// 定义组件
-const MyComponent = defineComponent({
-  name: 'my-comp',
-  props: {
-    title: String,
-    count: { type: Number, default: 0 }
-  },
-  data(this: { title: string, count: number }) {
-    return {
-      message: `${this.title}: ${this.count}`
-    }
-  },
-  render(props, context) {
-    return `<text>${context.message}</text>`
-  }
-})
-
-// 注册组件
-addComponent(MyComponent)
-
-// 在消息中使用
-// <my-comp title="计数器" :count="5"/>
+// 适配器通过 Adapter.register 静态注册
+Adapter.register('my-platform', MyAdapter)
 ```
 
-## Hooks API
+每个适配器可以通过 `addTool()` 注册平台工具，通过 `declareSkill()` 将工具聚合为 AI 可理解的技能。
 
-### 应用和插件
-```typescript
-// 获取应用实例
-const app = useApp()
+### MessageDispatcher（消息路由）
 
-// 获取当前插件
-const plugin = usePlugin()
+三阶段消息处理管线：
 
-// 获取插件日志器
-const logger = useLogger()
+```
+消息到达 → Guardrail（守卫） → Route（路由） → Handle（处理）
+                │                    │                │
+           权限/频率检查         命令 or AI？      执行命令 / AI Agent
 ```
 
-### 事件监听
-```typescript
-// 监听所有消息
-onMessage(async (message) => {
-  console.log('收到消息:', message.raw)
-})
+- **Guardrail** — 鉴权、速率限制、黑名单等前置检查
+- **Route** — 判断消息是命令还是 AI 对话
+- **Handle** — CommandFeature 处理命令，ZhinAgent 处理 AI 对话
 
-// 监听群聊消息
-onGroupMessage(async (message) => {
-  if (message.raw.includes('帮助')) {
-    await message.reply('这里是帮助信息')
-  }
-})
+### AI 模块（ZhinAgent）
 
-// 监听私聊消息
-onPrivateMessage(async (message) => {
-  await message.reply('私聊回复')
-})
+内置 AI 智能体，支持 OpenAI / Ollama 等大模型。
 
-// 自定义事件监听
-onEvent('custom.event', (data) => {
-  console.log('自定义事件:', data)
-})
+```
+用户消息 → 速率限制 → 工具过滤 → 会话记忆 → LLM 调用 → 输出
+                                    │
+                              三条路径选择：
+                         闲聊（0工具）→ 1次 LLM
+                         快速（无参数工具）→ 预执行 + 1次 LLM
+                         Agent（有参数工具）→ 多轮 tool-calling
 ```
 
-### 生命周期
-```typescript
-// 插件挂载时
-onMounted(async (plugin) => {
-  console.log('插件已挂载:', plugin.name)
-})
+核心子模块：
 
-// 插件销毁时
-onDispose(() => {
-  console.log('插件正在销毁')
-})
-```
+| 模块 | 说明 |
+|------|------|
+| `SessionManager` | 会话管理（内存/数据库） |
+| `ContextManager` | 上下文构建与滑动窗口 |
+| `ConversationMemory` | 话题感知、链式摘要 |
+| `UserProfileStore` | 用户画像 |
+| `RateLimiter` | 频率限制 |
+| `FollowUpManager` | 定时提醒（持久化） |
+| `ToneDetector` | 情绪分析 |
+| `OutputParser` | 多模态输出解析 |
 
-### 上下文管理
-```typescript
-// 注册上下文
-register({
-  name: 'database',
-  async mounted(plugin) {
-    const db = new Database()
-    await db.connect()
-    return db
-  },
-  async dispose(db) {
-    await db.disconnect()
-  }
-})
-
-// 使用上下文依赖
-useContext('database', async (db) => {
-  const users = await db.getUsers()
-  console.log('用户列表:', users)
-})
-```
-
-### 适配器注册
-```typescript
-import { registerAdapter } from '@zhin.js/core'
-
-registerAdapter(new Adapter('my-platform', MyBot))
-```
-
-### 消息处理
-```typescript
-// 发送消息前处理
-beforeSend(async (options) => {
-  console.log('即将发送消息:', options)
-  // 可以修改消息内容
-  return options
-})
-
-// 发送消息
-await sendMessage({
-  type: 'group',
-  id: '123456',
-  context: 'onebot11',
-  bot: 'my-bot',
-  content: '你好世界！'
-})
-```
-
-## 类型定义
-
-### 消息相关
-```typescript
-interface Message {
-  id: string
-  adapter: string
-  bot: string
-  content: MessageSegment[]
-  sender: MessageSender
-  channel: MessageChannel
-  timestamp: number
-  raw: string
-  reply(content: SendContent, quote?: boolean | string): Promise<void>
-}
-
-interface MessageSegment {
-  type: string
-  data: Record<string, any>
-}
-
-type SendContent = string | MessageSegment | (string | MessageSegment)[]
-```
-
-### 配置相关
-```typescript
-interface AppConfig {
-  bots?: BotConfig[]
-  plugin_dirs?: string[]
-  plugins?: string[]
-  disable_dependencies?: string[]
-  debug?: boolean
-}
-
-interface BotConfig {
-  name: string
-  context: string
-  [key: string]: any
-}
-```
-
-### 机器人接口
-```typescript
-interface Bot<T extends BotConfig = BotConfig> {
-  config: T
-  connected?: boolean
-  connect(): Promise<void>
-  disconnect(): Promise<void>
-  sendMessage(options: SendOptions): Promise<void>
-}
-```
-
-## 中间件系统
+## 主要导出
 
 ```typescript
-type MessageMiddleware = (
-  message: Message, 
-  next: () => Promise<void>
-) => Promise<void> | void
+// 插件系统
+export { Plugin, usePlugin, getPlugin } from './plugin.js'
 
-// 添加身份验证中间件
-addMiddleware(async (message, next) => {
-  if (isAdmin(message.sender.id)) {
-    await next()
-  } else {
-    await message.reply('权限不足')
-  }
-})
+// Feature 体系
+export { Feature } from './feature.js'
+export { CommandFeature } from './built/command.js'
+export { ToolFeature, ZhinTool } from './built/tool.js'
+export { SkillFeature } from './built/skill.js'
+export { CronFeature } from './built/cron.js'
+export { DatabaseFeature } from './built/database.js'
+export { ComponentFeature } from './built/component.js'
+export { ConfigFeature } from './built/config.js'
+export { PermissionFeature } from './built/permission.js'
 
-// 添加日志中间件
-addMiddleware(async (message, next) => {
-  const start = Date.now()
-  await next()
-  const duration = Date.now() - start
-  console.log(`处理消息耗时: ${duration}ms`)
-})
+// 消息路由
+export { createMessageDispatcher } from './built/dispatcher.js'
+
+// AI
+export { ZhinAgent } from './ai/index.js'
+
+// 适配器
+export { Adapter } from './adapter.js'
+
+// 工具
+export { MessageCommand } from './command.js'
+export { Message } from './message.js'
+export { Cron } from './cron.js'
+export { Schema } from '@zhin.js/schema'
 ```
 
-## 配置文件支持
+## 安装
 
-支持多种配置文件格式：
-- `zhin.config.ts` - JavaScript 配置
-- `zhin.config.ts` - TypeScript 配置  
-- `zhin.config.json` - JSON 配置
-- `zhin.config.yaml` - YAML 配置
-- `zhin.config.toml` - TOML 配置
-
-```typescript
-// zhin.config.ts
-import { defineConfig } from 'zhin.js'
-
-export default defineConfig({
-  database: {
-    dialect: 'sqlite',
-    filename: './data/bot.db'
-  },
-  plugin_dirs: ['./src/plugins', 'node_modules', 'node_modules/@zhin.js'],
-  plugins: ['http', 'console', 'adapter-process'],
-  bots: [
-    {
-      context: 'process',
-      name: 'console-bot'
-    }
-  ],
-  log_level: 1,
-  debug: process.env.NODE_ENV === 'development'
-})
-```
-
-## 开发工具
-
-### 类型生成
 ```bash
-# 自动生成环境类型定义
-npx zhin dev  # 开发时自动生成
+pnpm add @zhin.js/core
 ```
 
-### 热更新
-```bash
-# 开发模式启动，支持热更新
-npx zhin dev
-```
-
-## 依赖项
-
-- `@zhin.js/hmr` - 热模块替换系统
-- `segment-matcher` - 消息片段匹配器
-- `yaml` - YAML 配置文件支持
-- `toml` - TOML 配置文件支持
-- `dotenv` - 环境变量支持
+> 通常不需要直接安装此包。使用 `zhin.js` 主入口包即可自动引入。
 
 ## 许可证
 
-MIT License
 MIT License

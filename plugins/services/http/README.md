@@ -20,7 +20,7 @@
 - **路由**: 自定义Router类扩展@koa/router
 - **WebSocket**: ws 库
 - **身份验证**: koa-basic-auth
-- **请求解析**: koa-bodyparser
+- **请求解析**: koa-body
 
 ## 安装
 
@@ -37,20 +37,16 @@ npm install @zhin.js/http
 import '@zhin.js/http'
 ```
 
-### 环境变量配置
+### 配置
 
-```bash
-# 服务器端口 (默认: 8086)
-port=8086
+在 `zhin.config.yml` 中配置：
 
-# 路由前缀 (可选)
-routerPrefix=/api
-
-# 基础认证用户名 (默认: admin)
-username=admin
-
-# 基础认证密码 (默认: 123456)  
-password=123456
+```yaml
+http:
+  port: 8086            # 服务器端口（默认 8086）
+  base: /api            # 路由前缀（默认 /api）
+  username: admin       # Basic Auth 用户名（默认系统用户名）
+  password: your-pass   # Basic Auth 密码（默认随机生成）
 ```
 
 ## 核心组件
@@ -78,7 +74,7 @@ class Router extends KoaRouter {
 ### 全局上下文
 
 ```typescript
-declare module '@zhin.js/types' {
+declare module 'zhin.js' {
   interface GlobalContext {
     koa: Koa,           // Koa应用实例
     router: Router,     // 路由器实例  

@@ -24,6 +24,33 @@ npm install -g pnpm
 
 ## 创建项目
 
+### 方式一：一键安装（推荐）
+
+使用一键安装脚本，自动检测环境并启动配置向导：
+
+```bash
+curl -fsSL https://zhin.js.org/install.sh | bash
+```
+
+你也可以直接指定项目名称：
+
+```bash
+curl -fsSL https://zhin.js.org/install.sh | bash -s -- my-bot
+```
+
+快速模式（跳过所有交互，使用默认配置）：
+
+```bash
+curl -fsSL https://zhin.js.org/install.sh | bash -s -- my-bot -y
+```
+
+脚本会自动完成以下检查：
+- 检测 Node.js 版本（>= 20.19.0 或 >= 22.12.0）
+- 检测并安装 pnpm
+- 启动 Zhin.js 交互式配置向导
+
+### 方式二：手动创建
+
 使用脚手架工具创建新项目：
 
 ```bash
@@ -46,13 +73,13 @@ npm create zhin-app my-bot
 
 ```
 ? 选择配置格式
-  > YAML (推荐，易读易写)
-    TypeScript (类型安全)
+  > TypeScript (推荐)
     JavaScript
+    YAML
     JSON
 ```
 
-**建议**：选择 YAML，最容易上手。
+**建议**：选择 TypeScript，IDE 提示最友好；如果偏好纯配置文件，选择 YAML。
 
 ### 3. 配置 Web 控制台
 
@@ -63,7 +90,50 @@ npm create zhin-app my-bot
 
 这些信息会保存在 `.env` 文件中，用于登录 Web 控制台。
 
-### 4. 等待安装
+### 4. 配置数据库
+
+```
+? 选择数据库类型
+  > SQLite (推荐，无需额外安装)
+    MySQL
+    PostgreSQL
+    MongoDB
+    Redis
+```
+
+**建议**：新手选择 SQLite，数据直接存在本地文件中，无需安装额外数据库服务。
+
+### 5. 选择适配器
+
+```
+? 选择聊天平台适配器
+  ◉ Sandbox (调试沙盒，默认)
+  ◯ ICQQ (QQ)
+  ◯ QQ 官方
+  ◯ KOOK
+  ◯ Discord
+  ◯ Telegram
+  ...
+```
+
+选择需要的聊天平台，Sandbox 为必选项。选择后会逐个引导你配置 Bot 的连接信息（如 Token、API Key 等），敏感信息会保存在 `.env` 文件中。
+
+### 6. 配置 AI 智能体
+
+```
+? 是否启用 AI 智能体？ (Y/n)
+? 选择 AI 提供商
+  > OpenAI (GPT-4o, 推荐)
+    Anthropic (Claude)
+    DeepSeek
+    Moonshot (月之暗面)
+    智谱 AI (GLM)
+    Ollama (本地部署)
+```
+
+选择 AI 提供商后，会引导你配置 API Key 和触发方式（@机器人、私聊、前缀触发等）。
+
+### 7. 等待安装
 
 脚手架会自动：
 - 创建项目目录
@@ -76,15 +146,20 @@ npm create zhin-app my-bot
 创建完成后，你会看到以下目录结构：
 
 ```
-my-bot/
+my-zhin-bot/
 ├── src/
-│   └── plugins/          # 你的插件目录
-├── data/                 # 数据存储目录
-│   └── database.db      # SQLite 数据库
-├── zhin.config.yml      # 配置文件
-├── .env                 # 环境变量（包含密码）
-├── package.json         # 项目依赖
-└── tsconfig.json        # TypeScript 配置
+│   └── plugins/           # 你的插件目录
+│       └── example.ts     # 示例插件
+├── client/                # 客户端页面（Web 控制台自定义页面）
+│   ├── index.tsx          # 客户端入口
+│   └── tsconfig.json      # 客户端 TypeScript 配置
+├── data/                  # 数据存储目录（运行时自动生成）
+│   └── bot.db             # SQLite 数据库文件
+├── zhin.config.ts         # 主配置文件（默认 TypeScript 格式）
+├── .env                   # 环境变量（存放密码等敏感信息，不应提交到 Git）
+├── package.json           # 项目依赖
+├── tsconfig.json          # TypeScript 配置
+└── pnpm-workspace.yaml    # pnpm 工作区配置
 ```
 
 ## 启动项目
@@ -92,7 +167,7 @@ my-bot/
 进入项目目录并启动：
 
 ```bash
-cd my-bot
+cd my-zhin-bot
 
 # 开发模式（支持热重载）
 pnpm dev
@@ -114,12 +189,31 @@ pnpm dev
 # 生产模式（无热重载，性能更好）
 pnpm start
 
-# 后台运行（守护进程）
-pnpm daemon
+# 后台运行（守护进程模式）
+pnpm start -- -d
+# 等价于
+npx zhin start --daemon
 
 # 停止后台运行的机器人
-pnpm stop
+npx zhin stop
 ```
+
+## CLI 命令一览
+
+Zhin.js 提供了丰富的命令行工具：
+
+| 命令 | 说明 |
+|------|------|
+| `zhin dev` | 开发模式启动（热重载），支持 `--verbose`、`--bun` |
+| `zhin start` | 生产模式启动，支持 `-d/--daemon`（后台运行）、`--bun` |
+| `zhin restart` | 重启后台运行的机器人 |
+| `zhin stop` | 停止后台运行的机器人 |
+| `zhin build` | 构建 workspace 下的插件，支持 `--clean`、`--production` |
+| `zhin new` | 创建插件模板（normal/service/adapter），支持 `--type` |
+| `zhin pub` | 发布插件到 npm，支持 `--tag`、`--dry-run` |
+| `zhin install` | 安装插件（npm 或 git），支持 `-S/--save` |
+| `zhin search` | 搜索 npm 上的 Zhin 插件 |
+| `zhin info` | 查看某个插件的详细信息 |
 
 ## 测试机器人
 
@@ -142,11 +236,9 @@ pnpm stop
 
 ### 控制台功能
 
-- **📊 仪表盘** - 查看机器人运行状态、内存使用、消息统计
-- **🧩 插件管理** - 启用/禁用插件、查看插件列表
-- **⚙️ 配置编辑** - 可视化编辑配置文件
-- **📝 日志查看** - 实时查看日志输出
-- **🗄️ 数据库** - 查看数据表、执行 SQL 查询
+- **仪表盘** - 查看机器人运行状态、内存使用、消息统计
+- **插件管理** - 查看插件列表和 Feature 统计
+- **日志查看** - 实时查看日志输出
 
 ## 第一个插件
 
@@ -172,15 +264,28 @@ addCommand(
 
 ### 2. 启用插件
 
-编辑 `zhin.config.yml`，在 `plugins` 列表中添加：
+编辑配置文件（如 `zhin.config.ts` 或 `zhin.config.yml`），在 `plugins` 列表中添加：
 
-```yaml
+::: code-group
+
+```typescript [zhin.config.ts]
+plugins: [
+  'hello',                    // 你的新插件
+  '@zhin.js/http',           // HTTP 服务
+  '@zhin.js/console',        // Web 控制台
+  '@zhin.js/adapter-sandbox' // 终端适配器
+],
+```
+
+```yaml [zhin.config.yml]
 plugins:
   - hello                    # 你的新插件
   - "@zhin.js/http"         # HTTP 服务
   - "@zhin.js/console"      # Web 控制台
   - "@zhin.js/adapter-sandbox"  # 终端适配器
 ```
+
+:::
 
 ### 3. 测试插件
 
@@ -190,8 +295,6 @@ plugins:
 > hello
 机器人: 你好！
 ```
-
-成功！🎉
 
 ## 添加带参数的命令
 
@@ -246,7 +349,7 @@ addCommand(
 
 ### 端口被占用
 
-如果 8086 端口被占用，可以在 `zhin.config.yml` 中修改：
+如果 8086 端口被占用，可以在配置文件中修改（示例为 YAML 格式）：
 
 ```yaml
 http:
@@ -255,13 +358,13 @@ http:
 
 ### 热重载不生效
 
-确保你在开发模式下运行（`pnpm dev`），而不是生产模式。
+确保你在开发模式下运行（`pnpm dev`），而不是生产模式（`pnpm start`）。
 
 ### 找不到命令
 
 检查：
 1. 插件文件是否在 `src/plugins/` 目录下
-2. 插件是否在 `zhin.config.yml` 的 `plugins` 列表中
+2. 插件是否在配置文件的 `plugins` 列表中
 3. 终端是否显示插件加载成功的日志
 
 ## 下一步
@@ -272,4 +375,4 @@ http:
 - **[命令系统](/essentials/commands)** - 学习创建复杂命令
 - **[插件系统](/essentials/plugins)** - 深入理解插件开发
 - **[适配器](/essentials/adapters)** - 连接到 QQ、Discord 等平台
-
+- **[AI 模块](/advanced/ai)** - 集成 AI 大模型能力

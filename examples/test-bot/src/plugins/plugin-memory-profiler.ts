@@ -92,18 +92,19 @@ addCommand(
 
       for (const p of plugins) {
         const analysis = analyzePluginModules(p.name);
-        const features = p.features;
+        const features = p.getFeatures();
+        
+        // 从 FeatureJSON 数组中提取各类计数
+        const featureCounts: Record<string, number> = {};
+        for (const f of features) {
+          featureCounts[f.name] = f.count;
+        }
         
         results.push({
           name: p.name,
           modules: analysis.count,
           estimatedSize: formatBytes(analysis.size),
-          features: {
-            commands: features.commands.length,
-            components: features.components.length,
-            crons: features.crons.length,
-            middlewares: features.middlewares.length,
-          },
+          features: featureCounts,
         });
       }
 
@@ -125,7 +126,7 @@ addCommand(
         output += `${index + 1}. ${result.name}\n`;
         output += `   模块数: ${result.modules}\n`;
         output += `   估算大小: ${result.estimatedSize}\n`;
-        output += `   功能: ${result.features.commands}命令 ${result.features.components}组件 ${result.features.crons}定时 ${result.features.middlewares}中间件\n\n`;
+        output += `   功能: ${Object.entries(result.features).map(([k, v]) => `${v}${k}`).join(' ')}\n\n`;
       }
 
       if (results.length > 10) {
@@ -157,7 +158,7 @@ addCommand(
 
       // 获取插件信息
       const analysis = analyzePluginModules(pluginName);
-      const features = targetPlugin.features;
+      const features = targetPlugin.getFeatures();
       const currentMem = process.memoryUsage();
 
       let output = `📊 插件内存分析: ${pluginName}\n\n`;
@@ -170,10 +171,10 @@ addCommand(
       output += `\n估算大小: ${formatBytes(analysis.size)}\n\n`;
       
       output += '功能统计:\n';
-      output += `  命令: ${features.commands.length}\n`;
-      output += `  组件: ${features.components.length}\n`;
-      output += `  定时任务: ${features.crons.length}\n`;
-      output += `  中间件: ${features.middlewares.length}\n\n`;
+      for (const f of features) {
+        output += `  ${f.desc}: ${f.count}\n`;
+      }
+      output += '\n';
 
       output += '当前内存状态:\n';
       output += `  RSS: ${formatBytes(currentMem.rss)}\n`;
@@ -291,5 +292,5 @@ addCommand(
     })
 );
 
-logger.info('插件内存分析工具已加载');
+logger.debug('插件内存分析工具已加载');
 

@@ -92,7 +92,9 @@ export default defineConfig({
 ### 基础消息处理
 
 ```typescript
-import { addCommand, MessageCommand } from 'zhin.js'
+import { usePlugin, MessageCommand } from 'zhin.js'
+
+const { addCommand } = usePlugin()
 
 addCommand(new MessageCommand('hello <name:text>')
   .action(async (message, result) => {
@@ -145,9 +147,9 @@ addCommand(new MessageCommand('md')
 addCommand(new MessageCommand('card')
     .action(async (message) => {
         logger.info(message);
-        if (message.$adapter === 'icqq') {
+        if (message.$adapter !== 'kook') {
             return "暂未适配平台！";
-        } else if (message.$adapter === 'kook') {
+        } else {
             const cardMessage = [{
                 type: 'card',
                 theme: "secondary",
@@ -165,7 +167,7 @@ addCommand(new MessageCommand('card')
             }];
             return cardMessage;
         }
-        return `当前平台：${message.adapter}`;
+        return `当前平台：${message.$adapter}`;
     })
 )
 ```

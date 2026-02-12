@@ -377,7 +377,7 @@ describe('Adapter Core Functionality', () => {
     })
 
     describe('message.receive', () => {
-      it('should process received message through middleware', async () => {
+      it('should process received message through middleware when no dispatcher', async () => {
         const config = [{ id: 'bot1' }]
         const adapter = new MockAdapter(plugin, 'test', config)
         await adapter.start()
@@ -398,6 +398,74 @@ describe('Adapter Core Functionality', () => {
         adapter.emit('message.receive', message)
         
         // 等待异步处理
+        await new Promise(resolve => setTimeout(resolve, 10))
+        expect(middlewareCalled).toBe(true)
+      })
+
+      it('should use MessageDispatcher when available', async () => {
+        const config = [{ id: 'bot1' }]
+        const adapter = new MockAdapter(plugin, 'test', config)
+        await adapter.start()
+
+        let dispatchCalled = false
+        let middlewareCalled = false
+
+        // 注册 dispatcher context
+        plugin.$contexts.set('dispatcher', {
+          name: 'dispatcher',
+          description: 'mock dispatcher',
+          value: {
+            dispatch: (msg: any) => { dispatchCalled = true },
+          },
+        } as any)
+
+        plugin.addMiddleware(async (message, next) => {
+          middlewareCalled = true
+          await next()
+        })
+
+        const message = {
+          $bot: 'bot1',
+          $adapter: 'test',
+          $channel: { id: 'channel-id', type: 'text' },
+          $content: 'Hello'
+        } as any
+
+        adapter.emit('message.receive', message)
+
+        await new Promise(resolve => setTimeout(resolve, 10))
+        expect(dispatchCalled).toBe(true)
+        expect(middlewareCalled).toBe(false)
+      })
+
+      it('should fallback to middleware when dispatcher has no dispatch method', async () => {
+        const config = [{ id: 'bot1' }]
+        const adapter = new MockAdapter(plugin, 'test', config)
+        await adapter.start()
+
+        let middlewareCalled = false
+
+        // 注册一个没有 dispatch 方法的 dispatcher
+        plugin.$contexts.set('dispatcher', {
+          name: 'dispatcher',
+          description: 'broken dispatcher',
+          value: { noDispatch: true },
+        } as any)
+
+        plugin.addMiddleware(async (message, next) => {
+          middlewareCalled = true
+          await next()
+        })
+
+        const message = {
+          $bot: 'bot1',
+          $adapter: 'test',
+          $channel: { id: 'channel-id', type: 'text' },
+          $content: 'Hello'
+        } as any
+
+        adapter.emit('message.receive', message)
+
         await new Promise(resolve => setTimeout(resolve, 10))
         expect(middlewareCalled).toBe(true)
       })
@@ -546,6 +614,90 @@ describe('Adapter Core Functionality', () => {
       
       expect(hookCalled).toBe(true)
     })
+  })
+})
+
+describe('Adapter declareSkill', () => {
+  it('should register a skill when SkillFeature is available', () => {
+    const plugin = new Plugin('/test/adapter-plugin.ts')
+    
+    // 模拟 SkillFeature
+    const mockSkillFeature = {
+      add: vi.fn(() => vi.fn()),
+    }
+    
+    // 设置 root plugin 和 inject
+    ;(plugin as any)._root = plugin
+    const originalInject = plugin.inject.bind(plugin)
+    plugin.inject = ((name: string) => {
+      if (name === 'skill') return mockSkillFeature
+      return originalInject(name)
+    }) as any
+    ;(plugin as any).recordFeatureContribution = vi.fn()
+
+    const adapter = new MockAdapter(plugin, 'test-adapter')
+    
+    // 添加一个工具
+    adapter.addTool({
+      name: 'test_tool',
+      description: '测试工具',
+      parameters: { type: 'object', properties: {} },
+      execute: async () => '',
+      keywords: ['test'],
+      tags: ['testing'],
+    })
+
+    adapter.declareSkill({
+      description: '测试适配器的技能',
+      keywords: ['adapter'],
+      tags: ['adapter-tag'],
+    })
+
+    expect(mockSkillFeature.add).toHaveBeenCalledTimes(1)
+    const [skill] = mockSkillFeature.add.mock.calls[0]
+    expect(skill.name).toContain('test-adapter')
+    expect(skill.description).toBe('测试适配器的技能')
+    expect(skill.tools).toHaveLength(1)
+    // keywords 应合并适配器和工具的关键词
+    expect(skill.keywords).toContain('adapter')
+    expect(skill.keywords).toContain('test')
+    // tags 应合并
+    expect(skill.tags).toContain('adapter-tag')
+    expect(skill.tags).toContain('testing')
+  })
+
+  it('should clean up skill on stop', async () => {
+    const disposeSkill = vi.fn()
+    const plugin = new Plugin('/test/adapter-plugin.ts')
+    
+    const mockSkillFeature = {
+      add: vi.fn(() => disposeSkill),
+    }
+    ;(plugin as any)._root = plugin
+    plugin.inject = ((name: string) => {
+      if (name === 'skill') return mockSkillFeature
+      return undefined
+    }) as any
+    ;(plugin as any).recordFeatureContribution = vi.fn()
+
+    const adapter = new MockAdapter(plugin, 'test-adapter')
+    adapter.declareSkill({ description: '测试' })
+
+    await adapter.stop()
+
+    expect(disposeSkill).toHaveBeenCalledTimes(1)
+  })
+
+  it('should skip when SkillFeature is not available', () => {
+    const plugin = new Plugin('/test/adapter-plugin.ts')
+    ;(plugin as any)._root = plugin
+
+    const adapter = new MockAdapter(plugin, 'test-adapter')
+    
+    // 不应抛错
+    expect(() => {
+      adapter.declareSkill({ description: '测试' })
+    }).not.toThrow()
   })
 })
 

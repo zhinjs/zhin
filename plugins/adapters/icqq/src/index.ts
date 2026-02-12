@@ -38,6 +38,8 @@ export interface IcqqSenderInfo {
   isOwner?: boolean;
   /** 是否为管理员 */
   isAdmin?: boolean;
+  /** 权限标识列表（供 inferSenderPermissions 使用） */
+  permissions?: string[];
   /** 群名片 */
   card?: string;
   /** 头衔 */
@@ -165,6 +167,11 @@ export class IcqqBot extends Client implements Bot<IcqqBotConfig, PrivateMessage
         senderInfo.role = sender.role;
         senderInfo.isOwner = sender.role === "owner";
         senderInfo.isAdmin = sender.role === "admin" || sender.role === "owner";
+        // 设置 permissions 数组，供 inferSenderPermissions 使用
+        const perms: string[] = [];
+        if (sender.role === "owner") perms.push('owner', 'admin');
+        else if (sender.role === "admin") perms.push('admin');
+        senderInfo.permissions = perms;
       }
       
       if (sender.card) {
@@ -447,6 +454,15 @@ class IcqqAdapter extends Adapter<IcqqBot> {
   async start(): Promise<void> {
     // 注册 ICQQ 特有的群管理工具
     this.registerIcqqTools();
+
+    // 声明适配器 Skill：将所有工具聚合为一个语义化的 Skill
+    this.declareSkill({
+      description: 'ICQQ QQ群管理能力，包括成员管理（踢人、禁言、设管理员、改名片、设头衔）、群设置（改群名、发公告、全员禁言、匿名设置）、群查询（成员列表、禁言列表）以及互动（戳一戳）。',
+      keywords: ['QQ', '群管理', '群聊'],
+      tags: ['qq', '群管理', '社交平台'],
+      conventions: '用户和群均使用数字 QQ号标识。调用工具时 bot 参数应填当前上下文的 Bot ID，group_id 应填当前场景 ID。user_id 为要操作的目标成员 QQ号。',
+    });
+
     await super.start();
   }
 
@@ -457,25 +473,27 @@ class IcqqAdapter extends Adapter<IcqqBot> {
     // 踢出成员工具
     this.addTool({
       name: 'icqq_kick_member',
-      description: '将成员踢出 QQ 群（需要管理员或群主权限）',
+      description: '将指定成员踢出 QQ 群聊，可选是否同时拉黑。需要 Bot 拥有管理员或群主权限。',
+      tags: ['群管理', '成员管理', '踢人'],
+      keywords: ['踢', '踢出', '移出', '移除', '请出', '踢出群', '踢人', '拉黑', 't人'],
       parameters: {
         type: 'object',
         properties: {
           bot: {
             type: 'string',
-            description: 'Bot QQ号',
+            description: '执行操作的 Bot QQ号（即当前上下文中的 Bot ID）',
           },
           group_id: {
             type: 'number',
-            description: '群号',
+            description: '目标群号（即当前上下文中的场景 ID）',
           },
           user_id: {
             type: 'number',
-            description: '要踢出的成员QQ号',
+            description: '要踢出的目标成员 QQ号',
           },
           block: {
             type: 'boolean',
-            description: '是否拉黑（加入黑名单，可选）',
+            description: '是否同时拉黑（加入黑名单），默认 false',
           },
         },
         required: ['bot', 'group_id', 'user_id'],
@@ -501,25 +519,27 @@ class IcqqAdapter extends Adapter<IcqqBot> {
     // 禁言成员工具
     this.addTool({
       name: 'icqq_mute_member',
-      description: '禁言 QQ 群成员（需要管理员权限）',
+      description: '对 QQ 群中的指定成员执行禁言或解除禁言操作。可指定禁言时长，duration=0 表示解除禁言。需要 Bot 拥有管理员权限/群主权限，同时。',
+      tags: ['群管理', '成员管理', '禁言'],
+      keywords: ['禁言', '解除禁言', '取消禁言', '闭嘴', '封口', '解禁', '静音', '解除静音'],
       parameters: {
         type: 'object',
         properties: {
           bot: {
             type: 'string',
-            description: 'Bot QQ号',
+            description: '执行操作的 Bot QQ号（即当前上下文中的 Bot ID）',
           },
           group_id: {
             type: 'number',
-            description: '群号',
+            description: '目标群号（即当前上下文中的场景 ID）',
           },
           user_id: {
             type: 'number',
-            description: '要禁言的成员QQ号',
+            description: '要禁言的目标成员 QQ号',
           },
           duration: {
             type: 'number',
-            description: '禁言时长（秒），0 表示解除禁言，默认 600 秒',
+            description: '禁言时长（秒）。0=解除禁言，60=1分钟，3600=1小时，86400=1天。默认 600 秒（10分钟）',
           },
         },
         required: ['bot', 'group_id', 'user_id'],
@@ -547,21 +567,23 @@ class IcqqAdapter extends Adapter<IcqqBot> {
     // 全员禁言工具
     this.addTool({
       name: 'icqq_mute_all',
-      description: '开启/关闭 QQ 群全员禁言（需要管理员权限）',
+      description: '开启或关闭 QQ 群的全员禁言模式。开启后所有普通成员无法发言，关闭后恢复正常。需要 Bot 拥有管理员权限。',
+      tags: ['群管理', '群设置', '禁言'],
+      keywords: ['全员禁言', '全体禁言', '全群禁言', '关闭全员禁言', '开启全员禁言', '解除全员禁言'],
       parameters: {
         type: 'object',
         properties: {
           bot: {
             type: 'string',
-            description: 'Bot QQ号',
+            description: '执行操作的 Bot QQ号（即当前上下文中的 Bot ID）',
           },
           group_id: {
             type: 'number',
-            description: '群号',
+            description: '目标群号（即当前上下文中的场景 ID）',
           },
           enable: {
             type: 'boolean',
-            description: '是否开启全员禁言，默认 true',
+            description: 'true=开启全员禁言，false=关闭全员禁言，默认 true',
           },
         },
         required: ['bot', 'group_id'],
@@ -587,25 +609,27 @@ class IcqqAdapter extends Adapter<IcqqBot> {
     // 设置管理员工具
     this.addTool({
       name: 'icqq_set_admin',
-      description: '设置/取消 QQ 群管理员（需要群主权限）',
+      description: '设置或取消 QQ 群管理员。只有群主才能操作。enable=true 授予管理员，enable=false 撤销管理员。',
+      tags: ['群管理', '权限管理', '管理员'],
+      keywords: ['管理员', '设管理', '取消管理', '撤销管理', '设置管理员', '取消管理员'],
       parameters: {
         type: 'object',
         properties: {
           bot: {
             type: 'string',
-            description: 'Bot QQ号',
+            description: '执行操作的 Bot QQ号（即当前上下文中的 Bot ID）',
           },
           group_id: {
             type: 'number',
-            description: '群号',
+            description: '目标群号（即当前上下文中的场景 ID）',
           },
           user_id: {
             type: 'number',
-            description: '成员QQ号',
+            description: '目标成员 QQ号',
           },
           enable: {
             type: 'boolean',
-            description: '是否设为管理员，默认 true',
+            description: 'true=授予管理员，false=撤销管理员，默认 true',
           },
         },
         required: ['bot', 'group_id', 'user_id'],
@@ -631,25 +655,27 @@ class IcqqAdapter extends Adapter<IcqqBot> {
     // 设置群名片工具
     this.addTool({
       name: 'icqq_set_card',
-      description: '设置群成员的群名片（需要管理员权限）',
+      description: '修改 QQ 群中某个成员的群名片（备注名）。需要 Bot 拥有管理员权限。',
+      tags: ['群管理', '成员管理', '群名片'],
+      keywords: ['名片', '群名片', '备注', '改名', '改名片', '设置名片', '修改名片'],
       parameters: {
         type: 'object',
         properties: {
           bot: {
             type: 'string',
-            description: 'Bot QQ号',
+            description: '执行操作的 Bot QQ号（即当前上下文中的 Bot ID）',
           },
           group_id: {
             type: 'number',
-            description: '群号',
+            description: '目标群号（即当前上下文中的场景 ID）',
           },
           user_id: {
             type: 'number',
-            description: '成员QQ号',
+            description: '目标成员 QQ号',
           },
           card: {
             type: 'string',
-            description: '新的群名片',
+            description: '新的群名片内容',
           },
         },
         required: ['bot', 'group_id', 'user_id', 'card'],
@@ -675,25 +701,27 @@ class IcqqAdapter extends Adapter<IcqqBot> {
     // 设置头衔工具
     this.addTool({
       name: 'icqq_set_title',
-      description: '设置群成员的专属头衔（需要群主权限）',
+      description: '设置 QQ 群成员的专属头衔（显示在群昵称旁）。只有群主才能操作。可设置持续时间或永久。',
+      tags: ['群管理', '成员管理', '头衔'],
+      keywords: ['头衔', '专属头衔', '设置头衔', '给头衔', '加头衔', '称号'],
       parameters: {
         type: 'object',
         properties: {
           bot: {
             type: 'string',
-            description: 'Bot QQ号',
+            description: '执行操作的 Bot QQ号（即当前上下文中的 Bot ID）',
           },
           group_id: {
             type: 'number',
-            description: '群号',
+            description: '目标群号（即当前上下文中的场景 ID）',
           },
           user_id: {
             type: 'number',
-            description: '成员QQ号',
+            description: '目标成员 QQ号',
           },
           title: {
             type: 'string',
-            description: '头衔名称',
+            description: '头衔文字内容',
           },
           duration: {
             type: 'number',
@@ -723,17 +751,19 @@ class IcqqAdapter extends Adapter<IcqqBot> {
     // 设置群名工具
     this.addTool({
       name: 'icqq_set_group_name',
-      description: '修改 QQ 群名称（需要管理员权限）',
+      description: '修改 QQ 群的群名称。需要 Bot 拥有管理员权限。',
+      tags: ['群管理', '群设置', '群名'],
+      keywords: ['群名', '改群名', '修改群名', '群名称', '改名'],
       parameters: {
         type: 'object',
         properties: {
           bot: {
             type: 'string',
-            description: 'Bot QQ号',
+            description: '执行操作的 Bot QQ号（即当前上下文中的 Bot ID）',
           },
           group_id: {
             type: 'number',
-            description: '群号',
+            description: '目标群号（即当前上下文中的场景 ID）',
           },
           name: {
             type: 'string',
@@ -800,21 +830,23 @@ class IcqqAdapter extends Adapter<IcqqBot> {
     // 戳一戳工具
     this.addTool({
       name: 'icqq_poke',
-      description: '戳一戳群成员',
+      description: '在 QQ 群中对某个成员执行"戳一戳"互动操作（类似拍一拍）。任何人都可以使用。',
+      tags: ['互动', '趣味', '戳一戳'],
+      keywords: ['戳', '戳一戳', '拍一拍', '拍', '碰一碰', 'poke'],
       parameters: {
         type: 'object',
         properties: {
           bot: {
             type: 'string',
-            description: 'Bot QQ号',
+            description: '执行操作的 Bot QQ号（即当前上下文中的 Bot ID）',
           },
           group_id: {
             type: 'number',
-            description: '群号',
+            description: '目标群号（即当前上下文中的场景 ID）',
           },
           user_id: {
             type: 'number',
-            description: '要戳的成员QQ号',
+            description: '要戳的目标成员 QQ号',
           },
         },
         required: ['bot', 'group_id', 'user_id'],
@@ -835,17 +867,19 @@ class IcqqAdapter extends Adapter<IcqqBot> {
     // 获取群成员列表工具
     this.addTool({
       name: 'icqq_list_members',
-      description: '获取 QQ 群成员列表',
+      description: '查询 QQ 群的完整成员列表，返回每个成员的 QQ号、昵称、群名片、角色（群主/管理员/成员）、头衔等信息。',
+      tags: ['群查询', '成员查询', '列表'],
+      keywords: ['成员', '群成员', '成员列表', '群员', '有多少人', '人数', '管理员列表', '谁是管理'],
       parameters: {
         type: 'object',
         properties: {
           bot: {
             type: 'string',
-            description: 'Bot QQ号',
+            description: '执行操作的 Bot QQ号（即当前上下文中的 Bot ID）',
           },
           group_id: {
             type: 'number',
-            description: '群号',
+            description: '目标群号（即当前上下文中的场景 ID）',
           },
         },
         required: ['bot', 'group_id'],
@@ -876,21 +910,23 @@ class IcqqAdapter extends Adapter<IcqqBot> {
         };
       },
     });
-
+    
     // 获取被禁言列表工具
     this.addTool({
       name: 'icqq_list_muted',
-      description: '获取 QQ 群中被禁言的成员列表',
+      description: '查询 QQ 群中当前被禁言的成员列表。仅查询用途，不执行禁言操作（禁言请用 icqq_mute_member）。',
+      tags: ['群查询', '禁言查询', '列表'],
+      keywords: ['禁言列表', '被禁言', '谁被禁言', '查看禁言', '禁言名单'],
       parameters: {
         type: 'object',
         properties: {
           bot: {
             type: 'string',
-            description: 'Bot QQ号',
+            description: '执行操作的 Bot QQ号（即当前上下文中的 Bot ID）',
           },
           group_id: {
             type: 'number',
-            description: '群号',
+            description: '目标群号（即当前上下文中的场景 ID）',
           },
         },
         required: ['bot', 'group_id'],
@@ -914,21 +950,23 @@ class IcqqAdapter extends Adapter<IcqqBot> {
     // 设置匿名状态工具
     this.addTool({
       name: 'icqq_set_anonymous',
-      description: '开启/关闭 QQ 群匿名聊天（需要管理员权限）',
+      description: '开启或关闭 QQ 群的匿名聊天功能。开启后群成员可以匿名发言。需要 Bot 拥有管理员权限。',
+      tags: ['群管理', '群设置', '匿名'],
+      keywords: ['匿名', '匿名聊天', '开启匿名', '关闭匿名', '允许匿名'],
       parameters: {
         type: 'object',
         properties: {
           bot: {
             type: 'string',
-            description: 'Bot QQ号',
+            description: '执行操作的 Bot QQ号（即当前上下文中的 Bot ID）',
           },
           group_id: {
             type: 'number',
-            description: '群号',
+            description: '目标群号（即当前上下文中的场景 ID）',
           },
           enable: {
             type: 'boolean',
-            description: '是否允许匿名，默认 true',
+            description: 'true=开启匿名聊天，false=关闭匿名聊天，默认 true',
           },
         },
         required: ['bot', 'group_id'],
@@ -956,13 +994,9 @@ class IcqqAdapter extends Adapter<IcqqBot> {
 
   /**
    * 检查执行上下文中的权限
+   * 双重验证：优先从 ToolContext 获取权限级别，其次从消息发送者信息获取
    */
   private checkPermission(context: any, required: ToolPermissionLevel): void {
-    if (!context?.message) return; // 无上下文时跳过检查（命令行调用）
-    
-    const sender = context.message.$sender as IcqqSenderInfo;
-    if (!sender) return;
-    
     const permissionLevels: Record<ToolPermissionLevel, number> = {
       'user': 0,
       'group_admin': 1,
@@ -970,17 +1004,34 @@ class IcqqAdapter extends Adapter<IcqqBot> {
       'bot_admin': 3,
       'owner': 4,
     };
-    
-    // 获取发送者的实际权限级别
+
+    const requiredLevel = permissionLevels[required] ?? 0;
+    if (requiredLevel === 0) return; // user 级别无需检查
+
+    // 1. 优先从 ToolContext.senderPermissionLevel 获取（AI Agent 路径注入）
+    if (context?.senderPermissionLevel) {
+      const ctxLevel = permissionLevels[context.senderPermissionLevel as ToolPermissionLevel] ?? 0;
+      if (ctxLevel < requiredLevel) {
+        throw new Error(`权限不足：需要 ${required} 权限，当前为 ${context.senderPermissionLevel}`);
+      }
+      return; // 检查通过
+    }
+
+    // 2. 从消息的 $sender 获取权限（命令行/中间件路径）
+    const sender = context?.message?.$sender as IcqqSenderInfo | undefined;
+    if (!sender) {
+      // 无上下文且无发送者信息 → 拒绝高权限操作
+      throw new Error(`权限不足：无法验证身份，拒绝执行需要 ${required} 权限的操作`);
+    }
+
     let senderLevel: ToolPermissionLevel = 'user';
-    
     if (sender.isOwner || sender.role === 'owner') {
       senderLevel = 'group_owner';
     } else if (sender.isAdmin || sender.role === 'admin') {
       senderLevel = 'group_admin';
     }
-    
-    if (permissionLevels[senderLevel] < permissionLevels[required]) {
+
+    if (permissionLevels[senderLevel] < requiredLevel) {
       throw new Error(`权限不足：需要 ${required} 权限，当前为 ${senderLevel}`);
     }
   }
@@ -1003,10 +1054,7 @@ provide({
 
 useContext("web", (web: any) => {
   // 注册ICQQ适配器的客户端入口文件
-  const dispose = web.addEntry({
-    production: path.resolve(import.meta.dirname, "../dist/index.js"),
-    development: path.resolve(import.meta.dirname, "../client/index.tsx"),
-  });
+  const dispose = web.addEntry(path.resolve(import.meta.dirname, "../client/index.tsx"));
   return dispose;
 });
 

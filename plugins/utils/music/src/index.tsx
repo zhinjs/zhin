@@ -179,8 +179,8 @@ useContext('tool', (toolService) => {
   if (!toolService) return;
   
   const disposers = [
-    toolService.add(searchMusicTool, 'music'),
-    toolService.add(shareMusicTool, 'music'),
+    toolService.addTool(searchMusicTool, 'music'),
+    toolService.addTool(shareMusicTool, 'music'),
   ];
   
   logger.debug('音乐工具已注册');

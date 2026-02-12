@@ -14,8 +14,11 @@ import * as path from "path";
 import { fileURLToPath } from "url";
 import logger, { Logger } from "@zhin.js/logger";
 import { compose, remove, resolveEntry } from "./utils.js";
-import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, ConfigService, PermissionService, SendOptions } from "./types.js";
+import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, SendOptions } from "./types.js";
+import type { ConfigFeature } from "./built/config.js";
+import type { PermissionFeature } from "./built/permission.js";
 import { Adapter, Adapters } from "./adapter.js";
+import { Feature, FeatureJSON } from "./feature.js";
 import { createHash } from "crypto";
 const contextsKey = Symbol("contexts");
 const loadedModules = new Map<string, Plugin>(); // 记录已加载的模块
@@ -63,10 +66,19 @@ function getCurrentFile(metaUrl = import.meta.url): string {
 /**
  * usePlugin - 获取或创建当前插件实例
  * 类似 React Hooks 的设计，根据调用文件自动创建插件树
+ *
+ * 同一个文件多次调用 usePlugin() 返回同一个实例，
+ * 避免 Plugin.create() + usePlugin() 产生不必要的双层包装。
  */
 export function usePlugin(): Plugin {
   const callerFile = getCurrentFile();
   const parentPlugin = storage.getStore();
+
+  // 同一文件再次调用 usePlugin()，直接复用已有实例
+  if (parentPlugin && parentPlugin.filePath === callerFile) {
+    return parentPlugin;
+  }
+
   const newPlugin = new Plugin(callerFile, parentPlugin);
   storage.enterWith(newPlugin);
   return newPlugin;
@@ -164,6 +176,9 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   // 统一的清理函数集合
   #disposables: Set<() => void | Promise<void>> = new Set();
 
+  // 记录当前插件向哪些 Feature 贡献了哪些 item
+  #featureContributions = new Map<string, Set<string>>();
+
   get middleware(): MessageMiddleware<RegisteredAdapter> {
     return compose<RegisteredAdapter>(this.#middlewares);
   }
@@ -226,10 +241,10 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     tool: Tool,
     generateCommand: boolean = true
   ): () => void {
-    // 尝试使用 ToolService
+    // 尝试使用 ToolFeature
     const toolService = this.root.inject('tool' as any) as any;
-    if (toolService && typeof toolService.add === 'function') {
-      const dispose = toolService.add(tool, this.name, generateCommand);
+    if (toolService && typeof toolService.addTool === 'function') {
+      const dispose = toolService.addTool(tool, this.name, generateCommand);
       this.#disposables.add(dispose);
       return () => {
         dispose();
@@ -430,8 +445,10 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
 
     // 启动所有服务
     for (const context of this.$contexts.values()) {
-      if (typeof context.mounted === "function" && !context.value) {
-        context.value = await context.mounted(this);
+      if (typeof context.mounted === "function") {
+        const result = await context.mounted(this);
+        // 仅当 value 未预设时才赋值（mounted 始终执行，以支持副作用如设置内部引用）
+        if (!context.value) context.value = result;
       }
       this.dispatch('context.mounted', context.name)
     }
@@ -449,26 +466,157 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     }
   }
   /**
-   * 获取插件提供的功能
-   * 从各个服务中获取数据
+   * 记录 Feature 贡献（由 Feature extensions 内部调用）
+   * @param featureName Feature 名称（如 'command'）
+   * @param itemName item 标识（如命令 pattern）
    */
-  get features(): Plugin.Features {
-    const commandService = this.inject('command');
-    const componentService = this.inject('component')
-    const cronService = this.inject('cron');
+  recordFeatureContribution(featureName: string, itemName: string): void {
+    if (!this.#featureContributions.has(featureName)) {
+      this.#featureContributions.set(featureName, new Set());
+    }
+    this.#featureContributions.get(featureName)!.add(itemName);
+  }
 
-    return {
-      commands: commandService ? commandService.items.map(c => c.pattern) : [],
-      components: componentService ? componentService.getAllNames() : [],
-      crons: cronService ? cronService.items.map(c => c.cronExpression) : [],
-      middlewares: this.#middlewares.map((m, i) => m.name || `middleware_${i}`),
+  /**
+   * 收集本插件及所有后代插件的 Feature 贡献名称
+   * 解决 Plugin.create() 包装问题：外层插件的 #featureContributions 为空，
+   * 实际贡献记录在 usePlugin() 创建的内层子插件上
+   */
+  #collectAllFeatureNames(names: Set<string>): void {
+    for (const name of this.#featureContributions.keys()) {
+      names.add(name);
+    }
+    for (const child of this.children) {
+      child.#collectAllFeatureNames(names);
+    }
+  }
+
+  /**
+   * 收集本插件及所有后代插件的 plugin name 集合
+   * 用于 Feature.toJSON(pluginName) 匹配
+   */
+  #collectAllPluginNames(names: Set<string>): void {
+    names.add(this.name);
+    for (const child of this.children) {
+      child.#collectAllPluginNames(names);
+    }
+  }
+
+  /**
+   * 获取当前插件的所有 Feature 数据（用于 HTTP API）
+   * 遍历插件贡献的 Feature，调用各 Feature 的 toJSON(pluginName) 获取序列化数据
+   * 同时包含 middleware（方案 B: 本地构造）
+   *
+   * 注意：Plugin.create() 创建 "外层" 插件，usePlugin() 创建 "内层" 子插件。
+   * extension 方法 (addCommand 等) 通过 getPlugin() 记录在内层插件上。
+   * 因此需要遍历整个子树来收集 feature 贡献名称。
+   */
+  getFeatures(): FeatureJSON[] {
+    const result: FeatureJSON[] = [];
+
+    // 收集本插件及所有后代插件的 feature 名称和 plugin 名称
+    const featureNames = new Set<string>();
+    this.#collectAllFeatureNames(featureNames);
+
+    const pluginNames = new Set<string>();
+    this.#collectAllPluginNames(pluginNames);
+
+    // 从 Feature 贡献中收集
+    for (const featureName of featureNames) {
+      const feature = this.inject(featureName as keyof Plugin.Contexts);
+      if (feature instanceof Feature) {
+        // 先用当前插件名尝试
+        let json = feature.toJSON(this.name);
+        if (json.count === 0) {
+          // 当前插件名匹配不到（可能名称不同），尝试后代插件名
+          for (const pName of pluginNames) {
+            if (pName === this.name) continue;
+            json = feature.toJSON(pName);
+            if (json.count > 0) break;
+          }
+        }
+        if (json.count > 0) {
+          result.push(json);
+        }
+      }
+    }
+
+    // middleware（方案 B: 本地构造，因为 middleware 是 Plugin 私有属性）
+    // 同样需要收集子插件树中的 middleware
+    const allMiddlewareNames: string[] = [];
+    const collectMiddlewares = (plugin: Plugin) => {
+      const mws = plugin.#middlewares
+        .filter(m => m !== plugin.#messageMiddleware)
+        .map((m, i) => m.name || `middleware_${i}`);
+      allMiddlewareNames.push(...mws);
+      for (const child of plugin.children) {
+        collectMiddlewares(child);
+      }
     };
+    collectMiddlewares(this);
+
+    if (allMiddlewareNames.length > 0) {
+      result.push({
+        name: 'middleware',
+        icon: 'Layers',
+        desc: '中间件',
+        count: allMiddlewareNames.length,
+        items: allMiddlewareNames.map(name => ({ name })),
+      });
+    }
+
+    // 自动检测适配器和服务上下文（从 $contexts 中发现非 Feature 的贡献）
+    const adapterItems: { name: string; bots: number; online: number; tools: number }[] = [];
+    const serviceItems: { name: string; desc: string }[] = [];
+
+    const scanContexts = (plugin: Plugin) => {
+      for (const [name, context] of plugin.$contexts) {
+        const value = context.value;
+        if (value instanceof Adapter) {
+          adapterItems.push({
+            name,
+            bots: value.bots.size,
+            online: Array.from(value.bots.values()).filter(b => b.$connected).length,
+            tools: value.tools.size,
+          });
+        } else if (value !== undefined && !(value instanceof Feature)) {
+          // 非 Feature、非 Adapter 的上下文 = 服务
+          serviceItems.push({ name, desc: context.description || name });
+        }
+      }
+      for (const child of plugin.children) {
+        scanContexts(child);
+      }
+    };
+    scanContexts(this);
+
+    if (adapterItems.length > 0) {
+      result.push({
+        name: 'adapter',
+        icon: 'Plug',
+        desc: '适配器',
+        count: adapterItems.length,
+        items: adapterItems,
+      });
+    }
+
+    if (serviceItems.length > 0) {
+      result.push({
+        name: 'service',
+        icon: 'Server',
+        desc: '服务',
+        count: serviceItems.length,
+        items: serviceItems,
+      });
+    }
+
+    return result;
   }
 
   info(): Record<string, any> {
     return {
       [this.name]: {
-        features: this.features,
+        features: this.getFeatures(),
         children: this.children.map(child => child.info())
       }
     }
@@ -522,6 +670,9 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
 
     // 清理 middlewares 数组（保留默认的消息中间件）
     this.#middlewares.length = 1;
+
+    // 清理 feature 贡献记录
+    this.#featureContributions.clear();
 
     if (this.parent) {
       remove(this.parent?.children, this);
@@ -595,9 +746,32 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   // ============================================================================
 
   /**
-   * 注册上下文
+   * 注册上下文（支持 Feature 实例或传统 Context 对象）
    */
-  provide<T extends keyof Plugin.Contexts>(context: Context<T>): this {
+  provide<T extends keyof Plugin.Contexts>(target: Feature | Context<T>): this {
+    if (target instanceof Feature) {
+      // Feature → 自动转为内部 Context 格式存储
+      const feature = target;
+      const context: Context<T> = {
+        name: feature.name as T,
+        description: feature.desc,
+        value: feature as any,
+        mounted: feature.mounted
+          ? async (plugin: Plugin) => {
+              await feature.mounted!(plugin);
+              return feature as any;
+            }
+          : undefined,
+        dispose: feature.dispose
+          ? async () => { await feature.dispose!(); }
+          : undefined,
+        extensions: feature.extensions,
+      };
+      return this.provide(context);
+    }
+
+    // 传统 Context 路径
+    const context = target;
     if (!Plugin[contextsKey].includes(context.name as string)) {
       Plugin[contextsKey].push(context.name as string);
     }
@@ -705,7 +879,8 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   static #coreMethods = new Set([
     'addMiddleware', 'useContext', 'inject', 'contextIsReady',
     'start', 'stop', 'onMounted', 'onDispose',
-    'dispatch', 'broadcast', 'provide', 'import', 'reload', 'watch', 'info'
+    'dispatch', 'broadcast', 'provide', 'import', 'reload', 'watch', 'info',
+    'recordFeatureContribution', 'getFeatures'
   ]);
 
   /**
@@ -775,16 +950,6 @@ export interface Context<T extends keyof Plugin.Contexts = keyof Plugin.Contexts
 // ============================================================================
 export namespace Plugin {
   /**
-   * 插件提供的功能
-   */
-  export interface Features {
-    commands: string[];
-    components: string[];
-    crons: string[];
-    middlewares: string[];
-  }
-
-  /**
    * 生命周期事件
    */
   export interface Lifecycle {
@@ -805,8 +970,8 @@ export namespace Plugin {
    * 各个 Context 通过 declare module 扩展此接口
    */
   export interface Contexts extends Adapters {
-    config: ConfigService;
-    permission: PermissionService;
+    config: ConfigFeature;
+    permission: PermissionFeature;
   }
 
   /**

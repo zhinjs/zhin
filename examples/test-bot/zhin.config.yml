@@ -1,27 +1,16 @@
-log_level: 1
+log_level: 0
 database:
   dialect: sqlite
   filename: ./data/test.db
 bots:
-  # - context: kook
-  #   name: kook-bot
-  #   token: ${KOOK_TOKEN}
-  # - name: zhin-qq
-  #   context: qq
-  #   appid: ${QQ_APPID}
-  #   secret: ${QQ_SECRET}
-  #   removeAt: true
-  #   sandbox: false
-  #   mode: websocket
-  #   intents:
-  #     - GUILDS
-  #     - PUBLIC_GUILD_MESSAGES
-  #     - GUILD_MESSAGE_REACTIONS
-  #     - DIRECT_MESSAGE
-  #     - GROUP_AT_MESSAGE_CREATE
-  #     - C2C_MESSAGE_CREATE
-  #     - INTERACTION
-  #   data_dir: /Users/liuchunlang/IdeaProjects/zhin/examples/test-bot/data
+  - context: icqq
+    name: ${ICQQ_ACCOUNT}
+    password: ${ICQQ_PASSWORD}
+    platform: ${ICQQ_PLATFORM}
+    sign_api_addr: ${ICQQ_SIGN_API_ADDR}
+    ver: '9.1.70'
+    data_dir: /Users/liuchunlang/IdeaProjects/zhin/examples/test-bot/data
+    scope: icqqjs
 plugin_dirs:
   - node_modules
   - ./src/plugins
@@ -32,63 +21,35 @@ services:
   - component
   - permission
   - cron
-  # tool 和 ai-trigger 服务由 @zhin.js/ai 插件提供
 plugins:
   - test-plugin
   - test-jsx
   - memory-debug
   - plugin-memory-profiler
-  - 60s              # 60s API 聚合插件（包含天气、热搜、新闻等）
   - tool-examples
   - ai-workflow-demo
   - html-test
   - "@zhin.js/http"
-  - "@zhin.js/ai"
+  - "@zhin.js/console"
   - "@zhin.js/mcp"
   - "@zhin.js/plugin-github-notify"
   - "@zhin.js/adapter-sandbox"
   - "@zhin.js/adapter-kook"
+  - "@zhin.js/adapter-icqq"
   - "@zhin.js/adapter-qq"
   - "@zhin.js/plugin-html-renderer"
-http:
-  port: 8086
-  username: ${username}
-  password: ${password}
-  base: /api
+  - "@zhin.js/plugin-60s"
 console:
   enabled: true
   lazyLoad: true
 ai:
   enabled: true
-  defaultProvider: ollama  # 默认用本地快速模型
+  defaultProvider: ollama
   providers:
-    # 本地 Ollama - 快速响应 + 工具调用
     ollama:
-      baseUrl: ${OLLAMA_BASE_URL:http://localhost:11434}
+      host: http://172.25.70.73:11434
       models:
-        - qwen2.5:7b      # 推荐：工具调用能力强
-        - qwen3:8b        # 备选：更强的理解和生成能力
-    # 云端 DeepSeek - 复杂任务（性价比最高）
-    deepseek:
-      apiKey: ${DEEPSEEK_API_KEY}
-      baseUrl: https://api.deepseek.com
-      models:
-        - deepseek-chat   # DeepSeek-V3
-        - deepseek-reasoner  # 推理增强版
-    # 月之暗面 Moonshot（可选）
-    # moonshot:
-    #   apiKey: ${MOONSHOT_API_KEY}
-    #   models:
-    #     - moonshot-v1-8k
-    #     - moonshot-v1-32k
-    #     - moonshot-v1-128k
-    # 智谱 AI GLM（可选）
-    # zhipu:
-    #   apiKey: ${ZHIPU_API_KEY}
-    #   models:
-    #     - glm-4-plus
-    #     - glm-4
-    #     - glm-4-flash
+        - qwen3:8b
   sessions:
     useDatabase: true
     maxHistory: 50
@@ -97,18 +58,23 @@ ai:
     enabled: true
     maxMessagesBeforeSummary: 100
     summaryRetentionDays: 30
-  # AI 触发配置
   trigger:
     enabled: true
     prefixes:
-      - '#'           # 使用 # 开头触发 AI
-      - 'AI:'         # 使用 AI: 开头触发
-      - 'ai:'
-    respondToAt: true      # 响应 @机器人
-    respondToPrivate: true # 私聊直接对话
-    ignorePrefixes:        # 忽略命令前缀
-      - '/'
-      - '!'
-      - '！'
-    timeout: 60000         # 超时 60 秒
-    # thinkingMessage: '🤔 思考中...'  # 可选：思考中提示
+      - "#"
+      - "AI:"
+      - "ai:"
+    respondToAt: true
+    respondToPrivate: true
+    ignorePrefixes:
+      - /
+      - "!"
+      - ！
+    timeout: 60000
+60s:
+  apiBase: https://services.zhin.dev
+http:
+  port: 8086
+  username: ${username}
+  password: ${password}
+  base: /api

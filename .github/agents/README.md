@@ -174,9 +174,11 @@ addCommand(new MessageCommand('hello <name:text>')
 ### 3. 类型扩展
 ```typescript
 // ✅ 正确
-declare module '@zhin.js/types' {
-  interface GlobalContext {
-    myService: MyService
+declare module 'zhin.js' {
+  namespace Plugin {
+    interface Contexts {
+      myService: MyService
+    }
   }
 }
 ```
@@ -193,10 +195,11 @@ useContext('database', (db) => {
 ## 📚 相关文档
 
 - [Zhin.js 主文档](../../README.md)
-- [架构设计](../../docs/guide/architecture.md)
-- [插件开发指南](../../docs/plugin/development.md)
-- [适配器开发指南](../../docs/adapter/development.md)
-- [最佳实践](../../docs/guide/best-practices.md)
+- [快速开始](../../docs/getting-started/index.md)
+- [插件开发](../../docs/essentials/plugins.md)
+- [适配器开发](../../docs/essentials/adapters.md)
+- [命令系统](../../docs/essentials/commands.md)
+- [AI 模块](../../docs/advanced/ai.md)
 
 ## 🤝 贡献
 

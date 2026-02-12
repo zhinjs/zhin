@@ -811,6 +811,12 @@ class LarkAdapter extends Adapter<LarkBot> {
 
     async start(): Promise<void> {
         this.registerLarkTools();
+        this.declareSkill({
+            description: '飞书群聊管理能力，包括用户信息查询、群信息查询、群创建/更新/解散、成员管理（添加/移除成员）、管理员管理（设置/撤销管理员）。',
+            keywords: ['飞书', 'Lark', '群聊管理', '企业协作'],
+            tags: ['lark', '群聊管理', '企业协作'],
+            conventions: '群和用户均使用字符串 ID 标识（open_id / chat_id）。调用工具时 bot 参数应填当前上下文的 Bot ID，chat_id 应填当前场景 ID。',
+        });
         await super.start();
     }
 

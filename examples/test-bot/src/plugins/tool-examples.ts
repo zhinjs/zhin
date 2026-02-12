@@ -60,7 +60,6 @@ const calculatorTool = defineTool<{ expression: string }>({
 });
 
 plugin.addTool(calculatorTool);
-logger.info('[工具示例] 计算器工具已注册');
 
 // ============================================================================
 // 示例 2: 翻译工具（多参数）
@@ -121,7 +120,6 @@ const translateTool = defineTool<{ text: string; from?: string; to?: string }>({
 });
 
 plugin.addTool(translateTool);
-logger.info('[工具示例] 翻译工具已注册');
 
 // ============================================================================
 // 示例 3: 纯 AI 工具（不生成命令）
@@ -178,7 +176,6 @@ const systemInfoTool = defineTool<{ type?: string }>({
 
 // 仅注册工具，不生成命令
 plugin.addTool(systemInfoTool, false /* generateCommand: 不为该工具创建聊天命令，仅供 AI 调用 */);
-logger.info('[工具示例] 系统信息工具已注册（仅 AI 可用）');
 
 // ============================================================================
 // 示例 4: 传统命令 -> 自动转为 AI 工具
@@ -206,7 +203,6 @@ addCommand(
     })
 );
 
-logger.info('[工具示例] 骰子命令已注册（AI 可自动调用）');
 
 // ============================================================================
 // 示例 5: 带权限控制的工具
@@ -249,7 +245,6 @@ const adminTool = defineTool<{ action: string }>({
 });
 
 plugin.addTool(adminTool);
-logger.info('[工具示例] 管理员工具已注册');
 
 // ============================================================================
 // 示例 6: 带标签的工具（用于分类）
@@ -301,22 +296,10 @@ const reminderTool: Tool = {
 };
 
 plugin.addTool(reminderTool as Tool);
-logger.info('[工具示例] 提醒工具已注册');
 
 // ============================================================================
 // 打印已注册的工具信息
 // ============================================================================
 
-logger.info('========================================');
-logger.info('[工具示例] 所有工具注册完成');
-logger.info('');
-logger.info('测试方式:');
-logger.info('  1. AI 触发: "# 帮我计算 2+3*4"');
-logger.info('  2. AI 触发: "# 翻译 Hello World"');
-logger.info('  3. AI 触发: "# 掷2个骰子"');
-logger.info('  4. 命令: /calc 2 + 3 * 4');
-logger.info('  5. 命令: /translate 你好');
-logger.info('  6. 命令: /dice 2 6');
-logger.info('  7. 命令: /remind 5 记得喝水');
-logger.info('========================================');
+logger.info('[工具示例] 已注册 6 个工具: calculator, translate, get_system_info, dice, admin_action, set_reminder');
 

@@ -1,11 +1,16 @@
+import type { AISetupConfig } from './ai.js';
+import type { AdapterSetupResult } from './adapter.js';
+
 export interface InitOptions {
   name?: string;
-  config?: 'json' | 'yaml' | 'toml' | 'ts' | 'js';
+  config?: 'json' | 'yaml' | 'ts' | 'js';
   runtime?: 'node' | 'bun';
   yes?: boolean;
   httpUsername?: string;
   httpPassword?: string;
   database?: DatabaseConfig;
+  ai?: AISetupConfig;
+  adapters?: AdapterSetupResult;
 }
 
 export interface DatabaseConfig {

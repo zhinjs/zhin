@@ -729,6 +729,12 @@ class SlackAdapter extends Adapter<SlackBot> {
 
   async start(): Promise<void> {
     this.registerSlackTools();
+    this.declareSkill({
+      description: 'Slack 频道管理能力，包括成员管理（邀请、踢出）、频道设置（主题、重命名、归档）、消息管理（置顶）、频道信息查询、表情回应。',
+      keywords: ['Slack', '频道管理', '工作区'],
+      tags: ['slack', '频道管理', '办公协作'],
+      conventions: '频道和用户均使用字符串 ID 标识（如 C0xxx、U0xxx）。调用工具时 bot 参数应填当前上下文的 Bot ID，channel_id 应填当前场景 ID。',
+    });
     await super.start();
   }
 

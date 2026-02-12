@@ -38,7 +38,6 @@
   },
   "dependencies": {
     "@zhin.js/core": "workspace:*",
-    "@zhin.js/ai": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/schema": "workspace:*",
     "yaml": "^2.3.4",

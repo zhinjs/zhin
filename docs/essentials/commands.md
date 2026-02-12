@@ -1,6 +1,6 @@
 # 命令系统
 
-使用 `MessageCommand` 创建命令。
+命令是用户与机器人交互的主要方式。使用 `MessageCommand` 创建命令，由 `CommandFeature` 统一管理。
 
 ## 基础命令
 
@@ -15,6 +15,8 @@ addCommand(
     .action(() => '你好！')
 )
 ```
+
+`addCommand` 是 CommandFeature 注入到插件上的扩展方法，返回一个 dispose 函数用于移除命令。
 
 ## 命令参数
 
@@ -43,6 +45,14 @@ addCommand(
 )
 ```
 
+### 参数类型
+
+| 类型 | 说明 | 示例 |
+|------|------|------|
+| `string` | 单个字符串（空格分隔） | `<name:string>` |
+| `number` | 数字 | `<count:number>` |
+| `text` | 文本（包含空格） | `[...content:text]` |
+
 ## 命令描述
 
 ```typescript
@@ -61,13 +71,27 @@ addCommand(
 addCommand(
   new MessageCommand('test')
     .action((message, result) => {
-      // message: 消息对象
-      console.log('用户:', message.user_id)
+      // message: 消息对象（包含 $sender、$channel、$adapter 等）
+      console.log('发送者:', message.$sender?.id)
+      console.log('频道:', message.$channel)
       
-      // result: 解析结果
+      // result: 匹配与解析结果
       console.log('参数:', result.params)
       
       return '处理完成'
+    })
+)
+```
+
+## 权限控制
+
+```typescript
+addCommand(
+  new MessageCommand('ban <user:string>')
+    .desc('封禁用户')
+    .permit('admin')  // 需要 admin 权限
+    .action((_, result) => {
+      return `已封禁 ${result.params.user}`
     })
 )
 ```
@@ -82,6 +106,49 @@ addCommand(
       return `${result.params.city}: ${data.temp}°C`
     })
 )
+```
+
+## Tool 与 Command 互转
+
+Zhin.js 支持 Tool 和 Command 之间的自动转换，使同一个功能既能被用户通过命令调用，也能被 AI Agent 通过工具调用。
+
+### Tool 自动生成 Command
+
+注册工具时，设置 `command` 选项即可同时生成对应的命令：
+
+```typescript
+import { usePlugin } from 'zhin.js'
+
+const { addTool } = usePlugin()
+
+addTool({
+  name: 'get_weather',
+  description: '查询天气',
+  parameters: {
+    type: 'object',
+    properties: {
+      city: { type: 'string', description: '城市名称' },
+    },
+    required: ['city'],
+  },
+  // 同时生成命令 "get_weather <city:string>"
+  command: { pattern: 'weather <city:string>' },
+  execute: async (args) => {
+    return await fetchWeather(args.city)
+  },
+})
+```
+
+### 手动转换
+
+```typescript
+import { toolToCommand, commandToTool } from 'zhin.js'
+
+// Tool -> Command
+const command = toolToCommand(myTool)
+
+// Command -> Tool
+const tool = commandToTool(myCommand)
 ```
 
 ## 完整示例

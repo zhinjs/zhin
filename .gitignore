@@ -1,5 +1,11 @@
 # Dependencies
 node_modules/
+.agent/
+.agents/
+.claude/
+.cursor/
+.opencode/
+.codex/
 .pnp
 .pnp.js
 test-bot/data

@@ -965,6 +965,12 @@ class TelegramAdapter extends Adapter<TelegramBot> {
 
   async start(): Promise<void> {
     this.registerTelegramTools();
+    this.declareSkill({
+      description: 'Telegram 群组管理能力，包括成员管理（踢人、解封、禁言、设管理员、设头衔）、消息管理（置顶、取消置顶）、群信息查询（管理员列表、成员数、群信息）、邀请链接生成。',
+      keywords: ['Telegram', 'TG', '电报', '群组管理'],
+      tags: ['telegram', '群组管理', '社交平台'],
+      conventions: 'chat_id 使用数字 ID 标识（群组为负数）。user_id 为数字用户 ID。调用工具时 bot 参数应填当前上下文的 Bot ID，chat_id 应填当前场景 ID。',
+    });
     await super.start();
   }
 

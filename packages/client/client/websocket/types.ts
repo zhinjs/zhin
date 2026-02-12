@@ -101,6 +101,11 @@ export interface DataUpdateMessage extends BaseMessage {
   type: 'data-update'
 }
 
+export interface HmrReloadMessage extends BaseMessage {
+  type: 'hmr:reload'
+  data?: { file?: string }
+}
+
 // ============================================================================
 // 联合类型
 // ============================================================================
@@ -119,6 +124,7 @@ export type WebSocketMessage =
   | SchemaBatchMessage
   | InitDataMessage
   | DataUpdateMessage
+  | HmrReloadMessage
 
 // ============================================================================
 // 配置选项类型
