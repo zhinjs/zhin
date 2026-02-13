@@ -13,7 +13,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "clean": "rm -rf lib"
+    "clean": "rimraf lib"
   },
   "devDependencies": {
     "typescript": "^5.3.0",

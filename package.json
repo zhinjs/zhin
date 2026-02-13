@@ -30,7 +30,7 @@
     "init": "pnpm --filter test-bot initial && pnpm install",
     "prepare:logger": "pnpm --filter @zhin.js/logger build && pnpm --filter @zhin.js/cli install",
     "prepare:cli": "pnpm --filter @zhin.js/cli build && pnpm install",
-    "build": "pnpm -r --filter './basic/**' build && pnpm -r --filter './packages/**' build && pnpm -r --filter './plugins/services/**' build && pnpm -r --filter './plugins/adapters/**' build && pnpm -r --filter './plugins/games/**' build && pnpm -r --filter './plugins/utils/**' build",
+    "build": "pnpm -r --filter \"./basic/**\" build && pnpm -r --filter \"./packages/**\" build && pnpm -r --filter \"./plugins/services/**\" build && pnpm -r --filter \"./plugins/adapters/**\" build && pnpm -r --filter \"./plugins/games/**\" build && pnpm -r --filter \"./plugins/utils/**\" build",
     "clean": "pnpm -r clean",
     "lint": "eslint . --ext .ts,.tsx",
     "type-check": "tsc --noEmit",
@@ -54,6 +54,7 @@
     "@typescript-eslint/parser": "^8.46.3",
     "@vitest/coverage-v8": "^1.6.1",
     "eslint": "^9.39.1",
+    "rimraf": "^6.1.2",
     "typescript": "^5.9.3",
     "vitest": "^1.6.1"
   },

@@ -13,7 +13,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "clean": "rm -rf dist"
+    "clean": "rimraf lib"
   },
   "dependencies": {},
   "peerDependencies": {

@@ -143,7 +143,7 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
       'build:node': 'tsc',
       'build:client': 'zhin-console build',
       dev: 'tsc --watch',
-      clean: 'rm -rf lib dist',
+      clean: 'rimraf lib dist',
       test: 'vitest run',
       'test:watch': 'vitest',
       'test:coverage': 'vitest run --coverage',
@@ -173,7 +173,8 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
       'radix-ui': 'latest',
       'class-variance-authority': 'latest',
       'vitest': 'latest',
-      '@vitest/coverage-v8': 'latest'
+      '@vitest/coverage-v8': 'latest',
+      'rimraf': 'latest'
     }
   };
   

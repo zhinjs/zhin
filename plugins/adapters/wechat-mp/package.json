@@ -7,7 +7,7 @@
   "types": "lib/index.d.ts",
   "scripts": {
     "build": "pnpm build:node",
-    "clean": "rm -rf lib",
+    "clean": "rimraf lib",
     "build:node": "tsc"
   },
   "dependencies": {
