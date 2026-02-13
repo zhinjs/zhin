@@ -40,15 +40,15 @@
   },
   "scripts": {
     "dev": "concurrently \"pnpm dev:default\" \"pnpm dev:wasm\"",
-    "dev:default": "NODE_ENV=development tsup src/index.ts --watch",
-    "dev:wasm": "WASM=1 NODE_ENV=development tsup src/index.ts --watch",
-    "build": "NODE_ENV=production pnpm run build:default && pnpm run build:wasm",
+    "dev:default": "cross-env NODE_ENV=development tsup src/index.ts --watch",
+    "dev:wasm": "cross-env WASM=1 NODE_ENV=development tsup src/index.ts --watch",
+    "build": "cross-env NODE_ENV=production pnpm run build:default && pnpm run build:wasm",
     "build:default": "tsup",
-    "build:wasm": "WASM=1 tsup",
-    "test": "NODE_ENV=test vitest run",
-    "test:ui": "NODE_ENV=test vitest --ui --coverage.enabled",
+    "build:wasm": "cross-env WASM=1 tsup",
+    "test": "cross-env NODE_ENV=test vitest run",
+    "test:ui": "cross-env NODE_ENV=test vitest --ui --coverage.enabled",
     "test-type": "tsc -p tsconfig.json --noEmit",
-    "dev:test": "NODE_ENV=test vitest --update",
+    "dev:test": "cross-env NODE_ENV=test vitest --update",
     "lint": "eslint . --ext .js,.ts --quiet --cache",
     "lint:fix": "pnpm lint --fix",
     "prettier-check": "prettier --check .",
@@ -89,7 +89,8 @@
     "turbo": "^1.6.3",
     "twrnc": "^3.4.0",
     "typescript": "^5",
-    "vitest": "^1.6.0"
+    "vitest": "^1.6.0",
+    "cross-env": "^10.1.0"
   },
   "dependencies": {
     "@resvg/resvg-js": "^2.1.0",

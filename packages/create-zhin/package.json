@@ -12,7 +12,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "clean": "rm -rf lib",
+    "clean": "rimraf lib",
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
