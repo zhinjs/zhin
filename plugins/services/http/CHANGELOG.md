@@ -1,5 +1,11 @@
 # @zhin.js/http
 
+## 1.0.19
+
+### Patch Changes
+
+- 2b44e18: fix: change version
+
 ## 1.0.18
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.8
+
+### Patch Changes
+
+- 2b44e18: fix: change version
+
 ## 1.0.7
 
 ### Patch Changes
