@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.22
+
+### Patch Changes
+
+- b27e633: fix: cli 优化
+
 ## 1.0.21
 
 ### Patch Changes

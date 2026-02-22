@@ -1,5 +1,15 @@
 # zhin.js
 
+## 1.0.27
+
+### Patch Changes
+
+- b27e633: fix: cli 优化
+- Updated dependencies [b27e633]
+  - @zhin.js/core@1.0.27
+  - @zhin.js/logger@0.1.11
+  - @zhin.js/schema@1.0.11
+
 ## 1.0.26
 
 ### Patch Changes
