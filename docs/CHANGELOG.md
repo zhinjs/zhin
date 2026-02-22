@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.7
+
+### Patch Changes
+
+- b27e633: fix: cli 优化
+
 ## 1.0.6
 
 ### Patch Changes
