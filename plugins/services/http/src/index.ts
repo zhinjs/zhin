@@ -35,6 +35,7 @@ export const httpSchema = Schema.object({
 
 export interface HttpConfig {
   port?: number;
+  host?: string;
   username?: string;
   password?: string;
   base?: string;
@@ -81,6 +82,7 @@ useContext("config", (configService) => {
   const httpConfig = appConfig.http || {};
   const {
     port = 8086,
+    host = "127.0.0.1",
     username = getCurrentUsername(),
     password = generateRandomPassword(),
     base = "/api",
@@ -343,13 +345,13 @@ useContext("config", (configService) => {
       },
     };
   });
-  server.listen({ host: "127.0.0.1", port }, () => {
+  server.listen({ host, port }, () => {
     const address = server.address();
     if (!address) return;
     const visitAddress =
       typeof address === "string"
         ? address
-        : `localhost:${address.port}`;
+        : `${host}:${address.port}`;
     const apiUrl = `http://${visitAddress}${base}`;
 
     logger.info(`HTTP 服务已启动 (port=${port}, api=${apiUrl}, user=${username})`);

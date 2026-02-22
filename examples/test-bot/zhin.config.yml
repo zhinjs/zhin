@@ -74,6 +74,7 @@ ai:
 60s:
   apiBase: https://services.zhin.dev
 http:
+  host: 0.0.0.0
   port: 8086
   username: ${username}
   password: ${password}

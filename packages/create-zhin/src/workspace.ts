@@ -171,7 +171,7 @@ addCommand(
 
 在 \`zhin.config.${options.config}\` 中启用插件：
 
-\`\`\`${options.config === 'yaml' ? 'yaml' : 'typescript'}
+\`\`\`${options.config === 'json' ? 'json' : options.config === 'toml' ? 'toml' : 'yaml'}
 plugins:
   - "@zhin.js/adapter-sandbox"
   - "@zhin.js/http"
@@ -261,6 +261,7 @@ NODE_ENV=production
   await fs.writeFile(path.join(projectPath, 'src', 'plugins', 'example.ts'),
 `import { usePlugin, MessageCommand, Time } from 'zhin.js';
 import * as os from 'node:os';
+import * as path from 'node:path';
 
 const { addCommand, useContext } = usePlugin();
 
@@ -319,7 +320,7 @@ useContext('web', (web) => {
   const clientEntry = isDev 
     ? './client/index.tsx'
     : './dist/index.js';
-  web.addEntry(clientEntry);
+  web.addEntry(path.join(process.cwd(), clientEntry));
 });
 `);
   

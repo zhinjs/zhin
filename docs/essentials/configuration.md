@@ -1,6 +1,6 @@
 # 配置文件
 
-Zhin.js 使用 `zhin.config.yml` 作为主配置文件。支持 YAML（`.yml` / `.yaml`）和 JSON（`.json`）格式。
+Zhin.js 在项目根目录自动发现主配置文件，支持 **YAML**（`zhin.config.yml` / `.yaml`）、**JSON**（`zhin.config.json`）和 **TOML**（`zhin.config.toml`）。发现优先级：`.yml` → `.yaml` → `.json` → `.toml`。
 
 ## 配置文件位置
 
@@ -8,7 +8,7 @@ Zhin.js 使用 `zhin.config.yml` 作为主配置文件。支持 YAML（`.yml` / 
 
 ```
 my-bot/
-├── zhin.config.yml  ← 主配置文件
+├── zhin.config.yml  ← 主配置文件（也可使用 .yaml / .json / .toml）
 ├── .env             ← 环境变量（密码等敏感信息）
 ├── src/
 └── package.json

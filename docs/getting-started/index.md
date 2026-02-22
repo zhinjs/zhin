@@ -181,7 +181,7 @@ my-zhin-bot/
 │   └── tsconfig.json      # 客户端 TypeScript 配置
 ├── data/                  # 数据存储目录（运行时自动生成）
 │   └── bot.db             # SQLite 数据库文件
-├── zhin.config.ts         # 主配置文件（默认 TypeScript 格式）
+├── zhin.config.yml        # 主配置文件（可选 yaml / json / toml）
 ├── .env                   # 环境变量（存放密码等敏感信息，不应提交到 Git）
 ├── package.json           # 项目依赖
 ├── tsconfig.json          # TypeScript 配置
@@ -286,25 +286,25 @@ addCommand(new MessageCommand("hello").desc("打个招呼").action(() => "你好
 
 ### 2. 启用插件
 
-编辑配置文件（如 `zhin.config.ts` 或 `zhin.config.yml`），在 `plugins` 列表中添加：
+编辑配置文件（`zhin.config.yml` / `.json` / `.toml`），在 `plugins` 列表中添加：
 
 ::: code-group
 
-```typescript [zhin.config.ts]
-plugins: [
-  'hello',                    // 你的新插件
-  '@zhin.js/http',           // HTTP 服务
-  '@zhin.js/console',        // Web 控制台
-  '@zhin.js/adapter-sandbox' // 终端适配器
-],
-```
-
 ```yaml [zhin.config.yml]
 plugins:
-  - hello # 你的新插件
-  - "@zhin.js/http" # HTTP 服务
-  - "@zhin.js/console" # Web 控制台
-  - "@zhin.js/adapter-sandbox" # 终端适配器
+  - hello
+  - "@zhin.js/http"
+  - "@zhin.js/console"
+  - "@zhin.js/adapter-sandbox"
+```
+
+```json [zhin.config.json]
+"plugins": [
+  "hello",
+  "@zhin.js/http",
+  "@zhin.js/console",
+  "@zhin.js/adapter-sandbox"
+]
 ```
 
 :::

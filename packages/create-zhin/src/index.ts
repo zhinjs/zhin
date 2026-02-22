@@ -23,7 +23,7 @@ async function main() {
   const projectNameArg = args.find(arg => !arg.startsWith('-'));
   
   if (options.yes) {
-    options.config = 'ts';
+    options.config = 'yaml';
     options.runtime = 'node';
     options.httpUsername = getCurrentUsername();
     options.httpPassword = generateRandomPassword(6);
@@ -82,12 +82,11 @@ async function main() {
           name: 'configFormat',
           message: '选择配置文件格式:',
           choices: [
-            { name: 'TypeScript (推荐)', value: 'ts' },
-            { name: 'JavaScript', value: 'js' },
-            { name: 'YAML', value: 'yaml' },
-            { name: 'JSON', value: 'json' }
+            { name: 'YAML (推荐)', value: 'yaml' },
+            { name: 'JSON', value: 'json' },
+            { name: 'TOML', value: 'toml' }
           ],
-          default: 'ts'
+          default: 'yaml'
         }
       ]);
       options.config = configFormat;

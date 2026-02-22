@@ -131,7 +131,7 @@ export function initAIModule(): void {
     async mounted(p: Plugin) {
       const configService = root.inject('config');
       const appConfig =
-        configService?.get<{ ai?: AIConfig }>('zhin.config.yml') || {};
+        configService?.getPrimary<{ ai?: AIConfig }>() || {};
       const config = appConfig.ai || {};
 
       if (config.enabled === false) {
@@ -146,7 +146,7 @@ export function initAIModule(): void {
       const providers = service.listProviders();
       if (providers.length === 0) {
         logger.warn(
-          'No AI providers configured. Please add API keys in zhin.config.yml',
+          'No AI providers configured. Please add API keys in zhin.config (yml/json/toml)',
         );
       } else {
         logger.info(
@@ -358,7 +358,7 @@ export function initAIModule(): void {
       if (!aiServiceInstance) return;
       const configService = root.inject('config');
       const appConfig =
-        configService?.get<{ ai?: AIConfig }>('zhin.config.yml') || {};
+        configService?.getPrimary<{ ai?: AIConfig }>() || {};
       const config = appConfig.ai || {};
 
       if (config.sessions?.useDatabase === false) return;

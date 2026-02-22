@@ -23,8 +23,11 @@ const {
   import: importPlugin } = plugin;
 
 // 1. 先加载配置，用户在 zhin.config 中决定启用哪些服务
+//    自动发现配置文件：zhin.config.yml / .yaml / .json / .toml
+import { ConfigLoader } from '@zhin.js/core';
+const configFile = ConfigLoader.discover('zhin.config') || 'zhin.config.yml';
 const configFeature = new ConfigFeature();
-await configFeature.load('zhin.config.yml', {
+await configFeature.load(configFile, {
   log_level: LogLevel.INFO,
   bots: [],
   database: {
@@ -35,7 +38,7 @@ await configFeature.load('zhin.config.yml', {
   plugins: ['@zhin.js/http', '@zhin.js/console', '@zhin.js/adapter-sandbox'],
   services: ['process', 'config', 'command', 'component', 'permission', 'cron'],
 });
-const appConfig = configFeature.get<AppConfig>('zhin.config.yml');
+const appConfig = configFeature.get<AppConfig>(configFile);
 const enabledServices = new Set(appConfig.services || ['process', 'config', 'command', 'component', 'permission', 'cron']);
 
 // 注册配置服务（必须）

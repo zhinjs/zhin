@@ -338,29 +338,23 @@ export function generateBotsConfigYaml(result: AdapterSetupResult): string {
 }
 
 /**
- * 生成 TS/JS 格式的 bots 配置段
+ * 生成 TOML 格式的 bots 配置段
  */
-export function generateBotsConfigTS(result: AdapterSetupResult): string {
+export function generateBotsConfigToml(result: AdapterSetupResult): string {
   if (result.bots.length === 0) return '';
 
-  const lines: string[] = ['    bots: ['];
-
+  const lines: string[] = [''];
   for (const bot of result.bots) {
-    lines.push('      {');
+    lines.push('[[bots]]');
     for (const [key, value] of Object.entries(bot)) {
-      if (typeof value === 'string' && value.startsWith('${')) {
-        // 环境变量引用 — 保持 '${VAR}' 格式
-        lines.push(`        ${key}: '${value}',`);
-      } else if (typeof value === 'string') {
-        lines.push(`        ${key}: '${value}',`);
+      if (typeof value === 'string') {
+        lines.push(`${key} = "${value.replace(/"/g, '\\"')}"`);
       } else {
-        lines.push(`        ${key}: ${JSON.stringify(value)},`);
+        lines.push(`${key} = ${JSON.stringify(value)}`);
       }
     }
-    lines.push('      },');
+    lines.push('');
   }
-
-  lines.push('    ],');
   return lines.join('\n');
 }
 

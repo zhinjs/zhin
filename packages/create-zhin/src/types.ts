@@ -3,7 +3,7 @@ import type { AdapterSetupResult } from './adapter.js';
 
 export interface InitOptions {
   name?: string;
-  config?: 'json' | 'yaml' | 'ts' | 'js';
+  config?: 'json' | 'yaml' | 'toml';
   runtime?: 'node' | 'bun';
   yes?: boolean;
   httpUsername?: string;
