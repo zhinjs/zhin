@@ -1,5 +1,21 @@
 # test-bot
 
+## 0.1.23
+
+### Patch Changes
+
+- Updated dependencies [2b44e18]
+  - @zhin.js/http@1.0.19
+  - @zhin.js/adapter-dingtalk@1.0.13
+  - @zhin.js/adapter-discord@1.0.28
+  - @zhin.js/adapter-icqq@1.0.33
+  - @zhin.js/adapter-lark@1.0.29
+  - @zhin.js/adapter-onebot11@1.0.30
+  - @zhin.js/adapter-sandbox@1.0.33
+  - @zhin.js/adapter-wechat-mp@0.1.14
+  - @zhin.js/plugin-github-notify@0.0.15
+  - @zhin.js/plugin-music@0.0.14
+
 ## 0.1.22
 
 ### Patch Changes
