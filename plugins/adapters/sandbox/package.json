@@ -42,7 +42,7 @@
   },
   "scripts": {
     "build": "tsc && (test -f ../../services/console/lib/bin.js && node ../../services/console/lib/bin.js build || echo 'Skipping client build: console not built yet')",
-    "clean": "rm -rf lib"
+    "clean": "rimraf lib"
   },
   "devDependencies": {
     "@types/react": "^19.2.2",

@@ -67,7 +67,8 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       '@types/react-dom': 'latest',
       'typescript': 'latest',
       'lucide-react': 'latest',
-      'tsx': 'latest'
+      'tsx': 'latest',
+      'rimraf': 'latest'
     },
     pnpm: {
       onlyBuiltDependencies: ['esbuild', 'sqlite3']

@@ -19,7 +19,7 @@
   ],
   "scripts": {
     "build": "tsc --build",
-    "clean": "rm -rf lib"
+    "clean": "rimraf lib"
   },
   "keywords": [
     "zhin",

@@ -27,9 +27,7 @@
         "./packages/core/src/*"
       ]
     },
-    "types": [
-      "@zhin.js/types"
-    ]
+    "types": []
   },
   "include": [
     "apps/**/*",
