@@ -9,6 +9,7 @@ import { newCommand } from './commands/new.js';
 import { pubCommand } from './commands/pub.js';
 import { installCommand, addCommand } from './commands/install.js';
 import { searchCommand, infoCommand } from './commands/search.js';
+import { installServiceCommand, uninstallServiceCommand } from './commands/install-service.js';
 
 const program = new Command();
 
@@ -29,5 +30,7 @@ program.addCommand(installCommand);
 program.addCommand(addCommand);
 program.addCommand(searchCommand);
 program.addCommand(infoCommand);
+program.addCommand(installServiceCommand);
+program.addCommand(uninstallServiceCommand);
 
 program.parse(); 

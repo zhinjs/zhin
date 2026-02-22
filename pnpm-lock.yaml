@@ -796,6 +796,19 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/zhin
 
+  plugins/features/process-monitor:
+    dependencies:
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.4
+        version: 24.10.4
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
   plugins/services/console:
     dependencies:
       '@types/ws':

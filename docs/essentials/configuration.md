@@ -205,9 +205,143 @@ ai:
 ```yaml
 http:
   port: 8086                # 端口号
+  host: "127.0.0.1"         # 监听地址，默认仅本机；部署/代理场景改为 "0.0.0.0"
   username: ${username}     # 用户名（从环境变量读取）
   password: ${password}     # 密码（从环境变量读取）
-  base: /api               # API 基础路径
+  base: /api                # API 基础路径
+  trustProxy: false         # 通过 Cloudflare/Nginx 等反向代理访问时设为 true
+```
+
+**通过 Cloudflare 等反向代理公网访问时**，建议：
+
+```yaml
+http:
+  port: 8086
+  host: "0.0.0.0"           # 监听所有网卡，便于隧道或端口转发
+  username: ${username}
+  password: ${password}
+  base: /api
+  trustProxy: true          # 信任 X-Forwarded-Host / X-Forwarded-Proto
+```
+
+- 使用 **Cloudflare Tunnel** 时，在 `cloudflared` 配置中将 `url` 指向 `http://localhost:8086`（或本机 `http://127.0.0.1:8086`）即可。
+- Cloudflare 控制台 SSL/TLS 建议使用「完全」或「完全(严格)」，由 Cloudflare 提供 HTTPS。
+
+## 进程保活与开机自启
+
+Zhin.js 提供三种进程保活方案：
+
+### 方案一：系统服务（推荐生产环境）
+
+通过 **systemd**（Linux）或 **launchd**（macOS）实现系统级进程监督，确保守护进程本身也被监督。
+
+**优点**：
+- ✅ 系统级监督，守护进程崩溃也能自动重启
+- ✅ 开机自启动
+- ✅ 无需额外依赖
+- ✅ 与系统日志集成
+
+**安装步骤**：
+
+```bash
+# 1. 构建项目
+pnpm build
+
+# 2. 安装系统服务
+zhin install-service
+
+# 3. Linux (systemd)
+sudo systemctl daemon-reload
+sudo systemctl enable your-bot.service
+sudo systemctl start your-bot.service
+
+# 查看状态和日志
+sudo systemctl status your-bot.service
+sudo journalctl -u your-bot.service -f
+
+# 4. macOS (launchd)
+launchctl load ~/Library/LaunchAgents/com.zhinjs.your-bot.plist
+launchctl start com.zhinjs.your-bot
+
+# 查看状态
+launchctl list | grep your-bot
+tail -f logs/launchd-stdout.log
+
+# 5. Windows (NSSM)
+# 先安装 NSSM: choco install nssm 或 scoop install nssm
+zhin install-service
+.\install-service.ps1    # 以管理员身份运行
+nssm start your-bot
+
+# 查看状态
+nssm status your-bot
+type logs\nssm-stdout.log
+```
+
+**卸载服务**：
+
+```bash
+zhin uninstall-service
+```
+
+### 方案二：PM2
+
+适合需要多进程管理、监控面板的场景。
+
+```bash
+pnpm build
+pnpm pm2:start
+
+# 开机自启
+pm2 startup
+pm2 save
+```
+
+### 方案三：内置守护模式
+
+轻量简单，适合开发/测试环境。
+
+```bash
+pnpm build
+pnpm daemon  # 或 zhin start --daemon
+```
+
+**注意**：内置守护模式的守护进程本身不受系统监督，如果守护进程崩溃则需要手动重启。
+
+### 方案对比
+
+| 方案 | 平台支持 | 优点 | 缺点 | 推荐场景 |
+|------|----------|------|------|----------|
+| **系统服务** | Linux, macOS, Windows | • 系统级监督<br>• 开机自启<br>• 无需额外依赖 | • 需要系统权限<br>• 配置稍复杂 | **生产环境首选** |
+| **PM2** | 全平台 | • 功能丰富<br>• 监控面板<br>• 集群模式 | • 需要额外依赖<br>• 占用资源 | 多进程管理 |
+| **内置守护** | 全平台 | • 轻量简单<br>• 无需依赖 | • 无系统级监督 | 开发/测试环境 |
+
+### Windows 特别说明
+
+**NSSM vs 任务计划程序**：
+
+- **NSSM**（推荐）：
+  - ✅ 真正的 Windows 服务
+  - ✅ 自动重启、日志轮转
+  - ✅ 服务管理界面（`services.msc`）
+  - ❌ 需要额外安装（`choco install nssm` 或 `scoop install nssm`）
+
+- **任务计划程序**：
+  - ✅ Windows 内置，无需安装
+  - ✅ 开机自启
+  - ❌ 功能较弱，重启策略有限
+  - ❌ 管理不如服务方便
+
+**安装 NSSM**：
+```powershell
+# 方式一：Chocolatey
+choco install nssm
+
+# 方式二：Scoop
+scoop install nssm
+
+# 方式三：手动下载
+# https://nssm.cc/download
 ```
 
 ## Web 控制台配置

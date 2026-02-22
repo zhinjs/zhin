@@ -251,9 +251,15 @@ async function main() {
     console.log('');
     console.log(chalk.yellow('生产环境：'));
     console.log(`  ${chalk.cyan('pnpm build')} ${chalk.gray('# 构建客户端代码和所有插件')}`);
-    console.log(`  ${chalk.cyan('pnpm start')} ${chalk.gray('# 生产环境启动')}`);
-    console.log(`  ${chalk.cyan('pnpm daemon')} ${chalk.gray('# 后台运行')}`);
+    console.log(`  ${chalk.cyan('pnpm start')} ${chalk.gray('# 前台运行')}`);
+    console.log(`  ${chalk.cyan('pnpm daemon')} ${chalk.gray('# 后台运行（内置守护）')}`);
     console.log(`  ${chalk.cyan('pnpm stop')} ${chalk.gray('# 停止后台服务')}`);
+    console.log('');
+    console.log(chalk.yellow('PM2 进程管理（推荐生产环境）：'));
+    console.log(`  ${chalk.cyan('pnpm pm2:start')} ${chalk.gray('# 启动 PM2 守护进程')}`);
+    console.log(`  ${chalk.cyan('pnpm pm2:stop')} ${chalk.gray('# 停止服务')}`);
+    console.log(`  ${chalk.cyan('pnpm pm2:restart')} ${chalk.gray('# 重启服务')}`);
+    console.log(`  ${chalk.cyan('pnpm pm2:logs')} ${chalk.gray('# 查看日志')}`);
     console.log('');
     console.log(chalk.yellow('插件开发：'));
     console.log(`  ${chalk.cyan('zhin new <plugin-name>')} ${chalk.gray('# 创建新插件')}`);
