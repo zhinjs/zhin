@@ -168,7 +168,7 @@ describe('MessageCommand', () => {
 ```typescript
 // tests/integration.test.ts
 import { describe, it, expect } from 'vitest';
-import { Plugin } from '@zhin.js/core';
+import { Plugin } from 'zhin.js';
 
 describe('Plugin', () => {
   it('should have correct name', () => {

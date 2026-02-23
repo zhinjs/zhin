@@ -26,6 +26,9 @@ import type { MessageDispatcherService } from '../built/dispatcher.js';
 import type { SkillFeature } from '../built/skill.js';
 import { AIService } from './service.js';
 import { ZhinAgent } from './zhin-agent.js';
+import { createBuiltinTools, discoverWorkspaceSkills, loadSoulPersona } from './builtin-tools.js';
+import { loadBootstrapFiles, buildContextFiles, buildBootstrapContextSection, loadToolsGuide } from './bootstrap.js';
+import { triggerAIHook, createAIHookEvent } from './hooks.js';
 import { SessionManager, createDatabaseSessionManager } from './session.js';
 import { AI_SESSION_MODEL } from './session.js';
 import {
@@ -497,6 +500,127 @@ export function initAIModule(): void {
     const disposers: (() => void)[] = [];
     for (const tool of tools) disposers.push(toolService.addTool(tool, root.name));
     logger.debug(`Registered ${tools.length} AI management tools`);
+    return () => disposers.forEach(d => d());
+  });
+
+  // ── 内置系统工具（文件/Shell/网络/计划/记忆/技能） ──
+  useContext('ai', 'tool', (ai, toolService) => {
+    if (!ai || !toolService) return;
+
+    // 注册工具
+    const builtinTools = createBuiltinTools();
+    const disposers: (() => void)[] = [];
+    for (const tool of builtinTools) disposers.push(toolService.addTool(tool, root.name));
+    logger.info(`Registered ${builtinTools.length} built-in system tools`);
+
+    // 异步发现工作区技能 + 加载引导文件（不阻塞注册流程）
+    (async () => {
+      // ── 第一步：发现和注册工作区技能 ──
+      try {
+        const skills = await discoverWorkspaceSkills();
+        const skillFeature = root.inject?.('skill') as SkillFeature | undefined;
+        if (skillFeature && skills.length > 0) {
+          logger.debug(`[技能注册] 开始注册 ${skills.length} 个技能...`);
+          // 构建所有已注册工具名的索引（用于模糊匹配）
+          const allRegisteredTools = toolService.getAll();
+          const toolNameIndex = new Map<string, Tool>();
+          for (const t of allRegisteredTools) {
+            toolNameIndex.set(t.name, t);
+            // 建立反向别名索引：read_file ↔ file_read 等
+            const parts = t.name.split('_');
+            if (parts.length === 2) {
+              toolNameIndex.set(`${parts[1]}_${parts[0]}`, t);
+            }
+          }
+
+          for (const s of skills) {
+            // 从 toolService 中查找技能声明的关联工具（支持模糊匹配）
+            const associatedTools: Tool[] = [];
+            const toolNames = s.toolNames || [];
+            if (toolNames.length > 0 && toolService) {
+              logger.debug(`[技能注册] 技能 '${s.name}' 声明的工具: ${toolNames.join(', ')}`);
+              for (const toolName of toolNames) {
+                // 精确匹配
+                let tool = toolService.get(toolName);
+                // 若精确匹配失败，尝试反向别名（file_read → read_file）
+                if (!tool) {
+                  tool = toolNameIndex.get(toolName) || undefined;
+                }
+                if (tool) {
+                  associatedTools.push(tool);
+                  const matchType = toolService.get(toolName) ? '精确' : '模糊';
+                  logger.debug(`[技能注册]   ✅ 找到工具: ${toolName}${matchType === '模糊' ? ` → ${tool.name} (模糊匹配)` : ''}`);
+                } else {
+                  logger.warn(`[技能注册]   ❌ 工具 '${toolName}' 未找到（已注册: ${allRegisteredTools.map(t => t.name).join(', ')}）`);
+                }
+              }
+            }
+            skillFeature.add({
+              name: s.name,
+              description: s.description,
+              tools: associatedTools,
+              keywords: s.keywords || [],
+              tags: s.tags || [],
+              pluginName: root.name,
+            }, root.name);
+            logger.debug(`[技能注册] 技能 '${s.name}' 已注册 (${associatedTools.length} 个工具)`);
+          }
+          logger.info(`✅ Registered ${skills.length} workspace skills with ${skills.reduce((sum, s) => sum + ((s.toolNames || []).length), 0)} total tool references`);
+        }
+      } catch (e: any) {
+        logger.warn(`Failed to discover workspace skills: ${e.message}`);
+      }
+
+      // ── 第二步：加载引导文件 ──
+      const loadedFiles: string[] = [];
+      try {
+        // 使用项目根目录或当前工作目录作为工作区目录
+        const workspaceDir = process.cwd();
+        const bootstrapFiles = await loadBootstrapFiles(workspaceDir);
+        const contextFiles = buildContextFiles(bootstrapFiles);
+        
+        logger.debug(`Bootstrap files loaded (cwd: ${workspaceDir}): ${bootstrapFiles.map(f => f.name + (f.missing ? ' (missing)' : '')).join(', ')}`);
+
+        // SOUL.md → 注入到 agent persona
+        const soulFile = contextFiles.find(f => f.path === 'SOUL.md');
+        if (soulFile && zhinAgentInstance) {
+          logger.info('Loaded SOUL.md persona → agent prompt');
+          loadedFiles.push('SOUL.md');
+        }
+
+        // TOOLS.md → 记录已加载
+        const toolsFile = contextFiles.find(f => f.path === 'TOOLS.md');
+        if (toolsFile) {
+          logger.info('Loaded TOOLS.md tool guidance → agent prompt');
+          loadedFiles.push('TOOLS.md');
+        }
+
+        // AGENTS.md → 记录已加载
+        const agentsFile = contextFiles.find(f => f.path === 'AGENTS.md');
+        if (agentsFile) {
+          logger.info('Loaded AGENTS.md memory → agent prompt');
+          loadedFiles.push('AGENTS.md');
+        }
+
+        // 注入引导上下文到 ZhinAgent
+        if (zhinAgentInstance && contextFiles.length > 0) {
+          const contextSection = buildBootstrapContextSection(contextFiles);
+          zhinAgentInstance.setBootstrapContext(contextSection);
+        }
+      } catch (e: any) {
+        logger.debug(`Bootstrap files not loaded: ${e.message}`);
+      }
+
+      // 触发 agent:bootstrap Hook
+      const skillFeature2 = (root as any).inject?.('skill') as SkillFeature | undefined;
+      await triggerAIHook(createAIHookEvent('agent', 'bootstrap', undefined, {
+        workspaceDir: process.cwd(),
+        toolCount: builtinTools.length,
+        skillCount: skillFeature2?.size ?? 0,
+        bootstrapFiles: loadedFiles,
+      }));
+    })();
+
     return () => disposers.forEach(d => d());
   });
 }

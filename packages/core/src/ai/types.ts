@@ -172,6 +172,8 @@ export interface AgentTool {
   keywords?: string[];
   /** 所需权限级别 (0=所有人, 1=群管理, 2=群主, 3=Bot管理员, 4=拥有者) */
   permissionLevel?: number;
+  /** 是否允许预执行（opt-in），默认 false */
+  preExecutable?: boolean;
 }
 
 /**

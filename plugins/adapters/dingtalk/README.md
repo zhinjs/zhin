@@ -138,9 +138,9 @@ export default defineConfig({
 ### 接收和发送消息
 
 ```typescript
-import { addCommand, MessageCommand, useLogger } from 'zhin.js'
+import { usePlugin, MessageCommand } from 'zhin.js'
 
-const logger = useLogger()
+const { addCommand, logger } = usePlugin()
 
 // 定义命令
 addCommand(new MessageCommand('hello <name:text>')

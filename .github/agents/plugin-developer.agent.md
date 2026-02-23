@@ -63,10 +63,9 @@ plugins/my-plugin/
 ### 模板 1: 基础插件入口
 ```typescript
 // plugins/my-plugin/src/index.ts
-import { usePlugin, useLogger } from 'zhin.js'
+import { usePlugin } from 'zhin.js'
 
-const plugin = usePlugin()
-const logger = useLogger()
+const { logger } = usePlugin()
 
 // 导入子模块
 import './commands/index.js'
@@ -100,10 +99,9 @@ import './basic-commands.js'
 import './advanced-commands.js'
 
 // plugins/my-plugin/src/commands/basic-commands.ts
-import { addCommand, MessageCommand, useLogger, usePlugin } from 'zhin.js'
+import { usePlugin, MessageCommand } from 'zhin.js'
 
-const logger = useLogger()
-const plugin = usePlugin()
+const { addCommand, logger } = usePlugin()
 
 // 简单命令
 addCommand(new MessageCommand('hello')
@@ -320,10 +318,10 @@ onDatabaseReady(async (db) => {
 ### 模板 4: 服务层设计
 ```typescript
 // plugins/my-plugin/src/services/my-service.ts
-import { useLogger, usePlugin } from 'zhin.js'
+import { usePlugin } from 'zhin.js'
 
 export class MyService {
-  private logger = useLogger()
+  private logger = usePlugin().logger
   private plugin = usePlugin()
   private cache = new Map<string, any>()
   
@@ -382,9 +380,10 @@ export class MyService {
    * 定时清理缓存
    */
   startCacheCleaner(intervalMs: number = 3600000): void {
-    this.plugin.cron(`0 0 */${intervalMs / 3600000} * * *`, async () => {
+    const { addCron } = usePlugin()
+    addCron(new Cron(`0 */${intervalMs / 3600000} * * *`, async () => {
       this.clearCache()
-    })
+    }))
   }
   
   /**
@@ -416,10 +415,9 @@ register({
 ### 模板 5: 中间件开发
 ```typescript
 // plugins/my-plugin/src/middlewares/index.ts
-import { addMiddleware, useLogger, usePlugin } from 'zhin.js'
+import { usePlugin } from 'zhin.js'
 
-const logger = useLogger()
-const plugin = usePlugin()
+const { addMiddleware, logger } = usePlugin()
 
 // 1. 日志中间件
 addMiddleware(async (message, next) => {
@@ -629,9 +627,9 @@ export function Dashboard() {
 ### 模板 7: HTTP API 集成
 ```typescript
 // plugins/my-plugin/src/api/index.ts
-import { useContext, useLogger } from 'zhin.js'
+import { usePlugin } from 'zhin.js'
 
-const logger = useLogger()
+const { useContext, logger } = usePlugin()
 
 useContext('router', 'database', (router, db) => {
   const users = db.model('plugin_users')
@@ -838,9 +836,11 @@ onDispose(() => {
 ### 4. 类型扩展
 ```typescript
 // ✅ 正确 - 扩展全局类型
-declare module '@zhin.js/types' {
-  interface GlobalContext {
-    myService: MyService
+declare module 'zhin.js' {
+  namespace Plugin {
+    interface Contexts {
+      myService: MyService
+    }
   }
   
   interface Models {

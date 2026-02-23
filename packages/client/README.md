@@ -70,8 +70,8 @@ addPage({
   key: 'settings',
   path: '/settings',
   title: '设置',
-  icon: 'Settings',
-  Component: SettingsPage
+  icon: <Settings className="w-5 h-5" />,
+  element: <SettingsPage />
 })
 
 // 删除页面
@@ -85,6 +85,8 @@ updatePage('/settings', {
   icon: <Settings className="w-5 h-5" />,
   element: <UpdatedSettingsPage />
 })
+
+// 注：RouteMenuItem 同时支持 element（ReactNode）和 Component（ComponentType）两种属性
 
 // 向后兼容的旧 API（已废弃）
 import { addRoute, removeRoute, updateRoute } from '@zhin.js/client'

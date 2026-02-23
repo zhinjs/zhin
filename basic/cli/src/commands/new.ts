@@ -161,7 +161,6 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
       '@zhin.js/client': 'workspace:*'
     },
     devDependencies: {
-      '@zhin.js/types': 'workspace:*',
       '@types/node': 'latest',
       '@types/react': 'latest',
       '@types/react-dom': 'latest',
@@ -238,7 +237,7 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
   
   // 创建服务端入口文件 src/index.ts
   const indexContent = `import {
-  useLogger,
+  usePlugin,
   useContext,
   onDispose,
   ZhinTool,
@@ -246,7 +245,7 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
 } from 'zhin.js';
 import path from 'node:path';
 
-const logger = useLogger();
+const { logger } = usePlugin();
 
 // ============================================================================
 // 工具定义示例 (使用 ZhinTool)

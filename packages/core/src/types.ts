@@ -361,6 +361,14 @@ export interface Tool {
    * 隐藏的工具不会出现在帮助列表中，但仍可被调用
    */
   hidden?: boolean;
+
+  /**
+   * 是否允许预执行（opt-in）
+   * 仅当设置为 true 时，Agent 才会在 LLM 调用前自动预执行此工具并将结果注入上下文。
+   * 适用于无副作用的只读工具（如获取系统状态、读取配置等）。
+   * 默认为 false，即不预执行。
+   */
+  preExecutable?: boolean;
 }
 
 /**

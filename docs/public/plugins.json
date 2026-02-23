@@ -736,8 +736,8 @@
     },
     {
       "name": "@zhin.js/types",
-      "displayName": "types",
-      "description": "Zhin types for typescript",
+      "displayName": "types (deprecated)",
+      "description": "Zhin types for typescript (已废弃，类型已迁移到 @zhin.js/core)",
       "author": "lc_cn",
       "isOfficial": true,
       "category": [],
@@ -745,7 +745,7 @@
       "npm": "https://www.npmjs.com/package/@zhin.js/types",
       "github": "",
       "homepage": "",
-      "tags": [],
+      "tags": ["deprecated"],
       "lastUpdate": "2025-11-17T15:12:30.927Z"
     }
   ],

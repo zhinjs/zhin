@@ -4,6 +4,7 @@ import { InitOptions, DATABASE_PACKAGES } from './types.js';
 import { createConfigFile, generateDatabaseEnvVars } from './config.js';
 import { generateAdapterEnvVars, getAdapterDependencies } from './adapter.js';
 import { generateAIEnvVars } from './ai.js';
+import { SOUL_MD_TEMPLATE, TOOLS_MD_TEMPLATE, AGENTS_MD_TEMPLATE } from './templates/bootstrap.js';
 
 export async function createWorkspace(projectPath: string, projectName: string, options: InitOptions): Promise<void> {
   await fs.ensureDir(projectPath);
@@ -59,7 +60,6 @@ export async function createWorkspace(projectPath: string, projectName: string, 
     },
     dependencies: {
       'zhin.js': 'latest',
-      "@zhin.js/types": "latest",
       '@zhin.js/http': 'latest',
       '@zhin.js/client': 'latest',
       '@zhin.js/console': 'latest',
@@ -87,6 +87,19 @@ export async function createWorkspace(projectPath: string, projectName: string, 
   
   // 创建 app 模块（内部会写入完整的 tsconfig.json）
   await createAppModule(projectPath, projectName, options);
+  
+  // 创建引导文件（SOUL.md, TOOLS.md, AGENTS.md）
+  await fs.writeFile(path.join(projectPath, 'SOUL.md'), SOUL_MD_TEMPLATE);
+  await fs.writeFile(path.join(projectPath, 'TOOLS.md'), TOOLS_MD_TEMPLATE);
+  await fs.writeFile(path.join(projectPath, 'AGENTS.md'), AGENTS_MD_TEMPLATE);
+  
+  // 创建内置 skill-creator 技能
+  const skillCreatorDir = path.join(projectPath, 'skills', 'skill-creator');
+  await fs.ensureDir(skillCreatorDir);
+  const skillCreatorPath = path.join(__dirname, '../template/skills/skill-creator/SKILL.md');
+  if (fs.existsSync(skillCreatorPath)) {
+    await fs.copy(skillCreatorPath, path.join(skillCreatorDir, 'SKILL.md'));
+  }
   
   // 创建 plugins 目录
   await fs.ensureDir(path.join(projectPath, 'plugins'));
@@ -556,7 +569,6 @@ NODE_ENV=production
       "jsxImportSource": "zhin.js",
       "types": [
         "@types/node",
-        "@zhin.js/types",
         "zhin.js",
         "@zhin.js/console",
         "@zhin.js/client",

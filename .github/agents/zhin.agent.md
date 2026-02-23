@@ -76,9 +76,11 @@ new MessageCommand('roll [sides:6]')     // 类型写错位置
 
 ```typescript
 // ✅ 正确 - 扩展全局类型
-declare module '@zhin.js/types' {
-  interface GlobalContext {
-    myService: MyService
+declare module 'zhin.js' {
+  namespace Plugin {
+    interface Contexts {
+      myService: MyService
+    }
   }
   interface RegisteredAdapters {
     myAdapter: Adapter<MyBot>
@@ -89,8 +91,10 @@ declare module '@zhin.js/types' {
 }
 
 // ❌ 错误 - 不会生效
-interface GlobalContext {
-  myService: MyService
+namespace Plugin {
+  interface Contexts {
+    myService: MyService
+  }
 }
 ```
 
@@ -100,10 +104,9 @@ interface GlobalContext {
 
 ```typescript
 // src/plugins/my-plugin.ts
-import { usePlugin, addCommand, MessageCommand, useLogger } from 'zhin.js'
+import { usePlugin, MessageCommand } from 'zhin.js'
 
-const plugin = usePlugin()
-const logger = useLogger()
+const { addCommand, logger } = usePlugin()
 
 // 简单命令
 addCommand(new MessageCommand('ping')
@@ -137,15 +140,9 @@ logger.info('插件已加载')
 
 ```typescript
 // src/plugins/database-plugin.ts
-import { 
-  usePlugin, 
-  addCommand, 
-  MessageCommand,
-  register,
-  useContext,
-  defineModel,
-  onDatabaseReady
-} from 'zhin.js'
+import { usePlugin, MessageCommand } from 'zhin.js'
+
+const { addCommand, defineModel, useContext } = usePlugin()
 
 // 1. 定义数据库模型
 defineModel('users', {
@@ -156,7 +153,7 @@ defineModel('users', {
 })
 
 // 2. 等待数据库就绪
-onDatabaseReady(async (db) => {
+useContext('database', async (db) => {
   const users = db.model('users')
   
   // 添加命令
@@ -201,9 +198,9 @@ onDatabaseReady(async (db) => {
 
 ```typescript
 // src/plugins/api-plugin.ts
-import { useContext, useLogger } from 'zhin.js'
+import { usePlugin } from 'zhin.js'
 
-const logger = useLogger()
+const { useContext, logger } = usePlugin()
 
 useContext('router', (router) => {
   // GET 请求
@@ -280,10 +277,10 @@ addPage({
 
 ```typescript
 // src/plugins/my-plugin/index.ts
-import { useContext, useLogger } from 'zhin.js'
+import { usePlugin } from 'zhin.js'
 import path from 'node:path'
 
-const logger = useLogger()
+const { useContext, logger } = usePlugin()
 
 useContext('web', (web) => {
   // 添加客户端入口文件
@@ -320,9 +317,9 @@ interface ComponentContext {
 **1️⃣ 函数式组件（推荐）**：
 ```typescript
 // src/plugins/component-plugin.ts
-import { addComponent, defineComponent, useLogger, ComponentContext } from 'zhin.js'
+import { usePlugin, defineComponent, ComponentContext } from 'zhin.js'
 
-const logger = useLogger()
+const { addComponent, addCommand, logger } = usePlugin()
 
 // ✅ 方式1: 直接添加函数（自动使用函数名）
 addComponent(async function UserCard(
@@ -415,9 +412,9 @@ type MessageMiddleware<P extends RegisteredAdapter=RegisteredAdapter> =
 **基础示例**：
 ```typescript
 // src/plugins/middleware-plugin.ts
-import { addMiddleware, useLogger } from 'zhin.js'
+import { usePlugin } from 'zhin.js'
 
-const logger = useLogger()
+const { addMiddleware, logger } = usePlugin()
 
 // 1️⃣ 日志中间件（洋葱模型 - before/after）
 addMiddleware(async (message, next) => {
@@ -529,102 +526,87 @@ class Cron {
 
 **Cron 表达式格式**：
 ```
-标准格式: "秒 分 时 日 月 周"
+标准格式: "分 时 日 月 周" (5 字段)
 
 字段说明:
-- 秒: 0-59
 - 分: 0-59
 - 时: 0-23
 - 日: 1-31
 - 月: 1-12 (或 JAN-DEC)
 - 周: 0-7 (0和7都表示周日，或 SUN-SAT)
 
+> croner 也支持 6 字段格式 "秒 分 时 日 月 周"，但推荐使用 5 字段格式。
+
 特殊字符:
 - * (星号): 匹配任意值
 - - (横线): 表示范围，如 1-5
 - , (逗号): 表示列表，如 1,3,5
-- / (斜杠): 表示步长，如 0/15 表示每15分钟
+- / (斜杠): 表示步长，如 */15 表示每15分钟
 ```
 
 **基础示例**：
 ```typescript
 // src/plugins/cron-plugin.ts
-import { usePlugin, useLogger } from 'zhin.js'
+import { usePlugin, Cron } from 'zhin.js'
 
-const plugin = usePlugin()
-const logger = useLogger()
+const { addCron, useContext, logger } = usePlugin()
 
 // 1️⃣ 每天定时任务
-plugin.cron('0 0 0 * * *', async () => {
+addCron(new Cron('0 0 * * *', async () => {
   logger.info('每天午夜执行')
   // 执行每日统计、清理等任务
-})
+}))
 
 // 2️⃣ 每小时任务
-plugin.cron('0 0 * * * *', async () => {
+addCron(new Cron('0 * * * *', async () => {
   logger.info('每小时执行')
   // 定时检查、同步数据等
-})
+}))
 
 // 3️⃣ 每15分钟任务
-plugin.cron('0 */15 * * * *', async () => {
+addCron(new Cron('*/15 * * * *', async () => {
   logger.info('每15分钟执行一次')
-})
+}))
 
 // 4️⃣ 工作日早上9点
-plugin.cron('0 0 9 * * 1-5', async () => {
+addCron(new Cron('0 9 * * 1-5', async () => {
   logger.info('工作日早上9点提醒')
   // 发送每日消息
-})
+}))
 
 // 5️⃣ 每周一早上10点
-plugin.cron('0 0 10 * * 1', async () => {
+addCron(new Cron('0 10 * * 1', async () => {
   logger.info('周一早上10点执行')
   // 周报生成等
-})
+}))
 
 // 6️⃣ 每月1号凌晨
-plugin.cron('0 0 0 1 * *', async () => {
+addCron(new Cron('0 0 1 * *', async () => {
   logger.info('每月1号执行')
   // 月度统计
-})
+}))
 ```
 
 **高级用法**：
 ```typescript
-import { usePlugin, useLogger, useContext } from 'zhin.js'
+import { usePlugin, Cron } from 'zhin.js'
 
-const plugin = usePlugin()
-const logger = useLogger()
+const { addCron, useContext, logger } = usePlugin()
 
 // 1️⃣ 带数据库操作的定时任务
 useContext('database', (db) => {
-  plugin.cron('0 0 2 * * *', async () => {
+  addCron(new Cron('0 2 * * *', async () => {
     // 凌晨2点清理过期数据
     const model = db.model('logs')
     const threeDaysAgo = Date.now() - 3 * 24 * 60 * 60 * 1000
     
     await model.delete({ timestamp: { $lt: threeDaysAgo } })
     logger.info('已清理过期日志')
-  })
+  }))
 })
 
-// 2️⃣ 定时发送消息
-plugin.cron('0 0 12 * * *', async () => {
-  // 每天中午12点发送消息
-  await plugin.sendMessage({
-    context: 'icqq',
-    bot: '123456',
-    id: '群号',
-    type: 'group',
-    content: '中午好！该吃饭了！'
-  })
-})
-
-// 3️⃣ 手动控制定时任务
-import { Cron } from 'zhin.js'
-
-const dailyTask = new Cron('0 0 0 * * *', async () => {
+// 2️⃣ 手动控制定时任务
+const dailyTask = new Cron('0 0 * * *', async () => {
   logger.info('每日任务执行')
 })
 
@@ -635,50 +617,41 @@ dailyTask.run()
 dailyTask.stop()
 
 // 获取下次执行时间
-const nextTime = dailyTask.getNextExecut行时间()
+const nextTime = dailyTask.getNextExecutionTime()
 logger.info(`下次执行时间: ${nextTime}`)
 
 // 销毁任务（释放资源）
 dailyTask.dispose()
 
-// 4️⃣ 在插件中使用（自动管理生命周期）
-plugin.cron('0 */5 * * * *', async () => {
+// 3️⃣ 在插件中使用（自动管理生命周期）
+addCron(new Cron('*/5 * * * *', async () => {
   // 每5分钟执行
   logger.info('定时检查')
-})
-
+}))
 // 插件销毁时，所有 cron 任务会自动清理
 ```
 
 **常用 Cron 表达式示例**：
 ```typescript
-'0 0 0 * * *'      // 每天午夜
-'0 0 */2 * * *'    // 每2小时
-'0 */30 * * * *'   // 每30分钟
-'0 0 12 * * *'     // 每天中午12点
-'0 0 0 * * 0'      // 每周日午夜
-'0 0 0 1 * *'      // 每月1号
-'0 0 9 * * 1-5'    // 工作日早上9点
-'0 0 0 1 1 *'      // 每年1月1日
-'*/10 * * * * *'   // 每10秒（包含秒字段）
+'0 0 * * *'        // 每天午夜
+'0 */2 * * *'      // 每2小时
+'*/30 * * * *'     // 每30分钟
+'0 12 * * *'       // 每天中午12点
+'0 0 * * 0'        // 每周日午夜
+'0 0 1 * *'        // 每月1号
+'0 9 * * 1-5'      // 工作日早上9点
+'0 0 1 1 *'        // 每年1月1日
 ```
 
 **错误处理**：
 ```typescript
-plugin.cron('0 0 * * * *', async () => {
+addCron(new Cron('0 * * * *', async () => {
   try {
     // 执行可能出错的任务
     await someRiskyOperation()
   } catch (error) {
     logger.error('定时任务执行失败:', error)
-    // 可以发送告警通知
-    await plugin.sendMessage({
-      context: 'icqq',
-      bot: 'admin-bot',
-      id: 'admin-id',
-      type: 'private',
-      content: `定时任务失败: ${error.message}`
-    })
+  }
   }
 })
 ```
@@ -709,8 +682,7 @@ import {
   SendOptions,
   MessageElement,
   segment,
-  Plugin,
-  useLogger
+  Plugin
 } from 'zhin.js'
 
 // 1️⃣ 定义配置接口
@@ -751,7 +723,7 @@ class MyPlatformBot implements Bot<MyPlatformConfig, PlatformMessage> {
     private plugin: Plugin,
     public config: MyPlatformConfig
   ) {
-    this.logger = useLogger()
+    this.logger = usePlugin().logger
   }
   
   // 连接到平台
@@ -1002,13 +974,13 @@ registerAdapter(myPlatformAdapter)
 export default myPlatformAdapter
 
 // 6️⃣ 扩展类型声明（使类型安全）
-declare module '@zhin.js/types' {
+declare module 'zhin.js' {
   interface RegisteredAdapters {
     'my-platform': Adapter<MyPlatformBot>
   }
   
   // 如果有特定的消息字段，可以扩展
-  interface GlobalModels {
+  interface Models {
     my_platform_data: {
       user_id: string
       data: any
@@ -1101,7 +1073,7 @@ useContext('database', (db) => {
 - [ ] 所有 import 都使用了 `.js` 扩展名
 - [ ] MessageCommand 参数访问使用 `result.params` 而非 `result.args`
 - [ ] 命令模板格式正确 `<name:type>` 或 `[name:type]`
-- [ ] 如果扩展类型，使用了 `declare module '@zhin.js/types'`
+- [ ] 如果扩展类型，使用了 `declare module 'zhin.js'`
 - [ ] 异步操作正确使用 `async/await`
 - [ ] 有资源的地方提供了清理函数
 - [ ] 代码没有使用 `// ...` 占位符，都是完整实现

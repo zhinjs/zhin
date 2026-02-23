@@ -84,9 +84,9 @@ Plugin 层 (业务逻辑)
 插件文件通常放在 \`src/plugins/\` 目录：
 
 \`\`\`typescript
-import { addCommand, MessageCommand, useLogger } from 'zhin.js'
+import { usePlugin, MessageCommand } from 'zhin.js'
 
-const logger = useLogger()
+const { addCommand, logger } = usePlugin()
 
 addCommand(new MessageCommand('hello <name:text>')
   .action(async (message, result) => {

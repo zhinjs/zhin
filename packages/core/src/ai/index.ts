@@ -126,3 +126,61 @@ export type {
 
 // ── 初始化 ──
 export { initAIModule } from './init.js';
+
+// ── Hook 系统 (借鉴 OpenClaw) ──
+export {
+  registerAIHook,
+  unregisterAIHook,
+  triggerAIHook,
+  createAIHookEvent,
+  clearAIHooks,
+  getRegisteredAIHookKeys,
+} from './hooks.js';
+export type {
+  AIHookEvent,
+  AIHookEventType,
+  AIHookHandler,
+  MessageReceivedEvent,
+  MessageSentEvent,
+  SessionCompactEvent,
+  SessionNewEvent,
+  AgentBootstrapEvent,
+  ToolCallEvent,
+} from './hooks.js';
+
+// ── 会话压缩 (借鉴 OpenClaw) ──
+export {
+  estimateTokens,
+  estimateMessagesTokens,
+  splitMessagesByTokenShare,
+  chunkMessagesByMaxTokens,
+  computeAdaptiveChunkRatio,
+  resolveContextWindowTokens,
+  evaluateContextWindowGuard,
+  summarizeWithFallback,
+  summarizeInStages,
+  pruneHistoryForContext,
+  compactSession,
+  DEFAULT_CONTEXT_TOKENS,
+} from './compaction.js';
+export type {
+  ContextWindowSource,
+  ContextWindowInfo,
+  ContextWindowGuardResult,
+  PruneResult,
+} from './compaction.js';
+
+// ── 引导文件管理 (借鉴 OpenClaw) ──
+export {
+  loadBootstrapFiles,
+  buildContextFiles,
+  buildBootstrapContextSection,
+  loadSoulPersona,
+  loadToolsGuide,
+  loadAgentsMemory,
+  clearBootstrapCache,
+} from './bootstrap.js';
+export type {
+  BootstrapFile,
+  ContextFile,
+} from './bootstrap.js';

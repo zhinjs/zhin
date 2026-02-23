@@ -75,10 +75,12 @@ class Router extends KoaRouter {
 
 ```typescript
 declare module 'zhin.js' {
-  interface GlobalContext {
-    koa: Koa,           // Koa应用实例
-    router: Router,     // 路由器实例  
-    server: Server      // HTTP服务器实例
+  namespace Plugin {
+    interface Contexts {
+      koa: Koa,           // Koa应用实例
+      router: Router,     // 路由器实例  
+      server: Server      // HTTP服务器实例
+    }
   }
 }
 ```

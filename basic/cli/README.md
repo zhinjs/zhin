@@ -23,6 +23,8 @@ zhin new [plugin-name] [options]
 ```
 
 **选项：**
+- `--type <type>`: 插件类型（`normal` | `service` | `adapter`），默认 `normal`
+- `--is-official`: 是否为官方插件（使用 `@zhin.js/` 前缀）
 - `--skip-install`: 跳过依赖安装
 
 **生成的插件结构：**
@@ -76,7 +78,7 @@ zhin dev [options]
 - 📊 **性能监控**: 实时性能统计
 
 **选项：**
-- `-p, --port [port]`: HTTP 服务端口，默认 8086
+- `-p, --port [port]`: HMR 服务端口，默认 3000
 - `--verbose`: 显示详细日志输出
 - `--bun`: 使用 bun 运行时（默认使用 tsx）
 
@@ -163,6 +165,8 @@ zhin build [plugin] [options]
 
 **选项：**
 - `--clean`: 构建前清理输出目录（`lib/` 和 `dist/`）
+- `--production`: 生产构建，启用 Tree Shaking（默认开启）
+- `--analyze`: 分析包体积
 
 **功能：**
 - 📦 构建插件的 app 代码（TypeScript → lib/）
@@ -329,6 +333,201 @@ process.exit(51); // 特殊退出码，会触发自动重启
 **PID 文件管理：**
 - 开发模式：`.zhin-dev.pid`
 - 生产模式：`.zhin.pid`
+
+### pub - 发布插件
+
+将插件包发布到 npm：
+
+```bash
+zhin pub [plugin-name] [options]
+```
+
+**选项：**
+- `--tag <tag>`: 发布标签，默认 `latest`
+- `--access <access>`: 访问级别（`public` | `restricted`），默认 `public`
+- `--registry <url>`: 自定义 npm registry
+- `--dry-run`: 试运行，不实际发布
+- `--skip-build`: 跳过构建步骤
+
+**使用示例：**
+```bash
+# 交互式选择要发布的插件
+zhin pub
+
+# 指定插件发布
+zhin pub my-plugin
+
+# 试运行（不实际发布）
+zhin pub my-plugin --dry-run
+
+# 使用自定义 registry
+zhin pub my-plugin --registry https://registry.npmmirror.com
+```
+
+### install / add - 安装插件
+
+安装插件包（npm 或 git 仓库）：
+
+```bash
+zhin install [plugin] [options]
+zhin add [plugin] [options]   # 别名
+```
+
+**选项：**
+- `-S, --save`: 安装到 dependencies（默认）
+- `-D, --save-dev`: 安装到 devDependencies
+- `-g, --global`: 全局安装
+
+**支持的安装来源：**
+- npm 包：`zhin install @zhin.js/adapter-kook`
+- GitHub 仓库：`zhin install github:user/repo`
+- Git URL：`zhin install git+https://github.com/user/repo.git`
+
+### search - 搜索插件
+
+在 npm 上搜索 Zhin.js 插件：
+
+```bash
+zhin search [keyword] [options]
+```
+
+**选项：**
+- `-c, --category <category>`: 按分类搜索（`utility` | `service` | `game` | `adapter` | `admin` | `ai`）
+- `-l, --limit <number>`: 限制结果数量，默认 20
+- `--official`: 仅显示官方插件
+
+**使用示例：**
+```bash
+# 搜索所有 Zhin 插件
+zhin search
+
+# 按关键词搜索
+zhin search music
+
+# 仅显示官方插件
+zhin search --official
+
+# 按分类搜索，限制 5 个结果
+zhin search -c adapter -l 5
+```
+
+### info - 查看插件信息
+
+查看 npm 上某个插件的详细信息：
+
+```bash
+zhin info <package>
+```
+
+显示内容包括：名称、版本、描述、作者、发布时间、标签、主页、仓库地址、依赖等。
+
+### doctor - 健康检查
+
+检查系统环境和项目配置，诊断常见问题：
+
+```bash
+zhin doctor [options]
+```
+
+**别名：** `zhin health`
+
+**选项：**
+- `--fix`: 自动修复可修复的问题（如创建默认配置文件、引导文件、`.env` 文件等）
+
+**检查项目：**
+- Node.js 版本（>= 18）
+- pnpm 安装
+- 配置文件（`zhin.config.yml` 等）
+- 引导文件（`SOUL.md`、`TOOLS.md`、`AGENTS.md`）
+- `package.json` 中是否安装 `zhin.js`
+- `node_modules` 目录
+- 端口 8086 占用
+- TypeScript 安装
+- 环境变量文件
+
+### setup - 配置向导
+
+交互式引导配置项目：
+
+```bash
+zhin setup [options]
+```
+
+**选项：**
+- `--bootstrap`: 仅配置引导文件（SOUL.md、TOOLS.md、AGENTS.md）
+- `--database`: 仅配置数据库（SQLite / MySQL / PostgreSQL）
+- `--adapters`: 仅配置适配器（Sandbox、QQ、KOOK、Discord 等）
+- `--ai`: 仅配置 AI（Ollama、OpenAI、DeepSeek 等）
+
+不带选项时，运行完整配置向导。
+
+### config - 配置管理
+
+命令行管理配置文件（支持 YAML / JSON）：
+
+```bash
+zhin config <subcommand>
+```
+
+**子命令：**
+
+| 子命令            | 说明                                           |
+| ----------------- | ---------------------------------------------- |
+| `config list`     | 显示所有配置（别名 `ls`）                      |
+| `config get <key>`| 获取配置项（支持嵌套路径，如 `ai.enabled`）    |
+| `config set <key> <value>` | 设置配置项（值支持 JSON 格式）       |
+| `config delete <key>` | 删除配置项（别名 `del`）                   |
+| `config path`     | 显示配置文件路径                               |
+
+**使用示例：**
+```bash
+# 查看所有配置
+zhin config list
+
+# 获取某项
+zhin config get ai.enabled
+
+# 修改配置
+zhin config set http.port 3000
+zhin config set ai.enabled true
+
+# 删除配置
+zhin config del ai.trigger.prefixes
+
+# 查看配置文件路径
+zhin config path
+```
+
+### onboarding - 新手引导
+
+新手快速上手教程，包含环境检查和交互式指引：
+
+```bash
+zhin onboarding [options]
+```
+
+**选项：**
+- `-i, --interactive`: 交互式引导模式（创建项目、配置、检查等）
+- `-q, --quick`: 仅显示快速开始指南
+
+默认模式显示完整引导：欢迎页、环境检查、快速开始、常用命令、学习资源。
+
+### install-service / uninstall-service - 系统服务
+
+将机器人注册为系统服务，实现开机自启和守护进程监督：
+
+```bash
+zhin install-service [options]
+zhin uninstall-service
+```
+
+**选项：**
+- `--user`: 以用户模式安装（仅 systemd）
+
+**支持平台：**
+- Linux: systemd（用户模式 / 系统模式）
+- macOS: launchd
+- Windows: NSSM
 
 ## 故障排查
 

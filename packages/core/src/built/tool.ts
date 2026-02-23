@@ -187,6 +187,7 @@ export class ZhinTool {
   #commandConfig: Omit<Tool.CommandConfig, 'enabled'> = {};
   #hidden: boolean = false;
   #source?: string;
+  #preExecutable: boolean = false;
 
   constructor(name: string) {
     this.#name = name;
@@ -251,6 +252,16 @@ export class ZhinTool {
 
   hidden(value: boolean = true): this {
     this.#hidden = value;
+    return this;
+  }
+
+  /**
+   * 标记此工具允许被预执行（opt-in）。
+   * 仅适用于无副作用的只读工具（如获取系统状态、读取配置等）。
+   * 默认为 false，即不预执行。
+   */
+  preExec(value: boolean = true): this {
+    this.#preExecutable = value;
     return this;
   }
 
@@ -353,6 +364,7 @@ export class ZhinTool {
     if (this.#hidden) tool.hidden = this.#hidden;
     if (this.#source) tool.source = this.#source;
     if (this.#keywords.length > 0) tool.keywords = this.#keywords;
+    if (this.#preExecutable) tool.preExecutable = true;
 
     if (!this.#commandCallback) {
       tool.command = false;

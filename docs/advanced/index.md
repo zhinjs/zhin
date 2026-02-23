@@ -6,13 +6,15 @@
 
 集成大语言模型，让机器人具备智能对话和工具调用能力：
 
-```typescript
-// zhin.config.yml 中启用 AI
-// ai:
-//   enabled: true
-//   providers:
-//     - type: openai
-//       model: gpt-4o
+```yaml
+# zhin.config.yml 中启用 AI
+ai:
+  enabled: true
+  defaultProvider: ollama
+  providers:
+    ollama:
+      baseURL: "http://localhost:11434"
+      model: "qwen2.5:7b"
 ```
 
 [了解更多 →](./ai)

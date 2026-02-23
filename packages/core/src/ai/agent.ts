@@ -416,6 +416,10 @@ export class Agent {
 
         // ── 分支 1: 模型想调用工具 ──
         if (choice.message.tool_calls?.length) {
+          const callSummary = choice.message.tool_calls.map(
+            (tc: any) => `${tc.function.name}(${tc.function.arguments})`
+          ).join(', ');
+          logger.info(`[第${state.iterations}轮] 工具调用: ${callSummary}`);
           this.emit('thinking', '正在执行工具调用...');
 
           // 当存在 tool_calls 时，content 通常是模型的内部思考或原始 JSON，
@@ -460,6 +464,8 @@ export class Agent {
 
           // 将工具结果加入消息历史
           for (const { toolCall, result } of results) {
+            const resultPreview = result.length > 200 ? result.slice(0, 200) + '...' : result;
+            logger.info(`[第${state.iterations}轮] 工具结果 ${toolCall.function.name}: ${resultPreview}`);
             state.messages.push({
               role: 'tool',
               content: result,

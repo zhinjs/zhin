@@ -251,8 +251,8 @@ import { toolToCommand, commandToTool } from 'zhin.js'
 // Tool -> Command
 const command = toolToCommand(myTool)
 
-// Command -> Tool
-const tool = commandToTool(myCommand)
+// Command -> Tool（第二个参数为插件名）
+const tool = commandToTool(myCommand, 'my-plugin')
 ```
 
 ## 去重机制
