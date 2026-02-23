@@ -136,6 +136,9 @@ export type BeforeSendHandler=(options:SendOptions)=>MaybePromise<SendOptions|vo
 /**
  * JSON Schema 定义，用于描述工具参数
  */
+/** ToolContext 中可自动注入的字段名 */
+export type ContextInjectableKey = 'platform' | 'botId' | 'sceneId' | 'senderId' | 'scope';
+
 export interface ToolJsonSchema {
   type: string;
   properties?: Record<string, ToolJsonSchema & { 
@@ -147,6 +150,12 @@ export interface ToolJsonSchema {
   enum?: any[];
   description?: string;
   default?: any;
+  /**
+   * 自动从 ToolContext 注入的字段名。
+   * 设置后该参数对 AI 隐藏，执行时自动从上下文填充。
+   * 例如: contextKey: 'botId' → 执行时自动填入 context.botId
+   */
+  contextKey?: ContextInjectableKey;
   [key: string]: any;
 }
 
@@ -174,6 +183,8 @@ export interface PropertySchema<T = any> extends ToolJsonSchema {
   default?: T;
   enum?: T extends string | number ? T[] : never;
   paramType?: 'text' | 'number' | 'boolean' | 'rest';
+  /** 自动从 ToolContext 注入的字段名（继承自 ToolJsonSchema） */
+  contextKey?: ContextInjectableKey;
 }
 
 /**

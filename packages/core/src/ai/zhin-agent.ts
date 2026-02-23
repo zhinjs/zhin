@@ -501,8 +501,10 @@ ${preData ? `\n已获取数据：${preData}\n` : ''}`;
   private buildContextHint(context: ToolContext, _content: string): string {
     const parts: string[] = [];
     if (context.platform) parts.push(`平台:${context.platform}`);
+    if (context.botId) parts.push(`Bot:${context.botId}`);
     if (context.senderId) parts.push(`用户:${context.senderId}`);
-    if (context.scope) parts.push(`场景:${context.scope}`);
+    if (context.scope) parts.push(`场景类型:${context.scope}`);
+    if (context.sceneId) parts.push(`场景ID:${context.sceneId}`);
     if (parts.length === 0) return '';
     return `\n上下文: ${parts.join(' | ')}`;
   }
@@ -559,6 +561,10 @@ ${preData ? `\n已获取数据：${preData}\n` : ''}`;
 
       for (const skill of skills) {
         for (const tool of skill.tools) {
+          // 平台过滤：确保 Skill 中的工具也只保留当前平台支持的
+          if (tool.platforms?.length && context.platform && !tool.platforms.includes(context.platform)) continue;
+          // 场景过滤
+          if (tool.scopes?.length && context.scope && !tool.scopes.includes(context.scope)) continue;
           // 权限检查
           const toolPerm = tool.permissionLevel ? (PERM_MAP[tool.permissionLevel] ?? 0) : 0;
           if (toolPerm > callerPerm) continue;
@@ -629,17 +635,74 @@ ${preData ? `\n已获取数据：${preData}\n` : ''}`;
   // ── 辅助方法 ─────────────────────────────────────────────────────────
 
   /**
-   * 将 Tool 转为 AgentTool，注入 ToolContext 以确保执行时鉴权生效
+   * 将 Tool 转为 AgentTool，注入 ToolContext 以确保执行时鉴权生效。
+   *
+   * 当参数定义了 contextKey 时：
+   *   1. 从 AI 可见的 parameters 中移除该参数（减少 token、避免填错）
+   *   2. 执行时自动从 ToolContext 注入对应值，并按声明类型做类型转换
    */
   private toAgentTool(tool: Tool, context?: ToolContext): AgentTool {
     const originalExecute = tool.execute;
+
+    // ── 收集需要自动注入的参数 ──────────────────────────────────
+    const contextInjections: Array<{
+      paramName: string;
+      contextKey: string;
+      paramType: string; // 目标参数的 JSON Schema type，用于类型转换
+    }> = [];
+    let cleanParameters: any = tool.parameters;
+
+    if (context && tool.parameters?.properties) {
+      const props = tool.parameters.properties as Record<string, any>;
+      const filteredProps: Record<string, any> = {};
+      const filteredRequired: string[] = [];
+
+      for (const [key, schema] of Object.entries(props)) {
+        if (schema.contextKey && (context as any)[schema.contextKey] != null) {
+          // 记录需要注入的映射
+          contextInjections.push({
+            paramName: key,
+            contextKey: schema.contextKey,
+            paramType: schema.type || 'string',
+          });
+        } else {
+          // 保留给 AI 的参数
+          filteredProps[key] = schema;
+          if (tool.parameters.required?.includes(key)) {
+            filteredRequired.push(key);
+          }
+        }
+      }
+
+      if (contextInjections.length > 0) {
+        cleanParameters = {
+          ...tool.parameters,
+          properties: filteredProps,
+          required: filteredRequired.length > 0 ? filteredRequired : undefined,
+        };
+      }
+    }
+
+    // ── 组装 AgentTool ──────────────────────────────────────────
     const at: AgentTool = {
       name: tool.name,
       description: tool.description,
-      parameters: tool.parameters as any,
-      // 包装 execute，将 ToolContext 注入第二参数，确保工具内部的鉴权逻辑能正常执行
+      parameters: cleanParameters as any,
       execute: context
-        ? (args: Record<string, any>) => originalExecute(args, context)
+        ? (args: Record<string, any>) => {
+            // 自动注入 context 值，按目标 type 做类型转换
+            const enrichedArgs = { ...args };
+            for (const { paramName, contextKey, paramType } of contextInjections) {
+              let value = (context as any)[contextKey];
+              if (paramType === 'number' && typeof value === 'string') {
+                value = Number(value);
+              } else if (paramType === 'string' && typeof value !== 'string') {
+                value = String(value);
+              }
+              enrichedArgs[paramName] = value;
+            }
+            return originalExecute(enrichedArgs, context);
+          }
         : originalExecute,
     };
     if (tool.tags?.length) at.tags = tool.tags;
