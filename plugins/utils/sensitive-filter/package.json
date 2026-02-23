@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/sensitive-filter",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "Content moderation plugin for Zhin.js - filters sensitive words",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",

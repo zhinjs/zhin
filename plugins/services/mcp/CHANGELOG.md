@@ -1,5 +1,14 @@
 # @zhin.js/mcp
 
+## 1.0.11
+
+### Patch Changes
+
+- 05a514d: fix: ai 增强,cli 增强
+- Updated dependencies [05a514d]
+  - @zhin.js/http@1.0.20
+  - zhin.js@1.0.28
+
 ## 1.0.10
 
 ### Patch Changes

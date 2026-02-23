@@ -1,5 +1,14 @@
 # @zhin.js/core
 
+## 1.0.28
+
+### Patch Changes
+
+- 05a514d: fix: ai 增强,cli 增强
+  - @zhin.js/database@1.0.15
+  - @zhin.js/logger@0.1.12
+  - @zhin.js/schema@1.0.12
+
 ## 1.0.27
 
 ### Patch Changes
