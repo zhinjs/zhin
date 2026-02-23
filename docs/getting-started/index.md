@@ -67,7 +67,7 @@ windows（powershell） 下使用：
 ```powershell
 irm https://zhin.js.org/install.ps1 | iex
 ```
-
+:::
 脚本会自动完成以下检查：
 
 - 检测 Node.js 版本（>= 20.19.0 或 >= 22.12.0）
