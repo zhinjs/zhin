@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.24
+
+### Patch Changes
+
+- 05a514d: fix: ai 增强,cli 增强
+
 ## 1.0.23
 
 ### Patch Changes

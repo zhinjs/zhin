@@ -1,5 +1,13 @@
 # @zhin.js/http
 
+## 1.0.20
+
+### Patch Changes
+
+- 05a514d: fix: ai 增强,cli 增强
+  - zhin.js@1.0.28
+  - @zhin.js/schema@1.0.12
+
 ## 1.0.19
 
 ### Patch Changes

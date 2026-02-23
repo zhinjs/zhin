@@ -1,5 +1,11 @@
 # @zhin.js/client
 
+## 1.0.10
+
+### Patch Changes
+
+- 05a514d: fix: ai 增强,cli 增强
+
 ## 1.0.9
 
 ### Patch Changes
