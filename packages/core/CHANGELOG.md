@@ -1,5 +1,14 @@
 # @zhin.js/core
 
+## 1.0.29
+
+### Patch Changes
+
+- 4ec9176: fix: ai
+  - @zhin.js/database@1.0.16
+  - @zhin.js/logger@0.1.13
+  - @zhin.js/schema@1.0.13
+
 ## 1.0.28
 
 ### Patch Changes
