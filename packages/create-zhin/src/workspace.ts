@@ -1,10 +1,13 @@
 import fs from 'fs-extra';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { InitOptions, DATABASE_PACKAGES } from './types.js';
 import { createConfigFile, generateDatabaseEnvVars } from './config.js';
 import { generateAdapterEnvVars, getAdapterDependencies } from './adapter.js';
 import { generateAIEnvVars } from './ai.js';
 import { SOUL_MD_TEMPLATE, TOOLS_MD_TEMPLATE, AGENTS_MD_TEMPLATE } from './templates/bootstrap.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export async function createWorkspace(projectPath: string, projectName: string, options: InitOptions): Promise<void> {
   await fs.ensureDir(projectPath);
