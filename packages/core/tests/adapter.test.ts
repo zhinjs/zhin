@@ -415,7 +415,7 @@ describe('Adapter Core Functionality', () => {
           name: 'dispatcher',
           description: 'mock dispatcher',
           value: {
-            dispatch: (msg: any) => { dispatchCalled = true },
+            dispatch: (msg: any) => { dispatchCalled = true; return Promise.resolve() },
           },
         } as any)
 

@@ -88,22 +88,21 @@ describe('create-zhin config', () => {
   })
 
   describe('generateDatabaseConfig', () => {
-    it('should generate TypeScript config for SQLite', () => {
+    it('should generate YAML config for SQLite with mode', () => {
       const config: DatabaseConfig = {
         dialect: 'sqlite',
         filename: './data/bot.db',
         mode: 'wal'
       }
       
-      const tsConfig = generateDatabaseConfig(config, 'ts')
+      const yamlConfig = generateDatabaseConfig(config, 'yaml')
       
-      expect(tsConfig).toContain('database:')
-      expect(tsConfig).toContain('"dialect": "sqlite"')
-      expect(tsConfig).toContain('"filename": "./data/bot.db"')
-      expect(tsConfig).toContain('"mode": "wal"')
+      expect(yamlConfig).toContain('dialect: sqlite')
+      expect(yamlConfig).toContain('filename: ./data/bot.db')
+      expect(yamlConfig).toContain('mode: wal')
     })
 
-    it('should generate TypeScript config for MySQL', () => {
+    it('should generate YAML config for MySQL', () => {
       const config: DatabaseConfig = {
         dialect: 'mysql',
         host: 'localhost',
@@ -113,12 +112,11 @@ describe('create-zhin config', () => {
         database: 'test_db'
       }
       
-      const tsConfig = generateDatabaseConfig(config, 'ts')
+      const yamlConfig = generateDatabaseConfig(config, 'yaml')
       
-      expect(tsConfig).toContain('database:')
-      expect(tsConfig).toContain("dialect: 'mysql'")
-      expect(tsConfig).toContain('env.DB_HOST')
-      expect(tsConfig).toContain('env.DB_PORT')
+      expect(yamlConfig).toContain('dialect: mysql')
+      expect(yamlConfig).toContain('${DB_HOST}')
+      expect(yamlConfig).toContain('${DB_PORT}')
     })
 
     it('should generate YAML config for SQLite', () => {
@@ -145,16 +143,16 @@ describe('create-zhin config', () => {
       expect(jsonConfig).toContain('"dialect": "sqlite"')
     })
 
-    it('should generate JavaScript config', () => {
+    it('should generate TOML config for SQLite', () => {
       const config: DatabaseConfig = {
         dialect: 'sqlite',
         filename: './data/bot.db'
       }
       
-      const jsConfig = generateDatabaseConfig(config, 'js')
+      const tomlConfig = generateDatabaseConfig(config, 'toml')
       
-      expect(jsConfig).toContain('database:')
-      expect(jsConfig).toContain('"dialect": "sqlite"')
+      expect(tomlConfig).toContain('[database]')
+      expect(tomlConfig).toContain('dialect = "sqlite"')
     })
   })
 })
