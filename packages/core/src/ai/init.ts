@@ -43,6 +43,7 @@ import {
 import { AI_MESSAGE_MODEL, AI_SUMMARY_MODEL } from './conversation-memory.js';
 import { AI_USER_PROFILE_MODEL } from './user-profile.js';
 import { AI_FOLLOWUP_MODEL } from './follow-up.js';
+import { PersistentCronEngine, setCronManager, createCronTools } from './cron-engine.js';
 import { renderToPlainText, type OutputElement } from './output.js';
 import type { AIConfig, ContentPart } from './types.js';
 
@@ -203,8 +204,32 @@ export function initAIModule(): void {
       });
     });
 
+    // 持久化定时任务引擎：加载 data/cron-jobs.json，到点用 prompt 调用 Agent；并暴露给 AI 管理（list/add/remove/pause/resume）
+    let cronEngine: PersistentCronEngine | null = null;
+    const cronFeature = root.inject('cron' as any);
+    if (cronFeature && typeof cronFeature.add === 'function') {
+      const dataDir = path.join(process.cwd(), 'data');
+      const addCron = (c: any) => cronFeature.add(c, 'cron-engine');
+      const runner = async (prompt: string) => {
+        if (!zhinAgentInstance) return;
+        await zhinAgentInstance.process(prompt, {
+          platform: 'cron',
+          senderId: 'system',
+          sceneId: 'cron',
+        });
+      };
+      cronEngine = new PersistentCronEngine({ dataDir, addCron, runner });
+      cronEngine.load();
+      setCronManager({ cronFeature, engine: cronEngine });
+    }
+
     logger.debug('ZhinAgent created');
     return () => {
+      setCronManager(null);
+      if (cronEngine) {
+        cronEngine.unload();
+        cronEngine = null;
+      }
       agent.dispose();
       zhinAgentInstance = null;
     };
@@ -513,7 +538,9 @@ export function initAIModule(): void {
     const builtinTools = createBuiltinTools();
     const disposers: (() => void)[] = [];
     for (const tool of builtinTools) disposers.push(toolService.addTool(tool, root.name));
-    logger.info(`Registered ${builtinTools.length} built-in system tools`);
+    const cronTools = createCronTools();
+    for (const tool of cronTools) disposers.push(toolService.addTool(tool, root.name));
+    logger.info(`Registered ${builtinTools.length} built-in + ${cronTools.length} cron tools`);
 
     let skillWatchers: fs.FSWatcher[] = [];
     let skillReloadDebounce: ReturnType<typeof setTimeout> | null = null;

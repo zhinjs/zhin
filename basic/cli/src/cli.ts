@@ -15,6 +15,7 @@ import { setupCommand } from './commands/setup.js';
 import { configCommand } from './commands/config.js';
 import { onboardingCommand } from './commands/onboarding.js';
 import { skillsCommand } from './commands/skills.js';
+import { cronCommand } from './commands/cron.js';
 
 const program = new Command();
 
@@ -41,5 +42,6 @@ program.addCommand(setupCommand);
 program.addCommand(configCommand);
 program.addCommand(onboardingCommand);
 program.addCommand(skillsCommand);
+program.addCommand(cronCommand);
 
 program.parse(); 

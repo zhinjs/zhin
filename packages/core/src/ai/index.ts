@@ -74,6 +74,26 @@ export type { RateLimitConfig, RateLimitResult } from './rate-limiter.js';
 export { FollowUpManager, AI_FOLLOWUP_MODEL } from './follow-up.js';
 export type { FollowUpRecord, FollowUpSender } from './follow-up.js';
 
+// ── 持久化定时任务引擎 ──
+export {
+  PersistentCronEngine,
+  readCronJobsFile,
+  writeCronJobsFile,
+  getCronJobsFilePath,
+  generateCronJobId,
+  createCronTools,
+  setCronManager,
+  getCronManager,
+  CRON_JOBS_FILENAME,
+} from './cron-engine.js';
+export type {
+  CronJobRecord,
+  CronRunner,
+  AddCronFn,
+  PersistentCronEngineOptions,
+  CronManager,
+} from './cron-engine.js';
+
 // ── Tone Detector ──
 export { detectTone } from './tone-detector.js';
 export type { Tone } from './tone-detector.js';
