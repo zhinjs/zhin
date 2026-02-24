@@ -1,5 +1,14 @@
 # zhin.js
 
+## 1.0.30
+
+### Patch Changes
+
+- 460a6c6: fix: unhandleRejection
+  - @zhin.js/logger@0.1.14
+  - @zhin.js/schema@1.0.14
+  - @zhin.js/core@1.0.30
+
 ## 1.0.29
 
 ### Patch Changes

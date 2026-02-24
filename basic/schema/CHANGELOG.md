@@ -1,5 +1,12 @@
 # @zhin.js/schema
 
+## 1.0.14
+
+### Patch Changes
+
+- Updated dependencies [460a6c6]
+  - zhin.js@1.0.30
+
 ## 1.0.13
 
 ### Patch Changes
