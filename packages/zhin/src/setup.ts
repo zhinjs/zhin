@@ -147,10 +147,17 @@ const handleUncaughtException = (error: Error) => {
   process.exit(1);
 };
 
+// 仅记录，不退出进程。避免 ICQQ ApiRejection 等第三方未捕获的 Promise 拒绝导致整机挂掉
 const handleUnhandledRejection = (reason: unknown) => {
-  logger.error('Unhandled rejection:', reason);
-  stop();
-  process.exit(1);
+  if (reason instanceof Error) {
+    logger.error('Unhandled rejection (进程继续运行):', reason.message);
+    logger.debug(reason.stack);
+  } else {
+    const msg = typeof reason === 'object' && reason !== null && 'message' in reason
+      ? (reason as { message?: string }).message ?? String(reason)
+      : String(reason);
+    logger.error('Unhandled rejection (进程继续运行):', msg);
+  }
 };
 
 // 移除可能存在的旧监听器（防止热重载时累积）
