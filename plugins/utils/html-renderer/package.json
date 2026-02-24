@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-html-renderer",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "HTML to image rendering plugin for Zhin.js using @zhinjs/satori",
   "type": "module",
   "main": "./lib/index.js",

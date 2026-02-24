@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.26
+
+### Patch Changes
+
+- 1107f69: fix: sys service
+
 ## 1.0.25
 
 ### Patch Changes

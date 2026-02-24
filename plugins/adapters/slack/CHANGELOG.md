@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.16
+
+### Patch Changes
+
+- zhin.js@1.0.31
+
 ## 1.0.15
 
 ### Patch Changes
