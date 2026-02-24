@@ -49,7 +49,7 @@ curl -fsSL https://zhin.js.org/install.sh | bash -s -- my-bot
 ```
 
 ```powershell [Windows PowerShell]
-irm https://zhin.js.org/install.ps1 | iex -Args "my-bot"
+irm https://zhin.js.org/install.ps1 | iex
 ```
 
 :::
