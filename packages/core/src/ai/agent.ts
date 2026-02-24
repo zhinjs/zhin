@@ -22,6 +22,27 @@ const logger = new Logger(null, 'Agent');
 const DEFAULT_TOOL_TIMEOUT = 30_000;
 
 /**
+ * 根据工具名和参数生成简短标题（用于日志、TOOLS.md 等）
+ */
+export function formatToolTitle(name: string, args?: Record<string, any>): string {
+  if (!args || Object.keys(args).length === 0) return name;
+  const a = args;
+  switch (name) {
+    case 'bash': return a.command != null ? `bash: ${String(a.command).slice(0, 60)}` : name;
+    case 'read_file': return a.file_path != null ? `read_file: ${a.file_path}` : name;
+    case 'write_file': return a.file_path != null ? `write_file: ${a.file_path}` : name;
+    case 'edit_file': return a.file_path != null ? `edit_file: ${a.file_path}` : name;
+    case 'web_search': return a.query != null ? `web_search: ${String(a.query).slice(0, 40)}` : name;
+    case 'web_fetch': return a.url != null ? `web_fetch: ${String(a.url).slice(0, 50)}` : name;
+    default: {
+      const first = Object.values(a)[0];
+      if (first != null) return `${name}: ${String(first).slice(0, 50)}`;
+      return name;
+    }
+  }
+}
+
+/**
  * Agent 执行状态
  */
 export interface AgentState {

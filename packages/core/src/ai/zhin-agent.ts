@@ -52,6 +52,25 @@ const logger = new Logger(null, 'ZhinAgent');
 /** 高精度计时 */
 const now = () => performance.now();
 
+const HISTORY_CONTEXT_MARKER = '[Chat messages since your last reply - for context]';
+const CURRENT_MESSAGE_MARKER = '[Current message - respond to this]';
+
+function contentToText(c: string | ContentPart[]): string {
+  if (typeof c === 'string') return c;
+  return (c as ContentPart[]).map(p => (p.type === 'text' ? p.text : '')).join('');
+}
+
+
+function buildUserMessageWithHistory(history: ChatMessage[], currentContent: string): string {
+  if (history.length === 0) return currentContent;
+  const roleLabel = (role: string) => (role === 'user' ? '用户' : role === 'assistant' ? '助手' : '系统');
+  const lines = history
+    .filter(m => m.role === 'user' || m.role === 'assistant' || m.role === 'system')
+    .map(m => `${roleLabel(m.role)}: ${contentToText(m.content)}`);
+  const historyBlock = lines.join('\n');
+  return `${HISTORY_CONTEXT_MARKER}\n${historyBlock}\n\n${CURRENT_MESSAGE_MARKER}\n${currentContent}`;
+}
+
 // ============================================================================
 // 配置
 // ============================================================================
@@ -85,6 +104,16 @@ export interface ZhinAgentConfig {
   contextTokens?: number;
   /** 历史记录最大占比（默认 0.5 = 50%） */
   maxHistoryShare?: number;
+  /** 禁用的工具名列表（来自配置，这些工具不会下发给 AI） */
+  disabledTools?: string[];
+  /** 仅允许的工具名列表；若设置则只下发列表中的工具（与 disabledTools 二选一，allowedTools 优先） */
+  allowedTools?: string[];
+  /** bash 执行策略：deny=禁止，allowlist=仅允许列表内，full=不限制 */
+  execSecurity?: 'deny' | 'allowlist' | 'full';
+  /** allowlist 模式下允许的命令（正则字符串） */
+  execAllowlist?: string[];
+  /** allowlist 未命中时 true=需审批（当前为拒绝并提示），false=直接拒绝 */
+  execAsk?: boolean;
 }
 
 const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
@@ -102,6 +131,11 @@ const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   visionModel: '',
   contextTokens: DEFAULT_CONTEXT_TOKENS,
   maxHistoryShare: 0.5,
+  disabledTools: [],
+  allowedTools: [],  // 空数组表示不限制；非空时仅允许列表中的工具
+  execSecurity: 'deny',  // 默认禁止 bash，避免误用
+  execAllowlist: [],
+  execAsk: false,
 };
 
 // ============================================================================
@@ -392,15 +426,15 @@ ${preData ? `\n已获取数据：${preData}\n` : ''}`;
 
       // 始终传递所有工具给 Agent，因为 activate_skill 激活后可能需要调用
       // 之前被分类为 noParamTools 的工具（确保技能中引用的所有工具都可用）
-      const agentTools = allTools;
+      const agentTools = this.applyExecPolicyToTools(allTools);
       const agent = createAgent(this.provider, {
         systemPrompt,
         tools: agentTools,
         maxIterations: this.config.maxIterations,
       });
 
-      // Agent 路径也注入历史上下文
-      const result = await agent.run(content, historyMessages);
+      const userMessageWithHistory = buildUserMessageWithHistory(historyMessages, content);
+      const result = await agent.run(userMessageWithHistory, []);
       reply = result.content || this.fallbackFormat(result.toolCalls);
       logger.info(`[Agent 路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, Agent=${(now() - tAgent).toFixed(0)}ms, 总=${(now() - t0).toFixed(0)}ms`);
     }
@@ -619,17 +653,83 @@ ${preData ? `\n已获取数据：${preData}\n` : ''}`;
       }
     }
 
+    // 5. 配置级工具开关：disabledTools / allowedTools（权限与安全）
+    let final = filtered;
+    const allowed = this.config.allowedTools;
+    const disabled = this.config.disabledTools ?? [];
+    if (allowed && allowed.length > 0) {
+      const allowSet = new Set(allowed.map(n => n.toLowerCase()));
+      final = final.filter(t => allowSet.has(t.name.toLowerCase()));
+      if (final.length < filtered.length) {
+        logger.debug(`[工具开关] allowedTools 限制: ${filtered.length} -> ${final.length}`);
+      }
+    } else if (disabled.length > 0) {
+      const disabledSet = new Set(disabled.map(n => n.toLowerCase()));
+      final = final.filter(t => !disabledSet.has(t.name.toLowerCase()));
+      if (final.length < filtered.length) {
+        logger.debug(`[工具开关] disabledTools 过滤: ${filtered.length} -> ${final.length}`);
+      }
+    }
+
     // 诊断日志：显示收集的工具总数、过滤后的数量、以及列表
-    if (filtered.length > 0) {
+    if (final.length > 0) {
       logger.debug(
-        `[工具收集] 收集了 ${collected.length} 个工具，过滤后 ${filtered.length} 个，` +
-        `用户消息相关性最高的: ${filtered.slice(0, 3).map(t => t.name).join(', ')}`
+        `[工具收集] 收集了 ${collected.length} 个工具，过滤后 ${final.length} 个，` +
+        `用户消息相关性最高的: ${final.slice(0, 3).map(t => t.name).join(', ')}`
       );
     } else {
       logger.debug(`[工具收集] 收集了 ${collected.length} 个工具，但过滤后 0 个（没有超过相关性阈值的）`);
     }
 
-    return filtered;
+    return final;
+  }
+
+  /**
+   * bash 执行策略检查：未通过时抛出 Error（供上层返回给用户）。
+   */
+  private checkExecPolicy(command: string): void {
+    const security = this.config.execSecurity ?? 'deny';
+    if (security === 'full') return;
+    if (security === 'deny') {
+      throw new Error('当前配置禁止执行 Shell 命令（execSecurity=deny）。如需开放请在配置中设置 ai.agent.execSecurity。');
+    }
+    // allowlist
+    const list = this.config.execAllowlist ?? [];
+    const cmd = (command || '').trim();
+    const allowed = list.some(pattern => {
+      try {
+        const re = new RegExp(pattern);
+        return re.test(cmd);
+      } catch {
+        return cmd === pattern || cmd.startsWith(pattern);
+      }
+    });
+    if (!allowed) {
+      const ask = this.config.execAsk;
+      throw new Error(
+        ask
+          ? '该命令不在允许列表中，需要审批后执行。当前版本请将命令加入 ai.agent.execAllowlist 或联系管理员。'
+          : '该命令不在允许列表中，已被拒绝执行。可将允许的命令模式加入 ai.agent.execAllowlist。',
+      );
+    }
+  }
+
+  /**
+   * 对传入的 Agent 工具列表应用 bash 执行策略（仅包装 bash 工具）。
+   */
+  private applyExecPolicyToTools(tools: AgentTool[]): AgentTool[] {
+    return tools.map(t => {
+      if (t.name !== 'bash') return t;
+      const original = t.execute;
+      return {
+        ...t,
+        execute: async (args: Record<string, any>) => {
+          const cmd = args?.command != null ? String(args.command) : '';
+          this.checkExecPolicy(cmd);
+          return original(args);
+        },
+      };
+    });
   }
 
   // ── 辅助方法 ─────────────────────────────────────────────────────────
@@ -709,6 +809,7 @@ ${preData ? `\n已获取数据：${preData}\n` : ''}`;
     if (tool.keywords?.length) at.keywords = tool.keywords;
     if (tool.permissionLevel) at.permissionLevel = PERM_MAP[tool.permissionLevel] ?? 0;
     if (tool.preExecutable) at.preExecutable = true;
+    if ((tool as any).kind) at.kind = (tool as any).kind;
     return at;
   }
 
@@ -738,7 +839,7 @@ ${preData ? `\n已获取数据：${preData}\n` : ''}`;
     lines.push(this.config.persona);
     lines.push('');
 
-    // §2 核心规则（精简为 6 条短句）
+    // §2 核心规则（精简为 7 条短句）
     lines.push('## 规则');
     lines.push('1. 直接调用工具执行操作，不要描述步骤或解释意图');
     lines.push('2. 时间/日期问题：直接用下方"当前时间"回答，不调工具');
@@ -746,6 +847,7 @@ ${preData ? `\n已获取数据：${preData}\n` : ''}`;
     lines.push('4. activate_skill 返回后，必须继续调用其中指导的工具，不要停');
     lines.push('5. 所有回答必须基于工具返回的实际数据');
     lines.push('6. 工具失败时尝试替代方案，不要直接把错误丢给用户');
+    lines.push('7. 只根据用户**最后一条**消息作答，前面的对话仅作背景');
     lines.push('');
 
     // §3 技能列表（紧凑格式）
@@ -1003,10 +1105,12 @@ ${preData ? `\n已获取数据：${preData}\n` : ''}`;
     onChunk?: OnChunkCallback,
   ): Promise<string> {
     const model = this.provider.models[0];
+    const userContent = history.length > 0
+      ? buildUserMessageWithHistory(history, content)
+      : content;
     const messages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
-      ...history,
-      { role: 'user', content },
+      { role: 'user', content: userContent },
     ];
 
     // 优先流式（对 Ollama 等本地模型有明显提速）

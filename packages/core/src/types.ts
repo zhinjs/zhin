@@ -380,6 +380,9 @@ export interface Tool {
    * 默认为 false，即不预执行。
    */
   preExecutable?: boolean;
+
+  /** 工具分类（如 file / shell / web），用于展示与 TOOLS.md 协同 */
+  kind?: string;
 }
 
 /**

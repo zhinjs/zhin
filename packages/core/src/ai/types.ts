@@ -174,6 +174,8 @@ export interface AgentTool {
   permissionLevel?: number;
   /** 是否允许预执行（opt-in），默认 false */
   preExecutable?: boolean;
+  /** 工具分类（如 file / shell / web），用于 formatToolTitle 等展示 */
+  kind?: string;
 }
 
 /**
@@ -273,6 +275,19 @@ export interface AIConfig {
     maxContextTokens?: number;
     /** 自定义总结提示词 */
     summaryPrompt?: string;
+  };
+  /** Agent 工具开关与执行安全 */
+  agent?: {
+    /** 禁用的工具名列表，这些工具不会下发给 AI */
+    disabledTools?: string[];
+    /** 仅允许的工具名列表；若设置则只下发列表中的工具（与 disabledTools 二选一，allowedTools 优先） */
+    allowedTools?: string[];
+    /** bash 执行策略：deny=禁止执行，allowlist=仅允许列表内命令，full=不限制 */
+    execSecurity?: 'deny' | 'allowlist' | 'full';
+    /** allowlist 模式下允许的命令（支持正则字符串，如 "^ls "、"^cat "） */
+    execAllowlist?: string[];
+    /** allowlist 未命中时：true=需审批（当前实现为拒绝并提示），false=直接拒绝 */
+    execAsk?: boolean;
   };
   /** AI 触发配置 */
   trigger?: {

@@ -9,11 +9,12 @@ import { newCommand } from './commands/new.js';
 import { pubCommand } from './commands/pub.js';
 import { installCommand, addCommand } from './commands/install.js';
 import { searchCommand, infoCommand } from './commands/search.js';
-import { installServiceCommand, uninstallServiceCommand } from './commands/install-service.js';
+import { serviceCommand } from './commands/install-service.js';
 import { doctorCommand } from './commands/doctor.js';
 import { setupCommand } from './commands/setup.js';
 import { configCommand } from './commands/config.js';
 import { onboardingCommand } from './commands/onboarding.js';
+import { skillsCommand } from './commands/skills.js';
 
 const program = new Command();
 
@@ -34,11 +35,11 @@ program.addCommand(installCommand);
 program.addCommand(addCommand);
 program.addCommand(searchCommand);
 program.addCommand(infoCommand);
-program.addCommand(installServiceCommand);
-program.addCommand(uninstallServiceCommand);
+program.addCommand(serviceCommand);
 program.addCommand(doctorCommand);
 program.addCommand(setupCommand);
 program.addCommand(configCommand);
 program.addCommand(onboardingCommand);
+program.addCommand(skillsCommand);
 
 program.parse(); 

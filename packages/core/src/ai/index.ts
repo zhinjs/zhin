@@ -26,7 +26,7 @@ export type {
 export { AIService } from './service.js';
 
 // ── Agent ──
-export { Agent, createAgent } from './agent.js';
+export { Agent, createAgent, formatToolTitle } from './agent.js';
 
 // ── Session ──
 export {

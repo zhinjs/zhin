@@ -1,216 +1,236 @@
 import { Command } from 'commander';
-import { logger } from '../utils/logger.js';
+import { execSync } from 'node:child_process';
 import fs from 'fs-extra';
-import path from 'path';
-import os from 'os';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import path from 'node:path';
+import os from 'node:os';
+import { logger } from '../utils/logger.js';
 
-const execAsync = promisify(exec);
+async function getProjectName(): Promise<string> {
+  const cwd = process.cwd();
+  const pkgPath = path.join(cwd, 'package.json');
+  if (!(await fs.pathExists(pkgPath))) {
+    logger.error('当前目录未找到 package.json，请在项目根目录执行');
+    process.exit(1);
+  }
+  const packageJson = await fs.readJson(pkgPath);
+  return packageJson.name || 'zhin-bot';
+}
 
-export const installServiceCommand = new Command('install-service')
-  .description('安装系统服务（systemd/launchd），实现开机自启和守护进程监督')
-  .option('--user', '以用户模式安装（systemd user service）', false)
-  .action(async (options: { user: boolean }) => {
-    try {
-      const cwd = process.cwd();
-      const platform = os.platform();
-      const packageJson = await fs.readJson(path.join(cwd, 'package.json'));
-      const projectName = packageJson.name || 'zhin-bot';
-
-      if (platform === 'linux') {
-        await installSystemdService(cwd, projectName, options.user);
-      } else if (platform === 'darwin') {
-        await installLaunchdService(cwd, projectName);
-      } else if (platform === 'win32') {
-        await installWindowsService(cwd, projectName);
-      } else {
-        logger.error(`不支持的操作系统: ${platform}`);
-        process.exit(1);
-      }
-    } catch (error) {
-      logger.error(`安装服务失败: ${error}`);
-      process.exit(1);
-    }
-  });
-
-async function installSystemdService(cwd: string, projectName: string, userMode: boolean): Promise<void> {
+// --- Linux systemd ---
+async function installSystemd(cwd: string, projectName: string, userMode: boolean): Promise<void> {
   const serviceFile = path.join(cwd, `${projectName}.service`);
-  
-  if (!fs.existsSync(serviceFile)) {
-    logger.error(`未找到 systemd 配置文件: ${serviceFile}`);
-    logger.info('请确保项目是通过 create-zhin-app 创建的');
+  if (!(await fs.pathExists(serviceFile))) {
+    logger.error(`未找到服务文件: ${serviceFile}`);
+    logger.log('请使用 create-zhin 创建的项目或手动创建 .service 文件');
     process.exit(1);
   }
 
-  const serviceContent = await fs.readFile(serviceFile, 'utf-8');
-  const finalContent = serviceContent.replace(/%i/g, os.userInfo().username);
+  let content = await fs.readFile(serviceFile, 'utf-8');
+  content = content.replace(/%i/g, os.userInfo().username);
 
   if (userMode) {
-    // 用户模式：安装到 ~/.config/systemd/user/
-    const userServiceDir = path.join(os.homedir(), '.config/systemd/user');
-    await fs.ensureDir(userServiceDir);
-    const targetPath = path.join(userServiceDir, `${projectName}.service`);
-    
-    await fs.writeFile(targetPath, finalContent);
-    logger.success(`✅ 服务文件已复制到: ${targetPath}`);
-    
-    logger.info('');
-    logger.info('📝 执行以下命令启用服务：');
-    logger.info('');
-    console.log(`  systemctl --user daemon-reload`);
-    console.log(`  systemctl --user enable ${projectName}.service`);
-    console.log(`  systemctl --user start ${projectName}.service`);
-    logger.info('');
-    logger.info('📊 查看服务状态：');
-    console.log(`  systemctl --user status ${projectName}.service`);
-    logger.info('');
-    logger.info('📋 查看日志：');
-    console.log(`  journalctl --user -u ${projectName}.service -f`);
-    
+    const userDir = path.join(os.homedir(), '.config', 'systemd', 'user');
+    await fs.ensureDir(userDir);
+    const targetPath = path.join(userDir, `${projectName}.service`);
+    await fs.writeFile(targetPath, content);
+    logger.success(`已安装用户服务: ${targetPath}`);
+
+    try {
+      execSync('systemctl --user daemon-reload', { stdio: 'inherit' });
+      logger.success('已执行 daemon-reload');
+    } catch (e) {
+      logger.warn('daemon-reload 执行失败，请手动执行');
+    }
+
+    logger.log('');
+    logger.info('启用并启动服务：');
+    logger.log('  systemctl --user enable ' + projectName + '.service');
+    logger.log('  systemctl --user start ' + projectName + '.service');
+    logger.info('查看状态：systemctl --user status ' + projectName + '.service');
+    logger.info('查看日志：journalctl --user -u ' + projectName + '.service -f');
   } else {
-    // 系统模式：需要 sudo 安装到 /etc/systemd/system/
     const targetPath = `/etc/systemd/system/${projectName}.service`;
-    
-    logger.info('🔐 需要 sudo 权限安装系统服务');
-    logger.info('');
-    logger.info('📝 执行以下命令：');
-    logger.info('');
-    console.log(`  sudo cp ${serviceFile} ${targetPath}`);
-    console.log(`  sudo systemctl daemon-reload`);
-    console.log(`  sudo systemctl enable ${projectName}.service`);
-    console.log(`  sudo systemctl start ${projectName}.service`);
-    logger.info('');
-    logger.info('📊 查看服务状态：');
-    console.log(`  sudo systemctl status ${projectName}.service`);
-    logger.info('');
-    logger.info('📋 查看日志：');
-    console.log(`  sudo journalctl -u ${projectName}.service -f`);
+    logger.info('系统级安装需要 root 权限，请执行：');
+    logger.log('');
+    logger.log(`  sudo cp ${serviceFile} ${targetPath}`);
+    logger.log('  sudo systemctl daemon-reload');
+    logger.log('  sudo systemctl enable ' + projectName + '.service');
+    logger.log('  sudo systemctl start ' + projectName + '.service');
+    logger.log('');
+    logger.info('查看状态：sudo systemctl status ' + projectName + '.service');
   }
 }
 
-async function installLaunchdService(cwd: string, projectName: string): Promise<void> {
+async function uninstallSystemd(projectName: string, userMode: boolean): Promise<void> {
+  if (userMode) {
+    const targetPath = path.join(os.homedir(), '.config', 'systemd', 'user', `${projectName}.service`);
+    if (!(await fs.pathExists(targetPath))) {
+      logger.warn('用户服务未安装或已删除');
+      return;
+    }
+    try {
+      execSync(`systemctl --user stop ${projectName}.service`, { stdio: 'inherit' });
+    } catch {}
+    try {
+      execSync(`systemctl --user disable ${projectName}.service`, { stdio: 'inherit' });
+    } catch {}
+    await fs.remove(targetPath);
+    try {
+      execSync('systemctl --user daemon-reload', { stdio: 'inherit' });
+    } catch {}
+    logger.success('已卸载用户服务');
+  } else {
+    logger.info('请手动执行以下命令卸载系统服务：');
+    logger.log('  sudo systemctl stop ' + projectName + '.service');
+    logger.log('  sudo systemctl disable ' + projectName + '.service');
+    logger.log('  sudo rm /etc/systemd/system/' + projectName + '.service');
+    logger.log('  sudo systemctl daemon-reload');
+  }
+}
+
+// --- macOS launchd ---
+async function installLaunchd(cwd: string, projectName: string): Promise<void> {
   const plistFile = path.join(cwd, `com.zhinjs.${projectName}.plist`);
-  
-  if (!fs.existsSync(plistFile)) {
-    logger.error(`未找到 launchd 配置文件: ${plistFile}`);
-    logger.info('请确保项目是通过 create-zhin-app 创建的');
+  if (!(await fs.pathExists(plistFile))) {
+    logger.error(`未找到 launchd 配置: ${plistFile}`);
+    logger.log('请使用 create-zhin 创建的项目或手动创建 .plist 文件');
     process.exit(1);
   }
 
-  const targetDir = path.join(os.homedir(), 'Library/LaunchAgents');
+  const targetDir = path.join(os.homedir(), 'Library', 'LaunchAgents');
   await fs.ensureDir(targetDir);
   const targetPath = path.join(targetDir, `com.zhinjs.${projectName}.plist`);
-  
   await fs.copy(plistFile, targetPath);
-  logger.success(`✅ 服务文件已复制到: ${targetPath}`);
-  
-  logger.info('');
-  logger.info('📝 执行以下命令启用服务：');
-  logger.info('');
-  console.log(`  launchctl load ${targetPath}`);
-  console.log(`  launchctl start com.zhinjs.${projectName}`);
-  logger.info('');
-  logger.info('📊 查看服务状态：');
-  console.log(`  launchctl list | grep ${projectName}`);
-  logger.info('');
-  logger.info('🛑 停止服务：');
-  console.log(`  launchctl stop com.zhinjs.${projectName}`);
-  console.log(`  launchctl unload ${targetPath}`);
-  logger.info('');
-  logger.info('📋 查看日志：');
-  console.log(`  tail -f ${path.join(cwd, 'logs/launchd-stdout.log')}`);
-}
+  logger.success(`已安装服务: ${targetPath}`);
 
-async function installWindowsService(cwd: string, projectName: string): Promise<void> {
-  const psScript = path.join(cwd, 'install-service.ps1');
-  const taskXml = path.join(cwd, `${projectName}-task.xml`);
-  
-  if (!fs.existsSync(psScript)) {
-    logger.error(`未找到 PowerShell 脚本: ${psScript}`);
-    logger.info('请确保项目是通过 create-zhin-app 创建的');
-    process.exit(1);
+  try {
+    execSync(`launchctl load ${targetPath}`, { stdio: 'inherit' });
+    logger.success('服务已加载并启动');
+  } catch (e) {
+    logger.warn('launchctl load 失败，请手动执行: launchctl load ' + targetPath);
   }
 
-  logger.info('');
-  logger.info('🪟 Windows 系统服务安装');
-  logger.info('');
-  logger.info('📝 方式一：使用 NSSM（推荐）');
-  logger.info('');
-  logger.info('1. 安装 NSSM：');
-  console.log('   choco install nssm        # 使用 Chocolatey');
-  console.log('   scoop install nssm        # 使用 Scoop');
-  console.log('   # 或从 https://nssm.cc/download 下载');
-  logger.info('');
-  logger.info('2. 以管理员身份运行 PowerShell，执行：');
-  console.log(`   cd "${cwd}"`);
-  console.log(`   .\\install-service.ps1`);
-  logger.info('');
-  logger.info('3. 启动服务：');
-  console.log(`   nssm start ${projectName}`);
-  logger.info('');
-  logger.info('📝 方式二：使用任务计划程序');
-  logger.info('');
-  logger.info('1. 以管理员身份运行 PowerShell，执行：');
-  console.log(`   schtasks /Create /TN "${projectName}" /XML "${taskXml}"`);
-  logger.info('');
-  logger.info('2. 启动任务：');
-  console.log(`   schtasks /Run /TN "${projectName}"`);
-  logger.info('');
-  logger.info('3. 查看状态：');
-  console.log(`   schtasks /Query /TN "${projectName}"`);
-  logger.info('');
-  logger.info('📝 方式三：使用 PM2');
-  logger.info('');
-  console.log('   pnpm pm2:start');
-  console.log('   pm2 startup');
-  console.log('   pm2 save');
+  logger.log('');
+  logger.info('查看状态：launchctl list | grep ' + projectName);
+  logger.info('停止服务：launchctl unload ' + targetPath);
 }
 
-export const uninstallServiceCommand = new Command('uninstall-service')
-  .description('卸载系统服务')
-  .option('--user', '卸载用户模式服务（systemd user service）', false)
-  .action(async (options: { user: boolean }) => {
-    try {
-      const cwd = process.cwd();
-      const platform = os.platform();
-      const packageJson = await fs.readJson(path.join(cwd, 'package.json'));
-      const projectName = packageJson.name || 'zhin-bot';
+async function uninstallLaunchd(projectName: string): Promise<void> {
+  const targetPath = path.join(os.homedir(), 'Library', 'LaunchAgents', `com.zhinjs.${projectName}.plist`);
+  if (!(await fs.pathExists(targetPath))) {
+    logger.warn('服务未安装或已删除');
+    return;
+  }
+  try {
+    execSync(`launchctl unload ${targetPath}`, { stdio: 'inherit' });
+  } catch {}
+  await fs.remove(targetPath);
+  logger.success('已卸载服务');
+}
 
-      if (platform === 'linux') {
-        if (options.user) {
-          logger.info('📝 执行以下命令卸载用户服务：');
-          console.log(`  systemctl --user stop ${projectName}.service`);
-          console.log(`  systemctl --user disable ${projectName}.service`);
-          console.log(`  rm ~/.config/systemd/user/${projectName}.service`);
-          console.log(`  systemctl --user daemon-reload`);
-        } else {
-          logger.info('📝 执行以下命令卸载系统服务：');
-          console.log(`  sudo systemctl stop ${projectName}.service`);
-          console.log(`  sudo systemctl disable ${projectName}.service`);
-          console.log(`  sudo rm /etc/systemd/system/${projectName}.service`);
-          console.log(`  sudo systemctl daemon-reload`);
-        }
-      } else if (platform === 'darwin') {
-        const plistPath = path.join(os.homedir(), `Library/LaunchAgents/com.zhinjs.${projectName}.plist`);
-        logger.info('📝 执行以下命令卸载服务：');
-        console.log(`  launchctl stop com.zhinjs.${projectName}`);
-        console.log(`  launchctl unload ${plistPath}`);
-        console.log(`  rm ${plistPath}`);
-      } else if (platform === 'win32') {
-        logger.info('📝 方式一：卸载 NSSM 服务');
-        console.log(`  nssm stop ${projectName}`);
-        console.log(`  nssm remove ${projectName} confirm`);
-        logger.info('');
-        logger.info('📝 方式二：删除任务计划');
-        console.log(`  schtasks /End /TN "${projectName}"`);
-        console.log(`  schtasks /Delete /TN "${projectName}" /F`);
-      } else {
-        logger.error(`不支持的操作系统: ${platform}`);
-        process.exit(1);
-      }
-    } catch (error) {
-      logger.error(`卸载服务失败: ${error}`);
+// --- Windows ---
+async function installWindows(cwd: string, projectName: string): Promise<void> {
+  const psScript = path.join(cwd, 'install-service.ps1');
+  const taskXml = path.join(cwd, `${projectName}-task.xml`);
+
+  logger.info('Windows 请任选一种方式安装服务：');
+  logger.log('');
+  logger.info('方式一：NSSM（推荐）');
+  logger.log('  1. 安装 NSSM: choco install nssm 或 scoop install nssm');
+  logger.log('  2. 以管理员打开 PowerShell:');
+  logger.log(`     cd "${cwd}"`);
+  logger.log('     .\\install-service.ps1');
+  logger.log('');
+  logger.info('方式二：任务计划程序');
+  logger.log(`  schtasks /Create /TN "${projectName}" /XML "${taskXml}"`);
+  logger.log('');
+  logger.info('方式三：PM2');
+  logger.log('  pnpm pm2:start && pm2 startup && pm2 save');
+}
+
+async function uninstallWindows(projectName: string): Promise<void> {
+  logger.info('请手动执行以下之一卸载：');
+  logger.log('  NSSM:    nssm stop ' + projectName + ' && nssm remove ' + projectName + ' confirm');
+  logger.log('  计划任务: schtasks /End /TN "' + projectName + '" && schtasks /Delete /TN "' + projectName + '" /F');
+}
+
+// --- status ---
+async function statusSystemd(projectName: string, userMode: boolean): Promise<void> {
+  try {
+    const opt = userMode ? '--user' : '';
+    execSync(`systemctl ${opt} status ${projectName}.service`, { stdio: 'inherit' });
+  } catch (e: any) {
+    if (e.status !== 0) logger.warn('服务未运行或未安装');
+  }
+}
+
+async function statusLaunchd(projectName: string): Promise<void> {
+  try {
+    const out = execSync(`launchctl list | grep com.zhinjs.${projectName}`, { encoding: 'utf-8' });
+    logger.log(out || '未找到');
+  } catch {
+    logger.log('服务未加载');
+  }
+}
+
+// --- 子命令 ---
+const installCmd = new Command('install')
+  .description('安装系统服务（开机自启）')
+  .option('--user', 'Linux 下使用用户级 systemd', false)
+  .action(async (opts: { user?: boolean }) => {
+    const cwd = process.cwd();
+    const projectName = await getProjectName();
+    const platform = os.platform();
+
+    if (platform === 'linux') {
+      await installSystemd(cwd, projectName, opts.user ?? false);
+    } else if (platform === 'darwin') {
+      await installLaunchd(cwd, projectName);
+    } else if (platform === 'win32') {
+      await installWindows(cwd, projectName);
+    } else {
+      logger.error('当前系统暂不支持: ' + platform);
       process.exit(1);
     }
   });
+
+const uninstallCmd = new Command('uninstall')
+  .description('卸载系统服务')
+  .option('--user', 'Linux 下卸载用户级 systemd', false)
+  .action(async (opts: { user?: boolean }) => {
+    const projectName = await getProjectName();
+    const platform = os.platform();
+
+    if (platform === 'linux') {
+      await uninstallSystemd(projectName, opts.user ?? false);
+    } else if (platform === 'darwin') {
+      await uninstallLaunchd(projectName);
+    } else if (platform === 'win32') {
+      await uninstallWindows(projectName);
+    } else {
+      logger.error('当前系统暂不支持: ' + platform);
+      process.exit(1);
+    }
+  });
+
+const statusCmd = new Command('status')
+  .description('查看服务运行状态（仅 Linux/macOS）')
+  .option('--user', 'Linux 下查看用户级服务', false)
+  .action(async (opts: { user?: boolean }) => {
+    const projectName = await getProjectName();
+    const platform = os.platform();
+
+    if (platform === 'linux') {
+      await statusSystemd(projectName, opts.user ?? false);
+    } else if (platform === 'darwin') {
+      await statusLaunchd(projectName);
+    } else {
+      logger.info('Windows 请使用: schtasks /Query /TN "' + projectName + '"');
+    }
+  });
+
+export const serviceCommand = new Command('service')
+  .description('管理系统服务（开机自启 / 守护）')
+  .addCommand(installCmd)
+  .addCommand(uninstallCmd)
+  .addCommand(statusCmd);

@@ -188,6 +188,7 @@ export class ZhinTool {
   #hidden: boolean = false;
   #source?: string;
   #preExecutable: boolean = false;
+  #kind?: string;
 
   constructor(name: string) {
     this.#name = name;
@@ -262,6 +263,12 @@ export class ZhinTool {
    */
   preExec(value: boolean = true): this {
     this.#preExecutable = value;
+    return this;
+  }
+
+  /** 设置工具分类（如 file / shell / web），用于展示与 TOOLS.md 协同 */
+  kind(value: string): this {
+    this.#kind = value;
     return this;
   }
 
@@ -365,6 +372,7 @@ export class ZhinTool {
     if (this.#source) tool.source = this.#source;
     if (this.#keywords.length > 0) tool.keywords = this.#keywords;
     if (this.#preExecutable) tool.preExecutable = true;
+    if (this.#kind) tool.kind = this.#kind;
 
     if (!this.#commandCallback) {
       tool.command = false;

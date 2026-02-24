@@ -15,6 +15,7 @@
  */
 
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -54,6 +55,7 @@ export function createBuiltinTools(): ZhinTool[] {
       .desc('读取文件内容（带行号，支持 offset/limit 分页）')
       .keyword('读文件', '查看', '打开', 'cat', 'read')
       .tag('file', 'read')
+      .kind('file')
       .param('file_path', { type: 'string', description: '文件路径（绝对或相对）' }, true)
       .param('offset', { type: 'number', description: '起始行号（0-based，默认 0）' })
       .param('limit', { type: 'number', description: '最大读取行数（默认全部）' })
@@ -78,6 +80,7 @@ export function createBuiltinTools(): ZhinTool[] {
       .desc('创建或覆盖文件（自动创建目录）')
       .keyword('写文件', '创建文件', '保存', 'write')
       .tag('file', 'write')
+      .kind('file')
       .param('file_path', { type: 'string', description: '文件路径' }, true)
       .param('content', { type: 'string', description: '写入内容' }, true)
       .execute(async (args) => {
@@ -97,6 +100,7 @@ export function createBuiltinTools(): ZhinTool[] {
       .desc('查找并替换文件内容（old_string 必须唯一匹配）。注意：old_string 应包含完整的行内容（含前后文），不要只匹配单个数字或单词')
       .keyword('编辑', '修改', '替换', 'edit')
       .tag('file', 'edit')
+      .kind('file')
       .param('file_path', { type: 'string', description: '文件路径' }, true)
       .param('old_string', { type: 'string', description: '要替换的原文（必须在文件中唯一出现，建议包含完整行）' }, true)
       .param('new_string', { type: 'string', description: '替换后的文本（必须是替换 old_string 后的完整内容）' }, true)
@@ -125,6 +129,7 @@ export function createBuiltinTools(): ZhinTool[] {
       .desc('按 glob 模式查找文件（如 **/*.ts）')
       .keyword('查找文件', '搜索文件', '文件列表', 'ls', 'find')
       .tag('file', 'search')
+      .kind('file')
       .param('pattern', { type: 'string', description: 'Glob 模式（如 **/*.ts）' }, true)
       .param('cwd', { type: 'string', description: '工作目录（默认项目根目录）' })
       .execute(async (args) => {
@@ -150,6 +155,7 @@ export function createBuiltinTools(): ZhinTool[] {
       .desc('按正则搜索文件内容，返回匹配行和行号')
       .keyword('搜索', '查找内容', 'grep', '正则')
       .tag('search', 'regex')
+      .kind('file')
       .param('pattern', { type: 'string', description: '正则表达式' }, true)
       .param('path', { type: 'string', description: '搜索路径（默认 .）' })
       .param('include', { type: 'string', description: '文件类型过滤（如 *.ts）' })
@@ -175,6 +181,7 @@ export function createBuiltinTools(): ZhinTool[] {
       .desc('执行 Shell 命令（带超时保护）')
       .keyword('执行', '运行', '命令', '终端', 'shell', 'bash')
       .tag('shell', 'exec')
+      .kind('shell')
       .param('command', { type: 'string', description: 'Shell 命令' }, true)
       .param('cwd', { type: 'string', description: '工作目录' })
       .param('timeout', { type: 'number', description: '超时毫秒数（默认 30000）' })
@@ -264,6 +271,7 @@ export function createBuiltinTools(): ZhinTool[] {
       .desc('抓取网页内容（去除 HTML 标签，最大 20KB）')
       .keyword('抓取', '网页', 'fetch', 'url', '链接')
       .tag('web', 'fetch')
+      .kind('web')
       .param('url', { type: 'string', description: 'URL 地址' }, true)
       .execute(async (args) => {
         try {
@@ -293,6 +301,7 @@ export function createBuiltinTools(): ZhinTool[] {
       .desc('读取当前任务计划列表，用于查看进度和待办事项')
       .keyword('任务', '计划', '进度', 'todo', '待办')
       .tag('plan', 'todo')
+      .kind('plan')
       .param('chat_id', { type: 'string', description: '聊天范围（传 "global" 表示全局，或传具体聊天 ID）' }, true)
       .execute(async (args) => {
         try {
@@ -318,6 +327,7 @@ export function createBuiltinTools(): ZhinTool[] {
       .desc('创建或更新任务计划，用于分解复杂任务并跟踪进度')
       .keyword('创建计划', '更新任务', '标记完成', 'todo')
       .tag('plan', 'todo')
+      .kind('plan')
       .param('items', { type: 'array', description: '任务列表 [{title, detail?, status: pending|in-progress|done}]' } as any, true)
       .param('chat_id', { type: 'string', description: '聊天范围（可选）' })
       .execute(async (args) => {
@@ -341,6 +351,7 @@ export function createBuiltinTools(): ZhinTool[] {
       .desc('读取持久化记忆（AGENTS.md）。记忆跨会话保持。scope: global（共享）或 chat（按聊天隔离）')
       .keyword('记忆', '记住', '回忆', '之前', '上次', 'memory')
       .tag('memory', 'agents')
+      .kind('memory')
       .param('scope', { type: 'string', description: "'global' 或 'chat'（默认 chat）", enum: ['global', 'chat'] }, true)
       .param('chat_id', { type: 'string', description: '聊天 ID（chat scope 时使用）' })
       .execute(async (args) => {
@@ -362,6 +373,7 @@ export function createBuiltinTools(): ZhinTool[] {
       .desc('写入持久化记忆。当用户说"记住…"、"记录…"时使用此工具')
       .keyword('记住', '保存', 'remember', '记录')
       .tag('memory', 'agents')
+      .kind('memory')
       .param('content', { type: 'string', description: '要保存的记忆内容（Markdown）' }, true)
       .param('scope', { type: 'string', description: "'global' 或 'chat'（默认 chat）", enum: ['global', 'chat'] })
       .param('chat_id', { type: 'string', description: '聊天 ID' })
@@ -385,19 +397,24 @@ export function createBuiltinTools(): ZhinTool[] {
       .desc('按名称激活技能，加载其完整指令。当判断某个技能与用户请求相关时使用')
       .keyword('技能', '激活', '启用', '使用', 'skill', 'activate', 'use')
       .tag('skill', 'activate')
+      .kind('skill')
       .param('name', { type: 'string', description: '技能名称' }, true)
       .execute(async (args) => {
         try {
+          // 与 discoverWorkspaceSkills 顺序一致：Workspace > Local > Bundled
           const dirs = [
             path.join(process.cwd(), 'skills'),
+            path.join(os.homedir(), '.zhin', 'skills'),
             path.join(DATA_DIR, 'skills'),
           ];
           for (const dir of dirs) {
             const skillPath = path.join(dir, args.name, 'SKILL.md');
             if (fs.existsSync(skillPath)) {
               const fullContent = await fs.promises.readFile(skillPath, 'utf-8');
-              // 提取精简的执行指令，避免全文输出占用太多 token
-              return extractSkillInstructions(args.name, fullContent);
+              // 5.3 可执行环境检查：若 SKILL 声明了 deps，再次检查；缺失则在返回内容中提示
+              const depWarning = await checkSkillDeps(fullContent);
+              const instructions = extractSkillInstructions(args.name, fullContent);
+              return depWarning ? `${depWarning}\n\n${instructions}` : instructions;
             }
           }
           return `Skill '${args.name}' not found. Check skills/ directory.`;
@@ -409,6 +426,36 @@ export function createBuiltinTools(): ZhinTool[] {
 
   logger.info(`已创建 ${tools.length} 个内置系统工具`);
   return tools;
+}
+
+/**
+ * 检查技能声明的依赖是否在环境中可用；若有缺失返回提示文案，否则返回空字符串
+ */
+async function checkSkillDeps(content: string): Promise<string> {
+  const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
+  if (!fmMatch) return '';
+  let yaml: any;
+  try {
+    yaml = await import('yaml');
+    if (yaml.default) yaml = yaml.default;
+  } catch {
+    return '';
+  }
+  const metadata = yaml.parse(fmMatch[1]);
+  if (!metadata) return '';
+  const compat = metadata.compatibility || {};
+  const deps = compat.deps || metadata.deps;
+  if (!deps || !Array.isArray(deps)) return '';
+  const missing: string[] = [];
+  for (const dep of deps) {
+    try {
+      await execAsync(`which ${dep} 2>/dev/null`);
+    } catch {
+      missing.push(dep);
+    }
+  }
+  if (missing.length === 0) return '';
+  return `⚠️ 当前环境缺少以下依赖，请先安装后再使用本技能：${missing.join(', ')}`;
 }
 
 /**
@@ -433,11 +480,27 @@ function extractSkillInstructions(name: string, content: string): string {
     }
   }
 
-  // 2. 提取"执行规则"或"规则"部分（关键的行动指导）
-  const rulesMatch = content.match(/## 执行规则[\s\S]*?(?=\n## [^执]|$)/);
+  // 2. 提取执行指导：优先 "## 执行规则"，否则尝试 "## Workflow" / "## Instructions" / "## 使用说明"，再否则用正文（去掉 frontmatter）
+  const rulesMatch = content.match(/## 执行规则[\s\S]*?(?=\n## [^\s]|$)/);
+  const workflowMatch = content.match(/## (?:Workflow|Instructions|使用说明)[\s\S]*?(?=\n## [^\s]|$)/);
+  const bodyAfterFm = fmMatch && fmMatch.index !== undefined
+    ? content.slice(fmMatch.index + fmMatch[0].length).replace(/^\s+/, '')
+    : content;
   if (rulesMatch) {
     lines.push(rulesMatch[0].trim());
     lines.push('');
+  } else if (workflowMatch) {
+    lines.push(workflowMatch[0].trim());
+    lines.push('');
+  } else if (bodyAfterFm.trim()) {
+    // 无上述标题时使用正文（去除 frontmatter 后）作为指导
+    const firstH2 = bodyAfterFm.match(/\n## [^\s]/);
+    const main = firstH2 ? bodyAfterFm.slice(0, firstH2.index).trim() : bodyAfterFm.trim();
+    if (main) {
+      lines.push('## 指导');
+      lines.push(main);
+      lines.push('');
+    }
   }
 
   // 3. 添加强制执行提醒
@@ -462,15 +525,18 @@ interface SkillMeta {
 }
 
 /**
- * 扫描工作区 skills/ 目录，发现 SKILL.md 技能文件
+ * 扫描技能目录，发现 SKILL.md 技能文件
+ * 加载顺序：Workspace（cwd/skills）> Local（~/.zhin/skills）> Bundled（data/skills），同名技能先发现者优先
  * 支持平台/依赖兼容性过滤
  */
 export async function discoverWorkspaceSkills(): Promise<SkillMeta[]> {
   const skills: SkillMeta[] = [];
+  const seenNames = new Set<string>();
   const dataDir = getDataDir();
   const skillDirs = [
-    path.join(process.cwd(), 'skills'),
-    path.join(dataDir, 'skills'),
+    path.join(process.cwd(), 'skills'),           // Workspace
+    path.join(os.homedir(), '.zhin', 'skills'),  // Local
+    path.join(dataDir, 'skills'),                 // Bundled / 默认 data
   ];
 
   // 确保 data/skills 目录存在
@@ -545,6 +611,12 @@ export async function discoverWorkspaceSkills(): Promise<SkillMeta[]> {
           }
           if (missing) continue;
         }
+
+        if (seenNames.has(metadata.name)) {
+          logger.debug(`Skill '${metadata.name}' 已由先序目录加载，跳过: ${skillMdPath}`);
+          continue;
+        }
+        seenNames.add(metadata.name);
 
         skills.push({
           name: metadata.name,

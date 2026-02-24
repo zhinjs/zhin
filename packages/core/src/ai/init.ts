@@ -10,6 +10,9 @@
  *   - AI 管理工具
  */
 
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { Logger } from '@zhin.js/logger';
 import { getPlugin, type Plugin } from '../plugin.js';
 import { Message } from '../message.js';
@@ -169,19 +172,18 @@ export function initAIModule(): void {
   });
 
   // ── ZhinAgent 全局大脑 ──
-  useContext('ai' as any, (ai: AIService) => {
+  useContext('ai', (ai) => {
     if (!ai.isReady()) {
       logger.warn('AI Service not ready, ZhinAgent not created');
       return;
     }
 
     const provider = ai.getProvider();
-    const agent = new ZhinAgent(provider);
+    const agentConfig = ai.getAgentConfig();
+    const agent = new ZhinAgent(provider, agentConfig);
     zhinAgentInstance = agent;
 
-    const skillRegistry = root.inject('skill' as any) as
-      | SkillFeature
-      | undefined;
+    const skillRegistry = root.inject('skill');
     if (skillRegistry) agent.setSkillRegistry(skillRegistry);
 
     // 注入跟进提醒的发送回调（不依赖数据库，内存模式也能发）
@@ -513,59 +515,51 @@ export function initAIModule(): void {
     for (const tool of builtinTools) disposers.push(toolService.addTool(tool, root.name));
     logger.info(`Registered ${builtinTools.length} built-in system tools`);
 
+    let skillWatchers: fs.FSWatcher[] = [];
+    let skillReloadDebounce: ReturnType<typeof setTimeout> | null = null;
+
+    async function syncWorkspaceSkills(): Promise<number> {
+      const skillFeature = root.inject?.('skill') as SkillFeature | undefined;
+      if (!skillFeature) return 0;
+      // 先移除当前插件注册的所有工作区技能（增量更新）
+      const existing = skillFeature.getByPlugin(root.name);
+      for (const s of existing) skillFeature.remove(s);
+      const skills = await discoverWorkspaceSkills();
+      if (skills.length === 0) return 0;
+      const allRegisteredTools = toolService.getAll();
+      const toolNameIndex = new Map<string, Tool>();
+      for (const t of allRegisteredTools) {
+        toolNameIndex.set(t.name, t);
+        const parts = t.name.split('_');
+        if (parts.length === 2) toolNameIndex.set(`${parts[1]}_${parts[0]}`, t);
+      }
+      for (const s of skills) {
+        const associatedTools: Tool[] = [];
+        const toolNames = s.toolNames || [];
+        for (const toolName of toolNames) {
+          let tool = toolService.get(toolName) || toolNameIndex.get(toolName);
+          if (tool) associatedTools.push(tool);
+        }
+        skillFeature.add({
+          name: s.name,
+          description: s.description,
+          tools: associatedTools,
+          keywords: s.keywords || [],
+          tags: s.tags || [],
+          pluginName: root.name,
+        }, root.name);
+      }
+      return skills.length;
+    }
+
     // 异步发现工作区技能 + 加载引导文件（不阻塞注册流程）
     (async () => {
       // ── 第一步：发现和注册工作区技能 ──
       try {
-        const skills = await discoverWorkspaceSkills();
+        const count = await syncWorkspaceSkills();
         const skillFeature = root.inject?.('skill') as SkillFeature | undefined;
-        if (skillFeature && skills.length > 0) {
-          logger.debug(`[技能注册] 开始注册 ${skills.length} 个技能...`);
-          // 构建所有已注册工具名的索引（用于模糊匹配）
-          const allRegisteredTools = toolService.getAll();
-          const toolNameIndex = new Map<string, Tool>();
-          for (const t of allRegisteredTools) {
-            toolNameIndex.set(t.name, t);
-            // 建立反向别名索引：read_file ↔ file_read 等
-            const parts = t.name.split('_');
-            if (parts.length === 2) {
-              toolNameIndex.set(`${parts[1]}_${parts[0]}`, t);
-            }
-          }
-
-          for (const s of skills) {
-            // 从 toolService 中查找技能声明的关联工具（支持模糊匹配）
-            const associatedTools: Tool[] = [];
-            const toolNames = s.toolNames || [];
-            if (toolNames.length > 0 && toolService) {
-              logger.debug(`[技能注册] 技能 '${s.name}' 声明的工具: ${toolNames.join(', ')}`);
-              for (const toolName of toolNames) {
-                // 精确匹配
-                let tool = toolService.get(toolName);
-                // 若精确匹配失败，尝试反向别名（file_read → read_file）
-                if (!tool) {
-                  tool = toolNameIndex.get(toolName) || undefined;
-                }
-                if (tool) {
-                  associatedTools.push(tool);
-                  const matchType = toolService.get(toolName) ? '精确' : '模糊';
-                  logger.debug(`[技能注册]   ✅ 找到工具: ${toolName}${matchType === '模糊' ? ` → ${tool.name} (模糊匹配)` : ''}`);
-                } else {
-                  logger.warn(`[技能注册]   ❌ 工具 '${toolName}' 未找到（已注册: ${allRegisteredTools.map(t => t.name).join(', ')}）`);
-                }
-              }
-            }
-            skillFeature.add({
-              name: s.name,
-              description: s.description,
-              tools: associatedTools,
-              keywords: s.keywords || [],
-              tags: s.tags || [],
-              pluginName: root.name,
-            }, root.name);
-            logger.debug(`[技能注册] 技能 '${s.name}' 已注册 (${associatedTools.length} 个工具)`);
-          }
-          logger.info(`✅ Registered ${skills.length} workspace skills with ${skills.reduce((sum, s) => sum + ((s.toolNames || []).length), 0)} total tool references`);
+        if (count > 0 && skillFeature) {
+          logger.info(`✅ Registered ${count} workspace skills`);
         }
       } catch (e: any) {
         logger.warn(`Failed to discover workspace skills: ${e.message}`);
@@ -619,8 +613,41 @@ export function initAIModule(): void {
         skillCount: skillFeature2?.size ?? 0,
         bootstrapFiles: loadedFiles,
       }));
+
+      // ── 技能目录热重载：监听 workspace + local 技能目录，防抖后重新发现并更新 ──
+      const workspaceSkillDir = path.join(process.cwd(), 'skills');
+      const localSkillDir = path.join(os.homedir(), '.zhin', 'skills');
+      const onSkillDirChange = () => {
+        if (skillReloadDebounce) clearTimeout(skillReloadDebounce);
+        skillReloadDebounce = setTimeout(async () => {
+          skillReloadDebounce = null;
+          try {
+            const count = await syncWorkspaceSkills();
+            await triggerAIHook(createAIHookEvent('agent', 'skills-reloaded', undefined, { skillCount: count }));
+            if (count >= 0) logger.info(`[技能热重载] 已更新，当前工作区技能数: ${count}`);
+          } catch (e: any) {
+            logger.warn(`[技能热重载] 失败: ${e.message}`);
+          }
+        }, 400);
+      };
+      for (const dir of [workspaceSkillDir, localSkillDir]) {
+        if (fs.existsSync(dir)) {
+          try {
+            const w = fs.watch(dir, { recursive: true }, onSkillDirChange);
+            skillWatchers.push(w);
+            logger.debug(`[技能热重载] 监听目录: ${dir}`);
+          } catch (e: any) {
+            logger.debug(`[技能热重载] 无法监听 ${dir}: ${e.message}`);
+          }
+        }
+      }
     })();
 
-    return () => disposers.forEach(d => d());
+    return () => {
+      disposers.forEach(d => d());
+      skillWatchers.forEach(w => w.close());
+      skillWatchers = [];
+      if (skillReloadDebounce) clearTimeout(skillReloadDebounce);
+    };
   });
 }

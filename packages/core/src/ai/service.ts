@@ -44,6 +44,7 @@ export class AIService {
   private sessionConfig: { maxHistory?: number; expireMs?: number };
   private contextConfig: ContextConfig;
   private triggerConfig: AITriggerConfig;
+  private agentConfig: AIConfig['agent'];
   private plugin?: Plugin;
   private customTools: Map<string, AgentTool> = new Map();
 
@@ -52,6 +53,7 @@ export class AIService {
     this.sessionConfig = config.sessions || {};
     this.contextConfig = config.context || {};
     this.triggerConfig = config.trigger || {};
+    this.agentConfig = config.agent;
     this.sessions = createMemorySessionManager(this.sessionConfig);
     this.builtinTools = getBuiltinTools().map(tool => this.convertToolToAgentTool(tool.toTool()));
 
@@ -253,6 +255,8 @@ ${preExecutedData ? `\n已自动获取的数据：${preExecutedData}\n` : ''}
   getContextConfig(): ContextConfig { return this.contextConfig; }
   getSessionConfig() { return this.sessionConfig; }
   getTriggerConfig(): AITriggerConfig { return this.triggerConfig; }
+  /** Agent 配置（如 disabledTools / allowedTools），供 ZhinAgent 使用 */
+  getAgentConfig(): AIConfig['agent'] { return this.agentConfig; }
 
   registerProvider(provider: AIProvider): void { this.providers.set(provider.name, provider); }
   getProvider(name?: string): AIProvider {

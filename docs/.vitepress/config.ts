@@ -16,7 +16,8 @@ export default defineConfig({
       { text: 'AI 智能', link: '/advanced/ai' },
       { text: '高级特性', link: '/advanced/' },
       { text: 'API 参考', link: '/api/' },
-      { text: '插件市场', link: '/plugins/' }
+      { text: '插件市场', link: '/plugins/' },
+      { text: '技能商店', link: '/skills/' }
     ],
 
     sidebar: {
@@ -92,6 +93,15 @@ export default defineConfig({
           text: 'API 参考',
           items: [
             { text: 'API 总览', link: '/api/' }
+          ]
+        }
+      ],
+
+      '/skills/': [
+        {
+          text: '技能商店',
+          items: [
+            { text: '技能商店', link: '/skills/' }
           ]
         }
       ]
