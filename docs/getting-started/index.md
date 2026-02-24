@@ -62,9 +62,7 @@ irm https://zhin.js.org/install.ps1 | iex -Args "my-bot"
 curl -fsSL https://zhin.js.org/install.sh | bash -s -- my-bot -y
 ```
 
-windows（powershell） 下使用：
-
-```powershell
+```powershell [Windows PowerShell]
 irm https://zhin.js.org/install.ps1 | iex
 ```
 :::
