@@ -108,7 +108,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
   await fs.ensureDir(path.join(projectPath, 'plugins'));
   await fs.writeFile(path.join(projectPath, 'plugins', '.gitkeep'), '');
   
-  // 创建 systemd service 配置（Linux）
+  // 创建 systemd service 配置（Linux）：当前目录用 npx 启动，不写死 nvm/node 路径
   await fs.writeFile(path.join(projectPath, `${projectName}.service`),
 `[Unit]
 Description=${projectName} - Zhin.js Bot
@@ -118,15 +118,15 @@ After=network.target
 Type=simple
 User=%i
 WorkingDirectory=${path.resolve(projectPath)}
-ExecStart=${process.execPath} ${path.resolve(projectPath, 'node_modules/.bin/zhin')} start --daemon
-ExecStop=${process.execPath} ${path.resolve(projectPath, 'node_modules/.bin/zhin')} stop
+ExecStart=/usr/bin/env npx zhin start --daemon
+ExecStop=/usr/bin/env npx zhin stop
 Restart=always
 RestartSec=10s
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=${projectName}
 
-# 环境变量
+# 环境变量（确保 PATH 含 node/npx，如 /usr/local/bin）
 Environment="NODE_ENV=production"
 EnvironmentFile=${path.resolve(projectPath, '.env')}
 
@@ -138,7 +138,7 @@ MemoryMax=2G
 WantedBy=multi-user.target
 `);
 
-  // 创建 launchd plist 配置（macOS）
+  // 创建 launchd plist 配置（macOS）：当前目录用 npx 启动，不写死 nvm/node 路径
   await fs.writeFile(path.join(projectPath, `com.zhinjs.${projectName}.plist`),
 `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -149,8 +149,9 @@ WantedBy=multi-user.target
     
     <key>ProgramArguments</key>
     <array>
-        <string>${process.execPath}</string>
-        <string>${path.resolve(projectPath, 'node_modules/.bin/zhin')}</string>
+        <string>/usr/bin/env</string>
+        <string>npx</string>
+        <string>zhin</string>
         <string>start</string>
         <string>--daemon</string>
     </array>
@@ -163,7 +164,7 @@ WantedBy=multi-user.target
         <key>NODE_ENV</key>
         <string>production</string>
         <key>PATH</key>
-        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     </dict>
     
     <key>RunAtLoad</key>
@@ -191,8 +192,9 @@ WantedBy=multi-user.target
 
 $ServiceName = "${projectName}"
 $ProjectPath = "${path.resolve(projectPath).replace(/\\/g, '\\\\')}"
-$NodeExe = "${process.execPath.replace(/\\/g, '\\\\')}"
-$ZhinCli = "$ProjectPath\\node_modules\\.bin\\zhin.cmd"
+
+# 当前目录使用 npx 启动，不依赖 nvm 等固定 node 路径
+$NpxArgs = "zhin start --daemon"
 
 # 检查 NSSM 是否安装
 if (-not (Get-Command nssm -ErrorAction SilentlyContinue)) {
@@ -219,8 +221,8 @@ if ($existingService) {
     nssm remove $ServiceName confirm
 }
 
-# 安装服务
-nssm install $ServiceName $ZhinCli start --daemon
+# 安装服务（npx 在项目目录下启动）
+nssm install $ServiceName npx $NpxArgs
 
 # 配置服务
 nssm set $ServiceName AppDirectory $ProjectPath
@@ -292,8 +294,8 @@ Write-Host "  nssm start $ServiceName" -ForegroundColor Cyan
   </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command>${process.execPath.replace(/\\/g, '\\\\')}</Command>
-      <Arguments>${path.resolve(projectPath, 'node_modules/.bin/zhin').replace(/\\/g, '\\\\')} start --daemon</Arguments>
+      <Command>npx</Command>
+      <Arguments>zhin start --daemon</Arguments>
       <WorkingDirectory>${path.resolve(projectPath).replace(/\\/g, '\\\\')}</WorkingDirectory>
     </Exec>
   </Actions>
