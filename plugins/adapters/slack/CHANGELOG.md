@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.15
+
+### Patch Changes
+
+- Updated dependencies [460a6c6]
+  - zhin.js@1.0.30
+
 ## 1.0.14
 
 ### Patch Changes
