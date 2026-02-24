@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.10
+
+### Patch Changes
+
+- 771706d: fix: 技能优化
+
 ## 1.0.9
 
 ### Patch Changes

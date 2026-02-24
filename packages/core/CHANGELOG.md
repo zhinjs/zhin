@@ -1,5 +1,14 @@
 # @zhin.js/core
 
+## 1.0.31
+
+### Patch Changes
+
+- 771706d: fix: 技能优化
+  - @zhin.js/database@1.0.18
+  - @zhin.js/logger@0.1.15
+  - @zhin.js/schema@1.0.15
+
 ## 1.0.30
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @zhin.js/adapter-dingtalk
 
+## 1.0.17
+
+### Patch Changes
+
+- zhin.js@1.0.31
+- @zhin.js/http@1.0.23
+
 ## 1.0.16
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @zhin.js/cli
 
+## 1.0.27
+
+### Patch Changes
+
+- 771706d: fix: 技能优化
+  - zhin.js@1.0.31
+  - @zhin.js/logger@0.1.15
+
 ## 1.0.26
 
 ### Patch Changes
