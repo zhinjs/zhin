@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.11
+
+### Patch Changes
+
+- 10d8bdc: fix: win 下 dev 错误
+
 ## 1.0.10
 
 ### Patch Changes
