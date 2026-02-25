@@ -11,7 +11,7 @@ import { Schema } from "@zhin.js/schema";
 import type { Models, RegisteredAdapters, Tool, ToolContext } from "./types.js";
 import * as fs from "fs";
 import * as path from "path";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 import logger, { Logger } from "@zhin.js/logger";
 import { compose, remove, resolveEntry } from "./utils.js";
 import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, SendOptions } from "./types.js";
@@ -927,7 +927,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     loadedModules.set(realPath, plugin);
 
     await storage.run(plugin, async () => {
-      await import(`${import.meta.resolve(entryFile)}?t=${Date.now()}`);
+      await import(`${pathToFileURL(entryFile).href}?t=${Date.now()}`);
     });
 
     return plugin;
