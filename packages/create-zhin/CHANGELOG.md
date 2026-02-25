@@ -1,5 +1,35 @@
 # create-zhin-app
 
+## 1.0.26
+
+### Patch Changes
+
+- 1107f69: fix: sys service
+
+## 1.0.25
+
+### Patch Changes
+
+- cca7815: fix: esm 兼容
+
+## 1.0.24
+
+### Patch Changes
+
+- 05a514d: fix: ai 增强,cli 增强
+
+## 1.0.23
+
+### Patch Changes
+
+- 2b44e18: fix: change version
+
+## 1.0.22
+
+### Patch Changes
+
+- b27e633: fix: cli 优化
+
 ## 1.0.21
 
 ### Patch Changes

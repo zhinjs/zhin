@@ -37,11 +37,39 @@ import { UserProfileStore } from './user-profile.js';
 import { RateLimiter, type RateLimitConfig } from './rate-limiter.js';
 import { detectTone } from './tone-detector.js';
 import { FollowUpManager, type FollowUpSender } from './follow-up.js';
+import {
+  compactSession,
+  estimateMessagesTokens,
+  pruneHistoryForContext,
+  resolveContextWindowTokens,
+  evaluateContextWindowGuard,
+  DEFAULT_CONTEXT_TOKENS,
+} from './compaction.js';
+import { triggerAIHook, createAIHookEvent } from './hooks.js';
 
 const logger = new Logger(null, 'ZhinAgent');
 
 /** 高精度计时 */
 const now = () => performance.now();
+
+const HISTORY_CONTEXT_MARKER = '[Chat messages since your last reply - for context]';
+const CURRENT_MESSAGE_MARKER = '[Current message - respond to this]';
+
+function contentToText(c: string | ContentPart[]): string {
+  if (typeof c === 'string') return c;
+  return (c as ContentPart[]).map(p => (p.type === 'text' ? p.text : '')).join('');
+}
+
+
+function buildUserMessageWithHistory(history: ChatMessage[], currentContent: string): string {
+  if (history.length === 0) return currentContent;
+  const roleLabel = (role: string) => (role === 'user' ? '用户' : role === 'assistant' ? '助手' : '系统');
+  const lines = history
+    .filter(m => m.role === 'user' || m.role === 'assistant' || m.role === 'system')
+    .map(m => `${roleLabel(m.role)}: ${contentToText(m.content)}`);
+  const historyBlock = lines.join('\n');
+  return `${HISTORY_CONTEXT_MARKER}\n${historyBlock}\n\n${CURRENT_MESSAGE_MARKER}\n${currentContent}`;
+}
 
 // ============================================================================
 // 配置
@@ -72,6 +100,20 @@ export interface ZhinAgentConfig {
   toneAwareness?: boolean;
   /** 视觉模型名称（如 llava, bakllava），留空则不启用视觉 */
   visionModel?: string;
+  /** 上下文窗口 token 数（默认 128000） */
+  contextTokens?: number;
+  /** 历史记录最大占比（默认 0.5 = 50%） */
+  maxHistoryShare?: number;
+  /** 禁用的工具名列表（来自配置，这些工具不会下发给 AI） */
+  disabledTools?: string[];
+  /** 仅允许的工具名列表；若设置则只下发列表中的工具（与 disabledTools 二选一，allowedTools 优先） */
+  allowedTools?: string[];
+  /** bash 执行策略：deny=禁止，allowlist=仅允许列表内，full=不限制 */
+  execSecurity?: 'deny' | 'allowlist' | 'full';
+  /** allowlist 模式下允许的命令（正则字符串） */
+  execAllowlist?: string[];
+  /** allowlist 未命中时 true=需审批（当前为拒绝并提示），false=直接拒绝 */
+  execAsk?: boolean;
 }
 
 const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
@@ -87,6 +129,13 @@ const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   rateLimit: {},
   toneAwareness: true,
   visionModel: '',
+  contextTokens: DEFAULT_CONTEXT_TOKENS,
+  maxHistoryShare: 0.5,
+  disabledTools: [],
+  allowedTools: [],  // 空数组表示不限制；非空时仅允许列表中的工具
+  execSecurity: 'deny',  // 默认禁止 bash，避免误用
+  execAllowlist: [],
+  execAsk: false,
 };
 
 // ============================================================================
@@ -128,6 +177,8 @@ export class ZhinAgent {
   private userProfiles: UserProfileStore;
   private rateLimiter: RateLimiter;
   private followUps: FollowUpManager;
+  /** 引导文件上下文（SOUL.md + TOOLS.md + AGENTS.md） */
+  private bootstrapContext: string = '';
 
   constructor(provider: AIProvider, config?: ZhinAgentConfig) {
     this.provider = provider;
@@ -199,6 +250,15 @@ export class ZhinAgent {
     return () => { this.externalTools.delete(tool.name); };
   }
 
+  /**
+   * 注入引导文件上下文（SOUL.md + TOOLS.md + AGENTS.md 的合并内容）
+   * 由 init.ts 在加载引导文件后调用
+   */
+  setBootstrapContext(context: string): void {
+    this.bootstrapContext = context;
+    logger.debug(`Bootstrap context set (${context.length} chars)`);
+  }
+
   // ── 核心处理入口 ─────────────────────────────────────────────────────
 
   /**
@@ -239,20 +299,47 @@ export class ZhinAgent {
       return parseOutput(rateCheck.message || '请稍后再试');
     }
 
+    // 触发 message:received hook
+    triggerAIHook(createAIHookEvent('message', 'received', sessionId, {
+      userId,
+      content,
+      platform: platform || '',
+    })).catch(() => {});
+
     // ══════ 1. 收集工具 — 两级过滤 ══════
     const tFilter = now();
     const allTools = this.collectTools(content, context, externalTools);
 
-    // 注入内置工具
-    allTools.push(this.createChatHistoryTool(sessionId));
-    allTools.push(this.createUserProfileTool(userId));
-    allTools.push(this.createScheduleFollowUpTool(sessionId, context));
+    // 按需注入内置工具 — 只在消息匹配关键词时注入，避免污染小模型的上下文
+    if (/之前|上次|历史|回忆|聊过|记录|还记得|曾经/i.test(content)) {
+      allTools.push(this.createChatHistoryTool(sessionId));
+    }
+    if (/偏好|设置|配置|档案|资料|时区|timezone|profile|喜好|我叫|叫我|记住我/i.test(content)) {
+      allTools.push(this.createUserProfileTool(userId));
+    }
+    if (/提醒|定时|过一会|跟进|别忘|取消提醒|reminder|分钟后|小时后/i.test(content)) {
+      allTools.push(this.createScheduleFollowUpTool(sessionId, context));
+    }
 
     const filterMs = (now() - tFilter).toFixed(0);
 
     // ══════ 2. 构建会话记忆 + 用户画像 ══════
     const tMem = now();
-    const historyMessages = await this.buildHistoryMessages(sessionId);
+    let historyMessages = await this.buildHistoryMessages(sessionId);
+
+    // 上下文窗口保护：按 token 预算修剪历史（借鉴 OpenClaw context-window-guard）
+    const contextTokens = this.config.contextTokens ?? DEFAULT_CONTEXT_TOKENS;
+    const maxHistoryShare = this.config.maxHistoryShare ?? 0.5;
+    const pruneResult = pruneHistoryForContext({
+      messages: historyMessages,
+      maxContextTokens: contextTokens,
+      maxHistoryShare,
+    });
+    historyMessages = pruneResult.messages;
+    if (pruneResult.droppedCount > 0) {
+      logger.debug(`[上下文窗口] 丢弃 ${pruneResult.droppedCount} 条历史消息 (${pruneResult.droppedTokens} tokens)`);
+    }
+
     const memMs = (now() - tMem).toFixed(0);
 
     // ══════ 2.5 用户画像 & 情绪感知 ══════
@@ -273,21 +360,20 @@ export class ZhinAgent {
 
     logger.debug(`[工具路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, ${allTools.length} 工具 (${allTools.map(t => t.name).join(', ')})`);
 
-    // ══════ 4. 拆分无参数 / 有参数工具 ══════
-    const noParamTools: AgentTool[] = [];
-    const paramTools: AgentTool[] = [];
+    // ══════ 4. 拆分可预执行 / 普通工具 ══════
+    // 只有显式标记 preExecutable=true 的工具才会被预执行（opt-in 模式）
+    const preExecTools: AgentTool[] = [];
     for (const tool of allTools) {
-      const required = tool.parameters?.required;
-      (!required || required.length === 0) ? noParamTools.push(tool) : paramTools.push(tool);
+      if (tool.preExecutable) preExecTools.push(tool);
     }
 
-    // ══════ 5. 预执行无参数工具 ══════
+    // ══════ 5. 预执行标记的工具 ══════
     let preData = '';
-    if (noParamTools.length > 0) {
+    if (preExecTools.length > 0) {
       const tPre = now();
-      logger.debug(`预执行: ${noParamTools.map(t => t.name).join(', ')}`);
+      logger.debug(`预执行: ${preExecTools.map(t => t.name).join(', ')}`);
       const results = await Promise.allSettled(
-        noParamTools.map(async (tool) => {
+        preExecTools.map(async (tool) => {
           const result = await Promise.race([
             tool.execute({}),
             new Promise<never>((_, rej) =>
@@ -298,7 +384,11 @@ export class ZhinAgent {
       );
       for (const r of results) {
         if (r.status === 'fulfilled') {
-          const s = typeof r.value.result === 'string' ? r.value.result : JSON.stringify(r.value.result);
+          let s = typeof r.value.result === 'string' ? r.value.result : JSON.stringify(r.value.result);
+          // 限制单条预执行结果的长度，防止注入过多数据干扰模型
+          if (s.length > 500) {
+            s = s.slice(0, 500) + `\n... (truncated, ${s.length} chars total)`;
+          }
           preData += `\n【${r.value.name}】${s}`;
         }
       }
@@ -308,8 +398,11 @@ export class ZhinAgent {
     // ══════ 6. 路径选择 ══════
     let reply: string;
 
-    if (paramTools.length === 0 && preData) {
-      // ── 快速路径: 只有预执行数据 → 1 轮 AI ──
+    // 判断是否所有工具都已被预执行（即没有非预执行工具）
+    const hasNonPreExecTools = allTools.some(t => !t.preExecutable);
+
+    if (!hasNonPreExecTools && preData) {
+      // ── 快速路径: 所有工具都已预执行 → 1 轮 AI ──
       const tLLM = now();
       const prompt = `${personaEnhanced}
 
@@ -320,38 +413,41 @@ ${preData}
       reply = await this.streamChatWithHistory(content, prompt, historyMessages, onChunk);
       logger.info(`[快速路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, LLM=${(now() - tLLM).toFixed(0)}ms, 总=${(now() - t0).toFixed(0)}ms`);
     } else {
-      // ── Agent 路径: 需要参数的工具 → 多轮 ──
+      // ── Agent 路径: 需要 LLM 决策调用哪些工具 → 多轮 ──
       const tAgent = now();
-      logger.debug(`Agent 路径: ${paramTools.length} 个参数工具`);
+      logger.debug(`Agent 路径: ${allTools.length} 个工具`);
       const contextHint = this.buildContextHint(context, content);
-      const systemPrompt = `${personaEnhanced}
+      
+      // 使用结构化系统提示（包含时间、安全准则、技能列表等）
+      const richPrompt = this.buildRichSystemPrompt();
+      const systemPrompt = `${richPrompt}
 ${contextHint}
-${preData ? `\n已自动获取的数据：${preData}\n` : ''}
-## 工作流程
-1. 分析用户的问题
-2. 如果已获取的数据能回答问题，直接作答
-3. 如果还需要更多信息，调用工具获取（直接调用，不要解释）
-4. 获取工具结果后，**务必**生成一条完整、自然的中文回答
+${preData ? `\n已获取数据：${preData}\n` : ''}`;
 
-## 关键要求
-- 调用工具后你**必须**基于结果给出完整回答，绝不能返回空内容
-- 用自然语言总结工具结果，突出关键信息
-- 适当使用 emoji 让回答更生动`;
-
-      const agentTools = paramTools.length > 0 ? paramTools : allTools;
+      // 始终传递所有工具给 Agent，因为 activate_skill 激活后可能需要调用
+      // 之前被分类为 noParamTools 的工具（确保技能中引用的所有工具都可用）
+      const agentTools = this.applyExecPolicyToTools(allTools);
       const agent = createAgent(this.provider, {
         systemPrompt,
         tools: agentTools,
         maxIterations: this.config.maxIterations,
       });
 
-      // Agent 路径也注入历史上下文
-      const result = await agent.run(content, historyMessages);
+      const userMessageWithHistory = buildUserMessageWithHistory(historyMessages, content);
+      const result = await agent.run(userMessageWithHistory, []);
       reply = result.content || this.fallbackFormat(result.toolCalls);
       logger.info(`[Agent 路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, Agent=${(now() - tAgent).toFixed(0)}ms, 总=${(now() - t0).toFixed(0)}ms`);
     }
 
     await this.saveToSession(sessionId, content, reply, sceneId);
+
+    // 触发 message:sent hook
+    triggerAIHook(createAIHookEvent('message', 'sent', sessionId, {
+      userId,
+      content: reply,
+      platform: platform || '',
+    })).catch(() => {});
+
     return parseOutput(reply);
   }
 
@@ -416,7 +512,7 @@ ${preData ? `\n已自动获取的数据：${preData}\n` : ''}
     return parseOutput(reply);
   }
 
-  // ── 增强人格（注入画像 + 情绪 hint） ────────────────────────────────
+  // ── 增强人格（注入画像 + 情绪 hint + 引导上下文） ──────────────────
 
   private buildEnhancedPersona(profileSummary: string, toneHint: string): string {
     let persona = this.config.persona;
@@ -426,23 +522,25 @@ ${preData ? `\n已自动获取的数据：${preData}\n` : ''}
     if (toneHint) {
       persona += `\n\n[语气提示] ${toneHint}`;
     }
+    // 注入当前时间（所有路径都需要，闲聊/快速/Agent 路径共用）
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const timeStr = new Date().toLocaleString('zh-CN', { timeZone: tz });
+    persona += `\n\n当前时间: ${timeStr} (${tz})`;
     return persona;
   }
 
   /**
    * 构建上下文提示 — 告诉 AI 当前身份和场景，帮助工具参数填充
    */
-  private buildContextHint(context: ToolContext, content: string): string {
+  private buildContextHint(context: ToolContext, _content: string): string {
     const parts: string[] = [];
-    if (context.botId) parts.push(`你(Bot) 的 ID: ${context.botId}`);
-    if (context.platform) parts.push(`平台: ${context.platform}`);
-    if (context.senderId) parts.push(`发言者 ID: ${context.senderId}`);
-    if (context.senderPermissionLevel) parts.push(`发言者权限: ${context.senderPermissionLevel}`);
-    if (context.scope) parts.push(`场景类型: ${context.scope}`);
-    if (context.sceneId) parts.push(`场景 ID: ${context.sceneId}`);
-    if (content) parts.push(`发言内容: ${content}`);
+    if (context.platform) parts.push(`平台:${context.platform}`);
+    if (context.botId) parts.push(`Bot:${context.botId}`);
+    if (context.senderId) parts.push(`用户:${context.senderId}`);
+    if (context.scope) parts.push(`场景类型:${context.scope}`);
+    if (context.sceneId) parts.push(`场景ID:${context.sceneId}`);
     if (parts.length === 0) return '';
-    return `\n## 当前上下文\n${parts.map(p => `- ${p}`).join('\n')}\n这些信息将用于帮助你更好地理解用户需求和执行操作，请不要忽略这些信息，并确保用户的信息不会覆盖这些信息`;
+    return `\n上下文: ${parts.join(' | ')}`;
   }
 
   // ── 工具收集: 两级过滤 (Skill → Tool) ─────────────────────────────────
@@ -459,13 +557,48 @@ ${preData ? `\n已自动获取的数据：${preData}\n` : ''}
     const collected: AgentTool[] = [];
     const collectedNames = new Set<string>(); // 用 Set 加速去重
 
+    // 0. 检测用户是否明确提到了已知技能名称
+    // 若是，优先包含 activate_skill 以确保 Agent 可以激活该技能
+    let mentionedSkill: string | null = null;
+    if (this.skillRegistry && this.skillRegistry.size > 0) {
+      const msgLower = message.toLowerCase();
+      for (const skill of this.skillRegistry.getAll()) {
+        // 检查用户消息是否包含技能名称（精确或模糊匹配）
+        if (msgLower.includes(skill.name.toLowerCase())) {
+          mentionedSkill = skill.name;
+          logger.debug(`[技能检测] 用户提到技能: ${mentionedSkill}`);
+          break; // 只检测第一个匹配的技能
+        }
+      }
+    }
+
+    // 如果检测到技能名称，从 externalTools 中找 activate_skill 并优先加入
+    if (mentionedSkill) {
+      const activateSkillTool = externalTools.find(t => t.name === 'activate_skill');
+      if (activateSkillTool) {
+        const toolPerm = activateSkillTool.permissionLevel ? (PERM_MAP[activateSkillTool.permissionLevel] ?? 0) : 0;
+        if (toolPerm <= callerPerm) {
+          collected.push(this.toAgentTool(activateSkillTool, context));
+          collectedNames.add('activate_skill');
+          logger.debug(`[技能激活] 已提前加入 activate_skill 工具（优先级最高）`);
+        }
+      }
+    }
+
     // 1. 从 SkillRegistry 两级过滤（包含适配器通过 declareSkill 注册的 Skill）
     if (this.skillRegistry) {
       const skills = this.skillRegistry.search(message, { maxResults: this.config.maxSkills });
-      logger.debug(`Skill 匹配: ${skills.map(s => s.name).join(', ')}`);
+      const skillStr = skills.length > 0
+        ? skills.map(s => `${s.name}(${s.tools?.length || 0}工具)`).join(', ')
+        : '(无匹配技能)';
+      logger.debug(`[Skill 匹配] ${skillStr}`);
 
       for (const skill of skills) {
         for (const tool of skill.tools) {
+          // 平台过滤：确保 Skill 中的工具也只保留当前平台支持的
+          if (tool.platforms?.length && context.platform && !tool.platforms.includes(context.platform)) continue;
+          // 场景过滤
+          if (tool.scopes?.length && context.scope && !tool.scopes.includes(context.scope)) continue;
           // 权限检查
           const toolPerm = tool.permissionLevel ? (PERM_MAP[tool.permissionLevel] ?? 0) : 0;
           if (toolPerm > callerPerm) continue;
@@ -501,49 +634,246 @@ ${preData ? `\n已自动获取的数据：${preData}\n` : ''}
       collectedNames.add(tool.name);
     }
 
-    // 4. 用 Agent.filterTools 做最终相关性排序
-    return Agent.filterTools(message, collected, {
+    // 4. 用 Agent.filterTools 做最终相关性排序（阈值 0.3 减少噪音）
+    const filtered = Agent.filterTools(message, collected, {
       callerPermissionLevel: callerPerm,
       maxTools: this.config.maxTools,
-      minScore: 0.1,
+      minScore: 0.3,
+    });
+
+    // 特殊处理：如果检测到了技能名称，确保 activate_skill 排在最前面
+    if (mentionedSkill && filtered.length > 0) {
+      const activateSkillIdx = filtered.findIndex(t => t.name === 'activate_skill');
+      if (activateSkillIdx > 0) {  // 若存在但不在最前
+        // 将 activate_skill 移到最前面
+        const activateSkillTool = filtered[activateSkillIdx];
+        filtered.splice(activateSkillIdx, 1);
+        filtered.unshift(activateSkillTool);
+        logger.debug(`[工具排序] activate_skill 提升至首位（因检测到技能: ${mentionedSkill}）`);
+      }
+    }
+
+    // 5. 配置级工具开关：disabledTools / allowedTools（权限与安全）
+    let final = filtered;
+    const allowed = this.config.allowedTools;
+    const disabled = this.config.disabledTools ?? [];
+    if (allowed && allowed.length > 0) {
+      const allowSet = new Set(allowed.map(n => n.toLowerCase()));
+      final = final.filter(t => allowSet.has(t.name.toLowerCase()));
+      if (final.length < filtered.length) {
+        logger.debug(`[工具开关] allowedTools 限制: ${filtered.length} -> ${final.length}`);
+      }
+    } else if (disabled.length > 0) {
+      const disabledSet = new Set(disabled.map(n => n.toLowerCase()));
+      final = final.filter(t => !disabledSet.has(t.name.toLowerCase()));
+      if (final.length < filtered.length) {
+        logger.debug(`[工具开关] disabledTools 过滤: ${filtered.length} -> ${final.length}`);
+      }
+    }
+
+    // 诊断日志：显示收集的工具总数、过滤后的数量、以及列表
+    if (final.length > 0) {
+      logger.debug(
+        `[工具收集] 收集了 ${collected.length} 个工具，过滤后 ${final.length} 个，` +
+        `用户消息相关性最高的: ${final.slice(0, 3).map(t => t.name).join(', ')}`
+      );
+    } else {
+      logger.debug(`[工具收集] 收集了 ${collected.length} 个工具，但过滤后 0 个（没有超过相关性阈值的）`);
+    }
+
+    return final;
+  }
+
+  /**
+   * bash 执行策略检查：未通过时抛出 Error（供上层返回给用户）。
+   */
+  private checkExecPolicy(command: string): void {
+    const security = this.config.execSecurity ?? 'deny';
+    if (security === 'full') return;
+    if (security === 'deny') {
+      throw new Error('当前配置禁止执行 Shell 命令（execSecurity=deny）。如需开放请在配置中设置 ai.agent.execSecurity。');
+    }
+    // allowlist
+    const list = this.config.execAllowlist ?? [];
+    const cmd = (command || '').trim();
+    const allowed = list.some(pattern => {
+      try {
+        const re = new RegExp(pattern);
+        return re.test(cmd);
+      } catch {
+        return cmd === pattern || cmd.startsWith(pattern);
+      }
+    });
+    if (!allowed) {
+      const ask = this.config.execAsk;
+      throw new Error(
+        ask
+          ? '该命令不在允许列表中，需要审批后执行。当前版本请将命令加入 ai.agent.execAllowlist 或联系管理员。'
+          : '该命令不在允许列表中，已被拒绝执行。可将允许的命令模式加入 ai.agent.execAllowlist。',
+      );
+    }
+  }
+
+  /**
+   * 对传入的 Agent 工具列表应用 bash 执行策略（仅包装 bash 工具）。
+   */
+  private applyExecPolicyToTools(tools: AgentTool[]): AgentTool[] {
+    return tools.map(t => {
+      if (t.name !== 'bash') return t;
+      const original = t.execute;
+      return {
+        ...t,
+        execute: async (args: Record<string, any>) => {
+          const cmd = args?.command != null ? String(args.command) : '';
+          this.checkExecPolicy(cmd);
+          return original(args);
+        },
+      };
     });
   }
 
   // ── 辅助方法 ─────────────────────────────────────────────────────────
 
   /**
-   * 将 Tool 转为 AgentTool，注入 ToolContext 以确保执行时鉴权生效
+   * 将 Tool 转为 AgentTool，注入 ToolContext 以确保执行时鉴权生效。
+   *
+   * 当参数定义了 contextKey 时：
+   *   1. 从 AI 可见的 parameters 中移除该参数（减少 token、避免填错）
+   *   2. 执行时自动从 ToolContext 注入对应值，并按声明类型做类型转换
    */
   private toAgentTool(tool: Tool, context?: ToolContext): AgentTool {
     const originalExecute = tool.execute;
+
+    // ── 收集需要自动注入的参数 ──────────────────────────────────
+    const contextInjections: Array<{
+      paramName: string;
+      contextKey: string;
+      paramType: string; // 目标参数的 JSON Schema type，用于类型转换
+    }> = [];
+    let cleanParameters: any = tool.parameters;
+
+    if (context && tool.parameters?.properties) {
+      const props = tool.parameters.properties as Record<string, any>;
+      const filteredProps: Record<string, any> = {};
+      const filteredRequired: string[] = [];
+
+      for (const [key, schema] of Object.entries(props)) {
+        if (schema.contextKey && (context as any)[schema.contextKey] != null) {
+          // 记录需要注入的映射
+          contextInjections.push({
+            paramName: key,
+            contextKey: schema.contextKey,
+            paramType: schema.type || 'string',
+          });
+        } else {
+          // 保留给 AI 的参数
+          filteredProps[key] = schema;
+          if (tool.parameters.required?.includes(key)) {
+            filteredRequired.push(key);
+          }
+        }
+      }
+
+      if (contextInjections.length > 0) {
+        cleanParameters = {
+          ...tool.parameters,
+          properties: filteredProps,
+          required: filteredRequired.length > 0 ? filteredRequired : undefined,
+        };
+      }
+    }
+
+    // ── 组装 AgentTool ──────────────────────────────────────────
     const at: AgentTool = {
       name: tool.name,
       description: tool.description,
-      parameters: tool.parameters as any,
-      // 包装 execute，将 ToolContext 注入第二参数，确保工具内部的鉴权逻辑能正常执行
+      parameters: cleanParameters as any,
       execute: context
-        ? (args: Record<string, any>) => originalExecute(args, context)
+        ? (args: Record<string, any>) => {
+            // 自动注入 context 值，按目标 type 做类型转换
+            const enrichedArgs = { ...args };
+            for (const { paramName, contextKey, paramType } of contextInjections) {
+              let value = (context as any)[contextKey];
+              if (paramType === 'number' && typeof value === 'string') {
+                value = Number(value);
+              } else if (paramType === 'string' && typeof value !== 'string') {
+                value = String(value);
+              }
+              enrichedArgs[paramName] = value;
+            }
+            return originalExecute(enrichedArgs, context);
+          }
         : originalExecute,
     };
     if (tool.tags?.length) at.tags = tool.tags;
     if (tool.keywords?.length) at.keywords = tool.keywords;
     if (tool.permissionLevel) at.permissionLevel = PERM_MAP[tool.permissionLevel] ?? 0;
+    if (tool.preExecutable) at.preExecutable = true;
+    if ((tool as any).kind) at.kind = (tool as any).kind;
     return at;
   }
 
   /**
-   * 构建 Skill 增强的 system prompt（仅在工具路径使用，闲聊不走这里）
+   * 构建结构化 System Prompt（借鉴 OpenClaw 的分段式设计）
+   *
+   * 段落结构：
+   *   1. 身份 + 人格
+   *   2. 安全准则
+   *   3. 工具调用风格
+   *   4. 技能列表（XML 格式）
+   *   5. 当前时间
+   *   6. 引导文件上下文（SOUL.md, TOOLS.md, AGENTS.md）
+   */
+  /**
+   * 构建精简的 System Prompt — 专为小模型（8B/14B 级）优化
+   *
+   * 设计原则：
+   *   - 控制在 300-500 token 内，为工具定义和历史留足空间
+   *   - 规则用短句，不用段落
+   *   - 不重复，不举例（模型能从工具定义中推断用法）
    */
   private buildRichSystemPrompt(): string {
-    let prompt = this.config.persona;
+    const lines: string[] = [];
+
+    // §1 身份
+    lines.push(this.config.persona);
+    lines.push('');
+
+    // §2 核心规则（精简为 7 条短句）
+    lines.push('## 规则');
+    lines.push('1. 直接调用工具执行操作，不要描述步骤或解释意图');
+    lines.push('2. 时间/日期问题：直接用下方"当前时间"回答，不调工具');
+    lines.push('3. 修改文件必须调用 edit_file/write_file，禁止给手动教程');
+    lines.push('4. activate_skill 返回后，必须继续调用其中指导的工具，不要停');
+    lines.push('5. 所有回答必须基于工具返回的实际数据');
+    lines.push('6. 工具失败时尝试替代方案，不要直接把错误丢给用户');
+    lines.push('7. 只根据用户**最后一条**消息作答，前面的对话仅作背景');
+    lines.push('');
+
+    // §3 技能列表（紧凑格式）
     if (this.skillRegistry && this.skillRegistry.size > 0) {
       const skills = this.skillRegistry.getAll();
-      prompt += '\n\n## 我的能力\n';
+      lines.push('## 可用技能');
       for (const skill of skills) {
-        prompt += `- **${skill.name}**: ${skill.description}\n`;
+        lines.push(`- ${skill.name}: ${skill.description}`);
       }
+      lines.push('用户提到技能名 → 调用 activate_skill(name) → 按返回的指导执行工具');
+      lines.push('');
     }
-    return prompt;
+
+    // §4 当前时间
+    const now = new Date();
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const timeStr = now.toLocaleString('zh-CN', { timeZone: tz });
+    lines.push(`当前时间: ${timeStr} (${tz})`);
+    lines.push('');
+
+    // §5 引导文件上下文（SOUL.md, TOOLS.md, AGENTS.md）
+    if (this.bootstrapContext) {
+      lines.push(this.bootstrapContext);
+    }
+
+    return lines.filter(Boolean).join('\n');
   }
 
   // ── 内置工具 ─────────────────────────────────────────────────────────
@@ -562,7 +892,7 @@ ${preData ? `\n已自动获取的数据：${preData}\n` : ''}
         properties: {
           keyword: {
             type: 'string',
-            description: '搜索关键词（模糊匹配消息内容和摘要）',
+            description: '搜索关键词（模糊匹配消息内容和摘要）。留空则返回最近几轮记录',
           },
           from_round: {
             type: 'number',
@@ -573,6 +903,7 @@ ${preData ? `\n已自动获取的数据：${preData}\n` : ''}
             description: '结束轮次',
           },
         },
+        required: ['keyword'],
       },
       tags: ['memory', 'history', '聊天记录', '回忆', '之前'],
       keywords: ['之前', '历史', '聊过', '讨论过', '记得', '上次', '以前', '回忆'],
@@ -774,10 +1105,12 @@ ${preData ? `\n已自动获取的数据：${preData}\n` : ''}
     onChunk?: OnChunkCallback,
   ): Promise<string> {
     const model = this.provider.models[0];
+    const userContent = history.length > 0
+      ? buildUserMessageWithHistory(history, content)
+      : content;
     const messages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
-      ...history,
-      { role: 'user', content },
+      { role: 'user', content: userContent },
     ];
 
     // 优先流式（对 Ollama 等本地模型有明显提速）
@@ -822,7 +1155,13 @@ ${preData ? `\n已自动获取的数据：${preData}\n` : ''}
 
   private fallbackFormat(toolCalls: { tool: string; args: any; result: any }[]): string {
     if (toolCalls.length === 0) return '处理完成。';
-    return toolCalls.map(tc => {
+    // 过滤掉 activate_skill 的结果（是 SKILL.md 指令，不应暴露给用户）
+    const userFacing = toolCalls.filter(tc => tc.tool !== 'activate_skill');
+    if (userFacing.length === 0) {
+      // 只有 activate_skill 被调用但后续工具未执行 — 说明技能激活后流程中断
+      return '技能已激活但未能完成后续操作，请重试或换一种方式描述你的需求。';
+    }
+    return userFacing.map(tc => {
       const s = typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2);
       return `【${tc.tool}】\n${s}`;
     }).join('\n\n');

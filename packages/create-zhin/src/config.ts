@@ -1,8 +1,8 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { InitOptions, DatabaseConfig } from './types.js';
-import { generateAIConfigYaml, generateAIConfigTS, generateAIConfigJSON } from './ai.js';
-import { generateBotsConfigYaml, generateBotsConfigTS, generateBotsConfigJSON } from './adapter.js';
+import { generateAIConfigYaml, generateAIConfigJSON, generateAIConfigToml } from './ai.js';
+import { generateBotsConfigYaml, generateBotsConfigJSON, generateBotsConfigToml } from './adapter.js';
 
 // 生成数据库环境变量
 export function generateDatabaseEnvVars(config: DatabaseConfig): string {
@@ -60,48 +60,48 @@ type DatabaseConfigObject = {
   [key: string]: string | number | { [key: string]: string | number } | undefined;
 };
 
-// 生成数据库配置代码
-export function generateDatabaseConfig(config: DatabaseConfig, format: 'ts' | 'js' | 'yaml' | 'json'): string {
-  // 根据数据库类型生成使用环境变量的配置
+// 生成数据库配置代码（仅支持 yaml / json / toml）
+export function generateDatabaseConfig(config: DatabaseConfig, format: 'yaml' | 'json' | 'toml'): string {
+  const useEnvRef = format === 'yaml' || format === 'toml';
   let configObj: DatabaseConfigObject = { dialect: config.dialect };
-  
+
   switch (config.dialect) {
     case 'mysql':
       configObj = {
         dialect: 'mysql',
-        host: format === 'yaml' ? '${DB_HOST}' : 'env.DB_HOST',
-        port: format === 'yaml' ? '${DB_PORT}' : 'parseInt(env.DB_PORT || "3306")',
-        user: format === 'yaml' ? '${DB_USER}' : 'env.DB_USER',
-        password: format === 'yaml' ? '${DB_PASSWORD}' : 'env.DB_PASSWORD',
-        database: format === 'yaml' ? '${DB_DATABASE}' : 'env.DB_DATABASE'
+        host: useEnvRef ? '${DB_HOST}' : 'env.DB_HOST',
+        port: useEnvRef ? '${DB_PORT}' : 'parseInt(env.DB_PORT || "3306")',
+        user: useEnvRef ? '${DB_USER}' : 'env.DB_USER',
+        password: useEnvRef ? '${DB_PASSWORD}' : 'env.DB_PASSWORD',
+        database: useEnvRef ? '${DB_DATABASE}' : 'env.DB_DATABASE'
       };
       break;
     case 'pg':
       configObj = {
         dialect: 'pg',
-        host: format === 'yaml' ? '${DB_HOST}' : 'env.DB_HOST',
-        port: format === 'yaml' ? '${DB_PORT}' : 'parseInt(env.DB_PORT || "5432")',
-        user: format === 'yaml' ? '${DB_USER}' : 'env.DB_USER',
-        password: format === 'yaml' ? '${DB_PASSWORD}' : 'env.DB_PASSWORD',
-        database: format === 'yaml' ? '${DB_DATABASE}' : 'env.DB_DATABASE'
+        host: useEnvRef ? '${DB_HOST}' : 'env.DB_HOST',
+        port: useEnvRef ? '${DB_PORT}' : 'parseInt(env.DB_PORT || "5432")',
+        user: useEnvRef ? '${DB_USER}' : 'env.DB_USER',
+        password: useEnvRef ? '${DB_PASSWORD}' : 'env.DB_PASSWORD',
+        database: useEnvRef ? '${DB_DATABASE}' : 'env.DB_DATABASE'
       };
       break;
     case 'mongodb':
       configObj = {
         dialect: 'mongodb',
-        url: format === 'yaml' ? '${DB_URL}' : 'env.DB_URL',
-        dbName: format === 'yaml' ? '${DB_NAME}' : 'env.DB_NAME'
+        url: useEnvRef ? '${DB_URL}' : 'env.DB_URL',
+        dbName: useEnvRef ? '${DB_NAME}' : 'env.DB_NAME'
       };
       break;
     case 'redis':
       configObj = {
         dialect: 'redis',
         socket: {
-          host: format === 'yaml' ? '${REDIS_HOST}' : 'env.REDIS_HOST',
-          port: format === 'yaml' ? '${REDIS_PORT}' : 'parseInt(env.REDIS_PORT || "6379")'
+          host: useEnvRef ? '${REDIS_HOST}' : 'env.REDIS_HOST',
+          port: useEnvRef ? '${REDIS_PORT}' : 'parseInt(env.REDIS_PORT || "6379")'
         },
-        password: format === 'yaml' ? '${REDIS_PASSWORD}' : 'env.REDIS_PASSWORD || undefined',
-        database: format === 'yaml' ? '${REDIS_DB}' : 'parseInt(env.REDIS_DB || "0")'
+        password: useEnvRef ? '${REDIS_PASSWORD}' : 'env.REDIS_PASSWORD || undefined',
+        database: useEnvRef ? '${REDIS_DB}' : 'parseInt(env.REDIS_DB || "0")'
       };
       break;
     case 'sqlite':
@@ -109,40 +109,8 @@ export function generateDatabaseConfig(config: DatabaseConfig, format: 'ts' | 'j
       configObj = config;
       break;
   }
-  
+
   switch (format) {
-    case 'ts':
-    case 'js':
-      if (config.dialect === 'sqlite') {
-        return `database: ${JSON.stringify(configObj, null, 2).replace(/^/gm, '    ').trim()},`;
-      } else {
-        // 对于其他数据库，手动构建配置以保持可读性
-        let configLines: string[] = ['{'];
-        configLines.push(`      dialect: '${configObj.dialect}',`);
-        
-        Object.entries(configObj).forEach(([key, value]) => {
-          if (key === 'dialect') return;
-          
-          if (typeof value === 'object' && value !== null) {
-            configLines.push(`      ${key}: {`);
-            Object.entries(value).forEach(([subKey, subValue]) => {
-              if (typeof subValue === 'string' && (subValue.includes('env.') || subValue.includes('parseInt('))) {
-                configLines.push(`        ${subKey}: ${subValue},`);
-              } else {
-                configLines.push(`        ${subKey}: '${subValue}',`);
-              }
-            });
-            configLines.push('      },');
-          } else if (typeof value === 'string' && (value.includes('env.') || value.includes('parseInt('))) {
-            configLines.push(`      ${key}: ${value},`);
-          } else {
-            configLines.push(`      ${key}: '${value}',`);
-          }
-        });
-        configLines.push('    }');
-        
-        return `database: ${configLines.join('\n    ')},`;
-      }
     case 'yaml': {
       const yamlLines: string[] = [];
       Object.entries(configObj).forEach(([key, value]) => {
@@ -157,9 +125,30 @@ export function generateDatabaseConfig(config: DatabaseConfig, format: 'ts' | 'j
       });
       return yamlLines.join('\n');
     }
-    case 'json':
+    case 'json': {
       const jsonStr = JSON.stringify(configObj, null, 2).replace(/^/gm, '  ');
       return `  "database": ${jsonStr},`;
+    }
+    case 'toml': {
+      const tomlLines: string[] = ['', '[database]'];
+      if (configObj.dialect === 'sqlite') {
+        tomlLines.push(`dialect = "${configObj.dialect}"`);
+        if ((configObj as any).filename) tomlLines.push(`filename = "${(configObj as any).filename}"`);
+        if ((configObj as any).mode) tomlLines.push(`mode = "${(configObj as any).mode}"`);
+      } else {
+        tomlLines.push(`dialect = "${configObj.dialect}"`);
+        Object.entries(configObj).forEach(([key, value]) => {
+          if (key === 'dialect') return;
+          if (typeof value === 'object' && value !== null) {
+            tomlLines.push('', `[database.${key}]`);
+            Object.entries(value).forEach(([k, v]) => tomlLines.push(`${k} = "${v}"`));
+          } else {
+            tomlLines.push(`${key} = "${value}"`);
+          }
+        });
+      }
+      return tomlLines.join('\n');
+    }
     default:
       return '';
   }
@@ -185,113 +174,36 @@ function buildPluginsList(options: InitOptions): string[] {
   return plugins;
 }
 
-// 创建配置文件
+// 创建配置文件（仅支持 yaml / json / toml）
 export async function createConfigFile(appPath: string, format: string, options: InitOptions): Promise<void> {
-  const configFormat = format as 'ts' | 'js' | 'yaml' | 'json';
+  const configFormat = format as 'yaml' | 'json' | 'toml';
   const databaseConfig = options.database ? generateDatabaseConfig(options.database, configFormat) : '';
   const plugins = buildPluginsList(options);
 
-  // 生成 bots 和 AI 配置
   const botsYaml = options.adapters ? generateBotsConfigYaml(options.adapters) : '';
-  const botsTS = options.adapters ? generateBotsConfigTS(options.adapters) : '';
   const botsJSON = options.adapters ? generateBotsConfigJSON(options.adapters) : '';
+  const botsToml = options.adapters ? generateBotsConfigToml(options.adapters) : '';
   const aiYaml = options.ai ? generateAIConfigYaml(options.ai) : '';
-  const aiTS = options.ai ? generateAIConfigTS(options.ai) : '';
   const aiJSON = options.ai ? generateAIConfigJSON(options.ai) : '';
+  const aiToml = options.ai ? generateAIConfigToml(options.ai) : '';
 
-  // TS/JS 格式的 plugins 列表
-  const pluginsTSLines = plugins.map(p => `      '${p}'`).join(',\n');
-
-  // YAML 格式的 plugins 列表
   const pluginsYamlLines = plugins.map(p => `  - "${p}"`).join('\n');
-
-  // JSON 格式的 plugins 列表
   const pluginsJsonLines = plugins.map(p => `    "${p}"`).join(',\n');
+  const pluginsTomlLines = plugins.map(p => `  "${p}"`).join(',\n');
 
-  // 构建 TS/JS 的额外段（bots + ai）
-  let tsExtraConfig = '';
-  if (botsTS) tsExtraConfig += `\n${botsTS}`;
-  if (aiTS) tsExtraConfig += `\n${aiTS}`;
-
-  // 构建 YAML 的额外段（bots + ai）
   let yamlExtraConfig = '';
   if (botsYaml) yamlExtraConfig += botsYaml;
   if (aiYaml) yamlExtraConfig += aiYaml;
 
-  // 构建 JSON 的额外段（bots + ai）
   let jsonExtraConfig = '';
   if (botsJSON) jsonExtraConfig += `\n  ${botsJSON}`;
   if (aiJSON) jsonExtraConfig += `\n  ${aiJSON}`;
 
+  let tomlExtraConfig = '';
+  if (botsToml) tomlExtraConfig += botsToml;
+  if (aiToml) tomlExtraConfig += aiToml;
+
   const configMap: Record<string, [string, string]> = {
-    ts: ['zhin.config.ts', 
-`import { defineConfig, LogLevel } from 'zhin.js';
-
-export default defineConfig(async (env) => {
-  return {
-    log_level: LogLevel.INFO,
-${databaseConfig ? `    ${databaseConfig}\n` : ''}    plugin_dirs: [
-      'node_modules',
-      './src/plugins'
-    ],
-    services: [
-      'process',
-      'config',
-      'command',
-      'component',
-      'permission',
-      'cron'
-    ],
-    plugins: [
-${pluginsTSLines}
-    ],
-    http: {
-      port: 8086,
-      username: '\${username}',
-      password: '\${password}',
-      base: '/api'
-    },
-    console: {
-      enabled: true,
-      lazyLoad: true
-    },${tsExtraConfig}
-  };
-});
-`],
-    js: ['zhin.config.js',
-`import { defineConfig, LogLevel } from 'zhin.js';
-
-export default defineConfig(async (env) => {
-  return {
-    log_level: LogLevel.INFO,
-${databaseConfig ? `    ${databaseConfig}\n` : ''}    plugin_dirs: [
-      'node_modules',
-      './src/plugins'
-    ],
-    services: [
-      'process',
-      'config',
-      'command',
-      'component',
-      'permission',
-      'cron'
-    ],
-    plugins: [
-${pluginsTSLines}
-    ],
-    http: {
-      port: 8086,
-      username: '\${username}',
-      password: '\${password}',
-      base: '/api'
-    },
-    console: {
-      enabled: true,
-      lazyLoad: true
-    },${tsExtraConfig}
-  };
-});
-`],
     yaml: ['zhin.config.yml',
 `log_level: 1
 ${databaseConfig ? `database:\n${databaseConfig}\n` : ''}plugin_dirs:
@@ -349,9 +261,42 @@ ${pluginsJsonLines}
     "lazyLoad": true
   }${jsonExtraConfig ? `,${jsonExtraConfig}` : ''}
 }
+`],
+    toml: ['zhin.config.toml',
+`log_level = 1
+${databaseConfig}
+
+plugin_dirs = [
+  "node_modules",
+  "./src/plugins"
+]
+
+services = [
+  "process",
+  "config",
+  "command",
+  "component",
+  "permission",
+  "cron"
+]
+
+plugins = [
+${pluginsTomlLines}
+]
+
+[http]
+port = 8086
+username = "\${username}"
+password = "\${password}"
+base = "/api"
+
+[console]
+enabled = true
+lazyLoad = true
+${tomlExtraConfig}
 `]
   };
-  
-  const [filename, content] = configMap[format] || configMap.ts;
+
+  const [filename, content] = configMap[format] || configMap.yaml;
   await fs.writeFile(path.join(appPath, filename), content);
 }

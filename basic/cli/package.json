@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/cli",
-  "version": "1.0.21",
+  "version": "1.0.27",
   "description": "Command-line interface for Zhin.js bot framework",
   "type": "module",
   "main": "./lib/index.js",
@@ -19,14 +19,17 @@
   },
   "dependencies": {
     "@zhin.js/logger": "workspace:*",
-    "commander": "^14.0.2",
+    "adm-zip": "^0.5.16",
     "chalk": "^5.6.2",
-    "ora": "^8.2.0",
-    "fs-extra": "^11.3.2",
+    "commander": "^14.0.2",
     "cross-spawn": "^7.0.6",
     "dotenv": "^16.4.7",
+    "fs-extra": "^11.3.2",
     "glob": "^11.0.0",
-    "inquirer": "^12.10.0"
+    "inquirer": "^12.10.0",
+    "open": "^10.1.2",
+    "ora": "^8.2.0",
+    "yaml": "^2.7.1"
   },
   "peerDependencies": {
     "zhin.js": "workspace:*"
@@ -37,10 +40,10 @@
     }
   },
   "devDependencies": {
-    "@types/fs-extra": "^11.0.4",
     "@types/cross-spawn": "^6.0.6",
-    "@types/node": "^24.10.0",
+    "@types/fs-extra": "^11.0.4",
     "@types/inquirer": "^9.0.7",
+    "@types/node": "^24.10.0",
     "typescript": "^5.9.3",
     "zhin.js": "workspace:*"
   },

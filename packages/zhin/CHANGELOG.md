@@ -1,5 +1,51 @@
 # zhin.js
 
+## 1.0.31
+
+### Patch Changes
+
+- Updated dependencies [771706d]
+  - @zhin.js/core@1.0.31
+  - @zhin.js/logger@0.1.15
+  - @zhin.js/schema@1.0.15
+
+## 1.0.30
+
+### Patch Changes
+
+- 460a6c6: fix: unhandleRejection
+  - @zhin.js/logger@0.1.14
+  - @zhin.js/schema@1.0.14
+  - @zhin.js/core@1.0.30
+
+## 1.0.29
+
+### Patch Changes
+
+- Updated dependencies [4ec9176]
+  - @zhin.js/core@1.0.29
+  - @zhin.js/logger@0.1.13
+  - @zhin.js/schema@1.0.13
+
+## 1.0.28
+
+### Patch Changes
+
+- Updated dependencies [05a514d]
+  - @zhin.js/core@1.0.28
+  - @zhin.js/logger@0.1.12
+  - @zhin.js/schema@1.0.12
+
+## 1.0.27
+
+### Patch Changes
+
+- b27e633: fix: cli 优化
+- Updated dependencies [b27e633]
+  - @zhin.js/core@1.0.27
+  - @zhin.js/logger@0.1.11
+  - @zhin.js/schema@1.0.11
+
 ## 1.0.26
 
 ### Patch Changes

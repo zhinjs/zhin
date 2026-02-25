@@ -22,6 +22,27 @@ const logger = new Logger(null, 'Agent');
 const DEFAULT_TOOL_TIMEOUT = 30_000;
 
 /**
+ * 根据工具名和参数生成简短标题（用于日志、TOOLS.md 等）
+ */
+export function formatToolTitle(name: string, args?: Record<string, any>): string {
+  if (!args || Object.keys(args).length === 0) return name;
+  const a = args;
+  switch (name) {
+    case 'bash': return a.command != null ? `bash: ${String(a.command).slice(0, 60)}` : name;
+    case 'read_file': return a.file_path != null ? `read_file: ${a.file_path}` : name;
+    case 'write_file': return a.file_path != null ? `write_file: ${a.file_path}` : name;
+    case 'edit_file': return a.file_path != null ? `edit_file: ${a.file_path}` : name;
+    case 'web_search': return a.query != null ? `web_search: ${String(a.query).slice(0, 40)}` : name;
+    case 'web_fetch': return a.url != null ? `web_fetch: ${String(a.url).slice(0, 50)}` : name;
+    default: {
+      const first = Object.values(a)[0];
+      if (first != null) return `${name}: ${String(first).slice(0, 50)}`;
+      return name;
+    }
+  }
+}
+
+/**
  * Agent 执行状态
  */
 export interface AgentState {
@@ -416,6 +437,10 @@ export class Agent {
 
         // ── 分支 1: 模型想调用工具 ──
         if (choice.message.tool_calls?.length) {
+          const callSummary = choice.message.tool_calls.map(
+            (tc: any) => `${tc.function.name}(${tc.function.arguments})`
+          ).join(', ');
+          logger.info(`[第${state.iterations}轮] 工具调用: ${callSummary}`);
           this.emit('thinking', '正在执行工具调用...');
 
           // 当存在 tool_calls 时，content 通常是模型的内部思考或原始 JSON，
@@ -460,6 +485,8 @@ export class Agent {
 
           // 将工具结果加入消息历史
           for (const { toolCall, result } of results) {
+            const resultPreview = result.length > 200 ? result.slice(0, 200) + '...' : result;
+            logger.info(`[第${state.iterations}轮] 工具结果 ${toolCall.function.name}: ${resultPreview}`);
             state.messages.push({
               role: 'tool',
               content: result,

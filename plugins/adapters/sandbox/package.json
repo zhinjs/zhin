@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-sandbox",
-  "version": "1.0.31",
+  "version": "1.0.37",
   "description": "Zhin.js adapter for local testing and development",
   "type": "module",
   "main": "./lib/index.js",

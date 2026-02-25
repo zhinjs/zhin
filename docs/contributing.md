@@ -15,6 +15,10 @@
 - 📚 **文档**: 改进文档
 - 🧪 **测试**: 添加或改进测试
 
+### 贡献技能
+- 在仓库的技能目录（如 `docs/public/skills/`）下新建技能文件夹，包含 `SKILL.md`（必填 frontmatter：name、description），提 PR；合并后由脚本或 CI 生成 [技能商店](https://zhinjs.github.io/zhin/skills/) 的 registry。
+- 自托管技能：PR 只修改 `docs/public/skills.json`，新增一条并填写 `source`（ZIP 下载地址），确保 ZIP 内包含 `SKILL.md`。详见文档 [技能商店](/skills/)。
+
 ## 🚀 开发环境设置
 
 ### 1. 克隆仓库
@@ -168,7 +172,7 @@ describe('MessageCommand', () => {
 ```typescript
 // tests/integration.test.ts
 import { describe, it, expect } from 'vitest';
-import { Plugin } from '@zhin.js/core';
+import { Plugin } from 'zhin.js';
 
 describe('Plugin', () => {
   it('should have correct name', () => {

@@ -30,7 +30,6 @@ export default defineConfig({
     // Runtime 依赖 - 由用户安装
     '@zhin.js/core',
     '@zhin.js/http',
-    '@zhin.js/types',
     '@zhin.js/client',
     // Node.js 内置模块
     'fs',

@@ -1,6 +1,44 @@
 # 定时任务
 
-Zhin.js 通过 `CronFeature` 管理定时任务。插件可以使用 `addCron` 扩展方法添加定时任务。
+Zhin.js 通过 `CronFeature` 管理定时任务。插件可以使用 `addCron` 扩展方法添加定时任务。此外，提供**持久化定时任务引擎**：任务写入 `data/cron-jobs.json`，到点由 AI 执行指定 prompt，重启后自动加载。
+
+## 持久化定时任务（AI 到点执行）
+
+适用于「每天 9 点让 AI 执行某段 prompt」等场景，数据存于 `data/cron-jobs.json`，与 OpenClaw 定时任务思路一致。
+
+### CLI
+
+```bash
+# 列出所有持久化任务
+zhin cron list
+
+# 添加：Cron 表达式 + 触发时发给 AI 的 prompt
+zhin cron add "0 9 * * *" "今天有什么待办？给我一份简要提醒"
+zhin cron add "0 8 * * 1-5" "早报摘要" --label 工作日早报
+
+# 删除
+zhin cron remove <id>
+
+# 暂停 / 恢复（不删除，重启后暂停的不执行）
+zhin cron pause <id>
+zhin cron resume <id>
+```
+
+修改后需**重启应用**（`zhin start` / `zhin dev`）后生效。触发时以 `platform: 'cron'`、`senderId: 'system'` 调用 ZhinAgent.process(prompt)。
+
+### AI 管理定时任务
+
+AI 具备管理定时任务的能力（内存任务 + 持久化任务），通过内置工具与 Agent 交互：
+
+| 工具 | 说明 |
+|------|------|
+| `cron_list` | 列出所有定时任务：**memory**（插件注册，重启丢失）与 **persistent**（存于 data/cron-jobs.json，有 id） |
+| `cron_add` | 添加一条持久化任务（cron_expression + prompt + 可选 label），**立即生效** |
+| `cron_remove` | 按 id 删除持久化任务 |
+| `cron_pause` | 暂停持久化任务（不删除） |
+| `cron_resume` | 恢复已暂停的持久化任务 |
+
+用户可以说「帮我加一个每天 9 点的提醒：今天有什么待办」「列出所有定时任务」「把 id 为 xxx 的任务删掉」等，由 AI 调用上述工具完成。
 
 ## 基础用法
 

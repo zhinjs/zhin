@@ -49,7 +49,7 @@ curl -fsSL https://zhin.js.org/install.sh | bash -s -- my-bot
 ```
 
 ```powershell [Windows PowerShell]
-irm https://zhin.js.org/install.ps1 | iex -Args "my-bot"
+irm https://zhin.js.org/install.ps1 | iex
 ```
 
 :::
@@ -62,12 +62,10 @@ irm https://zhin.js.org/install.ps1 | iex -Args "my-bot"
 curl -fsSL https://zhin.js.org/install.sh | bash -s -- my-bot -y
 ```
 
-windows（powershell） 下使用：
-
-```powershell
+```powershell [Windows PowerShell]
 irm https://zhin.js.org/install.ps1 | iex
 ```
-
+:::
 脚本会自动完成以下检查：
 
 - 检测 Node.js 版本（>= 20.19.0 或 >= 22.12.0）
@@ -181,7 +179,7 @@ my-zhin-bot/
 │   └── tsconfig.json      # 客户端 TypeScript 配置
 ├── data/                  # 数据存储目录（运行时自动生成）
 │   └── bot.db             # SQLite 数据库文件
-├── zhin.config.ts         # 主配置文件（默认 TypeScript 格式）
+├── zhin.config.yml        # 主配置文件（可选 yaml / json / toml）
 ├── .env                   # 环境变量（存放密码等敏感信息，不应提交到 Git）
 ├── package.json           # 项目依赖
 ├── tsconfig.json          # TypeScript 配置
@@ -228,18 +226,37 @@ npx zhin stop
 
 Zhin.js 提供了丰富的命令行工具：
 
-| 命令           | 说明                                                    |
-| -------------- | ------------------------------------------------------- |
-| `zhin dev`     | 开发模式启动（热重载），支持 `--verbose`、`--bun`       |
-| `zhin start`   | 生产模式启动，支持 `-d/--daemon`（后台运行）、`--bun`   |
-| `zhin restart` | 重启后台运行的机器人                                    |
-| `zhin stop`    | 停止后台运行的机器人                                    |
-| `zhin build`   | 构建 workspace 下的插件，支持 `--clean`、`--production` |
-| `zhin new`     | 创建插件模板（normal/service/adapter），支持 `--type`   |
-| `zhin pub`     | 发布插件到 npm，支持 `--tag`、`--dry-run`               |
-| `zhin install` | 安装插件（npm 或 git），支持 `-S/--save`                |
-| `zhin search`  | 搜索 npm 上的 Zhin 插件                                 |
-| `zhin info`    | 查看某个插件的详细信息                                  |
+### 开发与运维
+
+| 命令           | 说明                                                              |
+| -------------- | ----------------------------------------------------------------- |
+| `zhin dev`     | 开发模式启动（热重载），支持 `-p/--port`、`--verbose`、`--bun`    |
+| `zhin start`   | 生产模式启动，支持 `-d/--daemon`、`--log-file`、`--bun`           |
+| `zhin restart` | 重启后台运行的机器人                                              |
+| `zhin stop`    | 停止后台运行的机器人                                              |
+| `zhin build`   | 构建插件，支持 `--clean`、`--production`、`--analyze`             |
+
+### 插件管理
+
+| 命令           | 说明                                                              |
+| -------------- | ----------------------------------------------------------------- |
+| `zhin new`     | 创建插件模板（normal/service/adapter），支持 `--type`             |
+| `zhin install` | 安装插件（npm 或 git），支持 `-S/--save`、`-D/--save-dev`、`-g`  |
+| `zhin add`     | `install` 的别名                                                  |
+| `zhin pub`     | 发布插件到 npm，支持 `--tag`、`--dry-run`、`--access`             |
+| `zhin search`  | 搜索 npm 上的 Zhin 插件，支持 `-c/--category`、`--official`       |
+| `zhin info`    | 查看某个插件的详细信息                                            |
+
+### 配置与诊断
+
+| 命令                    | 说明                                                       |
+| ----------------------- | ---------------------------------------------------------- |
+| `zhin setup`            | 交互式配置向导（数据库、适配器、AI 等）                    |
+| `zhin config`           | 管理配置文件（子命令：`list`/`get`/`set`/`delete`/`path`） |
+| `zhin doctor`           | 检查系统环境和项目配置，支持 `--fix` 自动修复              |
+| `zhin onboarding`       | 新手引导教程，支持 `-i`（交互模式）、`-q`（快速指南）      |
+| `zhin install-service`  | 注册为系统服务（systemd/launchd/NSSM），支持 `--user`      |
+| `zhin uninstall-service`| 卸载系统服务                                               |
 
 ## 测试机器人
 
@@ -286,25 +303,25 @@ addCommand(new MessageCommand("hello").desc("打个招呼").action(() => "你好
 
 ### 2. 启用插件
 
-编辑配置文件（如 `zhin.config.ts` 或 `zhin.config.yml`），在 `plugins` 列表中添加：
+编辑配置文件（`zhin.config.yml` / `.json` / `.toml`），在 `plugins` 列表中添加：
 
 ::: code-group
 
-```typescript [zhin.config.ts]
-plugins: [
-  'hello',                    // 你的新插件
-  '@zhin.js/http',           // HTTP 服务
-  '@zhin.js/console',        // Web 控制台
-  '@zhin.js/adapter-sandbox' // 终端适配器
-],
-```
-
 ```yaml [zhin.config.yml]
 plugins:
-  - hello # 你的新插件
-  - "@zhin.js/http" # HTTP 服务
-  - "@zhin.js/console" # Web 控制台
-  - "@zhin.js/adapter-sandbox" # 终端适配器
+  - hello
+  - "@zhin.js/http"
+  - "@zhin.js/console"
+  - "@zhin.js/adapter-sandbox"
+```
+
+```json [zhin.config.json]
+"plugins": [
+  "hello",
+  "@zhin.js/http",
+  "@zhin.js/console",
+  "@zhin.js/adapter-sandbox"
+]
 ```
 
 :::

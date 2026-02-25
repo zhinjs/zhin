@@ -64,7 +64,7 @@ import {
   MessageElement,
   segment,
   Plugin,
-  useLogger
+
 } from 'zhin.js'
 import WebSocket from 'ws'
 
@@ -144,7 +144,7 @@ class MyPlatformBot implements Bot<MyPlatformConfig, PlatformMessage> {
   private reconnectTimer?: NodeJS.Timeout
   private reconnectAttempts = 0
   private maxReconnectAttempts = 5
-  private logger = useLogger()
+  private logger = usePlugin().logger
   
   constructor(
     private plugin: Plugin,
@@ -617,7 +617,7 @@ registerAdapter(myPlatformAdapter)
 export default myPlatformAdapter
 
 // 7️⃣ 类型扩展（使类型安全）
-declare module '@zhin.js/types' {
+declare module 'zhin.js' {
   interface RegisteredAdapters {
     'my-platform': Adapter<MyPlatformBot>
   }
@@ -636,7 +636,7 @@ import {
   SendOptions,
   segment,
   Plugin,
-  useLogger
+
 } from 'zhin.js'
 
 interface HttpPollingConfig extends Bot.Config {
@@ -659,7 +659,7 @@ class HttpPollingBot implements Bot<HttpPollingConfig, PlatformMessage> {
   public connected = false
   private pollingTimer?: NodeJS.Timeout
   private lastMessageId?: string
-  private logger = useLogger()
+  private logger = usePlugin().logger
   
   constructor(
     private plugin: Plugin,
@@ -815,7 +815,7 @@ registerAdapter(httpPollingAdapter)
 
 export default httpPollingAdapter
 
-declare module '@zhin.js/types' {
+declare module 'zhin.js' {
   interface RegisteredAdapters {
     'http-polling': Adapter<HttpPollingBot>
   }

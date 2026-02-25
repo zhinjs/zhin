@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/core",
-  "version": "1.0.26",
+  "version": "1.0.31",
   "description": "Zhin机器人核心框架",
   "type": "module",
   "main": "./lib/index.js",
@@ -37,7 +37,7 @@
     "@zhin.js/schema": "workspace:*",
     "croner": "^9.1.0",
     "segment-matcher": "latest",
-    "toml": "^3.0.0",
+    "smol-toml": "^1.6.0",
     "yaml": "^2.3.4"
   },
   "devDependencies": {

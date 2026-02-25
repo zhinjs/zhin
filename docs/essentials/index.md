@@ -100,12 +100,10 @@ addMiddleware(async (message, next) => {
   console.log('收到消息:', message.$raw)
   
   // 调用下一个中间件或命令
-  const result = await next()
+  await next()
   
   // 在命令执行后
   console.log('处理完成')
-  
-  return result
 })
 ```
 

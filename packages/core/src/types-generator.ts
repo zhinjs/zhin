@@ -11,7 +11,7 @@ const logger = getLogger('TypesGenerator');
 export async function generateEnvTypes(cwd: string): Promise<void> {
     try {
         // 基础类型集合
-        const types = new Set(['@zhin.js/types']);
+        const types = new Set(['@types/node']);
         
         // 检查 package.json 中的依赖
         const pkgPath = path.join(cwd, 'package.json');

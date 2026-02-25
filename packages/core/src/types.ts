@@ -136,6 +136,9 @@ export type BeforeSendHandler=(options:SendOptions)=>MaybePromise<SendOptions|vo
 /**
  * JSON Schema 定义，用于描述工具参数
  */
+/** ToolContext 中可自动注入的字段名 */
+export type ContextInjectableKey = 'platform' | 'botId' | 'sceneId' | 'senderId' | 'scope';
+
 export interface ToolJsonSchema {
   type: string;
   properties?: Record<string, ToolJsonSchema & { 
@@ -147,6 +150,12 @@ export interface ToolJsonSchema {
   enum?: any[];
   description?: string;
   default?: any;
+  /**
+   * 自动从 ToolContext 注入的字段名。
+   * 设置后该参数对 AI 隐藏，执行时自动从上下文填充。
+   * 例如: contextKey: 'botId' → 执行时自动填入 context.botId
+   */
+  contextKey?: ContextInjectableKey;
   [key: string]: any;
 }
 
@@ -174,6 +183,8 @@ export interface PropertySchema<T = any> extends ToolJsonSchema {
   default?: T;
   enum?: T extends string | number ? T[] : never;
   paramType?: 'text' | 'number' | 'boolean' | 'rest';
+  /** 自动从 ToolContext 注入的字段名（继承自 ToolJsonSchema） */
+  contextKey?: ContextInjectableKey;
 }
 
 /**
@@ -361,6 +372,17 @@ export interface Tool {
    * 隐藏的工具不会出现在帮助列表中，但仍可被调用
    */
   hidden?: boolean;
+
+  /**
+   * 是否允许预执行（opt-in）
+   * 仅当设置为 true 时，Agent 才会在 LLM 调用前自动预执行此工具并将结果注入上下文。
+   * 适用于无副作用的只读工具（如获取系统状态、读取配置等）。
+   * 默认为 false，即不预执行。
+   */
+  preExecutable?: boolean;
+
+  /** 工具分类（如 file / shell / web），用于展示与 TOOLS.md 协同 */
+  kind?: string;
 }
 
 /**

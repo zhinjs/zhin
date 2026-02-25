@@ -43,13 +43,14 @@ function getRenderer(): HtmlRendererService | undefined {
 
 // 创建测试渲染工具
 const testRenderTool = new ZhinTool('test.render')
-  .desc('测试 HTML 渲染功能')
-  .tag('test', 'render')
+  .desc('测试 HTML 渲染功能。将 HTML 代码渲染成图片（SVG/PNG）。主要用于开发测试。')
+  .tag('render', 'html', 'visual', 'demo')
+  .keyword('渲染', '图像', '生成', 'render', 'html')
   .param('type', { 
     type: 'string', 
     description: '测试类型: simple, card, gradient, complex',
     enum: ['simple', 'card', 'gradient', 'complex']
-  })
+  }, true)  // 设置为必填参数
   .execute(async ({ type = 'simple' }) => {
     const renderer = getRenderer();
     if (!renderer) {

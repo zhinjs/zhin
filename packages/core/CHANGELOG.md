@@ -1,5 +1,49 @@
 # @zhin.js/core
 
+## 1.0.31
+
+### Patch Changes
+
+- 771706d: fix: 技能优化
+  - @zhin.js/database@1.0.18
+  - @zhin.js/logger@0.1.15
+  - @zhin.js/schema@1.0.15
+
+## 1.0.30
+
+### Patch Changes
+
+- @zhin.js/database@1.0.17
+- @zhin.js/logger@0.1.14
+- @zhin.js/schema@1.0.14
+
+## 1.0.29
+
+### Patch Changes
+
+- 4ec9176: fix: ai
+  - @zhin.js/database@1.0.16
+  - @zhin.js/logger@0.1.13
+  - @zhin.js/schema@1.0.13
+
+## 1.0.28
+
+### Patch Changes
+
+- 05a514d: fix: ai 增强,cli 增强
+  - @zhin.js/database@1.0.15
+  - @zhin.js/logger@0.1.12
+  - @zhin.js/schema@1.0.12
+
+## 1.0.27
+
+### Patch Changes
+
+- b27e633: fix: cli 优化
+  - @zhin.js/database@1.0.14
+  - @zhin.js/logger@0.1.11
+  - @zhin.js/schema@1.0.11
+
 ## 1.0.26
 
 ### Patch Changes

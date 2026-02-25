@@ -1,4 +1,4 @@
-log_level: 0
+log_level: 1
 database:
   dialect: sqlite
   filename: ./data/test.db
@@ -24,6 +24,7 @@ services:
 plugins:
   - test-plugin
   - test-jsx
+  - test-hooks
   - memory-debug
   - plugin-memory-profiler
   - tool-examples
@@ -47,7 +48,7 @@ ai:
   defaultProvider: ollama
   providers:
     ollama:
-      host: ${OLLAMA_HOST:-http://localhost:11434}
+      host: 'http://172.25.70.73:11434'
       models:
         - qwen3:8b
   sessions:
@@ -74,6 +75,7 @@ ai:
 60s:
   apiBase: https://services.zhin.dev
 http:
+  host: 0.0.0.0
   port: 8086
   username: ${username}
   password: ${password}

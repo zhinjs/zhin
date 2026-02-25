@@ -1,5 +1,50 @@
 # @zhin.js/cli
 
+## 1.0.27
+
+### Patch Changes
+
+- 771706d: fix: 技能优化
+  - zhin.js@1.0.31
+  - @zhin.js/logger@0.1.15
+
+## 1.0.26
+
+### Patch Changes
+
+- Updated dependencies [460a6c6]
+  - zhin.js@1.0.30
+  - @zhin.js/logger@0.1.14
+
+## 1.0.25
+
+### Patch Changes
+
+- zhin.js@1.0.29
+- @zhin.js/logger@0.1.13
+
+## 1.0.24
+
+### Patch Changes
+
+- 05a514d: fix: ai 增强,cli 增强
+  - zhin.js@1.0.28
+  - @zhin.js/logger@0.1.12
+
+## 1.0.23
+
+### Patch Changes
+
+- 2b44e18: fix: change version
+
+## 1.0.22
+
+### Patch Changes
+
+- Updated dependencies [b27e633]
+  - zhin.js@1.0.27
+  - @zhin.js/logger@0.1.11
+
 ## 1.0.21
 
 ### Patch Changes

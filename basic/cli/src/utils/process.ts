@@ -67,9 +67,6 @@ export async function startProcess(command: string, args: string[], options:Spaw
     if(options.detached) child.unref();
 
     child.on('spawn', () => {
-      // 保存进程ID
-      const pidFile = path.join((options.cwd!).toString(), PID_FILE);
-      fs.writeFileSync(pidFile, child.pid!.toString());
       logger.success(`机器人已启动，PID: ${child.pid}`);
       resolve(child);
     });

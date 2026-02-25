@@ -1,9 +1,13 @@
 import fs from 'fs-extra';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { InitOptions, DATABASE_PACKAGES } from './types.js';
 import { createConfigFile, generateDatabaseEnvVars } from './config.js';
 import { generateAdapterEnvVars, getAdapterDependencies } from './adapter.js';
 import { generateAIEnvVars } from './ai.js';
+import { SOUL_MD_TEMPLATE, TOOLS_MD_TEMPLATE, AGENTS_MD_TEMPLATE } from './templates/bootstrap.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export async function createWorkspace(projectPath: string, projectName: string, options: InitOptions): Promise<void> {
   await fs.ensureDir(projectPath);
@@ -49,11 +53,16 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       start: 'zhin start',
       daemon: 'zhin start --daemon',
       stop: 'zhin stop',
-      build: 'tsc && zhin-console build'
+      build: 'tsc && zhin-console build',
+      'pm2:start': 'pm2 start ecosystem.config.cjs',
+      'pm2:stop': 'pm2 stop ecosystem.config.cjs',
+      'pm2:restart': 'pm2 restart ecosystem.config.cjs',
+      'pm2:delete': 'pm2 delete ecosystem.config.cjs',
+      'pm2:logs': 'pm2 logs',
+      'pm2:monit': 'pm2 monit'
     },
     dependencies: {
       'zhin.js': 'latest',
-      "@zhin.js/types": "latest",
       '@zhin.js/http': 'latest',
       '@zhin.js/client': 'latest',
       '@zhin.js/console': 'latest',
@@ -68,7 +77,8 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       'typescript': 'latest',
       'lucide-react': 'latest',
       'tsx': 'latest',
-      'rimraf': 'latest'
+      'rimraf': 'latest',
+      'pm2': 'latest'
     },
     pnpm: {
       onlyBuiltDependencies: ['esbuild', 'sqlite3']
@@ -81,10 +91,248 @@ export async function createWorkspace(projectPath: string, projectName: string, 
   // 创建 app 模块（内部会写入完整的 tsconfig.json）
   await createAppModule(projectPath, projectName, options);
   
+  // 创建引导文件（SOUL.md, TOOLS.md, AGENTS.md）
+  await fs.writeFile(path.join(projectPath, 'SOUL.md'), SOUL_MD_TEMPLATE);
+  await fs.writeFile(path.join(projectPath, 'TOOLS.md'), TOOLS_MD_TEMPLATE);
+  await fs.writeFile(path.join(projectPath, 'AGENTS.md'), AGENTS_MD_TEMPLATE);
+  
+  // 创建内置 skill-creator 技能
+  const skillCreatorDir = path.join(projectPath, 'skills', 'skill-creator');
+  await fs.ensureDir(skillCreatorDir);
+  const skillCreatorPath = path.join(__dirname, '../template/skills/skill-creator/SKILL.md');
+  if (fs.existsSync(skillCreatorPath)) {
+    await fs.copy(skillCreatorPath, path.join(skillCreatorDir, 'SKILL.md'));
+  }
+  
   // 创建 plugins 目录
   await fs.ensureDir(path.join(projectPath, 'plugins'));
   await fs.writeFile(path.join(projectPath, 'plugins', '.gitkeep'), '');
   
+  // 创建 systemd service 配置（Linux）：当前目录用 npx 启动，不写死 nvm/node 路径
+  await fs.writeFile(path.join(projectPath, `${projectName}.service`),
+`[Unit]
+Description=${projectName} - Zhin.js Bot
+After=network.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=${path.resolve(projectPath)}
+ExecStart=/usr/bin/env npx zhin start --daemon
+ExecStop=/usr/bin/env npx zhin stop
+Restart=always
+RestartSec=10s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=${projectName}
+
+# 环境变量（确保 PATH 含 node/npx，如 /usr/local/bin）
+Environment="NODE_ENV=production"
+EnvironmentFile=${path.resolve(projectPath, '.env')}
+
+# 资源限制
+LimitNOFILE=65536
+MemoryMax=2G
+
+[Install]
+WantedBy=multi-user.target
+`);
+
+  // 创建 launchd plist 配置（macOS）：当前目录用 npx 启动，不写死 nvm/node 路径
+  await fs.writeFile(path.join(projectPath, `com.zhinjs.${projectName}.plist`),
+`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.zhinjs.${projectName}</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/env</string>
+        <string>npx</string>
+        <string>zhin</string>
+        <string>start</string>
+        <string>--daemon</string>
+    </array>
+    
+    <key>WorkingDirectory</key>
+    <string>${path.resolve(projectPath)}</string>
+    
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>NODE_ENV</key>
+        <string>production</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+    
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <key>KeepAlive</key>
+    <true/>
+    
+    <key>StandardOutPath</key>
+    <string>${path.resolve(projectPath, 'logs/launchd-stdout.log')}</string>
+    
+    <key>StandardErrorPath</key>
+    <string>${path.resolve(projectPath, 'logs/launchd-stderr.log')}</string>
+    
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+</dict>
+</plist>
+`);
+
+  // 创建 Windows NSSM 安装脚本（PowerShell）
+  await fs.writeFile(path.join(projectPath, 'install-service.ps1'),
+`# Windows 服务安装脚本（使用 NSSM）
+# 需要管理员权限运行
+
+$ServiceName = "${projectName}"
+$ProjectPath = "${path.resolve(projectPath).replace(/\\/g, '\\\\')}"
+
+# 当前目录使用 npx 启动，不依赖 nvm 等固定 node 路径
+$NpxArgs = "zhin start --daemon"
+
+# 检查 NSSM 是否安装
+if (-not (Get-Command nssm -ErrorAction SilentlyContinue)) {
+    Write-Host "❌ 未找到 NSSM，请先安装：" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "方式一：使用 Chocolatey" -ForegroundColor Yellow
+    Write-Host "  choco install nssm" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "方式二：使用 Scoop" -ForegroundColor Yellow
+    Write-Host "  scoop install nssm" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "方式三：手动下载" -ForegroundColor Yellow
+    Write-Host "  https://nssm.cc/download" -ForegroundColor Cyan
+    exit 1
+}
+
+Write-Host "🔧 安装 Windows 服务: $ServiceName" -ForegroundColor Green
+
+# 停止并删除已存在的服务
+$existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+if ($existingService) {
+    Write-Host "⚠️  服务已存在，先删除..." -ForegroundColor Yellow
+    nssm stop $ServiceName
+    nssm remove $ServiceName confirm
+}
+
+# 安装服务（npx 在项目目录下启动）
+nssm install $ServiceName npx $NpxArgs
+
+# 配置服务
+nssm set $ServiceName AppDirectory $ProjectPath
+nssm set $ServiceName AppEnvironmentExtra "NODE_ENV=production"
+nssm set $ServiceName DisplayName "Zhin.js Bot - $ServiceName"
+nssm set $ServiceName Description "Zhin.js 聊天机器人服务"
+nssm set $ServiceName Start SERVICE_AUTO_START
+nssm set $ServiceName AppStdout "$ProjectPath\\logs\\nssm-stdout.log"
+nssm set $ServiceName AppStderr "$ProjectPath\\logs\\nssm-stderr.log"
+nssm set $ServiceName AppRotateFiles 1
+nssm set $ServiceName AppRotateOnline 1
+nssm set $ServiceName AppRotateBytes 10485760
+
+Write-Host ""
+Write-Host "✅ 服务安装成功！" -ForegroundColor Green
+Write-Host ""
+Write-Host "📝 管理命令：" -ForegroundColor Yellow
+Write-Host "  启动服务: nssm start $ServiceName" -ForegroundColor Cyan
+Write-Host "  停止服务: nssm stop $ServiceName" -ForegroundColor Cyan
+Write-Host "  重启服务: nssm restart $ServiceName" -ForegroundColor Cyan
+Write-Host "  查看状态: nssm status $ServiceName" -ForegroundColor Cyan
+Write-Host "  卸载服务: nssm remove $ServiceName confirm" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "🚀 启动服务：" -ForegroundColor Yellow
+Write-Host "  nssm start $ServiceName" -ForegroundColor Cyan
+`);
+
+  // 创建 Windows Task Scheduler XML（备选方案）
+  await fs.writeFile(path.join(projectPath, `${projectName}-task.xml`),
+`<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Zhin.js Bot - ${projectName}</Description>
+    <URI>\\${projectName}</URI>
+  </RegistrationInfo>
+  <Triggers>
+    <BootTrigger>
+      <Enabled>true</Enabled>
+    </BootTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>false</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <WakeToRun>false</WakeToRun>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>7</Priority>
+    <RestartOnFailure>
+      <Interval>PT1M</Interval>
+      <Count>3</Count>
+    </RestartOnFailure>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>npx</Command>
+      <Arguments>zhin start --daemon</Arguments>
+      <WorkingDirectory>${path.resolve(projectPath).replace(/\\/g, '\\\\')}</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>
+`);
+
+  // 创建 PM2 配置文件
+  await fs.writeFile(path.join(projectPath, 'ecosystem.config.cjs'),
+`module.exports = {
+  apps: [
+    {
+      name: '${projectName}',
+      script: 'node_modules/.bin/zhin',
+      args: 'start',
+      cwd: './',
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '1G',
+      env: {
+        NODE_ENV: 'production',
+      },
+      env_development: {
+        NODE_ENV: 'development',
+      },
+      error_file: './logs/pm2-error.log',
+      out_file: './logs/pm2-out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      merge_logs: true,
+      min_uptime: '10s',
+      max_restarts: 10,
+      restart_delay: 4000,
+    },
+  ],
+};
+`);
+
   // 创建 .gitignore
   await fs.writeFile(path.join(projectPath, '.gitignore'), 
 `node_modules/
@@ -92,6 +340,7 @@ dist/
 lib/
 client/dist/
 *.log
+logs/
 .env
 .env.*
 !.env.development
@@ -100,6 +349,7 @@ client/dist/
 .zhin.pid
 .zhin-dev.pid
 data/
+.pm2/
 `);
   
   // 创建 README.md（参考 test-bot 的简洁风格）
@@ -127,22 +377,104 @@ ${projectName}/
 
 ## 🚀 快速开始
 
+### 开发模式
+
 \`\`\`bash
-# 开发模式
-pnpm dev
-
-# 生产模式
-pnpm start
-
-# 后台运行
-pnpm daemon
-
-# 停止服务
-pnpm stop
-
-# 构建项目
-pnpm build
+pnpm dev          # 开发模式（支持热重载）
 \`\`\`
+
+### 生产模式
+
+#### 方式一：直接运行
+
+\`\`\`bash
+pnpm build        # 构建项目
+pnpm start        # 前台运行
+pnpm daemon       # 后台运行
+pnpm stop         # 停止后台服务
+\`\`\`
+
+#### 方式二：系统服务（推荐生产环境，开机自启）
+
+**Linux (systemd)**：
+
+\`\`\`bash
+pnpm build                    # 构建项目
+zhin install-service          # 安装系统服务
+sudo systemctl start ${projectName}.service      # 启动服务
+sudo systemctl enable ${projectName}.service     # 开机自启
+sudo systemctl status ${projectName}.service     # 查看状态
+sudo journalctl -u ${projectName}.service -f     # 查看日志
+\`\`\`
+
+**macOS (launchd)**：
+
+\`\`\`bash
+pnpm build                    # 构建项目
+zhin install-service          # 安装系统服务
+launchctl load ~/Library/LaunchAgents/com.zhinjs.${projectName}.plist
+launchctl start com.zhinjs.${projectName}
+launchctl list | grep ${projectName}
+\`\`\`
+
+**Windows (NSSM)**：
+
+\`\`\`powershell
+# 1. 安装 NSSM
+choco install nssm           # 使用 Chocolatey
+# 或 scoop install nssm      # 使用 Scoop
+
+# 2. 构建项目
+pnpm build
+
+# 3. 以管理员身份运行 PowerShell
+.\\install-service.ps1
+
+# 4. 启动服务
+nssm start ${projectName}
+
+# 查看状态
+nssm status ${projectName}
+\`\`\`
+
+#### 方式三：使用 PM2
+
+\`\`\`bash
+pnpm build        # 构建项目
+pnpm pm2:start    # 启动 PM2 守护进程
+pnpm pm2:stop     # 停止服务
+pnpm pm2:restart  # 重启服务
+pnpm pm2:logs     # 查看日志
+pnpm pm2:monit    # 监控面板
+\`\`\`
+
+**PM2 高级用法**：
+
+\`\`\`bash
+# 查看进程状态
+pm2 status
+
+# 查看详细信息
+pm2 show ${projectName}
+
+# 查看实时日志
+pm2 logs ${projectName} --lines 100
+
+# 开机自启动
+pm2 startup
+pm2 save
+
+# 删除进程
+pnpm pm2:delete
+\`\`\`
+
+## 🛡️ 进程保活方案对比
+
+| 方案 | 平台支持 | 优点 | 缺点 | 推荐场景 |
+|------|----------|------|------|----------|
+| **系统服务** | Linux, macOS, Windows | • 系统级监督<br>• 开机自启<br>• 无需额外依赖 | • 需要系统权限<br>• 配置稍复杂 | **生产环境首选** |
+| **PM2** | 全平台 | • 功能丰富<br>• 监控面板<br>• 集群模式 | • 需要额外依赖<br>• 占用资源 | 多进程管理 |
+| **内置守护** | 全平台 | • 轻量简单<br>• 无需依赖 | • 无系统级监督 | 开发/测试环境 |
 
 ## 🔌 插件开发
 
@@ -172,7 +504,7 @@ addCommand(
 
 在 \`zhin.config.${options.config}\` 中启用插件：
 
-\`\`\`${options.config === 'yaml' ? 'yaml' : 'typescript'}
+\`\`\`${options.config === 'json' ? 'json' : options.config === 'toml' ? 'toml' : 'yaml'}
 plugins:
   - "@zhin.js/adapter-sandbox"
   - "@zhin.js/http"
@@ -242,7 +574,6 @@ NODE_ENV=production
       "jsxImportSource": "zhin.js",
       "types": [
         "@types/node",
-        "@zhin.js/types",
         "zhin.js",
         "@zhin.js/console",
         "@zhin.js/client",
@@ -262,6 +593,7 @@ NODE_ENV=production
   await fs.writeFile(path.join(projectPath, 'src', 'plugins', 'example.ts'),
 `import { usePlugin, MessageCommand, Time } from 'zhin.js';
 import * as os from 'node:os';
+import * as path from 'node:path';
 
 const { addCommand, useContext } = usePlugin();
 
@@ -320,7 +652,7 @@ useContext('web', (web) => {
   const clientEntry = isDev 
     ? './client/index.tsx'
     : './dist/index.js';
-  web.addEntry(clientEntry);
+  web.addEntry(path.join(process.cwd(), clientEntry));
 });
 `);
   

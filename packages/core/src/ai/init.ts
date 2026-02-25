@@ -10,6 +10,9 @@
  *   - AI 管理工具
  */
 
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { Logger } from '@zhin.js/logger';
 import { getPlugin, type Plugin } from '../plugin.js';
 import { Message } from '../message.js';
@@ -26,6 +29,9 @@ import type { MessageDispatcherService } from '../built/dispatcher.js';
 import type { SkillFeature } from '../built/skill.js';
 import { AIService } from './service.js';
 import { ZhinAgent } from './zhin-agent.js';
+import { createBuiltinTools, discoverWorkspaceSkills, loadSoulPersona } from './builtin-tools.js';
+import { loadBootstrapFiles, buildContextFiles, buildBootstrapContextSection, loadToolsGuide } from './bootstrap.js';
+import { triggerAIHook, createAIHookEvent } from './hooks.js';
 import { SessionManager, createDatabaseSessionManager } from './session.js';
 import { AI_SESSION_MODEL } from './session.js';
 import {
@@ -37,6 +43,7 @@ import {
 import { AI_MESSAGE_MODEL, AI_SUMMARY_MODEL } from './conversation-memory.js';
 import { AI_USER_PROFILE_MODEL } from './user-profile.js';
 import { AI_FOLLOWUP_MODEL } from './follow-up.js';
+import { PersistentCronEngine, setCronManager, createCronTools } from './cron-engine.js';
 import { renderToPlainText, type OutputElement } from './output.js';
 import type { AIConfig, ContentPart } from './types.js';
 
@@ -131,7 +138,7 @@ export function initAIModule(): void {
     async mounted(p: Plugin) {
       const configService = root.inject('config');
       const appConfig =
-        configService?.get<{ ai?: AIConfig }>('zhin.config.yml') || {};
+        configService?.getPrimary<{ ai?: AIConfig }>() || {};
       const config = appConfig.ai || {};
 
       if (config.enabled === false) {
@@ -146,7 +153,7 @@ export function initAIModule(): void {
       const providers = service.listProviders();
       if (providers.length === 0) {
         logger.warn(
-          'No AI providers configured. Please add API keys in zhin.config.yml',
+          'No AI providers configured. Please add API keys in zhin.config (yml/json/toml)',
         );
       } else {
         logger.info(
@@ -166,19 +173,18 @@ export function initAIModule(): void {
   });
 
   // ── ZhinAgent 全局大脑 ──
-  useContext('ai' as any, (ai: AIService) => {
+  useContext('ai', (ai) => {
     if (!ai.isReady()) {
       logger.warn('AI Service not ready, ZhinAgent not created');
       return;
     }
 
     const provider = ai.getProvider();
-    const agent = new ZhinAgent(provider);
+    const agentConfig = ai.getAgentConfig();
+    const agent = new ZhinAgent(provider, agentConfig);
     zhinAgentInstance = agent;
 
-    const skillRegistry = root.inject('skill' as any) as
-      | SkillFeature
-      | undefined;
+    const skillRegistry = root.inject('skill');
     if (skillRegistry) agent.setSkillRegistry(skillRegistry);
 
     // 注入跟进提醒的发送回调（不依赖数据库，内存模式也能发）
@@ -198,8 +204,32 @@ export function initAIModule(): void {
       });
     });
 
+    // 持久化定时任务引擎：加载 data/cron-jobs.json，到点用 prompt 调用 Agent；并暴露给 AI 管理（list/add/remove/pause/resume）
+    let cronEngine: PersistentCronEngine | null = null;
+    const cronFeature = root.inject('cron' as any);
+    if (cronFeature && typeof cronFeature.add === 'function') {
+      const dataDir = path.join(process.cwd(), 'data');
+      const addCron = (c: any) => cronFeature.add(c, 'cron-engine');
+      const runner = async (prompt: string) => {
+        if (!zhinAgentInstance) return;
+        await zhinAgentInstance.process(prompt, {
+          platform: 'cron',
+          senderId: 'system',
+          sceneId: 'cron',
+        });
+      };
+      cronEngine = new PersistentCronEngine({ dataDir, addCron, runner });
+      cronEngine.load();
+      setCronManager({ cronFeature, engine: cronEngine });
+    }
+
     logger.debug('ZhinAgent created');
     return () => {
+      setCronManager(null);
+      if (cronEngine) {
+        cronEngine.unload();
+        cronEngine = null;
+      }
       agent.dispose();
       zhinAgentInstance = null;
     };
@@ -358,7 +388,7 @@ export function initAIModule(): void {
       if (!aiServiceInstance) return;
       const configService = root.inject('config');
       const appConfig =
-        configService?.get<{ ai?: AIConfig }>('zhin.config.yml') || {};
+        configService?.getPrimary<{ ai?: AIConfig }>() || {};
       const config = appConfig.ai || {};
 
       if (config.sessions?.useDatabase === false) return;
@@ -498,5 +528,153 @@ export function initAIModule(): void {
     for (const tool of tools) disposers.push(toolService.addTool(tool, root.name));
     logger.debug(`Registered ${tools.length} AI management tools`);
     return () => disposers.forEach(d => d());
+  });
+
+  // ── 内置系统工具（文件/Shell/网络/计划/记忆/技能） ──
+  useContext('ai', 'tool', (ai, toolService) => {
+    if (!ai || !toolService) return;
+
+    // 注册工具
+    const builtinTools = createBuiltinTools();
+    const disposers: (() => void)[] = [];
+    for (const tool of builtinTools) disposers.push(toolService.addTool(tool, root.name));
+    const cronTools = createCronTools();
+    for (const tool of cronTools) disposers.push(toolService.addTool(tool, root.name));
+    logger.info(`Registered ${builtinTools.length} built-in + ${cronTools.length} cron tools`);
+
+    let skillWatchers: fs.FSWatcher[] = [];
+    let skillReloadDebounce: ReturnType<typeof setTimeout> | null = null;
+
+    async function syncWorkspaceSkills(): Promise<number> {
+      const skillFeature = root.inject?.('skill') as SkillFeature | undefined;
+      if (!skillFeature) return 0;
+      // 先移除当前插件注册的所有工作区技能（增量更新）
+      const existing = skillFeature.getByPlugin(root.name);
+      for (const s of existing) skillFeature.remove(s);
+      const skills = await discoverWorkspaceSkills();
+      if (skills.length === 0) return 0;
+      const allRegisteredTools = toolService.getAll();
+      const toolNameIndex = new Map<string, Tool>();
+      for (const t of allRegisteredTools) {
+        toolNameIndex.set(t.name, t);
+        const parts = t.name.split('_');
+        if (parts.length === 2) toolNameIndex.set(`${parts[1]}_${parts[0]}`, t);
+      }
+      for (const s of skills) {
+        const associatedTools: Tool[] = [];
+        const toolNames = s.toolNames || [];
+        for (const toolName of toolNames) {
+          let tool = toolService.get(toolName) || toolNameIndex.get(toolName);
+          if (tool) associatedTools.push(tool);
+        }
+        skillFeature.add({
+          name: s.name,
+          description: s.description,
+          tools: associatedTools,
+          keywords: s.keywords || [],
+          tags: s.tags || [],
+          pluginName: root.name,
+        }, root.name);
+      }
+      return skills.length;
+    }
+
+    // 异步发现工作区技能 + 加载引导文件（不阻塞注册流程）
+    (async () => {
+      // ── 第一步：发现和注册工作区技能 ──
+      try {
+        const count = await syncWorkspaceSkills();
+        const skillFeature = root.inject?.('skill') as SkillFeature | undefined;
+        if (count > 0 && skillFeature) {
+          logger.info(`✅ Registered ${count} workspace skills`);
+        }
+      } catch (e: any) {
+        logger.warn(`Failed to discover workspace skills: ${e.message}`);
+      }
+
+      // ── 第二步：加载引导文件 ──
+      const loadedFiles: string[] = [];
+      try {
+        // 使用项目根目录或当前工作目录作为工作区目录
+        const workspaceDir = process.cwd();
+        const bootstrapFiles = await loadBootstrapFiles(workspaceDir);
+        const contextFiles = buildContextFiles(bootstrapFiles);
+        
+        logger.debug(`Bootstrap files loaded (cwd: ${workspaceDir}): ${bootstrapFiles.map(f => f.name + (f.missing ? ' (missing)' : '')).join(', ')}`);
+
+        // SOUL.md → 注入到 agent persona
+        const soulFile = contextFiles.find(f => f.path === 'SOUL.md');
+        if (soulFile && zhinAgentInstance) {
+          logger.info('Loaded SOUL.md persona → agent prompt');
+          loadedFiles.push('SOUL.md');
+        }
+
+        // TOOLS.md → 记录已加载
+        const toolsFile = contextFiles.find(f => f.path === 'TOOLS.md');
+        if (toolsFile) {
+          logger.info('Loaded TOOLS.md tool guidance → agent prompt');
+          loadedFiles.push('TOOLS.md');
+        }
+
+        // AGENTS.md → 记录已加载
+        const agentsFile = contextFiles.find(f => f.path === 'AGENTS.md');
+        if (agentsFile) {
+          logger.info('Loaded AGENTS.md memory → agent prompt');
+          loadedFiles.push('AGENTS.md');
+        }
+
+        // 注入引导上下文到 ZhinAgent
+        if (zhinAgentInstance && contextFiles.length > 0) {
+          const contextSection = buildBootstrapContextSection(contextFiles);
+          zhinAgentInstance.setBootstrapContext(contextSection);
+        }
+      } catch (e: any) {
+        logger.debug(`Bootstrap files not loaded: ${e.message}`);
+      }
+
+      // 触发 agent:bootstrap Hook
+      const skillFeature2 = (root as any).inject?.('skill') as SkillFeature | undefined;
+      await triggerAIHook(createAIHookEvent('agent', 'bootstrap', undefined, {
+        workspaceDir: process.cwd(),
+        toolCount: builtinTools.length,
+        skillCount: skillFeature2?.size ?? 0,
+        bootstrapFiles: loadedFiles,
+      }));
+
+      // ── 技能目录热重载：监听 workspace + local 技能目录，防抖后重新发现并更新 ──
+      const workspaceSkillDir = path.join(process.cwd(), 'skills');
+      const localSkillDir = path.join(os.homedir(), '.zhin', 'skills');
+      const onSkillDirChange = () => {
+        if (skillReloadDebounce) clearTimeout(skillReloadDebounce);
+        skillReloadDebounce = setTimeout(async () => {
+          skillReloadDebounce = null;
+          try {
+            const count = await syncWorkspaceSkills();
+            await triggerAIHook(createAIHookEvent('agent', 'skills-reloaded', undefined, { skillCount: count }));
+            if (count >= 0) logger.info(`[技能热重载] 已更新，当前工作区技能数: ${count}`);
+          } catch (e: any) {
+            logger.warn(`[技能热重载] 失败: ${e.message}`);
+          }
+        }, 400);
+      };
+      for (const dir of [workspaceSkillDir, localSkillDir]) {
+        if (fs.existsSync(dir)) {
+          try {
+            const w = fs.watch(dir, { recursive: true }, onSkillDirChange);
+            skillWatchers.push(w);
+            logger.debug(`[技能热重载] 监听目录: ${dir}`);
+          } catch (e: any) {
+            logger.debug(`[技能热重载] 无法监听 ${dir}: ${e.message}`);
+          }
+        }
+      }
+    })();
+
+    return () => {
+      disposers.forEach(d => d());
+      skillWatchers.forEach(w => w.close());
+      skillWatchers = [];
+      if (skillReloadDebounce) clearTimeout(skillReloadDebounce);
+    };
   });
 }

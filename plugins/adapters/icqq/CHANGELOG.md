@@ -1,5 +1,63 @@
 # @zhin.js/adapter-icqq
 
+## 1.0.37
+
+### Patch Changes
+
+- Updated dependencies [771706d]
+  - @zhin.js/core@1.0.31
+  - zhin.js@1.0.31
+  - @zhin.js/console@1.0.27
+  - @zhin.js/http@1.0.23
+
+## 1.0.36
+
+### Patch Changes
+
+- Updated dependencies [460a6c6]
+  - zhin.js@1.0.30
+  - @zhin.js/console@1.0.26
+  - @zhin.js/http@1.0.22
+  - @zhin.js/core@1.0.30
+
+## 1.0.35
+
+### Patch Changes
+
+- Updated dependencies [4ec9176]
+  - @zhin.js/core@1.0.29
+  - zhin.js@1.0.29
+  - @zhin.js/console@1.0.25
+  - @zhin.js/http@1.0.21
+
+## 1.0.34
+
+### Patch Changes
+
+- Updated dependencies [05a514d]
+  - @zhin.js/console@1.0.24
+  - @zhin.js/http@1.0.20
+  - @zhin.js/client@1.0.10
+  - @zhin.js/core@1.0.28
+  - zhin.js@1.0.28
+
+## 1.0.33
+
+### Patch Changes
+
+- Updated dependencies [2b44e18]
+  - @zhin.js/http@1.0.19
+
+## 1.0.32
+
+### Patch Changes
+
+- Updated dependencies [b27e633]
+  - @zhin.js/http@1.0.18
+  - @zhin.js/core@1.0.27
+  - zhin.js@1.0.27
+  - @zhin.js/console@1.0.23
+
 ## 1.0.31
 
 ### Patch Changes

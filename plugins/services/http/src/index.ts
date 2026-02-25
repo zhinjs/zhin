@@ -35,9 +35,12 @@ export const httpSchema = Schema.object({
 
 export interface HttpConfig {
   port?: number;
+  host?: string;
   username?: string;
   password?: string;
   base?: string;
+  /** 是否信任反向代理（Cloudflare、Nginx 等）的 X-Forwarded-* 头，部署在代理后时建议设为 true */
+  trustProxy?: boolean;
 }
 
 // 获取当前计算机登录用户名
@@ -77,14 +80,19 @@ provide({
 
 // 使用配置服务
 useContext("config", (configService) => {
-  const appConfig = configService.get<{ http?: HttpConfig }>("zhin.config.yml");
+  const appConfig = configService.getPrimary<{ http?: HttpConfig }>();
   const httpConfig = appConfig.http || {};
   const {
     port = 8086,
+    host = "127.0.0.1",
     username = getCurrentUsername(),
     password = generateRandomPassword(),
     base = "/api",
+    trustProxy = false,
   } = httpConfig;
+
+  // 反向代理场景下信任 X-Forwarded-Host / X-Forwarded-Proto 等
+  koa.proxy = trustProxy;
 
   // 设置基本认证
   koa.use(auth({ name: username, pass: password }));
@@ -343,13 +351,13 @@ useContext("config", (configService) => {
       },
     };
   });
-  server.listen({ host: "127.0.0.1", port }, () => {
+  server.listen({ host, port }, () => {
     const address = server.address();
     if (!address) return;
     const visitAddress =
       typeof address === "string"
         ? address
-        : `localhost:${address.port}`;
+        : `${host}:${address.port}`;
     const apiUrl = `http://${visitAddress}${base}`;
 
     logger.info(`HTTP 服务已启动 (port=${port}, api=${apiUrl}, user=${username})`);
@@ -359,7 +367,7 @@ useContext("config", (configService) => {
 // 使用数据库服务（可选）
 useContext("database", (database: DatabaseFeature) => {
   const configService = root.inject("config")!;
-  const appConfig = configService.get<{ http?: HttpConfig }>("zhin.config.yml");
+  const appConfig = configService.getPrimary<{ http?: HttpConfig }>();
   const base = appConfig.http?.base || "/api";
 
   // 日志 API - 获取日志

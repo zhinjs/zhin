@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.0.16
+
+### Patch Changes
+
+- zhin.js@1.0.31
+
+## 1.0.15
+
+### Patch Changes
+
+- Updated dependencies [460a6c6]
+  - zhin.js@1.0.30
+
+## 1.0.14
+
+### Patch Changes
+
+- zhin.js@1.0.29
+
+## 1.0.13
+
+### Patch Changes
+
+- zhin.js@1.0.28
+
+## 1.0.12
+
+### Patch Changes
+
+- Updated dependencies [b27e633]
+  - zhin.js@1.0.27
+
 ## 1.0.11
 
 ### Patch Changes

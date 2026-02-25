@@ -223,50 +223,34 @@ export function generateAIConfigYaml(config: AISetupConfig): string {
 }
 
 /**
- * 生成 TS/JS 格式的 AI 配置段
+ * 生成 TOML 格式的 AI 配置段
  */
-export function generateAIConfigTS(config: AISetupConfig): string {
+export function generateAIConfigToml(config: AISetupConfig): string {
   if (!config.enabled) return '';
 
-  const lines: string[] = [
-    '    ai: {',
-    '      enabled: true,',
-    `      defaultProvider: '${config.defaultProvider}',`,
-    '      providers: {',
-  ];
+  const lines: string[] = ['', '[ai]', 'enabled = true', `defaultProvider = "${config.defaultProvider}"`];
 
   if (config.providers) {
     for (const [name, providerConfig] of Object.entries(config.providers)) {
-      lines.push(`        ${name}: {`);
-      if (providerConfig.apiKey) {
-        lines.push(`          apiKey: '${providerConfig.apiKey}',`);
+      lines.push('', `[ai.providers.${name}]`);
+      if (providerConfig.apiKey) lines.push(`apiKey = "${providerConfig.apiKey}"`);
+      if (providerConfig.host) lines.push(`host = "${providerConfig.host}"`);
+      if (providerConfig.models?.length) {
+        lines.push(`models = ${JSON.stringify(providerConfig.models)}`);
       }
-      if (providerConfig.host) {
-        lines.push(`          host: '${providerConfig.host}',`);
-      }
-      if (providerConfig.models) {
-        lines.push(`          models: [${providerConfig.models.map(m => `'${m}'`).join(', ')}],`);
-      }
-      if (providerConfig.baseUrl) {
-        lines.push(`          baseUrl: '${providerConfig.baseUrl}',`);
-      }
-      lines.push('        },');
+      if (providerConfig.baseUrl) lines.push(`baseUrl = "${providerConfig.baseUrl}"`);
     }
   }
 
-  lines.push('      },');
-
   if (config.trigger) {
-    lines.push('      trigger: {');
-    lines.push('        enabled: true,');
-    lines.push(`        respondToAt: ${config.trigger.respondToAt},`);
-    lines.push(`        respondToPrivate: ${config.trigger.respondToPrivate},`);
-    lines.push(`        prefixes: [${config.trigger.prefixes.map(p => `'${p}'`).join(', ')}],`);
-    lines.push("        ignorePrefixes: ['/', '!'],");
-    lines.push('      },');
+    lines.push('', '[ai.trigger]');
+    lines.push('enabled = true');
+    lines.push(`respondToAt = ${config.trigger.respondToAt}`);
+    lines.push(`respondToPrivate = ${config.trigger.respondToPrivate}`);
+    lines.push(`prefixes = ${JSON.stringify(config.trigger.prefixes)}`);
+    lines.push('ignorePrefixes = ["/", "!"]');
   }
 
-  lines.push('    },');
   return lines.join('\n');
 }
 

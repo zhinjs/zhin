@@ -1,5 +1,52 @@
 # @zhin.js/console
 
+## 1.0.27
+
+### Patch Changes
+
+- Updated dependencies [771706d]
+  - @zhin.js/core@1.0.31
+  - zhin.js@1.0.31
+  - @zhin.js/http@1.0.23
+
+## 1.0.26
+
+### Patch Changes
+
+- Updated dependencies [460a6c6]
+  - zhin.js@1.0.30
+  - @zhin.js/http@1.0.22
+  - @zhin.js/core@1.0.30
+
+## 1.0.25
+
+### Patch Changes
+
+- Updated dependencies [4ec9176]
+  - @zhin.js/core@1.0.29
+  - zhin.js@1.0.29
+  - @zhin.js/http@1.0.21
+
+## 1.0.24
+
+### Patch Changes
+
+- 05a514d: fix: ai 增强,cli 增强
+- Updated dependencies [05a514d]
+  - @zhin.js/http@1.0.20
+  - @zhin.js/client@1.0.10
+  - @zhin.js/core@1.0.28
+  - zhin.js@1.0.28
+
+## 1.0.23
+
+### Patch Changes
+
+- Updated dependencies [b27e633]
+  - @zhin.js/http@1.0.18
+  - @zhin.js/core@1.0.27
+  - zhin.js@1.0.27
+
 ## 1.0.22
 
 ### Patch Changes

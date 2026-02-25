@@ -409,13 +409,13 @@ declare module 'zhin.js' {
 }
 ```
 
-### Adapters
+### RegisteredAdapters
 
-扩展适配器类型：
+扩展适配器类型（用于消息中间件的类型约束）：
 
 ```typescript
 declare module 'zhin.js' {
-  interface Adapters {
+  interface RegisteredAdapters {
     myAdapter: MyAdapter
   }
 }

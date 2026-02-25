@@ -6,6 +6,7 @@
 import path from "node:path";
 import fs from "node:fs";
 import { stringify as stringifyYaml, parse as parseYaml } from "yaml";
+import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
 import { Schema } from "@zhin.js/schema";
 import { Feature, FeatureJSON } from "../feature.js";
 import { getPlugin } from "../plugin.js";
@@ -99,6 +100,9 @@ export class ConfigLoader<T extends object> {
       case ".yml":
         rawConfig = parseYaml(content);
         break;
+      case ".toml":
+        rawConfig = parseToml(content);
+        break;
     }
     if (this.schema) {
       this.#data = this.schema(rawConfig || this.initial) as T;
@@ -115,12 +119,29 @@ export class ConfigLoader<T extends object> {
       case ".yml":
         fs.writeFileSync(fullPath, stringifyYaml(this.#data));
         break;
+      case ".toml":
+        fs.writeFileSync(fullPath, stringifyToml(this.#data as Record<string, any>));
+        break;
     }
   }
 }
 
 export namespace ConfigLoader {
-  export const supportedExtensions = [".json", ".yaml", ".yml"];
+  export const supportedExtensions = [".json", ".yaml", ".yml", ".toml"];
+
+  /**
+   * 自动发现配置文件（按优先级：yml > yaml > json > toml）
+   */
+  export function discover(basename: string): string | null {
+    const cwd = process.cwd();
+    for (const ext of ['.yml', '.yaml', '.json', '.toml']) {
+      const filename = `${basename}${ext}`;
+      if (fs.existsSync(path.resolve(cwd, filename))) {
+        return filename;
+      }
+    }
+    return null;
+  }
   export function load<T extends object>(filename: string, initial?: T, schema?: Schema<T>) {
     const result = new ConfigLoader<T>(filename, initial ?? {} as T, schema);
     result.load();
@@ -168,6 +189,11 @@ export class ConfigFeature extends Feature<ConfigRecord> {
   /** 主配置文件名（第一个加载的配置文件） */
   #primaryConfigFile: string = '';
 
+  /** 获取主配置文件名 */
+  get primaryFile(): string {
+    return this.#primaryConfigFile;
+  }
+
   /**
    * 加载配置文件
    */
@@ -192,6 +218,14 @@ export class ConfigFeature extends Feature<ConfigRecord> {
     const config = this.configs.get(filename);
     if (!config) throw new Error(`配置文件 ${filename} 未加载`);
     return config.data as T;
+  }
+
+  /**
+   * 获取主配置文件数据（第一个加载的配置文件）
+   */
+  getPrimary<T extends object>(): T {
+    if (!this.#primaryConfigFile) throw new Error('没有加载任何配置文件');
+    return this.get<T>(this.#primaryConfigFile);
   }
 
   /**

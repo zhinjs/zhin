@@ -5,6 +5,8 @@ import PluginList from './components/PluginList.vue'
 import PluginSearch from './components/PluginSearch.vue'
 import PluginStats from './components/PluginStats.vue'
 import PluginMarket from './components/PluginMarket.vue'
+import SkillMarket from './components/SkillMarket.vue'
+import SkillSearch from './components/SkillSearch.vue'
 import './custom.css'
 
 export default {
@@ -20,6 +22,8 @@ export default {
     app.component('PluginSearch', PluginSearch)
     app.component('PluginStats', PluginStats)
     app.component('PluginMarket', PluginMarket)
+    app.component('SkillMarket', SkillMarket)
+    app.component('SkillSearch', SkillSearch)
   }
 } satisfies Theme
 

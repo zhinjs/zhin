@@ -69,7 +69,7 @@ describe('CLI new command integration', () => {
     const srcIndexPath = path.join(pluginDir, 'src', 'index.ts')
     expect(await fs.pathExists(srcIndexPath)).toBe(true)
     const srcIndex = await fs.readFile(srcIndexPath, 'utf-8')
-    expect(srcIndex).toContain('useLogger')
+    expect(srcIndex).toContain('usePlugin')
     expect(srcIndex).toContain('useContext')
 
     // Check tests/index.test.ts

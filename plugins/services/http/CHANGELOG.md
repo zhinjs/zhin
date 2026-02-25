@@ -1,5 +1,50 @@
 # @zhin.js/http
 
+## 1.0.23
+
+### Patch Changes
+
+- zhin.js@1.0.31
+- @zhin.js/schema@1.0.15
+
+## 1.0.22
+
+### Patch Changes
+
+- Updated dependencies [460a6c6]
+  - zhin.js@1.0.30
+  - @zhin.js/schema@1.0.14
+
+## 1.0.21
+
+### Patch Changes
+
+- zhin.js@1.0.29
+- @zhin.js/schema@1.0.13
+
+## 1.0.20
+
+### Patch Changes
+
+- 05a514d: fix: ai 增强,cli 增强
+  - zhin.js@1.0.28
+  - @zhin.js/schema@1.0.12
+
+## 1.0.19
+
+### Patch Changes
+
+- 2b44e18: fix: change version
+
+## 1.0.18
+
+### Patch Changes
+
+- b27e633: fix: cli 优化
+- Updated dependencies [b27e633]
+  - zhin.js@1.0.27
+  - @zhin.js/schema@1.0.11
+
 ## 1.0.17
 
 ### Patch Changes

@@ -127,9 +127,9 @@ const db = plugin.inject('database')
 
 ```typescript
 // src/plugins/my-plugin.ts
-import { addCommand, MessageCommand, useLogger } from 'zhin.js'
+import { usePlugin, MessageCommand } from 'zhin.js'
 
-const logger = useLogger()
+const { addCommand, logger } = usePlugin()
 
 addCommand(new MessageCommand('hello <name:text>')
   .action(async (message, result) => {
@@ -584,46 +584,49 @@ class Cron {
 }
 ```
 
-**Cron 表达式格式**: `"秒 分 时 日 月 周"`
+**Cron 表达式格式**: `"分 时 日 月 周"` (5 字段，标准 cron 格式)
+
+> croner 也支持 6 字段格式 `"秒 分 时 日 月 周"`，但推荐使用 5 字段格式。
 
 **常用示例**：
 ```typescript
-import { usePlugin } from 'zhin.js'
+import { usePlugin, Cron } from 'zhin.js'
 
-const plugin = usePlugin()
+const { addCron, useContext } = usePlugin()
 
 // 每天午夜执行
-plugin.cron('0 0 0 * * *', async () => {
+addCron(new Cron('0 0 * * *', async () => {
   console.log('每日任务')
-})
+}))
 
 // 每15分钟
-plugin.cron('0 */15 * * * *', async () => {
+addCron(new Cron('*/15 * * * *', async () => {
   console.log('定时检查')
-})
+}))
 
 // 工作日早上9点
-plugin.cron('0 0 9 * * 1-5', async () => {
+addCron(new Cron('0 9 * * 1-5', async () => {
   console.log('工作日提醒')
-})
+}))
 
 // 带数据库操作
 useContext('database', (db) => {
-  plugin.cron('0 0 2 * * *', async () => {
+  addCron(new Cron('0 2 * * *', async () => {
     // 凌晨2点清理数据
-    await db.model('logs').delete({ 
+    const logs = db.model('logs')
+    await logs.delete({ 
       timestamp: { $lt: Date.now() - 3*24*60*60*1000 } 
     })
-  })
+  }))
 })
 
 // 常用表达式
-'0 0 0 * * *'      // 每天午夜
-'0 0 */2 * * *'    // 每2小时
-'0 */30 * * * *'   // 每30分钟
-'0 0 12 * * *'     // 每天中午12点
-'0 0 0 * * 0'      // 每周日
-'0 0 0 1 * *'      // 每月1号
+'0 0 * * *'        // 每天午夜
+'0 */2 * * *'      // 每2小时
+'*/30 * * * *'     // 每30分钟
+'0 12 * * *'       // 每天中午12点
+'0 0 * * 0'        // 每周日
+'0 0 1 * *'        // 每月1号
 ```
 
 ### 5. 数据库模型
@@ -880,11 +883,9 @@ plugin.provide({
 
 **数据库操作**：
 ```typescript
-// ❌ 旧版
-const model = db.model('tableName')
-
-// ✅ 新版
-const model = db.models.get('tableName')
+// 两种方式均可使用
+const model = db.model('tableName')       // 高层封装，支持 options 参数
+const model = db.models.get('tableName')  // 直接 Map 访问
 ```
 
 **类型扩展**：

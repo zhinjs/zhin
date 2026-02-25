@@ -357,8 +357,8 @@ describe('ConfigFeature', () => {
     const json = feature.toJSON()
     expect(json.name).toBe('config')
     expect(json.count).toBe(2)
-    expect(json.items[0]).toEqual({ name: 'debug', defaultValue: false })
-    expect(json.items[1]).toEqual({ name: 'port', defaultValue: 8080 })
+    expect(json.items[0]).toEqual({ name: 'debug' })
+    expect(json.items[1]).toEqual({ name: 'port' })
   })
 
   it('toJSON(pluginName) 应按插件过滤', () => {

@@ -286,7 +286,7 @@ import {
   usePlugin,
 } from "zhin.js";
 
-declare module "@zhin.js/types" {
+declare module "zhin.js" {
   interface RegisteredAdapters {
     "${name}": Adapter<${className}Bot>;
   }

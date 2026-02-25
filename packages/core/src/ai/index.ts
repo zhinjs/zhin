@@ -26,7 +26,7 @@ export type {
 export { AIService } from './service.js';
 
 // ── Agent ──
-export { Agent, createAgent } from './agent.js';
+export { Agent, createAgent, formatToolTitle } from './agent.js';
 
 // ── Session ──
 export {
@@ -73,6 +73,26 @@ export type { RateLimitConfig, RateLimitResult } from './rate-limiter.js';
 // ── Follow-Up ──
 export { FollowUpManager, AI_FOLLOWUP_MODEL } from './follow-up.js';
 export type { FollowUpRecord, FollowUpSender } from './follow-up.js';
+
+// ── 持久化定时任务引擎 ──
+export {
+  PersistentCronEngine,
+  readCronJobsFile,
+  writeCronJobsFile,
+  getCronJobsFilePath,
+  generateCronJobId,
+  createCronTools,
+  setCronManager,
+  getCronManager,
+  CRON_JOBS_FILENAME,
+} from './cron-engine.js';
+export type {
+  CronJobRecord,
+  CronRunner,
+  AddCronFn,
+  PersistentCronEngineOptions,
+  CronManager,
+} from './cron-engine.js';
 
 // ── Tone Detector ──
 export { detectTone } from './tone-detector.js';
@@ -126,3 +146,61 @@ export type {
 
 // ── 初始化 ──
 export { initAIModule } from './init.js';
+
+// ── Hook 系统 (借鉴 OpenClaw) ──
+export {
+  registerAIHook,
+  unregisterAIHook,
+  triggerAIHook,
+  createAIHookEvent,
+  clearAIHooks,
+  getRegisteredAIHookKeys,
+} from './hooks.js';
+export type {
+  AIHookEvent,
+  AIHookEventType,
+  AIHookHandler,
+  MessageReceivedEvent,
+  MessageSentEvent,
+  SessionCompactEvent,
+  SessionNewEvent,
+  AgentBootstrapEvent,
+  ToolCallEvent,
+} from './hooks.js';
+
+// ── 会话压缩 (借鉴 OpenClaw) ──
+export {
+  estimateTokens,
+  estimateMessagesTokens,
+  splitMessagesByTokenShare,
+  chunkMessagesByMaxTokens,
+  computeAdaptiveChunkRatio,
+  resolveContextWindowTokens,
+  evaluateContextWindowGuard,
+  summarizeWithFallback,
+  summarizeInStages,
+  pruneHistoryForContext,
+  compactSession,
+  DEFAULT_CONTEXT_TOKENS,
+} from './compaction.js';
+export type {
+  ContextWindowSource,
+  ContextWindowInfo,
+  ContextWindowGuardResult,
+  PruneResult,
+} from './compaction.js';
+
+// ── 引导文件管理 (借鉴 OpenClaw) ──
+export {
+  loadBootstrapFiles,
+  buildContextFiles,
+  buildBootstrapContextSection,
+  loadSoulPersona,
+  loadToolsGuide,
+  loadAgentsMemory,
+  clearBootstrapCache,
+} from './bootstrap.js';
+export type {
+  BootstrapFile,
+  ContextFile,
+} from './bootstrap.js';

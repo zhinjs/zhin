@@ -470,6 +470,10 @@ class IcqqAdapter extends Adapter<IcqqBot> {
    * 注册 ICQQ 平台特有的群管理工具
    */
   private registerIcqqTools(): void {
+    // 公共参数: 通过 contextKey 自动从上下文注入，对 AI 隐藏，避免小模型填错
+    const CTX_BOT = { type: 'string' as const, description: '执行操作的 Bot QQ号', contextKey: 'botId' as const };
+    const CTX_GROUP = { type: 'number' as const, description: '目标群号', contextKey: 'sceneId' as const };
+
     // 踢出成员工具
     this.addTool({
       name: 'icqq_kick_member',
@@ -479,14 +483,8 @@ class IcqqAdapter extends Adapter<IcqqBot> {
       parameters: {
         type: 'object',
         properties: {
-          bot: {
-            type: 'string',
-            description: '执行操作的 Bot QQ号（即当前上下文中的 Bot ID）',
-          },
-          group_id: {
-            type: 'number',
-            description: '目标群号（即当前上下文中的场景 ID）',
-          },
+          bot: CTX_BOT,
+          group_id: CTX_GROUP,
           user_id: {
             type: 'number',
             description: '要踢出的目标成员 QQ号',
@@ -525,14 +523,8 @@ class IcqqAdapter extends Adapter<IcqqBot> {
       parameters: {
         type: 'object',
         properties: {
-          bot: {
-            type: 'string',
-            description: '执行操作的 Bot QQ号（即当前上下文中的 Bot ID）',
-          },
-          group_id: {
-            type: 'number',
-            description: '目标群号（即当前上下文中的场景 ID）',
-          },
+          bot: CTX_BOT,
+          group_id: CTX_GROUP,
           user_id: {
             type: 'number',
             description: '要禁言的目标成员 QQ号',
@@ -573,14 +565,8 @@ class IcqqAdapter extends Adapter<IcqqBot> {
       parameters: {
         type: 'object',
         properties: {
-          bot: {
-            type: 'string',
-            description: '执行操作的 Bot QQ号（即当前上下文中的 Bot ID）',
-          },
-          group_id: {
-            type: 'number',
-            description: '目标群号（即当前上下文中的场景 ID）',
-          },
+          bot: CTX_BOT,
+          group_id: CTX_GROUP,
           enable: {
             type: 'boolean',
             description: 'true=开启全员禁言，false=关闭全员禁言，默认 true',
@@ -615,14 +601,8 @@ class IcqqAdapter extends Adapter<IcqqBot> {
       parameters: {
         type: 'object',
         properties: {
-          bot: {
-            type: 'string',
-            description: '执行操作的 Bot QQ号（即当前上下文中的 Bot ID）',
-          },
-          group_id: {
-            type: 'number',
-            description: '目标群号（即当前上下文中的场景 ID）',
-          },
+          bot: CTX_BOT,
+          group_id: CTX_GROUP,
           user_id: {
             type: 'number',
             description: '目标成员 QQ号',
@@ -661,14 +641,8 @@ class IcqqAdapter extends Adapter<IcqqBot> {
       parameters: {
         type: 'object',
         properties: {
-          bot: {
-            type: 'string',
-            description: '执行操作的 Bot QQ号（即当前上下文中的 Bot ID）',
-          },
-          group_id: {
-            type: 'number',
-            description: '目标群号（即当前上下文中的场景 ID）',
-          },
+          bot: CTX_BOT,
+          group_id: CTX_GROUP,
           user_id: {
             type: 'number',
             description: '目标成员 QQ号',
@@ -707,14 +681,8 @@ class IcqqAdapter extends Adapter<IcqqBot> {
       parameters: {
         type: 'object',
         properties: {
-          bot: {
-            type: 'string',
-            description: '执行操作的 Bot QQ号（即当前上下文中的 Bot ID）',
-          },
-          group_id: {
-            type: 'number',
-            description: '目标群号（即当前上下文中的场景 ID）',
-          },
+          bot: CTX_BOT,
+          group_id: CTX_GROUP,
           user_id: {
             type: 'number',
             description: '目标成员 QQ号',
@@ -757,14 +725,8 @@ class IcqqAdapter extends Adapter<IcqqBot> {
       parameters: {
         type: 'object',
         properties: {
-          bot: {
-            type: 'string',
-            description: '执行操作的 Bot QQ号（即当前上下文中的 Bot ID）',
-          },
-          group_id: {
-            type: 'number',
-            description: '目标群号（即当前上下文中的场景 ID）',
-          },
+          bot: CTX_BOT,
+          group_id: CTX_GROUP,
           name: {
             type: 'string',
             description: '新的群名称',
@@ -797,14 +759,8 @@ class IcqqAdapter extends Adapter<IcqqBot> {
       parameters: {
         type: 'object',
         properties: {
-          bot: {
-            type: 'string',
-            description: 'Bot QQ号',
-          },
-          group_id: {
-            type: 'number',
-            description: '群号',
-          },
+          bot: CTX_BOT,
+          group_id: CTX_GROUP,
           content: {
             type: 'string',
             description: '公告内容',
@@ -836,14 +792,8 @@ class IcqqAdapter extends Adapter<IcqqBot> {
       parameters: {
         type: 'object',
         properties: {
-          bot: {
-            type: 'string',
-            description: '执行操作的 Bot QQ号（即当前上下文中的 Bot ID）',
-          },
-          group_id: {
-            type: 'number',
-            description: '目标群号（即当前上下文中的场景 ID）',
-          },
+          bot: CTX_BOT,
+          group_id: CTX_GROUP,
           user_id: {
             type: 'number',
             description: '要戳的目标成员 QQ号',
@@ -873,14 +823,8 @@ class IcqqAdapter extends Adapter<IcqqBot> {
       parameters: {
         type: 'object',
         properties: {
-          bot: {
-            type: 'string',
-            description: '执行操作的 Bot QQ号（即当前上下文中的 Bot ID）',
-          },
-          group_id: {
-            type: 'number',
-            description: '目标群号（即当前上下文中的场景 ID）',
-          },
+          bot: CTX_BOT,
+          group_id: CTX_GROUP,
         },
         required: ['bot', 'group_id'],
       },
@@ -920,14 +864,8 @@ class IcqqAdapter extends Adapter<IcqqBot> {
       parameters: {
         type: 'object',
         properties: {
-          bot: {
-            type: 'string',
-            description: '执行操作的 Bot QQ号（即当前上下文中的 Bot ID）',
-          },
-          group_id: {
-            type: 'number',
-            description: '目标群号（即当前上下文中的场景 ID）',
-          },
+          bot: CTX_BOT,
+          group_id: CTX_GROUP,
         },
         required: ['bot', 'group_id'],
       },
@@ -956,14 +894,8 @@ class IcqqAdapter extends Adapter<IcqqBot> {
       parameters: {
         type: 'object',
         properties: {
-          bot: {
-            type: 'string',
-            description: '执行操作的 Bot QQ号（即当前上下文中的 Bot ID）',
-          },
-          group_id: {
-            type: 'number',
-            description: '目标群号（即当前上下文中的场景 ID）',
-          },
+          bot: CTX_BOT,
+          group_id: CTX_GROUP,
           enable: {
             type: 'boolean',
             description: 'true=开启匿名聊天，false=关闭匿名聊天，默认 true',
