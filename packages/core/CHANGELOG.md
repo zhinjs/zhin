@@ -1,5 +1,14 @@
 # @zhin.js/core
 
+## 1.0.32
+
+### Patch Changes
+
+- 10d8bdc: fix: win 下 dev 错误
+  - @zhin.js/database@1.0.19
+  - @zhin.js/logger@0.1.16
+  - @zhin.js/schema@1.0.16
+
 ## 1.0.31
 
 ### Patch Changes
