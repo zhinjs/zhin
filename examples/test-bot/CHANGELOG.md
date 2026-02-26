@@ -1,5 +1,25 @@
 # test-bot
 
+## 0.1.29
+
+### Patch Changes
+
+- 48481a8: fix: @zhin.js/adapter-icqq 内置点赞工具
+  fix: create-zhin-app 默认增加 send 指令
+  fix: @zhin.js/cli 重命名 onborading 为 onborad 并重写实现,新增 zhin send 命令，用于直接通过 send 命令发送消息
+  fix: @zhin.js/http 新增消息发送 api
+- Updated dependencies [48481a8]
+  - @zhin.js/adapter-icqq@1.0.39
+  - @zhin.js/http@1.0.25
+  - @zhin.js/plugin-music@0.0.20
+  - @zhin.js/adapter-dingtalk@1.0.19
+  - @zhin.js/adapter-discord@1.0.34
+  - @zhin.js/adapter-lark@1.0.35
+  - @zhin.js/adapter-onebot11@1.0.36
+  - @zhin.js/adapter-sandbox@1.0.39
+  - @zhin.js/adapter-wechat-mp@0.1.20
+  - @zhin.js/plugin-github-notify@0.0.21
+
 ## 0.1.28
 
 ### Patch Changes
