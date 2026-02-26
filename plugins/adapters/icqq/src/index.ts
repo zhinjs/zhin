@@ -884,7 +884,38 @@ class IcqqAdapter extends Adapter<IcqqBot> {
         };
       },
     });
-
+    this.addTool({
+      name:'icqq_send_user_like',
+      description: '发送用户点赞消息',
+      tags: ['互动', '趣味', '点赞'],
+      keywords: ['点赞', '赞我'],
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: CTX_BOT,
+          user_id: {
+            type: 'number',
+            description: '要点赞的目标用户 QQ号',
+          },
+          times:{
+            type: 'number',
+            description: '点赞次数',
+            default: 1,
+          }
+        },
+        required: ['bot', 'user_id'],
+      },
+      platforms: ['icqq'],
+      scopes: ['group', 'private'], 
+      permissionLevel: 'user',
+      execute: async (args) => {
+        const { bot: botId, user_id, times = 1 } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const success = await bot.sendLike(user_id, Math.min(times, 10));
+        return { success, message: success ? `已发送用户点赞消息给 ${user_id}` : '发送失败' };
+      },
+    })
     // 设置匿名状态工具
     this.addTool({
       name: 'icqq_set_anonymous',

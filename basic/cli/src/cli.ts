@@ -13,9 +13,11 @@ import { serviceCommand } from './commands/install-service.js';
 import { doctorCommand } from './commands/doctor.js';
 import { setupCommand } from './commands/setup.js';
 import { configCommand } from './commands/config.js';
-import { onboardingCommand } from './commands/onboarding.js';
+import { onboardCommand } from './commands/onboard.js';
 import { skillsCommand } from './commands/skills.js';
 import { cronCommand } from './commands/cron.js';
+import { migrateCommand } from './commands/migrate.js';
+import { sendCommand } from './commands/send.js';
 
 const program = new Command();
 
@@ -40,8 +42,10 @@ program.addCommand(serviceCommand);
 program.addCommand(doctorCommand);
 program.addCommand(setupCommand);
 program.addCommand(configCommand);
-program.addCommand(onboardingCommand);
+program.addCommand(onboardCommand);
 program.addCommand(skillsCommand);
 program.addCommand(cronCommand);
+program.addCommand(migrateCommand);
+program.addCommand(sendCommand);
 
 program.parse(); 

@@ -267,7 +267,7 @@ async function main() {
     console.log('');
     console.log('📚 相关文档：');
     console.log(`  ${chalk.cyan('https://github.com/zhinjs/zhin')}`);
-    console.log(`  ${chalk.cyan('https://zhinjs.github.io')}`);
+    console.log(`  ${chalk.cyan('https://zhin.js.org')}`);
     
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

@@ -498,19 +498,47 @@ zhin config del ai.trigger.prefixes
 zhin config path
 ```
 
-### onboarding - 新手引导
+### onboard - 引导与配置向导
 
-新手快速上手教程，包含环境检查和交互式指引：
+借鉴 OpenClaw onboard：在项目内检测现有配置，可选择保持 / 重新配置（复用当前配置与 .env、data）/ 重置；非项目内可创建新项目或仅查看快速开始。
 
 ```bash
-zhin onboarding [options]
+zhin onboard [options]
 ```
 
 **选项：**
-- `-i, --interactive`: 交互式引导模式（创建项目、配置、检查等）
-- `-q, --quick`: 仅显示快速开始指南
+- `-q, --quick`: 仅显示快速开始步骤，不进入向导
+- `--flow <flow>`: 配置流程，可选 `quickstart` | `full`（默认）
 
-默认模式显示完整引导：欢迎页、环境检查、快速开始、常用命令、学习资源。
+**项目内流程：** 环境检查 → 若存在配置则显示摘要 → 选择「保持 / 重新配置 / 重置」→ 重新配置或重置时启动 `zhin setup`，复用现有配置文件、环境变量与 data 目录 → 可选运行 `zhin doctor`。
+
+### send - 向运行中的机器人发送消息
+
+在 daemon 运行时，通过 HTTP API 向指定适配器/场景发送一条消息（需启用 `@zhin.js/http`，借鉴 OpenClaw `message send`）。
+
+```bash
+zhin send <scene_id> [内容...] [options]
+```
+
+**参数：**
+- `scene_id`: 场景 ID（私聊为用户 ID，群聊为群号等）
+- `内容`: 消息正文，可多个词用空格连接；不传则从 stdin 读取（如 `echo "hi" | zhin send 123`）
+
+**选项：**
+- `-s, --scene <type>`: 场景类型，`private` | `group` | `channel`，默认 `private`
+- `-a, --adapter <name>`: 适配器名称（如 `icqq`、`discord`、`process`），默认 `process`
+- `-b, --bot <id>`: 指定 Bot ID；不传则使用该适配器下第一个在线 Bot
+
+**示例：**
+```bash
+zhin send 1659488338 你好啊
+zhin send 123456 --scene group --adapter icqq 群发一条
+echo "长内容" | zhin send 1659488338 --adapter process
+```
+
+### migrate - 项目升级
+
+将老版本 Zhin 项目依赖与结构升级到最新，见上文「migrate」说明。
 
 ### install-service / uninstall-service - 系统服务
 

@@ -254,7 +254,7 @@ Zhin.js 提供了丰富的命令行工具：
 | `zhin setup`            | 交互式配置向导（数据库、适配器、AI 等）                    |
 | `zhin config`           | 管理配置文件（子命令：`list`/`get`/`set`/`delete`/`path`） |
 | `zhin doctor`           | 检查系统环境和项目配置，支持 `--fix` 自动修复              |
-| `zhin onboarding`       | 新手引导教程，支持 `-i`（交互模式）、`-q`（快速指南）      |
+| `zhin onboard`          | 引导与配置向导：项目内保持/重新配置/重置，复用现有配置与 data；非项目内可创建新项目或查看快速开始 |
 | `zhin install-service`  | 注册为系统服务（systemd/launchd/NSSM），支持 `--user`      |
 | `zhin uninstall-service`| 卸载系统服务                                               |
 

@@ -489,7 +489,7 @@ tar -czf my-skill.tar.gz my-skill/
 
 ## 资源
 
-- Zhin.js 文档：https://zhinjs.github.io/docs/advanced/tools-skills
+- Zhin.js 文档：https://zhin.js.org/docs/advanced/tools-skills
 - 技能示例仓库：https://github.com/zhinjs/skills
 - 社区技能市场：https://zhin.js.org/skills
 

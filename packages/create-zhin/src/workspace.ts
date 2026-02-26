@@ -514,7 +514,7 @@ plugins:
 
 ## 📚 文档
 
-- [官方文档](https://zhinjs.github.io)
+- [官方文档](https://zhin.js.org)
 - [GitHub](https://github.com/zhinjs/zhin)
 
 ## 许可证
@@ -631,28 +631,25 @@ addCommand(
       const freemem = os.freemem();
       
       return [
-        '╔═══════════ 系统状态 ═══════════╗',
-        '',
+        '系统状态',
         \`运行时：Node.js \${process.version} | 架构：\${process.arch}\`,
         \`运行时长：\${Time.formatTime(uptime * 1000)}\`,
-        '',
         \`物理内存：\${formatMemory(memUsage.rss)}\`,
         \`堆内存：\${formatMemory(memUsage.heapUsed)} / \${formatMemory(memUsage.heapTotal)}\`,
-        '',
         \`系统内存：\${formatMemory(totalmem - freemem)} / \${formatMemory(totalmem)}\`,
-        '',
-        '╚════════════════════════════════╝'
       ].join('\\n');
     })
 );
-
+addCommand(
+  new MessageCommand("send").action(
+    (_, result) => result.remaining as MessageElement[]
+  )
+);
 // 注册客户端页面
 useContext('web', (web) => {
-  const isDev = process.env.NODE_ENV === 'development';
-  const clientEntry = isDev 
-    ? './client/index.tsx'
-    : './dist/index.js';
-  web.addEntry(path.join(process.cwd(), clientEntry));
+  const dispose = web.addEntry(
+    path.resolve(process.cwd(), "client/index.tsx"));
+  return dispose;
 });
 `);
   
@@ -686,7 +683,7 @@ function HomePage() {
             <h2 className="text-xl font-semibold mb-2">📚 资源</h2>
             <ul className="space-y-1">
               <li>
-                <a href="https://zhinjs.github.io" target="_blank" rel="noopener noreferrer" 
+                <a href="https://zhin.js.org" target="_blank" rel="noopener noreferrer" 
                    className="text-blue-600 hover:underline">
                   官方文档
                 </a>
@@ -707,7 +704,7 @@ function HomePage() {
 
 addPage({
   key: 'home',
-  path: '/',
+  path: '/example',
   title: '首页',
   icon: <Home className="w-5 h-5" />,
   element: <HomePage />

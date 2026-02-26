@@ -17,7 +17,7 @@ coverage/
 # Production builds
 lib/
 build/
-
+examples/**/data/
 # Environment variables
 .env
 .env.local

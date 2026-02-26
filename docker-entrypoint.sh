@@ -33,7 +33,7 @@ show_help() {
     echo "  # 开发模式运行"
     echo "  docker run -it -v \$(pwd)/my-bot:/app -p 8086:8086 ghcr.io/zhinjs/zhin dev"
     echo ""
-    echo "详细文档: https://zhinjs.github.io"
+    echo "详细文档: https://zhin.js.org"
     echo ""
 }
 

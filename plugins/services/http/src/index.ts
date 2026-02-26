@@ -317,8 +317,8 @@ useContext("config", (configService) => {
     ctx.body = { success: true, data: schema.toJSON() };
   });
 
-  // 消息发送 API
-  router.post(`${base}/message/send`, async (ctx:RouterContext) => {
+  // 消息发送 API（与其它 API 一样由 Basic Auth 保护，供 zhin send 等调用）
+  router.post(`${base}/message/send`, async (ctx: RouterContext) => {
     interface SendMessageBody {
       context: string;
       bot: string;
@@ -329,7 +329,7 @@ useContext("config", (configService) => {
     const body = ctx.request.body as SendMessageBody;
     const { context, bot, id, type, content } = body;
 
-    if (!context || !bot || !id || !type || !content) {
+    if (!context || !bot || !id || !type || content === undefined || content === null) {
       ctx.status = 400;
       ctx.body = {
         success: false,
@@ -338,18 +338,32 @@ useContext("config", (configService) => {
       return;
     }
 
-    ctx.body = {
-      success: true,
-      message: "Message sent successfully",
-      data: {
+    try {
+      const adapter = root.inject(context as keyof Plugin.Contexts);
+      if (!adapter || !(adapter instanceof Adapter)) {
+        ctx.status = 404;
+        ctx.body = { success: false, error: `Adapter not found or not sendable: ${context}` };
+        return;
+      }
+      const normalizedContent =
+        typeof content === "string" ? content : Array.isArray(content) ? content : String(content);
+      const msgId = await adapter.sendMessage({
         context,
         bot,
         id,
-        type,
-        content,
-        timestamp: new Date().toISOString(),
-      },
-    };
+        type: type as "private" | "group" | "channel",
+        content: normalizedContent,
+      });
+      ctx.body = {
+        success: true,
+        message: "Message sent successfully",
+        data: { context, bot, id, type, messageId: msgId, timestamp: new Date().toISOString() },
+      };
+    } catch (err: any) {
+      logger.error("message/send failed: " + (err?.message || String(err)));
+      ctx.status = 500;
+      ctx.body = { success: false, error: err?.message || String(err) };
+    }
   });
   server.listen({ host, port }, () => {
     const address = server.address();
