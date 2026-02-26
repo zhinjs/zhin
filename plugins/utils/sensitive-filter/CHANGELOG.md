@@ -1,5 +1,11 @@
 # @zhin.js/sensitive-filter
 
+## 0.0.19
+
+### Patch Changes
+
+- zhin.js@1.0.33
+
 ## 0.0.18
 
 ### Patch Changes
