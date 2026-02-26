@@ -375,6 +375,9 @@ importers:
       inquirer:
         specifier: ^12.10.0
         version: 12.11.1(@types/node@24.10.4)
+      yaml:
+        specifier: ^2.3.4
+        version: 2.8.2
     devDependencies:
       '@types/fs-extra':
         specifier: ^11.0.4
