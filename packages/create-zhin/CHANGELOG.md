@@ -1,5 +1,14 @@
 # create-zhin-app
 
+## 1.0.27
+
+### Patch Changes
+
+- 48481a8: fix: @zhin.js/adapter-icqq 内置点赞工具
+  fix: create-zhin-app 默认增加 send 指令
+  fix: @zhin.js/cli 重命名 onborading 为 onborad 并重写实现,新增 zhin send 命令，用于直接通过 send 命令发送消息
+  fix: @zhin.js/http 新增消息发送 api
+
 ## 1.0.26
 
 ### Patch Changes
