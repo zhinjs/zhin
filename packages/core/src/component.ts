@@ -470,34 +470,38 @@ export async function renderComponent<P = any>(component: Component<P>, template
     const props = getProps(component, template, context);
     return component(props, context);
 }
-// 渲染函数 - 支持新的组件系统
+// 渲染函数 - 支持新的组件系统；无组件时仍对内容执行 ${...} 模板编译，与有组件时行为一致
 export async function renderComponents(
     componentMap: Map<string, Component>,
     options: SendOptions,
     customContext?: ComponentContext
 ): Promise<SendOptions> {
-    if (!componentMap.size) return options;
+    const template = typeof options.content === 'string'
+        ? options.content
+        : segment.toString(options.content as MessageElement);
 
-    const components = [...Array.from(componentMap.values()), Fetch, Fragment];
-
-    // 创建根上下文
     const rootContext = customContext || createComponentContext(
         options,
         undefined,
-        typeof options.content === 'string' ? options.content : segment.toString(options.content as MessageElement)
+        template
     );
 
-    // 实现渲染逻辑
-    const renderWithContext = async (template: string, context: ComponentContext): Promise<SendContent> => {
-        let result = template;
+    if (!componentMap.size) {
+        const compiled = rootContext.compile(template);
+        return {
+            ...options,
+            content: typeof compiled === 'string' ? segment.from(compiled) : (compiled as MessageElement[]),
+        };
+    }
+
+    const components = [...Array.from(componentMap.values()), Fetch, Fragment];
+
+    const renderWithContext = async (tpl: string, context: ComponentContext): Promise<SendContent> => {
+        let result = context.compile(tpl);
         let hasChanges = true;
         let iterations = 0;
-        const maxIterations = 10; // 防止无限循环
+        const maxIterations = 10;
 
-        // 编译模板
-        result = context.compile(result);
-
-        // 递归处理所有组件，直到没有更多组件需要渲染
         while (hasChanges && iterations < maxIterations) {
             hasChanges = false;
             iterations++;
@@ -505,22 +509,21 @@ export async function renderComponents(
             for (const comp of components) {
                 const match = matchComponent(comp, result);
                 if (match) {
-                    // 创建组件特定的上下文
                     const componentContext = createComponentContext(
                         context.props,
                         context,
                         result
                     );
                     let SendContent;
-                    try{
+                    try {
                         SendContent = await renderComponent(comp, match, componentContext);
-                    }catch(error){
-                        SendContent = `[${comp.name} Error: ${(error as Error)?.message||String(error)}]`
+                    } catch (error) {
+                        SendContent = `[${comp.name} Error: ${(error as Error)?.message || String(error)}]`;
                     }
                     const renderedString = typeof SendContent === 'string' ? SendContent : segment.toString(SendContent as MessageElement);
                     result = result.replace(match, renderedString);
                     hasChanges = true;
-                    break; // 处理一个组件后重新开始循环
+                    break;
                 }
             }
         }
@@ -528,20 +531,18 @@ export async function renderComponents(
         return result;
     };
 
-    // 更新根上下文的渲染函数
-    rootContext.render = async (template: string, context?: Partial<ComponentContext>) => {
-        return await renderWithContext(template, rootContext);
+    rootContext.render = async (tpl: string, context?: Partial<ComponentContext>) => {
+        return await renderWithContext(tpl, rootContext);
     };
 
-    // 渲染模板
     const output = await renderWithContext(rootContext.root, rootContext);
     const content = typeof output === 'string' ? segment.from(output) : output as MessageElement[];
 
-        return {
-            ...options,
-            content
-        };
-    }
+    return {
+        ...options,
+        content,
+    };
+}
 
 // 内置组件
 export const Fragment = defineComponent(async (props: { children?: SendContent }, context: ComponentContext) => {
