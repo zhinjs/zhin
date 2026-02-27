@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.28
+
+### Patch Changes
+
+- 634e2d7: fix: ai 强化
+
 ## 1.0.27
 
 ### Patch Changes
