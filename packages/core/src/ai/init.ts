@@ -29,7 +29,8 @@ import type { MessageDispatcherService } from '../built/dispatcher.js';
 import type { SkillFeature } from '../built/skill.js';
 import { AIService } from './service.js';
 import { ZhinAgent } from './zhin-agent.js';
-import { createBuiltinTools, discoverWorkspaceSkills, loadSoulPersona } from './builtin-tools.js';
+import { createBuiltinTools, discoverWorkspaceSkills, loadSoulPersona, loadAlwaysSkillsContent, buildSkillsSummaryXML } from './builtin-tools.js';
+import { resolveSkillInstructionMaxChars, DEFAULT_CONFIG } from './zhin-agent-config.js';
 import { loadBootstrapFiles, buildContextFiles, buildBootstrapContextSection, loadToolsGuide } from './bootstrap.js';
 import { triggerAIHook, createAIHookEvent } from './hooks.js';
 import { SessionManager, createDatabaseSessionManager } from './session.js';
@@ -44,6 +45,7 @@ import { AI_MESSAGE_MODEL, AI_SUMMARY_MODEL } from './conversation-memory.js';
 import { AI_USER_PROFILE_MODEL } from './user-profile.js';
 import { AI_FOLLOWUP_MODEL } from './follow-up.js';
 import { PersistentCronEngine, setCronManager, createCronTools } from './cron-engine.js';
+import { Scheduler, getScheduler, setScheduler } from '../scheduler/index.js';
 import { renderToPlainText, type OutputElement } from './output.js';
 import type { AIConfig, ContentPart } from './types.js';
 
@@ -204,6 +206,38 @@ export function initAIModule(): void {
       });
     });
 
+    // 子任务管理器：让 AI 可以 spawn 后台子 agent 异步执行复杂任务
+    agent.initSubagentManager(() => {
+      const modelName = provider.models[0] || '';
+      const fullConfig = { ...DEFAULT_CONFIG, ...agentConfig } as Required<import('./zhin-agent-config.js').ZhinAgentConfig>;
+      const zhinTools = createBuiltinTools({ skillInstructionMaxChars: resolveSkillInstructionMaxChars(fullConfig, modelName) });
+      return zhinTools.map(zt => {
+        const t = zt.toTool();
+        return {
+          name: t.name,
+          description: t.description,
+          parameters: t.parameters as any,
+          execute: t.execute as (args: Record<string, any>) => Promise<any>,
+          tags: t.tags,
+          keywords: t.keywords,
+        };
+      });
+    });
+    agent.setSubagentSender(async (origin, content) => {
+      const adapter = root.inject(origin.platform as any) as any;
+      if (!adapter || typeof adapter.sendMessage !== 'function') {
+        logger.warn(`[子任务] 找不到适配器: ${origin.platform}`);
+        return;
+      }
+      await adapter.sendMessage({
+        context: origin.platform,
+        bot: origin.botId,
+        id: origin.sceneId,
+        type: origin.sceneType as any,
+        content,
+      });
+    });
+
     // 持久化定时任务引擎：加载 data/cron-jobs.json，到点用 prompt 调用 Agent；并暴露给 AI 管理（list/add/remove/pause/resume）
     let cronEngine: PersistentCronEngine | null = null;
     const cronFeature = root.inject('cron' as any);
@@ -223,12 +257,37 @@ export function initAIModule(): void {
       setCronManager({ cronFeature, engine: cronEngine });
     }
 
+    // 统一调度器（at/every/cron + Heartbeat），持久化到 data/scheduler-jobs.json
+    const dataDir = path.join(process.cwd(), 'data');
+    const workspace = process.cwd();
+    const scheduler = new Scheduler({
+      storePath: path.join(dataDir, 'scheduler-jobs.json'),
+      workspace,
+      onJob: async (job) => {
+        if (!zhinAgentInstance) return;
+        await zhinAgentInstance.process(job.payload.message, {
+          platform: 'cron',
+          senderId: 'system',
+          sceneId: 'scheduler',
+        });
+      },
+      heartbeatEnabled: true,
+      heartbeatIntervalMs: 30 * 60 * 1000,
+    });
+    setScheduler(scheduler);
+    scheduler.start().catch((e) => logger.warn('Scheduler start failed: ' + (e as Error).message));
+
     logger.debug('ZhinAgent created');
     return () => {
       setCronManager(null);
       if (cronEngine) {
         cronEngine.unload();
         cronEngine = null;
+      }
+      const s = getScheduler();
+      if (s) {
+        s.stop();
+        setScheduler(null);
       }
       agent.dispose();
       zhinAgentInstance = null;
@@ -534,8 +593,11 @@ export function initAIModule(): void {
   useContext('ai', 'tool', (ai, toolService) => {
     if (!ai || !toolService) return;
 
-    // 注册工具
-    const builtinTools = createBuiltinTools();
+    const provider = ai.getProvider();
+    const agentCfg = ai.getAgentConfig();
+    const fullCfg = { ...DEFAULT_CONFIG, ...agentCfg } as Required<import('./zhin-agent-config.js').ZhinAgentConfig>;
+    const modelName = provider.models[0] || '';
+    const builtinTools = createBuiltinTools({ skillInstructionMaxChars: resolveSkillInstructionMaxChars(fullCfg, modelName) });
     const disposers: (() => void)[] = [];
     for (const tool of builtinTools) disposers.push(toolService.addTool(tool, root.name));
     const cronTools = createCronTools();
@@ -632,6 +694,19 @@ export function initAIModule(): void {
         logger.debug(`Bootstrap files not loaded: ${e.message}`);
       }
 
+      // ── 第三步：常驻技能正文 + 技能 XML 摘要注入 Agent ──
+      try {
+        const skillsForContext = await discoverWorkspaceSkills();
+        const alwaysContent = await loadAlwaysSkillsContent(skillsForContext);
+        const skillsXml = buildSkillsSummaryXML(skillsForContext);
+        if (zhinAgentInstance) {
+          zhinAgentInstance.setActiveSkillsContext(alwaysContent);
+          zhinAgentInstance.setSkillsSummaryXML(skillsXml);
+        }
+      } catch (e: any) {
+        logger.debug(`Skills context not set: ${e.message}`);
+      }
+
       // 触发 agent:bootstrap Hook
       const skillFeature2 = (root as any).inject?.('skill') as SkillFeature | undefined;
       await triggerAIHook(createAIHookEvent('agent', 'bootstrap', undefined, {
@@ -650,6 +725,13 @@ export function initAIModule(): void {
           skillReloadDebounce = null;
           try {
             const count = await syncWorkspaceSkills();
+            const skillsForContext = await discoverWorkspaceSkills();
+            const alwaysContent = await loadAlwaysSkillsContent(skillsForContext);
+            const skillsXml = buildSkillsSummaryXML(skillsForContext);
+            if (zhinAgentInstance) {
+              zhinAgentInstance.setActiveSkillsContext(alwaysContent);
+              zhinAgentInstance.setSkillsSummaryXML(skillsXml);
+            }
             await triggerAIHook(createAIHookEvent('agent', 'skills-reloaded', undefined, { skillCount: count }));
             if (count >= 0) logger.info(`[技能热重载] 已更新，当前工作区技能数: ${count}`);
           } catch (e: any) {

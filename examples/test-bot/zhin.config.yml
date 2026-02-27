@@ -1,4 +1,5 @@
 log_level: 1
+num_ctx: 8192
 database:
   dialect: sqlite
   filename: ./data/test.db
@@ -50,7 +51,7 @@ ai:
     ollama:
       host: 'http://172.25.70.73:11434'
       models:
-        - qwen3:8b
+        - qwen3:14b
   sessions:
     useDatabase: true
     maxHistory: 50
@@ -59,6 +60,21 @@ ai:
     enabled: true
     maxMessagesBeforeSummary: 100
     summaryRetentionDays: 30
+  agent:
+    execSecurity: allowlist
+    execAllowlist:
+      - "ls"
+      - "cat"
+      - "echo"
+      - "whoami"
+      - "pwd"
+      - "date"
+      - "cal"
+      - "clear"
+      - "help"
+      - "man"
+      - "info"
+      - "curl"
   trigger:
     enabled: true
     prefixes:

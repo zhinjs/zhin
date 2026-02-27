@@ -24,10 +24,10 @@ const logger = new Logger(null, 'Bootstrap');
 // 常量
 // ============================================================================
 
-/** 支持的引导文件名 */
+/** 支持的引导文件名（顺序：SOUL → AGENTS → TOOLS） */
 export const BOOTSTRAP_FILENAMES = [
-  'AGENTS.md',
   'SOUL.md',
+  'AGENTS.md',
   'TOOLS.md',
 ] as const;
 
@@ -102,6 +102,52 @@ export function clearBootstrapCache(): void {
 function getDataDir(workspaceDir?: string): string {
   const cwd = workspaceDir || process.cwd();
   return path.join(cwd, 'data');
+}
+
+/**
+ * 获取文件制长期记忆目录（data/memory），不存在则创建
+ */
+export function getMemoryDir(workspaceDir?: string): string {
+  const dir = path.join(getDataDir(workspaceDir), 'memory');
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+}
+
+function todayDate(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
+/**
+ * 读取文件制长期记忆 + 当日笔记，拼成注入 system prompt 的字符串（与 miniclawd 一致）
+ * 同步读取，供 buildRichSystemPrompt 等同步调用
+ */
+export function getFileMemoryContext(workspaceDir?: string): string {
+  const memoryDir = getMemoryDir(workspaceDir);
+  const parts: string[] = [];
+
+  const memoryFile = path.join(memoryDir, 'MEMORY.md');
+  if (fs.existsSync(memoryFile)) {
+    try {
+      const longTerm = fs.readFileSync(memoryFile, 'utf-8').trim();
+      if (longTerm) parts.push('## Long-term Memory\n' + longTerm);
+    } catch {
+      // ignore read errors
+    }
+  }
+
+  const todayFile = path.join(memoryDir, `${todayDate()}.md`);
+  if (fs.existsSync(todayFile)) {
+    try {
+      const today = fs.readFileSync(todayFile, 'utf-8').trim();
+      if (today) parts.push("## Today's Notes\n" + today);
+    } catch {
+      // ignore read errors
+    }
+  }
+
+  return parts.length > 0 ? parts.join('\n\n') : '';
 }
 
 /**

@@ -267,6 +267,14 @@ ${preExecutedData ? `\n已自动获取的数据：${preExecutedData}\n` : ''}
   }
   listProviders(): string[] { return Array.from(this.providers.keys()); }
 
+  getProviderCapabilities(name?: string): { contextWindow?: number; capabilities?: import('./types.js').ProviderCapabilities } {
+    const provider = this.getProvider(name);
+    return {
+      contextWindow: provider.contextWindow,
+      capabilities: provider.capabilities,
+    };
+  }
+
   async listModels(providerName?: string): Promise<{ provider: string; models: string[] }[]> {
     const result: { provider: string; models: string[] }[] = [];
     if (providerName) {

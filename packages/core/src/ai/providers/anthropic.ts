@@ -178,12 +178,15 @@ export class AnthropicProvider extends BaseProvider {
     'claude-3-sonnet-20240229',
     'claude-3-haiku-20240307',
   ];
+  contextWindow: number;
+  capabilities = { vision: true, streaming: true, toolCalling: true, thinking: false };
 
   private baseUrl: string;
   private anthropicVersion: string;
 
   constructor(config: AnthropicConfig = {}) {
     super(config);
+    this.contextWindow = config.contextWindow ?? 200000;
     this.baseUrl = config.baseUrl || 'https://api.anthropic.com';
     this.anthropicVersion = config.anthropicVersion || '2023-06-01';
   }

@@ -95,13 +95,19 @@ export async function createWorkspace(projectPath: string, projectName: string, 
   await fs.writeFile(path.join(projectPath, 'SOUL.md'), SOUL_MD_TEMPLATE);
   await fs.writeFile(path.join(projectPath, 'TOOLS.md'), TOOLS_MD_TEMPLATE);
   await fs.writeFile(path.join(projectPath, 'AGENTS.md'), AGENTS_MD_TEMPLATE);
-  
-  // 创建内置 skill-creator 技能
+
+  // 创建内置技能：skill-creator、summarize
   const skillCreatorDir = path.join(projectPath, 'skills', 'skill-creator');
   await fs.ensureDir(skillCreatorDir);
   const skillCreatorPath = path.join(__dirname, '../template/skills/skill-creator/SKILL.md');
   if (fs.existsSync(skillCreatorPath)) {
     await fs.copy(skillCreatorPath, path.join(skillCreatorDir, 'SKILL.md'));
+  }
+  const summarizeDir = path.join(projectPath, 'skills', 'summarize');
+  await fs.ensureDir(summarizeDir);
+  const summarizePath = path.join(__dirname, '../template/skills/summarize/SKILL.md');
+  if (fs.existsSync(summarizePath)) {
+    await fs.copy(summarizePath, path.join(summarizeDir, 'SKILL.md'));
   }
   
   // 创建 plugins 目录

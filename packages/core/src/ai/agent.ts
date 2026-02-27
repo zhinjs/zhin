@@ -32,6 +32,7 @@ export function formatToolTitle(name: string, args?: Record<string, any>): strin
     case 'read_file': return a.file_path != null ? `read_file: ${a.file_path}` : name;
     case 'write_file': return a.file_path != null ? `write_file: ${a.file_path}` : name;
     case 'edit_file': return a.file_path != null ? `edit_file: ${a.file_path}` : name;
+    case 'list_dir': return a.path != null ? `list_dir: ${a.path}` : name;
     case 'web_search': return a.query != null ? `web_search: ${String(a.query).slice(0, 40)}` : name;
     case 'web_fetch': return a.url != null ? `web_fetch: ${String(a.url).slice(0, 50)}` : name;
     default: {
@@ -286,10 +287,21 @@ export class Agent {
       });
     }
 
+    let args: Record<string, unknown>;
     try {
-      const args = JSON.parse(toolCall.function.arguments);
-      this.emit('tool_call', tool.name, args);
+      args = JSON.parse(toolCall.function.arguments);
+    } catch {
+      return JSON.stringify({
+        error: 'Invalid tool arguments JSON',
+        tool: toolCall.function.name,
+        hint: '请检查工具参数格式后重试。',
+      });
+    }
 
+    logger.debug({ tool: toolCall.function.name, params: args }, 'Executing tool');
+    this.emit('tool_call', tool.name, args);
+
+    try {
       // 带超时的工具执行
       const result = await Promise.race([
         tool.execute(args),
@@ -303,6 +315,7 @@ export class Agent {
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       logger.warn(`工具 ${toolCall.function.name} 执行失败: ${errorMsg}`);
+      logger.error({ tool: toolCall.function.name, params: args, err: error }, 'Tool execution failed');
       // 向 AI 提供结构化的错误信息和恢复提示
       return JSON.stringify({
         error: errorMsg,

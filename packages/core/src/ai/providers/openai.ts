@@ -28,11 +28,14 @@ export class OpenAIProvider extends BaseProvider {
     'o1-preview',
     'o3-mini',
   ];
+  contextWindow: number;
+  capabilities = { vision: true, streaming: true, toolCalling: true, thinking: false };
 
   private baseUrl: string;
 
   constructor(config: OpenAIConfig = {}) {
     super(config);
+    this.contextWindow = config.contextWindow ?? 128000;
     this.baseUrl = config.baseUrl || 'https://api.openai.com/v1';
     
     if (config.organization) {

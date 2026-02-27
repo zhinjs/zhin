@@ -19,6 +19,8 @@ const logger = new Logger(null, 'Ollama');
 export interface OllamaConfig extends ProviderConfig {
   host?: string;
   models?: string[];
+  /** Ollama 上下文窗口大小（token 数），默认 32768。影响多轮对话和技能指令的保持能力 */
+  num_ctx?: number;
 }
 
 /**
@@ -81,13 +83,17 @@ function toOllamaTools(tools?: ToolDefinition[]): any[] | undefined {
 export class OllamaProvider extends BaseProvider {
   name = 'ollama';
   models: string[];
+  contextWindow: number;
+  capabilities = { vision: true, streaming: true, toolCalling: true, thinking: true };
 
   private host: string;
+  private numCtx: number;
 
   constructor(config: OllamaConfig = {}) {
     super(config);
     this.host = config.host || config.baseUrl || 'http://localhost:11434';
-    // 使用配置中的模型列表，如果没有则使用默认列表
+    this.numCtx = config.contextWindow ?? config.num_ctx ?? 32768;
+    this.contextWindow = this.numCtx;
     this.models = config.models?.length ? config.models : [
       'llama3.3',
       'llama3.2',
@@ -113,7 +119,9 @@ export class OllamaProvider extends BaseProvider {
       model: request.model,
       messages,
       stream: false,
-      options: {},
+      options: {
+        num_ctx: this.numCtx,
+      },
     };
 
     // think 参数：控制 qwen3 等模型的思考模式
@@ -186,7 +194,9 @@ export class OllamaProvider extends BaseProvider {
       model: request.model,
       messages,
       stream: true,
-      options: {},
+      options: {
+        num_ctx: this.numCtx,
+      },
     };
 
     if (request.think !== undefined) {

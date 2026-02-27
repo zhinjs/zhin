@@ -1,8 +1,33 @@
 # 定时任务
 
-Zhin.js 通过 `CronFeature` 管理定时任务。插件可以使用 `addCron` 扩展方法添加定时任务。此外，提供**持久化定时任务引擎**：任务写入 `data/cron-jobs.json`，到点由 AI 执行指定 prompt，重启后自动加载。
+Zhin.js 通过 `CronFeature` 管理定时任务。插件可以使用 `addCron` 扩展方法添加定时任务。此外提供两类持久化能力：
 
-## 持久化定时任务（AI 到点执行）
+1. **Cron 持久化**：`data/cron-jobs.json`，仅 Cron 表达式 + prompt，重启后加载。
+2. **统一调度器（Scheduler）**：`data/scheduler-jobs.json`，支持单次（at）、间隔（every）、Cron，以及 **Heartbeat**（周期检查工作区 `HEARTBEAT.md`）。
+
+## 统一调度器与 Heartbeat
+
+调度器在应用启动时自动运行，持久化到 `data/scheduler-jobs.json`。
+
+- **at**：单次在指定时间执行（ISO8601）。
+- **every**：按固定间隔执行（如 30m、1h、1d）。
+- **cron**：Cron 表达式（与 cron-jobs 一致）。
+- **Heartbeat**：每 30 分钟检查项目根目录下的 `HEARTBEAT.md`；若文件存在且内容非空（除注释和 `- [ ]` 任务列表外有正文），则触发一次 Agent 执行固定 prompt（读 HEARTBEAT 说明）。可用于周期任务清单。
+
+### CLI 添加单次/间隔任务
+
+```bash
+# 单次：指定时间执行一次（执行后默认删除）
+zhin cron add --at "2025-12-31T09:00:00" "提醒：年终总结"
+
+# 间隔：每 30 分钟 / 1 小时 / 1 天执行
+zhin cron add --every 30m "检查待办并提醒"
+zhin cron add --every 1h "早报摘要" --label hourly
+```
+
+应用运行中会到点执行；重启后会自动加载 `scheduler-jobs.json` 中未过期的任务。
+
+## 持久化定时任务（Cron，AI 到点执行）
 
 适用于「每天 9 点让 AI 执行某段 prompt」等场景，数据存于 `data/cron-jobs.json`，与 OpenClaw 定时任务思路一致。
 
@@ -12,7 +37,7 @@ Zhin.js 通过 `CronFeature` 管理定时任务。插件可以使用 `addCron` �
 # 列出所有持久化任务
 zhin cron list
 
-# 添加：Cron 表达式 + 触发时发给 AI 的 prompt
+# 添加：Cron 表达式 + 触发时发给 AI 的 prompt（或使用 --at / --every 见上文）
 zhin cron add "0 9 * * *" "今天有什么待办？给我一份简要提醒"
 zhin cron add "0 8 * * 1-5" "早报摘要" --label 工作日早报
 

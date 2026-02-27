@@ -128,6 +128,14 @@ export interface ChatCompletionChunkChoice {
 // Provider 类型
 // ============================================================================
 
+/** Provider 能力声明 */
+export interface ProviderCapabilities {
+  vision?: boolean;
+  streaming?: boolean;
+  toolCalling?: boolean;
+  thinking?: boolean;
+}
+
 /** Provider 配置 */
 export interface ProviderConfig {
   apiKey?: string;
@@ -136,6 +144,10 @@ export interface ProviderConfig {
   timeout?: number;
   maxRetries?: number;
   headers?: Record<string, string>;
+  /** 上下文窗口大小（token 数），各 Provider 映射到自身参数 */
+  contextWindow?: number;
+  /** Provider 能力声明 */
+  capabilities?: ProviderCapabilities;
 }
 
 /** Provider 接口 */
@@ -154,6 +166,12 @@ export interface AIProvider {
   
   /** 检查连接 */
   healthCheck?(): Promise<boolean>;
+
+  /** 上下文窗口大小（token 数），由 Provider 实现暴露 */
+  contextWindow?: number;
+
+  /** Provider 能力声明 */
+  capabilities?: ProviderCapabilities;
 }
 
 // ============================================================================
@@ -241,6 +259,13 @@ export interface Session {
 // AI Service 配置
 // ============================================================================
 
+/** Ollama-specific fields for AIConfig typing (mirrors OllamaConfig) */
+export interface OllamaProviderConfig extends ProviderConfig {
+  host?: string;
+  models?: string[];
+  num_ctx?: number;
+}
+
 /** AI 服务配置 */
 export interface AIConfig {
   enabled?: boolean;
@@ -251,7 +276,7 @@ export interface AIConfig {
     deepseek?: ProviderConfig;
     moonshot?: ProviderConfig;
     zhipu?: ProviderConfig;
-    ollama?: ProviderConfig & { host?: string; models?: string[] };
+    ollama?: OllamaProviderConfig;
     custom?: ProviderConfig[];
   };
   sessions?: {
@@ -284,7 +309,9 @@ export interface AIConfig {
     allowedTools?: string[];
     /** bash 执行策略：deny=禁止执行，allowlist=仅允许列表内命令，full=不限制 */
     execSecurity?: 'deny' | 'allowlist' | 'full';
-    /** allowlist 模式下允许的命令（支持正则字符串，如 "^ls "、"^cat "） */
+    /** 预设命令白名单模式：readonly / network / development / custom（默认 custom，使用自定义 execAllowlist） */
+    execPreset?: 'readonly' | 'network' | 'development' | 'custom';
+    /** allowlist 模式下允许的命令（支持正则字符串，如 "^ls "、"^cat "），与 preset 合并 */
     execAllowlist?: string[];
     /** allowlist 未命中时：true=需审批（当前实现为拒绝并提示），false=直接拒绝 */
     execAsk?: boolean;

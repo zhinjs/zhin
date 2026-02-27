@@ -33,6 +33,7 @@ export * from './types.js'
 export * from './utils.js'
 export * from './errors.js'  // 导出错误处理系统
 export * from './cron.js'
+export * from './scheduler/index.js'
 export * from '@zhin.js/database'
 export * from '@zhin.js/logger'
 // 只导出 Schema 类，避免与 utils.js 的 isEmpty 冲突

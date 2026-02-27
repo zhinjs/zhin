@@ -11,6 +11,11 @@
       "development": "./src/index.ts",
       "import": "./lib/index.js"
     },
+    "./tool-zod": {
+      "types": "./lib/tool-zod.d.ts",
+      "development": "./src/tool-zod.ts",
+      "import": "./lib/tool-zod.js"
+    },
     "./jsx": {
       "types": "./lib/jsx.d.ts",
       "development": "./src/jsx.ts",

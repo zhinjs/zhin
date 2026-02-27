@@ -9,12 +9,13 @@ export type {
   AIConfig,
   AIProvider,
   ProviderConfig,
+  ProviderCapabilities,
+  OllamaProviderConfig,
   ChatMessage,
   ChatCompletionRequest,
   ChatCompletionResponse,
   ChatCompletionChunk,
   ContentPart,
-  // 注意：ToolDefinition 已从 core/types.ts 导出，此处不重复导出
   ToolCall,
   MessageRole,
   AgentTool,
@@ -52,6 +53,14 @@ export type {
 export { ZhinAgent } from './zhin-agent.js';
 export type { ZhinAgentConfig, OnChunkCallback } from './zhin-agent.js';
 
+// ── ZhinAgent sub-modules (for advanced consumers) ──
+export { PERM_MAP, DEFAULT_CONFIG as ZHIN_AGENT_DEFAULT_CONFIG, SECTION_SEP } from './zhin-agent-config.js';
+export { checkExecPolicy, applyExecPolicyToTools, resolveExecAllowlist, EXEC_PRESETS } from './zhin-agent-exec-policy.js';
+export { collectRelevantTools, toAgentTool } from './zhin-agent-tool-collector.js';
+export { buildRichSystemPrompt, buildContextHint, buildEnhancedPersona, buildUserMessageWithHistory, contentToText } from './zhin-agent-prompt.js';
+export type { RichSystemPromptContext } from './zhin-agent-prompt.js';
+export { createChatHistoryTool, createUserProfileTool, createScheduleFollowUpTool, createSpawnTaskTool } from './zhin-agent-builtin-tools.js';
+
 // ── Conversation Memory ──
 export {
   ConversationMemory,
@@ -73,6 +82,15 @@ export type { RateLimitConfig, RateLimitResult } from './rate-limiter.js';
 // ── Follow-Up ──
 export { FollowUpManager, AI_FOLLOWUP_MODEL } from './follow-up.js';
 export type { FollowUpRecord, FollowUpSender } from './follow-up.js';
+
+// ── Subagent ──
+export { SubagentManager } from './subagent.js';
+export type {
+  SubagentOrigin,
+  SubagentResultSender,
+  SpawnOptions,
+  SubagentManagerOptions,
+} from './subagent.js';
 
 // ── 持久化定时任务引擎 ──
 export {
