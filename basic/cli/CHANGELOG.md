@@ -1,5 +1,13 @@
 # @zhin.js/cli
 
+## 1.0.31
+
+### Patch Changes
+
+- 634e2d7: fix: ai 强化
+  - zhin.js@1.0.34
+  - @zhin.js/logger@0.1.18
+
 ## 1.0.30
 
 ### Patch Changes

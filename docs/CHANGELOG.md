@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.12
+
+### Patch Changes
+
+- 634e2d7: fix: ai 强化
+
 ## 1.0.11
 
 ### Patch Changes
