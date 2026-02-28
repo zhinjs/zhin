@@ -376,8 +376,8 @@ class QQAdapter extends Adapter<QQBot<ReceiverMode>> {
   async start(): Promise<void> {
     this.registerQQTools();
     this.declareSkill({
-      description: 'QQ 频道管理能力，包括频道/子频道管理、成员管理（踢人、禁言）、身份组管理（创建、分配、撤销角色）、频道信息查询。',
-      keywords: ['QQ', '频道', '频道管理', '身份组'],
+      description: 'QQ 频道管理能力，包括频道/子频道管理、成员管理（踢人、禁言）、身份组管理（创建、分配、撤销角色）、频道信息查询、子频道详情、单成员详情。',
+      keywords: ['QQ', '频道', '频道管理', '身份组', '子频道详情', '成员详情'],
       tags: ['qq', '频道管理', '社交平台'],
       conventions: '频道和用户均使用字符串 ID 标识。guild_id 为频道 ID，channel_id 为子频道 ID。调用工具时 bot 参数应填当前上下文的 Bot ID。',
     });
@@ -665,6 +665,55 @@ class QQAdapter extends Adapter<QQBot<ReceiverMode>> {
         if (!bot) throw new Error(`Bot ${botId} 不存在`);
         const success = await bot.removeMemberRole(guild_id, channel_id, user_id, role_id);
         return { success, message: success ? `已移除成员的角色` : '操作失败' };
+      },
+    });
+
+    // 子频道详情
+    this.addTool({
+      name: 'qq_channel_info',
+      description: '获取 QQ 频道中指定子频道的详细信息',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          channel_id: { type: 'string', description: '子频道 ID' },
+        },
+        required: ['bot', 'channel_id'],
+      },
+      platforms: ['qq'],
+      scopes: ['channel'],
+      permissionLevel: 'user',
+      execute: async (args) => {
+        const { bot: botId, channel_id } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const info = await bot.getChannelInfo(channel_id);
+        return info;
+      },
+    });
+
+    // 单成员详情
+    this.addTool({
+      name: 'qq_member_detail',
+      description: '获取 QQ 频道中指定成员的详细信息',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          guild_id: { type: 'string', description: '频道 ID' },
+          user_id: { type: 'string', description: '用户 ID' },
+        },
+        required: ['bot', 'guild_id', 'user_id'],
+      },
+      platforms: ['qq'],
+      scopes: ['channel'],
+      permissionLevel: 'user',
+      execute: async (args) => {
+        const { bot: botId, guild_id, user_id } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const member = await bot.getGuildMember(guild_id, user_id);
+        return member;
       },
     });
 

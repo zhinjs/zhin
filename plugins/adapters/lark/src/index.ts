@@ -812,8 +812,8 @@ class LarkAdapter extends Adapter<LarkBot> {
     async start(): Promise<void> {
         this.registerLarkTools();
         this.declareSkill({
-            description: '飞书群聊管理能力，包括用户信息查询、群信息查询、群创建/更新/解散、成员管理（添加/移除成员）、管理员管理（设置/撤销管理员）。',
-            keywords: ['飞书', 'Lark', '群聊管理', '企业协作'],
+            description: '飞书群聊管理能力，包括用户信息查询、群信息查询、群创建/更新/解散、成员管理（添加/移除成员）、管理员管理（设置/撤销管理员）、文件上传。',
+            keywords: ['飞书', 'Lark', '群聊管理', '企业协作', '文件上传', 'upload'],
             tags: ['lark', '群聊管理', '企业协作'],
             conventions: '群和用户均使用字符串 ID 标识（open_id / chat_id）。调用工具时 bot 参数应填当前上下文的 Bot ID，chat_id 应填当前场景 ID。',
         });
@@ -1067,6 +1067,31 @@ class LarkAdapter extends Adapter<LarkBot> {
                 if (!bot) throw new Error(`Bot ${botId} 不存在`);
                 const success = await bot.dissolveChat(chat_id);
                 return { success, message: success ? '群聊已解散' : '解散失败' };
+            },
+        });
+
+        // 文件上传
+        this.addTool({
+            name: 'lark_upload_file',
+            description: '上传文件到飞书（图片/文件/视频/音频）',
+            parameters: {
+                type: 'object',
+                properties: {
+                    bot: { type: 'string', description: 'Bot 名称' },
+                    file_path: { type: 'string', description: '本地文件路径' },
+                    file_type: { type: 'string', description: '文件类型：image/file/video/audio', enum: ['image', 'file', 'video', 'audio'] },
+                },
+                required: ['bot', 'file_path', 'file_type'],
+            },
+            platforms: ['lark'],
+            scopes: ['group', 'private'],
+            permissionLevel: 'user',
+            execute: async (args) => {
+                const { bot: botId, file_path, file_type } = args;
+                const bot = this.bots.get(botId);
+                if (!bot) throw new Error(`Bot ${botId} 不存在`);
+                const result = await bot.uploadFile(file_path, file_type);
+                return { success: true, file_key: result, message: `文件已上传，file_key: ${result}` };
             },
         });
 

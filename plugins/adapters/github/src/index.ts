@@ -1010,7 +1010,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
               if (!args.labels) return '❌ 请提供标签名';
               const labels = (args.labels as string).split(',').map(s => s.trim());
               const r = await api.addLabels(repo, args.number as number, labels);
-              return r.ok ? `✅ 已添加标签: ${labels.join(', ')}` : `❌ ${r.data?.message || JSON.stringify(r.data)}`;
+              return r.ok ? `✅ 已添加标签: ${labels.join(', ')}` : `❌ ${(r.data as any)?.message || JSON.stringify(r.data)}`;
             }
             case 'remove': {
               if (!args.number) return '❌ 请提供 Issue/PR 编号';

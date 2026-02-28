@@ -429,9 +429,69 @@ export class KookBot extends Client implements Bot<KookBotConfig, KookRawMessage
    */
   async getBlacklist(guildId: string): Promise<Guild.BlackInfo[]> {
     try {
-      return await this.getBlacklist(guildId);
+      const guild = this.pickGuild(guildId);
+      return await guild.getBlacklist();
     } catch (error) {
       logger.error(`KOOK Bot ${this.$id} 获取黑名单失败:`, error);
+      throw error;
+    }
+  }
+
+  async addToBlacklist(guildId: string, userId: string, remark?: string): Promise<boolean> {
+    try {
+      const guild = this.pickGuild(guildId);
+      await guild.addBlacklist(userId, remark);
+      logger.info(`KOOK Bot ${this.$id} 添加用户 ${userId} 到黑名单（服务器 ${guildId}）`);
+      return true;
+    } catch (error) {
+      logger.error(`KOOK Bot ${this.$id} 添加黑名单失败:`, error);
+      throw error;
+    }
+  }
+
+  async removeFromBlacklist(guildId: string, userId: string): Promise<boolean> {
+    try {
+      const guild = this.pickGuild(guildId);
+      await guild.removeBlacklist(userId);
+      logger.info(`KOOK Bot ${this.$id} 从黑名单移除用户 ${userId}（服务器 ${guildId}）`);
+      return true;
+    } catch (error) {
+      logger.error(`KOOK Bot ${this.$id} 移除黑名单失败:`, error);
+      throw error;
+    }
+  }
+
+  async sendCardMessage(channelId: string, card: any[]): Promise<any> {
+    try {
+      const channel = this.pickChannel(channelId);
+      const result = await channel.send(JSON.stringify(card), 10);
+      logger.info(`KOOK Bot ${this.$id} 发送卡片消息到 ${channelId}`);
+      return result;
+    } catch (error) {
+      logger.error(`KOOK Bot ${this.$id} 发送卡片消息失败:`, error);
+      throw error;
+    }
+  }
+
+  async updateRole(guildId: string, roleId: string, data: { name?: string; color?: number; permissions?: number }): Promise<any> {
+    try {
+      const guild = this.pickGuild(guildId);
+      const result = await guild.updateRole(roleId, data);
+      logger.info(`KOOK Bot ${this.$id} 更新角色 ${roleId}（服务器 ${guildId}）`);
+      return result;
+    } catch (error) {
+      logger.error(`KOOK Bot ${this.$id} 更新角色失败:`, error);
+      throw error;
+    }
+  }
+
+  async listEmojis(guildId: string): Promise<any[]> {
+    try {
+      const guild = this.pickGuild(guildId);
+      const result = await guild.getEmojiList();
+      return result;
+    } catch (error) {
+      logger.error(`KOOK Bot ${this.$id} 获取表情列表失败:`, error);
       throw error;
     }
   }
@@ -769,8 +829,8 @@ export class KookAdapter extends Adapter<KookBot> {
     // 注册 KOOK 特有的管理工具
     this.registerKookTools();
     this.declareSkill({
-      description: 'KOOK 服务器管理能力，包括成员管理（踢人、封禁、解封、改昵称）、角色管理（创建、删除、授予、撤销角色）、成员列表查询。',
-      keywords: ['KOOK', '开黑啦', '服务器管理', '角色'],
+      description: 'KOOK 服务器管理能力，包括成员管理（踢人、封禁、解封、改昵称）、角色管理（创建、删除、授予、撤销、更新角色）、成员列表查询、卡片消息、服务器表情列表、黑名单管理。',
+      keywords: ['KOOK', '开黑啦', '服务器管理', '角色', '卡片', 'card', '表情', 'emoji', '黑名单', 'blacklist'],
       tags: ['kook', '服务器管理', '社交平台'],
       conventions: '用户和服务器均使用字符串 ID 标识。guild_id 为服务器 ID，user_id 为用户 ID。调用工具时 bot 参数应填当前上下文的 Bot ID。',
     });
@@ -1198,6 +1258,153 @@ export class KookAdapter extends Adapter<KookBot> {
           })),
           count: members.length,
         };
+      },
+    });
+
+    // 发送卡片消息
+    this.addTool({
+      name: 'kook_send_card',
+      description: '发送 KOOK 卡片消息（富文本结构化消息）',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          channel_id: { type: 'string', description: '频道 ID' },
+          title: { type: 'string', description: '卡片标题' },
+          description: { type: 'string', description: '卡片描述' },
+          color: { type: 'string', description: '侧边栏颜色（如 #FF0000）' },
+        },
+        required: ['bot', 'channel_id', 'title'],
+      },
+      platforms: ['kook'],
+      scopes: ['channel'],
+      permissionLevel: 'user',
+      execute: async (args) => {
+        const { bot: botId, channel_id, title, description, color } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const card: any = {
+          type: 'card',
+          theme: 'primary',
+          color: color || undefined,
+          size: 'lg',
+          modules: [
+            { type: 'header', text: { type: 'plain-text', content: title } },
+          ],
+        };
+        if (description) {
+          card.modules.push({ type: 'section', text: { type: 'kmarkdown', content: description } });
+        }
+        await bot.sendCardMessage(channel_id, [card]);
+        return { success: true, message: '卡片消息已发送' };
+      },
+    });
+
+    // 更新角色
+    this.addTool({
+      name: 'kook_update_role',
+      description: '更新 KOOK 服务器角色的名称、颜色或权限',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          guild_id: { type: 'string', description: '服务器 ID' },
+          role_id: { type: 'string', description: '角色 ID' },
+          name: { type: 'string', description: '新角色名（可选）' },
+          color: { type: 'number', description: '新颜色值（可选）' },
+          permissions: { type: 'number', description: '新权限值（可选）' },
+        },
+        required: ['bot', 'guild_id', 'role_id'],
+      },
+      platforms: ['kook'],
+      scopes: ['channel'],
+      permissionLevel: 'group_admin',
+      execute: async (args, context) => {
+        const { bot: botId, guild_id, role_id, name, color, permissions } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        this.checkPermission(context, 'group_admin');
+        const data: any = {};
+        if (name) data.name = name;
+        if (color !== undefined) data.color = color;
+        if (permissions !== undefined) data.permissions = permissions;
+        await bot.updateRole(guild_id, role_id, data);
+        return { success: true, message: `角色 ${role_id} 已更新` };
+      },
+    });
+
+    // 查看服务器表情
+    this.addTool({
+      name: 'kook_list_emojis',
+      description: '查看 KOOK 服务器的自定义表情列表',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          guild_id: { type: 'string', description: '服务器 ID' },
+        },
+        required: ['bot', 'guild_id'],
+      },
+      platforms: ['kook'],
+      scopes: ['channel'],
+      permissionLevel: 'user',
+      execute: async (args) => {
+        const { bot: botId, guild_id } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const emojis = await bot.listEmojis(guild_id);
+        return {
+          emojis: emojis.map((e: any) => ({ id: e.id, name: e.name })),
+          count: emojis.length,
+          message: `服务器共有 ${emojis.length} 个自定义表情`,
+        };
+      },
+    });
+
+    // 黑名单管理
+    this.addTool({
+      name: 'kook_blacklist',
+      description: 'KOOK 服务器黑名单管理：查看/添加/移除',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          guild_id: { type: 'string', description: '服务器 ID' },
+          action: { type: 'string', description: 'list|add|remove', enum: ['list', 'add', 'remove'] },
+          user_id: { type: 'string', description: '用户 ID（add/remove 必填）' },
+          remark: { type: 'string', description: '备注（add 可选）' },
+        },
+        required: ['bot', 'guild_id', 'action'],
+      },
+      platforms: ['kook'],
+      scopes: ['channel'],
+      permissionLevel: 'group_admin',
+      execute: async (args, context) => {
+        const { bot: botId, guild_id, action, user_id, remark } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        this.checkPermission(context, 'group_admin');
+
+        switch (action) {
+          case 'list': {
+            const list = await bot.getBlacklist(guild_id);
+            return {
+              blacklist: list.map((b: any) => ({ user_id: b.user_id, remark: b.remark, created_time: b.created_time })),
+              count: list.length,
+            };
+          }
+          case 'add': {
+            if (!user_id) return { success: false, message: '请提供 user_id' };
+            const success = await bot.addToBlacklist(guild_id, user_id, remark);
+            return { success, message: success ? `已将 ${user_id} 加入黑名单` : '操作失败' };
+          }
+          case 'remove': {
+            if (!user_id) return { success: false, message: '请提供 user_id' };
+            const success = await bot.removeFromBlacklist(guild_id, user_id);
+            return { success, message: success ? `已将 ${user_id} 从黑名单移除` : '操作失败' };
+          }
+          default: return { success: false, message: `未知操作: ${action}` };
+        }
       },
     });
 

@@ -794,8 +794,8 @@ class DingTalkAdapter extends Adapter<DingTalkBot> {
     async start(): Promise<void> {
         this.registerDingTalkTools();
         this.declareSkill({
-            description: '钉钉管理能力，包括用户信息查询、部门信息查询、工作通知发送、群聊管理（创建群、查看群信息、添加/移除群成员）。',
-            keywords: ['钉钉', 'DingTalk', '企业管理', '工作通知'],
+            description: '钉钉管理能力，包括用户信息查询、部门信息查询（详情/列表）、工作通知发送、群聊管理（创建群、查看群信息、更新群设置、添加/移除群成员）。',
+            keywords: ['钉钉', 'DingTalk', '企业管理', '工作通知', '部门详情', '更新群设置'],
             tags: ['dingtalk', '企业管理', '办公协作'],
             conventions: '用户使用 userId 标识，群聊使用 chatId 标识。调用工具时 bot 参数应填当前上下文的 Bot ID。',
         });
@@ -1002,6 +1002,63 @@ class DingTalkAdapter extends Adapter<DingTalkBot> {
                 if (!bot) throw new Error(`Bot ${botId} 不存在`);
                 const success = await bot.updateChat(chat_id, { del_useridlist: user_ids });
                 return { success, message: success ? '成员移除成功' : '移除失败' };
+            },
+        });
+
+        // 部门详情
+        this.addTool({
+            name: 'dingtalk_dept_info',
+            description: '获取钉钉部门详细信息',
+            parameters: {
+                type: 'object',
+                properties: {
+                    bot: { type: 'string', description: 'Bot 名称' },
+                    dept_id: { type: 'string', description: '部门 ID' },
+                },
+                required: ['bot', 'dept_id'],
+            },
+            platforms: ['dingtalk'],
+            scopes: ['group', 'private'],
+            permissionLevel: 'user',
+            execute: async (args) => {
+                const { bot: botId, dept_id } = args;
+                const bot = this.bots.get(botId);
+                if (!bot) throw new Error(`Bot ${botId} 不存在`);
+                const info = await bot.getDepartmentInfo(dept_id);
+                return info;
+            },
+        });
+
+        // 更新群设置
+        this.addTool({
+            name: 'dingtalk_update_chat',
+            description: '更新钉钉群聊设置（改名、换群主、增减成员）',
+            parameters: {
+                type: 'object',
+                properties: {
+                    bot: { type: 'string', description: 'Bot 名称' },
+                    chat_id: { type: 'string', description: '群聊 ID' },
+                    name: { type: 'string', description: '新群名（可选）' },
+                    owner: { type: 'string', description: '新群主 userId（可选）' },
+                    add_members: { type: 'string', description: '要添加的成员 userId，逗号分隔（可选）' },
+                    remove_members: { type: 'string', description: '要移除的成员 userId，逗号分隔（可选）' },
+                },
+                required: ['bot', 'chat_id'],
+            },
+            platforms: ['dingtalk'],
+            scopes: ['group'],
+            permissionLevel: 'group_admin',
+            execute: async (args) => {
+                const { bot: botId, chat_id, name, owner, add_members, remove_members } = args;
+                const bot = this.bots.get(botId);
+                if (!bot) throw new Error(`Bot ${botId} 不存在`);
+                const options: any = {};
+                if (name) options.name = name;
+                if (owner) options.owner = owner;
+                if (add_members) options.add_useridlist = add_members.split(',').map((s: string) => s.trim());
+                if (remove_members) options.del_useridlist = remove_members.split(',').map((s: string) => s.trim());
+                await bot.updateChat(chat_id, options);
+                return { success: true, message: '群聊设置已更新' };
             },
         });
 
