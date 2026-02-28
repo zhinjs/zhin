@@ -1,5 +1,13 @@
 # @zhin.js/adapter-github
 
+## 0.1.6
+
+### Patch Changes
+
+- 631da6e: fix: 约定公开路由前缀/pub
+- Updated dependencies [631da6e]
+  - @zhin.js/http@1.0.31
+
 ## 0.1.5
 
 ### Patch Changes

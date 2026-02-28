@@ -1,5 +1,11 @@
 # @zhin.js/http
 
+## 1.0.31
+
+### Patch Changes
+
+- 631da6e: fix: 约定公开路由前缀/pub
+
 ## 1.0.30
 
 ### Patch Changes

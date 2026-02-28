@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/http",
-  "version": "1.0.30",
+  "version": "1.0.31",
   "description": "HTTP server service for Zhin.js with routing and WebSocket support",
   "type": "module",
   "main": "./lib/index.js",

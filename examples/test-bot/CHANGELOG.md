@@ -1,5 +1,22 @@
 # test-bot
 
+## 0.1.38
+
+### Patch Changes
+
+- Updated dependencies [631da6e]
+  - @zhin.js/console@1.0.34
+  - @zhin.js/adapter-github@0.1.6
+  - @zhin.js/http@1.0.31
+  - @zhin.js/adapter-icqq@1.0.46
+  - @zhin.js/adapter-sandbox@1.0.45
+  - @zhin.js/adapter-dingtalk@1.0.26
+  - @zhin.js/adapter-discord@1.0.41
+  - @zhin.js/adapter-lark@1.0.42
+  - @zhin.js/adapter-onebot11@1.0.42
+  - @zhin.js/adapter-wechat-mp@0.1.26
+  - @zhin.js/plugin-music@0.0.27
+
 ## 0.1.37
 
 ### Patch Changes
