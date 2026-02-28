@@ -1,5 +1,11 @@
 # @zhin.js/adapter-icqq
 
+## 1.0.45
+
+### Patch Changes
+
+- e23e732: fix: 增强平台 AI 能力
+
 ## 1.0.44
 
 ### Patch Changes

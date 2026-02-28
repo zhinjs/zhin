@@ -1,5 +1,11 @@
 # @zhin.js/adapter-dingtalk
 
+## 1.0.25
+
+### Patch Changes
+
+- e23e732: fix: 增强平台 AI 能力
+
 ## 1.0.24
 
 ### Patch Changes

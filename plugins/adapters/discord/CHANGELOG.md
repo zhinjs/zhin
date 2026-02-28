@@ -1,5 +1,11 @@
 # @zhin.js/adapter-discord
 
+## 1.0.40
+
+### Patch Changes
+
+- bb0be4c: fix: 平台能力增强
+
 ## 1.0.39
 
 ### Patch Changes

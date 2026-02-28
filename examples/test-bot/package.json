@@ -1,7 +1,7 @@
 {
   "name": "test-bot",
   "private": true,
-  "version": "0.1.35",
+  "version": "0.1.36",
   "description": "test-bot 机器人",
   "type": "module",
   "main": "src/index.ts",

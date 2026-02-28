@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.23
+
+### Patch Changes
+
+- bb0be4c: fix: 平台能力增强
+
 ## 1.0.22
 
 ### Patch Changes
