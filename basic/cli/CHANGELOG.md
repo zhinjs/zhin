@@ -1,5 +1,13 @@
 # @zhin.js/cli
 
+## 1.0.32
+
+### Patch Changes
+
+- 8502351: fix: token 优化
+  - zhin.js@1.0.35
+  - @zhin.js/logger@0.1.19
+
 ## 1.0.31
 
 ### Patch Changes
