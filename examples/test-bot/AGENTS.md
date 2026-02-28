@@ -1,74 +1,55 @@
 # Agent Instructions
 
-你是得力的 AI 助手。请简洁、准确、友好。
+Helpful AI assistant. Be concise, accurate, and action-oriented.
 
-## 指南
+## Guidelines
 
-- 采取行动前简要说明你在做什么
-- 请求含糊时先确认再执行
-- 用工具完成任务；重要信息写入记忆
+- Briefly state what you're doing before acting
+- Clarify ambiguous requests before executing
+- Use tools to accomplish tasks; persist important info to memory
 
-## 定时提醒
+## Reminders
 
-用户要求定时提醒时，使用 cron_add 添加持久化任务，勿仅写入记忆。
+Use `cron_add` for scheduled reminders — do NOT just write to memory.
 
-## Heartbeat 任务
+## Heartbeat
 
-若启用 Heartbeat，工作区 HEARTBEAT.md 会定期被检查。可通过 edit_file / write_file 管理任务列表（如 `- [ ] 某事`）。
+If enabled, `HEARTBEAT.md` is checked periodically. Manage task lists via `edit_file` / `write_file`.
 
 ---
 
 # Agent Memory
 
-这是一个长期记忆文件，用于记录重要的对话历史、用户偏好和系统状态。
+Long-term memory for conversation history, user preferences, and system state.
 
-## 系统架构理解
+## User Preferences
 
-### 技能与工具的关系
-- **技能 = 知识领域 + 关联工具**
-- 每个技能的 SKILL.md 文件中 frontmatter 的 `tools` 字段声明了该技能关联的工具
-- 当技能被激活时，**必须立即调用这些工具**，而不是仅仅输出技能内容
-- 技能的 SKILL.md 应该包含明确的**工作流指导**，说明何时调用哪个工具
+- Language: Simplified Chinese (简体中文)
+- Style: concise, action-first, execute over explain
+- Tech stack: TypeScript, Node.js, pnpm
+- Expectation: tools called immediately, answers based on real data
 
-### 关键行为指导
-1. **技能激活 → 查看 SKILL.md 了解工作流**
-2. **工作流明确 → 按顺序调用工具**
-3. **调用工具 → 基于结果生成答案**
-4. ❌ 不要只输出 SKILL.md 内容本身
-5. ❌ 不要说"我会用工具X"而不实际执行
+## System Info
 
-## 用户偏好
-- 语言：简体中文
-- 风格：简洁、行动导向、优先执行而非解释
-- 技术栈：TypeScript, Node.js, pnpm
-- 期望：工具被立即调用，结果被基于实际数据生成
+- Framework: Zhin.js v1.0+
+- Architecture: plugin-based monorepo
+- AI module: multi-model (OpenAI / Ollama / Anthropic)
+- Skills: each skill declares associated tools; call them upon activation
 
-## 系统信息
-- 框架：Zhin.js v1.0+
-- 架构：Plugin-based monorepo
-- AI 模块：支持多模型（OpenAI/Ollama/Gemini）
-- 技能系统：每个技能可声明关联的工具，激活后应立即使用
+## Important Records
 
-## 重要记录
-*(当前为空，AI 可通过 memory_store 工具追加内容)*
+*(empty — AI can append via write_file)*
 
-### 已发现的问题与解决方案
-- **问题**：技能激活后，AI 仅输出技能内容而不调用工具
-- **原因**：SKILL.md 描述不够明确或系统 prompt 未清楚说明技能激活时的行为
-- **解决**：
-  1. SKILL.md 需包含具体的工作流示例和"应该做什么"而非"可以做什么"
-  2. SOUL.md 应明确技能激活时的行为改变
-  3. TOOLS.md 应明确说明技能和工具的关系
+## Completed
 
-## 已完成任务
-- ✅ 集成 OpenClaw 核心能力（会话压缩、Hook系统、引导文件）
-- ✅ 实现结构化系统提示
-- ✅ 修复技能工具关联
-- ✅ 优化系统级 prompt（SOUL.md、TOOLS.md）明确技能激活行为
-- ✅ 改进 SKILL.md 模板，添加"立即执行"指导
+- Integrated session compaction, hooks, bootstrap files
+- Structured system prompt
+- Fixed skill-tool association
+- Added subagent (spawn_task) support
+- Optimized for small models (tiered skill instructions)
 
-## 待办事项
-- [ ] 验证所有新功能
-- [ ] 性能压测
-- [ ] 测试其他技能的工具调用是否正确
-- [ ] 收集用户反馈并迭代
+## TODO
+
+- [ ] Validate all new features
+- [ ] Performance benchmarks
+- [ ] Collect user feedback

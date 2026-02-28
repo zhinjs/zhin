@@ -1,17 +1,17 @@
 /**
- * Workspace Bootstrap Files — 工作区引导文件管理
+ * Workspace Bootstrap Files
  *
- * 借鉴 OpenClaw 的 workspace bootstrap 设计，支持多种注入式提示文件：
+ * Injectable prompt files inspired by OpenClaw's workspace bootstrap design:
  *
- *   AGENTS.md  — 持久化记忆/指令（AI 可读写）
- *   SOUL.md    — 人格定义（只读）
- *   TOOLS.md   — 工具使用指引（只读，用户自定义工具使用规则）
+ *   AGENTS.md  — persistent memory / instructions (AI read-write)
+ *   SOUL.md    — persona definition (read-only)
+ *   TOOLS.md   — tool usage guidelines (read-only)
  *
- * 关键设计：
- *   1. 基于 mtime 的文件缓存，避免冗余磁盘读取
- *   2. 文件不存在不报错（可选）
- *   3. 内容大小限制，防止注入超长文本
- *   4. 统一的 ContextFile 格式，方便注入到 system prompt
+ * Key design:
+ *   1. mtime-based file cache to avoid redundant disk reads
+ *   2. Missing files are silently skipped
+ *   3. Per-file and total size limits to prevent prompt injection
+ *   4. Unified ContextFile format for system prompt injection
  */
 
 import * as fs from 'fs';
@@ -81,7 +81,7 @@ async function readFileWithCache(filePath: string): Promise<string> {
     return content;
   } catch {
     fileCache.delete(filePath);
-    throw new Error(`文件读取失败: ${filePath}`);
+    throw new Error(`Failed to read file: ${filePath}`);
   }
 }
 
@@ -214,13 +214,13 @@ export function buildContextFiles(
 
     // 单文件裁剪
     if (content.length > maxChars) {
-      content = content.slice(0, maxChars) + '\n...(内容过长已截断)';
-      logger.warn(`引导文件 ${file.name} 超过 ${maxChars} 字符，已截断`);
+      content = content.slice(0, maxChars) + '\n...(truncated)';
+      logger.warn(`Bootstrap file ${file.name} exceeds ${maxChars} chars, truncated`);
     }
 
     // 总量限制
     if (totalChars + content.length > totalMaxChars) {
-      logger.warn(`引导文件总量超过 ${totalMaxChars} 字符，跳过 ${file.name}`);
+      logger.warn(`Bootstrap total exceeds ${totalMaxChars} chars, skipping ${file.name}`);
       break;
     }
 
@@ -289,14 +289,14 @@ export function buildBootstrapContextSection(contextFiles: ContextFile[]): strin
   );
 
   const lines: string[] = [
-    '# 项目上下文',
+    '# Project Context',
     '',
-    '以下项目上下文文件已加载：',
+    'The following project context files have been loaded:',
   ];
 
   if (hasSoul) {
     lines.push(
-      '如果存在 SOUL.md，请融入其人格和语气。避免生硬的通用回复，遵循其指引。',
+      'If SOUL.md is present, embody its persona and tone. Avoid generic responses.',
     );
   }
   lines.push('');

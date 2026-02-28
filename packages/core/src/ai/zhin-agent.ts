@@ -312,10 +312,11 @@ export class ZhinAgent {
       const tLLM = now();
       const prompt = `${personaEnhanced}
 
-以下是根据用户问题自动获取的实时数据：
+Pre-fetched data for the user's question:
 ${preData}
 
-请基于以上数据，用自然流畅的中文回答用户问题。突出重点，适当使用 emoji。`;
+Answer based on the data above. Be natural, highlight key points.`;
+      logger.info(`[系统提示] 快速路径: ${prompt.length} 字符 ≈ ${Math.ceil(prompt.length / 2.5)} tokens`);
       reply = await this.streamChatWithHistory(content, prompt, historyMessages, onChunk);
       logger.info(`[快速路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, LLM=${(now() - tLLM).toFixed(0)}ms, 总=${(now() - t0).toFixed(0)}ms`);
     } else {
@@ -334,6 +335,11 @@ ${preData}
       const systemPrompt = `${richPrompt}
 ${contextHint}
 ${preData ? `\n已获取数据：${preData}\n` : ''}`;
+
+      const promptChars = systemPrompt.length;
+      const estimatedTokens = Math.ceil(promptChars / 2.5);
+      logger.info(`[System Prompt] ${promptChars} chars ≈ ${estimatedTokens} tokens`);
+      logger.debug(`[System Prompt Preview]\n${systemPrompt.slice(0, 500)}...\n---END PREVIEW---`);
 
       const agentTools = applyExecPolicyToTools(this.config, allTools);
 

@@ -133,6 +133,226 @@ function ensureDirs(dir: string, dryRun: boolean): void {
   }
 }
 
+// ============================================================================
+// Bootstrap file upgrade (SOUL.md, TOOLS.md, AGENTS.md)
+// ============================================================================
+
+const NEW_SOUL_MD = `# Soul
+
+Action-oriented AI assistant living in chat channels.
+
+## Personality
+
+- Prefer action over discussion. Execute first, explain after.
+- Direct and concise. No filler or unnecessary disclaimers.
+- Calm confidence. Honest about limitations without being dramatic.
+- Adapt to the user's tone — casual when they're casual, precise when they need precision.
+- Light humor when appropriate, but never at the expense of getting things done.
+- Default optimistic. Problems are puzzles, errors are clues, setbacks are plot twists.
+
+## Values
+
+- Reliability over cleverness
+- Transparency — report failures honestly, with a plan for next steps
+- Respect context — remember what matters to the user
+- Efficiency — no unnecessary back-and-forth
+
+## Work Style
+
+- Break complex tasks into tracked steps
+- Verify by executing tools, never guess
+- Report results, not intentions — "done" beats "I'll try"
+- On failure: report, propose next step, no drama
+`;
+
+const NEW_TOOLS_MD = `# Tools Guide
+
+- After skill activation, call its declared tools immediately — no explaining or waiting
+- Answers must be based on actual tool results, never guess
+- On tool failure, try alternatives instead of reporting raw errors
+- Use \`spawn_task\` for complex/long-running background tasks
+- Persist important info to \`memory/MEMORY.md\`, periodic tasks to \`HEARTBEAT.md\`
+`;
+
+const NEW_AGENTS_MD_HEADER = `# Agent Instructions
+
+Helpful AI assistant. Be concise, accurate, and action-oriented.
+
+## Guidelines
+
+- Briefly state what you're doing before acting
+- Clarify ambiguous requests before executing
+- Use tools to accomplish tasks; persist important info to memory
+
+## Reminders
+
+Use \`cron_add\` for scheduled reminders — do NOT just write to memory files.
+
+## Heartbeat
+
+If enabled, \`HEARTBEAT.md\` is checked periodically. Manage task lists via \`edit_file\` / \`write_file\`. Keep the file small to save tokens.
+
+---
+
+# Agent Memory
+
+Long-term memory for conversation history, user preferences, and system state.`;
+
+/**
+ * Detect whether a file is using the old Chinese template.
+ * Checks for common Chinese header phrases from the original templates.
+ */
+function isOldChineseTemplate(content: string): boolean {
+  const markers = [
+    '我是一个能力出众',
+    '行动导向的 AI 助手',
+    '性格', '价值观', '工作方式',
+    '工具使用原则', '调用风格',
+    '你是得力的 AI 助手',
+    '可用工具', '记忆',
+    '工具组合', '常用工具场景',
+  ];
+  return markers.some(m => content.includes(m));
+}
+
+/**
+ * Extract user-written sections from an existing AGENTS.md.
+ * Preserves: User Preferences, Important Records, TODO sections.
+ */
+function extractUserSections(content: string): { preferences: string; records: string; todo: string } {
+  const lines = content.split('\n');
+  let preferences = '';
+  let records = '';
+  let todo = '';
+
+  let currentSection: 'none' | 'preferences' | 'records' | 'todo' = 'none';
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const lower = line.toLowerCase();
+
+    if (lower.includes('用户偏好') || lower.includes('user preference')) {
+      currentSection = 'preferences';
+      continue;
+    } else if (lower.includes('重要记录') || lower.includes('important record')) {
+      currentSection = 'records';
+      continue;
+    } else if (lower.includes('待办事项') || lower.includes('## todo')) {
+      currentSection = 'todo';
+      continue;
+    } else if (/^##\s/.test(line) && currentSection !== 'none') {
+      currentSection = 'none';
+    }
+
+    switch (currentSection) {
+      case 'preferences': preferences += line + '\n'; break;
+      case 'records': records += line + '\n'; break;
+      case 'todo': todo += line + '\n'; break;
+    }
+  }
+
+  return {
+    preferences: preferences.trim(),
+    records: records.trim(),
+    todo: todo.trim(),
+  };
+}
+
+function buildNewAgentsMd(existingContent?: string): string {
+  const defaultPrefs = `- Language: Simplified Chinese (简体中文)\n- Style: concise, action-first, execute over explain`;
+  const defaultRecords = `*(AI can append here via write_file / write_memory)*`;
+  const defaultTodo = `*(Track pending work here)*`;
+
+  let prefs = defaultPrefs;
+  let records = defaultRecords;
+  let todo = defaultTodo;
+
+  if (existingContent) {
+    const extracted = extractUserSections(existingContent);
+    if (extracted.preferences) prefs = extracted.preferences;
+    if (extracted.records) records = extracted.records;
+    if (extracted.todo) todo = extracted.todo;
+  }
+
+  return `${NEW_AGENTS_MD_HEADER}
+
+## User Preferences
+
+${prefs}
+
+## Important Records
+
+${records}
+
+## TODO
+
+${todo}
+`;
+}
+
+function upgradeBootstrapFiles(dir: string, dryRun: boolean): number {
+  let upgraded = 0;
+  const files = [
+    { name: 'SOUL.md', newContent: NEW_SOUL_MD },
+    { name: 'TOOLS.md', newContent: NEW_TOOLS_MD },
+  ];
+
+  for (const { name, newContent } of files) {
+    const filePath = path.join(dir, name);
+    if (fs.existsSync(filePath)) {
+      const existing = fs.readFileSync(filePath, 'utf-8');
+      if (isOldChineseTemplate(existing)) {
+        if (dryRun) {
+          console.log(chalk.cyan(`  [dry-run] ${name}: upgrade to English template`));
+        } else {
+          fs.writeFileSync(filePath, newContent, 'utf-8');
+          console.log(chalk.green(`  ✓ ${name} upgraded to English template`));
+        }
+        upgraded++;
+      } else {
+        console.log(chalk.gray(`  · ${name} already customized, skipped`));
+      }
+    } else {
+      if (dryRun) {
+        console.log(chalk.cyan(`  [dry-run] ${name}: create new`));
+      } else {
+        fs.writeFileSync(filePath, newContent, 'utf-8');
+        console.log(chalk.green(`  ✓ ${name} created`));
+      }
+      upgraded++;
+    }
+  }
+
+  // AGENTS.md — special handling to preserve user data
+  const agentsPath = path.join(dir, 'AGENTS.md');
+  if (fs.existsSync(agentsPath)) {
+    const existing = fs.readFileSync(agentsPath, 'utf-8');
+    if (isOldChineseTemplate(existing)) {
+      const merged = buildNewAgentsMd(existing);
+      if (dryRun) {
+        console.log(chalk.cyan(`  [dry-run] AGENTS.md: upgrade to English (user data preserved)`));
+      } else {
+        fs.writeFileSync(agentsPath, merged, 'utf-8');
+        console.log(chalk.green(`  ✓ AGENTS.md upgraded to English (user data preserved)`));
+      }
+      upgraded++;
+    } else {
+      console.log(chalk.gray(`  · AGENTS.md already customized, skipped`));
+    }
+  } else {
+    const fresh = buildNewAgentsMd();
+    if (dryRun) {
+      console.log(chalk.cyan(`  [dry-run] AGENTS.md: create new`));
+    } else {
+      fs.writeFileSync(agentsPath, fresh, 'utf-8');
+      console.log(chalk.green(`  ✓ AGENTS.md created`));
+    }
+    upgraded++;
+  }
+
+  return upgraded;
+}
+
 function runInstall(dir: string, dryRun: boolean): boolean {
   const hasPnpm = fs.existsSync(path.join(dir, 'pnpm-lock.yaml'));
   const hasNpm = fs.existsSync(path.join(dir, 'package-lock.json'));
@@ -184,13 +404,21 @@ export const migrateCommand = new Command('migrate')
     console.log('');
 
     // 2. 确保目录
-    console.log(chalk.bold.blue('2. 确保目录结构'));
+    console.log(chalk.bold.blue('2. Ensure directory structure'));
     ensureDirs(cwd, dryRun);
     console.log('');
 
-    // 3. 安装依赖
+    // 3. Upgrade bootstrap files (SOUL.md, TOOLS.md, AGENTS.md)
+    console.log(chalk.bold.blue('3. Upgrade bootstrap files'));
+    const bootstrapCount = upgradeBootstrapFiles(cwd, dryRun);
+    if (bootstrapCount === 0) {
+      console.log(chalk.gray('  No bootstrap files need upgrading'));
+    }
+    console.log('');
+
+    // 4. 安装依赖
     if (runInstallAfter) {
-      console.log(chalk.bold.blue('3. 安装依赖'));
+      console.log(chalk.bold.blue('4. Install dependencies'));
       const ok = runInstall(cwd, dryRun);
       if (!ok && !dryRun) {
         process.exitCode = 1;
@@ -199,10 +427,10 @@ export const migrateCommand = new Command('migrate')
       console.log('');
     }
 
-    console.log(chalk.bold.green('✅ 升级完成'));
+    console.log(chalk.bold.green('✅ Migration complete'));
     console.log('');
-    console.log(chalk.gray('建议：'));
-    console.log(chalk.cyan('  zhin doctor') + chalk.gray('  检查项目健康'));
-    console.log(chalk.cyan('  pnpm dev') + chalk.gray('   试运行'));
+    console.log(chalk.gray('Next steps:'));
+    console.log(chalk.cyan('  zhin doctor') + chalk.gray('  check project health'));
+    console.log(chalk.cyan('  pnpm dev') + chalk.gray('   start dev server'));
     console.log('');
   });

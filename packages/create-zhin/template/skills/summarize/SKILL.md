@@ -1,31 +1,31 @@
 ---
 name: summarize
-description: "将网页文章、文档或任意长文本归纳为简洁要点，支持摘要、关键点、结构化总结等格式。"
+description: "Summarize web articles, documents, or long text into concise key points. Supports brief summary, bullet points, and structured formats."
 ---
 
-# 摘要技能（Summarize）
+# Summarize
 
-将 URL、本地文件或用户提供的长文本归纳为易读的摘要，支持简要概括、关键点列表、结构化总结（TL;DR / 要点 / 详情）等格式。
+Condense URLs, local files, or user-provided long text into readable summaries.
 
-## 摘要 URL 网页
+## Summarize a URL
 
-1. 用 `web_fetch` 获取网页内容
-2. 提取并归纳关键点
+1. Use `web_fetch` to retrieve the page content
+2. Extract and summarize key points
 
-## 摘要本地文件
+## Summarize a Local File
 
-1. 用 `read_file` 读取文件内容
-2. 再对内容做摘要
+1. Use `read_file` to load the content
+2. Summarize it
 
-## 输出格式
+## Output Formats
 
-- **简要摘要**：2～3 句话概括主旨，适合快速了解。
-- **关键点**：5～7 条要点，可包含重要数字、引语。
-- **结构化总结**：含 TL;DR、要点、详情、行动建议等小节。
-- **汇报型总结**：面向业务/技术文档，含概述、发现、建议、下一步。
+- **Brief**: 2–3 sentences capturing the essence
+- **Key Points**: 5–7 bullet points with important figures and quotes
+- **Structured**: Sections — TL;DR, key findings, details, action items
+- **Report**: For business/technical docs — overview, findings, recommendations, next steps
 
-## 注意
+## Notes
 
-- 默认与原文同语言；用户指定语言时可翻译摘要。
-- 保留重要数字、日期、人名；若内容不完整或需付费可说明。
-- 长文可分段摘要，并注明内容类型（新闻、研究、博客等）。
+- Default to the source language; translate if the user specifies a language
+- Preserve important numbers, dates, and names
+- For long content, summarize in sections and note the content type (news, research, blog, etc.)

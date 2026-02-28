@@ -1,5 +1,4 @@
 log_level: 1
-num_ctx: 8192
 database:
   dialect: sqlite
   filename: ./data/test.db
@@ -25,12 +24,6 @@ services:
 plugins:
   - test-plugin
   - test-jsx
-  - test-hooks
-  - memory-debug
-  - plugin-memory-profiler
-  - tool-examples
-  - ai-workflow-demo
-  - html-test
   - "@zhin.js/http"
   - "@zhin.js/console"
   - "@zhin.js/mcp"
@@ -75,6 +68,7 @@ ai:
       - "man"
       - "info"
       - "curl"
+  maxIterations: 100
   trigger:
     enabled: true
     prefixes:
