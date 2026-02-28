@@ -1,5 +1,6 @@
 // ── Bot 配置 ─────────────────────────────────────────────────────────
 //  GitHub App 认证: app_id + private_key → JWT → Installation Token
+//  OAuth 用户授权: client_id + client_secret → 用户绑定 GitHub 账号
 
 export interface GitHubBotConfig {
   context: 'github';
@@ -13,6 +14,30 @@ export interface GitHubBotConfig {
   installation_id?: number;
   /** Webhook 签名密钥 */
   webhook_secret?: string;
+  /** GitHub App OAuth: Client ID (在 App 设置页获取) */
+  client_id?: string;
+  /** GitHub App OAuth: Client Secret */
+  client_secret?: string;
+}
+
+// ── OAuth 用户绑定 ───────────────────────────────────────────────────
+
+export interface GitHubOAuthUser {
+  id: number;
+  /** 聊天平台名称 (icqq / kook / discord ...) */
+  platform: string;
+  /** 聊天平台用户 ID */
+  platform_uid: string;
+  /** GitHub 用户名 */
+  github_login: string;
+  /** GitHub 用户 ID */
+  github_id: number;
+  /** OAuth access_token */
+  access_token: string;
+  /** 授权范围 */
+  scope: string;
+  created_at: Date;
+  updated_at: Date;
 }
 
 // ── Channel ID ───────────────────────────────────────────────────────

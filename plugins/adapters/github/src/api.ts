@@ -1,7 +1,10 @@
 /**
  * GitHub REST API 客户端
  *
- * GitHub App 认证: app_id + private_key → JWT → Installation Access Token
+ * 两种认证方式：
+ *  1. GitHub App (JWT): app_id + private_key → JWT → Installation Access Token
+ *  2. OAuth User: access_token → 以用户身份调用 API
+ *
  * 零外部依赖，使用 Node.js 原生 crypto + fetch
  */
 
@@ -205,5 +208,78 @@ export class GitHubAPI {
 
   async listWorkflowRuns(repo: string, limit: number = 10) {
     return this.get<{ total_count: number; workflow_runs: any[] }>(`/repos/${repo}/actions/runs?per_page=${limit}`);
+  }
+}
+
+// ── OAuth Token Exchange ─────────────────────────────────────────────
+
+export async function exchangeOAuthCode(
+  clientId: string,
+  clientSecret: string,
+  code: string,
+): Promise<{ access_token: string; scope: string; token_type: string }> {
+  const res = await fetch('https://github.com/login/oauth/access_token', {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
+  });
+  if (!res.ok) throw new Error(`OAuth token exchange failed: ${res.status}`);
+  const data = await res.json() as any;
+  if (data.error) throw new Error(`OAuth error: ${data.error_description || data.error}`);
+  return data;
+}
+
+// ── OAuth User API Client ────────────────────────────────────────────
+
+type ApiResult<T = any> = { ok: boolean; status: number; data: T };
+
+export class GitHubOAuthClient {
+  constructor(private accessToken: string) {}
+
+  async request<T = any>(method: string, path: string, body?: any): Promise<ApiResult<T>> {
+    const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
+    const res = await fetch(url, {
+      method,
+      headers: {
+        Authorization: `Bearer ${this.accessToken}`,
+        Accept: ACCEPT,
+        'X-GitHub-Api-Version': API_VERSION,
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const text = await res.text();
+    let data: any;
+    try { data = JSON.parse(text); } catch { data = text; }
+    return { ok: res.ok, status: res.status, data };
+  }
+
+  async getUser(): Promise<ApiResult<{ login: string; id: number; name: string | null; avatar_url: string }>> {
+    return this.request('GET', '/user');
+  }
+
+  async starRepo(repo: string): Promise<ApiResult> {
+    return this.request('PUT', `/user/starred/${repo}`);
+  }
+
+  async unstarRepo(repo: string): Promise<ApiResult> {
+    return this.request('DELETE', `/user/starred/${repo}`);
+  }
+
+  async isStarred(repo: string): Promise<boolean> {
+    const res = await this.request('GET', `/user/starred/${repo}`);
+    return res.status === 204;
+  }
+
+  async forkRepo(repo: string): Promise<ApiResult> {
+    return this.request('POST', `/repos/${repo}/forks`);
+  }
+
+  async createIssue(repo: string, title: string, body?: string, labels?: string[]): Promise<ApiResult> {
+    return this.request('POST', `/repos/${repo}/issues`, { title, body, labels });
+  }
+
+  async createPR(repo: string, title: string, body: string, head: string, base: string = 'main'): Promise<ApiResult> {
+    return this.request('POST', `/repos/${repo}/pulls`, { title, body, head, base });
   }
 }

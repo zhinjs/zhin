@@ -32,7 +32,8 @@ import type {
   RepoAction,
 } from './types.js';
 import { parseChannelId, buildChannelId } from './types.js';
-import { GitHubAPI } from './api.js';
+import type { GitHubOAuthUser } from './types.js';
+import { GitHubAPI, GitHubOAuthClient, exchangeOAuthCode } from './api.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -66,6 +67,7 @@ declare module 'zhin.js' {
       event_type: string;
       payload: any;
     };
+    github_oauth_users: GitHubOAuthUser;
   }
 }
 
@@ -93,7 +95,23 @@ defineModel('github_events', {
   payload: { type: 'json', default: {} },
 });
 
+defineModel('github_oauth_users', {
+  id: { type: 'integer', primary: true },
+  platform: { type: 'text', nullable: false },
+  platform_uid: { type: 'text', nullable: false },
+  github_login: { type: 'text', nullable: false },
+  github_id: { type: 'integer', nullable: false },
+  access_token: { type: 'text', nullable: false },
+  scope: { type: 'text', default: '' },
+  created_at: { type: 'date', nullable: false },
+  updated_at: { type: 'date', nullable: false },
+});
+
 const VALID_EVENTS: EventType[] = ['push', 'issue', 'star', 'fork', 'unstar', 'pull_request'];
+
+// OAuth state 存储（内存，5分钟过期）
+const oauthStates = new Map<string, { platform: string; platformUid: string; expires: number }>();
+const OAUTH_STATE_TTL = 5 * 60 * 1000;
 
 // ============================================================================
 // GitHubBot
@@ -241,6 +259,8 @@ export class GitHubBot implements Bot<GitHubBotConfig, IssueCommentPayload> {
 // ============================================================================
 
 class GitHubAdapter extends Adapter<GitHubBot> {
+  oauthBaseUrl: string | null = null;
+
   constructor(plugin: Plugin) {
     super(plugin, 'github', []);
   }
@@ -270,6 +290,126 @@ class GitHubAdapter extends Adapter<GitHubBot> {
     return bot?.api || null;
   }
 
+  // ── OAuth 用户查询 ─────────────────────────────────────────────────
+
+  async getOAuthClient(platform: string, platformUid: string): Promise<GitHubOAuthClient | null> {
+    const db = root.inject('database') as any;
+    const model = db?.models?.get('github_oauth_users');
+    if (!model) return null;
+    const [row] = await model.select().where({ platform, platform_uid: platformUid });
+    if (!row) return null;
+    return new GitHubOAuthClient(row.access_token);
+  }
+
+  // ── OAuth 路由 (由 useContext('router') 注入) ─────────────────────
+
+  setupOAuth(router: import('@zhin.js/http').Router): void {
+    const OAUTH_SCOPES = 'repo,user';
+
+    router.get('/github/oauth', async (ctx: any) => {
+      const state = ctx.query.state as string;
+      if (!state || !oauthStates.has(state)) {
+        ctx.status = 400;
+        ctx.body = 'Invalid or expired state. Please use /github bind to generate a new link.';
+        return;
+      }
+
+      const bot = this.bots.values().next().value as GitHubBot | undefined;
+      const clientId = bot?.$config.client_id;
+      if (!clientId) {
+        ctx.status = 500;
+        ctx.body = 'GitHub App OAuth not configured (missing client_id).';
+        return;
+      }
+
+      this.oauthBaseUrl = ctx.origin;
+      const redirectUri = `${ctx.origin}/github/oauth/callback`;
+      const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${OAUTH_SCOPES}&state=${state}`;
+      ctx.redirect(url);
+    });
+
+    router.get('/github/oauth/callback', async (ctx: any) => {
+      const { code, state } = ctx.query as { code?: string; state?: string };
+      if (!code || !state) {
+        ctx.status = 400;
+        ctx.body = 'Missing code or state parameter.';
+        return;
+      }
+
+      const pending = oauthStates.get(state);
+      if (!pending || Date.now() > pending.expires) {
+        oauthStates.delete(state);
+        ctx.status = 400;
+        ctx.body = 'State expired. Please use /github bind to try again.';
+        return;
+      }
+      oauthStates.delete(state);
+
+      const bot = this.bots.values().next().value as GitHubBot | undefined;
+      const clientId = bot?.$config.client_id;
+      const clientSecret = bot?.$config.client_secret;
+      if (!clientId || !clientSecret) {
+        ctx.status = 500;
+        ctx.body = 'OAuth not configured.';
+        return;
+      }
+
+      try {
+        const tokenData = await exchangeOAuthCode(clientId, clientSecret, code);
+        const oauthClient = new GitHubOAuthClient(tokenData.access_token);
+        const userRes = await oauthClient.getUser();
+        if (!userRes.ok) {
+          ctx.status = 500;
+          ctx.body = 'Failed to fetch GitHub user info.';
+          return;
+        }
+
+        const ghUser = userRes.data;
+        const db = root.inject('database') as any;
+        const model = db?.models?.get('github_oauth_users');
+        if (!model) {
+          ctx.status = 500;
+          ctx.body = 'Database not ready.';
+          return;
+        }
+
+        const [existing] = await model.select().where({ platform: pending.platform, platform_uid: pending.platformUid });
+        if (existing) {
+          await model.update({
+            github_login: ghUser.login,
+            github_id: ghUser.id,
+            access_token: tokenData.access_token,
+            scope: tokenData.scope || '',
+            updated_at: new Date(),
+          }).where({ id: existing.id });
+        } else {
+          await model.insert({
+            id: Date.now(),
+            platform: pending.platform,
+            platform_uid: pending.platformUid,
+            github_login: ghUser.login,
+            github_id: ghUser.id,
+            access_token: tokenData.access_token,
+            scope: tokenData.scope || '',
+            created_at: new Date(),
+            updated_at: new Date(),
+          });
+        }
+
+        logger.info(`OAuth 绑定成功: ${pending.platform}:${pending.platformUid} → ${ghUser.login}`);
+
+        ctx.type = 'text/html';
+        ctx.body = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>绑定成功</title><style>body{font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f5f5f5}div{text-align:center;background:#fff;padding:3rem;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.1)}h1{color:#28a745;margin-bottom:.5rem}p{color:#666}</style></head><body><div><h1>GitHub 账号绑定成功</h1><p>已绑定 GitHub 用户: <strong>${ghUser.login}</strong></p><p>你现在可以关闭这个页面，回到聊天中使用 GitHub 功能了。</p></div></body></html>`;
+      } catch (err: any) {
+        logger.error('OAuth callback 失败:', err);
+        ctx.status = 500;
+        ctx.body = `OAuth failed: ${err.message}`;
+      }
+    });
+
+    logger.info('GitHub OAuth: GET /github/oauth, GET /github/oauth/callback');
+  }
+
   // ── Webhook 路由 (由 useContext('router') 注入) ────────────────────
 
   setupWebhook(router: import('@zhin.js/http').Router): void {
@@ -277,16 +417,24 @@ class GitHubAdapter extends Adapter<GitHubBot> {
       try {
         const eventName = ctx.request.headers['x-github-event'] as string;
         const signature = ctx.request.headers['x-hub-signature-256'] as string;
-        const payload = ctx.body;
+        const payload = ctx.request.body;
 
-        logger.info(`GitHub Webhook: ${eventName} - ${payload?.repository?.full_name}`);
+        logger.info(`GitHub Webhook: ${eventName} - ${payload?.repository?.full_name || '(no repo)'}`);
+
+        if (eventName === 'ping') {
+          logger.info(`GitHub Webhook ping OK — hook_id: ${payload?.hook_id}, zen: ${payload?.zen}`);
+          ctx.status = 200;
+          ctx.body = { message: 'pong' };
+          return;
+        }
 
         if (signature) {
           let verified = false;
+          const rawBody = JSON.stringify(payload);
           for (const bot of this.bots.values()) {
             const secret = bot.$config.webhook_secret;
             if (!secret) continue;
-            const expected = `sha256=${crypto.createHmac('sha256', secret).update(JSON.stringify(ctx.body)).digest('hex')}`;
+            const expected = `sha256=${crypto.createHmac('sha256', secret).update(rawBody).digest('hex')}`;
             if (signature === expected) { verified = true; break; }
           }
           if (!verified) {
@@ -638,7 +786,142 @@ class GitHubAdapter extends Adapter<GitHubBot> {
         }),
     );
 
-    logger.debug('GitHub 工具已注册: pr, issue, repo, subscribe, unsubscribe, subscriptions');
+    // --- GitHub OAuth Bind ---
+    this.addTool(
+      new ZhinTool('github.bind')
+        .desc('绑定 GitHub 账号 — 通过 OAuth 授权，让 bot 以你的身份执行 star/fork 等操作')
+        .keyword('github bind', '绑定github', 'github 绑定', 'github 授权')
+        .tag('github', 'oauth')
+        .execute(async (_args, ctx) => {
+          if (!ctx?.message) return '❌ 无法获取消息上下文';
+          const msg = ctx.message as Message;
+
+          const bot = this.bots.values().next().value as GitHubBot | undefined;
+          if (!bot?.$config.client_id) {
+            return '❌ GitHub OAuth 未配置（需要在 bot 配置中添加 client_id 和 client_secret）';
+          }
+
+          const nonce = crypto.randomBytes(16).toString('hex');
+          const state = `${msg.$adapter}:${msg.$sender.id}:${nonce}`;
+          oauthStates.set(state, {
+            platform: msg.$adapter,
+            platformUid: msg.$sender.id,
+            expires: Date.now() + OAUTH_STATE_TTL,
+          });
+
+          const baseUrl = this.oauthBaseUrl || 'http://localhost:8086';
+          const link = `${baseUrl}/github/oauth?state=${encodeURIComponent(state)}`;
+
+          return `🔗 请点击以下链接授权你的 GitHub 账号：\n\n${link}\n\n⏱️ 链接有效期 5 分钟`;
+        }),
+    );
+
+    // --- GitHub OAuth Unbind ---
+    this.addTool(
+      new ZhinTool('github.unbind')
+        .desc('解除 GitHub 账号绑定')
+        .keyword('github unbind', '解绑github', 'github 解绑')
+        .tag('github', 'oauth')
+        .execute(async (_args, ctx) => {
+          if (!ctx?.message) return '❌ 无法获取消息上下文';
+          const msg = ctx.message as Message;
+          const db = root.inject('database') as any;
+          const model = db?.models?.get('github_oauth_users');
+          if (!model) return '❌ 数据库未就绪';
+
+          const [existing] = await model.select().where({ platform: msg.$adapter, platform_uid: msg.$sender.id });
+          if (!existing) return '❌ 你还没有绑定 GitHub 账号';
+
+          await model.delete({ id: existing.id });
+          return `✅ 已解除 GitHub 账号绑定（${existing.github_login}）`;
+        }),
+    );
+
+    // --- GitHub OAuth Whoami ---
+    this.addTool(
+      new ZhinTool('github.whoami')
+        .desc('查看当前绑定的 GitHub 账号信息')
+        .keyword('github whoami', 'github 我是谁', 'github 账号')
+        .tag('github', 'oauth')
+        .execute(async (_args, ctx) => {
+          if (!ctx?.message) return '❌ 无法获取消息上下文';
+          const msg = ctx.message as Message;
+          const db = root.inject('database') as any;
+          const model = db?.models?.get('github_oauth_users');
+          if (!model) return '❌ 数据库未就绪';
+
+          const [existing] = await model.select().where({ platform: msg.$adapter, platform_uid: msg.$sender.id });
+          if (!existing) return '❌ 你还没有绑定 GitHub 账号\n💡 使用 /github bind 进行绑定';
+
+          const oauthClient = new GitHubOAuthClient(existing.access_token);
+          const userRes = await oauthClient.getUser();
+          if (!userRes.ok) {
+            return `⚠️ 已绑定 ${existing.github_login}，但 token 可能已失效\n💡 请使用 /github bind 重新授权`;
+          }
+
+          const u = userRes.data;
+          return [
+            `🔗 GitHub 账号已绑定`,
+            `👤 ${u.login}${u.name ? ` (${u.name})` : ''}`,
+            `🔑 授权范围: ${existing.scope || 'N/A'}`,
+            `📅 绑定时间: ${new Date(existing.created_at).toLocaleDateString()}`,
+          ].join('\n');
+        }),
+    );
+
+    // --- GitHub Star (用户级操作) ---
+    this.addTool(
+      new ZhinTool('github.star')
+        .desc('Star / Unstar 一个仓库（使用你的 GitHub 账号）')
+        .keyword('star', 'unstar', '收藏', '取消收藏')
+        .tag('github', 'user')
+        .param('repo', { type: 'string', description: 'owner/repo (必填)' }, true)
+        .param('unstar', { type: 'boolean', description: '设为 true 则取消 star' })
+        .execute(async (args, ctx) => {
+          if (!ctx?.message) return '❌ 无法获取消息上下文';
+          const msg = ctx.message as Message;
+          const repo = args.repo as string;
+          if (!repo.includes('/')) return '❌ 格式应为 owner/repo';
+
+          const oauthClient = await this.getOAuthClient(msg.$adapter, msg.$sender.id);
+          if (!oauthClient) {
+            return '❌ 你还没有绑定 GitHub 账号，star 需要使用你自己的身份\n💡 使用 /github bind 绑定';
+          }
+
+          if (args.unstar) {
+            const r = await oauthClient.unstarRepo(repo);
+            return r.ok || r.status === 204 ? `✅ 已取消 star: ${repo}` : `❌ 操作失败: ${JSON.stringify(r.data)}`;
+          } else {
+            const r = await oauthClient.starRepo(repo);
+            return r.ok || r.status === 204 ? `⭐ 已 star: ${repo}` : `❌ 操作失败: ${JSON.stringify(r.data)}`;
+          }
+        }),
+    );
+
+    // --- GitHub Fork (用户级操作) ---
+    this.addTool(
+      new ZhinTool('github.fork')
+        .desc('Fork 一个仓库到你的 GitHub 账号')
+        .keyword('fork', '复刻')
+        .tag('github', 'user')
+        .param('repo', { type: 'string', description: 'owner/repo (必填)' }, true)
+        .execute(async (args, ctx) => {
+          if (!ctx?.message) return '❌ 无法获取消息上下文';
+          const msg = ctx.message as Message;
+          const repo = args.repo as string;
+          if (!repo.includes('/')) return '❌ 格式应为 owner/repo';
+
+          const oauthClient = await this.getOAuthClient(msg.$adapter, msg.$sender.id);
+          if (!oauthClient) {
+            return '❌ 你还没有绑定 GitHub 账号，fork 需要使用你自己的身份\n💡 使用 /github bind 绑定';
+          }
+
+          const r = await oauthClient.forkRepo(repo);
+          return r.ok ? `🍴 已 fork: ${r.data.full_name}\n🔗 ${r.data.html_url}` : `❌ 操作失败: ${r.data?.message || JSON.stringify(r.data)}`;
+        }),
+    );
+
+    logger.debug('GitHub 工具已注册: pr, issue, repo, subscribe, unsubscribe, subscriptions, bind, unbind, whoami, star, fork');
   }
 
 
@@ -764,6 +1047,7 @@ provide({
 
 useContext('router', 'github', (router, adapter: GitHubAdapter) => {
   adapter.setupWebhook(router);
+  adapter.setupOAuth(router);
 });
 
 logger.info('GitHub 适配器已加载 (GitHub App 认证)');

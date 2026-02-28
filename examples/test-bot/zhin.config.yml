@@ -16,6 +16,8 @@ bots:
     app_id: ${GITHUB_APP_ID}
     private_key: ./data/zhin-connect.pem
     webhook_secret: ${GITHUB_WEBHOOK_SECRET}
+    client_id: ${GITHUB_CLIENT_ID}
+    client_secret: ${GITHUB_CLIENT_SECRET}
 plugin_dirs:
   - node_modules
   - ./src/plugins
