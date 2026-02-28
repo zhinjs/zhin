@@ -1,5 +1,14 @@
 # @zhin.js/core
 
+## 1.0.37
+
+### Patch Changes
+
+- a8ce720: fix: ai 优化,github 优化
+  - @zhin.js/database@1.0.24
+  - @zhin.js/logger@0.1.21
+  - @zhin.js/schema@1.0.21
+
 ## 1.0.36
 
 ### Patch Changes
