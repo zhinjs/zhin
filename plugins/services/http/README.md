@@ -116,7 +116,7 @@ declare module 'zhin.js' {
 - `GET /api/config` - 配置信息
 - `POST /api/message/send` - 发送消息
 - `POST /api/plugins/:name/reload` - 重载插件
-- `GET /api/health` - 健康检查
+- `GET /pub/health` - 健康检查
 
 ### 自定义 HTTP 路由
 
@@ -190,7 +190,7 @@ useContext('koa', async (koa) => {
 
 以下 API 路径无需认证：
 - 包含 `/webhook` 的路径（有自己的签名验证）
-- 以 `/health` 结尾的路径
+- 以 `/pub` 为前缀的路径（含 `/pub/health`）
 
 Web 控制台打开时会展示 Token 登录页，输入 `.env` 中的 `HTTP_TOKEN` 即可进入管理面板。
 

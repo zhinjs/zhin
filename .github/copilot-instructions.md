@@ -668,7 +668,7 @@ plugin.useContext('database', async (db) => {
 
 ```typescript
 useContext('router', (router) => {
-  router.get('/api/health', (ctx) => {
+  router.get('/pub/health', (ctx) => {
     ctx.body = { status: 'ok' }
   })
   

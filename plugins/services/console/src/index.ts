@@ -209,8 +209,8 @@ if (enabled) {
 
     // SPA 回退路由 - 处理所有未匹配的路由
     router.all("*all", async (ctx, next) => {
-      // 跳过 API 路由，交给其他路由处理器
-      if (ctx.path.startsWith("/api/") || ctx.path === "/api") {
+      // 跳过 API、/pub 等后端路由，交给其他路由处理器
+      if (ctx.path.startsWith("/api/") || ctx.path === "/api" || ctx.path.startsWith("/pub/") || ctx.path === "/pub") {
         return next();
       }
 

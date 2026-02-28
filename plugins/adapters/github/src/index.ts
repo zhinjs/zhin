@@ -319,7 +319,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
   setupOAuth(router: import('@zhin.js/http').Router): void {
     const OAUTH_SCOPES = 'repo,user';
 
-    router.get('/github/oauth', async (ctx: any) => {
+    router.get('/pub/github/oauth', async (ctx: any) => {
       const state = ctx.query.state as string;
       if (!state || !oauthStates.has(state)) {
         ctx.status = 400;
@@ -336,12 +336,12 @@ class GitHubAdapter extends Adapter<GitHubBot> {
       }
 
       const base = this.publicUrl || ctx.origin;
-      const redirectUri = `${base}/github/oauth/callback`;
+      const redirectUri = `${base}/pub/github/oauth/callback`;
       const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${OAUTH_SCOPES}&state=${state}`;
       ctx.redirect(url);
     });
 
-    router.get('/github/oauth/callback', async (ctx: any) => {
+    router.get('/pub/github/oauth/callback', async (ctx: any) => {
       const { code, state } = ctx.query as { code?: string; state?: string };
       if (!code || !state) {
         ctx.status = 400;
@@ -420,13 +420,13 @@ class GitHubAdapter extends Adapter<GitHubBot> {
       }
     });
 
-    logger.info('GitHub OAuth: GET /github/oauth, GET /github/oauth/callback');
+    logger.info('GitHub OAuth: GET /pub/github/oauth, GET /pub/github/oauth/callback');
   }
 
   // ── Webhook 路由 (由 useContext('router') 注入) ────────────────────
 
   setupWebhook(router: import('@zhin.js/http').Router): void {
-    router.post('/api/github/webhook', async (ctx: any) => {
+    router.post('/pub/github/webhook', async (ctx: any) => {
       try {
         const eventName = ctx.request.headers['x-github-event'] as string;
         const signature = ctx.request.headers['x-hub-signature-256'] as string;
@@ -507,7 +507,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
       }
     });
 
-    logger.info('GitHub Webhook: POST /api/github/webhook');
+    logger.info('GitHub Webhook: POST /pub/github/webhook');
   }
 
   // ── GitHub 管理工具 ────────────────────────────────────────────────
@@ -829,7 +829,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
           if (!baseUrl) {
             return '❌ 未配置 public_url，无法生成 OAuth 链接\n💡 请在 bot 配置中添加 public_url（如 https://bot.example.com）';
           }
-          const link = `${baseUrl}/github/oauth?state=${encodeURIComponent(state)}`;
+          const link = `${baseUrl}/pub/github/oauth?state=${encodeURIComponent(state)}`;
           const fullText = `🔗 请点击以下链接授权你的 GitHub 账号：\n\n${link}\n\n⏱️ 链接有效期 5 分钟`;
 
           // 由工具直接发到用户，避免 AI 总结时把链接吞掉

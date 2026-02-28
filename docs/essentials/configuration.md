@@ -217,9 +217,7 @@ Token 传递方式：
 - **Header**: `Authorization: Bearer <token>`
 - **Query**: `?token=<token>`
 
-以下 API 路径无需认证：
-- 包含 `/webhook` 的路径（有自己的签名验证）
-- 以 `/health` 结尾的路径
+以 `/pub` 为前缀的路径为公开入口，无需认证（如 `/pub/health`、`/pub/github/webhook` 等）。
 
 **通过 Cloudflare 等反向代理公网访问时**，建议：
 

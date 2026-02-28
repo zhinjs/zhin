@@ -32,7 +32,7 @@ pnpm add @zhin.js/adapter-github
 3. 填写基本信息：
    - **App name**: 你的 bot 名称
    - **Homepage URL**: 任意
-   - **Webhook URL**: `http://your-server:port/api/github/webhook`（有 HTTP 服务时）
+   - **Webhook URL**: `http://your-server:port/pub/github/webhook`（有 HTTP 服务时）
    - **Webhook secret**: 自定义密钥
 4. 权限设置（Permissions）：
    - **Repository → Issues**: Read & Write
@@ -45,7 +45,7 @@ pnpm add @zhin.js/adapter-github
    - Push、Star、Fork（用于通知）
 6. 创建后记录 **App ID**，点击 **Generate a private key** 下载 `.pem` 文件
 7. 如需 OAuth 用户绑定功能，记录 **Client ID** 和 **Client Secret**（在 App 设置页的 General 中）
-8. 在 App 设置页配置 **Callback URL**: `https://your-domain/github/oauth/callback`
+8. 在 App 设置页配置 **Callback URL**: `https://your-domain/pub/github/oauth/callback`
 9. 安装 App 到目标仓库/组织
 
 ## 配置
@@ -146,7 +146,7 @@ AI: fork zhinjs/zhin
 ### Webhook 端点
 
 ```
-POST /api/github/webhook
+POST /pub/github/webhook
 ```
 
 Headers:
@@ -172,7 +172,7 @@ Headers:
 1. 用户在聊天中发送"绑定 GitHub 账号"或触发 `github.bind` 工具
 2. Bot 返回一个带有 `state` 的 OAuth 授权链接
 3. 用户点击链接 → 浏览器跳转到 GitHub 授权页面
-4. 用户授权后 → GitHub 回调到 `/api/github/oauth/callback`
+4. 用户授权后 → GitHub 回调到 `/pub/github/oauth/callback`
 5. 服务端交换 code → access_token，获取用户信息，存入数据库
 6. 用户看到"绑定成功"页面
 
@@ -180,8 +180,8 @@ Headers:
 
 | 路由 | 说明 |
 |------|------|
-| `GET /github/oauth?state=xxx` | 发起 GitHub 授权重定向 |
-| `GET /github/oauth/callback?code=xxx&state=xxx` | GitHub 回调，完成绑定 |
+| `GET /pub/github/oauth?state=xxx` | 发起 GitHub 授权重定向 |
+| `GET /pub/github/oauth/callback?code=xxx&state=xxx` | GitHub 回调，完成绑定 |
 
 > OAuth 路由注册在 `/github/` 而非 `/api/` 下，因此不受 API Token 认证限制，用户浏览器可直接访问。
 
@@ -189,7 +189,7 @@ Headers:
 
 - 需要配置 `client_id` 和 `client_secret`
 - 需要 `@zhin.js/http` 插件（提供 HTTP 路由）
-- GitHub App 设置页中的 Callback URL 须指向 `https://your-domain/github/oauth/callback`
+- GitHub App 设置页中的 Callback URL 须指向 `https://your-domain/pub/github/oauth/callback`
 
 ## 数据库表
 

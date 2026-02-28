@@ -72,14 +72,11 @@ useContext("config", (configService) => {
   // 反向代理场景下信任 X-Forwarded-Host / X-Forwarded-Proto 等
   koa.proxy = trustProxy;
 
-  // Token 认证中间件（仅保护 API 路径）
+  // Token 认证中间件：仅对 /api 要求认证，/pub 为公开入口
   koa.use(async (ctx, next) => {
-    // 只对 API 路径要求认证，静态文件/SPA 路由不受限
     if (!ctx.path.startsWith(base + '/') && ctx.path !== base) return next();
-    // webhook 路径跳过（有自己的签名验证）
-    if (ctx.path.includes('/webhook')) return next();
-    // 健康检查跳过
-    if (ctx.path.endsWith('/health')) return next();
+    // /pub 为公开前缀（webhook、OAuth、health 等），不校验 token
+    if (ctx.path.startsWith('/pub/') || ctx.path === '/pub') return next();
 
     // 从 Bearer token 或 query 参数中提取 token
     const authHeader = ctx.get('Authorization');
@@ -116,7 +113,7 @@ useContext("config", (configService) => {
   });
 
   // 健康检查 API
-  router.get(`${base}/health`, async (ctx) => {
+  router.get('/pub/health', async (ctx) => {
     ctx.body = {
       success: true,
       status: "ok",
