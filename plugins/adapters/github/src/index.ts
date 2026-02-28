@@ -650,7 +650,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
               if (!num) return '❌ 请提供 Issue 编号';
               if (!args.body) return '❌ 请提供评论内容';
               const r = await api.createIssueComment(repo, num, args.body as string);
-              return r.ok ? `✅ 已评论 Issue #${num}` : `❌ ${(r.data as any)?.message || JSON.stringify(r.data)}`;
+              return r.ok ? `✅ 已评论 Issue #${num}` : `❌ ${JSON.stringify(r.data)}`;
             }
             default: return `❌ 未知操作: ${action}`;
           }
@@ -1010,7 +1010,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
               if (!args.labels) return '❌ 请提供标签名';
               const labels = (args.labels as string).split(',').map(s => s.trim());
               const r = await api.addLabels(repo, args.number as number, labels);
-              return r.ok ? `✅ 已添加标签: ${labels.join(', ')}` : `❌ ${(r.data as any)?.message || JSON.stringify(r.data)}`;
+              return r.ok ? `✅ 已添加标签: ${labels.join(', ')}` : `❌ ${JSON.stringify(r.data)}`;
             }
             case 'remove': {
               if (!args.number) return '❌ 请提供 Issue/PR 编号';

@@ -402,27 +402,6 @@ export class IcqqBot extends Client implements Bot<IcqqBotConfig, PrivateMessage
     }
   }
 
-  async getGroupHonor(groupId: number, type?: string): Promise<any> {
-    try {
-      return await (this as any).getGroupHonorInfo(groupId, type);
-    } catch (error) {
-      plugin.logger.error(`ICQQ Bot ${this.$id} 获取群荣誉失败:`, error);
-      throw error;
-    }
-  }
-
-  async sendMusicShare(groupId: number, platform: 'qq' | '163' | 'kugou', id: string): Promise<boolean> {
-    try {
-      const group = this.pickGroup(groupId) as any;
-      await group.shareMusic(platform, id);
-      plugin.logger.info(`ICQQ Bot ${this.$id} 分享音乐到群 ${groupId}`);
-      return true;
-    } catch (error) {
-      plugin.logger.error(`ICQQ Bot ${this.$id} 音乐分享失败:`, error);
-      throw error;
-    }
-  }
-
   async $recallMessage(id: string): Promise<void> {
     await this.deleteMsg(id);
   }
@@ -488,8 +467,8 @@ class IcqqAdapter extends Adapter<IcqqBot> {
 
     // 声明适配器 Skill：将所有工具聚合为一个语义化的 Skill
     this.declareSkill({
-      description: 'ICQQ QQ群管理能力，包括成员管理（踢人、禁言、设管理员、改名片、设头衔）、群设置（改群名、发公告、全员禁言、匿名设置）、群查询（成员列表、禁言列表、群文件、群荣誉）、音乐分享、好友列表、互动（戳一戳）。',
-      keywords: ['QQ', '群管理', '群聊', '群文件', '群荣誉', '音乐分享', '好友列表'],
+      description: 'ICQQ QQ群管理能力，包括成员管理（踢人、禁言、设管理员、改名片、设头衔）、群设置（改群名、发公告、全员禁言、匿名设置）、群查询（成员列表、禁言列表、群文件）、好友列表、互动（戳一戳）。',
+      keywords: ['QQ', '群管理', '群聊', '群文件', '好友列表'],
       tags: ['qq', '群管理', '社交平台'],
       conventions: '用户和群均使用数字 QQ号标识。调用工具时 bot 参数应填当前上下文的 Bot ID，group_id 应填当前场景 ID。user_id 为要操作的目标成员 QQ号。',
     });
@@ -1013,57 +992,6 @@ class IcqqAdapter extends Adapter<IcqqBot> {
           })),
           count: files.length,
         };
-      },
-    });
-
-    // 群荣誉
-    this.addTool({
-      name: 'icqq_group_honor',
-      description: '查看 QQ 群荣誉信息（龙王、群聊之火等）',
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: { type: 'string', description: 'Bot 名称' },
-          group_id: { type: 'number', description: '群号' },
-          type: { type: 'string', description: '荣誉类型：talkative(龙王)/performer(群聊之火)/legend(群聊炽焰)/strong_newbie(冒尖小春笋)/emotion(快乐之源)' },
-        },
-        required: ['bot', 'group_id'],
-      },
-      platforms: ['icqq'],
-      scopes: ['group'],
-      permissionLevel: 'user',
-      execute: async (args) => {
-        const { bot: botId, group_id, type } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        const honor = await bot.getGroupHonor(group_id, type);
-        return honor;
-      },
-    });
-
-    // 音乐分享
-    this.addTool({
-      name: 'icqq_music_share',
-      description: '在 QQ 群中分享音乐（QQ音乐/网易云/酷狗）',
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: { type: 'string', description: 'Bot 名称' },
-          group_id: { type: 'number', description: '群号' },
-          platform: { type: 'string', description: '平台：qq/163/kugou', enum: ['qq', '163', 'kugou'] },
-          song_id: { type: 'string', description: '歌曲 ID' },
-        },
-        required: ['bot', 'group_id', 'platform', 'song_id'],
-      },
-      platforms: ['icqq'],
-      scopes: ['group'],
-      permissionLevel: 'user',
-      execute: async (args) => {
-        const { bot: botId, group_id, platform, song_id } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        const success = await bot.sendMusicShare(group_id, platform, song_id);
-        return { success, message: success ? '音乐已分享' : '分享失败' };
       },
     });
 
