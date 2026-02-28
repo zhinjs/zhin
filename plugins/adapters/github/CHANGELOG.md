@@ -1,5 +1,13 @@
 # @zhin.js/adapter-github
 
+## 0.1.3
+
+### Patch Changes
+
+- a8ce720: fix: ai 优化,github 优化
+  - zhin.js@1.0.37
+  - @zhin.js/http@1.0.30
+
 ## 0.1.2
 
 ### Patch Changes

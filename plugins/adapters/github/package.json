@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-github",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Zhin.js adapter for GitHub — treat issues/PRs as chat channels, full repo management, webhook notifications",
   "type": "module",
   "main": "./lib/index.js",
