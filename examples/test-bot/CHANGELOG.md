@@ -1,5 +1,12 @@
 # test-bot
 
+## 0.1.37
+
+### Patch Changes
+
+- Updated dependencies [d7bdca3]
+  - @zhin.js/adapter-github@0.1.5
+
 ## 0.1.36
 
 ### Patch Changes
