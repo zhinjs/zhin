@@ -98,7 +98,7 @@ export class GitHubAPI {
   private async post<T = any>(path: string, body?: any) { return this.request<T>('POST', path, body); }
   private async patch<T = any>(path: string, body?: any) { return this.request<T>('PATCH', path, body); }
   private async put<T = any>(path: string, body?: any) { return this.request<T>('PUT', path, body); }
-  private async del<T = any>(path: string) { return this.request<T>('DELETE', path); }
+  private async del<T = any>(path: string, body?: any) { return this.request<T>('DELETE', path, body); }
 
   // ── 连接验证 ──────────────────────────────────────────────────────
 
@@ -208,6 +208,74 @@ export class GitHubAPI {
 
   async listWorkflowRuns(repo: string, limit: number = 10) {
     return this.get<{ total_count: number; workflow_runs: any[] }>(`/repos/${repo}/actions/runs?per_page=${limit}`);
+  }
+
+  // ── Search ───────────────────────────────────────────────────────
+
+  async searchIssues(query: string, limit: number = 15) {
+    return this.get<{ total_count: number; items: any[] }>(`/search/issues?q=${encodeURIComponent(query)}&per_page=${limit}`);
+  }
+
+  async searchRepos(query: string, limit: number = 15) {
+    return this.get<{ total_count: number; items: any[] }>(`/search/repositories?q=${encodeURIComponent(query)}&per_page=${limit}`);
+  }
+
+  async searchCode(query: string, limit: number = 15) {
+    return this.get<{ total_count: number; items: any[] }>(`/search/code?q=${encodeURIComponent(query)}&per_page=${limit}`);
+  }
+
+  // ── Labels ───────────────────────────────────────────────────────
+
+  async listLabels(repo: string) {
+    return this.get<any[]>(`/repos/${repo}/labels?per_page=100`);
+  }
+
+  async addLabels(repo: string, issueNumber: number, labels: string[]) {
+    return this.post<any[]>(`/repos/${repo}/issues/${issueNumber}/labels`, { labels });
+  }
+
+  async removeLabel(repo: string, issueNumber: number, label: string) {
+    return this.del(`/repos/${repo}/issues/${issueNumber}/labels/${encodeURIComponent(label)}`);
+  }
+
+  // ── Assignees ────────────────────────────────────────────────────
+
+  async addAssignees(repo: string, issueNumber: number, assignees: string[]) {
+    return this.post<any>(`/repos/${repo}/issues/${issueNumber}/assignees`, { assignees });
+  }
+
+  async removeAssignees(repo: string, issueNumber: number, assignees: string[]) {
+    return this.del<any>(`/repos/${repo}/issues/${issueNumber}/assignees`, { assignees });
+  }
+
+  // ── File Content ─────────────────────────────────────────────────
+
+  async getFileContent(repo: string, filePath: string, ref?: string) {
+    const qs = ref ? `?ref=${encodeURIComponent(ref)}` : '';
+    return this.get<any>(`/repos/${repo}/contents/${filePath}${qs}`);
+  }
+
+  // ── Commits ──────────────────────────────────────────────────────
+
+  async listCommits(repo: string, sha?: string, filePath?: string, limit: number = 15) {
+    const params = new URLSearchParams({ per_page: String(limit) });
+    if (sha) params.set('sha', sha);
+    if (filePath) params.set('path', filePath);
+    return this.get<any[]>(`/repos/${repo}/commits?${params}`);
+  }
+
+  async compareCommits(repo: string, base: string, head: string) {
+    return this.get<any>(`/repos/${repo}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`);
+  }
+
+  // ── Update Issue / PR ────────────────────────────────────────────
+
+  async updateIssue(repo: string, number: number, data: { title?: string; body?: string; state?: string; labels?: string[]; assignees?: string[] }) {
+    return this.patch<any>(`/repos/${repo}/issues/${number}`, data);
+  }
+
+  async updatePR(repo: string, number: number, data: { title?: string; body?: string; state?: string; base?: string }) {
+    return this.patch<any>(`/repos/${repo}/pulls/${number}`, data);
   }
 }
 

@@ -97,6 +97,12 @@ GitHub adapter 将 Issue/PR 映射为聊天频道：
 | `github.pr` | PR 管理 | list / view / diff / merge / create / review / close |
 | `github.issue` | Issue 管理 | list / view / create / close / comment |
 | `github.repo` | 仓库查询 | info / branches / releases / runs(CI) / stars |
+| `github.search` | 全局搜索 | issues / repos / code |
+| `github.label` | 标签管理 | list / add / remove |
+| `github.assign` | 指派管理 | add / remove |
+| `github.file` | 读取仓库文件 | 返回文件内容或目录列表 |
+| `github.commits` | 提交查询 | list / compare |
+| `github.edit` | 编辑 Issue/PR | 修改标题、正文、状态 |
 | `github.subscribe` | 订阅事件通知 | 订阅仓库的 push/issue/star/fork/pr 事件 |
 | `github.unsubscribe` | 取消订阅 | — |
 | `github.subscriptions` | 查看订阅列表 | — |
@@ -113,6 +119,11 @@ AI: 列出 zhinjs/zhin 的 PR
 AI: 合并 zhinjs/zhin 的 PR #108
 AI: 查看 zhinjs/zhin 的 star 数
 AI: 订阅 zhinjs/zhin 的 push 和 pr 事件
+AI: 搜索 zhinjs 相关的仓库
+AI: 给 zhinjs/zhin 的 issue #42 加上 bug 标签
+AI: 查看 zhinjs/zhin 的 README.md 文件
+AI: 对比 zhinjs/zhin 的 main 和 dev 分支
+AI: 编辑 zhinjs/zhin 的 issue #42 标题
 AI: 绑定我的 GitHub 账号
 AI: star zhinjs/zhin
 AI: fork zhinjs/zhin

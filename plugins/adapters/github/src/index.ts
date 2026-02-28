@@ -280,11 +280,13 @@ class GitHubAdapter extends Adapter<GitHubBot> {
   async start(): Promise<void> {
     this.registerGitHubTools();
     this.declareSkill({
-      description: 'GitHub 全功能适配器：Issue/PR 评论即聊天通道，仓库管理（PR合并/创建/Review、Issue管理）、信息查询（Star/CI/Release/Branch）、Webhook 事件通知订阅。通过 GitHub App 认证，纯 REST API。',
+      description: 'GitHub 全功能适配器：Issue/PR 评论即聊天通道，仓库管理（PR合并/创建/Review、Issue编辑管理）、信息查询（Star/CI/Release/Branch）、全局搜索（issues/repos/code）、标签与指派管理、仓库文件读取、提交历史与分支对比、Webhook 事件通知订阅、OAuth 用户绑定。通过 GitHub App 认证，纯 REST API。',
       keywords: [
         'github', 'pr', 'pull request', 'issue', 'merge', 'review',
         'star', 'fork', 'branch', 'release', 'CI', 'workflow', 'repo',
-        '合并', '仓库', '拉取请求', '代码审查',
+        '合并', '仓库', '拉取请求', '代码审查', 'search', '搜索',
+        'label', '标签', 'assign', '指派', 'file', '文件',
+        'commit', '提交', 'compare', '对比', 'edit', '编辑',
       ],
       tags: ['github', 'development', 'git', 'ci-cd'],
       conventions: 'channel ID 格式 owner/repo/issues/N 或 owner/repo/pull/N。repo 参数不填则需要手动指定。',
@@ -932,7 +934,235 @@ class GitHubAdapter extends Adapter<GitHubBot> {
         }),
     );
 
-    logger.debug('GitHub 工具已注册: pr, issue, repo, subscribe, unsubscribe, subscriptions, bind, unbind, whoami, star, fork');
+    // --- Search ---
+    this.addTool(
+      new ZhinTool('github.search')
+        .desc('GitHub 搜索：在 issues/repos/code 中搜索')
+        .keyword('search', '搜索', '查找', 'github search')
+        .tag('github', 'search')
+        .param('action', { type: 'string', description: 'issues|repos|code', enum: ['issues', 'repos', 'code'] }, true)
+        .param('query', { type: 'string', description: '搜索关键词' }, true)
+        .param('limit', { type: 'number', description: '返回数量，默认 10' })
+        .execute(async (args) => {
+          const api = this.getAPI();
+          if (!api) return '❌ 没有可用的 GitHub bot';
+          const q = args.query as string;
+          const limit = (args.limit as number) || 10;
+
+          switch (args.action) {
+            case 'issues': {
+              const r = await api.searchIssues(q, limit);
+              if (!r.ok) return `❌ ${JSON.stringify(r.data)}`;
+              if (!r.data.items.length) return `📭 没有匹配的 Issue/PR`;
+              return `🔍 共 ${r.data.total_count} 条，显示前 ${r.data.items.length}:\n\n` +
+                r.data.items.map((i: any) =>
+                  `${i.pull_request ? '🔀' : '🐛'} ${i.repository_url.replace('https://api.github.com/repos/', '')}#${i.number}\n   ${i.title}\n   👤 ${i.user.login} | ${i.state}`
+                ).join('\n\n');
+            }
+            case 'repos': {
+              const r = await api.searchRepos(q, limit);
+              if (!r.ok) return `❌ ${JSON.stringify(r.data)}`;
+              if (!r.data.items.length) return `📭 没有匹配的仓库`;
+              return `🔍 共 ${r.data.total_count} 条，显示前 ${r.data.items.length}:\n\n` +
+                r.data.items.map((repo: any) =>
+                  `📦 ${repo.full_name}${repo.private ? ' 🔒' : ''}\n   ${repo.description || '(无描述)'}\n   ⭐ ${repo.stargazers_count} | 🍴 ${repo.forks_count} | 📝 ${repo.language || '?'}`
+                ).join('\n\n');
+            }
+            case 'code': {
+              const r = await api.searchCode(q, limit);
+              if (!r.ok) return `❌ ${JSON.stringify(r.data)}`;
+              if (!r.data.items.length) return `📭 没有匹配的代码`;
+              return `🔍 共 ${r.data.total_count} 条，显示前 ${r.data.items.length}:\n\n` +
+                r.data.items.map((c: any) =>
+                  `📄 ${c.repository.full_name}/${c.path}\n   🔗 ${c.html_url}`
+                ).join('\n\n');
+            }
+            default: return `❌ 未知搜索类型: ${args.action}`;
+          }
+        }),
+    );
+
+    // --- Label ---
+    this.addTool(
+      new ZhinTool('github.label')
+        .desc('GitHub 标签管理：查看/添加/移除 Issue/PR 标签')
+        .keyword('label', '标签', 'tag')
+        .tag('github', 'label')
+        .param('action', { type: 'string', description: 'list|add|remove', enum: ['list', 'add', 'remove'] }, true)
+        .param('repo', { type: 'string', description: 'owner/repo (必填)' }, true)
+        .param('number', { type: 'number', description: 'Issue/PR 编号 (add/remove 必填)' })
+        .param('labels', { type: 'string', description: '标签名，逗号分隔 (add/remove)' })
+        .execute(async (args) => {
+          const api = this.getAPI();
+          if (!api) return '❌ 没有可用的 GitHub bot';
+          const repo = args.repo as string;
+
+          switch (args.action) {
+            case 'list': {
+              const r = await api.listLabels(repo);
+              if (!r.ok) return `❌ ${JSON.stringify(r.data)}`;
+              if (!r.data.length) return `📭 仓库没有标签`;
+              return `🏷️ ${repo} 标签 (${r.data.length}):\n` +
+                r.data.map((l: any) => `  • ${l.name}${l.description ? ` — ${l.description}` : ''}`).join('\n');
+            }
+            case 'add': {
+              if (!args.number) return '❌ 请提供 Issue/PR 编号';
+              if (!args.labels) return '❌ 请提供标签名';
+              const labels = (args.labels as string).split(',').map(s => s.trim());
+              const r = await api.addLabels(repo, args.number as number, labels);
+              return r.ok ? `✅ 已添加标签: ${labels.join(', ')}` : `❌ ${r.data?.message || JSON.stringify(r.data)}`;
+            }
+            case 'remove': {
+              if (!args.number) return '❌ 请提供 Issue/PR 编号';
+              if (!args.labels) return '❌ 请提供要移除的标签名';
+              const labels = (args.labels as string).split(',').map(s => s.trim());
+              const results: string[] = [];
+              for (const label of labels) {
+                const r = await api.removeLabel(repo, args.number as number, label);
+                results.push(r.ok ? `✅ ${label}` : `❌ ${label}: ${r.data?.message || 'failed'}`);
+              }
+              return results.join('\n');
+            }
+            default: return `❌ 未知操作: ${args.action}`;
+          }
+        }),
+    );
+
+    // --- Assign ---
+    this.addTool(
+      new ZhinTool('github.assign')
+        .desc('GitHub 指派管理：给 Issue/PR 添加/移除指派人')
+        .keyword('assign', '指派', '分配')
+        .tag('github', 'assign')
+        .param('action', { type: 'string', description: 'add|remove', enum: ['add', 'remove'] }, true)
+        .param('repo', { type: 'string', description: 'owner/repo (必填)' }, true)
+        .param('number', { type: 'number', description: 'Issue/PR 编号 (必填)' }, true)
+        .param('assignees', { type: 'string', description: '用户名，逗号分隔 (必填)' }, true)
+        .execute(async (args) => {
+          const api = this.getAPI();
+          if (!api) return '❌ 没有可用的 GitHub bot';
+          const repo = args.repo as string;
+          const num = args.number as number;
+          const assignees = (args.assignees as string).split(',').map(s => s.trim());
+
+          if (args.action === 'add') {
+            const r = await api.addAssignees(repo, num, assignees);
+            return r.ok ? `✅ 已指派: ${assignees.join(', ')}` : `❌ ${r.data?.message || JSON.stringify(r.data)}`;
+          } else {
+            const r = await api.removeAssignees(repo, num, assignees);
+            return r.ok ? `✅ 已移除指派: ${assignees.join(', ')}` : `❌ ${r.data?.message || JSON.stringify(r.data)}`;
+          }
+        }),
+    );
+
+    // --- File ---
+    this.addTool(
+      new ZhinTool('github.file')
+        .desc('读取 GitHub 仓库中的文件内容')
+        .keyword('file', '文件', '查看文件', '读取文件', 'cat')
+        .tag('github', 'file')
+        .param('repo', { type: 'string', description: 'owner/repo (必填)' }, true)
+        .param('path', { type: 'string', description: '文件路径 (必填)' }, true)
+        .param('ref', { type: 'string', description: '分支/tag/commit SHA (可选，默认主分支)' })
+        .execute(async (args) => {
+          const api = this.getAPI();
+          if (!api) return '❌ 没有可用的 GitHub bot';
+          const r = await api.getFileContent(args.repo as string, args.path as string, args.ref as string | undefined);
+          if (!r.ok) return `❌ ${r.data?.message || JSON.stringify(r.data)}`;
+
+          if (Array.isArray(r.data)) {
+            return `📂 ${args.path} (目录，${r.data.length} 项):\n` +
+              r.data.map((f: any) => `  ${f.type === 'dir' ? '📁' : '📄'} ${f.name}`).join('\n');
+          }
+
+          if (r.data.type === 'file' && r.data.content) {
+            const decoded = Buffer.from(r.data.content, 'base64').toString('utf-8');
+            const maxLen = 3000;
+            const truncated = decoded.length > maxLen;
+            return `📄 ${r.data.path} (${r.data.size} bytes)\n\n${decoded.slice(0, maxLen)}${truncated ? `\n\n... (截断，共 ${decoded.length} 字符)` : ''}`;
+          }
+
+          return `📄 ${r.data.path} — ${r.data.type} (${r.data.size} bytes)\n🔗 ${r.data.html_url}`;
+        }),
+    );
+
+    // --- Commits ---
+    this.addTool(
+      new ZhinTool('github.commits')
+        .desc('GitHub 提交查询：列出提交记录或对比两个分支')
+        .keyword('commit', '提交', '历史', 'log', 'compare', '对比')
+        .tag('github', 'commits')
+        .param('action', { type: 'string', description: 'list|compare', enum: ['list', 'compare'] }, true)
+        .param('repo', { type: 'string', description: 'owner/repo (必填)' }, true)
+        .param('sha', { type: 'string', description: '分支/SHA (list)' })
+        .param('path', { type: 'string', description: '按文件路径过滤 (list)' })
+        .param('base', { type: 'string', description: '基准分支 (compare)' })
+        .param('head', { type: 'string', description: '目标分支 (compare)' })
+        .param('limit', { type: 'number', description: '返回数量，默认 10' })
+        .execute(async (args) => {
+          const api = this.getAPI();
+          if (!api) return '❌ 没有可用的 GitHub bot';
+          const repo = args.repo as string;
+
+          if (args.action === 'list') {
+            const r = await api.listCommits(repo, args.sha as string | undefined, args.path as string | undefined, (args.limit as number) || 10);
+            if (!r.ok) return `❌ ${JSON.stringify(r.data)}`;
+            if (!r.data.length) return '📭 没有找到提交记录';
+            return r.data.map((c: any) =>
+              `• ${c.sha.substring(0, 7)} ${c.commit.message.split('\n')[0]}\n  👤 ${c.commit.author?.name || '?'} | 📅 ${c.commit.author?.date?.split('T')[0] || '?'}`
+            ).join('\n\n');
+          } else {
+            if (!args.base || !args.head) return '❌ compare 需要 base 和 head 参数';
+            const r = await api.compareCommits(repo, args.base as string, args.head as string);
+            if (!r.ok) return `❌ ${r.data?.message || JSON.stringify(r.data)}`;
+            const d = r.data;
+            return [
+              `🔀 ${args.base} ← ${args.head}`,
+              `📊 ${d.status} | ${d.ahead_by} ahead, ${d.behind_by} behind`,
+              `📝 ${d.total_commits} commits | ${d.files?.length || 0} files changed`,
+              d.commits?.length ? '\n最近提交:\n' + d.commits.slice(0, 5).map((c: any) =>
+                `  • ${c.sha.substring(0, 7)} ${c.commit.message.split('\n')[0]}`
+              ).join('\n') : '',
+            ].filter(Boolean).join('\n');
+          }
+        }),
+    );
+
+    // --- Edit (Issue/PR) ---
+    this.addTool(
+      new ZhinTool('github.edit')
+        .desc('编辑 GitHub Issue 或 PR 的标题、正文、状态')
+        .keyword('edit', '编辑', '修改', 'update', '更新')
+        .tag('github', 'edit')
+        .param('type', { type: 'string', description: 'issue|pr', enum: ['issue', 'pr'] }, true)
+        .param('repo', { type: 'string', description: 'owner/repo (必填)' }, true)
+        .param('number', { type: 'number', description: 'Issue/PR 编号 (必填)' }, true)
+        .param('title', { type: 'string', description: '新标题' })
+        .param('body', { type: 'string', description: '新正文' })
+        .param('state', { type: 'string', description: 'open|closed' })
+        .execute(async (args) => {
+          const api = this.getAPI();
+          if (!api) return '❌ 没有可用的 GitHub bot';
+          const repo = args.repo as string;
+          const num = args.number as number;
+
+          const data: any = {};
+          if (args.title) data.title = args.title;
+          if (args.body) data.body = args.body;
+          if (args.state) data.state = args.state;
+
+          if (!Object.keys(data).length) return '❌ 请至少提供一个要修改的字段 (title/body/state)';
+
+          const r = args.type === 'pr'
+            ? await api.updatePR(repo, num, data)
+            : await api.updateIssue(repo, num, data);
+
+          if (!r.ok) return `❌ ${r.data?.message || JSON.stringify(r.data)}`;
+          return `✅ ${args.type === 'pr' ? 'PR' : 'Issue'} #${num} 已更新\n🔗 ${r.data.html_url}`;
+        }),
+    );
+
+    logger.debug('GitHub 工具已注册: pr, issue, repo, search, label, assign, file, commits, edit, subscribe, unsubscribe, subscriptions, bind, unbind, whoami, star, fork');
   }
 
 
