@@ -143,8 +143,7 @@ export async function readExistingProjectConfig(cwd: string): Promise<ExistingPr
 
   const options: Partial<InitOptions> = {
     config: configFormat,
-    httpUsername: env.username || env.USER || '',
-    httpPassword: env.password || env.PASSWORD || '',
+    httpToken: env.HTTP_TOKEN || env.token || '',
     database: mapDatabaseFromConfig(config.database),
     ai: mapAIFromConfig(config.ai, env),
     adapters: {

@@ -11,6 +11,11 @@ bots:
     ver: '9.1.70'
     data_dir: ./data
     scope: icqqjs
+  - context: github
+    name: zhin-github
+    app_id: ${GITHUB_APP_ID}
+    private_key: ./data/zhin-connect.pem
+    webhook_secret: ${GITHUB_WEBHOOK_SECRET}
 plugin_dirs:
   - node_modules
   - ./src/plugins
@@ -27,7 +32,7 @@ plugins:
   - "@zhin.js/http"
   - "@zhin.js/console"
   - "@zhin.js/mcp"
-  - "@zhin.js/plugin-github-notify"
+  - "@zhin.js/adapter-github"
   - "@zhin.js/adapter-sandbox"
   - "@zhin.js/adapter-kook"
   - "@zhin.js/adapter-icqq"
@@ -87,6 +92,5 @@ ai:
 http:
   host: 0.0.0.0
   port: 8086
-  username: ${username}
-  password: ${password}
+  token: ${HTTP_TOKEN}
   base: /api

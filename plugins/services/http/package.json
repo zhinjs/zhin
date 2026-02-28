@@ -43,7 +43,6 @@
     "@zhin.js/schema": "workspace:*",
     "koa": "^3.1.1",
     "ws": "^8.18.3",
-    "koa-basic-auth": "latest",
     "koa-body": "latest"
   },
   "peerDependencies": {
@@ -51,7 +50,6 @@
   },
   "devDependencies": {
     "@types/koa": "latest",
-    "@types/koa-basic-auth": "latest",
     "@types/koa-bodyparser": "latest",
     "@types/koa__router": "latest",
     "@types/ws": "latest",

@@ -17,54 +17,54 @@
  */
 
 import { Logger } from '@zhin.js/logger';
-import type { Tool, ToolContext } from '../types.js';
-import type { SkillFeature } from '../built/skill.js';
+import type { Tool, ToolContext } from '../../types.js';
+import type { SkillFeature } from '../../built/skill.js';
 import type {
   AIProvider,
   AgentTool,
   ChatMessage,
   ContentPart,
-} from './types.js';
-import { createAgent } from './agent.js';
-import { SessionManager, createMemorySessionManager } from './session.js';
-import type { ContextManager } from './context-manager.js';
-import { ConversationMemory } from './conversation-memory.js';
-import type { OutputElement } from './output.js';
-import { parseOutput } from './output.js';
-import { UserProfileStore } from './user-profile.js';
-import { RateLimiter } from './rate-limiter.js';
-import { detectTone } from './tone-detector.js';
-import { FollowUpManager, type FollowUpSender } from './follow-up.js';
-import { SubagentManager, type SubagentResultSender } from './subagent.js';
+} from '../types.js';
+import { createAgent } from '../agent.js';
+import { SessionManager, createMemorySessionManager } from '../session.js';
+import type { ContextManager } from '../context-manager.js';
+import { ConversationMemory } from '../conversation-memory.js';
+import type { OutputElement } from '../output.js';
+import { parseOutput } from '../output.js';
+import { UserProfileStore } from '../user-profile.js';
+import { RateLimiter } from '../rate-limiter.js';
+import { detectTone } from '../tone-detector.js';
+import { FollowUpManager, type FollowUpSender } from '../follow-up.js';
+import { SubagentManager, type SubagentResultSender } from '../subagent.js';
 import {
   pruneHistoryForContext,
   DEFAULT_CONTEXT_TOKENS,
-} from './compaction.js';
-import { triggerAIHook, createAIHookEvent } from './hooks.js';
+} from '../compaction.js';
+import { triggerAIHook, createAIHookEvent } from '../hooks.js';
 
-// ── Extracted modules ───────────────────────────────────────────────
+// ── Sub-modules ─────────────────────────────────────────────────────
 import {
   type ZhinAgentConfig,
   type OnChunkCallback,
   DEFAULT_CONFIG,
-} from './zhin-agent-config.js';
-import { applyExecPolicyToTools } from './zhin-agent-exec-policy.js';
-import { collectRelevantTools } from './zhin-agent-tool-collector.js';
+} from './config.js';
+import { applyExecPolicyToTools } from './exec-policy.js';
+import { collectRelevantTools } from './tool-collector.js';
 import {
   buildEnhancedPersona,
   buildContextHint,
   buildRichSystemPrompt,
   buildUserMessageWithHistory,
-} from './zhin-agent-prompt.js';
+} from './prompt.js';
 import {
   createChatHistoryTool,
   createUserProfileTool,
   createScheduleFollowUpTool,
   createSpawnTaskTool,
-} from './zhin-agent-builtin-tools.js';
+} from './builtin-tools.js';
 
 // Re-export public types for backward compat
-export type { ZhinAgentConfig, OnChunkCallback } from './zhin-agent-config.js';
+export type { ZhinAgentConfig, OnChunkCallback } from './config.js';
 
 const logger = new Logger(null, 'ZhinAgent');
 const now = () => performance.now();
@@ -259,6 +259,7 @@ export class ZhinAgent {
 
     // 3. No tools → chat path
     if (allTools.length === 0) {
+      logger.info(`[System Prompt] chat-path: ${personaEnhanced.length} chars ≈ ${Math.ceil(personaEnhanced.length / 2.5)} tokens`);
       logger.debug(`[闲聊路径] 过滤=${filterMs}ms, 记忆=${memMs}ms (${historyMessages.length}条), 0 工具`);
       const tLLM = now();
       const reply = await this.streamChatWithHistory(content, personaEnhanced, historyMessages, onChunk);
@@ -312,11 +313,11 @@ export class ZhinAgent {
       const tLLM = now();
       const prompt = `${personaEnhanced}
 
-Pre-fetched data for the user's question:
+以下是根据用户问题自动获取的实时数据：
 ${preData}
 
-Answer based on the data above. Be natural, highlight key points.`;
-      logger.info(`[系统提示] 快速路径: ${prompt.length} 字符 ≈ ${Math.ceil(prompt.length / 2.5)} tokens`);
+请基于以上数据，用自然流畅的中文回答用户问题。突出重点，适当使用 emoji。`;
+      logger.info(`[System Prompt] fast-path: ${prompt.length} chars ≈ ${Math.ceil(prompt.length / 2.5)} tokens`);
       reply = await this.streamChatWithHistory(content, prompt, historyMessages, onChunk);
       logger.info(`[快速路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, LLM=${(now() - tLLM).toFixed(0)}ms, 总=${(now() - t0).toFixed(0)}ms`);
     } else {
@@ -509,4 +510,3 @@ ${preData ? `\n已获取数据：${preData}\n` : ''}`;
     }
   }
 }
-

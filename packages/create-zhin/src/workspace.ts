@@ -109,6 +109,12 @@ export async function createWorkspace(projectPath: string, projectName: string, 
   if (fs.existsSync(summarizePath)) {
     await fs.copy(summarizePath, path.join(summarizeDir, 'SKILL.md'));
   }
+  const githubDir = path.join(projectPath, 'skills', 'github');
+  await fs.ensureDir(githubDir);
+  const githubPath = path.join(__dirname, '../template/skills/github/SKILL.md');
+  if (fs.existsSync(githubPath)) {
+    await fs.copy(githubPath, path.join(githubDir, 'SKILL.md'));
+  }
   
   // 创建 plugins 目录
   await fs.ensureDir(path.join(projectPath, 'plugins'));
@@ -540,9 +546,8 @@ async function createAppModule(projectPath: string, projectName: string, options
   const adapterEnvVars = options.adapters ? generateAdapterEnvVars(options.adapters) : '';
   const aiEnvVars = options.ai ? generateAIEnvVars(options.ai) : '';
   await fs.writeFile(path.join(projectPath, '.env'),
-`# HTTP 服务配置（Web 控制台登录信息）
-username=${options.httpUsername}
-password=${options.httpPassword}${databaseEnvVars}${adapterEnvVars}${aiEnvVars}
+`# HTTP 服务配置（Web 控制台 Token 认证）
+HTTP_TOKEN=${options.httpToken}${databaseEnvVars}${adapterEnvVars}${aiEnvVars}
 `);
 await fs.writeFile(path.join(projectPath, '.env.development'),
 `# 调试模式

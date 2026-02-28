@@ -3,13 +3,13 @@
  */
 
 import * as path from 'path';
-import type { ContentPart } from './types.js';
-import type { SkillFeature } from '../built/skill.js';
-import type { ZhinAgentConfig } from './zhin-agent-config.js';
-import type { ToolContext } from '../types.js';
-import { SECTION_SEP, HISTORY_CONTEXT_MARKER, CURRENT_MESSAGE_MARKER } from './zhin-agent-config.js';
-import type { ChatMessage } from './types.js';
-import { getFileMemoryContext } from './bootstrap.js';
+import type { ContentPart } from '../types.js';
+import type { SkillFeature } from '../../built/skill.js';
+import type { ZhinAgentConfig } from './config.js';
+import type { ToolContext } from '../../types.js';
+import { SECTION_SEP, HISTORY_CONTEXT_MARKER, CURRENT_MESSAGE_MARKER } from './config.js';
+import type { ChatMessage } from '../types.js';
+import { getFileMemoryContext } from '../bootstrap.js';
 
 export function contentToText(c: string | ContentPart[]): string {
   if (typeof c === 'string') return c;

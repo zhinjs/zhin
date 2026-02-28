@@ -2,14 +2,14 @@
  * ZhinAgent 执行策略 — bash 命令的安全检查与工具包装
  */
 
-import type { AgentTool } from './types.js';
-import type { ZhinAgentConfig } from './zhin-agent-config.js';
+import type { AgentTool } from '../types.js';
+import type { ZhinAgentConfig } from './config.js';
 
 // ── 预设命令白名单 ──────────────────────────────────────────────────
 
 const PRESET_READONLY = ['ls', 'cat', 'pwd', 'date', 'whoami', 'grep', 'find', 'head', 'tail', 'wc'];
 const PRESET_NETWORK = [...PRESET_READONLY, 'curl', 'wget', 'ping', 'dig'];
-const PRESET_DEVELOPMENT = [...PRESET_NETWORK, 'npm', 'npx', 'node', 'git', 'python', 'python3', 'pip', 'pnpm', 'yarn'];
+const PRESET_DEVELOPMENT = [...PRESET_NETWORK, 'npm', 'npx', 'node', 'git', 'gh', 'python', 'python3', 'pip', 'pnpm', 'yarn'];
 
 export const EXEC_PRESETS: Record<string, string[]> = {
   readonly: PRESET_READONLY,

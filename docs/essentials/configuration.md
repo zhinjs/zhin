@@ -9,7 +9,7 @@ Zhin.js 在项目根目录自动发现主配置文件，支持 **YAML**（`zhin.
 ```
 my-bot/
 ├── zhin.config.yml  ← 主配置文件（也可使用 .yaml / .json / .toml）
-├── .env             ← 环境变量（密码等敏感信息）
+├── .env             ← 环境变量（令牌、密码等敏感信息）
 ├── src/
 └── package.json
 ```
@@ -206,11 +206,18 @@ ai:
 http:
   port: 8086                # 端口号
   host: "127.0.0.1"         # 监听地址，默认仅本机；部署/代理场景改为 "0.0.0.0"
-  username: ${username}     # 用户名（从环境变量读取）
-  password: ${password}     # 密码（从环境变量读取）
+  token: ${HTTP_TOKEN}      # API 访问令牌（从环境变量读取，不填自动生成）
   base: /api                # API 基础路径
   trustProxy: false         # 通过 Cloudflare/Nginx 等反向代理访问时设为 true
 ```
+
+**认证方式**：Token 认证，支持两种传递方式：
+- **Header**: `Authorization: Bearer <token>`
+- **Query**: `?token=<token>`
+
+以下路径无需认证：
+- 包含 `/webhook` 的路径（有自己的签名验证）
+- 以 `/health` 结尾的路径
 
 **通过 Cloudflare 等反向代理公网访问时**，建议：
 
@@ -218,8 +225,7 @@ http:
 http:
   port: 8086
   host: "0.0.0.0"           # 监听所有网卡，便于隧道或端口转发
-  username: ${username}
-  password: ${password}
+  token: ${HTTP_TOKEN}
   base: /api
   trustProxy: true          # 信任 X-Forwarded-Host / X-Forwarded-Proto
 ```
@@ -360,7 +366,7 @@ Zhin.js 支持在配置文件中通过 `${VAR}` 引用环境变量：
 
 ```yaml
 # 基础用法
-password: ${MY_PASSWORD}
+token: ${HTTP_TOKEN}
 
 # 带默认值
 port: ${PORT:8086}          # 如果 PORT 未设置，使用 8086
@@ -369,14 +375,13 @@ port: ${PORT:8086}          # 如果 PORT 未设置，使用 8086
 在项目根目录的 `.env` 文件中设置：
 
 ```bash
-username=admin
-password=your_secure_password
+HTTP_TOKEN=your_secure_token
 ICQQ_ACCOUNT=123456789
 ICQQ_PASSWORD=your_qq_password
 ```
 
 **为什么使用环境变量？**
-- 安全 - 密码不会提交到 Git
+- 安全 - 令牌和密码不会提交到 Git
 - 灵活 - 不同环境使用不同配置
 - 标准 - 符合 12-Factor App 原则
 
@@ -503,8 +508,7 @@ bots:
 
 http:
   port: 8086
-  username: ${username}
-  password: ${password}
+  token: ${HTTP_TOKEN}
 
 console:
   enabled: true

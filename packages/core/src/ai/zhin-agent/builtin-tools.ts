@@ -5,12 +5,12 @@
  * 由 ZhinAgent.process() 按需创建并注入到工具列表中。
  */
 
-import type { ToolContext } from '../types.js';
-import type { AgentTool } from './types.js';
-import type { ConversationMemory } from './conversation-memory.js';
-import type { UserProfileStore } from './user-profile.js';
-import type { FollowUpManager } from './follow-up.js';
-import type { SubagentManager, SubagentOrigin } from './subagent.js';
+import type { ToolContext } from '../../types.js';
+import type { AgentTool } from '../types.js';
+import type { ConversationMemory } from '../conversation-memory.js';
+import type { UserProfileStore } from '../user-profile.js';
+import type { FollowUpManager } from '../follow-up.js';
+import type { SubagentManager, SubagentOrigin } from '../subagent.js';
 
 export function createChatHistoryTool(sessionId: string, memory: ConversationMemory): AgentTool {
   return {

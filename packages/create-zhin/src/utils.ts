@@ -1,19 +1,11 @@
-import os from 'os';
-import { webcrypto } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 
-// 生成随机密码
-export function generateRandomPassword(length: number = 6): string {
-  if (length < 1) {
-    throw new Error('密码长度必须大于 0');
+// 生成随机 token（hex 格式）
+export function generateToken(bytes: number = 16): string {
+  if (bytes < 1) {
+    throw new Error('bytes 必须大于 0');
   }
-  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-  const randomValues = webcrypto.getRandomValues(new Uint32Array(length));
-  return Array.from(randomValues, (value) => chars[value % chars.length]).join('');
-}
-
-// 获取当前系统用户名
-export function getCurrentUsername(): string {
-  return os.userInfo().username || 'admin';
+  return randomBytes(bytes).toString('hex');
 }
 
 // 获取数据库显示名称

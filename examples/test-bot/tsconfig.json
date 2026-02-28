@@ -33,7 +33,7 @@
       "@zhin.js/adapter-qq",
       "@zhin.js/adapter-discord",
       "@zhin.js/mcp",
-      "@zhin.js/plugin-github-notify",
+      "@zhin.js/adapter-github",
       "@zhin.js/sensitive-filter"
     ]
   },

@@ -6,8 +6,7 @@ export interface InitOptions {
   config?: 'json' | 'yaml' | 'toml';
   runtime?: 'node' | 'bun';
   yes?: boolean;
-  httpUsername?: string;
-  httpPassword?: string;
+  httpToken?: string;
   database?: DatabaseConfig;
   ai?: AISetupConfig;
   adapters?: AdapterSetupResult;

@@ -273,8 +273,7 @@ plugins:
 http:
   host: 0.0.0.0
   port: 8086
-  username: admin
-  password: admin123
+  token: \${HTTP_TOKEN}
 ai:
   enabled: false
 `;

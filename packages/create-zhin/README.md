@@ -9,7 +9,7 @@
 - 🔧 **智能配置**: 自动安装 pnpm、项目依赖
 - 🎯 **交互式配置**: 选择运行时、配置格式、数据库类型
 - 🗄️ **数据库支持**: 支持 SQLite、MySQL、PostgreSQL、MongoDB、Redis
-- 🔐 **安全配置**: 自动生成 HTTP 认证和环境变量管理
+- 🔐 **安全配置**: 自动生成 HTTP Token 认证和环境变量管理
 - 📊 **日志配置**: 内置完整的日志等级和清理配置
 - 🌐 **零安装**: 无需全局安装，直接使用
 
@@ -51,18 +51,17 @@ pnpm build
 1. **启动脚手架**: 当你运行 `npm create zhin-app` 时
 2. **检测 pnpm**: 自动检测并安装 pnpm（如果未安装）
 3. **交互式配置**: 询问项目名称、运行时、配置格式
-4. **HTTP 认证配置**: 配置 Web 控制台登录信息
-   - 默认用户名：当前系统用户名
-   - 默认密码：随机生成 6 位字符串
+4. **HTTP Token 认证配置**: 配置 Web 控制台访问 Token
+   - 默认 Token：随机生成 32 位 hex 字符串
 5. **数据库配置**: 选择数据库类型和连接参数
    - SQLite (默认，零配置)
    - MySQL、PostgreSQL、MongoDB、Redis
    - 自动安装对应的数据库驱动包
 6. **创建 Workspace**: 生成 pnpm workspace 结构
 7. **生成配置文件**: 包含数据库、日志等完整配置
-8. **生成 .env 文件**: 保存 HTTP 认证和数据库连接信息
+8. **生成 .env 文件**: 保存 HTTP Token 和数据库连接信息
 9. **自动安装依赖**: 在项目根目录执行 `pnpm install`
-10. **完成提示**: 显示登录信息、数据库配置和下一步操作
+10. **完成提示**: 显示 Token、数据库配置和下一步操作
 
 ## 支持的参数
 
@@ -80,9 +79,8 @@ npm create zhin-app my-awesome-bot
 1. 📝 输入项目名称
 2. ⚙️ 选择运行时（Node.js / Bun）
 3. 📄 选择配置格式（TypeScript / JavaScript / YAML / JSON）
-4. 🔐 配置 Web 控制台登录信息
-   - 用户名（默认：当前系统用户名）
-   - 密码（默认：随机 6 位字符）
+4. 🔐 配置 Web 控制台 Token
+   - Token（默认：随机 32 位 hex 字符串，用于 Authorization: Bearer 或 ?token= 认证）
 5. 🗄️ 配置数据库
    - SQLite（推荐，零配置）
    - MySQL（主机、端口、用户名、密码、数据库名）
@@ -93,7 +91,7 @@ npm create zhin-app my-awesome-bot
 ### 快速创建（跳过交互）
 
 ```bash
-# 使用默认配置（TypeScript + Node.js + 随机密码）
+# 使用默认配置（YAML + Node.js + 随机 Token）
 npm create zhin-app my-bot -y
 # 或
 npm create zhin-app my-bot --yes
@@ -107,12 +105,11 @@ npm create zhin-app my-bot --yes
 | `-y, --yes` | 跳过交互，使用默认配置 | `false` |
 
 **默认配置（使用 `-y` 时）：**
-- 配置格式: TypeScript (`zhin.config.ts`)
+- 配置格式: YAML (`zhin.config.yml`)
 - 运行时: Node.js
 - 包管理器: pnpm（自动安装）
 - 数据库: SQLite (`./data/bot.db`, WAL 模式)
-- HTTP 用户名: 当前系统用户名
-- HTTP 密码: 随机生成 6 位字符
+- HTTP Token: 随机生成 32 位 hex 字符串
 - 日志等级: INFO
 - 日志清理: 7 天，10000 条记录
 
@@ -177,7 +174,7 @@ my-awesome-bot/
 └── README.md                # 项目说明文档
 ```
 
-**⚠️ 重要**: `.env` 文件包含敏感信息（登录密码），已自动添加到 `.gitignore`，不会被提交到版本控制。
+**⚠️ 重要**: `.env` 文件包含敏感信息（HTTP Token），已自动添加到 `.gitignore`，不会被提交到版本控制。
 
 **Workspace 配置 (`pnpm-workspace.yaml`):**
 ```yaml
@@ -246,8 +243,7 @@ export default defineConfig<AppConfig>(async (env) => {
     ],
     http: {
       port: 8086,
-      username: process.env.HTTP_USERNAME || 'admin',
-      password: process.env.HTTP_PASSWORD || '123456',
+      token: process.env.HTTP_TOKEN || 'your-token',
       base: '/api'
     },
     debug: process.env.NODE_ENV === 'development'
@@ -273,12 +269,12 @@ pnpm dev
 
 访问 `http://localhost:8086` 查看 Web 控制台
 
-**登录信息：**
-- 用户名和密码在创建项目时已配置
+**访问信息：**
+- Token 在创建项目时已配置
 - 保存在 `.env` 文件中
 - 创建完成时会在终端显示
 
-> 💡 **修改密码**: 编辑 `.env` 文件中的 `HTTP_USERNAME` 和 `HTTP_PASSWORD`
+> 💡 **修改 Token**: 编辑 `.env` 文件中的 `HTTP_TOKEN`
 
 ### 3. 创建插件
 

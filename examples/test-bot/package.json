@@ -30,7 +30,7 @@
     "@zhin.js/http": "workspace:*",
     "@zhin.js/mcp": "workspace:*",
     "@zhin.js/plugin-60s": "workspace:*",
-    "@zhin.js/plugin-github-notify": "workspace:*",
+    "@zhin.js/adapter-github": "workspace:*",
     "@zhin.js/plugin-html-renderer": "workspace:*",
     "@zhin.js/plugin-music": "workspace:*",
     "@zhin.js/sensitive-filter": "workspace:*",

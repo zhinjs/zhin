@@ -575,28 +575,30 @@
       "lastUpdate": "2026-02-12T07:11:38.393Z"
     },
     {
-      "name": "@zhin.js/plugin-github-notify",
-      "displayName": "plugin-github-notify",
-      "description": "GitHub webhook notification service for Zhin.js",
+      "name": "@zhin.js/adapter-github",
+      "displayName": "adapter-github",
+      "description": "Zhin.js adapter for GitHub — Issues/PRs as chat channels, full repo management, webhook notifications",
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": [
-        "service"
+        "adapter"
       ],
-      "version": "0.0.22",
-      "npm": "https://www.npmjs.com/package/@zhin.js/plugin-github-notify",
+      "version": "0.1.0",
+      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-github",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
         "zhin",
         "bot",
-        "service",
+        "adapter",
         "github",
+        "issue",
+        "pull-request",
         "webhook",
-        "notification",
+        "chatbot",
         "ci-cd"
       ],
-      "lastUpdate": "2026-02-26T06:10:44.085Z"
+      "lastUpdate": "2026-02-27T00:00:00.000Z"
     },
     {
       "name": "@zhin.js/plugin-html-renderer",

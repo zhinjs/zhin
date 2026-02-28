@@ -216,6 +216,9 @@ importers:
       '@zhin.js/adapter-email':
         specifier: workspace:*
         version: link:../../plugins/adapters/email
+      '@zhin.js/adapter-github':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/github
       '@zhin.js/adapter-icqq':
         specifier: workspace:*
         version: link:../../plugins/adapters/icqq
@@ -258,9 +261,6 @@ importers:
       '@zhin.js/plugin-60s':
         specifier: workspace:*
         version: link:../../plugins/utils/60s
-      '@zhin.js/plugin-github-notify':
-        specifier: workspace:*
-        version: link:../../plugins/services/github-notify
       '@zhin.js/plugin-html-renderer':
         specifier: workspace:*
         version: link:../../plugins/utils/html-renderer
@@ -589,6 +589,19 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/zhin
 
+  plugins/adapters/github:
+    dependencies:
+      '@zhin.js/http':
+        specifier: workspace:*
+        version: link:../../services/http
+    devDependencies:
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
+
   plugins/adapters/icqq:
     dependencies:
       '@icqqjs/icqq':
@@ -904,19 +917,6 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/zhin
 
-  plugins/services/github-notify:
-    dependencies:
-      '@zhin.js/http':
-        specifier: workspace:*
-        version: link:../http
-    devDependencies:
-      typescript:
-        specifier: ^5.3.3
-        version: 5.9.3
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/zhin
-
   plugins/services/http:
     dependencies:
       '@koa/router':
@@ -928,9 +928,6 @@ importers:
       koa:
         specifier: ^3.1.1
         version: 3.1.1
-      koa-basic-auth:
-        specifier: latest
-        version: 4.0.0
       koa-body:
         specifier: latest
         version: 7.0.1
@@ -941,9 +938,6 @@ importers:
       '@types/koa':
         specifier: latest
         version: 3.0.1
-      '@types/koa-basic-auth':
-        specifier: latest
-        version: 2.0.7
       '@types/koa-bodyparser':
         specifier: latest
         version: 4.3.13
@@ -3644,9 +3638,6 @@ packages:
   '@types/keygrip@1.0.6':
     resolution: {integrity: sha512-lZuNAY9xeJt7Bx4t4dx0rYCDqGPW8RXhQZK1td7d4H6E9zYbLoOtjBvfwdTKpsyxQI/2jv+armjX/RW+ZNpXOQ==}
 
-  '@types/koa-basic-auth@2.0.7':
-    resolution: {integrity: sha512-iCzNlVkrYlyYM/KaI7dz/6UWJue9I2QFVhn4CNT5Xj1iQ9ALHWhRl8hlLe0Ifmki346hGA46V52mhd9Ky+5lsA==}
-
   '@types/koa-bodyparser@4.3.13':
     resolution: {integrity: sha512-yW9afsDnV1ymnhMBfAlzsKZ45sYnvIlTRS+eF5MUZOQ8ePIIj3ajwi+9b4a0vdyYvh6uJKYibU8R1zrUIpCmCA==}
 
@@ -4213,10 +4204,6 @@ packages:
   baseline-browser-mapping@2.9.11:
     resolution: {integrity: sha512-Sg0xJUNDU1sJNGdfGWhVHX0kkZ+HWcvmVymJbj6NSgZZmW/8S9Y2HQ5euytnIgakgxN6papOAWiwDo1ctFDcoQ==}
     hasBin: true
-
-  basic-auth@2.0.1:
-    resolution: {integrity: sha512-NF+epuEdnUYVlGuhaxbbq+dvJttwLnGY+YixlXlME5KpQ5W3CnXA5cVTneY3SPbPDRkcjMbifrwmFYcClgOZeg==}
-    engines: {node: '>= 0.8'}
 
   better-path-resolve@1.0.0:
     resolution: {integrity: sha512-pbnl5XzGBdrFU/wT4jqmJVPn2B6UHPBOhzMQkY/SPUPB6QtUXtmBHBIwCbXJol93mOpGMnQyP/+BB19q04xj7g==}
@@ -5699,9 +5686,6 @@ packages:
   keyv@4.5.4:
     resolution: {integrity: sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==}
 
-  koa-basic-auth@4.0.0:
-    resolution: {integrity: sha512-eV1sGVAizDuFWNpY43VF3Z1ND4PotQZB/igxHNrcJXzXw+Flmj8Uv+4hP9LyNXyvqLJz/X5bmXeMu84AAGD9Jw==}
-
   koa-body@7.0.1:
     resolution: {integrity: sha512-fSCZyN7Mhf/gijDeoOr20H4+g29znYhqoNuCX5X1kPQkUiRYIG/lku0CaCx0BBuoZ4pDAjsbJJfiECtJspKP/Q==}
 
@@ -7049,9 +7033,6 @@ packages:
 
   rxjs@7.8.2:
     resolution: {integrity: sha512-dhKf903U/PQZY6boNNtAGdWbG85WAbjT/1xYoZIC7FAY0yWapOBQVsVrDl58W86//e1VpMNBtRV4MaXfdMySFA==}
-
-  safe-buffer@5.1.2:
-    resolution: {integrity: sha512-Gd2UZBJDkXlY7GbJxfsE8/nvKkUEU1G38c1siN6QP6a9PT9MmHB8GnpscSmMJSoF8LOIrt8ud/wPtojys4G6+g==}
 
   safe-buffer@5.2.1:
     resolution: {integrity: sha512-rp3So07KcdmmKbGvgaNxQSJr7bGVSVk5S9Eq1F+ppbRo70+YeaDxkw5Dd8NPN+GD6bjnYm2VuPuCXmpuYvmCXQ==}
@@ -11246,10 +11227,6 @@ snapshots:
 
   '@types/keygrip@1.0.6': {}
 
-  '@types/koa-basic-auth@2.0.7':
-    dependencies:
-      '@types/koa': 3.0.1
-
   '@types/koa-bodyparser@4.3.13':
     dependencies:
       '@types/koa': 3.0.1
@@ -12005,10 +11982,6 @@ snapshots:
   base64-js@1.5.1: {}
 
   baseline-browser-mapping@2.9.11: {}
-
-  basic-auth@2.0.1:
-    dependencies:
-      safe-buffer: 5.1.2
 
   better-path-resolve@1.0.0:
     dependencies:
@@ -13649,11 +13622,6 @@ snapshots:
     dependencies:
       json-buffer: 3.0.1
 
-  koa-basic-auth@4.0.0:
-    dependencies:
-      basic-auth: 2.0.1
-      tsscmp: 1.0.6
-
   koa-body@7.0.1:
     dependencies:
       '@types/co-body': 6.1.3
@@ -15192,8 +15160,6 @@ snapshots:
   rxjs@7.8.2:
     dependencies:
       tslib: 2.8.1
-
-  safe-buffer@5.1.2: {}
 
   safe-buffer@5.2.1: {}
 

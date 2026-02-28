@@ -1,9 +1,8 @@
 import { usePlugin, DatabaseFeature, Models, Adapter, SystemLog, Plugin } from "zhin.js";
 import { Schema } from "@zhin.js/schema";
 import { createServer, Server } from "http";
-import os from "node:os";
+import crypto from "node:crypto";
 import Koa from "koa";
-import auth from "koa-basic-auth";
 import body, { KoaBodyMiddlewareOptionsSchema } from "koa-body";
 import { Router, RouterContext} from "./router.js";
 
@@ -22,11 +21,8 @@ declare module "zhin.js" {
 // Schema 定义
 export const httpSchema = Schema.object({
   port: Schema.number().default(8086).description("HTTP 服务端口"),
-  username: Schema.string().description(
-    "HTTP 基本认证用户名, 默认为当前系统用户名"
-  ),
-  password: Schema.string().description(
-    "HTTP 基本认证密码, 默认为随机生成的6位字符串"
+  token: Schema.string().description(
+    "API 访问令牌，不填则自动生成。通过 Authorization: Bearer <token> 或 ?token=<token> 传递"
   ),
   base: Schema.string()
     .default("/api")
@@ -36,30 +32,13 @@ export const httpSchema = Schema.object({
 export interface HttpConfig {
   port?: number;
   host?: string;
-  username?: string;
-  password?: string;
+  token?: string;
   base?: string;
   /** 是否信任反向代理（Cloudflare、Nginx 等）的 X-Forwarded-* 头，部署在代理后时建议设为 true */
   trustProxy?: boolean;
 }
 
-// 获取当前计算机登录用户名
-const getCurrentUsername = () => {
-  try {
-    return os.userInfo().username;
-  } catch {
-    return "admin";
-  }
-};
-
-// 生成6位随机密码
-const generateRandomPassword = () => {
-  const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  return Array.from({ length: 6 }, () =>
-    chars.charAt(Math.floor(Math.random() * chars.length))
-  ).join("");
-};
+const generateToken = () => crypto.randomBytes(16).toString('hex');
 
 const { provide, root, useContext, logger } = usePlugin();
 
@@ -85,8 +64,7 @@ useContext("config", (configService) => {
   const {
     port = 8086,
     host = "127.0.0.1",
-    username = getCurrentUsername(),
-    password = generateRandomPassword(),
+    token = generateToken(),
     base = "/api",
     trustProxy = false,
   } = httpConfig;
@@ -94,8 +72,26 @@ useContext("config", (configService) => {
   // 反向代理场景下信任 X-Forwarded-Host / X-Forwarded-Proto 等
   koa.proxy = trustProxy;
 
-  // 设置基本认证
-  koa.use(auth({ name: username, pass: password }));
+  // Token 认证中间件
+  koa.use(async (ctx, next) => {
+    // webhook 路径跳过（有自己的签名验证）
+    if (ctx.path.includes('/webhook')) return next();
+    // 健康检查跳过
+    if (ctx.path.endsWith('/health')) return next();
+
+    // 从 Bearer token 或 query 参数中提取 token
+    const authHeader = ctx.get('Authorization');
+    const reqToken = authHeader?.startsWith('Bearer ')
+      ? authHeader.slice(7)
+      : (ctx.query.token as string);
+
+    if (reqToken !== token) {
+      ctx.status = 401;
+      ctx.body = { success: false, error: 'Invalid or missing token' };
+      return;
+    }
+    await next();
+  });
 
   // ============================================================================
   // API 路由
@@ -317,7 +313,7 @@ useContext("config", (configService) => {
     ctx.body = { success: true, data: schema.toJSON() };
   });
 
-  // 消息发送 API（与其它 API 一样由 Basic Auth 保护，供 zhin send 等调用）
+  // 消息发送 API（由 Token 认证保护，供 zhin send 等调用）
   router.post(`${base}/message/send`, async (ctx: RouterContext) => {
     interface SendMessageBody {
       context: string;
@@ -374,7 +370,7 @@ useContext("config", (configService) => {
         : `${host}:${address.port}`;
     const apiUrl = `http://${visitAddress}${base}`;
 
-    logger.info(`HTTP 服务已启动 (port=${port}, api=${apiUrl}, user=${username})`);
+    logger.info(`HTTP 服务已启动 (port=${port}, api=${apiUrl}, token=${token.slice(0, 6)}...)`);
   });
 });
 

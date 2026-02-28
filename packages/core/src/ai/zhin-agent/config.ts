@@ -2,8 +2,8 @@
  * ZhinAgent 配置、常量、类型定义
  */
 
-import type { RateLimitConfig } from './rate-limiter.js';
-import { DEFAULT_CONTEXT_TOKENS } from './compaction.js';
+import type { RateLimitConfig } from '../rate-limiter.js';
+import { DEFAULT_CONTEXT_TOKENS } from '../compaction.js';
 
 export type ModelSizeHint = 'small' | 'medium' | 'large';
 

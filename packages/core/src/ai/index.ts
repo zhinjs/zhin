@@ -50,16 +50,16 @@ export type {
 } from './context-manager.js';
 
 // ── ZhinAgent ──
-export { ZhinAgent } from './zhin-agent.js';
-export type { ZhinAgentConfig, OnChunkCallback } from './zhin-agent.js';
+export { ZhinAgent } from './zhin-agent/index.js';
+export type { ZhinAgentConfig, OnChunkCallback } from './zhin-agent/index.js';
 
 // ── ZhinAgent sub-modules (for advanced consumers) ──
-export { PERM_MAP, DEFAULT_CONFIG as ZHIN_AGENT_DEFAULT_CONFIG, SECTION_SEP } from './zhin-agent-config.js';
-export { checkExecPolicy, applyExecPolicyToTools, resolveExecAllowlist, EXEC_PRESETS } from './zhin-agent-exec-policy.js';
-export { collectRelevantTools, toAgentTool } from './zhin-agent-tool-collector.js';
-export { buildRichSystemPrompt, buildContextHint, buildEnhancedPersona, buildUserMessageWithHistory, contentToText } from './zhin-agent-prompt.js';
-export type { RichSystemPromptContext } from './zhin-agent-prompt.js';
-export { createChatHistoryTool, createUserProfileTool, createScheduleFollowUpTool, createSpawnTaskTool } from './zhin-agent-builtin-tools.js';
+export { PERM_MAP, DEFAULT_CONFIG as ZHIN_AGENT_DEFAULT_CONFIG, SECTION_SEP } from './zhin-agent/config.js';
+export { checkExecPolicy, applyExecPolicyToTools, resolveExecAllowlist, EXEC_PRESETS } from './zhin-agent/exec-policy.js';
+export { collectRelevantTools, toAgentTool } from './zhin-agent/tool-collector.js';
+export { buildRichSystemPrompt, buildContextHint, buildEnhancedPersona, buildUserMessageWithHistory, contentToText } from './zhin-agent/prompt.js';
+export type { RichSystemPromptContext } from './zhin-agent/prompt.js';
+export { createChatHistoryTool, createUserProfileTool, createScheduleFollowUpTool, createSpawnTaskTool } from './zhin-agent/builtin-tools.js';
 
 // ── Conversation Memory ──
 export {

@@ -5,7 +5,7 @@
 ## 功能特性
 
 - 🌐 基于 Koa.js 的 HTTP 服务器
-- 🔐 Basic Auth 身份验证
+- 🔐 Token 身份验证
 - 🛠️ RESTful API 支持
 - 📡 WebSocket 实时通信
 - 🔄 请求体解析 (JSON)
@@ -19,7 +19,7 @@
 - **HTTP框架**: Koa.js
 - **路由**: 自定义Router类扩展@koa/router
 - **WebSocket**: ws 库
-- **身份验证**: koa-basic-auth
+- **身份验证**: Token 认证（Bearer / Query）
 - **请求解析**: koa-body
 
 ## 安装
@@ -45,8 +45,7 @@ import '@zhin.js/http'
 http:
   port: 8086            # 服务器端口（默认 8086）
   base: /api            # 路由前缀（默认 /api）
-  username: admin       # Basic Auth 用户名（默认系统用户名）
-  password: your-pass   # Basic Auth 密码（默认随机生成）
+  token: your-token     # API 访问令牌（不填自动生成）
 ```
 
 ## 核心组件
@@ -183,9 +182,13 @@ useContext('koa', async (koa) => {
 
 ### 身份验证
 
-默认启用 Basic Auth：
-- 用户名: `admin` (可通过环境变量修改)
-- 密码: `123456` (可通过环境变量修改)
+默认启用 Token 认证，支持两种传递方式：
+- **Header**: `Authorization: Bearer <token>`
+- **Query**: `?token=<token>`
+
+以下路径无需认证：
+- `/webhook` 相关路径（有自己的签名验证）
+- `/health` 健康检查
 
 ## WebSocket 功能
 
@@ -233,7 +236,7 @@ npm run clean  # 清理构建文件
 - `@koa/router` - Koa路由器
 - `koa` - Koa.js框架
 - `ws` - WebSocket库
-- `koa-basic-auth` - 基础认证中间件
+- `crypto` (Node.js built-in) - Token 生成
 - `koa-bodyparser` - 请求体解析中间件
 
 ### 对等依赖

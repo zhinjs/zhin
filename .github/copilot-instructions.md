@@ -938,7 +938,7 @@ declare module 'zhin.js' {
 ### HTTP 插件 (`@zhin.js/http`)
 - 基于 Koa.js 的 HTTP 服务器
 - 提供 `koa`、`router`、`server` 三个 Context
-- 默认端口 8086，支持 Basic Auth (admin/123456)
+- 默认端口 8086，支持 Token 认证（Bearer / Query）
 - 内置 API: `/api/adapters`, `/api/system/status`, `/api/plugins`
 
 ### Console 插件 (`@zhin.js/console`)

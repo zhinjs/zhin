@@ -223,8 +223,7 @@ ${pluginsYamlLines}
 
 http:
   port: 8086
-  username: \${username}
-  password: \${password}
+  token: \${HTTP_TOKEN}
   base: /api
 
 console:
@@ -252,8 +251,7 @@ ${pluginsJsonLines}
   ],
   "http": {
     "port": 8086,
-    "username": "\${username}",
-    "password": "\${password}",
+    "token": "\${HTTP_TOKEN}",
     "base": "/api"
   },
   "console": {
@@ -286,8 +284,7 @@ ${pluginsTomlLines}
 
 [http]
 port = 8086
-username = "\${username}"
-password = "\${password}"
+token = "\${HTTP_TOKEN}"
 base = "/api"
 
 [console]

@@ -38,7 +38,7 @@ function parseEnv(content: string): Record<string, string> {
   return out;
 }
 
-async function loadHttpOptions(): Promise<{ baseUrl: string; username: string; password: string } | null> {
+async function loadHttpOptions(): Promise<{ baseUrl: string; token: string } | null> {
   const configFile = findConfigFile(cwd);
   if (!configFile) return null;
   const config = await readConfig(path.join(cwd, configFile));
@@ -51,24 +51,19 @@ async function loadHttpOptions(): Promise<{ baseUrl: string; username: string; p
   const envPath = path.join(cwd, '.env');
   const env = fs.existsSync(envPath) ? parseEnv(await fs.readFile(envPath, 'utf-8')) : {};
 
-  let username = http.username ?? '';
-  let password = http.password ?? '';
-  if (typeof username === 'string' && username.startsWith('${') && username.endsWith('}')) {
-    const key = username.slice(2, -1).trim();
-    username = env[key] ?? process.env[key] ?? '';
-  }
-  if (typeof password === 'string' && password.startsWith('${') && password.endsWith('}')) {
-    const key = password.slice(2, -1).trim();
-    password = env[key] ?? process.env[key] ?? '';
+  let token = http.token ?? '';
+  if (typeof token === 'string' && token.startsWith('${') && token.endsWith('}')) {
+    const key = token.slice(2, -1).trim();
+    token = env[key] ?? process.env[key] ?? '';
   }
 
-  return { baseUrl, username: String(username), password: String(password) };
+  return { baseUrl, token: String(token) };
 }
 
-async function getFirstBotForAdapter(baseUrl: string, auth: string, adapter: string): Promise<string | null> {
+async function getFirstBotForAdapter(baseUrl: string, token: string, adapter: string): Promise<string | null> {
   try {
     const res = await fetch(`${baseUrl}/bots`, {
-      headers: { Authorization: `Basic ${auth}` },
+      headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return null;
     const json = (await res.json()) as { data?: { name: string; adapter: string }[] };
@@ -114,10 +109,10 @@ export const sendCommand = new Command('send')
       process.exit(1);
     }
 
-    const auth = Buffer.from(`${httpOpts.username}:${httpOpts.password}`).toString('base64');
+    const token = httpOpts.token;
     let bot_id   = botId;
     if (!bot_id) {
-      const bot = await getFirstBotForAdapter(httpOpts.baseUrl, auth, adapterName);
+      const bot = await getFirstBotForAdapter(httpOpts.baseUrl, token, adapterName);
       if (!bot) {
         logger.error(`未找到适配器 "${adapterName}" 下的 Bot，请使用 --bot <id> 指定`);
         process.exit(1);
@@ -138,7 +133,7 @@ export const sendCommand = new Command('send')
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Basic ${auth}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(body),
       });

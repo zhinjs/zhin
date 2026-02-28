@@ -12,8 +12,8 @@ import { randomUUID } from 'crypto';
 import { Logger } from '@zhin.js/logger';
 import type { AIProvider, AgentTool } from './types.js';
 import { createAgent } from './agent.js';
-import type { ZhinAgentConfig } from './zhin-agent-config.js';
-import { applyExecPolicyToTools } from './zhin-agent-exec-policy.js';
+import type { ZhinAgentConfig } from './zhin-agent/config.js';
+import { applyExecPolicyToTools } from './zhin-agent/exec-policy.js';
 
 const logger = new Logger(null, 'Subagent');
 

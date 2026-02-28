@@ -31,7 +31,7 @@ Zhin 框架的插件生态系统，包含平台适配器、功能服务和工具
 |------|------|------|
 | HTTP | `@zhin.js/http` | HTTP 服务器、路由、WebSocket |
 | Console | `@zhin.js/console` | Web 控制台 |
-| GitHub Notify | `@zhin.js/plugin-github-notify` | GitHub Webhook 通知 |
+| GitHub | `@zhin.js/adapter-github` | GitHub 适配器 — Issue/PR 聊天通道 + 仓库管理 + Webhook 通知 |
 | MCP | `@zhin.js/plugin-mcp` | Model Context Protocol 服务 |
 
 ### utils/ — 工具类插件

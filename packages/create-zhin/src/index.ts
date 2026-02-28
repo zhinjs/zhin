@@ -6,7 +6,7 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 
 import { InitOptions } from './types.js';
-import { generateRandomPassword, getCurrentUsername, getDatabaseDisplayName } from './utils.js';
+import { generateToken, getDatabaseDisplayName } from './utils.js';
 import { configureDatabaseOptions } from './database.js';
 import { createWorkspace } from './workspace.js';
 import { ensurePnpmInstalled, installDependencies } from './install.js';
@@ -25,8 +25,7 @@ async function main() {
   if (options.yes) {
     options.config = 'yaml';
     options.runtime = 'node';
-    options.httpUsername = getCurrentUsername();
-    options.httpPassword = generateRandomPassword(6);
+    options.httpToken = generateToken(16);
     options.database = {
       dialect: 'sqlite',
       filename: './data/bot.db',
@@ -92,40 +91,27 @@ async function main() {
       options.config = configFormat;
     }
     
-    // HTTP 认证配置
-    if (!options.httpUsername || !options.httpPassword) {
+    // HTTP Token 认证配置
+    if (!options.httpToken) {
       console.log('');
-      console.log(chalk.blue('🔐 配置 Web 控制台登录信息'));
+      console.log(chalk.blue('🔐 配置 Web 控制台访问 Token'));
       
-      const defaultUsername = getCurrentUsername();
-      const defaultPassword = generateRandomPassword(6);
+      const defaultToken = generateToken(16);
       
-      const httpConfig = await inquirer.prompt([
+      const { token } = await inquirer.prompt([
         {
           type: 'input',
-          name: 'username',
-          message: 'Web 控制台用户名:',
-          default: defaultUsername,
+          name: 'token',
+          message: 'Web 控制台 Token (用于 Authorization: Bearer 或 ?token= 认证):',
+          default: defaultToken,
           validate: (input: string) => {
-            if (!input.trim()) return '用户名不能为空';
-            return true;
-          }
-        },
-        {
-          type: 'input',
-          name: 'password',
-          message: 'Web 控制台密码:',
-          default: defaultPassword,
-          validate: (input: string) => {
-            if (!input.trim()) return '密码不能为空';
-            if (input.length < 6) return '密码至少需要 6 个字符';
+            if (!input.trim()) return 'Token 不能为空';
             return true;
           }
         }
       ]);
       
-      options.httpUsername = httpConfig.username;
-      options.httpPassword = httpConfig.password;
+      options.httpToken = token;
     }
     
     // 数据库配置
@@ -188,11 +174,10 @@ async function main() {
     console.log('');
     console.log(chalk.green('🎉 项目初始化完成！'));
     console.log('');
-    console.log(chalk.blue('🔐 Web 控制台登录信息：'));
+    console.log(chalk.blue('🔐 Web 控制台访问信息：'));
     console.log(`  ${chalk.gray('URL:')} ${chalk.cyan('http://localhost:8086')}`);
-    console.log(`  ${chalk.gray('用户名:')} ${chalk.cyan(options.httpUsername)}`);
-    console.log(`  ${chalk.gray('密码:')} ${chalk.cyan(options.httpPassword)}`);
-    console.log(`  ${chalk.yellow('⚠ 登录信息已保存到')} ${chalk.cyan('.env')} ${chalk.yellow('文件')}`);
+    console.log(`  ${chalk.gray('Token:')} ${chalk.cyan(options.httpToken)}`);
+    console.log(`  ${chalk.yellow('⚠ Token 已保存到')} ${chalk.cyan('.env')} ${chalk.yellow('文件')}`);
     
     // 显示数据库配置信息
     if (options.database) {

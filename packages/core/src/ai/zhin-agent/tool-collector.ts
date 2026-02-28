@@ -3,12 +3,12 @@
  */
 
 import { Logger } from '@zhin.js/logger';
-import type { Tool, ToolContext } from '../types.js';
-import type { SkillFeature } from '../built/skill.js';
-import type { AgentTool } from './types.js';
-import { Agent } from './agent.js';
-import type { ZhinAgentConfig } from './zhin-agent-config.js';
-import { PERM_MAP } from './zhin-agent-config.js';
+import type { Tool, ToolContext } from '../../types.js';
+import type { SkillFeature } from '../../built/skill.js';
+import type { AgentTool } from '../types.js';
+import { Agent } from '../agent.js';
+import type { ZhinAgentConfig } from './config.js';
+import { PERM_MAP } from './config.js';
 
 const logger = new Logger(null, 'ZhinAgent:ToolCollector');
 

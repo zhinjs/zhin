@@ -28,9 +28,9 @@ import {
 import type { MessageDispatcherService } from '../built/dispatcher.js';
 import type { SkillFeature } from '../built/skill.js';
 import { AIService } from './service.js';
-import { ZhinAgent } from './zhin-agent.js';
+import { ZhinAgent } from './zhin-agent/index.js';
 import { createBuiltinTools, discoverWorkspaceSkills, loadSoulPersona, loadAlwaysSkillsContent, buildSkillsSummaryXML } from './builtin-tools.js';
-import { resolveSkillInstructionMaxChars, DEFAULT_CONFIG } from './zhin-agent-config.js';
+import { resolveSkillInstructionMaxChars, DEFAULT_CONFIG } from './zhin-agent/config.js';
 import { loadBootstrapFiles, buildContextFiles, buildBootstrapContextSection, loadToolsGuide } from './bootstrap.js';
 import { triggerAIHook, createAIHookEvent } from './hooks.js';
 import { SessionManager, createDatabaseSessionManager } from './session.js';
@@ -209,7 +209,7 @@ export function initAIModule(): void {
     // 子任务管理器：让 AI 可以 spawn 后台子 agent 异步执行复杂任务
     agent.initSubagentManager(() => {
       const modelName = provider.models[0] || '';
-      const fullConfig = { ...DEFAULT_CONFIG, ...agentConfig } as Required<import('./zhin-agent-config.js').ZhinAgentConfig>;
+      const fullConfig = { ...DEFAULT_CONFIG, ...agentConfig } as Required<import('./zhin-agent/config.js').ZhinAgentConfig>;
       const zhinTools = createBuiltinTools({ skillInstructionMaxChars: resolveSkillInstructionMaxChars(fullConfig, modelName) });
       return zhinTools.map(zt => {
         const t = zt.toTool();
@@ -595,7 +595,7 @@ export function initAIModule(): void {
 
     const provider = ai.getProvider();
     const agentCfg = ai.getAgentConfig();
-    const fullCfg = { ...DEFAULT_CONFIG, ...agentCfg } as Required<import('./zhin-agent-config.js').ZhinAgentConfig>;
+    const fullCfg = { ...DEFAULT_CONFIG, ...agentCfg } as Required<import('./zhin-agent/config.js').ZhinAgentConfig>;
     const modelName = provider.models[0] || '';
     const builtinTools = createBuiltinTools({ skillInstructionMaxChars: resolveSkillInstructionMaxChars(fullCfg, modelName) });
     const disposers: (() => void)[] = [];

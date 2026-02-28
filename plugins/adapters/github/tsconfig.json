@@ -16,8 +16,9 @@
     "emitDecoratorMetadata": true,
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "verbatimModuleSyntax": false
   },
   "include": ["src/**/*"],
-  "exclude": ["lib", "node_modules", "client", "dist"]
-} 
+  "exclude": ["lib", "node_modules"]
+}

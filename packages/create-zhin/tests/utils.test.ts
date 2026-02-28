@@ -1,41 +1,31 @@
 import { describe, it, expect } from 'vitest'
-import { generateRandomPassword, getCurrentUsername, getDatabaseDisplayName } from '../src/utils'
+import { generateToken, getDatabaseDisplayName } from '../src/utils'
 
 describe('create-zhin utils', () => {
-  describe('generateRandomPassword', () => {
-    it('should generate password with default length', () => {
-      const password = generateRandomPassword()
-      expect(password).toBeDefined()
-      expect(typeof password).toBe('string')
-      expect(password.length).toBe(6)
+  describe('generateToken', () => {
+    it('should generate token with default bytes (32 hex chars)', () => {
+      const token = generateToken()
+      expect(token).toBeDefined()
+      expect(typeof token).toBe('string')
+      expect(token.length).toBe(32)
     })
 
-    it('should generate password with custom length', () => {
-      const password = generateRandomPassword(10)
-      expect(password.length).toBe(10)
+    it('should generate token with custom bytes', () => {
+      const token = generateToken(8)
+      expect(token.length).toBe(16)
     })
 
-    it('should generate different passwords', () => {
-      const password1 = generateRandomPassword()
-      const password2 = generateRandomPassword()
-      // 虽然理论上可能相同，但概率极低
-      expect(password1).toBeDefined()
-      expect(password2).toBeDefined()
+    it('should generate different tokens', () => {
+      const token1 = generateToken()
+      const token2 = generateToken()
+      expect(token1).toBeDefined()
+      expect(token2).toBeDefined()
     })
 
-    it('should only contain valid characters', () => {
-      const password = generateRandomPassword(100)
-      const validChars = /^[ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789]+$/
-      expect(validChars.test(password)).toBe(true)
-    })
-  })
-
-  describe('getCurrentUsername', () => {
-    it('should return a username', () => {
-      const username = getCurrentUsername()
-      expect(username).toBeDefined()
-      expect(typeof username).toBe('string')
-      expect(username.length).toBeGreaterThan(0)
+    it('should only contain hex characters', () => {
+      const token = generateToken(32)
+      const validChars = /^[0-9a-f]+$/
+      expect(validChars.test(token)).toBe(true)
     })
   })
 
