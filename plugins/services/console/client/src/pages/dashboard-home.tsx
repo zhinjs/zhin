@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { Bot, AlertCircle, Activity, Package, Clock, Cpu, MemoryStick, FileText, TrendingUp } from 'lucide-react'
+import { apiFetch } from '../utils/auth'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
@@ -40,8 +41,8 @@ export default function DashboardHome() {
   const fetchData = async () => {
     try {
       const [statsRes, statusRes] = await Promise.all([
-        fetch('/api/stats', { credentials: 'include' }),
-        fetch('/api/system/status', { credentials: 'include' })
+        apiFetch('/api/stats'),
+        apiFetch('/api/system/status')
       ])
       if (!statsRes.ok || !statusRes.ok) throw new Error('API 请求失败')
       const statsData = await statsRes.json()

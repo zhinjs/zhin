@@ -182,13 +182,17 @@ useContext('koa', async (koa) => {
 
 ### 身份验证
 
-默认启用 Token 认证，支持两种传递方式：
+默认启用 Token 认证，**仅保护 API 路径**（`/api/*`），静态文件和 SPA 路由不受限制。
+
+支持两种传递方式：
 - **Header**: `Authorization: Bearer <token>`
 - **Query**: `?token=<token>`
 
-以下路径无需认证：
-- `/webhook` 相关路径（有自己的签名验证）
-- `/health` 健康检查
+以下 API 路径无需认证：
+- 包含 `/webhook` 的路径（有自己的签名验证）
+- 以 `/health` 结尾的路径
+
+Web 控制台打开时会展示 Token 登录页，输入 `.env` 中的 `HTTP_TOKEN` 即可进入管理面板。
 
 ## WebSocket 功能
 

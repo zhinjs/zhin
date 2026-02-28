@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { AlertCircle, Package, Terminal, Box as IconBox, Layers, Clock, Brain, Wrench, Database, Shield, Settings, Plug, Server, type LucideIcon } from 'lucide-react'
+import { apiFetch } from '../utils/auth'
 import { Card, CardContent } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Alert, AlertDescription } from '../components/ui/alert'
@@ -56,7 +57,7 @@ export default function DashboardPlugins() {
 
   const fetchPlugins = async () => {
     try {
-      const res = await fetch('/api/plugins', { credentials: 'include' })
+      const res = await apiFetch('/api/plugins')
       if (!res.ok) throw new Error('API 请求失败')
       const data = await res.json()
       if (data.success) { setPlugins(data.data); setError(null) }

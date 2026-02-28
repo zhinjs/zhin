@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useState } from 'react'
+import { StrictMode, useCallback, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Provider as ReduxProvider } from 'react-redux'
 import { Home, Package, Bot, FileText } from 'lucide-react'
@@ -9,6 +9,8 @@ import DashboardPlugins from './pages/dashboard-plugins'
 import DashboardPluginDetail from './pages/dashboard-plugin-detail'
 import DashboardBots from './pages/dashboard-bots'
 import DashboardLogs from './pages/dashboard-logs'
+import LoginPage from './pages/login'
+import { hasToken } from './utils/auth'
 import './style.css'
 import { PersistGate } from 'redux-persist/integration/react'
 import { initializeTheme } from './theme'
@@ -17,7 +19,31 @@ import { TooltipProvider } from './components/ui/tooltip'
 // Initialize theme on app load
 initializeTheme()
 
-// Route initializer component
+// Auth guard + route initializer
+function App() {
+    const [authed, setAuthed] = useState(hasToken())
+
+    const handleLogin = useCallback(() => setAuthed(true), [])
+
+    useEffect(() => {
+        const onAuthRequired = () => setAuthed(false)
+        window.addEventListener('zhin:auth-required', onAuthRequired)
+        return () => window.removeEventListener('zhin:auth-required', onAuthRequired)
+    }, [])
+
+    if (!authed) {
+        return <LoginPage onSuccess={handleLogin} />
+    }
+
+    return (
+        <PersistGate loading={null} persistor={persistor}>
+            <ReduxProvider store={store}>
+                <RouteInitializer />
+            </ReduxProvider>
+        </PersistGate>
+    )
+}
+
 function RouteInitializer() {
     useWebSocket()
 
@@ -108,11 +134,7 @@ createRoot(
 ).render(
     <StrictMode>
         <TooltipProvider>
-            <PersistGate loading={null} persistor={persistor}>
-                <ReduxProvider store={store}>
-                    <RouteInitializer />
-                </ReduxProvider>
-            </PersistGate>
+            <App />
         </TooltipProvider>
     </StrictMode>,
 )

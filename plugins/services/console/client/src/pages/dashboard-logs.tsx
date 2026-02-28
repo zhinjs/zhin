@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { Info, AlertTriangle, XCircle, Circle, Trash2, RefreshCw, FileText, AlertCircle } from 'lucide-react'
+import { apiFetch } from '../utils/auth'
 import { Card, CardContent } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
@@ -49,7 +50,7 @@ export default function DashboardLogs() {
   const fetchLogs = async () => {
     try {
       const url = levelFilter === 'all' ? '/api/logs?limit=100' : `/api/logs?limit=100&level=${levelFilter}`
-      const res = await fetch(url, { credentials: 'include' })
+      const res = await apiFetch(url)
       if (!res.ok) throw new Error('API 请求失败')
       const data = await res.json()
       if (data.success && Array.isArray(data.data)) { setLogs(data.data.reverse()); setError(null) }
@@ -62,7 +63,7 @@ export default function DashboardLogs() {
 
   const fetchStats = async () => {
     try {
-      const res = await fetch('/api/logs/stats', { credentials: 'include' })
+      const res = await apiFetch('/api/logs/stats')
       if (!res.ok) return
       const data = await res.json()
       if (data.success) setStats(data.data)
@@ -73,9 +74,9 @@ export default function DashboardLogs() {
     const message = days ? `确定清理 ${days} 天前的日志吗？` : `确定只保留最近 ${maxRecords} 条日志吗？`
     if (!confirm(message)) return
     try {
-      const res = await fetch('/api/logs/cleanup', {
+      const res = await apiFetch('/api/logs/cleanup', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ days, maxRecords }), credentials: 'include'
+        body: JSON.stringify({ days, maxRecords })
       })
       if (!res.ok) throw new Error('清理失败')
       const data = await res.json()

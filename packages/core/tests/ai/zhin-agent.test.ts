@@ -4,7 +4,7 @@
  * 测试 collectTools 逻辑、handleMessage 端到端流程、会话管理等
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ZhinAgent } from '../../src/ai/zhin-agent.js';
+import { ZhinAgent } from '../../src/ai/zhin-agent/index.js';
 import { SkillFeature } from '../../src/built/skill.js';
 import type { AIProvider, ChatResponse, AgentTool } from '../../src/ai/types.js';
 import type { Tool, ToolContext } from '../../src/types.js';

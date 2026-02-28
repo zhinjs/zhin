@@ -72,8 +72,10 @@ useContext("config", (configService) => {
   // 反向代理场景下信任 X-Forwarded-Host / X-Forwarded-Proto 等
   koa.proxy = trustProxy;
 
-  // Token 认证中间件
+  // Token 认证中间件（仅保护 API 路径）
   koa.use(async (ctx, next) => {
+    // 只对 API 路径要求认证，静态文件/SPA 路由不受限
+    if (!ctx.path.startsWith(base + '/') && ctx.path !== base) return next();
     // webhook 路径跳过（有自己的签名验证）
     if (ctx.path.includes('/webhook')) return next();
     // 健康检查跳过

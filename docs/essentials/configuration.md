@@ -211,11 +211,13 @@ http:
   trustProxy: false         # 通过 Cloudflare/Nginx 等反向代理访问时设为 true
 ```
 
-**认证方式**：Token 认证，支持两种传递方式：
+**认证方式**：Token 认证，仅保护 API 路径（`/api/*`）。Web 控制台页面无需认证即可加载，打开后会展示 Token 登录页。
+
+Token 传递方式：
 - **Header**: `Authorization: Bearer <token>`
 - **Query**: `?token=<token>`
 
-以下路径无需认证：
+以下 API 路径无需认证：
 - 包含 `/webhook` 的路径（有自己的签名验证）
 - 以 `/health` 结尾的路径
 

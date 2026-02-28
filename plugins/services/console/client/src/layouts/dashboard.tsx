@@ -1,12 +1,12 @@
 import { Outlet, Link, useSelector, useDispatch, toggleSidebar, setActiveMenu } from "@zhin.js/client"
 import { useMemo } from "react"
-import { Menu, Search } from 'lucide-react'
+import { Menu, Search, LogOut } from 'lucide-react'
 import { cn } from "@zhin.js/client"
 import { ThemeToggle } from "../components/ThemeToggle"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { ScrollArea } from "../components/ui/scroll-area"
-import { Avatar, AvatarImage, AvatarFallback } from "../components/ui/avatar"
+import { clearToken } from "../utils/auth"
 
 export default function DashboardLayout() {
     const dispatch = useDispatch()
@@ -113,6 +113,17 @@ export default function DashboardLayout() {
                     {/* Right actions */}
                     <div className="flex items-center gap-1">
                         <ThemeToggle />
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            title="退出登录"
+                            onClick={() => {
+                                clearToken()
+                                window.dispatchEvent(new CustomEvent('zhin:auth-required'))
+                            }}
+                        >
+                            <LogOut className="h-4 w-4" />
+                        </Button>
                     </div>
                 </header>
 

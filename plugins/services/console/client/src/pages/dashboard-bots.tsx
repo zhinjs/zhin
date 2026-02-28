@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Bot, AlertCircle, Wifi, WifiOff, Activity, Package, Zap } from 'lucide-react'
+import { apiFetch } from '../utils/auth'
 import { Card, CardContent } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Alert, AlertDescription } from '../components/ui/alert'
@@ -26,7 +27,7 @@ export default function DashboardBots() {
 
   const fetchBots = async () => {
     try {
-      const res = await fetch('/api/bots', { credentials: 'include' })
+      const res = await apiFetch('/api/bots')
       if (!res.ok) throw new Error('API 请求失败')
       const data = await res.json()
       if (data.success) { setBots(data.data); setError(null) }

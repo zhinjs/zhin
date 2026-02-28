@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router'
 import { ArrowLeft, AlertCircle, Package, Terminal, Box as IconBox, Layers, Clock, Database, Brain, Wrench, Shield, Settings, Plug, Server, type LucideIcon } from 'lucide-react'
+import { apiFetch } from '../utils/auth'
 import { PluginConfigForm } from '../components/PluginConfigForm'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
@@ -60,7 +61,7 @@ export default function DashboardPluginDetail() {
 
   const fetchPluginDetail = async (pluginName: string) => {
     try {
-      const res = await fetch(`/api/plugins/${encodeURIComponent(pluginName)}`, { credentials: 'include' })
+      const res = await apiFetch(`/api/plugins/${encodeURIComponent(pluginName)}`)
       if (!res.ok) throw new Error('API 请求失败')
       const data = await res.json()
       if (data.success) { setPlugin(data.data); setError(null) }
