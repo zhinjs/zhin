@@ -878,6 +878,72 @@ export class DiscordBot
     }
   }
 
+  async createThread(channelId: string, name: string, messageId?: string, autoArchiveDuration?: number): Promise<ThreadChannel> {
+    try {
+      const channel = await this.channels.fetch(channelId);
+      if (!channel || !('threads' in channel)) throw new Error(`Channel ${channelId} 不支持创建帖子`);
+      const options: any = { name, autoArchiveDuration: autoArchiveDuration || 1440 };
+      if (messageId) options.startMessage = messageId;
+      const thread = await (channel as TextChannel).threads.create(options);
+      plugin.logger.info(`Discord Bot ${this.$id} 创建帖子 "${name}" (channel ${channelId})`);
+      return thread;
+    } catch (error) {
+      plugin.logger.error(`Discord Bot ${this.$id} 创建帖子失败:`, error);
+      throw error;
+    }
+  }
+
+  async addReaction(channelId: string, messageId: string, emoji: string): Promise<void> {
+    try {
+      const channel = await this.channels.fetch(channelId);
+      if (!channel || !channel.isTextBased()) throw new Error(`Channel ${channelId} 不是文本频道`);
+      const message = await (channel as TextChannel).messages.fetch(messageId);
+      await message.react(emoji);
+      plugin.logger.info(`Discord Bot ${this.$id} 添加反应 ${emoji} (message ${messageId})`);
+    } catch (error) {
+      plugin.logger.error(`Discord Bot ${this.$id} 添加反应失败:`, error);
+      throw error;
+    }
+  }
+
+  async sendEmbed(channelId: string, embedData: { title?: string; description?: string; color?: number; url?: string; fields?: { name: string; value: string; inline?: boolean }[] }): Promise<DiscordMessage<boolean>> {
+    try {
+      const channel = await this.channels.fetch(channelId);
+      if (!channel || !channel.isTextBased()) throw new Error(`Channel ${channelId} 不是文本频道`);
+      const embed = this.createEmbedFromData(embedData);
+      const msg = await (channel as TextChannel).send({ embeds: [embed] });
+      plugin.logger.info(`Discord Bot ${this.$id} 发送 Embed 到 ${channelId}`);
+      return msg;
+    } catch (error) {
+      plugin.logger.error(`Discord Bot ${this.$id} 发送 Embed 失败:`, error);
+      throw error;
+    }
+  }
+
+  async createForumPost(channelId: string, name: string, content: string, tags?: string[]): Promise<ThreadChannel> {
+    try {
+      const channel = await this.channels.fetch(channelId);
+      if (!channel || channel.type !== ChannelType.GuildForum) throw new Error(`Channel ${channelId} 不是论坛频道`);
+      const forumChannel = channel as any;
+      const options: any = {
+        name,
+        message: { content },
+      };
+      if (tags?.length && forumChannel.availableTags?.length) {
+        const tagIds = forumChannel.availableTags
+          .filter((t: any) => tags.includes(t.name))
+          .map((t: any) => t.id);
+        if (tagIds.length) options.appliedTags = tagIds;
+      }
+      const thread = await forumChannel.threads.create(options);
+      plugin.logger.info(`Discord Bot ${this.$id} 创建论坛帖 "${name}" (channel ${channelId})`);
+      return thread;
+    } catch (error) {
+      plugin.logger.error(`Discord Bot ${this.$id} 创建论坛帖失败:`, error);
+      throw error;
+    }
+  }
+
   // 处理文件段
   async handleFileSegment(
     data: any,
@@ -1362,8 +1428,8 @@ class DiscordAdapter extends Adapter<DiscordBot> {
   async start(): Promise<void> {
     this.registerDiscordTools();
     this.declareSkill({
-      description: 'Discord 服务器管理能力，包括成员管理（踢人、封禁、解封、超时、改昵称）、角色管理（添加/移除角色、角色列表）、服务器信息查询（成员列表、服务器信息）。',
-      keywords: ['Discord', 'DC', '服务器管理', '角色'],
+      description: 'Discord 服务器管理能力，包括成员管理（踢人、封禁、解封、超时、改昵称）、角色管理（添加/移除角色、角色列表）、服务器信息查询（成员列表、服务器信息）、帖子/论坛管理、消息反应、富文本嵌入消息。',
+      keywords: ['Discord', 'DC', '服务器管理', '角色', 'thread', '帖子', 'react', '反应', 'embed', '嵌入', 'forum', '论坛'],
       tags: ['discord', '服务器管理', '社交平台'],
       conventions: '服务器和用户均使用字符串 Snowflake ID 标识。guild_id 为服务器 ID，user_id 为用户 ID。调用工具时 bot 参数应填当前上下文的 Bot ID，guild_id 应填当前场景 ID。',
     });
@@ -1632,6 +1698,124 @@ class DiscordAdapter extends Adapter<DiscordBot> {
         const bot = this.bots.get(botId);
         if (!bot) throw new Error(`Bot ${botId} 不存在`);
         return await bot.getGuildInfo(guild_id);
+      },
+    });
+
+    // 创建帖子
+    this.addTool({
+      name: 'discord_create_thread',
+      description: '在 Discord 频道中创建帖子/子线程',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          channel_id: { type: 'string', description: '频道 ID' },
+          name: { type: 'string', description: '帖子标题' },
+          message_id: { type: 'string', description: '基于某条消息创建（可选）' },
+          auto_archive_duration: { type: 'number', description: '自动归档时间（分钟：60/1440/4320/10080）' },
+        },
+        required: ['bot', 'channel_id', 'name'],
+      },
+      platforms: ['discord'],
+      scopes: ['channel'],
+      permissionLevel: 'user',
+      execute: async (args) => {
+        const { bot: botId, channel_id, name, message_id, auto_archive_duration } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const thread = await bot.createThread(channel_id, name, message_id, auto_archive_duration);
+        return { success: true, thread_id: thread.id, message: `帖子 "${name}" 已创建` };
+      },
+    });
+
+    // 消息反应
+    this.addTool({
+      name: 'discord_react',
+      description: '对 Discord 消息添加表情反应',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          channel_id: { type: 'string', description: '频道 ID' },
+          message_id: { type: 'string', description: '消息 ID' },
+          emoji: { type: 'string', description: '表情（Unicode 表情或自定义表情如 <:name:id>）' },
+        },
+        required: ['bot', 'channel_id', 'message_id', 'emoji'],
+      },
+      platforms: ['discord'],
+      scopes: ['channel', 'private'],
+      permissionLevel: 'user',
+      execute: async (args) => {
+        const { bot: botId, channel_id, message_id, emoji } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        await bot.addReaction(channel_id, message_id, emoji);
+        return { success: true, message: `已添加反应 ${emoji}` };
+      },
+    });
+
+    // 发送 Embed
+    this.addTool({
+      name: 'discord_send_embed',
+      description: '发送 Discord 富文本嵌入消息（Embed）',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          channel_id: { type: 'string', description: '频道 ID' },
+          title: { type: 'string', description: 'Embed 标题' },
+          description: { type: 'string', description: 'Embed 描述' },
+          color: { type: 'number', description: '颜色值（十进制，如 0x00ff00 = 65280）' },
+          url: { type: 'string', description: '标题链接（可选）' },
+          fields: { type: 'string', description: '字段，JSON 格式: [{"name":"k","value":"v","inline":false}]' },
+        },
+        required: ['bot', 'channel_id'],
+      },
+      platforms: ['discord'],
+      scopes: ['channel', 'private'],
+      permissionLevel: 'user',
+      execute: async (args) => {
+        const { bot: botId, channel_id, title, description, color, url, fields } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const embedData: any = {};
+        if (title) embedData.title = title;
+        if (description) embedData.description = description;
+        if (color) embedData.color = color;
+        if (url) embedData.url = url;
+        if (fields) {
+          try { embedData.fields = JSON.parse(fields); } catch { return { success: false, message: 'fields 格式错误，应为 JSON 数组' }; }
+        }
+        const msg = await bot.sendEmbed(channel_id, embedData);
+        return { success: true, message_id: msg.id, message: 'Embed 已发送' };
+      },
+    });
+
+    // 论坛帖子
+    this.addTool({
+      name: 'discord_forum_post',
+      description: '在 Discord 论坛频道中创建帖子',
+      parameters: {
+        type: 'object',
+        properties: {
+          bot: { type: 'string', description: 'Bot 名称' },
+          channel_id: { type: 'string', description: '论坛频道 ID' },
+          name: { type: 'string', description: '帖子标题' },
+          content: { type: 'string', description: '帖子内容' },
+          tags: { type: 'string', description: '标签名，逗号分隔（可选）' },
+        },
+        required: ['bot', 'channel_id', 'name', 'content'],
+      },
+      platforms: ['discord'],
+      scopes: ['channel'],
+      permissionLevel: 'user',
+      execute: async (args) => {
+        const { bot: botId, channel_id, name, content, tags } = args;
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        const tagList = tags ? tags.split(',').map((t: string) => t.trim()) : undefined;
+        const thread = await bot.createForumPost(channel_id, name, content, tagList);
+        return { success: true, thread_id: thread.id, message: `论坛帖 "${name}" 已创建` };
       },
     });
 
