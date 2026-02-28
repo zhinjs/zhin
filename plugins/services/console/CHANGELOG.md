@@ -1,5 +1,13 @@
 # @zhin.js/console
 
+## 1.0.34
+
+### Patch Changes
+
+- 631da6e: fix: 约定公开路由前缀/pub
+- Updated dependencies [631da6e]
+  - @zhin.js/http@1.0.31
+
 ## 1.0.33
 
 ### Patch Changes

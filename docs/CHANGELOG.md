@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.14
+
+### Patch Changes
+
+- 631da6e: fix: 约定公开路由前缀/pub
+
 ## 1.0.13
 
 ### Patch Changes
