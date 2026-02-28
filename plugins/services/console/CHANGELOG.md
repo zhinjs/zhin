@@ -1,5 +1,16 @@
 # @zhin.js/console
 
+## 1.0.32
+
+### Patch Changes
+
+- 432d0a5: fix: 鉴权优化
+- Updated dependencies [432d0a5]
+- Updated dependencies [6d94111]
+  - @zhin.js/http@1.0.29
+  - @zhin.js/core@1.0.36
+  - zhin.js@1.0.36
+
 ## 1.0.31
 
 ### Patch Changes

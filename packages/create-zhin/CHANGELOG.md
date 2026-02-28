@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.30
+
+### Patch Changes
+
+- 6d94111: fix: 增加 github 适配器,更改 auth 为 token auth
+
 ## 1.0.29
 
 ### Patch Changes

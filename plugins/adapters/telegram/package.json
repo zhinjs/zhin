@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-telegram",
-  "version": "1.0.20",
+  "version": "1.0.21",
   "description": "Zhin.js adapter for Telegram",
   "type": "module",
   "main": "./lib/index.js",

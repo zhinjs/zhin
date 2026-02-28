@@ -1,5 +1,34 @@
 # test-bot
 
+## 0.1.33
+
+### Patch Changes
+
+- 6d94111: fix: 增加 github 适配器,更改 auth 为 token auth
+- Updated dependencies [432d0a5]
+- Updated dependencies [6d94111]
+  - @zhin.js/console@1.0.32
+  - @zhin.js/http@1.0.29
+  - @zhin.js/adapter-icqq@1.0.43
+  - @zhin.js/adapter-sandbox@1.0.43
+  - @zhin.js/adapter-dingtalk@1.0.23
+  - @zhin.js/adapter-discord@1.0.38
+  - @zhin.js/adapter-github@0.1.1
+  - @zhin.js/adapter-lark@1.0.39
+  - @zhin.js/adapter-onebot11@1.0.40
+  - @zhin.js/adapter-wechat-mp@0.1.24
+  - zhin.js@1.0.36
+  - @zhin.js/plugin-music@0.0.24
+  - @zhin.js/adapter-email@0.1.24
+  - @zhin.js/adapter-kook@1.0.36
+  - @zhin.js/adapter-qq@1.0.36
+  - @zhin.js/adapter-slack@1.0.21
+  - @zhin.js/adapter-telegram@1.0.21
+  - @zhin.js/mcp@1.0.19
+  - @zhin.js/plugin-60s@0.0.2
+  - @zhin.js/plugin-html-renderer@0.0.14
+  - @zhin.js/sensitive-filter@0.0.22
+
 ## 0.1.32
 
 ### Patch Changes

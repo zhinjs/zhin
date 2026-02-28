@@ -1,5 +1,13 @@
 # @zhin.js/cli
 
+## 1.0.33
+
+### Patch Changes
+
+- 6d94111: fix: 增加 github 适配器,更改 auth 为 token auth
+  - zhin.js@1.0.36
+  - @zhin.js/logger@0.1.20
+
 ## 1.0.32
 
 ### Patch Changes
