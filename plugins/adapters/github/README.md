@@ -61,6 +61,7 @@ bots:
     # webhook_secret: your-secret         # 可选，Webhook 签名验证
     # client_id: Iv1.xxxxxxxxxx           # 可选，OAuth 用户绑定
     # client_secret: xxxxxxxxxxxx         # 可选，配合 client_id 使用
+    # public_url: https://bot.example.com # 可选，OAuth 回调和绑定链接的公开地址
 
 plugins:
   - "@zhin.js/adapter-github"

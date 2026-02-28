@@ -267,7 +267,10 @@ export class GitHubBot implements Bot<GitHubBotConfig, IssueCommentPayload> {
 // ============================================================================
 
 class GitHubAdapter extends Adapter<GitHubBot> {
-  oauthBaseUrl: string | null = null;
+  get publicUrl(): string | undefined {
+    const bot = this.bots.values().next().value as GitHubBot | undefined;
+    return bot?.$config.public_url?.replace(/\/+$/, '');
+  }
 
   constructor(plugin: Plugin) {
     super(plugin, 'github', []);
@@ -332,8 +335,8 @@ class GitHubAdapter extends Adapter<GitHubBot> {
         return;
       }
 
-      this.oauthBaseUrl = ctx.origin;
-      const redirectUri = `${ctx.origin}/github/oauth/callback`;
+      const base = this.publicUrl || ctx.origin;
+      const redirectUri = `${base}/github/oauth/callback`;
       const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${OAUTH_SCOPES}&state=${state}`;
       ctx.redirect(url);
     });
@@ -822,10 +825,30 @@ class GitHubAdapter extends Adapter<GitHubBot> {
             expires: Date.now() + OAUTH_STATE_TTL,
           });
 
-          const baseUrl = this.oauthBaseUrl || 'http://localhost:8086';
+          const baseUrl = this.publicUrl;
+          if (!baseUrl) {
+            return '❌ 未配置 public_url，无法生成 OAuth 链接\n💡 请在 bot 配置中添加 public_url（如 https://bot.example.com）';
+          }
           const link = `${baseUrl}/github/oauth?state=${encodeURIComponent(state)}`;
+          const fullText = `🔗 请点击以下链接授权你的 GitHub 账号：\n\n${link}\n\n⏱️ 链接有效期 5 分钟`;
 
-          return `🔗 请点击以下链接授权你的 GitHub 账号：\n\n${link}\n\n⏱️ 链接有效期 5 分钟`;
+          // 由工具直接发到用户，避免 AI 总结时把链接吞掉
+          try {
+            const targetAdapter = root.inject(msg.$adapter)
+            if (targetAdapter instanceof Adapter) {
+              await targetAdapter.sendMessage({
+                context: msg.$adapter,
+                bot: msg.$bot,
+                id: msg.$channel.id,
+                type: msg.$channel.type,
+                content: fullText,
+              });
+            }
+          } catch (e) {
+            logger.warn('github.bind 直发链接失败，将仅通过返回值返回链接', e);
+          }
+
+          return '已向当前会话发送绑定链接，请提醒用户查收并点击链接完成授权。';
         }),
     );
 

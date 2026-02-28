@@ -18,6 +18,8 @@ export interface GitHubBotConfig {
   client_id?: string;
   /** GitHub App OAuth: Client Secret */
   client_secret?: string;
+  /** 服务公开访问地址，用于 OAuth 回调和绑定链接（如 https://bot.example.com） */
+  public_url?: string;
 }
 
 // ── OAuth 用户绑定 ───────────────────────────────────────────────────
