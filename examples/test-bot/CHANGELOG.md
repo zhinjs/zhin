@@ -1,5 +1,13 @@
 # test-bot
 
+## 0.1.34
+
+### Patch Changes
+
+- d4a7daa: fix: github 优化
+- Updated dependencies [d4a7daa]
+  - @zhin.js/adapter-github@0.1.2
+
 ## 0.1.33
 
 ### Patch Changes

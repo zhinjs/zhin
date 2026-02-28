@@ -1,5 +1,11 @@
 # @zhin.js/adapter-github
 
+## 0.1.2
+
+### Patch Changes
+
+- d4a7daa: fix: github 优化
+
 ## 0.1.1
 
 ### Patch Changes
