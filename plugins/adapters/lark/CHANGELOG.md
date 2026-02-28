@@ -1,5 +1,11 @@
 # @zhin.js/adapter-lark
 
+## 1.0.41
+
+### Patch Changes
+
+- e23e732: fix: 增强平台 AI 能力
+
 ## 1.0.40
 
 ### Patch Changes

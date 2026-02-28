@@ -1,5 +1,12 @@
 # @zhin.js/adapter-github
 
+## 0.1.4
+
+### Patch Changes
+
+- e23e732: fix: 增强平台 AI 能力
+- bb0be4c: fix: 平台能力增强
+
 ## 0.1.3
 
 ### Patch Changes

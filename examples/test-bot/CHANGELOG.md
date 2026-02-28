@@ -1,5 +1,22 @@
 # test-bot
 
+## 0.1.36
+
+### Patch Changes
+
+- Updated dependencies [e23e732]
+- Updated dependencies [bb0be4c]
+  - @zhin.js/adapter-dingtalk@1.0.25
+  - @zhin.js/adapter-github@0.1.4
+  - @zhin.js/adapter-slack@1.0.23
+  - @zhin.js/adapter-icqq@1.0.45
+  - @zhin.js/adapter-kook@1.0.38
+  - @zhin.js/adapter-lark@1.0.41
+  - @zhin.js/adapter-qq@1.0.38
+  - @zhin.js/adapter-telegram@1.0.23
+  - @zhin.js/adapter-discord@1.0.40
+  - @zhin.js/plugin-music@0.0.26
+
 ## 0.1.35
 
 ### Patch Changes
