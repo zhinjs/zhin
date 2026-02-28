@@ -1,5 +1,33 @@
 # test-bot
 
+## 0.1.35
+
+### Patch Changes
+
+- a8ce720: fix: ai 优化,github 优化
+- Updated dependencies [a8ce720]
+  - @zhin.js/adapter-github@0.1.3
+  - zhin.js@1.0.37
+  - @zhin.js/adapter-icqq@1.0.44
+  - @zhin.js/adapter-sandbox@1.0.44
+  - @zhin.js/adapter-dingtalk@1.0.24
+  - @zhin.js/adapter-discord@1.0.39
+  - @zhin.js/adapter-email@0.1.25
+  - @zhin.js/adapter-kook@1.0.37
+  - @zhin.js/adapter-lark@1.0.40
+  - @zhin.js/adapter-onebot11@1.0.41
+  - @zhin.js/adapter-qq@1.0.37
+  - @zhin.js/adapter-slack@1.0.22
+  - @zhin.js/adapter-telegram@1.0.22
+  - @zhin.js/adapter-wechat-mp@0.1.25
+  - @zhin.js/console@1.0.33
+  - @zhin.js/http@1.0.30
+  - @zhin.js/mcp@1.0.20
+  - @zhin.js/plugin-60s@0.0.2
+  - @zhin.js/plugin-html-renderer@0.0.15
+  - @zhin.js/plugin-music@0.0.25
+  - @zhin.js/sensitive-filter@0.0.23
+
 ## 0.1.34
 
 ### Patch Changes

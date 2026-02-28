@@ -44,7 +44,7 @@
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {
-    "zhin.js": ">=1.0.36"
+    "zhin.js": ">=1.0.37"
   },
   "repository": {
     "type": "git",
