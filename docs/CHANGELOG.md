@@ -1,5 +1,12 @@
 # @zhin.js/docs
 
+## 1.0.13
+
+### Patch Changes
+
+- 432d0a5: fix: 鉴权优化
+- 6d94111: fix: 增加 github 适配器,更改 auth 为 token auth
+
 ## 1.0.12
 
 ### Patch Changes
