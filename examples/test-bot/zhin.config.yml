@@ -37,7 +37,7 @@ plugins:
   - "@zhin.js/adapter-github"
   - "@zhin.js/adapter-sandbox"
   - "@zhin.js/adapter-kook"
-  - "@zhin.js/adapter-icqq"
+  # - "@zhin.js/adapter-icqq"
   - "@zhin.js/adapter-qq"
   - "@zhin.js/plugin-html-renderer"
   - "@zhin.js/plugin-60s"

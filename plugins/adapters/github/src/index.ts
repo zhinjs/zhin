@@ -109,6 +109,14 @@ defineModel('github_oauth_users', {
 
 const VALID_EVENTS: EventType[] = ['push', 'issue', 'star', 'fork', 'unstar', 'pull_request'];
 
+function safeParseEvents(raw: any): EventType[] {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') {
+    try { const parsed = JSON.parse(raw); if (Array.isArray(parsed)) return parsed; } catch {}
+  }
+  return [];
+}
+
 // OAuth state 存储（内存，5分钟过期）
 const oauthStates = new Map<string, { platform: string; platformUid: string; expires: number }>();
 const OAUTH_STATE_TTL = 5 * 60 * 1000;
@@ -740,12 +748,13 @@ class GitHubAdapter extends Adapter<GitHubBot> {
 
           const where = { repo: repoStr, target_id: msg.$channel.id, target_type: msg.$channel.type, adapter: msg.$adapter, bot: msg.$bot };
           const [existing] = await model.select().where(where);
+          const eventsJson = JSON.stringify(subEvents);
           if (existing) {
-            await model.update({ events: subEvents }).where({ id: existing.id });
+            await model.update({ events: eventsJson }).where({ id: existing.id });
             return `✅ 已更新订阅 ${repoStr}\n📢 ${subEvents.join(', ')}`;
           }
           const { repo: _r, ...rest } = where;
-          await model.insert({ id: Date.now(), repo: repoStr, events: subEvents, ...rest });
+          await model.insert({ id: Date.now(), repo: repoStr, events: eventsJson, ...rest });
           return `✅ 已订阅 ${repoStr}\n📢 ${subEvents.join(', ')}\n💡 记得在 GitHub App 或仓库 Settings → Webhooks 中配置 Webhook`;
         }),
     );
@@ -782,7 +791,9 @@ class GitHubAdapter extends Adapter<GitHubBot> {
           if (!model) return '❌ 数据库未就绪';
           const subs = await model.select().where({ target_id: msg.$channel.id, target_type: msg.$channel.type, adapter: msg.$adapter, bot: msg.$bot });
           if (!subs?.length) return '📭 当前没有订阅';
-          return `📋 订阅 (${subs.length}):\n\n` + subs.map((s: any, i: number) => `${i + 1}. ${s.repo}\n   📢 ${(s.events || []).join(', ')}`).join('\n\n');
+          return `📋 订阅 (${subs.length}):\n\n` + subs.map((s: any, i: number) => {
+            return `${i + 1}. ${s.repo}\n   📢 ${safeParseEvents(s.events).join(', ')}`;
+          }).join('\n\n');
         }),
     );
 
@@ -936,25 +947,39 @@ class GitHubAdapter extends Adapter<GitHubBot> {
       case 'fork': eventType = 'fork'; break;
       case 'pull_request': eventType = 'pull_request'; break;
     }
-    if (!eventType) return;
+    if (!eventType) {
+      logger.debug(`dispatchNotification: 未知事件 ${eventName}，跳过`);
+      return;
+    }
 
     const repo = payload.repository.full_name;
     const db = root.inject('database') as any;
     const model = db?.models?.get('github_subscriptions');
-    if (!model) return;
+    if (!model) {
+      logger.warn('dispatchNotification: 数据库模型 github_subscriptions 未就绪');
+      return;
+    }
 
     const subs = await model.select().where({ repo });
+    logger.debug(`dispatchNotification: ${repo} ${eventName}(${eventType}) — 找到 ${subs?.length || 0} 条订阅`);
     if (!subs?.length) return;
 
     const text = formatNotification(eventName, payload);
     for (const sub of subs) {
       const s = sub as Subscription;
-      if (!s.events.includes(eventType)) continue;
+      const events = safeParseEvents(s.events);
+      if (!events.includes(eventType)) {
+        logger.debug(`dispatchNotification: ${s.adapter}:${s.target_id} 未订阅 ${eventType}，跳过`);
+        continue;
+      }
       try {
         const adapter = root.inject(s.adapter as any) as any;
-        if (adapter?.sendMessage) {
-          await adapter.sendMessage({ context: s.adapter, bot: s.bot, id: s.target_id, type: s.target_type, content: text });
+        if (!adapter?.sendMessage) {
+          logger.warn(`dispatchNotification: 适配器 ${s.adapter} 不存在或无 sendMessage 方法`);
+          continue;
         }
+        logger.info(`dispatchNotification: 推送 ${eventType} → ${s.adapter}:${s.bot}:${s.target_id}`);
+        await adapter.sendMessage({ context: s.adapter, bot: s.bot, id: s.target_id, type: s.target_type, content: text });
       } catch (e) {
         logger.error(`通知推送失败 → ${s.adapter}:${s.target_id}`, e);
       }

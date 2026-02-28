@@ -161,10 +161,17 @@ export class Agent {
   }
 
   /**
-   * 生成工具调用的去重 key
+   * 生成工具调用的去重 key（规范化参数以避免 "" vs "{}" 等差异）
    */
   private static toolCallKey(name: string, args: string): string {
-    return `${name}::${args}`;
+    let normalized: string;
+    try {
+      const parsed = JSON.parse(args || '{}');
+      normalized = JSON.stringify(parsed, Object.keys(parsed).sort());
+    } catch {
+      normalized = args || '';
+    }
+    return `${name}::${normalized}`;
   }
 
   /**
@@ -472,10 +479,9 @@ export class Agent {
           );
 
           if (results.length === 0) {
-            // 本轮全部重复
             consecutiveDuplicateRounds++;
+            logger.warn(`[第${state.iterations}轮] 检测到重复工具调用，已跳过执行，强制下轮文本回答`);
 
-            // 为每个重复的 tool_call 补上 tool 消息，保持协议完整性
             for (const tc of choice.message.tool_calls) {
               const key = Agent.toolCallKey(tc.function.name, tc.function.arguments);
               const previous = state.toolCalls.find(
@@ -489,7 +495,11 @@ export class Agent {
               });
             }
 
-            // 下一轮将 forceAnswer=true，通过不传 tools 参数来禁止工具调用
+            state.messages.push({
+              role: 'system',
+              content: '你已经获取了所需的全部信息，请直接用自然语言回答用户，不要再调用工具。',
+            });
+
             continue;
           }
 
@@ -504,6 +514,15 @@ export class Agent {
               role: 'tool',
               content: result,
               tool_call_id: toolCall.id,
+            });
+          }
+
+          // 如果工具返回的是最终结果（非查询中间步骤），引导模型直接回复
+          const allSucceeded = results.every(r => !r.result.startsWith('{'));
+          if (allSucceeded && results.length > 0) {
+            state.messages.push({
+              role: 'system',
+              content: '工具已返回结果。如果信息足够回答用户问题，请直接用自然语言回答，不要重复调用相同工具。',
             });
           }
 
