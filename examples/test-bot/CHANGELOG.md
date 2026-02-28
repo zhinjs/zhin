@@ -1,5 +1,32 @@
 # test-bot
 
+## 0.1.32
+
+### Patch Changes
+
+- 8502351: fix: token 优化
+  - zhin.js@1.0.35
+  - @zhin.js/adapter-icqq@1.0.42
+  - @zhin.js/adapter-sandbox@1.0.42
+  - @zhin.js/adapter-dingtalk@1.0.22
+  - @zhin.js/adapter-discord@1.0.37
+  - @zhin.js/adapter-email@0.1.23
+  - @zhin.js/adapter-kook@1.0.35
+  - @zhin.js/adapter-lark@1.0.38
+  - @zhin.js/adapter-onebot11@1.0.39
+  - @zhin.js/adapter-qq@1.0.35
+  - @zhin.js/adapter-slack@1.0.20
+  - @zhin.js/adapter-telegram@1.0.20
+  - @zhin.js/adapter-wechat-mp@0.1.23
+  - @zhin.js/console@1.0.31
+  - @zhin.js/plugin-github-notify@0.0.24
+  - @zhin.js/http@1.0.28
+  - @zhin.js/mcp@1.0.18
+  - @zhin.js/plugin-60s@0.0.2
+  - @zhin.js/plugin-html-renderer@0.0.13
+  - @zhin.js/plugin-music@0.0.23
+  - @zhin.js/sensitive-filter@0.0.21
+
 ## 0.1.31
 
 ### Patch Changes

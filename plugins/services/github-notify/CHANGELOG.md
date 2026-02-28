@@ -1,5 +1,12 @@
 # @zhin.js/plugin-github-notify
 
+## 0.0.24
+
+### Patch Changes
+
+- zhin.js@1.0.35
+- @zhin.js/http@1.0.28
+
 ## 0.0.23
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # @zhin.js/core
 
+## 1.0.35
+
+### Patch Changes
+
+- 8502351: fix: token 优化
+  - @zhin.js/database@1.0.22
+  - @zhin.js/logger@0.1.19
+  - @zhin.js/schema@1.0.19
+
 ## 1.0.34
 
 ### Patch Changes
