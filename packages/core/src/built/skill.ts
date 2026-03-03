@@ -232,21 +232,20 @@ export class SkillFeature extends Feature<Skill> {
         const pluginName = plugin.name;
 
         // 收集该插件注册的工具
-        const toolService = plugin.root.inject('tool' as any) as any;
+        const toolService = plugin.root.inject('tool') as { getToolsByPlugin?: (name: string) => Tool[] } | undefined;
         let tools: Tool[] = [];
 
         if (toolService && typeof toolService.getToolsByPlugin === 'function') {
           tools = toolService.getToolsByPlugin(pluginName);
         } else {
-          // 回退：从插件本地工具获取
           tools = plugin.getAllTools?.() || [];
         }
 
         // 聚合关键词：开发者声明 + 工具自带
         const allKeywords = new Set<string>(metadata.keywords || []);
         for (const tool of tools) {
-          if ((tool as any).keywords) {
-            for (const kw of (tool as any).keywords) {
+          if (tool.keywords) {
+            for (const kw of tool.keywords) {
               allKeywords.add(kw);
             }
           }

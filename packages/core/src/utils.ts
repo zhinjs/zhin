@@ -12,15 +12,21 @@ import {
 import { Message } from "./message.js";
 
 export function getValueWithRuntime(template: string, ctx: Dict) {
-  const result = evaluate(template, ctx);
-  if (result === `return(${template})`) return undefined;
-  return result;
+  return evaluate(template, ctx);
 }
-export const evaluate = <S, T = any>(exp: string, context: S) => {
-  const result = execute<S, T>(`return(${exp})`, context);
-  // 如果结果是原始表达式，说明访问被阻止，返回 undefined
-  if (result === `return(${exp})`) return undefined;
-  return result;
+/**
+ * Evaluate a single expression in a sandboxed vm context.
+ * Unlike `execute`, does NOT wrap in IIFE — the expression value is returned directly.
+ */
+export const evaluate = <S extends Record<string, unknown>, T = unknown>(exp: string, context: S): T | undefined => {
+  const script = getOrCompileScript(exp);
+  if (!script) return undefined;
+
+  try {
+    return script.runInNewContext(buildSandbox(context), { timeout: 200 }) as T;
+  } catch {
+    return undefined;
+  }
 };
 /**
  * 组合中间件,洋葱模型
@@ -95,14 +101,9 @@ function getOrCompileScript(code: string): vm.Script | null {
   return script;
 }
 
-/**
- * Safe expression evaluator using vm.runInNewContext.
- * Dangerous globals (require, process, global, Buffer, etc.) are blocked.
- */
-export const execute = <S, T = any>(exp: string, context: S): T => {
-  const sandbox: Record<string, any> = {
-    ...(context as any),
-    // Expose only safe process info
+function buildSandbox<S extends Record<string, unknown>>(context: S): Record<string, unknown> {
+  return {
+    ...context,
     process: {
       version: process.version,
       versions: process.versions,
@@ -115,7 +116,6 @@ export const execute = <S, T = any>(exp: string, context: S): T => {
       pid: process.pid,
       ppid: process.ppid,
     },
-    // Block dangerous globals
     global: undefined,
     globalThis: undefined,
     Buffer: undefined,
@@ -127,15 +127,19 @@ export const execute = <S, T = any>(exp: string, context: S): T => {
     Bun: undefined,
     Deno: undefined,
   };
+}
 
-  const script = getOrCompileScript(exp);
-  if (!script) return exp as T;
+/**
+ * Execute a code block in a sandboxed vm context.
+ * Supports `return` statements by wrapping in an IIFE.
+ * Throws on compilation or runtime errors.
+ */
+export const execute = <S extends Record<string, unknown>, T = unknown>(code: string, context: S): T => {
+  const wrapped = `(function(){${code}})()`;
+  const script = getOrCompileScript(wrapped);
+  if (!script) throw new SyntaxError(`Failed to compile: ${code.slice(0, 80)}`);
 
-  try {
-    return script.runInNewContext(sandbox, { timeout: 200 }) as T;
-  } catch {
-    return exp as T;
-  }
+  return script.runInNewContext(buildSandbox(context), { timeout: 200 }) as T;
 };
 
 export function clearEvalCache(): void {
@@ -152,9 +156,8 @@ export function compiler(template: string, ctx: Dict) {
   const matched = [...template.matchAll(/\${([^}]*?)}/g)];
   for (const item of matched) {
     const tpl = item[1];
-    let value = getValueWithRuntime(tpl, ctx);
-    if (value === tpl) continue;
-    if (typeof value !== "string") value = JSON.stringify(value, null, 2);
+    const raw = getValueWithRuntime(tpl, ctx);
+    const value = typeof raw === 'string' ? raw : (raw == null ? 'undefined' : JSON.stringify(raw, null, 2));
     template = template.replace(`\${${item[1]}}`, value);
   }
   return template;
@@ -401,14 +404,15 @@ export namespace Time {
 
   export function parseDate(date: string) {
     const parsed = parseTime(date);
+    let dateInput: string | number = date;
     if (parsed) {
-      date = (Date.now() + parsed) as any;
+      dateInput = Date.now() + parsed;
     } else if (/^\d{1,2}(:\d{1,2}){1,2}$/.test(date)) {
-      date = `${new Date().toLocaleDateString()}-${date}`;
+      dateInput = `${new Date().toLocaleDateString()}-${date}`;
     } else if (/^\d{1,2}-\d{1,2}-\d{1,2}(:\d{1,2}){1,2}$/.test(date)) {
-      date = `${new Date().getFullYear()}-${date}`;
+      dateInput = `${new Date().getFullYear()}-${date}`;
     }
-    return date ? new Date(date) : new Date();
+    return dateInput ? new Date(dateInput) : new Date();
   }
 
   export function formatTimeShort(ms: number) {

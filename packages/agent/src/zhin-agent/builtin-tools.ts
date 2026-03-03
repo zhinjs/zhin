@@ -147,7 +147,7 @@ export function createScheduleFollowUpTool(
   const botId = context.botId || '';
   const senderId = context.senderId || '';
   const sceneId = context.sceneId || '';
-  const sceneType = (context.message as any)?.$channel?.type || 'private';
+  const sceneType = context.message?.$channel?.type || 'private';
 
   return {
     name: 'schedule_followup',
@@ -208,7 +208,7 @@ export function createSpawnTaskTool(
   const botId = context.botId || '';
   const senderId = context.senderId || '';
   const sceneId = context.sceneId || '';
-  const sceneType = (context.message as any)?.$channel?.type || 'private';
+  const sceneType = context.message?.$channel?.type || 'private';
 
   return {
     name: 'spawn_task',

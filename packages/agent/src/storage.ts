@@ -117,7 +117,7 @@ export class DatabaseStorageBackend<T extends Record<string, any>> implements St
   async clear(): Promise<void> {
     const all = await this.list();
     for (const item of all) {
-      const key = (item as any)[this.options.keyField];
+      const key = (item as Record<string, unknown>)[this.options.keyField] as string | undefined;
       if (key) await this.delete(key);
     }
   }

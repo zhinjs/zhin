@@ -587,7 +587,7 @@ function commandToToolFn(
         
         const plugin = getPlugin();
         const result = await command.handle(tempMessage, plugin);
-        return result;
+        return result as import("../types.js").ToolResult;
       }
       
       return { 

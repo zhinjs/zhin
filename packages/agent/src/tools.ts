@@ -3,7 +3,7 @@
  * 内置工具集合 - 使用 ZhinTool 类定义
  */
 
-import { ZhinTool, type Tool } from '@zhin.js/core';
+import { ZhinTool, type Tool, evaluate, execute } from '@zhin.js/core';
 
 /**
  * 计算器工具
@@ -16,7 +16,6 @@ export const calculatorTool = new ZhinTool('calculator')
   .param('expression', { type: 'string', description: '数学表达式，例如 "2 + 3 * 4" 或 "sqrt(16)"' }, true)
   .execute(async ({ expression }) => {
     try {
-      // 安全的数学表达式求值
       const sanitized = (expression as string)
         .replace(/[^0-9+\-*/().^eEsincosqrtabspowlogxMathPI\s]/g, '')
         .replace(/\bsqrt\b/g, 'Math.sqrt')
@@ -30,7 +29,8 @@ export const calculatorTool = new ZhinTool('calculator')
         .replace(/\bE\b(?![0-9])/g, 'Math.E')
         .replace(/\^/g, '**');
 
-      const result = new Function(`return ${sanitized}`)();
+      const result = evaluate(sanitized, { Math });
+      if (result === undefined) return { error: '无法计算表达式', expression };
       return { result, expression };
     } catch (error) {
       return { error: '无法计算表达式', expression };
@@ -104,13 +104,10 @@ export const codeRunnerTool = new ZhinTool('run_code')
   .param('code', { type: 'string', description: 'JavaScript 代码' }, true)
   .execute(async ({ code }) => {
     try {
-      // 简单的沙箱执行（生产环境应使用 vm2 或 isolated-vm）
-      const result = new Function(`
-        'use strict';
-        const console = { log: (...args) => args.join(' ') };
-        return (function() { ${code} })();
-      `)();
-      
+      const sandbox = {
+        console: { log: (...args: unknown[]) => args.map(String).join(' ') },
+      };
+      const result = execute(code as string, sandbox);
       return {
         success: true,
         result: result !== undefined ? String(result) : 'undefined',

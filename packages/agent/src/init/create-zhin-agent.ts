@@ -3,7 +3,7 @@
  * (follow-up sender, subagent manager, cron engine, scheduler).
  */
 import * as path from 'path';
-import { getPlugin, Scheduler, getScheduler, setScheduler } from '@zhin.js/core';
+import { getPlugin, Scheduler, getScheduler, setScheduler, type MessageType, type SendOptions } from '@zhin.js/core';
 import { ZhinAgent } from '../zhin-agent/index.js';
 import { createBuiltinTools } from '../builtin-tools.js';
 import { resolveSkillInstructionMaxChars, DEFAULT_CONFIG } from '../zhin-agent/config.js';
@@ -30,7 +30,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
 
     // Follow-up reminder sender
     agent.setFollowUpSender(async (record) => {
-      const adapter = root.inject(record.platform as any) as any;
+      const adapter = root.inject(record.platform) as { sendMessage?: (opts: SendOptions) => Promise<string> } | undefined;
       if (!adapter || typeof adapter.sendMessage !== 'function') {
         logger.warn(`[跟进提醒] 找不到适配器: ${record.platform}`);
         return;
@@ -39,7 +39,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
         context: record.platform,
         bot: record.bot_id,
         id: record.scene_id,
-        type: record.scene_type as any,
+        type: record.scene_type as MessageType,
         content: `⏰ 定时提醒：${record.message}`,
       });
     });
@@ -54,15 +54,15 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
         return {
           name: t.name,
           description: t.description,
-          parameters: t.parameters as any,
-          execute: t.execute as (args: Record<string, any>) => Promise<any>,
+          parameters: t.parameters,
+          execute: t.execute as (args: Record<string, any>) => Promise<unknown>,
           tags: t.tags,
           keywords: t.keywords,
         };
       });
     });
     agent.setSubagentSender(async (origin, content) => {
-      const adapter = root.inject(origin.platform as any) as any;
+      const adapter = root.inject(origin.platform) as { sendMessage?: (opts: SendOptions) => Promise<string> } | undefined;
       if (!adapter || typeof adapter.sendMessage !== 'function') {
         logger.warn(`[子任务] 找不到适配器: ${origin.platform}`);
         return;
@@ -71,17 +71,17 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
         context: origin.platform,
         bot: origin.botId,
         id: origin.sceneId,
-        type: origin.sceneType as any,
+        type: origin.sceneType as MessageType,
         content,
       });
     });
 
     // Persistent cron engine
     let cronEngine: PersistentCronEngine | null = null;
-    const cronFeature = root.inject('cron' as any);
+    const cronFeature = root.inject('cron') as import('@zhin.js/core').CronFeature | undefined;
     if (cronFeature && typeof cronFeature.add === 'function') {
       const dataDir = path.join(process.cwd(), 'data');
-      const addCron = (c: any) => cronFeature.add(c, 'cron-engine');
+      const addCron: import('../cron-engine.js').AddCronFn = (c) => cronFeature.add(c, 'cron-engine');
       const runner = async (prompt: string) => {
         if (!refs.zhinAgent) return;
         await refs.zhinAgent.process(prompt, {

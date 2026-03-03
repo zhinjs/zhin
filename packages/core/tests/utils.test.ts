@@ -140,9 +140,7 @@ describe('evaluate and execute', () => {
   })
 
   it('should handle invalid expressions gracefully', () => {
-    const result = execute('invalid syntax here !!!', {})
-    // 无效表达式会被 try-catch 捕获，返回 undefined
-    expect(result).toBeUndefined()
+    expect(() => execute('invalid syntax here !!!', {})).toThrow()
   })
 
   it('should provide safe process context', () => {

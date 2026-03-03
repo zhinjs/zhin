@@ -22,7 +22,7 @@ export function toAgentTool(tool: Tool, context?: ToolContext): AgentTool {
     contextKey: string;
     paramType: string;
   }> = [];
-  let cleanParameters: any = tool.parameters;
+  let cleanParameters: AgentTool['parameters'] = tool.parameters;
 
   if (context && tool.parameters?.properties) {
     const props = tool.parameters.properties as Record<string, any>;
@@ -30,7 +30,7 @@ export function toAgentTool(tool: Tool, context?: ToolContext): AgentTool {
     const filteredRequired: string[] = [];
 
     for (const [key, schema] of Object.entries(props)) {
-      if (schema.contextKey && (context as any)[schema.contextKey] != null) {
+      if (schema.contextKey && (context as Record<string, unknown>)[schema.contextKey] != null) {
         contextInjections.push({
           paramName: key,
           contextKey: schema.contextKey,
@@ -56,12 +56,12 @@ export function toAgentTool(tool: Tool, context?: ToolContext): AgentTool {
   const at: AgentTool = {
     name: tool.name,
     description: tool.description,
-    parameters: cleanParameters as any,
+    parameters: cleanParameters,
     execute: context
-      ? (args: Record<string, any>) => {
+      ? async (args: Record<string, any>) => {
           const enrichedArgs = { ...args };
           for (const { paramName, contextKey, paramType } of contextInjections) {
-            let value = (context as any)[contextKey];
+            let value = (context as Record<string, unknown>)[contextKey];
             if (paramType === 'number' && typeof value === 'string') {
               value = Number(value);
             } else if (paramType === 'string' && typeof value !== 'string') {
@@ -71,13 +71,13 @@ export function toAgentTool(tool: Tool, context?: ToolContext): AgentTool {
           }
           return originalExecute(enrichedArgs, context);
         }
-      : originalExecute,
+      : async (args: Record<string, any>) => originalExecute(args),
   };
   if (tool.tags?.length) at.tags = tool.tags;
   if (tool.keywords?.length) at.keywords = tool.keywords;
   if (tool.permissionLevel) at.permissionLevel = PERM_MAP[tool.permissionLevel] ?? 0;
   if (tool.preExecutable) at.preExecutable = true;
-  if ((tool as any).kind) at.kind = (tool as any).kind;
+  if (tool.kind) at.kind = tool.kind;
   return at;
 }
 

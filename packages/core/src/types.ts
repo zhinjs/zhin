@@ -14,7 +14,7 @@ export interface Models extends Record<string,object>{
   SystemLog: SystemLog
   User: User,
 }
-export type MaybePromise<T> = T extends Promise<infer U> ? T|U : T|Promise<T>;
+export type MaybePromise<T> = [T] extends [Promise<infer U>] ? T|U : T|Promise<T>;
 export interface RegisteredAdapters {
   process: ProcessAdapter;
 }
@@ -71,6 +71,8 @@ export interface MessageSender{
   id: string;
   name?: string;
   permissions?:string[]
+  /** 平台侧角色标识（owner / admin / member 等） */
+  role?: string;
 }
 /**
  * 通用字典类型
@@ -310,11 +312,11 @@ export type ToolPermissionLevel = 'user' | 'group_admin' | 'group_owner' | 'bot_
  * execute 可返回以下任一形式：
  * - string: 直接作为文本回复
  * - { text: string }: 结构化文本
- * - { data: any; format?: string }: 结构化数据
+ * - { data: unknown; format?: string }: 结构化数据
  * - void/null/undefined: 无回复
- * - 其他: 自动 JSON.stringify
+ * - Record / Array: 自动 JSON.stringify
  */
-export type ToolResult = string | void | null | undefined | { text: string } | { data: any; format?: string } | any;
+export type ToolResult = string | void | null | undefined | { text: string } | { data: unknown; format?: string } | Record<string, unknown> | unknown[];
 
 /**
  * 统一的 Tool 定义（支持泛型参数类型推断）。

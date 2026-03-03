@@ -255,8 +255,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     tool: Tool,
     generateCommand: boolean = true
   ): () => void {
-    // 尝试使用 ToolFeature
-    const toolService = this.root.inject('tool' as any) as any;
+    const toolService = this.root.inject('tool') as { addTool?: (tool: Tool, name: string, gen: boolean) => () => void } | undefined;
     if (toolService && typeof toolService.addTool === 'function') {
       const dispose = toolService.addTool(tool, this.name, generateCommand);
       this.#disposables.add(dispose);
@@ -319,8 +318,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
    * 优先使用 ToolService，否则回退到本地收集
    */
   collectAllTools(): Tool[] {
-    // 尝试使用 ToolService
-    const toolService = this.root.inject('tool' as any) as any;
+    const toolService = this.root.inject('tool') as { collectAll?: (root: Plugin) => Tool[] } | undefined;
     if (toolService && typeof toolService.collectAll === 'function') {
       return toolService.collectAll(this.root);
     }
@@ -421,16 +419,15 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
       if (!dispose) return;
       const disposeFn = async (name: keyof Plugin.Contexts) => {
         if (contexts.includes(name)) {
-          await dispose(this.inject(name) as any)
+          await dispose(this.inject(name) as ArrayItem<ContextList<T>>)
         }
         this.off('context.dispose', disposeFn)
         sideEffect.finished = false;
       }
       this.on('context.dispose', disposeFn)
-      // 确保 dispose 时清理监听器（只注册一次）
       const cleanupOnDispose = () => {
         this.off('context.dispose', disposeFn)
-        dispose(this.inject(args[0] as any) as any)
+        dispose(this.inject(args[0] as unknown as keyof Plugin.Contexts) as unknown as ArrayItem<ContextList<T>>)
       }
       this.once('dispose', cleanupOnDispose)
     }
@@ -444,9 +441,11 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     if (!this.#contextsIsReady(contexts)) return
     contextReadyCallback()
   }
-  inject<T extends keyof Plugin.Contexts>(name: T): Plugin.Contexts[T] | undefined {
-    const context = this.root.contexts.get(name as string);
-    return context?.value as Plugin.Contexts[T];
+  inject<T extends keyof Plugin.Contexts>(name: T): Plugin.Contexts[T] | undefined;
+  inject(name: string): unknown;
+  inject(name: string): unknown {
+    const context = this.root.contexts.get(name);
+    return context?.value;
   }
   #contextsIsReady<CS extends (keyof Plugin.Contexts)[]>(contexts: CS) {
     if (!contexts.length) return true
@@ -669,7 +668,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
       if (context.extensions) {
         for (const key of Object.keys(context.extensions)) {
           if (Plugin[extensionOwnersKey].get(key) === name) {
-            delete (Plugin.prototype as any)[key];
+            delete (Plugin.prototype as unknown as Record<string, unknown>)[key];
             Plugin[extensionOwnersKey].delete(key);
           }
         }
@@ -783,11 +782,11 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
       const context: Context<T> = {
         name: feature.name as T,
         description: feature.desc,
-        value: feature as any,
+        value: feature as Plugin.Contexts[T],
         mounted: feature.mounted
           ? async (plugin: Plugin) => {
               await feature.mounted!(plugin);
-              return feature as any;
+              return feature as Plugin.Contexts[T];
             }
           : undefined,
         dispose: feature.dispose
@@ -929,7 +928,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     for (const key of Plugin.#coreMethods) {
       const value = proto[key];
       if (typeof value === "function") {
-        (this as any)[key] = value.bind(this);
+        (this as Record<string, unknown>)[key] = value.bind(this);
       }
     }
   }

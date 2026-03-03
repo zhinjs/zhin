@@ -224,12 +224,12 @@ ${preExecutedData ? `\n已自动获取的数据：${preExecutedData}\n` : ''}
     const agentTool: AgentTool = {
       name: tool.name,
       description: tool.description,
-      parameters: tool.parameters as any,
-      execute: tool.execute,
+      parameters: tool.parameters,
+      execute: async (args) => tool.execute(args),
     };
     if (tool.tags?.length) agentTool.tags = tool.tags;
     if (tool.permissionLevel) agentTool.permissionLevel = AIService.PERM_MAP[tool.permissionLevel] ?? 0;
-    if ((tool as any).keywords?.length) agentTool.keywords = (tool as any).keywords;
+    if (tool.keywords?.length) agentTool.keywords = tool.keywords;
     return agentTool;
   }
 

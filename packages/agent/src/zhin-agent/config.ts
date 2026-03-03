@@ -25,7 +25,7 @@ export function inferModelSize(modelName: string): ModelSizeHint {
  * Priority: explicit config > model name inference.
  */
 export function resolveModelSize(config: Required<ZhinAgentConfig>, modelName: string): ModelSizeHint {
-  if (config.modelSizeHint && config.modelSizeHint !== ('' as any)) return config.modelSizeHint;
+  if (config.modelSizeHint && (config.modelSizeHint as string) !== '') return config.modelSizeHint as ModelSizeHint;
   return inferModelSize(modelName);
 }
 
@@ -80,7 +80,7 @@ export interface ZhinAgentConfig {
   maxSubagentIterations?: number;
   subagentTools?: string[];
   /** 模型大小提示，影响技能指令截断长度。留空则根据模型名自动推断 */
-  modelSizeHint?: 'small' | 'medium' | 'large';
+  modelSizeHint?: '' | 'small' | 'medium' | 'large';
   /** 技能指令最大字符数（覆盖 modelSizeHint 推断值） */
   skillInstructionMaxChars?: number;
 }
@@ -108,6 +108,6 @@ export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   execAsk: false,
   maxSubagentIterations: 15,
   subagentTools: [],
-  modelSizeHint: '' as any,
+  modelSizeHint: '',
   skillInstructionMaxChars: 0,
 };

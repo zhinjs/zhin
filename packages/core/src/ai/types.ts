@@ -51,10 +51,11 @@ export interface JsonSchema {
   properties?: Record<string, JsonSchema>;
   required?: string[];
   items?: JsonSchema;
-  enum?: any[];
+  enum?: unknown[];
   description?: string;
-  default?: any;
-  [key: string]: any;
+  default?: unknown;
+  /** JSON Schema allows arbitrary extension properties */
+  [key: string]: any; // eslint-disable-line @typescript-eslint/no-explicit-any -- JSON Schema spec requires open index
 }
 
 // ============================================================================
@@ -183,7 +184,7 @@ export interface AgentTool {
   name: string;
   description: string;
   parameters: JsonSchema;
-  execute: (args: Record<string, any>) => Promise<any>;
+  execute: (args: Record<string, any>) => Promise<unknown>;
   /** 工具标签，用于分类和快速匹配 */
   tags?: string[];
   /** 触发关键词，用户消息包含这些词时优先选择此工具 */

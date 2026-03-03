@@ -197,10 +197,12 @@ export class PersistentCronEngine {
    * 卸载所有由本引擎注册的定时任务（用于 dispose）
    */
   unload(): void {
-    for (const dispose of this.disposes.values()) {
+    for (const [id, dispose] of this.disposes) {
       try {
         dispose();
-      } catch (_) {}
+      } catch (e) {
+        logger.warn(`Cron dispose failed for ${id}:`, e);
+      }
     }
     this.disposes.clear();
   }

@@ -12,8 +12,8 @@ export function registerDbModels(): void {
   const plugin = getPlugin();
   const { logger } = plugin;
 
-  const defineModel = (plugin as any).defineModel as
-    | ((name: string, def: any) => void)
+  const defineModel = (plugin as unknown as Record<string, unknown>).defineModel as
+    | ((name: string, def: Record<string, unknown>) => void)
     | undefined;
 
   if (typeof defineModel === 'function') {

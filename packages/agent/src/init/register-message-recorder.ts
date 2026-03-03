@@ -16,7 +16,7 @@ export function registerMessageRecorder(refs: AIServiceRefs): void {
         platform: message.$adapter,
         scene_id: message.$channel?.id || message.$sender.id,
         scene_type: message.$channel?.type || 'private',
-        scene_name: (message.$channel as any)?.name || '',
+        scene_name: (message.$channel as { name?: string })?.name || '',
         sender_id: message.$sender.id,
         sender_name: message.$sender.name || message.$sender.id,
         message:

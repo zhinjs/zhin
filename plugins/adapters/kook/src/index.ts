@@ -747,9 +747,7 @@ export class KookAdapter extends Adapter<KookBot> {
   }
 
   createBot(config: KookBotConfig): KookBot {
-    const bot = new KookBot(this, config);
-    this.bots.set(bot.$id, bot);
-    return bot;
+    return new KookBot(this, config);
   }
 
   // ── IGroupManagement 标准群管方法 ──────────────────────────────────
@@ -800,10 +798,7 @@ export class KookAdapter extends Adapter<KookBot> {
   }
 
   async stop(): Promise<void> {
-    // 断开所有 bot 连接
-    for (const bot of this.bots.values()) {
-      await bot.$disconnect();
-    }
+    await super.stop();
     logger.info("KOOK 适配器已停止");
   }
 

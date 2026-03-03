@@ -354,7 +354,7 @@ Schema.extend('union', function (this: Schema, key: string, value: any) {
     for (const schema of this.options.list!) {
         try {
             return (schema as any)(value, key);
-        } catch (e) {}
+        } catch { /* schema mismatch, try next variant */ }
     }
     throw new Error(`${key} union type not match`);
 });

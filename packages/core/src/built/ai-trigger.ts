@@ -171,12 +171,12 @@ export function inferSenderPermissions<T extends object>(
   
   const isGroupOwner = senderPermissions.includes('owner') || 
                        senderPermissions.includes('group_owner') ||
-                       (message as any).$sender?.role === 'owner';
+                       message.$sender?.role === 'owner';
   
   const isGroupAdmin = isGroupOwner || 
                        senderPermissions.includes('admin') || 
                        senderPermissions.includes('group_admin') ||
-                       (message as any).$sender?.role === 'admin';
+                       message.$sender?.role === 'admin';
   
   let permissionLevel: ToolPermissionLevel = 'user';
   if (isOwner) permissionLevel = 'owner';

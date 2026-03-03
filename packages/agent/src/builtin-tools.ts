@@ -19,7 +19,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { Logger } from '@zhin.js/core';
+import { Logger, type PropertySchema } from '@zhin.js/core';
 import { ZhinTool } from '@zhin.js/core';
 
 // 从新模块中 re-export 向后兼容的函数
@@ -27,6 +27,10 @@ export { loadSoulPersona, loadToolsGuide, loadAgentsMemory } from './bootstrap.j
 
 const execAsync = promisify(exec);
 const logger = new Logger(null, 'builtin-tools');
+
+function errMsg(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
 
 /**
  * 获取数据目录路径
@@ -202,8 +206,8 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
           return files.length === 0
             ? `No files matching '${args.pattern}'`
             : `Found ${files.length} files:\n${files.join('\n')}`;
-        } catch (e: any) {
-          return `Error: ${e.message}`;
+        } catch (e: unknown) {
+          return `Error: ${errMsg(e)}`;
         }
       }),
   );
@@ -227,9 +231,10 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
             { cwd: process.cwd() },
           );
           return stdout.trim() || `No matches for '${args.pattern}'`;
-        } catch (e: any) {
-          if (e.code === 1) return `No matches for '${args.pattern}'`;
-          return `Error: ${e.message}`;
+        } catch (e: unknown) {
+          const err = e as { code?: number; message?: string };
+          if (err.code === 1) return `No matches for '${args.pattern}'`;
+          return `Error: ${errMsg(e)}`;
         }
       }),
   );
@@ -256,8 +261,9 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
           if (stdout.trim()) result += `STDOUT:\n${stdout.trim()}`;
           if (stderr.trim()) result += `${result ? '\n' : ''}STDERR:\n${stderr.trim()}`;
           return result || '(no output)';
-        } catch (e: any) {
-          return `Error (exit ${e.code || '?'}): ${e.message}\nSTDOUT:\n${e.stdout || ''}\nSTDERR:\n${e.stderr || ''}`;
+        } catch (e: unknown) {
+          const err = e as { code?: number; message?: string; stdout?: string; stderr?: string };
+          return `Error (exit ${err.code || '?'}): ${errMsg(e)}\nSTDOUT:\n${err.stdout || ''}\nSTDERR:\n${err.stderr || ''}`;
         }
       }),
   );
@@ -319,8 +325,8 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
           return results.map((r, i) =>
             `${i + 1}. ${r.title}\n   URL: ${r.url}\n   ${r.snippet}`,
           ).join('\n\n');
-        } catch (e: any) {
-          return `Error: ${e.message}`;
+        } catch (e: unknown) {
+          return `Error: ${errMsg(e)}`;
         }
       }),
   );
@@ -349,8 +355,8 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
             .trim();
           const maxLen = 20 * 1024;
           return text.length > maxLen ? text.slice(0, maxLen) + '\n...(truncated)' : text;
-        } catch (e: any) {
-          return `Error: ${e.message}`;
+        } catch (e: unknown) {
+          return `Error: ${errMsg(e)}`;
         }
       }),
   );
@@ -375,8 +381,8 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
             return `${status} ${i + 1}. ${item.title}${item.detail ? ' — ' + item.detail : ''}`;
           });
           return `📋 Tasks (${data.items.filter((i: any) => i.status === 'done').length}/${data.items.length} done):\n${lines.join('\n')}`;
-        } catch (e: any) {
-          return `Error: ${e.message}`;
+        } catch (e: unknown) {
+          return `Error: ${errMsg(e)}`;
         }
       }),
   );
@@ -388,7 +394,7 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
       .keyword('创建计划', '更新任务', '标记完成', 'todo')
       .tag('plan', 'todo')
       .kind('plan')
-      .param('items', { type: 'array', description: '任务列表 [{title, detail?, status: pending|in-progress|done}]' } as any, true)
+      .param('items', { type: 'array', description: '任务列表 [{title, detail?, status: pending|in-progress|done}]' } as PropertySchema<unknown[]>, true)
       .param('chat_id', { type: 'string', description: '聊天范围（可选）' })
       .execute(async (args) => {
         try {
@@ -399,8 +405,8 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
           await fs.promises.writeFile(todoPath, JSON.stringify(data, null, 2), 'utf-8');
           const done = args.items.filter((i: any) => i.status === 'done').length;
           return `✅ Tasks updated (${done}/${args.items.length} done)`;
-        } catch (e: any) {
-          return `Error: ${e.message}`;
+        } catch (e: unknown) {
+          return `Error: ${errMsg(e)}`;
         }
       }),
   );
@@ -421,8 +427,8 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
             : path.join(DATA_DIR, 'groups', args.chat_id || 'default', 'AGENTS.md');
           if (!fs.existsSync(memPath)) return 'No memory stored yet.';
           return await fs.promises.readFile(memPath, 'utf-8');
-        } catch (e: any) {
-          return `Error: ${e.message}`;
+        } catch (e: unknown) {
+          return `Error: ${errMsg(e)}`;
         }
       }),
   );
@@ -445,8 +451,8 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
           await fs.promises.mkdir(path.dirname(memPath), { recursive: true });
           await fs.promises.writeFile(memPath, args.content, 'utf-8');
           return `✅ Memory saved (${args.scope || 'chat'} scope)`;
-        } catch (e: any) {
-          return `Error: ${e.message}`;
+        } catch (e: unknown) {
+          return `Error: ${errMsg(e)}`;
         }
       }),
   );
@@ -478,8 +484,8 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
             }
           }
           return `Skill '${args.name}' not found. Check skills/ directory.`;
-        } catch (e: any) {
-          return `Error: ${e.message}`;
+        } catch (e: unknown) {
+          return `Error: ${errMsg(e)}`;
         }
       }),
   );
@@ -523,8 +529,8 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
 
           logger.info(`技能已安装: ${skillName} → ${skillPath}`);
           return `✅ 技能「${skillName}」已安装到 ${skillPath}。现在可以用 activate_skill("${skillName}") 激活它。`;
-        } catch (e: any) {
-          return `Error: ${e.message}`;
+        } catch (e: unknown) {
+          return `Error: ${errMsg(e)}`;
         }
       }),
   );

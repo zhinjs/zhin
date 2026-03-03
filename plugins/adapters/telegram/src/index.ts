@@ -187,7 +187,7 @@ export class TelegramBot extends Telegraf implements Bot<TelegramBotConfig, Tele
           context: "telegram",
           bot: this.$config.name,
           id: channelId,
-          type: "private",
+          type: channelType,
           content: content,
         });
       },

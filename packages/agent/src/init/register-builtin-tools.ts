@@ -123,12 +123,12 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
           refs.zhinAgent.setActiveSkillsContext(alwaysContent);
           refs.zhinAgent.setSkillsSummaryXML(skillsXml);
         }
-      } catch (e: any) {
-        logger.debug(`Skills context not set: ${e.message}`);
+      } catch (e: unknown) {
+        logger.debug(`Skills context not set: ${e instanceof Error ? e.message : String(e)}`);
       }
 
       // Trigger agent:bootstrap hook
-      const skillFeature2 = (root as any).inject?.('skill') as SkillFeature | undefined;
+      const skillFeature2 = root.inject('skill') as SkillFeature | undefined;
       await triggerAIHook(createAIHookEvent('agent', 'bootstrap', undefined, {
         workspaceDir: process.cwd(),
         toolCount: builtinTools.length,

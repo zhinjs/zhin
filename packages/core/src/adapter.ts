@@ -2,7 +2,7 @@ import { Bot } from "./bot.js";
 import { Plugin } from "./plugin.js";
 import { EventEmitter } from "events";
 import { Message } from "./message.js";
-import { BeforeSendHandler, SendOptions, Tool, ToolContext } from "./types.js";
+import { BeforeSendHandler, SendOptions, Tool, ToolContext, ToolScope } from "./types.js";
 import { segment } from "./utils.js";
 import { ZhinTool, isZhinTool, type ToolInput } from "./built/tool.js";
 import type { Skill, SkillFeature } from "./built/skill.js";
@@ -54,7 +54,7 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
       this.logger.info(`${message.$bot} recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`);
       const rootPlugin = this.plugin?.root || this.plugin;
       // 优先使用 MessageDispatcher（新架构），回退到旧中间件链（兼容）
-      const dispatcher = rootPlugin?.inject('dispatcher' as any) as any;
+      const dispatcher = rootPlugin?.inject('dispatcher') as { dispatch?: (msg: Message) => Promise<void> } | undefined;
       if (dispatcher && typeof dispatcher.dispatch === 'function') {
         void dispatcher.dispatch(message).catch((err: unknown) => {
           this.logger.error('dispatcher.dispatch(message) failed', err);
@@ -161,7 +161,7 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
 
     // 同步到全局 ToolFeature（如果可用），使适配器工具出现在插件 features 统计中
     let globalDispose: (() => void) | undefined;
-    const toolFeature = this.plugin?.root?.inject('tool' as any) as any;
+    const toolFeature = this.plugin?.root?.inject('tool') as { addTool?: (tool: Tool, name: string, gen: boolean) => () => void } | undefined;
     if (toolFeature && typeof toolFeature.addTool === 'function') {
       const adapterPluginName = this.plugin?.name || `adapter:${this.name}`;
       globalDispose = toolFeature.addTool(toolWithSource, adapterPluginName, false);
@@ -207,7 +207,7 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
     tags?: string[];
     conventions?: string;
   }): void {
-    const skillFeature = this.plugin?.root?.inject('skill' as any) as SkillFeature | undefined;
+    const skillFeature = this.plugin?.root?.inject('skill') as SkillFeature | undefined;
     if (!skillFeature) {
       this.logger.debug(`declareSkill: SkillFeature 不可用，跳过 Skill 注册`);
       return;
@@ -357,7 +357,7 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
       const tool: Tool = {
         name: `${prefix}_${spec.toolSuffix}`,
         description: `${spec.description} (${prefix})`,
-        parameters: { type: 'object', properties, required } as any,
+        parameters: { type: 'object' as const, properties, required },
         execute: async (args: Record<string, any>) => {
           const { bot_id, scene_id, ...rest } = args;
           return boundFn(...buildMethodArgs(spec.method, bot_id, scene_id, rest));
@@ -365,7 +365,7 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
         tags: ['group', 'management', prefix],
         keywords: spec.keywords,
         permissionLevel: spec.permissionLevel,
-        scopes: ['group', 'channel'] as any,
+        scopes: ['group', 'channel'] as ToolScope[],
         preExecutable: spec.preExecutable,
       };
 
