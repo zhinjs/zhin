@@ -461,226 +461,69 @@ class IcqqAdapter extends Adapter<IcqqBot> {
     return new IcqqBot(this, config);
   }
 
+  // ── IGroupManagement 标准群管方法 ──────────────────────────────────
+
+  async kickMember(botId: string, sceneId: string, userId: string) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.kickMember(Number(sceneId), Number(userId), false);
+  }
+
+  async muteMember(botId: string, sceneId: string, userId: string, duration = 600) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.muteMember(Number(sceneId), Number(userId), duration);
+  }
+
+  async muteAll(botId: string, sceneId: string, enable = true) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.muteAll(Number(sceneId), enable);
+  }
+
+  async setAdmin(botId: string, sceneId: string, userId: string, enable = true) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.setAdmin(Number(sceneId), Number(userId), enable);
+  }
+
+  async setMemberNickname(botId: string, sceneId: string, userId: string, nickname: string) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.setCard(Number(sceneId), Number(userId), nickname);
+  }
+
+  async setGroupName(botId: string, sceneId: string, name: string) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.setGroupName(Number(sceneId), name);
+  }
+
+  async listMembers(botId: string, sceneId: string) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    const memberMap = await bot.getMemberList(Number(sceneId));
+    const members = Array.from(memberMap.values()).map((m: MemberInfo) => ({
+      user_id: m.user_id, nickname: m.nickname, card: m.card,
+      role: m.role, title: m.title,
+    }));
+    return { members, count: members.length };
+  }
+
+  // ── 生命周期 ───────────────────────────────────────────────────────
+
   async start(): Promise<void> {
-    // 注册 ICQQ 特有的群管理工具
-    this.registerIcqqTools();
-
-    // 声明适配器 Skill：将所有工具聚合为一个语义化的 Skill
-    this.declareSkill({
-      description: 'ICQQ QQ群管理能力，包括成员管理（踢人、禁言、设管理员、改名片、设头衔）、群设置（改群名、发公告、全员禁言、匿名设置）、群查询（成员列表、禁言列表、群文件）、好友列表、互动（戳一戳）。',
-      keywords: ['QQ', '群管理', '群聊', '群文件', '好友列表'],
-      tags: ['qq', '群管理', '社交平台'],
-      conventions: '用户和群均使用数字 QQ号标识。调用工具时 bot 参数应填当前上下文的 Bot ID，group_id 应填当前场景 ID。user_id 为要操作的目标成员 QQ号。',
-    });
-
+    this.registerIcqqPlatformTools();
     await super.start();
+    // super.start() 自动检测上述群管方法 → 生成 Tool → 注册 Skill
   }
 
   /**
-   * 注册 ICQQ 平台特有的群管理工具
+   * 注册 ICQQ 平台特有工具（标准群管操作已通过 IGroupManagement 覆写方法自动注册）
    */
-  private registerIcqqTools(): void {
-    // 公共参数: 通过 contextKey 自动从上下文注入，对 AI 隐藏，避免小模型填错
+  private registerIcqqPlatformTools(): void {
     const CTX_BOT = { type: 'string' as const, description: '执行操作的 Bot QQ号', contextKey: 'botId' as const };
     const CTX_GROUP = { type: 'number' as const, description: '目标群号', contextKey: 'sceneId' as const };
-
-    // 踢出成员工具
-    this.addTool({
-      name: 'icqq_kick_member',
-      description: '将指定成员踢出 QQ 群聊，可选是否同时拉黑。需要 Bot 拥有管理员或群主权限。',
-      tags: ['群管理', '成员管理', '踢人'],
-      keywords: ['踢', '踢出', '移出', '移除', '请出', '踢出群', '踢人', '拉黑', 't人'],
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: CTX_BOT,
-          group_id: CTX_GROUP,
-          user_id: {
-            type: 'number',
-            description: '要踢出的目标成员 QQ号',
-          },
-          block: {
-            type: 'boolean',
-            description: '是否同时拉黑（加入黑名单），默认 false',
-          },
-        },
-        required: ['bot', 'group_id', 'user_id'],
-      },
-      platforms: ['icqq'],
-      scopes: ['group'],
-      permissionLevel: 'group_admin',
-      execute: async (args, context) => {
-        const { bot: botId, group_id, user_id, block } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        
-        this.checkPermission(context, 'group_admin');
-        
-        const success = await bot.kickMember(group_id, user_id, block);
-        return { 
-          success, 
-          message: success ? `已将 ${user_id} 踢出群${block ? '并拉黑' : ''}` : '踢出失败' 
-        };
-      },
-    });
-
-    // 禁言成员工具
-    this.addTool({
-      name: 'icqq_mute_member',
-      description: '对 QQ 群中的指定成员执行禁言或解除禁言操作。可指定禁言时长，duration=0 表示解除禁言。需要 Bot 拥有管理员权限/群主权限，同时。',
-      tags: ['群管理', '成员管理', '禁言'],
-      keywords: ['禁言', '解除禁言', '取消禁言', '闭嘴', '封口', '解禁', '静音', '解除静音'],
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: CTX_BOT,
-          group_id: CTX_GROUP,
-          user_id: {
-            type: 'number',
-            description: '要禁言的目标成员 QQ号',
-          },
-          duration: {
-            type: 'number',
-            description: '禁言时长（秒）。0=解除禁言，60=1分钟，3600=1小时，86400=1天。默认 600 秒（10分钟）',
-          },
-        },
-        required: ['bot', 'group_id', 'user_id'],
-      },
-      platforms: ['icqq'],
-      scopes: ['group'],
-      permissionLevel: 'group_admin',
-      execute: async (args, context) => {
-        const { bot: botId, group_id, user_id, duration = 600 } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        
-        this.checkPermission(context, 'group_admin');
-        
-        const success = await bot.muteMember(group_id, user_id, duration);
-        return { 
-          success, 
-          message: success 
-            ? (duration > 0 ? `已禁言 ${user_id} ${duration} 秒` : `已解除 ${user_id} 的禁言`) 
-            : '操作失败' 
-        };
-      },
-    });
-
-    // 全员禁言工具
-    this.addTool({
-      name: 'icqq_mute_all',
-      description: '开启或关闭 QQ 群的全员禁言模式。开启后所有普通成员无法发言，关闭后恢复正常。需要 Bot 拥有管理员权限。',
-      tags: ['群管理', '群设置', '禁言'],
-      keywords: ['全员禁言', '全体禁言', '全群禁言', '关闭全员禁言', '开启全员禁言', '解除全员禁言'],
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: CTX_BOT,
-          group_id: CTX_GROUP,
-          enable: {
-            type: 'boolean',
-            description: 'true=开启全员禁言，false=关闭全员禁言，默认 true',
-          },
-        },
-        required: ['bot', 'group_id'],
-      },
-      platforms: ['icqq'],
-      scopes: ['group'],
-      permissionLevel: 'group_admin',
-      execute: async (args, context) => {
-        const { bot: botId, group_id, enable = true } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        
-        this.checkPermission(context, 'group_admin');
-        
-        const success = await bot.muteAll(group_id, enable);
-        return { 
-          success, 
-          message: success ? (enable ? '已开启全员禁言' : '已关闭全员禁言') : '操作失败' 
-        };
-      },
-    });
-
-    // 设置管理员工具
-    this.addTool({
-      name: 'icqq_set_admin',
-      description: '设置或取消 QQ 群管理员。只有群主才能操作。enable=true 授予管理员，enable=false 撤销管理员。',
-      tags: ['群管理', '权限管理', '管理员'],
-      keywords: ['管理员', '设管理', '取消管理', '撤销管理', '设置管理员', '取消管理员'],
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: CTX_BOT,
-          group_id: CTX_GROUP,
-          user_id: {
-            type: 'number',
-            description: '目标成员 QQ号',
-          },
-          enable: {
-            type: 'boolean',
-            description: 'true=授予管理员，false=撤销管理员，默认 true',
-          },
-        },
-        required: ['bot', 'group_id', 'user_id'],
-      },
-      platforms: ['icqq'],
-      scopes: ['group'],
-      permissionLevel: 'group_owner',
-      execute: async (args, context) => {
-        const { bot: botId, group_id, user_id, enable = true } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        
-        this.checkPermission(context, 'group_owner');
-        
-        const success = await bot.setAdmin(group_id, user_id, enable);
-        return { 
-          success, 
-          message: success ? (enable ? `已将 ${user_id} 设为管理员` : `已取消 ${user_id} 的管理员`) : '操作失败' 
-        };
-      },
-    });
-
-    // 设置群名片工具
-    this.addTool({
-      name: 'icqq_set_card',
-      description: '修改 QQ 群中某个成员的群名片（备注名）。需要 Bot 拥有管理员权限。',
-      tags: ['群管理', '成员管理', '群名片'],
-      keywords: ['名片', '群名片', '备注', '改名', '改名片', '设置名片', '修改名片'],
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: CTX_BOT,
-          group_id: CTX_GROUP,
-          user_id: {
-            type: 'number',
-            description: '目标成员 QQ号',
-          },
-          card: {
-            type: 'string',
-            description: '新的群名片内容',
-          },
-        },
-        required: ['bot', 'group_id', 'user_id', 'card'],
-      },
-      platforms: ['icqq'],
-      scopes: ['group'],
-      permissionLevel: 'group_admin',
-      execute: async (args, context) => {
-        const { bot: botId, group_id, user_id, card } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        
-        this.checkPermission(context, 'group_admin');
-        
-        const success = await bot.setCard(group_id, user_id, card);
-        return { 
-          success, 
-          message: success ? `已将 ${user_id} 的群名片设为 "${card}"` : '设置失败' 
-        };
-      },
-    });
 
     // 设置头衔工具
     this.addTool({
@@ -722,42 +565,6 @@ class IcqqAdapter extends Adapter<IcqqBot> {
         return { 
           success, 
           message: success ? `已将 ${user_id} 的头衔设为 "${title}"` : '设置失败' 
-        };
-      },
-    });
-
-    // 设置群名工具
-    this.addTool({
-      name: 'icqq_set_group_name',
-      description: '修改 QQ 群的群名称。需要 Bot 拥有管理员权限。',
-      tags: ['群管理', '群设置', '群名'],
-      keywords: ['群名', '改群名', '修改群名', '群名称', '改名'],
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: CTX_BOT,
-          group_id: CTX_GROUP,
-          name: {
-            type: 'string',
-            description: '新的群名称',
-          },
-        },
-        required: ['bot', 'group_id', 'name'],
-      },
-      platforms: ['icqq'],
-      scopes: ['group'],
-      permissionLevel: 'group_admin',
-      execute: async (args, context) => {
-        const { bot: botId, group_id, name } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        
-        this.checkPermission(context, 'group_admin');
-        
-        const success = await bot.setGroupName(group_id, name);
-        return { 
-          success, 
-          message: success ? `已将群名修改为 "${name}"` : '修改失败' 
         };
       },
     });
@@ -824,47 +631,6 @@ class IcqqAdapter extends Adapter<IcqqBot> {
       },
     });
 
-    // 获取群成员列表工具
-    this.addTool({
-      name: 'icqq_list_members',
-      description: '查询 QQ 群的完整成员列表，返回每个成员的 QQ号、昵称、群名片、角色（群主/管理员/成员）、头衔等信息。',
-      tags: ['群查询', '成员查询', '列表'],
-      keywords: ['成员', '群成员', '成员列表', '群员', '有多少人', '人数', '管理员列表', '谁是管理'],
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: CTX_BOT,
-          group_id: CTX_GROUP,
-        },
-        required: ['bot', 'group_id'],
-      },
-      platforms: ['icqq'],
-      scopes: ['group'],
-      permissionLevel: 'user',
-      execute: async (args) => {
-        const { bot: botId, group_id } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        
-        const memberMap = await bot.getMemberList(group_id);
-        const members = Array.from(memberMap.values()).map(m => ({
-          user_id: m.user_id,
-          nickname: m.nickname,
-          card: m.card,
-          role: m.role,
-          title: m.title,
-          join_time: m.join_time,
-          last_sent_time: m.last_sent_time,
-        }));
-        
-        return { 
-          members,
-          count: members.length,
-          admins: members.filter(m => m.role === 'admin' || m.role === 'owner').length,
-        };
-      },
-    });
-    
     // 获取被禁言列表工具
     this.addTool({
       name: 'icqq_list_muted',

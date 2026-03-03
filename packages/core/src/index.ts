@@ -26,6 +26,8 @@ export * from './built/ai-trigger.js'
 export * from './built/dispatcher.js'
 // Skill 系统 (AI 能力描述)
 export * from './built/skill.js'
+// Common adapter tool factories (shared across adapters)
+export * from './built/common-adapter-tools.js'
 // AI 模块 (原 @zhin.js/ai，已合并至 core)
 export * from './ai/index.js'
 

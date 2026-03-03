@@ -21,7 +21,8 @@ import { Adapter, Adapters } from "./adapter.js";
 import { Feature, FeatureJSON } from "./feature.js";
 import { createHash } from "crypto";
 const contextsKey = Symbol("contexts");
-const loadedModules = new Map<string, Plugin>(); // 记录已加载的模块
+const extensionOwnersKey = Symbol("extensionOwners");
+const loadedModules = new Map<string, Plugin>();
 const require = createRequire(import.meta.url);
 
 
@@ -138,8 +139,11 @@ export interface Plugin extends Plugin.Extensions { }
  */
 export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   static [contextsKey] = [] as string[];
+  /** Maps extension method name → context name that owns it */
+  static [extensionOwnersKey] = new Map<string, string>();
 
   #cachedName?: string;
+  #explicitName?: string;
   adapters: (keyof Plugin.Contexts)[] = [];
   started = false;
 
@@ -182,6 +186,14 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   get middleware(): MessageMiddleware<RegisteredAdapter> {
     return compose<RegisteredAdapter>(this.#middlewares);
   }
+
+  /**
+   * Returns custom middlewares (excluding the built-in command middleware).
+   * Used by MessageDispatcher to run legacy middlewares after dispatch.
+   */
+  _getCustomMiddlewares(): MessageMiddleware<RegisteredAdapter>[] {
+    return this.#middlewares.filter(m => m !== this.#messageMiddleware);
+  }
   /**
    * 构造函数
    */
@@ -213,8 +225,10 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
    * @param middleware 中间件函数
    */
   addMiddleware<T extends RegisteredAdapter>(middleware: MessageMiddleware<T>): () => void {
-    if(this.parent){
-      const dispose= this.parent.addMiddleware(middleware);
+    // Always register on root so middlewares reach the global chain
+    const target = this.root;
+    if (target !== this) {
+      const dispose = target.addMiddleware(middleware);
       this.#disposables.add(dispose);
       return () => {
         dispose();
@@ -331,9 +345,22 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   }
 
   /**
-   * 插件名称
+   * 显式设置插件名称（优先级高于路径推导）。
+   * 可通过以下方式声明：
+   *   1. 模块导出 `export const pluginName = 'my-plugin'`
+   *   2. 调用 `plugin.setName('my-plugin')`
+   */
+  setName(name: string): void {
+    this.#explicitName = name;
+    this.#cachedName = name;
+    this.logger = logger.getLogger(name);
+  }
+
+  /**
+   * 插件名称（显式名称 > 路径推导）
    */
   get name(): string {
+    if (this.#explicitName) return this.#explicitName;
     if (this.#cachedName) return this.#cachedName;
 
     let name = path
@@ -636,13 +663,15 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     }
     this.children = [];
 
-    // 停止服务
+    // 停止服务 — only remove extensions owned by this plugin's contexts
     for (const [name, context] of this.$contexts) {
       remove(Plugin[contextsKey], name);
-      // 移除扩展方法
       if (context.extensions) {
         for (const key of Object.keys(context.extensions)) {
-          delete (Plugin.prototype as any)[key];
+          if (Plugin[extensionOwnersKey].get(key) === name) {
+            delete (Plugin.prototype as any)[key];
+            Plugin[extensionOwnersKey].delete(key);
+          }
         }
       }
       if (typeof context.dispose === "function") {
@@ -750,7 +779,6 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
    */
   provide<T extends keyof Plugin.Contexts>(target: Feature | Context<T>): this {
     if (target instanceof Feature) {
-      // Feature → 自动转为内部 Context 格式存储
       const feature = target;
       const context: Context<T> = {
         name: feature.name as T,
@@ -770,17 +798,24 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
       return this.provide(context);
     }
 
-    // 传统 Context 路径
     const context = target;
     if (!Plugin[contextsKey].includes(context.name as string)) {
       Plugin[contextsKey].push(context.name as string);
     }
     this.logger.debug(`Context "${context.name as string}" provided`);
-    // 注册扩展方法到 Plugin.prototype
+
+    // Track which extension methods this context registers.
+    // On collision, log a warning but allow override (last-write-wins).
     if (context.extensions) {
+      const extNames: string[] = [];
       for (const [name, fn] of Object.entries(context.extensions)) {
         if (typeof fn === 'function') {
+          if (Reflect.has(Plugin.prototype, name) && !Plugin[extensionOwnersKey].has(name)) {
+            this.logger.warn(`Extension method "${name}" shadows an existing Plugin method`);
+          }
           Reflect.set(Plugin.prototype, name, fn);
+          Plugin[extensionOwnersKey].set(name, context.name as string);
+          extNames.push(name);
         }
       }
     }
@@ -926,15 +961,48 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     // 先记录，防止循环依赖时重复加载
     loadedModules.set(realPath, plugin);
 
+    let mod: any;
     await storage.run(plugin, async () => {
-      await import(`${pathToFileURL(entryFile).href}?t=${Date.now()}`);
+      mod = await import(`${pathToFileURL(entryFile).href}?t=${Date.now()}`);
     });
+
+    // 支持模块显式声明插件名称：export const pluginName = 'my-plugin'
+    if (mod?.pluginName && typeof mod.pluginName === 'string') {
+      plugin.setName(mod.pluginName);
+    }
 
     return plugin;
   }
 }
 export function defineContext<T extends keyof Plugin.Contexts, E extends Partial<Plugin.Extensions> = {}>(options: Context<T, E>): Context<T, E> {
   return options;
+}
+
+/**
+ * 声明式定义插件。
+ * 提供显式名称 + setup 函数，自动设置当前插件名称并执行 setup。
+ *
+ * @example
+ * ```typescript
+ * // plugins/weather/index.ts
+ * export default definePlugin({
+ *   name: 'weather',
+ *   setup(plugin) {
+ *     plugin.addTool({ ... });
+ *   },
+ * });
+ * ```
+ */
+export function definePlugin(options: {
+  name: string;
+  setup: (plugin: Plugin) => MaybePromise<void>;
+}): { pluginName: string } {
+  const plugin = usePlugin();
+  if (options.name) {
+    plugin.setName(options.name);
+  }
+  options.setup(plugin);
+  return { pluginName: options.name };
 }
 export interface Context<T extends keyof Plugin.Contexts = keyof Plugin.Contexts, E extends Partial<Plugin.Extensions> = {}> {
   name: T;

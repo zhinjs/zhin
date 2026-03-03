@@ -373,21 +373,49 @@ class QQAdapter extends Adapter<QQBot<ReceiverMode>> {
     return new QQBot(this, config);
   }
 
+  // ── IGroupManagement 标准群管方法 ──────────────────────────────────
+
+  async kickMember(botId: string, sceneId: string, userId: string) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.removeGuildMember(sceneId, userId, false);
+  }
+
+  async muteMember(botId: string, sceneId: string, userId: string, duration = 600) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.muteMembers(sceneId, [userId], duration);
+  }
+
+  async muteAll(botId: string, sceneId: string, enable = true) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.muteAll(sceneId, enable ? 600 : 0);
+  }
+
+  async listMembers(botId: string, sceneId: string) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.getGuildMembers(sceneId);
+  }
+
+  async getGroupInfo(botId: string, sceneId: string) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.getGuildInfo(sceneId);
+  }
+
+  // ── 生命周期 ───────────────────────────────────────────────────────
+
   async start(): Promise<void> {
-    this.registerQQTools();
-    this.declareSkill({
-      description: 'QQ 频道管理能力，包括频道/子频道管理、成员管理（踢人、禁言）、身份组管理（创建、分配、撤销角色）、频道信息查询、子频道详情、单成员详情。',
-      keywords: ['QQ', '频道', '频道管理', '身份组', '子频道详情', '成员详情'],
-      tags: ['qq', '频道管理', '社交平台'],
-      conventions: '频道和用户均使用字符串 ID 标识。guild_id 为频道 ID，channel_id 为子频道 ID。调用工具时 bot 参数应填当前上下文的 Bot ID。',
-    });
+    this.registerQQPlatformTools();
     await super.start();
   }
 
   /**
-   * 注册 QQ 官方平台频道管理工具
+   * 注册 QQ 官方平台特有工具（标准群管操作已通过覆写方法自动注册）
    */
-  private registerQQTools(): void {
+  private registerQQPlatformTools(): void {
     // 获取频道列表工具
     this.addTool({
       name: 'qq_list_guilds',
@@ -408,29 +436,6 @@ class QQAdapter extends Adapter<QQBot<ReceiverMode>> {
         if (!bot) throw new Error(`Bot ${botId} 不存在`);
         const guilds = await bot.getGuilds();
         return { guilds, count: guilds.length };
-      },
-    });
-
-    // 获取频道信息工具
-    this.addTool({
-      name: 'qq_guild_info',
-      description: '获取 QQ 频道详细信息',
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: { type: 'string', description: 'Bot 名称' },
-          guild_id: { type: 'string', description: '频道 ID' },
-        },
-        required: ['bot', 'guild_id'],
-      },
-      platforms: ['qq'],
-      scopes: ['channel'],
-      permissionLevel: 'user',
-      execute: async (args) => {
-        const { bot: botId, guild_id } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        return await bot.getGuildInfo(guild_id);
       },
     });
 
@@ -455,112 +460,6 @@ class QQAdapter extends Adapter<QQBot<ReceiverMode>> {
         if (!bot) throw new Error(`Bot ${botId} 不存在`);
         const channels = await bot.getChannels(guild_id);
         return { channels, count: channels.length };
-      },
-    });
-
-    // 获取频道成员列表工具
-    this.addTool({
-      name: 'qq_list_members',
-      description: '获取 QQ 频道成员列表',
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: { type: 'string', description: 'Bot 名称' },
-          guild_id: { type: 'string', description: '频道 ID' },
-        },
-        required: ['bot', 'guild_id'],
-      },
-      platforms: ['qq'],
-      scopes: ['channel'],
-      permissionLevel: 'user',
-      execute: async (args) => {
-        const { bot: botId, guild_id } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        const members = await bot.getGuildMembers(guild_id);
-        return { members, count: members.length };
-      },
-    });
-
-    // 踢出成员工具
-    this.addTool({
-      name: 'qq_kick_member',
-      description: '将成员踢出 QQ 频道（需要管理员权限）',
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: { type: 'string', description: 'Bot 名称' },
-          guild_id: { type: 'string', description: '频道 ID' },
-          user_id: { type: 'string', description: '用户 ID' },
-          blacklist: { type: 'boolean', description: '是否加入黑名单，默认 false' },
-        },
-        required: ['bot', 'guild_id', 'user_id'],
-      },
-      platforms: ['qq'],
-      scopes: ['channel'],
-      permissionLevel: 'group_admin',
-      execute: async (args) => {
-        const { bot: botId, guild_id, user_id, blacklist = false } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        const success = await bot.removeGuildMember(guild_id, user_id, blacklist);
-        return { success, message: success ? `已将成员 ${user_id} 踢出频道` : '操作失败' };
-      },
-    });
-
-    // 禁言成员工具
-    this.addTool({
-      name: 'qq_mute_member',
-      description: '禁言 QQ 频道成员（支持批量）',
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: { type: 'string', description: 'Bot 名称' },
-          guild_id: { type: 'string', description: '频道 ID' },
-          user_ids: { type: 'array', items: { type: 'string' }, description: '用户 ID 列表' },
-          duration: { type: 'number', description: '禁言时长（秒），0 表示解除禁言，默认 600' },
-        },
-        required: ['bot', 'guild_id', 'user_ids'],
-      },
-      platforms: ['qq'],
-      scopes: ['channel'],
-      permissionLevel: 'group_admin',
-      execute: async (args) => {
-        const { bot: botId, guild_id, user_ids, duration = 600 } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        const success = await bot.muteMembers(guild_id, user_ids, duration);
-        return { 
-          success, 
-          message: success 
-            ? (duration > 0 ? `已禁言成员 ${duration} 秒` : `已解除成员的禁言`)
-            : '操作失败' 
-        };
-      },
-    });
-
-    // 全员禁言工具
-    this.addTool({
-      name: 'qq_mute_all',
-      description: '开启/关闭 QQ 频道全员禁言',
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: { type: 'string', description: 'Bot 名称' },
-          guild_id: { type: 'string', description: '频道 ID' },
-          duration: { type: 'number', description: '禁言时长（秒），0 表示解除禁言' },
-        },
-        required: ['bot', 'guild_id', 'duration'],
-      },
-      platforms: ['qq'],
-      scopes: ['channel'],
-      permissionLevel: 'group_admin',
-      execute: async (args) => {
-        const { bot: botId, guild_id, duration } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        const success = await bot.muteAll(guild_id, duration);
-        return { success, message: success ? (duration > 0 ? '已开启全员禁言' : '已关闭全员禁言') : '操作失败' };
       },
     });
 

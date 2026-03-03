@@ -6,7 +6,7 @@ import { Feature, FeatureJSON } from "../feature.js";
 import { MessageCommand } from "../command.js";
 import { Message } from "../message.js";
 import { Plugin, getPlugin } from "../plugin.js";
-import type { Tool, ToolDefinition, RegisteredAdapter, AdapterMessage, ToolContext, ToolJsonSchema, ToolParametersSchema, PropertySchema, MaybePromise, ToolPermissionLevel, ToolScope } from "../types.js";
+import type { Tool, RegisteredAdapter, AdapterMessage, ToolContext, ToolJsonSchema, ToolParametersSchema, PropertySchema, MaybePromise, ToolPermissionLevel, ToolScope } from "../types.js";
 import { MatchResult } from "segment-matcher";
 
 // ============================================================================
@@ -147,7 +147,7 @@ export function extractParamInfo(parameters: ToolJsonSchema): Tool.ParamInfo[] {
  * 定义工具的辅助函数（提供类型推断）
  */
 export function defineTool<TArgs extends Record<string, any> = Record<string, any>>(
-  tool: ToolDefinition<TArgs>
+  tool: Tool<TArgs>
 ): Tool {
   return tool as Tool;
 }

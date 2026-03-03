@@ -305,25 +305,52 @@ export type ToolScope = 'private' | 'group' | 'channel';
  */
 export type ToolPermissionLevel = 'user' | 'group_admin' | 'group_owner' | 'bot_admin' | 'owner';
 
-export interface Tool {
+/**
+ * 标准化工具返回类型。
+ * execute 可返回以下任一形式：
+ * - string: 直接作为文本回复
+ * - { text: string }: 结构化文本
+ * - { data: any; format?: string }: 结构化数据
+ * - void/null/undefined: 无回复
+ * - 其他: 自动 JSON.stringify
+ */
+export type ToolResult = string | void | null | undefined | { text: string } | { data: any; format?: string } | any;
+
+/**
+ * 统一的 Tool 定义（支持泛型参数类型推断）。
+ *
+ * @template TArgs 参数类型，默认 Record<string, any>
+ *
+ * @example
+ * ```typescript
+ * // 无泛型 — 兼容旧代码
+ * const tool: Tool = { name: 'ping', ... };
+ *
+ * // 有泛型 — 通过 defineTool 获得类型安全
+ * const tool = defineTool<{ city: string }>({
+ *   name: 'weather',
+ *   parameters: { type: 'object', properties: { city: { type: 'string', description: '城市' } }, required: ['city'] },
+ *   execute: async (args) => args.city, // args.city 有类型提示
+ * });
+ * ```
+ */
+export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
   /** 工具名称（唯一标识，建议使用 snake_case） */
   name: string;
   
   /** 工具描述（供 AI 和帮助系统使用） */
   description: string;
   
-  /** 
-   * 参数定义（JSON Schema 格式）
-   */
-  parameters: ToolParametersSchema;
+  /** 参数定义（JSON Schema 格式） */
+  parameters: ToolParametersSchema<TArgs>;
   
   /** 
    * 工具执行函数
    * @param args 解析后的参数
    * @param context 执行上下文（包含消息、发送者等信息）
-   * @returns 执行结果（字符串会直接作为回复，对象会被 JSON 序列化）
+   * @returns 执行结果
    */
-  execute: (args: Record<string, any>, context?: ToolContext) => MaybePromise<any>;
+  execute: (args: TArgs, context?: ToolContext) => MaybePromise<ToolResult>;
   
   /** 工具来源标识（自动填充：adapter:xxx / plugin:xxx） */
   source?: string;
@@ -386,27 +413,9 @@ export interface Tool {
 }
 
 /**
- * 类型安全的 Tool 定义（用于 defineTool）
- * 提供泛型参数以获得 execute 函数的类型推断
+ * @deprecated 使用 `Tool<TArgs>` 替代。Tool 已原生支持泛型。
  */
-export interface ToolDefinition<TArgs extends Record<string, any> = Record<string, any>> {
-  name: string;
-  description: string;
-  parameters: ToolParametersSchema<TArgs>;
-  execute: (args: TArgs, context?: ToolContext) => MaybePromise<any>;
-  source?: string;
-  tags?: string[];
-  keywords?: string[];
-  command?: Tool.CommandConfig | false;
-  permissions?: string[];
-  /** 支持的平台列表（不填则支持所有平台） */
-  platforms?: string[];
-  /** 支持的场景列表（不填则支持所有场景） */
-  scopes?: ToolScope[];
-  /** 调用所需的最低权限级别（默认 'user'） */
-  permissionLevel?: ToolPermissionLevel;
-  hidden?: boolean;
-}
+export type ToolDefinition<TArgs extends Record<string, any> = Record<string, any>> = Tool<TArgs>;
 
 export namespace Tool {
   /**

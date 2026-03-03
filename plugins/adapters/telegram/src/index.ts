@@ -1028,158 +1028,55 @@ class TelegramAdapter extends Adapter<TelegramBot> {
     return new TelegramBot(this, config);
   }
 
+  // ── IGroupManagement 标准群管方法 ──────────────────────────────────
+
+  async kickMember(botId: string, sceneId: string, userId: string) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.kickMember(Number(sceneId), Number(userId));
+  }
+
+  async unbanMember(botId: string, sceneId: string, userId: string) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.unbanMember(Number(sceneId), Number(userId));
+  }
+
+  async muteMember(botId: string, sceneId: string, userId: string, duration = 600) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.muteMember(Number(sceneId), Number(userId), duration);
+  }
+
+  async setAdmin(botId: string, sceneId: string, userId: string, enable = true) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.setAdmin(Number(sceneId), Number(userId), enable);
+  }
+
+  async setGroupName(botId: string, sceneId: string, name: string) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.setChatTitle(Number(sceneId), name);
+  }
+
+  async getGroupInfo(botId: string, sceneId: string) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.getChatInfo(Number(sceneId));
+  }
+
+  // ── 生命周期 ───────────────────────────────────────────────────────
+
   async start(): Promise<void> {
-    this.registerTelegramTools();
-    this.declareSkill({
-      description: 'Telegram 群组管理能力，包括成员管理（踢人、解封、禁言、设管理员、设头衔）、消息管理（置顶、取消置顶）、群信息查询（管理员列表、成员数、群信息）、邀请链接生成、发起投票、消息表情反应、发送贴纸、群权限控制、设置群描述。',
-      keywords: ['Telegram', 'TG', '电报', '群组管理', '投票', 'poll', '反应', 'react', '贴纸', 'sticker', '权限', 'permissions'],
-      tags: ['telegram', '群组管理', '社交平台'],
-      conventions: 'chat_id 使用数字 ID 标识（群组为负数）。user_id 为数字用户 ID。调用工具时 bot 参数应填当前上下文的 Bot ID，chat_id 应填当前场景 ID。',
-    });
+    this.registerTelegramPlatformTools();
     await super.start();
   }
 
   /**
-   * 注册 Telegram 平台特有的群组管理工具
+   * 注册 Telegram 平台特有工具（标准群管操作已通过覆写方法自动注册）
    */
-  private registerTelegramTools(): void {
-    // 踢出用户工具
-    this.addTool({
-      name: 'telegram_kick_user',
-      description: '将用户踢出 Telegram 群组（需要管理员权限）',
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: { type: 'string', description: 'Bot 名称' },
-          chat_id: { type: 'number', description: '聊天 ID' },
-          user_id: { type: 'number', description: '用户 ID' },
-        },
-        required: ['bot', 'chat_id', 'user_id'],
-      },
-      platforms: ['telegram'],
-      scopes: ['group'],
-      permissionLevel: 'group_admin',
-      execute: async (args) => {
-        const { bot: botId, chat_id, user_id } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        const success = await bot.kickMember(chat_id, user_id);
-        return { success, message: success ? `已将用户 ${user_id} 踢出群组` : '操作失败' };
-      },
-    });
-
-    // 解除封禁工具
-    this.addTool({
-      name: 'telegram_unban_user',
-      description: '解除用户在 Telegram 群组的封禁',
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: { type: 'string', description: 'Bot 名称' },
-          chat_id: { type: 'number', description: '聊天 ID' },
-          user_id: { type: 'number', description: '用户 ID' },
-        },
-        required: ['bot', 'chat_id', 'user_id'],
-      },
-      platforms: ['telegram'],
-      scopes: ['group'],
-      permissionLevel: 'group_admin',
-      execute: async (args) => {
-        const { bot: botId, chat_id, user_id } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        const success = await bot.unbanMember(chat_id, user_id);
-        return { success, message: success ? `已解除用户 ${user_id} 的封禁` : '操作失败' };
-      },
-    });
-
-    // 禁言用户工具
-    this.addTool({
-      name: 'telegram_mute_user',
-      description: '禁言 Telegram 群组成员',
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: { type: 'string', description: 'Bot 名称' },
-          chat_id: { type: 'number', description: '聊天 ID' },
-          user_id: { type: 'number', description: '用户 ID' },
-          duration: { type: 'number', description: '禁言时长（秒），0 表示解除禁言，默认 600' },
-        },
-        required: ['bot', 'chat_id', 'user_id'],
-      },
-      platforms: ['telegram'],
-      scopes: ['group'],
-      permissionLevel: 'group_admin',
-      execute: async (args) => {
-        const { bot: botId, chat_id, user_id, duration = 600 } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        const success = await bot.muteMember(chat_id, user_id, duration);
-        return { 
-          success, 
-          message: success 
-            ? (duration > 0 ? `已禁言用户 ${user_id} ${duration} 秒` : `已解除用户 ${user_id} 的禁言`)
-            : '操作失败' 
-        };
-      },
-    });
-
-    // 设置管理员工具
-    this.addTool({
-      name: 'telegram_set_admin',
-      description: '提升/降级 Telegram 群组管理员（需要群主权限）',
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: { type: 'string', description: 'Bot 名称' },
-          chat_id: { type: 'number', description: '聊天 ID' },
-          user_id: { type: 'number', description: '用户 ID' },
-          promote: { type: 'boolean', description: '是否提升为管理员，默认 true' },
-        },
-        required: ['bot', 'chat_id', 'user_id'],
-      },
-      platforms: ['telegram'],
-      scopes: ['group'],
-      permissionLevel: 'group_owner',
-      execute: async (args) => {
-        const { bot: botId, chat_id, user_id, promote = true } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        const success = await bot.setAdmin(chat_id, user_id, promote);
-        return { 
-          success, 
-          message: success 
-            ? (promote ? `已将用户 ${user_id} 提升为管理员` : `已降级用户 ${user_id}`)
-            : '操作失败' 
-        };
-      },
-    });
-
-    // 设置群标题工具
-    this.addTool({
-      name: 'telegram_set_title',
-      description: '设置 Telegram 群组标题',
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: { type: 'string', description: 'Bot 名称' },
-          chat_id: { type: 'number', description: '聊天 ID' },
-          title: { type: 'string', description: '新标题' },
-        },
-        required: ['bot', 'chat_id', 'title'],
-      },
-      platforms: ['telegram'],
-      scopes: ['group'],
-      permissionLevel: 'group_admin',
-      execute: async (args) => {
-        const { bot: botId, chat_id, title } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        const success = await bot.setChatTitle(chat_id, title);
-        return { success, message: success ? `已将群标题设为 "${title}"` : '操作失败' };
-      },
-    });
-
+  private registerTelegramPlatformTools(): void {
     // 置顶消息工具
     this.addTool({
       name: 'telegram_pin_message',
@@ -1307,37 +1204,6 @@ class TelegramAdapter extends Adapter<TelegramBot> {
         if (!bot) throw new Error(`Bot ${botId} 不存在`);
         const link = await bot.createInviteLink(chat_id);
         return { invite_link: link, message: `邀请链接: ${link}` };
-      },
-    });
-
-    // 获取群信息工具
-    this.addTool({
-      name: 'telegram_chat_info',
-      description: '获取 Telegram 聊天/群组信息',
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: { type: 'string', description: 'Bot 名称' },
-          chat_id: { type: 'number', description: '聊天 ID' },
-        },
-        required: ['bot', 'chat_id'],
-      },
-      platforms: ['telegram'],
-      scopes: ['group', 'private'],
-      permissionLevel: 'user',
-      execute: async (args) => {
-        const { bot: botId, chat_id } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        const info = await bot.getChatInfo(chat_id);
-        return {
-          id: info.id,
-          type: info.type,
-          title: info.title,
-          username: info.username,
-          description: info.description,
-          member_count: (info as any).member_count,
-        };
       },
     });
 

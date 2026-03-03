@@ -245,24 +245,34 @@ const memberInfo = bot.getGroupMemberInfo(groupId, userId)
 
 ## 🔧 群管理工具（AI 可调用）
 
-适配器自动注册了一系列群管理工具，这些工具可以被 AI 调用，实现智能化的群管理。
+适配器通过覆写 `IGroupManagement` 标准方法自动注册群管理工具，同时保留平台特有工具，这些工具可以被 AI 调用，实现智能化的群管理。
 
-### 工具列表
+### 标准群管工具（自动生成）
+
+通过覆写 `IGroupManagement` 方法，`start()` 时自动检测并生成对应 Tool：
+
+| 工具 | 覆写方法 | 所需权限 | 说明 |
+|------|---------|----------|------|
+| `icqq_kick_member` | `kickMember` | 管理员 | 踢出群成员 |
+| `icqq_mute_member` | `muteMember` | 管理员 | 禁言群成员 |
+| `icqq_mute_all` | `muteAll` | 管理员 | 全员禁言 |
+| `icqq_set_admin` | `setAdmin` | 群主 | 设置/取消管理员 |
+| `icqq_set_nickname` | `setMemberNickname` | 管理员 | 设置群名片 |
+| `icqq_set_group_name` | `setGroupName` | 管理员 | 修改群名称 |
+| `icqq_list_members` | `listMembers` | 普通用户 | 获取群成员列表 |
+
+### 平台特有工具（手动注册）
 
 | 工具 | 所需权限 | 说明 |
 |------|----------|------|
-| `icqq_kick_member` | 管理员 | 踢出群成员（可选拉黑） |
-| `icqq_mute_member` | 管理员 | 禁言群成员 |
-| `icqq_mute_all` | 管理员 | 全员禁言 |
-| `icqq_set_admin` | 群主 | 设置/取消管理员 |
-| `icqq_set_card` | 管理员 | 设置群名片 |
 | `icqq_set_title` | 群主 | 设置专属头衔 |
-| `icqq_set_group_name` | 管理员 | 修改群名称 |
 | `icqq_announce` | 管理员 | 发送群公告 |
 | `icqq_poke` | 普通用户 | 戳一戳 |
-| `icqq_list_members` | 普通用户 | 获取群成员列表 |
 | `icqq_list_muted` | 普通用户 | 获取被禁言成员列表 |
+| `icqq_send_user_like` | 普通用户 | 发送用户点赞 |
 | `icqq_set_anonymous` | 管理员 | 开启/关闭匿名聊天 |
+| `icqq_group_files` | 普通用户 | 获取群文件列表 |
+| `icqq_friend_list` | 普通用户 | 获取好友列表 |
 
 ### 使用示例
 

@@ -5,12 +5,12 @@
 ## 概念关系
 
 ```
-Skill（技能）
-├── 描述："QQ 群管理能力"
-├── 关键词：["QQ", "群管理"]
-├── 调用约定："用户和群使用数字 QQ号标识"
-└── 工具列表：
-    ├── Tool: icqq_kick_member
+Skill（技能）—— 由 start() 自动检测并注册
+├── 描述："群聊管理能力：在 IM 系统中对群/服务器进行管理..."
+├── 关键词：["群管理", "踢人", "禁言", ...]
+├── 标签：["group", "management", "im", ...]
+└── 工具列表（标准 + 平台特有）：
+    ├── Tool: icqq_kick_member    ← 自动生成（覆写 kickMember）
     ├── Tool: icqq_mute_member
     ├── Tool: icqq_set_admin
     └── ...
@@ -53,13 +53,15 @@ addTool({
 
 ### Tool 接口
 
+`Tool` 支持泛型参数推断（默认 `Record<string, any>`，向后兼容）：
+
 ```typescript
-interface Tool {
+interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
   // 必填
-  name: string                    // 工具名称（全局唯一）
-  description: string             // 描述（AI 用来理解工具用途）
-  parameters: JSONSchema          // 参数定义（JSON Schema 格式）
-  execute: (args, context?) => any  // 执行函数
+  name: string                           // 工具名称（全局唯一）
+  description: string                    // 描述（AI 用来理解工具用途）
+  parameters: ToolParametersSchema<TArgs>  // 参数定义（JSON Schema 格式）
+  execute: (args: TArgs, context?: ToolContext) => MaybePromise<ToolResult>  // 执行函数
   
   // 可选 - AI 发现
   tags?: string[]                 // 分类标签
@@ -70,13 +72,28 @@ interface Tool {
   scopes?: ('private'|'group'|'channel')[]  // 限定场景
   permissionLevel?: ToolPermissionLevel     // 权限要求
   hidden?: boolean                // 对 AI 隐藏
+  preExecutable?: boolean         // 允许预执行（无副作用的只读工具）
   
   // 可选 - 命令互转
   command?: { pattern: string } | false  // 同时生成命令
   
   // 可选 - 元数据
   source?: string                 // 来源标识
+  kind?: string                   // 工具分类（如 file / shell / web）
 }
+```
+
+### ToolResult 返回类型
+
+工具的 `execute` 返回 `ToolResult`，支持多种形式：
+
+```typescript
+type ToolResult =
+  | string               // 直接作为文本回复
+  | { text: string }     // 结构化文本
+  | { data: any; format?: string }  // 结构化数据
+  | void | null | undefined  // 无回复
+  | any                  // 其他类型自动 JSON.stringify
 ```
 
 ### 使用 ZhinTool 链式 DSL
@@ -104,6 +121,8 @@ addTool(
 
 ### 使用 defineTool（类型安全）
 
+`defineTool<TArgs>` 利用 `Tool<TArgs>` 的泛型支持，让 `execute` 的 `args` 参数获得完整的类型提示：
+
 ```typescript
 import { defineTool } from 'zhin.js'
 
@@ -124,6 +143,8 @@ const weatherTool = defineTool<{ city: string; unit?: string }>({
   },
 })
 ```
+
+> **注意：** 旧的 `ToolDefinition<TArgs>` 已废弃，现在是 `Tool<TArgs>` 的类型别名。直接使用 `Tool<TArgs>` 即可。
 
 ## 技能（Skill）
 
@@ -156,29 +177,92 @@ declareSkill({
 
 ### 在适配器中声明
 
-适配器使用 `declareSkill()` 方法将平台工具聚合为 Skill，并附加平台调用约定：
+#### 群管理能力（推荐：覆写方法自动检测）
+
+群管理是 IM 的通用能力。Adapter 基类声明了 `IGroupManagement` 接口中的可选方法规范，适配器只需覆写自己平台支持的方法，`start()` 会自动检测并生成 Tool + 注册 Skill，无需任何手动调用：
 
 ```typescript
-class MyAdapter extends Adapter<MyBot> {
+class IcqqAdapter extends Adapter<IcqqBot> {
+  // 覆写标准群管方法 —— 内部委托给 Bot 的原生 API
+  async kickMember(botId: string, sceneId: string, userId: string) {
+    const bot = this.bots.get(botId)
+    if (!bot) throw new Error(`Bot ${botId} 不存在`)
+    return bot.kickMember(Number(sceneId), Number(userId), false)
+  }
+
+  async muteMember(botId: string, sceneId: string, userId: string, duration = 600) {
+    const bot = this.bots.get(botId)
+    if (!bot) throw new Error(`Bot ${botId} 不存在`)
+    return bot.muteMember(Number(sceneId), Number(userId), duration)
+  }
+
+  async listMembers(botId: string, sceneId: string) {
+    const bot = this.bots.get(botId)
+    if (!bot) throw new Error(`Bot ${botId} 不存在`)
+    const memberMap = await bot.getMemberList(Number(sceneId))
+    return { members: Array.from(memberMap.values()), count: memberMap.size }
+  }
+
   async start() {
-    // 注册平台工具
-    this.addTool({ name: 'my_kick', ... })
-    this.addTool({ name: 'my_mute', ... })
-    
-    // 声明 Skill（conventions 描述平台特性）
-    this.declareSkill({
-      description: '群管理能力，包括踢人、禁言等',
-      keywords: ['群管理', '踢人', '禁言'],
-      tags: ['群管理'],
-      conventions: '用户和群使用数字 ID。bot 参数填 Bot ID，group_id 填场景 ID。',
-    })
-    
-    await super.start()
+    this.registerIcqqPlatformTools()  // 注册平台特有工具（头衔、公告、戳一戳等）
+    await super.start()               // 自动检测上述 3 个方法 → 生成 Tool → 注册 Skill
   }
 }
 ```
 
-`conventions` 字段会拼接到 Skill 描述末尾，AI 选中该 Skill 时能看到平台的调用约定，减少参数填错的情况。
+目前所有 9 个 IM 适配器都已采用此模式：
+
+| 适配器 | 覆写的标准方法 | 保留的平台特有工具 |
+|--------|---------------|-------------------|
+| ICQQ | kick, mute, muteAll, setAdmin, setNickname, setGroupName, listMembers | 头衔、群公告、戳一戳、禁言列表等 |
+| OneBot11 | kick, mute, muteAll, setAdmin, setNickname, setGroupName, listMembers, getGroupInfo | 头衔 |
+| Telegram | kick, unban, mute, setAdmin, setGroupName, getGroupInfo | 置顶、投票、反应、贴纸、权限等 |
+| Discord | kick, ban, unban, mute, setNickname, listMembers, getGroupInfo | 角色管理、帖子/论坛、反应、Embed |
+| KOOK | kick, ban, unban, setNickname, listMembers | 角色管理、黑名单 |
+| QQ 官方 | kick, mute, muteAll, listMembers, getGroupInfo | 频道/子频道、角色管理 |
+| Slack | kick, setGroupName, listMembers, getGroupInfo | 邀请、话题、归档、反应等 |
+| 钉钉 | kick, setGroupName, getGroupInfo | 部门管理、工作通知等 |
+| 飞书 | kick, listMembers, getGroupInfo, setGroupName | 管理员设置、解散群等 |
+
+可用的群管理方法规范：
+
+| 方法 | 说明 | 权限级别 |
+|------|------|---------|
+| `kickMember` | 踢出成员 | group_admin |
+| `muteMember` | 禁言（duration=0 解除） | group_admin |
+| `setMemberNickname` | 设置群昵称/名片 | group_admin |
+| `setAdmin` | 设置/取消管理员 | group_owner |
+| `listMembers` | 获取成员列表 | user |
+| `banMember` | 封禁成员 | group_admin |
+| `unbanMember` | 解除封禁 | group_admin |
+| `setGroupName` | 修改群名称 | group_admin |
+| `muteAll` | 全员禁言/解除 | group_admin |
+| `getGroupInfo` | 获取群信息 | user |
+
+#### 平台特有工具
+
+对于标准群管以外的平台特有操作（如 ICQQ 的头衔/群公告、Discord 的角色管理/Embed 等），在 `start()` 中通过 `addTool()` 手动注册。这些工具会被 `super.start()` 的自动检测机制一并收录到 Skill 中，无需单独调用 `declareSkill()`：
+
+```typescript
+class IcqqAdapter extends Adapter<IcqqBot> {
+  // 标准群管方法（自动检测）
+  async kickMember(...) { /* ... */ }
+  async muteMember(...) { /* ... */ }
+
+  async start() {
+    // 注册平台特有工具
+    this.addTool({ name: 'icqq_set_title', ... })
+    this.addTool({ name: 'icqq_announce', ... })
+    this.addTool({ name: 'icqq_poke', ... })
+
+    await super.start()
+    // 自动检测 kickMember / muteMember → 生成标准 Tool
+    // 连同 set_title / announce / poke 一起聚合为 "群聊管理" Skill
+  }
+}
+```
+
+如果适配器完全没有覆写任何 `IGroupManagement` 方法但仍需注册 Skill，可以手动调用 `declareSkill()`。
 
 ### Skill 接口
 

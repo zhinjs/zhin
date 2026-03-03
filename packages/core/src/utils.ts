@@ -1,5 +1,6 @@
 import * as path from "path";
 import * as fs from "fs";
+import * as vm from "vm";
 import {
   AdapterMessage,
   Dict,
@@ -74,26 +75,34 @@ export function compose<P extends RegisteredAdapter=RegisteredAdapter>(
     return dispatch(0);
   };
 }
-// 使用 LRU 缓存限制大小，防止内存泄漏
+// LRU cache for compiled vm.Script instances
 const MAX_EVAL_CACHE_SIZE = 1000;
-const evalCache: Record<string, Function> = Object.create(null);
-const evalCacheKeys: string[] = [];
+const scriptCache = new Map<string, vm.Script>();
 
-export const execute = <S, T = any>(exp: string, context: S): T => {
-  let fn = evalCache[exp];
-  
-  if (!fn) {
-    // 如果缓存已满，删除最旧的条目（LRU）
-    if (evalCacheKeys.length >= MAX_EVAL_CACHE_SIZE) {
-      const oldest = evalCacheKeys.shift()!;
-      delete evalCache[oldest];
-    }
-    
-    fn = evalCache[exp] = toFunction(exp);
-    evalCacheKeys.push(exp);
+function getOrCompileScript(code: string): vm.Script | null {
+  let script = scriptCache.get(code);
+  if (script) return script;
+  try {
+    script = new vm.Script(code);
+  } catch {
+    return null;
   }
-  context = {
-    ...context,
+  if (scriptCache.size >= MAX_EVAL_CACHE_SIZE) {
+    const oldest = scriptCache.keys().next().value;
+    if (oldest !== undefined) scriptCache.delete(oldest);
+  }
+  scriptCache.set(code, script);
+  return script;
+}
+
+/**
+ * Safe expression evaluator using vm.runInNewContext.
+ * Dangerous globals (require, process, global, Buffer, etc.) are blocked.
+ */
+export const execute = <S, T = any>(exp: string, context: S): T => {
+  const sandbox: Record<string, any> = {
+    ...(context as any),
+    // Expose only safe process info
     process: {
       version: process.version,
       versions: process.versions,
@@ -106,39 +115,37 @@ export const execute = <S, T = any>(exp: string, context: S): T => {
       pid: process.pid,
       ppid: process.ppid,
     },
-    Bun: "你想干嘛",
+    // Block dangerous globals
     global: undefined,
+    globalThis: undefined,
     Buffer: undefined,
     crypto: undefined,
+    require: undefined,
+    import: undefined,
+    __dirname: undefined,
+    __filename: undefined,
+    Bun: undefined,
+    Deno: undefined,
   };
+
+  const script = getOrCompileScript(exp);
+  if (!script) return exp as T;
+
   try {
-    return fn.apply(context, [context]);
+    return script.runInNewContext(sandbox, { timeout: 200 }) as T;
   } catch {
     return exp as T;
   }
 };
 
-const toFunction = (exp: string): Function => {
-  try {
-    return new Function(`$data`, `with($data){${exp}}`);
-  } catch {
-    return () => { };
-  }
-};
-
-// 清理 evalCache（用于内存调试）
 export function clearEvalCache(): void {
-  Object.keys(evalCache).forEach(key => {
-    delete evalCache[key];
-  });
-  evalCacheKeys.length = 0;
+  scriptCache.clear();
 }
 
-// 获取 evalCache 统计信息（用于内存调试）
 export function getEvalCacheStats(): { size: number; maxSize: number } {
   return {
-    size: evalCacheKeys.length,
-    maxSize: MAX_EVAL_CACHE_SIZE
+    size: scriptCache.size,
+    maxSize: MAX_EVAL_CACHE_SIZE,
   };
 }
 export function compiler(template: string, ctx: Dict) {

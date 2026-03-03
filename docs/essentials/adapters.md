@@ -42,7 +42,7 @@ bots:
     data_dir: ./data
 ```
 
-ICQQ 适配器提供丰富的群管理工具（踢人、禁言、设管理员、改名片等），详见 [工具与技能](/advanced/tools-skills)。
+ICQQ 适配器通过覆写 `IGroupManagement` 方法自动注册群管理工具（踢人、禁言、设管理员、改名片等），同时提供平台特有工具（头衔、群公告、戳一戳等）。详见 [工具与技能](/advanced/tools-skills)。
 
 ### QQ 官方机器人
 
@@ -253,43 +253,46 @@ bots:
 
 适配器不仅负责消息收发，还可以向 AI Agent 提供平台特有的工具。
 
-### 工具注册（addTool）
+### 群管理能力（自动检测）
 
-每个适配器通过 `addTool()` 注册平台特有的操作，如群管理、成员管理等：
+群管理是 IM 系统的通用能力。Adapter 基类声明了 `IGroupManagement` 接口中的可选方法规范，适配器只需覆写自己平台支持的方法，`start()` 会自动检测并生成 Tool + 注册 Skill，无需任何手动调用：
 
 ```typescript
-class MyAdapter extends Adapter<MyBot> {
+class IcqqAdapter extends Adapter<IcqqBot> {
+  async kickMember(botId: string, sceneId: string, userId: string) {
+    const bot = this.bots.get(botId)
+    return bot!.kickMember(Number(sceneId), Number(userId), false)
+  }
+
+  async muteMember(botId: string, sceneId: string, userId: string, duration = 600) {
+    const bot = this.bots.get(botId)
+    return bot!.muteMember(Number(sceneId), Number(userId), duration)
+  }
+
   async start() {
-    this.addTool({
-      name: 'my_kick_member',
-      description: '踢出群成员',
-      parameters: { /* JSON Schema */ },
-      permissionLevel: 'group_admin',
-      execute: async (args, context) => { /* ... */ },
-    })
-    await super.start()
+    this.registerPlatformTools() // 仅注册平台特有工具
+    await super.start()          // 自动检测群管方法 → 生成 Tool → 注册 Skill
   }
 }
 ```
 
-### 技能声明（declareSkill）
+目前所有 9 个 IM 适配器（ICQQ、OneBot11、QQ 官方、Telegram、Discord、KOOK、Slack、钉钉、飞书）都已采用此模式。
 
-适配器可以通过 `declareSkill()` 将所有工具聚合为一个语义化的 Skill，帮助 AI 更好地理解平台能力和调用约定：
+### 平台特有工具（addTool）
+
+对于标准群管以外的平台特有操作（如 ICQQ 的头衔、群公告、戳一戳，Discord 的角色管理等），仍通过 `addTool()` 手动注册，它们会被自动收录到同一个 Skill 中：
 
 ```typescript
-async start() {
-  this.registerMyTools()
-  this.declareSkill({
-    description: 'QQ群管理能力，包括踢人、禁言、设管理员等',
-    keywords: ['QQ', '群管理'],
-    tags: ['qq', '社交平台'],
-    conventions: '用户和群均使用数字 QQ号标识。bot 参数填 Bot ID，group_id 填场景 ID。',
+private registerPlatformTools() {
+  this.addTool({
+    name: 'icqq_set_title',
+    description: '设置群成员的专属头衔',
+    parameters: { /* JSON Schema */ },
+    permissionLevel: 'group_owner',
+    execute: async (args) => { /* ... */ },
   })
-  await super.start()
 }
 ```
-
-`conventions` 字段描述平台特有的调用约定，AI 在选中该 Skill 时会看到这些信息。
 
 详见 [工具与技能](/advanced/tools-skills)。
 

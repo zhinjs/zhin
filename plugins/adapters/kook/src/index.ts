@@ -752,15 +752,50 @@ export class KookAdapter extends Adapter<KookBot> {
     return bot;
   }
 
+  // ── IGroupManagement 标准群管方法 ──────────────────────────────────
+
+  async kickMember(botId: string, sceneId: string, userId: string) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.kickUser(sceneId, userId);
+  }
+
+  async banMember(botId: string, sceneId: string, userId: string, reason?: string) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.addToBlacklist(sceneId, userId, reason);
+  }
+
+  async unbanMember(botId: string, sceneId: string, userId: string) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.removeFromBlacklist(sceneId, userId);
+  }
+
+  async setMemberNickname(botId: string, sceneId: string, userId: string, nickname: string) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.setNickname(sceneId, userId, nickname);
+  }
+
+  async listMembers(botId: string, sceneId: string) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    const members = await bot.getGuildMembers(sceneId);
+    return {
+      members: members.map(m => ({
+        id: m.id, username: m.username,
+        nickname: m.nickname, roles: m.roles,
+      })),
+      count: members.length,
+    };
+  }
+
+  // ── 生命周期 ───────────────────────────────────────────────────────
+
   async start(): Promise<void> {
-    // 注册 KOOK 特有的管理工具
-    this.registerKookTools();
-    this.declareSkill({
-      description: 'KOOK 服务器管理能力，包括成员管理（踢人、封禁、解封、改昵称）、角色管理（创建、删除、授予、撤销）、成员列表查询、黑名单管理。',
-      keywords: ['KOOK', '开黑啦', '服务器管理', '角色', '黑名单', 'blacklist'],
-      tags: ['kook', '服务器管理', '社交平台'],
-      conventions: '用户和服务器均使用字符串 ID 标识。guild_id 为服务器 ID，user_id 为用户 ID。调用工具时 bot 参数应填当前上下文的 Bot ID。',
-    });
+    this.registerKookPlatformTools();
+    await super.start();
     logger.info("KOOK 适配器已启动");
   }
 
@@ -773,133 +808,9 @@ export class KookAdapter extends Adapter<KookBot> {
   }
 
   /**
-   * 注册 KOOK 平台特有的管理工具
-   * 这些工具仅在 KOOK 平台可用，且需要相应权限
+   * 注册 KOOK 平台特有工具（标准群管操作已通过覆写方法自动注册）
    */
-  private registerKookTools(): void {
-    // 踢出用户工具
-    this.addTool({
-      name: 'kook_kick_user',
-      description: '将用户踢出 KOOK 服务器（需要管理员或服务器主人权限）',
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: {
-            type: 'string',
-            description: 'Bot 名称',
-          },
-          guild_id: {
-            type: 'string',
-            description: '服务器 ID',
-          },
-          user_id: {
-            type: 'string',
-            description: '要踢出的用户 ID',
-          },
-        },
-        required: ['bot', 'guild_id', 'user_id'],
-      },
-      platforms: ['kook'],
-      scopes: ['channel'],
-      permissionLevel: 'group_admin',
-      execute: async (args, context) => {
-        const { bot: botId, guild_id, user_id } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        
-        // 权限检查
-        this.checkPermission(context, 'group_admin');
-        
-        const success = await bot.kickUser(guild_id, user_id);
-        return { success, message: success ? `已将用户 ${user_id} 踢出服务器` : '踢出失败' };
-      },
-    });
-
-    // 黑名单管理工具
-    this.addTool({
-      name: 'kook_ban_user',
-      description: '将用户加入 KOOK 服务器黑名单（封禁用户，需要管理员权限）',
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: {
-            type: 'string',
-            description: 'Bot 名称',
-          },
-          guild_id: {
-            type: 'string',
-            description: '服务器 ID',
-          },
-          user_id: {
-            type: 'string',
-            description: '要封禁的用户 ID',
-          },
-          remark: {
-            type: 'string',
-            description: '封禁原因/备注（可选）',
-          },
-          del_msg_days: {
-            type: 'number',
-            description: '删除该用户最近几天的消息（0-7，可选）',
-          },
-        },
-        required: ['bot', 'guild_id', 'user_id'],
-      },
-      platforms: ['kook'],
-      scopes: ['channel'],
-      permissionLevel: 'group_admin',
-      execute: async (args, context) => {
-        const { bot: botId, guild_id, user_id, remark, del_msg_days } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        
-        this.checkPermission(context, 'group_admin');
-        
-        const success = await bot.addToBlacklist(guild_id, user_id, remark, del_msg_days);
-        return { 
-          success, 
-          message: success ? `已将用户 ${user_id} 加入黑名单${remark ? `，原因：${remark}` : ''}` : '封禁失败' 
-        };
-      },
-    });
-
-    // 解除封禁工具
-    this.addTool({
-      name: 'kook_unban_user',
-      description: '将用户从 KOOK 服务器黑名单移除（解除封禁）',
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: {
-            type: 'string',
-            description: 'Bot 名称',
-          },
-          guild_id: {
-            type: 'string',
-            description: '服务器 ID',
-          },
-          user_id: {
-            type: 'string',
-            description: '要解封的用户 ID',
-          },
-        },
-        required: ['bot', 'guild_id', 'user_id'],
-      },
-      platforms: ['kook'],
-      scopes: ['channel'],
-      permissionLevel: 'group_admin',
-      execute: async (args, context) => {
-        const { bot: botId, guild_id, user_id } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        
-        this.checkPermission(context, 'group_admin');
-        
-        const success = await bot.removeFromBlacklist(guild_id, user_id);
-        return { success, message: success ? `已将用户 ${user_id} 从黑名单移除` : '解封失败' };
-      },
-    });
-
+  private registerKookPlatformTools(): void {
     // 角色管理工具 - 授予角色
     this.addTool({
       name: 'kook_grant_role',
@@ -979,47 +890,6 @@ export class KookAdapter extends Adapter<KookBot> {
         
         const success = await bot.revokeRole(guild_id, user_id, role_id);
         return { success, message: success ? `已撤销用户 ${user_id} 的角色 ${role_id}` : '撤销角色失败' };
-      },
-    });
-
-    // 设置昵称工具
-    this.addTool({
-      name: 'kook_set_nickname',
-      description: '设置用户在 KOOK 服务器中的昵称',
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: {
-            type: 'string',
-            description: 'Bot 名称',
-          },
-          guild_id: {
-            type: 'string',
-            description: '服务器 ID',
-          },
-          user_id: {
-            type: 'string',
-            description: '用户 ID',
-          },
-          nickname: {
-            type: 'string',
-            description: '新昵称',
-          },
-        },
-        required: ['bot', 'guild_id', 'user_id', 'nickname'],
-      },
-      platforms: ['kook'],
-      scopes: ['channel'],
-      permissionLevel: 'group_admin',
-      execute: async (args, context) => {
-        const { bot: botId, guild_id, user_id, nickname } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        
-        this.checkPermission(context, 'group_admin');
-        
-        const success = await bot.setNickname(guild_id, user_id, nickname);
-        return { success, message: success ? `已将用户 ${user_id} 的昵称设置为 "${nickname}"` : '设置昵称失败' };
       },
     });
 
@@ -1141,50 +1011,6 @@ export class KookAdapter extends Adapter<KookBot> {
         
         const success = await bot.deleteRole(guild_id, role_id);
         return { success, message: success ? `已删除角色 ${role_id}` : '删除角色失败' };
-      },
-    });
-
-    // 获取成员列表工具
-    this.addTool({
-      name: 'kook_list_members',
-      description: '获取 KOOK 服务器或频道的成员列表',
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: {
-            type: 'string',
-            description: 'Bot 名称',
-          },
-          guild_id: {
-            type: 'string',
-            description: '服务器 ID',
-          },
-          channel_id: {
-            type: 'string',
-            description: '频道 ID（可选，不填则获取整个服务器成员）',
-          },
-        },
-        required: ['bot', 'guild_id'],
-      },
-      platforms: ['kook'],
-      scopes: ['channel'],
-      permissionLevel: 'user',
-      execute: async (args) => {
-        const { bot: botId, guild_id, channel_id } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        
-        const members = await bot.getGuildMembers(guild_id, channel_id);
-        return { 
-          members: members.map(m => ({
-            id: m.id,
-            username: m.username,
-            nickname: m.nickname,
-            avatar: m.avatar,
-            roles: m.roles,
-          })),
-          count: members.length,
-        };
       },
     });
 

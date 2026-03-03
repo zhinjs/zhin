@@ -12,6 +12,7 @@
     "packages/*",
     "plugins/adapters/*",
     "plugins/services/*",
+    "plugins/features/*",
     "plugins/games/*",
     "plugins/utils/*",
     "examples/*",

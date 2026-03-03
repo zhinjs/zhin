@@ -88,6 +88,71 @@ export { default as logger } from '@zhin.js/logger'
 - **MessageDispatcher** — 三阶段消息处理管线（Guardrail → Route → Handle）
 - **ZhinAgent** — 内置 AI 智能体，支持工具调用和多轮对话
 
+## AI 与多 Agent
+
+本包在此层提供 **多 Agent 编排** API（基于 `ctx.ai.createAgent()`）：
+
+- **runPipeline(ai, steps, initialInput)** — 多步串联，每步输出作为下一步输入
+- **runParallel(ai, tasks)** — 多 Agent 并行执行，返回 `Record<key, 输出>`
+- **route(ai, content, rules, defaultOptions?)** — 按条件路由到不同专业 Agent
+
+插件从 `zhin.js` 引入后，在 `useContext('ai', ...)` 内使用即可。按 bot/群组配置多个 ZhinAgent 的调度与路由规划在后续版本提供。
+
+### 编排示例
+
+以下示例中的 `prompt` / `systemPrompt` 可按需细化，使模型输出更稳定、格式更可控。
+
+```typescript
+import { useContext, runPipeline, runParallel, route } from 'zhin.js'
+
+// 串联：先总结再翻译（每步的 {input} 会替换为上一步输出）
+useContext('ai', async (ai) => {
+  const result = await runPipeline(ai, [
+    {
+      prompt: '请严格用 3 条 bullet 总结以下内容，每条一行，不要多余解释：\n\n{input}',
+      systemPrompt: '你是总结助手。只输出 3 条要点，每条一行，不要编号以外的多余文字。',
+    },
+    {
+      prompt: '将以下中文要点逐条翻译成英文，保持 3 条、每行一条，不要增删内容：\n\n{input}',
+      systemPrompt: '你是翻译。只输出翻译后的 3 行英文，不要前言或结语。',
+    },
+  ], userMessage)
+})
+
+// 并行：同时生成代码与文档
+useContext('ai', async (ai) => {
+  const out = await runParallel(ai, [
+    {
+      key: 'code',
+      prompt: '用 TypeScript 写一个在控制台输出 "Hello World" 的示例，仅代码、无注释。',
+      systemPrompt: '你只输出可运行的 TypeScript/JavaScript 代码，不要 markdown 包裹、不要解释。',
+    },
+    {
+      key: 'doc',
+      prompt: '为「在控制台打印 Hello World 的 TypeScript 程序」写一段 2–3 句的简短说明。',
+      systemPrompt: '你只输出纯文本说明，2–3 句，不要代码块或标题。',
+    },
+  ])
+  // out.code, out.doc
+})
+
+// 路由：按关键词分发给专业 Agent（{content} 会替换为用户原文）
+useContext('ai', async (ai) => {
+  const reply = await route(ai, userInput, [
+    {
+      when: (c) => /代码|code|实现|写一个|示例/.test(c),
+      systemPrompt: '你是代码助手。根据用户需求只输出代码或最小可运行示例，必要时加一行注释说明运行方式。',
+      prompt: '{content}',
+    },
+    {
+      when: (c) => /翻译|translate|译成|译成英文/.test(c),
+      systemPrompt: '你是翻译。只输出翻译结果，保持原有格式（列表/段落），不添加「翻译如下」等前缀。',
+      prompt: '{content}',
+    },
+  ], { systemPrompt: '你是通用助手，简明回答用户问题。' })
+})
+```
+
 ## 常用命令
 
 ```bash

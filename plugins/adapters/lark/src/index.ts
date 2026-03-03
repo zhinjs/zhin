@@ -809,21 +809,43 @@ class LarkAdapter extends Adapter<LarkBot> {
         return new LarkBot(this, this.#router, config);
     }
 
+    // ── IGroupManagement 标准群管方法 ──────────────────────────────────
+
+    async kickMember(botId: string, sceneId: string, userId: string) {
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        return bot.removeChatMembers(sceneId, [userId]);
+    }
+
+    async listMembers(botId: string, sceneId: string) {
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        return bot.getChatMembers(sceneId);
+    }
+
+    async getGroupInfo(botId: string, sceneId: string) {
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        return bot.getChatInfo(sceneId);
+    }
+
+    async setGroupName(botId: string, sceneId: string, name: string) {
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        return bot.updateChatInfo(sceneId, { name });
+    }
+
+    // ── 生命周期 ───────────────────────────────────────────────────────
+
     async start(): Promise<void> {
-        this.registerLarkTools();
-        this.declareSkill({
-            description: '飞书群聊管理能力，包括用户信息查询、群信息查询、群创建/更新/解散、成员管理（添加/移除成员）、管理员管理（设置/撤销管理员）、文件上传。',
-            keywords: ['飞书', 'Lark', '群聊管理', '企业协作', '文件上传', 'upload'],
-            tags: ['lark', '群聊管理', '企业协作'],
-            conventions: '群和用户均使用字符串 ID 标识（open_id / chat_id）。调用工具时 bot 参数应填当前上下文的 Bot ID，chat_id 应填当前场景 ID。',
-        });
+        this.registerLarkPlatformTools();
         await super.start();
     }
 
     /**
-     * 注册飞书平台群组管理工具
+     * 注册飞书平台特有工具（标准群管操作已通过覆写方法自动注册）
      */
-    private registerLarkTools(): void {
+    private registerLarkPlatformTools(): void {
         // 获取用户信息工具
         this.addTool({
             name: 'lark_get_user',
@@ -844,29 +866,6 @@ class LarkAdapter extends Adapter<LarkBot> {
                 const bot = this.bots.get(botId);
                 if (!bot) throw new Error(`Bot ${botId} 不存在`);
                 return await bot.getUserInfo(user_id);
-            },
-        });
-
-        // 获取群聊信息工具
-        this.addTool({
-            name: 'lark_chat_info',
-            description: '获取飞书群聊信息',
-            parameters: {
-                type: 'object',
-                properties: {
-                    bot: { type: 'string', description: 'Bot 名称' },
-                    chat_id: { type: 'string', description: '群聊 ID' },
-                },
-                required: ['bot', 'chat_id'],
-            },
-            platforms: ['lark'],
-            scopes: ['group'],
-            permissionLevel: 'user',
-            execute: async (args) => {
-                const { bot: botId, chat_id } = args;
-                const bot = this.bots.get(botId);
-                if (!bot) throw new Error(`Bot ${botId} 不存在`);
-                return await bot.getChatInfo(chat_id);
             },
         });
 
@@ -944,55 +943,6 @@ class LarkAdapter extends Adapter<LarkBot> {
                 if (!bot) throw new Error(`Bot ${botId} 不存在`);
                 const success = await bot.addChatMembers(chat_id, user_ids);
                 return { success, message: success ? '成员添加成功' : '添加失败' };
-            },
-        });
-
-        // 移除群成员工具
-        this.addTool({
-            name: 'lark_remove_members',
-            description: '移除飞书群成员',
-            parameters: {
-                type: 'object',
-                properties: {
-                    bot: { type: 'string', description: 'Bot 名称' },
-                    chat_id: { type: 'string', description: '群聊 ID' },
-                    user_ids: { type: 'array', items: { type: 'string' }, description: '用户 open_id 列表' },
-                },
-                required: ['bot', 'chat_id', 'user_ids'],
-            },
-            platforms: ['lark'],
-            scopes: ['group'],
-            permissionLevel: 'group_admin',
-            execute: async (args) => {
-                const { bot: botId, chat_id, user_ids } = args;
-                const bot = this.bots.get(botId);
-                if (!bot) throw new Error(`Bot ${botId} 不存在`);
-                const success = await bot.removeChatMembers(chat_id, user_ids);
-                return { success, message: success ? '成员移除成功' : '移除失败' };
-            },
-        });
-
-        // 获取群成员列表工具
-        this.addTool({
-            name: 'lark_list_members',
-            description: '获取飞书群成员列表',
-            parameters: {
-                type: 'object',
-                properties: {
-                    bot: { type: 'string', description: 'Bot 名称' },
-                    chat_id: { type: 'string', description: '群聊 ID' },
-                },
-                required: ['bot', 'chat_id'],
-            },
-            platforms: ['lark'],
-            scopes: ['group'],
-            permissionLevel: 'user',
-            execute: async (args) => {
-                const { bot: botId, chat_id } = args;
-                const bot = this.bots.get(botId);
-                if (!bot) throw new Error(`Bot ${botId} 不存在`);
-                const members = await bot.getChatMembers(chat_id);
-                return { members, count: members.length };
             },
         });
 

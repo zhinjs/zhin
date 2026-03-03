@@ -727,21 +727,43 @@ class SlackAdapter extends Adapter<SlackBot> {
     return new SlackBot(this, config);
   }
 
+  // ── IGroupManagement 标准群管方法 ──────────────────────────────────
+
+  async kickMember(botId: string, sceneId: string, userId: string) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.kickFromChannel(sceneId, userId);
+  }
+
+  async setGroupName(botId: string, sceneId: string, name: string) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.renameChannel(sceneId, name);
+  }
+
+  async listMembers(botId: string, sceneId: string) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.getChannelMembers(sceneId);
+  }
+
+  async getGroupInfo(botId: string, sceneId: string) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error(`Bot ${botId} 不存在`);
+    return bot.getChannelInfo(sceneId);
+  }
+
+  // ── 生命周期 ───────────────────────────────────────────────────────
+
   async start(): Promise<void> {
-    this.registerSlackTools();
-    this.declareSkill({
-      description: 'Slack 频道管理能力，包括成员管理（邀请、踢出）、频道设置（主题、用途、重命名、归档、恢复归档）、消息管理（置顶、取消置顶、表情反应、移除反应）、频道信息查询、用户信息查询。',
-      keywords: ['Slack', '频道管理', '工作区', '取消置顶', '移除反应', '用户信息', '频道用途', '恢复归档'],
-      tags: ['slack', '频道管理', '办公协作'],
-      conventions: '频道和用户均使用字符串 ID 标识（如 C0xxx、U0xxx）。调用工具时 bot 参数应填当前上下文的 Bot ID，channel_id 应填当前场景 ID。',
-    });
+    this.registerSlackPlatformTools();
     await super.start();
   }
 
   /**
-   * 注册 Slack 平台工作区管理工具
+   * 注册 Slack 平台特有工具（标准群管操作已通过覆写方法自动注册）
    */
-  private registerSlackTools(): void {
+  private registerSlackPlatformTools(): void {
     // 邀请用户到频道
     this.addTool({
       name: 'slack_invite_to_channel',
@@ -767,31 +789,6 @@ class SlackAdapter extends Adapter<SlackBot> {
       },
     });
 
-    // 从频道踢出用户
-    this.addTool({
-      name: 'slack_kick_from_channel',
-      description: '将用户从 Slack 频道踢出',
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: { type: 'string', description: 'Bot 名称' },
-          channel: { type: 'string', description: '频道 ID' },
-          user: { type: 'string', description: '用户 ID' },
-        },
-        required: ['bot', 'channel', 'user'],
-      },
-      platforms: ['slack'],
-      scopes: ['group'],
-      permissionLevel: 'group_admin',
-      execute: async (args) => {
-        const { bot: botId, channel, user } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        const success = await bot.kickFromChannel(channel, user);
-        return { success, message: success ? `已将用户 ${user} 踢出频道` : '操作失败' };
-      },
-    });
-
     // 设置频道话题
     this.addTool({
       name: 'slack_set_topic',
@@ -814,31 +811,6 @@ class SlackAdapter extends Adapter<SlackBot> {
         if (!bot) throw new Error(`Bot ${botId} 不存在`);
         const success = await bot.setChannelTopic(channel, topic);
         return { success, message: success ? `已设置频道话题` : '操作失败' };
-      },
-    });
-
-    // 重命名频道
-    this.addTool({
-      name: 'slack_rename_channel',
-      description: '重命名 Slack 频道',
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: { type: 'string', description: 'Bot 名称' },
-          channel: { type: 'string', description: '频道 ID' },
-          name: { type: 'string', description: '新名称' },
-        },
-        required: ['bot', 'channel', 'name'],
-      },
-      platforms: ['slack'],
-      scopes: ['group'],
-      permissionLevel: 'group_admin',
-      execute: async (args) => {
-        const { bot: botId, channel, name } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        const success = await bot.renameChannel(channel, name);
-        return { success, message: success ? `已将频道重命名为 "${name}"` : '操作失败' };
       },
     });
 
@@ -888,53 +860,6 @@ class SlackAdapter extends Adapter<SlackBot> {
         if (!bot) throw new Error(`Bot ${botId} 不存在`);
         const success = await bot.pinMessage(channel, timestamp);
         return { success, message: success ? `已置顶消息` : '操作失败' };
-      },
-    });
-
-    // 获取频道成员
-    this.addTool({
-      name: 'slack_list_members',
-      description: '获取 Slack 频道成员列表',
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: { type: 'string', description: 'Bot 名称' },
-          channel: { type: 'string', description: '频道 ID' },
-        },
-        required: ['bot', 'channel'],
-      },
-      platforms: ['slack'],
-      scopes: ['group'],
-      permissionLevel: 'user',
-      execute: async (args) => {
-        const { bot: botId, channel } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        const members = await bot.getChannelMembers(channel);
-        return { members, count: members.length };
-      },
-    });
-
-    // 获取频道信息
-    this.addTool({
-      name: 'slack_channel_info',
-      description: '获取 Slack 频道信息',
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: { type: 'string', description: 'Bot 名称' },
-          channel: { type: 'string', description: '频道 ID' },
-        },
-        required: ['bot', 'channel'],
-      },
-      platforms: ['slack'],
-      scopes: ['group'],
-      permissionLevel: 'user',
-      execute: async (args) => {
-        const { bot: botId, channel } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        return await bot.getChannelInfo(channel);
       },
     });
 

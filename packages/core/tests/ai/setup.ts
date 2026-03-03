@@ -8,7 +8,7 @@
  */
 import { vi } from 'vitest';
 import type { Message, MessageElement, Tool, ToolContext } from '@zhin.js/core';
-import type { AIConfig, AIProviderConfig, ChatMessage } from '../../src/ai/types.js';
+import type { AIConfig, ChatMessage } from '@zhin.js/core';
 
 // ============================================================================
 // Logger Mock
@@ -226,7 +226,7 @@ export const createMockAIConfig = (overrides: Partial<AIConfig> = {}): AIConfig 
   defaultProvider: 'mock',
   sessions: {
     maxHistory: 10,
-    timeout: 300000,
+    expireMs: 300000,
   },
   context: {
     enabled: false,

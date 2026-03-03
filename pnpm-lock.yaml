@@ -305,6 +305,25 @@ importers:
         specifier: ^5.0.0
         version: 5.9.3
 
+  packages/agent:
+    dependencies:
+      '@zhin.js/core':
+        specifier: workspace:*
+        version: link:../core
+      '@zhin.js/logger':
+        specifier: workspace:*
+        version: link:../../basic/logger
+    devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.10.4
+      rimraf:
+        specifier: ^6.0.0
+        version: 6.1.2
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+
   packages/client:
     dependencies:
       '@reduxjs/toolkit':
@@ -491,6 +510,9 @@ importers:
 
   packages/zhin:
     dependencies:
+      '@zhin.js/agent':
+        specifier: workspace:*
+        version: link:../agent
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../core
@@ -5200,7 +5222,7 @@ packages:
 
   glob@7.2.3:
     resolution: {integrity: sha512-nFR0zLpU2YCaRxwoCJvL6UvCH2JFyFVIvwTLsIf21AuHlMskA1hhTdk+LlYJtOlYt9v6dvszD2BGRqBL+iQK9Q==}
-    deprecated: Glob versions prior to v9 are no longer supported
+    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
   globals@13.24.0:
     resolution: {integrity: sha512-AhO5QUcj8llrbG09iWhPU2B204J1xnPeL8kQmVorSsy+Sjj1sk8gIyh6cUocGmH4L0UuhAJy+hJMRA4mgA4mFQ==}

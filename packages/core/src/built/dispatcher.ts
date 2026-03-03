@@ -149,72 +149,73 @@ declare module '../plugin.js' {
  * 创建 MessageDispatcher Context
  */
 export function createMessageDispatcher(): Context<'dispatcher', DispatcherContextExtensions> {
-  // 护栏中间件列表
   const guardrails: GuardrailMiddleware[] = [];
-
-  // AI 处理函数（由 AI 模块注册）
   let aiHandler: AIHandler | null = null;
-
-  // AI 触发判定器（由 AI 模块注册）
   let aiTriggerMatcher: AITriggerMatcher | null = null;
-
-  // 命令匹配器（默认由 command service 驱动）
   let commandMatcher: CommandMatcher | null = null;
-
-  // 根插件引用（mounted 时设置）
   let rootPlugin: Plugin | null = null;
 
-  /**
-   * 执行 Guardrail 管道
-   * 返回 true 表示消息通过，false 表示被拦截
-   */
-  async function runGuardrails(message: Message<any>): Promise<boolean> {
-    if (guardrails.length === 0) return true;
+  // Command prefix index — rebuilt lazily for O(1) lookup
+  let commandPrefixIndex: Map<string, boolean> | null = null;
+  let lastCommandCount = -1;
 
-    let passed = true;
-    let index = 0;
-
-    const runNext = async (): Promise<void> => {
-      if (index >= guardrails.length) return;
-      const guardrail = guardrails[index++];
-      try {
-        await guardrail(message, runNext);
-      } catch {
-        // Guardrail 抛异常 → 拦截消息
-        passed = false;
-      }
-    };
-
-    await runNext();
-    return passed;
-  }
-
-  /**
-   * 路由判定：这条消息该走哪条路径？
-   */
-  function route(message: Message<any>): RouteResult {
-    // 提取文本内容
-    const text = extractText(message);
-
-    // 1. 如果有自定义命令匹配器，优先使用
-    if (commandMatcher && commandMatcher(text, message)) {
-      return { type: 'command' };
-    }
-
-    // 2. 默认命令匹配：检查 commandService
+  function rebuildCommandIndex(): Map<string, boolean> {
+    const index = new Map<string, boolean>();
     if (rootPlugin) {
       const commandService = rootPlugin.inject('command');
       if (commandService?.items) {
         for (const cmd of commandService.items) {
-          const pattern = cmd.pattern?.split(/\s/)[0];
-          if (pattern && text.startsWith(pattern)) {
-            return { type: 'command' };
-          }
+          const prefix = cmd.pattern?.split(/\s/)[0];
+          if (prefix) index.set(prefix, true);
         }
       }
     }
+    return index;
+  }
 
-    // 3. AI 触发判定
+  function getCommandIndex(): Map<string, boolean> {
+    const commandService = rootPlugin?.inject('command');
+    const currentCount = commandService?.items?.length ?? 0;
+    if (!commandPrefixIndex || currentCount !== lastCommandCount) {
+      commandPrefixIndex = rebuildCommandIndex();
+      lastCommandCount = currentCount;
+    }
+    return commandPrefixIndex;
+  }
+
+  /**
+   * Guardrail pipeline — a guardrail that does NOT call next() blocks the message.
+   */
+  async function runGuardrails(message: Message<any>): Promise<boolean> {
+    if (guardrails.length === 0) return true;
+
+    for (const guardrail of guardrails) {
+      let nextCalled = false;
+      try {
+        await guardrail(message, async () => { nextCalled = true; });
+      } catch {
+        return false;
+      }
+      if (!nextCalled) return false;
+    }
+    return true;
+  }
+
+  function route(message: Message<any>): RouteResult {
+    const text = extractText(message);
+
+    if (commandMatcher && commandMatcher(text, message)) {
+      return { type: 'command' };
+    }
+
+    // Use indexed lookup instead of O(N) scan
+    const index = getCommandIndex();
+    for (const [prefix] of index) {
+      if (text.startsWith(prefix)) {
+        return { type: 'command' };
+      }
+    }
+
     if (aiTriggerMatcher) {
       const { triggered, content } = aiTriggerMatcher(message);
       if (triggered) {
@@ -222,13 +223,9 @@ export function createMessageDispatcher(): Context<'dispatcher', DispatcherConte
       }
     }
 
-    // 4. 都不匹配 → 跳过
     return { type: 'skip' };
   }
 
-  /**
-   * 提取消息文本（简单实现，与 ai-trigger 中的 extractTextContent 对齐）
-   */
   function extractText(message: Message<any>): string {
     if (!message.$content) return '';
     return message.$content
@@ -240,8 +237,6 @@ export function createMessageDispatcher(): Context<'dispatcher', DispatcherConte
       .join('')
       .trim();
   }
-
-  // ─── 服务实例 ───────────────────────────────────────────────────────────
 
   const service: MessageDispatcherService = {
     async dispatch(message: Message<any>) {
@@ -255,7 +250,6 @@ export function createMessageDispatcher(): Context<'dispatcher', DispatcherConte
       // Stage 3: Handle
       switch (result.type) {
         case 'command': {
-          // 命令快速路径 — 直接委托给 commandService
           if (rootPlugin) {
             const commandService = rootPlugin.inject('command');
             if (commandService) {
@@ -269,7 +263,6 @@ export function createMessageDispatcher(): Context<'dispatcher', DispatcherConte
         }
 
         case 'ai': {
-          // AI Agent 路径
           if (aiHandler) {
             await aiHandler(message, result.content);
           }
@@ -278,13 +271,19 @@ export function createMessageDispatcher(): Context<'dispatcher', DispatcherConte
 
         case 'skip':
         default:
-          // 不处理
           break;
       }
 
-      // 兼容：仍然执行旧的中间件链（除了默认的命令中间件和 AI 触发中间件）
-      // 这样既有 Guardrail/Dispatcher 新逻辑，又不会丢失已有的自定义中间件
-      // Phase 1 阶段先保持兼容，后续逐步迁移
+      // Run legacy custom middlewares (skip the built-in command middleware at index 0).
+      // This ensures plugins that registered middlewares via addMiddleware() still work.
+      if (rootPlugin) {
+        const customMiddlewares = (rootPlugin as any)._getCustomMiddlewares?.() as MessageMiddleware<RegisteredAdapter>[] | undefined;
+        if (customMiddlewares && customMiddlewares.length > 0) {
+          const { compose } = await import('../utils.js');
+          const composed = compose(customMiddlewares);
+          await composed(message, async () => {});
+        }
+      }
     },
 
     addGuardrail(guardrail: GuardrailMiddleware) {

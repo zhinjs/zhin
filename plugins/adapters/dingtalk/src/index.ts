@@ -791,21 +791,37 @@ class DingTalkAdapter extends Adapter<DingTalkBot> {
         return new DingTalkBot(this, this.#router, config);
     }
 
+    // ── IGroupManagement 标准群管方法 ──────────────────────────────────
+
+    async kickMember(botId: string, sceneId: string, userId: string) {
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        return bot.updateChat(sceneId, { del_useridlist: [userId] });
+    }
+
+    async setGroupName(botId: string, sceneId: string, name: string) {
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        return bot.updateChat(sceneId, { name });
+    }
+
+    async getGroupInfo(botId: string, sceneId: string) {
+        const bot = this.bots.get(botId);
+        if (!bot) throw new Error(`Bot ${botId} 不存在`);
+        return bot.getChatInfo(sceneId);
+    }
+
+    // ── 生命周期 ───────────────────────────────────────────────────────
+
     async start(): Promise<void> {
-        this.registerDingTalkTools();
-        this.declareSkill({
-            description: '钉钉管理能力，包括用户信息查询、部门信息查询（详情/列表）、工作通知发送、群聊管理（创建群、查看群信息、更新群设置、添加/移除群成员）。',
-            keywords: ['钉钉', 'DingTalk', '企业管理', '工作通知', '部门详情', '更新群设置'],
-            tags: ['dingtalk', '企业管理', '办公协作'],
-            conventions: '用户使用 userId 标识，群聊使用 chatId 标识。调用工具时 bot 参数应填当前上下文的 Bot ID。',
-        });
+        this.registerDingTalkPlatformTools();
         await super.start();
     }
 
     /**
-     * 注册钉钉平台管理工具
+     * 注册钉钉平台特有工具（标准群管操作已通过覆写方法自动注册）
      */
-    private registerDingTalkTools(): void {
+    private registerDingTalkPlatformTools(): void {
         // 获取用户信息工具
         this.addTool({
             name: 'dingtalk_get_user',
@@ -932,29 +948,6 @@ class DingTalkAdapter extends Adapter<DingTalkBot> {
             },
         });
 
-        // 获取群聊信息工具
-        this.addTool({
-            name: 'dingtalk_chat_info',
-            description: '获取钉钉群聊信息',
-            parameters: {
-                type: 'object',
-                properties: {
-                    bot: { type: 'string', description: 'Bot 名称' },
-                    chat_id: { type: 'string', description: '群聊 ID' },
-                },
-                required: ['bot', 'chat_id'],
-            },
-            platforms: ['dingtalk'],
-            scopes: ['group'],
-            permissionLevel: 'user',
-            execute: async (args) => {
-                const { bot: botId, chat_id } = args;
-                const bot = this.bots.get(botId);
-                if (!bot) throw new Error(`Bot ${botId} 不存在`);
-                return await bot.getChatInfo(chat_id);
-            },
-        });
-
         // 添加群成员工具
         this.addTool({
             name: 'dingtalk_add_chat_members',
@@ -977,31 +970,6 @@ class DingTalkAdapter extends Adapter<DingTalkBot> {
                 if (!bot) throw new Error(`Bot ${botId} 不存在`);
                 const success = await bot.updateChat(chat_id, { add_useridlist: user_ids });
                 return { success, message: success ? '成员添加成功' : '添加失败' };
-            },
-        });
-
-        // 移除群成员工具
-        this.addTool({
-            name: 'dingtalk_remove_chat_members',
-            description: '从钉钉群聊移除成员',
-            parameters: {
-                type: 'object',
-                properties: {
-                    bot: { type: 'string', description: 'Bot 名称' },
-                    chat_id: { type: 'string', description: '群聊 ID' },
-                    user_ids: { type: 'array', items: { type: 'string' }, description: '要移除的用户 ID 列表' },
-                },
-                required: ['bot', 'chat_id', 'user_ids'],
-            },
-            platforms: ['dingtalk'],
-            scopes: ['group'],
-            permissionLevel: 'group_admin',
-            execute: async (args) => {
-                const { bot: botId, chat_id, user_ids } = args;
-                const bot = this.bots.get(botId);
-                if (!bot) throw new Error(`Bot ${botId} 不存在`);
-                const success = await bot.updateChat(chat_id, { del_useridlist: user_ids });
-                return { success, message: success ? '成员移除成功' : '移除失败' };
             },
         });
 

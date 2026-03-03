@@ -2,6 +2,14 @@
 
 Zhin 框架的插件生态系统，包含平台适配器、功能服务和工具类插件。
 
+## 包命名约定
+
+- **adapters/**：`@zhin.js/adapter-*`（如 `adapter-icqq`、`adapter-kook`）。
+- **services/**：可简短命名（如 `@zhin.js/http`、`@zhin.js/console`）或 `@zhin.js/plugin-*`。
+- **utils/**、**features/**：`@zhin.js/plugin-*`（如 `plugin-60s`、`plugin-html-renderer`）。
+
+新插件请按上述规范命名，详见 [架构概览](../docs/architecture-overview.md)。
+
 ## 插件分类
 
 ### adapters/ — 平台适配器

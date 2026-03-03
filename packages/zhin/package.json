@@ -11,6 +11,16 @@
       "development": "./src/index.ts",
       "import": "./lib/index.js"
     },
+    "./core": {
+      "types": "./lib/re-exports/core.d.ts",
+      "development": "./src/re-exports/core.ts",
+      "import": "./lib/re-exports/core.js"
+    },
+    "./agent": {
+      "types": "./lib/re-exports/agent.d.ts",
+      "development": "./src/re-exports/agent.ts",
+      "import": "./lib/re-exports/agent.js"
+    },
     "./jsx": {
       "types": "./lib/jsx.d.ts",
       "development": "./src/jsx.ts",
@@ -37,6 +47,7 @@
     "clean": "rimraf lib"
   },
   "dependencies": {
+    "@zhin.js/agent": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/schema": "workspace:*",

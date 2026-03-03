@@ -23,9 +23,30 @@ addCommand(
 )
 ```
 
+插件名称默认从文件路径推导，也可以显式声明：
+
+```typescript
+// 方式 1: 导出 pluginName 常量
+export const pluginName = 'my-awesome-plugin'
+
+// 方式 2: 使用 definePlugin 声明式 API
+import { definePlugin } from '@zhin.js/core'
+
+export default definePlugin({
+  name: 'my-awesome-plugin',
+  setup(plugin) {
+    // 在这里使用 plugin 注册命令、工具等
+  },
+})
+
+// 方式 3: 手动设置
+const plugin = usePlugin()
+plugin.setName('my-awesome-plugin')
+```
+
 ### Feature（特性抽象）
 
-Feature 是 Zhin.js 的核心扩展机制。所有内置功能均继承自 `Feature` 抽象基类，提供统一的注册/注销、插件归属追踪和 JSON 序列化能力。
+Feature 是 Zhin.js 的核心扩展机制。所有内置功能均继承自 `Feature` 抽象基类，提供统一的注册/注销、插件归属追踪、JSON 序列化和变更事件通知能力。
 
 ```
 Feature (抽象基类)
@@ -41,6 +62,18 @@ Feature (抽象基类)
 
 每个 Feature 都会在 `Plugin.prototype` 上注入对应的扩展方法（如 `addCommand`、`addTool`），插件通过 `usePlugin()` 获取这些方法。
 
+Feature 支持变更事件监听，依赖方可实时响应 item 的增删：
+
+```typescript
+const toolFeature = plugin.inject('tool')
+const off = toolFeature.on('add', (tool, pluginName) => {
+  console.log(`工具 ${tool.name} 已注册 (来自 ${pluginName})`)
+})
+toolFeature.on('remove', (tool) => {
+  console.log(`工具 ${tool.name} 已移除`)
+})
+```
+
 ### Adapter（适配器）
 
 适配器将不同聊天平台接入 Zhin.js，统一消息收发接口。
@@ -50,7 +83,28 @@ Feature (抽象基类)
 Adapter.register('my-platform', MyAdapter)
 ```
 
-每个适配器可以通过 `addTool()` 注册平台工具，通过 `declareSkill()` 将工具聚合为 AI 可理解的技能。
+每个适配器可以通过 `addTool()` 注册平台特有工具，标准群管操作通过覆写 `IGroupManagement` 方法自动注册。
+
+**群管理能力自动检测：** 适配器基类声明了 `IGroupManagement` 接口中的可选方法（`kickMember`、`muteMember`、`banMember` 等），子类只需覆写自己平台支持的方法，`start()` 会自动检测哪些方法已实现，生成对应的 Tool 并注册为"群聊管理"Skill。目前所有 9 个 IM 适配器（ICQQ、OneBot11、QQ 官方、Telegram、Discord、KOOK、Slack、钉钉、飞书）均已采用此模式：
+
+```typescript
+class IcqqAdapter extends Adapter<IcqqBot> {
+  // 覆写标准群管方法
+  async kickMember(botId: string, sceneId: string, userId: string) {
+    const bot = this.bots.get(botId)
+    if (!bot) throw new Error(`Bot ${botId} 不存在`)
+    return bot.kickMember(Number(sceneId), Number(userId), false)
+  }
+  async muteMember(botId: string, sceneId: string, userId: string, duration = 600) { /* ... */ }
+  async setAdmin(botId: string, sceneId: string, userId: string, enable = true) { /* ... */ }
+  // ...共覆写 7 个标准方法
+
+  async start() {
+    this.registerIcqqPlatformTools()  // 头衔、公告、戳一戳等平台特有工具
+    await super.start()               // 自动检测 → 生成标准 Tool → 与平台工具一起注册 Skill
+  }
+}
+```
 
 ### MessageDispatcher（消息路由）
 
@@ -96,7 +150,7 @@ Adapter.register('my-platform', MyAdapter)
 
 ```typescript
 // 插件系统
-export { Plugin, usePlugin, getPlugin } from './plugin.js'
+export { Plugin, usePlugin, getPlugin, definePlugin } from './plugin.js'
 
 // Feature 体系
 export { Feature } from './feature.js'
