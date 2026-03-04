@@ -1,5 +1,14 @@
 # @zhin.js/adapter-qq
 
+## 1.0.41
+
+### Patch Changes
+
+- 7ef9057: fix: 架构调整优化
+- Updated dependencies [7ef9057]
+  - zhin.js@1.0.40
+  - @zhin.js/logger@0.1.24
+
 ## 1.0.40
 
 ### Patch Changes

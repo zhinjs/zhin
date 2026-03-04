@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/kernel",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Framework-agnostic runtime kernel: Plugin DI, Feature, Config, Cron, Scheduler, errors, utilities",
   "type": "module",
   "main": "./lib/index.js",
