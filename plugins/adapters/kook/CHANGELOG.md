@@ -1,5 +1,14 @@
 # @zhin.js/adapter-kook
 
+## 1.0.39
+
+### Patch Changes
+
+- ab5c54a: fix: ai 架构优化
+- Updated dependencies [ab5c54a]
+  - zhin.js@1.0.38
+  - @zhin.js/logger@0.1.22
+
 ## 1.0.38
 
 ### Patch Changes

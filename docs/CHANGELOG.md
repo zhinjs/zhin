@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.15
+
+### Patch Changes
+
+- ab5c54a: fix: ai 架构优化
+
 ## 1.0.14
 
 ### Patch Changes

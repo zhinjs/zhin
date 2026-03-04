@@ -1,5 +1,14 @@
 # @zhin.js/adapter-discord
 
+## 1.0.42
+
+### Patch Changes
+
+- ab5c54a: fix: ai 架构优化
+- Updated dependencies [ab5c54a]
+  - zhin.js@1.0.38
+  - @zhin.js/http@1.0.32
+
 ## 1.0.41
 
 ### Patch Changes
