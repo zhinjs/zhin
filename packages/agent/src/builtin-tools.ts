@@ -510,15 +510,15 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
           const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
           if (!fmMatch) return 'Error: 无效的 SKILL.md 文件（缺少 frontmatter）';
 
-          let yaml: any;
+          let jsYaml: any;
           try {
-            yaml = await import('yaml');
-            if (yaml.default) yaml = yaml.default;
+            jsYaml = await import('js-yaml');
+            if (jsYaml.default) jsYaml = jsYaml.default;
           } catch {
             return 'Error: 无法加载 yaml 解析器';
           }
 
-          const metadata = yaml.parse(fmMatch[1]);
+          const metadata = jsYaml.load(fmMatch[1]);
           if (!metadata?.name) return 'Error: SKILL.md 缺少 name 字段';
 
           const skillName: string = metadata.name;
@@ -545,14 +545,14 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
 async function checkSkillDeps(content: string): Promise<string> {
   const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
   if (!fmMatch) return '';
-  let yaml: any;
+  let jsYaml: any;
   try {
-    yaml = await import('yaml');
-    if (yaml.default) yaml = yaml.default;
+    jsYaml = await import('js-yaml');
+    if (jsYaml.default) jsYaml = jsYaml.default;
   } catch {
     return '';
   }
-  const metadata = yaml.parse(fmMatch[1]);
+  const metadata = jsYaml.load(fmMatch[1]);
   if (!metadata) return '';
   const compat = metadata.compatibility || {};
   const deps = compat.deps || metadata.deps;
@@ -714,17 +714,16 @@ export async function discoverWorkspaceSkills(): Promise<SkillMeta[]> {
           continue;
         }
 
-        // 动态导入 yaml，使用 .default 兼容 ESM 模块
-        let yaml: any;
+        let jsYaml: any;
         try {
-          yaml = await import('yaml');
-          if (yaml.default) yaml = yaml.default;
+          jsYaml = await import('js-yaml');
+          if (jsYaml.default) jsYaml = jsYaml.default;
         } catch (e) {
-          logger.warn(`Unable to import yaml module: ${e}`);
+          logger.warn(`Unable to import js-yaml module: ${e}`);
           continue;
         }
 
-        const metadata = yaml.parse(match[1]);
+        const metadata = jsYaml.load(match[1]);
         if (!metadata || !metadata.name || !metadata.description) {
           logger.debug(`Skill文件 ${skillMdPath} 缺少必需的 name/description 字段`);
           continue;

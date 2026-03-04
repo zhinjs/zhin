@@ -1,4 +1,13 @@
-import { Config, Client, PrivateMessageEvent, GroupMessageEvent, Sendable, MessageElem, MemberInfo, GroupRole } from "@icqqjs/icqq";
+import {
+  Config,
+  Client,
+  PrivateMessageEvent,
+  GroupMessageEvent,
+  Sendable,
+  MessageElem,
+  MemberInfo,
+  GroupRole,
+} from "@icqqjs/icqq";
 import path from "path";
 import {
   Bot,
@@ -12,6 +21,8 @@ import {
   segment,
   Tool,
   ToolPermissionLevel,
+  MessageCommand,
+  AdapterMessage,
 } from "zhin.js";
 import { Router } from "@zhin.js/http";
 
@@ -22,7 +33,7 @@ declare module "zhin.js" {
       router: Router;
     }
   }
-  
+
   interface Adapters {
     icqq: IcqqAdapter;
   }
@@ -47,7 +58,7 @@ export interface IcqqSenderInfo {
 }
 
 const plugin = usePlugin();
-const { useContext } = plugin;
+const { useContext, addCommand } = plugin;
 
 export interface IcqqBotConfig extends Config {
   context: "icqq";
@@ -60,7 +71,10 @@ export interface IcqqBot {
   $config: IcqqBotConfig;
 }
 
-export class IcqqBot extends Client implements Bot<IcqqBotConfig, PrivateMessageEvent | GroupMessageEvent> {
+export class IcqqBot
+  extends Client
+  implements Bot<IcqqBotConfig, PrivateMessageEvent | GroupMessageEvent>
+{
   $connected: boolean = false;
 
   get $id() {
@@ -75,10 +89,16 @@ export class IcqqBot extends Client implements Bot<IcqqBotConfig, PrivateMessage
     this.$config = config;
   }
 
-  private handleIcqqMessage(msg: PrivateMessageEvent | GroupMessageEvent): void {
+  private handleIcqqMessage(
+    msg: PrivateMessageEvent | GroupMessageEvent,
+  ): void {
     const message = this.$formatMessage(msg);
     this.adapter.emit("message.receive", message);
-    plugin.logger.debug(`${this.$config.name} recv  ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`);
+    plugin.logger.debug(
+      `${this.$config.name} recv  ${message.$channel.type}(${
+        message.$channel.id
+      }):${segment.raw(message.$content)}`,
+    );
   }
 
   async $connect(): Promise<void> {
@@ -119,14 +139,17 @@ export class IcqqBot extends Client implements Bot<IcqqBotConfig, PrivateMessage
   $formatMessage(msg: PrivateMessageEvent | GroupMessageEvent) {
     // 获取发送者的权限信息
     const senderInfo = this.getSenderInfo(msg);
-    
+
     const result = Message.from(msg, {
       $id: msg.message_id.toString(),
       $adapter: "icqq" as const,
       $bot: `${this.$config.name}`,
       $sender: senderInfo,
       $channel: {
-        id: msg.message_type === "group" ? msg.group_id.toString() : msg.from_id.toString(),
+        id:
+          msg.message_type === "group"
+            ? msg.group_id.toString()
+            : msg.from_id.toString(),
         type: msg.message_type,
       },
       $content: IcqqBot.toSegments(msg.message),
@@ -135,9 +158,16 @@ export class IcqqBot extends Client implements Bot<IcqqBotConfig, PrivateMessage
       $recall: async () => {
         await this.$recallMessage(result.$id);
       },
-      $reply: async (content: SendContent, quote?: boolean | string): Promise<string> => {
+      $reply: async (
+        content: SendContent,
+        quote?: boolean | string,
+      ): Promise<string> => {
         if (!Array.isArray(content)) content = [content];
-        if (quote) content.unshift({ type: "reply", data: { id: typeof quote === "boolean" ? result.$id : quote } });
+        if (quote)
+          content.unshift({
+            type: "reply",
+            data: { id: typeof quote === "boolean" ? result.$id : quote },
+          });
         return await this.adapter.sendMessage({
           ...result.$channel,
           context: "icqq",
@@ -152,7 +182,9 @@ export class IcqqBot extends Client implements Bot<IcqqBotConfig, PrivateMessage
   /**
    * 获取发送者的详细权限信息
    */
-  private getSenderInfo(msg: PrivateMessageEvent | GroupMessageEvent): IcqqSenderInfo {
+  private getSenderInfo(
+    msg: PrivateMessageEvent | GroupMessageEvent,
+  ): IcqqSenderInfo {
     const senderInfo: IcqqSenderInfo = {
       id: msg.sender.user_id.toString(),
       name: msg.sender.nickname.toString(),
@@ -162,22 +194,22 @@ export class IcqqBot extends Client implements Bot<IcqqBotConfig, PrivateMessage
     if (msg.message_type === "group") {
       const groupMsg = msg as GroupMessageEvent;
       const sender = groupMsg.sender as any;
-      
+
       if (sender.role) {
         senderInfo.role = sender.role;
         senderInfo.isOwner = sender.role === "owner";
         senderInfo.isAdmin = sender.role === "admin" || sender.role === "owner";
         // 设置 permissions 数组，供 inferSenderPermissions 使用
         const perms: string[] = [];
-        if (sender.role === "owner") perms.push('owner', 'admin');
-        else if (sender.role === "admin") perms.push('admin');
+        if (sender.role === "owner") perms.push("owner", "admin");
+        else if (sender.role === "admin") perms.push("admin");
         senderInfo.permissions = perms;
       }
-      
+
       if (sender.card) {
         senderInfo.card = sender.card;
       }
-      
+
       if (sender.title) {
         senderInfo.title = sender.title;
       }
@@ -194,11 +226,19 @@ export class IcqqBot extends Client implements Bot<IcqqBotConfig, PrivateMessage
    * @param userId 用户QQ号
    * @param block 是否拉黑（加入黑名单）
    */
-  async kickMember(groupId: number, userId: number, block?: boolean): Promise<boolean> {
+  async kickMember(
+    groupId: number,
+    userId: number,
+    block?: boolean,
+  ): Promise<boolean> {
     try {
       const group = this.pickGroup(groupId);
       const result = await group.kickMember(userId, undefined, block);
-      plugin.logger.info(`ICQQ Bot ${this.$id} 踢出成员 ${userId} 从群 ${groupId}${block ? '（已拉黑）' : ''}`);
+      plugin.logger.info(
+        `ICQQ Bot ${this.$id} 踢出成员 ${userId} 从群 ${groupId}${
+          block ? "（已拉黑）" : ""
+        }`,
+      );
       return result;
     } catch (error) {
       plugin.logger.error(`ICQQ Bot ${this.$id} 踢出成员失败:`, error);
@@ -212,11 +252,21 @@ export class IcqqBot extends Client implements Bot<IcqqBotConfig, PrivateMessage
    * @param userId 用户QQ号
    * @param duration 禁言时长（秒），0 表示解除禁言
    */
-  async muteMember(groupId: number, userId: number, duration: number = 600): Promise<boolean> {
+  async muteMember(
+    groupId: number,
+    userId: number,
+    duration: number = 600,
+  ): Promise<boolean> {
     try {
       const group = this.pickGroup(groupId);
       const result = await group.muteMember(userId, duration);
-      plugin.logger.info(`ICQQ Bot ${this.$id} ${duration > 0 ? `禁言成员 ${userId} ${duration}秒` : `解除成员 ${userId} 禁言`}（群 ${groupId}）`);
+      plugin.logger.info(
+        `ICQQ Bot ${this.$id} ${
+          duration > 0
+            ? `禁言成员 ${userId} ${duration}秒`
+            : `解除成员 ${userId} 禁言`
+        }（群 ${groupId}）`,
+      );
       return result;
     } catch (error) {
       plugin.logger.error(`ICQQ Bot ${this.$id} 禁言操作失败:`, error);
@@ -233,7 +283,11 @@ export class IcqqBot extends Client implements Bot<IcqqBotConfig, PrivateMessage
     try {
       const group = this.pickGroup(groupId);
       const result = await group.muteAll(enable);
-      plugin.logger.info(`ICQQ Bot ${this.$id} ${enable ? '开启' : '关闭'}全员禁言（群 ${groupId}）`);
+      plugin.logger.info(
+        `ICQQ Bot ${this.$id} ${
+          enable ? "开启" : "关闭"
+        }全员禁言（群 ${groupId}）`,
+      );
       return result;
     } catch (error) {
       plugin.logger.error(`ICQQ Bot ${this.$id} 全员禁言操作失败:`, error);
@@ -247,11 +301,19 @@ export class IcqqBot extends Client implements Bot<IcqqBotConfig, PrivateMessage
    * @param userId 用户QQ号
    * @param enable 是否设为管理员
    */
-  async setAdmin(groupId: number, userId: number, enable: boolean = true): Promise<boolean> {
+  async setAdmin(
+    groupId: number,
+    userId: number,
+    enable: boolean = true,
+  ): Promise<boolean> {
     try {
       const group = this.pickGroup(groupId);
       const result = await group.setAdmin(userId, enable);
-      plugin.logger.info(`ICQQ Bot ${this.$id} ${enable ? '设置' : '取消'}管理员 ${userId}（群 ${groupId}）`);
+      plugin.logger.info(
+        `ICQQ Bot ${this.$id} ${
+          enable ? "设置" : "取消"
+        }管理员 ${userId}（群 ${groupId}）`,
+      );
       return result;
     } catch (error) {
       plugin.logger.error(`ICQQ Bot ${this.$id} 设置管理员失败:`, error);
@@ -265,11 +327,17 @@ export class IcqqBot extends Client implements Bot<IcqqBotConfig, PrivateMessage
    * @param userId 用户QQ号
    * @param card 群名片
    */
-  async setCard(groupId: number, userId: number, card: string): Promise<boolean> {
+  async setCard(
+    groupId: number,
+    userId: number,
+    card: string,
+  ): Promise<boolean> {
     try {
       const group = this.pickGroup(groupId);
       const result = await group.setCard(userId, card);
-      plugin.logger.info(`ICQQ Bot ${this.$id} 设置成员 ${userId} 群名片为 "${card}"（群 ${groupId}）`);
+      plugin.logger.info(
+        `ICQQ Bot ${this.$id} 设置成员 ${userId} 群名片为 "${card}"（群 ${groupId}）`,
+      );
       return result;
     } catch (error) {
       plugin.logger.error(`ICQQ Bot ${this.$id} 设置群名片失败:`, error);
@@ -284,11 +352,18 @@ export class IcqqBot extends Client implements Bot<IcqqBotConfig, PrivateMessage
    * @param title 头衔
    * @param duration 持续时间（秒），-1 表示永久
    */
-  async setTitle(groupId: number, userId: number, title: string, duration: number = -1): Promise<boolean> {
+  async setTitle(
+    groupId: number,
+    userId: number,
+    title: string,
+    duration: number = -1,
+  ): Promise<boolean> {
     try {
       const group = this.pickGroup(groupId);
       const result = await group.setTitle(userId, title, duration);
-      plugin.logger.info(`ICQQ Bot ${this.$id} 设置成员 ${userId} 头衔为 "${title}"（群 ${groupId}）`);
+      plugin.logger.info(
+        `ICQQ Bot ${this.$id} 设置成员 ${userId} 头衔为 "${title}"（群 ${groupId}）`,
+      );
       return result;
     } catch (error) {
       plugin.logger.error(`ICQQ Bot ${this.$id} 设置头衔失败:`, error);
@@ -305,7 +380,9 @@ export class IcqqBot extends Client implements Bot<IcqqBotConfig, PrivateMessage
     try {
       const group = this.pickGroup(groupId);
       const result = await group.setName(name);
-      plugin.logger.info(`ICQQ Bot ${this.$id} 设置群名为 "${name}"（群 ${groupId}）`);
+      plugin.logger.info(
+        `ICQQ Bot ${this.$id} 设置群名为 "${name}"（群 ${groupId}）`,
+      );
       return result;
     } catch (error) {
       plugin.logger.error(`ICQQ Bot ${this.$id} 设置群名失败:`, error);
@@ -339,7 +416,9 @@ export class IcqqBot extends Client implements Bot<IcqqBotConfig, PrivateMessage
     try {
       const group = this.pickGroup(groupId);
       const result = await group.pokeMember(userId);
-      plugin.logger.info(`ICQQ Bot ${this.$id} 戳了戳 ${userId}（群 ${groupId}）`);
+      plugin.logger.info(
+        `ICQQ Bot ${this.$id} 戳了戳 ${userId}（群 ${groupId}）`,
+      );
       return result;
     } catch (error) {
       plugin.logger.error(`ICQQ Bot ${this.$id} 戳一戳失败:`, error);
@@ -380,11 +459,16 @@ export class IcqqBot extends Client implements Bot<IcqqBotConfig, PrivateMessage
    * @param groupId 群号
    * @param enable 是否允许匿名
    */
-  async setAnonymous(groupId: number, enable: boolean = true): Promise<boolean> {
+  async setAnonymous(
+    groupId: number,
+    enable: boolean = true,
+  ): Promise<boolean> {
     try {
       const group = this.pickGroup(groupId);
       const result = await group.allowAnony(enable);
-      plugin.logger.info(`ICQQ Bot ${this.$id} ${enable ? '开启' : '关闭'}匿名（群 ${groupId}）`);
+      plugin.logger.info(
+        `ICQQ Bot ${this.$id} ${enable ? "开启" : "关闭"}匿名（群 ${groupId}）`,
+      );
       return result;
     } catch (error) {
       plugin.logger.error(`ICQQ Bot ${this.$id} 设置匿名失败:`, error);
@@ -409,13 +493,27 @@ export class IcqqBot extends Client implements Bot<IcqqBotConfig, PrivateMessage
   async $sendMessage(options: SendOptions): Promise<string> {
     switch (options.type) {
       case "private": {
-        const result = await this.sendPrivateMsg(Number(options.id), IcqqBot.toSendable(options.content));
-        plugin.logger.debug(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`);
+        const result = await this.sendPrivateMsg(
+          Number(options.id),
+          IcqqBot.toSendable(options.content),
+        );
+        plugin.logger.debug(
+          `${this.$config.name} send ${options.type}(${
+            options.id
+          }):${segment.raw(options.content)}`,
+        );
         return result.message_id.toString();
       }
       case "group": {
-        const result = await this.sendGroupMsg(Number(options.id), IcqqBot.toSendable(options.content));
-        plugin.logger.debug(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`);
+        const result = await this.sendGroupMsg(
+          Number(options.id),
+          IcqqBot.toSendable(options.content),
+        );
+        plugin.logger.debug(
+          `${this.$config.name} send ${options.type}(${
+            options.id
+          }):${segment.raw(options.content)}`,
+        );
         return result.message_id.toString();
       }
       default:
@@ -425,16 +523,38 @@ export class IcqqBot extends Client implements Bot<IcqqBotConfig, PrivateMessage
 }
 
 export namespace IcqqBot {
-  const allowTypes = ["text", "face", "image", "record", "audio", "dice", "rps", "video", "file", "location", "share", "json", "at", "reply", "long_msg", "button", "markdown", "xml"];
+  const allowTypes = [
+    "text",
+    "face",
+    "image",
+    "record",
+    "audio",
+    "dice",
+    "rps",
+    "video",
+    "file",
+    "location",
+    "share",
+    "json",
+    "at",
+    "reply",
+    "long_msg",
+    "button",
+    "markdown",
+    "xml",
+  ];
 
   export function toSegments(message: Sendable): MessageSegment[] {
     if (!Array.isArray(message)) message = [message];
     return message
       .filter((item, index) => {
-        return typeof item === "string" || item.type !== "long_msg" || index !== 0;
+        return (
+          typeof item === "string" || item.type !== "long_msg" || index !== 0
+        );
       })
       .map((item): MessageSegment => {
-        if (typeof item === "string") return { type: "text", data: { text: item } };
+        if (typeof item === "string")
+          return { type: "text", data: { text: item } };
         const { type, ...data } = item;
         return { type, data };
       });
@@ -446,7 +566,8 @@ export namespace IcqqBot {
       if (typeof seg === "string") return { type: "text", text: seg };
       let { type, data } = seg;
       if (typeof type === "function") type = type.name;
-      if (!allowTypes.includes(type)) return { type: "text", text: segment.toString(seg) };
+      if (!allowTypes.includes(type))
+        return { type: "text", text: segment.toString(seg) };
       return { type, ...data } as MessageElem;
     });
   }
@@ -469,7 +590,12 @@ class IcqqAdapter extends Adapter<IcqqBot> {
     return bot.kickMember(Number(sceneId), Number(userId), false);
   }
 
-  async muteMember(botId: string, sceneId: string, userId: string, duration = 600) {
+  async muteMember(
+    botId: string,
+    sceneId: string,
+    userId: string,
+    duration = 600,
+  ) {
     const bot = this.bots.get(botId);
     if (!bot) throw new Error(`Bot ${botId} 不存在`);
     return bot.muteMember(Number(sceneId), Number(userId), duration);
@@ -481,13 +607,23 @@ class IcqqAdapter extends Adapter<IcqqBot> {
     return bot.muteAll(Number(sceneId), enable);
   }
 
-  async setAdmin(botId: string, sceneId: string, userId: string, enable = true) {
+  async setAdmin(
+    botId: string,
+    sceneId: string,
+    userId: string,
+    enable = true,
+  ) {
     const bot = this.bots.get(botId);
     if (!bot) throw new Error(`Bot ${botId} 不存在`);
     return bot.setAdmin(Number(sceneId), Number(userId), enable);
   }
 
-  async setMemberNickname(botId: string, sceneId: string, userId: string, nickname: string) {
+  async setMemberNickname(
+    botId: string,
+    sceneId: string,
+    userId: string,
+    nickname: string,
+  ) {
     const bot = this.bots.get(botId);
     if (!bot) throw new Error(`Bot ${botId} 不存在`);
     return bot.setCard(Number(sceneId), Number(userId), nickname);
@@ -504,8 +640,11 @@ class IcqqAdapter extends Adapter<IcqqBot> {
     if (!bot) throw new Error(`Bot ${botId} 不存在`);
     const memberMap = await bot.getMemberList(Number(sceneId));
     const members = Array.from(memberMap.values()).map((m: MemberInfo) => ({
-      user_id: m.user_id, nickname: m.nickname, card: m.card,
-      role: m.role, title: m.title,
+      user_id: m.user_id,
+      nickname: m.nickname,
+      card: m.card,
+      role: m.role,
+      title: m.title,
     }));
     return { members, count: members.length };
   }
@@ -522,233 +661,257 @@ class IcqqAdapter extends Adapter<IcqqBot> {
    * 注册 ICQQ 平台特有工具（标准群管操作已通过 IGroupManagement 覆写方法自动注册）
    */
   private registerIcqqPlatformTools(): void {
-    const CTX_BOT = { type: 'string' as const, description: '执行操作的 Bot QQ号', contextKey: 'botId' as const };
-    const CTX_GROUP = { type: 'number' as const, description: '目标群号', contextKey: 'sceneId' as const };
+    const CTX_BOT = {
+      type: "string" as const,
+      description: "执行操作的 Bot QQ号",
+      contextKey: "botId" as const,
+    };
+    const CTX_GROUP = {
+      type: "number" as const,
+      description: "目标群号",
+      contextKey: "sceneId" as const,
+    };
 
     // 设置头衔工具
     this.addTool({
-      name: 'icqq_set_title',
-      description: '设置 QQ 群成员的专属头衔（显示在群昵称旁）。只有群主才能操作。可设置持续时间或永久。',
-      tags: ['群管理', '成员管理', '头衔'],
-      keywords: ['头衔', '专属头衔', '设置头衔', '给头衔', '加头衔', '称号'],
+      name: "icqq_set_title",
+      description:
+        "设置 QQ 群成员的专属头衔（显示在群昵称旁）。只有群主才能操作。可设置持续时间或永久。",
+      tags: ["群管理", "成员管理", "头衔"],
+      keywords: ["头衔", "专属头衔", "设置头衔", "给头衔", "加头衔", "称号"],
       parameters: {
-        type: 'object',
+        type: "object",
         properties: {
           bot: CTX_BOT,
           group_id: CTX_GROUP,
           user_id: {
-            type: 'number',
-            description: '目标成员 QQ号',
+            type: "number",
+            description: "目标成员 QQ号",
           },
           title: {
-            type: 'string',
-            description: '头衔文字内容',
+            type: "string",
+            description: "头衔文字内容",
           },
           duration: {
-            type: 'number',
-            description: '持续时间（秒），-1 表示永久，默认永久',
+            type: "number",
+            description: "持续时间（秒），-1 表示永久，默认永久",
           },
         },
-        required: ['bot', 'group_id', 'user_id', 'title'],
+        required: ["bot", "group_id", "user_id", "title"],
       },
-      platforms: ['icqq'],
-      scopes: ['group'],
-      permissionLevel: 'group_owner',
+      platforms: ["icqq"],
+      scopes: ["group"],
+      permissionLevel: "group_owner",
       execute: async (args, context) => {
         const { bot: botId, group_id, user_id, title, duration = -1 } = args;
         const bot = this.bots.get(botId);
         if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        
-        this.checkPermission(context, 'group_owner');
-        
+
+        this.checkPermission(context, "group_owner");
+
         const success = await bot.setTitle(group_id, user_id, title, duration);
-        return { 
-          success, 
-          message: success ? `已将 ${user_id} 的头衔设为 "${title}"` : '设置失败' 
+        return {
+          success,
+          message: success
+            ? `已将 ${user_id} 的头衔设为 "${title}"`
+            : "设置失败",
         };
       },
     });
 
     // 发送群公告工具
     this.addTool({
-      name: 'icqq_announce',
-      description: '发送 QQ 群公告（需要管理员权限）',
+      name: "icqq_announce",
+      description: "发送 QQ 群公告（需要管理员权限）",
       parameters: {
-        type: 'object',
+        type: "object",
         properties: {
           bot: CTX_BOT,
           group_id: CTX_GROUP,
           content: {
-            type: 'string',
-            description: '公告内容',
+            type: "string",
+            description: "公告内容",
           },
         },
-        required: ['bot', 'group_id', 'content'],
+        required: ["bot", "group_id", "content"],
       },
-      platforms: ['icqq'],
-      scopes: ['group'],
-      permissionLevel: 'group_admin',
+      platforms: ["icqq"],
+      scopes: ["group"],
+      permissionLevel: "group_admin",
       execute: async (args, context) => {
         const { bot: botId, group_id, content } = args;
         const bot = this.bots.get(botId);
         if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        
-        this.checkPermission(context, 'group_admin');
-        
+
+        this.checkPermission(context, "group_admin");
+
         const success = await bot.sendAnnounce(group_id, content);
-        return { success, message: success ? '群公告已发送' : '发送失败' };
+        return { success, message: success ? "群公告已发送" : "发送失败" };
       },
     });
 
     // 戳一戳工具
     this.addTool({
-      name: 'icqq_poke',
-      description: '在 QQ 群中对某个成员执行"戳一戳"互动操作（类似拍一拍）。任何人都可以使用。',
-      tags: ['互动', '趣味', '戳一戳'],
-      keywords: ['戳', '戳一戳', '拍一拍', '拍', '碰一碰', 'poke'],
+      name: "icqq_poke",
+      description:
+        '在 QQ 群中对某个成员执行"戳一戳"互动操作（类似拍一拍）。任何人都可以使用。',
+      tags: ["互动", "趣味", "戳一戳"],
+      keywords: ["戳", "戳一戳", "拍一拍", "拍", "碰一碰", "poke"],
       parameters: {
-        type: 'object',
+        type: "object",
         properties: {
           bot: CTX_BOT,
           group_id: CTX_GROUP,
           user_id: {
-            type: 'number',
-            description: '要戳的目标成员 QQ号',
+            type: "number",
+            description: "要戳的目标成员 QQ号",
           },
         },
-        required: ['bot', 'group_id', 'user_id'],
+        required: ["bot", "group_id", "user_id"],
       },
-      platforms: ['icqq'],
-      scopes: ['group'],
-      permissionLevel: 'user',
+      platforms: ["icqq"],
+      scopes: ["group"],
+      permissionLevel: "user",
       execute: async (args) => {
         const { bot: botId, group_id, user_id } = args;
         const bot = this.bots.get(botId);
         if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        
+
         const success = await bot.pokeMember(group_id, user_id);
-        return { success, message: success ? `已戳了戳 ${user_id}` : '戳一戳失败' };
+        return {
+          success,
+          message: success ? `已戳了戳 ${user_id}` : "戳一戳失败",
+        };
       },
     });
 
     // 获取被禁言列表工具
     this.addTool({
-      name: 'icqq_list_muted',
-      description: '查询 QQ 群中当前被禁言的成员列表。仅查询用途，不执行禁言操作（禁言请用 icqq_mute_member）。',
-      tags: ['群查询', '禁言查询', '列表'],
-      keywords: ['禁言列表', '被禁言', '谁被禁言', '查看禁言', '禁言名单'],
+      name: "icqq_list_muted",
+      description:
+        "查询 QQ 群中当前被禁言的成员列表。仅查询用途，不执行禁言操作（禁言请用 icqq_mute_member）。",
+      tags: ["群查询", "禁言查询", "列表"],
+      keywords: ["禁言列表", "被禁言", "谁被禁言", "查看禁言", "禁言名单"],
       parameters: {
-        type: 'object',
+        type: "object",
         properties: {
           bot: CTX_BOT,
           group_id: CTX_GROUP,
         },
-        required: ['bot', 'group_id'],
+        required: ["bot", "group_id"],
       },
-      platforms: ['icqq'],
-      scopes: ['group'],
-      permissionLevel: 'user',
+      platforms: ["icqq"],
+      scopes: ["group"],
+      permissionLevel: "user",
       execute: async (args) => {
         const { bot: botId, group_id } = args;
         const bot = this.bots.get(botId);
         if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        
+
         const mutedList = await bot.getMutedMembers(group_id);
-        return { 
-          muted_members: mutedList.filter(m => m !== null),
-          count: mutedList.filter(m => m !== null).length,
+        return {
+          muted_members: mutedList.filter((m) => m !== null),
+          count: mutedList.filter((m) => m !== null).length,
         };
       },
     });
     this.addTool({
-      name:'icqq_send_user_like',
-      description: '发送用户点赞消息',
-      tags: ['互动', '趣味', '点赞'],
-      keywords: ['点赞', '赞我'],
+      name: "icqq_send_user_like",
+      description: "发送用户点赞消息",
+      tags: ["互动", "趣味", "点赞"],
+      keywords: ["点赞", "赞我"],
       parameters: {
-        type: 'object',
+        type: "object",
         properties: {
           bot: CTX_BOT,
           user_id: {
-            type: 'number',
-            description: '要点赞的目标用户 QQ号',
+            type: "number",
+            description: "要点赞的目标用户 QQ号",
           },
-          times:{
-            type: 'number',
-            description: '点赞次数',
+          times: {
+            type: "number",
+            description: "点赞次数",
             default: 1,
-          }
+          },
         },
-        required: ['bot', 'user_id'],
+        required: ["bot", "user_id"],
       },
-      platforms: ['icqq'],
-      scopes: ['group', 'private'], 
-      permissionLevel: 'user',
+      platforms: ["icqq"],
+      scopes: ["group", "private"],
+      permissionLevel: "user",
       execute: async (args) => {
         const { bot: botId, user_id, times = 1 } = args;
         const bot = this.bots.get(botId);
         if (!bot) throw new Error(`Bot ${botId} 不存在`);
         const success = await bot.sendLike(user_id, Math.min(times, 10));
-        return { success, message: success ? `已发送用户点赞消息给 ${user_id}` : '发送失败' };
+        return {
+          success,
+          message: success ? `已发送用户点赞消息给 ${user_id}` : "发送失败",
+        };
       },
-    })
+    });
     // 设置匿名状态工具
     this.addTool({
-      name: 'icqq_set_anonymous',
-      description: '开启或关闭 QQ 群的匿名聊天功能。开启后群成员可以匿名发言。需要 Bot 拥有管理员权限。',
-      tags: ['群管理', '群设置', '匿名'],
-      keywords: ['匿名', '匿名聊天', '开启匿名', '关闭匿名', '允许匿名'],
+      name: "icqq_set_anonymous",
+      description:
+        "开启或关闭 QQ 群的匿名聊天功能。开启后群成员可以匿名发言。需要 Bot 拥有管理员权限。",
+      tags: ["群管理", "群设置", "匿名"],
+      keywords: ["匿名", "匿名聊天", "开启匿名", "关闭匿名", "允许匿名"],
       parameters: {
-        type: 'object',
+        type: "object",
         properties: {
           bot: CTX_BOT,
           group_id: CTX_GROUP,
           enable: {
-            type: 'boolean',
-            description: 'true=开启匿名聊天，false=关闭匿名聊天，默认 true',
+            type: "boolean",
+            description: "true=开启匿名聊天，false=关闭匿名聊天，默认 true",
           },
         },
-        required: ['bot', 'group_id'],
+        required: ["bot", "group_id"],
       },
-      platforms: ['icqq'],
-      scopes: ['group'],
-      permissionLevel: 'group_admin',
+      platforms: ["icqq"],
+      scopes: ["group"],
+      permissionLevel: "group_admin",
       execute: async (args, context) => {
         const { bot: botId, group_id, enable = true } = args;
         const bot = this.bots.get(botId);
         if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        
-        this.checkPermission(context, 'group_admin');
-        
+
+        this.checkPermission(context, "group_admin");
+
         const success = await bot.setAnonymous(group_id, enable);
-        return { 
-          success, 
-          message: success ? (enable ? '已开启匿名聊天' : '已关闭匿名聊天') : '操作失败' 
+        return {
+          success,
+          message: success
+            ? enable
+              ? "已开启匿名聊天"
+              : "已关闭匿名聊天"
+            : "操作失败",
         };
       },
     });
 
     // 群文件列表
     this.addTool({
-      name: 'icqq_group_files',
-      description: '获取 QQ 群的群文件列表',
+      name: "icqq_group_files",
+      description: "获取 QQ 群的群文件列表",
       parameters: {
-        type: 'object',
+        type: "object",
         properties: {
-          bot: { type: 'string', description: 'Bot 名称' },
-          group_id: { type: 'number', description: '群号' },
+          bot: { type: "string", description: "Bot 名称" },
+          group_id: { type: "number", description: "群号" },
         },
-        required: ['bot', 'group_id'],
+        required: ["bot", "group_id"],
       },
-      platforms: ['icqq'],
-      scopes: ['group'],
-      permissionLevel: 'user',
+      platforms: ["icqq"],
+      scopes: ["group"],
+      permissionLevel: "user",
       execute: async (args) => {
         const { bot: botId, group_id } = args;
         const bot = this.bots.get(botId);
         if (!bot) throw new Error(`Bot ${botId} 不存在`);
         const files = await bot.getGroupFiles(group_id);
-        if (!files?.length) return { files: [], message: '群文件为空' };
+        if (!files?.length) return { files: [], message: "群文件为空" };
         return {
           files: files.slice(0, 30).map((f: any) => ({
             name: f.name,
@@ -763,18 +926,18 @@ class IcqqAdapter extends Adapter<IcqqBot> {
 
     // 好友列表
     this.addTool({
-      name: 'icqq_friend_list',
-      description: '获取 QQ 好友列表',
+      name: "icqq_friend_list",
+      description: "获取 QQ 好友列表",
       parameters: {
-        type: 'object',
+        type: "object",
         properties: {
-          bot: { type: 'string', description: 'Bot 名称' },
+          bot: { type: "string", description: "Bot 名称" },
         },
-        required: ['bot'],
+        required: ["bot"],
       },
-      platforms: ['icqq'],
-      scopes: ['group', 'private'],
-      permissionLevel: 'user',
+      platforms: ["icqq"],
+      scopes: ["group", "private"],
+      permissionLevel: "user",
       execute: async (args) => {
         const { bot: botId } = args;
         const bot = this.bots.get(botId);
@@ -789,7 +952,7 @@ class IcqqAdapter extends Adapter<IcqqBot> {
       },
     });
 
-    plugin.logger.debug('已注册 ICQQ 平台群管理工具');
+    plugin.logger.debug("已注册 ICQQ 平台群管理工具");
   }
 
   /**
@@ -798,11 +961,11 @@ class IcqqAdapter extends Adapter<IcqqBot> {
    */
   private checkPermission(context: any, required: ToolPermissionLevel): void {
     const permissionLevels: Record<ToolPermissionLevel, number> = {
-      'user': 0,
-      'group_admin': 1,
-      'group_owner': 2,
-      'bot_admin': 3,
-      'owner': 4,
+      user: 0,
+      group_admin: 1,
+      group_owner: 2,
+      bot_admin: 3,
+      owner: 4,
     };
 
     const requiredLevel = permissionLevels[required] ?? 0;
@@ -810,9 +973,14 @@ class IcqqAdapter extends Adapter<IcqqBot> {
 
     // 1. 优先从 ToolContext.senderPermissionLevel 获取（AI Agent 路径注入）
     if (context?.senderPermissionLevel) {
-      const ctxLevel = permissionLevels[context.senderPermissionLevel as ToolPermissionLevel] ?? 0;
+      const ctxLevel =
+        permissionLevels[
+          context.senderPermissionLevel as ToolPermissionLevel
+        ] ?? 0;
       if (ctxLevel < requiredLevel) {
-        throw new Error(`权限不足：需要 ${required} 权限，当前为 ${context.senderPermissionLevel}`);
+        throw new Error(
+          `权限不足：需要 ${required} 权限，当前为 ${context.senderPermissionLevel}`,
+        );
       }
       return; // 检查通过
     }
@@ -821,14 +989,16 @@ class IcqqAdapter extends Adapter<IcqqBot> {
     const sender = context?.message?.$sender as IcqqSenderInfo | undefined;
     if (!sender) {
       // 无上下文且无发送者信息 → 拒绝高权限操作
-      throw new Error(`权限不足：无法验证身份，拒绝执行需要 ${required} 权限的操作`);
+      throw new Error(
+        `权限不足：无法验证身份，拒绝执行需要 ${required} 权限的操作`,
+      );
     }
 
-    let senderLevel: ToolPermissionLevel = 'user';
-    if (sender.isOwner || sender.role === 'owner') {
-      senderLevel = 'group_owner';
-    } else if (sender.isAdmin || sender.role === 'admin') {
-      senderLevel = 'group_admin';
+    let senderLevel: ToolPermissionLevel = "user";
+    if (sender.isOwner || sender.role === "owner") {
+      senderLevel = "group_owner";
+    } else if (sender.isAdmin || sender.role === "admin") {
+      senderLevel = "group_admin";
     }
 
     if (permissionLevels[senderLevel] < requiredLevel) {
@@ -851,10 +1021,38 @@ provide({
     await adapter.stop();
   },
 });
-
+useContext("icqq", (icqq: IcqqAdapter) => {
+  addCommand(
+    new MessageCommand<"icqq">("赞我 <times:number>")
+      .permit("adapter(icqq)")
+      .action(async (message, result) => {
+        const bot = icqq.bots.get(message.$bot);
+        const send1= bot?.sendLike(
+          Number(message.$sender.id),
+          20
+        );
+        const send2= bot?.sendLike(
+          Number(message.$sender.id),
+         20
+        );
+        const send3= bot?.sendLike(
+          Number(message.$sender.id),
+          10
+        );
+        const [send1Result, send2Result, send3Result] = await Promise.all([send1, send2, send3]);
+        let times=0;
+        if(send1Result) times+=20;
+        if(send2Result) times+=20;
+        if(send3Result) times+=10;
+        return `给你咱好啦，你已经获得了${times}个赞`;
+      }),
+  );
+});
 useContext("web", (web: any) => {
   // 注册ICQQ适配器的客户端入口文件
-  const dispose = web.addEntry(path.resolve(import.meta.dirname, "../client/index.tsx"));
+  const dispose = web.addEntry(
+    path.resolve(import.meta.dirname, "../client/index.tsx"),
+  );
   return dispose;
 });
 
@@ -913,7 +1111,10 @@ useContext("router", async (router: Router) => {
         success: false,
         error: "ICQQ_API_ERROR",
         message: "获取机器人数据失败",
-        details: process.env.NODE_ENV === "development" ? (error as Error).message : undefined,
+        details:
+          process.env.NODE_ENV === "development"
+            ? (error as Error).message
+            : undefined,
         timestamp: new Date().toISOString(),
       };
     }

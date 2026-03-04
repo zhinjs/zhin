@@ -192,14 +192,17 @@ export class DatabaseSessionManager implements ISessionManager {
   private saveTimer?: ReturnType<typeof setTimeout>;
   private model: any; // 数据库模型
 
+  /** 内存缓存上限，超出时淘汰最久未访问的条目 */
+  private static readonly MAX_CACHE_SIZE = 2000;
+
   constructor(
     model: any,
     config: { maxHistory?: number; expireMs?: number } = {}
   ) {
     this.model = model;
     this.config = {
-      maxHistory: config.maxHistory ?? 200, // 数据库支持更长的历史
-      expireMs: config.expireMs ?? 7 * 24 * 60 * 60 * 1000, // 7 天过期
+      maxHistory: config.maxHistory ?? 200,
+      expireMs: config.expireMs ?? 7 * 24 * 60 * 60 * 1000,
     };
 
     // 定期清理过期会话（每小时）
@@ -286,7 +289,6 @@ export class DatabaseSessionManager implements ISessionManager {
       session = await this.loadSession(sessionId) ?? undefined;
 
       if (!session) {
-        // 创建新会话
         session = {
           id: sessionId,
           config: config || { provider: 'openai' },
@@ -296,6 +298,11 @@ export class DatabaseSessionManager implements ISessionManager {
         };
       }
 
+      this.evictCacheIfNeeded();
+      this.cache.set(sessionId, session);
+    } else {
+      // LRU: 重新插入以更新 Map 的迭代顺序
+      this.cache.delete(sessionId);
       this.cache.set(sessionId, session);
     }
 
@@ -303,6 +310,21 @@ export class DatabaseSessionManager implements ISessionManager {
     this.schedulesSave(session);
 
     return session;
+  }
+
+  /**
+   * 当缓存超过上限时，淘汰最久未访问的条目。
+   * 利用 Map 的插入顺序（最旧的在前）。
+   */
+  private evictCacheIfNeeded(): void {
+    while (this.cache.size >= DatabaseSessionManager.MAX_CACHE_SIZE) {
+      const oldest = this.cache.keys().next().value;
+      if (oldest !== undefined) {
+        this.cache.delete(oldest);
+      } else {
+        break;
+      }
+    }
   }
 
   async has(sessionId: string): Promise<boolean> {

@@ -316,6 +316,13 @@ export class ConversationMemory {
   private topicStates: Map<string, TopicState> = new Map();
   /** per-session 轮次缓存（避免每次查数据库） */
   private roundCache: Map<string, number> = new Map();
+  /** 各 session 最后活跃时间（用于淘汰） */
+  private lastAccess: Map<string, number> = new Map();
+
+  /** 内存缓存上限：超过此数量时淘汰过期条目 */
+  private static readonly MAX_TRACKED_SESSIONS = 5000;
+  /** 缓存过期时间：24 小时未访问即淘汰 */
+  private static readonly SESSION_CACHE_TTL = 24 * 60 * 60 * 1000;
 
   constructor(config?: ConversationMemoryConfig) {
     this.store = new MemoryStore();
@@ -345,6 +352,9 @@ export class ConversationMemory {
     userContent: string,
     assistantContent: string,
   ): Promise<void> {
+    this.lastAccess.set(sessionId, Date.now());
+    this.pruneStaleSessionCaches();
+
     // 优先用缓存，首次才查数据库
     const cached = this.roundCache.get(sessionId);
     let currentRound = cached != null ? cached + 1 : (await this.store.getMaxRound(sessionId)) + 1;
@@ -765,10 +775,42 @@ export class ConversationMemory {
 
   // ── 生命周期 ──
 
+  /**
+   * 淘汰长时间未访问的 session 缓存，防止 topicStates/roundCache 无限增长。
+   * 触发条件：Map size 超过 MAX_TRACKED_SESSIONS。
+   */
+  private pruneStaleSessionCaches(): void {
+    if (this.lastAccess.size <= ConversationMemory.MAX_TRACKED_SESSIONS) return;
+
+    const now = Date.now();
+    const ttl = ConversationMemory.SESSION_CACHE_TTL;
+    for (const [sid, ts] of this.lastAccess) {
+      if (now - ts > ttl) {
+        this.topicStates.delete(sid);
+        this.roundCache.delete(sid);
+        this.lastAccess.delete(sid);
+        this.summarizing.delete(sid);
+      }
+    }
+
+    // 如果 TTL 淘汰后仍超限，按 LRU 删除最旧的
+    if (this.lastAccess.size > ConversationMemory.MAX_TRACKED_SESSIONS) {
+      const entries = [...this.lastAccess.entries()].sort((a, b) => a[1] - b[1]);
+      const toRemove = entries.slice(0, entries.length - ConversationMemory.MAX_TRACKED_SESSIONS);
+      for (const [sid] of toRemove) {
+        this.topicStates.delete(sid);
+        this.roundCache.delete(sid);
+        this.lastAccess.delete(sid);
+        this.summarizing.delete(sid);
+      }
+    }
+  }
+
   dispose(): void {
     this.store.dispose();
     this.summarizing.clear();
     this.topicStates.clear();
     this.roundCache.clear();
+    this.lastAccess.clear();
   }
 }
