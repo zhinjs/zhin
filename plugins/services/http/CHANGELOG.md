@@ -1,5 +1,13 @@
 # @zhin.js/http
 
+## 1.0.32
+
+### Patch Changes
+
+- Updated dependencies [ab5c54a]
+  - zhin.js@1.0.38
+  - @zhin.js/schema@1.0.22
+
 ## 1.0.31
 
 ### Patch Changes
