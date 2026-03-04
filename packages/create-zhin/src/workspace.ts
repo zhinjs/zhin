@@ -715,7 +715,7 @@ function HomePage() {
 
 addPage({
   key: 'home',
-  path: '/example',
+  path: '/',
   title: '首页',
   icon: <Home className="w-5 h-5" />,
   element: <HomePage />

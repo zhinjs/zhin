@@ -59,13 +59,11 @@ function RouteInitializer() {
                 path: '/',
                 title: 'Dashboard',
                 element: <DashboardLayout />,
-                redirect: '/dashboard',
                 meta: { order: 0 },
                 children: [
                     {
                         key: 'dashboard-home',
-                        index: true,
-                        path: '',
+                        path: '/dashboard',
                         title: '系统概览',
                         icon: <Home className="w-4 h-4" />,
                         element: <DashboardHome />,
