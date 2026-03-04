@@ -1,5 +1,33 @@
 # test-bot
 
+## 0.1.41
+
+### Patch Changes
+
+- 7ef9057: fix: 架构调整优化
+- Updated dependencies [7ef9057]
+  - @zhin.js/adapter-wechat-mp@0.1.29
+  - @zhin.js/adapter-dingtalk@1.0.29
+  - @zhin.js/adapter-onebot11@1.0.45
+  - @zhin.js/adapter-telegram@1.0.26
+  - @zhin.js/adapter-discord@1.0.44
+  - @zhin.js/adapter-github@0.1.9
+  - @zhin.js/adapter-email@0.1.28
+  - @zhin.js/adapter-slack@1.0.26
+  - @zhin.js/adapter-icqq@1.0.49
+  - @zhin.js/adapter-lark@1.0.45
+  - @zhin.js/mcp@1.0.23
+  - @zhin.js/adapter-qq@1.0.41
+  - zhin.js@1.0.40
+  - @zhin.js/plugin-music@0.0.30
+  - @zhin.js/adapter-sandbox@1.0.48
+  - @zhin.js/adapter-kook@1.0.41
+  - @zhin.js/console@1.0.37
+  - @zhin.js/http@1.0.34
+  - @zhin.js/plugin-60s@0.0.2
+  - @zhin.js/plugin-html-renderer@0.0.18
+  - @zhin.js/sensitive-filter@0.0.26
+
 ## 0.1.40
 
 ### Patch Changes

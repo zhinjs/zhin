@@ -1,5 +1,14 @@
 # @zhin.js/agent
 
+## 0.0.3
+
+### Patch Changes
+
+- 7ef9057: fix: 架构调整优化
+- Updated dependencies [7ef9057]
+  - @zhin.js/core@1.0.40
+  - @zhin.js/ai@1.0.1
+
 ## 0.0.2
 
 ### Patch Changes

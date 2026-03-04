@@ -1,5 +1,16 @@
 # @zhin.js/adapter-icqq
 
+## 1.0.49
+
+### Patch Changes
+
+- 7ef9057: fix: 架构调整优化
+- Updated dependencies [7ef9057]
+  - @zhin.js/core@1.0.40
+  - zhin.js@1.0.40
+  - @zhin.js/console@1.0.37
+  - @zhin.js/http@1.0.34
+
 ## 1.0.48
 
 ### Patch Changes
