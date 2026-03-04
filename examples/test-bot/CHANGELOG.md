@@ -1,5 +1,33 @@
 # test-bot
 
+## 0.1.42
+
+### Patch Changes
+
+- 5a68249: fix: 文档优化
+- Updated dependencies [5a68249]
+  - @zhin.js/adapter-icqq@1.0.50
+  - @zhin.js/plugin-music@0.0.31
+  - zhin.js@1.0.41
+  - @zhin.js/adapter-sandbox@1.0.49
+  - @zhin.js/adapter-dingtalk@1.0.30
+  - @zhin.js/adapter-discord@1.0.45
+  - @zhin.js/adapter-email@0.1.29
+  - @zhin.js/adapter-github@0.1.10
+  - @zhin.js/adapter-kook@1.0.42
+  - @zhin.js/adapter-lark@1.0.46
+  - @zhin.js/adapter-onebot11@1.0.46
+  - @zhin.js/adapter-qq@1.0.42
+  - @zhin.js/adapter-slack@1.0.27
+  - @zhin.js/adapter-telegram@1.0.27
+  - @zhin.js/adapter-wechat-mp@0.1.30
+  - @zhin.js/console@1.0.38
+  - @zhin.js/http@1.0.35
+  - @zhin.js/mcp@1.0.24
+  - @zhin.js/plugin-60s@0.0.2
+  - @zhin.js/plugin-html-renderer@0.0.19
+  - @zhin.js/sensitive-filter@0.0.27
+
 ## 0.1.41
 
 ### Patch Changes

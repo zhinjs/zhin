@@ -1,5 +1,16 @@
 # @zhin.js/core
 
+## 1.0.41
+
+### Patch Changes
+
+- 5a68249: fix: 文档优化
+  - @zhin.js/database@1.0.28
+  - @zhin.js/logger@0.1.25
+  - @zhin.js/schema@1.0.25
+  - @zhin.js/ai@1.0.2
+  - @zhin.js/kernel@0.0.2
+
 ## 1.0.40
 
 ### Patch Changes

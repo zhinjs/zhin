@@ -1,5 +1,16 @@
 # @zhin.js/adapter-icqq
 
+## 1.0.50
+
+### Patch Changes
+
+- 5a68249: fix: 文档优化
+- Updated dependencies [5a68249]
+  - @zhin.js/core@1.0.41
+  - zhin.js@1.0.41
+  - @zhin.js/console@1.0.38
+  - @zhin.js/http@1.0.35
+
 ## 1.0.49
 
 ### Patch Changes

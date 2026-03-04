@@ -1,5 +1,12 @@
 # @zhin.js/adapter-github
 
+## 0.1.10
+
+### Patch Changes
+
+- zhin.js@1.0.41
+- @zhin.js/http@1.0.35
+
 ## 0.1.9
 
 ### Patch Changes
