@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitepress'
+import { withMermaid } from 'vitepress-plugin-mermaid'
 
-export default defineConfig({
+export default withMermaid(defineConfig({
   title: "Zhin.js",
   description: "AI 驱动的 TypeScript 机器人框架",
   
@@ -11,6 +12,7 @@ export default defineConfig({
   
   themeConfig: {
     nav: [
+      { text: '架构概览', link: '/architecture-overview' },
       { text: '快速开始', link: '/getting-started/' },
       { text: '核心基础', link: '/essentials/' },
       { text: 'AI 智能', link: '/advanced/ai' },
@@ -119,5 +121,27 @@ export default defineConfig({
     search: {
       provider: 'local'
     }
-  }
-})
+  },
+
+  vite: {
+    optimizeDeps: {
+      include: ['mermaid'],
+    },
+    ssr: {
+      noExternal: ['mermaid'],
+    },
+  },
+
+  mermaid: {
+    startOnLoad: true,
+    securityLevel: 'loose',
+    flowchart: {
+      useMaxWidth: true,
+      htmlLabels: true,
+    },
+  },
+
+  mermaidPlugin: {
+    class: 'mermaid',
+  },
+}))

@@ -273,20 +273,34 @@ onDispose(() => {
 
 ## 核心概念关系图
 
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '13px' }}}%%
+flowchart TD
+  A([" 📨 用户消息 "]) --> B["MessageDispatcher"]
+  B --> C{" 🛡️ Guardrail\n权限 · 速率限制 "}
+  C -->|" ✅ 通过 "| D{" 🔀 Route "}
+  D -->|" ⌨️ 命令匹配 "| E["CommandFeature"]
+  D -->|" 🤖 AI 触发 "| F["ZhinAgent"]
+  E --> G["Handle — 执行 + 回复"]
+  F --> G
+  G --> H(["📤 返回结果"])
+
+  classDef input fill:#e3f2fd,stroke:#1565c0,color:#0d47a1,rx:20
+  classDef output fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20,rx:20
+  classDef guard fill:#d32f2f,stroke:#b71c1c,color:#fff
+  classDef route fill:#f57c00,stroke:#e65100,color:#fff
+  classDef ai fill:#1565c0,stroke:#0d47a1,color:#fff,rx:8
+  classDef normal fill:#f5f5f5,stroke:#bdbdbd,color:#424242,rx:6
+
+  class A input
+  class H output
+  class C guard
+  class D route
+  class F ai
+  class B,E,G normal
 ```
-用户消息
-   ↓
-MessageDispatcher
-   ├── Guardrail（权限检查、速率限制）
-   ↓
-   ├── Route（路由判定）
-   │     ├── 命令匹配 → CommandFeature 处理
-   │     └── AI 触发  → ZhinAgent 处理（工具调用 / 对话）
-   ↓
-   └── Handle（执行 + 使用上下文 + 调用服务）
-   ↓
-返回结果
-```
+
+> 详细的分层架构说明请参阅 [架构概览](/architecture-overview)。
 
 ## 下一步
 

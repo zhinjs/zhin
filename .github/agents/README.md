@@ -195,11 +195,13 @@ useContext('database', (db) => {
 ## 📚 相关文档
 
 - [Zhin.js 主文档](../../README.md)
+- [架构概览](../../docs/architecture-overview.md)
 - [快速开始](../../docs/getting-started/index.md)
 - [插件开发](../../docs/essentials/plugins.md)
 - [适配器开发](../../docs/essentials/adapters.md)
 - [命令系统](../../docs/essentials/commands.md)
 - [AI 模块](../../docs/advanced/ai.md)
+- [工具与技能](../../docs/advanced/tools-skills.md)
 
 ## 🤝 贡献
 

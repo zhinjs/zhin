@@ -1090,10 +1090,12 @@ useContext('database', (db) => {
 
 ## 📚 参考资源
 
-- **架构设计**: `docs/guide/architecture.md`
-- **插件开发**: `docs/plugin/development.md`  
-- **适配器开发**: `docs/adapter/development.md`
-- **最佳实践**: `docs/guide/best-practices.md`
+- **架构设计**: `docs/architecture-overview.md`
+- **核心概念**: `docs/essentials/index.md`
+- **插件开发**: `docs/essentials/plugins.md`
+- **适配器开发**: `docs/essentials/adapters.md`
+- **AI 模块**: `docs/advanced/ai.md`
+- **工具与技能**: `docs/advanced/tools-skills.md`
 - **Copilot 指令**: `.github/copilot-instructions.md`
 
 ---

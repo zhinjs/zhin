@@ -195,12 +195,14 @@ pnpm test:coverage
 ### 文档结构
 ```
 docs/
-├── getting-started/ # 快速开始
-├── essentials/      # 核心基础（配置、命令、插件、中间件、适配器）
-├── advanced/        # 高级特性（AI、Feature、工具与技能、组件、定时任务、数据库、热重载）
-├── api/             # API 参考
-├── plugins/         # 插件市场
-└── contributing.md  # 贡献指南
+├── architecture-overview.md  # 分层架构概览（kernel/ai/core/agent/zhin）
+├── getting-started/          # 快速开始
+├── essentials/               # 核心基础（配置、命令、插件、中间件、适配器）
+├── advanced/                 # 高级特性（AI、Feature、工具与技能、组件、定时任务、数据库、热重载）
+├── api/                      # API 参考
+├── plugins/                  # 插件市场
+├── skills/                   # 技能商店
+└── contributing.md           # 贡献指南
 ```
 
 ### 文档规范

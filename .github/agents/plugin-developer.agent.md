@@ -1002,9 +1002,9 @@ useContext('pluginEventBus', (eventBus) => {
 
 ## 🎓 学习资源
 
-- **框架文档**: `docs/guide/architecture.md`
-- **插件开发**: `docs/plugin/development.md`
-- **最佳实践**: `docs/guide/best-practices.md`
+- **架构设计**: `docs/architecture-overview.md`
+- **插件开发**: `docs/essentials/plugins.md`
+- **工具与技能**: `docs/advanced/tools-skills.md`
 - **现有插件**: 查看 `plugins/` 目录下的官方插件示例
 - **示例项目**: `examples/test-bot` 目录
 

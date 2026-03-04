@@ -676,7 +676,7 @@ class IcqqAdapter extends Adapter<IcqqBot> {
     this.addTool({
       name: "icqq_set_title",
       description:
-        "设置 QQ 群成员的专属头衔（显示在群昵称旁）。只有群主才能操作。可设置持续时间或永久。",
+        "设置 QQ 群成员的专属头衔（显示在群昵称旁边的标签）。只有群主才能操作。可设置持续时间或永久。如果只有昵称没有 QQ号，请先调用 list_members 查询。",
       tags: ["群管理", "成员管理", "头衔"],
       keywords: ["头衔", "专属头衔", "设置头衔", "给头衔", "加头衔", "称号"],
       parameters: {
@@ -754,7 +754,7 @@ class IcqqAdapter extends Adapter<IcqqBot> {
     this.addTool({
       name: "icqq_poke",
       description:
-        '在 QQ 群中对某个成员执行"戳一戳"互动操作（类似拍一拍）。任何人都可以使用。',
+        '在 QQ 群中对某个成员执行"戳一戳"互动操作（类似拍一拍）。任何人都可以使用。注意：每次请求只戳一次，不要重复调用此工具。如果只有昵称没有 QQ号，请先调用 list_members 查询。',
       tags: ["互动", "趣味", "戳一戳"],
       keywords: ["戳", "戳一戳", "拍一拍", "拍", "碰一碰", "poke"],
       parameters: {
@@ -789,7 +789,7 @@ class IcqqAdapter extends Adapter<IcqqBot> {
     this.addTool({
       name: "icqq_list_muted",
       description:
-        "查询 QQ 群中当前被禁言的成员列表。仅查询用途，不执行禁言操作（禁言请用 icqq_mute_member）。",
+        "查询 QQ 群中当前被禁言的成员列表，返回被禁言成员的 QQ号和剩余禁言时间。此工具仅用于查询，不会执行禁言操作。如需禁言或解除禁言，请使用 icqq_mute_member 工具。",
       tags: ["群查询", "禁言查询", "列表"],
       keywords: ["禁言列表", "被禁言", "谁被禁言", "查看禁言", "禁言名单"],
       parameters: {
@@ -817,20 +817,20 @@ class IcqqAdapter extends Adapter<IcqqBot> {
     });
     this.addTool({
       name: "icqq_send_user_like",
-      description: "发送用户点赞消息",
+      description: "给用户点赞（竖大拇指）。每人每天最多点赞 20 次，超出无效。如果只有昵称没有 QQ号，请先调用 list_members 查询。",
       tags: ["互动", "趣味", "点赞"],
-      keywords: ["点赞", "赞我"],
+      keywords: ["点赞", "赞我", "赞一下", "大拇指"],
       parameters: {
         type: "object",
         properties: {
           bot: CTX_BOT,
           user_id: {
             type: "number",
-            description: "要点赞的目标用户 QQ号",
+            description: "要点赞的目标用户 QQ号（如果只有昵称，先用 list_members 查询获取）",
           },
           times: {
             type: "number",
-            description: "点赞次数",
+            description: "点赞次数（1-20），默认 1 次，每人每天上限 20 次",
             default: 1,
           },
         },
@@ -843,7 +843,7 @@ class IcqqAdapter extends Adapter<IcqqBot> {
         const { bot: botId, user_id, times = 1 } = args;
         const bot = this.bots.get(botId);
         if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        const success = await bot.sendLike(user_id, Math.min(times, 10));
+        const success = await bot.sendLike(user_id, Math.min(times, 20));
         return {
           success,
           message: success ? `已发送用户点赞消息给 ${user_id}` : "发送失败",

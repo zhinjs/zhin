@@ -4,8 +4,31 @@
 
 Zhin.js 使用 **MessageDispatcher**（消息调度器）处理所有收到的消息。调度器将消息处理分为三个阶段：
 
-```
-消息到达 → Guardrail（守卫） → Route（路由） → Handle（处理）
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '14px' }}}%%
+flowchart LR
+  A([" 📨 消息到达 "]) ==> B
+
+  subgraph pipeline [" MessageDispatcher 三阶段管线 "]
+    direction LR
+    B(" 🛡️ Guardrail\n守卫 ") ==> C(" 🔀 Route\n路由 ") ==> D(" ⚡ Handle\n处理 ")
+  end
+
+  D ==> E(["📤 返回结果"])
+
+  classDef input fill:#e3f2fd,stroke:#1565c0,color:#0d47a1,rx:20
+  classDef output fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20,rx:20
+  classDef guard fill:#d32f2f,stroke:#b71c1c,color:#fff,rx:8
+  classDef route fill:#f57c00,stroke:#e65100,color:#fff,rx:8
+  classDef handle fill:#2e7d32,stroke:#1b5e20,color:#fff,rx:8
+
+  class A input
+  class E output
+  class B guard
+  class C route
+  class D handle
+
+  linkStyle 0,1,2,3 stroke:#42a5f5,stroke-width:2.5px
 ```
 
 1. **Guardrail（守卫阶段）** - 安全检查、频率限制、日志记录等前置过滤

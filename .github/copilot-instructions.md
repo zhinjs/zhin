@@ -32,21 +32,27 @@ basic/          # 基础层 - 底层工具和类型系统
 ├── schema/     # Schema 配置系统 (类型安全配置)
 └── cli/        # CLI 工具 (zhin 命令行入口)
 
-packages/       # 核心层 - 框架核心
-├── core/       # 核心框架 (App, Plugin, Adapter, Bot, Types)
+packages/       # 核心层 - 框架核心（分层架构）
+├── kernel/     # 运行时内核 (PluginBase, Feature, Cron, Scheduler, 错误体系)
+├── ai/         # AI 引擎 (Provider, Agent, Session, Memory, Compaction)
+├── core/       # IM 核心框架 (Plugin, Adapter, Bot, Command, MessageDispatcher)
+├── agent/      # Agent 编排 (ZhinAgent, AIService, 子任务, 用户画像, 引导文件)
 ├── client/     # 客户端库 (React Router 7, Redux)
 ├── create-zhin/# 项目脚手架 (交互式创建项目)
+├── satori/     # HTML/CSS → SVG/PNG 渲染引擎
 └── zhin/       # 主入口包 (统一导出)
 
 plugins/        # 插件层 - 扩展生态
 ├── services/   # 功能服务插件 (http, console, mcp)
-├── adapters/   # 平台适配器 (icqq, kook, discord, qq, onebot11, process)
+├── adapters/   # 平台适配器 (icqq, kook, discord, qq, onebot11, ...)
 ├── utils/      # 工具插件 (music, sensitive-filter)
 └── games/      # 游戏插件
 
 examples/       # 示例项目
 └── test-bot/   # 完整示例机器人 (开发测试用)
 ```
+
+> kernel 和 ai 不依赖 IM 概念，可被非 IM 应用直接使用。详见 `docs/architecture-overview.md`。
 
 ## 核心开发模式
 
@@ -1001,8 +1007,9 @@ export default defineConfig(async (env) => {
 
 ## 参考文档
 
-- 架构设计: `docs/guide/architecture.md`
-- 核心创新: `docs/guide/innovations.md`
-- 插件开发: `docs/plugin/development.md`
-- 适配器开发: `docs/adapter/development.md`
-- 最佳实践: `docs/guide/best-practices.md`
+- 架构设计: `docs/architecture-overview.md`
+- 核心概念: `docs/essentials/index.md`
+- 插件开发: `docs/essentials/plugins.md`
+- 适配器开发: `docs/essentials/adapters.md`
+- AI 模块: `docs/advanced/ai.md`
+- 工具与技能: `docs/advanced/tools-skills.md`

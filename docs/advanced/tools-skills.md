@@ -4,16 +4,30 @@
 
 ## 概念关系
 
-```
-Skill（技能）—— 由 start() 自动检测并注册
-├── 描述："群聊管理能力：在 IM 系统中对群/服务器进行管理..."
-├── 关键词：["群管理", "踢人", "禁言", ...]
-├── 标签：["group", "management", "im", ...]
-└── 工具列表（标准 + 平台特有）：
-    ├── Tool: icqq_kick_member    ← 自动生成（覆写 kickMember）
-    ├── Tool: icqq_mute_member
-    ├── Tool: icqq_set_admin
-    └── ...
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '13px' }}}%%
+graph LR
+  S(["🎯 Skill — 技能\n由 start() 自动检测并注册"])
+
+  S --- D["📝 描述\n群聊管理能力"]
+  S --- K["🔑 关键词\n群管理 · 踢人 · 禁言"]
+  S --- T["🏷️ 标签\ngroup · management · im"]
+  S --- TL["🔧 工具列表"]
+
+  TL --> T1("icqq_kick_member")
+  TL --> T2("icqq_mute_member")
+  TL --> T3("icqq_set_admin")
+  TL --> T4("...")
+
+  classDef skill fill:#e65100,stroke:#bf360c,color:#fff,rx:16
+  classDef meta fill:#fff3e0,stroke:#e65100,color:#bf360c,rx:8
+  classDef toolList fill:#1565c0,stroke:#0d47a1,color:#fff,rx:8
+  classDef tool fill:#e3f2fd,stroke:#1565c0,color:#0d47a1,rx:12
+
+  class S skill
+  class D,K,T meta
+  class TL toolList
+  class T1,T2,T3,T4 tool
 ```
 
 AI Agent 处理消息时的两级过滤：
@@ -238,6 +252,27 @@ class IcqqAdapter extends Adapter<IcqqBot> {
 | `setGroupName` | 修改群名称 | group_admin |
 | `muteAll` | 全员禁言/解除 | group_admin |
 | `getGroupInfo` | 获取群信息 | user |
+
+#### 群管理使用指南
+
+AI 在调用群管理工具时会遵循以下规则（已内置到 Skill 描述中）：
+
+1. **用户名到 ID 的解析** — 当用户只提供昵称/名片时，AI 会先调用 `list_members` 查询成员列表，匹配目标用户的 `user_id`，再执行后续操作
+2. **禁言场景** — `mute_member` 适用于违规发言、刷屏、骚扰等需要临时限制发言的场景。`duration` 单位为秒，传 0 表示解除禁言，默认 600 秒（10 分钟）
+3. **管理员操作** — `set_admin` 需要群主权限，普通管理员无法操作；`enable=false` 为取消管理员
+4. **踢人与封禁的区别** — `kick_member` 是将成员移出群聊（可再次加入），`ban_member` 是永久拉黑
+5. **操作前确认** — AI 会确认目标用户正确后再执行，避免误操作
+
+#### 平台特有工具约束
+
+不同平台的特有工具有各自的使用限制：
+
+| 平台 | 工具 | 约束 |
+|------|------|------|
+| ICQQ | `icqq_poke` | 每次请求只戳一次，不重复调用 |
+| ICQQ | `icqq_send_user_like` | 每人每天最多 20 次 |
+| ICQQ | `icqq_list_muted` | 仅查询，不执行禁言操作 |
+| ICQQ | `icqq_set_title` | 需要群主权限 |
 
 #### 平台特有工具
 

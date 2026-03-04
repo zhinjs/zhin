@@ -1156,8 +1156,8 @@ class MonitoredBot implements Bot<Config, RawMessage> {
 
 ## 📚 参考资源
 
-- **框架文档**: `docs/guide/architecture.md`
-- **适配器开发**: `docs/adapter/development.md`
+- **架构设计**: `docs/architecture-overview.md`
+- **适配器开发**: `docs/essentials/adapters.md`
 - **现有适配器**: 查看 `adapters/` 目录下的官方适配器
 - **类型定义**: `packages/types/src/index.ts`
 
