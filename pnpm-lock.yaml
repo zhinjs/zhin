@@ -310,9 +310,6 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../core
-      '@zhin.js/logger':
-        specifier: workspace:*
-        version: link:../../basic/logger
     devDependencies:
       '@types/node':
         specifier: ^24.3.0
@@ -367,7 +364,7 @@ importers:
         specifier: ^9.1.0
         version: 9.1.0
       segment-matcher:
-        specifier: latest
+        specifier: ^1.0.5
         version: 1.0.5
       smol-toml:
         specifier: ^1.6.0
