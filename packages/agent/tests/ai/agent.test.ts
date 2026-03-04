@@ -410,13 +410,13 @@ describe('Agent.filterTools 程序化过滤', () => {
 
   it('应该通过 tags 匹配工具', () => {
     const tools = [
-      createMockTool({ name: 'ai.models', description: '列出模型', tags: ['ai', 'management'] }),
+      createMockTool({ name: 'ai_models', description: '列出模型', tags: ['ai', 'management'] }),
       createMockTool({ name: 'weather', description: '天气', tags: ['weather', 'utility'] }),
     ] as any[];
 
     const result = Agent.filterTools('ai 相关功能', tools);
     expect(result.length).toBeGreaterThanOrEqual(1);
-    expect(result[0].name).toBe('ai.models');
+    expect(result[0].name).toBe('ai_models');
   });
 
   it('应该通过工具名 token 匹配', () => {

@@ -541,7 +541,7 @@ addComponent(RenderImage);
 /**
  * HTML 渲染工具 - 供 AI 使用
  */
-const renderHtmlTool = new ZhinTool('html.render')
+const renderHtmlTool = new ZhinTool('html_render')
   .desc('将 HTML/CSS 代码渲染为图片')
   .tag('render', 'image', 'html')
   .param('html', { type: 'string', description: 'HTML 代码（支持内联 CSS 样式）' }, true)
@@ -611,7 +611,7 @@ if (toolService) {
 /**
  * 生成卡片图片工具 - 供 AI 使用
  */
-const generateCardTool = new ZhinTool('html.card')
+const generateCardTool = new ZhinTool('html_card')
   .desc('生成美观的卡片图片（自动生成 HTML）')
   .tag('render', 'image', 'card')
   .param('title', { type: 'string', description: '卡片标题' }, true)

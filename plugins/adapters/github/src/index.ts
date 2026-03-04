@@ -516,7 +516,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
 
     // --- PR ---
     this.addTool(
-      new ZhinTool('github.pr')
+      new ZhinTool('github_pr')
         .desc('GitHub PR 操作：list/view/diff/merge/create/review/close')
         .keyword('pr', 'pull request', '合并', 'merge', 'review', '审查', '拉取请求')
         .tag('github', 'pr')
@@ -595,7 +595,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
 
     // --- Issue ---
     this.addTool(
-      new ZhinTool('github.issue')
+      new ZhinTool('github_issue')
         .desc('GitHub Issue 操作：list/view/create/close/comment')
         .keyword('issue', '问题', 'bug', '创建issue', '关闭issue')
         .tag('github', 'issue')
@@ -662,7 +662,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
 
     // --- Repo ---
     this.addTool(
-      new ZhinTool('github.repo')
+      new ZhinTool('github_repo')
         .desc('GitHub 仓库查询：info/branches/releases/runs(CI)/stars')
         .keyword('仓库', 'repo', 'star', '分支', 'branch', 'release', '发布', 'CI', 'workflow')
         .tag('github', 'repo')
@@ -728,7 +728,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
 
     // --- Subscribe ---
     this.addTool(
-      new ZhinTool('github.subscribe')
+      new ZhinTool('github_subscribe')
         .desc('订阅 GitHub 仓库 Webhook 事件通知（跨平台推送到当前聊天）')
         .tag('github', 'subscription')
         .param('repo', { type: 'string', description: 'owner/repo' }, true)
@@ -766,7 +766,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
 
     // --- Unsubscribe ---
     this.addTool(
-      new ZhinTool('github.unsubscribe')
+      new ZhinTool('github_unsubscribe')
         .desc('取消订阅 GitHub 仓库事件通知')
         .tag('github', 'subscription')
         .param('repo', { type: 'string', description: 'owner/repo' }, true)
@@ -785,7 +785,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
 
     // --- List subscriptions ---
     this.addTool(
-      new ZhinTool('github.subscriptions')
+      new ZhinTool('github_subscriptions')
         .desc('查看当前聊天的 GitHub 事件订阅列表')
         .tag('github', 'subscription')
         .execute(async (_args, ctx) => {
@@ -804,7 +804,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
 
     // --- GitHub OAuth Bind ---
     this.addTool(
-      new ZhinTool('github.bind')
+      new ZhinTool('github_bind')
         .desc('绑定 GitHub 账号 — 通过 OAuth 授权，让 bot 以你的身份执行 star/fork 等操作')
         .keyword('github bind', '绑定github', 'github 绑定', 'github 授权')
         .tag('github', 'oauth')
@@ -854,7 +854,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
 
     // --- GitHub OAuth Unbind ---
     this.addTool(
-      new ZhinTool('github.unbind')
+      new ZhinTool('github_unbind')
         .desc('解除 GitHub 账号绑定')
         .keyword('github unbind', '解绑github', 'github 解绑')
         .tag('github', 'oauth')
@@ -875,7 +875,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
 
     // --- GitHub OAuth Whoami ---
     this.addTool(
-      new ZhinTool('github.whoami')
+      new ZhinTool('github_whoami')
         .desc('查看当前绑定的 GitHub 账号信息')
         .keyword('github whoami', 'github 我是谁', 'github 账号')
         .tag('github', 'oauth')
@@ -907,7 +907,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
 
     // --- GitHub Star (用户级操作) ---
     this.addTool(
-      new ZhinTool('github.star')
+      new ZhinTool('github_star')
         .desc('Star / Unstar 一个仓库（使用你的 GitHub 账号）')
         .keyword('star', 'unstar', '收藏', '取消收藏')
         .tag('github', 'user')
@@ -936,7 +936,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
 
     // --- GitHub Fork (用户级操作) ---
     this.addTool(
-      new ZhinTool('github.fork')
+      new ZhinTool('github_fork')
         .desc('Fork 一个仓库到你的 GitHub 账号')
         .keyword('fork', '复刻')
         .tag('github', 'user')
@@ -959,7 +959,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
 
     // --- Search ---
     this.addTool(
-      new ZhinTool('github.search')
+      new ZhinTool('github_search')
         .desc('GitHub 搜索：在 issues/repos/code 中搜索')
         .keyword('search', '搜索', '查找', 'github search')
         .tag('github', 'search')
@@ -1007,7 +1007,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
 
     // --- Label ---
     this.addTool(
-      new ZhinTool('github.label')
+      new ZhinTool('github_label')
         .desc('GitHub 标签管理：查看/添加/移除 Issue/PR 标签')
         .keyword('label', '标签', 'tag')
         .tag('github', 'label')
@@ -1053,7 +1053,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
 
     // --- Assign ---
     this.addTool(
-      new ZhinTool('github.assign')
+      new ZhinTool('github_assign')
         .desc('GitHub 指派管理：给 Issue/PR 添加/移除指派人')
         .keyword('assign', '指派', '分配')
         .tag('github', 'assign')
@@ -1080,7 +1080,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
 
     // --- File ---
     this.addTool(
-      new ZhinTool('github.file')
+      new ZhinTool('github_file')
         .desc('读取 GitHub 仓库中的文件内容')
         .keyword('file', '文件', '查看文件', '读取文件', 'cat')
         .tag('github', 'file')
@@ -1111,7 +1111,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
 
     // --- Commits ---
     this.addTool(
-      new ZhinTool('github.commits')
+      new ZhinTool('github_commits')
         .desc('GitHub 提交查询：列出提交记录或对比两个分支')
         .keyword('commit', '提交', '历史', 'log', 'compare', '对比')
         .tag('github', 'commits')
@@ -1153,7 +1153,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
 
     // --- Edit (Issue/PR) ---
     this.addTool(
-      new ZhinTool('github.edit')
+      new ZhinTool('github_edit')
         .desc('编辑 GitHub Issue 或 PR 的标题、正文、状态')
         .keyword('edit', '编辑', '修改', 'update', '更新')
         .tag('github', 'edit')

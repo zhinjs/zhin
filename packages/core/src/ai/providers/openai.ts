@@ -37,7 +37,8 @@ export class OpenAIProvider extends BaseProvider {
     super(config);
     this.contextWindow = config.contextWindow ?? 128000;
     this.baseUrl = config.baseUrl || 'https://api.openai.com/v1';
-    
+    if (config.models?.length) this.models = config.models;
+
     if (config.organization) {
       this.config.headers = {
         ...this.config.headers,
@@ -114,6 +115,7 @@ export class DeepSeekProvider extends OpenAIProvider {
       ...config,
       baseUrl: config.baseUrl || 'https://api.deepseek.com/v1',
     });
+    if (config.models?.length) this.models = config.models;
   }
 
   async listModels(): Promise<string[]> {
@@ -137,6 +139,7 @@ export class MoonshotProvider extends OpenAIProvider {
       ...config,
       baseUrl: config.baseUrl || 'https://api.moonshot.cn/v1',
     });
+    if (config.models?.length) this.models = config.models;
   }
 
   async listModels(): Promise<string[]> {
@@ -162,6 +165,7 @@ export class ZhipuProvider extends OpenAIProvider {
       ...config,
       baseUrl: config.baseUrl || 'https://open.bigmodel.cn/api/paas/v4',
     });
+    if (config.models?.length) this.models = config.models;
   }
 
   async listModels(): Promise<string[]> {

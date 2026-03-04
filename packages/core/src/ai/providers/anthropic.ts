@@ -189,6 +189,7 @@ export class AnthropicProvider extends BaseProvider {
     this.contextWindow = config.contextWindow ?? 200000;
     this.baseUrl = config.baseUrl || 'https://api.anthropic.com';
     this.anthropicVersion = config.anthropicVersion || '2023-06-01';
+    if (config.models?.length) this.models = config.models;
   }
 
   protected async fetch<T>(url: string, options: RequestInit & { json?: any } = {}): Promise<T> {

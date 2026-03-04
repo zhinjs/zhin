@@ -252,7 +252,7 @@ const { logger } = usePlugin();
 // ============================================================================
 
 // 示例工具：问候
-const greetTool = new ZhinTool('${pluginName}.greet')
+const greetTool = new ZhinTool('${pluginName}_greet')
   .desc('发送问候消息')
   .tag('${pluginName}')
   .param('name', { type: 'string', description: '要问候的名字' })

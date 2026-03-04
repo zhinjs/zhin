@@ -42,7 +42,7 @@ function getRenderer(): HtmlRendererService | undefined {
 }
 
 // 创建测试渲染工具
-const testRenderTool = new ZhinTool('test.render')
+const testRenderTool = new ZhinTool('test_render')
   .desc('测试 HTML 渲染功能。将 HTML 代码渲染成图片（SVG/PNG）。主要用于开发测试。')
   .tag('render', 'html', 'visual', 'demo')
   .keyword('渲染', '图像', '生成', 'render', 'html')

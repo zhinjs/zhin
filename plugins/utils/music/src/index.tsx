@@ -40,7 +40,7 @@ addComponent(Suspense);
 // 点歌工具 (使用 ZhinTool)
 // ============================================================================
 
-const searchMusicTool = new ZhinTool('music.search')
+const searchMusicTool = new ZhinTool('music_search')
   .desc('搜索音乐并返回结果列表')
   .tag('music', 'entertainment')
   .param('keyword', { type: 'string', description: '搜索关键词' }, true)
@@ -133,7 +133,7 @@ const searchMusicTool = new ZhinTool('music.search')
   });
 
 // 分享音乐工具（直接分享指定音乐）
-const shareMusicTool = new ZhinTool('music.share')
+const shareMusicTool = new ZhinTool('music_share')
   .desc('分享指定的音乐')
   .tag('music', 'entertainment')
   .param('id', { type: 'string', description: '音乐 ID' }, true)

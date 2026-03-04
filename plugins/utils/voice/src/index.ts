@@ -190,7 +190,7 @@ async function textToSpeech(text: string): Promise<Buffer> {
 const allTools: ZhinTool[] = [];
 
 if (config.stt?.enabled !== false) {
-  const sttTool = new ZhinTool('voice.stt')
+  const sttTool = new ZhinTool('voice_stt')
     .desc('将语音/音频消息转写为文字')
     .keyword('语音转文字', '语音识别', 'stt', 'transcribe', '听')
     .tag('voice', 'stt', '语音')
@@ -216,7 +216,7 @@ if (config.stt?.enabled !== false) {
 }
 
 if (config.tts?.enabled !== false) {
-  const ttsTool = new ZhinTool('voice.tts')
+  const ttsTool = new ZhinTool('voice_tts')
     .desc('将文字转换为语音消息')
     .keyword('文字转语音', '语音合成', 'tts', '朗读', '读出来')
     .tag('voice', 'tts', '语音')

@@ -12,7 +12,7 @@ export function registerManagementTools(): void {
   useContext('ai', 'tool', (ai, toolService) => {
     if (!ai || !toolService) return;
 
-    const listModelsTool = new ZhinTool('ai.models')
+    const listModelsTool = new ZhinTool('ai_models')
       .desc('列出所有可用的 AI 模型')
       .keyword('模型', '可用模型', 'ai模型', 'model', 'models')
       .tag('ai', 'management')
@@ -30,7 +30,7 @@ export function registerManagementTools(): void {
         return r;
       });
 
-    const clearSessionTool = new ZhinTool('ai.clear')
+    const clearSessionTool = new ZhinTool('ai_clear')
       .desc('清除当前对话的历史记录')
       .keyword('清除', '清空', '重置', 'clear', 'reset')
       .tag('ai', 'session')
@@ -47,7 +47,7 @@ export function registerManagementTools(): void {
         return '✅ 对话历史已清除';
       });
 
-    const healthCheckTool = new ZhinTool('ai.health')
+    const healthCheckTool = new ZhinTool('ai_health')
       .desc('检查 AI 服务的健康状态')
       .keyword('健康', '状态', '检查', 'health', 'status')
       .tag('ai', 'management')
