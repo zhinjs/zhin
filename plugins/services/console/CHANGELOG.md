@@ -1,5 +1,11 @@
 # @zhin.js/console
 
+## 1.0.40
+
+### Patch Changes
+
+- 5f5127c: fix: web url 调整
+
 ## 1.0.39
 
 ### Patch Changes

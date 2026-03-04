@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.31
+
+### Patch Changes
+
+- 5f5127c: fix: web url 调整
+
 ## 1.0.30
 
 ### Patch Changes
