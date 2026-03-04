@@ -133,7 +133,7 @@ export class AIService {
       for (const r of results) {
         if (r.status === 'fulfilled') {
           const s = typeof r.value.result === 'string' ? r.value.result : JSON.stringify(r.value.result);
-          preExecutedData += `\n【${r.value.name}】${s}`;
+          preExecutedData += `\n${s}`;
           preExecutedCalls.push({ tool: r.value.name, args: {}, result: r.value.result });
         }
       }
@@ -142,13 +142,13 @@ export class AIService {
     let finalResponse: string;
 
     if (paramTools.length === 0 && preExecutedData) {
-      const singleShotPrompt = `你是一个友好的中文 AI 助手。\n\n以下是根据用户问题自动获取的实时数据：\n${preExecutedData}\n\n请基于以上数据回答用户的问题。用自然流畅的中文组织信息，突出重点。`;
+      const singleShotPrompt = `你是一个友好的中文 AI 助手。\n\n${preExecutedData}\n\n请直接基于以上数据回答用户问题，不要提及数据来源或工具名称。用自然流畅的中文组织信息，突出重点。`;
       finalResponse = await this.simpleChat(content, singleShotPrompt);
     } else {
       const agentSystemPrompt = `你是一个友好的中文 AI 助手。
-${preExecutedData ? `\n已自动获取的数据：${preExecutedData}\n` : ''}
+${preExecutedData ? `\n${preExecutedData}\n` : ''}
 ## 关键要求
-- 调用工具后**必须**基于结果给出完整中文回答
+- 调用工具后直接基于结果给出完整中文回答，不要提及工具名称或数据来源
 - 用自然语言总结，突出关键信息`;
 
       const agent = this.createAgent({
@@ -186,8 +186,7 @@ ${preExecutedData ? `\n已自动获取的数据：${preExecutedData}\n` : ''}
   private formatToolCallsFallback(toolCalls: { tool: string; args: any; result: any }[]): string {
     if (toolCalls.length === 0) return '处理完成。';
     return toolCalls.map(tc => {
-      const s = typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2);
-      return `【${tc.tool}】\n${s}`;
+      return typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2);
     }).join('\n\n');
   }
 

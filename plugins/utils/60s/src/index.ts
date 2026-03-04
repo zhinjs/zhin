@@ -72,8 +72,9 @@ function formatList(items: any[], limit = 10): string {
     .slice(0, limit)
     .map((item, i) => {
       const title = item.title || item.name || item.word || item;
-      const hot = item.hot ? ` 🔥${item.hot}` : '';
-      return `${i + 1}. ${title}${hot}`;
+      const hot = item.hot_value || item.hot;
+      const hotStr = hot ? ` 🔥${hot}` : '';
+      return `${i + 1}. ${title}${hotStr}`;
     })
     .join('\n');
 }
@@ -110,19 +111,23 @@ const weatherTool = new ZhinTool('weather')
   .examples('/weather 成都', '/天气 北京')
   .param('city', { type: 'string', description: '城市名称，如"成都"、"北京"' }, true)
   .execute(async (args) => {
-    const data = await fetchApi<any>('/weather', { query: args.city });
+    const data = await fetchApi<any>('/weather', { city: args.city });
     const w = data.weather;
     const aq = data.air_quality;
     const loc = data.location;
+    const cityName = loc?.city || loc?.name || args.city;
     const lines = [
-      `🌤️ ${loc?.name || args.city} 天气`,
+      `🌤️ ${cityName} 天气`,
       '',
       `🌡️ 温度: ${w.temperature}°C`,
       `☁️ 天气: ${w.condition}`,
       `💧 湿度: ${w.humidity}%`,
       `💨 风: ${w.wind_direction} ${w.wind_power}`,
     ];
-    if (aq) lines.push(`🌬️ 空气: ${aq.quality} (AQI ${aq.aqi})`);
+    if (aq) {
+      const quality = aq.quality || '';
+      lines.push(`🌬️ 空气: ${quality}${aq.aqi ? ` (AQI ${aq.aqi})` : ''}`);
+    }
     return lines.join('\n');
   });
 
@@ -200,8 +205,9 @@ const hitokotoTool = new ZhinTool('hitokoto')
       ? { c: args.type }
       : undefined;
     const data = await fetchApi<any>('/hitokoto', params);
-    const lines = ['💬 一言', '', `「${data.hitokoto || data.content || data}」`];
-    if (data.from || data.source) {
+    const text = data.hitokoto || data.content || (typeof data === 'string' ? data : '');
+    const lines = ['💬 一言', '', `「${text}」`];
+    if (data.from || data.source || data.from_who || data.author) {
       const author = data.from_who || data.author || '';
       const source = data.from || data.source || '';
       lines.push(`——${author}${source ? `《${source}》` : ''}`);
@@ -220,8 +226,28 @@ const moyuTool = new ZhinTool('moyu')
   .execute(async () => {
     const data = await fetchApi<any>('/moyu');
     if (typeof data === 'string') return `🐟 摸鱼日历\n\n${data}`;
-    if (data.url || data.image) return `🐟 摸鱼日历\n\n${data.url || data.image}`;
-    return `🐟 摸鱼日历\n\n${JSON.stringify(data)}`;
+    const lines = ['🐟 摸鱼日历', ''];
+    if (data.date?.gregorian) lines.push(`📅 ${data.date.gregorian} ${data.date.weekday || ''}`);
+    if (data.date?.lunar) {
+      const l = data.date.lunar;
+      lines.push(`🌙 农历${l.monthCN || ''}${l.dayCN || ''} ${l.yearGanZhi || ''}年`);
+    }
+    if (data.today) {
+      const t = data.today;
+      if (t.holidayName) lines.push(`🎉 ${t.holidayName}`);
+      if (t.solarTerm) lines.push(`🌿 ${t.solarTerm}`);
+      lines.push(t.isWorkday ? '💼 今天是工作日' : '🎮 今天不上班');
+    }
+    if (data.festivals && Array.isArray(data.festivals)) {
+      data.festivals.forEach((f: any) => lines.push(`🎊 ${f.name || f}`));
+    }
+    if (data.countdown && Array.isArray(data.countdown)) {
+      lines.push('');
+      data.countdown.forEach((c: any) => {
+        if (c.name && c.days !== undefined) lines.push(`⏳ 距 ${c.name} 还有 ${c.days} 天`);
+      });
+    }
+    return lines.join('\n');
   });
 
 // ── IP 查询 ───────────────────────────────────────────────────────────────────
@@ -240,12 +266,10 @@ const ipTool = new ZhinTool('ip_query')
     const data = await fetchApi<any>('/ip', params);
     const lines = ['🌐 IP 查询', '', `IP: ${data.ip || args.ip || '当前 IP'}`];
     if (data.country || data.region || data.city) {
-      lines.push(
-        `位置: ${data.country || ''}${data.region || ''}${data.city || ''}`,
-      );
+      lines.push(`位置: ${[data.country, data.region, data.city].filter(Boolean).join(' ')}`);
     }
-    if (data.isp) lines.push(`运营商: ${data.isp}`);
     if (data.location) lines.push(`位置: ${data.location}`);
+    if (data.isp) lines.push(`运营商: ${data.isp}`);
     return lines.join('\n');
   });
 
@@ -261,8 +285,11 @@ const bingTool = new ZhinTool('bing_image')
     const data = await fetchApi<any>('/bing');
     const lines = ['🖼️ Bing 每日壁纸', ''];
     if (data.title) lines.push(`📌 ${data.title}`);
+    if (data.headline) lines.push(`💡 ${data.headline}`);
     if (data.copyright) lines.push(`📝 ${data.copyright}`);
-    if (data.url || data.image) lines.push('', data.url || data.image);
+    if (data.description) lines.push('', data.description);
+    const imgUrl = data.cover || data.cover_4k || data.url || data.image;
+    if (imgUrl) lines.push('', imgUrl);
     return lines.join('\n');
   });
 
@@ -277,19 +304,18 @@ const goldPriceTool = new ZhinTool('gold_price')
   .execute(async () => {
     const data = await fetchApi<any>('/gold-price');
     const lines = ['💰 今日金价', ''];
-    if (Array.isArray(data)) {
-      data.slice(0, 10).forEach((item: any) => {
-        const name = item.name || item.title || '黄金';
-        const price = item.price || item.value;
-        const change = item.change || item.diff;
-        const icon = change?.includes('-') ? '📉' : '📈';
-        lines.push(`${name}: ¥${price} ${change ? `${icon}${change}` : ''}`);
+    if (data.date) lines.push(`📅 ${data.date}`);
+    const metals = data.metals || (Array.isArray(data) ? data : []);
+    if (metals.length > 0) {
+      lines.push('');
+      metals.forEach((item: any) => {
+        const name = item.name || '黄金';
+        const price = item.today_price || item.sell_price || item.price || 'N/A';
+        const unit = item.unit || '元/克';
+        if (price !== 'N/A') lines.push(`${name}: ¥${price} ${unit}`);
       });
     } else if (data.price) {
       lines.push(`当前金价: ¥${data.price}/克`);
-      if (data.change) lines.push(`涨跌: ${data.change}`);
-    } else {
-      lines.push(JSON.stringify(data));
     }
     return lines.join('\n');
   });
@@ -309,22 +335,14 @@ const fuelPriceTool = new ZhinTool('fuel_price')
       : undefined;
     const data = await fetchApi<any>('/fuel-price', params);
     const lines = ['⛽ 今日油价', ''];
-    if (data.province) lines.push(`📍 ${data.province}`);
-    if (data['92'] || data['95'] || data['98']) {
-      if (data['92']) lines.push(`92号汽油: ¥${data['92']}/升`);
-      if (data['95']) lines.push(`95号汽油: ¥${data['95']}/升`);
-      if (data['98']) lines.push(`98号汽油: ¥${data['98']}/升`);
-      if (data['0']) lines.push(`0号柴油: ¥${data['0']}/升`);
-    } else if (Array.isArray(data)) {
-      data
-        .slice(0, 5)
-        .forEach((item: any) =>
-          lines.push(
-            `${item.name || item.province}: 92号¥${item['92'] || item.price92}`,
-          ),
-        );
-    } else {
-      lines.push(JSON.stringify(data));
+    if (data.region) lines.push(`📍 ${data.region}`);
+    if (data.items && Array.isArray(data.items)) {
+      data.items.forEach((item: any) => {
+        lines.push(`${item.name}: ${item.price_desc || `¥${item.price}/升`}`);
+      });
+    }
+    if (data.trend) {
+      lines.push('', `📊 ${data.trend.description || ''}`);
     }
     return lines.join('\n');
   });
@@ -348,15 +366,19 @@ const exchangeRateTool = new ZhinTool('exchange_rate')
       Object.keys(params).length ? params : undefined,
     );
     const lines = ['💱 汇率查询', ''];
-    if (Array.isArray(data)) {
-      data.slice(0, 10).forEach((item: any) => {
-        lines.push(`${item.name || item.currency}: ${item.rate || item.value}`);
-      });
-    } else if (data.rate) {
-      lines.push(`${args.from || 'USD'} → ${args.to || 'CNY'}: ${data.rate}`);
-    } else {
-      lines.push(JSON.stringify(data));
-    }
+    const base = data.base_code || args.from || 'CNY';
+    lines.push(`基准货币: ${base}`);
+    if (data.updated) lines.push(`更新时间: ${data.updated}`);
+    lines.push('');
+    const rates = data.rates || (Array.isArray(data) ? data : []);
+    const targetCurrencies = args.to
+      ? [args.to.toUpperCase()]
+      : ['USD', 'EUR', 'JPY', 'GBP', 'HKD', 'KRW', 'AUD', 'CAD', 'SGD', 'CHF'];
+    rates.forEach((item: any) => {
+      if (targetCurrencies.includes(item.currency) && item.currency !== base) {
+        lines.push(`${base} → ${item.currency}: ${item.rate}`);
+      }
+    });
     return lines.join('\n');
   });
 
@@ -374,12 +396,18 @@ const translateTool = new ZhinTool('translate_60s')
     const params: Record<string, string> = { text: args.text };
     if (args.to) params.to = args.to;
     const data = await fetchApi<any>('/fanyi', params);
-    return [
+    const srcText = data.source?.text || args.text;
+    const srcLang = data.source?.type_desc || data.source?.type || '';
+    const tgtText = data.target?.text || data.result || data.translation || (typeof data === 'string' ? data : '');
+    const tgtLang = data.target?.type_desc || data.target?.type || '';
+    const lines = [
       '🌐 翻译结果',
       '',
-      `原文: ${args.text}`,
-      `译文: ${data.result || data.translation || data.text || data}`,
-    ].join('\n');
+      `原文${srcLang ? ` (${srcLang})` : ''}: ${srcText}`,
+      `译文${tgtLang ? ` (${tgtLang})` : ''}: ${tgtText}`,
+    ];
+    if (data.target?.pronounce) lines.push(`发音: ${data.target.pronounce}`);
+    return lines.join('\n');
   });
 
 // ── 历史上的今天 ──────────────────────────────────────────────────────────────
@@ -392,20 +420,15 @@ const historyTodayTool = new ZhinTool('history_today')
   .examples('/history')
   .execute(async () => {
     const data = await fetchApi<any>('/today-in-history');
-    const today = new Date();
-    const lines = [
-      `📅 历史上的今天 (${today.getMonth() + 1}月${today.getDate()}日)`,
-      '',
-    ];
-    if (Array.isArray(data)) {
-      data.slice(0, 10).forEach((item: any, i: number) => {
-        const year = item.year || '';
-        const title = item.title || item.event || item.content || item;
-        lines.push(`${i + 1}. ${year ? `[${year}] ` : ''}${title}`);
-      });
-    } else {
-      lines.push(JSON.stringify(data));
-    }
+    const dateStr = data.date || `${data.month || ''}月${data.day || ''}日`;
+    const lines = [`📅 历史上的今天 (${dateStr})`, ''];
+    const items = data.items || (Array.isArray(data) ? data : []);
+    items.slice(0, 10).forEach((item: any, i: number) => {
+      const year = item.year || '';
+      const title = item.title || item.event || item.content || item;
+      const typeIcon = item.event_type === 'birth' ? '👶' : item.event_type === 'death' ? '🕊️' : '📌';
+      lines.push(`${typeIcon} ${i + 1}. ${year ? `[${year}] ` : ''}${title}`);
+    });
     return lines.join('\n');
   });
 
@@ -419,7 +442,7 @@ const kfcTool = new ZhinTool('kfc')
   .examples('/kfc')
   .execute(async () => {
     const data = await fetchApi<any>('/kfc');
-    return `🍗 疯狂星期四\n\n${data.content || data.text || data}`;
+    return `🍗 疯狂星期四\n\n${data.kfc || data.content || data.text || (typeof data === 'string' ? data : '')}`;
   });
 
 // ── 段子 ──────────────────────────────────────────────────────────────────────
@@ -432,7 +455,7 @@ const duanziTool = new ZhinTool('duanzi')
   .examples('/duanzi')
   .execute(async () => {
     const data = await fetchApi<any>('/duanzi');
-    return `😂 段子\n\n${data.content || data.text || data}`;
+    return `😂 段子\n\n${data.duanzi || data.content || data.text || (typeof data === 'string' ? data : '')}`;
   });
 
 // ═══════════════════════════════════════════════════════════════════════════════
