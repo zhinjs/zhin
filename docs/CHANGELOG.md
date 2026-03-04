@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.16
+
+### Patch Changes
+
+- 5a68249: fix: 文档优化
+
 ## 1.0.15
 
 ### Patch Changes
