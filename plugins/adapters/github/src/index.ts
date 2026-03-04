@@ -420,7 +420,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
       }
     });
 
-    logger.info('GitHub OAuth: GET /pub/github/oauth, GET /pub/github/oauth/callback');
+    logger.debug('GitHub OAuth: GET /pub/github/oauth, GET /pub/github/oauth/callback');
   }
 
   // ── Webhook 路由 (由 useContext('router') 注入) ────────────────────
@@ -507,7 +507,7 @@ class GitHubAdapter extends Adapter<GitHubBot> {
       }
     });
 
-    logger.info('GitHub Webhook: POST /pub/github/webhook');
+    logger.debug('GitHub Webhook: POST /pub/github/webhook');
   }
 
   // ── GitHub 管理工具 ────────────────────────────────────────────────
@@ -1328,4 +1328,4 @@ useContext('router', 'github', (router, adapter: GitHubAdapter) => {
   adapter.setupOAuth(router);
 });
 
-logger.info('GitHub 适配器已加载 (GitHub App 认证)');
+logger.debug('GitHub 适配器已加载 (GitHub App 认证)');

@@ -96,8 +96,6 @@ useContext("router", "mcpServer", (router, mcpServer) => {
   const config = appConfig.mcp || {};
   const { enabled = true, path: mcpPath = "/mcp" } = config;
 
-  logger.info(`MCP Config: enabled=${enabled}, path=${mcpPath}`);
-
   // 创建 StreamableHTTPServerTransport (无状态模式)
   httpTransport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined, // 无状态模式

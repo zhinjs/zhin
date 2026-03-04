@@ -20,8 +20,6 @@ export const devCommand = new Command('dev')
         process.exit(1);
       }
 
-      // 加载环境变量文件
-      logger.info('🔍 正在加载环境变量...');
       loadEnvFiles(cwd, 'development');
 
       // 检查src目录是否存在，不存在则创建
@@ -33,8 +31,6 @@ export const devCommand = new Command('dev')
       // 检查入口文件是否存在，决定启动方式
       const entryFile = path.join(srcPath, 'index.ts');
       const hasEntryFile = fs.existsSync(entryFile);
-
-      logger.info('📦 开发模式启动中...');
 
       // 启动机器人的函数
       const startBot = (): ChildProcess => {
@@ -58,13 +54,10 @@ export const devCommand = new Command('dev')
           args = options.bun 
             ? ['src/index.ts'] 
             : ['--import', 'tsx/esm','src/index.ts'];
-          logger.info(`📦 启动命令: ${runtime} ${args.join(' ')}`);
         } else {
-          // 没有入口文件，使用 -e 参数直接执行代码
           args = options.bun 
             ? ['-e', "import('zhin.js/setup')"]
             : ['--import', 'tsx/esm','-e', "import('zhin.js/setup')"];
-          logger.info(`📦 启动命令: ${runtime} ${args.join(' ')}`);
         }
         
         // 启动机器人
@@ -169,9 +162,7 @@ export const devCommand = new Command('dev')
       process.on('SIGINT', cleanup);
       process.on('SIGTERM', cleanup);
 
-      // 显示开发模式提示
-      logger.info('💡 开发模式运行中，按 Ctrl+C 退出');
-      logger.info('💡 重启方式: 在插件中调用 process.exit(51)');
+      logger.info('📦 开发模式运行中 (Ctrl+C 退出, process.exit(51) 重启)');
 
     } catch (error) {
       logger.error(`❌ 开发模式启动失败: ${error}`);

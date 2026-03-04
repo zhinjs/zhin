@@ -473,4 +473,4 @@ plugin.declareSkill({
   ],
 });
 
-logger.info(`[60s] 已注册 ${allTools.length} 个工具`);
+logger.debug(`[60s] 已注册 ${allTools.length} 个工具`);

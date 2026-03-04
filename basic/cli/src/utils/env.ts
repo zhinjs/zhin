@@ -31,16 +31,14 @@ export function loadEnvFiles(cwd: string, nodeEnv: string): void {
           
           // 在debug模式下显示详细信息
           if (process.env.ZHIN_DEBUG === 'true') {
-            logger.info(`📄 已加载环境变量文件: ${envFile}`);
-            
-            // 打印加载的变量（仅在debug模式）
+            logger.debug(`已加载环境变量文件: ${envFile}`);
             Object.keys(result.parsed).forEach(key => {
               const value = result.parsed![key];
               const displayValue = key.toLowerCase().includes('password') || 
                                  key.toLowerCase().includes('secret') || 
                                  key.toLowerCase().includes('token') 
                                  ? '***' : value;
-              logger.info(`  - ${key}=${displayValue}`);
+              logger.debug(`  - ${key}=${displayValue}`);
             });
           }
         }

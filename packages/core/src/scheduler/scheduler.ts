@@ -200,7 +200,7 @@ export class Scheduler implements IScheduler {
     };
     this.heartbeatJobId = job.id;
     this.store.jobs.push(job);
-    logger.info({ intervalMs: this.heartbeatIntervalMs }, 'Heartbeat job added');
+    logger.debug({ intervalMs: this.heartbeatIntervalMs }, 'Heartbeat job added');
   }
 
   private recomputeNextRuns(): void {

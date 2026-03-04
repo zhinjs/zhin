@@ -190,7 +190,7 @@ class SandboxAdapter extends Adapter<SandboxBot> {
       });
     });
 
-    logger.info("Sandbox WebSocket server started at /sandbox");
+    logger.debug("Sandbox WebSocket server started at /sandbox");
   }
 }
 

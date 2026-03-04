@@ -483,13 +483,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     for (const child of this.children) {
       await child.start(t);
     }
-    // 输出启动日志（使用 debug 级别，避免重复输出）
-    // 只在根插件或重要插件时使用 info 级别
-    if (!this.parent || this.name === 'setup') {
-      this.logger.info(`Plugin "${this.name}" ${t ? `reloaded in ${Date.now() - t}ms` : "started"}`);
-    } else {
-      this.logger.debug(`Plugin "${this.name}" ${t ? `reloaded in ${Date.now() - t}ms` : "started"}`);
-    }
+    this.logger.debug(`Plugin "${this.name}" ${t ? `reloaded in ${Date.now() - t}ms` : "started"}`);
   }
   /**
    * 记录 Feature 贡献（由 Feature extensions 内部调用）

@@ -22,15 +22,7 @@ export const startCommand = new Command('start')
         process.exit(1);
       }
       
-      // 加载环境变量文件
-      logger.info('🔍 正在加载环境变量...');
       loadEnvFiles(cwd, 'production');
-      
-      // 新架构: 始终使用 import('zhin.js/setup') 方式启动
-      // 不再依赖 lib/index.js 入口文件
-      const useEval = true;
-      
-      logger.info('🚀 正在生产模式启动机器人...');
       
       // 启动机器人的函数
       const startBot = async (): Promise<ChildProcess> => {
@@ -53,7 +45,6 @@ export const startCommand = new Command('start')
         const args = options.bun 
           ? ['-e', "import('zhin.js/setup')"]
           : ['--expose-gc', '-e', "import('zhin.js/setup')"];
-        logger.info(`📦 启动命令: ${runtime} -e "import('zhin.js/setup')"`);
         return startProcess(runtime, args, {
           cwd,
           env,
@@ -232,8 +223,7 @@ export const startCommand = new Command('start')
         // 不退出，让事件循环继续
       } else {
         // 前台运行时也显示重启提示
-        logger.info('💡 前台运行模式，按 Ctrl+C 退出');
-        logger.info('💡 重启方式: 在插件中调用 process.exit(51)');
+        logger.info('🚀 前台运行中 (Ctrl+C 退出, process.exit(51) 重启)');
       }
     } catch (error) {
       logger.error(`❌ 启动失败: ${error}`);

@@ -535,7 +535,6 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
       }),
   );
 
-  logger.info(`已创建 ${tools.length} 个内置系统工具`);
   return tools;
 }
 

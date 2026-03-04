@@ -1101,4 +1101,4 @@ provide({
   },
 });
 
-logger.info("✅ KOOK 适配器已加载");
+logger.debug("KOOK 适配器已加载");

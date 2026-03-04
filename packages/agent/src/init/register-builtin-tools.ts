@@ -89,21 +89,16 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
         logger.debug(`Bootstrap files loaded (cwd: ${workspaceDir}): ${bootstrapFiles.map(f => f.name + (f.missing ? ' (missing)' : '')).join(', ')}`);
 
         const soulFile = contextFiles.find(f => f.path === 'SOUL.md');
-        if (soulFile && refs.zhinAgent) {
-          logger.info('Loaded SOUL.md persona → agent prompt');
-          loadedFiles.push('SOUL.md');
-        }
+        if (soulFile && refs.zhinAgent) loadedFiles.push('SOUL.md');
 
         const toolsFile = contextFiles.find(f => f.path === 'TOOLS.md');
-        if (toolsFile) {
-          logger.info('Loaded TOOLS.md tool guidance → agent prompt');
-          loadedFiles.push('TOOLS.md');
-        }
+        if (toolsFile) loadedFiles.push('TOOLS.md');
 
         const agentsFile = contextFiles.find(f => f.path === 'AGENTS.md');
-        if (agentsFile) {
-          logger.info('Loaded AGENTS.md memory → agent prompt');
-          loadedFiles.push('AGENTS.md');
+        if (agentsFile) loadedFiles.push('AGENTS.md');
+
+        if (loadedFiles.length > 0) {
+          logger.info(`Loaded bootstrap: ${loadedFiles.join(', ')} → agent prompt`);
         }
 
         if (refs.zhinAgent && contextFiles.length > 0) {

@@ -486,7 +486,7 @@ const rendererService = createHtmlRendererService(pluginConfig);
   value: rendererService,
 });
 
-logger.info('HTML Renderer service registered (using @zhin.js/satori)');
+logger.debug('HTML Renderer service registered (using @zhin.js/satori)');
 
 // ============================================================================
 // JSX 组件
@@ -682,17 +682,16 @@ const generateCardTool = new ZhinTool('html.card')
   .action(async (message, result) => {
     const { title, content, theme, width } = result.params;
     
-    // 执行 execute 获取结果
     const executeResult = await generateCardTool.toTool().execute(
       { title, content, theme, width },
       { platform: message.$adapter, senderId: message.$sender.id }
-    );
+    ) as { success: boolean; error?: string; dataUrl?: string } | null | undefined;
 
-    if (!executeResult.success) {
-      return `❌ 生成失败: ${executeResult.error}`;
+    if (!executeResult || !executeResult.success) {
+      return `❌ 生成失败: ${executeResult?.error ?? '未知错误'}`;
     }
 
-    return <image url={executeResult.dataUrl} />;
+    return <image url={executeResult.dataUrl!} />;
   });
 
 // 注册卡片工具
