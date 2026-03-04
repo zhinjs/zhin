@@ -1,5 +1,14 @@
 # @zhin.js/agent
 
+## 0.0.5
+
+### Patch Changes
+
+- 0999ca6: fix: 提示词优化,60s 技能优化
+- Updated dependencies [0999ca6]
+  - @zhin.js/ai@1.0.3
+  - @zhin.js/core@1.0.42
+
 ## 0.0.4
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @zhin.js/adapter-lark
 
+## 1.0.47
+
+### Patch Changes
+
+- zhin.js@1.0.42
+- @zhin.js/http@1.0.36
+
 ## 1.0.46
 
 ### Patch Changes

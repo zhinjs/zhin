@@ -1,5 +1,12 @@
 # @zhin.js/adapter-kook
 
+## 1.0.43
+
+### Patch Changes
+
+- zhin.js@1.0.42
+- @zhin.js/logger@0.1.26
+
 ## 1.0.42
 
 ### Patch Changes
