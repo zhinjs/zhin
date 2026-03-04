@@ -1,5 +1,14 @@
 # @zhin.js/core
 
+## 1.0.39
+
+### Patch Changes
+
+- 04f76ac: fix: 工具命名格式优化
+  - @zhin.js/database@1.0.26
+  - @zhin.js/logger@0.1.23
+  - @zhin.js/schema@1.0.23
+
 ## 1.0.38
 
 ### Patch Changes
