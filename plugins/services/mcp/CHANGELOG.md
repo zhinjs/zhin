@@ -1,5 +1,14 @@
 # @zhin.js/mcp
 
+## 1.0.23
+
+### Patch Changes
+
+- 7ef9057: fix: 架构调整优化
+- Updated dependencies [7ef9057]
+  - zhin.js@1.0.40
+  - @zhin.js/http@1.0.34
+
 ## 1.0.22
 
 ### Patch Changes
