@@ -1,5 +1,12 @@
 # @zhin.js/plugin-html-renderer
 
+## 0.0.17
+
+### Patch Changes
+
+- 04f76ac: fix: 工具命名格式优化
+  - zhin.js@1.0.39
+
 ## 0.0.16
 
 ### Patch Changes
