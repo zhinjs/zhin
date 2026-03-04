@@ -1695,7 +1695,7 @@ class DiscordInteractionsAdapter extends Adapter<DiscordInteractionsBot> {
 provide({
   name: "discord",
   description: "Discord Gateway Adapter",
-  mounted: async (p) => {
+  mounted: async (p: Plugin) => {
     const adapter = new DiscordAdapter(p);
     await adapter.start();
     return adapter;
@@ -1710,7 +1710,7 @@ useContext("router", (router) => {
   provide({
     name: "discord-interactions",
     description: "Discord Interactions Endpoint Adapter",
-    mounted: async (p) => {
+    mounted: async (p: Plugin) => {
       const adapter = new DiscordInteractionsAdapter(p, router);
       await adapter.start();
       return adapter;

@@ -624,7 +624,7 @@ class QQAdapter extends Adapter<QQBot<ReceiverMode>> {
 provide({
   name: "qq",
   description: "QQ Official Bot Adapter",
-  mounted: async (p) => {
+  mounted: async (p: Plugin) => {
     const adapter = new QQAdapter(p);
     await adapter.start();
     return adapter;

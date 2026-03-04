@@ -1358,7 +1358,7 @@ class TelegramAdapter extends Adapter<TelegramBot> {
 provide({
   name: "telegram",
   description: "Telegram Bot Adapter",
-  mounted: async (p) => {
+  mounted: async (p: Plugin) => {
     const adapter = new TelegramAdapter(p);
     await adapter.start();
     return adapter;

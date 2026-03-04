@@ -30,7 +30,7 @@ export function registerCoreServices(
     provide({
       name: 'process',
       description: '命令行适配器',
-      mounted: async (p) => {
+      mounted: async (p: Plugin) => {
         const adapter = new ProcessAdapter(p);
         await adapter.start();
         return adapter;

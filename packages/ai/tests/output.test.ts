@@ -2,7 +2,7 @@
  * AI Output 模块测试
  */
 import { describe, it, expect } from 'vitest';
-import { parseOutput, renderToPlainText, renderToSatori } from '@zhin.js/agent';
+import { parseOutput, renderToPlainText, renderToSatori } from '@zhin.js/ai';
 
 describe('parseOutput', () => {
   it('纯文本应返回单个 TextElement', () => {

@@ -60,7 +60,7 @@ let httpTransport: StreamableHTTPServerTransport | undefined;
 provide({
   name: "mcpServer",
   description: "MCP Server for Zhin development",
-  async mounted(p) {
+  async mounted(p: import('zhin.js').Plugin) {
     // 从配置服务获取配置
     const configService = root.inject("config")!;
     const appConfig = configService.get<{ mcp?: McpConfig }>("zhin.config.yml");

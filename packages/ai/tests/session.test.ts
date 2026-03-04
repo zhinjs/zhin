@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-vi.mock('@zhin.js/core', async (importOriginal) => {
+vi.mock('@zhin.js/logger', async (importOriginal) => {
   const original = await importOriginal() as any;
   return {
     ...original,
@@ -21,7 +21,7 @@ import {
   DatabaseSessionManager,
   SessionManager,
   createMemorySessionManager,
-} from '@zhin.js/agent';
+} from '@zhin.js/ai';
 
 describe('MemorySessionManager', () => {
   let manager: MemorySessionManager;

@@ -501,7 +501,7 @@ class EmailAdapter extends Adapter<EmailBot> {
 provide({
     name: "email",
     description: "Email Bot Adapter",
-    mounted: async (p) => {
+    mounted: async (p: Plugin) => {
         const adapter = new EmailAdapter(p);
         await adapter.start();
         return adapter;

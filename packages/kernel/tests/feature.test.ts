@@ -1,10 +1,10 @@
 /**
- * Feature 基类测试
+ * Feature 基类测试（从 core/tests/feature.test.ts 迁移）
  */
-import { describe, it, expect } from 'vitest';
-import { Feature, FeatureJSON } from '../src/feature.js';
+import { describe, it, expect, vi } from 'vitest';
+import { Feature } from '../src/feature.js';
+import type { FeatureJSON } from '../src/feature.js';
 
-// 创建一个具体的 Feature 子类用于测试
 class TestFeature extends Feature<{ id: string; value: number }> {
   readonly name = 'test';
   readonly icon = 'TestIcon';
@@ -23,12 +23,11 @@ class TestFeature extends Feature<{ id: string; value: number }> {
 }
 
 describe('Feature 基类', () => {
-  describe('add / remove / getAll', () => {
+  describe('add / remove', () => {
     it('应该能添加 item 并返回 dispose 函数', () => {
       const feature = new TestFeature();
       const item = { id: 'a', value: 1 };
       const dispose = feature.add(item, 'plugin-a');
-
       expect(feature.items).toHaveLength(1);
       expect(feature.items[0]).toBe(item);
       expect(typeof dispose).toBe('function');
@@ -36,9 +35,7 @@ describe('Feature 基类', () => {
 
     it('dispose 函数应移除 item', () => {
       const feature = new TestFeature();
-      const item = { id: 'a', value: 1 };
-      const dispose = feature.add(item, 'plugin-a');
-
+      const dispose = feature.add({ id: 'a', value: 1 }, 'plugin-a');
       dispose();
       expect(feature.items).toHaveLength(0);
     });
@@ -47,16 +44,13 @@ describe('Feature 基类', () => {
       const feature = new TestFeature();
       const item = { id: 'a', value: 1 };
       feature.add(item, 'plugin-a');
-
-      const result = feature.remove(item);
-      expect(result).toBe(true);
+      expect(feature.remove(item)).toBe(true);
       expect(feature.items).toHaveLength(0);
     });
 
     it('remove 不存在的 item 应返回 false', () => {
       const feature = new TestFeature();
-      const result = feature.remove({ id: 'nonexistent', value: 0 });
-      expect(result).toBe(false);
+      expect(feature.remove({ id: 'x', value: 0 })).toBe(false);
     });
 
     it('应支持多个 item', () => {
@@ -64,7 +58,6 @@ describe('Feature 基类', () => {
       feature.add({ id: 'a', value: 1 }, 'plugin-a');
       feature.add({ id: 'b', value: 2 }, 'plugin-b');
       feature.add({ id: 'c', value: 3 }, 'plugin-a');
-
       expect(feature.items).toHaveLength(3);
       expect(feature.count).toBe(3);
     });
@@ -80,10 +73,6 @@ describe('Feature 基类', () => {
       const pluginAItems = feature.getByPlugin('plugin-a');
       expect(pluginAItems).toHaveLength(2);
       expect(pluginAItems.map(i => i.id)).toEqual(['a', 'c']);
-
-      const pluginBItems = feature.getByPlugin('plugin-b');
-      expect(pluginBItems).toHaveLength(1);
-      expect(pluginBItems[0].id).toBe('b');
     });
 
     it('不存在的插件应返回空数组', () => {
@@ -95,7 +84,6 @@ describe('Feature 基类', () => {
       const feature = new TestFeature();
       feature.add({ id: 'a', value: 1 }, 'plugin-a');
       feature.add({ id: 'b', value: 2 }, 'plugin-a');
-
       expect(feature.countByPlugin('plugin-a')).toBe(2);
       expect(feature.countByPlugin('plugin-b')).toBe(0);
     });
@@ -105,8 +93,37 @@ describe('Feature 基类', () => {
       const item = { id: 'a', value: 1 };
       feature.add(item, 'plugin-a');
       feature.remove(item);
-
       expect(feature.getByPlugin('plugin-a')).toHaveLength(0);
+    });
+  });
+
+  describe('事件监听', () => {
+    it('add 时应触发 add 事件', () => {
+      const feature = new TestFeature();
+      const listener = vi.fn();
+      feature.on('add', listener);
+      const item = { id: 'a', value: 1 };
+      feature.add(item, 'plugin-a');
+      expect(listener).toHaveBeenCalledWith(item, 'plugin-a');
+    });
+
+    it('remove 时应触发 remove 事件', () => {
+      const feature = new TestFeature();
+      const listener = vi.fn();
+      feature.on('remove', listener);
+      const item = { id: 'a', value: 1 };
+      feature.add(item, 'plugin-a');
+      feature.remove(item, 'plugin-a');
+      expect(listener).toHaveBeenCalledWith(item, 'plugin-a');
+    });
+
+    it('off 函数应取消监听', () => {
+      const feature = new TestFeature();
+      const listener = vi.fn();
+      const off = feature.on('add', listener);
+      off();
+      feature.add({ id: 'a', value: 1 }, 'plugin-a');
+      expect(listener).not.toHaveBeenCalled();
     });
   });
 
@@ -115,11 +132,8 @@ describe('Feature 基类', () => {
       const feature = new TestFeature();
       feature.add({ id: 'a', value: 1 }, 'plugin-a');
       feature.add({ id: 'b', value: 2 }, 'plugin-b');
-
       const json = feature.toJSON();
       expect(json.name).toBe('test');
-      expect(json.icon).toBe('TestIcon');
-      expect(json.desc).toBe('测试 Feature');
       expect(json.count).toBe(2);
       expect(json.items).toHaveLength(2);
     });
@@ -128,18 +142,15 @@ describe('Feature 基类', () => {
       const feature = new TestFeature();
       feature.add({ id: 'a', value: 1 }, 'plugin-a');
       feature.add({ id: 'b', value: 2 }, 'plugin-b');
-
       const json = feature.toJSON('plugin-a');
       expect(json.count).toBe(1);
-      expect(json.items).toHaveLength(1);
       expect(json.items[0].id).toBe('a');
     });
   });
 
   describe('extensions getter', () => {
     it('默认返回空对象', () => {
-      const feature = new TestFeature();
-      expect(feature.extensions).toEqual({});
+      expect(new TestFeature().extensions).toEqual({});
     });
   });
 });

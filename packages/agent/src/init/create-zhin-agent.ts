@@ -95,7 +95,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
       setCronManager({ cronFeature, engine: cronEngine });
     }
 
-    // Unified scheduler (at/every/cron + Heartbeat)
+    // Unified scheduler (at/every/cron)
     const dataDir = path.join(process.cwd(), 'data');
     const scheduler = new Scheduler({
       storePath: path.join(dataDir, 'scheduler-jobs.json'),
@@ -108,8 +108,6 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
           sceneId: 'scheduler',
         });
       },
-      heartbeatEnabled: true,
-      heartbeatIntervalMs: 30 * 60 * 1000,
     });
     setScheduler(scheduler);
     scheduler.start().catch((e) => logger.warn('Scheduler start failed: ' + (e as Error).message));

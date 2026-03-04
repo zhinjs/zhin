@@ -1313,7 +1313,7 @@ function formatNotification(event: string, p: GenericWebhookPayload): string {
 provide({
   name: 'github',
   description: 'GitHub Adapter — Issues/PRs as chat channels, full repo management via GitHub App',
-  mounted: async (p) => {
+  mounted: async (p: Plugin) => {
     const adapter = new GitHubAdapter(p);
     await adapter.start();
     return adapter;

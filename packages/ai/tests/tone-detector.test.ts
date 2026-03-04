@@ -2,7 +2,7 @@
  * ToneDetector 测试
  */
 import { describe, it, expect } from 'vitest';
-import { detectTone, type Tone } from '@zhin.js/agent';
+import { detectTone } from '@zhin.js/ai';
 
 describe('detectTone', () => {
   it('空消息应返回 neutral', () => {

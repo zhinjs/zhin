@@ -1030,7 +1030,7 @@ class SlackAdapter extends Adapter<SlackBot> {
 provide({
   name: "slack",
   description: "Slack Bot Adapter",
-  mounted: async (p) => {
+  mounted: async (p: Plugin) => {
     const adapter = new SlackAdapter(p);
     await adapter.start();
     return adapter;

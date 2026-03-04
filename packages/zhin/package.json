@@ -21,6 +21,16 @@
       "development": "./src/re-exports/agent.ts",
       "import": "./lib/re-exports/agent.js"
     },
+    "./ai": {
+      "types": "./lib/re-exports/ai.d.ts",
+      "development": "./src/re-exports/ai.ts",
+      "import": "./lib/re-exports/ai.js"
+    },
+    "./kernel": {
+      "types": "./lib/re-exports/kernel.d.ts",
+      "development": "./src/re-exports/kernel.ts",
+      "import": "./lib/re-exports/kernel.js"
+    },
     "./jsx": {
       "types": "./lib/jsx.d.ts",
       "development": "./src/jsx.ts",
@@ -48,7 +58,9 @@
   },
   "dependencies": {
     "@zhin.js/agent": "workspace:*",
+    "@zhin.js/ai": "workspace:*",
     "@zhin.js/core": "workspace:*",
+    "@zhin.js/kernel": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/schema": "workspace:*",
     "yaml": "^2.3.4",

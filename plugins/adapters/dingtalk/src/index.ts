@@ -1039,7 +1039,7 @@ useContext('router', (router: any) => {
     provide({
         name: "dingtalk",
         description: "DingTalk Bot Adapter",
-        mounted: async (p) => {
+        mounted: async (p: Plugin) => {
             const adapter = new DingTalkAdapter(p, router);
             await adapter.start();
             return adapter;

@@ -8,9 +8,9 @@
  * - 重复调用检测
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createMockTool } from './setup.js';
+import { createMockTool, createMockProvider, createChatResponse } from './setup.js';
 
-vi.mock('@zhin.js/core', async (importOriginal) => {
+vi.mock('@zhin.js/logger', async (importOriginal) => {
   const original = await importOriginal() as any;
   return {
     ...original,
@@ -23,35 +23,7 @@ vi.mock('@zhin.js/core', async (importOriginal) => {
   };
 });
 
-import { createAgent, Agent } from '@zhin.js/agent';
-
-const createMockProvider = () => ({
-  name: 'mock',
-  models: ['mock-model'],
-  chat: vi.fn(),
-  healthCheck: vi.fn().mockResolvedValue(true),
-});
-
-const createChatResponse = (content: string, toolCalls?: any[]) => ({
-  id: 'test-id',
-  object: 'chat.completion',
-  created: Date.now(),
-  model: 'mock-model',
-  choices: [{
-    index: 0,
-    message: {
-      role: 'assistant',
-      content,
-      tool_calls: toolCalls,
-    },
-    finish_reason: toolCalls ? 'tool_calls' : 'stop',
-  }],
-  usage: {
-    prompt_tokens: 10,
-    completion_tokens: 10,
-    total_tokens: 20,
-  },
-});
+import { createAgent, Agent } from '@zhin.js/ai';
 
 describe('Agent 完整流程测试', () => {
   let mockProvider: ReturnType<typeof createMockProvider>;

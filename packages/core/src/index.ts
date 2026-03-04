@@ -40,3 +40,5 @@ export * from '@zhin.js/database'
 export * from '@zhin.js/logger'
 // 只导出 Schema 类，避免与 utils.js 的 isEmpty 冲突
 export { Schema } from '@zhin.js/schema'
+// Re-export PluginLike from kernel (generic plugin interface)
+export type { PluginLike } from '@zhin.js/kernel'

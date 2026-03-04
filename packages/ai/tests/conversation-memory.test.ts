@@ -2,7 +2,7 @@
  * ConversationMemory 测试
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ConversationMemory } from '@zhin.js/agent';
+import { ConversationMemory } from '@zhin.js/ai';
 
 describe('ConversationMemory（内存模式）', () => {
   let memory: ConversationMemory;

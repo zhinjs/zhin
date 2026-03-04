@@ -2,7 +2,7 @@
  * RateLimiter 测试
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { RateLimiter } from '@zhin.js/agent';
+import { RateLimiter } from '@zhin.js/ai';
 
 describe('RateLimiter', () => {
   let limiter: RateLimiter;

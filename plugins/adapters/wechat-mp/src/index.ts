@@ -603,7 +603,7 @@ useContext('router', (router: Router) => {
     provide({
         name: "wechat-mp",
         description: "WeChat MP Bot Adapter",
-        mounted: async (p) => {
+        mounted: async (p: Plugin) => {
             const adapter = new WeChatMPAdapter(p, router);
             await adapter.start();
             return adapter;

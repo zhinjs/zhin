@@ -1054,7 +1054,7 @@ useContext('router', (router) => {
     provide({
         name: "lark",
         description: "Lark/Feishu Bot Adapter",
-        mounted: async (p) => {
+        mounted: async (p: Plugin) => {
             const adapter = new LarkAdapter(p, router);
             await adapter.start();
             return adapter;

@@ -1,55 +1,46 @@
-import * as path from "path";
-import * as fs from "fs";
-import * as vm from "vm";
+/**
+ * @zhin.js/core utilities.
+ *
+ * Generic utilities are re-exported from @zhin.js/kernel.
+ * IM-specific utilities (compose, segment) remain here.
+ */
+
+// ── Re-export generic utils from kernel ──
+export {
+  evaluate,
+  execute,
+  clearEvalCache,
+  getEvalCacheStats,
+  getValueWithRuntime,
+  compiler,
+  remove,
+  isEmpty,
+  Time,
+  supportedPluginExtensions,
+  resolveEntry,
+  sleep,
+} from '@zhin.js/kernel';
+
+// ── IM-specific utilities ──
 import {
   AdapterMessage,
-  Dict,
   MessageElement,
   MessageMiddleware,
   RegisteredAdapter,
   SendContent,
-} from "./types";
+} from "./types.js";
 import { Message } from "./message.js";
 
-export function getValueWithRuntime(template: string, ctx: Dict) {
-  return evaluate(template, ctx);
-}
-/**
- * Evaluate a single expression in a sandboxed vm context.
- * Unlike `execute`, does NOT wrap in IIFE — the expression value is returned directly.
- */
-export const evaluate = <S extends Record<string, unknown>, T = unknown>(exp: string, context: S): T | undefined => {
-  const script = getOrCompileScript(exp);
-  if (!script) return undefined;
-
-  try {
-    return script.runInNewContext(buildSandbox(context), { timeout: 200 }) as T;
-  } catch {
-    return undefined;
-  }
-};
 /**
  * 组合中间件,洋葱模型
- * 灵感来源于 zhinjs/next 的 Hooks.compose
- *
- * @param middlewares 中间件列表
- * @returns 中间件处理函数
- *
- * @example
- * ```typescript
- * const composed = compose([middleware1, middleware2]);
- * await composed(message);
- * ```
  */
 export function compose<P extends RegisteredAdapter=RegisteredAdapter>(
   middlewares: MessageMiddleware<P>[]
 ) {
-  // 性能优化：空数组直接返回空函数
   if (middlewares.length === 0) {
     return () => Promise.resolve();
   }
 
-  // 性能优化：单个中间件直接返回
   if (middlewares.length === 1) {
     return (message: Message<AdapterMessage<P>>, next: () => Promise<void> = () => Promise.resolve()) => {
       return middlewares[0](message, next);
@@ -62,7 +53,6 @@ export function compose<P extends RegisteredAdapter=RegisteredAdapter>(
   ) {
     let index = -1;
     const dispatch = async (i: number = 0): Promise<void> => {
-      // 防止 next() 被多次调用
       if (i <= index) {
         return Promise.reject(new Error("next() called multiple times"));
       }
@@ -73,7 +63,6 @@ export function compose<P extends RegisteredAdapter=RegisteredAdapter>(
       try {
         return await fn(message, () => dispatch(i + 1));
       } catch (error) {
-        // 中间件异常应该被记录但不中断整个流程
         console.error("Middleware error:", error);
         throw error;
       }
@@ -81,87 +70,7 @@ export function compose<P extends RegisteredAdapter=RegisteredAdapter>(
     return dispatch(0);
   };
 }
-// LRU cache for compiled vm.Script instances
-const MAX_EVAL_CACHE_SIZE = 1000;
-const scriptCache = new Map<string, vm.Script>();
 
-function getOrCompileScript(code: string): vm.Script | null {
-  let script = scriptCache.get(code);
-  if (script) return script;
-  try {
-    script = new vm.Script(code);
-  } catch {
-    return null;
-  }
-  if (scriptCache.size >= MAX_EVAL_CACHE_SIZE) {
-    const oldest = scriptCache.keys().next().value;
-    if (oldest !== undefined) scriptCache.delete(oldest);
-  }
-  scriptCache.set(code, script);
-  return script;
-}
-
-function buildSandbox<S extends Record<string, unknown>>(context: S): Record<string, unknown> {
-  return {
-    ...context,
-    process: {
-      version: process.version,
-      versions: process.versions,
-      platform: process.platform,
-      arch: process.arch,
-      release: process.release,
-      uptime: process.uptime(),
-      memoryUsage: process.memoryUsage(),
-      cpuUsage: process.cpuUsage(),
-      pid: process.pid,
-      ppid: process.ppid,
-    },
-    global: undefined,
-    globalThis: undefined,
-    Buffer: undefined,
-    crypto: undefined,
-    require: undefined,
-    import: undefined,
-    __dirname: undefined,
-    __filename: undefined,
-    Bun: undefined,
-    Deno: undefined,
-  };
-}
-
-/**
- * Execute a code block in a sandboxed vm context.
- * Supports `return` statements by wrapping in an IIFE.
- * Throws on compilation or runtime errors.
- */
-export const execute = <S extends Record<string, unknown>, T = unknown>(code: string, context: S): T => {
-  const wrapped = `(function(){${code}})()`;
-  const script = getOrCompileScript(wrapped);
-  if (!script) throw new SyntaxError(`Failed to compile: ${code.slice(0, 80)}`);
-
-  return script.runInNewContext(buildSandbox(context), { timeout: 200 }) as T;
-};
-
-export function clearEvalCache(): void {
-  scriptCache.clear();
-}
-
-export function getEvalCacheStats(): { size: number; maxSize: number } {
-  return {
-    size: scriptCache.size,
-    maxSize: MAX_EVAL_CACHE_SIZE,
-  };
-}
-export function compiler(template: string, ctx: Dict) {
-  const matched = [...template.matchAll(/\${([^}]*?)}/g)];
-  for (const item of matched) {
-    const tpl = item[1];
-    const raw = getValueWithRuntime(tpl, ctx);
-    const value = typeof raw === 'string' ? raw : (raw == null ? 'undefined' : JSON.stringify(raw, null, 2));
-    template = template.replace(`\${${item[1]}}`, value);
-  }
-  return template;
-}
 export function segment<T extends object>(type: string, data: T) {
   return {
     type,
@@ -197,33 +106,27 @@ export namespace segment {
     if (!Array.isArray(content)) content = [content];
     const toString = (template: string | MessageElement) => {
       if (typeof template !== "string") return [template];
-      
-      // 安全检查：限制输入长度，防止 ReDoS 攻击
-      const MAX_TEMPLATE_LENGTH = 100000; // 100KB
+
+      const MAX_TEMPLATE_LENGTH = 100000;
       if (template.length > MAX_TEMPLATE_LENGTH) {
         throw new Error(`Template too large: ${template.length} > ${MAX_TEMPLATE_LENGTH}`);
       }
-      
+
       template = unescape(template);
       const result: MessageElement[] = [];
-      // 修复 ReDoS 漏洞：使用更安全的正则表达式
-      // 注意：需要使用捕获组来获取属性字符串，否则无法正确重建原始标签
-      // closingReg: 自闭合标签 <type attr="val"/>
       const closingReg = /<(\w+)(\s+[^>]*?)?\/>/;
-      // twinningReg: 成对标签 <type attr="val">child</type>
       const twinningReg = /<(\w+)(\s+[^>]*?)?>([^]*?)<\/\1>/;
-      
+
       let iterations = 0;
-      const MAX_ITERATIONS = 1000; // 防止无限循环
-      
+      const MAX_ITERATIONS = 1000;
+
       while (template.length && iterations++ < MAX_ITERATIONS) {
         const twinMatch = template.match(twinningReg);
         const closeMatch = template.match(closingReg);
-        
-        // 选择位置更靠前的匹配
+
         let match: RegExpMatchArray | null = null;
         let isClosing = false;
-        
+
         if (twinMatch && closeMatch) {
           const twinIndex = template.indexOf(twinMatch[0]);
           const closeIndex = template.indexOf(closeMatch[0]);
@@ -239,14 +142,14 @@ export namespace segment {
         } else if (twinMatch) {
           match = twinMatch;
         }
-        
+
         if (!match) break;
-        
-        const [fullMatch, type, attrStr = "", child = ""] = isClosing 
+
+        const [fullMatch, type, attrStr = "", child = ""] = isClosing
           ? [match[0], match[1], match[2] || ""]
           : [match[0], match[1], match[2] || "", match[3] || ""];
         const index = template.indexOf(fullMatch);
-        if (index === -1) break; // 安全检查
+        if (index === -1) break;
         const prevText = template.slice(0, index);
         if (prevText)
           result.push({
@@ -256,8 +159,6 @@ export namespace segment {
             },
           });
         template = template.slice(index + fullMatch.length);
-        // 修复 ReDoS 漏洞：使用更简单的正则表达式
-        // 原: /\s([^=]+)(?=(?=="([^"]+)")|(?=='([^']+)'))/g  嵌套前瞻断言
         const attrArr = [
           ...attrStr.matchAll(/\s+([^=\s]+)=(?:"([^"]*)"|'([^']*)')/g),
         ];
@@ -323,202 +224,4 @@ export namespace segment {
       })
       .join("");
   }
-}
-
-export function remove<T>(list: T[], fn: (item: T) => boolean): void;
-export function remove<T>(list: T[], item: T): void;
-export function remove<T>(list: T[], arg: T | ((item: T) => boolean)) {
-  const index =
-    typeof arg === "function" &&
-      !list.every((item) => typeof item === "function")
-      ? list.findIndex(arg as (item: T) => boolean)
-      : list.indexOf(arg as T);
-  if (index !== -1) list.splice(index, 1);
-}
-export function isEmpty<T>(item: T) {
-  if (Array.isArray(item)) return item.length === 0;
-  if (typeof item === "object") {
-    if (!item) return true;
-    return Reflect.ownKeys(item).length === 0;
-  }
-  return false;
-}
-
-export namespace Time {
-  export const millisecond = 1;
-  export const second = 1000;
-  export const minute = second * 60;
-  export const hour = minute * 60;
-  export const day = hour * 24;
-  export const week = day * 7;
-
-  let timezoneOffset = new Date().getTimezoneOffset();
-
-  export function setTimezoneOffset(offset: number) {
-    timezoneOffset = offset;
-  }
-
-  export function getTimezoneOffset() {
-    return timezoneOffset;
-  }
-
-  export function getDateNumber(
-    date: number | Date = new Date(),
-    offset?: number
-  ) {
-    if (typeof date === "number") date = new Date(date);
-    if (offset === undefined) offset = timezoneOffset;
-    return Math.floor((date.valueOf() / minute - offset) / 1440);
-  }
-
-  export function fromDateNumber(value: number, offset?: number) {
-    const date = new Date(value * day);
-    if (offset === undefined) offset = timezoneOffset;
-    return new Date(+date + offset * minute);
-  }
-
-  const numeric = /\d+(?:\.\d+)?/.source;
-  const timeRegExp = new RegExp(
-    `^${[
-      "w(?:eek(?:s)?)?",
-      "d(?:ay(?:s)?)?",
-      "h(?:our(?:s)?)?",
-      "m(?:in(?:ute)?(?:s)?)?",
-      "s(?:ec(?:ond)?(?:s)?)?",
-    ]
-      .map((unit) => `(${numeric}${unit})?`)
-      .join("")}$`
-  );
-
-  export function parseTime(source: string) {
-    const capture = timeRegExp.exec(source);
-    if (!capture) return 0;
-    return (
-      (parseFloat(capture[1]) * week || 0) +
-      (parseFloat(capture[2]) * day || 0) +
-      (parseFloat(capture[3]) * hour || 0) +
-      (parseFloat(capture[4]) * minute || 0) +
-      (parseFloat(capture[5]) * second || 0)
-    );
-  }
-
-  export function parseDate(date: string) {
-    const parsed = parseTime(date);
-    let dateInput: string | number = date;
-    if (parsed) {
-      dateInput = Date.now() + parsed;
-    } else if (/^\d{1,2}(:\d{1,2}){1,2}$/.test(date)) {
-      dateInput = `${new Date().toLocaleDateString()}-${date}`;
-    } else if (/^\d{1,2}-\d{1,2}-\d{1,2}(:\d{1,2}){1,2}$/.test(date)) {
-      dateInput = `${new Date().getFullYear()}-${date}`;
-    }
-    return dateInput ? new Date(dateInput) : new Date();
-  }
-
-  export function formatTimeShort(ms: number) {
-    const abs = Math.abs(ms);
-    if (abs >= day - hour / 2) {
-      return Math.round(ms / day) + "d";
-    } else if (abs >= hour - minute / 2) {
-      return Math.round(ms / hour) + "h";
-    } else if (abs >= minute - second / 2) {
-      return Math.round(ms / minute) + "m";
-    } else if (abs >= second) {
-      return Math.round(ms / second) + "s";
-    }
-    return ms + "ms";
-  }
-
-  export function formatTime(ms: number) {
-    let result: string;
-    if (ms >= day - hour / 2) {
-      ms += hour / 2;
-      result = Math.floor(ms / day) + " 天";
-      if (ms % day > hour) {
-        result += ` ${Math.floor((ms % day) / hour)} 小时`;
-      }
-    } else if (ms >= hour - minute / 2) {
-      ms += minute / 2;
-      result = Math.floor(ms / hour) + " 小时";
-      if (ms % hour > minute) {
-        result += ` ${Math.floor((ms % hour) / minute)} 分钟`;
-      }
-    } else if (ms >= minute - second / 2) {
-      ms += second / 2;
-      result = Math.floor(ms / minute) + " 分钟";
-      if (ms % minute > second) {
-        result += ` ${Math.floor((ms % minute) / second)} 秒`;
-      }
-    } else {
-      result = Math.round(ms / second) + " 秒";
-    }
-    return result;
-  }
-
-  const dayMap = ["日", "一", "二", "三", "四", "五", "六"];
-
-  function toDigits(source: number, length = 2) {
-    return source.toString().padStart(length, "0");
-  }
-
-  export function template(template: string, time = new Date()) {
-    return template
-      .replace("yyyy", time.getFullYear().toString())
-      .replace("yy", time.getFullYear().toString().slice(2))
-      .replace("MM", toDigits(time.getMonth() + 1))
-      .replace("dd", toDigits(time.getDate()))
-      .replace("hh", toDigits(time.getHours()))
-      .replace("mm", toDigits(time.getMinutes()))
-      .replace("ss", toDigits(time.getSeconds()))
-      .replace("SSS", toDigits(time.getMilliseconds(), 3));
-  }
-
-  function toHourMinute(time: Date) {
-    return `${toDigits(time.getHours())}:${toDigits(time.getMinutes())}`;
-  }
-
-  export function formatTimeInterval(time: Date, interval?: number) {
-    if (!interval) {
-      return template("yyyy-MM-dd hh:mm:ss", time);
-    } else if (interval === day) {
-      return `每天 ${toHourMinute(time)}`;
-    } else if (interval === week) {
-      return `每周${dayMap[time.getDay()]} ${toHourMinute(time)}`;
-    } else {
-      return `${template("yyyy-MM-dd hh:mm:ss", time)} 起每隔 ${formatTime(
-        interval
-      )}`;
-    }
-  }
-}
-export const supportedPluginExtensions = [
-  ".js",
-  ".ts",
-  ".mjs",
-  ".cjs",
-  ".jsx",
-  ".tsx",
-  "",
-];
-
-export function resolveEntry(entry: string) {
-  if (fs.existsSync(entry)) {
-    const stat = fs.statSync(entry);
-    if (stat.isFile()) return entry;
-    if (stat.isSymbolicLink()) return resolveEntry(fs.realpathSync(entry));
-    if (stat.isDirectory()) {
-      const packageJsonPath = path.resolve(entry, 'package.json');
-      if (!fs.existsSync(packageJsonPath)) return resolveEntry(path.join(entry, 'index'));
-      const pkgJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-      return resolveEntry(path.resolve(entry, pkgJson.main || 'index.js'));
-    }
-  } else {
-    for (const ext of supportedPluginExtensions) {
-      const fullPath = path.resolve(entry + ext);
-      if (fs.existsSync(fullPath)) return resolveEntry(fullPath);
-    }
-  }
-}
-export function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

@@ -18,6 +18,7 @@ coverage/
 lib/
 build/
 examples/**/data/
+examples/**/zhin.config.*
 # Environment variables
 .env
 .env.local

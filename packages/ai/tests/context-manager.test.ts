@@ -1,6 +1,6 @@
 /**
  * Context Manager 测试
- * 
+ *
  * 测试上下文管理功能：
  * - 消息记录
  * - 上下文构建
@@ -10,7 +10,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock Logger
-vi.mock('@zhin.js/core', async (importOriginal) => {
+vi.mock('@zhin.js/logger', async (importOriginal) => {
   const original = await importOriginal() as any;
   return {
     ...original,
@@ -23,8 +23,8 @@ vi.mock('@zhin.js/core', async (importOriginal) => {
   };
 });
 
-import { ContextManager, createContextManager, CHAT_MESSAGE_MODEL, CONTEXT_SUMMARY_MODEL } from '@zhin.js/agent';
-import type { MessageRecord } from '@zhin.js/agent';
+import { ContextManager, createContextManager, CHAT_MESSAGE_MODEL, CONTEXT_SUMMARY_MODEL } from '@zhin.js/ai';
+import type { MessageRecord } from '@zhin.js/ai';
 
 describe('ContextManager', () => {
   let manager: ContextManager;
@@ -172,7 +172,7 @@ describe('ContextManager', () => {
       });
 
       const messages = await manager.getRecentMessages('group-123');
-      
+
       expect(messages.length).toBe(2);
       // 链式 API: select() 无参数调用
       expect(mockMessageModel.select).toHaveBeenCalled();
@@ -185,7 +185,7 @@ describe('ContextManager', () => {
 
     it('应该限制返回数量', async () => {
       const messages = await manager.getRecentMessages('group-123', 10);
-      
+
       // 链式 API: select() 无参数调用，limit 通过链式传递
       expect(mockMessageModel.select).toHaveBeenCalled();
     });
@@ -205,7 +205,7 @@ describe('ContextManager', () => {
       });
 
       const context = await manager.buildContext('group-123', 'qq');
-      
+
       expect(context.sceneId).toBe('group-123');
       expect(context.platform).toBe('qq');
       expect(context.chatMessages).toBeDefined();
@@ -213,7 +213,7 @@ describe('ContextManager', () => {
 
     it('空场景应返回有效的空上下文', async () => {
       const context = await manager.buildContext('empty-scene', 'qq');
-      
+
       expect(context.sceneId).toBe('empty-scene');
       expect(context.recentMessages).toEqual([]);
       expect(context.summaries).toEqual([]);
@@ -237,7 +237,7 @@ describe('ContextManager', () => {
       ];
 
       const chatMessages = manager.formatToChatMessages([], messages);
-      
+
       expect(chatMessages.length).toBe(1);
       expect(chatMessages[0].role).toBe('user');
       expect(chatMessages[0].content).toContain('张三');
@@ -249,7 +249,7 @@ describe('ContextManager', () => {
       const messages: MessageRecord[] = [];
 
       const chatMessages = manager.formatToChatMessages(summaries, messages);
-      
+
       expect(chatMessages.length).toBe(1);
       expect(chatMessages[0].role).toBe('system');
       expect(chatMessages[0].content).toContain('这是之前的总结');
@@ -271,7 +271,7 @@ describe('ContextManager', () => {
       ];
 
       const chatMessages = manager.formatToChatMessages([], messages);
-      
+
       expect(chatMessages[0].role).toBe('assistant');
     });
   });
@@ -280,7 +280,7 @@ describe('ContextManager', () => {
     it('应该估算中文文本的 token 数量', () => {
       const text = '你好世界'; // 4 个中文字符
       const tokens = manager.estimateTokens(text);
-      
+
       // 中文约 2 tokens/字
       expect(tokens).toBeGreaterThanOrEqual(8);
     });
@@ -288,7 +288,7 @@ describe('ContextManager', () => {
     it('应该估算英文文本的 token 数量', () => {
       const text = 'hello world'; // 11 个字符
       const tokens = manager.estimateTokens(text);
-      
+
       // 英文约 0.25 tokens/字符
       expect(tokens).toBeGreaterThanOrEqual(2);
     });
@@ -296,7 +296,7 @@ describe('ContextManager', () => {
     it('应该估算混合文本的 token 数量', () => {
       const text = 'Hello 世界';
       const tokens = manager.estimateTokens(text);
-      
+
       expect(tokens).toBeGreaterThan(0);
     });
   });
@@ -351,9 +351,9 @@ describe('ContextManager', () => {
       };
 
       manager.setAIProvider(mockProvider as any);
-      
+
       const result = await manager.summarize('group-123');
-      
+
       expect(mockProvider.chat).toHaveBeenCalled();
     });
   });
@@ -372,14 +372,14 @@ describe('ContextManager', () => {
       });
 
       const stats = await manager.getSceneStats('group-123');
-      
+
       expect(stats.messageCount).toBeGreaterThan(0);
       expect(stats.summaryCount).toBe(0);
     });
 
     it('空场景应返回零统计', async () => {
       const stats = await manager.getSceneStats('empty');
-      
+
       expect(stats.messageCount).toBe(0);
       expect(stats.summaryCount).toBe(0);
     });
@@ -407,7 +407,7 @@ describe('createContextManager', () => {
     const manager = createContextManager(mockModel, mockModel, {
       maxRecentMessages: 50,
     });
-    
+
     expect(manager).toBeInstanceOf(ContextManager);
   });
 });

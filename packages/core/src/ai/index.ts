@@ -1,10 +1,13 @@
 /**
- * @zhin.js/core — AI 模块（仅基础类型与 Provider）
+ * @zhin.js/core — AI 模块
  *
- * Agent 循环、会话、ZhinAgent 等已迁至 @zhin.js/agent。
+ * 类型定义和 Provider 实现已迁移至独立的 @zhin.js/ai 包，
+ * 此文件通过 re-export 保持向后兼容。
+ *
+ * 注意：ToolDefinition 不在此 re-export，因为 core/types.ts 有自己的同名类型。
+ * 使用 ChatToolDefinition 别名代替。
  */
 
-// ── 类型定义 ──
 export type {
   AIConfig,
   AIProvider,
@@ -15,21 +18,23 @@ export type {
   ChatCompletionRequest,
   ChatCompletionResponse,
   ChatCompletionChunk,
+  ChatCompletionChoice,
+  ChatCompletionChunkChoice,
   ContentPart,
   ToolCall,
   MessageRole,
   AgentTool,
   AgentConfig,
   AgentResult,
-  Usage,
   ToolFilterOptions,
+  Usage,
   SessionConfig,
   Session,
-  ToolDefinition as ChatToolDefinition,
   JsonSchema,
-} from './types.js';
+} from '@zhin.js/ai';
 
-// ── Providers ──
+export type { ToolDefinition as ChatToolDefinition } from '@zhin.js/ai';
+
 export {
   BaseProvider,
   OpenAIProvider,
@@ -38,9 +43,10 @@ export {
   ZhipuProvider,
   AnthropicProvider,
   OllamaProvider,
-} from './providers/index.js';
+} from '@zhin.js/ai';
+
 export type {
   OpenAIConfig,
   AnthropicConfig,
   OllamaConfig,
-} from './providers/index.js';
+} from '@zhin.js/ai';

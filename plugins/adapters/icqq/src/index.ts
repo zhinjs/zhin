@@ -1012,7 +1012,7 @@ const { provide } = usePlugin();
 provide({
   name: "icqq",
   description: "ICQQ Adapter",
-  mounted: async (p) => {
+  mounted: async (p: Plugin) => {
     const adapter = new IcqqAdapter(p);
     await adapter.start();
     return adapter;

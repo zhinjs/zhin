@@ -801,7 +801,7 @@ class OneBot11WssAdapter extends Adapter<OneBot11WsServer> {
 provide({
   name: "onebot11",
   description: "OneBot11 WebSocket Client Adapter",
-  mounted: async (p) => {
+  mounted: async (p: Plugin) => {
     const adapter = new OneBot11Adapter(p);
     await adapter.start();
     return adapter;
@@ -815,7 +815,7 @@ useContext('router', (router) => {
   provide({
     name: "onebot11.wss",
     description: "OneBot11 WebSocket Server Adapter",
-    mounted: async (p) => {
+    mounted: async (p: Plugin) => {
       const adapter = new OneBot11WssAdapter(p, router);
       await adapter.start();
       return adapter;

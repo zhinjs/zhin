@@ -1,7 +1,11 @@
 /**
- * Scheduler module — at / every / cron + heartbeat
+ * Re-export from @zhin.js/kernel for backward compatibility.
  */
-
+export {
+  Scheduler,
+  getScheduler,
+  setScheduler,
+} from '@zhin.js/kernel';
 export type {
   Schedule,
   JobPayload,
@@ -11,18 +15,5 @@ export type {
   JobCallback,
   AddJobOptions,
   IScheduler,
-} from './types.js';
-export { Scheduler } from './scheduler.js';
-export type { SchedulerOptions } from './scheduler.js';
-
-import type { Scheduler } from './scheduler.js';
-
-let schedulerInstance: Scheduler | null = null;
-
-export function getScheduler(): Scheduler | null {
-  return schedulerInstance;
-}
-
-export function setScheduler(s: Scheduler | null): void {
-  schedulerInstance = s;
-}
+  SchedulerOptions,
+} from '@zhin.js/kernel';

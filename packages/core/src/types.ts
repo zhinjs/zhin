@@ -221,7 +221,8 @@ export interface ToolParametersSchema<TArgs extends Record<string, any> = Record
 
 /**
  * 工具执行上下文
- * 包含消息来源、发送者等信息
+ * 包含消息来源、发送者等 IM 信息。
+ * 通用（IM 无关）版本请使用 @zhin.js/ai 的 ToolContext。
  */
 export interface ToolContext {
   /** 来源平台 */
@@ -463,3 +464,10 @@ export namespace Tool {
 
 /** @deprecated 使用 Tool 替代 */
 export type AITool = Tool;
+
+/**
+ * IMToolContext — ToolContext 的显式 IM 别名。
+ * 当同时使用 @zhin.js/ai (通用 ToolContext) 和 @zhin.js/core (IM ToolContext) 时，
+ * 用此类型消除歧义。
+ */
+export type IMToolContext = ToolContext;
