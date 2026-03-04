@@ -46,12 +46,20 @@ console:
   lazyLoad: true
 ai:
   enabled: true
-  defaultProvider: ollama
+  defaultProvider: openai
+  session:
+    maxHistory: 20        # 50→20，减少上下文长度
+    expireMs: 3600000
   providers:
     ollama:
-      host: 'http://172.25.70.73:11434'
+      host: http://172.25.70.73:11434
       models:
         - qwen3:14b
+    openai:
+      baseUrl: ${OPENAI_BASE_URL}
+      apiKey: ${OPENAI_API_KEY}
+      models:
+        - gpt-5
   sessions:
     useDatabase: true
     maxHistory: 50
