@@ -29,6 +29,11 @@
   ],
   "author": "Zhin.js Team",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "plugins/features/process-monitor"
+  },
   "dependencies": {
     "zhin.js": "workspace:*"
   },
