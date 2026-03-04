@@ -1,5 +1,13 @@
 # @zhin.js/plugin-music
 
+## 0.0.29
+
+### Patch Changes
+
+- 04f76ac: fix: 工具命名格式优化
+  - zhin.js@1.0.39
+  - @zhin.js/adapter-icqq@1.0.48
+
 ## 0.0.28
 
 ### Patch Changes

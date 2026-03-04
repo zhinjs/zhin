@@ -1,5 +1,13 @@
 # @zhin.js/cli
 
+## 1.0.36
+
+### Patch Changes
+
+- 04f76ac: fix: 工具命名格式优化
+  - zhin.js@1.0.39
+  - @zhin.js/logger@0.1.23
+
 ## 1.0.35
 
 ### Patch Changes

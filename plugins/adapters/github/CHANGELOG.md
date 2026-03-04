@@ -1,5 +1,13 @@
 # @zhin.js/adapter-github
 
+## 0.1.8
+
+### Patch Changes
+
+- 04f76ac: fix: 工具命名格式优化
+  - zhin.js@1.0.39
+  - @zhin.js/http@1.0.33
+
 ## 0.1.7
 
 ### Patch Changes
