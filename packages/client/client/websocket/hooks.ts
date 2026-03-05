@@ -3,7 +3,7 @@
  * 提供在 React 组件中使用 WebSocket 功能的便捷接口
  */
 
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { 
   useSelector, 
   useDispatch,
@@ -15,7 +15,9 @@ import {
   selectAllConfigs,
   selectAllSchemas,
   setLoading,
-  setError
+  setError,
+  updateConfig,
+  updateSchema
 } from '../store'
 import { getWebSocketManager } from './instance'
 import type { UseConfigOptions, UseWebSocketOptions } from './types'
@@ -119,6 +121,7 @@ export function useConfig(pluginName: string, options: UseConfigOptions = {}) {
 
     try {
       const result = await wsManager.getConfig(pluginName)
+      dispatch(updateConfig({ pluginName, config: result }))
       return result
     } catch (error) {
       console.error('[useConfig] getConfig failed:', error)
@@ -130,12 +133,13 @@ export function useConfig(pluginName: string, options: UseConfigOptions = {}) {
     }
   }, [pluginName, wsManager, dispatch])
 
-  const setConfig = useCallback(async (newConfig: any) => {
+  const setConfig = useCallback(async (newConfig: any): Promise<{ reloaded?: boolean; message?: string }> => {
     dispatch(setLoading({ pluginName, loading: true }))
     dispatch(setError({ pluginName, error: null }))
 
     try {
-      await wsManager.setConfig(pluginName, newConfig)
+      const result = await wsManager.setConfig(pluginName, newConfig)
+      return { reloaded: result?.reloaded, message: result?.message }
     } catch (error) {
       console.error('[useConfig] setConfig failed:', error)
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -148,12 +152,16 @@ export function useConfig(pluginName: string, options: UseConfigOptions = {}) {
 
   const getSchema = useCallback(async () => {
     try {
-      return await wsManager.getSchema(pluginName)
+      const result = await wsManager.getSchema(pluginName)
+      if (result) {
+        dispatch(updateSchema({ pluginName, schema: result }))
+      }
+      return result
     } catch (error) {
       console.error(`Failed to get schema for plugin ${pluginName}:`, error)
       throw error
     }
-  }, [pluginName, wsManager])
+  }, [pluginName, wsManager, dispatch])
 
   // 重新加载配置和 Schema
   const reload = useCallback(async () => {
@@ -233,4 +241,125 @@ export function useAllConfigs() {
     connected,
     refreshAll
   }), [allConfigs, allSchemas, connected, refreshAll])
+}
+
+// ============================================================================
+// 配置文件 YAML 读写 Hook
+// ============================================================================
+
+export function useConfigYaml() {
+  const wsManager = getWebSocketManager()
+  const connected = useSelector(selectConfigConnected)
+
+  const [yaml, setYaml] = useState('')
+  const [pluginKeys, setPluginKeys] = useState<string[]>([])
+  const [loading, setLoadingState] = useState(false)
+  const [error, setErrorState] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setLoadingState(true)
+    setErrorState(null)
+    try {
+      const result = await wsManager.getConfigYaml()
+      setYaml(result.yaml)
+      setPluginKeys(result.pluginKeys)
+      return result
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setErrorState(msg)
+      throw err
+    } finally {
+      setLoadingState(false)
+    }
+  }, [wsManager])
+
+  const save = useCallback(async (content: string) => {
+    setLoadingState(true)
+    setErrorState(null)
+    try {
+      const result = await wsManager.saveConfigYaml(content)
+      setYaml(content)
+      return result
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setErrorState(msg)
+      throw err
+    } finally {
+      setLoadingState(false)
+    }
+  }, [wsManager])
+
+  useEffect(() => {
+    if (connected && !yaml && !loading) {
+      load().catch(() => {})
+    }
+  }, [connected, yaml, loading, load])
+
+  return useMemo(() => ({
+    yaml, pluginKeys, loading, error, load, save
+  }), [yaml, pluginKeys, loading, error, load, save])
+}
+
+// ============================================================================
+// 环境变量文件管理 Hook
+// ============================================================================
+
+export function useEnvFiles() {
+  const wsManager = getWebSocketManager()
+  const connected = useSelector(selectConfigConnected)
+
+  const [files, setFiles] = useState<Array<{ name: string; exists: boolean }>>([])
+  const [loading, setLoadingState] = useState(false)
+  const [error, setErrorState] = useState<string | null>(null)
+
+  const listFiles = useCallback(async () => {
+    setLoadingState(true)
+    setErrorState(null)
+    try {
+      const result = await wsManager.getEnvList()
+      setFiles(result.files)
+      return result.files
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setErrorState(msg)
+      throw err
+    } finally {
+      setLoadingState(false)
+    }
+  }, [wsManager])
+
+  const getFile = useCallback(async (filename: string) => {
+    try {
+      const result = await wsManager.getEnvFile(filename)
+      return result.content
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setErrorState(msg)
+      throw err
+    }
+  }, [wsManager])
+
+  const saveFile = useCallback(async (filename: string, content: string) => {
+    setLoadingState(true)
+    setErrorState(null)
+    try {
+      return await wsManager.saveEnvFile(filename, content)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setErrorState(msg)
+      throw err
+    } finally {
+      setLoadingState(false)
+    }
+  }, [wsManager])
+
+  useEffect(() => {
+    if (connected && files.length === 0 && !loading) {
+      listFiles().catch(() => {})
+    }
+  }, [connected, files.length, loading, listFiles])
+
+  return useMemo(() => ({
+    files, loading, error, listFiles, getFile, saveFile
+  }), [files, loading, error, listFiles, getFile, saveFile])
 }

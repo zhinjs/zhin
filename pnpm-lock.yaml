@@ -267,12 +267,27 @@ importers:
       '@zhin.js/plugin-60s':
         specifier: workspace:*
         version: link:../../plugins/utils/60s
+      '@zhin.js/plugin-checkin':
+        specifier: workspace:*
+        version: link:../../plugins/utils/checkin
       '@zhin.js/plugin-html-renderer':
         specifier: workspace:*
         version: link:../../plugins/utils/html-renderer
       '@zhin.js/plugin-music':
         specifier: workspace:*
         version: link:../../plugins/utils/music
+      '@zhin.js/plugin-repeater':
+        specifier: workspace:*
+        version: link:../../plugins/utils/repeater
+      '@zhin.js/plugin-rss':
+        specifier: workspace:*
+        version: link:../../plugins/utils/rss
+      '@zhin.js/plugin-stats':
+        specifier: workspace:*
+        version: link:../../plugins/utils/stats
+      '@zhin.js/plugin-teach':
+        specifier: workspace:*
+        version: link:../../plugins/utils/teach
       '@zhin.js/sensitive-filter':
         specifier: workspace:*
         version: link:../../plugins/utils/sensitive-filter
@@ -1000,6 +1015,9 @@ importers:
       vite:
         specifier: '>=7.1.11'
         version: 7.3.0(@types/node@24.10.4)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+      yaml:
+        specifier: ^2.8.2
+        version: 2.8.2
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/zhin
@@ -1041,11 +1059,8 @@ importers:
   plugins/services/mcp:
     dependencies:
       '@modelcontextprotocol/sdk':
-        specifier: '>=1.25.2'
-        version: 1.26.0(zod@3.25.76)
-      '@zhin.js/http':
-        specifier: workspace:^
-        version: link:../http
+        specifier: ^1.27.1
+        version: 1.27.1(zod@3.25.76)
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -1053,11 +1068,23 @@ importers:
       '@types/node':
         specifier: latest
         version: 25.0.3
+      '@zhin.js/http':
+        specifier: workspace:^
+        version: link:../http
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/zhin
 
   plugins/utils/60s:
+    devDependencies:
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
+
+  plugins/utils/checkin:
     devDependencies:
       typescript:
         specifier: ^5.3.3
@@ -1100,7 +1127,47 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/zhin
 
+  plugins/utils/repeater:
+    devDependencies:
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
+
+  plugins/utils/rss:
+    dependencies:
+      rss-parser:
+        specifier: ^3.13.0
+        version: 3.13.0
+    devDependencies:
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
+
   plugins/utils/sensitive-filter:
+    devDependencies:
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
+
+  plugins/utils/stats:
+    devDependencies:
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
+
+  plugins/utils/teach:
     devDependencies:
       typescript:
         specifier: ^5.3.3
@@ -2152,8 +2219,8 @@ packages:
   '@mermaid-js/parser@1.0.0':
     resolution: {integrity: sha512-vvK0Hi/VWndxoh03Mmz6wa1KDriSPjS2XMZL/1l19HFwygiObEEoEwSDxOqyLzzAI6J2PU3261JjTMTO7x+BPw==}
 
-  '@modelcontextprotocol/sdk@1.26.0':
-    resolution: {integrity: sha512-Y5RmPncpiDtTXDbLKswIJzTqu2hyBKxTNsgKqKclDbhIgg1wgtf1fRuvxgTnRfcnxtvvgbIEcqUOzZrJ6iSReg==}
+  '@modelcontextprotocol/sdk@1.27.1':
+    resolution: {integrity: sha512-sr6GbP+4edBwFndLbM60gf07z0FQ79gaExpnsjMGePXqFcSSb7t6iscpjk9DhFhwd+mTEQrzNafGP8/iGGFYaA==}
     engines: {node: '>=18'}
     peerDependencies:
       '@cfworker/json-schema': ^4.1.1
@@ -5188,6 +5255,9 @@ packages:
     resolution: {integrity: sha512-rRqJg/6gd538VHvR3PSrdRBb/1Vy2YfzHqzvbhGIQpDRKIa4FgV/54b5Q1xYSxOOwKvjXweS26E0Q+nAMwp2pQ==}
     engines: {node: '>=8.6'}
 
+  entities@2.2.0:
+    resolution: {integrity: sha512-p92if5Nz619I0w+akJrLZH0MX0Pb5DX39XOwQTtXSdQQOaYH03S1uIQp4mhOZtAXrxq4ViO67YTiLBo2638o9A==}
+
   entities@4.5.0:
     resolution: {integrity: sha512-V0hjH4dGPh9Ao5p0MoRY6BVqtwCjhz6vI5LT8AJ55H+4g9/4vbHx1I54fS0XuclLhDHArPQCiMjDxjaL8fPxhw==}
     engines: {node: '>=0.12'}
@@ -7488,6 +7558,9 @@ packages:
   rrweb-cssom@0.8.0:
     resolution: {integrity: sha512-guoltQEx+9aMf2gDZ0s62EcV8lsXR+0w8915TC3ITdn2YueuNjdAYh/levpU9nFaoChh9RUS5ZdQMrKfVEN9tw==}
 
+  rss-parser@3.13.0:
+    resolution: {integrity: sha512-7jWUBV5yGN3rqMMj7CZufl/291QAhvrrGpDNE4k/02ZchL0npisiYYqULF71jCEKoIiHvK/Q2e6IkDwPziT7+w==}
+
   run-applescript@7.1.0:
     resolution: {integrity: sha512-DPe5pVFaAsinSaV6QjQ6gdiedWDcRCbUuiQfQa2wmWV7+xC9bGulGI8+TdRmoFkAPaBXk8CrAbnlY2ISniJ47Q==}
     engines: {node: '>=18'}
@@ -8502,6 +8575,10 @@ packages:
   xml-name-validator@5.0.0:
     resolution: {integrity: sha512-EvGK8EJ3DhaHfbRlETOWAS5pO9MZITeauHKJyb8wyajUfQUenkIg2MvLDTZ4T/TgIcm3HU0TFBgWWboAZ30UHg==}
     engines: {node: '>=18'}
+
+  xml2js@0.5.0:
+    resolution: {integrity: sha512-drPFnkQJik/O+uPKpqSgr22mpuFHqKdbS835iAQrUC73L2F5WkboIRd63ai/2Yg6I1jzifPFKH2NTK+cfglkIA==}
+    engines: {node: '>=4.0.0'}
 
   xml2js@0.6.2:
     resolution: {integrity: sha512-T4rieHaC1EXcES0Kxxj4JWgaUQHDk+qwHcYOCFHfiwKz7tOVPLq7Hjq9dM1WCMhylqMEfP7hMcOIChvotiZegA==}
@@ -10030,7 +10107,7 @@ snapshots:
     dependencies:
       langium: 4.2.1
 
-  '@modelcontextprotocol/sdk@1.26.0(zod@3.25.76)':
+  '@modelcontextprotocol/sdk@1.27.1(zod@3.25.76)':
     dependencies:
       '@hono/node-server': 1.19.9(hono@4.11.8)
       ajv: 8.17.1
@@ -13449,6 +13526,8 @@ snapshots:
       ansi-colors: 4.1.3
       strip-ansi: 6.0.1
 
+  entities@2.2.0: {}
+
   entities@4.5.0: {}
 
   entities@6.0.1: {}
@@ -16127,6 +16206,11 @@ snapshots:
 
   rrweb-cssom@0.8.0: {}
 
+  rss-parser@3.13.0:
+    dependencies:
+      entities: 2.2.0
+      xml2js: 0.5.0
+
   run-applescript@7.1.0: {}
 
   run-async@4.0.6: {}
@@ -17205,6 +17289,11 @@ snapshots:
       is-wsl: 3.1.1
 
   xml-name-validator@5.0.0: {}
+
+  xml2js@0.5.0:
+    dependencies:
+      sax: 1.4.3
+      xmlbuilder: 11.0.1
 
   xml2js@0.6.2:
     dependencies:

@@ -29,7 +29,9 @@ export {
 export { 
   useWebSocket,
   useConfig,
-  useAllConfigs
+  useAllConfigs,
+  useConfigYaml,
+  useEnvFiles
 } from './hooks'
 
 // ============================================================================

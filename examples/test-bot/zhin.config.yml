@@ -8,7 +8,7 @@ bots:
     password: ${ICQQ_PASSWORD}
     platform: ${ICQQ_PLATFORM}
     sign_api_addr: ${ICQQ_SIGN_API_ADDR}
-    ver: '9.1.70'
+    ver: 9.1.70
     data_dir: ./data
     scope: icqqjs
   - context: github
@@ -41,6 +41,7 @@ plugins:
   - "@zhin.js/adapter-qq"
   - "@zhin.js/plugin-html-renderer"
   - "@zhin.js/plugin-60s"
+  - "@zhin.js/plugin-teach"
 console:
   enabled: true
   lazyLoad: true
@@ -48,7 +49,7 @@ ai:
   enabled: true
   defaultProvider: openai
   session:
-    maxHistory: 20        # 50→20，减少上下文长度
+    maxHistory: 20
     expireMs: 3600000
   providers:
     ollama:
@@ -71,18 +72,18 @@ ai:
   agent:
     execSecurity: allowlist
     execAllowlist:
-      - "ls"
-      - "cat"
-      - "echo"
-      - "whoami"
-      - "pwd"
-      - "date"
-      - "cal"
-      - "clear"
-      - "help"
-      - "man"
-      - "info"
-      - "curl"
+      - ls
+      - cat
+      - echo
+      - whoami
+      - pwd
+      - date
+      - cal
+      - clear
+      - help
+      - man
+      - info
+      - curl
   maxIterations: 100
   trigger:
     enabled: true
@@ -104,3 +105,8 @@ http:
   port: 8086
   token: ${HTTP_TOKEN}
   base: /api
+teach:
+  maxPerGroup: 200
+  cooldown: 3000
+  allowRegex: true
+  pageSize: 10

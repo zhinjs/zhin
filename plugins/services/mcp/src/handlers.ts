@@ -4,6 +4,7 @@ import { usePlugin } from "zhin.js";
 
 const plugin = usePlugin();
 const root = plugin.root;
+const logger = plugin.logger;
 
 /**
  * 创建插件文件
@@ -435,4 +436,465 @@ function getTypeScriptType(dbType: string): string {
     date: "Date",
   };
   return typeMap[dbType] || "any";
+}
+
+// ============================================================================
+// 新增脚手架工具 handlers
+// ============================================================================
+
+/**
+ * 生成中间件代码
+ */
+export function createMiddlewareCode(args: {
+  name: string;
+  description: string;
+  hasFilter?: boolean;
+}): string {
+  const { name, description, hasFilter = false } = args;
+
+  let code = `import { usePlugin } from "zhin.js";
+
+const { addMiddleware, logger } = usePlugin();
+
+`;
+
+  if (hasFilter) {
+    code += `addMiddleware(function ${name}(message, next) {
+  // ${description}
+  if (message.type !== "group") {
+    return next();
+  }
+
+  logger.info(\`[${name}] 处理消息: \${message.content}\`);
+
+  // 在这里添加处理逻辑
+
+  return next();
+});
+`;
+  } else {
+    code += `addMiddleware(function ${name}(message, next) {
+  // ${description}
+  const start = Date.now();
+
+  return next().then(() => {
+    const cost = Date.now() - start;
+    logger.info(\`[${name}] 处理耗时: \${cost}ms\`);
+  });
+});
+`;
+  }
+
+  return code;
+}
+
+/**
+ * 生成服务代码
+ */
+export function createServiceCode(args: {
+  name: string;
+  description: string;
+  hasDispose?: boolean;
+}): string {
+  const { name, description, hasDispose = true } = args;
+  const className = name
+    .split("-")
+    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+    .join("");
+
+  let code = `import { provide, useContext } from "zhin.js";
+
+declare module "zhin.js" {
+  namespace Plugin {
+    interface Contexts {
+      ${name}: ${className}Service;
+    }
+  }
+}
+
+class ${className}Service {
+  // ${description}
+
+  async initialize(): Promise<void> {
+    // 初始化逻辑
+  }
+`;
+
+  if (hasDispose) {
+    code += `
+  async close(): Promise<void> {
+    // 清理资源
+  }
+`;
+  }
+
+  code += `}
+
+provide({
+  name: "${name}",
+  description: "${description}",
+  async mounted() {
+    const service = new ${className}Service();
+    await service.initialize();
+    return service;
+  },`;
+
+  if (hasDispose) {
+    code += `
+  async dispose(service) {
+    await service.close();
+  },`;
+  }
+
+  code += `
+});
+
+// 在其他插件中消费此服务:
+// useContext("${name}", (${name}Service) => {
+//   ${name}Service.doSomething();
+// });
+`;
+
+  return code;
+}
+
+/**
+ * 生成 ZhinTool 代码
+ */
+export function createToolCode(args: {
+  name: string;
+  description: string;
+  params: { name: string; type: string; description: string; required?: boolean }[];
+}): string {
+  const { name, description, params } = args;
+
+  const paramLines = params
+    .map((p) => {
+      const req = p.required !== false ? "true" : "false";
+      return `    .param("${p.name}", "${p.type}", "${p.description}", ${req})`;
+    })
+    .join("\n");
+
+  const destructureArgs = params.map((p) => p.name).join(", ");
+
+  return `import { usePlugin, ZhinTool } from "zhin.js";
+
+const { addTool } = usePlugin();
+
+addTool(
+  new ZhinTool("${name}")
+    .description("${description}")
+${paramLines}
+    .execute(async ({ ${destructureArgs} }) => {
+      // 工具执行逻辑
+      return \`结果: TODO\`;
+    })
+);
+`;
+}
+
+// ============================================================================
+// 运行时工具 handlers
+// ============================================================================
+
+/**
+ * 列出所有连接的 Bot 及状态
+ */
+export function listBots(): any[] {
+  const { Adapter } = require("zhin.js");
+  const bots: any[] = [];
+  for (const adapterName of root.adapters) {
+    const adapter = root.inject(adapterName as any);
+    if (adapter instanceof Adapter) {
+      for (const [botName, bot] of (adapter as any).bots.entries()) {
+        bots.push({
+          name: botName,
+          adapter: adapterName,
+          connected: bot.$connected || false,
+          status: bot.$connected ? "online" : "offline",
+        });
+      }
+    }
+  }
+  return bots;
+}
+
+/**
+ * 列出所有注册的命令
+ */
+export function listCommands(): any[] {
+  const commandService = root.inject("command" as any) as any;
+  if (!commandService?.items) return [];
+  return commandService.items.map((cmd: any) => ({
+    pattern: cmd.pattern || cmd.helpInfo?.pattern || String(cmd),
+    description: cmd.helpInfo?.desc?.join(" ") || "",
+    usage: cmd.helpInfo?.usage || [],
+    examples: cmd.helpInfo?.examples || [],
+  }));
+}
+
+/**
+ * 通过指定 Bot 发送消息
+ */
+export async function sendMessage(args: {
+  adapter: string;
+  bot: string;
+  target_id: string;
+  target_type: "private" | "group" | "channel";
+  content: string;
+}): Promise<string> {
+  const { Adapter } = require("zhin.js");
+  const adapterInstance = root.inject(args.adapter as any);
+  if (!adapterInstance || !(adapterInstance instanceof Adapter)) {
+    throw new Error(`Adapter "${args.adapter}" not found`);
+  }
+  const msgId = await (adapterInstance as any).sendMessage({
+    context: args.adapter,
+    bot: args.bot,
+    id: args.target_id,
+    type: args.target_type,
+    content: args.content,
+  });
+  return `Message sent (id: ${msgId})`;
+}
+
+/**
+ * 获取最近 N 条日志
+ */
+export async function getLogs(args: {
+  limit?: number;
+  level?: string;
+}): Promise<any[]> {
+  const database = root.inject("database" as any) as any;
+  if (!database) throw new Error("Database service not available");
+
+  const LogModel = database.models?.get("SystemLog");
+  if (!LogModel) throw new Error("SystemLog model not available");
+
+  const limit = args.limit || 50;
+  let selection = LogModel.select();
+  if (args.level && args.level !== "all") {
+    selection = selection.where({ level: args.level });
+  }
+
+  const logs = await selection.orderBy("timestamp", "DESC").limit(limit);
+  return logs.map((log: any) => ({
+    level: log.level,
+    name: log.name,
+    message: log.message,
+    source: log.source,
+    timestamp:
+      log.timestamp instanceof Date
+        ? log.timestamp.toISOString()
+        : log.timestamp,
+  }));
+}
+
+/**
+ * 获取当前运行配置
+ */
+export function getConfig(args?: { plugin_name?: string }): any {
+  const configService = root.inject("config" as any) as any;
+  if (!configService) throw new Error("Config service not available");
+
+  const appConfig = configService.get("zhin.config.yml");
+  if (args?.plugin_name) {
+    return appConfig[args.plugin_name] || null;
+  }
+  return appConfig;
+}
+
+/**
+ * 热重载指定插件
+ */
+export async function reloadPlugin(args: { name: string }): Promise<string> {
+  const target = root.children.find((p: any) => p.name === args.name);
+  if (!target) {
+    throw new Error(`Plugin "${args.name}" not found`);
+  }
+  await root.reload(target as any);
+  return `Plugin "${args.name}" reloaded successfully`;
+}
+
+// ============================================================================
+// 新增运行时查询 handlers
+// ============================================================================
+
+/**
+ * 列出所有已注册的 Context 服务
+ */
+export function listServices(): any[] {
+  const contexts = root.contexts;
+  const result: any[] = [];
+  for (const [name, ctx] of contexts) {
+    result.push({
+      name,
+      description: ctx.description || "",
+      hasValue: ctx.value !== undefined && ctx.value !== null,
+      type: ctx.value ? typeof ctx.value : "unknown",
+    });
+  }
+  return result;
+}
+
+/**
+ * 列出所有已注册的 ZhinTool
+ */
+export function listTools(args?: { plugin_name?: string }): any[] {
+  const toolService = root.inject("tool" as any) as any;
+
+  if (args?.plugin_name && toolService?.getToolsByPlugin) {
+    const tools = toolService.getToolsByPlugin(args.plugin_name);
+    return tools.map(formatTool);
+  }
+
+  if (toolService?.collectAll) {
+    const tools = toolService.collectAll(root);
+    return tools.map(formatTool);
+  }
+
+  // fallback
+  const tools = (root as any).collectAllTools?.() || (root as any).getAllTools?.() || [];
+  return tools.map(formatTool);
+}
+
+function formatTool(tool: any): any {
+  return {
+    name: tool.name,
+    description: tool.description || "",
+    source: tool.source || "",
+    tags: tool.tags || [],
+    params: tool.params?.map((p: any) => ({
+      name: p.name,
+      type: p.type,
+      description: p.description || "",
+      required: p.required ?? true,
+    })) || [],
+  };
+}
+
+/**
+ * 列出可监听的事件
+ */
+export function listEvents(): any {
+  return {
+    lifecycle: [
+      { name: "mounted", description: "插件挂载完成" },
+      { name: "dispose", description: "插件卸载" },
+      { name: "before-start", description: "插件启动前" },
+      { name: "started", description: "插件启动后" },
+      { name: "before-mount", description: "子插件挂载前" },
+      { name: "before-dispose", description: "子插件卸载前" },
+      { name: "context.mounted", description: "Context 服务就绪" },
+      { name: "context.dispose", description: "Context 服务销毁" },
+    ],
+    message: [
+      { name: "before.sendMessage", description: "发送消息前触发" },
+      { name: "call.recallMessage", description: "撤回消息时触发" },
+    ],
+    usage: `// 监听事件示例:
+import { usePlugin } from "zhin.js";
+const { root, onDispose } = usePlugin();
+
+root.on("context.mounted", (name) => {
+  console.log(\`服务 \${name} 已就绪\`);
+});
+
+// 监听消息（通过中间件）:
+const { addMiddleware } = usePlugin();
+addMiddleware(async (message, next) => {
+  console.log("收到消息:", message.content);
+  await next();
+});`,
+  };
+}
+
+/**
+ * 模拟发送消息测试命令
+ */
+export async function simulateMessage(args: {
+  content: string;
+  adapter?: string;
+}): Promise<string> {
+  const adapterName = args.adapter || "sandbox";
+
+  try {
+    const { Adapter } = require("zhin.js");
+    const adapterInstance = root.inject(adapterName as any);
+    if (!adapterInstance || !(adapterInstance instanceof Adapter)) {
+      return `❌ 适配器 "${adapterName}" 不可用。可用的适配器: ${Array.from(root.contexts.keys()).filter((k: string) => {
+        const v = root.contexts.get(k)?.value;
+        return v && typeof v === "object" && "bots" in v;
+      }).join(", ") || "(无)"}`;
+    }
+
+    const bots = Array.from((adapterInstance as any).bots.entries());
+    if (bots.length === 0) {
+      return `❌ 适配器 "${adapterName}" 没有在线的 Bot`;
+    }
+
+    const [botName, bot] = bots[0] as [string, any];
+
+    // 构造模拟消息
+    const { Message } = require("zhin.js");
+    let reply = "";
+    const fakeMessage = Message.from({
+      id: `simulate-${Date.now()}`,
+      type: "private" as const,
+      content: args.content,
+      $sender: { id: "mcp-tester", name: "MCP Tester" },
+      $reply: async (content: string) => {
+        reply = content;
+        return `simulated-reply-${Date.now()}`;
+      },
+    });
+
+    // 通过根插件的 middleware chain 处理
+    const middleware = (root as any).middleware;
+    if (typeof middleware === "function") {
+      await middleware(fakeMessage, async () => {});
+    }
+
+    return reply
+      ? `✅ Bot 回复:\n${reply}`
+      : `⚠️ 命令 "${args.content}" 未产生回复（可能命令不存在或无匹配）`;
+  } catch (error) {
+    return `❌ 模拟失败: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+/**
+ * 读取插件入口源码
+ */
+export async function getPluginSource(args: { pluginName: string }): Promise<string> {
+  const target = root.children.find(
+    (p: any) => p.name === args.pluginName || p.filePath?.includes(args.pluginName),
+  );
+
+  if (!target) {
+    throw new Error(`插件 "${args.pluginName}" 不存在。可用插件: ${root.children.map((p: any) => p.name).join(", ")}`);
+  }
+
+  const filePath = (target as any).filePath;
+  if (!filePath) {
+    throw new Error(`插件 "${args.pluginName}" 没有文件路径信息`);
+  }
+
+  // 尝试找到 .ts 源文件
+  const possiblePaths = [
+    filePath.replace(/\.js$/, ".ts"),
+    filePath.replace(/\/lib\//, "/src/").replace(/\.js$/, ".ts"),
+    filePath,
+  ];
+
+  for (const p of possiblePaths) {
+    try {
+      const content = await fs.readFile(p, "utf-8");
+      return `// 文件: ${p}\n// 行数: ${content.split("\n").length}\n\n${content}`;
+    } catch {
+      continue;
+    }
+  }
+
+  throw new Error(`无法读取插件 "${args.pluginName}" 的源文件 (尝试路径: ${possiblePaths.join(", ")})`);
 }

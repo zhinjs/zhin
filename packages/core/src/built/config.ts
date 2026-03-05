@@ -5,7 +5,7 @@
  */
 import path from "node:path";
 import fs from "node:fs";
-import { stringify as stringifyYaml, parse as parseYaml } from "yaml";
+import { stringify as stringifyYaml, parse as parseYaml, parseDocument } from "yaml";
 import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
 import { Schema } from "@zhin.js/schema";
 import { Feature, FeatureJSON } from "../feature.js";
@@ -123,6 +123,39 @@ export class ConfigLoader<T extends object> {
         fs.writeFileSync(fullPath, stringifyToml(this.#data as Record<string, any>));
         break;
     }
+  }
+  /**
+   * 精准修改单个顶层 key 并写回文件
+   * 保留注释、格式和未修改字段（如 ${VAR} 环境变量引用）
+   */
+  patchKey(key: string, value: any) {
+    const fullPath = path.resolve(process.cwd(), this.filename);
+    switch (this.extension) {
+      case ".yaml":
+      case ".yml": {
+        const content = fs.readFileSync(fullPath, 'utf-8');
+        const doc = parseDocument(content);
+        doc.set(key, value);
+        fs.writeFileSync(fullPath, doc.toString());
+        break;
+      }
+      case ".json": {
+        const content = fs.readFileSync(fullPath, 'utf-8');
+        const obj = JSON.parse(content);
+        obj[key] = value;
+        fs.writeFileSync(fullPath, JSON.stringify(obj, null, 2));
+        break;
+      }
+      case ".toml": {
+        const content = fs.readFileSync(fullPath, 'utf-8');
+        const obj = parseToml(content);
+        (obj as Record<string, any>)[key] = value;
+        fs.writeFileSync(fullPath, stringifyToml(obj));
+        break;
+      }
+    }
+    // 同步更新内存
+    (this.#data as Record<string, any>)[key] = value;
   }
 }
 

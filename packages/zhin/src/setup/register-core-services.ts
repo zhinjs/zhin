@@ -5,6 +5,7 @@ import {
   CronFeature,
   PermissionFeature,
   SkillFeature,
+  SchemaFeature,
   createMessageDispatcher,
   ProcessAdapter,
 } from '@zhin.js/core';
@@ -48,4 +49,5 @@ export function registerCoreServices(
 
   provide(createMessageDispatcher());
   provide(new SkillFeature());
+  provide(new SchemaFeature());
 }

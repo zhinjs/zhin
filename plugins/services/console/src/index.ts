@@ -214,6 +214,13 @@ if (enabled) {
         return next();
       }
 
+      // 跳过其他插件注册的路由（如 /mcp），避免 SPA fallback 拦截
+      const whiteList: (string | RegExp)[] = (router as any).whiteList || [];
+      const isRegistered = whiteList.some(p =>
+        typeof p === 'string' && !p.includes('*') && !p.startsWith('/vite') && ctx.path.startsWith(p)
+      );
+      if (isRegistered) return next();
+
       const name = ctx.path.slice(1);
 
       const sendFile = async (filename: string) => {

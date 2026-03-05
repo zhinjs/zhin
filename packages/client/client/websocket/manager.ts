@@ -169,8 +169,8 @@ export class WebSocketManager {
   /**
    * 设置插件配置
    */
-  async setConfig(pluginName: string, config: any): Promise<void> {
-    await this.sendRequest({
+  async setConfig(pluginName: string, config: any): Promise<{ success?: boolean; reloaded?: boolean; message?: string }> {
+    return this.sendRequest({
       type: 'config:set',
       pluginName,
       data: config
@@ -203,6 +203,34 @@ export class WebSocketManager {
     return this.sendRequest({
       type: 'schema:get-all'
     })
+  }
+
+  // ============================================================================
+  // 配置文件原始 YAML 读写
+  // ============================================================================
+
+  async getConfigYaml(): Promise<{ yaml: string; pluginKeys: string[] }> {
+    return this.sendRequest({ type: 'config:get-yaml' })
+  }
+
+  async saveConfigYaml(yaml: string): Promise<{ success: boolean; message?: string }> {
+    return this.sendRequest({ type: 'config:save-yaml', yaml })
+  }
+
+  // ============================================================================
+  // 环境变量文件管理
+  // ============================================================================
+
+  async getEnvList(): Promise<{ files: Array<{ name: string; exists: boolean }> }> {
+    return this.sendRequest({ type: 'env:list' })
+  }
+
+  async getEnvFile(filename: string): Promise<{ content: string }> {
+    return this.sendRequest({ type: 'env:get', filename })
+  }
+
+  async saveEnvFile(filename: string, content: string): Promise<{ success: boolean; message?: string }> {
+    return this.sendRequest({ type: 'env:save', filename, content })
   }
 
   // ============================================================================

@@ -1,7 +1,7 @@
 import { StrictMode, useCallback, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Provider as ReduxProvider } from 'react-redux'
-import { Home, Package, Bot, FileText } from 'lucide-react'
+import { Home, Package, Bot, FileText, Settings, KeyRound } from 'lucide-react'
 import { store, DynamicRouter, persistor, addPage, useSelector, useWebSocket } from '@zhin.js/client'
 import DashboardLayout from './layouts/dashboard'
 import DashboardHome from './pages/dashboard-home'
@@ -9,6 +9,8 @@ import DashboardPlugins from './pages/dashboard-plugins'
 import DashboardPluginDetail from './pages/dashboard-plugin-detail'
 import DashboardBots from './pages/dashboard-bots'
 import DashboardLogs from './pages/dashboard-logs'
+import DashboardConfig from './pages/dashboard-config'
+import DashboardEnv from './pages/dashboard-env'
 import LoginPage from './pages/login'
 import { hasToken } from './utils/auth'
 import './style.css'
@@ -84,12 +86,28 @@ function RouteInitializer() {
                         meta: { hideInMenu: true }
                     },
                     {
+                        key: 'dashboard-config',
+                        path: '/config',
+                        title: '配置管理',
+                        icon: <Settings className="w-4 h-4" />,
+                        element: <DashboardConfig />,
+                        meta: { order: 3 }
+                    },
+                    {
+                        key: 'dashboard-env',
+                        path: '/env',
+                        title: '环境变量',
+                        icon: <KeyRound className="w-4 h-4" />,
+                        element: <DashboardEnv />,
+                        meta: { order: 4 }
+                    },
+                    {
                         key: 'dashboard-bots',
                         path: '/bots',
                         title: '机器人',
                         icon: <Bot className="w-4 h-4" />,
                         element: <DashboardBots />,
-                        meta: { order: 3 }
+                        meta: { order: 5 }
                     },
                     {
                         key: 'dashboard-logs',
@@ -97,7 +115,7 @@ function RouteInitializer() {
                         title: '系统日志',
                         icon: <FileText className="w-4 h-4" />,
                         element: <DashboardLogs />,
-                        meta: { order: 4 }
+                        meta: { order: 6 }
                     }
                 ]
             }

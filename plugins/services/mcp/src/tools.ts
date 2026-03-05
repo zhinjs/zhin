@@ -4,16 +4,31 @@ import {
   createPlugin,
   createCommandCode,
   createComponentCode,
+  createMiddlewareCode,
+  createServiceCode,
+  createToolCode,
   queryPlugin,
   listPlugins,
   createAdapterCode,
   createModelCode,
+  listBots,
+  listCommands,
+  listServices,
+  listTools,
+  listEvents,
+  simulateMessage,
+  getPluginSource,
+  sendMessage,
+  getLogs,
+  getConfig,
+  reloadPlugin,
 } from "./handlers.js";
 
-/**
- * 注册所有 MCP 工具
- */
 export function registerTools(server: McpServer) {
+  // ============================================================================
+  // 脚手架工具 — 生成代码片段
+  // ============================================================================
+
   server.registerTool(
     "create_plugin",
     {
@@ -25,12 +40,9 @@ export function registerTools(server: McpServer) {
         directory: z.string().optional().describe("插件保存目录 (相对于项目根目录)"),
       }),
     },
-    async (args) => {
-      const result = await createPlugin(args);
-      return {
-        content: [{ type: "text" as const, text: result }],
-      };
-    }
+    async (args) => ({
+      content: [{ type: "text" as const, text: await createPlugin(args) }],
+    }),
   );
 
   server.registerTool(
@@ -43,12 +55,9 @@ export function registerTools(server: McpServer) {
         hasPermission: z.boolean().optional().describe("是否需要权限检查"),
       }),
     },
-    async (args) => {
-      const result = createCommandCode(args);
-      return {
-        content: [{ type: "text" as const, text: result }],
-      };
-    }
+    async (args) => ({
+      content: [{ type: "text" as const, text: createCommandCode(args) }],
+    }),
   );
 
   server.registerTool(
@@ -61,41 +70,59 @@ export function registerTools(server: McpServer) {
         usesJsx: z.boolean().optional().describe("是否使用 JSX"),
       }),
     },
-    async (args) => {
-      const result = createComponentCode(args);
-      return {
-        content: [{ type: "text" as const, text: result }],
-      };
-    }
+    async (args) => ({
+      content: [{ type: "text" as const, text: createComponentCode(args) }],
+    }),
   );
 
   server.registerTool(
-    "query_plugin",
+    "create_middleware",
     {
-      description: "查询现有插件的信息、命令、组件等",
+      description: "生成一个 Zhin 消息中间件的代码片段（洋葱模型）",
       inputSchema: z.object({
-        pluginName: z.string().describe("插件名称"),
+        name: z.string().describe("中间件名称 (用于日志标识)"),
+        description: z.string().describe("中间件功能描述"),
+        hasFilter: z.boolean().optional().describe("是否包含消息过滤逻辑"),
       }),
     },
-    async (args) => {
-      const result = queryPlugin(args);
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-      };
-    }
+    async (args) => ({
+      content: [{ type: "text" as const, text: createMiddlewareCode(args) }],
+    }),
   );
 
   server.registerTool(
-    "list_plugins",
+    "create_service",
     {
-      description: "列出所有已加载的插件",
+      description: "生成一个 Zhin 服务 (Context) 的代码片段，使用 provide() 注册",
+      inputSchema: z.object({
+        name: z.string().describe("服务名称 (将注册到 Plugin.Contexts)"),
+        description: z.string().describe("服务描述"),
+        hasDispose: z.boolean().optional().describe("是否需要 dispose 清理逻辑"),
+      }),
     },
-    async () => {
-      const result = listPlugins();
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-      };
-    }
+    async (args) => ({
+      content: [{ type: "text" as const, text: createServiceCode(args) }],
+    }),
+  );
+
+  server.registerTool(
+    "create_tool",
+    {
+      description: "生成一个 ZhinTool 的代码片段（可同时作为命令和 AI 工具）",
+      inputSchema: z.object({
+        name: z.string().describe("工具名称"),
+        description: z.string().describe("工具描述"),
+        params: z.array(z.object({
+          name: z.string().describe("参数名"),
+          type: z.string().describe("参数类型 (string/number/boolean)"),
+          description: z.string().describe("参数描述"),
+          required: z.boolean().optional().describe("是否必需"),
+        })).describe("工具参数列表"),
+      }),
+    },
+    async (args) => ({
+      content: [{ type: "text" as const, text: createToolCode(args) }],
+    }),
   );
 
   server.registerTool(
@@ -108,12 +135,9 @@ export function registerTools(server: McpServer) {
         hasWebhook: z.boolean().optional().describe("是否需要 Webhook 支持"),
       }),
     },
-    async (args) => {
-      const result = createAdapterCode(args);
-      return {
-        content: [{ type: "text" as const, text: result }],
-      };
-    }
+    async (args) => ({
+      content: [{ type: "text" as const, text: createAdapterCode(args) }],
+    }),
   );
 
   server.registerTool(
@@ -125,124 +149,166 @@ export function registerTools(server: McpServer) {
         fields: z.record(z.any()).describe("字段定义"),
       }),
     },
-    async (args) => {
-      const result = createModelCode(args);
-      return {
-        content: [{ type: "text" as const, text: result }],
-      };
-    }
+    async (args) => ({
+      content: [{ type: "text" as const, text: createModelCode(args) }],
+    }),
   );
 
   // ============================================================================
-  // AI 相关工具
+  // 运行时查询工具 — 了解当前运行状态
   // ============================================================================
 
   server.registerTool(
-    "ai_chat",
-    {
-      description: "与 AI 对话，获取智能回复",
-      inputSchema: z.object({
-        message: z.string().describe("用户消息"),
-        systemPrompt: z.string().optional().describe("系统提示词（可选）"),
-        model: z.string().optional().describe("模型名称（可选）"),
-        provider: z.string().optional().describe("提供商名称（可选）"),
-      }),
-    },
-    async (args) => {
-      const { aiChat } = await import("./ai-handlers.js");
-      const result = await aiChat(args);
-      return {
-        content: [{ type: "text" as const, text: result }],
-      };
-    }
+    "list_plugins",
+    { description: "列出所有已加载的插件及其功能概况" },
+    async () => ({
+      content: [{ type: "text" as const, text: JSON.stringify(listPlugins(), null, 2) }],
+    }),
   );
 
   server.registerTool(
-    "ai_agent",
+    "query_plugin",
     {
-      description: "让 AI Agent 执行复杂任务，可使用工具（计算器、时间查询等）",
+      description: "查询指定插件的详细信息（命令、组件、中间件、Context 等）",
       inputSchema: z.object({
-        task: z.string().describe("任务描述"),
-        model: z.string().optional().describe("模型名称（可选）"),
+        pluginName: z.string().describe("插件名称"),
       }),
     },
-    async (args) => {
-      const { aiAgent } = await import("./ai-handlers.js");
-      const result = await aiAgent(args);
-      return {
-        content: [{ type: "text" as const, text: result }],
-      };
-    }
+    async (args) => ({
+      content: [{ type: "text" as const, text: JSON.stringify(queryPlugin(args), null, 2) }],
+    }),
   );
 
   server.registerTool(
-    "ai_code_review",
-    {
-      description: "让 AI 审查代码，提供改进建议",
-      inputSchema: z.object({
-        code: z.string().describe("要审查的代码"),
-        language: z.string().optional().describe("编程语言"),
-        focus: z.string().optional().describe("审查重点（性能/安全/可读性/最佳实践）"),
-      }),
-    },
-    async (args) => {
-      const { aiCodeReview } = await import("./ai-handlers.js");
-      const result = await aiCodeReview(args);
-      return {
-        content: [{ type: "text" as const, text: result }],
-      };
-    }
+    "list_services",
+    { description: "列出所有已注册的 Context 服务（provide 注册的依赖注入）" },
+    async () => ({
+      content: [{ type: "text" as const, text: JSON.stringify(listServices(), null, 2) }],
+    }),
   );
 
   server.registerTool(
-    "ai_explain_code",
+    "list_tools",
     {
-      description: "让 AI 解释代码的功能和逻辑",
+      description: "列出所有已注册的 ZhinTool（包含插件工具和适配器工具）",
       inputSchema: z.object({
-        code: z.string().describe("要解释的代码"),
-        language: z.string().optional().describe("编程语言"),
-        detail: z.enum(["brief", "detailed"]).optional().describe("解释详细程度"),
+        plugin_name: z.string().optional().describe("按插件名筛选（为空则返回全部）"),
       }),
     },
-    async (args) => {
-      const { aiExplainCode } = await import("./ai-handlers.js");
-      const result = await aiExplainCode(args);
-      return {
-        content: [{ type: "text" as const, text: result }],
-      };
-    }
+    async (args) => ({
+      content: [{ type: "text" as const, text: JSON.stringify(listTools(args), null, 2) }],
+    }),
   );
 
   server.registerTool(
-    "ai_generate_code",
-    {
-      description: "让 AI 根据需求生成代码",
-      inputSchema: z.object({
-        requirement: z.string().describe("功能需求描述"),
-        language: z.string().optional().describe("目标编程语言"),
-        framework: z.string().optional().describe("使用的框架"),
-      }),
-    },
-    async (args) => {
-      const { aiGenerateCode } = await import("./ai-handlers.js");
-      const result = await aiGenerateCode(args);
-      return {
-        content: [{ type: "text" as const, text: result }],
-      };
-    }
+    "list_events",
+    { description: "列出 Zhin 插件可监听的生命周期事件和消息事件" },
+    async () => ({
+      content: [{ type: "text" as const, text: JSON.stringify(listEvents(), null, 2) }],
+    }),
   );
 
   server.registerTool(
-    "ai_list_models",
+    "list_commands",
+    { description: "列出所有已注册的命令（含模式、描述、用法）" },
+    async () => ({
+      content: [{ type: "text" as const, text: JSON.stringify(listCommands(), null, 2) }],
+    }),
+  );
+
+  server.registerTool(
+    "list_bots",
+    { description: "列出所有连接的 Bot 及其状态（适配器、在线/离线）" },
+    async () => ({
+      content: [{ type: "text" as const, text: JSON.stringify(listBots(), null, 2) }],
+    }),
+  );
+
+  server.registerTool(
+    "get_plugin_source",
     {
-      description: "列出所有可用的 AI 模型",
+      description: "读取指定插件的入口源码文件，方便参考和学习",
+      inputSchema: z.object({
+        pluginName: z.string().describe("插件名称"),
+      }),
     },
-    async () => {
-      const { aiListModels } = await import("./ai-handlers.js");
-      const result = await aiListModels();
-      return {
-        content: [{ type: "text" as const, text: result }],
-      };
-    }
+    async (args) => ({
+      content: [{ type: "text" as const, text: await getPluginSource(args) }],
+    }),
+  );
+
+  // ============================================================================
+  // 运行时操作工具 — 开发调试
+  // ============================================================================
+
+  server.registerTool(
+    "simulate_message",
+    {
+      description: "模拟发送一条消息来测试命令，返回 Bot 的回复内容",
+      inputSchema: z.object({
+        content: z.string().describe("模拟的消息内容 (例如: 'ping' 或 'echo hello')"),
+        adapter: z.string().optional().describe("适配器名称 (默认使用 sandbox)"),
+      }),
+    },
+    async (args) => ({
+      content: [{ type: "text" as const, text: await simulateMessage(args) }],
+    }),
+  );
+
+  server.registerTool(
+    "send_message",
+    {
+      description: "通过指定 Bot 发送消息到群组或私聊",
+      inputSchema: z.object({
+        adapter: z.string().describe("适配器名称 (如 icqq, discord)"),
+        bot: z.string().describe("Bot 名称/ID"),
+        target_id: z.string().describe("目标 ID (群号或用户 ID)"),
+        target_type: z.enum(["private", "group", "channel"]).describe("目标类型"),
+        content: z.string().describe("消息内容"),
+      }),
+    },
+    async (args) => ({
+      content: [{ type: "text" as const, text: await sendMessage(args) }],
+    }),
+  );
+
+  server.registerTool(
+    "get_logs",
+    {
+      description: "获取最近的系统日志",
+      inputSchema: z.object({
+        limit: z.number().optional().describe("返回条数（默认 50）"),
+        level: z.string().optional().describe("日志级别筛选 (info/warn/error/all)"),
+      }),
+    },
+    async (args) => ({
+      content: [{ type: "text" as const, text: JSON.stringify(await getLogs(args), null, 2) }],
+    }),
+  );
+
+  server.registerTool(
+    "get_config",
+    {
+      description: "获取当前运行配置（全部或指定插件）",
+      inputSchema: z.object({
+        plugin_name: z.string().optional().describe("插件名称（为空则返回全部配置）"),
+      }),
+    },
+    async (args) => ({
+      content: [{ type: "text" as const, text: JSON.stringify(getConfig(args), null, 2) }],
+    }),
+  );
+
+  server.registerTool(
+    "reload_plugin",
+    {
+      description: "热重载指定插件",
+      inputSchema: z.object({
+        name: z.string().describe("要重载的插件名称"),
+      }),
+    },
+    async (args) => ({
+      content: [{ type: "text" as const, text: await reloadPlugin(args) }],
+    }),
   );
 }

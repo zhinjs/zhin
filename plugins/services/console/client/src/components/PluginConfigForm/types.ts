@@ -23,6 +23,7 @@ export interface SchemaField {
 
 export interface Schema {
   type: string
+  object?: Record<string, SchemaField>
   properties?: Record<string, SchemaField>
   dict?: Record<string, SchemaField>
   description?: string

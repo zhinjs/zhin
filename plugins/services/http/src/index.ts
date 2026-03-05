@@ -40,7 +40,10 @@ export interface HttpConfig {
 
 const generateToken = () => crypto.randomBytes(16).toString('hex');
 
-const { provide, root, useContext, logger } = usePlugin();
+const plugin = usePlugin();
+const { provide, root, useContext, logger, declareConfig } = plugin;
+
+declareConfig("http", httpSchema, { reloadable: false });
 
 // 创建实例
 const koa = new Koa();
@@ -72,11 +75,17 @@ useContext("config", (configService) => {
   // 反向代理场景下信任 X-Forwarded-Host / X-Forwarded-Proto 等
   koa.proxy = trustProxy;
 
-  // Token 认证中间件：仅对 /api 要求认证，/pub 为公开入口
+  // Token 认证中间件：仅对 API 路径要求认证
   koa.use(async (ctx, next) => {
     if (!ctx.path.startsWith(base + '/') && ctx.path !== base) return next();
     // /pub 为公开前缀（webhook、OAuth、health 等），不校验 token
     if (ctx.path.startsWith('/pub/') || ctx.path === '/pub') return next();
+    // 跳过 router 注册的非 API 路由（如 /mcp），避免误拦截
+    const whiteList: (string | RegExp)[] = router.whiteList || [];
+    const isWhitelisted = whiteList.some(p =>
+      typeof p === 'string' && !p.startsWith(base) && ctx.path.startsWith(p)
+    );
+    if (isWhitelisted) return next();
 
     // 从 Bearer token 或 query 参数中提取 token
     const authHeader = ctx.get('Authorization');

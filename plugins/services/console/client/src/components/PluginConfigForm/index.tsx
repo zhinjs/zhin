@@ -5,7 +5,7 @@
 import { useState, useEffect } from 'react'
 import { useConfig } from '@zhin.js/client'
 import type { PluginConfigFormProps, SchemaField } from './types.js'
-import { Settings, ChevronDown, CheckCircle, AlertCircle, X, Save, Loader2 } from 'lucide-react'
+import { Settings, ChevronDown, CheckCircle, AlertCircle, AlertTriangle, X, Save, Loader2 } from 'lucide-react'
 import { FieldRenderer, isComplexField } from './FieldRenderer.js'
 import { NestedFieldRenderer } from './NestedFieldRenderer.js'
 import { Card } from '../ui/card'
@@ -25,12 +25,21 @@ export function PluginConfigForm({ pluginName, onSuccess }: Omit<PluginConfigFor
     if (config) setLocalConfig(config)
   }, [config])
 
+  const [warnMessage, setWarnMessage] = useState<string | null>(null)
+
   const handleSave = async () => {
     if (!connected) return
     try {
-      await setConfig(localConfig)
-      setSuccessMessage('配置已保存成功')
-      setTimeout(() => { setIsExpanded(undefined); onSuccess?.(); setSuccessMessage(null) }, 1500)
+      const result = await setConfig(localConfig)
+      if (result?.reloaded) {
+        setSuccessMessage('配置已保存，插件已重载')
+      } else if (result?.message) {
+        setWarnMessage(result.message)
+        setSuccessMessage(null)
+      } else {
+        setSuccessMessage('配置已保存')
+      }
+      setTimeout(() => { setIsExpanded(undefined); onSuccess?.(); setSuccessMessage(null); setWarnMessage(null) }, 2500)
     } catch (err) {
       console.error('保存配置失败:', err)
     }
@@ -74,7 +83,7 @@ export function PluginConfigForm({ pluginName, onSuccess }: Omit<PluginConfigFor
     )
   }
 
-  const fields = schema?.properties || schema?.dict || {}
+  const fields = schema?.object || schema?.properties || schema?.dict || {}
   if (!schema || !fields || Object.keys(fields).length === 0) return null
 
   return (
@@ -93,6 +102,12 @@ export function PluginConfigForm({ pluginName, onSuccess }: Omit<PluginConfigFor
               <Alert variant="success" className="mb-3">
                 <CheckCircle className="h-4 w-4" />
                 <AlertDescription>{successMessage}</AlertDescription>
+              </Alert>
+            )}
+            {warnMessage && !successMessage && (
+              <Alert className="mb-3 border-yellow-500/50 text-yellow-700 dark:text-yellow-400">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>{warnMessage}</AlertDescription>
               </Alert>
             )}
             {error && (
