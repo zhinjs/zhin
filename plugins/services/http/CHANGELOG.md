@@ -1,5 +1,14 @@
 # @zhin.js/http
 
+## 1.0.37
+
+### Patch Changes
+
+- 72ec4ba: fix: 新增插件,控制台调优
+- Updated dependencies [72ec4ba]
+  - zhin.js@1.0.43
+  - @zhin.js/schema@1.0.27
+
 ## 1.0.36
 
 ### Patch Changes

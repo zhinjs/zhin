@@ -1,5 +1,16 @@
 # @zhin.js/console
 
+## 1.0.41
+
+### Patch Changes
+
+- 72ec4ba: fix: 新增插件,控制台调优
+- Updated dependencies [72ec4ba]
+  - @zhin.js/http@1.0.37
+  - @zhin.js/client@1.0.11
+  - @zhin.js/core@1.0.43
+  - zhin.js@1.0.43
+
 ## 1.0.40
 
 ### Patch Changes

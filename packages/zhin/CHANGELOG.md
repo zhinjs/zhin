@@ -1,5 +1,18 @@
 # zhin.js
 
+## 1.0.43
+
+### Patch Changes
+
+- 72ec4ba: fix: 新增插件,控制台调优
+- Updated dependencies [72ec4ba]
+  - @zhin.js/core@1.0.43
+  - @zhin.js/agent@0.0.6
+  - @zhin.js/logger@0.1.27
+  - @zhin.js/schema@1.0.27
+  - @zhin.js/ai@1.0.4
+  - @zhin.js/kernel@0.0.4
+
 ## 1.0.42
 
 ### Patch Changes

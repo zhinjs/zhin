@@ -1,5 +1,39 @@
 # test-bot
 
+## 0.1.45
+
+### Patch Changes
+
+- 72ec4ba: fix: 新增插件,控制台调优
+- Updated dependencies [72ec4ba]
+  - @zhin.js/console@1.0.41
+  - @zhin.js/http@1.0.37
+  - @zhin.js/mcp@1.0.26
+  - @zhin.js/client@1.0.11
+  - zhin.js@1.0.43
+  - @zhin.js/adapter-icqq@1.0.53
+  - @zhin.js/adapter-sandbox@1.0.52
+  - @zhin.js/adapter-dingtalk@1.0.32
+  - @zhin.js/adapter-discord@1.0.47
+  - @zhin.js/adapter-github@0.1.12
+  - @zhin.js/adapter-lark@1.0.48
+  - @zhin.js/adapter-onebot11@1.0.48
+  - @zhin.js/adapter-wechat-mp@0.1.32
+  - @zhin.js/adapter-email@0.1.31
+  - @zhin.js/adapter-kook@1.0.44
+  - @zhin.js/adapter-qq@1.0.44
+  - @zhin.js/adapter-slack@1.0.29
+  - @zhin.js/adapter-telegram@1.0.29
+  - @zhin.js/plugin-60s@0.0.3
+  - @zhin.js/plugin-checkin@0.0.0
+  - @zhin.js/plugin-html-renderer@0.0.21
+  - @zhin.js/plugin-music@0.0.34
+  - @zhin.js/plugin-repeater@0.0.0
+  - @zhin.js/plugin-rss@0.0.0
+  - @zhin.js/sensitive-filter@0.0.29
+  - @zhin.js/plugin-stats@0.0.0
+  - @zhin.js/plugin-teach@0.0.0
+
 ## 0.1.44
 
 ### Patch Changes
