@@ -1,5 +1,11 @@
 # @zhin.js/client
 
+## 1.0.11
+
+### Patch Changes
+
+- 72ec4ba: fix: 新增插件,控制台调优
+
 ## 1.0.10
 
 ### Patch Changes

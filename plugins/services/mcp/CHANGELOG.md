@@ -1,5 +1,13 @@
 # @zhin.js/mcp
 
+## 1.0.26
+
+### Patch Changes
+
+- 72ec4ba: fix: 新增插件,控制台调优
+- Updated dependencies [72ec4ba]
+  - zhin.js@1.0.43
+
 ## 1.0.25
 
 ### Patch Changes

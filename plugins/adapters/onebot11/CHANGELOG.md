@@ -1,5 +1,13 @@
 # @zhin.js/adapter-onebot11
 
+## 1.0.48
+
+### Patch Changes
+
+- Updated dependencies [72ec4ba]
+  - @zhin.js/http@1.0.37
+  - zhin.js@1.0.43
+
 ## 1.0.47
 
 ### Patch Changes
