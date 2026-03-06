@@ -140,6 +140,10 @@ export interface ProviderCapabilities {
 /** Provider 配置 */
 export interface ProviderConfig {
   apiKey?: string;
+  /**
+   * Authorization 头前缀。默认 `'Bearer '`；设为 `''` 时仅用 apiKey 作为值（部分 API 要求 `Authorization: <key>`）。
+   */
+  authScheme?: string;
   baseUrl?: string;
   defaultModel?: string;
   models?: string[];

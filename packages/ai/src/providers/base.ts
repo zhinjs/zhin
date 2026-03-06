@@ -49,7 +49,8 @@ export abstract class BaseProvider implements AIProvider {
     };
 
     if (this.config.apiKey) {
-      headers['Authorization'] = `Bearer ${this.config.apiKey}`;
+      const scheme = this.config.authScheme !== undefined ? this.config.authScheme : 'Bearer ';
+      headers['Authorization'] = scheme + this.config.apiKey;
     }
 
     const controller = new AbortController();
@@ -91,7 +92,8 @@ export abstract class BaseProvider implements AIProvider {
     };
 
     if (this.config.apiKey) {
-      headers['Authorization'] = `Bearer ${this.config.apiKey}`;
+      const scheme = this.config.authScheme !== undefined ? this.config.authScheme : 'Bearer ';
+      headers['Authorization'] = scheme + this.config.apiKey;
     }
 
     const controller = new AbortController();
