@@ -10,6 +10,10 @@ import {
     segment,
     Tool,
     ToolPermissionLevel,
+    createGroupManagementTools,
+    GROUP_MANAGEMENT_SKILL_KEYWORDS,
+    GROUP_MANAGEMENT_SKILL_TAGS,
+    type IGroupManagement,
 } from "zhin.js";
 import type { Context } from 'koa';
 import { createHmac } from 'crypto';
@@ -815,11 +819,19 @@ class DingTalkAdapter extends Adapter<DingTalkBot> {
 
     async start(): Promise<void> {
         this.registerDingTalkPlatformTools();
+        const groupTools = createGroupManagementTools(this as unknown as IGroupManagement, this.name);
+        groupTools.forEach((t) => this.addTool(t));
+        this.declareSkill({
+            description:
+                '钉钉群管理：踢人、禁言、设管理员、改群名、查成员等。仅有昵称时请先 list_members 获取 user_id 再操作。',
+            keywords: GROUP_MANAGEMENT_SKILL_KEYWORDS,
+            tags: GROUP_MANAGEMENT_SKILL_TAGS,
+        });
         await super.start();
     }
 
     /**
-     * 注册钉钉平台特有工具（标准群管操作已通过覆写方法自动注册）
+     * 注册钉钉平台特有工具（获取用户信息等）
      */
     private registerDingTalkPlatformTools(): void {
         // 获取用户信息工具

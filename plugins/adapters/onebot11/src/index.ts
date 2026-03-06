@@ -12,6 +12,10 @@ import {
   SendContent,
   Tool,
   ToolPermissionLevel,
+  createGroupManagementTools,
+  GROUP_MANAGEMENT_SKILL_KEYWORDS,
+  GROUP_MANAGEMENT_SKILL_TAGS,
+  type IGroupManagement,
 } from 'zhin.js';
 import type { Router } from '@zhin.js/http'
 import { IncomingMessage } from "http";
@@ -749,11 +753,19 @@ class OneBot11Adapter extends Adapter<OneBot11WsClient> {
 
   async start(): Promise<void> {
     this.registerOneBot11PlatformTools();
+    const groupTools = createGroupManagementTools(this as unknown as IGroupManagement, this.name);
+    groupTools.forEach((t) => this.addTool(t));
+    this.declareSkill({
+      description:
+        'OneBot11 协议群管理：踢人、禁言、封禁、设管理员、改群名、查成员等。仅有昵称时请先 list_members 获取 user_id 再执行操作。',
+      keywords: GROUP_MANAGEMENT_SKILL_KEYWORDS,
+      tags: GROUP_MANAGEMENT_SKILL_TAGS,
+    });
     await super.start();
   }
 
   /**
-   * 注册 OneBot11 平台特有工具（标准群管操作已通过覆写方法自动注册）
+   * 注册 OneBot11 平台特有工具（头衔等）
    */
   private registerOneBot11PlatformTools(): void {
     // 设置头衔工具（OneBot11 平台特有）

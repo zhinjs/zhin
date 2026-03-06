@@ -12,6 +12,10 @@ import {
   usePlugin,
   Tool,
   ToolPermissionLevel,
+  createGroupManagementTools,
+  GROUP_MANAGEMENT_SKILL_KEYWORDS,
+  GROUP_MANAGEMENT_SKILL_TAGS,
+  type IGroupManagement,
 } from "zhin.js";
 
 // 类型扩展 - 使用 zhin.js 模式
@@ -1070,11 +1074,19 @@ class TelegramAdapter extends Adapter<TelegramBot> {
 
   async start(): Promise<void> {
     this.registerTelegramPlatformTools();
+    const groupTools = createGroupManagementTools(this as unknown as IGroupManagement, this.name);
+    groupTools.forEach((t) => this.addTool(t));
+    this.declareSkill({
+      description:
+        'Telegram 群组管理：踢人、禁言、封禁、设管理员、改群名、查成员等。仅用户名时请先 list_members 获取 user_id 再操作。',
+      keywords: GROUP_MANAGEMENT_SKILL_KEYWORDS,
+      tags: GROUP_MANAGEMENT_SKILL_TAGS,
+    });
     await super.start();
   }
 
   /**
-   * 注册 Telegram 平台特有工具（标准群管操作已通过覆写方法自动注册）
+   * 注册 Telegram 平台特有工具（置顶消息等）
    */
   private registerTelegramPlatformTools(): void {
     // 置顶消息工具

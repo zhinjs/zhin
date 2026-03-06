@@ -6,25 +6,12 @@ import { BeforeSendHandler, SendOptions, Tool, ToolContext, ToolScope } from "./
 import { segment } from "./utils.js";
 import { ZhinTool, isZhinTool, type ToolInput } from "./built/tool.js";
 import type { Skill, SkillFeature } from "./built/skill.js";
-import {
-  type IGroupManagement,
-  GROUP_METHOD_SPECS,
-  GROUP_MANAGEMENT_SKILL_DESCRIPTION,
-  GROUP_MANAGEMENT_SKILL_TAGS,
-  GROUP_MANAGEMENT_SKILL_KEYWORDS,
-  buildMethodArgs,
-} from "./built/common-adapter-tools.js";
 /**
- * Adapter类：适配器抽象，管理多平台Bot实例。
+ * Adapter 类：适配器抽象，管理多平台 Bot 实例。
  * 负责根据配置启动/关闭各平台机器人，统一异常处理。
  *
- * 适配器可以提供 AI 工具，供 AI 服务调用。
- *
- * 群管理能力：
- *   Adapter 基类声明了 IGroupManagement 中的可选方法规范，
- *   具体适配器（ICQQ/Discord/Telegram 等）选择性覆写。
- *   调用 registerGroupManagementSkill() 后，基类自动检测
- *   哪些方法已被实现，生成对应的 Tool 并注册为 "群聊管理" Skill。
+ * 适配器可提供 AI 工具并声明 Skill。群管等能力由各 IM 平台在子类中
+ * 自行实现方法并注册 Tool（如使用 createGroupManagementTools）+ declareSkill。
  */
 export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.Lifecycle> {
   /** 当前适配器下所有Bot实例，key为bot名称 */
@@ -101,8 +88,6 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
       this.bots.set(bot.$id, bot);
     }
     this.logger.debug(`adapter ${this.name} started`);
-
-    this._autoDetectGroupManagement();
   }
   /**
    * 停止适配器，断开并移除所有Bot实例
@@ -322,69 +307,6 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
     });
   }
 
-  // ==========================================================================
-  // 群管理自动检测 — start() 结束时自动执行
-  // ==========================================================================
-
-  /**
-   * 遍历 GROUP_METHOD_SPECS，检测子类是否覆写了对应方法。
-   * 对每个已实现的方法生成 Tool 并注册，最后聚合为 "群聊管理" Skill。
-   */
-  private _autoDetectGroupManagement(): void {
-    const self = this as unknown as IGroupManagement;
-    const prefix = this.name as string;
-    const generatedTools: Tool[] = [];
-
-    for (const spec of GROUP_METHOD_SPECS) {
-      const fn = self[spec.method];
-      if (typeof fn !== 'function') continue;
-
-      const boundFn: (...args: any[]) => Promise<any> = fn.bind(self);
-
-      const properties: Record<string, any> = {
-        bot_id: { type: 'string', description: 'Bot ID', contextKey: 'botId' },
-        scene_id: { type: 'string', description: '群/服务器 ID', contextKey: 'sceneId' },
-      };
-      const required: string[] = ['bot_id', 'scene_id'];
-
-      for (const [name, schema] of Object.entries(spec.extraParams)) {
-        properties[name] = schema;
-      }
-      if (spec.extraRequired) {
-        required.push(...spec.extraRequired);
-      }
-
-      const tool: Tool = {
-        name: `${prefix}_${spec.toolSuffix}`,
-        description: `${spec.description} (${prefix})`,
-        parameters: { type: 'object' as const, properties, required },
-        execute: async (args: Record<string, any>) => {
-          const { bot_id, scene_id, ...rest } = args;
-          return boundFn(...buildMethodArgs(spec.method, bot_id, scene_id, rest));
-        },
-        tags: ['group', 'management', prefix],
-        keywords: spec.keywords,
-        permissionLevel: spec.permissionLevel,
-        scopes: ['group', 'channel'] as ToolScope[],
-        preExecutable: spec.preExecutable,
-      };
-
-      this.addTool(tool);
-      generatedTools.push(tool);
-    }
-
-    if (generatedTools.length === 0) return;
-
-    this.declareSkill({
-      description: GROUP_MANAGEMENT_SKILL_DESCRIPTION,
-      keywords: GROUP_MANAGEMENT_SKILL_KEYWORDS,
-      tags: GROUP_MANAGEMENT_SKILL_TAGS,
-    });
-
-    this.logger.debug(
-      `自动检测到 ${generatedTools.length} 个群管理方法 → 已注册 Skill`,
-    );
-  }
 }
 export interface Adapters {}
 export namespace Adapter {

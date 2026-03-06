@@ -19,6 +19,10 @@ import {
   segment,
   Tool,
   ToolPermissionLevel,
+  createGroupManagementTools,
+  GROUP_MANAGEMENT_SKILL_KEYWORDS,
+  GROUP_MANAGEMENT_SKILL_TAGS,
+  type IGroupManagement,
 } from "zhin.js";
 
 // 类型扩展 - 使用 zhin.js 模式
@@ -409,11 +413,19 @@ class QQAdapter extends Adapter<QQBot<ReceiverMode>> {
 
   async start(): Promise<void> {
     this.registerQQPlatformTools();
+    const groupTools = createGroupManagementTools(this as unknown as IGroupManagement, this.name);
+    groupTools.forEach((t) => this.addTool(t));
+    this.declareSkill({
+      description:
+        'QQ 官方机器人群管理：踢人、禁言、设管理员、改群名、查成员等。仅有昵称时请先 list_members 查 user_id 再操作。',
+      keywords: GROUP_MANAGEMENT_SKILL_KEYWORDS,
+      tags: GROUP_MANAGEMENT_SKILL_TAGS,
+    });
     await super.start();
   }
 
   /**
-   * 注册 QQ 官方平台特有工具（标准群管操作已通过覆写方法自动注册）
+   * 注册 QQ 官方平台特有工具（频道列表等）
    */
   private registerQQPlatformTools(): void {
     // 获取频道列表工具

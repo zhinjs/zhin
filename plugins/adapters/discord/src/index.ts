@@ -31,6 +31,10 @@ import {
   usePlugin,
   Tool,
   ToolPermissionLevel,
+  createGroupManagementTools,
+  GROUP_MANAGEMENT_SKILL_KEYWORDS,
+  GROUP_MANAGEMENT_SKILL_TAGS,
+  type IGroupManagement,
 } from "zhin.js";
 import type { Context } from "koa";
 import { createReadStream } from "fs";
@@ -1473,11 +1477,19 @@ class DiscordAdapter extends Adapter<DiscordBot> {
 
   async start(): Promise<void> {
     this.registerDiscordPlatformTools();
+    const groupTools = createGroupManagementTools(this as unknown as IGroupManagement, this.name);
+    groupTools.forEach((t) => this.addTool(t));
+    this.declareSkill({
+      description:
+        'Discord 服务器/频道管理：踢人、禁言、封禁、改频道名、查成员等。需先 list_members 获取用户 ID 再执行管理操作。',
+      keywords: GROUP_MANAGEMENT_SKILL_KEYWORDS,
+      tags: GROUP_MANAGEMENT_SKILL_TAGS,
+    });
     await super.start();
   }
 
   /**
-   * 注册 Discord 平台特有工具（标准群管操作已通过覆写方法自动注册）
+   * 注册 Discord 平台特有工具（角色等）
    */
   private registerDiscordPlatformTools(): void {
     // 添加角色工具

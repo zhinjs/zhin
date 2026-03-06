@@ -23,6 +23,10 @@ import {
   MessageType,
   Tool,
   ToolPermissionLevel,
+  createGroupManagementTools,
+  GROUP_MANAGEMENT_SKILL_KEYWORDS,
+  GROUP_MANAGEMENT_SKILL_TAGS,
+  type IGroupManagement,
 } from "zhin.js";
 
 // 类型扩展
@@ -793,6 +797,14 @@ export class KookAdapter extends Adapter<KookBot> {
 
   async start(): Promise<void> {
     this.registerKookPlatformTools();
+    const groupTools = createGroupManagementTools(this as unknown as IGroupManagement, this.name);
+    groupTools.forEach((t) => this.addTool(t));
+    this.declareSkill({
+      description:
+        'KOOK 服务器/频道群管理：踢人、禁言、封禁、设管理员、改服务器名、查成员等。仅昵称时请先 list_members 获取 user_id。',
+      keywords: GROUP_MANAGEMENT_SKILL_KEYWORDS,
+      tags: GROUP_MANAGEMENT_SKILL_TAGS,
+    });
     await super.start();
     logger.info("KOOK 适配器已启动");
   }
@@ -803,7 +815,7 @@ export class KookAdapter extends Adapter<KookBot> {
   }
 
   /**
-   * 注册 KOOK 平台特有工具（标准群管操作已通过覆写方法自动注册）
+   * 注册 KOOK 平台特有工具（角色授予等）
    */
   private registerKookPlatformTools(): void {
     // 角色管理工具 - 授予角色

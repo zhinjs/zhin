@@ -23,6 +23,10 @@ import {
   ToolPermissionLevel,
   MessageCommand,
   AdapterMessage,
+  createGroupManagementTools,
+  GROUP_MANAGEMENT_SKILL_KEYWORDS,
+  GROUP_MANAGEMENT_SKILL_TAGS,
+  type IGroupManagement,
 } from "zhin.js";
 import { Router } from "@zhin.js/http";
 
@@ -653,12 +657,19 @@ class IcqqAdapter extends Adapter<IcqqBot> {
 
   async start(): Promise<void> {
     this.registerIcqqPlatformTools();
+    const groupTools = createGroupManagementTools(this as unknown as IGroupManagement, this.name);
+    groupTools.forEach((t) => this.addTool(t));
+    this.declareSkill({
+      description:
+        'ICQQ（QQ 协议）群管理：踢人、禁言、设管理员、改名片、头衔、群公告等。只有昵称时请先调用 list_members 查 QQ 号再操作。',
+      keywords: GROUP_MANAGEMENT_SKILL_KEYWORDS,
+      tags: GROUP_MANAGEMENT_SKILL_TAGS,
+    });
     await super.start();
-    // super.start() 自动检测上述群管方法 → 生成 Tool → 注册 Skill
   }
 
   /**
-   * 注册 ICQQ 平台特有工具（标准群管操作已通过 IGroupManagement 覆写方法自动注册）
+   * 注册 ICQQ 平台特有工具（头衔、戳一戳、群公告等）
    */
   private registerIcqqPlatformTools(): void {
     const CTX_BOT = {

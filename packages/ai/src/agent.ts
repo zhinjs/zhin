@@ -576,10 +576,11 @@ export class Agent {
         if (state.toolCalls.length > 0) {
           logger.warn(`第 ${state.iterations} 轮 LLM 调用失败，尝试基于已有数据恢复: ${err.message}`);
           const toolSummary = state.toolCalls.map(tc => {
-            return typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result);
-          }).join('\n\n');
+            const r = typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result);
+            return `【${tc.tool}】${r}`;
+          }).join('\n');
           const fallbackResult: AgentResult = {
-            content: toolSummary,
+            content: `${toolSummary}`,
             toolCalls: state.toolCalls,
             usage: state.usage,
             iterations: state.iterations,

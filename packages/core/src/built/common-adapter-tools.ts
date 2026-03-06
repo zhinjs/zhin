@@ -1,23 +1,19 @@
 /**
- * Group Management Skill — 方法规范与元数据
+ * Group Management — 方法规范与 Tool 工厂
  *
  * 设计理念：
- *   群管理是 IM 系统的一种"技能"(Skill)，而非一组零散的工具。
- *   Adapter 基类声明群管理操作的方法规范（可选），
- *   具体适配器（ICQQ/Discord/Telegram 等）选择性覆写。
- *   Adapter.start() 自动检测哪些方法已被子类实现，
- *   生成对应的 Tool 并注册为 "群聊管理" Skill。
+ *   各 IM 平台在适配器内自行实现群管方法（kickMember、muteMember 等），
+ *   并自行注册 Tool 与 declareSkill，保障平台特性与描述一致。
  *
- * 子类无需任何额外调用：
+ * 使用方式（在各适配器 start 或注册方法中）：
  *
- *   class IcqqAdapter extends Adapter<IcqqBot> {
- *     async kickMember(botId, sceneId, userId) { ... }
- *     async muteMember(botId, sceneId, userId, duration) { ... }
- *     // start() 中自动检测 → 自动注册 Skill，零样板代码
- *   }
+ *   import { createGroupManagementTools, GROUP_MANAGEMENT_SKILL_KEYWORDS, GROUP_MANAGEMENT_SKILL_TAGS } from 'zhin.js';
+ *   const tools = createGroupManagementTools(this, this.name);
+ *   tools.forEach(t => this.addTool(t));
+ *   this.declareSkill({ description: '本平台群管说明...', keywords: [...], tags: [...] });
  */
 
-import type { ToolPermissionLevel } from '../types.js';
+import type { Tool, ToolPermissionLevel, ToolScope } from '../types.js';
 
 // ============================================================================
 // Adapter 群管理方法规范
@@ -168,24 +164,57 @@ export const GROUP_METHOD_SPECS: GroupMethodSpec[] = [
 ];
 
 // ============================================================================
-// Skill 常量
+// Skill 常量（各适配器 declareSkill 时可复用 keywords/tags）
 // ============================================================================
-
-export const GROUP_MANAGEMENT_SKILL_DESCRIPTION =
-  '群聊管理能力：在 IM 系统中对群/服务器进行管理，包括踢人、禁言、封禁、' +
-  '设置管理员、修改群名、查看成员列表等操作。具体可用的操作取决于平台和 Bot 权限。\n\n' +
-  '使用指南：\n' +
-  '1. 用户提供昵称/名片而非 ID 时，必须先调用 list_members 查询成员列表，从返回结果中匹配目标用户的 user_id，再执行后续操作\n' +
-  '2. 禁言(mute_member)适用场景：违规发言、刷屏、骚扰他人等；传 duration=0 可解除禁言\n' +
-  '3. 设置/取消管理员(set_admin)需要群主权限，普通管理员无法操作；enable=false 为取消管理员\n' +
-  '4. 踢人(kick_member)是将成员移出群聊，封禁(ban_member)是永久拉黑，两者不同\n' +
-  '5. 操作前应确认目标用户正确，避免误操作';
 
 export const GROUP_MANAGEMENT_SKILL_TAGS = ['group', 'management', 'im', 'admin'];
 export const GROUP_MANAGEMENT_SKILL_KEYWORDS = [
   '群管理', '踢人', '禁言', '封禁', '管理员', '群名',
   '成员', 'kick', 'mute', 'ban', 'admin', 'members',
 ];
+
+// ============================================================================
+// 工厂：根据已实现的方法为指定适配器生成群管 Tool 列表（各平台自行调用并 addTool）
+// ============================================================================
+
+export function createGroupManagementTools(
+  adapter: IGroupManagement,
+  prefix: string,
+): Tool[] {
+  const tools: Tool[] = [];
+  for (const spec of GROUP_METHOD_SPECS) {
+    const fn = adapter[spec.method];
+    if (typeof fn !== 'function') continue;
+
+    const properties: Record<string, any> = {
+      bot_id: { type: 'string', description: 'Bot ID', contextKey: 'botId' },
+      scene_id: { type: 'string', description: '群/服务器 ID', contextKey: 'sceneId' },
+    };
+    const required: string[] = ['bot_id', 'scene_id'];
+    for (const [name, schema] of Object.entries(spec.extraParams)) {
+      properties[name] = schema;
+    }
+    if (spec.extraRequired) required.push(...spec.extraRequired);
+
+    const boundFn = fn.bind(adapter);
+    tools.push({
+      name: `${prefix}_${spec.toolSuffix}`,
+      description: `${spec.description} (${prefix})`,
+      parameters: { type: 'object' as const, properties, required },
+      execute: async (args: Record<string, any>) => {
+        const { bot_id, scene_id, ...rest } = args;
+        const methodArgs = buildMethodArgs(spec.method, bot_id, scene_id, rest);
+        return (boundFn as (...a: any[]) => Promise<any>).apply(adapter, methodArgs);
+      },
+      tags: ['group', 'management', prefix],
+      keywords: spec.keywords,
+      permissionLevel: spec.permissionLevel,
+      scopes: ['group', 'channel'] as ToolScope[],
+      preExecutable: spec.preExecutable,
+    });
+  }
+  return tools;
+}
 
 // ============================================================================
 // 参数映射（method → 有序参数列表）
@@ -208,6 +237,6 @@ export function buildMethodArgs(
     case 'setGroupName':    return [botId, sceneId, rest.name];
     case 'muteAll':         return [botId, sceneId, rest.enable ?? true];
     case 'getGroupInfo':    return [botId, sceneId];
-    default:                return [botId, sceneId, ...Object.values(rest)];
+    default:                return [botId, sceneId, ...(Object.values(rest) as any[])];
   }
 }

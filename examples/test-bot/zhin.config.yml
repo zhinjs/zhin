@@ -47,7 +47,7 @@ console:
   lazyLoad: true
 ai:
   enabled: true
-  defaultProvider: ollama
+  defaultProvider: openai
   session:
     maxHistory: 20
     expireMs: 3600000
@@ -60,7 +60,9 @@ ai:
       baseUrl: ${OPENAI_BASE_URL}
       apiKey: ${OPENAI_API_KEY}
       models:
-        - gpt-5
+        - deepseek-ai/deepseek-v3.1
+        - z-ai/glm4.7
+        - minimaxai/minimax-m2.5
   sessions:
     useDatabase: true
     maxHistory: 50

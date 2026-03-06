@@ -10,6 +10,10 @@ import {
     segment,
     Tool,
     ToolPermissionLevel,
+    createGroupManagementTools,
+    GROUP_MANAGEMENT_SKILL_KEYWORDS,
+    GROUP_MANAGEMENT_SKILL_TAGS,
+    type IGroupManagement,
 } from "zhin.js";
 import type { Context } from 'koa';
 import axios, { AxiosInstance } from 'axios';
@@ -839,11 +843,19 @@ class LarkAdapter extends Adapter<LarkBot> {
 
     async start(): Promise<void> {
         this.registerLarkPlatformTools();
+        const groupTools = createGroupManagementTools(this as unknown as IGroupManagement, this.name);
+        groupTools.forEach((t) => this.addTool(t));
+        this.declareSkill({
+            description:
+                '飞书/Lark 群管理：踢人、禁言、设管理员、改群名、查成员等。仅有昵称时请先 list_members 获取 user_id 再操作。',
+            keywords: GROUP_MANAGEMENT_SKILL_KEYWORDS,
+            tags: GROUP_MANAGEMENT_SKILL_TAGS,
+        });
         await super.start();
     }
 
     /**
-     * 注册飞书平台特有工具（标准群管操作已通过覆写方法自动注册）
+     * 注册飞书平台特有工具（获取用户、设管等）
      */
     private registerLarkPlatformTools(): void {
         // 获取用户信息工具

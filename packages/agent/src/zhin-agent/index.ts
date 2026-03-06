@@ -291,7 +291,7 @@ export class ZhinAgent {
           if (s.length > 500) {
             s = s.slice(0, 500) + `\n... (truncated, ${s.length} chars total)`;
           }
-          preData += `\n${s}`;
+          preData += `\n【${r.value.name}】${s}`;
         }
       }
       logger.debug(`预执行耗时: ${(now() - tPre).toFixed(0)}ms`);
@@ -306,9 +306,10 @@ export class ZhinAgent {
       const tLLM = now();
       const prompt = `${personaEnhanced}
 
+以下是根据用户问题自动获取的实时数据：
 ${preData}
 
-请直接基于以上数据回答用户问题，不要提及数据来源或工具名称。用自然流畅的中文组织信息，突出重点。`;
+请基于以上数据，用自然流畅的中文回答用户问题。突出重点，适当使用 emoji。`;
       logger.info(`[System Prompt] fast-path: ${prompt.length} chars ≈ ${Math.ceil(prompt.length / 2.5)} tokens`);
       reply = await this.streamChatWithHistory(content, prompt, historyMessages, onChunk);
       logger.info(`[快速路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, LLM=${(now() - tLLM).toFixed(0)}ms, 总=${(now() - t0).toFixed(0)}ms`);
@@ -327,7 +328,7 @@ ${preData}
       });
       const systemPrompt = `${richPrompt}
 ${contextHint}
-${preData ? `\n${preData}\n` : ''}`;
+${preData ? `\n已获取数据：${preData}\n` : ''}`;
 
       const promptChars = systemPrompt.length;
       const estimatedTokens = Math.ceil(promptChars / 2.5);
@@ -478,7 +479,8 @@ ${preData ? `\n${preData}\n` : ''}`;
       return '技能已激活但未能完成后续操作，请重试或换一种方式描述你的需求。';
     }
     return userFacing.map(tc => {
-      return typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2);
+      const s = typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2);
+      return `【${tc.tool}】\n${s}`;
     }).join('\n\n');
   }
 
