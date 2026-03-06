@@ -1,5 +1,11 @@
 # @zhin.js/plugin-html-renderer
 
+## 0.0.23
+
+### Patch Changes
+
+- zhin.js@1.0.45
+
 ## 0.0.22
 
 ### Patch Changes
