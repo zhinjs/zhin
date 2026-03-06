@@ -1,5 +1,13 @@
 # @zhin.js/agent
 
+## 0.0.7
+
+### Patch Changes
+
+- 4f2fb55: fix: agent bug
+  - @zhin.js/core@1.0.44
+  - @zhin.js/ai@1.0.5
+
 ## 0.0.6
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @zhin.js/ai
 
+## 1.0.5
+
+### Patch Changes
+
+- @zhin.js/logger@0.1.28
+
 ## 1.0.4
 
 ### Patch Changes
