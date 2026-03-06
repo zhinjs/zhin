@@ -1,5 +1,17 @@
 # @zhin.js/core
 
+## 1.0.45
+
+### Patch Changes
+
+- 63b83ef: fix: 自定义 schema
+- Updated dependencies [63b83ef]
+  - @zhin.js/ai@1.0.6
+  - @zhin.js/database@1.0.32
+  - @zhin.js/logger@0.1.29
+  - @zhin.js/schema@1.0.29
+  - @zhin.js/kernel@0.0.6
+
 ## 1.0.44
 
 ### Patch Changes
