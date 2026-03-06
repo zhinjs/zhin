@@ -11,9 +11,11 @@ import { SECTION_SEP, HISTORY_CONTEXT_MARKER, CURRENT_MESSAGE_MARKER } from './c
 import type { ChatMessage } from '@zhin.js/core';
 import { getFileMemoryContext } from '../bootstrap.js';
 
-export function contentToText(c: string | ContentPart[]): string {
+export function contentToText(c: string | ContentPart[] | ContentPart | null | undefined): string {
+  if (c == null) return '';
   if (typeof c === 'string') return c;
-  return (c as ContentPart[]).map(p => (p.type === 'text' ? p.text : '')).join('');
+  const parts = Array.isArray(c) ? c : [c as ContentPart];
+  return parts.map(p => (p?.type === 'text' ? p.text : '')).join('');
 }
 
 export function buildUserMessageWithHistory(history: ChatMessage[], currentContent: string): string {
