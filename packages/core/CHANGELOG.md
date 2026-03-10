@@ -1,5 +1,17 @@
 # @zhin.js/core
 
+## 1.0.48
+
+### Patch Changes
+
+- 7d09e5e: fix: 代码安全漏洞修复
+- Updated dependencies [7d09e5e]
+  - @zhin.js/kernel@0.0.9
+  - @zhin.js/database@1.0.35
+  - @zhin.js/logger@0.1.32
+  - @zhin.js/schema@1.0.32
+  - @zhin.js/ai@1.0.9
+
 ## 1.0.47
 
 ### Patch Changes
