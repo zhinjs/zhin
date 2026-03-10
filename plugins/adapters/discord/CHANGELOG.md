@@ -1,5 +1,13 @@
 # @zhin.js/adapter-discord
 
+## 1.0.51
+
+### Patch Changes
+
+- Updated dependencies [de3e352]
+  - zhin.js@1.0.47
+  - @zhin.js/http@1.0.41
+
 ## 1.0.50
 
 ### Patch Changes

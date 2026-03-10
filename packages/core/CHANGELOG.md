@@ -1,5 +1,16 @@
 # @zhin.js/core
 
+## 1.0.47
+
+### Patch Changes
+
+- de3e352: fix: 新增 request 和 notice 抽象,新增消息过滤支持
+  - @zhin.js/database@1.0.34
+  - @zhin.js/logger@0.1.31
+  - @zhin.js/schema@1.0.31
+  - @zhin.js/ai@1.0.8
+  - @zhin.js/kernel@0.0.8
+
 ## 1.0.46
 
 ### Patch Changes
