@@ -3,7 +3,6 @@ import {
   compiler,
   evaluate,
   execute,
-  isExpressionSafe,
   remove,
   isEmpty,
   Time,
@@ -54,41 +53,56 @@ describe('Template Security', () => {
   })
 })
 
-describe('Sandbox Escape Prevention', () => {
-  it('should block this.constructor.constructor escape (CVE-like prototype chain)', () => {
-    // This is the exact attack vector: this.constructor.constructor('return process')().exit(1)
+describe('Sandbox Escape Prevention (Proxy-based)', () => {
+  it('should return safe process even through VM constructor chain (no exit/kill)', () => {
+    // this.constructor.constructor leads to VM's Function (not host Function),
+    // so the created function accesses VM globals which only has our safe process
     const result = evaluate("this.constructor.constructor('return process')()", {})
-    expect(result).toBeUndefined()
+    expect(result).toBeDefined()
+    expect(evaluate("typeof this.constructor.constructor('return process')().exit", {})).toBe('undefined')
+    expect(evaluate("typeof this.constructor.constructor('return process')().kill", {})).toBe('undefined')
   })
 
   it('should block constructor access in templates', () => {
     const result = compiler("${this.constructor.constructor('return process')().exit(1)}", {})
-    // Blocked expression evaluates to undefined, so compiler replaces with 'undefined'
     expect(result).toBe('undefined')
   })
 
-  it('should block __proto__ access', () => {
-    expect(evaluate('this.__proto__', {})).toBeUndefined()
-    expect(isExpressionSafe('this.__proto__')).toBe(false)
+  it('should block constructor access on HOST objects via Proxy', () => {
+    // Math is a host object — Proxy blocks .constructor to prevent host Function escape
+    expect(evaluate('Math.constructor', { Math })).toBeUndefined()
+    expect(evaluate('Math.prototype', { Math })).toBeUndefined()
+    expect(evaluate('Math.__proto__', { Math })).toBeUndefined()
   })
 
-  it('should block prototype access', () => {
-    expect(evaluate('Object.prototype', {})).toBeUndefined()
-    expect(isExpressionSafe('Object.prototype')).toBe(false)
+  it('should block string-concatenation bypass on host objects', () => {
+    // This bypasses regex-based blocklists, but Proxy catches it at engine level
+    expect(evaluate("var a='constr',b='uctor';Math[a+b]", { Math })).toBeUndefined()
+    expect(evaluate("Math['const'+'ructor']", { Math })).toBeUndefined()
+    expect(evaluate("var p='__proto__';Math[p]", { Math })).toBeUndefined()
   })
 
-  it('should block Function constructor', () => {
-    expect(evaluate("Function('return process')()", {})).toBeUndefined()
-    expect(isExpressionSafe("Function('return process')()")).toBe(false)
+  it('should block bracket notation access on host objects', () => {
+    expect(evaluate("Math['constructor']", { Math })).toBeUndefined()
+    expect(evaluate("Math['__proto__']", { Math })).toBeUndefined()
+    expect(evaluate("Math['prototype']", { Math })).toBeUndefined()
   })
 
-  it('should block eval calls', () => {
-    expect(evaluate("eval('process.exit(1)')", {})).toBeUndefined()
-    expect(isExpressionSafe("eval('process.exit(1)')")).toBe(false)
+  it('should block chained constructor escape through host objects', () => {
+    // Math.constructor.constructor gives host Function — must be blocked by Proxy
+    expect(evaluate("Math.constructor.constructor('return process')()", { Math })).toBeUndefined()
   })
 
-  it('should block constructor in execute()', () => {
-    expect(() => execute("return this.constructor.constructor('return process')()", {})).toThrow('Expression contains blocked patterns')
+  it('should block Object.getPrototypeOf on proxied host objects', () => {
+    // getPrototypeOf trap returns null for proxied objects
+    expect(evaluate('Object.getPrototypeOf(obj)', { obj: { a: 1 } })).toBeNull()
+  })
+
+  it('should still allow normal host object methods', () => {
+    expect(evaluate('Math.sqrt(16)', { Math })).toBe(4)
+    expect(evaluate('Math.max(1, 2, 3)', { Math })).toBe(3)
+    expect(evaluate('Math.PI', { Math })).toBeCloseTo(3.14159)
+    expect(evaluate('JSON.stringify({a:1})', { JSON })).toBe('{"a":1}')
   })
 
   it('should still allow normal property access', () => {
@@ -98,8 +112,6 @@ describe('Sandbox Escape Prevention', () => {
   })
 
   it('should not leak real process.exit through sandbox', () => {
-    // Even if expression validation is somehow bypassed,
-    // the sandbox should use Object.create(null) preventing prototype traversal
     const result = evaluate('typeof process.exit', {})
     expect(result).toBe('undefined')
   })
@@ -113,24 +125,78 @@ describe('Sandbox Escape Prevention', () => {
     expect(evaluate('process.version', {})).toBe(process.version)
     expect(evaluate('process.pid', {})).toBe(process.pid)
   })
-})
 
-describe('isExpressionSafe', () => {
-  it('should allow safe expressions', () => {
-    expect(isExpressionSafe('name')).toBe(true)
-    expect(isExpressionSafe('user.age')).toBe(true)
-    expect(isExpressionSafe('Math.max(1, 2)')).toBe(true)
-    expect(isExpressionSafe('1 + 2')).toBe(true)
-    expect(isExpressionSafe('a > b ? "yes" : "no"')).toBe(true)
+  it('should block escape through nested proxied objects', () => {
+    const obj = { inner: { deep: { value: 42 } } }
+    expect(evaluate('obj.inner.deep.value', { obj })).toBe(42)
+    expect(evaluate('obj.constructor', { obj })).toBeUndefined()
+    expect(evaluate('obj.inner.constructor', { obj })).toBeUndefined()
+    expect(evaluate('obj.inner.deep.constructor', { obj })).toBeUndefined()
   })
 
-  it('should block dangerous expressions', () => {
-    expect(isExpressionSafe('constructor')).toBe(false)
-    expect(isExpressionSafe('this.constructor')).toBe(false)
-    expect(isExpressionSafe('__proto__')).toBe(false)
-    expect(isExpressionSafe('prototype')).toBe(false)
-    expect(isExpressionSafe("Function('code')")).toBe(false)
-    expect(isExpressionSafe("eval('code')")).toBe(false)
+  it('should block Function constructor access via host function objects', () => {
+    const fn = () => 42
+    expect(evaluate('fn()', { fn })).toBe(42)
+    expect(evaluate('fn.constructor', { fn })).toBeUndefined()
+    expect(evaluate('fn.prototype', { fn })).toBeUndefined()
+  })
+
+  it('should block Reflect.getOwnPropertyDescriptor escape', () => {
+    // Without getOwnPropertyDescriptor trap, this leaks host references
+    const fn = function test() {}
+    expect(evaluate(
+      "var d = Reflect.getOwnPropertyDescriptor(fn, 'prototype'); d && d.value && d.value.constructor",
+      { fn }
+    )).toBeUndefined()
+  })
+
+  it('should block Object.getOwnPropertyDescriptor escape', () => {
+    const fn = function test() {}
+    expect(evaluate(
+      "var d = Object.getOwnPropertyDescriptor(fn, 'prototype'); d && d.value && d.value.constructor",
+      { fn }
+    )).toBeUndefined()
+  })
+
+  it('should block Reflect.getOwnPropertyDescriptor on constructor prop', () => {
+    const obj = { a: 1 }
+    // constructor is inherited not own, but verify it returns undefined
+    expect(evaluate(
+      "Reflect.getOwnPropertyDescriptor(obj, 'constructor')",
+      { obj }
+    )).toBeUndefined()
+  })
+
+  it('should proxy values inside descriptors for normal properties', () => {
+    const obj = { inner: { secret: 42 } }
+    // Access normal prop through descriptor — value should be proxied
+    expect(evaluate(
+      "var d = Object.getOwnPropertyDescriptor(obj, 'inner'); d.value.secret",
+      { obj }
+    )).toBe(42)
+    // But constructor should still be blocked on the proxied value
+    expect(evaluate(
+      "var d = Object.getOwnPropertyDescriptor(obj, 'inner'); d.value.constructor",
+      { obj }
+    )).toBeUndefined()
+  })
+
+  it('should block Reflect.get on blocked props (same as dot access)', () => {
+    // Reflect.get on a Proxy triggers the get trap
+    expect(evaluate("Reflect.get(Math, 'constructor')", { Math, Reflect })).toBeUndefined()
+    expect(evaluate("Reflect.get(Math, '__proto__')", { Math, Reflect })).toBeUndefined()
+  })
+
+  it('should neutralize blocked keys in ownKeys/getOwnPropertyDescriptor', () => {
+    const fn = function namedFn() {}
+    // prototype appears in ownKeys (non-configurable, Proxy invariant), but its
+    // value is neutralized by getOwnPropertyDescriptor trap
+    expect(evaluate(
+      "var d = Object.getOwnPropertyDescriptor(fn, 'prototype'); d ? d.value : 'missing'",
+      { fn }
+    )).toBeUndefined()
+    // Normal props still work
+    expect(evaluate("fn.name", { fn })).toBe('namedFn')
   })
 })
 

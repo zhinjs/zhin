@@ -197,11 +197,8 @@ const runCodeTool = defineTool<{ code: string }>({
     }
     
     try {
-      // 使用框架的安全沙箱执行（vm.runInNewContext + 原型链隔离 + 表达式验证）
-      const { execute, isExpressionSafe } = await import('@zhin.js/kernel');
-      if (!isExpressionSafe(code)) {
-        return { error: '代码包含不允许的操作' };
-      }
+      // 使用框架的安全沙箱执行（vm.runInNewContext + Object.create(null) + Proxy 原型链隔离）
+      const { execute } = await import('@zhin.js/kernel');
       const result = execute(`return ${code}`, {});
       
       return {

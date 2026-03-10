@@ -9,28 +9,98 @@ export function getValueWithRuntime(template: string, ctx: Dict) {
 }
 
 /**
- * Pattern that matches dangerous prototype-chain escape attempts.
- * Blocks: constructor, __proto__, prototype, Function, eval
- * This prevents attacks like: this.constructor.constructor('return process')()
+ * Property names that enable prototype-chain escapes.
+ * Blocked at the Proxy level so that no form of access (dot notation,
+ * bracket notation, computed property, string concatenation) can bypass it.
  */
-const BLOCKED_EXPRESSION = /\b(constructor|__proto__|prototype)\b|\bFunction\s*\(|\beval\s*\(/;
+const BLOCKED_PROTO_PROPS: ReadonlySet<string | symbol> = new Set([
+  'constructor',
+  '__proto__',
+  'prototype',
+  '__defineGetter__',
+  '__defineSetter__',
+  '__lookupGetter__',
+  '__lookupSetter__',
+]);
+
+const proxyCache = new WeakMap<object, object>();
 
 /**
- * Check whether an expression is safe to evaluate.
- * Returns false for expressions containing prototype-chain escape patterns.
+ * Wrap a host value in a Proxy that structurally prevents prototype-chain access.
+ * Intercepts ALL property-access vectors: dot/bracket notation, string concatenation,
+ * Reflect.get, Reflect.getOwnPropertyDescriptor, Object.getOwnPropertyDescriptor,
+ * Object.getPrototypeOf, etc.
  */
-export function isExpressionSafe(expr: string): boolean {
-  return !BLOCKED_EXPRESSION.test(expr);
+function createSafeProxy<T>(value: T): T {
+  if (value === null || value === undefined) return value;
+  const type = typeof value;
+  if (type !== 'object' && type !== 'function') return value;
+
+  const obj = value as object;
+  const cached = proxyCache.get(obj);
+  if (cached) return cached as T;
+
+  const handler: ProxyHandler<any> = {
+    get(target, prop) {
+      if (BLOCKED_PROTO_PROPS.has(prop)) return undefined;
+      return createSafeProxy(Reflect.get(target, prop));
+    },
+    has(target, prop) {
+      if (BLOCKED_PROTO_PROPS.has(prop)) return false;
+      return Reflect.has(target, prop);
+    },
+    getPrototypeOf() {
+      return null;
+    },
+    setPrototypeOf() {
+      return false;
+    },
+    getOwnPropertyDescriptor(target, prop) {
+      const desc = Reflect.getOwnPropertyDescriptor(target, prop);
+      if (!desc) return desc;
+      if (BLOCKED_PROTO_PROPS.has(prop)) {
+        // Non-configurable own properties must still be reported (Proxy invariant),
+        // but we neutralize their values to prevent escape.
+        if ('value' in desc) desc.value = undefined;
+        if (desc.get) desc.get = () => undefined;
+        return desc;
+      }
+      // Wrap descriptor values so leaked references are also proxied.
+      if ('value' in desc) desc.value = createSafeProxy(desc.value);
+      if (desc.get) {
+        const originalGet = desc.get;
+        desc.get = function(this: any) { return createSafeProxy(originalGet.call(target)); };
+      }
+      return desc;
+    },
+    ownKeys(target) {
+      // Don't filter: non-configurable own props (e.g. Function.prototype)
+      // MUST appear per Proxy invariant. The get/getOwnPropertyDescriptor traps
+      // already neutralize blocked property values.
+      return Reflect.ownKeys(target);
+    },
+    defineProperty(_target, prop) {
+      // Prevent defining/redefining blocked properties on the proxy.
+      if (BLOCKED_PROTO_PROPS.has(prop)) return false;
+      return false; // Read-only proxy: disallow all mutations.
+    },
+  };
+
+  if (type === 'function') {
+    handler.apply = (target, thisArg, args) => Reflect.apply(target, thisArg, args);
+  }
+
+  const proxy = new Proxy(obj, handler) as T;
+  proxyCache.set(obj, proxy as object);
+  return proxy;
 }
 
 /**
  * Evaluate a single expression in a sandboxed vm context.
  * Unlike `execute`, does NOT wrap in IIFE — the expression value is returned directly.
- * Rejects expressions containing prototype-chain escape patterns.
+ * Host objects are wrapped in Proxy to structurally prevent prototype-chain escapes.
  */
 export const evaluate = <S extends Record<string, unknown>, T = unknown>(exp: string, context: S): T | undefined => {
-  if (!isExpressionSafe(exp)) return undefined;
-
   const script = getOrCompileScript(exp);
   if (!script) return undefined;
 
@@ -62,16 +132,15 @@ function getOrCompileScript(code: string): vm.Script | null {
 
 /**
  * Build a prototype-less sandbox for vm.runInNewContext.
- * Uses Object.create(null) to prevent this.constructor escape.
- * Context values are copied as-is; the isExpressionSafe check
- * blocks prototype-chain traversal (constructor/__proto__/prototype)
- * through any object in the sandbox.
+ * Uses Object.create(null) for the sandbox itself (blocks `this.constructor`),
+ * and wraps all host context values in Proxy (blocks `obj.constructor`,
+ * `obj['__proto__']`, `Object.getPrototypeOf(obj)`, etc.).
  */
 function buildSandbox<S extends Record<string, unknown>>(context: S): Record<string, unknown> {
   const sandbox: Record<string, unknown> = Object.create(null);
 
   for (const [key, value] of Object.entries(context)) {
-    sandbox[key] = value;
+    sandbox[key] = createSafeProxy(value);
   }
 
   const safeProcess: Record<string, unknown> = Object.create(null);
@@ -105,12 +174,10 @@ function buildSandbox<S extends Record<string, unknown>>(context: S): Record<str
 /**
  * Execute a code block in a sandboxed vm context.
  * Supports `return` statements by wrapping in an IIFE.
- * Rejects code containing prototype-chain escape patterns.
+ * Host objects are wrapped in Proxy to structurally prevent prototype-chain escapes.
  * Throws on compilation or runtime errors.
  */
 export const execute = <S extends Record<string, unknown>, T = unknown>(code: string, context: S): T => {
-  if (!isExpressionSafe(code)) throw new Error('Expression contains blocked patterns');
-
   const wrapped = `(function(){${code}})()`;
   const script = getOrCompileScript(wrapped);
   if (!script) throw new SyntaxError(`Failed to compile: ${code.slice(0, 80)}`);
