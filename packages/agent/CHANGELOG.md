@@ -1,5 +1,15 @@
 # @zhin.js/agent
 
+## 0.0.9
+
+### Patch Changes
+
+- 7394603: fix: cli 优化, windows 用户体验优化
+  fix: 新增消息过滤系统
+- Updated dependencies [7394603]
+  - @zhin.js/ai@1.0.7
+  - @zhin.js/core@1.0.46
+
 ## 0.0.8
 
 ### Patch Changes

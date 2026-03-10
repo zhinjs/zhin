@@ -1,5 +1,39 @@
 # test-bot
 
+## 0.1.48
+
+### Patch Changes
+
+- 7394603: fix: cli 优化, windows 用户体验优化
+  fix: 新增消息过滤系统
+- Updated dependencies [7394603]
+  - zhin.js@1.0.46
+  - @zhin.js/adapter-icqq@1.0.56
+  - @zhin.js/adapter-sandbox@1.0.55
+  - @zhin.js/adapter-dingtalk@1.0.35
+  - @zhin.js/adapter-discord@1.0.50
+  - @zhin.js/adapter-email@0.1.34
+  - @zhin.js/adapter-github@0.1.15
+  - @zhin.js/adapter-kook@1.0.47
+  - @zhin.js/adapter-lark@1.0.51
+  - @zhin.js/adapter-onebot11@1.0.51
+  - @zhin.js/adapter-qq@1.0.47
+  - @zhin.js/adapter-slack@1.0.32
+  - @zhin.js/adapter-telegram@1.0.32
+  - @zhin.js/adapter-wechat-mp@0.1.35
+  - @zhin.js/console@1.0.44
+  - @zhin.js/http@1.0.40
+  - @zhin.js/mcp@1.0.29
+  - @zhin.js/plugin-60s@0.0.3
+  - @zhin.js/plugin-checkin@0.0.0
+  - @zhin.js/plugin-html-renderer@0.0.24
+  - @zhin.js/plugin-music@0.0.37
+  - @zhin.js/plugin-repeater@0.0.0
+  - @zhin.js/plugin-rss@0.0.1
+  - @zhin.js/sensitive-filter@0.0.32
+  - @zhin.js/plugin-stats@0.0.0
+  - @zhin.js/plugin-teach@0.0.0
+
 ## 0.1.47
 
 ### Patch Changes

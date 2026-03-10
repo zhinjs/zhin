@@ -1,5 +1,12 @@
 # create-zhin-app
 
+## 1.0.32
+
+### Patch Changes
+
+- 7394603: fix: cli 优化, windows 用户体验优化
+  fix: 新增消息过滤系统
+
 ## 1.0.31
 
 ### Patch Changes
