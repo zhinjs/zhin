@@ -1,5 +1,13 @@
 # @zhin.js/kernel
 
+## 0.0.9
+
+### Patch Changes
+
+- 7d09e5e: fix: 代码安全漏洞修复
+  - @zhin.js/logger@0.1.32
+  - @zhin.js/schema@1.0.32
+
 ## 0.0.8
 
 ### Patch Changes
