@@ -17,8 +17,18 @@ export const startCommand = new Command('start')
       
       // 检查是否是Zhin项目
       if (!isZhinProject(cwd)) {
-        logger.error('当前目录不是Zhin项目');
-        logger.info('请在Zhin项目根目录运行此命令');
+        logger.error('❌ 当前目录不是Zhin项目');
+        logger.info('💡 请在Zhin项目根目录运行此命令');
+        logger.info('   或使用 "zhin new <project-name>" 创建新项目');
+        process.exit(1);
+      }
+
+      // 检查依赖是否完整
+      const nodeModulesPath = path.join(cwd, 'node_modules');
+      if (!fs.existsSync(nodeModulesPath)) {
+        logger.error('❌ 依赖未安装或不完整');
+        logger.info('💡 请运行以下命令以安装依赖：');
+        logger.info('   pnpm install');
         process.exit(1);
       }
       
@@ -40,11 +50,11 @@ export const startCommand = new Command('start')
         }
         
         // 选择运行时和参数
-        const runtime = options.bun ? 'bun' : 'tsx';
+        const runtime = options.bun ? 'bun' : 'node';
         // 使用 -e 参数启动 zhin.js/setup
         const args = options.bun 
           ? ['-e', "import('zhin.js/setup')"]
-          : ['--expose-gc', '-e', "import('zhin.js/setup')"];
+          : ['--import', 'tsx/esm', '--expose-gc', '-e', "import('zhin.js/setup')"];
         return startProcess(runtime, args, {
           cwd,
           env,

@@ -243,7 +243,7 @@ export class ContextManager {
     if (summaries.length > 0) {
       chatMessages.push({
         role: 'system',
-        content: `以下是之前对话的总结：\n\n${summaries.join('\n\n---\n\n')}\n\n请基于这些背景信息继续对话。`,
+        content: `Previous conversation summaries:\n\n${summaries.join('\n\n---\n\n')}\n\nUse this as context to continue the conversation.`,
       });
     }
 
@@ -412,19 +412,19 @@ export class ContextManager {
   }
 
   /**
-   * 默认总结提示词
+   * Default summary prompt (English)
    */
   private getDefaultSummaryPrompt(): string {
-    return `你是一个对话总结助手。请将以下对话内容总结为简洁的要点，保留关键信息、人物关系和重要事件。
+    return `You are a conversation summarization assistant. Summarize the following conversation into concise bullet points. Keep key information, people, and important events.
 
-要求：
-1. 使用第三人称描述
-2. 保留重要的人名、事件、决定
-3. 忽略日常寒暄和无意义的对话
-4. 总结应该简洁，不超过 200 字
-5. 如果对话中有明确的结论或决定，务必保留
+Requirements:
+1. Use third person
+2. Keep important names, events, and decisions
+3. Skip small talk and trivial exchanges
+4. Keep the summary under 200 words
+5. If there are clear conclusions or decisions, include them
 
-请直接输出总结内容，不要添加额外的标题或格式。`;
+Output only the summary, no extra title or formatting.`;
   }
 }
 

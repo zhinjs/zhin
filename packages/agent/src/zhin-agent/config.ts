@@ -86,7 +86,7 @@ export interface ZhinAgentConfig {
 }
 
 export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
-  persona: '你是一个友好的中文 AI 助手，擅长使用工具帮助用户解决问题。',
+  persona: 'You are a helpful AI assistant. You can use tools to help the user. Reply in the language specified in [User profile] (key: language or preferred_language), or in the same language as the user\'s message if not set.',
   maxIterations: 5,
   timeout: 60_000,
   preExecTimeout: 10_000,

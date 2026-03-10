@@ -164,7 +164,8 @@ export class UserProfileStore {
   }
 
   /**
-   * 构建用户画像摘要，注入 system prompt
+   * Build user profile summary for system prompt. Keys like "language" or "preferred_language"
+   * define the reply language preference; persona instructions use this for "Reply in the language specified in [User profile]".
    */
   async buildProfileSummary(userId: string): Promise<string> {
     const profile = await this.store.getAll(userId);
@@ -172,7 +173,7 @@ export class UserProfileStore {
     if (entries.length === 0) return '';
 
     const lines = entries.map(([k, v]) => `- ${k}: ${v}`).join('\n');
-    return `[用户画像]\n${lines}`;
+    return `[User profile]\n${lines}`;
   }
 
   dispose(): void {

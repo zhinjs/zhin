@@ -99,15 +99,16 @@ export class Agent {
   }
 
   /**
-   * 默认系统提示词
+   * Default system prompt (English). Reply language is determined by user profile or message language.
    */
   private getDefaultSystemPrompt(): string {
-    return `你是一个智能助手，可以使用工具来帮助用户完成任务。
-请遵循以下原则：
-1. 理解用户的意图，选择合适的工具
-2. 如果需要多个步骤，逐步执行
-3. 清晰地解释你的行动和结果
-4. 如果无法完成任务，诚实地告知用户`;
+    return `You are a helpful assistant and can use tools to complete tasks.
+Follow these principles:
+1. Understand the user's intent and choose appropriate tools
+2. If multiple steps are needed, execute them in order
+3. Explain your actions and results clearly
+4. If a task cannot be completed, say so honestly
+Reply in the language specified in [User profile] (key: language / preferred_language), or in the user's message language if not set.`;
   }
 
   /**
@@ -513,14 +514,14 @@ export class Agent {
               );
               state.messages.push({
                 role: 'tool',
-                content: previous ? JSON.stringify(previous.result) : '结果已获取',
+                content: previous ? JSON.stringify(previous.result) : 'Result received.',
                 tool_call_id: tc.id,
               });
             }
 
             state.messages.push({
               role: 'system',
-              content: '你已经获取了所需的全部信息，请直接用自然语言回答用户，不要再调用工具。',
+              content: 'You have all the information needed. Reply to the user in natural language; do not call more tools.',
             });
 
             continue;
@@ -545,7 +546,7 @@ export class Agent {
           if (allSucceeded && results.length > 0) {
             state.messages.push({
               role: 'system',
-              content: '工具已返回结果。如果信息足够回答用户问题，请直接用自然语言回答，不要重复调用相同工具。',
+              content: 'Tools have returned. If the information is enough to answer the user, reply in natural language; do not call the same tools again.',
             });
           }
 
@@ -591,7 +592,7 @@ export class Agent {
 
         // 没有任何工具结果，提供友好的错误消息
         const fallbackResult: AgentResult = {
-          content: `抱歉，处理过程中遇到了问题：${err.message}。请稍后重试或换个方式提问。`,
+          content: `Something went wrong: ${err.message}. Please try again or rephrase your request.`,
           toolCalls: [],
           usage: state.usage,
           iterations: state.iterations,
@@ -609,9 +610,9 @@ export class Agent {
         const r = typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result);
         return `【${tc.tool}】${r}`;
       }).join('\n');
-      fallbackContent = `处理完成，以下是获取到的信息：\n${toolSummary}`;
+      fallbackContent = `Done. Information retrieved:\n${toolSummary}`;
     } else {
-      fallbackContent = '达到最大处理轮次，任务可能未完全完成。请尝试简化问题后重试。';
+      fallbackContent = 'Max iterations reached; the task may be incomplete. Try simplifying your request and retry.';
     }
 
     const result: AgentResult = {
@@ -755,7 +756,7 @@ export class Agent {
             );
             messages.push({
               role: 'tool_result',
-              content: previous ? JSON.stringify(previous.result) : '结果已获取',
+              content: previous ? JSON.stringify(previous.result) : 'Result received.',
               tool_call_id: tc.id,
             });
           }
@@ -807,7 +808,7 @@ export class Agent {
           );
           messages.push({
             role: 'tool',
-            content: previous ? JSON.stringify(previous.result) : '结果已获取',
+            content: previous ? JSON.stringify(previous.result) : 'Result received.',
             tool_call_id: tc.id,
           });
         }
@@ -833,8 +834,8 @@ export class Agent {
       type: 'done',
       data: {
         content: toolCallHistory.length > 0
-          ? `处理完成，共执行了 ${toolCallHistory.length} 个工具调用。`
-          : '达到最大迭代次数',
+          ? `Done. Executed ${toolCallHistory.length} tool call(s).`
+          : 'Max iterations reached.',
         toolCalls: toolCallHistory,
         usage,
         iterations,

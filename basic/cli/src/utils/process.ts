@@ -71,8 +71,15 @@ export async function startProcess(command: string, args: string[], options:Spaw
       resolve(child);
     });
 
-    child.on('error', (error) => {
-      logger.error(`启动失败: ${error.message}`);
+    child.on('error', (error: any) => {
+      // 检查是否是 Node 模块缺失的错误（tsx 依赖未安装）
+      if (error.code === 'ERR_MODULE_NOT_FOUND' || error.message?.includes('Cannot find module')) {
+        logger.error(`❌ 启动失败: 缺失必要的依赖模块（可能是 tsx）`);
+        logger.info('💡 请运行以下命令以安装或修复依赖：');
+        logger.info('   pnpm install');
+      } else {
+        logger.error(`❌ 启动失败: ${error.message}`);
+      }
       reject(error);
     });
 

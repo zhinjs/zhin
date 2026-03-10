@@ -148,6 +148,28 @@ async function main() {
       }
     }
 
+    // 全局 CLI 安装选项
+    if (options.installGlobalCli === undefined && !options.yes) {
+      console.log('');
+      console.log(chalk.blue('🌍 全局 CLI 安装'));
+      console.log(chalk.gray('这将允许你在任何目录下使用 "zhin" 命令'));
+      
+      const { globalCli } = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'globalCli',
+          message: '是否全局安装 @zhin.js/cli 命令行工具？',
+          default: false
+        }
+      ]);
+      options.installGlobalCli = globalCli;
+    }
+
+    // -y 模式下默认不全局安装
+    if (options.installGlobalCli === undefined) {
+      options.installGlobalCli = false;
+    }
+
     if (!name?.trim()) {
       console.error(chalk.red('项目名称不能为空'));
       process.exit(1);
@@ -230,24 +252,56 @@ async function main() {
     if (options.database?.dialect === 'sqlite') {
       console.log(`  ${chalk.cyan('pnpm approve-builds sqlite3')} ${chalk.gray('# 批准 sqlite3 原生模块构建如遇错误，请检查系统是否已安装C++编译器(g++)')}`);
     }
-    console.log('');
-    console.log(chalk.yellow('开发环境：'));
-    console.log(`  ${chalk.cyan('pnpm dev')} ${chalk.gray('# 开发模式（自动监听，使用 tsx 文件）')}`);
-    console.log('');
-    console.log(chalk.yellow('生产环境：'));
-    console.log(`  ${chalk.cyan('pnpm build')} ${chalk.gray('# 构建客户端代码和所有插件')}`);
-    console.log(`  ${chalk.cyan('pnpm start')} ${chalk.gray('# 前台运行')}`);
-    console.log(`  ${chalk.cyan('pnpm daemon')} ${chalk.gray('# 后台运行（内置守护）')}`);
-    console.log(`  ${chalk.cyan('pnpm stop')} ${chalk.gray('# 停止后台服务')}`);
-    console.log('');
-    console.log(chalk.yellow('PM2 进程管理（推荐生产环境）：'));
-    console.log(`  ${chalk.cyan('pnpm pm2:start')} ${chalk.gray('# 启动 PM2 守护进程')}`);
-    console.log(`  ${chalk.cyan('pnpm pm2:stop')} ${chalk.gray('# 停止服务')}`);
-    console.log(`  ${chalk.cyan('pnpm pm2:restart')} ${chalk.gray('# 重启服务')}`);
-    console.log(`  ${chalk.cyan('pnpm pm2:logs')} ${chalk.gray('# 查看日志')}`);
-    console.log('');
-    console.log(chalk.yellow('插件开发：'));
-    console.log(`  ${chalk.cyan('zhin new <plugin-name>')} ${chalk.gray('# 创建新插件')}`);
+    
+    
+    // 根据是否全局安装 CLI，显示不同的命令
+    if (options.installGlobalCli) {
+      console.log('');
+      console.log(chalk.green('✓ 已为你配置全局 CLI'));
+      console.log(`  ${chalk.cyan('pnpm link')} ${chalk.gray('# 执行一次以链接全局 CLI')}`);
+      console.log('');
+      console.log(chalk.yellow('开发环境：'));
+      console.log(`  ${chalk.cyan('zhin dev')} ${chalk.gray('# 或 pnpm dev - 开发模式（自动监听，支持热重载）')}`);
+      console.log('');
+      console.log(chalk.yellow('生产环境：'));
+      console.log(`  ${chalk.cyan('zhin build')} ${chalk.gray('# 或 pnpm build - 构建客户端代码和所有插件')}`);
+      console.log(`  ${chalk.cyan('zhin start')} ${chalk.gray('# 或 pnpm start - 前台运行')}`);
+      console.log(`  ${chalk.cyan('zhin start --daemon')} ${chalk.gray('# 或 pnpm daemon - 后台运行（内置守护）')}`);
+      console.log(`  ${chalk.cyan('zhin stop')} ${chalk.gray('# 或 pnpm stop - 停止后台服务')}`);
+      console.log('');
+      console.log(chalk.yellow('PM2 进程管理（推荐生产环境）：'));
+      console.log(`  ${chalk.cyan('pnpm pm2:start')} ${chalk.gray('# 启动 PM2 守护进程')}`);
+      console.log(`  ${chalk.cyan('pnpm pm2:stop')} ${chalk.gray('# 停止服务')}`);
+      console.log(`  ${chalk.cyan('pnpm pm2:restart')} ${chalk.gray('# 重启服务')}`);
+      console.log(`  ${chalk.cyan('pnpm pm2:logs')} ${chalk.gray('# 查看日志')}`);
+      console.log('');
+      console.log(chalk.yellow('插件开发：'));
+      console.log(`  ${chalk.cyan('zhin new <plugin-name>')} ${chalk.gray('# 创建新插件')}`);
+    } else {
+      console.log('');
+      console.log(chalk.blue('💡 使用 pnpm 和 npx 运行命令：'));
+      console.log('');
+      console.log(chalk.yellow('开发环境：'));
+      console.log(`  ${chalk.cyan('pnpm dev')} ${chalk.gray('# 或 npx zhin dev - 开发模式（自动监听，支持热重载）')}`);
+      console.log('');
+      console.log(chalk.yellow('生产环境：'));
+      console.log(`  ${chalk.cyan('pnpm build')} ${chalk.gray('# 或 npx zhin build - 构建客户端代码和所有插件')}`);
+      console.log(`  ${chalk.cyan('pnpm start')} ${chalk.gray('# 或 npx zhin start - 前台运行')}`);
+      console.log(`  ${chalk.cyan('pnpm daemon')} ${chalk.gray('# 或 npx zhin start --daemon - 后台运行（内置守护）')}`);
+      console.log(`  ${chalk.cyan('pnpm stop')} ${chalk.gray('# 或 npx zhin stop - 停止后台服务')}`);
+      console.log('');
+      console.log(chalk.yellow('PM2 进程管理（推荐生产环境）：'));
+      console.log(`  ${chalk.cyan('pnpm pm2:start')} ${chalk.gray('# 启动 PM2 守护进程')}`);
+      console.log(`  ${chalk.cyan('pnpm pm2:stop')} ${chalk.gray('# 停止服务')}`);
+      console.log(`  ${chalk.cyan('pnpm pm2:restart')} ${chalk.gray('# 重启服务')}`);
+      console.log(`  ${chalk.cyan('pnpm pm2:logs')} ${chalk.gray('# 查看日志')}`);
+      console.log('');
+      console.log(chalk.yellow('插件开发：'));
+      console.log(`  ${chalk.cyan('npx zhin new <plugin-name>')} ${chalk.gray('# 创建新插件')}`);
+      console.log('');
+      console.log(chalk.gray('💡 后续如需全局安装 CLI，可运行：'));
+      console.log(`  ${chalk.cyan('pnpm link')} ${chalk.gray('# 在项目根目录执行，链接全局 CLI')}`);
+    }
     
     console.log('');
     console.log('📚 相关文档：');

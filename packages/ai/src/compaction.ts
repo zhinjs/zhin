@@ -230,28 +230,28 @@ async function generateSummary(
   customInstructions?: string,
 ): Promise<string> {
   const conversation = messages.map(m => {
-    const role = m.role === 'user' ? '用户' : m.role === 'assistant' ? '助手' : '系统';
+    const role = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Assistant' : 'System';
     const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
     return `[${role}] ${content}`;
   }).join('\n');
 
-  let systemPrompt = `你是一个对话摘要助手。请将以下对话压缩为简洁的摘要，保留：
-- 关键决定和结论
-- 未完成的 TODO 和待解决的问题
-- 重要的用户偏好和约束
-- 讨论的核心主题
+  let systemPrompt = `You are a conversation summarization assistant. Compress the following conversation into a concise summary. Keep:
+- Key decisions and conclusions
+- Unfinished TODOs and open questions
+- Important user preferences and constraints
+- Core topics discussed
 
-摘要应该简洁但信息量大，便于后续对话能快速了解上下文。`;
+The summary should be brief but informative so that later turns can quickly recover context.`;
 
   if (customInstructions) {
-    systemPrompt += `\n\n额外要求：${customInstructions}`;
+    systemPrompt += `\n\nAdditional instructions: ${customInstructions}`;
   }
 
   let userContent = '';
   if (previousSummary) {
-    userContent += `之前的摘要：\n${previousSummary}\n\n`;
+    userContent += `Previous summary:\n${previousSummary}\n\n`;
   }
-  userContent += `新的对话内容：\n${conversation}\n\n请生成更新后的完整摘要。`;
+  userContent += `New conversation:\n${conversation}\n\nGenerate the updated full summary.`;
 
   try {
     const response = await provider.chat({

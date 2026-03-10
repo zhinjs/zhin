@@ -12,6 +12,13 @@
     "build": "tsc && zhin-console build",
     "stop": "zhin stop"
   },
+  "_scripts-info": {
+    "dev": "启动开发服务器（推荐首次使用），支持热重载。访问 http://localhost:8086",
+    "start": "生产环境启动，不支持热重载",
+    "daemon": "后台守护进程启动（Linux/macOS），子进程异常会自动重启",
+    "build": "编译 TypeScript 并构建 Web 控制台",
+    "stop": "停止守护进程"
+  },
   "dependencies": {
     "@zhin.js/adapter-dingtalk": "workspace:*",
     "@zhin.js/adapter-discord": "workspace:*",

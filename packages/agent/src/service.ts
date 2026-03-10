@@ -89,7 +89,7 @@ export class AIService {
     const { platform, senderId, sceneId } = context;
     const sessionId = SessionManager.generateId(platform || '', senderId || '', sceneId);
     const allTools = this.collectAllToolsWithExternal(tools);
-    const baseSystemPrompt = '你是一个友好的中文 AI 助手，请始终使用中文回复。';
+    const baseSystemPrompt = 'You are a helpful AI assistant. Reply in the language specified in [User profile] (key: language / preferred_language), or in the user\'s message language if not set.';
 
     if (allTools.length === 0) {
       return this.finishAndSave(sessionId, content, baseSystemPrompt, sceneId);
@@ -142,14 +142,14 @@ export class AIService {
     let finalResponse: string;
 
     if (paramTools.length === 0 && preExecutedData) {
-      const singleShotPrompt = `你是一个友好的中文 AI 助手。\n\n${preExecutedData}\n\n请直接基于以上数据回答用户问题，不要提及数据来源或工具名称。用自然流畅的中文组织信息，突出重点。`;
+      const singleShotPrompt = `You are a helpful AI assistant. Reply in the language specified in [User profile] (key: language / preferred_language), or in the user's message language if not set.\n\nPre-fetched data:\n${preExecutedData}\n\nAnswer the user's question based on the data above. Do not mention data sources or tool names. Summarize clearly and highlight key information.`;
       finalResponse = await this.simpleChat(content, singleShotPrompt);
     } else {
-      const agentSystemPrompt = `你是一个友好的中文 AI 助手。
-${preExecutedData ? `\n${preExecutedData}\n` : ''}
-## 关键要求
-- 调用工具后直接基于结果给出完整中文回答，不要提及工具名称或数据来源
-- 用自然语言总结，突出关键信息`;
+      const agentSystemPrompt = `You are a helpful AI assistant. Reply in the language specified in [User profile] (key: language / preferred_language), or in the user's message language if not set.
+${preExecutedData ? `\nPre-fetched data:\n${preExecutedData}\n` : ''}
+## Requirements
+- After calling tools, give a complete answer based on the results; do not mention tool names or data sources
+- Summarize in natural language and highlight key information`;
 
       const agent = this.createAgent({
         systemPrompt: agentSystemPrompt,
@@ -184,7 +184,7 @@ ${preExecutedData ? `\n${preExecutedData}\n` : ''}
   }
 
   private formatToolCallsFallback(toolCalls: { tool: string; args: any; result: any }[]): string {
-    if (toolCalls.length === 0) return '处理完成。';
+    if (toolCalls.length === 0) return 'Done.';
     return toolCalls.map(tc => {
       return typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2);
     }).join('\n\n');

@@ -306,10 +306,10 @@ export class ZhinAgent {
       const tLLM = now();
       const prompt = `${personaEnhanced}
 
-以下是根据用户问题自动获取的实时数据：
+Pre-fetched data (from user's question):
 ${preData}
 
-请基于以上数据，用自然流畅的中文回答用户问题。突出重点，适当使用 emoji。`;
+Answer the user's question based on the data above. Be clear and concise; use emoji when appropriate.`;
       logger.info(`[System Prompt] fast-path: ${prompt.length} chars ≈ ${Math.ceil(prompt.length / 2.5)} tokens`);
       reply = await this.streamChatWithHistory(content, prompt, historyMessages, onChunk);
       logger.info(`[快速路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, LLM=${(now() - tLLM).toFixed(0)}ms, 总=${(now() - t0).toFixed(0)}ms`);
@@ -328,7 +328,7 @@ ${preData}
       });
       const systemPrompt = `${richPrompt}
 ${contextHint}
-${preData ? `\n已获取数据：${preData}\n` : ''}`;
+${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
 
       const promptChars = systemPrompt.length;
       const estimatedTokens = Math.ceil(promptChars / 2.5);
@@ -473,7 +473,7 @@ ${preData ? `\n已获取数据：${preData}\n` : ''}`;
   }
 
   private fallbackFormat(toolCalls: { tool: string; args: any; result: any }[]): string {
-    if (toolCalls.length === 0) return '处理完成。';
+    if (toolCalls.length === 0) return 'Done.';
     const userFacing = toolCalls.filter(tc => tc.tool !== 'activate_skill');
     if (userFacing.length === 0) {
       return '技能已激活但未能完成后续操作，请重试或换一种方式描述你的需求。';

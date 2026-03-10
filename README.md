@@ -31,6 +31,8 @@ pnpm dev          # 开发模式（热重载）
 
 访问 Web 控制台：`http://localhost:8086`
 
+> **Windows 用户注意** 📌：如果首次初始化遇到问题，请参考 [Windows 初始化指南](./docs/essentials/windows-setup.md)，包含详细的排查步骤。
+
 ### 贡献者（开发框架本身）
 
 ```bash

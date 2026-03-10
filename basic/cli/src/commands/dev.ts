@@ -15,8 +15,17 @@ export const devCommand = new Command('dev')
 
       // 检查是否是Zhin项目
       if (!isZhinProject(cwd)) {
-        logger.error('当前目录不是Zhin项目');
-        logger.info('请在Zhin项目根目录运行此命令，或使用 zhin init 初始化项目');
+        logger.error('❌ 当前目录不是Zhin项目');
+        logger.info('💡 请在Zhin项目根目录运行此命令，或使用 "zhin new <project-name>" 创建新项目');
+        process.exit(1);
+      }
+
+      // 检查依赖是否完整
+      const nodeModulesPath = path.join(cwd, 'node_modules');
+      if (!fs.existsSync(nodeModulesPath)) {
+        logger.error('❌ 依赖未安装或不完整');
+        logger.info('💡 请运行以下命令以安装依赖：');
+        logger.info('   pnpm install');
         process.exit(1);
       }
 

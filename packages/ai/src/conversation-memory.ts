@@ -500,11 +500,11 @@ export class ConversationMemory {
       messages: [
         {
           role: 'system',
-          content: '你是一个话题分析助手。判断用户最新发送的消息相比之前的消息，是否切换到了一个全新的话题。只回答一个字：是 或 否。',
+          content: 'You are a topic-analysis assistant. Decide whether the user\'s latest message has switched to a completely new topic compared to the previous messages. Reply with exactly one word: yes or no.',
         },
         {
           role: 'user',
-          content: `之前的消息：\n${recentText}\n\n最新消息：\n${currentMessage}`,
+          content: `Previous messages:\n${recentText}\n\nLatest message:\n${currentMessage}`,
         },
       ],
       temperature: 0.1,
@@ -512,8 +512,9 @@ export class ConversationMemory {
 
     const raw = response.choices[0]?.message?.content;
     const content = (typeof raw === 'string' ? raw : '').trim();
-    // 解析回答：包含"是"→ 切换，包含"否"或其他 → 未切换
-    return content.includes('是') && !content.includes('否');
+    // Parse: "yes" → switched, "no" or other → not switched
+    const lower = content.toLowerCase();
+    return lower.includes('yes') && !lower.includes('no');
   }
 
   /**
@@ -679,8 +680,8 @@ export class ConversationMemory {
         {
           role: 'system',
           content: parentSummary
-            ? '你是一个对话摘要助手。请将「之前的摘要」和「最近的对话记录」合并为一段新的综合摘要（150-300字）。保留关键信息、用户偏好和重要结论，让新摘要完整覆盖所有历史。只输出摘要内容，不要添加任何前缀。'
-            : '你是一个对话摘要助手。请将以下对话压缩为一段简洁的中文摘要（100-200字），保留关键信息、用户偏好和重要结论。只输出摘要内容，不要添加任何前缀。',
+            ? 'You are a conversation summarization assistant. Merge "previous summary" and "recent conversation" into one new summary (150-300 words). Keep key information, user preferences, and important conclusions; the summary should cover all history. Output only the summary, no prefix.'
+            : 'You are a conversation summarization assistant. Compress the following conversation into a concise summary (100-200 words). Keep key information, user preferences, and important conclusions. Output only the summary, no prefix.',
         },
         { role: 'user', content: userContent },
       ],
