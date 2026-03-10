@@ -6,6 +6,8 @@ export * from './command.js'
 export * from './component.js'
 export * from './adapter.js'
 export * from './message.js'
+export * from './notice.js'
+export * from './request.js'
 export * from './prompt.js'
 // Models
 export * from './models/system-log.js'

@@ -7,6 +7,19 @@ import {
   MessageElem,
   MemberInfo,
   GroupRole,
+  MemberIncreaseEvent,
+  MemberDecreaseEvent,
+  GroupRecallEvent,
+  GroupAdminEvent,
+  GroupMuteEvent,
+  GroupTransferEvent,
+  GroupPokeEvent,
+  FriendRecallEvent,
+  FriendPokeEvent,
+  FriendIncreaseEvent,
+  FriendRequestEvent,
+  GroupRequestEvent,
+  GroupInviteEvent,
 } from "@icqqjs/icqq";
 import path from "path";
 import {
@@ -23,6 +36,8 @@ import {
   ToolPermissionLevel,
   MessageCommand,
   AdapterMessage,
+  Notice,
+  Request,
   createGroupManagementTools,
   GROUP_MANAGEMENT_SKILL_KEYWORDS,
   GROUP_MANAGEMENT_SKILL_TAGS,
@@ -107,6 +122,21 @@ export class IcqqBot
 
   async $connect(): Promise<void> {
     this.on("message", this.handleIcqqMessage.bind(this));
+    // 监听通知事件
+    this.on("notice.group.increase", (e: MemberIncreaseEvent) => this.handleGroupNotice(e, 'group_member_increase', 'increase'));
+    this.on("notice.group.decrease", (e: MemberDecreaseEvent) => this.handleGroupNotice(e, 'group_member_decrease', 'decrease'));
+    this.on("notice.group.recall", (e: GroupRecallEvent) => this.handleGroupNotice(e, 'group_recall', 'recall'));
+    this.on("notice.group.admin", (e: GroupAdminEvent) => this.handleGroupNotice(e, 'group_admin_change', 'admin'));
+    this.on("notice.group.ban", (e: GroupMuteEvent) => this.handleGroupNotice(e, 'group_ban', 'ban'));
+    this.on("notice.group.transfer", (e: GroupTransferEvent) => this.handleGroupNotice(e, 'group_transfer', 'transfer'));
+    this.on("notice.group.poke", (e: GroupPokeEvent) => this.handleGroupNotice(e, 'group_poke', 'poke'));
+    this.on("notice.friend.increase", (e: FriendIncreaseEvent) => this.handleFriendNotice(e, 'friend_add', 'increase'));
+    this.on("notice.friend.recall", (e: FriendRecallEvent) => this.handleFriendNotice(e, 'friend_recall', 'recall'));
+    this.on("notice.friend.poke", (e: FriendPokeEvent) => this.handleFriendNotice(e, 'friend_poke', 'poke'));
+    // 监听请求事件
+    this.on("request.friend.add", (e: FriendRequestEvent) => this.handleFriendRequest(e));
+    this.on("request.group.add", (e: GroupRequestEvent) => this.handleGroupRequest(e, 'group_add'));
+    this.on("request.group.invite", (e: GroupInviteEvent) => this.handleGroupRequest(e, 'group_invite'));
     this.on("system.login.device", async (e: unknown) => {
       await this.sendSmsCode();
       plugin.logger.info("请输入短信验证码:");
@@ -220,6 +250,72 @@ export class IcqqBot
     }
 
     return senderInfo;
+  }
+
+  // ==================== 通知/请求事件处理 ====================
+
+  private handleGroupNotice(event: any, type: string, subType: string): void {
+    const notice = Notice.from(event, {
+      $id: `${event.time || Date.now()}_${type}_${event.group_id}`,
+      $adapter: 'icqq',
+      $bot: this.$config.name,
+      $type: type,
+      $subType: subType,
+      $channel: { id: event.group_id?.toString() || '', type: 'group' },
+      $operator: event.operator_id ? { id: event.operator_id.toString(), name: event.operator_id.toString() } : undefined,
+      $target: event.user_id ? { id: event.user_id.toString(), name: event.user_id.toString() } : (event.target_id ? { id: event.target_id.toString(), name: event.target_id.toString() } : undefined),
+      $timestamp: event.time || Math.floor(Date.now() / 1000),
+    });
+    this.adapter.emit('notice.receive', notice);
+  }
+
+  private handleFriendNotice(event: any, type: string, subType: string): void {
+    const notice = Notice.from(event, {
+      $id: `${event.time || Date.now()}_${type}_${event.user_id}`,
+      $adapter: 'icqq',
+      $bot: this.$config.name,
+      $type: type,
+      $subType: subType,
+      $channel: { id: event.user_id?.toString() || '', type: 'private' },
+      $operator: event.operator_id ? { id: event.operator_id.toString(), name: event.operator_id.toString() } : undefined,
+      $target: event.user_id ? { id: event.user_id.toString(), name: event.user_id.toString() } : undefined,
+      $timestamp: event.time || Math.floor(Date.now() / 1000),
+    });
+    this.adapter.emit('notice.receive', notice);
+  }
+
+  private handleFriendRequest(event: FriendRequestEvent): void {
+    const request = Request.from(event, {
+      $id: event.flag || `${event.time}_friend_add_${event.user_id}`,
+      $adapter: 'icqq',
+      $bot: this.$config.name,
+      $type: 'friend_add',
+      $subType: event.sub_type,
+      $channel: { id: event.user_id.toString(), type: 'private' },
+      $sender: { id: event.user_id.toString(), name: event.nickname || event.user_id.toString() },
+      $comment: event.comment,
+      $timestamp: event.time || Math.floor(Date.now() / 1000),
+      $approve: async () => { await event.approve(true); },
+      $reject: async () => { await event.approve(false); },
+    });
+    this.adapter.emit('request.receive', request);
+  }
+
+  private handleGroupRequest(event: GroupRequestEvent | GroupInviteEvent, type: string): void {
+    const request = Request.from(event, {
+      $id: event.flag || `${event.time}_${type}_${event.user_id}`,
+      $adapter: 'icqq',
+      $bot: this.$config.name,
+      $type: type,
+      $subType: event.sub_type,
+      $channel: { id: event.group_id.toString(), type: 'group' },
+      $sender: { id: event.user_id.toString(), name: event.nickname || event.user_id.toString() },
+      $comment: 'comment' in event ? event.comment : undefined,
+      $timestamp: event.time || Math.floor(Date.now() / 1000),
+      $approve: async () => { await event.approve(true); },
+      $reject: async () => { await event.approve(false); },
+    });
+    this.adapter.emit('request.receive', request);
   }
 
   // ==================== 群管理 API ====================

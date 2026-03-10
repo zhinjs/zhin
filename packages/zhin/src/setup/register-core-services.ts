@@ -57,7 +57,9 @@ export function registerCoreServices(
   // 将过滤引擎接入 Dispatcher Guardrail（第一阶段拦截）
   plugin.useContext('dispatcher', (dispatcher) => {
     return dispatcher.addGuardrail(async (message: Message<any>, next: () => Promise<void>) => {
-      if (filterFeature.test(message).allowed) {
+      const result = filterFeature.test(message);
+      plugin.logger.debug(`消息过滤结果: ${result.allowed ? '允许' : '拒绝'} - ${result.reason || '无理由'}`);
+      if (result.allowed) {
         await next();
       }
     });

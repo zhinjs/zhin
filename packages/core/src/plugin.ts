@@ -18,6 +18,8 @@ import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, SendOpti
 import type { ConfigFeature } from "./built/config.js";
 import type { PermissionFeature } from "./built/permission.js";
 import { Adapter, Adapters } from "./adapter.js";
+import { Notice } from "./notice.js";
+import { Request } from "./request.js";
 import { Feature, FeatureJSON } from "./feature.js";
 import { createHash } from "crypto";
 const contextsKey = Symbol("contexts");
@@ -1024,6 +1026,12 @@ export namespace Plugin {
     'before.sendMessage': [SendOptions];
     "context.mounted": [keyof Plugin.Contexts];
     "context.dispose": [keyof Plugin.Contexts];
+    // Notice 事件
+    'notice.receive': [Notice];
+    [key: `notice.${string}`]: [Notice];
+    // Request 事件
+    'request.receive': [Request];
+    [key: `request.${string}`]: [Request];
   }
 
   /**

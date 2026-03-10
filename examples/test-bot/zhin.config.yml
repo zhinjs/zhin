@@ -70,7 +70,7 @@ console:
   lazyLoad: true
 ai:
   enabled: true
-  defaultProvider: openai
+  defaultProvider: ollama
   session:
     maxHistory: 20
     expireMs: 3600000

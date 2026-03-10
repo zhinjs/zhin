@@ -1,11 +1,13 @@
 import type { SendOptions } from "./types.js";
 import { Message } from "./message.js";
+import { Notice } from "./notice.js";
+import { Request } from "./request.js";
 import { Adapter, Adapters } from "./adapter.js";
 /**
  * Bot接口：所有平台机器人需实现的统一接口。
  * 负责消息格式化、连接、断开、消息发送等。
- * @template M 消息类型
- * @template T 配置类型
+ * @template Config 配置类型
+ * @template Event 消息事件类型
  */
 export interface Bot<Config extends object= {},Event extends object = {}> {
   $id:string
@@ -15,6 +17,10 @@ export interface Bot<Config extends object= {},Event extends object = {}> {
   $connected: boolean;
   /** 格式化平台消息为标准Message结构 */
   $formatMessage(event: Event): Message<Event>;
+  /** 格式化平台通知为标准Notice结构（适配器可选实现） */
+  $formatNotice?(event: any): Notice<any>;
+  /** 格式化平台请求为标准Request结构（适配器可选实现） */
+  $formatRequest?(event: any): Request<any>;
   /** 连接机器人 */
   $connect(): Promise<void>;
   /** 断开机器人 */

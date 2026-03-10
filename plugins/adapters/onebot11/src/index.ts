@@ -12,6 +12,8 @@ import {
   SendContent,
   Tool,
   ToolPermissionLevel,
+  Notice,
+  Request,
   createGroupManagementTools,
   GROUP_MANAGEMENT_SKILL_KEYWORDS,
   GROUP_MANAGEMENT_SKILL_TAGS,
@@ -437,9 +439,81 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11WsClie
     // 处理事件消息
     if (message.post_type === 'message') {
       this.handleOneBot11Message(message);
+    } else if (message.post_type === 'notice') {
+      this.handleOneBot11Notice(message);
+    } else if (message.post_type === 'request') {
+      this.handleOneBot11Request(message);
     } else if (message.post_type === 'meta_event' && message.meta_event_type === 'heartbeat') {
       // 心跳消息，暂时忽略
     }
+  }
+
+  private handleOneBot11Notice(event: any): void {
+    const noticeTypeMap: Record<string, string> = {
+      group_increase: 'group_member_increase',
+      group_decrease: 'group_member_decrease',
+      group_admin: 'group_admin_change',
+      group_ban: 'group_ban',
+      group_recall: 'group_recall',
+      friend_recall: 'friend_recall',
+      friend_add: 'friend_add',
+      notify: event.sub_type === 'poke'
+        ? (event.group_id ? 'group_poke' : 'friend_poke')
+        : `notify_${event.sub_type}`,
+      group_upload: 'group_upload',
+    };
+    const $type = noticeTypeMap[event.notice_type] || event.notice_type;
+    const isGroup = !!event.group_id;
+    const notice = Notice.from(event, {
+      $id: `${event.time}_${event.notice_type}_${event.group_id || event.user_id}`,
+      $adapter: 'onebot11',
+      $bot: this.$config.name,
+      $type,
+      $subType: event.sub_type,
+      $channel: {
+        id: (event.group_id || event.user_id)?.toString() || '',
+        type: isGroup ? 'group' : 'private',
+      },
+      $operator: event.operator_id ? { id: event.operator_id.toString(), name: event.operator_id.toString() } : undefined,
+      $target: event.user_id ? { id: event.user_id.toString(), name: event.user_id.toString() } : undefined,
+      $timestamp: event.time || Math.floor(Date.now() / 1000),
+    });
+    this.adapter.emit('notice.receive', notice);
+  }
+
+  private handleOneBot11Request(event: any): void {
+    const typeMap: Record<string, string> = {
+      friend: 'friend_add',
+      group: event.sub_type === 'invite' ? 'group_invite' : 'group_add',
+    };
+    const $type = typeMap[event.request_type] || event.request_type;
+    const request = Request.from(event, {
+      $id: event.flag || `${event.time}_${event.request_type}_${event.user_id}`,
+      $adapter: 'onebot11',
+      $bot: this.$config.name,
+      $type,
+      $subType: event.sub_type,
+      $channel: {
+        id: (event.group_id || event.user_id)?.toString() || '',
+        type: event.group_id ? 'group' : 'private',
+      },
+      $sender: { id: event.user_id?.toString() || '', name: event.user_id?.toString() || '' },
+      $comment: event.comment,
+      $timestamp: event.time || Math.floor(Date.now() / 1000),
+      $approve: async (remark?: string) => {
+        await this.callApi(
+          event.request_type === 'friend' ? 'set_friend_add_request' : 'set_group_add_request',
+          { flag: event.flag, approve: true, remark },
+        );
+      },
+      $reject: async (reason?: string) => {
+        await this.callApi(
+          event.request_type === 'friend' ? 'set_friend_add_request' : 'set_group_add_request',
+          { flag: event.flag, approve: false, reason },
+        );
+      },
+    });
+    this.adapter.emit('request.receive', request);
   }
 
   private handleOneBot11Message(onebotMsg: OneBot11Message): void {
@@ -645,13 +719,12 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11WsServ
     switch (message.post_type) {
       case 'message':
         return this.handleMessage(message);
+      case 'notice':
+        return this.handleNotice(message);
+      case 'request':
+        return this.handleRequest(message);
       case 'meta_event':
         return this.handleMetaEvent(client, message)
-    }
-    // 处理事件消息
-    if (message.post_type === 'message') {
-    } else if (message.post_type === 'meta_event' && message.meta_event_type === 'heartbeat') {
-      // 心跳消息，暂时忽略
     }
   }
   private handleMetaEvent(client: WebSocket, message: any) {
@@ -668,6 +741,77 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11WsServ
     const message = this.$formatMessage(onebotMsg);
     this.adapter.emit('message.receive', message);
     plugin.logger.debug(`${this.$config.name} recv  ${message.$channel.type}(${onebotMsg.group_id || onebotMsg.user_id}):${segment.raw(message.$content)}`);
+  }
+
+  private handleNotice(event: any): void {
+    const noticeTypeMap: Record<string, string> = {
+      group_increase: 'group_member_increase',
+      group_decrease: 'group_member_decrease',
+      group_admin: 'group_admin_change',
+      group_ban: 'group_ban',
+      group_recall: 'group_recall',
+      friend_recall: 'friend_recall',
+      friend_add: 'friend_add',
+      notify: event.sub_type === 'poke'
+        ? (event.group_id ? 'group_poke' : 'friend_poke')
+        : `notify_${event.sub_type}`,
+      group_upload: 'group_upload',
+    };
+    const $type = noticeTypeMap[event.notice_type] || event.notice_type;
+    const isGroup = !!event.group_id;
+    const notice = Notice.from(event, {
+      $id: `${event.self_id}:${event.time}_${event.notice_type}_${event.group_id || event.user_id}`,
+      $adapter: 'onebot11',
+      $bot: this.$config.name,
+      $type,
+      $subType: event.sub_type,
+      $channel: {
+        id: [event.self_id, (event.group_id || event.user_id)].join(':'),
+        type: isGroup ? 'group' : 'private',
+      },
+      $operator: event.operator_id ? { id: event.operator_id.toString(), name: event.operator_id.toString() } : undefined,
+      $target: event.user_id ? { id: event.user_id.toString(), name: event.user_id.toString() } : undefined,
+      $timestamp: event.time || Math.floor(Date.now() / 1000),
+    });
+    this.adapter.emit('notice.receive', notice);
+  }
+
+  private handleRequest(event: any): void {
+    const self_id = event.self_id?.toString() || '';
+    const typeMap: Record<string, string> = {
+      friend: 'friend_add',
+      group: event.sub_type === 'invite' ? 'group_invite' : 'group_add',
+    };
+    const $type = typeMap[event.request_type] || event.request_type;
+    const request = Request.from(event, {
+      $id: event.flag || `${self_id}:${event.time}_${event.request_type}_${event.user_id}`,
+      $adapter: 'onebot11',
+      $bot: this.$config.name,
+      $type,
+      $subType: event.sub_type,
+      $channel: {
+        id: [self_id, (event.group_id || event.user_id)].join(':'),
+        type: event.group_id ? 'group' : 'private',
+      },
+      $sender: { id: event.user_id?.toString() || '', name: event.user_id?.toString() || '' },
+      $comment: event.comment,
+      $timestamp: event.time || Math.floor(Date.now() / 1000),
+      $approve: async (remark?: string) => {
+        await this.callApi(
+          self_id,
+          event.request_type === 'friend' ? 'set_friend_add_request' : 'set_group_add_request',
+          { flag: event.flag, approve: true, remark },
+        );
+      },
+      $reject: async (reason?: string) => {
+        await this.callApi(
+          self_id,
+          event.request_type === 'friend' ? 'set_friend_add_request' : 'set_group_add_request',
+          { flag: event.flag, approve: false, reason },
+        );
+      },
+    });
+    this.adapter.emit('request.receive', request);
   }
 
   private startHeartbeat(): void {

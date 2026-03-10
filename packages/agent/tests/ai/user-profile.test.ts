@@ -58,7 +58,7 @@ describe('UserProfileStore（内存模式）', () => {
       await store.set('u1', 'name', '小明');
       await store.set('u1', 'interests', '编程');
       const summary = await store.buildProfileSummary('u1');
-      expect(summary).toContain('[用户画像]');
+      expect(summary).toContain('[User profile]');
       expect(summary).toContain('name: 小明');
       expect(summary).toContain('interests: 编程');
     });

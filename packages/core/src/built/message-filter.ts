@@ -370,10 +370,10 @@ export class MessageFilterFeature extends Feature<FilterRule> {
     if (rule.bots?.length && !this.#matchAny(rule.bots, String(message.$bot))) {
       return false;
     }
-    if (rule.channels?.length && !this.#matchAny(rule.channels, message.$channel.id)) {
+    if (rule.channels?.length && !this.#matchAny(rule.channels, String(message.$channel.id))) {
       return false;
     }
-    if (rule.senders?.length && !this.#matchAny(rule.senders, message.$sender.id)) {
+    if (rule.senders?.length && !this.#matchAny(rule.senders, String(message.$sender.id))) {
       return false;
     }
     return true;

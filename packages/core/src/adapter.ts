@@ -2,6 +2,8 @@ import { Bot } from "./bot.js";
 import { Plugin } from "./plugin.js";
 import { EventEmitter } from "events";
 import { Message } from "./message.js";
+import { Notice, NoticeType } from "./notice.js";
+import { Request, RequestType } from "./request.js";
 import { BeforeSendHandler, SendOptions, Tool, ToolContext, ToolScope } from "./types.js";
 import { segment } from "./utils.js";
 import { ZhinTool, isZhinTool, type ToolInput } from "./built/tool.js";
@@ -52,6 +54,21 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
           this.logger.error('rootPlugin.middleware(message, next) failed', err);
         });
       }
+    });
+    this.on('notice.receive', (notice) => {
+      this.logger.info(`${notice.$bot} notice ${notice.$type}${notice.$subType ? '.' + notice.$subType : ''} ${notice.$channel.type}(${notice.$channel.id})`);
+      const rootPlugin = this.plugin?.root || this.plugin;
+      rootPlugin?.dispatch('notice.receive', notice);
+      // 分发细粒度事件: notice.{type} 和 notice.{channelType}.{type}
+      rootPlugin?.dispatch(`notice.${notice.$type}` as 'notice.receive', notice);
+      rootPlugin?.dispatch(`notice.${notice.$channel.type}.${notice.$type}` as 'notice.receive', notice);
+    });
+    this.on('request.receive', (request) => {
+      this.logger.info(`${request.$bot} request ${request.$type}${request.$subType ? '.' + request.$subType : ''} from ${request.$sender.id}`);
+      const rootPlugin = this.plugin?.root || this.plugin;
+      rootPlugin?.dispatch('request.receive', request);
+      // 分发细粒度事件: request.{type}
+      rootPlugin?.dispatch(`request.${request.$type}` as 'request.receive', request);
     });
   }
   abstract createBot(config: Adapter.BotConfig<R>): R;
@@ -322,6 +339,14 @@ export namespace Adapter {
     'message.private.receive': [Message];
     'message.group.receive': [Message];
     'message.channel.receive': [Message];
+    'notice.receive': [Notice];
+    'notice.private.receive': [Notice];
+    'notice.group.receive': [Notice];
+    'notice.channel.receive': [Notice];
+    'request.receive': [Request];
+    'request.friend_add': [Request];
+    'request.group_add': [Request];
+    'request.group_invite': [Request];
     'call.recallMessage': [string, string];
   }
   /**
