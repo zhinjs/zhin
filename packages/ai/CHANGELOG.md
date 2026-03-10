@@ -1,5 +1,13 @@
 # @zhin.js/ai
 
+## 1.0.7
+
+### Patch Changes
+
+- 7394603: fix: cli 优化, windows 用户体验优化
+  fix: 新增消息过滤系统
+  - @zhin.js/logger@0.1.30
+
 ## 1.0.6
 
 ### Patch Changes

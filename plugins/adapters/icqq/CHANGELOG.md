@@ -1,5 +1,15 @@
 # @zhin.js/adapter-icqq
 
+## 1.0.56
+
+### Patch Changes
+
+- Updated dependencies [7394603]
+  - @zhin.js/core@1.0.46
+  - zhin.js@1.0.46
+  - @zhin.js/console@1.0.44
+  - @zhin.js/http@1.0.40
+
 ## 1.0.55
 
 ### Patch Changes
