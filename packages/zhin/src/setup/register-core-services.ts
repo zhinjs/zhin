@@ -6,10 +6,11 @@ import {
   PermissionFeature,
   SkillFeature,
   SchemaFeature,
+  MessageFilterFeature,
   createMessageDispatcher,
   ProcessAdapter,
 } from '@zhin.js/core';
-import type { Plugin } from '@zhin.js/core';
+import type { Plugin, Message } from '@zhin.js/core';
 import type { AppConfig } from '../types.js';
 
 /**
@@ -47,7 +48,21 @@ export function registerCoreServices(
   if (enabledServices.has('permission')) provide(new PermissionFeature());
   if (enabledServices.has('cron')) provide(new CronFeature());
 
+  // 消息过滤引擎
+  const filterFeature = new MessageFilterFeature(appConfig.message_filter);
+  provide(filterFeature);
+
   provide(createMessageDispatcher());
+
+  // 将过滤引擎接入 Dispatcher Guardrail（第一阶段拦截）
+  plugin.useContext('dispatcher', (dispatcher) => {
+    return dispatcher.addGuardrail(async (message: Message<any>, next: () => Promise<void>) => {
+      if (filterFeature.test(message).allowed) {
+        await next();
+      }
+    });
+  });
+
   provide(new SkillFeature());
   provide(new SchemaFeature());
 }

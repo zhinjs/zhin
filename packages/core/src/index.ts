@@ -18,6 +18,7 @@ export * from './built/permission.js'
 export * from './built/adapter-process.js'
 export * from './built/component.js'
 export * from './built/database.js'
+export * from './built/message-filter.js'
 // Tool Service (纯工具，无副作用)
 export * from './built/tool.js'
 // AI Trigger Service (纯工具，无副作用)

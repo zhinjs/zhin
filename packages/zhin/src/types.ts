@@ -1,4 +1,4 @@
-import { Bot, DatabaseConfig, Databases } from "@zhin.js/core";
+import { Bot, DatabaseConfig, Databases, MessageFilterConfig } from "@zhin.js/core";
 import { LogLevel } from "@zhin.js/logger";
 
 /**
@@ -28,6 +28,8 @@ export interface AppConfig<T extends keyof Databases = keyof Databases> {
     /** 自动清理间隔（小时），默认 24 小时 */
     cleanupInterval?: number;
   };
+  /** 消息过滤配置 */
+  message_filter?: MessageFilterConfig;
   /** 插件配置（键为插件名，值为配置对象） */
   [key: string]: any;
 }

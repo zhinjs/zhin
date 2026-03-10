@@ -2,6 +2,29 @@ log_level: 1
 database:
   dialect: sqlite
   filename: ./data/test.db
+
+# 消息过滤配置（可选）
+# 基于优先级规则的过滤引擎，在 Dispatcher Guardrail 第一阶段拦截
+# 文档：https://zhin.js.org/essentials/message-filter
+#
+# 规则形式（推荐）：
+# message_filter:
+#   default_policy: allow         # 无规则匹配时的行为
+#   rules:
+#     - name: block-spam-groups
+#       action: deny
+#       scopes: [group]
+#       channels: ['123456']
+#     - name: allow-vip
+#       action: allow
+#       priority: 100
+#       senders: ['admin001']
+#     - name: block-test-channels
+#       action: deny
+#       scopes: [channel]
+#       channels: ['/^test-/']     # 支持正则
+
+
 bots:
   - context: icqq
     name: ${ICQQ_ACCOUNT}
