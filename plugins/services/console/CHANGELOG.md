@@ -1,5 +1,14 @@
 # @zhin.js/console
 
+## 1.0.47
+
+### Patch Changes
+
+- Updated dependencies [b00b6c9]
+  - @zhin.js/core@1.0.49
+  - zhin.js@1.0.49
+  - @zhin.js/http@1.0.43
+
 ## 1.0.46
 
 ### Patch Changes

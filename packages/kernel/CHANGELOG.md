@@ -1,5 +1,13 @@
 # @zhin.js/kernel
 
+## 0.0.10
+
+### Patch Changes
+
+- b00b6c9: fix: 代码逃逸拦截增强
+  - @zhin.js/logger@0.1.33
+  - @zhin.js/schema@1.0.33
+
 ## 0.0.9
 
 ### Patch Changes
