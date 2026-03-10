@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/logger",
-  "version": "0.1.31",
+  "version": "0.1.32",
   "description": "Structured logging system for Zhin.js bot framework",
   "main": "lib/index.js",
   "type": "module",
