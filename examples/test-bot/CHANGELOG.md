@@ -1,5 +1,37 @@
 # test-bot
 
+## 0.1.51
+
+### Patch Changes
+
+- b00b6c9: fix: 代码逃逸拦截增强
+  - zhin.js@1.0.49
+  - @zhin.js/adapter-icqq@1.0.59
+  - @zhin.js/adapter-sandbox@1.0.58
+  - @zhin.js/adapter-dingtalk@1.0.38
+  - @zhin.js/adapter-discord@1.0.53
+  - @zhin.js/adapter-email@0.1.37
+  - @zhin.js/adapter-github@0.1.18
+  - @zhin.js/adapter-kook@1.0.50
+  - @zhin.js/adapter-lark@1.0.54
+  - @zhin.js/adapter-onebot11@1.0.54
+  - @zhin.js/adapter-qq@1.0.50
+  - @zhin.js/adapter-slack@1.0.35
+  - @zhin.js/adapter-telegram@1.0.35
+  - @zhin.js/adapter-wechat-mp@0.1.38
+  - @zhin.js/console@1.0.47
+  - @zhin.js/http@1.0.43
+  - @zhin.js/mcp@1.0.32
+  - @zhin.js/plugin-60s@0.0.3
+  - @zhin.js/plugin-checkin@0.0.0
+  - @zhin.js/plugin-html-renderer@0.0.27
+  - @zhin.js/plugin-music@0.0.40
+  - @zhin.js/plugin-repeater@0.0.0
+  - @zhin.js/plugin-rss@0.0.1
+  - @zhin.js/sensitive-filter@0.0.35
+  - @zhin.js/plugin-stats@0.0.0
+  - @zhin.js/plugin-teach@0.0.0
+
 ## 0.1.50
 
 ### Patch Changes

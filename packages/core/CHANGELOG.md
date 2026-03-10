@@ -1,5 +1,17 @@
 # @zhin.js/core
 
+## 1.0.49
+
+### Patch Changes
+
+- b00b6c9: fix: 代码逃逸拦截增强
+- Updated dependencies [b00b6c9]
+  - @zhin.js/kernel@0.0.10
+  - @zhin.js/database@1.0.36
+  - @zhin.js/logger@0.1.33
+  - @zhin.js/schema@1.0.33
+  - @zhin.js/ai@1.0.10
+
 ## 1.0.48
 
 ### Patch Changes
