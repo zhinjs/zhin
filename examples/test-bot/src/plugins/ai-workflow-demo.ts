@@ -191,36 +191,18 @@ const runCodeTool = defineTool<{ code: string }>({
   execute: async (args) => {
     const { code } = args;
     
-    // 安全检查：禁止危险操作
-    const forbidden = ['require', 'import', 'process', 'eval', 'Function', 'fetch', 'fs', 'child_process'];
-    if (forbidden.some(f => code.includes(f))) {
-      return { error: '代码包含不允许的操作' };
-    }
-    
     // 限制代码长度
     if (code.length > 500) {
       return { error: '代码过长' };
     }
     
     try {
-      // 使用受限的执行环境
-      const sandbox = {
-        Math,
-        Date,
-        JSON,
-        Array,
-        Object,
-        String,
-        Number,
-        Boolean,
-        parseInt,
-        parseFloat,
-        isNaN,
-        isFinite,
-      };
-      
-      const fn = new Function(...Object.keys(sandbox), `return ${code}`);
-      const result = fn(...Object.values(sandbox));
+      // 使用框架的安全沙箱执行（vm.runInNewContext + 原型链隔离 + 表达式验证）
+      const { execute, isExpressionSafe } = await import('@zhin.js/kernel');
+      if (!isExpressionSafe(code)) {
+        return { error: '代码包含不允许的操作' };
+      }
+      const result = execute(`return ${code}`, {});
       
       return {
         success: true,

@@ -3,6 +3,7 @@ import {
   compiler,
   evaluate,
   execute,
+  isExpressionSafe,
   remove,
   isEmpty,
   Time,
@@ -50,6 +51,86 @@ describe('Template Security', () => {
 
   it('should block Buffer access', () => {
     expect(evaluate('Buffer', {})).toBeUndefined()
+  })
+})
+
+describe('Sandbox Escape Prevention', () => {
+  it('should block this.constructor.constructor escape (CVE-like prototype chain)', () => {
+    // This is the exact attack vector: this.constructor.constructor('return process')().exit(1)
+    const result = evaluate("this.constructor.constructor('return process')()", {})
+    expect(result).toBeUndefined()
+  })
+
+  it('should block constructor access in templates', () => {
+    const result = compiler("${this.constructor.constructor('return process')().exit(1)}", {})
+    // Blocked expression evaluates to undefined, so compiler replaces with 'undefined'
+    expect(result).toBe('undefined')
+  })
+
+  it('should block __proto__ access', () => {
+    expect(evaluate('this.__proto__', {})).toBeUndefined()
+    expect(isExpressionSafe('this.__proto__')).toBe(false)
+  })
+
+  it('should block prototype access', () => {
+    expect(evaluate('Object.prototype', {})).toBeUndefined()
+    expect(isExpressionSafe('Object.prototype')).toBe(false)
+  })
+
+  it('should block Function constructor', () => {
+    expect(evaluate("Function('return process')()", {})).toBeUndefined()
+    expect(isExpressionSafe("Function('return process')()")).toBe(false)
+  })
+
+  it('should block eval calls', () => {
+    expect(evaluate("eval('process.exit(1)')", {})).toBeUndefined()
+    expect(isExpressionSafe("eval('process.exit(1)')")).toBe(false)
+  })
+
+  it('should block constructor in execute()', () => {
+    expect(() => execute("return this.constructor.constructor('return process')()", {})).toThrow('Expression contains blocked patterns')
+  })
+
+  it('should still allow normal property access', () => {
+    expect(evaluate('name', { name: 'test' })).toBe('test')
+    expect(evaluate('user.age', { user: { age: 25 } })).toBe(25)
+    expect(evaluate('1 + 2', {})).toBe(3)
+  })
+
+  it('should not leak real process.exit through sandbox', () => {
+    // Even if expression validation is somehow bypassed,
+    // the sandbox should use Object.create(null) preventing prototype traversal
+    const result = evaluate('typeof process.exit', {})
+    expect(result).toBe('undefined')
+  })
+
+  it('should not have process.kill in sandbox', () => {
+    expect(evaluate('process.kill', {})).toBeUndefined()
+  })
+
+  it('should expose safe process properties', () => {
+    expect(evaluate('process.platform', {})).toBe(process.platform)
+    expect(evaluate('process.version', {})).toBe(process.version)
+    expect(evaluate('process.pid', {})).toBe(process.pid)
+  })
+})
+
+describe('isExpressionSafe', () => {
+  it('should allow safe expressions', () => {
+    expect(isExpressionSafe('name')).toBe(true)
+    expect(isExpressionSafe('user.age')).toBe(true)
+    expect(isExpressionSafe('Math.max(1, 2)')).toBe(true)
+    expect(isExpressionSafe('1 + 2')).toBe(true)
+    expect(isExpressionSafe('a > b ? "yes" : "no"')).toBe(true)
+  })
+
+  it('should block dangerous expressions', () => {
+    expect(isExpressionSafe('constructor')).toBe(false)
+    expect(isExpressionSafe('this.constructor')).toBe(false)
+    expect(isExpressionSafe('__proto__')).toBe(false)
+    expect(isExpressionSafe('prototype')).toBe(false)
+    expect(isExpressionSafe("Function('code')")).toBe(false)
+    expect(isExpressionSafe("eval('code')")).toBe(false)
   })
 })
 

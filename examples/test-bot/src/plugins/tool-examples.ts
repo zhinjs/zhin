@@ -45,8 +45,9 @@ const calculatorTool = defineTool<{ expression: string }>({
         return '❌ 表达式包含非法字符';
       }
       
-      // 使用 Function 构造器进行计算（比 eval 稍安全）
-      const result = new Function(`return ${sanitized}`)();
+      // 使用框架的安全沙箱执行
+      const { evaluate } = await import('@zhin.js/kernel');
+      const result = evaluate(sanitized, {});
       
       if (typeof result !== 'number' || !isFinite(result)) {
         return '❌ 计算结果无效';

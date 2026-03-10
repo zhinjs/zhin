@@ -7,11 +7,30 @@ export type Dict<T = any> = Record<string, T>;
 export function getValueWithRuntime(template: string, ctx: Dict) {
   return evaluate(template, ctx);
 }
+
+/**
+ * Pattern that matches dangerous prototype-chain escape attempts.
+ * Blocks: constructor, __proto__, prototype, Function, eval
+ * This prevents attacks like: this.constructor.constructor('return process')()
+ */
+const BLOCKED_EXPRESSION = /\b(constructor|__proto__|prototype)\b|\bFunction\s*\(|\beval\s*\(/;
+
+/**
+ * Check whether an expression is safe to evaluate.
+ * Returns false for expressions containing prototype-chain escape patterns.
+ */
+export function isExpressionSafe(expr: string): boolean {
+  return !BLOCKED_EXPRESSION.test(expr);
+}
+
 /**
  * Evaluate a single expression in a sandboxed vm context.
  * Unlike `execute`, does NOT wrap in IIFE — the expression value is returned directly.
+ * Rejects expressions containing prototype-chain escape patterns.
  */
 export const evaluate = <S extends Record<string, unknown>, T = unknown>(exp: string, context: S): T | undefined => {
+  if (!isExpressionSafe(exp)) return undefined;
+
   const script = getOrCompileScript(exp);
   if (!script) return undefined;
 
@@ -41,40 +60,57 @@ function getOrCompileScript(code: string): vm.Script | null {
   return script;
 }
 
+/**
+ * Build a prototype-less sandbox for vm.runInNewContext.
+ * Uses Object.create(null) to prevent this.constructor escape.
+ * Context values are copied as-is; the isExpressionSafe check
+ * blocks prototype-chain traversal (constructor/__proto__/prototype)
+ * through any object in the sandbox.
+ */
 function buildSandbox<S extends Record<string, unknown>>(context: S): Record<string, unknown> {
-  return {
-    ...context,
-    process: {
-      version: process.version,
-      versions: process.versions,
-      platform: process.platform,
-      arch: process.arch,
-      release: process.release,
-      uptime: process.uptime(),
-      memoryUsage: process.memoryUsage(),
-      cpuUsage: process.cpuUsage(),
-      pid: process.pid,
-      ppid: process.ppid,
-    },
-    global: undefined,
-    globalThis: undefined,
-    Buffer: undefined,
-    crypto: undefined,
-    require: undefined,
-    import: undefined,
-    __dirname: undefined,
-    __filename: undefined,
-    Bun: undefined,
-    Deno: undefined,
-  };
+  const sandbox: Record<string, unknown> = Object.create(null);
+
+  for (const [key, value] of Object.entries(context)) {
+    sandbox[key] = value;
+  }
+
+  const safeProcess: Record<string, unknown> = Object.create(null);
+  safeProcess.version = process.version;
+  safeProcess.platform = process.platform;
+  safeProcess.arch = process.arch;
+  safeProcess.pid = process.pid;
+  safeProcess.ppid = process.ppid;
+
+  const safeVersions: Record<string, unknown> = Object.create(null);
+  for (const [k, v] of Object.entries(process.versions)) {
+    safeVersions[k] = v;
+  }
+  safeProcess.versions = safeVersions;
+
+  sandbox.process = safeProcess;
+  sandbox.global = undefined;
+  sandbox.globalThis = undefined;
+  sandbox.Buffer = undefined;
+  sandbox.crypto = undefined;
+  sandbox.require = undefined;
+  sandbox.import = undefined;
+  sandbox.__dirname = undefined;
+  sandbox.__filename = undefined;
+  sandbox.Bun = undefined;
+  sandbox.Deno = undefined;
+
+  return sandbox;
 }
 
 /**
  * Execute a code block in a sandboxed vm context.
  * Supports `return` statements by wrapping in an IIFE.
+ * Rejects code containing prototype-chain escape patterns.
  * Throws on compilation or runtime errors.
  */
 export const execute = <S extends Record<string, unknown>, T = unknown>(code: string, context: S): T => {
+  if (!isExpressionSafe(code)) throw new Error('Expression contains blocked patterns');
+
   const wrapped = `(function(){${code}})()`;
   const script = getOrCompileScript(wrapped);
   if (!script) throw new SyntaxError(`Failed to compile: ${code.slice(0, 80)}`);

@@ -52,6 +52,7 @@ export type {
 export {
   evaluate,
   execute,
+  isExpressionSafe,
   clearEvalCache,
   getEvalCacheStats,
   getValueWithRuntime,
