@@ -1,5 +1,16 @@
 # @zhin.js/adapter-icqq
 
+## 1.0.57
+
+### Patch Changes
+
+- de3e352: fix: 新增 request 和 notice 抽象,新增消息过滤支持
+- Updated dependencies [de3e352]
+  - @zhin.js/core@1.0.47
+  - zhin.js@1.0.47
+  - @zhin.js/console@1.0.45
+  - @zhin.js/http@1.0.41
+
 ## 1.0.56
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # @zhin.js/agent
 
+## 0.0.10
+
+### Patch Changes
+
+- de3e352: fix: 新增 request 和 notice 抽象,新增消息过滤支持
+- Updated dependencies [de3e352]
+  - @zhin.js/core@1.0.47
+  - @zhin.js/ai@1.0.8
+
 ## 0.0.9
 
 ### Patch Changes
