@@ -1,5 +1,11 @@
 # @zhin.js/logger
 
+## 0.1.34
+
+### Patch Changes
+
+- zhin.js@1.0.50
+
 ## 0.1.33
 
 ### Patch Changes
