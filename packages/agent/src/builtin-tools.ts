@@ -21,6 +21,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { Logger, type PropertySchema } from '@zhin.js/core';
 import { ZhinTool } from '@zhin.js/core';
+import { assertFileAccess, checkBashCommandSafety, shellEscape } from './file-policy.js';
 
 // 从新模块中 re-export 向后兼容的函数
 export { loadSoulPersona, loadToolsGuide, loadAgentsMemory } from './bootstrap.js';
@@ -91,8 +92,8 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
       .execute(async (args) => {
         try {
           const fp = expandHome(args.file_path);
+          assertFileAccess(fp);
           const stat = await fs.promises.stat(fp);
-          if (!stat.isFile()) return `Error: Not a file: ${fp}`;
           const content = await fs.promises.readFile(fp, 'utf-8');
           const lines = content.split('\n');
           const offset = args.offset ?? 0;
@@ -118,6 +119,7 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
       .execute(async (args) => {
         try {
           const fp = expandHome(args.file_path);
+          assertFileAccess(fp);
           await fs.promises.mkdir(path.dirname(fp), { recursive: true });
           await fs.promises.writeFile(fp, args.content, 'utf-8');
           return `✅ Wrote ${Buffer.byteLength(args.content)} bytes to ${fp}`;
@@ -140,6 +142,7 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
       .execute(async (args) => {
         try {
           const fp = expandHome(args.file_path);
+          assertFileAccess(fp);
           const content = await fs.promises.readFile(fp, 'utf-8');
           const count = content.split(args.old_string).length - 1;
           if (count === 0) return `Error: old_string not found in file. Make sure it matches exactly.`;
@@ -167,6 +170,7 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
       .execute(async (args) => {
         try {
           const dirPath = path.resolve(process.cwd(), expandHome(args.path));
+          assertFileAccess(dirPath);
           const stat = await fs.promises.stat(dirPath);
           if (!stat.isDirectory()) {
             return `Error: Not a directory: ${args.path}`;
@@ -198,8 +202,11 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
       .execute(async (args) => {
         try {
           const cwd = args.cwd || process.cwd();
+          assertFileAccess(cwd);
+          // 安全转义 glob pattern 防止命令注入
+          const safePattern = shellEscape(args.pattern);
           const { stdout } = await execAsync(
-            `find . -path './${args.pattern}' -type f 2>/dev/null | head -100`,
+            `find . -path ./${safePattern} -type f 2>/dev/null | head -100`,
             { cwd },
           );
           const files = stdout.trim().split('\n').filter(Boolean);
@@ -225,9 +232,13 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
       .execute(async (args) => {
         try {
           const searchPath = args.path || '.';
-          const includeFlag = args.include ? `--include='${args.include}'` : '';
+          assertFileAccess(path.resolve(process.cwd(), searchPath));
+          // 安全转义 pattern 和 include 参数防止命令注入
+          const safePattern = shellEscape(args.pattern);
+          const safePath = shellEscape(searchPath);
+          const includeFlag = args.include ? `--include=${shellEscape(args.include)}` : '';
           const { stdout } = await execAsync(
-            `grep -rn ${includeFlag} '${args.pattern}' ${searchPath} 2>/dev/null | head -50`,
+            `grep -rn ${includeFlag} ${safePattern} ${safePath} 2>/dev/null | head -50`,
             { cwd: process.cwd() },
           );
           return stdout.trim() || `No matches for '${args.pattern}'`;
@@ -252,7 +263,11 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
       .execute(async (args) => {
         try {
           const timeout = args.timeout ?? 30000;
-          const { stdout, stderr } = await execAsync(args.command, {
+          const cmd = String(args.command || '');
+          // 检查命令是否可能泄漏敏感信息
+          const safety = checkBashCommandSafety(cmd);
+          if (!safety.safe) return `Error: ${safety.reason}`;
+          const { stdout, stderr } = await execAsync(cmd, {
             cwd: args.cwd || process.cwd(),
             timeout,
             maxBuffer: 1024 * 1024,
