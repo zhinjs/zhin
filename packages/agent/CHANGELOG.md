@@ -1,5 +1,13 @@
 # @zhin.js/agent
 
+## 0.0.13
+
+### Patch Changes
+
+- 2510365: fix: 文件安全拦截
+  - @zhin.js/core@1.0.50
+  - @zhin.js/ai@1.0.11
+
 ## 0.0.12
 
 ### Patch Changes
