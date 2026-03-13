@@ -1,6 +1,6 @@
 # 消息过滤
 
-Zhin.js 内置了一个基于优先级规则的消息过滤引擎 (`MessageFilterFeature`)，在 [Dispatcher Guardrail](/docs/advanced/features.md) 第一阶段拦截符合条件的消息。
+Zhin.js 内置了一个基于优先级规则的消息过滤引擎 (`MessageFilterFeature`)，在 [Dispatcher Guardrail](/advanced/features) 第一阶段拦截符合条件的消息。
 
 ## 核心概念
 
