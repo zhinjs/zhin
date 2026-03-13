@@ -19,7 +19,8 @@ export default withMermaid(defineConfig({
       { text: '高级特性', link: '/advanced/' },
       { text: 'API 参考', link: '/api/' },
       { text: '插件市场', link: '/plugins/' },
-      { text: '技能商店', link: '/skills/' }
+      { text: '技能商店', link: '/skills/' },
+      { text: '🎮 Playground', link: '/playground' }
     ],
 
     sidebar: {

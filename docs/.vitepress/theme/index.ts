@@ -7,6 +7,7 @@ import PluginStats from './components/PluginStats.vue'
 import PluginMarket from './components/PluginMarket.vue'
 import SkillMarket from './components/SkillMarket.vue'
 import SkillSearch from './components/SkillSearch.vue'
+import Playground from './components/Playground.vue'
 import './custom.css'
 
 export default {
@@ -24,6 +25,7 @@ export default {
     app.component('PluginMarket', PluginMarket)
     app.component('SkillMarket', SkillMarket)
     app.component('SkillSearch', SkillSearch)
+    app.component('Playground', Playground)
   }
 } satisfies Theme
 

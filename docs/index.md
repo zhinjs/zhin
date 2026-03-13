@@ -21,6 +21,9 @@ hero:
     - theme: alt
       text: API 文档
       link: /api/
+    - theme: alt
+      text: 🎮 在线体验
+      link: /playground
 
 features:
   - icon: "\uD83E\uDDE0"
