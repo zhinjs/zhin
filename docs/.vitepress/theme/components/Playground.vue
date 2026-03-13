@@ -1,6 +1,6 @@
 <template>
     <iframe
-        src="https://zhinjs-zhin-playground.hf.space"
+        src="https://zhinjs-zhin-playground.hf.space?token=zhin-playground"
         class="playground-iframe"
         allow="clipboard-write"
         title="Zhin.js Playground"
