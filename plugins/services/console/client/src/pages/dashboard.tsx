@@ -25,7 +25,7 @@ interface SystemStatus {
   nodeVersion: string
 }
 
-export default function DashboardHome() {
+export default function HomePage() {
   const navigate = useNavigate()
   const [stats, setStats] = useState<Stats | null>(null)
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null)

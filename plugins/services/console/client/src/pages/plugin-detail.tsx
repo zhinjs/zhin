@@ -48,7 +48,7 @@ function getIcon(iconName: string): LucideIcon {
   return iconMap[iconName] || Package
 }
 
-export default function DashboardPluginDetail() {
+export default function PluginDetailPage() {
   const { name } = useParams<{ name: string }>()
   const navigate = useNavigate()
   const [plugin, setPlugin] = useState<PluginDetail | null>(null)

@@ -258,7 +258,7 @@ function ConfigFieldEditor({
   )
 }
 
-export default function DashboardConfig() {
+export default function ConfigPage() {
   const { yaml, pluginKeys, loading, error, load, save } = useConfigYaml()
   const [mode, setMode] = useState<'form' | 'yaml'>('form')
   const [yamlText, setYamlText] = useState('')

@@ -107,6 +107,46 @@ export interface HmrReloadMessage extends BaseMessage {
 }
 
 // ============================================================================
+// 文件管理类型
+// ============================================================================
+
+export interface FileTreeNode {
+  name: string
+  path: string
+  type: 'file' | 'directory'
+  children?: FileTreeNode[]
+}
+
+// ============================================================================
+// 数据库管理类型
+// ============================================================================
+
+export type DatabaseType = 'related' | 'document' | 'keyvalue'
+
+export interface DatabaseInfo {
+  dialect: string
+  type: DatabaseType
+  tables: string[]
+}
+
+export interface TableInfo {
+  name: string
+  columns?: Record<string, { type: string; primary?: boolean; nullable?: boolean; default?: any }>
+}
+
+export interface SelectResult {
+  rows: any[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export interface KvEntry {
+  key: string
+  value: any
+}
+
+// ============================================================================
 // 联合类型
 // ============================================================================
 

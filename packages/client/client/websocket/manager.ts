@@ -8,7 +8,12 @@ import { MessageHandler } from './messageHandler'
 import type {
   WebSocketMessage,
   WebSocketConfig,
-  WebSocketCallbacks
+  WebSocketCallbacks,
+  FileTreeNode,
+  DatabaseInfo,
+  TableInfo,
+  SelectResult,
+  KvEntry
 } from './types'
 import {
   ConnectionState,
@@ -231,6 +236,70 @@ export class WebSocketManager {
 
   async saveEnvFile(filename: string, content: string): Promise<{ success: boolean; message?: string }> {
     return this.sendRequest({ type: 'env:save', filename, content })
+  }
+
+  // ============================================================================
+  // 文件管理
+  // ============================================================================
+
+  async getFileTree(): Promise<{ tree: FileTreeNode[] }> {
+    return this.sendRequest({ type: 'files:tree' })
+  }
+
+  async readFile(filePath: string): Promise<{ content: string; size: number }> {
+    return this.sendRequest({ type: 'files:read', filePath })
+  }
+
+  async saveFile(filePath: string, content: string): Promise<{ success: boolean; message?: string }> {
+    return this.sendRequest({ type: 'files:save', filePath, content })
+  }
+
+  // ============================================================================
+  // 数据库管理
+  // ============================================================================
+
+  async getDbInfo(): Promise<DatabaseInfo> {
+    return this.sendRequest({ type: 'db:info' })
+  }
+
+  async getDbTables(): Promise<{ tables: TableInfo[] }> {
+    return this.sendRequest({ type: 'db:tables' })
+  }
+
+  async dbSelect(table: string, page?: number, pageSize?: number, where?: any): Promise<SelectResult> {
+    return this.sendRequest({ type: 'db:select', table, page, pageSize, where })
+  }
+
+  async dbInsert(table: string, row: any): Promise<{ success: boolean }> {
+    return this.sendRequest({ type: 'db:insert', table, row })
+  }
+
+  async dbUpdate(table: string, row: any, where: any): Promise<{ success: boolean; affected: number }> {
+    return this.sendRequest({ type: 'db:update', table, row, where })
+  }
+
+  async dbDelete(table: string, where: any): Promise<{ success: boolean; deleted: number }> {
+    return this.sendRequest({ type: 'db:delete', table, where })
+  }
+
+  async dbDropTable(table: string): Promise<{ success: boolean }> {
+    return this.sendRequest({ type: 'db:drop-table', table })
+  }
+
+  async kvGet(table: string, key: string): Promise<{ key: string; value: any }> {
+    return this.sendRequest({ type: 'db:kv:get', table, key })
+  }
+
+  async kvSet(table: string, key: string, value: any, ttl?: number): Promise<{ success: boolean }> {
+    return this.sendRequest({ type: 'db:kv:set', table, key, value, ttl })
+  }
+
+  async kvDelete(table: string, key: string): Promise<{ success: boolean }> {
+    return this.sendRequest({ type: 'db:kv:delete', table, key })
+  }
+
+  async kvGetEntries(table: string): Promise<{ entries: KvEntry[] }> {
+    return this.sendRequest({ type: 'db:kv:entries', table })
   }
 
   // ============================================================================

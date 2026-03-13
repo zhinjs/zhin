@@ -14,7 +14,7 @@ interface BotInfo {
   status: 'online' | 'offline'
 }
 
-export default function DashboardBots() {
+export default function BotMangePage() {
   const [bots, setBots] = useState<BotInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

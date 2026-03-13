@@ -20,7 +20,7 @@ import {
   updateSchema
 } from '../store'
 import { getWebSocketManager } from './instance'
-import type { UseConfigOptions, UseWebSocketOptions } from './types'
+import type { UseConfigOptions, UseWebSocketOptions, FileTreeNode, DatabaseInfo, TableInfo, SelectResult, KvEntry, DatabaseType } from './types'
 
 // ============================================================================
 // WebSocket 连接 Hook
@@ -362,4 +362,220 @@ export function useEnvFiles() {
   return useMemo(() => ({
     files, loading, error, listFiles, getFile, saveFile
   }), [files, loading, error, listFiles, getFile, saveFile])
+}
+
+// ============================================================================
+// 文件管理 Hook
+// ============================================================================
+
+export function useFiles() {
+  const wsManager = getWebSocketManager()
+  const connected = useSelector(selectConfigConnected)
+
+  const [tree, setTree] = useState<FileTreeNode[]>([])
+  const [loading, setLoadingState] = useState(false)
+  const [error, setErrorState] = useState<string | null>(null)
+
+  const loadTree = useCallback(async () => {
+    setLoadingState(true)
+    setErrorState(null)
+    try {
+      const result = await wsManager.getFileTree()
+      setTree(result.tree)
+      return result.tree
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setErrorState(msg)
+      throw err
+    } finally {
+      setLoadingState(false)
+    }
+  }, [wsManager])
+
+  const readFile = useCallback(async (filePath: string) => {
+    try {
+      const result = await wsManager.readFile(filePath)
+      return result.content
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setErrorState(msg)
+      throw err
+    }
+  }, [wsManager])
+
+  const saveFile = useCallback(async (filePath: string, content: string) => {
+    setLoadingState(true)
+    setErrorState(null)
+    try {
+      return await wsManager.saveFile(filePath, content)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setErrorState(msg)
+      throw err
+    } finally {
+      setLoadingState(false)
+    }
+  }, [wsManager])
+
+  useEffect(() => {
+    if (connected && tree.length === 0 && !loading) {
+      loadTree().catch(() => {})
+    }
+  }, [connected, tree.length, loading, loadTree])
+
+  return useMemo(() => ({
+    tree, loading, error, loadTree, readFile, saveFile
+  }), [tree, loading, error, loadTree, readFile, saveFile])
+}
+
+// ============================================================================
+// 数据库管理 Hook
+// ============================================================================
+
+export function useDatabase() {
+  const wsManager = getWebSocketManager()
+  const connected = useSelector(selectConfigConnected)
+
+  const [info, setInfo] = useState<DatabaseInfo | null>(null)
+  const [tables, setTables] = useState<TableInfo[]>([])
+  const [loading, setLoadingState] = useState(false)
+  const [error, setErrorState] = useState<string | null>(null)
+
+  const loadInfo = useCallback(async () => {
+    setLoadingState(true)
+    setErrorState(null)
+    try {
+      const result = await wsManager.getDbInfo()
+      setInfo(result)
+      return result
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setErrorState(msg)
+      throw err
+    } finally {
+      setLoadingState(false)
+    }
+  }, [wsManager])
+
+  const loadTables = useCallback(async () => {
+    setLoadingState(true)
+    setErrorState(null)
+    try {
+      const result = await wsManager.getDbTables()
+      setTables(result.tables)
+      return result.tables
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setErrorState(msg)
+      throw err
+    } finally {
+      setLoadingState(false)
+    }
+  }, [wsManager])
+
+  const select = useCallback(async (table: string, page?: number, pageSize?: number, where?: any) => {
+    try {
+      return await wsManager.dbSelect(table, page, pageSize, where)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setErrorState(msg)
+      throw err
+    }
+  }, [wsManager])
+
+  const insert = useCallback(async (table: string, row: any) => {
+    try {
+      return await wsManager.dbInsert(table, row)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setErrorState(msg)
+      throw err
+    }
+  }, [wsManager])
+
+  const update = useCallback(async (table: string, row: any, where: any) => {
+    try {
+      return await wsManager.dbUpdate(table, row, where)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setErrorState(msg)
+      throw err
+    }
+  }, [wsManager])
+
+  const remove = useCallback(async (table: string, where: any) => {
+    try {
+      return await wsManager.dbDelete(table, where)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setErrorState(msg)
+      throw err
+    }
+  }, [wsManager])
+
+  const dropTable = useCallback(async (table: string) => {
+    try {
+      const result = await wsManager.dbDropTable(table)
+      await loadTables()
+      return result
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setErrorState(msg)
+      throw err
+    }
+  }, [wsManager, loadTables])
+
+  const kvGet = useCallback(async (table: string, key: string) => {
+    try {
+      return await wsManager.kvGet(table, key)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setErrorState(msg)
+      throw err
+    }
+  }, [wsManager])
+
+  const kvSet = useCallback(async (table: string, key: string, value: any, ttl?: number) => {
+    try {
+      return await wsManager.kvSet(table, key, value, ttl)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setErrorState(msg)
+      throw err
+    }
+  }, [wsManager])
+
+  const kvDelete = useCallback(async (table: string, key: string) => {
+    try {
+      return await wsManager.kvDelete(table, key)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setErrorState(msg)
+      throw err
+    }
+  }, [wsManager])
+
+  const kvEntries = useCallback(async (table: string) => {
+    try {
+      return await wsManager.kvGetEntries(table)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setErrorState(msg)
+      throw err
+    }
+  }, [wsManager])
+
+  useEffect(() => {
+    if (connected && !info && !loading) {
+      loadInfo().catch(() => {})
+      loadTables().catch(() => {})
+    }
+  }, [connected, info, loading, loadInfo, loadTables])
+
+  return useMemo(() => ({
+    info, tables, loading, error,
+    loadInfo, loadTables, dropTable,
+    select, insert, update, remove,
+    kvGet, kvSet, kvDelete, kvEntries,
+  }), [info, tables, loading, error, loadInfo, loadTables, dropTable, select, insert, update, remove, kvGet, kvSet, kvDelete, kvEntries])
 }

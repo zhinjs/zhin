@@ -141,7 +141,7 @@ function EnvFileEditor({
   )
 }
 
-export default function DashboardEnv() {
+export default function EnvMangePage() {
   const { files, loading, error, listFiles, getFile, saveFile } = useEnvFiles()
   const [activeTab, setActiveTab] = useState('.env')
 

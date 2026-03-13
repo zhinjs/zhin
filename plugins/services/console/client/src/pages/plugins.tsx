@@ -43,7 +43,7 @@ function getIcon(iconName: string): LucideIcon {
   return iconMap[iconName] || Package
 }
 
-export default function DashboardPlugins() {
+export default function PluginsPage() {
   const navigate = useNavigate()
   const [plugins, setPlugins] = useState<Plugin[]>([])
   const [loading, setLoading] = useState(true)

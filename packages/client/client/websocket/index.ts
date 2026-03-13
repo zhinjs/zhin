@@ -31,7 +31,9 @@ export {
   useConfig,
   useAllConfigs,
   useConfigYaml,
-  useEnvFiles
+  useEnvFiles,
+  useFiles,
+  useDatabase
 } from './hooks'
 
 // ============================================================================

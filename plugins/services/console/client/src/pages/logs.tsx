@@ -23,7 +23,7 @@ interface LogStats {
   oldestTimestamp: string | null
 }
 
-export default function DashboardLogs() {
+export default function LogsPage() {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [stats, setStats] = useState<LogStats | null>(null)
   const [loading, setLoading] = useState(true)

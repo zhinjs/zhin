@@ -1,16 +1,18 @@
 import { StrictMode, useCallback, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Provider as ReduxProvider } from 'react-redux'
-import { Home, Package, Bot, FileText, Settings, KeyRound } from 'lucide-react'
+import { Home, Package, Bot, FileText, Settings, KeyRound, FolderOpen, Database } from 'lucide-react'
 import { store, DynamicRouter, persistor, addPage, useSelector, useWebSocket } from '@zhin.js/client'
 import DashboardLayout from './layouts/dashboard'
-import DashboardHome from './pages/dashboard-home'
-import DashboardPlugins from './pages/dashboard-plugins'
-import DashboardPluginDetail from './pages/dashboard-plugin-detail'
-import DashboardBots from './pages/dashboard-bots'
-import DashboardLogs from './pages/dashboard-logs'
-import DashboardConfig from './pages/dashboard-config'
-import DashboardEnv from './pages/dashboard-env'
+import HomePage from './pages/dashboard'
+import PluginsPage from './pages/plugins'
+import PluginDetailPage from './pages/plugin-detail'
+import BotMangePage from './pages/bots'
+import LogsPage from './pages/logs'
+import ConfigPage from './pages/config'
+import EnvMangePage from './pages/env'
+import FileMangePage from './pages/files'
+import DatabasePage from './pages/database'
 import LoginPage from './pages/login'
 import { hasToken } from './utils/auth'
 import './style.css'
@@ -64,58 +66,74 @@ function RouteInitializer() {
                 meta: { order: 0 },
                 children: [
                     {
-                        key: 'dashboard-home',
+                        key: 'homePage',
                         path: '/dashboard',
                         title: '系统概览',
                         icon: <Home className="w-4 h-4" />,
-                        element: <DashboardHome />,
+                        element: <HomePage />,
                     },
                     {
-                        key: 'dashboard-plugins',
+                        key: 'pluginsPage',
                         path: '/plugins',
                         title: '插件管理',
                         icon: <Package className="w-4 h-4" />,
-                        element: <DashboardPlugins />,
+                        element: <PluginsPage />,
                         meta: { order: 2 }
                     },
                     {
-                        key: 'dashboard-plugin-detail',
+                        key: 'pluginDetailPage',
                         title: '插件详情',
                         path: '/plugins/:name',
-                        element: <DashboardPluginDetail />,
+                        element: <PluginDetailPage />,
                         meta: { hideInMenu: true }
                     },
                     {
-                        key: 'dashboard-config',
+                        key: 'configPage',
                         path: '/config',
                         title: '配置管理',
                         icon: <Settings className="w-4 h-4" />,
-                        element: <DashboardConfig />,
+                        element: <ConfigPage />,
                         meta: { order: 3 }
                     },
                     {
-                        key: 'dashboard-env',
+                        key: 'envManagePage',
                         path: '/env',
                         title: '环境变量',
                         icon: <KeyRound className="w-4 h-4" />,
-                        element: <DashboardEnv />,
+                        element: <EnvMangePage />,
                         meta: { order: 4 }
                     },
                     {
-                        key: 'dashboard-bots',
-                        path: '/bots',
-                        title: '机器人',
-                        icon: <Bot className="w-4 h-4" />,
-                        element: <DashboardBots />,
+                        key: 'fileManagePage',
+                        path: '/files',
+                        title: '文件管理',
+                        icon: <FolderOpen className="w-4 h-4" />,
+                        element: <FileMangePage />,
                         meta: { order: 5 }
                     },
                     {
-                        key: 'dashboard-logs',
+                        key: 'databasePage',
+                        path: '/database',
+                        title: '数据库',
+                        icon: <Database className="w-4 h-4" />,
+                        element: <DatabasePage />,
+                        meta: { order: 6 }
+                    },
+                    {
+                        key: 'botManagePage',
+                        path: '/bots',
+                        title: '机器人',
+                        icon: <Bot className="w-4 h-4" />,
+                        element: <BotMangePage />,
+                        meta: { order: 7 }
+                    },
+                    {
+                        key: 'logsPage  ',
                         path: '/logs',
                         title: '系统日志',
                         icon: <FileText className="w-4 h-4" />,
-                        element: <DashboardLogs />,
-                        meta: { order: 6 }
+                        element: <LogsPage />,
+                        meta: { order: 8 }
                     }
                 ]
             }
