@@ -19,7 +19,13 @@ export async function createPlugin(args: {
   
   const pluginCode = generatePluginCode(name, description, features);
   const filename = `${name}.ts`;
-  const fullPath = path.join(process.cwd(), directory, filename);
+  const fullPath = path.resolve(process.cwd(), directory, filename);
+  
+  // 防止路径遍历：确保文件在项目目录内
+  const projectRoot = process.cwd() + path.sep;
+  if (!fullPath.startsWith(projectRoot)) {
+    throw new Error(`安全错误：禁止在项目目录之外创建文件`);
+  }
   
   try {
     await fs.mkdir(path.dirname(fullPath), { recursive: true });

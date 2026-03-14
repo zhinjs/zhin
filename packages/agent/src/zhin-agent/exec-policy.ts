@@ -41,12 +41,14 @@ export function checkExecPolicy(config: Required<ZhinAgentConfig>, command: stri
   // allowlist
   const list = resolveExecAllowlist(config);
   const cmd = (command || '').trim();
+  // 提取命令的第一个 token（实际可执行程序名）进行白名单匹配
+  const cmdName = cmd.split(/[\s;|&]/)[0];
   const allowed = list.some(pattern => {
     try {
-      const re = new RegExp(pattern);
-      return re.test(cmd);
+      const re = new RegExp(`^${pattern}$`);
+      return re.test(cmdName);
     } catch {
-      return cmd === pattern || cmd.startsWith(pattern);
+      return cmdName === pattern;
     }
   });
   if (!allowed) {

@@ -3,6 +3,7 @@ import { WebSocketServer } from "ws";
 import mime from "mime";
 import * as fs from "fs";
 import * as path from "path";
+import * as crypto from "crypto";
 import { setupWebSocket, notifyDataUpdate } from "./websocket.js";
 import { transformFile, isTransformable } from "./transform.js";
 
@@ -101,7 +102,7 @@ if (enabled) {
     // ── Token 映射：隐藏绝对路径 ──────────────────────────────────────────
     // token → 目录绝对路径。URL 只暴露 token + 相对文件名，不暴露服务器路径。
     const entryBases = new Map<string, string>();
-    const genToken = () => Math.random().toString(36).slice(2, 8);
+    const genToken = () => crypto.randomBytes(6).toString('hex');
 
     // ── 开发模式文件监听（轻量 HMR：文件变更 → 通知客户端刷新） ──────────────
     const watchedDirs = new Set<string>();
@@ -166,7 +167,7 @@ if (enabled) {
     const webServer: WebServer = {
       entries: {},
       addEntry(entry) {
-        const hash = Date.now().toString(16) + Math.random().toString(16).slice(2, 8);
+        const hash = crypto.randomBytes(8).toString('hex');
         const entryFile =
           typeof entry === "string"
             ? entry

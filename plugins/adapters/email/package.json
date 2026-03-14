@@ -14,7 +14,7 @@
     "@types/imap": "^0.8.40",
     "@types/nodemailer": "^6.4.14",
     "imap": "^0.8.19",
-    "mailparser": "^3.6.5",
+    "mailparser": "^3.9.4",
     "nodemailer": "^7.0.11"
   },
   "peerDependencies": {

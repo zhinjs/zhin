@@ -1,6 +1,7 @@
 import { Model} from '../../base/index.js';
 import { DocumentDatabase } from './database.js';
 import { DocumentQueryResult, Condition } from '../../types.js';
+import { randomUUID } from 'crypto';
 
 /**
  * 文档型模型类
@@ -81,6 +82,6 @@ export class DocumentModel<D=any, S extends Record<string, object> = Record<stri
    * 生成文档ID
    */
   private generateId(): string {
-    return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+    return randomUUID();
   }
 }

@@ -45,6 +45,25 @@ const config = declareConfig("teach", Schema.object({
 
 const cooldownMap = new Map<string, number>();
 
+/**
+ * 简单的 ReDoS 检查：拒绝可能导致灾难性回溯的正则
+ * 检测嵌套量词、重复交替等常见危险模式
+ */
+function isSafeRegex(pattern: string): boolean {
+  // 限制长度
+  if (pattern.length > 200) return false;
+  // 禁止嵌套量词: (a+)+ , (a*)* , (a+){2,} 等
+  if (/(\+|\*|\{)\)?(\+|\*|\{)/.test(pattern)) return false;
+  // 禁止回溯陷阱: (.+.+)+ , (a|a)+ 等
+  if (/\([^)]*(\+|\*)[^)]*(\+|\*)[^)]*\)[\+\*]/.test(pattern)) return false;
+  // 禁止过长的交替组: (a|b|c|d|e|f|g|h|...)+
+  const altGroups = pattern.match(/\([^)]*\|[^)]*\)/g) || [];
+  for (const g of altGroups) {
+    if ((g.match(/\|/g) || []).length > 10) return false;
+  }
+  return true;
+}
+
 function isOnCooldown(key: string): boolean {
   const last = cooldownMap.get(key);
   if (!last) return false;
@@ -248,6 +267,10 @@ addCommand(
         new RegExp(pattern, "i");
       } catch (e) {
         return `正则表达式不合法: ${(e as Error).message}`;
+      }
+
+      if (!isSafeRegex(pattern)) {
+        return "该正则表达式可能导致性能问题（ReDoS 风险），请简化后重试";
       }
 
       const { type: ctxType, id: ctxId } = getContextKey(message);

@@ -315,7 +315,7 @@ async function runOutsideProject(checks: ReturnType<typeof checkEnvironment>): P
 
   console.log('');
   try {
-    execSync(`npx create-zhin ${projectName}`, { stdio: 'inherit' });
+    spawnSync('npx', ['create-zhin', projectName], { stdio: 'inherit' });
     console.log('');
     console.log(chalk.bold.green('✅ 项目已创建'));
     console.log(chalk.cyan(`  cd ${projectName}`));
