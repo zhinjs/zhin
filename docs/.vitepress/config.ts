@@ -28,7 +28,8 @@ export default withMermaid(defineConfig({
         {
           text: '快速开始',
           items: [
-            { text: '安装与启动', link: '/getting-started/' }
+            { text: '安装与启动', link: '/getting-started/' },
+            { text: 'Docker 部署', link: '/getting-started/docker' }
           ]
         }
       ],

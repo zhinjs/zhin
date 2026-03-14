@@ -40,8 +40,8 @@ show_help() {
 case "$1" in
     create)
         shift
-        # 创建项目使用 create-zhin-app
-        exec create-zhin-app "$@"
+        # 创建项目使用 create-zhin
+        exec create-zhin "$@"
         ;;
     dev)
         shift

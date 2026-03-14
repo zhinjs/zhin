@@ -20,6 +20,11 @@ RUN apk add --no-cache \
 # 启用 corepack 并安装 pnpm
 RUN corepack enable && corepack prepare pnpm@9.0.2 --activate
 
+# 设置 pnpm 全局目录（必须在全局安装之前）
+ENV PNPM_HOME=/usr/local/share/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+RUN mkdir -p $PNPM_HOME
+
 # 全局安装 zhin.js CLI 和脚手架
 RUN pnpm add -g create-zhin-app @zhin.js/cli zhin.js
 
@@ -41,8 +46,6 @@ USER zhin
 
 # 设置环境变量
 ENV NODE_ENV=production
-ENV PNPM_HOME=/home/zhin/.local/share/pnpm
-ENV PATH=$PNPM_HOME:$PATH
 
 # 暴露默认端口
 EXPOSE 8086
