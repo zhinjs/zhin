@@ -1,5 +1,13 @@
 # @zhin.js/console
 
+## 1.0.49
+
+### Patch Changes
+
+- 353de3d: fix: 控制台优化
+- Updated dependencies [353de3d]
+  - @zhin.js/client@1.0.12
+
 ## 1.0.48
 
 ### Patch Changes

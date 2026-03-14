@@ -1,5 +1,11 @@
 # @zhin.js/client
 
+## 1.0.12
+
+### Patch Changes
+
+- 353de3d: fix: 控制台优化
+
 ## 1.0.11
 
 ### Patch Changes
