@@ -104,7 +104,7 @@
       "category": [
         "adapter"
       ],
-      "version": "1.0.60",
+      "version": "1.0.61",
       "npm": "https://www.npmjs.com/package/@zhin.js/adapter-icqq",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -117,7 +117,7 @@
         "tencent",
         "chatbot"
       ],
-      "lastUpdate": "2026-03-11T11:31:55.613Z"
+      "lastUpdate": "2026-03-14T03:21:24.593Z"
     },
     {
       "name": "@zhin.js/adapter-kook",
@@ -243,7 +243,7 @@
       "category": [
         "adapter"
       ],
-      "version": "1.0.59",
+      "version": "1.0.60",
       "npm": "https://www.npmjs.com/package/@zhin.js/adapter-sandbox",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -256,7 +256,7 @@
         "development",
         "local"
       ],
-      "lastUpdate": "2026-03-11T11:31:55.743Z"
+      "lastUpdate": "2026-03-14T03:21:24.692Z"
     },
     {
       "name": "@zhin.js/adapter-slack",
@@ -389,12 +389,12 @@
       "category": [
         "framework"
       ],
-      "version": "1.0.11",
+      "version": "1.0.12",
       "npm": "https://www.npmjs.com/package/@zhin.js/client",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [],
-      "lastUpdate": "2026-03-05T10:11:07.822Z"
+      "lastUpdate": "2026-03-14T03:21:24.554Z"
     },
     {
       "name": "@zhin.js/console",
@@ -405,7 +405,7 @@
       "category": [
         "service"
       ],
-      "version": "1.0.48",
+      "version": "1.0.49",
       "npm": "https://www.npmjs.com/package/@zhin.js/console",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -419,7 +419,7 @@
         "monitoring",
         "admin"
       ],
-      "lastUpdate": "2026-03-11T11:32:00.860Z"
+      "lastUpdate": "2026-03-14T03:21:25.004Z"
     },
     {
       "name": "@zhin.js/core",
@@ -694,7 +694,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": [],
-      "version": "0.0.41",
+      "version": "0.0.42",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-music",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -708,7 +708,7 @@
         "search",
         "share"
       ],
-      "lastUpdate": "2026-03-11T11:32:00.939Z"
+      "lastUpdate": "2026-03-14T03:21:24.584Z"
     },
     {
       "name": "@zhin.js/plugin-repeater",
@@ -939,5 +939,5 @@
     "adapters": 14,
     "community": 0
   },
-  "updatedAt": "2026-03-14T02:33:52.175Z"
+  "updatedAt": "2026-03-15T02:54:46.092Z"
 }
