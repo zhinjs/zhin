@@ -35,8 +35,17 @@ function extractMediaParts(message: Message<any>): ContentPart[] {
         case 'audio':
         case 'record':
         case 'voice': {
-          const url = data?.url || data?.file || data?.src;
-          if (url) parts.push({ type: 'image_url', image_url: { url } });
+          const dataStr = data?.data || data?.base64;
+          if (dataStr) {
+            const fmt = data?.format === 'wav' ? 'wav' : 'mp3';
+            parts.push({ type: 'audio', audio: { data: dataStr, format: fmt } });
+          } else {
+            const url = data?.url || data?.file || data?.src;
+            if (url) {
+              // Audio URL: describe as text since most LLMs can't play audio URLs directly
+              parts.push({ type: 'text', text: `[用户发送了一段语音: ${url}]` });
+            }
+          }
           break;
         }
         case 'face':

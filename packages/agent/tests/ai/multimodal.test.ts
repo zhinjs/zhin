@@ -92,11 +92,15 @@ describe('ContentPart 类型完整性', () => {
       type: 'image_url',
       image_url: { url: 'https://img.png', detail: 'high' },
     };
-    expect((part as any).image_url.detail).toBe('high');
+    if (part.type === 'image_url') {
+      expect(part.image_url.detail).toBe('high');
+    }
   });
 
   it('face 的 text 应为可选', () => {
     const part: ContentPart = { type: 'face', face: { id: '100' } };
-    expect((part as any).face.text).toBeUndefined();
+    if (part.type === 'face') {
+      expect(part.face.text).toBeUndefined();
+    }
   });
 });
