@@ -8,27 +8,71 @@ import type { ContentPart } from '@zhin.js/core';
 import type { OutputElement } from '../output.js';
 import type { AIServiceRefs } from './shared-refs.js';
 
-function extractImageUrls(message: Message<any>): string[] {
-  const urls: string[] = [];
-  const raw = typeof message.$raw === 'string' ? message.$raw : JSON.stringify(message.$raw || '');
+/**
+ * Extract multimodal ContentPart[] from a Message's structured $content segments.
+ * Handles image, video, audio, and face/sticker types.
+ * Falls back to raw string parsing for image URLs when $content has no media segments.
+ */
+function extractMediaParts(message: Message<any>): ContentPart[] {
+  const parts: ContentPart[] = [];
 
-  const xmlMatches = raw.match(/<image[^>]+url="([^"]+)"/g);
-  if (xmlMatches) {
-    for (const m of xmlMatches) {
-      const urlMatch = m.match(/url="([^"]+)"/);
-      if (urlMatch) urls.push(urlMatch[1]);
+  // 1. Extract from structured $content segments
+  if (Array.isArray(message.$content)) {
+    for (const seg of message.$content) {
+      if (typeof seg === 'string' || !seg || !seg.type) continue;
+      const { type, data } = seg;
+      switch (type) {
+        case 'image': {
+          const url = data?.url || data?.file || data?.src;
+          if (url) parts.push({ type: 'image_url', image_url: { url } });
+          break;
+        }
+        case 'video': {
+          const url = data?.url || data?.file || data?.src;
+          if (url) parts.push({ type: 'video_url', video_url: { url } });
+          break;
+        }
+        case 'audio':
+        case 'record':
+        case 'voice': {
+          const url = data?.url || data?.file || data?.src;
+          if (url) parts.push({ type: 'image_url', image_url: { url } });
+          break;
+        }
+        case 'face':
+        case 'sticker':
+        case 'emoji': {
+          const id = String(data?.id ?? data?.face_id ?? '');
+          const text = data?.text || data?.name || data?.describe;
+          if (id) parts.push({ type: 'face', face: { id, text } });
+          break;
+        }
+      }
     }
   }
 
-  const cqMatches = raw.match(/\[CQ:image[^\]]*url=([^\],]+)/g);
-  if (cqMatches) {
-    for (const m of cqMatches) {
-      const urlMatch = m.match(/url=([^\],]+)/);
-      if (urlMatch) urls.push(urlMatch[1]);
+  // 2. Fallback: parse image URLs from $raw for adapters that don't use structured $content
+  if (parts.length === 0) {
+    const raw = typeof message.$raw === 'string' ? message.$raw : JSON.stringify(message.$raw || '');
+
+    const xmlMatches = raw.match(/<image[^>]+url="([^"]+)"/g);
+    if (xmlMatches) {
+      for (const m of xmlMatches) {
+        const urlMatch = m.match(/url="([^"]+)"/);
+        if (urlMatch) parts.push({ type: 'image_url', image_url: { url: urlMatch[1] } });
+      }
+    }
+
+    const cqMatches = raw.match(/\[CQ:image[^\]]*url=([^\],]+)/g);
+    if (cqMatches) {
+      for (const m of cqMatches) {
+        const urlMatch = m.match(/url=([^\],]+)/);
+        if (urlMatch) parts.push({ type: 'image_url', image_url: { url: urlMatch[1] } });
+      }
     }
   }
 
-  return urls;
+  return parts;
 }
 
 function renderOutput(elements: OutputElement[]): string {
@@ -116,14 +160,12 @@ export function registerAITrigger(refs: AIServiceRefs): void {
 
         let responseText: string;
         if (refs.zhinAgent) {
-          const imageUrls = extractImageUrls(message);
+          const mediaParts = extractMediaParts(message);
           let elements: OutputElement[];
-          if (imageUrls.length > 0) {
+          if (mediaParts.length > 0) {
             const parts: ContentPart[] = [];
             if (content) parts.push({ type: 'text', text: content });
-            for (const url of imageUrls) {
-              parts.push({ type: 'image_url', image_url: { url } });
-            }
+            parts.push(...mediaParts);
             elements = await Promise.race([
               refs.zhinAgent.processMultimodal(parts, toolContext),
               timeout,
