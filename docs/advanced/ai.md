@@ -556,17 +556,42 @@ agent.process(content, context, tools, (chunk, full) => {
 
 ## 多模态支持
 
-AI 支持图片+文本的多模态输入（需要 LLM 支持视觉能力）：
+AI 支持多种媒体类型的多模态输入（需要 LLM 支持视觉/音频能力）：
 
 ```typescript
 agent.processMultimodal(
   [
     { type: 'text', text: '这是什么？' },
     { type: 'image_url', image_url: { url: 'https://...' } },
+    { type: 'video_url', video_url: { url: 'https://...' } },
+    { type: 'audio', audio: { data: 'base64...', format: 'mp3' } },
+    { type: 'face', face: { id: '178', text: '笑哭' } },
   ],
   context
 )
 ```
+
+### 支持的媒体类型
+
+| ContentPart 类型 | 说明 | IM 消息段类型 |
+|---|---|---|
+| `text` | 纯文本 | `text` |
+| `image_url` | 图片（URL） | `image` |
+| `video_url` | 视频（URL） | `video` |
+| `audio` | 音频（base64） | `audio`, `record`, `voice` |
+| `face` | 表情/贴纸 | `face`, `sticker`, `emoji` |
+
+### 自动提取
+
+当 IM 消息包含图片、视频、音频或表情时，AI 触发器会自动从 `message.$content` 中提取这些媒体元素并转换为 `ContentPart[]`，然后调用 `processMultimodal` 进行处理。无需手动构建。
+
+### 输出回传
+
+AI 回复中的富媒体内容（图片、音频、视频）会自动解析为 `OutputElement[]`，然后通过 `parseRichMediaContent` 转换为 IM 消息段发送回用户：
+
+- `![alt](url)` → 图片消息
+- `[audio](url)` → 音频消息
+- `[video](url)` → 视频消息
 
 需配置 `visionModel` 或使用默认模型。
 

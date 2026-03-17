@@ -385,17 +385,43 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     const profileSummary = await this.userProfiles.buildProfileSummary(userId);
     const personaEnhanced = buildEnhancedPersona(this.config, profileSummary, '');
 
-    const textContent = parts
-      .filter((p): p is Extract<ContentPart, { type: 'text' }> => p.type === 'text')
-      .map(p => p.text)
-      .join(' ') || '[多模态消息]';
+    // Build text summary describing the multimodal content
+    const textFragments: string[] = [];
+    const llmParts: ContentPart[] = [];
 
+    for (const p of parts) {
+      switch (p.type) {
+        case 'text':
+          textFragments.push(p.text);
+          llmParts.push(p);
+          break;
+        case 'image_url':
+          textFragments.push('[图片]');
+          llmParts.push(p);
+          break;
+        case 'video_url':
+          textFragments.push('[视频]');
+          // Most LLMs don't support video natively; describe it as a URL for context
+          llmParts.push({ type: 'text', text: `[用户发送了一个视频: ${p.video_url.url}]` });
+          break;
+        case 'audio':
+          textFragments.push('[音频]');
+          llmParts.push(p);
+          break;
+        case 'face':
+          textFragments.push(p.face.text || `[表情:${p.face.id}]`);
+          llmParts.push({ type: 'text', text: p.face.text ? `[表情: ${p.face.text}]` : `[表情ID: ${p.face.id}]` });
+          break;
+      }
+    }
+
+    const textContent = textFragments.join(' ') || '[多模态消息]';
     const visionModel = this.config.visionModel || this.provider.models[0];
 
     const messages: ChatMessage[] = [
       { role: 'system', content: personaEnhanced },
       ...historyMessages,
-      { role: 'user', content: parts },
+      { role: 'user', content: llmParts },
     ];
 
     let reply = '';
@@ -413,7 +439,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       reply = typeof msg === 'string' ? msg : '';
     }
 
-    if (!reply) reply = '抱歉，我无法理解这张图片。';
+    if (!reply) reply = '抱歉，我无法理解这条多模态消息。';
     await this.saveToSession(sessionId, textContent, reply, sceneId);
     return parseOutput(reply);
   }

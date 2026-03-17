@@ -15,7 +15,17 @@ export function contentToText(c: string | ContentPart[] | ContentPart | null | u
   if (c == null) return '';
   if (typeof c === 'string') return c;
   const parts = Array.isArray(c) ? c : [c as ContentPart];
-  return parts.map(p => (p?.type === 'text' ? p.text : '')).join('');
+  return parts.map(p => {
+    if (!p) return '';
+    switch (p.type) {
+      case 'text': return p.text;
+      case 'image_url': return '[图片]';
+      case 'audio': return '[音频]';
+      case 'video_url': return '[视频]';
+      case 'face': return (p as Extract<ContentPart, { type: 'face' }>).face.text || '[表情]';
+      default: return '';
+    }
+  }).join('');
 }
 
 export function buildUserMessageWithHistory(history: ChatMessage[], currentContent: string): string {

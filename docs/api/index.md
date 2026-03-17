@@ -294,9 +294,9 @@ agent.process(
   onChunk?: OnChunkCallback
 ): Promise<OutputElement[]>
 
-// 处理多模态消息（图片+文本）
+// 处理多模态消息（图片/视频/音频/表情+文本）
 agent.processMultimodal(
-  parts: MultimodalPart[],
+  parts: ContentPart[],
   context: ToolContext,
   onChunk?: OnChunkCallback
 ): Promise<OutputElement[]>
