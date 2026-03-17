@@ -1,5 +1,13 @@
 # @zhin.js/agent
 
+## 0.0.14
+
+### Patch Changes
+
+- 607acc4: fix: 视觉模型处理
+  - @zhin.js/core@1.0.51
+  - @zhin.js/ai@1.0.12
+
 ## 0.0.13
 
 ### Patch Changes
