@@ -585,6 +585,19 @@ agent.processMultimodal(
 
 当 IM 消息包含图片、视频、音频或表情时，AI 触发器会自动从 `message.$content` 中提取这些媒体元素并转换为 `ContentPart[]`，然后调用 `processMultimodal` 进行处理。无需手动构建。
 
+### 输入：MessageElement 约定
+
+多模态输入依赖 `message.$content`（`MessageElement[]`）中 **MessageSegment** 的 `type` 与 `data` 约定。适配器在构造 `$content` 时需使用下表约定的段类型与字段，AI 触发器才能正确提取并转为 `ContentPart`：
+
+| 消息段 type | 说明 | data 常用字段 |
+|---|---|---|
+| `image` | 图片 | `url`、`file` 或 `src`（任一带有效值即可） |
+| `video` | 视频 | `url`、`file` 或 `src` |
+| `audio`、`record`、`voice` | 音频/语音 | base64 内容：`data` 或 `base64`；格式：`format`（`wav`/`mp3`）。若仅有 `url`，会退化为文本描述传给模型 |
+| `face`、`sticker`、`emoji` | 表情/贴纸 | `id` 或 `face_id`；可选 `text`、`name`、`describe` |
+
+仅当 `$content` 元素为 `MessageSegment`（`{ type: string, data: Record<string, any> }`）且 `type` 匹配上表时会被提取；`MessageComponent` 或其它 type 会被安全跳过。
+
 ### 输出回传
 
 AI 回复中的富媒体内容（图片、音频、视频）会自动解析为 `OutputElement[]`，然后通过 `parseRichMediaContent` 转换为 IM 消息段发送回用户：
@@ -594,6 +607,33 @@ AI 回复中的富媒体内容（图片、音频、视频）会自动解析为 `
 - `[video](url)` → 视频消息
 
 需配置 `visionModel` 或使用默认模型。
+
+#### Ollama 多模型 + 多模态示例
+
+若本地通过 Ollama 同时跑多款模型（如 qwen3:14b、qwen3:8b、qwen2.5:7b、qwen2.5vl:7b），可这样配置：
+
+- **文本对话与工具调用**：使用 `providers.ollama.models` 列表中的**第一个**模型。
+- **多模态（看图/视频等）**：使用 `agent.visionModel` 指定视觉模型；若不配置则回退到上述第一个模型。
+
+示例（默认用 qwen3:14b 做文本与工具调用，看图用 qwen2.5vl:7b）：
+
+```yaml
+ai:
+  enabled: true
+  defaultProvider: ollama
+  providers:
+    ollama:
+      host: "http://localhost:11434"
+      models:
+        - qwen3:14b      # 默认：纯文本 + 工具调用
+        - qwen3:8b
+        - qwen2.5:7b
+        - qwen2.5vl:7b   # 多模态（视觉）
+  agent:
+    visionModel: qwen2.5vl:7b   # 有图/视频时用该模型
+```
+
+按需把第一个模型改为 `qwen3:8b` 或 `qwen2.5:7b` 可降低显存占用。
 
 ## 自定义 Provider
 

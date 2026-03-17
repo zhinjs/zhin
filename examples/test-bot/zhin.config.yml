@@ -96,6 +96,7 @@ ai:
     summaryRetentionDays: 30
   agent:
     execSecurity: allowlist
+    visionModel: qwen2.5vl:7b
     execAllowlist:
       - ls
       - cat
@@ -122,7 +123,7 @@ ai:
       - /
       - "!"
       - ！
-    timeout: 60000
+    timeout: 120000
 60s:
   apiBase: https://services.zhin.dev
 http:

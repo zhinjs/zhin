@@ -389,7 +389,13 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     const textFragments: string[] = [];
     const llmParts: ContentPart[] = [];
 
-    for (const p of parts) {
+    /** Full multimodal ContentPart union (core/ai may export a narrower type in some builds) */
+    type MultimodalPart =
+      | ContentPart
+      | { type: 'video_url'; video_url: { url: string } }
+      | { type: 'face'; face: { id: string; text?: string } };
+
+    for (const p of parts as MultimodalPart[]) {
       switch (p.type) {
         case 'text':
           textFragments.push(p.text);
@@ -439,7 +445,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       reply = typeof msg === 'string' ? msg : '';
     }
 
-    if (!reply) reply = '抱歉，我无法理解这条多模态消息。';
+    if (!reply) reply = '抱歉，我无法理解这条消息。';
     await this.saveToSession(sessionId, textContent, reply, sceneId);
     return parseOutput(reply);
   }

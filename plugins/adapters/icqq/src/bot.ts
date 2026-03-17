@@ -474,6 +474,14 @@ export namespace IcqqBot {
         return { type, data };
       });
   }
+}
+
+export namespace IcqqBot {
+  const allowTypes = [
+    "text", "face", "image", "record", "audio", "dice", "rps", "video",
+    "file", "location", "share", "json", "at", "reply", "long_msg",
+    "button", "markdown", "xml",
+  ];
 
   export function toSendable(content: SendContent): Sendable {
     if (!Array.isArray(content)) content = [content];
