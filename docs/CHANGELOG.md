@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.17
+
+### Patch Changes
+
+- 607acc4: fix: 视觉模型处理
+
 ## 1.0.16
 
 ### Patch Changes
