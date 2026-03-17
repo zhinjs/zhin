@@ -1,5 +1,15 @@
 # @zhin.js/adapter-icqq
 
+## 1.0.62
+
+### Patch Changes
+
+- 607acc4: fix: 视觉模型处理
+  - zhin.js@1.0.51
+  - @zhin.js/console@1.0.50
+  - @zhin.js/http@1.0.45
+  - @zhin.js/core@1.0.51
+
 ## 1.0.61
 
 ### Patch Changes
