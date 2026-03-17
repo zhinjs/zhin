@@ -7,11 +7,12 @@ import { MigrationRunner, defineMigration } from '../src/migration.js';
 const require = createRequire(import.meta.url);
 let sqliteAvailable = false;
 try {
-  const sqlite3 = require('sqlite3');
-  new sqlite3.Database(':memory:'); // 触发 native 绑定加载，无此步骤 require 可能不报错
+  const { DatabaseSync } = require('node:sqlite');
+  const db = new DatabaseSync(':memory:');
+  db.close();
   sqliteAvailable = true;
 } catch {
-  // sqlite3 未安装或 native 绑定未编译（如 Node 版本不匹配），跳过 SQLite 测试
+  // Node 内置 SQLite 需要 Node.js 22.5+（推荐 24+），版本不足时跳过 SQLite 测试
 }
 
 // 注册 SQLite dialect

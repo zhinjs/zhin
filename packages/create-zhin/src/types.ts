@@ -18,11 +18,11 @@ export interface DatabaseConfig {
   [key: string]: any;
 }
 
-// 数据库配置映射
-export const DATABASE_PACKAGES = {
-  sqlite: 'sqlite3',
+// 数据库配置映射（SQLite 使用 Node 内置 node:sqlite，无需额外安装）
+export const DATABASE_PACKAGES: Record<DatabaseConfig['dialect'], string | undefined> = {
+  sqlite: undefined,
   mysql: 'mysql2',
   pg: 'pg',
   mongodb: 'mongodb',
   redis: 'redis'
-} as const;
+};

@@ -8,12 +8,9 @@ Universal database abstraction layer for Zhin.js framework with support for mult
 npm install @zhin.js/database
 ```
 
-Install the database driver you need:
+Install the database driver you need（SQLite 使用 Node 内置 `node:sqlite`，无需安装，需 Node.js 22.5+，推荐 24+）:
 
 ```bash
-# For SQLite
-npm install sqlite3
-
 # For MySQL
 npm install mysql2
 
@@ -56,7 +53,7 @@ const user = await userModel.create({
 ## Supported Databases
 
 ### ✅ Relational Databases (已完整实现)
-- **SQLite** - 内置支持，需要安装 `sqlite3`
+- **SQLite** - 内置支持，使用 Node 自带 `node:sqlite`（无需安装驱动，需 Node.js 22.5+，推荐 24+）
   - 轻量级、零配置
   - 适合中小型应用
   - 支持 WAL 模式

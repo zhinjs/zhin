@@ -250,7 +250,7 @@ async function main() {
     console.log('📝 下一步操作：');
     console.log(`  ${chalk.cyan(`cd ${realName}`)}`);
     if (options.database?.dialect === 'sqlite') {
-      console.log(`  ${chalk.cyan('pnpm approve-builds sqlite3')} ${chalk.gray('# 批准 sqlite3 原生模块构建如遇错误，请检查系统是否已安装C++编译器(g++)')}`);
+      console.log(`  ${chalk.gray('# SQLite 使用 Node 内置 node:sqlite，请使用 Node.js 22.5+（推荐 24+）')}`);
     }
     
     

@@ -224,12 +224,13 @@ class IcqqAdapter extends Adapter<IcqqBot> {
 }
 ```
 
-目前所有 9 个 IM 适配器都已采用此模式：
+目前 10 余个 IM 适配器（含 ICQQ、OneBot11、Milky、QQ 官方、Telegram、Discord、KOOK、Slack、钉钉、飞书等）已采用此模式，Satori、OneBot 12 等协议适配器见 [适配器](/essentials/adapters) 一览：
 
 | 适配器 | 覆写的标准方法 | 保留的平台特有工具 |
 |--------|---------------|-------------------|
 | ICQQ | kick, mute, muteAll, setAdmin, setNickname, setGroupName, listMembers | 头衔、群公告、戳一戳、禁言列表等 |
 | OneBot11 | kick, mute, muteAll, setAdmin, setNickname, setGroupName, listMembers, getGroupInfo | 头衔 |
+| Milky | kick, mute, muteAll, setAdmin, setNickname, setGroupName, listMembers, getGroupInfo | — |
 | Telegram | kick, unban, mute, setAdmin, setGroupName, getGroupInfo | 置顶、投票、反应、贴纸、权限等 |
 | Discord | kick, ban, unban, mute, setNickname, listMembers, getGroupInfo | 角色管理、帖子/论坛、反应、Embed |
 | KOOK | kick, ban, unban, setNickname, listMembers | 角色管理、黑名单 |

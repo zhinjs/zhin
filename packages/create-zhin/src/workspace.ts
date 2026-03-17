@@ -81,7 +81,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       'pm2': 'latest'
     },
     pnpm: {
-      onlyBuiltDependencies: ['esbuild', 'sqlite3']
+      onlyBuiltDependencies: ['esbuild']
     },
     engines: {
       node: '>=18.0.0'

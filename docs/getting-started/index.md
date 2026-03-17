@@ -410,5 +410,5 @@ http:
 - **[配置文件](/essentials/configuration)** - 了解更多配置选项
 - **[命令系统](/essentials/commands)** - 学习创建复杂命令
 - **[插件系统](/essentials/plugins)** - 深入理解插件开发
-- **[适配器](/essentials/adapters)** - 连接到 QQ、Discord 等平台
+- **[适配器](/essentials/adapters)** - 连接到 QQ、Discord、Satori、OneBot 12 等平台
 - **[AI 模块](/advanced/ai)** - 集成 AI 大模型能力

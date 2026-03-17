@@ -17,19 +17,17 @@
     "build": "tsc",
     "clean": "rimraf lib"
   },
-  "dependencies": {},
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "peerDependencies": {
-    "sqlite3": "latest",
+    "mongodb": "^3.1.13",
     "mysql2": "^3.9.8",
     "pg": "^7.1.2",
-    "mongodb": "^3.1.13",
     "redis": "latest",
     "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {
-    "sqlite3": {
-      "optional": true
-    },
     "mysql2": {
       "optional": true
     },
@@ -44,14 +42,12 @@
     }
   },
   "devDependencies": {
-    "typescript": "^5.3.0",
-    "sqlite3": "latest",
+    "@types/pg": "latest",
+    "mongodb": "latest",
     "mysql2": "latest",
     "pg": "latest",
-    "mongodb": "latest",
     "redis": "latest",
-    "@types/pg": "latest",
-    "@types/sqlite3": "latest",
+    "typescript": "^5.3.0",
     "zhin.js": "workspace:*"
   },
   "repository": {

@@ -48,6 +48,6 @@ features:
 
   - icon: "\uD83C\uDF10"
     title: 多平台生态
-    details: 支持 QQ、Discord、Telegram、KOOK、Slack、钉钉、飞书等 12 个平台。统一 API 接口，适配器自动暴露 AI 能力。
+    details: 支持 QQ、Discord、Telegram、KOOK、Slack、钉钉、飞书、OneBot 11/12、Milky、Satori 等 14+ 平台。统一 API 接口，适配器自动暴露 AI 能力。
 
 ---

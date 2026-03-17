@@ -16,7 +16,7 @@
 - **TypeScript 全量类型** — 完整的类型推导和提示，极致开发体验
 - **智能热重载** — 代码、配置、依赖变更自动生效，无需重启，错误自动回滚
 - **插件化架构** — 基于 AsyncLocalStorage 的上下文管理，React Hooks 风格的 `usePlugin()` API
-- **多平台生态** — 统一 API 接口，支持 QQ、Discord、Telegram、KOOK、Slack、钉钉、飞书等 12 个平台
+- **多平台生态** — 统一 API 接口，支持 QQ、Discord、Telegram、KOOK、Slack、钉钉、飞书、OneBot 11/12、Milky、Satori 等 14+ 平台
 - **Web 控制台** — 实时监控、插件管理、Feature 统计、日志查看
 
 ## 快速开始

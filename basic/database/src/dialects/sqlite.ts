@@ -1,56 +1,50 @@
 import * as fs from 'node:fs';
-import {Dialect} from "../base/index.js";
-import {Registry} from "../registry.js";
-import {Database} from "../base/index.js";
-import {Column, Transaction, TransactionOptions} from "../types.js";
-import {RelatedDatabase} from "../type/related/database.js";
 import path from 'node:path';
-
+import { Dialect } from '../base/index.js';
+import { Registry } from '../registry.js';
+import { Database } from '../base/index.js';
+import { Column, Transaction, TransactionOptions } from '../types.js';
+import { RelatedDatabase } from '../type/related/database.js';
 
 export interface SQLiteDialectConfig {
   filename: string;
-  mode?:string
+  mode?: string;
 }
 
 export class SQLiteDialect<S extends Record<string, object> = Record<string, object>> extends Dialect<SQLiteDialectConfig, S, string> {
-  private db: any = null;
+  /** Node 内置 SQLite 连接（node:sqlite），在 connect() 中动态加载 */
+  private db: { prepare(sql: string): any; close(): void } | null = null;
 
   constructor(config: SQLiteDialectConfig) {
     super('sqlite', config);
   }
 
-  // Connection management
   isConnected(): boolean {
     return this.db !== null;
   }
 
   async connect(): Promise<void> {
     try {
-      const { default: sqlite3 } = await import('sqlite3');
-      const isExistDbFile=fs.existsSync(this.config.filename);
-      const dirname=path.dirname(this.config.filename);
-      if(!fs.existsSync(dirname)){
-        fs.mkdirSync(dirname,{recursive:true});
+      const { createRequire } = await import('node:module');
+      const require = createRequire(import.meta.url);
+      const { DatabaseSync } = require('node:sqlite');
+      const dirname = path.dirname(this.config.filename);
+      if (!fs.existsSync(dirname)) {
+        fs.mkdirSync(dirname, { recursive: true });
       }
-      this.db = new sqlite3.Database(this.config.filename);
+      this.db = new DatabaseSync(this.config.filename);
     } catch (error) {
-      console.error('forgot install sqlite3 ?');
-      throw new Error(`SQLite 连接失败: ${error}`);
+      throw new Error(`SQLite 连接失败（需要 Node.js 22.5+，推荐 24+）: ${error}`);
     }
   }
 
   async disconnect(): Promise<void> {
     if (this.db) {
-      return new Promise((resolve, reject) => {
-        this.db.close((err: any) => {
-          if (err) {
-            reject(err);
-          } else {
-    this.db = null;
-            resolve();
-          }
-        });
-      });
+      try {
+        this.db.close();
+      } finally {
+        this.db = null;
+      }
     }
   }
 
@@ -58,55 +52,46 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
     return this.isConnected();
   }
 
-  async query<U = any>(sql: string, params?: any[]): Promise<U> {
-    const trimmedSql = sql.trim().toLowerCase();
-    const isSelectQuery = trimmedSql.startsWith('select');
-    const isInsertQuery = trimmedSql.startsWith('insert');
-    
-    return new Promise((resolve, reject) => {
-      // SELECT 查询使用 db.all 获取所有结果
-      if (isSelectQuery) {
-        this.db.all(sql, params, (err: any, rows: any) => {
-          if (err) {
-            reject(err);
-          } else {
-            // 对查询结果进行后处理，移除多余的引号
-            const processedRows = this.processQueryResults(rows);
-            resolve(processedRows as U);
-          }
-        });
-      } 
-      // INSERT 使用 db.run 执行，返回 { lastID, changes }
-      else if (isInsertQuery) {
-        this.db.run(sql, params, function(this: any, err: any) {
-          if (err) {
-            reject(err);
-          } else {
-            resolve({ lastID: this.lastID, changes: this.changes } as U);
-          }
-        });
-      }
-      // UPDATE/DELETE 返回受影响的行数
-      else if (trimmedSql.startsWith('update') || trimmedSql.startsWith('delete')) {
-        this.db.run(sql, params, function(this: any, err: any) {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(this.changes as U);
-          }
-        });
-      }
-      // 其他查询（CREATE TABLE, ALTER TABLE 等）使用 db.run
-      else {
-        this.db.run(sql, params, (err: any) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(undefined as U);
-          }
-        });
-      }
+  /** node:sqlite 仅支持 number/string/bigint/buffer/null，将 Date/boolean 等转为可绑定值 */
+  private prepareBindParams(params: any[]): any[] {
+    return params.map((v) => {
+      if (v == null) return null;
+      if (v instanceof Date) return v.toISOString();
+      if (typeof v === 'boolean') return v ? 1 : 0;
+      return v;
     });
+  }
+
+  async query<U = any>(sql: string, params?: any[]): Promise<U> {
+    if (!this.db) throw new Error('SQLite 未连接');
+    const trimmedSql = sql.trim().toLowerCase();
+    const isSelect = trimmedSql.startsWith('select');
+    const isInsert = trimmedSql.startsWith('insert');
+    const isUpdateOrDelete = trimmedSql.startsWith('update') || trimmedSql.startsWith('delete');
+    const args = this.prepareBindParams(params ?? []);
+
+    try {
+      const stmt = this.db.prepare(sql);
+      if (isSelect) {
+        const rows = stmt.all(...args) as any[];
+        return this.processQueryResults(rows) as U;
+      }
+      if (isInsert) {
+        const result = stmt.run(...args) as { changes: number | bigint; lastInsertRowid: number | bigint };
+        return {
+          lastID: Number(result.lastInsertRowid),
+          changes: Number(result.changes),
+        } as U;
+      }
+      if (isUpdateOrDelete) {
+        const result = stmt.run(...args) as { changes: number | bigint };
+        return Number(result.changes) as U;
+      }
+      stmt.run(...args);
+      return undefined as U;
+    } catch (err) {
+      throw err;
+    }
   }
 
   /**
@@ -177,8 +162,11 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
 
   async dispose(): Promise<void> {
     if (this.db) {
-      await this.db.close();
-      this.db = null;
+      try {
+        this.db.close();
+      } finally {
+        this.db = null;
+      }
     }
   }
 

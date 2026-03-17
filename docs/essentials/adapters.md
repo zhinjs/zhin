@@ -374,7 +374,7 @@ class IcqqAdapter extends Adapter<IcqqBot> {
 }
 ```
 
-目前所有 10 个 IM 适配器（ICQQ、OneBot11、Milky、QQ 官方、Telegram、Discord、KOOK、Slack、钉钉、飞书）都已采用此模式。
+目前 10 余个 IM 适配器（ICQQ、OneBot11、Milky、QQ 官方、Telegram、Discord、KOOK、Slack、钉钉、飞书等）以及 Satori、OneBot 12 等协议适配器均已接入，详见下方 [可用适配器一览](#可用适配器一览)。
 
 ### 平台特有工具（addTool）
 
