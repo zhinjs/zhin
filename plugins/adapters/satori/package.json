@@ -28,6 +28,10 @@
     "chatbot"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "dependencies": {
     "ws": "^8.18.3"
   },
