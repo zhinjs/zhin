@@ -34,6 +34,27 @@ bots:
     ver: 9.1.70
     data_dir: ./data
     scope: icqqjs
+  - context: milky
+    connection: ws
+    name: milky-bot
+    baseUrl: "${MILKY_BASE_URL}"
+    access_token: "${COMMON_ACCESS_TOKEN}"
+  - context: satori
+    connection: ws
+    name: satori-bot
+    baseUrl: "${SATORI_BASE_URL}"
+    token: "${COMMON_ACCESS_TOKEN}"
+    heartbeat_interval: 10000
+  - context: onebot12
+    connection: ws
+    name: ob12-bot
+    url: "${ONEBOT12_BASE_URL}"
+    access_token: "${COMMON_ACCESS_TOKEN}"
+  - context: onebot11
+    connection: ws
+    name: kook-zhin
+    url: "${ONEBOT11_BASE_URL}"
+    access_token: "kook_v11_token"
   - context: github
     name: zhin-github
     app_id: ${GITHUB_APP_ID}
@@ -57,11 +78,15 @@ plugins:
   - "@zhin.js/http"
   - "@zhin.js/console"
   - "@zhin.js/mcp"
-  - "@zhin.js/adapter-github"
+  # - "@zhin.js/adapter-github"
   - "@zhin.js/adapter-sandbox"
   - "@zhin.js/adapter-kook"
-  - "@zhin.js/adapter-icqq"
-  - "@zhin.js/adapter-qq"
+  - "@zhin.js/adapter-milky"
+  # - "@zhin.js/adapter-satori"
+  # - "@zhin.js/adapter-onebot11"
+  # - "@zhin.js/adapter-onebot12"
+  # - "@zhin.js/adapter-icqq"
+  # - "@zhin.js/adapter-qq"
   - "@zhin.js/plugin-html-renderer"
   - "@zhin.js/plugin-60s"
   - "@zhin.js/plugin-teach"

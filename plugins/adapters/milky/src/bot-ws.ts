@@ -57,6 +57,7 @@ export class MilkyWsClient extends EventEmitter implements Bot<MilkyWsConfig, Mi
       this.ws.on('open', () => {
         this.$connected = true;
         if (!this.$config.access_token) this.logger.warn('missing access_token, connection is not secured');
+        this.logger.info(`${this.$config.name} 已连接 (WS 正向: ${this.$config.baseUrl})`);
         this.startHeartbeat();
         resolve();
       });
@@ -72,11 +73,15 @@ export class MilkyWsClient extends EventEmitter implements Bot<MilkyWsConfig, Mi
 
       this.ws.on('close', (code, reason) => {
         this.$connected = false;
-        reject(new Error(`WS closed: ${code} ${reason.toString()}`));
+        const reasonStr = reason?.toString?.() || String(reason);
+        const codeHint = code === 1005 ? ' [无状态，多为服务端/代理未发 close 帧即断开]' : code === 1006 ? ' [异常关闭]' : '';
+        this.logger.warn(`${this.$config.name} 连接已断开 (code=${code}${codeHint}${reasonStr ? `, reason=${reasonStr}` : ''})，${this.$config.reconnect_interval ?? 5000}ms 后重连`);
+        reject(new Error(`WS closed: ${code} ${reasonStr}`));
         this.scheduleReconnect();
       });
 
       this.ws.on('error', (error) => {
+        this.logger.warn(`${this.$config.name} WS 错误: ${error instanceof Error ? error.message : String(error)}`);
         reject(error);
       });
     });
@@ -260,6 +265,7 @@ export class MilkyWsClient extends EventEmitter implements Bot<MilkyWsConfig, Mi
 
   private startHeartbeat(): void {
     const interval = this.$config.heartbeat_interval ?? 30000;
+    if (interval <= 0) return; // 设为 0 可关闭心跳（部分网关如 onebots 对 ping 处理异常时会 1006 断连）
     this.heartbeatTimer = setInterval(() => {
       if (this.ws?.readyState === WebSocket.OPEN) this.ws.ping();
     }, interval);

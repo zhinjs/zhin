@@ -111,5 +111,6 @@ export class MilkyAdapter extends Adapter<MilkyBot> {
       tags: GROUP_MANAGEMENT_SKILL_TAGS,
     });
     await super.start();
+    this.plugin.logger.info('Milky 适配器已启动');
   }
 }

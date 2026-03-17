@@ -244,15 +244,24 @@ importers:
       '@zhin.js/adapter-lark':
         specifier: workspace:*
         version: link:../../plugins/adapters/lark
+      '@zhin.js/adapter-milky':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/milky
       '@zhin.js/adapter-onebot11':
         specifier: workspace:*
         version: link:../../plugins/adapters/onebot11
+      '@zhin.js/adapter-onebot12':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/onebot12
       '@zhin.js/adapter-qq':
         specifier: workspace:*
         version: link:../../plugins/adapters/qq
       '@zhin.js/adapter-sandbox':
         specifier: workspace:*
         version: link:../../plugins/adapters/sandbox
+      '@zhin.js/adapter-satori':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/satori
       '@zhin.js/adapter-slack':
         specifier: workspace:*
         version: link:../../plugins/adapters/slack

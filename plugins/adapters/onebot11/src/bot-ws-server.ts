@@ -68,9 +68,11 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11WsServ
     this.#wss.on('connection', (client, req) => {
       this.startHeartbeat();
       this.logger.info(`已连接到协议端：${req.socket.remoteAddress}`);
-      client.on('error', (err) => this.logger.error('连接出错：', err));
-      client.on('close', (code) => {
-        this.logger.error(`与连接端(${req.socket.remoteAddress})断开，错误码：${code}`);
+      client.on('error', (err) => this.logger.warn(`OneBot11 反向 WS 连接错误: ${err instanceof Error ? err.message : String(err)}`));
+      client.on('close', (code, reason) => {
+        const reasonStr = reason?.toString?.() || String(reason ?? '');
+        const codeHint = code === 1005 ? ' [无状态]' : code === 1006 ? ' [异常关闭]' : '';
+        this.logger.warn(`OneBot11 反向 WS 与协议端(${req.socket.remoteAddress})连接已断开 (code=${code ?? '?'}${codeHint}${reasonStr ? `, reason=${reasonStr}` : ''})`);
         for (const [key, value] of this.#clientMap) {
           if (client === value) this.#clientMap.delete(key);
         }

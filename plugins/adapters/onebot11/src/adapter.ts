@@ -115,6 +115,7 @@ export class OneBot11Adapter extends Adapter<OneBot11Bot> {
       tags: GROUP_MANAGEMENT_SKILL_TAGS,
     });
     await super.start();
+    this.plugin.logger.info('OneBot11 适配器已启动');
   }
 
   private registerOneBot11PlatformTools(): void {

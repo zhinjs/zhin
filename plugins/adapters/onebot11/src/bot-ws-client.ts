@@ -55,6 +55,7 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11WsClie
       this.ws.on('open', () => {
         this.$connected = true;
         if (!this.$config.access_token) this.logger.warn(`missing 'access_token', your OneBot protocol is not safely`);
+        this.logger.info(`${this.$config.name} 已连接 (WS 正向: ${this.$config.url})`);
         this.startHeartbeat();
         resolve();
       });
@@ -70,11 +71,15 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11WsClie
 
       this.ws.on('close', (code, reason) => {
         this.$connected = false;
+        const reasonStr = reason?.toString?.() || String(reason);
+        const codeHint = code === 1005 ? ' [无状态，多为服务端/代理未发 close 帧即断开]' : code === 1006 ? ' [异常关闭]' : '';
+        this.logger.warn(`${this.$config.name} 连接已断开 (code=${code}${codeHint}${reasonStr ? `, reason=${reasonStr}` : ''})，${this.$config.reconnect_interval || 5000}ms 后重连`);
         reject({ code, reason });
         this.scheduleReconnect();
       });
 
       this.ws.on('error', (error) => {
+        this.logger.warn(`${this.$config.name} WS 错误: ${error instanceof Error ? error.message : String(error)}`);
         reject(error);
       });
     });

@@ -42,5 +42,6 @@ export class SatoriAdapter extends Adapter<SatoriBot> {
       this.#router = router;
     });
     await super.start();
+    this.plugin.logger.info('Satori 适配器已启动');
   }
 }

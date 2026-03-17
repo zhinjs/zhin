@@ -67,10 +67,13 @@ export class SatoriWsClient extends EventEmitter implements Bot<SatoriWsConfig, 
 
   async $connect(): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.ws = new WebSocket(this.wsUrl);
+      const headers: Record<string, string> = {};
+      if (this.$config.token) headers['Authorization'] = `Bearer ${this.$config.token}`;
+      this.ws = new WebSocket(this.wsUrl, { headers });
 
       this.ws.on('open', () => {
         this.$connected = true;
+        this.logger.info(`${this.$config.name} 已连接 (WS: ${this.wsUrl})`);
         this.sendSignal(SatoriOpcode.IDENTIFY, {
           token: this.$config.token,
           sn: this.lastSn,
@@ -99,11 +102,15 @@ export class SatoriWsClient extends EventEmitter implements Bot<SatoriWsConfig, 
 
       this.ws.on('close', (code, reason) => {
         this.$connected = false;
-        reject(new Error(`Satori WS closed: ${code} ${reason.toString()}`));
+        const reasonStr = reason?.toString?.() || String(reason);
+        const codeHint = code === 1005 ? ' [无状态，多为服务端/代理未发 close 帧即断开]' : code === 1006 ? ' [异常关闭]' : '';
+        this.logger.warn(`${this.$config.name} 连接已断开 (code=${code}${codeHint}${reasonStr ? `, reason=${reasonStr}` : ''})，5000ms 后重连`);
+        reject(new Error(`Satori WS closed: ${code} ${reasonStr}`));
         this.scheduleReconnect();
       });
 
       this.ws.on('error', (error) => {
+        this.logger.warn(`${this.$config.name} WS 错误: ${error instanceof Error ? error.message : String(error)}`);
         reject(error);
       });
     });

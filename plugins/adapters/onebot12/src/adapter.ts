@@ -48,5 +48,6 @@ export class OneBot12Adapter extends Adapter<OneBot12Bot> {
       this.#router = router;
     });
     await super.start();
+    this.plugin.logger.info('OneBot12 适配器已启动');
   }
 }

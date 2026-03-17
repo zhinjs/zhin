@@ -104,13 +104,17 @@ export class OneBot12WssServer extends EventEmitter implements Bot<OneBot12WssCo
         }
       });
 
-      ws.on('close', () => {
+      ws.on('close', (code, reason) => {
         this.$connected = false;
         this.#client = undefined;
-        this.logger.warn('OneBot12 反向 WS 断开');
+        const reasonStr = reason?.toString?.() || String(reason ?? '');
+        const codeHint = code === 1005 ? ' [无状态]' : code === 1006 ? ' [异常关闭]' : '';
+        this.logger.warn(`OneBot12 反向 WS ${this.$config.name} 连接已断开 (code=${code ?? '?'}${codeHint}${reasonStr ? `, reason=${reasonStr}` : ''})`);
       });
 
-      ws.on('error', (err) => this.logger.error('OneBot12 反向 WS 错误', err));
+      ws.on('error', (err) => {
+        this.logger.warn(`OneBot12 反向 WS ${this.$config.name} 错误: ${err instanceof Error ? err.message : String(err)}`);
+      });
     });
   }
 
