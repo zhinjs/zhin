@@ -167,6 +167,29 @@
       "lastUpdate": "2026-03-11T11:31:55.492Z"
     },
     {
+      "name": "@zhin.js/adapter-milky",
+      "displayName": "milky",
+      "description": "Zhin.js adapter for Milky protocol",
+      "author": "lc_cn",
+      "isOfficial": true,
+      "category": [
+        "adapter"
+      ],
+      "version": "0.0.0",
+      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-milky",
+      "github": "",
+      "homepage": "",
+      "tags": [
+        "zhin",
+        "bot",
+        "adapter",
+        "milky",
+        "qq",
+        "chatbot"
+      ],
+      "lastUpdate": "2026-03-17T01:02:53.056Z"
+    },
+    {
       "name": "@zhin.js/adapter-onebot11",
       "displayName": "onebot11",
       "description": "Zhin.js adapter for OneBot v11 protocol",
@@ -189,6 +212,29 @@
         "chatbot"
       ],
       "lastUpdate": "2026-03-11T11:31:55.703Z"
+    },
+    {
+      "name": "@zhin.js/adapter-onebot12",
+      "displayName": "onebot12",
+      "description": "Zhin.js adapter for OneBot 12 protocol",
+      "author": "lc_cn",
+      "isOfficial": true,
+      "category": [
+        "adapter"
+      ],
+      "version": "0.0.0",
+      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-onebot12",
+      "github": "",
+      "homepage": "",
+      "tags": [
+        "zhin",
+        "bot",
+        "adapter",
+        "onebot",
+        "onebot12",
+        "chatbot"
+      ],
+      "lastUpdate": "2026-03-17T01:03:50.412Z"
     },
     {
       "name": "@zhin.js/adapter-process",
@@ -257,6 +303,28 @@
         "local"
       ],
       "lastUpdate": "2026-03-14T03:21:24.692Z"
+    },
+    {
+      "name": "@zhin.js/adapter-satori",
+      "displayName": "satori",
+      "description": "Zhin.js adapter for Satori protocol",
+      "author": "lc_cn",
+      "isOfficial": true,
+      "category": [
+        "adapter"
+      ],
+      "version": "0.0.0",
+      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-satori",
+      "github": "",
+      "homepage": "",
+      "tags": [
+        "zhin",
+        "bot",
+        "adapter",
+        "satori",
+        "chatbot"
+      ],
+      "lastUpdate": "2026-03-17T01:03:15.452Z"
     },
     {
       "name": "@zhin.js/adapter-slack",
@@ -934,10 +1002,10 @@
     }
   ],
   "stats": {
-    "total": 42,
-    "official": 42,
-    "adapters": 14,
+    "total": 45,
+    "official": 45,
+    "adapters": 17,
     "community": 0
   },
-  "updatedAt": "2026-03-16T02:55:18.810Z"
+  "updatedAt": "2026-03-17T02:38:06.603Z"
 }
