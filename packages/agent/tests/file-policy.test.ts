@@ -54,6 +54,7 @@ describe('file-policy', () => {
         '/home/user/.gcloud/properties',
         '/home/user/.kube/config',
         '/root/.ssh/authorized_keys',
+        'data/memory/notes.md', // data 目录为敏感目录，禁止访问
       ];
 
       for (const p of blockedPaths) {
@@ -85,7 +86,6 @@ describe('file-policy', () => {
         '/home/user/project/README.md',
         '/home/user/project/tsconfig.json',
         './src/utils.ts',
-        'data/memory/notes.md',
         '/tmp/test.txt',
       ];
 

@@ -33,6 +33,8 @@ export * from './built/skill.js'
 export * from './built/schema-feature.js'
 // Common adapter tool factories (shared across adapters)
 export * from './built/common-adapter-tools.js'
+// Login assist (producer-consumer for QR / SMS / slider etc.)
+export * from './built/login-assist.js'
 // AI 模块 (原 @zhin.js/ai，已合并至 core)
 export * from './ai/index.js'
 

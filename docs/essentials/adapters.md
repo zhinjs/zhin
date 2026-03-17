@@ -87,13 +87,15 @@ bots:
 
 ### Discord
 
+Discord 适配器**一个适配器**支持 Gateway（WebSocket）与 Interactions（HTTP 斜杠命令等），由配置项 `connection` 区分。
+
 安装：
 
 ```bash
-pnpm add @zhin.js/adapter-discord
+pnpm add @zhin.js/adapter-discord discord.js
 ```
 
-配置：
+配置（Gateway，默认）：
 
 ```yaml
 plugins:
@@ -101,9 +103,12 @@ plugins:
 
 bots:
   - context: discord
+    connection: gateway
     name: discord-bot
     token: "${DISCORD_TOKEN}"
 ```
+
+Interactions 模式需启用 `@zhin.js/http`，并配置 `connection: interactions`、`applicationId`、`publicKey`、`interactionsPath`，详见 [@zhin.js/adapter-discord](https://github.com/zhinjs/zhin/tree/master/plugins/adapters/discord) README。
 
 ### Telegram
 
@@ -189,13 +194,17 @@ bots:
 
 ### OneBot v11
 
+[OneBot 11](https://github.com/botuniverse/onebot) 协议适配器，**一个适配器**支持正向 WebSocket 与反向 WebSocket，由配置项 `connection` 区分。
+
 安装：
 
 ```bash
-pnpm add @zhin.js/adapter-onebot11
+pnpm add @zhin.js/adapter-onebot11 ws
 ```
 
-配置：
+反向 WS 需同时启用 `@zhin.js/http`。
+
+配置（正向 WS）：
 
 ```yaml
 plugins:
@@ -203,9 +212,98 @@ plugins:
 
 bots:
   - context: onebot11
+    connection: ws
     name: onebot-bot
     url: "ws://127.0.0.1:6700"
+    access_token: "${ONEBOT11_ACCESS_TOKEN}"
 ```
+
+反向 WS：`connection: wss`，并配置 `path`，详见 [@zhin.js/adapter-onebot11](https://github.com/zhinjs/zhin/tree/master/plugins/adapters/onebot11) README。
+
+### Milky
+
+[Milky](https://milky.ntqqrev.org/) 协议适配器，**一个适配器**支持四种连接方式（WebSocket 正向/反向、SSE、Webhook），由配置项 `connection` 区分；支持 HTTP API 与 `access_token` 鉴权。
+
+安装：
+
+```bash
+pnpm add @zhin.js/adapter-milky ws eventsource
+```
+
+需同时启用 `@zhin.js/http`（适配器依赖 router 注册）。
+
+配置示例（WebSocket 正向）：
+
+```yaml
+plugins:
+  - "@zhin.js/http"
+  - "@zhin.js/adapter-milky"
+
+bots:
+  - context: milky
+    connection: ws
+    name: milky-bot
+    baseUrl: "http://127.0.0.1:8080"
+    access_token: "${MILKY_ACCESS_TOKEN}"
+```
+
+其他连接方式：`connection: sse`（SSE）、`connection: webhook`（Webhook）、`connection: wss`（反向 WS），详见 [@zhin.js/adapter-milky](https://github.com/zhinjs/zhin/tree/master/plugins/adapters/milky) README。
+
+### Satori
+
+[Satori](https://satori.chat/zh-CN/introduction.html) 通用聊天协议适配器，**一个适配器**支持 WebSocket 正向与 Webhook，由配置项 `connection` 区分；支持 HTTP API 与 Bearer Token 鉴权。
+
+安装：
+
+```bash
+pnpm add @zhin.js/adapter-satori ws
+```
+
+Webhook 方式需同时启用 `@zhin.js/http`。
+
+配置示例（WebSocket 正向）：
+
+```yaml
+plugins:
+  - "@zhin.js/adapter-satori"
+
+bots:
+  - context: satori
+    connection: ws
+    name: satori-bot
+    baseUrl: "http://127.0.0.1:5140"
+    token: "${SATORI_TOKEN}"
+```
+
+其他连接方式：`connection: webhook`（Webhook），详见 [@zhin.js/adapter-satori](https://github.com/zhinjs/zhin/tree/master/plugins/adapters/satori) README。
+
+### OneBot 12
+
+[OneBot 12](https://12.onebot.dev/) 标准适配器，**一个适配器**支持正向 WebSocket、HTTP Webhook、反向 WebSocket，由配置项 `connection` 区分。
+
+安装：
+
+```bash
+pnpm add @zhin.js/adapter-onebot12 ws
+```
+
+Webhook / 反向 WS 需同时启用 `@zhin.js/http`。
+
+配置示例（正向 WebSocket）：
+
+```yaml
+plugins:
+  - "@zhin.js/adapter-onebot12"
+
+bots:
+  - context: onebot12
+    connection: ws
+    name: ob12-bot
+    url: "ws://127.0.0.1:6700"
+    access_token: "${ONEBOT12_ACCESS_TOKEN}"
+```
+
+其他连接方式：`connection: webhook`（Webhook，可选 `api_url` 用于发消息）、`connection: wss`（反向 WS），详见 [@zhin.js/adapter-onebot12](https://github.com/zhinjs/zhin/tree/master/plugins/adapters/onebot12) README。
 
 ### 微信公众号
 
@@ -276,7 +374,7 @@ class IcqqAdapter extends Adapter<IcqqBot> {
 }
 ```
 
-目前所有 9 个 IM 适配器（ICQQ、OneBot11、QQ 官方、Telegram、Discord、KOOK、Slack、钉钉、飞书）都已采用此模式。
+目前所有 10 个 IM 适配器（ICQQ、OneBot11、Milky、QQ 官方、Telegram、Discord、KOOK、Slack、钉钉、飞书）都已采用此模式。
 
 ### 平台特有工具（addTool）
 
@@ -303,12 +401,15 @@ private registerPlatformTools() {
 | ICQQ (QQ) | `@zhin.js/adapter-icqq` | QQ 非官方协议，功能最全 |
 | QQ 官方 | `@zhin.js/adapter-qq` | QQ 官方机器人 API |
 | KOOK | `@zhin.js/adapter-kook` | KOOK（开黑啦）|
-| Discord | `@zhin.js/adapter-discord` | Discord |
+| Discord | `@zhin.js/adapter-discord` | Discord（单适配器，connection: gateway/interactions） |
 | Telegram | `@zhin.js/adapter-telegram` | Telegram |
 | Slack | `@zhin.js/adapter-slack` | Slack |
 | 钉钉 | `@zhin.js/adapter-dingtalk` | 钉钉 |
 | 飞书 | `@zhin.js/adapter-lark` | 飞书 / Lark |
-| OneBot v11 | `@zhin.js/adapter-onebot11` | OneBot v11 协议 |
+| OneBot v11 | `@zhin.js/adapter-onebot11` | OneBot v11 协议（单适配器，connection: ws/wss） |
+| Milky | `@zhin.js/adapter-milky` | Milky 协议（单适配器，connection: ws/sse/webhook/wss） |
+| Satori | `@zhin.js/adapter-satori` | Satori 协议（单适配器，connection: ws/webhook） |
+| OneBot 12 | `@zhin.js/adapter-onebot12` | OneBot 12 标准（单适配器，connection: ws/webhook/wss） |
 | 微信公众号 | `@zhin.js/adapter-wechat-mp` | 微信公众号 |
 | Sandbox | `@zhin.js/adapter-sandbox` | 终端测试 |
 | Email | `@zhin.js/adapter-email` | 邮件 |

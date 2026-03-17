@@ -1,0 +1,51 @@
+{
+  "name": "@zhin.js/adapter-milky",
+  "version": "0.0.0",
+  "description": "Zhin.js adapter for Milky protocol",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc && (test -f ../../services/console/lib/bin.js && node ../../services/console/lib/bin.js build || echo 'Skipping client build: console not built yet')",
+    "clean": "rimraf lib"
+  },
+  "files": [
+    "lib",
+    "src",
+    "README.md"
+  ],
+  "keywords": [
+    "zhin",
+    "bot",
+    "adapter",
+    "milky",
+    "qq",
+    "chatbot"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "eventsource": "^2.0.2",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.3.0",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependencies": {
+    "zhin.js": "workspace:*",
+    "@zhin.js/http": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/http": {
+      "optional": true
+    }
+  }
+}

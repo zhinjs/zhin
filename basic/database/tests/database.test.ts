@@ -1,7 +1,18 @@
+import { createRequire } from 'node:module';
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { Registry } from '../src/registry.js';
 import { Sqlite } from '../src/dialects/sqlite.js';
 import { MigrationRunner, defineMigration } from '../src/migration.js';
+
+const require = createRequire(import.meta.url);
+let sqliteAvailable = false;
+try {
+  const sqlite3 = require('sqlite3');
+  new sqlite3.Database(':memory:'); // 触发 native 绑定加载，无此步骤 require 可能不报错
+  sqliteAvailable = true;
+} catch {
+  // sqlite3 未安装或 native 绑定未编译（如 Node 版本不匹配），跳过 SQLite 测试
+}
 
 // 注册 SQLite dialect
 Registry.register('sqlite', Sqlite);
@@ -38,7 +49,7 @@ interface TestSchema extends Record<string, object> {
   };
 }
 
-describe('Database Core Features', () => {
+describe.skipIf(!sqliteAvailable)('Database Core Features', () => {
   let db: Sqlite<TestSchema>;
 
   beforeAll(async () => {
@@ -91,7 +102,7 @@ describe('Database Core Features', () => {
   });
 
   afterAll(async () => {
-    await db.stop();
+    if (db) await db.stop();
   });
 
   beforeEach(async () => {
@@ -803,7 +814,7 @@ describe('Database Core Features', () => {
 // Migration Tests (独立的 describe 块，使用独立的数据库实例)
 // =============================================================================
 
-describe('Migration Runner', () => {
+describe.skipIf(!sqliteAvailable)('Migration Runner', () => {
   let migrationDb: Sqlite<Record<string, object>>;
   let runner: MigrationRunner;
 
@@ -1207,7 +1218,7 @@ describe('Migration Runner', () => {
 // ============================================================================
 // Lifecycle Hooks Tests
 // ============================================================================
-describe('Lifecycle Hooks', () => {
+describe.skipIf(!sqliteAvailable)('Lifecycle Hooks', () => {
   let db: Sqlite<TestSchema>;
   let userModel: ReturnType<typeof db.model<'users'>>;
 
@@ -1233,8 +1244,8 @@ describe('Lifecycle Hooks', () => {
   });
 
   afterEach(async () => {
-    userModel.clearHooks();
-    await db.stop();
+    if (userModel) userModel.clearHooks();
+    if (db) await db.stop();
   });
 
   it('should call beforeCreate and afterCreate hooks', async () => {
@@ -1493,7 +1504,7 @@ describe('Lifecycle Hooks', () => {
 // ============================================================================
 // Many-to-Many (belongsToMany) Tests
 // ============================================================================
-describe('Many-to-Many Relations (belongsToMany)', () => {
+describe.skipIf(!sqliteAvailable)('Many-to-Many Relations (belongsToMany)', () => {
   let db: Sqlite<TestSchema & {
     roles: { id: number; name: string };
     user_roles: { user_id: number; role_id: number; assigned_at: string };

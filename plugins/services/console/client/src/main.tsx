@@ -1,7 +1,7 @@
 import { StrictMode, useCallback, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Provider as ReduxProvider } from 'react-redux'
-import { Home, Package, Bot, FileText, Settings, KeyRound, FolderOpen, Database } from 'lucide-react'
+import { Home, Package, Bot, FileText, Settings, KeyRound, FolderOpen, Database, LogIn } from 'lucide-react'
 import { store, DynamicRouter, persistor, addPage, useSelector, useWebSocket } from '@zhin.js/client'
 import DashboardLayout from './layouts/dashboard'
 import HomePage from './pages/dashboard'
@@ -14,6 +14,7 @@ import EnvMangePage from './pages/env'
 import FileMangePage from './pages/files'
 import DatabasePage from './pages/database'
 import LoginPage from './pages/login'
+import LoginAssistPage from './pages/login-assist'
 import { hasToken } from './utils/auth'
 import './style.css'
 import { PersistGate } from 'redux-persist/integration/react'
@@ -71,6 +72,14 @@ function RouteInitializer() {
                         title: '系统概览',
                         icon: <Home className="w-4 h-4" />,
                         element: <HomePage />,
+                    },
+                    {
+                        key: 'loginAssistPage',
+                        path: '/login-assist',
+                        title: '登录辅助',
+                        icon: <LogIn className="w-4 h-4" />,
+                        element: <LoginAssistPage />,
+                        meta: { order: 1 }
                     },
                     {
                         key: 'pluginsPage',

@@ -5,7 +5,9 @@ Zhin.js OneBot v11 协议适配器，通过 WebSocket 连接各种支持 OneBot 
 ## 功能特性
 
 - 🔌 完整 OneBot v11 协议兼容
-- 🌐 WebSocket 客户端和服务器模式
+- 📦 **单一适配器**：`context: onebot11`，通过 `connection` 选择连接方式
+- 🌐 **正向 WebSocket**（`connection: ws`）：应用连 OneBot 实现的 WS
+- 🔄 **反向 WebSocket**（`connection: wss`）：应用开 WS 服务端，实现连上来
 - 🔐 Access Token 认证支持
 - 🔄 自动重连机制
 - 💓 心跳检测
@@ -19,52 +21,45 @@ Zhin.js OneBot v11 协议适配器，通过 WebSocket 连接各种支持 OneBot 
 pnpm add @zhin.js/adapter-onebot11 ws
 ```
 
+反向 WS 需同时启用 `@zhin.js/http`。
+
 ## 配置
 
-### WebSocket 客户端模式（正向 WS）
+所有 Bot 使用 **同一 context：`onebot11`**，通过 **`connection`** 区分连接方式。
 
-```typescript
-// zhin.config.ts
-import { defineConfig } from 'zhin.js'
+### 正向 WebSocket（connection: ws）
 
-export default defineConfig({
-  bots: [
-    {
-      context: 'onebot11',
-      type: 'ws',                            // WebSocket 客户端
-      name: 'my-bot',
-      url: 'ws://localhost:8080',            // OneBot 服务地址
-      access_token: process.env.ONEBOT_TOKEN, // 访问令牌（可选）
-      reconnect_interval: 5000,              // 重连间隔（毫秒）
-      heartbeat_interval: 30000              // 心跳间隔（毫秒）
-    }
-  ],
-  plugins: [
-    'adapter-onebot11'
-  ]
-})
+```yaml
+plugins:
+  - "@zhin.js/adapter-onebot11"
+
+bots:
+  - context: onebot11
+    connection: ws
+    name: my-bot
+    url: "ws://localhost:8080"
+    access_token: "${ONEBOT_TOKEN}"
+    reconnect_interval: 5000
+    heartbeat_interval: 30000
 ```
 
-### WebSocket 服务器模式（反向 WS）
+### 反向 WebSocket（connection: wss）
 
-```typescript
-export default defineConfig({
-  bots: [
-    {
-      context: 'onebot11.wss',               // WebSocket 服务器
-      type: 'ws_reverse',
-      name: 'my-bot',
-      path: '/onebot/ws',                    // WebSocket 路径
-      access_token: process.env.ONEBOT_TOKEN, // 访问令牌（可选）
-      heartbeat_interval: 30000
-    }
-  ],
-  plugins: [
-    'http',                                   // 需要 HTTP 服务
-    'adapter-onebot11'
-  ]
-})
+```yaml
+plugins:
+  - "@zhin.js/http"
+  - "@zhin.js/adapter-onebot11"
+
+bots:
+  - context: onebot11
+    connection: wss
+    name: my-bot
+    path: "/onebot/ws"
+    access_token: "${ONEBOT_TOKEN}"
+    heartbeat_interval: 30000
 ```
+
+兼容旧配置：若使用 `type: 'ws'` / `type: 'ws_reverse'` 而未写 `connection`，适配器会自动映射为 `ws` / `wss`。
 
 ## 支持的 OneBot 实现
 

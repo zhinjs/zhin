@@ -1011,6 +1011,17 @@ export interface Context<T extends keyof Plugin.Contexts = keyof Plugin.Contexts
 // ============================================================================
 // 类型定义
 // ============================================================================
+
+/** 登录辅助：bot.login.pending 事件 payload */
+export interface BotLoginPendingTask {
+  id: string;
+  adapter: string;
+  botId: string;
+  type: string;
+  payload?: { message?: string; image?: string; url?: string; [key: string]: unknown };
+  createdAt: number;
+}
+
 export namespace Plugin {
   /**
    * 生命周期事件
@@ -1026,6 +1037,8 @@ export namespace Plugin {
     'before.sendMessage': [SendOptions];
     "context.mounted": [keyof Plugin.Contexts];
     "context.dispose": [keyof Plugin.Contexts];
+    /** 登录辅助：有待办时触发 */
+    'bot.login.pending': [BotLoginPendingTask];
     // Notice 事件
     'notice.receive': [Notice];
     [key: `notice.${string}`]: [Notice];

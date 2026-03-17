@@ -728,9 +728,6 @@ importers:
       '@zhin.js/client':
         specifier: workspace:*
         version: link:../../../packages/client
-      '@zhin.js/console':
-        specifier: workspace:*
-        version: link:../../services/console
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/core
@@ -747,6 +744,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.2.1
         version: 19.2.3(@types/react@19.2.7)
+      '@zhin.js/console':
+        specifier: workspace:*
+        version: link:../../services/console
       lucide-react:
         specifier: ^0.469.0
         version: 0.469.0(react@19.2.0)
@@ -798,7 +798,54 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/zhin
 
+  plugins/adapters/milky:
+    dependencies:
+      '@zhin.js/http':
+        specifier: workspace:*
+        version: link:../../services/http
+      eventsource:
+        specifier: ^2.0.2
+        version: 2.0.2
+      ws:
+        specifier: ^8.18.3
+        version: 8.18.3
+    devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.10.4
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
+
   plugins/adapters/onebot11:
+    dependencies:
+      '@zhin.js/http':
+        specifier: workspace:*
+        version: link:../../services/http
+      ws:
+        specifier: ^8.18.3
+        version: 8.18.3
+    devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.10.4
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
+
+  plugins/adapters/onebot12:
     dependencies:
       '@zhin.js/http':
         specifier: workspace:*
@@ -863,6 +910,28 @@ importers:
       radix-ui:
         specifier: ^1.4.3
         version: 1.4.3(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
+
+  plugins/adapters/satori:
+    dependencies:
+      '@zhin.js/http':
+        specifier: workspace:*
+        version: link:../../services/http
+      ws:
+        specifier: ^8.18.3
+        version: 8.18.3
+    devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.10.4
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
@@ -5354,6 +5423,10 @@ packages:
   eventsource-parser@3.0.6:
     resolution: {integrity: sha512-Vo1ab+QXPzZ4tCa8SwIHJFaSzy4R6SHf7BY79rFBDf0idraZWAkYrDjDj8uWaSm3S2TK+hJ7/t1CEmZ7jXw+pg==}
     engines: {node: '>=18.0.0'}
+
+  eventsource@2.0.2:
+    resolution: {integrity: sha512-IzUmBGPR3+oUG9dUeXynyNmf91/3zUSJg1lCktzKw47OXuhco54U3r9B7O4XX+Rb1Itm9OZ2b0RkTs10bICOxA==}
+    engines: {node: '>=12.0.0'}
 
   eventsource@3.0.7:
     resolution: {integrity: sha512-CRT1WTyuQoD771GW56XEZFQ/ZoSfWid1alKGDYMmkt2yl8UXrVR4pspqWNEcqKvVIzg6PAltWjxcSSPrboA4iA==}
@@ -13531,6 +13604,8 @@ snapshots:
   eventemitter3@5.0.1: {}
 
   eventsource-parser@3.0.6: {}
+
+  eventsource@2.0.2: {}
 
   eventsource@3.0.7:
     dependencies:

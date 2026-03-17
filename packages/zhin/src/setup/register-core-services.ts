@@ -9,6 +9,7 @@ import {
   MessageFilterFeature,
   createMessageDispatcher,
   ProcessAdapter,
+  LoginAssist,
 } from '@zhin.js/core';
 import type { Plugin, Message } from '@zhin.js/core';
 import type { AppConfig } from '../types.js';
@@ -67,4 +68,12 @@ export function registerCoreServices(
 
   provide(new SkillFeature());
   provide(new SchemaFeature());
+
+  // 登录辅助：生产者-消费者，Web/CLI 均可消费，未消费刷新后可继续
+  provide({
+    name: 'loginAssist',
+    description: '登录辅助（扫码/短信/滑块等）待办队列',
+    mounted: async (p: Plugin) => new LoginAssist(p),
+    dispose: async (s) => s.dispose(),
+  });
 }
