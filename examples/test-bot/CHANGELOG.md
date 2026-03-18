@@ -1,5 +1,15 @@
 # test-bot
 
+## 0.1.55
+
+### Patch Changes
+
+- Updated dependencies [a451abf]
+  - @zhin.js/console@1.0.51
+  - @zhin.js/adapter-icqq@1.0.63
+  - @zhin.js/adapter-sandbox@1.0.62
+  - @zhin.js/plugin-music@0.0.44
+
 ## 0.1.54
 
 ### Patch Changes

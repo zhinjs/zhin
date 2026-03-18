@@ -1,5 +1,11 @@
 # @zhin.js/console
 
+## 1.0.51
+
+### Patch Changes
+
+- a451abf: fix: console 白屏
+
 ## 1.0.50
 
 ### Patch Changes
