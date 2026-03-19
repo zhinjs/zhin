@@ -104,7 +104,7 @@
       "category": [
         "adapter"
       ],
-      "version": "1.0.62",
+      "version": "1.0.63",
       "npm": "https://www.npmjs.com/package/@zhin.js/adapter-icqq",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -117,7 +117,7 @@
         "tencent",
         "chatbot"
       ],
-      "lastUpdate": "2026-03-17T10:52:18.778Z"
+      "lastUpdate": "2026-03-18T05:14:36.355Z"
     },
     {
       "name": "@zhin.js/adapter-kook",
@@ -289,7 +289,7 @@
       "category": [
         "adapter"
       ],
-      "version": "1.0.61",
+      "version": "1.0.62",
       "npm": "https://www.npmjs.com/package/@zhin.js/adapter-sandbox",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -302,7 +302,7 @@
         "development",
         "local"
       ],
-      "lastUpdate": "2026-03-17T10:52:21.290Z"
+      "lastUpdate": "2026-03-18T05:14:36.072Z"
     },
     {
       "name": "@zhin.js/adapter-satori",
@@ -473,7 +473,7 @@
       "category": [
         "service"
       ],
-      "version": "1.0.50",
+      "version": "1.0.51",
       "npm": "https://www.npmjs.com/package/@zhin.js/console",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -487,7 +487,7 @@
         "monitoring",
         "admin"
       ],
-      "lastUpdate": "2026-03-17T10:52:25.929Z"
+      "lastUpdate": "2026-03-18T05:14:36.567Z"
     },
     {
       "name": "@zhin.js/core",
@@ -762,7 +762,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": [],
-      "version": "0.0.43",
+      "version": "0.0.44",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-music",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -776,7 +776,7 @@
         "search",
         "share"
       ],
-      "lastUpdate": "2026-03-17T10:52:25.721Z"
+      "lastUpdate": "2026-03-18T05:14:36.256Z"
     },
     {
       "name": "@zhin.js/plugin-repeater",
@@ -1007,5 +1007,5 @@
     "adapters": 17,
     "community": 0
   },
-  "updatedAt": "2026-03-18T02:44:42.608Z"
+  "updatedAt": "2026-03-19T02:45:57.315Z"
 }
