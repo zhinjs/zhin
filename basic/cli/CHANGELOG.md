@@ -1,5 +1,15 @@
 # @zhin.js/cli
 
+## 1.0.49
+
+### Patch Changes
+
+- bb6bfa8: feat: `zhin new` 为插件创建 `skills/<name>/` 与 `SKILL.md` 模板；生成 `package.json` 的 `files`/`exports`（含 `development`、`./package.json`）与仓库插件约定对齐
+- Updated dependencies [bb6bfa8]
+- Updated dependencies [bb6bfa8]
+  - zhin.js@1.0.52
+  - @zhin.js/logger@0.1.36
+
 ## 1.0.48
 
 ### Patch Changes

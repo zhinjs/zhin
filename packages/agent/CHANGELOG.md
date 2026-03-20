@@ -1,5 +1,15 @@
 # @zhin.js/agent
 
+## 0.0.15
+
+### Patch Changes
+
+- bb6bfa8: feat: MessageDispatcher 双轨分流（指令+AI）、出站润色管道；技能扫描含插件包 `skills/`
+- Updated dependencies [bb6bfa8]
+- Updated dependencies [bb6bfa8]
+  - @zhin.js/core@1.0.52
+  - @zhin.js/ai@1.0.13
+
 ## 0.0.14
 
 ### Patch Changes

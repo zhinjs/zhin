@@ -1,5 +1,20 @@
 # zhin.js
 
+## 1.0.52
+
+### Patch Changes
+
+- bb6bfa8: feat: MessageDispatcher 双轨分流（指令+AI）、出站润色管道；技能扫描含插件包 `skills/`
+- bb6bfa8: feat: 技能全面文件化——仓库内插件/适配器使用 `skills/<name>/SKILL.md`；Core 已移除 `plugin.declareSkill` / `Adapter.declareSkill` API
+- Updated dependencies [bb6bfa8]
+- Updated dependencies [bb6bfa8]
+  - @zhin.js/core@1.0.52
+  - @zhin.js/agent@0.0.15
+  - @zhin.js/logger@0.1.36
+  - @zhin.js/schema@1.0.36
+  - @zhin.js/ai@1.0.13
+  - @zhin.js/kernel@0.0.13
+
 ## 1.0.51
 
 ### Patch Changes
