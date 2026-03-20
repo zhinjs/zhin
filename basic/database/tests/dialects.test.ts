@@ -1,4 +1,16 @@
+import { createRequire } from 'node:module'
 import { describe, it, expect, beforeEach } from 'vitest'
+
+const require = createRequire(import.meta.url)
+let sqliteAvailable = false
+try {
+  const { DatabaseSync } = require('node:sqlite')
+  const db = new DatabaseSync(':memory:')
+  db.close()
+  sqliteAvailable = true
+} catch {
+  // Node 内置 SQLite 需要 Node.js 22.5+
+}
 
 describe('Database Dialects', () => {
   describe('Memory Dialect', () => {
@@ -111,6 +123,24 @@ describe('Database Dialects', () => {
         expect(processValue(null)).toBe(null)
         expect(processValue(undefined)).toBe(undefined)
         expect(processValue(true)).toBe(true)
+      })
+    })
+
+    describe.skipIf(!sqliteAvailable)('bind params (JSON object)', () => {
+      it('should INSERT plain object as JSON text and read back as object', async () => {
+        const { SQLiteDialect } = await import('../src/dialects/sqlite')
+        const dialect = new SQLiteDialect({ filename: ':memory:' } as any)
+        await dialect.connect()
+        await dialect.query('CREATE TABLE "github_events" ("id" INTEGER PRIMARY KEY, "payload" TEXT)')
+        const payload = { repository: { full_name: 'o/r' }, zen: 'keep it simple' }
+        await dialect.query(
+          'INSERT INTO "github_events" ("id", "payload") VALUES (?, ?)',
+          [1, payload],
+        )
+        const rows = (await dialect.query('SELECT "id", "payload" FROM "github_events"')) as any[]
+        expect(rows[0].id).toBe(1)
+        expect(rows[0].payload).toEqual(payload)
+        await dialect.disconnect()
       })
     })
   })

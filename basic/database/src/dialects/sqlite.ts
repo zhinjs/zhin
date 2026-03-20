@@ -52,12 +52,15 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
     return this.isConnected();
   }
 
-  /** node:sqlite 仅支持 number/string/bigint/buffer/null，将 Date/boolean 等转为可绑定值 */
+  /** node:sqlite 仅支持 number/string/bigint/buffer/null；JSON 列在库内为 TEXT，对象需序列化 */
   private prepareBindParams(params: any[]): any[] {
     return params.map((v) => {
       if (v == null) return null;
+      if (typeof v === 'bigint') return v;
       if (v instanceof Date) return v.toISOString();
       if (typeof v === 'boolean') return v ? 1 : 0;
+      if (Buffer.isBuffer(v)) return v;
+      if (typeof v === 'object') return JSON.stringify(v);
       return v;
     });
   }
