@@ -107,7 +107,7 @@ export namespace segment {
     const toString = (template: string | MessageElement) => {
       if (typeof template !== "string") return [template];
 
-      const MAX_TEMPLATE_LENGTH = 100000;
+      const MAX_TEMPLATE_LENGTH = 400000;
       if (template.length > MAX_TEMPLATE_LENGTH) {
         throw new Error(`Template too large: ${template.length} > ${MAX_TEMPLATE_LENGTH}`);
       }

@@ -74,6 +74,24 @@ function hasExtension(specifier: string): boolean {
 }
 
 /**
+ * 源码写 import './x.js'（TS 输出惯例）但磁盘仅有 x.ts / x.tsx 时，映射到真实文件。
+ * 否则 /vite/@ext/ 会按字面请求 .js 导致 404。
+ */
+function resolveJsSpecifierToSource(specifier: string, fromFile: string): string {
+  if (!isRelative(specifier) || !specifier.endsWith(".js")) return specifier;
+  const dir = path.dirname(fromFile);
+  const jsPath = path.resolve(dir, specifier);
+  if (fs.existsSync(jsPath)) return specifier;
+  const base = specifier.slice(0, -3);
+  for (const ext of [".tsx", ".ts", ".jsx"]) {
+    if (fs.existsSync(path.resolve(dir, base + ext))) {
+      return base + ext;
+    }
+  }
+  return specifier;
+}
+
+/**
  * 探测并补全相对 import 的扩展名
  *
  * ./Foo → 探测 Foo.tsx > Foo.ts > Foo.jsx > Foo.js > Foo/index.tsx > ...
@@ -83,7 +101,9 @@ function resolveRelativeImport(
   fromFile: string,
 ): string {
   if (!isRelative(specifier)) return specifier;
-  if (hasExtension(specifier)) return specifier;
+  if (hasExtension(specifier)) {
+    return resolveJsSpecifierToSource(specifier, fromFile);
+  }
 
   const dir = path.dirname(fromFile);
   const target = path.resolve(dir, specifier);
@@ -121,7 +141,6 @@ function rewriteImports(code: string, fromFile: string): string {
   code = code.replace(IMPORT_RE, (match, fromSpecifier, dynamicSpecifier) => {
     const specifier = fromSpecifier || dynamicSpecifier;
     if (!specifier || !isRelative(specifier)) return match;
-    if (hasExtension(specifier)) return match;
 
     const resolved = resolveRelativeImport(specifier, fromFile);
     if (resolved === specifier) return match;

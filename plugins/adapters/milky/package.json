@@ -17,8 +17,11 @@
     "clean": "rimraf lib"
   },
   "files": [
-    "lib",
     "src",
+    "lib",
+    "client",
+    "dist",
+    "skills",
     "README.md"
   ],
   "keywords": [

@@ -7,21 +7,18 @@ import { Request, RequestType } from "./request.js";
 import { BeforeSendHandler, SendOptions, Tool, ToolContext, ToolScope } from "./types.js";
 import { segment } from "./utils.js";
 import { ZhinTool, isZhinTool, type ToolInput } from "./built/tool.js";
-import type { Skill, SkillFeature } from "./built/skill.js";
 /**
  * Adapter 类：适配器抽象，管理多平台 Bot 实例。
  * 负责根据配置启动/关闭各平台机器人，统一异常处理。
  *
- * 适配器可提供 AI 工具并声明 Skill。群管等能力由各 IM 平台在子类中
- * 自行实现方法并注册 Tool（如使用 createGroupManagementTools）+ declareSkill。
+ * 适配器可提供 AI 工具；群管等由各 IM 平台在子类中实现方法并注册 Tool（如 createGroupManagementTools）。
+ * 面向 AI 的技能说明请使用包内 `skills/<name>/SKILL.md`（由 Agent 扫描），不再提供代码内 declareSkill。
  */
 export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.Lifecycle> {
   /** 当前适配器下所有Bot实例，key为bot名称 */
   public bots: Map<string, R> = new Map<string, R>();
   /** 适配器提供的工具 */
   public tools: Map<string, Tool> = new Map<string, Tool>();
-  /** Skill 注销函数（declareSkill 时设置） */
-  private _skillDispose?: () => void;
   /**
    * 构造函数
    * @param name 适配器名称（如 'process'、'qq' 等）
@@ -54,6 +51,7 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
           this.logger.error('rootPlugin.middleware(message, next) failed', err);
         });
       }
+      rootPlugin?.dispatch('message.receive', message);
     });
     this.on('notice.receive', (notice) => {
       this.logger.info(`${notice.$bot} notice ${notice.$type}${notice.$subType ? '.' + notice.$subType : ''} ${notice.$channel.type}(${notice.$channel.id})`);
@@ -79,6 +77,7 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
   binding(plugin: Plugin) {
     this.plugin = plugin;
   }
+  /** 出站统一预处理：`MessageDispatcher.replyWithPolish` 与任意 `$reply` 最终都走此处。润色见 `addOutboundPolish`（注册额外的 before.sendMessage）。 */
   private async renderSendMessage(options:SendOptions):Promise<SendOptions>{
     const fns=this.plugin.root.listeners('before.sendMessage') as BeforeSendHandler[];
     for(const fn of fns){
@@ -124,10 +123,6 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
       // 清理 bots Map
       this.bots.clear();
 
-      // 清理 Skill
-      this._skillDispose?.();
-      this._skillDispose = undefined;
-      
       // 从 adapters 数组中移除
       const idx = this.plugin.root.adapters.indexOf(this.name);
       if (idx !== -1) {
@@ -192,76 +187,6 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
    */
   getTool(name: string): Tool | undefined {
     return this.tools.get(name);
-  }
-  
-  /**
-   * 声明适配器的 Skill（将 this.tools 聚合为一个 Skill 注册到 SkillFeature）
-   *
-   * @param metadata Skill 元数据
-   *   - description: 平台级能力描述
-   *   - keywords: 额外的触发关键词（可选，会自动从工具中聚合）
-   *   - tags: 额外的分类标签（可选，会自动从工具中聚合）
-   *   - conventions: 平台调用约定（可选，拼接到 description 末尾）
-   */
-  declareSkill(metadata: {
-    description: string;
-    keywords?: string[];
-    tags?: string[];
-    conventions?: string;
-  }): void {
-    const skillFeature = this.plugin?.root?.inject('skill') as SkillFeature | undefined;
-    if (!skillFeature) {
-      this.logger.debug(`declareSkill: SkillFeature 不可用，跳过 Skill 注册`);
-      return;
-    }
-
-    // 收集适配器所有工具
-    const tools = this.getTools();
-
-    // 聚合关键词：metadata 声明 + 工具自带
-    const allKeywords = new Set<string>(metadata.keywords || []);
-    for (const tool of tools) {
-      if (tool.keywords) {
-        for (const kw of tool.keywords) {
-          allKeywords.add(kw);
-        }
-      }
-    }
-
-    // 聚合标签：metadata 声明 + 工具自带
-    const allTags = new Set<string>(metadata.tags || []);
-    for (const tool of tools) {
-      if (tool.tags) {
-        for (const tag of tool.tags) {
-          allTags.add(tag);
-        }
-      }
-    }
-
-    // 拼接描述：基础描述 + 调用约定
-    let description = metadata.description;
-    if (metadata.conventions) {
-      description += `\n\n调用约定：${metadata.conventions}`;
-    }
-
-    const pluginName = this.plugin?.name || `adapter:${this.name}`;
-    const skill: Skill = {
-      name: `adapter:${this.name}`,
-      description,
-      tools,
-      keywords: Array.from(allKeywords),
-      tags: Array.from(allTags),
-      pluginName,
-    };
-
-    // 清理旧的 Skill（如果有）
-    this._skillDispose?.();
-
-    // 注册到 SkillFeature
-    this._skillDispose = skillFeature.add(skill, pluginName);
-    this.plugin?.recordFeatureContribution('skill', `adapter:${this.name}`);
-
-    this.logger.debug(`declareSkill: 已注册 Skill "${skill.name}"，包含 ${tools.length} 个工具`);
   }
 
   /**

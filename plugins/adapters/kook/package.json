@@ -47,9 +47,13 @@
     "zhin.js": "workspace:*"
   },
   "files": [
+    "src",
     "lib",
-    "node",
+    "client",
+    "dist",
+    "skills",
     "README.md",
+    "node",
     "CHANGELOG.md"
   ],
   "publishConfig": {

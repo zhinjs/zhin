@@ -5,8 +5,6 @@ import {
   Adapter,
   Plugin,
   createGroupManagementTools,
-  GROUP_MANAGEMENT_SKILL_KEYWORDS,
-  GROUP_MANAGEMENT_SKILL_TAGS,
   type IGroupManagement,
 } from "zhin.js";
 import { LarkBot } from "./bot.js";
@@ -56,12 +54,6 @@ export class LarkAdapter extends Adapter<LarkBot> {
         this.registerLarkPlatformTools();
         const groupTools = createGroupManagementTools(this as unknown as IGroupManagement, this.name);
         groupTools.forEach((t) => this.addTool(t));
-        this.declareSkill({
-            description:
-                '飞书/Lark 群管理：踢人、禁言、设管理员、改群名、查成员等。仅有昵称时请先 list_members 获取 user_id 再操作。',
-            keywords: GROUP_MANAGEMENT_SKILL_KEYWORDS,
-            tags: GROUP_MANAGEMENT_SKILL_TAGS,
-        });
         await super.start();
     }
 

@@ -12,5 +12,7 @@
         "paths": {
             "@/*": ["src/*"]
         }
-    }
+    },
+    "include": ["src/**/*", "src/**/*.tsx"],
+    "exclude": ["node_modules", "dist"]
 }

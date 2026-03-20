@@ -18,6 +18,7 @@ export default {
     `${cwd}/node_modules/@zhin.js/*/client/**/*.{js,ts,jsx,tsx}`,
     `${cwd}/node_modules/@zhin.js/*/dist/**/*.{js,ts,jsx,tsx}`,
     `${cwd}/plugins/*/client/**/*.{js,ts,jsx,tsx}`,
+    `${cwd}/plugins/**/client/**/*.{js,ts,jsx,tsx}`,
     `${cwd}/client/**/*.{js,ts,jsx,tsx}`,
   ].filter(Boolean),
   theme: {

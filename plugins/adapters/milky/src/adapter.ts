@@ -6,8 +6,6 @@ import {
   Adapter,
   Plugin,
   createGroupManagementTools,
-  GROUP_MANAGEMENT_SKILL_KEYWORDS,
-  GROUP_MANAGEMENT_SKILL_TAGS,
   type IGroupManagement,
 } from 'zhin.js';
 import { MilkyWsClient } from './bot-ws.js';
@@ -105,11 +103,6 @@ export class MilkyAdapter extends Adapter<MilkyBot> {
     });
     const groupTools = createGroupManagementTools(this as unknown as IGroupManagement, this.name);
     groupTools.forEach((t) => this.addTool(t));
-    this.declareSkill({
-      description: 'Milky 协议群管理：踢人、禁言、全员禁言、设管理员、改群名、查成员等。',
-      keywords: GROUP_MANAGEMENT_SKILL_KEYWORDS,
-      tags: GROUP_MANAGEMENT_SKILL_TAGS,
-    });
     await super.start();
     this.plugin.logger.info('Milky 适配器已启动');
   }

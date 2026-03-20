@@ -1,6 +1,7 @@
 // 消息段类型定义 - 客户端版本
 export interface MessageSegment {
-  type: 'text' | 'image' | 'at' | 'face' | 'video' | 'audio' | 'file' | 'reply'
+  /** record：如 ICQQ 语音等，展示时按音频处理 */
+  type: 'text' | 'image' | 'at' | 'face' | 'video' | 'audio' | 'record' | 'file' | 'reply'
   data: Record<string, any>
 }
 

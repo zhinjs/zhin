@@ -58,7 +58,9 @@ SelectScrollDownButton.displayName = "SelectScrollDownButton"
 const SelectContent = React.forwardRef<
   React.ComponentRef<typeof SelectPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
->(({ className, children, position = "popper", ...props }, ref) => (
+>(({ className, children, position: positionProp, ...props }, ref) => {
+  const position = (positionProp ?? "popper") as "popper" | "item-aligned"
+  return (
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
       ref={ref}
@@ -84,15 +86,17 @@ const SelectContent = React.forwardRef<
       <SelectScrollDownButton />
     </SelectPrimitive.Content>
   </SelectPrimitive.Portal>
-))
+  )
+})
 SelectContent.displayName = "SelectContent"
 
 const SelectItem = React.forwardRef<
   React.ComponentRef<typeof SelectPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>
->(({ className, children, ...props }, ref) => (
+>(({ className, children, value, ...props }, ref) => (
   <SelectPrimitive.Item
     ref={ref}
+    value={value}
     className={cn(
       "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className

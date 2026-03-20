@@ -1,5 +1,11 @@
 # @zhin.js/plugin-html-renderer
 
+## 0.0.30
+
+### Minor Changes
+
+- 支持配置项 `htmlRenderer.aiTextAsImage`：通过 `before.sendMessage` 将纯文本发送转为 PNG 图片。
+
 ## 0.0.29
 
 ### Patch Changes

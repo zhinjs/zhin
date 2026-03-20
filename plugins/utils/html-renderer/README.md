@@ -84,6 +84,37 @@ htmlRenderer:
       weight: 400
 ```
 
+### 纯文本自动转图片（`aiTextAsImage`）
+
+通过框架的 **`before.sendMessage`**，在消息真正发给用户前，把**仅含纯文本**的内容渲染成一张 PNG，再以图片消息发出。适合希望 AI 长文、公告等以「卡片图」展示的场景。
+
+```yaml
+htmlRenderer:
+  defaultWidth: 720
+  defaultBackgroundColor: "#ffffff"
+  # 写 true 等价于 { enabled: true }，使用默认样式
+  aiTextAsImage: true
+  # 或细调：
+  # aiTextAsImage:
+  #   enabled: true
+  #   onlyAdapters: ["onebot"]   # 仅在这些 adapter（SendOptions.context）上生效，不填则全平台
+  #   minLength: 10               # trim 后少于该字数不转图，仍发文字
+  #   maxLength: 8000             # 超过不转图（0 表示不限制）
+  #   skipIfRich: true            # 正文里含 <image>、CQ: 等则跳过（默认 true）
+  #   fontSize: 16
+  #   color: "#1a1a1a"
+  #   padding: 20
+  #   scale: 2                    # PNG 缩放，略增清晰度
+  #   fileName: "reply.png"
+```
+
+**行为说明：**
+
+- 会转换的是：整段内容为**字符串**或**仅 `text` 片段**、且（可选）未命中富媒体启发规则。
+- **不会**转换：已含 `image` / `at` / `face` 等段，或字符串里出现 `<image`、`<video`、`<audio`、`<file`、`CQ:` 等。
+- 作用范围是**所有**走 `adapter.sendMessage` / `$reply` 的纯文本，**不限于 AI**；若只希望部分场景转图，可配合 `onlyAdapters`、`minLength`，或关闭本项、改用下方 `html.render` / `html.card` 工具。
+- 与 **敏感词**等其它 `before.sendMessage` 插件的**注册顺序**有关：一般建议先加载 `sensitive-filter` 再加载本插件，以便先处理文字再转图。
+
 ## API
 
 ### `render(html, options)`

@@ -14,7 +14,11 @@
     "./package.json": "./package.json"
   },
   "files": [
+    "src",
     "lib",
+    "client",
+    "dist",
+    "skills",
     "README.md"
   ],
   "scripts": {

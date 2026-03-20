@@ -15,6 +15,10 @@ export interface RouteMenuItem {
         hideInMenu?: boolean
         requiresAuth?: boolean
         order?: number
+        /** 侧栏分组标签，同组内按 order 排序 */
+        group?: string
+        /** 主内容区全宽（无 max-w-7xl） */
+        fullWidth?: boolean
     }
 }
 

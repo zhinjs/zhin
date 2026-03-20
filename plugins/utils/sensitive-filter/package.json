@@ -2,8 +2,16 @@
   "name": "@zhin.js/sensitive-filter",
   "version": "0.0.37",
   "description": "Content moderation plugin for Zhin.js - filters sensitive words",
-  "main": "lib/index.js",
-  "types": "lib/index.d.ts",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "files": [
+    "src",
+    "lib",
+    "client",
+    "dist",
+    "skills",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc --build",
     "dev": "tsc --watch"

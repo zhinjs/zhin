@@ -161,7 +161,7 @@ export class IcqqBot
       },
       $content: IcqqBot.toSegments(msg.message),
       $raw: msg.raw_message,
-      $timestamp: msg.time,
+      $timestamp: msg.time*1000,
       $recall: async () => {
         await this.$recallMessage(result.$id);
       },
@@ -221,7 +221,7 @@ export class IcqqBot
       $channel: { id: event.group_id?.toString() || '', type: 'group' },
       $operator: event.operator_id ? { id: event.operator_id.toString(), name: event.operator_id.toString() } : undefined,
       $target: event.user_id ? { id: event.user_id.toString(), name: event.user_id.toString() } : (event.target_id ? { id: event.target_id.toString(), name: event.target_id.toString() } : undefined),
-      $timestamp: event.time || Math.floor(Date.now() / 1000),
+      $timestamp: event.time*1000 || Date.now(),
     });
     this.adapter.emit('notice.receive', notice);
   }
@@ -236,7 +236,7 @@ export class IcqqBot
       $channel: { id: event.user_id?.toString() || '', type: 'private' },
       $operator: event.operator_id ? { id: event.operator_id.toString(), name: event.operator_id.toString() } : undefined,
       $target: event.user_id ? { id: event.user_id.toString(), name: event.user_id.toString() } : undefined,
-      $timestamp: event.time || Math.floor(Date.now() / 1000),
+      $timestamp: event.time*1000 || Date.now(),
     });
     this.adapter.emit('notice.receive', notice);
   }
@@ -251,7 +251,7 @@ export class IcqqBot
       $channel: { id: event.user_id.toString(), type: 'private' },
       $sender: { id: event.user_id.toString(), name: event.nickname || event.user_id.toString() },
       $comment: event.comment,
-      $timestamp: event.time || Math.floor(Date.now() / 1000),
+      $timestamp: event.time*1000 || Date.now(),
       $approve: async () => { await event.approve(true); },
       $reject: async () => { await event.approve(false); },
     });
@@ -268,7 +268,7 @@ export class IcqqBot
       $channel: { id: event.group_id.toString(), type: 'group' },
       $sender: { id: event.user_id.toString(), name: event.nickname || event.user_id.toString() },
       $comment: 'comment' in event ? event.comment : undefined,
-      $timestamp: event.time || Math.floor(Date.now() / 1000),
+      $timestamp: event.time*1000 || Date.now(),
       $approve: async () => { await event.approve(true); },
       $reject: async () => { await event.approve(false); },
     });
@@ -489,6 +489,7 @@ export namespace IcqqBot {
       if (typeof seg === "string") return { type: "text", text: seg };
       let { type, data } = seg as any;
       if (typeof type === "function") type = type.name;
+      if(['image','video','audio'].includes(type)) data.file=data.file||data.url||data.src
       if (!allowTypes.includes(type)) return { type: "text", text: segment.toString(seg) };
       return { type, ...data } as MessageElem;
     });

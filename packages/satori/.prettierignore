@@ -2,7 +2,7 @@
 node_modules
 **/.next/**
 **/_next/**
-**/dist/**
+**/lib/**
 src/vendor/
 pnpm-lock.yaml
 *.md

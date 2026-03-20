@@ -15,7 +15,7 @@ const Test=async function Test(){
 }
 addComponent(Test);
 addCommand(
-  new MessageCommand("test-error").action(async (message, result) => {
+  new MessageCommand("test-err").action(async (message, result) => {
     return <Test/>;
   })
 );

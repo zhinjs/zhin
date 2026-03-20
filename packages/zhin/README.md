@@ -43,7 +43,7 @@ ai:
 ```typescript
 import { usePlugin, MessageCommand, ZhinTool } from 'zhin.js'
 
-const { addCommand, addTool, declareSkill, addCron } = usePlugin()
+const { addCommand, addTool, addCron } = usePlugin()
 
 // 注册命令
 addCommand(
@@ -62,12 +62,7 @@ addTool(
     .execute(async ({ city }) => `${city}：晴，25°C`)
 )
 
-// 声明技能（将插件内的工具聚合）
-declareSkill({
-  description: '天气查询服务',
-  keywords: ['天气', '气温'],
-  tags: ['生活'],
-})
+// 技能：在包内添加 skills/my-plugin/SKILL.md（由 Agent 扫描）
 ```
 
 ## 导出内容

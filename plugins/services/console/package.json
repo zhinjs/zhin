@@ -35,12 +35,7 @@
       "development": "./src/index.ts",
       "import": "./lib/index.js"
     },
-    "./client": {
-      "types": "./lib/client/index.d.ts",
-      "development": "./client/index.tsx",
-      "import": "./lib/client/index.js"
-    },
-    "./browser.tsconfig.json": "./broswer.tsconfig.json",
+    "./browser.tsconfig.json": "./browser.tsconfig.json",
     "./node.tsconfig.json": "./node.tsconfig.json"
   },
   "scripts": {
@@ -87,11 +82,14 @@
     "zhin.js": "workspace:*"
   },
   "files": [
+    "src",
     "lib",
-    "node",
-    "README.md",
-    "dist",
     "client",
+    "dist",
+    "skills",
+    "README.md",
+    "browser.tsconfig.json",
+    "node.tsconfig.json",
     "CHANGELOG.md"
   ],
   "optionalDependencies": {

@@ -25,6 +25,15 @@ export class MessageHandler {
    */
   static handle(message: WebSocketMessage): void {
     try {
+      const t = (message as { type: string }).type
+      if (t === 'bot:request' || t === 'bot:notice' || t === 'bot:message') {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('zhin-console-bot-push', { detail: message })
+          )
+        }
+        return
+      }
       switch (message.type) {
         // 脚本管理相关消息
         case 'sync':

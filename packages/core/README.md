@@ -52,7 +52,7 @@ Feature 是 Zhin.js 的核心扩展机制。所有内置功能均继承自 `Feat
 Feature (抽象基类)
 ├── CommandFeature    — 消息命令       addCommand()
 ├── ToolFeature       — AI 可调用工具   addTool()
-├── SkillFeature      — 技能聚合       declareSkill()
+├── SkillFeature      — 技能记录       Agent 从 SKILL.md 注入
 ├── CronFeature       — 定时任务       addCron()
 ├── DatabaseFeature   — 数据模型       defineModel()
 ├── ComponentFeature  — 消息组件       addComponent()

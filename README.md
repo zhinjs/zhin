@@ -11,7 +11,7 @@
 ## 核心特性
 
 - **AI 驱动** — 内置 ZhinAgent 智能体，接入 OpenAI / Ollama 等大模型，支持多轮对话、流式输出、工具调用（Function Calling）
-- **Tool / Skill 能力体系** — 插件通过 `addTool` 注册可调用工具，通过 `declareSkill` 将工具聚合为语义化技能，AI 按权限和关键词自动路由
+- **Tool / Skill 能力体系** — 插件通过 `addTool` 注册可调用工具；技能说明使用包内 `skills/<name>/SKILL.md`，由 Agent 同步到 SkillFeature，AI 按权限与关键词路由
 - **Feature 可扩展架构** — CommandFeature、ToolFeature、SkillFeature、CronFeature、DatabaseFeature… 所有能力统一抽象，插件按需组合
 - **TypeScript 全量类型** — 完整的类型推导和提示，极致开发体验
 - **智能热重载** — 代码、配置、依赖变更自动生效，无需重启，错误自动回滚
@@ -91,29 +91,11 @@ addTool({
 })
 ```
 
-### 声明技能（Skill）
+### 技能（Skill，文件化）
 
-将多个工具聚合为一个语义化技能，提供调用约定：
+在插件或适配器包内维护 `skills/<name>/SKILL.md`（frontmatter：`name`、`description`、`keywords` 等）。Agent 会扫描并写入 SkillFeature；**Core 不再提供 `declareSkill` API**。
 
-```typescript
-import { usePlugin } from 'zhin.js'
-
-const { addTool, declareSkill } = usePlugin()
-
-// 注册若干工具...
-addTool({ name: 'mute_member', /* ... */ })
-addTool({ name: 'kick_member', /* ... */ })
-
-// 声明技能
-declareSkill({
-  description: '群管理能力，包括禁言、踢人等',
-  keywords: ['群管理', '禁言', '踢人'],
-  tags: ['群管理'],
-  conventions: 'user_id 为目标成员 QQ 号，group_id 为群号'
-})
-```
-
-AI 会根据用户消息自动匹配相关 Skill，筛选可用 Tool，并在权限允许时执行调用。
+AI 会根据用户消息匹配 Skill / 工具关键词，筛选可用 Tool，并在权限允许时执行调用。
 
 ## Feature 系统
 
@@ -123,7 +105,7 @@ Feature 是 Zhin.js 的核心扩展机制。所有内置功能均基于 Feature 
 |---------|-------------|------|
 | CommandFeature | `addCommand()` | 消息命令 |
 | ToolFeature | `addTool()` | AI 可调用工具 |
-| SkillFeature | `declareSkill()` | 工具聚合为技能 |
+| SkillFeature | — | 技能由 Agent 从 `SKILL.md` 注入 |
 | CronFeature | `addCron()` | 定时任务 |
 | DatabaseFeature | `defineModel()` | 数据模型 |
 | ComponentFeature | `addComponent()` | 消息组件 |
@@ -158,7 +140,7 @@ addCron(new Cron('0 8 * * *', () => console.log('早上好')))
 | Sandbox | `@zhin.js/adapter-sandbox` | 终端测试适配器（内置）|
 | Email | `@zhin.js/adapter-email` | 邮件 |
 
-每个适配器都可以通过 `addTool()` + `declareSkill()` 将平台能力暴露给 AI。
+每个适配器通过 `addTool()` 暴露平台能力给 AI，并用包内 `skills/` 补充语义说明。
 
 ## 项目结构
 

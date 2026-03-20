@@ -4,7 +4,8 @@ import {
   KeyRound, AlertCircle, CheckCircle, Save, Loader2,
   RefreshCw, FileWarning, Eye, EyeOff
 } from 'lucide-react'
-import { Card, CardContent } from '../components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+import { PageHeader } from '../components/PageHeader'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Alert, AlertDescription } from '../components/ui/alert'
@@ -141,7 +142,7 @@ function EnvFileEditor({
   )
 }
 
-export default function EnvMangePage() {
+export default function EnvManagePage() {
   const { files, loading, error, listFiles, getFile, saveFile } = useEnvFiles()
   const [activeTab, setActiveTab] = useState('.env')
 
@@ -155,9 +156,9 @@ export default function EnvMangePage() {
 
   if (loading && files.length === 0) {
     return (
-      <div className="space-y-4">
-        <h1 className="text-2xl font-bold tracking-tight">环境变量</h1>
-        <div className="flex items-center justify-center py-12">
+      <div className="space-y-6">
+        <PageHeader title="环境变量" description="加载文件列表…" />
+        <div className="flex items-center justify-center py-12 rounded-lg border border-dashed">
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           <span className="ml-2 text-sm text-muted-foreground">加载中...</span>
         </div>
@@ -166,19 +167,17 @@ export default function EnvMangePage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">环境变量</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            管理 .env 文件中的环境变量，修改后需重启生效
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
-          刷新
-        </Button>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="环境变量"
+        description="管理 .env / .env.* 中的键值；含 PASSWORD、TOKEN、SECRET 等关键字的行可在未编辑时自动遮罩显示。保存后需重启进程生效。"
+        actions={
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
+            <RefreshCw className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
+            刷新
+          </Button>
+        }
+      />
 
       {error && (
         <Alert variant="destructive" className="py-2">
@@ -187,12 +186,12 @@ export default function EnvMangePage() {
         </Alert>
       )}
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList className="w-full justify-start flex-wrap h-auto gap-1 bg-muted/40 p-1">
           {['.env', '.env.development', '.env.production'].map(name => {
             const fileInfo = files.find(f => f.name === name)
             return (
-              <TabsTrigger key={name} value={name} className="gap-1.5">
+              <TabsTrigger key={name} value={name} className="gap-1.5 data-[state=active]:shadow-sm">
                 <KeyRound className="w-3.5 h-3.5" />
                 {name}
                 {fileInfo && !fileInfo.exists && (
@@ -204,13 +203,24 @@ export default function EnvMangePage() {
         </TabsList>
 
         {['.env', '.env.development', '.env.production'].map(name => (
-          <TabsContent key={name} value={name}>
-            <EnvFileEditor
-              filename={name}
-              getFile={getFile}
-              saveFile={saveFile}
-              exists={files.find(f => f.name === name)?.exists ?? false}
-            />
+          <TabsContent key={name} value={name} className="mt-0">
+            <Card className="border-border/80 shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold">{name}</CardTitle>
+                <CardDescription>
+                  键值对一行一条，格式 <code className="rounded bg-muted px-1 py-0.5 text-xs">KEY=VALUE</code>
+                  ；编辑时始终显示真实内容，保存前请确认环境安全。
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <EnvFileEditor
+                  filename={name}
+                  getFile={getFile}
+                  saveFile={saveFile}
+                  exists={files.find(f => f.name === name)?.exists ?? false}
+                />
+              </CardContent>
+            </Card>
           </TabsContent>
         ))}
       </Tabs>

@@ -24,5 +24,9 @@ declare module "zhin.js" {
     }
   }
   interface RegisteredAdapters {}
-  interface Models {}
+  interface Models {
+    unified_inbox_message?: Record<string, unknown>;
+    unified_inbox_request?: Record<string, unknown>;
+    unified_inbox_notice?: Record<string, unknown>;
+  }
 }

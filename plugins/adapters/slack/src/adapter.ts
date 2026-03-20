@@ -5,8 +5,6 @@ import {
   Adapter,
   Plugin,
   createGroupManagementTools,
-  GROUP_MANAGEMENT_SKILL_KEYWORDS,
-  GROUP_MANAGEMENT_SKILL_TAGS,
   type IGroupManagement,
 } from "zhin.js";
 import { SlackBot } from "./bot.js";
@@ -53,12 +51,6 @@ export class SlackAdapter extends Adapter<SlackBot> {
     this.registerSlackPlatformTools();
     const groupTools = createGroupManagementTools(this as unknown as IGroupManagement, this.name);
     groupTools.forEach((t) => this.addTool(t));
-    this.declareSkill({
-      description:
-        'Slack 工作区/频道管理：踢人、禁言、改频道名、查成员等。需先 list_members 获取用户 ID 再执行管理操作。',
-      keywords: GROUP_MANAGEMENT_SKILL_KEYWORDS,
-      tags: GROUP_MANAGEMENT_SKILL_TAGS,
-    });
     await super.start();
   }
 

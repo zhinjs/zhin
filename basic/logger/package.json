@@ -2,10 +2,10 @@
   "name": "@zhin.js/logger",
   "version": "0.1.35",
   "description": "Structured logging system for Zhin.js bot framework",
-  "main": "lib/index.js",
+  "main": "./lib/index.js",
   "type": "module",
-  "module": "lib/index.js",
-  "types": "lib/index.d.ts",
+  "module": "./lib/index.js",
+  "types": "./lib/index.d.ts",
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",

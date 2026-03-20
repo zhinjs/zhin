@@ -129,14 +129,25 @@ export function registerAITrigger(refs: AIServiceRefs): void {
       return;
     }
 
+    const dispatcherSvc = root.inject('dispatcher') as
+      | { replyWithPolish?: (m: Message<any>, s: 'ai' | 'command', c: unknown) => Promise<unknown> }
+      | undefined;
+
     const handleAIMessage = async (
       message: Message<any>,
       content: string,
     ) => {
+      const replyOutbound = async (payload: unknown) => {
+        if (dispatcherSvc && typeof dispatcherSvc.replyWithPolish === 'function') {
+          return dispatcherSvc.replyWithPolish(message, 'ai', payload as any);
+        }
+        return message.$reply(payload as any);
+      };
+
       const t0 = performance.now();
       if (!ai.isReady()) return;
       if (triggerConfig.thinkingMessage)
-        await message.$reply(triggerConfig.thinkingMessage);
+        await replyOutbound(triggerConfig.thinkingMessage);
 
       const permissions = inferSenderPermissions(message, triggerConfig);
       const toolContext: ToolContext = {
@@ -194,12 +205,12 @@ export function registerAITrigger(refs: AIServiceRefs): void {
           responseText = typeof response === 'string' ? response : '';
         }
 
-        if (responseText) await message.$reply(parseRichMediaContent(responseText));
+        if (responseText) await replyOutbound(parseRichMediaContent(responseText));
         logger.info(`[AI Handler] 总耗时: ${(performance.now() - t0).toFixed(0)}ms`);
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         logger.warn(`[AI Handler] 失败 (${(performance.now() - t0).toFixed(0)}ms): ${msg}`);
-        await message.$reply(triggerConfig.errorTemplate.replace('{error}', msg));
+        await replyOutbound(triggerConfig.errorTemplate.replace('{error}', msg));
       }
     };
 

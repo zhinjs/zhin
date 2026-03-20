@@ -53,7 +53,7 @@ export function registerCoreServices(
   const filterFeature = new MessageFilterFeature(appConfig.message_filter);
   provide(filterFeature);
 
-  provide(createMessageDispatcher());
+  provide(createMessageDispatcher({ dualRoute: appConfig.dispatcher }));
 
   // 将过滤引擎接入 Dispatcher Guardrail（第一阶段拦截）
   plugin.useContext('dispatcher', (dispatcher) => {

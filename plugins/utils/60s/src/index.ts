@@ -484,16 +484,4 @@ const allTools = [
 
 allTools.forEach((tool) => plugin.addTool(tool.toTool()));
 
-// 声明 Skill 元数据 — 让 AI Agent 知道这个插件的能力
-plugin.declareSkill({
-  description:
-    '60s API 聚合服务：提供新闻、天气、热搜、金价、油价、汇率、翻译、一言、摸鱼日历等 17 种实用查询能力',
-  tags: ['新闻', '资讯', '天气', '热搜', '生活', '金融', '娱乐', '工具'],
-  keywords: [
-    '60s', '新闻', '天气', '微博', '知乎', '抖音', '头条',
-    '一言', '摸鱼', '金价', '油价', '汇率', '翻译', '历史',
-    'kfc', '段子', '壁纸', 'bing', 'ip',
-  ],
-});
-
 logger.debug(`[60s] 已注册 ${allTools.length} 个工具`);

@@ -11,15 +11,19 @@ This directory contains font files that are included with the `@zhin.js/satori` 
 
 ### Noto Sans CJK Fonts (SIL Open Font License 1.1)
 
-- **NotoSansSC-Regular.ttf** - Noto Sans Simplified Chinese (400 weight) - ~291 KB
-- **NotoSansJP-Regular.ttf** - Noto Sans Japanese (400 weight) - ~291 KB
-- **NotoSansKR-Regular.ttf** - Noto Sans Korean (400 weight) - ~291 KB
+These are **SubsetOTF** static fonts from [googlefonts/noto-cjk](https://github.com/googlefonts/noto-cjk) (`Sans/SubsetOTF/{SC,JP,KR}/`). They work with Satori’s bundled OpenType parser; **do not** replace them with Google Fonts **variable** `.ttf` here — those can crash Satori’s `fvar` parsing.
+
+- **NotoSansSC-Regular.otf** — Simplified Chinese — ~8 MB  
+- **NotoSansJP-Regular.otf** — Japanese — ~4.3 MB  
+- **NotoSansKR-Regular.otf** — Korean — ~4.4 MB  
+
+> **Important**: If these files are accidentally replaced by an HTML page (e.g. wrong `curl` URL or Git LFS misconfiguration), `file *.otf` will show `HTML document` and **CJK will render as tofu**. Re-fetch with `pnpm fetch-noto-cjk` from `packages/satori`.
 
 ### Noto Color Emoji Font (SIL Open Font License 1.1)
 
-- **NotoColorEmoji.ttf** - Noto Color Emoji (all emoji support) - ~10.1 MB
+- **NotoColorEmoji.ttf** — ~10.1 MB，**仅作保留/其它用途**。Satori 的 `fonts` 选项需要轮廓字体（TTF/OTF+CFF），该文件为 **CBDT 彩色位图**，传入 Satori 会报错；插件里 Emoji 应通过 **`loadAdditionalAsset`（如 Twemoji）** 渲染。
 
-**Total Size**: ~11.3 MB
+**Approximate total (fonts on disk)**: ~37 MB（含 Color Emoji 文件；Satori 实际加载的是 Poppins + Noto CJK SubsetOTF）
 
 ## License Information
 
@@ -32,7 +36,7 @@ This directory contains font files that are included with the `@zhin.js/satori` 
 ### Noto Sans CJK (SC, JP, KR)
 - **License**: SIL Open Font License 1.1 (OFL)
 - **Copyright**: Google
-- **Source**: https://fonts.google.com/noto
+- **Source**: https://github.com/googlefonts/noto-cjk (SubsetOTF)
 - **License URL**: https://openfontlicense.org
 
 ### Noto Color Emoji
@@ -70,7 +74,7 @@ const extendedFonts = getExtendedFonts();
 // Get CJK fonts (Chinese, Japanese, Korean)
 const cjkFonts = getCJKFonts();
 
-// Get complete fonts (all languages + emoji) - RECOMMENDED
+// 拉丁 + 全 CJK（不含可传给 Satori 的 Color Emoji 字体）
 const completeFonts = getCompleteFonts();
 
 // Or get specific fonts
@@ -81,7 +85,11 @@ const korean = getNotoSansKR();
 const emoji = getNotoColorEmoji();
 ```
 
-No download or installation required!
+No extra download is required for normal installs; to **refresh** Noto CJK files after a bad copy:
+
+```bash
+cd packages/satori && pnpm fetch-noto-cjk
+```
 
 ## Adding More Fonts
 
@@ -129,12 +137,11 @@ The fonts are included in the npm package, so users get them automatically when 
 
 When publishing:
 - Fonts are included via `package.json` `files` field
-- Total package size: ~490 KB (code + fonts)
-- Users download fonts only once during installation
+- Users download fonts once during installation
 
 ## References
 
-- **Roboto Font**: https://fonts.google.com/specimen/Roboto
+- **Noto**: https://fonts.google.com/noto
 - **Apache License 2.0**: https://www.apache.org/licenses/LICENSE-2.0
 - **MPL-2.0 License**: https://www.mozilla.org/en-US/MPL/2.0/
 - **Font License Compatibility**: See LICENSE_COMPLIANCE.md

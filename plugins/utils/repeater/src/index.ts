@@ -26,7 +26,7 @@
 import { usePlugin, MessageCommand, Schema } from "zhin.js";
 
 const plugin = usePlugin();
-const { logger, addCommand, addMiddleware, onDispose, declareSkill, declareConfig } = plugin;
+const { logger, addCommand, addMiddleware, onDispose, declareConfig } = plugin;
 
 const config = declareConfig("repeater", Schema.object({
   threshold: Schema.number().default(3).min(2).max(10).description("触发复读的最少人数"),
@@ -132,11 +132,5 @@ addCommand(
       return lines.join("\n");
     }),
 );
-
-declareSkill({
-  description: "复读机：当群内连续多人发送相同消息时，Bot 自动跟读。支持阈值和冷却配置。",
-  keywords: ["repeater", "复读", "复读机", "跟读", "echo", "parrot"],
-  tags: ["repeater", "fun", "group"],
-});
 
 logger.info(`插件已加载 (阈值=${config.threshold}人, 冷却=${config.cooldown / 1000}s)`);

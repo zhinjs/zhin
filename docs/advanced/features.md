@@ -18,7 +18,7 @@ Feature 提供了统一的基类，所有内置功能都继承自它。
 |---------|------|-------------|------|
 | `CommandFeature` | `command` | `addCommand()` | 命令注册与匹配 |
 | `ToolFeature` | `tool` | `addTool()` | AI 工具注册 |
-| `SkillFeature` | `skill` | `declareSkill()` | AI 技能声明 |
+| `SkillFeature` | `skill` | — | 技能记录由 Agent 等 `add()` 注入 |
 | `ConfigFeature` | `config` | `addConfig()` | 配置项注册 |
 | `CronFeature` | `cron` | `addCron()` | 定时任务管理 |
 | `PermissionFeature` | `permission` | `addPermission()` | 权限规则管理 |
@@ -121,13 +121,12 @@ feature.toJSON('my-plugin')
 ### 通过扩展方法（推荐）
 
 ```typescript
-const { addCommand, addTool, addCron, declareSkill } = usePlugin()
+const { addCommand, addTool, addCron } = usePlugin()
 
 // 直接调用扩展方法
 addCommand(new MessageCommand('hello').action(() => '你好'))
 addTool({ name: 'my_tool', ... })
 addCron(new Cron('0 8 * * *', () => {}))
-declareSkill({ description: '...' })
 ```
 
 ### 通过 inject（高级）

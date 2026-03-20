@@ -1,11 +1,90 @@
 import fs from "node:fs";
 import path from "node:path";
 import WebSocket from "ws";
-import { Plugin, usePlugin } from "@zhin.js/core";
+import { Plugin, usePlugin, Adapter } from "@zhin.js/core";
 import type { SchemaFeature, ConfigFeature, DatabaseFeature } from "@zhin.js/core";
 import type { WebServer } from "./index.js";
+import {
+  initBotHub,
+  setBotHubWss,
+  sendCatchUpToClient,
+  getPendingRequest,
+  markRequestConsumedByPlatformId,
+} from "./bot-hub.js";
+import {
+  markRequestsConsumed,
+  markNoticesConsumed,
+  listRequestsForBot,
+  listUnconsumedRequests,
+  listUnconsumedNotices,
+  getRequestRowById,
+} from "./bot-persistence.js";
+import { removePendingRequest } from "./bot-hub.js";
 
 const { root, logger } = usePlugin();
+
+function collectBotsList(): Array<{
+  name: string;
+  adapter: string;
+  connected: boolean;
+  status: "online" | "offline";
+  pendingRequestCount?: number;
+  pendingNoticeCount?: number;
+}> {
+  const bots: Array<{
+    name: string;
+    adapter: string;
+    connected: boolean;
+    status: "online" | "offline";
+  }> = [];
+  for (const name of root.adapters) {
+    const adapter = root.inject(name as keyof Plugin.Contexts);
+    if (adapter instanceof Adapter) {
+      for (const [botName, bot] of adapter.bots.entries()) {
+        bots.push({
+          name: botName,
+          adapter: String(name),
+          connected: !!(bot as { $connected?: boolean }).$connected,
+          status: (bot as { $connected?: boolean }).$connected ? "online" : "offline",
+        });
+      }
+    }
+  }
+  return bots;
+}
+
+async function collectBotsListWithPending(): Promise<
+  Array<{
+    name: string;
+    adapter: string;
+    connected: boolean;
+    status: "online" | "offline";
+    pendingRequestCount: number;
+    pendingNoticeCount: number;
+  }>
+> {
+  const bots = collectBotsList();
+  let reqs: Awaited<ReturnType<typeof listUnconsumedRequests>> = [];
+  let notices: Awaited<ReturnType<typeof listUnconsumedNotices>> = [];
+  try {
+    [reqs, notices] = await Promise.all([listUnconsumedRequests(), listUnconsumedNotices()]);
+  } catch {
+    // ignore
+  }
+  return bots.map((bot) => {
+    const pendingRequestCount = reqs.filter(
+      (r) => r.adapter === bot.adapter && r.bot_id === bot.name
+    ).length;
+    const pendingNoticeCount = notices.filter(
+      (n) => n.adapter === bot.adapter && n.bot_id === bot.name
+    ).length;
+    return {
+      ...bot,
+      pendingRequestCount,
+      pendingNoticeCount,
+    };
+  });
+}
 
 const ENV_WHITELIST = [".env", ".env.development", ".env.production"];
 
@@ -63,12 +142,18 @@ function getConfigFilePath(): string {
 }
 
 export function setupWebSocket(webServer: WebServer) {
+  setBotHubWss(webServer.ws);
+  initBotHub(root as { on: (ev: string, fn: (...a: unknown[]) => void) => void });
+
   webServer.ws.on("connection", (ws: WebSocket) => {
     ws.send(JSON.stringify({
       type: "sync",
       data: { key: "entries", value: Object.values(webServer.entries) },
     }));
     ws.send(JSON.stringify({ type: "init-data", timestamp: Date.now() }));
+    void sendCatchUpToClient(ws).catch((e) =>
+      logger.warn("[console] bot catch-up failed", (e as Error).message)
+    );
 
     ws.on("message", async (data) => {
       try {
@@ -486,6 +571,515 @@ async function handleWebSocketMessage(
         ws.send(JSON.stringify({ requestId, error: `Failed to get entries: ${(error as Error).message}` }));
       }
       break;
+
+    // ================================================================
+    // 机器人管理（WebSocket）
+    // ================================================================
+
+    case "bot:list": {
+      try {
+        const botsWithPending = await collectBotsListWithPending();
+        ws.send(JSON.stringify({ requestId, data: { bots: botsWithPending } }));
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      }
+      break;
+    }
+
+    case "bot:info": {
+      try {
+        const d = message.data || {};
+        const { adapter, botId } = d;
+        if (!adapter || !botId) {
+          ws.send(JSON.stringify({ requestId, error: "adapter and botId required" }));
+          break;
+        }
+        const ad = root.inject(adapter as keyof Plugin.Contexts);
+        if (!(ad instanceof Adapter)) {
+          ws.send(JSON.stringify({ requestId, error: "adapter not found" }));
+          break;
+        }
+        const bot = ad.bots.get(botId);
+        if (!bot) {
+          ws.send(JSON.stringify({ requestId, error: "bot not found" }));
+          break;
+        }
+        ws.send(
+          JSON.stringify({
+            requestId,
+            data: {
+              name: botId,
+              adapter: String(adapter),
+              connected: !!bot.$connected,
+              status: bot.$connected ? "online" : "offline",
+            },
+          })
+        );
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      }
+      break;
+    }
+
+    case "bot:sendMessage": {
+      try {
+        const d = message.data || {};
+        const { adapter, botId, id, type: msgType, content } = d;
+        if (!adapter || !botId || !id || !msgType || content === undefined) {
+          ws.send(
+            JSON.stringify({
+              requestId,
+              error: "adapter, botId, id, type, content required",
+            })
+          );
+          break;
+        }
+        const ad = root.inject(adapter as keyof Plugin.Contexts);
+        if (!(ad instanceof Adapter)) {
+          ws.send(JSON.stringify({ requestId, error: "adapter not found" }));
+          break;
+        }
+        const normalized =
+          typeof content === "string"
+            ? content
+            : Array.isArray(content)
+              ? content
+              : String(content);
+        const messageId = await ad.sendMessage({
+          context: adapter,
+          bot: botId,
+          id: String(id),
+          type: msgType as "private" | "group" | "channel",
+          content: normalized,
+        });
+        ws.send(JSON.stringify({ requestId, data: { messageId } }));
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      }
+      break;
+    }
+
+    case "bot:friends":
+    case "bot:groups": {
+      try {
+        const d = message.data || {};
+        const { adapter, botId } = d;
+        if (!adapter || !botId) {
+          ws.send(JSON.stringify({ requestId, error: "adapter and botId required" }));
+          break;
+        }
+        if (adapter !== "icqq") {
+          ws.send(JSON.stringify({ requestId, error: "not supported for this adapter" }));
+          break;
+        }
+        const ad = root.inject("icqq" as keyof Plugin.Contexts) as any;
+        const bot = ad?.bots?.get?.(botId);
+        if (!bot) {
+          ws.send(JSON.stringify({ requestId, error: "bot not found" }));
+          break;
+        }
+        if (type === "bot:friends") {
+          const fl = bot.fl;
+          const friends = Array.from((fl || new Map()).values()).map((f: any) => ({
+            user_id: f.user_id,
+            nickname: f.nickname,
+            remark: f.remark,
+          }));
+          ws.send(JSON.stringify({ requestId, data: { friends, count: friends.length } }));
+        } else {
+          const gl = bot.gl;
+          const groups = Array.from((gl || new Map()).values()).map((g: any) => ({
+            group_id: g.group_id,
+            name: g.name,
+          }));
+          ws.send(JSON.stringify({ requestId, data: { groups, count: groups.length } }));
+        }
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      }
+      break;
+    }
+
+    case "bot:channels": {
+      try {
+        const d = message.data || {};
+        const { adapter, botId } = d;
+        if (!adapter || !botId) {
+          ws.send(JSON.stringify({ requestId, error: "adapter and botId required" }));
+          break;
+        }
+        if (adapter === "icqq") {
+          ws.send(JSON.stringify({ requestId, error: "channels not supported for icqq" }));
+          break;
+        }
+        const ad = root.inject(adapter as keyof Plugin.Contexts) as any;
+        const bot = ad?.bots?.get?.(botId);
+        if (!bot) {
+          ws.send(JSON.stringify({ requestId, error: "bot not found" }));
+          break;
+        }
+        const channels: Array<{ id: string; name: string }> = [];
+        if (adapter === "qq" && typeof bot.getGuilds === "function" && typeof bot.getChannels === "function") {
+          const guilds = (await bot.getGuilds()) || [];
+          for (const g of guilds) {
+            const gid = g?.id ?? g?.guild_id ?? String(g);
+            const chs = (await bot.getChannels(gid)) || [];
+            for (const c of chs) {
+              channels.push({
+                id: String(c?.id ?? c?.channel_id ?? c),
+                name: String(c?.name ?? c?.channel_name ?? c?.id ?? ""),
+              });
+            }
+          }
+        } else if (typeof (ad as any)?.listChannels === "function") {
+          const result = await (ad as any).listChannels(botId);
+          if (Array.isArray(result)) channels.push(...result.map((c: any) => ({ id: String(c?.id ?? c), name: String(c?.name ?? c?.id ?? "") })));
+          else if (result?.channels) channels.push(...result.channels.map((c: any) => ({ id: String(c?.id ?? c), name: String(c?.name ?? c?.id ?? "") })));
+        }
+        ws.send(JSON.stringify({ requestId, data: { channels, count: channels.length } }));
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      }
+      break;
+    }
+
+    case "bot:deleteFriend": {
+      try {
+        const d = message.data || {};
+        const { adapter, botId, userId } = d;
+        if (!adapter || !botId || !userId) {
+          ws.send(JSON.stringify({ requestId, error: "adapter, botId, userId required" }));
+          break;
+        }
+        const ad = root.inject(adapter as keyof Plugin.Contexts) as any;
+        const bot = ad?.bots?.get?.(botId);
+        if (!bot) {
+          ws.send(JSON.stringify({ requestId, error: "bot not found" }));
+          break;
+        }
+        if (adapter === "icqq" && typeof bot.deleteFriend === "function") {
+          await bot.deleteFriend(Number(userId));
+          ws.send(JSON.stringify({ requestId, data: { success: true } }));
+        } else if (adapter === "icqq" && typeof bot.delete_friend === "function") {
+          await bot.delete_friend(Number(userId));
+          ws.send(JSON.stringify({ requestId, data: { success: true } }));
+        } else {
+          ws.send(JSON.stringify({ requestId, error: "当前适配器暂不支持删除好友" }));
+        }
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      }
+      break;
+    }
+
+    case "bot:requests": {
+      try {
+        const d = message.data || {};
+        const { adapter, botId } = d;
+        if (!adapter || !botId) {
+          ws.send(JSON.stringify({ requestId, error: "adapter and botId required" }));
+          break;
+        }
+        const rows = await listRequestsForBot(String(adapter), String(botId));
+        ws.send(
+          JSON.stringify({
+            requestId,
+            data: {
+              requests: rows.map((r) => ({
+                id: r.id,
+                platformRequestId: r.platform_request_id,
+                type: r.type,
+                sender: { id: r.sender_id, name: r.sender_name },
+                comment: r.comment,
+                channel: { id: r.channel_id, type: r.channel_type },
+                timestamp: r.created_at,
+              })),
+            },
+          })
+        );
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      }
+      break;
+    }
+
+    case "bot:requestApprove":
+    case "bot:requestReject": {
+      try {
+        const d = message.data || {};
+        const { adapter, botId, requestId: platformReqId, remark, reason } = d;
+        if (!adapter || !botId || !platformReqId) {
+          ws.send(
+            JSON.stringify({
+              requestId,
+              error: "adapter, botId, requestId required",
+            })
+          );
+          break;
+        }
+        const req = getPendingRequest(String(adapter), String(botId), String(platformReqId));
+        if (!req) {
+          ws.send(
+            JSON.stringify({
+              requestId,
+              error:
+                "request not in memory (restart?) — use bot:requestConsumed to dismiss",
+            })
+          );
+          break;
+        }
+        if (type === "bot:requestApprove") await req.$approve(remark);
+        else await req.$reject(reason);
+        await markRequestConsumedByPlatformId(String(adapter), String(botId), String(platformReqId));
+        ws.send(JSON.stringify({ requestId, data: { success: true } }));
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      }
+      break;
+    }
+
+    case "bot:requestConsumed": {
+      try {
+        const d = message.data || {};
+        const ids = d.ids ?? (d.id != null ? [d.id] : []);
+        if (!Array.isArray(ids) || !ids.length) {
+          ws.send(JSON.stringify({ requestId, error: "id or ids required" }));
+          break;
+        }
+        const numIds = ids.map(Number);
+        for (const id of numIds) {
+          const row = await getRequestRowById(id);
+          if (row && row.consumed === 0) {
+            removePendingRequest(row.adapter, row.bot_id, row.platform_request_id);
+          }
+        }
+        await markRequestsConsumed(numIds);
+        ws.send(JSON.stringify({ requestId, data: { success: true } }));
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      }
+      break;
+    }
+
+    case "bot:noticeConsumed": {
+      try {
+        const d = message.data || {};
+        const ids = d.ids ?? (d.id != null ? [d.id] : []);
+        if (!Array.isArray(ids) || !ids.length) {
+          ws.send(JSON.stringify({ requestId, error: "id or ids required" }));
+          break;
+        }
+        await markNoticesConsumed(ids.map(Number));
+        ws.send(JSON.stringify({ requestId, data: { success: true } }));
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      }
+      break;
+    }
+
+    case "bot:inboxMessages": {
+      try {
+        const d = message.data || {};
+        const { adapter, botId, channelId, channelType, limit = 50, beforeId, beforeTs } = d;
+        if (!adapter || !botId || !channelId || !channelType) {
+          ws.send(JSON.stringify({ requestId, error: "adapter, botId, channelId, channelType required" }));
+          break;
+        }
+        let db: DatabaseFeature;
+        try {
+          db = root.inject("database") as DatabaseFeature;
+        } catch {
+          ws.send(JSON.stringify({ requestId, data: { messages: [], inboxEnabled: false } }));
+          break;
+        }
+        const MessageModel = db?.models?.get("unified_inbox_message") as any;
+        if (!MessageModel) {
+          ws.send(JSON.stringify({ requestId, data: { messages: [], inboxEnabled: false } }));
+          break;
+        }
+        const where: Record<string, unknown> = {
+          adapter: String(adapter),
+          bot_id: String(botId),
+          channel_id: String(channelId),
+          channel_type: String(channelType),
+        };
+        if (beforeTs != null) where.created_at = { $lt: Number(beforeTs) };
+        if (beforeId != null) where.id = { $lt: Number(beforeId) };
+        let q = MessageModel.select().where(where).orderBy("created_at", "DESC").limit(Math.min(Number(limit) || 50, 100));
+        const rows = await (typeof q.then === "function" ? q : Promise.resolve(q));
+        const messages = (rows || []).map((r: any) => ({
+          id: r.id,
+          platform_message_id: r.platform_message_id,
+          sender_id: r.sender_id,
+          sender_name: r.sender_name,
+          content: r.content,
+          raw: r.raw,
+          created_at: r.created_at,
+        }));
+        ws.send(JSON.stringify({ requestId, data: { messages, inboxEnabled: true } }));
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      }
+      break;
+    }
+
+    case "bot:inboxRequests": {
+      try {
+        const d = message.data || {};
+        const { adapter, botId, limit = 30, offset = 0 } = d;
+        if (!adapter || !botId) {
+          ws.send(JSON.stringify({ requestId, error: "adapter and botId required" }));
+          break;
+        }
+        let db: DatabaseFeature;
+        try {
+          db = root.inject("database") as DatabaseFeature;
+        } catch {
+          ws.send(JSON.stringify({ requestId, data: { requests: [], inboxEnabled: false } }));
+          break;
+        }
+        const RequestModel = db?.models?.get("unified_inbox_request") as any;
+        if (!RequestModel) {
+          ws.send(JSON.stringify({ requestId, data: { requests: [], inboxEnabled: false } }));
+          break;
+        }
+        const where = { adapter: String(adapter), bot_id: String(botId) };
+        const limitNum = Math.min(Number(limit) || 30, 100);
+        const offsetNum = Math.max(0, Number(offset) || 0);
+        let q = RequestModel.select().where(where).orderBy("created_at", "DESC").limit(limitNum).offset(offsetNum);
+        const rows = await (typeof q.then === "function" ? q : Promise.resolve(q));
+        const requests = (rows || []).map((r: any) => ({
+          id: r.id,
+          platform_request_id: r.platform_request_id,
+          type: r.type,
+          sub_type: r.sub_type,
+          channel_id: r.channel_id,
+          channel_type: r.channel_type,
+          sender_id: r.sender_id,
+          sender_name: r.sender_name,
+          comment: r.comment,
+          created_at: r.created_at,
+          resolved: r.resolved,
+          resolved_at: r.resolved_at,
+        }));
+        ws.send(JSON.stringify({ requestId, data: { requests, inboxEnabled: true } }));
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      }
+      break;
+    }
+
+    case "bot:inboxNotices": {
+      try {
+        const d = message.data || {};
+        const { adapter, botId, limit = 30, offset = 0 } = d;
+        if (!adapter || !botId) {
+          ws.send(JSON.stringify({ requestId, error: "adapter and botId required" }));
+          break;
+        }
+        let db: DatabaseFeature;
+        try {
+          db = root.inject("database") as DatabaseFeature;
+        } catch {
+          ws.send(JSON.stringify({ requestId, data: { notices: [], inboxEnabled: false } }));
+          break;
+        }
+        const NoticeModel = db?.models?.get("unified_inbox_notice") as any;
+        if (!NoticeModel) {
+          ws.send(JSON.stringify({ requestId, data: { notices: [], inboxEnabled: false } }));
+          break;
+        }
+        const where = { adapter: String(adapter), bot_id: String(botId) };
+        const limitNum = Math.min(Number(limit) || 30, 100);
+        const offsetNum = Math.max(0, Number(offset) || 0);
+        let q = NoticeModel.select().where(where).orderBy("created_at", "DESC").limit(limitNum).offset(offsetNum);
+        const rows = await (typeof q.then === "function" ? q : Promise.resolve(q));
+        const notices = (rows || []).map((r: any) => ({
+          id: r.id,
+          platform_notice_id: r.platform_notice_id,
+          type: r.type,
+          sub_type: r.sub_type,
+          channel_id: r.channel_id,
+          channel_type: r.channel_type,
+          operator_id: r.operator_id,
+          operator_name: r.operator_name,
+          target_id: r.target_id,
+          target_name: r.target_name,
+          payload: r.payload,
+          created_at: r.created_at,
+        }));
+        ws.send(JSON.stringify({ requestId, data: { notices, inboxEnabled: true } }));
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      }
+      break;
+    }
+
+    case "bot:groupMembers":
+    case "bot:groupKick":
+    case "bot:groupMute":
+    case "bot:groupAdmin": {
+      try {
+        const d = message.data || {};
+        const { adapter, botId, groupId, userId, duration, enable } = d;
+        if (!adapter || !botId || !groupId) {
+          ws.send(
+            JSON.stringify({ requestId, error: "adapter, botId, groupId required" })
+          );
+          break;
+        }
+        const ad = root.inject(adapter as keyof Plugin.Contexts) as any;
+        if (!ad) {
+          ws.send(JSON.stringify({ requestId, error: "adapter not found" }));
+          break;
+        }
+        const gid = String(groupId);
+        if (type === "bot:groupMembers") {
+          if (typeof ad.listMembers !== "function") {
+            ws.send(JSON.stringify({ requestId, error: "adapter does not support listMembers" }));
+            break;
+          }
+          const r = await ad.listMembers(botId, gid);
+          ws.send(JSON.stringify({ requestId, data: r }));
+        } else if (type === "bot:groupKick") {
+          if (!userId) {
+            ws.send(JSON.stringify({ requestId, error: "userId required" }));
+            break;
+          }
+          if (typeof ad.kickMember !== "function") {
+            ws.send(JSON.stringify({ requestId, error: "adapter does not support kickMember" }));
+            break;
+          }
+          await ad.kickMember(botId, gid, String(userId));
+          ws.send(JSON.stringify({ requestId, data: { success: true } }));
+        } else if (type === "bot:groupMute") {
+          if (!userId) {
+            ws.send(JSON.stringify({ requestId, error: "userId required" }));
+            break;
+          }
+          if (typeof ad.muteMember !== "function") {
+            ws.send(JSON.stringify({ requestId, error: "adapter does not support muteMember" }));
+            break;
+          }
+          await ad.muteMember(botId, gid, String(userId), duration ?? 600);
+          ws.send(JSON.stringify({ requestId, data: { success: true } }));
+        } else {
+          if (!userId) {
+            ws.send(JSON.stringify({ requestId, error: "userId required" }));
+            break;
+          }
+          if (typeof ad.setAdmin !== "function") {
+            ws.send(JSON.stringify({ requestId, error: "adapter does not support setAdmin" }));
+            break;
+          }
+          await ad.setAdmin(botId, gid, String(userId), enable !== false);
+          ws.send(JSON.stringify({ requestId, data: { success: true } }));
+        }
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      }
+      break;
+    }
 
     default:
       ws.send(JSON.stringify({ requestId, error: `Unknown message type: ${type}` }));

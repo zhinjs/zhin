@@ -260,6 +260,21 @@ flowchart TD
   class B,C,D,G,L,M,N process
 ```
 
+## 出站消息（发送链）
+
+所有「机器人主动发到会话」的逻辑应走 **同一套发送管道**，避免在 core 中新增与 `Adapter.sendMessage` 并行的旁路 API。
+
+**推荐链（概念顺序）**：
+
+1. 业务或框架代码调用 **`Message.$reply(...)`**，或直接调用 **`Adapter.sendMessage(...)`**（与具体 Bot API 封装一致）。
+2. **`Adapter`** 内经过 **`renderSendMessage`** 等渲染/规范化（如 segment → 平台格式）。
+3. **根插件** 的 **`before.sendMessage`** 生命周期：可读取/改写即将发出的 `options`（例如统一润色 `content`、审计、限流）。
+4. 最终落到具体 **`Bot` / 平台 SDK**（如 `bot.$sendMessage`）。
+
+**Dispatcher 出站润色（`packages/core/src/built/dispatcher.ts`）**：在调用 `$reply` 的异步上下文中，用 **`AsyncLocalStorage`** 标记「本次发送由 Dispatcher 发起的回复」；`addOutboundPolish` 向根注册额外的 **`before.sendMessage`**，仅在存储命中时修改 `options.content`。这样润色与**普通插件发消息**走同一 `before.sendMessage` 链，行为一致、可组合。
+
+扩展阅读：`docs/advanced/ai.md`（若涉及 AI 触发与出站）；根目录 **`AGENTS.md`**（速查表）。
+
 ## 插件系统
 
 Zhin.js 使用 `AsyncLocalStorage` 实现插件上下文管理。开发者通过 `usePlugin()` 获取当前插件 API：
@@ -267,7 +282,7 @@ Zhin.js 使用 `AsyncLocalStorage` 实现插件上下文管理。开发者通过
 ```typescript
 import { usePlugin, MessageCommand } from 'zhin.js'
 
-const { addCommand, addTool, declareSkill, onMounted } = usePlugin()
+const { addCommand, addTool, onMounted } = usePlugin()
 ```
 
 插件支持：
@@ -278,7 +293,7 @@ const { addCommand, addTool, declareSkill, onMounted } = usePlugin()
 
 ## 适配器与群管理
 
-适配器通过覆写 `IGroupManagement` 接口方法来声明群管理能力。`Adapter.start()` 会自动检测已覆写的方法并生成对应的 AI 工具和技能：
+适配器通过覆写 `IGroupManagement` 接口方法来声明群管理能力。`Adapter.start()` 会自动检测已覆写的方法并生成对应的 **AI 工具**；技能说明由包内 `skills/`（SKILL.md）提供：
 
 ```typescript
 class MyAdapter extends Adapter<MyBot> {

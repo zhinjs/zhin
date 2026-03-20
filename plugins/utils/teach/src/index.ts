@@ -30,7 +30,7 @@
 import { usePlugin, ZhinTool, MessageCommand, Schema } from "zhin.js";
 
 const plugin = usePlugin();
-const { logger, root, addCommand, addMiddleware, useContext, onDispose, declareSkill, declareConfig } = plugin;
+const { logger, root, addCommand, addMiddleware, useContext, onDispose, declareConfig } = plugin;
 
 // ─── 配置 ─────────────────────────────────────────────────────────────────────
 
@@ -422,19 +422,5 @@ plugin.addTool(
     })
     .toTool(),
 );
-
-// ─── Skill 声明 ──────────────────────────────────────────────────────────────
-
-declareSkill({
-  description: "自定义问答系统：用户可以教会 Bot 问答对，支持精确匹配和正则匹配，自动在聊天中触发回复。可查询问答库内容和统计信息。",
-  keywords: [
-    "teach", "问答", "教学", "自定义回复", "auto-reply",
-    "forget", "忘记", "删除问答",
-    "teach-list", "问答列表",
-    "teach-regex", "正则问答",
-    "query", "查询", "统计",
-  ],
-  tags: ["teach", "qa", "auto-reply"],
-});
 
 logger.info(`插件已加载 (上限 ${config.maxPerGroup}/群, 冷却 ${config.cooldown}ms)`);

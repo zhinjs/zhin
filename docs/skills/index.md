@@ -8,31 +8,48 @@ aside: false
 
 # 技能商店
 
-<p class="page-desc">搜索并安装 AI 技能到本地，扩展机器人的能力</p>
+<p class="page-desc">浏览本仓库中的文件化技能：区分「通用模板技能」与「插件自带技能」</p>
 
 <ClientOnly>
 <SkillMarket />
 </ClientOnly>
 
-## 如何安装
+## 两类技能
 
-在项目根目录或任意目录下执行：
+| 类型 | 来源 | Agent 如何发现 | 典型操作 |
+|------|------|----------------|----------|
+| **通用技能** | `packages/create-zhin/template/skills/` | 复制到项目根 `skills/<name>/`（新建项目模板已带） | 按需编辑 SKILL.md |
+| **插件技能** | 各 `plugins/**/skills/<name>/SKILL.md`，随 npm 包发布 | 安装并启用对应插件后，扫描插件包内 `skills/` | 在插件仓库改 SKILL.md 并发版 |
+
+插件技能**不是**通过 `zhin skills add` 安装的 ZIP 技能，而是与插件一起分发的说明文件。
+
+## 如何安装（CLI）
+
+在项目根目录执行：
 
 ```bash
-# 从云端搜索（需先有 registry）
+# 从线上 registry 搜索（与本文档同源 JSON）
 zhin skills search "关键词"
 
-# 按 id 或 name 安装到当前项目 skills/
+# 仅当 registry 中该条目提供可下载 source（ZIP）时，可安装到当前项目 skills/
 zhin skills add <id>
 
 # 安装到用户目录 ~/.zhin/skills
 zhin skills add <id> --local
+
+# 本地新建空白技能目录
+zhin skills add --new
 ```
+
+## 目录数据如何更新
+
+构建文档时会运行 `gen-skills`，扫描模板与插件包内的 `SKILL.md`，生成 `docs/public/skills.json`。部署后该文件即为 CLI 默认拉取的 registry。
 
 ## 如何贡献技能
 
-1. **推荐**：在仓库的技能目录（如 `docs/public/skills/`）下新建技能文件夹，包含 `SKILL.md`（必填 frontmatter：name、description），提 PR。合并后由脚本或 CI 生成 registry。
-2. **自托管**：PR 只修改 `docs/public/skills.json`，新增一条并填写 `source`（ZIP 下载地址），确保 ZIP 内包含 `SKILL.md`。
+1. **通用技能**：向 `packages/create-zhin/template/skills/<name>/SKILL.md` 提 PR（frontmatter 必填 `name`、`description`）。
+2. **插件技能**：在对应插件包下维护 `skills/<name>/SKILL.md`，并确保 `package.json` 的 `files` 包含 `skills`。
+3. **带 ZIP 的社区技能**：若需支持 `zhin skills add` 一键安装，应在合并流程中向 registry **追加**条目并填写 `source`；注意避免覆盖自动生成的 `skills.json`（建议后续改为「生成结果 + 叠加补丁文件」合并）。
 
 </div>
 

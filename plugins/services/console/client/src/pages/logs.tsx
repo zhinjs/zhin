@@ -1,5 +1,5 @@
-import { useEffect, useState, useRef } from 'react'
-import { Info, AlertTriangle, XCircle, Circle, Trash2, RefreshCw, FileText, AlertCircle } from 'lucide-react'
+import { useEffect, useState, useRef, useMemo } from 'react'
+import { Info, AlertTriangle, XCircle, Circle, Trash2, RefreshCw, FileText, AlertCircle, Copy, Search } from 'lucide-react'
 import { apiFetch } from '../utils/auth'
 import { Card, CardContent } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
@@ -9,6 +9,7 @@ import { Skeleton } from '../components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Checkbox } from '../components/ui/checkbox'
 import { cn } from '@zhin.js/client'
+import { PageHeader } from '../components/PageHeader'
 
 interface LogEntry {
   level: 'info' | 'warn' | 'error'
@@ -31,7 +32,19 @@ export default function LogsPage() {
   const [levelFilter, setLevelFilter] = useState<string>('all')
   const [autoScroll, setAutoScroll] = useState(true)
   const logsEndRef = useRef<HTMLDivElement>(null)
-  const [prevLogCount, setPrevLogCount] = useState(0)
+  const prevRawLogCountRef = useRef(0)
+  const [textFilter, setTextFilter] = useState('')
+
+  const filteredLogs = useMemo(() => {
+    const q = textFilter.trim().toLowerCase()
+    if (!q) return logs
+    return logs.filter(
+      (l) =>
+        l.message.toLowerCase().includes(q) ||
+        l.source.toLowerCase().includes(q) ||
+        l.level.toLowerCase().includes(q),
+    )
+  }, [logs, textFilter])
 
   useEffect(() => {
     fetchLogs()
@@ -41,11 +54,11 @@ export default function LogsPage() {
   }, [levelFilter])
 
   useEffect(() => {
-    if (autoScroll && logs.length > prevLogCount) {
+    if (autoScroll && logs.length > prevRawLogCountRef.current) {
       logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
-    setPrevLogCount(logs.length)
-  }, [logs, autoScroll])
+    prevRawLogCountRef.current = logs.length
+  }, [logs.length, autoScroll])
 
   const fetchLogs = async () => {
     try {
@@ -105,13 +118,20 @@ export default function LogsPage() {
     )
   }
 
+  const copyLine = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      // ignore
+    }
+  }
+
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">系统日志</h1>
-        <p className="text-sm text-muted-foreground">实时查看系统运行日志</p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="系统日志"
+        description="实时查看与筛选系统运行日志；支持按级别与关键字过滤。"
+      />
 
       {/* Stats */}
       {stats && (
@@ -144,9 +164,19 @@ export default function LogsPage() {
       )}
 
       {/* Toolbar */}
-      <Card>
+      <Card className="border-border/80 shadow-sm">
         <CardContent className="flex justify-between items-center p-3 flex-wrap gap-3">
           <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-[180px] max-w-xs">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              <input
+                type="search"
+                placeholder="搜索消息、来源…"
+                value={textFilter}
+                onChange={(e) => setTextFilter(e.target.value)}
+                className="w-full h-9 pl-9 pr-3 rounded-md border border-input bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
             <Select value={levelFilter} onValueChange={setLevelFilter}>
               <SelectTrigger className="w-32">
                 <SelectValue placeholder="所有级别" />
@@ -184,9 +214,9 @@ export default function LogsPage() {
       </Card>
 
       {/* Logs */}
-      <Card>
+      <Card className="border-border/80 shadow-sm">
         <CardContent className="p-4">
-          <div className="max-h-[600px] overflow-y-auto rounded-md bg-muted/30 p-2 space-y-1.5">
+          <div className="max-h-[min(70vh,720px)] overflow-y-auto rounded-md border border-border/60 bg-muted/20 dark:bg-muted/30 p-2 space-y-1.5">
             {error ? (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
@@ -197,24 +227,49 @@ export default function LogsPage() {
                 <FileText className="w-12 h-12 text-muted-foreground/30" />
                 <span className="text-sm text-muted-foreground">暂无日志</span>
               </div>
+            ) : filteredLogs.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-10 text-sm text-muted-foreground">
+                没有符合「{textFilter}」的条目，请调整筛选条件
+              </div>
             ) : (
-              logs.map((log, index) => {
+              filteredLogs.map((log, index) => {
                 const style = getLevelStyle(log.level)
+                const lineText = `[${log.timestamp}] [${log.level}] ${log.source ? log.source + ' ' : ''}${log.message}`
                 return (
                   <div
                     key={`${log.timestamp}-${index}`}
-                    className={cn("p-3 rounded-md bg-background border-l-[3px]", style.border)}
+                    className={cn(
+                      'group relative p-3 rounded-md border border-border/50 bg-card/80 dark:bg-card/60 shadow-sm',
+                      'border-l-[3px]',
+                      style.border,
+                    )}
                   >
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge variant={style.badge} className="gap-1 text-[10px] px-1.5 py-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap pr-8">
+                      <Badge variant={style.badge} className="gap-1 text-[10px] px-1.5 py-0 font-medium">
                         {style.icon} {log.level.toUpperCase()}
                       </Badge>
-                      <span className="text-[11px] text-muted-foreground">
+                      <span className="text-[11px] tabular-nums text-muted-foreground">
                         {new Date(log.timestamp).toLocaleString()}
                       </span>
-                      {log.source && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{log.source}</Badge>}
+                      {log.source && (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
+                          {log.source}
+                        </Badge>
+                      )}
                     </div>
-                    <p className="text-sm font-mono whitespace-pre-wrap break-words">{log.message}</p>
+                    <p className="text-[13px] leading-relaxed font-mono text-foreground/95 whitespace-pre-wrap break-words pr-2">
+                      {log.message}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="复制本行"
+                      onClick={() => void copyLine(lineText)}
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </Button>
                   </div>
                 )
               })

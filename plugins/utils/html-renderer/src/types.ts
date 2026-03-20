@@ -58,6 +58,40 @@ export interface RenderResult {
 }
 
 /**
+ * 纯文本在发出前自动渲染为 PNG（通过框架 `before.sendMessage`）。
+ * 设为 `true` 等价于 `{ enabled: true }`。
+ */
+export interface HtmlRendererAiTextAsImageConfig {
+  /** 是否启用（对象形式下缺省为 true；可显式设为 false 关闭） */
+  enabled?: boolean;
+  /**
+   * 仅在这些 adapter context 名上生效（与 `SendOptions.context` 一致，如 onebot、qq）。
+   * 不填或空数组表示全部平台。
+   */
+  onlyAdapters?: string[];
+  /** 低于该字符数不转图，仍发原文 */
+  minLength?: number;
+  /** 超过则不转图（避免超大画布）；0 或不填表示不限制 */
+  maxLength?: number;
+  /** 字符串里出现疑似富媒体标签 / CQ 码时跳过（默认 true） */
+  skipIfRich?: boolean;
+  /** 画布宽度（像素） */
+  width?: number;
+  height?: number;
+  backgroundColor?: string;
+  /** 正文字号 px */
+  fontSize?: number;
+  /** 正文颜色 */
+  color?: string;
+  /** 内层文字区域 padding（像素），由外层 wrap 控制观感时可与 width 配合 */
+  padding?: number;
+  /** PNG 缩放（高清） */
+  scale?: number;
+  /** 随图发送的文件名提示 */
+  fileName?: string;
+}
+
+/**
  * 插件配置
  */
 export interface HtmlRendererConfig {
@@ -71,6 +105,11 @@ export interface HtmlRendererConfig {
   cacheFonts?: boolean;
   /** 字体 URL（用于自动加载） */
   fontUrls?: string[];
+  /**
+   * 输出方式：将「仅纯文本」的发送内容在送达用户前转为图片。
+   * 适用于希望 AI/机器人长文以卡片图展示的场景；富媒体消息会自动跳过。
+   */
+  aiTextAsImage?: boolean | HtmlRendererAiTextAsImageConfig;
 }
 
 /**

@@ -1,139 +1,85 @@
 /**
- * Built-in font utilities
- * 
- * This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- * 
- * This module provides utilities to load fonts for use with Satori.
- * Fonts can be loaded from the fonts directory if available.
+ * Built-in font utilities for @zhin.js/satori.
+ * Loads font files from the package fonts/ directory; compatible with official satori fonts option.
  */
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-import type { FontOptions, Weight, FontStyle } from './font.js'
-import { readFileSync } from 'fs'
-import { join } from 'path'
-import { fileURLToPath } from 'url'
-import { dirname } from 'path'
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
+export type Weight = 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900;
+export type FontStyle = 'normal' | 'italic';
 
 export interface BuiltinFont {
-  name: string
-  data: FontOptions['data']
-  weight?: Weight
-  style?: FontStyle
+  name: string;
+  data: ArrayBuffer | Buffer;
+  weight?: Weight;
+  style?: FontStyle;
 }
 
-// Cache for loaded fonts
-const fontCache = new Map<string, BuiltinFont | null>()
+const fontCache = new Map<string, BuiltinFont | null>();
 
-/**
- * Load a font file from the fonts directory
- * @param filename Font file name
- * @param name Font name
- * @param weight Font weight
- * @param style Font style
- * @returns BuiltinFont or null if file doesn't exist
- */
 function loadFont(
   filename: string,
   name: string,
   weight?: Weight,
   style?: FontStyle
 ): BuiltinFont | null {
-  const cacheKey = `${filename}_${name}_${weight}_${style}`
-  
+  const cacheKey = `${filename}_${name}_${weight}_${style}`;
   if (fontCache.has(cacheKey)) {
-    return fontCache.get(cacheKey)!
+    return fontCache.get(cacheKey)!;
   }
-
   try {
-    // Font directory is at ../fonts/ relative to both src/ and dist/
-    // This works consistently in both development and production
-    const fontPath = join(__dirname, '..', 'fonts', filename)
-    const buffer = readFileSync(fontPath)
-    
-    const font: BuiltinFont = {
-      name,
-      data: buffer,
-      weight,
-      style,
+    const fontPath = join(__dirname, '..', 'fonts', filename);
+    const buffer = readFileSync(fontPath);
+    const font: BuiltinFont = { name, data: buffer, weight, style };
+    fontCache.set(cacheKey, font);
+    return font;
+  } catch (err: unknown) {
+    const e = err as NodeJS.ErrnoException;
+    if (e?.code === 'ENOENT' || e?.code === 'ENOTDIR') {
+      fontCache.set(cacheKey, null);
+      return null;
     }
-    fontCache.set(cacheKey, font)
-    return font
-  } catch (error) {
-    const err = error as NodeJS.ErrnoException
-    if (err && typeof err === 'object' && (err.code === 'ENOENT' || err.code === 'ENOTDIR')) {
-      // Font file not found, cache null to avoid repeated attempts
-      fontCache.set(cacheKey, null)
-      return null
-    }
-    // Unexpected I/O error: rethrow so callers can handle or log it
-    throw error
+    throw err;
   }
 }
 
-/**
- * Get Noto Sans Simplified Chinese font
- * @returns BuiltinFont or null if not available
- */
 export function getNotoSansCJK(): BuiltinFont | null {
-  return loadFont('NotoSansSC-Regular.ttf', 'Noto Sans SC', 400, 'normal')
+  /** SubsetOTF（静态），Satori 内置 opentype 对 Google 可变 TTF 的 fvar 解析会报错 */
+  return loadFont('NotoSansSC-Regular.otf', 'Noto Sans SC', 400, 'normal');
 }
 
-/**
- * Alias for getNotoSansCJK
- * @returns BuiltinFont or null if not available
- */
 export function getNotoSansSC(): BuiltinFont | null {
-  return getNotoSansCJK()
+  return getNotoSansCJK();
 }
 
-/**
- * Get Noto Sans Japanese font
- * @returns BuiltinFont or null if not available
- */
 export function getNotoSansJP(): BuiltinFont | null {
-  return loadFont('NotoSansJP-Regular.ttf', 'Noto Sans JP', 400, 'normal')
+  return loadFont('NotoSansJP-Regular.otf', 'Noto Sans JP', 400, 'normal');
 }
 
-/**
- * Get Noto Sans Korean font
- * @returns BuiltinFont or null if not available
- */
 export function getNotoSansKR(): BuiltinFont | null {
-  return loadFont('NotoSansKR-Regular.ttf', 'Noto Sans KR', 400, 'normal')
+  return loadFont('NotoSansKR-Regular.otf', 'Noto Sans KR', 400, 'normal');
 }
 
 /**
- * Get Noto Color Emoji font
- * @returns BuiltinFont or null if not available
+ * 彩色 Emoji TTF（CBDT 位图），**不要**放进 Satori `fonts`：opentype 需要轮廓字体会报错。
+ * Emoji 请用 `loadAdditionalAsset` / `graphemeImages`（如 Twemoji）由 Satori 拉图片渲染。
  */
 export function getNotoColorEmoji(): BuiltinFont | null {
-  return loadFont('NotoColorEmoji.ttf', 'Noto Color Emoji', 400, 'normal')
+  return loadFont('NotoColorEmoji.ttf', 'Noto Color Emoji', 400, 'normal');
 }
 
-/**
- * Get Poppins Regular font
- * @returns BuiltinFont or null if not available
- */
 export function getPoppinsRegular(): BuiltinFont | null {
-  return loadFont('Poppins-Regular.ttf', 'Poppins', 400, 'normal')
+  return loadFont('Poppins-Regular.ttf', 'Poppins', 400, 'normal');
 }
 
-/**
- * Get Poppins Bold font
- * @returns BuiltinFont or null if not available
- */
 export function getPoppinsBold(): BuiltinFont | null {
-  return loadFont('Poppins-Bold.ttf', 'Poppins', 700, 'normal')
+  return loadFont('Poppins-Bold.ttf', 'Poppins', 700, 'normal');
 }
 
-/**
- * Get all available built-in fonts
- * @returns Array of available BuiltinFont objects
- */
+/** 供 Satori 使用的内置轮廓字体（含拉丁 + CJK）；不含 Noto Color Emoji（与 Satori 不兼容） */
 export function getAllBuiltinFonts(): BuiltinFont[] {
   const fonts = [
     getPoppinsRegular(),
@@ -141,65 +87,33 @@ export function getAllBuiltinFonts(): BuiltinFont[] {
     getNotoSansCJK(),
     getNotoSansJP(),
     getNotoSansKR(),
-    getNotoColorEmoji(),
-  ]
-  
-  return fonts.filter((font): font is BuiltinFont => font !== null)
+  ];
+  return fonts.filter((f): f is BuiltinFont => f !== null);
 }
 
-/**
- * Get default fonts (Poppins Regular and Bold)
- * Falls back to empty array if fonts are not available
- * @returns Array of default BuiltinFont objects
- */
 export function getDefaultFonts(): BuiltinFont[] {
-  const fonts = [getPoppinsRegular(), getPoppinsBold()]
-  
-  return fonts.filter((font): font is BuiltinFont => font !== null)
+  return [getPoppinsRegular(), getPoppinsBold()].filter((f): f is BuiltinFont => f !== null);
 }
 
-/**
- * Get extended default fonts (includes Poppins and Noto Sans SC)
- * @returns Array of default BuiltinFont objects with extended coverage
- */
 export function getExtendedFonts(): BuiltinFont[] {
-  const fonts = [
+  return [
     getPoppinsRegular(),
     getPoppinsBold(),
     getNotoSansSC(),
-  ]
-  
-  return fonts.filter((font): font is BuiltinFont => font !== null)
+  ].filter((f): f is BuiltinFont => f !== null);
 }
 
-/**
- * Get CJK fonts (Chinese, Japanese, Korean)
- * @returns Array of CJK BuiltinFont objects
- */
 export function getCJKFonts(): BuiltinFont[] {
-  const fonts = [
-    getNotoSansSC(),
-    getNotoSansJP(),
-    getNotoSansKR(),
-  ]
-  
-  return fonts.filter((font): font is BuiltinFont => font !== null)
+  return [getNotoSansSC(), getNotoSansJP(), getNotoSansKR()].filter((f): f is BuiltinFont => f !== null);
 }
 
-/**
- * Get complete font set (Latin + CJK + Emoji)
- * Recommended for maximum language and emoji support
- * @returns Array of all recommended BuiltinFont objects
- */
+/** 拉丁 + 全 CJK；Emoji 仍应通过 Satori 的 asset 回调，勿把 `getNotoColorEmoji()` 塞进 `fonts` */
 export function getCompleteFonts(): BuiltinFont[] {
-  const fonts = [
+  return [
     getPoppinsRegular(),
     getPoppinsBold(),
     getNotoSansSC(),
     getNotoSansJP(),
     getNotoSansKR(),
-    getNotoColorEmoji(),
-  ]
-  
-  return fonts.filter((font): font is BuiltinFont => font !== null)
+  ].filter((f): f is BuiltinFont => f !== null);
 }

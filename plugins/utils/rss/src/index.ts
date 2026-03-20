@@ -35,7 +35,7 @@ import { usePlugin, Cron, ZhinTool, MessageCommand, Adapter, Schema } from "zhin
 import Parser from "rss-parser";
 
 const plugin = usePlugin();
-const { logger, root, addCommand, addCron, useContext, onDispose, declareSkill, declareConfig } = plugin;
+const { logger, root, addCommand, addCron, useContext, onDispose, declareConfig } = plugin;
 
 // ─── 配置 ─────────────────────────────────────────────────────────────────────
 
@@ -545,18 +545,5 @@ plugin.addTool(
     })
     .toTool(),
 );
-
-// ─── Skill 声明 ──────────────────────────────────────────────────────────────
-
-declareSkill({
-  description:
-    "RSS/Atom 订阅推送系统：订阅 RSS 源并自动推送新内容到群聊或私聊。支持订阅管理、手动检查、预览。可用 AI 工具查询订阅和预览 feed。",
-  keywords: [
-    "rss", "atom", "feed", "订阅", "推送",
-    "rss-add", "rss-remove", "rss-list", "rss-check", "rss-preview",
-    "subscribe", "unsubscribe",
-  ],
-  tags: ["rss", "feed", "subscription", "push"],
-});
 
 logger.info(`插件已加载 (轮询=${config.pollCron}, 上限=${config.maxPerGroup}/会话)`);

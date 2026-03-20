@@ -10,6 +10,19 @@ Zhin 框架的插件生态系统，包含平台适配器、功能服务和工具
 
 新插件请按上述规范命名，详见 [架构概览](../docs/architecture-overview.md)。
 
+## npm 发布与 `files`
+
+发布到 npm 时，请在 `package.json` 中用 **`files` 白名单** 写清要打进包的目录与文件。本仓库插件统一包含（按顺序）：
+
+- `src`、`lib`、`client`、`dist`、`skills`、`README.md`
+
+若包内还有必须随包分发的内容，在以上六项**之后**追加，例如：
+
+- 带原生/预编译二进制的适配器：`node`、`CHANGELOG.md`
+- `@zhin.js/console`：`browser.tsconfig.json`、`node.tsconfig.json`、`CHANGELOG.md`
+
+未列出的路径不会进入 npm 包（`package.json` 始终会包含）。
+
 ## 插件分类
 
 ### adapters/ — 平台适配器
@@ -72,18 +85,23 @@ npx zhin new my-service --type service
 ```
 my-plugin/
 ├── src/
-│   └── index.ts      # 插件入口
-├── package.json
+│   └── index.ts          # 插件入口
+├── client/               # 若使用控制台扩展（`zhin new` 会生成）
+├── skills/my-plugin/     # AI 技能目录（推荐保留 SKILL.md，与 npm `files` 约定一致）
+│   └── SKILL.md
+├── package.json          # 建议 `files` 含 src、lib、client、dist、skills、README.md
 ├── tsconfig.json
 └── README.md
 ```
+
+也可用 `zhin new my-plugin` 生成符合上述约定的完整模板。
 
 ### 插件示例
 
 ```typescript
 import { usePlugin, MessageCommand, ZhinTool } from 'zhin.js'
 
-const { addCommand, addTool, declareSkill, onMounted } = usePlugin()
+const { addCommand, addTool, onMounted } = usePlugin()
 
 // 注册命令
 addCommand(
@@ -116,7 +134,7 @@ class MyAdapter extends Adapter {
 Adapter.register('my-platform', MyAdapter)
 ```
 
-适配器可通过 `addTool()` + `declareSkill()` 将平台能力暴露给 AI。
+适配器通过 `addTool()` 暴露平台能力，并用包内 `skills/` 提供 AI 可读说明。
 
 ## 插件开发规范
 

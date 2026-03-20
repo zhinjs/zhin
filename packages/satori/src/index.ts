@@ -1,15 +1,16 @@
-export type {
-  FontOptions as Font,
-  Weight as FontWeight,
-  FontStyle,
-} from './font.js'
-export type { Locale } from './language.js'
+/**
+ * @zhin.js/satori — HTML/CSS to SVG via official satori
+ *
+ * - Directly depends on the official "satori" package; no internal reimplementation.
+ * - Supports HTML input via html-react-parser (depends on react, same as html-react-parser).
+ * - Provides built-in font files (Noto Sans SC/JP/KR, etc.) from the fonts/ directory.
+ */
 
-export * from './satori.js'
-export { default } from './satori.js'
+export { default as satori, default } from 'satori';
+export { htmlToSvg } from './html-to-svg.js';
+export type { HtmlToSvgOptions } from './html-to-svg.js';
 
-// Export built-in font utilities
-export type { BuiltinFont } from './fonts.js'
+export type { BuiltinFont, Weight, FontStyle } from './fonts.js';
 export {
   getPoppinsRegular,
   getPoppinsBold,
@@ -23,4 +24,4 @@ export {
   getExtendedFonts,
   getCJKFonts,
   getCompleteFonts,
-} from './fonts.js'
+} from './fonts.js';

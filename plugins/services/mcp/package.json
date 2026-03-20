@@ -49,7 +49,11 @@
     "zhin.js": "workspace:*"
   },
   "files": [
+    "src",
     "lib",
+    "client",
+    "dist",
+    "skills",
     "README.md",
     "CHANGELOG.md"
   ],

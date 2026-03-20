@@ -6,19 +6,24 @@
 import { AsyncLocalStorage } from "async_hooks";
 import { EventEmitter } from "events";
 import { createRequire } from "module";
-import type { Database, Definition } from "@zhin.js/database";
-import { Schema } from "@zhin.js/schema";
-import type { Models, RegisteredAdapters, Tool, ToolContext } from "./types.js";
+import type { Tool } from "./types.js";
 import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import logger, { Logger } from "@zhin.js/logger";
 import { compose, remove, resolveEntry } from "./utils.js";
-import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, SendOptions } from "./types.js";
+import {
+  MessageMiddleware,
+  RegisteredAdapter,
+  MaybePromise,
+  ArrayItem,
+  SendOptions,
+} from "./types.js";
 import type { ConfigFeature } from "./built/config.js";
 import type { PermissionFeature } from "./built/permission.js";
 import { Adapter, Adapters } from "./adapter.js";
 import { Notice } from "./notice.js";
+import { Message } from "./message.js";
 import { Request } from "./request.js";
 import { Feature, FeatureJSON } from "./feature.js";
 import { createHash } from "crypto";
@@ -910,7 +915,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     'addMiddleware', 'useContext', 'inject', 'contextIsReady',
     'start', 'stop', 'onMounted', 'onDispose',
     'dispatch', 'broadcast', 'provide', 'import', 'reload', 'watch', 'info',
-    'recordFeatureContribution', 'getFeatures'
+    'recordFeatureContribution', 'getFeatures',
   ]);
 
   /**
@@ -1041,6 +1046,7 @@ export namespace Plugin {
     'bot.login.pending': [BotLoginPendingTask];
     // Notice 事件
     'notice.receive': [Notice];
+    'message.receive': [Message];
     [key: `notice.${string}`]: [Notice];
     // Request 事件
     'request.receive': [Request];

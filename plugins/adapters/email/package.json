@@ -3,8 +3,8 @@
   "version": "0.1.39",
   "type": "module",
   "description": "Zhin.js adapter for Email (SMTP/IMAP)",
-  "main": "lib/index.js",
-  "types": "lib/index.d.ts",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
   "scripts": {
     "build": "pnpm build:node",
     "clean": "rimraf lib",
@@ -47,9 +47,13 @@
     "directory": "plugins/adapters/email"
   },
   "files": [
+    "src",
     "lib",
-    "node",
+    "client",
+    "dist",
+    "skills",
     "README.md",
+    "node",
     "CHANGELOG.md"
   ],
   "publishConfig": {

@@ -46,9 +46,6 @@ const {
   // 工具系统
   addTool,         // 添加 AI 工具（ToolFeature 扩展）
   
-  // 技能系统
-  declareSkill,    // 声明 Skill 元数据（SkillFeature 扩展）
-  
   // 定时任务
   addCron,         // 添加定时任务（CronFeature 扩展）
   
@@ -76,7 +73,7 @@ const {
 ```
 
 ::: tip
-上面的 `addCommand`、`addTool`、`declareSkill`、`addCron`、`addConfig` 等方法都是由对应的 Feature 注入到插件上的扩展方法。详见 [Feature 系统](/advanced/features)。
+上面的 `addCommand`、`addTool`、`addCron`、`addConfig` 等方法都是由对应的 Feature 注入到插件上的扩展方法。技能请使用包内 `skills/`（无 `declareSkill` API）。详见 [Feature 系统](/advanced/features)。
 :::
 
 ## 生命周期
@@ -171,21 +168,9 @@ addTool(
 
 详见 [工具与技能](/advanced/tools-skills)。
 
-## 声明技能（Skill）
+## 技能（Skill，文件化）
 
-当插件提供了多个相关工具时，可以声明一个 Skill 将它们语义化分组：
-
-```typescript
-const { declareSkill } = usePlugin()
-
-declareSkill({
-  description: '天气查询服务，支持国内外城市天气和未来天气预报',
-  keywords: ['天气', '气温', '下雨', '预报'],
-  tags: ['weather', '生活服务'],
-})
-```
-
-声明后，AI Agent 会在匹配到关键词时优先选择此 Skill 下的工具。
+在插件包目录下添加 `skills/<技能名>/SKILL.md`（含 `name`、`description`、`keywords`、`tags` 等）。详见 [工具与技能](/advanced/tools-skills)。
 
 ## 提供服务
 

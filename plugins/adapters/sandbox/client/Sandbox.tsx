@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSegment, cn } from '@zhin.js/client';
-import { User, Users, Trash2, Send, Hash, MessageSquare, Wifi, WifiOff, Smile, Image, AtSign, X, Upload, Check, Info, Search, Bot } from 'lucide-react';
+import { MessageSegment, cn, resolveMediaSrc, pickMediaRawUrl } from '@zhin.js/client';
+import { User, Users, Trash2, Send, Hash, MessageSquare, Wifi, WifiOff, Smile, Image, X, Check, Info, Search, Bot, UserPlus, Bell, Video, Music } from 'lucide-react';
 import RichTextEditor, { RichTextEditorRef } from './RichTextEditor';
 
 interface Message {
@@ -25,12 +25,13 @@ export default function Sandbox() {
     const [botName, setBotName] = useState('ProcessBot')
     const [connected, setConnected] = useState(false)
     const [showFacePicker, setShowFacePicker] = useState(false)
-    const [showImageUpload, setShowImageUpload] = useState(false)
+    /** 输入区：插入图片 / 视频 / 音频 URL */
+    const [mediaPanel, setMediaPanel] = useState<null | 'image' | 'video' | 'audio'>(null)
+    const [mediaUrl, setMediaUrl] = useState('')
     const [showAtPicker, setShowAtPicker] = useState(false)
     const [atPopoverPosition, setAtPopoverPosition] = useState<{ top: number; left: number } | null>(null)
     const [atSearchQuery, setAtSearchQuery] = useState('')
     const [faceSearchQuery, setFaceSearchQuery] = useState('')
-    const [imageUrl, setImageUrl] = useState('')
     const [atUserName, setAtUserName] = useState('')
     const [atSuggestions] = useState([
         { id: '10001', name: '张三' }, { id: '10002', name: '李四' }, { id: '10003', name: '王五' },
@@ -39,6 +40,7 @@ export default function Sandbox() {
     ])
     const [previewSegments, setPreviewSegments] = useState<MessageSegment[]>([])
     const [showChannelList, setShowChannelList] = useState(false)
+    const [viewMode, setViewMode] = useState<'chat' | 'requests' | 'notices'>('chat')
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const wsRef = useRef<WebSocket | null>(null)
     const editorRef = useRef<RichTextEditorRef>(null)
@@ -85,39 +87,101 @@ export default function Sandbox() {
     useEffect(() => { setPreviewSegments(inputText.trim() ? parseTextToSegments(inputText) : []) }, [inputText])
 
     const parseTextToSegments = (text: string): MessageSegment[] => {
-        const segments: MessageSegment[] = []; const regex = /\[@([^\]]+)\]|\[face:(\d+)\]|\[image:([^\]]+)\]/g
-        let lastIndex = 0; let match
+        const segments: MessageSegment[] = []
+        const regex = /\[@([^\]]+)\]|\[face:(\d+)\]|\[image:([^\]]+)\]|\[video:([^\]]+)\]|\[audio:([^\]]+)\]/g
+        let lastIndex = 0
+        let match: RegExpExecArray | null
         while ((match = regex.exec(text)) !== null) {
-            if (match.index > lastIndex) { const t = text.substring(lastIndex, match.index); if (t) segments.push({ type: 'text', data: { text: t } }) }
+            if (match.index > lastIndex) {
+                const t = text.substring(lastIndex, match.index)
+                if (t) segments.push({ type: 'text', data: { text: t } })
+            }
             if (match[1]) segments.push({ type: 'at', data: { qq: match[1], name: match[1] } })
-            else if (match[2]) segments.push({ type: 'face', data: { id: parseInt(match[2]) } })
+            else if (match[2]) segments.push({ type: 'face', data: { id: parseInt(match[2], 10) } })
             else if (match[3]) segments.push({ type: 'image', data: { url: match[3] } })
+            else if (match[4]) segments.push({ type: 'video', data: { url: match[4] } })
+            else if (match[5]) segments.push({ type: 'audio', data: { url: match[5] } })
             lastIndex = regex.lastIndex
         }
-        if (lastIndex < text.length) { const r = text.substring(lastIndex); if (r) segments.push({ type: 'text', data: { text: r } }) }
+        if (lastIndex < text.length) {
+            const r = text.substring(lastIndex)
+            if (r) segments.push({ type: 'text', data: { text: r } })
+        }
         return segments.length > 0 ? segments : [{ type: 'text', data: { text } }]
     }
 
-    const renderMessageSegments = (segments: (MessageSegment | string)[]) => {
+    const hasRenderableSegments = (segments: MessageSegment[]) => {
+        if (segments.length === 0) return false
+        return segments.some((s) => {
+            if (s.type === 'text') return Boolean(String(s.data?.text ?? '').trim())
+            return true
+        })
+    }
+
+    const renderMessageSegments = (segments: (MessageSegment | string)[], isSent: boolean) => {
+        const ring = isSent ? 'ring-1 ring-primary-foreground/25' : 'ring-1 ring-border/60'
         return segments.map((segment, index) => {
             if (typeof segment === 'string') {
                 return <span key={index}>{segment.split('\n').map((part, i) => <React.Fragment key={i}>{part}{i < segment.split('\n').length - 1 && <br />}</React.Fragment>)}</span>
             }
+            const d = segment.data as Record<string, unknown>
             switch (segment.type) {
-                case 'text': return <span key={index}>{segment.data.text.split('\n').map((part: string, i: number) => <React.Fragment key={i}>{part}{i < segment.data.text.split('\n').length - 1 && <br />}</React.Fragment>)}</span>
-                case 'at': return <span key={index} className="inline-flex items-center px-1.5 py-0.5 rounded bg-accent text-accent-foreground text-xs mx-0.5">@{segment.data.name || segment.data.qq}</span>
-                case 'face': return <img key={index} src={`https://face.viki.moe/apng/${segment.data.id}.png`} alt={`face${segment.data.id}`} className="w-6 h-6 inline-block align-middle mx-0.5" />
-                case 'image': return <img key={index} src={segment.data.url} alt="image" className="max-w-[300px] rounded-lg my-1 block" onError={(e) => { e.currentTarget.style.display = 'none' }} />
-                case 'video': return <span key={index} className="inline-flex items-center px-1.5 py-0.5 rounded border text-xs mx-0.5">📹 视频</span>
-                case 'audio': return <span key={index} className="inline-flex items-center px-1.5 py-0.5 rounded border text-xs mx-0.5">🎵 语音</span>
-                case 'file': return <span key={index} className="inline-flex items-center px-1.5 py-0.5 rounded border text-xs mx-0.5">📎 {segment.data.name || '文件'}</span>
-                default: return <span key={index}>[未知消息类型]</span>
+                case 'text':
+                    return <span key={index}>{String(d.text ?? '').split('\n').map((part: string, i: number) => <React.Fragment key={i}>{part}{i < String(d.text ?? '').split('\n').length - 1 && <br />}</React.Fragment>)}</span>
+                case 'at':
+                    return <span key={index} className="inline-flex items-center px-1.5 py-0.5 rounded bg-accent text-accent-foreground text-xs mx-0.5">@{String(d.name ?? d.qq ?? '')}</span>
+                case 'face':
+                    return <img key={index} src={`https://face.viki.moe/apng/${d.id}.png`} alt="" className="w-6 h-6 inline-block align-middle mx-0.5" />
+                case 'image': {
+                    const raw = pickMediaRawUrl(d)
+                    const src = resolveMediaSrc(raw, 'image')
+                    if (!src) return <span key={index} className="text-xs opacity-70">[图片]</span>
+                    return (
+                        <a key={index} href={src} target="_blank" rel="noreferrer" className="block my-1">
+                            <img src={src} alt="" className={cn('max-w-[min(320px,88vw)] rounded-lg block', ring, 'ring-offset-0')} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                        </a>
+                    )
+                }
+                case 'video': {
+                    const raw = pickMediaRawUrl(d)
+                    const src = resolveMediaSrc(raw, 'video')
+                    if (!src) return <span key={index} className="text-xs opacity-70">[视频无地址]</span>
+                    return (
+                        <video
+                            key={index}
+                            src={src}
+                            controls
+                            playsInline
+                            preload="metadata"
+                            className={cn('max-w-[min(360px,92vw)] max-h-72 rounded-lg my-1 bg-black/10', ring)}
+                        />
+                    )
+                }
+                case 'audio':
+                case 'record': {
+                    const raw = pickMediaRawUrl(d)
+                    const src = resolveMediaSrc(raw, 'audio')
+                    if (!src) return <span key={index} className="text-xs opacity-70">[音频无地址]</span>
+                    return (
+                        <audio
+                            key={index}
+                            src={src}
+                            controls
+                            preload="metadata"
+                            className={cn('w-full max-w-sm my-2 h-10', isSent && 'opacity-95')}
+                        />
+                    )
+                }
+                case 'file':
+                    return <span key={index} className="inline-flex items-center px-1.5 py-0.5 rounded border text-xs mx-0.5">📎 {String(d.name || '文件')}</span>
+                default:
+                    return <span key={index} className="text-xs opacity-70">[{segment.type}]</span>
             }
         })
     }
 
     const handleSendMessage = (text: string, segments: MessageSegment[]) => {
-        if (!text.trim() || segments.length === 0) return
+        if (!hasRenderableSegments(segments)) return
         const newMessage: Message = { id: `msg_${Date.now()}`, type: 'sent', channelType: activeChannel.type, channelId: activeChannel.id, channelName: activeChannel.name, senderId: 'test_user', senderName: '测试用户', content: segments, timestamp: Date.now() }
         setMessages((prev) => [...prev, newMessage]); setInputText(''); setPreviewSegments([])
         editorRef.current?.clear()
@@ -125,7 +189,7 @@ export default function Sandbox() {
     }
 
     const clearMessages = () => { if (confirm('确定清空所有消息记录？')) setMessages([]) }
-    const switchChannel = (channel: Channel) => { setActiveChannel(channel); setChannels((prev) => prev.map((c) => c.id === channel.id ? { ...c, unread: 0 } : c)); if (window.innerWidth < 768) setShowChannelList(false) }
+    const switchChannel = (channel: Channel) => { setViewMode('chat'); setActiveChannel(channel); setChannels((prev) => prev.map((c) => c.id === channel.id ? { ...c, unread: 0 } : c)); if (window.innerWidth < 768) setShowChannelList(false) }
     const addChannel = () => {
         const types: Array<'private' | 'group' | 'channel'> = ['private', 'group', 'channel']
         const type = types[Math.floor(Math.random() * types.length)]
@@ -134,7 +198,15 @@ export default function Sandbox() {
     }
     const getChannelIcon = (type: string) => { switch (type) { case 'private': return <User size={16} />; case 'group': return <Users size={16} />; case 'channel': return <Hash size={16} />; default: return <MessageSquare size={16} /> } }
     const insertFace = (faceId: number) => { editorRef.current?.insertFace(faceId); setShowFacePicker(false) }
-    const insertImageUrl = () => { if (!imageUrl.trim()) return; editorRef.current?.insertImage(imageUrl.trim()); setImageUrl(''); setShowImageUpload(false) }
+    const commitMediaUrl = () => {
+        const u = mediaUrl.trim()
+        if (!u || !mediaPanel) return
+        if (mediaPanel === 'image') editorRef.current?.insertImage(u)
+        else if (mediaPanel === 'video') editorRef.current?.insertVideo(u)
+        else editorRef.current?.insertAudio(u)
+        setMediaUrl('')
+        setMediaPanel(null)
+    }
     const insertAtUser = () => { if (!atUserName.trim()) return; editorRef.current?.insertAt(atUserName.trim()); setAtUserName(''); setShowAtPicker(false) }
     const selectAtUser = (user: { id: string; name: string }) => { editorRef.current?.replaceAtTrigger(user.name, user.id); setAtPopoverPosition(null); setAtSearchQuery('') }
     const handleAtTrigger = (show: boolean, searchQuery: string, position?: { top: number; left: number }) => {
@@ -147,7 +219,7 @@ export default function Sandbox() {
     const channelMessages = messages.filter((msg) => msg.channelId === activeChannel.id)
 
     return (
-        <div className="sandbox-container">
+        <div className="sandbox-container rounded-xl border border-border/70 bg-card/30 shadow-sm">
             <button className="mobile-channel-toggle md:hidden" onClick={() => setShowChannelList(!showChannelList)}>
                 <MessageSquare size={20} /> 频道列表
             </button>
@@ -169,7 +241,7 @@ export default function Sandbox() {
 
                 <div className="flex-1 overflow-y-auto p-2 space-y-1">
                     {channels.map((channel) => {
-                        const isActive = activeChannel.id === channel.id
+                        const isActive = viewMode === 'chat' && activeChannel.id === channel.id
                         return (
                             <div key={channel.id} className={cn("menu-item", isActive && "active")} onClick={() => switchChannel(channel)}>
                                 <span className="shrink-0">{getChannelIcon(channel.type)}</span>
@@ -181,6 +253,22 @@ export default function Sandbox() {
                             </div>
                         )
                     })}
+                    <div className="pt-2 mt-2 border-t space-y-1">
+                        <div className={cn("menu-item", viewMode === 'requests' && "active")} onClick={() => { setViewMode('requests'); if (window.innerWidth < 768) setShowChannelList(false) }}>
+                            <UserPlus size={16} className="shrink-0" />
+                            <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium">请求</div>
+                                <div className="text-xs text-muted-foreground">好友/群邀请等</div>
+                            </div>
+                        </div>
+                        <div className={cn("menu-item", viewMode === 'notices' && "active")} onClick={() => { setViewMode('notices'); if (window.innerWidth < 768) setShowChannelList(false) }}>
+                            <Bell size={16} className="shrink-0" />
+                            <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium">通知</div>
+                                <div className="text-xs text-muted-foreground">群管/撤回等</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="p-2 border-t">
@@ -190,8 +278,40 @@ export default function Sandbox() {
 
             {showChannelList && <div className="channel-overlay md:hidden" onClick={() => setShowChannelList(false)} />}
 
-            {/* Chat area */}
+            {/* Main area: Chat / Requests / Notices */}
             <div className="chat-area">
+                {viewMode === 'requests' && (
+                    <div className="rounded-lg border bg-card flex-1 flex flex-col min-h-0 overflow-hidden">
+                        <div className="p-3 border-b flex-shrink-0">
+                            <h2 className="text-lg font-bold flex items-center gap-2">
+                                <UserPlus size={20} /> 请求
+                            </h2>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center justify-center gap-3 text-muted-foreground text-center">
+                            <UserPlus size={48} className="opacity-30" />
+                            <span>沙盒为模拟环境，暂无请求数据</span>
+                            <span className="text-sm">实际好友/群邀请等请求请到侧边栏 <strong>机器人</strong> 页面进入对应机器人管理查看</span>
+                        </div>
+                    </div>
+                )}
+
+                {viewMode === 'notices' && (
+                    <div className="rounded-lg border bg-card flex-1 flex flex-col min-h-0 overflow-hidden">
+                        <div className="p-3 border-b flex-shrink-0">
+                            <h2 className="text-lg font-bold flex items-center gap-2">
+                                <Bell size={20} /> 通知
+                            </h2>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center justify-center gap-3 text-muted-foreground text-center">
+                            <Bell size={48} className="opacity-30" />
+                            <span>沙盒为模拟环境，暂无通知数据</span>
+                            <span className="text-sm">实际群管、撤回等通知请到侧边栏 <strong>机器人</strong> 页面进入对应机器人管理查看</span>
+                        </div>
+                    </div>
+                )}
+
+                {viewMode === 'chat' && (
+                    <>
                 {/* Top bar */}
                 <div className="rounded-lg border bg-card p-3 flex-shrink-0">
                     <div className="flex justify-between items-center flex-wrap gap-2">
@@ -238,7 +358,7 @@ export default function Sandbox() {
                                                 <span className="text-xs font-medium opacity-90">{msg.senderName}</span>
                                                 <span className="text-xs opacity-70">{new Date(msg.timestamp).toLocaleTimeString()}</span>
                                             </div>
-                                            <div className="text-sm">{renderMessageSegments(msg.content)}</div>
+                                            <div className="text-sm space-y-1">{renderMessageSegments(msg.content, msg.type === 'sent')}</div>
                                         </div>
                                     </div>
                                 ))}
@@ -251,16 +371,24 @@ export default function Sandbox() {
                 {/* Input area */}
                 <div className="rounded-lg border bg-card p-3 flex-shrink-0 space-y-3">
                     {/* Toolbar */}
-                    <div className="flex gap-2 items-center">
-                        <button className={cn("h-8 w-8 rounded-md flex items-center justify-center border transition-colors", showFacePicker ? "bg-primary text-primary-foreground" : "hover:bg-accent")}
-                            onClick={() => { setShowFacePicker(!showFacePicker); setShowImageUpload(false) }} title="插入表情">
+                    <div className="flex gap-2 items-center flex-wrap">
+                        <button type="button" className={cn("h-8 w-8 rounded-md flex items-center justify-center border transition-colors", showFacePicker ? "bg-primary text-primary-foreground" : "hover:bg-accent")}
+                            onClick={() => { setShowFacePicker(!showFacePicker); setMediaPanel(null) }} title="插入表情">
                             <Smile size={16} />
                         </button>
-                        <button className={cn("h-8 w-8 rounded-md flex items-center justify-center border transition-colors", showImageUpload ? "bg-primary text-primary-foreground" : "hover:bg-accent")}
-                            onClick={() => { setShowImageUpload(!showImageUpload); setShowFacePicker(false) }} title="插入图片">
+                        <button type="button" className={cn("h-8 w-8 rounded-md flex items-center justify-center border transition-colors", mediaPanel === 'image' ? "bg-primary text-primary-foreground" : "hover:bg-accent")}
+                            onClick={() => { setMediaPanel((p) => (p === 'image' ? null : 'image')); setShowFacePicker(false) }} title="插入图片 URL">
                             <Image size={16} />
                         </button>
-                        <div className="flex-1" />
+                        <button type="button" className={cn("h-8 w-8 rounded-md flex items-center justify-center border transition-colors", mediaPanel === 'video' ? "bg-primary text-primary-foreground" : "hover:bg-accent")}
+                            onClick={() => { setMediaPanel((p) => (p === 'video' ? null : 'video')); setShowFacePicker(false) }} title="插入视频 URL">
+                            <Video size={16} />
+                        </button>
+                        <button type="button" className={cn("h-8 w-8 rounded-md flex items-center justify-center border transition-colors", mediaPanel === 'audio' ? "bg-primary text-primary-foreground" : "hover:bg-accent")}
+                            onClick={() => { setMediaPanel((p) => (p === 'audio' ? null : 'audio')); setShowFacePicker(false) }} title="插入音频 URL">
+                            <Music size={16} />
+                        </button>
+                        <div className="flex-1 min-w-[1rem]" />
                         {inputText && (
                             <button className="h-8 w-8 rounded-md flex items-center justify-center hover:bg-accent transition-colors"
                                 onClick={() => { setInputText(''); setPreviewSegments([]) }}><X size={16} /></button>
@@ -289,15 +417,27 @@ export default function Sandbox() {
                         </div>
                     )}
 
-                    {/* Image upload */}
-                    {showImageUpload && (
+                    {mediaPanel && (
                         <div className="p-3 rounded-md border bg-muted/30 space-y-2">
-                            <input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="输入图片 URL..."
-                                className="w-full h-8 rounded-md border bg-transparent px-2 text-sm"
-                                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); insertImageUrl() } }} />
-                            <button className="inline-flex items-center gap-1 h-8 px-3 rounded-md bg-primary text-primary-foreground text-sm disabled:opacity-50"
-                                onClick={insertImageUrl} disabled={!imageUrl.trim()}>
-                                <Check size={14} /> 插入
+                            <p className="text-xs text-muted-foreground">
+                                {mediaPanel === 'image' && '支持 http(s) 图片链接或 data URL'}
+                                {mediaPanel === 'video' && '支持浏览器可解码的视频直链（如 .mp4、.webm）'}
+                                {mediaPanel === 'audio' && '支持 .mp3、.ogg、.wav 等音频直链'}
+                            </p>
+                            <input
+                                value={mediaUrl}
+                                onChange={(e) => setMediaUrl(e.target.value)}
+                                placeholder={mediaPanel === 'image' ? '图片 URL…' : mediaPanel === 'video' ? '视频 URL…' : '音频 URL…'}
+                                className="w-full h-8 rounded-md border border-input bg-background px-2 text-sm"
+                                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitMediaUrl() } }}
+                            />
+                            <button
+                                type="button"
+                                className="inline-flex items-center gap-1 h-8 px-3 rounded-md bg-primary text-primary-foreground text-sm disabled:opacity-50"
+                                onClick={commitMediaUrl}
+                                disabled={!mediaUrl.trim()}
+                            >
+                                <Check size={14} /> 插入到输入框
                             </button>
                         </div>
                     )}
@@ -330,7 +470,7 @@ export default function Sandbox() {
                         <button
                             className="inline-flex items-center gap-1.5 h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50 transition-colors hover:bg-primary/90"
                             onClick={() => { const c = editorRef.current?.getContent(); if (c) handleSendMessage(c.text, c.segments) }}
-                            disabled={!inputText.trim() || previewSegments.length === 0}>
+                            disabled={!hasRenderableSegments(previewSegments)}>
                             <Send size={16} /> 发送
                         </button>
                     </div>
@@ -341,8 +481,12 @@ export default function Sandbox() {
                         <span className="px-1 py-0.5 rounded border text-[10px]">Enter</span> 发送
                         <span className="px-1 py-0.5 rounded border text-[10px]">Shift+Enter</span> 换行
                         <span className="px-1 py-0.5 rounded border text-[10px]">[@名称]</span> @某人
+                        <span className="px-1 py-0.5 rounded border text-[10px]">[video:URL]</span>
+                        <span className="px-1 py-0.5 rounded border text-[10px]">[audio:URL]</span>
                     </div>
                 </div>
+                    </>
+                )}
             </div>
         </div>
     )

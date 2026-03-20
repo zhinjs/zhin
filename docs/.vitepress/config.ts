@@ -20,7 +20,8 @@ export default withMermaid(defineConfig({
       { text: 'API 参考', link: '/api/' },
       { text: '插件市场', link: '/plugins/' },
       { text: '技能商店', link: '/skills/' },
-      { text: '演练场', link: '/playground' }
+      { text: '演练场', link: '/playground' },
+      { text: '贡献', link: '/contributing' }
     ],
 
     sidebar: {
@@ -106,6 +107,25 @@ export default withMermaid(defineConfig({
           text: '技能商店',
           items: [
             { text: '技能商店', link: '/skills/' }
+          ]
+        }
+      ],
+
+      '/contributing': [
+        {
+          text: '贡献指南',
+          items: [
+            { text: '总览', link: '/contributing' },
+            { text: '仓库结构与模块化约定', link: '/contributing/repo-structure' }
+          ]
+        }
+      ],
+      '/contributing/': [
+        {
+          text: '贡献指南',
+          items: [
+            { text: '总览', link: '/contributing' },
+            { text: '仓库结构与模块化约定', link: '/contributing/repo-structure' }
           ]
         }
       ]

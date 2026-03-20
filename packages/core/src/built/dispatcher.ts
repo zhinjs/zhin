@@ -11,42 +11,86 @@
  *                  ▼
  *   ┌────────────────────────────────────────┐
  *   │  Stage 2: Route（路径判定）             │
- *   │  精确命令 → Command 快速路径            │
- *   │  其它消息 → AI Agent 路径               │
+ *   │  exclusive：命令与 AI 互斥（旧行为）     │
+ *   │  dual：命令与 AI 独立判定，可同时命中     │
  *   └──────────────┬─────────────────────────┘
  *                  ▼
  *   ┌────────────────────────────────────────┐
  *   │  Stage 3: Handle（处理）                │
  *   │  Command: commandService.handle()      │
  *   │  AI: aiHandler (由 AI 模块注册)         │
+ *   │  出站：replyWithPolish → $reply → Adapter.sendMessage → before.sendMessage │
  *   └────────────────────────────────────────┘
  *
  * 注意：Context key 为 'dispatcher'，避免与 HTTP 模块的 'router' 冲突。
  */
 
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { Message } from '../message.js';
 import { Plugin, getPlugin } from '../plugin.js';
 import type {
   MessageMiddleware,
   RegisteredAdapter,
-  AdapterMessage,
   MaybePromise,
-  ToolContext,
-  Tool,
+  SendContent,
+  OutboundReplySource,
+  OutboundPolishContext,
+  OutboundPolishMiddleware,
+  BeforeSendHandler,
 } from '../types.js';
 import type { Context } from '../plugin.js';
+
+/** Dispatcher 管理的「会话回复」异步上下文，供 `before.sendMessage` 内读取（与 Adapter.renderSendMessage 同链） */
+const outboundReplyAls = new AsyncLocalStorage<{ message: Message<any>; source: OutboundReplySource }>();
+
+export function getOutboundReplyStore(): { message: Message<any>; source: OutboundReplySource } | undefined {
+  return outboundReplyAls.getStore();
+}
 
 // ============================================================================
 // 类型定义
 // ============================================================================
 
 /**
- * 路由判定结果
+ * 路由判定结果（互斥模式 legacy）
  */
 export type RouteResult =
-  | { type: 'command' }    // 精确命令 → Command 快速路径
-  | { type: 'ai'; content: string }  // 自然语言 → AI Agent 路径
-  | { type: 'skip' };     // 不处理（被 Guardrail 拦截等）
+  | { type: 'command' }
+  | { type: 'ai'; content: string }
+  | { type: 'skip' };
+
+/**
+ * 双轨分流配置
+ */
+export interface DualRouteConfig {
+  /**
+   * exclusive：与旧版一致，命中命令则不再走 AI；
+   * dual：命令与 AI 独立判定，可同时执行（顺序由 order 决定）
+   */
+  mode?: 'exclusive' | 'dual';
+  /** 同时命中时的执行顺序，默认先指令后 AI */
+  order?: 'command-first' | 'ai-first';
+  /**
+   * 是否允许在双命中时各回复一次；为 false 时仅执行 order 中的第一个分支
+   */
+  allowDualReply?: boolean;
+}
+
+export type ResolvedDualRouteConfig = Required<DualRouteConfig>;
+
+const DUAL_ROUTE_DEFAULTS: ResolvedDualRouteConfig = {
+  mode: 'dual',
+  order: 'command-first',
+  allowDualReply: true,
+};
+
+function resolveDualRouteConfig(partial?: Partial<DualRouteConfig>): ResolvedDualRouteConfig {
+  return {
+    mode: partial?.mode ?? DUAL_ROUTE_DEFAULTS.mode,
+    order: partial?.order ?? DUAL_ROUTE_DEFAULTS.order,
+    allowDualReply: partial?.allowDualReply ?? DUAL_ROUTE_DEFAULTS.allowDualReply,
+  };
+}
 
 /**
  * AI 处理函数签名
@@ -59,68 +103,66 @@ export type AIHandler = (
 
 /**
  * 命令前缀判定函数
- * 返回 true 表示该消息是精确命令调用
  */
 export type CommandMatcher = (text: string, message: Message<any>) => boolean;
 
 /**
  * AI 触发判定函数
- * 返回 { triggered, content } 表示是否应该触发 AI 以及提取的内容
  */
 export type AITriggerMatcher = (message: Message<any>) => { triggered: boolean; content: string };
 
-/**
- * Guardrail 中间件
- * 与 MessageMiddleware 签名一致，但语义上只用于鉴权/限流/安全/日志
- * 返回 false 或抛异常表示拦截消息
- */
 export type GuardrailMiddleware = MessageMiddleware<RegisteredAdapter>;
+
+/** @alias OutboundReplySource：出站回复来源（指令 / AI） */
+export type ReplySource = OutboundReplySource;
+
+export interface CreateMessageDispatcherOptions {
+  dualRoute?: Partial<DualRouteConfig>;
+}
 
 // ============================================================================
 // MessageDispatcher 服务
 // ============================================================================
 
-/**
- * MessageDispatcher 服务接口
- */
 export interface MessageDispatcherService {
-  /**
-   * 调度一条消息 — 这是唯一的入口
-   * Adapter 的 message.receive 事件应该调用此方法
-   */
   dispatch(message: Message<any>): Promise<void>;
 
-  /**
-   * 注册 Guardrail（护栏中间件）
-   * Guardrail 始终执行，用于鉴权、限流、安全过滤、日志等
-   * @returns 移除函数
-   */
   addGuardrail(guardrail: GuardrailMiddleware): () => void;
 
-  /**
-   * 设置命令匹配器
-   * 用于判定消息是否为精确命令调用
-   * 默认：检查消息是否以已注册命令的 pattern 开头
-   */
   setCommandMatcher(matcher: CommandMatcher): void;
 
-  /**
-   * 设置 AI 触发判定器
-   * 用于判定消息是否应该触发 AI 处理
-   * 由 AI 模块注册
-   */
   setAITriggerMatcher(matcher: AITriggerMatcher): void;
 
-  /**
-   * 注册 AI 处理函数
-   * 由 AI 模块注册，当消息路由到 AI 路径时调用
-   */
   setAIHandler(handler: AIHandler): void;
 
-  /**
-   * 获取当前是否已注册 AI 处理能力
-   */
   hasAIHandler(): boolean;
+
+  /** 合并更新双轨配置 */
+  setDualRouteConfig(config: Partial<DualRouteConfig>): void;
+
+  getDualRouteConfig(): Readonly<ResolvedDualRouteConfig>;
+
+  /** 注册出站润色：挂到根插件 `before.sendMessage`；仅在 `replyWithPolish` 触发的发送中生效（见 getOutboundReplyStore） */
+  addOutboundPolish(handler: OutboundPolishMiddleware): () => void;
+
+  /**
+   * 在 `before.sendMessage` 管道内调用 `message.$reply`（与 Adapter#sendMessage 同一出站链）
+   */
+  replyWithPolish(
+    message: Message<any>,
+    source: ReplySource,
+    content: SendContent,
+  ): Promise<unknown>;
+
+  /**
+   * 是否匹配为指令路径（与 dispatch 内判定一致）
+   */
+  matchCommand(message: Message<any>): boolean;
+
+  /**
+   * AI 触发判定结果
+   */
+  matchAI(message: Message<any>): { triggered: boolean; content: string };
 }
 
 // ============================================================================
@@ -128,8 +170,8 @@ export interface MessageDispatcherService {
 // ============================================================================
 
 export interface DispatcherContextExtensions {
-  /** 注册 Guardrail（护栏中间件） */
   addGuardrail(guardrail: GuardrailMiddleware): () => void;
+  addOutboundPolish(handler: OutboundPolishMiddleware): () => void;
 }
 
 declare module '../plugin.js' {
@@ -145,17 +187,18 @@ declare module '../plugin.js' {
 // 实现
 // ============================================================================
 
-/**
- * 创建 MessageDispatcher Context
- */
-export function createMessageDispatcher(): Context<'dispatcher', DispatcherContextExtensions> {
+export function createMessageDispatcher(
+  options?: CreateMessageDispatcherOptions,
+): Context<'dispatcher', DispatcherContextExtensions> {
   const guardrails: GuardrailMiddleware[] = [];
+  /** mounted 前注册的润色，在 mounted 时挂到 root.before.sendMessage */
+  const pendingOutboundPolish: OutboundPolishMiddleware[] = [];
   let aiHandler: AIHandler | null = null;
   let aiTriggerMatcher: AITriggerMatcher | null = null;
   let commandMatcher: CommandMatcher | null = null;
   let rootPlugin: Plugin | null = null;
+  let dualRoute = resolveDualRouteConfig(options?.dualRoute);
 
-  // Command prefix index — rebuilt lazily for O(1) lookup
   let commandPrefixIndex: Map<string, boolean> | null = null;
   let lastCommandCount = -1;
 
@@ -183,16 +226,15 @@ export function createMessageDispatcher(): Context<'dispatcher', DispatcherConte
     return commandPrefixIndex;
   }
 
-  /**
-   * Guardrail pipeline — a guardrail that does NOT call next() blocks the message.
-   */
   async function runGuardrails(message: Message<any>): Promise<boolean> {
     if (guardrails.length === 0) return true;
 
     for (const guardrail of guardrails) {
       let nextCalled = false;
       try {
-        await guardrail(message, async () => { nextCalled = true; });
+        await guardrail(message, async () => {
+          nextCalled = true;
+        });
       } catch {
         return false;
       }
@@ -201,14 +243,41 @@ export function createMessageDispatcher(): Context<'dispatcher', DispatcherConte
     return true;
   }
 
-  function route(message: Message<any>): RouteResult {
+  function extractText(message: Message<any>): string {
+    if (!message.$content) return '';
+    return message.$content
+      .map((seg: any) => {
+        if (typeof seg === 'string') return seg;
+        if (seg.type === 'text') return seg.data?.text || '';
+        return '';
+      })
+      .join('')
+      .trim();
+  }
+
+  function matchCommandInternal(message: Message<any>): boolean {
+    const text = extractText(message);
+    if (commandMatcher && commandMatcher(text, message)) return true;
+    const index = getCommandIndex();
+    for (const [prefix] of index) {
+      if (text.startsWith(prefix)) return true;
+    }
+    return false;
+  }
+
+  function matchAIInternal(message: Message<any>): { triggered: boolean; content: string } {
+    if (!aiTriggerMatcher) return { triggered: false, content: '' };
+    return aiTriggerMatcher(message);
+  }
+
+  /** 互斥路由（与旧版 route 一致） */
+  function routeExclusive(message: Message<any>): RouteResult {
     const text = extractText(message);
 
     if (commandMatcher && commandMatcher(text, message)) {
       return { type: 'command' };
     }
 
-    // Use indexed lookup instead of O(N) scan
     const index = getCommandIndex();
     for (const [prefix] of index) {
       if (text.startsWith(prefix)) {
@@ -226,64 +295,117 @@ export function createMessageDispatcher(): Context<'dispatcher', DispatcherConte
     return { type: 'skip' };
   }
 
-  function extractText(message: Message<any>): string {
-    if (!message.$content) return '';
-    return message.$content
-      .map((seg: any) => {
-        if (typeof seg === 'string') return seg;
-        if (seg.type === 'text') return seg.data?.text || '';
-        return '';
-      })
-      .join('')
-      .trim();
+  function wrapPolishAsBeforeSend(handler: OutboundPolishMiddleware): BeforeSendHandler {
+    return async (options) => {
+      const store = outboundReplyAls.getStore();
+      if (!store) return;
+      const ctx: OutboundPolishContext = {
+        message: store.message,
+        content: options.content,
+        source: store.source,
+      };
+      const next = await handler(ctx);
+      if (next !== undefined) return { ...options, content: next };
+    };
+  }
+
+  function flushPendingOutboundPolish(): void {
+    if (!rootPlugin) return;
+    const root = rootPlugin.root;
+    for (const mw of pendingOutboundPolish) {
+      const fn = wrapPolishAsBeforeSend(mw);
+      root.on('before.sendMessage', fn);
+    }
+    pendingOutboundPolish.length = 0;
+  }
+
+  async function replyWithPolishInternal(
+    message: Message<any>,
+    source: ReplySource,
+    content: SendContent,
+  ): Promise<unknown> {
+    if (!rootPlugin) {
+      return message.$reply(content);
+    }
+    return outboundReplyAls.run({ message, source }, () => message.$reply(content));
+  }
+
+  async function runCommandBranch(message: Message<any>): Promise<void> {
+    if (!rootPlugin) return;
+    const commandService = rootPlugin.inject('command');
+    if (!commandService) return;
+    const response = await commandService.handle(message, rootPlugin);
+    if (response) {
+      await replyWithPolishInternal(message, 'command', response);
+    }
+  }
+
+  async function runCustomMiddlewares(message: Message<any>): Promise<void> {
+    if (!rootPlugin) return;
+    const customMiddlewares = (rootPlugin as any)._getCustomMiddlewares?.() as
+      | MessageMiddleware<RegisteredAdapter>[]
+      | undefined;
+    if (customMiddlewares && customMiddlewares.length > 0) {
+      const { compose } = await import('../utils.js');
+      const composed = compose(customMiddlewares);
+      await composed(message, async () => {});
+    }
   }
 
   const service: MessageDispatcherService = {
     async dispatch(message: Message<any>) {
-      // Stage 1: Guardrail
       const passed = await runGuardrails(message);
       if (!passed) return;
 
-      // Stage 2: Route
-      const result = route(message);
+      const cfg = dualRoute;
 
-      // Stage 3: Handle
-      switch (result.type) {
-        case 'command': {
-          if (rootPlugin) {
-            const commandService = rootPlugin.inject('command');
-            if (commandService) {
-              const response = await commandService.handle(message, rootPlugin);
-              if (response) {
-                await message.$reply(response);
-              }
-            }
-          }
-          break;
+      if (cfg.mode === 'exclusive') {
+        const result = routeExclusive(message);
+        switch (result.type) {
+          case 'command':
+            await runCommandBranch(message);
+            break;
+          case 'ai':
+            if (aiHandler) await aiHandler(message, result.content);
+            break;
+          default:
+            break;
         }
-
-        case 'ai': {
-          if (aiHandler) {
-            await aiHandler(message, result.content);
-          }
-          break;
-        }
-
-        case 'skip':
-        default:
-          break;
+        await runCustomMiddlewares(message);
+        return;
       }
 
-      // Run legacy custom middlewares (skip the built-in command middleware at index 0).
-      // This ensures plugins that registered middlewares via addMiddleware() still work.
-      if (rootPlugin) {
-        const customMiddlewares = (rootPlugin as any)._getCustomMiddlewares?.() as MessageMiddleware<RegisteredAdapter>[] | undefined;
-        if (customMiddlewares && customMiddlewares.length > 0) {
-          const { compose } = await import('../utils.js');
-          const composed = compose(customMiddlewares);
-          await composed(message, async () => {});
-        }
+      // dual 模式
+      let wantCmd = matchCommandInternal(message);
+      const aiRes = matchAIInternal(message);
+      let wantAi = aiRes.triggered;
+
+      if (!wantCmd && !wantAi) {
+        await runCustomMiddlewares(message);
+        return;
       }
+
+      if (!cfg.allowDualReply && wantCmd && wantAi) {
+        if (cfg.order === 'command-first') wantAi = false;
+        else wantCmd = false;
+      }
+
+      const runCmd = async () => {
+        if (wantCmd) await runCommandBranch(message);
+      };
+      const runAi = async () => {
+        if (wantAi && aiHandler) await aiHandler(message, aiRes.content);
+      };
+
+      if (cfg.order === 'ai-first') {
+        await runAi();
+        await runCmd();
+      } else {
+        await runCmd();
+        await runAi();
+      }
+
+      await runCustomMiddlewares(message);
     },
 
     addGuardrail(guardrail: GuardrailMiddleware) {
@@ -309,6 +431,40 @@ export function createMessageDispatcher(): Context<'dispatcher', DispatcherConte
     hasAIHandler() {
       return aiHandler !== null;
     },
+
+    setDualRouteConfig(config: Partial<DualRouteConfig>) {
+      dualRoute = resolveDualRouteConfig({ ...dualRoute, ...config });
+    },
+
+    getDualRouteConfig() {
+      return { ...dualRoute };
+    },
+
+    addOutboundPolish(handler: OutboundPolishMiddleware) {
+      const fn = wrapPolishAsBeforeSend(handler);
+      if (rootPlugin) {
+        const root = rootPlugin.root;
+        root.on('before.sendMessage', fn);
+        return () => root.off('before.sendMessage', fn);
+      }
+      pendingOutboundPolish.push(handler);
+      return () => {
+        const i = pendingOutboundPolish.indexOf(handler);
+        if (i !== -1) pendingOutboundPolish.splice(i, 1);
+      };
+    },
+
+    replyWithPolish(message, source, content) {
+      return replyWithPolishInternal(message, source, content);
+    },
+
+    matchCommand(message) {
+      return matchCommandInternal(message);
+    },
+
+    matchAI(message) {
+      return matchAIInternal(message);
+    },
   };
 
   return {
@@ -317,12 +473,19 @@ export function createMessageDispatcher(): Context<'dispatcher', DispatcherConte
     value: service,
     mounted(plugin: Plugin) {
       rootPlugin = plugin.root;
+      flushPendingOutboundPolish();
       return service;
     },
     extensions: {
       addGuardrail(guardrail: GuardrailMiddleware) {
         const plugin = getPlugin();
         const dispose = service.addGuardrail(guardrail);
+        plugin.onDispose(dispose);
+        return dispose;
+      },
+      addOutboundPolish(handler: OutboundPolishMiddleware) {
+        const plugin = getPlugin();
+        const dispose = service.addOutboundPolish(handler);
         plugin.onDispose(dispose);
         return dispose;
       },

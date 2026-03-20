@@ -1,7 +1,7 @@
 import { useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
 
 export interface MessageSegment {
-    type: 'text' | 'at' | 'face' | 'image' | 'video' | 'audio' | 'file'
+    type: 'text' | 'at' | 'face' | 'image' | 'video' | 'audio' | 'record' | 'file'
     data: Record<string, any>
 }
 
@@ -19,6 +19,8 @@ export interface RichTextEditorRef {
     clear: () => void
     insertFace: (faceId: number) => void
     insertImage: (url: string) => void
+    insertVideo: (url: string) => void
+    insertAudio: (url: string) => void
     insertAt: (name: string, id?: string) => void
     replaceAtTrigger: (name: string, id?: string) => void
     getContent: () => { text: string; segments: MessageSegment[] }
@@ -55,6 +57,14 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
                         const imageUrl = el.dataset.url
                         text += `[image:${imageUrl}]`
                         segments.push({ type: 'image', data: { url: imageUrl } })
+                    } else if (el.classList.contains('editor-video')) {
+                        const u = el.dataset.url || ''
+                        text += `[video:${u}]`
+                        segments.push({ type: 'video', data: { url: u } })
+                    } else if (el.classList.contains('editor-audio')) {
+                        const u = el.dataset.url || ''
+                        text += `[audio:${u}]`
+                        segments.push({ type: 'audio', data: { url: u } })
                     } else if (el.classList.contains('editor-at')) {
                         const name = el.dataset.name
                         const id = el.dataset.id
@@ -96,6 +106,30 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
             img.className = 'editor-image'
 
             insertNodeAtCursor(img)
+            handleChange()
+        }
+
+        const insertVideo = (url: string) => {
+            if (!editorRef.current || !url.trim()) return
+            const u = url.trim()
+            const span = document.createElement('span')
+            span.className = 'editor-video'
+            span.dataset.url = u
+            span.contentEditable = 'false'
+            span.textContent = '📹 视频'
+            insertNodeAtCursor(span)
+            handleChange()
+        }
+
+        const insertAudio = (url: string) => {
+            if (!editorRef.current || !url.trim()) return
+            const u = url.trim()
+            const span = document.createElement('span')
+            span.className = 'editor-audio'
+            span.dataset.url = u
+            span.contentEditable = 'false'
+            span.textContent = '🎵 音频'
+            insertNodeAtCursor(span)
             handleChange()
         }
 
@@ -319,6 +353,8 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
             clear,
             insertFace,
             insertImage,
+            insertVideo,
+            insertAudio,
             insertAt,
             replaceAtTrigger,
             getContent

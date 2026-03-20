@@ -1,19 +1,7 @@
 {
-    "compilerOptions": {
-      "outDir": "../dist",
-      "baseUrl": ".",
-      "declaration": true,
-      "module": "ESNext",
-      "moduleResolution": "bundler",
-      "target": "ES2022",
-      "jsx":"react-jsx",
-      "declarationMap": true,
-      "sourceMap": true,
-      "skipLibCheck": true,
-      "noEmit": false
-    },
-    "include": [
-      "./**/*"
-    ]
-  }
-  
+  "extends": "@zhin.js/console/browser.tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../dist"
+  },
+  "include": ["./**/*"]
+}

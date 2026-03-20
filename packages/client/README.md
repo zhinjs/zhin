@@ -1,5 +1,10 @@
 # Zhin Client - 动态页面路由与插件配置系统
 
+> **本仓库目录约定（与本包对应）**  
+> - **`client/`**：浏览器端源码（路由、Redux、WebSocket 等）。  
+> - **`dist/`**：`pnpm build` 后的发布产物；`package.json` 的 `main`/`types` 指向此处。  
+> 包根目录 `packages/client/` 表示 npm 包 `@zhin.js/client`，内层 `client/` 表示「Web 客户端实现」，与 [仓库结构与模块化约定](../../docs/contributing/repo-structure.md) 中 §3.4 一致。
+
 基于 React Router 7.0 的动态页面管理系统，集成插件配置功能，支持基于 Schema 的自动表单生成。
 
 ## 特性

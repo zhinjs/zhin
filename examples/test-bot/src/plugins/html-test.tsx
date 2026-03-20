@@ -1,20 +1,11 @@
 /**
  * HTML 渲染测试插件
  */
-import { usePlugin, ZhinTool } from 'zhin.js';
-import { writeFileSync, mkdirSync, existsSync } from 'fs';
-import { join } from 'path';
+import { usePlugin, ZhinTool,segment } from 'zhin.js';
 
 const plugin = usePlugin();
 const { logger } = plugin;
 
-// 输出目录
-const OUTPUT_DIR = join(process.cwd(), 'data', 'render-output');
-
-// 确保输出目录存在
-if (!existsSync(OUTPUT_DIR)) {
-  mkdirSync(OUTPUT_DIR, { recursive: true });
-}
 
 // 定义渲染服务类型（避免直接导入）
 interface RenderResult {
@@ -38,7 +29,7 @@ interface HtmlRendererService {
 
 // 获取 html-renderer 服务
 function getRenderer(): HtmlRendererService | undefined {
-  return plugin.root.inject('html-renderer' as any) as HtmlRendererService | undefined;
+  return plugin.root.inject('html-renderer') as HtmlRendererService | undefined;
 }
 
 // 创建测试渲染工具
@@ -177,12 +168,14 @@ const testRenderTool = new ZhinTool('test_render')
             <div style="
               background-color: #16213e;
               padding: 16px;
+              display: flex;
+              flex-direction: column;
               border-radius: 12px;
               font-size: 14px;
               line-height: 1.6;
             ">
               这是一个复杂布局的示例，展示了 @zhinjs/satori 的能力：
-              <ul style="margin-top: 12px; padding-left: 20px;">
+              <ul style="margin-top: 12px; padding-left: 20px; display: flex; flex-direction: column; gap: 8px;">
                 <li style="margin-bottom: 8px;">✅ Flexbox 布局</li>
                 <li style="margin-bottom: 8px;">✅ 渐变背景</li>
                 <li style="margin-bottom: 8px;">✅ 圆角边框</li>
@@ -215,26 +208,10 @@ const testRenderTool = new ZhinTool('test_render')
         width,
         format: 'png',
       });
-
-      const base64 = (result.data as Buffer).toString('base64');
-      
-      // 保存到本地文件
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `render-${type}-${timestamp}.png`;
-      const filepath = join(OUTPUT_DIR, filename);
-      
-      writeFileSync(filepath, result.data as Buffer);
-      logger.info(`Render result saved to: ${filepath}`);
-
       return {
         success: true,
-        type,
-        width: result.width,
-        height: result.height,
-        base64,
-        dataUrl: `data:${result.mimeType};base64,${base64}`,
-        savedTo: filepath,
-      };
+        dataUrl: `base64://${(result.data as Buffer).toString('base64')}`,
+      }
     } catch (error) {
       return {
         success: false,
@@ -254,20 +231,18 @@ const testRenderTool = new ZhinTool('test_render')
       const executeResult = await testRenderTool.toTool().execute(
         { type },
         { platform: message.$adapter, senderId: message.$sender.id }
-      );
-
-      if (!executeResult.success) {
-        return `❌ 渲染失败: ${executeResult.error}`;
+      ) as { success: boolean; error?: string; dataUrl?: string } | null | undefined;
+      if(!executeResult || !executeResult.success) {
+        return `❌ 渲染失败: ${executeResult?.error}`;
       }
-
-      return <image url={executeResult.dataUrl} />;
+      return segment("image", { url:(executeResult as { dataUrl?: string })?.dataUrl as string,name: `render-${type}.png` });
     } catch (error) {
       return `❌ 渲染失败: ${error instanceof Error ? error.message : String(error)}`;
     }
   });
 
 // 注册工具
-const toolService = plugin.root.inject('tool' as any) as any;
+const toolService = plugin.root.inject('tool');
 if (toolService) {
   toolService.addTool(testRenderTool, plugin.name, true);
 }

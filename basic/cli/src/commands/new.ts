@@ -88,6 +88,8 @@ export const newCommand = new Command('new')
       logger.log('');
       logger.log('📦 发布到 npm：');
       logger.log(`  pnpm publish`);
+      logger.log('');
+      logger.log('🤖 AI 技能：可编辑 plugins/' + name + '/skills/' + name + '/SKILL.md（随 npm 包发布）');
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -112,8 +114,9 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
   await fs.ensureDir(path.join(pluginDir, 'lib'));
   await fs.ensureDir(path.join(pluginDir, 'dist'));
   await fs.ensureDir(path.join(pluginDir, 'tests'));
+  await fs.ensureDir(path.join(pluginDir, 'skills', pluginName));
   
-  // 创建 package.json
+  // 创建 package.json（与仓库插件约定一致：files 含 src/lib/client/dist/skills/README.md 等）
   const packageJson = {
     name: packageName,
     version: '0.1.0',
@@ -124,17 +127,20 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
     exports: {
       '.': {
         types: './lib/index.d.ts',
+        development: './src/index.ts',
         import: './lib/index.js'
       },
       './client': {
         import: './dist/index.js'
-      }
+      },
+      './package.json': './package.json'
     },
     files: [
-      'lib',
       'src',
-      'dist',
+      'lib',
       'client',
+      'dist',
+      'skills',
       'README.md',
       'CHANGELOG.md'
     ],
@@ -360,6 +366,10 @@ export default defineConfig({
 });
 \`\`\`
 
+## AI 技能（SKILL.md）
+
+本包包含 \`skills/${pluginName}/SKILL.md\`（YAML frontmatter：\`name\`、\`description\`、\`keywords\`、\`tags\`、\`tools\` 等）。Agent 会扫描并用于工具粗筛与 \`activate_skill\`；请按实际能力修改描述与关键词。
+
 ## 开发
 
 \`\`\`bash
@@ -379,6 +389,24 @@ MIT
 `;
   
   await fs.writeFile(path.join(pluginDir, 'README.md'), readmeContent);
+
+  // 文件化技能模板（与官方插件一致，随 npm 包发布）
+  const skillMdContent = `---
+name: ${pluginName}
+description: ${capitalizedName} 插件：请简要说明本插件为 AI 提供的工具能力与使用场景（供 Agent 发现与粗筛工具）。
+keywords:
+  - ${pluginName}
+  - zhin
+tags:
+  - ${pluginName}
+tools: []
+---
+
+## 执行规则
+
+- 通过本插件注册的 \`${pluginName}_*\` 等工具完成具体任务；请根据实际工具名与参数补充说明。
+`;
+  await fs.writeFile(path.join(pluginDir, 'skills', pluginName, 'SKILL.md'), skillMdContent);
   
   // 创建 CHANGELOG.md
   const changelogContent = `# ${packageName}

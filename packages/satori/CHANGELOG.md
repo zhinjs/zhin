@@ -1,5 +1,12 @@
 # @zhin.js/satori
 
+## 0.2.0
+
+### Major Changes
+
+- 改为直接依赖官方 `satori`，通过 `html-react-parser` 提供 `htmlToSvg`；移除旧版自研布局/渲染源码。
+- 保留 `fonts/` 与字体工具函数；导出 `satori`（官方）与 `htmlToSvg`。
+
 ## 0.1.0
 
 ### Minor Changes

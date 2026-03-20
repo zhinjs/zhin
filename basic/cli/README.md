@@ -31,21 +31,25 @@ zhin new [plugin-name] [options]
 ```
 plugins/my-plugin/
 ├── src/                    # 插件逻辑代码
-│   └── index.ts           # 插件入口
-├── client/                 # 客户端页面（可选）
-│   ├── index.tsx          # 页面入口
-│   └── pages/             # React 组件
-│       └── index.tsx
-├── lib/                    # 构建输出
+│   └── index.ts            # 插件入口
+├── client/                 # 控制台客户端页面
+│   ├── index.tsx           # 页面入口
+│   ├── tsconfig.json
+│   └── pages/              # React 组件
+├── skills/my-plugin/       # 文件化 AI 技能（随包发布）
+│   └── SKILL.md
+├── tests/                  # Vitest 测试
+├── lib/                    # Node 端构建输出（tsc）
 ├── dist/                   # client 构建输出
-├── package.json           # 插件配置
-├── tsconfig.json          # TypeScript 配置
-├── README.md              # 插件文档
-└── CHANGELOG.md           # 变更日志
+├── package.json            # 含 npm files：src/lib/client/dist/skills/README.md/CHANGELOG.md
+├── tsconfig.json
+├── README.md
+└── CHANGELOG.md
 ```
 
 **自动配置：**
-- ✅ 创建完整的 npm 包结构
+- ✅ 创建完整的 npm 包结构（`files` 白名单含 `skills/`，与官方插件约定一致）
+- ✅ 生成 `skills/<插件名>/SKILL.md` 模板（frontmatter 供 Agent 扫描）
 - ✅ 配置 TypeScript 编译
 - ✅ 自动添加到根 `package.json` 依赖（`workspace:*`）
 - ✅ 自动安装依赖

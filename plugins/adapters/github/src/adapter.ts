@@ -78,18 +78,6 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
 
   async start(): Promise<void> {
     this.registerGitHubTools();
-    this.declareSkill({
-      description: 'GitHub 全功能适配器：Issue/PR 评论即聊天通道，仓库管理（PR合并/创建/Review、Issue编辑管理）、信息查询（Star/CI/Release/Branch）、全局搜索（issues/repos/code）、标签与指派管理、仓库文件读取、提交历史与分支对比、Webhook 事件通知订阅、OAuth 用户绑定。通过 GitHub App 认证，纯 REST API。',
-      keywords: [
-        'github', 'pr', 'pull request', 'issue', 'merge', 'review',
-        'star', 'fork', 'branch', 'release', 'CI', 'workflow', 'repo',
-        '合并', '仓库', '拉取请求', '代码审查', 'search', '搜索',
-        'label', '标签', 'assign', '指派', 'file', '文件',
-        'commit', '提交', 'compare', '对比', 'edit', '编辑',
-      ],
-      tags: ['github', 'development', 'git', 'ci-cd'],
-      conventions: 'channel ID 格式 owner/repo/issues/N 或 owner/repo/pull/N。repo 参数不填则需要手动指定。',
-    });
     await super.start();
   }
 

@@ -1,4 +1,544 @@
 {
-  "skills": [],
-  "updatedAt": null
+  "skills": [
+    {
+      "id": "universal-skill-creator",
+      "name": "skill-creator",
+      "description": "Create or update AgentSkills. Use when designing skill structure, writing SKILL.md, configuring tool associations, or organizing skill resources.",
+      "keywords": [
+        "skill",
+        "SKILL.md",
+        "create skill",
+        "skill development"
+      ],
+      "tags": [
+        "development",
+        "skill-creation",
+        "documentation",
+        "通用技能"
+      ],
+      "kind": "universal",
+      "repoPath": "packages/create-zhin/template/skills/skill-creator/SKILL.md",
+      "installNote": "使用 create-zhin / `zhin new` 新建项目时，模板已含 `skills/`；也可从仓库复制该目录到你的项目 `skills/<name>/` 下，Agent 即可发现。"
+    },
+    {
+      "id": "universal-summarize",
+      "name": "summarize",
+      "description": "Summarize web articles, documents, or long text into concise key points. Supports brief summary, bullet points, and structured formats.",
+      "keywords": [],
+      "tags": [
+        "通用技能"
+      ],
+      "kind": "universal",
+      "repoPath": "packages/create-zhin/template/skills/summarize/SKILL.md",
+      "installNote": "使用 create-zhin / `zhin new` 新建项目时，模板已含 `skills/`；也可从仓库复制该目录到你的项目 `skills/<name>/` 下，Agent 即可发现。"
+    },
+    {
+      "id": "plugin-utils-60s-60s",
+      "name": "60s",
+      "description": "60s API 聚合服务：提供新闻、天气、热搜、金价、油价、汇率、翻译、一言、摸鱼日历等多种实用查询能力。",
+      "keywords": [
+        "60s",
+        "新闻",
+        "天气",
+        "微博",
+        "知乎",
+        "抖音",
+        "头条",
+        "一言",
+        "摸鱼",
+        "金价",
+        "油价",
+        "汇率",
+        "翻译",
+        "历史",
+        "kfc",
+        "段子",
+        "壁纸",
+        "bing",
+        "ip"
+      ],
+      "tags": [
+        "新闻",
+        "资讯",
+        "天气",
+        "热搜",
+        "生活",
+        "金融",
+        "娱乐",
+        "工具",
+        "插件技能",
+        "@zhin.js/plugin-60s"
+      ],
+      "kind": "plugin",
+      "pluginPackage": "@zhin.js/plugin-60s",
+      "repoPath": "plugins/utils/60s/skills/60s/SKILL.md",
+      "installNote": "安装 npm 包 `@zhin.js/plugin-60s` 并在 `zhin.config` 中启用插件后，包内 `skills/` 会被 Agent 扫描（无需 `zhin skills add`）。"
+    },
+    {
+      "id": "plugin-utils-checkin-checkin",
+      "name": "checkin",
+      "description": "签到积分系统：用户每日签到获取随机积分，连续签到有额外奖励，支持排行榜查询。可用工具查询用户积分和排行数据。",
+      "keywords": [
+        "checkin",
+        "签到",
+        "sign-in",
+        "积分",
+        "points",
+        "排行",
+        "rank",
+        "排行榜",
+        "mypoints",
+        "我的积分",
+        "streak",
+        "连续"
+      ],
+      "tags": [
+        "checkin",
+        "points",
+        "gamification",
+        "插件技能",
+        "@zhin.js/plugin-checkin"
+      ],
+      "kind": "plugin",
+      "pluginPackage": "@zhin.js/plugin-checkin",
+      "repoPath": "plugins/utils/checkin/skills/checkin/SKILL.md",
+      "installNote": "安装 npm 包 `@zhin.js/plugin-checkin` 并在 `zhin.config` 中启用插件后，包内 `skills/` 会被 Agent 扫描（无需 `zhin skills add`）。"
+    },
+    {
+      "id": "plugin-adapters-dingtalk-dingtalk",
+      "name": "dingtalk",
+      "description": "钉钉群管理：踢人、禁言、设管理员、改群名、查成员等。仅有昵称时请先 list_members 获取 user_id 再操作。",
+      "keywords": [
+        "dingtalk",
+        "钉钉",
+        "adapter:dingtalk",
+        "群管理",
+        "list_members"
+      ],
+      "tags": [
+        "group",
+        "management",
+        "插件技能",
+        "@zhin.js/adapter-dingtalk"
+      ],
+      "kind": "plugin",
+      "pluginPackage": "@zhin.js/adapter-dingtalk",
+      "repoPath": "plugins/adapters/dingtalk/skills/dingtalk/SKILL.md",
+      "installNote": "安装 npm 包 `@zhin.js/adapter-dingtalk` 并在 `zhin.config` 中启用插件后，包内 `skills/` 会被 Agent 扫描（无需 `zhin skills add`）。"
+    },
+    {
+      "id": "plugin-adapters-discord-discord",
+      "name": "discord",
+      "description": "Discord 服务器/频道管理：踢人、禁言、封禁、改频道名、查成员等。需先 list_members 获取用户 ID 再执行管理操作。仅 Gateway 连接支持。",
+      "keywords": [
+        "discord",
+        "adapter:discord",
+        "群管理",
+        "踢人",
+        "禁言",
+        "list_members"
+      ],
+      "tags": [
+        "group",
+        "management",
+        "im",
+        "插件技能",
+        "@zhin.js/adapter-discord"
+      ],
+      "kind": "plugin",
+      "pluginPackage": "@zhin.js/adapter-discord",
+      "repoPath": "plugins/adapters/discord/skills/discord/SKILL.md",
+      "installNote": "安装 npm 包 `@zhin.js/adapter-discord` 并在 `zhin.config` 中启用插件后，包内 `skills/` 会被 Agent 扫描（无需 `zhin skills add`）。"
+    },
+    {
+      "id": "plugin-adapters-github-github",
+      "name": "github",
+      "description": "GitHub 全功能适配器：Issue/PR 评论即聊天通道，仓库管理（PR 合并/创建/Review、Issue 编辑）、信息查询（Star/CI/Release/Branch）、全局搜索（issues/repos/code）、标签与指派、仓库文件与提交历史、Webhook、OAuth。REST API。 调用约定：channel ID 格式 owner/repo/issues/N 或 owner/repo/pull/N；repo 参数不填时需手动指定 owner/repo。",
+      "keywords": [
+        "github",
+        "adapter:github",
+        "pr",
+        "pull request",
+        "issue",
+        "merge",
+        "review",
+        "star",
+        "fork",
+        "branch",
+        "release",
+        "CI",
+        "workflow",
+        "repo",
+        "合并",
+        "仓库",
+        "拉取请求",
+        "代码审查",
+        "search",
+        "搜索",
+        "label",
+        "assign",
+        "file",
+        "commit",
+        "compare",
+        "edit"
+      ],
+      "tags": [
+        "github",
+        "development",
+        "git",
+        "ci-cd",
+        "插件技能",
+        "@zhin.js/adapter-github"
+      ],
+      "kind": "plugin",
+      "pluginPackage": "@zhin.js/adapter-github",
+      "repoPath": "plugins/adapters/github/skills/github/SKILL.md",
+      "installNote": "安装 npm 包 `@zhin.js/adapter-github` 并在 `zhin.config` 中启用插件后，包内 `skills/` 会被 Agent 扫描（无需 `zhin skills add`）。"
+    },
+    {
+      "id": "plugin-utils-group-daily-analysis-group-daily-analysis",
+      "name": "group-daily-analysis",
+      "description": "群日常分析：基于收件箱统计群消息、参与人数、活跃时段，支持按群启用/禁用与定时报告。",
+      "keywords": [
+        "群分析",
+        "日常分析",
+        "群统计",
+        "分析设置"
+      ],
+      "tags": [
+        "group",
+        "analysis",
+        "stats",
+        "inbox",
+        "插件技能",
+        "@zhin.js/plugin-group-daily-analysis"
+      ],
+      "kind": "plugin",
+      "pluginPackage": "@zhin.js/plugin-group-daily-analysis",
+      "repoPath": "plugins/utils/group-daily-analysis/skills/group-daily-analysis/SKILL.md",
+      "installNote": "安装 npm 包 `@zhin.js/plugin-group-daily-analysis` 并在 `zhin.config` 中启用插件后，包内 `skills/` 会被 Agent 扫描（无需 `zhin skills add`）。"
+    },
+    {
+      "id": "plugin-adapters-icqq-icqq",
+      "name": "icqq",
+      "description": "ICQQ（QQ 协议）群管理：踢人、禁言、设管理员、改名片、头衔、群公告等。只有昵称时请先调用 list_members 查 QQ 号再操作。",
+      "keywords": [
+        "ICQQ",
+        "QQ",
+        "adapter:icqq",
+        "群管理",
+        "踢人",
+        "禁言",
+        "管理员",
+        "list_members"
+      ],
+      "tags": [
+        "group",
+        "management",
+        "im",
+        "插件技能",
+        "@zhin.js/adapter-icqq"
+      ],
+      "kind": "plugin",
+      "pluginPackage": "@zhin.js/adapter-icqq",
+      "repoPath": "plugins/adapters/icqq/skills/icqq/SKILL.md",
+      "installNote": "安装 npm 包 `@zhin.js/adapter-icqq` 并在 `zhin.config` 中启用插件后，包内 `skills/` 会被 Agent 扫描（无需 `zhin skills add`）。"
+    },
+    {
+      "id": "plugin-adapters-kook-kook",
+      "name": "kook",
+      "description": "KOOK 服务器/频道群管理：踢人、禁言、封禁、设管理员、改服务器名、查成员等。仅昵称时请先 list_members 获取 user_id。",
+      "keywords": [
+        "kook",
+        "KOOK",
+        "adapter:kook",
+        "群管理",
+        "list_members"
+      ],
+      "tags": [
+        "group",
+        "management",
+        "插件技能",
+        "@zhin.js/adapter-kook"
+      ],
+      "kind": "plugin",
+      "pluginPackage": "@zhin.js/adapter-kook",
+      "repoPath": "plugins/adapters/kook/skills/kook/SKILL.md",
+      "installNote": "安装 npm 包 `@zhin.js/adapter-kook` 并在 `zhin.config` 中启用插件后，包内 `skills/` 会被 Agent 扫描（无需 `zhin skills add`）。"
+    },
+    {
+      "id": "plugin-adapters-lark-lark",
+      "name": "lark",
+      "description": "飞书/Lark 群管理：踢人、禁言、设管理员、改群名、查成员等。仅有昵称时请先 list_members 获取 user_id 再操作。",
+      "keywords": [
+        "lark",
+        "飞书",
+        "adapter:lark",
+        "群管理",
+        "list_members"
+      ],
+      "tags": [
+        "group",
+        "management",
+        "插件技能",
+        "@zhin.js/adapter-lark"
+      ],
+      "kind": "plugin",
+      "pluginPackage": "@zhin.js/adapter-lark",
+      "repoPath": "plugins/adapters/lark/skills/lark/SKILL.md",
+      "installNote": "安装 npm 包 `@zhin.js/adapter-lark` 并在 `zhin.config` 中启用插件后，包内 `skills/` 会被 Agent 扫描（无需 `zhin skills add`）。"
+    },
+    {
+      "id": "plugin-adapters-milky-milky",
+      "name": "milky",
+      "description": "Milky 协议群管理：踢人、禁言、全员禁言、设管理员、改群名、查成员等。",
+      "keywords": [
+        "milky",
+        "adapter:milky",
+        "群管理",
+        "list_members"
+      ],
+      "tags": [
+        "group",
+        "management",
+        "插件技能",
+        "@zhin.js/adapter-milky"
+      ],
+      "kind": "plugin",
+      "pluginPackage": "@zhin.js/adapter-milky",
+      "repoPath": "plugins/adapters/milky/skills/milky/SKILL.md",
+      "installNote": "安装 npm 包 `@zhin.js/adapter-milky` 并在 `zhin.config` 中启用插件后，包内 `skills/` 会被 Agent 扫描（无需 `zhin skills add`）。"
+    },
+    {
+      "id": "plugin-adapters-onebot11-onebot11",
+      "name": "onebot11",
+      "description": "OneBot11 协议群管理：踢人、禁言、封禁、设管理员、改群名、查成员等。仅有昵称时请先 list_members 获取 user_id 再执行操作。",
+      "keywords": [
+        "onebot",
+        "onebot11",
+        "adapter:onebot11",
+        "群管理",
+        "list_members"
+      ],
+      "tags": [
+        "group",
+        "management",
+        "插件技能",
+        "@zhin.js/adapter-onebot11"
+      ],
+      "kind": "plugin",
+      "pluginPackage": "@zhin.js/adapter-onebot11",
+      "repoPath": "plugins/adapters/onebot11/skills/onebot11/SKILL.md",
+      "installNote": "安装 npm 包 `@zhin.js/adapter-onebot11` 并在 `zhin.config` 中启用插件后，包内 `skills/` 会被 Agent 扫描（无需 `zhin skills add`）。"
+    },
+    {
+      "id": "plugin-adapters-qq-qq",
+      "name": "qq",
+      "description": "QQ 官方机器人群管理：踢人、禁言、设管理员、改群名、查成员等。仅有昵称时请先 list_members 查 user_id 再操作。",
+      "keywords": [
+        "qq",
+        "QQ",
+        "adapter:qq",
+        "群管理",
+        "list_members"
+      ],
+      "tags": [
+        "group",
+        "management",
+        "插件技能",
+        "@zhin.js/adapter-qq"
+      ],
+      "kind": "plugin",
+      "pluginPackage": "@zhin.js/adapter-qq",
+      "repoPath": "plugins/adapters/qq/skills/qq/SKILL.md",
+      "installNote": "安装 npm 包 `@zhin.js/adapter-qq` 并在 `zhin.config` 中启用插件后，包内 `skills/` 会被 Agent 扫描（无需 `zhin skills add`）。"
+    },
+    {
+      "id": "plugin-utils-repeater-repeater",
+      "name": "repeater",
+      "description": "复读机：当群内连续多人发送相同消息时，Bot 自动跟读。支持阈值和冷却配置。",
+      "keywords": [
+        "repeater",
+        "复读",
+        "复读机",
+        "跟读",
+        "echo",
+        "parrot"
+      ],
+      "tags": [
+        "repeater",
+        "fun",
+        "group",
+        "插件技能",
+        "@zhin.js/plugin-repeater"
+      ],
+      "kind": "plugin",
+      "pluginPackage": "@zhin.js/plugin-repeater",
+      "repoPath": "plugins/utils/repeater/skills/repeater/SKILL.md",
+      "installNote": "安装 npm 包 `@zhin.js/plugin-repeater` 并在 `zhin.config` 中启用插件后，包内 `skills/` 会被 Agent 扫描（无需 `zhin skills add`）。"
+    },
+    {
+      "id": "plugin-utils-rss-rss",
+      "name": "rss",
+      "description": "RSS/Atom 订阅推送系统：订阅 RSS 源并自动推送新内容到群聊或私聊。支持订阅管理、手动检查、预览。可用 AI 工具查询订阅和预览 feed。",
+      "keywords": [
+        "rss",
+        "atom",
+        "feed",
+        "订阅",
+        "推送",
+        "rss-add",
+        "rss-remove",
+        "rss-list",
+        "rss-check",
+        "rss-preview",
+        "subscribe",
+        "unsubscribe"
+      ],
+      "tags": [
+        "rss",
+        "feed",
+        "subscription",
+        "push",
+        "插件技能",
+        "@zhin.js/plugin-rss"
+      ],
+      "kind": "plugin",
+      "pluginPackage": "@zhin.js/plugin-rss",
+      "repoPath": "plugins/utils/rss/skills/rss/SKILL.md",
+      "installNote": "安装 npm 包 `@zhin.js/plugin-rss` 并在 `zhin.config` 中启用插件后，包内 `skills/` 会被 Agent 扫描（无需 `zhin skills add`）。"
+    },
+    {
+      "id": "plugin-adapters-slack-slack",
+      "name": "slack",
+      "description": "Slack 工作区/频道管理：踢人、禁言、改频道名、查成员等。需先 list_members 获取用户 ID 再执行管理操作。",
+      "keywords": [
+        "slack",
+        "adapter:slack",
+        "群管理",
+        "list_members"
+      ],
+      "tags": [
+        "group",
+        "management",
+        "插件技能",
+        "@zhin.js/adapter-slack"
+      ],
+      "kind": "plugin",
+      "pluginPackage": "@zhin.js/adapter-slack",
+      "repoPath": "plugins/adapters/slack/skills/slack/SKILL.md",
+      "installNote": "安装 npm 包 `@zhin.js/adapter-slack` 并在 `zhin.config` 中启用插件后，包内 `skills/` 会被 Agent 扫描（无需 `zhin skills add`）。"
+    },
+    {
+      "id": "plugin-utils-stats-stats",
+      "name": "stats",
+      "description": "消息统计系统：自动追踪每个用户和群聊的消息数量，支持日/周/月维度查看，提供活跃度排行和个人统计。AI 可查询统计数据。",
+      "keywords": [
+        "stats",
+        "统计",
+        "消息统计",
+        "话唠",
+        "rank",
+        "排行",
+        "活跃",
+        "mystats",
+        "我的统计",
+        "week",
+        "周报"
+      ],
+      "tags": [
+        "stats",
+        "analytics",
+        "message",
+        "插件技能",
+        "@zhin.js/plugin-stats"
+      ],
+      "kind": "plugin",
+      "pluginPackage": "@zhin.js/plugin-stats",
+      "repoPath": "plugins/utils/stats/skills/stats/SKILL.md",
+      "installNote": "安装 npm 包 `@zhin.js/plugin-stats` 并在 `zhin.config` 中启用插件后，包内 `skills/` 会被 Agent 扫描（无需 `zhin skills add`）。"
+    },
+    {
+      "id": "plugin-utils-teach-teach",
+      "name": "teach",
+      "description": "自定义问答系统：用户可以教会 Bot 问答对，支持精确匹配和正则匹配，自动在聊天中触发回复。可查询问答库内容和统计信息。",
+      "keywords": [
+        "teach",
+        "问答",
+        "教学",
+        "自定义回复",
+        "auto-reply",
+        "forget",
+        "忘记",
+        "删除问答",
+        "teach-list",
+        "问答列表",
+        "teach-regex",
+        "正则问答",
+        "query",
+        "查询",
+        "统计"
+      ],
+      "tags": [
+        "teach",
+        "qa",
+        "auto-reply",
+        "插件技能",
+        "@zhin.js/plugin-teach"
+      ],
+      "kind": "plugin",
+      "pluginPackage": "@zhin.js/plugin-teach",
+      "repoPath": "plugins/utils/teach/skills/teach/SKILL.md",
+      "installNote": "安装 npm 包 `@zhin.js/plugin-teach` 并在 `zhin.config` 中启用插件后，包内 `skills/` 会被 Agent 扫描（无需 `zhin skills add`）。"
+    },
+    {
+      "id": "plugin-adapters-telegram-telegram",
+      "name": "telegram",
+      "description": "Telegram 群组管理：踢人、禁言、封禁、设管理员、改群名、查成员等。仅用户名时请先 list_members 获取 user_id 再操作。",
+      "keywords": [
+        "telegram",
+        "tg",
+        "adapter:telegram",
+        "群管理",
+        "list_members"
+      ],
+      "tags": [
+        "group",
+        "management",
+        "插件技能",
+        "@zhin.js/adapter-telegram"
+      ],
+      "kind": "plugin",
+      "pluginPackage": "@zhin.js/adapter-telegram",
+      "repoPath": "plugins/adapters/telegram/skills/telegram/SKILL.md",
+      "installNote": "安装 npm 包 `@zhin.js/adapter-telegram` 并在 `zhin.config` 中启用插件后，包内 `skills/` 会被 Agent 扫描（无需 `zhin skills add`）。"
+    },
+    {
+      "id": "plugin-utils-voice-voice",
+      "name": "voice",
+      "description": "语音输入(STT)和语音输出(TTS)能力，支持语音转文字和文字转语音。",
+      "keywords": [
+        "语音",
+        "朗读",
+        "stt",
+        "tts",
+        "voice",
+        "转文字",
+        "转语音"
+      ],
+      "tags": [
+        "voice",
+        "audio",
+        "stt",
+        "tts",
+        "插件技能",
+        "@zhin.js/plugin-voice"
+      ],
+      "kind": "plugin",
+      "pluginPackage": "@zhin.js/plugin-voice",
+      "repoPath": "plugins/utils/voice/skills/voice/SKILL.md",
+      "installNote": "安装 npm 包 `@zhin.js/plugin-voice` 并在 `zhin.config` 中启用插件后，包内 `skills/` 会被 Agent 扫描（无需 `zhin skills add`）。"
+    }
+  ],
+  "updatedAt": "2026-03-20"
 }

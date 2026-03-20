@@ -6,7 +6,13 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { getPlugin, type Tool, type SkillFeature } from '@zhin.js/core';
-import { createBuiltinTools, discoverWorkspaceSkills, loadAlwaysSkillsContent, buildSkillsSummaryXML } from '../builtin-tools.js';
+import {
+  collectPluginSkillSearchRoots,
+  createBuiltinTools,
+  discoverWorkspaceSkills,
+  loadAlwaysSkillsContent,
+  buildSkillsSummaryXML,
+} from '../builtin-tools.js';
 import { resolveSkillInstructionMaxChars, DEFAULT_CONFIG } from '../zhin-agent/config.js';
 import { loadBootstrapFiles, buildContextFiles, buildBootstrapContextSection } from '../bootstrap.js';
 import { triggerAIHook, createAIHookEvent } from '../hooks.js';
@@ -24,7 +30,10 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
     const agentCfg = ai.getAgentConfig();
     const fullCfg = { ...DEFAULT_CONFIG, ...agentCfg } as Required<import('../zhin-agent/config.js').ZhinAgentConfig>;
     const modelName = provider.models[0] || '';
-    const builtinTools = createBuiltinTools({ skillInstructionMaxChars: resolveSkillInstructionMaxChars(fullCfg, modelName) });
+    const builtinTools = createBuiltinTools({
+      skillInstructionMaxChars: resolveSkillInstructionMaxChars(fullCfg, modelName),
+      pluginSkillRootsResolver: () => collectPluginSkillSearchRoots(root),
+    });
     const disposers: (() => void)[] = [];
     for (const tool of builtinTools) disposers.push(toolService.addTool(tool, root.name));
     const cronTools = createCronTools();
@@ -39,7 +48,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       if (!skillFeature) return 0;
       const existing = skillFeature.getByPlugin(root.name);
       for (const s of existing) skillFeature.remove(s);
-      const skills = await discoverWorkspaceSkills();
+      const skills = await discoverWorkspaceSkills(root);
       if (skills.length === 0) return 0;
       const allRegisteredTools = toolService.getAll();
       const toolNameIndex = new Map<string, Tool>();
@@ -111,7 +120,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
 
       // Step 3: inject always-on skills content + XML summary
       try {
-        const skillsForContext = await discoverWorkspaceSkills();
+        const skillsForContext = await discoverWorkspaceSkills(root);
         const alwaysContent = await loadAlwaysSkillsContent(skillsForContext);
         const skillsXml = buildSkillsSummaryXML(skillsForContext);
         if (refs.zhinAgent) {
@@ -140,7 +149,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
           skillReloadDebounce = null;
           try {
             const count = await syncWorkspaceSkills();
-            const skillsForContext = await discoverWorkspaceSkills();
+            const skillsForContext = await discoverWorkspaceSkills(root);
             const alwaysContent = await loadAlwaysSkillsContent(skillsForContext);
             const skillsXml = buildSkillsSummaryXML(skillsForContext);
             if (refs.zhinAgent) {

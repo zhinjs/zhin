@@ -6,8 +6,6 @@ import {
   Adapter,
   Plugin,
   createGroupManagementTools,
-  GROUP_MANAGEMENT_SKILL_KEYWORDS,
-  GROUP_MANAGEMENT_SKILL_TAGS,
   type IGroupManagement,
   type ToolPermissionLevel,
 } from "zhin.js";
@@ -96,12 +94,6 @@ export class IcqqAdapter extends Adapter<IcqqBot> {
     this.registerIcqqPlatformTools();
     const groupTools = createGroupManagementTools(this as unknown as IGroupManagement, this.name);
     groupTools.forEach((t) => this.addTool(t));
-    this.declareSkill({
-      description:
-        'ICQQ（QQ 协议）群管理：踢人、禁言、设管理员、改名片、头衔、群公告等。只有昵称时请先调用 list_members 查 QQ 号再操作。',
-      keywords: GROUP_MANAGEMENT_SKILL_KEYWORDS,
-      tags: GROUP_MANAGEMENT_SKILL_TAGS,
-    });
     await super.start();
   }
 

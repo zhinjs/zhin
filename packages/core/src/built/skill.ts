@@ -5,8 +5,7 @@
  *   Plugin = 运行时容器（生命周期、服务注册、中间件）
  *   Skill  = AI 可见的能力接口（名称、描述、工具列表）
  *
- * 每个 Plugin 可以声明一个 Skill 描述，告诉 AI Agent：
- *   "我叫什么、我能做什么、我有哪些工具"
+ * Skill 记录由运行时注入（如 Agent 从磁盘 SKILL.md 同步），供 Agent 粗筛与工具关联。
  *
  * SkillFeature 全局收集所有 Skill，供 Agent 进行两级过滤：
  *   1. 粗筛：根据用户消息选择相关 Skill
@@ -14,7 +13,6 @@
  */
 
 import { Feature, FeatureJSON } from '../feature.js';
-import { Plugin, getPlugin } from '../plugin.js';
 import type { Tool } from '../types.js';
 
 // ============================================================================
@@ -51,35 +49,21 @@ export interface Skill {
 }
 
 /**
- * Skill 元数据 — 开发者在插件中声明
- * 由 plugin.declareSkill() 注册
+ * SKILL.md frontmatter 常见字段（类型提示；运行时由 Agent 等同步到 SkillFeature）
  */
 export interface SkillMetadata {
   /** 技能描述（必填） */
   description: string;
 
-  /** 触发关键词（可选，自动从工具中聚合） */
+  /** 触发关键词（可选） */
   keywords?: string[];
 
   /** 分类标签（可选） */
   tags?: string[];
 }
 
-// ============================================================================
-// 扩展 Plugin 接口
-// ============================================================================
-
-export interface SkillContextExtensions {
-  /**
-   * 声明本插件的 Skill 元数据
-   * 调用后，插件的工具会自动聚合为一个 Skill 注册到 SkillFeature
-   */
-  declareSkill(metadata: SkillMetadata): void;
-}
-
 declare module '../plugin.js' {
   namespace Plugin {
-    interface Extensions extends SkillContextExtensions {}
     interface Contexts {
       skill: SkillFeature;
     }
@@ -218,62 +202,6 @@ export class SkillFeature extends Feature<Skill> {
         keywords: s.keywords,
         tags: s.tags,
       })),
-    };
-  }
-
-  /**
-   * 提供给 Plugin.prototype 的扩展方法
-   */
-  get extensions() {
-    const feature = this;
-    return {
-      declareSkill(metadata: SkillMetadata) {
-        const plugin = getPlugin();
-        const pluginName = plugin.name;
-
-        // 收集该插件注册的工具
-        const toolService = plugin.root.inject('tool') as { getToolsByPlugin?: (name: string) => Tool[] } | undefined;
-        let tools: Tool[] = [];
-
-        if (toolService && typeof toolService.getToolsByPlugin === 'function') {
-          tools = toolService.getToolsByPlugin(pluginName);
-        } else {
-          tools = plugin.getAllTools?.() || [];
-        }
-
-        // 聚合关键词：开发者声明 + 工具自带
-        const allKeywords = new Set<string>(metadata.keywords || []);
-        for (const tool of tools) {
-          if (tool.keywords) {
-            for (const kw of tool.keywords) {
-              allKeywords.add(kw);
-            }
-          }
-        }
-
-        // 聚合标签
-        const allTags = new Set<string>(metadata.tags || []);
-        for (const tool of tools) {
-          if (tool.tags) {
-            for (const tag of tool.tags) {
-              allTags.add(tag);
-            }
-          }
-        }
-
-        const skill: Skill = {
-          name: pluginName,
-          description: metadata.description,
-          tools,
-          keywords: Array.from(allKeywords),
-          tags: Array.from(allTags),
-          pluginName,
-        };
-
-        const dispose = feature.add(skill, pluginName);
-        plugin.recordFeatureContribution(feature.name, pluginName);
-        plugin.onDispose(dispose);
-      },
     };
   }
 }

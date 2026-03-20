@@ -2,6 +2,16 @@
 
 Zhin.js 是一个现代化的 TypeScript 机器人框架，采用 AsyncLocalStorage 上下文管理和热重载系统。
 
+## 架构权威文档（请先读）
+
+自动化助手应优先以下顺序建立心智模型，**下文若与之一致性冲突，以表中为准**：
+
+| 文件 | 内容 |
+|------|------|
+| 根目录 **`AGENTS.md`** | monorepo 约定 + 分层速览 + **入/出站消息链** + 关键源码路径 |
+| **`docs/architecture-overview.md`** | 分层详解、Mermaid 图、插件/适配器、出站发送链 |
+| **`docs/contributing/repo-structure.md`** | workspace glob、`src`/`lib`/`client`/`dist`、包命名（事实来源） |
+
 ## 项目架构
 
 ### 核心架构设计

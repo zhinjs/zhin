@@ -290,8 +290,9 @@ zhin new my-awesome-plugin
 
 ```bash
 # 编辑插件文件
-# plugins/my-awesome-plugin/app/index.ts  # 插件逻辑
-# plugins/my-awesome-plugin/client/       # 客户端页面
+# plugins/my-awesome-plugin/src/index.ts              # 插件逻辑
+# plugins/my-awesome-plugin/skills/my-awesome-plugin/SKILL.md  # AI 技能说明（可选完善）
+# plugins/my-awesome-plugin/client/                   # 控制台客户端页面
 
 # 保存后自动热重载 ⚡
 ```

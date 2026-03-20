@@ -40,12 +40,12 @@ This package contains code and assets from multiple sources:
 3. Noto Sans CJK Fonts (Simplified Chinese, Japanese, Korean)
    License: SIL Open Font License 1.1 (OFL)
    Copyright (c) Google
-   Source: https://fonts.google.com/noto
+   Source: https://github.com/googlefonts/noto-cjk (Sans/SubsetOTF)
    
    Files:
-   - fonts/NotoSansSC-Regular.ttf (Simplified Chinese)
-   - fonts/NotoSansJP-Regular.ttf (Japanese)
-   - fonts/NotoSansKR-Regular.ttf (Korean)
+   - fonts/NotoSansSC-Regular.otf (Simplified Chinese)
+   - fonts/NotoSansJP-Regular.otf (Japanese)
+   - fonts/NotoSansKR-Regular.otf (Korean)
    
    This Font Software is licensed under the SIL Open Font License, Version 1.1.
    This license is available with a FAQ at: https://openfontlicense.org

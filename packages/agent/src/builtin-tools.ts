@@ -19,7 +19,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { Logger, type PropertySchema } from '@zhin.js/core';
+import { Logger, type PropertySchema, type Plugin } from '@zhin.js/core';
 import { ZhinTool } from '@zhin.js/core';
 import { assertFileAccess, checkBashCommandSafety, shellEscape } from './file-policy.js';
 
@@ -40,6 +40,54 @@ function getDataDir(): string {
   const dir = path.join(process.cwd(), 'data');
   fs.mkdirSync(dir, { recursive: true });
   return dir;
+}
+
+/** Workspace / ~/.zhin / data 下 skills 根目录（与 activate_skill 扫描顺序一致的前缀） */
+function buildStandardSkillDirs(): string[] {
+  return [
+    path.join(process.cwd(), 'skills'),
+    path.join(os.homedir(), '.zhin', 'skills'),
+    path.join(getDataDir(), 'skills'),
+  ];
+}
+
+/**
+ * 从根插件树收集：根插件与**直接子插件**包目录下的 `skills/`（其下为 `<name>/SKILL.md`）
+ */
+export function collectPluginSkillSearchRoots(root: Plugin | null | undefined): string[] {
+  if (!root) return [];
+  const dirs: string[] = [];
+  const push = (d: string) => {
+    if (d && !dirs.includes(d)) dirs.push(d);
+  };
+  const fromPlugin = (p: Plugin) => {
+    if (!p?.filePath) return;
+    push(path.join(path.dirname(p.filePath), 'skills'));
+  };
+  fromPlugin(root);
+  for (const child of root.children || []) {
+    fromPlugin(child);
+  }
+  return dirs;
+}
+
+/**
+ * 技能发现与 activate_skill 查找共用：标准目录 + 已加载插件包 skills/
+ */
+export function getSkillSearchDirectories(root?: Plugin | null): string[] {
+  const list = [...buildStandardSkillDirs()];
+  for (const d of collectPluginSkillSearchRoots(root ?? undefined)) {
+    if (!list.includes(d)) list.push(d);
+  }
+  return list;
+}
+
+function mergeSkillDirsWithResolver(resolver?: () => string[]): string[] {
+  const list = [...buildStandardSkillDirs()];
+  for (const d of resolver?.() ?? []) {
+    if (d && !list.includes(d)) list.push(d);
+  }
+  return list;
 }
 
 /** 展开路径中的 ~ 为实际 home 目录 */
@@ -68,6 +116,10 @@ function nodeErrToFileMessage(err: unknown, filePath: string, kind: 'read' | 'wr
 export interface BuiltinToolsOptions {
   /** Max chars for skill instruction extraction (model-size-aware) */
   skillInstructionMaxChars?: number;
+  /**
+   * 返回额外技能根目录（每个根下为 `<skillName>/SKILL.md`），通常为已加载插件的 `.../skills`
+   */
+  pluginSkillRootsResolver?: () => string[];
 }
 
 /**
@@ -76,6 +128,7 @@ export interface BuiltinToolsOptions {
 export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
   const DATA_DIR = getDataDir();
   const skillMaxChars = options?.skillInstructionMaxChars ?? 4000;
+  const skillDirList = () => mergeSkillDirsWithResolver(options?.pluginSkillRootsResolver);
 
   const tools: ZhinTool[] = [];
 
@@ -482,13 +535,8 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
       .param('name', { type: 'string', description: '技能名称' }, true)
       .execute(async (args) => {
         try {
-          // 与 discoverWorkspaceSkills 顺序一致：Workspace > Local > Bundled
-          const dirs = [
-            path.join(process.cwd(), 'skills'),
-            path.join(os.homedir(), '.zhin', 'skills'),
-            path.join(DATA_DIR, 'skills'),
-          ];
-          for (const dir of dirs) {
+          // 与 discoverWorkspaceSkills / getSkillSearchDirectories 顺序一致
+          for (const dir of skillDirList()) {
             const skillPath = path.join(dir, args.name, 'SKILL.md');
             if (fs.existsSync(skillPath)) {
               const fullContent = await fs.promises.readFile(skillPath, 'utf-8');
@@ -684,18 +732,16 @@ export interface SkillMeta {
 
 /**
  * 扫描技能目录，发现 SKILL.md 技能文件
- * 加载顺序：Workspace（cwd/skills）> Local（~/.zhin/skills）> Bundled（data/skills），同名先发现者优先
+ * 加载顺序：Workspace（cwd/skills）> Local（~/.zhin/skills）> data/skills > 已加载插件包 skills/，同名先发现者优先
  * 支持平台/依赖兼容性过滤。内置技能由 create-zhin 在创建项目时写入 skills/summarize 等。
+ *
+ * @param root 根插件（可选）：用于追加插件包内 `skills/` 扫描，与 `activate_skill` 查找路径一致
  */
-export async function discoverWorkspaceSkills(): Promise<SkillMeta[]> {
+export async function discoverWorkspaceSkills(root?: Plugin | null): Promise<SkillMeta[]> {
   const skills: SkillMeta[] = [];
   const seenNames = new Set<string>();
   const dataDir = getDataDir();
-  const skillDirs = [
-    path.join(process.cwd(), 'skills'),           // Workspace
-    path.join(os.homedir(), '.zhin', 'skills'),  // Local
-    path.join(dataDir, 'skills'),                 // Bundled / 默认 data
-  ];
+  const skillDirs = getSkillSearchDirectories(root ?? undefined);
 
   // 确保 data/skills 目录存在
   const defaultSkillDir = path.join(dataDir, 'skills');

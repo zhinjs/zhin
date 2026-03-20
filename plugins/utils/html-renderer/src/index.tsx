@@ -1,33 +1,22 @@
 /**
- * HTML 渲染器插件
- * 
- * 使用 @zhin.js/satori 将 HTML/CSS 转换为 SVG，
- * 使用 @resvg/resvg-js 将 SVG 转换为 PNG
+ * HTML → 图片：@zhin.js/satori（htmlToSvg）+ @resvg/resvg-js（PNG）
  */
 
 import { usePlugin, defineComponent, ZhinTool } from "zhin.js";
-import satori, { getDefaultFonts, type BuiltinFont } from '@zhin.js/satori';
+import { htmlToSvg, getAllBuiltinFonts } from '@zhin.js/satori';
 import { Resvg } from '@resvg/resvg-js';
-import { JSDOM } from 'jsdom';
-import type { 
-  HtmlRendererConfig, 
-  HtmlRendererService, 
-  RenderOptions, 
-  RenderResult, 
+import type {
+  HtmlRendererConfig,
+  HtmlRendererService,
+  RenderOptions,
+  RenderResult,
   FontConfig,
-  OutputFormat 
+  OutputFormat,
 } from './types.js';
-
-// ============================================================================
-// 插件初始化
-// ============================================================================
+import { registerAiTextAsImageOutput } from './ai-text-as-image.js';
 
 const plugin = usePlugin();
-const { logger, provide, addComponent } = plugin;
-
-// ============================================================================
-// 默认配置
-// ============================================================================
+const { logger, provide, addComponent, root } = plugin;
 
 const DEFAULT_CONFIG: Required<HtmlRendererConfig> = {
   defaultWidth: 800,
@@ -35,71 +24,60 @@ const DEFAULT_CONFIG: Required<HtmlRendererConfig> = {
   defaultBackgroundColor: '#ffffff',
   cacheFonts: true,
   fontUrls: [],
+  aiTextAsImage: false,
 };
 
-// ============================================================================
-// 字体管理
-// ============================================================================
-
-// 字体缓存
 const fontCache: Map<string, FontConfig> = new Map();
-
-// 默认字体加载状态
 let defaultFontLoaded = false;
 
-/**
- * 加载默认字体（使用 @zhin.js/satori 内置字体）
- */
-async function loadDefaultFont(): Promise<FontConfig | null> {
-  if (defaultFontLoaded) {
-    const cached = fontCache.get('default');
-    return cached || null;
-  }
+function toFontConfig(f: { name: string; data: ArrayBuffer | Buffer; weight?: FontConfig['weight']; style?: FontConfig['style'] }): FontConfig {
+  return { name: f.name, data: f.data, weight: f.weight, style: f.style };
+}
 
-  try {
-    // 使用 @zhin.js/satori 内置的字体
-    const builtinFonts = getDefaultFonts();
-    
-    if (builtinFonts.length > 0) {
-      // 注册所有内置字体
-      for (const font of builtinFonts) {
-        const fontConfig: FontConfig = {
-          name: font.name,
-          data: font.data,
-          weight: font.weight,
-          style: font.style,
-        };
-        fontCache.set(`${font.name}-${font.weight}`, fontConfig);
-        logger.debug(`Builtin font registered: ${font.name} (${Math.round(font.data.byteLength / 1024)}KB)`);
-      }
-      
-      // 设置第一个字体为默认
-      const defaultFont = builtinFonts[0];
-      const defaultFontConfig: FontConfig = {
-        name: defaultFont.name,
-        data: defaultFont.data,
-        weight: defaultFont.weight,
-        style: defaultFont.style,
-      };
-      
-      fontCache.set('default', defaultFontConfig);
-      defaultFontLoaded = true;
-      
-      logger.info(`Default fonts loaded from @zhin.js/satori: ${builtinFonts.map(f => f.name).join(', ')}`);
-      return defaultFontConfig;
-    }
-  } catch (error) {
-    logger.warn('Failed to load builtin fonts:', error);
+/** 合并字体：同名同 weight 同 style **后者覆盖前者**（便于 options.fonts 覆盖缓存） */
+function uniqueFontsForRender(list: FontConfig[]): FontConfig[] {
+  const m = new Map<string, FontConfig>();
+  for (const f of list) {
+    const k = `${f.name}\0${f.weight ?? 400}\0${f.style ?? 'normal'}`;
+    m.set(k, f);
   }
+  return [...m.values()];
+}
 
-  logger.warn('No fonts available');
-  defaultFontLoaded = true;
-  return null;
+/** 多段列表依次合并，**后出现的同键覆盖** */
+function mergeFontLists(...lists: FontConfig[][]): FontConfig[] {
+  const flat: FontConfig[] = [];
+  for (const list of lists) flat.push(...list);
+  return uniqueFontsForRender(flat);
 }
 
 /**
- * 从 URL 加载字体
+ * 同步把 @zhin.js/satori 内置轮廓字写入 fontCache，并保证任意一次 render 前已执行。
+ * 避免「fontCache 里已有部分字体 → allFonts 非空 → 未合并 CJK → 第一次中文豆腐块、第二次才对」。
  */
+function ensureBuiltinFontsCached(): void {
+  if (defaultFontLoaded) return;
+
+  try {
+    const builtinFonts = getAllBuiltinFonts();
+    if (builtinFonts.length > 0) {
+      for (const font of builtinFonts) {
+        const fc = toFontConfig(font);
+        fontCache.set(`${font.name}-${font.weight}`, fc);
+        logger.debug(`Builtin font: ${font.name} (${Math.round(font.data.byteLength / 1024)}KB)`);
+      }
+      fontCache.set('default', toFontConfig(builtinFonts[0]));
+      defaultFontLoaded = true;
+      logger.info(`Default fonts: ${builtinFonts.map((f) => f.name).join(', ')}`);
+      return;
+    }
+  } catch (e) {
+    logger.warn('Builtin fonts failed:', e);
+  }
+  defaultFontLoaded = true;
+  logger.warn('No fonts available');
+}
+
 async function loadFontFromUrl(url: string, name: string, weight: FontConfig['weight'] = 400): Promise<FontConfig | null> {
   try {
     const cacheKey = `${name}-${weight}`;
@@ -132,34 +110,15 @@ async function loadFontFromUrl(url: string, name: string, weight: FontConfig['we
   }
 }
 
-// ============================================================================
-// Emoji 支持
-// ============================================================================
-
-/**
- * 将 emoji 代码点转换为 Twemoji URL
- */
 function emojiToTwemojiUrl(emoji: string): string {
-  // 获取 emoji 的代码点
   const codePoints: string[] = [];
   for (const char of emoji) {
     const cp = char.codePointAt(0);
-    if (cp) {
-      // 跳过变体选择器 (FE0F)
-      if (cp !== 0xfe0f) {
-        codePoints.push(cp.toString(16));
-      }
-    }
+    if (cp && cp !== 0xfe0f) codePoints.push(cp.toString(16));
   }
-  
-  const filename = codePoints.join('-');
-  // 使用 jsDelivr CDN 的 Twemoji
-  return `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/${filename}.svg`;
+  return `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/${codePoints.join('-')}.svg`;
 }
 
-/**
- * 加载 emoji 图片
- */
 async function loadEmojiImage(emoji: string): Promise<string | null> {
   try {
     const url = emojiToTwemojiUrl(emoji);
@@ -180,74 +139,27 @@ async function loadEmojiImage(emoji: string): Promise<string | null> {
   }
 }
 
-// Emoji 缓存
 const emojiCache: Map<string, string> = new Map();
 
-/**
- * 加载额外资源（字体和 emoji）
- */
 async function loadAdditionalAsset(
   languageCode: string,
   segment: string
 ): Promise<string | null> {
-  // 如果是 emoji
   if (languageCode === 'emoji') {
-    // 检查缓存
-    if (emojiCache.has(segment)) {
-      return emojiCache.get(segment)!;
-    }
-    
+    if (emojiCache.has(segment)) return emojiCache.get(segment)!;
     const result = await loadEmojiImage(segment);
-    if (result) {
-      emojiCache.set(segment, result);
-    }
+    if (result) emojiCache.set(segment, result);
     return result;
   }
-  
-  // 其他语言代码暂不处理
   return null;
 }
 
-// ============================================================================
-// 渲染引擎
-// ============================================================================
-
-/**
- * 将 HTML 包装为完整的 HTML 文档
- */
-function wrapHtml(html: string, backgroundColor: string = '#ffffff'): string {
-  // 如果已经是完整 HTML，直接返回
-  if (html.includes('<!DOCTYPE') || html.includes('<html')) {
-    return html;
-  }
-  
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    body {
-      display: flex;
-      flex-direction: column;
-      background-color: ${backgroundColor};
-      font-family: "Noto Sans SC", sans-serif;
-    }
-  </style>
-</head>
-<body>
-  ${html}
-</body>
-</html>`;
+/** 片段包一层根节点（satori 用内联样式即可，不必整页 HTML + &lt;style&gt;） */
+function wrapHtmlFragment(html: string, backgroundColor: string): string {
+  if (html.includes('<!DOCTYPE') || html.includes('<html')) return html;
+  return `<div style="display:flex;flex-direction:column;width:100%;height:100%;margin:0;padding:0;box-sizing:border-box;background-color:${backgroundColor};font-family:Noto Sans SC,sans-serif">${html}</div>`;
 }
 
-/**
- * 渲染 HTML 为 SVG（使用 @zhin.js/satori 的 JSDOM 方式）
- */
 async function renderHtmlToSvg(
   html: string,
   width: number,
@@ -255,57 +167,34 @@ async function renderHtmlToSvg(
   fonts: FontConfig[],
   backgroundColor?: string
 ): Promise<{ svg: string; width: number; height: number }> {
-  // 确保至少有一个字体
-  let finalFonts = fonts;
+  ensureBuiltinFontsCached();
+  /** 无论调用方是否已带字体，都先铺一层内置 CJK+拉丁，再叠缓存/ options（后者可覆盖同名） */
+  const finalFonts = mergeFontLists(getAllBuiltinFonts().map(toFontConfig), fonts);
   if (finalFonts.length === 0) {
-    const defaultFont = await loadDefaultFont();
-    if (defaultFont) {
-      finalFonts = [defaultFont];
-    }
+    logger.warn('No fonts: non-ASCII text may fail');
   }
 
-  if (finalFonts.length === 0) {
-    logger.warn('No fonts available, rendering may fail for non-ASCII characters');
-  }
-
-  // 包装 HTML
-  const wrappedHtml = wrapHtml(html, backgroundColor);
-  
-  // 使用 JSDOM 解析 HTML
-  const dom = new JSDOM(wrappedHtml);
-
-  // 使用 @zhin.js/satori 渲染
-  const satoriOptions: any = {
+  const svg = await htmlToSvg(wrapHtmlFragment(html, backgroundColor ?? '#ffffff'), {
     width,
-    fonts: finalFonts.map(f => ({
+    ...(height != null && { height }),
+    fonts: finalFonts.map((f) => ({
       name: f.name,
       data: f.data,
       weight: f.weight,
       style: f.style,
     })),
-    // 支持 emoji 加载
-    loadAdditionalAsset,
+    loadAdditionalAsset: async (code, seg) => (await loadAdditionalAsset(code, seg)) ?? '',
+  });
+
+  const wm = svg.match(/width="(\d+)"/);
+  const hm = svg.match(/height="(\d+)"/);
+  return {
+    svg,
+    width: wm ? parseInt(wm[1], 10) : width,
+    height: hm ? parseInt(hm[1], 10) : height || width,
   };
-  
-  if (height) {
-    satoriOptions.height = height;
-  }
-
-  const svg = await satori(dom, satoriOptions);
-
-  // 从 SVG 中解析实际尺寸
-  const widthMatch = svg.match(/width="(\d+)"/);
-  const heightMatch = svg.match(/height="(\d+)"/);
-  
-  const actualWidth = widthMatch ? parseInt(widthMatch[1], 10) : width;
-  const actualHeight = heightMatch ? parseInt(heightMatch[1], 10) : height || width;
-
-  return { svg, width: actualWidth, height: actualHeight };
 }
 
-/**
- * 将 SVG 转换为 PNG
- */
 function svgToPng(svg: string, scale: number = 1): Buffer {
   const resvg = new Resvg(svg, {
     fitTo: scale !== 1 ? {
@@ -318,21 +207,14 @@ function svgToPng(svg: string, scale: number = 1): Buffer {
   return Buffer.from(pngData.asPng());
 }
 
-// ============================================================================
-// 渲染服务
-// ============================================================================
-
-/**
- * 创建渲染服务
- */
 function createHtmlRendererService(config: HtmlRendererConfig = {}): HtmlRendererService {
   const mergedConfig = { ...DEFAULT_CONFIG, ...config };
-  
-  // 注册默认字体
+  /** 先内置字库，再写配置里的 defaultFonts，同名同 weight 时以配置为准 */
+  ensureBuiltinFontsCached();
   for (const font of mergedConfig.defaultFonts) {
     fontCache.set(`${font.name}-${font.weight || 400}`, font);
   }
-  
+
   return {
     async render(html: string, options: RenderOptions = {}): Promise<RenderResult> {
       const {
@@ -344,13 +226,9 @@ function createHtmlRendererService(config: HtmlRendererConfig = {}): HtmlRendere
         scale = 1,
       } = options;
 
-      // 合并字体
-      const allFonts = [
-        ...Array.from(fontCache.values()),
-        ...fonts,
-      ];
+      ensureBuiltinFontsCached();
+      const allFonts = uniqueFontsForRender([...fontCache.values(), ...fonts]);
 
-      // 渲染为 SVG
       const { svg, width: actualWidth, height: actualHeight } = await renderHtmlToSvg(
         html,
         width,
@@ -360,16 +238,9 @@ function createHtmlRendererService(config: HtmlRendererConfig = {}): HtmlRendere
       );
 
       if (format === 'svg') {
-        return {
-          data: svg,
-          format: 'svg',
-          width: actualWidth,
-          height: actualHeight,
-          mimeType: 'image/svg+xml',
-        };
+        return { data: svg, format: 'svg', width: actualWidth, height: actualHeight, mimeType: 'image/svg+xml' };
       }
 
-      // 转换为 PNG
       const png = svgToPng(svg, scale);
       
       return {
@@ -381,11 +252,8 @@ function createHtmlRendererService(config: HtmlRendererConfig = {}): HtmlRendere
       };
     },
 
-    // renderJsx 保留用于向后兼容，但内部转换为 HTML
     async renderJsx(element: JSX.Element, options: RenderOptions = {}): Promise<RenderResult> {
-      // 将 JSX 元素序列化为 HTML（简化实现）
-      const html = serializeJsxToHtml(element);
-      return this.render(html, options);
+      return this.render(serializeJsxToHtml(element), options);
     },
 
     registerFont(font: FontConfig): void {
@@ -406,9 +274,6 @@ function createHtmlRendererService(config: HtmlRendererConfig = {}): HtmlRendere
   };
 }
 
-/**
- * 简单的 JSX 到 HTML 序列化（用于向后兼容）
- */
 function serializeJsxToHtml(element: any): string {
   if (typeof element === 'string' || typeof element === 'number') {
     return String(element);
@@ -426,19 +291,13 @@ function serializeJsxToHtml(element: any): string {
     const { type, props = {} } = element;
     const { children, style, ...restProps } = props;
     
-    // 处理样式
     let styleStr = '';
     if (style && typeof style === 'object') {
       styleStr = Object.entries(style)
-        .map(([key, value]) => {
-          // 转换 camelCase 到 kebab-case
-          const cssKey = key.replace(/([A-Z])/g, '-$1').toLowerCase();
-          return `${cssKey}: ${value}`;
-        })
+        .map(([key, value]) => `${key.replace(/([A-Z])/g, '-$1').toLowerCase()}: ${value}`)
         .join('; ');
     }
-    
-    // 构建属性字符串
+
     const attrs = Object.entries(restProps)
       .filter(([key]) => key !== 'dangerouslySetInnerHTML')
       .map(([key, value]) => `${key}="${value}"`)
@@ -446,16 +305,12 @@ function serializeJsxToHtml(element: any): string {
     
     const styleAttr = styleStr ? ` style="${styleStr}"` : '';
     const attrStr = attrs ? ` ${attrs}` : '';
-    
-    // 处理 dangerouslySetInnerHTML
-    if (props.dangerouslySetInnerHTML && props.dangerouslySetInnerHTML.__html) {
+
+    if (props.dangerouslySetInnerHTML?.__html) {
       return `<${type}${attrStr}${styleAttr}>${props.dangerouslySetInnerHTML.__html}</${type}>`;
     }
-    
-    // 处理子元素
+
     const childrenHtml = children ? serializeJsxToHtml(children) : '';
-    
-    // 自闭合标签
     const selfClosingTags = ['img', 'br', 'hr', 'input', 'meta', 'link'];
     if (selfClosingTags.includes(type) && !childrenHtml) {
       return `<${type}${attrStr}${styleAttr} />`;
@@ -467,34 +322,42 @@ function serializeJsxToHtml(element: any): string {
   return '';
 }
 
-// ============================================================================
-// 注册服务
-// ============================================================================
-
-// 获取配置
 const configService = plugin.root.inject('config');
 const appConfig = configService?.get<{ htmlRenderer?: HtmlRendererConfig }>('zhin.config.yml') || {};
 const pluginConfig = appConfig.htmlRenderer || {};
-
-// 创建服务实例
+const mergedHtmlRendererConfig: HtmlRendererConfig = { ...DEFAULT_CONFIG, ...pluginConfig };
 const rendererService = createHtmlRendererService(pluginConfig);
 
-// 注册为 Context
-(provide as any)({
-  name: 'html-renderer',
-  description: 'HTML to image rendering service using @zhin.js/satori',
-  value: rendererService,
+registerAiTextAsImageOutput({
+  root,
+  logger,
+  fullConfig: mergedHtmlRendererConfig,
+  getRenderer: () => rendererService,
 });
 
-logger.debug('HTML Renderer service registered (using @zhin.js/satori)');
+(provide as any)({
+  name: 'html-renderer',
+  description: 'HTML → image (satori + resvg)',
+  value: rendererService,
+});
+logger.debug('html-renderer service registered');
 
-// ============================================================================
-// JSX 组件
-// ============================================================================
+/** PNG 渲染并生成 data URL（供工具复用） */
+async function renderPngPayload(
+  html: string,
+  opts: Pick<RenderOptions, 'width' | 'height' | 'backgroundColor' | 'scale'> = {}
+) {
+  const result = await rendererService.render(html, { ...opts, format: 'png' });
+  const base64 = (result.data as Buffer).toString('base64');
+  return {
+    width: result.width,
+    height: result.height,
+    format: result.format,
+    base64,
+    dataUrl: `data:${result.mimeType};base64,${base64}`,
+  };
+}
 
-/**
- * 渲染 HTML 为图片的组件
- */
 const RenderImage = defineComponent(async function RenderImage(props: {
   children?: any;
   html?: string;
@@ -534,13 +397,6 @@ const RenderImage = defineComponent(async function RenderImage(props: {
 
 addComponent(RenderImage);
 
-// ============================================================================
-// AI 工具
-// ============================================================================
-
-/**
- * HTML 渲染工具 - 供 AI 使用
- */
 const renderHtmlTool = new ZhinTool('html_render')
   .desc('将 HTML/CSS 代码渲染为图片')
   .tag('render', 'image', 'html')
@@ -550,67 +406,34 @@ const renderHtmlTool = new ZhinTool('html_render')
   .param('backgroundColor', { type: 'string', description: '背景颜色（默认 #ffffff）' })
   .execute(async ({ html, width, height, backgroundColor }) => {
     try {
-      const result = await rendererService.render(
-        html as string,
-        {
-          width: width as number | undefined,
-          height: height as number | undefined,
-          backgroundColor: backgroundColor as string | undefined,
-          format: 'png',
-        }
-      );
-
-      // 转换为 base64
-      const base64 = (result.data as Buffer).toString('base64');
-
-      return {
-        success: true,
-        width: result.width,
-        height: result.height,
-        format: result.format,
-        base64,
-        dataUrl: `data:${result.mimeType};base64,${base64}`,
-      };
+      const p = await renderPngPayload(html as string, {
+        width: width as number | undefined,
+        height: height as number | undefined,
+        backgroundColor: backgroundColor as string | undefined,
+      });
+      return { success: true, ...p };
     } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   })
-  .action(async (message, result) => {
-    const html = result.params.html as string;
-    const width = result.params.width as number | undefined;
-    const height = result.params.height as number | undefined;
-    const backgroundColor = result.params.backgroundColor as string | undefined;
-
+  .action(async (_message, result) => {
     try {
-      const renderResult = await rendererService.render(html, {
-        width,
-        height,
-        backgroundColor,
-        format: 'png',
+      const p = await renderPngPayload(result.params.html as string, {
+        width: result.params.width as number | undefined,
+        height: result.params.height as number | undefined,
+        backgroundColor: result.params.backgroundColor as string | undefined,
       });
-
-      const base64 = (renderResult.data as Buffer).toString('base64');
-      const dataUrl = `data:${renderResult.mimeType};base64,${base64}`;
-
-      return <image url={dataUrl} />;
+      return <image url={p.dataUrl} />;
     } catch (error) {
       return `❌ 渲染失败: ${error instanceof Error ? error.message : String(error)}`;
     }
   });
 
-// 注册工具
 const toolService = plugin.root.inject('tool');
 if (toolService) {
   toolService.addTool(renderHtmlTool, plugin.name);
-  logger.debug('HTML render tool registered');
 }
 
-/**
- * 生成卡片图片工具 - 供 AI 使用
- */
 const generateCardTool = new ZhinTool('html_card')
   .desc('生成美观的卡片图片（自动生成 HTML）')
   .tag('render', 'image', 'card')
@@ -658,25 +481,10 @@ const generateCardTool = new ZhinTool('html_card')
 </div>`;
 
     try {
-      const result = await rendererService.render(html, {
-        width: width as number,
-        format: 'png',
-      });
-
-      const base64 = (result.data as Buffer).toString('base64');
-
-      return {
-        success: true,
-        width: result.width,
-        height: result.height,
-        base64,
-        dataUrl: `data:${result.mimeType};base64,${base64}`,
-      };
+      const p = await renderPngPayload(html, { width: width as number });
+      return { success: true, width: p.width, height: p.height, base64: p.base64, dataUrl: p.dataUrl };
     } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   })
   .action(async (message, result) => {
@@ -694,18 +502,13 @@ const generateCardTool = new ZhinTool('html_card')
     return <image url={executeResult.dataUrl!} />;
   });
 
-// 注册卡片工具
 if (toolService) {
   toolService.addTool(generateCardTool, plugin.name);
-  logger.debug('HTML card tool registered');
 }
-
-// ============================================================================
-// 导出
-// ============================================================================
 
 export type { 
   HtmlRendererConfig, 
+  HtmlRendererAiTextAsImageConfig,
   HtmlRendererService, 
   RenderOptions, 
   RenderResult, 

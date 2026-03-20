@@ -33,12 +33,13 @@
     "directory": "plugins/adapters/icqq"
   },
   "files": [
-    "lib",
-    "README.md",
-    "CHANGELOG.md",
-    "client",
     "src",
-    "dist"
+    "lib",
+    "client",
+    "dist",
+    "skills",
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsc && (test -f ../../services/console/lib/bin.js && node ../../services/console/lib/bin.js build || echo 'Skipping client build: console not built yet')",

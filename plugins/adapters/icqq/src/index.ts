@@ -25,7 +25,7 @@ export { IcqqBot } from "./bot.js";
 export { IcqqAdapter } from "./adapter.js";
 
 const plugin = usePlugin();
-const { provide, useContext, addCommand } = plugin;
+const { provide, useContext, addCommand, root } = plugin;
 
 provide({
   name: "icqq",
@@ -66,7 +66,40 @@ useContext("web", (web: WebServer) => {
   return dispose;
 });
 
-useContext("router",'icqq', async (router: Router, icqq: IcqqAdapter) => {
+useContext("router", "icqq", async (router: Router, icqq: IcqqAdapter) => {
+  const loginAssist = root.inject("loginAssist" as any) as
+    | {
+        listPending: () => unknown[];
+        submit: (id: string, value: string | Record<string, unknown>) => boolean;
+        cancel: (id: string, reason?: string) => boolean;
+      }
+    | undefined;
+  if (loginAssist) {
+    router.get("/api/login-assist/pending", (ctx: any) => {
+      ctx.body = loginAssist.listPending();
+    });
+    router.post("/api/login-assist/submit", async (ctx: any) => {
+      const body = ctx.request?.body as { id: string; value?: string | Record<string, unknown> };
+      if (!body?.id) {
+        ctx.status = 400;
+        ctx.body = { error: "missing id" };
+        return;
+      }
+      const ok = loginAssist.submit(body.id, body.value ?? "");
+      ctx.body = { ok };
+    });
+    router.post("/api/login-assist/cancel", async (ctx: any) => {
+      const body = ctx.request?.body as { id: string; reason?: string };
+      if (!body?.id) {
+        ctx.status = 400;
+        ctx.body = { error: "missing id" };
+        return;
+      }
+      const ok = loginAssist.cancel(body.id, body.reason);
+      ctx.body = { ok };
+    });
+  }
+
   router.get("/api/icqq/bots", async (ctx) => {
     try {
       const bots = Array.from(icqq.bots.values());

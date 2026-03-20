@@ -258,11 +258,4 @@ if (config.tts?.enabled !== false) {
 
 allTools.forEach((tool) => plugin.addTool(tool.toTool()));
 
-// 声明 Skill 元数据
-plugin.declareSkill({
-  description: '语音输入(STT)和语音输出(TTS)能力，支持语音转文字和文字转语音',
-  keywords: ['语音', '朗读', 'stt', 'tts', 'voice', '转文字', '转语音'],
-  tags: ['voice', 'audio', 'stt', 'tts'],
-});
-
 logger.info(`Voice plugin loaded (STT: ${config.stt?.enabled !== false ? 'on' : 'off'}, TTS: ${config.tts?.enabled !== false ? 'on' : 'off'})`);

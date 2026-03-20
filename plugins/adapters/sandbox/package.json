@@ -13,12 +13,13 @@
     }
   },
   "files": [
-    "lib",
-    "README.md",
-    "CHANGELOG.md",
-    "client",
     "src",
-    "dist"
+    "lib",
+    "client",
+    "dist",
+    "skills",
+    "README.md",
+    "CHANGELOG.md"
   ],
   "keywords": [
     "zhin",
@@ -38,7 +39,7 @@
   "repository": {
     "url": "git+https://github.com/zhinjs/zhin.git",
     "type": "git",
-    "directory": "plugins/adapters/process"
+    "directory": "plugins/adapters/sandbox"
   },
   "scripts": {
     "build": "tsc && (test -f ../../services/console/lib/bin.js && node ../../services/console/lib/bin.js build || echo 'Skipping client build: console not built yet')",

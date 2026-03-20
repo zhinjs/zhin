@@ -177,7 +177,26 @@ AI 不会处理所有消息。只有满足以下条件之一时才会触发：
 
 以下消息会被排除：
 - 以 `ignorePrefixes` 中的前缀开头的消息（通常是命令）
-- 已被命令系统匹配到的消息
+
+### MessageDispatcher：指令与 AI 双轨
+
+`message.receive` 进入 **MessageDispatcher** 后：
+
+- **独立判定（默认）**：`dispatcher.mode: dual` 时，「是否走指令」与「是否走 AI」**分别**判断，可同时为真；可按顺序各回复一次（`$reply` 两次）。
+- **顺序与开关**：`dispatcher.order` 为 `command-first`（默认）或 `ai-first`；`allowDualReply: false` 时若双命中，只执行顺序上的**第一个**分支。
+- **互斥（旧行为）**：`dispatcher.mode: exclusive` 时与早期版本一致——命中指令前缀后不再走 AI。
+- **出站润色**：与 **`Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage`** 同一管道。`dispatcher.addOutboundPolish(handler)` 会往**根插件**注册额外的 `before.sendMessage`；仅当通过 **`MessageDispatcher.replyWithPolish`** 回复时，框架会用异步上下文带上入站 `message` 与 `source`（`command` / `ai`），润色函数与手写 `before.sendMessage` 内可通过 **`getOutboundReplyStore()`**（`@zhin.js/core` / dispatcher 导出）读取。直接 `message.$reply` 的调用仍会走 `before.sendMessage`，但**没有**该异步上下文，润色 handler 应跳过（`getOutboundReplyStore()` 为空）。
+- **配置示例**（应用根配置，如 `zhin.config.yml`）：
+
+```yaml
+dispatcher:
+  mode: dual
+  order: command-first
+  allowDualReply: true
+# 技能：使用磁盘 SKILL.md（工作区 / ~/.zhin/skills / data/skills / 各包 skills/），无代码 declareSkill
+```
+
+- **notice / request**：本期仍由适配器 `dispatch` 事件，**不**经 MessageDispatcher；与消息双轨对齐留待后续。
 
 ## 消息处理流程
 
@@ -239,17 +258,9 @@ addTool({
 })
 ```
 
-### 声明技能
+### 技能（文件化）
 
-```typescript
-const { declareSkill } = usePlugin()
-
-declareSkill({
-  description: '音乐搜索和播放服务',
-  keywords: ['音乐', '歌', '播放', '听'],
-  tags: ['music', '娱乐'],
-})
-```
+在插件或适配器包内维护 `skills/<name>/SKILL.md`（见 [工具与技能](/advanced/tools-skills)）。Core 不再提供 `declareSkill` API；技能记录由 Agent 等运行时同步到 `SkillFeature`。
 
 ### 安装外部技能 (install_skill)
 

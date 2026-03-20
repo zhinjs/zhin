@@ -1,4 +1,4 @@
-import { Bot, DatabaseConfig, Databases, MessageFilterConfig } from "@zhin.js/core";
+import { Bot, DatabaseConfig, Databases, MessageFilterConfig, type DualRouteConfig } from "@zhin.js/core";
 import { LogLevel } from "@zhin.js/logger";
 
 /**
@@ -30,6 +30,19 @@ export interface AppConfig<T extends keyof Databases = keyof Databases> {
   };
   /** 消息过滤配置 */
   message_filter?: MessageFilterConfig;
+  /**
+   * MessageDispatcher 双轨分流：指令与 AI 独立判定、顺序、是否双次回复等
+   * @see @zhin.js/core createMessageDispatcher
+   */
+  dispatcher?: DualRouteConfig;
+  /**
+   * 统一收件箱：将各适配器的消息、请求、通知归一化后写入内置数据库。
+   * 需同时配置 database 方可生效。
+   */
+  inbox?: {
+    /** 是否启用统一收件箱存储，默认 false */
+    enabled?: boolean;
+  };
   /** 插件配置（键为插件名，值为配置对象） */
   [key: string]: any;
 }

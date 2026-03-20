@@ -5,7 +5,7 @@
 import * as path from 'path';
 import { getPlugin, Scheduler, getScheduler, setScheduler, type MessageType, type SendOptions } from '@zhin.js/core';
 import { ZhinAgent } from '../zhin-agent/index.js';
-import { createBuiltinTools } from '../builtin-tools.js';
+import { collectPluginSkillSearchRoots, createBuiltinTools } from '../builtin-tools.js';
 import { resolveSkillInstructionMaxChars, DEFAULT_CONFIG } from '../zhin-agent/config.js';
 import { PersistentCronEngine, setCronManager } from '../cron-engine.js';
 import type { AIServiceRefs } from './shared-refs.js';
@@ -48,7 +48,10 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     agent.initSubagentManager(() => {
       const modelName = provider.models[0] || '';
       const fullConfig = { ...DEFAULT_CONFIG, ...agentConfig } as Required<import('../zhin-agent/config.js').ZhinAgentConfig>;
-      const zhinTools = createBuiltinTools({ skillInstructionMaxChars: resolveSkillInstructionMaxChars(fullConfig, modelName) });
+      const zhinTools = createBuiltinTools({
+        skillInstructionMaxChars: resolveSkillInstructionMaxChars(fullConfig, modelName),
+        pluginSkillRootsResolver: () => collectPluginSkillSearchRoots(root),
+      });
       return zhinTools.map(zt => {
         const t = zt.toTool();
         return {

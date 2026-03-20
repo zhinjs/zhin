@@ -15,7 +15,6 @@ function findModulePath(id) {
 }
 
 const cwd = resolve(import.meta.dirname, '../../../..')
-console.log('cwd',cwd)
 const dist = cwd + '/plugins/services/console/dist'
 
 const externalBare = [

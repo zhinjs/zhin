@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-html-renderer",
-  "version": "0.0.29",
+  "version": "0.0.30",
   "description": "HTML to image rendering plugin for Zhin.js using @zhinjs/satori",
   "type": "module",
   "main": "./lib/index.js",
@@ -13,7 +13,11 @@
     "./package.json": "./package.json"
   },
   "files": [
+    "src",
     "lib",
+    "client",
+    "dist",
+    "skills",
     "README.md"
   ],
   "scripts": {
@@ -39,11 +43,9 @@
   "license": "MIT",
   "dependencies": {
     "@zhin.js/satori": "workspace:*",
-    "@resvg/resvg-js": "^2.6.2",
-    "jsdom": "^24.0.0"
+    "@resvg/resvg-js": "^2.6.2"
   },
   "devDependencies": {
-    "@types/jsdom": "^21.1.6",
     "typescript": "^5.3.3",
     "zhin.js": "workspace:*"
   },

@@ -28,9 +28,6 @@ const plugin = usePlugin()
   // ── 工具系统（ToolFeature 扩展）──
   addTool(input: Tool | ZhinTool, generateCommand?: boolean): () => void
   
-  // ── 技能系统（SkillFeature 扩展）──
-  declareSkill(metadata: SkillMetadata): void
-  
   // ── 定时任务（CronFeature 扩展）──
   addCron(cron: Cron): () => void
   
@@ -126,7 +123,7 @@ abstract class Feature<T> {
 |---------|------|-------------|------|
 | `CommandFeature` | `command` | `addCommand()` | 命令管理 |
 | `ToolFeature` | `tool` | `addTool()` | AI 工具管理 |
-| `SkillFeature` | `skill` | `declareSkill()` | AI 技能管理 |
+| `SkillFeature` | `skill` | （无插件扩展方法） | 技能由 Agent 从 `SKILL.md` 等注入 `add()` |
 | `ConfigFeature` | `config` | `addConfig()` | 配置管理 |
 | `CronFeature` | `cron` | `addCron()` | 定时任务 |
 | `PermissionFeature` | `permission` | `addPermission()` | 权限管理 |
@@ -244,7 +241,7 @@ search(query: string, options?: { maxResults?: number }): Skill[]
 collectAllTools(): Tool[]
 ```
 
-### SkillMetadata（declareSkill 参数）
+### SkillMetadata（SKILL.md frontmatter 常见字段）
 
 ```typescript
 interface SkillMetadata {
@@ -322,14 +319,6 @@ abstract class Adapter<R extends Bot> {
   
   // 获取所有工具
   getTools(): Tool[]
-  
-  // 声明 Skill（聚合所有工具为一个 Skill）
-  declareSkill(metadata: {
-    description: string
-    keywords?: string[]
-    tags?: string[]
-    conventions?: string   // 平台调用约定
-  }): void
   
   // 启动/停止
   abstract start(): Promise<void>

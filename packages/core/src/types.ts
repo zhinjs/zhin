@@ -64,6 +64,22 @@ export type MaybeArray<T>=T|T[]
  * 消息发送内容类型
  */
 export type SendContent=MaybeArray<string|MessageElement>
+
+/** 出站回复来源（指令 / AI），仅当经 MessageDispatcher.replyWithPolish 发出时由框架填入异步上下文 */
+export type OutboundReplySource = 'command' | 'ai'
+
+/**
+ * 出站润色上下文（`dispatcher.addOutboundPolish` 的 handler 签名的同构类型）。
+ * 与 {@link Adapter.sendMessage} → `before.sendMessage` 同一管道；需 `message`/`source` 时见 `getOutboundReplyStore`（dispatcher 导出）。
+ */
+export interface OutboundPolishContext {
+  message: Message
+  content: SendContent
+  source: OutboundReplySource
+}
+
+/** 返回 `SendContent` 则替换后续 `before.sendMessage` 与发送中的 content */
+export type OutboundPolishMiddleware = (ctx: OutboundPolishContext) => MaybePromise<SendContent | void>
 /**
  * 消息发送者信息
  */

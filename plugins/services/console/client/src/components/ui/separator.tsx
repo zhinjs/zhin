@@ -5,7 +5,9 @@ import { cn } from "@zhin.js/client"
 const Separator = React.forwardRef<
   React.ComponentRef<typeof SeparatorPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof SeparatorPrimitive.Root>
->(({ className, orientation = "horizontal", decorative = true, ...props }, ref) => (
+>(({ className, orientation: orientationProp, decorative = true, ...props }, ref) => {
+  const orientation = (orientationProp ?? "horizontal") as "vertical" | "horizontal"
+  return (
   <SeparatorPrimitive.Root
     ref={ref}
     decorative={decorative}
@@ -17,7 +19,8 @@ const Separator = React.forwardRef<
     )}
     {...props}
   />
-))
+  )
+})
 Separator.displayName = "Separator"
 
 export { Separator }

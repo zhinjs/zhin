@@ -9,6 +9,7 @@ import { registerAI } from './setup/register-ai.js';
 import { connectBots } from './setup/connect-bots.js';
 import { loadPlugins } from './setup/load-plugins.js';
 import { registerSignalHandlers } from './setup/signal-handlers.js';
+import { registerUnifiedInboxMessageListeners } from './setup/register-inbox.js';
 
 const plugin = usePlugin();
 const { configFeature, appConfig } = loadConfig();
@@ -35,4 +36,5 @@ plugin.on('bot.login.pending', (task: BotLoginPendingTask) => {
 
 await connectBots(plugin, appConfig);
 await loadPlugins(plugin, appConfig);
+registerUnifiedInboxMessageListeners(plugin, appConfig);
 await registerSignalHandlers(plugin);

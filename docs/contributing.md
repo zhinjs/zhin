@@ -2,6 +2,8 @@
 
 感谢您对 Zhin.js 项目的关注！本指南将帮助您了解如何为项目做出贡献。
 
+**仓库结构与模块化约定（目录、`src`→`lib`、`client`→`dist`、命名与代码组织）以 [仓库结构与模块化约定](./contributing/repo-structure.md) 为准；提交新代码前请先阅读该文档。**
+
 ## 🎯 贡献方式
 
 ### 报告问题
@@ -16,8 +18,9 @@
 - 🧪 **测试**: 添加或改进测试
 
 ### 贡献技能
-- 在仓库的技能目录（如 `docs/public/skills/`）下新建技能文件夹，包含 `SKILL.md`（必填 frontmatter：name、description），提 PR；合并后由脚本或 CI 生成 [技能商店](https://zhin.js.org/zhin/skills/) 的 registry。
-- 自托管技能：PR 只修改 `docs/public/skills.json`，新增一条并填写 `source`（ZIP 下载地址），确保 ZIP 内包含 `SKILL.md`。详见文档 [技能商店](/skills/)。
+- **通用技能**：在 `packages/create-zhin/template/skills/<name>/` 下维护 `SKILL.md`（frontmatter 必填 `name`、`description`），提 PR；文档构建会运行 `gen-skills` 更新 [技能商店](/skills/) 与 `public/skills.json`。
+- **插件技能**：在对应插件包 `plugins/**/<插件>/skills/<name>/SKILL.md` 编写说明，并保证 `package.json` 的 `files` 包含 `skills`；同上由脚本收录进商店「插件技能」分类。
+- **可下载 ZIP 技能**（可选）：若需支持 `zhin skills add` 从 URL 安装，须在 registry 中增加带 `source` 的条目（勿整文件覆盖自动生成内容；详见 [技能商店](/skills/) 说明）。
 
 ## 🚀 开发环境设置
 
@@ -64,6 +67,8 @@ pnpm build:watch
 ```
 
 ## 📝 代码规范
+
+单仓布局、构建产物目录与前后端源码分界等约定，见 **[仓库结构与模块化约定](./contributing/repo-structure.md)**（与下述 TypeScript / 提交规范配合使用）。
 
 ### TypeScript 规范
 - 使用 TypeScript 编写所有代码
@@ -201,9 +206,13 @@ docs/
 ├── advanced/                 # 高级特性（AI、Feature、工具与技能、组件、定时任务、数据库、热重载）
 ├── api/                      # API 参考
 ├── plugins/                  # 插件市场
-├── skills/                   # 技能商店
-└── contributing.md           # 贡献指南
+├── skills/                   # 技能商店页面（数据由 scripts 扫描 SKILL.md 生成 public/skills.json）
+├── contributing.md           # 贡献指南（本页）
+└── contributing/
+    └── repo-structure.md     # 仓库结构、src/lib 与 client/dist、命名、代码组织、审计备忘
 ```
+
+开发新包或调整目录前，请先阅读 [仓库结构与模块化约定](/contributing/repo-structure)。
 
 ### 文档规范
 - 使用 Markdown 格式

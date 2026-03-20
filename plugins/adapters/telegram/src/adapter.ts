@@ -5,8 +5,6 @@ import {
   Adapter,
   Plugin,
   createGroupManagementTools,
-  GROUP_MANAGEMENT_SKILL_KEYWORDS,
-  GROUP_MANAGEMENT_SKILL_TAGS,
   type IGroupManagement,
 } from "zhin.js";
 import { TelegramBot } from "./bot.js";
@@ -65,12 +63,6 @@ export class TelegramAdapter extends Adapter<TelegramBot> {
     this.registerTelegramPlatformTools();
     const groupTools = createGroupManagementTools(this as unknown as IGroupManagement, this.name);
     groupTools.forEach((t) => this.addTool(t));
-    this.declareSkill({
-      description:
-        'Telegram 群组管理：踢人、禁言、封禁、设管理员、改群名、查成员等。仅用户名时请先 list_members 获取 user_id 再操作。',
-      keywords: GROUP_MANAGEMENT_SKILL_KEYWORDS,
-      tags: GROUP_MANAGEMENT_SKILL_TAGS,
-    });
     await super.start();
   }
 

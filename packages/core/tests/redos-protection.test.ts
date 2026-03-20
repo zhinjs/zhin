@@ -72,12 +72,13 @@ describe('ReDoS Protection Tests', () => {
     });
 
     it('should reject extremely large templates', () => {
-      // 测试超大模板
-      const hugeTemplate = '<tag>content</tag>'.repeat(10000);
-      
+      // segment.from 在 utils 中限制单段模板长度 > 400_000（见 MAX_TEMPLATE_LENGTH）
+      const chunk = '<tag>content</tag>';
+      const hugeTemplate = chunk.repeat(Math.ceil(400_001 / chunk.length));
+
       expect(() => {
         segment.from(hugeTemplate);
-      }).toThrow('Template too large');
+      }).toThrow(/Template too large/);
     });
 
     it('should handle nested tags without exponential backtracking', () => {

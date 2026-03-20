@@ -3,14 +3,14 @@
  *
  * 设计理念：
  *   各 IM 平台在适配器内自行实现群管方法（kickMember、muteMember 等），
- *   并自行注册 Tool 与 declareSkill，保障平台特性与描述一致。
+ *   并自行注册 Tool；平台说明使用包内 `skills/<adapter>/SKILL.md`。
  *
  * 使用方式（在各适配器 start 或注册方法中）：
  *
  *   import { createGroupManagementTools, GROUP_MANAGEMENT_SKILL_KEYWORDS, GROUP_MANAGEMENT_SKILL_TAGS } from 'zhin.js';
  *   const tools = createGroupManagementTools(this, this.name);
  *   tools.forEach(t => this.addTool(t));
- *   this.declareSkill({ description: '本平台群管说明...', keywords: [...], tags: [...] });
+ *   // 另：包内 skills/<name>/SKILL.md 供 Agent 发现
  */
 
 import type { Tool, ToolPermissionLevel, ToolScope } from '../types.js';
@@ -164,7 +164,7 @@ export const GROUP_METHOD_SPECS: GroupMethodSpec[] = [
 ];
 
 // ============================================================================
-// Skill 常量（各适配器 declareSkill 时可复用 keywords/tags）
+// Skill 常量（群管相关 SKILL.md 与文档可复用 keywords/tags）
 // ============================================================================
 
 export const GROUP_MANAGEMENT_SKILL_TAGS = ['group', 'management', 'im', 'admin'];

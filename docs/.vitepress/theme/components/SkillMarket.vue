@@ -13,9 +13,9 @@ function handleFilter(keyword: string) {
   <div class="skill-market">
     <div class="skill-stats">
       <p class="skill-stats-desc">
-        从云端搜索并安装技能到本地，使用
-        <code>zhin skills add &lt;id&gt;</code>
-        安装。
+        下列数据由仓库内 <code>SKILL.md</code> 自动生成：<strong>通用技能</strong>来自 create-zhin 模板，可复制到项目
+        <code>skills/</code>；<strong>插件技能</strong>随对应 npm 插件安装，无需
+        <code>zhin skills add</code>。若条目带「可下载」且配置了 <code>source</code>，可用 CLI 安装到本地。
       </p>
     </div>
     <SkillSearch ref="searchRef" />

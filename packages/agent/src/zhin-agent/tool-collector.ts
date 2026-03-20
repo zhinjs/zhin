@@ -106,15 +106,22 @@ export function collectRelevantTools(
   const collected: AgentTool[] = [];
   const collectedNames = new Set<string>();
 
-  // 0. Detect if user mentions a known skill name
+  // 0. Detect if user mentions a known skill（名称或关键词，与 SkillFeature / SKILL.md 注入一致）
   let mentionedSkill: string | null = null;
   if (skillRegistry && skillRegistry.size > 0) {
     const msgLower = message.toLowerCase();
-    for (const skill of skillRegistry.getAll()) {
+    outer: for (const skill of skillRegistry.getAll()) {
       if (msgLower.includes(skill.name.toLowerCase())) {
         mentionedSkill = skill.name;
-        logger.debug(`[技能检测] 用户提到技能: ${mentionedSkill}`);
+        logger.debug(`[技能检测] 用户提到技能(名称): ${mentionedSkill}`);
         break;
+      }
+      for (const kw of skill.keywords || []) {
+        if (kw && msgLower.includes(String(kw).toLowerCase())) {
+          mentionedSkill = skill.name;
+          logger.debug(`[技能检测] 用户提到技能(关键词→${skill.name}): ${kw}`);
+          break outer;
+        }
       }
     }
   }

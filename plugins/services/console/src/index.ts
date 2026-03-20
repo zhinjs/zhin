@@ -6,6 +6,8 @@ import * as path from "path";
 import * as crypto from "crypto";
 import { setupWebSocket, notifyDataUpdate } from "./websocket.js";
 import { transformFile, isTransformable } from "./transform.js";
+import { registerBotModels } from "./bot-db-models.js";
+import { initBotPersistence } from "./bot-persistence.js";
 
 export interface ConsoleConfig {
   /** 是否启用控制台插件，默认 true */
@@ -78,6 +80,8 @@ const {
 } = consoleConfig;
 
 if (enabled) {
+  registerBotModels(root as { defineModel?: (name: string, def: unknown) => void });
+  initBotPersistence(root as { inject: (key: string) => unknown });
 
   const createSyncMsg = (key: string, value: unknown): SyncMessage => ({
     type: "sync",
@@ -207,38 +211,6 @@ if (enabled) {
     } as WebServer;
 
     logger.info(`Web 控制台已启动 (${isDev ? "开发模式, esbuild 按需转译 + 文件监听" : "生产模式, 静态文件 + 按需转译"})`);
-
-    // ── 登录辅助 API（生产者-消费者，未消费刷新后可继续） ─────────────────────
-    const loginAssist = root.inject("loginAssist" as any) as {
-      listPending: () => unknown[];
-      submit: (id: string, value: string | Record<string, unknown>) => boolean;
-      cancel: (id: string, reason?: string) => boolean;
-    } | undefined;
-    if (loginAssist) {
-      router.get("/api/login-assist/pending", (ctx: any) => {
-        ctx.body = loginAssist.listPending();
-      });
-      router.post("/api/login-assist/submit", async (ctx: any) => {
-        const body = ctx.request?.body as { id: string; value?: string | Record<string, unknown> };
-        if (!body?.id) {
-          ctx.status = 400;
-          ctx.body = { error: "missing id" };
-          return;
-        }
-        const ok = loginAssist.submit(body.id, body.value ?? "");
-        ctx.body = { ok };
-      });
-      router.post("/api/login-assist/cancel", async (ctx: any) => {
-        const body = ctx.request?.body as { id: string; reason?: string };
-        if (!body?.id) {
-          ctx.status = 400;
-          ctx.body = { error: "missing id" };
-          return;
-        }
-        const ok = loginAssist.cancel(body.id, body.reason);
-        ctx.body = { ok };
-      });
-    }
 
     // SPA 回退路由 - 处理所有未匹配的路由
     router.all("*all", async (ctx, next) => {

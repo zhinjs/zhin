@@ -79,8 +79,6 @@ addCommand(
       // ============================================
 
       return [
-        "╔═══════════ 系统状态 ═══════════╗",
-        "",
         `运行时：${runtime} | 架构：${process.arch} | PID：${process.pid}`,
         `运行时长：${Time.formatTime(processUptime * 1000)}`,
         "",
@@ -88,8 +86,6 @@ addCommand(
         `堆内存：${formatMemoSize(processHeapUsed)} / ${formatMemoSize(processHeapTotal)}`,
         "",
         `适配器：${root.adapters.length} 个 | 插件：${root.children.length} 个`,
-        "",
-        "╚════════════════════════════════╝",
       ].join("\n");
     })
 );

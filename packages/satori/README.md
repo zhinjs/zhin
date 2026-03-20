@@ -1,245 +1,86 @@
-# Satori
+# @zhin.js/satori
 
-**Satori**: 一个强大的库，用于将 HTML 和 CSS 转换为 SVG。
-
-## 概述
-
-Satori 支持将 HTML 和 CSS 转换为高质量的 SVG 图像。它使用 JSDOM 来解析 HTML，并实现了自己的布局引擎来生成与浏览器渲染结果一致的 SVG。
+基于 [官方 satori](https://github.com/vercel/satori) 的薄封装：直接依赖 `satori`；通过 **html-react-parser** 解析 HTML（**需同时安装 `react`**，与 html-react-parser 的 peer 要求一致），再交给 satori 渲染；对外提供**内置字体**。
 
 ## 特性
 
-- ✅ **内置字体**: 包含 Roboto 字体，开箱即用
-- 🎨 完整的 CSS 支持
-- 📦 支持 ESM 和 CommonJS
-- 🚀 高性能渲染引擎
-- 💪 TypeScript 支持
-
-## 基本用法
-
-```javascript
-import satori, { getDefaultFonts } from '@zhin.js/satori'
-import { JSDOM } from 'jsdom'
-
-// 创建 HTML 内容
-const html = `
-<!DOCTYPE html>
-<html>
-<body>
-  <div style="color: black; padding: 20px; background: #f0f0f0;">
-    Hello, World!
-  </div>
-</body>
-</html>
-`
-
-// 使用 JSDOM 解析 HTML
-const dom = new JSDOM(html)
-
-// 使用内置字体
-const fonts = getDefaultFonts()
-
-// 转换为 SVG
-const svg = await satori(dom, {
-    width: 600,
-    height: 400,
-    fonts: [
-      {
-        name: 'Roboto',
-      data: robotoArrayBuffer, // 字体数据
-        weight: 400,
-        style: 'normal',
-      },
-    ],
-})
-
-console.log(svg)
-// 输出: '<svg width="600" height="400" viewBox="0 0 600 400">...</svg>'
-```
-
-## 功能特性
-
-### 支持的 HTML 元素
-
-Satori 支持大部分常用的 HTML 元素：
-
-- **文本元素**: `div`, `p`, `h1-h6`, `span`, `strong`, `em`, `br`
-- **列表元素**: `ul`, `ol`, `li`
-- **图片元素**: `img`
-- **SVG 元素**: `svg`, `path`, `circle`, `rect` 等
-
-### 支持的 CSS 属性
-
-#### 布局属性
-- `display`: `flex`, `none`
-- `position`: `relative`, `absolute`
-- `width`, `height`, `minWidth`, `minHeight`, `maxWidth`, `maxHeight`
-
-#### Flexbox 属性
-- `flexDirection`: `row`, `column`, `row-reverse`, `column-reverse`
-- `flexWrap`: `wrap`, `nowrap`, `wrap-reverse`
-- `justifyContent`: `flex-start`, `center`, `flex-end`, `space-between`, `space-around`
-- `alignItems`: `stretch`, `center`, `flex-start`, `flex-end`, `baseline`
-- `gap`: 支持数值
-
-#### 边距和填充
-- `margin`, `marginTop`, `marginRight`, `marginBottom`, `marginLeft`
-- `padding`, `paddingTop`, `paddingRight`, `paddingBottom`, `paddingLeft`
-
-#### 边框
-- `border`, `borderWidth`, `borderStyle`, `borderColor`
-- `borderRadius`, `borderTopLeftRadius`, `borderTopRightRadius`, `borderBottomLeftRadius`, `borderBottomRightRadius`
-
-#### 背景
-- `backgroundColor`
-- `backgroundImage`: 支持 `linear-gradient`, `radial-gradient`, `url()`
-- `backgroundPosition`, `backgroundSize`, `backgroundRepeat`
-
-#### 字体和文本
-- `fontFamily`, `fontSize`, `fontWeight`, `fontStyle`
-- `color`, `textAlign`, `textDecoration`, `textTransform`
-- `lineHeight`, `letterSpacing`, `whiteSpace`, `wordBreak`
-
-#### 变换
-- `transform`: 支持 `translate`, `rotate`, `scale`, `skew`
-- `transformOrigin`
-
-#### 其他
-- `opacity`, `boxShadow`, `overflow`, `clipPath`
-- `filter`, `maskImage`, `objectFit`
-
-### 字体支持
-
-Satori 支持以下字体格式：
-- TTF (TrueType)
-- OTF (OpenType)
-- WOFF (Web Open Font Format)
-
-**注意**: 目前不支持 WOFF2 格式。
-
-### 视口单位
-
-支持所有视口单位：
-- `vw` (视口宽度)
-- `vh` (视口高度)
-- `vmin` (视口最小值)
-- `vmax` (视口最大值)
-
-### 百分比单位
-
-支持百分比值用于：
-- 尺寸 (`width`, `height`)
-- 边距和填充
-- 定位 (`top`, `left`, `right`, `bottom`)
+- **直接使用官方 satori**：渲染与布局由 [Vercel satori](https://github.com/vercel/satori) 完成
+- **HTML 字符串输入**：`htmlToSvg(html, options)` 使用 `html-react-parser` + `react` 解析后转为 satori 可用的元素树
+- **内置字体**：从包内 `fonts/` 目录提供 Noto Sans SC/JP/KR 等，与 satori 的 `fonts` 选项兼容
 
 ## 安装
 
 ```bash
-npm install @zhin.js/satori
-# 或
-yarn add @zhin.js/satori
-# 或
 pnpm add @zhin.js/satori
 ```
 
-## 环境要求
+## 用法
 
-- Node.js >= 16
-- 支持浏览器和 Web Workers
+### 1. 使用官方 satori（React 元素）
 
-## 高级用法
+```ts
+import satori, { getDefaultFonts } from '@zhin.js/satori'
 
-### 动态加载字体和表情符号
-
-```javascript
-const svg = await satori(dom, {
-  width: 600,
-  height: 400,
-  fonts: [...],
-  loadAdditionalAsset: async (code, segment) => {
-    if (code === 'emoji') {
-      // 加载表情符号图片
-      return `data:image/svg+xml;base64,...`
-    }
-    
-    // 加载动态字体
-    return loadFontFromSystem(code)
-  }
-})
-```
-
-### 多语言支持
-
-```javascript
-const svg = await satori(dom, {
-    width: 600,
-    height: 400,
-    fonts: [
-      {
-      name: 'Noto Sans CJK',
-      data: notoSansCJK,
-        weight: 400,
-        style: 'normal',
-      lang: 'zh-CN'
-    }
-  ]
-})
-```
-
-### 调试模式
-
-```javascript
-const svg = await satori(dom, {
-  width: 600,
-  height: 400,
-  fonts: [...],
-  debug: true // 启用调试模式，显示元素边界
-})
-```
-
-## 性能优化
-
-### 字体缓存
-
-```javascript
-// 全局定义字体，避免重复创建
-const fonts = [
+const fonts = getDefaultFonts()
+const svg = await satori(
   {
-    name: 'Roboto',
-    data: robotoArrayBuffer,
-    weight: 400,
-    style: 'normal',
-  }
-]
-
-// 在多个渲染中复用
-const svg1 = await satori(dom1, { fonts, width: 600, height: 400 })
-const svg2 = await satori(dom2, { fonts, width: 600, height: 400 })
+    type: 'div',
+    props: {
+      style: { color: 'black', padding: 20 },
+      children: 'Hello, World!',
+    },
+  },
+  { width: 600, height: 400, fonts }
+)
 ```
 
-### 图片优化
+### 2. HTML 字符串 → SVG（htmlToSvg）
 
-使用 base64 编码的图片数据而不是 URL，避免额外的 I/O 操作：
+```ts
+import { htmlToSvg, getAllBuiltinFonts } from '@zhin.js/satori'
 
-```javascript
-<img src="data:image/png;base64,..." width={200} height={300} />
+const html = `
+  <div style="color: black; padding: 20px; background: #f0f0f0;">
+    Hello, World!
+  </div>
+`
+const fonts = getAllBuiltinFonts()
+const svg = await htmlToSvg(html, {
+  width: 600,
+  height: 400,
+  fonts,
+})
 ```
 
-## 限制
+内联 `style` 会被解析为对象并传给 satori；支持的 HTML/CSS 以 [官方 satori 文档](https://github.com/vercel/satori) 为准。
 
-1. **不支持交互元素**: `<input>`, `<button>` 等
-2. **不支持动画**: CSS 动画和过渡
-3. **不支持 JavaScript**: 无法执行脚本
-4. **不支持外部资源**: 无法加载外部样式表或脚本
-5. **不支持 3D 变换**: 只支持 2D 变换
-6. **不支持 z-index**: SVG 中元素按文档顺序绘制
-7. **CSS 属性限制**:
-   - `overflow`: 只支持 `visible` 和 `hidden`，不支持 `scroll` 和 `auto`
-   - `border-style`: 只支持 `solid` 和 `dashed`，不支持 `dotted`、`double` 等
-   - `display`: 不支持 CSS Grid 布局 (`grid`)，只支持 `flex`、`block`、`none`、`-webkit-box`
+### 3. 内置字体
 
-## 贡献
+从包内 `fonts/` 读取，与 satori 的 `fonts` 选项格式一致：
 
-欢迎贡献代码！请查看 [贡献指南](CONTRIBUTING.md) 了解详细信息。
+| 方法 | 说明 |
+|------|------|
+| `getNotoSansSC()` | Noto Sans 简体中文 |
+| `getNotoSansJP()` | Noto Sans 日文 |
+| `getNotoSansKR()` | Noto Sans 韩文 |
+| `getAllBuiltinFonts()` | 当前包内所有可用字体 |
+| `getDefaultFonts()` | 默认集合（如 Poppins，若存在） |
+| `getExtendedFonts()` | 默认 + Noto Sans SC |
+| `getCJKFonts()` | 仅 CJK |
+| `getCompleteFonts()` | 推荐完整集合 |
+
+未包含在包内的字体文件（如 Poppins、Noto Color Emoji）会返回 `null`，可自行下载后通过 `fonts` 传入。
+
+## API
+
+- **`satori(element, options)`**：官方 satori，签名与 [satori](https://www.npmjs.com/package/satori) 一致
+- **`htmlToSvg(html, options)`**：HTML 字符串 → SVG；`options` 同 satori（`width`、`height`、`fonts` 等）
+- **字体方法**：见上表
+
+## 环境
+
+- Node.js >= 18
+- 依赖：`satori`、`html-react-parser`、`react`（^18 或 ^19，与 html-react-parser 兼容）
 
 ## 许可证
 

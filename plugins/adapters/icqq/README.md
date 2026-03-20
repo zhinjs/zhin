@@ -6,6 +6,7 @@ Zhin.js ICQQ 适配器，基于 ICQQ 库实现的 QQ 机器人适配器，支持
 
 - 🤖 支持 QQ 群聊和私聊消息处理
 - 🔐 完整的登录验证支持（短信验证、二维码、滑块验证）
+- 🖥️ **Web 控制台登录辅助**：与 `@zhin.js/console` 同时启用时，在 **`/icqq`** 页面提供「概览 + 登录辅助」；HTTP 接口为 **`GET /api/login-assist/pending`**、**`POST /api/login-assist/submit`**、**`POST /api/login-assist/cancel`**（由本适配器在路由上下文中注册，依赖核心 `loginAssist` 服务）。
 - 📨 消息发送和接收处理
 - 🔄 消息格式转换和适配
 - 📁 自动数据目录管理
@@ -166,6 +167,12 @@ addCommand(new MessageCommand('at <user:at>')
   })
 )
 ```
+
+## Web 控制台登录辅助
+
+1. 配置中同时启用 **`@zhin.js/console`** 与本适配器（且 console 建议 **`lazyLoad: false`**，以便扩展 `addEntry` 正常注册）。
+2. 打开控制台中的 **ICQQ 管理**（`/icqq`），切换到 **登录辅助** Tab；仅展示当前 **icqq** 适配器相关的待处理登录步骤。
+3. 若未启用 console，仅启动机器人进程时，仍可通过日志完成登录；**不提供** Console 专属的 `/api/login-assist` 降级路径。
 
 ## 登录流程
 

@@ -78,21 +78,33 @@ plugins:
   - "@zhin.js/http"
   - "@zhin.js/console"
   - "@zhin.js/mcp"
-  # - "@zhin.js/adapter-github"
+  - "@zhin.js/adapter-github"
   - "@zhin.js/adapter-sandbox"
   - "@zhin.js/adapter-kook"
   - "@zhin.js/adapter-milky"
   # - "@zhin.js/adapter-satori"
   # - "@zhin.js/adapter-onebot11"
   # - "@zhin.js/adapter-onebot12"
-  # - "@zhin.js/adapter-icqq"
+  - "@zhin.js/adapter-icqq"
   # - "@zhin.js/adapter-qq"
+  - "html-test"
   - "@zhin.js/plugin-html-renderer"
+  - "@zhin.js/plugin-group-daily-analysis"
   - "@zhin.js/plugin-60s"
   - "@zhin.js/plugin-teach"
 console:
   enabled: true
   lazyLoad: true
+inbox:
+  enabled: true
+group-daily-analysis:
+  analysisDays: 1              # 默认分析最近天数
+  autoAnalysisEnabled: true   # 是否定时自动分析
+  autoAnalysisCron: "0 9 * * *"  # 每日 9 点
+  enabledGroups: []           # 群 ID 白名单（空表示不限制）
+  disabledGroups: []           # 群 ID 黑名单
+  outputFormat: "text"         # text | image（image 需 html-renderer）
+  maxMessagesPerAnalysis: 500 # 单次分析最多使用的消息条数
 ai:
   enabled: true
   defaultProvider: ollama
@@ -149,6 +161,12 @@ ai:
       - "!"
       - ！
     timeout: 120000
+htmlRenderer:
+  defaultWidth: 1080
+  defaultBackgroundColor: "#ffffff"
+  cacheFonts: true
+  # 纯文本在发出前自动转 PNG（AI 与普通 $reply 的纯文本都会生效；按需开启）
+  # aiTextAsImage: true
 60s:
   apiBase: https://services.zhin.dev
 http:

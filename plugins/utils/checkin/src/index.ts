@@ -31,7 +31,7 @@
 import { usePlugin, ZhinTool, MessageCommand, Schema } from "zhin.js";
 
 const plugin = usePlugin();
-const { logger, root, addCommand, useContext, onDispose, declareSkill, declareConfig } = plugin;
+const { logger, root, addCommand, useContext, onDispose, declareConfig } = plugin;
 
 const config = declareConfig("checkin", Schema.object({
   basePointsMin: Schema.number().default(10).min(1).max(100).description("基础积分最小值"),
@@ -294,18 +294,5 @@ plugin.addTool(
     })
     .toTool(),
 );
-
-// ─── Skill 声明 ──────────────────────────────────────────────────────────────
-
-declareSkill({
-  description: "签到积分系统：用户每日签到获取随机积分，连续签到有额外奖励，支持排行榜查询。可用工具查询用户积分和排行数据。",
-  keywords: [
-    "checkin", "签到", "sign-in", "积分", "points",
-    "排行", "rank", "排行榜",
-    "mypoints", "我的积分",
-    "streak", "连续",
-  ],
-  tags: ["checkin", "points", "gamification"],
-});
 
 logger.info(`插件已加载 (基础积分=${config.basePointsMin}~${config.basePointsMax}, 连续奖励=${config.streakBonus}/天)`);

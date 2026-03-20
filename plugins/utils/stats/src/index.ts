@@ -29,7 +29,7 @@
 import { usePlugin, ZhinTool, MessageCommand, Schema } from "zhin.js";
 
 const plugin = usePlugin();
-const { logger, root, addCommand, addMiddleware, useContext, onDispose, declareSkill, declareConfig } = plugin;
+const { logger, root, addCommand, addMiddleware, useContext, onDispose, declareConfig } = plugin;
 
 const config = declareConfig("stats", Schema.object({
   rankSize: Schema.number().default(10).min(3).max(50).description("排行榜显示人数"),
@@ -416,18 +416,5 @@ const cleanupTimer = setInterval(async () => {
 }, 24 * 60 * 60_000);
 
 onDispose(() => clearInterval(cleanupTimer));
-
-// ─── Skill 声明 ──────────────────────────────────────────────────────────────
-
-declareSkill({
-  description: "消息统计系统：自动追踪每个用户和群聊的消息数量，支持日/周/月维度查看，提供活跃度排行和个人统计。AI 可查询统计数据。",
-  keywords: [
-    "stats", "统计", "消息统计", "话唠",
-    "rank", "排行", "活跃",
-    "mystats", "我的统计",
-    "week", "周报",
-  ],
-  tags: ["stats", "analytics", "message"],
-});
 
 logger.info(`插件已加载 (排行数=${config.rankSize}, 保留天数=${config.retentionDays})`);
