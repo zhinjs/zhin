@@ -1,5 +1,11 @@
 # @zhin.js/satori
 
+## 0.2.1
+
+### Patch Changes
+
+- bb6bfa8: chore: 控制台路由 key、client tsc、页面模块化拆分；client/satori 的 clean 与构建产物约定对齐
+
 ## 0.2.0
 
 ### Major Changes

@@ -1,5 +1,18 @@
 # @zhin.js/console
 
+## 1.0.52
+
+### Patch Changes
+
+- bb6bfa8: chore: 控制台路由 key、client tsc、页面模块化拆分；client/satori 的 clean 与构建产物约定对齐
+- Updated dependencies [bb6bfa8]
+- Updated dependencies [bb6bfa8]
+- Updated dependencies [bb6bfa8]
+  - @zhin.js/core@1.0.52
+  - zhin.js@1.0.52
+  - @zhin.js/client@1.0.13
+  - @zhin.js/http@1.0.46
+
 ## 1.0.51
 
 ### Patch Changes
