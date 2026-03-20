@@ -107,9 +107,8 @@ describe('Adapter Core Functionality', () => {
       expect(adapter).toBeInstanceOf(EventEmitter)
     })
 
-    it('should register message.receive listener', () => {
-      const listeners = adapter.listeners('message.receive')
-      expect(listeners.length).toBeGreaterThan(0)
+    it('should route message.receive via emit without default listener', () => {
+      expect(adapter.listenerCount('message.receive')).toBe(0)
     })
 
     it('should register call.recallMessage listener', () => {
@@ -199,13 +198,15 @@ describe('Adapter Core Functionality', () => {
 
     it('should remove all event listeners', async () => {
       await adapter.start()
+      const noop = () => {}
+      adapter.on('message.receive', noop)
       const beforeCount = adapter.listenerCount('message.receive')
-      
+      expect(beforeCount).toBe(1)
+
       await adapter.stop()
       const afterCount = adapter.listenerCount('message.receive')
-      
+
       expect(afterCount).toBe(0)
-      expect(beforeCount).toBeGreaterThan(0)
     })
 
     it('should handle bot disconnect errors gracefully', async () => {
@@ -377,97 +378,92 @@ describe('Adapter Core Functionality', () => {
     })
 
     describe('message.receive', () => {
-      it('should process received message through middleware when no dispatcher', async () => {
+      it('should still dispatch plugin message.receive when dispatcher is missing (no middleware fallback)', async () => {
         const config = [{ id: 'bot1' }]
         const adapter = new MockAdapter(plugin, 'test', config)
         await adapter.start()
-        
+
         let middlewareCalled = false
-        plugin.addMiddleware(async (message, next) => {
+        plugin.addMiddleware(async (_message, next) => {
           middlewareCalled = true
           await next()
         })
-        
+
+        let lifecycleCalled = false
+        plugin.on('message.receive', () => {
+          lifecycleCalled = true
+        })
+
         const message = {
           $bot: 'bot1',
           $adapter: 'test',
           $channel: { id: 'channel-id', type: 'text' },
-          $content: 'Hello'
+          $content: 'Hello',
         } as any
-        
+
         adapter.emit('message.receive', message)
-        
-        // 等待异步处理
-        await new Promise(resolve => setTimeout(resolve, 10))
-        expect(middlewareCalled).toBe(true)
+        await new Promise((r) => setTimeout(r, 20))
+        expect(middlewareCalled).toBe(false)
+        expect(lifecycleCalled).toBe(true)
       })
 
-      it('should use MessageDispatcher when available', async () => {
+      it('should await MessageDispatcher then plugin lifecycle', async () => {
         const config = [{ id: 'bot1' }]
         const adapter = new MockAdapter(plugin, 'test', config)
         await adapter.start()
 
-        let dispatchCalled = false
-        let middlewareCalled = false
-
-        // 注册 dispatcher context
+        const order: string[] = []
         plugin.$contexts.set('dispatcher', {
           name: 'dispatcher',
           description: 'mock dispatcher',
           value: {
-            dispatch: (msg: any) => { dispatchCalled = true; return Promise.resolve() },
+            dispatch: async (_msg: any) => {
+              order.push('dispatcher')
+            },
           },
         } as any)
 
-        plugin.addMiddleware(async (message, next) => {
-          middlewareCalled = true
-          await next()
+        plugin.on('message.receive', () => {
+          order.push('lifecycle')
         })
 
         const message = {
           $bot: 'bot1',
           $adapter: 'test',
           $channel: { id: 'channel-id', type: 'text' },
-          $content: 'Hello'
+          $content: 'Hello',
         } as any
 
         adapter.emit('message.receive', message)
-
-        await new Promise(resolve => setTimeout(resolve, 10))
-        expect(dispatchCalled).toBe(true)
-        expect(middlewareCalled).toBe(false)
+        await new Promise((r) => setTimeout(r, 20))
+        expect(order).toEqual(['dispatcher', 'lifecycle'])
       })
 
-      it('should fallback to middleware when dispatcher has no dispatch method', async () => {
+      it('should call adapter.on observers after plugin lifecycle', async () => {
         const config = [{ id: 'bot1' }]
         const adapter = new MockAdapter(plugin, 'test', config)
         await adapter.start()
 
-        let middlewareCalled = false
-
-        // 注册一个没有 dispatch 方法的 dispatcher
         plugin.$contexts.set('dispatcher', {
           name: 'dispatcher',
-          description: 'broken dispatcher',
-          value: { noDispatch: true },
+          description: 'mock dispatcher',
+          value: { dispatch: async () => {} },
         } as any)
 
-        plugin.addMiddleware(async (message, next) => {
-          middlewareCalled = true
-          await next()
-        })
+        const order: string[] = []
+        plugin.on('message.receive', () => order.push('lifecycle'))
+        adapter.on('message.receive', () => order.push('adapterObserver'))
 
         const message = {
           $bot: 'bot1',
           $adapter: 'test',
           $channel: { id: 'channel-id', type: 'text' },
-          $content: 'Hello'
+          $content: 'Hello',
         } as any
 
         adapter.emit('message.receive', message)
-
-        await new Promise(resolve => setTimeout(resolve, 10))
-        expect(middlewareCalled).toBe(true)
+        await new Promise((r) => setTimeout(r, 20))
+        expect(order).toEqual(['lifecycle', 'adapterObserver'])
       })
     })
   })

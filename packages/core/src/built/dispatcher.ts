@@ -23,6 +23,8 @@
  *   └────────────────────────────────────────┘
  *
  * 注意：Context key 为 'dispatcher'，避免与 HTTP 模块的 'router' 冲突。
+ *
+ * 默认路由为 exclusive（命令与 AI 互斥）；需双轨时请显式 dualRoute.mode: 'dual'。
  */
 
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -79,9 +81,9 @@ export interface DualRouteConfig {
 export type ResolvedDualRouteConfig = Required<DualRouteConfig>;
 
 const DUAL_ROUTE_DEFAULTS: ResolvedDualRouteConfig = {
-  mode: 'dual',
+  mode: 'exclusive',
   order: 'command-first',
-  allowDualReply: true,
+  allowDualReply: false,
 };
 
 function resolveDualRouteConfig(partial?: Partial<DualRouteConfig>): ResolvedDualRouteConfig {

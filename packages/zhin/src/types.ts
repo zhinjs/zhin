@@ -31,8 +31,8 @@ export interface AppConfig<T extends keyof Databases = keyof Databases> {
   /** 消息过滤配置 */
   message_filter?: MessageFilterConfig;
   /**
-   * MessageDispatcher 双轨分流：指令与 AI 独立判定、顺序、是否双次回复等
-   * @see @zhin.js/core createMessageDispatcher
+   * MessageDispatcher 路由：默认与 createMessageDispatcher 一致（exclusive，命令与 AI 互斥）。
+   * 若需双轨可同时命中指令与 AI，请设 mode: 'dual' 等，见 @zhin.js/core createMessageDispatcher
    */
   dispatcher?: DualRouteConfig;
   /**

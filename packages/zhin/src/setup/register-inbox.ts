@@ -186,8 +186,8 @@ export function registerUnifiedInbox(plugin: Plugin, appConfig: AppConfig): void
 }
 
 /**
- * 订阅各适配器的 message.receive，将消息写入收件箱。
- * 应在 connectBots / loadPlugins 之后调用，以便 root.adapters 已就绪。
+ * 订阅根插件生命周期 message.receive（在 MessageDispatcher.dispatch 完成之后触发）。
+ * 将消息写入收件箱。应在 connectBots / loadPlugins 之后调用，以便 root.adapters 已就绪。
  */
 export function registerUnifiedInboxMessageListeners(plugin: Plugin, appConfig: AppConfig): void {
   const enabled = !!appConfig?.inbox?.enabled;

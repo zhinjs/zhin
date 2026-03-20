@@ -11,17 +11,31 @@ export default withMermaid(defineConfig({
   ],
   
   themeConfig: {
+    // 顶栏保持少量入口，其余收进下拉，降低首屏认知负担（侧栏仍保留完整路径）
     nav: [
-      { text: '架构概览', link: '/architecture-overview' },
       { text: '快速开始', link: '/getting-started/' },
-      { text: '核心基础', link: '/essentials/' },
-      { text: 'AI 智能', link: '/advanced/ai' },
-      { text: '高级特性', link: '/advanced/' },
-      { text: 'API 参考', link: '/api/' },
-      { text: '插件市场', link: '/plugins/' },
-      { text: '技能商店', link: '/skills/' },
-      { text: '演练场', link: '/playground' },
-      { text: '贡献', link: '/contributing' }
+      {
+        text: '文档',
+        items: [
+          { text: '学习路径', link: '/essentials/learning-paths' },
+          { text: '核心基础', link: '/essentials/' },
+          { text: '消息如何流转', link: '/essentials/message-flow' },
+          { text: '架构概览', link: '/architecture-overview' },
+          { text: '术语表', link: '/reference/glossary' },
+        ],
+      },
+      { text: 'AI', link: '/advanced/ai' },
+      {
+        text: '参考与生态',
+        items: [
+          { text: 'API 参考', link: '/api/' },
+          { text: '高级特性', link: '/advanced/' },
+          { text: '插件市场', link: '/plugins/' },
+          { text: '技能商店', link: '/skills/' },
+          { text: '演练场', link: '/playground' },
+          { text: '贡献指南', link: '/contributing' },
+        ],
+      },
     ],
 
     sidebar: {
@@ -40,12 +54,23 @@ export default withMermaid(defineConfig({
           text: '核心基础',
           items: [
             { text: '核心概念', link: '/essentials/' },
+            { text: '学习路径', link: '/essentials/learning-paths' },
+            { text: '消息如何流转', link: '/essentials/message-flow' },
             { text: '配置文件', link: '/essentials/configuration' },
             { text: '命令系统', link: '/essentials/commands' },
             { text: '插件系统', link: '/essentials/plugins' },
             { text: '中间件', link: '/essentials/middleware' },
-            { text: '适配器', link: '/essentials/adapters' }
+            { text: '适配器', link: '/essentials/adapters' },
+            { text: '消息过滤', link: '/essentials/message-filter' },
+            { text: 'Windows 环境', link: '/essentials/windows-setup' },
           ]
+        }
+      ],
+
+      '/reference/': [
+        {
+          text: '参考',
+          items: [{ text: '术语表', link: '/reference/glossary' }],
         }
       ],
       

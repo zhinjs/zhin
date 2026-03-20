@@ -178,22 +178,22 @@ AI 不会处理所有消息。只有满足以下条件之一时才会触发：
 以下消息会被排除：
 - 以 `ignorePrefixes` 中的前缀开头的消息（通常是命令）
 
-### MessageDispatcher：指令与 AI 双轨
+### MessageDispatcher：指令与 AI 路由
 
-`message.receive` 进入 **MessageDispatcher** 后：
+`Adapter.emit('message.receive')` 在内部会 **`await MessageDispatcher.dispatch`**（再进入根插件生命周期 `message.receive`，详见 [消息如何流转](/essentials/message-flow)）。
 
-- **独立判定（默认）**：`dispatcher.mode: dual` 时，「是否走指令」与「是否走 AI」**分别**判断，可同时为真；可按顺序各回复一次（`$reply` 两次）。
-- **顺序与开关**：`dispatcher.order` 为 `command-first`（默认）或 `ai-first`；`allowDualReply: false` 时若双命中，只执行顺序上的**第一个**分支。
-- **互斥（旧行为）**：`dispatcher.mode: exclusive` 时与早期版本一致——命中指令前缀后不再走 AI。
+- **互斥（默认）**：`dispatcher.mode: exclusive`（框架与 `createMessageDispatcher` 默认值）——命中指令路径后不再走 AI；未命中指令时再判断是否走 AI。
+- **独立判定（按需）**：`dispatcher.mode: dual` 时，「是否走指令」与「是否走 AI」**分别**判断；可同时为真并按 `order` 执行；`allowDualReply: true` 时可能各回复一次（两次 `$reply`）。
+- **顺序与开关**：在 `dual` 模式下，`order` 为 `command-first`（默认）或 `ai-first`；`allowDualReply: false` 且双命中时只执行顺序上的**第一个**分支。
 - **出站润色**：与 **`Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage`** 同一管道。`dispatcher.addOutboundPolish(handler)` 会往**根插件**注册额外的 `before.sendMessage`；仅当通过 **`MessageDispatcher.replyWithPolish`** 回复时，框架会用异步上下文带上入站 `message` 与 `source`（`command` / `ai`），润色函数与手写 `before.sendMessage` 内可通过 **`getOutboundReplyStore()`**（`@zhin.js/core` / dispatcher 导出）读取。直接 `message.$reply` 的调用仍会走 `before.sendMessage`，但**没有**该异步上下文，润色 handler 应跳过（`getOutboundReplyStore()` 为空）。
-- **配置示例**（应用根配置，如 `zhin.config.yml`）：
+- **双轨配置示例**（仅在你需要指令与 AI 同时判定时，`zhin.config.yml`）：
 
 ```yaml
 dispatcher:
   mode: dual
   order: command-first
   allowDualReply: true
-# 技能：使用磁盘 SKILL.md（工作区 / ~/.zhin/skills / data/skills / 各包 skills/），无代码 declareSkill
+# … ai、技能等其余配置；技能 SKILL.md 见文档技能商店说明
 ```
 
 - **notice / request**：本期仍由适配器 `dispatch` 事件，**不**经 MessageDispatcher；与消息双轨对齐留待后续。

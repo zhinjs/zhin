@@ -54,6 +54,10 @@ const plugin = usePlugin()
 }
 ```
 
+### 消息与中间件（行为说明）
+
+- **addMiddleware**：在已启用 `MessageDispatcher` 时，自定义中间件一般在 **`dispatch` 完成命令/AI 等主处理之后** 运行；路由前的拦截请使用 **`inject('dispatcher').addGuardrail`** 或消息过滤等。详见 [消息如何流转](/essentials/message-flow)、[中间件](/essentials/middleware)。
+
 ## MessageCommand
 
 命令类，用于创建和处理命令。基于模式匹配（pattern matching）。
@@ -253,29 +257,33 @@ interface SkillMetadata {
 
 ## MessageDispatcher
 
-消息调度器，管理消息的三阶段处理流程。
+消息调度器：**Guardrail → Route（默认 `exclusive`）→ Handle**。由 `createMessageDispatcher(options?)` 得到 **Context**，通过 `plugin.provide(...)` 注册（`zhin.js` 默认已注册）；`mounted` 时绑定根插件。服务实例通过 `plugin.inject('dispatcher')` 取得。
+
+完整行为与入站顺序见 [消息如何流转](/essentials/message-flow)；类型与实现见 `@zhin.js/core built/dispatcher`。
 
 ```typescript
-// 创建调度器
-const dispatcher = createMessageDispatcher(plugin)
+import { createMessageDispatcher } from '@zhin.js/core'
 
-// 添加守卫
-dispatcher.addGuardrail(middleware): () => void
-
-// 设置命令匹配器
-dispatcher.setCommandMatcher(matcher: (message) => boolean): void
-
-// 设置 AI 触发匹配器
-dispatcher.setAITriggerMatcher(matcher: (message) => boolean): void
-
-// 设置 AI 处理器
-dispatcher.setAIHandler(handler: (message) => Promise<void>): void
-
-// 是否已注册 AI 处理器
-dispatcher.hasAIHandler(): boolean
-
-// 调度消息
-dispatcher.dispatch(message: Message): Promise<void>
+// 通常：provide(createMessageDispatcher({ dualRoute: { mode: 'exclusive' } }))
+// 服务 API（Context['value'] / inject('dispatcher')）：
+interface MessageDispatcherService {
+  dispatch(message: Message): Promise<void>
+  addGuardrail(guardrail): () => void
+  setCommandMatcher(matcher: (text: string, message: Message) => boolean): void
+  setAITriggerMatcher(matcher: (message: Message) => { triggered: boolean; content: string }): void
+  setAIHandler(handler: (message: Message, content: string) => MaybePromise<void>): void
+  hasAIHandler(): boolean
+  setDualRouteConfig(partial: {
+    mode?: 'exclusive' | 'dual'
+    order?: 'command-first' | 'ai-first'
+    allowDualReply?: boolean
+  }): void
+  getDualRouteConfig(): Readonly<{ mode: 'exclusive' | 'dual'; order: 'command-first' | 'ai-first'; allowDualReply: boolean }>
+  addOutboundPolish(handler): () => void
+  replyWithPolish(message, source, content): Promise<unknown>
+  matchCommand(message): boolean
+  matchAI(message): { triggered: boolean; content: string }
+}
 ```
 
 ## ZhinAgent
@@ -307,24 +315,19 @@ agent.setSkillRegistry(registry: SkillFeature): void
 
 ## Adapter
 
-适配器基类。
+适配器基类。平台 Bot 在收消息时应 **`emit('message.receive', message)`**：内部会 **串行** `await MessageDispatcher.dispatch`、再 `await` 根插件 `message.receive`、最后调用 **`adapter.on('message.receive')` 注册的观察者**（适合观测，不适合做主业务路由）。出站统一走 `sendMessage` / `renderSendMessage` / `before.sendMessage`。
 
 ```typescript
-abstract class Adapter<R extends Bot> {
+abstract class Adapter<R extends Bot> extends EventEmitter {
+  abstract createBot(config: Adapter.BotConfig<R>): R
   bots: Map<string, R>
   tools: Map<string, Tool>
-  
-  // 注册工具
+  emit<K extends keyof Adapter.Lifecycle>(eventName: K, ...args): boolean
+  // message.receive 的 emit 见上文
   addTool(input: Tool | ZhinTool): () => void
-  
-  // 获取所有工具
   getTools(): Tool[]
-  
-  // 启动/停止
-  abstract start(): Promise<void>
-  abstract stop(): Promise<void>
-  
-  // 发送消息
+  start(): Promise<void>
+  stop(): Promise<void>
   sendMessage(options: SendOptions): Promise<string>
 }
 ```

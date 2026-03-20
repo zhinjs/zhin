@@ -213,33 +213,37 @@ graph TD
 
 ## 消息处理流程
 
+入站顺序（与源码一致）：平台 → **`Adapter.emit('message.receive')`**（内部 **`await MessageDispatcher.dispatch`**）→ **`await` 根插件 `message.receive`（生命周期）** → 再通知 **`adapter.on('message.receive')` 注册的观察者**（如控制台 UI）。默认路由 **`exclusive`**（命令与 AI 互斥）；双轨见配置 `dispatcher.mode: dual`。详见仓库根目录 **`AGENTS.md`** 与 [消息如何流转](/essentials/message-flow)。
+
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '13px' }}}%%
 flowchart TD
-  A([" 📨 用户消息 "]) --> B["Adapter.Bot\n接收消息"]
-  B --> C["Plugin.dispatch\n('message.receive')"]
-  C --> D["MessageDispatcher"]
+  A([" 📨 用户消息 "]) --> B["Adapter_Bot_接收规范化"]
+  B --> C["Adapter_emit_message_receive"]
+  C --> D["MessageDispatcher_dispatch"]
 
   D --> E{" 🛡️ Guardrail "}
   E -->|" ❌ 拒绝 "| Z(["丢弃"])
-  E -->|" ✅ 通过 "| F{" 🔀 Route "}
+  E -->|" ✅ 通过 "| F{" 🔀 Route_默认exclusive "}
 
   F -->|" ⌨️ 命令匹配 "| G["CommandFeature\n命令处理"]
   F -->|" 🤖 AI 触发 "| H["ZhinAgent"]
 
-  H --> I["🎯 工具收集\nSkill 粗筛 → Tool 细筛"]
-  I --> J["📋 构建上下文\n历史 + 用户画像"]
-  J --> K{" 路由处理 "}
+  H --> I["🎯 工具收集\nSkill粗筛 → Tool细筛"]
+  I --> J["📋 构建上下文"]
+  J --> K{" Agent 路由 "}
 
-  K -->|" 💬 闲聊 "| L["纯对话\n1 次 LLM"]
-  K -->|" ⚡ 预执行 "| M["快速路径\n预执行 + 1 次 LLM"]
-  K -->|" 🔧 工具调用 "| N["Agent 路径\n多轮 tool-calling"]
+  K -->|" 💬 闲聊 "| L["纯对话\n1次LLM"]
+  K -->|" ⚡ 预执行 "| M["快速路径"]
+  K -->|" 🔧 工具调用 "| N["多轮tool_calling"]
 
   G --> O
   L --> O
   M --> O
   N --> O
-  O(["📤 返回结果"])
+  O([" 📤 Dispatcher内处理与回复 "])
+  O --> P[" 根Plugin_message_receive_生命周期"]
+  P --> Q[" adapter_on观察者可选"]
 
   classDef input fill:#e3f2fd,stroke:#1565c0,color:#0d47a1,rx:20
   classDef output fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20,rx:20
@@ -251,13 +255,13 @@ flowchart TD
   classDef routeNode fill:#7b1fa2,stroke:#4a148c,color:#fff
 
   class A input
-  class O output
+  class P,Q output
   class Z drop
   class E guard
   class F route
   class H,I,J aiNode
   class K routeNode
-  class B,C,D,G,L,M,N process
+  class B,C,D,G,L,M,N,O process
 ```
 
 ## 出站消息（发送链）

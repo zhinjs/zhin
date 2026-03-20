@@ -35,7 +35,7 @@
 
 ## 消息路径（概念）
 
-**入站（简）**：平台 → `Adapter` / `Bot` 收消息 → `Plugin.dispatch('message.receive')` 等 → `MessageDispatcher`（Guardrail → Route → Handle：命令 / AI 等）。
+**入站（简）**：平台 → `Adapter` / `Bot` 收消息 → `Adapter.emit('message.receive')` 串行：`await MessageDispatcher.dispatch` → `await` 根插件 `message.receive`（生命周期）→ 再通知 `adapter.on('message.receive')` 观察者。无 Dispatcher 时不再走根 `middleware` 回退；默认路由为 **exclusive**（命令与 AI 互斥，与 `createMessageDispatcher` 默认一致）。
 
 **出站（发送链，勿绕开）**：业务侧通过 **`Message.$reply` / `Adapter.sendMessage`** 等同一路径 → `renderSendMessage` → **根插件** `before.sendMessage`（可在此统一改写 `options.content`）→ 底层 `bot.$sendMessage`。  
 

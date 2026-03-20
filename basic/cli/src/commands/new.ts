@@ -849,9 +849,8 @@ describe('${capitalizedName} Adapter', () => {
       expect(listeners.length).toBeGreaterThan(0)
     })
 
-    it('should listen to message.receive event', () => {
-      const listeners = adapter.listeners('message.receive')
-      expect(listeners.length).toBeGreaterThan(0)
+    it('should not register a default message.receive listener (routing via emit)', () => {
+      expect(adapter.listenerCount('message.receive')).toBe(0)
     })
 
     it('should remove all listeners on stop', async () => {

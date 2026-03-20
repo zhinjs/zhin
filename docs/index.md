@@ -13,6 +13,9 @@ hero:
       text: 快速开始
       link: /getting-started/
     - theme: alt
+      text: 学习路径
+      link: /essentials/learning-paths
+    - theme: alt
       text: AI 智能
       link: /advanced/ai
     - theme: alt

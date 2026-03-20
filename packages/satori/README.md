@@ -1,5 +1,16 @@
 # @zhin.js/satori
 
+## 这不是什么（避免装错包）
+
+| 包 | 用途 |
+|----|------|
+| **本包 `@zhin.js/satori`** | [Vercel satori](https://github.com/vercel/satori) 的 **SVG 渲染**：把 React 元素或 HTML 字符串画成 SVG，可选内置中文字体。 |
+| **`@zhin.js/adapter-satori`** | [Satori **聊天协议**](https://satori.chat/zh-CN/introduction.html) 的 **IM 适配器**（连 Satori SDK、收消息）。见 [适配器 README](https://github.com/zhinjs/zhin/tree/master/plugins/adapters/satori)。 |
+
+普通聊天机器人 **不需要** 安装本包；只有插件里要 **生成卡片图 / 将 HTML 转 SVG** 时再装。在 Zhin 文档中见 [术语表 - @zhin.js/satori](https://zhin.js.org/reference/glossary.html#包与生态)（或仓库 `docs/reference/glossary.md`）。
+
+---
+
 基于 [官方 satori](https://github.com/vercel/satori) 的薄封装：直接依赖 `satori`；通过 **html-react-parser** 解析 HTML（**需同时安装 `react`**，与 html-react-parser 的 peer 要求一致），再交给 satori 渲染；对外提供**内置字体**。
 
 ## 特性

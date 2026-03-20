@@ -1,6 +1,8 @@
 # 中间件与消息调度
 
-## 消息处理架构
+> **级别：L2～L3**。若尚未了解消息如何进入框架，请先读 [消息如何流转](./message-flow.md)。
+
+## 消息处理架构 {#消息处理架构}
 
 Zhin.js 使用 **MessageDispatcher**（消息调度器）处理所有收到的消息。调度器将消息处理分为三个阶段：
 
@@ -35,11 +37,16 @@ flowchart LR
 2. **Route（路由阶段）** - 判断消息应走「命令路径」还是「AI 路径」
 3. **Handle（处理阶段）** - 交由命令系统或 AI Agent 处理
 
-如果 MessageDispatcher 未注册（极少数情况），框架会回退到旧版中间件链。
+正式运行时须 **`inject('dispatcher').dispatch` 可用**（`zhin.js` 默认会注册）。若缺失，入站命令/AI 路由会被跳过并记错误日志；**不会**再走旧版「根 `middleware` 包裹整条消息链」的兼容路径。
 
-## 中间件（Middleware）
+**路由阶段默认 `exclusive`**（命令与 AI 互斥）。需要「指令 + AI」同时判定时，在配置里显式设置 `dispatcher.mode: dual` 等，详见 [AI 模块：MessageDispatcher 路由](/advanced/ai.html#messagedispatcher-指令与-ai-路由)。
 
-中间件仍然是消息处理的重要组成部分。它以洋葱模型运行，每个中间件可以选择拦截消息或传递给下一个。
+## 中间件（Middleware）何时运行 {#中间件-middleware-何时运行}
+
+在已启用 MessageDispatcher 时，通过 `addMiddleware` 注册的函数会在 **`MessageDispatcher.dispatch` 完成命令/AI 等主处理之后** 执行（实现上为根插件上除内置命令中间件外的 `_getCustomMiddlewares` 链）。  
+因此：**需要在路由之前拦截、过滤、限流**，优先使用 **`dispatcher.addGuardrail`** 或框架内置的 [消息过滤](./message-filter.md)。中间件更适合 **日志、指标、后处理** 等。
+
+中间件仍以洋葱模型运行：每个中间件可选择不调用 `next()` 以终止本条链路。
 
 ### 基础用法
 
@@ -106,9 +113,9 @@ useContext('dispatcher', (dispatcher) => {
 
 MessageDispatcher 在路由阶段判断消息应该怎么处理：
 
-- **命令路径**：消息匹配到已注册的命令 -> 交给 CommandFeature 处理
-- **AI 路径**：消息满足 AI 触发条件（如 @机器人、私聊、AI 前缀） -> 交给 AI Agent 处理
-- **中间件路径**：都不匹配时 -> 走传统中间件链
+- **命令路径**：消息匹配到已注册的命令 → 交给 `CommandFeature` 处理
+- **AI 路径**：消息满足 AI 触发条件（如 @机器人、私聊、前缀）→ 交给 AI Handler / ZhinAgent
+- **无双路径命中**：主处理阶段可能无回复；随后在 Dispatcher 末尾仍会执行上述 **用户自定义 `addMiddleware` 链**（若已注册）
 
 ### AI 触发条件
 

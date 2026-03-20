@@ -249,9 +249,11 @@ bots:
 
 其他连接方式：`connection: sse`（SSE）、`connection: webhook`（Webhook）、`connection: wss`（反向 WS），详见 [@zhin.js/adapter-milky](https://github.com/zhinjs/zhin/tree/master/plugins/adapters/milky) README。
 
-### Satori
+### Satori（协议适配器）
 
-[Satori](https://satori.chat/zh-CN/introduction.html) 通用聊天协议适配器，**一个适配器**支持 WebSocket 正向与 Webhook，由配置项 `connection` 区分；支持 HTTP API 与 Bearer Token 鉴权。
+[Satori](https://satori.chat/zh-CN/introduction.html) **通用聊天协议**适配器（npm：`@zhin.js/adapter-satori`），**一个适配器**支持 WebSocket 正向与 Webhook，由配置项 `connection` 区分；支持 HTTP API 与 Bearer Token 鉴权。
+
+与 **`@zhin.js/satori`（独立包，`packages/satori`）无关**：后者是 Vercel **satori** 的 SVG 渲染封装，用于生成图片，不是 IM 协议。见 [术语表](/reference/glossary)。
 
 安装：
 

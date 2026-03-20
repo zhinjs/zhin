@@ -36,23 +36,6 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
       this.logger.info(`${bot_id} recall ${id}`);
       await bot.$recallMessage(id);
     })
-    this.on('message.receive', (message) => {
-      this.logger.info(`${message.$bot} recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`);
-      const rootPlugin = this.plugin?.root || this.plugin;
-      // 优先使用 MessageDispatcher（新架构），回退到旧中间件链（兼容）
-      const dispatcher = rootPlugin?.inject('dispatcher') as { dispatch?: (msg: Message) => Promise<void> } | undefined;
-      if (dispatcher && typeof dispatcher.dispatch === 'function') {
-        void dispatcher.dispatch(message).catch((err: unknown) => {
-          this.logger.error('dispatcher.dispatch(message) failed', err);
-        });
-      } else {
-        // 旧中间件链回退
-        void Promise.resolve(rootPlugin?.middleware(message, async () => {})).catch((err: unknown) => {
-          this.logger.error('rootPlugin.middleware(message, next) failed', err);
-        });
-      }
-      rootPlugin?.dispatch('message.receive', message);
-    });
     this.on('notice.receive', (notice) => {
       this.logger.info(`${notice.$bot} notice ${notice.$type}${notice.$subType ? '.' + notice.$subType : ''} ${notice.$channel.type}(${notice.$channel.id})`);
       const rootPlugin = this.plugin?.root || this.plugin;
@@ -69,6 +52,54 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
       rootPlugin?.dispatch(`request.${request.$type}` as 'request.receive', request);
     });
   }
+
+  /**
+   * 入站顺序：await MessageDispatcher.dispatch → await 根插件 message.receive（生命周期）→
+   * 再同步调用本适配器上通过 `adapter.on('message.receive')` 注册的观察者（如控制台 UI）。
+   * 不再使用无 Dispatcher 时的根 middleware 回退。
+   */
+  override emit<K extends keyof Adapter.Lifecycle>(
+    eventName: K,
+    ...args: Adapter.Lifecycle[K]
+  ): boolean {
+    if (eventName === 'message.receive') {
+      const message = args[0] as Message;
+      void this.#deliverInboundMessage(message);
+      return true;
+    }
+    return super.emit(eventName, ...(args as any));
+  }
+
+  async #deliverInboundMessage(message: Message): Promise<void> {
+    this.logger.info(`${message.$bot} recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`);
+    const rootPlugin = this.plugin?.root || this.plugin;
+    const dispatcher = rootPlugin?.inject('dispatcher') as { dispatch?: (msg: Message) => Promise<void> } | undefined;
+    if (dispatcher && typeof dispatcher.dispatch === 'function') {
+      try {
+        await dispatcher.dispatch(message);
+      } catch (err: unknown) {
+        this.logger.error('dispatcher.dispatch(message) failed', err);
+      }
+    } else {
+      this.logger.error(
+        'MessageDispatcher missing: inject("dispatcher").dispatch is required for inbound routing (legacy root middleware path removed).',
+      );
+    }
+    try {
+      await rootPlugin?.dispatch('message.receive', message);
+    } catch (err: unknown) {
+      this.logger.error('root dispatch message.receive failed', err);
+    }
+    const observers = this.listeners('message.receive') as ((m: Message) => void)[];
+    for (const fn of observers) {
+      try {
+        fn(message);
+      } catch (e: unknown) {
+        this.logger.error('adapter message.receive observer failed', e);
+      }
+    }
+  }
+
   abstract createBot(config: Adapter.BotConfig<R>): R;
   get logger() {
     if(!this.plugin) throw new Error("Adapter is not associated with any plugin");

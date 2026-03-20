@@ -31,6 +31,8 @@ pnpm dev          # 开发模式（热重载）
 
 访问 Web 控制台：`http://localhost:8086`
 
+按 **L1 → L2 → L3** 渐进阅读文档：站点 [学习路径](https://zhin.js.org/essentials/learning-paths)（或仓库 `docs/essentials/learning-paths.md`）；消息从哪来到哪去见 [消息如何流转](https://zhin.js.org/essentials/message-flow)。
+
 > **Windows 用户注意** 📌：如果首次初始化遇到问题，请参考 [Windows 初始化指南](./docs/essentials/windows-setup.md)，包含详细的排查步骤。
 
 ### 贡献者（开发框架本身）

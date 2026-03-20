@@ -1,5 +1,7 @@
 # 核心概念
 
+> **级别：L1～L2**。不知道从哪里读起时，先看 [学习路径](./learning-paths)；弄清消息顺序请看 [消息如何流转](./message-flow)。
+
 在深入学习之前，让我们先理解 Zhin.js 的核心概念。这些概念是构建机器人的基础。
 
 ## 插件（Plugin）
@@ -79,46 +81,9 @@ addCommand(
 
 ## 中间件（Middleware）
 
-**中间件是消息处理的拦截器**。它可以在消息到达命令之前进行处理。
+> **级别：L2～L3**。请先阅读 [消息如何流转](./message-flow)：框架用 **MessageDispatcher** 做主路由；**在路由之前**拦截请优先 **Guardrail** 或 [消息过滤](./message-filter)；`addMiddleware` 注册的链主要在 Dispatcher **主处理之后** 运行。
 
-### 中间件的作用
-
-想象中间件是一道道关卡：
-- 消息从用户发出
-- 经过中间件 1（检查权限）
-- 经过中间件 2（过滤敏感词）
-- 经过中间件 3（记录日志）
-- 最终到达命令处理
-
-### 创建中间件
-
-```typescript
-const { addMiddleware } = usePlugin()
-
-addMiddleware(async (message, next) => {
-  // 在命令执行前
-  console.log('收到消息:', message.$raw)
-  
-  // 调用下一个中间件或命令
-  await next()
-  
-  // 在命令执行后
-  console.log('处理完成')
-})
-```
-
-### 实用示例：权限检查
-
-```typescript
-addMiddleware(async (message, next) => {
-  // 只允许管理员使用
-  if (message.$sender?.id !== 'admin') {
-    return '权限不足'
-  }
-  
-  return next()
-})
-```
+**中间件**仍可用于日志、统计、在 `next()` 前后附加逻辑等。详细说明、与 Guardrail 的分工及示例见 **[中间件与消息调度](./middleware)**。
 
 ## 上下文（Context）
 
@@ -273,17 +238,20 @@ onDispose(() => {
 
 ## 核心概念关系图
 
+下图粗粒度表示 **Dispatcher 内部**；完整入站顺序（含 `Adapter.emit`、根插件 `message.receive`）见 [消息如何流转](./message-flow)。
+
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '13px' }}}%%
 flowchart TD
-  A([" 📨 用户消息 "]) --> B["MessageDispatcher"]
-  B --> C{" 🛡️ Guardrail\n权限 · 速率限制 "}
-  C -->|" ✅ 通过 "| D{" 🔀 Route "}
-  D -->|" ⌨️ 命令匹配 "| E["CommandFeature"]
-  D -->|" 🤖 AI 触发 "| F["ZhinAgent"]
-  E --> G["Handle — 执行 + 回复"]
-  F --> G
-  G --> H(["📤 返回结果"])
+  A([" 📨 用户消息 "]) --> B[" Bot与Adapter入站 "]
+  B --> C[" MessageDispatcher "]
+  C --> D{" 🛡️ Guardrail "}
+  D -->|" ✅ 通过 "| E{" 🔀 Route默认exclusive "}
+  E -->|" ⌨️ 命令 "| F[" CommandFeature "]
+  E -->|" 🤖 AI "| G[" ZhinAgent "]
+  F --> H[" 处理与回复 "]
+  G --> H
+  H --> I([" 再进入插件message_receive等 "])
 
   classDef input fill:#e3f2fd,stroke:#1565c0,color:#0d47a1,rx:20
   classDef output fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20,rx:20
@@ -293,21 +261,23 @@ flowchart TD
   classDef normal fill:#f5f5f5,stroke:#bdbdbd,color:#424242,rx:6
 
   class A input
-  class H output
-  class C guard
-  class D route
-  class F ai
-  class B,E,G normal
+  class I output
+  class D guard
+  class E route
+  class G ai
+  class B,C,F,H normal
 ```
 
-> 详细的分层架构说明请参阅 [架构概览](/architecture-overview)。
+> 详细分层与依赖请参阅 [架构概览](/architecture-overview)；术语见 [术语表](/reference/glossary)。
 
 ## 下一步
 
 现在你已经理解了核心概念，可以继续学习：
 
+- **[学习路径](./learning-paths)** - 按 L1/L2/L3 选读
+- **[消息如何流转](./message-flow)** - 入站/出站一页弄清
 - **[配置文件](./configuration)** - 配置机器人行为
 - **[命令系统](./commands)** - 深入学习命令开发
 - **[插件系统](./plugins)** - 创建复杂的插件
-- **[中间件](./middleware)** - 消息处理流程
+- **[中间件](./middleware)** - 与 Dispatcher、Guardrail 的配合
 
