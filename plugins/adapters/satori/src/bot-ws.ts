@@ -35,7 +35,11 @@ export class SatoriWsClient extends EventEmitter implements Bot<SatoriWsConfig, 
 
   private get wsUrl(): string {
     const base = this.$config.baseUrl.replace(/\/$/, '');
-    return base.replace(/^http/, 'ws') + '/v1/events';
+    const url=new URL(base);
+    if(this.$config.token) {
+      url.searchParams.set('access_token', this.$config.token);
+    }
+    return url.toString();
   }
 
   private apiOptions(): { baseUrl: string; platform: string; userId: string; token?: string } {
@@ -68,7 +72,7 @@ export class SatoriWsClient extends EventEmitter implements Bot<SatoriWsConfig, 
   async $connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       const headers: Record<string, string> = {};
-      if (this.$config.token) headers['Authorization'] = `Bearer ${this.$config.token}`;
+      if (this.$config.token) headers['Authorization'] = `Bearer ${this.$config.token}`
       this.ws = new WebSocket(this.wsUrl, { headers });
 
       this.ws.on('open', () => {
