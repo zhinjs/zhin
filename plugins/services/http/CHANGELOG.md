@@ -1,5 +1,12 @@
 # @zhin.js/http
 
+## 1.0.48
+
+### Patch Changes
+
+- zhin.js@1.0.53
+- @zhin.js/schema@1.0.37
+
 ## 1.0.47
 
 ### Patch Changes

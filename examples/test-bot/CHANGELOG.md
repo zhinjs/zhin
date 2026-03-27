@@ -1,5 +1,40 @@
 # test-bot
 
+## 0.1.58
+
+### Patch Changes
+
+- zhin.js@1.0.53
+- @zhin.js/adapter-icqq@1.0.66
+- @zhin.js/adapter-sandbox@1.0.65
+- @zhin.js/adapter-dingtalk@1.0.43
+- @zhin.js/adapter-discord@1.0.58
+- @zhin.js/adapter-email@0.1.42
+- @zhin.js/adapter-github@0.1.23
+- @zhin.js/adapter-kook@1.0.55
+- @zhin.js/adapter-lark@1.0.59
+- @zhin.js/adapter-milky@0.0.4
+- @zhin.js/adapter-onebot11@1.0.59
+- @zhin.js/adapter-onebot12@0.0.4
+- @zhin.js/adapter-qq@1.0.55
+- @zhin.js/adapter-satori@0.0.4
+- @zhin.js/adapter-slack@1.0.40
+- @zhin.js/adapter-telegram@1.0.40
+- @zhin.js/adapter-wechat-mp@0.1.43
+- @zhin.js/console@1.0.54
+- @zhin.js/http@1.0.48
+- @zhin.js/mcp@1.0.37
+- @zhin.js/plugin-60s@0.0.4
+- @zhin.js/plugin-checkin@0.0.1
+- @zhin.js/plugin-group-daily-analysis@0.0.4
+- @zhin.js/plugin-html-renderer@0.0.33
+- @zhin.js/plugin-music@0.0.47
+- @zhin.js/plugin-repeater@0.0.1
+- @zhin.js/plugin-rss@0.0.2
+- @zhin.js/sensitive-filter@0.0.40
+- @zhin.js/plugin-stats@0.0.1
+- @zhin.js/plugin-teach@0.0.1
+
 ## 0.1.57
 
 ### Patch Changes
