@@ -1,5 +1,12 @@
 # @zhin.js/database
 
+## 1.0.40
+
+### Patch Changes
+
+- daee7f6: fix: database error
+  - zhin.js@1.0.53
+
 ## 1.0.39
 
 ### Patch Changes
