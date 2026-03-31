@@ -388,7 +388,11 @@ export function sanitizeHtml(html: string): string {
   // 将危险 URI 协议替换为安全值（引号写法，含 HTML 实体混淆检测）
   result = result.replace(URI_ATTR_QUOTED_RE, (match, prefix: string, value: string) => {
     const decoded = decodeHtmlEntities(value).replace(/\s+/g, '').toLowerCase();
-    if (decoded.startsWith('javascript:') || decoded.startsWith('vbscript:') || decoded.startsWith('data:text/html')) {
+    if (decoded.startsWith('javascript:') || decoded.startsWith('vbscript:')) {
+      return `${prefix}about:invalid`;
+    }
+    // Block data: URIs except safe media types (image/*, font/*)
+    if (decoded.startsWith('data:') && !decoded.startsWith('data:image/') && !decoded.startsWith('data:font/')) {
       return `${prefix}about:invalid`;
     }
     return match;
