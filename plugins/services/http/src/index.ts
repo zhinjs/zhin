@@ -75,6 +75,13 @@ useContext("config", (configService) => {
   // 反向代理场景下信任 X-Forwarded-Host / X-Forwarded-Proto 等
   koa.proxy = trustProxy;
 
+  // 安全响应头
+  koa.use(async (ctx, next) => {
+    ctx.set('X-Content-Type-Options', 'nosniff');
+    ctx.set('X-Frame-Options', 'DENY');
+    await next();
+  });
+
   // Token 认证中间件：仅对 API 路径要求认证
   koa.use(async (ctx, next) => {
     if (!ctx.path.startsWith(base + '/') && ctx.path !== base) return next();
@@ -93,7 +100,10 @@ useContext("config", (configService) => {
       ? authHeader.slice(7)
       : undefined;
 
-    if (reqToken !== token) {
+    // 使用 timingSafeEqual 防止时序攻击（长度不同也不短路退出）
+    const expected = Buffer.from(token);
+    const received = Buffer.from(reqToken || '');
+    if (expected.length !== received.length || !crypto.timingSafeEqual(expected, received)) {
       ctx.status = 401;
       ctx.body = { success: false, error: 'Invalid or missing token' };
       return;
@@ -366,7 +376,7 @@ useContext("config", (configService) => {
     } catch (err: any) {
       logger.error("message/send failed: " + (err?.message || String(err)));
       ctx.status = 500;
-      ctx.body = { success: false, error: err?.message || String(err) };
+      ctx.body = { success: false, error: 'Message sending failed' };
     }
   });
   server.listen({ host, port }, () => {
@@ -390,7 +400,7 @@ useContext("database", (database: DatabaseFeature) => {
 
   // 日志 API - 获取日志
   router.get(`${base}/logs`, async (ctx) => {
-    const limit = parseInt(ctx.query.limit as string) || 100;
+    const limit = Math.min(Math.max(parseInt(ctx.query.limit as string, 10) || 100, 1), 1000);
     const level = ctx.query.level as string;
 
     const LogModel = database.models.get("SystemLog");
