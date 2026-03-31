@@ -86,56 +86,80 @@ export class IcqqBot
     this.on("request.friend.add", (e: FriendRequestEvent) => this.handleFriendRequest(e));
     this.on("request.group.add", (e: GroupRequestEvent) => this.handleGroupRequest(e, 'group_add'));
     this.on("request.group.invite", (e: GroupInviteEvent) => this.handleGroupRequest(e, 'group_invite'));
-    const root = this.adapter.plugin?.root;
-    const loginAssist = root?.inject?.('loginAssist' as any) as { waitForInput: (adapter: string, botId: string, type: string, payload?: Record<string, unknown>) => Promise<string | Record<string, unknown>> } | undefined;
 
-    this.on("system.login.device", async (e: unknown) => {
+    this.on("system.login.device", async (e) => {
+      this.pluginLogger.info(`[${this.$config.name}] 触发设备验证，正在发送短信验证码...`);
       await this.sendSmsCode();
-      if (loginAssist) {
-        const value = await loginAssist.waitForInput('icqq', this.$config.name, 'device', { message: '请输入短信验证码' });
-        const code = typeof value === 'string' ? value : (value?.code as string) ?? '';
-        this.submitSmsCode(code.trim());
-      } else {
-        this.pluginLogger.info("请输入短信验证码:");
-        process.stdin.once("data", (data: Buffer) => {
-          this.submitSmsCode(data.toString().trim());
-        });
-      }
+      this.pluginLogger.info(`[${this.$config.name}] 短信验证码已发送，请查收手机短信`);
+      this.pluginLogger.info(`[${this.$config.name}] 请在终端输入短信验证码:`);
+      process.stdin.once("data", (data: Buffer) => {
+        this.pluginLogger.info(`[${this.$config.name}] 正在提交短信验证码...`);
+        this.submitSmsCode(data.toString().trim());
+      });
     });
     this.on("system.login.qrcode", async (e: any) => {
-      if (loginAssist) {
-        await loginAssist.waitForInput('icqq', this.$config.name, 'qrcode', {
-          message: '请扫码完成后在 Web 控制台或命令行确认',
-          image: e.image,
-        });
+      this.pluginLogger.info(`[${this.$config.name}] 触发扫码登录，请使用手机 QQ 扫描二维码`);
+      this.pluginLogger.info(`[${this.$config.name}] 扫码完成后按回车继续`);
+      process.stdin.once("data", () => {
+        this.pluginLogger.info(`[${this.$config.name}] 扫码已确认，正在登录...`);
         this.login();
-      } else {
-        this.pluginLogger.info(`取码地址：${e.image}\n请扫码完成后回车继续:`);
-        process.stdin.once("data", () => {
-          this.login();
-        });
-      }
+      });
     });
     this.on("system.login.slider", async (e: { url: string }) => {
-      if (loginAssist) {
-        const value = await loginAssist.waitForInput('icqq', this.$config.name, 'slider', {
-          message: '请输入滑块验证 ticket',
-          url: e.url,
-        });
-        const ticket = typeof value === 'string' ? value : (value?.ticket as string) ?? '';
-        this.submitSlider(ticket.trim());
-      } else {
-        this.pluginLogger.info(`取码地址：${e.url}\n请输入滑块验证ticket:`);
-        process.stdin.once("data", (data: Buffer) => {
-          this.submitSlider(data.toString().trim());
-        });
-      }
-    });
-    return new Promise((resolve) => {
-      this.once("system.online", () => {
-        this.$connected = true;
-        resolve();
+      this.pluginLogger.info(`[${this.$config.name}] 触发滑块验证`);
+      this.pluginLogger.info(`[${this.$config.name}] 验证地址: ${e.url}`);
+      this.pluginLogger.info(`[${this.$config.name}] 请在浏览器中完成滑块验证后，在终端输入 ticket:`);
+      process.stdin.once("data", (data: Buffer) => {
+        this.pluginLogger.info(`[${this.$config.name}] 正在提交滑块 ticket...`);
+        this.submitSlider(data.toString().trim());
       });
+    });
+
+    const LOGIN_TIMEOUT = 120_000; // 2 分钟登录超时
+    const loginMode = this.$config.password ? '密码' : '扫码';
+    this.pluginLogger.info(`[${this.$config.name}] 正在尝试${loginMode}登录...`);
+
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        cleanup();
+        const msg = `[${this.$config.name}] 登录超时（${LOGIN_TIMEOUT / 1000}s），请检查网络或验证流程是否完成`;
+        this.pluginLogger.error(msg);
+        reject(new Error(msg));
+      }, LOGIN_TIMEOUT);
+
+      const cleanup = () => {
+        clearTimeout(timer);
+        // once 注册的监听器在触发后会自动移除，这里只清理未触发的
+        this.off("system.online" as any);
+        this.off("system.login.error" as any);
+        this.off("system.offline" as any);
+      };
+
+      const onOnline = () => {
+        cleanup();
+        this.$connected = true;
+        this.pluginLogger.info(`[${this.$config.name}] 登录成功，已上线`);
+        resolve();
+      };
+
+      const onError = (e: { code: number; message: string }) => {
+        cleanup();
+        const msg = `[${this.$config.name}] 登录失败 (code=${e.code}): ${e.message}`;
+        this.pluginLogger.error(msg);
+        reject(new Error(msg));
+      };
+
+      const onOffline = (e?: { message: string }) => {
+        cleanup();
+        const msg = `[${this.$config.name}] 登录过程中掉线: ${e?.message ?? '未知原因'}`;
+        this.pluginLogger.error(msg);
+        reject(new Error(msg));
+      };
+
+      this.once("system.online", onOnline);
+      this.once("system.login.error", onError as any);
+      this.once("system.offline", onOffline);
+
       this.login(Number(this.$config.name), this.$config.password);
     });
   }

@@ -130,9 +130,13 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
 
     for (const config of this.config) {
       const bot = this.createBot(config);
-      await bot.$connect();
-      this.logger.debug(`bot ${bot.$id} of adapter ${this.name} connected`);
-      this.bots.set(bot.$id, bot);
+      try {
+        await bot.$connect();
+        this.logger.debug(`bot ${bot.$id} of adapter ${this.name} connected`);
+        this.bots.set(bot.$id, bot);
+      } catch (error) {
+        this.logger.error(`bot ${bot.$id} of adapter ${this.name} 连接失败: ${error instanceof Error ? error.message : error}`);
+      }
     }
     this.logger.debug(`adapter ${this.name} started`);
   }

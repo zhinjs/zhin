@@ -69,17 +69,20 @@ export class OneBot12WsClient extends EventEmitter implements Bot<OneBot12WsConf
   async $connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       const headers: Record<string, string> = {};
+      let connectUrl = this.$config.url;
       if (this.$config.access_token) {
         headers['Authorization'] = `Bearer ${this.$config.access_token}`;
-        const url=new URL(this.$config.url);
+        const url = new URL(this.$config.url);
         url.searchParams.set('access_token', this.$config.access_token);
-        this.$config.url = url.toString();
+        connectUrl = url.toString();
       }
-      this.ws = new WebSocket(this.$config.url, { headers });
+      this.ws = new WebSocket(connectUrl, { headers });
 
       this.ws.on('open', () => {
         this.$connected = true;
-        this.logger.info(`${this.$config.name} 已连接 (WS 正向: ${this.$config.url})`);
+        const safeUrl = new URL(connectUrl);
+        safeUrl.searchParams.delete('access_token');
+        this.logger.info(`${this.$config.name} 已连接 (WS 正向: ${safeUrl})`);
         this.startHeartbeat();
         resolve();
       });

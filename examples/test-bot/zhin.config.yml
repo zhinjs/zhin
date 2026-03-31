@@ -2,29 +2,6 @@ log_level: 1
 database:
   dialect: sqlite
   filename: ./data/test.db
-
-# 消息过滤配置（可选）
-# 基于优先级规则的过滤引擎，在 Dispatcher Guardrail 第一阶段拦截
-# 文档：https://zhin.js.org/essentials/message-filter
-#
-# 规则形式（推荐）：
-# message_filter:
-#   default_policy: allow         # 无规则匹配时的行为
-#   rules:
-#     - name: block-spam-groups
-#       action: deny
-#       scopes: [group]
-#       channels: ['123456']
-#     - name: allow-vip
-#       action: allow
-#       priority: 100
-#       senders: ['admin001']
-#     - name: block-test-channels
-#       action: deny
-#       scopes: [channel]
-#       channels: ['/^test-/']     # 支持正则
-
-
 bots:
   - context: icqq
     name: ${ICQQ_ACCOUNT}
@@ -34,27 +11,16 @@ bots:
     ver: 9.1.70
     data_dir: ./data
     scope: icqqjs
-  - context: milky
-    connection: ws
-    name: milky-bot
-    baseUrl: "${MILKY_BASE_URL}"
-    access_token: "${COMMON_ACCESS_TOKEN}"
-  - context: satori
-    connection: ws
-    name: satori-bot
-    baseUrl: "${SATORI_BASE_URL}"
-    token: "${COMMON_ACCESS_TOKEN}"
-    heartbeat_interval: 10000
-  - context: onebot12
-    connection: ws
-    name: ob12-bot
-    url: "${ONEBOT12_BASE_URL}"
-    access_token: "${COMMON_ACCESS_TOKEN}"
   - context: onebot11
     connection: ws
-    name: kook-zhin
-    url: "${ONEBOT11_BASE_URL}"
-    access_token: "kook_v11_token"
+    name: discord-zhin
+    url: wss://onebots.l2cl.link/discord/zhin/onebot/v11?access_token=Lcl9623.
+    access_token: ${COMMON_ACCESS_TOKEN}
+  - context: onebot11
+    connection: ws
+    name: telegram-zhin
+    url: wss://onebots.l2cl.link/telegram/zhin/onebot/v11?access_token=Lcl9623.
+    access_token: ${COMMON_ACCESS_TOKEN}
   - context: github
     name: zhin-github
     app_id: ${GITHUB_APP_ID}
@@ -82,12 +48,11 @@ plugins:
   - "@zhin.js/adapter-sandbox"
   - "@zhin.js/adapter-kook"
   - "@zhin.js/adapter-milky"
-  # - "@zhin.js/adapter-satori"
-  # - "@zhin.js/adapter-onebot11"
-  # - "@zhin.js/adapter-onebot12"
-  - "@zhin.js/adapter-icqq"
-  # - "@zhin.js/adapter-qq"
-  - "html-test"
+  - "@zhin.js/adapter-satori"
+  - "@zhin.js/adapter-onebot11"
+  - "@zhin.js/adapter-onebot12"
+  - "@zhin.js/adapter-qq"
+  - html-test
   - "@zhin.js/plugin-html-renderer"
   - "@zhin.js/plugin-group-daily-analysis"
   - "@zhin.js/plugin-60s"
@@ -98,13 +63,13 @@ console:
 inbox:
   enabled: true
 group-daily-analysis:
-  analysisDays: 1              # 默认分析最近天数
-  autoAnalysisEnabled: true   # 是否定时自动分析
-  autoAnalysisCron: "0 9 * * *"  # 每日 9 点
-  enabledGroups: []           # 群 ID 白名单（空表示不限制）
-  disabledGroups: []           # 群 ID 黑名单
-  outputFormat: "text"         # text | image（image 需 html-renderer）
-  maxMessagesPerAnalysis: 500 # 单次分析最多使用的消息条数
+  analysisDays: 1
+  autoAnalysisEnabled: true
+  autoAnalysisCron: 0 9 * * *
+  enabledGroups: []
+  disabledGroups: []
+  outputFormat: text
+  maxMessagesPerAnalysis: 500
 ai:
   enabled: true
   defaultProvider: ollama
@@ -165,8 +130,6 @@ htmlRenderer:
   defaultWidth: 1080
   defaultBackgroundColor: "#ffffff"
   cacheFonts: true
-  # 纯文本在发出前自动转 PNG（AI 与普通 $reply 的纯文本都会生效；按需开启）
-  # aiTextAsImage: true
 60s:
   apiBase: https://services.zhin.dev
 http:
