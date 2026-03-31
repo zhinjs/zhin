@@ -99,3 +99,7 @@ defineModel('users', {
 - ✅ 依赖关系自动管理
 
 [了解更多 →](./hot-reload)
+
+## 更多
+
+- [插件开发、测试与发布](/guide/plugin-development) — 从创建到发布的完整插件生命周期指南

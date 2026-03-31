@@ -409,6 +409,7 @@ http:
 
 恭喜！你已经成功创建了第一个 Zhin.js 机器人。接下来可以：
 
+- **[插件开发、测试与发布](/guide/plugin-development)** - 完整的插件生命周期（创建 → 测试 → 构建 → 发布）
 - **[配置文件](/essentials/configuration)** - 了解更多配置选项
 - **[命令系统](/essentials/commands)** - 学习创建复杂命令
 - **[插件系统](/essentials/plugins)** - 深入理解插件开发
