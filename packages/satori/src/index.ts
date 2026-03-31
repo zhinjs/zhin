@@ -7,7 +7,7 @@
  */
 
 export { default as satori, default } from 'satori';
-export { htmlToSvg } from './html-to-svg.js';
+export { htmlToSvg, sanitizeHtml } from './html-to-svg.js';
 export type { HtmlToSvgOptions } from './html-to-svg.js';
 
 export type { BuiltinFont, Weight, FontStyle } from './fonts.js';

@@ -325,8 +325,88 @@ function normalizeRoot(parsed: unknown): SatoriElement {
   };
 }
 
+/**
+ * 危险 HTML 标签名（小写）——在传入 html-react-parser 之前移除。
+ * 这些标签可执行脚本、嵌入外部资源或引入 XSS 向量。
+ */
+const DANGEROUS_TAGS = [
+  'script', 'iframe', 'object', 'embed', 'applet',
+  'form', 'input', 'textarea', 'button', 'select',
+  'link', 'meta', 'base', 'noscript',
+];
+
+/** 预编译：带内容的危险标签（如 <script>...</script>） */
+const DANGEROUS_TAG_PAIR_RES = DANGEROUS_TAGS.map(
+  tag => new RegExp(`<${tag}[^>]*>[\\s\\S]*?<\\/${tag}\\s*>`, 'gi'),
+);
+
+/** 自闭合或未闭合的危险标签 */
+const DANGEROUS_TAG_RE = new RegExp(
+  `<\\/?\\s*(${DANGEROUS_TAGS.join('|')})[^>]*>`,
+  'gi',
+);
+
+/** 匹配 on* 事件处理属性，如 onclick="..." onLoad='...' ONERROR=xxx（gi 标志处理大小写） */
+const EVENT_HANDLER_RE = /\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
+
+/**
+ * 匹配 href / src / action 等 URI 属性（引号值写法），用于 javascript: 检测。
+ * 捕获组 1 = 属性前缀（含引号），捕获组 2 = 属性值（引号内内容）。
+ */
+const URI_ATTR_QUOTED_RE = /(\s+(?:href|src|action|formaction|data|xlink:href)\s*=\s*["'])([^"']*)/gi;
+const JS_PROTOCOL_UNQUOTED_RE = /(\s+(?:href|src|action|formaction|data|xlink:href)\s*=\s*)(?:javascript|vbscript):/gi;
+
+/** 解码 HTML 数字实体（&#NNN; 和 &#xHH;），用于检测混淆后的 javascript: URI */
+function decodeHtmlEntities(s: string): string {
+  return s.replace(/&#x([0-9a-fA-F]+);?/g, (_, hex: string) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&#(\d+);?/g, (_, dec: string) => String.fromCharCode(parseInt(dec, 10)));
+}
+
+/**
+ * 从 HTML 字符串中移除危险内容，防止 XSS。
+ * 移除：危险标签（含内容）、on* 事件处理属性、javascript: URI。
+ */
+export function sanitizeHtml(html: string): string {
+  let result = html;
+
+  // 移除带内容的危险标签（如 <script>...</script>）
+  for (const re of DANGEROUS_TAG_PAIR_RES) {
+    re.lastIndex = 0;
+    result = result.replace(re, '');
+  }
+
+  // 移除自闭合或未闭合的危险标签
+  result = result.replace(DANGEROUS_TAG_RE, '');
+
+  // 移除事件处理属性（循环直到没有更多匹配，防止嵌套如 ononclick）
+  let prev: string;
+  do {
+    prev = result;
+    result = result.replace(EVENT_HANDLER_RE, '');
+  } while (result !== prev);
+
+  // 将危险 URI 协议替换为安全值（引号写法，含 HTML 实体混淆检测）
+  result = result.replace(URI_ATTR_QUOTED_RE, (match, prefix: string, value: string) => {
+    const decoded = decodeHtmlEntities(value).replace(/\s+/g, '').toLowerCase();
+    if (decoded.startsWith('javascript:') || decoded.startsWith('vbscript:')) {
+      return `${prefix}about:invalid`;
+    }
+    // Block data: URIs except safe media types (image/*, font/*)
+    if (decoded.startsWith('data:') && !decoded.startsWith('data:image/') && !decoded.startsWith('data:font/')) {
+      return `${prefix}about:invalid`;
+    }
+    return match;
+  });
+
+  // 将危险 URI 协议替换为安全值（无引号写法）
+  result = result.replace(JS_PROTOCOL_UNQUOTED_RE, '$1"about:invalid"');
+
+  return result;
+}
+
 export async function htmlToSvg(html: string, options: HtmlToSvgOptions): Promise<string> {
-  const parsed = parse(html);
+  const sanitized = sanitizeHtml(html);
+  const parsed = parse(sanitized);
   const tree = normalizeRoot(parsed);
   return satori(tree as Parameters<typeof satori>[0], options as Parameters<typeof satori>[1]);
 }

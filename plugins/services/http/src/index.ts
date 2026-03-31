@@ -22,7 +22,7 @@ declare module "zhin.js" {
 export const httpSchema = Schema.object({
   port: Schema.number().default(8086).description("HTTP 服务端口"),
   token: Schema.string().description(
-    "API 访问令牌，不填则自动生成。通过 Authorization: Bearer <token> 或 ?token=<token> 传递"
+    "API 访问令牌，不填则自动生成。通过 Authorization: Bearer <token> 传递"
   ),
   base: Schema.string()
     .default("/api")
@@ -75,6 +75,13 @@ useContext("config", (configService) => {
   // 反向代理场景下信任 X-Forwarded-Host / X-Forwarded-Proto 等
   koa.proxy = trustProxy;
 
+  // 安全响应头
+  koa.use(async (ctx, next) => {
+    ctx.set('X-Content-Type-Options', 'nosniff');
+    ctx.set('X-Frame-Options', 'SAMEORIGIN');
+    await next();
+  });
+
   // Token 认证中间件：仅对 API 路径要求认证
   koa.use(async (ctx, next) => {
     if (!ctx.path.startsWith(base + '/') && ctx.path !== base) return next();
@@ -87,13 +94,16 @@ useContext("config", (configService) => {
     );
     if (isWhitelisted) return next();
 
-    // 从 Bearer token 或 query 参数中提取 token
+    // 仅从 Authorization: Bearer 头提取 token（不接受 query 参数，避免凭据泄漏）
     const authHeader = ctx.get('Authorization');
     const reqToken = authHeader?.startsWith('Bearer ')
       ? authHeader.slice(7)
-      : (ctx.query.token as string);
+      : undefined;
 
-    if (reqToken !== token) {
+    // 使用 HMAC 做固定时间比较，避免长度与内容两层时序泄漏
+    const expected = crypto.createHmac('sha256', token).update(token).digest();
+    const received = crypto.createHmac('sha256', token).update(reqToken || '').digest();
+    if (!crypto.timingSafeEqual(expected, received)) {
       ctx.status = 401;
       ctx.body = { success: false, error: 'Invalid or missing token' };
       return;
@@ -366,7 +376,7 @@ useContext("config", (configService) => {
     } catch (err: any) {
       logger.error("message/send failed: " + (err?.message || String(err)));
       ctx.status = 500;
-      ctx.body = { success: false, error: err?.message || String(err) };
+      ctx.body = { success: false, error: 'Message sending failed' };
     }
   });
   server.listen({ host, port }, () => {
@@ -390,7 +400,7 @@ useContext("database", (database: DatabaseFeature) => {
 
   // 日志 API - 获取日志
   router.get(`${base}/logs`, async (ctx) => {
-    const limit = parseInt(ctx.query.limit as string) || 100;
+    const limit = Math.min(Math.max(parseInt(ctx.query.limit as string, 10) || 100, 1), 1000);
     const level = ctx.query.level as string;
 
     const LogModel = database.models.get("SystemLog");
