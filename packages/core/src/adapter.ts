@@ -2,23 +2,19 @@ import { Bot } from "./bot.js";
 import { Plugin } from "./plugin.js";
 import { EventEmitter } from "events";
 import { Message } from "./message.js";
-import { Notice, NoticeType } from "./notice.js";
-import { Request, RequestType } from "./request.js";
-import { BeforeSendHandler, SendOptions, Tool, ToolContext, ToolScope } from "./types.js";
+import { BeforeSendHandler, SendOptions, AITool, ToolContext } from "./types.js";
 import { segment } from "./utils.js";
-import { ZhinTool, isZhinTool, type ToolInput } from "./built/tool.js";
 /**
- * Adapter 类：适配器抽象，管理多平台 Bot 实例。
+ * Adapter类：适配器抽象，管理多平台Bot实例。
  * 负责根据配置启动/关闭各平台机器人，统一异常处理。
- *
- * 适配器可提供 AI 工具；群管等由各 IM 平台在子类中实现方法并注册 Tool（如 createGroupManagementTools）。
- * 面向 AI 的技能说明请使用包内 `skills/<name>/SKILL.md`（由 Agent 扫描），不再提供代码内 declareSkill。
+ * 
+ * 适配器可以提供 AI 工具，供 AI 服务调用。
  */
 export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.Lifecycle> {
   /** 当前适配器下所有Bot实例，key为bot名称 */
   public bots: Map<string, R> = new Map<string, R>();
-  /** 适配器提供的工具 */
-  public tools: Map<string, Tool> = new Map<string, Tool>();
+  /** 适配器提供的 AI 工具 */
+  public tools: Map<string, AITool> = new Map<string, AITool>();
   /**
    * 构造函数
    * @param name 适配器名称（如 'process'、'qq' 等）
@@ -36,70 +32,11 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
       this.logger.info(`${bot_id} recall ${id}`);
       await bot.$recallMessage(id);
     })
-    this.on('notice.receive', (notice) => {
-      this.logger.info(`${notice.$bot} notice ${notice.$type}${notice.$subType ? '.' + notice.$subType : ''} ${notice.$channel.type}(${notice.$channel.id})`);
-      const rootPlugin = this.plugin?.root || this.plugin;
-      rootPlugin?.dispatch('notice.receive', notice);
-      // 分发细粒度事件: notice.{type} 和 notice.{channelType}.{type}
-      rootPlugin?.dispatch(`notice.${notice.$type}` as 'notice.receive', notice);
-      rootPlugin?.dispatch(`notice.${notice.$channel.type}.${notice.$type}` as 'notice.receive', notice);
-    });
-    this.on('request.receive', (request) => {
-      this.logger.info(`${request.$bot} request ${request.$type}${request.$subType ? '.' + request.$subType : ''} from ${request.$sender.id}`);
-      const rootPlugin = this.plugin?.root || this.plugin;
-      rootPlugin?.dispatch('request.receive', request);
-      // 分发细粒度事件: request.{type}
-      rootPlugin?.dispatch(`request.${request.$type}` as 'request.receive', request);
+    this.on('message.receive', (message) => {
+      this.logger.info(`${message.$bot} recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`);
+      this.plugin?.middleware(message, async ()=>{});
     });
   }
-
-  /**
-   * 入站顺序：await MessageDispatcher.dispatch → await 根插件 message.receive（生命周期）→
-   * 再同步调用本适配器上通过 `adapter.on('message.receive')` 注册的观察者（如控制台 UI）。
-   * 不再使用无 Dispatcher 时的根 middleware 回退。
-   */
-  override emit<K extends keyof Adapter.Lifecycle>(
-    eventName: K,
-    ...args: Adapter.Lifecycle[K]
-  ): boolean {
-    if (eventName === 'message.receive') {
-      const message = args[0] as Message;
-      void this.#deliverInboundMessage(message);
-      return true;
-    }
-    return super.emit(eventName, ...(args as any));
-  }
-
-  async #deliverInboundMessage(message: Message): Promise<void> {
-    this.logger.info(`${message.$bot} recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`);
-    const rootPlugin = this.plugin?.root || this.plugin;
-    const dispatcher = rootPlugin?.inject('dispatcher') as { dispatch?: (msg: Message) => Promise<void> } | undefined;
-    if (dispatcher && typeof dispatcher.dispatch === 'function') {
-      try {
-        await dispatcher.dispatch(message);
-      } catch (err: unknown) {
-        this.logger.error('dispatcher.dispatch(message) failed', err);
-      }
-    } else {
-      this.logger.error(
-        'MessageDispatcher missing: inject("dispatcher").dispatch is required for inbound routing (legacy root middleware path removed).',
-      );
-    }
-    try {
-      await rootPlugin?.dispatch('message.receive', message);
-    } catch (err: unknown) {
-      this.logger.error('root dispatch message.receive failed', err);
-    }
-    const observers = this.listeners('message.receive') as ((m: Message) => void)[];
-    for (const fn of observers) {
-      try {
-        fn(message);
-      } catch (e: unknown) {
-        this.logger.error('adapter message.receive observer failed', e);
-      }
-    }
-  }
-
   abstract createBot(config: Adapter.BotConfig<R>): R;
   get logger() {
     if(!this.plugin) throw new Error("Adapter is not associated with any plugin");
@@ -108,7 +45,6 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
   binding(plugin: Plugin) {
     this.plugin = plugin;
   }
-  /** 出站统一预处理：`MessageDispatcher.replyWithPolish` 与任意 `$reply` 最终都走此处。润色见 `addOutboundPolish`（注册额外的 before.sendMessage）。 */
   private async renderSendMessage(options:SendOptions):Promise<SendOptions>{
     const fns=this.plugin.root.listeners('before.sendMessage') as BeforeSendHandler[];
     for(const fn of fns){
@@ -130,13 +66,9 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
 
     for (const config of this.config) {
       const bot = this.createBot(config);
-      try {
-        await bot.$connect();
-        this.logger.debug(`bot ${bot.$id} of adapter ${this.name} connected`);
-        this.bots.set(bot.$id, bot);
-      } catch (error) {
-        this.logger.error(`bot ${bot.$id} of adapter ${this.name} 连接失败: ${error instanceof Error ? error.message : error}`);
-      }
+      await bot.$connect();
+      this.logger.debug(`bot ${bot.$id} of adapter ${this.name} connected`);
+      this.bots.set(bot.$id, bot);
     }
     this.logger.debug(`adapter ${this.name} started`);
   }
@@ -157,7 +89,7 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
       }
       // 清理 bots Map
       this.bots.clear();
-
+      
       // 从 adapters 数组中移除
       const idx = this.plugin.root.adapters.indexOf(this.name);
       if (idx !== -1) {
@@ -175,35 +107,20 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
   }
   
   /**
-   * 注册工具
-   * @param input 工具定义（支持 Tool 对象或 ZhinTool 实例）
+   * 注册 AI 工具
+   * @param tool 工具定义
    * @returns 返回一个移除工具的函数
    */
-  addTool(input: ToolInput): () => void {
-    // 如果是 ZhinTool 实例，转换为 Tool 对象
-    const tool: Tool = isZhinTool(input) ? input.toTool() : input;
-    
+  addTool(tool: AITool): () => void {
     // 自动添加适配器源标识
-    const toolWithSource: Tool = {
+    const toolWithSource: AITool = {
       ...tool,
       source: tool.source || `adapter:${this.name}`,
       tags: [...(tool.tags || []), 'adapter', this.name],
     };
     this.tools.set(tool.name, toolWithSource);
-
-    // 同步到全局 ToolFeature（如果可用），使适配器工具出现在插件 features 统计中
-    let globalDispose: (() => void) | undefined;
-    const toolFeature = this.plugin?.root?.inject('tool') as { addTool?: (tool: Tool, name: string, gen: boolean) => () => void } | undefined;
-    if (toolFeature && typeof toolFeature.addTool === 'function') {
-      const adapterPluginName = this.plugin?.name || `adapter:${this.name}`;
-      globalDispose = toolFeature.addTool(toolWithSource, adapterPluginName, false);
-      // 记录到宿主插件的 feature 贡献
-      this.plugin?.recordFeatureContribution('tool', tool.name);
-    }
-
     return () => {
       this.tools.delete(tool.name);
-      globalDispose?.();
     };
   }
   
@@ -211,7 +128,7 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
    * 获取所有注册的工具
    * @returns 工具数组
    */
-  getTools(): Tool[] {
+  getTools(): AITool[] {
     return Array.from(this.tools.values());
   }
   
@@ -220,10 +137,10 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
    * @param name 工具名称
    * @returns 工具定义或 undefined
    */
-  getTool(name: string): Tool | undefined {
+  getTool(name: string): AITool | undefined {
     return this.tools.get(name);
   }
-
+  
   /**
    * 提供默认的适配器工具（子类可覆盖）
    * 包含发送消息、撤回消息等基础能力
@@ -246,6 +163,7 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
           },
           type: {
             type: 'string',
+            enum: ['private', 'group', 'channel'],
             description: '消息类型',
           },
           content: {
@@ -283,7 +201,6 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
       },
     });
   }
-
 }
 export interface Adapters {}
 export namespace Adapter {
@@ -299,14 +216,6 @@ export namespace Adapter {
     'message.private.receive': [Message];
     'message.group.receive': [Message];
     'message.channel.receive': [Message];
-    'notice.receive': [Notice];
-    'notice.private.receive': [Notice];
-    'notice.group.receive': [Notice];
-    'notice.channel.receive': [Notice];
-    'request.receive': [Request];
-    'request.friend_add': [Request];
-    'request.group_add': [Request];
-    'request.group_invite': [Request];
     'call.recallMessage': [string, string];
   }
   /**
