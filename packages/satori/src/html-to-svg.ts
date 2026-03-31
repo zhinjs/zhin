@@ -37,6 +37,148 @@ function styleStringToObject(styleStr: string): Record<string, string | number> 
   return out;
 }
 
+/**
+ * 将不被 satori 支持的 CSS 属性转换为 flexbox 等价写法。
+ * satori 基于 Yoga 布局引擎，只支持 flexbox，不支持 block/inline/grid/table 等。
+ */
+function patchStyleForSatori(style: Record<string, unknown>): Record<string, unknown> {
+  const display = style.display as string | undefined;
+  if (display) {
+    switch (display) {
+      // block → flex column + 占满父级宽度（浏览器 block 默认 width:100%）
+      case 'block':
+        style.display = 'flex';
+        if (!style.flexDirection) style.flexDirection = 'column';
+        if (!style.width) style.width = '100%';
+        break;
+      // inline → 行内元素：不独占一行，内容撑开宽度，允许换行
+      case 'inline':
+        style.display = 'flex';
+        if (!style.flexDirection) style.flexDirection = 'row';
+        if (!style.flexWrap) style.flexWrap = 'wrap';
+        if (!style.alignItems) style.alignItems = 'baseline';
+        break;
+      // inline-block → 行内块：像 inline 一样流式排列，但可设置宽高
+      case 'inline-block':
+        style.display = 'flex';
+        if (!style.flexDirection) style.flexDirection = 'row';
+        if (!style.flexWrap) style.flexWrap = 'wrap';
+        break;
+      // inline-flex → flex（satori 不区分 inline-flex）
+      case 'inline-flex':
+        style.display = 'flex';
+        break;
+      // grid → flex 近似：行方向换行排列，模拟网格效果
+      case 'grid':
+        style.display = 'flex';
+        if (!style.flexDirection) style.flexDirection = 'row';
+        if (!style.flexWrap) style.flexWrap = 'wrap';
+        break;
+      // table → flex column，table-row → flex row，table-cell → flex item
+      case 'table':
+        style.display = 'flex';
+        if (!style.flexDirection) style.flexDirection = 'column';
+        if (!style.width) style.width = '100%';
+        break;
+      case 'table-row':
+      case 'table-header-group':
+      case 'table-footer-group':
+      case 'table-row-group':
+        style.display = 'flex';
+        if (!style.flexDirection) style.flexDirection = 'row';
+        break;
+      case 'table-cell':
+        style.display = 'flex';
+        if (!style.flex) style.flex = '1';
+        break;
+      // none 保持不变（satori 支持）
+      case 'none':
+      case 'flex':
+        break;
+      // 其他未知值降级为 flex
+      default:
+        style.display = 'flex';
+        break;
+    }
+  }
+
+  // grid 布局属性 → flex 近似映射
+  if (style.gridTemplateColumns) {
+    // grid columns → flex row + wrap
+    if (!style.flexWrap) style.flexWrap = 'wrap';
+    if (!style.flexDirection) style.flexDirection = 'row';
+    delete style.gridTemplateColumns;
+  }
+  if (style.gridTemplateRows) delete style.gridTemplateRows;
+  if (style.gridColumn) delete style.gridColumn;
+  if (style.gridRow) delete style.gridRow;
+  if (style.gridArea) delete style.gridArea;
+  if (style.gridGap) {
+    if (!style.gap) style.gap = style.gridGap;
+    delete style.gridGap;
+  }
+  if (style.gridColumnGap) {
+    if (!style.columnGap) style.columnGap = style.gridColumnGap;
+    delete style.gridColumnGap;
+  }
+  if (style.gridRowGap) {
+    if (!style.rowGap) style.rowGap = style.gridRowGap;
+    delete style.gridRowGap;
+  }
+
+  // position: fixed/sticky → absolute（satori 不支持 fixed/sticky）
+  const position = style.position as string | undefined;
+  if (position === 'fixed' || position === 'sticky') {
+    style.position = 'absolute';
+  }
+
+  // float → 移除（satori 不支持 float）
+  if (style.float) {
+    const floatVal = style.float as string;
+    delete style.float;
+    delete style.clear;
+    // 尝试用 alignSelf 模拟
+    if (floatVal === 'right' && !style.alignSelf) {
+      style.alignSelf = 'flex-end';
+      if (!style.marginLeft) style.marginLeft = 'auto';
+    }
+  }
+
+  // visibility → display:none（satori 不支持 visibility，用 display 替代）
+  if (style.visibility === 'hidden' || style.visibility === 'collapse') {
+    style.display = 'none';
+    delete style.visibility;
+  } else if (style.visibility) {
+    delete style.visibility;
+  }
+
+  // vertical-align → alignSelf 近似（仅处理常见值）
+  if (style.verticalAlign) {
+    const va = style.verticalAlign as string;
+    if (!style.alignSelf) {
+      if (va === 'top') style.alignSelf = 'flex-start';
+      else if (va === 'bottom') style.alignSelf = 'flex-end';
+      else if (va === 'middle') style.alignSelf = 'center';
+    }
+    delete style.verticalAlign;
+  }
+
+  // 移除 satori 不支持的纯交互/动画属性
+  const unsupportedProps = [
+    'animation', 'animationName', 'animationDuration', 'animationDelay',
+    'animationTimingFunction', 'animationIterationCount', 'animationFillMode',
+    'transition', 'transitionProperty', 'transitionDuration', 'transitionDelay',
+    'cursor', 'pointerEvents', 'userSelect',
+    'filter', 'backdropFilter',
+    'clear', 'textIndent',
+  ];
+  for (const prop of unsupportedProps) {
+    if (prop in style) delete style[prop];
+  }
+
+  return style;
+}
+
 type SatoriElement = {
   type: string | symbol | ((props: unknown) => unknown);
   props: Record<string, unknown>;
@@ -54,6 +196,50 @@ function isElementStub(node: unknown): node is { type: unknown; props: Record<st
     (node as { props: object | null }).props !== null
   );
 }
+
+/**
+ * 需要特殊处理的 HTML 标签 → satori 兼容映射。
+ * satori 原生支持: div, span, p, a, b, strong, i, em, u, s, del, code, pre,
+ *                  h1-h6, br, hr, img, svg, ul, ol, li
+ * 以下仅映射 satori **不支持** 的标签。
+ */
+const TAG_REMAP: Record<string, { tag: string; style?: Record<string, string> }> = {
+  // table 系列 → div + flex 行列布局
+  table: { tag: 'div', style: { display: 'flex', flexDirection: 'column', width: '100%' } },
+  thead: { tag: 'div', style: { display: 'flex', flexDirection: 'column' } },
+  tbody: { tag: 'div', style: { display: 'flex', flexDirection: 'column' } },
+  tfoot: { tag: 'div', style: { display: 'flex', flexDirection: 'column' } },
+  tr: { tag: 'div', style: { display: 'flex', flexDirection: 'row', width: '100%' } },
+  th: { tag: 'div', style: { display: 'flex', flex: '1', fontWeight: '700', padding: '8px', alignItems: 'center' } },
+  td: { tag: 'div', style: { display: 'flex', flex: '1', padding: '8px', alignItems: 'center' } },
+  caption: { tag: 'div', style: { display: 'flex', justifyContent: 'center', padding: '4px', fontWeight: '700' } },
+  colgroup: { tag: 'div', style: { display: 'none' } },
+  col: { tag: 'div', style: { display: 'none' } },
+  // 定义列表
+  dl: { tag: 'div', style: { display: 'flex', flexDirection: 'column' } },
+  dt: { tag: 'div', style: { display: 'flex', fontWeight: '700' } },
+  dd: { tag: 'div', style: { display: 'flex', marginLeft: '40px' } },
+  // HTML5 语义标签 → div（保持 block 行为）
+  section: { tag: 'div', style: { display: 'flex', flexDirection: 'column', width: '100%' } },
+  article: { tag: 'div', style: { display: 'flex', flexDirection: 'column', width: '100%' } },
+  aside: { tag: 'div', style: { display: 'flex', flexDirection: 'column' } },
+  nav: { tag: 'div', style: { display: 'flex', flexDirection: 'row', flexWrap: 'wrap' } },
+  header: { tag: 'div', style: { display: 'flex', flexDirection: 'column', width: '100%' } },
+  footer: { tag: 'div', style: { display: 'flex', flexDirection: 'column', width: '100%' } },
+  main: { tag: 'div', style: { display: 'flex', flexDirection: 'column', width: '100%' } },
+  // 图文、引用
+  figure: { tag: 'div', style: { display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '16px 40px' } },
+  figcaption: { tag: 'div', style: { display: 'flex', fontSize: '14px', color: '#666', justifyContent: 'center' } },
+  blockquote: { tag: 'div', style: { display: 'flex', flexDirection: 'column', borderLeft: '3px solid #ccc', paddingLeft: '12px', margin: '16px 0' } },
+  // 表单类（渲染为静态占位）
+  form: { tag: 'div', style: { display: 'flex', flexDirection: 'column' } },
+  fieldset: { tag: 'div', style: { display: 'flex', flexDirection: 'column', border: '1px solid #ccc', padding: '8px', margin: '8px 0' } },
+  legend: { tag: 'div', style: { display: 'flex', fontWeight: '700', padding: '0 4px' } },
+  // 其他
+  details: { tag: 'div', style: { display: 'flex', flexDirection: 'column' } },
+  summary: { tag: 'div', style: { display: 'flex', fontWeight: '700', cursor: 'pointer' } },
+  address: { tag: 'div', style: { display: 'flex', flexDirection: 'column', fontStyle: 'italic' } },
+};
 
 /** 将 html-react-parser 产出的节点转为 satori 可用的树（style 字符串 → 对象等） */
 function transformNode(node: unknown): TransformedNode {
@@ -75,8 +261,28 @@ function transformNode(node: unknown): TransformedNode {
 
   const newProps: Record<string, unknown> = { ...props };
 
-  if (typeof props.style === 'string') {
-    newProps.style = styleStringToObject(props.style);
+  // 标签映射：将不支持的 HTML 标签转换为 div + 等价 flex 样式
+  let resolvedType = type;
+  if (typeof type === 'string' && type in TAG_REMAP) {
+    const remap = TAG_REMAP[type];
+    resolvedType = remap.tag;
+    if (remap.style) {
+      const existingStyle = typeof newProps.style === 'string'
+        ? styleStringToObject(newProps.style)
+        : typeof newProps.style === 'object' && newProps.style !== null
+          ? { ...newProps.style as Record<string, unknown> }
+          : {};
+      // remap 样式作为默认值，用户显式样式优先
+      newProps.style = patchStyleForSatori({ ...remap.style, ...existingStyle });
+    } else if (typeof newProps.style === 'string') {
+      newProps.style = patchStyleForSatori(styleStringToObject(newProps.style));
+    } else if (typeof newProps.style === 'object' && newProps.style !== null) {
+      newProps.style = patchStyleForSatori({ ...newProps.style as Record<string, unknown> });
+    }
+  } else if (typeof props.style === 'string') {
+    newProps.style = patchStyleForSatori(styleStringToObject(props.style));
+  } else if (typeof props.style === 'object' && props.style !== null) {
+    newProps.style = patchStyleForSatori({ ...props.style as Record<string, unknown> });
   }
 
   if (props.children !== undefined && props.children !== null) {
@@ -88,7 +294,7 @@ function transformNode(node: unknown): TransformedNode {
     else newProps.children = filtered;
   }
 
-  return { type, props: newProps } as SatoriElement;
+  return { type: resolvedType, props: newProps } as SatoriElement;
 }
 
 function normalizeRoot(parsed: unknown): SatoriElement {
