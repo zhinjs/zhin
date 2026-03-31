@@ -335,16 +335,32 @@ const DANGEROUS_TAGS = [
   'link', 'meta', 'base', 'noscript',
 ];
 
+/** 预编译：带内容的危险标签（如 <script>...</script>） */
+const DANGEROUS_TAG_PAIR_RES = DANGEROUS_TAGS.map(
+  tag => new RegExp(`<${tag}[^>]*>[\\s\\S]*?<\\/${tag}\\s*>`, 'gi'),
+);
+
+/** 自闭合或未闭合的危险标签 */
 const DANGEROUS_TAG_RE = new RegExp(
-  `<\\/?\\s*(${DANGEROUS_TAGS.join('|')})(\\s[^>]*)?>`,
+  `<\\/?\\s*(${DANGEROUS_TAGS.join('|')})[^>]*>`,
   'gi',
 );
 
-/** 匹配 on* 事件处理属性，如 onclick="..." onload='...' onerror=xxx */
+/** 匹配 on* 事件处理属性，如 onclick="..." onLoad='...' ONERROR=xxx（gi 标志处理大小写） */
 const EVENT_HANDLER_RE = /\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
 
-/** 匹配 href / src / action 等以 javascript: 开头的 URI */
-const JS_PROTOCOL_RE = /(\s+(?:href|src|action|formaction|data|xlink:href)\s*=\s*(?:["']))javascript:/gi;
+/**
+ * 匹配 href / src / action 等 URI 属性（引号值写法），用于 javascript: 检测。
+ * 捕获组 1 = 属性前缀（含引号），捕获组 2 = 属性值（引号内内容）。
+ */
+const URI_ATTR_QUOTED_RE = /(\s+(?:href|src|action|formaction|data|xlink:href)\s*=\s*["'])([^"']*)/gi;
+const JS_PROTOCOL_UNQUOTED_RE = /(\s+(?:href|src|action|formaction|data|xlink:href)\s*=\s*)javascript:/gi;
+
+/** 解码 HTML 数字实体（&#NNN; 和 &#xHH;），用于检测混淆后的 javascript: URI */
+function decodeHtmlEntities(s: string): string {
+  return s.replace(/&#x([0-9a-fA-F]+);?/g, (_, hex: string) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&#(\d+);?/g, (_, dec: string) => String.fromCharCode(parseInt(dec, 10)));
+}
 
 /**
  * 从 HTML 字符串中移除危险内容，防止 XSS。
@@ -354,8 +370,8 @@ export function sanitizeHtml(html: string): string {
   let result = html;
 
   // 移除带内容的危险标签（如 <script>...</script>）
-  for (const tag of DANGEROUS_TAGS) {
-    const re = new RegExp(`<${tag}(\\s[^>]*)?>[\\s\\S]*?<\\/${tag}\\s*>`, 'gi');
+  for (const re of DANGEROUS_TAG_PAIR_RES) {
+    re.lastIndex = 0;
     result = result.replace(re, '');
   }
 
@@ -365,8 +381,17 @@ export function sanitizeHtml(html: string): string {
   // 移除事件处理属性
   result = result.replace(EVENT_HANDLER_RE, '');
 
-  // 将 javascript: URI 替换为安全值
-  result = result.replace(JS_PROTOCOL_RE, '$1about:invalid');
+  // 将 javascript: URI 替换为安全值（引号写法，含 HTML 实体混淆检测）
+  result = result.replace(URI_ATTR_QUOTED_RE, (match, prefix: string, value: string) => {
+    const decoded = decodeHtmlEntities(value).replace(/\s+/g, '').toLowerCase();
+    if (decoded.startsWith('javascript:')) {
+      return `${prefix}about:invalid`;
+    }
+    return match;
+  });
+
+  // 将 javascript: URI 替换为安全值（无引号写法）
+  result = result.replace(JS_PROTOCOL_UNQUOTED_RE, '$1"about:invalid"');
 
   return result;
 }
