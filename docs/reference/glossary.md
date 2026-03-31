@@ -32,4 +32,12 @@
 | **@zhin.js/agent** | L3 | IM 场景下 ZhinAgent、AIService 等编排。 |
 | **@zhin.js/satori** | L3 | **Vercel satori** 的 SVG 渲染工具包；**不是** [Satori 协议适配器](https://www.npmjs.com/package/@zhin.js/adapter-satori)。 |
 
+## AI 能力文件约定
+
+| 术语 | 级别 | 简述 |
+|------|------|------|
+| **`*.tool.md`** | L2 | 文件化 Tool 定义。YAML frontmatter 声明参数/元数据，可选 `handler` 指向执行文件或用 body 作为 `{{param}}` 模板。框架自动扫描 `tools/` 目录。 |
+| **`*.agent.md`** | L2 | 文件化 Agent 预设。frontmatter 声明名称/关键词/关联工具/模型，body 作为 `systemPrompt`。框架自动扫描 `agents/` 目录。 |
+| **`plugin.yml` / `PluginManifest`** | L2 | 插件元数据清单（`name`、`description`、`version`）。通过 `plugin.manifest` getter 访问，fallback 到 `package.json`。 |
+
 返回 [学习路径](/essentials/learning-paths)。

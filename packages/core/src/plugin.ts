@@ -8,7 +8,7 @@ import { EventEmitter } from "events";
 import { createRequire } from "module";
 import type { Database, Definition } from "@zhin.js/database";
 import { Schema } from "@zhin.js/schema";
-import type { Models, RegisteredAdapters, AITool, ToolContext } from "./types.js";
+import type { Models, RegisteredAdapters, AITool, ToolContext, PluginManifest } from "./types.js";
 import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
@@ -63,10 +63,16 @@ function getCurrentFile(metaUrl = import.meta.url): string {
 /**
  * usePlugin - 获取或创建当前插件实例
  * 类似 React Hooks 的设计，根据调用文件自动创建插件树
+ * 同一上下文中同一文件多次调用返回同一实例
  */
 export function usePlugin(): Plugin {
   const callerFile = getCurrentFile();
-  const parentPlugin = storage.getStore();
+  // 如果当前 store 已是同一文件创建的插件，直接返回
+  const current = storage.getStore();
+  if (current && current.filePath.replace(/\?t=\d+$/, '') === callerFile.replace(/\?t=\d+$/, '')) {
+    return current;
+  }
+  const parentPlugin = current;
   const newPlugin = new Plugin(callerFile, parentPlugin);
   storage.enterWith(newPlugin);
   return newPlugin;
@@ -128,6 +134,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   static [contextsKey] = [] as string[];
   
   #cachedName?: string;
+  #manifest?: PluginManifest | null;
   adapters: (keyof Plugin.Contexts)[] = [];
   started = false;
 
@@ -304,6 +311,53 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   }
 
   /**
+   * 插件清单（从 plugin.yml 或 package.json 延迟读取）
+   */
+  get manifest(): PluginManifest | undefined {
+    if (this.#manifest !== undefined) return this.#manifest ?? undefined;
+    if (!this.filePath) {
+      this.#manifest = null;
+      return undefined;
+    }
+    const dir = path.dirname(this.filePath);
+    // 优先读取 plugin.yml
+    const ymlPath = path.join(dir, 'plugin.yml');
+    if (fs.existsSync(ymlPath)) {
+      try {
+        const content = fs.readFileSync(ymlPath, 'utf-8');
+        const match = content.match(/^name:\s*(.+)$/m);
+        const descMatch = content.match(/^description:\s*(.+)$/m);
+        const verMatch = content.match(/^version:\s*(.+)$/m);
+        if (match) {
+          this.#manifest = {
+            name: match[1].trim(),
+            description: descMatch?.[1]?.trim(),
+            version: verMatch?.[1]?.trim(),
+          };
+          return this.#manifest;
+        }
+      } catch { /* ignore */ }
+    }
+    // Fallback: package.json
+    const pkgPath = path.join(dir, 'package.json');
+    if (fs.existsSync(pkgPath)) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+        if (pkg.name) {
+          this.#manifest = {
+            name: pkg.name,
+            description: pkg.description,
+            version: pkg.version,
+          };
+          return this.#manifest;
+        }
+      } catch { /* ignore */ }
+    }
+    this.#manifest = null;
+    return undefined;
+  }
+
+  /**
    * 根插件
    */
   get root(): Plugin {
@@ -386,8 +440,12 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     
     // 启动所有服务
     for (const context of this.$contexts.values()) {
-      if (typeof context.mounted === "function" && !context.value) {
-        context.value = await context.mounted(this);
+      if (typeof context.mounted === "function") {
+        const result = await context.mounted(this);
+        // 仅在没有预设 value 时才用 mounted 返回值赋值
+        if (!context.value) {
+          context.value = result;
+        }
       }
       // 注册扩展方法到 Plugin.prototype
       if (context.extensions) {
@@ -427,6 +485,23 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
       crons: cronService ? cronService.items.map(c => c.cronExpression) : [],
       middlewares: this.#middlewares.map((m, i) => m.name || `middleware_${i}`),
     };
+  }
+
+  /**
+   * 获取插件功能摘要（数组形式）
+   * 返回各功能类型的名称和数量
+   */
+  getFeatures(): Array<{ name: string; count: number }> {
+    const result: Array<{ name: string; count: number }> = [];
+    const f = this.features;
+    if (f.commands.length > 0) result.push({ name: 'command', count: f.commands.length });
+    if (f.components.length > 0) result.push({ name: 'component', count: f.components.length });
+    if (f.crons.length > 0) result.push({ name: 'cron', count: f.crons.length });
+    // #middlewares includes the default command middleware, only count user-added ones
+    const userMiddlewareCount = this.#middlewares.length - 1; // subtract default #messageMiddleware
+    if (userMiddlewareCount > 0) result.push({ name: 'middleware', count: userMiddlewareCount });
+    if (this.#tools.size > 0) result.push({ name: 'tool', count: this.#tools.size });
+    return result;
   }
 
   info(): Record<string, any> {
@@ -754,6 +829,7 @@ export namespace Plugin {
     'before.sendMessage': [SendOptions];
     "context.mounted": [keyof Plugin.Contexts];
     "context.dispose": [keyof Plugin.Contexts];
+    "message.receive": [any];
   }
 
   /**

@@ -3,7 +3,7 @@
  * 
  * 进程监控与重启通知插件
  */
-import { usePlugin, ZhinTool } from 'zhin.js';
+import { usePlugin } from 'zhin.js';
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
@@ -54,13 +54,13 @@ interface ProcessState {
   totalUptime: number;
 }
 
-let processState: ProcessState = {
+export let processState: ProcessState = {
   restartCount: 0,
   crashCount: 0,
   totalUptime: 0,
 };
 
-const startTime = Date.now();
+export const startTime = Date.now();
 
 function loadProcessState() {
   try {
@@ -167,7 +167,7 @@ function formatNotificationMessage(record: any): string {
   return lines.join('\n');
 }
 
-function formatUptime(ms: number): string {
+export function formatUptime(ms: number): string {
   const seconds = Math.floor(ms / 1000);
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
@@ -215,35 +215,6 @@ if (config.enabled) {
   });
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// 工具定义
-// ═══════════════════════════════════════════════════════════════════════════════
-
-// 工具会自动注册
-new ZhinTool('process_status')
-  .desc('查看进程监控状态')
-  .tag('监控', '进程')
-  .keyword('进程状态', '监控状态', 'process status')
-  .alias('monitor', 'pm')
-  .usage('查看当前进程状态和统计信息')
-  .examples('/monitor', '/pm')
-  .execute(async () => {
-    const uptime = Date.now() - startTime;
-    const memUsage = process.memoryUsage();
-    
-    return [
-      '📊 进程监控状态',
-      '',
-      `🚀 当前 PID: ${process.pid}`,
-      `⏱️  运行时长: ${formatUptime(uptime)}`,
-      `💾 内存使用: ${Math.round(memUsage.heapUsed / 1024 / 1024)} MB`,
-      `🔄 总重启: ${processState.restartCount} 次`,
-      `💥 崩溃: ${processState.crashCount} 次`,
-      `📈 累计运行: ${formatUptime(processState.totalUptime)}`,
-      `🖥️  主机: ${os.hostname()}`,
-      `💻 平台: ${os.platform()}-${os.arch()}`,
-      `📦 Node: ${process.version}`,
-    ].join('\n');
-  });
+// AI 工具已迁移到 tools/*.tool.md，框架自动发现注册
 
 export default plugin;

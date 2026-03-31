@@ -45,6 +45,21 @@
 
 ---
 
+## AI 能力文件约定
+
+除程序化注册外，框架自动扫描约定目录中的声明文件，按 `cwd/` > `~/.zhin/` > `data/` > 插件包根 的顺序发现，同名先发现者优先。
+
+| 目录 | 文件格式 | 说明 |
+|------|---------|------|
+| `tools/` | `*.tool.md` | 文件化 AI Tool。frontmatter 定义参数/元数据，可选 `handler` 或 body 模板（`{{param}}` 替换）。程序化同名 Tool 优先。 |
+| `skills/` | `<name>/SKILL.md` | 文件化 Skill。粗筛描述 + 关联工具列表。`always: true` 常驻注入。 |
+| `agents/` | `*.agent.md` | 文件化 Agent 预设。frontmatter + body 作为 systemPrompt。 |
+| 包根 | `plugin.yml` | 插件清单（`name`/`description`/`version`），`plugin.manifest` 访问。 |
+
+详见：[docs/advanced/tools-skills.md](./docs/advanced/tools-skills.md)、[docs/contributing/repo-structure.md §9](./docs/contributing/repo-structure.md)。
+
+---
+
 ## 工作区（pnpm）
 
 - `packages/*` — 框架与 `@zhin.js/*` 核心包  

@@ -32,10 +32,33 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
       this.logger.info(`${bot_id} recall ${id}`);
       await bot.$recallMessage(id);
     })
-    this.on('message.receive', (message) => {
-      this.logger.info(`${message.$bot} recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`);
-      this.plugin?.middleware(message, async ()=>{});
+  }
+
+  /**
+   * 重写 emit：拦截 message.receive 事件，按架构规定的入站流程处理
+   * 入站消息链：adapter.emit → dispatcher.dispatch → plugin.dispatch('message.receive') → adapter observers
+   */
+  emit<K extends keyof Adapter.Lifecycle>(event: K, ...args: Adapter.Lifecycle[K]): boolean {
+    if (event !== 'message.receive') {
+      return super.emit(event, ...args as any);
+    }
+    const message = args[0] as Message;
+    this.logger.info(`${message.$bot} recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`);
+    // 异步执行入站消息处理链
+    (async () => {
+      // Step 1: 如果有 Dispatcher，先通过它
+      const dispatcher = this.plugin?.inject('dispatcher');
+      if (dispatcher && typeof dispatcher.dispatch === 'function') {
+        await dispatcher.dispatch(message);
+      }
+      // Step 2: 触发插件生命周期事件
+      this.plugin?.dispatch('message.receive', message);
+      // Step 3: 通知 adapter.on('message.receive') 观察者
+      super.emit(event, ...args as any);
+    })().catch((e) => {
+      this.logger.warn(`message.receive handling error: ${e instanceof Error ? e.message : String(e)}`);
     });
+    return true;
   }
   abstract createBot(config: Adapter.BotConfig<R>): R;
   get logger() {

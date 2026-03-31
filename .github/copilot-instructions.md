@@ -155,6 +155,24 @@ addCommand(new MessageCommand('hello <name:text>')
 )
 ```
 
+#### AI 工具文件化
+
+除了程序化 `addTool()`，还可以在插件包的 `tools/` 目录放置 `*.tool.md` 文件，框架自动发现和注册：
+
+```text
+plugins/my-plugin/
+├── src/
+│   └── index.ts
+└── tools/
+    ├── greeting.tool.md          # 纯模板
+    └── calculator/
+        ├── calculator.tool.md    # 带 handler
+        └── handler.ts
+```
+
+同理，技能用 `skills/<name>/SKILL.md`，Agent 预设用 `agents/<name>.agent.md`。
+详见 `docs/advanced/tools-skills.md`。
+
 ### 4. 适配器开发
 **Bot 接口定义**：
 ```typescript
@@ -949,6 +967,10 @@ declare module 'zhin.js' {
 - `plugin.stop()` - 停止插件
 - `plugin.reload()` - 重载插件
 
+**新增属性**：
+- `plugin.manifest` - 插件清单（从 `plugin.yml` 或 `package.json` 延迟读取），类型为 `PluginManifest | undefined`
+- `plugin.getFeatures()` - 返回 `Array<{ name, count }>` 格式的功能摘要
+
 ## 插件系统
 
 ### HTTP 插件 (`@zhin.js/http`)
@@ -1023,3 +1045,4 @@ export default defineConfig(async (env) => {
 - 适配器开发: `docs/essentials/adapters.md`
 - AI 模块: `docs/advanced/ai.md`
 - 工具与技能: `docs/advanced/tools-skills.md`
+- 仓库结构与 AI 文件约定: `docs/contributing/repo-structure.md`（§9）

@@ -26,7 +26,7 @@
  *   retentionDays: 90
  * ```
  */
-import { usePlugin, ZhinTool, MessageCommand, Schema } from "zhin.js";
+import { usePlugin, MessageCommand, Schema } from "zhin.js";
 
 const plugin = usePlugin();
 const { logger, root, addCommand, addMiddleware, useContext, onDispose, declareConfig } = plugin;
@@ -36,19 +36,19 @@ const config = declareConfig("stats", Schema.object({
   retentionDays: Schema.number().default(90).min(7).max(365).description("数据保留天数"),
 }));
 
-function todayStr(): string {
+export function todayStr(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function weekStartStr(): string {
+export function weekStartStr(): string {
   const d = new Date();
   const day = d.getDay() || 7;
   d.setDate(d.getDate() - day + 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function monthStartStr(): string {
+export function monthStartStr(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 }
@@ -61,7 +61,7 @@ function ts(): string {
 
 let _db: any = null;
 
-function getModel(): any {
+export function getModel(): any {
   if (!_db) {
     const database = root.inject("database" as any) as any;
     if (database) _db = database;
@@ -107,7 +107,7 @@ function bufferKey(userId: string, groupId: string, date: string): string {
   return `${userId}:${groupId}:${date}`;
 }
 
-async function flushBuffer(): Promise<void> {
+export async function flushBuffer(): Promise<void> {
   const M = getModel();
   if (!M || buffer.size === 0) return;
 
@@ -175,7 +175,7 @@ addMiddleware(async function statsCounter(message: any, next: () => Promise<void
 
 // ─── 查询辅助 ─────────────────────────────────────────────────────────────────
 
-async function queryStats(groupId: string, fromDate: string): Promise<Map<string, { name: string; count: number }>> {
+export async function queryStats(groupId: string, fromDate: string): Promise<Map<string, { name: string; count: number }>> {
   const M = getModel();
   if (!M) return new Map();
 
@@ -327,70 +327,7 @@ addCommand(
     }),
 );
 
-// ─── AI 工具 ─────────────────────────────────────────────────────────────────
-
-plugin.addTool(
-  new ZhinTool("stats_query")
-    .desc("查询消息统计数据")
-    .param("group_id", { type: "string", description: "群ID（可选，不填查全局）" })
-    .param("period", { type: "string", description: "时段: today/week/month（默认today）" })
-    .execute(async (args: Record<string, any>) => {
-      await flushBuffer();
-      const groupId = (args.group_id as string) || "";
-      const period = (args.period as string) || "today";
-
-      let fromDate: string;
-      switch (period) {
-        case "week": fromDate = weekStartStr(); break;
-        case "month": fromDate = monthStartStr(); break;
-        default: fromDate = todayStr(); break;
-      }
-
-      const stats = await queryStats(groupId, fromDate);
-      if (stats.size === 0) return `${period} 暂无消息统计数据`;
-
-      const sorted = [...stats.entries()].sort((a, b) => b[1].count - a[1].count);
-      const total = sorted.reduce((s, [, v]) => s + v.count, 0);
-
-      const top10 = sorted.slice(0, 10);
-      const lines = top10.map(([, v], i) => `${i + 1}. ${v.name} — ${v.count}条`);
-
-      return `消息统计 (${period})\n总消息: ${total}条, 活跃用户: ${stats.size}人\n${lines.join("\n")}`;
-    })
-    .toTool(),
-);
-
-plugin.addTool(
-  new ZhinTool("stats_user")
-    .desc("查询指定用户的消息统计")
-    .param("user_id", { type: "string", description: "用户ID" })
-    .execute(async (args: Record<string, any>) => {
-      await flushBuffer();
-      const M = getModel();
-      if (!M) return "统计数据库尚未就绪";
-
-      const userId = args.user_id as string;
-      if (!userId) return "请提供用户ID";
-
-      const rows: any[] = await M.select().where({ user_id: userId });
-      if (rows.length === 0) return `用户 ${userId} 暂无消息记录`;
-
-      const today = todayStr();
-      const weekStart = weekStartStr();
-      let todayCount = 0, weekCount = 0, totalCount = 0;
-
-      for (const row of rows) {
-        const c = row.count || 0;
-        totalCount += c;
-        if (row.date >= weekStart) weekCount += c;
-        if (row.date === today) todayCount += c;
-      }
-
-      const name = rows[0].user_name || userId;
-      return `${name} 的统计\n今日: ${todayCount}条\n本周: ${weekCount}条\n总计: ${totalCount}条\n活跃天数: ${rows.length}天`;
-    })
-    .toTool(),
-);
+// AI 工具已迁移到 tools/*.tool.md，框架自动发现注册
 
 // ─── 数据清理（定期删除过期数据）──────────────────────────────────────────────
 

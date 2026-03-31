@@ -11,6 +11,8 @@ import {
   createBuiltinTools,
   discoverWorkspaceSkills,
   discoverWorkspaceAgents,
+  discoverWorkspaceTools,
+  buildToolFromMeta,
   loadAlwaysSkillsContent,
   buildSkillsSummaryXML,
 } from '../builtin-tools.js';
@@ -47,6 +49,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
 
     let skillWatchers: fs.FSWatcher[] = [];
     let skillReloadDebounce: ReturnType<typeof setTimeout> | null = null;
+    let toolReloadDebounce: ReturnType<typeof setTimeout> | null = null;
 
     async function syncWorkspaceSkills(): Promise<number> {
       const skillFeature = root.inject?.('skill') as SkillFeature | undefined;
@@ -81,6 +84,36 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
         }, root.name);
       }
       return skills.length;
+    }
+
+    // 文件化 Tool 的 disposer（用于热重载时移除旧 tool）
+    let toolFileDisposers: (() => void)[] = [];
+
+    /**
+     * Discover *.tool.md files and register them as tools.
+     */
+    async function syncWorkspaceTools(): Promise<number> {
+      // 移除之前文件化注册的 tool
+      for (const d of toolFileDisposers) d();
+      toolFileDisposers = [];
+
+      const toolMetas = await discoverWorkspaceTools(root);
+      if (toolMetas.length === 0) return 0;
+
+      let added = 0;
+      for (const meta of toolMetas) {
+        // 跳过已通过程序化方式注册的同名 tool
+        if (toolService.get(meta.name)) {
+          logger.debug(`Tool '${meta.name}' 已存在（程序化注册），跳过文件化版本`);
+          continue;
+        }
+        const tool = await buildToolFromMeta(meta);
+        if (!tool) continue;
+        const dispose = toolService.addTool(tool, root.name);
+        toolFileDisposers.push(dispose);
+        added++;
+      }
+      return added;
     }
 
     // 已发现的 Agent 预设（本地缓存，无需存储到 Plugin 树）
@@ -139,6 +172,16 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
         }
       } catch (e: any) {
         logger.warn(`Failed to discover workspace skills: ${e.message}`);
+      }
+
+      // Step 1b: discover *.tool.md file-based tools
+      try {
+        const toolCount = await syncWorkspaceTools();
+        if (toolCount > 0) {
+          logger.info(`Registered ${toolCount} workspace file-based tools`);
+        }
+      } catch (e: any) {
+        logger.warn(`Failed to discover workspace tools: ${e.message}`);
       }
 
       // Step 1c: discover *.agent.md agent presets
@@ -203,6 +246,30 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
         bootstrapFiles: loadedFiles,
       }));
 
+      // Hot-reload tool directories
+      const workspaceToolDir = path.join(process.cwd(), 'tools');
+      const onToolDirChange = () => {
+        if (toolReloadDebounce) clearTimeout(toolReloadDebounce);
+        toolReloadDebounce = setTimeout(async () => {
+          toolReloadDebounce = null;
+          try {
+            const count = await syncWorkspaceTools();
+            if (count >= 0) logger.info(`[Tool热重载] 已更新，工作区文件化Tool: ${count}`);
+          } catch (e: any) {
+            logger.warn(`[Tool热重载] 失败: ${e.message}`);
+          }
+        }, 400);
+      };
+      if (fs.existsSync(workspaceToolDir)) {
+        try {
+          const w = fs.watch(workspaceToolDir, { recursive: true }, onToolDirChange);
+          skillWatchers.push(w);
+          logger.debug(`[Tool热重载] 监听目录: ${workspaceToolDir}`);
+        } catch (e: any) {
+          logger.debug(`[Tool热重载] 无法监听 ${workspaceToolDir}: ${e.message}`);
+        }
+      }
+
       // Hot-reload skill directories
       const workspaceSkillDir = path.join(process.cwd(), 'skills');
       const localSkillDir = path.join(os.homedir(), '.zhin', 'skills');
@@ -241,9 +308,12 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
 
     return () => {
       disposers.forEach(d => d());
+      toolFileDisposers.forEach(d => d());
+      toolFileDisposers = [];
       skillWatchers.forEach(w => w.close());
       skillWatchers = [];
       if (skillReloadDebounce) clearTimeout(skillReloadDebounce);
+      if (toolReloadDebounce) clearTimeout(toolReloadDebounce);
     };
   });
 }

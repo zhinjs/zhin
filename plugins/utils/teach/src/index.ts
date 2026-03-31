@@ -27,7 +27,7 @@
  *   pageSize: 10
  * ```
  */
-import { usePlugin, ZhinTool, MessageCommand, Schema } from "zhin.js";
+import { usePlugin, MessageCommand, Schema } from "zhin.js";
 
 const plugin = usePlugin();
 const { logger, root, addCommand, addMiddleware, useContext, onDispose, declareConfig } = plugin;
@@ -116,7 +116,7 @@ function ts(): string {
 
 let _db: any = null;
 
-function getQA(): any {
+export function getQA(): any {
   if (!_db) {
     const database = root.inject("database" as any) as any;
     if (database) _db = database;
@@ -359,68 +359,6 @@ addCommand(
     }),
 );
 
-// ─── AI 工具 ─────────────────────────────────────────────────────────────────
-
-plugin.addTool(
-  new ZhinTool("teach_query")
-    .desc("查询问答库中的问答对")
-    .param("keyword", { type: "string", description: "搜索关键词（模糊匹配问题或回答）" })
-    .execute(async (args: Record<string, any>) => {
-      const QA = getQA();
-      if (!QA) return "问答数据库尚未就绪";
-
-      const keyword = args.keyword as string | undefined;
-      const allItems: any[] = await QA.select();
-      let items = allItems;
-      if (keyword) {
-        const kw = keyword.toLowerCase();
-        items = allItems.filter(
-          (item: any) => item.question.toLowerCase().includes(kw) || item.answer.toLowerCase().includes(kw),
-        );
-      }
-      if (items.length === 0) return keyword ? `没有找到包含「${keyword}」的问答` : "问答库为空";
-
-      return items
-        .slice(0, 20)
-        .map((item: any) => {
-          const type = item.is_regex ? "[正则]" : "[精确]";
-          const scope = item.context_type === "global" ? "全局" : `群${item.context_id}`;
-          return `${type} ${item.question} → ${item.answer} (${scope}, ${item.hit_count}次命中)`;
-        })
-        .join("\n");
-    })
-    .toTool(),
-);
-
-plugin.addTool(
-  new ZhinTool("teach_stats")
-    .desc("查看问答库统计信息")
-    .execute(async () => {
-      const QA = getQA();
-      if (!QA) return "问答数据库尚未就绪";
-
-      const allItems: any[] = await QA.select();
-      const globalCount = allItems.filter((i: any) => i.context_type === "global").length;
-      const groupCount = allItems.filter((i: any) => i.context_type === "group").length;
-      const regexCount = allItems.filter((i: any) => i.is_regex).length;
-      const totalHits = allItems.reduce((sum: number, i: any) => sum + (i.hit_count || 0), 0);
-      const topHits = [...allItems].sort((a: any, b: any) => (b.hit_count || 0) - (a.hit_count || 0)).slice(0, 5);
-
-      let out = "问答库统计\n";
-      out += `总数: ${allItems.length} 条 (全局 ${globalCount}, 群聊 ${groupCount})\n`;
-      out += `正则问答: ${regexCount} 条\n`;
-      out += `总命中: ${totalHits} 次\n`;
-
-      if (topHits.length > 0) {
-        out += `\n热门问答 TOP5:\n`;
-        topHits.forEach((item: any, i: number) => {
-          out += `${i + 1}. 「${item.question}」→「${item.answer}」(${item.hit_count}次)\n`;
-        });
-      }
-
-      return out;
-    })
-    .toTool(),
-);
+// AI 工具已迁移到 tools/*.tool.md，框架自动发现注册
 
 logger.info(`插件已加载 (上限 ${config.maxPerGroup}/群, 冷却 ${config.cooldown}ms)`);

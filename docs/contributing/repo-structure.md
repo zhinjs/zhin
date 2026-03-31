@@ -146,6 +146,19 @@ plugins/services/console/client/
 - **日志：** 构建脚本、CLI 中避免长期保留无环境变量的 `console.log` 调试输出；必要进度信息可用 `console.error`（stderr）或受 `DEBUG=*` 控制。
 - **英文标识符：** 公共导出符号、类型名、路由 key 使用正确英文拼写，避免混入拼音缩写（除非领域通用如 `icqq`）。
 
+## 9. AI 能力文件约定
+
+插件 / 工作区可通过标准目录放置 AI 声明文件，框架自动扫描与热重载：
+
+| 目录 | 文件格式 | 用途 |
+|------|---------|------|
+| `tools/` | `*.tool.md`（扁平）或 `<name>/<name>.tool.md`（嵌套 + handler） | 文件化 AI Tool：YAML frontmatter 定义参数/元数据，可选 handler 或 body 模板 |
+| `skills/` | `<name>/SKILL.md` | 文件化 Skill：粗筛描述 + 关联工具列表，`always: true` 常驻注入 |
+| `agents/` | `*.agent.md`（扁平）或 `<name>/<name>.agent.md`（嵌套） | 文件化 Agent 预设：frontmatter + body 作为 systemPrompt |
+| 包根 | `plugin.yml` | 插件元数据清单（`name`、`description`、`version`），通过 `plugin.manifest` 访问 |
+
+**发现优先级**：工作区 `cwd/` > `~/.zhin/` > `data/` > 已加载插件包根。同名先发现者优先；程序化注册的同名 Tool 优先于文件化版本。
+
 ---
 
 维护者更新本文时，请同步检查 `pnpm-workspace.yaml` 与 `docs/contributing.md` 中的链接。

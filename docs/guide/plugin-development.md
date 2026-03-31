@@ -208,6 +208,59 @@ addTool({
 })
 ```
 
+#### 文件化 Tool（*.tool.md）
+
+对于简单工具，可以不写代码，直接在 `tools/` 目录放置 `*.tool.md` 文件：
+
+```text
+src/plugins/my-plugin/
+└── tools/
+    └── roll-dice.tool.md
+```
+
+```markdown
+---
+name: roll_dice
+description: 掷骰子，返回 1~6 的随机数
+tags: [utility, game]
+---
+
+🎲 结果：你掷出了一个骰子！
+```
+
+带执行逻辑的工具使用 `handler` 字段指向 TypeScript 文件：
+
+```text
+tools/
+└── weather/
+    ├── weather.tool.md
+    └── handler.ts
+```
+
+```markdown
+---
+name: get_weather
+description: 查询城市天气
+parameters:
+  city:
+    type: string
+    description: 城市名称
+    required: true
+handler: ./handler.ts
+---
+```
+
+```typescript
+// tools/weather/handler.ts
+export default async function(args: { city: string }) {
+  const res = await fetch(`https://api.example.com/weather?city=${args.city}`)
+  const data = await res.json()
+  return `${args.city}: ${data.temp}°C, ${data.description}`
+}
+```
+
+框架自动扫描 `tools/` 目录，支持热重载。程序化 `addTool()` 注册的同名工具优先。详见 [工具与技能](/advanced/tools-skills)。
+
 ### 服务插件（提供 Context）
 
 ```typescript

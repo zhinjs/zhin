@@ -68,12 +68,20 @@ const {
   logger,          // 日志对象
   root,            // 根插件实例
   name,            // 插件名称
+  manifest,        // 插件清单（plugin.yml / package.json）
   filePath,        // 插件文件路径
 } = usePlugin()
+
+// 其他实例方法
+plugin.getFeatures()  // 返回 Array<{ name, count }>，汇总已注册的功能数量
 ```
 
 ::: tip
 上面的 `addCommand`、`addTool`、`addCron`、`addConfig` 等方法都是由对应的 Feature 注入到插件上的扩展方法。技能请使用包内 `skills/`（无 `declareSkill` API）。详见 [Feature 系统](/advanced/features)。
+:::
+
+::: info 文件化 AI 能力
+除了程序化 `addTool()`，工具还可以通过 `*.tool.md` 文件声明；技能用 `skills/<name>/SKILL.md`；Agent 预设用 `agents/<name>.agent.md`。框架自动扫描、注册、热重载。详见 [工具与技能](/advanced/tools-skills)。
 :::
 
 ## 生命周期

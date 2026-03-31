@@ -63,8 +63,11 @@
 
 ### AI 工具
 
-- 入口：`addTool(new ZhinTool(...))`
+- 入口（程序化）：`addTool(new ZhinTool(...))`
+- 入口（文件化）：`tools/<name>.tool.md` 或 `tools/<name>/<name>.tool.md`（框架自动发现）
 - 适用：给 AI 暴露结构化可调用能力
+- 文件化 Tool 支持纯模板（body 中 `{{param}}` 替换）或带 handler 文件
+- 程序化注册的同名 Tool 优先于文件化版本
 - 真实来源：stats、60s、test-bot 工具示例
 
 ### AI 技能（Skill）

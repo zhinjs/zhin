@@ -28,7 +28,7 @@
  *   rankSize: 10
  * ```
  */
-import { usePlugin, ZhinTool, MessageCommand, Schema } from "zhin.js";
+import { usePlugin, MessageCommand, Schema } from "zhin.js";
 
 const plugin = usePlugin();
 const { logger, root, addCommand, useContext, onDispose, declareConfig } = plugin;
@@ -41,7 +41,7 @@ const config = declareConfig("checkin", Schema.object({
   rankSize: Schema.number().default(10).min(3).max(50).description("排行榜显示人数"),
 }));
 
-function todayStr(): string {
+export function todayStr(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
@@ -64,7 +64,7 @@ function ts(): string {
 
 let _db: any = null;
 
-function getModel(): any {
+export function getModel(): any {
   if (!_db) {
     const database = root.inject("database" as any) as any;
     if (database) _db = database;
@@ -246,53 +246,6 @@ addCommand(
     }),
 );
 
-// ─── AI 工具 ─────────────────────────────────────────────────────────────────
-
-plugin.addTool(
-  new ZhinTool("checkin_query")
-    .desc("查询用户的签到积分信息")
-    .param("user_id", { type: "string", description: "用户ID（可选，不填则返回统计摘要）" })
-    .execute(async (args: Record<string, any>) => {
-      const M = getModel();
-      if (!M) return "签到数据库尚未就绪";
-
-      const userId = args.user_id as string | undefined;
-      if (userId) {
-        const rows: any[] = await M.select().where({ user_id: userId });
-        if (rows.length === 0) return `用户 ${userId} 没有签到记录`;
-        const u = rows[0];
-        return `${u.user_name}: 积分=${u.points}, 累计=${u.total_checkins}天, 连续=${u.streak}天, 最长=${u.max_streak}天, 上次=${u.last_checkin}`;
-      }
-
-      const all: any[] = await M.select();
-      const totalUsers = all.length;
-      const totalPoints = all.reduce((s: number, u: any) => s + (u.points || 0), 0);
-      const today = todayStr();
-      const todayCount = all.filter((u: any) => u.last_checkin === today).length;
-      return `签到系统统计\n总用户: ${totalUsers}\n总积分: ${totalPoints}\n今日签到: ${todayCount}人`;
-    })
-    .toTool(),
-);
-
-plugin.addTool(
-  new ZhinTool("checkin_rank")
-    .desc("获取积分排行榜数据")
-    .param("limit", { type: "number", description: "返回前 N 名（默认10）" })
-    .execute(async (args: Record<string, any>) => {
-      const M = getModel();
-      if (!M) return "签到数据库尚未就绪";
-
-      const limit = Math.min(Math.max(Number(args.limit) || 10, 1), 50);
-      const all: any[] = await M.select();
-      const sorted = all.sort((a: any, b: any) => (b.points || 0) - (a.points || 0)).slice(0, limit);
-
-      if (sorted.length === 0) return "暂无排行数据";
-
-      return sorted
-        .map((u: any, i: number) => `${i + 1}. ${u.user_name || u.user_id} — ${u.points}分 (连续${u.streak}天)`)
-        .join("\n");
-    })
-    .toTool(),
-);
+// AI 工具已迁移到 tools/*.tool.md，框架自动发现注册
 
 logger.info(`插件已加载 (基础积分=${config.basePointsMin}~${config.basePointsMax}, 连续奖励=${config.streakBonus}/天)`);

@@ -62,7 +62,13 @@ export function collectPluginSkillSearchRoots(root: Plugin | null | undefined): 
   };
   const fromPlugin = (p: Plugin) => {
     if (!p?.filePath) return;
-    push(path.join(path.dirname(p.filePath), 'skills'));
+    const dir = path.dirname(p.filePath);
+    push(path.join(dir, 'skills'));
+    // Also check package root when filePath is under src/ or lib/
+    const dirName = path.basename(dir);
+    if (dirName === 'src' || dirName === 'lib') {
+      push(path.join(path.dirname(dir), 'skills'));
+    }
   };
   fromPlugin(root);
   for (const child of root.children || []) {
@@ -968,8 +974,15 @@ export async function discoverWorkspaceAgents(root?: Plugin | null): Promise<Age
   if (root) {
     const addPluginDir = (p: Plugin) => {
       if (!p?.filePath) return;
-      const d = path.join(path.dirname(p.filePath), 'agents');
+      const dir = path.dirname(p.filePath);
+      const d = path.join(dir, 'agents');
       if (!agentDirs.includes(d)) agentDirs.push(d);
+      // Also check package root when filePath is under src/ or lib/
+      const dirName = path.basename(dir);
+      if (dirName === 'src' || dirName === 'lib') {
+        const d2 = path.join(path.dirname(dir), 'agents');
+        if (!agentDirs.includes(d2)) agentDirs.push(d2);
+      }
     };
     addPluginDir(root);
     for (const child of root.children || []) {
@@ -1054,4 +1067,288 @@ export async function discoverWorkspaceAgents(root?: Plugin | null): Promise<Age
   }
 
   return agents;
+}
+
+// ============================================================================
+// Tool 发现（*.tool.md 文件）
+// ============================================================================
+
+/**
+ * 简写参数定义（*.tool.md frontmatter 中使用）
+ */
+export interface ToolParamShorthand {
+  type: string;
+  description?: string;
+  required?: boolean;
+  enum?: string[];
+  default?: any;
+}
+
+/**
+ * Tool 元数据（从 *.tool.md frontmatter 解析）
+ */
+export interface ToolMeta {
+  name: string;
+  description: string;
+  /** 简写参数定义（frontmatter 格式） */
+  parameters?: Record<string, ToolParamShorthand>;
+  /** 命令配置 */
+  command?: {
+    pattern?: string;
+    alias?: string[];
+    examples?: string[];
+  };
+  /** 支持的平台列表 */
+  platforms?: string[];
+  /** 支持的场景列表 */
+  scopes?: string[];
+  /** 权限级别 */
+  permissionLevel?: string;
+  /** 标签 */
+  tags?: string[];
+  /** 触发关键词 */
+  keywords?: string[];
+  /** 工具分类 */
+  kind?: string;
+  /** 是否隐藏 */
+  hidden?: boolean;
+  /** handler 文件路径（相对于 .tool.md） */
+  handler?: string;
+  /** *.tool.md 文件的绝对路径 */
+  filePath: string;
+  /** body 内容（无 handler 时作为 prompt 模板） */
+  templateBody?: string;
+}
+
+/**
+ * 从根插件树收集：根插件与直接子插件包目录下的 `tools/`
+ */
+export function collectPluginToolSearchRoots(root: Plugin | null | undefined): string[] {
+  if (!root) return [];
+  const dirs: string[] = [];
+  const push = (d: string) => {
+    if (d && !dirs.includes(d)) dirs.push(d);
+  };
+  const fromPlugin = (p: Plugin) => {
+    if (!p?.filePath) return;
+    const dir = path.dirname(p.filePath);
+    push(path.join(dir, 'tools'));
+    // Also check package root when filePath is under src/ or lib/
+    const dirName = path.basename(dir);
+    if (dirName === 'src' || dirName === 'lib') {
+      push(path.join(path.dirname(dir), 'tools'));
+    }
+  };
+  fromPlugin(root);
+  for (const child of root.children || []) {
+    fromPlugin(child);
+  }
+  return dirs;
+}
+
+/**
+ * 获取所有 tool 搜索目录（标准目录 + 插件包 tools/）
+ */
+export function getToolSearchDirectories(root?: Plugin | null): string[] {
+  const list = [
+    path.join(process.cwd(), 'tools'),
+    path.join(os.homedir(), '.zhin', 'tools'),
+    path.join(getDataDir(), 'tools'),
+  ];
+  for (const d of collectPluginToolSearchRoots(root ?? undefined)) {
+    if (!list.includes(d)) list.push(d);
+  }
+  return list;
+}
+
+/**
+ * 将简写参数定义转换为 ToolParametersSchema
+ */
+function shorthandToSchema(params: Record<string, ToolParamShorthand>): import('@zhin.js/core').ToolParametersSchema {
+  const properties: Record<string, any> = {};
+  const required: string[] = [];
+  for (const [key, param] of Object.entries(params)) {
+    properties[key] = {
+      type: param.type || 'string',
+      description: param.description || key,
+    };
+    if (param.enum) properties[key].enum = param.enum;
+    if (param.default !== undefined) properties[key].default = param.default;
+    if (param.required) required.push(key);
+  }
+  return { type: 'object', properties, required: required.length > 0 ? required : undefined };
+}
+
+/**
+ * 加载 handler 文件（动态 import）
+ * @returns execute 函数, 或 undefined（加载失败）
+ */
+async function loadToolHandler(handlerPath: string, toolMdPath: string): Promise<((args: any, context?: any) => any) | undefined> {
+  const resolved = path.resolve(path.dirname(toolMdPath), handlerPath);
+  if (!fs.existsSync(resolved)) {
+    logger.warn(`Tool handler 文件不存在: ${resolved}`);
+    return undefined;
+  }
+  try {
+    const fileUrl = `file://${resolved}?t=${Date.now()}`;
+    const mod = await import(fileUrl);
+    const fn = mod.default || mod;
+    if (typeof fn !== 'function') {
+      logger.warn(`Tool handler 未导出函数: ${resolved}`);
+      return undefined;
+    }
+    return fn;
+  } catch (e) {
+    logger.warn(`Tool handler 加载失败 (${resolved}): ${errMsg(e)}`);
+    return undefined;
+  }
+}
+
+/**
+ * 从 body 构建 prompt 模板执行函数
+ */
+function buildTemplateExecute(body: string): (args: Record<string, any>) => string {
+  return (args: Record<string, any>) => body.replace(/\{\{(\w+)\}\}/g, (_, k) => {
+    const val = args[k];
+    return val !== undefined && val !== null ? String(val) : '';
+  });
+}
+
+/**
+ * 扫描 tools/ 目录，发现 *.tool.md 文件
+ * 加载顺序与 skills/agents 一致：Workspace > ~/.zhin > data > 插件包
+ * 同名先发现者优先
+ */
+export async function discoverWorkspaceTools(root?: Plugin | null): Promise<ToolMeta[]> {
+  const tools: ToolMeta[] = [];
+  const seenNames = new Set<string>();
+  const toolDirs = getToolSearchDirectories(root);
+
+  for (const toolsDir of toolDirs) {
+    if (!fs.existsSync(toolsDir)) continue;
+
+    let entries: fs.Dirent[];
+    try {
+      entries = await fs.promises.readdir(toolsDir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      // 支持两种结构：
+      // 1. tools/<name>.tool.md（扁平文件）
+      // 2. tools/<name>/<name>.tool.md（目录结构，允许放 handler.ts）
+      let toolMdPath: string | undefined;
+      if (entry.isFile() && entry.name.endsWith('.tool.md')) {
+        toolMdPath = path.join(toolsDir, entry.name);
+      } else if (entry.isDirectory()) {
+        const nested = path.join(toolsDir, entry.name, `${entry.name}.tool.md`);
+        if (fs.existsSync(nested)) {
+          toolMdPath = nested;
+        }
+      }
+      if (!toolMdPath) continue;
+
+      try {
+        const content = await fs.promises.readFile(toolMdPath, 'utf-8');
+        const match = content.match(/^---\s*\n([\s\S]*?)\n---\s*(?:\n|$)/);
+        if (!match) {
+          logger.debug(`Tool文件 ${toolMdPath} 没有有效的frontmatter格式`);
+          continue;
+        }
+
+        let jsYaml: any;
+        try {
+          jsYaml = await import('js-yaml');
+          if (jsYaml.default) jsYaml = jsYaml.default;
+        } catch (e) {
+          logger.warn(`Unable to import js-yaml module: ${e}`);
+          continue;
+        }
+
+        const metadata = jsYaml.load(match[1]);
+        if (!metadata || !metadata.name || !metadata.description) {
+          logger.debug(`Tool文件 ${toolMdPath} 缺少必需的 name/description 字段`);
+          continue;
+        }
+
+        if (seenNames.has(metadata.name)) {
+          logger.debug(`Tool '${metadata.name}' 已由先序目录加载，跳过: ${toolMdPath}`);
+          continue;
+        }
+        seenNames.add(metadata.name);
+
+        // 提取 body（frontmatter 之后的内容）
+        const body = content.replace(/^---\s*\n[\s\S]*?\n---\s*(?:\n|$)/, '').trim();
+
+        tools.push({
+          name: metadata.name,
+          description: metadata.description,
+          parameters: metadata.parameters || undefined,
+          command: metadata.command || undefined,
+          platforms: metadata.platforms,
+          scopes: metadata.scopes,
+          permissionLevel: metadata.permissionLevel,
+          tags: metadata.tags || [],
+          keywords: metadata.keywords || [],
+          kind: metadata.kind,
+          hidden: metadata.hidden,
+          handler: metadata.handler,
+          filePath: toolMdPath,
+          templateBody: !metadata.handler && body ? body : undefined,
+        });
+        logger.debug(`Tool发现成功: ${metadata.name}`);
+      } catch (e) {
+        logger.warn(`Failed to parse tool.md in ${toolMdPath}:`, e);
+      }
+    }
+  }
+
+  if (tools.length > 0) {
+    logger.info(`发现 ${tools.length} 个工作区 Tool: ${tools.map(t => t.name).join(', ')}`);
+  }
+
+  return tools;
+}
+
+/**
+ * 将 ToolMeta 转换为 Tool 对象（包含 execute 函数）
+ */
+export async function buildToolFromMeta(meta: ToolMeta): Promise<import('@zhin.js/core').Tool | null> {
+  // 构建 execute 函数
+  let execute: ((args: any, context?: any) => any) | undefined;
+
+  if (meta.handler) {
+    execute = await loadToolHandler(meta.handler, meta.filePath);
+    if (!execute) return null;
+  } else if (meta.templateBody) {
+    execute = buildTemplateExecute(meta.templateBody);
+  } else {
+    logger.warn(`Tool '${meta.name}' 既没有 handler 也没有模板 body，跳过`);
+    return null;
+  }
+
+  // 构建参数 schema
+  const parameters = meta.parameters
+    ? shorthandToSchema(meta.parameters)
+    : { type: 'object' as const, properties: {} };
+
+  return {
+    name: meta.name,
+    description: meta.description,
+    parameters,
+    execute,
+    tags: meta.tags,
+    keywords: meta.keywords,
+    platforms: meta.platforms,
+    scopes: meta.scopes as any,
+    permissionLevel: meta.permissionLevel as any,
+    hidden: meta.hidden,
+    kind: meta.kind,
+    command: meta.command ? {
+      pattern: meta.command.pattern,
+      alias: meta.command.alias,
+      examples: meta.command.examples,
+    } : undefined,
+  };
 }

@@ -175,6 +175,188 @@ const weatherTool = defineTool<{ city: string; unit?: string }>({
 
 > **注意：** 旧的 `ToolDefinition<TArgs>` 已废弃，现在是 `Tool<TArgs>` 的类型别名。直接使用 `Tool<TArgs>` 即可。
 
+### 文件化 Tool（*.tool.md）
+
+除了程序化注册，还可以通过 `*.tool.md` 文件声明工具——无需写 TypeScript 代码即可让 AI 拥有新能力。框架自动扫描、注册、热重载。
+
+#### 发现顺序
+
+1. 工作区 `cwd/tools/`
+2. `~/.zhin/tools/`
+3. `data/tools/`（框架默认数据目录）
+4. **已加载插件**：根插件与直接子插件包根目录下的 `tools/`
+
+同名 Tool 先发现者优先。**程序化注册的同名 Tool 优先于文件化版本。**
+
+#### 文件结构
+
+支持两种组织方式：
+
+```text
+tools/
+├── greeting.tool.md              # 扁平：纯模板，无需 handler 文件
+└── calculator/
+    ├── calculator.tool.md        # 嵌套：带 handler
+    └── handler.ts                # 执行逻辑
+```
+
+#### 带 handler 的 Tool
+
+```markdown
+---
+name: calculator
+description: 计算数学表达式，支持加减乘除和括号
+parameters:
+  expression:
+    type: string
+    description: 数学表达式
+    required: true
+command:
+  pattern: "calc <expression:text>"
+  alias: [计算]
+keywords: [计算, 算]
+tags: [utility, math]
+handler: ./handler.ts
+---
+```
+
+Handler 文件导出默认函数：
+
+```typescript
+// tools/calculator/handler.ts
+export default async function(args: { expression: string }) {
+  const sanitized = args.expression.replace(/[^0-9+\-*/().%\s]/g, '')
+  const result = new Function(`return ${sanitized}`)()
+  return `${args.expression} = ${result}`
+}
+```
+
+#### 纯模板 Tool（无 handler）
+
+当没有 `handler` 字段时，body 作为模板，`{{param}}` 自动替换为参数值：
+
+```markdown
+---
+name: greeting
+description: 生成个性化问候语
+parameters:
+  name:
+    type: string
+    description: 用户名
+    required: true
+  time:
+    type: string
+    description: 时间段
+    enum: [morning, afternoon, evening]
+tags: [utility]
+---
+
+你好，{{name}}！{{time}}好，欢迎来到 Zhin 机器人世界。
+```
+
+#### Frontmatter 字段一览
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `name` | string | ✅ | 工具名称（全局唯一） |
+| `description` | string | ✅ | 工具描述 |
+| `parameters` | object | — | 简写参数定义（见下） |
+| `handler` | string | — | handler 文件路径（相对于 .tool.md） |
+| `command` | object | — | 命令配置：`pattern`、`alias`、`examples` |
+| `keywords` | string[] | — | 触发关键词 |
+| `tags` | string[] | — | 分类标签 |
+| `platforms` | string[] | — | 限定平台 |
+| `scopes` | string[] | — | 限定场景 |
+| `permissionLevel` | string | — | 权限级别 |
+| `kind` | string | — | 工具分类 |
+| `hidden` | boolean | — | 是否隐藏 |
+
+参数简写格式（自动转换为 `ToolParametersSchema`）：
+
+```yaml
+parameters:
+  city:
+    type: string
+    description: 城市名称
+    required: true
+  unit:
+    type: string
+    description: 温度单位
+    enum: [C, F]
+    default: C
+```
+
+#### 热重载
+
+工作区 `cwd/tools/` 目录支持热重载——新增、修改、删除 `*.tool.md` 文件后，框架会在 400ms 内自动重新发现并注册。
+
+## Agent 预设（*.agent.md）
+
+Agent 预设用于声明领域专长 Agent，AI 可自动识别场景并委派子任务。
+
+### 发现顺序
+
+1. 工作区 `cwd/agents/`
+2. `~/.zhin/agents/`
+3. `data/agents/`
+4. 已加载插件包根目录下的 `agents/`
+
+### 文件格式
+
+```markdown
+---
+name: code-reviewer
+description: 代码审查专家，擅长发现 bug 和优化建议
+keywords: [代码, 审查, review, bug]
+tags: [development]
+tools: [read_file, grep, edit_file]
+model: gpt-4o
+maxIterations: 8
+---
+
+你是一个资深代码审查员，专注于安全和性能问题。
+
+## 审查规则
+1. 检查输入验证和 SQL 注入风险
+2. 检查资源泄漏（未关闭的连接、定时器）
+3. 检查异步错误处理
+```
+
+### Frontmatter 字段
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `name` | string | ✅ | Agent 名称 |
+| `description` | string | ✅ | Agent 描述 |
+| `keywords` | string[] | — | 触发关键词 |
+| `tags` | string[] | — | 分类标签 |
+| `tools` | string[] | — | 关联工具名列表 |
+| `model` | string | — | 首选模型 |
+| `provider` | string | — | 首选 Provider |
+| `maxIterations` | number | — | 最大迭代次数 |
+
+Body（frontmatter 之后的正文）作为 Agent 的 `systemPrompt` 注入。
+
+## 插件清单（plugin.yml）
+
+插件可在包根目录放置 `plugin.yml` 声明元数据：
+
+```yaml
+name: my-plugin
+description: 我的示例插件
+version: 1.0.0
+```
+
+通过 `plugin.manifest` getter 访问：
+
+```typescript
+const plugin = usePlugin()
+console.log(plugin.manifest)
+// → { name: 'my-plugin', description: '...', version: '1.0.0' }
+```
+
+如果 `plugin.yml` 不存在，会自动 fallback 到 `package.json` 的 `name`/`description`/`version`。
+
 ## 技能（Skill）
 
 ### 技能目录与发现顺序

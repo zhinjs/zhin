@@ -58,6 +58,8 @@ declare module 'zhin.js' {
 
 ### Tool（单个 AI 可调用能力）
 
+**方式一：程序化注册（适合复杂逻辑）**
+
 ```typescript
 import { usePlugin, ZhinTool } from 'zhin.js'
 const { addTool } = usePlugin()
@@ -70,6 +72,70 @@ addTool(new ZhinTool('calculator')
   .toTool()
 )
 ```
+
+**方式二：*.tool.md 文件约定（适合简单工具，零代码或轻代码）**
+
+把 `*.tool.md` 放在插件包的 `tools/` 目录，框架自动扫描、注册：
+
+```
+plugins/my-plugin/
+├── src/
+│   └── index.ts
+└── tools/
+    ├── greeting.tool.md          # 扁平：纯模板，无需 handler
+    └── calculator/
+        ├── calculator.tool.md    # 嵌套：带 handler
+        └── handler.ts
+```
+
+*.tool.md 标准格式（带 handler）：
+```markdown
+---
+name: calculator
+description: 计算数学表达式
+parameters:
+  expression:
+    type: string
+    description: 数学表达式
+    required: true
+command:
+  pattern: "calc <expression:text>"
+  alias: [计算]
+keywords: [计算, 算]
+tags: [utility]
+handler: ./handler.ts
+---
+```
+
+纯模板 tool（无 handler，body 作为模板，`{{param}}` 替换参数值）：
+```markdown
+---
+name: greeting
+description: 生成问候语
+parameters:
+  name:
+    type: string
+    description: 用户名
+    required: true
+tags: [utility]
+---
+
+你好，{{name}}！欢迎来到 Zhin 机器人世界。
+```
+
+Handler 文件格式：
+```typescript
+// tools/calculator/handler.ts
+export default async function(args: { expression: string }) {
+  const sanitized = args.expression.replace(/[^0-9+\-*/().%\s]/g, '');
+  const result = new Function(`return ${sanitized}`)();
+  return `${args.expression} = ${result}`;
+}
+```
+
+- 两种方式共存，程序化注册的同名 Tool 优先于文件化版本
+- 文件化 Tool 支持热重载（修改 .tool.md 即时生效）
+- 搜索顺序：`cwd/tools/` > `~/.zhin/tools/` > `data/tools/` > 插件包 `tools/`
 
 ### Skill（标准 SKILL.md 文件，框架自动发现）
 
