@@ -78,7 +78,7 @@ useContext("config", (configService) => {
   // 安全响应头
   koa.use(async (ctx, next) => {
     ctx.set('X-Content-Type-Options', 'nosniff');
-    ctx.set('X-Frame-Options', 'DENY');
+    ctx.set('X-Frame-Options', 'SAMEORIGIN');
     await next();
   });
 
@@ -100,10 +100,10 @@ useContext("config", (configService) => {
       ? authHeader.slice(7)
       : undefined;
 
-    // 使用 timingSafeEqual 防止时序攻击（长度不同也不短路退出）
-    const expected = Buffer.from(token);
-    const received = Buffer.from(reqToken || '');
-    if (expected.length !== received.length || !crypto.timingSafeEqual(expected, received)) {
+    // 使用 HMAC 做固定时间比较，避免长度与内容两层时序泄漏
+    const expected = crypto.createHmac('sha256', token).update(token).digest();
+    const received = crypto.createHmac('sha256', token).update(reqToken || '').digest();
+    if (!crypto.timingSafeEqual(expected, received)) {
       ctx.status = 401;
       ctx.body = { success: false, error: 'Invalid or missing token' };
       return;
