@@ -2,9 +2,9 @@
  * Define AI-related database models (7 tables).
  */
 import { getPlugin } from '@zhin.js/core';
-import { AI_SESSION_MODEL } from '../session.js';
-import { CHAT_MESSAGE_MODEL, CONTEXT_SUMMARY_MODEL } from '../context-manager.js';
-import { AI_MESSAGE_MODEL, AI_SUMMARY_MODEL } from '../conversation-memory.js';
+import { AI_SESSION_MODEL } from '@zhin.js/ai';
+import { CHAT_MESSAGE_MODEL, CONTEXT_SUMMARY_MODEL } from '@zhin.js/ai';
+import { AI_MESSAGE_MODEL, AI_SUMMARY_MODEL } from '@zhin.js/ai';
 import { AI_USER_PROFILE_MODEL } from '../user-profile.js';
 import { AI_FOLLOWUP_MODEL } from '../follow-up.js';
 

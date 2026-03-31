@@ -11,7 +11,7 @@
 import { randomUUID } from 'crypto';
 import { Logger } from '@zhin.js/core';
 import type { AIProvider, AgentTool } from '@zhin.js/core';
-import { createAgent } from './agent.js';
+import { createAgent } from '@zhin.js/ai';
 import type { ZhinAgentConfig } from './zhin-agent/config.js';
 import { applyExecPolicyToTools } from './zhin-agent/exec-policy.js';
 

@@ -46,6 +46,18 @@ export interface Skill {
 
   /** 来源插件名 */
   pluginName: string;
+
+  /**
+   * SKILL.md 文件的绝对路径
+   * 存在时 activate_skill 可按需加载完整指令内容
+   */
+  filePath?: string;
+
+  /**
+   * 是否常驻注入 system prompt
+   * 仅在 filePath 存在时有效
+   */
+  always?: boolean;
 }
 
 /**
@@ -205,3 +217,5 @@ export class SkillFeature extends Feature<Skill> {
     };
   }
 }
+
+

@@ -54,6 +54,7 @@ export type {
 // ── Agent Engine ──
 export { Agent, createAgent, formatToolTitle } from './agent.js';
 export type { AgentState, AgentEvents } from './agent.js';
+export { filterTools, tokenize } from './tool-filter.js';
 
 // ── Session Management ──
 export {

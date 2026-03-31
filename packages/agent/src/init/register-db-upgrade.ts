@@ -7,8 +7,8 @@
 import './types.js';
 import { getPlugin } from '@zhin.js/core';
 import type { AIConfig } from '@zhin.js/core';
-import { createDatabaseSessionManager } from '../session.js';
-import { createContextManager } from '../context-manager.js';
+import { createDatabaseSessionManager } from '@zhin.js/ai';
+import { createContextManager } from '@zhin.js/ai';
 import type { AIServiceRefs } from './shared-refs.js';
 
 export function registerDbUpgrade(refs: AIServiceRefs): void {

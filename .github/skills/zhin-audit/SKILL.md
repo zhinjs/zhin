@@ -1,6 +1,8 @@
 ---
 name: zhin-audit
 description: 'Audit Zhin.js monorepo for security vulnerabilities, performance bottlenecks, and architecture issues. Use when asked to "audit code", "check security", "find performance issues", "review architecture", "scan for vulnerabilities", "check memory leaks", or "review code quality".'
+argument-hint: 'Describe the audit scope (full, security, performance, architecture, or change-based) and any specific files or concerns to focus on.'
+user-invocable: true
 ---
 
 # Zhin.js 代码审计技能

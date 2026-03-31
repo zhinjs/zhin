@@ -5,11 +5,12 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { getPlugin, type Tool, type SkillFeature } from '@zhin.js/core';
+import { getPlugin, type Tool, type SkillFeature, type AgentPreset } from '@zhin.js/core';
 import {
   collectPluginSkillSearchRoots,
   createBuiltinTools,
   discoverWorkspaceSkills,
+  discoverWorkspaceAgents,
   loadAlwaysSkillsContent,
   buildSkillsSummaryXML,
 } from '../builtin-tools.js';
@@ -33,6 +34,10 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
     const builtinTools = createBuiltinTools({
       skillInstructionMaxChars: resolveSkillInstructionMaxChars(fullCfg, modelName),
       pluginSkillRootsResolver: () => collectPluginSkillSearchRoots(root),
+      skillFileLookup: (name: string) => {
+        const skillFeature = root.inject?.('skill') as SkillFeature | undefined;
+        return skillFeature?.get(name)?.filePath;
+      },
     });
     const disposers: (() => void)[] = [];
     for (const tool of builtinTools) disposers.push(toolService.addTool(tool, root.name));
@@ -71,9 +76,57 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
           keywords: s.keywords || [],
           tags: s.tags || [],
           pluginName: root.name,
+          filePath: s.filePath,
+          always: s.always,
         }, root.name);
       }
       return skills.length;
+    }
+
+    // 已发现的 Agent 预设（本地缓存，无需存储到 Plugin 树）
+    const discoveredAgents = new Map<string, AgentPreset>();
+
+    /**
+     * Discover *.agent.md files and register agent presets.
+     */
+    async function syncWorkspaceAgents(): Promise<number> {
+      const agentMetas = await discoverWorkspaceAgents(root);
+      if (agentMetas.length === 0) return 0;
+      const allRegisteredTools = toolService.getAll();
+      const toolNameIndex = new Map<string, import('@zhin.js/core').Tool>();
+      for (const t of allRegisteredTools) {
+        toolNameIndex.set(t.name, t);
+      }
+      let added = 0;
+      for (const meta of agentMetas) {
+        if (discoveredAgents.has(meta.name)) continue;
+        const associatedTools: import('@zhin.js/core').Tool[] = [];
+        for (const toolName of meta.toolNames || []) {
+          const tool = toolService.get(toolName) || toolNameIndex.get(toolName);
+          if (tool) associatedTools.push(tool);
+        }
+        // Read body as systemPrompt
+        let systemPrompt: string | undefined;
+        try {
+          const content = await fs.promises.readFile(meta.filePath, 'utf-8');
+          const body = content.replace(/^---\s*\n[\s\S]*?\n---\s*(?:\n|$)/, '').trim();
+          if (body) systemPrompt = body;
+        } catch { /* ignore */ }
+        discoveredAgents.set(meta.name, {
+          name: meta.name,
+          description: meta.description,
+          keywords: meta.keywords,
+          tags: meta.tags,
+          tools: associatedTools.length > 0 ? associatedTools : undefined,
+          systemPrompt,
+          model: meta.model,
+          provider: meta.provider,
+          maxIterations: meta.maxIterations,
+          filePath: meta.filePath,
+        });
+        added++;
+      }
+      return added;
     }
 
     (async () => {
@@ -86,6 +139,16 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
         }
       } catch (e: any) {
         logger.warn(`Failed to discover workspace skills: ${e.message}`);
+      }
+
+      // Step 1c: discover *.agent.md agent presets
+      try {
+        const agentCount = await syncWorkspaceAgents();
+        if (agentCount > 0) {
+          logger.info(`Registered ${agentCount} workspace agent presets`);
+        }
+      } catch (e: any) {
+        logger.debug(`Failed to discover workspace agents: ${e.message}`);
       }
 
       // Step 2: load bootstrap files
@@ -157,7 +220,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
               refs.zhinAgent.setSkillsSummaryXML(skillsXml);
             }
             await triggerAIHook(createAIHookEvent('agent', 'skills-reloaded', undefined, { skillCount: count }));
-            if (count >= 0) logger.info(`[技能热重载] 已更新，当前工作区技能数: ${count}`);
+            if (count >= 0) logger.info(`[技能热重载] 已更新，工作区技能: ${count}`);
           } catch (e: any) {
             logger.warn(`[技能热重载] 失败: ${e.message}`);
           }

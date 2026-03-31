@@ -25,13 +25,27 @@ import {
 import {
   SessionManager,
   createMemorySessionManager,
-  createDatabaseSessionManager,
-} from './session.js';
-import { Agent, createAgent } from './agent.js';
+} from '@zhin.js/ai';
+import { Agent, createAgent } from '@zhin.js/ai';
 import { getBuiltinTools } from './tools.js';
-import type { ContextManager, ContextConfig } from './context-manager.js';
+import type { ContextManager, ContextConfig } from '@zhin.js/ai';
+import { PERM_MAP } from './zhin-agent/config.js';
 
 const aiLogger = new Logger(null, 'AI');
+
+/** Provider 注册表：key → 构造函数 + 是否需要 apiKey */
+const PROVIDER_REGISTRY: Array<{
+  key: keyof NonNullable<AIConfig['providers']>;
+  factory: new (config: any) => AIProvider;
+  requireApiKey: boolean;
+}> = [
+  { key: 'openai', factory: OpenAIProvider, requireApiKey: true },
+  { key: 'anthropic', factory: AnthropicProvider, requireApiKey: true },
+  { key: 'deepseek', factory: DeepSeekProvider, requireApiKey: true },
+  { key: 'moonshot', factory: MoonshotProvider, requireApiKey: true },
+  { key: 'zhipu', factory: ZhipuProvider, requireApiKey: true },
+  { key: 'ollama', factory: OllamaProvider, requireApiKey: false },
+];
 
 export class AIService {
   private providers: Map<string, AIProvider> = new Map();
@@ -55,23 +69,11 @@ export class AIService {
     this.sessions = createMemorySessionManager(this.sessionConfig);
     this.builtinTools = getBuiltinTools().map(tool => this.convertToolToAgentTool(tool.toTool()));
 
-    if (config.providers?.openai?.apiKey) {
-      this.registerProvider(new OpenAIProvider(config.providers.openai));
-    }
-    if (config.providers?.anthropic?.apiKey) {
-      this.registerProvider(new AnthropicProvider(config.providers.anthropic));
-    }
-    if (config.providers?.deepseek?.apiKey) {
-      this.registerProvider(new DeepSeekProvider(config.providers.deepseek));
-    }
-    if (config.providers?.moonshot?.apiKey) {
-      this.registerProvider(new MoonshotProvider(config.providers.moonshot));
-    }
-    if (config.providers?.zhipu?.apiKey) {
-      this.registerProvider(new ZhipuProvider(config.providers.zhipu));
-    }
-    if (config.providers?.ollama) {
-      this.registerProvider(new OllamaProvider(config.providers.ollama));
+    for (const { key, factory, requireApiKey } of PROVIDER_REGISTRY) {
+      const providerConfig = config.providers?.[key];
+      if (!providerConfig) continue;
+      if (requireApiKey && !(providerConfig as any).apiKey) continue;
+      this.registerProvider(new factory(providerConfig as any));
     }
   }
 
@@ -79,98 +81,15 @@ export class AIService {
     return this.providers.size > 0;
   }
 
-  private static readonly PRE_EXEC_TIMEOUT = 10_000;
-
   async process(
     content: string,
     context: ToolContext,
-    tools: Tool[],
-  ): Promise<string | AsyncIterable<string>> {
+    _tools: Tool[],
+  ): Promise<string> {
     const { platform, senderId, sceneId } = context;
     const sessionId = SessionManager.generateId(platform || '', senderId || '', sceneId);
-    const allTools = this.collectAllToolsWithExternal(tools);
-    const baseSystemPrompt = 'You are a helpful AI assistant. Reply in the language specified in [User profile] (key: language / preferred_language), or in the user\'s message language if not set.';
-
-    if (allTools.length === 0) {
-      return this.finishAndSave(sessionId, content, baseSystemPrompt, sceneId);
-    }
-
-    const callerPermissionLevel = context.senderPermissionLevel
-      ? (AIService.PERM_MAP[context.senderPermissionLevel] ?? 0)
-      : (context.isOwner ? 4 : context.isBotAdmin ? 3 : context.isGroupOwner ? 2 : context.isGroupAdmin ? 1 : 0);
-
-    const relevantTools = Agent.filterTools(content, allTools, {
-      callerPermissionLevel,
-      maxTools: 8,
-      minScore: 0.1,
-    });
-
-    if (relevantTools.length === 0) {
-      return this.finishAndSave(sessionId, content, baseSystemPrompt, sceneId);
-    }
-
-    const noParamTools: AgentTool[] = [];
-    const paramTools: AgentTool[] = [];
-    for (const tool of relevantTools) {
-      const required = tool.parameters?.required;
-      (!required || required.length === 0) ? noParamTools.push(tool) : paramTools.push(tool);
-    }
-
-    let preExecutedData = '';
-    const preExecutedCalls: { tool: string; args: Record<string, any>; result: any }[] = [];
-
-    if (noParamTools.length > 0) {
-      const results = await Promise.allSettled(
-        noParamTools.map(async (tool) => {
-          const result = await Promise.race([
-            tool.execute({}),
-            new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error('预执行超时')), AIService.PRE_EXEC_TIMEOUT)),
-          ]);
-          return { name: tool.name, result };
-        }),
-      );
-      for (const r of results) {
-        if (r.status === 'fulfilled') {
-          const s = typeof r.value.result === 'string' ? r.value.result : JSON.stringify(r.value.result);
-          preExecutedData += `\n${s}`;
-          preExecutedCalls.push({ tool: r.value.name, args: {}, result: r.value.result });
-        }
-      }
-    }
-
-    let finalResponse: string;
-
-    if (paramTools.length === 0 && preExecutedData) {
-      const singleShotPrompt = `You are a helpful AI assistant. Reply in the language specified in [User profile] (key: language / preferred_language), or in the user's message language if not set.\n\nPre-fetched data:\n${preExecutedData}\n\nAnswer the user's question based on the data above. Do not mention data sources or tool names. Summarize clearly and highlight key information.`;
-      finalResponse = await this.simpleChat(content, singleShotPrompt);
-    } else {
-      const agentSystemPrompt = `You are a helpful AI assistant. Reply in the language specified in [User profile] (key: language / preferred_language), or in the user's message language if not set.
-${preExecutedData ? `\nPre-fetched data:\n${preExecutedData}\n` : ''}
-## Requirements
-- After calling tools, give a complete answer based on the results; do not mention tool names or data sources
-- Summarize in natural language and highlight key information`;
-
-      const agent = this.createAgent({
-        systemPrompt: agentSystemPrompt,
-        tools: paramTools.length > 0 ? paramTools : relevantTools,
-        useBuiltinTools: false,
-        collectExternalTools: false,
-        maxIterations: 3,
-      });
-
-      const agentResult = await agent.run(content);
-      finalResponse = agentResult.content || this.formatToolCallsFallback(
-        [...preExecutedCalls, ...agentResult.toolCalls],
-      );
-    }
-
-    await this.sessions.addMessage(sessionId, { role: 'user', content });
-    await this.sessions.addMessage(sessionId, { role: 'assistant', content: finalResponse });
-    if (this.contextManager && sceneId) {
-      this.contextManager.autoSummarizeIfNeeded(sceneId).catch(() => {});
-    }
-    return finalResponse;
+    const systemPrompt = 'You are a helpful AI assistant. Reply in the language specified in [User profile] (key: language / preferred_language), or in the user\'s message language if not set.';
+    return this.finishAndSave(sessionId, content, systemPrompt, sceneId);
   }
 
   private async finishAndSave(sessionId: string, content: string, systemPrompt: string, sceneId?: string): Promise<string> {
@@ -181,13 +100,6 @@ ${preExecutedData ? `\nPre-fetched data:\n${preExecutedData}\n` : ''}
       this.contextManager.autoSummarizeIfNeeded(sceneId).catch(() => {});
     }
     return response;
-  }
-
-  private formatToolCallsFallback(toolCalls: { tool: string; args: any; result: any }[]): string {
-    if (toolCalls.length === 0) return 'Done.';
-    return toolCalls.map(tc => {
-      return typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2);
-    }).join('\n\n');
   }
 
   private async simpleChat(content: string, systemPrompt: string): Promise<string> {
@@ -203,22 +115,6 @@ ${preExecutedData ? `\nPre-fetched data:\n${preExecutedData}\n` : ''}
     return typeof msgContent === 'string' ? msgContent : '';
   }
 
-  private collectAllToolsWithExternal(externalTools: Tool[]): AgentTool[] {
-    const tools: AgentTool[] = [];
-    tools.push(...this.builtinTools);
-    tools.push(...this.customTools.values());
-    for (const tool of externalTools) {
-      if (tool.name.startsWith('cmd_') || tool.name.startsWith('process_')) continue;
-      tools.push(this.convertToolToAgentTool(tool));
-    }
-    if (tools.length > 30) return tools.slice(0, 30);
-    return tools;
-  }
-
-  private static readonly PERM_MAP: Record<string, number> = {
-    'user': 0, 'group_admin': 1, 'group_owner': 2, 'bot_admin': 3, 'owner': 4,
-  };
-
   private convertToolToAgentTool(tool: Tool): AgentTool {
     const agentTool: AgentTool = {
       name: tool.name,
@@ -227,7 +123,7 @@ ${preExecutedData ? `\nPre-fetched data:\n${preExecutedData}\n` : ''}
       execute: async (args) => tool.execute(args),
     };
     if (tool.tags?.length) agentTool.tags = tool.tags;
-    if (tool.permissionLevel) agentTool.permissionLevel = AIService.PERM_MAP[tool.permissionLevel] ?? 0;
+    if (tool.permissionLevel) agentTool.permissionLevel = PERM_MAP[tool.permissionLevel] ?? 0;
     if (tool.keywords?.length) agentTool.keywords = tool.keywords;
     return agentTool;
   }

@@ -5,7 +5,7 @@ import './types.js';
 import { getPlugin, Message, shouldTriggerAI, inferSenderPermissions, parseRichMediaContent, mergeAITriggerConfig } from '@zhin.js/core';
 import type { Tool, ToolContext } from '@zhin.js/core';
 import type { ContentPart } from '@zhin.js/core';
-import type { OutputElement } from '../output.js';
+import type { OutputElement } from '@zhin.js/ai';
 import type { AIServiceRefs } from './shared-refs.js';
 
 /**

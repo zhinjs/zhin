@@ -221,6 +221,8 @@ export interface AgentTool {
   permissionLevel?: number;
   /** 是否允许预执行（opt-in），默认 false */
   preExecutable?: boolean;
+  /** 工具执行超时时间（毫秒），默认 30000 */
+  timeout?: number;
   /** 工具分类（如 file / shell / web），用于 formatToolTitle 等展示 */
   kind?: string;
 }

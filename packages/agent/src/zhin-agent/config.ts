@@ -2,8 +2,8 @@
  * ZhinAgent 配置、常量、类型定义
  */
 
-import type { RateLimitConfig } from '../rate-limiter.js';
-import { DEFAULT_CONTEXT_TOKENS } from '../compaction.js';
+import type { RateLimitConfig } from '@zhin.js/ai';
+import { DEFAULT_CONTEXT_TOKENS } from '@zhin.js/ai';
 
 export type ModelSizeHint = 'small' | 'medium' | 'large';
 
@@ -55,6 +55,14 @@ export const PERM_MAP: Record<string, number> = {
 };
 
 export type OnChunkCallback = (chunk: string, full: string) => void;
+
+/** 上下文感知内置工具的关键词触发正则 */
+export const KEYWORD_TRIGGERS = {
+  chatHistory: /之前|上次|历史|回忆|聊过|记录|还记得|曾经/i,
+  userProfile: /偏好|设置|配置|档案|资料|时区|timezone|profile|喜好|我叫|叫我|记住我/i,
+  scheduleFollowUp: /提醒|定时|过一会|跟进|别忘|取消提醒|reminder|分钟后|小时后/i,
+  spawnTask: /后台|子任务|spawn|异步|background|并行|独立处理/i,
+} as const;
 
 export interface ZhinAgentConfig {
   persona?: string;

@@ -18,21 +18,21 @@
 
 import { Logger } from '@zhin.js/core';
 import type { Tool, ToolContext, SkillFeature, AIProvider, AgentTool, ChatMessage, ContentPart } from '@zhin.js/core';
-import { createAgent } from '../agent.js';
-import { SessionManager, createMemorySessionManager } from '../session.js';
-import type { ContextManager } from '../context-manager.js';
-import { ConversationMemory } from '../conversation-memory.js';
-import type { OutputElement } from '../output.js';
-import { parseOutput } from '../output.js';
+import { createAgent } from '@zhin.js/ai';
+import { SessionManager, createMemorySessionManager } from '@zhin.js/ai';
+import type { ContextManager } from '@zhin.js/ai';
+import { ConversationMemory } from '@zhin.js/ai';
+import type { OutputElement } from '@zhin.js/ai';
+import { parseOutput } from '@zhin.js/ai';
 import { UserProfileStore } from '../user-profile.js';
-import { RateLimiter } from '../rate-limiter.js';
-import { detectTone } from '../tone-detector.js';
+import { RateLimiter } from '@zhin.js/ai';
+import { detectTone } from '@zhin.js/ai';
 import { FollowUpManager, type FollowUpSender } from '../follow-up.js';
 import { SubagentManager, type SubagentResultSender } from '../subagent.js';
 import {
   pruneHistoryForContext,
   DEFAULT_CONTEXT_TOKENS,
-} from '../compaction.js';
+} from '@zhin.js/ai';
 import { triggerAIHook, createAIHookEvent } from '../hooks.js';
 
 // ── Sub-modules ─────────────────────────────────────────────────────
@@ -40,6 +40,7 @@ import {
   type ZhinAgentConfig,
   type OnChunkCallback,
   DEFAULT_CONFIG,
+  KEYWORD_TRIGGERS,
 } from './config.js';
 import { applyExecPolicyToTools } from './exec-policy.js';
 import { collectRelevantTools } from './tool-collector.js';
@@ -212,16 +213,16 @@ export class ZhinAgent {
     });
 
     // Inject context-aware built-in tools on keyword match
-    if (/之前|上次|历史|回忆|聊过|记录|还记得|曾经/i.test(content)) {
+    if (KEYWORD_TRIGGERS.chatHistory.test(content)) {
       allTools.push(createChatHistoryTool(sessionId, this.memory));
     }
-    if (/偏好|设置|配置|档案|资料|时区|timezone|profile|喜好|我叫|叫我|记住我/i.test(content)) {
+    if (KEYWORD_TRIGGERS.userProfile.test(content)) {
       allTools.push(createUserProfileTool(userId, this.userProfiles));
     }
-    if (/提醒|定时|过一会|跟进|别忘|取消提醒|reminder|分钟后|小时后/i.test(content)) {
+    if (KEYWORD_TRIGGERS.scheduleFollowUp.test(content)) {
       allTools.push(createScheduleFollowUpTool(sessionId, context, this.followUps));
     }
-    if (this.subagentManager && /后台|子任务|spawn|异步|background|并行|独立处理/i.test(content)) {
+    if (this.subagentManager && KEYWORD_TRIGGERS.spawnTask.test(content)) {
       allTools.push(createSpawnTaskTool(context, this.subagentManager));
     }
 

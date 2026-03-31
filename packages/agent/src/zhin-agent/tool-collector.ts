@@ -5,7 +5,7 @@
 import { Logger } from '@zhin.js/core';
 import type { Tool, ToolContext, SkillFeature } from '@zhin.js/core';
 import type { AgentTool } from '@zhin.js/core';
-import { Agent } from '../agent.js';
+import { Agent } from '@zhin.js/ai';
 import type { ZhinAgentConfig } from './config.js';
 import { PERM_MAP } from './config.js';
 

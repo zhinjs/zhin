@@ -144,6 +144,7 @@ export class ProcessAdapter extends Adapter<ProcessBot>{
                     },
                     level: {
                         type: 'string',
+                        enum: ['info', 'warn', 'error', 'debug'],
                         description: '日志级别',
                     },
                 },

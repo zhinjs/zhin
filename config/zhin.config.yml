@@ -29,11 +29,3 @@ plugins: []
 #     summaryThreshold: 50  # 触发自动总结的消息数量
 #     keepAfterSummary: 10  # 总结后保留的最近消息数
 #     maxContextTokens: 4000  # 上下文最大 token 估算
-#   trigger:  # AI 触发配置
-#     enabled: true  # 是否启用
-#     prefixes: ['#', 'AI:']  # 触发前缀
-#     respondToAt: true  # 响应 @机器人
-#     respondToPrivate: true  # 私聊直接对话
-#     ignorePrefixes: ['/', '!']  # 忽略的前缀（避免与命令冲突）
-#     timeout: 60000  # 超时时间（毫秒）
-#     # thinkingMessage: '🤔 思考中...'  # 思考中提示语（可选）

@@ -2,7 +2,7 @@
  * Register middleware that records messages to the context manager.
  */
 import { getPlugin, Message } from '@zhin.js/core';
-import type { MessageRecord } from '../context-manager.js';
+import type { MessageRecord } from '@zhin.js/ai';
 import type { AIServiceRefs } from './shared-refs.js';
 
 export function registerMessageRecorder(refs: AIServiceRefs): void {

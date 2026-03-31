@@ -3,7 +3,7 @@
  */
 import './types.js';
 import { getPlugin, Message, ZhinTool } from '@zhin.js/core';
-import { SessionManager } from '../session.js';
+import { SessionManager } from '@zhin.js/ai';
 
 export function registerManagementTools(): void {
   const plugin = getPlugin();

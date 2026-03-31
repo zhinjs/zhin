@@ -7,7 +7,7 @@
 
 import type { ToolContext } from '@zhin.js/core';
 import type { AgentTool } from '@zhin.js/core';
-import type { ConversationMemory } from '../conversation-memory.js';
+import type { ConversationMemory } from '@zhin.js/ai';
 import type { UserProfileStore } from '../user-profile.js';
 import type { FollowUpManager } from '../follow-up.js';
 import type { SubagentManager, SubagentOrigin } from '../subagent.js';

@@ -29,6 +29,8 @@ export * from './built/ai-trigger.js'
 export * from './built/dispatcher.js'
 // Skill 系统 (AI 能力描述)
 export * from './built/skill.js'
+// Agent 预设 (插件声明的专长 Agent)
+export * from './built/agent-preset.js'
 // Schema 注册表 (插件配置声明)
 export * from './built/schema-feature.js'
 // Common adapter tool factories (shared across adapters)

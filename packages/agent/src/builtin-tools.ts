@@ -120,6 +120,11 @@ export interface BuiltinToolsOptions {
    * 返回额外技能根目录（每个根下为 `<skillName>/SKILL.md`），通常为已加载插件的 `.../skills`
    */
   pluginSkillRootsResolver?: () => string[];
+  /**
+   * 按名称查找 SkillFeature 中已注册技能的 filePath
+   * 返回 SKILL.md 的绝对路径，或 undefined 表示未找到
+   */
+  skillFileLookup?: (name: string) => string | undefined;
 }
 
 /**
@@ -129,6 +134,7 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
   const DATA_DIR = getDataDir();
   const skillMaxChars = options?.skillInstructionMaxChars ?? 4000;
   const skillDirList = () => mergeSkillDirsWithResolver(options?.pluginSkillRootsResolver);
+  const skillFileLookup = options?.skillFileLookup;
 
   const tools: ZhinTool[] = [];
 
@@ -535,12 +541,19 @@ export function createBuiltinTools(options?: BuiltinToolsOptions): ZhinTool[] {
       .param('name', { type: 'string', description: '技能名称' }, true)
       .execute(async (args) => {
         try {
-          // 与 discoverWorkspaceSkills / getSkillSearchDirectories 顺序一致
+          // 优先查找 SkillFeature 中已注册技能的 filePath
+          const registeredPath = skillFileLookup?.(args.name);
+          if (registeredPath && fs.existsSync(registeredPath)) {
+            const fullContent = await fs.promises.readFile(registeredPath, 'utf-8');
+            const depWarning = await checkSkillDeps(fullContent);
+            const instructions = extractSkillInstructions(args.name, fullContent, skillMaxChars);
+            return depWarning ? `${depWarning}\n\n${instructions}` : instructions;
+          }
+          // 回退到目录扫描（与 discoverWorkspaceSkills 顺序一致）
           for (const dir of skillDirList()) {
             const skillPath = path.join(dir, args.name, 'SKILL.md');
             if (fs.existsSync(skillPath)) {
               const fullContent = await fs.promises.readFile(skillPath, 'utf-8');
-              // 5.3 可执行环境检查：若 SKILL 声明了 deps，再次检查；缺失则在返回内容中提示
               const depWarning = await checkSkillDeps(fullContent);
               const instructions = extractSkillInstructions(args.name, fullContent, skillMaxChars);
               return depWarning ? `${depWarning}\n\n${instructions}` : instructions;
@@ -911,4 +924,134 @@ export function buildSkillsSummaryXML(skills: SkillMeta[]): string {
   }
   lines.push('</skills>');
   return lines.join('\n');
+}
+
+// ============================================================================
+// Agent 预设发现（*.agent.md 文件）
+// ============================================================================
+
+/**
+ * Agent 预设元数据（从 *.agent.md frontmatter 解析）
+ */
+export interface AgentMeta {
+  name: string;
+  description: string;
+  keywords?: string[];
+  tags?: string[];
+  /** frontmatter 中声明的工具名列表 */
+  toolNames?: string[];
+  /** *.agent.md 文件的绝对路径 */
+  filePath: string;
+  /** 首选模型名 */
+  model?: string;
+  /** 首选 Provider 名 */
+  provider?: string;
+  /** 最大工具调用迭代次数 */
+  maxIterations?: number;
+}
+
+/**
+ * 扫描 agents/ 目录，发现 *.agent.md 文件
+ * 加载顺序与 skills 一致：Workspace > ~/.zhin > data > 插件包
+ * 同名先发现者优先
+ */
+export async function discoverWorkspaceAgents(root?: Plugin | null): Promise<AgentMeta[]> {
+  const agents: AgentMeta[] = [];
+  const seenNames = new Set<string>();
+
+  // 构建扫描目录：标准目录的 agents/ + 插件包的 agents/
+  const agentDirs: string[] = [
+    path.join(process.cwd(), 'agents'),
+    path.join(os.homedir(), '.zhin', 'agents'),
+    path.join(getDataDir(), 'agents'),
+  ];
+  if (root) {
+    const addPluginDir = (p: Plugin) => {
+      if (!p?.filePath) return;
+      const d = path.join(path.dirname(p.filePath), 'agents');
+      if (!agentDirs.includes(d)) agentDirs.push(d);
+    };
+    addPluginDir(root);
+    for (const child of root.children || []) {
+      addPluginDir(child);
+    }
+  }
+
+  for (const agentsDir of agentDirs) {
+    if (!fs.existsSync(agentsDir)) continue;
+
+    let entries: fs.Dirent[];
+    try {
+      entries = await fs.promises.readdir(agentsDir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      // 支持两种结构：
+      // 1. agents/<name>.agent.md（扁平文件）
+      // 2. agents/<name>/<name>.agent.md（目录结构）
+      let agentMdPath: string | undefined;
+      if (entry.isFile() && entry.name.endsWith('.agent.md')) {
+        agentMdPath = path.join(agentsDir, entry.name);
+      } else if (entry.isDirectory()) {
+        const nested = path.join(agentsDir, entry.name, `${entry.name}.agent.md`);
+        if (fs.existsSync(nested)) {
+          agentMdPath = nested;
+        }
+      }
+      if (!agentMdPath) continue;
+
+      try {
+        const content = await fs.promises.readFile(agentMdPath, 'utf-8');
+        const match = content.match(/^---\s*\n([\s\S]*?)\n---\s*(?:\n|$)/);
+        if (!match) {
+          logger.debug(`Agent文件 ${agentMdPath} 没有有效的frontmatter格式`);
+          continue;
+        }
+
+        let jsYaml: any;
+        try {
+          jsYaml = await import('js-yaml');
+          if (jsYaml.default) jsYaml = jsYaml.default;
+        } catch (e) {
+          logger.warn(`Unable to import js-yaml module: ${e}`);
+          continue;
+        }
+
+        const metadata = jsYaml.load(match[1]);
+        if (!metadata || !metadata.name || !metadata.description) {
+          logger.debug(`Agent文件 ${agentMdPath} 缺少必需的 name/description 字段`);
+          continue;
+        }
+
+        if (seenNames.has(metadata.name)) {
+          logger.debug(`Agent '${metadata.name}' 已由先序目录加载，跳过: ${agentMdPath}`);
+          continue;
+        }
+        seenNames.add(metadata.name);
+
+        agents.push({
+          name: metadata.name,
+          description: metadata.description,
+          keywords: metadata.keywords || [],
+          tags: metadata.tags || [],
+          toolNames: Array.isArray(metadata.tools) ? metadata.tools : [],
+          filePath: agentMdPath,
+          model: metadata.model,
+          provider: metadata.provider,
+          maxIterations: typeof metadata.maxIterations === 'number' ? metadata.maxIterations : undefined,
+        });
+        logger.debug(`Agent发现成功: ${metadata.name}`);
+      } catch (e) {
+        logger.warn(`Failed to parse agent.md in ${agentMdPath}:`, e);
+      }
+    }
+  }
+
+  if (agents.length > 0) {
+    logger.info(`发现 ${agents.length} 个工作区 Agent 预设: ${agents.map(a => a.name).join(', ')}`);
+  }
+
+  return agents;
 }
