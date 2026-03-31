@@ -24,6 +24,7 @@ export default withMermaid(defineConfig({
           { text: '术语表', link: '/reference/glossary' },
         ],
       },
+      { text: '插件开发', link: '/guide/plugin-development' },
       { text: 'AI', link: '/advanced/ai' },
       {
         text: '参考与生态',
@@ -45,6 +46,15 @@ export default withMermaid(defineConfig({
           items: [
             { text: '安装与启动', link: '/getting-started/' },
             { text: 'Docker 部署', link: '/getting-started/docker' }
+          ]
+        }
+      ],
+
+      '/guide/': [
+        {
+          text: '开发指南',
+          items: [
+            { text: '插件开发、测试与发布', link: '/guide/plugin-development' }
           ]
         }
       ],

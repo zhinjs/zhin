@@ -11,7 +11,7 @@
 | 类型 | 适合 | 说明 |
 |------|------|------|
 | **文档与示例** | 所有人 | 修正错别字、补充 [学习路径](/essentials/learning-paths) 相关交叉链接、改进上手体验。 |
-| **插件 / 适配器** | 熟悉业务 API | 在 `plugins/` 或自有仓库发布；通常不必通读 `packages/kernel`。 |
+| **插件 / 适配器** | 熟悉业务 API | 在 `plugins/` 或自有仓库发布；通常不必通读 `packages/kernel`。参考 [插件开发指南](/guide/plugin-development)。 |
 | **框架核心** | 维护者 / 资深贡献者 | `packages/core`、`packages/agent`、`zhin.js` 启动链等；动手前务必读 [仓库结构与模块化约定](./contributing/repo-structure) 与根目录 **`AGENTS.md`**。 |
 
 ### 报告问题

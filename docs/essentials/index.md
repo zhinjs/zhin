@@ -280,4 +280,5 @@ flowchart TD
 - **[命令系统](./commands)** - 深入学习命令开发
 - **[插件系统](./plugins)** - 创建复杂的插件
 - **[中间件](./middleware)** - 与 Dispatcher、Guardrail 的配合
+- **[插件开发、测试与发布](/guide/plugin-development)** - 完整的插件生命周期指南
 

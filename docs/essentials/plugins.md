@@ -318,3 +318,10 @@ onDispose(() => {
   logger.info('插件已卸载')
 })
 ```
+
+## 下一步
+
+- [插件开发、测试与发布](/guide/plugin-development) — 完整的插件生命周期指南（创建 → 测试 → 构建 → 发布到 npm）
+- [命令系统](./commands) — 深入学习命令语法和参数类型
+- [工具与技能](/advanced/tools-skills) — 注册 AI 可调用工具和声明技能
+- [Feature 系统](/advanced/features) — 了解 Feature 抽象和自定义扩展
