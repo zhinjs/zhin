@@ -354,7 +354,7 @@ const EVENT_HANDLER_RE = /\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
  * 捕获组 1 = 属性前缀（含引号），捕获组 2 = 属性值（引号内内容）。
  */
 const URI_ATTR_QUOTED_RE = /(\s+(?:href|src|action|formaction|data|xlink:href)\s*=\s*["'])([^"']*)/gi;
-const JS_PROTOCOL_UNQUOTED_RE = /(\s+(?:href|src|action|formaction|data|xlink:href)\s*=\s*)javascript:/gi;
+const JS_PROTOCOL_UNQUOTED_RE = /(\s+(?:href|src|action|formaction|data|xlink:href)\s*=\s*)(?:javascript|vbscript):/gi;
 
 /** 解码 HTML 数字实体（&#NNN; 和 &#xHH;），用于检测混淆后的 javascript: URI */
 function decodeHtmlEntities(s: string): string {
@@ -378,19 +378,23 @@ export function sanitizeHtml(html: string): string {
   // 移除自闭合或未闭合的危险标签
   result = result.replace(DANGEROUS_TAG_RE, '');
 
-  // 移除事件处理属性
-  result = result.replace(EVENT_HANDLER_RE, '');
+  // 移除事件处理属性（循环直到没有更多匹配，防止嵌套如 ononclick）
+  let prev: string;
+  do {
+    prev = result;
+    result = result.replace(EVENT_HANDLER_RE, '');
+  } while (result !== prev);
 
-  // 将 javascript: URI 替换为安全值（引号写法，含 HTML 实体混淆检测）
+  // 将危险 URI 协议替换为安全值（引号写法，含 HTML 实体混淆检测）
   result = result.replace(URI_ATTR_QUOTED_RE, (match, prefix: string, value: string) => {
     const decoded = decodeHtmlEntities(value).replace(/\s+/g, '').toLowerCase();
-    if (decoded.startsWith('javascript:')) {
+    if (decoded.startsWith('javascript:') || decoded.startsWith('vbscript:') || decoded.startsWith('data:text/html')) {
       return `${prefix}about:invalid`;
     }
     return match;
   });
 
-  // 将 javascript: URI 替换为安全值（无引号写法）
+  // 将危险 URI 协议替换为安全值（无引号写法）
   result = result.replace(JS_PROTOCOL_UNQUOTED_RE, '$1"about:invalid"');
 
   return result;
