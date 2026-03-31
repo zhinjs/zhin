@@ -215,7 +215,6 @@ http:
 
 Token 传递方式：
 - **Header**: `Authorization: Bearer <token>`
-- **Query**: `?token=<token>`
 
 以 `/pub` 为前缀的路径为公开入口，无需认证（如 `/pub/health`、`/pub/github/webhook` 等）。
 

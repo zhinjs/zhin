@@ -22,7 +22,7 @@ declare module "zhin.js" {
 export const httpSchema = Schema.object({
   port: Schema.number().default(8086).description("HTTP 服务端口"),
   token: Schema.string().description(
-    "API 访问令牌，不填则自动生成。通过 Authorization: Bearer <token> 或 ?token=<token> 传递"
+    "API 访问令牌，不填则自动生成。通过 Authorization: Bearer <token> 传递"
   ),
   base: Schema.string()
     .default("/api")
@@ -87,11 +87,11 @@ useContext("config", (configService) => {
     );
     if (isWhitelisted) return next();
 
-    // 从 Bearer token 或 query 参数中提取 token
+    // 仅从 Authorization: Bearer 头提取 token（不接受 query 参数，避免凭据泄漏）
     const authHeader = ctx.get('Authorization');
     const reqToken = authHeader?.startsWith('Bearer ')
       ? authHeader.slice(7)
-      : (ctx.query.token as string);
+      : undefined;
 
     if (reqToken !== token) {
       ctx.status = 401;

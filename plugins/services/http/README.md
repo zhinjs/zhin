@@ -19,7 +19,7 @@
 - **HTTP框架**: Koa.js
 - **路由**: 自定义Router类扩展@koa/router
 - **WebSocket**: ws 库
-- **身份验证**: Token 认证（Bearer / Query）
+- **身份验证**: Token 认证（Bearer Header）
 - **请求解析**: koa-body
 
 ## 安装
@@ -184,9 +184,8 @@ useContext('koa', async (koa) => {
 
 默认启用 Token 认证，**仅保护 API 路径**（`/api/*`），静态文件和 SPA 路由不受限制。
 
-支持两种传递方式：
+Token 传递方式：
 - **Header**: `Authorization: Bearer <token>`
-- **Query**: `?token=<token>`
 
 以下 API 路径无需认证：
 - 包含 `/webhook` 的路径（有自己的签名验证）

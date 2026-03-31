@@ -325,8 +325,55 @@ function normalizeRoot(parsed: unknown): SatoriElement {
   };
 }
 
+/**
+ * 危险 HTML 标签名（小写）——在传入 html-react-parser 之前移除。
+ * 这些标签可执行脚本、嵌入外部资源或引入 XSS 向量。
+ */
+const DANGEROUS_TAGS = [
+  'script', 'iframe', 'object', 'embed', 'applet',
+  'form', 'input', 'textarea', 'button', 'select',
+  'link', 'meta', 'base', 'noscript',
+];
+
+const DANGEROUS_TAG_RE = new RegExp(
+  `<\\/?\\s*(${DANGEROUS_TAGS.join('|')})(\\s[^>]*)?>`,
+  'gi',
+);
+
+/** 匹配 on* 事件处理属性，如 onclick="..." onload='...' onerror=xxx */
+const EVENT_HANDLER_RE = /\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
+
+/** 匹配 href / src / action 等以 javascript: 开头的 URI */
+const JS_PROTOCOL_RE = /(\s+(?:href|src|action|formaction|data|xlink:href)\s*=\s*(?:["']))javascript:/gi;
+
+/**
+ * 从 HTML 字符串中移除危险内容，防止 XSS。
+ * 移除：危险标签（含内容）、on* 事件处理属性、javascript: URI。
+ */
+export function sanitizeHtml(html: string): string {
+  let result = html;
+
+  // 移除带内容的危险标签（如 <script>...</script>）
+  for (const tag of DANGEROUS_TAGS) {
+    const re = new RegExp(`<${tag}(\\s[^>]*)?>[\\s\\S]*?<\\/${tag}\\s*>`, 'gi');
+    result = result.replace(re, '');
+  }
+
+  // 移除自闭合或未闭合的危险标签
+  result = result.replace(DANGEROUS_TAG_RE, '');
+
+  // 移除事件处理属性
+  result = result.replace(EVENT_HANDLER_RE, '');
+
+  // 将 javascript: URI 替换为安全值
+  result = result.replace(JS_PROTOCOL_RE, '$1about:invalid');
+
+  return result;
+}
+
 export async function htmlToSvg(html: string, options: HtmlToSvgOptions): Promise<string> {
-  const parsed = parse(html);
+  const sanitized = sanitizeHtml(html);
+  const parsed = parse(sanitized);
   const tree = normalizeRoot(parsed);
   return satori(tree as Parameters<typeof satori>[0], options as Parameters<typeof satori>[1]);
 }
