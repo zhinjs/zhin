@@ -1,7 +1,7 @@
 import { fetchApi } from '../api.js';
 
 export default async function (args: { city: string }) {
-  const data = await fetchApi<any>('/weather', { city: args.city });
+  const data = await fetchApi<any>('/weather', { query: args.city });
   const w = data.weather;
   const aq = data.air_quality;
   const loc = data.location;

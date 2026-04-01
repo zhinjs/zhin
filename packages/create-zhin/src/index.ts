@@ -170,6 +170,29 @@ async function main() {
       options.installGlobalCli = false;
     }
 
+    // 开发技能安装选项
+    if (options.devSkills === undefined && !options.yes) {
+      console.log('');
+      console.log(chalk.blue('🛠️  Zhin 插件开发技能'));
+      console.log(chalk.gray('安装一组 AI 技能，帮助你通过 AI 助手高质量地开发、测试和发布 Zhin 插件'));
+      console.log(chalk.gray('包含：插件初始化、功能开发、测试编写、质量审查、发布指南'));
+      
+      const { devSkills } = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'devSkills',
+          message: '是否安装 Zhin 插件开发技能？（推荐）',
+          default: true
+        }
+      ]);
+      options.devSkills = devSkills;
+    }
+
+    // -y 模式下默认安装开发技能
+    if (options.devSkills === undefined) {
+      options.devSkills = true;
+    }
+
     if (!name?.trim()) {
       console.error(chalk.red('项目名称不能为空'));
       process.exit(1);
@@ -244,6 +267,18 @@ async function main() {
         console.log(`  ${chalk.gray('触发方式:')} ${chalk.cyan(triggers.join('、'))}`);
       }
       console.log(`  ${chalk.yellow('⚠ API Key 已保存到')} ${chalk.cyan('.env')} ${chalk.yellow('文件')}`);
+    }
+
+    // 显示开发技能信息
+    if (options.devSkills) {
+      console.log('');
+      console.log(chalk.blue('🛠️  插件开发技能：'));
+      console.log(`  ${chalk.gray('•')} ${chalk.cyan('plugin-init')}     ${chalk.gray('初始化插件项目结构')}`);
+      console.log(`  ${chalk.gray('•')} ${chalk.cyan('plugin-develop')}  ${chalk.gray('开发插件功能（命令、中间件、AI 工具等）')}`);
+      console.log(`  ${chalk.gray('•')} ${chalk.cyan('plugin-test')}     ${chalk.gray('编写和运行测试用例')}`);
+      console.log(`  ${chalk.gray('•')} ${chalk.cyan('plugin-quality')}  ${chalk.gray('代码质量审查与规范检查')}`);
+      console.log(`  ${chalk.gray('•')} ${chalk.cyan('plugin-publish')}  ${chalk.gray('发布到 npm 和插件市场')}`);
+      console.log(`  ${chalk.gray('位置:')} ${chalk.cyan('skills/')} ${chalk.gray('目录')}`);
     }
     
     console.log('');

@@ -14,9 +14,10 @@ import * as path from "path";
 import { fileURLToPath } from "url";
 import logger, { Logger } from "@zhin.js/logger";
 import { compose, remove, resolveEntry } from "./utils.js";
-import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, ConfigService, PermissionService, SendOptions } from "./types.js";
+import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, SendOptions } from "./types.js";
 import { Adapter, Adapters } from "./adapter.js";
 import { createHash } from "crypto";
+import { Feature } from "./feature.js";
 const contextsKey = Symbol("contexts");
 const loadedModules = new Map<string, Plugin>(); // 记录已加载的模块
 const require = createRequire(import.meta.url);
@@ -167,12 +168,22 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   
   // AI 工具
   #tools: Map<string, AITool> = new Map();
+
+  // Feature 贡献追踪
+  #featureContributions = new Map<string, Set<string>>();
   
   // 统一的清理函数集合
   #disposables: Set<() => void | Promise<void>> = new Set();
   
   get middleware(): MessageMiddleware<RegisteredAdapter> {
     return compose<RegisteredAdapter>(this.#middlewares);
+  }
+
+  recordFeatureContribution(featureName: string, itemName: string): void {
+    if (!this.#featureContributions.has(featureName)) {
+      this.#featureContributions.set(featureName, new Set());
+    }
+    this.#featureContributions.get(featureName)!.add(itemName);
   }
   /**
    * 构造函数
@@ -412,9 +423,11 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     if (!this.#contextsIsReady(contexts)) return
     contextReadyCallback()
   }
-  inject<T extends keyof Plugin.Contexts>(name: T): Plugin.Contexts[T]|undefined {
-    const context = this.root.contexts.get(name as string);
-    return context?.value as Plugin.Contexts[T];
+  inject<T extends keyof Plugin.Contexts>(name: T): Plugin.Contexts[T]|undefined;
+  inject(name: string): unknown;
+  inject(name: string): unknown {
+    const context = this.root.contexts.get(name);
+    return context?.value;
   }
   #contextsIsReady<CS extends (keyof Plugin.Contexts)[]>(contexts: CS) {
     if (!contexts.length) return true
@@ -561,6 +574,9 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     
     // 清理 middlewares 数组（保留默认的消息中间件）
     this.#middlewares.length = 1;
+
+    // 清理 feature 贡献记录
+    this.#featureContributions.clear();
     
     if (this.parent) {
       remove(this.parent?.children, this);
@@ -636,12 +652,42 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   /**
    * 注册上下文
    */
-  provide<T extends keyof Plugin.Contexts>(context: Context<T>): this {
+  provide<T extends keyof Plugin.Contexts>(context: Context<T>): this;
+  provide(feature: Feature<unknown>): this;
+  provide(target: Context<keyof Plugin.Contexts> | Feature<unknown>): this {
+    if (target instanceof Feature) {
+      const feature = target;
+      const ctx: Context<keyof Plugin.Contexts> = {
+        name: feature.name as keyof Plugin.Contexts,
+        description: feature.desc,
+        value: feature as Plugin.Contexts[keyof Plugin.Contexts],
+        mounted: feature.mounted
+          ? async (plugin: Plugin) => {
+              await feature.mounted!(plugin);
+              return feature as Plugin.Contexts[keyof Plugin.Contexts];
+            }
+          : undefined,
+        dispose: feature.dispose
+          ? async () => { await feature.dispose!(); }
+          : undefined,
+        extensions: feature.extensions,
+      };
+      return this.provide(ctx);
+    }
+    const context = target;
     if (!Plugin[contextsKey].includes(context.name as string)) {
       Plugin[contextsKey].push(context.name as string);
     }
     this.logger.debug(`Context "${context.name as string}" provided`);
     this.$contexts.set(context.name as string, context);
+    // 立即注册扩展方法到 Plugin.prototype，确保后续 import 的插件可用
+    if (context.extensions) {
+      for (const [name, fn] of Object.entries(context.extensions)) {
+        if (typeof fn === 'function') {
+          Reflect.set(Plugin.prototype, name, fn);
+        }
+      }
+    }
     return this;
   }
 
@@ -830,16 +876,16 @@ export namespace Plugin {
     "context.mounted": [keyof Plugin.Contexts];
     "context.dispose": [keyof Plugin.Contexts];
     "message.receive": [any];
+    "bot.login.pending": [import('./built/login-assist.js').PendingLoginTask];
+    "request.receive": [any];
+    "notice.receive": [any];
   }
 
   /**
    * 服务类型扩展点
    * 各个 Context 通过 declare module 扩展此接口
    */
-  export interface Contexts extends Adapters {
-    config: ConfigService;
-    permission: PermissionService;
-  }
+  export interface Contexts extends Adapters {}
   
   /**
    * Service 扩展方法类型

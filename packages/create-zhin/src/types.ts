@@ -11,6 +11,7 @@ export interface InitOptions {
   ai?: AISetupConfig;
   adapters?: AdapterSetupResult;
   installGlobalCli?: boolean;
+  devSkills?: boolean;
 }
 
 export interface DatabaseConfig {

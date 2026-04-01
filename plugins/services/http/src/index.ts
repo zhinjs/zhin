@@ -200,18 +200,7 @@ useContext("config", (configService) => {
 
     const features = plugin.getFeatures();
 
-    // 收集 features 中已展示的上下文名（adapter/service items 的 name）
-    const shownContextNames = new Set<string>();
-    for (const f of features) {
-      if (f.name === 'adapter' || f.name === 'service') {
-        for (const item of f.items) {
-          if (item.name) shownContextNames.add(item.name);
-        }
-      }
-    }
-    // 过滤掉已在 features 中展示的上下文
     const contexts = Array.from(plugin.contexts.entries())
-      .filter(([name]) => !shownContextNames.has(name))
       .map(([name]) => ({ name }));
 
     ctx.body = {

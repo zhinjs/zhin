@@ -6,6 +6,7 @@ import { Feature, FeatureJSON } from "../feature.js";
 import { Component, renderComponents } from "../component.js";
 import { SendOptions, MaybePromise } from "../types.js";
 import { Plugin, getPlugin } from "../plugin.js";
+import type { PluginLike } from '@zhin.js/kernel';
 
 type Listener = (options: SendOptions) => MaybePromise<SendOptions>;
 
@@ -75,12 +76,13 @@ export class ComponentFeature extends Feature<Component<any>> {
   /**
    * 生命周期: 挂载时注册消息渲染监听器
    */
-  mounted(plugin: Plugin): void {
-    this.#rootPlugin = plugin;
+  mounted(plugin: PluginLike): void {
+    const p = plugin as Plugin;
+    this.#rootPlugin = p;
     this.#listener = (options: SendOptions) => {
       return renderComponents(this.byName, options);
     };
-    plugin.root.on('before.sendMessage', this.#listener);
+    p.root.on('before.sendMessage', this.#listener);
   }
 
   /**

@@ -63,6 +63,11 @@ export type { ZhinAgentConfig, OnChunkCallback } from './config.js';
 const logger = new Logger(null, 'ZhinAgent');
 const now = () => performance.now();
 
+/** Strip `<think>…</think>` blocks that some reasoning models embed in content. */
+function stripThinkBlocks(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
+}
+
 // ============================================================================
 // ZhinAgent
 // ============================================================================
@@ -353,7 +358,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
 
       const userMessageWithHistory = buildUserMessageWithHistory(historyMessages, content);
       const result = await agent.run(userMessageWithHistory, []);
-      reply = result.content || this.fallbackFormat(result.toolCalls);
+      reply = stripThinkBlocks(result.content) || this.fallbackFormat(result.toolCalls);
       logger.info(`[Agent 路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, Agent=${(now() - tAgent).toFixed(0)}ms, 总=${(now() - t0).toFixed(0)}ms`);
     }
 
@@ -434,16 +439,25 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     let reply = '';
     try {
       for await (const chunk of this.provider.chatStream({ model: visionModel, messages })) {
-        const delta = chunk.choices?.[0]?.delta?.content;
-        if (delta && typeof delta === 'string') {
-          reply += delta;
-          if (onChunk) onChunk(delta, reply);
+        const delta = chunk.choices?.[0]?.delta;
+        if (!delta) continue;
+        const text = typeof delta.content === 'string' ? delta.content : '';
+        if (text) {
+          reply += text;
+          if (onChunk) onChunk(text, reply);
         }
+      }
+      reply = stripThinkBlocks(reply);
+      if (!reply) {
+        logger.warn('[processMultimodal] 流式响应内容为空，尝试非流式回退');
+        const response = await this.provider.chat({ model: visionModel, messages });
+        const msg = response.choices[0]?.message?.content;
+        reply = stripThinkBlocks(typeof msg === 'string' ? msg : '');
       }
     } catch {
       const response = await this.provider.chat({ model: visionModel, messages });
       const msg = response.choices[0]?.message?.content;
-      reply = typeof msg === 'string' ? msg : '';
+      reply = stripThinkBlocks(typeof msg === 'string' ? msg : '');
     }
 
     if (!reply) reply = '抱歉，我无法理解这条消息。';
@@ -475,20 +489,27 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     try {
       let result = '';
       for await (const chunk of this.provider.chatStream({ model, messages })) {
-        const delta = chunk.choices?.[0]?.delta?.content;
-        if (delta && typeof delta === 'string') {
-          result += delta;
-          if (onChunk) onChunk(delta, result);
+        const delta = chunk.choices?.[0]?.delta;
+        if (!delta) continue;
+        const text = typeof delta.content === 'string' ? delta.content : '';
+        if (text) {
+          result += text;
+          if (onChunk) onChunk(text, result);
         }
       }
-      return result;
+      result = stripThinkBlocks(result);
+      if (result) return result;
+      // Streaming returned empty content — fall back to non-streaming
+      logger.warn('[streamChat] 流式响应内容为空，尝试非流式回退');
     } catch {
-      const response = await this.provider.chat({ model, messages });
-      const msg = response.choices[0]?.message?.content;
-      const result = typeof msg === 'string' ? msg : '';
-      if (onChunk && result) onChunk(result, result);
-      return result;
+      // Stream failed — fall back to non-streaming
     }
+    const response = await this.provider.chat({ model, messages });
+    const msg = response.choices[0]?.message?.content;
+    let result = typeof msg === 'string' ? msg : '';
+    result = stripThinkBlocks(result);
+    if (onChunk && result) onChunk(result, result);
+    return result;
   }
 
   private async saveToSession(

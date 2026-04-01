@@ -1,0 +1,727 @@
+[
+  {
+    "provider": "minimax-coding-plan",
+    "api": "https://api.minimax.io/anthropic/v1",
+    "docs": "https://platform.minimax.io/docs/coding-plan/intro",
+    "models": [
+      "MiniMax-M2.7",
+      "MiniMax-M2.1",
+      "MiniMax-M2.5",
+      "MiniMax-M2",
+      "MiniMax-M2.5-highspeed",
+      "MiniMax-M2.7-highspeed"
+    ]
+  },
+  {
+    "provider": "cloudflare-ai-gateway",
+    "api": "",
+    "docs": "https://developers.cloudflare.com/ai-gateway/",
+    "models": [
+      "workers-ai/@cf/myshell-ai/melotts",
+      "workers-ai/@cf/facebook/bart-large-cnn",
+      "workers-ai/@cf/pipecat-ai/smart-turn-v2",
+      "workers-ai/@cf/deepgram/aura-2-en",
+      "workers-ai/@cf/deepgram/nova-3",
+      "workers-ai/@cf/deepgram/aura-2-es"
+    ]
+  },
+  {
+    "provider": "meganova",
+    "api": "https://api.meganova.ai/v1",
+    "docs": "https://docs.meganova.ai",
+    "models": [
+      "mistralai/Mistral-Small-3.2-24B-Instruct-2506"
+    ]
+  },
+  {
+    "provider": "zai-coding-plan",
+    "api": "https://api.z.ai/api/coding/paas/v4",
+    "docs": "https://docs.z.ai/devpack/overview",
+    "models": [
+      "glm-4.7-flash",
+      "glm-5-turbo",
+      "glm-4.5",
+      "glm-4.6",
+      "glm-4.6v",
+      "glm-4.5-flash",
+      "glm-5",
+      "glm-4.5-air",
+      "glm-4.5v",
+      "glm-5.1",
+      "glm-4.7"
+    ]
+  },
+  {
+    "provider": "nova",
+    "api": "https://api.nova.amazon.com/v1",
+    "docs": "https://nova.amazon.com/dev/documentation",
+    "models": [
+      "nova-2-lite-v1",
+      "nova-2-pro-v1"
+    ]
+  },
+  {
+    "provider": "tencent-coding-plan",
+    "api": "https://api.lkeap.cloud.tencent.com/coding/v3",
+    "docs": "https://cloud.tencent.com/document/product/1772/128947",
+    "models": [
+      "hunyuan-2.0-instruct",
+      "kimi-k2.5",
+      "hunyuan-t1",
+      "hunyuan-2.0-thinking",
+      "tc-code-latest",
+      "glm-5",
+      "hunyuan-turbos",
+      "minimax-m2.5"
+    ]
+  },
+  {
+    "provider": "jiekou",
+    "api": "https://api.jiekou.ai/openai",
+    "docs": "https://docs.jiekou.ai/docs/support/quickstart?utm_source=github_models.dev",
+    "models": [
+      "xiaomimimo/mimo-v2-flash"
+    ]
+  },
+  {
+    "provider": "llama",
+    "api": "https://api.llama.com/compat/v1/",
+    "docs": "https://llama.developer.meta.com/docs/models",
+    "models": [
+      "cerebras-llama-4-scout-17b-16e-instruct",
+      "llama-3.3-70b-instruct",
+      "cerebras-llama-4-maverick-17b-128e-instruct",
+      "groq-llama-4-maverick-17b-128e-instruct",
+      "llama-4-scout-17b-16e-instruct-fp8",
+      "llama-3.3-8b-instruct",
+      "llama-4-maverick-17b-128e-instruct-fp8"
+    ]
+  },
+  {
+    "provider": "zai",
+    "api": "https://api.z.ai/api/paas/v4",
+    "docs": "https://docs.z.ai/guides/overview/pricing",
+    "models": [
+      "glm-4.7-flash",
+      "glm-4.5-flash"
+    ]
+  },
+  {
+    "provider": "opencode",
+    "api": "https://opencode.ai/zen/v1",
+    "docs": "https://opencode.ai/docs/zen",
+    "models": [
+      "mimo-v2-flash-free",
+      "big-pickle",
+      "minimax-m2.1-free",
+      "mimo-v2-omni-free",
+      "qwen3.6-plus-free",
+      "grok-code",
+      "kimi-k2.5-free",
+      "glm-5-free",
+      "gpt-5-nano",
+      "nemotron-3-super-free",
+      "minimax-m2.5-free",
+      "trinity-large-preview-free",
+      "glm-4.7-free",
+      "mimo-v2-pro-free"
+    ]
+  },
+  {
+    "provider": "zhipuai",
+    "api": "https://open.bigmodel.cn/api/paas/v4",
+    "docs": "https://docs.z.ai/guides/overview/pricing",
+    "models": [
+      "glm-4.5-flash",
+      "glm-4.7-flash"
+    ]
+  },
+  {
+    "provider": "nvidia",
+    "api": "https://integrate.api.nvidia.com/v1",
+    "docs": "https://docs.api.nvidia.com/nim/",
+    "models": [
+      "openai/gpt-oss-120b",
+      "openai/whisper-large-v3",
+      "microsoft/phi-3-small-8k-instruct",
+      "microsoft/phi-3-vision-128k-instruct",
+      "microsoft/phi-3-medium-4k-instruct",
+      "microsoft/phi-3.5-vision-instruct",
+      "microsoft/phi-3-medium-128k-instruct",
+      "microsoft/phi-3.5-moe-instruct",
+      "microsoft/phi-3-small-128k-instruct",
+      "microsoft/phi-4-mini-instruct",
+      "nvidia/llama3-chatqa-1.5-70b",
+      "nvidia/llama-3.1-nemotron-70b-instruct",
+      "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+      "nvidia/nemotron-4-340b-instruct",
+      "nvidia/cosmos-nemotron-34b",
+      "nvidia/nvidia-nemotron-nano-9b-v2",
+      "nvidia/llama-3.1-nemotron-51b-instruct",
+      "nvidia/nemoretriever-ocr-v1",
+      "nvidia/llama-embed-nemotron-8b",
+      "nvidia/llama-3.3-nemotron-super-49b-v1",
+      "nvidia/parakeet-tdt-0.6b-v2",
+      "nvidia/nemotron-3-nano-30b-a3b",
+      "nvidia/llama-3.1-nemotron-ultra-253b-v1",
+      "z-ai/glm5",
+      "z-ai/glm4.7",
+      "stepfun-ai/step-3.5-flash",
+      "google/gemma-3-1b-it",
+      "google/gemma-3n-e2b-it",
+      "google/gemma-3-27b-it",
+      "google/gemma-3n-e4b-it",
+      "google/codegemma-1.1-7b",
+      "google/codegemma-7b",
+      "google/gemma-2-2b-it",
+      "google/gemma-2-27b-it",
+      "google/gemma-3-12b-it",
+      "minimaxai/minimax-m2.1",
+      "minimaxai/minimax-m2.5",
+      "deepseek-ai/deepseek-v3.1-terminus",
+      "deepseek-ai/deepseek-r1",
+      "deepseek-ai/deepseek-coder-6.7b-instruct",
+      "deepseek-ai/deepseek-v3.1",
+      "deepseek-ai/deepseek-r1-0528",
+      "deepseek-ai/deepseek-v3.2",
+      "qwen/qwq-32b",
+      "qwen/qwen2.5-coder-7b-instruct",
+      "qwen/qwen2.5-coder-32b-instruct",
+      "qwen/qwen3-coder-480b-a35b-instruct",
+      "qwen/qwen3-next-80b-a3b-thinking",
+      "qwen/qwen3-next-80b-a3b-instruct",
+      "qwen/qwen3-235b-a22b",
+      "qwen/qwen3.5-397b-a17b",
+      "black-forest-labs/flux.1-dev",
+      "moonshotai/kimi-k2-thinking",
+      "moonshotai/kimi-k2.5",
+      "moonshotai/kimi-k2-instruct-0905",
+      "moonshotai/kimi-k2-instruct",
+      "meta/codellama-70b",
+      "meta/llama-3.3-70b-instruct",
+      "meta/llama-3.2-1b-instruct",
+      "meta/llama-3.1-405b-instruct",
+      "meta/llama3-8b-instruct",
+      "meta/llama-4-scout-17b-16e-instruct",
+      "meta/llama-3.2-11b-vision-instruct",
+      "meta/llama3-70b-instruct",
+      "meta/llama-4-maverick-17b-128e-instruct",
+      "meta/llama-3.1-70b-instruct",
+      "mistralai/devstral-2-123b-instruct-2512",
+      "mistralai/mistral-large-3-675b-instruct-2512",
+      "mistralai/mistral-large-2-instruct",
+      "mistralai/ministral-14b-instruct-2512",
+      "mistralai/mamba-codestral-7b-v0.1",
+      "mistralai/codestral-22b-instruct-v0.1",
+      "mistralai/mistral-small-3.1-24b-instruct-2503"
+    ]
+  },
+  {
+    "provider": "nebius",
+    "api": "https://api.tokenfactory.nebius.com/v1",
+    "docs": "https://docs.tokenfactory.nebius.com/",
+    "models": [
+      "black-forest-labs/flux-dev",
+      "black-forest-labs/flux-schnell"
+    ]
+  },
+  {
+    "provider": "google",
+    "api": "",
+    "docs": "https://ai.google.dev/gemini-api/docs/pricing",
+    "models": [
+      "gemma-3n-e2b-it",
+      "gemma-3-27b-it",
+      "gemma-3-4b-it",
+      "gemma-3n-e4b-it",
+      "gemma-3-12b-it"
+    ]
+  },
+  {
+    "provider": "lmstudio",
+    "api": "http://127.0.0.1:1234/v1",
+    "docs": "https://lmstudio.ai/models",
+    "models": [
+      "openai/gpt-oss-20b",
+      "qwen/qwen3-coder-30b",
+      "qwen/qwen3-30b-a3b-2507"
+    ]
+  },
+  {
+    "provider": "kimi-for-coding",
+    "api": "https://api.kimi.com/coding/v1",
+    "docs": "https://www.kimi.com/coding/docs/en/third-party-agents.html",
+    "models": [
+      "kimi-k2-thinking",
+      "k2p5"
+    ]
+  },
+  {
+    "provider": "alibaba-cn",
+    "api": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "docs": "https://www.alibabacloud.com/help/en/model-studio/models",
+    "models": [
+      "deepseek-r1-distill-qwen-1-5b",
+      "deepseek-r1-distill-llama-8b"
+    ]
+  },
+  {
+    "provider": "novita-ai",
+    "api": "https://api.novita.ai/openai",
+    "docs": "https://novita.ai/docs/guides/introduction",
+    "models": [
+      "kwaipilot/kat-coder"
+    ]
+  },
+  {
+    "provider": "cortecs",
+    "api": "https://api.cortecs.ai/v1",
+    "docs": "https://api.cortecs.ai/v1/models",
+    "models": [
+      "devstral-2512",
+      "llama-3.1-405b-instruct",
+      "gpt-oss-120b",
+      "devstral-small-2512"
+    ]
+  },
+  {
+    "provider": "siliconflow-cn",
+    "api": "https://api.siliconflow.cn/v1",
+    "docs": "https://cloud.siliconflow.com/models",
+    "models": [
+      "PaddlePaddle/PaddleOCR-VL-1.5",
+      "PaddlePaddle/PaddleOCR-VL",
+      "deepseek-ai/DeepSeek-OCR",
+      "Qwen/Qwen3.5-4B",
+      "tencent/Hunyuan-MT-7B"
+    ]
+  },
+  {
+    "provider": "kilo",
+    "api": "https://api.kilo.ai/api/gateway",
+    "docs": "https://kilo.ai",
+    "models": [
+      "giga-potato",
+      "corethink:free",
+      "giga-potato-thinking",
+      "morph-warp-grep-v2",
+      "x-ai/grok-code-fast-1:optimized:free",
+      "nvidia/nemotron-3-super-120b-a12b:free",
+      "kilo/auto-free",
+      "openrouter/hunter-alpha",
+      "openrouter/free",
+      "openrouter/bodybuilder",
+      "openrouter/auto",
+      "openrouter/healer-alpha",
+      "arcee-ai/trinity-large-preview:free",
+      "kilo-auto/free",
+      "minimax/minimax-m2.5:free",
+      "stepfun/step-3.5-flash:free"
+    ]
+  },
+  {
+    "provider": "kuae-cloud-coding-plan",
+    "api": "https://coding-plan-endpoint.kuaecloud.net/v1",
+    "docs": "https://docs.mthreads.com/kuaecloud/kuaecloud-doc-online/coding_plan/",
+    "models": [
+      "GLM-4.7"
+    ]
+  },
+  {
+    "provider": "modelscope",
+    "api": "https://api-inference.modelscope.cn/v1",
+    "docs": "https://modelscope.cn/docs/model-service/API-Inference/intro",
+    "models": [
+      "ZhipuAI/GLM-4.5",
+      "ZhipuAI/GLM-4.6",
+      "Qwen/Qwen3-30B-A3B-Thinking-2507",
+      "Qwen/Qwen3-235B-A22B-Thinking-2507",
+      "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+      "Qwen/Qwen3-30B-A3B-Instruct-2507",
+      "Qwen/Qwen3-235B-A22B-Instruct-2507"
+    ]
+  },
+  {
+    "provider": "openrouter",
+    "api": "https://openrouter.ai/api/v1",
+    "docs": "https://openrouter.ai/models",
+    "models": [
+      "openai/gpt-oss-120b:free",
+      "openai/gpt-oss-20b:free",
+      "deepseek/deepseek-r1-distill-llama-70b",
+      "deepseek/deepseek-chat-v3-0324",
+      "nvidia/nemotron-nano-9b-v2:free",
+      "nvidia/nemotron-nano-12b-v2-vl:free",
+      "nvidia/nemotron-3-super-120b-a12b:free",
+      "nvidia/nemotron-3-nano-30b-a3b:free",
+      "z-ai/glm-4.5-air:free",
+      "sourceful/riverflow-v2-standard-preview",
+      "sourceful/riverflow-v2-fast-preview",
+      "sourceful/riverflow-v2-max-preview",
+      "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+      "google/gemma-3-12b-it:free",
+      "google/gemma-3-4b-it:free",
+      "google/gemma-3-27b-it:free",
+      "google/gemma-3n-e2b-it:free",
+      "google/gemma-3n-e4b-it:free",
+      "meta-llama/llama-3.2-11b-vision-instruct",
+      "meta-llama/llama-3.2-3b-instruct:free",
+      "meta-llama/llama-3.3-70b-instruct:free",
+      "openrouter/free",
+      "arcee-ai/trinity-mini:free",
+      "arcee-ai/trinity-large-preview:free",
+      "nousresearch/hermes-3-llama-3.1-405b:free",
+      "qwen/qwen3-4b:free",
+      "qwen/qwen3-coder:free",
+      "qwen/qwen2.5-vl-72b-instruct",
+      "qwen/qwen3-next-80b-a3b-instruct:free",
+      "qwen/qwen3.6-plus-preview:free",
+      "qwen/qwen-2.5-coder-32b-instruct",
+      "black-forest-labs/flux.2-pro",
+      "black-forest-labs/flux.2-max",
+      "black-forest-labs/flux.2-klein-4b",
+      "black-forest-labs/flux.2-flex",
+      "stepfun/step-3.5-flash:free",
+      "liquid/lfm-2.5-1.2b-instruct:free",
+      "liquid/lfm-2.5-1.2b-thinking:free",
+      "moonshotai/kimi-k2:free",
+      "bytedance-seed/seedream-4.5",
+      "mistralai/mistral-small-3.2-24b-instruct",
+      "mistralai/mistral-small-3.1-24b-instruct"
+    ]
+  },
+  {
+    "provider": "zenmux",
+    "api": "https://zenmux.ai/api/v1",
+    "docs": "https://docs.zenmux.ai",
+    "models": [
+      "z-ai/glm-4.7-flash-free",
+      "z-ai/glm-4.6v-flash-free",
+      "xiaomi/mimo-v2-flash-free",
+      "stepfun/step-3.5-flash-free",
+      "kuaishou/kat-coder-pro-v1-free"
+    ]
+  },
+  {
+    "provider": "privatemode-ai",
+    "api": "http://localhost:8080/v1",
+    "docs": "https://docs.privatemode.ai/api/overview",
+    "models": [
+      "gpt-oss-120b",
+      "qwen3-embedding-4b",
+      "whisper-large-v3",
+      "gemma-3-27b",
+      "qwen3-coder-30b-a3b"
+    ]
+  },
+  {
+    "provider": "gitlab",
+    "api": "",
+    "docs": "https://docs.gitlab.com/user/duo_agent_platform/",
+    "models": [
+      "duo-chat-gpt-5-1",
+      "duo-chat-gpt-5-2",
+      "duo-chat-sonnet-4-6",
+      "duo-chat-opus-4-6",
+      "duo-chat-haiku-4-5",
+      "duo-chat-gpt-5-codex",
+      "duo-chat-gpt-5-mini",
+      "duo-chat-gpt-5-2-codex",
+      "duo-chat-gpt-5-4-mini",
+      "duo-chat-gpt-5-3-codex",
+      "duo-chat-gpt-5-4-nano",
+      "duo-chat-gpt-5-4",
+      "duo-chat-sonnet-4-5",
+      "duo-chat-opus-4-5"
+    ]
+  },
+  {
+    "provider": "alibaba-coding-plan-cn",
+    "api": "https://coding.dashscope.aliyuncs.com/v1",
+    "docs": "https://help.aliyun.com/zh/model-studio/coding-plan",
+    "models": [
+      "qwen3.5-plus",
+      "qwen3-coder-next",
+      "kimi-k2.5",
+      "MiniMax-M2.5",
+      "glm-5",
+      "qwen3-coder-plus",
+      "glm-4.7",
+      "qwen3-max-2026-01-23"
+    ]
+  },
+  {
+    "provider": "huggingface",
+    "api": "https://router.huggingface.co/v1",
+    "docs": "https://huggingface.co/docs/inference-providers",
+    "models": [
+      "zai-org/GLM-4.7-Flash"
+    ]
+  },
+  {
+    "provider": "vercel",
+    "api": "",
+    "docs": "https://github.com/vercel/ai/tree/5eb85cc45a259553501f535b8ac79a77d0e79223/packages/gateway",
+    "models": [
+      "meta/llama-3.3-70b",
+      "meta/llama-4-maverick",
+      "meta/llama-4-scout"
+    ]
+  },
+  {
+    "provider": "llmgateway",
+    "api": "https://api.llmgateway.io/v1",
+    "docs": "https://llmgateway.io/docs",
+    "models": [
+      "grok-imagine-image",
+      "qwen-image",
+      "glm-image",
+      "seedream-4-0",
+      "qwen-image-max",
+      "glm-4.7-flash",
+      "qwen-image-edit-plus",
+      "qwen-image-plus",
+      "veo-3.1-fast-generate-preview",
+      "auto",
+      "qwen-image-edit-max",
+      "custom",
+      "glm-4.5-flash",
+      "qwen-image-max-2025-12-30",
+      "cogview-4",
+      "veo-3.1-generate-preview",
+      "seedream-4-5",
+      "grok-imagine-image-pro",
+      "glm-4.6v-flash"
+    ]
+  },
+  {
+    "provider": "groq",
+    "api": "",
+    "docs": "https://console.groq.com/docs/models",
+    "models": [
+      "whisper-large-v3",
+      "whisper-large-v3-turbo",
+      "allam-2-7b",
+      "canopylabs/orpheus-v1-english",
+      "groq/compound-mini",
+      "groq/compound"
+    ]
+  },
+  {
+    "provider": "aihubmix",
+    "api": "",
+    "docs": "https://docs.aihubmix.com",
+    "models": [
+      "coding-glm-5-free",
+      "coding-glm-4.7-free",
+      "coding-minimax-m2.1-free"
+    ]
+  },
+  {
+    "provider": "minimax-cn-coding-plan",
+    "api": "https://api.minimaxi.com/anthropic/v1",
+    "docs": "https://platform.minimaxi.com/docs/coding-plan/intro",
+    "models": [
+      "MiniMax-M2.7",
+      "MiniMax-M2.1",
+      "MiniMax-M2.5",
+      "MiniMax-M2",
+      "MiniMax-M2.5-highspeed",
+      "MiniMax-M2.7-highspeed"
+    ]
+  },
+  {
+    "provider": "mistral",
+    "api": "",
+    "docs": "https://docs.mistral.ai/getting-started/models/",
+    "models": [
+      "labs-devstral-small-2512"
+    ]
+  },
+  {
+    "provider": "github-copilot",
+    "api": "https://api.githubcopilot.com",
+    "docs": "https://docs.github.com/en/copilot",
+    "models": [
+      "gpt-5.2-codex",
+      "gpt-5.1-codex-mini",
+      "claude-opus-4.6",
+      "gpt-5.4-mini",
+      "gpt-5",
+      "claude-haiku-4.5",
+      "gemini-3.1-pro-preview",
+      "gemini-3-pro-preview",
+      "gpt-4o",
+      "grok-code-fast-1",
+      "gpt-5.3-codex",
+      "gpt-5-mini",
+      "gpt-5.1-codex-max",
+      "gpt-4.1",
+      "gpt-5.4",
+      "gemini-3-flash-preview",
+      "claude-sonnet-4.6",
+      "gemini-2.5-pro",
+      "claude-sonnet-4",
+      "gpt-5.2",
+      "gpt-5.1",
+      "claude-opus-4.5",
+      "claude-opus-41",
+      "claude-sonnet-4.5",
+      "gpt-5.1-codex"
+    ]
+  },
+  {
+    "provider": "iflowcn",
+    "api": "https://apis.iflow.cn/v1",
+    "docs": "https://platform.iflow.cn/en/docs",
+    "models": [
+      "deepseek-r1",
+      "qwen3-max-preview",
+      "deepseek-v3",
+      "kimi-k2-0905",
+      "kimi-k2",
+      "qwen3-235b",
+      "glm-4.6",
+      "qwen3-235b-a22b-instruct",
+      "qwen3-235b-a22b-thinking-2507",
+      "qwen3-vl-plus",
+      "qwen3-coder-plus",
+      "qwen3-max",
+      "qwen3-32b",
+      "deepseek-v3.2"
+    ]
+  },
+  {
+    "provider": "github-models",
+    "api": "https://models.github.ai/inference",
+    "docs": "https://docs.github.com/en/github-models",
+    "models": [
+      "mistral-ai/codestral-2501",
+      "mistral-ai/mistral-large-2411",
+      "mistral-ai/mistral-small-2503",
+      "mistral-ai/mistral-medium-2505",
+      "mistral-ai/ministral-3b",
+      "mistral-ai/mistral-nemo",
+      "ai21-labs/ai21-jamba-1.5-mini",
+      "ai21-labs/ai21-jamba-1.5-large",
+      "openai/o3-mini",
+      "openai/gpt-4o",
+      "openai/gpt-4o-mini",
+      "openai/gpt-4.1",
+      "openai/o1",
+      "openai/o3",
+      "openai/gpt-4.1-mini",
+      "openai/gpt-4.1-nano",
+      "openai/o1-preview",
+      "openai/o4-mini",
+      "openai/o1-mini",
+      "microsoft/phi-3-mini-128k-instruct",
+      "microsoft/phi-3-small-8k-instruct",
+      "microsoft/phi-4-reasoning",
+      "microsoft/phi-4-mini-reasoning",
+      "microsoft/phi-3-mini-4k-instruct",
+      "microsoft/phi-3-medium-4k-instruct",
+      "microsoft/phi-3.5-vision-instruct",
+      "microsoft/mai-ds-r1",
+      "microsoft/phi-3.5-mini-instruct",
+      "microsoft/phi-4",
+      "microsoft/phi-3-medium-128k-instruct",
+      "microsoft/phi-3.5-moe-instruct",
+      "microsoft/phi-4-multimodal-instruct",
+      "microsoft/phi-3-small-128k-instruct",
+      "microsoft/phi-4-mini-instruct",
+      "cohere/cohere-command-r-plus-08-2024",
+      "cohere/cohere-command-r",
+      "cohere/cohere-command-r-08-2024",
+      "cohere/cohere-command-r-plus",
+      "cohere/cohere-command-a",
+      "deepseek/deepseek-v3-0324",
+      "deepseek/deepseek-r1",
+      "deepseek/deepseek-r1-0528",
+      "xai/grok-3-mini",
+      "xai/grok-3",
+      "core42/jais-30b-chat",
+      "meta/meta-llama-3.1-8b-instruct",
+      "meta/llama-3.3-70b-instruct",
+      "meta/llama-4-scout-17b-16e-instruct",
+      "meta/llama-3.2-11b-vision-instruct",
+      "meta/meta-llama-3-70b-instruct",
+      "meta/meta-llama-3-8b-instruct",
+      "meta/llama-3.2-90b-vision-instruct",
+      "meta/meta-llama-3.1-405b-instruct",
+      "meta/llama-4-maverick-17b-128e-instruct-fp8",
+      "meta/meta-llama-3.1-70b-instruct"
+    ]
+  },
+  {
+    "provider": "nano-gpt",
+    "api": "https://nano-gpt.com/api/v1",
+    "docs": "https://docs.nano-gpt.com",
+    "models": [
+      "auto-model"
+    ]
+  },
+  {
+    "provider": "cloudflare-workers-ai",
+    "api": "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+    "docs": "https://developers.cloudflare.com/workers-ai/models/",
+    "models": [
+      "@cf/myshell-ai/melotts",
+      "@cf/facebook/bart-large-cnn",
+      "@cf/pipecat-ai/smart-turn-v2",
+      "@cf/deepgram/aura-2-en",
+      "@cf/deepgram/nova-3",
+      "@cf/deepgram/aura-2-es"
+    ]
+  },
+  {
+    "provider": "siliconflow",
+    "api": "https://api.siliconflow.com/v1",
+    "docs": "https://cloud.siliconflow.com/models",
+    "models": [
+      "tencent/Hunyuan-MT-7B"
+    ]
+  },
+  {
+    "provider": "alibaba-coding-plan",
+    "api": "https://coding-intl.dashscope.aliyuncs.com/v1",
+    "docs": "https://www.alibabacloud.com/help/en/model-studio/coding-plan",
+    "models": [
+      "qwen3.5-plus",
+      "qwen3-coder-next",
+      "kimi-k2.5",
+      "MiniMax-M2.5",
+      "glm-5",
+      "qwen3-coder-plus",
+      "glm-4.7",
+      "qwen3-max-2026-01-23"
+    ]
+  },
+  {
+    "provider": "zhipuai-coding-plan",
+    "api": "https://open.bigmodel.cn/api/coding/paas/v4",
+    "docs": "https://docs.bigmodel.cn/cn/coding-plan/overview",
+    "models": [
+      "glm-5.1",
+      "glm-4.6v-flash",
+      "glm-4.7",
+      "glm-4.5v",
+      "glm-4.5-air",
+      "glm-5",
+      "glm-4.5-flash",
+      "glm-4.6v",
+      "glm-4.6",
+      "glm-4.5",
+      "glm-5-turbo",
+      "glm-4.7-flash"
+    ]
+  },
+  {
+    "provider": "fireworks-ai",
+    "api": "https://api.fireworks.ai/inference/v1/",
+    "docs": "https://fireworks.ai/docs/",
+    "models": [
+      "accounts/fireworks/routers/kimi-k2p5-turbo"
+    ]
+  }
+]

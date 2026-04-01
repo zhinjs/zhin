@@ -8,6 +8,7 @@
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",
+      "development": "./src/index.tsx",
       "import": "./lib/index.js"
     },
     "./package.json": "./package.json"
@@ -26,6 +27,7 @@
   },
   "keywords": [
     "zhin",
+    "zhin.js",
     "bot",
     "plugin",
     "music",

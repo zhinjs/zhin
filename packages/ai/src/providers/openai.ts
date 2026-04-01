@@ -48,38 +48,58 @@ export class OpenAIProvider extends BaseProvider {
   }
 
   async chat(request: ChatCompletionRequest): Promise<ChatCompletionResponse> {
-    return this.fetch<ChatCompletionResponse>(
-      `${this.baseUrl}/chat/completions`,
-      {
-        method: 'POST',
-        json: {
-          ...request,
-          stream: false,
-        },
-      }
-    );
+    const body = OpenAIProvider.sanitizeRequest(request);
+    try {
+      return await this.fetch<ChatCompletionResponse>(
+        `${this.baseUrl}/chat/completions`,
+        { method: 'POST', json: { ...body, stream: false } },
+      );
+    } catch (err) {
+      const stripped = OpenAIProvider.stripUnsupportedParam(err, body);
+      if (!stripped) throw err;
+      return this.fetch<ChatCompletionResponse>(
+        `${this.baseUrl}/chat/completions`,
+        { method: 'POST', json: { ...stripped, stream: false } },
+      );
+    }
   }
 
   async *chatStream(request: ChatCompletionRequest): AsyncIterable<ChatCompletionChunk> {
+    const body = OpenAIProvider.sanitizeRequest(request);
+    let finalBody = body;
+    // Pre-flight: for streaming we can't easily retry, so do a quick non-stream
+    // probe if needed. Instead, just send and if it fails, retry without the param.
+    try {
+      const stream = this.fetchStream(
+        `${this.baseUrl}/chat/completions`,
+        {
+          method: 'POST',
+          json: { ...finalBody, stream: true, stream_options: { include_usage: true } },
+        },
+      );
+      for await (const data of stream) {
+        try {
+          yield JSON.parse(data) as ChatCompletionChunk;
+        } catch { /* ignore parse errors */ }
+      }
+      return;
+    } catch (err) {
+      const stripped = OpenAIProvider.stripUnsupportedParam(err, finalBody);
+      if (!stripped) throw err;
+      finalBody = stripped;
+    }
+    // Retry stream without the unsupported param
     const stream = this.fetchStream(
       `${this.baseUrl}/chat/completions`,
       {
         method: 'POST',
-        json: {
-          ...request,
-          stream: true,
-          stream_options: { include_usage: true },
-        },
-      }
+        json: { ...finalBody, stream: true, stream_options: { include_usage: true } },
+      },
     );
-
     for await (const data of stream) {
       try {
-        const chunk = JSON.parse(data) as ChatCompletionChunk;
-        yield chunk;
-      } catch {
-        // 忽略解析错误的行
-      }
+        yield JSON.parse(data) as ChatCompletionChunk;
+      } catch { /* ignore parse errors */ }
     }
   }
 
@@ -96,6 +116,59 @@ export class OpenAIProvider extends BaseProvider {
     } catch {
       return this.models;
     }
+  }
+
+  /**
+   * Normalize message roles to standard OpenAI-compatible values.
+   * Converts internal roles (tool_call → assistant, tool_result → tool)
+   * so that strict APIs like GLM don't reject the request.
+   */
+  private static normalizeMessages(messages: ChatCompletionRequest['messages']) {
+    return messages.map(msg => {
+      if (msg.role === 'tool_call') return { ...msg, role: 'assistant' as const };
+      if (msg.role === 'tool_result') return { ...msg, role: 'tool' as const };
+      return msg;
+    });
+  }
+
+  /**
+   * Build a clean request body with only standard OpenAI-compatible parameters.
+   * Drops non-standard fields (think, etc.) and optional fields that are undefined,
+   * so strict APIs won't reject unknown parameters.
+   */
+  private static sanitizeRequest(request: ChatCompletionRequest) {
+    const clean: Record<string, unknown> = {
+      model: request.model,
+      messages: OpenAIProvider.normalizeMessages(request.messages),
+    };
+    if (request.tools) clean.tools = request.tools;
+    if (request.tool_choice) clean.tool_choice = request.tool_choice;
+    if (request.temperature !== undefined) clean.temperature = request.temperature;
+    if (request.top_p !== undefined) clean.top_p = request.top_p;
+    if (request.max_tokens !== undefined) clean.max_tokens = request.max_tokens;
+    if (request.stop !== undefined) clean.stop = request.stop;
+    if (request.presence_penalty !== undefined) clean.presence_penalty = request.presence_penalty;
+    if (request.frequency_penalty !== undefined) clean.frequency_penalty = request.frequency_penalty;
+    if (request.user) clean.user = request.user;
+    return clean;
+  }
+
+  /**
+   * If a 400 error mentions "Unsupported parameter: '<name>'", remove that
+   * parameter from the request body and return the cleaned body for retry.
+   * Returns null if the error is not about an unsupported parameter.
+   */
+  private static stripUnsupportedParam(
+    err: unknown,
+    body: Record<string, unknown>,
+  ): Record<string, unknown> | null {
+    const msg = err instanceof Error ? err.message : String(err);
+    const match = msg.match(/Unsupported parameter[:\s]*'(\w+)'/i);
+    if (!match) return null;
+    const param = match[1];
+    if (!(param in body)) return null;
+    const { [param]: _, ...rest } = body;
+    return rest;
   }
 }
 

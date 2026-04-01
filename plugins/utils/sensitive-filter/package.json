@@ -18,6 +18,7 @@
   },
   "keywords": [
     "zhin",
+    "zhin.js",
     "bot",
     "plugin",
     "sensitive",
@@ -48,5 +49,12 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
   }
 }

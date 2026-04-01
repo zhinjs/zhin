@@ -384,7 +384,7 @@ Reply in the language specified in [User profile] (key: language / preferred_lan
           // 当存在 tool_calls 时，content 通常是模型的内部思考或原始 JSON，
           // 不需要暴露给最终用户，但需要保留在消息历史中以维持对话完整性
           state.messages.push({
-            role: 'tool_call',
+            role: 'assistant',
             content: typeof choice.message.content === 'string' ? choice.message.content : '',
             tool_calls: choice.message.tool_calls,
           });
@@ -617,7 +617,7 @@ Reply in the language specified in [User profile] (key: language / preferred_lan
 
       // 将 assistant 消息加入上下文
       messages.push({
-        role: 'tool_call',
+        role: 'assistant',
         content,
         tool_calls: pendingToolCalls.length > 0 ? pendingToolCalls : undefined,
       });
@@ -649,7 +649,7 @@ Reply in the language specified in [User profile] (key: language / preferred_lan
                    Agent.toolCallKey(h.tool, tc.function.arguments) === key,
             );
             messages.push({
-              role: 'tool_result',
+              role: 'tool',
               content: previous ? JSON.stringify(previous.result) : 'Result received.',
               tool_call_id: tc.id,
             });

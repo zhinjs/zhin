@@ -6,6 +6,7 @@ import { Registry, Definition, Databases, Database } from "@zhin.js/database";
 import { DatabaseConfig, Models } from "../types.js";
 import { Feature, FeatureJSON } from "../feature.js";
 import { Plugin, getPlugin } from "../plugin.js";
+import type { PluginLike } from '@zhin.js/kernel';
 import { SystemLogDefinition } from "../models/system-log.js";
 import { UserDefinition } from "../models/user.js";
 
@@ -87,7 +88,7 @@ export class DatabaseFeature extends Feature<ModelRecord> {
   /**
    * 生命周期: 启动数据库
    */
-  async mounted(plugin: Plugin): Promise<void> {
+  async mounted(plugin: PluginLike): Promise<void> {
     plugin.logger.info('Database service started');
     await this.db.start();
   }

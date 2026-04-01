@@ -2,7 +2,10 @@ import { Bot } from "./bot.js";
 import { Plugin } from "./plugin.js";
 import { EventEmitter } from "events";
 import { Message } from "./message.js";
+import { Notice } from "./notice.js";
+import { Request } from "./request.js";
 import { BeforeSendHandler, SendOptions, AITool, ToolContext } from "./types.js";
+import { isZhinTool, ToolInput } from "./built/tool.js";
 import { segment } from "./utils.js";
 /**
  * Adapter类：适配器抽象，管理多平台Bot实例。
@@ -134,7 +137,8 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
    * @param tool 工具定义
    * @returns 返回一个移除工具的函数
    */
-  addTool(tool: AITool): () => void {
+  addTool(input: ToolInput): () => void {
+    const tool: AITool = isZhinTool(input) ? input.toTool() : input;
     // 自动添加适配器源标识
     const toolWithSource: AITool = {
       ...tool,
@@ -239,6 +243,8 @@ export namespace Adapter {
     'message.private.receive': [Message];
     'message.group.receive': [Message];
     'message.channel.receive': [Message];
+    'notice.receive': [Notice];
+    'request.receive': [Request];
     'call.recallMessage': [string, string];
   }
   /**

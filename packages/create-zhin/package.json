@@ -7,7 +7,8 @@
     "create-zhin": "./lib/index.js"
   },
   "files": [
-    "lib"
+    "lib",
+    "template"
   ],
   "scripts": {
     "build": "tsc",

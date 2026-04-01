@@ -18,6 +18,7 @@ declare module "zhin.js" {
     };
   }
 }
+const p2=usePlugin();
 const { addCommand, addComponent, root, useContext } = usePlugin()
 // 全局内存历史记录
 declare global {
@@ -32,6 +33,7 @@ function formatMemoSize(size: number) {
   }
   return `${size.toFixed(2)}${sizes[0]}`;
 }
+console.log('plugin',p2.addCommand)
 addCommand(
   new MessageCommand("send").action(
     (_, result) => result.remaining as MessageElement[]

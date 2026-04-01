@@ -115,6 +115,19 @@ export async function createWorkspace(projectPath: string, projectName: string, 
   if (fs.existsSync(githubPath)) {
     await fs.copy(githubPath, path.join(githubDir, 'SKILL.md'));
   }
+
+  // 创建插件开发技能（可选）
+  if (options.devSkills) {
+    const devSkillNames = ['plugin-init', 'plugin-develop', 'plugin-test', 'plugin-quality', 'plugin-publish'];
+    for (const skillName of devSkillNames) {
+      const skillDir = path.join(projectPath, 'skills', skillName);
+      await fs.ensureDir(skillDir);
+      const skillSrcPath = path.join(__dirname, '../template/skills', skillName, 'SKILL.md');
+      if (fs.existsSync(skillSrcPath)) {
+        await fs.copy(skillSrcPath, path.join(skillDir, 'SKILL.md'));
+      }
+    }
+  }
   
   // 创建 plugins 目录
   await fs.ensureDir(path.join(projectPath, 'plugins'));
