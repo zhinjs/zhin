@@ -1,5 +1,11 @@
 # @zhin.js/satori
 
+## 0.2.2
+
+### Patch Changes
+
+- 16c8f92: fix: 统一发一次版
+
 ## 0.2.1
 
 ### Patch Changes

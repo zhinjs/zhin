@@ -1,5 +1,17 @@
 # @zhin.js/adapter-icqq
 
+## 1.0.67
+
+### Patch Changes
+
+- 16c8f92: fix: 统一发一次版
+- Updated dependencies [16c8f92]
+  - @zhin.js/client@1.0.14
+  - @zhin.js/core@1.0.54
+  - zhin.js@1.0.54
+  - @zhin.js/console@1.0.55
+  - @zhin.js/http@1.0.49
+
 ## 1.0.66
 
 ### Patch Changes
