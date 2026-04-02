@@ -3,7 +3,7 @@ import { logger } from '../utils/logger.js';
 import fs from 'fs-extra';
 import path from 'path';
 import inquirer from 'inquirer';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 
 interface InstallOptions {
   save?: boolean;
@@ -44,14 +44,14 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
     logger.log('');
 
     // 构建安装命令
-    const installCmd = buildInstallCommand(pluginToInstall, pluginType, options);
+    const installArgs = buildInstallArgs(pluginToInstall, pluginType, options);
     
-    logger.log(`执行命令: ${installCmd}`);
+    logger.log(`执行命令: pnpm ${installArgs.join(' ')}`);
     logger.log('');
 
-    // 执行安装
+    // 执行安装（使用 execFileSync 防止 shell 注入）
     try {
-      execSync(installCmd, {
+      execFileSync('pnpm', installArgs, {
         cwd: process.cwd(),
         stdio: 'inherit'
       });
@@ -163,10 +163,10 @@ function isWorkspaceRoot(): boolean {
 }
 
 /**
- * 构建安装命令
+ * 构建安装命令参数数组（不包含 pnpm 本身）
  */
-function buildInstallCommand(plugin: string, type: string, options: InstallOptions): string {
-  const parts = ['pnpm', 'add'];
+function buildInstallArgs(plugin: string, type: string, options: InstallOptions): string[] {
+  const parts = ['add'];
 
   // 添加保存选项
   if (options.saveDev) {
@@ -217,7 +217,7 @@ function buildInstallCommand(plugin: string, type: string, options: InstallOptio
 
   parts.push(packageSpec);
 
-  return parts.join(' ');
+  return parts;
 }
 
 /**
