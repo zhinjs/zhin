@@ -1,5 +1,14 @@
 # @zhin.js/agent
 
+## 0.0.18
+
+### Patch Changes
+
+- 75709e1: fix: ai 强化,文档梳理
+- Updated dependencies [75709e1]
+  - @zhin.js/core@1.0.55
+  - @zhin.js/ai@1.0.16
+
 ## 0.0.17
 
 ### Patch Changes
