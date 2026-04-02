@@ -6,15 +6,15 @@ import os from 'node:os';
 import { logger } from '../utils/logger.js';
 
 /**
- * Validate and sanitize a project name for use in shell commands.
- * Only allow alphanumeric, hyphens, underscores, and dots.
+ * Validate a project name for safe use in shell commands.
+ * Only allows alphanumeric characters, hyphens, underscores, and dots.
+ * Throws if the name contains any other characters.
  */
-function sanitizeProjectName(name: string): string {
-  const sanitized = name.replace(/[^a-zA-Z0-9._-]/g, '');
-  if (!sanitized || sanitized !== name) {
+function validateProjectName(name: string): string {
+  if (!name || !/^[a-zA-Z0-9._-]+$/.test(name)) {
     throw new Error(`项目名称 "${name}" 包含不安全字符，仅允许字母、数字、连字符、下划线和点`);
   }
-  return sanitized;
+  return name;
 }
 
 async function getProjectName(): Promise<string> {
@@ -26,7 +26,7 @@ async function getProjectName(): Promise<string> {
   }
   const packageJson = await fs.readJson(pkgPath);
   const name = packageJson.name || 'zhin-bot';
-  return sanitizeProjectName(name);
+  return validateProjectName(name);
 }
 
 // --- Linux systemd ---
