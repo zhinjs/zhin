@@ -153,10 +153,10 @@ export const infoCommand = new Command('info')
       logger.info(`正在获取 ${packageName} 的信息...`);
       logger.log('');
 
-      const cmd = ['view', packageName, '--json'];
+      const viewArgs = ['view', packageName, '--json'];
       
       try {
-        const output = execFileSync('npm', cmd, {
+        const output = execFileSync('npm', viewArgs, {
           encoding: 'utf-8',
           stdio: ['pipe', 'pipe', 'ignore']
         });
