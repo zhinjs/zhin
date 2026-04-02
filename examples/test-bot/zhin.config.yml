@@ -11,16 +11,6 @@ bots:
     ver: 9.1.70
     data_dir: ./data
     scope: icqqjs
-  - context: onebot11
-    connection: ws
-    name: discord-zhin
-    url: wss://onebots.l2cl.link/discord/zhin/onebot/v11?access_token=Lcl9623.
-    access_token: ${COMMON_ACCESS_TOKEN}
-  - context: onebot11
-    connection: ws
-    name: telegram-zhin
-    url: wss://onebots.l2cl.link/telegram/zhin/onebot/v11?access_token=Lcl9623.
-    access_token: ${COMMON_ACCESS_TOKEN}
   - context: github
     name: zhin-github
     app_id: ${GITHUB_APP_ID}

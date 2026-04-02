@@ -52,9 +52,9 @@ function App() {
 function RouteInitializer() {
     useWebSocket()
 
-    const entries = useSelector(state => state.script.entries)
-    const loadedScripts = useSelector(state => state.script.loadedScripts)
-    const synced = useSelector(state => state.script.synced)
+    const entries = useSelector(state => state.script?.entries || [])
+    const loadedScripts = useSelector(state => state.script?.loadedScripts || [])
+    const synced = useSelector(state => state.script?.synced ?? false)
     const [initialized, setInitialized] = useState(false)
 
     useEffect(() => {
