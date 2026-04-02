@@ -1,5 +1,13 @@
 # @zhin.js/ai
 
+## 1.0.15
+
+### Patch Changes
+
+- 16c8f92: fix: 统一发一次版
+- Updated dependencies [16c8f92]
+  - @zhin.js/logger@0.1.38
+
 ## 1.0.14
 
 ### Patch Changes

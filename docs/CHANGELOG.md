@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.18
+
+### Patch Changes
+
+- 16c8f92: fix: 统一发一次版
+
 ## 1.0.17
 
 ### Patch Changes

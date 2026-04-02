@@ -1,5 +1,14 @@
 # @zhin.js/plugin-group-daily-analysis
 
+## 0.0.5
+
+### Patch Changes
+
+- 16c8f92: fix: 统一发一次版
+- Updated dependencies [16c8f92]
+  - zhin.js@1.0.54
+  - @zhin.js/plugin-html-renderer@0.0.34
+
 ## 0.0.4
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # @zhin.js/agent
 
+## 0.0.17
+
+### Patch Changes
+
+- 16c8f92: fix: 统一发一次版
+- Updated dependencies [16c8f92]
+  - @zhin.js/ai@1.0.15
+  - @zhin.js/core@1.0.54
+
 ## 0.0.16
 
 ### Patch Changes

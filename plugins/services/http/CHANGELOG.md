@@ -1,5 +1,14 @@
 # @zhin.js/http
 
+## 1.0.49
+
+### Patch Changes
+
+- 16c8f92: fix: 统一发一次版
+- Updated dependencies [16c8f92]
+  - @zhin.js/schema@1.0.38
+  - zhin.js@1.0.54
+
 ## 1.0.48
 
 ### Patch Changes
