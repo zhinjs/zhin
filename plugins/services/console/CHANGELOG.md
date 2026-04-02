@@ -1,5 +1,11 @@
 # @zhin.js/console
 
+## 1.0.57
+
+### Patch Changes
+
+- a4e3559: fix: 客户端 err
+
 ## 1.0.56
 
 ### Patch Changes
