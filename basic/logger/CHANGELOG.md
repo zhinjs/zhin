@@ -1,5 +1,13 @@
 # @zhin.js/logger
 
+## 0.1.38
+
+### Patch Changes
+
+- 16c8f92: fix: 统一发一次版
+- Updated dependencies [16c8f92]
+  - zhin.js@1.0.54
+
 ## 0.1.37
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.33
+
+### Patch Changes
+
+- 16c8f92: fix: 统一发一次版
+
 ## 1.0.32
 
 ### Patch Changes

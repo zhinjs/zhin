@@ -1,5 +1,17 @@
 # @zhin.js/core
 
+## 1.0.54
+
+### Patch Changes
+
+- 16c8f92: fix: 统一发一次版
+- Updated dependencies [16c8f92]
+  - @zhin.js/database@1.0.41
+  - @zhin.js/logger@0.1.38
+  - @zhin.js/schema@1.0.38
+  - @zhin.js/ai@1.0.15
+  - @zhin.js/kernel@0.0.15
+
 ## 1.0.53
 
 ### Patch Changes

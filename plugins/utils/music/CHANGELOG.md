@@ -1,5 +1,14 @@
 # @zhin.js/plugin-music
 
+## 0.0.48
+
+### Patch Changes
+
+- 16c8f92: fix: 统一发一次版
+- Updated dependencies [16c8f92]
+  - zhin.js@1.0.54
+  - @zhin.js/adapter-icqq@1.0.67
+
 ## 0.0.47
 
 ### Patch Changes

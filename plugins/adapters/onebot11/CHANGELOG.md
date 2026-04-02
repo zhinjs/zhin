@@ -1,5 +1,14 @@
 # @zhin.js/adapter-onebot11
 
+## 1.0.60
+
+### Patch Changes
+
+- 16c8f92: fix: 统一发一次版
+- Updated dependencies [16c8f92]
+  - zhin.js@1.0.54
+  - @zhin.js/http@1.0.49
+
 ## 1.0.59
 
 ### Patch Changes

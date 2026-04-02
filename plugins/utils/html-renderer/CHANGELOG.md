@@ -1,5 +1,14 @@
 # @zhin.js/plugin-html-renderer
 
+## 0.0.34
+
+### Patch Changes
+
+- 16c8f92: fix: 统一发一次版
+- Updated dependencies [16c8f92]
+  - @zhin.js/satori@0.2.2
+  - zhin.js@1.0.54
+
 ## 0.0.33
 
 ### Patch Changes

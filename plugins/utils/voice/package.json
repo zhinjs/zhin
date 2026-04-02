@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-voice",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Voice input/output plugin for Zhin.js — STT via Whisper + TTS via edge-tts",
   "type": "module",
   "main": "./lib/index.js",
@@ -49,7 +49,7 @@
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {
-    "zhin.js": ">=1.0.53"
+    "zhin.js": ">=1.0.54"
   },
   "repository": {
     "type": "git",
