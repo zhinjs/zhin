@@ -1,5 +1,16 @@
 # test-bot
 
+## 0.1.61
+
+### Patch Changes
+
+- a4e3559: fix: 客户端 err
+- Updated dependencies [a4e3559]
+  - @zhin.js/console@1.0.57
+  - @zhin.js/adapter-icqq@1.0.69
+  - @zhin.js/adapter-sandbox@1.0.68
+  - @zhin.js/plugin-music@0.0.50
+
 ## 0.1.60
 
 ### Patch Changes
