@@ -380,10 +380,11 @@ export function sanitizeHtml(html: string): string {
 
   // 移除事件处理属性（循环直到没有更多匹配，防止嵌套如 ononclick）
   let prev: string;
+  let maxIterations = 10;
   do {
     prev = result;
     result = result.replace(EVENT_HANDLER_RE, '');
-  } while (result !== prev);
+  } while (result !== prev && --maxIterations > 0);
 
   // 将危险 URI 协议替换为安全值（引号写法，含 HTML 实体混淆检测）
   result = result.replace(URI_ATTR_QUOTED_RE, (match, prefix: string, value: string) => {

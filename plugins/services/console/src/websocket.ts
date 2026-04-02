@@ -160,12 +160,12 @@ export function setupWebSocket(webServer: WebServer) {
         const message = JSON.parse(data.toString());
         await handleWebSocketMessage(ws, message, webServer);
       } catch (error) {
-        console.error("WebSocket 消息处理错误:", error);
+        logger.error("WebSocket 消息处理错误:", error);
         ws.send(JSON.stringify({ error: "Invalid message format" }));
       }
     });
     ws.on("close", () => {});
-    ws.on("error", (error) => { console.error("WebSocket 错误:", error); });
+    ws.on("error", (error) => { logger.error("WebSocket 错误:", error); });
   });
 }
 

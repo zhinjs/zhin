@@ -1,9 +1,21 @@
 import { Command } from 'commander';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import fs from 'fs-extra';
 import path from 'node:path';
 import os from 'node:os';
 import { logger } from '../utils/logger.js';
+
+/**
+ * Validate a project name for safe use in shell commands.
+ * Only allows alphanumeric characters, hyphens, underscores, and dots.
+ * Throws if the name contains any other characters.
+ */
+function validateProjectName(name: string): string {
+  if (!name || !/^[a-zA-Z0-9._-]+$/.test(name)) {
+    throw new Error(`项目名称 "${name}" 包含不安全字符，仅允许字母、数字、连字符、下划线和点`);
+  }
+  return name;
+}
 
 async function getProjectName(): Promise<string> {
   const cwd = process.cwd();
@@ -13,7 +25,8 @@ async function getProjectName(): Promise<string> {
     process.exit(1);
   }
   const packageJson = await fs.readJson(pkgPath);
-  return packageJson.name || 'zhin-bot';
+  const name = packageJson.name || 'zhin-bot';
+  return validateProjectName(name);
 }
 
 // --- Linux systemd ---
@@ -36,7 +49,7 @@ async function installSystemd(cwd: string, projectName: string, userMode: boolea
     logger.success(`已安装用户服务: ${targetPath}`);
 
     try {
-      execSync('systemctl --user daemon-reload', { stdio: 'inherit' });
+      execFileSync('systemctl', ['--user', 'daemon-reload'], { stdio: 'inherit' });
       logger.success('已执行 daemon-reload');
     } catch (e) {
       logger.warn('daemon-reload 执行失败，请手动执行');
@@ -69,14 +82,14 @@ async function uninstallSystemd(projectName: string, userMode: boolean): Promise
       return;
     }
     try {
-      execSync(`systemctl --user stop ${projectName}.service`, { stdio: 'inherit' });
+      execFileSync('systemctl', ['--user', 'stop', `${projectName}.service`], { stdio: 'inherit' });
     } catch {}
     try {
-      execSync(`systemctl --user disable ${projectName}.service`, { stdio: 'inherit' });
+      execFileSync('systemctl', ['--user', 'disable', `${projectName}.service`], { stdio: 'inherit' });
     } catch {}
     await fs.remove(targetPath);
     try {
-      execSync('systemctl --user daemon-reload', { stdio: 'inherit' });
+      execFileSync('systemctl', ['--user', 'daemon-reload'], { stdio: 'inherit' });
     } catch {}
     logger.success('已卸载用户服务');
   } else {
@@ -104,7 +117,7 @@ async function installLaunchd(cwd: string, projectName: string): Promise<void> {
   logger.success(`已安装服务: ${targetPath}`);
 
   try {
-    execSync(`launchctl load ${targetPath}`, { stdio: 'inherit' });
+    execFileSync('launchctl', ['load', targetPath], { stdio: 'inherit' });
     logger.success('服务已加载并启动');
   } catch (e) {
     logger.warn('launchctl load 失败，请手动执行: launchctl load ' + targetPath);
@@ -122,7 +135,7 @@ async function uninstallLaunchd(projectName: string): Promise<void> {
     return;
   }
   try {
-    execSync(`launchctl unload ${targetPath}`, { stdio: 'inherit' });
+    execFileSync('launchctl', ['unload', targetPath], { stdio: 'inherit' });
   } catch {}
   await fs.remove(targetPath);
   logger.success('已卸载服务');
@@ -157,8 +170,10 @@ async function uninstallWindows(projectName: string): Promise<void> {
 // --- status ---
 async function statusSystemd(projectName: string, userMode: boolean): Promise<void> {
   try {
-    const opt = userMode ? '--user' : '';
-    execSync(`systemctl ${opt} status ${projectName}.service`, { stdio: 'inherit' });
+    const args = userMode
+      ? ['--user', 'status', `${projectName}.service`]
+      : ['status', `${projectName}.service`];
+    execFileSync('systemctl', args, { stdio: 'inherit' });
   } catch (e: any) {
     if (e.status !== 0) logger.warn('服务未运行或未安装');
   }
@@ -166,8 +181,9 @@ async function statusSystemd(projectName: string, userMode: boolean): Promise<vo
 
 async function statusLaunchd(projectName: string): Promise<void> {
   try {
-    const out = execSync(`launchctl list | grep com.zhinjs.${projectName}`, { encoding: 'utf-8' });
-    logger.log(out || '未找到');
+    const out = execFileSync('launchctl', ['list'], { encoding: 'utf-8' });
+    const filtered = out.split('\n').filter(line => line.includes(`com.zhinjs.${projectName}`)).join('\n');
+    logger.log(filtered || '未找到');
   } catch {
     logger.log('服务未加载');
   }

@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { logger } from '../utils/logger.js';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 
 interface SearchOptions {
   category?: string;
@@ -30,11 +30,9 @@ export const searchCommand = new Command('search')
         searchQuery = 'zhin.js plugin';
       }
 
-      // 使用 npm search
-      const cmd = `npm search ${searchQuery} --json`;
-      
+      // 使用 npm search（execFileSync 防止 shell 注入）
       try {
-        const output = execSync(cmd, {
+        const output = execFileSync('npm', ['search', searchQuery, '--json'], {
           encoding: 'utf-8',
           maxBuffer: 10 * 1024 * 1024, // 10MB
           stdio: ['pipe', 'pipe', 'ignore'] // 忽略 stderr
@@ -155,10 +153,10 @@ export const infoCommand = new Command('info')
       logger.info(`正在获取 ${packageName} 的信息...`);
       logger.log('');
 
-      const cmd = `npm view ${packageName} --json`;
+      const viewArgs = ['view', packageName, '--json'];
       
       try {
-        const output = execSync(cmd, {
+        const output = execFileSync('npm', viewArgs, {
           encoding: 'utf-8',
           stdio: ['pipe', 'pipe', 'ignore']
         });

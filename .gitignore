@@ -3,6 +3,7 @@ node_modules/
 .agent/
 .agents/
 .claude/
+data/
 .cursor/
 .opencode/
 .codex/
