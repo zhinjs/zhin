@@ -37,7 +37,7 @@
     "type-check": "tsc --noEmit",
     "link": "pnpm --filter @zhin.js/cli exec npm link",
     "test": "vitest run",
-    "test:reporter": "echo 'test:reporter is not implemented'",
+    "test:reporter": "vitest run --reporter=verbose",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "create": "node packages/create-zhin/lib/index.js",
@@ -53,11 +53,12 @@
     "@types/ws": "^8.18.1",
     "@typescript-eslint/eslint-plugin": "^8.46.3",
     "@typescript-eslint/parser": "^8.46.3",
-    "@vitest/coverage-v8": "^1.6.1",
+    "@vitest/coverage-v8": "^2.1.9",
+    "@vitest/ui": "^2.1.9",
     "eslint": "^9.39.1",
     "rimraf": "^6.1.2",
     "typescript": "^5.9.3",
-    "vitest": "^1.6.1"
+    "vitest": "^2.1.9"
   },
   "dependencies": {
     "chalk": "^5.6.2",
