@@ -5,7 +5,8 @@
 import * as path from 'path';
 import { getPlugin, Scheduler, getScheduler, setScheduler, type MessageType, type SendOptions } from '@zhin.js/core';
 import { ZhinAgent } from '../zhin-agent/index.js';
-import { collectPluginSkillSearchRoots, createBuiltinTools } from '../builtin-tools.js';
+import { createBuiltinTools } from '../builtin-tools.js';
+import { collectPluginSkillSearchRoots } from '../discovery-utils.js';
 import { resolveSkillInstructionMaxChars, DEFAULT_CONFIG } from '../zhin-agent/config.js';
 import { PersistentCronEngine, setCronManager } from '../cron-engine.js';
 import type { AIServiceRefs } from './shared-refs.js';

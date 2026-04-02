@@ -123,6 +123,79 @@ addTool({
 })
 ```
 
+### 文件化 AI 能力（零代码 / 轻代码）
+
+除了上述程序化注册，还可以在约定目录放置 Markdown 文件，框架**自动发现并注册**，无需编写 TypeScript。
+
+#### Tool（`*.tool.md`）
+
+```text
+tools/
+├── greeting.tool.md          # 纯模板 Tool
+└── weather/
+    ├── weather.tool.md        # 带 handler 的 Tool
+    └── handler.ts             # execute 逻辑
+```
+
+**纯模板示例**（`greeting.tool.md`）：
+
+```markdown
+---
+name: greeting
+description: 向用户问好
+parameters:
+  name:
+    type: string
+    description: 用户名称
+    required: true
+---
+你好，{{name}}！欢迎使用 Zhin.js 🎉
+```
+
+> body 中的 `{{param}}` 会被参数值替换后直接作为返回。若需复杂逻辑，在 frontmatter 加 `handler: ./handler.ts`，指向一个默认导出函数。
+
+#### Skill（`SKILL.md`）
+
+```text
+skills/
+└── code-review/
+    └── SKILL.md
+```
+
+```markdown
+---
+name: code-review
+description: 代码审查助手
+keywords: [review, lint, best-practice]
+tags: [dev]
+tools: [read_file, grep_search]
+always: false          # true = 常驻注入；false = 按需激活
+---
+你是一个代码审查专家，请对用户提供的代码进行审查……
+```
+
+#### Agent 预设（`*.agent.md`）
+
+```text
+agents/
+└── translator.agent.md
+```
+
+```markdown
+---
+name: translator
+description: 多语翻译助手
+model: gpt-4o
+maxIterations: 5
+tools: [web_search]
+---
+你是一名专业翻译，精通中英日三语互译……
+```
+
+#### 发现顺序
+
+框架按 **`cwd/` → `~/.zhin/` → `data/` → 已加载插件包根** 的顺序扫描 `tools/`、`skills/`、`agents/` 目录，同名先发现者优先；工作区内的文件变更支持**热重载**。
+
 📖 详见：[AI 模块](./docs/advanced/ai.md) · [工具与技能](./docs/advanced/tools-skills.md)
 
 ## 多平台适配器

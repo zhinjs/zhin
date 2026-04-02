@@ -45,6 +45,14 @@ addTool({
 })
 ```
 
+也可以通过文件声明，无需编写 TypeScript：
+
+- **工具** — `tools/*.tool.md`（纯模板 `{{param}}` 或带 handler）
+- **技能** — `skills/<name>/SKILL.md`（语义粗筛 + 工具列表）
+- **Agent 预设** — `agents/*.agent.md`（领域专长子 Agent）
+
+框架按 `cwd/` → `~/.zhin/` → `data/` → 插件包根 自动扫描、注册、热重载。
+
 [了解更多 →](./tools-skills)
 
 ## 组件系统

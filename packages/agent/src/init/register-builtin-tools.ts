@@ -5,17 +5,12 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { getPlugin, type Tool, type SkillFeature, type AgentPreset } from '@zhin.js/core';
-import {
-  collectPluginSkillSearchRoots,
-  createBuiltinTools,
-  discoverWorkspaceSkills,
-  discoverWorkspaceAgents,
-  discoverWorkspaceTools,
-  buildToolFromMeta,
-  loadAlwaysSkillsContent,
-  buildSkillsSummaryXML,
-} from '../builtin-tools.js';
+import { getPlugin, type Tool, type SkillFeature, type AgentPresetFeature } from '@zhin.js/core';
+import { createBuiltinTools } from '../builtin-tools.js';
+import { collectPluginSkillSearchRoots } from '../discovery-utils.js';
+import { discoverWorkspaceSkills, loadAlwaysSkillsContent, buildSkillsSummaryXML } from '../discover-skills.js';
+import { discoverWorkspaceAgents } from '../discover-agents.js';
+import { discoverWorkspaceTools, buildToolFromMeta } from '../discover-tools.js';
 import { resolveSkillInstructionMaxChars, DEFAULT_CONFIG } from '../zhin-agent/config.js';
 import { loadBootstrapFiles, buildContextFiles, buildBootstrapContextSection } from '../bootstrap.js';
 import { triggerAIHook, createAIHookEvent } from '../hooks.js';
@@ -57,31 +52,39 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       const existing = skillFeature.getByPlugin(root.name);
       for (const s of existing) skillFeature.remove(s);
       const skills = await discoverWorkspaceSkills(root);
-      if (skills.length === 0) return 0;
-      const allRegisteredTools = toolService.getAll();
-      const toolNameIndex = new Map<string, Tool>();
-      for (const t of allRegisteredTools) {
-        toolNameIndex.set(t.name, t);
-        const parts = t.name.split('_');
-        if (parts.length === 2) toolNameIndex.set(`${parts[1]}_${parts[0]}`, t);
-      }
-      for (const s of skills) {
-        const associatedTools: Tool[] = [];
-        const toolNames = s.toolNames || [];
-        for (const toolName of toolNames) {
-          let tool = toolService.get(toolName) || toolNameIndex.get(toolName);
-          if (tool) associatedTools.push(tool);
+      if (skills.length > 0) {
+        const allRegisteredTools = toolService.getAll();
+        const toolNameIndex = new Map<string, Tool>();
+        for (const t of allRegisteredTools) {
+          toolNameIndex.set(t.name, t);
+          const parts = t.name.split('_');
+          if (parts.length === 2) toolNameIndex.set(`${parts[1]}_${parts[0]}`, t);
         }
-        skillFeature.add({
-          name: s.name,
-          description: s.description,
-          tools: associatedTools,
-          keywords: s.keywords || [],
-          tags: s.tags || [],
-          pluginName: root.name,
-          filePath: s.filePath,
-          always: s.always,
-        }, root.name);
+        for (const s of skills) {
+          const associatedTools: Tool[] = [];
+          const toolNames = s.toolNames || [];
+          for (const toolName of toolNames) {
+            let tool = toolService.get(toolName) || toolNameIndex.get(toolName);
+            if (tool) associatedTools.push(tool);
+          }
+          skillFeature.add({
+            name: s.name,
+            description: s.description,
+            tools: associatedTools,
+            keywords: s.keywords || [],
+            tags: s.tags || [],
+            pluginName: root.name,
+            filePath: s.filePath,
+            always: s.always,
+          }, root.name);
+        }
+      }
+      // Inject always-on skills content + XML summary into agent
+      if (refs.zhinAgent) {
+        const alwaysContent = await loadAlwaysSkillsContent(skills);
+        const skillsXml = buildSkillsSummaryXML(skills);
+        refs.zhinAgent.setActiveSkillsContext(alwaysContent);
+        refs.zhinAgent.setSkillsSummaryXML(skillsXml);
       }
       return skills.length;
     }
@@ -116,15 +119,20 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       return added;
     }
 
-    // 已发现的 Agent 预设（本地缓存，无需存储到 Plugin 树）
-    const discoveredAgents = new Map<string, AgentPreset>();
-
     /**
-     * Discover *.agent.md files and register agent presets.
+     * Discover *.agent.md files and register agent presets into AgentPresetFeature.
      */
     async function syncWorkspaceAgents(): Promise<number> {
+      const agentPresetFeature = root.inject?.('agentPreset') as AgentPresetFeature | undefined;
+      if (!agentPresetFeature) return 0;
+
+      // Remove previously discovered presets for this plugin
+      const existing = agentPresetFeature.getByPlugin(root.name);
+      for (const p of existing) agentPresetFeature.remove(p);
+
       const agentMetas = await discoverWorkspaceAgents(root);
       if (agentMetas.length === 0) return 0;
+
       const allRegisteredTools = toolService.getAll();
       const toolNameIndex = new Map<string, import('@zhin.js/core').Tool>();
       for (const t of allRegisteredTools) {
@@ -132,7 +140,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       }
       let added = 0;
       for (const meta of agentMetas) {
-        if (discoveredAgents.has(meta.name)) continue;
+        if (agentPresetFeature.get(meta.name)) continue;
         const associatedTools: import('@zhin.js/core').Tool[] = [];
         for (const toolName of meta.toolNames || []) {
           const tool = toolService.get(toolName) || toolNameIndex.get(toolName);
@@ -145,7 +153,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
           const body = content.replace(/^---\s*\n[\s\S]*?\n---\s*(?:\n|$)/, '').trim();
           if (body) systemPrompt = body;
         } catch { /* ignore */ }
-        discoveredAgents.set(meta.name, {
+        agentPresetFeature.add({
           name: meta.name,
           description: meta.description,
           keywords: meta.keywords,
@@ -156,7 +164,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
           provider: meta.provider,
           maxIterations: meta.maxIterations,
           filePath: meta.filePath,
-        });
+        }, root.name);
         added++;
       }
       return added;
@@ -224,19 +232,6 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
         logger.debug(`Bootstrap files not loaded: ${e.message}`);
       }
 
-      // Step 3: inject always-on skills content + XML summary
-      try {
-        const skillsForContext = await discoverWorkspaceSkills(root);
-        const alwaysContent = await loadAlwaysSkillsContent(skillsForContext);
-        const skillsXml = buildSkillsSummaryXML(skillsForContext);
-        if (refs.zhinAgent) {
-          refs.zhinAgent.setActiveSkillsContext(alwaysContent);
-          refs.zhinAgent.setSkillsSummaryXML(skillsXml);
-        }
-      } catch (e: unknown) {
-        logger.debug(`Skills context not set: ${e instanceof Error ? e.message : String(e)}`);
-      }
-
       // Trigger agent:bootstrap hook
       const skillFeature2 = root.inject('skill') as SkillFeature | undefined;
       await triggerAIHook(createAIHookEvent('agent', 'bootstrap', undefined, {
@@ -279,13 +274,6 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
           skillReloadDebounce = null;
           try {
             const count = await syncWorkspaceSkills();
-            const skillsForContext = await discoverWorkspaceSkills(root);
-            const alwaysContent = await loadAlwaysSkillsContent(skillsForContext);
-            const skillsXml = buildSkillsSummaryXML(skillsForContext);
-            if (refs.zhinAgent) {
-              refs.zhinAgent.setActiveSkillsContext(alwaysContent);
-              refs.zhinAgent.setSkillsSummaryXML(skillsXml);
-            }
             await triggerAIHook(createAIHookEvent('agent', 'skills-reloaded', undefined, { skillCount: count }));
             if (count >= 0) logger.info(`[技能热重载] 已更新，工作区技能: ${count}`);
           } catch (e: any) {

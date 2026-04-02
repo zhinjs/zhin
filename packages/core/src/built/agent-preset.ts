@@ -10,6 +10,7 @@
  * 主 Agent（ZhinAgent）可根据用户请求自动委派给匹配的专长 Agent。
  */
 
+import { Feature, type FeatureJSON } from '../feature.js';
 import type { Tool } from '../types.js';
 
 // ============================================================================
@@ -52,4 +53,84 @@ export interface AgentPreset {
 
   /** *.agent.md 文件的绝对路径 */
   filePath?: string;
+}
+
+// ============================================================================
+// AgentPresetFeature
+// ============================================================================
+
+declare module '../plugin.js' {
+  namespace Plugin {
+    interface Contexts {
+      agentPreset: AgentPresetFeature;
+    }
+  }
+}
+
+export class AgentPresetFeature extends Feature<AgentPreset> {
+  readonly name = 'agentPreset' as const;
+  readonly icon = 'Bot';
+  readonly desc = 'Agent 预设';
+
+  readonly byName = new Map<string, AgentPreset>();
+
+  add(preset: AgentPreset, pluginName: string): () => void {
+    this.byName.set(preset.name, preset);
+    return super.add(preset, pluginName);
+  }
+
+  remove(preset: AgentPreset, pluginName?: string): boolean {
+    this.byName.delete(preset.name);
+    return super.remove(preset, pluginName);
+  }
+
+  get(name: string): AgentPreset | undefined {
+    return this.byName.get(name);
+  }
+
+  getAll(): AgentPreset[] {
+    return [...this.items];
+  }
+
+  search(query: string, options?: { maxResults?: number }): AgentPreset[] {
+    const maxResults = options?.maxResults ?? 5;
+    const lower = query.toLowerCase();
+    const scored = this.items
+      .map(preset => ({ preset, score: this.#scorePreset(preset, lower) }))
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, maxResults);
+    return scored.map(({ preset }) => preset);
+  }
+
+  #scorePreset(preset: AgentPreset, query: string): number {
+    let score = 0;
+    if (preset.name.toLowerCase().includes(query)) score += 10;
+    if (preset.description.toLowerCase().includes(query)) score += 5;
+    for (const kw of preset.keywords || []) {
+      if (kw.toLowerCase().includes(query) || query.includes(kw.toLowerCase())) score += 8;
+    }
+    for (const tag of preset.tags || []) {
+      if (tag.toLowerCase().includes(query)) score += 3;
+    }
+    return score;
+  }
+
+  toJSON(pluginName?: string): FeatureJSON {
+    const list = pluginName ? this.getByPlugin(pluginName) : this.items;
+    return {
+      name: this.name,
+      icon: this.icon,
+      desc: this.desc,
+      count: list.length,
+      items: list.map(p => ({
+        name: p.name,
+        desc: p.description,
+        keywords: p.keywords,
+        tags: p.tags,
+        model: p.model,
+        provider: p.provider,
+      })),
+    };
+  }
 }

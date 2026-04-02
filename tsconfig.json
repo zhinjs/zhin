@@ -18,7 +18,6 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "baseUrl": ".",
     "paths": {
       "@zhin.js/core": [
         "./packages/core/src/index.ts"

@@ -258,6 +258,42 @@ addTool({
 })
 ```
 
+### 文件化工具（`*.tool.md`）
+
+除了程序化注册，还可以在 `tools/` 目录放置 `*.tool.md` 文件声明工具——无需 TypeScript 代码：
+
+```markdown
+---
+name: greeting
+description: 生成个性化问候语
+parameters:
+  name:
+    type: string
+    description: 用户名称
+    required: true
+---
+你好，{{name}}！欢迎使用 Zhin.js 🎉
+```
+
+需要复杂执行逻辑时，在 frontmatter 加 `handler: ./handler.ts`，指向默认导出函数。详见 [文件化 Tool](/advanced/tools-skills#文件化-tool-tool-md)。
+
+### Agent 预设（`*.agent.md`）
+
+在 `agents/` 目录放置 `*.agent.md` 声明领域专长 Agent，AI 可自动委派子任务：
+
+```markdown
+---
+name: code-reviewer
+description: 代码审查专家
+tools: [read_file, grep]
+model: gpt-4o
+maxIterations: 8
+---
+你是一个资深代码审查员，专注于安全和性能问题。
+```
+
+Body 作为 `systemPrompt` 注入。详见 [Agent 预设](/advanced/tools-skills#agent-预设-agent-md)。
+
 ### 技能（文件化）
 
 在插件或适配器包内维护 `skills/<name>/SKILL.md`（见 [工具与技能](/advanced/tools-skills)）。Core 不再提供 `declareSkill` API；技能记录由 Agent 等运行时同步到 `SkillFeature`。
