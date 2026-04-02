@@ -1,5 +1,12 @@
 # @zhin.js/adapter-qq
 
+## 1.0.57
+
+### Patch Changes
+
+- zhin.js@1.0.55
+- @zhin.js/logger@0.1.39
+
 ## 1.0.56
 
 ### Patch Changes

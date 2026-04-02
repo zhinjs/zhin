@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-milky",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Zhin.js adapter for Milky protocol",
   "type": "module",
   "main": "./lib/index.js",
