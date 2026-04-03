@@ -16,11 +16,34 @@ import type {
   Usage,
 } from './types.js';
 import { filterTools } from './tool-filter.js';
+import { CostTracker } from './cost-tracker.js';
+import {
+  autoCompactIfNeeded,
+  createAutoCompactTracking,
+  estimateMessagesTokens,
+} from './compaction.js';
+import type { AutoCompactTrackingState } from './compaction.js';
 
 const logger = new Logger(null, 'Agent');
 
 /** 工具执行默认超时时间 (ms) */
 const DEFAULT_TOOL_TIMEOUT = 30_000;
+
+/** 默认最大并发工具执行数（参考 Claude Code StreamingToolExecutor） */
+const DEFAULT_MAX_CONCURRENT_TOOLS = 10;
+
+/**
+ * 判断工具是否可并发执行
+ *
+ * 优先使用显式的 isConcurrencySafe 标记；
+ * 其次使用 isReadOnly 推断（只读工具默认可并发）；
+ * 无标记时默认不可并发（fail-closed，参考 Claude Code buildTool 模式）。
+ */
+function isToolConcurrencySafe(tool: AgentTool): boolean {
+  if (tool.isConcurrencySafe !== undefined) return tool.isConcurrencySafe;
+  if (tool.isReadOnly !== undefined) return tool.isReadOnly;
+  return false; // fail-closed: 未标记的工具默认独占执行
+}
 
 /**
  * 根据工具名和参数生成简短标题（用于日志、TOOLS.md 等）
@@ -64,6 +87,8 @@ export interface AgentEvents {
   'streaming': (content: string) => void;
   'complete': (result: AgentResult) => void;
   'error': (error: Error) => void;
+  /** 循环内压缩完成时触发 */
+  'compaction': (info: { microSavedTokens: number; autoSavedTokens: number; totalTokensBefore: number; totalTokensAfter: number }) => void;
 }
 
 /**
@@ -72,9 +97,11 @@ export interface AgentEvents {
  */
 export class Agent {
   private provider: AIProvider;
-  private config: Required<AgentConfig>;
+  private config: Required<Pick<AgentConfig, 'provider' | 'model' | 'systemPrompt' | 'tools' | 'maxIterations' | 'temperature'>> & Pick<AgentConfig, 'contextWindow' | 'maxConcurrentTools'>;
   private tools: Map<string, AgentTool> = new Map();
   private eventHandlers: Map<keyof AgentEvents, Function[]> = new Map();
+  /** 成本追踪器（参考 Claude Code cost-tracker） */
+  readonly costTracker: CostTracker = new CostTracker();
 
   constructor(provider: AIProvider, config: AgentConfig) {
     this.provider = provider;
@@ -85,6 +112,8 @@ export class Agent {
       tools: config.tools || [],
       maxIterations: config.maxIterations || 10,
       temperature: config.temperature ?? 0.7,
+      contextWindow: config.contextWindow,
+      maxConcurrentTools: config.maxConcurrentTools,
     };
 
     // 注册工具
@@ -97,13 +126,14 @@ export class Agent {
    * Default system prompt (English). Reply language is determined by user profile or message language.
    */
   private getDefaultSystemPrompt(): string {
-    return `You are a helpful assistant and can use tools to complete tasks.
-Follow these principles:
-1. Understand the user's intent and choose appropriate tools
-2. If multiple steps are needed, execute them in order
-3. Explain your actions and results clearly
-4. If a task cannot be completed, say so honestly
-Reply in the language specified in [User profile] (key: language / preferred_language), or in the user's message language if not set.`;
+    return `You are a helpful assistant that can use tools to complete tasks.
+
+# Principles
+ - Understand the user's intent and choose appropriate tools
+ - If multiple steps are needed, execute them in order
+ - On tool failure, try alternatives — do not dump raw errors to user
+ - If a task cannot be completed, say so honestly
+ - Reply in the language specified in [User profile] (key: language / preferred_language), or in the user's message language if not set`;
   }
 
   /**
@@ -252,6 +282,12 @@ Reply in the language specified in [User profile] (key: language / preferred_lan
 
   /**
    * 并行执行多个工具调用（跳过重复的）
+   *
+   * 并发控制策略（参考 Claude Code StreamingToolExecutor）：
+   * - 所有工具分为"并发安全"和"独占"两类
+   * - 并发安全工具可同时执行（上限 maxConcurrentTools，默认 10）
+   * - 独占工具串行执行，等待前面所有工具完成后再开始
+   *
    * @returns 新执行的工具调用结果列表；如果全部重复则返回空数组
    */
   private async executeToolCalls(
@@ -272,13 +308,29 @@ Reply in the language specified in [User profile] (key: language / preferred_lan
 
     if (fresh.length === 0) return [];
 
-    // 并行执行所有新工具调用
-    const tasks = fresh.map(async (tc) => {
+    const maxConcurrent = this.config.maxConcurrentTools ?? DEFAULT_MAX_CONCURRENT_TOOLS;
+
+    // 将工具分为并发组和独占组
+    const concurrentCalls: ToolCall[] = [];
+    const exclusiveCalls: ToolCall[] = [];
+
+    for (const tc of fresh) {
+      const tool = this.tools.get(tc.function.name);
+      if (tool && isToolConcurrencySafe(tool)) {
+        concurrentCalls.push(tc);
+      } else {
+        exclusiveCalls.push(tc);
+      }
+    }
+
+    const allResults: { toolCall: ToolCall; result: string; args: Record<string, any> }[] = [];
+
+    // 执行单个工具并记录状态
+    const execOne = async (tc: ToolCall) => {
       const result = await this.executeToolCall(tc);
       const args = Agent.safeParse(tc.function.arguments);
       const parsedResult = Agent.safeParse(result);
 
-      // 记录到状态
       const key = Agent.toolCallKey(tc.function.name, tc.function.arguments);
       seenKeys.add(key);
       state.toolCalls.push({
@@ -288,9 +340,22 @@ Reply in the language specified in [User profile] (key: language / preferred_lan
       });
 
       return { toolCall: tc, result, args };
-    });
+    };
 
-    return Promise.all(tasks);
+    // ── 并发安全工具：分批并行，每批最多 maxConcurrent ──
+    for (let i = 0; i < concurrentCalls.length; i += maxConcurrent) {
+      const batch = concurrentCalls.slice(i, i + maxConcurrent);
+      const batchResults = await Promise.all(batch.map(execOne));
+      allResults.push(...batchResults);
+    }
+
+    // ── 独占工具：串行执行 ──
+    for (const tc of exclusiveCalls) {
+      const result = await execOne(tc);
+      allResults.push(result);
+    }
+
+    return allResults;
   }
 
   /**
@@ -345,8 +410,46 @@ Reply in the language specified in [User profile] (key: language / preferred_lan
     // 连续全重复计数器
     let consecutiveDuplicateRounds = 0;
 
+    // ── 每轮压缩追踪（参考 Claude Code per-turn compression） ──
+    const contextWindow = this.config.contextWindow;
+    const compactTracking = contextWindow ? createAutoCompactTracking() : undefined;
+    let totalMicroSaved = 0;
+    let totalAutoSaved = 0;
+    let compactCount = 0;
+
     while (state.iterations < this.config.maxIterations) {
       state.iterations++;
+
+      // ── 每轮入口：上下文压缩 ──
+      // 在调用 LLM 之前检查 token 预算，按需压缩
+      if (contextWindow && compactTracking) {
+        try {
+          const compactResult = await autoCompactIfNeeded({
+            provider: this.provider,
+            messages: state.messages,
+            contextWindow,
+            tracking: compactTracking,
+          });
+          if (compactResult.wasCompacted) {
+            state.messages = compactResult.messages;
+            totalMicroSaved += compactResult.microSavedTokens;
+            totalAutoSaved += compactResult.autoSavedTokens;
+            compactCount++;
+            logger.info(
+              `[第${state.iterations}轮] 上下文压缩: 节省 ${compactResult.savedTokens} tokens ` +
+              `(micro: ${compactResult.microSavedTokens}, auto: ${compactResult.autoSavedTokens})`,
+            );
+            this.emit('compaction', {
+              microSavedTokens: compactResult.microSavedTokens,
+              autoSavedTokens: compactResult.autoSavedTokens,
+              totalTokensBefore: compactResult.savedTokens + estimateMessagesTokens(state.messages),
+              totalTokensAfter: estimateMessagesTokens(state.messages),
+            });
+          }
+        } catch (e) {
+          logger.warn(`[第${state.iterations}轮] 上下文压缩失败，继续执行: ${e}`);
+        }
+      }
 
       // 强制文本回答的条件：
       // 1. 检测到连续重复工具调用
@@ -368,6 +471,9 @@ Reply in the language specified in [User profile] (key: language / preferred_lan
         });
 
         Agent.addUsage(state.usage, response.usage);
+        if (response.usage) {
+          this.costTracker.addUsage(this.config.model, response.usage);
+        }
         logger.info(`token 用量: ${state.usage.prompt_tokens} -> ${state.usage.completion_tokens} -> ${state.usage.total_tokens}`);
         logger.info(`response: `,response);
         const choice = response.choices[0];
@@ -457,6 +563,7 @@ Reply in the language specified in [User profile] (key: language / preferred_lan
           toolCalls: state.toolCalls,
           usage: state.usage,
           iterations: state.iterations,
+          ...(compactCount > 0 && { compaction: { microSavedTokens: totalMicroSaved, autoSavedTokens: totalAutoSaved, compactCount } }),
         };
 
         this.emit('complete', result);
@@ -514,6 +621,7 @@ Reply in the language specified in [User profile] (key: language / preferred_lan
       toolCalls: state.toolCalls,
       usage: state.usage,
       iterations: state.iterations,
+      ...(compactCount > 0 && { compaction: { microSavedTokens: totalMicroSaved, autoSavedTokens: totalAutoSaved, compactCount } }),
     };
 
     this.emit('complete', result);
@@ -528,7 +636,7 @@ Reply in the language specified in [User profile] (key: language / preferred_lan
    * @param filterOptions  工具过滤选项 —— 启用后在 AI 调用之前程序化筛选工具
    */
   async *runStream(userMessage: string, context?: ChatMessage[], filterOptions?: ToolFilterOptions): AsyncIterable<{
-    type: 'content' | 'tool_call' | 'tool_result' | 'done';
+    type: 'content' | 'tool_call' | 'tool_result' | 'compaction' | 'done';
     data: any;
   }> {
     const messages: ChatMessage[] = [
@@ -561,8 +669,57 @@ Reply in the language specified in [User profile] (key: language / preferred_lan
     const seenToolKeys = new Set<string>();
     let consecutiveDuplicateRounds = 0;
 
+    // ── 每轮压缩追踪 ──
+    const contextWindow = this.config.contextWindow;
+    const compactTracking = contextWindow ? createAutoCompactTracking() : undefined;
+    let totalMicroSaved = 0;
+    let totalAutoSaved = 0;
+    let compactCount = 0;
+
+    // 构建与 run() 中 executeToolCalls 兼容的轻量 state
+    const state: AgentState = {
+      messages,
+      toolCalls: toolCallHistory,
+      usage,
+      iterations: 0,
+    };
+
     while (iterations < this.config.maxIterations) {
       iterations++;
+      state.iterations = iterations;
+
+      // ── 每轮入口：上下文压缩 ──
+      if (contextWindow && compactTracking) {
+        try {
+          const compactResult = await autoCompactIfNeeded({
+            provider: this.provider,
+            messages,
+            contextWindow,
+            tracking: compactTracking,
+          });
+          if (compactResult.wasCompacted) {
+            // messages 是引用类型，需要原地替换
+            messages.length = 0;
+            messages.push(...compactResult.messages);
+            totalMicroSaved += compactResult.microSavedTokens;
+            totalAutoSaved += compactResult.autoSavedTokens;
+            compactCount++;
+            logger.info(
+              `[流式第${iterations}轮] 上下文压缩: 节省 ${compactResult.savedTokens} tokens`,
+            );
+            const info = {
+              microSavedTokens: compactResult.microSavedTokens,
+              autoSavedTokens: compactResult.autoSavedTokens,
+              totalTokensBefore: compactResult.savedTokens + estimateMessagesTokens(messages),
+              totalTokensAfter: estimateMessagesTokens(messages),
+            };
+            this.emit('compaction', info);
+            yield { type: 'compaction', data: info };
+          }
+        } catch (e) {
+          logger.warn(`[流式第${iterations}轮] 上下文压缩失败，继续执行: ${e}`);
+        }
+      }
 
       let content = '';
       const pendingToolCalls: ToolCall[] = [];
@@ -613,6 +770,9 @@ Reply in the language specified in [User profile] (key: language / preferred_lan
         if (choice.finish_reason) finishReason = choice.finish_reason;
 
         Agent.addUsage(usage, chunk.usage);
+        if (chunk.usage) {
+          this.costTracker.addUsage(this.config.model, chunk.usage);
+        }
       }
 
       // 将 assistant 消息加入上下文
@@ -624,24 +784,21 @@ Reply in the language specified in [User profile] (key: language / preferred_lan
 
       // 处理工具调用
       if (pendingToolCalls.length > 0 && finishReason === 'tool_calls') {
-        // 分离新调用和重复调用
-        const freshCalls: ToolCall[] = [];
-        const duplicateCalls: ToolCall[] = [];
-
+        // 先通知上层所有工具调用开始
         for (const tc of pendingToolCalls) {
           const key = Agent.toolCallKey(tc.function.name, tc.function.arguments);
-          if (seenToolKeys.has(key)) {
-            duplicateCalls.push(tc);
-          } else {
-            freshCalls.push(tc);
+          if (!seenToolKeys.has(key)) {
+            yield { type: 'tool_call', data: { name: tc.function.name, args: tc.function.arguments } };
           }
         }
 
-        if (freshCalls.length === 0) {
+        // 使用统一的 executeToolCalls（含读写并发控制 + 去重）
+        const results = await this.executeToolCalls(pendingToolCalls, seenToolKeys, state);
+
+        if (results.length === 0) {
           // 全部重复
           consecutiveDuplicateRounds++;
 
-          // 补上 tool 消息保持协议完整
           for (const tc of pendingToolCalls) {
             const key = Agent.toolCallKey(tc.function.name, tc.function.arguments);
             const previous = toolCallHistory.find(
@@ -659,30 +816,6 @@ Reply in the language specified in [User profile] (key: language / preferred_lan
 
         consecutiveDuplicateRounds = 0;
 
-        // 先通知上层所有工具调用开始
-        for (const tc of freshCalls) {
-          yield { type: 'tool_call', data: { name: tc.function.name, args: tc.function.arguments } };
-        }
-
-        // 并行执行所有新工具调用
-        const results = await Promise.all(
-          freshCalls.map(async (toolCall) => {
-            const result = await this.executeToolCall(toolCall);
-            const args = Agent.safeParse(toolCall.function.arguments);
-            const parsedResult = Agent.safeParse(result);
-
-            const key = Agent.toolCallKey(toolCall.function.name, toolCall.function.arguments);
-            seenToolKeys.add(key);
-            toolCallHistory.push({
-              tool: toolCall.function.name,
-              args: typeof args === 'object' ? args : { raw: args },
-              result: parsedResult,
-            });
-
-            return { toolCall, result };
-          }),
-        );
-
         // yield 工具结果并加入消息历史
         for (const { toolCall, result } of results) {
           yield { type: 'tool_result', data: { name: toolCall.function.name, result } };
@@ -693,18 +826,21 @@ Reply in the language specified in [User profile] (key: language / preferred_lan
           });
         }
 
-        // 为重复的调用也补上 tool 消息
-        for (const tc of duplicateCalls) {
+        // 为重复的调用也补上 tool 消息（已被 executeToolCalls 过滤掉的）
+        for (const tc of pendingToolCalls) {
           const key = Agent.toolCallKey(tc.function.name, tc.function.arguments);
-          const previous = toolCallHistory.find(
-            h => Agent.toolCallKey(h.tool, JSON.stringify(h.args)) === key ||
-                 Agent.toolCallKey(h.tool, tc.function.arguments) === key,
-          );
-          messages.push({
-            role: 'tool',
-            content: previous ? JSON.stringify(previous.result) : 'Result received.',
-            tool_call_id: tc.id,
-          });
+          const wasExecuted = results.some(r => r.toolCall.id === tc.id);
+          if (!wasExecuted) {
+            const previous = toolCallHistory.find(
+              h => Agent.toolCallKey(h.tool, JSON.stringify(h.args)) === key ||
+                   Agent.toolCallKey(h.tool, tc.function.arguments) === key,
+            );
+            messages.push({
+              role: 'tool',
+              content: previous ? JSON.stringify(previous.result) : 'Result received.',
+              tool_call_id: tc.id,
+            });
+          }
         }
 
         continue;
@@ -718,6 +854,7 @@ Reply in the language specified in [User profile] (key: language / preferred_lan
           toolCalls: toolCallHistory,
           usage,
           iterations,
+          ...(compactCount > 0 && { compaction: { microSavedTokens: totalMicroSaved, autoSavedTokens: totalAutoSaved, compactCount } }),
         },
       };
       return;
@@ -733,6 +870,7 @@ Reply in the language specified in [User profile] (key: language / preferred_lan
         toolCalls: toolCallHistory,
         usage,
         iterations,
+        ...(compactCount > 0 && { compaction: { microSavedTokens: totalMicroSaved, autoSavedTokens: totalAutoSaved, compactCount } }),
       },
     };
   }

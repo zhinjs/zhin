@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { checkFileAccess, assertFileAccess, checkBashCommandSafety, shellEscape } from '../src/file-policy.js';
+import {
+  checkFileAccess, assertFileAccess, checkBashCommandSafety, shellEscape,
+  isBlockedDevicePath, classifyBashCommand, isFileStale,
+  MAX_READ_FILE_SIZE, MAX_EDIT_FILE_SIZE,
+} from '../src/file-policy.js';
 
 describe('file-policy', () => {
   // ── checkFileAccess ──
@@ -212,6 +216,190 @@ describe('file-policy', () => {
 
     it('含反引号', () => {
       expect(shellEscape('`whoami`')).toBe("'`whoami`'");
+    });
+  });
+
+  // ── isBlockedDevicePath（设备路径拦截）──
+
+  describe('isBlockedDevicePath', () => {
+    describe('应阻止危险设备路径', () => {
+      const blocked = [
+        '/dev/zero',
+        '/dev/random',
+        '/dev/urandom',
+        '/dev/full',
+        '/dev/stdin',
+        '/dev/tty',
+        '/dev/console',
+        '/dev/stdout',
+        '/dev/stderr',
+        '/dev/fd/0',
+        '/dev/fd/1',
+        '/dev/fd/2',
+      ];
+      for (const p of blocked) {
+        it(`阻止 ${p}`, () => {
+          expect(isBlockedDevicePath(p)).toBe(true);
+        });
+      }
+    });
+
+    describe('应阻止 Linux /proc/ fd 别名', () => {
+      it('阻止 /proc/self/fd/0', () => {
+        expect(isBlockedDevicePath('/proc/self/fd/0')).toBe(true);
+      });
+      it('阻止 /proc/1234/fd/1', () => {
+        expect(isBlockedDevicePath('/proc/1234/fd/1')).toBe(true);
+      });
+      it('阻止 /proc/self/fd/2', () => {
+        expect(isBlockedDevicePath('/proc/self/fd/2')).toBe(true);
+      });
+    });
+
+    describe('应允许安全设备路径', () => {
+      it('允许 /dev/null', () => {
+        expect(isBlockedDevicePath('/dev/null')).toBe(false);
+      });
+      it('允许普通文件', () => {
+        expect(isBlockedDevicePath('/home/user/file.txt')).toBe(false);
+      });
+      it('允许 /proc/self/fd/3', () => {
+        expect(isBlockedDevicePath('/proc/self/fd/3')).toBe(false);
+      });
+    });
+  });
+
+  // ── classifyBashCommand（命令读写分类）──
+
+  describe('classifyBashCommand', () => {
+    describe('只读搜索命令', () => {
+      it('grep 是搜索', () => {
+        const r = classifyBashCommand('grep -rn pattern src/');
+        expect(r.isSearch).toBe(true);
+        expect(r.isReadOnly).toBe(true);
+      });
+
+      it('rg 是搜索', () => {
+        const r = classifyBashCommand('rg "hello" .');
+        expect(r.isSearch).toBe(true);
+        expect(r.isReadOnly).toBe(true);
+      });
+
+      it('find 是搜索', () => {
+        const r = classifyBashCommand('find . -name "*.ts"');
+        expect(r.isSearch).toBe(true);
+        expect(r.isReadOnly).toBe(true);
+      });
+    });
+
+    describe('只读读取命令', () => {
+      it('cat 是读取', () => {
+        const r = classifyBashCommand('cat README.md');
+        expect(r.isRead).toBe(true);
+        expect(r.isReadOnly).toBe(true);
+      });
+
+      it('head 是读取', () => {
+        const r = classifyBashCommand('head -50 file.ts');
+        expect(r.isRead).toBe(true);
+        expect(r.isReadOnly).toBe(true);
+      });
+
+      it('wc -l 是读取', () => {
+        expect(classifyBashCommand('wc -l file.txt').isRead).toBe(true);
+      });
+
+      it('jq 是读取', () => {
+        expect(classifyBashCommand('jq .name package.json').isRead).toBe(true);
+      });
+    });
+
+    describe('只读列出命令', () => {
+      it('ls 是列出', () => {
+        const r = classifyBashCommand('ls -la');
+        expect(r.isList).toBe(true);
+        expect(r.isReadOnly).toBe(true);
+      });
+
+      it('tree 是列出', () => {
+        expect(classifyBashCommand('tree .').isList).toBe(true);
+      });
+    });
+
+    describe('管道组合', () => {
+      it('cat | grep 是只读', () => {
+        const r = classifyBashCommand('cat file.txt | grep pattern');
+        expect(r.isReadOnly).toBe(true);
+      });
+
+      it('cat file && echo done 是只读（echo 是中性命令）', () => {
+        const r = classifyBashCommand('cat file && echo done');
+        expect(r.isReadOnly).toBe(true);
+      });
+
+      it('cat | sort | uniq 是只读', () => {
+        expect(classifyBashCommand('cat file | sort | uniq').isReadOnly).toBe(true);
+      });
+    });
+
+    describe('写/执行命令', () => {
+      it('rm 不是只读', () => {
+        expect(classifyBashCommand('rm file.txt').isReadOnly).toBe(false);
+      });
+
+      it('npm install 不是只读', () => {
+        expect(classifyBashCommand('npm install').isReadOnly).toBe(false);
+      });
+
+      it('git push 不是只读', () => {
+        expect(classifyBashCommand('git push').isReadOnly).toBe(false);
+      });
+
+      it('混合管道 cat | xargs rm 不是只读', () => {
+        expect(classifyBashCommand('cat files.txt | xargs rm').isReadOnly).toBe(false);
+      });
+    });
+
+    describe('纯中性命令', () => {
+      it('echo "hello" 是只读', () => {
+        expect(classifyBashCommand('echo "hello"').isReadOnly).toBe(true);
+      });
+
+      it(': (noop) 是只读', () => {
+        expect(classifyBashCommand(':').isReadOnly).toBe(true);
+      });
+    });
+  });
+
+  // ── isFileStale ──
+
+  describe('isFileStale', () => {
+    it('相同 mtime 不是 stale', () => {
+      expect(isFileStale(1000, 1000)).toBe(false);
+    });
+
+    it('1ms 误差内不是 stale', () => {
+      expect(isFileStale(1000, 1000.5)).toBe(false);
+    });
+
+    it('超过 1ms 差异是 stale', () => {
+      expect(isFileStale(1000, 1002)).toBe(true);
+    });
+
+    it('mtime 变小也是 stale', () => {
+      expect(isFileStale(1000, 997)).toBe(true);
+    });
+  });
+
+  // ── 常量导出 ──
+
+  describe('常量', () => {
+    it('MAX_READ_FILE_SIZE 为 256 MiB', () => {
+      expect(MAX_READ_FILE_SIZE).toBe(256 * 1024 * 1024);
+    });
+
+    it('MAX_EDIT_FILE_SIZE 为 1 GiB', () => {
+      expect(MAX_EDIT_FILE_SIZE).toBe(1024 * 1024 * 1024);
     });
   });
 });

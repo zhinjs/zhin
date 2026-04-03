@@ -50,6 +50,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
       const modelName = provider.models[0] || '';
       const fullConfig = { ...DEFAULT_CONFIG, ...agentConfig } as Required<import('../zhin-agent/config.js').ZhinAgentConfig>;
       const zhinTools = createBuiltinTools({
+        plugin,
         skillInstructionMaxChars: resolveSkillInstructionMaxChars(fullConfig, modelName),
         pluginSkillRootsResolver: () => collectPluginSkillSearchRoots(root),
       });

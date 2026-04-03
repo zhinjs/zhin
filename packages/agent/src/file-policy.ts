@@ -4,14 +4,60 @@
  * 防止 AI Agent 读写敏感文件（如 .env、密钥、证书等），
  * 并将 bash/grep/glob 等工具的命令注入风险降到最低。
  *
- * 三层防御:
- *  1. 敏感文件名/路径模式 — 阻止 .env、私钥、证书等
- *  2. 敏感目录 — 阻止 .ssh, .gnupg 等
- *  3. bash 环境变量泄漏 — 过滤 env/printenv/export 输出中的敏感值
+ * 四层防御:
+ *  1. 设备路径阻止 — 阻止 /dev/zero, /dev/stdin 等挂起进程的设备文件
+ *  2. 敏感文件名/路径模式 — 阻止 .env、私钥、证书等
+ *  3. 敏感目录 — 阻止 .ssh, .gnupg 等
+ *  4. bash 安全分类 — 环境变量泄漏 + 命令读写分类
  */
 
 import * as path from 'path';
 import * as os from 'os';
+
+// ── 设备路径阻止（参考 Claude Code FileReadTool BLOCKED_DEVICE_PATHS）──
+
+/**
+ * 会导致进程挂起的设备文件路径。
+ * 检查纯路径即可（无 I/O），安全设备如 /dev/null 不在此列。
+ */
+const BLOCKED_DEVICE_PATHS: ReadonlySet<string> = new Set([
+  // 无限输出 — 永远无法 EOF
+  '/dev/zero',
+  '/dev/random',
+  '/dev/urandom',
+  '/dev/full',
+  // 阻塞等待输入
+  '/dev/stdin',
+  '/dev/tty',
+  '/dev/console',
+  // 对读取无意义
+  '/dev/stdout',
+  '/dev/stderr',
+  // stdio fd 别名
+  '/dev/fd/0',
+  '/dev/fd/1',
+  '/dev/fd/2',
+]);
+
+/**
+ * 检测路径是否为被阻止的设备文件（含 Linux /proc/ fd 别名）。
+ */
+export function isBlockedDevicePath(filePath: string): boolean {
+  if (BLOCKED_DEVICE_PATHS.has(filePath)) return true;
+  // /proc/self/fd/0-2 和 /proc/<pid>/fd/0-2 是 Linux 的 stdio 别名
+  if (
+    filePath.startsWith('/proc/') &&
+    (filePath.endsWith('/fd/0') || filePath.endsWith('/fd/1') || filePath.endsWith('/fd/2'))
+  ) return true;
+  return false;
+}
+
+// ── 文件大小限制（参考 Claude Code FileEditTool MAX_EDIT_FILE_SIZE）──
+
+/** 读取文件最大字节数（256 MiB），防止 OOM */
+export const MAX_READ_FILE_SIZE = 256 * 1024 * 1024;
+/** 编辑文件最大字节数（1 GiB），防止 V8 字符串长度溢出 */
+export const MAX_EDIT_FILE_SIZE = 1024 * 1024 * 1024;
 
 // ── 敏感文件名模式 ──────────────────────────────────────────────────
 
@@ -172,6 +218,108 @@ export function checkBashCommandSafety(command: string): { safe: boolean; reason
   }
 
   return { safe: true };
+}
+
+// ── bash 命令读写分类（参考 Claude Code BashTool isSearchOrReadBashCommand）──
+
+/** 搜索类命令 */
+const BASH_SEARCH_COMMANDS: ReadonlySet<string> = new Set([
+  'find', 'grep', 'rg', 'ag', 'ack', 'locate', 'which', 'whereis',
+]);
+
+/** 读取/查看类命令 */
+const BASH_READ_COMMANDS: ReadonlySet<string> = new Set([
+  'cat', 'head', 'tail', 'less', 'more', 'wc', 'stat', 'file', 'strings',
+  'jq', 'awk', 'cut', 'sort', 'uniq', 'tr',
+]);
+
+/** 目录列出类命令 */
+const BASH_LIST_COMMANDS: ReadonlySet<string> = new Set([
+  'ls', 'tree', 'du',
+]);
+
+/** 语义中性命令 — 纯输出/状态命令，不影响管道是否只读 */
+const BASH_NEUTRAL_COMMANDS: ReadonlySet<string> = new Set([
+  'echo', 'printf', 'true', 'false', ':',
+]);
+
+export interface BashCommandClassification {
+  /** 是否为搜索命令 */
+  isSearch: boolean;
+  /** 是否为读取命令 */
+  isRead: boolean;
+  /** 是否为列出命令 */
+  isList: boolean;
+  /** 综合判断：命令是否只读（搜索/读取/列出） */
+  isReadOnly: boolean;
+}
+
+/**
+ * 对 bash 命令进行读/写分类。
+ *
+ * 对管道命令（如 `cat file | grep pattern`），所有非中性部分
+ * 都必须是搜索/读/列出类，整条命令才算只读。
+ *
+ * 参考 Claude Code BashTool `isSearchOrReadBashCommand`。
+ */
+export function classifyBashCommand(command: string): BashCommandClassification {
+  const trimmed = command.trim();
+  // 按管道和操作符拆分
+  const parts = trimmed.split(/\s*(?:\|\||&&|\||;)\s*/);
+
+  let hasSearch = false;
+  let hasRead = false;
+  let hasList = false;
+  let hasNonNeutral = false;
+
+  for (const part of parts) {
+    const baseCmd = part.trim().split(/\s+/)[0];
+    if (!baseCmd) continue;
+
+    // 跳过中性命令
+    if (BASH_NEUTRAL_COMMANDS.has(baseCmd)) continue;
+
+    hasNonNeutral = true;
+    if (BASH_SEARCH_COMMANDS.has(baseCmd)) hasSearch = true;
+    else if (BASH_READ_COMMANDS.has(baseCmd)) hasRead = true;
+    else if (BASH_LIST_COMMANDS.has(baseCmd)) hasList = true;
+    else {
+      // 包含非只读命令 → 整条命令不是只读
+      return { isSearch: false, isRead: false, isList: false, isReadOnly: false };
+    }
+  }
+
+  // 全部中性命令（如 echo "hi"）— 视为只读
+  if (!hasNonNeutral) {
+    return { isSearch: false, isRead: false, isList: false, isReadOnly: true };
+  }
+
+  return {
+    isSearch: hasSearch,
+    isRead: hasRead,
+    isList: hasList,
+    isReadOnly: hasSearch || hasRead || hasList,
+  };
+}
+
+// ── 文件 mtime 比对（参考 Claude Code FileEditTool stale detection）──
+
+/**
+ * 文件修改时间快照，用于检测编辑前是否被并发修改。
+ */
+export async function getFileMtime(filePath: string): Promise<number> {
+  const { default: fsPromises } = await import('fs/promises');
+  const stat = await fsPromises.stat(filePath);
+  return stat.mtimeMs;
+}
+
+/**
+ * 检查文件在读取后是否被修改。
+ * @returns true 表示文件已被修改（stale），应中止编辑
+ */
+export function isFileStale(savedMtime: number, currentMtime: number): boolean {
+  // 允许 1ms 的精度误差
+  return Math.abs(currentMtime - savedMtime) > 1;
 }
 
 // ── 命令参数转义 ────────────────────────────────────────────────────

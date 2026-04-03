@@ -1,0 +1,3 @@
+[submodule "vendor/claude-code"]
+	path = vendor/claude-code
+	url = https://github.com/jarmuine/claude-code.git

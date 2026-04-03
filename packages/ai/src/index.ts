@@ -87,13 +87,50 @@ export {
   summarizeInStages,
   pruneHistoryForContext,
   compactSession,
+  // ── 三级压缩管线 ──
+  AUTOCOMPACT_BUFFER_TOKENS,
+  POST_COMPACT_TOKEN_BUDGET,
+  MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES,
+  createAutoCompactTracking,
+  shouldAutoCompact,
+  autoCompactIfNeeded,
 } from './compaction.js';
 export type {
   ContextWindowSource,
   ContextWindowInfo,
   ContextWindowGuardResult,
   PruneResult,
+  AutoCompactTrackingState,
+  AutoCompactResult,
 } from './compaction.js';
+
+// ── Micro-Compact ──
+export {
+  microCompactMessages,
+  COMPACTABLE_TOOLS,
+  CLEARED_MESSAGE,
+  DEFAULT_KEEP_RECENT_TOOL_RESULTS,
+} from './micro-compact.js';
+export type {
+  MicroCompactOptions,
+  MicroCompactResult,
+} from './micro-compact.js';
+
+// ── Cost Tracker ──
+export { CostTracker } from './cost-tracker.js';
+export type {
+  ModelUsage,
+  ModelPricing,
+  CostSnapshot,
+  CostUpdateEvent,
+} from './cost-tracker.js';
+
+// ── Tool Search Cache ──
+export { CachedToolFilter, computeToolSetHash } from './tool-search-cache.js';
+
+// ── File State Cache ──
+export { FileStateCache, DEFAULT_MAX_ENTRIES, DEFAULT_MAX_SIZE_BYTES } from './file-state-cache.js';
+export type { FileState } from './file-state-cache.js';
 
 // ── Context Manager ──
 export {

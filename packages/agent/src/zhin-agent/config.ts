@@ -94,7 +94,7 @@ export interface ZhinAgentConfig {
 }
 
 export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
-  persona: 'You are a helpful AI assistant. You can use tools to help the user. Reply in the language specified in [User profile] (key: language or preferred_language), or in the same language as the user\'s message if not set.',
+  persona: 'You are Zhin, an intelligent IM bot assistant that helps users with tasks through conversation. Use tools available to you to assist the user. You are running inside the Zhin.js framework.',
   maxIterations: 5,
   timeout: 60_000,
   preExecTimeout: 10_000,

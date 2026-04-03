@@ -225,6 +225,19 @@ export interface AgentTool {
   timeout?: number;
   /** 工具分类（如 file / shell / web），用于 formatToolTitle 等展示 */
   kind?: string;
+  /**
+   * 该工具是否为只读操作（如 read_file, grep, list_dir）。
+   * 只读工具可以安全并发执行。
+   * 参考 Claude Code Tool.isReadOnly 模式。
+   */
+  isReadOnly?: boolean;
+  /**
+   * 该工具是否可以与其他工具并发执行。
+   * 默认行为：isReadOnly 为 true 的工具自动视为并发安全。
+   * 设为 false 可强制独占执行（如写文件、发送消息）。
+   * 参考 Claude Code Tool.isConcurrencySafe 模式。
+   */
+  isConcurrencySafe?: boolean;
 }
 
 /**
@@ -249,6 +262,17 @@ export interface AgentConfig {
   tools?: AgentTool[];
   maxIterations?: number;
   temperature?: number;
+  /**
+   * 上下文窗口大小（tokens），用于循环内自动压缩判断。
+   * 设置后每轮循环入口会执行 Micro-Compact + Auto-Compact。
+   * 不设置则禁用循环内压缩。
+   */
+  contextWindow?: number;
+  /**
+   * 最大并发工具执行数（默认 10）。
+   * 参考 Claude Code StreamingToolExecutor 的并发上限。
+   */
+  maxConcurrentTools?: number;
 }
 
 /** Agent 运行结果 */
@@ -261,6 +285,12 @@ export interface AgentResult {
   }[];
   usage: Usage;
   iterations: number;
+  /** 压缩统计（仅当 contextWindow 开启时有值） */
+  compaction?: {
+    microSavedTokens: number;
+    autoSavedTokens: number;
+    compactCount: number;
+  };
 }
 
 // ============================================================================

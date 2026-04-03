@@ -29,6 +29,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
     const fullCfg = { ...DEFAULT_CONFIG, ...agentCfg } as Required<import('../zhin-agent/config.js').ZhinAgentConfig>;
     const modelName = provider.models[0] || '';
     const builtinTools = createBuiltinTools({
+      plugin,
       skillInstructionMaxChars: resolveSkillInstructionMaxChars(fullCfg, modelName),
       pluginSkillRootsResolver: () => collectPluginSkillSearchRoots(root),
       skillFileLookup: (name: string) => {

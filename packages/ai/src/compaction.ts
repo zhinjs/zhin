@@ -14,6 +14,8 @@
 
 import { Logger } from '@zhin.js/logger';
 import type { AIProvider, ChatMessage } from './types.js';
+import { microCompactMessages } from './micro-compact.js';
+import type { MicroCompactOptions } from './micro-compact.js';
 
 const logger = new Logger(null, 'Compaction');
 
@@ -527,3 +529,181 @@ export async function compactSession(params: {
     savedTokens: beforeTokens - estimateTokens({ role: 'system', content: summary }),
   };
 }
+
+// ============================================================================
+// 三级压缩管线（参考 Claude Code auto-compact 模式）
+// ============================================================================
+
+/** 自动压缩缓冲 token 数 */
+export const AUTOCOMPACT_BUFFER_TOKENS = 13_000;
+
+/** 压缩后恢复注入的最大 token 预算 */
+export const POST_COMPACT_TOKEN_BUDGET = 50_000;
+
+/** 连续压缩失败断路器上限 */
+export const MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES = 3;
+
+/**
+ * 自动压缩追踪状态
+ * 参考 Claude Code 的 AutoCompactTrackingState
+ */
+export interface AutoCompactTrackingState {
+  /** 本轮是否已完成压缩 */
+  compacted: boolean;
+  /** 当前轮次计数 */
+  turnCounter: number;
+  /** 连续压缩失败次数 */
+  consecutiveFailures: number;
+}
+
+/**
+ * 自动压缩结果
+ */
+export interface AutoCompactResult {
+  /** 是否执行了压缩 */
+  wasCompacted: boolean;
+  /** 压缩后的消息列表 */
+  messages: ChatMessage[];
+  /** 总共节省的 token 数 */
+  savedTokens: number;
+  /** micro-compact 节省的 token 数 */
+  microSavedTokens: number;
+  /** auto-compact 节省的 token 数 */
+  autoSavedTokens: number;
+  /** 摘要文本（如果执行了 auto-compact） */
+  summary?: string;
+}
+
+/**
+ * 创建自动压缩追踪状态
+ */
+export function createAutoCompactTracking(): AutoCompactTrackingState {
+  return { compacted: false, turnCounter: 0, consecutiveFailures: 0 };
+}
+
+/**
+ * 判断是否应该执行自动压缩
+ */
+export function shouldAutoCompact(
+  messages: ChatMessage[],
+  contextWindow: number,
+  tracking?: AutoCompactTrackingState,
+): boolean {
+  // 断路器
+  if (tracking && tracking.consecutiveFailures >= MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES) {
+    logger.warn(`连续 ${tracking.consecutiveFailures} 次压缩失败，断路器开启，跳过压缩`);
+    return false;
+  }
+
+  const totalTokens = estimateMessagesTokens(messages);
+  const threshold = contextWindow - AUTOCOMPACT_BUFFER_TOKENS;
+
+  return totalTokens > threshold;
+}
+
+/**
+ * 三级渐进压缩管线
+ *
+ * Level 1: Micro-Compact — 清理旧工具结果（无 LLM 调用）
+ * Level 2: Auto-Compact — LLM 摘要 + 保留近期消息
+ * Level 3: 参见 session-memory-compact.ts（持久化关键发现）
+ *
+ * 参考 Claude Code 的 autoCompactIfNeeded
+ */
+export async function autoCompactIfNeeded(params: {
+  provider: AIProvider;
+  messages: ChatMessage[];
+  contextWindow?: number;
+  tracking?: AutoCompactTrackingState;
+  microCompactOptions?: MicroCompactOptions;
+  keepRecentCount?: number;
+}): Promise<AutoCompactResult> {
+  const contextWindow = params.contextWindow ?? DEFAULT_CONTEXT_TOKENS;
+  const tracking = params.tracking;
+  let messages = params.messages;
+  let microSavedTokens = 0;
+  let autoSavedTokens = 0;
+
+  // ── Level 1: Micro-Compact ──
+  // 轻量级清理，无 LLM 调用
+  const microResult = microCompactMessages(messages, {
+    tokenThreshold: Math.floor(contextWindow * 0.6),
+    ...params.microCompactOptions,
+  });
+
+  if (microResult.didCompact) {
+    messages = microResult.messages;
+    microSavedTokens = microResult.savedTokens;
+    logger.info(
+      `Micro-compact 清理了 ${microResult.clearedCount} 条工具结果，节省约 ${microResult.savedTokens} tokens`,
+    );
+  }
+
+  // 检查 micro-compact 后是否仍需 auto-compact
+  if (!shouldAutoCompact(messages, contextWindow, tracking)) {
+    return {
+      wasCompacted: microResult.didCompact,
+      messages,
+      savedTokens: microSavedTokens,
+      microSavedTokens,
+      autoSavedTokens: 0,
+    };
+  }
+
+  // ── Level 2: Auto-Compact ──
+  // LLM 摘要压缩
+  try {
+    const result = await compactSession({
+      provider: params.provider,
+      messages,
+      contextWindow,
+      keepRecentCount: params.keepRecentCount,
+    });
+
+    autoSavedTokens = result.savedTokens;
+
+    // 构建压缩后的消息列表
+    const compactedMessages: ChatMessage[] = [];
+    if (result.summary) {
+      compactedMessages.push({
+        role: 'system',
+        content: `[会话历史摘要]\n${result.summary}`,
+      });
+    }
+    compactedMessages.push(...result.keptMessages);
+
+    if (tracking) {
+      tracking.compacted = true;
+      tracking.consecutiveFailures = 0;
+    }
+
+    logger.info(
+      `Auto-compact 压缩了 ${result.compactedCount} 条消息，节省约 ${result.savedTokens} tokens`,
+    );
+
+    return {
+      wasCompacted: true,
+      messages: compactedMessages,
+      savedTokens: microSavedTokens + autoSavedTokens,
+      microSavedTokens,
+      autoSavedTokens,
+      summary: result.summary,
+    };
+  } catch (error: any) {
+    // 断路器记录
+    if (tracking) {
+      tracking.consecutiveFailures++;
+    }
+    logger.error(`Auto-compact 失败: ${error.message}`);
+
+    // 返回 micro-compact 的结果（至少不丢失轻量级清理的收益）
+    return {
+      wasCompacted: microResult.didCompact,
+      messages,
+      savedTokens: microSavedTokens,
+      microSavedTokens,
+      autoSavedTokens: 0,
+    };
+  }
+}
+

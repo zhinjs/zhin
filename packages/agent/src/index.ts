@@ -40,7 +40,11 @@ export { ZhinAgent } from './zhin-agent/index.js';
 export type { ZhinAgentConfig, OnChunkCallback } from './zhin-agent/index.js';
 
 export { PERM_MAP, DEFAULT_CONFIG as ZHIN_AGENT_DEFAULT_CONFIG, SECTION_SEP } from './zhin-agent/config.js';
-export { checkExecPolicy, applyExecPolicyToTools, resolveExecAllowlist, EXEC_PRESETS } from './zhin-agent/exec-policy.js';
+export {
+  checkExecPolicy, applyExecPolicyToTools, resolveExecAllowlist, EXEC_PRESETS,
+  isDangerousCommand, stripEnvVarPrefix, stripSafeWrappers, splitCompoundCommand, extractCommandName,
+  type ExecPolicyResult,
+} from './zhin-agent/exec-policy.js';
 export { collectRelevantTools, toAgentTool } from './zhin-agent/tool-collector.js';
 export { buildRichSystemPrompt, buildContextHint, buildEnhancedPersona, buildUserMessageWithHistory, contentToText } from './zhin-agent/prompt.js';
 export type { RichSystemPromptContext } from './zhin-agent/prompt.js';
