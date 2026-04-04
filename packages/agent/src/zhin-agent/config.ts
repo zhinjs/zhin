@@ -76,6 +76,8 @@ export interface ZhinAgentConfig {
   topicChangeThreshold?: number;
   rateLimit?: RateLimitConfig;
   toneAwareness?: boolean;
+  /** 聊天任务使用的模型（覆盖自动选择） */
+  chatModel?: string;
   visionModel?: string;
   contextTokens?: number;
   maxHistoryShare?: number;
@@ -105,6 +107,7 @@ export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   topicChangeThreshold: 0.15,
   rateLimit: {},
   toneAwareness: true,
+  chatModel: '',
   visionModel: '',
   contextTokens: DEFAULT_CONTEXT_TOKENS,
   maxHistoryShare: 0.5,

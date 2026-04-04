@@ -535,3 +535,77 @@ describe('Agent 类', () => {
     );
   });
 });
+
+describe('模型自动降级', () => {
+  it('主模型失败时自动降级到 fallback 模型', async () => {
+    const mockProvider = createMockProvider();
+    let callCount = 0;
+    mockProvider.chat.mockImplementation(async (req: any) => {
+      callCount++;
+      if (req.model === 'primary-model') {
+        throw new Error('rate limit exceeded');
+      }
+      return createChatResponse('来自降级模型的回复');
+    });
+
+    const agent = createAgent(mockProvider as any, {
+      model: 'primary-model',
+      modelFallbacks: ['fallback-model-a', 'fallback-model-b'],
+    });
+
+    const result = await agent.run('你好');
+    expect(result.content).toBe('来自降级模型的回复');
+    // Should have called primary first, then fallback-a
+    expect(callCount).toBe(2);
+    expect(mockProvider.chat).toHaveBeenCalledWith(expect.objectContaining({ model: 'primary-model' }));
+    expect(mockProvider.chat).toHaveBeenCalledWith(expect.objectContaining({ model: 'fallback-model-a' }));
+  });
+
+  it('所有模型失败时返回错误信息', async () => {
+    const mockProvider = createMockProvider();
+    mockProvider.chat.mockRejectedValue(new Error('all models down'));
+
+    const agent = createAgent(mockProvider as any, {
+      model: 'model-a',
+      modelFallbacks: ['model-b'],
+    });
+
+    const result = await agent.run('你好');
+    expect(result.content).toContain('all models down');
+  });
+
+  it('降级成功后后续轮次使用降级模型', async () => {
+    const mockProvider = createMockProvider();
+    const modelsUsed: string[] = [];
+    mockProvider.chat.mockImplementation(async (req: any) => {
+      modelsUsed.push(req.model);
+      if (req.model === 'broken-model' && modelsUsed.length === 1) {
+        throw new Error('first call fails');
+      }
+      return createChatResponse('回复');
+    });
+
+    const agent = createAgent(mockProvider as any, {
+      model: 'broken-model',
+      modelFallbacks: ['working-model'],
+    });
+
+    const result = await agent.run('你好');
+    expect(result.content).toBe('回复');
+    // First call to broken-model fails, second to working-model succeeds
+    expect(modelsUsed[0]).toBe('broken-model');
+    expect(modelsUsed[1]).toBe('working-model');
+  });
+
+  it('无 fallback 时返回错误信息', async () => {
+    const mockProvider = createMockProvider();
+    mockProvider.chat.mockRejectedValue(new Error('model error'));
+
+    const agent = createAgent(mockProvider as any, {
+      model: 'only-model',
+    });
+
+    const result = await agent.run('你好');
+    expect(result.content).toContain('model error');
+  });
+});

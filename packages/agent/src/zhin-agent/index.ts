@@ -24,6 +24,7 @@ import type { ContextManager } from '@zhin.js/ai';
 import { ConversationMemory } from '@zhin.js/ai';
 import type { OutputElement } from '@zhin.js/ai';
 import { parseOutput } from '@zhin.js/ai';
+import type { ModelRegistry } from '@zhin.js/ai';
 import { UserProfileStore } from '../user-profile.js';
 import { RateLimiter } from '@zhin.js/ai';
 import { detectTone } from '@zhin.js/ai';
@@ -87,6 +88,7 @@ export class ZhinAgent {
   private bootstrapContext: string = '';
   private activeSkillsContext: string = '';
   private skillsSummaryXML: string = '';
+  private modelRegistry: ModelRegistry | null = null;
 
   constructor(provider: AIProvider, config?: ZhinAgentConfig) {
     this.provider = provider;
@@ -118,6 +120,10 @@ export class ZhinAgent {
   setContextManager(manager: ContextManager): void {
     this.contextManager = manager;
     manager.setAIProvider(this.provider);
+  }
+
+  setModelRegistry(registry: ModelRegistry): void {
+    this.modelRegistry = registry;
   }
 
   upgradeMemoryToDatabase(msgModel: any, sumModel: any): void {
@@ -163,6 +169,41 @@ export class ZhinAgent {
 
   getUserProfiles(): UserProfileStore {
     return this.userProfiles;
+  }
+
+  /** 根据任务类型选择最合适的模型，优先使用 config 显式指定，其次 ModelRegistry，回退到 provider.models[0] */
+  private resolveModel(task: 'chat' | 'vision' | 'tool_call' | 'summary' = 'chat', preferred?: string): string {
+    return this.resolveModelCandidates(task, preferred)[0];
+  }
+
+  /**
+   * 返回按优先级排序的候选模型列表（用于自动降级）。
+   * 第一个是最优选择，失败后依次尝试后续模型。
+   */
+  private resolveModelCandidates(task: 'chat' | 'vision' | 'tool_call' | 'summary' = 'chat', preferred?: string): string[] {
+    const candidates: string[] = [];
+
+    // 1. 用户显式指定 / 配置指定优先
+    if (preferred) candidates.push(preferred);
+    if (task === 'chat' && this.config.chatModel && !candidates.includes(this.config.chatModel)) {
+      candidates.push(this.config.chatModel);
+    }
+    if (task === 'vision' && this.config.visionModel && !candidates.includes(this.config.visionModel)) {
+      candidates.push(this.config.visionModel);
+    }
+
+    // 2. ModelRegistry 自动排序的候选列表
+    if (this.modelRegistry) {
+      for (const id of this.modelRegistry.selectModels(this.provider.name, task, 5)) {
+        if (!candidates.includes(id)) candidates.push(id);
+      }
+    }
+
+    // 3. 兜底: provider.models[0]
+    const fallback = this.provider.models[0];
+    if (fallback && !candidates.includes(fallback)) candidates.push(fallback);
+
+    return candidates;
   }
 
   registerTool(tool: AgentTool): () => void {
@@ -350,7 +391,10 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
         ? this.config.maxIterations + SKILL_ITERATION_BOOST
         : this.config.maxIterations;
 
+      const chatCandidates = this.resolveModelCandidates('chat');
       const agent = createAgent(this.provider, {
+        model: chatCandidates[0],
+        modelFallbacks: chatCandidates.slice(1),
         systemPrompt,
         tools: agentTools,
         maxIterations: effectiveMaxIterations,
@@ -428,7 +472,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     }
 
     const textContent = textFragments.join(' ') || '[多模态消息]';
-    const visionModel = this.config.visionModel || this.provider.models[0];
+    const visionCandidates = this.resolveModelCandidates('vision');
 
     const messages: ChatMessage[] = [
       { role: 'system', content: personaEnhanced },
@@ -437,27 +481,39 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     ];
 
     let reply = '';
-    try {
-      for await (const chunk of this.provider.chatStream({ model: visionModel, messages })) {
-        const delta = chunk.choices?.[0]?.delta;
-        if (!delta) continue;
-        const text = typeof delta.content === 'string' ? delta.content : '';
-        if (text) {
-          reply += text;
-          if (onChunk) onChunk(text, reply);
+    for (let i = 0; i < visionCandidates.length; i++) {
+      const visionModel = visionCandidates[i];
+      try {
+        reply = '';
+        for await (const chunk of this.provider.chatStream({ model: visionModel, messages })) {
+          const delta = chunk.choices?.[0]?.delta;
+          if (!delta) continue;
+          const text = typeof delta.content === 'string' ? delta.content : '';
+          if (text) {
+            reply += text;
+            if (onChunk) onChunk(text, reply);
+          }
+        }
+        reply = stripThinkBlocks(reply);
+        if (!reply) {
+          logger.warn(`[processMultimodal] ${visionModel} 流式为空，尝试非流式`);
+          const response = await this.provider.chat({ model: visionModel, messages });
+          const msg = response.choices[0]?.message?.content;
+          reply = stripThinkBlocks(typeof msg === 'string' ? msg : '');
+        }
+        if (reply) break; // 成功，退出循环
+      } catch (err) {
+        const isLast = i === visionCandidates.length - 1;
+        if (isLast) {
+          try {
+            const response = await this.provider.chat({ model: visionModel, messages });
+            const msg = response.choices[0]?.message?.content;
+            reply = stripThinkBlocks(typeof msg === 'string' ? msg : '');
+          } catch { /* all candidates exhausted */ }
+        } else {
+          logger.warn(`[processMultimodal] ${visionModel} 失败，降级到 ${visionCandidates[i + 1]}: ${(err as Error).message}`);
         }
       }
-      reply = stripThinkBlocks(reply);
-      if (!reply) {
-        logger.warn('[processMultimodal] 流式响应内容为空，尝试非流式回退');
-        const response = await this.provider.chat({ model: visionModel, messages });
-        const msg = response.choices[0]?.message?.content;
-        reply = stripThinkBlocks(typeof msg === 'string' ? msg : '');
-      }
-    } catch {
-      const response = await this.provider.chat({ model: visionModel, messages });
-      const msg = response.choices[0]?.message?.content;
-      reply = stripThinkBlocks(typeof msg === 'string' ? msg : '');
     }
 
     if (!reply) reply = '抱歉，我无法理解这条消息。';
@@ -477,7 +533,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     history: ChatMessage[],
     onChunk?: OnChunkCallback,
   ): Promise<string> {
-    const model = this.provider.models[0];
+    const candidates = this.resolveModelCandidates('chat');
     const userContent = history.length > 0
       ? buildUserMessageWithHistory(history, content)
       : content;
@@ -486,30 +542,48 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       { role: 'user', content: userContent },
     ];
 
-    try {
-      let result = '';
-      for await (const chunk of this.provider.chatStream({ model, messages })) {
-        const delta = chunk.choices?.[0]?.delta;
-        if (!delta) continue;
-        const text = typeof delta.content === 'string' ? delta.content : '';
-        if (text) {
-          result += text;
-          if (onChunk) onChunk(text, result);
+    for (let i = 0; i < candidates.length; i++) {
+      const model = candidates[i];
+      try {
+        let result = '';
+        for await (const chunk of this.provider.chatStream({ model, messages })) {
+          const delta = chunk.choices?.[0]?.delta;
+          if (!delta) continue;
+          const text = typeof delta.content === 'string' ? delta.content : '';
+          if (text) {
+            result += text;
+            if (onChunk) onChunk(text, result);
+          }
         }
+        result = stripThinkBlocks(result);
+        if (result) return result;
+        // Streaming returned empty content — try non-streaming with same model
+        logger.warn(`[streamChat] ${model} 流式响应为空，尝试非流式`);
+        const response = await this.provider.chat({ model, messages });
+        const msg = response.choices[0]?.message?.content;
+        result = stripThinkBlocks(typeof msg === 'string' ? msg : '');
+        if (result) {
+          if (onChunk) onChunk(result, result);
+          return result;
+        }
+      } catch (err) {
+        const isLast = i === candidates.length - 1;
+        if (isLast) {
+          // No more candidates — try non-streaming as final attempt
+          try {
+            const response = await this.provider.chat({ model, messages });
+            const msg = response.choices[0]?.message?.content;
+            let result = stripThinkBlocks(typeof msg === 'string' ? msg : '');
+            if (onChunk && result) onChunk(result, result);
+            return result;
+          } catch {
+            return '';
+          }
+        }
+        logger.warn(`[streamChat] ${model} 失败，降级到 ${candidates[i + 1]}: ${(err as Error).message}`);
       }
-      result = stripThinkBlocks(result);
-      if (result) return result;
-      // Streaming returned empty content — fall back to non-streaming
-      logger.warn('[streamChat] 流式响应内容为空，尝试非流式回退');
-    } catch {
-      // Stream failed — fall back to non-streaming
     }
-    const response = await this.provider.chat({ model, messages });
-    const msg = response.choices[0]?.message?.content;
-    let result = typeof msg === 'string' ? msg : '';
-    result = stripThinkBlocks(result);
-    if (onChunk && result) onChunk(result, result);
-    return result;
+    return '';
   }
 
   private async saveToSession(

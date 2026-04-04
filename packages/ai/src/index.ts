@@ -183,3 +183,7 @@ export {
   createSwappableBackend,
 } from './storage.js';
 export type { StorageBackend, DbModel } from './storage.js';
+
+// ── Model Registry ──
+export { ModelRegistry, extractModelRoot, computeTierScore } from './model-registry.js';
+export type { AIModelInfo, ModelTask } from './model-registry.js';

@@ -7,7 +7,9 @@ Zhin AI Agent 组合层：在 `@zhin.js/core` 的类型与 Provider 之上，提
 - 🤖 **Agent 循环**：`Agent` / `createAgent`，支持工具调用、迭代与事件
 - 📝 **会话管理**：`SessionManager`、内存/数据库会话、`SessionManager.generateId`
 - 🧠 **ZhinAgent**：与 Zhin 消息流集成的智能体（SOUL/TOOLS/AGENTS、工具收集、执行策略）
-- �️ **6 层 Bash 安全**：`ExecPolicy` 纵深防御（危险黑名单、环境变量剥离、wrapper 剥离、复合命令拆分、只读放行、交互式审批）
+- 🔍 **模型自动发现**：ModelRegistry 自动发现 Provider 可用模型，Tier 评分智能选择
+- 🔄 **模型自动降级**：首选模型失败时自动切换到次优模型，支持 Chat / Vision / Agent 三条路径
+- 🛡️ **6 层 Bash 安全**：`ExecPolicy` 纵深防御（危险黑名单、环境变量剥离、wrapper 剥离、复合命令拆分、只读放行、交互式审批）
 - 📂 **文件访问安全**：`FilePolicy` 路径检查、设备路径拦截、命令读写分类
 - 📋 **10 段系统提示词**：`PromptBuilder` 结构化 prompt（Identity、System、Tasks、Actions、Tools、Communication、Skills、Active Skills、Memory、Bootstrap）
 - 🔌 **框架挂载**：`initAgentModule()` 注册 `ctx.ai`、定时任务、DB 模型等
@@ -78,6 +80,7 @@ const result = await agent.run('你好')
 |------|------|
 | 初始化 | `initAgentModule` |
 | Agent | `Agent`, `createAgent`, `formatToolTitle` |
+| 模型管理 | `ModelRegistry`, `computeTierScore`, `extractModelRoot`, `AIModelInfo` |
 | 服务与会话 | `AIService`, `SessionManager`, `MemorySessionManager`, `DatabaseSessionManager`, `createMemorySessionManager`, `createDatabaseSessionManager` |
 | ZhinAgent | `ZhinAgent`，以及 config / exec-policy / file-policy / tool-collector / prompt / builtin-tools 等子模块 |
 | 安全策略 | `checkExecPolicy`, `applyExecPolicyToTools`, `isDangerousCommand`, `stripEnvVarPrefix`, `stripSafeWrappers`, `splitCompoundCommand`, `extractCommandName`, `ExecPolicyResult`, `checkFileAccess`, `classifyBashCommand`, `isBlockedDevicePath` |
@@ -213,7 +216,7 @@ src/
 │   └── register-builtin-tools.ts
 └── zhin-agent/           # ZhinAgent 及子模块
     ├── index.ts          # ZhinAgent 主类
-    ├── config.ts         # 配置与常量（ModelSizeHint、KEYWORD_TRIGGERS 等）
+    ├── config.ts         # 配置与常量（chatModel、visionModel、ModelSizeHint 等）
     ├── exec-policy.ts    # Bash 执行安全（6 层纵深防御）
     ├── tool-collector.ts # 工具收集与过滤
     ├── prompt.ts         # 系统提示词构建器（10 段结构化架构）

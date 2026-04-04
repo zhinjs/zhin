@@ -167,11 +167,13 @@ ai:
   providers:
     ollama:
       baseURL: "http://localhost:11434"
-      model: "qwen2.5:7b"
+      # models 可省略 — ModelRegistry 自动发现并按 Tier 评分排序
+      # models:
+      #   - qwen2.5:7b
     openai:
       apiKey: "${OPENAI_API_KEY}"
       baseURL: "https://api.openai.com/v1"
-      model: "gpt-4o-mini"
+      # models 可省略 — 自动通过 /v1/models 发现
 
   # 会话配置
   sessions:
@@ -200,6 +202,8 @@ AI Agent 的行为控制在 `ai.agent` 下配置：
 ```yaml
 ai:
   agent:
+    chatModel: ''               # 聊天模型（留空自动选择最优）
+    visionModel: ''             # 视觉模型（留空自动选择）
     execSecurity: allowlist     # bash 执行策略：deny / allowlist / full
     execPreset: network         # 预设白名单：readonly / network / development / custom
     execAllowlist: ["docker"]   # 自定义允许的命令（与 preset 合并）
@@ -217,7 +221,10 @@ ai:
 
 **说明**：
 - AI 模块需要配置至少一个 provider 才能工作
-- 支持 Ollama（本地模型）、OpenAI、以及其他兼容 OpenAI API 的服务
+- `models` 列表现在是可选的 — 框架通过 ModelRegistry 自动发现可用模型并按 Tier 评分排序
+- `chatModel` / `visionModel` 可指定首选模型，留空则自动选择最优模型
+- 当首选模型不可用时，系统自动降级到次优模型
+- 支持 Ollama（本地模型）、OpenAI、以及其他兼容 OpenAI API 的服务（含中转/聚合服务）
 - 详见 [AI 模块文档](/advanced/ai)
 
 ## HTTP 服务配置

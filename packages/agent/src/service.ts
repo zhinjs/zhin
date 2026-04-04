@@ -27,6 +27,7 @@ import {
   createMemorySessionManager,
 } from '@zhin.js/ai';
 import { Agent, createAgent } from '@zhin.js/ai';
+import type { ModelRegistry } from '@zhin.js/ai';
 import { getBuiltinTools } from './tools.js';
 import type { ContextManager, ContextConfig } from '@zhin.js/ai';
 import { PERM_MAP } from './zhin-agent/config.js';
@@ -59,6 +60,7 @@ export class AIService {
   private agentConfig: AIConfig['agent'];
   private plugin?: Plugin;
   private customTools: Map<string, AgentTool> = new Map();
+  private _modelRegistry: ModelRegistry | null = null;
 
   constructor(config: AIConfig = {}) {
     this.defaultProvider = config.defaultProvider || 'openai';
@@ -135,6 +137,8 @@ export class AIService {
     if (defaultProvider) manager.setAIProvider(defaultProvider);
   }
   setPlugin(plugin: Plugin): void { this.plugin = plugin; }
+  setModelRegistry(registry: ModelRegistry): void { this._modelRegistry = registry; }
+  getModelRegistry(): ModelRegistry | null { return this._modelRegistry; }
   registerTool(tool: AgentTool): () => void { this.customTools.set(tool.name, tool); return () => { this.customTools.delete(tool.name); }; }
 
   collectAllTools(): AgentTool[] {

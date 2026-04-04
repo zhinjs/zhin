@@ -107,9 +107,10 @@ ai:
   providers:
     ollama:
       host: "http://localhost:11434"
-      models:
-        - qwen3:14b
+      # models 可省略 — ModelRegistry 自动发现并选择最优模型
   agent:
+    chatModel: ''              # 留空自动选择（或指定如 qwen3:14b）
+    visionModel: ''            # 留空自动选择视觉模型
     execSecurity: allowlist    # bash 执行策略：deny / allowlist / full
     execPreset: network        # 预设白名单：readonly / network / development
     execAsk: true              # 未知命令交互式审批

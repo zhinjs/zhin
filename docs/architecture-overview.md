@@ -101,6 +101,7 @@ graph TB
 |------|------|
 | `AIProvider` | LLM 提供者统一接口（OpenAI、Anthropic、Ollama、DeepSeek、Moonshot、Zhipu 等） |
 | `Agent` | 无状态 Agent 引擎，执行多轮 tool-calling 循环 |
+| `ModelRegistry` | 模型自动发现、Tier 评分、缓存与智能选择（支持自动降级） |
 | `SessionManager` | 会话管理（内存 / 数据库持久化） |
 | `ContextManager` | 上下文管理，消息记录与摘要 |
 | `ConversationMemory` | 短期滑动窗口 + 长期链式摘要 |

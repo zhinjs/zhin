@@ -12,7 +12,7 @@
 
 ## 架构分层（速览）
 
-由下至上：**`basic/`**（日志、DB、schema、CLI）→ **`@zhin.js/kernel`**（PluginBase、Feature、调度与错误体系，**无 IM 概念**）→ **`@zhin.js/ai`**（Provider、Agent、Memory、CostTracker、FileStateCache、MicroCompact、ToolSearchCache，**无 IM 概念**）→ **`@zhin.js/core`**（Plugin、Adapter、Bot、MessageDispatcher、命令/中间件/工具/技能）→ **`@zhin.js/agent`**（ZhinAgent、AIService、ExecPolicy-6层安全、FilePolicy、PromptBuilder-10段架构、IM 侧编排）→ **`zhin.js` 主包**（配置加载、插件发现、统一 re-export）。
+由下至上：**`basic/`**（日志、DB、schema、CLI）→ **`@zhin.js/kernel`**（PluginBase、Feature、调度与错误体系，**无 IM 概念**）→ **`@zhin.js/ai`**（Provider、Agent、ModelRegistry、Memory、CostTracker、FileStateCache、MicroCompact、ToolSearchCache，**无 IM 概念**）→ **`@zhin.js/core`**（Plugin、Adapter、Bot、MessageDispatcher、命令/中间件/工具/技能）→ **`@zhin.js/agent`**（ZhinAgent、AIService、ExecPolicy-6层安全、FilePolicy、PromptBuilder-10段架构、模型自动发现与降级、IM 侧编排）→ **`zhin.js` 主包**（配置加载、插件发现、统一 re-export）。
 
 - **改「消息怎么进、命令怎么路由、AI 怎么接」**：优先 `packages/core` + `packages/agent`。  
 - **改「纯 LLM/记忆/Provider」**：优先 `packages/ai`。  
@@ -33,6 +33,7 @@
 | 文件访问安全（路径检查、设备拦截、命令分类） | `packages/agent/src/file-policy.ts` |
 | 系统提示词构建（10 段结构化架构） | `packages/agent/src/zhin-agent/prompt.ts` |
 | AI 内置工具（bash、read_file、ask_user 等） | `packages/agent/src/builtin-tools.ts` |
+| 模型自动发现、Tier 评分与降级 | `packages/ai/src/model-registry.ts` |
 | 类型与对外协议补充 | `packages/core/src/types.ts` |
 
 ---

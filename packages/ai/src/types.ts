@@ -258,6 +258,8 @@ export interface ToolFilterOptions {
 export interface AgentConfig {
   provider: string;
   model?: string;
+  /** 降级候选模型列表（按优先级排序），主模型失败时依次尝试 */
+  modelFallbacks?: string[];
   systemPrompt?: string;
   tools?: AgentTool[];
   maxIterations?: number;

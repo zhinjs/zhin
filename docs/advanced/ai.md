@@ -110,13 +110,17 @@ ai:
   providers:
     ollama:
       host: "http://localhost:11434"
-      models:
-        - qwen3:14b
+      # models 可省略 — 框架通过 ModelRegistry 自动发现可用模型
+      # models:
+      #   - qwen3:14b
       num_ctx: 32768          # 上下文窗口（token 数）
       contextWindow: 32768    # 通用字段，优先级高于 num_ctx
     openai:
       apiKey: "${OPENAI_API_KEY}"
+      baseURL: "https://api.openai.com/v1"
       contextWindow: 128000
+      # 对于 API 聚合 / 中转服务（如 9router），无需手动列出模型
+      # ModelRegistry 会自动调用 /v1/models 接口发现所有可用模型
   
   sessions:
     useDatabase: true
@@ -129,6 +133,8 @@ ai:
     summaryRetentionDays: 30
   
   agent:
+    chatModel: ''             # 指定聊天模型（留空自动选择最优）
+    visionModel: ''           # 指定视觉模型（留空自动选择）
     execSecurity: allowlist
     execPreset: network       # readonly / network / development / custom
     execAllowlist:            # 与 preset 合并
@@ -163,7 +169,8 @@ ai:
 | `contextTokens` | number | 128000 | 上下文窗口 token 数 |
 | `maxHistoryShare` | number | 0.5 | 历史记录占上下文窗口的最大比例 |
 | `toneAwareness` | boolean | true | 是否启用情绪感知 |
-| `visionModel` | string | '' | 视觉模型名称（如 llava） |
+| `visionModel` | string | '' | 视觉模型名称（留空自动选择视觉能力模型） |
+| `chatModel` | string | '' | 聊天模型名称（留空自动选择最优模型） |
 | `execSecurity` | string | 'deny' | bash 执行策略：deny / allowlist / full |
 | `execPreset` | string | 'custom' | 预设命令白名单：readonly / network / development / custom |
 | `execAllowlist` | string[] | [] | 自定义允许的命令（正则字符串） |
@@ -603,6 +610,99 @@ const caps = aiService.getProviderCapabilities('ollama')
 // { contextWindow: 32768, capabilities: { vision: true, streaming: true, ... } }
 ```
 
+## 模型自动发现与智能选择
+
+框架内置 **ModelRegistry**，自动发现、缓存和智能选择 Provider 上的可用模型，无需手动配置 `models` 列表。
+
+### 自动发现
+
+启动时，ModelRegistry 调用 Provider 的 `listModels()` 接口（Ollama: `/api/tags`，OpenAI 兼容: `/v1/models`）获取所有可用模型，并推断每个模型的能力（视觉、编码、上下文窗口等）。
+
+对于 Ollama，还会通过 `/api/show` 获取详细的参数量和量化信息。对于 OpenAI 兼容 API（如中转/聚合服务），则基于模型名称启发式推断。
+
+发现结果会缓存到 `data/model-registry-cache.json`，避免重复 API 调用。
+
+### 智能选择（Tier 评分）
+
+ModelRegistry 为每个模型计算 **Tier 评分**（0-100 分），用于自动选择最优模型：
+
+| 模型系列 | 评分示例 |
+|----------|----------|
+| claude-opus, gpt-5 | 95-96 |
+| claude-sonnet-4.6, o3 | 90-93 |
+| gpt-4o, gemini-pro | 88 |
+| deepseek-r1, qwen-max | 85 |
+| kimi, grok | 80-82 |
+| glm-4 | 78 |
+| 小模型 (< 8B) | 40-60 |
+
+自动发现后，模型列表按 Tier 评分降序排列，`provider.models[0]` 自动指向最优模型。
+
+### 自动降级
+
+当首选模型请求失败时（如限流、负载过高），系统自动切换到 Tier 评分次高的模型：
+
+- **Chat 路径**：`streamChatWithHistory` 按候选列表依次尝试（流式 → 非流式回退）
+- **Vision 路径**：`processMultimodal` 对视觉模型同理
+- **Agent 循环**：底层 `Agent.chatWithFallback()` 支持 `modelFallbacks` 配置
+
+降级时会输出日志：`[模型降级] claude-sonnet → gpt-4o`。首次降级成功后，后续轮次自动使用降级后的模型。
+
+### 配置示例
+
+**最简配置**（全自动）：
+```yaml
+ai:
+  enabled: true
+  defaultProvider: ollama
+  providers:
+    ollama:
+      host: "http://localhost:11434"
+      # models 省略 — 自动发现并选择最优模型
+```
+
+**指定模型**（手动覆盖）：
+```yaml
+ai:
+  providers:
+    openai:
+      apiKey: "${OPENAI_API_KEY}"
+      baseURL: "https://api.openai.com/v1"
+  agent:
+    chatModel: gpt-4o           # 指定聊天模型
+    visionModel: gpt-4o         # 指定视觉模型
+```
+
+**API 聚合服务**（如 9router 等 OpenAI 兼容中转）：
+```yaml
+ai:
+  providers:
+    openai:
+      apiKey: "${ROUTER_API_KEY}"
+      baseURL: "http://my-router:8000/v1"
+      # ModelRegistry 自动发现所有中转模型（支持 prefix/model-name 格式）
+  agent:
+    chatModel: cu/claude-4.5-sonnet   # 可选：指定中转前缀格式的模型
+```
+
+### 编程接口
+
+```typescript
+import { ModelRegistry } from 'zhin.js'
+
+const registry = new ModelRegistry(logger)
+
+// 发现模型
+const models = await registry.discover(provider)
+
+// 智能选择
+const bestChat = registry.selectModel(provider.name, 'chat')
+const bestVision = registry.selectModel(provider.name, 'vision')
+
+// 获取候选列表（用于降级）
+const candidates = registry.selectModels(provider.name, 'chat', 5)
+```
+
 ## 小模型适配
 
 针对 8B 及以下小模型的优化策略。
@@ -699,12 +799,12 @@ AI 回复中的富媒体内容（图片、音频、视频）会自动解析为 `
 
 #### Ollama 多模型 + 多模态示例
 
-若本地通过 Ollama 同时跑多款模型（如 qwen3:14b、qwen3:8b、qwen2.5:7b、qwen2.5vl:7b），可这样配置：
+若本地通过 Ollama 同时跑多款模型（如 qwen3:14b、qwen3:8b、qwen2.5:7b、qwen2.5vl:7b），框架会自动发现所有模型并按 Tier 评分排序。
 
-- **文本对话与工具调用**：使用 `providers.ollama.models` 列表中的**第一个**模型。
-- **多模态（看图/视频等）**：使用 `agent.visionModel` 指定视觉模型；若不配置则回退到上述第一个模型。
+- **文本对话与工具调用**：自动选择 Tier 评分最高的模型（或通过 `chatModel` 指定）。
+- **多模态（看图/视频等）**：自动选择视觉能力最优的模型（或通过 `visionModel` 指定）。
 
-示例（默认用 qwen3:14b 做文本与工具调用，看图用 qwen2.5vl:7b）：
+示例（自动发现模式）：
 
 ```yaml
 ai:
@@ -713,16 +813,26 @@ ai:
   providers:
     ollama:
       host: "http://localhost:11434"
-      models:
-        - qwen3:14b      # 默认：纯文本 + 工具调用
-        - qwen3:8b
-        - qwen2.5:7b
-        - qwen2.5vl:7b   # 多模态（视觉）
+      # 无需列出 models — ModelRegistry 自动发现并排序
   agent:
-    visionModel: qwen2.5vl:7b   # 有图/视频时用该模型
+    # 可选指定：不指定则自动选择
+    chatModel: qwen3:14b          # 指定用于文本对话的模型
+    visionModel: qwen2.5vl:7b    # 指定用于视觉的模型
 ```
 
-按需把第一个模型改为 `qwen3:8b` 或 `qwen2.5:7b` 可降低显存占用。
+手动指定 models 列表仍然有效（会跳过自动发现）：
+
+```yaml
+ai:
+  providers:
+    ollama:
+      host: "http://localhost:11434"
+      models:                     # 手动指定时按此列表，第一个为默认
+        - qwen3:14b
+        - qwen2.5vl:7b
+  agent:
+    visionModel: qwen2.5vl:7b
+```
 
 ## 系统提示词架构
 

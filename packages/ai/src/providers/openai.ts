@@ -110,9 +110,7 @@ export class OpenAIProvider extends BaseProvider {
     
     try {
       const response = await this.fetch<ModelList>(`${this.baseUrl}/models`);
-      return response.data
-        .map((m) => m.id)
-        .filter((id) => id.includes('gpt') || id.includes('o1') || id.includes('o3'));
+      return response.data.map((m) => m.id);
     } catch {
       return this.models;
     }

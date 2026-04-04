@@ -69,13 +69,9 @@ ai:
   providers:
     ollama:
       host: http://172.25.70.73:11434
-      models:
-        - qwen3:14b
     openai:
       baseUrl: ${OPENAI_BASE_URL}
       apiKey: ${OPENAI_API_KEY}
-      models:
-        - cu/default
   sessions:
     maxHistory: 200                    # 最大历史消息数
     expireMs: 604800000                # 会话过期: 7 天
@@ -88,6 +84,8 @@ ai:
     maxContextTokens: 4000   
   agent:
     # Bash 执行安全（6 层纵深防御）
+    chatModel: 'cu/claude-4.5-sonnet'     # 聊天用的模型（显式指定）
+    visionModel: 'qw/vision-model' 
     execSecurity: allowlist            # deny=禁止 | allowlist=白名单 | full=不限制
     execPreset: network                # 预设白名单集，与 execAllowlist 合并
     #   readonly:    ls cat pwd date whoami grep find head tail wc stat file

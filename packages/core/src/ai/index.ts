@@ -50,3 +50,6 @@ export type {
   AnthropicConfig,
   OllamaConfig,
 } from '@zhin.js/ai';
+
+export { ModelRegistry, extractModelRoot, computeTierScore } from '@zhin.js/ai';
+export type { AIModelInfo, ModelTask } from '@zhin.js/ai';

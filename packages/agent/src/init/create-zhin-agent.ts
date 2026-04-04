@@ -4,6 +4,7 @@
  */
 import * as path from 'path';
 import { getPlugin, Scheduler, getScheduler, setScheduler, type MessageType, type SendOptions } from '@zhin.js/core';
+import { ModelRegistry, computeTierScore } from '@zhin.js/ai';
 import { ZhinAgent } from '../zhin-agent/index.js';
 import { createBuiltinTools } from '../builtin-tools.js';
 import { collectPluginSkillSearchRoots } from '../discovery-utils.js';
@@ -28,6 +29,32 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
 
     const skillRegistry = root.inject('skill');
     if (skillRegistry) agent.setSkillRegistry(skillRegistry);
+
+    // Model Registry: discover models and wire to agent
+    const dataDir = path.join(process.cwd(), 'data');
+    const modelRegistry = new ModelRegistry(dataDir);
+    const hadCache = modelRegistry.loadCache();
+    agent.setModelRegistry(modelRegistry);
+    ai.setModelRegistry(modelRegistry);
+    // Discover models in background (don't block startup)
+    (async () => {
+      try {
+        const discovered = await modelRegistry.discover(provider);
+        modelRegistry.saveCache();
+        if (discovered.length > 0) {
+          provider.models = discovered
+            .sort((a, b) => computeTierScore(b.id) - computeTierScore(a.id))
+            .map(m => m.id);
+        }
+        if (hadCache) {
+          logger.debug(`ModelRegistry: refreshed ${discovered.length} models from ${provider.name}`);
+        } else {
+          logger.info(`ModelRegistry: discovered ${discovered.length} models from ${provider.name}`);
+        }
+      } catch (e) {
+        logger.warn(`ModelRegistry: discovery failed for ${provider.name}: ${(e as Error).message}`);
+      }
+    })();
 
     // Follow-up reminder sender
     agent.setFollowUpSender(async (record) => {
@@ -85,7 +112,6 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     let cronEngine: PersistentCronEngine | null = null;
     const cronFeature = root.inject('cron') as import('@zhin.js/core').CronFeature | undefined;
     if (cronFeature && typeof cronFeature.add === 'function') {
-      const dataDir = path.join(process.cwd(), 'data');
       const addCron: import('../cron-engine.js').AddCronFn = (c) => cronFeature.add(c, 'cron-engine');
       const runner = async (prompt: string) => {
         if (!refs.zhinAgent) return;
@@ -101,7 +127,6 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     }
 
     // Unified scheduler (at/every/cron)
-    const dataDir = path.join(process.cwd(), 'data');
     const scheduler = new Scheduler({
       storePath: path.join(dataDir, 'scheduler-jobs.json'),
       workspace: process.cwd(),

@@ -16,9 +16,8 @@ import { OpenAIProvider, OllamaProvider, AnthropicProvider } from '@zhin.js/ai'
 const provider = new OpenAIProvider({
   apiKey: 'sk-...',
   baseUrl: 'https://api.openai.com/v1',
-  model: 'gpt-4o',
   contextWindow: 128000,
-  models: ['gpt-4o', 'gpt-4o-mini'],
+  // models 可省略 — ModelRegistry 自动发现
   capabilities: { vision: true, streaming: true, toolCalling: true },
 })
 
@@ -49,6 +48,7 @@ import { Agent, createAgent } from '@zhin.js/ai'
 const agent = createAgent(provider, logger, {
   maxIterations: 5,
   timeout: 60000,
+  modelFallbacks: ['gpt-4o-mini'],  // 可选：降级模型列表
 })
 
 const result = await agent.run({
@@ -59,6 +59,35 @@ const result = await agent.run({
   tools: [weatherTool],
 })
 ```
+
+Agent 支持自动模型降级：当主模型请求失败时，依次尝试 `modelFallbacks` 中的模型。
+
+### ModelRegistry（模型注册表）
+
+自动发现、缓存和智能选择 Provider 上的可用模型：
+
+```typescript
+import { ModelRegistry } from '@zhin.js/ai'
+
+const registry = new ModelRegistry(logger)
+
+// 自动发现可用模型
+const models = await registry.discover(provider)
+
+// 智能选择（按 Tier 评分 0-100）
+const best = registry.selectModel(provider.name, 'chat')
+const vision = registry.selectModel(provider.name, 'vision')
+
+// 获取候选列表（用于降级）
+const candidates = registry.selectModels(provider.name, 'chat', 5)
+```
+
+特性：
+- 调用 Provider 的 `listModels()` 自动发现模型
+- Ollama: `/api/show` 获取详细参数量和量化信息
+- OpenAI 兼容 API: 启发式推断（支持 `prefix/model-name` 中转格式）
+- Tier 评分（0-100）实现智能排序（claude-opus 96, gpt-4o 88, deepseek-r1 85...）
+- 本地缓存 `data/model-registry-cache.json` 避免重复 API 调用
 
 ### SessionManager（会话管理）
 

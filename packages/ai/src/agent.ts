@@ -97,7 +97,7 @@ export interface AgentEvents {
  */
 export class Agent {
   private provider: AIProvider;
-  private config: Required<Pick<AgentConfig, 'provider' | 'model' | 'systemPrompt' | 'tools' | 'maxIterations' | 'temperature'>> & Pick<AgentConfig, 'contextWindow' | 'maxConcurrentTools'>;
+  private config: Required<Pick<AgentConfig, 'provider' | 'model' | 'systemPrompt' | 'tools' | 'maxIterations' | 'temperature'>> & Pick<AgentConfig, 'contextWindow' | 'maxConcurrentTools' | 'modelFallbacks'>;
   private tools: Map<string, AgentTool> = new Map();
   private eventHandlers: Map<keyof AgentEvents, Function[]> = new Map();
   /** 成本追踪器（参考 Claude Code cost-tracker） */
@@ -108,6 +108,7 @@ export class Agent {
     this.config = {
       provider: config.provider,
       model: config.model || provider.models[0],
+      modelFallbacks: config.modelFallbacks,
       systemPrompt: config.systemPrompt || this.getDefaultSystemPrompt(),
       tools: config.tools || [],
       maxIterations: config.maxIterations || 10,
@@ -134,6 +135,32 @@ export class Agent {
  - On tool failure, try alternatives — do not dump raw errors to user
  - If a task cannot be completed, say so honestly
  - Reply in the language specified in [User profile] (key: language / preferred_language), or in the user's message language if not set`;
+  }
+
+  /**
+   * 带自动降级的 chat 调用：主模型失败时依次尝试 modelFallbacks。
+   */
+  private async chatWithFallback(request: Omit<import('./types.js').ChatCompletionRequest, 'model'>): Promise<{ response: import('./types.js').ChatCompletionResponse; usedModel: string }> {
+    const candidates = [this.config.model, ...(this.config.modelFallbacks || [])];
+    let lastError: Error | undefined;
+    for (let i = 0; i < candidates.length; i++) {
+      const model = candidates[i];
+      try {
+        const response = await this.provider.chat({ ...request, model });
+        // 成功且切换了模型 → 将当前模型提升为首选（后续轮次直接用）
+        if (i > 0) {
+          logger.info(`[模型降级] ${candidates[0]} → ${model} 成功，切换为首选模型`);
+          this.config.model = model;
+        }
+        return { response, usedModel: model };
+      } catch (err) {
+        lastError = err as Error;
+        if (i < candidates.length - 1) {
+          logger.warn(`[模型降级] ${model} 失败: ${lastError.message}，尝试 ${candidates[i + 1]}`);
+        }
+      }
+    }
+    throw lastError || new Error('All model candidates failed');
   }
 
   /**
@@ -461,18 +488,18 @@ export class Agent {
       try {
         // 工具调用轮次禁用思考（qwen3 等模型），大幅减少无效 token 生成
         const isToolCallRound = hasTools && !forceAnswer;
-        const response = await this.provider.chat({
-          model: this.config.model,
+        const chatRequest = {
           messages: state.messages,
           tools: isToolCallRound ? toolDefinitions : undefined,
-          tool_choice: isToolCallRound ? 'auto' : undefined,
+          tool_choice: isToolCallRound ? 'auto' as const : undefined,
           temperature: this.config.temperature,
           think: isToolCallRound ? false : undefined,
-        });
+        };
+        const { response, usedModel } = await this.chatWithFallback(chatRequest);
 
         Agent.addUsage(state.usage, response.usage);
         if (response.usage) {
-          this.costTracker.addUsage(this.config.model, response.usage);
+          this.costTracker.addUsage(usedModel, response.usage);
         }
         logger.info(`token 用量: ${state.usage.prompt_tokens} -> ${state.usage.completion_tokens} -> ${state.usage.total_tokens}`);
         logger.info(`response: `,response);
