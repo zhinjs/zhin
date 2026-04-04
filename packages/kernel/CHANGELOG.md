@@ -1,5 +1,12 @@
 # @zhin.js/kernel
 
+## 0.0.17
+
+### Patch Changes
+
+- @zhin.js/logger@0.1.40
+- @zhin.js/schema@1.0.40
+
 ## 0.0.16
 
 ### Patch Changes

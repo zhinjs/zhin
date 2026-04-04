@@ -1,5 +1,14 @@
 # @zhin.js/agent
 
+## 0.0.19
+
+### Patch Changes
+
+- 20ab379: fix: ai 优化
+- Updated dependencies [20ab379]
+  - @zhin.js/ai@1.0.17
+  - @zhin.js/core@1.0.56
+
 ## 0.0.18
 
 ### Patch Changes
