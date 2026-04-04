@@ -1,5 +1,16 @@
 # @zhin.js/adapter-process
 
+## 1.0.70
+
+### Patch Changes
+
+- c606a57: fix: ask_user 优化
+- Updated dependencies [c606a57]
+  - @zhin.js/core@1.0.57
+  - zhin.js@1.0.57
+  - @zhin.js/console@1.0.59
+  - @zhin.js/http@1.0.52
+
 ## 1.0.69
 
 ### Patch Changes
