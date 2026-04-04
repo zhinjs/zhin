@@ -105,6 +105,10 @@ graph TB
 | `ContextManager` | 上下文管理，消息记录与摘要 |
 | `ConversationMemory` | 短期滑动窗口 + 长期链式摘要 |
 | `compaction` | 上下文窗口管理，token 估算、分阶段摘要、历史修剪 |
+| `CostTracker` | Token 用量与成本追踪，支持按模型/Provider 统计 |
+| `FileStateCache` | 文件状态缓存，减少重复磁盘读取 |
+| `MicroCompact` | 微压缩引擎，增量式上下文摘要 |
+| `ToolSearchCache` | 工具搜索结果缓存，加速重复查找 |
 | `output` | AI 文本解析为结构化 `OutputElement[]`（文本/图片/音频/卡片等） |
 | `RateLimiter` | 请求速率限制 |
 | `ToneDetector` | 消息情绪感知 |
@@ -136,8 +140,11 @@ graph TB
 | `UserProfileStore` | 用户画像管理（跨会话个性化） |
 | `PersistentCronEngine` | AI 感知的持久化 cron 引擎 |
 | `BootstrapLoader` | 引导文件加载（SOUL.md / AGENTS.md / TOOLS.md） |
+| `ExecPolicy` | Bash 执行安全（6 层纵深防御：黑名单、环境变量剥离、wrapper 剥离、复合命令拆分、只读放行、审批集成） |
+| `FilePolicy` | 文件访问安全（路径检查、设备路径拦截、命令读写分类） |
+| `PromptBuilder` | 系统提示词构建器（10 段结构化架构） |
 | Hook 系统 | `message:received`、`tool:call`、`session:compact` 等事件钩子 |
-| 内置工具 | `bash`、`read_file`、`write_file`、`web_search`、`chat_history` 等 |
+| 内置工具 | `bash`、`read_file`、`write_file`、`ask_user`、`web_search`、`chat_history` 等 |
 
 ### zhin.js（应用层）
 

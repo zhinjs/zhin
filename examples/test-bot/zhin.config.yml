@@ -75,7 +75,7 @@ ai:
       baseUrl: ${OPENAI_BASE_URL}
       apiKey: ${OPENAI_API_KEY}
       models:
-        - nvidia/moonshotai/kimi-k2.5
+        - cu/default
   sessions:
     useDatabase: true
     maxHistory: 50

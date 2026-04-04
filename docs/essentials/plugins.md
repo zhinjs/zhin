@@ -176,6 +176,8 @@ addTool(
 
 详见 [工具与技能](/advanced/tools-skills)。
 
+> **安全提示**：涉及 bash 命令执行或文件操作的工具受 `execSecurity` 策略约束。详见 [执行安全](/advanced/ai#执行安全-execsecurity)。
+
 ## 技能（Skill，文件化）
 
 在插件包目录下添加 `skills/<技能名>/SKILL.md`（含 `name`、`description`、`keywords`、`tags` 等）。详见 [工具与技能](/advanced/tools-skills)。

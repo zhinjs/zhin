@@ -1,6 +1,6 @@
 # @zhin.js/ai
 
-框架无关的 AI 引擎，提供 LLM Provider 抽象、Agent 循环、会话管理、记忆与压缩等能力。
+框架无关的 AI 引擎，提供 LLM Provider 抽象、Agent 循环、会话管理、记忆与压缩、成本追踪、性能缓存等能力。
 
 不依赖任何 IM/Bot 概念，可独立用于 Web 后端、CLI 工具、自动化脚本等任意 Node.js 应用。
 
@@ -170,6 +170,53 @@ const backend = createSwappableBackend(new MemoryStorageBackend())
 backend.swap(new DatabaseStorageBackend(model))
 ```
 
+### CostTracker（成本追踪）
+
+追踪每次 LLM 调用的 token 用量和估算成本，支持按模型/Provider 统计：
+
+```typescript
+import { CostTracker } from '@zhin.js/ai'
+
+const tracker = new CostTracker()
+tracker.record({ model: 'qwen3:14b', inputTokens: 1200, outputTokens: 350 })
+
+console.log(tracker.summary())
+// { totalCalls: 1, totalInputTokens: 1200, totalOutputTokens: 350, estimatedCost: 0.002 }
+```
+
+### FileStateCache（文件状态缓存）
+
+缓存文件 mtime 和内容摘要，避免工具多次读取同一文件时重复访问磁盘：
+
+```typescript
+import { FileStateCache } from '@zhin.js/ai'
+
+const cache = new FileStateCache({ maxEntries: 500, ttlMs: 30000 })
+const content = await cache.getOrRead('/path/to/file.ts')
+```
+
+### MicroCompact（微压缩）
+
+轻量级上下文压缩引擎，在完整 LLM 摘要之前先做增量裁剪，降低 token 消耗：
+
+```typescript
+import { MicroCompact } from '@zhin.js/ai'
+
+const compactor = new MicroCompact({ maxTokens: 2000 })
+const compacted = compactor.compact(messages)
+```
+
+### ToolSearchCache（工具搜索缓存）
+
+缓存工具关键词匹配结果，避免每轮对话重复扫描全部工具：
+
+```typescript
+import { ToolSearchCache } from '@zhin.js/ai'
+
+const cache = new ToolSearchCache({ maxSize: 100, ttlMs: 60000 })
+const tools = cache.getOrSearch('天气查询', () => searchTools('天气查询'))
+```
+
 ## 主要导出
 
 | 导出 | 说明 |
@@ -180,6 +227,10 @@ backend.swap(new DatabaseStorageBackend(model))
 | `ContextManager` | 上下文管理 |
 | `ConversationMemory` | 对话记忆 |
 | `compactSession` / `pruneHistoryForContext` | 上下文压缩 |
+| `CostTracker` | Token 用量与成本追踪 |
+| `FileStateCache` | 文件状态缓存 |
+| `MicroCompact` | 微压缩引擎 |
+| `ToolSearchCache` | 工具搜索缓存 |
 | `parseOutput` / `renderToPlainText` | 输出解析 |
 | `RateLimiter` | 速率限制 |
 | `detectTone` | 情绪检测 |

@@ -44,9 +44,9 @@ basic/          # 基础层 - 底层工具和类型系统
 
 packages/       # 核心层 - 框架核心（分层架构）
 ├── kernel/     # 运行时内核 (PluginBase, Feature, Cron, Scheduler, 错误体系)
-├── ai/         # AI 引擎 (Provider, Agent, Session, Memory, Compaction)
+├── ai/         # AI 引擎 (Provider, Agent, Session, Memory, Compaction, CostTracker, FileStateCache, MicroCompact, ToolSearchCache)
 ├── core/       # IM 核心框架 (Plugin, Adapter, Bot, Command, MessageDispatcher)
-├── agent/      # Agent 编排 (ZhinAgent, AIService, 子任务, 用户画像, 引导文件)
+├── agent/      # Agent 编排 (ZhinAgent, AIService, ExecPolicy-6层安全, FilePolicy, PromptBuilder-10段架构, 子任务, 用户画像, 引导文件)
 ├── client/     # 客户端库 (React Router 7, Redux)
 ├── create-zhin/# 项目脚手架 (交互式创建项目)
 ├── satori/     # HTML/CSS → SVG/PNG 渲染引擎

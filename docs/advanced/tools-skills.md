@@ -290,6 +290,49 @@ parameters:
 
 工作区 `cwd/tools/` 目录支持热重载——新增、修改、删除 `*.tool.md` 文件后，框架会在 400ms 内自动重新发现并注册。
 
+## 内置工具
+
+框架内置了一组 AI 可直接使用的工具（由 `@zhin.js/agent` 提供），无需手动注册：
+
+| 工具 | 说明 |
+|------|------|
+| `bash` | 执行 Shell 命令（受 execSecurity 策略约束） |
+| `read_file` | 读取文件内容 |
+| `write_file` | 写入文件 |
+| `edit_file` | 编辑文件（基于 diff） |
+| `list_dir` | 列出目录 |
+| `glob` | 按模式匹配文件 |
+| `grep` | 搜索文件内容 |
+| `web_search` | 网页搜索 |
+| `web_fetch` | 抓取网页内容 |
+| `ask_user` | 向用户提问并等待回答 |
+| `chat_history` | 查询对话历史（关键词触发） |
+| `user_profile` | 读写用户偏好（关键词触发） |
+| `schedule_followup` | 安排定时跟进提醒（关键词触发） |
+| `spawn_task` | 创建后台子任务（关键词触发） |
+| `activate_skill` | 激活已安装的技能 |
+| `install_skill` | 从 URL 安装技能 |
+
+### ask_user — 用户确认工具
+
+`ask_user` 工具允许 AI 主动向用户提问并等待回答。典型场景：
+
+- **危险操作确认**：当 `execAsk: true` 且命令不在白名单时，AI 用 `ask_user` 向用户确认
+- **信息补全**：AI 需要更多信息才能完成任务时主动询问
+- **选择确认**：提供选项让用户选择
+
+```json
+{
+  "name": "ask_user",
+  "arguments": {
+    "question": "要执行 npm install 吗？",
+    "choices": ["是", "否"]
+  }
+}
+```
+
+`ask_user` 通过 IM 消息发送问题，等待用户回复后将答案返回给 AI 继续处理。超时未回复则返回超时提示。
+
 ## Agent 预设（*.agent.md）
 
 Agent 预设用于声明领域专长 Agent，AI 可自动识别场景并委派子任务。

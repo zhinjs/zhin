@@ -193,6 +193,28 @@ ai:
     timeout: 60000              # AI 处理超时（毫秒）
 ```
 
+### Agent 配置
+
+AI Agent 的行为控制在 `ai.agent` 下配置：
+
+```yaml
+ai:
+  agent:
+    execSecurity: allowlist     # bash 执行策略：deny / allowlist / full
+    execPreset: network         # 预设白名单：readonly / network / development / custom
+    execAllowlist: ["docker"]   # 自定义允许的命令（与 preset 合并）
+    execAsk: false              # 未知命令是否提示用户审批（需 ask_user 工具）
+    maxIterations: 5            # 最大工具调用轮数
+    contextTokens: 128000      # 上下文窗口 token 数
+    maxHistoryShare: 0.5        # 历史记录占上下文窗口的最大比例
+    toneAwareness: true         # 是否启用情绪感知
+    modelSizeHint: ""           # 模型大小提示：small / medium / large（留空自动推断）
+    skillInstructionMaxChars: 0 # 技能指令最大字符数（0 表示按模型大小自动推断）
+    maxSubagentIterations: 15   # 子 agent 最大工具调用轮数
+```
+
+完整配置项说明详见 [AI 模块文档 — Agent 配置详解](/advanced/ai#agent-配置详解)。
+
 **说明**：
 - AI 模块需要配置至少一个 provider 才能工作
 - 支持 Ollama（本地模型）、OpenAI、以及其他兼容 OpenAI API 的服务

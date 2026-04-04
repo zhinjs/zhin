@@ -8,6 +8,8 @@
 
 - `basic/*` — 基础能力（CLI、数据库、日志、schema 等）
 - `packages/*` — 框架核心与运行时（`kernel`、`core`、`zhin`、`agent`、`client`、`ai` 等）
+  - `ai`：通用 AI 引擎（Provider、Agent、Memory、CostTracker、FileStateCache、MicroCompact、ToolSearchCache）
+  - `agent`：IM Agent 编排（ZhinAgent、ExecPolicy、FilePolicy、PromptBuilder、内置工具）
 - `plugins/adapters/*` — 平台适配器
 - `plugins/services/*` — 服务类插件（如 HTTP、Console）
 - `plugins/features/*` — 特性类插件

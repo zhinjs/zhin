@@ -32,10 +32,16 @@ plugins:
 
 ai:
   enabled: true
+  defaultProvider: ollama
   providers:
-    - type: openai
-      model: gpt-4o
-      api_key: ${OPENAI_API_KEY}
+    ollama:
+      host: "http://localhost:11434"
+      models:
+        - qwen3:14b
+  agent:
+    execSecurity: allowlist    # bash 执行策略：deny / allowlist / full
+    execPreset: network        # 预设白名单：readonly / network / development
+    execAsk: true              # 未知命令交互式审批
 ```
 
 ## 编写插件
@@ -81,7 +87,9 @@ export { default as logger } from '@zhin.js/logger'
 - **Feature** — 统一抽象（Command、Tool、Skill、Cron、Database、Component、Config、Permission）
 - **Adapter** — 多平台适配器（QQ、Discord、Telegram、KOOK 等 12 个平台）
 - **MessageDispatcher** — 三阶段消息处理管线（Guardrail → Route → Handle）
-- **ZhinAgent** — 内置 AI 智能体，支持工具调用和多轮对话
+- **ZhinAgent** — 内置 AI 智能体，支持工具调用、多轮对话、6 层 Bash 安全防御与 10 段结构化系统提示词
+- **ExecPolicy** — 6 层纵深防御（环境变量剥离 → 包装器剥离 → 复合拆分 → 设备路径拦截 → 危险命令拦截 → 白名单验证）
+- **CostTracker / FileStateCache / MicroCompact / ToolSearchCache** — AI 引擎性能优化模块
 
 ## AI 与多 Agent
 
