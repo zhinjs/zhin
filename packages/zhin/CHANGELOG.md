@@ -1,5 +1,17 @@
 # zhin.js
 
+## 1.0.56
+
+### Patch Changes
+
+- Updated dependencies [20ab379]
+  - @zhin.js/agent@0.0.19
+  - @zhin.js/ai@1.0.17
+  - @zhin.js/core@1.0.56
+  - @zhin.js/logger@0.1.40
+  - @zhin.js/schema@1.0.40
+  - @zhin.js/kernel@0.0.17
+
 ## 1.0.55
 
 ### Patch Changes

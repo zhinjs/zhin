@@ -1,5 +1,12 @@
 # @zhin.js/ai
 
+## 1.0.17
+
+### Patch Changes
+
+- 20ab379: fix: ai 优化
+  - @zhin.js/logger@0.1.40
+
 ## 1.0.16
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @zhin.js/console
 
+## 1.0.58
+
+### Patch Changes
+
+- zhin.js@1.0.56
+- @zhin.js/core@1.0.56
+- @zhin.js/http@1.0.51
+
 ## 1.0.57
 
 ### Patch Changes
