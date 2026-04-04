@@ -150,6 +150,18 @@ export function registerAITrigger(refs: AIServiceRefs): void {
         await replyOutbound(triggerConfig.thinkingMessage);
 
       const permissions = inferSenderPermissions(message, triggerConfig);
+
+      // 从 bot 配置中查找 owner（bots[].owner）
+      const adapterInstance = root.inject(message.$adapter) as
+        | { bots?: Map<string, { $config?: Record<string, any> }> }
+        | undefined;
+      const botConfig = adapterInstance?.bots?.get(message.$bot)?.$config as Record<string, any> | undefined;
+      const botOwner: string | undefined = botConfig?.owner;
+
+      // 用 bot 级别 owner 覆盖权限判断
+      const isOwner = botOwner ? String(message.$sender.id) === String(botOwner) : permissions.isOwner;
+      const permissionLevel = isOwner ? 'owner' as const : permissions.permissionLevel;
+
       const toolContext: ToolContext = {
         platform: message.$adapter,
         botId: message.$bot,
@@ -157,11 +169,11 @@ export function registerAITrigger(refs: AIServiceRefs): void {
         senderId: message.$sender.id,
         message,
         scope: permissions.scope,
-        senderPermissionLevel: permissions.permissionLevel,
+        senderPermissionLevel: permissionLevel,
         isGroupAdmin: permissions.isGroupAdmin,
         isGroupOwner: permissions.isGroupOwner,
-        isBotAdmin: permissions.isBotAdmin,
-        isOwner: permissions.isOwner,
+        isBotAdmin: isOwner || permissions.isBotAdmin,
+        isOwner,
       };
 
       const tCollect = performance.now();

@@ -273,8 +273,8 @@ export function applyExecPolicyToTools(config: Required<ZhinAgentConfig>, tools:
         const result = checkExecPolicy(config, cmd);
         if (!result.allowed) {
           if (result.needsApproval) {
-            // 返回可读消息让 AI 用 ask_user 向用户确认
-            return `⚠️ ${result.reason}\n请使用 ask_user 工具询问用户是否允许执行此命令。`;
+            // 返回可读消息让 AI 用 ask_user 向 Owner 确认
+            return `⚠️ ${result.reason}\n请使用 ask_user 工具向 Owner 确认是否允许执行此命令。`;
           }
           throw new Error(result.reason!);
         }

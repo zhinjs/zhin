@@ -77,43 +77,51 @@ ai:
       models:
         - cu/default
   sessions:
-    useDatabase: true
-    maxHistory: 50
-    expireMs: 3600000
+    maxHistory: 200                    # 最大历史消息数
+    expireMs: 604800000                # 会话过期: 7 天
+    useDatabase: true  
   context:
     enabled: true
-    maxMessagesBeforeSummary: 100
-    summaryRetentionDays: 30
+    maxRecentMessages: 100             # 读取最近消息数
+    summaryThreshold: 50               # 触发自动总结的阈值
+    keepAfterSummary: 10               # 总结后保留最近条数
+    maxContextTokens: 4000   
   agent:
-    execSecurity: allowlist
-    visionModel: qwen2.5vl:7b
-    execAllowlist:
-      - ls
-      - cat
+    # Bash 执行安全（6 层纵深防御）
+    execSecurity: allowlist            # deny=禁止 | allowlist=白名单 | full=不限制
+    execPreset: network                # 预设白名单集，与 execAllowlist 合并
+    #   readonly:    ls cat pwd date whoami grep find head tail wc stat file
+    #   network:     + curl wget ping dig nslookup host
+    #   development: + npm npx node git gh python python3 pip pnpm yarn tsc bun
+    execAllowlist:                     # 自定义追加白名单（支持正则）
       - echo
-      - whoami
-      - pwd
-      - date
-      - cal
-      - clear
-      - help
-      - man
-      - info
-      - curl
-  maxIterations: 100
+      - sort
+      - uniq
+      - awk
+      - sed
+      - jq
+      - tar
+      - zip
+      - unzip
+      - du
+      - df
+      - env
+      - uname
+      - which
+      - xargs
+      - "^docker (ps|logs|inspect)"    # 只允许 docker 只读操作
+    execAsk: true                      # 未匹配白名单 → 私聊 Owner 审批
+    # disabledTools: []                # 禁用的工具名列表
+    # allowedTools: []                 # 仅允许的工具名列表（与 disabledTools 二选一）
   trigger:
     enabled: true
-    prefixes:
-      - "#"
-      - "AI:"
-      - "ai:"
-    respondToAt: true
-    respondToPrivate: true
-    ignorePrefixes:
-      - /
-      - "!"
-      - ！
-    timeout: 120000
+    prefixes: ['#', 'AI:', 'ai:']     # 触发前缀
+    respondToAt: true                  # 响应 @机器人
+    respondToPrivate: true             # 响应私聊
+    ignorePrefixes: ['/', '!', '！']   # 忽略命令前缀
+    timeout: 60000                     # AI 响应超时 (ms)
+    thinkingMessage: '🤔 思考中...'  # 可选: 处理前发送提示
+
 htmlRenderer:
   defaultWidth: 1080
   defaultBackgroundColor: "#ffffff"

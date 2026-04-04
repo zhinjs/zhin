@@ -19,6 +19,8 @@ export interface SandboxConfig {
   context: "sandbox";
   ws: WebSocket;
   name: string;
+  /** 发言者即为 owner（沙箱模式） */
+  owner?: string;
 }
 
 declare module "zhin.js" {
@@ -84,6 +86,8 @@ export class SandboxBot extends EventEmitter implements Bot<SandboxConfig, { con
   }
 
   $formatMessage({ content, type, id, ts }: { content: MessageElement[]; id: string; type: MessageType; ts: number }) {
+    // 沙箱模式：发言者即为 owner
+    if (!this.$config.owner) this.$config.owner = id;
     const message = Message.from(
       { content, ts },
       {

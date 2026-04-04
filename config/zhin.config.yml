@@ -3,6 +3,11 @@ disable_bots: []
 disable_plugins: []
 plugin_dirs: []
 bots: []
+#   - context: icqq            # 适配器名称
+#     name: '123456789'        # Bot ID
+#     owner: '你的用户ID'       # ⚠️ Bot Owner（ask_user 安全确认目标）
+#     password: ''
+#     platform: 2
 plugins: []
 
 # AI 服务配置（可选）
@@ -19,6 +24,8 @@ plugins: []
 #       apiKey: sk-xxx  # DeepSeek API Key
 #     ollama:
 #       host: http://localhost:11434  # Ollama 本地地址
+#       models:
+#         - qwen3:14b
 #   sessions:
 #     maxHistory: 200  # 最大历史消息数（数据库模式）
 #     expireMs: 604800000  # 会话过期时间（7天）
@@ -29,3 +36,12 @@ plugins: []
 #     summaryThreshold: 50  # 触发自动总结的消息数量
 #     keepAfterSummary: 10  # 总结后保留的最近消息数
 #     maxContextTokens: 4000  # 上下文最大 token 估算
+#   agent:
+#     execSecurity: allowlist  # bash 执行策略: deny(禁止) / allowlist(白名单) / full(不限制)
+#     execPreset: network      # 预设白名单: readonly / network / development / custom
+#     execAsk: true            # 未知命令向 Owner 私聊审批
+#   trigger:
+#     prefixes: ['#', 'AI:', 'ai:']
+#     respondToAt: true
+#     respondToPrivate: true
+#     timeout: 60000

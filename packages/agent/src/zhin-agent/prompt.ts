@@ -166,7 +166,7 @@ function buildDoingTasksSection(): string {
     'File changes must use edit_file/write_file — never give manual instructions for the user to apply.',
     'Read files before modifying them. Understand existing code before suggesting changes.',
     'Prefer editing existing files over creating new ones to prevent file bloat.',
-    'If an approach fails, diagnose why before switching — read the error, check assumptions. Don\'t retry the identical action blindly. Use ask_user only when genuinely stuck after investigation.',
+    'If an approach fails, diagnose why before switching — read the error, check assumptions. Don\'t retry the identical action blindly. Use ask_user only when genuinely stuck after investigation (it will contact the Owner, not the current user).',
     'Be careful not to introduce security vulnerabilities (command injection, XSS, SQL injection). If you notice insecure code, fix it immediately.',
     ...codeStyleItems,
     'All answers must be based on actual tool output — do not fabricate results.',
@@ -183,7 +183,7 @@ function buildDoingTasksSection(): string {
 function buildActionsSection(): string {
   return `# Executing actions with care
 
-Carefully consider the reversibility and impact of actions. You can freely take local, reversible actions like reading files, searching content, or running read-only commands. But for actions that are hard to reverse, affect shared systems, or could be destructive, check with the user before proceeding (use ask_user).
+Carefully consider the reversibility and impact of actions. You can freely take local, reversible actions like reading files, searching content, or running read-only commands. But for actions that are hard to reverse, affect shared systems, or could be destructive, check with the Owner before proceeding (use ask_user — it always routes to the configured Owner via private message, never to the current chat user).
 
 Examples of risky actions that warrant user confirmation:
  - Destructive operations: deleting files, dropping database tables, overwriting uncommitted changes

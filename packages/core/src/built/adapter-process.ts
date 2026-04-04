@@ -1,11 +1,11 @@
 import { Adapter, Plugin, Bot, SendContent, SendOptions, MessageBase, Message, segment } from "@zhin.js/core";
-export class ProcessBot implements Bot<{},{content:string,ts:number}>{
+export class ProcessBot implements Bot<{ owner?: string },{content:string,ts:number}>{
     $id=`${process.pid}`;
     get logger() {
         return this.adapter.logger;
     }
     $connected=false;
-    constructor(public adapter: ProcessAdapter, public $config={}) {
+    constructor(public adapter: ProcessAdapter, public $config: { owner?: string }={ owner: `${process.pid}` }) {
         this.$listenInput=this.$listenInput.bind(this);
     }
     $listenInput:(data:Buffer<ArrayBufferLike>)=>void=function (this:ProcessBot,data){
@@ -64,7 +64,7 @@ export class ProcessBot implements Bot<{},{content:string,ts:number}>{
 }
 export class ProcessAdapter extends Adapter<ProcessBot>{
     constructor(plugin: Plugin) {
-        super(plugin, 'process', [{}]);
+        super(plugin, 'process', [{ owner: `${process.pid}` }]);
         
         // 注册适配器提供的 AI 工具
         this.registerDefaultTools();
