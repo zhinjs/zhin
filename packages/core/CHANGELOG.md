@@ -1,5 +1,16 @@
 # @zhin.js/core
 
+## 1.0.57
+
+### Patch Changes
+
+- c606a57: fix: ask_user 优化
+  - @zhin.js/database@1.0.44
+  - @zhin.js/logger@0.1.41
+  - @zhin.js/schema@1.0.41
+  - @zhin.js/ai@1.0.18
+  - @zhin.js/kernel@0.0.18
+
 ## 1.0.56
 
 ### Patch Changes

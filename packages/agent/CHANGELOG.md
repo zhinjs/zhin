@@ -1,5 +1,14 @@
 # @zhin.js/agent
 
+## 0.0.20
+
+### Patch Changes
+
+- c606a57: fix: ask_user 优化
+- Updated dependencies [c606a57]
+  - @zhin.js/core@1.0.57
+  - @zhin.js/ai@1.0.18
+
 ## 0.0.19
 
 ### Patch Changes
