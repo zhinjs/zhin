@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/schema",
-  "version": "1.0.40",
+  "version": "1.0.41",
   "description": "Configuration validation and schema system for Zhin.js",
   "type": "module",
   "main": "./lib/index.js",
