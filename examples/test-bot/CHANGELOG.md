@@ -1,5 +1,49 @@
 # test-bot
 
+## 0.1.64
+
+### Patch Changes
+
+- 8280fe7: feat: ModelRegistry 模型自动发现与智能选择
+
+  - 新增 ModelRegistry：自动发现 Provider 可用模型，Tier 评分（0-100）智能排序
+  - 支持 Ollama 详细元数据（参数量、量化）和 OpenAI 兼容 API 启发式推断
+  - 支持 API 聚合/中转服务的 prefix/model-name 格式（如 9router）
+  - providers.models 配置现为可选 — 框架自动发现并按评分排序
+  - 新增 chatModel / visionModel 配置项，留空自动选择最优模型
+  - 自动模型降级：Chat / Vision / Agent 三条路径均支持失败自动切换
+  - Agent 新增 modelFallbacks 配置和 chatWithFallback() 降级引擎
+  - zhin.js@1.0.58
+  - @zhin.js/adapter-icqq@2.0.0
+  - @zhin.js/adapter-sandbox@2.0.0
+  - @zhin.js/console@2.0.0
+  - @zhin.js/adapter-dingtalk@1.0.48
+  - @zhin.js/adapter-discord@1.0.63
+  - @zhin.js/adapter-email@0.1.47
+  - @zhin.js/adapter-github@0.1.28
+  - @zhin.js/adapter-kook@1.0.60
+  - @zhin.js/adapter-lark@1.0.64
+  - @zhin.js/adapter-milky@0.0.9
+  - @zhin.js/adapter-onebot11@1.0.64
+  - @zhin.js/adapter-onebot12@0.0.9
+  - @zhin.js/adapter-qq@1.0.60
+  - @zhin.js/adapter-satori@0.0.9
+  - @zhin.js/adapter-slack@1.0.45
+  - @zhin.js/adapter-telegram@1.0.45
+  - @zhin.js/adapter-wechat-mp@0.1.48
+  - @zhin.js/http@1.0.53
+  - @zhin.js/mcp@1.0.42
+  - @zhin.js/plugin-60s@0.0.5
+  - @zhin.js/plugin-checkin@0.0.2
+  - @zhin.js/plugin-group-daily-analysis@0.0.9
+  - @zhin.js/plugin-html-renderer@0.0.38
+  - @zhin.js/plugin-music@1.0.0
+  - @zhin.js/plugin-repeater@0.0.2
+  - @zhin.js/plugin-rss@0.0.3
+  - @zhin.js/sensitive-filter@0.0.45
+  - @zhin.js/plugin-stats@0.0.2
+  - @zhin.js/plugin-teach@0.0.2
+
 ## 0.1.63
 
 ### Patch Changes
