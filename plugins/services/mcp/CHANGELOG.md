@@ -1,5 +1,11 @@
 # @zhin.js/mcp
 
+## 1.0.42
+
+### Patch Changes
+
+- zhin.js@1.0.58
+
 ## 1.0.41
 
 ### Patch Changes
