@@ -70,6 +70,11 @@ export class MessageHandler {
           this.handleHmrReload(message)
           break
 
+        // 系统重启通知：延迟后刷新页面
+        case 'system:restarting':
+          this.handleSystemRestart()
+          break
+
         // 系统消息
         case 'init-data':
         case 'data-update':
@@ -180,6 +185,17 @@ export class MessageHandler {
     const file = message.data?.file || ''
     console.info(`[HMR] 文件变更: ${file}，正在刷新页面...`)
     window.location.reload()
+  }
+
+  /**
+   * 处理系统重启通知
+   * 服务端即将重启，延迟后刷新页面以重新连接
+   */
+  private static handleSystemRestart(): void {
+    console.info('[System] 服务端正在重启，稍后将自动刷新...')
+    setTimeout(() => {
+      window.location.reload()
+    }, 3000)
   }
 
   /**

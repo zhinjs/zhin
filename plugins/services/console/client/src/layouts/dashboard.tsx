@@ -43,7 +43,7 @@ export default function DashboardLayout() {
   const navigate = useNavigate()
   const sidebarOpen = useSelector((state) => state.ui.sidebarOpen)
   const activeMenu = useSelector((state) => state.ui.activeMenu)
-  const routes = useSelector((state) => state.route.routes)
+  const routes = useSelector((state) => state.route?.routes || [])
   const [searchQ, setSearchQ] = useState("")
 
   const menuRoutes = useMemo(() => {

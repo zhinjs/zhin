@@ -167,7 +167,7 @@ importers:
         version: 7.1.0(socks@2.8.7)
       mysql2:
         specifier: latest
-        version: 3.20.0(@types/node@25.5.0)
+        version: 3.20.0(@types/node@25.5.2)
       pg:
         specifier: latest
         version: 8.20.0
@@ -581,6 +581,9 @@ importers:
       '@types/node':
         specifier: ^22.9.0
         version: 22.19.15
+      '@zhin.js/mcp':
+        specifier: workspace:^
+        version: link:../../services/mcp
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
@@ -606,6 +609,9 @@ importers:
       '@types/node':
         specifier: ^22.9.0
         version: 22.19.15
+      '@zhin.js/mcp':
+        specifier: workspace:^
+        version: link:../../services/mcp
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
@@ -650,6 +656,9 @@ importers:
         specifier: workspace:*
         version: link:../../services/http
     devDependencies:
+      '@zhin.js/mcp':
+        specifier: workspace:^
+        version: link:../../services/mcp
       typescript:
         specifier: ^5.3.3
         version: 5.9.3
@@ -684,6 +693,9 @@ importers:
       '@zhin.js/console':
         specifier: workspace:*
         version: link:../../services/console
+      '@zhin.js/mcp':
+        specifier: workspace:^
+        version: link:../../services/mcp
       lucide-react:
         specifier: ^0.469.0
         version: 0.469.0(react@19.2.0)
@@ -706,6 +718,9 @@ importers:
         specifier: latest
         version: 1.0.4
     devDependencies:
+      '@zhin.js/mcp':
+        specifier: workspace:^
+        version: link:../../services/mcp
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
@@ -728,6 +743,9 @@ importers:
       '@types/node':
         specifier: ^22.9.0
         version: 22.19.15
+      '@zhin.js/mcp':
+        specifier: workspace:^
+        version: link:../../services/mcp
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
@@ -753,6 +771,9 @@ importers:
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
+      '@zhin.js/mcp':
+        specifier: workspace:^
+        version: link:../../services/mcp
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
@@ -775,6 +796,9 @@ importers:
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
+      '@zhin.js/mcp':
+        specifier: workspace:^
+        version: link:../../services/mcp
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
@@ -813,6 +837,9 @@ importers:
         specifier: ^1.0.12
         version: 1.0.12
     devDependencies:
+      '@zhin.js/mcp':
+        specifier: workspace:^
+        version: link:../../services/mcp
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
@@ -888,6 +915,9 @@ importers:
       '@types/node':
         specifier: ^22.9.0
         version: 22.19.15
+      '@zhin.js/mcp':
+        specifier: workspace:^
+        version: link:../../services/mcp
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
@@ -907,6 +937,9 @@ importers:
       '@types/node':
         specifier: ^22.9.0
         version: 22.19.15
+      '@zhin.js/mcp':
+        specifier: workspace:^
+        version: link:../../services/mcp
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
@@ -963,6 +996,9 @@ importers:
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
+      '@zhin.js/agent':
+        specifier: workspace:^
+        version: link:../../../packages/agent
       '@zhin.js/client':
         specifier: workspace:^
         version: link:../../../packages/client
@@ -3620,6 +3656,9 @@ packages:
 
   '@types/node@25.5.0':
     resolution: {integrity: sha512-jp2P3tQMSxWugkCUKLRPVUpGaL5MVFwF8RDuSRztfwgN1wmqJeMSbKlnEtQqU8UrhTmzEmZdu2I6v2dpp7XIxw==}
+
+  '@types/node@25.5.2':
+    resolution: {integrity: sha512-tO4ZIRKNC+MDWV4qKVZe3Ql/woTnmHDr5JD8UI5hn2pwBrHEwOEMZK7WlNb5RKB6EoJ02gwmQS9OrjuFnZYdpg==}
 
   '@types/nodemailer@6.4.23':
     resolution: {integrity: sha512-aFV3/NsYFLSx9mbb5gtirBSXJnAlrusoKNuPbxsASWc7vrKLmIrTQRpdcxNcSFL3VW2A2XpeLEavwb2qMi6nlQ==}
@@ -10024,6 +10063,10 @@ snapshots:
     dependencies:
       undici-types: 7.18.2
 
+  '@types/node@25.5.2':
+    dependencies:
+      undici-types: 7.18.2
+
   '@types/nodemailer@6.4.23':
     dependencies:
       '@types/node': 24.12.0
@@ -12444,9 +12487,9 @@ snapshots:
 
   mute-stream@2.0.0: {}
 
-  mysql2@3.20.0(@types/node@25.5.0):
+  mysql2@3.20.0(@types/node@25.5.2):
     dependencies:
-      '@types/node': 25.5.0
+      '@types/node': 25.5.2
       aws-ssl-profiles: 1.1.2
       denque: 2.1.0
       generate-function: 2.3.1

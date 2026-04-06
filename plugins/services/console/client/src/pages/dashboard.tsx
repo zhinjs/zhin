@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { Bot, AlertCircle, Activity, Package, Clock, Cpu, MemoryStick, FileText, TrendingUp } from 'lucide-react'
+import { Bot, AlertCircle, Activity, Package, Clock, Cpu, MemoryStick, FileText, TrendingUp, RotateCw } from 'lucide-react'
 import { apiFetch } from '../utils/auth'
+import { useWebSocket } from '@zhin.js/client'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { Skeleton } from '../components/ui/skeleton'
+import {
+  Dialog, DialogContent, DialogHeader, DialogFooter,
+  DialogTitle, DialogDescription, DialogClose,
+} from '../components/ui/dialog'
 
 interface Stats {
   plugins: { total: number; active: number }
@@ -31,6 +36,9 @@ export default function HomePage() {
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [restartDialogOpen, setRestartDialogOpen] = useState(false)
+  const [restarting, setRestarting] = useState(false)
+  const { sendRequest } = useWebSocket()
 
   useEffect(() => {
     fetchData()
@@ -67,6 +75,19 @@ export default function HomePage() {
   }
 
   const formatMemory = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(2)} MB`
+
+  const handleRestart = async () => {
+    setRestarting(true)
+    try {
+      await sendRequest({ type: 'system:restart' })
+    } catch {
+      // 连接断开是预期行为（进程重启中）
+    }
+    // 显示重启中状态，然后自动刷新页面
+    setTimeout(() => {
+      window.location.reload()
+    }, 3000)
+  }
 
   if (loading) {
     return (
@@ -223,9 +244,47 @@ export default function HomePage() {
                 <span className="text-xs text-muted-foreground">查看运行日志</span>
               </div>
             </Button>
+            <Button
+              variant="outline"
+              className="h-auto p-4 justify-start border-orange-200 hover:border-orange-400 hover:bg-orange-50 dark:border-orange-800 dark:hover:border-orange-600 dark:hover:bg-orange-950"
+              onClick={() => setRestartDialogOpen(true)}
+              disabled={restarting}
+            >
+              <div className="flex flex-col items-start gap-1">
+                <RotateCw className={`h-5 w-5 mb-1 text-orange-500 ${restarting ? 'animate-spin' : ''}`} />
+                <span className="font-medium">{restarting ? '重启中...' : '重启服务'}</span>
+                <span className="text-xs text-muted-foreground">{restarting ? '请稍候，页面将自动刷新' : '重启机器人进程'}</span>
+              </div>
+            </Button>
           </div>
         </CardContent>
       </Card>
+
+      {/* Restart confirmation dialog */}
+      <Dialog open={restartDialogOpen} onOpenChange={setRestartDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认重启</DialogTitle>
+            <DialogDescription>
+              确定要重启机器人进程吗？所有连接将临时断开，进行中的对话会被中断。进程将在几秒内自动恢复。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">取消</Button>
+            </DialogClose>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setRestartDialogOpen(false)
+                handleRestart()
+              }}
+            >
+              确认重启
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

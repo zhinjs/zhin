@@ -19,6 +19,7 @@ import {
   simulateMessage,
   getPluginSource,
   sendMessage,
+  recallMessage,
   getLogs,
   getConfig,
   reloadPlugin,
@@ -269,6 +270,21 @@ export function registerTools(server: McpServer) {
     },
     async (args) => ({
       content: [{ type: "text" as const, text: await sendMessage(args) }],
+    }),
+  );
+
+  server.registerTool(
+    "recall_message",
+    {
+      description: "撤回/删除指定消息",
+      inputSchema: z.object({
+        adapter: z.string().describe("适配器名称 (如 icqq, discord)"),
+        bot: z.string().describe("Bot 名称/ID"),
+        message_id: z.string().describe("要撤回的消息 ID"),
+      }),
+    },
+    async (args) => ({
+      content: [{ type: "text" as const, text: await recallMessage(args) }],
     }),
   );
 

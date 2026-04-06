@@ -12,6 +12,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { Cron, ZhinTool } from '@zhin.js/core';
+import type { ToolContext } from '@zhin.js/core';
 import { Logger } from '@zhin.js/core';
 
 const logger = new Logger(null, 'cron-engine');
@@ -21,6 +22,20 @@ const logger = new Logger(null, 'cron-engine');
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const CRON_JOBS_FILENAME = 'cron-jobs.json';
+
+/** 定时任务执行时的上下文信息 */
+export interface CronJobContext {
+  /** 来源平台（adapter name），如 'icqq', 'discord' */
+  platform?: string;
+  /** Bot ID */
+  botId?: string;
+  /** 发送者 ID（创建者） */
+  senderId?: string;
+  /** 场景 ID（群号/频道ID/私聊用户ID） */
+  sceneId?: string;
+  /** 场景类型: private | group | channel */
+  scope?: string;
+}
 
 export interface CronJobRecord {
   id: string;
@@ -32,6 +47,8 @@ export interface CronJobRecord {
   label?: string;
   /** 是否启用（暂停的任务不加载） */
   enabled: boolean;
+  /** 执行时的上下文（缺省为 system/cron） */
+  context?: CronJobContext;
   createdAt: number;
 }
 
@@ -63,7 +80,7 @@ export async function writeCronJobsFile(dataDir: string, jobs: CronJobRecord[]):
 // 持久化引擎：加载文件并注册到 CronFeature
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type CronRunner = (prompt: string, jobId: string) => void | Promise<void>;
+export type CronRunner = (prompt: string, jobId: string, context?: CronJobContext) => void | Promise<void>;
 
 export type AddCronFn = (cron: Cron) => () => void;
 
@@ -109,10 +126,10 @@ export class PersistentCronEngine {
     addCron: AddCronFn,
     runner: CronRunner,
   ): void {
-    const { prompt, id: jobId, cronExpression } = job;
+    const { prompt, id: jobId, cronExpression, context } = job;
     try {
       const cron = new Cron(cronExpression, async () => {
-        await runner(prompt, jobId);
+        await runner(prompt, jobId, context);
       });
       cron.id = jobId;
       const dispose = addCron(cron);
@@ -263,6 +280,7 @@ export function createCronTools(): ZhinTool[] {
             prompt: j.prompt,
             label: j.label,
             enabled: j.enabled,
+            context: j.context,
             createdAt: j.createdAt,
           }))
         : [];
@@ -276,18 +294,29 @@ export function createCronTools(): ZhinTool[] {
     .param('cron_expression', { type: 'string', description: 'Cron 表达式，如 "0 9 * * *" 表示每天 9:00' }, true)
     .param('prompt', { type: 'string', description: '到点触发时发给 AI 的提示词' }, true)
     .param('label', { type: 'string', description: '可选标签，便于识别' })
-    .execute(async (args) => {
+    .execute(async (args, toolContext) => {
       const m = getCronManager();
       if (!m?.engine) {
         return { error: '持久化定时任务引擎不可用' };
       }
       const id = generateCronJobId();
+      // 从调用者的 ToolContext 自动捕获上下文
+      const jobContext: CronJobContext | undefined = toolContext
+        ? {
+            platform: toolContext.platform,
+            botId: toolContext.botId,
+            senderId: toolContext.senderId,
+            sceneId: toolContext.sceneId,
+            scope: toolContext.scope,
+          }
+        : undefined;
       const job = await m.engine.addJob({
         id,
         cronExpression: args.cron_expression as string,
         prompt: args.prompt as string,
         label: args.label as string | undefined,
         enabled: true,
+        context: jobContext,
       });
       return { success: true, id: job.id, message: '已添加并立即生效' };
     });

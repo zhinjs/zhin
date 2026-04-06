@@ -1,7 +1,7 @@
 import { StrictMode, useCallback, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Provider as ReduxProvider } from 'react-redux'
-import { Home, Package, Bot, FileText, Settings, KeyRound, FolderOpen, Database } from 'lucide-react'
+import { Home, Package, Bot, FileText, Settings, KeyRound, FolderOpen, Database, Clock } from 'lucide-react'
 import { store, DynamicRouter, persistor, addPage, useSelector, useWebSocket } from '@zhin.js/client'
 import DashboardLayout from './layouts/dashboard'
 import HomePage from './pages/dashboard'
@@ -14,6 +14,7 @@ import ConfigPage from './pages/config'
 import EnvManagePage from './pages/env'
 import FileManagePage from './pages/files'
 import DatabasePage from './pages/database'
+import CronPage from './pages/cron'
 import LoginPage from './pages/login'
 import { hasToken } from './utils/auth'
 import './style.css'
@@ -89,6 +90,14 @@ function RouteInitializer() {
                         icon: <FileText className="w-4 h-4" />,
                         element: <LogsPage />,
                         meta: { group: '系统', order: 2, fullWidth: true },
+                    },
+                    {
+                        key: 'cronPage',
+                        path: '/cron',
+                        title: '定时任务',
+                        icon: <Clock className="w-4 h-4" />,
+                        element: <CronPage />,
+                        meta: { group: '系统', order: 3 },
                     },
                     {
                         key: 'pluginsPage',

@@ -64,6 +64,8 @@ const scriptSlice = createSlice({
     reducers: {
         syncEntries: (state, action: PayloadAction<string[]>) => {
             state.entries = action.payload
+            // 清理掉不在新 entries 中的 loadedScripts（重启后 entries 可能变化）
+            state.loadedScripts = state.loadedScripts.filter(s => action.payload.includes(s))
             state.synced = true
         },
         

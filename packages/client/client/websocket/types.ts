@@ -106,6 +106,10 @@ export interface HmrReloadMessage extends BaseMessage {
   data?: { file?: string }
 }
 
+export interface SystemRestartingMessage extends BaseMessage {
+  type: 'system:restarting'
+}
+
 // ============================================================================
 // 文件管理类型
 // ============================================================================
@@ -165,6 +169,7 @@ export type WebSocketMessage =
   | InitDataMessage
   | DataUpdateMessage
   | HmrReloadMessage
+  | SystemRestartingMessage
 
 // ============================================================================
 // 配置选项类型

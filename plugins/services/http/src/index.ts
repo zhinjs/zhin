@@ -1,4 +1,4 @@
-import { usePlugin, DatabaseFeature, Models, Adapter, SystemLog, Plugin } from "zhin.js";
+import { usePlugin, DatabaseFeature, Models, Adapter, SystemLog, Plugin, Feature } from "zhin.js";
 import { Schema } from "@zhin.js/schema";
 import { createServer, Server } from "http";
 import crypto from "node:crypto";
@@ -176,14 +176,31 @@ useContext("config", (configService) => {
     };
   });
 
+  // 收集所有 Feature 服务实例（用于 toJSON 序列化）
+  const collectFeatures = (): Feature[] => {
+    const features: Feature[] = [];
+    for (const [, context] of root.contexts) {
+      if (context.value instanceof Feature) {
+        features.push(context.value);
+      }
+    }
+    return features;
+  };
+
   // 插件列表 API
   router.get(`${base}/plugins`, async (ctx) => {
-    const plugins = root.children.map((p) => ({
-      name: p.name,
-      status: "active",
-      description: p.name,
-      features: p.getFeatures(),
-    }));
+    const featureServices = collectFeatures();
+    const plugins = root.children.map((p) => {
+      const features = featureServices
+        .map(f => f.toJSON(p.name))
+        .filter(f => f.count > 0);
+      return {
+        name: p.name,
+        status: p.started ? "active" : "inactive",
+        description: p.manifest?.description || p.name,
+        features,
+      };
+    });
     ctx.body = { success: true, data: plugins, total: plugins.length };
   });
 
@@ -198,7 +215,10 @@ useContext("config", (configService) => {
       return;
     }
 
-    const features = plugin.getFeatures();
+    const featureServices = collectFeatures();
+    const features = featureServices
+      .map(f => f.toJSON(pluginName))
+      .filter(f => f.count > 0);
 
     const contexts = Array.from(plugin.contexts.entries())
       .map(([name]) => ({ name }));
@@ -209,8 +229,8 @@ useContext("config", (configService) => {
         name: plugin.name,
         filename: plugin.filePath,
         filePath: plugin.filePath,
-        status: "active",
-        description: plugin.name,
+        status: plugin.started ? "active" : "inactive",
+        description: plugin.manifest?.description || plugin.name,
         features,
         contexts,
       },

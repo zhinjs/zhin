@@ -18,7 +18,7 @@ export const clearPages = () => store.dispatch(clearRoutes())
 
 // 动态路由组件（从 Redux store 读取）
 export function DynamicRouter() {
-  const storeRoutes = useSelector((state) => state.route.routes)
+  const storeRoutes = useSelector((state) => state.route?.routes || [])
   const router = useMemo(() => {
     // 递归转换路由（支持多层嵌套）
     const convertRoute = (route: RouteMenuItem): RouteObject => {

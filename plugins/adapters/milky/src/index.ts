@@ -3,7 +3,10 @@
  */
 import { usePlugin, type Plugin, type Context } from 'zhin.js';
 import type { Router } from '@zhin.js/http';
+import type { McpToolRegistry } from '@zhin.js/mcp';
+import { registerGroupManagementMcpTools } from '@zhin.js/mcp/adapter-tools-helper';
 import { MilkyAdapter } from './adapter.js';
+import type { IGroupManagement } from 'zhin.js';
 
 export * from './types.js';
 export { callApi } from './api.js';
@@ -18,6 +21,7 @@ declare module 'zhin.js' {
   namespace Plugin {
     interface Contexts {
       router: import('@zhin.js/http').Router;
+      mcp: McpToolRegistry;
     }
   }
   interface Adapters {
@@ -25,7 +29,7 @@ declare module 'zhin.js' {
   }
 }
 
-const { provide } = usePlugin();
+const { provide, useContext } = usePlugin();
 provide({
   name: 'milky',
   description: 'Milky Adapter（WS 正向 / SSE / Webhook / 反向 WS）',
@@ -38,3 +42,7 @@ provide({
     await adapter.stop();
   },
 } as unknown as Context<'milky'>);
+
+useContext('mcp' as any, 'milky', (mcp: McpToolRegistry, milky: MilkyAdapter) => {
+  return registerGroupManagementMcpTools(mcp, milky as unknown as IGroupManagement & { bots: Map<string, any> }, 'milky');
+});

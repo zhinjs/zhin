@@ -1,0 +1,3 @@
+name: adapter-discord
+description: Discord 适配器：服务器管理、角色管理、线程、论坛帖子、Embed 消息、表情反应
+version: 1.0.62

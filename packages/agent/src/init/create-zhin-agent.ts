@@ -113,12 +113,14 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     const cronFeature = root.inject('cron') as import('@zhin.js/core').CronFeature | undefined;
     if (cronFeature && typeof cronFeature.add === 'function') {
       const addCron: import('../cron-engine.js').AddCronFn = (c) => cronFeature.add(c, 'cron-engine');
-      const runner = async (prompt: string) => {
+      const runner = async (prompt: string, _jobId: string, jobContext?: import('../cron-engine.js').CronJobContext) => {
         if (!refs.zhinAgent) return;
         await refs.zhinAgent.process(prompt, {
-          platform: 'cron',
-          senderId: 'system',
-          sceneId: 'cron',
+          platform: jobContext?.platform || 'cron',
+          senderId: jobContext?.senderId || 'system',
+          botId: jobContext?.botId,
+          sceneId: jobContext?.sceneId || 'cron',
+          scope: (jobContext?.scope as any) || undefined,
         });
       };
       cronEngine = new PersistentCronEngine({ dataDir, addCron, runner });

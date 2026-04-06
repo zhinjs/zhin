@@ -86,6 +86,7 @@ export {
 } from './cron-engine.js';
 export type {
   CronJobRecord,
+  CronJobContext,
   CronRunner,
   AddCronFn,
   PersistentCronEngineOptions,

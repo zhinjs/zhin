@@ -665,6 +665,27 @@ export async function sendMessage(args: {
 }
 
 /**
+ * 撤回/删除指定消息
+ */
+export async function recallMessage(args: {
+  adapter: string;
+  bot: string;
+  message_id: string;
+}): Promise<string> {
+  const { Adapter } = require("zhin.js");
+  const adapterInstance = root.inject(args.adapter as any);
+  if (!adapterInstance || !(adapterInstance instanceof Adapter)) {
+    throw new Error(`Adapter "${args.adapter}" not found`);
+  }
+  const bot = (adapterInstance as any).bots.get(args.bot);
+  if (!bot) {
+    throw new Error(`Bot "${args.bot}" not found in adapter "${args.adapter}"`);
+  }
+  await bot.$recallMessage(args.message_id);
+  return `Message recalled (id: ${args.message_id})`;
+}
+
+/**
  * 获取最近 N 条日志
  */
 export async function getLogs(args: {

@@ -63,6 +63,7 @@ export type {
   SpawnOptions,
   SubagentManagerOptions,
   CronJobRecord,
+  CronJobContext,
   CronRunner,
   AddCronFn,
   PersistentCronEngineOptions,

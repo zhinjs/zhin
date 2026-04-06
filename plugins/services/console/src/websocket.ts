@@ -20,6 +20,8 @@ import {
   getRequestRowById,
 } from "./bot-persistence.js";
 import { removePendingRequest } from "./bot-hub.js";
+import { getCronManager, generateCronJobId } from "@zhin.js/agent";
+import type { CronJobRecord } from "@zhin.js/agent";
 
 const { root, logger } = usePlugin();
 
@@ -1075,6 +1077,144 @@ async function handleWebSocketMessage(
           await ad.setAdmin(botId, gid, String(userId), enable !== false);
           ws.send(JSON.stringify({ requestId, data: { success: true } }));
         }
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      }
+      break;
+    }
+
+    // ================================================================
+    // 系统管理
+    // ================================================================
+
+    case "system:restart": {
+      try {
+        logger.info("[console] 收到重启请求，准备重启进程...");
+        ws.send(JSON.stringify({ requestId, data: { success: true, message: "正在重启..." } }));
+        // 广播给所有客户端
+        broadcastToAll(webServer, { type: "system:restarting" });
+        // 延迟 500ms 让 WebSocket 消息发出，然后用 exit code 51 触发 CLI 守护进程重启
+        setTimeout(() => {
+          process.exit(51);
+        }, 500);
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      }
+      break;
+    }
+
+    // ================================================================
+    // 定时任务管理
+    // ================================================================
+
+    case "cron:list": {
+      try {
+        const m = getCronManager();
+        if (!m) {
+          ws.send(JSON.stringify({ requestId, error: "定时任务服务不可用（Agent 未初始化）" }));
+          break;
+        }
+        const memory = m.cronFeature.getStatus().map((s) => ({
+          type: "memory" as const,
+          expression: s.expression,
+          running: s.running,
+          nextExecution: s.nextExecution?.toISOString() ?? null,
+          plugin: s.plugin,
+        }));
+        const persistent = m.engine
+          ? (await m.engine.listJobs()).map((j) => ({
+              type: "persistent" as const,
+              ...j,
+            }))
+          : [];
+        ws.send(JSON.stringify({ requestId, data: { memory, persistent } }));
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      }
+      break;
+    }
+
+    case "cron:add": {
+      try {
+        const m = getCronManager();
+        if (!m?.engine) {
+          ws.send(JSON.stringify({ requestId, error: "持久化定时任务引擎不可用" }));
+          break;
+        }
+        const { cronExpression, prompt, label, context: cronContext } = message as any;
+        if (!cronExpression || !prompt) {
+          ws.send(JSON.stringify({ requestId, error: "缺少 cronExpression 或 prompt" }));
+          break;
+        }
+        const record = await m.engine.addJob({
+          id: generateCronJobId(),
+          cronExpression,
+          prompt,
+          label: label || undefined,
+          enabled: true,
+          context: cronContext || undefined,
+        });
+        ws.send(JSON.stringify({ requestId, data: record }));
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      }
+      break;
+    }
+
+    case "cron:remove": {
+      try {
+        const m = getCronManager();
+        if (!m?.engine) {
+          ws.send(JSON.stringify({ requestId, error: "持久化定时任务引擎不可用" }));
+          break;
+        }
+        const { id } = message as any;
+        if (!id) {
+          ws.send(JSON.stringify({ requestId, error: "缺少任务 id" }));
+          break;
+        }
+        const ok = await m.engine.removeJob(id);
+        ws.send(JSON.stringify({ requestId, data: { success: ok } }));
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      }
+      break;
+    }
+
+    case "cron:pause": {
+      try {
+        const m = getCronManager();
+        if (!m?.engine) {
+          ws.send(JSON.stringify({ requestId, error: "持久化定时任务引擎不可用" }));
+          break;
+        }
+        const { id } = message as any;
+        if (!id) {
+          ws.send(JSON.stringify({ requestId, error: "缺少任务 id" }));
+          break;
+        }
+        const ok = await m.engine.pauseJob(id);
+        ws.send(JSON.stringify({ requestId, data: { success: ok } }));
+      } catch (error) {
+        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      }
+      break;
+    }
+
+    case "cron:resume": {
+      try {
+        const m = getCronManager();
+        if (!m?.engine) {
+          ws.send(JSON.stringify({ requestId, error: "持久化定时任务引擎不可用" }));
+          break;
+        }
+        const { id } = message as any;
+        if (!id) {
+          ws.send(JSON.stringify({ requestId, error: "缺少任务 id" }));
+          break;
+        }
+        const ok = await m.engine.resumeJob(id);
+        ws.send(JSON.stringify({ requestId, data: { success: ok } }));
       } catch (error) {
         ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
       }

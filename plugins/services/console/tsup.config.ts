@@ -31,6 +31,7 @@ export default defineConfig({
     '@zhin.js/core',
     '@zhin.js/http',
     '@zhin.js/client',
+    '@zhin.js/agent',
     // Node.js 内置模块
     'fs',
     'path',

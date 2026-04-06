@@ -1,0 +1,3 @@
+name: adapter-github
+description: GitHub 适配器：PR/Issue 管理、仓库搜索、CI/Release 查询、文件编辑、Webhook 订阅
+version: 0.1.27

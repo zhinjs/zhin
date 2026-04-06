@@ -5,7 +5,6 @@ import type { Router } from '@zhin.js/http';
 import {
   Adapter,
   Plugin,
-  createGroupManagementTools,
   type IGroupManagement,
 } from 'zhin.js';
 import { MilkyWsClient } from './bot-ws.js';
@@ -101,8 +100,6 @@ export class MilkyAdapter extends Adapter<MilkyBot> {
     (this.plugin.useContext as (key: string, fn: (router: Router) => void) => void)('router', (router: Router) => {
       this.#router = router;
     });
-    const groupTools = createGroupManagementTools(this as unknown as IGroupManagement, this.name);
-    groupTools.forEach((t) => this.addTool(t));
     await super.start();
     this.plugin.logger.info('Milky 适配器已启动');
   }

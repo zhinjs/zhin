@@ -43,12 +43,13 @@
   },
   "license": "MIT",
   "devDependencies": {
+    "@zhin.js/mcp": "workspace:^",
     "typescript": "^5.3.3",
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {
-    "zhin.js": "workspace:*",
-    "@zhin.js/http": "workspace:*"
+    "@zhin.js/http": "workspace:*",
+    "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@zhin.js/http": {

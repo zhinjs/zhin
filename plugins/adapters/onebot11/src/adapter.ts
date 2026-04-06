@@ -5,8 +5,6 @@ import type { Router } from '@zhin.js/http';
 import {
   Adapter,
   Plugin,
-  createGroupManagementTools,
-  type IGroupManagement,
 } from 'zhin.js';
 import { OneBot11WsClient } from './bot-ws-client.js';
 import { OneBot11WsServer } from './bot-ws-server.js';
@@ -103,37 +101,8 @@ export class OneBot11Adapter extends Adapter<OneBot11Bot> {
     (this.plugin.useContext as (key: string, fn: (router: Router) => void) => void)('router', (router: Router) => {
       this.#router = router;
     });
-    this.registerOneBot11PlatformTools();
-    const groupTools = createGroupManagementTools(this as unknown as IGroupManagement, this.name);
-    groupTools.forEach((t) => this.addTool(t));
     await super.start();
     this.plugin.logger.info('OneBot11 适配器已启动');
   }
 
-  private registerOneBot11PlatformTools(): void {
-    this.addTool({
-      name: 'onebot11_set_title',
-      description: '设置群成员的专属头衔（需要群主权限）',
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: { type: 'string', description: 'Bot 名称' },
-          group_id: { type: 'number', description: '群号' },
-          user_id: { type: 'number', description: '成员 QQ 号' },
-          title: { type: 'string', description: '头衔名称' },
-        },
-        required: ['bot', 'group_id', 'user_id', 'title'],
-      },
-      platforms: ['onebot11'],
-      scopes: ['group'],
-      permissionLevel: 'group_owner',
-      execute: async (args) => {
-        const { bot: botId, group_id, user_id, title } = args;
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        const success = await bot.setTitle(group_id, user_id, title);
-        return { success, message: success ? `已将 ${user_id} 的头衔设为 "${title}"` : '操作失败' };
-      },
-    });
-  }
 }
