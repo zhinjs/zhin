@@ -1,5 +1,13 @@
 # @zhin.js/mcp
 
+## 1.0.43
+
+### Patch Changes
+
+- c212bf7: fix: 适配器优化
+- Updated dependencies [c212bf7]
+  - zhin.js@1.0.59
+
 ## 1.0.42
 
 ### Patch Changes

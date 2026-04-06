@@ -1,5 +1,11 @@
 # @zhin.js/client
 
+## 1.0.15
+
+### Patch Changes
+
+- c212bf7: fix: 适配器优化
+
 ## 1.0.14
 
 ### Patch Changes

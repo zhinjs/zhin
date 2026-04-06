@@ -1,5 +1,14 @@
 # @zhin.js/adapter-dingtalk
 
+## 1.0.49
+
+### Patch Changes
+
+- c212bf7: fix: 适配器优化
+- Updated dependencies [c212bf7]
+  - zhin.js@1.0.59
+  - @zhin.js/http@1.0.54
+
 ## 1.0.48
 
 ### Patch Changes

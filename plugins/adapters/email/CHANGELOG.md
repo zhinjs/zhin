@@ -1,5 +1,13 @@
 # @zhin.js/adapter-email
 
+## 0.1.48
+
+### Patch Changes
+
+- c212bf7: fix: 适配器优化
+- Updated dependencies [c212bf7]
+  - zhin.js@1.0.59
+
 ## 0.1.47
 
 ### Patch Changes

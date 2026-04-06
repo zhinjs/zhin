@@ -1,5 +1,13 @@
 # @zhin.js/plugin-60s
 
+## 0.0.6
+
+### Patch Changes
+
+- c212bf7: fix: 适配器优化
+- Updated dependencies [c212bf7]
+  - zhin.js@1.0.59
+
 ## 0.0.5
 
 ### Patch Changes

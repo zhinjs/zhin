@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.46
+
+### Patch Changes
+
+- c212bf7: fix: 适配器优化
+- Updated dependencies [c212bf7]
+  - zhin.js@1.0.59
+
 ## 1.0.45
 
 ### Patch Changes

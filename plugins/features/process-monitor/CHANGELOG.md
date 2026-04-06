@@ -1,5 +1,13 @@
 # @zhin.js/process-monitor
 
+## 0.0.23
+
+### Patch Changes
+
+- c212bf7: fix: 适配器优化
+- Updated dependencies [c212bf7]
+  - zhin.js@1.0.59
+
 ## 0.0.22
 
 ### Patch Changes
