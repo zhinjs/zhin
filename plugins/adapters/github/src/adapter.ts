@@ -28,36 +28,50 @@ const OAUTH_STATE_TTL = 5 * 60 * 1000;
 function formatNotification(event: string, p: GenericWebhookPayload): string {
   const repo = p.repository.full_name;
   const sender = p.sender.login;
+  const repoUrl = p.repository.html_url;
   switch (event) {
     case 'push': {
       const branch = p.ref?.replace('refs/heads/', '') || '?';
       const commits = p.commits || [];
-      let msg = `📦 ${repo}\n🌿 ${sender} pushed to ${branch}\n\n`;
+      const compareUrl = commits.length >= 2
+        ? `${repoUrl}/compare/${commits[0].id.substring(0, 12)}...${commits[commits.length - 1].id.substring(0, 12)}`
+        : commits.length === 1 ? `${repoUrl}/commit/${commits[0].id}` : '';
+      let msg = `📦 ${repo}\n🌿 ${sender} pushed ${commits.length} commit(s) to \`${branch}\`\n`;
       if (commits.length) {
-        msg += `📝 ${commits.length} commit(s):\n`;
-        msg += commits.slice(0, 3).map(c => `  • ${c.id.substring(0, 7)} ${c.message.split('\n')[0]}`).join('\n');
-        if (commits.length > 3) msg += `\n  ... +${commits.length - 3} more`;
+        msg += '\n';
+        msg += commits.slice(0, 5).map(c =>
+          `  • [\`${c.id.substring(0, 7)}\`](${repoUrl}/commit/${c.id}) ${c.message.split('\n')[0]}`
+        ).join('\n');
+        if (commits.length > 5) msg += `\n  ... +${commits.length - 5} more`;
       }
+      if (compareUrl) msg += `\n\n🔗 ${compareUrl}`;
       return msg;
     }
     case 'issues': {
       const i = p.issue!;
-      const act = p.action === 'opened' ? 'opened' : p.action === 'closed' ? 'closed' : 'updated';
-      return `🐛 ${repo}\n👤 ${sender} ${act} issue #${i.number}\n📌 ${i.title}`;
+      const act = p.action === 'opened' ? '📝 opened' : p.action === 'closed' ? '✅ closed' : `🔄 ${p.action || 'updated'}`;
+      let msg = `🐛 ${repo}\n👤 ${sender} ${act} issue #${i.number}\n📌 ${i.title}`;
+      msg += `\n🔗 ${i.html_url}`;
+      return msg;
     }
     case 'star': {
       const starred = p.action !== 'deleted';
-      return `${starred ? '⭐' : '💔'} ${repo}\n👤 ${sender} ${starred ? 'starred' : 'unstarred'}`;
+      return `${starred ? '⭐' : '💔'} ${repo}\n👤 ${sender} ${starred ? 'starred' : 'unstarred'}\n🔗 ${repoUrl}`;
     }
     case 'fork':
-      return `🍴 ${repo}\n👤 ${sender} forked → ${p.forkee!.full_name}`;
+      return `🍴 ${repo}\n👤 ${sender} forked → ${p.forkee!.full_name}\n🔗 ${p.forkee!.html_url}`;
     case 'pull_request': {
       const pr = p.pull_request!;
-      const act = p.action === 'opened' ? 'opened' : p.action === 'closed' ? 'closed' : 'updated';
-      return `🔀 ${repo}\n👤 ${sender} ${act} PR #${pr.number}\n📌 ${pr.title}`;
+      const act = p.action === 'opened' ? '📝 opened'
+        : p.action === 'closed' ? (pr.state === 'closed' ? '❌ closed' : '✅ merged')
+        : `🔄 ${p.action || 'updated'}`;
+      let msg = `🔀 ${repo}\n👤 ${sender} ${act} PR #${pr.number}\n📌 ${pr.title}`;
+      msg += `\n🌿 ${pr.head.ref} → ${pr.base.ref}`;
+      msg += `\n🔗 ${pr.html_url}`;
+      return msg;
     }
     default:
-      return `📬 ${repo}\n${event} by ${sender}`;
+      return `📬 ${repo}\n📡 ${event}${p.action ? ` (${p.action})` : ''} by ${sender}\n🔗 ${repoUrl}`;
   }
 }
 
