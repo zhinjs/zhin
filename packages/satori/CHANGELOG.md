@@ -1,5 +1,17 @@
 # @zhin.js/satori
 
+## 0.2.4
+
+### Patch Changes
+
+- 5073d4c: chore: chore: update TypeScript version to ^5.9.3 across all plugins and packages
+  feat: enhance ai-text-as-image output registration with off handler for cleanup
+  fix: remove unnecessary logging in ensureBuiltinFontsCached function
+  refactor: simplify action handlers in html-renderer tools
+  chore: add README files for queue-sandbox-poc and event-delivery packages
+  chore: adjust pnpm workspace configuration to exclude games directory
+  chore: update tsconfig to include plugins directory for TypeScript compilation
+
 ## 0.2.3
 
 ### Patch Changes
