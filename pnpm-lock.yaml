@@ -581,9 +581,6 @@ importers:
       '@types/node':
         specifier: ^22.9.0
         version: 22.19.15
-      '@zhin.js/mcp':
-        specifier: workspace:^
-        version: link:../../services/mcp
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -609,9 +606,6 @@ importers:
       '@types/node':
         specifier: ^22.9.0
         version: 22.19.15
-      '@zhin.js/mcp':
-        specifier: workspace:^
-        version: link:../../services/mcp
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -656,9 +650,6 @@ importers:
         specifier: workspace:*
         version: link:../../services/http
     devDependencies:
-      '@zhin.js/mcp':
-        specifier: workspace:^
-        version: link:../../services/mcp
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -693,9 +684,6 @@ importers:
       '@zhin.js/console':
         specifier: workspace:*
         version: link:../../services/console
-      '@zhin.js/mcp':
-        specifier: workspace:^
-        version: link:../../services/mcp
       lucide-react:
         specifier: ^0.469.0
         version: 0.469.0(react@19.2.0)
@@ -718,9 +706,6 @@ importers:
         specifier: latest
         version: 1.0.4
     devDependencies:
-      '@zhin.js/mcp':
-        specifier: workspace:^
-        version: link:../../services/mcp
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -743,9 +728,6 @@ importers:
       '@types/node':
         specifier: ^22.9.0
         version: 22.19.15
-      '@zhin.js/mcp':
-        specifier: workspace:^
-        version: link:../../services/mcp
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -771,9 +753,6 @@ importers:
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
-      '@zhin.js/mcp':
-        specifier: workspace:^
-        version: link:../../services/mcp
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -796,9 +775,6 @@ importers:
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
-      '@zhin.js/mcp':
-        specifier: workspace:^
-        version: link:../../services/mcp
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -837,9 +813,6 @@ importers:
         specifier: ^1.0.12
         version: 1.0.12
     devDependencies:
-      '@zhin.js/mcp':
-        specifier: workspace:^
-        version: link:../../services/mcp
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -915,9 +888,6 @@ importers:
       '@types/node':
         specifier: ^22.9.0
         version: 22.19.15
-      '@zhin.js/mcp':
-        specifier: workspace:^
-        version: link:../../services/mcp
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -937,9 +907,6 @@ importers:
       '@types/node':
         specifier: ^22.9.0
         version: 22.19.15
-      '@zhin.js/mcp':
-        specifier: workspace:^
-        version: link:../../services/mcp
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
