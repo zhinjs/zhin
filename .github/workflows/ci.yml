@@ -43,6 +43,9 @@ jobs:
       - name: build packages
         run: pnpm build
       
+      - name: type check
+        run: pnpm type-check
+      
       - name: run tests
         run: pnpm test:reporter
       

@@ -12,9 +12,9 @@ const filteredPlugins = computed(() => {
 
   if (props.category) {
     result = result.filter(p => {
-      // 支持 "official" 作为虚拟分类
       if (props.category === 'official') return p.isOfficial
-      return p.category.includes(props.category as any)
+      if (props.category === 'community') return !p.isOfficial
+      return p.category === props.category
     })
   }
 
@@ -35,6 +35,12 @@ function formatDate(dateStr?: string) {
   if (!dateStr) return ''
   const d = new Date(dateStr)
   return d.toLocaleDateString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+function formatDownloads(n?: number) {
+  if (!n) return ''
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
+  return String(n)
 }
 </script>
 
@@ -60,12 +66,17 @@ function formatDate(dateStr?: string) {
 
         <p class="card-desc">{{ plugin.description || '暂无描述' }}</p>
 
-        <div class="card-tags" v-if="plugin.category.length">
-          <span
-            v-for="cat in plugin.category"
-            :key="cat"
-            class="card-tag"
-          >{{ cat }}</span>
+        <div class="card-meta" v-if="plugin.downloads?.weekly || plugin.license">
+          <span v-if="plugin.downloads?.weekly" class="card-downloads" title="周下载量">
+            ↓ {{ formatDownloads(plugin.downloads.weekly) }}/周
+          </span>
+          <span v-if="plugin.license" class="card-license" :title="plugin.license">
+            {{ plugin.license }}
+          </span>
+        </div>
+
+        <div class="card-tags" v-if="plugin.category">
+          <span class="card-tag">{{ plugin.category }}</span>
         </div>
 
         <div class="card-footer">
@@ -187,6 +198,27 @@ function formatDate(dateStr?: string) {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 4px;
+}
+
+.card-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--vp-c-text-3);
+  margin-top: 2px;
+}
+
+.card-downloads {
+  color: var(--vp-c-green-2);
+  font-weight: 500;
+}
+
+.card-license {
+  padding: 1px 6px;
+  background: var(--vp-c-bg);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 4px;
+  font-size: 11px;
 }
 
 .card-tag {

@@ -4,9 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "gen-skills": "node ./scripts/build-skills-registry.mjs",
-    "dev": "pnpm run gen-skills && vitepress dev .",
-    "build": "pnpm run gen-skills && vitepress build .",
+    "dev": "vitepress dev .",
+    "build": "vitepress build .",
     "preview": "vitepress preview ."
   },
   "devDependencies": {

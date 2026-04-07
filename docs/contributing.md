@@ -25,11 +25,6 @@
 - 📚 **文档**: 改进文档
 - 🧪 **测试**: 添加或改进测试
 
-### 贡献技能
-- **通用技能**：在 `packages/create-zhin/template/skills/<name>/` 下维护 `SKILL.md`（frontmatter 必填 `name`、`description`），提 PR；文档构建会运行 `gen-skills` 更新 [技能商店](/skills/) 与 `public/skills.json`。
-- **插件技能**：在对应插件包 `plugins/**/<插件>/skills/<name>/SKILL.md` 编写说明，并保证 `package.json` 的 `files` 包含 `skills`；同上由脚本收录进商店「插件技能」分类。
-- **可下载 ZIP 技能**（可选）：若需支持 `zhin skills add` 从 URL 安装，须在 registry 中增加带 `source` 的条目（勿整文件覆盖自动生成内容；详见 [技能商店](/skills/) 说明）。
-
 ## 🚀 开发环境设置
 
 ### 1. 克隆仓库
@@ -214,7 +209,6 @@ docs/
 ├── advanced/                 # 高级特性（AI、Feature、工具与技能、组件、定时任务、数据库、热重载）
 ├── api/                      # API 参考
 ├── plugins/                  # 插件市场
-├── skills/                   # 技能商店页面（数据由 scripts 扫描 SKILL.md 生成 public/skills.json）
 ├── contributing.md           # 贡献指南（本页）
 └── contributing/
     └── repo-structure.md     # 仓库结构、src/lib 与 client/dist、命名、代码组织、审计备忘

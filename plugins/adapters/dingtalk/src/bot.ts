@@ -440,6 +440,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
 
   async $disconnect(): Promise<void> {
     try {
+      this.sessionWebhooks.clear();
       this.$connected = false;
       this.logger.info("DingTalk bot disconnected");
     } catch (error) {

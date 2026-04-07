@@ -83,6 +83,7 @@ export class TelegramBot extends Telegraf implements Bot<TelegramBotConfig, Tele
 
   async $disconnect(): Promise<void> {
     try {
+      (this as unknown as import('node:events').EventEmitter).removeAllListeners();
       await this.stop();
       this.$connected = false;
       this.pluginLogger.info(`Telegram bot ${this.$config.name} disconnected`);

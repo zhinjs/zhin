@@ -10,21 +10,35 @@ export interface PluginInfo {
   description: string
   author: string
   isOfficial: boolean
-  category: ('game' | 'util' | 'ai' | 'framework' | 'service' | 'adapter')[]
+  category: 'adapter' | 'service' | 'util' | 'game' | 'feature'
   version?: string
   npm?: string
   github?: string
   homepage?: string
   tags?: string[]
   lastUpdate?: string
+  /** 下载量统计 */
+  downloads?: { weekly: number; monthly: number }
+  /** README 摘要（前 200 字） */
+  readme?: string
+  /** 许可证 */
+  license?: string
+  /** Node.js 引擎要求 */
+  engines?: Record<string, string>
+  /** 对等依赖 */
+  peerDependencies?: Record<string, string>
 }
 
 // 插件统计接口
 export interface PluginStats {
   total: number
   official: number
-  adapters: number
   community: number
+  adapters: number
+  services: number
+  utils: number
+  games: number
+  features: number
 }
 
 // 数据加载结果类型

@@ -9,9 +9,13 @@ const emit = defineEmits<{
 
 const items = [
   { label: '插件总数', value: stats?.total || 0, keyword: '' },
-  { label: '官方插件', value: stats?.official || 0, keyword: '@zhin.js' },
+  { label: '官方插件', value: stats?.official || 0, keyword: 'official' },
+  { label: '社区插件', value: stats?.community || 0, keyword: 'community' },
   { label: '适配器', value: stats?.adapters || 0, keyword: 'adapter' },
-  { label: '社区插件', value: stats?.community || 0, keyword: 'zhin.js-' },
+  { label: '服务', value: stats?.services || 0, keyword: 'service' },
+  { label: '工具', value: stats?.utils || 0, keyword: 'util' },
+  { label: '游戏', value: stats?.games || 0, keyword: 'game' },
+  { label: '特性', value: stats?.features || 0, keyword: 'feature' },
 ]
 </script>
 

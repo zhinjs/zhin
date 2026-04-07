@@ -13,6 +13,7 @@
       "import": "./lib/index.js"
     }
   },
+  "files": ["lib"],
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib"

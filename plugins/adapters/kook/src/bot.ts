@@ -566,6 +566,7 @@ export class KookBot extends Client implements Bot<KookBotConfig, KookRawMessage
  */
   async $disconnect(): Promise<void> {
     try {
+      (this as unknown as import('node:events').EventEmitter).removeAllListeners();
       await this.disconnect();
       this.$connected = false;
       this.pluginLogger.info(`KOOK Bot ${this.$id} 已断开连接`);

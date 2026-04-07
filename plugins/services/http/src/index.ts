@@ -388,6 +388,133 @@ useContext("config", (configService) => {
       ctx.body = { success: false, error: 'Message sending failed' };
     }
   });
+
+  // ─── 插件市场 API ─────────────────────────────────────────────
+  router.get(`${base}pub/marketplace/search`, async (ctx) => {
+    const { keyword = '', page = '1', size = '20', category, official } = ctx.query as Record<string, string>;
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(size, 10) || 20));
+
+    try {
+      const searchUrl = new URL('https://registry.npmmirror.com/-/v1/search');
+      const q = keyword ? `zhin-plugin ${keyword}` : 'zhin-plugin';
+      searchUrl.searchParams.set('text', q);
+      searchUrl.searchParams.set('size', '250');
+      const resp = await fetch(searchUrl.toString());
+      if (!resp.ok) throw new Error(`npm search failed: ${resp.status}`);
+      const data = await resp.json() as any;
+
+      let plugins = (data.objects || [])
+        .filter((o: any) => {
+          const name: string = o.package?.name || '';
+          return (
+            (name.startsWith('zhin-plugin-') || name.startsWith('@zhin.js/')) &&
+            !['@zhin.js/core', '@zhin.js/kernel', '@zhin.js/ai', '@zhin.js/agent',
+              '@zhin.js/client', '@zhin.js/satori', '@zhin.js/schema',
+              '@zhin.js/logger', '@zhin.js/database', '@zhin.js/cli',
+              'zhin', 'zhin.js', 'create-zhin'].includes(name)
+          );
+        })
+        .map((o: any) => {
+          const pkg = o.package;
+          const isOfficial = (pkg.name as string).startsWith('@zhin.js/');
+          const kw: string[] = pkg.keywords || [];
+          let cat = 'util';
+          if (kw.includes('adapter')) cat = 'adapter';
+          else if (kw.includes('service')) cat = 'service';
+          else if (kw.includes('game')) cat = 'game';
+          else if (kw.includes('feature')) cat = 'feature';
+          return {
+            name: pkg.name,
+            version: pkg.version,
+            description: pkg.description || '',
+            author: typeof pkg.author === 'string' ? pkg.author : pkg.author?.name || '',
+            keywords: kw,
+            category: cat,
+            official: isOfficial,
+            date: pkg.date,
+            score: o.score?.final || 0,
+          };
+        });
+
+      if (category) plugins = plugins.filter((p: any) => p.category === category);
+      if (official === 'true') plugins = plugins.filter((p: any) => p.official);
+      if (official === 'false') plugins = plugins.filter((p: any) => !p.official);
+
+      const total = plugins.length;
+      const start = (pageNum - 1) * pageSize;
+      const items = plugins.slice(start, start + pageSize);
+
+      ctx.body = { success: true, data: { items, total, page: pageNum, size: pageSize } };
+    } catch (err: any) {
+      ctx.status = 502;
+      ctx.body = { success: false, error: err.message || 'Search failed' };
+    }
+  });
+
+  router.get(`${base}pub/marketplace/detail/:name+`, async (ctx) => {
+    const pkgName = ctx.params.name;
+    try {
+      const [metaResp, dlResp] = await Promise.all([
+        fetch(`https://registry.npmmirror.com/${encodeURIComponent(pkgName)}`),
+        fetch(`https://api.npmjs.org/downloads/point/last-week/${encodeURIComponent(pkgName)}`),
+      ]);
+      if (!metaResp.ok) throw new Error(`Package not found: ${metaResp.status}`);
+      const meta = await metaResp.json() as any;
+      const dl = dlResp.ok ? (await dlResp.json() as any) : {};
+      const latest = meta['dist-tags']?.latest;
+      const latestInfo = latest ? meta.versions?.[latest] : undefined;
+      ctx.body = {
+        success: true,
+        data: {
+          name: meta.name,
+          version: latest,
+          description: meta.description || '',
+          readme: meta.readme || '',
+          license: meta.license || latestInfo?.license || '',
+          homepage: meta.homepage || latestInfo?.homepage || '',
+          repository: meta.repository?.url || latestInfo?.repository?.url || '',
+          author: typeof meta.author === 'string' ? meta.author : meta.author?.name || '',
+          keywords: latestInfo?.keywords || [],
+          dependencies: latestInfo?.dependencies || {},
+          weeklyDownloads: dl.downloads ?? 0,
+          versions: Object.keys(meta.versions || {}),
+          time: meta.time || {},
+        },
+      };
+    } catch (err: any) {
+      ctx.status = 502;
+      ctx.body = { success: false, error: err.message || 'Detail fetch failed' };
+    }
+  });
+
+  router.get(`${base}/marketplace/updates`, async (ctx) => {
+    try {
+      const configService = plugin.inject('config');
+      const appConfig = configService?.get<{ plugins?: string[] }>('zhin.config.yml');
+      const installed: string[] = appConfig?.plugins || [];
+      if (!installed.length) {
+        ctx.body = { success: true, data: [] };
+        return;
+      }
+
+      const updates = await Promise.all(
+        installed.map(async (name: string) => {
+          try {
+            const resp = await fetch(`https://registry.npmmirror.com/${encodeURIComponent(name)}/latest`);
+            if (!resp.ok) return null;
+            const pkg = await resp.json() as any;
+            return { name, latest: pkg.version, description: pkg.description || '' };
+          } catch { return null; }
+        }),
+      );
+      ctx.body = { success: true, data: updates.filter(Boolean) };
+    } catch (err: any) {
+      ctx.status = 500;
+      ctx.body = { success: false, error: err.message || 'Update check failed' };
+    }
+  });
+
   server.listen({ host, port }, () => {
     const address = server.address();
     if (!address) return;

@@ -407,15 +407,6 @@ console.log(plugin.manifest)
 
 `install_skill` 默认仍安装到工作区 `skills/`。工作区 `skills/` 支持热重载（见下文及 AI 文档）。
 
-### 通用技能 vs 插件技能（文档与技能商店）
-
-| | **通用技能** | **插件技能** |
-|---|-------------|-------------|
-| **位置** | 如 create-zhin 模板 `packages/create-zhin/template/skills/`；用户可复制到项目 `skills/` | 各插件 / 适配器包内 `skills/<name>/SKILL.md`，随 npm 安装 |
-| **谁需要它** | 与具体插件无关的流程说明（如摘要、写 SKILL 规范） | 说明本插件工具集、触发词，帮模型做粗筛 |
-| **CLI `zhin skills add`** | 仅当 registry 条目提供可下载 `source`（ZIP）时适用 | 一般**不需要**：装插件包即可，Agent 会扫包内 `skills/` |
-| **文档** | [技能商店](/skills/) 中「通用技能」分类；数据由 `docs/scripts/build-skills-registry.mjs` 扫描生成 | 同页「插件技能」分类，展示对应 npm 包名与仓库路径 |
-
 ### 在插件中声明（推荐：文件化）
 
 当插件提供多个相关工具时，在**插件包目录**下增加 `skills/<技能名>/SKILL.md`（frontmatter 含 `name`、`description`、`keywords`、`tags`；可选 `tools` 列表关联工具名）。Agent 会通过 `discoverWorkspaceSkills` 与同路径的 `activate_skill` 发现该技能。

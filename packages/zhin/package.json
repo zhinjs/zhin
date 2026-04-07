@@ -52,6 +52,7 @@
       "import": "./lib/jsx-dev-runtime.js"
     }
   },
+  "files": ["lib"],
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib"

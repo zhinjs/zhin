@@ -31,6 +31,12 @@ function formatDate(dateStr?: string) {
   const d = new Date(dateStr)
   return d.toLocaleDateString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' })
 }
+
+function formatDownloads(n?: number) {
+  if (!n) return ''
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
+  return String(n)
+}
 </script>
 
 <template>
@@ -80,8 +86,15 @@ function formatDate(dateStr?: string) {
           <p class="result-package">{{ plugin.name }}</p>
           <p class="result-desc">{{ plugin.description || '暂无描述' }}</p>
 
-          <div class="result-tags" v-if="plugin.category.length">
-            <span v-for="cat in plugin.category" :key="cat" class="result-tag">{{ cat }}</span>
+          <div class="result-meta" v-if="plugin.downloads?.weekly || plugin.license">
+            <span v-if="plugin.downloads?.weekly" class="result-downloads" title="周下载量">
+              ↓ {{ formatDownloads(plugin.downloads.weekly) }}/周
+            </span>
+            <span v-if="plugin.license" class="result-license">{{ plugin.license }}</span>
+          </div>
+
+          <div class="result-tags" v-if="plugin.category">
+            <span class="result-tag">{{ plugin.category }}</span>
           </div>
 
           <div class="result-footer">
@@ -273,6 +286,26 @@ function formatDate(dateStr?: string) {
   color: var(--vp-c-brand);
   background: var(--vp-c-brand-soft);
   border-radius: 6px;
+}
+
+.result-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--vp-c-text-3);
+}
+
+.result-downloads {
+  color: var(--vp-c-green-2);
+  font-weight: 500;
+}
+
+.result-license {
+  padding: 1px 6px;
+  background: var(--vp-c-bg);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 4px;
+  font-size: 11px;
 }
 
 .result-footer {

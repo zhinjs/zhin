@@ -209,7 +209,7 @@ dispatcher:
   mode: dual
   order: command-first
   allowDualReply: true
-# … ai、技能等其余配置；技能 SKILL.md 见文档技能商店说明
+# … ai 等其余配置
 ```
 
 - **notice / request**：本期仍由适配器 `dispatch` 事件，**不**经 MessageDispatcher；与消息双轨对齐留待后续。

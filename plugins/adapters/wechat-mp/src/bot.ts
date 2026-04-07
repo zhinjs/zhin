@@ -72,6 +72,10 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
     }
 
     async $disconnect(): Promise<void> {
+        if (this.tokenRefreshTimer) {
+            clearInterval(this.tokenRefreshTimer);
+            this.tokenRefreshTimer = undefined;
+        }
         this.$connected = false;
         this.logger.info('WeChat MP bot disconnected');
     }
@@ -403,9 +407,11 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
         }
     }
 
+    private tokenRefreshTimer?: ReturnType<typeof setInterval>;
+
     private startTokenRefreshTimer(): void {
         // 每小时检查一次token是否需要刷新
-        setInterval(async () => {
+        this.tokenRefreshTimer = setInterval(async () => {
             if (Date.now() >= this.tokenExpireTime) {
                 try {
                     await this.refreshAccessToken();
