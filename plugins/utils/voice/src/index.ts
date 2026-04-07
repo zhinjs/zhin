@@ -238,18 +238,6 @@ if (config.tts?.enabled !== false) {
         const msg = e instanceof Error ? e.message : String(e);
         return { error: `语音合成失败: ${msg}` };
       }
-    })
-    .action(async (message: any) => {
-      const text = message.$raw?.toString() || '';
-      if (!text) return '请提供要转换的文字';
-      try {
-        const audioBuffer = await textToSpeech(text);
-        const base64 = audioBuffer.toString('base64');
-        return `<audio url="data:audio/mp3;base64,${base64}"/>`;
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        return `语音合成失败: ${msg}`;
-      }
     });
 
   allTools.push(ttsTool);
