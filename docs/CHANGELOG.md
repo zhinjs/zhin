@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.20
+
+### Patch Changes
+
+- c212bf7: fix: 适配器优化
+
 ## 1.0.19
 
 ### Patch Changes

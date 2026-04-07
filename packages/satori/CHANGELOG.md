@@ -1,5 +1,11 @@
 # @zhin.js/satori
 
+## 0.2.3
+
+### Patch Changes
+
+- c212bf7: fix: 适配器优化
+
 ## 0.2.2
 
 ### Patch Changes

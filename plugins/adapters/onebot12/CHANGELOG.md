@@ -1,5 +1,14 @@
 # @zhin.js/adapter-onebot12
 
+## 0.0.10
+
+### Patch Changes
+
+- c212bf7: fix: 适配器优化
+- Updated dependencies [c212bf7]
+  - zhin.js@1.0.59
+  - @zhin.js/http@1.0.54
+
 ## 0.0.9
 
 ### Patch Changes

@@ -1,5 +1,17 @@
 # @zhin.js/adapter-process
 
+## 2.0.1
+
+### Patch Changes
+
+- c212bf7: fix: 适配器优化
+- Updated dependencies [c212bf7]
+  - @zhin.js/client@1.0.15
+  - @zhin.js/core@1.1.1
+  - zhin.js@1.0.59
+  - @zhin.js/console@2.0.1
+  - @zhin.js/http@1.0.54
+
 ## 2.0.0
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @zhin.js/plugin-stats
 
+## 0.0.3
+
+### Patch Changes
+
+- c212bf7: fix: 适配器优化
+- Updated dependencies [c212bf7]
+  - zhin.js@1.0.59
+
 ## 0.0.2
 
 ### Patch Changes

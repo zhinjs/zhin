@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-stats",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Message statistics plugin for Zhin.js — track per-user and per-group message counts with daily/weekly reports",
   "type": "module",
   "main": "./lib/index.js",
@@ -50,7 +50,7 @@
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {
-    "zhin.js": ">=1.0.58"
+    "zhin.js": ">=1.0.59"
   },
   "repository": {
     "type": "git",

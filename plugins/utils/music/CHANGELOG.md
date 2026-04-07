@@ -1,5 +1,14 @@
 # @zhin.js/plugin-music
 
+## 1.0.1
+
+### Patch Changes
+
+- c212bf7: fix: 适配器优化
+- Updated dependencies [c212bf7]
+  - zhin.js@1.0.59
+  - @zhin.js/adapter-icqq@2.0.1
+
 ## 1.0.0
 
 ### Patch Changes

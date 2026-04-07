@@ -1,5 +1,13 @@
 # @zhin.js/ai
 
+## 1.1.1
+
+### Patch Changes
+
+- c212bf7: fix: 适配器优化
+- Updated dependencies [c212bf7]
+  - @zhin.js/logger@0.1.43
+
 ## 1.1.0
 
 ### Minor Changes

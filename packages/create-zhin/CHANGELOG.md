@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.34
+
+### Patch Changes
+
+- c212bf7: fix: 适配器优化
+
 ## 1.0.33
 
 ### Patch Changes

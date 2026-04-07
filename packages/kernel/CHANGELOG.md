@@ -1,5 +1,14 @@
 # @zhin.js/kernel
 
+## 0.0.20
+
+### Patch Changes
+
+- c212bf7: fix: 适配器优化
+- Updated dependencies [c212bf7]
+  - @zhin.js/logger@0.1.43
+  - @zhin.js/schema@1.0.43
+
 ## 0.0.19
 
 ### Patch Changes

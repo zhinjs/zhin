@@ -1,5 +1,18 @@
 # zhin.js
 
+## 1.0.59
+
+### Patch Changes
+
+- c212bf7: fix: 适配器优化
+- Updated dependencies [c212bf7]
+  - @zhin.js/logger@0.1.43
+  - @zhin.js/schema@1.0.43
+  - @zhin.js/agent@0.1.1
+  - @zhin.js/ai@1.1.1
+  - @zhin.js/core@1.1.1
+  - @zhin.js/kernel@0.0.20
+
 ## 1.0.58
 
 ### Patch Changes
