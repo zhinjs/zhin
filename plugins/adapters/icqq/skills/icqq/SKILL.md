@@ -1,5 +1,7 @@
 ---
 name: icqq
+platforms:
+  - icqq
 description: ICQQ（QQ 协议）群管理：踢人、禁言、全员禁言、设管理员、改名片、头衔、群公告、戳一戳、点赞、群文件等。仅有昵称时请先 list_members 查 QQ 号。
 keywords:
   - ICQQ

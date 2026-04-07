@@ -8,7 +8,7 @@
  * 依赖：主配置中启用 inbox.enabled 与 database。
  * 命令：/群分析 [天数]、/分析设置 enable|disable|status
  */
-import { usePlugin, MessageCommand, Schema, Cron,segment } from "zhin.js";
+import { usePlugin, MessageCommand, Schema, Cron, segment } from "zhin.js";
 import type { InboxMessageRow } from "./analysis.js";
 import type {} from "@zhin.js/plugin-html-renderer";
 import {
@@ -64,7 +64,7 @@ const config = declareConfig(
       .min(100)
       .max(5000)
       .description("单次分析使用的最大消息条数"),
-  })
+  }),
 );
 
 // ─── 数据库与收件箱 ───────────────────────────────────────────────────────────
@@ -84,7 +84,14 @@ function getSettingsModel(): any {
   return _db?.models?.get(SETTINGS_TABLE) ?? null;
 }
 
-function getChannelFromMessage(message: any): { channelId: string; channelType: string; adapter?: string; botId?: string } | null {
+function getChannelFromMessage(
+  message: any,
+): {
+  channelId: string;
+  channelType: string;
+  adapter?: string;
+  botId?: string;
+} | null {
   const ch = message?.$channel;
   if (!ch?.id) return null;
   return {
@@ -95,26 +102,17 @@ function getChannelFromMessage(message: any): { channelId: string; channelType: 
   };
 }
 
-useContext("database", (db: any) => {
+useContext("database", (db) => {
   _db = db;
-  // 收件箱表由主包在 inbox.enabled 时注册，此处仅只读使用
-  const inboxModel = db.models?.get(INBOX_TABLE);
-  if (!inboxModel) {
-    logger.warn("[group-daily-analysis] 未检测到收件箱表，请在主配置中启用 inbox.enabled 与 database");
-  }
-  // 本插件仅新增：群分析开关表（用于 /分析设置）
-  if (typeof db.define === "function") {
-    db.define(SETTINGS_TABLE, {
-      id: { type: "integer", primary: true, autoIncrement: true },
-      channel_id: { type: "text", nullable: false },
-      channel_type: { type: "text", nullable: false },
-      adapter: { type: "text", default: "" },
-      bot_id: { type: "text", default: "" },
-      enabled: { type: "integer", default: 1 },
-      updated_at: { type: "text", default: "" },
-    });
-    logger.info("[group-daily-analysis] 分析设置表已注册");
-  }
+  db.define(SETTINGS_TABLE, {
+    id: { type: "integer", primary: true, autoIncrement: true },
+    channel_id: { type: "text", nullable: false },
+    channel_type: { type: "text", nullable: false },
+    adapter: { type: "text", default: "" },
+    bot_id: { type: "text", default: "" },
+    enabled: { type: "integer", default: 1 },
+    updated_at: { type: "text", default: "" },
+  });
 });
 
 // ─── 群组是否参与分析（白名单/黑名单 + 分析设置）──────────────────────────────
@@ -126,11 +124,19 @@ function isGroupInList(groupId: string, list: string[]): boolean {
 async function isAnalysisEnabledForChannel(
   channelId: string,
   channelType: string,
-  adapter: string
+  adapter: string,
 ): Promise<boolean> {
   if (channelType !== "group") return false;
-  if (config.disabledGroups.length > 0 && isGroupInList(channelId, config.disabledGroups)) return false;
-  if (config.enabledGroups.length > 0 && !isGroupInList(channelId, config.enabledGroups)) return false;
+  if (
+    config.disabledGroups.length > 0 &&
+    isGroupInList(channelId, config.disabledGroups)
+  )
+    return false;
+  if (
+    config.enabledGroups.length > 0 &&
+    !isGroupInList(channelId, config.enabledGroups)
+  )
+    return false;
   const Settings = getSettingsModel();
   if (!Settings) return true;
   try {
@@ -151,7 +157,7 @@ async function setAnalysisEnabledForChannel(
   channelType: string,
   adapter: string,
   botId: string,
-  enabled: boolean
+  enabled: boolean,
 ): Promise<void> {
   const Settings = getSettingsModel();
   if (!Settings) return;
@@ -181,13 +187,20 @@ async function setAnalysisEnabledForChannel(
 
 // ─── 从收件箱查询消息并执行分析 ─────────────────────────────────────────────────
 
-function getTimeRangeDays(days: number): { start: number; end: number; startStr: string; endStr: string } {
+function getTimeRangeDays(days: number): {
+  start: number;
+  end: number;
+  startStr: string;
+  endStr: string;
+} {
   const end = Date.now();
   const start = end - days * 24 * 60 * 60 * 1000;
   const dStart = new Date(start);
   const dEnd = new Date(end);
   const fmt = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+      d.getDate(),
+    ).padStart(2, "0")}`;
   return { start, end, startStr: fmt(dStart), endStr: fmt(dEnd) };
 }
 
@@ -197,7 +210,7 @@ async function queryInboxMessages(
   botId: string,
   startTs: number,
   endTs: number,
-  limit: number
+  limit: number,
 ): Promise<InboxMessageRow[]> {
   const Inbox = getInboxModel();
   if (!Inbox) return [];
@@ -215,8 +228,12 @@ async function queryInboxMessages(
         .orderBy("created_at", "ASC")
         .limit(limit);
     } catch {
-      rows = await Inbox.select()
-        .where({ channel_id: channelId, channel_type: "group", adapter: adapter || "", bot_id: botId || "" });
+      rows = await Inbox.select().where({
+        channel_id: channelId,
+        channel_type: "group",
+        adapter: adapter || "",
+        bot_id: botId || "",
+      });
       rows = (rows || [])
         .filter((r: any) => r.created_at >= startTs && r.created_at <= endTs)
         .sort((a: any, b: any) => a.created_at - b.created_at)
@@ -224,7 +241,7 @@ async function queryInboxMessages(
     }
     return rows as InboxMessageRow[];
   } catch (e) {
-    logger.warn("[group-daily-analysis] 查询收件箱失败", (e as Error)?.message);
+    logger.warn("查询收件箱失败", (e as Error)?.message);
     return [];
   }
 }
@@ -234,7 +251,7 @@ async function runAnalysis(
   channelName: string,
   adapter: string,
   botId: string,
-  days: number
+  days: number,
 ): Promise<AnalysisResult | string> {
   const Inbox = getInboxModel();
   if (!Inbox) {
@@ -247,7 +264,7 @@ async function runAnalysis(
     botId,
     start,
     end,
-    config.maxMessagesPerAnalysis
+    config.maxMessagesPerAnalysis,
   );
   if (rows.length === 0) {
     return `在 ${startStr} 至 ${endStr} 区间内没有找到本群消息记录，请确认收件箱已启用并有过群消息。`;
@@ -261,13 +278,21 @@ async function runAnalysis(
   });
 
   // 可选：LLM 话题/金句/用户画像（灵感来自 astrbot_plugin_qq_group_daily_analysis）
-  const ai = root.inject("ai" as any) as { ask?: (q: string, opts?: { systemPrompt?: string }) => Promise<string> } | undefined;
+  const ai = root.inject("ai" as any) as
+    | { ask?: (q: string, opts?: { systemPrompt?: string }) => Promise<string> }
+    | undefined;
   if (ai?.ask) {
     try {
       const sampleSize = Math.min(rows.length, 150);
       const sample = rows.slice(-sampleSize);
       const conversation = sample
-        .map((r) => `[${r.sender_name || r.sender_id}]: ${extractText(r).slice(0, 200)}`)
+        .map(
+          (r) =>
+            `[${r.sender_name || r.sender_id}]: ${extractText(r).slice(
+              0,
+              200,
+            )}`,
+        )
         .join("\n");
       const systemPrompt = `你是一个群聊分析助手。根据下面的群聊消息摘要，提取并仅返回一个 JSON 对象，包含以下三个数组（均为中文）：
 - topics: 数组，每项 { "topic": "话题关键词", "summary": "简短说明" }
@@ -276,16 +301,20 @@ async function runAnalysis(
 不要输出除 JSON 以外的内容。`;
       const answer = await ai.ask(
         `请分析以下群聊片段并返回 JSON：\n\n${conversation.slice(0, 6000)}`,
-        { systemPrompt }
+        { systemPrompt },
       );
       if (answer && answer.trim()) {
         const llm = parseLLMResponse(answer);
-        if (llm.topics?.length || llm.quotes?.length || llm.userTitles?.length) {
+        if (
+          llm.topics?.length ||
+          llm.quotes?.length ||
+          llm.userTitles?.length
+        ) {
           textReport = appendLLMReport(textReport, llm);
         }
       }
     } catch (e) {
-      logger.debug("[group-daily-analysis] LLM 分析跳过", (e as Error)?.message);
+      logger.debug("[LLM 分析跳过", (e as Error)?.message);
     }
   }
 
@@ -302,18 +331,21 @@ addCommand(
       if (!ch || ch.channelType !== "group") {
         return "请在群聊中使用本命令。";
       }
-      const days = Math.min(30, Math.max(1, Number(result.params?.天数) || config.analysisDays));
+      const days = Math.min(
+        30,
+        Math.max(1, Number(result.params?.天数) || config.analysisDays),
+      );
       const channelName = (message?.$channel as { name?: string })?.name || "";
       const report = await runAnalysis(
         ch.channelId,
         channelName,
         ch.adapter || "",
         ch.botId || "",
-        days
+        days,
       );
       if (typeof report === "string") return report;
       if (config.outputFormat === "image") {
-        const renderer = root.inject("html-renderer")
+        const renderer = root.inject("html-renderer");
         if (renderer) {
           try {
             const escaped = report.textReport
@@ -325,14 +357,19 @@ addCommand(
             const resultImg = await renderer.render(html);
             const base64 = (resultImg.data as Buffer).toString("base64");
             const dataUrl = `base64://${base64}`;
-            return [segment("image", { url: dataUrl,name: "group-daily-analysis.png" })];
+            return [
+              segment("image", {
+                url: dataUrl,
+                name: "group-daily-analysis.png",
+              }),
+            ];
           } catch (e) {
-            logger.debug("[group-daily-analysis] 图片渲染失败，回退文本", (e as Error)?.message);
+            logger.debug("图片渲染失败，回退文本", (e as Error)?.message);
           }
         }
       }
       return report.textReport;
-    })
+    }),
 );
 
 // ─── 命令：分析设置 ───────────────────────────────────────────────────────────
@@ -349,19 +386,35 @@ addCommand(
       const adapter = ch.adapter || "";
       const botId = ch.botId || "";
       if (op === "enable") {
-        await setAnalysisEnabledForChannel(ch.channelId, ch.channelType, adapter, botId, true);
+        await setAnalysisEnabledForChannel(
+          ch.channelId,
+          ch.channelType,
+          adapter,
+          botId,
+          true,
+        );
         return "已为本群启用日常分析。";
       }
       if (op === "disable") {
-        await setAnalysisEnabledForChannel(ch.channelId, ch.channelType, adapter, botId, false);
+        await setAnalysisEnabledForChannel(
+          ch.channelId,
+          ch.channelType,
+          adapter,
+          botId,
+          false,
+        );
         return "已为本群关闭日常分析。";
       }
       if (op === "status") {
-        const enabled = await isAnalysisEnabledForChannel(ch.channelId, ch.channelType, adapter);
+        const enabled = await isAnalysisEnabledForChannel(
+          ch.channelId,
+          ch.channelType,
+          adapter,
+        );
         return `本群日常分析：${enabled ? "已启用" : "已关闭"}`;
       }
       return "用法：分析设置 enable | disable | status";
-    })
+    }),
 );
 
 // ─── 定时任务（可选）───────────────────────────────────────────────────────────
@@ -376,28 +429,49 @@ useContext("database", () => {
       new Cron(config.autoAnalysisCron, async () => {
         const inject = root.inject?.bind(root) as (key: string) => any;
         if (typeof inject !== "function") return;
-        const targets: { channelId: string; adapter: string; botId: string }[] = [];
+        const targets: { channelId: string; adapter: string; botId: string }[] =
+          [];
         const Settings = getSettingsModel();
         if (Settings) {
-          const rows: any[] = await Settings.select().where({ channel_type: "group", enabled: 1 });
+          const rows: any[] = await Settings.select().where({
+            channel_type: "group",
+            enabled: 1,
+          });
           for (const r of rows) {
-            if (r.channel_id && r.adapter) targets.push({
-              channelId: String(r.channel_id),
-              adapter: String(r.adapter),
-              botId: String(r.bot_id || ""),
-            });
+            if (r.channel_id && r.adapter)
+              targets.push({
+                channelId: String(r.channel_id),
+                adapter: String(r.adapter),
+                botId: String(r.bot_id || ""),
+              });
           }
         }
         for (const gid of config.enabledGroups) {
           if (targets.some((t) => t.channelId === gid)) continue;
           const adapters = (root as any).adapters as string[] | undefined;
-          const adapterName = Array.isArray(adapters) && adapters[0] ? adapters[0] : "";
-          if (adapterName) targets.push({ channelId: String(gid), adapter: adapterName, botId: "" });
+          const adapterName =
+            Array.isArray(adapters) && adapters[0] ? adapters[0] : "";
+          if (adapterName)
+            targets.push({
+              channelId: String(gid),
+              adapter: adapterName,
+              botId: "",
+            });
         }
         for (const t of targets) {
-          if (config.disabledGroups.length && isGroupInList(t.channelId, config.disabledGroups)) continue;
+          if (
+            config.disabledGroups.length &&
+            isGroupInList(t.channelId, config.disabledGroups)
+          )
+            continue;
           try {
-            const report = await runAnalysis(t.channelId, "", t.adapter, t.botId, config.analysisDays);
+            const report = await runAnalysis(
+              t.channelId,
+              "",
+              t.adapter,
+              t.botId,
+              config.analysisDays,
+            );
             if (typeof report === "string") continue;
             const adapter = inject(t.adapter);
             if (adapter?.sendMessage) {
@@ -406,23 +480,24 @@ useContext("database", () => {
                 const first = adapter.bots.values().next().value;
                 botId = first?.$id ?? first?.selfId ?? "";
               }
-              await adapter.sendMessage({
-                context: t.adapter,
-                bot: botId,
-                type: "group",
-                id: t.channelId,
-                content: report.textReport,
-              }).catch(() => {});
+              await adapter
+                .sendMessage({
+                  context: t.adapter,
+                  bot: botId,
+                  type: "group",
+                  id: t.channelId,
+                  content: report.textReport,
+                })
+                .catch(() => {});
             }
           } catch (e) {
-            logger.warn("[group-daily-analysis] 定时分析发送失败", t.channelId, (e as Error)?.message);
+            logger.warn("定时分析发送失败", t.channelId, (e as Error)?.message);
           }
         }
-      })
+      }),
     );
-    logger.info("[group-daily-analysis] 定时分析已注册: " + config.autoAnalysisCron);
   } catch (e) {
-    logger.warn("[group-daily-analysis] 注册定时任务失败", (e as Error)?.message);
+    logger.warn("注册定时任务失败", (e as Error)?.message);
   }
 });
 
@@ -432,7 +507,3 @@ onDispose(() => {
     cronDispose = null;
   }
 });
-
-logger.info(
-  `[group-daily-analysis] 已加载 (分析天数=${config.analysisDays}, 定时=${config.autoAnalysisEnabled ? config.autoAnalysisCron : "关"})`
-);

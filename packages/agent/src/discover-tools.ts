@@ -31,12 +31,6 @@ export interface ToolMeta {
   description: string;
   /** 简写参数定义（frontmatter 格式） */
   parameters?: Record<string, ToolParamShorthand>;
-  /** 命令配置 */
-  command?: {
-    pattern?: string;
-    alias?: string[];
-    examples?: string[];
-  };
   platforms?: string[];
   scopes?: string[];
   permissionLevel?: string;
@@ -159,7 +153,6 @@ export async function discoverWorkspaceTools(root?: Plugin | null): Promise<Tool
           name: metadata.name,
           description: metadata.description,
           parameters: metadata.parameters || undefined,
-          command: metadata.command || undefined,
           platforms: metadata.platforms,
           scopes: metadata.scopes,
           permissionLevel: metadata.permissionLevel,
@@ -293,10 +286,5 @@ export async function buildToolFromMeta(meta: ToolMeta): Promise<import('@zhin.j
     permissionLevel: meta.permissionLevel as any,
     hidden: meta.hidden,
     kind: meta.kind,
-    command: meta.command ? {
-      pattern: meta.command.pattern,
-      alias: meta.command.alias,
-      examples: meta.command.examples,
-    } : undefined,
   };
 }

@@ -112,45 +112,6 @@ addCommand(
 
 Zhin.js 支持 Tool 和 Command 之间的自动转换，使同一个功能既能被用户通过命令调用，也能被 AI Agent 通过工具调用。
 
-### Tool 自动生成 Command
-
-注册工具时，设置 `command` 选项即可同时生成对应的命令：
-
-```typescript
-import { usePlugin } from 'zhin.js'
-
-const { addTool } = usePlugin()
-
-addTool({
-  name: 'get_weather',
-  description: '查询天气',
-  parameters: {
-    type: 'object',
-    properties: {
-      city: { type: 'string', description: '城市名称' },
-    },
-    required: ['city'],
-  },
-  // 同时生成命令 "weather <city:string>"
-  command: { pattern: 'weather <city:string>' },
-  execute: async (args) => {
-    return await fetchWeather(args.city)
-  },
-})
-```
-
-### 手动转换
-
-```typescript
-import { toolToCommand, commandToTool } from 'zhin.js'
-
-// Tool -> Command
-const command = toolToCommand(myTool)
-
-// Command -> Tool（第二个参数为插件名）
-const tool = commandToTool(myCommand, 'my-plugin')
-```
-
 ## 完整示例
 
 ```typescript

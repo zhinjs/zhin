@@ -62,7 +62,7 @@
     "lucide-react": "^0.469.0",
     "radix-ui": "^1.4.3",
     "tsx": "^4.7.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=18.0.0"

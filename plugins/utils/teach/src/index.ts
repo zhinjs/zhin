@@ -140,7 +140,6 @@ useContext("database", (db: any) => {
     created_at: { type: "text", default: "" },
     updated_at: { type: "text", default: "" },
   });
-  logger.info("问答模型已注册，等待数据库启动");
 });
 
 // ─── 中间件：自动匹配问答 ────────────────────────────────────────────────────
@@ -359,6 +358,3 @@ addCommand(
     }),
 );
 
-// AI 工具已迁移到 tools/*.tool.md，框架自动发现注册
-
-logger.info(`插件已加载 (上限 ${config.maxPerGroup}/群, 冷却 ${config.cooldown}ms)`);

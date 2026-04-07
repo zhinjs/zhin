@@ -188,9 +188,10 @@ export async function sendCatchUpToClient(ws: WebSocket) {
 
 export function initBotHub(root: {
   on: (ev: string, fn: (...a: any[]) => void) => void;
+  off?: (ev: string, fn: (...a: any[]) => void) => void;
   adapters?: Iterable<string>;
   inject?: (key: string) => unknown;
-}) {
+}): (() => void) | undefined {
   if (hubInited) return;
   hubInited = true;
 
@@ -211,12 +212,13 @@ export function initBotHub(root: {
   // 收消息推送：向控制台广播机器人收到的消息，供「收消息展示」使用
   const adapterNames = root.adapters ? [...(root.adapters as Iterable<string>)] : [];
   const inject = root.inject;
+  const adapterListeners: Array<{ adapter: any; handler: (...a: any[]) => void }> = [];
   if (inject && typeof inject === "function" && adapterNames.length > 0) {
     for (const name of adapterNames) {
       try {
-        const ad = inject(name) as { on?: (ev: string, fn: (...a: any[]) => void) => void } | null;
+        const ad = inject(name) as { on?: (ev: string, fn: (...a: any[]) => void) => void; off?: (ev: string, fn: (...a: any[]) => void) => void } | null;
         if (ad && typeof ad.on === "function") {
-          ad.on("message.receive", (msg: any) => {
+          const handler = (msg: any) => {
             const payload = {
               type: "bot:message",
               data: {
@@ -230,11 +232,23 @@ export function initBotHub(root: {
               },
             };
             broadcast(payload);
-          });
+          };
+          ad.on("message.receive", handler);
+          adapterListeners.push({ adapter: ad, handler });
         }
       } catch {
         // 忽略单个适配器注册失败
       }
     }
   }
+
+  // 返回清理函数
+  return () => {
+    root.off?.("request.receive", handlerReq);
+    root.off?.("notice.receive", handlerNotice);
+    for (const { adapter, handler } of adapterListeners) {
+      adapter.off?.("message.receive", handler);
+    }
+    hubInited = false;
+  };
 }

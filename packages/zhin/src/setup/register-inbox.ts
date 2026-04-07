@@ -178,11 +178,9 @@ export function registerUnifiedInbox(plugin: Plugin, appConfig: AppConfig): void
   defineModel(TABLE_MESSAGE, MessageDefinition);
   defineModel(TABLE_REQUEST, RequestDefinition);
   defineModel(TABLE_NOTICE, NoticeDefinition);
-  plugin.logger.info('[inbox] models registered: %s, %s, %s', TABLE_MESSAGE, TABLE_REQUEST, TABLE_NOTICE);
 
   plugin.root.on('request.receive', (req: any) => persistRequest(plugin, req));
   plugin.root.on('notice.receive', (notice: any) => persistNotice(plugin, notice));
-  plugin.logger.info('[inbox] subscribed to request.receive, notice.receive');
 }
 
 /**
@@ -194,5 +192,4 @@ export function registerUnifiedInboxMessageListeners(plugin: Plugin, appConfig: 
   if (!enabled || !appConfig.database) return;
 
   plugin.on('message.receive', (msg) => persistMessage(plugin, msg));
-  plugin.logger.info('[inbox] subscribed to message.receive (per adapter)');
 }

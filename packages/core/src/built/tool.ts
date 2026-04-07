@@ -1,13 +1,10 @@
 /**
  * ToolFeature — 统一的工具管理服务
- * 支持 Tool ↔ Command 互转
+ * 工具仅面向 AI（通过 MCP 注册），不再与 Command 互转
  */
 import { Feature, FeatureJSON } from "../feature.js";
-import { MessageCommand } from "../command.js";
-import { Message } from "../message.js";
 import { Plugin, getPlugin } from "../plugin.js";
-import type { Tool, RegisteredAdapter, AdapterMessage, ToolContext, ToolJsonSchema, ToolParametersSchema, PropertySchema, MaybePromise, ToolPermissionLevel, ToolScope } from "../types.js";
-import { MatchResult } from "segment-matcher";
+import type { Tool, ToolContext, ToolJsonSchema, ToolParametersSchema, PropertySchema, MaybePromise, ToolPermissionLevel, ToolScope } from "../types.js";
 
 // ============================================================================
 // 权限级别比较
@@ -83,50 +80,6 @@ function canAccessTool(tool: Tool, context: ToolContext): boolean {
 // ============================================================================
 
 /**
- * 从 Tool 参数生成命令模式
- * @example
- * parameters: { properties: { city: { type: 'string' } }, required: ['city'] }
- * => 'toolName <city>'
- */
-export function generatePattern(tool: Tool): string {
-  const { name, parameters } = tool;
-  
-  if (tool.command && tool.command.pattern) {
-    return tool.command.pattern;
-  }
-  
-  if (!parameters.properties) {
-    return name;
-  }
-  
-  const parts: string[] = [name];
-  const props = parameters.properties;
-  const required = parameters.required || [];
-  
-  // 按照 required 优先、字母顺序排序
-  const sortedKeys = Object.keys(props).sort((a, b) => {
-    const aReq = required.includes(a) ? 0 : 1;
-    const bReq = required.includes(b) ? 0 : 1;
-    if (aReq !== bReq) return aReq - bReq;
-    return a.localeCompare(b);
-  });
-  
-  for (const key of sortedKeys) {
-    const prop = props[key];
-    const isRequired = required.includes(key);
-    const paramType = prop.paramType || (prop.type === 'number' ? 'number' : 'text');
-    
-    if (isRequired) {
-      parts.push(`<${key}:${paramType}>`);
-    } else {
-      parts.push(`[${key}:${paramType}]`);
-    }
-  }
-  
-  return parts.join(' ');
-}
-
-/**
  * 从参数定义中提取参数信息
  */
 export function extractParamInfo(parameters: ToolJsonSchema): Tool.ParamInfo[] {
@@ -167,7 +120,7 @@ interface ParamDef {
 
 /**
  * ZhinTool 类
- * 提供类似 MessageCommand 的链式调用风格来定义工具
+ * 提供链式调用风格来定义工具
  */
 export class ZhinTool {
   #name: string;
@@ -181,10 +134,6 @@ export class ZhinTool {
   #permissions: string[] = [];
   #tags: string[] = [];
   #keywords: string[] = [];
-  /** 命令回调（入参是 message, matchResult） */
-  #commandCallback?: MessageCommand.Callback<RegisteredAdapter>;
-  /** 命令配置 */
-  #commandConfig: Omit<Tool.CommandConfig, 'enabled'> = {};
   #hidden: boolean = false;
   #source?: string;
   #preExecutable: boolean = false;
@@ -272,33 +221,8 @@ export class ZhinTool {
     return this;
   }
 
-  usage(...usage: string[]): this {
-    this.#commandConfig.usage = [...(this.#commandConfig.usage || []), ...usage];
-    return this;
-  }
-
-  examples(...examples: string[]): this {
-    this.#commandConfig.examples = [...(this.#commandConfig.examples || []), ...examples];
-    return this;
-  }
-
-  alias(...alias: string[]): this {
-    this.#commandConfig.alias = [...(this.#commandConfig.alias || []), ...alias];
-    return this;
-  }
-
-  pattern(pattern: string): this {
-    this.#commandConfig.pattern = pattern;
-    return this;
-  }
-
   execute(callback: (args: Record<string, any>, context?: ToolContext) => MaybePromise<any>): this {
     this.#execute = callback;
-    return this;
-  }
-
-  action(callback: MessageCommand.Callback<RegisteredAdapter>): this {
-    this.#commandCallback = callback;
     return this;
   }
 
@@ -326,31 +250,6 @@ export class ZhinTool {
     };
   }
 
-  #generatePattern(): string {
-    if (this.#commandConfig.pattern) {
-      return this.#commandConfig.pattern;
-    }
-    
-    const parts: string[] = [this.#name];
-    
-    const sortedParams = [...this.#params].sort((a, b) => {
-      if (a.required && !b.required) return -1;
-      if (!a.required && b.required) return 1;
-      return 0;
-    });
-    
-    for (const param of sortedParams) {
-      const paramType = param.schema.paramType || (param.schema.type === 'number' ? 'number' : 'text');
-      if (param.required) {
-        parts.push(`<${param.name}:${paramType}>`);
-      } else {
-        parts.push(`[${param.name}:${paramType}]`);
-      }
-    }
-    
-    return parts.join(' ');
-  }
-
   toTool(): Tool {
     if (!this.#execute) {
       throw new Error(`Tool "${this.#name}" has no execute() defined`);
@@ -374,21 +273,7 @@ export class ZhinTool {
     if (this.#preExecutable) tool.preExecutable = true;
     if (this.#kind) tool.kind = this.#kind;
 
-    if (!this.#commandCallback) {
-      tool.command = false;
-    } else {
-      tool.command = {
-        ...this.#commandConfig,
-        pattern: this.#generatePattern(),
-        enabled: true,
-      };
-    }
-
     return tool;
-  }
-
-  getActionCallback(): MessageCommand.Callback<RegisteredAdapter> | undefined {
-    return this.#commandCallback;
   }
 
   toJSON(): {
@@ -415,7 +300,7 @@ export class ZhinTool {
   }
 
   get help(): string {
-    const lines: string[] = [this.#generatePattern()];
+    const lines: string[] = [this.#name];
     if (this.#description) lines.push(`  ${this.#description}`);
     
     if (this.#params.length > 0) {
@@ -437,20 +322,6 @@ export class ZhinTool {
     
     if (this.#scopes.length > 0) {
       lines.push(`  场景: ${this.#scopes.join(', ')}`);
-    }
-    
-    if (this.#commandConfig.usage?.length) {
-      lines.push('  用法:');
-      for (const u of this.#commandConfig.usage) {
-        lines.push(`    ${u}`);
-      }
-    }
-    
-    if (this.#commandConfig.examples?.length) {
-      lines.push('  示例:');
-      for (const e of this.#commandConfig.examples) {
-        lines.push(`    ${e}`);
-      }
     }
     
     return lines.join('\n');
@@ -478,10 +349,8 @@ export type ToolInput = Tool | ZhinTool;
  * ToolContext 扩展方法类型
  */
 export interface ToolContextExtensions {
-  /** 添加工具（自动生成命令） */
+  /** 添加工具 */
   addTool(tool: ToolInput): () => void;
-  /** 仅添加工具，不生成命令 */
-  addToolOnly(tool: ToolInput): () => void;
 }
 
 // 扩展 Plugin 接口
@@ -491,196 +360,6 @@ declare module "../plugin.js" {
     interface Contexts {
       tool: ToolFeature;
     }
-  }
-}
-
-// ============================================================================
-// 内部工具函数
-// ============================================================================
-
-/**
- * 将 Tool 转换为 MessageCommand
- */
-function toolToCommand(tool: Tool): MessageCommand<RegisteredAdapter> {
-  const pattern = generatePattern(tool);
-  const command = new MessageCommand<RegisteredAdapter>(pattern);
-  
-  command.desc(tool.description);
-  
-  if (tool.command && tool.command.usage) {
-    command.usage(...tool.command.usage);
-  }
-  
-  if (tool.command && tool.command.examples) {
-    command.examples(...tool.command.examples);
-  }
-  
-  if (tool.permissions?.length) {
-    command.permit(...tool.permissions);
-  }
-  
-  command.action(async (message: Message<AdapterMessage<RegisteredAdapter>>, result: MatchResult) => {
-    const context: ToolContext = {
-      platform: message.$adapter,
-      botId: message.$bot,
-      sceneId: message.$channel?.id || message.$sender.id,
-      senderId: message.$sender.id,
-      message,
-    };
-    
-    const args = extractArgsFromMatchResult(result, tool.parameters);
-    
-    try {
-      const response = await tool.execute(args, context);
-      
-      if (response === undefined || response === null) {
-        return undefined;
-      }
-      
-      if (typeof response === 'string') {
-        return response;
-      }
-      
-      return formatToolResult(response);
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      return `❌ 执行失败: ${errorMsg}`;
-    }
-  });
-  
-  return command;
-}
-
-/**
- * 将 MessageCommand 转换为 Tool
- */
-function commandToToolFn(
-  command: MessageCommand<RegisteredAdapter>,
-  pluginName: string
-): Tool {
-  const { pattern, helpInfo } = command;
-  
-  const parameters = parseCommandPattern(pattern);
-  
-  return {
-    name: `cmd_${pattern.split(' ')[0].replace(/[^a-zA-Z0-9_]/g, '_')}`,
-    description: helpInfo.desc.join(' ') || `执行命令: ${pattern}`,
-    parameters,
-    source: `command:${pluginName}`,
-    tags: ['command', pluginName],
-    execute: async (args, context) => {
-      const cmdParts = [pattern.split(' ')[0]];
-      
-      if (parameters.properties) {
-        for (const [key, schema] of Object.entries(parameters.properties)) {
-          if (args[key] !== undefined) {
-            cmdParts.push(String(args[key]));
-          }
-        }
-      }
-      
-      const cmdString = cmdParts.join(' ');
-      
-      if (context?.message) {
-        const tempMessage = Object.create(context.message);
-        tempMessage.$content = cmdString;
-        
-        const plugin = getPlugin();
-        const result = await command.handle(tempMessage, plugin);
-        return result as import("../types.js").ToolResult;
-      }
-      
-      return { 
-        error: '此工具需要消息上下文才能执行',
-        command: cmdString 
-      };
-    },
-    command: false,
-  };
-}
-
-/**
- * 从 MatchResult 提取参数
- */
-function extractArgsFromMatchResult(
-  result: MatchResult,
-  schema: ToolJsonSchema
-): Record<string, any> {
-  const args: Record<string, any> = {};
-  
-  if (result.params) {
-    Object.assign(args, result.params);
-  }
-  
-  if (schema.properties) {
-    for (const [key, prop] of Object.entries(schema.properties)) {
-      if (args[key] !== undefined) {
-        if (prop.type === 'number') {
-          args[key] = Number(args[key]);
-        } else if (prop.type === 'boolean') {
-          args[key] = args[key] === 'true' || args[key] === true;
-        } else if (prop.type === 'array' && typeof args[key] === 'string') {
-          args[key] = args[key].split(',').map((s: string) => s.trim());
-        }
-      }
-    }
-  }
-  
-  return args;
-}
-
-/**
- * 解析命令模式，生成参数 Schema
- */
-function parseCommandPattern(pattern: string): ToolParametersSchema {
-  const properties: Record<string, PropertySchema> = {};
-  const required: string[] = [];
-  
-  const paramRegex = /([<\[])(\w+)(?::(\w+))?([>\]])/g;
-  let match;
-  
-  while ((match = paramRegex.exec(pattern)) !== null) {
-    const [, bracket, name, type] = match;
-    const isRequired = bracket === '<';
-    
-    const schemaType = type === 'number' ? 'number' : type === 'boolean' ? 'boolean' : 'string';
-    properties[name] = {
-      type: schemaType,
-      description: `参数: ${name}`,
-    } as PropertySchema;
-    
-    if (isRequired) {
-      required.push(name);
-    }
-  }
-  
-  return {
-    type: 'object',
-    properties,
-    required: required.length > 0 ? required : undefined,
-  } as ToolParametersSchema;
-}
-
-/**
- * 格式化工具执行结果
- */
-function formatToolResult(result: any): string {
-  if (result === null || result === undefined) {
-    return '';
-  }
-  
-  if (typeof result === 'string') {
-    return result;
-  }
-  
-  if (result.error) {
-    return `❌ ${result.error}`;
-  }
-  
-  try {
-    return JSON.stringify(result, null, 2);
-  } catch {
-    return String(result);
   }
 }
 
@@ -696,19 +375,15 @@ export class ToolFeature extends Feature<Tool> {
   /** 按名称索引 */
   readonly byName = new Map<string, Tool>();
 
-  /** 工具对应的命令 */
-  readonly toolCommands = new Map<string, MessageCommand<RegisteredAdapter>>();
-
   /** 工具到插件名的映射 */
   readonly #toolPluginMap = new Map<string, string>();
 
   /**
-   * 添加工具
+   * 添加工具（仅注册到 ToolFeature，不再生成 Command）
    * @param toolInput 工具或 ZhinTool 实例
    * @param pluginName 注册插件名
-   * @param generateCommand 是否生成命令（默认 true）
    */
-  addTool(toolInput: ToolInput, pluginName: string, generateCommand: boolean = true): () => void {
+  addTool(toolInput: ToolInput, pluginName: string): () => void {
     const zhinTool = isZhinTool(toolInput) ? toolInput : null;
     const tool: Tool = zhinTool ? zhinTool.toTool() : toolInput as Tool;
 
@@ -720,43 +395,6 @@ export class ToolFeature extends Feature<Tool> {
 
     this.byName.set(tool.name, toolWithSource);
     this.#toolPluginMap.set(tool.name, pluginName);
-
-    // 生成对应的命令
-    if (generateCommand && tool.command !== false) {
-      let command: MessageCommand<RegisteredAdapter>;
-      
-      const customCallback = zhinTool?.getActionCallback();
-      if (customCallback) {
-        command = new MessageCommand<RegisteredAdapter>(
-          tool.command && typeof tool.command === 'object' && tool.command.pattern 
-            ? tool.command.pattern 
-            : generatePattern(toolWithSource)
-        );
-        
-        command.desc(tool.description);
-        
-        if (tool.command && typeof tool.command === 'object') {
-          if (tool.command.usage) command.usage(...tool.command.usage);
-          if (tool.command.examples) command.examples(...tool.command.examples);
-        }
-        
-        if (tool.permissions?.length) {
-          command.permit(...tool.permissions);
-        }
-        
-        command.action(customCallback);
-      } else {
-        command = toolToCommand(toolWithSource);
-      }
-      
-      this.toolCommands.set(tool.name, command);
-      
-      const plugin = getPlugin();
-      const commandService = plugin.root.inject('command');
-      if (commandService) {
-        commandService.add(command, pluginName);
-      }
-    }
 
     // Use Feature.add for item tracking
     const baseDispose = super.add(toolWithSource, pluginName);
@@ -776,17 +414,6 @@ export class ToolFeature extends Feature<Tool> {
 
     this.byName.delete(name);
     this.#toolPluginMap.delete(name);
-
-    // 移除对应的命令
-    const command = this.toolCommands.get(name);
-    if (command) {
-      const plugin = getPlugin();
-      const commandService = plugin.root.inject('command');
-      if (commandService) {
-        commandService.remove(command);
-      }
-      this.toolCommands.delete(name);
-    }
 
     // 移除 item
     super.remove(tool);
@@ -828,43 +455,6 @@ export class ToolFeature extends Feature<Tool> {
   }
 
   /**
-   * 将 Command 转换为 Tool
-   */
-  commandToTool(command: MessageCommand<RegisteredAdapter>, pluginName: string): Tool {
-    return commandToToolFn(command, pluginName);
-  }
-
-  /**
-   * 收集所有可用工具（包括从 Command 转换的）
-   */
-  collectAll(plugin: Plugin): Tool[] {
-    const allTools: Tool[] = [];
-    
-    allTools.push(...this.getAll());
-    
-    const commandService = plugin.root.inject('command');
-    if (commandService) {
-      for (const command of commandService.items) {
-        const isFromTool = Array.from(this.toolCommands.values()).includes(command);
-        if (!isFromTool) {
-          const toolFromCmd = commandToToolFn(command, 'command');
-          allTools.push(toolFromCmd);
-        }
-      }
-    }
-    
-    for (const [name, context] of plugin.root.contexts) {
-      const adapterValue = context.value;
-      if (adapterValue && typeof adapterValue === 'object' && 'getTools' in adapterValue) {
-        const adapter = adapterValue as { getTools(): Tool[] };
-        allTools.push(...adapter.getTools());
-      }
-    }
-    
-    return allTools;
-  }
-
-  /**
    * 根据上下文过滤工具
    */
   filterByContext(tools: Tool[], context: ToolContext): Tool[] {
@@ -883,6 +473,14 @@ export class ToolFeature extends Feature<Tool> {
       }
     }
     return result;
+  }
+
+  /**
+   * 生命周期: 销毁时清理所有工具
+   */
+  dispose(): void {
+    this.byName.clear();
+    this.#toolPluginMap.clear();
   }
 
   /**
@@ -920,15 +518,7 @@ export class ToolFeature extends Feature<Tool> {
       addTool(tool: ToolInput) {
         const plugin = getPlugin();
         const toolObj = isZhinTool(tool) ? tool.toTool() : tool as Tool;
-        const dispose = feature.addTool(tool, plugin.name, true);
-        plugin.recordFeatureContribution(feature.name, toolObj.name);
-        plugin.onDispose(dispose);
-        return dispose;
-      },
-      addToolOnly(tool: ToolInput) {
-        const plugin = getPlugin();
-        const toolObj = isZhinTool(tool) ? tool.toTool() : tool as Tool;
-        const dispose = feature.addTool(tool, plugin.name, false);
+        const dispose = feature.addTool(tool, plugin.name);
         plugin.recordFeatureContribution(feature.name, toolObj.name);
         plugin.onDispose(dispose);
         return dispose;
@@ -939,8 +529,6 @@ export class ToolFeature extends Feature<Tool> {
 
 // 导出类型和工具函数
 export { 
-  toolToCommand, 
-  commandToToolFn as commandToTool,
   canAccessTool,
   inferPermissionLevel,
   hasPermissionLevel,

@@ -42,4 +42,3 @@ const config: Config = {
 // 将 API 地址写入环境变量，供 tool handler 使用
 process.env.ZHIN_60S_API = config.apiBase || 'https://60s.viki.moe';
 
-logger.info(`[60s] 插件已加载，API 地址: ${process.env.ZHIN_60S_API}，工具由 tools/ 目录自动发现`);

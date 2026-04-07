@@ -180,7 +180,7 @@ export function registerAITrigger(refs: AIServiceRefs): void {
       const toolService = root.inject('tool');
       let externalTools: Tool[] = [];
       if (toolService) {
-        externalTools = toolService.collectAll(root);
+        externalTools = toolService.getAll();
         externalTools = toolService.filterByContext(externalTools, toolContext);
       }
       logger.debug(`[AI Handler] 工具收集: ${externalTools.length} 个, ${(performance.now() - tCollect).toFixed(0)}ms`);

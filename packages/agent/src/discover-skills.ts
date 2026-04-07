@@ -26,12 +26,14 @@ export interface SkillMeta {
   tags?: string[];
   /** SKILL.md frontmatter 中声明的关联工具名列表 */
   toolNames?: string[];
+  /** 支持的平台列表（如 ['icqq', 'discord']），不填则为通用 Skill */
+  platforms?: string[];
   filePath: string;
   /** 是否常驻注入 system prompt（frontmatter always: true） */
   always?: boolean;
   /** 当前环境是否满足依赖（bins/env） */
   available?: boolean;
-  /** 缺失的依赖描述（如 "CLI: ffmpeg", "ENV: API_KEY"） */
+  /** 缺失的依赖描述（如 "CLI: ffmpeg", "ENV: API_KEY") */
   requiresMissing?: string[];
 }
 
@@ -136,12 +138,13 @@ export async function discoverWorkspaceSkills(root?: Plugin | null): Promise<Ski
           keywords: metadata.keywords || [],
           tags: [...(metadata.tags || []), 'workspace-skill'],
           toolNames: Array.isArray(metadata.tools) ? metadata.tools : [],
+          platforms: Array.isArray(metadata.platforms) ? metadata.platforms : undefined,
           filePath: skillMdPath,
           always: Boolean(metadata.always),
           available,
           requiresMissing: requiresMissing.length > 0 ? requiresMissing : undefined,
         });
-        logger.debug(`Skill发现成功: ${metadata.name}, tools: ${JSON.stringify(metadata.tools || [])}`);
+        logger.debug(`Skill发现成功: ${metadata.name}, tools: ${JSON.stringify(metadata.tools || [])}, platforms: ${JSON.stringify(metadata.platforms || '(all)')}`);
       } catch (e) {
         logger.warn(`Failed to parse SKILL.md in ${skillMdPath}:`, e);
       }

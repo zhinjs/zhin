@@ -342,18 +342,6 @@ export function createMessageDispatcher(
     }
   }
 
-  async function runCustomMiddlewares(message: Message<any>): Promise<void> {
-    if (!rootPlugin) return;
-    const customMiddlewares = (rootPlugin as any)._getCustomMiddlewares?.() as
-      | MessageMiddleware<RegisteredAdapter>[]
-      | undefined;
-    if (customMiddlewares && customMiddlewares.length > 0) {
-      const { compose } = await import('../utils.js');
-      const composed = compose(customMiddlewares);
-      await composed(message, async () => {});
-    }
-  }
-
   const service: MessageDispatcherService = {
     async dispatch(message: Message<any>) {
       const passed = await runGuardrails(message);
@@ -373,7 +361,6 @@ export function createMessageDispatcher(
           default:
             break;
         }
-        await runCustomMiddlewares(message);
         return;
       }
 
@@ -383,7 +370,6 @@ export function createMessageDispatcher(
       let wantAi = aiRes.triggered;
 
       if (!wantCmd && !wantAi) {
-        await runCustomMiddlewares(message);
         return;
       }
 
@@ -406,8 +392,6 @@ export function createMessageDispatcher(
         await runCmd();
         await runAi();
       }
-
-      await runCustomMiddlewares(message);
     },
 
     addGuardrail(guardrail: GuardrailMiddleware) {

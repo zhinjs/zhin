@@ -1,5 +1,7 @@
 ---
 name: github
+platforms:
+  - github
 description: >-
   GitHub 全功能适配器：PR 管理（创建/合并/Review/关闭/Diff）、Issue 管理（创建/编辑/关闭/评论）、
   仓库操作（Star/Fork/搜索/标签）、CI/Release/Branch 查询、文件查看/编辑、提交历史、Webhook 订阅。

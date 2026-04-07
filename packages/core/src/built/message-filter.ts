@@ -271,6 +271,12 @@ export class MessageFilterFeature extends Feature<FilterRule> {
     return super.remove(rule, pluginName);
   }
 
+  /** 清理所有规则注册（热重载时由 Plugin.stop() 调用） */
+  dispose(): void {
+    this.byName.clear();
+    this.#sortedCache = null;
+  }
+
   /** 序列化为 JSON（供 Web 控制台展示） */
   toJSON(pluginName?: string): FeatureJSON {
     const list = pluginName ? this.getByPlugin(pluginName) : this.items;

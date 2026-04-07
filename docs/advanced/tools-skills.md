@@ -103,9 +103,6 @@ interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
   hidden?: boolean                // 对 AI 隐藏
   preExecutable?: boolean         // 允许预执行（无副作用的只读工具）
   
-  // 可选 - 命令互转
-  command?: { pattern: string } | false  // 同时生成命令
-  
   // 可选 - 元数据
   source?: string                 // 来源标识
   kind?: string                   // 工具分类（如 file / shell / web）
@@ -211,9 +208,6 @@ parameters:
     type: string
     description: 数学表达式
     required: true
-command:
-  pattern: "calc <expression:text>"
-  alias: [计算]
 keywords: [计算, 算]
 tags: [utility, math]
 handler: ./handler.ts
@@ -262,7 +256,7 @@ tags: [utility]
 | `description` | string | ✅ | 工具描述 |
 | `parameters` | object | — | 简写参数定义（见下） |
 | `handler` | string | — | handler 文件路径（相对于 .tool.md） |
-| `command` | object | — | 命令配置：`pattern`、`alias`、`examples` |
+
 | `keywords` | string[] | — | 触发关键词 |
 | `tags` | string[] | — | 分类标签 |
 | `platforms` | string[] | — | 限定平台 |
@@ -434,7 +428,7 @@ plugins/utils/my-plugin/skills/my-plugin/SKILL.md
 
 #### 包内 `skills/<name>/SKILL.md`
 
-各适配器包内提供 `skills/<适配器名>/SKILL.md`（含 `name`、`description`、`keywords` 等 frontmatter），工具通过 `addTool` / `registerDefaultTools` / 群管自动生成注册。**`Adapter.declareSkill` 已从 Core 移除**，仅保留文件化技能。
+各适配器包内提供 `skills/＜适配器名＞/SKILL.md`（含 `name`、`description`、`keywords` 等 frontmatter），工具通过 `addTool` / 群管自动生成注册。**`Adapter.declareSkill` 已从 Core 移除**，仅保留文件化技能。
 
 #### 群管理能力（推荐：覆写方法自动检测）
 
@@ -586,32 +580,6 @@ execute: async (args, context) => {
 ## Tool 与 Command 互转
 
 ### 工具自动生成命令
-
-注册工具时通过 `command` 选项同时生成命令：
-
-```typescript
-addTool({
-  name: 'get_weather',
-  description: '查询天气',
-  parameters: { ... },
-  command: { pattern: 'weather <city:string>' },  // 自动生成命令
-  execute: async (args) => { ... },
-})
-```
-
-用户可以通过 `weather 北京` 命令调用，AI 也可以通过工具调用。
-
-### 手动转换
-
-```typescript
-import { toolToCommand, commandToTool } from 'zhin.js'
-
-// Tool -> Command
-const command = toolToCommand(myTool)
-
-// Command -> Tool（第二个参数为插件名）
-const tool = commandToTool(myCommand, 'my-plugin')
-```
 
 ## 去重机制
 

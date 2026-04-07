@@ -7,9 +7,5 @@ parameters:
   province:
     type: string
     description: 省份名称，如"四川"、"北京"
-command:
-  pattern: "fuel [province:text]"
-  alias: [油价, yj]
-  examples: ["/fuel", "/油价 四川"]
 handler: ./handler.ts
 ---

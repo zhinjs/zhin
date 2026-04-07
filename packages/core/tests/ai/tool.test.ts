@@ -13,7 +13,6 @@ import {
   ZhinTool, 
   defineTool, 
   isZhinTool,
-  generatePattern,
   extractParamInfo,
   hasPermissionLevel,
   inferPermissionLevel,
@@ -110,34 +109,7 @@ describe('ZhinTool 类', () => {
     expect(help).toContain('group');
   });
 
-  it('应该能设置命令配置', () => {
-    const tool = new ZhinTool('cmd_test')
-      .desc('命令测试')
-      .usage('使用说明1', '使用说明2')
-      .examples('/cmd_test arg1', '/cmd_test arg2')
-      .alias('别名1', '别名2')
-      .execute(async () => '');
 
-    const toolObj = tool.toTool();
-    
-    // 没有设置 action，command 应该是 false
-    expect(toolObj.command).toBe(false);
-  });
-
-  it('设置 action 后应该生成命令配置', () => {
-    const tool = new ZhinTool('with_action')
-      .desc('带命令的工具')
-      .param('arg', { type: 'string' }, true)
-      .usage('使用说明')
-      .execute(async () => '')
-      .action(async () => '命令结果');
-
-    const toolObj = tool.toTool();
-    
-    expect(toolObj.command).not.toBe(false);
-    expect((toolObj.command as any).enabled).toBe(true);
-    expect((toolObj.command as any).usage).toContain('使用说明');
-  });
 });
 
 describe('defineTool 辅助函数', () => {
@@ -197,52 +169,7 @@ describe('isZhinTool 函数', () => {
   });
 });
 
-describe('generatePattern 函数', () => {
-  it('应该生成基本命令模式', () => {
-    const tool: Tool = {
-      name: 'test',
-      description: '',
-      parameters: { type: 'object', properties: {} },
-      execute: async () => '',
-    };
 
-    expect(generatePattern(tool)).toBe('test');
-  });
-
-  it('应该生成带参数的命令模式', () => {
-    const tool: Tool = {
-      name: 'weather',
-      description: '',
-      parameters: {
-        type: 'object',
-        properties: {
-          city: { type: 'string', description: '城市' },
-          days: { type: 'number', description: '天数' },
-        },
-        required: ['city'],
-      },
-      execute: async () => '',
-    };
-
-    const pattern = generatePattern(tool);
-    
-    expect(pattern).toContain('weather');
-    expect(pattern).toContain('<city:text>');
-    expect(pattern).toContain('[days:number]');
-  });
-
-  it('应该使用自定义模式', () => {
-    const tool: Tool = {
-      name: 'custom',
-      description: '',
-      parameters: { type: 'object', properties: {} },
-      command: { pattern: 'custom <arg1> [arg2]' },
-      execute: async () => '',
-    };
-
-    expect(generatePattern(tool)).toBe('custom <arg1> [arg2]');
-  });
-});
 
 describe('extractParamInfo 函数', () => {
   it('应该提取参数信息', () => {
@@ -429,17 +356,7 @@ describe('ZhinTool 高级功能', () => {
     expect(toolObj.permissions).toContain('operator');
   });
 
-  it('应该支持自定义命令模式', () => {
-    const tool = new ZhinTool('custom_pattern')
-      .desc('自定义模式')
-      .param('arg', { type: 'string' }, true)
-      .pattern('custom <arg:rest>')
-      .execute(async () => '')
-      .action(async () => '');
 
-    const toolObj = tool.toTool();
-    expect((toolObj.command as any).pattern).toBe('custom <arg:rest>');
-  });
 
   it('应该支持多次调用 param 更新参数', () => {
     const tool = new ZhinTool('update_param')
@@ -519,65 +436,7 @@ describe('ZhinTool 高级功能', () => {
   });
 });
 
-describe('generatePattern 边界情况', () => {
-  it('应该处理没有 properties 的参数', () => {
-    const tool: Tool = {
-      name: 'no_props',
-      description: '',
-      parameters: { type: 'object' },
-      execute: async () => '',
-    };
 
-    expect(generatePattern(tool)).toBe('no_props');
-  });
-
-  it('应该处理空 properties', () => {
-    const tool: Tool = {
-      name: 'empty_props',
-      description: '',
-      parameters: { type: 'object', properties: {} },
-      execute: async () => '',
-    };
-
-    expect(generatePattern(tool)).toBe('empty_props');
-  });
-
-  it('应该正确处理 number 类型参数', () => {
-    const tool: Tool = {
-      name: 'number_param',
-      description: '',
-      parameters: {
-        type: 'object',
-        properties: {
-          count: { type: 'number', description: '数量' },
-        },
-        required: ['count'],
-      },
-      execute: async () => '',
-    };
-
-    const pattern = generatePattern(tool);
-    expect(pattern).toContain('<count:number>');
-  });
-
-  it('应该正确处理自定义 paramType', () => {
-    const tool: Tool = {
-      name: 'custom_type',
-      description: '',
-      parameters: {
-        type: 'object',
-        properties: {
-          content: { type: 'string', paramType: 'rest' as any },
-        },
-        required: ['content'],
-      },
-      execute: async () => '',
-    };
-
-    const pattern = generatePattern(tool);
-    expect(pattern).toContain('<content:rest>');
-  });
-});
 
 describe('extractParamInfo 边界情况', () => {
   it('应该处理空 properties', () => {

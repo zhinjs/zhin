@@ -43,7 +43,7 @@ flowchart LR
 
 ## 中间件（Middleware）何时运行 {#中间件-middleware-何时运行}
 
-在已启用 MessageDispatcher 时，通过 `addMiddleware` 注册的函数会在 **`MessageDispatcher.dispatch` 完成命令/AI 等主处理之后** 执行（实现上为根插件上除内置命令中间件外的 `_getCustomMiddlewares` 链）。  
+在已启用 MessageDispatcher 时，通过 `addMiddleware` 注册的函数会在消息生命周期事件中执行。  
 因此：**需要在路由之前拦截、过滤、限流**，优先使用 **`dispatcher.addGuardrail`** 或框架内置的 [消息过滤](./message-filter.md)。中间件更适合 **日志、指标、后处理** 等。
 
 中间件仍以洋葱模型运行：每个中间件可选择不调用 `next()` 以终止本条链路。

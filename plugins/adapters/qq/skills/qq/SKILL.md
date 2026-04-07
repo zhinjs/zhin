@@ -1,5 +1,7 @@
 ---
 name: qq
+platforms:
+  - qq
 description: QQ 官方机器人管理：群管（踢人、禁言、全员禁言、查成员/群信息）、频道/子频道管理、角色管理（创建/添加/移除）、成员详情。仅有昵称时请先 list_members 查 user_id。
 keywords:
   - qq

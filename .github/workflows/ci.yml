@@ -37,6 +37,9 @@ jobs:
           NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
+      - name: check changeset
+        run: pnpm changeset status
+      
       - name: build packages
         run: pnpm build
       

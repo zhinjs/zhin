@@ -29,8 +29,9 @@
     "types": []
   },
   "include": [
-    "apps/**/*",
-    "packages/**/*"
+    "basic/**/*",
+    "packages/**/*",
+    "plugins/**/*"
   ],
   "exclude": [
     "node_modules",

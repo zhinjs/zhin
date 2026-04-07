@@ -1,5 +1,7 @@
 ---
 name: onebot11
+platforms:
+  - onebot11
 description: OneBot11 协议群管理：踢人、禁言、全员禁言、设管理员、改昵称/群名、头衔、查成员/群信息。仅有昵称时请先 list_members 获取 user_id。
 keywords:
   - onebot

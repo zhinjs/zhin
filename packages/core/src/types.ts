@@ -381,13 +381,6 @@ export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
   keywords?: string[];
   
   /** 
-   * 命令配置（可选）
-   * 如果不提供，会根据 parameters 自动生成命令模式
-   * 如果设置为 false，则不生成命令
-   */
-  command?: Tool.CommandConfig | false;
-  
-  /** 
    * 权限要求（旧版，保留兼容）
    * 执行此工具需要的权限列表
    */
@@ -437,30 +430,6 @@ export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
 export type ToolDefinition<TArgs extends Record<string, any> = Record<string, any>> = Tool<TArgs>;
 
 export namespace Tool {
-  /**
-   * 命令配置
-   */
-  export interface CommandConfig {
-    /** 
-     * 自定义命令模式
-     * 如果不提供，会根据 parameters 自动生成
-     * @example 'weather <city>' | 'calc <expression:text>'
-     */
-    pattern?: string;
-    
-    /** 命令别名 */
-    alias?: string[];
-    
-    /** 命令使用说明 */
-    usage?: string[];
-    
-    /** 命令示例 */
-    examples?: string[];
-    
-    /** 是否启用（默认 true） */
-    enabled?: boolean;
-  }
-  
   /**
    * 参数信息
    */

@@ -7,9 +7,5 @@ parameters:
   limit:
     type: number
     description: 返回条数，默认10条
-command:
-  pattern: "douyin [limit:number]"
-  alias: [抖音热搜, dy]
-  examples: ["/douyin", "/douyin 20"]
 handler: ./handler.ts
 ---

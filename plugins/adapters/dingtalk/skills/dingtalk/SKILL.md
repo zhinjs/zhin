@@ -1,5 +1,7 @@
 ---
 name: dingtalk
+platforms:
+  - dingtalk
 description: 钉钉平台管理：群管理（踢人、改群名、查群信息）、组织架构（部门/用户查询）、工作通知、群聊创建与管理。仅有昵称时请先 list_members 获取 user_id 再操作。
 keywords:
   - dingtalk

@@ -7,9 +7,5 @@ parameters:
   limit:
     type: number
     description: 返回条数，默认10条
-command:
-  pattern: "zhihu [limit:number]"
-  alias: [知乎热榜, zh]
-  examples: ["/zhihu", "/zhihu 20"]
 handler: ./handler.ts
 ---

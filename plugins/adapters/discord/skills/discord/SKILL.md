@@ -1,5 +1,7 @@
 ---
 name: discord
+platforms:
+  - discord
 description: Discord 服务器管理：群管（踢人、封禁、解封、禁言、改昵称、查成员）、角色管理、帖子/论坛、表情反应、Embed 消息、线程创建。需先 list_members 获取用户 ID。
 keywords:
   - discord

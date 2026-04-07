@@ -8,9 +8,5 @@ parameters:
     type: string
     description: 城市名称，如"成都"、"北京"
     required: true
-command:
-  pattern: "weather <city:text>"
-  alias: [天气, tq]
-  examples: ["/weather 成都", "/天气 北京"]
 handler: ./handler.ts
 ---

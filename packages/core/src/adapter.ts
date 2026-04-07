@@ -4,8 +4,7 @@ import { EventEmitter } from "events";
 import { Message } from "./message.js";
 import { Notice } from "./notice.js";
 import { Request } from "./request.js";
-import { BeforeSendHandler, SendOptions, AITool, ToolContext } from "./types.js";
-import { isZhinTool, ToolInput } from "./built/tool.js";
+import { BeforeSendHandler, SendOptions } from "./types.js";
 import { segment } from "./utils.js";
 /**
  * Adapter类：适配器抽象，管理多平台Bot实例。
@@ -16,8 +15,6 @@ import { segment } from "./utils.js";
 export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.Lifecycle> {
   /** 当前适配器下所有Bot实例，key为bot名称 */
   public bots: Map<string, R> = new Map<string, R>();
-  /** 适配器提供的 AI 工具 */
-  public tools: Map<string, AITool> = new Map<string, AITool>();
   /**
    * 构造函数
    * @param name 适配器名称（如 'process'、'qq' 等）
@@ -103,130 +100,33 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
    * @param plugin 所属插件实例
    */
   async stop() {
-    try {
-      for (const [id, bot] of this.bots) {
-        try {
-          await bot.$disconnect();
-          this.logger.debug(`bot ${id} of adapter ${this.name} disconnected`);
-        } catch (error) {
-          // 如果断开连接失败，确保错误正确传播
-          throw error;
-        }
+    const errors: Error[] = [];
+    for (const [id, bot] of this.bots) {
+      try {
+        await bot.$disconnect();
+        this.logger.debug(`bot ${id} of adapter ${this.name} disconnected`);
+      } catch (error) {
+        errors.push(error instanceof Error ? error : new Error(String(error)));
+        this.logger.error(`bot ${id} of adapter ${this.name} disconnect failed:`, error);
       }
-      // 清理 bots Map
-      this.bots.clear();
-      
-      // 从 adapters 数组中移除
-      const idx = this.plugin.root.adapters.indexOf(this.name);
-      if (idx !== -1) {
-        this.plugin.root.adapters.splice(idx, 1);
-      }
-      
-      // 移除所有事件监听器
-      this.removeAllListeners();
-      
-      this.logger.info(`adapter ${this.name} stopped`);
-    } catch (error) {
-      // 确保错误正确传播
-      throw error;
     }
-  }
-  
-  /**
-   * 注册 AI 工具
-   * @param tool 工具定义
-   * @returns 返回一个移除工具的函数
-   */
-  addTool(input: ToolInput): () => void {
-    const tool: AITool = isZhinTool(input) ? input.toTool() : input;
-    // 自动添加适配器源标识
-    const toolWithSource: AITool = {
-      ...tool,
-      source: tool.source || `adapter:${this.name}`,
-      tags: [...(tool.tags || []), 'adapter', this.name],
-    };
-    this.tools.set(tool.name, toolWithSource);
-    return () => {
-      this.tools.delete(tool.name);
-    };
-  }
-  
-  /**
-   * 获取所有注册的工具
-   * @returns 工具数组
-   */
-  getTools(): AITool[] {
-    return Array.from(this.tools.values());
-  }
-  
-  /**
-   * 根据名称获取工具
-   * @param name 工具名称
-   * @returns 工具定义或 undefined
-   */
-  getTool(name: string): AITool | undefined {
-    return this.tools.get(name);
-  }
-  
-  /**
-   * 提供默认的适配器工具（子类可覆盖）
-   * 包含发送消息、撤回消息等基础能力
-   */
-  protected registerDefaultTools(): void {
-    // 发送消息工具
-    this.addTool({
-      name: `${this.name}_send_message`,
-      description: `使用 ${this.name} 适配器发送消息到指定目标`,
-      parameters: {
-        type: 'object',
-        properties: {
-          bot: {
-            type: 'string',
-            description: 'Bot 名称/ID',
-          },
-          id: {
-            type: 'string',
-            description: '目标 ID（用户/群/频道）',
-          },
-          type: {
-            type: 'string',
-            enum: ['private', 'group', 'channel'],
-            description: '消息类型',
-          },
-          content: {
-            type: 'string',
-            description: '消息内容',
-          },
-        },
-        required: ['bot', 'id', 'type', 'content'],
-      },
-      execute: async (args) => {
-        const { bot, id, type, content } = args;
-        return await this.sendMessage({
-          context: this.name,
-          bot,
-          id,
-          type: type as 'private' | 'group' | 'channel',
-          content,
-        });
-      },
-    });
+    // 无论是否有错误，始终完成清理
+    this.bots.clear();
     
-    // 获取 Bot 列表工具
-    this.addTool({
-      name: `${this.name}_list_bots`,
-      description: `获取 ${this.name} 适配器下所有已连接的 Bot 列表`,
-      parameters: {
-        type: 'object',
-        properties: {},
-      },
-      execute: async () => {
-        return Array.from(this.bots.entries()).map(([id, bot]) => ({
-          id,
-          connected: bot.$connected,
-        }));
-      },
-    });
+    // 从 adapters 数组中移除
+    const idx = this.plugin.root.adapters.indexOf(this.name);
+    if (idx !== -1) {
+      this.plugin.root.adapters.splice(idx, 1);
+    }
+    
+    // 移除所有事件监听器
+    this.removeAllListeners();
+    
+    this.logger.info(`adapter ${this.name} stopped`);
+    
+    if (errors.length) {
+      throw new AggregateError(errors, `adapter ${this.name}: ${errors.length} bot(s) failed to disconnect`);
+    }
   }
 }
 export interface Adapters {}

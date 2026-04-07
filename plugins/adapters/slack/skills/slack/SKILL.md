@@ -1,5 +1,7 @@
 ---
 name: slack
+platforms:
+  - slack
 description: Slack 工作区管理：群管（踢人、改频道名、查成员/频道信息）、邀请用户、设置话题/用途、归档/恢复频道、置顶消息、表情反应、用户信息查询。
 keywords:
   - slack

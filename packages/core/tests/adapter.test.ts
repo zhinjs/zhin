@@ -222,15 +222,14 @@ describe('Adapter Core Functionality', () => {
       // Mock logger to spy on error logging
       const loggerSpy = vi.spyOn(adapter.logger, 'error')
       
-      // The adapter should continue cleanup despite errors
-      // Note: Current implementation throws, but this test documents the desired behavior
-      // where adapter.stop() should handle errors gracefully and continue cleanup
-      await expect(adapter.stop()).rejects.toThrow('Disconnect failed')
+      // adapter.stop() should handle errors gracefully: collect errors, continue cleanup
+      await expect(adapter.stop()).rejects.toThrow('1 bot(s) failed to disconnect')
       
-      // Even though it throws, we document that graceful handling would be:
-      // - Log the error
-      // - Continue disconnecting other bots
-      // - Complete cleanup (clear bots, remove from adapters list, remove listeners)
+      // Should log the error for the failed bot
+      expect(loggerSpy).toHaveBeenCalled()
+      
+      // Should still clean up all bots (including the second one that succeeded)
+      expect(adapter.bots.size).toBe(0)
     })
   })
 

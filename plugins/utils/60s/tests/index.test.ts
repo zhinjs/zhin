@@ -11,7 +11,6 @@ describe('60s 插件 ZhinTool 定义', () => {
     .desc('获取每日60秒新闻，快速了解今日要闻')
     .tag('新闻', '资讯', '60s')
     .keyword('60s', '新闻', '今日新闻', '60秒', '每日新闻', '读懂世界')
-    .alias('新闻', '今日新闻', '60秒')
     .execute(async () => '测试新闻');
 
   const weatherTool = new ZhinTool('weather')

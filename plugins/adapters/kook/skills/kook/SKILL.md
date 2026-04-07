@@ -1,5 +1,7 @@
 ---
 name: kook
+platforms:
+  - kook
 description: KOOK 服务器管理：群管（踢人、封禁、解封、改昵称、查成员）、角色管理（创建/删除/授予/撤销）、黑名单。仅昵称时请先 list_members 获取 user_id。
 keywords:
   - kook

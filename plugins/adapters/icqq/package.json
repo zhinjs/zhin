@@ -57,7 +57,7 @@
     "@zhin.js/mcp": "workspace:^",
     "lucide-react": "^0.469.0",
     "radix-ui": "^1.4.3",
-    "typescript": "^5.3.0",
+    "typescript": "^5.9.3",
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {

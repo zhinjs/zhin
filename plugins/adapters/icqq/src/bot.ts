@@ -165,6 +165,8 @@ export class IcqqBot
   }
 
   async $disconnect(): Promise<void> {
+    // Client 继承自 EventEmitter，清除 $connect() 注册的所有监听器
+    (this as unknown as import('node:events').EventEmitter).removeAllListeners();
     await this.logout();
     this.$connected = false;
   }

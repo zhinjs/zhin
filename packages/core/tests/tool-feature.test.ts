@@ -1,13 +1,10 @@
 /**
- * ToolFeature 补全测试
- * 测试 toolToCommand / commandToTool / ToolFeature.add / filterByContext
+ * ToolFeature 测试
+ * 测试 ToolFeature.add / filterByContext / ZhinTool / canAccessTool
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
-  generatePattern,
   extractParamInfo,
-  toolToCommand,
-  commandToTool,
   canAccessTool,
   inferPermissionLevel,
   hasPermissionLevel,
@@ -16,59 +13,6 @@ import {
   ToolFeature,
 } from '../src/built/tool.js';
 import type { Tool, ToolContext } from '../src/types.js';
-
-describe('generatePattern', () => {
-  it('应生成无参数的模式', () => {
-    const tool: Tool = {
-      name: 'ping',
-      description: '测试',
-      parameters: { type: 'object', properties: {} },
-      execute: async () => 'pong',
-    };
-    expect(generatePattern(tool)).toBe('ping');
-  });
-
-  it('应生成有必填参数的模式', () => {
-    const tool: Tool = {
-      name: 'weather',
-      description: '天气',
-      parameters: {
-        type: 'object',
-        properties: { city: { type: 'string', description: '城市' } },
-        required: ['city'],
-      },
-      execute: async () => '',
-    };
-    expect(generatePattern(tool)).toBe('weather <city:text>');
-  });
-
-  it('应生成有可选参数的模式', () => {
-    const tool: Tool = {
-      name: 'search',
-      description: '搜索',
-      parameters: {
-        type: 'object',
-        properties: { query: { type: 'string' }, limit: { type: 'number' } },
-        required: ['query'],
-      },
-      execute: async () => '',
-    };
-    const pattern = generatePattern(tool);
-    expect(pattern).toContain('<query:text>');
-    expect(pattern).toContain('[limit:number]');
-  });
-
-  it('应使用自定义 command.pattern', () => {
-    const tool: Tool = {
-      name: 'custom',
-      description: '自定义',
-      parameters: { type: 'object', properties: {} },
-      execute: async () => '',
-      command: { pattern: 'my-custom <arg:text>', enabled: true },
-    };
-    expect(generatePattern(tool)).toBe('my-custom <arg:text>');
-  });
-});
 
 describe('extractParamInfo', () => {
   it('应从空 properties 返回空数组', () => {

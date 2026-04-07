@@ -140,11 +140,11 @@ export function collectRelevantTools(
 
   // 1. SkillRegistry two-level filter
   if (skillRegistry) {
-    const skills = skillRegistry.search(message, { maxResults: config.maxSkills });
+    const skills = skillRegistry.search(message, { maxResults: config.maxSkills, platform: context.platform });
     const skillStr = skills.length > 0
       ? skills.map(s => `${s.name}(${s.tools?.length || 0}工具)`).join(', ')
       : '(无匹配技能)';
-    logger.debug(`[Skill 匹配] ${skillStr}`);
+    logger.debug(`[Skill 匹配] ${skillStr}` + (context.platform ? ` (平台: ${context.platform})` : ''));
 
     for (const skill of skills) {
       for (const tool of skill.tools) {
@@ -162,7 +162,6 @@ export function collectRelevantTools(
   // 2. External tools
   let deduped = 0;
   for (const tool of externalTools) {
-    if (tool.name.startsWith('cmd_') || tool.name.startsWith('process_')) continue;
     const toolPerm = tool.permissionLevel ? (PERM_MAP[tool.permissionLevel] ?? 0) : 0;
     if (toolPerm > callerPerm) continue;
     if (collectedNames.has(tool.name)) {

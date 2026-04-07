@@ -89,7 +89,7 @@ useContext('router', 'github', (router, adapter) => {
 });
 
 // ── MCP 工具注册 ─────────────────────────────────────────────────────
-useContext('mcp' as any, 'github', (mcp: McpToolRegistry, adapter: GitHubAdapter) => {
+useContext('mcp', 'github', (mcp: McpToolRegistry, adapter: GitHubAdapter) => {
   const tools: McpToolDef[] = [
     // --- PR ---
     {

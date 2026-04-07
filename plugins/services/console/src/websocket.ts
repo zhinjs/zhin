@@ -23,7 +23,8 @@ import { removePendingRequest } from "./bot-hub.js";
 import { getCronManager, generateCronJobId } from "@zhin.js/agent";
 import type { CronJobRecord } from "@zhin.js/agent";
 
-const { root, logger } = usePlugin();
+const plugin = usePlugin();
+const { root, logger } = plugin;
 
 function collectBotsList(): Array<{
   name: string;
@@ -145,7 +146,15 @@ function getConfigFilePath(): string {
 
 export function setupWebSocket(webServer: WebServer) {
   setBotHubWss(webServer.ws);
-  initBotHub(root as { on: (ev: string, fn: (...a: unknown[]) => void) => void });
+  const disposeBotHub = initBotHub(root as {
+    on: (ev: string, fn: (...a: unknown[]) => void) => void;
+    off?: (ev: string, fn: (...a: unknown[]) => void) => void;
+    adapters?: Iterable<string>;
+    inject?: (key: string) => unknown;
+  });
+  if (disposeBotHub) {
+    plugin.onDispose(disposeBotHub);
+  }
 
   webServer.ws.on("connection", (ws: WebSocket) => {
     ws.send(JSON.stringify({

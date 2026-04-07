@@ -33,6 +33,13 @@ export interface Skill {
   tools: Tool[];
 
   /**
+   * 支持的平台列表
+   * 例如：['icqq', 'discord']
+   * 不填则为通用 Skill（所有平台可用）
+   */
+  platforms?: string[];
+
+  /**
    * 触发关键词
    * 当用户消息包含这些关键词时，优先选择此 Skill
    */
@@ -118,6 +125,13 @@ export class SkillFeature extends Feature<Skill> {
   }
 
   /**
+   * 清理所有 Skill 注册（热重载时由 Plugin.stop() 调用）
+   */
+  dispose(): void {
+    this.byName.clear();
+  }
+
+  /**
    * 获取所有已注册 Skill
    */
   getAll(): Skill[] {
@@ -128,9 +142,17 @@ export class SkillFeature extends Feature<Skill> {
    * 按关键词/标签搜索相关 Skill
    * 返回按相关性排序的 Skill 列表
    */
-  search(query: string, options?: { maxResults?: number }): Skill[] {
+  search(query: string, options?: { maxResults?: number; platform?: string }): Skill[] {
     const maxResults = options?.maxResults ?? 5;
+    const platform = options?.platform;
     const scored = this.items
+      .filter(skill => {
+        // 平台过滤：有 platforms 限制的 skill 必须匹配当前平台
+        if (platform && skill.platforms?.length) {
+          return skill.platforms.includes(platform);
+        }
+        return true;
+      })
       .map(skill => ({ skill, score: this.#scoreSkill(skill, query) }))
       .filter(({ score }) => score > 0)
       .sort((a, b) => b.score - a.score)

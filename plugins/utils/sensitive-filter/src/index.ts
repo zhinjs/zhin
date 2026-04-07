@@ -123,7 +123,7 @@ const sensitiveWords = getEnabledWords(config);
 const sensitiveRegex = createSensitiveWordRegex(sensitiveWords);
 
 // 注册发送前过滤器
-plugin.on('before.sendMessage', async (options: SendOptions) => {
+const sensitiveFilterHandler = async (options: SendOptions) => {
     const { content } = options;
 
     // 如果内容为空，直接返回
@@ -166,7 +166,10 @@ plugin.on('before.sendMessage', async (options: SendOptions) => {
       ...options,
       content: filtered as any,
     };
-  });
+  };
+
+plugin.on('before.sendMessage', sensitiveFilterHandler);
+plugin.onDispose(() => { plugin.off('before.sendMessage', sensitiveFilterHandler); });
 
 logger.info("敏感词过滤功能已启用");
 logger.info(`敏感词过滤插件已加载，共 ${sensitiveWords.length} 个敏感词`);

@@ -33,7 +33,6 @@ function formatMemoSize(size: number) {
   }
   return `${size.toFixed(2)}${sizes[0]}`;
 }
-console.log('plugin',p2.addCommand)
 addCommand(
   new MessageCommand("send").action(
     (_, result) => result.remaining as MessageElement[]
@@ -475,10 +474,11 @@ addCommand(
       const cron = new Cron("*/10 * * * * *", () => {
         console.log(`[Test Cron] 定时任务执行: ${new Date().toLocaleTimeString()}`);
       });
-
-      plugin.addCron(cron);
-
       const cronService = plugin.inject('cron');
+      if (cronService) {
+        const dispose = cronService.add(cron, plugin.name);
+        plugin.onDispose(dispose);
+      }
       const count = cronService?.items.length
 
       return [
@@ -500,7 +500,7 @@ addCommand(
       crons?.remove(name);
       return `已停止定时任务: ${name}`;
     })
-);
+)
 addCommand(
   new MessageCommand("cron-list")
     .desc("查看定时任务状态", "显示所有定时任务的状态")
@@ -536,11 +536,6 @@ addCommand(
     })
 );
 
-// 插件销毁时的日志
-plugin.onDispose(() => {
-  console.log('[Test Plugin] 插件正在销毁...');
-  console.log(`[Test Plugin] 动态命令数: ${dynamicDisposes.length} (将自动清理)`);
-});
 
 useContext("database", async (db) => {
   db.define("test_model", {
@@ -562,8 +557,6 @@ useContext("database", async (db) => {
 });
 
 useContext("web", (web) => {
-  console.log('add web entry');
-  console.log({cwd: process.cwd()});
   const dispose = web.addEntry(
     path.resolve(process.cwd(), "client/index.tsx"));
   return dispose;

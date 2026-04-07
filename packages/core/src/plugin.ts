@@ -8,7 +8,7 @@ import { EventEmitter } from "events";
 import { createRequire } from "module";
 import type { Database, Definition } from "@zhin.js/database";
 import { Schema } from "@zhin.js/schema";
-import type { Models, RegisteredAdapters, AITool, ToolContext, PluginManifest } from "./types.js";
+import type { Models, RegisteredAdapters, PluginManifest } from "./types.js";
 import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
@@ -161,13 +161,9 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     const adapter = this.inject(message.$adapter) as Adapter;
     if (!adapter || !(adapter instanceof Adapter)) return await next();
     await message.$reply(result);
-    await next();
   };
   // 插件功能
   #middlewares: MessageMiddleware<RegisteredAdapter>[] = [this.#messageMiddleware];
-  
-  // AI 工具
-  #tools: Map<string, AITool> = new Map();
 
   // Feature 贡献追踪
   #featureContributions = new Map<string, Set<string>>();
@@ -222,84 +218,6 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     };
     this.#disposables.add(dispose);
     return dispose;
-  }
-
-  /**
-   * 添加 AI 工具
-   * 工具可以被 AI 服务调用来执行操作
-   * @param tool 工具定义
-   * @returns 返回一个移除工具的函数
-   */
-  addTool(tool: AITool): () => void {
-    // 自动添加插件源标识
-    const toolWithSource: AITool = {
-      ...tool,
-      source: tool.source || `plugin:${this.name}`,
-      tags: [...(tool.tags || []), 'plugin', this.name],
-    };
-    this.#tools.set(tool.name, toolWithSource);
-    const dispose = () => {
-      this.#tools.delete(tool.name);
-      this.#disposables.delete(dispose);
-    };
-    this.#disposables.add(dispose);
-    return dispose;
-  }
-  
-  /**
-   * 获取当前插件注册的所有工具
-   */
-  getTools(): AITool[] {
-    return Array.from(this.#tools.values());
-  }
-  
-  /**
-   * 获取当前插件及所有子插件注册的工具
-   */
-  getAllTools(): AITool[] {
-    const tools: AITool[] = [...this.getTools()];
-    for (const child of this.children) {
-      tools.push(...child.getAllTools());
-    }
-    return tools;
-  }
-  
-  /**
-   * 根据名称获取工具
-   */
-  getTool(name: string): AITool | undefined {
-    // 先在当前插件查找
-    const tool = this.#tools.get(name);
-    if (tool) return tool;
-    // 再在子插件中查找
-    for (const child of this.children) {
-      const childTool = child.getTool(name);
-      if (childTool) return childTool;
-    }
-    return undefined;
-  }
-  
-  /**
-   * 收集所有可用的工具（包括适配器提供的）
-   * 这是 AI 服务获取工具的主入口
-   */
-  collectAllTools(): AITool[] {
-    const tools: AITool[] = [];
-    
-    // 收集插件树中的所有工具
-    const rootPlugin = this.root;
-    tools.push(...rootPlugin.getAllTools());
-    
-    // 收集所有适配器的工具
-    for (const [name, context] of rootPlugin.contexts) {
-      const value = context.value;
-      if (value && typeof value === 'object' && 'getTools' in value) {
-        const adapter = value as Adapter;
-        tools.push(...adapter.getTools());
-      }
-    }
-    
-    return tools;
   }
 
   /**
@@ -513,7 +431,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     // #middlewares includes the default command middleware, only count user-added ones
     const userMiddlewareCount = this.#middlewares.length - 1; // subtract default #messageMiddleware
     if (userMiddlewareCount > 0) result.push({ name: 'middleware', count: userMiddlewareCount });
-    if (this.#tools.size > 0) result.push({ name: 'tool', count: this.#tools.size });
+    // Tool count is now tracked via ToolFeature, not Plugin#tools
     return result;
   }
 

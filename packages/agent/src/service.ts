@@ -143,9 +143,6 @@ export class AIService {
 
   collectAllTools(): AgentTool[] {
     const tools: AgentTool[] = [...this.builtinTools, ...this.customTools.values()];
-    if (this.plugin) {
-      for (const tool of this.plugin.collectAllTools()) tools.push(this.convertToolToAgentTool(tool));
-    }
     return tools;
   }
 
@@ -207,7 +204,7 @@ export class AIService {
     const provider = this.getProvider(options.provider);
     let tools: AgentTool[] = [];
     if (options.useBuiltinTools !== false) tools.push(...this.builtinTools);
-    if (options.collectExternalTools !== false) { tools.push(...this.customTools.values()); if (this.plugin) { for (const t of this.plugin.collectAllTools()) tools.push(this.convertToolToAgentTool(t)); } }
+    if (options.collectExternalTools !== false) { tools.push(...this.customTools.values()); }
     if (options.tools?.length) tools.push(...options.tools);
     return createAgent(provider, { model: options.model, systemPrompt: options.systemPrompt, tools, maxIterations: options.maxIterations });
   }

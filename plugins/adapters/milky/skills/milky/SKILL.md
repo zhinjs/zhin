@@ -1,5 +1,7 @@
 ---
 name: milky
+platforms:
+  - milky
 description: Milky 协议群管理：踢人、禁言、全员禁言、设管理员、改昵称/群名、查成员/群信息。
 keywords:
   - milky

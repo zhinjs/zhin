@@ -7,9 +7,5 @@ parameters:
   limit:
     type: number
     description: 返回条数，默认10条
-command:
-  pattern: "toutiao [limit:number]"
-  alias: [头条热搜, tt]
-  examples: ["/toutiao", "/tt 20"]
 handler: ./handler.ts
 ---

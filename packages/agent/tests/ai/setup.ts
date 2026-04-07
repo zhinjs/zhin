@@ -34,7 +34,6 @@ export const createMockPlugin = (name = 'test-plugin') => ({
   },
   logger: createMockLogger(),
   onDispose: vi.fn(),
-  collectAllTools: vi.fn(() => []),
   provide: vi.fn(),
   useContext: vi.fn(),
   addMiddleware: vi.fn(),

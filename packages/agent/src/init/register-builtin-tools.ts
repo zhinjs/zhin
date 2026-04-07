@@ -5,7 +5,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { getPlugin, type Tool, type SkillFeature, type AgentPresetFeature } from '@zhin.js/core';
+import { getPlugin,type Tool, type SkillFeature, type AgentPresetFeature } from '@zhin.js/core';
 import { createBuiltinTools } from '../builtin-tools.js';
 import { collectPluginSkillSearchRoots } from '../discovery-utils.js';
 import { discoverWorkspaceSkills, loadAlwaysSkillsContent, buildSkillsSummaryXML } from '../discover-skills.js';
@@ -46,38 +46,90 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
     let skillWatchers: fs.FSWatcher[] = [];
     let skillReloadDebounce: ReturnType<typeof setTimeout> | null = null;
     let toolReloadDebounce: ReturnType<typeof setTimeout> | null = null;
+    /** 保存 skill → 声明的 toolNames 映射，供延迟重关联使用 */
+    const skillToolNames = new Map<string, string[]>();
+
+    /** 根据工具名列表从 toolService + MCP registry 查找 Tool */
+    function resolveSkillTools(toolNames: string[]): Tool[] {
+      if (toolNames.length === 0) return [];
+      const allRegisteredTools = toolService.getAll();
+      const toolNameIndex = new Map<string, Tool>();
+      for (const t of allRegisteredTools) {
+        toolNameIndex.set(t.name, t);
+        const parts = t.name.split('_');
+        if (parts.length === 2) toolNameIndex.set(`${parts[1]}_${parts[0]}`, t);
+      }
+      // 也从 MCP registry 收集（适配器通过 mcp.addTool 注册的工具）
+      const mcpRegistry = root.inject?.('mcp' as any) as { getTools?(): any[] } | undefined;
+      if (mcpRegistry && typeof mcpRegistry.getTools === 'function') {
+        for (const t of mcpRegistry.getTools()) {
+          if (!toolNameIndex.has(t.name)) {
+            // MCP tool → 转为 Tool 形状以便 Skill 关联
+            toolNameIndex.set(t.name, {
+              name: t.name,
+              description: t.description || '',
+              parameters: t.parameters || { type: 'object', properties: {} },
+              execute: t.handler || (async () => {}),
+              platforms: t.platforms,
+              tags: t.tags,
+            } as Tool);
+          }
+        }
+      }
+      const result: Tool[] = [];
+      for (const name of toolNames) {
+        const tool = toolService.get(name) || toolNameIndex.get(name);
+        if (tool) result.push(tool);
+      }
+      return result;
+    }
+
+    /** 重新关联所有已注册 Skill 的 tools（适配器 tool 后注册时调用） */
+    function relinkSkillTools(): void {
+      const skillFeature = root.inject?.('skill') as SkillFeature | undefined;
+      if (!skillFeature) return;
+      let updated = 0;
+      for (const skill of skillFeature.getAll()) {
+        const declaredNames = skillToolNames.get(skill.name);
+        if (!declaredNames || declaredNames.length === 0) continue;
+        const newTools = resolveSkillTools(declaredNames);
+        if (newTools.length > skill.tools.length) {
+          (skill as any).tools = newTools;
+          updated++;
+          logger.info(`[重关联] ${newTools.length} 工具`);
+        }
+      }
+      if (updated > 0) {
+        logger.info(`[Skill 重关联] ${updated} 个技能已更新工具列表`);
+      }
+    }
 
     async function syncWorkspaceSkills(): Promise<number> {
       const skillFeature = root.inject?.('skill') as SkillFeature | undefined;
       if (!skillFeature) return 0;
       const existing = skillFeature.getByPlugin(root.name);
       for (const s of existing) skillFeature.remove(s);
+      skillToolNames.clear();
       const skills = await discoverWorkspaceSkills(root);
       if (skills.length > 0) {
-        const allRegisteredTools = toolService.getAll();
-        const toolNameIndex = new Map<string, Tool>();
-        for (const t of allRegisteredTools) {
-          toolNameIndex.set(t.name, t);
-          const parts = t.name.split('_');
-          if (parts.length === 2) toolNameIndex.set(`${parts[1]}_${parts[0]}`, t);
-        }
         for (const s of skills) {
-          const associatedTools: Tool[] = [];
           const toolNames = s.toolNames || [];
-          for (const toolName of toolNames) {
-            let tool = toolService.get(toolName) || toolNameIndex.get(toolName);
-            if (tool) associatedTools.push(tool);
-          }
+          skillToolNames.set(s.name, toolNames);
+          const associatedTools = resolveSkillTools(toolNames);
           skillFeature.add({
             name: s.name,
             description: s.description,
             tools: associatedTools,
             keywords: s.keywords || [],
             tags: s.tags || [],
+            platforms: s.platforms,
             pluginName: root.name,
             filePath: s.filePath,
             always: s.always,
           }, root.name);
+          if(associatedTools.length){
+            logger.info(`[注册] ${associatedTools.length} 工具${s.platforms?.length ? ', 平台: ' + s.platforms.join(',') : ', 通用'}`);
+          }
         }
       }
       // Inject always-on skills content + XML summary into agent
@@ -241,6 +293,9 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
         skillCount: skillFeature2?.size ?? 0,
         bootstrapFiles: loadedFiles,
       }));
+
+      // Step 3: 延迟重关联 — 等适配器 tool 就绪后补齐 Skill 的 tools 列表
+      setTimeout(() => relinkSkillTools(), 2000);
 
       // Hot-reload tool directories
       const workspaceToolDir = path.join(process.cwd(), 'tools');

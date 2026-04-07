@@ -42,7 +42,7 @@ useContext("router", (router: any) => {
 useContext('mcp', 'dingtalk', (mcp: McpToolRegistry, dingtalk: DingTalkAdapter) => {
   const disposeGroup = registerGroupManagementMcpTools(
     mcp,
-    dingtalk as unknown as IGroupManagement & { bots: Map<string, any> },
+    dingtalk,
     'dingtalk',
   );
 

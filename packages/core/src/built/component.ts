@@ -93,6 +93,7 @@ export class ComponentFeature extends Feature<Component<any>> {
       this.#rootPlugin.root.off('before.sendMessage', this.#listener);
       this.#listener = undefined;
     }
+    this.byName.clear();
   }
 
   /**

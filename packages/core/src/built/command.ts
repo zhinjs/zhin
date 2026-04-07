@@ -72,6 +72,13 @@ export class CommandFeature extends Feature<MessageCommand<RegisteredAdapter>> {
   }
 
   /**
+   * 生命周期: 销毁时清理所有命令
+   */
+  dispose(): void {
+    this.byName.clear();
+  }
+
+  /**
    * 序列化为 JSON
    */
   toJSON(pluginName?: string): FeatureJSON {

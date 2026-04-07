@@ -9,8 +9,7 @@
     "declaration": true,
     "declarationMap": true,
     "outDir": "lib",
-    "rootDir": "src",
-    "noEmit": true
+    "rootDir": "src"
   },
   "include": ["src/**/*"]
 }

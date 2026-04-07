@@ -77,11 +77,14 @@ function buildPlainTextHtml(text: string, opts: HtmlRendererAiTextAsImageConfig)
 }
 
 export function registerAiTextAsImageOutput(params: {
-  root: { on: (ev: 'before.sendMessage', fn: (o: SendOptions) => unknown) => void };
+  root: {
+    on: (ev: 'before.sendMessage', fn: (o: SendOptions) => unknown) => void;
+    off?: (ev: 'before.sendMessage', fn: (o: SendOptions) => unknown) => void;
+  };
   logger: { debug: (...a: unknown[]) => void; info: (...a: unknown[]) => void; warn: (...a: unknown[]) => void };
   fullConfig: HtmlRendererConfig;
   getRenderer: () => HtmlRendererService;
-}): void {
+}): (() => void) | undefined {
   const { root, logger, fullConfig, getRenderer } = params;
 
   if (!isAiImageFeatureOn(fullConfig.aiTextAsImage)) {
@@ -91,7 +94,7 @@ export function registerAiTextAsImageOutput(params: {
 
   const aiOpts = mergeAiConfig(fullConfig, fullConfig.aiTextAsImage);
 
-  root.on('before.sendMessage', async (options: SendOptions) => {
+  const handler = async (options: SendOptions) => {
     try {
       const { context, content } = options;
       if (content == null) return options;
@@ -137,7 +140,13 @@ export function registerAiTextAsImageOutput(params: {
       );
       return options;
     }
-  });
+  };
+
+  root.on('before.sendMessage', handler);
 
   logger.info('html-renderer: 已启用 aiTextAsImage（before.sendMessage 纯文本→PNG）');
+
+  return () => {
+    root.off?.('before.sendMessage', handler);
+  };
 }

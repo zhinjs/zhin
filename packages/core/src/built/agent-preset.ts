@@ -88,6 +88,11 @@ export class AgentPresetFeature extends Feature<AgentPreset> {
     return this.byName.get(name);
   }
 
+  /** 清理所有预设注册（热重载时由 Plugin.stop() 调用） */
+  dispose(): void {
+    this.byName.clear();
+  }
+
   getAll(): AgentPreset[] {
     return [...this.items];
   }

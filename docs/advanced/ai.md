@@ -948,3 +948,46 @@ class AnotherProvider implements AIProvider {
 
 aiService.registerProvider(new MyProvider())
 ```
+
+### 核心类型参考
+
+`ChatCompletionRequest` — 聊天补全请求：
+
+```typescript
+interface ChatCompletionRequest {
+  model: string
+  messages: ChatMessage[]
+  tools?: ToolDefinition[]
+  tool_choice?: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } }
+  temperature?: number
+  top_p?: number
+  max_tokens?: number
+  stream?: boolean
+  stop?: string | string[]
+  think?: boolean  // 启用模型思考（如 qwen3 的 <think> 模式）
+}
+```
+
+`ChatCompletionResponse` — 聊天补全响应：
+
+```typescript
+interface ChatCompletionResponse {
+  id: string
+  object: 'chat.completion'
+  created: number
+  model: string
+  choices: { index: number; message: ChatMessage; finish_reason: 'stop' | 'length' | 'tool_calls' | null }[]
+  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number }
+}
+```
+
+`ProviderCapabilities` — Provider 能力声明：
+
+```typescript
+interface ProviderCapabilities {
+  vision?: boolean      // 图片理解
+  streaming?: boolean   // 流式输出
+  toolCalling?: boolean // 工具调用
+  thinking?: boolean    // 思考模式
+}
+```

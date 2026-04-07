@@ -20,7 +20,6 @@ vi.mock('@zhin.js/core', async (importOriginal) => {
       root: { inject: vi.fn() },
       logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
       onDispose: vi.fn(),
-      collectAllTools: vi.fn(() => []),
     })),
     usePlugin: vi.fn(() => ({
       name: 'test-plugin',
@@ -523,17 +522,11 @@ describe('ZhinTool 完整流程', () => {
       .scope('group', 'private')
       .permission('user')
       .tag('test', 'example')
-      .usage('这是使用说明')
-      .examples('/complete_tool arg1', '/complete_tool arg1 123')
-      .alias('ct')
       .execute(async (args, ctx) => {
         return {
           received: args,
           platform: ctx?.platform,
         };
-      })
-      .action(async (message, result) => {
-        return `Command executed: ${result.params.required_param}`;
       });
 
     // 转换为 Tool
@@ -551,12 +544,6 @@ describe('ZhinTool 完整流程', () => {
     expect(toolObj.parameters.properties).toHaveProperty('required_param');
     expect(toolObj.parameters.properties).toHaveProperty('optional_param');
     expect(toolObj.parameters.required).toContain('required_param');
-    
-    // 验证命令配置
-    expect(toolObj.command).not.toBe(false);
-    expect((toolObj.command as any).usage).toContain('这是使用说明');
-    expect((toolObj.command as any).examples).toContain('/complete_tool arg1');
-    expect((toolObj.command as any).alias).toContain('ct');
     
     // 验证执行
     const result = await toolObj.execute(

@@ -68,7 +68,6 @@ function ensureBuiltinFontsCached(): void {
       }
       fontCache.set('default', toFontConfig(builtinFonts[0]));
       defaultFontLoaded = true;
-      logger.info(`Default fonts: ${builtinFonts.map((f) => f.name).join(', ')}`);
       return;
     }
   } catch (e) {
@@ -328,12 +327,15 @@ const pluginConfig = appConfig.htmlRenderer || {};
 const mergedHtmlRendererConfig: HtmlRendererConfig = { ...DEFAULT_CONFIG, ...pluginConfig };
 const rendererService = createHtmlRendererService(pluginConfig);
 
-registerAiTextAsImageOutput({
+const disposeAiTextAsImage = registerAiTextAsImageOutput({
   root,
   logger,
   fullConfig: mergedHtmlRendererConfig,
   getRenderer: () => rendererService,
 });
+if (disposeAiTextAsImage) {
+  plugin.onDispose(disposeAiTextAsImage);
+}
 
 (provide as any)({
   name: 'html-renderer',
@@ -416,18 +418,6 @@ const renderHtmlTool = new ZhinTool('html_render')
       return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   })
-  .action(async (_message, result) => {
-    try {
-      const p = await renderPngPayload(result.params.html as string, {
-        width: result.params.width as number | undefined,
-        height: result.params.height as number | undefined,
-        backgroundColor: result.params.backgroundColor as string | undefined,
-      });
-      return <image url={p.dataUrl} />;
-    } catch (error) {
-      return `❌ 渲染失败: ${error instanceof Error ? error.message : String(error)}`;
-    }
-  });
 
 const toolService = plugin.root.inject('tool');
 if (toolService) {
@@ -487,20 +477,6 @@ const generateCardTool = new ZhinTool('html_card')
       return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   })
-  .action(async (message, result) => {
-    const { title, content, theme, width } = result.params;
-    
-    const executeResult = await generateCardTool.toTool().execute(
-      { title, content, theme, width },
-      { platform: message.$adapter, senderId: message.$sender.id }
-    ) as { success: boolean; error?: string; dataUrl?: string } | null | undefined;
-
-    if (!executeResult || !executeResult.success) {
-      return `❌ 生成失败: ${executeResult?.error ?? '未知错误'}`;
-    }
-
-    return <image url={executeResult.dataUrl!} />;
-  });
 
 if (toolService) {
   toolService.addTool(generateCardTool, plugin.name);

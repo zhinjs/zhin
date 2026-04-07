@@ -775,14 +775,12 @@ export function listTools(args?: { plugin_name?: string }): any[] {
     return tools.map(formatTool);
   }
 
-  if (toolService?.collectAll) {
-    const tools = toolService.collectAll(root);
+  if (toolService?.getAll) {
+    const tools = toolService.getAll();
     return tools.map(formatTool);
   }
 
-  // fallback
-  const tools = (root as any).collectAllTools?.() || (root as any).getAllTools?.() || [];
-  return tools.map(formatTool);
+  return [];
 }
 
 function formatTool(tool: any): any {

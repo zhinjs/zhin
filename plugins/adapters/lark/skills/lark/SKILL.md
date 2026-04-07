@@ -1,5 +1,7 @@
 ---
 name: lark
+platforms:
+  - lark
 description: 飞书/Lark 群管理：群管（踢人、查成员/群信息、改群名）、用户查询、群聊创建/更新/解散、添加/移除管理员、文件上传。仅有昵称时请先 list_members 获取 user_id。
 keywords:
   - lark

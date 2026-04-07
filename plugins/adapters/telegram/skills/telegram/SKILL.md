@@ -1,5 +1,7 @@
 ---
 name: telegram
+platforms:
+  - telegram
 description: Telegram 群组管理：群管（踢人、解封、禁言、设管理员、改群名/描述）、置顶、投票、表情反应、贴纸、群权限设置、邀请链接、管理员列表。仅有用户名时请先 list_members 获取 user_id。
 keywords:
   - telegram

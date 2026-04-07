@@ -7,9 +7,5 @@ parameters:
     description: 返回条数，默认10条
 tags: [热搜, 社交, 微博]
 keywords: [微博, 热搜, weibo, wb]
-command:
-  pattern: "weibo [limit:number]"
-  alias: [微博热搜, wb]
-  examples: ["/weibo", "/weibo 20"]
 handler: ./weibo-handler.ts
 ---

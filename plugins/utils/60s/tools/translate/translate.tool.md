@@ -11,9 +11,5 @@ parameters:
   to:
     type: string
     description: 目标语言，如 en, zh, ja
-command:
-  pattern: "fanyi <text:text> [to:text]"
-  alias: [翻译, fy]
-  examples: ["/fanyi hello", "/翻译 你好 en"]
 handler: ./handler.ts
 ---

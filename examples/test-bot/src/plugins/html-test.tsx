@@ -219,32 +219,11 @@ const testRenderTool = new ZhinTool('test_render')
       };
     }
   })
-  .action(async (message, result) => {
-    const type = (result.params.type as string) || 'simple';
-    
-    const renderer = getRenderer();
-    if (!renderer) {
-      return '❌ html-renderer 服务不可用';
-    }
-
-    try {
-      const executeResult = await testRenderTool.toTool().execute(
-        { type },
-        { platform: message.$adapter, senderId: message.$sender.id }
-      ) as { success: boolean; error?: string; dataUrl?: string } | null | undefined;
-      if(!executeResult || !executeResult.success) {
-        return `❌ 渲染失败: ${executeResult?.error}`;
-      }
-      return segment("image", { url:(executeResult as { dataUrl?: string })?.dataUrl as string,name: `render-${type}.png` });
-    } catch (error) {
-      return `❌ 渲染失败: ${error instanceof Error ? error.message : String(error)}`;
-    }
-  });
 
 // 注册工具
 const toolService = plugin.root.inject('tool');
 if (toolService) {
-  toolService.addTool(testRenderTool, plugin.name, true);
+  toolService.addTool(testRenderTool, plugin.name);
 }
 
 logger.debug('HTML test plugin loaded');

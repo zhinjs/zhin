@@ -26,7 +26,7 @@ const plugin = usePlugin()
   addComponent(component: Component): () => void
   
   // ── 工具系统（ToolFeature 扩展）──
-  addTool(input: Tool | ZhinTool, generateCommand?: boolean): () => void
+  addTool(input: Tool | ZhinTool): () => void
   
   // ── 定时任务（CronFeature 扩展）──
   addCron(cron: Cron): () => void
@@ -140,7 +140,7 @@ abstract class Feature<T> {
 
 ```typescript
 // 添加工具
-addTool(input: Tool | ZhinTool, pluginName?: string, generateCommand?: boolean): () => void
+addTool(input: Tool | ZhinTool, pluginName?: string): () => void
 
 // 获取工具
 get(name: string): Tool | undefined
@@ -192,7 +192,6 @@ interface Tool {
   scopes?: ToolScope[]          // 限定场景 ('private' | 'group' | 'channel')
   permissionLevel?: ToolPermissionLevel  // 权限要求
   hidden?: boolean              // 是否对 AI 隐藏
-  command?: CommandConfig | false // 是否同时生成命令
 }
 ```
 
