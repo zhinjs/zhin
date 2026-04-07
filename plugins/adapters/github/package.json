@@ -43,7 +43,6 @@
   },
   "license": "MIT",
   "devDependencies": {
-    "@zhin.js/mcp": "workspace:^",
     "typescript": "^5.9.3",
     "zhin.js": "workspace:*"
   },

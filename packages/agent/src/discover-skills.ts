@@ -202,14 +202,11 @@ export function buildSkillsSummaryXML(skills: SkillMeta[]): string {
   const lines = ['<skills>'];
   for (const s of skills) {
     const available = s.available !== false;
-    lines.push(`  <skill available="${available}">`);
-    lines.push(`    <name>${escapeXml(s.name)}</name>`);
-    lines.push(`    <description>${escapeXml(s.description)}</description>`);
-    lines.push(`    <location>${escapeXml(s.filePath)}</location>`);
-    if (!available && s.requiresMissing && s.requiresMissing.length > 0) {
-      lines.push(`    <requires>${escapeXml(s.requiresMissing.join(', '))}</requires>`);
-    }
-    lines.push('  </skill>');
+    const attrs = `available="${available}"`;
+    const requires = (!available && s.requiresMissing?.length)
+      ? ` requires="${escapeXml(s.requiresMissing.join(','))}"`
+      : '';
+    lines.push(`  <skill ${attrs}${requires}><name>${escapeXml(s.name)}</name><desc>${escapeXml(s.description)}</desc></skill>`);
   }
   lines.push('</skills>');
   return lines.join('\n');

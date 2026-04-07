@@ -52,7 +52,6 @@
   "devDependencies": {
     "@types/node": "^24.3.0",
     "@types/ws": "^8.18.1",
-    "@zhin.js/mcp": "workspace:^",
     "typescript": "^5.9.3",
     "zhin.js": "workspace:*"
   },

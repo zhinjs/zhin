@@ -1,9 +1,7 @@
 /**
  * KOOK 适配器入口：类型扩展、导出、注册
  */
-import { usePlugin, type Plugin, type IGroupManagement } from "zhin.js";
-import type { McpToolRegistry } from "@zhin.js/mcp";
-import { registerGroupManagementMcpTools } from "@zhin.js/mcp/adapter-tools-helper";
+import { usePlugin, type Plugin, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
 import { KookAdapter } from "./adapter.js";
 
 declare module "zhin.js" {
@@ -32,14 +30,14 @@ provide({
   },
 });
 
-useContext('mcp' as any, 'kook', (mcp: McpToolRegistry, kook: KookAdapter) => {
-  const disposeGroup = registerGroupManagementMcpTools(
-    mcp,
-    kook as unknown as IGroupManagement & { bots: Map<string, any> },
+useContext('tool', 'kook', (toolService: ToolFeature, kook: KookAdapter) => {
+  const groupTools = createGroupManagementTools(
+    kook as unknown as IGroupManagement,
     'kook',
   );
+  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, 'kook'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'kook_grant_role',
     description: '给用户授予 KOOK 服务器角色',
     parameters: {
@@ -52,15 +50,17 @@ useContext('mcp' as any, 'kook', (mcp: McpToolRegistry, kook: KookAdapter) => {
       },
       required: ['bot', 'guild_id', 'user_id', 'role_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['kook'],
+    tags: ['kook'],
+    execute: async (args: Record<string, any>) => {
       const bot = kook.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const success = await bot.grantRole(args.guild_id, args.user_id, args.role_id);
       return { success, message: success ? `已授予用户 ${args.user_id} 角色 ${args.role_id}` : '授予角色失败' };
     },
-  });
+  }, 'kook'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'kook_revoke_role',
     description: '撤销用户的 KOOK 服务器角色',
     parameters: {
@@ -73,15 +73,17 @@ useContext('mcp' as any, 'kook', (mcp: McpToolRegistry, kook: KookAdapter) => {
       },
       required: ['bot', 'guild_id', 'user_id', 'role_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['kook'],
+    tags: ['kook'],
+    execute: async (args: Record<string, any>) => {
       const bot = kook.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const success = await bot.revokeRole(args.guild_id, args.user_id, args.role_id);
       return { success, message: success ? `已撤销用户 ${args.user_id} 的角色 ${args.role_id}` : '撤销角色失败' };
     },
-  });
+  }, 'kook'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'kook_list_roles',
     description: '获取 KOOK 服务器的角色列表',
     parameters: {
@@ -92,7 +94,9 @@ useContext('mcp' as any, 'kook', (mcp: McpToolRegistry, kook: KookAdapter) => {
       },
       required: ['bot', 'guild_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['kook'],
+    tags: ['kook'],
+    execute: async (args: Record<string, any>) => {
       const bot = kook.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const roles = await bot.getRoleList(args.guild_id);
@@ -107,9 +111,9 @@ useContext('mcp' as any, 'kook', (mcp: McpToolRegistry, kook: KookAdapter) => {
         count: roles.length,
       };
     },
-  });
+  }, 'kook'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'kook_create_role',
     description: '在 KOOK 服务器中创建新角色',
     parameters: {
@@ -121,7 +125,9 @@ useContext('mcp' as any, 'kook', (mcp: McpToolRegistry, kook: KookAdapter) => {
       },
       required: ['bot', 'guild_id', 'name'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['kook'],
+    tags: ['kook'],
+    execute: async (args: Record<string, any>) => {
       const bot = kook.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const role = await bot.createRole(args.guild_id, args.name);
@@ -131,9 +137,9 @@ useContext('mcp' as any, 'kook', (mcp: McpToolRegistry, kook: KookAdapter) => {
         role: { id: role.role_id, name: role.name },
       };
     },
-  });
+  }, 'kook'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'kook_delete_role',
     description: '删除 KOOK 服务器中的角色',
     parameters: {
@@ -145,15 +151,17 @@ useContext('mcp' as any, 'kook', (mcp: McpToolRegistry, kook: KookAdapter) => {
       },
       required: ['bot', 'guild_id', 'role_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['kook'],
+    tags: ['kook'],
+    execute: async (args: Record<string, any>) => {
       const bot = kook.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const success = await bot.deleteRole(args.guild_id, args.role_id);
       return { success, message: success ? `已删除角色 ${args.role_id}` : '删除角色失败' };
     },
-  });
+  }, 'kook'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'kook_blacklist',
     description: 'KOOK 服务器黑名单管理：添加/移除',
     parameters: {
@@ -167,7 +175,9 @@ useContext('mcp' as any, 'kook', (mcp: McpToolRegistry, kook: KookAdapter) => {
       },
       required: ['bot', 'guild_id', 'action', 'user_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['kook'],
+    tags: ['kook'],
+    execute: async (args: Record<string, any>) => {
       const bot = kook.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       switch (args.action) {
@@ -183,9 +193,7 @@ useContext('mcp' as any, 'kook', (mcp: McpToolRegistry, kook: KookAdapter) => {
           return { success: false, message: `未知操作: ${args.action}` };
       }
     },
-  });
+  }, 'kook'));
 
-  return () => {
-    disposeGroup();
-  };
+  return () => disposers.forEach(d => d());
 });

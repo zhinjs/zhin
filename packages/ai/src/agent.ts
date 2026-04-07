@@ -501,8 +501,7 @@ export class Agent {
         if (response.usage) {
           this.costTracker.addUsage(usedModel, response.usage);
         }
-        logger.info(`token 用量: ${state.usage.prompt_tokens} -> ${state.usage.completion_tokens} -> ${state.usage.total_tokens}`);
-        logger.info(`response: `,response);
+        logger.info(`[第${state.iterations}轮] token 用量: prompt=${state.usage.prompt_tokens}, completion=${state.usage.completion_tokens}, total=${state.usage.total_tokens} (model=${usedModel})`);
         const choice = response.choices[0];
         if (!choice) break;
 

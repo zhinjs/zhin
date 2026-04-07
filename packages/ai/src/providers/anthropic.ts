@@ -235,7 +235,12 @@ export class AnthropicProvider extends BaseProvider {
     };
 
     if (system) {
-      anthropicRequest.system = system;
+      // Use structured system with cache_control for prompt caching
+      anthropicRequest.system = [{
+        type: 'text',
+        text: system,
+        cache_control: { type: 'ephemeral' },
+      }];
     }
 
     if (request.temperature !== undefined) {
@@ -274,7 +279,12 @@ export class AnthropicProvider extends BaseProvider {
     };
 
     if (system) {
-      anthropicRequest.system = system;
+      // Use structured system with cache_control for prompt caching
+      anthropicRequest.system = [{
+        type: 'text',
+        text: system,
+        cache_control: { type: 'ephemeral' },
+      }];
     }
 
     if (request.temperature !== undefined) {

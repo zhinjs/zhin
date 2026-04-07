@@ -1,10 +1,8 @@
 /**
  * Discord 适配器入口：单一适配器，支持 Gateway / Interactions（connection: gateway | interactions）
  */
-import { usePlugin, type Plugin, type Context, type IGroupManagement } from "zhin.js";
+import { usePlugin, type Plugin, type Context, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
 import type { Router } from "@zhin.js/http";
-import type { McpToolRegistry } from "@zhin.js/mcp";
-import { registerGroupManagementMcpTools } from "@zhin.js/mcp/adapter-tools-helper";
 import { DiscordAdapter, type DiscordBotLike } from "./adapter.js";
 
 declare module "zhin.js" {
@@ -37,12 +35,12 @@ provide({
   },
 } as unknown as Context<"discord">);
 
-useContext('mcp' as any, 'discord', (mcp: McpToolRegistry, discord: DiscordAdapter) => {
-  const disposeGroup = registerGroupManagementMcpTools(
-    mcp,
-    discord as unknown as IGroupManagement & { bots: Map<string, any> },
+useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter) => {
+  const groupTools = createGroupManagementTools(
+    discord as unknown as IGroupManagement,
     'discord',
   );
+  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, 'discord'));
 
   function getGatewayBot(botId: string): DiscordBotLike {
     const bot = discord.bots.get(botId);
@@ -53,7 +51,7 @@ useContext('mcp' as any, 'discord', (mcp: McpToolRegistry, discord: DiscordAdapt
     return bot;
   }
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'discord_add_role',
     description: '给成员添加 Discord 角色',
     parameters: {
@@ -66,14 +64,16 @@ useContext('mcp' as any, 'discord', (mcp: McpToolRegistry, discord: DiscordAdapt
       },
       required: ['bot', 'guild_id', 'user_id', 'role_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['discord'],
+    tags: ['discord'],
+    execute: async (args: Record<string, any>) => {
       const bot = getGatewayBot(args.bot) as any;
       const success = await bot.addRole(args.guild_id, args.user_id, args.role_id);
       return { success, message: success ? `已给用户 ${args.user_id} 添加角色` : '操作失败' };
     },
-  });
+  }, 'discord'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'discord_remove_role',
     description: '移除成员的 Discord 角色',
     parameters: {
@@ -86,14 +86,16 @@ useContext('mcp' as any, 'discord', (mcp: McpToolRegistry, discord: DiscordAdapt
       },
       required: ['bot', 'guild_id', 'user_id', 'role_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['discord'],
+    tags: ['discord'],
+    execute: async (args: Record<string, any>) => {
       const bot = getGatewayBot(args.bot) as any;
       const success = await bot.removeRole(args.guild_id, args.user_id, args.role_id);
       return { success, message: success ? `已移除用户 ${args.user_id} 的角色` : '操作失败' };
     },
-  });
+  }, 'discord'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'discord_list_roles',
     description: '获取 Discord 服务器角色列表',
     parameters: {
@@ -104,14 +106,16 @@ useContext('mcp' as any, 'discord', (mcp: McpToolRegistry, discord: DiscordAdapt
       },
       required: ['bot', 'guild_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['discord'],
+    tags: ['discord'],
+    execute: async (args: Record<string, any>) => {
       const bot = getGatewayBot(args.bot) as any;
       const roles = await bot.getRoles(args.guild_id);
       return { roles, count: roles.length };
     },
-  });
+  }, 'discord'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'discord_create_thread',
     description: '在 Discord 频道中创建帖子/子线程',
     parameters: {
@@ -128,14 +132,16 @@ useContext('mcp' as any, 'discord', (mcp: McpToolRegistry, discord: DiscordAdapt
       },
       required: ['bot', 'channel_id', 'name'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['discord'],
+    tags: ['discord'],
+    execute: async (args: Record<string, any>) => {
       const bot = getGatewayBot(args.bot) as any;
       const thread = await bot.createThread(args.channel_id, args.name, args.message_id, args.auto_archive_duration);
       return { success: true, thread_id: thread.id, message: `帖子 "${args.name}" 已创建` };
     },
-  });
+  }, 'discord'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'discord_react',
     description: '对 Discord 消息添加表情反应',
     parameters: {
@@ -151,14 +157,16 @@ useContext('mcp' as any, 'discord', (mcp: McpToolRegistry, discord: DiscordAdapt
       },
       required: ['bot', 'channel_id', 'message_id', 'emoji'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['discord'],
+    tags: ['discord'],
+    execute: async (args: Record<string, any>) => {
       const bot = getGatewayBot(args.bot) as any;
       await bot.addReaction(args.channel_id, args.message_id, args.emoji);
       return { success: true, message: `已添加反应 ${args.emoji}` };
     },
-  });
+  }, 'discord'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'discord_send_embed',
     description: '发送 Discord 富文本嵌入消息（Embed）',
     parameters: {
@@ -177,7 +185,9 @@ useContext('mcp' as any, 'discord', (mcp: McpToolRegistry, discord: DiscordAdapt
       },
       required: ['bot', 'channel_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['discord'],
+    tags: ['discord'],
+    execute: async (args: Record<string, any>) => {
       const bot = getGatewayBot(args.bot) as any;
       const embedData: any = {};
       if (args.title) embedData.title = args.title;
@@ -194,9 +204,9 @@ useContext('mcp' as any, 'discord', (mcp: McpToolRegistry, discord: DiscordAdapt
       const msg = await bot.sendEmbed(args.channel_id, embedData);
       return { success: true, message_id: msg.id, message: 'Embed 已发送' };
     },
-  });
+  }, 'discord'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'discord_forum_post',
     description: '在 Discord 论坛频道中创建帖子',
     parameters: {
@@ -210,22 +220,15 @@ useContext('mcp' as any, 'discord', (mcp: McpToolRegistry, discord: DiscordAdapt
       },
       required: ['bot', 'channel_id', 'name', 'content'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['discord'],
+    tags: ['discord'],
+    execute: async (args: Record<string, any>) => {
       const bot = getGatewayBot(args.bot) as any;
       const tagList = args.tags ? args.tags.split(',').map((t: string) => t.trim()) : undefined;
       const thread = await bot.createForumPost(args.channel_id, args.name, args.content, tagList);
       return { success: true, thread_id: thread.id, message: `论坛帖 "${args.name}" 已创建` };
     },
-  });
+  }, 'discord'));
 
-  return () => {
-    disposeGroup();
-    mcp.removeTool('discord_add_role');
-    mcp.removeTool('discord_remove_role');
-    mcp.removeTool('discord_list_roles');
-    mcp.removeTool('discord_create_thread');
-    mcp.removeTool('discord_react');
-    mcp.removeTool('discord_send_embed');
-    mcp.removeTool('discord_forum_post');
-  };
+  return () => disposers.forEach(d => d());
 });

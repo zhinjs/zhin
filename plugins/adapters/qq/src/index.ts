@@ -1,9 +1,7 @@
 /**
  * QQ 官方适配器入口：类型扩展、导出、注册
  */
-import { usePlugin, type Plugin, type IGroupManagement } from "zhin.js";
-import type { McpToolRegistry } from "@zhin.js/mcp";
-import { registerGroupManagementMcpTools } from "@zhin.js/mcp/adapter-tools-helper";
+import { usePlugin, type Plugin, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
 import { QQAdapter } from "./adapter.js";
 
 declare module "zhin.js" {
@@ -32,15 +30,15 @@ provide({
   },
 });
 
-useContext('mcp' as any, 'qq', (mcp: McpToolRegistry, qq: QQAdapter) => {
-  const disposeGroup = registerGroupManagementMcpTools(
-    mcp,
-    qq as unknown as IGroupManagement & { bots: Map<string, any> },
+useContext('tool', 'qq', (toolService: ToolFeature, qq: QQAdapter) => {
+  const groupTools = createGroupManagementTools(
+    qq as unknown as IGroupManagement,
     'qq',
   );
+  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, 'qq'));
 
   // 获取频道列表
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'qq_list_guilds',
     description: '获取 QQ 频道列表',
     parameters: {
@@ -50,16 +48,18 @@ useContext('mcp' as any, 'qq', (mcp: McpToolRegistry, qq: QQAdapter) => {
       },
       required: ['bot'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['qq'],
+    tags: ['qq'],
+    execute: async (args: Record<string, any>) => {
       const bot = qq.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const guilds = await bot.getGuilds();
       return { guilds, count: guilds.length };
     },
-  });
+  }, 'qq'));
 
   // 获取子频道列表
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'qq_list_channels',
     description: '获取 QQ 频道下的子频道列表',
     parameters: {
@@ -70,16 +70,18 @@ useContext('mcp' as any, 'qq', (mcp: McpToolRegistry, qq: QQAdapter) => {
       },
       required: ['bot', 'guild_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['qq'],
+    tags: ['qq'],
+    execute: async (args: Record<string, any>) => {
       const bot = qq.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const channels = await bot.getChannels(args.guild_id);
       return { channels, count: channels.length };
     },
-  });
+  }, 'qq'));
 
   // 获取角色列表
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'qq_list_roles',
     description: '获取 QQ 频道角色列表',
     parameters: {
@@ -90,16 +92,18 @@ useContext('mcp' as any, 'qq', (mcp: McpToolRegistry, qq: QQAdapter) => {
       },
       required: ['bot', 'guild_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['qq'],
+    tags: ['qq'],
+    execute: async (args: Record<string, any>) => {
       const bot = qq.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const roles = await bot.getGuildRoles(args.guild_id);
       return { roles, count: roles.length };
     },
-  });
+  }, 'qq'));
 
   // 创建角色
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'qq_create_role',
     description: '创建 QQ 频道角色',
     parameters: {
@@ -112,16 +116,18 @@ useContext('mcp' as any, 'qq', (mcp: McpToolRegistry, qq: QQAdapter) => {
       },
       required: ['bot', 'guild_id', 'name'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['qq'],
+    tags: ['qq'],
+    execute: async (args: Record<string, any>) => {
       const bot = qq.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const role = await bot.createGuildRole(args.guild_id, args.name, args.color);
       return { success: !!role, role, message: role ? `角色 "${args.name}" 创建成功` : '创建失败' };
     },
-  });
+  }, 'qq'));
 
   // 添加角色
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'qq_add_role',
     description: '给成员添加 QQ 频道角色',
     parameters: {
@@ -135,16 +141,18 @@ useContext('mcp' as any, 'qq', (mcp: McpToolRegistry, qq: QQAdapter) => {
       },
       required: ['bot', 'guild_id', 'channel_id', 'user_id', 'role_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['qq'],
+    tags: ['qq'],
+    execute: async (args: Record<string, any>) => {
       const bot = qq.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const success = await bot.addMemberRole(args.guild_id, args.channel_id, args.user_id, args.role_id);
       return { success, message: success ? '已给成员添加角色' : '操作失败' };
     },
-  });
+  }, 'qq'));
 
   // 移除角色
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'qq_remove_role',
     description: '移除成员的 QQ 频道角色',
     parameters: {
@@ -158,16 +166,18 @@ useContext('mcp' as any, 'qq', (mcp: McpToolRegistry, qq: QQAdapter) => {
       },
       required: ['bot', 'guild_id', 'channel_id', 'user_id', 'role_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['qq'],
+    tags: ['qq'],
+    execute: async (args: Record<string, any>) => {
       const bot = qq.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const success = await bot.removeMemberRole(args.guild_id, args.channel_id, args.user_id, args.role_id);
       return { success, message: success ? '已移除成员的角色' : '操作失败' };
     },
-  });
+  }, 'qq'));
 
   // 子频道详情
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'qq_channel_info',
     description: '获取 QQ 频道中指定子频道的详细信息',
     parameters: {
@@ -178,16 +188,18 @@ useContext('mcp' as any, 'qq', (mcp: McpToolRegistry, qq: QQAdapter) => {
       },
       required: ['bot', 'channel_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['qq'],
+    tags: ['qq'],
+    execute: async (args: Record<string, any>) => {
       const bot = qq.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const info = await bot.getChannelInfo(args.channel_id);
       return info;
     },
-  });
+  }, 'qq'));
 
   // 单成员详情
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'qq_member_detail',
     description: '获取 QQ 频道中指定成员的详细信息',
     parameters: {
@@ -199,23 +211,15 @@ useContext('mcp' as any, 'qq', (mcp: McpToolRegistry, qq: QQAdapter) => {
       },
       required: ['bot', 'guild_id', 'user_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['qq'],
+    tags: ['qq'],
+    execute: async (args: Record<string, any>) => {
       const bot = qq.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const member = await bot.getGuildMember(args.guild_id, args.user_id);
       return member;
     },
-  });
+  }, 'qq'));
 
-  return () => {
-    disposeGroup();
-    mcp.removeTool('qq_list_guilds');
-    mcp.removeTool('qq_list_channels');
-    mcp.removeTool('qq_list_roles');
-    mcp.removeTool('qq_create_role');
-    mcp.removeTool('qq_add_role');
-    mcp.removeTool('qq_remove_role');
-    mcp.removeTool('qq_channel_info');
-    mcp.removeTool('qq_member_detail');
-  };
+  return () => disposers.forEach(d => d());
 });

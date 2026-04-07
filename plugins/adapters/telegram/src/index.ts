@@ -1,9 +1,7 @@
 /**
  * Telegram 适配器入口：类型扩展、导出、注册
  */
-import { usePlugin, type Plugin, type Context, type IGroupManagement } from "zhin.js";
-import type { McpToolRegistry } from "@zhin.js/mcp";
-import { registerGroupManagementMcpTools } from "@zhin.js/mcp/adapter-tools-helper";
+import { usePlugin, type Plugin, type Context, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
 import { TelegramAdapter } from "./adapter.js";
 
 declare module "zhin.js" {
@@ -32,14 +30,14 @@ provide({
   },
 } as Context<"telegram">);
 
-useContext('mcp' as any, 'telegram', (mcp: McpToolRegistry, telegram: TelegramAdapter) => {
-  const disposeGroup = registerGroupManagementMcpTools(
-    mcp,
-    telegram as unknown as IGroupManagement & { bots: Map<string, any> },
+useContext('tool', 'telegram', (toolService: ToolFeature, telegram: TelegramAdapter) => {
+  const groupTools = createGroupManagementTools(
+    telegram as unknown as IGroupManagement,
     'telegram',
   );
+  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, 'telegram'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'telegram_pin_message',
     description: '置顶 Telegram 群组消息',
     parameters: {
@@ -51,15 +49,17 @@ useContext('mcp' as any, 'telegram', (mcp: McpToolRegistry, telegram: TelegramAd
       },
       required: ['bot', 'chat_id', 'message_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['telegram'],
+    tags: ['telegram'],
+    execute: async (args: Record<string, any>) => {
       const bot = telegram.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const success = await bot.pinMessage(Number(args.chat_id), Number(args.message_id));
       return { success, message: success ? '消息已置顶' : '操作失败' };
     },
-  });
+  }, 'telegram'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'telegram_unpin_message',
     description: '取消置顶 Telegram 群组消息',
     parameters: {
@@ -71,15 +71,17 @@ useContext('mcp' as any, 'telegram', (mcp: McpToolRegistry, telegram: TelegramAd
       },
       required: ['bot', 'chat_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['telegram'],
+    tags: ['telegram'],
+    execute: async (args: Record<string, any>) => {
       const bot = telegram.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const success = await bot.unpinMessage(Number(args.chat_id), args.message_id ? Number(args.message_id) : undefined);
       return { success, message: success ? '已取消置顶' : '操作失败' };
     },
-  });
+  }, 'telegram'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'telegram_list_admins',
     description: '获取 Telegram 群组管理员列表',
     parameters: {
@@ -90,7 +92,9 @@ useContext('mcp' as any, 'telegram', (mcp: McpToolRegistry, telegram: TelegramAd
       },
       required: ['bot', 'chat_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['telegram'],
+    tags: ['telegram'],
+    execute: async (args: Record<string, any>) => {
       const bot = telegram.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const admins = await bot.getChatAdmins(Number(args.chat_id));
@@ -104,9 +108,9 @@ useContext('mcp' as any, 'telegram', (mcp: McpToolRegistry, telegram: TelegramAd
         count: admins.length,
       };
     },
-  });
+  }, 'telegram'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'telegram_member_count',
     description: '获取 Telegram 群组成员数量',
     parameters: {
@@ -117,15 +121,17 @@ useContext('mcp' as any, 'telegram', (mcp: McpToolRegistry, telegram: TelegramAd
       },
       required: ['bot', 'chat_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['telegram'],
+    tags: ['telegram'],
+    execute: async (args: Record<string, any>) => {
       const bot = telegram.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const count = await bot.getChatMemberCount(Number(args.chat_id));
       return { count, message: `群组共有 ${count} 名成员` };
     },
-  });
+  }, 'telegram'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'telegram_create_invite',
     description: '创建 Telegram 群组邀请链接',
     parameters: {
@@ -136,15 +142,17 @@ useContext('mcp' as any, 'telegram', (mcp: McpToolRegistry, telegram: TelegramAd
       },
       required: ['bot', 'chat_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['telegram'],
+    tags: ['telegram'],
+    execute: async (args: Record<string, any>) => {
       const bot = telegram.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const link = await bot.createInviteLink(Number(args.chat_id));
       return { invite_link: link, message: `邀请链接: ${link}` };
     },
-  });
+  }, 'telegram'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'telegram_send_poll',
     description: '在 Telegram 群组中发起投票',
     parameters: {
@@ -159,7 +167,9 @@ useContext('mcp' as any, 'telegram', (mcp: McpToolRegistry, telegram: TelegramAd
       },
       required: ['bot', 'chat_id', 'question', 'options'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['telegram'],
+    tags: ['telegram'],
+    execute: async (args: Record<string, any>) => {
       const bot = telegram.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       let optList: string[];
@@ -177,9 +187,9 @@ useContext('mcp' as any, 'telegram', (mcp: McpToolRegistry, telegram: TelegramAd
       );
       return { success: true, message_id: result.message_id, message: '投票已发送' };
     },
-  });
+  }, 'telegram'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'telegram_react',
     description: '对 Telegram 消息添加表情反应',
     parameters: {
@@ -192,15 +202,17 @@ useContext('mcp' as any, 'telegram', (mcp: McpToolRegistry, telegram: TelegramAd
       },
       required: ['bot', 'chat_id', 'message_id', 'reaction'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['telegram'],
+    tags: ['telegram'],
+    execute: async (args: Record<string, any>) => {
       const bot = telegram.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const success = await bot.setMessageReaction(Number(args.chat_id), Number(args.message_id), args.reaction);
       return { success, message: success ? `已添加反应 ${args.reaction}` : '操作失败' };
     },
-  });
+  }, 'telegram'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'telegram_send_sticker',
     description: '发送 Telegram 贴纸',
     parameters: {
@@ -212,15 +224,17 @@ useContext('mcp' as any, 'telegram', (mcp: McpToolRegistry, telegram: TelegramAd
       },
       required: ['bot', 'chat_id', 'sticker'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['telegram'],
+    tags: ['telegram'],
+    execute: async (args: Record<string, any>) => {
       const bot = telegram.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const result = await bot.sendStickerMessage(Number(args.chat_id), args.sticker);
       return { success: true, message_id: result.message_id, message: '贴纸已发送' };
     },
-  });
+  }, 'telegram'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'telegram_set_permissions',
     description: '设置 Telegram 群组的默认成员权限',
     parameters: {
@@ -240,7 +254,9 @@ useContext('mcp' as any, 'telegram', (mcp: McpToolRegistry, telegram: TelegramAd
       },
       required: ['bot', 'chat_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['telegram'],
+    tags: ['telegram'],
+    execute: async (args: Record<string, any>) => {
       const { bot: botId, chat_id, ...perms } = args;
       const bot = telegram.bots.get(botId);
       if (!bot) throw new Error(`Bot ${botId} 不存在`);
@@ -251,9 +267,9 @@ useContext('mcp' as any, 'telegram', (mcp: McpToolRegistry, telegram: TelegramAd
       const success = await bot.setChatPermissionsAll(Number(chat_id), permissions);
       return { success, message: success ? '群权限已更新' : '操作失败' };
     },
-  });
+  }, 'telegram'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'telegram_set_description',
     description: '设置 Telegram 群组描述',
     parameters: {
@@ -265,15 +281,15 @@ useContext('mcp' as any, 'telegram', (mcp: McpToolRegistry, telegram: TelegramAd
       },
       required: ['bot', 'chat_id', 'description'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['telegram'],
+    tags: ['telegram'],
+    execute: async (args: Record<string, any>) => {
       const bot = telegram.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const success = await bot.setChatDescription(Number(args.chat_id), args.description);
       return { success, message: success ? '群描述已更新' : '操作失败' };
     },
-  });
+  }, 'telegram'));
 
-  return () => {
-    disposeGroup();
-  };
+  return () => disposers.forEach(d => d());
 });

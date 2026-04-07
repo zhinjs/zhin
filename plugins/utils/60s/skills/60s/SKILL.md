@@ -30,7 +30,24 @@ tags:
   - 金融
   - 娱乐
   - 工具
-tools: []
+tools:
+  - 60s_news
+  - bing_image
+  - douyin_hot
+  - duanzi
+  - exchange_rate
+  - fuel_price
+  - gold_price
+  - history_today
+  - hitokoto
+  - ip_query
+  - kfc
+  - moyu
+  - toutiao_hot
+  - translate_60s
+  - weather
+  - weibo_hot
+  - zhihu_hot
 ---
 
 ## 执行规则

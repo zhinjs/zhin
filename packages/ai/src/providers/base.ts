@@ -62,6 +62,7 @@ export abstract class BaseProvider implements AIProvider {
         headers,
         body: json ? JSON.stringify(json) : fetchOptions.body,
         signal: controller.signal,
+        keepalive: true,
       });
 
       if (!response.ok) {
@@ -106,6 +107,7 @@ export abstract class BaseProvider implements AIProvider {
         headers,
         body: json ? JSON.stringify(json) : fetchOptions.body,
         signal: controller.signal,
+        keepalive: true,
       });
 
       if (!response.ok) {

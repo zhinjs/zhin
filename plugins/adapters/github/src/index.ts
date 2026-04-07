@@ -1,9 +1,8 @@
 /**
  * GitHub 适配器入口：类型扩展、模型、导出、注册
  */
-import { usePlugin, type Plugin, type Context } from 'zhin.js';
+import { usePlugin, type Plugin, type Context, type ToolFeature, type Tool } from 'zhin.js';
 import { GitHubAdapter } from './adapter.js';
-import type { McpToolRegistry, McpToolDef } from '@zhin.js/mcp';
 
 declare module 'zhin.js' {
   namespace Plugin {
@@ -88,9 +87,9 @@ useContext('router', 'github', (router, adapter) => {
   adapter.setupOAuth(router);
 });
 
-// ── MCP 工具注册 ─────────────────────────────────────────────────────
-useContext('mcp', 'github', (mcp: McpToolRegistry, adapter: GitHubAdapter) => {
-  const tools: McpToolDef[] = [
+// ── Tool 工具注册 ─────────────────────────────────────────────────────────
+useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) => {
+  const tools: Tool[] = [
     // --- PR ---
     {
       name: 'github_pr',
@@ -111,7 +110,9 @@ useContext('mcp', 'github', (mcp: McpToolRegistry, adapter: GitHubAdapter) => {
         },
         required: ['action', 'repo'],
       },
-      handler: async (args: Record<string, any>) => {
+      platforms: ['github'],
+      tags: ['github'],
+      execute: async (args: Record<string, any>) => {
         const api = adapter.getAPI();
         if (!api) return '❌ 没有可用的 GitHub bot';
         const { action, repo, number: num, title, body, head, base, state, approve, method } = args;
@@ -187,7 +188,9 @@ useContext('mcp', 'github', (mcp: McpToolRegistry, adapter: GitHubAdapter) => {
         },
         required: ['action', 'repo'],
       },
-      handler: async (args: Record<string, any>) => {
+      platforms: ['github'],
+      tags: ['github'],
+      execute: async (args: Record<string, any>) => {
         const api = adapter.getAPI();
         if (!api) return '❌ 没有可用的 GitHub bot';
         const { action, repo, number: num, title, body, labels, state } = args;
@@ -249,7 +252,9 @@ useContext('mcp', 'github', (mcp: McpToolRegistry, adapter: GitHubAdapter) => {
         },
         required: ['action', 'repo'],
       },
-      handler: async (args: Record<string, any>) => {
+      platforms: ['github'],
+      tags: ['github'],
+      execute: async (args: Record<string, any>) => {
         const api = adapter.getAPI();
         if (!api) return '❌ 没有可用的 GitHub bot';
         const { action, repo, limit: lim } = args;
@@ -316,7 +321,9 @@ useContext('mcp', 'github', (mcp: McpToolRegistry, adapter: GitHubAdapter) => {
         },
         required: ['action', 'query'],
       },
-      handler: async (args: Record<string, any>) => {
+      platforms: ['github'],
+      tags: ['github'],
+      execute: async (args: Record<string, any>) => {
         const api = adapter.getAPI();
         if (!api) return '❌ 没有可用的 GitHub bot';
         const { action, query: q, limit: lim } = args;
@@ -367,7 +374,9 @@ useContext('mcp', 'github', (mcp: McpToolRegistry, adapter: GitHubAdapter) => {
         },
         required: ['action', 'repo'],
       },
-      handler: async (args: Record<string, any>) => {
+      platforms: ['github'],
+      tags: ['github'],
+      execute: async (args: Record<string, any>) => {
         const api = adapter.getAPI();
         if (!api) return '❌ 没有可用的 GitHub bot';
         const { action, repo, number: num, labels } = args;
@@ -415,7 +424,9 @@ useContext('mcp', 'github', (mcp: McpToolRegistry, adapter: GitHubAdapter) => {
         },
         required: ['action', 'repo', 'number', 'assignees'],
       },
-      handler: async (args: Record<string, any>) => {
+      platforms: ['github'],
+      tags: ['github'],
+      execute: async (args: Record<string, any>) => {
         const api = adapter.getAPI();
         if (!api) return '❌ 没有可用的 GitHub bot';
         const { action, repo, number: num, assignees } = args;
@@ -442,7 +453,9 @@ useContext('mcp', 'github', (mcp: McpToolRegistry, adapter: GitHubAdapter) => {
         },
         required: ['repo', 'path'],
       },
-      handler: async (args: Record<string, any>) => {
+      platforms: ['github'],
+      tags: ['github'],
+      execute: async (args: Record<string, any>) => {
         const api = adapter.getAPI();
         if (!api) return '❌ 没有可用的 GitHub bot';
         const r = await api.getFileContent(args.repo, args.path, args.ref);
@@ -477,7 +490,9 @@ useContext('mcp', 'github', (mcp: McpToolRegistry, adapter: GitHubAdapter) => {
         },
         required: ['action', 'repo'],
       },
-      handler: async (args: Record<string, any>) => {
+      platforms: ['github'],
+      tags: ['github'],
+      execute: async (args: Record<string, any>) => {
         const api = adapter.getAPI();
         if (!api) return '❌ 没有可用的 GitHub bot';
         const { action, repo, sha, path, base, head, limit: lim } = args;
@@ -520,7 +535,9 @@ useContext('mcp', 'github', (mcp: McpToolRegistry, adapter: GitHubAdapter) => {
         },
         required: ['type', 'repo', 'number'],
       },
-      handler: async (args: Record<string, any>) => {
+      platforms: ['github'],
+      tags: ['github'],
+      execute: async (args: Record<string, any>) => {
         const api = adapter.getAPI();
         if (!api) return '❌ 没有可用的 GitHub bot';
         const { type: itemType, repo, number: num, title, body, state } = args;
@@ -538,16 +555,10 @@ useContext('mcp', 'github', (mcp: McpToolRegistry, adapter: GitHubAdapter) => {
     },
   ];
 
-  for (const tool of tools) {
-    mcp.addTool(tool);
-  }
-  logger.debug(`GitHub MCP 工具已注册: ${tools.map(t => t.name).join(', ')}`);
+  const disposers = tools.map(t => toolService.addTool(t, 'github'));
+  logger.debug(`GitHub 工具已注册: ${tools.map(t => t.name).join(', ')}`);
 
-  return () => {
-    for (const tool of tools) {
-      mcp.removeTool(tool.name);
-    }
-  };
+  return () => disposers.forEach(d => d());
 });
 
 logger.debug('GitHub 适配器已加载 (GitHub App 认证)');

@@ -48,7 +48,7 @@ export {
 export { collectRelevantTools, toAgentTool } from './zhin-agent/tool-collector.js';
 export { buildRichSystemPrompt, buildContextHint, buildEnhancedPersona, buildUserMessageWithHistory, contentToText } from './zhin-agent/prompt.js';
 export type { RichSystemPromptContext } from './zhin-agent/prompt.js';
-export { createChatHistoryTool, createUserProfileTool, createScheduleFollowUpTool, createSpawnTaskTool } from './zhin-agent/builtin-tools.js';
+export { createChatHistoryTool, createUserProfileTool, createSpawnTaskTool } from './zhin-agent/builtin-tools.js';
 
 export {
   ConversationMemory,
@@ -61,9 +61,6 @@ export { UserProfileStore, AI_USER_PROFILE_MODEL } from './user-profile.js';
 
 export { RateLimiter } from './rate-limiter.js';
 export type { RateLimitConfig, RateLimitResult } from './rate-limiter.js';
-
-export { FollowUpManager, AI_FOLLOWUP_MODEL } from './follow-up.js';
-export type { FollowUpRecord, FollowUpSender } from './follow-up.js';
 
 export { SubagentManager } from './subagent.js';
 export type {

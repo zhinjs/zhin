@@ -452,8 +452,8 @@ useContext("config", (configService) => {
     }
   });
 
-  router.get(`${base}pub/marketplace/detail/:name+`, async (ctx) => {
-    const pkgName = ctx.params.name;
+  router.get(`/pub/marketplace/detail{/*name}`, async (ctx) => {
+    const pkgName = Array.isArray(ctx.params.name) ? ctx.params.name.join('/') : ctx.params.name;
     try {
       const [metaResp, dlResp] = await Promise.all([
         fetch(`https://registry.npmmirror.com/${encodeURIComponent(pkgName)}`),

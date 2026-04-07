@@ -6,7 +6,6 @@ import { AI_SESSION_MODEL } from '@zhin.js/ai';
 import { CHAT_MESSAGE_MODEL, CONTEXT_SUMMARY_MODEL } from '@zhin.js/ai';
 import { AI_MESSAGE_MODEL, AI_SUMMARY_MODEL } from '@zhin.js/ai';
 import { AI_USER_PROFILE_MODEL } from '../user-profile.js';
-import { AI_FOLLOWUP_MODEL } from '../follow-up.js';
 
 export function registerDbModels(): void {
   const plugin = getPlugin();
@@ -23,8 +22,7 @@ export function registerDbModels(): void {
     defineModel('ai_messages', AI_MESSAGE_MODEL);
     defineModel('ai_summaries', AI_SUMMARY_MODEL);
     defineModel('ai_user_profiles', AI_USER_PROFILE_MODEL);
-    defineModel('ai_followups', AI_FOLLOWUP_MODEL);
-    logger.debug('AI database models registered (7 tables)');
+    logger.debug('AI database models registered (6 tables)');
   } else {
     logger.debug('defineModel not available, AI will use in-memory storage');
   }

@@ -59,17 +59,9 @@ export function registerDbUpgrade(refs: AIServiceRefs): void {
         if (profileModel) {
           refs.zhinAgent.upgradeProfilesToDatabase(profileModel);
         }
-
-        const followUpModel = db.models.get('ai_followups');
-        if (followUpModel) {
-          refs.zhinAgent.upgradeFollowUpsToDatabase(followUpModel);
-          refs.zhinAgent.restoreFollowUps().catch(e => {
-            logger.warn('FollowUp restore failed:', e);
-          });
-        }
       }
 
-      logger.debug('AI database storage activated (session, memory, profile, followup)');
+      logger.debug('AI database storage activated (session, memory, profile)');
     } catch (e) {
       logger.error('AI Session: database setup failed:', e);
     }

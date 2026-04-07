@@ -3,6 +3,7 @@ name: hitokoto
 description: 获取一言/每日一句，随机返回一条语句
 tags: [语录, 文学, 随机]
 keywords: [一言, 每日一句, 语录, 名言, hitokoto]
+preExecutable: true
 parameters:
   type:
     type: string

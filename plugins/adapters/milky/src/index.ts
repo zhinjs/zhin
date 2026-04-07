@@ -1,10 +1,8 @@
 /**
  * Milky 适配器入口：单一适配器，支持 WS/SSE/Webhook/反向 WS，依赖 router 注册
  */
-import { usePlugin, type Plugin, type Context } from 'zhin.js';
+import { usePlugin, type Plugin, type Context, createGroupManagementTools, type ToolFeature } from 'zhin.js';
 import type { Router } from '@zhin.js/http';
-import type { McpToolRegistry } from '@zhin.js/mcp';
-import { registerGroupManagementMcpTools } from '@zhin.js/mcp/adapter-tools-helper';
 import { MilkyAdapter } from './adapter.js';
 import type { IGroupManagement } from 'zhin.js';
 
@@ -21,7 +19,6 @@ declare module 'zhin.js' {
   namespace Plugin {
     interface Contexts {
       router: import('@zhin.js/http').Router;
-      mcp: McpToolRegistry;
     }
   }
   interface Adapters {
@@ -43,6 +40,8 @@ provide({
   },
 } as unknown as Context<'milky'>);
 
-useContext('mcp' as any, 'milky', (mcp: McpToolRegistry, milky: MilkyAdapter) => {
-  return registerGroupManagementMcpTools(mcp, milky as unknown as IGroupManagement & { bots: Map<string, any> }, 'milky');
+useContext('tool', 'milky', (toolService: ToolFeature, milky: MilkyAdapter) => {
+  const groupTools = createGroupManagementTools(milky as unknown as IGroupManagement, 'milky');
+  const disposers = groupTools.map(t => toolService.addTool(t, 'milky'));
+  return () => disposers.forEach(d => d());
 });

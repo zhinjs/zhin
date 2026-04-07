@@ -3,6 +3,7 @@ name: ip_query
 description: 查询 IP 地址的地理位置信息
 tags: [网络, 查询, IP]
 keywords: [ip, IP, IP查询, ip查询]
+preExecutable: true
 parameters:
   ip:
     type: string

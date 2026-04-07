@@ -12,7 +12,7 @@
  *   8. 速率限制：防止单用户过度消耗资源
  *   9. 流式输出：onChunk 回调实时推送部分文本
  *  10. 情绪感知：根据用户语气调整回复风格
- *  11. 主动跟进：schedule_followup 定时回查
+ *  11. 定时任务：cron_add 持久化定时任务
  *  12. 多模态输入：图片/音频直接传给视觉模型
  */
 
@@ -28,7 +28,6 @@ import type { ModelRegistry } from '@zhin.js/ai';
 import { UserProfileStore } from '../user-profile.js';
 import { RateLimiter } from '@zhin.js/ai';
 import { detectTone } from '@zhin.js/ai';
-import { FollowUpManager, type FollowUpSender } from '../follow-up.js';
 import { SubagentManager, type SubagentResultSender } from '../subagent.js';
 import {
   pruneHistoryForContext,
@@ -54,7 +53,6 @@ import {
 import {
   createChatHistoryTool,
   createUserProfileTool,
-  createScheduleFollowUpTool,
   createSpawnTaskTool,
 } from './builtin-tools.js';
 
@@ -83,7 +81,6 @@ export class ZhinAgent {
   private externalTools: Map<string, AgentTool> = new Map();
   private userProfiles: UserProfileStore;
   private rateLimiter: RateLimiter;
-  private followUps: FollowUpManager;
   private subagentManager: SubagentManager | null = null;
   private bootstrapContext: string = '';
   private activeSkillsContext: string = '';
@@ -102,7 +99,6 @@ export class ZhinAgent {
     this.memory.setProvider(provider);
     this.userProfiles = new UserProfileStore();
     this.rateLimiter = new RateLimiter(this.config.rateLimit);
-    this.followUps = new FollowUpManager();
   }
 
   // ── DI setters ──────────────────────────────────────────────────────
@@ -132,18 +128,6 @@ export class ZhinAgent {
 
   upgradeProfilesToDatabase(model: any): void {
     this.userProfiles.upgradeToDatabase(model);
-  }
-
-  upgradeFollowUpsToDatabase(model: any): void {
-    this.followUps.upgradeToDatabase(model);
-  }
-
-  setFollowUpSender(sender: FollowUpSender): void {
-    this.followUps.setSender(sender);
-  }
-
-  async restoreFollowUps(): Promise<number> {
-    return this.followUps.restore();
   }
 
   initSubagentManager(createTools: () => AgentTool[]): void {
@@ -265,44 +249,46 @@ export class ZhinAgent {
     if (KEYWORD_TRIGGERS.userProfile.test(content)) {
       allTools.push(createUserProfileTool(userId, this.userProfiles));
     }
-    if (KEYWORD_TRIGGERS.scheduleFollowUp.test(content)) {
-      allTools.push(createScheduleFollowUpTool(sessionId, context, this.followUps));
-    }
     if (this.subagentManager && KEYWORD_TRIGGERS.spawnTask.test(content)) {
       allTools.push(createSpawnTaskTool(context, this.subagentManager));
     }
 
     const filterMs = (now() - tFilter).toFixed(0);
 
-    // 2. History + profile
+    logger.info(`[工具过滤] ${allTools.length} 个工具: ${allTools.map(t => t.name).join(', ') || '(无)'}`);
+
+    // 2. History + profile (parallel)
     const tMem = now();
-    let historyMessages = await this.buildHistoryMessages(sessionId);
+    const [rawHistoryMessages, profileSummary] = await Promise.all([
+      this.buildHistoryMessages(sessionId),
+      this.userProfiles.buildProfileSummary(userId),
+    ]);
 
     const contextTokens = this.config.contextTokens ?? DEFAULT_CONTEXT_TOKENS;
     const maxHistoryShare = this.config.maxHistoryShare ?? 0.5;
     const pruneResult = pruneHistoryForContext({
-      messages: historyMessages,
+      messages: rawHistoryMessages,
       maxContextTokens: contextTokens,
       maxHistoryShare,
     });
-    historyMessages = pruneResult.messages;
+    let historyMessages = pruneResult.messages;
     if (pruneResult.droppedCount > 0) {
       logger.debug(`[上下文窗口] 丢弃 ${pruneResult.droppedCount} 条历史消息 (${pruneResult.droppedTokens} tokens)`);
     }
 
     const memMs = (now() - tMem).toFixed(0);
 
-    // 2.5 Profile + tone
-    const profileSummary = await this.userProfiles.buildProfileSummary(userId);
+    // 2.5 Tone + persona
     const toneHint = this.config.toneAwareness ? detectTone(content).hint : '';
     const personaEnhanced = buildEnhancedPersona(this.config, profileSummary, toneHint);
 
-    // 3. No tools → chat path
+    // 3. No tools → chat path (prefer lightweight model)
     if (allTools.length === 0) {
-      logger.info(`[System Prompt] chat-path: ${personaEnhanced.length} chars ≈ ${Math.ceil(personaEnhanced.length / 2.5)} tokens`);
+      const liteModel = this.config.chatLiteModel || undefined;
+      logger.info(`[System Prompt] chat-path: ${personaEnhanced.length} chars${liteModel ? `, liteModel=${liteModel}` : ''}`);
       logger.debug(`[闲聊路径] 过滤=${filterMs}ms, 记忆=${memMs}ms (${historyMessages.length}条), 0 工具`);
       const tLLM = now();
-      const reply = await this.streamChatWithHistory(content, personaEnhanced, historyMessages, onChunk);
+      const reply = await this.streamChatWithHistory(content, personaEnhanced, historyMessages, onChunk, liteModel);
       const llmMs = (now() - tLLM).toFixed(0);
       logger.info(`[闲聊路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, LLM=${llmMs}ms, 总=${(now() - t0).toFixed(0)}ms`);
       await this.saveToSession(sessionId, content, reply, sceneId);
@@ -357,7 +343,7 @@ Pre-fetched data (from user's question):
 ${preData}
 
 Answer the user's question based on the data above. Be clear and concise; use emoji when appropriate.`;
-      logger.info(`[System Prompt] fast-path: ${prompt.length} chars ≈ ${Math.ceil(prompt.length / 2.5)} tokens`);
+      logger.info(`[System Prompt] fast-path: ${prompt.length} chars`);
       reply = await this.streamChatWithHistory(content, prompt, historyMessages, onChunk);
       logger.info(`[快速路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, LLM=${(now() - tLLM).toFixed(0)}ms, 总=${(now() - t0).toFixed(0)}ms`);
     } else {
@@ -377,10 +363,8 @@ Answer the user's question based on the data above. Be clear and concise; use em
 ${contextHint}
 ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
 
-      const promptChars = systemPrompt.length;
-      const estimatedTokens = Math.ceil(promptChars / 2.5);
-      logger.info(`[System Prompt] ${promptChars} chars ≈ ${estimatedTokens} tokens`);
-      logger.debug(`[System Prompt Preview]\n${systemPrompt.slice(0, 500)}...\n---END PREVIEW---`);
+      logger.info(`[System Prompt] ${systemPrompt.length} chars`);
+      logger.debug(`[System Prompt Full]\n${systemPrompt}\n---END---`);
 
       const agentTools = applyExecPolicyToTools(this.config, allTools);
 
@@ -532,8 +516,9 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     systemPrompt: string,
     history: ChatMessage[],
     onChunk?: OnChunkCallback,
+    preferredModel?: string,
   ): Promise<string> {
-    const candidates = this.resolveModelCandidates('chat');
+    const candidates = this.resolveModelCandidates('chat', preferredModel);
     const userContent = history.length > 0
       ? buildUserMessageWithHistory(history, content)
       : content;
@@ -546,7 +531,9 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       const model = candidates[i];
       try {
         let result = '';
+        let lastUsage: any = null;
         for await (const chunk of this.provider.chatStream({ model, messages })) {
+          if (chunk.usage) lastUsage = chunk.usage;
           const delta = chunk.choices?.[0]?.delta;
           if (!delta) continue;
           const text = typeof delta.content === 'string' ? delta.content : '';
@@ -554,6 +541,9 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
             result += text;
             if (onChunk) onChunk(text, result);
           }
+        }
+        if (lastUsage) {
+          logger.info(`[闲聊] token 用量: prompt=${lastUsage.prompt_tokens}, completion=${lastUsage.completion_tokens}, total=${lastUsage.total_tokens} (model=${model})`);
         }
         result = stripThinkBlocks(result);
         if (result) return result;
@@ -624,7 +614,6 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     this.externalTools.clear();
     this.userProfiles.dispose();
     this.rateLimiter.dispose();
-    this.followUps.dispose();
     if (this.subagentManager) {
       this.subagentManager.dispose();
       this.subagentManager = null;

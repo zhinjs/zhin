@@ -49,7 +49,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
     /** 保存 skill → 声明的 toolNames 映射，供延迟重关联使用 */
     const skillToolNames = new Map<string, string[]>();
 
-    /** 根据工具名列表从 toolService + MCP registry 查找 Tool */
+    /** 根据工具名列表从 toolService 查找 Tool */
     function resolveSkillTools(toolNames: string[]): Tool[] {
       if (toolNames.length === 0) return [];
       const allRegisteredTools = toolService.getAll();
@@ -58,23 +58,6 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
         toolNameIndex.set(t.name, t);
         const parts = t.name.split('_');
         if (parts.length === 2) toolNameIndex.set(`${parts[1]}_${parts[0]}`, t);
-      }
-      // 也从 MCP registry 收集（适配器通过 mcp.addTool 注册的工具）
-      const mcpRegistry = root.inject?.('mcp' as any) as { getTools?(): any[] } | undefined;
-      if (mcpRegistry && typeof mcpRegistry.getTools === 'function') {
-        for (const t of mcpRegistry.getTools()) {
-          if (!toolNameIndex.has(t.name)) {
-            // MCP tool → 转为 Tool 形状以便 Skill 关联
-            toolNameIndex.set(t.name, {
-              name: t.name,
-              description: t.description || '',
-              parameters: t.parameters || { type: 'object', properties: {} },
-              execute: t.handler || (async () => {}),
-              platforms: t.platforms,
-              tags: t.tags,
-            } as Tool);
-          }
-        }
       }
       const result: Tool[] = [];
       for (const name of toolNames) {
@@ -88,22 +71,15 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
     function relinkSkillTools(): void {
       const skillFeature = root.inject?.('skill') as SkillFeature | undefined;
       if (!skillFeature) return;
-      let updated = 0;
       for (const skill of skillFeature.getAll()) {
         const declaredNames = skillToolNames.get(skill.name);
         if (!declaredNames || declaredNames.length === 0) continue;
         const newTools = resolveSkillTools(declaredNames);
         if (newTools.length > skill.tools.length) {
-          (skill as any).tools = newTools;
-          updated++;
-          logger.info(`[重关联] ${newTools.length} 工具`);
+          skill.tools = newTools;
         }
       }
-      if (updated > 0) {
-        logger.info(`[Skill 重关联] ${updated} 个技能已更新工具列表`);
-      }
     }
-
     async function syncWorkspaceSkills(): Promise<number> {
       const skillFeature = root.inject?.('skill') as SkillFeature | undefined;
       if (!skillFeature) return 0;

@@ -1,10 +1,8 @@
 /**
  * OneBot11 适配器入口：单一适配器，支持正向 WS / 反向 WS（connection: ws | wss）
  */
-import { usePlugin, type Plugin, type Context, type IGroupManagement } from 'zhin.js';
+import { usePlugin, type Plugin, type Context, type IGroupManagement, createGroupManagementTools, type ToolFeature } from 'zhin.js';
 import type { Router } from '@zhin.js/http';
-import type { McpToolRegistry } from '@zhin.js/mcp';
-import { registerGroupManagementMcpTools } from '@zhin.js/mcp/adapter-tools-helper';
 import { OneBot11Adapter } from './adapter.js';
 
 export * from './types.js';
@@ -37,15 +35,15 @@ provide({
   },
 } as unknown as Context<'onebot11'>);
 
-useContext('mcp' as any, 'onebot11', (mcp: McpToolRegistry, onebot11: OneBot11Adapter) => {
-  const disposeGroup = registerGroupManagementMcpTools(
-    mcp,
-    onebot11 as unknown as IGroupManagement & { bots: Map<string, any> },
+useContext('tool', 'onebot11', (toolService: ToolFeature, onebot11: OneBot11Adapter) => {
+  const groupTools = createGroupManagementTools(
+    onebot11 as unknown as IGroupManagement,
     'onebot11',
   );
+  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, 'onebot11'));
 
   // Platform-specific tool: set title
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'onebot11_set_title',
     description: '设置 QQ 群成员的专属头衔。只有群主才能设置。',
     parameters: {
@@ -58,16 +56,15 @@ useContext('mcp' as any, 'onebot11', (mcp: McpToolRegistry, onebot11: OneBot11Ad
       },
       required: ['bot', 'group_id', 'user_id', 'title'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['onebot11'],
+    tags: ['onebot11'],
+    execute: async (args: Record<string, any>) => {
       const bot = onebot11.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const success = await bot.setTitle(args.group_id, args.user_id, args.title);
       return { success, message: success ? `已将 ${args.user_id} 的头衔设为 "${args.title}"` : '设置失败' };
     },
-  });
+  }, 'onebot11'));
 
-  return () => {
-    disposeGroup();
-    mcp.removeTool('onebot11_set_title');
-  };
+  return () => disposers.forEach(d => d());
 });

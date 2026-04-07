@@ -38,6 +38,7 @@ export interface ToolMeta {
   keywords?: string[];
   kind?: string;
   hidden?: boolean;
+  preExecutable?: boolean;
   /** handler 文件路径（相对于 .tool.md） */
   handler?: string;
   /** *.tool.md 文件的绝对路径 */
@@ -160,6 +161,7 @@ export async function discoverWorkspaceTools(root?: Plugin | null): Promise<Tool
           keywords: metadata.keywords || [],
           kind: metadata.kind,
           hidden: metadata.hidden,
+          preExecutable: metadata.preExecutable,
           handler: metadata.handler,
           filePath: toolMdPath,
           templateBody: !metadata.handler && body ? body : undefined,
@@ -285,6 +287,7 @@ export async function buildToolFromMeta(meta: ToolMeta): Promise<import('@zhin.j
     scopes: meta.scopes as any,
     permissionLevel: meta.permissionLevel as any,
     hidden: meta.hidden,
+    preExecutable: meta.preExecutable,
     kind: meta.kind,
   };
 }

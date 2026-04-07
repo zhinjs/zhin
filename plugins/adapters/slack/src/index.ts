@@ -1,9 +1,7 @@
 /**
  * Slack 适配器入口：类型扩展、导出、注册
  */
-import { usePlugin, type Plugin, type IGroupManagement } from "zhin.js";
-import type { McpToolRegistry } from "@zhin.js/mcp";
-import { registerGroupManagementMcpTools } from "@zhin.js/mcp/adapter-tools-helper";
+import { usePlugin, type Plugin, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
 import { SlackAdapter } from "./adapter.js";
 
 declare module "zhin.js" {
@@ -32,12 +30,12 @@ provide({
   },
 });
 
-useContext('mcp' as any, 'slack', (mcp: McpToolRegistry, slack: SlackAdapter) => {
-  const disposeGroup = registerGroupManagementMcpTools(
-    mcp,
-    slack as unknown as IGroupManagement & { bots: Map<string, any> },
+useContext('tool', 'slack', (toolService: ToolFeature, slack: SlackAdapter) => {
+  const groupTools = createGroupManagementTools(
+    slack as unknown as IGroupManagement,
     'slack',
   );
+  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, 'slack'));
 
   function getBot(botId: string) {
     const bot = slack.bots.get(botId);
@@ -45,7 +43,7 @@ useContext('mcp' as any, 'slack', (mcp: McpToolRegistry, slack: SlackAdapter) =>
     return bot;
   }
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'slack_invite_to_channel',
     description: '邀请用户加入 Slack 频道',
     parameters: {
@@ -57,14 +55,16 @@ useContext('mcp' as any, 'slack', (mcp: McpToolRegistry, slack: SlackAdapter) =>
       },
       required: ['bot', 'channel', 'users'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['slack'],
+    tags: ['slack'],
+    execute: async (args: Record<string, any>) => {
       const bot = getBot(args.bot);
       const success = await bot.inviteToChannel(args.channel, args.users.split(','));
       return { success, message: success ? '已邀请用户加入频道' : '操作失败' };
     },
-  });
+  }, 'slack'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'slack_set_topic',
     description: '设置 Slack 频道话题',
     parameters: {
@@ -76,14 +76,16 @@ useContext('mcp' as any, 'slack', (mcp: McpToolRegistry, slack: SlackAdapter) =>
       },
       required: ['bot', 'channel', 'topic'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['slack'],
+    tags: ['slack'],
+    execute: async (args: Record<string, any>) => {
       const bot = getBot(args.bot);
       const success = await bot.setChannelTopic(args.channel, args.topic);
       return { success, message: success ? '已设置频道话题' : '操作失败' };
     },
-  });
+  }, 'slack'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'slack_archive_channel',
     description: '归档 Slack 频道',
     parameters: {
@@ -94,14 +96,16 @@ useContext('mcp' as any, 'slack', (mcp: McpToolRegistry, slack: SlackAdapter) =>
       },
       required: ['bot', 'channel'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['slack'],
+    tags: ['slack'],
+    execute: async (args: Record<string, any>) => {
       const bot = getBot(args.bot);
       const success = await bot.archiveChannel(args.channel);
       return { success, message: success ? '已归档频道' : '操作失败' };
     },
-  });
+  }, 'slack'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'slack_pin_message',
     description: '置顶 Slack 消息',
     parameters: {
@@ -113,14 +117,16 @@ useContext('mcp' as any, 'slack', (mcp: McpToolRegistry, slack: SlackAdapter) =>
       },
       required: ['bot', 'channel', 'timestamp'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['slack'],
+    tags: ['slack'],
+    execute: async (args: Record<string, any>) => {
       const bot = getBot(args.bot);
       const success = await bot.pinMessage(args.channel, args.timestamp);
       return { success, message: success ? '已置顶消息' : '操作失败' };
     },
-  });
+  }, 'slack'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'slack_add_reaction',
     description: '给 Slack 消息添加表情反应',
     parameters: {
@@ -133,14 +139,16 @@ useContext('mcp' as any, 'slack', (mcp: McpToolRegistry, slack: SlackAdapter) =>
       },
       required: ['bot', 'channel', 'timestamp', 'emoji'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['slack'],
+    tags: ['slack'],
+    execute: async (args: Record<string, any>) => {
       const bot = getBot(args.bot);
       const success = await bot.addReaction(args.channel, args.timestamp, args.emoji);
       return { success, message: success ? `已添加反应 :${args.emoji}:` : '操作失败' };
     },
-  });
+  }, 'slack'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'slack_remove_reaction',
     description: '移除 Slack 消息上的表情反应',
     parameters: {
@@ -153,14 +161,16 @@ useContext('mcp' as any, 'slack', (mcp: McpToolRegistry, slack: SlackAdapter) =>
       },
       required: ['bot', 'channel_id', 'timestamp', 'name'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['slack'],
+    tags: ['slack'],
+    execute: async (args: Record<string, any>) => {
       const bot = getBot(args.bot);
       const success = await bot.removeReaction(args.channel_id, args.timestamp, args.name);
       return { success, message: success ? `已移除反应 :${args.name}:` : '操作失败' };
     },
-  });
+  }, 'slack'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'slack_unpin_message',
     description: '取消 Slack 频道中消息的置顶',
     parameters: {
@@ -172,14 +182,16 @@ useContext('mcp' as any, 'slack', (mcp: McpToolRegistry, slack: SlackAdapter) =>
       },
       required: ['bot', 'channel_id', 'timestamp'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['slack'],
+    tags: ['slack'],
+    execute: async (args: Record<string, any>) => {
       const bot = getBot(args.bot);
       const success = await bot.unpinMessage(args.channel_id, args.timestamp);
       return { success, message: success ? '已取消置顶' : '操作失败' };
     },
-  });
+  }, 'slack'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'slack_user_info',
     description: '查询 Slack 用户详细信息',
     parameters: {
@@ -190,7 +202,9 @@ useContext('mcp' as any, 'slack', (mcp: McpToolRegistry, slack: SlackAdapter) =>
       },
       required: ['bot', 'user_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['slack'],
+    tags: ['slack'],
+    execute: async (args: Record<string, any>) => {
       const bot = getBot(args.bot);
       const user = await bot.getUserInfo(args.user_id);
       return {
@@ -204,9 +218,9 @@ useContext('mcp' as any, 'slack', (mcp: McpToolRegistry, slack: SlackAdapter) =>
         status_text: user.profile?.status_text,
       };
     },
-  });
+  }, 'slack'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'slack_set_purpose',
     description: '设置 Slack 频道的用途/目的',
     parameters: {
@@ -218,14 +232,16 @@ useContext('mcp' as any, 'slack', (mcp: McpToolRegistry, slack: SlackAdapter) =>
       },
       required: ['bot', 'channel_id', 'purpose'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['slack'],
+    tags: ['slack'],
+    execute: async (args: Record<string, any>) => {
       const bot = getBot(args.bot);
       const success = await bot.setChannelPurpose(args.channel_id, args.purpose);
       return { success, message: success ? '频道用途已更新' : '操作失败' };
     },
-  });
+  }, 'slack'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'slack_unarchive',
     description: '恢复已归档的 Slack 频道',
     parameters: {
@@ -236,14 +252,14 @@ useContext('mcp' as any, 'slack', (mcp: McpToolRegistry, slack: SlackAdapter) =>
       },
       required: ['bot', 'channel_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['slack'],
+    tags: ['slack'],
+    execute: async (args: Record<string, any>) => {
       const bot = getBot(args.bot);
       const success = await bot.unarchiveChannel(args.channel_id);
       return { success, message: success ? '频道已恢复' : '操作失败' };
     },
-  });
+  }, 'slack'));
 
-  return () => {
-    disposeGroup();
-  };
+  return () => disposers.forEach(d => d());
 });

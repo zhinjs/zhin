@@ -2,10 +2,8 @@
  * ICQQ 适配器入口：类型扩展、导出、注册
  */
 import path from "path";
-import { usePlugin, type Plugin, type IGroupManagement } from "zhin.js";
+import { usePlugin, type Plugin, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
 import type { Router } from "@zhin.js/http";
-import type { McpToolRegistry } from "@zhin.js/mcp";
-import { registerGroupManagementMcpTools } from "@zhin.js/mcp/adapter-tools-helper";
 import { MessageCommand } from "zhin.js";
 import { IcqqAdapter } from "./adapter.js";
 import type { WebServer } from "@zhin.js/console";
@@ -61,15 +59,15 @@ useContext("icqq", (icqq: IcqqAdapter) => {
   );
 });
 
-useContext("mcp" as any, "icqq", (mcp: McpToolRegistry, icqq: IcqqAdapter) => {
-  const disposeGroup = registerGroupManagementMcpTools(
-    mcp,
-    icqq as unknown as IGroupManagement & { bots: Map<string, any> },
+useContext("tool", "icqq", (toolService: ToolFeature, icqq: IcqqAdapter) => {
+  const groupTools = createGroupManagementTools(
+    icqq,
     "icqq",
   );
+  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, "icqq"));
 
   // 设置头衔
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: "icqq_set_title",
     description: "设置 QQ 群成员的专属头衔",
     parameters: {
@@ -83,16 +81,18 @@ useContext("mcp" as any, "icqq", (mcp: McpToolRegistry, icqq: IcqqAdapter) => {
       },
       required: ["bot", "group_id", "user_id", "title"],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ["icqq"],
+    tags: ["icqq"],
+    execute: async (args: Record<string, any>) => {
       const bot = icqq.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const success = await bot.setTitle(args.group_id, args.user_id, args.title, args.duration ?? -1);
       return { success, message: success ? `已将 ${args.user_id} 的头衔设为 "${args.title}"` : "设置失败" };
     },
-  });
+  }, "icqq"));
 
   // 发送群公告
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: "icqq_announce",
     description: "发送 QQ 群公告（需要管理员权限）",
     parameters: {
@@ -104,16 +104,18 @@ useContext("mcp" as any, "icqq", (mcp: McpToolRegistry, icqq: IcqqAdapter) => {
       },
       required: ["bot", "group_id", "content"],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ["icqq"],
+    tags: ["icqq"],
+    execute: async (args: Record<string, any>) => {
       const bot = icqq.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const success = await bot.sendAnnounce(args.group_id, args.content);
       return { success, message: success ? "群公告已发送" : "发送失败" };
     },
-  });
+  }, "icqq"));
 
   // 戳一戳
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: "icqq_poke",
     description: "在 QQ 群中对某个成员执行戳一戳互动操作",
     parameters: {
@@ -125,16 +127,18 @@ useContext("mcp" as any, "icqq", (mcp: McpToolRegistry, icqq: IcqqAdapter) => {
       },
       required: ["bot", "group_id", "user_id"],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ["icqq"],
+    tags: ["icqq"],
+    execute: async (args: Record<string, any>) => {
       const bot = icqq.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const success = await bot.pokeMember(args.group_id, args.user_id);
       return { success, message: success ? `已戳了戳 ${args.user_id}` : "戳一戳失败" };
     },
-  });
+  }, "icqq"));
 
   // 获取被禁言列表
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: "icqq_list_muted",
     description: "查询 QQ 群中当前被禁言的成员列表",
     parameters: {
@@ -145,17 +149,19 @@ useContext("mcp" as any, "icqq", (mcp: McpToolRegistry, icqq: IcqqAdapter) => {
       },
       required: ["bot", "group_id"],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ["icqq"],
+    tags: ["icqq"],
+    execute: async (args: Record<string, any>) => {
       const bot = icqq.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const mutedList = await bot.getMutedMembers(args.group_id);
       const filtered = mutedList.filter((m: any) => m !== null);
       return { muted_members: filtered, count: filtered.length };
     },
-  });
+  }, "icqq"));
 
   // 给用户点赞
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: "icqq_send_user_like",
     description: "给用户点赞（竖大拇指），每人每天最多 20 次",
     parameters: {
@@ -167,16 +173,18 @@ useContext("mcp" as any, "icqq", (mcp: McpToolRegistry, icqq: IcqqAdapter) => {
       },
       required: ["bot", "user_id"],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ["icqq"],
+    tags: ["icqq"],
+    execute: async (args: Record<string, any>) => {
       const bot = icqq.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const success = await bot.sendLike(args.user_id, Math.min(args.times ?? 1, 20));
       return { success, message: success ? `已给 ${args.user_id} 点赞` : "发送失败" };
     },
-  });
+  }, "icqq"));
 
   // 设置匿名聊天
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: "icqq_set_anonymous",
     description: "开启或关闭 QQ 群的匿名聊天功能",
     parameters: {
@@ -188,17 +196,19 @@ useContext("mcp" as any, "icqq", (mcp: McpToolRegistry, icqq: IcqqAdapter) => {
       },
       required: ["bot", "group_id"],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ["icqq"],
+    tags: ["icqq"],
+    execute: async (args: Record<string, any>) => {
       const bot = icqq.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const enable = args.enable ?? true;
       const success = await bot.setAnonymous(args.group_id, enable);
       return { success, message: success ? (enable ? "已开启匿名聊天" : "已关闭匿名聊天") : "操作失败" };
     },
-  });
+  }, "icqq"));
 
   // 群文件列表
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: "icqq_group_files",
     description: "获取 QQ 群的群文件列表",
     parameters: {
@@ -209,7 +219,9 @@ useContext("mcp" as any, "icqq", (mcp: McpToolRegistry, icqq: IcqqAdapter) => {
       },
       required: ["bot", "group_id"],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ["icqq"],
+    tags: ["icqq"],
+    execute: async (args: Record<string, any>) => {
       const bot = icqq.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const files = await bot.getGroupFiles(args.group_id);
@@ -224,10 +236,10 @@ useContext("mcp" as any, "icqq", (mcp: McpToolRegistry, icqq: IcqqAdapter) => {
         count: files.length,
       };
     },
-  });
+  }, "icqq"));
 
   // 好友列表
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: "icqq_friend_list",
     description: "获取 QQ 好友列表",
     parameters: {
@@ -237,7 +249,9 @@ useContext("mcp" as any, "icqq", (mcp: McpToolRegistry, icqq: IcqqAdapter) => {
       },
       required: ["bot"],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ["icqq"],
+    tags: ["icqq"],
+    execute: async (args: Record<string, any>) => {
       const bot = icqq.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const fl = bot.fl;
@@ -248,19 +262,9 @@ useContext("mcp" as any, "icqq", (mcp: McpToolRegistry, icqq: IcqqAdapter) => {
       }));
       return { friends: friends.slice(0, 50), count: fl.size };
     },
-  });
+  }, "icqq"));
 
-  return () => {
-    disposeGroup();
-    mcp.removeTool("icqq_set_title");
-    mcp.removeTool("icqq_announce");
-    mcp.removeTool("icqq_poke");
-    mcp.removeTool("icqq_list_muted");
-    mcp.removeTool("icqq_send_user_like");
-    mcp.removeTool("icqq_set_anonymous");
-    mcp.removeTool("icqq_group_files");
-    mcp.removeTool("icqq_friend_list");
-  };
+  return () => disposers.forEach(d => d());
 });
 
 useContext("web", (web: WebServer) => {

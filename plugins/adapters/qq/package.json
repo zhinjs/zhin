@@ -42,7 +42,6 @@
     "qq-official-bot": "^1.0.12"
   },
   "devDependencies": {
-    "@zhin.js/mcp": "workspace:^",
     "typescript": "^5.9.3",
     "zhin.js": "workspace:*"
   },

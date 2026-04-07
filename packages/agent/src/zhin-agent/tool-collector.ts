@@ -5,11 +5,14 @@
 import { Logger } from '@zhin.js/core';
 import type { Tool, ToolContext, SkillFeature } from '@zhin.js/core';
 import type { AgentTool } from '@zhin.js/core';
-import { Agent } from '@zhin.js/ai';
+import { CachedToolFilter } from '@zhin.js/ai';
 import type { ZhinAgentConfig } from './config.js';
 import { PERM_MAP } from './config.js';
 
 const logger = new Logger(null, 'ZhinAgent:ToolCollector');
+
+/** Module-level cached tool filter instance (LRU, auto-invalidates on tool-set change) */
+const cachedFilter = new CachedToolFilter();
 
 /**
  * Convert a Tool (with ToolContext) to an AgentTool, injecting context-provided parameters.
@@ -183,8 +186,8 @@ export function collectRelevantTools(
     collectedNames.add(tool.name);
   }
 
-  // 4. Relevance filtering
-  const filtered = Agent.filterTools(message, collected, {
+  // 4. Relevance filtering (cached)
+  const filtered = cachedFilter.filter(message, collected, {
     callerPermissionLevel: callerPerm,
     maxTools: config.maxTools,
     minScore: 0.3,

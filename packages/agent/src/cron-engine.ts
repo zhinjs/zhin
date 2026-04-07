@@ -258,8 +258,8 @@ export function getCronManager(): CronManager | null {
 export function createCronTools(): ZhinTool[] {
   const listTool = new ZhinTool('cron_list')
     .desc('列出所有定时任务：包括插件注册的内存任务与持久化任务（持久化任务有 id，可用于 cron_remove/cron_pause/cron_resume）')
-    .keyword('定时任务', 'cron', '计划任务', '任务列表')
-    .tag('cron', 'schedule')
+    .keyword('定时任务', 'cron', '计划任务', '任务列表', '我的定时', '查看定时')
+    .tag('cron', 'schedule', '定时')
     .execute(async () => {
       const m = getCronManager();
       if (!m) {
@@ -288,17 +288,36 @@ export function createCronTools(): ZhinTool[] {
     });
 
   const addTool = new ZhinTool('cron_add')
-    .desc('添加一条持久化定时任务：到点由 AI 执行指定 prompt，重启后仍保留')
-    .keyword('添加定时', '新建定时任务', 'cron add')
-    .tag('cron', 'schedule')
-    .param('cron_expression', { type: 'string', description: 'Cron 表达式，如 "0 9 * * *" 表示每天 9:00' }, true)
-    .param('prompt', { type: 'string', description: '到点触发时发给 AI 的提示词' }, true)
+    .desc('添加一条持久化定时任务。支持两种模式：1) cron_expression: 周期性任务(如每天9点)；2) delay_minutes: 一次性延迟提醒(如30分钟后)。执行后不删除。到点由 AI 执行 prompt 并投递结果，重启不丢失。')
+    .keyword('添加定时', '新建定时任务', 'cron add', '定时任务', '定时推送', '每天', '每周', '每月', '自动推送', '自动发送', '定期', '定时提醒', '提醒我', '提醒', '分钟后', '小时后', '过一会', '别忘')
+    .tag('cron', 'schedule', '定时', '提醒')
+    .param('cron_expression', { type: 'string', description: 'Cron 表达式(分 时 日 月 周)。示例："0 9 * * *"=每天9点，"0 7-21 * * *"=每天7点到21点每整点，"*/30 * * * *"=每30分钟，"0 9 * * 1-5"=工作日9点，"0 9,18 * * *"=每天9点和18点。与 delay_minutes 二选一' })
+    .param('delay_minutes', { type: 'number', description: '一次性延迟(分钟)，如 30 表示30分钟后执行一次。与 cron_expression 二选一' })
+    .param('prompt', { type: 'string', description: '到点触发时发给 AI 的提示词（如"查询今日金价"）。如果只是简单提醒，可写提醒内容' }, true)
     .param('label', { type: 'string', description: '可选标签，便于识别' })
     .execute(async (args, toolContext) => {
       const m = getCronManager();
       if (!m?.engine) {
         return { error: '持久化定时任务引擎不可用' };
       }
+      const cronExpr = args.cron_expression as string | undefined;
+      const delayMin = args.delay_minutes as number | undefined;
+
+      if (!cronExpr && !delayMin) {
+        return { error: '请提供 cron_expression（周期任务）或 delay_minutes（一次性延迟）' };
+      }
+
+      let finalCron: string;
+      let isOneShot = false;
+      if (delayMin && delayMin > 0) {
+        // Convert delay_minutes to a one-shot cron at the target time
+        const target = new Date(Date.now() + delayMin * 60 * 1000);
+        finalCron = `${target.getMinutes()} ${target.getHours()} ${target.getDate()} ${target.getMonth() + 1} *`;
+        isOneShot = true;
+      } else {
+        finalCron = cronExpr!;
+      }
+
       const id = generateCronJobId();
       // 从调用者的 ToolContext 自动捕获上下文
       const jobContext: CronJobContext | undefined = toolContext
@@ -312,13 +331,19 @@ export function createCronTools(): ZhinTool[] {
         : undefined;
       const job = await m.engine.addJob({
         id,
-        cronExpression: args.cron_expression as string,
+        cronExpression: finalCron,
         prompt: args.prompt as string,
-        label: args.label as string | undefined,
+        label: args.label as string || (isOneShot ? `一次性提醒 (${delayMin}分钟后)` : undefined),
         enabled: true,
         context: jobContext,
       });
-      return { success: true, id: job.id, message: '已添加并立即生效' };
+
+      if (isOneShot) {
+        const target = new Date(Date.now() + (delayMin ?? 0) * 60 * 1000);
+        const timeStr = target.toLocaleString('zh-CN', { hour12: false });
+        return { success: true, id: job.id, message: `已安排一次性任务，将在 ${timeStr} 执行` };
+      }
+      return { success: true, id: job.id, message: '已添加周期性定时任务并立即生效' };
     });
 
   const removeTool = new ZhinTool('cron_remove')

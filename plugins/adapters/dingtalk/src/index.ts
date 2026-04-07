@@ -1,9 +1,7 @@
 /**
  * 钉钉适配器入口：类型扩展、导出、注册
  */
-import { usePlugin, type Plugin, type IGroupManagement } from "zhin.js";
-import type { McpToolRegistry } from "@zhin.js/mcp";
-import { registerGroupManagementMcpTools } from "@zhin.js/mcp/adapter-tools-helper";
+import { usePlugin, type Plugin, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
 import { DingTalkAdapter } from "./adapter.js";
 
 declare module "zhin.js" {
@@ -39,14 +37,14 @@ useContext("router", (router: any) => {
   });
 });
 
-useContext('mcp', 'dingtalk', (mcp: McpToolRegistry, dingtalk: DingTalkAdapter) => {
-  const disposeGroup = registerGroupManagementMcpTools(
-    mcp,
-    dingtalk,
+useContext('tool', 'dingtalk', (toolService: ToolFeature, dingtalk: DingTalkAdapter) => {
+  const groupTools = createGroupManagementTools(
+    dingtalk as unknown as IGroupManagement,
     'dingtalk',
   );
+  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, 'dingtalk'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'dingtalk_get_user',
     description: '获取钉钉用户信息',
     parameters: {
@@ -57,14 +55,16 @@ useContext('mcp', 'dingtalk', (mcp: McpToolRegistry, dingtalk: DingTalkAdapter) 
       },
       required: ['bot', 'user_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['dingtalk'],
+    tags: ['dingtalk'],
+    execute: async (args: Record<string, any>) => {
       const bot = dingtalk.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       return await bot.getUserInfo(args.user_id);
     },
-  });
+  }, 'dingtalk'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'dingtalk_get_dept_users',
     description: '获取钉钉部门用户列表',
     parameters: {
@@ -75,15 +75,17 @@ useContext('mcp', 'dingtalk', (mcp: McpToolRegistry, dingtalk: DingTalkAdapter) 
       },
       required: ['bot', 'dept_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['dingtalk'],
+    tags: ['dingtalk'],
+    execute: async (args: Record<string, any>) => {
       const bot = dingtalk.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const users = await bot.getDepartmentUsers(args.dept_id);
       return { users, count: users.length };
     },
-  });
+  }, 'dingtalk'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'dingtalk_list_departments',
     description: '获取钉钉部门列表',
     parameters: {
@@ -94,15 +96,17 @@ useContext('mcp', 'dingtalk', (mcp: McpToolRegistry, dingtalk: DingTalkAdapter) 
       },
       required: ['bot'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['dingtalk'],
+    tags: ['dingtalk'],
+    execute: async (args: Record<string, any>) => {
       const bot = dingtalk.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const departments = await bot.getDepartmentList(args.dept_id || '1');
       return { departments, count: departments.length };
     },
-  });
+  }, 'dingtalk'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'dingtalk_send_work_notice',
     description: '向指定用户发送钉钉工作通知',
     parameters: {
@@ -114,16 +118,18 @@ useContext('mcp', 'dingtalk', (mcp: McpToolRegistry, dingtalk: DingTalkAdapter) 
       },
       required: ['bot', 'user_ids', 'content'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['dingtalk'],
+    tags: ['dingtalk'],
+    execute: async (args: Record<string, any>) => {
       const bot = dingtalk.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const msgContent = { msgtype: 'text', text: { content: args.content } };
       const success = await bot.sendWorkNotice(args.user_ids.split(','), msgContent);
       return { success, message: success ? '工作通知已发送' : '发送失败' };
     },
-  });
+  }, 'dingtalk'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'dingtalk_create_chat',
     description: '创建钉钉群聊',
     parameters: {
@@ -136,15 +142,17 @@ useContext('mcp', 'dingtalk', (mcp: McpToolRegistry, dingtalk: DingTalkAdapter) 
       },
       required: ['bot', 'name', 'owner', 'members'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['dingtalk'],
+    tags: ['dingtalk'],
+    execute: async (args: Record<string, any>) => {
       const bot = dingtalk.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const chatId = await bot.createChat(args.name, args.owner, args.members.split(','));
       return { success: !!chatId, chat_id: chatId, message: chatId ? `群聊创建成功: ${chatId}` : '创建失败' };
     },
-  });
+  }, 'dingtalk'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'dingtalk_add_chat_members',
     description: '向钉钉群聊添加成员',
     parameters: {
@@ -156,15 +164,17 @@ useContext('mcp', 'dingtalk', (mcp: McpToolRegistry, dingtalk: DingTalkAdapter) 
       },
       required: ['bot', 'chat_id', 'user_ids'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['dingtalk'],
+    tags: ['dingtalk'],
+    execute: async (args: Record<string, any>) => {
       const bot = dingtalk.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const success = await bot.updateChat(args.chat_id, { add_useridlist: args.user_ids.split(',') });
       return { success, message: success ? '成员添加成功' : '添加失败' };
     },
-  });
+  }, 'dingtalk'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'dingtalk_dept_info',
     description: '获取钉钉部门详细信息',
     parameters: {
@@ -175,14 +185,16 @@ useContext('mcp', 'dingtalk', (mcp: McpToolRegistry, dingtalk: DingTalkAdapter) 
       },
       required: ['bot', 'dept_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['dingtalk'],
+    tags: ['dingtalk'],
+    execute: async (args: Record<string, any>) => {
       const bot = dingtalk.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       return await bot.getDepartmentInfo(Number(args.dept_id));
     },
-  });
+  }, 'dingtalk'));
 
-  mcp.addTool({
+  disposers.push(toolService.addTool({
     name: 'dingtalk_update_chat',
     description: '更新钉钉群聊设置（改名、换群主、增减成员）',
     parameters: {
@@ -197,7 +209,9 @@ useContext('mcp', 'dingtalk', (mcp: McpToolRegistry, dingtalk: DingTalkAdapter) 
       },
       required: ['bot', 'chat_id'],
     },
-    handler: async (args: Record<string, any>) => {
+    platforms: ['dingtalk'],
+    tags: ['dingtalk'],
+    execute: async (args: Record<string, any>) => {
       const bot = dingtalk.bots.get(args.bot);
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       const options: any = {};
@@ -208,9 +222,7 @@ useContext('mcp', 'dingtalk', (mcp: McpToolRegistry, dingtalk: DingTalkAdapter) 
       await bot.updateChat(args.chat_id, options);
       return { success: true, message: '群聊设置已更新' };
     },
-  });
+  }, 'dingtalk'));
 
-  return () => {
-    disposeGroup();
-  };
+  return () => disposers.forEach(d => d());
 });

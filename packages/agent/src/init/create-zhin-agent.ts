@@ -56,22 +56,6 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
       }
     })();
 
-    // Follow-up reminder sender
-    agent.setFollowUpSender(async (record) => {
-      const adapter = root.inject(record.platform) as { sendMessage?: (opts: SendOptions) => Promise<string> } | undefined;
-      if (!adapter || typeof adapter.sendMessage !== 'function') {
-        logger.warn(`[跟进提醒] 找不到适配器: ${record.platform}`);
-        return;
-      }
-      await adapter.sendMessage({
-        context: record.platform,
-        bot: record.bot_id,
-        id: record.scene_id,
-        type: record.scene_type as MessageType,
-        content: `⏰ 定时提醒：${record.message}`,
-      });
-    });
-
     // Subagent manager for background tasks
     agent.initSubagentManager(() => {
       const modelName = provider.models[0] || '';
@@ -115,13 +99,34 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
       const addCron: import('../cron-engine.js').AddCronFn = (c) => cronFeature.add(c, 'cron-engine');
       const runner = async (prompt: string, _jobId: string, jobContext?: import('../cron-engine.js').CronJobContext) => {
         if (!refs.zhinAgent) return;
-        await refs.zhinAgent.process(prompt, {
+        const elements = await refs.zhinAgent.process(prompt, {
           platform: jobContext?.platform || 'cron',
           senderId: jobContext?.senderId || 'system',
           botId: jobContext?.botId,
           sceneId: jobContext?.sceneId || 'cron',
           scope: (jobContext?.scope as any) || undefined,
         });
+        // Deliver AI response to the user's chat
+        const text = elements.map(el => {
+          if (el.type === 'text') return el.content || '';
+          if (el.type === 'image') return `<image url="${el.url}"/>`;
+          return '';
+        }).join('\n').trim();
+        if (text && jobContext?.platform && jobContext.botId && jobContext.sceneId) {
+          const adapter = root.inject(jobContext.platform) as { sendMessage?: (opts: SendOptions) => Promise<string> } | undefined;
+          if (adapter && typeof adapter.sendMessage === 'function') {
+            const sceneType = (jobContext.scope || 'private') as MessageType;
+            await adapter.sendMessage({
+              context: jobContext.platform,
+              bot: jobContext.botId,
+              id: jobContext.sceneId,
+              type: sceneType,
+              content: text,
+            });
+          } else {
+            logger.warn(`[Cron] 无法投递: 找不到适配器 ${jobContext.platform}`);
+          }
+        }
       };
       cronEngine = new PersistentCronEngine({ dataDir, addCron, runner });
       cronEngine.load();

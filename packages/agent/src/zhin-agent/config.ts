@@ -60,7 +60,6 @@ export type OnChunkCallback = (chunk: string, full: string) => void;
 export const KEYWORD_TRIGGERS = {
   chatHistory: /之前|上次|历史|回忆|聊过|记录|还记得|曾经/i,
   userProfile: /偏好|设置|配置|档案|资料|时区|timezone|profile|喜好|我叫|叫我|记住我/i,
-  scheduleFollowUp: /提醒|定时|过一会|跟进|别忘|取消提醒|reminder|分钟后|小时后/i,
   spawnTask: /后台|子任务|spawn|异步|background|并行|独立处理/i,
 } as const;
 
@@ -78,6 +77,8 @@ export interface ZhinAgentConfig {
   toneAwareness?: boolean;
   /** 聊天任务使用的模型（覆盖自动选择） */
   chatModel?: string;
+  /** 纯闲聊(0工具)使用的轻量模型，留空则复用 chatModel */
+  chatLiteModel?: string;
   visionModel?: string;
   contextTokens?: number;
   maxHistoryShare?: number;
@@ -108,6 +109,7 @@ export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   rateLimit: {},
   toneAwareness: true,
   chatModel: '',
+  chatLiteModel: '',
   visionModel: '',
   contextTokens: DEFAULT_CONTEXT_TOKENS,
   maxHistoryShare: 0.5,

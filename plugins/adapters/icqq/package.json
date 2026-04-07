@@ -54,7 +54,6 @@
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.1",
     "@zhin.js/console": "workspace:*",
-    "@zhin.js/mcp": "workspace:^",
     "lucide-react": "^0.469.0",
     "radix-ui": "^1.4.3",
     "typescript": "^5.9.3",

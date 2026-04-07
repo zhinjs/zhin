@@ -194,17 +194,24 @@ export function registerAITrigger(refs: AIServiceRefs): void {
         if (refs.zhinAgent) {
           const mediaParts = extractMediaParts(message);
           let elements: OutputElement[];
+          let firstChunkMs = 0;
+          const onChunk: (chunk: string, full: string) => void = (_chunk, _full) => {
+            if (!firstChunkMs) {
+              firstChunkMs = performance.now() - t0;
+              logger.debug(`[AI Handler] 首 token: ${firstChunkMs.toFixed(0)}ms`);
+            }
+          };
           if (mediaParts.length > 0) {
             const parts: ContentPart[] = [];
             if (content) parts.push({ type: 'text', text: content });
             parts.push(...mediaParts);
             elements = await Promise.race([
-              refs.zhinAgent.processMultimodal(parts, toolContext),
+              refs.zhinAgent.processMultimodal(parts, toolContext, onChunk),
               timeout,
             ]);
           } else {
             elements = await Promise.race([
-              refs.zhinAgent.process(content, toolContext, externalTools),
+              refs.zhinAgent.process(content, toolContext, externalTools, onChunk),
               timeout,
             ]);
           }

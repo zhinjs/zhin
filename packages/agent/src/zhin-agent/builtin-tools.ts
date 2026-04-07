@@ -9,7 +9,6 @@ import type { ToolContext } from '@zhin.js/core';
 import type { AgentTool } from '@zhin.js/core';
 import type { ConversationMemory } from '@zhin.js/ai';
 import type { UserProfileStore } from '../user-profile.js';
-import type { FollowUpManager } from '../follow-up.js';
 import type { SubagentManager, SubagentOrigin } from '../subagent.js';
 
 export function createChatHistoryTool(sessionId: string, memory: ConversationMemory): AgentTool {
@@ -134,68 +133,6 @@ export function createUserProfileTool(userId: string, profiles: UserProfileStore
         default:
           return '不支持的操作，请使用 get/set/delete';
       }
-    },
-  };
-}
-
-export function createScheduleFollowUpTool(
-  sessionId: string,
-  context: ToolContext,
-  followUps: FollowUpManager,
-): AgentTool {
-  const platform = context.platform || '';
-  const botId = context.botId || '';
-  const senderId = context.senderId || '';
-  const sceneId = context.sceneId || '';
-  const sceneType = context.message?.$channel?.type || 'private';
-
-  return {
-    name: 'schedule_followup',
-    description: '安排或取消定时跟进提醒。创建新提醒会自动取消之前的提醒。提醒持久保存，重启不丢失。',
-    parameters: {
-      type: 'object',
-      properties: {
-        action: {
-          type: 'string',
-          description: '操作类型: create（创建提醒，默认）或 cancel（取消当前会话所有提醒）',
-          enum: ['create', 'cancel'],
-        },
-        delay_minutes: {
-          type: 'number',
-          description: '延迟时间，单位是分钟。注意：3 就是 3 分钟，不是 3 小时。举例: 3 = 3分钟后, 60 = 1小时后, 1440 = 1天后',
-        },
-        message: {
-          type: 'string',
-          description: '提醒消息内容',
-        },
-      },
-      required: ['action'],
-    },
-    tags: ['reminder', '提醒', '跟进', '定时'],
-    keywords: ['提醒', '提醒我', '过一会', '过一小时', '明天', '跟进', '别忘了', '记得提醒', '取消提醒'],
-    async execute(args: Record<string, any>) {
-      const { action = 'create', delay_minutes, message: msg } = args;
-
-      if (action === 'cancel') {
-        const count = await followUps.cancelBySession(sessionId);
-        return count > 0
-          ? `✅ 已取消 ${count} 个待执行的提醒`
-          : '当前没有待执行的提醒';
-      }
-
-      if (!delay_minutes || delay_minutes <= 0) return '延迟时间必须大于 0 分钟';
-      if (!msg) return '请提供提醒内容';
-
-      return followUps.schedule({
-        sessionId,
-        platform,
-        botId,
-        senderId,
-        sceneId,
-        sceneType,
-        message: msg,
-        delayMinutes: delay_minutes,
-      });
     },
   };
 }
