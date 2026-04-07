@@ -1,5 +1,48 @@
 # test-bot
 
+## 0.1.66
+
+### Patch Changes
+
+- 5073d4c: chore: chore: update TypeScript version to ^5.9.3 across all plugins and packages
+  feat: enhance ai-text-as-image output registration with off handler for cleanup
+  fix: remove unnecessary logging in ensureBuiltinFontsCached function
+  refactor: simplify action handlers in html-renderer tools
+  chore: add README files for queue-sandbox-poc and event-delivery packages
+  chore: adjust pnpm workspace configuration to exclude games directory
+  chore: update tsconfig to include plugins directory for TypeScript compilation
+- Updated dependencies [5073d4c]
+  - @zhin.js/plugin-group-daily-analysis@0.0.11
+  - @zhin.js/sensitive-filter@0.0.47
+  - @zhin.js/plugin-html-renderer@0.0.40
+  - @zhin.js/adapter-wechat-mp@0.1.50
+  - @zhin.js/adapter-dingtalk@1.0.50
+  - @zhin.js/adapter-onebot11@1.0.66
+  - @zhin.js/adapter-onebot12@0.0.11
+  - @zhin.js/adapter-telegram@1.0.47
+  - @zhin.js/adapter-discord@1.0.65
+  - @zhin.js/adapter-sandbox@2.0.2
+  - @zhin.js/console@2.0.2
+  - @zhin.js/adapter-github@0.1.30
+  - @zhin.js/adapter-satori@0.0.11
+  - @zhin.js/adapter-email@0.1.49
+  - @zhin.js/adapter-milky@0.0.11
+  - @zhin.js/adapter-slack@1.0.47
+  - @zhin.js/plugin-repeater@0.0.4
+  - @zhin.js/adapter-icqq@2.0.2
+  - @zhin.js/adapter-kook@1.0.62
+  - @zhin.js/adapter-lark@1.0.66
+  - @zhin.js/plugin-checkin@0.0.4
+  - @zhin.js/mcp@1.0.44
+  - @zhin.js/adapter-qq@1.0.62
+  - @zhin.js/plugin-music@1.0.2
+  - @zhin.js/plugin-stats@0.0.4
+  - @zhin.js/plugin-teach@0.0.4
+  - @zhin.js/plugin-60s@0.0.7
+  - @zhin.js/plugin-rss@0.0.5
+  - zhin.js@1.0.60
+  - @zhin.js/http@1.0.55
+
 ## 0.1.65
 
 ### Patch Changes

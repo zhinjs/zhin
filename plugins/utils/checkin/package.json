@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-checkin",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Daily check-in & points plugin for Zhin.js — gamified engagement with streaks, ranks, and rewards",
   "type": "module",
   "main": "./lib/index.js",
@@ -52,7 +52,7 @@
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {
-    "zhin.js": ">=1.0.59"
+    "zhin.js": ">=1.0.60"
   },
   "repository": {
     "type": "git",

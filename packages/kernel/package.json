@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/kernel",
-  "version": "0.0.20",
+  "version": "0.0.21",
   "description": "Framework-agnostic runtime kernel: Plugin DI, Feature, Config, Cron, Scheduler, errors, utilities",
   "type": "module",
   "main": "./lib/index.js",
@@ -12,7 +12,9 @@
       "import": "./lib/index.js"
     }
   },
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",

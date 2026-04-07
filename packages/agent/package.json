@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/agent",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Zhin AI Agent — session, ZhinAgent, init; composes @zhin.js/core providers and tools",
   "type": "module",
   "main": "./lib/index.js",
@@ -12,7 +12,9 @@
       "import": "./lib/index.js"
     }
   },
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib"
