@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/database",
-  "version": "1.0.46",
+  "version": "1.0.47",
   "description": "Universal database abstraction layer for Zhin.js - supports SQLite, MySQL, PostgreSQL, MongoDB, Redis",
   "type": "module",
   "main": "./lib/index.js",
@@ -13,7 +13,9 @@
       "development": "./src/index.ts"
     }
   },
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib"

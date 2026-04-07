@@ -1,5 +1,19 @@
 # @zhin.js/plugin-rss
 
+## 0.0.5
+
+### Patch Changes
+
+- 5073d4c: chore: chore: update TypeScript version to ^5.9.3 across all plugins and packages
+  feat: enhance ai-text-as-image output registration with off handler for cleanup
+  fix: remove unnecessary logging in ensureBuiltinFontsCached function
+  refactor: simplify action handlers in html-renderer tools
+  chore: add README files for queue-sandbox-poc and event-delivery packages
+  chore: adjust pnpm workspace configuration to exclude games directory
+  chore: update tsconfig to include plugins directory for TypeScript compilation
+- Updated dependencies [5073d4c]
+  - zhin.js@1.0.60
+
 ## 0.0.4
 
 ### Patch Changes

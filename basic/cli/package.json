@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/cli",
-  "version": "1.0.56",
+  "version": "1.0.57",
   "description": "Command-line interface for Zhin.js bot framework",
   "type": "module",
   "main": "./lib/index.js",
@@ -13,7 +13,9 @@
       "import": "./lib/index.js"
     }
   },
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib"
