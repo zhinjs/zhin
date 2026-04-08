@@ -1,5 +1,13 @@
 # @zhin.js/agent
 
+## 0.1.4
+
+### Patch Changes
+
+- bf0dc75: fix: 幻觉优化
+  - @zhin.js/core@1.1.4
+  - @zhin.js/ai@1.1.4
+
 ## 0.1.3
 
 ### Patch Changes
