@@ -382,6 +382,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
         systemPrompt,
         tools: agentTools,
         maxIterations: effectiveMaxIterations,
+        turnTimeout: this.config.timeout,
       });
 
       const userMessageWithHistory = buildUserMessageWithHistory(historyMessages, content);
@@ -519,6 +520,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     preferredModel?: string,
   ): Promise<string> {
     const candidates = this.resolveModelCandidates('chat', preferredModel);
+    const turnTimeout = this.config.timeout;
     const userContent = history.length > 0
       ? buildUserMessageWithHistory(history, content)
       : content;
@@ -527,21 +529,34 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       { role: 'user', content: userContent },
     ];
 
+    const withTurnTimeout = <T>(promise: Promise<T>): Promise<T> =>
+      turnTimeout
+        ? Promise.race([
+            promise,
+            new Promise<never>((_, rej) =>
+              setTimeout(() => rej(new Error(`LLM 单轮响应超时 (${turnTimeout}ms)`)), turnTimeout),
+            ),
+          ])
+        : promise;
+
     for (let i = 0; i < candidates.length; i++) {
       const model = candidates[i];
       try {
         let result = '';
         let lastUsage: any = null;
-        for await (const chunk of this.provider.chatStream({ model, messages })) {
-          if (chunk.usage) lastUsage = chunk.usage;
-          const delta = chunk.choices?.[0]?.delta;
-          if (!delta) continue;
-          const text = typeof delta.content === 'string' ? delta.content : '';
-          if (text) {
-            result += text;
-            if (onChunk) onChunk(text, result);
+        // 对整个流式消费过程应用超时
+        await withTurnTimeout((async () => {
+          for await (const chunk of this.provider.chatStream({ model, messages })) {
+            if (chunk.usage) lastUsage = chunk.usage;
+            const delta = chunk.choices?.[0]?.delta;
+            if (!delta) continue;
+            const text = typeof delta.content === 'string' ? delta.content : '';
+            if (text) {
+              result += text;
+              if (onChunk) onChunk(text, result);
+            }
           }
-        }
+        })());
         if (lastUsage) {
           logger.info(`[闲聊] token 用量: prompt=${lastUsage.prompt_tokens}, completion=${lastUsage.completion_tokens}, total=${lastUsage.total_tokens} (model=${model})`);
         }
@@ -549,7 +564,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
         if (result) return result;
         // Streaming returned empty content — try non-streaming with same model
         logger.warn(`[streamChat] ${model} 流式响应为空，尝试非流式`);
-        const response = await this.provider.chat({ model, messages });
+        const response = await withTurnTimeout(this.provider.chat({ model, messages }));
         const msg = response.choices[0]?.message?.content;
         result = stripThinkBlocks(typeof msg === 'string' ? msg : '');
         if (result) {
@@ -561,7 +576,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
         if (isLast) {
           // No more candidates — try non-streaming as final attempt
           try {
-            const response = await this.provider.chat({ model, messages });
+            const response = await withTurnTimeout(this.provider.chat({ model, messages }));
             const msg = response.choices[0]?.message?.content;
             let result = stripThinkBlocks(typeof msg === 'string' ? msg : '');
             if (onChunk && result) onChunk(result, result);

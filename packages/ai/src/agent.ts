@@ -97,7 +97,7 @@ export interface AgentEvents {
  */
 export class Agent {
   private provider: AIProvider;
-  private config: Required<Pick<AgentConfig, 'provider' | 'model' | 'systemPrompt' | 'tools' | 'maxIterations' | 'temperature'>> & Pick<AgentConfig, 'contextWindow' | 'maxConcurrentTools' | 'modelFallbacks'>;
+  private config: Required<Pick<AgentConfig, 'provider' | 'model' | 'systemPrompt' | 'tools' | 'maxIterations' | 'temperature'>> & Pick<AgentConfig, 'contextWindow' | 'maxConcurrentTools' | 'modelFallbacks' | 'turnTimeout'>;
   private tools: Map<string, AgentTool> = new Map();
   private eventHandlers: Map<keyof AgentEvents, Function[]> = new Map();
   /** 成本追踪器（参考 Claude Code cost-tracker） */
@@ -115,6 +115,7 @@ export class Agent {
       temperature: config.temperature ?? 0.7,
       contextWindow: config.contextWindow,
       maxConcurrentTools: config.maxConcurrentTools,
+      turnTimeout: config.turnTimeout,
     };
 
     // 注册工具
@@ -139,14 +140,24 @@ export class Agent {
 
   /**
    * 带自动降级的 chat 调用：主模型失败时依次尝试 modelFallbacks。
+   * 每次 LLM 请求独立应用 turnTimeout，而非所有轮次共享。
    */
   private async chatWithFallback(request: Omit<import('./types.js').ChatCompletionRequest, 'model'>): Promise<{ response: import('./types.js').ChatCompletionResponse; usedModel: string }> {
     const candidates = [this.config.model, ...(this.config.modelFallbacks || [])];
+    const turnTimeout = this.config.turnTimeout;
     let lastError: Error | undefined;
     for (let i = 0; i < candidates.length; i++) {
       const model = candidates[i];
       try {
-        const response = await this.provider.chat({ ...request, model });
+        const chatPromise = this.provider.chat({ ...request, model });
+        const response = turnTimeout
+          ? await Promise.race([
+              chatPromise,
+              new Promise<never>((_, rej) =>
+                setTimeout(() => rej(new Error(`LLM 单轮响应超时 (${turnTimeout}ms)`)), turnTimeout),
+              ),
+            ])
+          : await chatPromise;
         // 成功且切换了模型 → 将当前模型提升为首选（后续轮次直接用）
         if (i > 0) {
           logger.info(`[模型降级] ${candidates[0]} → ${model} 成功，切换为首选模型`);

@@ -1167,6 +1167,15 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/zhin
 
+  plugins/utils/link-poster:
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
+
   plugins/utils/music:
     devDependencies:
       '@zhin.js/adapter-icqq':

@@ -275,6 +275,11 @@ export interface AgentConfig {
    * 参考 Claude Code StreamingToolExecutor 的并发上限。
    */
   maxConcurrentTools?: number;
+  /**
+   * 每轮 LLM 调用的超时时间（毫秒，默认 60000）。
+   * 此超时应用于 Agent 循环中的每一次 LLM 请求，而非所有轮次共享。
+   */
+  turnTimeout?: number;
 }
 
 /** Agent 运行结果 */

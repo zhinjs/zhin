@@ -186,9 +186,8 @@ export function registerAITrigger(refs: AIServiceRefs): void {
       logger.debug(`[AI Handler] 工具收集: ${externalTools.length} 个, ${(performance.now() - tCollect).toFixed(0)}ms`);
 
       try {
-        const timeout = new Promise<never>((_, rej) =>
-          setTimeout(() => rej(new Error('AI 响应超时')), triggerConfig.timeout),
-        );
+        // 每轮 LLM 调用在 Agent 内部已有 turnTimeout（来自 triggerConfig.timeout），
+        // 这里不再设置全局超时，避免多轮工具调用被不合理地截断。
 
         let responseText: string;
         if (refs.zhinAgent) {
@@ -205,18 +204,16 @@ export function registerAITrigger(refs: AIServiceRefs): void {
             const parts: ContentPart[] = [];
             if (content) parts.push({ type: 'text', text: content });
             parts.push(...mediaParts);
-            elements = await Promise.race([
-              refs.zhinAgent.processMultimodal(parts, toolContext, onChunk),
-              timeout,
-            ]);
+            elements = await refs.zhinAgent.processMultimodal(parts, toolContext, onChunk);
           } else {
-            elements = await Promise.race([
-              refs.zhinAgent.process(content, toolContext, externalTools, onChunk),
-              timeout,
-            ]);
+            elements = await refs.zhinAgent.process(content, toolContext, externalTools, onChunk);
           }
           responseText = renderOutput(elements);
         } else {
+          // 非 ZhinAgent 路径：仍用单次超时保护
+          const timeout = new Promise<never>((_, rej) =>
+            setTimeout(() => rej(new Error('AI 响应超时')), triggerConfig.timeout),
+          );
           const response = await Promise.race([
             ai.process(content, toolContext, externalTools),
             timeout,
