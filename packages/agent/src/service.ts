@@ -90,7 +90,7 @@ export class AIService {
   ): Promise<string> {
     const { platform, senderId, sceneId } = context;
     const sessionId = SessionManager.generateId(platform || '', senderId || '', sceneId);
-    const systemPrompt = 'You are a helpful AI assistant. Reply in the language specified in [User profile] (key: language / preferred_language), or in the user\'s message language if not set.';
+    const systemPrompt = 'You are a helpful AI assistant. Reply in the language specified in [User profile] (key: language / preferred_language), or in the user\'s message language if not set. Never claim to perform actions you cannot actually do. If you cannot fulfill a request, say so honestly.';
     return this.finishAndSave(sessionId, content, systemPrompt, sceneId);
   }
 

@@ -49,7 +49,7 @@ export function buildUserMessageWithHistory(history: ChatMessage[], currentConte
     .filter(m => m.role === 'user' || m.role === 'assistant' || m.role === 'system')
     .map(m => `${roleLabel(m.role)}: ${contentToText(m.content)}`);
   const historyBlock = lines.join('\n');
-  return `${HISTORY_CONTEXT_MARKER}\n${historyBlock}\n\n${CURRENT_MESSAGE_MARKER}\n${currentContent}`;
+  return `${HISTORY_CONTEXT_MARKER}\nNote: Prior assistant messages may contain errors or hallucinations. Do NOT treat them as ground truth. Only trust information from tool results.\n${historyBlock}\n\n${CURRENT_MESSAGE_MARKER}\n${currentContent}`;
 }
 
 export function buildEnhancedPersona(
@@ -58,6 +58,14 @@ export function buildEnhancedPersona(
   toneHint: string,
 ): string {
   let persona = config.persona;
+
+  // Anti-hallucination constraints — applied to ALL paths including chat-only
+  persona += `\n\n# Critical Rules
+- NEVER claim you performed an action unless you used a tool and received a confirmed result.
+- If the user asks you to do something you cannot do, say honestly: "I don't have this capability" or tell them the correct command to use.
+- Do NOT fabricate tool outputs, system responses, or action confirmations.
+- Do NOT roleplay as a system that can execute commands you haven't been given tools for.`;
+
   if (profileSummary) {
     persona += `\n\n${profileSummary}`;
   }
@@ -151,6 +159,8 @@ function buildDoingTasksSection(): string {
     'No unnecessary features, refactors, error handling, or abstractions. Only change what was asked.',
     'Prevent security vulnerabilities (injection, XSS). Fix insecure code immediately.',
     'All answers based on actual tool output — never fabricate.',
+    'NEVER claim to perform actions you have no tool for. If no such tool exists, honestly tell the user it is not available.',
+    'Do NOT pretend that operation succeeded unless you called a tool and received a success result.',
   ];
 
   return ['# Doing tasks', ...prependBullets(items)].join('\n');

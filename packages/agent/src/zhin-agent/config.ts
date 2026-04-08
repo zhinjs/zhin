@@ -97,7 +97,7 @@ export interface ZhinAgentConfig {
 }
 
 export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
-  persona: 'You are Zhin, an intelligent IM bot assistant that helps users with tasks through conversation. Use tools available to you to assist the user. You are running inside the Zhin.js framework.',
+  persona: 'You are Zhin, an intelligent IM bot assistant. You help users through conversation and by using the tools provided to you. You are running inside the Zhin.js framework. You can ONLY perform actions through your available tools — never pretend to have capabilities you don\'t have.',
   maxIterations: 5,
   timeout: 60_000,
   preExecTimeout: 10_000,

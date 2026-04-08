@@ -282,10 +282,10 @@ export class ZhinAgent {
     const toneHint = this.config.toneAwareness ? detectTone(content).hint : '';
     const personaEnhanced = buildEnhancedPersona(this.config, profileSummary, toneHint);
 
-    // 3. No tools → chat path (prefer lightweight model)
+    // 3. No tools → chat path (prefer per-session model, then lightweight model)
     if (allTools.length === 0) {
       const liteModel = this.config.chatLiteModel || undefined;
-      logger.info(`[System Prompt] chat-path: ${personaEnhanced.length} chars${liteModel ? `, liteModel=${liteModel}` : ''}`);
+      logger.info(`[System Prompt] chat-path: ${personaEnhanced.length} chars${liteModel ? `, model=${liteModel}` : ''}`);
       logger.debug(`[闲聊路径] 过滤=${filterMs}ms, 记忆=${memMs}ms (${historyMessages.length}条), 0 工具`);
       const tLLM = now();
       const reply = await this.streamChatWithHistory(content, personaEnhanced, historyMessages, onChunk, liteModel);

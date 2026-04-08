@@ -135,6 +135,8 @@ export class Agent {
  - If multiple steps are needed, execute them in order
  - On tool failure, try alternatives — do not dump raw errors to user
  - If a task cannot be completed, say so honestly
+ - NEVER claim to have performed an action unless you called a tool and got a confirmed result
+ - If the user asks you to do something you have no tool for, say so honestly — do NOT fabricate a success response
  - Reply in the language specified in [User profile] (key: language / preferred_language), or in the user's message language if not set`;
   }
 
