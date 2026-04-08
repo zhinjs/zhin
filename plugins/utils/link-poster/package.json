@@ -13,18 +13,45 @@
     },
     "./package.json": "./package.json"
   },
-  "files": ["src", "lib", "README.md"],
+  "files": [
+    "src",
+    "lib",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc --build",
     "clean": "rimraf lib"
   },
-  "keywords": ["zhin", "zhin.js", "bot", "plugin", "link-poster", "bilibili", "github", "douyin", "xiaohongshu"],
-  "author": { "name": "lc-cn", "email": "admin@liucl.cn", "url": "https://github.com/lc-cn" },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "plugin",
+    "link-poster",
+    "bilibili",
+    "github",
+    "douyin",
+    "xiaohongshu"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
   "license": "MIT",
   "dependencies": {},
-  "devDependencies": { "typescript": "^5.9.3", "zhin.js": "workspace:*" },
-  "peerDependencies": { "zhin.js": ">=1.0.60" },
-  "repository": { "type": "git", "url": "git+https://github.com/zhinjs/zhin.git", "directory": "plugins/utils/link-poster" },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependencies": {
+    "zhin.js": ">=1.0.62"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "plugins/utils/link-poster"
+  },
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
