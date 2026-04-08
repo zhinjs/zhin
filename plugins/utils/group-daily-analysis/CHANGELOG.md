@@ -1,5 +1,12 @@
 # @zhin.js/plugin-group-daily-analysis
 
+## 0.0.12
+
+### Patch Changes
+
+- zhin.js@1.0.61
+- @zhin.js/plugin-html-renderer@0.0.41
+
 ## 0.0.11
 
 ### Patch Changes

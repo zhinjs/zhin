@@ -1,5 +1,13 @@
 # @zhin.js/agent
 
+## 0.1.3
+
+### Patch Changes
+
+- a257f3f: fix: 定时任务提示词优化
+  - @zhin.js/core@1.1.3
+  - @zhin.js/ai@1.1.3
+
 ## 0.1.2
 
 ### Patch Changes
