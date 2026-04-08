@@ -1121,6 +1121,24 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/zhin
 
+  plugins/utils/code-runner:
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
+
+  plugins/utils/group-admin:
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
+
   plugins/utils/group-daily-analysis:
     devDependencies:
       '@zhin.js/plugin-html-renderer':
@@ -1161,6 +1179,15 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/zhin
 
+  plugins/utils/qrcode:
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
+
   plugins/utils/repeater:
     devDependencies:
       typescript:
@@ -1184,6 +1211,15 @@ importers:
         version: link:../../../packages/zhin
 
   plugins/utils/sensitive-filter:
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/zhin
+
+  plugins/utils/short-url:
     devDependencies:
       typescript:
         specifier: ^5.9.3

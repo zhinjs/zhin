@@ -39,7 +39,43 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
     });
     const disposers: (() => void)[] = [];
     for (const tool of builtinTools) disposers.push(toolService.addTool(tool, root.name));
-    const cronTools = createCronTools();
+    const cronTools = createCronTools({
+      optimizePrompt: async (rawPrompt, cronExpr) => {
+        const agent = refs.zhinAgent;
+        if (!agent) return rawPrompt;
+        const optimizeInstruction = [
+          `你是一个提示词优化助手。请将以下用户为定时任务设置的简短提示词改写为更完整、详细的执行指令。`,
+          `要求：`,
+          `- 保留用户的原始意图，不要改变任务目标`,
+          `- 让提示词在定时触发时能产出自然、有温度的内容（而非模板或说明）`,
+          `- 如果是问候/报时类任务，提示词应指导 AI 根据当前时间生成符合时段的问候语`,
+          `- 如果是查询类任务，提示词应明确查询目标和输出格式`,
+          `- 只输出优化后的提示词本身，不要加任何解释或前缀`,
+          ``,
+          `Cron 表达式: ${cronExpr}`,
+          `原始提示词: ${rawPrompt}`,
+        ].join('\n');
+        try {
+          const elements = await agent.process(optimizeInstruction, {
+            platform: 'system',
+            senderId: 'prompt-optimizer',
+            sceneId: 'cron-setup',
+          });
+          const optimized = elements
+            .filter(el => el.type === 'text')
+            .map(el => el.content || '')
+            .join('\n')
+            .trim();
+          if (optimized && optimized.length > rawPrompt.length) {
+            logger.debug(`Cron prompt optimized: "${rawPrompt}" → "${optimized.slice(0, 80)}..."`);
+            return optimized;
+          }
+        } catch (e) {
+          logger.warn('Cron prompt optimization failed: ' + (e as Error).message);
+        }
+        return rawPrompt;
+      },
+    });
     for (const tool of cronTools) disposers.push(toolService.addTool(tool, root.name));
     logger.info(`Registered ${builtinTools.length} built-in + ${cronTools.length} cron tools`);
 

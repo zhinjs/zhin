@@ -255,7 +255,9 @@ export function getCronManager(): CronManager | null {
 // AI 可调用的定时任务管理工具
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function createCronTools(): ZhinTool[] {
+export type PromptOptimizer = (rawPrompt: string, cronExpression: string) => Promise<string>;
+
+export function createCronTools(options?: { optimizePrompt?: PromptOptimizer }): ZhinTool[] {
   const listTool = new ZhinTool('cron_list')
     .desc('列出所有定时任务：包括插件注册的内存任务与持久化任务（持久化任务有 id，可用于 cron_remove/cron_pause/cron_resume）')
     .keyword('定时任务', 'cron', '计划任务', '任务列表', '我的定时', '查看定时')
@@ -319,6 +321,15 @@ export function createCronTools(): ZhinTool[] {
       }
 
       const id = generateCronJobId();
+      // Optimize the stored prompt so it produces better results when triggered
+      let finalPrompt = args.prompt as string;
+      if (options?.optimizePrompt) {
+        try {
+          finalPrompt = await options.optimizePrompt(finalPrompt, finalCron);
+        } catch (e) {
+          logger.warn('Prompt optimization failed, using original: ' + (e as Error).message);
+        }
+      }
       // 从调用者的 ToolContext 自动捕获上下文
       const jobContext: CronJobContext | undefined = toolContext
         ? {
@@ -332,7 +343,7 @@ export function createCronTools(): ZhinTool[] {
       const job = await m.engine.addJob({
         id,
         cronExpression: finalCron,
-        prompt: args.prompt as string,
+        prompt: finalPrompt,
         label: args.label as string || (isOneShot ? `一次性提醒 (${delayMin}分钟后)` : undefined),
         enabled: true,
         context: jobContext,

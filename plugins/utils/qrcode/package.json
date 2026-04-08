@@ -1,0 +1,32 @@
+{
+  "name": "@zhin.js/plugin-qrcode",
+  "version": "0.0.1",
+  "description": "QR code generator & reader plugin for Zhin.js",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["src", "lib", "README.md"],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rimraf lib"
+  },
+  "keywords": ["zhin", "zhin.js", "bot", "plugin", "qrcode", "qr"],
+  "author": { "name": "lc-cn", "email": "admin@liucl.cn", "url": "https://github.com/lc-cn" },
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": { "typescript": "^5.9.3", "zhin.js": "workspace:*" },
+  "peerDependencies": { "zhin.js": ">=1.0.60" },
+  "repository": { "type": "git", "url": "git+https://github.com/zhinjs/zhin.git", "directory": "plugins/utils/qrcode" },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

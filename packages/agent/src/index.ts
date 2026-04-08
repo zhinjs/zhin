@@ -88,6 +88,7 @@ export type {
   AddCronFn,
   PersistentCronEngineOptions,
   CronManager,
+  PromptOptimizer,
 } from './cron-engine.js';
 
 export {

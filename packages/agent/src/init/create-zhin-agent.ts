@@ -99,7 +99,18 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
       const addCron: import('../cron-engine.js').AddCronFn = (c) => cronFeature.add(c, 'cron-engine');
       const runner = async (prompt: string, _jobId: string, jobContext?: import('../cron-engine.js').CronJobContext) => {
         if (!refs.zhinAgent) return;
-        const elements = await refs.zhinAgent.process(prompt, {
+        // Enrich prompt with current time and execution context so AI
+        // produces the actual content instead of explaining a template.
+        const now = new Date();
+        const timeStr = now.toLocaleString('zh-CN', { hour12: false });
+        const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+        const weekday = weekdays[now.getDay()];
+        const enrichedPrompt = [
+          `[定时任务自动触发] 当前时间: ${timeStr} 星期${weekday}`,
+          `请直接生成以下任务要求的内容，不要解释模板或询问用户。回复将自动发送到聊天中。`,
+          `任务: ${prompt}`,
+        ].join('\n');
+        const elements = await refs.zhinAgent.process(enrichedPrompt, {
           platform: jobContext?.platform || 'cron',
           senderId: jobContext?.senderId || 'system',
           botId: jobContext?.botId,

@@ -43,7 +43,13 @@ jobs:
       
       - name: build packages
         run: pnpm build
-      
+
+      - name: init new packages (first-time publish)
+        run: node scripts/init-new-packages.mjs
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
+          NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
+
       - name: bump versions and publish
         uses: changesets/action@6a0a831ff30acef54f2c6aa1cbbc1096b066edaf # v1.7.0
         with:
@@ -53,4 +59,5 @@ jobs:
           publish: pnpm pub
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # OIDC authentication is automatic - no NPM_TOKEN needed!
+          NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.PERSONAL_TOKEN }}

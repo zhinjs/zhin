@@ -27,6 +27,7 @@
     "release": "pnpm changeset",
     "bump": "pnpm changeset version",
     "pub": "pnpm changeset publish",
+    "init-publish": "node scripts/init-new-packages.mjs",
     "stop": "pnpm --filter test-bot stop",
     "init": "pnpm --filter test-bot initial && pnpm install",
     "prepare:logger": "pnpm --filter @zhin.js/logger build && pnpm --filter @zhin.js/cli install",
