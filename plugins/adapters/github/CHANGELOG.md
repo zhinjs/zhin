@@ -1,5 +1,11 @@
 # @zhin.js/adapter-github
 
+## 0.1.33
+
+### Patch Changes
+
+- 6b146fd: fix: 补齐工具
+
 ## 0.1.32
 
 ### Patch Changes
