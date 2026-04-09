@@ -2,7 +2,6 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "display": "Zhin Console — 适配器 / 插件「浏览器端 client/」推荐基线",
   "compilerOptions": {
-    "baseUrl": ".",
     "declaration": true,
     "module": "ESNext",
     "moduleResolution": "bundler",

@@ -336,6 +336,36 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
             insertAt(name, id)
         }
 
+        // 处理粘贴事件
+        const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+            e.preventDefault()
+            const clipboardData = e.clipboardData
+
+            // 优先处理图片粘贴
+            const items = Array.from(clipboardData.items)
+            const imageItem = items.find((item) => item.type.startsWith('image/'))
+            if (imageItem) {
+                const file = imageItem.getAsFile()
+                if (file) {
+                    const reader = new FileReader()
+                    reader.onload = () => {
+                        if (typeof reader.result === 'string') {
+                            insertImage(reader.result)
+                        }
+                    }
+                    reader.readAsDataURL(file)
+                }
+                return
+            }
+
+            // 纯文本粘贴（去除富文本格式）
+            const text = clipboardData.getData('text/plain')
+            if (text) {
+                document.execCommand('insertText', false, text)
+                handleChange()
+            }
+        }
+
         // 处理键盘事件
         const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -367,6 +397,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
                 suppressContentEditableWarning
                 onInput={handleChange}
                 onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
                 data-placeholder={placeholder}
                 className="rich-text-editor"
                 style={{

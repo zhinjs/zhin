@@ -13,7 +13,6 @@
   "dependencies": {
     "xml2js": "^0.6.2",
     "axios": "^1.6.2",
-    "@types/xml2js": "^0.4.14",
     "form-data": "^4.0.0"
   },
   "peerDependencies": {
@@ -21,9 +20,10 @@
     "zhin.js": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^5.9.3",
-    "@types/node": "^20.10.6",
+    "@types/xml2js": "^0.4.14",
     "@types/koa": "^2.15.0",
+    "@types/node": "^20.10.6",
+    "typescript": "^5.9.3",
     "zhin.js": "workspace:*"
   },
   "keywords": [
@@ -52,11 +52,8 @@
   "files": [
     "src",
     "lib",
-    "client",
-    "dist",
     "skills",
     "README.md",
-    "node",
     "CHANGELOG.md"
   ],
   "publishConfig": {

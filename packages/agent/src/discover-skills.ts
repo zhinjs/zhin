@@ -35,6 +35,8 @@ export interface SkillMeta {
   available?: boolean;
   /** 缺失的依赖描述（如 "CLI: ffmpeg", "ENV: API_KEY") */
   requiresMissing?: string[];
+  /** 所属插件名（从 skills/ 目录归属推断） */
+  ownerPlugin?: string;
 }
 
 // ============================================================================
@@ -50,6 +52,22 @@ export async function discoverWorkspaceSkills(root?: Plugin | null): Promise<Ski
   const seenNames = new Set<string>();
   const dataDir = getDataDir();
   const skillDirs = getSkillSearchDirectories(root ?? undefined);
+
+  // Build dir → pluginName mapping for attribution
+  const dirToPlugin = new Map<string, string>();
+  if (root) {
+    const mapPlugin = (p: Plugin) => {
+      if (!p?.filePath) return;
+      const dir = path.dirname(p.filePath);
+      dirToPlugin.set(path.join(dir, 'skills'), p.name);
+      const dirName = path.basename(dir);
+      if (dirName === 'src' || dirName === 'lib') {
+        dirToPlugin.set(path.join(path.dirname(dir), 'skills'), p.name);
+      }
+    };
+    mapPlugin(root);
+    for (const child of root.children || []) mapPlugin(child);
+  }
 
   // 确保 data/skills 目录存在
   const defaultSkillDir = path.join(dataDir, 'skills');
@@ -143,6 +161,7 @@ export async function discoverWorkspaceSkills(root?: Plugin | null): Promise<Ski
           always: Boolean(metadata.always),
           available,
           requiresMissing: requiresMissing.length > 0 ? requiresMissing : undefined,
+          ownerPlugin: dirToPlugin.get(skillsDir),
         });
         logger.debug(`Skill发现成功: ${metadata.name}, tools: ${JSON.stringify(metadata.tools || [])}, platforms: ${JSON.stringify(metadata.platforms || '(all)')}`);
       } catch (e) {

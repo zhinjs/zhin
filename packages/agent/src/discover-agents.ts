@@ -32,6 +32,8 @@ export interface AgentMeta {
   provider?: string;
   /** 最大工具调用迭代次数 */
   maxIterations?: number;
+  /** 所属插件名（从 agents/ 目录归属推断） */
+  ownerPlugin?: string;
 }
 
 // ============================================================================
@@ -50,16 +52,20 @@ export async function discoverWorkspaceAgents(root?: Plugin | null): Promise<Age
     path.join(os.homedir(), '.zhin', 'agents'),
     path.join(getDataDir(), 'agents'),
   ];
+  // Build dir → pluginName mapping for attribution
+  const dirToPlugin = new Map<string, string>();
   if (root) {
     const addPluginDir = (p: Plugin) => {
       if (!p?.filePath) return;
       const dir = path.dirname(p.filePath);
       const d = path.join(dir, 'agents');
       if (!agentDirs.includes(d)) agentDirs.push(d);
+      dirToPlugin.set(d, p.name);
       const dirName = path.basename(dir);
       if (dirName === 'src' || dirName === 'lib') {
         const d2 = path.join(path.dirname(dir), 'agents');
         if (!agentDirs.includes(d2)) agentDirs.push(d2);
+        dirToPlugin.set(d2, p.name);
       }
     };
     addPluginDir(root);
@@ -127,6 +133,7 @@ export async function discoverWorkspaceAgents(root?: Plugin | null): Promise<Age
           model: metadata.model,
           provider: metadata.provider,
           maxIterations: typeof metadata.maxIterations === 'number' ? metadata.maxIterations : undefined,
+          ownerPlugin: dirToPlugin.get(agentsDir),
         });
         logger.debug(`Agent发现成功: ${metadata.name}`);
       } catch (e) {

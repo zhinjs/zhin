@@ -119,12 +119,17 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
     async function syncWorkspaceSkills(): Promise<number> {
       const skillFeature = root.inject?.('skill') as SkillFeature | undefined;
       if (!skillFeature) return 0;
-      const existing = skillFeature.getByPlugin(root.name);
-      for (const s of existing) skillFeature.remove(s);
+      // 移除之前文件化注册的 skill（所有插件）
+      const pluginNames = new Set<string>([root.name, ...root.children.map(c => c.name)]);
+      for (const pn of pluginNames) {
+        const existing = skillFeature.getByPlugin(pn);
+        for (const s of existing) skillFeature.remove(s);
+      }
       skillToolNames.clear();
       const skills = await discoverWorkspaceSkills(root);
       if (skills.length > 0) {
         for (const s of skills) {
+          const ownerName = s.ownerPlugin || root.name;
           const toolNames = s.toolNames || [];
           skillToolNames.set(s.name, toolNames);
           const associatedTools = resolveSkillTools(toolNames);
@@ -135,10 +140,10 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
             keywords: s.keywords || [],
             tags: s.tags || [],
             platforms: s.platforms,
-            pluginName: root.name,
+            pluginName: ownerName,
             filePath: s.filePath,
             always: s.always,
-          }, root.name);
+          }, ownerName);
           if(associatedTools.length){
             logger.info(`[注册] ${associatedTools.length} 工具${s.platforms?.length ? ', 平台: ' + s.platforms.join(',') : ', 通用'}`);
           }
@@ -177,7 +182,8 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
         }
         const tool = await buildToolFromMeta(meta);
         if (!tool) continue;
-        const dispose = toolService.addTool(tool, root.name);
+        const ownerName = meta.ownerPlugin || root.name;
+        const dispose = toolService.addTool(tool, ownerName);
         toolFileDisposers.push(dispose);
         added++;
       }
@@ -191,9 +197,12 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       const agentPresetFeature = root.inject?.('agentPreset') as AgentPresetFeature | undefined;
       if (!agentPresetFeature) return 0;
 
-      // Remove previously discovered presets for this plugin
-      const existing = agentPresetFeature.getByPlugin(root.name);
-      for (const p of existing) agentPresetFeature.remove(p);
+      // Remove previously discovered presets for all plugins
+      const pluginNames = new Set<string>([root.name, ...root.children.map(c => c.name)]);
+      for (const pn of pluginNames) {
+        const existing = agentPresetFeature.getByPlugin(pn);
+        for (const p of existing) agentPresetFeature.remove(p);
+      }
 
       const agentMetas = await discoverWorkspaceAgents(root);
       if (agentMetas.length === 0) return 0;
@@ -229,7 +238,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
           provider: meta.provider,
           maxIterations: meta.maxIterations,
           filePath: meta.filePath,
-        }, root.name);
+        }, meta.ownerPlugin || root.name);
         added++;
       }
       return added;

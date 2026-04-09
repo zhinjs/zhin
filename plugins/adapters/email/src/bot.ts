@@ -279,16 +279,7 @@ export class EmailBot extends EventEmitter implements Bot<EmailBotConfig, EmailM
 
         // 如果没有纯文本但有HTML，尝试转换
         if (!email.text && email.html) {
-            // 简单的HTML到文本转换
-            const textFromHtml = email.html
-                .replace(/<[^>]*>/g, '') // 移除HTML标签
-                .replace(/&nbsp;/g, ' ')
-                .replace(/&amp;/g, '&')
-                .replace(/&lt;/g, '<')
-                .replace(/&gt;/g, '>')
-                .replace(/&quot;/g, '"')
-                .trim();
-
+            const textFromHtml = EmailBot.htmlToText(email.html);
             if (textFromHtml) {
                 segments.push(segment.text(textFromHtml));
             }
@@ -323,11 +314,11 @@ export class EmailBot extends EventEmitter implements Bot<EmailBotConfig, EmailM
             const mailOptions = await this.formatSendContent(options);
             const info = await this.smtpTransporter.sendMail(mailOptions);
             this.logger.debug('Email sent:', info.messageId);
+            return info.messageId || '';
         } catch (error) {
             this.logger.error('Failed to send email:', error);
             throw error;
         }
-        return ''
     }
 
     async $recallMessage(id: string): Promise<void> {
@@ -416,6 +407,39 @@ export class EmailBot extends EventEmitter implements Bot<EmailBotConfig, EmailM
             writeStream.on('finish', () => resolve(filepath));
             writeStream.on('error', reject);
         });
+    }
+
+    /**
+     * HTML → 纯文本转换，处理常见标签和实体
+     */
+    static htmlToText(html: string): string {
+        return html
+            // 块级标签换行
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<\/p>/gi, '\n\n')
+            .replace(/<\/div>/gi, '\n')
+            .replace(/<\/li>/gi, '\n')
+            .replace(/<\/tr>/gi, '\n')
+            .replace(/<\/h[1-6]>/gi, '\n\n')
+            // 移除 style 和 script 块
+            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+            // 移除所有剩余标签
+            .replace(/<[^>]*>/g, '')
+            // HTML 实体解码
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&apos;/g, "'")
+            .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+            .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+            // 清理多余空白
+            .replace(/\n{3,}/g, '\n\n')
+            .replace(/[ \t]+/g, ' ')
+            .trim();
     }
 }
 

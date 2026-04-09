@@ -390,52 +390,54 @@ useContext("config", (configService) => {
   });
 
   // ─── 插件市场 API ─────────────────────────────────────────────
-  router.get(`${base}pub/marketplace/search`, async (ctx) => {
-    const { keyword = '', page = '1', size = '20', category, official } = ctx.query as Record<string, string>;
+
+  // 缓存 plugins.json（5 分钟过期）
+  let _pluginsCache: { data: any[]; ts: number } | null = null;
+  const CACHE_TTL = 5 * 60 * 1000;
+
+  async function fetchPluginRegistry(): Promise<any[]> {
+    if (_pluginsCache && Date.now() - _pluginsCache.ts < CACHE_TTL) return _pluginsCache.data;
+    const resp = await fetch('https://zhin.js.org/plugins.json');
+    if (!resp.ok) throw new Error(`plugins.json fetch failed: ${resp.status}`);
+    const json = await resp.json() as any;
+    const list = json.plugins || [];
+    _pluginsCache = { data: list, ts: Date.now() };
+    return list;
+  }
+
+  router.get(`/pub/marketplace/search`, async (ctx) => {
+    const { q = '', keyword = '', page = '1', size = '20', limit, category, official } = ctx.query as Record<string, string>;
+    const searchKeyword = (q || keyword).trim().toLowerCase();
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const pageSize = Math.min(100, Math.max(1, parseInt(size, 10) || 20));
+    const pageSize = Math.min(100, Math.max(1, parseInt(limit || size, 10) || 20));
 
     try {
-      const searchUrl = new URL('https://registry.npmmirror.com/-/v1/search');
-      const q = keyword ? `zhin-plugin ${keyword}` : 'zhin-plugin';
-      searchUrl.searchParams.set('text', q);
-      searchUrl.searchParams.set('size', '250');
-      const resp = await fetch(searchUrl.toString());
-      if (!resp.ok) throw new Error(`npm search failed: ${resp.status}`);
-      const data = await resp.json() as any;
+      const allPlugins = await fetchPluginRegistry();
 
-      let plugins = (data.objects || [])
-        .filter((o: any) => {
-          const name: string = o.package?.name || '';
-          return (
-            (name.startsWith('zhin-plugin-') || name.startsWith('@zhin.js/')) &&
-            !['@zhin.js/core', '@zhin.js/kernel', '@zhin.js/ai', '@zhin.js/agent',
-              '@zhin.js/client', '@zhin.js/satori', '@zhin.js/schema',
-              '@zhin.js/logger', '@zhin.js/database', '@zhin.js/cli',
-              'zhin', 'zhin.js', 'create-zhin'].includes(name)
-          );
-        })
-        .map((o: any) => {
-          const pkg = o.package;
-          const isOfficial = (pkg.name as string).startsWith('@zhin.js/');
-          const kw: string[] = pkg.keywords || [];
-          let cat = 'util';
-          if (kw.includes('adapter')) cat = 'adapter';
-          else if (kw.includes('service')) cat = 'service';
-          else if (kw.includes('game')) cat = 'game';
-          else if (kw.includes('feature')) cat = 'feature';
-          return {
-            name: pkg.name,
-            version: pkg.version,
-            description: pkg.description || '',
-            author: typeof pkg.author === 'string' ? pkg.author : pkg.author?.name || '',
-            keywords: kw,
-            category: cat,
-            official: isOfficial,
-            date: pkg.date,
-            score: o.score?.final || 0,
-          };
+      let plugins = allPlugins.map((p: any) => ({
+        name: p.name,
+        displayName: p.displayName || '',
+        version: p.version || '',
+        description: p.description || '',
+        author: p.author || '',
+        isOfficial: !!p.isOfficial,
+        official: !!p.isOfficial,
+        category: p.category || 'util',
+        keywords: p.tags || [],
+        npm: p.npm || `https://www.npmjs.com/package/${p.name}`,
+        date: p.lastUpdate || '',
+        downloads: p.downloads || { weekly: 0, monthly: 0 },
+        readme: p.readme || '',
+        license: p.license || '',
+      }));
+
+      // 关键词搜索（匹配 name / displayName / description / keywords）
+      if (searchKeyword) {
+        plugins = plugins.filter((p: any) => {
+          const haystack = [p.name, p.displayName, p.description, ...(p.keywords || [])].join(' ').toLowerCase();
+          return haystack.includes(searchKeyword);
         });
+      }
 
       if (category) plugins = plugins.filter((p: any) => p.category === category);
       if (official === 'true') plugins = plugins.filter((p: any) => p.official);
@@ -445,7 +447,7 @@ useContext("config", (configService) => {
       const start = (pageNum - 1) * pageSize;
       const items = plugins.slice(start, start + pageSize);
 
-      ctx.body = { success: true, data: { items, total, page: pageNum, size: pageSize } };
+      ctx.body = { success: true, data: items, total, page: pageNum, size: pageSize };
     } catch (err: any) {
       ctx.status = 502;
       ctx.body = { success: false, error: err.message || 'Search failed' };
@@ -455,13 +457,17 @@ useContext("config", (configService) => {
   router.get(`/pub/marketplace/detail{/*name}`, async (ctx) => {
     const pkgName = Array.isArray(ctx.params.name) ? ctx.params.name.join('/') : ctx.params.name;
     try {
-      const [metaResp, dlResp] = await Promise.all([
-        fetch(`https://registry.npmmirror.com/${encodeURIComponent(pkgName)}`),
-        fetch(`https://api.npmjs.org/downloads/point/last-week/${encodeURIComponent(pkgName)}`),
-      ]);
+      // 先从缓存查找下载量信息
+      let cachedDownloads = { weekly: 0, monthly: 0 };
+      try {
+        const registry = await fetchPluginRegistry();
+        const cached = registry.find((p: any) => p.name === pkgName);
+        if (cached?.downloads) cachedDownloads = cached.downloads;
+      } catch { /* ignore cache miss */ }
+
+      const metaResp = await fetch(`https://registry.npmmirror.com/${encodeURIComponent(pkgName)}`);
       if (!metaResp.ok) throw new Error(`Package not found: ${metaResp.status}`);
       const meta = await metaResp.json() as any;
-      const dl = dlResp.ok ? (await dlResp.json() as any) : {};
       const latest = meta['dist-tags']?.latest;
       const latestInfo = latest ? meta.versions?.[latest] : undefined;
       ctx.body = {
@@ -476,10 +482,11 @@ useContext("config", (configService) => {
           repository: meta.repository?.url || latestInfo?.repository?.url || '',
           author: typeof meta.author === 'string' ? meta.author : meta.author?.name || '',
           keywords: latestInfo?.keywords || [],
-          dependencies: latestInfo?.dependencies || {},
-          weeklyDownloads: dl.downloads ?? 0,
+          engines: latestInfo?.engines || {},
+          peerDependencies: latestInfo?.peerDependencies || {},
+          downloads: cachedDownloads,
           versions: Object.keys(meta.versions || {}),
-          time: meta.time || {},
+          lastPublish: (latest && meta.time?.[latest]) || '',
         },
       };
     } catch (err: any) {

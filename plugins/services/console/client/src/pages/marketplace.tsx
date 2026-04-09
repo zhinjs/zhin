@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import {
   Search, Package, Download, ExternalLink, AlertCircle,
   ArrowUpDown, RefreshCw, ShieldCheck, Globe,
@@ -78,6 +78,8 @@ export default function MarketplacePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
   const [category, setCategory] = useState<Category>('')
   const [officialOnly, setOfficialOnly] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>('name')
@@ -94,7 +96,7 @@ export default function MarketplacePage() {
     setError(null)
     try {
       const params = new URLSearchParams()
-      if (search) params.set('q', search)
+      if (debouncedSearch) params.set('q', debouncedSearch)
       if (category) params.set('category', category)
       if (officialOnly) params.set('official', 'true')
       params.set('limit', '50')
@@ -112,7 +114,14 @@ export default function MarketplacePage() {
     } finally {
       setLoading(false)
     }
-  }, [search, category, officialOnly])
+  }, [debouncedSearch, category, officialOnly])
+
+  // Debounce search input (350ms)
+  useEffect(() => {
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => setDebouncedSearch(search), 350)
+    return () => clearTimeout(debounceRef.current)
+  }, [search])
 
   useEffect(() => {
     fetchPlugins()
@@ -138,7 +147,7 @@ export default function MarketplacePage() {
     setDetailLoading(true)
     setDetail(null)
     try {
-      const res = await fetch(`/pub/marketplace/detail/${encodeURIComponent(name)}`)
+      const res = await fetch(`/pub/marketplace/detail/${name}`)
       if (res.ok) {
         const data = await res.json()
         if (data.success) setDetail(data.data)
@@ -322,7 +331,7 @@ export default function MarketplacePage() {
 
       {/* Detail Dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           {detailLoading ? (
             <div className="space-y-3">
               <Skeleton className="h-6 w-48" />
@@ -427,7 +436,7 @@ export default function MarketplacePage() {
                 </div>
               </div>
 
-              <DialogFooter className="gap-2">
+              <DialogFooter className="gap-2 flex-wrap">
                 {detail.homepage && (
                   <Button variant="outline" size="sm" asChild>
                     <a href={detail.homepage} target="_blank" rel="noopener noreferrer">
@@ -435,17 +444,15 @@ export default function MarketplacePage() {
                     </a>
                   </Button>
                 )}
-                {detail.npm || (
-                  <Button variant="outline" size="sm" asChild>
-                    <a
-                      href={`https://www.npmjs.com/package/${detail.name}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Download className="w-3 h-3 mr-1" /> npm
-                    </a>
-                  </Button>
-                )}
+                <Button variant="outline" size="sm" asChild>
+                  <a
+                    href={detail.npm || `https://www.npmjs.com/package/${detail.name}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Download className="w-3 h-3 mr-1" /> npm
+                  </a>
+                </Button>
                 <DialogClose asChild>
                   <Button variant="secondary" size="sm">关闭</Button>
                 </DialogClose>

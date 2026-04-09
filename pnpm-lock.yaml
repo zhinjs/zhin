@@ -590,6 +590,9 @@ importers:
 
   plugins/adapters/discord:
     dependencies:
+      '@zhin.js/client':
+        specifier: workspace:*
+        version: link:../../../packages/client
       '@zhin.js/http':
         specifier: workspace:*
         version: link:../../services/http
@@ -606,6 +609,18 @@ importers:
       '@types/node':
         specifier: ^22.9.0
         version: 22.19.15
+      '@types/react':
+        specifier: ^19.2.2
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.1
+        version: 19.2.3(@types/react@19.2.14)
+      '@zhin.js/console':
+        specifier: workspace:*
+        version: link:../../services/console
+      lucide-react:
+        specifier: ^0.469.0
+        version: 0.469.0(react@19.2.0)
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -615,12 +630,6 @@ importers:
 
   plugins/adapters/email:
     dependencies:
-      '@types/imap':
-        specifier: ^0.8.40
-        version: 0.8.43
-      '@types/nodemailer':
-        specifier: ^6.4.14
-        version: 6.4.23
       imap:
         specifier: ^0.8.19
         version: 0.8.19
@@ -631,12 +640,18 @@ importers:
         specifier: ^7.0.11
         version: 7.0.13
     devDependencies:
+      '@types/imap':
+        specifier: ^0.8.40
+        version: 0.8.43
       '@types/mailparser':
         specifier: ^3.4.6
         version: 3.4.6
       '@types/node':
         specifier: ^20.10.6
         version: 20.19.37
+      '@types/nodemailer':
+        specifier: ^6.4.14
+        version: 6.4.23
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -699,6 +714,12 @@ importers:
 
   plugins/adapters/kook:
     dependencies:
+      '@zhin.js/client':
+        specifier: workspace:*
+        version: link:../../../packages/client
+      '@zhin.js/http':
+        specifier: workspace:*
+        version: link:../../services/http
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
@@ -706,6 +727,18 @@ importers:
         specifier: latest
         version: 1.0.4
     devDependencies:
+      '@types/react':
+        specifier: ^19.2.2
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.1
+        version: 19.2.3(@types/react@19.2.14)
+      '@zhin.js/console':
+        specifier: workspace:*
+        version: link:../../services/console
+      lucide-react:
+        specifier: ^0.469.0
+        version: 0.469.0(react@19.2.0)
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -806,6 +839,12 @@ importers:
 
   plugins/adapters/qq:
     dependencies:
+      '@zhin.js/client':
+        specifier: workspace:*
+        version: link:../../../packages/client
+      '@zhin.js/http':
+        specifier: workspace:*
+        version: link:../../services/http
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
@@ -813,6 +852,18 @@ importers:
         specifier: ^1.0.12
         version: 1.0.12
     devDependencies:
+      '@types/react':
+        specifier: ^19.2.2
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.1
+        version: 19.2.3(@types/react@19.2.14)
+      '@zhin.js/console':
+        specifier: workspace:*
+        version: link:../../services/console
+      lucide-react:
+        specifier: ^0.469.0
+        version: 0.469.0(react@19.2.0)
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -897,6 +948,12 @@ importers:
 
   plugins/adapters/telegram:
     dependencies:
+      '@zhin.js/client':
+        specifier: workspace:*
+        version: link:../../../packages/client
+      '@zhin.js/http':
+        specifier: workspace:*
+        version: link:../../services/http
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
@@ -907,6 +964,18 @@ importers:
       '@types/node':
         specifier: ^22.9.0
         version: 22.19.15
+      '@types/react':
+        specifier: ^19.2.2
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.1
+        version: 19.2.3(@types/react@19.2.14)
+      '@zhin.js/console':
+        specifier: workspace:*
+        version: link:../../services/console
+      lucide-react:
+        specifier: ^0.469.0
+        version: 0.469.0(react@19.2.0)
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -916,9 +985,6 @@ importers:
 
   plugins/adapters/wechat-mp:
     dependencies:
-      '@types/xml2js':
-        specifier: ^0.4.14
-        version: 0.4.14
       '@zhin.js/http':
         specifier: workspace:*
         version: link:../../services/http
@@ -938,6 +1004,9 @@ importers:
       '@types/node':
         specifier: ^20.10.6
         version: 20.19.37
+      '@types/xml2js':
+        specifier: ^0.4.14
+        version: 0.4.14
       typescript:
         specifier: ^5.9.3
         version: 5.9.3

@@ -43,4 +43,5 @@ export interface TokenResponse {
 export interface WeChatAPIResponse {
   errcode?: number;
   errmsg?: string;
+  msgid?: number;
 }

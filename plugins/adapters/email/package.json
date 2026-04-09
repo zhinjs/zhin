@@ -11,8 +11,6 @@
     "build:node": "tsc"
   },
   "dependencies": {
-    "@types/imap": "^0.8.40",
-    "@types/nodemailer": "^6.4.14",
     "imap": "^0.8.19",
     "mailparser": "^3.9.4",
     "nodemailer": "^7.0.11"
@@ -21,8 +19,10 @@
     "zhin.js": "workspace:*"
   },
   "devDependencies": {
+    "@types/imap": "^0.8.40",
     "@types/mailparser": "^3.4.6",
     "@types/node": "^20.10.6",
+    "@types/nodemailer": "^6.4.14",
     "typescript": "^5.9.3",
     "zhin.js": "workspace:*"
   },
@@ -50,11 +50,8 @@
   "files": [
     "src",
     "lib",
-    "client",
-    "dist",
     "skills",
     "README.md",
-    "node",
     "CHANGELOG.md"
   ],
   "publishConfig": {

@@ -3,7 +3,7 @@
  */
 import axios from "axios";
 import * as xml2js from "xml2js";
-import { createHash } from "crypto";
+import { createHash, createDecipheriv, createCipheriv, randomBytes } from "crypto";
 import { EventEmitter } from "events";
 import FormData from "form-data";
 import { Bot, Message, SendOptions, SendContent, MessageSegment, segment } from "zhin.js";
@@ -99,7 +99,7 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
 
     private async handleMessage(ctx: Context): Promise<void> {
         try {
-            const { signature, timestamp, nonce } = ctx.query;
+            const { signature, timestamp, nonce, msg_signature, encrypt_type } = ctx.query;
             
             // 验证签名
             if (!this.verifySignature(
@@ -114,15 +114,33 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
             }
             
             // 获取原始XML数据
-            const xmlBody = (ctx as any).request.rawBody || (ctx as any).body;
-            const wechatMessage = await this.parseXMLMessage(xmlBody?.toString() || '');
+            let xmlBody = (ctx as any).request.rawBody || (ctx as any).body;
+            let xmlString = xmlBody?.toString() || '';
+
+            // AES 加密模式：先解密
+            if (this.$config.encrypt && encrypt_type === 'aes' && this.$config.encodingAESKey) {
+                xmlString = await this.decryptMessage(
+                    xmlString,
+                    msg_signature as string,
+                    timestamp as string,
+                    nonce as string
+                );
+            }
+
+            const wechatMessage = await this.parseXMLMessage(xmlString);
             
             if (wechatMessage) {
                 const message = this.$formatMessage(wechatMessage);
                 this.adapter.emit('message.receive', message);
                 
                 // 处理被动回复
-                const replyXML = await this.handlePassiveReply(wechatMessage, message);
+                let replyXML = await this.handlePassiveReply(wechatMessage, message);
+
+                // AES 加密模式：加密回复
+                if (replyXML && this.$config.encrypt && this.$config.encodingAESKey) {
+                    replyXML = this.encryptMessage(replyXML);
+                }
+
                 ctx.set('Content-Type', 'text/xml');
                 ctx.body = replyXML || 'success';
             } else {
@@ -258,9 +276,9 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
 
     async $sendMessage(options: SendOptions): Promise<string> {
         try {
-            // 公众号主动发送消息需要通过模板消息或客服消息API
-             await this.sendCustomerServiceMessage(options);
-            return ''
+            // 公众号主动发送消息需要通过客服消息API
+            const msgId = await this.sendCustomerServiceMessage(options);
+            return msgId;
         } catch (error) {
             this.logger.error('Failed to send WeChat message:', error);
             throw error;
@@ -270,7 +288,7 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
         // 公众号不支持撤回消息
     }
 
-    private async sendCustomerServiceMessage(options: SendOptions): Promise<void> {
+    private async sendCustomerServiceMessage(options: SendOptions): Promise<string> {
         if (!this.accessToken) {
             await this.refreshAccessToken();
         }
@@ -285,6 +303,8 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
         if (result.errcode && result.errcode !== 0) {
             throw new Error(`WeChat API error: ${result.errcode} - ${result.errmsg}`);
         }
+
+        return result.msgid?.toString() || `cs_${Date.now()}`;
     }
 
     private formatSendContent(options: SendOptions): any {
@@ -360,15 +380,26 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
         if (wechatMsg.MsgType === 'event') {
             switch (wechatMsg.Event) {
                 case 'subscribe':
+                    this.logger.info(`User subscribed: ${wechatMsg.FromUserName}${wechatMsg.EventKey ? `, scene: ${wechatMsg.EventKey}` : ''}`);
                     return this.buildTextReply(wechatMsg, '感谢关注！');
                 case 'unsubscribe':
-                    // 取关事件不能回复消息
+                    this.logger.info(`User unsubscribed: ${wechatMsg.FromUserName}`);
+                    return '';
+                case 'SCAN':
+                    this.logger.info(`User scanned QR: ${wechatMsg.FromUserName}, scene: ${wechatMsg.EventKey}`);
+                    return '';
+                case 'LOCATION':
+                    this.logger.debug(`User location: ${wechatMsg.FromUserName}, lat=${wechatMsg.Location_X}, lng=${wechatMsg.Location_Y}`);
+                    return '';
+                case 'CLICK':
+                    this.logger.debug(`Menu click: ${wechatMsg.EventKey}`);
+                    return '';
+                case 'VIEW':
+                    this.logger.debug(`Menu view: ${wechatMsg.EventKey}`);
                     return '';
             }
         }
         
-        // 这里可以添加自定义的被动回复逻辑
-        // 返回空字符串表示不回复
         return '';
     }
 
@@ -521,6 +552,107 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
         };
         
         return contentTypes[type] || 'application/octet-stream';
+    }
+
+    // ── AES 加解密（安全模式） ──────────────────────────────
+
+    private getAESKey(): Buffer {
+        const key = this.$config.encodingAESKey!;
+        return Buffer.from(key + '=', 'base64');
+    }
+
+    /**
+     * 解密微信推送的加密消息
+     */
+    private async decryptMessage(
+        encryptedXml: string,
+        msgSignature: string,
+        timestamp: string,
+        nonce: string
+    ): Promise<string> {
+        // 从外层 XML 提取 Encrypt 字段
+        const parsed = await this.parseXMLMessage(encryptedXml);
+        const encrypt = (parsed as any)?.Encrypt;
+        if (!encrypt) throw new Error('Missing Encrypt field in encrypted message');
+
+        // 校验 msg_signature
+        const expected = createHash('sha1')
+            .update([this.$config.token, timestamp, nonce, encrypt].sort().join(''))
+            .digest('hex');
+        if (expected !== msgSignature) {
+            throw new Error('msg_signature verification failed');
+        }
+
+        // AES-256-CBC 解密
+        const aesKey = this.getAESKey();
+        const iv = aesKey.subarray(0, 16);
+        const decipher = createDecipheriv('aes-256-cbc', aesKey, iv);
+        decipher.setAutoPadding(false);
+
+        const decrypted = Buffer.concat([
+            decipher.update(Buffer.from(encrypt, 'base64')),
+            decipher.final()
+        ]);
+
+        // 去除 PKCS#7 填充
+        const pad = decrypted[decrypted.length - 1];
+        const content = decrypted.subarray(0, decrypted.length - pad);
+
+        // 格式: 16 bytes random + 4 bytes msgLen (network order) + msg + appId
+        const msgLen = content.readUInt32BE(16);
+        const xmlContent = content.subarray(20, 20 + msgLen).toString('utf8');
+        const appId = content.subarray(20 + msgLen).toString('utf8');
+
+        if (appId !== this.$config.appId) {
+            throw new Error(`AppID mismatch: expected ${this.$config.appId}, got ${appId}`);
+        }
+
+        return xmlContent;
+    }
+
+    /**
+     * 加密被动回复消息
+     */
+    private encryptMessage(replyXml: string): string {
+        const aesKey = this.getAESKey();
+        const iv = aesKey.subarray(0, 16);
+
+        // 组装明文: 16 bytes random + 4 bytes msgLen + msg + appId
+        const random = randomBytes(16);
+        const msgBuf = Buffer.from(replyXml, 'utf8');
+        const appIdBuf = Buffer.from(this.$config.appId, 'utf8');
+        const lenBuf = Buffer.alloc(4);
+        lenBuf.writeUInt32BE(msgBuf.length, 0);
+
+        const plaintext = Buffer.concat([random, lenBuf, msgBuf, appIdBuf]);
+
+        // PKCS#7 填充
+        const blockSize = 32;
+        const padLen = blockSize - (plaintext.length % blockSize);
+        const padBuf = Buffer.alloc(padLen, padLen);
+        const padded = Buffer.concat([plaintext, padBuf]);
+
+        // AES-256-CBC 加密
+        const cipher = createCipheriv('aes-256-cbc', aesKey, iv);
+        cipher.setAutoPadding(false);
+        const encrypted = Buffer.concat([cipher.update(padded), cipher.final()]);
+        const encryptStr = encrypted.toString('base64');
+
+        // 签名
+        const timestamp = Math.floor(Date.now() / 1000).toString();
+        const nonce = randomBytes(8).toString('hex');
+        const signature = createHash('sha1')
+            .update([this.$config.token, timestamp, nonce, encryptStr].sort().join(''))
+            .digest('hex');
+
+        return [
+            '<xml>',
+            `<Encrypt><![CDATA[${encryptStr}]]></Encrypt>`,
+            `<MsgSignature><![CDATA[${signature}]]></MsgSignature>`,
+            `<TimeStamp>${timestamp}</TimeStamp>`,
+            `<Nonce><![CDATA[${nonce}]]></Nonce>`,
+            '</xml>'
+        ].join('\n');
     }
 }
 

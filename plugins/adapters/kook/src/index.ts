@@ -1,8 +1,18 @@
 /**
  * KOOK 适配器入口：类型扩展、导出、注册
  */
+import path from "node:path";
 import { usePlugin, type Plugin, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
 import { KookAdapter } from "./adapter.js";
+import type { WebServer } from "@zhin.js/console";
+
+declare module "zhin.js" {
+  namespace Plugin {
+    interface Contexts {
+      web: WebServer;
+    }
+  }
+}
 
 declare module "zhin.js" {
   interface Adapters {
@@ -196,4 +206,112 @@ useContext('tool', 'kook', (toolService: ToolFeature, kook: KookAdapter) => {
   }, 'kook'));
 
   return () => disposers.forEach(d => d());
+});
+
+// ── Web 控制台 ─────────────────────────────────────────────────────────
+useContext("web", (web: WebServer) => {
+  return web.addEntry(path.resolve(import.meta.dirname, "../client/index.tsx"));
+});
+
+useContext("router", "kook", (router: any, kook: KookAdapter) => {
+  router.get("/api/kook/bots", async (ctx: any) => {
+    try {
+      const bots = Array.from(kook.bots.values());
+      const result = bots.map((bot: any) => {
+        try {
+          return {
+            name: bot.$config.name,
+            connected: bot.$connected || false,
+            guildCount: bot.guilds?.size || 0,
+            status: bot.$connected ? "online" : "offline",
+          };
+        } catch {
+          return { name: bot.$config.name, connected: false, guildCount: 0, status: "error" };
+        }
+      });
+      ctx.body = { success: true, data: result };
+    } catch {
+      ctx.status = 500;
+      ctx.body = { success: false, error: "获取机器人数据失败" };
+    }
+  });
+
+  // Bot 连接/断开
+  router.post("/api/kook/bots/:name/connect", async (ctx: any) => {
+    try {
+      const bot = kook.bots.get(ctx.params.name);
+      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
+      if (bot.$connected) { ctx.body = { success: true, message: "已经在线" }; return; }
+      await bot.$connect();
+      ctx.body = { success: true, message: "连接成功" };
+    } catch (e: any) {
+      ctx.status = 500;
+      ctx.body = { success: false, error: e?.message || "连接失败" };
+    }
+  });
+
+  router.post("/api/kook/bots/:name/disconnect", async (ctx: any) => {
+    try {
+      const bot = kook.bots.get(ctx.params.name);
+      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
+      if (!bot.$connected) { ctx.body = { success: true, message: "已经离线" }; return; }
+      await bot.$disconnect();
+      ctx.body = { success: true, message: "已断开" };
+    } catch (e: any) {
+      ctx.status = 500;
+      ctx.body = { success: false, error: e?.message || "断开失败" };
+    }
+  });
+
+  // 角色列表
+  router.get("/api/kook/bots/:name/guilds/:guildId/roles", async (ctx: any) => {
+    try {
+      const bot: any = kook.bots.get(ctx.params.name);
+      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
+      if (!bot.$connected) { ctx.status = 400; ctx.body = { success: false, error: "Bot 未连接" }; return; }
+      const roles = await bot.getRoleList(ctx.params.guildId);
+      ctx.body = {
+        success: true,
+        data: roles.map((r: any) => ({
+          id: r.role_id,
+          name: r.name,
+          color: r.color,
+          position: r.position,
+        })),
+      };
+    } catch (e: any) {
+      ctx.status = 500;
+      ctx.body = { success: false, error: e?.message || "获取角色列表失败" };
+    }
+  });
+
+  // 创建角色
+  router.post("/api/kook/bots/:name/guilds/:guildId/roles", async (ctx: any) => {
+    try {
+      const bot: any = kook.bots.get(ctx.params.name);
+      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
+      if (!bot.$connected) { ctx.status = 400; ctx.body = { success: false, error: "Bot 未连接" }; return; }
+      const { name } = ctx.request.body || {};
+      if (!name) { ctx.status = 400; ctx.body = { success: false, error: "缺少角色名称" }; return; }
+      const role = await bot.createRole(ctx.params.guildId, name);
+      ctx.body = { success: true, data: { id: role.role_id, name: role.name } };
+    } catch (e: any) {
+      ctx.status = 500;
+      ctx.body = { success: false, error: e?.message || "创建角色失败" };
+    }
+  });
+
+  // 删除角色
+  router.delete("/api/kook/bots/:name/guilds/:guildId/roles/:roleId", async (ctx: any) => {
+    try {
+      const bot: any = kook.bots.get(ctx.params.name);
+      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
+      if (!bot.$connected) { ctx.status = 400; ctx.body = { success: false, error: "Bot 未连接" }; return; }
+      const success = await bot.deleteRole(ctx.params.guildId, ctx.params.roleId);
+      ctx.body = { success, message: success ? "角色已删除" : "删除失败" };
+    } catch (e: any) {
+      ctx.status = 500;
+      ctx.body = { success: false, error: e?.message || "删除角色失败" };
+    }
+  });
 });

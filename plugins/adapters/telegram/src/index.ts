@@ -1,8 +1,18 @@
 /**
  * Telegram 适配器入口：类型扩展、导出、注册
  */
+import path from "node:path";
 import { usePlugin, type Plugin, type Context, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
 import { TelegramAdapter } from "./adapter.js";
+import type { WebServer } from "@zhin.js/console";
+
+declare module "zhin.js" {
+  namespace Plugin {
+    interface Contexts {
+      web: WebServer;
+    }
+  }
+}
 
 declare module "zhin.js" {
   interface Adapters {
@@ -292,4 +302,120 @@ useContext('tool', 'telegram', (toolService: ToolFeature, telegram: TelegramAdap
   }, 'telegram'));
 
   return () => disposers.forEach(d => d());
+});
+
+// ── Web 控制台 ─────────────────────────────────────────────────────────
+useContext("web", (web: WebServer) => {
+  return web.addEntry(path.resolve(import.meta.dirname, "../client/index.tsx"));
+});
+
+useContext("router", "telegram", (router: any, telegram: TelegramAdapter) => {
+  router.get("/api/telegram/bots", async (ctx: any) => {
+    try {
+      const bots = Array.from(telegram.bots.values());
+      const result = bots.map((bot: any) => {
+        try {
+          return {
+            name: bot.$config.name,
+            connected: bot.$connected || false,
+            mode: bot.$config.polling !== false ? "polling" : "webhook",
+            status: bot.$connected ? "online" : "offline",
+            botInfo: bot.botInfo ? { username: bot.botInfo.username, firstName: bot.botInfo.first_name } : null,
+          };
+        } catch {
+          return { name: bot.$config.name, connected: false, mode: "unknown", status: "error", botInfo: null };
+        }
+      });
+      ctx.body = { success: true, data: result };
+    } catch {
+      ctx.status = 500;
+      ctx.body = { success: false, error: "获取机器人数据失败" };
+    }
+  });
+
+  // Bot 连接/断开
+  router.post("/api/telegram/bots/:name/connect", async (ctx: any) => {
+    try {
+      const bot = telegram.bots.get(ctx.params.name);
+      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
+      if (bot.$connected) { ctx.body = { success: true, message: "已经在线" }; return; }
+      await bot.$connect();
+      ctx.body = { success: true, message: "连接成功" };
+    } catch (e: any) {
+      ctx.status = 500;
+      ctx.body = { success: false, error: e?.message || "连接失败" };
+    }
+  });
+
+  router.post("/api/telegram/bots/:name/disconnect", async (ctx: any) => {
+    try {
+      const bot = telegram.bots.get(ctx.params.name);
+      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
+      if (!bot.$connected) { ctx.body = { success: true, message: "已经离线" }; return; }
+      await bot.$disconnect();
+      ctx.body = { success: true, message: "已断开" };
+    } catch (e: any) {
+      ctx.status = 500;
+      ctx.body = { success: false, error: e?.message || "断开失败" };
+    }
+  });
+
+  // 快捷操作：创建邀请链接
+  router.post("/api/telegram/bots/:name/invite", async (ctx: any) => {
+    try {
+      const bot: any = telegram.bots.get(ctx.params.name);
+      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
+      if (!bot.$connected) { ctx.status = 400; ctx.body = { success: false, error: "Bot 未连接" }; return; }
+      const { chat_id } = ctx.request.body || {};
+      if (!chat_id) { ctx.status = 400; ctx.body = { success: false, error: "缺少 chat_id" }; return; }
+      const link = await bot.createInviteLink(Number(chat_id));
+      ctx.body = { success: true, data: { invite_link: link } };
+    } catch (e: any) {
+      ctx.status = 500;
+      ctx.body = { success: false, error: e?.message || "创建邀请链接失败" };
+    }
+  });
+
+  // 快捷操作：发起投票
+  router.post("/api/telegram/bots/:name/poll", async (ctx: any) => {
+    try {
+      const bot: any = telegram.bots.get(ctx.params.name);
+      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
+      if (!bot.$connected) { ctx.status = 400; ctx.body = { success: false, error: "Bot 未连接" }; return; }
+      const { chat_id, question, options, is_anonymous, allows_multiple } = ctx.request.body || {};
+      if (!chat_id || !question || !options?.length) {
+        ctx.status = 400; ctx.body = { success: false, error: "缺少 chat_id, question 或 options" }; return;
+      }
+      if (options.length < 2) { ctx.status = 400; ctx.body = { success: false, error: "至少需要 2 个选项" }; return; }
+      const result = await bot.sendPoll(Number(chat_id), question, options, is_anonymous ?? true, allows_multiple ?? false);
+      ctx.body = { success: true, data: { message_id: result.message_id } };
+    } catch (e: any) {
+      ctx.status = 500;
+      ctx.body = { success: false, error: e?.message || "发起投票失败" };
+    }
+  });
+
+  // 快捷操作：获取群管理员
+  router.get("/api/telegram/bots/:name/admins", async (ctx: any) => {
+    try {
+      const bot: any = telegram.bots.get(ctx.params.name);
+      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
+      if (!bot.$connected) { ctx.status = 400; ctx.body = { success: false, error: "Bot 未连接" }; return; }
+      const chat_id = ctx.query.chat_id;
+      if (!chat_id) { ctx.status = 400; ctx.body = { success: false, error: "缺少 chat_id" }; return; }
+      const admins = await bot.getChatAdmins(Number(chat_id));
+      ctx.body = {
+        success: true,
+        data: admins.map((a: any) => ({
+          user_id: a.user.id,
+          username: a.user.username,
+          first_name: a.user.first_name,
+          status: a.status,
+        })),
+      };
+    } catch (e: any) {
+      ctx.status = 500;
+      ctx.body = { success: false, error: e?.message || "获取管理员失败" };
+    }
+  });
 });

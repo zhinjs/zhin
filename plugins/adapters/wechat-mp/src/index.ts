@@ -23,7 +23,7 @@ export { WeChatMPAdapter } from "./adapter.js";
 const plugin = usePlugin();
 const { provide, useContext } = plugin;
 
-(useContext as (key: string, fn: (router: Router) => void) => void)("router", (router: Router) => {
+useContext("router", (router: Router) => {
   provide({
     name: "wechat-mp",
     description: "WeChat MP Bot Adapter",

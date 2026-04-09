@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   LogIn,
   QrCode,
@@ -6,34 +6,10 @@ import {
   MousePointer,
   Smartphone,
   AlertCircle,
+  Loader2,
+  X,
 } from "lucide-react";
 import { apiFetch } from "./utils/api";
-
-const card: CSSProperties = {
-  background: "hsl(var(--card))",
-  color: "hsl(var(--card-foreground))",
-  border: "1px solid hsl(var(--border))",
-  borderRadius: "var(--radius)",
-};
-const muted: CSSProperties = { color: "hsl(var(--muted-foreground))", fontSize: "0.875rem" };
-const btn: CSSProperties = {
-  padding: "0.375rem 0.75rem",
-  borderRadius: "calc(var(--radius) - 2px)",
-  border: "1px solid hsl(var(--border))",
-  background: "hsl(var(--primary))",
-  color: "hsl(var(--primary-foreground))",
-  cursor: "pointer",
-  fontSize: "0.875rem",
-};
-const btnOutline: CSSProperties = { ...btn, background: "transparent", color: "hsl(var(--foreground))" };
-const inputStyle: CSSProperties = {
-  padding: "0.5rem 0.75rem",
-  borderRadius: "calc(var(--radius) - 2px)",
-  border: "1px solid hsl(var(--input))",
-  background: "hsl(var(--background))",
-  color: "hsl(var(--foreground))",
-  maxWidth: "18rem",
-};
 
 interface PendingLoginTask {
   id: string;
@@ -49,7 +25,15 @@ interface PendingLoginTask {
   createdAt: number;
 }
 
-const POLL_MS = 2000;
+const POLL_BASE_MS = 2_000;
+const POLL_MAX_MS = 15_000;
+
+const TYPE_META: Record<string, { icon: React.ReactNode; label: string }> = {
+  qrcode: { icon: <QrCode className="w-4 h-4" />, label: "扫码登录" },
+  sms: { icon: <MessageSquare className="w-4 h-4" />, label: "短信验证码" },
+  device: { icon: <Smartphone className="w-4 h-4" />, label: "设备验证" },
+  slider: { icon: <MousePointer className="w-4 h-4" />, label: "滑块验证" },
+};
 
 export default function LoginAssistPanel() {
   const [pending, setPending] = useState<PendingLoginTask[]>([]);
@@ -58,27 +42,45 @@ export default function LoginAssistPanel() {
   const [submitting, setSubmitting] = useState<Record<string, boolean>>({});
   const [inputValues, setInputValues] = useState<Record<string, string>>({});
 
+  /* ── Exponential-backoff polling ── */
+  const consecutiveEmptyRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+
   const fetchPending = useCallback(async () => {
     try {
       const res = await apiFetch("/api/login-assist/pending");
       if (!res.ok) throw new Error("获取待办失败");
       const data = (await res.json()) as unknown;
       const list = Array.isArray(data) ? (data as PendingLoginTask[]) : [];
-      setPending(list.filter((t) => t.adapter === "icqq"));
+      const filtered = list.filter((t) => t.adapter === "icqq");
+      setPending(filtered);
       setError(null);
+      consecutiveEmptyRef.current = filtered.length > 0 ? 0 : consecutiveEmptyRef.current + 1;
     } catch (err) {
       setError((err as Error).message);
+      consecutiveEmptyRef.current++;
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    fetchPending();
-    const id = setInterval(fetchPending, POLL_MS);
-    return () => clearInterval(id);
+  const scheduleNext = useCallback(() => {
+    const delay = Math.min(
+      POLL_BASE_MS * Math.pow(1.5, consecutiveEmptyRef.current),
+      POLL_MAX_MS,
+    );
+    timerRef.current = setTimeout(async () => {
+      await fetchPending();
+      scheduleNext();
+    }, delay);
   }, [fetchPending]);
 
+  useEffect(() => {
+    fetchPending().then(scheduleNext);
+    return () => clearTimeout(timerRef.current);
+  }, [fetchPending, scheduleNext]);
+
+  /* ── Actions ── */
   const handleSubmit = async (id: string, value: string | Record<string, unknown>) => {
     setSubmitting((s) => ({ ...s, [id]: true }));
     try {
@@ -93,6 +95,7 @@ export default function LoginAssistPanel() {
         delete next[id];
         return next;
       });
+      consecutiveEmptyRef.current = 0;
       await fetchPending();
     } catch (err) {
       setError((err as Error).message);
@@ -114,178 +117,147 @@ export default function LoginAssistPanel() {
     }
   };
 
-  const typeIcon: Record<string, ReactNode> = {
-    qrcode: <QrCode style={{ width: 16, height: 16 }} />,
-    sms: <MessageSquare style={{ width: 16, height: 16 }} />,
-    device: <Smartphone style={{ width: 16, height: 16 }} />,
-    slider: <MousePointer style={{ width: 16, height: 16 }} />,
-  };
-  const typeLabel: Record<string, string> = {
-    qrcode: "扫码登录",
-    sms: "短信验证码",
-    device: "设备验证",
-    slider: "滑块验证",
-    other: "其他",
-  };
-
+  /* ── Loading skeleton ── */
   if (loading && pending.length === 0) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-        <div style={{ ...card, height: "2rem", width: "12rem", opacity: 0.5 }} />
-        <div style={{ ...card, height: "8rem", opacity: 0.5 }} />
+      <div className="flex justify-center py-12">
+        <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
       </div>
     );
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-      <p style={muted}>
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
         扫码、短信或滑块等验证会出现在下方；刷新页面后仍可继续处理（仅 ICQQ 待办）。
       </p>
 
       {error && (
-        <div
-          style={{
-            ...card,
-            borderColor: "hsl(var(--destructive))",
-            color: "hsl(var(--destructive))",
-            padding: "0.75rem",
-            display: "flex",
-            alignItems: "center",
-            gap: "0.5rem",
-          }}
-        >
-          <AlertCircle style={{ width: 16, height: 16, flexShrink: 0 }} />
-          <span style={{ fontSize: "0.875rem" }}>{error}</span>
+        <div className="flex items-center gap-2 p-3 rounded border border-red-200 bg-red-50 text-red-600 text-sm dark:bg-red-900/20 dark:text-red-400 dark:border-red-800">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="ml-auto">
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
       {pending.length === 0 ? (
-        <div style={{ ...card, padding: "3rem", textAlign: "center" }}>
-          <LogIn style={{ width: 64, height: 64, margin: "0 auto 1rem", opacity: 0.25 }} />
-          <h3 style={{ margin: "0 0 0.5rem", fontSize: "1.125rem" }}>暂无待办</h3>
-          <p style={{ ...muted, margin: 0 }}>机器人需要验证时，待办将显示在此处</p>
+        <div className="border rounded-lg bg-card p-12 text-center">
+          <LogIn className="w-16 h-16 mx-auto mb-4 opacity-25" />
+          <h3 className="text-lg font-semibold mb-1">暂无待办</h3>
+          <p className="text-sm text-muted-foreground">机器人需要验证时，待办将显示在此处</p>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          {pending.map((task) => (
-            <div key={task.id} style={{ ...card, padding: "1rem" }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
-                  marginBottom: "0.5rem",
-                  flexWrap: "wrap",
-                  gap: "0.5rem",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: 600 }}>
-                  {typeIcon[task.type] ?? <LogIn style={{ width: 16, height: 16 }} />}
-                  {typeLabel[task.type] ?? task.type}
+        <div className="space-y-4">
+          {pending.map((task) => {
+            const meta = TYPE_META[task.type] ?? {
+              icon: <LogIn className="w-4 h-4" />,
+              label: task.type,
+            };
+            return (
+              <div key={task.id} className="border rounded-lg bg-card p-4 shadow-sm">
+                {/* Header */}
+                <div className="flex items-start justify-between flex-wrap gap-2 mb-2">
+                  <div className="flex items-center gap-2 font-semibold">
+                    {meta.icon} {meta.label}
+                  </div>
+                  <div className="flex gap-1 text-xs">
+                    <span className="px-2 py-0.5 rounded border">{task.adapter}</span>
+                    <span className="px-2 py-0.5 rounded bg-muted">{task.botId}</span>
+                  </div>
                 </div>
-                <div style={{ display: "flex", gap: "0.5rem", fontSize: "0.75rem" }}>
-                  <span
-                    style={{
-                      padding: "0.125rem 0.5rem",
-                      borderRadius: 4,
-                      border: "1px solid hsl(var(--border))",
-                    }}
-                  >
-                    {task.adapter}
-                  </span>
-                  <span
-                    style={{
-                      padding: "0.125rem 0.5rem",
-                      borderRadius: 4,
-                      background: "hsl(var(--muted))",
-                    }}
-                  >
-                    {task.botId}
-                  </span>
-                </div>
-              </div>
-              {task.payload?.message && <p style={{ ...muted, margin: "0 0 1rem" }}>{task.payload.message}</p>}
 
-              {task.type === "qrcode" && task.payload?.image && (
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "center",
-                    padding: "1rem",
-                    background: "hsl(var(--muted) / 0.3)",
-                    borderRadius: "var(--radius)",
-                    marginBottom: "1rem",
-                  }}
-                >
-                  <img
-                    src={String(task.payload.image)}
-                    alt="登录二维码"
-                    style={{ maxWidth: 200, width: "100%", height: "auto" }}
-                  />
-                </div>
-              )}
+                {/* Message */}
+                {task.payload?.message && (
+                  <p className="text-sm text-muted-foreground mb-3">{task.payload.message}</p>
+                )}
 
-              {task.type === "slider" && task.payload?.url && (
-                <p style={{ fontSize: "0.875rem", wordBreak: "break-all", marginBottom: "1rem" }}>
-                  <span style={muted}>滑块链接：</span>{" "}
-                  <a
-                    href={String(task.payload.url)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ color: "hsl(var(--primary))" }}
-                  >
-                    {String(task.payload.url)}
-                  </a>
-                </p>
-              )}
+                {/* QR Code */}
+                {task.type === "qrcode" && task.payload?.image && (
+                  <div className="flex justify-center p-4 bg-muted/30 rounded-lg mb-3">
+                    <img
+                      src={String(task.payload.image)}
+                      alt="登录二维码"
+                      className="max-w-[200px] w-full h-auto"
+                    />
+                  </div>
+                )}
 
-              {(task.type === "sms" || task.type === "device" || task.type === "slider") && (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
-                  <input
-                    style={inputStyle}
-                    placeholder={task.type === "slider" ? "输入 ticket" : "输入验证码"}
-                    value={inputValues[task.id] ?? ""}
-                    onChange={(e) => setInputValues((v) => ({ ...v, [task.id]: e.target.value }))}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
+                {/* Slider URL */}
+                {task.type === "slider" && task.payload?.url && (
+                  <p className="text-sm break-all mb-3">
+                    <span className="text-muted-foreground">滑块链接：</span>{" "}
+                    <a
+                      href={String(task.payload.url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      {String(task.payload.url)}
+                    </a>
+                  </p>
+                )}
+
+                {/* Text input (sms / device / slider ticket) */}
+                {(task.type === "sms" || task.type === "device" || task.type === "slider") && (
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <input
+                      className="h-9 px-3 rounded-md border border-input bg-background text-sm max-w-[18rem] flex-1"
+                      placeholder={task.type === "slider" ? "输入 ticket" : "输入验证码"}
+                      value={inputValues[task.id] ?? ""}
+                      onChange={(e) =>
+                        setInputValues((v) => ({ ...v, [task.id]: e.target.value }))
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          const val = inputValues[task.id]?.trim();
+                          if (val)
+                            void handleSubmit(
+                              task.id,
+                              task.type === "slider" ? { ticket: val } : val,
+                            );
+                        }
+                      }}
+                    />
+                    <button
+                      className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm disabled:opacity-50"
+                      disabled={submitting[task.id] || !inputValues[task.id]?.trim()}
+                      onClick={() => {
                         const val = inputValues[task.id]?.trim();
                         if (val)
-                          void handleSubmit(task.id, task.type === "slider" ? { ticket: val } : val);
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    style={btn}
-                    disabled={submitting[task.id] || !inputValues[task.id]?.trim()}
-                    onClick={() => {
-                      const val = inputValues[task.id]?.trim();
-                      if (val) void handleSubmit(task.id, task.type === "slider" ? { ticket: val } : val);
-                    }}
-                  >
-                    {submitting[task.id] ? "提交中…" : "提交"}
-                  </button>
-                </div>
-              )}
+                          void handleSubmit(
+                            task.id,
+                            task.type === "slider" ? { ticket: val } : val,
+                          );
+                      }}
+                    >
+                      {submitting[task.id] ? "提交中…" : "提交"}
+                    </button>
+                  </div>
+                )}
 
-              {task.type === "qrcode" && (
-                <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem" }}>
-                  <button
-                    type="button"
-                    style={btn}
-                    disabled={!!submitting[task.id]}
-                    onClick={() => void handleSubmit(task.id, { done: true })}
-                  >
-                    {submitting[task.id] ? "提交中…" : "我已扫码"}
-                  </button>
-                  <button type="button" style={btnOutline} onClick={() => void handleCancel(task.id)}>
-                    取消
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
+                {/* QR code actions */}
+                {task.type === "qrcode" && (
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm disabled:opacity-50"
+                      disabled={!!submitting[task.id]}
+                      onClick={() => void handleSubmit(task.id, { done: true })}
+                    >
+                      {submitting[task.id] ? "提交中…" : "我已扫码"}
+                    </button>
+                    <button
+                      className="h-9 px-4 rounded-md border text-sm hover:bg-accent transition-colors"
+                      onClick={() => void handleCancel(task.id)}
+                    >
+                      取消
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

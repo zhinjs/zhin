@@ -1,14 +1,17 @@
 /**
  * Discord 适配器入口：单一适配器，支持 Gateway / Interactions（connection: gateway | interactions）
  */
+import path from "node:path";
 import { usePlugin, type Plugin, type Context, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
 import type { Router } from "@zhin.js/http";
+import type { WebServer } from "@zhin.js/console";
 import { DiscordAdapter, type DiscordBotLike } from "./adapter.js";
 
 declare module "zhin.js" {
   namespace Plugin {
     interface Contexts {
       router: import("@zhin.js/http").Router;
+      web: WebServer;
     }
   }
   interface Adapters {
@@ -231,4 +234,84 @@ useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter
   }, 'discord'));
 
   return () => disposers.forEach(d => d());
+});
+
+// ── Web 控制台 ─────────────────────────────────────────────────────────
+useContext("web", (web: WebServer) => {
+  return web.addEntry(path.resolve(import.meta.dirname, "../client/index.tsx"));
+});
+
+useContext("router", "discord", (router: Router, discord: DiscordAdapter) => {
+  router.get("/api/discord/bots", async (ctx: any) => {
+    try {
+      const bots = Array.from(discord.bots.values());
+      const result = bots.map((bot: any) => {
+        try {
+          const client = bot.client || bot;
+          return {
+            name: bot.$config.name,
+            connected: bot.$connected || false,
+            mode: bot.$config.connection || "gateway",
+            guildCount: client.guilds?.cache?.size || 0,
+            channelCount: client.channels?.cache?.size || 0,
+            status: bot.$connected ? "online" : "offline",
+            user: client.user ? { tag: client.user.tag, id: client.user.id } : null,
+          };
+        } catch {
+          return { name: bot.$config.name, connected: false, mode: "unknown", guildCount: 0, channelCount: 0, status: "error", user: null };
+        }
+      });
+      ctx.body = { success: true, data: result };
+    } catch {
+      ctx.status = 500;
+      ctx.body = { success: false, error: "获取机器人数据失败" };
+    }
+  });
+
+  // Bot 连接/断开
+  router.post("/api/discord/bots/:name/connect", async (ctx: any) => {
+    try {
+      const bot = discord.bots.get(ctx.params.name);
+      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
+      if (bot.$connected) { ctx.body = { success: true, message: "已经在线" }; return; }
+      await bot.$connect();
+      ctx.body = { success: true, message: "连接成功" };
+    } catch (e: any) {
+      ctx.status = 500;
+      ctx.body = { success: false, error: e?.message || "连接失败" };
+    }
+  });
+
+  router.post("/api/discord/bots/:name/disconnect", async (ctx: any) => {
+    try {
+      const bot = discord.bots.get(ctx.params.name);
+      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
+      if (!bot.$connected) { ctx.body = { success: true, message: "已经离线" }; return; }
+      await bot.$disconnect();
+      ctx.body = { success: true, message: "已断开" };
+    } catch (e: any) {
+      ctx.status = 500;
+      ctx.body = { success: false, error: e?.message || "断开失败" };
+    }
+  });
+
+  // 服务器列表（仅 Gateway 模式）
+  router.get("/api/discord/bots/:name/guilds", async (ctx: any) => {
+    try {
+      const bot: any = discord.bots.get(ctx.params.name);
+      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
+      if (!bot.$connected) { ctx.status = 400; ctx.body = { success: false, error: "Bot 未连接" }; return; }
+      const client = bot.client || bot;
+      const guilds = client.guilds?.cache?.map((g: any) => ({
+        id: g.id,
+        name: g.name,
+        memberCount: g.memberCount,
+        icon: g.iconURL({ size: 64 }),
+      })) || [];
+      ctx.body = { success: true, data: guilds };
+    } catch (e: any) {
+      ctx.status = 500;
+      ctx.body = { success: false, error: e?.message || "获取服务器列表失败" };
+    }
+  });
 });

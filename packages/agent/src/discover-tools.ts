@@ -45,6 +45,8 @@ export interface ToolMeta {
   filePath: string;
   /** body 内容（无 handler 时作为 prompt 模板） */
   templateBody?: string;
+  /** 所属插件名（从 tools/ 目录归属推断） */
+  ownerPlugin?: string;
 }
 
 // ============================================================================
@@ -98,6 +100,22 @@ export async function discoverWorkspaceTools(root?: Plugin | null): Promise<Tool
   const tools: ToolMeta[] = [];
   const seenNames = new Set<string>();
   const toolDirs = getToolSearchDirectories(root);
+
+  // Build dir → pluginName mapping for attribution
+  const dirToPlugin = new Map<string, string>();
+  if (root) {
+    const mapPlugin = (p: Plugin) => {
+      if (!p?.filePath) return;
+      const dir = path.dirname(p.filePath);
+      dirToPlugin.set(path.join(dir, 'tools'), p.name);
+      const dirName = path.basename(dir);
+      if (dirName === 'src' || dirName === 'lib') {
+        dirToPlugin.set(path.join(path.dirname(dir), 'tools'), p.name);
+      }
+    };
+    mapPlugin(root);
+    for (const child of root.children || []) mapPlugin(child);
+  }
 
   for (const toolsDir of toolDirs) {
     if (!fs.existsSync(toolsDir)) continue;
@@ -165,6 +183,7 @@ export async function discoverWorkspaceTools(root?: Plugin | null): Promise<Tool
           handler: metadata.handler,
           filePath: toolMdPath,
           templateBody: !metadata.handler && body ? body : undefined,
+          ownerPlugin: dirToPlugin.get(toolsDir),
         });
         logger.debug(`Tool发现成功: ${metadata.name}`);
       } catch (e) {
