@@ -18,7 +18,9 @@ tags:
   - checkin
   - points
   - gamification
-tools: []
+tools:
+  - checkin_rank
+  - checkin_query
 ---
 
 ## 执行规则

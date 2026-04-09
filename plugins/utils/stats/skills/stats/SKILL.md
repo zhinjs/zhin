@@ -17,7 +17,9 @@ tags:
   - stats
   - analytics
   - message
-tools: []
+tools:
+  - stats_query
+  - stats_user
 ---
 
 ## 执行规则

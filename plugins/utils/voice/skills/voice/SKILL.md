@@ -14,7 +14,9 @@ tags:
   - audio
   - stt
   - tts
-tools: []
+tools:
+  - voice_stt
+  - voice_tts
 ---
 
 ## 执行规则

@@ -21,7 +21,9 @@ tags:
   - teach
   - qa
   - auto-reply
-tools: []
+tools:
+  - teach_query
+  - teach_stats
 ---
 
 ## 执行规则

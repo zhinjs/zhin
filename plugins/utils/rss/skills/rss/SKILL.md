@@ -19,7 +19,9 @@ tags:
   - feed
   - subscription
   - push
-tools: []
+tools:
+  - rss_list_subscriptions
+  - rss_preview_feed
 ---
 
 ## 执行规则

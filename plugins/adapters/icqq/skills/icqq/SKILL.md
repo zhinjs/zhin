@@ -26,6 +26,9 @@ tools:
   - icqq_poke
   - icqq_list_muted
   - icqq_send_user_like
+  - icqq_set_anonymous
+  - icqq_group_files
+  - icqq_friend_list
   # 通用群管工具
   - icqq_kick_member
   - icqq_mute_member
@@ -47,6 +50,9 @@ tools:
 | `icqq_poke` | 戳一戳互动 | user |
 | `icqq_list_muted` | 查询禁言列表 | user |
 | `icqq_send_user_like` | 给用户点赞 | user |
+| `icqq_set_anonymous` | 开启/关闭匿名聊天 | group_admin |
+| `icqq_group_files` | 获取群文件列表 | user |
+| `icqq_friend_list` | 获取好友列表 | user |
 
 ### 通用群管
 
