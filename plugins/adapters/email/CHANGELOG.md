@@ -1,5 +1,12 @@
 # @zhin.js/adapter-email
 
+## 0.1.52
+
+### Patch Changes
+
+- ba30934: fix: web 优化
+  - zhin.js@1.0.63
+
 ## 0.1.51
 
 ### Patch Changes

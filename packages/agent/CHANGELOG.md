@@ -1,5 +1,13 @@
 # @zhin.js/agent
 
+## 0.1.5
+
+### Patch Changes
+
+- ba30934: fix: web 优化
+  - @zhin.js/core@1.1.5
+  - @zhin.js/ai@1.1.5
+
 ## 0.1.4
 
 ### Patch Changes

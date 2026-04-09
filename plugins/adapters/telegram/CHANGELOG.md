@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.50
+
+### Patch Changes
+
+- ba30934: fix: web 优化
+- Updated dependencies [ba30934]
+  - @zhin.js/console@2.0.5
+  - @zhin.js/http@1.0.58
+  - zhin.js@1.0.63
+  - @zhin.js/logger@0.1.47
+
 ## 1.0.49
 
 ### Patch Changes
