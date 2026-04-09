@@ -99,6 +99,19 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
     return bot?.api || null;
   }
 
+  /** 创建 OAuth 状态并返回授权 URL（供 github_bind 工具使用） */
+  createOAuthState(platform: string, platformUid: string): string | null {
+    const bot = this.bots.values().next().value as GitHubBot | undefined;
+    const clientId = bot?.$config.client_id;
+    if (!clientId) return null;
+
+    const state = crypto.randomUUID();
+    oauthStates.set(state, { platform, platformUid, expires: Date.now() + OAUTH_STATE_TTL });
+
+    const base = this.publicUrl || '';
+    return `${base}/pub/github/oauth?state=${state}`;
+  }
+
   // ── OAuth 用户查询 ─────────────────────────────────────────────────
 
   async getOAuthClient(platform: string, platformUid: string): Promise<GitHubOAuthClient | null> {

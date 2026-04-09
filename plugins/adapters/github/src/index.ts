@@ -1,8 +1,9 @@
 /**
  * GitHub 适配器入口：类型扩展、模型、导出、注册
  */
-import { usePlugin, type Plugin, type Context, type ToolFeature, type Tool } from 'zhin.js';
+import { usePlugin, type Plugin, type Context, type ToolFeature, type Tool, type ToolContext } from 'zhin.js';
 import { GitHubAdapter } from './adapter.js';
+import type { EventType } from './types.js';
 
 declare module 'zhin.js' {
   namespace Plugin {
@@ -551,6 +552,258 @@ useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) 
           : await api.updateIssue(repo, num, data);
         if (!r.ok) return `❌ ${r.data?.message || JSON.stringify(r.data)}`;
         return `✅ ${itemType === 'pr' ? 'PR' : 'Issue'} #${num} 已更新\n🔗 ${r.data.html_url}`;
+      },
+    },
+    // --- Star ---
+    {
+      name: 'github_star',
+      description: 'Star 或取消 Star 一个 GitHub 仓库（需要先 github_bind 绑定账号）',
+      parameters: {
+        type: 'object' as const,
+        properties: {
+          action: { type: 'string' as const, description: 'star|unstar|check', enum: ['star', 'unstar', 'check'] },
+          repo: { type: 'string' as const, description: 'owner/repo (必填)' },
+        },
+        required: ['action', 'repo'],
+      },
+      platforms: ['github'],
+      tags: ['github'],
+      execute: async (args: Record<string, any>, context?: ToolContext) => {
+        if (!context?.platform || !context?.senderId) return '❌ 无法获取用户信息';
+        const client = await adapter.getOAuthClient(context.platform, context.senderId);
+        if (!client) return '❌ 你还没有绑定 GitHub 账号，请先使用 github_bind';
+        const { action, repo } = args;
+        switch (action) {
+          case 'star': {
+            const r = await client.starRepo(repo);
+            return r.ok || r.status === 204 ? `⭐ 已 Star ${repo}` : `❌ ${r.data?.message || JSON.stringify(r.data)}`;
+          }
+          case 'unstar': {
+            const r = await client.unstarRepo(repo);
+            return r.ok || r.status === 204 ? `💔 已取消 Star ${repo}` : `❌ ${r.data?.message || JSON.stringify(r.data)}`;
+          }
+          case 'check': {
+            const starred = await client.isStarred(repo);
+            return starred ? `⭐ 你已 Star ${repo}` : `☆ 你尚未 Star ${repo}`;
+          }
+          default: return `❌ 未知操作: ${action}`;
+        }
+      },
+    },
+    // --- Fork ---
+    {
+      name: 'github_fork',
+      description: 'Fork 一个 GitHub 仓库到自己的账号下（需要先 github_bind 绑定账号）',
+      parameters: {
+        type: 'object' as const,
+        properties: {
+          repo: { type: 'string' as const, description: 'owner/repo (必填)' },
+        },
+        required: ['repo'],
+      },
+      platforms: ['github'],
+      tags: ['github'],
+      execute: async (args: Record<string, any>, context?: ToolContext) => {
+        if (!context?.platform || !context?.senderId) return '❌ 无法获取用户信息';
+        const client = await adapter.getOAuthClient(context.platform, context.senderId);
+        if (!client) return '❌ 你还没有绑定 GitHub 账号，请先使用 github_bind';
+        const r = await client.forkRepo(args.repo);
+        if (!r.ok) return `❌ ${r.data?.message || JSON.stringify(r.data)}`;
+        return `🍴 已 Fork ${args.repo} → ${r.data.full_name}\n🔗 ${r.data.html_url}`;
+      },
+    },
+    // --- Subscribe ---
+    {
+      name: 'github_subscribe',
+      description: '订阅 GitHub 仓库的 Webhook 事件，事件将推送到当前聊天通道',
+      parameters: {
+        type: 'object' as const,
+        properties: {
+          repo: { type: 'string' as const, description: 'owner/repo (必填)' },
+          events: { type: 'string' as const, description: '要订阅的事件类型，逗号分隔 (push/issue/star/fork/unstar/pull_request)，默认全部' },
+        },
+        required: ['repo'],
+      },
+      platforms: ['github'],
+      tags: ['github'],
+      execute: async (args: Record<string, any>, context?: ToolContext) => {
+        if (!context?.platform || !context?.senderId || !context?.sceneId || !context?.botId) {
+          return '❌ 无法获取当前聊天通道信息';
+        }
+        const db = plugin.root?.inject('database') as any;
+        const model = db?.models?.get('github_subscriptions');
+        if (!model) return '❌ 数据库未就绪';
+
+        const validEvents: EventType[] = ['push', 'issue', 'star', 'fork', 'unstar', 'pull_request'];
+        const events: EventType[] = args.events
+          ? args.events.split(',').map((s: string) => s.trim()).filter((e: string) => validEvents.includes(e as EventType))
+          : validEvents;
+        if (!events.length) return `❌ 无效的事件类型，可选: ${validEvents.join(', ')}`;
+
+        const [existing] = await model.select().where({
+          repo: args.repo,
+          target_id: context.sceneId,
+          adapter: context.platform,
+          bot: context.botId,
+        });
+        if (existing) {
+          await model.update({ events, target_type: context.scope || 'private' }).where({ id: existing.id });
+          return `✅ 已更新订阅 ${args.repo}\n📡 事件: ${events.join(', ')}`;
+        }
+
+        await model.insert({
+          id: Date.now(),
+          repo: args.repo,
+          events,
+          target_id: context.sceneId,
+          target_type: context.scope || 'private',
+          adapter: context.platform,
+          bot: context.botId,
+        });
+        return `✅ 已订阅 ${args.repo}\n📡 事件: ${events.join(', ')}\n📌 通知将推送到当前通道`;
+      },
+    },
+    // --- Unsubscribe ---
+    {
+      name: 'github_unsubscribe',
+      description: '取消订阅 GitHub 仓库的 Webhook 事件',
+      parameters: {
+        type: 'object' as const,
+        properties: {
+          repo: { type: 'string' as const, description: 'owner/repo (必填)' },
+        },
+        required: ['repo'],
+      },
+      platforms: ['github'],
+      tags: ['github'],
+      execute: async (args: Record<string, any>, context?: ToolContext) => {
+        if (!context?.platform || !context?.sceneId || !context?.botId) {
+          return '❌ 无法获取当前聊天通道信息';
+        }
+        const db = plugin.root?.inject('database') as any;
+        const model = db?.models?.get('github_subscriptions');
+        if (!model) return '❌ 数据库未就绪';
+
+        const [existing] = await model.select().where({
+          repo: args.repo,
+          target_id: context.sceneId,
+          adapter: context.platform,
+          bot: context.botId,
+        });
+        if (!existing) return `📭 当前通道未订阅 ${args.repo}`;
+
+        await model.delete().where({ id: existing.id });
+        return `✅ 已取消订阅 ${args.repo}`;
+      },
+    },
+    // --- Subscriptions ---
+    {
+      name: 'github_subscriptions',
+      description: '查看当前聊天通道的 GitHub 仓库订阅列表',
+      parameters: {
+        type: 'object' as const,
+        properties: {},
+      },
+      platforms: ['github'],
+      tags: ['github'],
+      execute: async (_args: Record<string, any>, context?: ToolContext) => {
+        if (!context?.platform || !context?.sceneId || !context?.botId) {
+          return '❌ 无法获取当前聊天通道信息';
+        }
+        const db = plugin.root?.inject('database') as any;
+        const model = db?.models?.get('github_subscriptions');
+        if (!model) return '❌ 数据库未就绪';
+
+        const subs = await model.select().where({
+          target_id: context.sceneId,
+          adapter: context.platform,
+          bot: context.botId,
+        });
+        if (!subs?.length) return '📭 当前通道没有任何 GitHub 订阅';
+
+        return `📋 当前通道订阅 (${subs.length}):\n\n` +
+          subs.map((s: any) => {
+            const events = Array.isArray(s.events) ? s.events : [];
+            return `  📦 ${s.repo}\n     📡 ${events.join(', ') || '(无事件)'}`;
+          }).join('\n\n');
+      },
+    },
+    // --- Bind ---
+    {
+      name: 'github_bind',
+      description: '绑定 GitHub 账号，生成 OAuth 授权链接',
+      parameters: {
+        type: 'object' as const,
+        properties: {},
+      },
+      platforms: ['github'],
+      tags: ['github'],
+      execute: async (_args: Record<string, any>, context?: ToolContext) => {
+        if (!context?.platform || !context?.senderId) return '❌ 无法获取用户信息';
+
+        // 检查是否已绑定
+        const db = plugin.root?.inject('database') as any;
+        const model = db?.models?.get('github_oauth_users');
+        if (model) {
+          const [existing] = await model.select().where({ platform: context.platform, platform_uid: context.senderId });
+          if (existing) return `✅ 你已绑定 GitHub 账号: ${existing.github_login}\n如需重新绑定，请先使用 github_unbind 解绑`;
+        }
+
+        const url = adapter.createOAuthState(context.platform, context.senderId);
+        if (!url) return '❌ GitHub App 未配置 OAuth (缺少 client_id)';
+
+        return `🔗 请点击以下链接绑定你的 GitHub 账号:\n${url}\n\n链接有效期 5 分钟`;
+      },
+    },
+    // --- Unbind ---
+    {
+      name: 'github_unbind',
+      description: '解绑 GitHub 账号',
+      parameters: {
+        type: 'object' as const,
+        properties: {},
+      },
+      platforms: ['github'],
+      tags: ['github'],
+      execute: async (_args: Record<string, any>, context?: ToolContext) => {
+        if (!context?.platform || !context?.senderId) return '❌ 无法获取用户信息';
+        const db = plugin.root?.inject('database') as any;
+        const model = db?.models?.get('github_oauth_users');
+        if (!model) return '❌ 数据库未就绪';
+
+        const [existing] = await model.select().where({ platform: context.platform, platform_uid: context.senderId });
+        if (!existing) return '📭 你还没有绑定 GitHub 账号';
+
+        await model.delete().where({ id: existing.id });
+        return `✅ 已解绑 GitHub 账号: ${existing.github_login}`;
+      },
+    },
+    // --- Whoami ---
+    {
+      name: 'github_whoami',
+      description: '查看当前绑定的 GitHub 账号信息',
+      parameters: {
+        type: 'object' as const,
+        properties: {},
+      },
+      platforms: ['github'],
+      tags: ['github'],
+      execute: async (_args: Record<string, any>, context?: ToolContext) => {
+        if (!context?.platform || !context?.senderId) return '❌ 无法获取用户信息';
+        const db = plugin.root?.inject('database') as any;
+        const model = db?.models?.get('github_oauth_users');
+        if (!model) return '❌ 数据库未就绪';
+
+        const [row] = await model.select().where({ platform: context.platform, platform_uid: context.senderId });
+        if (!row) return '📭 你还没有绑定 GitHub 账号，使用 github_bind 进行绑定';
+
+        return [
+          `🐙 GitHub 账号信息`,
+          `👤 用户名: ${row.github_login}`,
+          `🆔 GitHub ID: ${row.github_id}`,
+          `📅 绑定时间: ${row.created_at instanceof Date ? row.created_at.toLocaleDateString() : String(row.created_at).split('T')[0]}`,
+          `🔑 权限: ${row.scope || '(默认)'}`,
+        ].join('\n');
       },
     },
   ];
