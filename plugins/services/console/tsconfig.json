@@ -3,6 +3,7 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "nodenext",
+    "ignoreDeprecations": "6.0",
     "outDir": "./lib",
     "rootDir": "./src",
     "strict": true,

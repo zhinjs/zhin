@@ -3,7 +3,9 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "types": ["node"],
     "outDir": "./dist",
+    "rootDir": "./client",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -18,6 +20,7 @@
     "sourceMap": true,
     "jsx": "react-jsx",
     "jsxImportSource": "react",
+    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
       "@/*": [

@@ -3,6 +3,7 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "types": ["node"],
     "outDir": "./lib",
     "rootDir": "./src",
     "strict": true,
