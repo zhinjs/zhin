@@ -42,7 +42,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.9.0",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.0",
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {
@@ -54,6 +54,7 @@
     "client",
     "dist",
     "skills",
+    "plugin.yml",
     "README.md",
     "CHANGELOG.md"
   ],

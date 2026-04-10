@@ -52,7 +52,7 @@
   "devDependencies": {
     "@types/react": "^18.3.0",
     "tsup": "^8.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.0"
   },
   "engines": {
     "node": ">=18"

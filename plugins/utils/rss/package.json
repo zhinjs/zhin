@@ -49,7 +49,7 @@
     "rss-parser": "^3.13.0"
   },
   "devDependencies": {
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.0",
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {

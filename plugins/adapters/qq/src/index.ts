@@ -45,7 +45,7 @@ useContext('tool', 'qq', (toolService: ToolFeature, qq: QQAdapter) => {
     qq as unknown as IGroupManagement,
     'qq',
   );
-  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, 'qq'));
+  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, plugin.name));
 
   // 获取频道列表
   disposers.push(toolService.addTool({
@@ -66,7 +66,7 @@ useContext('tool', 'qq', (toolService: ToolFeature, qq: QQAdapter) => {
       const guilds = await bot.getGuilds();
       return { guilds, count: guilds.length };
     },
-  }, 'qq'));
+  }, plugin.name));
 
   // 获取子频道列表
   disposers.push(toolService.addTool({
@@ -88,7 +88,7 @@ useContext('tool', 'qq', (toolService: ToolFeature, qq: QQAdapter) => {
       const channels = await bot.getChannels(args.guild_id);
       return { channels, count: channels.length };
     },
-  }, 'qq'));
+  }, plugin.name));
 
   // 获取角色列表
   disposers.push(toolService.addTool({
@@ -110,7 +110,7 @@ useContext('tool', 'qq', (toolService: ToolFeature, qq: QQAdapter) => {
       const roles = await bot.getGuildRoles(args.guild_id);
       return { roles, count: roles.length };
     },
-  }, 'qq'));
+  }, plugin.name));
 
   // 创建角色
   disposers.push(toolService.addTool({
@@ -134,7 +134,7 @@ useContext('tool', 'qq', (toolService: ToolFeature, qq: QQAdapter) => {
       const role = await bot.createGuildRole(args.guild_id, args.name, args.color);
       return { success: !!role, role, message: role ? `角色 "${args.name}" 创建成功` : '创建失败' };
     },
-  }, 'qq'));
+  }, plugin.name));
 
   // 添加角色
   disposers.push(toolService.addTool({
@@ -159,7 +159,7 @@ useContext('tool', 'qq', (toolService: ToolFeature, qq: QQAdapter) => {
       const success = await bot.addMemberRole(args.guild_id, args.channel_id, args.user_id, args.role_id);
       return { success, message: success ? '已给成员添加角色' : '操作失败' };
     },
-  }, 'qq'));
+  }, plugin.name));
 
   // 移除角色
   disposers.push(toolService.addTool({
@@ -184,7 +184,7 @@ useContext('tool', 'qq', (toolService: ToolFeature, qq: QQAdapter) => {
       const success = await bot.removeMemberRole(args.guild_id, args.channel_id, args.user_id, args.role_id);
       return { success, message: success ? '已移除成员的角色' : '操作失败' };
     },
-  }, 'qq'));
+  }, plugin.name));
 
   // 子频道详情
   disposers.push(toolService.addTool({
@@ -206,7 +206,7 @@ useContext('tool', 'qq', (toolService: ToolFeature, qq: QQAdapter) => {
       const info = await bot.getChannelInfo(args.channel_id);
       return info;
     },
-  }, 'qq'));
+  }, plugin.name));
 
   // 单成员详情
   disposers.push(toolService.addTool({
@@ -229,7 +229,7 @@ useContext('tool', 'qq', (toolService: ToolFeature, qq: QQAdapter) => {
       const member = await bot.getGuildMember(args.guild_id, args.user_id);
       return member;
     },
-  }, 'qq'));
+  }, plugin.name));
 
   return () => disposers.forEach(d => d());
 });

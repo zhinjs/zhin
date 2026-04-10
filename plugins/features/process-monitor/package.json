@@ -19,6 +19,8 @@
     "client",
     "dist",
     "skills",
+    "tools",
+    "plugin.yml",
     "README.md"
   ],
   "scripts": {
@@ -45,7 +47,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.10.4",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.0"
   },
   "peerDependencies": {
     "zhin.js": "^1.0.62"

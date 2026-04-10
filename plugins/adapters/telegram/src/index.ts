@@ -45,7 +45,7 @@ useContext('tool', 'telegram', (toolService: ToolFeature, telegram: TelegramAdap
     telegram as unknown as IGroupManagement,
     'telegram',
   );
-  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, 'telegram'));
+  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'telegram_pin_message',
@@ -67,7 +67,7 @@ useContext('tool', 'telegram', (toolService: ToolFeature, telegram: TelegramAdap
       const success = await bot.pinMessage(Number(args.chat_id), Number(args.message_id));
       return { success, message: success ? '消息已置顶' : '操作失败' };
     },
-  }, 'telegram'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'telegram_unpin_message',
@@ -89,7 +89,7 @@ useContext('tool', 'telegram', (toolService: ToolFeature, telegram: TelegramAdap
       const success = await bot.unpinMessage(Number(args.chat_id), args.message_id ? Number(args.message_id) : undefined);
       return { success, message: success ? '已取消置顶' : '操作失败' };
     },
-  }, 'telegram'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'telegram_list_admins',
@@ -118,7 +118,7 @@ useContext('tool', 'telegram', (toolService: ToolFeature, telegram: TelegramAdap
         count: admins.length,
       };
     },
-  }, 'telegram'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'telegram_member_count',
@@ -139,7 +139,7 @@ useContext('tool', 'telegram', (toolService: ToolFeature, telegram: TelegramAdap
       const count = await bot.getChatMemberCount(Number(args.chat_id));
       return { count, message: `群组共有 ${count} 名成员` };
     },
-  }, 'telegram'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'telegram_create_invite',
@@ -160,7 +160,7 @@ useContext('tool', 'telegram', (toolService: ToolFeature, telegram: TelegramAdap
       const link = await bot.createInviteLink(Number(args.chat_id));
       return { invite_link: link, message: `邀请链接: ${link}` };
     },
-  }, 'telegram'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'telegram_send_poll',
@@ -197,7 +197,7 @@ useContext('tool', 'telegram', (toolService: ToolFeature, telegram: TelegramAdap
       );
       return { success: true, message_id: result.message_id, message: '投票已发送' };
     },
-  }, 'telegram'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'telegram_react',
@@ -220,7 +220,7 @@ useContext('tool', 'telegram', (toolService: ToolFeature, telegram: TelegramAdap
       const success = await bot.setMessageReaction(Number(args.chat_id), Number(args.message_id), args.reaction);
       return { success, message: success ? `已添加反应 ${args.reaction}` : '操作失败' };
     },
-  }, 'telegram'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'telegram_send_sticker',
@@ -242,7 +242,7 @@ useContext('tool', 'telegram', (toolService: ToolFeature, telegram: TelegramAdap
       const result = await bot.sendStickerMessage(Number(args.chat_id), args.sticker);
       return { success: true, message_id: result.message_id, message: '贴纸已发送' };
     },
-  }, 'telegram'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'telegram_set_permissions',
@@ -277,7 +277,7 @@ useContext('tool', 'telegram', (toolService: ToolFeature, telegram: TelegramAdap
       const success = await bot.setChatPermissionsAll(Number(chat_id), permissions);
       return { success, message: success ? '群权限已更新' : '操作失败' };
     },
-  }, 'telegram'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'telegram_set_description',
@@ -299,7 +299,7 @@ useContext('tool', 'telegram', (toolService: ToolFeature, telegram: TelegramAdap
       const success = await bot.setChatDescription(Number(args.chat_id), args.description);
       return { success, message: success ? '群描述已更新' : '操作失败' };
     },
-  }, 'telegram'));
+  }, plugin.name));
 
   return () => disposers.forEach(d => d());
 });

@@ -26,7 +26,8 @@ declare module 'zhin.js' {
   }
 }
 
-const { provide, useContext } = usePlugin();
+const plugin = usePlugin();
+const { provide, useContext } = plugin;
 provide({
   name: 'milky',
   description: 'Milky Adapter（WS 正向 / SSE / Webhook / 反向 WS）',
@@ -42,6 +43,6 @@ provide({
 
 useContext('tool', 'milky', (toolService: ToolFeature, milky: MilkyAdapter) => {
   const groupTools = createGroupManagementTools(milky as unknown as IGroupManagement, 'milky');
-  const disposers = groupTools.map(t => toolService.addTool(t, 'milky'));
+  const disposers = groupTools.map(t => toolService.addTool(t, plugin.name));
   return () => disposers.forEach(d => d());
 });

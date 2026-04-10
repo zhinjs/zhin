@@ -40,7 +40,7 @@
   "license": "MIT",
   "dependencies": {},
   "devDependencies": {
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.0",
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {

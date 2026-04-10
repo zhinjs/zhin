@@ -42,7 +42,7 @@ useContext('tool', 'dingtalk', (toolService: ToolFeature, dingtalk: DingTalkAdap
     dingtalk as unknown as IGroupManagement,
     'dingtalk',
   );
-  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, 'dingtalk'));
+  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'dingtalk_get_user',
@@ -62,7 +62,7 @@ useContext('tool', 'dingtalk', (toolService: ToolFeature, dingtalk: DingTalkAdap
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       return await bot.getUserInfo(args.user_id);
     },
-  }, 'dingtalk'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'dingtalk_get_dept_users',
@@ -83,7 +83,7 @@ useContext('tool', 'dingtalk', (toolService: ToolFeature, dingtalk: DingTalkAdap
       const users = await bot.getDepartmentUsers(args.dept_id);
       return { users, count: users.length };
     },
-  }, 'dingtalk'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'dingtalk_list_departments',
@@ -104,7 +104,7 @@ useContext('tool', 'dingtalk', (toolService: ToolFeature, dingtalk: DingTalkAdap
       const departments = await bot.getDepartmentList(args.dept_id || '1');
       return { departments, count: departments.length };
     },
-  }, 'dingtalk'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'dingtalk_send_work_notice',
@@ -127,7 +127,7 @@ useContext('tool', 'dingtalk', (toolService: ToolFeature, dingtalk: DingTalkAdap
       const success = await bot.sendWorkNotice(args.user_ids.split(','), msgContent);
       return { success, message: success ? '工作通知已发送' : '发送失败' };
     },
-  }, 'dingtalk'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'dingtalk_create_chat',
@@ -150,7 +150,7 @@ useContext('tool', 'dingtalk', (toolService: ToolFeature, dingtalk: DingTalkAdap
       const chatId = await bot.createChat(args.name, args.owner, args.members.split(','));
       return { success: !!chatId, chat_id: chatId, message: chatId ? `群聊创建成功: ${chatId}` : '创建失败' };
     },
-  }, 'dingtalk'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'dingtalk_add_chat_members',
@@ -172,7 +172,7 @@ useContext('tool', 'dingtalk', (toolService: ToolFeature, dingtalk: DingTalkAdap
       const success = await bot.updateChat(args.chat_id, { add_useridlist: args.user_ids.split(',') });
       return { success, message: success ? '成员添加成功' : '添加失败' };
     },
-  }, 'dingtalk'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'dingtalk_dept_info',
@@ -192,7 +192,7 @@ useContext('tool', 'dingtalk', (toolService: ToolFeature, dingtalk: DingTalkAdap
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       return await bot.getDepartmentInfo(Number(args.dept_id));
     },
-  }, 'dingtalk'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'dingtalk_update_chat',
@@ -222,7 +222,7 @@ useContext('tool', 'dingtalk', (toolService: ToolFeature, dingtalk: DingTalkAdap
       await bot.updateChat(args.chat_id, options);
       return { success: true, message: '群聊设置已更新' };
     },
-  }, 'dingtalk'));
+  }, plugin.name));
 
   return () => disposers.forEach(d => d());
 });

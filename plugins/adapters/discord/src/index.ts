@@ -24,7 +24,8 @@ export { DiscordBot } from "./bot.js";
 export { DiscordInteractionsBot } from "./bot-interactions.js";
 export { DiscordAdapter, type DiscordBotLike } from "./adapter.js";
 
-const { provide, useContext } = usePlugin();
+const plugin = usePlugin();
+const { provide, useContext } = plugin;
 provide({
   name: "discord",
   description: "Discord 适配器（Gateway / Interactions）",
@@ -43,7 +44,7 @@ useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter
     discord as unknown as IGroupManagement,
     'discord',
   );
-  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, 'discord'));
+  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, plugin.name));
 
   function getGatewayBot(botId: string): DiscordBotLike {
     const bot = discord.bots.get(botId);
@@ -74,7 +75,7 @@ useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter
       const success = await bot.addRole(args.guild_id, args.user_id, args.role_id);
       return { success, message: success ? `已给用户 ${args.user_id} 添加角色` : '操作失败' };
     },
-  }, 'discord'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'discord_remove_role',
@@ -96,7 +97,7 @@ useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter
       const success = await bot.removeRole(args.guild_id, args.user_id, args.role_id);
       return { success, message: success ? `已移除用户 ${args.user_id} 的角色` : '操作失败' };
     },
-  }, 'discord'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'discord_list_roles',
@@ -116,7 +117,7 @@ useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter
       const roles = await bot.getRoles(args.guild_id);
       return { roles, count: roles.length };
     },
-  }, 'discord'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'discord_create_thread',
@@ -142,7 +143,7 @@ useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter
       const thread = await bot.createThread(args.channel_id, args.name, args.message_id, args.auto_archive_duration);
       return { success: true, thread_id: thread.id, message: `帖子 "${args.name}" 已创建` };
     },
-  }, 'discord'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'discord_react',
@@ -167,7 +168,7 @@ useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter
       await bot.addReaction(args.channel_id, args.message_id, args.emoji);
       return { success: true, message: `已添加反应 ${args.emoji}` };
     },
-  }, 'discord'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'discord_send_embed',
@@ -207,7 +208,7 @@ useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter
       const msg = await bot.sendEmbed(args.channel_id, embedData);
       return { success: true, message_id: msg.id, message: 'Embed 已发送' };
     },
-  }, 'discord'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'discord_forum_post',
@@ -231,7 +232,7 @@ useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter
       const thread = await bot.createForumPost(args.channel_id, args.name, args.content, tagList);
       return { success: true, thread_id: thread.id, message: `论坛帖 "${args.name}" 已创建` };
     },
-  }, 'discord'));
+  }, plugin.name));
 
   return () => disposers.forEach(d => d());
 });

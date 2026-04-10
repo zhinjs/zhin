@@ -21,7 +21,8 @@ declare module 'zhin.js' {
   }
 }
 
-const { provide, useContext } = usePlugin();
+const plugin = usePlugin();
+const { provide, useContext } = plugin;
 provide({
   name: 'onebot11',
   description: 'OneBot11 协议适配器（正向 WS / 反向 WS）',
@@ -40,7 +41,7 @@ useContext('tool', 'onebot11', (toolService: ToolFeature, onebot11: OneBot11Adap
     onebot11 as unknown as IGroupManagement,
     'onebot11',
   );
-  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, 'onebot11'));
+  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, plugin.name));
 
   // Platform-specific tool: set title
   disposers.push(toolService.addTool({
@@ -64,7 +65,7 @@ useContext('tool', 'onebot11', (toolService: ToolFeature, onebot11: OneBot11Adap
       const success = await bot.setTitle(args.group_id, args.user_id, args.title);
       return { success, message: success ? `已将 ${args.user_id} 的头衔设为 "${args.title}"` : '设置失败' };
     },
-  }, 'onebot11'));
+  }, plugin.name));
 
   return () => disposers.forEach(d => d());
 });

@@ -35,7 +35,7 @@ useContext('tool', 'slack', (toolService: ToolFeature, slack: SlackAdapter) => {
     slack as unknown as IGroupManagement,
     'slack',
   );
-  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, 'slack'));
+  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, plugin.name));
 
   function getBot(botId: string) {
     const bot = slack.bots.get(botId);
@@ -62,7 +62,7 @@ useContext('tool', 'slack', (toolService: ToolFeature, slack: SlackAdapter) => {
       const success = await bot.inviteToChannel(args.channel, args.users.split(','));
       return { success, message: success ? '已邀请用户加入频道' : '操作失败' };
     },
-  }, 'slack'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'slack_set_topic',
@@ -83,7 +83,7 @@ useContext('tool', 'slack', (toolService: ToolFeature, slack: SlackAdapter) => {
       const success = await bot.setChannelTopic(args.channel, args.topic);
       return { success, message: success ? '已设置频道话题' : '操作失败' };
     },
-  }, 'slack'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'slack_archive_channel',
@@ -103,7 +103,7 @@ useContext('tool', 'slack', (toolService: ToolFeature, slack: SlackAdapter) => {
       const success = await bot.archiveChannel(args.channel);
       return { success, message: success ? '已归档频道' : '操作失败' };
     },
-  }, 'slack'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'slack_pin_message',
@@ -124,7 +124,7 @@ useContext('tool', 'slack', (toolService: ToolFeature, slack: SlackAdapter) => {
       const success = await bot.pinMessage(args.channel, args.timestamp);
       return { success, message: success ? '已置顶消息' : '操作失败' };
     },
-  }, 'slack'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'slack_add_reaction',
@@ -146,7 +146,7 @@ useContext('tool', 'slack', (toolService: ToolFeature, slack: SlackAdapter) => {
       const success = await bot.addReaction(args.channel, args.timestamp, args.emoji);
       return { success, message: success ? `已添加反应 :${args.emoji}:` : '操作失败' };
     },
-  }, 'slack'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'slack_remove_reaction',
@@ -168,7 +168,7 @@ useContext('tool', 'slack', (toolService: ToolFeature, slack: SlackAdapter) => {
       const success = await bot.removeReaction(args.channel_id, args.timestamp, args.name);
       return { success, message: success ? `已移除反应 :${args.name}:` : '操作失败' };
     },
-  }, 'slack'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'slack_unpin_message',
@@ -189,7 +189,7 @@ useContext('tool', 'slack', (toolService: ToolFeature, slack: SlackAdapter) => {
       const success = await bot.unpinMessage(args.channel_id, args.timestamp);
       return { success, message: success ? '已取消置顶' : '操作失败' };
     },
-  }, 'slack'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'slack_user_info',
@@ -218,7 +218,7 @@ useContext('tool', 'slack', (toolService: ToolFeature, slack: SlackAdapter) => {
         status_text: user.profile?.status_text,
       };
     },
-  }, 'slack'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'slack_set_purpose',
@@ -239,7 +239,7 @@ useContext('tool', 'slack', (toolService: ToolFeature, slack: SlackAdapter) => {
       const success = await bot.setChannelPurpose(args.channel_id, args.purpose);
       return { success, message: success ? '频道用途已更新' : '操作失败' };
     },
-  }, 'slack'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'slack_unarchive',
@@ -259,7 +259,7 @@ useContext('tool', 'slack', (toolService: ToolFeature, slack: SlackAdapter) => {
       const success = await bot.unarchiveChannel(args.channel_id);
       return { success, message: success ? '频道已恢复' : '操作失败' };
     },
-  }, 'slack'));
+  }, plugin.name));
 
   return () => disposers.forEach(d => d());
 });

@@ -42,7 +42,7 @@ useContext('tool', 'lark', (toolService: ToolFeature, lark: LarkAdapter) => {
     lark as unknown as IGroupManagement,
     'lark',
   );
-  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, 'lark'));
+  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'lark_get_user',
@@ -62,7 +62,7 @@ useContext('tool', 'lark', (toolService: ToolFeature, lark: LarkAdapter) => {
       if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
       return await bot.getUserInfo(args.user_id);
     },
-  }, 'lark'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'lark_create_chat',
@@ -85,7 +85,7 @@ useContext('tool', 'lark', (toolService: ToolFeature, lark: LarkAdapter) => {
       const chatId = await bot.createChat(args.name, args.members.split(','), args.owner);
       return { success: !!chatId, chat_id: chatId, message: chatId ? `群聊创建成功: ${chatId}` : '创建失败' };
     },
-  }, 'lark'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'lark_update_chat',
@@ -108,7 +108,7 @@ useContext('tool', 'lark', (toolService: ToolFeature, lark: LarkAdapter) => {
       const success = await bot.updateChatInfo(args.chat_id, { name: args.name, description: args.description });
       return { success, message: success ? '群信息更新成功' : '更新失败' };
     },
-  }, 'lark'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'lark_add_members',
@@ -130,7 +130,7 @@ useContext('tool', 'lark', (toolService: ToolFeature, lark: LarkAdapter) => {
       const success = await bot.addChatMembers(args.chat_id, args.user_ids.split(','));
       return { success, message: success ? '成员添加成功' : '添加失败' };
     },
-  }, 'lark'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'lark_set_managers',
@@ -152,7 +152,7 @@ useContext('tool', 'lark', (toolService: ToolFeature, lark: LarkAdapter) => {
       const success = await bot.setChatManagers(args.chat_id, args.user_ids.split(','));
       return { success, message: success ? '管理员设置成功' : '设置失败' };
     },
-  }, 'lark'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'lark_remove_managers',
@@ -174,7 +174,7 @@ useContext('tool', 'lark', (toolService: ToolFeature, lark: LarkAdapter) => {
       const success = await bot.removeChatManagers(args.chat_id, args.user_ids.split(','));
       return { success, message: success ? '管理员移除成功' : '移除失败' };
     },
-  }, 'lark'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'lark_dissolve_chat',
@@ -195,7 +195,7 @@ useContext('tool', 'lark', (toolService: ToolFeature, lark: LarkAdapter) => {
       const success = await bot.dissolveChat(args.chat_id);
       return { success, message: success ? '群聊已解散' : '解散失败' };
     },
-  }, 'lark'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'lark_upload_file',
@@ -221,7 +221,7 @@ useContext('tool', 'lark', (toolService: ToolFeature, lark: LarkAdapter) => {
       const result = await bot.uploadFile(args.file_path, args.file_type);
       return { success: true, file_key: result, message: `文件已上传，file_key: ${result}` };
     },
-  }, 'lark'));
+  }, plugin.name));
 
   return () => disposers.forEach(d => d());
 });

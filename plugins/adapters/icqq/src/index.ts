@@ -64,7 +64,7 @@ useContext("tool", "icqq", (toolService: ToolFeature, icqq: IcqqAdapter) => {
     icqq,
     "icqq",
   );
-  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, "icqq"));
+  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, plugin.name));
 
   // 设置头衔
   disposers.push(toolService.addTool({
@@ -89,7 +89,7 @@ useContext("tool", "icqq", (toolService: ToolFeature, icqq: IcqqAdapter) => {
       const success = await bot.setTitle(args.group_id, args.user_id, args.title, args.duration ?? -1);
       return { success, message: success ? `已将 ${args.user_id} 的头衔设为 "${args.title}"` : "设置失败" };
     },
-  }, "icqq"));
+  }, plugin.name));
 
   // 发送群公告
   disposers.push(toolService.addTool({
@@ -112,7 +112,7 @@ useContext("tool", "icqq", (toolService: ToolFeature, icqq: IcqqAdapter) => {
       const success = await bot.sendAnnounce(args.group_id, args.content);
       return { success, message: success ? "群公告已发送" : "发送失败" };
     },
-  }, "icqq"));
+  }, plugin.name));
 
   // 戳一戳
   disposers.push(toolService.addTool({
@@ -135,7 +135,7 @@ useContext("tool", "icqq", (toolService: ToolFeature, icqq: IcqqAdapter) => {
       const success = await bot.pokeMember(args.group_id, args.user_id);
       return { success, message: success ? `已戳了戳 ${args.user_id}` : "戳一戳失败" };
     },
-  }, "icqq"));
+  }, plugin.name));
 
   // 获取被禁言列表
   disposers.push(toolService.addTool({
@@ -158,7 +158,7 @@ useContext("tool", "icqq", (toolService: ToolFeature, icqq: IcqqAdapter) => {
       const filtered = mutedList.filter((m: any) => m !== null);
       return { muted_members: filtered, count: filtered.length };
     },
-  }, "icqq"));
+  }, plugin.name));
 
   // 给用户点赞
   disposers.push(toolService.addTool({
@@ -181,7 +181,7 @@ useContext("tool", "icqq", (toolService: ToolFeature, icqq: IcqqAdapter) => {
       const success = await bot.sendLike(args.user_id, Math.min(args.times ?? 1, 20));
       return { success, message: success ? `已给 ${args.user_id} 点赞` : "发送失败" };
     },
-  }, "icqq"));
+  }, plugin.name));
 
   // 设置匿名聊天
   disposers.push(toolService.addTool({
@@ -205,7 +205,7 @@ useContext("tool", "icqq", (toolService: ToolFeature, icqq: IcqqAdapter) => {
       const success = await bot.setAnonymous(args.group_id, enable);
       return { success, message: success ? (enable ? "已开启匿名聊天" : "已关闭匿名聊天") : "操作失败" };
     },
-  }, "icqq"));
+  }, plugin.name));
 
   // 群文件列表
   disposers.push(toolService.addTool({
@@ -236,7 +236,7 @@ useContext("tool", "icqq", (toolService: ToolFeature, icqq: IcqqAdapter) => {
         count: files.length,
       };
     },
-  }, "icqq"));
+  }, plugin.name));
 
   // 好友列表
   disposers.push(toolService.addTool({
@@ -262,7 +262,7 @@ useContext("tool", "icqq", (toolService: ToolFeature, icqq: IcqqAdapter) => {
       }));
       return { friends: friends.slice(0, 50), count: fl.size };
     },
-  }, "icqq"));
+  }, plugin.name));
 
   return () => disposers.forEach(d => d());
 });

@@ -48,7 +48,7 @@
     "@resvg/resvg-js": "^2.6.2"
   },
   "devDependencies": {
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.0",
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {

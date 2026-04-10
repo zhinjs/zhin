@@ -39,6 +39,7 @@
     "client",
     "dist",
     "skills",
+    "plugin.yml",
     "README.md",
     "CHANGELOG.md"
   ],
@@ -56,7 +57,7 @@
     "@zhin.js/console": "workspace:*",
     "lucide-react": "^0.469.0",
     "radix-ui": "^1.4.3",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.0",
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {

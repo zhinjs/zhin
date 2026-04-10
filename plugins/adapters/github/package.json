@@ -19,6 +19,7 @@
     "client",
     "dist",
     "skills",
+    "plugin.yml",
     "README.md"
   ],
   "scripts": {
@@ -43,7 +44,7 @@
   },
   "license": "MIT",
   "devDependencies": {
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.0",
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {

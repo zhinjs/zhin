@@ -45,7 +45,7 @@ useContext('tool', 'kook', (toolService: ToolFeature, kook: KookAdapter) => {
     kook as unknown as IGroupManagement,
     'kook',
   );
-  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, 'kook'));
+  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'kook_grant_role',
@@ -68,7 +68,7 @@ useContext('tool', 'kook', (toolService: ToolFeature, kook: KookAdapter) => {
       const success = await bot.grantRole(args.guild_id, args.user_id, args.role_id);
       return { success, message: success ? `已授予用户 ${args.user_id} 角色 ${args.role_id}` : '授予角色失败' };
     },
-  }, 'kook'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'kook_revoke_role',
@@ -91,7 +91,7 @@ useContext('tool', 'kook', (toolService: ToolFeature, kook: KookAdapter) => {
       const success = await bot.revokeRole(args.guild_id, args.user_id, args.role_id);
       return { success, message: success ? `已撤销用户 ${args.user_id} 的角色 ${args.role_id}` : '撤销角色失败' };
     },
-  }, 'kook'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'kook_list_roles',
@@ -121,7 +121,7 @@ useContext('tool', 'kook', (toolService: ToolFeature, kook: KookAdapter) => {
         count: roles.length,
       };
     },
-  }, 'kook'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'kook_create_role',
@@ -147,7 +147,7 @@ useContext('tool', 'kook', (toolService: ToolFeature, kook: KookAdapter) => {
         role: { id: role.role_id, name: role.name },
       };
     },
-  }, 'kook'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'kook_delete_role',
@@ -169,7 +169,7 @@ useContext('tool', 'kook', (toolService: ToolFeature, kook: KookAdapter) => {
       const success = await bot.deleteRole(args.guild_id, args.role_id);
       return { success, message: success ? `已删除角色 ${args.role_id}` : '删除角色失败' };
     },
-  }, 'kook'));
+  }, plugin.name));
 
   disposers.push(toolService.addTool({
     name: 'kook_blacklist',
@@ -203,7 +203,7 @@ useContext('tool', 'kook', (toolService: ToolFeature, kook: KookAdapter) => {
           return { success: false, message: `未知操作: ${args.action}` };
       }
     },
-  }, 'kook'));
+  }, plugin.name));
 
   return () => disposers.forEach(d => d());
 });

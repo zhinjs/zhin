@@ -808,7 +808,7 @@ useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) 
     },
   ];
 
-  const disposers = tools.map(t => toolService.addTool(t, 'github'));
+  const disposers = tools.map(t => toolService.addTool(t, plugin.name));
   logger.debug(`GitHub 工具已注册: ${tools.map(t => t.name).join(', ')}`);
 
   return () => disposers.forEach(d => d());
