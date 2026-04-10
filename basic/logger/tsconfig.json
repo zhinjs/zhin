@@ -7,6 +7,7 @@
     "esModuleInterop": true,
     "allowJs": true,
     "strict": true,
+    "rootDir": "src",
     "outDir": "lib",
     "declaration": true,
     "declarationMap": true,
