@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-60s",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "60s API aggregation plugin for Zhin.js — news, weather, hot searches, utilities and more",
   "type": "module",
   "main": "./lib/index.js",
@@ -55,7 +55,7 @@
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {
-    "zhin.js": ">=1.0.63"
+    "zhin.js": ">=1.0.64"
   },
   "repository": {
     "type": "git",

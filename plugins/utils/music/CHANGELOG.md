@@ -1,5 +1,14 @@
 # @zhin.js/plugin-music
 
+## 1.0.6
+
+### Patch Changes
+
+- 9577eba: fix: tool 收集 bug,升级 ts 到 6.0.2
+- Updated dependencies [9577eba]
+  - zhin.js@1.0.64
+  - @zhin.js/adapter-icqq@2.0.6
+
 ## 1.0.5
 
 ### Patch Changes

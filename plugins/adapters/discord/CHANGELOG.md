@@ -1,5 +1,16 @@
 # @zhin.js/adapter-discord
 
+## 1.0.69
+
+### Patch Changes
+
+- 9577eba: fix: tool 收集 bug,升级 ts 到 6.0.2
+- Updated dependencies [9577eba]
+  - @zhin.js/client@1.0.16
+  - zhin.js@1.0.64
+  - @zhin.js/console@2.0.6
+  - @zhin.js/http@1.0.59
+
 ## 1.0.68
 
 ### Patch Changes

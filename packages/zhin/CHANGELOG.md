@@ -1,5 +1,18 @@
 # zhin.js
 
+## 1.0.64
+
+### Patch Changes
+
+- 9577eba: fix: tool 收集 bug,升级 ts 到 6.0.2
+- Updated dependencies [9577eba]
+  - @zhin.js/logger@0.1.48
+  - @zhin.js/schema@1.0.48
+  - @zhin.js/agent@0.1.6
+  - @zhin.js/ai@1.1.6
+  - @zhin.js/core@1.1.6
+  - @zhin.js/kernel@0.0.25
+
 ## 1.0.63
 
 ### Patch Changes
