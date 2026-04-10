@@ -1,5 +1,14 @@
 # @zhin.js/adapter-wechat-mp
 
+## 0.1.54
+
+### Patch Changes
+
+- 9577eba: fix: tool 收集 bug,升级 ts 到 6.0.2
+- Updated dependencies [9577eba]
+  - zhin.js@1.0.64
+  - @zhin.js/http@1.0.59
+
 ## 0.1.53
 
 ### Patch Changes

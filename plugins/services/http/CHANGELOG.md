@@ -1,5 +1,14 @@
 # @zhin.js/http
 
+## 1.0.59
+
+### Patch Changes
+
+- 9577eba: fix: tool 收集 bug,升级 ts 到 6.0.2
+- Updated dependencies [9577eba]
+  - @zhin.js/schema@1.0.48
+  - zhin.js@1.0.64
+
 ## 1.0.58
 
 ### Patch Changes

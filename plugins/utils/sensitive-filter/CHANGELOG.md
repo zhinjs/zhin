@@ -1,5 +1,13 @@
 # @zhin.js/sensitive-filter
 
+## 0.0.51
+
+### Patch Changes
+
+- 9577eba: fix: tool 收集 bug,升级 ts 到 6.0.2
+- Updated dependencies [9577eba]
+  - zhin.js@1.0.64
+
 ## 0.0.50
 
 ### Patch Changes

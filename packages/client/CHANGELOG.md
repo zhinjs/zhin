@@ -1,5 +1,11 @@
 # @zhin.js/client
 
+## 1.0.16
+
+### Patch Changes
+
+- 9577eba: fix: tool 收集 bug,升级 ts 到 6.0.2
+
 ## 1.0.15
 
 ### Patch Changes

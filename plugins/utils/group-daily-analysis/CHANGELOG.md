@@ -1,5 +1,14 @@
 # @zhin.js/plugin-group-daily-analysis
 
+## 0.0.15
+
+### Patch Changes
+
+- 9577eba: fix: tool 收集 bug,升级 ts 到 6.0.2
+- Updated dependencies [9577eba]
+  - zhin.js@1.0.64
+  - @zhin.js/plugin-html-renderer@0.0.44
+
 ## 0.0.14
 
 ### Patch Changes

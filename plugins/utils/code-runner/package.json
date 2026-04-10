@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-code-runner",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Sandboxed code execution plugin for Zhin.js — run code snippets via AI or command",
   "type": "module",
   "main": "./lib/index.js",
@@ -43,7 +43,7 @@
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {
-    "zhin.js": ">=1.0.63"
+    "zhin.js": ">=1.0.64"
   },
   "repository": {
     "type": "git",

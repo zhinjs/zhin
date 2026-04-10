@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-short-url",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "URL shortener plugin for Zhin.js — shorten & expand URLs",
   "type": "module",
   "main": "./lib/index.js",
@@ -42,7 +42,7 @@
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {
-    "zhin.js": ">=1.0.63"
+    "zhin.js": ">=1.0.64"
   },
   "repository": {
     "type": "git",

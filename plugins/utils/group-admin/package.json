@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-group-admin",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Group management plugin for Zhin.js — welcome, keyword reply, recall detection",
   "type": "module",
   "main": "./lib/index.js",
@@ -44,7 +44,7 @@
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {
-    "zhin.js": ">=1.0.63"
+    "zhin.js": ">=1.0.64"
   },
   "repository": {
     "type": "git",
