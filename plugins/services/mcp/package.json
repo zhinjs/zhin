@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/mcp",
-  "version": "1.0.46",
+  "version": "1.0.47",
   "description": "Model Context Protocol (MCP) service for Zhin.js - AI assistant integration",
   "type": "module",
   "main": "./lib/index.js",
