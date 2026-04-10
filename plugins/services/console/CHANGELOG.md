@@ -1,5 +1,16 @@
 # @zhin.js/console
 
+## 2.0.5
+
+### Patch Changes
+
+- ba30934: fix: web 优化
+- Updated dependencies [ba30934]
+  - @zhin.js/http@1.0.58
+  - @zhin.js/agent@0.1.5
+  - zhin.js@1.0.63
+  - @zhin.js/core@1.1.5
+
 ## 2.0.4
 
 ### Patch Changes
