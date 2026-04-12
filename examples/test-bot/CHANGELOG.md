@@ -1,5 +1,15 @@
 # test-bot
 
+## 0.1.72
+
+### Patch Changes
+
+- 36c1b8f: fix: 重构 icqq\github 适配器
+- Updated dependencies [36c1b8f]
+  - @zhin.js/adapter-github@0.1.36
+  - @zhin.js/adapter-icqq@2.0.7
+  - @zhin.js/plugin-music@1.0.7
+
 ## 0.1.71
 
 ### Patch Changes

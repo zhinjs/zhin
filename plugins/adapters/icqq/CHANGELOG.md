@@ -1,5 +1,11 @@
 # @zhin.js/adapter-icqq
 
+## 2.0.7
+
+### Patch Changes
+
+- 36c1b8f: fix: 重构 icqq\github 适配器
+
 ## 2.0.6
 
 ### Patch Changes

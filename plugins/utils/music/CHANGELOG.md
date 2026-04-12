@@ -1,5 +1,12 @@
 # @zhin.js/plugin-music
 
+## 1.0.7
+
+### Patch Changes
+
+- Updated dependencies [36c1b8f]
+  - @zhin.js/adapter-icqq@2.0.7
+
 ## 1.0.6
 
 ### Patch Changes
