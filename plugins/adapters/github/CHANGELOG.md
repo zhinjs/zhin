@@ -1,5 +1,11 @@
 # @zhin.js/adapter-github
 
+## 0.1.36
+
+### Patch Changes
+
+- 36c1b8f: fix: 重构 icqq\github 适配器
+
 ## 0.1.35
 
 ### Patch Changes
