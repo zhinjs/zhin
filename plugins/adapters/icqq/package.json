@@ -47,9 +47,7 @@
     "build": "tsc && (test -f ../../services/console/lib/bin.js && node ../../services/console/lib/bin.js build || echo 'Skipping client build: console not built yet')",
     "clean": "rimraf lib"
   },
-  "dependencies": {
-    "@icqqjs/icqq": "^1.10.18"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@radix-ui/themes": "^3.2.1",
     "@types/react": "^19.2.2",

@@ -4,20 +4,21 @@ database:
   filename: ./data/test.db
 bots:
   - context: icqq
-    name: ${ICQQ_ACCOUNT}
-    password: ${ICQQ_PASSWORD}
-    platform: ${ICQQ_PLATFORM}
-    sign_api_addr: ${ICQQ_SIGN_API_ADDR}
-    ver: 9.1.70
-    data_dir: ./data
+    name: "8596238"
     scope: icqqjs
+    rpc:
+      host: 127.0.0.1
+      port: 64130
+      token: ${ICQQ_RPC_TOKEN}
   - context: github
     name: zhin-github
     app_id: ${GITHUB_APP_ID}
-    private_key: ./data/zhin-connect.pem
-    webhook_secret: ${GITHUB_WEBHOOK_SECRET}
-    client_id: ${GITHUB_CLIENT_ID}
-    client_secret: ${GITHUB_CLIENT_SECRET}
+    private_key: ${GITHUB_PRIVATE_KEY}
+    # 生产环境：配置 webhook_secret 启用实时推送
+    # webhook_secret: ${GITHUB_WEBHOOK_SECRET}
+    # webhook_path: /github/webhook
+    # 开发环境：使用轮询（不配置 webhook_secret 自动启用）
+    poll_interval: 60
 plugin_dirs:
   - node_modules
   - ./src/plugins
@@ -31,9 +32,11 @@ services:
 plugins:
   - test-plugin
   - test-jsx
+  - github-commands
   - "@zhin.js/http"
   - "@zhin.js/console"
   - "@zhin.js/mcp"
+  - "@zhin.js/adapter-icqq"
   - "@zhin.js/adapter-github"
   - "@zhin.js/adapter-sandbox"
   - "@zhin.js/adapter-kook"
@@ -73,25 +76,21 @@ ai:
       baseUrl: ${OPENAI_BASE_URL}
       apiKey: ${OPENAI_API_KEY}
   sessions:
-    maxHistory: 200                    # 最大历史消息数
-    expireMs: 604800000                # 会话过期: 7 天
-    useDatabase: true  
+    maxHistory: 200
+    expireMs: 604800000
+    useDatabase: true
   context:
     enabled: true
-    maxRecentMessages: 100             # 读取最近消息数
-    summaryThreshold: 50               # 触发自动总结的阈值
-    keepAfterSummary: 10               # 总结后保留最近条数
-    maxContextTokens: 4000   
+    maxRecentMessages: 100
+    summaryThreshold: 50
+    keepAfterSummary: 10
+    maxContextTokens: 4000
   agent:
-    # Bash 执行安全（6 层纵深防御）
-    chatModel: 'cu/claude-4.5-sonnet'     # 聊天用的模型（显式指定）
-    visionModel: 'qw/vision-model' 
-    execSecurity: allowlist            # deny=禁止 | allowlist=白名单 | full=不限制
-    execPreset: network                # 预设白名单集，与 execAllowlist 合并
-    #   readonly:    ls cat pwd date whoami grep find head tail wc stat file
-    #   network:     + curl wget ping dig nslookup host
-    #   development: + npm npx node git gh python python3 pip pnpm yarn tsc bun
-    execAllowlist:                     # 自定义追加白名单（支持正则）
+    chatModel: nvidia/moonshotai/kimi-k2.5
+    visionModel: qw/vision-model
+    execSecurity: allowlist
+    execPreset: network
+    execAllowlist:
       - echo
       - sort
       - uniq
@@ -107,19 +106,22 @@ ai:
       - uname
       - which
       - xargs
-      - "^docker (ps|logs|inspect)"    # 只允许 docker 只读操作
-    execAsk: true                      # 未匹配白名单 → 私聊 Owner 审批
-    # disabledTools: []                # 禁用的工具名列表
-    # allowedTools: []                 # 仅允许的工具名列表（与 disabledTools 二选一）
+      - ^docker (ps|logs|inspect)
+    execAsk: true
   trigger:
     enabled: true
-    prefixes: ['#', 'AI:', 'ai:']     # 触发前缀
-    respondToAt: true                  # 响应 @机器人
-    respondToPrivate: true             # 响应私聊
-    ignorePrefixes: ['/', '!', '！']   # 忽略命令前缀
-    timeout: 60000                     # AI 响应超时 (ms)
-    thinkingMessage: '🤔 思考中...'  # 可选: 处理前发送提示
-
+    prefixes:
+      - "#"
+      - "AI:"
+      - "ai:"
+    respondToAt: true
+    respondToPrivate: true
+    ignorePrefixes:
+      - /
+      - "!"
+      - ！
+    timeout: 60000
+    thinkingMessage: 🤔 思考中...
 htmlRenderer:
   defaultWidth: 1080
   defaultBackgroundColor: "#ffffff"

@@ -1,9 +1,10 @@
 /**
  * ICQQ 适配器类型与配置
+ *
+ * 不再直接依赖 @icqqjs/icqq，通过 @icqqjs/cli 守护进程 IPC 通信。
  */
-import type { Config, GroupRole, MemberInfo } from "@icqqjs/icqq";
 
-export type { Config, GroupRole, MemberInfo };
+export type GroupRole = "owner" | "admin" | "member";
 
 export interface IcqqSenderInfo {
   id: string;
@@ -16,13 +17,52 @@ export interface IcqqSenderInfo {
   title?: string;
 }
 
-export interface IcqqBotConfig extends Config {
+/**
+ * Bot 配置：支持本地 IPC 和远程 RPC 两种连接模式。
+ *
+ * - 本地模式（默认）：只需 name（QQ号），自动连接 ~/.icqq/<uin>/daemon.sock
+ * - 远程模式：额外配置 rpc.host / rpc.port / rpc.token
+ */
+export interface IcqqBotConfig {
   context: "icqq";
+  /** QQ 号码字符串 */
   name: `${number}`;
-  password?: string;
-  scope?: string;
+  /** RPC 远程连接配置（不配置则使用本地 IPC） */
+  rpc?: {
+    /** 远程主机地址 */
+    host: string;
+    /** 远程端口 */
+    port: number;
+    /** 认证 token（用于 HMAC-SHA256 挑战-响应，不会明文传输） */
+    token: string;
+  };
 }
 
-export interface IcqqBot {
-  $config: IcqqBotConfig;
+/** IPC 返回的好友信息 */
+export interface IpcFriendInfo {
+  user_id: number;
+  nickname: string;
+  remark?: string;
+  class_id?: number;
+}
+
+/** IPC 返回的群信息 */
+export interface IpcGroupInfo {
+  group_id: number;
+  group_name: string;
+  member_count: number;
+  max_member_count: number;
+  owner_id?: number;
+}
+
+/** IPC 返回的群成员信息 */
+export interface IpcMemberInfo {
+  user_id: number;
+  nickname: string;
+  card: string;
+  role: GroupRole;
+  title: string;
+  join_time?: number;
+  last_sent_time?: number;
+  shutup_time?: number;
 }

@@ -1,74 +1,41 @@
 ---
 name: icqq
-platforms:
-  - icqq
-description: ICQQ（QQ 协议）群管理：踢人、禁言、全员禁言、设管理员、改名片、头衔、群公告、戳一戳、点赞、群文件等。仅有昵称时请先 list_members 查 QQ 号。
-keywords:
-  - ICQQ
-  - QQ
-  - adapter:icqq
-  - 群管理
-  - 踢人
-  - 禁言
-  - 管理员
-  - 头衔
-  - 群公告
-  - 戳一戳
-  - list_members
-tags:
-  - group
-  - management
-  - im
-tools:
-  # 平台特有工具
-  - icqq_set_title
-  - icqq_announce
-  - icqq_poke
-  - icqq_list_muted
-  - icqq_send_user_like
-  - icqq_set_anonymous
-  - icqq_group_files
-  - icqq_friend_list
-  # 通用群管工具
-  - icqq_kick_member
-  - icqq_mute_member
-  - icqq_mute_all
-  - icqq_set_admin
-  - icqq_set_nickname
-  - icqq_set_group_name
-  - icqq_list_members
+description: 'Operate QQ account via icqq CLI. Use when asked to: send QQ message, manage QQ groups, check QQ friends, poke friend, like friend, mute member, kick member, set nickname, view QQ profile, handle friend/group requests, manage group files, set group announcement, QQ签到, 发消息, 管群, 好友操作, 群文件.'
+argument-hint: 'Describe what QQ operation to perform, e.g. "send hello to friend 12345" or "mute user 67890 in group 11111"'
+disable-model-invocation: true
 ---
 
-## 工具概览
+# icqq — QQ Account Operations via CLI
 
-### 平台特有
+Operate a QQ account through the `icqq` command-line tool. The daemon must be running first (`icqq login`).
 
-| 工具 | 说明 | 权限 |
-|------|------|------|
-| `icqq_set_title` | 设置群头衔 | group_admin |
-| `icqq_announce` | 发送群公告 | group_admin |
-| `icqq_poke` | 戳一戳互动 | user |
-| `icqq_list_muted` | 查询禁言列表 | user |
-| `icqq_send_user_like` | 给用户点赞 | user |
-| `icqq_set_anonymous` | 开启/关闭匿名聊天 | group_admin |
-| `icqq_group_files` | 获取群文件列表 | user |
-| `icqq_friend_list` | 获取好友列表 | user |
+## Procedure
 
-### 通用群管
+1. **Identify the module** — Match the user's intent to one of the modules below
+2. **Load the reference** — Read ONLY the relevant module reference file(s)
+3. **Check daemon** — Run `icqq status` if unsure whether the account is online
+4. **Execute** — Run the command in terminal and report results
 
-| 工具 | 说明 | 权限 |
-|------|------|------|
-| `icqq_kick_member` | 踢出成员 | group_admin |
-| `icqq_mute_member` | 禁言成员（duration=0 解除） | group_admin |
-| `icqq_mute_all` | 全员禁言/解除 | group_admin |
-| `icqq_set_admin` | 设置/取消管理员 | group_owner |
-| `icqq_set_nickname` | 修改群昵称/名片 | group_admin |
-| `icqq_set_group_name` | 修改群名称 | group_admin |
-| `icqq_list_members` | 获取群成员列表 | user |
+## Modules
 
-## 执行规则
+Load the corresponding reference file based on what the user wants:
 
-1. 仅有成员昵称时先 `icqq_list_members` 获取 QQ 号
-2. 禁言 duration 单位为秒，默认 600（10 分钟），设为 0 解除禁言
-3. 头衔设置需要群主权限
-4. 群公告仅管理员可发布
+| Intent | Module | Reference |
+|--------|--------|-----------|
+| 发消息、撤回、聊天记录、消息详情、合并转发 | Messaging | [messaging.md](./references/messaging.md) |
+| 好友列表、查看、发消息、戳一戳、点赞、删除、备注、文件、好友分组 | Friends | [friends.md](./references/friends.md) |
+| 群管理：发消息、禁言、踢人、公告、邀请、签到、精华、成员、表态 | Groups | [groups.md](./references/groups.md) |
+| 设置：昵称、头像、签名、群名片、群头衔、加群方式、匿名 | Settings | [settings.md](./references/settings.md) |
+| 好友/群请求处理 | Requests | [requests.md](./references/requests.md) |
+| 群文件：目录管理、上传下载、转发 | Group Files | [gfs.md](./references/gfs.md) |
+| 登录、状态、配置、OCR、黑名单、Webhook、通知、UID转换、陌生人、漫游表情、缓存、重载、频道与子频道（Guild & Channel）、补全 | General | [general.md](./references/general.md) |
+
+## Global Notes
+
+- All `<uid>` = QQ number (integer), `<gid>` = group number (integer)
+- Daemon must run first: `icqq login`
+- Multi-instance: use `-u <uin>` or `ICQQ_CURRENT_UIN` env to specify account; defaults to `config.currentUin`
+- **Use `icqq friend send` / `icqq group send` for non-interactive messaging** (agent-friendly); `icqq friend chat` / `icqq group chat` are interactive
+- CQ code syntax in messages: `[face:id]` `[image:path]` `[at:uid]` `[at:all]` `[dice]` `[rps]`
+- Quote strings with spaces: `icqq friend send 12345 "hello world"`
+- Chain batch ops with `&&`

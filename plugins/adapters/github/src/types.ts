@@ -1,45 +1,23 @@
 // ── Bot 配置 ─────────────────────────────────────────────────────────
-//  GitHub App 认证: app_id + private_key → JWT → Installation Token
-//  OAuth 用户授权: client_id + client_secret → 用户绑定 GitHub 账号
+//  基于 gh CLI 认证：需要系统已安装并认证 gh CLI
+//  认证方式：gh auth login
 
 export interface GitHubBotConfig {
   context: 'github';
   /** Bot 标识名称 */
   name: string;
+  /** GitHub Enterprise 主机名（默认 github.com） */
+  host?: string;
   /** GitHub App ID */
-  app_id: number;
-  /** GitHub App 私钥 PEM 内容或文件路径 */
-  private_key: string;
-  /** Installation ID (不填则自动获取第一个) */
-  installation_id?: number;
-  /** Webhook 签名密钥 */
+  app_id?: string | number;
+  /** GitHub App 私钥（PEM 内容或文件路径） */
+  private_key?: string;
+  /** Webhook Secret（配置后启用 Webhook 接收事件，不配置则使用轮询） */
   webhook_secret?: string;
-  /** GitHub App OAuth: Client ID (在 App 设置页获取) */
-  client_id?: string;
-  /** GitHub App OAuth: Client Secret */
-  client_secret?: string;
-  /** 服务公开访问地址，用于 OAuth 回调和绑定链接（如 https://bot.example.com） */
-  public_url?: string;
-}
-
-// ── OAuth 用户绑定 ───────────────────────────────────────────────────
-
-export interface GitHubOAuthUser {
-  id: number;
-  /** 聊天平台名称 (icqq / kook / discord ...) */
-  platform: string;
-  /** 聊天平台用户 ID */
-  platform_uid: string;
-  /** GitHub 用户名 */
-  github_login: string;
-  /** GitHub 用户 ID */
-  github_id: number;
-  /** OAuth access_token */
-  access_token: string;
-  /** 授权范围 */
-  scope: string;
-  created_at: Date;
-  updated_at: Date;
+  /** Webhook 路由路径（默认 /github/webhook） */
+  webhook_path?: string;
+  /** 事件轮询间隔（秒，默认 60，Webhook 模式下作为降级备选） */
+  poll_interval?: number;
 }
 
 // ── Channel ID ───────────────────────────────────────────────────────
@@ -165,3 +143,20 @@ export interface Subscription {
 export type PrAction = 'list' | 'view' | 'diff' | 'merge' | 'create' | 'review' | 'close';
 export type IssueAction = 'list' | 'view' | 'create' | 'close' | 'comment';
 export type RepoAction = 'info' | 'branches' | 'releases' | 'runs' | 'stars';
+
+// ── OAuth 用户绑定 ───────────────────────────────────────────────────
+//  存储各平台用户绑定的 GitHub OAuth Token（Device Flow）
+
+export interface GitHubOAuthUser {
+  id: number;
+  /** 来源平台 (icqq, kook, discord …) */
+  platform: string;
+  /** 该平台上的用户 ID */
+  platform_uid: string;
+  /** GitHub 用户名 */
+  github_login: string;
+  /** OAuth Access Token */
+  access_token: string;
+  /** 绑定时间 (ms) */
+  created_at: number;
+}

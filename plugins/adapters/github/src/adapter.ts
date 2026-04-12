@@ -1,15 +1,15 @@
 /**
- * GitHub 适配器
+ * GitHub 适配器（基于 gh CLI + App 认证 + Webhook/轮询混合）
  */
-import crypto from 'node:crypto';
 import {
   Adapter,
   Plugin,
   Message,
 } from 'zhin.js';
+import crypto from 'node:crypto';
 import { GitHubBot } from './bot.js';
 import type { GitHubBotConfig, EventType, GenericWebhookPayload, Subscription } from './types.js';
-import { GitHubAPI, GitHubOAuthClient, exchangeOAuthCode } from './api.js';
+import type { GhClient } from './gh-client.js';
 import type { IssueCommentPayload, PRReviewCommentPayload, PRReviewPayload } from './types.js';
 
 const VALID_EVENTS: EventType[] = ['push', 'issue', 'star', 'fork', 'unstar', 'pull_request'];
@@ -21,9 +21,6 @@ function safeParseEvents(raw: any): EventType[] {
   }
   return [];
 }
-
-const oauthStates = new Map<string, { platform: string; platformUid: string; expires: number }>();
-const OAUTH_STATE_TTL = 5 * 60 * 1000;
 
 function formatNotification(event: string, p: GenericWebhookPayload): string {
   const repo = p.repository.full_name;
@@ -76,10 +73,14 @@ function formatNotification(event: string, p: GenericWebhookPayload): string {
 }
 
 export class GitHubAdapter extends Adapter<GitHubBot> {
-  get publicUrl(): string | undefined {
-    const bot = this.bots.values().next().value as GitHubBot | undefined;
-    return bot?.$config.public_url?.replace(/\/+$/, '');
-  }
+  /** 轮询定时器 */
+  private _pollTimer: ReturnType<typeof setInterval> | null = null;
+  /** 每个 repo 的 ETag 缓存 */
+  private _etags = new Map<string, string>();
+  /** 每个 repo 最后处理的事件 ID（防重复） */
+  private _lastEventIds = new Map<string, string>();
+  /** Webhook 是否已激活 */
+  private _webhookActive = false;
 
   constructor(plugin: Plugin) {
     super(plugin, 'github', []);
@@ -93,232 +94,308 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
     await super.start();
   }
 
-  /** 获取第一个可用 bot 的 API (工具用) */
-  getAPI(): GitHubAPI | null {
-    const bot = this.bots.values().next().value as GitHubBot | undefined;
-    return bot?.api || null;
+  async stop(): Promise<void> {
+    this.stopPolling();
+    await super.stop();
   }
 
-  /** 创建 OAuth 状态并返回授权 URL（供 github_bind 工具使用） */
-  createOAuthState(platform: string, platformUid: string): string | null {
+  /** 获取第一个可用 bot 的 GhClient (工具用) */
+  getAPI(): GhClient | null {
     const bot = this.bots.values().next().value as GitHubBot | undefined;
-    const clientId = bot?.$config.client_id;
-    if (!clientId) return null;
-
-    const state = crypto.randomUUID();
-    oauthStates.set(state, { platform, platformUid, expires: Date.now() + OAUTH_STATE_TTL });
-
-    const base = this.publicUrl || '';
-    return `${base}/pub/github/oauth?state=${state}`;
+    return bot?.gh || null;
   }
 
-  // ── OAuth 用户查询 ─────────────────────────────────────────────────
-
-  async getOAuthClient(platform: string, platformUid: string): Promise<GitHubOAuthClient | null> {
+  /** 获取指定用户绑定的 GhClient；未绑定则返回 null */
+  async getUserAPI(platform: string, platformUid: string): Promise<GhClient | null> {
     const db = this.plugin.root?.inject('database') as any;
     const model = db?.models?.get('github_oauth_users');
     if (!model) return null;
-    const [row] = await model.select().where({ platform, platform_uid: platformUid });
-    if (!row) return null;
-    return new GitHubOAuthClient(row.access_token);
+    const [record] = await model.select().where({ platform, platform_uid: platformUid });
+    if (!record?.access_token) return null;
+    const base = this.getAPI();
+    if (!base) return null;
+    return base.withToken(record.access_token);
   }
 
-  // ── OAuth 路由 (由 useContext('router') 注入) ─────────────────────
+  /** 获取用户 API，若未绑定则降级为 bot 默认的 API */
+  async getUserOrDefaultAPI(platform?: string, platformUid?: string): Promise<GhClient | null> {
+    if (platform && platformUid) {
+      const userApi = await this.getUserAPI(platform, platformUid);
+      if (userApi) return userApi;
+    }
+    return this.getAPI();
+  }
 
-  setupOAuth(router: import('@zhin.js/http').Router): void {
-    const OAUTH_SCOPES = 'repo,user';
+  /** 获取第一个 bot 的 client_id（App 认证时从 /app 自动获取） */
+  getClientId(): string | null {
+    const bot = this.bots.values().next().value as GitHubBot | undefined;
+    return bot?.gh.clientId || null;
+  }
 
-    router.get('/pub/github/oauth', async (ctx: any) => {
-      const state = ctx.query.state as string;
-      if (!state || !oauthStates.has(state)) {
+  /** 获取第一个 bot 的 host 配置 */
+  getHost(): string | undefined {
+    const bot = this.bots.values().next().value as GitHubBot | undefined;
+    return bot?.$config.host;
+  }
+
+  /** 获取 App slug（用于生成安装链接） */
+  getAppSlug(): string | null {
+    const bot = this.bots.values().next().value as GitHubBot | undefined;
+    return bot?.gh.appSlug || null;
+  }
+
+  /** 获取所有已发现的安装信息 */
+  getInstallations() {
+    const bot = this.bots.values().next().value as GitHubBot | undefined;
+    return bot?.gh.installations || [];
+  }
+
+  /** 第一个 bot 是否配置了 Webhook */
+  get hasWebhookConfig(): boolean {
+    const bot = this.bots.values().next().value as GitHubBot | undefined;
+    return !!bot?.$config.webhook_secret;
+  }
+
+  /** Webhook 是否已激活 */
+  get webhookActive(): boolean {
+    return this._webhookActive;
+  }
+
+  // ── Webhook ──────────────────────────────────────────────────────
+
+  /** 在 router 上挂载 Webhook 路由（生产环境推荐） */
+  setupWebhook(router: any): void {
+    const bot = this.bots.values().next().value as GitHubBot | undefined;
+    if (!bot?.$config.webhook_secret) {
+      this.plugin.logger.warn('Webhook 配置缺失 webhook_secret，跳过注册');
+      return;
+    }
+    const secret = bot.$config.webhook_secret;
+    const path = bot.$config.webhook_path || '/github/webhook';
+
+    router.post(path, async (ctx: any) => {
+      const signature = ctx.get('x-hub-signature-256') as string;
+      const event = ctx.get('x-github-event') as string;
+      const deliveryId = ctx.get('x-github-delivery') as string;
+
+      if (!signature || !event) {
         ctx.status = 400;
-        ctx.body = 'Invalid or expired state. Please use /github bind to generate a new link.';
+        ctx.body = { error: 'Missing signature or event header' };
         return;
       }
 
-      const bot = this.bots.values().next().value as GitHubBot | undefined;
-      const clientId = bot?.$config.client_id;
-      if (!clientId) {
-        ctx.status = 500;
-        ctx.body = 'GitHub App OAuth not configured (missing client_id).';
+      // HMAC-SHA256 签名验证
+      const body = (ctx.request as any).rawBody || JSON.stringify((ctx.request as any).body);
+      const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(body).digest('hex');
+      if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+        this.plugin.logger.warn(`Webhook 签名验证失败 (delivery: ${deliveryId})`);
+        ctx.status = 401;
+        ctx.body = { error: 'Invalid signature' };
         return;
       }
 
-      const base = this.publicUrl || ctx.origin;
-      const redirectUri = `${base}/pub/github/oauth/callback`;
-      const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${OAUTH_SCOPES}&state=${state}`;
-      ctx.redirect(url);
+      const payload = (ctx.request as any).body;
+      ctx.status = 200;
+      ctx.body = { ok: true };
+
+      // 异步处理事件，不阻塞响应
+      this.handleWebhookPayload(event, payload).catch(e =>
+        this.plugin.logger.error(`Webhook 事件处理失败 (${event}):`, e)
+      );
     });
 
-    router.get('/pub/github/oauth/callback', async (ctx: any) => {
-      const { code, state } = ctx.query as { code?: string; state?: string };
-      if (!code || !state) {
-        ctx.status = 400;
-        ctx.body = 'Missing code or state parameter.';
-        return;
-      }
+    this._webhookActive = true;
+    this.plugin.logger.info(`GitHub Webhook 已注册: POST ${path}`);
+  }
 
-      const pending = oauthStates.get(state);
-      if (!pending || Date.now() > pending.expires) {
-        oauthStates.delete(state);
-        ctx.status = 400;
-        ctx.body = 'State expired. Please use /github bind to try again.';
-        return;
-      }
-      oauthStates.delete(state);
+  /** 处理 Webhook 推送的事件 */
+  async handleWebhookPayload(event: string, payload: any): Promise<void> {
+    const bot = this.bots.values().next().value as GitHubBot | undefined;
+    const repo = payload.repository?.full_name;
 
-      const bot = this.bots.values().next().value as GitHubBot | undefined;
-      const clientId = bot?.$config.client_id;
-      const clientSecret = bot?.$config.client_secret;
-      if (!clientId || !clientSecret) {
-        ctx.status = 500;
-        ctx.body = 'OAuth not configured.';
-        return;
-      }
+    this.plugin.logger.debug(`Webhook: ${event}${payload.action ? `.${payload.action}` : ''} ${repo || ''}`);
 
+    // 记录事件到数据库
+    if (repo) {
+      const db = this.plugin.root?.inject('database') as any;
+      const eventsModel = db?.models?.get('github_events');
+      if (eventsModel) {
+        await eventsModel.insert({ id: Date.now(), repo, event_type: event, payload }).catch(() => {});
+      }
+    }
+
+    // 处理消息类事件（Issue/PR 评论）
+    if (bot && event === 'issue_comment' && payload.action === 'created' && payload.comment) {
+      const message = bot.$formatMessage(payload as IssueCommentPayload);
+      const botUser = bot.gh.authenticatedUser;
+      if (!(botUser && message.$sender.id === botUser)) {
+        this.emit('message.receive', message);
+      }
+    }
+
+    if (bot && event === 'pull_request_review_comment' && payload.action === 'created' && payload.comment) {
+      const message = bot.formatPRReviewComment(payload as PRReviewCommentPayload);
+      const botUser = bot.gh.authenticatedUser;
+      if (!(botUser && message.$sender.id === botUser)) {
+        this.emit('message.receive', message);
+      }
+    }
+
+    if (bot && event === 'pull_request_review' && payload.action === 'submitted') {
+      const message = bot.formatPRReview(payload as PRReviewPayload);
+      if (message) {
+        const botUser = bot.gh.authenticatedUser;
+        if (!(botUser && message.$sender.id === botUser)) {
+          this.emit('message.receive', message);
+        }
+      }
+    }
+
+    // 通知订阅者
+    if (repo) {
+      const genericPayload: GenericWebhookPayload = {
+        action: payload.action,
+        repository: payload.repository,
+        sender: payload.sender,
+        ref: payload.ref,
+        commits: payload.commits,
+        issue: payload.issue,
+        pull_request: payload.pull_request,
+        forkee: payload.forkee,
+      };
+      await this.dispatchNotification(event, genericPayload);
+    }
+  }
+
+  // ── 事件轮询 ────────────────────────────────────────────────────
+
+  /** 启动事件轮询 */
+  startPolling(): void {
+    if (this._pollTimer) return;
+    const bot = this.bots.values().next().value as GitHubBot | undefined;
+    const interval = (bot?.$config.poll_interval || 60) * 1000;
+    this.plugin.logger.info(`GitHub 事件轮询已启动 (间隔 ${interval / 1000}s)`);
+
+    // 立即执行一次
+    this.pollAllRepos().catch(e => this.plugin.logger.error('轮询失败:', e));
+
+    this._pollTimer = setInterval(() => {
+      this.pollAllRepos().catch(e => this.plugin.logger.error('轮询失败:', e));
+    }, interval);
+  }
+
+  /** 停止事件轮询 */
+  stopPolling(): void {
+    if (this._pollTimer) {
+      clearInterval(this._pollTimer);
+      this._pollTimer = null;
+      this.plugin.logger.debug('GitHub 事件轮询已停止');
+    }
+  }
+
+  /** 轮询所有已订阅仓库的事件 */
+  private async pollAllRepos(): Promise<void> {
+    const db = this.plugin.root?.inject('database') as any;
+    const model = db?.models?.get('github_subscriptions');
+    if (!model) return;
+
+    // 获取所有不重复的订阅仓库
+    const allSubs = await model.select();
+    const repos = [...new Set((allSubs || []).map((s: Subscription) => s.repo))] as string[];
+    if (!repos.length) return;
+
+    const gh = this.getAPI();
+    if (!gh) return;
+
+    for (const repo of repos) {
       try {
-        const tokenData = await exchangeOAuthCode(clientId, clientSecret, code);
-        const oauthClient = new GitHubOAuthClient(tokenData.access_token);
-        const userRes = await oauthClient.getUser();
-        if (!userRes.ok) {
-          ctx.status = 500;
-          ctx.body = 'Failed to fetch GitHub user info.';
-          return;
-        }
-
-        const ghUser = userRes.data;
-        const db = this.plugin.root?.inject('database') as any;
-        const model = db?.models?.get('github_oauth_users');
-        if (!model) {
-          ctx.status = 500;
-          ctx.body = 'Database not ready.';
-          return;
-        }
-
-        const [existing] = await model.select().where({ platform: pending.platform, platform_uid: pending.platformUid });
-        if (existing) {
-          await model.update({
-            github_login: ghUser.login,
-            github_id: ghUser.id,
-            access_token: tokenData.access_token,
-            scope: tokenData.scope || '',
-            updated_at: new Date(),
-          }).where({ id: existing.id });
-        } else {
-          await model.insert({
-            id: Date.now(),
-            platform: pending.platform,
-            platform_uid: pending.platformUid,
-            github_login: ghUser.login,
-            github_id: ghUser.id,
-            access_token: tokenData.access_token,
-            scope: tokenData.scope || '',
-            created_at: new Date(),
-            updated_at: new Date(),
-          });
-        }
-
-        this.plugin.logger.info(`OAuth 绑定成功: ${pending.platform}:${pending.platformUid} → ${ghUser.login}`);
-
-        ctx.type = 'text/html';
-        ctx.body = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>绑定成功</title><style>body{font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f5f5f5}div{text-align:center;background:#fff;padding:3rem;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.1)}h1{color:#28a745;margin-bottom:.5rem}p{color:#666}</style></head><body><div><h1>GitHub 账号绑定成功</h1><p>已绑定 GitHub 用户: <strong>${ghUser.login}</strong></p><p>你现在可以关闭这个页面，回到聊天中使用 GitHub 功能了。</p></div></body></html>`;
-      } catch (err: any) {
-        this.plugin.logger.error('OAuth callback 失败:', err);
-        ctx.status = 500;
-        ctx.body = `OAuth failed: ${err.message}`;
+        await this.pollRepoEvents(repo, gh);
+      } catch (e) {
+        this.plugin.logger.warn(`轮询 ${repo} 事件失败:`, e);
       }
-    });
-
-    this.plugin.logger.debug('GitHub OAuth: GET /pub/github/oauth, GET /pub/github/oauth/callback');
+    }
   }
 
-  // ── Webhook 路由 (由 useContext('router') 注入) ────────────────────
+  /** 轮询单个仓库的事件 */
+  private async pollRepoEvents(repo: string, gh: GhClient): Promise<void> {
+    const etag = this._etags.get(repo);
+    const { events, etag: newEtag } = await gh.listRepoEvents(repo, etag);
+    if (newEtag) this._etags.set(repo, newEtag);
+    if (!events.length) return;
 
-  setupWebhook(router: import('@zhin.js/http').Router): void {
-    router.post('/pub/github/webhook', async (ctx: any) => {
-      try {
-        const eventName = ctx.request.headers['x-github-event'] as string;
-        const signature = ctx.request.headers['x-hub-signature-256'] as string;
-        const payload = ctx.request.body;
+    const lastId = this._lastEventIds.get(repo);
+    const newEvents: any[] = [];
+    for (const ev of events) {
+      if (ev.id === lastId) break;
+      newEvents.push(ev);
+    }
+    if (!newEvents.length) return;
 
-        this.plugin.logger.info(`GitHub Webhook: ${eventName} - ${payload?.repository?.full_name || '(no repo)'}`);
+    // 记录最新事件 ID
+    this._lastEventIds.set(repo, events[0].id);
 
-        if (eventName === 'ping') {
-          this.plugin.logger.info(`GitHub Webhook ping OK — hook_id: ${payload?.hook_id}, zen: ${payload?.zen}`);
-          ctx.status = 200;
-          ctx.body = { message: 'pong' };
-          return;
-        }
+    // 首次轮询只记录位置，不触发通知（避免启动时大量回溯）
+    if (!lastId) {
+      this.plugin.logger.debug(`${repo}: 首次轮询，记录位置 (${events[0].id})，跳过 ${events.length} 条历史事件`);
+      return;
+    }
 
-        if (signature) {
-          let verified = false;
-          const rawBody = JSON.stringify(payload);
-          for (const bot of this.bots.values()) {
-            const secret = bot.$config.webhook_secret;
-            if (!secret) continue;
-            const expected = `sha256=${crypto.createHmac('sha256', secret).update(rawBody).digest('hex')}`;
-            if (signature === expected) { verified = true; break; }
-          }
-          if (!verified) {
-            const hasSecret = Array.from(this.bots.values()).some(b => b.$config.webhook_secret);
-            if (hasSecret) {
-              this.plugin.logger.warn('GitHub Webhook 签名验证失败');
-              ctx.status = 401;
-              ctx.body = { error: 'Invalid signature' };
-              return;
-            }
-          }
-        }
+    this.plugin.logger.debug(`${repo}: ${newEvents.length} 条新事件`);
 
-        if (!payload?.repository) {
-          ctx.status = 400;
-          ctx.body = { error: 'Invalid payload' };
-          return;
-        }
+    const bot = this.bots.values().next().value as GitHubBot | undefined;
 
-        const db = this.plugin.root?.inject('database') as any;
-        const eventsModel = db?.models?.get('github_events');
-        if (eventsModel) {
-          await eventsModel.insert({ id: Date.now(), repo: payload.repository.full_name, event_type: eventName, payload });
-        }
+    // 按时间正序处理（API 返回倒序）
+    for (const ev of newEvents.reverse()) {
+      const eventName = this.mapEventType(ev.type);
+      if (!eventName) continue;
 
-        const bot = this.bots.values().next().value as GitHubBot | undefined;
+      // 构造与 webhook payload 兼容的结构
+      const payload: GenericWebhookPayload = {
+        action: ev.payload?.action,
+        repository: ev.repo ? { full_name: ev.repo.name, html_url: `https://github.com/${ev.repo.name}`, description: '' } : ev.payload?.repository,
+        sender: { login: ev.actor?.login || '?', id: ev.actor?.id || 0, html_url: `https://github.com/${ev.actor?.login}` },
+        ref: ev.payload?.ref,
+        commits: ev.payload?.commits,
+        issue: ev.payload?.issue,
+        pull_request: ev.payload?.pull_request,
+        forkee: ev.payload?.forkee,
+      };
 
-        if (bot) {
-          let message: Message | null = null;
-
-          if (eventName === 'issue_comment' && payload.action === 'created') {
-            message = bot.$formatMessage(payload as IssueCommentPayload);
-          } else if (eventName === 'pull_request_review_comment' && payload.action === 'created') {
-            message = bot.formatPRReviewComment(payload as PRReviewCommentPayload);
-          } else if (eventName === 'pull_request_review' && payload.action === 'submitted') {
-            message = bot.formatPRReview(payload as PRReviewPayload);
-          }
-
-          if (message) {
-            const botUser = bot.api.authenticatedUser;
-            if (botUser && message.$sender.id === botUser) {
-              this.plugin.logger.debug(`忽略 bot 自身评论: ${message.$sender.id}`);
-            } else {
-              this.emit('message.receive', message);
-            }
-          }
-        }
-
-        await this.dispatchNotification(eventName, payload);
-
-        ctx.status = 200;
-        ctx.body = { message: 'OK' };
-      } catch (error) {
-        this.plugin.logger.error('Webhook 处理失败:', error);
-        ctx.status = 500;
-        ctx.body = { error: 'Internal server error' };
+      // 记录事件到数据库
+      const db = this.plugin.root?.inject('database') as any;
+      const eventsModel = db?.models?.get('github_events');
+      if (eventsModel) {
+        await eventsModel.insert({ id: Date.now(), repo, event_type: eventName, payload: ev.payload }).catch(() => {});
       }
-    });
 
-    this.plugin.logger.debug('GitHub Webhook: POST /pub/github/webhook');
+      // 处理消息类事件（Issue/PR 评论）
+      if (bot && eventName === 'issue_comment' && ev.payload?.action === 'created' && ev.payload?.comment) {
+        const message = bot.$formatMessage(ev.payload as IssueCommentPayload);
+        const botUser = bot.gh.authenticatedUser;
+        if (!(botUser && message.$sender.id === botUser)) {
+          this.emit('message.receive', message);
+        }
+      }
+
+      // 通知订阅者
+      await this.dispatchNotification(eventName, payload);
+    }
   }
 
+  /** Events API type → webhook event name */
+  private mapEventType(type: string): string | null {
+    const map: Record<string, string> = {
+      PushEvent: 'push',
+      IssuesEvent: 'issues',
+      WatchEvent: 'star',
+      ForkEvent: 'fork',
+      PullRequestEvent: 'pull_request',
+      IssueCommentEvent: 'issue_comment',
+      PullRequestReviewEvent: 'pull_request_review',
+      PullRequestReviewCommentEvent: 'pull_request_review_comment',
+    };
+    return map[type] || null;
+  }
 
   // ── 通知推送 ───────────────────────────────────────────────────────
 

@@ -1,8 +1,6 @@
 /**
- * GitHub Bot 实现
+ * GitHub Bot 实现（基于 gh CLI）
  */
-import path from 'node:path';
-import fs from 'node:fs';
 import {
   Bot,
   Message,
@@ -19,14 +17,7 @@ import type {
 } from './types.js';
 import { buildChannelId, parseChannelId } from './types.js';
 import type { GitHubAdapter } from './adapter.js';
-import { GitHubAPI } from './api.js';
-
-function resolvePrivateKey(raw: string): string {
-  if (raw.includes('-----BEGIN')) return raw;
-  const resolved = path.resolve(raw);
-  if (fs.existsSync(resolved)) return fs.readFileSync(resolved, 'utf-8');
-  throw new Error(`private_key 既不是 PEM 内容也不是有效的文件路径: ${raw}`);
-}
+import { GhClient } from './gh-client.js';
 
 export function parseMarkdown(md: string): MessageSegment[] {
   const segments: MessageSegment[] = [];
@@ -58,7 +49,7 @@ export function toMarkdown(content: SendContent): string {
 
 export class GitHubBot implements Bot<GitHubBotConfig, IssueCommentPayload> {
   $connected = false;
-  api: GitHubAPI;
+  gh: GhClient;
 
   get $id() { return this.$config.name; }
 
@@ -67,12 +58,15 @@ export class GitHubBot implements Bot<GitHubBotConfig, IssueCommentPayload> {
   }
 
   constructor(public adapter: GitHubAdapter, public $config: GitHubBotConfig) {
-    const privateKey = resolvePrivateKey($config.private_key);
-    this.api = new GitHubAPI($config.app_id, privateKey, $config.installation_id);
+    const { host, app_id, private_key } = $config;
+    const appAuth = app_id && private_key
+      ? { appId: app_id, privateKey: private_key }
+      : undefined;
+    this.gh = new GhClient({ host, appAuth });
   }
 
   async $connect(): Promise<void> {
-    const result = await this.api.verifyAuth();
+    const result = await this.gh.verifyAuth();
     if (!result.ok) throw new Error(`GitHub 认证失败: ${result.message}`);
     this.$connected = true;
     this.logger.info(`GitHub bot ${this.$id} 已连接 — ${result.message}`);
@@ -88,7 +82,7 @@ export class GitHubBot implements Bot<GitHubBotConfig, IssueCommentPayload> {
     const number = payload.issue.number;
     const isPR = 'pull_request' in (payload.issue as any);
     const channelId = buildChannelId(repo, isPR ? 'pr' : 'issue', number);
-    const api = this.api;
+    const gh = this.gh;
 
     const result = Message.from(payload, {
       $id: payload.comment.id.toString(),
@@ -99,11 +93,11 @@ export class GitHubBot implements Bot<GitHubBotConfig, IssueCommentPayload> {
       $content: parseMarkdown(payload.comment.body),
       $raw: payload.comment.body,
       $timestamp: new Date(payload.comment.created_at).getTime(),
-      $recall: async () => { await api.deleteIssueComment(repo, payload.comment.id); },
+      $recall: async () => { await gh.deleteIssueComment(repo, payload.comment.id); },
       $reply: async (content: SendContent, quote?: boolean | string): Promise<string> => {
         const text = toMarkdown(content);
         const finalBody = quote ? `> ${payload.comment.body.split('\n')[0]}\n\n${text}` : text;
-        const r = await api.createIssueComment(repo, number, finalBody);
+        const r = await gh.createIssueComment(repo, number, finalBody);
         return r.ok ? r.data.id.toString() : '';
       },
     });
@@ -114,7 +108,7 @@ export class GitHubBot implements Bot<GitHubBotConfig, IssueCommentPayload> {
     const repo = payload.repository.full_name;
     const number = payload.pull_request.number;
     const channelId = buildChannelId(repo, 'pr', number);
-    const api = this.api;
+    const gh = this.gh;
 
     const body = payload.comment.path
       ? `**${payload.comment.path}**\n${payload.comment.diff_hunk ? '```diff\n' + payload.comment.diff_hunk + '\n```\n' : ''}${payload.comment.body}`
@@ -129,9 +123,9 @@ export class GitHubBot implements Bot<GitHubBotConfig, IssueCommentPayload> {
       $content: parseMarkdown(body),
       $raw: body,
       $timestamp: new Date(payload.comment.created_at).getTime(),
-      $recall: async () => { await api.deletePRReviewComment(repo, payload.comment.id); },
+      $recall: async () => { await gh.deletePRReviewComment(repo, payload.comment.id); },
       $reply: async (content: SendContent): Promise<string> => {
-        const r = await api.createPRComment(repo, number, toMarkdown(content));
+        const r = await gh.createPRComment(repo, number, toMarkdown(content));
         return r.ok ? r.data.id.toString() : '';
       },
     });
@@ -142,7 +136,7 @@ export class GitHubBot implements Bot<GitHubBotConfig, IssueCommentPayload> {
     const repo = payload.repository.full_name;
     const number = payload.pull_request.number;
     const channelId = buildChannelId(repo, 'pr', number);
-    const api = this.api;
+    const gh = this.gh;
 
     const stateLabel: Record<string, string> = {
       approved: '✅ APPROVED', changes_requested: '🔄 CHANGES REQUESTED',
@@ -161,7 +155,7 @@ export class GitHubBot implements Bot<GitHubBotConfig, IssueCommentPayload> {
       $timestamp: new Date(payload.review.submitted_at).getTime(),
       $recall: async () => {},
       $reply: async (content: SendContent): Promise<string> => {
-        const r = await api.createPRComment(repo, number, toMarkdown(content));
+        const r = await gh.createPRComment(repo, number, toMarkdown(content));
         return r.ok ? r.data.id.toString() : '';
       },
     });
@@ -173,8 +167,8 @@ export class GitHubBot implements Bot<GitHubBotConfig, IssueCommentPayload> {
 
     const text = toMarkdown(options.content);
     const r = parsed.type === 'issue'
-      ? await this.api.createIssueComment(parsed.repo, parsed.number, text)
-      : await this.api.createPRComment(parsed.repo, parsed.number, text);
+      ? await this.gh.createIssueComment(parsed.repo, parsed.number, text)
+      : await this.gh.createPRComment(parsed.repo, parsed.number, text);
     if (!r.ok) throw new Error(`发送失败: ${JSON.stringify(r.data)}`);
 
     this.logger.debug(`${this.$id} send → ${options.id}: ${text.slice(0, 80)}...`);
