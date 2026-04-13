@@ -185,6 +185,18 @@ const ADAPTERS: AdapterDefinition[] = [
       { key: 'password', message: '邮箱密码/授权码:', required: true, type: 'password', envKey: 'EMAIL_PASSWORD' },
     ],
   },
+  {
+    name: 'GitHub',
+    value: 'github',
+    package: '@zhin.js/adapter-github',
+    plugin: '@zhin.js/adapter-github',
+    needsHttp: true,
+    fields: [
+      { key: 'name', message: 'Bot 标识名称（需先通过 gh auth login 完成认证）:', required: true },
+      { key: 'webhook_secret', message: 'Webhook Secret（留空则使用轮询模式）:', type: 'password', envKey: 'GITHUB_WEBHOOK_SECRET' },
+      { key: 'webhook_path', message: 'Webhook 路径:', default: '/github/webhook' },
+    ],
+  },
 ];
 
 /**
