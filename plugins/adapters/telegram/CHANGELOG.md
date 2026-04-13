@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.52
+
+### Patch Changes
+
+- zhin.js@1.0.65
+- @zhin.js/logger@0.1.49
+- @zhin.js/console@2.0.7
+- @zhin.js/http@1.0.60
+
 ## 1.0.51
 
 ### Patch Changes

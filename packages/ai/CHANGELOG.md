@@ -1,5 +1,12 @@
 # @zhin.js/ai
 
+## 1.1.7
+
+### Patch Changes
+
+- d73a3b7: fix: ai error
+  - @zhin.js/logger@0.1.49
+
 ## 1.1.6
 
 ### Patch Changes

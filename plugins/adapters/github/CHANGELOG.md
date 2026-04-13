@@ -1,5 +1,13 @@
 # @zhin.js/adapter-github
 
+## 0.1.37
+
+### Patch Changes
+
+- d73a3b7: fix: ai error
+  - zhin.js@1.0.65
+  - @zhin.js/http@1.0.60
+
 ## 0.1.36
 
 ### Patch Changes
