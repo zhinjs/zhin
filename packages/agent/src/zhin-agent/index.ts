@@ -386,7 +386,12 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       });
 
       const userMessageWithHistory = buildUserMessageWithHistory(historyMessages, content);
-      const result = await agent.run(userMessageWithHistory, []);
+      let result;
+      try {
+        result = await agent.run(userMessageWithHistory, []);
+      } finally {
+        agent.dispose();
+      }
       reply = stripThinkBlocks(result.content) || this.fallbackFormat(result.toolCalls);
       logger.info(`[Agent 路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, Agent=${(now() - tAgent).toFixed(0)}ms, 总=${(now() - t0).toFixed(0)}ms`);
     }

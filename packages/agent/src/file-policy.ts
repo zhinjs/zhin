@@ -84,11 +84,15 @@ const SENSITIVE_BASENAME_PATTERNS: RegExp[] = [
   /^\.npmrc$/i,
   /^\.pypirc$/i,
   /^\.netrc$/i,
-  /^\.docker\/config\.json$/i,
+  /^config\.json$/i,         // docker/config.json, gcloud/config.json etc.
   /^credentials$/i,
   /^credentials\.json$/i,
   /^service[_-]?account.*\.json$/i,
   /^token\.json$/i,
+  // Cloud provider credentials
+  /^kubeconfig(\..+)?$/i,
+  /^application_default_credentials\.json$/i,
+  /^google-cloud-key\.json$/i,
   // 数据库 / 密码文件
   /^\.pgpass$/i,
   /^\.my\.cnf$/i,
@@ -113,6 +117,8 @@ const SENSITIVE_DIR_NAMES: ReadonlySet<string> = new Set([
   '.gcloud',
   '.config/gcloud',
   '.kube',
+  '.docker',
+  '.password-store',
 ]);
 
 /**

@@ -136,11 +136,15 @@ export class SubagentManager {
         maxIterations: this.maxIterations,
       });
 
-      const result = await agent.run(task);
-      const finalResult = result.content || '任务已完成，但未生成最终响应。';
+      try {
+        const result = await agent.run(task);
+        const finalResult = result.content || '任务已完成，但未生成最终响应。';
 
-      logger.info({ taskId }, 'Subagent completed successfully');
-      await this.announceResult(taskId, label, task, finalResult, origin, 'ok');
+        logger.info({ taskId }, 'Subagent completed successfully');
+        await this.announceResult(taskId, label, task, finalResult, origin, 'ok');
+      } finally {
+        agent.dispose();
+      }
     } catch (error) {
       const errorMsg = `Error: ${error}`;
       logger.error({ taskId, error }, 'Subagent failed');

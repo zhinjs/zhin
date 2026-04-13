@@ -367,26 +367,54 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
    */
   async start(t?:number): Promise<void> {
     if (this.started) return;
-    this.started = true; // 提前设置，防止重复启动
     
-    // 启动所有服务
-    for (const context of this.$contexts.values()) {
-      if (typeof context.mounted === "function") {
-        const result = await context.mounted(this);
-        // 仅在没有预设 value 时才用 mounted 返回值赋值
-        if (!context.value) {
-          context.value = result;
-        }
-      }
-      // 注册扩展方法到 Plugin.prototype
-      if (context.extensions) {
-        for (const [name, fn] of Object.entries(context.extensions)) {
-          if (typeof fn === 'function') {
-            Reflect.set(Plugin.prototype, name, fn);
+    // 挂载所有 Context，支持部分失败回滚
+    const mountedContexts: Array<{ name: string; context: any }> = [];
+    for (const [name, context] of this.$contexts) {
+      try {
+        if (typeof context.mounted === "function") {
+          const result = await context.mounted(this);
+          // 仅在没有预设 value 时才用 mounted 返回值赋值
+          if (!context.value) {
+            context.value = result;
           }
         }
+        // 注册扩展方法到 Plugin.prototype
+        if (context.extensions) {
+          for (const [extName, fn] of Object.entries(context.extensions)) {
+            if (typeof fn === 'function') {
+              Reflect.set(Plugin.prototype, extName, fn);
+            }
+          }
+        }
+        mountedContexts.push({ name, context });
+      } catch (e) {
+        // 回滚已挂载的 Context（逆序 dispose）
+        this.logger.warn(`Context "${name}" mount failed: ${e}, rolling back ${mountedContexts.length} mounted contexts`);
+        for (let i = mountedContexts.length - 1; i >= 0; i--) {
+          const { name: mName, context: mCtx } = mountedContexts[i];
+          try {
+            if (mCtx.extensions) {
+              for (const key of Object.keys(mCtx.extensions)) {
+                delete (Plugin.prototype as any)[key];
+              }
+            }
+            if (typeof mCtx.dispose === 'function') {
+              await mCtx.dispose(mCtx.value);
+            }
+          } catch (disposeErr) {
+            this.logger.warn(`Rollback dispose for "${mName}" failed: ${disposeErr}`);
+          }
+        }
+        throw e;
       }
-      this.dispatch('context.mounted', context.name)
+    }
+    
+    // 所有 Context 成功挂载后，才标记为已启动
+    this.started = true;
+    
+    for (const { name } of mountedContexts) {
+      this.dispatch('context.mounted', name as keyof Plugin.Contexts);
     }
     await this.broadcast("mounted");
     // 先启动子插件，再打印当前插件启动日志

@@ -90,6 +90,7 @@ interface SummaryRecord {
 interface DbModel {
   select(...fields: string[]): any;  // 返回 Selection (thenable query builder)
   create(data: Record<string, any>): Promise<any>;
+  delete?(condition: Record<string, any>): PromiseLike<any>;
 }
 
 export interface ConversationMemoryConfig {
@@ -99,12 +100,15 @@ export interface ConversationMemoryConfig {
   slidingWindowSize?: number;
   /** 话题切换检测阈值（0-1，值越低越敏感，默认 0.15） */
   topicChangeThreshold?: number;
+  /** 数据库记录保留天数（默认 30，0 表示不自动清理） */
+  dbTtlDays?: number;
 }
 
 const DEFAULT_CONFIG: Required<ConversationMemoryConfig> = {
   minTopicRounds: 5,
   slidingWindowSize: 5,
   topicChangeThreshold: 0.15,
+  dbTtlDays: 30,
 };
 
 // ============================================================================
@@ -121,6 +125,7 @@ interface IStore {
   getLatestSummary(sessionId: string): Promise<SummaryRecord | null>;
   getSummaryById(sessionId: string, summaryId: number): Promise<SummaryRecord | null>;
   addSummary(record: Omit<SummaryRecord, 'id'>): Promise<SummaryRecord>;
+  deleteOlderThan(timestampMs: number): Promise<number>;
   dispose(): void;
 }
 
@@ -184,6 +189,25 @@ class MemoryStore implements IStore {
     return full;
   }
 
+  async deleteOlderThan(timestampMs: number): Promise<number> {
+    let deleted = 0;
+    for (const [sid, msgs] of this.messages) {
+      const before = msgs.length;
+      const kept = msgs.filter(m => m.created_at >= timestampMs);
+      deleted += before - kept.length;
+      if (kept.length === 0) this.messages.delete(sid);
+      else this.messages.set(sid, kept);
+    }
+    for (const [sid, sums] of this.summaries) {
+      const before = sums.length;
+      const kept = sums.filter(s => s.created_at >= timestampMs);
+      deleted += before - kept.length;
+      if (kept.length === 0) this.summaries.delete(sid);
+      else this.summaries.set(sid, kept);
+    }
+    return deleted;
+  }
+
   dispose(): void {
     this.messages.clear();
     this.summaries.clear();
@@ -241,6 +265,23 @@ class DatabaseStore implements IStore {
   async addSummary(record: Omit<SummaryRecord, 'id'>): Promise<SummaryRecord> {
     const created = await this.sumModel.create(record);
     return { ...record, id: created?.id ?? created?.lastID ?? 0 } as SummaryRecord;
+  }
+
+  async deleteOlderThan(timestampMs: number): Promise<number> {
+    let deleted = 0;
+    try {
+      if (this.msgModel.delete) {
+        const result = await this.msgModel.delete({ created_at: { $lt: timestampMs } });
+        deleted += (typeof result === 'number' ? result : 0);
+      }
+      if (this.sumModel.delete) {
+        const result = await this.sumModel.delete({ created_at: { $lt: timestampMs } });
+        deleted += (typeof result === 'number' ? result : 0);
+      }
+    } catch (e) {
+      logger.warn(`DB TTL cleanup failed: ${(e as Error).message}`);
+    }
+    return deleted;
   }
 
   dispose(): void {}
@@ -318,15 +359,20 @@ export class ConversationMemory {
   private roundCache: Map<string, number> = new Map();
   /** 各 session 最后活跃时间（用于淘汰） */
   private lastAccess: Map<string, number> = new Map();
+  /** DB TTL 自动清理定时器 */
+  private dbTtlTimer: ReturnType<typeof setInterval> | null = null;
 
   /** 内存缓存上限：超过此数量时淘汰过期条目 */
   private static readonly MAX_TRACKED_SESSIONS = 5000;
   /** 缓存过期时间：24 小时未访问即淘汰 */
   private static readonly SESSION_CACHE_TTL = 24 * 60 * 60 * 1000;
+  /** DB TTL 清理间隔：每 24 小时执行一次 */
+  private static readonly DB_TTL_INTERVAL = 24 * 60 * 60 * 1000;
 
   constructor(config?: ConversationMemoryConfig) {
     this.store = new MemoryStore();
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.startDbTtlTimer();
   }
 
   // ── 依赖注入 ──
@@ -808,10 +854,40 @@ export class ConversationMemory {
   }
 
   dispose(): void {
+    if (this.dbTtlTimer) {
+      clearInterval(this.dbTtlTimer);
+      this.dbTtlTimer = null;
+    }
     this.store.dispose();
     this.summarizing.clear();
     this.topicStates.clear();
     this.roundCache.clear();
     this.lastAccess.clear();
+  }
+
+  // ── DB TTL 自动清理 ──
+
+  private startDbTtlTimer(): void {
+    if (this.config.dbTtlDays <= 0) return;
+    this.dbTtlTimer = setInterval(() => {
+      this.runDbTtlCleanup();
+    }, ConversationMemory.DB_TTL_INTERVAL);
+    // 不阻止进程退出
+    if (this.dbTtlTimer && typeof this.dbTtlTimer === 'object' && 'unref' in this.dbTtlTimer) {
+      this.dbTtlTimer.unref();
+    }
+  }
+
+  private async runDbTtlCleanup(): Promise<void> {
+    if (this.config.dbTtlDays <= 0) return;
+    const cutoff = Date.now() - this.config.dbTtlDays * 24 * 60 * 60 * 1000;
+    try {
+      const deleted = await this.store.deleteOlderThan(cutoff);
+      if (deleted > 0) {
+        logger.info(`DB TTL cleanup: deleted ${deleted} expired records (older than ${this.config.dbTtlDays} days)`);
+      }
+    } catch (e) {
+      logger.warn(`DB TTL cleanup error: ${(e as Error).message}`);
+    }
   }
 }

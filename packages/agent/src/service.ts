@@ -210,7 +210,12 @@ export class AIService {
   }
 
   async runAgent(task: string, options: { provider?: string; model?: string; tools?: AgentTool[]; systemPrompt?: string } = {}): Promise<{ content: string; toolCalls: any[]; usage: any }> {
-    return this.createAgent(options).run(task);
+    const agent = this.createAgent(options);
+    try {
+      return await agent.run(task);
+    } finally {
+      agent.dispose();
+    }
   }
 
   async healthCheck(): Promise<Record<string, boolean>> {

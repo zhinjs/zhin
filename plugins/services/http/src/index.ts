@@ -100,10 +100,12 @@ useContext("config", (configService) => {
       ? authHeader.slice(7)
       : undefined;
 
-    // 使用 HMAC 做固定时间比较，避免长度与内容两层时序泄漏
-    const expected = crypto.createHmac('sha256', token).update(token).digest();
-    const received = crypto.createHmac('sha256', token).update(reqToken || '').digest();
-    if (!crypto.timingSafeEqual(expected, received)) {
+    // 使用 timingSafeEqual 做固定时间比较，避免时序攻击
+    const expectedBuf = Buffer.from(token, 'utf-8');
+    const receivedBuf = Buffer.from(reqToken || '', 'utf-8');
+    // timingSafeEqual 要求两个 buffer 等长；长度不等直接拒绝（长度本身不是秘密）
+    if (expectedBuf.length !== receivedBuf.length ||
+        !crypto.timingSafeEqual(expectedBuf, receivedBuf)) {
       ctx.status = 401;
       ctx.body = { success: false, error: 'Invalid or missing token' };
       return;

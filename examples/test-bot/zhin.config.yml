@@ -8,7 +8,7 @@ bots:
     scope: icqqjs
     rpc:
       host: 127.0.0.1
-      port: 64130
+      port: 64715
       token: ${ICQQ_RPC_TOKEN}
   - context: github
     name: zhin-github

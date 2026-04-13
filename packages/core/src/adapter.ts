@@ -15,6 +15,27 @@ import { segment } from "./utils.js";
 export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.Lifecycle> {
   /** 当前适配器下所有Bot实例，key为bot名称 */
   public bots: Map<string, R> = new Map<string, R>();
+
+  /** 入站消息并发计数 */
+  #pendingMessages = 0;
+  /** 并发上限，0 表示不限制（默认） */
+  static DEFAULT_MAX_CONCURRENT_MESSAGES = 0;
+
+  get maxConcurrentMessages(): number {
+    try {
+      const configService = this.plugin?.root?.inject('config') as any;
+      const appConfig = configService?.get?.('zhin.config.yml');
+      return appConfig?.max_concurrent_messages ?? Adapter.DEFAULT_MAX_CONCURRENT_MESSAGES;
+    } catch {
+      return Adapter.DEFAULT_MAX_CONCURRENT_MESSAGES;
+    }
+  }
+
+  /** 当前正在处理的消息数 */
+  get pendingMessages(): number {
+    return this.#pendingMessages;
+  }
+
   /**
    * 构造函数
    * @param name 适配器名称（如 'process'、'qq' 等）
@@ -44,8 +65,17 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
     }
     const message = args[0] as Message;
     this.logger.info(`${message.$bot} recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`);
+
+    // 背压控制：limit > 0 时启用，超出并发上限丢弃消息并告警
+    const limit = this.maxConcurrentMessages;
+    if (limit > 0 && this.#pendingMessages >= limit) {
+      this.logger.warn(`message dropped: concurrency limit reached (${limit})`);
+      return false;
+    }
+
+    this.#pendingMessages++;
     // 异步执行入站消息处理链
-    (async () => {
+    const processing = async () => {
       // Step 1: 如果有 Dispatcher，先通过它
       const dispatcher = this.plugin?.inject('dispatcher');
       if (dispatcher && typeof dispatcher.dispatch === 'function') {
@@ -55,8 +85,12 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
       this.plugin?.dispatch('message.receive', message);
       // Step 3: 通知 adapter.on('message.receive') 观察者
       super.emit(event, ...args as any);
-    })().catch((e) => {
+    };
+
+    processing().catch((e) => {
       this.logger.warn(`message.receive handling error: ${e instanceof Error ? e.message : String(e)}`);
+    }).finally(() => {
+      this.#pendingMessages--;
     });
     return true;
   }

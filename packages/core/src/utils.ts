@@ -41,15 +41,9 @@ export function compose<P extends RegisteredAdapter=RegisteredAdapter>(
     return () => Promise.resolve();
   }
 
-  if (middlewares.length === 1) {
-    return (message: Message<AdapterMessage<P>>, next: () => Promise<void> = () => Promise.resolve()) => {
-      return middlewares[0](message, next);
-    };
-  }
-
   return function (
     message: Message<AdapterMessage<P>>,
-    next: () => Promise<void>
+    next: () => Promise<void> = () => Promise.resolve()
   ) {
     let index = -1;
     const dispatch = async (i: number = 0): Promise<void> => {

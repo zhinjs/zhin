@@ -223,6 +223,18 @@ export class Agent {
   }
 
   /**
+   * 释放事件处理器和工具引用，防止内存泄漏。
+   * Agent 通常是单次使用（创建 → run → 丢弃），run() 结束后自动调用。
+   */
+  dispose(): void {
+    for (const handlers of this.eventHandlers.values()) {
+      handlers.length = 0;
+    }
+    this.eventHandlers.clear();
+    this.tools.clear();
+  }
+
+  /**
    * 获取工具定义（缓存在第一次调用后保持不变）
    */
   private getToolDefinitions(): ChatToolDefinition[] {
