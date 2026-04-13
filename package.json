@@ -67,7 +67,7 @@
     "cross-spawn": "^7.0.6",
     "fs-extra": "^11.3.2",
     "inquirer": "^12.10.0",
-    "ora": "^8.2.0"
+    "ora": "^9.3.0"
   },
   "pnpm": {
     "overrides": {
