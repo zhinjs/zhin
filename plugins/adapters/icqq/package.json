@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-icqq",
-  "version": "2.0.8",
+  "version": "2.0.9",
   "description": "Zhin.js adapter for ICQQ (QQ Bot)",
   "type": "module",
   "main": "./lib/index.js",

@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-group-daily-analysis",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "description": "Group daily analysis plugin for Zhin.js — stats, LLM topics/quotes/user titles, reuse unified inbox",
   "type": "module",
   "main": "./lib/index.js",

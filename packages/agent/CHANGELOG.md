@@ -1,5 +1,14 @@
 # @zhin.js/agent
 
+## 0.1.8
+
+### Patch Changes
+
+- 9aa08c3: fix: ai 增强
+- Updated dependencies [9aa08c3]
+  - @zhin.js/ai@1.1.8
+  - @zhin.js/core@1.1.8
+
 ## 0.1.7
 
 ### Patch Changes
