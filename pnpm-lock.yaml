@@ -277,6 +277,9 @@ importers:
       '@zhin.js/adapter-wechat-mp':
         specifier: workspace:*
         version: link:../../plugins/adapters/wechat-mp
+      '@zhin.js/cli':
+        specifier: workspace:*
+        version: link:../../basic/cli
       '@zhin.js/client':
         specifier: workspace:*
         version: link:../../packages/client
@@ -322,6 +325,9 @@ importers:
       sqlite3:
         specifier: latest
         version: 6.0.1
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
       zhin.js:
         specifier: workspace:*
         version: link:../../packages/zhin
@@ -338,18 +344,12 @@ importers:
       '@types/react-dom':
         specifier: ^19.2.1
         version: 19.2.3(@types/react@19.2.14)
-      '@zhin.js/cli':
-        specifier: workspace:*
-        version: link:../../basic/cli
       lucide-react:
         specifier: ^0.469.0
         version: 0.469.0(react@19.2.0)
       radix-ui:
         specifier: ^1.4.3
         version: 1.4.3(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
-      tsx:
-        specifier: ^4.7.0
-        version: 4.21.0
       typescript:
         specifier: ^6.0.0
         version: 6.0.2
