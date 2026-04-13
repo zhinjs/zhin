@@ -65,7 +65,28 @@
 
 ---
 
-## 工作区（pnpm）
+## 工作区（pnpm + git submodules）
+
+本仓库采用 **pnpm workspace + git submodules** 管理。大部分子包以独立仓库维护（`github.com/zhinjs/<name>`），通过 submodule 引入主仓库。克隆时需 `--recurse-submodules`。
+
+**主仓库内的包**（非 submodule）：`packages/core`、`packages/zhin`、`examples/*`。
+
+**子模块映射**：
+
+| 路径 | 远程仓库 |
+|------|---------|
+| `basic/cli` | `zhinjs/cli` |
+| `basic/database` | `zhinjs/database` |
+| `basic/logger` | `zhinjs/logger` |
+| `basic/schema` | `zhinjs/schema` |
+| `packages/kernel` | `zhinjs/kernel` |
+| `packages/ai` | `zhinjs/ai` |
+| `packages/agent` | `zhinjs/agent` |
+| `packages/client` | `zhinjs/client` |
+| `packages/create-zhin` | `zhinjs/create-zhin` |
+| `packages/satori` | `zhinjs/satori` |
+| `plugins` | `zhinjs/plugins` |
+| `docs` | `zhinjs/docs` |
 
 - `packages/*` — 框架与 `@zhin.js/*` 核心包  
 - `basic/*` — CLI、数据库、日志等基础库  

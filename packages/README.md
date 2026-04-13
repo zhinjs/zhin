@@ -2,6 +2,8 @@
 
 核心包目录，包含框架运行所必需的模块。
 
+> 本目录下的大部分包以 **git submodule** 形式管理，指向 `github.com/zhinjs/<name>` 独立仓库。仅 `core` 和 `zhin` 保留在主仓库中。
+
 ## 开发约定
 
 新增包、目录命名与 **`src/`→`lib/`**、**`client/`→`dist/`** 等规则，见仓库统一文档：  
@@ -9,16 +11,16 @@
 
 ## 包列表
 
-| 包名 | 路径 | 说明 |
-|------|------|------|
-| [`zhin.js`](./zhin/) | `packages/zhin` | 主入口包，组合所有层并重新导出全部公开 API |
-| [`@zhin.js/core`](./core/) | `packages/core` | IM 核心框架：Plugin、Adapter、Bot、Command、MessageDispatcher、Feature 子类 |
-| [`@zhin.js/kernel`](./kernel/) | `packages/kernel` | 运行时内核：PluginBase、Feature、Cron、Scheduler、错误体系、工具函数 |
-| [`@zhin.js/ai`](./ai/) | `packages/ai` | AI 引擎：Provider、Agent、Session、Memory、Compaction、Output |
-| [`@zhin.js/agent`](./agent/) | `packages/agent` | Agent 编排：ZhinAgent、AIService、子任务、用户画像、引导文件 |
-| [`@zhin.js/client`](./client/) | `packages/client` | Web 控制台 React 客户端 |
-| [`@zhin.js/satori`](./satori/) | `packages/satori` | HTML/CSS → SVG/PNG 渲染引擎 |
-| [`create-zhin-app`](./create-zhin/) | `packages/create-zhin` | 项目脚手架 CLI |
+| 包名 | 路径 | 说明 | 子模块 |
+|------|------|------|--------|
+| [`zhin.js`](./zhin/) | `packages/zhin` | 主入口包，组合所有层并重新导出全部公开 API | — |
+| [`@zhin.js/core`](./core/) | `packages/core` | IM 核心框架：Plugin、Adapter、Bot、Command、MessageDispatcher、Feature 子类 | — |
+| [`@zhin.js/kernel`](./kernel/) | `packages/kernel` | 运行时内核：PluginBase、Feature、Cron、Scheduler、错误体系、工具函数 | ⊕ [zhinjs/kernel](https://github.com/zhinjs/kernel) |
+| [`@zhin.js/ai`](./ai/) | `packages/ai` | AI 引擎：Provider、Agent、Session、Memory、Compaction、Output | ⊕ [zhinjs/ai](https://github.com/zhinjs/ai) |
+| [`@zhin.js/agent`](./agent/) | `packages/agent` | Agent 编排：ZhinAgent、AIService、子任务、用户画像、引导文件 | ⊕ [zhinjs/agent](https://github.com/zhinjs/agent) |
+| [`@zhin.js/client`](./client/) | `packages/client` | Web 控制台 React 客户端 | ⊕ [zhinjs/client](https://github.com/zhinjs/client) |
+| [`@zhin.js/satori`](./satori/) | `packages/satori` | HTML/CSS → SVG/PNG 渲染引擎 | ⊕ [zhinjs/satori](https://github.com/zhinjs/satori) |
+| [`create-zhin-app`](./create-zhin/) | `packages/create-zhin` | 项目脚手架 CLI | ⊕ [zhinjs/create-zhin](https://github.com/zhinjs/create-zhin) |
 
 ## 架构概览
 
@@ -66,9 +68,9 @@ zhin.js (应用层)
 
 核心包依赖 `basic/` 目录下的基础模块：
 
-| 包名 | 路径 | 说明 |
-|------|------|------|
-| `@zhin.js/cli` | `basic/cli` | 命令行工具（dev、start、new、build、pub） |
-| `@zhin.js/database` | `basic/database` | 数据库抽象层（SQLite、MySQL、MongoDB 等） |
-| `@zhin.js/logger` | `basic/logger` | 日志系统 |
-| `@zhin.js/schema` | `basic/schema` | Schema 校验与序列化 |
+| 包名 | 路径 | 说明 | 子模块 |
+|------|------|------|--------|
+| `@zhin.js/cli` | `basic/cli` | 命令行工具（dev、start、new、build、pub） | ⊕ [zhinjs/cli](https://github.com/zhinjs/cli) |
+| `@zhin.js/database` | `basic/database` | 数据库抽象层（SQLite、MySQL、MongoDB 等） | ⊕ [zhinjs/database](https://github.com/zhinjs/database) |
+| `@zhin.js/logger` | `basic/logger` | 日志系统 | ⊕ [zhinjs/logger](https://github.com/zhinjs/logger) |
+| `@zhin.js/schema` | `basic/schema` | Schema 校验与序列化 | ⊕ [zhinjs/schema](https://github.com/zhinjs/schema) |
