@@ -8,6 +8,7 @@ import {
 } from 'zhin.js';
 import crypto from 'node:crypto';
 import { GitHubBot } from './bot.js';
+import type { Router } from '@zhin.js/http';
 import type { GitHubBotConfig, EventType, GenericWebhookPayload, Subscription } from './types.js';
 import type { GhClient } from './gh-client.js';
 import type { IssueCommentPayload, PRReviewCommentPayload, PRReviewPayload } from './types.js';
@@ -164,7 +165,7 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
   // ── Webhook ──────────────────────────────────────────────────────
 
   /** 在 router 上挂载 Webhook 路由（生产环境推荐） */
-  setupWebhook(router: any): void {
+  setupWebhook(router: Router): void {
     const bot = this.bots.values().next().value as GitHubBot | undefined;
     if (!bot?.$config.webhook_secret) {
       this.plugin.logger.warn('Webhook 配置缺失 webhook_secret，跳过注册');
@@ -173,7 +174,7 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
     const secret = bot.$config.webhook_secret;
     const path = bot.$config.webhook_path || '/github/webhook';
 
-    router.post(path, async (ctx: any) => {
+    router.post(path, async (ctx) => {
       const signature = ctx.get('x-hub-signature-256') as string;
       const event = ctx.get('x-github-event') as string;
       const deliveryId = ctx.get('x-github-delivery') as string;

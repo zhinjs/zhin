@@ -515,7 +515,7 @@ export class Agent {
           this.costTracker.addUsage(usedModel, response.usage);
         }
         logger.info(`[第${state.iterations}轮] token 用量: prompt=${state.usage.prompt_tokens}, completion=${state.usage.completion_tokens}, total=${state.usage.total_tokens} (model=${usedModel})`);
-        const choice = response.choices[0];
+        const choice = response.choices?.[0];
         if (!choice) break;
 
         // ── 分支 1: 模型想调用工具 ──

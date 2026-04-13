@@ -86,13 +86,13 @@ provide({
 useContext('github', (adapter) => {
   if (adapter.hasWebhookConfig) {
     // 尝试注册 Webhook（需要 router Context）
-    const router = plugin.inject('router' as any) as any;
+    const router = plugin.inject('router');
     if (router) {
       adapter.setupWebhook(router);
       logger.info('GitHub 事件源: Webhook (实时)');
     } else {
       // router 还没就绪，等它挂载后再注册
-      plugin.useContext('router' as any, (r: any) => {
+      plugin.useContext('router', (r) => {
         adapter.setupWebhook(r);
         logger.info('GitHub 事件源: Webhook (实时, 延迟注册)');
       });
