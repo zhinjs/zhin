@@ -12,10 +12,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export async function createWorkspace(projectPath: string, projectName: string, options: InitOptions): Promise<void> {
   await fs.ensureDir(projectPath);
   
-  // 创建 pnpm-workspace.yaml (简化版，与 test-bot 一致)
+  // 创建 pnpm-workspace.yaml (包含 plugins 目录，支持 zhin new 创建的插件)
   await fs.writeFile(path.join(projectPath, 'pnpm-workspace.yaml'), 
 `packages:
   - '.'
+  - 'plugins/*'
 `);
   
   // 根据数据库类型添加相应依赖
@@ -63,22 +64,25 @@ export async function createWorkspace(projectPath: string, projectName: string, 
     },
     dependencies: {
       'zhin.js': 'latest',
+      '@zhin.js/cli': 'latest',
       '@zhin.js/http': 'latest',
       '@zhin.js/client': 'latest',
       '@zhin.js/console': 'latest',
+      'tsx': 'latest',
       ...adapterDeps,
       ...databaseDeps
     },
     devDependencies: {
-      '@zhin.js/cli': 'latest',
       '@types/node': 'latest',
       '@types/react': 'latest',
       '@types/react-dom': 'latest',
       'typescript': 'latest',
       'lucide-react': 'latest',
-      'tsx': 'latest',
       'rimraf': 'latest',
-      'pm2': 'latest'
+      'pm2': 'latest',
+      'vite': 'latest',
+      '@vitejs/plugin-react': 'latest',
+      '@tailwindcss/vite': 'latest'
     },
     pnpm: {
       onlyBuiltDependencies: ['esbuild']

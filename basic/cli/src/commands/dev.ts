@@ -43,15 +43,20 @@ export const devCommand = new Command('dev')
 
       // 启动机器人的函数
       const startBot = (): ChildProcess => {
+        // 检测 development 源码是否可用（仅 monorepo 环境）
+        const devSourcesAvailable = fs.existsSync(path.join(cwd, 'node_modules/zhin.js/src'));
+        
         // 设置环境变量
+        const nodeOptions = (process.env.NODE_OPTIONS || '')
+          + (devSourcesAvailable ? ' --conditions=development' : '');
         const env = {
           ...process.env,
           NODE_ENV: 'development',
           ZHIN_DEV_MODE: 'true',
           ZHIN_HMR_PORT: options.port,
           ZHIN_VERBOSE: options.verbose ? 'true' : 'false',
-          // 添加 development 条件，让 Node.js 优先加载 package.json 中的 development 字段
-          NODE_OPTIONS: (process.env.NODE_OPTIONS || '') + ' --conditions=development'
+          // 仅当框架源码可用时才添加 development 条件（monorepo 环境）
+          NODE_OPTIONS: nodeOptions
         };
         
         // 选择运行时和参数

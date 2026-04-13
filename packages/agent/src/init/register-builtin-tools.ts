@@ -23,6 +23,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
 
   useContext('ai', 'tool', (ai, toolService) => {
     if (!ai || !toolService) return;
+    if (!ai.isReady()) return;
 
     const provider = ai.getProvider();
     const agentCfg = ai.getAgentConfig();

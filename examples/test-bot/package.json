@@ -51,17 +51,17 @@
     "@zhin.js/plugin-music": "workspace:*",
     "@zhin.js/sensitive-filter": "workspace:*",
     "sqlite3": "latest",
-    "zhin.js": "workspace:*"
+    "zhin.js": "workspace:*",
+    "@zhin.js/cli": "workspace:*",
+    "tsx": "^4.7.0"
   },
   "devDependencies": {
     "@radix-ui/themes": "^3.2.1",
     "@types/bun": "latest",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.1",
-    "@zhin.js/cli": "workspace:*",
     "lucide-react": "^0.469.0",
     "radix-ui": "^1.4.3",
-    "tsx": "^4.7.0",
     "typescript": "^6.0.0"
   },
   "engines": {

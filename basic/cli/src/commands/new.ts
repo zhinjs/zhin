@@ -163,8 +163,8 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
     author: '',
     license: 'MIT',
     peerDependencies: {
-      'zhin.js': 'workspace:*',
-      '@zhin.js/client': 'workspace:*'
+      'zhin.js': '>=1.0.0',
+      '@zhin.js/client': '>=1.0.0'
     },
     devDependencies: {
       '@types/node': 'latest',
@@ -173,7 +173,7 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
       'typescript': 'latest',
       'react': 'latest',
       'react-dom': 'latest',
-      "@zhin.js/client":"workspace:*",
+      '@zhin.js/client': 'latest',
       'lucide-react': 'latest',
       'radix-ui': 'latest',
       'class-variance-authority': 'latest',

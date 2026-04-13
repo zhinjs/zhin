@@ -1,6 +1,6 @@
 
 import {MessageChannel,Message} from "./message.js";
-import {Adapter} from "./adapter.js";
+import {Adapter, Adapters} from "./adapter.js";
 import {Bot} from "./bot.js";
 import { SystemLog } from "./models/system-log.js";
 import { User } from "./models/user.js";
@@ -14,7 +14,7 @@ export interface Models extends Record<string,object>{
   User: User,
 }
 export type MaybePromise<T> = [T] extends [Promise<infer U>] ? T|U : T|Promise<T>;
-export interface RegisteredAdapters {
+export interface RegisteredAdapters extends Adapters {
   process: ProcessAdapter;
 }
 /**

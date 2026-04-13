@@ -43,21 +43,9 @@ const ADAPTERS: AdapterDefinition[] = [
     value: 'icqq',
     package: '@zhin.js/adapter-icqq',
     plugin: '@zhin.js/adapter-icqq',
-    extraDeps: { '@icqqjs/icqq': 'latest' },
     needsHttp: false,
     fields: [
-      { key: 'name', message: 'QQ 号:', required: true, envKey: 'ICQQ_ACCOUNT' },
-      { key: 'password', message: 'QQ 密码（留空扫码登录）:', type: 'password', envKey: 'ICQQ_PASSWORD' },
-      {
-        key: 'platform', message: '登录平台:', type: 'list', default: '5',
-        choices: [
-          { name: 'iPad (推荐)', value: '5' },
-          { name: 'Android 手机', value: '1' },
-          { name: 'Android 手表', value: '3' },
-          { name: 'macOS', value: '4' },
-        ]
-      },
-      { key: 'sign_api_addr', message: '签名 API 地址:', required: true, envKey: 'ICQQ_SIGN_API_ADDR' },
+      { key: 'name', message: 'QQ 号（需先通过 icqq login <QQ号> 完成登录）:', required: true, envKey: 'ICQQ_ACCOUNT' },
     ],
   },
   {
@@ -100,7 +88,6 @@ const ADAPTERS: AdapterDefinition[] = [
     value: 'discord',
     package: '@zhin.js/adapter-discord',
     plugin: '@zhin.js/adapter-discord',
-    extraDeps: { 'discord.js': 'latest' },
     needsHttp: true,
     fields: [
       { key: 'token', message: 'Discord Bot Token:', required: true, type: 'password', envKey: 'DISCORD_TOKEN' },

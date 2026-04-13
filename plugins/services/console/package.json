@@ -81,7 +81,15 @@
     "@zhin.js/client": "workspace:^",
     "@zhin.js/core": "workspace:^",
     "@zhin.js/http": "workspace:^",
-    "zhin.js": "workspace:*"
+    "zhin.js": "workspace:*",
+    "vite": ">=6.0.0",
+    "@vitejs/plugin-react": ">=4.0.0",
+    "@tailwindcss/vite": ">=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": { "optional": true },
+    "@vitejs/plugin-react": { "optional": true },
+    "@tailwindcss/vite": { "optional": true }
   },
   "files": [
     "src",
