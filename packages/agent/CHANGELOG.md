@@ -1,5 +1,14 @@
 # @zhin.js/agent
 
+## 0.1.9
+
+### Patch Changes
+
+- 0eba6d6: fix: 完善生命周期,确保生产稳定
+- Updated dependencies [0eba6d6]
+  - @zhin.js/core@1.1.9
+  - @zhin.js/ai@1.1.9
+
 ## 0.1.8
 
 ### Patch Changes

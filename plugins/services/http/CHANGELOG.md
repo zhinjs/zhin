@@ -1,5 +1,13 @@
 # @zhin.js/http
 
+## 1.0.62
+
+### Patch Changes
+
+- 0eba6d6: fix: 完善生命周期,确保生产稳定
+  - zhin.js@1.0.67
+  - @zhin.js/schema@1.0.51
+
 ## 1.0.61
 
 ### Patch Changes
