@@ -317,9 +317,8 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
       const dispose = await sideEffect(...args as ContextList<T>)
       if (!dispose) return;
       const disposeFn = async (name: keyof Plugin.Contexts) => {
-        if (contexts.includes(name)) {
-          await dispose(this.inject(name) as any)
-        }
+        if (!contexts.includes(name)) return;
+        await dispose(this.inject(name) as any)
         this.off('context.dispose', disposeFn)
         sideEffect.finished = false;
       }

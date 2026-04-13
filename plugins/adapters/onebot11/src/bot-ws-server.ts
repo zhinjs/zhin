@@ -63,7 +63,6 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11WsServ
         return true;
       },
     });
-    this.$connected = true;
     this.logger.info(`ws server start at path:${this.$config.path}`);
     this.#wss.on('connection', (client, req) => {
       this.startHeartbeat();
@@ -75,6 +74,9 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11WsServ
         this.logger.warn(`OneBot11 反向 WS 与协议端(${req.socket.remoteAddress})连接已断开 (code=${code ?? '?'}${codeHint}${reasonStr ? `, reason=${reasonStr}` : ''})`);
         for (const [key, value] of this.#clientMap) {
           if (client === value) this.#clientMap.delete(key);
+        }
+        if (this.#clientMap.size === 0) {
+          this.$connected = false;
         }
       });
       client.on('message', (data) => {
@@ -233,6 +235,16 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11WsServ
   }
 
   private handleWebSocketMessage(client: WebSocket, message: any): void {
+    // 自动注册 client 映射（修复：统一使用 String 类型 key，兼容不发 lifecycle:connect 的实现端）
+    if (message.self_id != null) {
+      const selfIdStr = String(message.self_id);
+      if (!this.#clientMap.has(selfIdStr) || this.#clientMap.get(selfIdStr) !== client) {
+        this.#clientMap.set(selfIdStr, client);
+        if (!this.$connected) {
+          this.$connected = true;
+        }
+      }
+    }
     if (message.echo && this.pendingRequests.has(message.echo)) {
       const request = this.pendingRequests.get(message.echo)!;
       this.pendingRequests.delete(message.echo);
@@ -258,7 +270,8 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11WsServ
       case 'heartbeat':
         break;
       case 'connect':
-        this.#clientMap.set(message.self_id, client);
+        this.#clientMap.set(String(message.self_id), client);
+        this.$connected = true;
         this.logger.info(`client ${message.self_id} of ${this.$config.name} by ${this.$config.context} connected`);
         break;
     }

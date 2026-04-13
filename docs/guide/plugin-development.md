@@ -17,20 +17,27 @@ npx zhin new my-plugin
 系统会进入交互式向导，依次选择：
 
 ```
-? 选择插件类型
-  > normal    (普通插件)
-    service   (服务插件，提供 Context)
-    adapter   (适配器插件，对接聊天平台)
-
-? 输入插件描述: 我的第一个插件
+? 请输入插件名称: my-plugin
+? 请选择插件类型:
+  > 普通插件 (Normal)
+    服务 (Service)
+    适配器 (Adapter)
 ```
 
 生成的目录结构：
 
 ```
-src/plugins/my-plugin/
+plugins/my-plugin/
 ├── src/
 │   └── index.ts        # 插件入口
+├── client/
+│   ├── index.tsx       # 客户端入口（Web 控制台页面）
+│   └── pages/          # 页面组件
+├── tests/
+│   └── index.test.ts   # 单元测试
+├── skills/
+│   └── my-plugin/
+│       └── SKILL.md    # AI 技能声明
 ├── package.json        # 包信息
 ├── tsconfig.json       # TypeScript 配置
 └── README.md           # 插件说明
@@ -407,31 +414,43 @@ npx zhin build --production
 
 ```json
 {
-  "name": "@zhin.js/plugin-my-plugin",
+  "name": "zhin.js-my-plugin",
   "version": "1.0.0",
   "description": "我的 Zhin.js 插件",
+  "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
+    "src",
     "lib",
+    "client",
+    "dist",
+    "skills",
     "README.md"
   ],
   "keywords": [
-    "zhin",
-    "zhin-plugin",
-    "chatbot"
+    "zhin.js",
+    "plugin"
   ],
   "peerDependencies": {
-    "zhin.js": ">=2.0.0"
+    "zhin.js": ">=1.0.0"
   }
 }
 ```
 
 ::: tip 命名规范
-- 官方插件：`@zhin.js/plugin-<name>`
-- 社区插件：`zhin-plugin-<name>` 或你自己的 scope（如 `@yourname/zhin-plugin-<name>`）
+- 官方插件：`@zhin.js/<name>`
+- 社区插件：`zhin.js-<name>` 或你自己的 scope
 
-带有 `zhin` 和 `zhin-plugin` 关键词的包会在 `npx zhin search` 中被发现。
+带有 `zhin.js` 和 `plugin` 关键词的包，或以 `zhin.js-` 开头的包名，会在 `npx zhin search` 中被发现。
 :::
 
 ### 2. 编写 README
@@ -469,10 +488,10 @@ npx zhin pub --dry-run
 npx zhin search my-plugin
 
 # 查看插件信息
-npx zhin info zhin-plugin-my-plugin
+npx zhin info zhin.js-my-plugin
 
 # 安装插件
-npx zhin install zhin-plugin-my-plugin
+npx zhin install zhin.js-my-plugin
 ```
 
 ## 插件开发最佳实践
@@ -564,8 +583,8 @@ useContext('database', (db) => {
 
 ### 插件没有加载
 
-1. 确认插件文件在 `src/plugins/` 目录下
-2. 确认插件已添加到 `zhin.config.yml` 的 `plugins` 列表中
+1. **单文件插件**：确认文件在 `src/plugins/` 目录下，`zhin.config.yml` 的 `plugins` 中使用文件名（如 `example`）
+2. **包插件**（`zhin new` 创建）：确认 `zhin.config.yml` 的 `plugins` 中使用完整包名（如 `zhin.js-my-plugin`）
 3. 查看终端日志是否有加载错误
 
 ### 热重载不生效

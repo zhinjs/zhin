@@ -76,18 +76,17 @@ export const newCommand = new Command('new')
       // 自动添加到 app/package.json
       await addPluginToApp(name, options.isOfficial);
       
+      const packageName = options.isOfficial ? `@zhin.js/${name}` : `zhin.js-${name}`;
+      
       logger.success(`✓ 插件包 ${name} 创建成功！`);
       logger.log('');
       logger.log('📝 下一步操作：');
-      logger.log(`  cd plugins/${name}`);
-      if (options.skipInstall) {
-        logger.log(`  pnpm install`);
-      }
-      logger.log(`  pnpm build`);
-      logger.log(`  pnpm dev # 开发模式（监听文件变化）`);
+      logger.log(`  1. 在 zhin.config.yml 的 plugins 列表中添加 "${packageName}"`);
+      logger.log(`  2. pnpm dev  # 开发模式（热重载，自动加载插件）`);
       logger.log('');
       logger.log('📦 发布到 npm：');
-      logger.log(`  pnpm publish`);
+      logger.log(`  cd plugins/${name}`);
+      logger.log(`  pnpm build && pnpm publish`);
       logger.log('');
       logger.log('🤖 AI 技能：可编辑 plugins/' + name + '/skills/' + name + '/SKILL.md（随 npm 包发布）');
       
@@ -145,8 +144,7 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
       'CHANGELOG.md'
     ],
     scripts: {
-      build: 'pnpm build:node && pnpm build:client',
-      'build:node': 'tsc',
+      build: 'tsc',
       'build:client': 'zhin-console build',
       dev: 'tsc --watch',
       clean: 'rimraf lib dist',
@@ -247,42 +245,36 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
   useContext,
   onDispose,
   ZhinTool,
-  type Message,
+  MessageCommand,
 } from 'zhin.js';
 import path from 'node:path';
 
-const { logger } = usePlugin();
+const { addCommand, addTool, logger } = usePlugin();
 
 // ============================================================================
-// 工具定义示例 (使用 ZhinTool)
+// 命令示例
 // ============================================================================
 
-// 示例工具：问候
-const greetTool = new ZhinTool('${pluginName}_greet')
-  .desc('发送问候消息')
-  .tag('${pluginName}')
-  .param('name', { type: 'string', description: '要问候的名字' })
-  .execute(async ({ name }) => {
-    const greeting = name ? \`你好，\${name}！\` : '你好！';
-    return { success: true, message: greeting };
-  })
-  .action(async (message: Message, result: any) => {
-    const name = result.params?.name;
-    return name ? \`👋 你好，\${name}！\` : '👋 你好！';
-  });
+addCommand(
+  new MessageCommand('${pluginName}')
+    .desc('${capitalizedName} 插件命令')
+    .action(() => '${capitalizedName} 运行中！')
+);
 
-// 注册工具
-useContext('tool', (toolService) => {
-  if (!toolService) return;
-  
-  const disposers = [
-    toolService.addTool(greetTool, '${pluginName}'),
-  ];
-  
-  logger.debug('${capitalizedName} 工具已注册');
-  
-  return () => disposers.forEach(d => d());
-});
+// ============================================================================
+// AI 工具示例 (使用 ZhinTool)
+// ============================================================================
+
+addTool(
+  new ZhinTool('${pluginName}_greet')
+    .desc('发送问候消息')
+    .tag('${pluginName}')
+    .param('name', { type: 'string', description: '要问候的名字' })
+    .execute(async ({ name }) => {
+      const greeting = name ? \`你好，\${name}！\` : '你好！';
+      return { success: true, message: greeting };
+    })
+);
 
 // 注册客户端入口（如果有客户端代码）
 useContext('web', (web) => {
