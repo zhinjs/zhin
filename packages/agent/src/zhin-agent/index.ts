@@ -565,7 +565,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
         // Streaming returned empty content — try non-streaming with same model
         logger.warn(`[streamChat] ${model} 流式响应为空，尝试非流式`);
         const response = await withTurnTimeout(this.provider.chat({ model, messages }));
-        const msg = response.choices[0]?.message?.content;
+        const msg = response.choices?.[0]?.message?.content;
         result = stripThinkBlocks(typeof msg === 'string' ? msg : '');
         if (result) {
           if (onChunk) onChunk(result, result);
@@ -577,7 +577,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
           // No more candidates — try non-streaming as final attempt
           try {
             const response = await withTurnTimeout(this.provider.chat({ model, messages }));
-            const msg = response.choices[0]?.message?.content;
+            const msg = response.choices?.[0]?.message?.content;
             let result = stripThinkBlocks(typeof msg === 'string' ? msg : '');
             if (onChunk && result) onChunk(result, result);
             return result;

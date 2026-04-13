@@ -160,6 +160,10 @@ export class Agent {
               ),
             ])
           : await chatPromise;
+        // 验证响应结构：choices 为空视为异常，触发模型降级
+        if (!response.choices?.length) {
+          throw new Error(`模型 ${model} 返回空响应 (choices 为空)`);
+        }
         // 成功且切换了模型 → 将当前模型提升为首选（后续轮次直接用）
         if (i > 0) {
           logger.info(`[模型降级] ${candidates[0]} → ${model} 成功，切换为首选模型`);
@@ -515,8 +519,7 @@ export class Agent {
           this.costTracker.addUsage(usedModel, response.usage);
         }
         logger.info(`[第${state.iterations}轮] token 用量: prompt=${state.usage.prompt_tokens}, completion=${state.usage.completion_tokens}, total=${state.usage.total_tokens} (model=${usedModel})`);
-        const choice = response.choices?.[0];
-        if (!choice) break;
+        const choice = response.choices[0];
 
         // ── 分支 1: 模型想调用工具 ──
         if (choice.message.tool_calls?.length) {
