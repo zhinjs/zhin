@@ -28,6 +28,10 @@ jobs:
         run: |
           git submodule update --remote plugins
           git submodule update --remote docs
+          git submodule update --remote basic/cli
+          git submodule update --remote basic/database
+          git submodule update --remote basic/logger
+          git submodule update --remote basic/schema
 
       - name: Check for changes
         id: diff
@@ -42,13 +46,13 @@ jobs:
           
           BRANCH="chore/sync-submodules-$(date +%Y%m%d)"
           git checkout -b "$BRANCH"
-          git add plugins docs
+          git add plugins docs basic
           git commit -m "chore: sync submodules to latest"
           git push origin "$BRANCH"
           
           gh pr create \
             --title "chore: sync submodules to latest" \
-            --body "自动同步 plugins 和 docs submodule 到最新版本。" \
+            --body "自动同步 plugins、docs 和 basic/* submodule 到最新版本。" \
             --base main \
             --head "$BRANCH"
         env:
