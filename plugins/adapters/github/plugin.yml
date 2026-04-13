@@ -1,3 +1,0 @@
-name: adapter-github
-description: GitHub 适配器（GitHub App + gh CLI）：PR/Issue 管理、仓库搜索、CI/Release 查询、文件编辑、事件轮询、多用户绑定
-version: 0.1.27
