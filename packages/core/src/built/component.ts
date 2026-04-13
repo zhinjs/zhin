@@ -77,7 +77,7 @@ export class ComponentFeature extends Feature<Component<any>> {
    * 生命周期: 挂载时注册消息渲染监听器
    */
   mounted(plugin: PluginLike): void {
-    const p = plugin as Plugin;
+    const p = plugin as unknown as Plugin;
     this.#rootPlugin = p;
     this.#listener = (options: SendOptions) => {
       return renderComponents(this.byName, options);

@@ -201,13 +201,13 @@ export class Prompt<P extends RegisteredAdapter> {
     /**
      * 批量Schema输入
      */
-    async getValueWithSchemas<T extends Record<string, Schema>>(schemas: T): Promise<Schema.RecordTypes<T>> {
+    async getValueWithSchemas<T extends Record<string, Schema>>(schemas: T): Promise<{ [K in keyof T]: Schema.Types<T[K]> }> {
         const result: Dict = {};
         for (const key of Object.keys(schemas)) {
             const schema = schemas[key];
             result[key] = await this.getValueWithSchema(schema);
         }
-        return result as Schema.RecordTypes<T>;
+        return result as { [K in keyof T]: Schema.Types<T[K]> };
     }
     /**
      * 单个Schema输入，自动分发到不同类型
@@ -223,8 +223,8 @@ export class Prompt<P extends RegisteredAdapter> {
                 return (await this.confirm(schema.meta.description || schema.meta.key || 'Confirm')) as Schema.Types<T>;
             case 'object':
                 if (schema.meta.description) await this.event.$reply(schema.meta.description);
-                if (!schema.options.object) throw new Error('Object schema missing object definition');
-                return (await this.getValueWithSchemas(schema.options.object)) as Schema.Types<T>;
+                if (!schema.options.dict) throw new Error('Object schema missing dict definition');
+                return (await this.getValueWithSchemas(schema.options.dict)) as Schema.Types<T>;
             case 'date':
                 return await this.prompt({
                     tips: schema.meta.description || schema.meta.key || 'Enter a date',
@@ -241,7 +241,7 @@ export class Prompt<P extends RegisteredAdapter> {
                 return await this.const(schema.meta.default!);
             case 'list':
                 const inner = schema.options.inner!;
-                if (!['string', 'boolean', 'number'].includes(inner.meta.type))
+                if (!['string', 'boolean', 'number'].includes(inner.meta.type!))
                     throw new Error(`unsupported inner type :${inner.meta.type}`);
                 return (await this.list(schema.meta.description || schema.meta.key || 'Enter list items', {
                     type: inner.meta.type === 'string' ? 'text' : (inner.meta.type as Prompt.SingleType),
