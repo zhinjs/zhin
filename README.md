@@ -280,30 +280,44 @@ npx zhin setup                # 交互式配置向导
 
 ## 项目结构
 
+本仓库采用 **pnpm workspace + git submodules** 管理，大部分子包以独立仓库维护：
+
 ```
-zhin/
-├── basic/            # 基础层（logger、database、schema、cli）
-├── packages/         # 核心层
-│   ├── kernel/       #   运行时内核（PluginBase、Feature、调度、错误体系）
-│   ├── ai/           #   AI 引擎（Provider、Agent、Memory、CostTracker、缓存）
-│   ├── core/         #   IM 框架（Plugin、Adapter、Bot、MessageDispatcher）
-│   ├── agent/        #   Agent 编排（ExecPolicy、FilePolicy、PromptBuilder、内置工具）
-│   ├── client/       #   Web 控制台（React Router 7、Redux）
-│   └── zhin/         #   主入口包（统一导出）
-├── plugins/          # 插件生态（adapters、services、utils）
-├── docs/             # VitePress 文档站
-└── examples/         # 示例项目
+zhin/                          # 主仓库 (github.com/zhinjs/zhin)
+├── basic/                     # 基础层（均为 git submodule）
+│   ├── cli/        ⊕          #   CLI 工具       → zhinjs/cli
+│   ├── database/   ⊕          #   数据库抽象     → zhinjs/database
+│   ├── logger/     ⊕          #   日志系统       → zhinjs/logger
+│   └── schema/     ⊕          #   Schema 校验    → zhinjs/schema
+├── packages/                  # 核心层
+│   ├── kernel/     ⊕          #   运行时内核     → zhinjs/kernel
+│   ├── ai/         ⊕          #   AI 引擎        → zhinjs/ai
+│   ├── core/                  #   IM 框架（主仓库内）
+│   ├── agent/      ⊕          #   Agent 编排     → zhinjs/agent
+│   ├── client/     ⊕          #   Web 控制台     → zhinjs/client
+│   ├── satori/     ⊕          #   渲染引擎       → zhinjs/satori
+│   ├── create-zhin/⊕          #   项目脚手架     → zhinjs/create-zhin
+│   └── zhin/                  #   主入口包（主仓库内）
+├── plugins/        ⊕          # 插件生态        → zhinjs/plugins
+├── docs/           ⊕          # VitePress 文档站 → zhinjs/docs
+└── examples/                  # 示例项目（主仓库内）
 ```
+
+> ⊕ 标记为 git submodule，指向 `github.com/zhinjs/<name>` 独立仓库。
 
 📖 详见：[仓库结构与模块化约定](./docs/contributing/repo-structure.md)
 
 ## 贡献者
 
 ```bash
-git clone https://github.com/zhinjs/zhin.git
+# 克隆时需初始化所有子模块
+git clone --recurse-submodules https://github.com/zhinjs/zhin.git
 cd zhin
 pnpm install && pnpm build
 pnpm dev
+
+# 若已克隆但未初始化子模块
+git submodule update --init --recursive
 ```
 
 📖 详见：[贡献指南](./docs/contributing.md)
