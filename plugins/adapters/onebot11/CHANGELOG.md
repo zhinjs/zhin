@@ -1,5 +1,13 @@
 # @zhin.js/adapter-onebot11
 
+## 1.0.74
+
+### Patch Changes
+
+- d0250e8: fix: 修复 onebot11 的反向 bug,优化 cli
+  - zhin.js@1.0.68
+  - @zhin.js/http@1.0.63
+
 ## 1.0.73
 
 ### Patch Changes
