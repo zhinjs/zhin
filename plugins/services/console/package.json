@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/console",
-  "version": "2.0.8",
+  "version": "2.0.9",
   "description": "Web console service for Zhin.js with real-time monitoring",
   "type": "module",
   "main": "./lib/index.js",
@@ -87,9 +87,15 @@
     "@tailwindcss/vite": ">=4.0.0"
   },
   "peerDependenciesMeta": {
-    "vite": { "optional": true },
-    "@vitejs/plugin-react": { "optional": true },
-    "@tailwindcss/vite": { "optional": true }
+    "vite": {
+      "optional": true
+    },
+    "@vitejs/plugin-react": {
+      "optional": true
+    },
+    "@tailwindcss/vite": {
+      "optional": true
+    }
   },
   "files": [
     "src",

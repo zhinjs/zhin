@@ -1,5 +1,43 @@
 # test-bot
 
+## 0.1.75
+
+### Patch Changes
+
+- 0eba6d6: fix: 完善生命周期,确保生产稳定
+- Updated dependencies [0eba6d6]
+  - @zhin.js/http@1.0.62
+  - @zhin.js/adapter-dingtalk@1.0.57
+  - @zhin.js/adapter-discord@1.0.72
+  - @zhin.js/adapter-github@0.1.39
+  - @zhin.js/adapter-icqq@2.0.10
+  - @zhin.js/adapter-kook@1.0.69
+  - @zhin.js/adapter-lark@1.0.73
+  - @zhin.js/adapter-milky@0.0.18
+  - @zhin.js/adapter-onebot11@1.0.73
+  - @zhin.js/adapter-onebot12@0.0.18
+  - @zhin.js/adapter-qq@1.0.69
+  - @zhin.js/adapter-sandbox@2.0.9
+  - @zhin.js/adapter-satori@0.0.18
+  - @zhin.js/adapter-telegram@1.0.54
+  - @zhin.js/adapter-wechat-mp@0.1.57
+  - zhin.js@1.0.67
+  - @zhin.js/plugin-music@1.0.10
+  - @zhin.js/cli@1.0.64
+  - @zhin.js/adapter-email@0.1.56
+  - @zhin.js/adapter-slack@1.0.54
+  - @zhin.js/console@2.0.9
+  - @zhin.js/mcp@1.0.51
+  - @zhin.js/plugin-60s@0.0.8
+  - @zhin.js/plugin-checkin@0.0.5
+  - @zhin.js/plugin-group-daily-analysis@0.0.18
+  - @zhin.js/plugin-html-renderer@0.0.47
+  - @zhin.js/plugin-repeater@0.0.5
+  - @zhin.js/plugin-rss@0.0.6
+  - @zhin.js/sensitive-filter@0.0.54
+  - @zhin.js/plugin-stats@0.0.5
+  - @zhin.js/plugin-teach@0.0.5
+
 ## 0.1.74
 
 ### Patch Changes

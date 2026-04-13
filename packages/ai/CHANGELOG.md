@@ -1,5 +1,12 @@
 # @zhin.js/ai
 
+## 1.1.9
+
+### Patch Changes
+
+- 0eba6d6: fix: 完善生命周期,确保生产稳定
+  - @zhin.js/logger@0.1.51
+
 ## 1.1.8
 
 ### Patch Changes
