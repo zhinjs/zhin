@@ -1,5 +1,11 @@
 # @zhin.js/process-monitor
 
+## 0.0.32
+
+### Patch Changes
+
+- zhin.js@1.0.68
+
 ## 0.0.31
 
 ### Patch Changes

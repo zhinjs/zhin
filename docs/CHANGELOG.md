@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.23
+
+### Patch Changes
+
+- d0250e8: fix: 修复 onebot11 的反向 bug,优化 cli
+
 ## 1.0.22
 
 ### Patch Changes
