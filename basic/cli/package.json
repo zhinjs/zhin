@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "@zhin.js/logger": "workspace:*",
-    "adm-zip": "^0.5.16",
+    "adm-zip": "^0.5.17",
     "chalk": "^5.6.2",
     "commander": "^14.0.2",
     "cross-spawn": "^7.0.6",
@@ -32,7 +32,7 @@
     "inquirer": "^12.10.0",
     "open": "^10.1.2",
     "ora": "^8.2.0",
-    "yaml": "^2.7.1"
+    "yaml": "^2.8.3"
   },
   "peerDependencies": {
     "zhin.js": "workspace:*"
