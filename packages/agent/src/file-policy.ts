@@ -131,25 +131,40 @@ export interface FileAccessCheckResult {
   reason?: string;
 }
 
+function expandHome(filePath: string): string {
+  return filePath.replace(/^~(?=$|[\\/])/, os.homedir());
+}
+
+function normalizePathSeparators(filePath: string): string {
+  return filePath.replace(/\\/g, '/');
+}
+
+function getPolicyPathCandidates(filePath: string): string[] {
+  const expanded = expandHome(filePath);
+  const raw = normalizePathSeparators(expanded);
+  const resolved = normalizePathSeparators(path.resolve(expanded));
+  return [...new Set([raw, resolved])];
+}
+
 /**
  * 检查文件路径是否允许被 AI Agent 访问。
  * 该函数只做「阻止明确敏感文件」的检查，不做正向白名单。
  */
 export function checkFileAccess(filePath: string): FileAccessCheckResult {
   // 解析为绝对路径
-  const resolved = path.resolve(filePath.replace(/^~/, os.homedir()));
+  const resolved = path.resolve(expandHome(filePath));
   const basename = path.basename(resolved);
-  const normalized = resolved.replace(/\\/g, '/');
+  const normalizedCandidates = getPolicyPathCandidates(filePath);
 
   // 1. 检查敏感路径前缀
   for (const prefix of SENSITIVE_PATH_PREFIXES) {
-    if (normalized.startsWith(prefix)) {
+    if (normalizedCandidates.some(candidate => candidate.startsWith(prefix))) {
       return { allowed: false, reason: `拒绝访问系统敏感文件: ${prefix}` };
     }
   }
 
   // 2. 检查敏感目录
-  const parts = normalized.split('/');
+  const parts = normalizePathSeparators(resolved).split('/');
   for (let i = 0; i < parts.length; i++) {
     if (SENSITIVE_DIR_NAMES.has(parts[i])) {
       return { allowed: false, reason: `拒绝访问敏感目录: ${parts[i]}` };
