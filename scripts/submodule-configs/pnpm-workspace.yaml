@@ -1,0 +1,12 @@
+# pnpm-workspace.yaml (迁移后的主仓库配置)
+# plugins/ 和 docs/ 现在是 git submodule，但 pnpm workspace 仍能正确解析
+packages:
+  - 'basic/*'
+  - 'packages/*'
+  - 'plugins/adapters/*'
+  - 'plugins/services/*'
+  - 'plugins/features/*'
+  - 'plugins/utils/*'
+  - 'plugins/games/*'
+  - 'examples/*'
+  - 'docs'

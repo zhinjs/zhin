@@ -1,0 +1,8 @@
+[submodule "plugins"]
+	path = plugins
+	url = https://github.com/zhinjs/plugins.git
+	branch = main
+[submodule "docs"]
+	path = docs
+	url = https://github.com/zhinjs/docs.git
+	branch = main
