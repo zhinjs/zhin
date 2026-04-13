@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-onebot12",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "description": "Zhin.js adapter for OneBot 12 protocol",
   "type": "module",
   "main": "./lib/index.js",

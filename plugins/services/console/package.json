@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/console",
-  "version": "2.0.7",
+  "version": "2.0.8",
   "description": "Web console service for Zhin.js with real-time monitoring",
   "type": "module",
   "main": "./lib/index.js",
