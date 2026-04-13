@@ -32,7 +32,7 @@
     "directory": "plugins/adapters/discord"
   },
   "scripts": {
-    "build": "tsc && (test -f ../../services/console/lib/bin.js && node ../../services/console/lib/bin.js build || echo 'Skipping client build: console not built yet')",
+    "build": "tsc && node ../../../scripts/build-console-client-if-present.mjs",
     "clean": "rimraf lib dist",
     "build:node": "tsc"
   },
