@@ -19,3 +19,21 @@
 [submodule "basic/schema"]
 	path = basic/schema
 	url = https://github.com/zhinjs/schema.git
+[submodule "packages/kernel"]
+	path = packages/kernel
+	url = https://github.com/zhinjs/kernel.git
+[submodule "packages/ai"]
+	path = packages/ai
+	url = https://github.com/zhinjs/ai.git
+[submodule "packages/agent"]
+	path = packages/agent
+	url = https://github.com/zhinjs/agent.git
+[submodule "packages/satori"]
+	path = packages/satori
+	url = https://github.com/zhinjs/satori.git
+[submodule "packages/client"]
+	path = packages/client
+	url = https://github.com/zhinjs/client.git
+[submodule "packages/create-zhin"]
+	path = packages/create-zhin
+	url = https://github.com/zhinjs/create-zhin.git
