@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/process-monitor",
-  "version": "0.0.29",
+  "version": "0.0.30",
   "description": "进程监控与重启通知插件",
   "type": "module",
   "main": "./lib/index.js",
@@ -50,6 +50,6 @@
     "typescript": "^6.0.0"
   },
   "peerDependencies": {
-    "zhin.js": "^1.0.65"
+    "zhin.js": "^1.0.66"
   }
 }
