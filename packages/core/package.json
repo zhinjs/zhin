@@ -45,7 +45,7 @@
     "@zhin.js/kernel": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/schema": "workspace:*",
-    "croner": "^9.1.0",
+    "croner": "^10.0.1",
     "segment-matcher": "^1.0.5",
     "smol-toml": "^1.6.0",
     "yaml": "^2.3.4"
