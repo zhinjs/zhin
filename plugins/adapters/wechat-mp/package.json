@@ -21,7 +21,7 @@
   },
   "devDependencies": {
     "@types/xml2js": "^0.4.14",
-    "@types/koa": "^2.15.0",
+    "@types/koa": "^3.0.2",
     "@types/node": "^20.10.6",
     "typescript": "^6.0.0",
     "zhin.js": "workspace:*"

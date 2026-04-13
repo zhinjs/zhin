@@ -38,7 +38,7 @@
     "build:node": "tsc"
   },
   "devDependencies": {
-    "@types/koa": "^2.15.0",
+    "@types/koa": "^3.0.2",
     "@types/node": "^22.9.0",
     "typescript": "^6.0.0",
     "zhin.js": "workspace:*"

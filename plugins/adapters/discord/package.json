@@ -41,7 +41,7 @@
     "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
-    "@types/koa": "^3.0.0",
+    "@types/koa": "^3.0.2",
     "@types/node": "^22.9.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.1",

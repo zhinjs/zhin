@@ -42,7 +42,7 @@
   "dependencies": {
     "@koa/router": "latest",
     "@zhin.js/schema": "workspace:*",
-    "koa": "^3.1.1",
+    "koa": "^3.2.0",
     "ws": "^8.18.3",
     "koa-body": "latest"
   },
