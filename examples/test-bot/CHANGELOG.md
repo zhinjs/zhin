@@ -1,5 +1,13 @@
 # test-bot
 
+## 0.1.77
+
+### Patch Changes
+
+- Updated dependencies [7b0227a]
+  - @zhin.js/cli@0.2.35
+  - zhin.js@1.0.69
+
 ## 0.1.76
 
 ### Patch Changes

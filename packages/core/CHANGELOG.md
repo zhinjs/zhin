@@ -1,5 +1,11 @@
 # @zhin.js/core
 
+## 1.1.11
+
+### Patch Changes
+
+- 7b0227a: fix: ai 优化,定时任务优化
+
 ## 1.1.10
 
 ### Patch Changes
