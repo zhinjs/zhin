@@ -5,6 +5,17 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
+  zhin.js: workspace:*
+  '@zhin.js/core': workspace:*
+  '@zhin.js/kernel': workspace:*
+  '@zhin.js/ai': workspace:*
+  '@zhin.js/logger': workspace:*
+  '@zhin.js/schema': workspace:*
+  '@zhin.js/database': workspace:*
+  '@zhin.js/cli': workspace:*
+  '@zhin.js/client': workspace:*
+  '@zhin.js/agent': workspace:*
+  '@zhin.js/satori': workspace:*
   semver@<5.7.2: '>=5.7.2'
   esbuild@<=0.24.2: '>=0.25.0'
   react-router@>=7.0 <7.12.0: '>=7.12.0'
@@ -172,8 +183,8 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0)
+        specifier: workspace:*
+        version: link:../../packages/zhin
 
   basic/logger:
     dependencies:
@@ -188,8 +199,8 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../packages/zhin
 
   basic/schema:
     dependencies:
@@ -583,7 +594,7 @@ importers:
     dependencies:
       '@zhin.js/http':
         specifier: ^1.0.63
-        version: 1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
+        version: 1.0.63(zhin.js@packages+zhin)
     devDependencies:
       '@types/koa':
         specifier: ^2.15.0
@@ -595,17 +606,17 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/discord:
     dependencies:
       '@zhin.js/client':
-        specifier: ^1.0.16
-        version: 1.0.16(@reduxjs/toolkit@2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react@19.2.0))(clsx@2.1.1)(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react-router@7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(redux-persist@6.0.0(react@19.2.0)(redux@5.0.1))(tailwind-merge@3.5.0)
+        specifier: workspace:*
+        version: link:../../../packages/client
       '@zhin.js/http':
         specifier: ^1.0.63
-        version: 1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
+        version: 1.0.63(zhin.js@packages+zhin)
       discord.js:
         specifier: ^14.15.3
         version: 14.25.1
@@ -627,7 +638,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       '@zhin.js/console':
         specifier: ^2.0.10
-        version: 2.0.10(@tailwindcss/vite@4.1.14(vite@8.0.0(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@types/ws@8.18.1)(@vitejs/plugin-react@4.7.0(vite@8.0.0(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@zhin.js/agent@0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)))(@zhin.js/client@1.0.16(@reduxjs/toolkit@2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react@19.2.0))(clsx@2.1.1)(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react-router@7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(redux-persist@6.0.0(react@19.2.0)(redux@5.0.1))(tailwind-merge@3.5.0))(@zhin.js/core@1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)))(@zhin.js/http@1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)))(vite@8.0.0(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
+        version: 2.0.10(@tailwindcss/vite@4.1.14(vite@8.0.0(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@types/ws@8.18.1)(@vitejs/plugin-react@4.7.0(vite@8.0.0(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@zhin.js/client@packages+client)(@zhin.js/http@1.0.63(zhin.js@packages+zhin))(vite@8.0.0(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))(zhin.js@packages+zhin)
       lucide-react:
         specifier: ^0.469.0
         version: 0.469.0(react@19.2.0)
@@ -635,8 +646,8 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/email:
     dependencies:
@@ -666,33 +677,33 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/github:
     dependencies:
       '@zhin.js/http':
         specifier: ^1.0.63
-        version: 1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
+        version: 1.0.63(zhin.js@packages+zhin)
     devDependencies:
       typescript:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/icqq:
     dependencies:
       '@zhin.js/client':
-        specifier: ^1.0.16
-        version: 1.0.16(@reduxjs/toolkit@2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react@19.2.0))(clsx@2.1.1)(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react-router@7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(redux-persist@6.0.0(react@19.2.0)(redux@5.0.1))(tailwind-merge@3.5.0)
+        specifier: workspace:*
+        version: link:../../../packages/client
       '@zhin.js/core':
-        specifier: ^1.1.10
-        version: 1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
+        specifier: workspace:*
+        version: link:../../../packages/core
       '@zhin.js/http':
         specifier: ^1.0.63
-        version: 1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
+        version: 1.0.63(zhin.js@packages+zhin)
     devDependencies:
       '@radix-ui/themes':
         specifier: ^3.2.1
@@ -705,7 +716,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       '@zhin.js/console':
         specifier: ^2.0.10
-        version: 2.0.10(@tailwindcss/vite@4.1.14(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@types/ws@8.18.1)(@vitejs/plugin-react@4.7.0(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@zhin.js/agent@0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(@zhin.js/client@1.0.16(@reduxjs/toolkit@2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react@19.2.0))(clsx@2.1.1)(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react-router@7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(redux-persist@6.0.0(react@19.2.0)(redux@5.0.1))(tailwind-merge@3.5.0))(@zhin.js/core@1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(@zhin.js/http@1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
+        version: 2.0.10(@tailwindcss/vite@4.1.14(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@types/ws@8.18.1)(@vitejs/plugin-react@4.7.0(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@zhin.js/client@packages+client)(@zhin.js/core@packages+core)(@zhin.js/http@1.0.63(zhin.js@packages+zhin))(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))(zhin.js@packages+zhin)
       lucide-react:
         specifier: ^0.469.0
         version: 0.469.0(react@19.2.0)
@@ -716,20 +727,20 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/kook:
     dependencies:
       '@zhin.js/client':
-        specifier: ^1.0.16
-        version: 1.0.16(@reduxjs/toolkit@2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react@19.2.0))(clsx@2.1.1)(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react-router@7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(redux-persist@6.0.0(react@19.2.0)(redux@5.0.1))(tailwind-merge@3.5.0)
+        specifier: workspace:*
+        version: link:../../../packages/client
       '@zhin.js/http':
         specifier: ^1.0.63
-        version: 1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
+        version: 1.0.63(zhin.js@packages+zhin)
       '@zhin.js/logger':
-        specifier: ^0.1.52
-        version: 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
+        specifier: workspace:*
+        version: link:../../../basic/logger
       kook-client:
         specifier: latest
         version: 1.0.4
@@ -742,7 +753,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       '@zhin.js/console':
         specifier: ^2.0.10
-        version: 2.0.10(@tailwindcss/vite@4.1.14(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@types/ws@8.18.1)(@vitejs/plugin-react@4.7.0(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@zhin.js/agent@0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(@zhin.js/client@1.0.16(@reduxjs/toolkit@2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react@19.2.0))(clsx@2.1.1)(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react-router@7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(redux-persist@6.0.0(react@19.2.0)(redux@5.0.1))(tailwind-merge@3.5.0))(@zhin.js/core@1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(@zhin.js/http@1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
+        version: 2.0.10(@tailwindcss/vite@4.1.14(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@types/ws@8.18.1)(@vitejs/plugin-react@4.7.0(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@zhin.js/client@packages+client)(@zhin.js/core@packages+core)(@zhin.js/http@1.0.63(zhin.js@packages+zhin))(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))(zhin.js@packages+zhin)
       lucide-react:
         specifier: ^0.469.0
         version: 0.469.0(react@19.2.0)
@@ -750,14 +761,14 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/lark:
     dependencies:
       '@zhin.js/http':
         specifier: ^1.0.63
-        version: 1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
+        version: 1.0.63(zhin.js@packages+zhin)
       axios:
         specifier: '>=1.13.5'
         version: 1.13.6
@@ -772,14 +783,14 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/milky:
     dependencies:
       '@zhin.js/http':
         specifier: ^1.0.63
-        version: 1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))
+        version: 1.0.63(zhin.js@packages+zhin)
       eventsource:
         specifier: ^2.0.2
         version: 2.0.2
@@ -797,14 +808,14 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/onebot11:
     dependencies:
       '@zhin.js/http':
         specifier: ^1.0.63
-        version: 1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))
+        version: 1.0.63(zhin.js@packages+zhin)
       ws:
         specifier: ^8.18.3
         version: 8.19.0
@@ -819,14 +830,14 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/onebot12:
     dependencies:
       '@zhin.js/http':
         specifier: ^1.0.63
-        version: 1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))
+        version: 1.0.63(zhin.js@packages+zhin)
       ws:
         specifier: ^8.18.3
         version: 8.19.0
@@ -841,20 +852,20 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/qq:
     dependencies:
       '@zhin.js/client':
-        specifier: ^1.0.16
-        version: 1.0.16(@reduxjs/toolkit@2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react@19.2.0))(clsx@2.1.1)(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react-router@7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(redux-persist@6.0.0(react@19.2.0)(redux@5.0.1))(tailwind-merge@3.5.0)
+        specifier: workspace:*
+        version: link:../../../packages/client
       '@zhin.js/http':
         specifier: ^1.0.63
-        version: 1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
+        version: 1.0.63(zhin.js@packages+zhin)
       '@zhin.js/logger':
-        specifier: ^0.1.52
-        version: 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
+        specifier: workspace:*
+        version: link:../../../basic/logger
       qq-official-bot:
         specifier: ^1.0.12
         version: 1.0.12
@@ -867,7 +878,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       '@zhin.js/console':
         specifier: ^2.0.10
-        version: 2.0.10(@tailwindcss/vite@4.1.14(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@types/ws@8.18.1)(@vitejs/plugin-react@4.7.0(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@zhin.js/agent@0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(@zhin.js/client@1.0.16(@reduxjs/toolkit@2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react@19.2.0))(clsx@2.1.1)(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react-router@7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(redux-persist@6.0.0(react@19.2.0)(redux@5.0.1))(tailwind-merge@3.5.0))(@zhin.js/core@1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(@zhin.js/http@1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
+        version: 2.0.10(@tailwindcss/vite@4.1.14(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@types/ws@8.18.1)(@vitejs/plugin-react@4.7.0(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@zhin.js/client@packages+client)(@zhin.js/core@packages+core)(@zhin.js/http@1.0.63(zhin.js@packages+zhin))(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))(zhin.js@packages+zhin)
       lucide-react:
         specifier: ^0.469.0
         version: 0.469.0(react@19.2.0)
@@ -875,23 +886,23 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/sandbox:
     dependencies:
       '@zhin.js/client':
-        specifier: ^1.0.16
-        version: 1.0.16(@reduxjs/toolkit@2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react@19.2.0))(clsx@2.1.1)(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react-router@7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(redux-persist@6.0.0(react@19.2.0)(redux@5.0.1))(tailwind-merge@3.5.0)
+        specifier: workspace:*
+        version: link:../../../packages/client
       '@zhin.js/console':
         specifier: ^2.0.10
-        version: 2.0.10(@tailwindcss/vite@4.1.14(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@types/ws@8.18.1)(@vitejs/plugin-react@4.7.0(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@zhin.js/agent@0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(@zhin.js/client@1.0.16(@reduxjs/toolkit@2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react@19.2.0))(clsx@2.1.1)(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react-router@7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(redux-persist@6.0.0(react@19.2.0)(redux@5.0.1))(tailwind-merge@3.5.0))(@zhin.js/core@1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(@zhin.js/http@1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
+        version: 2.0.10(@tailwindcss/vite@4.1.14(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@types/ws@8.18.1)(@vitejs/plugin-react@4.7.0(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@zhin.js/client@packages+client)(@zhin.js/core@packages+core)(@zhin.js/http@1.0.63(zhin.js@packages+zhin))(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))(zhin.js@packages+zhin)
       '@zhin.js/core':
-        specifier: ^1.1.10
-        version: 1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
+        specifier: workspace:*
+        version: link:../../../packages/core
       '@zhin.js/http':
         specifier: ^1.0.63
-        version: 1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
+        version: 1.0.63(zhin.js@packages+zhin)
     devDependencies:
       '@types/react':
         specifier: ^19.2.2
@@ -909,14 +920,14 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/satori:
     dependencies:
       '@zhin.js/http':
         specifier: ^1.0.63
-        version: 1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))
+        version: 1.0.63(zhin.js@packages+zhin)
       ws:
         specifier: ^8.18.3
         version: 8.19.0
@@ -931,8 +942,8 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/slack:
     dependencies:
@@ -950,20 +961,20 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/telegram:
     dependencies:
       '@zhin.js/client':
-        specifier: ^1.0.16
-        version: 1.0.16(@reduxjs/toolkit@2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react@19.2.0))(clsx@2.1.1)(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react-router@7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(redux-persist@6.0.0(react@19.2.0)(redux@5.0.1))(tailwind-merge@3.5.0)
+        specifier: workspace:*
+        version: link:../../../packages/client
       '@zhin.js/http':
         specifier: ^1.0.63
-        version: 1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
+        version: 1.0.63(zhin.js@packages+zhin)
       '@zhin.js/logger':
-        specifier: ^0.1.52
-        version: 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
+        specifier: workspace:*
+        version: link:../../../basic/logger
       telegraf:
         specifier: ^4.16.3
         version: 4.16.3
@@ -979,7 +990,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       '@zhin.js/console':
         specifier: ^2.0.10
-        version: 2.0.10(@tailwindcss/vite@4.1.14(vite@8.0.0(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@types/ws@8.18.1)(@vitejs/plugin-react@4.7.0(vite@8.0.0(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@zhin.js/agent@0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)))(@zhin.js/client@1.0.16(@reduxjs/toolkit@2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react@19.2.0))(clsx@2.1.1)(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react-router@7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(redux-persist@6.0.0(react@19.2.0)(redux@5.0.1))(tailwind-merge@3.5.0))(@zhin.js/core@1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)))(@zhin.js/http@1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)))(vite@8.0.0(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
+        version: 2.0.10(@tailwindcss/vite@4.1.14(vite@8.0.0(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@types/ws@8.18.1)(@vitejs/plugin-react@4.7.0(vite@8.0.0(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@zhin.js/client@packages+client)(@zhin.js/http@1.0.63(zhin.js@packages+zhin))(vite@8.0.0(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))(zhin.js@packages+zhin)
       lucide-react:
         specifier: ^0.469.0
         version: 0.469.0(react@19.2.0)
@@ -987,14 +998,14 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/adapters/wechat-mp:
     dependencies:
       '@zhin.js/http':
         specifier: ^1.0.63
-        version: 1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))
+        version: 1.0.63(zhin.js@packages+zhin)
       axios:
         specifier: '>=1.13.5'
         version: 1.13.6
@@ -1018,14 +1029,14 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/features/process-monitor:
     dependencies:
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
     devDependencies:
       '@types/node':
         specifier: ^24.10.4
@@ -1040,13 +1051,13 @@ importers:
         specifier: ^8.18.1
         version: 8.18.1
       '@zhin.js/agent':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../packages/agent
       '@zhin.js/client':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../packages/client
       '@zhin.js/core':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../packages/core
       '@zhin.js/http':
         specifier: workspace:^
@@ -1123,8 +1134,8 @@ importers:
         specifier: ^2.8.2
         version: 2.8.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/services/http:
     dependencies:
@@ -1132,8 +1143,8 @@ importers:
         specifier: latest
         version: 15.4.0(koa@3.1.2)
       '@zhin.js/schema':
-        specifier: ^1.0.52
-        version: 1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
+        specifier: workspace:*
+        version: link:../../../basic/schema
       koa:
         specifier: '>=3.1.2'
         version: 3.1.2
@@ -1157,8 +1168,8 @@ importers:
         specifier: latest
         version: 8.18.1
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/services/mcp:
     dependencies:
@@ -1176,8 +1187,8 @@ importers:
         specifier: workspace:^
         version: link:../http
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/utils/60s:
     devDependencies:
@@ -1185,8 +1196,8 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/utils/checkin:
     devDependencies:
@@ -1194,8 +1205,8 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/utils/code-runner:
     devDependencies:
@@ -1203,8 +1214,8 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/utils/group-admin:
     devDependencies:
@@ -1212,20 +1223,20 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/utils/group-daily-analysis:
     devDependencies:
       '@zhin.js/plugin-html-renderer':
         specifier: ^0.0.48
-        version: 0.0.48(@types/react@19.2.14)(react@19.2.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
+        version: 0.0.48(zhin.js@packages+zhin)
       typescript:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/utils/html-renderer:
     dependencies:
@@ -1233,15 +1244,15 @@ importers:
         specifier: ^2.6.2
         version: 2.6.2
       '@zhin.js/satori':
-        specifier: ^0.2.5
-        version: 0.2.5(@types/react@19.2.14)(react@19.2.0)
+        specifier: workspace:*
+        version: link:../../../packages/satori
     devDependencies:
       typescript:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/utils/link-poster:
     devDependencies:
@@ -1249,20 +1260,20 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/utils/music:
     devDependencies:
       '@zhin.js/adapter-icqq':
         specifier: ^2.0.11
-        version: 2.0.11(@zhin.js/client@1.0.16(@reduxjs/toolkit@2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react@19.2.0))(clsx@2.1.1)(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react-router@7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(redux-persist@6.0.0(react@19.2.0)(redux@5.0.1))(tailwind-merge@3.5.0))(@zhin.js/console@2.0.10(@tailwindcss/vite@4.1.14(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@types/ws@8.18.1)(@vitejs/plugin-react@4.7.0(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@zhin.js/agent@0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(@zhin.js/client@1.0.16(@reduxjs/toolkit@2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react@19.2.0))(clsx@2.1.1)(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react-router@7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(redux-persist@6.0.0(react@19.2.0)(redux@5.0.1))(tailwind-merge@3.5.0))(@zhin.js/core@1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(@zhin.js/http@1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(@zhin.js/core@1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(@zhin.js/http@1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
+        version: 2.0.11(@zhin.js/console@2.0.10(@tailwindcss/vite@4.1.14(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@types/ws@8.18.1)(@vitejs/plugin-react@4.7.0(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@zhin.js/http@1.0.63(zhin.js@packages+zhin))(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))(zhin.js@packages+zhin))(@zhin.js/http@1.0.63(zhin.js@packages+zhin))(zhin.js@packages+zhin)
       typescript:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/utils/qrcode:
     devDependencies:
@@ -1270,8 +1281,8 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/utils/repeater:
     devDependencies:
@@ -1279,8 +1290,8 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/utils/rss:
     dependencies:
@@ -1292,8 +1303,8 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/utils/sensitive-filter:
     devDependencies:
@@ -1301,8 +1312,8 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/utils/short-url:
     devDependencies:
@@ -1310,8 +1321,8 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/utils/stats:
     devDependencies:
@@ -1319,8 +1330,8 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/utils/teach:
     devDependencies:
@@ -1328,8 +1339,8 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
   plugins/utils/voice:
     devDependencies:
@@ -1337,8 +1348,8 @@ importers:
         specifier: ^6.0.0
         version: 6.0.2
       zhin.js:
-        specifier: ^1.0.68
-        version: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+        specifier: workspace:*
+        version: link:../../../packages/zhin
 
 packages:
 
@@ -4023,11 +4034,11 @@ packages:
   '@zhin.js/adapter-icqq@2.0.11':
     resolution: {integrity: sha512-8mLJl47/CEEdLAapL7haVVF9v8dnY0UIPcRSVH8wTMqm+k2RVOh5bhN1zUNahjsp19er466GI1swcQGUQKOhAg==}
     peerDependencies:
-      '@zhin.js/client': 1.0.16
+      '@zhin.js/client': workspace:*
       '@zhin.js/console': 2.0.10
-      '@zhin.js/core': 1.1.10
+      '@zhin.js/core': workspace:*
       '@zhin.js/http': 1.0.63
-      zhin.js: 1.0.68
+      zhin.js: workspace:*
     peerDependenciesMeta:
       '@zhin.js/client':
         optional: true
@@ -4036,22 +4047,6 @@ packages:
       '@zhin.js/http':
         optional: true
 
-  '@zhin.js/agent@0.1.10':
-    resolution: {integrity: sha512-3FVS18rFFXeO1+z/bwvUf1g0O8kpSCah1HO8oMi9A0fcqZE0v1TEu13t6zS6DXddgjRRQoW7u2voiCpf6Rnddg==}
-
-  '@zhin.js/ai@1.1.10':
-    resolution: {integrity: sha512-3ycqL+RuYo3mZgCkngNcQYCwY8QPIU6NaX0olhCchoyKQfUpKjxt79ad4LS3PpDZc6oyKmVqnWCox8mi37/OKg==}
-
-  '@zhin.js/client@1.0.16':
-    resolution: {integrity: sha512-Gvoo8WlxYwZNTgRl96sCBDD2++nD9LUz65kptXWNNVQMVPq8qYIwSn6EDfMmYNudKBEW6hZwD/OCrWJSzdl8Ww==}
-    peerDependencies:
-      '@reduxjs/toolkit': ^2.9.0
-      clsx: ^2.1.1
-      react-redux: 9.2.0
-      react-router: '>=7.12.0'
-      redux-persist: 6.0.0
-      tailwind-merge: ^3.3.1
-
   '@zhin.js/console@2.0.10':
     resolution: {integrity: sha512-PcOFd8F+HWUiBIgpWWHoxZXQrqYLCvK3c9LF4+iNRk0DzI/jNJRo7pQQhhoReVf+DWQFxQyKVzjLU3ohp7YEVg==}
     hasBin: true
@@ -4059,12 +4054,12 @@ packages:
       '@tailwindcss/vite': '>=4.0.0'
       '@types/ws': ^8.18.1
       '@vitejs/plugin-react': '>=4.0.0'
-      '@zhin.js/agent': ^0.1.10
-      '@zhin.js/client': ^1.0.16
-      '@zhin.js/core': ^1.1.10
+      '@zhin.js/agent': workspace:*
+      '@zhin.js/client': workspace:*
+      '@zhin.js/core': workspace:*
       '@zhin.js/http': ^1.0.63
       vite: '>=7.1.11'
-      zhin.js: 1.0.68
+      zhin.js: workspace:*
     peerDependenciesMeta:
       '@tailwindcss/vite':
         optional: true
@@ -4073,56 +4068,20 @@ packages:
       vite:
         optional: true
 
-  '@zhin.js/core@1.1.10':
-    resolution: {integrity: sha512-9PkXOXzXDuuoP0rdFHlpBWKPbY6cDyqSPEx2D6OKKnNDBb2l6OS3+mNYzo6NB1JfPR2ev+7CIkcpRFzqD147mg==}
-
-  '@zhin.js/database@1.0.55':
-    resolution: {integrity: sha512-gjQ+WJ0OBCDk5ei3ReLyj2cJDgFK4E+EOVEKRN8nBAM59NIkwSU8JeMTqfRUSyZnznMq2B6DjQddEBe2OADfHQ==}
-    engines: {node: '>=22.5.0'}
-    peerDependencies:
-      mongodb: ^3.1.13
-      mysql2: ^3.9.8
-      pg: ^7.1.2
-      redis: latest
-      zhin.js: 1.0.68
-    peerDependenciesMeta:
-      mongodb:
-        optional: true
-      mysql2:
-        optional: true
-      pg:
-        optional: true
-      redis:
-        optional: true
-
   '@zhin.js/http@1.0.63':
     resolution: {integrity: sha512-/D41iIE+lu5tJS369E9KIfhJ/9HFMagvO6cPZiosNFA4rKoo7wKV8LPAcE+JU7mrn96Xs/BqPFEAOAV13QB4yg==}
     peerDependencies:
-      zhin.js: 1.0.68
-
-  '@zhin.js/kernel@0.0.29':
-    resolution: {integrity: sha512-LQrOEqXFkr9pplouMnmRPKDVmd0Wa58obYsdbIf1fBjacShVlKzD8+FM3QWGc0rMf3LstzNZfILtA5gwZ2us+Q==}
-
-  '@zhin.js/logger@0.1.52':
-    resolution: {integrity: sha512-g7av6mmVAtD6kl1SI4mLWwxNnIBBFXxl51FgEKOj1eKXxb9MIMeHJa3cke3wK7XsNP22VlKaN+/jhQHCAbxgrw==}
-    peerDependencies:
-      zhin.js: 1.0.68
+      zhin.js: workspace:*
 
   '@zhin.js/plugin-html-renderer@0.0.48':
     resolution: {integrity: sha512-TEEpjOcrq3dcWmIVv3apSqzR8Ru7vGLr8v48OLEUlfAmkd12JZDwMyKuRWaw2bnK+ZBTx3AqiV85W5IK95ICVQ==}
     peerDependencies:
-      zhin.js: 1.0.68
-
-  '@zhin.js/satori@0.2.5':
-    resolution: {integrity: sha512-PILGmev48S9MOxyiafoKFPWD+detGGkkK3r/JbY/vcrGsokq8FhKreIJfmhGeL7oOYqLwSQ5Sa0cFfGfh2vzVA==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      react: ^18.0.0 || ^19.0.0
+      zhin.js: workspace:*
 
   '@zhin.js/schema@1.0.52':
     resolution: {integrity: sha512-G+nv6gz+V+VS2dQV+iHLfKN/vIBWGeKxphm3BnCsF2DV5s/yIL7VqrnBR9733a4zZ1TNfcFF7vR06PRbWdrrZA==}
     peerDependencies:
-      zhin.js: 1.0.68
+      zhin.js: workspace:*
 
   '@zhinjs/shared@0.0.7':
     resolution: {integrity: sha512-Dul14xannVXxCGfiKQfL7FhD5S71D2Xzqim0TP18NjVKwyreYOO9itlV7HDp7rkoPjSZKz3Mb/9DhDs9/6Tp1w==}
@@ -7957,9 +7916,6 @@ packages:
   yoga-wasm-web@0.3.3:
     resolution: {integrity: sha512-N+d4UJSJbt/R3wqY7Coqs5pcV0aUj2j9IaQ3rNj9bVCLld8tTGKRa2USARjnvZJWVx1NDmQev8EknoczaOQDOA==}
 
-  zhin.js@1.0.68:
-    resolution: {integrity: sha512-poisr3iWbcADEAiew4Q+WtI3d92bEVNfXjzzQRzfnHd5sscHCxp9k8bBmhv+10JgZ3pxj9E9VfDfLXWMjj36yQ==}
-
   zip-stream@4.1.1:
     resolution: {integrity: sha512-9qv4rlDiopXg4E69k+vMHjNN63YFMe9sZMrdlvKnCjlCRWeCBswPPMPUfx+ipsAWq1LXHe70RcbaHdJJpS6hyQ==}
     engines: {node: '>= 10'}
@@ -10227,14 +10183,6 @@ snapshots:
       tailwindcss: 4.1.14
       vite: 8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)
 
-  '@tailwindcss/vite@4.1.14(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))':
-    dependencies:
-      '@tailwindcss/node': 4.1.14
-      '@tailwindcss/oxide': 4.1.14
-      tailwindcss: 4.1.14
-      vite: 8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)
-    optional: true
-
   '@telegraf/types@7.1.0': {}
 
   '@tsconfig/node10@1.0.12': {}
@@ -10769,19 +10717,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@vitejs/plugin-react@4.7.0(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))':
-    dependencies:
-      '@babel/core': 7.29.0
-      '@babel/plugin-transform-react-jsx-self': 7.27.1(@babel/core@7.29.0)
-      '@babel/plugin-transform-react-jsx-source': 7.27.1(@babel/core@7.29.0)
-      '@rolldown/pluginutils': 1.0.0-beta.27
-      '@types/babel__core': 7.20.5
-      react-refresh: 0.17.0
-      vite: 8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)
-    transitivePeerDependencies:
-      - supports-color
-    optional: true
-
   '@vitejs/plugin-vue@5.2.4(vite@5.4.21(@types/node@24.12.0)(lightningcss@1.32.0)(terser@5.46.1))(vue@3.5.30(typescript@6.0.2))':
     dependencies:
       vite: 5.4.21(@types/node@24.12.0)(lightningcss@1.32.0)(terser@5.46.1)
@@ -10958,143 +10893,22 @@ snapshots:
     transitivePeerDependencies:
       - typescript
 
-  ? '@zhin.js/adapter-icqq@2.0.11(@zhin.js/client@1.0.16(@reduxjs/toolkit@2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react@19.2.0))(clsx@2.1.1)(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react-router@7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(redux-persist@6.0.0(react@19.2.0)(redux@5.0.1))(tailwind-merge@3.5.0))(@zhin.js/console@2.0.10(@tailwindcss/vite@4.1.14(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@types/ws@8.18.1)(@vitejs/plugin-react@4.7.0(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@zhin.js/agent@0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(@zhin.js/client@1.0.16(@reduxjs/toolkit@2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react@19.2.0))(clsx@2.1.1)(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react-router@7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(redux-persist@6.0.0(react@19.2.0)(redux@5.0.1))(tailwind-merge@3.5.0))(@zhin.js/core@1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(@zhin.js/http@1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(@zhin.js/core@1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(@zhin.js/http@1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))'
-  : dependencies:
-      '@zhin.js/core': 1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+  '@zhin.js/adapter-icqq@2.0.11(@zhin.js/console@2.0.10(@tailwindcss/vite@4.1.14(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@types/ws@8.18.1)(@vitejs/plugin-react@4.7.0(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@zhin.js/http@1.0.63(zhin.js@packages+zhin))(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))(zhin.js@packages+zhin))(@zhin.js/http@1.0.63(zhin.js@packages+zhin))(zhin.js@packages+zhin)':
+    dependencies:
+      zhin.js: link:packages/zhin
     optionalDependencies:
-      '@zhin.js/client': 1.0.16(@reduxjs/toolkit@2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react@19.2.0))(clsx@2.1.1)(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react-router@7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(redux-persist@6.0.0(react@19.2.0)(redux@5.0.1))(tailwind-merge@3.5.0)
-      '@zhin.js/console': 2.0.10(@tailwindcss/vite@4.1.14(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@types/ws@8.18.1)(@vitejs/plugin-react@4.7.0(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@zhin.js/agent@0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(@zhin.js/client@1.0.16(@reduxjs/toolkit@2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react@19.2.0))(clsx@2.1.1)(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react-router@7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(redux-persist@6.0.0(react@19.2.0)(redux@5.0.1))(tailwind-merge@3.5.0))(@zhin.js/core@1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(@zhin.js/http@1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
-      '@zhin.js/http': 1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
+      '@zhin.js/console': 2.0.10(@tailwindcss/vite@4.1.14(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@types/ws@8.18.1)(@vitejs/plugin-react@4.7.0(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@zhin.js/http@1.0.63(zhin.js@packages+zhin))(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))(zhin.js@packages+zhin)
+      '@zhin.js/http': 1.0.63(zhin.js@packages+zhin)
 
-  '@zhin.js/agent@0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))':
+  '@zhin.js/console@2.0.10(@tailwindcss/vite@4.1.14(vite@8.0.0(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@types/ws@8.18.1)(@vitejs/plugin-react@4.7.0(vite@8.0.0(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@zhin.js/client@packages+client)(@zhin.js/http@1.0.63(zhin.js@packages+zhin))(vite@8.0.0(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))(zhin.js@packages+zhin)':
     dependencies:
-      '@zhin.js/ai': 1.1.10(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))
-      '@zhin.js/core': 1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))
-      js-yaml: 4.1.1
-    transitivePeerDependencies:
-      - mongodb
-      - mysql2
-      - pg
-      - redis
-      - zhin.js
-
-  '@zhin.js/agent@0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))':
-    dependencies:
-      '@zhin.js/ai': 1.1.10(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
-      '@zhin.js/core': 1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
-      js-yaml: 4.1.1
-    transitivePeerDependencies:
-      - mongodb
-      - mysql2
-      - pg
-      - redis
-      - zhin.js
-
-  '@zhin.js/agent@0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))':
-    dependencies:
-      '@zhin.js/ai': 1.1.10(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))
-      '@zhin.js/core': 1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))
-      js-yaml: 4.1.1
-    transitivePeerDependencies:
-      - mongodb
-      - mysql2
-      - pg
-      - redis
-      - zhin.js
-
-  '@zhin.js/agent@0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0))':
-    dependencies:
-      '@zhin.js/ai': 1.1.10(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0))
-      '@zhin.js/core': 1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0))
-      js-yaml: 4.1.1
-    transitivePeerDependencies:
-      - mongodb
-      - mysql2
-      - pg
-      - redis
-      - zhin.js
-
-  '@zhin.js/agent@0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0))':
-    dependencies:
-      '@zhin.js/ai': 1.1.10(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0))
-      '@zhin.js/core': 1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0))
-      js-yaml: 4.1.1
-    transitivePeerDependencies:
-      - mongodb
-      - mysql2
-      - pg
-      - redis
-      - zhin.js
-
-  '@zhin.js/agent@0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))':
-    dependencies:
-      '@zhin.js/ai': 1.1.10(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
-      '@zhin.js/core': 1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
-      js-yaml: 4.1.1
-    transitivePeerDependencies:
-      - mongodb
-      - mysql2
-      - pg
-      - redis
-      - zhin.js
-
-  '@zhin.js/ai@1.1.10(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))':
-    dependencies:
-      '@zhin.js/logger': 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))
-    transitivePeerDependencies:
-      - zhin.js
-
-  '@zhin.js/ai@1.1.10(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))':
-    dependencies:
-      '@zhin.js/logger': 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
-    transitivePeerDependencies:
-      - zhin.js
-
-  '@zhin.js/ai@1.1.10(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))':
-    dependencies:
-      '@zhin.js/logger': 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))
-    transitivePeerDependencies:
-      - zhin.js
-
-  '@zhin.js/ai@1.1.10(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0))':
-    dependencies:
-      '@zhin.js/logger': 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0))
-    transitivePeerDependencies:
-      - zhin.js
-
-  '@zhin.js/ai@1.1.10(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0))':
-    dependencies:
-      '@zhin.js/logger': 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0))
-    transitivePeerDependencies:
-      - zhin.js
-
-  '@zhin.js/ai@1.1.10(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))':
-    dependencies:
-      '@zhin.js/logger': 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
-    transitivePeerDependencies:
-      - zhin.js
-
-  '@zhin.js/client@1.0.16(@reduxjs/toolkit@2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react@19.2.0))(clsx@2.1.1)(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react-router@7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(redux-persist@6.0.0(react@19.2.0)(redux@5.0.1))(tailwind-merge@3.5.0)':
-    dependencies:
-      '@reduxjs/toolkit': 2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react@19.2.0)
-      clsx: 2.1.1
-      react-redux: 9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1)
-      react-router: 7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
-      redux-persist: 6.0.0(react@19.2.0)(redux@5.0.1)
-      tailwind-merge: 3.5.0
-
-  ? '@zhin.js/console@2.0.10(@tailwindcss/vite@4.1.14(vite@8.0.0(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@types/ws@8.18.1)(@vitejs/plugin-react@4.7.0(vite@8.0.0(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@zhin.js/agent@0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)))(@zhin.js/client@1.0.16(@reduxjs/toolkit@2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react@19.2.0))(clsx@2.1.1)(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react-router@7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(redux-persist@6.0.0(react@19.2.0)(redux@5.0.1))(tailwind-merge@3.5.0))(@zhin.js/core@1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)))(@zhin.js/http@1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)))(vite@8.0.0(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))'
-  : dependencies:
       '@types/ws': 8.18.1
-      '@zhin.js/agent': 0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
-      '@zhin.js/client': 1.0.16(@reduxjs/toolkit@2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react@19.2.0))(clsx@2.1.1)(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react-router@7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(redux-persist@6.0.0(react@19.2.0)(redux@5.0.1))(tailwind-merge@3.5.0)
-      '@zhin.js/core': 1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
-      '@zhin.js/http': 1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
+      '@zhin.js/client': link:packages/client
+      '@zhin.js/http': 1.0.63(zhin.js@packages+zhin)
       esbuild: 0.27.4
       mime: 4.1.0
       ws: 8.20.0
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)
+      zhin.js: link:packages/zhin
     optionalDependencies:
       '@tailwindcss/vite': 4.1.14(vite@8.0.0(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))
       '@vitejs/plugin-react': 4.7.0(vite@8.0.0(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))
@@ -11104,365 +10918,65 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  ? '@zhin.js/console@2.0.10(@tailwindcss/vite@4.1.14(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@types/ws@8.18.1)(@vitejs/plugin-react@4.7.0(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@zhin.js/agent@0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(@zhin.js/client@1.0.16(@reduxjs/toolkit@2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react@19.2.0))(clsx@2.1.1)(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react-router@7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(redux-persist@6.0.0(react@19.2.0)(redux@5.0.1))(tailwind-merge@3.5.0))(@zhin.js/core@1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(@zhin.js/http@1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)))(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))'
-  : dependencies:
+  '@zhin.js/console@2.0.10(@tailwindcss/vite@4.1.14(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@types/ws@8.18.1)(@vitejs/plugin-react@4.7.0(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@zhin.js/client@packages+client)(@zhin.js/core@packages+core)(@zhin.js/http@1.0.63(zhin.js@packages+zhin))(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))(zhin.js@packages+zhin)':
+    dependencies:
       '@types/ws': 8.18.1
-      '@zhin.js/agent': 0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
-      '@zhin.js/client': 1.0.16(@reduxjs/toolkit@2.11.2(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react@19.2.0))(clsx@2.1.1)(react-redux@9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1))(react-router@7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(redux-persist@6.0.0(react@19.2.0)(redux@5.0.1))(tailwind-merge@3.5.0)
-      '@zhin.js/core': 1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
-      '@zhin.js/http': 1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
+      '@zhin.js/client': link:packages/client
+      '@zhin.js/core': link:packages/core
+      '@zhin.js/http': 1.0.63(zhin.js@packages+zhin)
       esbuild: 0.27.4
       mime: 4.1.0
       ws: 8.20.0
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+      zhin.js: link:packages/zhin
     optionalDependencies:
-      '@tailwindcss/vite': 4.1.14(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))
-      '@vitejs/plugin-react': 4.7.0(vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))
+      '@tailwindcss/vite': 4.1.14(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))
+      '@vitejs/plugin-react': 4.7.0(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))
       koa-connect: 2.1.1
-      vite: 8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)
+      vite: 8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@zhin.js/core@1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))':
+  '@zhin.js/console@2.0.10(@tailwindcss/vite@4.1.14(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@types/ws@8.18.1)(@vitejs/plugin-react@4.7.0(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(@zhin.js/http@1.0.63(zhin.js@packages+zhin))(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))(zhin.js@packages+zhin)':
     dependencies:
-      '@zhin.js/ai': 1.1.10(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))
-      '@zhin.js/database': 1.0.55(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))
-      '@zhin.js/kernel': 0.0.29(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))
-      '@zhin.js/logger': 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))
-      '@zhin.js/schema': 1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))
-      croner: 9.1.0
-      segment-matcher: 1.0.5
-      smol-toml: 1.6.0
-      yaml: 2.8.2
-    transitivePeerDependencies:
-      - mongodb
-      - mysql2
-      - pg
-      - redis
-      - zhin.js
-
-  '@zhin.js/core@1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))':
-    dependencies:
-      '@zhin.js/ai': 1.1.10(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
-      '@zhin.js/database': 1.0.55(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
-      '@zhin.js/kernel': 0.0.29(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
-      '@zhin.js/logger': 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
-      '@zhin.js/schema': 1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
-      croner: 9.1.0
-      segment-matcher: 1.0.5
-      smol-toml: 1.6.0
-      yaml: 2.8.2
-    transitivePeerDependencies:
-      - mongodb
-      - mysql2
-      - pg
-      - redis
-      - zhin.js
-
-  '@zhin.js/core@1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))':
-    dependencies:
-      '@zhin.js/ai': 1.1.10(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))
-      '@zhin.js/database': 1.0.55(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))
-      '@zhin.js/kernel': 0.0.29(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))
-      '@zhin.js/logger': 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))
-      '@zhin.js/schema': 1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))
-      croner: 9.1.0
-      segment-matcher: 1.0.5
-      smol-toml: 1.6.0
-      yaml: 2.8.2
-    transitivePeerDependencies:
-      - mongodb
-      - mysql2
-      - pg
-      - redis
-      - zhin.js
-
-  '@zhin.js/core@1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0))':
-    dependencies:
-      '@zhin.js/ai': 1.1.10(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0))
-      '@zhin.js/database': 1.0.55(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0))
-      '@zhin.js/kernel': 0.0.29(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0))
-      '@zhin.js/logger': 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0))
-      '@zhin.js/schema': 1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0))
-      croner: 9.1.0
-      segment-matcher: 1.0.5
-      smol-toml: 1.6.0
-      yaml: 2.8.2
-    transitivePeerDependencies:
-      - mongodb
-      - mysql2
-      - pg
-      - redis
-      - zhin.js
-
-  '@zhin.js/core@1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0))':
-    dependencies:
-      '@zhin.js/ai': 1.1.10(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0))
-      '@zhin.js/database': 1.0.55(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0))
-      '@zhin.js/kernel': 0.0.29(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0))
-      '@zhin.js/logger': 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0))
-      '@zhin.js/schema': 1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0))
-      croner: 9.1.0
-      segment-matcher: 1.0.5
-      smol-toml: 1.6.0
-      yaml: 2.8.2
-    transitivePeerDependencies:
-      - mongodb
-      - mysql2
-      - pg
-      - redis
-      - zhin.js
-
-  '@zhin.js/core@1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))':
-    dependencies:
-      '@zhin.js/ai': 1.1.10(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
-      '@zhin.js/database': 1.0.55(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
-      '@zhin.js/kernel': 0.0.29(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
-      '@zhin.js/logger': 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
-      '@zhin.js/schema': 1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
-      croner: 9.1.0
-      segment-matcher: 1.0.5
-      smol-toml: 1.6.0
-      yaml: 2.8.2
-    transitivePeerDependencies:
-      - mongodb
-      - mysql2
-      - pg
-      - redis
-      - zhin.js
-
-  '@zhin.js/database@1.0.55(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))':
-    dependencies:
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0)
+      '@types/ws': 8.18.1
+      '@zhin.js/http': 1.0.63(zhin.js@packages+zhin)
+      esbuild: 0.27.4
+      mime: 4.1.0
+      ws: 8.20.0
+      zhin.js: link:packages/zhin
     optionalDependencies:
-      mongodb: 7.1.0(socks@2.8.7)
-      mysql2: 3.20.0(@types/node@20.19.37)
-      pg: 8.20.0
+      '@tailwindcss/vite': 4.1.14(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))
+      '@vitejs/plugin-react': 4.7.0(vite@8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))
+      koa-connect: 2.1.1
+      vite: 8.0.0(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+    optional: true
 
-  '@zhin.js/database@1.0.55(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))':
-    dependencies:
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)
-    optionalDependencies:
-      mongodb: 7.1.0(socks@2.8.7)
-      mysql2: 3.20.0(@types/node@22.19.15)
-      pg: 8.20.0
-
-  '@zhin.js/database@1.0.55(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))':
-    dependencies:
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0)
-    optionalDependencies:
-      mongodb: 7.1.0(socks@2.8.7)
-      mysql2: 3.20.0(@types/node@24.12.0)
-      pg: 8.20.0
-
-  '@zhin.js/database@1.0.55(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0))':
-    dependencies:
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0)
-    optionalDependencies:
-      mongodb: 7.1.0(socks@2.8.7)
-      mysql2: 3.20.0(@types/node@25.5.0)
-      pg: 8.20.0
-
-  '@zhin.js/database@1.0.55(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0))':
-    dependencies:
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0)
-    optionalDependencies:
-      mongodb: 7.1.0(socks@2.8.7)
-      mysql2: 3.20.0(@types/node@25.6.0)
-      pg: 8.20.0
-      redis: 5.11.0
-
-  '@zhin.js/database@1.0.55(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))':
-    dependencies:
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
-    optionalDependencies:
-      mongodb: 7.1.0(socks@2.8.7)
-      mysql2: 3.20.0(@types/node@25.6.0)
-      pg: 8.20.0
-
-  '@zhin.js/http@1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))':
+  '@zhin.js/http@1.0.63(zhin.js@packages+zhin)':
     dependencies:
       '@koa/router': 15.4.0(koa@3.1.2)
-      '@zhin.js/schema': 1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))
+      '@zhin.js/schema': 1.0.52(zhin.js@packages+zhin)
       koa: 3.1.2
       koa-body: 7.0.1
       ws: 8.20.0
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0)
+      zhin.js: link:packages/zhin
     transitivePeerDependencies:
       - bufferutil
       - supports-color
       - utf-8-validate
 
-  '@zhin.js/http@1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))':
-    dependencies:
-      '@koa/router': 15.4.0(koa@3.1.2)
-      '@zhin.js/schema': 1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
-      koa: 3.1.2
-      koa-body: 7.0.1
-      ws: 8.20.0
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)
-    transitivePeerDependencies:
-      - bufferutil
-      - supports-color
-      - utf-8-validate
-
-  '@zhin.js/http@1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))':
-    dependencies:
-      '@koa/router': 15.4.0(koa@3.1.2)
-      '@zhin.js/schema': 1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))
-      koa: 3.1.2
-      koa-body: 7.0.1
-      ws: 8.20.0
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0)
-    transitivePeerDependencies:
-      - bufferutil
-      - supports-color
-      - utf-8-validate
-
-  '@zhin.js/http@1.0.63(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))':
-    dependencies:
-      '@koa/router': 15.4.0(koa@3.1.2)
-      '@zhin.js/schema': 1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
-      koa: 3.1.2
-      koa-body: 7.0.1
-      ws: 8.20.0
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
-    transitivePeerDependencies:
-      - bufferutil
-      - supports-color
-      - utf-8-validate
-
-  '@zhin.js/kernel@0.0.29(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))':
-    dependencies:
-      '@zhin.js/logger': 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))
-      '@zhin.js/schema': 1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))
-      croner: 9.1.0
-      smol-toml: 1.6.0
-      yaml: 2.8.2
-    transitivePeerDependencies:
-      - zhin.js
-
-  '@zhin.js/kernel@0.0.29(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))':
-    dependencies:
-      '@zhin.js/logger': 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
-      '@zhin.js/schema': 1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
-      croner: 9.1.0
-      smol-toml: 1.6.0
-      yaml: 2.8.2
-    transitivePeerDependencies:
-      - zhin.js
-
-  '@zhin.js/kernel@0.0.29(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))':
-    dependencies:
-      '@zhin.js/logger': 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))
-      '@zhin.js/schema': 1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))
-      croner: 9.1.0
-      smol-toml: 1.6.0
-      yaml: 2.8.2
-    transitivePeerDependencies:
-      - zhin.js
-
-  '@zhin.js/kernel@0.0.29(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0))':
-    dependencies:
-      '@zhin.js/logger': 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0))
-      '@zhin.js/schema': 1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0))
-      croner: 9.1.0
-      smol-toml: 1.6.0
-      yaml: 2.8.2
-    transitivePeerDependencies:
-      - zhin.js
-
-  '@zhin.js/kernel@0.0.29(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0))':
-    dependencies:
-      '@zhin.js/logger': 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0))
-      '@zhin.js/schema': 1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0))
-      croner: 9.1.0
-      smol-toml: 1.6.0
-      yaml: 2.8.2
-    transitivePeerDependencies:
-      - zhin.js
-
-  '@zhin.js/kernel@0.0.29(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))':
-    dependencies:
-      '@zhin.js/logger': 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
-      '@zhin.js/schema': 1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
-      croner: 9.1.0
-      smol-toml: 1.6.0
-      yaml: 2.8.2
-    transitivePeerDependencies:
-      - zhin.js
-
-  '@zhin.js/logger@0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))':
-    dependencies:
-      chalk: 5.6.2
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0)
-
-  '@zhin.js/logger@0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))':
-    dependencies:
-      chalk: 5.6.2
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)
-
-  '@zhin.js/logger@0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))':
-    dependencies:
-      chalk: 5.6.2
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0)
-
-  '@zhin.js/logger@0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0))':
-    dependencies:
-      chalk: 5.6.2
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0)
-
-  '@zhin.js/logger@0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0))':
-    dependencies:
-      chalk: 5.6.2
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0)
-
-  '@zhin.js/logger@0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))':
-    dependencies:
-      chalk: 5.6.2
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
-
-  '@zhin.js/plugin-html-renderer@0.0.48(@types/react@19.2.14)(react@19.2.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))':
+  '@zhin.js/plugin-html-renderer@0.0.48(zhin.js@packages+zhin)':
     dependencies:
       '@resvg/resvg-js': 2.6.2
-      '@zhin.js/satori': 0.2.5(@types/react@19.2.14)(react@19.2.0)
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
-    transitivePeerDependencies:
-      - '@types/react'
-      - react
+      '@zhin.js/satori': link:packages/satori
+      zhin.js: link:packages/zhin
 
-  '@zhin.js/satori@0.2.5(@types/react@19.2.14)(react@19.2.0)':
+  '@zhin.js/schema@1.0.52(zhin.js@packages+zhin)':
     dependencies:
-      html-react-parser: 5.2.17(@types/react@19.2.14)(react@19.2.0)
-      react: 19.2.0
-      satori: 0.12.2
-    transitivePeerDependencies:
-      - '@types/react'
-
-  '@zhin.js/schema@1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))':
-    dependencies:
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0)
-
-  '@zhin.js/schema@1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))':
-    dependencies:
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)
-
-  '@zhin.js/schema@1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))':
-    dependencies:
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0)
-
-  '@zhin.js/schema@1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0))':
-    dependencies:
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0)
-
-  '@zhin.js/schema@1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0))':
-    dependencies:
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0)
-
-  '@zhin.js/schema@1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))':
-    dependencies:
-      zhin.js: 1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)
+      zhin.js: link:packages/zhin
 
   '@zhinjs/shared@0.0.7': {}
 
@@ -12819,16 +12333,6 @@ snapshots:
     optionalDependencies:
       '@types/react': 18.3.28
 
-  html-react-parser@5.2.17(@types/react@19.2.14)(react@19.2.0):
-    dependencies:
-      domhandler: 5.0.3
-      html-dom-parser: 5.1.8
-      react: 19.2.0
-      react-property: 2.0.2
-      style-to-js: 1.1.21
-    optionalDependencies:
-      '@types/react': 19.2.14
-
   html-to-text@9.0.5:
     dependencies:
       '@selderee/plugin-htmlparser2': 0.11.0
@@ -13730,58 +13234,6 @@ snapshots:
   mute-stream@2.0.0: {}
 
   mylas@2.1.14: {}
-
-  mysql2@3.20.0(@types/node@20.19.37):
-    dependencies:
-      '@types/node': 20.19.37
-      aws-ssl-profiles: 1.1.2
-      denque: 2.1.0
-      generate-function: 2.3.1
-      iconv-lite: 0.7.2
-      long: 5.3.2
-      lru.min: 1.1.4
-      named-placeholders: 1.1.6
-      sql-escaper: 1.3.3
-    optional: true
-
-  mysql2@3.20.0(@types/node@22.19.15):
-    dependencies:
-      '@types/node': 22.19.15
-      aws-ssl-profiles: 1.1.2
-      denque: 2.1.0
-      generate-function: 2.3.1
-      iconv-lite: 0.7.2
-      long: 5.3.2
-      lru.min: 1.1.4
-      named-placeholders: 1.1.6
-      sql-escaper: 1.3.3
-    optional: true
-
-  mysql2@3.20.0(@types/node@24.12.0):
-    dependencies:
-      '@types/node': 24.12.0
-      aws-ssl-profiles: 1.1.2
-      denque: 2.1.0
-      generate-function: 2.3.1
-      iconv-lite: 0.7.2
-      long: 5.3.2
-      lru.min: 1.1.4
-      named-placeholders: 1.1.6
-      sql-escaper: 1.3.3
-    optional: true
-
-  mysql2@3.20.0(@types/node@25.5.0):
-    dependencies:
-      '@types/node': 25.5.0
-      aws-ssl-profiles: 1.1.2
-      denque: 2.1.0
-      generate-function: 2.3.1
-      iconv-lite: 0.7.2
-      long: 5.3.2
-      lru.min: 1.1.4
-      named-placeholders: 1.1.6
-      sql-escaper: 1.3.3
-    optional: true
 
   mysql2@3.20.0(@types/node@25.6.0):
     dependencies:
@@ -15382,24 +14834,6 @@ snapshots:
       tsx: 4.21.0
       yaml: 2.8.2
 
-  vite@8.0.0(@types/node@25.6.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2):
-    dependencies:
-      '@oxc-project/runtime': 0.115.0
-      lightningcss: 1.32.0
-      picomatch: 4.0.3
-      postcss: 8.5.8
-      rolldown: 1.0.0-rc.9
-      tinyglobby: 0.2.15
-    optionalDependencies:
-      '@types/node': 25.6.0
-      esbuild: 0.27.4
-      fsevents: 2.3.3
-      jiti: 2.6.1
-      terser: 5.46.1
-      tsx: 4.21.0
-      yaml: 2.8.2
-    optional: true
-
   vitepress-plugin-mermaid@2.0.17(mermaid@11.13.0)(vitepress@1.6.4(@algolia/client-search@5.49.2)(@types/node@24.12.0)(@types/react@19.2.14)(axios@1.13.6)(lightningcss@1.32.0)(postcss@8.5.8)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(search-insights@2.17.3)(terser@5.46.1)(typescript@6.0.2)):
     dependencies:
       mermaid: 11.13.0
@@ -15617,102 +15051,6 @@ snapshots:
   yoctocolors-cjs@2.1.3: {}
 
   yoga-wasm-web@0.3.3: {}
-
-  zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0):
-    dependencies:
-      '@zhin.js/agent': 0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))
-      '@zhin.js/ai': 1.1.10(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))
-      '@zhin.js/core': 1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))
-      '@zhin.js/kernel': 0.0.29(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))
-      '@zhin.js/logger': 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))
-      '@zhin.js/schema': 1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@20.19.37))(pg@8.20.0))
-      dotenv: 16.6.1
-      yaml: 2.8.2
-    transitivePeerDependencies:
-      - mongodb
-      - mysql2
-      - pg
-      - redis
-
-  zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0):
-    dependencies:
-      '@zhin.js/agent': 0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
-      '@zhin.js/ai': 1.1.10(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
-      '@zhin.js/core': 1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
-      '@zhin.js/kernel': 0.0.29(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
-      '@zhin.js/logger': 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
-      '@zhin.js/schema': 1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0))
-      dotenv: 16.6.1
-      yaml: 2.8.2
-    transitivePeerDependencies:
-      - mongodb
-      - mysql2
-      - pg
-      - redis
-
-  zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0):
-    dependencies:
-      '@zhin.js/agent': 0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))
-      '@zhin.js/ai': 1.1.10(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))
-      '@zhin.js/core': 1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))
-      '@zhin.js/kernel': 0.0.29(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))
-      '@zhin.js/logger': 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))
-      '@zhin.js/schema': 1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@24.12.0))(pg@8.20.0))
-      dotenv: 16.6.1
-      yaml: 2.8.2
-    transitivePeerDependencies:
-      - mongodb
-      - mysql2
-      - pg
-      - redis
-
-  zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0):
-    dependencies:
-      '@zhin.js/agent': 0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0))
-      '@zhin.js/ai': 1.1.10(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0))
-      '@zhin.js/core': 1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0))
-      '@zhin.js/kernel': 0.0.29(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0))
-      '@zhin.js/logger': 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0))
-      '@zhin.js/schema': 1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.5.0))(pg@8.20.0))
-      dotenv: 16.6.1
-      yaml: 2.8.2
-    transitivePeerDependencies:
-      - mongodb
-      - mysql2
-      - pg
-      - redis
-
-  zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0):
-    dependencies:
-      '@zhin.js/agent': 0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
-      '@zhin.js/ai': 1.1.10(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
-      '@zhin.js/core': 1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
-      '@zhin.js/kernel': 0.0.29(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
-      '@zhin.js/logger': 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
-      '@zhin.js/schema': 1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0))
-      dotenv: 16.6.1
-      yaml: 2.8.2
-    transitivePeerDependencies:
-      - mongodb
-      - mysql2
-      - pg
-      - redis
-
-  zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0):
-    dependencies:
-      '@zhin.js/agent': 0.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0))
-      '@zhin.js/ai': 1.1.10(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0))
-      '@zhin.js/core': 1.1.10(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0)(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0))
-      '@zhin.js/kernel': 0.0.29(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0))
-      '@zhin.js/logger': 0.1.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0))
-      '@zhin.js/schema': 1.0.52(zhin.js@1.0.68(mongodb@7.1.0(socks@2.8.7))(mysql2@3.20.0(@types/node@25.6.0))(pg@8.20.0)(redis@5.11.0))
-      dotenv: 16.6.1
-      yaml: 2.8.2
-    transitivePeerDependencies:
-      - mongodb
-      - mysql2
-      - pg
-      - redis
 
   zip-stream@4.1.1:
     dependencies:

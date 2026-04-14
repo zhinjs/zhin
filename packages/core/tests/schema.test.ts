@@ -38,7 +38,7 @@ describe('Schema系统测试', () => {
       })
       
       expect(schema.meta.type).toBe('object')
-      expect(Object.keys(schema.options.object!)).toEqual(['name', 'age', 'active'])
+      expect(Object.keys(schema.options.dict!)).toEqual(['name', 'age', 'active'])
     })
 
     it('应该创建列表Schema', () => {
@@ -204,8 +204,8 @@ describe('Schema系统测试', () => {
       })
       
       expect(schema.meta.type).toBe('object')
-      expect(schema.options.object!.user.meta.type).toBe('object')
-      expect(schema.options.object!.settings.meta.type).toBe('dict')
+      expect(schema.options.dict!.user.meta.type).toBe('object')
+      expect(schema.options.dict!.settings.meta.type).toBe('dict')
     })
 
     it('应该处理带选项的Schema', () => {

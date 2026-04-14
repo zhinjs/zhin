@@ -71,6 +71,17 @@
   },
   "pnpm": {
     "overrides": {
+      "zhin.js": "workspace:*",
+      "@zhin.js/core": "workspace:*",
+      "@zhin.js/kernel": "workspace:*",
+      "@zhin.js/ai": "workspace:*",
+      "@zhin.js/logger": "workspace:*",
+      "@zhin.js/schema": "workspace:*",
+      "@zhin.js/database": "workspace:*",
+      "@zhin.js/cli": "workspace:*",
+      "@zhin.js/client": "workspace:*",
+      "@zhin.js/agent": "workspace:*",
+      "@zhin.js/satori": "workspace:*",
       "semver@<5.7.2": ">=5.7.2",
       "esbuild@<=0.24.2": ">=0.25.0",
       "react-router@>=7.0 <7.12.0": ">=7.12.0",
