@@ -81,7 +81,11 @@ export function createDevTools(
     .param('mergeMethod', { type: 'string', description: '合并方式: merge, squash, rebase（默认 squash）' })
     .execute(async (args) => {
       try {
-        const method = (args.mergeMethod as 'merge' | 'squash' | 'rebase') || 'squash';
+        const validMethods = ['merge', 'squash', 'rebase'];
+        const rawMethod = (args.mergeMethod as string) || 'squash';
+        const method = validMethods.includes(rawMethod)
+          ? rawMethod as 'merge' | 'squash' | 'rebase'
+          : 'squash';
         await github.mergePullRequest(args.prNumber as number, method);
         return {
           success: true,

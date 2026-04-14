@@ -65,7 +65,7 @@ export class GitHubClient {
       throw new Error(`GitHub API ${method} ${path} failed (${response.status}): ${text}`);
     }
 
-    if (response.status === 204) return undefined as T;
+    if (response.status === 204) return undefined as unknown as T;
     return response.json() as Promise<T>;
   }
 

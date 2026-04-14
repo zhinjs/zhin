@@ -28,10 +28,10 @@ const { addTool, addCron, logger, root } = plugin;
 // ─── 配置 ────────────────────────────────────────────────────────────────────
 
 const configService = root.inject('config');
-const appConfig = configService?.getPrimary<{ devteam?: Partial<DevTeamConfig> }>() || {};
+const appConfig = configService?.getData?.('zhin.config.yml') || {};
 const config: DevTeamConfig = {
   ...DEFAULT_CONFIG,
-  ...appConfig.devteam,
+  ...(appConfig as Record<string, unknown>).devteam as Partial<DevTeamConfig> | undefined,
 };
 
 if (!config.githubToken || !config.owner || !config.repo) {

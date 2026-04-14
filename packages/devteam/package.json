@@ -43,7 +43,7 @@
     "directory": "packages/devteam"
   },
   "dependencies": {
-    "zhin.js": "^1.0.68"
+    "zhin.js": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.10.4",

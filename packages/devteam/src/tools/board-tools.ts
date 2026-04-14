@@ -81,6 +81,22 @@ export function createBoardTools(
       description: `操作者角色: ${Object.values(AgentRole).join(', ')}`,
     }, true)
     .execute(async (args) => {
+      const validStatuses = Object.values(RequirementStatus) as string[];
+      if (!validStatuses.includes(args.newStatus as string)) {
+        return {
+          success: false,
+          message: `无效的状态值: ${args.newStatus}。合法值: ${validStatuses.join(', ')}`,
+        };
+      }
+
+      const validRoles = Object.values(AgentRole) as string[];
+      if (!validRoles.includes(args.agentRole as string)) {
+        return {
+          success: false,
+          message: `无效的角色: ${args.agentRole}。合法值: ${validRoles.join(', ')}`,
+        };
+      }
+
       const success = await stateMachine.transition(
         args.issueNumber as number,
         args.newStatus as RequirementStatusValue,

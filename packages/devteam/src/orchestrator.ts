@@ -174,16 +174,21 @@ function buildDeveloperHandler(
         // 等待开发 - 创建分支开始开发
         const slug = event.title
           .toLowerCase()
-          .replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-')
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '')
           .substring(0, 30);
         const branchName = `feat/issue-${event.issueNumber}-${slug}`;
 
         try {
           await github.createBranch(branchName, productionBranch);
           stateMachine.update(event.issueNumber, { branchName });
-        } catch {
-          // 分支可能已存在
-          logger.warn(`分支创建可能失败（可能已存在）: ${branchName}`);
+        } catch (err: unknown) {
+          const errMsg = String(err);
+          if (errMsg.includes('Reference already exists')) {
+            logger.info(`分支已存在，复用: ${branchName}`);
+          } else {
+            logger.error(`分支创建失败: ${branchName}`, err);
+          }
         }
 
         await stateMachine.transition(
@@ -421,8 +426,8 @@ export class DevTeamOrchestrator {
             await this.github.addIssueComment(event.issueNumber,
               `⚠️ **[系统]** ${role} 处理需求时出错: ${err}`,
             );
-          } catch {
-            // 评论失败时静默处理
+          } catch (commentErr) {
+            logger.error(`发送错误通知评论失败 #${event.issueNumber}:`, commentErr);
           }
         } finally {
           this.processing.delete(eventKey);
