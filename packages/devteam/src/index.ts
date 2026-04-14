@@ -19,7 +19,7 @@ import { DevTeamEventBus } from './event-bus.js';
 import { RequirementStateMachine } from './state-machine.js';
 import { DevTeamOrchestrator } from './orchestrator.js';
 import { createBoardTools, createDevTools, createFeedbackTools } from './tools/index.js';
-import type { DevTeamConfig, UserFeedback, Requirement } from './types.js';
+import type { DevTeamConfig, UserFeedback, Requirement, RequirementStatusValue } from './types.js';
 import { DEFAULT_CONFIG, RequirementStatus, STATUS_LABELS } from './types.js';
 
 const plugin = usePlugin();
@@ -128,10 +128,10 @@ async function syncProjectBoard(): Promise<void> {
 /**
  * 从看板显示的状态名反查内部状态值
  */
-function findStatusValue(statusLabel: string): RequirementStatus[keyof typeof RequirementStatus] | undefined {
+function findStatusValue(statusLabel: string): RequirementStatusValue | undefined {
   for (const [value, label] of Object.entries(STATUS_LABELS)) {
     if (label === statusLabel) {
-      return value as RequirementStatus[keyof typeof RequirementStatus];
+      return value as RequirementStatusValue;
     }
   }
   return undefined;
