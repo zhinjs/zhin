@@ -1,0 +1,55 @@
+{
+  "name": "@zhin.js/devteam",
+  "version": "0.0.1",
+  "description": "多Agent协同开发插件 - 基于GitHub Project看板的自动化研发流程",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "lib",
+    "agents",
+    "skills",
+    "plugin.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "plugin",
+    "devteam",
+    "multi-agent",
+    "github-project",
+    "ci-cd",
+    "collaborative-development"
+  ],
+  "author": "Zhin.js Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/devteam"
+  },
+  "dependencies": {
+    "zhin.js": "^1.0.68"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.4",
+    "typescript": "^6.0.0"
+  },
+  "peerDependencies": {
+    "zhin.js": "^1.0.68"
+  }
+}
