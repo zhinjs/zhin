@@ -23,7 +23,7 @@ import type { DevTeamConfig, UserFeedback, Requirement, RequirementStatusValue }
 import { DEFAULT_CONFIG, RequirementStatus, STATUS_LABELS } from './types.js';
 
 const plugin = usePlugin();
-const { addTool, addCron, logger, root } = plugin;
+const { addTool, addCron, useContext, logger, root } = plugin;
 
 // ─── 配置 ────────────────────────────────────────────────────────────────────
 
@@ -34,13 +34,30 @@ const config: DevTeamConfig = {
   ...(appConfig as Record<string, unknown>).devteam as Partial<DevTeamConfig> | undefined,
 };
 
-if (!config.githubToken || !config.owner || !config.repo) {
-  logger.warn('DevTeam 插件缺少必要配置 (githubToken, owner, repo)，请在配置文件中设置 devteam 配置项');
+if (!config.owner || !config.repo) {
+  logger.warn('DevTeam 插件缺少必要配置 (owner, repo)，请在配置文件中设置 devteam 配置项');
 }
 
 // ─── 核心组件初始化 ──────────────────────────────────────────────────────────
 
 const github = new GitHubClient(config);
+
+// ─── 复用 GitHub 适配器（可选） ──────────────────────────────────────────────
+// 当 @zhin.js/adapter-github 已启用时，通过其 GhClient 代理 API 调用，
+// 共享适配器的认证（gh CLI / GitHub App / OAuth），无需单独配置 githubToken。
+
+// Note: 'github' Context is registered by @zhin.js/adapter-github when loaded.
+// We use 'as any' to avoid a hard type dependency on the adapter package.
+useContext('github' as any, (adapter: any) => {
+  const ghClient = adapter?.getAPI?.();
+  if (ghClient && typeof ghClient.request === 'function') {
+    github.setDelegate(ghClient);
+  }
+  return () => {
+    github.setDelegate(null);
+  };
+});
+
 const eventBus = new DevTeamEventBus();
 const stateMachine = new RequirementStateMachine(github, eventBus);
 
@@ -99,7 +116,7 @@ addCron(new Cron(`*/${config.pollIntervalMinutes} * * * *`, async () => {
 // ─── 看板同步 ────────────────────────────────────────────────────────────────
 
 async function syncProjectBoard(): Promise<void> {
-  if (!config.githubToken) return;
+  if (!github.isReady()) return;
 
   const items = await github.getProjectItems();
   logger.debug(`同步看板: 获取到 ${items.length} 个条目`);

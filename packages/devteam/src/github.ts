@@ -1,10 +1,16 @@
 /**
  * @zhin.js/devteam - GitHub API 客户端
  *
- * 封装 GitHub REST & GraphQL API，操作 Issues、Projects V2、PRs、Branches
+ * 封装 GitHub REST & GraphQL API，操作 Issues、Projects V2、PRs、Branches。
+ *
+ * 支持三种认证模式（按优先级）：
+ *   1. 显式 githubToken 配置
+ *   2. 委托给 GitHub 适配器的 GhClient（通过 setDelegate()）
+ *   3. 自动从 gh CLI 获取 token（gh auth token）
  */
 
 import { Logger } from 'zhin.js';
+import { execFileSync } from 'node:child_process';
 import type {
   DevTeamConfig,
   RequirementStatusValue,
@@ -14,16 +20,46 @@ import { STATUS_LABELS } from './types.js';
 const logger = new Logger(null, 'DevTeam:GitHub');
 
 // ============================================================================
-// GitHub API 基础
+// API 委托接口（与 @zhin.js/adapter-github 的 GhClient.request() 签名兼容）
 // ============================================================================
 
-interface GitHubRequestOptions {
-  method?: string;
-  path?: string;
-  body?: unknown;
-  graphql?: string;
-  variables?: Record<string, unknown>;
+/**
+ * Duck-typed interface matching GhClient.request() from @zhin.js/adapter-github.
+ * No hard dependency on the adapter package.
+ */
+export interface ApiDelegate {
+  request<T = any>(
+    method: string,
+    path: string,
+    body?: any,
+    headers?: Record<string, string>,
+  ): Promise<{ ok: boolean; status: number; data: T }>;
 }
+
+// ============================================================================
+// gh CLI token 自动检测
+// ============================================================================
+
+/**
+ * 尝试从 gh CLI 获取认证 token（需要 gh 已安装且已认证）。
+ * 如果 GitHub 适配器已配置，其 gh CLI 认证同样可用于 devteam。
+ */
+export function resolveGhCliToken(): string | null {
+  try {
+    const token = execFileSync('gh', ['auth', 'token'], {
+      encoding: 'utf-8',
+      timeout: 5000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return token || null;
+  } catch {
+    return null;
+  }
+}
+
+// ============================================================================
+// GitHub API 基础
+// ============================================================================
 
 export class GitHubClient {
   private token: string;
@@ -33,17 +69,52 @@ export class GitHubClient {
   private projectId: string | null = null;
   private statusFieldId: string | null = null;
   private statusOptions: Map<string, string> = new Map();
+  private delegate: ApiDelegate | null = null;
 
   constructor(config: DevTeamConfig) {
-    this.token = config.githubToken;
+    // 认证优先级: 显式 token > gh CLI 自动检测
+    this.token = config.githubToken || resolveGhCliToken() || '';
+    if (!config.githubToken && this.token) {
+      logger.info('从 gh CLI 自动获取到 GitHub Token');
+    }
     this.owner = config.owner;
     this.repo = config.repo;
     this.projectNumber = config.projectNumber;
   }
 
+  /**
+   * 设置 API 委托（通常来自 GitHub 适配器的 GhClient）。
+   * 设置后 REST 和 GraphQL 调用均通过委托执行，共享适配器的认证。
+   */
+  setDelegate(delegate: ApiDelegate | null): void {
+    this.delegate = delegate;
+    if (delegate) {
+      logger.info('已连接 GitHub Adapter，API 调用将通过适配器代理');
+    }
+  }
+
+  /**
+   * 是否有可用的认证方式（token 或 delegate）
+   */
+  isReady(): boolean {
+    return !!(this.token || this.delegate);
+  }
+
   // ── REST API ────────────────────────────────────────────────────────
 
   private async rest<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
+    // 优先使用委托（适配器的 GhClient）
+    if (this.delegate) {
+      const result = await this.delegate.request<T>(method, path, body);
+      if (!result.ok) {
+        const msg = typeof result.data === 'object' && result.data !== null
+          ? JSON.stringify(result.data)
+          : String(result.data);
+        throw new Error(`GitHub API ${method} ${path} failed (${result.status}): ${msg}`);
+      }
+      return result.data;
+    }
+
     const url = `https://api.github.com${path}`;
     const headers: Record<string, string> = {
       'Authorization': `Bearer ${this.token}`,
@@ -72,6 +143,23 @@ export class GitHubClient {
   // ── GraphQL API ─────────────────────────────────────────────────────
 
   private async graphql<T = unknown>(query: string, variables?: Record<string, unknown>): Promise<T> {
+    // 委托模式: gh CLI 的 `gh api /graphql` 也支持 GraphQL
+    if (this.delegate) {
+      const result = await this.delegate.request<{ data?: T; errors?: Array<{ message: string }> }>(
+        'POST',
+        '/graphql',
+        { query, variables },
+      );
+      if (!result.ok) {
+        throw new Error(`GitHub GraphQL failed (${result.status}): ${JSON.stringify(result.data)}`);
+      }
+      const gqlResult = result.data;
+      if (gqlResult?.errors?.length) {
+        throw new Error(`GitHub GraphQL: ${gqlResult.errors.map(e => e.message).join('; ')}`);
+      }
+      return gqlResult?.data as T;
+    }
+
     const response = await fetch('https://api.github.com/graphql', {
       method: 'POST',
       headers: {
