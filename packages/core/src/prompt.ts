@@ -223,8 +223,8 @@ export class Prompt<P extends RegisteredAdapter> {
                 return (await this.confirm(schema.meta.description || schema.meta.key || 'Confirm')) as Schema.Types<T>;
             case 'object':
                 if (schema.meta.description) await this.event.$reply(schema.meta.description);
-                if (!schema.options.dict) throw new Error('Object schema missing dict definition');
-                return (await this.getValueWithSchemas(schema.options.dict)) as Schema.Types<T>;
+                if (!schema.options.object) throw new Error('Object schema missing object definition');
+                return (await this.getValueWithSchemas(schema.options.object)) as Schema.Types<T>;
             case 'date':
                 return await this.prompt({
                     tips: schema.meta.description || schema.meta.key || 'Enter a date',

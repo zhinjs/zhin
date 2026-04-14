@@ -69,10 +69,10 @@ describe('Prompt', () => {
 
     it('should throw error for object schema without object definition', async () => {
       const schema = Schema.object({})
-      // 删除 dict 定义来触发错误
-      delete (schema as any).options.dict
+      // 删除 object 定义来触发错误
+      delete (schema as any).options.object
       
-      await expect(prompt.getValueWithSchema(schema)).rejects.toThrow('Object schema missing dict definition')
+      await expect(prompt.getValueWithSchema(schema)).rejects.toThrow('Object schema missing object definition')
     })
   })
 })
