@@ -14,6 +14,7 @@ import { execFileSync } from 'node:child_process';
 import type {
   DevTeamConfig,
   RequirementStatusValue,
+  AgentAppConfig,
 } from './types.js';
 import { STATUS_LABELS } from './types.js';
 
@@ -91,6 +92,23 @@ export class GitHubClient {
     if (delegate) {
       logger.info('已连接 GitHub Adapter，API 调用将通过适配器代理');
     }
+  }
+
+  /**
+   * 创建一个使用指定 Agent 角色认证的客户端副本。
+   * 共享 projectId / statusFieldId 等缓存，但使用该角色自己的 token。
+   * 如果没有角色配置，返回 this（共享认证）。
+   */
+  forRole(roleConfig: AgentAppConfig | undefined): GitHubClient {
+    const roleToken = roleConfig?.token;
+    if (!roleToken) return this;
+
+    // 创建一个轻量副本，共享项目缓存
+    const clone = Object.create(this) as GitHubClient;
+    // 覆盖 token 和 delegate（角色 token 优先，不走 delegate）
+    Object.defineProperty(clone, 'token', { value: roleToken, writable: false });
+    Object.defineProperty(clone, 'delegate', { value: null, writable: true });
+    return clone;
   }
 
   /**
@@ -397,11 +415,13 @@ export class GitHubClient {
       };
     }>(query, { projectId: this.projectId });
 
-    return data.node.items.nodes
-      .filter(item => item.content)
+    const nodes = data.node?.items?.nodes;
+    if (!nodes) return [];
+
+    return nodes
+      .filter(item => item.content && typeof item.content.number === 'number')
       .map(item => {
-        const statusField = item.fieldValues.nodes.find(fv => fv.field?.name === 'Status');
-        console.log('解析Project Item:', JSON.stringify(item, null, 2));
+        const statusField = item.fieldValues?.nodes?.find(fv => fv.field?.name === 'Status');
         return {
           itemId: item.id,
           issueNumber: item.content!.number,
@@ -409,7 +429,7 @@ export class GitHubClient {
           body: item.content!.body,
           state: item.content!.state,
           status: statusField?.name || '',
-          labels: item.content!.labels.nodes.map(l => l.name),
+          labels: item.content?.labels?.nodes?.map(l => l.name) || [],
         };
       });
   }

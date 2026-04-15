@@ -65,6 +65,24 @@ const stateMachine = new RequirementStateMachine(github, eventBus);
 // 用户反馈数据存储
 const feedbacks: UserFeedback[] = [];
 
+// ─── 注册 AI 工具 ────────────────────────────────────────────────────────────
+
+// 收集所有 devteam 工具实例，供子 Agent 调用时注入
+const devteamTools = [
+  ...createBoardTools(github, stateMachine),
+  ...createDevTools(github, stateMachine, config.productionBranch),
+  ...createFeedbackTools(feedbacks),
+];
+
+for (const tool of devteamTools) {
+  addTool(tool);
+}
+
+// 将 devteam 工具转为 AgentTool 格式，供 runAgent() 的 tools 选项使用
+const devteamAgentTools = devteamTools.map(t => {
+  return 'toTool' in t && typeof (t as any).toTool === 'function' ? (t as any).toTool() : t;
+});
+
 // ─── 编排器（连接事件总线与各 Agent 处理器） ─────────────────────────────────
 // 构造时自动在 eventBus 上注册所有角色的事件路由
 
@@ -73,35 +91,19 @@ const orchestrator = new DevTeamOrchestrator(
   stateMachine,
   eventBus,
   config.productionBranch,
+  config.agents,
 );
 
 // AIService 就绪后注入给编排器，使其能调用真实 AI 子代理
 let aiService: AIService | null = null;
 useContext('ai' as any, (ai: AIService) => {
   aiService = ai;
-  orchestrator.setAI(ai);
+  orchestrator.setAI(ai, devteamAgentTools);
   return () => {
     aiService = null;
     orchestrator.setAI(null);
   };
 });
-
-// ─── 注册 AI 工具 ────────────────────────────────────────────────────────────
-
-// 看板操作工具
-for (const tool of createBoardTools(github, stateMachine)) {
-  addTool(tool);
-}
-
-// 开发相关工具
-for (const tool of createDevTools(github, stateMachine, config.productionBranch)) {
-  addTool(tool);
-}
-
-// 反馈管理工具
-for (const tool of createFeedbackTools(feedbacks)) {
-  addTool(tool);
-}
 
 // ─── 定时任务 ────────────────────────────────────────────────────────────────
 
@@ -137,6 +139,7 @@ addCron(new Cron(config.triageCron, async () => {
         systemPrompt: '你是项目经理 Agent，负责将用户反馈整理为正式需求。' +
           '使用 devteam_list_feedback 查看详情，devteam_create_requirement 创建需求，' +
           'devteam_mark_feedback_processed 标记已处理。请逐条处理所有反馈。',
+        tools: devteamAgentTools,
       },
     );
     logger.info('项目经理 Agent 已完成反馈整理');

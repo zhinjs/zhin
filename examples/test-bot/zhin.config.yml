@@ -83,7 +83,7 @@ ai:
     keepAfterSummary: 10
     maxContextTokens: 4000
   agent:
-    chatModel: nvidia/moonshotai/kimi-k2.5
+    chatModel: kr/claude-sonnet-4.5
     visionModel: qw/vision-model
     execSecurity: allowlist
     execPreset: network
@@ -140,5 +140,5 @@ devteam:
   repo: zhin
   projectNumber: 2
   productionBranch: main
-  triageCron: "0 9 * * 1-5"
-  pollIntervalMinutes: 5
+  triageCron: "55 9 * * 1-5"
+  pollIntervalMinutes: 1

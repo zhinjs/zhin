@@ -137,8 +137,20 @@ export interface UserFeedback {
 // GitHub 配置
 // ============================================================================
 
+/** 单个 Agent 角色的 GitHub App 认证配置 */
+export interface AgentAppConfig {
+  /** GitHub App ID */
+  appId?: string;
+  /** GitHub App 私钥（PEM 格式） */
+  privateKey?: string;
+  /** 安装 ID（GitHub App Installation ID） */
+  installationId?: string;
+  /** 或者直接配置 Personal Access Token */
+  token?: string;
+}
+
 export interface DevTeamConfig {
-  /** GitHub Personal Access Token */
+  /** GitHub Personal Access Token（共享默认认证） */
   githubToken: string;
   /** 仓库 owner */
   owner: string;
@@ -156,6 +168,12 @@ export interface DevTeamConfig {
   triageCron: string;
   /** 需求状态轮询间隔（分钟） */
   pollIntervalMinutes: number;
+  /**
+   * 各 Agent 角色的独立 GitHub App 配置。
+   * 配置后该角色的评论和操作将以对应 App 身份执行。
+   * 未配置的角色使用 githubToken 共享认证。
+   */
+  agents?: Partial<Record<AgentRoleValue, AgentAppConfig>>;
 }
 
 export const DEFAULT_CONFIG: DevTeamConfig = {
