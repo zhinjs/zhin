@@ -50,6 +50,6 @@
     "typescript": "^6.0.0"
   },
   "peerDependencies": {
-    "zhin.js": "^1.0.68"
+    "zhin.js": "workspace:*"
   }
 }

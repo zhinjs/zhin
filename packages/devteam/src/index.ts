@@ -28,7 +28,7 @@ const { addTool, addCron, useContext, logger, root } = plugin;
 // ─── 配置 ────────────────────────────────────────────────────────────────────
 
 const configService = root.inject('config');
-const appConfig = configService?.getData?.('zhin.config.yml') || {};
+const appConfig = configService?.get?.('zhin.config.yml') || {};
 const config: DevTeamConfig = {
   ...DEFAULT_CONFIG,
   ...(appConfig as Record<string, unknown>).devteam as Partial<DevTeamConfig> | undefined,

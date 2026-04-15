@@ -184,51 +184,42 @@ export class GitHubClient {
   async initProject(): Promise<void> {
     if (this.projectId) return;
 
-    const query = `
-      query($owner: String!, $number: Int!) {
-        user(login: $owner) {
-          projectV2(number: $number) {
-            id
-            fields(first: 30) {
-              nodes {
-                ... on ProjectV2SingleSelectField {
-                  id
-                  name
-                  options {
+    // 先尝试 organization，再尝试 user（避免单次查询中一方报错导致整个失败）
+    let project: ProjectV2Data | undefined;
+
+    for (const ownerType of ['organization', 'user'] as const) {
+      const query = `
+        query($owner: String!, $number: Int!) {
+          ${ownerType}(login: $owner) {
+            projectV2(number: $number) {
+              id
+              fields(first: 30) {
+                nodes {
+                  ... on ProjectV2SingleSelectField {
                     id
                     name
+                    options {
+                      id
+                      name
+                    }
                   }
                 }
               }
             }
           }
         }
-        organization(login: $owner) {
-          projectV2(number: $number) {
-            id
-            fields(first: 30) {
-              nodes {
-                ... on ProjectV2SingleSelectField {
-                  id
-                  name
-                  options {
-                    id
-                    name
-                  }
-                }
-              }
-            }
-          }
-        }
+      `;
+
+      try {
+        const data = await this.graphql<Record<string, { projectV2: ProjectV2Data }>>(
+          query, { owner: this.owner, number: this.projectNumber },
+        );
+        project = data[ownerType]?.projectV2;
+        if (project) break;
+      } catch {
+        // 当前 ownerType 不匹配，尝试下一个
       }
-    `;
-
-    const data = await this.graphql<{
-      user?: { projectV2: ProjectV2Data };
-      organization?: { projectV2: ProjectV2Data };
-    }>(query, { owner: this.owner, number: this.projectNumber });
-
-    const project = data.user?.projectV2 || data.organization?.projectV2;
+    }
     if (!project) {
       throw new Error(`Project #${this.projectNumber} not found for ${this.owner}`);
     }
