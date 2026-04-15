@@ -1,5 +1,11 @@
 # @zhin.js/console
 
+## 2.0.12
+
+### Patch Changes
+
+- 60b1a4d: fix: console 发版
+
 ## 2.0.11
 
 ### Patch Changes

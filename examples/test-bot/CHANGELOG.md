@@ -1,5 +1,19 @@
 # test-bot
 
+## 0.1.80
+
+### Patch Changes
+
+- Updated dependencies [60b1a4d]
+  - @zhin.js/console@2.0.12
+  - @zhin.js/adapter-discord@1.0.75
+  - @zhin.js/adapter-icqq@2.0.13
+  - @zhin.js/adapter-kook@1.0.72
+  - @zhin.js/adapter-qq@1.0.72
+  - @zhin.js/adapter-sandbox@2.0.12
+  - @zhin.js/adapter-telegram@1.0.57
+  - @zhin.js/plugin-music@1.0.13
+
 ## 0.1.79
 
 ### Patch Changes
