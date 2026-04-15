@@ -1,0 +1,83 @@
+{
+  "name": "@zhin.js/adapter-icqq",
+  "version": "2.0.11",
+  "description": "Zhin.js adapter for ICQQ (QQ Bot)",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "adapter",
+    "icqq",
+    "qq",
+    "tencent",
+    "chatbot"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "type": "git",
+    "directory": "plugins/adapters/icqq"
+  },
+  "files": [
+    "src",
+    "lib",
+    "client",
+    "dist",
+    "skills",
+    "plugin.yml",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsc && node ../../../scripts/build-console-client-if-present.mjs",
+    "clean": "rimraf lib"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@radix-ui/themes": "^3.2.1",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.1",
+    "@zhin.js/console": "workspace:*",
+    "lucide-react": "^0.469.0",
+    "radix-ui": "^1.4.3",
+    "typescript": "^6.0.0",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependencies": {
+    "@zhin.js/client": "workspace:*",
+    "@zhin.js/console": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/http": "workspace:*",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/client": {
+      "optional": true
+    },
+    "@zhin.js/http": {
+      "optional": true
+    },
+    "@zhin.js/console": {
+      "optional": true
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": false,
+    "noEmit": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": false,
+    "allowSyntheticDefaultImports": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "zhin.js",
+    "types": []
+  },
+  "include": [
+    "adapters/**/*",
+    "services/**/*",
+    "features/**/*",
+    "utils/**/*",
+    "games/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "lib",
+    "dist",
+    "**/client/**",
+    "**/*.js"
+  ]
+}

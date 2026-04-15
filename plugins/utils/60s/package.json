@@ -1,0 +1,69 @@
+{
+  "name": "@zhin.js/plugin-60s",
+  "version": "0.0.8",
+  "description": "60s API aggregation plugin for Zhin.js — news, weather, hot searches, utilities and more",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "lib",
+    "client",
+    "dist",
+    "skills",
+    "tools",
+    "plugin.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rimraf lib"
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "plugin",
+    "60s",
+    "news",
+    "weather",
+    "weibo",
+    "zhihu",
+    "douyin",
+    "hot-search",
+    "hitokoto",
+    "api",
+    "chatbot"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^6.0.0",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependencies": {
+    "zhin.js": "workspace:*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "plugins/utils/60s"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

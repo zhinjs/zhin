@@ -1,0 +1,8 @@
+node_modules/
+lib/
+dist/
+*.tsbuildinfo
+.DS_Store
+.vitepress/cache/
+.vitepress/dist/
+coverage/

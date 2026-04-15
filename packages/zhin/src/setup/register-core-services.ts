@@ -5,6 +5,7 @@ import {
   CronFeature,
   PermissionFeature,
   SkillFeature,
+  AgentPresetFeature,
   SchemaFeature,
   MessageFilterFeature,
   createMessageDispatcher,
@@ -15,7 +16,7 @@ import type { Plugin, Message } from '@zhin.js/core';
 import type { AppConfig } from '../types.js';
 
 /**
- * 注册配置服务（必须）及按配置注册可选服务：process / command / component / permission / cron / dispatcher / skill
+ * 注册配置服务（必须）及按配置注册可选服务：process / command / component / permission / cron / dispatcher / skill / agentPreset
  */
 export function registerCoreServices(
   plugin: Plugin,
@@ -67,6 +68,8 @@ export function registerCoreServices(
   });
 
   provide(new SkillFeature());
+  /** 工作区 `agents/*.agent.md` 发现与注册依赖此上下文（见 @zhin.js/agent register-builtin-tools syncWorkspaceAgents） */
+  provide(new AgentPresetFeature());
   provide(new SchemaFeature());
 
   // 登录辅助：生产者-消费者，Web/CLI 均可消费，未消费刷新后可继续

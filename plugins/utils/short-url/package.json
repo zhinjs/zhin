@@ -1,0 +1,56 @@
+{
+  "name": "@zhin.js/plugin-short-url",
+  "version": "0.0.2",
+  "description": "URL shortener plugin for Zhin.js — shorten & expand URLs",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "lib",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rimraf lib"
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "plugin",
+    "short-url",
+    "url-shortener"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^6.0.0",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependencies": {
+    "zhin.js": "workspace:*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "plugins/utils/short-url"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

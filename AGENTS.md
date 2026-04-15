@@ -65,28 +65,11 @@
 
 ---
 
-## 工作区（pnpm + git submodules）
+## 工作区（pnpm workspace 单仓库）
 
-本仓库采用 **pnpm workspace + git submodules** 管理。大部分子包以独立仓库维护（`github.com/zhinjs/<name>`），通过 submodule 引入主仓库。克隆时需 `--recurse-submodules`。
+本仓库采用 **pnpm workspace** 管理多个包目录；**不再使用 git submodule**。克隆后 `pnpm install` 即可，无需 `git submodule update`。
 
-**主仓库内的包**（非 submodule）：`packages/core`、`packages/zhin`、`examples/*`。
-
-**子模块映射**：
-
-| 路径 | 远程仓库 |
-|------|---------|
-| `basic/cli` | `zhinjs/cli` |
-| `basic/database` | `zhinjs/database` |
-| `basic/logger` | `zhinjs/logger` |
-| `basic/schema` | `zhinjs/schema` |
-| `packages/kernel` | `zhinjs/kernel` |
-| `packages/ai` | `zhinjs/ai` |
-| `packages/agent` | `zhinjs/agent` |
-| `packages/client` | `zhinjs/client` |
-| `packages/create-zhin` | `zhinjs/create-zhin` |
-| `packages/satori` | `zhinjs/satori` |
-| `plugins` | `zhinjs/plugins` |
-| `docs` | `zhinjs/docs` |
+**主仓库内常驻包**：`packages/core`、`packages/zhin`、`examples/*`；其余 `basic/*`、`packages/kernel|ai|agent|…`、`plugins/`、`docs/` 等均为**同一 Git 仓库内的普通路径**（历史上曾对应 `github.com/zhinjs/<name>` 独立仓库，迁移说明见 [docs/contributing/monorepo-no-submodules.md](./docs/contributing/monorepo-no-submodules.md)）。
 
 - `packages/*` — 框架与 `@zhin.js/*` 核心包  
 - `basic/*` — CLI、数据库、日志等基础库  

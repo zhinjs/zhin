@@ -1,0 +1,70 @@
+{
+  "name": "@zhin.js/adapter-wechat-mp",
+  "version": "0.1.58",
+  "type": "module",
+  "description": "Zhin.js adapter for WeChat Official Account (微信公众号)",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "scripts": {
+    "build": "pnpm build:node",
+    "clean": "rimraf lib",
+    "build:node": "tsc"
+  },
+  "dependencies": {
+    "xml2js": "^0.6.2",
+    "axios": "^1.6.2",
+    "form-data": "^4.0.0"
+  },
+  "peerDependencies": {
+    "@zhin.js/http": "workspace:*",
+    "zhin.js": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/xml2js": "^0.4.14",
+    "@types/koa": "^2.15.0",
+    "@types/node": "^20.10.6",
+    "typescript": "^6.0.0",
+    "zhin.js": "workspace:*"
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "adapter",
+    "wechat",
+    "weixin",
+    "微信",
+    "official-account",
+    "mp",
+    "chatbot"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "type": "git",
+    "directory": "plugins/adapters/wechat-mp"
+  },
+  "files": [
+    "src",
+    "lib",
+    "skills",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
+  }
+}

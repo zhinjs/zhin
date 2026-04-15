@@ -34,39 +34,39 @@ Plugin 层 (AsyncLocalStorage 上下文管理)
 - **Adapter**: 平台适配器抽象，管理多个 Bot 实例，处理消息接收和发送
 - **setup.ts**: 应用入口，移除 App 类，直接使用 usePlugin() 初始化
 
-### Monorepo 结构 (pnpm workspace + git submodules)
+### Monorepo 结构 (pnpm workspace，无 submodule)
 
-本仓库采用 **pnpm workspace + git submodules** 管理，大部分子包以独立仓库维护。克隆时需 `--recurse-submodules`。
+本仓库采用 **pnpm workspace** 单仓多包；**无 git submodule**。克隆后 `pnpm install` 即可。
 
 ```
-basic/          # 基础层 - 底层工具和类型系统（均为 git submodule → zhinjs/<name>）
-├── logger/     # ⊕ 结构化日志系统 (chalk 颜色输出)
-├── database/   # ⊕ 数据库抽象层 (SQLite/MySQL)
-├── schema/     # ⊕ Schema 配置系统 (类型安全配置)
-└── cli/        # ⊕ CLI 工具 (zhin 命令行入口)
+basic/          # 基础层 - 底层工具和类型系统（独立 npm 包目录）
+├── logger/     # 结构化日志系统 (chalk 颜色输出)
+├── database/   # 数据库抽象层 (SQLite/MySQL)
+├── schema/     # Schema 配置系统 (类型安全配置)
+└── cli/        # CLI 工具 (zhin 命令行入口)
 
 packages/       # 核心层 - 框架核心（分层架构）
-├── kernel/     # ⊕ 运行时内核 (PluginBase, Feature, Cron, Scheduler, 错误体系)
-├── ai/         # ⊕ AI 引擎 (Provider, Agent, ModelRegistry, Session, Memory, Compaction, CostTracker, FileStateCache, MicroCompact, ToolSearchCache)
+├── kernel/     # 运行时内核 (PluginBase, Feature, Cron, Scheduler, 错误体系)
+├── ai/         # AI 引擎 (Provider, Agent, ModelRegistry, Session, Memory, Compaction, CostTracker, FileStateCache, MicroCompact, ToolSearchCache)
 ├── core/       # IM 核心框架 (Plugin, Adapter, Bot, Command, MessageDispatcher)【主仓库内】
-├── agent/      # ⊕ Agent 编排 (ZhinAgent, AIService, ExecPolicy-6层安全, FilePolicy, PromptBuilder-10段架构, 子任务, 用户画像, 引导文件, 模型自动发现与降级)
-├── client/     # ⊕ 客户端库 (React Router 7, Redux)
-├── create-zhin/# ⊕ 项目脚手架 (交互式创建项目)
-├── satori/     # ⊕ HTML/CSS → SVG/PNG 渲染引擎
+├── agent/      # Agent 编排 (ZhinAgent, AIService, ExecPolicy-6层安全, FilePolicy, PromptBuilder-10段架构, 子任务, 用户画像, 引导文件, 模型自动发现与降级)
+├── client/     # 客户端库 (React Router 7, Redux)
+├── create-zhin/# 项目脚手架 (交互式创建项目)
+├── satori/     # HTML/CSS → SVG/PNG 渲染引擎
 └── zhin/       # 主入口包 (统一导出)【主仓库内】
 
-plugins/        # ⊕ 插件层 - 扩展生态（整体为 git submodule → zhinjs/plugins）
+plugins/        # 插件层 - 扩展生态（monorepo 内 workspace 目录）
 ├── services/   # 功能服务插件 (http, console, mcp)
 ├── adapters/   # 平台适配器 (icqq, kook, discord, qq, onebot11, ...)
 ├── utils/      # 工具插件 (music, sensitive-filter)
 └── games/      # 游戏插件
 
-docs/           # ⊕ VitePress 文档站 → zhinjs/docs
+docs/           # VitePress 文档站
 examples/       # 示例项目【主仓库内】
 └── test-bot/   # 完整示例机器人 (开发测试用)
 ```
 
-> ⊕ 标记为 git submodule，指向 `github.com/zhinjs/<name>` 独立仓库。
+> `basic/*`、`packages/*`（除 core/zhin）、`plugins`、`docs` 等为 workspace 包目录；历史独立仓库对照见 `docs/contributing/repo-structure.md`。
 > kernel 和 ai 不依赖 IM 概念，可被非 IM 应用直接使用。详见 `docs/architecture-overview.md`。
 
 ## 核心开发模式

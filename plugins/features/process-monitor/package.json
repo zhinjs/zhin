@@ -1,0 +1,55 @@
+{
+  "name": "@zhin.js/process-monitor",
+  "version": "0.0.32",
+  "description": "进程监控与重启通知插件",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "lib",
+    "client",
+    "dist",
+    "skills",
+    "tools",
+    "plugin.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "plugin",
+    "monitor",
+    "process",
+    "notification"
+  ],
+  "author": "Zhin.js Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "plugins/features/process-monitor"
+  },
+  "dependencies": {
+    "zhin.js": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.4",
+    "typescript": "^6.0.0"
+  },
+  "peerDependencies": {
+    "zhin.js": "workspace:*"
+  }
+}

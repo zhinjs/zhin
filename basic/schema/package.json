@@ -1,0 +1,47 @@
+{
+  "name": "@zhin.js/schema",
+  "version": "1.0.52",
+  "description": "Configuration validation and schema system for Zhin.js",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.0",
+    "@types/node": "^24.3.0",
+    "zhin.js": "workspace:*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "basic/schema"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "peerDependencies": {
+    "zhin.js": "workspace:*"
+  },
+  "keywords": [
+    "zhin",
+    "bot",
+    "schema",
+    "validation",
+    "config",
+    "type-checking"
+  ]
+}

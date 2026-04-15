@@ -1,0 +1,3 @@
+name: adapter-slack
+description: Slack 适配器：工作区管理、频道话题/用途、归档、置顶、表情反应
+version: 1.0.44

@@ -1,0 +1,70 @@
+{
+  "name": "@zhin.js/adapter-dingtalk",
+  "version": "1.0.58",
+  "description": "Zhin.js adapter for DingTalk (钉钉)",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "adapter",
+    "dingtalk",
+    "钉钉",
+    "chatbot"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "type": "git",
+    "directory": "plugins/adapters/dingtalk"
+  },
+  "scripts": {
+    "build": "pnpm build:node",
+    "clean": "rimraf lib",
+    "build:node": "tsc"
+  },
+  "devDependencies": {
+    "@types/koa": "^2.15.0",
+    "@types/node": "^22.9.0",
+    "typescript": "^6.0.0",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependencies": {
+    "@zhin.js/http": "workspace:*",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/http": {
+      "optional": false
+    }
+  },
+  "files": [
+    "src",
+    "lib",
+    "client",
+    "dist",
+    "skills",
+    "plugin.yml",
+    "README.md",
+    "node",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

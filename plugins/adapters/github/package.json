@@ -1,0 +1,68 @@
+{
+  "name": "@zhin.js/adapter-github",
+  "version": "0.1.40",
+  "description": "Zhin.js adapter for GitHub (gh CLI) — treat issues/PRs as chat channels, full repo management, webhook notifications",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "lib",
+    "client",
+    "dist",
+    "skills",
+    "plugin.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib"
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "adapter",
+    "github",
+    "issue",
+    "pull-request",
+    "webhook",
+    "chatbot"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^6.0.0",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependencies": {
+    "@zhin.js/http": "workspace:*",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/http": {
+      "optional": true
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "plugins/adapters/github"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

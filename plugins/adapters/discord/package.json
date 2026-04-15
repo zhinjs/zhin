@@ -1,0 +1,82 @@
+{
+  "name": "@zhin.js/adapter-discord",
+  "version": "1.0.73",
+  "description": "Zhin.js adapter for Discord",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "adapter",
+    "discord",
+    "chatbot"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "type": "git",
+    "directory": "plugins/adapters/discord"
+  },
+  "scripts": {
+    "build": "tsc && node ../../../scripts/build-console-client-if-present.mjs",
+    "clean": "rimraf lib dist",
+    "build:node": "tsc"
+  },
+  "dependencies": {
+    "discord.js": "^14.15.3",
+    "tweetnacl": "^1.0.3"
+  },
+  "devDependencies": {
+    "@types/koa": "^3.0.0",
+    "@types/node": "^22.9.0",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.1",
+    "@zhin.js/console": "workspace:*",
+    "lucide-react": "^0.469.0",
+    "typescript": "^6.0.0",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependencies": {
+    "@zhin.js/client": "workspace:*",
+    "@zhin.js/console": "workspace:*",
+    "@zhin.js/http": "workspace:*",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/client": {
+      "optional": true
+    },
+    "@zhin.js/console": {
+      "optional": true
+    }
+  },
+  "files": [
+    "src",
+    "lib",
+    "client",
+    "dist",
+    "skills",
+    "plugin.yml",
+    "README.md",
+    "node",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

@@ -205,7 +205,7 @@ docker run -it --rm -v $(pwd):/app ghcr.io/zhinjs/zhin shell
 如需自行构建：
 
 ```bash
-git clone --recurse-submodules https://github.com/zhinjs/zhin.git
+git clone https://github.com/zhinjs/zhin.git
 cd zhin
 docker build -t zhin:local .
 docker run --rm zhin:local help

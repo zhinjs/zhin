@@ -1,0 +1,35 @@
+# process-monitor 插件配置示例
+
+# 基础配置
+process-monitor:
+  enabled: true
+  notifyOnStart: true
+  notifyOnRestart: true
+  notifyOnCrash: true
+  
+  # 通知渠道配置
+  notifyChannels:
+    # 示例 1: Webhook 通知（推荐用于监控系统集成）
+    - type: webhook
+      target: "https://your-monitoring-system.com/webhook"
+    
+    # 示例 2: 发送到管理员私聊
+    - type: user
+      target: "${ADMIN_USER_ID}"      # 从环境变量读取
+      platform: "icqq"                # 平台标识
+    
+    # 示例 3: 发送到运维群组
+    - type: group
+      target: "${OPS_GROUP_ID}"
+      platform: "icqq"
+
+# 完整的 zhin.config.yml 示例
+plugins:
+  - "@zhin.js/process-monitor"
+  - "@zhin.js/adapter-icqq"
+  - "@zhin.js/http"
+  - "@zhin.js/console"
+
+# 环境变量配置（.env 文件）
+# ADMIN_USER_ID=123456789
+# OPS_GROUP_ID=987654321

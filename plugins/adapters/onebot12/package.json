@@ -1,0 +1,60 @@
+{
+  "name": "@zhin.js/adapter-onebot12",
+  "version": "0.0.19",
+  "description": "Zhin.js adapter for OneBot 12 protocol",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc && node ../../../scripts/build-console-client-if-present.mjs",
+    "clean": "rimraf lib"
+  },
+  "files": [
+    "src",
+    "lib",
+    "client",
+    "dist",
+    "skills",
+    "README.md"
+  ],
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "adapter",
+    "onebot",
+    "onebot12",
+    "chatbot"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zhinjs/zhin",
+    "directory": "plugins/adapters/onebot12"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "^6.0.0",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependencies": {
+    "zhin.js": "workspace:*",
+    "@zhin.js/http": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/http": {
+      "optional": true
+    }
+  }
+}

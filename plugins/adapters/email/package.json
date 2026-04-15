@@ -1,0 +1,68 @@
+{
+  "name": "@zhin.js/adapter-email",
+  "version": "0.1.57",
+  "type": "module",
+  "description": "Zhin.js adapter for Email (SMTP/IMAP)",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "scripts": {
+    "build": "pnpm build:node",
+    "clean": "rimraf lib",
+    "build:node": "tsc"
+  },
+  "dependencies": {
+    "imap": "^0.8.19",
+    "mailparser": "^3.9.4",
+    "nodemailer": "^7.0.11"
+  },
+  "peerDependencies": {
+    "zhin.js": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/imap": "^0.8.40",
+    "@types/mailparser": "^3.4.6",
+    "@types/node": "^20.10.6",
+    "@types/nodemailer": "^6.4.14",
+    "typescript": "^6.0.0",
+    "zhin.js": "workspace:*"
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "adapter",
+    "email",
+    "smtp",
+    "imap",
+    "mail"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "type": "git",
+    "directory": "plugins/adapters/email"
+  },
+  "files": [
+    "src",
+    "lib",
+    "skills",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "name": "@zhin.js/plugin-teach",
+  "version": "0.0.5",
+  "description": "Custom Q&A plugin for Zhin.js — teach your bot to answer questions with exact/regex/fuzzy matching",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "lib",
+    "client",
+    "dist",
+    "skills",
+    "tools",
+    "plugin.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rimraf lib"
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "plugin",
+    "teach",
+    "qa",
+    "question-answer",
+    "auto-reply",
+    "custom-reply",
+    "chatbot",
+    "im"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^6.0.0",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependencies": {
+    "zhin.js": "workspace:*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "plugins/utils/teach"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

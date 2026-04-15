@@ -2,7 +2,7 @@
 
 核心包目录，包含框架运行所必需的模块。
 
-> 本目录下的大部分包以 **git submodule** 形式管理，指向 `github.com/zhinjs/<name>` 独立仓库。仅 `core` 和 `zhin` 保留在主仓库中。
+> 本目录下除 `core`、`zhin` 外，其余包目录与主仓库同属 **单一 Git 仓库**（pnpm workspace），不再使用 submodule。
 
 ## 开发约定
 

@@ -1,0 +1,3 @@
+name: adapter-dingtalk
+description: 钉钉适配器：群管理、组织架构查询、工作通知、群聊创建与管理
+version: 1.0.47

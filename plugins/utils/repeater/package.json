@@ -1,0 +1,62 @@
+{
+  "name": "@zhin.js/plugin-repeater",
+  "version": "0.0.5",
+  "description": "Repeater plugin for Zhin.js — auto-repeat messages when group members echo the same content",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "lib",
+    "client",
+    "dist",
+    "skills",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rimraf lib"
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "plugin",
+    "repeater",
+    "echo",
+    "parrot",
+    "chatbot",
+    "im"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^6.0.0",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependencies": {
+    "zhin.js": "workspace:*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "plugins/utils/repeater"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

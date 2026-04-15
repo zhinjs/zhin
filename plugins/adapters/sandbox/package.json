@@ -1,0 +1,79 @@
+{
+  "name": "@zhin.js/adapter-sandbox",
+  "version": "2.0.10",
+  "description": "Zhin.js adapter for local testing and development",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "lib",
+    "client",
+    "dist",
+    "skills",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "adapter",
+    "sandbox",
+    "test",
+    "development",
+    "local"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "type": "git",
+    "directory": "plugins/adapters/sandbox"
+  },
+  "scripts": {
+    "build": "tsc && node ../../../scripts/build-console-client-if-present.mjs",
+    "clean": "rimraf lib"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.1",
+    "radix-ui": "^1.4.3",
+    "lucide-react": "^0.469.0",
+    "typescript": "^6.0.0",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependencies": {
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/client": "workspace:*",
+    "@zhin.js/http": "workspace:*",
+    "@zhin.js/console": "workspace:*",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/http": {
+      "optional": true
+    },
+    "@zhin.js/console": {
+      "optional": true
+    },
+    "@zhin.js/client": {
+      "optional": true
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

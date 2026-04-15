@@ -280,44 +280,38 @@ npx zhin setup                # 交互式配置向导
 
 ## 项目结构
 
-本仓库采用 **pnpm workspace + git submodules** 管理，大部分子包以独立仓库维护：
+本仓库采用 **pnpm workspace** 单仓多包管理（**无 git submodule**）：
 
 ```
 zhin/                          # 主仓库 (github.com/zhinjs/zhin)
-├── basic/                     # 基础层（均为 git submodule）
-│   ├── cli/        ⊕          #   CLI 工具       → zhinjs/cli
-│   ├── database/   ⊕          #   数据库抽象     → zhinjs/database
-│   ├── logger/     ⊕          #   日志系统       → zhinjs/logger
-│   └── schema/     ⊕          #   Schema 校验    → zhinjs/schema
+├── basic/                     # 基础层（独立 npm 包目录）
+│   ├── cli/                   #   CLI 工具       (@zhin.js/cli)
+│   ├── database/              #   数据库抽象
+│   ├── logger/                #   日志系统
+│   └── schema/                #   Schema 校验
 ├── packages/                  # 核心层
-│   ├── kernel/     ⊕          #   运行时内核     → zhinjs/kernel
-│   ├── ai/         ⊕          #   AI 引擎        → zhinjs/ai
-│   ├── core/                  #   IM 框架（主仓库内）
-│   ├── agent/      ⊕          #   Agent 编排     → zhinjs/agent
-│   ├── client/     ⊕          #   Web 控制台     → zhinjs/client
-│   ├── satori/     ⊕          #   渲染引擎       → zhinjs/satori
-│   ├── create-zhin/⊕          #   项目脚手架     → zhinjs/create-zhin
-│   └── zhin/                  #   主入口包（主仓库内）
-├── plugins/        ⊕          # 插件生态        → zhinjs/plugins
-├── docs/           ⊕          # VitePress 文档站 → zhinjs/docs
-└── examples/                  # 示例项目（主仓库内）
+│   ├── kernel/                #   运行时内核
+│   ├── ai/                    #   AI 引擎
+│   ├── core/                  #   IM 框架
+│   ├── agent/                 #   Agent 编排
+│   ├── client/                #   Web 控制台
+│   ├── satori/                #   渲染引擎
+│   ├── create-zhin/           #   项目脚手架
+│   └── zhin/                  #   主入口包
+├── plugins/                   # 插件生态（适配器 / 服务 / 特性 / 工具）
+├── docs/                      # VitePress 文档站
+└── examples/                  # 示例项目
 ```
 
-> ⊕ 标记为 git submodule，指向 `github.com/zhinjs/<name>` 独立仓库。
-
-📖 详见：[仓库结构与模块化约定](./docs/contributing/repo-structure.md)
+📖 详见：[仓库结构与模块化约定](./docs/contributing/repo-structure.md) · [单仓库迁移说明](./docs/contributing/monorepo-no-submodules.md)
 
 ## 贡献者
 
 ```bash
-# 克隆时需初始化所有子模块
-git clone --recurse-submodules https://github.com/zhinjs/zhin.git
+git clone https://github.com/zhinjs/zhin.git
 cd zhin
 pnpm install && pnpm build
 pnpm dev
-
-# 若已克隆但未初始化子模块
-git submodule update --init --recursive
 ```
 
 📖 详见：[贡献指南](./docs/contributing.md)

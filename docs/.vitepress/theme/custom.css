@@ -1,0 +1,60 @@
+/**
+ * 自定义样式
+ */
+
+/* 全局样式优化 */
+:root {
+  --vp-c-brand: #3eaf7c;
+  --vp-c-brand-light: #4abf8a;
+  --vp-c-brand-lighter: #63d4a3;
+  --vp-c-brand-dark: #2d8659;
+  --vp-c-brand-darker: #1f6042;
+}
+
+/* 深色模式品牌色调整 */
+.dark {
+  --vp-c-brand: #4abf8a;
+  --vp-c-brand-light: #63d4a3;
+  --vp-c-brand-lighter: #7ce0b8;
+  --vp-c-brand-dark: #3eaf7c;
+  --vp-c-brand-darker: #2d8659;
+}
+
+/* 平滑滚动 */
+html {
+  scroll-behavior: smooth;
+}
+
+/* 代码块样式优化 */
+.vp-doc [class*='language-'] {
+  border-radius: 8px;
+  margin: 16px 0;
+}
+
+/* 链接样式 */
+.vp-doc a {
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+/* 表格样式 */
+.vp-doc table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* 按钮样式统一 */
+button {
+  font-family: inherit;
+}
+
+/* 响应式图片 */
+.vp-doc img {
+  border-radius: 8px;
+}
+
+/* ClientOnly 组件样式 */
+.client-only {
+  display: contents;
+}
+

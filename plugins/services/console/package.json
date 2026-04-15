@@ -1,0 +1,118 @@
+{
+  "name": "@zhin.js/console",
+  "version": "2.0.10",
+  "description": "Web console service for Zhin.js with real-time monitoring",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "bin": {
+    "zhin-console": "./lib/bin.js"
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "service",
+    "console",
+    "web",
+    "dashboard",
+    "monitoring",
+    "admin"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "type": "git",
+    "directory": "plugins/services/console"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./browser.tsconfig.json": "./browser.tsconfig.json",
+    "./node.tsconfig.json": "./node.tsconfig.json"
+  },
+  "scripts": {
+    "build": "pnpm build:node && pnpm build:client",
+    "build:prod": "NODE_ENV=production pnpm build",
+    "build:dev": "NODE_ENV=development pnpm build",
+    "build:client": "node scripts/client.js",
+    "clean": "rimraf lib dist",
+    "build:node": "tsup"
+  },
+  "dependencies": {
+    "esbuild": ">=0.21.0",
+    "mime": "^4.1.0",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@reduxjs/toolkit": "^2.9.0",
+    "@tailwindcss/postcss": "^4.1.11",
+    "@tailwindcss/vite": "4.1.14",
+    "@vitejs/plugin-react": "^4.3.4",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "koa-connect": "^2.1.0",
+    "lucide-react": "^0.469.0",
+    "radix-ui": "^1.4.3",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-redux": "9.2.0",
+    "react-router": "7.5.2",
+    "redux-persist": "6.0.0",
+    "tailwind-merge": "^3.3.1",
+    "tailwindcss": "latest",
+    "tsup": "^8.5.1",
+    "rolldown": "^1.0.0-rc.9",
+    "vite": "8.0.0",
+    "yaml": "^2.8.2",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependencies": {
+    "@types/ws": "^8.18.1",
+    "@zhin.js/agent": "workspace:*",
+    "@zhin.js/client": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/http": "workspace:*",
+    "zhin.js": "workspace:*",
+    "vite": ">=6.0.0",
+    "@vitejs/plugin-react": ">=4.0.0",
+    "@tailwindcss/vite": ">=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    },
+    "@vitejs/plugin-react": {
+      "optional": true
+    },
+    "@tailwindcss/vite": {
+      "optional": true
+    }
+  },
+  "files": [
+    "src",
+    "lib",
+    "client",
+    "dist",
+    "skills",
+    "README.md",
+    "browser.tsconfig.json",
+    "node.tsconfig.json",
+    "CHANGELOG.md"
+  ],
+  "optionalDependencies": {
+    "koa-connect": "^2.1.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

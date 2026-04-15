@@ -1,0 +1,55 @@
+{
+  "name": "@zhin.js/logger",
+  "version": "0.1.52",
+  "description": "Structured logging system for Zhin.js bot framework",
+  "main": "./lib/index.js",
+  "type": "module",
+  "module": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js",
+      "default": "./lib/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage"
+  },
+  "keywords": [
+    "zhin",
+    "bot",
+    "logger",
+    "logging",
+    "structured",
+    "debug"
+  ],
+  "author": "Zhin Team",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^5.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "^6.0.0",
+    "zhin.js": "workspace:*"
+  },
+  "files": [
+    "lib"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "basic/logger"
+  },
+  "peerDependencies": {
+    "zhin.js": "workspace:*"
+  }
+}
