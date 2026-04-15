@@ -1,5 +1,11 @@
 # @zhin.js/client
 
+## 1.0.17
+
+### Patch Changes
+
+- 4304825: fix: 重新发版
+
 ## 1.0.16
 
 ### Patch Changes

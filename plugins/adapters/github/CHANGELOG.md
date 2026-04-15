@@ -1,5 +1,15 @@
 # @zhin.js/adapter-github
 
+## 0.1.41
+
+### Patch Changes
+
+- 4304825: fix: 重新发版
+- ed66fb1: fix: 适配器优化
+- Updated dependencies [4304825]
+  - zhin.js@1.0.71
+  - @zhin.js/http@1.0.64
+
 ## 0.1.40
 
 ### Patch Changes
