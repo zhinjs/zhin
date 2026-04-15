@@ -1,5 +1,14 @@
 # @zhin.js/agent
 
+## 0.1.11
+
+### Patch Changes
+
+- 4304825: fix: 重新发版
+- Updated dependencies [4304825]
+  - @zhin.js/ai@1.1.11
+  - @zhin.js/core@1.1.13
+
 ## 0.1.10
 
 ### Patch Changes

@@ -1,5 +1,17 @@
 # @zhin.js/core
 
+## 1.1.13
+
+### Patch Changes
+
+- 4304825: fix: 重新发版
+- Updated dependencies [4304825]
+  - @zhin.js/database@1.0.56
+  - @zhin.js/logger@0.1.53
+  - @zhin.js/schema@1.0.53
+  - @zhin.js/ai@1.1.11
+  - @zhin.js/kernel@0.0.30
+
 ## 1.1.12
 
 ### Patch Changes
