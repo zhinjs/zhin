@@ -1,5 +1,15 @@
 # @zhin.js/cli
 
+## 1.0.66
+
+### Patch Changes
+
+- 4304825: fix: 重新发版
+- cea7a33: fix: cli 优化
+- Updated dependencies [4304825]
+  - @zhin.js/logger@0.1.53
+  - zhin.js@1.0.71
+
 ## 1.0.65
 
 ### Patch Changes

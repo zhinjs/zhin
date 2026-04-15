@@ -1,5 +1,13 @@
 # @zhin.js/schema
 
+## 1.0.53
+
+### Patch Changes
+
+- 4304825: fix: 重新发版
+- Updated dependencies [4304825]
+  - zhin.js@1.0.71
+
 ## 1.0.52
 
 ### Patch Changes

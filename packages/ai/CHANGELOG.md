@@ -1,5 +1,13 @@
 # @zhin.js/ai
 
+## 1.1.11
+
+### Patch Changes
+
+- 4304825: fix: 重新发版
+- Updated dependencies [4304825]
+  - @zhin.js/logger@0.1.53
+
 ## 1.1.10
 
 ### Patch Changes
