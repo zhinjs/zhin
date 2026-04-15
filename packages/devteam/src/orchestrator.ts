@@ -1,17 +1,24 @@
 /**
  * @zhin.js/devteam - Agent 编排器
  *
- * 将状态变更事件路由到对应的子 Agent 进行处理
+ * 将状态变更事件路由到对应的子 Agent 进行处理。
+ * 当 AIService 可用时，通过 runAgent() 调用真实 AI 子代理；
+ * 否则退化为规则式处理（评论 + 状态流转）。
  */
 
 import { Logger } from 'zhin.js';
-import type { StatusChangeEvent, AgentRoleValue, RequirementStatusValue } from './types.js';
+import type { StatusChangeEvent, AgentRoleValue, RequirementStatusValue, Requirement } from './types.js';
 import { RequirementStatus, AgentRole, STATUS_LABELS } from './types.js';
 import type { DevTeamEventBus } from './event-bus.js';
 import type { RequirementStateMachine } from './state-machine.js';
 import type { GitHubClient } from './github.js';
 
 const logger = new Logger(null, 'DevTeam:Orchestrator');
+
+/** AIService 的最小接口，避免硬依赖 @zhin.js/agent 类型 */
+interface AIServiceLike {
+  runAgent(task: string, options?: { systemPrompt?: string }): Promise<{ content: string; toolCalls: any[]; usage: any }>;
+}
 
 export interface AgentHandler {
   role: AgentRoleValue;
@@ -24,8 +31,23 @@ export interface AgentHandler {
 function buildProjectManagerHandler(
   github: GitHubClient,
   stateMachine: RequirementStateMachine,
+  ai: AIServiceLike | null,
 ): (event: StatusChangeEvent) => Promise<string> {
   return async (event) => {
+    const req = stateMachine.get(event.issueNumber);
+
+    if (ai) {
+      const task = buildAgentTask('项目经理', event, req);
+      try {
+        const result = await ai.runAgent(task, { systemPrompt: PM_SYSTEM_PROMPT });
+        logger.info(`[PM Agent] #${event.issueNumber} AI 处理完成`);
+        return result.content || `项目经理已处理: #${event.issueNumber}`;
+      } catch (err) {
+        logger.warn(`[PM Agent] AI 调用失败，退化为规则处理:`, err);
+      }
+    }
+
+    // 退化：规则式处理
     switch (event.to) {
       case RequirementStatus.IN_REVIEW: {
         // 评审中 - 收集各方评论并协调
@@ -76,8 +98,23 @@ function buildProjectManagerHandler(
 function buildDesignerHandler(
   github: GitHubClient,
   stateMachine: RequirementStateMachine,
+  ai: AIServiceLike | null,
 ): (event: StatusChangeEvent) => Promise<string> {
   return async (event) => {
+    const req = stateMachine.get(event.issueNumber);
+
+    if (ai) {
+      const task = buildAgentTask('设计师', event, req);
+      try {
+        const result = await ai.runAgent(task, { systemPrompt: DESIGNER_SYSTEM_PROMPT });
+        logger.info(`[Designer Agent] #${event.issueNumber} AI 处理完成`);
+        return result.content || `设计师已处理: #${event.issueNumber}`;
+      } catch (err) {
+        logger.warn(`[Designer Agent] AI 调用失败，退化为规则处理:`, err);
+      }
+    }
+
+    // 退化：规则式处理
     switch (event.to) {
       case RequirementStatus.WAITING_DESIGN: {
         // 等待设计 - 产出设计稿
@@ -139,8 +176,23 @@ function buildDeveloperHandler(
   github: GitHubClient,
   stateMachine: RequirementStateMachine,
   productionBranch: string,
+  ai: AIServiceLike | null,
 ): (event: StatusChangeEvent) => Promise<string> {
   return async (event) => {
+    const req = stateMachine.get(event.issueNumber);
+
+    if (ai) {
+      const task = buildAgentTask('开发人员', event, req);
+      try {
+        const result = await ai.runAgent(task, { systemPrompt: DEVELOPER_SYSTEM_PROMPT });
+        logger.info(`[Developer Agent] #${event.issueNumber} AI 处理完成`);
+        return result.content || `开发人员已处理: #${event.issueNumber}`;
+      } catch (err) {
+        logger.warn(`[Developer Agent] AI 调用失败，退化为规则处理:`, err);
+      }
+    }
+
+    // 退化：规则式处理
     switch (event.to) {
       case RequirementStatus.WAITING_REVIEW: {
         // 等待评审 → 评审中
@@ -249,8 +301,23 @@ function buildDeveloperHandler(
 function buildTesterHandler(
   github: GitHubClient,
   stateMachine: RequirementStateMachine,
+  ai: AIServiceLike | null,
 ): (event: StatusChangeEvent) => Promise<string> {
   return async (event) => {
+    const req = stateMachine.get(event.issueNumber);
+
+    if (ai) {
+      const task = buildAgentTask('测试人员', event, req);
+      try {
+        const result = await ai.runAgent(task, { systemPrompt: TESTER_SYSTEM_PROMPT });
+        logger.info(`[Tester Agent] #${event.issueNumber} AI 处理完成`);
+        return result.content || `测试人员已处理: #${event.issueNumber}`;
+      } catch (err) {
+        logger.warn(`[Tester Agent] AI 调用失败，退化为规则处理:`, err);
+      }
+    }
+
+    // 退化：规则式处理
     switch (event.to) {
       case RequirementStatus.IN_REVIEW: {
         // 评审中 - 参与讨论并准备测试用例
@@ -322,8 +389,23 @@ function buildTesterHandler(
 function buildOpsHandler(
   github: GitHubClient,
   stateMachine: RequirementStateMachine,
+  ai: AIServiceLike | null,
 ): (event: StatusChangeEvent) => Promise<string> {
   return async (event) => {
+    const req = stateMachine.get(event.issueNumber);
+
+    if (ai) {
+      const task = buildAgentTask('运维人员', event, req);
+      try {
+        const result = await ai.runAgent(task, { systemPrompt: OPS_SYSTEM_PROMPT });
+        logger.info(`[Ops Agent] #${event.issueNumber} AI 处理完成`);
+        return result.content || `运维已处理: #${event.issueNumber}`;
+      } catch (err) {
+        logger.warn(`[Ops Agent] AI 调用失败，退化为规则处理:`, err);
+      }
+    }
+
+    // 退化：规则式处理
     switch (event.to) {
       case RequirementStatus.WAITING_DEPLOY: {
         // 等待上线 - 合并 PR 并部署
@@ -382,6 +464,7 @@ function buildOpsHandler(
 export class DevTeamOrchestrator {
   private handlers: Map<AgentRoleValue, (event: StatusChangeEvent) => Promise<string>> = new Map();
   private processing: Set<string> = new Set();
+  private ai: AIServiceLike | null = null;
 
   constructor(
     private github: GitHubClient,
@@ -393,17 +476,28 @@ export class DevTeamOrchestrator {
     this.setupEventRouting();
   }
 
+  /**
+   * 注入 AIService 实例，使编排器能调用真实 AI 子代理。
+   * 可在 useContext('ai', ...) 就绪后调用。
+   */
+  setAI(ai: AIServiceLike | null): void {
+    this.ai = ai;
+    // 重建 handlers 以注入 AI
+    this.setupHandlers();
+    logger.info(ai ? 'AI 子代理模式已启用' : 'AI 子代理模式已关闭，使用规则式处理');
+  }
+
   private setupHandlers(): void {
     this.handlers.set(AgentRole.PROJECT_MANAGER,
-      buildProjectManagerHandler(this.github, this.stateMachine));
+      buildProjectManagerHandler(this.github, this.stateMachine, this.ai));
     this.handlers.set(AgentRole.DESIGNER,
-      buildDesignerHandler(this.github, this.stateMachine));
+      buildDesignerHandler(this.github, this.stateMachine, this.ai));
     this.handlers.set(AgentRole.DEVELOPER,
-      buildDeveloperHandler(this.github, this.stateMachine, this.productionBranch));
+      buildDeveloperHandler(this.github, this.stateMachine, this.productionBranch, this.ai));
     this.handlers.set(AgentRole.TESTER,
-      buildTesterHandler(this.github, this.stateMachine));
+      buildTesterHandler(this.github, this.stateMachine, this.ai));
     this.handlers.set(AgentRole.OPS,
-      buildOpsHandler(this.github, this.stateMachine));
+      buildOpsHandler(this.github, this.stateMachine, this.ai));
   }
 
   private setupEventRouting(): void {
@@ -441,3 +535,78 @@ export class DevTeamOrchestrator {
     this.processing.clear();
   }
 }
+
+// ============================================================================
+// AI Agent 任务构建与系统提示
+// ============================================================================
+
+/**
+ * 构建发给子 Agent 的任务描述，包含事件上下文和需求详情
+ */
+function buildAgentTask(
+  roleName: string,
+  event: StatusChangeEvent,
+  req: Requirement | undefined,
+): string {
+  const lines: string[] = [
+    `你是「${roleName}」，当前需要处理一个状态变更事件。`,
+    '',
+    `## 事件信息`,
+    `- 需求 Issue: #${event.issueNumber}`,
+    `- 标题: ${event.title}`,
+    `- 状态变更: [${STATUS_LABELS[event.from]}] → [${STATUS_LABELS[event.to]}]`,
+    `- 触发者: ${event.triggeredBy}`,
+  ];
+
+  if (req) {
+    lines.push(
+      '',
+      `## 需求详情`,
+      `- 描述: ${req.description || '无'}`,
+      `- 是否需要设计: ${req.needsDesign ? '是' : '否'}`,
+    );
+    if (req.branchName) lines.push(`- 开发分支: ${req.branchName}`);
+    if (req.prNumber) lines.push(`- PR: #${req.prNumber}`);
+    if (req.prototypeUrl) lines.push(`- 原型图: ${req.prototypeUrl}`);
+    if (req.designUrl) lines.push(`- 设计稿: ${req.designUrl}`);
+  }
+
+  lines.push(
+    '',
+    `请根据你的职责和当前状态，使用可用的工具完成处理。`,
+  );
+
+  return lines.join('\n');
+}
+
+const PM_SYSTEM_PROMPT = `你是项目经理，负责需求整理、评审协调和验收确认。
+你可以使用 devteam_* 系列工具来操作看板、查看需求、添加评论、管理反馈。
+- 评审中：收集各方评论并协调讨论
+- 等待验收：验证需求完成度，通过则更新为已完成
+请用工具完成实际操作，不要只描述你会做什么。`;
+
+const DESIGNER_SYSTEM_PROMPT = `你是 UI/UX 设计师，负责设计稿产出、评审参与和走查验收。
+你可以使用 devteam_* 系列工具来更新状态、查看需求、添加评论。
+- 等待设计：产出设计说明并更新状态为等待评审
+- 等待走查：对照设计稿检查开发实现，通过或不通过
+请用工具完成实际操作，不要只描述你会做什么。`;
+
+const DEVELOPER_SYSTEM_PROMPT = `你是全栈开发工程师，负责需求评审、编码开发、自测。
+你可以使用 devteam_* 系列工具来更新状态、创建分支、创建 PR、添加评论。
+- 等待评审 → 评审中 → 评审完成
+- 等待开发：创建开发分支并开始编码
+- 走查不通过：根据反馈修复
+- 走查通过：自测后提测
+请用工具完成实际操作，不要只描述你会做什么。`;
+
+const TESTER_SYSTEM_PROMPT = `你是 QA 测试工程师，负责测试用例编写和执行。
+你可以使用 devteam_* 系列工具来更新状态、查看需求、添加评论。
+- 评审中：参与讨论并准备测试用例
+- 评审完成：完成测试用例，更新为等待开发
+- 等待测试：执行完整测试，通过后更新为等待上线
+请用工具完成实际操作，不要只描述你会做什么。`;
+
+const OPS_SYSTEM_PROMPT = `你是 DevOps 运维工程师，负责 CI/CD 和部署上线。
+你可以使用 devteam_* 系列工具来合并 PR、检查 CI、更新状态、添加评论。
+- 等待上线：检查 CI，合并 PR，部署后更新为等待验收
+请用工具完成实际操作，不要只描述你会做什么。`;

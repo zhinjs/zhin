@@ -21,6 +21,7 @@ import { DevTeamOrchestrator } from './orchestrator.js';
 import { createBoardTools, createDevTools, createFeedbackTools } from './tools/index.js';
 import type { DevTeamConfig, UserFeedback, Requirement, RequirementStatusValue } from './types.js';
 import { DEFAULT_CONFIG, RequirementStatus, STATUS_LABELS } from './types.js';
+import type { AIService } from 'zhin.js';
 
 const plugin = usePlugin();
 const { addTool, addCron, useContext, logger, root } = plugin;
@@ -65,6 +66,7 @@ const stateMachine = new RequirementStateMachine(github, eventBus);
 const feedbacks: UserFeedback[] = [];
 
 // ─── 编排器（连接事件总线与各 Agent 处理器） ─────────────────────────────────
+// 构造时自动在 eventBus 上注册所有角色的事件路由
 
 const orchestrator = new DevTeamOrchestrator(
   github,
@@ -72,6 +74,17 @@ const orchestrator = new DevTeamOrchestrator(
   eventBus,
   config.productionBranch,
 );
+
+// AIService 就绪后注入给编排器，使其能调用真实 AI 子代理
+let aiService: AIService | null = null;
+useContext('ai' as any, (ai: AIService) => {
+  aiService = ai;
+  orchestrator.setAI(ai);
+  return () => {
+    aiService = null;
+    orchestrator.setAI(null);
+  };
+});
 
 // ─── 注册 AI 工具 ────────────────────────────────────────────────────────────
 
@@ -100,8 +113,36 @@ addCron(new Cron(config.triageCron, async () => {
     logger.info('没有未处理的用户反馈');
     return;
   }
-  logger.info(`发现 ${unprocessed.length} 条未处理反馈，等待项目经理处理`);
-  // 项目经理 Agent 会通过 devteam_list_feedback 工具查看并处理
+  logger.info(`发现 ${unprocessed.length} 条未处理反馈，开始项目经理整理`);
+
+  if (!aiService) {
+    logger.warn('AIService 不可用，无法调用项目经理 Agent 整理反馈');
+    return;
+  }
+
+  // 构造反馈摘要供项目经理处理
+  const feedbackSummary = unprocessed.map((f, i) => {
+    const idx = feedbacks.indexOf(f);
+    return `[#${idx}] ${f.platform}/${f.userId}: ${f.content.substring(0, 200)}`;
+  }).join('\n');
+
+  try {
+    await aiService.runAgent(
+      `你是项目经理，请整理以下用户反馈。\n` +
+      `对每条反馈判断：是否应形成正式需求？\n` +
+      `- 形成需求：使用 devteam_create_requirement 创建 Issue 并用 devteam_mark_feedback_processed 关联\n` +
+      `- 不形成：使用 devteam_mark_feedback_processed 标记已处理\n\n` +
+      `## 待处理反馈 (${unprocessed.length} 条)\n${feedbackSummary}`,
+      {
+        systemPrompt: '你是项目经理 Agent，负责将用户反馈整理为正式需求。' +
+          '使用 devteam_list_feedback 查看详情，devteam_create_requirement 创建需求，' +
+          'devteam_mark_feedback_processed 标记已处理。请逐条处理所有反馈。',
+      },
+    );
+    logger.info('项目经理 Agent 已完成反馈整理');
+  } catch (err) {
+    logger.error('项目经理 Agent 整理反馈失败:', err);
+  }
 }));
 
 // 定期同步看板状态

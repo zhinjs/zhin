@@ -401,6 +401,7 @@ export class GitHubClient {
       .filter(item => item.content)
       .map(item => {
         const statusField = item.fieldValues.nodes.find(fv => fv.field?.name === 'Status');
+        console.log('解析Project Item:', JSON.stringify(item, null, 2));
         return {
           itemId: item.id,
           issueNumber: item.content!.number,

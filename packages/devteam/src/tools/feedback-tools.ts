@@ -11,6 +11,29 @@ import type { UserFeedback } from '../types.js';
  * 创建反馈管理工具集
  */
 export function createFeedbackTools(feedbacks: UserFeedback[]) {
+  const collectFeedback = new ZhinTool('devteam_collect_feedback')
+    .desc('收集用户反馈。当用户描述了需求、建议、Bug 或意见时，使用此工具记录')
+    .keyword('反馈', '需求', '建议', 'bug', '意见', '功能请求')
+    .tag('devteam', 'feedback')
+    .param('userId', { type: 'string', description: '反馈用户 ID' }, true)
+    .param('platform', { type: 'string', description: '消息来源平台' }, true)
+    .param('content', { type: 'string', description: '用户反馈内容（完整原文或摘要）' }, true)
+    .execute(async (args) => {
+      const feedback: UserFeedback = {
+        userId: args.userId as string,
+        platform: args.platform as string,
+        content: args.content as string,
+        collectedAt: Date.now(),
+        processed: false,
+      };
+      feedbacks.push(feedback);
+      return {
+        success: true,
+        message: `已记录用户反馈 (共 ${feedbacks.length} 条)`,
+        feedbackIndex: feedbacks.length - 1,
+      };
+    });
+
   const listFeedback = new ZhinTool('devteam_list_feedback')
     .desc('列出未处理的用户反馈，用于项目经理整理需求')
     .keyword('用户反馈', '反馈列表', '未处理反馈')
@@ -59,5 +82,5 @@ export function createFeedbackTools(feedbacks: UserFeedback[]) {
       };
     });
 
-  return [listFeedback, markFeedbackProcessed];
+  return [collectFeedback, listFeedback, markFeedbackProcessed];
 }
