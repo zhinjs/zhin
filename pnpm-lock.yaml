@@ -1051,7 +1051,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/core
       '@zhin.js/http':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../http
       esbuild:
         specifier: '>=0.25.0'
@@ -1103,9 +1103,6 @@ importers:
       react-router:
         specifier: '>=7.12.0'
         version: 7.13.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
-      redux-persist:
-        specifier: 6.0.0
-        version: 6.0.0(react@19.2.0)(redux@5.0.1)
       rolldown:
         specifier: ^1.0.0-rc.9
         version: 1.0.0-rc.9

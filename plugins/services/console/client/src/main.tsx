@@ -1,8 +1,9 @@
 import { StrictMode, useCallback, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
+import type { EnhancedStore } from '@reduxjs/toolkit'
 import { Provider as ReduxProvider } from 'react-redux'
 import { Home, Package, Bot, FileText, Settings, KeyRound, FolderOpen, Database, Clock, Store } from 'lucide-react'
-import { store, DynamicRouter, persistor, addPage, useSelector, useWebSocket } from '@zhin.js/client'
+import { store, DynamicRouter, addPage, useSelector, useWebSocket, type RootState } from '@zhin.js/client'
 import DashboardLayout from './layouts/dashboard'
 import HomePage from './pages/dashboard'
 import PluginsPage from './pages/plugins'
@@ -19,7 +20,6 @@ import MarketplacePage from './pages/marketplace'
 import LoginPage from './pages/login'
 import { hasToken } from './utils/auth'
 import './style.css'
-import { PersistGate } from 'redux-persist/integration/react'
 import { initializeTheme } from './theme'
 import { TooltipProvider } from './components/ui/tooltip'
 
@@ -43,11 +43,9 @@ function App() {
     }
 
     return (
-        <PersistGate loading={null} persistor={persistor}>
-            <ReduxProvider store={store}>
-                <RouteInitializer />
-            </ReduxProvider>
-        </PersistGate>
+        <ReduxProvider store={store as EnhancedStore<RootState>}>
+            <RouteInitializer />
+        </ReduxProvider>
     )
 }
 

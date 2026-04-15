@@ -79,7 +79,6 @@ export async function createViteDevServer(
         "@reduxjs/toolkit",
         "react-router",
         "react-redux",
-        "redux-persist",
       ],
       alias: {
         "@zhin.js/client": path.resolve(process.cwd(), "node_modules/@zhin.js/client/client"),

@@ -66,7 +66,6 @@
     "react-dom": "19.2.0",
     "react-redux": "9.2.0",
     "react-router": "7.5.2",
-    "redux-persist": "6.0.0",
     "tailwind-merge": "^3.3.1",
     "tailwindcss": "latest",
     "tsup": "^8.5.1",
@@ -77,25 +76,11 @@
   },
   "peerDependencies": {
     "@types/ws": "^8.18.1",
-    "@zhin.js/agent": "workspace:*",
-    "@zhin.js/client": "workspace:*",
-    "@zhin.js/core": "workspace:*",
-    "@zhin.js/http": "workspace:*",
-    "zhin.js": "workspace:*",
-    "vite": ">=6.0.0",
-    "@vitejs/plugin-react": ">=4.0.0",
-    "@tailwindcss/vite": ">=4.0.0"
-  },
-  "peerDependenciesMeta": {
-    "vite": {
-      "optional": true
-    },
-    "@vitejs/plugin-react": {
-      "optional": true
-    },
-    "@tailwindcss/vite": {
-      "optional": true
-    }
+    "@zhin.js/agent": "workspace:^",
+    "@zhin.js/client": "workspace:^",
+    "@zhin.js/core": "workspace:^",
+    "@zhin.js/http": "workspace:^",
+    "zhin.js": "workspace:*"
   },
   "files": [
     "src",

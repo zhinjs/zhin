@@ -1,23 +1,9 @@
+import * as vite from 'vite'
 import { existsSync, promises as fs } from 'fs'
 import {join} from 'path'
-
-async function loadViteDeps() {
-  try {
-    const [vite, { default: react }, { default: tailwindcss }] = await Promise.all([
-      import('vite'),
-      import('@vitejs/plugin-react'),
-      import('@tailwindcss/vite'),
-    ]);
-    return { vite, react, tailwindcss };
-  } catch (e) {
-    throw new Error(
-      `缺少构建依赖，请先安装: pnpm add -D vite @vitejs/plugin-react @tailwindcss/vite\n` +
-      `原始错误: ${(e as Error).message}`
-    );
-  }
-}
-
-export async function build(root: string, config: Record<string, any> = {}) {
+import react from '@vitejs/plugin-react'
+import tailwindcss from "@tailwindcss/vite";
+export async function build(root: string, config: vite.UserConfig = {}) {
   if (!existsSync(root + '/client')) return
 
   const outDir = root + '/dist'
@@ -35,8 +21,6 @@ export async function build(root: string, config: Record<string, any> = {}) {
     throw new Error('No entry file found')
   }
   await fs.mkdir(root + '/dist', { recursive: true })
-
-  const { vite, react, tailwindcss } = await loadViteDeps();
 
   const results = await vite.build(vite.mergeConfig({
     root,
@@ -88,7 +72,7 @@ export async function build(root: string, config: Record<string, any> = {}) {
     define: {
       'process.env.NODE_ENV': '"production"',
     },
-  } as any, config)) as any[]
+  } as vite.InlineConfig, config)) as vite.Rollup.RollupOutput[]
 
   for (const item of results[0].output) {
     if (item.fileName === 'index.mjs') item.fileName = 'index.js'
