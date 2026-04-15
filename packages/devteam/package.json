@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/devteam",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "多Agent协同开发插件 - 基于GitHub Project看板的自动化研发流程",
   "type": "module",
   "main": "./lib/index.js",
