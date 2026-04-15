@@ -5,7 +5,6 @@
 ### Patch Changes
 
 - Updated dependencies [bcd56d5]
-  - @zhin.js/devteam@0.0.2
   - @zhin.js/cli@1.0.66
   - zhin.js@1.0.70
   - @zhin.js/adapter-kook@1.0.71

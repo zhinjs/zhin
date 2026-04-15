@@ -298,9 +298,6 @@ importers:
       '@zhin.js/console':
         specifier: workspace:*
         version: link:../../plugins/services/console
-      '@zhin.js/devteam':
-        specifier: workspace:*
-        version: link:../../packages/devteam
       '@zhin.js/http':
         specifier: workspace:*
         version: link:../../plugins/services/http
@@ -498,19 +495,6 @@ importers:
         version: 9.0.9
       '@types/node':
         specifier: ^24.3.0
-        version: 24.12.0
-      typescript:
-        specifier: ^6.0.0
-        version: 6.0.2
-
-  packages/devteam:
-    dependencies:
-      zhin.js:
-        specifier: workspace:*
-        version: link:../zhin
-    devDependencies:
-      '@types/node':
-        specifier: ^24.10.4
         version: 24.12.0
       typescript:
         specifier: ^6.0.0
