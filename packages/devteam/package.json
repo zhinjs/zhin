@@ -42,6 +42,10 @@
     "url": "git+https://github.com/zhinjs/zhin.git",
     "directory": "packages/devteam"
   },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
   "dependencies": {
     "zhin.js": "workspace:*"
   },
