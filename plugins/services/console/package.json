@@ -60,7 +60,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "koa-connect": "^2.1.0",
-    "lucide-react": "^0.469.0",
+    "lucide-react": "^1.8.0",
     "radix-ui": "^1.4.3",
     "react": "19.2.5",
     "react-dom": "19.2.5",

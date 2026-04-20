@@ -357,8 +357,8 @@ importers:
         specifier: ^19.2.1
         version: 19.2.3(@types/react@19.2.14)
       lucide-react:
-        specifier: ^0.469.0
-        version: 0.469.0(react@19.2.5)
+        specifier: ^1.8.0
+        version: 1.8.0(react@19.2.5)
       radix-ui:
         specifier: ^1.4.3
         version: 1.4.3(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -631,8 +631,8 @@ importers:
         specifier: workspace:*
         version: link:../../services/console
       lucide-react:
-        specifier: ^0.469.0
-        version: 0.469.0(react@19.2.5)
+        specifier: ^1.8.0
+        version: 1.8.0(react@19.2.5)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -709,8 +709,8 @@ importers:
         specifier: workspace:*
         version: link:../../services/console
       lucide-react:
-        specifier: ^0.469.0
-        version: 0.469.0(react@19.2.5)
+        specifier: ^1.8.0
+        version: 1.8.0(react@19.2.5)
       radix-ui:
         specifier: ^1.4.3
         version: 1.4.3(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -746,8 +746,8 @@ importers:
         specifier: workspace:*
         version: link:../../services/console
       lucide-react:
-        specifier: ^0.469.0
-        version: 0.469.0(react@19.2.5)
+        specifier: ^1.8.0
+        version: 1.8.0(react@19.2.5)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -871,8 +871,8 @@ importers:
         specifier: workspace:*
         version: link:../../services/console
       lucide-react:
-        specifier: ^0.469.0
-        version: 0.469.0(react@19.2.5)
+        specifier: ^1.8.0
+        version: 1.8.0(react@19.2.5)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -902,8 +902,8 @@ importers:
         specifier: ^19.2.1
         version: 19.2.3(@types/react@19.2.14)
       lucide-react:
-        specifier: ^0.469.0
-        version: 0.469.0(react@19.2.5)
+        specifier: ^1.8.0
+        version: 1.8.0(react@19.2.5)
       radix-ui:
         specifier: ^1.4.3
         version: 1.4.3(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -983,8 +983,8 @@ importers:
         specifier: workspace:*
         version: link:../../services/console
       lucide-react:
-        specifier: ^0.469.0
-        version: 0.469.0(react@19.2.5)
+        specifier: ^1.8.0
+        version: 1.8.0(react@19.2.5)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1086,8 +1086,8 @@ importers:
         specifier: ^2.1.1
         version: 2.1.1
       lucide-react:
-        specifier: ^0.469.0
-        version: 0.469.0(react@19.2.5)
+        specifier: ^1.8.0
+        version: 1.8.0(react@19.2.5)
       radix-ui:
         specifier: ^1.4.3
         version: 1.4.3(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -6027,8 +6027,8 @@ packages:
     resolution: {integrity: sha512-DqC6n3QQ77zdFpCMASA1a3Jlb64Hv2N2DciFGkO/4L9+q/IpIAuRlKOvCXabtRW6cQf8usbmM6BE/TOPysCdIA==}
     engines: {bun: '>=1.0.0', deno: '>=1.30.0', node: '>=8.0.0'}
 
-  lucide-react@0.469.0:
-    resolution: {integrity: sha512-28vvUnnKQ/dBwiCQtwJw7QauYnE7yd2Cyp4tTTJpvglX4EMpbflcdBgrgToX2j71B3YvugK/NH3BGUk+E/p/Fw==}
+  lucide-react@1.8.0:
+    resolution: {integrity: sha512-WuvlsjngSk7TnTBJ1hsCy3ql9V9VOdcPkd3PKcSmM34vJD8KG6molxz7m7zbYFgICwsanQWmJ13JlYs4Zp7Arw==}
     peerDependencies:
       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
@@ -12643,7 +12643,7 @@ snapshots:
 
   lru.min@1.1.4: {}
 
-  lucide-react@0.469.0(react@19.2.5):
+  lucide-react@1.8.0(react@19.2.5):
     dependencies:
       react: 19.2.5
 
