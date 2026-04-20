@@ -39,7 +39,7 @@
     "directory": "plugins/adapters/satori"
   },
   "dependencies": {
-    "ws": "^8.18.3"
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",

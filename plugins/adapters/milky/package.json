@@ -42,7 +42,7 @@
   },
   "dependencies": {
     "eventsource": "^2.0.2",
-    "ws": "^8.18.3"
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
