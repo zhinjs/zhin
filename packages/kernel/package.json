@@ -24,8 +24,8 @@
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/schema": "workspace:*",
     "croner": "^9.1.0",
-    "yaml": "^2.3.4",
-    "smol-toml": "^1.6.0"
+    "yaml": "^2.8.3",
+    "smol-toml": "^1.6.1"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
