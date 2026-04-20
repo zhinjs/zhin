@@ -37,7 +37,7 @@
     "build:node": "tsc"
   },
   "dependencies": {
-    "@slack/bolt": "^4.6.0",
+    "@slack/bolt": "^4.7.0",
     "@slack/web-api": "^7.15.1"
   },
   "devDependencies": {
