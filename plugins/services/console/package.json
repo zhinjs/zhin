@@ -48,7 +48,7 @@
     "build:node": "tsup"
   },
   "dependencies": {
-    "esbuild": ">=0.21.0",
+    "esbuild": ">=0.28.0",
     "mime": "^4.1.0",
     "ws": "^8.18.3"
   },
