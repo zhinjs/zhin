@@ -129,8 +129,8 @@ importers:
         specifier: ^7.0.6
         version: 7.0.6
       dotenv:
-        specifier: ^16.4.7
-        version: 16.6.1
+        specifier: ^17.4.2
+        version: 17.4.2
       fs-extra:
         specifier: ^11.3.2
         version: 11.3.4
@@ -568,8 +568,8 @@ importers:
         specifier: workspace:*
         version: link:../../basic/schema
       dotenv:
-        specifier: ^16.3.1
-        version: 16.6.1
+        specifier: ^17.4.2
+        version: 17.4.2
       yaml:
         specifier: ^2.8.3
         version: 2.8.3
@@ -5028,12 +5028,8 @@ packages:
   domutils@3.2.2:
     resolution: {integrity: sha512-6kZKyUajlDuqlHKVX1w7gyslj9MPIXzIFiz/rGu35uC1wMi+kMhQwGhl4lt9unC9Vb9INnY9Z3/ZA3+FhASLaw==}
 
-  dotenv@16.6.1:
-    resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
-    engines: {node: '>=12'}
-
-  dotenv@17.3.1:
-    resolution: {integrity: sha512-IO8C/dzEb6O3F9/twg6ZLXz164a2fhTnEWb95H23Dm4OuN+92NmEAlTrupP9VW6Jm3sO26tQlqyvyi4CsnY9GA==}
+  dotenv@17.4.2:
+    resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
     engines: {node: '>=12'}
 
   dunder-proto@1.0.1:
@@ -11503,9 +11499,7 @@ snapshots:
       domelementtype: 2.3.0
       domhandler: 5.0.3
 
-  dotenv@16.6.1: {}
-
-  dotenv@17.3.1: {}
+  dotenv@17.4.2: {}
 
   dunder-proto@1.0.1:
     dependencies:
@@ -12430,7 +12424,7 @@ snapshots:
   kook-client@1.0.4:
     dependencies:
       axios: 1.15.0
-      dotenv: 17.3.1
+      dotenv: 17.4.2
       formdata-node: 6.0.3
       log4js: 6.9.1
       node-persist: 4.0.4
