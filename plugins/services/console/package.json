@@ -50,7 +50,7 @@
   "dependencies": {
     "esbuild": ">=0.28.0",
     "mime": "^4.1.0",
-    "ws": "^8.18.3"
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "@reduxjs/toolkit": "^2.9.0",
