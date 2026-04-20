@@ -20,7 +20,7 @@
     "clean": "rimraf lib"
   },
   "devDependencies": {
-    "typescript": "^6.0.0",
+    "typescript": "^6.0.3",
     "@types/node": "^24.3.0",
     "zhin.js": "workspace:*"
   },

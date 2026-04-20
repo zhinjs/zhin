@@ -44,7 +44,7 @@
   "license": "MIT",
   "dependencies": {},
   "devDependencies": {
-    "typescript": "^6.0.0",
+    "typescript": "^6.0.3",
     "zhin.js": "workspace:*",
     "@zhin.js/adapter-icqq": "workspace:*"
   },

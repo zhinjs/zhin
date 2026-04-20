@@ -27,7 +27,7 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^24.3.0",
-    "typescript": "^6.0.0",
+    "typescript": "^6.0.3",
     "rimraf": "^6.0.0"
   },
   "repository": {

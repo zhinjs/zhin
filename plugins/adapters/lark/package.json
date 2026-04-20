@@ -44,7 +44,7 @@
   "devDependencies": {
     "@types/koa": "^2.15.0",
     "@types/node": "^22.9.0",
-    "typescript": "^6.0.0",
+    "typescript": "^6.0.3",
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {
