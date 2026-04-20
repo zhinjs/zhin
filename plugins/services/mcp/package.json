@@ -44,7 +44,7 @@
     "clean": "rimraf lib"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^3.24.1"
   },
   "peerDependencies": {
