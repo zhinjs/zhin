@@ -62,7 +62,7 @@
     "@types/react-dom": "^19.2.1",
     "lucide-react": "^0.469.0",
     "radix-ui": "^1.4.3",
-    "typescript": "^6.0.0"
+    "typescript": "^6.0.3"
   },
   "engines": {
     "node": ">=18.0.0"

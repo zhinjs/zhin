@@ -50,7 +50,7 @@
     "mysql2": "latest",
     "pg": "latest",
     "redis": "latest",
-    "typescript": "^6.0.0",
+    "typescript": "^6.0.3",
     "zhin.js": "workspace:*"
   },
   "repository": {

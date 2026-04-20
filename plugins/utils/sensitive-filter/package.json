@@ -37,7 +37,7 @@
     "zhin.js": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^6.0.0",
+    "typescript": "^6.0.3",
     "zhin.js": "workspace:*"
   },
   "type": "module",
