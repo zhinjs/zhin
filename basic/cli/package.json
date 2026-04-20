@@ -33,7 +33,7 @@
     "inquirer": "^12.10.0",
     "open": "^11.0.0",
     "ora": "^8.2.0",
-    "yaml": "^2.7.1"
+    "yaml": "^2.8.3"
   },
   "peerDependencies": {
     "zhin.js": "workspace:*"
