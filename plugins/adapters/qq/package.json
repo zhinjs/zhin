@@ -45,7 +45,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.1",
     "@zhin.js/console": "workspace:*",
-    "lucide-react": "^1.8.0",
+    "lucide-react": "^1.11.0",
     "typescript": "^6.0.3",
     "zhin.js": "workspace:*"
   },
