@@ -3,7 +3,6 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "types": ["node"],
     "outDir": "./dist",
     "rootDir": "./client",
     "strict": true,
@@ -13,20 +12,13 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "allowSyntheticDefaultImports": true,
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
     "jsx": "react-jsx",
     "jsxImportSource": "react",
     "ignoreDeprecations": "6.0",
-    "baseUrl": ".",
-    "paths": {
-      "@/*": [
-        "./client/*"
-      ]
-    }
+    "lib": ["ES2022", "DOM"]
   },
   "include": [
     "client/**/*"

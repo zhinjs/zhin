@@ -2,6 +2,7 @@
  * Nested field renderer for array items, tuple slots, etc.
  */
 
+import type * as React from 'react'
 import type { SchemaField } from './types.js'
 import { Input } from '../ui/input'
 import { Textarea } from '../ui/textarea'

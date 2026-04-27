@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/client",
   "version": "1.0.17",
-  "description": "Zhin 客户端",
+  "description": "Zhin console client: app singleton + WebSocket + re-exports (aligned with page-manager)",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -15,14 +15,12 @@
     "build": "tsc",
     "clean": "rimraf dist"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@zhin.js/console-core": "workspace:*",
+    "@zhin.js/console-types": "workspace:*"
+  },
   "peerDependencies": {
-    "@reduxjs/toolkit": "^2.9.0",
-    "clsx": "^2.1.1",
-    "react-redux": "9.2.0",
-    "react-router": "7.0.0",
-    "redux-persist": "6.0.0",
-    "tailwind-merge": "^3.3.1"
+    "react": ">=18"
   },
   "files": [
     "dist",
@@ -30,7 +28,10 @@
   ],
   "devDependencies": {
     "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.1"
+    "@types/react-dom": "^19.2.1",
+    "react": "^18.3.1",
+    "rimraf": "^6.0.1",
+    "typescript": "^6.0.2"
   },
   "repository": {
     "type": "git",

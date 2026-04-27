@@ -1,3 +1,4 @@
+import type * as React from "react"
 import { cn } from "@zhin.js/client"
 
 function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {

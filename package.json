@@ -35,6 +35,7 @@
     "build": "pnpm -r --filter \"./basic/**\" build && pnpm -r --filter \"./packages/**\" build && pnpm -r --filter \"./plugins/services/**\" build && pnpm -r --filter \"./plugins/adapters/**\" build && pnpm -r --filter \"./plugins/games/**\" build && pnpm -r --filter \"./plugins/utils/**\" build",
     "clean": "pnpm -r clean",
     "lint": "eslint . --ext .ts,.tsx",
+    "check:harness-paths": "node scripts/check-im-send-bypass.mjs",
     "type-check": "tsc --noEmit",
     "link": "pnpm --filter @zhin.js/cli exec npm link",
     "test": "vitest run",
@@ -119,6 +120,9 @@
       "dompurify@>=3.1.3 <=3.3.1": ">=3.3.2",
       "koa@>=3.0.0 <3.1.2": ">=3.1.2",
       "@tootallnate/once@<3.0.1": ">=3.0.1"
+    },
+    "patchedDependencies": {
+      "@farmfe/core@1.7.11": "patches/@farmfe__core@1.7.11.patch"
     }
   }
 }

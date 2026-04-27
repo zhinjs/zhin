@@ -13,6 +13,7 @@ import {
 } from "zhin.js";
 import type { WebSocket } from "ws";
 import { Router } from "@zhin.js/http";
+import { PageManager } from "@zhin.js/console";
 import path from "path";
 
 export interface SandboxConfig {
@@ -27,7 +28,7 @@ declare module "zhin.js" {
   namespace Plugin {
     interface Contexts {
       router: Router;
-      web: any;
+      web: PageManager;
     }
   }
 
@@ -228,11 +229,11 @@ plugin.useContext("router", async (router: Router) => {
 });
 
 // 使用 web 上下文注册客户端入口
-plugin.useContext("web", (web: any) => {
-  // 注册 Sandbox 适配器的客户端入口文件
-  const dispose = web.addEntry({
-    production: path.resolve(import.meta.dirname, "../dist/index.js"),
+plugin.useContext("web", () => {
+  PageManager.addEntry({
+    id: "sandbox",
     development: path.resolve(import.meta.dirname, "../client/index.tsx"),
+    production: path.resolve(import.meta.dirname, "../dist/index.js"),
+    meta: { name: "Sandbox" },
   });
-  return dispose;
 });

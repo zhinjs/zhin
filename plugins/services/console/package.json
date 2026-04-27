@@ -5,9 +5,6 @@
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
-  "bin": {
-    "zhin-console": "./lib/bin.js"
-  },
   "keywords": [
     "zhin",
     "zhin.js",
@@ -35,42 +32,21 @@
       "types": "./lib/index.d.ts",
       "development": "./src/index.ts",
       "import": "./lib/index.js"
-    },
-    "./browser.tsconfig.json": "./browser.tsconfig.json",
-    "./node.tsconfig.json": "./node.tsconfig.json"
+    }
   },
   "scripts": {
-    "build": "pnpm build:node && pnpm build:client",
-    "build:prod": "NODE_ENV=production pnpm build",
-    "build:dev": "NODE_ENV=development pnpm build",
-    "build:client": "node scripts/client.js",
-    "clean": "rimraf lib dist",
-    "build:node": "tsup"
+    "build": "tsup",
+    "clean": "rimraf lib"
   },
   "dependencies": {
-    "esbuild": ">=0.28.0",
-    "mime": "^4.1.0",
+    "@zhin.js/console-core": "workspace:*",
+    "@zhin.js/console-types": "workspace:*",
     "ws": "^8.20.0"
   },
   "devDependencies": {
-    "@reduxjs/toolkit": "^2.9.0",
-    "@tailwindcss/postcss": "^4.2.2",
-    "@tailwindcss/vite": "4.2.2",
-    "@vitejs/plugin-react": "^4.3.4",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "koa-connect": "^2.1.0",
-    "lucide-react": "^1.8.0",
-    "radix-ui": "^1.4.3",
-    "react": "19.2.5",
-    "react-dom": "19.2.5",
-    "react-redux": "9.2.0",
-    "react-router": "7.14.1",
-    "tailwind-merge": "^3.3.1",
-    "tailwindcss": "latest",
+    "@types/koa": "^2.15.0",
+    "esbuild": "^0.25.12",
     "tsup": "^8.5.1",
-    "rolldown": "^1.0.0-rc.9",
-    "vite": "8.0.8",
     "yaml": "^2.8.3",
     "zhin.js": "workspace:*"
   },
@@ -78,24 +54,19 @@
     "@types/ws": "^8.18.1",
     "@zhin.js/agent": "workspace:^",
     "@zhin.js/client": "workspace:^",
+    "@zhin.js/console-app": "workspace:^",
     "@zhin.js/core": "workspace:^",
     "@zhin.js/http": "workspace:^",
+    "koa": "^2.16.2",
     "zhin.js": "workspace:*"
   },
   "files": [
     "src",
     "lib",
-    "client",
-    "dist",
     "skills",
     "README.md",
-    "browser.tsconfig.json",
-    "node.tsconfig.json",
     "CHANGELOG.md"
   ],
-  "optionalDependencies": {
-    "koa-connect": "^2.1.0"
-  },
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"

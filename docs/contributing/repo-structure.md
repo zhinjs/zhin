@@ -102,39 +102,35 @@ pnpm install
 
 `package.json` 的 `files` 中通常需包含 **`client`**（源码供开发/扩展加载）及构建生成的 **`dist`**（若对外分发预构建产物）。
 
-### 3.3 大型服务：`@zhin.js/console`
+### 3.3 控制台架构（对齐 page-manager）
 
-- **服务端**：`plugins/services/console/src/` → **`lib/`**（如 `tsup`）。
-- **控制台 SPA**：`plugins/services/console/client/` → 构建产物在**该包下的 `dist/`**（Vite 等脚本，见 `scripts/client.js`）。
+控制台采用三层分包，与 [page-manager](https://github.com/lc-cn/page-manager) 架构对齐：
 
-即：在同一包内严格执行 **src→lib**、**client→dist**。
+| 包 | 源码 → 产物 | 职责 |
+|---|---|---|
+| `@zhin.js/console-types` | `src/` → tsup → `dist/` | 共享类型与常量 |
+| `@zhin.js/console-core` | Node: `src/node/` → tsc → `lib/`；Browser: `client/` → tsc → `dist/` | PageManager、EntryStore、esbuild 管线、RegistryStore、cn 工具 |
+| `@zhin.js/console-app` | Server: `src/` → tsc → `lib/`；Client: `client/` → Farm → `dist/` | 默认壳 SPA + 内置 `GET /entries` |
+| `@zhin.js/client` | `client/` → tsc → `dist/` | `app` 单例 + WebSocket + re-export |
+| `@zhin.js/console` | `src/` → tsup → `lib/` | 胶水层：创建 PageManager、挂载路由、WebSocket 业务逻辑 |
 
-包根提供可发布的 TypeScript 基线，供适配器 `extends`（见 `package.json` 的 `exports`）：
+**插件注册契约**：
+- 服务端：`PageManager.addEntry({ id, development, production })`
+- 浏览器：`export function register(api: PluginRegisterHostApi)`，使用 `api.React.createElement`、`api.addRoute`、`api.addTool`
 
-- **`@zhin.js/console/browser.tsconfig.json`** — 控制台扩展目录 **`client/`**（React + bundler）。
-- **`@zhin.js/console/node.tsconfig.json`** — Node 侧插件 **`src/`** 的推荐选项（与 `NodeNext` 一致）；各包仍需在本机 `tsconfig` 中设置自身的 `rootDir` / `outDir` / `include`。
+**共享依赖**：`/console/esm/*.mjs` 提供 canonical ESM（react、react-dom 等），esbuild 按需打包 + 缓存，无需 import map / farm-peer-shim。
 
-#### 3.3.1 控制台 SPA：`client/` 内部的「应用根」
+**构建顺序**：`console-types` (tsup) → `console-core` (tsc×2) → `client` (tsc) → `console-app` (tsc + farm) → `console` (tsup)。
 
-`@zhin.js/console` 的前端是 **Vite 单页应用**，除包根 **`client/`** 表示「整段浏览器资产」外，其下还有常见子结构（与适配器包根下**扁平**的 `client/index.tsx` 不同，但语义仍属浏览器侧）：
-
-```
-plugins/services/console/client/
-  index.html              # Vite 入口 HTML
-  src/                    # 应用源码（页面、布局、组件、hooks）
-  public/                 # 若有静态资源
-  *.config.js             # tailwind / postcss 等
-```
-
-**约定：** 控制台相关 **Node 逻辑**（Koa、WebSocket、持久化）只放在 **`plugins/services/console/src/`**，不要放进 `client/src/`。适配器扩展保持「包根 `client/` + 少量文件」即可。
+**约定**：控制台相关 **Node 逻辑**（Koa、WebSocket、持久化）只放在 `plugins/services/console/src/`，不要放进 `client/src/`。适配器扩展保持「包根 `client/` + 少量文件」即可。
 
 ### 3.4 `@zhin.js/client`（`packages/client`）
 
-- **`packages/client/`**：npm 包 **`@zhin.js/client`** 的根（清单、构建配置）。
-- **`packages/client/client/`**：**浏览器端源码**（非「包名重复」，而是「客户端子树」语义）。
-- **构建输出**：包根 **`dist/`**（`main`/`types` 指向 `./dist/...`），符合上表「client 侧 → dist」。
-
-路径别名 `@/*` → `./client/*` 与上述布局一致。
+- **`packages/client/`**：npm 包 **`@zhin.js/client`** 的根。
+- **`packages/client/client/`**：浏览器端源码（`app.ts` 单例、WebSocket 模块、mediaSrc 工具）。
+- **构建输出**：`dist/`（`main`/`types` 指向 `./dist/...`）。
+- **核心导出**：`app` 单例（`addRoute`/`addTool`/`defineSidebar`/`defineToolbar` + `useSyncExternalStore`）；WebSocket hooks（`useWebSocket`/`useConfig`/`useFiles`/`useDatabase`）；re-export `console-types` 类型 + `console-core/browser` 工具。
+- **无 Redux**：状态管理由 `app` 单例 + `useSyncExternalStore` 替代。
 
 ## 4. 文件命名（前端 / TS）
 

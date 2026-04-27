@@ -23,6 +23,7 @@ export type RouterContext = KoaRouterContext & {
 export class Router extends KoaRouter {
   wsStack: WebSocketServer[] = [];
   whiteList: Path[] = [];
+  private _upgradeListenerInstalled = false;
 
   constructor(public server: http.Server, options?: RouterOptions) {
     super(options);
@@ -43,24 +44,35 @@ export class Router extends KoaRouter {
     remove(this.wsStack, wsServer);
   }
 
+  private _ensureUpgradeListener(): void {
+    if (this._upgradeListenerInstalled) return;
+    this._upgradeListenerInstalled = true;
+
+    this.server.on("upgrade", (request: import("http").IncomingMessage, socket: import("stream").Duplex, head: Buffer) => {
+      if ((socket as any)._wsRouterHandled) return;
+      const { pathname } = parse(request.url!);
+      const target = this.wsStack.find((wss) => wss.options.path === pathname);
+      if (!target) return;
+      (socket as any)._wsRouterHandled = true;
+      try {
+        target.handleUpgrade(request, socket as import("net").Socket, head, (ws) => {
+          target.emit("connection", ws, request);
+        });
+      } catch {}
+    });
+  }
+
   ws(path: string, options: Omit<ServerOptions, "noServer" | "path"> = {}): WebSocketServer {
+    const existing = this.wsStack.find((wss) => wss.options.path === path);
+    if (existing) return existing;
+
     const wsServer = new WebSocketServer({
       noServer: true,
       path,
       ...options,
     });
     this.wsStack.push(wsServer);
-
-    this.server.on("upgrade", (request, socket, head) => {
-      const { pathname } = parse(request.url!);
-      if (this.wsStack.findIndex((wss) => wss.options.path === path) === -1) {
-        socket.destroy();
-      } else if (pathname === path) {
-        wsServer.handleUpgrade(request, socket, head, (ws) => {
-          wsServer.emit("connection", ws, request);
-        });
-      }
-    });
+    this._ensureUpgradeListener();
     return wsServer;
   }
 }

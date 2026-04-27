@@ -1,11 +1,11 @@
-import { addPage } from '@zhin.js/client'
-import { Bot } from 'lucide-react'
+import type { PluginRegisterHostApi } from '@zhin.js/console-types'
 import ICQQManagement from './ICQQManagement'
 
-addPage({
-  key: 'icqq-management',
-  path: '/icqq',
-  title: 'ICQQ管理',
-  icon: <Bot className="w-5 h-5" />,
-  element: <ICQQManagement/>
-})
+export function register(api: PluginRegisterHostApi) {
+  api.addRoute({
+    path: '/console/icqq',
+    name: 'ICQQ管理',
+    element: api.React.createElement(ICQQManagement, { hostReact: api.React }),
+  })
+  api.addTool({ id: 'icqq', name: 'ICQQ', path: '/console/icqq' })
+}

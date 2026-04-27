@@ -1,7 +1,8 @@
-import * as React from "react"
+import type * as React from "react"
+import { forwardRef } from "react"
 import { cn } from "@zhin.js/client"
 
-const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(
+const Textarea = forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(
   ({ className, ...props }, ref) => {
     return (
       <textarea

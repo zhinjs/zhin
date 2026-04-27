@@ -1,0 +1,26 @@
+diff --git a/dist/server/ws.js b/dist/server/ws.js
+index 935289b27862c6552dbf7188a66067c24a77865b..4fbc992ae9813613abb8d56b10f307ecebbdc19b 100644
+--- a/dist/server/ws.js
++++ b/dist/server/ws.js
+@@ -72,7 +72,10 @@ export default class WsServer {
+             this.handleHMRUpgrade(request, socket, head);
+         }
+         else {
+-            this.logger.error(`HMR upgrade failed because of invalid HMR path, header or host. The HMR connection is only allowed on hosts: ${this.hmrOrigins.join(', ')}. You can try set server.host or server.allowedHosts to allow the connection.`);
++            const pathOnly = (request.url || '').split('?')[0];
++            if (pathOnly === this.config.hmr.path) {
++                this.logger.error(`HMR upgrade failed because of invalid HMR path, header or host. The HMR connection is only allowed on hosts: ${this.hmrOrigins.join(', ')}. You can try set server.host or server.allowedHosts to allow the connection.`);
++            }
+         }
+     }
+     listen() {
+@@ -106,7 +109,8 @@ export default class WsServer {
+         });
+     }
+     isHMRRequest(request) {
+-        return (request.url === this.config.hmr.path &&
++        const pathOnly = (request.url || '').split('?')[0];
++        return (pathOnly === this.config.hmr.path &&
+             request.headers['sec-websocket-protocol'] === HMR_HEADER);
+     }
+     handleHMRUpgrade(request, socket, head) {

@@ -245,6 +245,36 @@ function buildMemorySection(): string | null {
   return '# Memory\n\n' + fileMemory;
 }
 
+/** 单段字符数统计（日志 / Harness debug；与 buildRichSystemPrompt 分段一致） */
+export interface PromptSectionDebugInfo {
+  id: string;
+  approxChars: number;
+}
+
+/**
+ * 返回当前上下文中**实际注入**的系统提示各段大小（不含 SECTION_SEP）。
+ * 用于观测渐进披露与 token 压力，不改变线上 prompt 拼接逻辑。
+ */
+export function describePromptSectionsForDebug(ctx: RichSystemPromptContext): PromptSectionDebugInfo[] {
+  const { config, skillRegistry, skillsSummaryXML, activeSkillsContext, bootstrapContext } = ctx;
+  const boot = bootstrapContext?.trim() ? bootstrapContext : null;
+  const pairs: [string, string | null][] = [
+    ['§1_identity_environment', buildIdentitySection(config)],
+    ['§2_system', buildSystemSection()],
+    ['§3_doing_tasks', buildDoingTasksSection()],
+    ['§4_action_safety', buildActionsSection()],
+    ['§5_tools', buildUsingToolsSection()],
+    ['§6_style', buildCommunicationSection()],
+    ['§7_skills', buildSkillsSection(skillRegistry, skillsSummaryXML)],
+    ['§8_active_skills', buildActiveSkillsSection(activeSkillsContext)],
+    ['§9_memory', buildMemorySection()],
+    ['§10_bootstrap', boot],
+  ];
+  return pairs
+    .filter(([, c]) => c != null && c.trim().length > 0)
+    .map(([id, c]) => ({ id, approxChars: c!.length }));
+}
+
 export function buildRichSystemPrompt(ctx: RichSystemPromptContext): string {
   const { config, skillRegistry, skillsSummaryXML, activeSkillsContext, bootstrapContext } = ctx;
 

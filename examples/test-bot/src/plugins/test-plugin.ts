@@ -556,8 +556,13 @@ useContext("database", async (db) => {
   }
 });
 
-useContext("web", (web) => {
-  const dispose = web.addEntry(
-    path.resolve(process.cwd(), "client/index.tsx"));
-  return dispose;
-});
+try {
+  const { PageManager } = await import("@zhin.js/console");
+  const clientEntry = path.resolve(process.cwd(), "client/index.tsx");
+  PageManager.addEntry({
+    id: "test-plugin",
+    development: clientEntry,
+    production: clientEntry,
+    meta: { name: "Test Plugin" },
+  });
+} catch {}

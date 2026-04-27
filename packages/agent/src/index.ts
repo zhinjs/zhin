@@ -46,8 +46,15 @@ export {
   type ExecPolicyResult,
 } from './zhin-agent/exec-policy.js';
 export { collectRelevantTools, toAgentTool } from './zhin-agent/tool-collector.js';
-export { buildRichSystemPrompt, buildContextHint, buildEnhancedPersona, buildUserMessageWithHistory, contentToText } from './zhin-agent/prompt.js';
-export type { RichSystemPromptContext } from './zhin-agent/prompt.js';
+export {
+  buildRichSystemPrompt,
+  buildContextHint,
+  buildEnhancedPersona,
+  buildUserMessageWithHistory,
+  contentToText,
+  describePromptSectionsForDebug,
+} from './zhin-agent/prompt.js';
+export type { RichSystemPromptContext, PromptSectionDebugInfo } from './zhin-agent/prompt.js';
 export { createChatHistoryTool, createUserProfileTool, createSpawnTaskTool } from './zhin-agent/builtin-tools.js';
 
 export {

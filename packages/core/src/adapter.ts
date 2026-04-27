@@ -58,10 +58,15 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
   /**
    * 重写 emit：拦截 message.receive 事件，按架构规定的入站流程处理
    * 入站消息链：adapter.emit → dispatcher.dispatch → plugin.dispatch('message.receive') → adapter observers
+   *
+   * 以属性 + `EventEmitter.prototype.emit` 调用满足 Node @types 25 对泛型 `emit` 的可赋值检查。
    */
-  emit<K extends keyof Adapter.Lifecycle>(event: K, ...args: Adapter.Lifecycle[K]): boolean {
+  override emit: EventEmitter<Adapter.Lifecycle>['emit'] = ((
+    event: string | symbol,
+    ...args: unknown[]
+  ): boolean => {
     if (event !== 'message.receive') {
-      return super.emit(event, ...args as any);
+      return EventEmitter.prototype.emit.call(this, event, ...args);
     }
     const message = args[0] as Message;
     this.logger.info(`${message.$bot} recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`);
@@ -84,7 +89,7 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
       // Step 2: 触发插件生命周期事件
       this.plugin?.dispatch('message.receive', message);
       // Step 3: 通知 adapter.on('message.receive') 观察者
-      super.emit(event, ...args as any);
+      EventEmitter.prototype.emit.call(this, event, ...args);
     };
 
     processing().catch((e) => {
@@ -93,7 +98,7 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
       this.#pendingMessages--;
     });
     return true;
-  }
+  }) as EventEmitter<Adapter.Lifecycle>['emit'];
   abstract createBot(config: Adapter.BotConfig<R>): R;
   get logger() {
     if(!this.plugin) throw new Error("Adapter is not associated with any plugin");
@@ -118,7 +123,10 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
     return await bot.$sendMessage(options);
   }
   async start() {
-    this.plugin.root.adapters.push(this.name);
+    const rootAdapters = this.plugin.root.adapters;
+    if (!rootAdapters.some((n) => String(n) === String(this.name))) {
+      rootAdapters.push(this.name);
+    }
     if (!this.config?.length) return;
 
     for (const config of this.config) {
@@ -147,10 +155,10 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
     // 无论是否有错误，始终完成清理
     this.bots.clear();
     
-    // 从 adapters 数组中移除
-    const idx = this.plugin.root.adapters.indexOf(this.name);
-    if (idx !== -1) {
-      this.plugin.root.adapters.splice(idx, 1);
+    // 从 adapters 数组中移除（可能因重复 start 出现多条同名，需全部删掉）
+    const rootAdapters = this.plugin.root.adapters;
+    for (let i = rootAdapters.length - 1; i >= 0; i--) {
+      if (rootAdapters[i] === this.name) rootAdapters.splice(i, 1);
     }
     
     // 移除所有事件监听器

@@ -45,6 +45,9 @@ jobs:
       
       - name: type check
         run: pnpm type-check
+
+      - name: harness IM send-path check
+        run: pnpm check:harness-paths
       
       - name: run tests
         run: pnpm test:reporter

@@ -1,16 +1,8 @@
-import {
-  Outlet,
-  Link,
-  useSelector,
-  useDispatch,
-  toggleSidebar,
-  setActiveMenu,
-  type RouteMenuItem,
-} from "@zhin.js/client"
-import { useMemo, useState, useCallback, type KeyboardEvent } from "react"
-import { useLocation, useNavigate, matchPath } from "react-router"
-import { Menu, Search, LogOut } from 'lucide-react'
-import { cn } from "@zhin.js/client"
+import { useMemo, useState, useCallback, useSyncExternalStore, type ComponentType, type KeyboardEvent } from "react"
+import { Outlet, Link, useLocation, useNavigate, matchPath } from "react-router-dom"
+import * as LucideIcons from "lucide-react"
+import { Menu, Search, LogOut } from "lucide-react"
+import { app, cn, type ConsoleRouteRecord } from "@zhin.js/client"
 import { ThemeToggle } from "../components/ThemeToggle"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
@@ -20,42 +12,50 @@ import { clearToken } from "../utils/auth"
 
 const GROUP_ORDER = ["系统", "扩展", "配置与数据", "其他"] as const
 
-function collectMenuRoutes(children: RouteMenuItem[]): RouteMenuItem[] {
-  return children.filter((r) => !r.meta?.hideInMenu && r.key !== "dashboardLayout")
+function SidebarMenuIcon({ icon }: { icon?: React.ReactNode | string }) {
+  if (icon == null) return null
+  if (typeof icon === "string") {
+    const Cmp = (LucideIcons as Record<string, ComponentType<{ className?: string }>>)[icon]
+    if (!Cmp || typeof Cmp !== "function") return null
+    return <Cmp className="w-4 h-4" />
+  }
+  return <>{icon}</>
 }
 
-function useContentFullWidth(routes: RouteMenuItem[], pathname: string): boolean {
+function collectMenuRoutes(routes: readonly ConsoleRouteRecord[]): ConsoleRouteRecord[] {
+  return routes.filter((r) => !r.meta?.hideInMenu)
+}
+
+function useContentFullWidth(routes: readonly ConsoleRouteRecord[], pathname: string): boolean {
   return useMemo(() => {
-    const dash = routes.find((r) => r.key === "dashboardLayout")
-    const children = dash?.children ?? []
-    for (const c of children) {
-      if (!(c.meta as { fullWidth?: boolean } | undefined)?.fullWidth || !c.path) continue
-      const m = matchPath({ path: c.path, end: true }, pathname)
-      if (m) return true
+    for (const r of routes) {
+      if (!r.meta?.fullWidth || !r.path) continue
+      if (matchPath({ path: r.path, end: true }, pathname)) return true
     }
     return false
   }, [routes, pathname])
 }
 
 export default function DashboardLayout() {
-  const dispatch = useDispatch()
   const location = useLocation()
   const navigate = useNavigate()
-  const sidebarOpen = useSelector((state) => state.ui.sidebarOpen)
-  const activeMenu = useSelector((state) => state.ui.activeMenu)
-  const routes = useSelector((state) => state.route?.routes || [])
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [activeMenu, setActiveMenu] = useState<string | null>(null)
   const [searchQ, setSearchQ] = useState("")
 
+  const routes = useSyncExternalStore(
+    app.subscribe,
+    () => app._getRoutes(),
+  )
+
   const menuRoutes = useMemo(() => {
-    const dashboardRoute = routes.find((route) => route.key === "dashboardLayout")
-    if (!dashboardRoute?.children) return []
-    return collectMenuRoutes(dashboardRoute.children).sort(
+    return collectMenuRoutes(routes).sort(
       (a, b) => (a.meta?.order ?? 999) - (b.meta?.order ?? 999),
     )
   }, [routes])
 
   const menuByGroup = useMemo(() => {
-    const map = new Map<string, RouteMenuItem[]>()
+    const map = new Map<string, ConsoleRouteRecord[]>()
     for (const r of menuRoutes) {
       const g = r.meta?.group ?? "其他"
       if (!map.has(g)) map.set(g, [])
@@ -68,7 +68,7 @@ export default function DashboardLayout() {
   }, [menuRoutes])
 
   const searchTargets = useMemo(
-    () => menuRoutes.map((r) => ({ title: r.title, path: r.path, key: r.key })),
+    () => menuRoutes.map((r) => ({ title: r.name, path: r.path })),
     [menuRoutes],
   )
 
@@ -86,11 +86,11 @@ export default function DashboardLayout() {
       const first = searchHits[0]
       if (first?.path) {
         navigate(first.path)
-        dispatch(setActiveMenu(first.key))
+        setActiveMenu(first.path)
         setSearchQ("")
       }
     },
-    [searchHits, navigate, dispatch],
+    [searchHits, navigate],
   )
 
   const contentFullWidth = useContentFullWidth(routes, location.pathname)
@@ -150,21 +150,23 @@ export default function DashboardLayout() {
                     </div>
                   )}
                   {items.map((route, index) => {
-                    const itemKey = route.key || `menu-item-${groupName}-${index}`
-                    const isActive = activeMenu === itemKey
+                    const itemKey = route.path || `menu-item-${groupName}-${index}`
+                    const isActive = activeMenu === itemKey || location.pathname === route.path || location.pathname.startsWith(route.path + "/")
                     return (
                       <Link
                         key={itemKey}
                         to={route.path}
-                        onClick={() => dispatch(setActiveMenu(itemKey))}
+                        onClick={() => setActiveMenu(itemKey)}
                         className={cn(
                           "menu-item",
                           isActive && "active",
                           !sidebarOpen && "justify-center px-2",
                         )}
                       >
-                        <span className="shrink-0">{route.icon}</span>
-                        {sidebarOpen && <span className="truncate">{route.title}</span>}
+                        <span className="shrink-0">
+                          <SidebarMenuIcon icon={route.icon} />
+                        </span>
+                        {sidebarOpen && <span className="truncate">{route.name}</span>}
                       </Link>
                     )
                   })}
@@ -178,7 +180,7 @@ export default function DashboardLayout() {
       <div className="flex flex-col flex-1 overflow-hidden min-w-0">
         <header className="flex items-center justify-between h-14 px-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            <Button variant="ghost" size="icon" onClick={() => dispatch(toggleSidebar())}>
+            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen((v) => !v)}>
               <Menu className="h-5 w-5" />
             </Button>
             <div className="flex flex-col min-w-0">

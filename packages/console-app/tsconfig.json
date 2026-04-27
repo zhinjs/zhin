@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "ignoreDeprecations": "6.0",
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "lib": ["ES2022", "DOM"],
+    "esModuleInterop": true,
+    "noEmit": true,
+    "paths": {
+      "@console/*": ["../../plugins/services/console/client/src/*"]
+    }
+  },
+  "include": ["client/**/*", "src/**/*", "../../plugins/services/console/client/src/**/*"]
+}

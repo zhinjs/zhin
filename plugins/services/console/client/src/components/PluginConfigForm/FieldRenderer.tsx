@@ -2,6 +2,7 @@
  * Field renderer - dispatches to type-specific renderers
  */
 
+import type * as React from 'react'
 import type { FieldRendererProps, SchemaField } from './types.js'
 import { Textarea } from '../ui/textarea'
 import {

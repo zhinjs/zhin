@@ -4,12 +4,12 @@
 import path from "node:path";
 import { usePlugin, type Plugin, type Context, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
 import { TelegramAdapter } from "./adapter.js";
-import type { WebServer } from "@zhin.js/console";
+import { PageManager } from "@zhin.js/console";
 
 declare module "zhin.js" {
   namespace Plugin {
     interface Contexts {
-      web: WebServer;
+      web: PageManager;
     }
   }
 }
@@ -305,8 +305,13 @@ useContext('tool', 'telegram', (toolService: ToolFeature, telegram: TelegramAdap
 });
 
 // ── Web 控制台 ─────────────────────────────────────────────────────────
-useContext("web", (web: WebServer) => {
-  return web.addEntry(path.resolve(import.meta.dirname, "../client/index.tsx"));
+useContext("web", () => {
+  PageManager.addEntry({
+    id: "telegram",
+    development: path.resolve(import.meta.dirname, "../client/index.tsx"),
+    production: path.resolve(import.meta.dirname, "../dist/index.js"),
+    meta: { name: "Telegram" },
+  });
 });
 
 useContext("router", "telegram", (router: any, telegram: TelegramAdapter) => {

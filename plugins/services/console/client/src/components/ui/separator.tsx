@@ -1,8 +1,9 @@
-import * as React from "react"
+import type * as React from "react"
+import { forwardRef } from "react"
 import { Separator as SeparatorPrimitive } from "radix-ui"
 import { cn } from "@zhin.js/client"
 
-const Separator = React.forwardRef<
+const Separator = forwardRef<
   React.ComponentRef<typeof SeparatorPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof SeparatorPrimitive.Root>
 >(({ className, orientation: orientationProp, decorative = true, ...props }, ref) => {

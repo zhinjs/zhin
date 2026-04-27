@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, type ChangeEvent } from 'react'
 import { Clock, Plus, Trash2, AlertCircle, Pause, Play, RefreshCw, Timer, Cpu, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react'
-import { useWebSocket, useSelector, selectConfigConnected } from '@zhin.js/client'
+import { useWebSocket } from '@zhin.js/client'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
@@ -62,8 +62,7 @@ export default function CronPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [expandedMemIdx, setExpandedMemIdx] = useState<number | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
-  const connected = useSelector(selectConfigConnected)
-  const { sendRequest } = useWebSocket()
+  const { connected, sendRequest } = useWebSocket()
 
   const fetchCrons = useCallback(async () => {
     if (!connected) {

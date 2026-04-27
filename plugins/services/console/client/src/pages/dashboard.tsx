@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router'
+import { useNavigate } from 'react-router-dom'
 import { Bot, AlertCircle, Activity, Package, Clock, Cpu, MemoryStick, FileText, TrendingUp, RotateCw } from 'lucide-react'
 import { apiFetch } from '../utils/auth'
 import { useWebSocket } from '@zhin.js/client'

@@ -4,7 +4,7 @@
 import path from "path";
 import { usePlugin, type Plugin, type ToolFeature } from "zhin.js";
 import type { Router } from "@zhin.js/http";
-import type { WebServer } from "@zhin.js/console";
+import { PageManager } from "@zhin.js/console";
 import { IcqqAdapter } from "./adapter.js";
 import { registerCommands } from "./commands/index.js";
 import { registerTools } from "./tools/index.js";
@@ -13,7 +13,7 @@ import { registerRoutes } from "./routes.js";
 declare module "zhin.js" {
   namespace Plugin {
     interface Contexts {
-      web: WebServer;
+      web: PageManager;
       router: Router;
     }
   }
@@ -54,10 +54,13 @@ useContext("tool", "icqq", (toolService: ToolFeature, icqq: IcqqAdapter) => {
 });
 
 // ── Web 控制台入口 ─────────────────────────────────────────────────
-useContext("web", (web: WebServer) => {
-  return web.addEntry(
-    path.resolve(import.meta.dirname, "../client/index.tsx"),
-  );
+useContext("web", () => {
+  PageManager.addEntry({
+    id: "icqq",
+    development: path.resolve(import.meta.dirname, "../client/index.tsx"),
+    production: path.resolve(import.meta.dirname, "../dist/index.js"),
+    meta: { name: "ICQQ" },
+  });
 });
 
 // ── HTTP 路由 ──────────────────────────────────────────────────────

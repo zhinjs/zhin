@@ -1,11 +1,11 @@
-import { addPage } from '@zhin.js/client'
-import { Headphones } from 'lucide-react'
+import type { PluginRegisterHostApi } from '@zhin.js/console-types'
 import KookDashboard from './Dashboard'
 
-addPage({
-  key: 'kook-management',
-  path: '/kook',
-  title: 'KOOK',
-  icon: <Headphones className="w-5 h-5" />,
-  element: <KookDashboard />,
-})
+export function register(api: PluginRegisterHostApi) {
+  api.addRoute({
+    path: '/console/kook',
+    name: 'KOOK',
+    element: api.React.createElement(KookDashboard, { hostReact: api.React }),
+  })
+  api.addTool({ id: 'kook', name: 'KOOK', path: '/console/kook' })
+}

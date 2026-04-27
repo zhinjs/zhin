@@ -1,11 +1,11 @@
-import { addPage } from '@zhin.js/client'
-import { Gamepad2 } from 'lucide-react'
+import type { PluginRegisterHostApi } from '@zhin.js/console-types'
 import DiscordDashboard from './Dashboard'
 
-addPage({
-  key: 'discord-management',
-  path: '/discord',
-  title: 'Discord',
-  icon: <Gamepad2 className="w-5 h-5" />,
-  element: <DiscordDashboard />,
-})
+export function register(api: PluginRegisterHostApi) {
+  api.addRoute({
+    path: '/console/discord',
+    name: 'Discord',
+    element: api.React.createElement(DiscordDashboard, { hostReact: api.React }),
+  })
+  api.addTool({ id: 'discord', name: 'Discord', path: '/console/discord' })
+}

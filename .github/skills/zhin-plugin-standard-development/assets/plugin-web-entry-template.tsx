@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { addPage } from '@zhin.js/client'
+import type { PluginRegisterHostApi } from '@zhin.js/console-types'
 
 function PluginDashboard() {
   return (
@@ -12,9 +12,10 @@ function PluginDashboard() {
   )
 }
 
-addPage({
-  key: 'plugin-dashboard',
-  path: '/plugins/plugin-dashboard',
-  title: 'Plugin Dashboard',
-  element: <PluginDashboard />,
-})
+export function register(api: PluginRegisterHostApi) {
+  api.addRoute({
+    path: '/console/plugins/plugin-dashboard',
+    name: 'Plugin Dashboard',
+    element: api.React.createElement(PluginDashboard),
+  })
+}

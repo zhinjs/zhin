@@ -1,11 +1,11 @@
-import { addPage } from '@zhin.js/client'
-import { MessageSquare } from 'lucide-react'
+import type { PluginRegisterHostApi } from '@zhin.js/console-types'
 import QQDashboard from './Dashboard'
 
-addPage({
-  key: 'qq-management',
-  path: '/qq',
-  title: 'QQ官方',
-  icon: <MessageSquare className="w-5 h-5" />,
-  element: <QQDashboard />,
-})
+export function register(api: PluginRegisterHostApi) {
+  api.addRoute({
+    path: '/console/qq',
+    name: 'QQ官方',
+    element: api.React.createElement(QQDashboard, { hostReact: api.React }),
+  })
+  api.addTool({ id: 'qq', name: 'QQ官方', path: '/console/qq' })
+}

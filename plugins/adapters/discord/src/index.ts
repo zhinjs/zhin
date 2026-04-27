@@ -4,14 +4,14 @@
 import path from "node:path";
 import { usePlugin, type Plugin, type Context, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
 import type { Router } from "@zhin.js/http";
-import type { WebServer } from "@zhin.js/console";
+import { PageManager } from "@zhin.js/console";
 import { DiscordAdapter, type DiscordBotLike } from "./adapter.js";
 
 declare module "zhin.js" {
   namespace Plugin {
     interface Contexts {
       router: import("@zhin.js/http").Router;
-      web: WebServer;
+      web: PageManager;
     }
   }
   interface Adapters {
@@ -238,8 +238,13 @@ useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter
 });
 
 // ── Web 控制台 ─────────────────────────────────────────────────────────
-useContext("web", (web: WebServer) => {
-  return web.addEntry(path.resolve(import.meta.dirname, "../client/index.tsx"));
+useContext("web", () => {
+  PageManager.addEntry({
+    id: "discord",
+    development: path.resolve(import.meta.dirname, "../client/index.tsx"),
+    production: path.resolve(import.meta.dirname, "../dist/index.js"),
+    meta: { name: "Discord" },
+  });
 });
 
 useContext("router", "discord", (router: Router, discord: DiscordAdapter) => {

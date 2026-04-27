@@ -77,7 +77,6 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       '@types/react': 'latest',
       '@types/react-dom': 'latest',
       'typescript': 'latest',
-      'lucide-react': 'latest',
       'rimraf': 'latest',
       'pm2': 'latest',
       'vite': 'latest',
@@ -683,8 +682,7 @@ useContext('web', (web) => {
   
   // client/index.tsx（参考 test-bot 的简洁风格）
   await fs.writeFile(path.join(projectPath, 'client', 'index.tsx'),
-`import { addPage } from '@zhin.js/client';
-import { Home } from 'lucide-react';
+`import type { PluginRegisterHostApi } from '@zhin.js/console-types';
 
 function HomePage() {
   return (
@@ -730,13 +728,13 @@ function HomePage() {
   );
 }
 
-addPage({
-  key: 'home',
-  path: '/',
-  title: '首页',
-  icon: <Home className="w-5 h-5" />,
-  element: <HomePage />
-});
+export function register(api: PluginRegisterHostApi) {
+  api.addRoute({
+    path: '/console/home',
+    name: '首页',
+    element: api.React.createElement(HomePage),
+  });
+}
 `);
 
   // client/tsconfig.json

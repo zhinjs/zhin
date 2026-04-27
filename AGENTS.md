@@ -6,6 +6,11 @@
 |------|----------------|
 | **本文 (`AGENTS.md`)** | 速览：分层、关键入口文件、入/出站消息链 |
 | [docs/architecture-overview.md](./docs/architecture-overview.md) | 分层详解、Mermaid 流程图、插件与适配器 |
+| [docs/architecture/im-queue-outbound-invariants.md](./docs/architecture/im-queue-outbound-invariants.md) | **Harness / Tier1**：IM·队列·出站不变量短清单（勿绕开发送链） |
+| [docs/architecture/harness-engineering-sources.md](./docs/architecture/harness-engineering-sources.md) | Harness Engineering 依据索引（OpenAI、Fowler、中文综述说明） |
+| [docs/architecture/agent-context-blocks.md](./docs/architecture/agent-context-blocks.md) | Agent 系统提示词 §1–§10 分段契约与 debug 导出 |
+| [docs/architecture/queue-im-field-contract.md](./docs/architecture/queue-im-field-contract.md) | 队列 payload 与 IM `SendOptions` / `Message` 字段对齐表 |
+| [docs/architecture/event-contracts.md](./docs/architecture/event-contracts.md) | 队列事件 `kind` / `type` / `detail` 推荐形状 |
 | [docs/contributing/repo-structure.md](./docs/contributing/repo-structure.md) | **事实来源**：工作区 glob、`src`/`lib`/`client`/`dist`、命名 |
 
 ---
@@ -83,11 +88,23 @@
 | Node 服务端 | `src/` | `lib/` |
 | 浏览器 | `client/` | `dist/`（包根下的 `dist/`） |
 
-## `@zhin.js/console` 特例
+## `@zhin.js/console` 架构（对齐 page-manager）
 
-- 服务端：`plugins/services/console/src/` → `lib/`  
-- 控制台 SPA：`plugins/services/console/client/`（内含 Vite 应用的 `client/src/`）→ 静态构建到该包的 `dist/`  
-- 适配器「控制台扩展」：各适配器包根的 `client/`（常为扁平 `index.tsx`）→ 该适配器包根 `dist/`  
+控制台采用 **page-manager** 三层分包架构：
+
+| 包 | 职责 |
+|---|---|
+| `@zhin.js/console-types` | 共享类型与常量（`ConsoleEntry`、`PluginRegisterHostApi`、`ConsolePluginRegister` 等） |
+| `@zhin.js/console-core`（双端） | **Node**：`PageManager` 类、`EntryStore`、esbuild 管线（`/@dev`/`/@assets`/`/esm` 路由）、`attachConsoleClientHost`（Farm 同栈/静态）；**Browser**：`createRegistryStore` + `useRegistry`（`useSyncExternalStore`）、`cn` 工具 |
+| `@zhin.js/console-app` | Farm + React 默认壳 SPA（`client/main.tsx` 挂载 React 单例 + `ConsoleWebHost`）+ `src/register.ts` → `lib/register.js`（内置 `GET /entries`） |
+| `@zhin.js/client`（精简） | `app` 单例（`addRoute`/`addTool`/`defineSidebar`/`defineToolbar` + `useSyncExternalStore`）、WebSocket 仅业务数据、re-export `console-types` + `console-core/browser` |
+| `plugins/services/console` | 胶水层：`new PageManager` + `mountConsoleRouter` + `pm.start()`；WebSocket 仅业务逻辑；provide `PageManager` 作为 `web` 上下文 |
+
+**插件注册**：适配器通过 `PageManager.addEntry({ id, development, production })` 注册客户端入口；浏览器侧插件模块 `export function register(api: PluginRegisterHostApi)` 使用 `api.React.createElement`（共享 React 单例）、`api.addRoute`、`api.addTool`。
+
+**共享依赖**：`/console/esm/*.mjs` 提供 canonical ESM（react、react-dom 等），esbuild 按需打包 + 缓存，不再需要 import map / farm-peer-shim。
+
+**构建顺序**：`console-types` (tsup) → `console-core` (tsc×2) → `client` (tsc) → `console-app` (tsc server + farm build) → `console` (tsup)。
 
 ## 贡献入口
 

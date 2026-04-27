@@ -1,7 +1,7 @@
 import { useState, useMemo, type MouseEvent } from 'react'
 import { useDatabase } from '@zhin.js/client'
 import type { DatabaseType, TableInfo } from '@zhin.js/client'
-import { Database, Table2, Trash2, RefreshCw, Loader2, AlertCircle, Key } from 'lucide-react'
+import { Database as DatabaseIcon, Table2, Trash2, RefreshCw, Loader2, AlertCircle, Key } from 'lucide-react'
 import { Card, CardContent } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Alert, AlertDescription } from '../../components/ui/alert'
@@ -69,14 +69,22 @@ export default function DatabasePage() {
                   ) : !tables.length ? (
                     <p className="text-sm text-muted-foreground text-center py-8">暂无数据</p>
                   ) : tables.map((t: TableInfo) => (
-                    <button
+                    <div
                       key={t.name}
+                      role="button"
+                      tabIndex={0}
                       className={`
                         group w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left
-                        hover:bg-accent transition-colors rounded-sm
+                        hover:bg-accent transition-colors rounded-sm cursor-pointer
                         ${selectedTable === t.name ? 'bg-accent text-accent-foreground font-medium' : ''}
                       `}
                       onClick={() => setSelectedTable(t.name)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setSelectedTable(t.name)
+                        }
+                      }}
                     >
                       {dbType === 'keyvalue' ? <Key className="w-3.5 h-3.5 text-muted-foreground shrink-0" /> : <Table2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
                       <span className="truncate flex-1">{t.name}</span>
@@ -95,7 +103,7 @@ export default function DatabasePage() {
                       >
                         <Trash2 className="w-3 h-3" />
                       </Button>
-                    </button>
+                    </div>
                   ))}
                 </div>
               </ScrollArea>
@@ -154,7 +162,7 @@ export default function DatabasePage() {
               ) : (
                 <div className="flex items-center justify-center h-full text-muted-foreground">
                   <div className="text-center">
-                    <Database className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <DatabaseIcon className="w-12 h-12 mx-auto mb-3 opacity-30" />
                     <p className="text-sm">
                       在左侧选择{dbType === 'related' ? '一个表' : dbType === 'document' ? '一个集合' : '一个桶'}开始管理
                     </p>

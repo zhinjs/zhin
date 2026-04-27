@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useParams } from 'react-router'
+import { useParams } from 'react-router-dom'
 import { Hash, MessageSquare, User, Users } from 'lucide-react'
 import { useWebSocket } from '@zhin.js/client'
 import type {

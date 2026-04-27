@@ -1,0 +1,32 @@
+{
+  "name": "@zhin.js/console-types",
+  "version": "0.1.0",
+  "description": "Zhin console / page-manager 对齐的共享类型（对标 @page-manager/types）",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "development": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "clean": "rimraf dist"
+  },
+  "files": ["dist", "src"],
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.2",
+    "rimraf": "^6.0.1"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/console-types"
+  }
+}

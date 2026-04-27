@@ -1,4 +1,5 @@
-import * as React from "react"
+import type * as React from "react"
+import { forwardRef } from "react"
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui"
 import { cn } from "@zhin.js/client"
 import { Check, ChevronRight, Circle } from "lucide-react"
@@ -9,7 +10,7 @@ const DropdownMenuGroup = DropdownMenuPrimitive.Group
 const DropdownMenuPortal = DropdownMenuPrimitive.Portal
 const DropdownMenuSub = DropdownMenuPrimitive.Sub
 
-const DropdownMenuContent = React.forwardRef<
+const DropdownMenuContent = forwardRef<
   React.ComponentRef<typeof DropdownMenuPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
 >(({ className, sideOffset = 4, ...props }, ref) => (
@@ -27,7 +28,7 @@ const DropdownMenuContent = React.forwardRef<
 ))
 DropdownMenuContent.displayName = "DropdownMenuContent"
 
-const DropdownMenuItem = React.forwardRef<
+const DropdownMenuItem = forwardRef<
   React.ComponentRef<typeof DropdownMenuPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & { inset?: boolean }
 >(({ className, inset, ...props }, ref) => (
@@ -43,7 +44,7 @@ const DropdownMenuItem = React.forwardRef<
 ))
 DropdownMenuItem.displayName = "DropdownMenuItem"
 
-const DropdownMenuCheckboxItem = React.forwardRef<
+const DropdownMenuCheckboxItem = forwardRef<
   React.ComponentRef<typeof DropdownMenuPrimitive.CheckboxItem>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem>
 >(({ className, children, checked, ...props }, ref) => (
@@ -66,7 +67,7 @@ const DropdownMenuCheckboxItem = React.forwardRef<
 ))
 DropdownMenuCheckboxItem.displayName = "DropdownMenuCheckboxItem"
 
-const DropdownMenuLabel = React.forwardRef<
+const DropdownMenuLabel = forwardRef<
   React.ComponentRef<typeof DropdownMenuPrimitive.Label>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Label> & { inset?: boolean }
 >(({ className, inset, ...props }, ref) => (
@@ -78,7 +79,7 @@ const DropdownMenuLabel = React.forwardRef<
 ))
 DropdownMenuLabel.displayName = "DropdownMenuLabel"
 
-const DropdownMenuSeparator = React.forwardRef<
+const DropdownMenuSeparator = forwardRef<
   React.ComponentRef<typeof DropdownMenuPrimitive.Separator>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Separator>
 >(({ className, ...props }, ref) => (

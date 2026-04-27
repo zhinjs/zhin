@@ -78,7 +78,7 @@ export interface ChatCompletionRequest {
   presence_penalty?: number;
   frequency_penalty?: number;
   user?: string;
-  /** 是否启用模型思考（如 qwen3 的 <think> 模式）。设为 false 可跳过思考加速响应。 */
+  /** 是否启用链式思考（Ollama：`think`，仅 `true` 开启；省略时由 Ollama 侧默认关闭，保证 `content` 为最终回复）。 */
   think?: boolean;
 }
 

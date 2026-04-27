@@ -172,7 +172,6 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
       'react': 'latest',
       'react-dom': 'latest',
       '@zhin.js/client': 'latest',
-      'lucide-react': 'latest',
       'radix-ui': 'latest',
       'class-variance-authority': 'latest',
       'vitest': 'latest',
@@ -298,17 +297,17 @@ logger.info('${capitalizedName} 插件已加载');
   await fs.writeFile(path.join(pluginDir, 'src', 'index.ts'), indexContent);
   
   // 创建客户端入口文件 client/index.tsx
-  const clientContent = `import { addPage } from '@zhin.js/client';
-import { Component } from 'lucide-react';
+  const clientContent = `import type { PluginRegisterHostApi } from '@zhin.js/console-types';
 import ${capitalizedName}Page from './pages/${capitalizedName}Page';
 
-addPage({
-  key: '${pluginName}-page',
-  path: '/plugins/${pluginName}',
-  title: '${capitalizedName}',
-  icon: <Component className="w-5 h-5" />,
-  element: <${capitalizedName}Page />
-});
+export function register(api: PluginRegisterHostApi) {
+  api.addRoute({
+    path: '/console/plugins/${pluginName}',
+    name: '${capitalizedName}',
+    element: api.React.createElement(${capitalizedName}Page, { hostReact: api.React }),
+  });
+  api.addTool({ id: '${pluginName}', name: '${capitalizedName}', path: '/console/plugins/${pluginName}' });
+}
 
 export { ${capitalizedName}Page };
 `;

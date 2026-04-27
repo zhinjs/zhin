@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Link } from 'react-router'
+import { Link } from 'react-router-dom'
 import { Bot, AlertCircle, Wifi, WifiOff, Activity, Package, Zap, ChevronRight, RefreshCw } from 'lucide-react'
-import { useWebSocket, useSelector, selectConfigConnected } from '@zhin.js/client'
+import { useWebSocket } from '@zhin.js/client'
 import { Button } from '../components/ui/button'
 import { Card, CardContent } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
@@ -22,8 +22,7 @@ export default function BotManagePage() {
   const [bots, setBots] = useState<BotInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const connected = useSelector(selectConfigConnected)
-  const { sendRequest } = useWebSocket()
+  const { connected, sendRequest } = useWebSocket()
 
   const fetchBots = useCallback(async () => {
     if (!connected) {

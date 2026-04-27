@@ -32,10 +32,10 @@ plugin.on('notice.receive', async (notice) => {
 
   try {
     const adapter = plugin.inject(notice.$adapter as any) as any
-    if (!adapter) return
+    if (!adapter?.sendMessage) return
     const bot = adapter.bots?.find((b: any) => b.$config?.name === notice.$bot || b.$id === notice.$bot)
     if (!bot) return
-    await bot.$sendMessage({
+    await adapter.sendMessage({
       context: notice.$adapter,
       bot: notice.$bot,
       content: welcomeMsg,
@@ -123,10 +123,10 @@ plugin.on('notice.receive', async (notice) => {
 
   try {
     const adapter = plugin.inject(notice.$adapter as any) as any
-    if (!adapter) return
+    if (!adapter?.sendMessage) return
     const bot = adapter.bots?.find((b: any) => b.$config?.name === notice.$bot || b.$id === notice.$bot)
     if (!bot) return
-    await bot.$sendMessage({
+    await adapter.sendMessage({
       context: notice.$adapter,
       bot: notice.$bot,
       content: msg,

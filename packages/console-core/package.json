@@ -1,0 +1,77 @@
+{
+  "name": "@zhin.js/console-core",
+  "version": "0.1.0",
+  "description": "Zhin console core: Node PageManager + esbuild pipeline; Browser registry store + UI components (aligned with @page-manager/core)",
+  "type": "module",
+  "exports": {
+    ".": {
+      "browser": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "default": "./dist/index.js"
+      },
+      "node": {
+        "types": "./lib/index.d.ts",
+        "import": "./lib/index.js",
+        "default": "./lib/index.js"
+      },
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js",
+      "default": "./lib/index.js"
+    },
+    "./browser": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.server.json && tsc -p tsconfig.client.json",
+    "build:node": "tsc -p tsconfig.server.json",
+    "build:browser": "tsc -p tsconfig.client.json",
+    "dev": "concurrently -n client,server -c blue,green \"tsc -p tsconfig.client.json -w\" \"tsc -p tsconfig.server.json -w\"",
+    "typecheck": "tsc -p tsconfig.client.json --noEmit && tsc -p tsconfig.server.json --noEmit",
+    "clean": "rimraf dist lib"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "dependencies": {
+    "@koa/router": "^13.1.0",
+    "@zhin.js/console-types": "workspace:*",
+    "clsx": "^2.1.1",
+    "esbuild": "^0.25.9",
+    "koa": "^2.16.2",
+    "koa-compose": "^4.1.0",
+    "koa-static": "^5.0.0",
+    "tailwind-merge": "^3.3.1"
+  },
+  "devDependencies": {
+    "@farmfe/core": "^1.7.11",
+    "@types/koa": "^2.15.0",
+    "@types/koa-compose": "^3.2.9",
+    "@types/koa-static": "^4.0.4",
+    "@types/koa__router": "^12.0.4",
+    "@types/node": "^22.15.3",
+    "@types/react": "^18.3.28",
+    "concurrently": "^9.2.1",
+    "react": "^18.3.1",
+    "rimraf": "^6.0.1",
+    "typescript": "^6.0.2"
+  },
+  "files": [
+    "dist",
+    "lib"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/console-core"
+  }
+}

@@ -124,10 +124,8 @@ export class OllamaProvider extends BaseProvider {
       },
     };
 
-    // think 参数：控制 qwen3 等模型的思考模式
-    if (request.think !== undefined) {
-      ollamaRequest.think = request.think;
-    }
+    // think：显式传 true 才开启链式思考；未传时默认 false，避免服务端对部分模型默认开 thinking 导致 content 为空
+    ollamaRequest.think = request.think === true;
 
     if (request.temperature !== undefined) {
       ollamaRequest.options.temperature = request.temperature;
@@ -199,9 +197,7 @@ export class OllamaProvider extends BaseProvider {
       },
     };
 
-    if (request.think !== undefined) {
-      ollamaRequest.think = request.think;
-    }
+    ollamaRequest.think = request.think === true;
 
     if (request.temperature !== undefined) {
       ollamaRequest.options.temperature = request.temperature;

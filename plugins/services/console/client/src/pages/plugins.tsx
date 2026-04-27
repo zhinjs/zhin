@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router'
+import { useNavigate } from 'react-router-dom'
 import { AlertCircle, Package, Terminal, Box as IconBox, Layers, Clock, Brain, Wrench, Database, Shield, Settings, Plug, Server, type LucideIcon } from 'lucide-react'
 import { apiFetch } from '../utils/auth'
 import { Card, CardContent } from '../components/ui/card'

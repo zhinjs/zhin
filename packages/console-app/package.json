@@ -1,0 +1,77 @@
+{
+  "name": "@zhin.js/console-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Zhin console Farm + React shell (aligned with @page-manager/app)",
+  "type": "module",
+  "exports": {
+    ".": {
+      "browser": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "default": "./dist/index.js"
+      },
+      "node": {
+        "types": "./lib/register.d.ts",
+        "import": "./lib/register.js",
+        "default": "./lib/register.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.server.json && farm build",
+    "build:lib": "tsc -p tsconfig.server.json",
+    "build:web": "farm build",
+    "dev": "farm start",
+    "dev:lib": "tsc -p tsconfig.server.json -w",
+    "clean": "rimraf dist lib"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18",
+    "react-router-dom": ">=6.0.0"
+  },
+  "dependencies": {
+    "@zhin.js/client": "workspace:*",
+    "@zhin.js/console-core": "workspace:*",
+    "@zhin.js/console-types": "workspace:*"
+  },
+  "devDependencies": {
+    "@farmfe/cli": "^1.0.5",
+    "@farmfe/core": "^1.7.11",
+    "@farmfe/js-plugin-postcss": "^1.12.0",
+    "@farmfe/plugin-react": "^1.2.6",
+    "@tailwindcss/postcss": "4",
+    "@types/koa": "^2.15.0",
+    "@types/node": "^22.15.3",
+    "@types/react": "^18.3.28",
+    "@types/react-dom": "^18.3.7",
+    "autoprefixer": "^10.4.21",
+    "class-variance-authority": "^0.7",
+    "clsx": "^2",
+    "koa": "^2.16.2",
+    "lucide-react": "^1.8.0",
+    "postcss": "^8.5.6",
+    "radix-ui": "^1.4.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-refresh": "^0.18.0",
+    "react-router-dom": "^6.30.1",
+    "rimraf": "^6.0.1",
+    "tailwind-merge": "^3",
+    "tailwindcss": "^4.2.4",
+    "typescript": "^6.0.2",
+    "yaml": "^2"
+  },
+  "files": [
+    "lib",
+    "dist",
+    "client"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/console-app"
+  }
+}

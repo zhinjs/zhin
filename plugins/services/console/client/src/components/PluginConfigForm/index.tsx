@@ -2,6 +2,7 @@
  * PluginConfigForm - Plugin configuration form with accordion
  */
 
+import type * as React from 'react'
 import { useState, useEffect } from 'react'
 import { useConfig } from '@zhin.js/client'
 import type { PluginConfigFormProps, SchemaField } from './types.js'

@@ -1,11 +1,11 @@
-import { addPage } from '@zhin.js/client'
-import { Send } from 'lucide-react'
+import type { PluginRegisterHostApi } from '@zhin.js/console-types'
 import TelegramDashboard from './Dashboard'
 
-addPage({
-  key: 'telegram-management',
-  path: '/telegram',
-  title: 'Telegram',
-  icon: <Send className="w-5 h-5" />,
-  element: <TelegramDashboard />,
-})
+export function register(api: PluginRegisterHostApi) {
+  api.addRoute({
+    path: '/console/telegram',
+    name: 'Telegram',
+    element: api.React.createElement(TelegramDashboard, { hostReact: api.React }),
+  })
+  api.addTool({ id: 'telegram', name: 'Telegram', path: '/console/telegram' })
+}

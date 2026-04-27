@@ -3,7 +3,11 @@ import path from "node:path";
 import WebSocket from "ws";
 import { Plugin, usePlugin, Adapter } from "@zhin.js/core";
 import type { SchemaFeature, ConfigFeature, DatabaseFeature } from "@zhin.js/core";
-import type { WebServer } from "./index.js";
+export interface WebServerCompat {
+  ws: import("ws").WebSocketServer;
+  entries?: Record<string, string>;
+}
+type WebServer = WebServerCompat;
 import {
   initBotHub,
   setBotHubWss,
@@ -40,13 +44,17 @@ function collectBotsList(): Array<{
     connected: boolean;
     status: "online" | "offline";
   }> = [];
+  const seenAdapterNames = new Set<string>();
   for (const name of root.adapters) {
+    const key = String(name);
+    if (seenAdapterNames.has(key)) continue;
+    seenAdapterNames.add(key);
     const adapter = root.inject(name as keyof Plugin.Contexts);
     if (adapter instanceof Adapter) {
       for (const [botName, bot] of adapter.bots.entries()) {
         bots.push({
           name: botName,
-          adapter: String(name),
+          adapter: key,
           connected: !!(bot as { $connected?: boolean }).$connected,
           status: (bot as { $connected?: boolean }).$connected ? "online" : "offline",
         });
@@ -159,7 +167,7 @@ export function setupWebSocket(webServer: WebServer) {
   webServer.ws.on("connection", (ws: WebSocket) => {
     ws.send(JSON.stringify({
       type: "sync",
-      data: { key: "entries", value: Object.values(webServer.entries) },
+      data: { key: "entries", value: Object.values(webServer.entries ?? {}) },
     }));
     ws.send(JSON.stringify({ type: "init-data", timestamp: Date.now() }));
     void sendCatchUpToClient(ws).catch((e) =>
@@ -193,7 +201,7 @@ async function handleWebSocketMessage(
       break;
 
     case "entries:get":
-      ws.send(JSON.stringify({ requestId, data: Object.values(webServer.entries) }));
+      ws.send(JSON.stringify({ requestId, data: Object.values(webServer.entries ?? {}) }));
       break;
 
     // ================================================================

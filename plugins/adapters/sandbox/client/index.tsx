@@ -1,11 +1,11 @@
-import { addPage } from '@zhin.js/client'
-import { Terminal } from 'lucide-react'
+import type { PluginRegisterHostApi } from '@zhin.js/console-types'
 import Sandbox from './Sandbox'
-addPage({
-  key: 'process-sandbox',
-  path: '/sandbox',
-  title: '沙盒',
-  icon: <Terminal className="w-5 h-5" />,
-  element: <Sandbox/>
-})
 
+export function register(api: PluginRegisterHostApi) {
+  api.addRoute({
+    path: '/console/sandbox',
+    name: '沙盒',
+    element: api.React.createElement(Sandbox, { hostReact: api.React }),
+  })
+  api.addTool({ id: 'sandbox', name: '沙盒', path: '/console/sandbox' })
+}

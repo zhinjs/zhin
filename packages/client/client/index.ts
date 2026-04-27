@@ -1,20 +1,48 @@
-import { type ClassValue, clsx } from 'clsx'
-import { twMerge } from 'tailwind-merge'
 // Types
-export * from './types'
+export * from "./types";
 
-// 媒体 URL（含 base64://）解析，供控制台 / 沙盒等
-export { resolveMediaSrc, pickMediaRawUrl, type MediaKind } from './mediaSrc'
+// Media URL resolution
+export { resolveMediaSrc, pickMediaRawUrl, type MediaKind } from "./mediaSrc";
 
-// Redux Store
-export * from './store'
+// Console app singleton (page-manager style)
+export {
+  app,
+  type ConsoleApp,
+  type AddRouteInput,
+  type AddToolInput,
+  type ConsoleRouteRecord,
+  type RouteTreeNode,
+  type ToolTreeNode,
+  type ConsoleRouteRenderer,
+} from "./app";
 
-// Router
-export * from './router'
+// WebSocket (business data only)
+export * from "./websocket";
 
-// WebSocket
-export * from './websocket'
+// Re-export console-types
+export type {
+  PluginRegisterHostApi,
+  PluginAddRouteInput,
+  PluginAddToolInput,
+  ConsolePluginRegister,
+  ConsoleClientEntry,
+  ConsoleEntriesResponse,
+  ConsoleEntry,
+  ConsoleFileAddEntryInput,
+  RuntimeEnv,
+} from "@zhin.js/console-types";
 
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
-}
+export {
+  DEFAULT_CONSOLE_BASE_PATH,
+  CONSOLE_HOST_REACT_NAMESPACE_KEY,
+} from "@zhin.js/console-types";
+
+// Re-export console-core browser utilities
+export {
+  createRegistryStore,
+  useRegistry,
+  type RegistryStore,
+  configureConsole,
+  getRuntimeEnv,
+  cn,
+} from "@zhin.js/console-core/browser";

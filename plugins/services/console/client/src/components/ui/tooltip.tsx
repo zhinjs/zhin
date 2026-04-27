@@ -1,4 +1,5 @@
-import * as React from "react"
+import type * as React from "react"
+import { forwardRef } from "react"
 import { Tooltip as TooltipPrimitive } from "radix-ui"
 import { cn } from "@zhin.js/client"
 
@@ -6,7 +7,7 @@ const TooltipProvider = TooltipPrimitive.Provider
 const Tooltip = TooltipPrimitive.Root
 const TooltipTrigger = TooltipPrimitive.Trigger
 
-const TooltipContent = React.forwardRef<
+const TooltipContent = forwardRef<
   React.ComponentRef<typeof TooltipPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>
 >(({ className, sideOffset = 4, ...props }, ref) => (

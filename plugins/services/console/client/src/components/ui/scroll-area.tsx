@@ -1,8 +1,9 @@
-import * as React from "react"
+import type * as React from "react"
+import { forwardRef } from "react"
 import { ScrollArea as ScrollAreaPrimitive } from "radix-ui"
 import { cn } from "@zhin.js/client"
 
-const ScrollArea = React.forwardRef<
+const ScrollArea = forwardRef<
   React.ComponentRef<typeof ScrollAreaPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root>
 >(({ className, children, ...props }, ref) => (
@@ -20,7 +21,7 @@ const ScrollArea = React.forwardRef<
 ))
 ScrollArea.displayName = "ScrollArea"
 
-const ScrollBar = React.forwardRef<
+const ScrollBar = forwardRef<
   React.ComponentRef<typeof ScrollAreaPrimitive.Scrollbar>,
   React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Scrollbar>
 >(({ className, orientation: orientationProp, ...props }, ref) => {

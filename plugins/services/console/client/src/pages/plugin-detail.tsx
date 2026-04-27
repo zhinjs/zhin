@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router'
+import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, AlertCircle, Package, Terminal, Box as IconBox, Layers, Clock, Database, Brain, Wrench, Shield, Settings, Plug, Server, type LucideIcon } from 'lucide-react'
 import { apiFetch } from '../utils/auth'
 import { PluginConfigForm } from '../components/PluginConfigForm'

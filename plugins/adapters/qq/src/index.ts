@@ -4,12 +4,12 @@
 import path from "node:path";
 import { usePlugin, type Plugin, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
 import { QQAdapter } from "./adapter.js";
-import type { WebServer } from "@zhin.js/console";
+import { PageManager } from "@zhin.js/console";
 
 declare module "zhin.js" {
   namespace Plugin {
     interface Contexts {
-      web: WebServer;
+      web: PageManager;
     }
   }
 }
@@ -235,8 +235,13 @@ useContext('tool', 'qq', (toolService: ToolFeature, qq: QQAdapter) => {
 });
 
 // ── Web 控制台 ─────────────────────────────────────────────────────────
-useContext("web", (web: WebServer) => {
-  return web.addEntry(path.resolve(import.meta.dirname, "../client/index.tsx"));
+useContext("web", () => {
+  PageManager.addEntry({
+    id: "qq",
+    development: path.resolve(import.meta.dirname, "../client/index.tsx"),
+    production: path.resolve(import.meta.dirname, "../dist/index.js"),
+    meta: { name: "QQ" },
+  });
 });
 
 useContext("router", "qq", (router: any, qq: QQAdapter) => {

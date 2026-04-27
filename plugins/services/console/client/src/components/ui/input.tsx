@@ -1,7 +1,8 @@
-import * as React from "react"
+import type * as React from "react"
+import { forwardRef } from "react"
 import { cn } from "@zhin.js/client"
 
-const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
+const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
   ({ className, type, ...props }, ref) => {
     return (
       <input

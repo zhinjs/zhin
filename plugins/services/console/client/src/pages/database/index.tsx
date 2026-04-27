@@ -1,1 +1,2 @@
-export { default } from './database-page'
+import DatabasePage from "./database-page";
+export default DatabasePage;

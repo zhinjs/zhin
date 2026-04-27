@@ -21,6 +21,8 @@ const OLLAMA_CONFIG = {
 // 全局状态
 let canRun = false;
 let provider: OllamaProvider | null = null;
+/** 从 /api/tags 解析出的、服务端实际存在的模型名（优先列表中的首选） */
+let integrationModel = '';
 
 // 跳过检查
 const skipIfNoNetwork = (ctx: any) => {
@@ -32,6 +34,8 @@ const skipIfNoNetwork = (ctx: any) => {
 };
 
 beforeAll(async () => {
+  canRun = false;
+  integrationModel = '';
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
@@ -39,15 +43,25 @@ beforeAll(async () => {
       signal: controller.signal,
     });
     clearTimeout(timeout);
-    canRun = response.ok;
-    
-    if (canRun) {
-      provider = new OllamaProvider({
-        baseUrl: OLLAMA_CONFIG.baseUrl,
-        models: OLLAMA_CONFIG.models,
-      });
-      console.log('✅ Ollama 服务可用');
+    if (!response.ok) {
+      console.log('⚠️ Ollama /api/tags 不可用，跳过集成测试');
+      return;
     }
+    const data = (await response.json()) as { models?: { name: string }[] };
+    const names = (data.models ?? []).map((m) => m.name).filter(Boolean);
+    if (!names.length) {
+      console.log('⚠️ Ollama 无已拉取模型，跳过集成测试');
+      return;
+    }
+    const nameSet = new Set(names);
+    const preferred = OLLAMA_CONFIG.models.find((m) => nameSet.has(m));
+    integrationModel = preferred ?? names[0]!;
+    provider = new OllamaProvider({
+      baseUrl: OLLAMA_CONFIG.baseUrl,
+      models: names,
+    });
+    canRun = true;
+    console.log('✅ Ollama 服务可用，测试模型:', integrationModel);
   } catch {
     canRun = false;
     console.log('⚠️ 网络不可用，跳过集成测试');
@@ -58,9 +72,9 @@ describe('Ollama Provider 集成测试', () => {
   describe('基本聊天', () => {
     it('应该能进行简单对话', async (ctx) => {
       if (skipIfNoNetwork(ctx)) return;
-      
+
       const response = await provider!.chat({
-        model: OLLAMA_CONFIG.models[0],
+        model: integrationModel,
         messages: [{ role: 'user', content: '你好，一句话介绍自己' }],
         max_tokens: 100,
       });
@@ -77,7 +91,7 @@ describe('Ollama Provider 集成测试', () => {
       ];
 
       const r1 = await provider!.chat({
-        model: OLLAMA_CONFIG.models[0],
+        model: integrationModel,
         messages,
         max_tokens: 30,
       });
@@ -86,7 +100,7 @@ describe('Ollama Provider 集成测试', () => {
       messages.push({ role: 'user', content: '我叫什么？' });
 
       const r2 = await provider!.chat({
-        model: OLLAMA_CONFIG.models[0],
+        model: integrationModel,
         messages,
         max_tokens: 30,
       });
@@ -102,7 +116,7 @@ describe('Ollama Provider 集成测试', () => {
       if (skipIfNoNetwork(ctx)) return;
       
       const response = await provider!.chat({
-        model: OLLAMA_CONFIG.models[0],
+        model: integrationModel,
         messages: [
           { role: 'system', content: '使用 calculator 工具计算。' },
           { role: 'user', content: '计算 15 * 8' },
@@ -131,7 +145,7 @@ describe('Ollama Provider 集成测试', () => {
       if (skipIfNoNetwork(ctx)) return;
       
       const response = await provider!.chat({
-        model: OLLAMA_CONFIG.models[0],
+        model: integrationModel,
         messages: [
           { role: 'system', content: '使用 get_weather 工具查天气。' },
           { role: 'user', content: '上海天气？' },
@@ -162,7 +176,7 @@ describe('Ollama Provider 集成测试', () => {
       if (skipIfNoNetwork(ctx)) return;
       
       const stream = await provider!.chatStream({
-        model: OLLAMA_CONFIG.models[0],
+        model: integrationModel,
         messages: [{ role: 'user', content: '写4行诗' }],
         max_tokens: 100,
         stream: true,
@@ -216,7 +230,7 @@ describe('性能测试', () => {
     
     const start = Date.now();
     await provider!.chat({
-      model: OLLAMA_CONFIG.models[0],
+      model: integrationModel,
       messages: [{ role: 'user', content: '1+1' }],
       max_tokens: 10,
     });

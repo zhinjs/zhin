@@ -2,6 +2,7 @@
  * Collection type field renderers
  */
 
+import type * as React from 'react'
 import { List, Trash2, Plus, Package, Code, Info } from 'lucide-react'
 import type { FieldRendererProps, SchemaField } from './types.js'
 import { Textarea } from '../ui/textarea'

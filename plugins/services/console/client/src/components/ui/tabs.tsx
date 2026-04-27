@@ -1,10 +1,11 @@
-import * as React from "react"
+import type * as React from "react"
+import { forwardRef } from "react"
 import { Tabs as TabsPrimitive } from "radix-ui"
 import { cn } from "@zhin.js/client"
 
 const Tabs = TabsPrimitive.Root
 
-const TabsList = React.forwardRef<
+const TabsList = forwardRef<
   React.ComponentRef<typeof TabsPrimitive.List>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
 >(({ className, ...props }, ref) => (
@@ -19,7 +20,7 @@ const TabsList = React.forwardRef<
 ))
 TabsList.displayName = "TabsList"
 
-const TabsTrigger = React.forwardRef<
+const TabsTrigger = forwardRef<
   React.ComponentRef<typeof TabsPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>
 >(({ className, value, ...props }, ref) => (
@@ -35,7 +36,7 @@ const TabsTrigger = React.forwardRef<
 ))
 TabsTrigger.displayName = "TabsTrigger"
 
-const TabsContent = React.forwardRef<
+const TabsContent = forwardRef<
   React.ComponentRef<typeof TabsPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.Content>
 >(({ className, value, ...props }, ref) => (

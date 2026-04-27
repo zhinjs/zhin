@@ -1,4 +1,5 @@
-import * as React from "react"
+import type * as React from "react"
+import { forwardRef } from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@zhin.js/client"
 
@@ -34,7 +35,7 @@ export interface ButtonProps
   asChild?: boolean
 }
 
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, ...props }, ref) => {
     return (
       <button

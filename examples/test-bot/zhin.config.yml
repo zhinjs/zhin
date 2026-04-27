@@ -62,7 +62,7 @@ group-daily-analysis:
   maxMessagesPerAnalysis: 500
 ai:
   enabled: true
-  defaultProvider: openai
+  defaultProvider: ollama
   session:
     maxHistory: 20
     expireMs: 3600000
@@ -83,8 +83,6 @@ ai:
     keepAfterSummary: 10
     maxContextTokens: 4000
   agent:
-    chatModel: kr/claude-sonnet-4.5
-    visionModel: qw/vision-model
     execSecurity: allowlist
     execPreset: network
     execAllowlist:

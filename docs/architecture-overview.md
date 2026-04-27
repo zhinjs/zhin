@@ -285,7 +285,7 @@ flowchart TD
 
 **Dispatcher 出站润色（`packages/core/src/built/dispatcher.ts`）**：在调用 `$reply` 的异步上下文中，用 **`AsyncLocalStorage`** 标记「本次发送由 Dispatcher 发起的回复」；`addOutboundPolish` 向根注册额外的 **`before.sendMessage`**，仅在存储命中时修改 `options.content`。这样润色与**普通插件发消息**走同一 `before.sendMessage` 链，行为一致、可组合。
 
-扩展阅读：`docs/advanced/ai.md`（若涉及 AI 触发与出站）；根目录 **`AGENTS.md`**（速查表）。
+扩展阅读：`docs/advanced/ai.md`（若涉及 AI 触发与出站）；根目录 **`AGENTS.md`**（速查表）；**Harness / 不变量**见 `docs/architecture/` 下 [im-queue-outbound-invariants.md](./architecture/im-queue-outbound-invariants.md) 与 [harness-engineering-sources.md](./architecture/harness-engineering-sources.md)。
 
 ## 插件系统
 

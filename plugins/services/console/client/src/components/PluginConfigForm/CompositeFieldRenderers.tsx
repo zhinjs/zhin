@@ -2,6 +2,7 @@
  * Composite type field renderers
  */
 
+import type * as React from 'react'
 import { GitBranch, Layers } from 'lucide-react'
 import type { FieldRendererProps, SchemaField } from './types.js'
 import { Input } from '../ui/input'
