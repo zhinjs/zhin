@@ -67,7 +67,7 @@ export function registerTools(server: McpServer) {
       description: "生成一个 Zhin 消息组件的代码",
       inputSchema: z.object({
         name: z.string().describe("组件名称"),
-        props: z.record(z.any()).describe("组件 props 定义"),
+        props: z.record(z.string(), z.string()).describe("组件 props 定义（键为 prop 名，值为 TS 类型字符串）"),
         usesJsx: z.boolean().optional().describe("是否使用 JSX"),
       }),
     },
@@ -147,7 +147,7 @@ export function registerTools(server: McpServer) {
       description: "生成 Zhin 数据库模型定义代码",
       inputSchema: z.object({
         name: z.string().describe("模型名称"),
-        fields: z.record(z.any()).describe("字段定义"),
+        fields: z.record(z.string(), z.any()).describe("字段定义"),
       }),
     },
     async (args) => ({

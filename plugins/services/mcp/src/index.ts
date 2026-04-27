@@ -49,7 +49,7 @@ function jsonSchemaPropertyToZod(prop: JsonSchemaProperty): z.ZodTypeAny {
       );
       break;
     case "object":
-      base = z.record(z.any());
+      base = z.record(z.string(), z.any());
       break;
     default:
       base = z.any();
