@@ -291,7 +291,7 @@ export class GhClient {
     const payload = Buffer.from(JSON.stringify({
       iat: now - 60,
       exp: now + 600,
-      iss: String(appId),
+      iss: Number(appId),
     })).toString('base64url');
     const signature = crypto
       .sign('sha256', Buffer.from(`${header}.${payload}`), privateKey)
