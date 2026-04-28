@@ -7,7 +7,7 @@ import {
   shouldUseSmartBuildInCwd,
   printEmptyPluginDirsError,
   watchClientBundle,
-} from "../lib/plugin-package-build.js";
+} from "../libs/plugin-package-build.js";
 
 export const buildCommand = new Command("build")
   .description("构建插件：按目录自动编译 src（tsc）与 client（esbuild）；也可在 zhin workspace 下批量构建 plugins/*")
