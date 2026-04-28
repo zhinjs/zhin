@@ -10,11 +10,14 @@ bots:
     name: zhin-github
     app_id: ${GITHUB_APP_ID}
     private_key: ${GITHUB_PRIVATE_KEY}
-    # 生产环境：配置 webhook_secret 启用实时推送
-    # webhook_secret: ${GITHUB_WEBHOOK_SECRET}
-    # webhook_path: /github/webhook
-    # 开发环境：使用轮询（不配置 webhook_secret 自动启用）
     poll_interval: 60
+  - context: napcat
+    name: "717505091"
+    access_token: ${ONEBOT11_ACCESS_TOKEN}
+    connection: ws
+    url: wss://onebot11.l2cl.link
+    reconnect_interval: 5000
+    heartbeat_interval: 30000
 plugin_dirs:
   - node_modules
   - ./src/plugins
@@ -40,6 +43,7 @@ plugins:
   - "@zhin.js/adapter-milky"
   - "@zhin.js/adapter-satori"
   - "@zhin.js/adapter-onebot11"
+  - "@zhin.js/adapter-napcat"
   - "@zhin.js/adapter-onebot12"
   - "@zhin.js/adapter-qq"
   - html-test
@@ -138,5 +142,5 @@ devteam:
   repo: zhin
   projectNumber: 2
   productionBranch: main
-  triageCron: "55 9 * * 1-5"
+  triageCron: 55 9 * * 1-5
   pollIntervalMinutes: 1

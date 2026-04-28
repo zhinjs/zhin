@@ -1,0 +1,3 @@
+name: adapter-napcat
+description: NapCatQQ 适配器：OneBot11 + go-cqhttp 扩展 + NapCat 独有 API（戳一戳、表情回应、AI语音、群文件、精华消息、群公告等）
+version: 0.1.0

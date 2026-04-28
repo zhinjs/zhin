@@ -27,6 +27,7 @@
     "@zhin.js/adapter-kook": "workspace:*",
     "@zhin.js/adapter-lark": "workspace:*",
     "@zhin.js/adapter-onebot11": "workspace:*",
+    "@zhin.js/adapter-napcat": "workspace:*",
     "@zhin.js/adapter-onebot12": "workspace:*",
     "@zhin.js/adapter-milky": "workspace:*",
     "@zhin.js/adapter-satori": "workspace:*",
