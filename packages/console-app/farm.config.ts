@@ -46,6 +46,16 @@ export default defineConfig({
   plugins: [react({ runtime: "automatic" }), farmPostcss()],
   compilation: {
     presetEnv: false,
+    /** 避免 @console 源码从 monorepo 根解析到异版本 lucide（如 1.8）导致 Farm HMR「Module … not registered」 */
+    lazyCompilation: false,
+    partialBundling: {
+      enforceResources: [
+        {
+          name: "lucide-react",
+          test: ["[\\\\/]lucide-react[\\\\/]", "lucide-react"],
+        },
+      ],
+    },
     input: {
       index: "./index.html",
     },
@@ -54,6 +64,7 @@ export default defineConfig({
       publicPath: "/",
     },
     resolve: {
+      dedupe: ["lucide-react"],
       alias: {
         "@console": path.resolve(packageRoot, "../../plugins/services/console/client/src"),
         "react": path.resolve(packageRoot, "node_modules/react"),

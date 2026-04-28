@@ -13,9 +13,78 @@ interface PublishOptions {
   skipBuild?: boolean;
 }
 
+/** 递归扫描 plugins/ 下含 package.json 的 Zhin 包（扁平 my-plugin 或嵌套 adapters/icqq） */
+interface PluginPublishCandidate {
+  relPath: string;
+  absPath: string;
+}
+
+function isLikelyZhinPluginPackage(pkg: {
+  name?: string;
+  keywords?: string[];
+}): boolean {
+  const n = pkg.name ?? '';
+  if (/^zhin\.js-/.test(n)) return true;
+  if (/^@zhin\.js\//.test(n)) return true;
+  if (pkg.keywords?.includes('zhin.js')) return true;
+  return false;
+}
+
+function collectPluginPublishCandidates(pluginsDir: string): PluginPublishCandidate[] {
+  const out: PluginPublishCandidate[] = [];
+
+  const walk = (abs: string, rel: string): void => {
+    if (!fs.existsSync(abs) || !fs.statSync(abs).isDirectory()) return;
+    const pkgJson = path.join(abs, 'package.json');
+    if (fs.existsSync(pkgJson)) {
+      try {
+        const pkg = fs.readJsonSync(pkgJson) as {
+          name?: string;
+          keywords?: string[];
+        };
+        if (isLikelyZhinPluginPackage(pkg)) {
+          out.push({
+            relPath: rel || path.basename(abs),
+            absPath: abs,
+          });
+          return;
+        }
+      } catch {
+        /* 忽略损坏的 package.json */
+      }
+    }
+    for (const ent of fs.readdirSync(abs, { withFileTypes: true })) {
+      if (!ent.isDirectory() || ent.name === 'node_modules' || ent.name.startsWith('.')) {
+        continue;
+      }
+      walk(path.join(abs, ent.name), rel ? `${rel}/${ent.name}` : ent.name);
+    }
+  };
+
+  walk(pluginsDir, '');
+  out.sort((a, b) => a.relPath.localeCompare(b.relPath));
+  return out;
+}
+
+function resolvePublishCandidate(
+  candidates: PluginPublishCandidate[],
+  pluginArg: string | undefined,
+): PluginPublishCandidate | undefined {
+  if (!pluginArg) return undefined;
+  const exact = candidates.find((c) => c.relPath === pluginArg);
+  if (exact) return exact;
+  const base = path.basename(pluginArg);
+  const byBase = candidates.filter((c) => path.basename(c.relPath) === base);
+  if (byBase.length === 1) return byBase[0];
+  return undefined;
+}
+
 export const pubCommand = new Command('pub')
   .description('发布插件到 npm')
-  .argument('[plugin-name]', '插件名称（如: my-plugin）')
+  .argument(
+    '[plugin-name]',
+    '插件路径（相对 plugins/，如 my-plugin 或 adapters/icqq）；可写目录名或完整相对路径',
+  )
   .option('--tag <tag>', '发布标签', 'latest')
   .option('--access <access>', '访问级别 (public|restricted)', 'public')
   .option('--registry <url>', '自定义 npm registry')
@@ -31,45 +100,48 @@ export const pubCommand = new Command('pub')
         process.exit(1);
       }
 
-      // 获取所有插件
-      const availablePlugins = fs.readdirSync(pluginsDir)
-        .filter(name => {
-          const pluginPath = path.join(pluginsDir, name);
-          return fs.statSync(pluginPath).isDirectory() && 
-                 fs.existsSync(path.join(pluginPath, 'package.json'));
-        });
+      const candidates = collectPluginPublishCandidates(pluginsDir);
 
-      if (availablePlugins.length === 0) {
-        logger.error('未找到可发布的插件');
+      if (candidates.length === 0) {
+        logger.error('未找到可发布的插件（需在 plugins 下存在含 zhin.js / @zhin.js/* 包名或 keywords 含 zhin.js 的 package.json）');
         process.exit(1);
       }
 
       // 如果没有指定插件名，让用户选择
-      let selectedPlugin = pluginName;
-      if (!selectedPlugin) {
-        if (availablePlugins.length === 1) {
-          selectedPlugin = availablePlugins[0];
-          logger.info(`自动选择插件: ${selectedPlugin}`);
+      let selected: PluginPublishCandidate | undefined;
+      if (!pluginName) {
+        if (candidates.length === 1) {
+          selected = candidates[0];
+          logger.info(`自动选择插件: ${selected!.relPath}`);
         } else {
           const { plugin } = await inquirer.prompt([
             {
               type: 'list',
               name: 'plugin',
               message: '请选择要发布的插件:',
-              choices: availablePlugins
-            }
+              choices: candidates.map((c) => ({
+                name: `${c.relPath} (${path.basename(c.absPath)})`,
+                value: c.relPath,
+              })),
+            },
           ]);
-          selectedPlugin = plugin;
+          selected = candidates.find((c) => c.relPath === plugin) ?? resolvePublishCandidate(candidates, plugin);
+        }
+      } else {
+        selected = resolvePublishCandidate(candidates, pluginName);
+        if (!selected) {
+          logger.error(`未找到插件: ${pluginName}`);
+          logger.log(`可用插件（相对 plugins/）:\n  ${candidates.map((c) => c.relPath).join('\n  ')}`);
+          process.exit(1);
         }
       }
 
-      // 验证插件是否存在
-      const pluginDir = path.join(pluginsDir, selectedPlugin);
-      if (!fs.existsSync(pluginDir)) {
-        logger.error(`插件不存在: ${selectedPlugin}`);
-        logger.log(`可用插件: ${availablePlugins.join(', ')}`);
+      if (!selected) {
+        logger.error('未选择插件');
         process.exit(1);
       }
+
+      const pluginDir = selected.absPath;
 
       const packageJsonPath = path.join(pluginDir, 'package.json');
       if (!fs.existsSync(packageJsonPath)) {

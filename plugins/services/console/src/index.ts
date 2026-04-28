@@ -1,5 +1,6 @@
 import { usePlugin } from "@zhin.js/core";
 import { PageManager, mountConsoleRouter } from "@zhin.js/console-core/node";
+import { existsSync } from "node:fs";
 import * as path from "path";
 import { createRequire } from "node:module";
 import { setupWebSocket, notifyDataUpdate } from "./websocket.js";
@@ -46,7 +47,14 @@ if (enabled) {
       const appPkg = require.resolve("@zhin.js/console-app/package.json");
       clientPackageRoot = path.dirname(appPkg);
     } catch {
-      clientPackageRoot = path.resolve(import.meta.dirname, "../../../../packages/console-app");
+      const monorepoDev = path.resolve(import.meta.dirname, "../../../../packages/console-app");
+      if (existsSync(path.join(monorepoDev, "lib", "register.js"))) {
+        clientPackageRoot = monorepoDev;
+      } else {
+        throw new Error(
+          "未安装 @zhin.js/console-app（@zhin.js/console 的运行时依赖）。请在项目根执行: npm install @zhin.js/console-app 或 pnpm add @zhin.js/console-app，然后重新启动。",
+        );
+      }
     }
 
     const pageManager = new PageManager({

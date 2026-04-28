@@ -24,7 +24,7 @@ const RECOMMENDED_SCRIPTS: Record<string, string> = {
   start: 'zhin start',
   daemon: 'zhin start --daemon',
   stop: 'zhin stop',
-  build: 'tsc && zhin-console build',
+  build: 'zhin build',
 };
 
 function isZhinProject(dir: string): boolean {

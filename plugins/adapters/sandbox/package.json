@@ -43,10 +43,11 @@
     "directory": "plugins/adapters/sandbox"
   },
   "scripts": {
-    "build": "tsc && node ../../../scripts/build-console-client-if-present.mjs",
+    "build": "zhin build",
     "clean": "rimraf lib"
   },
   "devDependencies": {
+    "@zhin.js/cli": "workspace:*",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.1",
     "radix-ui": "^1.4.3",

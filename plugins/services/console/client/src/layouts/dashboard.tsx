@@ -1,8 +1,8 @@
-import { useMemo, useState, useCallback, useSyncExternalStore, type ComponentType, type KeyboardEvent } from "react"
+import { useMemo, useState, useCallback, useSyncExternalStore, type KeyboardEvent } from "react"
 import { Outlet, Link, useLocation, useNavigate, matchPath } from "react-router-dom"
-import * as LucideIcons from "lucide-react"
 import { Menu, Search, LogOut } from "lucide-react"
 import { app, cn, type ConsoleRouteRecord } from "@zhin.js/client"
+import { getSidebarLucideIcon } from "../components/sidebarMenuIcons"
 import { ThemeToggle } from "../components/ThemeToggle"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
@@ -15,8 +15,7 @@ const GROUP_ORDER = ["系统", "扩展", "配置与数据", "其他"] as const
 function SidebarMenuIcon({ icon }: { icon?: React.ReactNode | string }) {
   if (icon == null) return null
   if (typeof icon === "string") {
-    const Cmp = (LucideIcons as Record<string, ComponentType<{ className?: string }>>)[icon]
-    if (!Cmp || typeof Cmp !== "function") return null
+    const Cmp = getSidebarLucideIcon(icon)
     return <Cmp className="w-4 h-4" />
   }
   return <>{icon}</>

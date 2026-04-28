@@ -34,7 +34,7 @@
     "directory": "plugins/adapters/qq"
   },
   "scripts": {
-    "build": "tsc && node ../../../scripts/build-console-client-if-present.mjs",
+    "build": "zhin build",
     "clean": "rimraf lib dist",
     "build:node": "tsc"
   },
@@ -42,6 +42,7 @@
     "qq-official-bot": "^1.0.12"
   },
   "devDependencies": {
+    "@zhin.js/cli": "workspace:*",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.1",
     "@zhin.js/console": "workspace:*",

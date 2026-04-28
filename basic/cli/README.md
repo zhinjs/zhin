@@ -353,13 +353,17 @@ zhin pub [plugin-name] [options]
 - `--dry-run`: 试运行，不实际发布
 - `--skip-build`: 跳过构建步骤
 
+**说明：** 会递归扫描 `plugins/` 下含 `package.json` 的包，并筛选 `zhin.js-*`、`@zhin.js/*` 或 `keywords` 含 `zhin.js` 的目录（支持 `plugins/my-plugin` 与 `plugins/adapters/icqq` 等嵌套路径）。
+
 **使用示例：**
 ```bash
 # 交互式选择要发布的插件
 zhin pub
 
-# 指定插件发布
+# 指定插件发布（相对 plugins/ 的路径，或唯一时可用最后一级目录名）
 zhin pub my-plugin
+zhin pub adapters/icqq
+zhin pub icqq
 
 # 试运行（不实际发布）
 zhin pub my-plugin --dry-run

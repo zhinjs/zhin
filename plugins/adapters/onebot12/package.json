@@ -13,7 +13,7 @@
     }
   },
   "scripts": {
-    "build": "tsc && node ../../../scripts/build-console-client-if-present.mjs",
+    "build": "zhin build",
     "clean": "rimraf lib"
   },
   "files": [
@@ -43,8 +43,10 @@
     "ws": "^8.20.0"
   },
   "devDependencies": {
+    "@zhin.js/cli": "workspace:*",
     "@types/node": "^25.6.0",
     "@types/ws": "^8.18.1",
+    "@zhin.js/client": "workspace:*",
     "typescript": "^6.0.3",
     "zhin.js": "workspace:*"
   },

@@ -23,7 +23,8 @@
     "build:web": "farm build",
     "dev": "farm start",
     "dev:lib": "tsc -p tsconfig.server.json -w",
-    "clean": "rimraf dist lib"
+    "clean": "rimraf dist lib",
+    "prepublishOnly": "pnpm run build"
   },
   "peerDependencies": {
     "react": ">=18",
@@ -65,7 +66,15 @@
   "files": [
     "lib",
     "dist",
-    "client"
+    "farm.config.ts",
+    "client/bootstrap",
+    "client/console-app",
+    "client/host",
+    "client/main.tsx",
+    "client/index.html",
+    "client/style.css",
+    "client/postcss.config.js",
+    "client/tailwind.config.js"
   ],
   "license": "MIT",
   "repository": {

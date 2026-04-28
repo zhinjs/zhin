@@ -38,6 +38,10 @@ export class IcqqBot implements Bot<IcqqBotConfig, IpcMessageEventData> {
   groups = new Map<number, IpcGroupInfo>();
 
   private subscriptions: Array<{ unsubscribe: () => Promise<void> }> = [];
+  /** 用户主动断开时为 true，阻止自动重连 */
+  private intentionalDisconnect = false;
+  /** 是否已有重连循环在跑（避免多次 schedule 叠套） */
+  private reconnectRunning = false;
 
   get $id() {
     return this.$config.name;
@@ -57,22 +61,54 @@ export class IcqqBot implements Bot<IcqqBotConfig, IpcMessageEventData> {
   // ── 连接 ───────────────────────────────────────────────────────────
 
   async $connect(): Promise<void> {
-    const uin = Number(this.$config.name);
+    this.intentionalDisconnect = false;
     const rpc = this.$config.rpc;
 
     if (rpc) {
-      this.logger.info(`[${this.$id}] 正在通过 RPC 连接 icqq 守护进程 (${rpc.host}:${rpc.port})...`);
-      this.ipc = await IpcClient.connectRpc(rpc);
+      this.logger.info(
+        `[${this.$id}] 正在通过 RPC 连接 icqq 守护进程 (${rpc.host}:${rpc.port})...`,
+      );
     } else {
       this.logger.info(`[${this.$id}] 正在连接 icqq 守护进程...`);
-      this.ipc = await IpcClient.connect(uin);
     }
-    this.logger.info(`[${this.$id}] 已连接守护进程${rpc ? " (RPC)" : ""}`);
 
-    // 拉取好友/群列表并缓存
+    await this.rebindIpcSession();
+
+    this.logger.info(`[${this.$id}] 已连接守护进程${rpc ? " (RPC)" : ""}`);
+    this.logger.info(
+      `[${this.$id}] 登录成功，好友 ${this.friends.size}，群 ${this.groups.size}`,
+    );
+  }
+
+  /** 建立或恢复与守护进程的 IPC/RPC 会话（订阅、缓存列表） */
+  private async rebindIpcSession(): Promise<void> {
+    const uin = Number(this.$config.name);
+    const rpc = this.$config.rpc;
+
+    // 旧连接上的订阅句柄已失效，不再对死 socket 发 unsubscribe
+    this.subscriptions = [];
+
+    let client: IpcClient;
+    if (rpc) {
+      client = await IpcClient.connectRpc(rpc);
+    } else {
+      client = await IpcClient.connect(uin);
+    }
+
+    if (this.intentionalDisconnect) {
+      client.close();
+      throw new Error("连接已取消");
+    }
+
+    this.ipc = client;
+    if (this.$config.autoReconnect !== false) {
+      this.ipc.setOnRemoteDisconnect(() => this.scheduleReconnect());
+    } else {
+      this.ipc.setOnRemoteDisconnect(null);
+    }
+
     await this.refreshLists();
 
-    // 订阅所有好友消息
     for (const [uid] of this.friends) {
       const sub = this.ipc.subscribe(
         Actions.SUBSCRIBE,
@@ -82,7 +118,6 @@ export class IcqqBot implements Bot<IcqqBotConfig, IpcMessageEventData> {
       this.subscriptions.push(sub);
     }
 
-    // 订阅所有群消息
     for (const [gid] of this.groups) {
       const sub = this.ipc.subscribe(
         Actions.SUBSCRIBE,
@@ -93,9 +128,47 @@ export class IcqqBot implements Bot<IcqqBotConfig, IpcMessageEventData> {
     }
 
     this.$connected = true;
-    this.logger.info(
-      `[${this.$id}] 登录成功，好友 ${this.friends.size}，群 ${this.groups.size}`,
-    );
+  }
+
+  /** IPC/RPC 意外断开时调度重连（指数退避） */
+  private scheduleReconnect(): void {
+    if (this.$config.autoReconnect === false) return;
+    if (this.intentionalDisconnect) return;
+    if (this.reconnectRunning) return;
+    this.reconnectRunning = true;
+    void this.runReconnectLoop();
+  }
+
+  private async runReconnectLoop(): Promise<void> {
+    try {
+      for (let attempt = 0; !this.intentionalDisconnect; attempt++) {
+        const base = Math.min(30_000, 500 * 2 ** Math.min(attempt, 6));
+        const jitter = Math.floor(Math.random() * 400);
+        const delayMs = base + jitter;
+
+        this.$connected = false;
+        this.logger.warn(
+          `[${this.$id}] 与 icqq 守护进程连接已断开，${delayMs}ms 后尝试重连（第 ${attempt + 1} 次）…`,
+        );
+
+        await new Promise<void>((r) => setTimeout(r, delayMs));
+        if (this.intentionalDisconnect) break;
+
+        try {
+          await this.rebindIpcSession();
+          this.logger.info(
+            `[${this.$id}] 已重新连接守护进程，好友 ${this.friends.size}，群 ${this.groups.size}`,
+          );
+          break;
+        } catch (e: any) {
+          this.logger.warn(
+            `[${this.$id}] 重连失败: ${e?.message ?? String(e)}`,
+          );
+        }
+      }
+    } finally {
+      this.reconnectRunning = false;
+    }
   }
 
   /** 刷新好友/群列表缓存 */
@@ -123,6 +196,8 @@ export class IcqqBot implements Bot<IcqqBotConfig, IpcMessageEventData> {
   // ── 断开 ───────────────────────────────────────────────────────────
 
   async $disconnect(): Promise<void> {
+    this.intentionalDisconnect = true;
+    this.ipc?.setOnRemoteDisconnect(null);
     for (const sub of this.subscriptions) {
       await sub.unsubscribe().catch(() => {});
     }

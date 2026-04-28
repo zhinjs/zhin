@@ -11,12 +11,50 @@ interface NewPluginOptions {
   type?: 'normal' | 'service' | 'adapter';
 }
 
+/** my-cool-plugin → myCoolPlugin，用作 Adapters / Contexts 键与 provide name */
+function toCamelCaseId(pluginName: string): string {
+  return pluginName.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+}
+
+/**
+ * 在本仓库等「含 packages/zhin 的 pnpm workspace」根执行 zhin new 时，对齐 workspace 协议依赖。
+ * 仅有 pnpm-workspace.yaml 但无 packages/zhin 时不启用，避免误写 workspace:* 导致 pnpm install 失败。
+ */
+function tryZhinWorkspaceDevDependencies(): Record<string, string> | null {
+  const root = process.cwd();
+  if (!fs.existsSync(path.join(root, 'pnpm-workspace.yaml'))) return null;
+  if (!fs.existsSync(path.join(root, 'packages/zhin/package.json'))) return null;
+  const pkgPath = path.join(root, 'package.json');
+  if (!fs.existsSync(pkgPath)) return null;
+  try {
+    const pkg = fs.readJsonSync(pkgPath) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+      peerDependencies?: Record<string, string>;
+    };
+    const hasZhin =
+      pkg.dependencies?.['zhin.js'] ||
+      pkg.devDependencies?.['zhin.js'] ||
+      pkg.peerDependencies?.['zhin.js'];
+    if (!hasZhin) return null;
+    return {
+      'zhin.js': 'workspace:*',
+      '@zhin.js/cli': 'workspace:*',
+      '@zhin.js/client': 'workspace:*',
+      '@zhin.js/console': 'workspace:*',
+      '@zhin.js/console-types': 'workspace:*',
+    };
+  } catch {
+    return null;
+  }
+}
+
 export const newCommand = new Command('new')
   .description('创建插件包模板')
   .argument('[plugin-name]', '插件名称（如: my-plugin）')
   .option('--is-official', '是否为官方插件', false)
   .option('--skip-install', '跳过依赖安装', false)
-  .option('--type <type>', '插件类型 (normal|service|adapter)', 'normal')
+  .option('--type <type>', '插件类型 (normal|service|adapter)')
   .action(async (pluginName: string, options: NewPluginOptions) => {
     try {
       let name = pluginName;
@@ -50,7 +88,8 @@ export const newCommand = new Command('new')
         process.exit(1);
       }
 
-      // 询问插件类型（如果未指定）
+      // 询问插件类型（未传 --type 时）
+      let resolvedType: 'normal' | 'service' | 'adapter' = options.type ?? 'normal';
       if (!options.type) {
         const { type } = await inquirer.prompt([
           {
@@ -60,15 +99,18 @@ export const newCommand = new Command('new')
             choices: [
               { name: '普通插件 (Normal)', value: 'normal' },
               { name: '服务 (Service)', value: 'service' },
-              { name: '适配器 (Adapter)', value: 'adapter' }
+              { name: '适配器 (Adapter)', value: 'adapter' },
             ],
-            default: 'normal'
-          }
+            default: 'normal',
+          },
         ]);
-        options.type = type;
+        resolvedType = type;
       }
+      options.type = resolvedType;
 
-      logger.info(`正在创建${options.type === 'service' ? '服务' : options.type === 'adapter' ? '适配器' : '插件'}包 ${name}...`);
+      logger.info(
+        `正在创建${options.type === 'service' ? '服务' : options.type === 'adapter' ? '适配器' : '插件'}包 ${name}...`,
+      );
       
       // 创建插件包结构
       await createPluginPackage(pluginDir, name, options);
@@ -84,9 +126,9 @@ export const newCommand = new Command('new')
       logger.log(`  1. 在 zhin.config.yml 的 plugins 列表中添加 "${packageName}"`);
       logger.log(`  2. pnpm dev  # 开发模式（热重载，自动加载插件）`);
       logger.log('');
-      logger.log('📦 发布到 npm：');
-      logger.log(`  cd plugins/${name}`);
-      logger.log(`  pnpm build && pnpm publish`);
+      logger.log('📦 发布到 npm（在项目根）：');
+      logger.log(`  pnpm exec zhin pub ${name}`);
+      logger.log(`  # 或嵌套目录: pnpm exec zhin pub adapters/<适配器名>`);
       logger.log('');
       logger.log('🤖 AI 技能：可编辑 plugins/' + name + '/skills/' + name + '/SKILL.md（随 npm 包发布）');
       
@@ -103,85 +145,142 @@ export const newCommand = new Command('new')
   });
 
 async function createPluginPackage(pluginDir: string, pluginName: string, options: NewPluginOptions) {
-  const capitalizedName = pluginName.charAt(0).toUpperCase() + pluginName.slice(1).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+  const kind = options.type ?? 'normal';
+  const capitalizedName =
+    pluginName.charAt(0).toUpperCase() +
+    pluginName.slice(1).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+  const camelId = toCamelCaseId(pluginName);
+  const serviceCtxName = `${camelId}Service`;
   const packageName = options.isOfficial ? `@zhin.js/${pluginName}` : `zhin.js-${pluginName}`;
-  
-  // 创建目录结构
+  const withClient = kind !== 'service';
+
   await fs.ensureDir(pluginDir);
   await fs.ensureDir(path.join(pluginDir, 'src'));
-  await fs.ensureDir(path.join(pluginDir, 'client'));
+  if (withClient) {
+    await fs.ensureDir(path.join(pluginDir, 'client'));
+    await fs.ensureDir(path.join(pluginDir, 'dist'));
+  }
   await fs.ensureDir(path.join(pluginDir, 'lib'));
-  await fs.ensureDir(path.join(pluginDir, 'dist'));
   await fs.ensureDir(path.join(pluginDir, 'tests'));
   await fs.ensureDir(path.join(pluginDir, 'skills', pluginName));
-  
-  // 创建 package.json（与仓库插件约定一致：files 含 src/lib/client/dist/skills/README.md 等）
-  const packageJson = {
+
+  const zhinStack =
+    tryZhinWorkspaceDevDependencies() ??
+    ({
+      'zhin.js': 'latest',
+      '@zhin.js/cli': 'latest',
+      '@zhin.js/client': 'latest',
+      '@zhin.js/console': 'latest',
+      '@zhin.js/console-types': 'latest',
+    } satisfies Record<string, string>);
+
+  const description =
+    kind === 'adapter'
+      ? `Zhin.js ${capitalizedName} 适配器`
+      : kind === 'service'
+        ? `Zhin.js ${capitalizedName} 服务`
+        : `Zhin.js ${capitalizedName} 插件`;
+
+  const keywords =
+    kind === 'adapter'
+      ? (['zhin.js', 'adapter', 'bot', pluginName] as string[])
+      : kind === 'service'
+        ? (['zhin.js', 'service', pluginName] as string[])
+        : (['zhin.js', 'plugin', pluginName] as string[]);
+
+  const exportsMap: Record<string, unknown> = {
+    '.': {
+      types: './lib/index.d.ts',
+      development: './src/index.ts',
+      import: './lib/index.js',
+    },
+    './package.json': './package.json',
+  };
+  if (withClient) {
+    exportsMap['./client'] = { import: './dist/index.js' };
+  }
+
+  const files = ['src', 'lib', 'skills', 'plugin.yml', 'README.md', 'CHANGELOG.md'];
+  if (withClient) files.push('client', 'dist');
+
+  const peerDependencies: Record<string, string> = { 'zhin.js': '>=1.0.0' };
+  const peerDependenciesMeta: Record<string, { optional: boolean }> = {};
+  if (withClient) {
+    peerDependencies['@zhin.js/client'] = '>=1.0.0';
+    peerDependencies['@zhin.js/console'] = '>=1.0.0';
+    peerDependenciesMeta['@zhin.js/console'] = { optional: true };
+  }
+  if (kind === 'adapter') {
+    peerDependencies['@zhin.js/http'] = '>=1.0.0';
+    peerDependenciesMeta['@zhin.js/http'] = { optional: true };
+  }
+
+  const devDependencies: Record<string, string> = {
+    '@types/node': 'latest',
+    typescript: 'latest',
+    ...zhinStack,
+    vitest: 'latest',
+    '@vitest/coverage-v8': 'latest',
+    rimraf: 'latest',
+  };
+  if (withClient) {
+    Object.assign(devDependencies, {
+      '@types/react': 'latest',
+      '@types/react-dom': 'latest',
+      react: 'latest',
+      'react-dom': 'latest',
+    });
+  }
+
+  const scripts: Record<string, string> = {
+    build: 'zhin build',
+    dev: 'tsc --watch',
+    clean: withClient ? 'rimraf lib dist' : 'rimraf lib',
+    test: 'vitest run',
+    'test:watch': 'vitest',
+    'test:coverage': 'vitest run --coverage',
+    prepublishOnly: 'pnpm build',
+  };
+  if (withClient) {
+    scripts['build:client'] = 'zhin build';
+    scripts['dev:client'] = 'zhin build --watch';
+  }
+
+  const packageJson: Record<string, unknown> = {
     name: packageName,
     version: '0.1.0',
-    description: `Zhin.js ${capitalizedName} 插件`,
+    description,
     type: 'module',
     main: './lib/index.js',
     types: './lib/index.d.ts',
-    exports: {
-      '.': {
-        types: './lib/index.d.ts',
-        development: './src/index.ts',
-        import: './lib/index.js'
-      },
-      './client': {
-        import: './dist/index.js'
-      },
-      './package.json': './package.json'
-    },
-    files: [
-      'src',
-      'lib',
-      'client',
-      'dist',
-      'skills',
-      'README.md',
-      'CHANGELOG.md'
-    ],
-    scripts: {
-      build: 'tsc',
-      'build:client': 'zhin-console build',
-      dev: 'tsc --watch',
-      clean: 'rimraf lib dist',
-      test: 'vitest run',
-      'test:watch': 'vitest',
-      'test:coverage': 'vitest run --coverage',
-      prepublishOnly: 'pnpm build'
-    },
-    keywords: [
-      'zhin.js',
-      'plugin',
-      pluginName
-    ],
+    exports: exportsMap,
+    files,
+    scripts,
+    keywords,
     author: '',
     license: 'MIT',
-    peerDependencies: {
-      'zhin.js': '>=1.0.0',
-      '@zhin.js/client': '>=1.0.0'
-    },
-    devDependencies: {
-      '@types/node': 'latest',
-      '@types/react': 'latest',
-      '@types/react-dom': 'latest',
-      'typescript': 'latest',
-      'react': 'latest',
-      'react-dom': 'latest',
-      '@zhin.js/client': 'latest',
-      'radix-ui': 'latest',
-      'class-variance-authority': 'latest',
-      'vitest': 'latest',
-      '@vitest/coverage-v8': 'latest',
-      'rimraf': 'latest'
-    }
+    peerDependencies,
+    devDependencies,
+    publishConfig: { access: 'public', registry: 'https://registry.npmjs.org' },
   };
-  
+  if (Object.keys(peerDependenciesMeta).length > 0) {
+    packageJson.peerDependenciesMeta = peerDependenciesMeta;
+  }
+
   await fs.writeJson(path.join(pluginDir, 'package.json'), packageJson, { spaces: 2 });
-  
+
+  const pluginYmlDesc =
+    kind === 'adapter'
+      ? `${capitalizedName} 适配器（zhin new --type adapter）`
+      : kind === 'service'
+        ? `${capitalizedName} 服务（zhin new --type service）`
+        : `${capitalizedName} 插件（zhin new）`;
+  const pluginYml = `name: ${pluginName}
+description: ${pluginYmlDesc}，请按实际能力修改
+version: 0.1.0
+`;
+  await fs.writeFile(path.join(pluginDir, 'plugin.yml'), pluginYml, 'utf8');
+
   // 创建 tsconfig.json (服务端主配置)
   const tsConfig = {
     "compilerOptions": {
@@ -203,9 +302,7 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
       "declarationMap": true,
       "sourceMap": true,
       "verbatimModuleSyntax": false,
-      "types": [
-        "@zhin.js/http"
-      ]
+      "types": ["node"]
     },
     "include": ["src/**/*"],
     "exclude": ["lib", "node_modules", "client"]
@@ -213,33 +310,210 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
   ;
   
   await fs.writeJson(path.join(pluginDir, 'tsconfig.json'), tsConfig, { spaces: 2 });
-  
-  
-  // 创建 client/tsconfig.json (客户端主配置)
-  const clientTsConfig = {
-    "compilerOptions": {
-      "outDir": "../dist",
-      "baseUrl": ".",
-      "declaration": true,
-      "module": "ESNext",
-      "moduleResolution": "bundler",
-      "target": "ES2022",
-      "jsx":"react-jsx",
-      "declarationMap": true,
-      "sourceMap": true,
-      "skipLibCheck": true,
-      "noEmit": false
-    },
-    "include": [
-      "./**/*"
-    ]
+
+  if (withClient) {
+    const clientTsConfig = {
+      compilerOptions: {
+        outDir: '../dist',
+        baseUrl: '.',
+        declaration: true,
+        module: 'ESNext',
+        moduleResolution: 'bundler',
+        target: 'ES2022',
+        jsx: 'react-jsx',
+        declarationMap: true,
+        sourceMap: true,
+        skipLibCheck: true,
+        noEmit: false,
+      },
+      include: ['./**/*'],
+    };
+    await fs.writeJson(path.join(pluginDir, 'client', 'tsconfig.json'), clientTsConfig, { spaces: 2 });
   }
-  ;
-  
-  await fs.writeJson(path.join(pluginDir, 'client', 'tsconfig.json'), clientTsConfig, { spaces: 2 });
-  
-  // 创建服务端入口文件 src/index.ts
-  const indexContent = `import {
+
+  // Vitest：与 tests/ 目录配套
+  const vitestConfig = `import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    environment: 'node',
+    include: ['tests/**/*.test.ts'],
+  },
+});
+`;
+  await fs.writeFile(path.join(pluginDir, 'vitest.config.ts'), vitestConfig, 'utf8');
+
+  if (kind === 'service') {
+    const serviceSrc = `export interface ${capitalizedName}Service {
+  /** 占位方法：替换为你的领域 API */
+  ping(): string;
+}
+
+export function create${capitalizedName}Service(): ${capitalizedName}Service {
+  return {
+    ping() {
+      return 'pong';
+    },
+  };
+}
+`;
+    await fs.writeFile(path.join(pluginDir, 'src', 'service.ts'), serviceSrc, 'utf8');
+
+    const indexSvc = `import { usePlugin, onDispose, type Context } from 'zhin.js';
+import { create${capitalizedName}Service } from './service.js';
+
+declare module 'zhin.js' {
+  namespace Plugin {
+    interface Contexts {
+      ${serviceCtxName}: import('./service.js').${capitalizedName}Service;
+    }
+  }
+}
+
+const { provide, logger } = usePlugin();
+
+provide({
+  name: '${serviceCtxName}',
+  description: '${capitalizedName} 服务（其它插件通过 root.inject(\"${serviceCtxName}\") 使用）',
+  value: create${capitalizedName}Service(),
+} as unknown as Context<'${serviceCtxName}'>);
+
+onDispose(() => {
+  logger.info('${capitalizedName} 服务插件已销毁');
+});
+
+logger.info('${capitalizedName} 服务已加载');
+
+export { create${capitalizedName}Service } from './service.js';
+export type { ${capitalizedName}Service } from './service.js';
+`;
+    await fs.writeFile(path.join(pluginDir, 'src', 'index.ts'), indexSvc, 'utf8');
+  } else if (kind === 'adapter') {
+    const botSrc = `import type { Bot, Message, SendOptions } from 'zhin.js';
+import type { ${capitalizedName}Adapter } from './adapter.js';
+
+export interface ${capitalizedName}BotConfig {
+  /** 与 zhin.config.yml 中 bots[].name 一致 */
+  name: string;
+  /** 平台凭证等，按实际协议扩展 */
+  token?: string;
+}
+
+export class ${capitalizedName}Bot implements Bot<${capitalizedName}BotConfig, Record<string, never>> {
+  $id: string;
+  $config: ${capitalizedName}BotConfig;
+  $connected = false;
+
+  constructor(
+    private readonly adapter: ${capitalizedName}Adapter,
+    config: ${capitalizedName}BotConfig,
+  ) {
+    this.$config = config;
+    this.$id = config.name;
+  }
+
+  $formatMessage(_event: Record<string, never>): Message {
+    throw new Error('[${camelId}] 请实现 $formatMessage：将平台事件转为标准 Message');
+  }
+
+  async $connect(): Promise<void> {
+    this.$connected = true;
+    this.adapter.logger.info(\`[${camelId}] bot \${this.$id} 已连接（占位）\`);
+  }
+
+  async $disconnect(): Promise<void> {
+    this.$connected = false;
+  }
+
+  async $recallMessage(_id: string): Promise<void> {}
+
+  async $sendMessage(options: SendOptions): Promise<string> {
+    this.adapter.logger.debug(\`[${camelId}] stub send: \${JSON.stringify(options)}\`);
+    return 'stub-message-id';
+  }
+}
+`;
+    await fs.writeFile(path.join(pluginDir, 'src', 'bot.ts'), botSrc, 'utf8');
+
+    const adapterSrc = `import { Adapter, type Plugin } from 'zhin.js';
+import { ${capitalizedName}Bot } from './bot.js';
+import type { ${capitalizedName}BotConfig } from './bot.js';
+
+export class ${capitalizedName}Adapter extends Adapter<${capitalizedName}Bot> {
+  constructor(plugin: Plugin, botConfigs: ${capitalizedName}BotConfig[]) {
+    super(plugin, '${camelId}' as keyof Plugin.Contexts, botConfigs);
+  }
+
+  createBot(config: ${capitalizedName}BotConfig): ${capitalizedName}Bot {
+    return new ${capitalizedName}Bot(this, config);
+  }
+}
+`;
+    await fs.writeFile(path.join(pluginDir, 'src', 'adapter.ts'), adapterSrc, 'utf8');
+
+    const indexAd = `import { usePlugin, type Plugin, type Context, onDispose } from 'zhin.js';
+import path from 'node:path';
+import { PageManager } from '@zhin.js/console';
+import { ${capitalizedName}Adapter } from './adapter.js';
+import type { ${capitalizedName}BotConfig } from './bot.js';
+
+declare module 'zhin.js' {
+  interface Adapters {
+    ${camelId}: ${capitalizedName}Adapter;
+  }
+}
+
+const plugin = usePlugin();
+const { provide, useContext, logger } = plugin;
+
+function loadBotConfigsFromApp(): ${capitalizedName}BotConfig[] {
+  const cfg = plugin.root.inject('config') as { get?: (k: string) => unknown } | undefined;
+  const doc = cfg?.get?.('zhin.config.yml') as { bots?: ${capitalizedName}BotConfig[] } | undefined;
+  const bots = doc?.bots ?? [];
+  return bots.filter((b) => (b as { context?: string }).context === '${camelId}');
+}
+
+provide({
+  name: '${camelId}',
+  description: '${capitalizedName} 适配器（占位，请接入真实协议）',
+  mounted: async (p: Plugin) => {
+    const configs = loadBotConfigsFromApp();
+    if (configs.length === 0) {
+      p.logger.warn(
+        '[${camelId}] 未在 zhin.config.yml 的 bots 中找到 context: \"${camelId}\" 的项，将以 0 个 Bot 启动',
+      );
+    }
+    const adapter = new ${capitalizedName}Adapter(p, configs);
+    await adapter.start();
+    return adapter;
+  },
+  dispose: async (adapter: ${capitalizedName}Adapter) => {
+    await adapter.stop();
+  },
+} as unknown as Context<'${camelId}'>);
+
+useContext('web', () => {
+  PageManager.addEntry({
+    id: '${pluginName}',
+    development: path.resolve(import.meta.dirname, '../client/index.tsx'),
+    production: path.resolve(import.meta.dirname, '../dist/index.js'),
+    meta: { name: '${capitalizedName}' },
+  });
+});
+
+onDispose(() => {
+  logger.info('${capitalizedName} 适配器插件已销毁');
+});
+
+logger.info('${capitalizedName} 适配器插件已加载');
+
+export { ${capitalizedName}Adapter } from './adapter.js';
+export { ${capitalizedName}Bot } from './bot.js';
+export type { ${capitalizedName}BotConfig } from './bot.js';
+`;
+    await fs.writeFile(path.join(pluginDir, 'src', 'index.ts'), indexAd, 'utf8');
+  } else {
+    const indexNormal = `import {
   usePlugin,
   useContext,
   onDispose,
@@ -247,22 +521,15 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
   MessageCommand,
 } from 'zhin.js';
 import path from 'node:path';
+import { PageManager } from '@zhin.js/console';
 
 const { addCommand, addTool, logger } = usePlugin();
-
-// ============================================================================
-// 命令示例
-// ============================================================================
 
 addCommand(
   new MessageCommand('${pluginName}')
     .desc('${capitalizedName} 插件命令')
     .action(() => '${capitalizedName} 运行中！')
 );
-
-// ============================================================================
-// AI 工具示例 (使用 ZhinTool)
-// ============================================================================
 
 addTool(
   new ZhinTool('${pluginName}_greet')
@@ -275,69 +542,88 @@ addTool(
     })
 );
 
-// 注册客户端入口（如果有客户端代码）
-useContext('web', (web) => {
-  // 开发环境使用 tsx 文件，生产环境使用编译后的 js 文件
-  const isDev = process.env.NODE_ENV === 'development';
-  const clientEntry = isDev 
-    ? path.resolve(import.meta.dirname, '../client/index.tsx')
-    : path.resolve(import.meta.dirname, '../dist/index.js');
-  const dispose = web.addEntry(clientEntry);
-  return dispose;
+useContext('web', () => {
+  PageManager.addEntry({
+    id: '${pluginName}',
+    development: path.resolve(import.meta.dirname, '../client/index.tsx'),
+    production: path.resolve(import.meta.dirname, '../dist/index.js'),
+    meta: { name: '${capitalizedName}' },
+  });
 });
 
-// 插件销毁时的清理
 onDispose(() => {
   logger.info('${capitalizedName} 插件已销毁');
 });
 
 logger.info('${capitalizedName} 插件已加载');
 `;
-  
-  await fs.writeFile(path.join(pluginDir, 'src', 'index.ts'), indexContent);
-  
-  // 创建客户端入口文件 client/index.tsx
-  const clientContent = `import type { PluginRegisterHostApi } from '@zhin.js/console-types';
+    await fs.writeFile(path.join(pluginDir, 'src', 'index.ts'), indexNormal, 'utf8');
+  }
+
+  if (withClient) {
+    const clientContent = `import type { PluginRegisterHostApi } from '@zhin.js/console-types';
 import ${capitalizedName}Page from './pages/${capitalizedName}Page';
 
 export function register(api: PluginRegisterHostApi) {
   api.addRoute({
     path: '/console/plugins/${pluginName}',
     name: '${capitalizedName}',
-    element: api.React.createElement(${capitalizedName}Page, { hostReact: api.React }),
+    element: api.React.createElement(${capitalizedName}Page),
   });
   api.addTool({ id: '${pluginName}', name: '${capitalizedName}', path: '/console/plugins/${pluginName}' });
 }
 
 export { ${capitalizedName}Page };
 `;
-  
-  await fs.writeFile(path.join(pluginDir, 'client', 'index.tsx'), clientContent);
+    await fs.writeFile(path.join(pluginDir, 'client', 'index.tsx'), clientContent, 'utf8');
 
-  // 创建客户端页面组件
-  await fs.ensureDir(path.join(pluginDir, 'client', 'pages'));
-  const pageContent = `import { useEffect } from 'react';
+    await fs.ensureDir(path.join(pluginDir, 'client', 'pages'));
+    const pageContent = `import { useEffect } from 'react';
 
 export default function ${capitalizedName}Page() {
-
   useEffect(() => {
     console.log('${capitalizedName} 页面已挂载');
   }, []);
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">${capitalizedName}</h1>
+    <div style={{ padding: 24 }}>
+      <h1 style={{ fontSize: 20, marginBottom: 16 }}>${capitalizedName}</h1>
+      <p style={{ color: '#666' }}>控制台插件页占位；可按需接入 @zhin.js/client 与宿主样式。</p>
     </div>
   );
 }
 `;
-  
-  await fs.writeFile(path.join(pluginDir, 'client', 'pages', `${capitalizedName}Page.tsx`), pageContent);
-  
-  // 创建 README.md
+    await fs.writeFile(path.join(pluginDir, 'client', 'pages', `${capitalizedName}Page.tsx`), pageContent, 'utf8');
+  }
+
+  const readmeIntro =
+    kind === 'adapter'
+      ? `${capitalizedName} 适配器（\`zhin new --type adapter\` 生成），含占位 Bot / Adapter 与控制台入口。`
+      : kind === 'service'
+        ? `${capitalizedName} 服务插件（\`zhin new --type service\`），通过 \`provide\` 注册 \`${serviceCtxName}\` 上下文。`
+        : `${capitalizedName} 普通插件（\`zhin new\` / \`--type normal\`），含命令、工具与控制台页示例。`;
+
+  const readmeUse =
+    kind === 'adapter'
+      ? `在 \`zhin.config.yml\` 的 \`plugins\` 中加入 \`${packageName}\`，并配置 bots（\`context\` 必须为适配器键 \`${camelId}\`）：
+
+\`\`\`yaml
+plugins:
+  - ${packageName}
+bots:
+  - context: ${camelId}
+    name: demo-bot
+    token: your-token-here
+\`\`\`
+
+可选：安装 \`@zhin.js/http\` 以便后续注册 Webhook 路由。控制台页需启用 \`@zhin.js/console\`。`
+      : kind === 'service'
+        ? `在 \`zhin.config.yml\` 的 \`plugins\` 中加入 \`${packageName}\`。其它插件中通过 \`root.inject(\"${serviceCtxName}\")\` 获取服务实例（类型由模板中的 declare module 提供）。`
+        : `在 \`zhin.config.yml\`（或 \`zhin.config.ts\`）的 \`plugins\` 中加入 \`${packageName}\`。若使用控制台页，请启用 \`@zhin.js/console\`。`;
+
   const readmeContent = `# ${packageName}
 
-${capitalizedName} 插件 for Zhin.js
+${readmeIntro}
 
 ## 安装
 
@@ -347,39 +633,28 @@ pnpm add ${packageName}
 
 ## 使用
 
-在 \`zhin.config.ts\` 中添加插件：
-
-\`\`\`typescript
-export default defineConfig({
-  plugins: [
-    '${pluginName}'
-  ]
-});
-\`\`\`
+${readmeUse}
 
 ## AI 技能（SKILL.md）
 
-本包包含 \`skills/${pluginName}/SKILL.md\`（YAML frontmatter：\`name\`、\`description\`、\`keywords\`、\`tags\`、\`tools\` 等）。Agent 会扫描并用于工具粗筛与 \`activate_skill\`；请按实际能力修改描述与关键词。
+本包包含 \`skills/${pluginName}/SKILL.md\`。请按实际能力修改 \`description\` / \`tools\` 等 frontmatter。
 
 ## 开发
 
 \`\`\`bash
-# 安装依赖
 pnpm install
-
-# 构建
 pnpm build
-
-# 开发模式
 pnpm dev
+${withClient ? 'pnpm dev:client   # 仅 client 监听\n' : ''}
 \`\`\`
+
+在 **本仓库** 根执行 \`zhin new\` 时：若存在 \`pnpm-workspace.yaml\`、\`packages/zhin/package.json\`，且根 \`package.json\` 声明了 \`zhin.js\`，模板会将 \`zhin.js\` / \`@zhin.js/*\` 开发依赖写为 \`workspace:*\`。
 
 ## 许可证
 
 MIT
 `;
-  
-  await fs.writeFile(path.join(pluginDir, 'README.md'), readmeContent);
+  await fs.writeFile(path.join(pluginDir, 'README.md'), readmeContent, 'utf8');
 
   // 文件化技能模板（与官方插件一致，随 npm 包发布）
   const skillMdContent = `---
@@ -415,14 +690,14 @@ tools: []
   const gitignoreContent = `node_modules/
 lib/
 dist/
+coverage/
 *.log
 .DS_Store
 `;
   
   await fs.writeFile(path.join(pluginDir, '.gitignore'), gitignoreContent);
   
-  // 生成测试文件
-  await generateTestFiles(pluginDir, pluginName, capitalizedName, options);
+  await generateTestFiles(pluginDir, pluginName, capitalizedName, camelId, options);
   
   // 安装依赖
   if (!options.skipInstall) {
@@ -446,16 +721,16 @@ async function generateTestFiles(
   pluginDir: string,
   pluginName: string,
   capitalizedName: string,
-  options: NewPluginOptions
+  camelId: string,
+  options: NewPluginOptions,
 ) {
   const testsDir = path.join(pluginDir, 'tests');
-  const pluginType = options.type || 'plugin';
-  
-  // 根据插件类型生成不同的测试文件
+  const pluginType = options.type ?? 'normal';
+
   if (pluginType === 'service') {
-    await generateServiceTest(testsDir, pluginName, capitalizedName);
+    await generateServiceTest(testsDir, capitalizedName);
   } else if (pluginType === 'adapter') {
-    await generateAdapterTest(testsDir, pluginName, capitalizedName);
+    await generateAdapterTest(testsDir, pluginName, capitalizedName, camelId);
   } else {
     await generatePluginTest(testsDir, pluginName, capitalizedName);
   }
@@ -468,7 +743,7 @@ async function generateTestFiles(
  */
 async function generatePluginTest(testsDir: string, pluginName: string, capitalizedName: string) {
   const testContent = `import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { Plugin } from '@zhin.js/core'
+import { Plugin } from 'zhin.js'
 
 describe('${capitalizedName} Plugin', () => {
   let plugin: Plugin
@@ -491,8 +766,9 @@ describe('${capitalizedName} Plugin', () => {
       expect(plugin).toBeInstanceOf(Plugin)
     })
 
-    it('should have correct name', () => {
-      expect(plugin.name).toBe('${pluginName}')
+    it('should have a non-empty name derived from entry path', () => {
+      expect(typeof plugin.name).toBe('string')
+      expect(plugin.name.length).toBeGreaterThan(0)
     })
 
     it('should have parent plugin', () => {
@@ -585,367 +861,61 @@ describe('${capitalizedName} Plugin', () => {
 }
 
 /**
- * 生成服务测试
+ * 生成服务测试（纯函数 + 工厂，不依赖完整 Bot 运行时）
  */
-async function generateServiceTest(testsDir: string, pluginName: string, capitalizedName: string) {
-  const testContent = `import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { Plugin } from '@zhin.js/core'
+async function generateServiceTest(testsDir: string, capitalizedName: string) {
+  const testContent = `import { describe, it, expect } from 'vitest';
+import { create${capitalizedName}Service } from '../src/service.js';
 
-describe('${capitalizedName} Service', () => {
-  let plugin: Plugin
-  let service: any
-
-  beforeEach(async () => {
-    plugin = new Plugin('/test/service-plugin.ts')
-    // TODO: 初始化你的服务实例
-    // service = await createYourService(plugin)
-  })
-
-  afterEach(() => {
-    if (plugin && typeof (plugin as any).stop === 'function') {
-      (plugin as any).stop()
-    }
-  })
-
-  describe('Service Instance', () => {
-    it('should create service instance', () => {
-      // TODO: 取消注释并实现
-      // expect(service).toBeDefined()
-      // expect(service).not.toBeNull()
-      expect(true).toBe(true)
-    })
-
-    it('should have correct type', () => {
-      // TODO: 取消注释并实现
-      // expect(typeof service).toBe('object')
-      expect(true).toBe(true)
-    })
-  })
-
-  describe('Service Methods', () => {
-    it('should have required methods', () => {
-      // TODO: 添加你的服务方法测试
-      // expect(service).toHaveProperty('methodName')
-      // expect(typeof service.methodName).toBe('function')
-      expect(true).toBe(true)
-    })
-
-    it('should execute methods correctly', async () => {
-      // TODO: 测试方法执行
-      // const result = await service.methodName()
-      // expect(result).toBeDefined()
-      expect(true).toBe(true)
-    })
-  })
-
-  describe('Service Lifecycle', () => {
-    it('should handle initialization', async () => {
-      // TODO: 测试初始化
-      expect(true).toBe(true)
-    })
-
-    it('should handle cleanup on dispose', async () => {
-      // TODO: 测试清理逻辑
-      expect(true).toBe(true)
-    })
-  })
-
-  describe('Service Dependencies', () => {
-    it('should inject required dependencies', () => {
-      // TODO: 测试依赖注入
-      // plugin.provide({ name: 'dep', value: mockDep })
-      // const dep = plugin.inject('dep')
-      // expect(dep).toBeDefined()
-      expect(true).toBe(true)
-    })
-  })
-
-  describe('Custom Tests', () => {
-    // 在这里添加你的自定义测试
-    it('should pass custom test', () => {
-      expect(true).toBe(true)
-    })
-  })
-})
+describe('${capitalizedName} service', () => {
+  it('ping returns pong', () => {
+    const svc = create${capitalizedName}Service();
+    expect(svc.ping()).toBe('pong');
+  });
+});
 `;
-  
   await fs.writeFile(path.join(testsDir, 'index.test.ts'), testContent);
 }
 
-/**
- * 生成适配器测试
- */
-async function generateAdapterTest(testsDir: string, pluginName: string, capitalizedName: string) {
-  const testContent = `import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { Plugin, Adapter, Bot } from '@zhin.js/core'
-import { EventEmitter } from 'events'
+/** 生成适配器测试（对接模板中的 Adapter / Bot） */
+async function generateAdapterTest(
+  testsDir: string,
+  pluginName: string,
+  capitalizedName: string,
+  camelId: string,
+) {
+  const testContent = `import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { Plugin } from 'zhin.js';
+import { ${capitalizedName}Adapter } from '../src/adapter.js';
+import { ${capitalizedName}Bot } from '../src/bot.js';
 
-// TODO: 导入你的适配器和 Bot 类
-// import { ${capitalizedName}Adapter, ${capitalizedName}Bot } from '../src/index'
-
-// Mock Bot 类（用于测试）
-class Mock${capitalizedName}Bot extends EventEmitter implements Bot {
-  adapter: string
-  unique: string
-  self_id: string
-  quote_self: boolean
-  forward_length: number
-  $connected: boolean = false
-  
-  constructor(adapter: any, config: any) {
-    super()
-    this.adapter = '${pluginName}'
-    this.unique = config.name || 'mock-bot'
-    this.self_id = config.self_id || 'mock-bot-id'
-    this.quote_self = config.quote_self ?? true
-    this.forward_length = config.forward_length ?? 3
-  }
-
-  async connect() {
-    this.$connected = true
-    this.emit('online')
-    return true
-  }
-
-  async disconnect() {
-    this.$connected = false
-    this.emit('offline')
-    return true
-  }
-
-  async sendMessage(channel_id: string, content: any) {
-    return 'mock-message-id'
-  }
-
-  async recallMessage(message_id: string) {
-    return true
-  }
-}
-
-// Mock Adapter 类（用于测试）
-class Mock${capitalizedName}Adapter extends Adapter<any, any> {
-  constructor(plugin: Plugin, name: string, config: any[]) {
-    super(plugin, name)
-    config.forEach(cfg => {
-      const bot = this.createBot(cfg)
-      this.bots.set(bot.unique, bot)
-    })
-  }
-
-  createBot(config: any): Bot {
-    return new Mock${capitalizedName}Bot(this, config)
-  }
-}
-
-describe('${capitalizedName} Adapter', () => {
-  let plugin: Plugin
-  let adapter: Mock${capitalizedName}Adapter
+describe('${capitalizedName} adapter', () => {
+  let root: Plugin;
+  let plugin: Plugin;
 
   beforeEach(() => {
-    plugin = new Plugin('/test/adapter-plugin.ts')
-    adapter = new Mock${capitalizedName}Adapter(plugin, '${pluginName}', [
-      { name: 'test-bot', token: 'test-token' }
-    ])
-  })
+    root = new Plugin('/test/root.ts');
+    plugin = new Plugin(\`/plugins/${pluginName}/src/index.ts\`, root);
+  });
 
   afterEach(async () => {
-    if (adapter) {
-      await adapter.stop()
-    }
-  })
+    if (plugin?.started) await plugin.stop();
+  });
 
-  describe('Adapter Instance', () => {
-    it('should create adapter instance', () => {
-      expect(adapter).toBeDefined()
-      expect(adapter).toBeInstanceOf(Adapter)
-    })
+  it('constructs with empty config and correct adapter key', () => {
+    const adapter = new ${capitalizedName}Adapter(plugin, []);
+    expect(adapter.bots.size).toBe(0);
+    expect(String(adapter.name)).toBe('${camelId}');
+  });
 
-    it('should have correct name', () => {
-      expect(adapter.name).toBe('${pluginName}')
-    })
-
-    it('should have plugin reference', () => {
-      expect(adapter.plugin).toBe(plugin)
-    })
-
-    it('should have logger', () => {
-      expect(adapter.logger).toBeDefined()
-      expect(typeof adapter.logger.info).toBe('function')
-    })
-
-    it('should initialize with bots', () => {
-      expect(adapter.bots).toBeInstanceOf(Map)
-      expect(adapter.bots.size).toBeGreaterThan(0)
-    })
-  })
-
-  describe('Bot Management', () => {
-    it('should create bots from config', () => {
-      expect(adapter.bots.size).toBe(1)
-      const bot = adapter.bots.values().next().value
-      expect(bot).toBeDefined()
-      expect(bot.adapter).toBe('${pluginName}')
-    })
-
-    it('should have createBot method', () => {
-      expect(typeof adapter.createBot).toBe('function')
-    })
-
-    it('should create bot with correct properties', () => {
-      const bot = adapter.bots.values().next().value
-      expect(bot.unique).toBeDefined()
-      expect(bot.self_id).toBeDefined()
-    })
-  })
-
-  describe('Adapter Lifecycle', () => {
-    it('should have start method', () => {
-      expect(typeof adapter.start).toBe('function')
-    })
-
-    it('should have stop method', () => {
-      expect(typeof adapter.stop).toBe('function')
-    })
-
-    it('should start successfully', async () => {
-      await expect(adapter.start()).resolves.not.toThrow()
-    })
-
-    it('should stop successfully', async () => {
-      await adapter.start()
-      await expect(adapter.stop()).resolves.not.toThrow()
-    })
-
-    it('should add to plugin adapters on start', async () => {
-      await adapter.start()
-      expect(plugin.adapters).toContain(adapter)
-    })
-
-    it('should remove from plugin adapters on stop', async () => {
-      await adapter.start()
-      await adapter.stop()
-      expect(plugin.adapters).not.toContain(adapter)
-    })
-
-    it('should clear bots on stop', async () => {
-      await adapter.start()
-      await adapter.stop()
-      expect(adapter.bots.size).toBe(0)
-    })
-  })
-
-  describe('Event Handling', () => {
-    it('should listen to call.recallMessage event', () => {
-      const listeners = adapter.listeners('call.recallMessage')
-      expect(listeners.length).toBeGreaterThan(0)
-    })
-
-    it('should not register a default message.receive listener (routing via emit)', () => {
-      expect(adapter.listenerCount('message.receive')).toBe(0)
-    })
-
-    it('should remove all listeners on stop', async () => {
-      await adapter.start()
-      await adapter.stop()
-      
-      expect(adapter.listenerCount('call.recallMessage')).toBe(0)
-      expect(adapter.listenerCount('message.receive')).toBe(0)
-    })
-  })
-
-  describe('Message Sending', () => {
-    it('should handle sendMessage event', async () => {
-      const bot = adapter.bots.values().next().value
-      const sendSpy = vi.spyOn(bot, 'sendMessage')
-      
-      await adapter.sendMessage(bot.unique, {
-        context: 'test',
-        bot: bot.unique,
-        content: 'test message',
-        id: 'test-channel',
-        type: 'text' as const
-      })
-      
-      expect(sendSpy).toHaveBeenCalled()
-    })
-
-    it('should throw error when bot not found for sending', async () => {
-      await expect(
-        adapter.sendMessage('non-existent-bot', {
-          context: 'test',
-          bot: 'non-existent-bot',
-          content: 'test message',
-          id: 'test-channel',
-          type: 'text' as const
-        })
-      ).rejects.toThrow()
-    })
-  })
-
-  describe('Message Receiving', () => {
-    it('should process received messages through middleware', async () => {
-      const bot = adapter.bots.values().next().value
-      
-      const middlewareSpy = vi.fn()
-      plugin.addMiddleware(async (event, next) => {
-        middlewareSpy(event)
-        return next()
-      })
-
-      const mockMessage = {
-        $adapter: '${pluginName}',
-        $bot: bot.unique,
-        $channel: { id: 'test-channel', type: 'text' },
-        $sender: { id: 'test-user' },
-        $content: 'test message',
-        $timestamp: Date.now()
-      }
-
-      await adapter.sendMessage(bot.unique, mockMessage)
-    })
-  })
-  describe('Bot Methods', () => {
-    let bot: Mock${capitalizedName}Bot
-    beforeEach(() => {
-      bot = adapter.bots.values().next().value as Mock${capitalizedName}Bot
-    })
-    it('should have connect method', () => {
-      expect(typeof bot.connect).toBe('function')
-    })
-
-    it('should have disconnect method', () => {
-      expect(typeof bot.disconnect).toBe('function')
-    })
-
-    it('should have sendMessage method', () => {
-      expect(typeof bot.sendMessage).toBe('function')
-    })
-
-    it('should have recallMessage method', () => {
-      expect(typeof bot.recallMessage).toBe('function')
-    })
-
-    it('should connect successfully', async () => {
-      await bot.connect()
-      expect(bot.$connected).toBe(true)
-    })
-
-    it('should disconnect successfully', async () => {
-      await bot.connect()
-      await bot.disconnect()
-      expect(bot.$connected).toBe(false)
-    })
-  })
-
-  describe('Custom Tests', () => {
-    // 在这里添加你的自定义测试
-    it('should pass custom test', () => {
-      expect(true).toBe(true)
-    })
-  })
-})
+  it('createBot wires $id from config.name', () => {
+    const adapter = new ${capitalizedName}Adapter(plugin, []);
+    const bot = adapter.createBot({ name: 'unit-test-bot' });
+    expect(bot).toBeInstanceOf(${capitalizedName}Bot);
+    expect(bot.$id).toBe('unit-test-bot');
+  });
+});
 `;
-  
   await fs.writeFile(path.join(testsDir, 'index.test.ts'), testContent);
 }
 

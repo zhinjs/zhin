@@ -47,6 +47,10 @@ export class IpcClient {
   >();
   private eventHandlers = new Map<string, (event: IpcEvent) => void>();
   private _closed = false;
+  /** 是否为客户端主动 close()（与对端断线区分） */
+  private _userClosed = false;
+  private _remoteDisconnectEmitted = false;
+  private onRemoteDisconnect: (() => void) | null = null;
 
   private constructor(socket: net.Socket, skipDataHandler = false) {
     this.socket = socket;
@@ -65,11 +69,36 @@ export class IpcClient {
         reject(new Error("连接已关闭"));
       }
       this.pending.clear();
+      const unexpected = !this._userClosed;
+      if (
+        unexpected &&
+        this.onRemoteDisconnect &&
+        !this._remoteDisconnectEmitted
+      ) {
+        this._remoteDisconnectEmitted = true;
+        const fn = this.onRemoteDisconnect;
+        this.onRemoteDisconnect = null;
+        queueMicrotask(() => {
+          try {
+            fn();
+          } catch {
+            /* 忽略上层重连回调异常 */
+          }
+        });
+      }
     });
   }
 
   get closed(): boolean {
     return this._closed;
+  }
+
+  /**
+   * 注册「对端断开 / 连接异常关闭」回调（不含本端 close()）。
+   * 传入 null 可清除回调。
+   */
+  setOnRemoteDisconnect(handler: (() => void) | null): void {
+    this.onRemoteDisconnect = handler;
   }
 
   /** 注册数据处理 handler（RPC 模式延迟到 challenge 完成后调用） */
@@ -315,7 +344,9 @@ export class IpcClient {
 
   /** 关闭连接 */
   close() {
+    this._userClosed = true;
     this._closed = true;
+    this.onRemoteDisconnect = null;
     this.eventHandlers.clear();
     for (const { reject } of this.pending.values()) {
       reject(new Error("连接已关闭"));

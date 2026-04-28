@@ -292,14 +292,11 @@ Console 插件采用智能的构建优化策略，显著减少重复打包：
 
 ### 插件客户端构建
 
-使用 `zhin-client` 工具构建插件客户端代码：
+在插件根目录使用 CLI 一并构建服务端与客户端：
 
 ```bash
-# 在插件目录下
-npx zhin-client build
-
-# 或使用相对路径
-node ../../plugins/console/lib/bin.js build
+# 在插件目录下（存在 src/ 则 tsc，存在 client/ 则打 dist）
+pnpm exec zhin build
 ```
 
 配置会自动外部化公共依赖，生成轻量级的插件代码。

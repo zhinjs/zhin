@@ -9,7 +9,7 @@
     "dev": "zhin dev",
     "start": "zhin start",
     "daemon": "zhin start --daemon",
-    "build": "tsc && zhin-console build",
+    "build": "zhin build",
     "stop": "zhin stop"
   },
   "_scripts-info": {

@@ -44,11 +44,12 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "build": "tsc && node ../../../scripts/build-console-client-if-present.mjs",
+    "build": "zhin build",
     "clean": "rimraf lib"
   },
   "dependencies": {},
   "devDependencies": {
+    "@zhin.js/cli": "workspace:*",
     "@radix-ui/themes": "^3.2.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.1",

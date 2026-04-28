@@ -36,6 +36,11 @@ export interface IcqqBotConfig {
     /** 认证 token（用于 HMAC-SHA256 挑战-响应，不会明文传输） */
     token: string;
   };
+  /**
+   * IPC/RPC 与守护进程连接意外断开时是否自动重连（指数退避，上限约 30s）。
+   * 默认 true；设为 false 则断开后仅将 `$connected` 置为 false，需手动重连。
+   */
+  autoReconnect?: boolean;
 }
 
 /** IPC 返回的好友信息 */
