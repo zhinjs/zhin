@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.58
+
+### Patch Changes
+
+- f1e9a76: fix: 提高 skill 质量
+  - zhin.js@1.0.73
+
 ## 1.0.57
 
 ### Patch Changes

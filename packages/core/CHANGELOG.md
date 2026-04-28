@@ -1,5 +1,15 @@
 # @zhin.js/core
 
+## 1.1.15
+
+### Patch Changes
+
+- @zhin.js/database@1.0.58
+- @zhin.js/logger@0.1.55
+- @zhin.js/schema@1.0.55
+- @zhin.js/ai@1.1.13
+- @zhin.js/kernel@0.0.32
+
 ## 1.1.14
 
 ### Patch Changes

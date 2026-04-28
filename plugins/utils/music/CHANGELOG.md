@@ -1,5 +1,13 @@
 # @zhin.js/plugin-music
 
+## 1.0.17
+
+### Patch Changes
+
+- f1e9a76: fix: 提高 skill 质量
+  - zhin.js@1.0.73
+  - @zhin.js/adapter-icqq@2.0.17
+
 ## 1.0.16
 
 ### Patch Changes

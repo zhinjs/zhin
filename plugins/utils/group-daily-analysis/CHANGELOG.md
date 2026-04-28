@@ -1,5 +1,13 @@
 # @zhin.js/plugin-group-daily-analysis
 
+## 0.0.22
+
+### Patch Changes
+
+- f1e9a76: fix: 提高 skill 质量
+  - zhin.js@1.0.73
+  - @zhin.js/plugin-html-renderer@0.0.51
+
 ## 0.0.21
 
 ### Patch Changes

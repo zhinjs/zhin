@@ -1,5 +1,11 @@
 # @zhin.js/database
 
+## 1.0.58
+
+### Patch Changes
+
+- zhin.js@1.0.73
+
 ## 1.0.57
 
 ### Patch Changes

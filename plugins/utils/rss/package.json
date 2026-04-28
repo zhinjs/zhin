@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-rss",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "RSS/Atom feed subscription & push plugin for Zhin.js — subscribe feeds, auto-poll, push new items to groups",
   "type": "module",
   "main": "./lib/index.js",

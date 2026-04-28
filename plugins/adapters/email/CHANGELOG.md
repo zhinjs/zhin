@@ -1,5 +1,12 @@
 # @zhin.js/adapter-email
 
+## 0.1.60
+
+### Patch Changes
+
+- f1e9a76: fix: 提高 skill 质量
+  - zhin.js@1.0.73
+
 ## 0.1.59
 
 ### Patch Changes

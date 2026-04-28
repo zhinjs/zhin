@@ -1,5 +1,13 @@
 # @zhin.js/agent
 
+## 0.1.13
+
+### Patch Changes
+
+- 63d0b88: fix: 定时任务优化
+  - @zhin.js/core@1.1.15
+  - @zhin.js/ai@1.1.13
+
 ## 0.1.12
 
 ### Patch Changes
