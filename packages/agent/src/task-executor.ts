@@ -83,22 +83,31 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
     const t0 = Date.now();
 
     try {
-      // 1. Optionally prepend time context (no style guidance)
+      // 1. Build final prompt with execution instructions
       let finalPrompt = prompt;
       if (timeContext) {
         const now = new Date();
         const timeStr = now.toLocaleString('zh-CN', { hour12: false });
         const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
         const weekday = weekdays[now.getDay()];
-        finalPrompt = `[定时任务自动触发] 当前时间: ${timeStr} 星期${weekday}\n任务: ${prompt}`;
+        finalPrompt = [
+          `[系统] 这是定时任务自动触发，当前时间: ${timeStr} 星期${weekday}`,
+          `你的输出将被直接发送到目标聊天中，请注意：`,
+          `- 直接输出最终内容，不要包含任何确认、进度报告或元评论（如"收到""正在执行""已完成"等）`,
+          `- 不要使用"为您""帮你"等对话式措辞，你不是在回复某个人的请求`,
+          `- 像一个真实的群成员一样自然发言`,
+          ``,
+          `任务: ${prompt}`,
+        ].join('\n');
       }
 
       // 2. Call agent.process() with per-sceneId lock
+      //    senderId = 'system' for cron tasks to avoid addressing a specific user
       const sceneId = context.sceneId || 'default';
       const elements = await withLock(sceneId, () =>
         deps.agent.process(finalPrompt, {
           platform: context.platform || 'cron',
-          senderId: context.senderId || 'system',
+          senderId: 'system',
           botId: context.botId,
           sceneId: context.sceneId || 'cron',
           scope: (context.scope as any) || undefined,
