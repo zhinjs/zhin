@@ -1,5 +1,11 @@
 # @zhin.js/console-app
 
+## 0.1.2
+
+### Patch Changes
+
+- abc75a4: fix: 优化,客户端构建优化
+
 ## 0.1.1
 
 ### Patch Changes

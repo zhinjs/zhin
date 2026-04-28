@@ -1,5 +1,25 @@
 # test-bot
 
+## 0.1.82
+
+### Patch Changes
+
+- abc75a4: fix: 优化,客户端构建优化
+- Updated dependencies [abc75a4]
+  - @zhin.js/adapter-onebot11@1.0.77
+  - @zhin.js/adapter-onebot12@0.0.22
+  - @zhin.js/adapter-telegram@1.0.59
+  - @zhin.js/adapter-discord@1.0.77
+  - @zhin.js/adapter-sandbox@2.0.14
+  - @zhin.js/console@2.0.14
+  - @zhin.js/adapter-satori@0.0.22
+  - @zhin.js/adapter-milky@0.0.22
+  - @zhin.js/adapter-icqq@2.0.15
+  - @zhin.js/adapter-kook@1.0.74
+  - @zhin.js/adapter-qq@1.0.74
+  - @zhin.js/cli@1.0.68
+  - @zhin.js/plugin-music@1.0.15
+
 ## 0.1.81
 
 ### Patch Changes

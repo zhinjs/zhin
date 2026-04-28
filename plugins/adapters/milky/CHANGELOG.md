@@ -1,5 +1,11 @@
 # @zhin.js/adapter-milky
 
+## 0.0.22
+
+### Patch Changes
+
+- abc75a4: fix: 优化,客户端构建优化
+
 ## 0.0.21
 
 ### Patch Changes

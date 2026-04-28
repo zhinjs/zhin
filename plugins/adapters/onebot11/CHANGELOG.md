@@ -1,5 +1,11 @@
 # @zhin.js/adapter-onebot11
 
+## 1.0.77
+
+### Patch Changes
+
+- abc75a4: fix: 优化,客户端构建优化
+
 ## 1.0.76
 
 ### Patch Changes

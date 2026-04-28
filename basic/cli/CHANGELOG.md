@@ -1,5 +1,11 @@
 # @zhin.js/cli
 
+## 1.0.68
+
+### Patch Changes
+
+- abc75a4: fix: 优化,客户端构建优化
+
 ## 1.0.67
 
 ### Patch Changes
