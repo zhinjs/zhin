@@ -1,5 +1,18 @@
 # zhin.js
 
+## 1.0.72
+
+### Patch Changes
+
+- e28fd7c: fix: 重新发版
+- Updated dependencies [e28fd7c]
+  - @zhin.js/logger@0.1.54
+  - @zhin.js/schema@1.0.54
+  - @zhin.js/agent@0.1.12
+  - @zhin.js/ai@1.1.12
+  - @zhin.js/core@1.1.14
+  - @zhin.js/kernel@0.0.31
+
 ## 1.0.71
 
 ### Patch Changes

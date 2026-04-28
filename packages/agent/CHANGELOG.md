@@ -1,5 +1,14 @@
 # @zhin.js/agent
 
+## 0.1.12
+
+### Patch Changes
+
+- e28fd7c: fix: 重新发版
+- Updated dependencies [e28fd7c]
+  - @zhin.js/ai@1.1.12
+  - @zhin.js/core@1.1.14
+
 ## 0.1.11
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/client",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "description": "Zhin console client: app singleton + WebSocket + re-exports (aligned with page-manager)",
   "type": "module",
   "main": "./dist/index.js",

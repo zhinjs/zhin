@@ -1,5 +1,14 @@
 # @zhin.js/plugin-html-renderer
 
+## 0.0.50
+
+### Patch Changes
+
+- e28fd7c: fix: 重新发版
+- Updated dependencies [e28fd7c]
+  - @zhin.js/satori@0.2.7
+  - zhin.js@1.0.72
+
 ## 0.0.49
 
 ### Patch Changes

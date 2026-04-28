@@ -1,5 +1,11 @@
 # @zhin.js/satori
 
+## 0.2.7
+
+### Patch Changes
+
+- e28fd7c: fix: 重新发版
+
 ## 0.2.6
 
 ### Patch Changes

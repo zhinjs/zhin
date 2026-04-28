@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/console-core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Zhin console core: Node PageManager + esbuild pipeline; Browser registry store + UI components (aligned with @page-manager/core)",
   "type": "module",
   "exports": {

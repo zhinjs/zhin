@@ -1,5 +1,13 @@
 # @zhin.js/plugin-60s
 
+## 0.0.10
+
+### Patch Changes
+
+- e28fd7c: fix: 重新发版
+- Updated dependencies [e28fd7c]
+  - zhin.js@1.0.72
+
 ## 0.0.9
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # @zhin.js/http
 
+## 1.0.65
+
+### Patch Changes
+
+- e28fd7c: fix: 重新发版
+- Updated dependencies [e28fd7c]
+  - @zhin.js/schema@1.0.54
+  - zhin.js@1.0.72
+
 ## 1.0.64
 
 ### Patch Changes
