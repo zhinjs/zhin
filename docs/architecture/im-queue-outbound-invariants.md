@@ -1,6 +1,6 @@
 # IM / 队列 / 出站 — 架构不变量（短清单）
 
-**Tier1**：与 [AGENTS.md](../../AGENTS.md) 一致；修改消息链或出站路径时先对照本文，再更新 [architecture-overview.md](../architecture-overview.md) 中的流程描述。
+**Tier1**：与 [AGENTS.md](https://github.com/zhinjs/zhin/blob/main/AGENTS.md)（仓库根）一致；修改消息链或出站路径时先对照本文，再更新 [architecture-overview.md](../architecture-overview.md) 中的流程描述。
 
 ## IM 栈 — 入站
 
