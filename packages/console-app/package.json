@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/console-app",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Zhin console Farm + React shell (aligned with @page-manager/app)",
   "type": "module",
   "exports": {

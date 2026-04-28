@@ -1,5 +1,11 @@
 # @zhin.js/adapter-github
 
+## 0.1.43
+
+### Patch Changes
+
+- 57bdf7a: fix: github adapter error
+
 ## 0.1.42
 
 ### Patch Changes
