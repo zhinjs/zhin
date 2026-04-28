@@ -1,5 +1,14 @@
 # @zhin.js/kernel
 
+## 0.0.31
+
+### Patch Changes
+
+- e28fd7c: fix: 重新发版
+- Updated dependencies [e28fd7c]
+  - @zhin.js/logger@0.1.54
+  - @zhin.js/schema@1.0.54
+
 ## 0.0.30
 
 ### Patch Changes

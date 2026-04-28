@@ -1,5 +1,16 @@
 # @zhin.js/adapter-discord
 
+## 1.0.76
+
+### Patch Changes
+
+- e28fd7c: fix: 重新发版
+- Updated dependencies [e28fd7c]
+  - @zhin.js/client@1.0.18
+  - zhin.js@1.0.72
+  - @zhin.js/console@2.0.13
+  - @zhin.js/http@1.0.65
+
 ## 1.0.75
 
 ### Patch Changes

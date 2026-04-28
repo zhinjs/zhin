@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-link-poster",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Auto-detect Bilibili/GitHub/Douyin/Xiaohongshu links and generate beautiful poster cards",
   "type": "module",
   "main": "./lib/index.js",

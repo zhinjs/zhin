@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-qrcode",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "QR code generator & reader plugin for Zhin.js",
   "type": "module",
   "main": "./lib/index.js",

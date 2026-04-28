@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.38
+
+### Patch Changes
+
+- e28fd7c: fix: 重新发版
+
 ## 1.0.37
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.25
+
+### Patch Changes
+
+- e28fd7c: fix: 重新发版
+
 ## 1.0.24
 
 ### Patch Changes

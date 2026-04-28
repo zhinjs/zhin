@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/console-types",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Zhin console / page-manager 对齐的共享类型（对标 @page-manager/types）",
   "type": "module",
   "main": "./dist/index.js",
@@ -16,7 +16,10 @@
     "build": "tsup",
     "clean": "rimraf dist"
   },
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "devDependencies": {
     "@types/react": "^19.2.14",
     "tsup": "^8.5.1",

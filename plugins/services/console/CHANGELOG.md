@@ -1,5 +1,20 @@
 # @zhin.js/console
 
+## 2.0.13
+
+### Patch Changes
+
+- e28fd7c: fix: 重新发版
+- Updated dependencies [e28fd7c]
+  - @zhin.js/agent@0.1.12
+  - @zhin.js/client@1.0.18
+  - @zhin.js/console-app@0.1.1
+  - @zhin.js/console-core@0.1.1
+  - @zhin.js/console-types@0.1.1
+  - @zhin.js/core@1.1.14
+  - zhin.js@1.0.72
+  - @zhin.js/http@1.0.65
+
 ## 2.0.12
 
 ### Patch Changes

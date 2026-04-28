@@ -1,5 +1,14 @@
 # @zhin.js/plugin-group-daily-analysis
 
+## 0.0.21
+
+### Patch Changes
+
+- e28fd7c: fix: 重新发版
+- Updated dependencies [e28fd7c]
+  - zhin.js@1.0.72
+  - @zhin.js/plugin-html-renderer@0.0.50
+
 ## 0.0.20
 
 ### Patch Changes
