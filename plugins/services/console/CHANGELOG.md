@@ -1,5 +1,13 @@
 # @zhin.js/console
 
+## 2.0.15
+
+### Patch Changes
+
+- 21efca3: fix: console error
+- Updated dependencies [21efca3]
+  - @zhin.js/console-app@0.1.3
+
 ## 2.0.14
 
 ### Patch Changes

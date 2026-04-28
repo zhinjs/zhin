@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.60
+
+### Patch Changes
+
+- Updated dependencies [21efca3]
+  - @zhin.js/console@2.0.15
+
 ## 1.0.59
 
 ### Patch Changes
