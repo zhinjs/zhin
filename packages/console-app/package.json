@@ -15,7 +15,8 @@
         "import": "./lib/register.js",
         "default": "./lib/register.js"
       }
-    }
+    },
+    "./package.json": "./package.json"
   },
   "scripts": {
     "build": "tsc -p tsconfig.server.json && farm build",
