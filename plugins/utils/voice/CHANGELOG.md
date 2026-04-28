@@ -1,5 +1,12 @@
 # @zhin.js/plugin-voice
 
+## 0.0.11
+
+### Patch Changes
+
+- f1e9a76: fix: 提高 skill 质量
+  - zhin.js@1.0.73
+
 ## 0.0.10
 
 ### Patch Changes
