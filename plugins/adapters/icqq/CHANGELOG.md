@@ -1,5 +1,13 @@
 # @zhin.js/adapter-icqq
 
+## 2.0.15
+
+### Patch Changes
+
+- abc75a4: fix: 优化,客户端构建优化
+- Updated dependencies [abc75a4]
+  - @zhin.js/console@2.0.14
+
 ## 2.0.14
 
 ### Patch Changes

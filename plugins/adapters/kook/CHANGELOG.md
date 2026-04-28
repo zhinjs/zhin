@@ -1,5 +1,13 @@
 # @zhin.js/adapter-kook
 
+## 1.0.74
+
+### Patch Changes
+
+- abc75a4: fix: 优化,客户端构建优化
+- Updated dependencies [abc75a4]
+  - @zhin.js/console@2.0.14
+
 ## 1.0.73
 
 ### Patch Changes
