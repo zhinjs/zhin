@@ -1,5 +1,13 @@
 # @zhin.js/kernel
 
+## 0.0.33
+
+### Patch Changes
+
+- c9dec38: fix: ai 架构优化,文档更新
+  - @zhin.js/logger@0.1.56
+  - @zhin.js/schema@1.0.56
+
 ## 0.0.32
 
 ### Patch Changes

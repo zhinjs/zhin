@@ -1,5 +1,12 @@
 # @zhin.js/database
 
+## 1.0.59
+
+### Patch Changes
+
+- Updated dependencies [c9dec38]
+  - zhin.js@1.0.74
+
 ## 1.0.58
 
 ### Patch Changes

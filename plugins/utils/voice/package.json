@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-voice",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "description": "Voice input/output plugin for Zhin.js — STT via Whisper + TTS via edge-tts",
   "type": "module",
   "main": "./lib/index.js",

@@ -1,5 +1,14 @@
 # @zhin.js/agent
 
+## 0.1.14
+
+### Patch Changes
+
+- c9dec38: fix: ai 架构优化,文档更新
+- Updated dependencies [c9dec38]
+  - @zhin.js/core@1.1.16
+  - @zhin.js/ai@1.1.14
+
 ## 0.1.13
 
 ### Patch Changes
