@@ -1,5 +1,14 @@
 # @zhin.js/cli
 
+## 1.0.70
+
+### Patch Changes
+
+- c9dec38: fix: ai 架构优化,文档更新
+- Updated dependencies [c9dec38]
+  - zhin.js@1.0.74
+  - @zhin.js/logger@0.1.56
+
 ## 1.0.69
 
 ### Patch Changes

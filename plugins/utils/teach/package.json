@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-teach",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "Custom Q&A plugin for Zhin.js — teach your bot to answer questions with exact/regex/fuzzy matching",
   "type": "module",
   "main": "./lib/index.js",

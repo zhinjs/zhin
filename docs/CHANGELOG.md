@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.26
+
+### Patch Changes
+
+- c9dec38: fix: ai 架构优化,文档更新
+
 ## 1.0.25
 
 ### Patch Changes

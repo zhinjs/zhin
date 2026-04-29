@@ -1,5 +1,15 @@
 # @zhin.js/adapter-kook
 
+## 1.0.77
+
+### Patch Changes
+
+- Updated dependencies [c9dec38]
+  - zhin.js@1.0.74
+  - @zhin.js/logger@0.1.56
+  - @zhin.js/console@2.0.17
+  - @zhin.js/http@1.0.67
+
 ## 1.0.76
 
 ### Patch Changes

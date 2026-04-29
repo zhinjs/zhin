@@ -1,5 +1,18 @@
 # zhin.js
 
+## 1.0.74
+
+### Patch Changes
+
+- c9dec38: fix: ai 架构优化,文档更新
+- Updated dependencies [c9dec38]
+  - @zhin.js/kernel@0.0.33
+  - @zhin.js/agent@0.1.14
+  - @zhin.js/core@1.1.16
+  - @zhin.js/ai@1.1.14
+  - @zhin.js/logger@0.1.56
+  - @zhin.js/schema@1.0.56
+
 ## 1.0.73
 
 ### Patch Changes
