@@ -1,5 +1,12 @@
 # @zhin.js/ai
 
+## 1.1.15
+
+### Patch Changes
+
+- efad4ef: fix: 幻觉优化
+  - @zhin.js/logger@0.1.57
+
 ## 1.1.14
 
 ### Patch Changes

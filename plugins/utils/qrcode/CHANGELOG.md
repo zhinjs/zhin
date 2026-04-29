@@ -1,5 +1,11 @@
 # @zhin.js/plugin-qrcode
 
+## 0.0.7
+
+### Patch Changes
+
+- zhin.js@1.0.75
+
 ## 0.0.6
 
 ### Patch Changes
