@@ -77,8 +77,12 @@ function stripHallucinatedToolCalls(text: string): string {
   let cleaned = text;
   // <tool_call …/> or <tool_call …>…</tool_call>
   cleaned = cleaned.replace(/<tool_call\b[\s\S]*?(?:\/>|<\/tool_call>)/gi, '');
+  // <tool_result …/> or <tool_result …>…</tool_result>
+  cleaned = cleaned.replace(/<tool_result\b[\s\S]*?(?:\/>|<\/tool_result>)/gi, '');
   // <function=name>…</function>
   cleaned = cleaned.replace(/<function=[^>]*>[\s\S]*?<\/function>/gi, '');
+  // {tool_result} / {tool_call} bare placeholders
+  cleaned = cleaned.replace(/\{tool_(?:result|call)\}/gi, '');
   // <|plugin|>…<|/plugin|>  (some Chinese models)
   cleaned = cleaned.replace(/<\|plugin\|>[\s\S]*?<\|\/plugin\|>/gi, '');
   // <<<tool_call>>> … <<<end>>> style
