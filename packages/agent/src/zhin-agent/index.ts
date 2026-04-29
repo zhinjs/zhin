@@ -68,6 +68,24 @@ function stripThinkBlocks(text: string): string {
   return text.replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
 }
 
+/**
+ * Strip hallucinated tool-call markup that some models emit as plain text
+ * (e.g. `<tool_call …/>`, `<function=xxx>…</function>`, `<|plugin|>…`).
+ * Only removes the markup; any surrounding real text is preserved.
+ */
+function stripHallucinatedToolCalls(text: string): string {
+  let cleaned = text;
+  // <tool_call …/> or <tool_call …>…</tool_call>
+  cleaned = cleaned.replace(/<tool_call\b[\s\S]*?(?:\/>|<\/tool_call>)/gi, '');
+  // <function=name>…</function>
+  cleaned = cleaned.replace(/<function=[^>]*>[\s\S]*?<\/function>/gi, '');
+  // <|plugin|>…<|/plugin|>  (some Chinese models)
+  cleaned = cleaned.replace(/<\|plugin\|>[\s\S]*?<\|\/plugin\|>/gi, '');
+  // <<<tool_call>>> … <<<end>>> style
+  cleaned = cleaned.replace(/<<<tool_call>>>[\s\S]*?<<<end>>>/gi, '');
+  return cleaned.trim();
+}
+
 // ============================================================================
 // ZhinAgent
 // ============================================================================
@@ -289,7 +307,8 @@ export class ZhinAgent {
       logger.info(`[System Prompt] chat-path: ${personaEnhanced.length} chars${liteModel ? `, model=${liteModel}` : ''}`);
       logger.debug(`[闲聊路径] 过滤=${filterMs}ms, 记忆=${memMs}ms (${historyMessages.length}条), 0 工具`);
       const tLLM = now();
-      const reply = await this.streamChatWithHistory(content, personaEnhanced, historyMessages, onChunk, liteModel);
+      let reply = await this.streamChatWithHistory(content, personaEnhanced, historyMessages, onChunk, liteModel);
+      reply = stripHallucinatedToolCalls(reply);
       const llmMs = (now() - tLLM).toFixed(0);
       logger.info(`[闲聊路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, LLM=${llmMs}ms, 总=${(now() - t0).toFixed(0)}ms`);
       await this.saveToSession(sessionId, content, reply, sceneId);
@@ -393,7 +412,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       } finally {
         agent.dispose();
       }
-      reply = stripThinkBlocks(result.content) || this.fallbackFormat(result.toolCalls);
+      reply = stripHallucinatedToolCalls(stripThinkBlocks(result.content)) || this.fallbackFormat(result.toolCalls);
       logger.info(`[Agent 路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, Agent=${(now() - tAgent).toFixed(0)}ms, 总=${(now() - t0).toFixed(0)}ms`);
     }
 
@@ -508,6 +527,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     }
 
     if (!reply) reply = '抱歉，我无法理解这条消息。';
+    reply = stripHallucinatedToolCalls(reply);
     await this.saveToSession(sessionId, textContent, reply, sceneId);
     return parseOutput(reply);
   }
