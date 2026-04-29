@@ -41,7 +41,7 @@ user-invocable: true
    - 搜索 `eval`, `Function(`, `new Function`, `vm.runIn`
    - 搜索 `child_process`, `exec(`, `execSync`, `spawn`
    - 检查 `packages/agent/src/builtin-tools.ts` 中 bash 命令安全策略
-   - 验证 `packages/agent/src/file-policy.ts` 文件访问控制覆盖率
+   - 验证 `packages/agent/src/security/file-policy.ts` 文件访问控制覆盖率
 
 2. **注入攻击 [严重]**
    - SQL 注入：检查 `basic/database/src/` 中参数化查询
@@ -61,7 +61,7 @@ user-invocable: true
 
 5. **路径遍历 [中]**
    - 检查文件操作是否验证路径边界
-   - 验证 `packages/agent/src/file-policy.ts` 的 `SENSITIVE_FILENAMES` 列表完整性
+   - 验证 `packages/agent/src/security/file-policy.ts` 的 `SENSITIVE_FILENAMES` 列表完整性
 
 ### 第 3 步：运行性能检查
 

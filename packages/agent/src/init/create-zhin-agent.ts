@@ -7,7 +7,7 @@ import { getPlugin, Scheduler, getScheduler, setScheduler, type MessageType, typ
 import { ModelRegistry, computeTierScore } from '@zhin.js/ai';
 import { ZhinAgent } from '../zhin-agent/index.js';
 import { createBuiltinTools } from '../builtin-tools.js';
-import { collectPluginSkillSearchRoots } from '../discovery-utils.js';
+import { collectPluginSkillSearchRoots } from '../discovery/utils.js';
 import { resolveSkillInstructionMaxChars, DEFAULT_CONFIG } from '../zhin-agent/config.js';
 import { PersistentCronEngine, setCronManager } from '../cron-engine.js';
 import { createTaskExecutor } from '../task-executor.js';
@@ -28,8 +28,8 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     const agent = new ZhinAgent(provider, agentConfig);
     refs.zhinAgent = agent;
 
-    const skillRegistry = root.inject('skill');
-    if (skillRegistry) agent.setSkillRegistry(skillRegistry);
+    const orchestrator = root.inject('agent');
+    if (orchestrator) agent.setSkillRegistry(orchestrator.skills);
 
     // Model Registry: discover models and wire to agent
     const dataDir = path.join(process.cwd(), 'data');

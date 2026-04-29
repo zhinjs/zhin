@@ -5,12 +5,14 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { getPlugin,type Tool, type SkillFeature, type AgentPresetFeature } from '@zhin.js/core';
+import { getPlugin } from '@zhin.js/core';
+import type { Tool } from '../orchestrator/types.js';
+import type { AgentOrchestrator } from '../orchestrator/index.js';
 import { createBuiltinTools } from '../builtin-tools.js';
-import { collectPluginSkillSearchRoots } from '../discovery-utils.js';
-import { discoverWorkspaceSkills, loadAlwaysSkillsContent, buildSkillsSummaryXML } from '../discover-skills.js';
-import { discoverWorkspaceAgents } from '../discover-agents.js';
-import { discoverWorkspaceTools, buildToolFromMeta } from '../discover-tools.js';
+import { collectPluginSkillSearchRoots } from '../discovery/utils.js';
+import { discoverWorkspaceSkills, loadAlwaysSkillsContent, buildSkillsSummaryXML } from '../discovery/skills.js';
+import { discoverWorkspaceAgents } from '../discovery/agents.js';
+import { discoverWorkspaceTools, buildToolFromMeta } from '../discovery/tools.js';
 import { resolveSkillInstructionMaxChars, DEFAULT_CONFIG } from '../zhin-agent/config.js';
 import { loadBootstrapFiles, buildContextFiles, buildBootstrapContextSection } from '../bootstrap.js';
 import { triggerAIHook, createAIHookEvent } from '../hooks.js';
@@ -34,8 +36,8 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       skillInstructionMaxChars: resolveSkillInstructionMaxChars(fullCfg, modelName),
       pluginSkillRootsResolver: () => collectPluginSkillSearchRoots(root),
       skillFileLookup: (name: string) => {
-        const skillFeature = root.inject?.('skill') as SkillFeature | undefined;
-        return skillFeature?.get(name)?.filePath;
+        const orchestrator = root.inject?.('agent') as AgentOrchestrator | undefined;
+        return orchestrator?.skills.getByName(name)?.filePath;
       },
     });
     const disposers: (() => void)[] = [];
@@ -70,9 +72,9 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
 
     /** 重新关联所有已注册 Skill 的 tools（适配器 tool 后注册时调用） */
     function relinkSkillTools(): void {
-      const skillFeature = root.inject?.('skill') as SkillFeature | undefined;
-      if (!skillFeature) return;
-      for (const skill of skillFeature.getAll()) {
+      const orchestrator = root.inject?.('agent') as AgentOrchestrator | undefined;
+      if (!orchestrator) return;
+      for (const skill of orchestrator.skills.getAll()) {
         const declaredNames = skillToolNames.get(skill.name);
         if (!declaredNames || declaredNames.length === 0) continue;
         const newTools = resolveSkillTools(declaredNames);
@@ -82,13 +84,11 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       }
     }
     async function syncWorkspaceSkills(): Promise<number> {
-      const skillFeature = root.inject?.('skill') as SkillFeature | undefined;
-      if (!skillFeature) return 0;
-      // 移除之前文件化注册的 skill（所有插件）
-      const pluginNames = new Set<string>([root.name, ...root.children.map(c => c.name)]);
-      for (const pn of pluginNames) {
-        const existing = skillFeature.getByPlugin(pn);
-        for (const s of existing) skillFeature.remove(s);
+      const orchestrator = root.inject?.('agent') as AgentOrchestrator | undefined;
+      if (!orchestrator) return 0;
+      // Remove previously discovered skills
+      for (const existing of orchestrator.skills.getAll()) {
+        orchestrator.skills.remove(existing.name);
       }
       skillToolNames.clear();
       const skills = await discoverWorkspaceSkills(root);
@@ -98,7 +98,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
           const toolNames = s.toolNames || [];
           skillToolNames.set(s.name, toolNames);
           const associatedTools = resolveSkillTools(toolNames);
-          skillFeature.add({
+          orchestrator.addSkill({
             name: s.name,
             description: s.description,
             tools: associatedTools,
@@ -108,7 +108,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
             pluginName: ownerName,
             filePath: s.filePath,
             always: s.always,
-          }, ownerName);
+          }, undefined, ownerName);
           if(associatedTools.length){
             logger.info(`[注册] ${associatedTools.length} 工具${s.platforms?.length ? ', 平台: ' + s.platforms.join(',') : ', 通用'}`);
           }
@@ -159,51 +159,45 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
      * Discover *.agent.md files and register agent presets into AgentPresetFeature.
      */
     async function syncWorkspaceAgents(): Promise<number> {
-      const agentPresetFeature = root.inject?.('agentPreset') as AgentPresetFeature | undefined;
-      if (!agentPresetFeature) return 0;
+      const orchestrator = root.inject?.('agent') as AgentOrchestrator | undefined;
+      if (!orchestrator) return 0;
 
-      // Remove previously discovered presets for all plugins
-      const pluginNames = new Set<string>([root.name, ...root.children.map(c => c.name)]);
-      for (const pn of pluginNames) {
-        const existing = agentPresetFeature.getByPlugin(pn);
-        for (const p of existing) agentPresetFeature.remove(p);
+      // Remove previously discovered presets
+      for (const existing of orchestrator.subagents.getAllPresets()) {
+        orchestrator.subagents.removePreset(existing.name);
       }
 
       const agentMetas = await discoverWorkspaceAgents(root);
       if (agentMetas.length === 0) return 0;
 
       const allRegisteredTools = toolService.getAll();
-      const toolNameIndex = new Map<string, import('@zhin.js/core').Tool>();
+      const toolNameIndex = new Map<string, Tool>();
       for (const t of allRegisteredTools) {
         toolNameIndex.set(t.name, t);
       }
       let added = 0;
       for (const meta of agentMetas) {
-        if (agentPresetFeature.get(meta.name)) continue;
-        const associatedTools: import('@zhin.js/core').Tool[] = [];
+        if (orchestrator.subagents.getPreset(meta.name)) continue;
+        const toolNames: string[] = [];
         for (const toolName of meta.toolNames || []) {
           const tool = toolService.get(toolName) || toolNameIndex.get(toolName);
-          if (tool) associatedTools.push(tool);
+          if (tool) toolNames.push(tool.name);
         }
-        // Read body as systemPrompt
         let systemPrompt: string | undefined;
         try {
           const content = await fs.promises.readFile(meta.filePath, 'utf-8');
           const body = content.replace(/^---\s*\n[\s\S]*?\n---\s*(?:\n|$)/, '').trim();
           if (body) systemPrompt = body;
         } catch { /* ignore */ }
-        agentPresetFeature.add({
+        orchestrator.addAgentPreset({
           name: meta.name,
           description: meta.description,
-          keywords: meta.keywords,
-          tags: meta.tags,
-          tools: associatedTools.length > 0 ? associatedTools : undefined,
-          systemPrompt,
+          systemPrompt: systemPrompt || '',
+          tools: toolNames.length > 0 ? toolNames : undefined,
           model: meta.model,
-          provider: meta.provider,
-          maxIterations: meta.maxIterations,
           filePath: meta.filePath,
-        }, meta.ownerPlugin || root.name);
+          pluginName: meta.ownerPlugin || root.name,
+        }, undefined, meta.ownerPlugin || root.name);
         added++;
       }
       return added;
@@ -213,8 +207,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       // Step 1: discover workspace skills
       try {
         const count = await syncWorkspaceSkills();
-        const skillFeature = root.inject?.('skill') as SkillFeature | undefined;
-        if (count > 0 && skillFeature) {
+        if (count > 0) {
           logger.info(`Registered ${count} workspace skills`);
         }
       } catch (e: any) {
@@ -272,11 +265,11 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       }
 
       // Trigger agent:bootstrap hook
-      const skillFeature2 = root.inject('skill') as SkillFeature | undefined;
+      const orchestrator2 = root.inject?.('agent') as AgentOrchestrator | undefined;
       await triggerAIHook(createAIHookEvent('agent', 'bootstrap', undefined, {
         workspaceDir: process.cwd(),
         toolCount: builtinTools.length,
-        skillCount: skillFeature2?.size ?? 0,
+        skillCount: orchestrator2?.skills.size ?? 0,
         bootstrapFiles: loadedFiles,
       }));
 

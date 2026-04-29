@@ -17,7 +17,9 @@
  */
 
 import { Logger } from '@zhin.js/core';
-import type { Tool, ToolContext, SkillFeature, AIProvider, AgentTool, ChatMessage, ContentPart } from '@zhin.js/core';
+import type { AIProvider, AgentTool, ChatMessage, ContentPart } from '@zhin.js/ai';
+import type { Tool, ToolContext } from '../orchestrator/types.js';
+import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import { createAgent } from '@zhin.js/ai';
 import { SessionManager, createMemorySessionManager } from '@zhin.js/ai';
 import type { ContextManager } from '@zhin.js/ai';
@@ -42,7 +44,7 @@ import {
   DEFAULT_CONFIG,
   KEYWORD_TRIGGERS,
 } from './config.js';
-import { applyExecPolicyToTools } from './exec-policy.js';
+import { applyExecPolicyToTools } from '../security/exec-policy.js';
 import { collectRelevantTools } from './tool-collector.js';
 import {
   buildEnhancedPersona,
@@ -56,7 +58,6 @@ import {
   createSpawnTaskTool,
 } from './builtin-tools.js';
 
-// Re-export public types for backward compat
 export type { ZhinAgentConfig, OnChunkCallback } from './config.js';
 
 const logger = new Logger(null, 'ZhinAgent');
@@ -74,7 +75,7 @@ function stripThinkBlocks(text: string): string {
 export class ZhinAgent {
   private provider: AIProvider;
   private config: Required<ZhinAgentConfig>;
-  private skillRegistry: SkillFeature | null = null;
+  private skillRegistry: SkillRegistry | null = null;
   private sessions: SessionManager;
   private contextManager: ContextManager | null = null;
   private memory: ConversationMemory;
@@ -103,7 +104,7 @@ export class ZhinAgent {
 
   // ── DI setters ──────────────────────────────────────────────────────
 
-  setSkillRegistry(registry: SkillFeature): void {
+  setSkillRegistry(registry: SkillRegistry): void {
     this.skillRegistry = registry;
     logger.debug(`SkillRegistry connected (${registry.size} skills)`);
   }

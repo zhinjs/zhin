@@ -11,26 +11,6 @@
       "development": "./src/index.ts",
       "import": "./lib/index.js"
     },
-    "./core": {
-      "types": "./lib/re-exports/core.d.ts",
-      "development": "./src/re-exports/core.ts",
-      "import": "./lib/re-exports/core.js"
-    },
-    "./agent": {
-      "types": "./lib/re-exports/agent.d.ts",
-      "development": "./src/re-exports/agent.ts",
-      "import": "./lib/re-exports/agent.js"
-    },
-    "./ai": {
-      "types": "./lib/re-exports/ai.d.ts",
-      "development": "./src/re-exports/ai.ts",
-      "import": "./lib/re-exports/ai.js"
-    },
-    "./kernel": {
-      "types": "./lib/re-exports/kernel.d.ts",
-      "development": "./src/re-exports/kernel.ts",
-      "import": "./lib/re-exports/kernel.js"
-    },
     "./jsx": {
       "types": "./lib/jsx.d.ts",
       "development": "./src/jsx.ts",

@@ -6,6 +6,26 @@ bots:
   - context: icqq
     name: "8596238"
     scope: icqqjs
+  - context: qq
+    name: zhin2号
+    appid: ${QQ_APPID}
+    secret: ${QQ_SECRET}
+    mode: websocket
+    sandbox: true
+    maxRetry: 3
+    timeout: 10000
+    heartbeatInterval: 30000
+    maxRetries: 3
+    reconnectDelay: 5000
+    removeAt: true
+    intents:
+      - GROUP_AT_MESSAGE_CREATE
+      - C2C_MESSAGE_CREATE
+      - PUBLIC_GUILD_MESSAGES
+      - DIRECT_MESSAGE
+      - GUILD_MESSAGE_REACTIONS
+      - GUILDS
+      - GUILD_MEMBERS
   - context: github
     name: zhin-github
     app_id: ${GITHUB_APP_ID}
@@ -43,7 +63,6 @@ plugins:
   - "@zhin.js/adapter-milky"
   - "@zhin.js/adapter-satori"
   - "@zhin.js/adapter-onebot11"
-  - "@zhin.js/adapter-napcat"
   - "@zhin.js/adapter-onebot12"
   - "@zhin.js/adapter-qq"
   - html-test

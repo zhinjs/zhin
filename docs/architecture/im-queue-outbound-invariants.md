@@ -23,5 +23,5 @@
 
 ## 工具 / 策略（Agent 相关）
 
-1. 执行 shell 须经过 **`checkExecPolicy`**（`packages/agent/src/zhin-agent/exec-policy.ts`）与工具层封装；见 harness 测试 `packages/agent/tests/harness-inbound-tool-boundary.test.ts`。
-2. 读文件：`read_file` 等工具组合使用 **`isBlockedDevicePath`**（设备挂起路径）与 **`checkFileAccess`**（敏感凭据路径）；见 `packages/agent/src/file-policy.ts`、`builtin-tools.ts`。
+1. 执行 shell 须经过 **`checkExecPolicy`**（`packages/agent/src/security/exec-policy.ts`）与工具层封装；见 harness 测试 `packages/agent/tests/harness-inbound-tool-boundary.test.ts`。
+2. 读文件：`read_file` 等工具组合使用 **`isBlockedDevicePath`**（设备挂起路径）与 **`checkFileAccess`**（敏感凭据路径）；见 `packages/agent/src/security/file-policy.ts`、`builtin-tools.ts`。

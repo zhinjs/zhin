@@ -3,9 +3,10 @@
  */
 
 import { Logger } from '@zhin.js/core';
-import type { Tool, ToolContext, SkillFeature } from '@zhin.js/core';
-import type { AgentTool } from '@zhin.js/core';
+import type { AgentTool } from '@zhin.js/ai';
 import { CachedToolFilter } from '@zhin.js/ai';
+import type { Tool, ToolContext } from '../orchestrator/types.js';
+import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { ZhinAgentConfig } from './config.js';
 import { PERM_MAP } from './config.js';
 
@@ -86,7 +87,7 @@ export function toAgentTool(tool: Tool, context?: ToolContext): AgentTool {
 
 export interface CollectToolsContext {
   config: Required<ZhinAgentConfig>;
-  skillRegistry: SkillFeature | null;
+  skillRegistry: SkillRegistry | null;
   externalRegistered: Map<string, AgentTool>;
 }
 

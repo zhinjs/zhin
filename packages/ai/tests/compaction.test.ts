@@ -35,7 +35,7 @@ import {
   DEFAULT_CONTEXT_TOKENS,
   CONTEXT_WINDOW_HARD_MIN_TOKENS,
   CONTEXT_WINDOW_WARN_BELOW_TOKENS,
-} from '../src/compaction.js';
+} from '../src/compaction/index.js';
 import type { ChatMessage } from '../src/types.js';
 
 const createMsg = (role: 'user' | 'assistant' | 'system', content: string): ChatMessage => ({

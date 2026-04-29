@@ -5,12 +5,13 @@
  */
 
 import type { AIService } from '../service.js';
+import type { AgentOrchestrator } from '../orchestrator/index.js';
 
-// Re-export the augmentation so it is applied when this file is imported
 declare module '@zhin.js/core' {
   namespace Plugin {
     interface Contexts {
       ai: AIService;
+      agent: AgentOrchestrator;
     }
   }
 }

@@ -22,7 +22,7 @@ vi.mock('@zhin.js/logger', async (importOriginal) => {
   };
 });
 
-import { CachedToolFilter, computeToolSetHash } from '../src/tool-search-cache.js';
+import { CachedToolFilter, computeToolSetHash } from '../src/agent/tool-filter.js';
 import type { AgentTool } from '../src/types.js';
 
 const makeTool = (name: string, description: string, keywords?: string[]): AgentTool => ({

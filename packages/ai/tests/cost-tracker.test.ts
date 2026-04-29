@@ -11,7 +11,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 
-import { CostTracker } from '../src/cost-tracker.js';
+import { CostTracker } from '../src/agent/cost-tracker.js';
 import type { Usage } from '../src/types.js';
 
 const mockUsage = (prompt: number, completion: number): Usage => ({

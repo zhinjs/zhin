@@ -76,7 +76,7 @@
 - [ ] **路径遍历**
   - 搜索文件读写操作中的用户输入
   - 验证：路径经过 `path.resolve` + 边界检查
-  - 重点：`packages/agent/src/file-policy.ts` 黑名单完整性
+  - 重点：`packages/agent/src/security/file-policy.ts` 黑名单完整性
 
 - [ ] **文件上传**
   - 检查是否有文件上传功能

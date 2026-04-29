@@ -9,8 +9,7 @@
  * 注意：此测试需要网络访问，在 sandbox 中会自动跳过
  */
 import { describe, it, expect, beforeAll } from 'vitest';
-import { OllamaProvider } from '../../src/ai/providers/ollama.js';
-import type { ChatMessage } from '@zhin.js/core';
+import { OllamaProvider, type ChatMessage } from '@zhin.js/ai';
 
 // Ollama 配置
 const OLLAMA_CONFIG = {

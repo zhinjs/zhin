@@ -6,9 +6,7 @@
 import { AsyncLocalStorage } from "async_hooks";
 import { EventEmitter } from "events";
 import { createRequire } from "module";
-import type { Database, Definition } from "@zhin.js/database";
-import { Schema } from "@zhin.js/schema";
-import type { Models, RegisteredAdapters, PluginManifest } from "./types.js";
+import type { PluginManifest } from "./types.js";
 import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -644,7 +642,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
    * 导入插件
    */
   async import(entry: string,t?:number): Promise<Plugin> {
-    if (!entry) throw new Error(`Plugin entry not found: ${entry}`);
+    if (!entry) throw new Error(`import plugin failed: entry is empty`);
     const resolved = resolveEntry(path.isAbsolute(entry) ?
       entry :
       path.resolve(path.dirname(this.filePath), entry)) || entry;
@@ -654,14 +652,13 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     } catch {
       realPath = resolved;
     }
-
     // 避免重复加载同一路径的插件
     const normalized = realPath.replace(/\?t=\d+$/, '').replace(/\\/g, '/');
     const existing = this.children.find(child => 
       child.filePath.replace(/\?t=\d+$/, '').replace(/\\/g, '/') === normalized
     );
     if (existing) {
-      this.logger.debug(`Plugin "${entry}" already loaded, skipping...`);
+      this.logger.warn(`Plugin "${entry}" already loaded, skipping...`);
       if (this.started && !existing.started) await existing.start(t);
       return existing;
     }

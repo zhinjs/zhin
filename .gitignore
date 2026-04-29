@@ -102,3 +102,6 @@ apps/**/config.*
 !apps/**/env.example 
 
 **/dist/**
+
+# Heap snapshots (large binary, never commit)
+*.heapsnapshot

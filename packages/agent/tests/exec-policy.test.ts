@@ -21,7 +21,7 @@ import {
   resolveExecAllowlist,
   checkExecPolicy,
   EXEC_PRESETS,
-} from '../src/zhin-agent/exec-policy.js';
+} from '../src/security/exec-policy.js';
 import type { ZhinAgentConfig } from '../src/zhin-agent/config.js';
 
 // ── Helpers ──

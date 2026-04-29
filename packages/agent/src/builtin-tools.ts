@@ -9,7 +9,7 @@
  * 技能:      activate_skill, install_skill
  * 交互:      ask_user（基于 Prompt 类的用户确认/提问工具）
  *
- * 发现逻辑已拆分到 discover-skills.ts / discover-agents.ts / discover-tools.ts
+ * 发现逻辑已拆分到 discovery/skills.ts、agents.ts、tools.ts
  */
 
 import * as fs from 'fs';
@@ -22,11 +22,11 @@ import {
   assertFileAccess, checkBashCommandSafety, shellEscape,
   isBlockedDevicePath, MAX_READ_FILE_SIZE, MAX_EDIT_FILE_SIZE,
   classifyBashCommand, getFileMtime, isFileStale,
-} from './file-policy.js';
+} from './security/file-policy.js';
 import {
   errMsg, expandHome, getDataDir, mergeSkillDirsWithResolver, nodeErrToFileMessage,
-} from './discovery-utils.js';
-import { checkSkillDeps, extractSkillInstructions } from './discover-skills.js';
+} from './discovery/utils.js';
+import { checkSkillDeps, extractSkillInstructions } from './discovery/skills.js';
 
 const execAsync = promisify(exec);
 const logger = new Logger(null, 'builtin-tools');

@@ -17,11 +17,12 @@
 
 ## 架构分层（速览）
 
-由下至上：**`basic/`**（日志、DB、schema、CLI）→ **`@zhin.js/kernel`**（PluginBase、Feature、调度与错误体系，**无 IM 概念**）→ **`@zhin.js/ai`**（Provider、Agent、ModelRegistry、Memory、CostTracker、FileStateCache、MicroCompact、ToolSearchCache，**无 IM 概念**）→ **`@zhin.js/core`**（Plugin、Adapter、Bot、MessageDispatcher、命令/中间件/工具/技能）→ **`@zhin.js/agent`**（ZhinAgent、AIService、ExecPolicy-6层安全、FilePolicy、PromptBuilder-10段架构、模型自动发现与降级、IM 侧编排）→ **`zhin.js` 主包**（配置加载、插件发现、统一 re-export）。
+由下至上：**`basic/`**（日志、DB、schema、CLI）→ **`@zhin.js/kernel`**（PluginBase、Feature、调度与错误体系，**无 IM 概念**）→ **`@zhin.js/ai`**（Provider、Agent、ModelRegistry，按子模块组织：`agent/`（Agent 引擎 + CostTracker + ToolFilter）、`memory/`（Session + Context + ConversationMemory）、`compaction/`（分阶段摘要 + MicroCompact + token 估算），**无 IM 概念**）→ **`@zhin.js/core`**（Plugin、Adapter、Bot、MessageDispatcher、命令/中间件/工具/技能；AI Provider 从 `@zhin.js/ai` 选择性 re-export）→ **`@zhin.js/agent`**（AgentOrchestrator 五类注册表、ZhinAgent、AIService、PromptBuilder-10段架构，按子模块组织：`orchestrator/`（ToolRegistry + SkillRegistry + SubAgentRegistry + McpRegistry + HookRegistry）、`discovery/`（tools/skills/agents 文件化发现）、`security/`（ExecPolicy-6层安全 + FilePolicy）、`mcp-client/`（MCP 连接管理）、`defaults/`（默认工具/子代理/Hook 注册））→ **`zhin.js` 主包**（配置加载、插件发现、项目根锁定、直接 re-export `@zhin.js/core` + `@zhin.js/agent`）。
 
-- **改「消息怎么进、命令怎么路由、AI 怎么接」**：优先 `packages/core` + `packages/agent`。  
-- **改「纯 LLM/记忆/Provider」**：优先 `packages/ai`。  
+- **改「消息怎么进、命令怎么路由、AI 怎么接」**：优先 `packages/core` + `packages/agent`。
+- **改「纯 LLM/记忆/Provider」**：优先 `packages/ai`（`agent/`、`memory/`、`compaction/` 子目录）。
 - **改「插件运行时、与 IM 无关的 DI/生命周期」**：优先 `packages/kernel`。
+- **改「AI 编排注册、工具/技能/MCP 管理」**：优先 `packages/agent/src/orchestrator/`。
 
 ---
 
@@ -33,13 +34,85 @@
 | 适配器、收发消息、渲染发送 | `packages/core/src/adapter.ts` |
 | Bot 抽象 | `packages/core/src/bot.ts` |
 | 消息三阶段调度（Guardrail / Route / Handle） | `packages/core/src/built/dispatcher.ts` |
-| Agent 编排、与 core 的衔接 | `packages/agent/`（见各子模块） |
-| Bash 执行安全（6 层纵深防御） | `packages/agent/src/zhin-agent/exec-policy.ts` |
-| 文件访问安全（路径检查、设备拦截、命令分类） | `packages/agent/src/file-policy.ts` |
+| **Agent 编排中枢**（五类注册表） | `packages/agent/src/orchestrator/` |
+| 工具注册表（权限、过滤、ZhinTool 契约） | `packages/agent/src/orchestrator/tool-registry.ts` |
+| 技能 / 子代理 / MCP / Hook 注册表 | `packages/agent/src/orchestrator/{skill,subagent,mcp,hook}-registry.ts` |
+| 文件化发现（tools/skills/agents） | `packages/agent/src/discovery/` |
+| Bash 执行安全（6 层纵深防御） | `packages/agent/src/security/exec-policy.ts` |
+| 文件访问安全（路径检查、设备拦截、命令分类） | `packages/agent/src/security/file-policy.ts` |
+| MCP 客户端连接管理 | `packages/agent/src/mcp-client/` |
 | 系统提示词构建（10 段结构化架构） | `packages/agent/src/zhin-agent/prompt.ts` |
 | AI 内置工具（bash、read_file、ask_user 等） | `packages/agent/src/builtin-tools.ts` |
+| 适配器群管工具自动生成 | `packages/agent/src/common-adapter-tools.ts` |
+| Agent 引擎（无 IM 的工具循环） | `packages/ai/src/agent/` |
+| 会话与上下文记忆 | `packages/ai/src/memory/` |
+| 上下文压缩与自动摘要 | `packages/ai/src/compaction/` |
 | 模型自动发现、Tier 评分与降级 | `packages/ai/src/model-registry.ts` |
 | 类型与对外协议补充 | `packages/core/src/types.ts` |
+| 项目根锁定（防 chdir 导致路径偏移） | `packages/zhin/src/setup/project-root.ts` |
+
+### `@zhin.js/agent` 子模块结构
+
+```
+packages/agent/src/
+├── orchestrator/          # AgentOrchestrator + 五类 ResourceRegistry
+│   ├── index.ts           #   聚合入口
+│   ├── types.ts           #   Tool/Skill/SubAgent/MCP/Hook 类型
+│   ├── resource-registry.ts #  通用注册表基类（公共 vs agentId 作用域）
+│   ├── tool-registry.ts   #   IM 工具权限、ZhinTool 契约
+│   ├── skill-registry.ts  #   Skill 注册与评分搜索
+│   ├── subagent-registry.ts # 子代理 + AgentPreset
+│   ├── mcp-registry.ts    #   MCP 服务端条目与连接聚合
+│   └── hook-registry.ts   #   AI 生命周期 Hook
+├── discovery/             # 文件化能力发现
+│   ├── tools.ts           #   *.tool.md 扫描与构建
+│   ├── skills.ts          #   SKILL.md 扫描与依赖检查
+│   ├── agents.ts          #   *.agent.md 预设发现
+│   └── utils.ts           #   路径、目录列表工具
+├── security/              # 安全策略（从 zhin-agent/ 与根迁出）
+│   ├── exec-policy.ts     #   bash 多段纵深校验
+│   └── file-policy.ts     #   文件/设备/命令安全分类
+├── mcp-client/            # MCP 客户端
+│   ├── connection.ts      #   单连接生命周期
+│   ├── bridge.ts          #   MCP→AgentTool/Resource 转换
+│   └── index.ts           #   McpClientManager
+├── defaults/              # 默认资源注册
+│   ├── tools.ts           #   内置工具 → orchestrator
+│   ├── subagents.ts       #   内置子代理
+│   └── hooks.ts           #   默认 Hook
+├── init/                  # 模块初始化
+│   ├── register-orchestrator.ts  # provide('agent', orchestrator)
+│   ├── register-builtin-tools.ts
+│   └── create-zhin-agent.ts
+├── zhin-agent/            # ZhinAgent 核心
+│   ├── index.ts           #   ZhinAgent 类
+│   ├── prompt.ts          #   10 段系统提示词
+│   └── tool-collector.ts  #   工具收集与粗筛
+├── builtin-tools.ts       # 全部内置工具定义
+├── common-adapter-tools.ts # 适配器群管工具生成
+└── subagent.ts            # SubagentManager
+```
+
+### `@zhin.js/ai` 子模块结构
+
+```
+packages/ai/src/
+├── agent/                 # Agent 引擎（无 IM）
+│   ├── index.ts           #   Agent 类、createAgent
+│   ├── cost-tracker.ts    #   按模型的 token/USD 成本追踪
+│   └── tool-filter.ts     #   TF-IDF 工具相关性过滤与缓存
+├── memory/                # 会话与上下文管理
+│   ├── session.ts         #   SessionManager（内存/DB 双实现）
+│   ├── context-manager.ts #   按场景落库、历史与总结
+│   └── conversation-memory.ts # 话题切换 + 链式摘要长期记忆
+├── compaction/            # 上下文压缩
+│   ├── compaction.ts      #   分阶段摘要、上下文窗口守护、自动压缩
+│   ├── micro-compact.ts   #   旧工具结果轻量占位清理
+│   └── token-counter.ts   #   极简 token 估算
+├── providers/             # LLM Provider 实现
+├── model-registry.ts      # 模型发现/Tier/降级
+└── types.ts               # AI 类型定义
+```
 
 ---
 

@@ -71,7 +71,7 @@ graph TB
 
 ### 基础层 (`basic/`)
 
-框架无关的基础设施，所有上层包共享的底层能力。各包均以 git submodule 维护于 `github.com/zhinjs/<name>`。
+框架无关的基础设施，所有上层包共享的底层能力。各包均在 monorepo 内作为普通路径管理（不再使用 git submodule）。
 
 | 包名 | 路径 | 说明 |
 |------|------|------|
@@ -95,21 +95,39 @@ graph TB
 
 ### @zhin.js/ai（AI 引擎层）
 
-**与 IM 无关的通用 AI 引擎**，可独立用于任何需要 LLM 集成的应用。
+**与 IM 无关的通用 AI 引擎**，可独立用于任何需要 LLM 集成的应用。按三个子模块组织：
+
+#### `agent/` — Agent 引擎
+
+| 模块 | 说明 |
+|------|------|
+| `Agent` | 无状态 Agent 引擎，执行多轮 tool-calling 循环 |
+| `CostTracker` | Token 用量与成本追踪，支持按模型/Provider 统计（Claude Code 风格） |
+| `ToolFilter` / `CachedToolFilter` | TF-IDF 工具相关性过滤与带缓存的过滤器 |
+
+#### `memory/` — 会话与上下文
+
+| 模块 | 说明 |
+|------|------|
+| `SessionManager` | 会话管理（内存 / 数据库持久化），统一工厂 `createSessionManager` |
+| `ContextManager` | 按场景落库、读历史与总结的多平台上下文管理 |
+| `ConversationMemory` | 话题切换 + 链式摘要的长期记忆 |
+
+#### `compaction/` — 上下文压缩
+
+| 模块 | 说明 |
+|------|------|
+| `compaction` | 分阶段摘要、上下文窗口守护、自动压缩管线 |
+| `MicroCompact` | 旧工具结果轻量占位清理（主压缩前） |
+| `token-counter` | 极简 token 估算（字符/4） |
+
+#### 顶层模块
 
 | 模块 | 说明 |
 |------|------|
 | `AIProvider` | LLM 提供者统一接口（OpenAI、Anthropic、Ollama、DeepSeek、Moonshot、Zhipu 等） |
-| `Agent` | 无状态 Agent 引擎，执行多轮 tool-calling 循环 |
 | `ModelRegistry` | 模型自动发现、Tier 评分、缓存与智能选择（支持自动降级） |
-| `SessionManager` | 会话管理（内存 / 数据库持久化） |
-| `ContextManager` | 上下文管理，消息记录与摘要 |
-| `ConversationMemory` | 短期滑动窗口 + 长期链式摘要 |
-| `compaction` | 上下文窗口管理，token 估算、分阶段摘要、历史修剪 |
-| `CostTracker` | Token 用量与成本追踪，支持按模型/Provider 统计 |
 | `FileStateCache` | 文件状态缓存，减少重复磁盘读取 |
-| `MicroCompact` | 微压缩引擎，增量式上下文摘要 |
-| `ToolSearchCache` | 工具搜索结果缓存，加速重复查找 |
 | `output` | AI 文本解析为结构化 `OutputElement[]`（文本/图片/音频/卡片等） |
 | `RateLimiter` | 请求速率限制 |
 | `ToneDetector` | 消息情绪感知 |
@@ -117,7 +135,7 @@ graph TB
 
 ### @zhin.js/core（IM 层）
 
-**IM 聊天机器人的核心框架**，在 kernel 基础上添加 IM 领域概念。
+**IM 聊天机器人的核心框架**，在 kernel 基础上添加 IM 领域概念。不再自带 AI Provider 实现（已迁至 `@zhin.js/ai`），而是从 `@zhin.js/ai` 选择性 re-export。
 
 | 模块 | 说明 |
 |------|------|
@@ -127,24 +145,61 @@ graph TB
 | `MessageDispatcher` | 消息三阶段调度：Guardrail → Route → Handle |
 | `Feature` 子类 | `CommandFeature`、`ToolFeature`、`SkillFeature`、`CronFeature`、`DatabaseFeature`、`ComponentFeature`、`PermissionFeature`、`ConfigFeature` |
 | 消息类型 | `Message`、`MessageElement`、`segment`（消息段工具） |
+| AI re-export | 从 `@zhin.js/ai` 选择性导出 Provider、Agent、Session、Memory、Compaction 等 |
 
 ### @zhin.js/agent（Agent 编排层）
 
-**IM 场景下的 AI Agent 编排**，在 `@zhin.js/ai` 基础上添加 IM 集成逻辑。
+**IM 场景下的 AI Agent 编排**，在 `@zhin.js/ai` 基础上添加 IM 集成逻辑。按五个子模块组织：
+
+#### `orchestrator/` — 中央编排
+
+| 模块 | 说明 |
+|------|------|
+| `AgentOrchestrator` | 聚合五类注册表，`provide('agent')` 对外暴露，支持 common vs agentId 作用域 |
+| `ToolRegistry` | IM 工具权限（`ToolPermissionLevel`）、`ZhinTool` 契约、与 `@zhin.js/ai` 过滤集成 |
+| `SkillRegistry` | Skill 注册、按名索引、评分搜索 |
+| `SubAgentRegistry` | 子代理定义 + AgentPreset 并存注册 |
+| `McpRegistry` | MCP 服务端条目注册与连接/工具/资源聚合 |
+| `HookRegistry` | AI 生命周期 Hook（错误隔离触发） |
+| `ResourceRegistry<T>` | 通用注册表基类（公共 vs 专有、增删与监听） |
+
+#### `discovery/` — 文件化能力发现
+
+| 模块 | 说明 |
+|------|------|
+| `tools.ts` | 扫描 `*.tool.md`，解析 frontmatter 并构建可注册工具 |
+| `skills.ts` | 扫描 `SKILL.md`，依赖检查、常驻技能与摘要 XML |
+| `agents.ts` | 扫描 `*.agent.md` 预设元数据 |
+| `utils.ts` | 发现路径优先级、目录列表等共享工具 |
+
+#### `security/` — 安全策略
+
+| 模块 | 说明 |
+|------|------|
+| `ExecPolicy` | Bash 执行安全（6 层纵深防御：黑名单、环境变量剥离、wrapper 剥离、复合命令拆分、只读放行、审批集成） |
+| `FilePolicy` | 文件访问安全（路径检查、设备路径拦截、命令读写分类） |
+
+#### `mcp-client/` — MCP 客户端
+
+| 模块 | 说明 |
+|------|------|
+| `McpClientManager` | 多连接管理，与编排层注册/断开配合 |
+| `McpClientConnection` | 单个 MCP Server 连接生命周期与状态 |
+| `bridge` | MCP 能力到 `AgentTool` / orchestrator 资源的转换 |
+
+#### 顶层模块
 
 | 模块 | 说明 |
 |------|------|
 | `ZhinAgent` | AI 全局大脑，编排工具选择、多轮对话、引导文件注入 |
 | `AIService` | AI 服务管理器，Provider 注册与路由 |
 | `SubagentManager` | 后台子任务管理 |
-| `FollowUpManager` | 定时跟进提醒 |
 | `UserProfileStore` | 用户画像管理（跨会话个性化） |
 | `PersistentCronEngine` | AI 感知的持久化 cron 引擎 |
 | `BootstrapLoader` | 引导文件加载（SOUL.md / AGENTS.md / TOOLS.md） |
-| `ExecPolicy` | Bash 执行安全（6 层纵深防御：黑名单、环境变量剥离、wrapper 剥离、复合命令拆分、只读放行、审批集成） |
-| `FilePolicy` | 文件访问安全（路径检查、设备路径拦截、命令读写分类） |
 | `PromptBuilder` | 系统提示词构建器（10 段结构化架构） |
-| Hook 系统 | `message:received`、`tool:call`、`session:compact` 等事件钩子 |
+| `defaults/` | 默认工具/子代理/Hook 注册（`registerDefaultTools` 等） |
+| `common-adapter-tools` | 适配器群管方法 → AI 工具自动生成 |
 | 内置工具 | `bash`、`read_file`、`write_file`、`ask_user`、`web_search`、`chat_history` 等 |
 
 ### zhin.js（应用层）
@@ -154,11 +209,12 @@ graph TB
 | 模块 | 说明 |
 |------|------|
 | 配置加载 | 从 `zhin.config.yml` / `.ts` 加载配置 |
-| 插件加载 | 自动发现和加载插件（支持热重载） |
+| 项目根锁定 | `setZhinProjectRoot` 防止后续 chdir 导致插件路径偏移 |
+| 插件加载 | 基于锁定的项目根自动发现和加载插件（支持热重载） |
 | Bot 连接 | 按配置连接各平台适配器的 Bot |
 | AI 注册 | 初始化 AI Provider、Agent、SessionManager |
 | 信号处理 | 优雅关闭（SIGINT/SIGTERM） |
-| 重新导出 | 导出 `@zhin.js/core`、`@zhin.js/agent`、`@zhin.js/kernel` 的全部公开 API |
+| 重新导出 | 直接 `export * from '@zhin.js/core'`，选择性 re-export `@zhin.js/agent`（不再使用 `re-exports/` 垫片文件） |
 
 ## 依赖关系
 

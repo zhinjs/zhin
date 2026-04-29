@@ -43,8 +43,8 @@ pnpm install
 
 - `basic/*` — 基础能力（CLI、数据库、日志、schema 等）
 - `packages/*` — 框架核心与运行时（`kernel`、`core`、`zhin`、`agent`、`client`、`ai` 等）
-  - `ai`：通用 AI 引擎（Provider、Agent、Memory、CostTracker、FileStateCache、MicroCompact、ToolSearchCache）
-  - `agent`：IM Agent 编排（ZhinAgent、ExecPolicy、FilePolicy、PromptBuilder、内置工具）
+  - `ai`：通用 AI 引擎，按子模块组织——`agent/`（Agent 引擎 + CostTracker + ToolFilter）、`memory/`（Session + Context + ConversationMemory）、`compaction/`（分阶段摘要 + MicroCompact + token 估算）
+  - `agent`：IM Agent 编排，按子模块组织——`orchestrator/`（五类注册表）、`discovery/`（文件化发现）、`security/`（ExecPolicy + FilePolicy）、`mcp-client/`（MCP 连接管理）、`defaults/`（默认资源注册）
 - `plugins/adapters/*` — 平台适配器
 - `plugins/services/*` — 服务类插件（如 HTTP、Console）
 - `plugins/features/*` — 特性类插件

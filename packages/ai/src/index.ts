@@ -52,9 +52,9 @@ export type {
 } from './providers/index.js';
 
 // ── Agent Engine ──
-export { Agent, createAgent, formatToolTitle } from './agent.js';
-export type { AgentState, AgentEvents } from './agent.js';
-export { filterTools, tokenize } from './tool-filter.js';
+export { Agent, createAgent, formatToolTitle } from './agent/index.js';
+export type { AgentState, AgentEvents } from './agent/index.js';
+export { filterTools, tokenize } from './agent/tool-filter.js';
 
 // ── Session Management ──
 export {
@@ -65,8 +65,8 @@ export {
   createMemorySessionManager,
   createDatabaseSessionManager,
   AI_SESSION_MODEL,
-} from './session.js';
-export type { ISessionManager } from './session.js';
+} from './memory/session.js';
+export type { ISessionManager } from './memory/session.js';
 
 // ── Context & Compaction ──
 export {
@@ -94,7 +94,7 @@ export {
   createAutoCompactTracking,
   shouldAutoCompact,
   autoCompactIfNeeded,
-} from './compaction.js';
+} from './compaction/index.js';
 export type {
   ContextWindowSource,
   ContextWindowInfo,
@@ -102,7 +102,7 @@ export type {
   PruneResult,
   AutoCompactTrackingState,
   AutoCompactResult,
-} from './compaction.js';
+} from './compaction/index.js';
 
 // ── Micro-Compact ──
 export {
@@ -110,23 +110,23 @@ export {
   COMPACTABLE_TOOLS,
   CLEARED_MESSAGE,
   DEFAULT_KEEP_RECENT_TOOL_RESULTS,
-} from './micro-compact.js';
+} from './compaction/index.js';
 export type {
   MicroCompactOptions,
   MicroCompactResult,
-} from './micro-compact.js';
+} from './compaction/index.js';
 
 // ── Cost Tracker ──
-export { CostTracker } from './cost-tracker.js';
+export { CostTracker } from './agent/cost-tracker.js';
 export type {
   ModelUsage,
   ModelPricing,
   CostSnapshot,
   CostUpdateEvent,
-} from './cost-tracker.js';
+} from './agent/cost-tracker.js';
 
 // ── Tool Search Cache ──
-export { CachedToolFilter, computeToolSetHash } from './tool-search-cache.js';
+export { CachedToolFilter, computeToolSetHash } from './agent/tool-filter.js';
 
 // ── File State Cache ──
 export { FileStateCache, DEFAULT_MAX_ENTRIES, DEFAULT_MAX_SIZE_BYTES } from './file-state-cache.js';
@@ -138,21 +138,21 @@ export {
   createContextManager,
   CHAT_MESSAGE_MODEL,
   CONTEXT_SUMMARY_MODEL,
-} from './context-manager.js';
+} from './memory/context-manager.js';
 export type {
   MessageRecord,
   SummaryRecord,
   ContextConfig,
   SceneContext,
-} from './context-manager.js';
+} from './memory/context-manager.js';
 
 // ── Conversation Memory ──
 export {
   ConversationMemory,
   AI_MESSAGE_MODEL,
   AI_SUMMARY_MODEL,
-} from './conversation-memory.js';
-export type { ConversationMemoryConfig } from './conversation-memory.js';
+} from './memory/conversation-memory.js';
+export type { ConversationMemoryConfig } from './memory/conversation-memory.js';
 
 // ── Output Parsing ──
 export { parseOutput, renderToPlainText, renderToSatori } from './output.js';

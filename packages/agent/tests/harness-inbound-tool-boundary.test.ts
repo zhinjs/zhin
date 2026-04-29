@@ -3,10 +3,10 @@
  * 模拟「Agent 侧将执行的危险命令 / 敏感读路径」在出工具前被策略拦截。
  */
 import { describe, it, expect } from 'vitest';
-import { checkExecPolicy } from '../src/zhin-agent/exec-policy.js';
+import { checkExecPolicy } from '../src/security/exec-policy.js';
 import type { ZhinAgentConfig } from '../src/zhin-agent/config.js';
 import { DEFAULT_CONFIG } from '../src/zhin-agent/config.js';
-import { checkFileAccess, isBlockedDevicePath } from '../src/file-policy.js';
+import { checkFileAccess, isBlockedDevicePath } from '../src/security/file-policy.js';
 import { describePromptSectionsForDebug } from '../src/zhin-agent/prompt.js';
 import type { RichSystemPromptContext } from '../src/zhin-agent/prompt.js';
 

@@ -4,8 +4,6 @@ import {
   ComponentFeature,
   CronFeature,
   PermissionFeature,
-  SkillFeature,
-  AgentPresetFeature,
   SchemaFeature,
   MessageFilterFeature,
   createMessageDispatcher,
@@ -67,9 +65,6 @@ export function registerCoreServices(
     });
   });
 
-  provide(new SkillFeature());
-  /** 工作区 `agents/*.agent.md` 发现与注册依赖此上下文（见 @zhin.js/agent register-builtin-tools syncWorkspaceAgents） */
-  provide(new AgentPresetFeature());
   provide(new SchemaFeature());
 
   // 登录辅助：生产者-消费者，Web/CLI 均可消费，未消费刷新后可继续

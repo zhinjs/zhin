@@ -3,7 +3,7 @@ import {
   checkFileAccess, assertFileAccess, checkBashCommandSafety, shellEscape,
   isBlockedDevicePath, classifyBashCommand, isFileStale,
   MAX_READ_FILE_SIZE, MAX_EDIT_FILE_SIZE,
-} from '../src/file-policy.js';
+} from '../src/security/file-policy.js';
 
 describe('file-policy', () => {
   // ── checkFileAccess ──

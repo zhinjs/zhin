@@ -1,6 +1,8 @@
+import * as path from 'node:path';
 import { ConfigLoader, ConfigFeature } from '@zhin.js/core';
 import { LogLevel } from '@zhin.js/logger';
 import type { AppConfig } from '../types.js';
+import { setZhinProjectRoot } from './project-root.js';
 
 const defaultConfig = {
   log_level: LogLevel.INFO,
@@ -19,6 +21,9 @@ const defaultConfig = {
  */
 export function loadConfig(): { configFeature: ConfigFeature; appConfig: AppConfig } {
   const configFile = ConfigLoader.discover('zhin.config') || 'zhin.config.yml';
+  const resolvedConfigPath = path.resolve(process.cwd(), configFile);
+  const envRoot = process.env.ZHIN_PROJECT_ROOT?.trim();
+  setZhinProjectRoot(envRoot ? path.resolve(envRoot) : path.dirname(resolvedConfigPath));
   const configFeature = new ConfigFeature();
   configFeature.load(configFile, defaultConfig);
   const appConfig = configFeature.get<AppConfig>(configFile);

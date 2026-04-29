@@ -21,24 +21,61 @@ export * from './built/adapter-process.js'
 export * from './built/component.js'
 export * from './built/database.js'
 export * from './built/message-filter.js'
-// Tool Service (纯工具，无副作用)
+// Tool/Skill/AgentPreset Features (backward-compat; canonical source is @zhin.js/agent)
 export * from './built/tool.js'
+export * from './built/skill.js'
+export * from './built/agent-preset.js'
+export * from './built/common-adapter-tools.js'
 // AI Trigger Service (纯工具，无副作用)
 export * from './built/ai-trigger.js'
 // MessageDispatcher (消息调度器)
 export * from './built/dispatcher.js'
-// Skill 系统 (AI 能力描述)
-export * from './built/skill.js'
-// Agent 预设 (插件声明的专长 Agent)
-export * from './built/agent-preset.js'
 // Schema 注册表 (插件配置声明)
 export * from './built/schema-feature.js'
-// Common adapter tool factories (shared across adapters)
-export * from './built/common-adapter-tools.js'
 // Login assist (producer-consumer for QR / SMS / slider etc.)
 export * from './built/login-assist.js'
-// AI 模块 (原 @zhin.js/ai，已合并至 core)
-export * from './ai/index.js'
+// AI 模块 — selective re-export from @zhin.js/ai to avoid conflicts with core types
+export {
+  BaseProvider, OpenAIProvider, DeepSeekProvider, MoonshotProvider,
+  ZhipuProvider, AnthropicProvider, OllamaProvider,
+  Agent, createAgent, formatToolTitle,
+  filterTools, tokenize,
+  SessionManager, MemorySessionManager, DatabaseSessionManager,
+  createSessionManager, createMemorySessionManager, createDatabaseSessionManager,
+  AI_SESSION_MODEL,
+  ContextManager, createContextManager, CHAT_MESSAGE_MODEL, CONTEXT_SUMMARY_MODEL,
+  ConversationMemory, AI_MESSAGE_MODEL, AI_SUMMARY_MODEL,
+  estimateTokens, estimateMessagesTokens,
+  DEFAULT_CONTEXT_TOKENS,
+  microCompactMessages,
+  CostTracker,
+  CachedToolFilter, computeToolSetHash,
+  FileStateCache,
+  RateLimiter,
+  detectTone,
+  parseOutput, renderToPlainText, renderToSatori,
+  MemoryStorageBackend, DatabaseStorageBackend, createSwappableBackend,
+  ModelRegistry, extractModelRoot, computeTierScore,
+} from '@zhin.js/ai'
+export type {
+  AIConfig, AIProvider, ProviderConfig, ProviderCapabilities,
+  ChatMessage, ChatCompletionRequest, ChatCompletionResponse, ChatCompletionChunk,
+  ContentPart, ToolCall, MessageRole,
+  AgentTool, AgentConfig, AgentResult,
+  ToolFilterOptions, Usage, SessionConfig, Session, JsonSchema,
+  AgentState, AgentEvents,
+  ContextConfig, MessageRecord as AIMessageRecord,
+  ConversationMemoryConfig,
+  ContextWindowSource, ContextWindowInfo, ContextWindowGuardResult, PruneResult,
+  MicroCompactOptions, MicroCompactResult,
+  ModelUsage, ModelPricing, CostSnapshot,
+  RateLimitConfig, RateLimitResult,
+  Tone,
+  OutputElement, TextElement, ImageElement, AudioElement, VideoElement,
+  CardElement, FileElement,
+  StorageBackend, DbModel as AIDbModel,
+  AIModelInfo, ModelTask,
+} from '@zhin.js/ai'
 
 export * from './types.js'
 export * from './utils.js'

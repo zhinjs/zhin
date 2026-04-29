@@ -16,6 +16,7 @@
 
 import './init/types.js';
 import { createRefs } from './init/shared-refs.js';
+import { registerOrchestrator } from './init/register-orchestrator.js';
 import { registerToolService } from './init/register-tool-service.js';
 import { registerDbModels } from './init/register-db-models.js';
 import { registerAIService } from './init/register-ai-service.js';
@@ -38,6 +39,7 @@ import { registerBuiltinTools } from './init/register-builtin-tools.js';
 export function initAgentModule(): void {
   const refs = createRefs();
 
+  registerOrchestrator();
   registerToolService();
   registerDbModels();
   registerAIService(refs);

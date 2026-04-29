@@ -382,20 +382,126 @@ export const supportedPluginExtensions = [
   "",
 ];
 
+/** 与 Node 行为对齐：从 NODE_OPTIONS / process.execArgv 收集 `--conditions`（如 development）。 */
+function collectNodeExportConditions(): string[] {
+  const out: string[] = [];
+  const pushCsv = (s: string) => {
+    for (const part of s.split(',')) {
+      const t = part.trim();
+      if (t) out.push(t);
+    }
+  };
+  const scanTokens = (tokens: string[]) => {
+    for (let i = 0; i < tokens.length; i++) {
+      const t = tokens[i];
+      if (t === '--conditions' || t === '-C') {
+        const v = tokens[i + 1];
+        if (v) pushCsv(v);
+        i++;
+      } else if (t.startsWith('--conditions=')) {
+        pushCsv(t.slice('--conditions='.length));
+      }
+    }
+  };
+  scanTokens(process.execArgv);
+  const no = process.env.NODE_OPTIONS;
+  if (no) scanTokens(no.split(/\s+/).filter(Boolean));
+  return [...new Set(out)];
+}
+
+const EXPORT_KEYS_SKIP_RUNTIME = new Set(['types', 'typings']);
+
+/**
+ * 在 package.json `exports["."]` 的条件对象中选一个可执行入口（相对包根的路径）。
+ * 优先匹配 Node 传入的 custom conditions，再按 import/require 等与 type 字段选择。
+ */
+function pickConditionalExportTarget(
+  cond: Record<string, unknown>,
+  pkgType?: string,
+): string | undefined {
+  const custom = collectNodeExportConditions();
+  for (const key of custom) {
+    const v = cond[key];
+    if (typeof v === 'string' && (v.startsWith('./') || v.startsWith('../'))) return v;
+  }
+  const preferImportFirst = pkgType === 'module';
+  const chain = preferImportFirst
+    ? (['import', 'module', 'require', 'node', 'default'] as const)
+    : (['require', 'import', 'module', 'node', 'default'] as const);
+  for (const key of chain) {
+    const v = cond[key];
+    if (typeof v === 'string' && (v.startsWith('./') || v.startsWith('../'))) return v;
+  }
+  for (const [k, v] of Object.entries(cond)) {
+    if (EXPORT_KEYS_SKIP_RUNTIME.has(k)) continue;
+    if (typeof v === 'string' && (v.startsWith('./') || v.startsWith('../'))) return v;
+  }
+  return undefined;
+}
+
+/** 将 exports 字段的某个值（字符串或条件表，或一层嵌套条件表）解析为相对包根的子路径。 */
+function exportSurfaceToRelativePath(surface: unknown, pkgType?: string): string | undefined {
+  if (typeof surface === 'string' && (surface.startsWith('./') || surface.startsWith('../'))) {
+    return surface;
+  }
+  if (!surface || typeof surface !== 'object' || Array.isArray(surface)) return undefined;
+  const table = surface as Record<string, unknown>;
+  const direct = pickConditionalExportTarget(table, pkgType);
+  if (direct) return direct;
+  // 一层嵌套：如 { "node": { "import": "./x.js" } }
+  for (const val of Object.values(table)) {
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+      const inner = pickConditionalExportTarget(val as Record<string, unknown>, pkgType);
+      if (inner) return inner;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * 根据 package.json 的 `exports` / `main` 得到包入口的绝对路径（再交给 resolveEntry 做扩展名解析）。
+ */
+function resolvePackageJsonEntryFile(packageDir: string, pkgJson: Record<string, unknown>): string {
+  const main =
+    (typeof pkgJson.main === 'string' && pkgJson.main.length > 0 ? pkgJson.main : null) ?? 'index.js';
+  const exp = pkgJson.exports;
+  if (exp == null) {
+    return path.resolve(packageDir, main);
+  }
+  let surface: unknown;
+  if (typeof exp === 'string') {
+    surface = exp;
+  } else if (typeof exp === 'object' && !Array.isArray(exp)) {
+    const map = exp as Record<string, unknown>;
+    surface = map['.'];
+    if (surface === undefined && typeof map['./'] === 'string') {
+      surface = map['./'];
+    }
+  } else {
+    return path.resolve(packageDir, main);
+  }
+  const rel = exportSurfaceToRelativePath(surface, pkgJson.type as string | undefined);
+  if (!rel) {
+    return path.resolve(packageDir, main);
+  }
+  return path.resolve(packageDir, rel);
+}
+
 export function resolveEntry(entry: string) {
-  if (fs.existsSync(entry)) {
-    const stat = fs.statSync(entry);
-    if (stat.isFile()) return entry;
-    if (stat.isSymbolicLink()) return resolveEntry(fs.realpathSync(entry));
+  const entryPath=path.resolve(process.cwd(), entry);
+  if (fs.existsSync(entryPath)) {
+    const stat = fs.statSync(entryPath);
+    if (stat.isFile()) return entryPath;
+    if (stat.isSymbolicLink()) return resolveEntry(fs.realpathSync(entryPath));
     if (stat.isDirectory()) {
-      const packageJsonPath = path.resolve(entry, 'package.json');
-      if (!fs.existsSync(packageJsonPath)) return resolveEntry(path.join(entry, 'index'));
-      const pkgJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-      return resolveEntry(path.resolve(entry, pkgJson.main || 'index.js'));
+      const packageJsonPath = path.resolve(entryPath, 'package.json');
+      if (!fs.existsSync(packageJsonPath)) return resolveEntry(path.join(entryPath, 'index'));
+      const pkgJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8')) as Record<string, unknown>;
+      return resolveEntry(resolvePackageJsonEntryFile(entryPath, pkgJson));
     }
   } else {
     for (const ext of supportedPluginExtensions) {
-      const fullPath = path.resolve(entry + ext);
+      const fullPath = path.resolve(entryPath + ext);
       if (fs.existsSync(fullPath)) return resolveEntry(fullPath);
     }
   }

@@ -82,7 +82,7 @@ describe('CLI new command integration', () => {
     expect(testFile).toContain('Plugin Lifecycle')
     expect(testFile).toContain('Plugin Features')
     expect(testFile).toContain('Custom Tests')
-    expect(testFile).toContain('@zhin.js/core')
+    expect(testFile).toContain('zhin.js')
 
     // Check README.md
     const readmePath = path.join(pluginDir, 'README.md')
@@ -142,13 +142,11 @@ describe('CLI new command integration', () => {
     expect(await fs.pathExists(testFilePath)).toBe(true)
     const testFile = await fs.readFile(testFilePath, 'utf-8')
     
-    // Service test should have TODO comments
-    expect(testFile).toContain('TODO')
-    expect(testFile).toContain('Service Instance')
-    expect(testFile).toContain('Service Methods')
-    expect(testFile).toContain('Service Lifecycle')
-    expect(testFile).toContain('Service Dependencies')
-    expect(testFile).toContain('Custom Tests')
+    // Service test：工厂 + ping（不依赖 Bot 运行时）
+    expect(testFile).toContain('createTestServiceService')
+    expect(testFile).toContain('ping returns pong')
+    expect(testFile).toContain('TestService service')
+    expect(testFile).toContain("../src/service.js")
   }, 30000)
 
   it('should create adapter plugin with adapter test template', async () => {
@@ -173,19 +171,13 @@ describe('CLI new command integration', () => {
     expect(await fs.pathExists(testFilePath)).toBe(true)
     const testFile = await fs.readFile(testFilePath, 'utf-8')
     
-    // Adapter test should have Mock classes
-    expect(testFile).toContain('MockTestAdapterBot')
-    expect(testFile).toContain('MockTestAdapterAdapter')
-    expect(testFile).toContain('extends EventEmitter')
-    expect(testFile).toContain('extends Adapter')
-    expect(testFile).toContain('Adapter Instance')
-    expect(testFile).toContain('Bot Management')
-    expect(testFile).toContain('Adapter Lifecycle')
-    expect(testFile).toContain('Event Handling')
-    expect(testFile).toContain('Message Sending')
-    expect(testFile).toContain('Message Receiving')
-    expect(testFile).toContain('Bot Methods')
-    expect(testFile).toContain('Custom Tests')
+    // Adapter test：真实 Adapter/Bot 构造与 createBot
+    expect(testFile).toContain('TestAdapterAdapter')
+    expect(testFile).toContain('TestAdapterBot')
+    expect(testFile).toContain('TestAdapter adapter')
+    expect(testFile).toContain('constructs with empty config')
+    expect(testFile).toContain('createBot wires')
+    expect(testFile).toContain('unit-test-bot')
   }, 30000)
 
   it('should create official plugin with @zhin.js scope', async () => {

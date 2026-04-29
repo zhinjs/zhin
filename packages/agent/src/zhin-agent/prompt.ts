@@ -17,12 +17,12 @@
  */
 
 import * as os from 'os';
-import type { ContentPart } from '@zhin.js/core';
-import type { SkillFeature } from '@zhin.js/core';
+import type { ContentPart } from '@zhin.js/ai';
+import type { SkillRegistry } from '../orchestrator/skill-registry.js';
+import type { ToolContext } from '../orchestrator/types.js';
 import type { ZhinAgentConfig } from './config.js';
-import type { ToolContext } from '@zhin.js/core';
 import { SECTION_SEP, HISTORY_CONTEXT_MARKER, CURRENT_MESSAGE_MARKER } from './config.js';
-import type { ChatMessage } from '@zhin.js/core';
+import type { ChatMessage } from '@zhin.js/ai';
 import { getFileMemoryContext } from '../bootstrap.js';
 
 export function contentToText(c: string | ContentPart[] | ContentPart | null | undefined): string {
@@ -91,7 +91,7 @@ export function buildContextHint(context: ToolContext, _content: string): string
 
 export interface RichSystemPromptContext {
   config: Required<ZhinAgentConfig>;
-  skillRegistry: SkillFeature | null;
+  skillRegistry: SkillRegistry | null;
   skillsSummaryXML: string;
   activeSkillsContext: string;
   bootstrapContext: string;
@@ -212,7 +212,7 @@ function buildCommunicationSection(): string {
 /**
  * §7 Skills
  */
-function buildSkillsSection(skillRegistry: SkillFeature | null, skillsSummaryXML: string): string | null {
+function buildSkillsSection(skillRegistry: SkillRegistry | null, skillsSummaryXML: string): string | null {
   if (skillsSummaryXML) {
     return '# Available Skills\n\n' + skillsSummaryXML + '\n\nUser mentions skill → activate_skill(name) → follow returned instructions.';
   }

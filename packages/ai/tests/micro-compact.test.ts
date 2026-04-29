@@ -28,7 +28,7 @@ import {
   COMPACTABLE_TOOLS,
   CLEARED_MESSAGE,
   DEFAULT_KEEP_RECENT_TOOL_RESULTS,
-} from '../src/micro-compact.js';
+} from '../src/compaction/index.js';
 import type { ChatMessage } from '../src/types.js';
 
 const msg = (role: ChatMessage['role'], content: string, extra?: Partial<ChatMessage>): ChatMessage => ({
