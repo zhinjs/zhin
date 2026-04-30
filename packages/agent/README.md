@@ -181,46 +181,78 @@ useContext('ai', async (ai) => {
 
 ```
 src/
-├── index.ts              # 入口与 re-export
-├── agent.ts              # Agent 执行循环（无状态，TF-IDF 工具过滤）
-├── service.ts            # AIService
-├── session.ts            # SessionManager
-├── storage.ts            # 统一存储抽象层（StorageBackend 接口）
-├── context-manager.ts
-├── conversation-memory.ts
-├── user-profile.ts
-├── follow-up.ts
+├── index.ts                         # 导出 AgentOrchestrator + 五类 Registry + ZhinAgent + init
+│
+├── orchestrator/                    # ★ 核心：编排中枢
+│   ├── index.ts                     # AgentOrchestrator class
+│   ├── types.ts                     # ResourceScope, ResourceEntry, Skill, SubAgentDef, AIHook, McpServerEntry
+│   ├── resource-registry.ts         # ResourceRegistry<T> 基类
+│   ├── tool-registry.ts             # ToolRegistry（含 ZhinTool, defineTool, 权限过滤）
+│   ├── skill-registry.ts            # SkillRegistry（含搜索）
+│   ├── subagent-registry.ts         # SubAgentRegistry
+│   ├── mcp-registry.ts              # McpRegistry
+│   └── hook-registry.ts             # HookRegistry
+│
+├── mcp-client/                      # ★ MCP 客户端
+│   ├── index.ts                     # McpClientManager
+│   ├── connection.ts                # 单连接生命周期
+│   └── bridge.ts                    # MCP -> AgentTool/Resource/Prompt 桥接
+│
+├── service.ts                       # AIService（保留，对接 Orchestrator）
+│
+├── zhin-agent/                      # 主对话 Agent
+│   ├── index.ts                     # ZhinAgent（改造：从 Orchestrator 获取资源）
+│   ├── config.ts
+│   ├── prompt.ts
+│   ├── tool-collector.ts            # 改造：查询 ToolRegistry + SkillRegistry
+│   └── context-tools.ts             # chat_history, user_profile, spawn_task
+│
+├── discovery/                       # ★ 文件化资源发现
+│   ├── index.ts
+│   ├── utils.ts
+│   ├── tools.ts                     # *.tool.md 发现
+│   ├── skills.ts                    # SKILL.md 发现
+│   └── agents.ts                    # *.agent.md 发现
+│
+├── security/                        # ★ 安全策略
+│   ├── file-policy.ts
+│   └── exec-policy.ts
+│
+├── builtin-tools/                   # ★ 拆分 959 行
+│   ├── index.ts                     # createBuiltinTools 聚合
+│   ├── file-tools.ts
+│   ├── shell-tools.ts
+│   ├── web-tools.ts
+│   ├── memory-tools.ts
+│   ├── skill-tools.ts
+│   └── simple-tools.ts              # calculator, time 等
+│
+├── defaults/                        # ★ 各注册表的默认资源
+│   ├── tools.ts                     # 默认 common tools
+│   ├── skills.ts                    # 默认 common skills
+│   ├── hooks.ts                     # 默认 common hooks
+│   └── subagents.ts                 # 默认 subagent 模板
+│
+├── common-adapter-tools.ts          # ← 从 core 迁移：群管工具工厂
 ├── subagent.ts
-├── rate-limiter.ts
+├── task-executor.ts
 ├── cron-engine.ts
-├── compaction.ts
 ├── bootstrap.ts
-├── hooks.ts
-├── output.ts
-├── tools.ts
-├── builtin-tools.ts      # 内置工具（bash、read_file、ask_user 等）
-├── tone-detector.ts
-├── file-policy.ts        # 文件访问安全（路径检查、设备拦截、命令分类）
-├── init.ts               # initAgentModule 精简入口（委托子模块）
-├── init/                 # init 子模块（从 init.ts 拆分）
-│   ├── shared-refs.ts
-│   ├── types.ts              # 集中的类型增强声明
-│   ├── register-tool-service.ts
-│   ├── register-db-models.ts
-│   ├── register-ai-service.ts
-│   ├── create-zhin-agent.ts
-│   ├── register-ai-trigger.ts
-│   ├── register-db-upgrade.ts
-│   ├── register-message-recorder.ts
-│   ├── register-management-tools.ts
-│   └── register-builtin-tools.ts
-└── zhin-agent/           # ZhinAgent 及子模块
-    ├── index.ts          # ZhinAgent 主类
-    ├── config.ts         # 配置与常量（chatModel、visionModel、ModelSizeHint 等）
-    ├── exec-policy.ts    # Bash 执行安全（6 层纵深防御）
-    ├── tool-collector.ts # 工具收集与过滤
-    ├── prompt.ts         # 系统提示词构建器（10 段结构化架构）
-    └── builtin-tools.ts  # ZhinAgent 专用内置工具
+├── user-profile.ts
+│
+└── init/
+    ├── index.ts                     # initAgentModule
+    ├── types.ts                     # declare Plugin.Contexts.agent: AgentOrchestrator
+    ├── shared-refs.ts
+    ├── register-orchestrator.ts     # ★ 新增：provide(new AgentOrchestrator())
+    ├── register-db-models.ts
+    ├── register-ai-service.ts
+    ├── create-zhin-agent.ts
+    ├── register-ai-trigger.ts
+    ├── register-db-upgrade.ts
+    ├── register-message-recorder.ts
+    ├── register-management-tools.ts
+    └── register-builtin-tools.ts    # 改造：通过 Orchestrator 注册默认资源
 ```
 
 ### 构建

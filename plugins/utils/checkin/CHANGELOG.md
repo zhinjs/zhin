@@ -1,5 +1,11 @@
 # @zhin.js/plugin-checkin
 
+## 0.0.10
+
+### Patch Changes
+
+- zhin.js@1.0.75
+
 ## 0.0.9
 
 ### Patch Changes
