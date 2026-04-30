@@ -1,5 +1,13 @@
 # test-bot
 
+## 0.1.87
+
+### Patch Changes
+
+- b3e6a93: fix: 同步上游更新
+- Updated dependencies [b3e6a93]
+  - @zhin.js/adapter-qq@1.0.79
+
 ## 0.1.86
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @zhin.js/adapter-qq
 
+## 1.0.79
+
+### Patch Changes
+
+- b3e6a93: fix: 同步上游更新
+
 ## 1.0.78
 
 ### Patch Changes
