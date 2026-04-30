@@ -19,13 +19,16 @@ bots:
     reconnectDelay: 5000
     removeAt: true
     intents:
-      - GROUP_AT_MESSAGE_CREATE
-      - C2C_MESSAGE_CREATE
-      - PUBLIC_GUILD_MESSAGES
-      - DIRECT_MESSAGE
-      - GUILD_MESSAGE_REACTIONS
       - GUILDS
       - GUILD_MEMBERS
+      - GUILD_MESSAGE_REACTIONS
+      - DIRECT_MESSAGE
+      - GROUP_AND_C2C_EVENT
+      - INTERACTION
+      - MESSAGE_AUDIT
+      - AUDIO_ACTION
+      - PUBLIC_GUILD_MESSAGES
+    data_dir: /Users/liuchunlang/IdeaProjects/zhin/examples/test-bot/data
   - context: github
     name: zhin-github
     app_id: ${GITHUB_APP_ID}
@@ -85,7 +88,7 @@ group-daily-analysis:
   maxMessagesPerAnalysis: 500
 ai:
   enabled: true
-  defaultProvider: ollama
+  defaultProvider: openai
   session:
     maxHistory: 20
     expireMs: 3600000

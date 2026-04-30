@@ -39,7 +39,7 @@
     "build:node": "tsc"
   },
   "dependencies": {
-    "qq-official-bot": "^1.0.12"
+    "qq-official-bot": "^1.0.13"
   },
   "devDependencies": {
     "@zhin.js/cli": "workspace:*",
