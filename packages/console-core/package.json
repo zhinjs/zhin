@@ -45,7 +45,7 @@
     "@koa/router": "^13.1.0",
     "@zhin.js/console-types": "workspace:*",
     "clsx": "^2.1.1",
-    "esbuild": "^0.25.9",
+    "esbuild": "^0.28.0",
     "koa": "^2.16.2",
     "koa-compose": "^4.1.0",
     "koa-static": "^5.0.0",

@@ -46,7 +46,7 @@
   },
   "devDependencies": {
     "@types/koa": "^2.15.0",
-    "esbuild": "^0.25.12",
+    "esbuild": "^0.28.0",
     "lucide-react": "^1.11.0",
     "tsup": "^8.5.1",
     "yaml": "^2.8.3",
