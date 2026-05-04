@@ -44,7 +44,7 @@
     "@farmfe/plugin-react": "^1.2.6",
     "@tailwindcss/postcss": "4",
     "@types/koa": "^2.15.0",
-    "@types/node": "^22.15.3",
+    "@types/node": "^25.6.0",
     "@types/react": "^18.3.28",
     "@types/react-dom": "^18.3.7",
     "autoprefixer": "^10.4.21",
