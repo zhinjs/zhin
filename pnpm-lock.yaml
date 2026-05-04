@@ -239,10 +239,10 @@ importers:
         version: 11.14.0
       vitepress:
         specifier: ^1.6.4
-        version: 1.6.4(@algolia/client-search@5.49.2)(@types/node@25.6.0)(@types/react@19.2.14)(axios@1.15.2)(lightningcss@1.32.0)(postcss@8.5.12)(react-dom@18.3.1(react@19.2.5))(react@19.2.5)(search-insights@2.17.3)(terser@5.46.1)(typescript@6.0.3)
+        version: 1.6.4(@algolia/client-search@5.49.2)(@types/node@25.6.0)(@types/react@19.2.14)(axios@1.16.0)(lightningcss@1.32.0)(postcss@8.5.12)(react-dom@18.3.1(react@19.2.5))(react@19.2.5)(search-insights@2.17.3)(terser@5.46.1)(typescript@6.0.3)
       vitepress-plugin-mermaid:
         specifier: ^2.0.17
-        version: 2.0.17(mermaid@11.14.0)(vitepress@1.6.4(@algolia/client-search@5.49.2)(@types/node@25.6.0)(@types/react@19.2.14)(axios@1.15.2)(lightningcss@1.32.0)(postcss@8.5.12)(react-dom@18.3.1(react@19.2.5))(react@19.2.5)(search-insights@2.17.3)(terser@5.46.1)(typescript@6.0.3))
+        version: 2.0.17(mermaid@11.14.0)(vitepress@1.6.4(@algolia/client-search@5.49.2)(@types/node@25.6.0)(@types/react@19.2.14)(axios@1.16.0)(lightningcss@1.32.0)(postcss@8.5.12)(react-dom@18.3.1(react@19.2.5))(react@19.2.5)(search-insights@2.17.3)(terser@5.46.1)(typescript@6.0.3))
       vue:
         specifier: ^3.5.33
         version: 3.5.33(typescript@6.0.3)
@@ -942,8 +942,8 @@ importers:
         specifier: workspace:*
         version: link:../../services/http
       axios:
-        specifier: ^1.15.2
-        version: 1.15.2
+        specifier: ^1.16.0
+        version: 1.16.0
     devDependencies:
       '@types/koa':
         specifier: ^2.15.0
@@ -1237,8 +1237,8 @@ importers:
         specifier: workspace:*
         version: link:../../services/http
       axios:
-        specifier: ^1.15.2
-        version: 1.15.2
+        specifier: ^1.16.0
+        version: 1.16.0
       form-data:
         specifier: ^4.0.0
         version: 4.0.5
@@ -4340,8 +4340,8 @@ packages:
   axios@1.15.0:
     resolution: {integrity: sha512-wWyJDlAatxk30ZJer+GeCWS209sA42X+N5jU2jy6oHTp7ufw8uzUTVFBX9+wTfAlhiJXGS0Bq7X6efruWjuK9Q==}
 
-  axios@1.15.2:
-    resolution: {integrity: sha512-wLrXxPtcrPTsNlJmKjkPnNPK2Ihe0hn0wGSaTEiHRPxwjvJwT3hKmXF4dpqxmPO9SoNb2FsYXj/xEo0gHN+D5A==}
+  axios@1.16.0:
+    resolution: {integrity: sha512-6hp5CwvTPlN2A31g5dxnwAX0orzM7pmCRDLnZSX772mv8WDqICwFjowHuPs04Mc8deIld1+ejhtaMn5vp6b+1w==}
 
   balanced-match@4.0.4:
     resolution: {integrity: sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==}
@@ -5560,6 +5560,10 @@ packages:
 
   hasown@2.0.2:
     resolution: {integrity: sha512-0hJU9SCPvmMzIBdZFqNPXWa6dqh7WdH0cII9y+CyS8rG3nL48Bclra9HmKhVVUHyPWNH5Y7xDwAB7bfgSjkUMQ==}
+    engines: {node: '>= 0.4'}
+
+  hasown@2.0.3:
+    resolution: {integrity: sha512-ej4AhfhfL2Q2zpMmLo7U1Uv9+PyhIZpgQLGT1F9miIGmiCJIoCgSmczFdrc97mWT4kVY72KA+WnnhJ5pghSvSg==}
     engines: {node: '>= 0.4'}
 
   hast-util-to-html@9.0.5:
@@ -10814,7 +10818,7 @@ snapshots:
       '@slack/types': 2.20.1
       '@slack/web-api': 7.15.1
       '@types/express': 5.0.6
-      axios: 1.15.2
+      axios: 1.16.0
       express: 5.2.1
       path-to-regexp: 8.4.2
       raw-body: 3.0.2
@@ -10860,7 +10864,7 @@ snapshots:
       '@slack/types': 2.20.1
       '@types/node': 25.6.0
       '@types/retry': 0.12.0
-      axios: 1.15.2
+      axios: 1.16.0
       eventemitter3: 5.0.4
       form-data: 4.0.5
       is-electron: 2.2.2
@@ -11578,13 +11582,13 @@ snapshots:
     transitivePeerDependencies:
       - typescript
 
-  '@vueuse/integrations@12.8.2(axios@1.15.2)(focus-trap@7.8.0)(typescript@6.0.3)':
+  '@vueuse/integrations@12.8.2(axios@1.16.0)(focus-trap@7.8.0)(typescript@6.0.3)':
     dependencies:
       '@vueuse/core': 12.8.2(typescript@6.0.3)
       '@vueuse/shared': 12.8.2(typescript@6.0.3)
       vue: 3.5.33(typescript@6.0.3)
     optionalDependencies:
-      axios: 1.15.2
+      axios: 1.16.0
       focus-trap: 7.8.0
     transitivePeerDependencies:
       - typescript
@@ -11720,7 +11724,7 @@ snapshots:
     transitivePeerDependencies:
       - debug
 
-  axios@1.15.2:
+  axios@1.16.0:
     dependencies:
       follow-redirects: 1.16.0(debug@4.4.3)
       form-data: 4.0.5
@@ -12966,7 +12970,7 @@ snapshots:
       get-proto: 1.0.1
       gopd: 1.2.0
       has-symbols: 1.1.0
-      hasown: 2.0.2
+      hasown: 2.0.3
       math-intrinsics: 1.1.0
 
   get-nonce@1.0.1: {}
@@ -13026,6 +13030,10 @@ snapshots:
       has-symbols: 1.1.0
 
   hasown@2.0.2:
+    dependencies:
+      function-bind: 1.1.2
+
+  hasown@2.0.3:
     dependencies:
       function-bind: 1.1.2
 
@@ -13298,7 +13306,7 @@ snapshots:
       call-bound: 1.0.4
       gopd: 1.2.0
       has-tostringtag: 1.0.2
-      hasown: 2.0.2
+      hasown: 2.0.3
 
   is-stream@2.0.1: {}
 
@@ -14393,7 +14401,7 @@ snapshots:
   qq-official-bot@1.0.13:
     dependencies:
       '@noble/curves': 1.9.7
-      axios: 1.15.2
+      axios: 1.16.0
       formdata-node: 6.0.3
       log4js: 6.9.1
       ws: 8.20.0
@@ -15523,14 +15531,14 @@ snapshots:
       lightningcss: 1.32.0
       terser: 5.46.1
 
-  vitepress-plugin-mermaid@2.0.17(mermaid@11.14.0)(vitepress@1.6.4(@algolia/client-search@5.49.2)(@types/node@25.6.0)(@types/react@19.2.14)(axios@1.15.2)(lightningcss@1.32.0)(postcss@8.5.12)(react-dom@18.3.1(react@19.2.5))(react@19.2.5)(search-insights@2.17.3)(terser@5.46.1)(typescript@6.0.3)):
+  vitepress-plugin-mermaid@2.0.17(mermaid@11.14.0)(vitepress@1.6.4(@algolia/client-search@5.49.2)(@types/node@25.6.0)(@types/react@19.2.14)(axios@1.16.0)(lightningcss@1.32.0)(postcss@8.5.12)(react-dom@18.3.1(react@19.2.5))(react@19.2.5)(search-insights@2.17.3)(terser@5.46.1)(typescript@6.0.3)):
     dependencies:
       mermaid: 11.14.0
-      vitepress: 1.6.4(@algolia/client-search@5.49.2)(@types/node@25.6.0)(@types/react@19.2.14)(axios@1.15.2)(lightningcss@1.32.0)(postcss@8.5.12)(react-dom@18.3.1(react@19.2.5))(react@19.2.5)(search-insights@2.17.3)(terser@5.46.1)(typescript@6.0.3)
+      vitepress: 1.6.4(@algolia/client-search@5.49.2)(@types/node@25.6.0)(@types/react@19.2.14)(axios@1.16.0)(lightningcss@1.32.0)(postcss@8.5.12)(react-dom@18.3.1(react@19.2.5))(react@19.2.5)(search-insights@2.17.3)(terser@5.46.1)(typescript@6.0.3)
     optionalDependencies:
       '@mermaid-js/mermaid-mindmap': 9.3.0
 
-  vitepress@1.6.4(@algolia/client-search@5.49.2)(@types/node@25.6.0)(@types/react@19.2.14)(axios@1.15.2)(lightningcss@1.32.0)(postcss@8.5.12)(react-dom@18.3.1(react@19.2.5))(react@19.2.5)(search-insights@2.17.3)(terser@5.46.1)(typescript@6.0.3):
+  vitepress@1.6.4(@algolia/client-search@5.49.2)(@types/node@25.6.0)(@types/react@19.2.14)(axios@1.16.0)(lightningcss@1.32.0)(postcss@8.5.12)(react-dom@18.3.1(react@19.2.5))(react@19.2.5)(search-insights@2.17.3)(terser@5.46.1)(typescript@6.0.3):
     dependencies:
       '@docsearch/css': 3.8.2
       '@docsearch/js': 3.8.2(@algolia/client-search@5.49.2)(@types/react@19.2.14)(react-dom@18.3.1(react@19.2.5))(react@19.2.5)(search-insights@2.17.3)
@@ -15543,7 +15551,7 @@ snapshots:
       '@vue/devtools-api': 7.7.9
       '@vue/shared': 3.5.30
       '@vueuse/core': 12.8.2(typescript@6.0.3)
-      '@vueuse/integrations': 12.8.2(axios@1.15.2)(focus-trap@7.8.0)(typescript@6.0.3)
+      '@vueuse/integrations': 12.8.2(axios@1.16.0)(focus-trap@7.8.0)(typescript@6.0.3)
       focus-trap: 7.8.0
       mark.js: 8.11.1
       minisearch: 7.2.0
