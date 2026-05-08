@@ -15,6 +15,22 @@
 
 ---
 
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs are tracked in GitHub Issues for `zhinjs/zhin`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the default five-label triage vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Use a multi-context domain documentation layout with root `CONTEXT-MAP.md`, system ADRs in `docs/adr/`, and context-local `CONTEXT.md` / ADRs where applicable. See `docs/agents/domain.md`.
+
+---
+
 ## 架构分层（速览）
 
 由下至上：**`basic/`**（日志、DB、schema、CLI）→ **`@zhin.js/kernel`**（PluginBase、Feature、调度与错误体系，**无 IM 概念**）→ **`@zhin.js/ai`**（Provider、Agent、ModelRegistry，按子模块组织：`agent/`（Agent 引擎 + CostTracker + ToolFilter）、`memory/`（Session + Context + ConversationMemory）、`compaction/`（分阶段摘要 + MicroCompact + token 估算），**无 IM 概念**）→ **`@zhin.js/core`**（Plugin、Adapter、Bot、MessageDispatcher、命令/中间件/工具/技能；AI Provider 从 `@zhin.js/ai` 选择性 re-export）→ **`@zhin.js/agent`**（AgentOrchestrator 五类注册表、ZhinAgent、AIService、PromptBuilder-10段架构，按子模块组织：`orchestrator/`（ToolRegistry + SkillRegistry + SubAgentRegistry + McpRegistry + HookRegistry）、`discovery/`（tools/skills/agents 文件化发现）、`security/`（ExecPolicy-6层安全 + FilePolicy）、`mcp-client/`（MCP 连接管理）、`defaults/`（默认工具/子代理/Hook 注册））→ **`zhin.js` 主包**（配置加载、插件发现、项目根锁定、直接 re-export `@zhin.js/core` + `@zhin.js/agent`）。
