@@ -25,7 +25,7 @@ describe('model harness defaults', () => {
   });
 
   it('应忽略未知 harness 键，仅保留受支持字段', () => {
-    const malformedFromYaml = JSON.parse('{"maxIterations":10,"unknown":123}') as Record<string, unknown>;
+    const malformedFromYaml = { maxIterations: 10, unknown: 123 };
     const resolved = resolveModelHarness('openai', 'gpt-4o', {
       models: {
         'gpt-4o': malformedFromYaml as unknown as { maxIterations?: number },
