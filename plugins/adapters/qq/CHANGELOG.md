@@ -1,5 +1,15 @@
 # @zhin.js/adapter-qq
 
+## 1.0.81
+
+### Patch Changes
+
+- Updated dependencies [88caeb2]
+  - @zhin.js/console@2.0.21
+  - zhin.js@1.0.78
+  - @zhin.js/logger@0.1.60
+  - @zhin.js/http@1.0.71
+
 ## 1.0.80
 
 ### Patch Changes
