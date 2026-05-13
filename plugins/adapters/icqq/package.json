@@ -52,7 +52,7 @@
     "@zhin.js/cli": "workspace:*",
     "@radix-ui/themes": "^3.2.1",
     "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.1",
+    "@types/react-dom": "^19.2.3",
     "@zhin.js/console": "workspace:*",
     "lucide-react": "^1.11.0",
     "radix-ui": "^1.4.3",
