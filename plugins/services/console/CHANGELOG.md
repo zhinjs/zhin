@@ -1,5 +1,15 @@
 # @zhin.js/console
 
+## 2.0.20
+
+### Patch Changes
+
+- Updated dependencies [fcad030]
+  - @zhin.js/agent@0.1.17
+  - zhin.js@1.0.77
+  - @zhin.js/core@1.1.19
+  - @zhin.js/http@1.0.70
+
 ## 2.0.19
 
 ### Patch Changes
