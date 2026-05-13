@@ -1,5 +1,12 @@
 # @zhin.js/adapter-napcat
 
+## 0.1.6
+
+### Patch Changes
+
+- zhin.js@1.0.78
+- @zhin.js/http@1.0.71
+
 ## 0.1.5
 
 ### Patch Changes

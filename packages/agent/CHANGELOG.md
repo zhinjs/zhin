@@ -1,5 +1,14 @@
 # @zhin.js/agent
 
+## 0.1.18
+
+### Patch Changes
+
+- 88caeb2: fix: ask user 护栏
+- Updated dependencies [88caeb2]
+  - @zhin.js/core@1.1.20
+  - @zhin.js/ai@1.1.18
+
 ## 0.1.17
 
 ### Patch Changes

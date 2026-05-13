@@ -1,5 +1,16 @@
 # @zhin.js/core
 
+## 1.1.20
+
+### Patch Changes
+
+- 88caeb2: fix: ask user 护栏
+  - @zhin.js/database@1.0.63
+  - @zhin.js/logger@0.1.60
+  - @zhin.js/schema@1.0.60
+  - @zhin.js/ai@1.1.18
+  - @zhin.js/kernel@0.0.37
+
 ## 1.1.19
 
 ### Patch Changes
