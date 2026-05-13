@@ -48,7 +48,7 @@
     "directory": "plugins/adapters/onebot11"
   },
   "dependencies": {
-    "ws": "^8.20.0"
+    "ws": "^8.20.1"
   },
   "devDependencies": {
     "@zhin.js/cli": "workspace:*",

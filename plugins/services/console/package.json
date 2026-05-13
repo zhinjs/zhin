@@ -42,7 +42,7 @@
     "@zhin.js/console-app": "workspace:*",
     "@zhin.js/console-core": "workspace:*",
     "@zhin.js/console-types": "workspace:*",
-    "ws": "^8.20.0"
+    "ws": "^8.20.1"
   },
   "devDependencies": {
     "@types/koa": "^2.15.0",

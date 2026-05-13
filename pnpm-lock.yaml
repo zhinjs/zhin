@@ -73,10 +73,10 @@ importers:
         specifier: ^7.0.6
         version: 7.0.6
       fs-extra:
-        specifier: ^11.3.2
+        specifier: ^11.3.5
         version: 11.3.5
       inquirer:
-        specifier: ^13.4.2
+        specifier: ^13.4.3
         version: 13.4.3(@types/node@25.7.0)
       ora:
         specifier: ^9.4.0
@@ -143,13 +143,13 @@ importers:
         specifier: ^0.28.0
         version: 0.28.0
       fs-extra:
-        specifier: ^11.3.2
+        specifier: ^11.3.5
         version: 11.3.5
       glob:
         specifier: ^13.0.6
         version: 13.0.6
       inquirer:
-        specifier: ^13.4.2
+        specifier: ^13.4.3
         version: 13.4.3(@types/node@25.7.0)
       open:
         specifier: ^11.0.0
@@ -650,10 +650,10 @@ importers:
         specifier: ^5.6.2
         version: 5.6.2
       fs-extra:
-        specifier: ^11.3.2
+        specifier: ^11.3.5
         version: 11.3.5
       inquirer:
-        specifier: ^13.4.2
+        specifier: ^13.4.3
         version: 13.4.3(@types/node@25.7.0)
       yaml:
         specifier: ^2.8.3
@@ -781,7 +781,7 @@ importers:
         specifier: workspace:*
         version: link:../../services/http
       discord.js:
-        specifier: ^14.26.3
+        specifier: ^14.26.4
         version: 14.26.4
       tweetnacl:
         specifier: ^1.0.3
@@ -967,7 +967,7 @@ importers:
         specifier: ^2.0.2
         version: 2.0.2
       ws:
-        specifier: ^8.20.0
+        specifier: ^8.20.1
         version: 8.20.1
     devDependencies:
       '@types/node':
@@ -995,7 +995,7 @@ importers:
         specifier: workspace:*
         version: link:../../services/http
       ws:
-        specifier: ^8.20.0
+        specifier: ^8.20.1
         version: 8.20.1
     devDependencies:
       '@types/node':
@@ -1020,7 +1020,7 @@ importers:
         specifier: workspace:*
         version: link:../../services/http
       ws:
-        specifier: ^8.20.0
+        specifier: ^8.20.1
         version: 8.20.1
     devDependencies:
       '@types/node':
@@ -1048,7 +1048,7 @@ importers:
         specifier: workspace:*
         version: link:../../services/http
       ws:
-        specifier: ^8.20.0
+        specifier: ^8.20.1
         version: 8.20.1
     devDependencies:
       '@types/node':
@@ -1150,7 +1150,7 @@ importers:
         specifier: workspace:*
         version: link:../../services/http
       ws:
-        specifier: ^8.20.0
+        specifier: ^8.20.1
         version: 8.20.1
     devDependencies:
       '@types/node':
@@ -1175,10 +1175,10 @@ importers:
   plugins/adapters/slack:
     dependencies:
       '@slack/bolt':
-        specifier: ^4.7.1
+        specifier: ^4.7.2
         version: 4.7.2(@types/express@5.0.6)
       '@slack/web-api':
-        specifier: ^7.15.1
+        specifier: ^7.15.2
         version: 7.15.2
     devDependencies:
       '@types/node':
@@ -1305,7 +1305,7 @@ importers:
         specifier: ^2.16.2
         version: 2.16.4
       ws:
-        specifier: ^8.20.0
+        specifier: ^8.20.1
         version: 8.20.1
     devDependencies:
       '@types/koa':
@@ -1342,7 +1342,7 @@ importers:
         specifier: latest
         version: 7.0.1
       ws:
-        specifier: ^8.20.0
+        specifier: ^8.20.1
         version: 8.20.1
     devDependencies:
       '@types/koa':
