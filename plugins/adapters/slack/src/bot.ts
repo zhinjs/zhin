@@ -17,8 +17,9 @@ import type { SlackAdapter } from "./adapter.js";
 
 export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
   $connected: boolean;
-  private app: SlackApp;
-  private client: WebClient;
+  /** 延迟到 `$connect`，避免子类 mock `$connect` 时仍在构造函数里创建 Bolt/WebClient（会在后台触发 Slack API） */
+  private app?: SlackApp;
+  private client?: WebClient;
 
   get logger() {
     return this.adapter.plugin.logger;
@@ -30,10 +31,12 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
 
   constructor(public adapter: SlackAdapter, public $config: SlackBotConfig) {
     this.$connected = false;
+  }
 
-    // Initialize Slack app
+  #ensureSlackRuntime(): void {
+    if (this.app && this.client) return;
+    const $config = this.$config;
     if ($config.socketMode && $config.appToken) {
-      // Socket Mode
       this.app = new SlackApp({
         token: $config.token,
         signingSecret: $config.signingSecret,
@@ -42,7 +45,6 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
         logLevel: $config.logLevel || LogLevel.INFO,
       });
     } else {
-      // HTTP Mode
       this.app = new SlackApp({
         token: $config.token,
         signingSecret: $config.signingSecret,
@@ -50,34 +52,34 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
         logLevel: $config.logLevel || LogLevel.INFO,
       });
     }
-
     this.client = new WebClient($config.token);
   }
 
   async $connect(): Promise<void> {
+    this.#ensureSlackRuntime();
     try {
       // Set up message event handler
-      this.app.message(async ({ message, say }) => {
+      this.app!.message(async ({ message, say }) => {
         await this.handleSlackMessage(message as SlackMessageEvent);
       });
 
       // Set up app mention handler
-      this.app.event("app_mention", async ({ event, say }) => {
+      this.app!.event("app_mention", async ({ event, say }) => {
         await this.handleSlackMessage(event as any);
       });
 
       // Start the app
       const port = this.$config.port || 3000;
       if (this.$config.socketMode) {
-        await this.app.start();
+        await this.app!.start();
       } else {
-        await this.app.start(port);
+        await this.app!.start(port);
       }
 
       this.$connected = true;
 
       // Get bot info
-      const authTest = await this.client.auth.test();
+      const authTest = await this.client!.auth.test();
       this.logger.info(
         `Slack bot ${this.$config.name} connected successfully as @${authTest.user}`
       );
@@ -93,8 +95,12 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
   }
 
   async $disconnect(): Promise<void> {
+    if (!this.app) {
+      this.$connected = false;
+      return;
+    }
     try {
-      await this.app.stop();
+      await this.app!.stop();
       this.$connected = false;
       this.logger.info(`Slack bot ${this.$config.name} disconnected`);
     } catch (error) {
@@ -146,7 +152,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
       $timestamp: parseFloat(msg.ts) * 1000,
       $recall: async () => {
         try {
-          await this.client.chat.delete({
+          await this.client!.chat.delete({
             channel: channelId,
             ts: result.$id,
           });
@@ -428,7 +434,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
           // Files need to be uploaded separately
           if (data.file) {
             try {
-              await this.client.files.upload({
+              await this.client!.files.upload({
                 channels: channel,
                 file: data.file,
                 filename: data.name,
@@ -455,7 +461,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
       messageOptions.attachments = attachments;
     }
 
-    const result = await this.client.chat.postMessage(messageOptions as ChatPostMessageArguments);
+    const result = await this.client!.chat.postMessage(messageOptions as ChatPostMessageArguments);
     return result.message || {};
   }
 
@@ -478,7 +484,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
    */
   async inviteToChannel(channel: string, users: string[]): Promise<boolean> {
     try {
-      await this.client.conversations.invite({ channel, users: users.join(',') });
+      await this.client!.conversations.invite({ channel, users: users.join(',') });
       this.logger.info(`Slack Bot ${this.$id} 邀请用户 ${users.join(',')} 到频道 ${channel}`);
       return true;
     } catch (error) {
@@ -494,7 +500,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
    */
   async kickFromChannel(channel: string, user: string): Promise<boolean> {
     try {
-      await this.client.conversations.kick({ channel, user });
+      await this.client!.conversations.kick({ channel, user });
       this.logger.info(`Slack Bot ${this.$id} 将用户 ${user} 从频道 ${channel} 踢出`);
       return true;
     } catch (error) {
@@ -510,7 +516,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
    */
   async setChannelTopic(channel: string, topic: string): Promise<boolean> {
     try {
-      await this.client.conversations.setTopic({ channel, topic });
+      await this.client!.conversations.setTopic({ channel, topic });
       this.logger.info(`Slack Bot ${this.$id} 设置频道 ${channel} 话题为 "${topic}"`);
       return true;
     } catch (error) {
@@ -526,7 +532,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
    */
   async setChannelPurpose(channel: string, purpose: string): Promise<boolean> {
     try {
-      await this.client.conversations.setPurpose({ channel, purpose });
+      await this.client!.conversations.setPurpose({ channel, purpose });
       this.logger.info(`Slack Bot ${this.$id} 设置频道 ${channel} 目的`);
       return true;
     } catch (error) {
@@ -541,7 +547,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
    */
   async archiveChannel(channel: string): Promise<boolean> {
     try {
-      await this.client.conversations.archive({ channel });
+      await this.client!.conversations.archive({ channel });
       this.logger.info(`Slack Bot ${this.$id} 归档频道 ${channel}`);
       return true;
     } catch (error) {
@@ -556,7 +562,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
    */
   async unarchiveChannel(channel: string): Promise<boolean> {
     try {
-      await this.client.conversations.unarchive({ channel });
+      await this.client!.conversations.unarchive({ channel });
       this.logger.info(`Slack Bot ${this.$id} 取消归档频道 ${channel}`);
       return true;
     } catch (error) {
@@ -572,7 +578,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
    */
   async renameChannel(channel: string, name: string): Promise<boolean> {
     try {
-      await this.client.conversations.rename({ channel, name });
+      await this.client!.conversations.rename({ channel, name });
       this.logger.info(`Slack Bot ${this.$id} 重命名频道 ${channel} 为 "${name}"`);
       return true;
     } catch (error) {
@@ -587,7 +593,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
    */
   async getChannelMembers(channel: string): Promise<string[]> {
     try {
-      const result = await this.client.conversations.members({ channel });
+      const result = await this.client!.conversations.members({ channel });
       return result.members || [];
     } catch (error) {
       this.logger.error(`Slack Bot ${this.$id} 获取成员列表失败:`, error);
@@ -601,7 +607,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
    */
   async getChannelInfo(channel: string): Promise<any> {
     try {
-      const result = await this.client.conversations.info({ channel });
+      const result = await this.client!.conversations.info({ channel });
       return result.channel;
     } catch (error) {
       this.logger.error(`Slack Bot ${this.$id} 获取频道信息失败:`, error);
@@ -615,7 +621,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
    */
   async getUserInfo(user: string): Promise<any> {
     try {
-      const result = await this.client.users.info({ user });
+      const result = await this.client!.users.info({ user });
       return result.user;
     } catch (error) {
       this.logger.error(`Slack Bot ${this.$id} 获取用户信息失败:`, error);
@@ -631,7 +637,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
    */
   async addReaction(channel: string, timestamp: string, name: string): Promise<boolean> {
     try {
-      await this.client.reactions.add({ channel, timestamp, name });
+      await this.client!.reactions.add({ channel, timestamp, name });
       this.logger.info(`Slack Bot ${this.$id} 添加反应 :${name}: 到消息`);
       return true;
     } catch (error) {
@@ -648,7 +654,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
    */
   async removeReaction(channel: string, timestamp: string, name: string): Promise<boolean> {
     try {
-      await this.client.reactions.remove({ channel, timestamp, name });
+      await this.client!.reactions.remove({ channel, timestamp, name });
       this.logger.info(`Slack Bot ${this.$id} 移除反应 :${name}:`);
       return true;
     } catch (error) {
@@ -664,7 +670,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
    */
   async pinMessage(channel: string, timestamp: string): Promise<boolean> {
     try {
-      await this.client.pins.add({ channel, timestamp });
+      await this.client!.pins.add({ channel, timestamp });
       this.logger.info(`Slack Bot ${this.$id} 置顶消息（频道 ${channel}）`);
       return true;
     } catch (error) {
@@ -680,7 +686,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
    */
   async unpinMessage(channel: string, timestamp: string): Promise<boolean> {
     try {
-      await this.client.pins.remove({ channel, timestamp });
+      await this.client!.pins.remove({ channel, timestamp });
       this.logger.info(`Slack Bot ${this.$id} 取消置顶消息`);
       return true;
     } catch (error) {

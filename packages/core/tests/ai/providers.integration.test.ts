@@ -1,12 +1,11 @@
 /**
  * AI Providers 集成测试（真实 API 调用）
- * 
- * 使用 test-bot 的环境配置进行真实 API 测试
- * 
- * 运行方式（需要网络权限）：
- * pnpm test packages/ai/tests/providers.integration.test.ts
- * 
- * 注意：此测试需要网络访问，在 sandbox 中会自动跳过
+ *
+ * 默认跳过，避免 CI/本地 `pnpm test` 依赖外部 Ollama 或长时间挂起。
+ * 启用方式：设置环境变量 `RUN_OLLAMA_INTEGRATION=1` 后再跑本文件相关测试。
+ *
+ * 运行示例：
+ * RUN_OLLAMA_INTEGRATION=1 pnpm test packages/core/tests/ai/providers.integration.test.ts
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import { OllamaProvider, type ChatMessage } from '@zhin.js/ai';
@@ -35,6 +34,10 @@ const skipIfNoNetwork = (ctx: any) => {
 beforeAll(async () => {
   canRun = false;
   integrationModel = '';
+  if (process.env.RUN_OLLAMA_INTEGRATION !== '1') {
+    console.log('⚠️ Ollama 集成测试已跳过（设置 RUN_OLLAMA_INTEGRATION=1 启用）');
+    return;
+  }
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);

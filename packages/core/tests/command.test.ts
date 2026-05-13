@@ -4,50 +4,6 @@ import { Message } from '../src/message'
 import { Plugin } from '../src/plugin'
 import { App } from '../src/app'
 
-// Mock segment-matcher
-vi.mock('segment-matcher', () => {
-  class MatchResult {
-    matched: any[] = []
-    params: Record<string, any> = {}
-    remaining: any[] = []
-    
-    addMatched(segment: any) {
-      this.matched.push(segment)
-    }
-    
-    addParam(name: string, value: any) {
-      this.params[name] = value
-    }
-    
-    addRemaining(segment: any) {
-      this.remaining.push(segment)
-    }
-  }
-
-  class SegmentMatcher {
-    constructor(public pattern: string) {}
-    
-    match(content: any) {
-      // 简单的mock实现
-      if (Array.isArray(content) && content.length > 0) {
-        const text = content[0]?.data?.text || ''
-        if (text.includes(this.pattern)) {
-          const result = new MatchResult()
-          result.addMatched(content[0])
-          const value = text.replace(this.pattern, '').trim()
-          if (value) {
-            result.addParam('text', value)
-          }
-          return result
-        }
-      }
-      return null
-    }
-  }
-
-  return { SegmentMatcher, MatchResult }
-})
-
 // Mock App with permissions
 const mockPermissionService = {
   check: vi.fn(async (perm: string, message: any) => {
@@ -543,7 +499,7 @@ describe('Command系统测试', () => {
         return `参数: ${Object.values(matchResult.params).join(', ')}`
       })
 
-      const command = new MessageCommand('say')
+      const command = new MessageCommand('say <msg:text>')
         .action(actionSpy)
 
       const message: Message = {

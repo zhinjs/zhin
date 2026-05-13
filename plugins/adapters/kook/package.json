@@ -38,7 +38,7 @@
     "build:node": "tsc"
   },
   "dependencies": {
-    "kook-client": "latest"
+    "kook-client": "^1.0.4"
   },
   "devDependencies": {
     "@zhin.js/cli": "workspace:*",

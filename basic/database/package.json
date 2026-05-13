@@ -24,9 +24,9 @@
     "node": ">=22.5.0"
   },
   "peerDependencies": {
-    "mongodb": "^3.1.13",
-    "mysql2": "^3.9.8",
-    "pg": "^7.1.2",
+    "mongodb": ">=3.1.13",
+    "mysql2": ">=3.9.8",
+    "pg": ">=2.11.2",
     "redis": "latest",
     "zhin.js": "workspace:*"
   },
@@ -45,10 +45,10 @@
     }
   },
   "devDependencies": {
-    "@types/pg": "latest",
-    "mongodb": "latest",
-    "mysql2": "latest",
-    "pg": "latest",
+    "@types/pg": "^8.15.0",
+    "mongodb": "^7.2.0",
+    "mysql2": "^3.22.3",
+    "pg": "^8.16.0",
     "redis": "latest",
     "typescript": "^6.0.3",
     "zhin.js": "workspace:*"

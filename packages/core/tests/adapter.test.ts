@@ -462,7 +462,7 @@ describe('Adapter Core Functionality', () => {
           name: 'config',
           description: 'mock config',
           value: {
-            get: () => ({ max_concurrent_messages: 1 }),
+            getPrimary: () => ({ max_concurrent_messages: 1 }),
           },
         } as any)
         plugin.$contexts.set('dispatcher', {
