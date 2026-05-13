@@ -219,6 +219,14 @@ ai:
     modelSizeHint: ""           # 模型大小提示：small / medium / large（留空自动推断）
     skillInstructionMaxChars: 0 # 技能指令最大字符数（0 表示按模型大小自动推断）
     maxSubagentIterations: 15   # 子 agent 最大工具调用轮数
+    phaseTrace: false           # 输出 Agent 回合 phase 日志（也可用 ZHIN_AGENT_PHASE_TRACE=1）
+    modelHarness:               # 按 provider 模式 / model id 覆盖 harness（与 TS 默认 deep merge）
+      providerPatterns:
+        "open*":
+          maxIterations: 7
+      models:
+        "openai:gpt-4o":
+          maxIterations: 9
 ```
 
 完整配置项说明详见 [AI 模块文档 — Agent 配置详解](/advanced/ai#agent-配置详解)。
@@ -228,6 +236,8 @@ ai:
 - `models` 列表现在是可选的 — 框架通过 ModelRegistry 自动发现可用模型并按 Tier 评分排序
 - `chatModel` / `visionModel` 可指定首选模型，留空则自动选择最优模型
 - 当首选模型不可用时，系统自动降级到次优模型
+- `modelHarness` 会在 TypeScript 默认 harness 之上做 deep merge：对象按字段合并，数组（如后续扩展字段）显式写出时完整覆盖默认数组
+- `phaseTrace`（或环境变量 `ZHIN_AGENT_PHASE_TRACE=1`）可输出稳定的 `[AGENT_PHASE]` 阶段日志，便于排障与回归对照
 - 支持 Ollama（本地模型）、OpenAI、以及其他兼容 OpenAI API 的服务（含中转/聚合服务）
 - 详见 [AI 模块文档](/advanced/ai)
 
