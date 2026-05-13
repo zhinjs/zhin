@@ -18,6 +18,7 @@ import { applyExecPolicyToTools } from './security/exec-policy.js';
 import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from './reserved-tools.js';
 import { resolveContextBudget } from './zhin-agent/context-budget.js';
 import { createRestrictedToolView, DEFAULT_SUBAGENT_TOOL_NAMES } from './orchestrator/tool-selection.js';
+import { createOwnerOrchestratedToolResultTransform } from './orchestrator/owner-confirm-orchestration.js';
 
 const logger = new Logger(null, 'Subagent');
 
@@ -152,6 +153,10 @@ export class SubagentManager {
         reservedToolNames: RESERVED_TOOL_NAMES,
         reservedToolNamePrefixes: RESERVED_TOOL_NAME_PREFIXES,
         contextWindow: contextBudget?.contextWindow ?? this.provider.contextWindow,
+        transformToolResult: createOwnerOrchestratedToolResultTransform({
+          toolContext: {},
+          disableHardOrchestration: true,
+        }),
       });
 
       try {

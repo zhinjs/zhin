@@ -23,6 +23,7 @@ describe('WebFetchBuiltinTool', () => {
     vi.stubGlobal('fetch', vi.fn());
     const inst = new WebFetchBuiltinTool();
     const out = String(await inst.run({ url: 'http://localhost:8080/' }));
+    expect(out.startsWith('ZHIN_NEEDS_OWNER:\n')).toBe(true);
     expect(out).toContain('SSRF');
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
@@ -30,8 +31,12 @@ describe('WebFetchBuiltinTool', () => {
   it('SSRF：拒绝 127.0.0.1 与 172.16 私网', async () => {
     vi.stubGlobal('fetch', vi.fn());
     const inst = new WebFetchBuiltinTool();
-    expect(String(await inst.run({ url: 'http://127.0.0.1/' }))).toContain('SSRF');
-    expect(String(await inst.run({ url: 'http://172.16.0.1/' }))).toContain('SSRF');
+    const o1 = String(await inst.run({ url: 'http://127.0.0.1/' }));
+    const o2 = String(await inst.run({ url: 'http://172.16.0.1/' }));
+    expect(o1.startsWith('ZHIN_NEEDS_OWNER:\n')).toBe(true);
+    expect(o2.startsWith('ZHIN_NEEDS_OWNER:\n')).toBe(true);
+    expect(o1).toContain('SSRF');
+    expect(o2).toContain('SSRF');
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 

@@ -14,6 +14,8 @@ export type {
   AgentTool,
   AgentConfig,
   AgentResult,
+  ToolResultTransformInput,
+  ToolResultTransform,
 } from '@zhin.js/ai';
 
 export { Agent, createAgent, formatToolTitle } from '@zhin.js/ai';
@@ -93,6 +95,14 @@ export {
   isDangerousCommand, stripEnvVarPrefix, stripSafeWrappers, splitCompoundCommand, extractCommandName,
   type ExecPolicyResult,
 } from './security/exec-policy.js';
+export {
+  ZHIN_NEEDS_OWNER_FIRST_LINE,
+  OWNER_HARD_ORCHESTRATION_TOOLS,
+  parseNeedsOwnerSignal,
+  shouldHardOrchestrateOwnerConfirm,
+  createOwnerOrchestratedToolResultTransform,
+} from './orchestrator/owner-confirm-orchestration.js';
+export type { OwnerOrchestrationOptions } from './orchestrator/owner-confirm-orchestration.js';
 export {
   buildRichSystemPrompt,
   buildContextHint,

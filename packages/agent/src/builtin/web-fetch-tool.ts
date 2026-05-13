@@ -86,7 +86,7 @@ export class WebFetchBuiltinTool extends BuiltinBaseTool {
       }
       const hostname = parsedUrl.hostname.toLowerCase();
       if (isBlockedSsrfHostname(hostname)) {
-        return `Error: 禁止访问内网地址 ${hostname}（SSRF 防护）`;
+        return `ZHIN_NEEDS_OWNER:\n禁止访问内网地址 ${hostname}（SSRF 防护）。若确有需要，请 Owner 确认风险后调整策略或在受控环境代为抓取。`;
       }
 
       const response = await fetch(String(args.url ?? ''), {

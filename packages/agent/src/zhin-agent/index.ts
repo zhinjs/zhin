@@ -61,6 +61,7 @@ import { stripHallucinatedToolCalls, stripThinkBlocks } from './text-sanitize.js
 import { pruneHistoryWithBudget } from './context-budget.js';
 import { resolveModelHarness } from './model-harness.js';
 import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from '../reserved-tools.js';
+import { createOwnerOrchestratedToolResultTransform } from '../orchestrator/owner-confirm-orchestration.js';
 
 export type { ZhinAgentConfig, OnChunkCallback } from './config.js';
 
@@ -394,6 +395,10 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
         contextWindow: contextBudget.contextWindow,
         reservedToolNames: RESERVED_TOOL_NAMES,
         reservedToolNamePrefixes: RESERVED_TOOL_NAME_PREFIXES,
+        transformToolResult: createOwnerOrchestratedToolResultTransform({
+          toolContext: contextForTools,
+          disableHardOrchestration: false,
+        }),
       });
 
       const userMessageWithHistory = buildUserMessageWithHistory(historyMessages, content);

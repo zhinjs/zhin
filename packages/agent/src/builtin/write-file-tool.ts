@@ -4,7 +4,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { Tool, ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
-import { assertFileAccess } from '../security/file-policy.js';
+import { checkFileAccess, isBlockedDevicePath } from '../security/file-policy.js';
 import { expandHome, nodeErrToFileMessage } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 
@@ -50,7 +50,13 @@ export class WriteFileBuiltinTool extends BuiltinBaseTool {
     }
     try {
       const fp = expandHome(filePathArg);
-      assertFileAccess(fp);
+      if (isBlockedDevicePath(fp)) {
+        return `Error: 禁止访问设备路径: ${fp}`;
+      }
+      const access = checkFileAccess(fp);
+      if (!access.allowed) {
+        return `ZHIN_NEEDS_OWNER:\n${access.reason!}\n\n（文件访问策略拒绝；仅 Owner 确认后在受控环境可重试或调整策略。）`;
+      }
       await fs.mkdir(path.dirname(fp), { recursive: true });
       await fs.writeFile(fp, contentArg, 'utf-8');
       return `✅ Wrote ${Buffer.byteLength(contentArg)} bytes to ${fp}`;

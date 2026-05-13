@@ -257,6 +257,17 @@ export interface ToolFilterOptions {
   minScore?: number;
 }
 
+/** 工具结果在进入消息历史前可由宿主改写（如 Owner 硬编排）。IM 无关。 */
+export interface ToolResultTransformInput {
+  toolName: string;
+  toolCallId: string;
+  args: Record<string, unknown>;
+  /** 工具返回的字符串（已 stringify） */
+  result: string;
+}
+
+export type ToolResultTransform = (input: ToolResultTransformInput) => Promise<string>;
+
 /** Agent 配置 */
 export interface AgentConfig {
   provider: string;
@@ -287,6 +298,11 @@ export interface AgentConfig {
   reservedToolNames?: string[];
   /** 受保护工具名前缀 */
   reservedToolNamePrefixes?: string[];
+  /**
+   * 在每条工具结果写入对话前调用（含 run / runStream）。
+   * 用于 Owner 确认注入等编排；应保持幂等、避免长时间阻塞整批并发工具。
+   */
+  transformToolResult?: ToolResultTransform;
 }
 
 /** Agent 运行结果 */

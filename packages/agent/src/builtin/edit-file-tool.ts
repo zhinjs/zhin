@@ -4,7 +4,8 @@
 import * as fs from 'node:fs/promises';
 import type { Tool, ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import {
-  assertFileAccess,
+  checkFileAccess,
+  isBlockedDevicePath,
   MAX_EDIT_FILE_SIZE,
   isFileStale,
 } from '../security/file-policy.js';
@@ -65,7 +66,13 @@ export class EditFileBuiltinTool extends BuiltinBaseTool {
     }
     try {
       const fp = expandHome(filePathArg);
-      assertFileAccess(fp);
+      if (isBlockedDevicePath(fp)) {
+        return `Error: 禁止访问设备路径: ${fp}`;
+      }
+      const access = checkFileAccess(fp);
+      if (!access.allowed) {
+        return `ZHIN_NEEDS_OWNER:\n${access.reason!}\n\n（文件访问策略拒绝；仅 Owner 确认后在受控环境可重试或调整策略。）`;
+      }
       const stat = await fs.stat(fp);
       if (stat.size > MAX_EDIT_FILE_SIZE) {
         return `Error: 文件过大 (${(stat.size / 1024 / 1024).toFixed(1)} MiB)，超过 ${MAX_EDIT_FILE_SIZE / 1024 / 1024} MiB 限制。`;

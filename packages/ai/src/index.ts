@@ -27,6 +27,8 @@ export type {
   AgentTool,
   AgentConfig,
   AgentResult,
+  ToolResultTransformInput,
+  ToolResultTransform,
   ToolFilterOptions,
   Usage,
   SessionConfig,

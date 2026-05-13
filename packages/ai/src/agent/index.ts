@@ -117,7 +117,7 @@ export interface AgentEvents {
  */
 export class Agent {
   private provider: AIProvider;
-  private config: Required<Pick<AgentConfig, 'provider' | 'model' | 'systemPrompt' | 'tools' | 'maxIterations' | 'temperature'>> & Pick<AgentConfig, 'contextWindow' | 'maxConcurrentTools' | 'modelFallbacks' | 'turnTimeout'>;
+  private config: Required<Pick<AgentConfig, 'provider' | 'model' | 'systemPrompt' | 'tools' | 'maxIterations' | 'temperature'>> & Pick<AgentConfig, 'contextWindow' | 'maxConcurrentTools' | 'modelFallbacks' | 'turnTimeout' | 'transformToolResult'>;
   private tools: Map<string, AgentTool> = new Map();
   private eventHandlers: Map<keyof AgentEvents, Function[]> = new Map();
 
@@ -134,6 +134,7 @@ export class Agent {
       contextWindow: config.contextWindow,
       maxConcurrentTools: config.maxConcurrentTools,
       turnTimeout: config.turnTimeout,
+      transformToolResult: config.transformToolResult,
     };
 
     // 注册工具
@@ -408,7 +409,20 @@ export class Agent {
 
     // 执行单个工具并记录状态
     const execOne = async (tc: ToolCall) => {
-      const result = await this.executeToolCall(tc);
+      let result = await this.executeToolCall(tc);
+      const transform = this.config.transformToolResult;
+      if (transform) {
+        const args = Agent.safeParse(tc.function.arguments);
+        const argsObj = typeof args === 'object' && args != null && !Array.isArray(args)
+          ? (args as Record<string, unknown>)
+          : {};
+        result = await transform({
+          toolName: tc.function.name,
+          toolCallId: tc.id,
+          args: argsObj,
+          result,
+        });
+      }
       const args = Agent.safeParse(tc.function.arguments);
       const parsedResult = Agent.safeParse(result);
 

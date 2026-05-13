@@ -100,6 +100,38 @@ describe('Agent 完整流程测试', () => {
       expect(result.toolCalls[0].tool).toBe('calculator');
     });
 
+    it('transformToolResult 在写入历史前改写工具返回字符串', async () => {
+      const tool = createMockTool({
+        name: 'echo_tool',
+        description: 'echo',
+        parameters: { x: { type: 'string', description: 'x' } },
+        required: ['x'],
+        executeResult: 'raw',
+      });
+      const transform = vi.fn(async () => 'transformed');
+
+      mockProvider.chat
+        .mockResolvedValueOnce(createChatResponse('', [{
+          id: 'call-1',
+          type: 'function',
+          function: { name: 'echo_tool', arguments: JSON.stringify({ x: '1' }) },
+        }]))
+        .mockResolvedValueOnce(createChatResponse('done'));
+
+      const agent = createAgent(mockProvider as any, {
+        tools: [tool],
+        transformToolResult: transform,
+      });
+      const result = await agent.run('hi');
+      expect(transform).toHaveBeenCalledWith(expect.objectContaining({
+        toolName: 'echo_tool',
+        result: 'raw',
+      }));
+      expect(result.toolCalls[0].result).toBe('transformed');
+      expect(result.content).toBe('done');
+      agent.dispose();
+    });
+
     it('第二轮 chat 请求应保留首轮带 tool_calls 的 reasoning_content', async () => {
       const searchTool = createMockTool({
         name: 'web_search',

@@ -43,11 +43,12 @@ describe('WriteFileBuiltinTool', () => {
     expect(out).toMatch(/Error|required|file_path/i);
   });
 
-  it('run 拒绝写入敏感文件名（assertFileAccess）', async () => {
+  it('run 拒绝写入敏感文件名（策略路径返回 ZHIN_NEEDS_OWNER）', async () => {
     const fp = path.join(tmpDir, '.env');
     const inst = new WriteFileBuiltinTool();
     const out = String(await inst.run({ file_path: fp, content: 'secret' }));
-    expect(out).toMatch(/Error|拒绝|敏感/i);
+    expect(out.startsWith('ZHIN_NEEDS_OWNER:\n')).toBe(true);
+    expect(out).toMatch(/拒绝|敏感/i);
     expect(fs.existsSync(fp)).toBe(false);
   });
 

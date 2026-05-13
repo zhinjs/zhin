@@ -7,7 +7,7 @@
  *   3. Safe wrapper 剥离 — `timeout 10 cmd` → 按 `cmd` 做匹配
  *   4. 复合命令拆分   — `&&` `||` `;` 逐段独立检查，deny 优先
  *   5. 只读命令自动放行 — 与 file-policy classifyBashCommand 集成
- *   6. ask_user 集成  — execAsk=true 时返回需审批标记（而非无法交互的抛错）
+ *   6. Owner 信号 — execAsk=true 时返回需审批（ZHIN_NEEDS_OWNER），由编排层可硬触发 ask_user
  */
 
 import type { AgentTool } from '@zhin.js/core';
@@ -273,8 +273,8 @@ export function applyExecPolicyToTools(config: Required<ZhinAgentConfig>, tools:
         const result = checkExecPolicy(config, cmd);
         if (!result.allowed) {
           if (result.needsApproval) {
-            // 返回可读消息让 AI 用 ask_user 向 Owner 确认
-            return `⚠️ ${result.reason}\n请使用 ask_user 工具向 Owner 确认是否允许执行此命令。`;
+            // 权威首行 + 正文：硬编排识别；与旧「请使用 ask_user」话术合并为单套
+            return `ZHIN_NEEDS_OWNER:\n⚠️ ${result.reason}\n\n此 shell 命令需 Bot Owner 审批后方可执行。`;
           }
           throw new Error(result.reason!);
         }
