@@ -112,6 +112,108 @@ export type {
 } from './subagent.js';
 export { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from './reserved-tools.js';
 
+export { BuiltinBaseTool } from './builtin/builtin-base-tool.js';
+export {
+  ReadFileBuiltinTool,
+  createReadFileTool,
+  READ_FILE_PARAMETERS,
+} from './builtin/read-file-tool.js';
+export {
+  WriteFileBuiltinTool,
+  createWriteFileTool,
+  WRITE_FILE_PARAMETERS,
+} from './builtin/write-file-tool.js';
+export {
+  EditFileBuiltinTool,
+  createEditFileTool,
+  EDIT_FILE_PARAMETERS,
+} from './builtin/edit-file-tool.js';
+export {
+  ListDirBuiltinTool,
+  createListDirTool,
+  LIST_DIR_PARAMETERS,
+} from './builtin/list-dir-tool.js';
+export {
+  GlobBuiltinTool,
+  createGlobTool,
+  GLOB_PARAMETERS,
+  type GlobExecAsync,
+} from './builtin/glob-tool.js';
+export {
+  GrepBuiltinTool,
+  createGrepTool,
+  GREP_PARAMETERS,
+  type GrepExecAsync,
+} from './builtin/grep-tool.js';
+export {
+  BashBuiltinTool,
+  createBashTool,
+  BASH_PARAMETERS,
+  type BashExecAsync,
+} from './builtin/bash-tool.js';
+export {
+  WebSearchBuiltinTool,
+  createWebSearchTool,
+  WEB_SEARCH_PARAMETERS,
+  MAX_WEB_SEARCH_COUNT,
+} from './builtin/web-search-tool.js';
+export {
+  WEB_SEARCH_LOCALE_EXTRA_KEY,
+  DEFAULT_WEB_SEARCH_MARKET,
+  normalizeWebSearchLocaleHint,
+  acceptLanguageForMarket,
+  resolveWebSearchMarketFromContext,
+} from './builtin/web-search-locale.js';
+export { bingSearchFetchHeaders, buildBingSearchUrl } from './builtin/bing-search-html.js';
+export {
+  WebFetchBuiltinTool,
+  createWebFetchTool,
+  WEB_FETCH_PARAMETERS,
+  WEB_FETCH_DEFAULT_MAX_LENGTH,
+  stripFetchedHtmlToText,
+} from './builtin/web-fetch-tool.js';
+export {
+  TodoReadBuiltinTool,
+  createTodoReadTool,
+  TODO_READ_PARAMETERS,
+} from './builtin/todo-read-tool.js';
+export {
+  TodoWriteBuiltinTool,
+  createTodoWriteTool,
+  TODO_WRITE_PARAMETERS,
+} from './builtin/todo-write-tool.js';
+export {
+  ReadMemoryBuiltinTool,
+  createReadMemoryTool,
+  READ_MEMORY_PARAMETERS,
+} from './builtin/read-memory-tool.js';
+export {
+  WriteMemoryBuiltinTool,
+  createWriteMemoryTool,
+  WRITE_MEMORY_PARAMETERS,
+} from './builtin/write-memory-tool.js';
+export {
+  ActivateSkillBuiltinTool,
+  createActivateSkillTool,
+  ACTIVATE_SKILL_PARAMETERS,
+  type ActivateSkillToolOptions,
+} from './builtin/activate-skill-tool.js';
+export {
+  InstallSkillBuiltinTool,
+  createInstallSkillTool,
+  INSTALL_SKILL_PARAMETERS,
+  type InstallSkillToolOptions,
+} from './builtin/install-skill-tool.js';
+export {
+  AskUserBuiltinTool,
+  createAskUserTool,
+  ASK_USER_PARAMETERS,
+  askViaPrompt,
+  formatOwnerResponse,
+} from './builtin/ask-user-tool.js';
+export { createBuiltinTools, type BuiltinToolsOptions } from './builtin-tools.js';
+export { ZHIN_WEB_USER_AGENT, WEB_TOOL_FETCH_TIMEOUT_MS } from './builtin/web-tool-utils.js';
+
 export {
   PersistentCronEngine,
   readCronJobsFile, writeCronJobsFile, getCronJobsFilePath, generateCronJobId,
@@ -137,11 +239,6 @@ export type {
   MessageReceivedEvent, MessageSentEvent, SessionCompactEvent,
   SessionNewEvent, AgentBootstrapEvent, ToolCallEvent,
 } from './hooks.js';
-
-export {
-  calculatorTool, timeTool, searchTool, codeRunnerTool,
-  httpTool, memoryTool, getBuiltinTools, getAllBuiltinTools,
-} from './tools.js';
 
 export { initAgentModule } from './init.js';
 

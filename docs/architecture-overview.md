@@ -198,7 +198,7 @@ graph TB
 | `PersistentCronEngine` | AI 感知的持久化 cron 引擎 |
 | `BootstrapLoader` | 引导文件加载（SOUL.md / AGENTS.md / TOOLS.md） |
 | `PromptBuilder` | 系统提示词构建器（10 段结构化架构） |
-| `defaults/` | 默认工具/子代理/Hook 注册（`registerDefaultTools` 等） |
+| `defaults/` | 默认工具/子代理/Hook |
 | `common-adapter-tools` | 适配器群管方法 → AI 工具自动生成 |
 | 内置工具 | `bash`、`read_file`、`write_file`、`ask_user`、`web_search`、`chat_history` 等 |
 

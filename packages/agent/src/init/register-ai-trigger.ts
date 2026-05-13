@@ -9,6 +9,7 @@ import type { OutputElement } from '@zhin.js/ai';
 import type { AIServiceRefs } from './shared-refs.js';
 import { extractMediaParts } from './message-media.js';
 import { renderOutput } from './output-renderer.js';
+import { canAccessTool } from '../orchestrator/tool-selection.js';
 
 export function registerAITrigger(refs: AIServiceRefs): void {
   const plugin = getPlugin();
@@ -71,10 +72,12 @@ export function registerAITrigger(refs: AIServiceRefs): void {
 
       const tCollect = performance.now();
       const toolService = root.inject('tool');
-      let externalTools: Tool[] = [];
+      let externalTools: Tool[] = [...ai.getResidentToolsAsTools()];
       if (toolService) {
-        externalTools = toolService.getAll();
+        externalTools.push(...toolService.getAll());
         externalTools = toolService.filterByContext(externalTools, toolContext);
+      } else {
+        externalTools = externalTools.filter(t => canAccessTool(t, toolContext));
       }
       logger.debug(`[AI Handler] 工具收集: ${externalTools.length} 个, ${(performance.now() - tCollect).toFixed(0)}ms`);
 

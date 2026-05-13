@@ -130,6 +130,12 @@ describe('normalizeTool', () => {
 
     await expect(agentTool.execute({ path: 'a.txt' })).resolves.toBe('u1');
   });
+
+  it('preserves Tool.source on AgentTool (reserved-name merge / builtin detection)', () => {
+    const tool = makeTool({ source: 'builtin:agent' });
+    const agentTool = normalizeTool(tool);
+    expect(agentTool.source).toBe('builtin:agent');
+  });
 });
 
 describe('ToolSelection', () => {
@@ -172,6 +178,34 @@ describe('ToolSelection', () => {
 
     expect(tools.map(t => t.name)).toEqual(['activate_skill', 'deploy_tool', 'bash']);
     expect(tools.some(t => t.name === 'blocked')).toBe(false);
+  });
+
+  it('retains web_search after relevance filter for messages without search keywords', () => {
+    const selection = new ToolSelection();
+    const context: ToolContext = { platform: 'qq' };
+    const externalTools = [
+      makeTool({ name: 'web_search', description: 'Bing HTML search', keywords: ['search', 'bing'] }),
+    ];
+    const tools = selection.collectRelevantTools('狐蒂云最近有什么动态', context, externalTools, {
+      config: makeConfig(),
+      skillRegistry: null,
+      externalRegistered: new Map(),
+    });
+    expect(tools.some(t => t.name === 'web_search')).toBe(true);
+  });
+
+  it('retains ask_user after relevance filter for messages without interaction keywords', () => {
+    const selection = new ToolSelection();
+    const context: ToolContext = { platform: 'qq' };
+    const externalTools = [
+      makeTool({ name: 'ask_user', description: 'Ask bot owner', keywords: ['owner', 'confirm'] }),
+    ];
+    const tools = selection.collectRelevantTools('今天天气适合出门吗', context, externalTools, {
+      config: makeConfig(),
+      skillRegistry: null,
+      externalRegistered: new Map(),
+    });
+    expect(tools.some(t => t.name === 'ask_user')).toBe(true);
   });
 });
 

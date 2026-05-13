@@ -1,0 +1,79 @@
+/**
+ * web_fetch 内置工具（BuiltinBaseTool）单测 — fetch 全局 mock
+ */
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import {
+  createWebFetchTool,
+  WebFetchBuiltinTool,
+  stripFetchedHtmlToText,
+} from '../../src/builtin/web-fetch-tool.js';
+import { ZHIN_WEB_USER_AGENT } from '../../src/builtin/web-tool-utils.js';
+import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
+import type { ToolContext } from '@zhin.js/core';
+
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+  vi.restoreAllMocks();
+});
+
+describe('WebFetchBuiltinTool', () => {
+  it('SSRF：拒绝 localhost', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    const inst = new WebFetchBuiltinTool();
+    const out = String(await inst.run({ url: 'http://localhost:8080/' }));
+    expect(out).toContain('SSRF');
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('SSRF：拒绝 127.0.0.1 与 172.16 私网', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    const inst = new WebFetchBuiltinTool();
+    expect(String(await inst.run({ url: 'http://127.0.0.1/' }))).toContain('SSRF');
+    expect(String(await inst.run({ url: 'http://172.16.0.1/' }))).toContain('SSRF');
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('非 http/https 协议拒绝', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    const inst = new WebFetchBuiltinTool();
+    const out = String(await inst.run({ url: 'file:///etc/passwd' }));
+    expect(out).toContain('仅支持 http/https');
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('成功抓取：UA、超时、redirect follow，并按 max_length 截断', async () => {
+    const longBody = '<html><body><p>' + 'x'.repeat(100) + '</p></body></html>';
+    const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
+      expect(String(url)).toBe('https://public.example/page');
+      expect(init?.headers).toEqual({ 'User-Agent': ZHIN_WEB_USER_AGENT });
+      expect(init?.redirect).toBe('follow');
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+      return new Response(longBody, { status: 200, statusText: 'OK' });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const inst = new WebFetchBuiltinTool();
+    const out = String(await inst.run({ url: 'https://public.example/page', max_length: 30 }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(out.endsWith('\n...(truncated)')).toBe(true);
+    expect(out.length).toBeLessThanOrEqual(30 + '\n...(truncated)'.length);
+  });
+
+  it('stripFetchedHtmlToText 去除 script/style 与标签', () => {
+    const html = '<script>evil()</script><p>Hi&nbsp;<b>there</b></p>';
+    expect(stripFetchedHtmlToText(html)).toBe('Hi there');
+  });
+
+  it('toTool 元数据与 execute 路径', async () => {
+    vi.stubGlobal('fetch', async () => new Response('<html><body>OK</body></html>', { status: 200 }));
+    const tool = createWebFetchTool();
+    expect(tool.name).toBe('web_fetch');
+    expect(tool.parameters.required).toContain('url');
+    const ctx = { platform: 'test' } as ToolContext;
+    const agentTool = normalizeTool(tool, ctx);
+    const result = await agentTool.execute({ url: 'https://example.com/' });
+    expect(String(result)).toContain('OK');
+  });
+});

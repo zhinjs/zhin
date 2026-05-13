@@ -192,6 +192,7 @@ function buildUsingToolsSection(): string {
   const items = [
     'Prefer dedicated tools over bash: read_file, edit_file, write_file, glob, grep.',
     'Call independent tools in parallel; dependent tools sequentially.',
+    'web_search: one tight query; summarize for the user—no raw dumps, no extra searches unless prior results were empty or useless.',
     'Complex tasks → todo_write to track. Long tasks → spawn_task.',
     'Skill install → install_skill(url) then activate_skill.',
   ];

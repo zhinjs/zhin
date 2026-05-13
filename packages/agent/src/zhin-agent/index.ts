@@ -28,6 +28,10 @@ import type { OutputElement } from '@zhin.js/ai';
 import { parseOutput } from '@zhin.js/ai';
 import type { ModelRegistry } from '@zhin.js/ai';
 import { UserProfileStore } from '../user-profile.js';
+import {
+  WEB_SEARCH_LOCALE_EXTRA_KEY,
+  normalizeWebSearchLocaleHint,
+} from '../builtin/web-search-locale.js';
 import { RateLimiter } from '@zhin.js/ai';
 import { detectTone } from '@zhin.js/ai';
 import { SubagentManager, type SubagentResultSender } from '../subagent.js';
@@ -226,6 +230,9 @@ export class ZhinAgent {
       return parseOutput(rateCheck.message || '请稍后再试');
     }
 
+    // 0.5 工具上下文：web_search 语言（档案 preferred_language / language，否则默认中文）
+    const contextForTools = await this.attachWebSearchLocale(context, userId);
+
     triggerAIHook(createAIHookEvent('message', 'received', sessionId, {
       userId,
       content,
@@ -236,7 +243,7 @@ export class ZhinAgent {
     const tFilter = now();
     const allTools = collectRuntimeTools({
       content,
-      context,
+      context: contextForTools,
       externalTools,
       config: this.config,
       skillRegistry: this.skillRegistry,
@@ -505,6 +512,30 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
   }
 
   // ── Internal helpers ────────────────────────────────────────────────
+
+  /**
+   * 为内置工具注入 `extra.web_search_locale`：
+   * - 若调用方已在 `context.extra.web_search_locale` 中设置，则规范化后沿用；
+   * - 否则读取用户档案 `preferred_language` / `language`；
+   * - 均未设置时不在 extra 中写入，web_search 默认使用中文市场。
+   */
+  private async attachWebSearchLocale(context: ToolContext, userId: string): Promise<ToolContext> {
+    const extra: Record<string, unknown> = { ...(context.extra ?? {}) };
+    const existing = extra[WEB_SEARCH_LOCALE_EXTRA_KEY];
+    if (typeof existing === 'string' && existing.trim()) {
+      extra[WEB_SEARCH_LOCALE_EXTRA_KEY] = normalizeWebSearchLocaleHint(existing);
+      return { ...context, extra };
+    }
+    const [preferred, language] = await Promise.all([
+      this.userProfiles.get(userId, 'preferred_language'),
+      this.userProfiles.get(userId, 'language'),
+    ]);
+    const hint = (preferred ?? language)?.trim();
+    if (hint) {
+      extra[WEB_SEARCH_LOCALE_EXTRA_KEY] = normalizeWebSearchLocaleHint(hint);
+    }
+    return { ...context, extra };
+  }
 
   private async buildHistoryMessages(sessionId: string): Promise<ChatMessage[]> {
     return this.memory.buildContext(sessionId);

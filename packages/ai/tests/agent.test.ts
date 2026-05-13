@@ -25,6 +25,7 @@ vi.mock('@zhin.js/logger', async (importOriginal) => {
 
 import { createAgent, Agent } from '@zhin.js/ai';
 import { mergeToolsByName } from '@zhin.js/ai';
+import type { ChatMessage } from '@zhin.js/ai';
 
 describe('Agent 完整流程测试', () => {
   let mockProvider: ReturnType<typeof createMockProvider>;
@@ -97,6 +98,43 @@ describe('Agent 完整流程测试', () => {
       expect(result.content).toBe('计算结果是 42');
       expect(result.toolCalls).toHaveLength(1);
       expect(result.toolCalls[0].tool).toBe('calculator');
+    });
+
+    it('第二轮 chat 请求应保留首轮带 tool_calls 的 reasoning_content', async () => {
+      const searchTool = createMockTool({
+        name: 'web_search',
+        description: '搜索',
+        parameters: { query: { type: 'string', description: 'q' } },
+        required: ['query'],
+        executeResult: 'snippet about 狐蒂云',
+      });
+
+      mockProvider.chat
+        .mockResolvedValueOnce(
+          createChatResponse(
+            '',
+            [{
+              id: 'call-1',
+              type: 'function',
+              function: { name: 'web_search', arguments: JSON.stringify({ query: '狐蒂云' }) },
+            }],
+            { reasoning_content: 'internal-reasoning-blob' },
+          ),
+        )
+        .mockResolvedValueOnce(createChatResponse('根据检索结果，事件概要如下。'));
+
+      const agent = createAgent(mockProvider as any, {
+        tools: [searchTool],
+      });
+
+      const result = await agent.run('你怎么看狐蒂云跑路');
+
+      expect(result.content).toBe('根据检索结果，事件概要如下。');
+      expect(mockProvider.chat).toHaveBeenCalledTimes(2);
+
+      const secondCall = mockProvider.chat.mock.calls[1][0] as { messages: ChatMessage[] };
+      const withTools = secondCall.messages.find(m => m.role === 'assistant' && m.tool_calls?.length);
+      expect(withTools?.reasoning_content).toBe('internal-reasoning-blob');
     });
 
     it('应该处理多个工具调用', async () => {
@@ -445,12 +483,12 @@ describe('Agent.filterTools 程序化过滤', () => {
 
   it('应该支持中文描述双向匹配', () => {
     const tools = [
-      createMockTool({ name: 'get_time', description: '获取当前时间和日期信息' }),
+      createMockTool({ name: 'clock_read', description: '获取当前时间和日期信息' }),
       createMockTool({ name: 'weather', description: '查询天气信息' }),
     ] as any[];
     const result = Agent.filterTools('时间', tools);
     expect(result.length).toBeGreaterThanOrEqual(1);
-    expect(result[0].name).toBe('get_time');
+    expect(result[0].name).toBe('clock_read');
   });
 });
 

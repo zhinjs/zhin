@@ -199,6 +199,7 @@ export function normalizeTool(input: NormalizableTool, context?: ToolContext): A
   if (tool.permissionLevel) agentTool.permissionLevel = permissionLevelToPriority(tool.permissionLevel);
   if (tool.preExecutable) agentTool.preExecutable = true;
   if (tool.kind) agentTool.kind = tool.kind;
+  if (tool.source) agentTool.source = tool.source;
   return agentTool;
 }
 
@@ -303,6 +304,14 @@ export class ToolSelection {
       maxTools: config.maxTools,
       minScore: 0.3,
     });
+
+    /** 时事/实体类问题常无关键词命中；以下工具仍应留在候选集中供模型自行调用 */
+    const relevanceResidentNames = ['web_search', 'ask_user'] as const;
+    for (const name of relevanceResidentNames) {
+      if (filtered.some(t => t.name === name)) continue;
+      const t = collected.find(x => x.name === name);
+      if (t) filtered.unshift(t);
+    }
 
     if (mentionedSkill && filtered.length > 0) {
       const activateSkillIdx = filtered.findIndex(t => t.name === 'activate_skill');

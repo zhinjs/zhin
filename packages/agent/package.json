@@ -22,13 +22,15 @@
   "dependencies": {
     "@zhin.js/ai": "workspace:*",
     "@zhin.js/core": "workspace:*",
+    "he": "^1.2.0",
     "js-yaml": "^4.1.0"
   },
   "devDependencies": {
+    "@types/he": "^1.2.3",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.7.0",
-    "typescript": "^6.0.3",
-    "rimraf": "^6.0.0"
+    "rimraf": "^6.0.0",
+    "typescript": "^6.0.3"
   },
   "repository": {
     "type": "git",

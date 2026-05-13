@@ -89,6 +89,8 @@ export interface ToolContext {
   isGroupAdmin?: boolean;
   isGroupOwner?: boolean;
   message?: unknown;
+  /** 与 @zhin.js/core.ToolContext.extra 对齐：供内置工具等读取扩展字段（如 web_search_locale） */
+  extra?: Record<string, unknown>;
 }
 
 export type IMToolContext = ToolContext;

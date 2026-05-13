@@ -53,6 +53,12 @@ describe('estimateTokens', () => {
     const msg: ChatMessage = { role: 'user', content: [{ type: 'text', text: 'hi' }] };
     expect(estimateTokens(msg)).toBeGreaterThanOrEqual(4);
   });
+
+  it('should include reasoning_content length in estimate', () => {
+    const a = createMsg('assistant', 'hi');
+    const b: ChatMessage = { ...a, reasoning_content: 'x'.repeat(40) };
+    expect(estimateTokens(b)).toBeGreaterThan(estimateTokens(a));
+  });
 });
 
 describe('estimateMessagesTokens', () => {

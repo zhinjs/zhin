@@ -9,7 +9,8 @@ import type { ToolContext } from '@zhin.js/core';
 import type { AgentTool } from '@zhin.js/core';
 import type { ConversationMemory } from '@zhin.js/ai';
 import type { UserProfileStore } from '../user-profile.js';
-import type { SubagentManager, SubagentOrigin } from '../subagent.js';
+
+export { createSpawnTaskTool } from '../builtin/spawn-task-tool.js';
 
 export function createChatHistoryTool(sessionId: string, memory: ConversationMemory): AgentTool {
   return {
@@ -105,7 +106,7 @@ export function createUserProfileTool(userId: string, profiles: UserProfileStore
         },
         value: {
           type: 'string',
-          description: '偏好值（仅 set 操作需要）',
+          description: '偏好值（仅 set 操作需要）。language / preferred_language 会影响回复与 web_search 的 Bing 市场语言。',
         },
       },
       required: ['action'],
@@ -135,53 +136,6 @@ export function createUserProfileTool(userId: string, profiles: UserProfileStore
         default:
           return '不支持的操作，请使用 get/set/delete';
       }
-    },
-  };
-}
-
-export function createSpawnTaskTool(
-  context: ToolContext,
-  manager: SubagentManager,
-): AgentTool {
-  const platform = context.platform || '';
-  const botId = context.botId || '';
-  const senderId = context.senderId || '';
-  const sceneId = context.sceneId || '';
-  const sceneType = context.message?.$channel?.type || 'private';
-
-  return {
-    name: 'spawn_task',
-    source: 'builtin:context',
-    description: '将复杂或耗时的任务交给后台子 agent 异步处理。子 agent 拥有文件读写、Shell、网络搜索等能力，完成后会自动通知用户。适用于需要多步操作的文件处理、代码分析、数据收集等任务。',
-    parameters: {
-      type: 'object',
-      properties: {
-        task: {
-          type: 'string',
-          description: '要交给子 agent 完成的任务描述（尽量详细，包含目标、范围、期望输出）',
-        },
-        label: {
-          type: 'string',
-          description: '任务的简短标签（用于显示，可选）',
-        },
-      },
-      required: ['task'],
-    },
-    tags: ['agent', 'async', 'task', '后台', '子任务'],
-    keywords: ['后台', '异步', '子任务', 'spawn', 'background', '并行', '独立处理'],
-    async execute(args: Record<string, any>) {
-      const { task, label } = args;
-      if (!task) return '请提供任务描述';
-
-      const origin: SubagentOrigin = {
-        platform,
-        botId,
-        sceneId,
-        senderId,
-        sceneType,
-      };
-
-      return manager.spawn({ task, label, origin });
     },
   };
 }

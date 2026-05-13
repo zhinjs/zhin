@@ -1,16 +1,6 @@
 /**
- * Default common tools — registered for all agents.
- *
- * These are the baseline tools every agent has access to.
- * Re-uses existing built-in tools from tools.ts.
+ * Orchestrator 默认工具注册位（保留入口；当前不注入任何占位 ZhinTool）。
+ * 真实能力请通过插件、`createBuiltinTools`、MCP 等注册。
  */
 
 import type { AgentOrchestrator } from '../orchestrator/index.js';
-import { getAllBuiltinTools } from '../tools.js';
-
-export function registerDefaultTools(orchestrator: AgentOrchestrator): void {
-  const builtinTools = getAllBuiltinTools();
-  for (const tool of builtinTools) {
-    orchestrator.addTool(tool, undefined, 'builtin');
-  }
-}

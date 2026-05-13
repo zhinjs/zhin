@@ -206,7 +206,7 @@ addTool({
 })
 
 addTool({
-  name: 'get_time',
+  name: 'show_clock',
   description: '获取当前时间',
   parameters: {},
   execute: async () => {

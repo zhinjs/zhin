@@ -26,6 +26,26 @@ import type { AutoCompactTrackingState } from '../compaction/index.js';
 
 const logger = new Logger(null, 'Agent');
 
+/** 将 LLM 返回的 assistant 消息写入多轮 history（保留 tool_calls 与 reasoning_content） */
+function buildAssistantHistoryMessage(choiceMessage: ChatMessage): ChatMessage {
+  const content = typeof choiceMessage.content === 'string' ? choiceMessage.content : '';
+  const next: ChatMessage = {
+    role: 'assistant',
+    content,
+    ...(choiceMessage.tool_calls?.length ? { tool_calls: choiceMessage.tool_calls } : {}),
+  };
+  if (choiceMessage.reasoning_content != null) {
+    next.reasoning_content = choiceMessage.reasoning_content;
+  }
+  return next;
+}
+
+/** 工具返回后一轮内提示：一行，避免与 Zhin 长 system 重复堆叠 */
+const SYSTEM_TOOL_FOLLOWUP_ANSWER =
+  'From the tool results above, answer the user in natural language; do not call web_search again unless those results were empty or useless.';
+
+const SYSTEM_TOOL_DUP_FORCE = 'Reply in natural language now; do not call more tools.';
+
 /** 工具执行默认超时时间 (ms) */
 const DEFAULT_TOOL_TIMEOUT = 30_000;
 
@@ -542,14 +562,7 @@ export class Agent {
           ).join(', ');
           logger.info(`[第${state.iterations}轮] 工具调用: ${callSummary}`);
           this.emit('thinking', '正在执行工具调用...');
-
-          // 当存在 tool_calls 时，content 通常是模型的内部思考或原始 JSON，
-          // 不需要暴露给最终用户，但需要保留在消息历史中以维持对话完整性
-          state.messages.push({
-            role: 'assistant',
-            content: typeof choice.message.content === 'string' ? choice.message.content : '',
-            tool_calls: choice.message.tool_calls,
-          });
+          state.messages.push(buildAssistantHistoryMessage(choice.message));
 
           // 并行执行所有新工具调用，自动跳过重复
           const results = await this.executeToolCalls(
@@ -577,7 +590,7 @@ export class Agent {
 
             state.messages.push({
               role: 'system',
-              content: 'You have all the information needed. Reply to the user in natural language; do not call more tools.',
+              content: SYSTEM_TOOL_DUP_FORCE,
             });
 
             continue;
@@ -602,7 +615,7 @@ export class Agent {
           if (allSucceeded && results.length > 0) {
             state.messages.push({
               role: 'system',
-              content: 'Tools have returned. If the information is enough to answer the user, reply in natural language; do not call the same tools again.',
+              content: SYSTEM_TOOL_FOLLOWUP_ANSWER,
             });
           }
 
@@ -778,6 +791,7 @@ export class Agent {
       }
 
       let content = '';
+      let reasoningContent = '';
       const pendingToolCalls: ToolCall[] = [];
       let finishReason: string | null = null;
       const isLastIteration = iterations >= this.config.maxIterations;
@@ -802,6 +816,10 @@ export class Agent {
           if (pendingToolCalls.length === 0) {
             yield { type: 'content', data: choice.delta.content };
           }
+        }
+
+        if (choice.delta.reasoning_content) {
+          reasoningContent += choice.delta.reasoning_content;
         }
 
         // 合并工具调用片段
@@ -829,11 +847,13 @@ export class Agent {
       }
 
       // 将 assistant 消息加入上下文
-      messages.push({
+      const assistantMsg: ChatMessage = {
         role: 'assistant',
         content,
         tool_calls: pendingToolCalls.length > 0 ? pendingToolCalls : undefined,
-      });
+      };
+      if (reasoningContent) assistantMsg.reasoning_content = reasoningContent;
+      messages.push(assistantMsg);
 
       // 处理工具调用
       if (pendingToolCalls.length > 0 && finishReason === 'tool_calls') {

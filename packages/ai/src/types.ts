@@ -17,6 +17,7 @@ export interface ChatMessage {
   name?: string;
   tool_call_id?: string;
   tool_calls?: ToolCall[];
+  reasoning_content?: string | null;
 }
 
 /** 内容部分（支持多模态） */

@@ -47,7 +47,7 @@ import {
   AIService,
   SessionManager,
   registerAIHook,
-  getBuiltinTools,
+  createBuiltinTools,
 } from 'zhin.js'
 
 // 使用 ctx.ai (AIService)
@@ -89,7 +89,7 @@ const result = await agent.run('你好')
 | 跟进与定时 | `FollowUpManager`, `PersistentCronEngine`, `createCronTools`, `setCronManager`, `getCronManager` |
 | 压缩与 Bootstrap | `compactSession`, `estimateTokens`, `loadBootstrapFiles`, `loadSoulPersona`, `loadToolsGuide`, `loadAgentsMemory` |
 | Hook | `registerAIHook`, `unregisterAIHook`, `triggerAIHook`, `createAIHookEvent` |
-| 内置工具 | `getBuiltinTools`, `getAllBuiltinTools`, `calculatorTool`, `timeTool`, `searchTool`, `codeRunnerTool`, `httpTool`, `memoryTool` |
+| IM 内置工具工厂 | `createBuiltinTools`、`BuiltinBaseTool`；具体工具见 `src/builtin/*` |
 | 输出与检测 | `parseOutput`, `renderToPlainText`, `renderToSatori`, `detectTone` |
 | 子代理 | `SubagentManager` |
 | 限流 | `RateLimiter` |
@@ -230,17 +230,10 @@ src/
 │   ├── file-policy.ts
 │   └── exec-policy.ts
 │
-├── builtin-tools/                   # ★ 拆分 959 行
-│   ├── index.ts                     # createBuiltinTools 聚合
-│   ├── file-tools.ts
-│   ├── shell-tools.ts
-│   ├── web-tools.ts
-│   ├── memory-tools.ts
-│   ├── skill-tools.ts
-│   └── simple-tools.ts              # calculator, time 等
+├── builtin/                         # IM 内置工具（BuiltinBaseTool + 各 *-tool.ts）
+├── builtin-tools.ts                 # createBuiltinTools() 聚合
 │
 ├── defaults/                        # ★ 各注册表的默认资源
-│   ├── tools.ts                     # 默认 common tools
 │   ├── skills.ts                    # 默认 common skills
 │   ├── hooks.ts                     # 默认 common hooks
 │   └── subagents.ts                 # 默认 subagent 模板

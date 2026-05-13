@@ -59,7 +59,7 @@ vi.mock('@zhin.js/core', async (importOriginal) => {
 });
 
 // Import after mocking — AIService + builtin tools from agent; Tool/trigger from core
-import { AIService, calculatorTool, timeTool, getBuiltinTools } from '@zhin.js/agent';
+import { AIService } from '@zhin.js/agent';
 import { ToolFeature, ZhinTool, shouldTriggerAI, inferSenderPermissions } from '@zhin.js/core';
 import type { Tool, ToolContext, AgentTool } from '@zhin.js/core';
 
@@ -165,8 +165,19 @@ describe('AI Service 集成测试', () => {
       const tools = aiService.collectAllTools();
       expect(Array.isArray(tools)).toBe(true);
       const names = tools.map(t => t.name);
-      expect(names).toContain('calculator');
-      expect(names).toContain('get_time');
+      expect(names).toEqual(['web_search']);
+    });
+
+    it('getResidentToolsAsTools 应包含 web_search', () => {
+      const resident = aiService.getResidentToolsAsTools();
+      expect(resident.map(t => t.name)).toEqual(['web_search']);
+    });
+
+    it('setPlugin 后常驻工具含 ask_user', () => {
+      const plugin = { addMiddleware: vi.fn(), inject: vi.fn() } as unknown as import('@zhin.js/core').Plugin;
+      aiService.setPlugin(plugin);
+      expect(aiService.getResidentToolsAsTools().map(t => t.name)).toEqual(['web_search', 'ask_user']);
+      expect(aiService.collectAllTools().map(t => t.name)).toEqual(['web_search', 'ask_user']);
     });
 
     it('应该注册自定义工具', () => {
@@ -447,63 +458,6 @@ describe('AI Trigger 工具函数测试', () => {
       const result = inferSenderPermissions(message as any, {});
       
       expect(result.permissionLevel).toBe('user');
-    });
-  });
-});
-
-// ============================================================================
-// 内置工具测试
-// ============================================================================
-
-describe('内置工具完整测试', () => {
-  describe('计算器工具', () => {
-    const calculator = calculatorTool.toTool();
-
-    it('应该正确处理嵌套括号', async () => {
-      const result = await calculator.execute({ expression: '((2 + 3) * (4 - 1))' });
-      expect(result.result).toBe(15);
-    });
-
-    it('应该处理负数', async () => {
-      const result = await calculator.execute({ expression: '-5 + 3' });
-      expect(result.result).toBe(-2);
-    });
-
-    it('应该处理小数', async () => {
-      const result = await calculator.execute({ expression: '1.5 + 2.5' });
-      expect(result.result).toBe(4);
-    });
-
-    it('应该处理科学计数法', async () => {
-      const result = await calculator.execute({ expression: '1e2 + 50' });
-      expect(result.result).toBe(150);
-    });
-  });
-
-  describe('时间工具', () => {
-    const timeToolObj = timeTool.toTool();
-
-    it('应该返回 ISO 格式时间', async () => {
-      const result = await timeToolObj.execute({ format: 'timestamp' });
-      expect(result.iso).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
-    });
-
-    it('时间戳应该是合理的', async () => {
-      const result = await timeToolObj.execute({});
-      const now = Date.now();
-      expect(Math.abs(result.timestamp - now)).toBeLessThan(1000);
-    });
-  });
-
-  describe('getBuiltinTools', () => {
-    it('应该返回内置工具列表', () => {
-      const tools = getBuiltinTools();
-      expect(Array.isArray(tools)).toBe(true);
-      expect(tools.length).toBeGreaterThan(0);
-      
-      const names = tools.map(t => t.name);
-      expect(names).toContain('calculator');
-      expect(names).toContain('get_time');
     });
   });
 });

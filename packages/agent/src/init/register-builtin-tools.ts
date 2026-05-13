@@ -5,7 +5,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { getPlugin } from '@zhin.js/core';
+import { getPlugin, isZhinTool } from '@zhin.js/core';
 import type { Tool } from '../orchestrator/types.js';
 import type { AgentOrchestrator } from '../orchestrator/index.js';
 import { createBuiltinTools } from '../builtin-tools.js';
@@ -42,7 +42,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
     });
     const disposers: (() => void)[] = [];
     for (const tool of builtinTools) {
-      const plain = tool.toTool();
+      const plain = isZhinTool(tool) ? tool.toTool() : tool;
       disposers.push(toolService.addTool({ ...plain, source: 'builtin' }, root.name));
     }
     const cronTools = createCronTools();

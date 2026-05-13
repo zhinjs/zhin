@@ -123,7 +123,7 @@ describe('ZhinAgent', () => {
     });
 
     it('应传递工具列表', async () => {
-      const tools: Tool[] = [makeTool('get_time', '获取时间')];
+      const tools: Tool[] = [makeTool('clock_read', '读取当前时间')];
       const context = makeToolContext();
 
       await agent.process('现在几点', context, tools);

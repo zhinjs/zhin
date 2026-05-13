@@ -45,7 +45,11 @@ export const createMockProvider = (options: MockProviderOptions = {}) => {
 };
 
 /** 构建 ChatCompletionResponse 用于测试 */
-export const createChatResponse = (content: string, toolCalls?: any[]) => ({
+export const createChatResponse = (
+  content: string,
+  toolCalls?: any[],
+  assistantExtras?: { reasoning_content?: string | null },
+) => ({
   id: 'test-id',
   object: 'chat.completion',
   created: Date.now(),
@@ -55,9 +59,10 @@ export const createChatResponse = (content: string, toolCalls?: any[]) => ({
     message: {
       role: 'assistant',
       content,
-      tool_calls: toolCalls,
+      ...(toolCalls?.length ? { tool_calls: toolCalls } : {}),
+      ...assistantExtras,
     },
-    finish_reason: toolCalls ? 'tool_calls' : 'stop',
+    finish_reason: toolCalls?.length ? 'tool_calls' : 'stop',
   }],
   usage: {
     prompt_tokens: 10,

@@ -3,7 +3,7 @@
  * (follow-up sender, subagent manager, cron engine, scheduler).
  */
 import * as path from 'path';
-import { getPlugin, Scheduler, getScheduler, setScheduler, type MessageType, type SendOptions } from '@zhin.js/core';
+import { getPlugin, Scheduler, getScheduler, setScheduler, type MessageType, type SendOptions, isZhinTool } from '@zhin.js/core';
 import { ModelRegistry, computeTierScore } from '@zhin.js/ai';
 import { ZhinAgent } from '../zhin-agent/index.js';
 import { createBuiltinTools } from '../builtin-tools.js';
@@ -66,8 +66,8 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
         skillInstructionMaxChars: resolveSkillInstructionMaxChars(fullConfig, modelName),
         pluginSkillRootsResolver: () => collectPluginSkillSearchRoots(root),
       });
-      return zhinTools.map(zt => {
-        const t = zt.toTool();
+      return zhinTools.map(item => {
+        const t = isZhinTool(item) ? item.toTool() : item;
         return {
           name: t.name,
           description: t.description,

@@ -13,6 +13,7 @@ import type {
   ChatCompletionResponse,
   ChatCompletionChunk,
   AgentTool,
+  Tool,
 } from '@zhin.js/core';
 import {
   OpenAIProvider,
@@ -28,11 +29,12 @@ import {
 } from '@zhin.js/ai';
 import { Agent, createAgent } from '@zhin.js/ai';
 import type { ModelRegistry } from '@zhin.js/ai';
-import { getBuiltinTools } from './tools.js';
 import type { ContextManager, ContextConfig } from '@zhin.js/ai';
-import { normalizeTool } from './orchestrator/tool-selection.js';
 import { DEFAULT_CONFIG } from './zhin-agent/config.js';
 import { resolveContextBudget } from './zhin-agent/context-budget.js';
+import { normalizeTool } from './orchestrator/tool-selection.js';
+import { createWebSearchTool } from './builtin/web-search-tool.js';
+import { createAskUserTool } from './builtin/ask-user-tool.js';
 
 const aiLogger = new Logger(null, 'AI');
 
@@ -55,7 +57,7 @@ export class AIService {
   private defaultProvider: string;
   public sessions: SessionManager;
   public contextManager?: ContextManager;
-  private builtinTools: AgentTool[];
+  private builtinTools!: AgentTool[];
   private sessionConfig: { maxHistory?: number; expireMs?: number };
   private contextConfig: ContextConfig;
   private triggerConfig: AITriggerConfig;
@@ -71,7 +73,7 @@ export class AIService {
     this.triggerConfig = config.trigger || {};
     this.agentConfig = config.agent;
     this.sessions = createMemorySessionManager(this.sessionConfig);
-    this.builtinTools = getBuiltinTools().map(tool => normalizeTool(tool.toTool()));
+    this.refreshBuiltinAgentTools();
 
     for (const { key, factory, requireApiKey } of PROVIDER_REGISTRY) {
       const providerConfig = config.providers?.[key];
@@ -104,7 +106,10 @@ export class AIService {
     const defaultProvider = this.providers.get(this.defaultProvider);
     if (defaultProvider) manager.setAIProvider(defaultProvider);
   }
-  setPlugin(plugin: Plugin): void { this.plugin = plugin; }
+  setPlugin(plugin: Plugin): void {
+    this.plugin = plugin;
+    this.refreshBuiltinAgentTools();
+  }
   setModelRegistry(registry: ModelRegistry): void { this._modelRegistry = registry; }
   getModelRegistry(): ModelRegistry | null { return this._modelRegistry; }
   registerTool(tool: AgentTool): () => void { this.customTools.set(tool.name, tool); return () => { this.customTools.delete(tool.name); }; }
@@ -112,6 +117,22 @@ export class AIService {
   collectAllTools(): AgentTool[] {
     const tools: AgentTool[] = [...this.builtinTools, ...this.customTools.values()];
     return tools;
+  }
+
+  /**
+   * IM / ZhinAgent 流水线用的常驻 Tool 实例（未经 normalize；与 ToolFeature 工具合并后由 collectRelevantTools 绑定 context）。
+   */
+  getResidentToolsAsTools(): Tool[] {
+    const tools: Tool[] = [createWebSearchTool()];
+    if (this.plugin) tools.push(createAskUserTool(this.plugin));
+    return tools;
+  }
+
+  /** `web_search` 始终挂载；`ask_user` 在 {@link setPlugin} 之后挂载（依赖 Prompt / 中间件）。 */
+  private refreshBuiltinAgentTools(): void {
+    const next: AgentTool[] = [normalizeTool(createWebSearchTool())];
+    if (this.plugin) next.push(normalizeTool(createAskUserTool(this.plugin)));
+    this.builtinTools = next;
   }
 
   getContextConfig(): ContextConfig { return this.contextConfig; }
