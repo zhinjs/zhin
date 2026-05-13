@@ -22,7 +22,7 @@ Messages support inline CQ codes for rich content:
 [rps]                   # Rock-paper-scissors
 ```
 
-Mixed example: `icqq group send 67890 "你好[face:178]看看[image:/tmp/pic.jpg]"`
+Mixed example: `icqq send group 67890 "你好[face:178]看看[image:/tmp/pic.jpg]"`
 
 ## Recall
 
@@ -51,8 +51,6 @@ icqq group chat history <gid> [-c count]    # Group chat history (default 20)
 icqq friend chat <uid>     # Enter private chat mode
 icqq group chat <gid>      # Enter group chat mode
 ```
-
-> **Do NOT use interactive chat commands for agent operations.** Use `icqq friend send` / `icqq group send` instead.
 
 ## Examples
 

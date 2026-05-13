@@ -3,7 +3,7 @@
 ## List Files
 
 ```
-icqq group fs list <gid>               # List root directory
+icqq group fs list <gid>                # List root directory
 icqq group fs list <gid> -p <pid>      # List subdirectory by parent ID
 ```
 
@@ -27,7 +27,7 @@ icqq group fs move <gid> <fid> <pid>          # Move file to directory
 
 ```
 icqq group fs upload <gid> <file>              # Upload file to group
-icqq group fs download <gid> <fid>             # Get download URL
+icqq group fs download <gid> <fid>            # Get download URL
 icqq group fs forward <gid> <fid> <target_gid> # Forward file to another group
 icqq group fs forward-offline <gid> <fid>      # Convert to offline file
 ```

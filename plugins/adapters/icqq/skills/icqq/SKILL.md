@@ -15,7 +15,7 @@ Operate a QQ account through the `icqq` command-line tool. The daemon must be ru
 
 1. **Identify the module** — Match the user's intent to one of the modules below
 2. **Load the reference** — Read ONLY the relevant module reference file(s)
-3. **Check daemon** — Run `icqq status` if unsure whether the account is online
+3. **Check daemon** — Use `icqq service status` for install/running state, then probe the account with `icqq profile` or `icqq friend list` to confirm IPC responds
 4. **Execute** — Run the command in terminal and report results
 
 ## Modules
@@ -30,7 +30,7 @@ Load the corresponding reference file based on what the user wants:
 | 设置：昵称、头像、签名、群名片、群头衔、加群方式、匿名 | Settings | [settings.md](./references/settings.md) |
 | 好友/群请求处理 | Requests | [requests.md](./references/requests.md) |
 | 群文件：目录管理、上传下载、转发 | Group Files | [gfs.md](./references/gfs.md) |
-| 登录、状态、配置、OCR、黑名单、Webhook、通知、UID转换、陌生人、漫游表情、缓存、重载、频道与子频道（Guild & Channel）、补全 | General | [general.md](./references/general.md) |
+| 登录、服务/守护、配置、OCR、黑名单、Webhook、通知、UID转换、陌生人、漫游表情、缓存、重载、频道与子频道（Guild & Channel）、RPC 远程连接、补全 | General | [general.md](./references/general.md) |
 
 ## Global Notes
 
@@ -41,4 +41,3 @@ Load the corresponding reference file based on what the user wants:
 - CQ code syntax in messages: `[face:id]` `[image:path]` `[at:uid]` `[at:all]` `[dice]` `[rps]`
 - Quote strings with spaces: `icqq friend send 12345 "hello world"`
 - Chain batch ops with `&&`
-- **Agent / bash**：`icqq …` 多由 `bash` 执行；`execSecurity: allowlist` 下非敏感子命令通常直接放行，敏感操作与 Owner `approve rule` / `approve always bash` 等见框架文档 [docs/advanced/ai.md](../../../../../docs/advanced/ai.md)（`#icqq-bash-exec`、`#owner-approve-commands`）。

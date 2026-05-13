@@ -35,9 +35,9 @@ icqq group screen-member <gid> <uid>  # Block/unblock member messages
 
 ```
 icqq group send <gid> <message>         # Send group message
-icqq group poke <gid> <uid>             # Poke group member
-icqq group invite <gid> <uid>           # Invite friend to group
-icqq group sign <gid>                   # Group check-in
+icqq group poke <gid> <uid>           # Poke group member
+icqq group invite <gid> <uid>         # Invite friend to group
+icqq group sign <gid>                 # Group check-in
 ```
 
 ## Reactions
