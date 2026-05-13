@@ -152,6 +152,29 @@ describe('ZhinAgent', () => {
 
       strictAgent.dispose();
     });
+
+    it('phaseTrace 开启时应输出可解析 phase 序列', async () => {
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const phaseAgent = new ZhinAgent(provider, { phaseTrace: true });
+      const context = makeToolContext();
+      try {
+        await phaseAgent.process('phase trace', context, []);
+        const phaseLogs = logSpy.mock.calls
+          .flatMap(args => args.map(v => String(v)))
+          .filter(line => line.includes('[AGENT_PHASE]'));
+        const serialized = phaseLogs.join('\n');
+        expect(serialized).toContain('turn.start');
+        expect(serialized).toContain('tools.collected');
+        expect(serialized).toContain('context.ready');
+        expect(serialized).toContain('path.chat');
+        expect(serialized).toContain('chat.llm.start');
+        expect(serialized).toContain('chat.llm.end');
+        expect(serialized).toContain('turn.end');
+      } finally {
+        phaseAgent.dispose();
+        logSpy.mockRestore();
+      }
+    });
   });
 
   describe('collectTools 去重', () => {

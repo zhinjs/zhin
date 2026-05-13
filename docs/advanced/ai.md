@@ -145,6 +145,14 @@ ai:
     toneAwareness: true
     modelSizeHint: medium     # small / medium / large（留空自动推断）
     maxSubagentIterations: 15
+    phaseTrace: false         # 输出 Agent 阶段观测日志（或 ZHIN_AGENT_PHASE_TRACE=1）
+    modelHarness:
+      providerPatterns:
+        "open*":
+          maxIterations: 7
+      models:
+        "openai:gpt-4o":
+          maxIterations: 9
   
   trigger:
     enabled: true
@@ -182,8 +190,20 @@ ai:
 | `skillInstructionMaxChars` | number | 0 | 技能指令最大字符数（覆盖自动推断） |
 | `maxSubagentIterations` | number | 15 | 子 agent 最大工具调用轮数 |
 | `subagentTools` | string[] | [] | 子 agent 额外允许的工具名（显式白名单追加；不自动继承主会话技能工具） |
+| `phaseTrace` | boolean | false | 开启后输出稳定 `[AGENT_PHASE]` 回合阶段日志（或 `ZHIN_AGENT_PHASE_TRACE=1`） |
+| `modelHarness.providerPatterns` | object | {} | 按 provider 模式（支持 `*`）覆盖 harness |
+| `modelHarness.models` | object | {} | 按 model id 覆盖 harness；支持 `model` 或 `provider:model` 精确键 |
 
-> Model harness 第一阶段仅使用 TypeScript 默认表（`packages/agent/src/zhin-agent/model-harness.ts`），暂不新增 `zhin.config.yml` 配置键。
+`modelHarness` 与 TypeScript 默认表（`packages/agent/src/zhin-agent/model-harness.ts`）按 **ADR 0006** 规则合并：对象 deep merge，数组显式写出时完整覆盖默认数组。
+
+### Agent phase 观测（排障）
+
+开启以下任一开关后，主 Agent 回合会输出稳定 phase 序列日志：
+
+- `ai.agent.phaseTrace: true`
+- 或环境变量 `ZHIN_AGENT_PHASE_TRACE=1`
+
+日志前缀固定为 `[AGENT_PHASE]`，示例 phase：`turn.start` → `tools.collected` → `context.ready` → `path.chat|path.pre_exec_fast|path.agent` → `turn.end`。
 
 ## 触发条件
 

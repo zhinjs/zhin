@@ -5,6 +5,7 @@
 import type { RateLimitConfig } from '@zhin.js/ai';
 import { DEFAULT_CONTEXT_TOKENS } from '@zhin.js/ai';
 import { PERMISSION_LEVEL_PRIORITY } from '../orchestrator/tool-selection.js';
+import type { ModelHarnessConfig } from './model-harness.js';
 
 export type ModelSizeHint = 'small' | 'medium' | 'large';
 
@@ -50,6 +51,7 @@ export const CURRENT_MESSAGE_MARKER = '[Current message - respond to this]';
 export const PERM_MAP: Record<string, number> = PERMISSION_LEVEL_PRIORITY;
 
 export type OnChunkCallback = (chunk: string, full: string) => void;
+const TRUE_VALUES = new Set(['1', 'true', 'yes', 'on']);
 
 /** 上下文感知内置工具的关键词触发正则 */
 export const KEYWORD_TRIGGERS = {
@@ -89,6 +91,10 @@ export interface ZhinAgentConfig {
   modelSizeHint?: '' | 'small' | 'medium' | 'large';
   /** 技能指令最大字符数（覆盖 modelSizeHint 推断值） */
   skillInstructionMaxChars?: number;
+  /** 模型级 harness 覆盖配置（按 model id / provider 模式） */
+  modelHarness?: ModelHarnessConfig;
+  /** 输出回合 phase 观测日志（或通过 ZHIN_AGENT_PHASE_TRACE 环境变量开启） */
+  phaseTrace?: boolean;
 }
 
 export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
@@ -118,4 +124,12 @@ export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   subagentTools: [],
   modelSizeHint: '',
   skillInstructionMaxChars: 0,
+  modelHarness: {},
+  phaseTrace: false,
 };
+
+export function isPhaseTraceEnabled(config: Required<ZhinAgentConfig>, env: NodeJS.ProcessEnv = process.env): boolean {
+  if (config.phaseTrace) return true;
+  const raw = env.ZHIN_AGENT_PHASE_TRACE?.trim().toLowerCase();
+  return !!raw && TRUE_VALUES.has(raw);
+}

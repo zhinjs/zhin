@@ -38,6 +38,7 @@ import {
   type ZhinAgentConfig,
   type OnChunkCallback,
   DEFAULT_CONFIG,
+  isPhaseTraceEnabled,
 } from './config.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
 import {
@@ -81,10 +82,12 @@ export class ZhinAgent {
   private activeSkillsContext: string = '';
   private skillsSummaryXML: string = '';
   private modelRegistry: ModelRegistry | null = null;
+  private phaseTraceEnabled: boolean;
 
   constructor(provider: AIProvider, config?: ZhinAgentConfig) {
     this.provider = provider;
     this.config = { ...DEFAULT_CONFIG, ...config } as Required<ZhinAgentConfig>;
+    this.phaseTraceEnabled = isPhaseTraceEnabled(this.config);
     this.sessions = createMemorySessionManager();
     this.memory = new ConversationMemory({
       minTopicRounds: this.config.minTopicRounds,
@@ -218,10 +221,16 @@ export class ZhinAgent {
     const { senderId, sceneId, platform } = context;
     const sessionId = SessionManager.generateId(platform || '', senderId || '', sceneId);
     const userId = senderId || 'unknown';
+    this.logPhase('turn.start', sessionId, {
+      mode: 'text',
+      provider: this.provider.name,
+      model: this.resolveModelCandidates('chat')[0] || '',
+    });
 
     // 0. Rate limit
     const rateCheck = this.rateLimiter.check(userId);
     if (!rateCheck.allowed) {
+      this.logPhase('turn.rate_limited', sessionId, { userId });
       logger.debug(`[速率限制] 用户 ${userId} 被限制: ${rateCheck.message}`);
       return parseOutput(rateCheck.message || '请稍后再试');
     }
@@ -249,6 +258,7 @@ export class ZhinAgent {
     });
 
     const filterMs = (now() - tFilter).toFixed(0);
+    this.logPhase('tools.collected', sessionId, { count: allTools.length });
 
     logger.info(`[工具过滤] ${allTools.length} 个工具: ${allTools.map(t => t.name).join(', ') || '(无)'}`);
 
@@ -276,6 +286,7 @@ export class ZhinAgent {
     }
 
     const memMs = (now() - tMem).toFixed(0);
+    this.logPhase('context.ready', sessionId, { historyCount: historyMessages.length });
 
     // 2.5 Tone + persona
     const toneHint = this.config.toneAwareness ? detectTone(content).hint : '';
@@ -283,16 +294,20 @@ export class ZhinAgent {
 
     // 3. No tools → chat path (prefer per-session model, then lightweight model)
     if (allTools.length === 0) {
+      this.logPhase('path.chat', sessionId, { toolCount: 0 });
       const liteModel = this.config.chatLiteModel || undefined;
       const chatSystemPrompt = this.buildDisciplinedPrompt(personaEnhanced);
       logger.info(`[System Prompt] chat-path: ${chatSystemPrompt.length} chars${liteModel ? `, model=${liteModel}` : ''}`);
       logger.debug(`[闲聊路径] 过滤=${filterMs}ms, 记忆=${memMs}ms (${historyMessages.length}条), 0 工具`);
       const tLLM = now();
+      this.logPhase('chat.llm.start', sessionId, { model: liteModel || chatCandidates[0] || '' });
       let reply = await this.streamChatWithHistory(content, chatSystemPrompt, historyMessages, onChunk, liteModel);
       reply = stripHallucinatedToolCalls(reply);
       const llmMs = (now() - tLLM).toFixed(0);
+      this.logPhase('chat.llm.end', sessionId, { durationMs: Number(llmMs) });
       logger.info(`[闲聊路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, LLM=${llmMs}ms, 总=${(now() - t0).toFixed(0)}ms`);
       await this.saveToSession(sessionId, content, reply, sceneId);
+      this.logPhase('turn.end', sessionId, { path: 'chat' });
       return parseOutput(reply);
     }
 
@@ -305,6 +320,10 @@ export class ZhinAgent {
       logger.debug(`预执行: ${preExecCandidates.map(t => t.name).join(', ')}`);
     }
     const toolRun = await planToolRun(allTools, this.config.preExecTimeout);
+    this.logPhase('preexec.done', sessionId, {
+      mode: toolRun.mode,
+      preExecutedTools: toolRun.preExecution.tools.length,
+    });
     const preData = toolRun.preExecution.data;
     if (tPre > 0) {
       logger.debug(`预执行耗时: ${(now() - tPre).toFixed(0)}ms`);
@@ -314,13 +333,17 @@ export class ZhinAgent {
     let reply: string;
 
     if (toolRun.mode === 'pre-exec-fast-path') {
+      this.logPhase('path.pre_exec_fast', sessionId, { toolCount: allTools.length });
       // Fast path
       const tLLM = now();
       const prompt = this.buildDisciplinedPrompt(buildPreExecFastPathPrompt(personaEnhanced, preData));
       logger.info(`[System Prompt] fast-path: ${prompt.length} chars`);
+      this.logPhase('fast.llm.start', sessionId, { model: chatCandidates[0] || '' });
       reply = await this.streamChatWithHistory(content, prompt, historyMessages, onChunk);
+      this.logPhase('fast.llm.end', sessionId, { durationMs: Math.round(now() - tLLM) });
       logger.info(`[快速路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, LLM=${(now() - tLLM).toFixed(0)}ms, 总=${(now() - t0).toFixed(0)}ms`);
     } else {
+      this.logPhase('path.agent', sessionId, { toolCount: allTools.length });
       const tAgent = now();
       logger.debug(`Agent 路径: ${allTools.length} 个工具`);
       const contextHint = buildContextHint(context, content);
@@ -344,11 +367,16 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       // Adaptive maxIterations: boost when skills are active (multi-step skill flows)
       const SKILL_ITERATION_BOOST = 3;
       const hasSkillActivation = agentTools.some(t => t.name === 'activate_skill' || t.name === 'install_skill');
-      const harness = resolveModelHarness(this.provider.name, chatCandidates[0] || '');
+      const harness = resolveModelHarness(this.provider.name, chatCandidates[0] || '', this.config.modelHarness);
       const baseIterations = harness.maxIterations ?? this.config.maxIterations;
       const effectiveMaxIterations = hasSkillActivation
         ? baseIterations + SKILL_ITERATION_BOOST
         : baseIterations;
+      this.logPhase('harness.resolved', sessionId, {
+        model: chatCandidates[0] || '',
+        harnessMaxIterations: harness.maxIterations ?? null,
+        effectiveMaxIterations,
+      });
 
       const agent = createAgent(this.provider, {
         model: chatCandidates[0],
@@ -365,7 +393,9 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       const userMessageWithHistory = buildUserMessageWithHistory(historyMessages, content);
       let result;
       try {
+        this.logPhase('agent.run.start', sessionId, { model: chatCandidates[0] || '' });
         result = await agent.run(userMessageWithHistory, []);
+        this.logPhase('agent.run.end', sessionId, { iterations: result.iterations });
       } finally {
         agent.dispose();
       }
@@ -381,12 +411,18 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       platform: platform || '',
     })).catch(() => {});
 
+    this.logPhase('turn.end', sessionId, { path: toolRun.mode === 'pre-exec-fast-path' ? 'fast' : 'agent' });
     return parseOutput(reply);
   }
 
   private buildDisciplinedPrompt(basePrompt: string): string {
     const discipline = `# Discipline\n${FIXED_DISCIPLINE_RULES.map(rule => `- ${rule}`).join('\n')}`;
     return `${discipline}\n\n${basePrompt}`;
+  }
+
+  private logPhase(phase: string, sessionId: string, extra: Record<string, unknown> = {}): void {
+    if (!this.phaseTraceEnabled) return;
+    logger.info({ phase, sessionId, ...extra }, '[AGENT_PHASE]');
   }
 
   async processMultimodal(
