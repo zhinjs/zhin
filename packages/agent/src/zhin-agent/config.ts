@@ -128,6 +128,7 @@ export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   phaseTrace: false,
 };
 
+/** `env` 参数主要用于测试注入，运行时默认读取 `process.env`。 */
 export function isPhaseTraceEnabled(config: Required<ZhinAgentConfig>, env: NodeJS.ProcessEnv = process.env): boolean {
   if (config.phaseTrace) return true;
   const raw = env.ZHIN_AGENT_PHASE_TRACE?.trim().toLowerCase();

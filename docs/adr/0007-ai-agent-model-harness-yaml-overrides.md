@@ -21,7 +21,7 @@ ai:
 ## 合并顺序（约定优先）
 
 1. TypeScript 默认 harness（约定层）
-2. `providerPatterns`（匹配当前 provider，按声明顺序叠加）
+2. `providerPatterns`（匹配当前 provider，按对象插入顺序叠加；实现基于 `Object.entries()`）
 3. `models`（`model` 与 `provider:model`）
 
 最终结果使用 deep merge 规则：对象按字段合并；数组若显式写出则完整覆盖默认数组（与 ADR 0006 一致）。

@@ -224,7 +224,6 @@ export class ZhinAgent {
     this.logPhase('turn.start', sessionId, {
       mode: 'text',
       provider: this.provider.name,
-      model: this.resolveModelCandidates('chat')[0] || '',
     });
 
     // 0. Rate limit

@@ -35,10 +35,13 @@ export const MODEL_HARNESS_DEFAULTS: ModelHarnessRow[] = [
 ];
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
+  const proto = value && typeof value === 'object'
+    ? Object.getPrototypeOf(value)
+    : null;
   return !!value
     && typeof value === 'object'
     && !Array.isArray(value)
-    && Object.getPrototypeOf(value) === Object.prototype;
+    && (proto === Object.prototype || proto === null);
 }
 
 export function mergeModelHarnessValues<T>(defaults: T, overrides: unknown): T {
@@ -62,7 +65,7 @@ export function mergeModelHarnessValues<T>(defaults: T, overrides: unknown): T {
 
 function providerPatternToRegExp(pattern: string): RegExp {
   const escaped = pattern
-    .replace(/[|\\{}()[\]^$+?.]/g, '\\$&')
+    .replace(/[|\\{}()[\]^$+?.-]/g, '\\$&')
     .replace(/\*/g, '.*');
   return new RegExp(`^${escaped}$`, 'i');
 }
@@ -89,6 +92,7 @@ export function resolveModelHarness(
   return {};
   })();
 
+  // providerPatterns 按对象插入顺序叠加（Object.entries iteration order）
   const providerOverride = Object.entries(config?.providerPatterns || {}).reduce<Record<string, unknown>>(
     (acc, [pattern, value]) => providerPatternToRegExp(pattern).test(providerName)
       ? mergeModelHarnessValues(acc, value)
