@@ -45,6 +45,7 @@ import {
   buildContextHint,
   buildRichSystemPrompt,
   buildUserMessageWithHistory,
+  FIXED_DISCIPLINE_RULES,
 } from './prompt.js';
 import {
   buildPreExecFastPathPrompt,
@@ -53,6 +54,8 @@ import {
 } from './tool-runtime.js';
 import { stripHallucinatedToolCalls, stripThinkBlocks } from './text-sanitize.js';
 import { pruneHistoryWithBudget } from './context-budget.js';
+import { resolveModelHarness } from './model-harness.js';
+import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from '../reserved-tools.js';
 
 export type { ZhinAgentConfig, OnChunkCallback } from './config.js';
 
@@ -128,6 +131,7 @@ export class ZhinAgent {
       provider: this.provider,
       workspace: process.cwd(),
       createTools,
+      subagentTools: this.config.subagentTools,
       maxIterations: this.config.maxSubagentIterations,
       execPolicyConfig: this.config,
       modelRegistry: this.modelRegistry,
@@ -280,10 +284,11 @@ export class ZhinAgent {
     // 3. No tools → chat path (prefer per-session model, then lightweight model)
     if (allTools.length === 0) {
       const liteModel = this.config.chatLiteModel || undefined;
-      logger.info(`[System Prompt] chat-path: ${personaEnhanced.length} chars${liteModel ? `, model=${liteModel}` : ''}`);
+      const chatSystemPrompt = this.buildDisciplinedPrompt(personaEnhanced);
+      logger.info(`[System Prompt] chat-path: ${chatSystemPrompt.length} chars${liteModel ? `, model=${liteModel}` : ''}`);
       logger.debug(`[闲聊路径] 过滤=${filterMs}ms, 记忆=${memMs}ms (${historyMessages.length}条), 0 工具`);
       const tLLM = now();
-      let reply = await this.streamChatWithHistory(content, personaEnhanced, historyMessages, onChunk, liteModel);
+      let reply = await this.streamChatWithHistory(content, chatSystemPrompt, historyMessages, onChunk, liteModel);
       reply = stripHallucinatedToolCalls(reply);
       const llmMs = (now() - tLLM).toFixed(0);
       logger.info(`[闲聊路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, LLM=${llmMs}ms, 总=${(now() - t0).toFixed(0)}ms`);
@@ -311,12 +316,11 @@ export class ZhinAgent {
     if (toolRun.mode === 'pre-exec-fast-path') {
       // Fast path
       const tLLM = now();
-      const prompt = buildPreExecFastPathPrompt(personaEnhanced, preData);
+      const prompt = this.buildDisciplinedPrompt(buildPreExecFastPathPrompt(personaEnhanced, preData));
       logger.info(`[System Prompt] fast-path: ${prompt.length} chars`);
       reply = await this.streamChatWithHistory(content, prompt, historyMessages, onChunk);
       logger.info(`[快速路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, LLM=${(now() - tLLM).toFixed(0)}ms, 总=${(now() - t0).toFixed(0)}ms`);
     } else {
-      // Agent path
       const tAgent = now();
       logger.debug(`Agent 路径: ${allTools.length} 个工具`);
       const contextHint = buildContextHint(context, content);
@@ -340,9 +344,11 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       // Adaptive maxIterations: boost when skills are active (multi-step skill flows)
       const SKILL_ITERATION_BOOST = 3;
       const hasSkillActivation = agentTools.some(t => t.name === 'activate_skill' || t.name === 'install_skill');
+      const harness = resolveModelHarness(this.provider.name, chatCandidates[0] || '');
+      const baseIterations = harness.maxIterations ?? this.config.maxIterations;
       const effectiveMaxIterations = hasSkillActivation
-        ? this.config.maxIterations + SKILL_ITERATION_BOOST
-        : this.config.maxIterations;
+        ? baseIterations + SKILL_ITERATION_BOOST
+        : baseIterations;
 
       const agent = createAgent(this.provider, {
         model: chatCandidates[0],
@@ -352,6 +358,8 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
         maxIterations: effectiveMaxIterations,
         turnTimeout: this.config.timeout,
         contextWindow: contextBudget.contextWindow,
+        reservedToolNames: RESERVED_TOOL_NAMES,
+        reservedToolNamePrefixes: RESERVED_TOOL_NAME_PREFIXES,
       });
 
       const userMessageWithHistory = buildUserMessageWithHistory(historyMessages, content);
@@ -376,6 +384,11 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     return parseOutput(reply);
   }
 
+  private buildDisciplinedPrompt(basePrompt: string): string {
+    const discipline = `# Discipline\n${FIXED_DISCIPLINE_RULES.map(rule => `- ${rule}`).join('\n')}`;
+    return `${discipline}\n\n${basePrompt}`;
+  }
+
   async processMultimodal(
     parts: ContentPart[],
     context: ToolContext,
@@ -392,7 +405,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
 
     const rawHistoryMessages = await this.buildHistoryMessages(sessionId);
     const profileSummary = await this.userProfiles.buildProfileSummary(userId);
-    const personaEnhanced = buildEnhancedPersona(this.config, profileSummary, '');
+    const personaEnhanced = this.buildDisciplinedPrompt(buildEnhancedPersona(this.config, profileSummary, ''));
 
     // Build text summary describing the multimodal content
     const textFragments: string[] = [];

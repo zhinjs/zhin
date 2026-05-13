@@ -24,6 +24,7 @@ vi.mock('@zhin.js/logger', async (importOriginal) => {
 });
 
 import { createAgent, Agent } from '@zhin.js/ai';
+import { mergeToolsByName } from '@zhin.js/ai';
 
 describe('Agent 完整流程测试', () => {
   let mockProvider: ReturnType<typeof createMockProvider>;
@@ -533,6 +534,38 @@ describe('Agent 类', () => {
         tools: undefined,
       })
     );
+  });
+
+  it('重复工具名应后者覆盖前者', async () => {
+    const mockProvider = createMockProvider();
+    mockProvider.chat
+      .mockResolvedValueOnce(createChatResponse('', [{
+        id: 'call-1',
+        type: 'function',
+        function: { name: 'dup_tool', arguments: '{}' },
+      }]))
+      .mockResolvedValueOnce(createChatResponse('ok'));
+
+    const first = createMockTool({ name: 'dup_tool', executeResult: 'first' });
+    const second = createMockTool({ name: 'dup_tool', executeResult: 'second' });
+    const agent = createAgent(mockProvider as any, {
+      tools: [first, second],
+    });
+
+    await agent.run('test');
+    expect(first.execute).not.toHaveBeenCalled();
+    expect(second.execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('保留名应优先保留内置实现', () => {
+    const builtin = createMockTool({ name: 'bash', executeResult: 'builtin' }) as any;
+    builtin.source = 'builtin';
+    const plugin = createMockTool({ name: 'bash', executeResult: 'plugin' }) as any;
+    plugin.source = 'plugin:test';
+    const merged = mergeToolsByName([builtin, plugin], { reservedNames: ['bash'] });
+    expect(merged.tools).toHaveLength(1);
+    expect(merged.tools[0].source).toBe('builtin');
+    expect(merged.warnings.some(w => w.action === 'ignored' && w.name === 'bash')).toBe(true);
   });
 });
 

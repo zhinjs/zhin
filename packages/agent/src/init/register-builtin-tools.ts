@@ -41,9 +41,15 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       },
     });
     const disposers: (() => void)[] = [];
-    for (const tool of builtinTools) disposers.push(toolService.addTool(tool, root.name));
+    for (const tool of builtinTools) {
+      const plain = tool.toTool();
+      disposers.push(toolService.addTool({ ...plain, source: 'builtin' }, root.name));
+    }
     const cronTools = createCronTools();
-    for (const tool of cronTools) disposers.push(toolService.addTool(tool, root.name));
+    for (const tool of cronTools) {
+      const plain = tool.toTool();
+      disposers.push(toolService.addTool({ ...plain, source: 'builtin' }, root.name));
+    }
     logger.info(`Registered ${builtinTools.length} built-in + ${cronTools.length} cron tools`);
 
     let skillWatchers: fs.FSWatcher[] = [];

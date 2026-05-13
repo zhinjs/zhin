@@ -7,7 +7,10 @@
  */
 
 import type { AgentTool, ToolFilterOptions } from '@zhin.js/ai';
+import { isBuiltinToolSource, isReservedToolName } from '@zhin.js/ai';
+import { Logger } from '@zhin.js/core';
 import { ResourceRegistry } from './resource-registry.js';
+import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from '../reserved-tools.js';
 import type {
   ResourceScope,
   Tool,
@@ -178,12 +181,30 @@ export type ToolInput = Tool | ZhinTool;
 // ============================================================================
 
 export class ToolRegistry extends ResourceRegistry<AgentTool> {
+  private readonly logger = new Logger(null, 'ToolRegistry');
   private readonly toolPluginMap = new Map<string, string>();
 
   addTool(input: ToolInput | AgentTool | ToolLike, scope?: ResourceScope, source?: string): () => void {
-    const tool = sharedToolSelection.normalize(input);
+    const incomingSource = source || 'unknown';
+    const normalized = sharedToolSelection.normalize(input);
+    const tool: AgentTool = {
+      ...normalized,
+      source: normalized.source || (input as { source?: string })?.source || incomingSource,
+    };
+    const protectedName = isReservedToolName(tool.name, {
+      reservedNames: RESERVED_TOOL_NAMES,
+      reservedPrefixes: RESERVED_TOOL_NAME_PREFIXES,
+    });
+    if (protectedName && !isBuiltinToolSource(tool.source)) {
+      this.logger.warn(`[工具命名] name=${tool.name} source=${incomingSource} action=ignored reason=reserved_name`);
+      return () => {};
+    }
+    const existingEntry = this.getEntry(tool.name, scope);
+    if (existingEntry) {
+      this.logger.warn(`[工具命名] name=${tool.name} source=${incomingSource} action=overridden previous=${existingEntry.source} reason=duplicate_name_last_wins`);
+    }
     sharedToolSelection.invalidate();
-    return this.add(tool, scope, source);
+    return this.add(tool, scope, incomingSource);
   }
 
   removeTool(name: string, scope?: ResourceScope): boolean {

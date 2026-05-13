@@ -213,6 +213,8 @@ export interface AgentTool {
   description: string;
   parameters: JsonSchema;
   execute: (args: Record<string, any>) => Promise<unknown>;
+  /** 工具来源（如 builtin / plugin:xxx），用于冲突诊断与命名策略 */
+  source?: string;
   /** 工具标签，用于分类和快速匹配 */
   tags?: string[];
   /** 触发关键词，用户消息包含这些词时优先选择此工具 */
@@ -280,6 +282,10 @@ export interface AgentConfig {
    * 此超时应用于 Agent 循环中的每一次 LLM 请求，而非所有轮次共享。
    */
   turnTimeout?: number;
+  /** 受保护工具名（内置/保留名），后续同名注册将被忽略 */
+  reservedToolNames?: string[];
+  /** 受保护工具名前缀 */
+  reservedToolNamePrefixes?: string[];
 }
 
 /** Agent 运行结果 */

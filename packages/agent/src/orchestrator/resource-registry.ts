@@ -131,4 +131,10 @@ export class ResourceRegistry<T extends { name: string }> {
       }
     }
   }
+
+  protected getEntry(name: string, scope?: ResourceScope): ResourceEntry<T> | undefined {
+    const agentId = scope?.agentId;
+    if (agentId) return this.specialized.get(agentId)?.get(name);
+    return this.common.get(name);
+  }
 }

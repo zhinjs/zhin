@@ -15,6 +15,7 @@ import { createAgent } from '@zhin.js/ai';
 import type { ModelRegistry } from '@zhin.js/ai';
 import type { ZhinAgentConfig } from './zhin-agent/config.js';
 import { applyExecPolicyToTools } from './security/exec-policy.js';
+import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from './reserved-tools.js';
 import { resolveContextBudget } from './zhin-agent/context-budget.js';
 import { createRestrictedToolView, DEFAULT_SUBAGENT_TOOL_NAMES } from './orchestrator/tool-selection.js';
 
@@ -44,6 +45,7 @@ export interface SubagentManagerOptions {
   provider: AIProvider;
   workspace: string;
   createTools: () => AgentTool[];
+  subagentTools?: string[];
   maxIterations?: number;
   /** Exec policy config to enforce on subagent bash tools */
   execPolicyConfig?: Required<ZhinAgentConfig>;
@@ -59,6 +61,7 @@ export class SubagentManager {
   private workspace: string;
   private createTools: () => AgentTool[];
   private maxIterations: number;
+  private subagentTools: string[];
   private execPolicyConfig: Required<ZhinAgentConfig> | null;
   private modelRegistry: ModelRegistry | null;
   private runningTasks: Map<string, AbortController> = new Map();
@@ -69,6 +72,7 @@ export class SubagentManager {
     this.workspace = options.workspace;
     this.createTools = options.createTools;
     this.maxIterations = options.maxIterations ?? 15;
+    this.subagentTools = options.subagentTools || [];
     this.execPolicyConfig = options.execPolicyConfig ?? null;
     this.modelRegistry = options.modelRegistry ?? null;
   }
@@ -119,8 +123,10 @@ export class SubagentManager {
     try {
       const allTools = this.createTools();
       let tools = createRestrictedToolView(allTools, {
-        allowedNames: this.execPolicyConfig?.subagentTools?.length
-          ? this.execPolicyConfig.subagentTools
+        allowedNames: this.subagentTools.length
+          ? this.subagentTools
+          : this.execPolicyConfig?.subagentTools?.length
+            ? this.execPolicyConfig.subagentTools
           : DEFAULT_SUBAGENT_TOOL_NAMES,
         disabledNames: this.execPolicyConfig?.disabledTools,
       });
@@ -143,6 +149,8 @@ export class SubagentManager {
         systemPrompt,
         tools,
         maxIterations: this.maxIterations,
+        reservedToolNames: RESERVED_TOOL_NAMES,
+        reservedToolNamePrefixes: RESERVED_TOOL_NAME_PREFIXES,
         contextWindow: contextBudget?.contextWindow ?? this.provider.contextWindow,
       });
 
@@ -199,6 +207,8 @@ ${task}
 2. Your final reply will be reported to the main agent and relayed to the user
 3. Do not start new conversations or take on extra tasks
 4. Keep replies concise but informative
+5. Never claim success unless tool results confirm it
+6. Do not fabricate tool outputs or execution status
 
 ## You may
 - Read/write files in the workspace
