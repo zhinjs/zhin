@@ -422,6 +422,8 @@ plugins/utils/my-plugin/skills/my-plugin/SKILL.md
 
 各适配器包内提供 `skills/＜适配器名＞/SKILL.md`（含 `name`、`description`、`keywords` 等 frontmatter），工具通过 `addTool` / 群管自动生成注册。**`Adapter.declareSkill` 已从 Core 移除**，仅保留文件化技能。
 
+**平台绑定（`platforms`）**：frontmatter 中声明 `platforms: [icqq]`、`[github]` 等与适配器名一致的列表时，只要用户消息来自该平台（`ToolContext.platform` 命中），Agent 会自动把 **`activate_skill`** 与该技能关联工具纳入本轮工具集，**不必**依赖用户在句子里显式提到技能名；与 `keywords` 文本触发互为补充。仅因平台合并进来的技能，其关联工具也会保留在候选集中（避免与用户句无语义重叠时被相关性过滤误删）。需要全文常驻说明时用 `always: true`。
+
 #### 群管理能力（推荐：覆写方法自动检测）
 
 群管理是 IM 的通用能力。Adapter 基类声明了 `IGroupManagement` 接口中的可选方法规范，适配器只需覆写自己平台支持的方法，`start()` 会自动检测并**生成群管 Tool**（Skill 粗筛依赖 `SKILL.md` 或工具 `keywords`，不再由适配器代码注册 Skill）：
@@ -531,6 +533,7 @@ interface Skill {
   name: string              // 技能名称
   description: string       // 描述（含 conventions）
   tools: Tool[]             // 包含的工具
+  platforms?: string[]      // 若声明且含当前会话 platform，自动注入 activate_skill（无需用户写出技能名）
   keywords?: string[]       // 触发关键词
   tags?: string[]           // 分类标签
   pluginName: string        // 来源插件

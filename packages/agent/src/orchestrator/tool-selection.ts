@@ -6,10 +6,51 @@ import { Logger } from '@zhin.js/core';
 import type { AgentTool, ToolFilterOptions } from '@zhin.js/ai';
 import { CachedToolFilter } from '@zhin.js/ai';
 import type { SkillRegistry } from './skill-registry.js';
-import type { Tool, ToolContext, ToolPermissionLevel } from './types.js';
+import type { Skill, Tool, ToolContext, ToolPermissionLevel } from './types.js';
 import type { ZhinAgentConfig } from '../zhin-agent/config.js';
 
 const logger = new Logger(null, 'ZhinAgent:ToolSelection');
+
+/** 技能在 frontmatter 中声明了 `platforms` 且包含当前会话平台时，视为「来源平台绑定」，无需用户消息里写出技能名。 */
+function skillDeclaresPlatform(skill: { platforms?: string[] }, platform: string | undefined): boolean {
+  if (!platform || !skill.platforms?.length) return false;
+  const pl = platform.toLowerCase();
+  return skill.platforms.some(p => String(p).toLowerCase() === pl);
+}
+
+/** 多技能同平台时优先与 adapter 名一致的 `name`（如 platform=github → skill github）。 */
+function pickPlatformTriggeredSkillName(skills: Array<{ name: string; platforms?: string[] }>, platform: string | undefined): string | null {
+  const matches = skills.filter(s => skillDeclaresPlatform(s, platform));
+  if (matches.length === 0) return null;
+  const pl = (platform || '').toLowerCase();
+  const same = matches.find(s => s.name.toLowerCase() === pl);
+  return (same ?? matches[0]).name;
+}
+
+/** 在 search 结果后追加「当前平台绑定」且尚未入选的技能，直到达到 maxSkills。 */
+function mergeSkillsWithPlatformAffinity(
+  searched: Skill[],
+  skillRegistry: SkillRegistry,
+  platform: string | undefined,
+  maxSkills: number,
+): Skill[] {
+  const out: Skill[] = [];
+  const seen = new Set<string>();
+  for (const s of searched) {
+    if (seen.has(s.name)) continue;
+    out.push(s);
+    seen.add(s.name);
+    if (out.length >= maxSkills) return out;
+  }
+  for (const skill of skillRegistry.getAll()) {
+    if (!skillDeclaresPlatform(skill, platform)) continue;
+    if (seen.has(skill.name)) continue;
+    out.push(skill);
+    seen.add(skill.name);
+    if (out.length >= maxSkills) return out;
+  }
+  return out;
+}
 
 export const PERMISSION_LEVEL_PRIORITY: Record<ToolPermissionLevel, number> = {
   user: 0,
@@ -232,6 +273,7 @@ export class ToolSelection {
     const callerPerm = inferPermissionPriority(context);
     const collected: AgentTool[] = [];
     const collectedNames = new Set<string>();
+    const platformOnlySkillToolNames = new Set<string>();
 
     let mentionedSkill: string | null = null;
     if (skillRegistry && skillRegistry.size > 0) {
@@ -250,6 +292,14 @@ export class ToolSelection {
           }
         }
       }
+      if (!mentionedSkill) {
+        mentionedSkill = pickPlatformTriggeredSkillName(skillRegistry.getAll(), context.platform);
+        if (mentionedSkill) {
+          logger.debug(
+            `[技能检测] 消息来源平台自动关联技能: ${mentionedSkill} (platform=${context.platform})`,
+          );
+        }
+      }
     }
 
     if (mentionedSkill) {
@@ -262,7 +312,14 @@ export class ToolSelection {
     }
 
     if (skillRegistry) {
-      const skills = skillRegistry.search(message, { maxResults: config.maxSkills, platform: context.platform });
+      const searched = skillRegistry.search(message, { maxResults: config.maxSkills, platform: context.platform });
+      const fromSearch = new Set(searched.map(s => s.name));
+      const skills = mergeSkillsWithPlatformAffinity(searched, skillRegistry, context.platform, config.maxSkills);
+      for (const s of skills) {
+        if (!fromSearch.has(s.name) && skillDeclaresPlatform(s, context.platform)) {
+          for (const t of s.tools) platformOnlySkillToolNames.add(t.name);
+        }
+      }
       const skillStr = skills.length > 0
         ? skills.map(s => `${s.name}(${s.tools?.length || 0}工具)`).join(', ')
         : '(无匹配技能)';
@@ -308,6 +365,20 @@ export class ToolSelection {
     /** 时事/实体类问题常无关键词命中；以下工具仍应留在候选集中供模型自行调用 */
     const relevanceResidentNames = ['web_search', 'ask_user'] as const;
     for (const name of relevanceResidentNames) {
+      if (filtered.some(t => t.name === name)) continue;
+      const t = collected.find(x => x.name === name);
+      if (t) filtered.unshift(t);
+    }
+
+    /** 已从候选集加入的 skill 类工具：用户消息可能与其 TF-IDF 词表无交集，但仍须保留 */
+    for (const name of ['activate_skill', 'install_skill'] as const) {
+      if (filtered.some(t => t.name === name)) continue;
+      const t = collected.find(x => x.name === name);
+      if (t) filtered.unshift(t);
+    }
+
+    /** 仅因「来源平台」合并进来的技能：其工具与用户句可能无语义重叠，仍须保留 */
+    for (const name of platformOnlySkillToolNames) {
       if (filtered.some(t => t.name === name)) continue;
       const t = collected.find(x => x.name === name);
       if (t) filtered.unshift(t);

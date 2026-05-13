@@ -221,7 +221,7 @@ function buildCommunicationSection(): string {
  */
 function buildSkillsSection(skillRegistry: SkillRegistry | null, skillsSummaryXML: string): string | null {
   if (skillsSummaryXML) {
-    return '# Available Skills\n\n' + skillsSummaryXML + '\n\nUser mentions skill → activate_skill(name) → follow returned instructions.';
+    return '# Available Skills\n\n' + skillsSummaryXML + '\n\nIf the user message matches a skill (name/keywords) OR the chat platform matches a skill\'s `platforms` in frontmatter, call activate_skill(name) when you need that skill\'s full instructions—then follow them.';
   }
   if (skillRegistry && skillRegistry.size > 0) {
     const skills = skillRegistry.getAll();
@@ -229,7 +229,7 @@ function buildSkillsSection(skillRegistry: SkillRegistry | null, skillsSummaryXM
     for (const skill of skills) {
       lines.push(` - ${skill.name}: ${skill.description}`);
     }
-    lines.push('\nUser mentions skill → activate_skill(name) → follow returned instructions.');
+    lines.push('\nIf the user message matches a skill (name/keywords) OR the chat platform matches a skill\'s `platforms` in frontmatter, call activate_skill(name) when you need that skill\'s full instructions—then follow them.');
     return lines.join('\n');
   }
   return null;

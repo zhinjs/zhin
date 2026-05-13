@@ -2,28 +2,28 @@ bots:
   - context: icqq
     name: "8596238"
     scope: icqqjs
-  - context: qq
-    name: zhin2号
-    appid: ${QQ_APPID}
-    secret: ${QQ_SECRET}
-    mode: websocket
-    sandbox: true
-    timeout: 10000
-    heartbeatInterval: 30000
-    maxRetries: 3
-    reconnectDelay: 5000
-    removeAt: true
-    intents:
-      - GUILDS
-      - GUILD_MEMBERS
-      - GUILD_MESSAGE_REACTIONS
-      - DIRECT_MESSAGE
-      - GROUP_AND_C2C_EVENT
-      - INTERACTION
-      - MESSAGE_AUDIT
-      - AUDIO_ACTION
-      - PUBLIC_GUILD_MESSAGES
-    data_dir: /Users/liuchunlang/IdeaProjects/zhin/examples/test-bot/data
+  # - context: qq
+  #   name: zhin2号
+  #   appid: ${QQ_APPID}
+  #   secret: ${QQ_SECRET}
+  #   mode: websocket
+  #   sandbox: true
+  #   timeout: 10000
+  #   heartbeatInterval: 30000
+  #   maxRetries: 3
+  #   reconnectDelay: 5000
+  #   removeAt: true
+  #   intents:
+  #     - GUILDS
+  #     - GUILD_MEMBERS
+  #     - GUILD_MESSAGE_REACTIONS
+  #     - DIRECT_MESSAGE
+  #     - GROUP_AND_C2C_EVENT
+  #     - INTERACTION
+  #     - MESSAGE_AUDIT
+  #     - AUDIO_ACTION
+  #     - PUBLIC_GUILD_MESSAGES
+  #   data_dir: /Users/liuchunlang/IdeaProjects/zhin/examples/test-bot/data
   - context: github
     name: zhin-github
     app_id: ${GITHUB_APP_ID}
@@ -46,13 +46,13 @@ plugins:
   - "@zhin.js/adapter-icqq"
   - "@zhin.js/adapter-github"
   - "@zhin.js/adapter-sandbox"
-  - "@zhin.js/devteam"
+  # - "@zhin.js/devteam"
   - "@zhin.js/adapter-kook"
-  - "@zhin.js/adapter-milky"
-  - "@zhin.js/adapter-satori"
-  - "@zhin.js/adapter-onebot11"
-  - "@zhin.js/adapter-onebot12"
-  - "@zhin.js/adapter-qq"
+  # - "@zhin.js/adapter-milky"
+  # - "@zhin.js/adapter-satori"
+  # - "@zhin.js/adapter-onebot11"
+  # - "@zhin.js/adapter-onebot12"
+  # - "@zhin.js/adapter-qq"
   - html-test
   - "@zhin.js/plugin-html-renderer"
   - "@zhin.js/plugin-group-daily-analysis"

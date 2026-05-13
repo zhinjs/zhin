@@ -180,6 +180,41 @@ describe('ToolSelection', () => {
     expect(tools.some(t => t.name === 'blocked')).toBe(false);
   });
 
+  it('当 context.platform 命中技能 platforms 时自动注入 activate_skill（消息无需含技能名）', () => {
+    const selection = new ToolSelection();
+    const context: ToolContext = { platform: 'icqq' };
+    const externalTools = [
+      makeTool({ name: 'activate_skill', description: 'activate a skill by name', keywords: [] }),
+      makeTool({ name: 'bash', description: 'run shell', keywords: [] }),
+    ];
+    const icqqAux = makeTool({ name: 'icqq_status_tool', description: 'qq status', keywords: [] });
+    const skillsList = [
+      {
+        name: 'icqq',
+        description: 'icqq cli skill',
+        tools: [icqqAux],
+        pluginName: 'adapter-icqq',
+        platforms: ['icqq'],
+        keywords: [],
+      },
+    ];
+    const skillRegistry = {
+      size: 1,
+      getAll: () => skillsList,
+      search: () => [],
+    };
+
+    const tools = selection.collectRelevantTools('帮我看看今天天气', context, externalTools, {
+      config: makeConfig({ maxSkills: 5, maxTools: 12 }),
+      skillRegistry: skillRegistry as any,
+      externalRegistered: new Map(),
+    });
+
+    expect(tools[0]?.name).toBe('activate_skill');
+    expect(tools.map(t => t.name)).toContain('icqq_status_tool');
+    expect(tools.map(t => t.name)).toContain('bash');
+  });
+
   it('retains web_search after relevance filter for messages without search keywords', () => {
     const selection = new ToolSelection();
     const context: ToolContext = { platform: 'qq' };

@@ -1,5 +1,7 @@
 ---
 name: icqq
+platforms:
+  - icqq
 description: 'Operate QQ account via icqq CLI. Use when asked to: send QQ message, manage QQ groups, check QQ friends, poke friend, like friend, mute member, kick member, set nickname, view QQ profile, handle friend/group requests, manage group files, set group announcement, QQ签到, 发消息, 管群, 好友操作, 群文件.'
 argument-hint: 'Describe what QQ operation to perform, e.g. "send hello to friend 12345" or "mute user 67890 in group 11111"'
 disable-model-invocation: true
