@@ -86,6 +86,8 @@ export { ZhinAgent } from './zhin-agent/index.js';
 export type { ZhinAgentConfig, OnChunkCallback } from './zhin-agent/index.js';
 
 export { PERM_MAP, DEFAULT_CONFIG as ZHIN_AGENT_DEFAULT_CONFIG, SECTION_SEP } from './zhin-agent/config.js';
+export { MODEL_HARNESS_DEFAULTS, resolveModelHarness } from './zhin-agent/model-harness.js';
+export type { ModelHarnessRow, ResolvedModelHarness } from './zhin-agent/model-harness.js';
 export {
   checkExecPolicy, applyExecPolicyToTools, resolveExecAllowlist, EXEC_PRESETS,
   isDangerousCommand, stripEnvVarPrefix, stripSafeWrappers, splitCompoundCommand, extractCommandName,
@@ -109,6 +111,7 @@ export { SubagentManager } from './subagent.js';
 export type {
   SubagentOrigin, SubagentResultSender, SpawnOptions, SubagentManagerOptions,
 } from './subagent.js';
+export { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from './reserved-tools.js';
 
 export {
   PersistentCronEngine,

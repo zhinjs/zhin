@@ -11,7 +11,7 @@ Zhin AI Agent 组合层：在 `@zhin.js/core` 的类型与 Provider 之上，提
 - 🔄 **模型自动降级**：首选模型失败时自动切换到次优模型，支持 Chat / Vision / Agent 三条路径
 - 🛡️ **6 层 Bash 安全**：`ExecPolicy` 纵深防御（危险黑名单、环境变量剥离、wrapper 剥离、复合命令拆分、只读放行、交互式审批）
 - 📂 **文件访问安全**：`FilePolicy` 路径检查、设备路径拦截、命令读写分类
-- 📋 **10 段系统提示词**：`PromptBuilder` 结构化 prompt（Identity、System、Tasks、Actions、Tools、Communication、Skills、Active Skills、Memory、Bootstrap）
+- 📋 **11 段系统提示词**：`PromptBuilder` 结构化 prompt（Identity、System、Discipline、Tasks、Actions、Tools、Communication、Skills、Active Skills、Memory、Bootstrap）
 - 🔌 **框架挂载**：`initAgentModule()` 注册 `ctx.ai`、定时任务、DB 模型等
 - 📦 **上下文与记忆**：`ContextManager`、`ConversationMemory`、`UserProfileStore`
 - ⏰ **跟进与定时**：`FollowUpManager`、`PersistentCronEngine`、cron 工具
@@ -117,13 +117,25 @@ declare module '@zhin.js/core' {
 
 ### 1. 主 Agent + 子 Agent（内置）
 
-框架已提供 **SubagentManager**：主 ZhinAgent 通过工具 `spawn_task` 把复杂/耗时任务派给**后台子 Agent** 异步执行，子 Agent 用受限工具集（文件、Shell、网络搜索等），完成后通过回调把结果发回主会话。
+框架已提供 **SubagentManager**：主 ZhinAgent 通过工具 `spawn_task` 把复杂/耗时任务派给**后台子 Agent** 异步执行，子 Agent 默认仅用受限工具集（文件、Shell、网络搜索等），完成后通过回调把结果发回主会话。
 
 - 主对话不阻塞，用户可继续聊天。
 - 子 Agent 由 `ZhinAgent.initSubagentManager(createTools)` 在 init 时挂好，主 Agent 在回复里提到「后台 / 子任务 / spawn」时会注入 `spawn_task` 工具。
 - 用户说「后台帮我整理这份文档」时，主 Agent 可调用 `spawn_task({ task: '...', label: '...' })`，子任务在后台跑完后再通知用户。
 
-无需额外配置即可使用；若需自定义子 Agent 工具或执行策略，可在 init 里对 `ZhinAgent` 调用 `initSubagentManager` 时传入自己的 `createTools` 和 `execPolicyConfig`。
+无需额外配置即可使用；若需放宽子 Agent 的工具范围，使用 `ai.agent.subagentTools` 显式追加白名单（不会自动继承主会话全部 skill/tool）。
+
+## 工具命名策略
+
+- 保留/内置工具名（如 `bash`、`read_file`、`spawn_task`）不可被插件或文件化工具覆盖。
+- 非保留工具同名时采用 **后注册覆盖前注册**。
+- 冲突统一以 warn 记录：包含 `name`、`source`、`action`（`ignored`/`overridden`）。
+
+## Model harness（第一期）
+
+- 默认参数通过 TypeScript 表维护：`src/zhin-agent/model-harness.ts`。
+- 为新 provider/model 增补默认值时，直接在该表新增行并附测试。
+- 第一阶段不引入新的 YAML 配置键；后续若支持 YAML 覆盖，TS 表仍作为默认层。
 
 ### 2. 用 AIService 创建多个不同配置的 Agent
 

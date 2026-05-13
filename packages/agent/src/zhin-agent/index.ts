@@ -51,12 +51,15 @@ import {
   buildContextHint,
   buildRichSystemPrompt,
   buildUserMessageWithHistory,
+  FIXED_DISCIPLINE_RULES,
 } from './prompt.js';
 import {
   createChatHistoryTool,
   createUserProfileTool,
   createSpawnTaskTool,
 } from './builtin-tools.js';
+import { resolveModelHarness } from './model-harness.js';
+import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from '../reserved-tools.js';
 
 export type { ZhinAgentConfig, OnChunkCallback } from './config.js';
 
@@ -158,6 +161,7 @@ export class ZhinAgent {
       provider: this.provider,
       workspace: process.cwd(),
       createTools,
+      subagentTools: this.config.subagentTools,
       maxIterations: this.config.maxSubagentIterations,
       execPolicyConfig: this.config,
     });
@@ -259,22 +263,7 @@ export class ZhinAgent {
 
     // 1. Collect tools
     const tFilter = now();
-    const allTools = collectRelevantTools(content, context, externalTools, {
-      config: this.config,
-      skillRegistry: this.skillRegistry,
-      externalRegistered: this.externalTools,
-    });
-
-    // Inject context-aware built-in tools on keyword match
-    if (KEYWORD_TRIGGERS.chatHistory.test(content)) {
-      allTools.push(createChatHistoryTool(sessionId, this.memory));
-    }
-    if (KEYWORD_TRIGGERS.userProfile.test(content)) {
-      allTools.push(createUserProfileTool(userId, this.userProfiles));
-    }
-    if (this.subagentManager && KEYWORD_TRIGGERS.spawnTask.test(content)) {
-      allTools.push(createSpawnTaskTool(context, this.subagentManager));
-    }
+    const allTools = this.collectTurnTools(content, context, externalTools, sessionId, userId);
 
     const filterMs = (now() - tFilter).toFixed(0);
 
@@ -282,22 +271,7 @@ export class ZhinAgent {
 
     // 2. History + profile (parallel)
     const tMem = now();
-    const [rawHistoryMessages, profileSummary] = await Promise.all([
-      this.buildHistoryMessages(sessionId),
-      this.userProfiles.buildProfileSummary(userId),
-    ]);
-
-    const contextTokens = this.config.contextTokens ?? DEFAULT_CONTEXT_TOKENS;
-    const maxHistoryShare = this.config.maxHistoryShare ?? 0.5;
-    const pruneResult = pruneHistoryForContext({
-      messages: rawHistoryMessages,
-      maxContextTokens: contextTokens,
-      maxHistoryShare,
-    });
-    let historyMessages = pruneResult.messages;
-    if (pruneResult.droppedCount > 0) {
-      logger.debug(`[上下文窗口] 丢弃 ${pruneResult.droppedCount} 条历史消息 (${pruneResult.droppedTokens} tokens)`);
-    }
+    const { historyMessages, profileSummary } = await this.loadTurnMemory(sessionId, userId);
 
     const memMs = (now() - tMem).toFixed(0);
 
@@ -308,10 +282,11 @@ export class ZhinAgent {
     // 3. No tools → chat path (prefer per-session model, then lightweight model)
     if (allTools.length === 0) {
       const liteModel = this.config.chatLiteModel || undefined;
-      logger.info(`[System Prompt] chat-path: ${personaEnhanced.length} chars${liteModel ? `, model=${liteModel}` : ''}`);
+      const chatSystemPrompt = this.buildDisciplinedPrompt(personaEnhanced);
+      logger.info(`[System Prompt] chat-path: ${chatSystemPrompt.length} chars${liteModel ? `, model=${liteModel}` : ''}`);
       logger.debug(`[闲聊路径] 过滤=${filterMs}ms, 记忆=${memMs}ms (${historyMessages.length}条), 0 工具`);
       const tLLM = now();
-      let reply = await this.streamChatWithHistory(content, personaEnhanced, historyMessages, onChunk, liteModel);
+      let reply = await this.streamChatWithHistory(content, chatSystemPrompt, historyMessages, onChunk, liteModel);
       reply = stripHallucinatedToolCalls(reply);
       const llmMs = (now() - tLLM).toFixed(0);
       logger.info(`[闲聊路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, LLM=${llmMs}ms, 总=${(now() - t0).toFixed(0)}ms`);
@@ -321,38 +296,8 @@ export class ZhinAgent {
 
     logger.debug(`[工具路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, ${allTools.length} 工具 (${allTools.map(t => t.name).join(', ')})`);
 
-    // 4. Pre-executable tools
-    const preExecTools: AgentTool[] = [];
-    for (const tool of allTools) {
-      if (tool.preExecutable) preExecTools.push(tool);
-    }
-
     // 5. Pre-execution
-    let preData = '';
-    if (preExecTools.length > 0) {
-      const tPre = now();
-      logger.debug(`预执行: ${preExecTools.map(t => t.name).join(', ')}`);
-      const results = await Promise.allSettled(
-        preExecTools.map(async (tool) => {
-          const result = await Promise.race([
-            tool.execute({}),
-            new Promise<never>((_, rej) =>
-              setTimeout(() => rej(new Error('超时')), this.config.preExecTimeout)),
-          ]);
-          return { name: tool.name, result };
-        }),
-      );
-      for (const r of results) {
-        if (r.status === 'fulfilled') {
-          let s = typeof r.value.result === 'string' ? r.value.result : JSON.stringify(r.value.result);
-          if (s.length > 500) {
-            s = s.slice(0, 500) + `\n... (truncated, ${s.length} chars total)`;
-          }
-          preData += `\n【${r.value.name}】${s}`;
-        }
-      }
-      logger.debug(`预执行耗时: ${(now() - tPre).toFixed(0)}ms`);
-    }
+    const preData = await this.executePreExecutableTools(allTools);
 
     // 6. Path selection
     let reply: string;
@@ -361,62 +306,18 @@ export class ZhinAgent {
     if (!hasNonPreExecTools && preData) {
       // Fast path
       const tLLM = now();
-      const prompt = `${personaEnhanced}
+      const prompt = this.buildDisciplinedPrompt(`${personaEnhanced}
 
 Pre-fetched data (from user's question):
 ${preData}
 
-Answer the user's question based on the data above. Be clear and concise; use emoji when appropriate.`;
+Answer the user's question based on the data above. Be clear and concise; use emoji when appropriate.`);
       logger.info(`[System Prompt] fast-path: ${prompt.length} chars`);
       reply = await this.streamChatWithHistory(content, prompt, historyMessages, onChunk);
       logger.info(`[快速路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, LLM=${(now() - tLLM).toFixed(0)}ms, 总=${(now() - t0).toFixed(0)}ms`);
     } else {
-      // Agent path
       const tAgent = now();
-      logger.debug(`Agent 路径: ${allTools.length} 个工具`);
-      const contextHint = buildContextHint(context, content);
-
-      const richPrompt = buildRichSystemPrompt({
-        config: this.config,
-        skillRegistry: this.skillRegistry,
-        skillsSummaryXML: this.skillsSummaryXML,
-        activeSkillsContext: this.activeSkillsContext,
-        bootstrapContext: this.bootstrapContext,
-      });
-      const systemPrompt = `${richPrompt}
-${contextHint}
-${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
-
-      logger.info(`[System Prompt] ${systemPrompt.length} chars`);
-      logger.debug(`[System Prompt Full]\n${systemPrompt}\n---END---`);
-
-      const agentTools = applyExecPolicyToTools(this.config, allTools);
-
-      // Adaptive maxIterations: boost when skills are active (multi-step skill flows)
-      const SKILL_ITERATION_BOOST = 3;
-      const hasSkillActivation = agentTools.some(t => t.name === 'activate_skill' || t.name === 'install_skill');
-      const effectiveMaxIterations = hasSkillActivation
-        ? this.config.maxIterations + SKILL_ITERATION_BOOST
-        : this.config.maxIterations;
-
-      const chatCandidates = this.resolveModelCandidates('chat');
-      const agent = createAgent(this.provider, {
-        model: chatCandidates[0],
-        modelFallbacks: chatCandidates.slice(1),
-        systemPrompt,
-        tools: agentTools,
-        maxIterations: effectiveMaxIterations,
-        turnTimeout: this.config.timeout,
-      });
-
-      const userMessageWithHistory = buildUserMessageWithHistory(historyMessages, content);
-      let result;
-      try {
-        result = await agent.run(userMessageWithHistory, []);
-      } finally {
-        agent.dispose();
-      }
-      reply = stripHallucinatedToolCalls(stripThinkBlocks(result.content)) || this.fallbackFormat(result.toolCalls);
+      reply = await this.runAgentPath(content, context, historyMessages, allTools, preData);
       logger.info(`[Agent 路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, Agent=${(now() - tAgent).toFixed(0)}ms, 总=${(now() - t0).toFixed(0)}ms`);
     }
 
@@ -429,6 +330,131 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     })).catch(() => {});
 
     return parseOutput(reply);
+  }
+
+  private buildDisciplinedPrompt(basePrompt: string): string {
+    const discipline = `# Discipline\n${FIXED_DISCIPLINE_RULES.map(rule => `- ${rule}`).join('\n')}`;
+    return `${discipline}\n\n${basePrompt}`;
+  }
+
+  private collectTurnTools(
+    content: string,
+    context: ToolContext,
+    externalTools: Tool[],
+    sessionId: string,
+    userId: string,
+  ): AgentTool[] {
+    const allTools = collectRelevantTools(content, context, externalTools, {
+      config: this.config,
+      skillRegistry: this.skillRegistry,
+      externalRegistered: this.externalTools,
+    });
+    if (KEYWORD_TRIGGERS.chatHistory.test(content)) {
+      allTools.push(createChatHistoryTool(sessionId, this.memory));
+    }
+    if (KEYWORD_TRIGGERS.userProfile.test(content)) {
+      allTools.push(createUserProfileTool(userId, this.userProfiles));
+    }
+    if (this.subagentManager && KEYWORD_TRIGGERS.spawnTask.test(content)) {
+      allTools.push(createSpawnTaskTool(context, this.subagentManager));
+    }
+    return allTools;
+  }
+
+  private async loadTurnMemory(sessionId: string, userId: string): Promise<{ historyMessages: ChatMessage[]; profileSummary: string }> {
+    const [rawHistoryMessages, profileSummary] = await Promise.all([
+      this.buildHistoryMessages(sessionId),
+      this.userProfiles.buildProfileSummary(userId),
+    ]);
+    const contextTokens = this.config.contextTokens ?? DEFAULT_CONTEXT_TOKENS;
+    const maxHistoryShare = this.config.maxHistoryShare ?? 0.5;
+    const pruneResult = pruneHistoryForContext({
+      messages: rawHistoryMessages,
+      maxContextTokens: contextTokens,
+      maxHistoryShare,
+    });
+    if (pruneResult.droppedCount > 0) {
+      logger.debug(`[上下文窗口] 丢弃 ${pruneResult.droppedCount} 条历史消息 (${pruneResult.droppedTokens} tokens)`);
+    }
+    return { historyMessages: pruneResult.messages, profileSummary };
+  }
+
+  private async executePreExecutableTools(tools: AgentTool[]): Promise<string> {
+    const preExecTools = tools.filter(tool => tool.preExecutable);
+    if (preExecTools.length === 0) return '';
+    const tPre = now();
+    logger.debug(`预执行: ${preExecTools.map(t => t.name).join(', ')}`);
+    let preData = '';
+    const results = await Promise.allSettled(
+      preExecTools.map(async (tool) => {
+        const result = await Promise.race([
+          tool.execute({}),
+          new Promise<never>((_, rej) =>
+            setTimeout(() => rej(new Error('超时')), this.config.preExecTimeout)),
+        ]);
+        return { name: tool.name, result };
+      }),
+    );
+    for (const r of results) {
+      if (r.status !== 'fulfilled') continue;
+      let s = typeof r.value.result === 'string' ? r.value.result : JSON.stringify(r.value.result);
+      if (s.length > 500) {
+        s = s.slice(0, 500) + `\n... (truncated, ${s.length} chars total)`;
+      }
+      preData += `\n【${r.value.name}】${s}`;
+    }
+    logger.debug(`预执行耗时: ${(now() - tPre).toFixed(0)}ms`);
+    return preData;
+  }
+
+  private async runAgentPath(
+    content: string,
+    context: ToolContext,
+    historyMessages: ChatMessage[],
+    allTools: AgentTool[],
+    preData: string,
+  ): Promise<string> {
+    logger.debug(`Agent 路径: ${allTools.length} 个工具`);
+    const contextHint = buildContextHint(context, content);
+    const richPrompt = buildRichSystemPrompt({
+      config: this.config,
+      skillRegistry: this.skillRegistry,
+      skillsSummaryXML: this.skillsSummaryXML,
+      activeSkillsContext: this.activeSkillsContext,
+      bootstrapContext: this.bootstrapContext,
+    });
+    const systemPrompt = `${richPrompt}
+${contextHint}
+${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
+    logger.info(`[System Prompt] ${systemPrompt.length} chars`);
+    logger.debug(`[System Prompt Full]\n${systemPrompt}\n---END---`);
+
+    const agentTools = applyExecPolicyToTools(this.config, allTools);
+    const chatCandidates = this.resolveModelCandidates('chat');
+    const harness = resolveModelHarness(this.provider.name, chatCandidates[0] || '');
+    const SKILL_ITERATION_BOOST = 3;
+    const hasSkillActivation = agentTools.some(t => t.name === 'activate_skill' || t.name === 'install_skill');
+    const baseIterations = harness.maxIterations ?? this.config.maxIterations;
+    const effectiveMaxIterations = hasSkillActivation ? baseIterations + SKILL_ITERATION_BOOST : baseIterations;
+
+    const agent = createAgent(this.provider, {
+      model: chatCandidates[0],
+      modelFallbacks: chatCandidates.slice(1),
+      systemPrompt,
+      tools: agentTools,
+      maxIterations: effectiveMaxIterations,
+      turnTimeout: this.config.timeout,
+      reservedToolNames: RESERVED_TOOL_NAMES,
+      reservedToolNamePrefixes: RESERVED_TOOL_NAME_PREFIXES,
+    });
+    const userMessageWithHistory = buildUserMessageWithHistory(historyMessages, content);
+    let result;
+    try {
+      result = await agent.run(userMessageWithHistory, []);
+    } finally {
+      agent.dispose();
+    }
+    return stripHallucinatedToolCalls(stripThinkBlocks(result.content)) || this.fallbackFormat(result.toolCalls);
   }
 
   async processMultimodal(
@@ -447,7 +473,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
 
     const historyMessages = await this.buildHistoryMessages(sessionId);
     const profileSummary = await this.userProfiles.buildProfileSummary(userId);
-    const personaEnhanced = buildEnhancedPersona(this.config, profileSummary, '');
+    const personaEnhanced = this.buildDisciplinedPrompt(buildEnhancedPersona(this.config, profileSummary, ''));
 
     // Build text summary describing the multimodal content
     const textFragments: string[] = [];

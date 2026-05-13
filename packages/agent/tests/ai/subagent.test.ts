@@ -160,6 +160,27 @@ describe('SubagentManager', () => {
         expect(toolNames).not.toContain('todo_write');
       }
     });
+
+    it('显式 subagentTools 配置应允许额外工具', async () => {
+      const customManager = new SubagentManager({
+        provider: provider as any,
+        workspace: '/tmp/test-workspace',
+        createTools: () => mockTools,
+        subagentTools: ['todo_write'],
+      });
+      const sender = vi.fn();
+      customManager.setSender(sender);
+
+      await customManager.spawn({ task: '测试扩展工具', origin: baseOrigin });
+      await vi.waitFor(() => expect(sender).toHaveBeenCalled(), { timeout: 2000 });
+
+      const request = provider.chat.mock.calls[0]?.[0] as any;
+      if (request?.tools) {
+        const toolNames = request.tools.map((t: any) => t.function?.name || t.name);
+        expect(toolNames).toContain('todo_write');
+      }
+      customManager.dispose();
+    });
   });
 
   describe('结果回告', () => {

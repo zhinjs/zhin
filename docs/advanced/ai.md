@@ -161,7 +161,7 @@ ai:
 
 | 配置项 | 类型 | 默认值 | 说明 |
 |--------|------|--------|------|
-| `maxIterations` | number | 5 | 最大工具调用轮数，技能激活时自动 +3 |
+| `maxIterations` | number | 5 | 最大工具调用轮数（会叠加 model harness 默认值与技能激活 +3） |
 | `timeout` | number | 60000 | 单次请求超时（ms） |
 | `preExecTimeout` | number | 10000 | 预执行超时（ms） |
 | `maxSkills` | number | 3 | 单次请求最多匹配的 Skill 数量 |
@@ -181,7 +181,9 @@ ai:
 | `modelSizeHint` | string | '' | 模型大小提示（影响技能截断） |
 | `skillInstructionMaxChars` | number | 0 | 技能指令最大字符数（覆盖自动推断） |
 | `maxSubagentIterations` | number | 15 | 子 agent 最大工具调用轮数 |
-| `subagentTools` | string[] | [] | 子 agent 允许使用的工具名列表 |
+| `subagentTools` | string[] | [] | 子 agent 额外允许的工具名（显式白名单追加；不自动继承主会话技能工具） |
+
+> Model harness 第一阶段仅使用 TypeScript 默认表（`packages/agent/src/zhin-agent/model-harness.ts`），暂不新增 `zhin.config.yml` 配置键。
 
 ## 触发条件
 

@@ -72,6 +72,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
           name: t.name,
           description: t.description,
           parameters: t.parameters,
+          source: 'builtin',
           execute: t.execute as (args: Record<string, any>) => Promise<unknown>,
           tags: t.tags,
           keywords: t.keywords,

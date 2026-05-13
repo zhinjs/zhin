@@ -8,7 +8,10 @@
 
 import type { AgentTool, ToolFilterOptions } from '@zhin.js/ai';
 import { filterTools, CachedToolFilter } from '@zhin.js/ai';
+import { isBuiltinToolSource, isReservedToolName } from '@zhin.js/ai';
+import { Logger } from '@zhin.js/core';
 import { ResourceRegistry } from './resource-registry.js';
+import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from '../reserved-tools.js';
 import type {
   ResourceScope,
   Tool,
@@ -205,13 +208,27 @@ export interface ToolLike {
 // ============================================================================
 
 export class ToolRegistry extends ResourceRegistry<AgentTool> {
+  private readonly logger = new Logger(null, 'ToolRegistry');
   private readonly cachedFilter = new CachedToolFilter();
   private readonly toolPluginMap = new Map<string, string>();
 
   addTool(input: ToolInput | AgentTool | ToolLike, scope?: ResourceScope, source?: string): () => void {
-    const tool = this.normalizeToAgentTool(input);
+    const incomingSource = source || 'unknown';
+    const tool = this.normalizeToAgentTool(input, incomingSource);
+    const protectedName = isReservedToolName(tool.name, {
+      reservedNames: RESERVED_TOOL_NAMES,
+      reservedPrefixes: RESERVED_TOOL_NAME_PREFIXES,
+    });
+    if (protectedName && !isBuiltinToolSource(incomingSource)) {
+      this.logger.warn(`[工具命名] name=${tool.name} source=${incomingSource} action=ignored reason=reserved_name`);
+      return () => {};
+    }
+    const existingEntry = this.getEntry(tool.name, scope);
+    if (existingEntry) {
+      this.logger.warn(`[工具命名] name=${tool.name} source=${incomingSource} action=overridden previous=${existingEntry.source} reason=duplicate_name_last_wins`);
+    }
     this.cachedFilter.invalidate();
-    return this.add(tool, scope, source);
+    return this.add(tool, scope, incomingSource);
   }
 
   removeTool(name: string, scope?: ResourceScope): boolean {
@@ -260,30 +277,31 @@ export class ToolRegistry extends ResourceRegistry<AgentTool> {
     super.dispose();
   }
 
-  private normalizeToAgentTool(input: ToolInput | AgentTool | ToolLike): AgentTool {
+  private normalizeToAgentTool(input: ToolInput | AgentTool | ToolLike, source: string): AgentTool {
     if (isZhinTool(input)) {
-      return this.toolToAgentTool(input.toTool());
+      return this.toolToAgentTool(input.toTool(), source);
     }
     if (typeof (input as any).toTool === 'function') {
-      return this.toolToAgentTool((input as ToolLike).toTool());
+      return this.toolToAgentTool((input as ToolLike).toTool(), source);
     }
     const obj = input as any;
     if ('execute' in obj && 'parameters' in obj) {
       if ('platforms' in obj || 'scopes' in obj || (typeof obj.permissionLevel === 'string')) {
-        return this.toolToAgentTool(obj as Tool);
+        return this.toolToAgentTool(obj as Tool, source);
       }
-      return obj as AgentTool;
+      return { ...(obj as AgentTool), source: obj.source || source };
     }
-    return obj as AgentTool;
+    return { ...(obj as AgentTool), source: obj.source || source };
   }
 
-  private toolToAgentTool(t: Tool): AgentTool {
+  private toolToAgentTool(t: Tool, source: string): AgentTool {
     const PERM_MAP: Record<string, number> = { user: 0, group_admin: 1, group_owner: 2, bot_admin: 3, owner: 4 };
     const result: AgentTool = {
       name: t.name,
       description: t.description,
       parameters: t.parameters,
       execute: async (args) => t.execute(args),
+      source: t.source || source,
       tags: t.tags,
       keywords: t.keywords,
       preExecutable: t.preExecutable,

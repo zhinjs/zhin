@@ -16,6 +16,7 @@ import type {
   Usage,
 } from '../types.js';
 import { filterTools } from './tool-filter.js';
+import { mergeToolsByName } from './tool-naming.js';
 import {
   autoCompactIfNeeded,
   createAutoCompactTracking,
@@ -116,7 +117,14 @@ export class Agent {
     };
 
     // 注册工具
-    for (const tool of this.config.tools) {
+    const merged = mergeToolsByName(this.config.tools, {
+      reservedNames: config.reservedToolNames,
+      reservedPrefixes: config.reservedToolNamePrefixes,
+    });
+    for (const warning of merged.warnings) {
+      logger.warn(`[工具命名] name=${warning.name} source=${warning.source} action=${warning.action}${warning.previousSource ? ` previous=${warning.previousSource}` : ''} reason=${warning.reason}`);
+    }
+    for (const tool of merged.tools) {
       this.tools.set(tool.name, tool);
     }
   }

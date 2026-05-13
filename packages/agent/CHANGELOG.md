@@ -1,5 +1,11 @@
 # @zhin.js/agent
 
+## Unreleased
+
+### Changed
+
+- 子代理默认继续使用最小工具继承（不自动继承主会话 skill/tool）；可通过 `ai.agent.subagentTools` 显式追加子代理可用工具白名单。
+
 ## 0.1.15
 
 ### Patch Changes

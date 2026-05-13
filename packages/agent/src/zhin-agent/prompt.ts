@@ -6,14 +6,15 @@
  *
  *   §1 Identity & Environment  — 身份 + 运行环境元数据
  *   §2 System                  — 系统行为约束（工具结果、上下文压缩、安全）
- *   §3 Doing Tasks             — 任务执行准则（工具优先、代码风格、安全编码）
- *   §4 Executing Actions       — 操作安全与可逆性（确认策略、破坏性操作）
- *   §5 Using Tools             — 工具使用指南（专用工具优先、并行调用、技能激活）
- *   §6 Communication           — 沟通风格（简洁、结构化、语言跟随用户）
- *   §7 Skills                  — 可用技能列表
- *   §8 Active Skills           — 已激活技能上下文
- *   §9 Memory                  — 长期记忆 + 当日笔记
- *   §10 Bootstrap              — 额外上下文注入
+ *   §3 Discipline              — 固定纪律（不编造、诚实失败、简洁）
+ *   §4 Doing Tasks             — 任务执行准则（工具优先、代码风格、安全编码）
+ *   §5 Executing Actions       — 操作安全与可逆性（确认策略、破坏性操作）
+ *   §6 Using Tools             — 工具使用指南（专用工具优先、并行调用、技能激活）
+ *   §7 Communication           — 沟通风格（简洁、结构化、语言跟随用户）
+ *   §8 Skills                  — 可用技能列表
+ *   §9 Active Skills           — 已激活技能上下文
+ *   §10 Memory                 — 长期记忆 + 当日笔记
+ *   §11 Bootstrap              — 额外上下文注入
  */
 
 import * as os from 'os';
@@ -24,6 +25,13 @@ import type { ZhinAgentConfig } from './config.js';
 import { SECTION_SEP, HISTORY_CONTEXT_MARKER, CURRENT_MESSAGE_MARKER } from './config.js';
 import type { ChatMessage } from '@zhin.js/ai';
 import { getFileMemoryContext } from '../bootstrap.js';
+
+export const FIXED_DISCIPLINE_RULES = [
+  'Never claim to have completed an action unless a tool was actually called and returned a confirmed result.',
+  'Never fabricate tool outputs, system states, or success confirmations.',
+  'If a capability is unavailable, state it honestly and suggest the closest valid alternative.',
+  'Lead with action or answer; avoid unnecessary preambles and filler.',
+] as const;
 
 export function contentToText(c: string | ContentPart[] | ContentPart | null | undefined): string {
   if (c == null) return '';
@@ -58,13 +66,6 @@ export function buildEnhancedPersona(
   toneHint: string,
 ): string {
   let persona = config.persona;
-
-  // Anti-hallucination constraints — applied to ALL paths including chat-only
-  persona += `\n\n# Critical Rules
-- NEVER claim you performed an action unless you used a tool and received a confirmed result.
-- If the user asks you to do something you cannot do, say honestly: "I don't have this capability" or tell them the correct command to use.
-- Do NOT fabricate tool outputs, system responses, or action confirmations.
-- Do NOT roleplay as a system that can execute commands you haven't been given tools for.`;
 
   if (profileSummary) {
     persona += `\n\n${profileSummary}`;
@@ -144,6 +145,10 @@ function buildSystemSection(): string {
     'Prior messages auto-compress near context limits. Answer based on the user\'s **last message**; prior messages are context.',
   ];
   return ['# System', ...prependBullets(items)].join('\n');
+}
+
+function buildDisciplineSection(): string {
+  return ['# Discipline', ...prependBullets(FIXED_DISCIPLINE_RULES.map(rule => `${rule}`))].join('\n');
 }
 
 /**
@@ -261,14 +266,15 @@ export function describePromptSectionsForDebug(ctx: RichSystemPromptContext): Pr
   const pairs: [string, string | null][] = [
     ['§1_identity_environment', buildIdentitySection(config)],
     ['§2_system', buildSystemSection()],
-    ['§3_doing_tasks', buildDoingTasksSection()],
-    ['§4_action_safety', buildActionsSection()],
-    ['§5_tools', buildUsingToolsSection()],
-    ['§6_style', buildCommunicationSection()],
-    ['§7_skills', buildSkillsSection(skillRegistry, skillsSummaryXML)],
-    ['§8_active_skills', buildActiveSkillsSection(activeSkillsContext)],
-    ['§9_memory', buildMemorySection()],
-    ['§10_bootstrap', boot],
+    ['§3_discipline', buildDisciplineSection()],
+    ['§4_doing_tasks', buildDoingTasksSection()],
+    ['§5_action_safety', buildActionsSection()],
+    ['§6_tools', buildUsingToolsSection()],
+    ['§7_style', buildCommunicationSection()],
+    ['§8_skills', buildSkillsSection(skillRegistry, skillsSummaryXML)],
+    ['§9_active_skills', buildActiveSkillsSection(activeSkillsContext)],
+    ['§10_memory', buildMemorySection()],
+    ['§11_bootstrap', boot],
   ];
   return pairs
     .filter(([, c]) => c != null && c.trim().length > 0)
@@ -282,15 +288,16 @@ export function buildRichSystemPrompt(ctx: RichSystemPromptContext): string {
     // Static sections (stable across turns)
     buildIdentitySection(config),       // §1
     buildSystemSection(),               // §2
-    buildDoingTasksSection(),           // §3
-    buildActionsSection(),              // §4
-    buildUsingToolsSection(),           // §5
-    buildCommunicationSection(),        // §6
+    buildDisciplineSection(),           // §3
+    buildDoingTasksSection(),           // §4
+    buildActionsSection(),              // §5
+    buildUsingToolsSection(),           // §6
+    buildCommunicationSection(),        // §7
     // Dynamic sections (vary per session/turn)
-    buildSkillsSection(skillRegistry, skillsSummaryXML),  // §7
-    buildActiveSkillsSection(activeSkillsContext),        // §8
-    buildMemorySection(),               // §9
-    bootstrapContext || null,           // §10
+    buildSkillsSection(skillRegistry, skillsSummaryXML),  // §8
+    buildActiveSkillsSection(activeSkillsContext),        // §9
+    buildMemorySection(),               // §10
+    bootstrapContext || null,           // §11
   ];
 
   return sections.filter(Boolean).join(SECTION_SEP);

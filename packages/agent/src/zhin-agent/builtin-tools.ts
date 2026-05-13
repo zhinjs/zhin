@@ -14,6 +14,7 @@ import type { SubagentManager, SubagentOrigin } from '../subagent.js';
 export function createChatHistoryTool(sessionId: string, memory: ConversationMemory): AgentTool {
   return {
     name: 'chat_history',
+    source: 'builtin:context',
     description: '搜索与用户的历史聊天记录。可以按关键词搜索，也可以按对话轮次范围查询。当用户问到"之前聊过什么""我们讨论过什么"等回忆类问题时使用。',
     parameters: {
       type: 'object',
@@ -88,6 +89,7 @@ export function createChatHistoryTool(sessionId: string, memory: ConversationMem
 export function createUserProfileTool(userId: string, profiles: UserProfileStore): AgentTool {
   return {
     name: 'user_profile',
+    source: 'builtin:context',
     description: '读取或保存用户的个人偏好和信息。当用户告诉你他的名字、偏好、兴趣、习惯等个人信息时，用 set 操作保存。当需要了解用户偏好时，用 get 操作读取。',
     parameters: {
       type: 'object',
@@ -149,6 +151,7 @@ export function createSpawnTaskTool(
 
   return {
     name: 'spawn_task',
+    source: 'builtin:context',
     description: '将复杂或耗时的任务交给后台子 agent 异步处理。子 agent 拥有文件读写、Shell、网络搜索等能力，完成后会自动通知用户。适用于需要多步操作的文件处理、代码分析、数据收集等任务。',
     parameters: {
       type: 'object',

@@ -55,6 +55,16 @@ export type {
 export { Agent, createAgent, formatToolTitle } from './agent/index.js';
 export type { AgentState, AgentEvents } from './agent/index.js';
 export { filterTools, tokenize } from './agent/tool-filter.js';
+export {
+  mergeToolsByName,
+  isReservedToolName,
+  isBuiltinToolSource,
+} from './agent/tool-naming.js';
+export type {
+  ToolNamePolicyOptions,
+  ToolNamePolicyWarning,
+  MergeToolsByNameResult,
+} from './agent/tool-naming.js';
 
 // ── Session Management ──
 export {

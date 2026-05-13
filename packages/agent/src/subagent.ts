@@ -14,6 +14,7 @@ import type { AIProvider, AgentTool } from '@zhin.js/core';
 import { createAgent } from '@zhin.js/ai';
 import type { ZhinAgentConfig } from './zhin-agent/config.js';
 import { applyExecPolicyToTools } from './security/exec-policy.js';
+import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from './reserved-tools.js';
 
 const logger = new Logger(null, 'Subagent');
 
@@ -41,6 +42,7 @@ export interface SubagentManagerOptions {
   provider: AIProvider;
   workspace: string;
   createTools: () => AgentTool[];
+  subagentTools?: string[];
   maxIterations?: number;
   /** Exec policy config to enforce on subagent bash tools */
   execPolicyConfig?: Required<ZhinAgentConfig>;
@@ -71,6 +73,7 @@ export class SubagentManager {
   private workspace: string;
   private createTools: () => AgentTool[];
   private maxIterations: number;
+  private allowedTools: Set<string>;
   private execPolicyConfig: Required<ZhinAgentConfig> | null;
   private runningTasks: Map<string, AbortController> = new Map();
   private resultSender: SubagentResultSender | null = null;
@@ -80,6 +83,10 @@ export class SubagentManager {
     this.workspace = options.workspace;
     this.createTools = options.createTools;
     this.maxIterations = options.maxIterations ?? 15;
+    this.allowedTools = new Set([
+      ...SUBAGENT_ALLOWED_TOOLS,
+      ...(options.subagentTools || []),
+    ]);
     this.execPolicyConfig = options.execPolicyConfig ?? null;
   }
 
@@ -124,7 +131,9 @@ export class SubagentManager {
 
     try {
       const allTools = this.createTools();
-      let tools = allTools.filter(t => SUBAGENT_ALLOWED_TOOLS.has(t.name));
+      let tools: AgentTool[] = allTools
+        .filter(t => this.allowedTools.has(t.name))
+        .map(t => ({ ...t, source: t.source || 'builtin' }));
       if (this.execPolicyConfig) {
         tools = applyExecPolicyToTools(this.execPolicyConfig, tools);
       }
@@ -134,6 +143,8 @@ export class SubagentManager {
         systemPrompt,
         tools,
         maxIterations: this.maxIterations,
+        reservedToolNames: RESERVED_TOOL_NAMES,
+        reservedToolNamePrefixes: RESERVED_TOOL_NAME_PREFIXES,
       });
 
       try {
@@ -189,6 +200,8 @@ ${task}
 2. Your final reply will be reported to the main agent and relayed to the user
 3. Do not start new conversations or take on extra tasks
 4. Keep replies concise but informative
+5. Never claim success unless tool results confirm it
+6. Do not fabricate tool outputs or execution status
 
 ## You may
 - Read/write files in the workspace

@@ -61,6 +61,7 @@ export function toAgentTool(tool: Tool, context?: ToolContext): AgentTool {
     name: tool.name,
     description: tool.description,
     parameters: cleanParameters,
+    source: tool.source,
     execute: context
       ? async (args: Record<string, any>) => {
           const enrichedArgs = { ...args };

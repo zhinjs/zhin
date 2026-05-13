@@ -1,0 +1,30 @@
+export const RESERVED_TOOL_NAME_PREFIXES = [
+  'internal_',
+];
+
+export const RESERVED_TOOL_NAMES = [
+  'read_file',
+  'write_file',
+  'edit_file',
+  'list_dir',
+  'glob',
+  'grep',
+  'bash',
+  'web_search',
+  'web_fetch',
+  'todo_read',
+  'todo_write',
+  'read_memory',
+  'write_memory',
+  'activate_skill',
+  'install_skill',
+  'ask_user',
+  'chat_history',
+  'user_profile',
+  'spawn_task',
+  'cron_list',
+  'cron_add',
+  'cron_remove',
+  'cron_pause',
+  'cron_resume',
+];
