@@ -1,5 +1,16 @@
 # @zhin.js/adapter-qq
 
+## 1.0.79
+
+### Patch Changes
+
+- b3e6a93: fix: 同步上游更新
+- Updated dependencies [cb9fbf1]
+  - zhin.js@1.0.76
+  - @zhin.js/logger@0.1.58
+  - @zhin.js/console@2.0.19
+  - @zhin.js/http@1.0.69
+
 ## 1.0.78
 
 ### Patch Changes

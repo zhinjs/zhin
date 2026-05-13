@@ -1,5 +1,13 @@
 # @zhin.js/plugin-group-daily-analysis
 
+## 0.0.25
+
+### Patch Changes
+
+- Updated dependencies [cb9fbf1]
+  - zhin.js@1.0.76
+  - @zhin.js/plugin-html-renderer@0.0.54
+
 ## 0.0.24
 
 ### Patch Changes
