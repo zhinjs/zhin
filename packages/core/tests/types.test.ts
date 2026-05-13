@@ -133,13 +133,11 @@ describe('应用配置类型测试', () => {
       }],
       plugin_dirs: ['./plugins'],
       plugins: ['test-plugin'],
-      disable_dependencies: ['disabled-plugin'],
       debug: true
     }
     expect(config.bots).toHaveLength(1)
     expect(config.plugin_dirs).toEqual(['./plugins'])
     expect(config.plugins).toEqual(['test-plugin'])
-    expect(config.disable_dependencies).toEqual(['disabled-plugin'])
     expect(config.debug).toBe(true)
   })
 })

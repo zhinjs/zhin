@@ -85,15 +85,25 @@ describe('ConfigLoader', () => {
       expect(proxiedData.escapedValue).toBe('${NOT_A_VAR}')
     })
 
-    it('should handle default values for missing env vars', () => {
+    it('should handle bash-style default values for missing env vars', () => {
       const config = {
-        valueWithDefault: '${MISSING_VAR:default_value}'
+        valueWithDefault: '${MISSING_VAR:-default_value}'
       }
       
       const loader = new ConfigLoader(testConfigPath, config)
       const proxiedData = loader.data
       
       expect(proxiedData.valueWithDefault).toBe('default_value')
+    })
+
+    it('should not treat legacy colon env syntax as a default value', () => {
+      const config = {
+        valueWithDefault: '${MISSING_VAR:default_value}'
+      }
+
+      const loader = new ConfigLoader(testConfigPath, config)
+
+      expect(loader.data.valueWithDefault).toBe('${MISSING_VAR:default_value}')
     })
 
     it('should not proxy function properties', () => {
@@ -149,6 +159,33 @@ describe('ConfigLoader', () => {
   })
 
   describe('File operations', () => {
+    it('should deep merge file config with defaults and let arrays override', () => {
+      const config = {
+        database: {
+          dialect: 'sqlite',
+          filename: './data/bot.db',
+        },
+        plugin_dirs: ['node_modules', './src/plugins'],
+        plugins: ['@zhin.js/http'],
+      }
+      fs.writeFileSync(testConfigPath, JSON.stringify({
+        database: { filename: './data/custom.db' },
+        plugins: [],
+      }))
+
+      const loader = new ConfigLoader(testConfigPath, config)
+      loader.load()
+
+      expect(loader.raw).toEqual({
+        database: {
+          dialect: 'sqlite',
+          filename: './data/custom.db',
+        },
+        plugin_dirs: ['node_modules', './src/plugins'],
+        plugins: [],
+      })
+    })
+
     it('should save and load JSON config', () => {
       const jsonPath = path.join(process.cwd(), 'test-config.json')
       const config = {

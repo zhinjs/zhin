@@ -724,7 +724,7 @@ export function getConfig(args?: { plugin_name?: string }): any {
   const configService = root.inject("config" as any) as any;
   if (!configService) throw new Error("Config service not available");
 
-  const appConfig = configService.get("zhin.config.yml");
+  const appConfig = configService.getPrimary();
   if (args?.plugin_name) {
     return appConfig[args.plugin_name] || null;
   }

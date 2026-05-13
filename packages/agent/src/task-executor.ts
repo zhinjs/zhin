@@ -14,6 +14,7 @@ import type { OutputElement } from '@zhin.js/ai';
 import type { ZhinAgent } from './zhin-agent/index.js';
 import type { CronJobContext } from './cron-engine.js';
 import { Logger } from '@zhin.js/core';
+import { toSendOptions, type NormalizedQueueOutboundDetail } from '@zhin.js/core/queue-im-field-contract';
 
 const logger = new Logger(null, 'task-executor');
 
@@ -73,6 +74,19 @@ function elementsToText(elements: OutputElement[]): string {
   }).join('\n').trim();
 }
 
+export function cronContextToSendOptions(context: CronJobContext, content: string): SendOptions {
+  if (!context.botId) throw new Error('Missing cron delivery field: botId');
+  const sceneType = (context.scope || 'private') as MessageType;
+  const outboundDetail: NormalizedQueueOutboundDetail = {
+    context: context.platform || 'cron',
+    bot: context.botId,
+    channelId: context.sceneId || 'cron',
+    channelType: sceneType,
+    content,
+  };
+  return toSendOptions(outboundDetail);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Factory
 // ─────────────────────────────────────────────────────────────────────────────
@@ -124,14 +138,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       if (context.platform && context.botId && context.sceneId) {
         const adapter = deps.resolveAdapter(context.platform);
         if (adapter) {
-          const sceneType = (context.scope || 'private') as MessageType;
-          await adapter.sendMessage({
-            context: context.platform,
-            bot: context.botId,
-            id: context.sceneId,
-            type: sceneType,
-            content: text,
-          });
+          await adapter.sendMessage(cronContextToSendOptions(context, text));
         } else {
           logger.warn(`[TaskExecutor] 找不到适配器: ${context.platform}`);
         }

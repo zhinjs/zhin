@@ -4,7 +4,7 @@
  */
 
 import { Logger } from '@zhin.js/core';
-import type { Plugin, Tool, ToolContext, AITriggerConfig } from '@zhin.js/core';
+import type { Plugin, AITriggerConfig } from '@zhin.js/core';
 import type {
   AIProvider,
   AIConfig,
@@ -30,7 +30,9 @@ import { Agent, createAgent } from '@zhin.js/ai';
 import type { ModelRegistry } from '@zhin.js/ai';
 import { getBuiltinTools } from './tools.js';
 import type { ContextManager, ContextConfig } from '@zhin.js/ai';
-import { PERM_MAP } from './zhin-agent/config.js';
+import { normalizeTool } from './orchestrator/tool-selection.js';
+import { DEFAULT_CONFIG } from './zhin-agent/config.js';
+import { resolveContextBudget } from './zhin-agent/context-budget.js';
 
 const aiLogger = new Logger(null, 'AI');
 
@@ -69,7 +71,7 @@ export class AIService {
     this.triggerConfig = config.trigger || {};
     this.agentConfig = config.agent;
     this.sessions = createMemorySessionManager(this.sessionConfig);
-    this.builtinTools = getBuiltinTools().map(tool => this.convertToolToAgentTool(tool.toTool()));
+    this.builtinTools = getBuiltinTools().map(tool => normalizeTool(tool.toTool()));
 
     for (const { key, factory, requireApiKey } of PROVIDER_REGISTRY) {
       const providerConfig = config.providers?.[key];
@@ -83,27 +85,6 @@ export class AIService {
     return this.providers.size > 0;
   }
 
-  async process(
-    content: string,
-    context: ToolContext,
-    _tools: Tool[],
-  ): Promise<string> {
-    const { platform, senderId, sceneId } = context;
-    const sessionId = SessionManager.generateId(platform || '', senderId || '', sceneId);
-    const systemPrompt = 'You are a helpful AI assistant. Reply in the language specified in [User profile] (key: language / preferred_language), or in the user\'s message language if not set. Never claim to perform actions you cannot actually do. If you cannot fulfill a request, say so honestly.';
-    return this.finishAndSave(sessionId, content, systemPrompt, sceneId);
-  }
-
-  private async finishAndSave(sessionId: string, content: string, systemPrompt: string, sceneId?: string): Promise<string> {
-    const response = await this.simpleChat(content, systemPrompt);
-    await this.sessions.addMessage(sessionId, { role: 'user', content });
-    await this.sessions.addMessage(sessionId, { role: 'assistant', content: response });
-    if (this.contextManager && sceneId) {
-      this.contextManager.autoSummarizeIfNeeded(sceneId).catch(() => {});
-    }
-    return response;
-  }
-
   private async simpleChat(content: string, systemPrompt: string): Promise<string> {
     const provider = this.getProvider();
     const response = await this.chat({
@@ -115,19 +96,6 @@ export class AIService {
     });
     const msgContent = response.choices[0]?.message?.content;
     return typeof msgContent === 'string' ? msgContent : '';
-  }
-
-  private convertToolToAgentTool(tool: Tool): AgentTool {
-    const agentTool: AgentTool = {
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.parameters,
-      execute: async (args) => tool.execute(args),
-    };
-    if (tool.tags?.length) agentTool.tags = tool.tags;
-    if (tool.permissionLevel) agentTool.permissionLevel = PERM_MAP[tool.permissionLevel] ?? 0;
-    if (tool.keywords?.length) agentTool.keywords = tool.keywords;
-    return agentTool;
   }
 
   setSessionManager(manager: SessionManager): void { this.sessions.dispose(); this.sessions = manager; }
@@ -200,13 +168,27 @@ export class AIService {
     return typeof content === 'string' ? content : '';
   }
 
-  createAgent(options: { provider?: string; model?: string; systemPrompt?: string; tools?: AgentTool[]; useBuiltinTools?: boolean; collectExternalTools?: boolean; maxIterations?: number } = {}): Agent {
+  createAgent(options: { provider?: string; model?: string; systemPrompt?: string; tools?: AgentTool[]; useBuiltinTools?: boolean; collectExternalTools?: boolean; maxIterations?: number; contextWindow?: number } = {}): Agent {
     const provider = this.getProvider(options.provider);
     let tools: AgentTool[] = [];
     if (options.useBuiltinTools !== false) tools.push(...this.builtinTools);
     if (options.collectExternalTools !== false) { tools.push(...this.customTools.values()); }
     if (options.tools?.length) tools.push(...options.tools);
-    return createAgent(provider, { model: options.model, systemPrompt: options.systemPrompt, tools, maxIterations: options.maxIterations });
+    const config = { ...DEFAULT_CONFIG, ...(this.agentConfig ?? {}) } as typeof DEFAULT_CONFIG;
+    const model = options.model ?? provider.models[0];
+    const contextWindow = options.contextWindow ?? resolveContextBudget({
+          config,
+          provider,
+          modelRegistry: this._modelRegistry,
+          model,
+        }).contextWindow;
+    return createAgent(provider, {
+      model,
+      systemPrompt: options.systemPrompt,
+      tools,
+      maxIterations: options.maxIterations,
+      contextWindow,
+    });
   }
 
   async runAgent(task: string, options: { provider?: string; model?: string; tools?: AgentTool[]; systemPrompt?: string } = {}): Promise<{ content: string; toolCalls: any[]; usage: any }> {

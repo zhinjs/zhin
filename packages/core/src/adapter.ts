@@ -6,6 +6,7 @@ import { Notice } from "./notice.js";
 import { Request } from "./request.js";
 import { BeforeSendHandler, SendOptions } from "./types.js";
 import { segment } from "./utils.js";
+import { runInboundMessage } from "./built/inbound-runner.js";
 /**
  * Adapter类：适配器抽象，管理多平台Bot实例。
  * 负责根据配置启动/关闭各平台机器人，统一异常处理。
@@ -24,7 +25,7 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
   get maxConcurrentMessages(): number {
     try {
       const configService = this.plugin?.root?.inject('config') as any;
-      const appConfig = configService?.get?.('zhin.config.yml');
+      const appConfig = configService?.getPrimary?.();
       return appConfig?.max_concurrent_messages ?? Adapter.DEFAULT_MAX_CONCURRENT_MESSAGES;
     } catch {
       return Adapter.DEFAULT_MAX_CONCURRENT_MESSAGES;
@@ -81,15 +82,13 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
     this.#pendingMessages++;
     // 异步执行入站消息处理链
     const processing = async () => {
-      // Step 1: 如果有 Dispatcher，先通过它
-      const dispatcher = this.plugin?.inject('dispatcher');
-      if (dispatcher && typeof dispatcher.dispatch === 'function') {
-        await dispatcher.dispatch(message);
-      }
-      // Step 2: 触发插件生命周期事件
-      this.plugin?.dispatch('message.receive', message);
-      // Step 3: 通知 adapter.on('message.receive') 观察者
-      EventEmitter.prototype.emit.call(this, event, ...args);
+      await runInboundMessage({
+        plugin: this.plugin,
+        message,
+        emitAdapterObservers: () => {
+          EventEmitter.prototype.emit.call(this, event, ...args);
+        },
+      });
     };
 
     processing().catch((e) => {

@@ -91,7 +91,6 @@ export {
   isDangerousCommand, stripEnvVarPrefix, stripSafeWrappers, splitCompoundCommand, extractCommandName,
   type ExecPolicyResult,
 } from './security/exec-policy.js';
-export { collectRelevantTools, toAgentTool } from './zhin-agent/tool-collector.js';
 export {
   buildRichSystemPrompt,
   buildContextHint,
@@ -160,6 +159,7 @@ export {
   ResourceRegistry,
   ToolRegistry, ZhinTool, isZhinTool, defineTool, extractParamInfo,
   canAccessTool, inferPermissionLevel, hasPermissionLevel,
+  normalizeTool, sharedToolSelection,
   SkillRegistry,
   SubAgentRegistry,
   McpRegistry,

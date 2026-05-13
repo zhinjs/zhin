@@ -54,8 +54,8 @@ useContext("tool", "icqq", (toolService: ToolFeature, icqq: IcqqAdapter) => {
 });
 
 // ── Web 控制台入口 ─────────────────────────────────────────────────
-useContext("web", () => {
-  PageManager.addEntry({
+useContext("web", (pageManager) => {
+  pageManager.addEntry({
     id: "icqq",
     development: path.resolve(import.meta.dirname, "../client/index.tsx"),
     production: path.resolve(import.meta.dirname, "../dist/index.js"),

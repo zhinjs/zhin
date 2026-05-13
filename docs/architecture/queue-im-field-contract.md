@@ -48,6 +48,16 @@
 
 **规则**：新代码禁止混用 `sceneId`/`roomId`/`peerId` 等不与上表映射表对照的裸键；若平台必须用异名，在适配层做 **一次性** 映射并文档化。
 
+### 规范化实现
+
+`@zhin.js/core/queue-im-field-contract` 提供轻量规范化 Module：
+
+- `normalizeQueueOutboundDetail(record)`：将 `adapter/context`、`id/channelId`、`type/channelType`、`text/content` 归一到 canonical queue-IM 字段。
+- `toSendOptions(detail)`：把 canonical queue-IM 字段转换为 `SendOptions`。
+- `normalizeRecordToSendOptions(record)`：一步完成归一化和 `SendOptions` 转换。
+
+冲突字段采用 canonical-first 优先级：`context` > `adapter`，`channelId` > `id`，`channelType` > `type`，`content` > `text`。
+
 ## 相关
 
 - [event-contracts.md](./event-contracts.md) — 队列事件 kind/type/detail 推荐形状  

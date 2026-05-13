@@ -268,14 +268,14 @@ useContext("config", (configService) => {
 
   // 配置 API
   router.get(`${base}/config`, async (ctx) => {
-    ctx.body = { success: true, data: configService.get("zhin.config.yml") };
+    ctx.body = { success: true, data: configService.getPrimary() };
   });
 
   router.get(`${base}/config/:name`, async (ctx) => {
     const { name } = ctx.params;
 
     if (name === "app") {
-      ctx.body = { success: true, data: configService.get("zhin.config.yml") };
+      ctx.body = { success: true, data: configService.getPrimary() };
       return;
     }
 
@@ -500,7 +500,7 @@ useContext("config", (configService) => {
   router.get(`${base}/marketplace/updates`, async (ctx) => {
     try {
       const configService = plugin.inject('config');
-      const appConfig = configService?.get<{ plugins?: string[] }>('zhin.config.yml');
+      const appConfig = configService?.getPrimary<{ plugins?: string[] }>();
       const installed: string[] = appConfig?.plugins || [];
       if (!installed.length) {
         ctx.body = { success: true, data: [] };

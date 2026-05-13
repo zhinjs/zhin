@@ -9,14 +9,12 @@ export interface AppConfig<T extends keyof Databases = keyof Databases> {
   log_level: LogLevel;
   /** 数据库配置列表 */
   database?: DatabaseConfig<T>;
-  /** 插件目录列表，默认为 ['./plugins', 'node_modules'] */
+  /** 插件目录列表，默认按 ['node_modules', './src/plugins'] 解析 */
   plugin_dirs?: string[];
   /** 需要加载的插件列表 */
   plugins?: string[];
   /** 启用的内置服务列表，例如 ['process','config','command','component','permission','cron'] */
   services?: ('process' | 'config' | 'command' | 'component' | 'permission' | 'cron')[];
-  /** 禁用的依赖列表 */
-  disable_dependencies?: string[];
   /** 是否启用调试模式 */
   debug?: boolean;
   /** 日志配置 */

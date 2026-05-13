@@ -206,7 +206,7 @@ addTool(
 - 及时清理监听器
 
 ## 5. 配置管理
-- 使用 \`root.inject('config').get('zhin.config.yml')\` 读取配置
+- 使用 \`root.inject('config').getPrimary()\` 读取主配置
 - 配置变更通过 \`.set()\` 自动持久化
 
 ## 6. 数据库使用

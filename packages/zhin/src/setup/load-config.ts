@@ -4,16 +4,18 @@ import { LogLevel } from '@zhin.js/logger';
 import type { AppConfig } from '../types.js';
 import { setZhinProjectRoot } from './project-root.js';
 
-const defaultConfig = {
+export const DEFAULT_CORE_SERVICES = ['process', 'config', 'command', 'component', 'permission', 'cron'] as const;
+
+export const DEFAULT_APP_CONFIG: AppConfig = {
   log_level: LogLevel.INFO,
   bots: [],
   database: {
     dialect: 'sqlite' as const,
-    filename: './data/test.db',
+    filename: './data/bot.db',
   },
   plugin_dirs: ['node_modules', './src/plugins'],
   plugins: ['@zhin.js/http', '@zhin.js/console', '@zhin.js/adapter-sandbox'],
-  services: ['process', 'config', 'command', 'component', 'permission', 'cron'] as const,
+  services: [...DEFAULT_CORE_SERVICES],
 };
 
 /**
@@ -25,7 +27,7 @@ export function loadConfig(): { configFeature: ConfigFeature; appConfig: AppConf
   const envRoot = process.env.ZHIN_PROJECT_ROOT?.trim();
   setZhinProjectRoot(envRoot ? path.resolve(envRoot) : path.dirname(resolvedConfigPath));
   const configFeature = new ConfigFeature();
-  configFeature.load(configFile, defaultConfig);
-  const appConfig = configFeature.get<AppConfig>(configFile);
+  configFeature.load(configFile, DEFAULT_APP_CONFIG);
+  const appConfig = configFeature.getPrimary<AppConfig>();
   return { configFeature, appConfig };
 }

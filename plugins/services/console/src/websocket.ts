@@ -149,7 +149,9 @@ function getPluginKeys(): string[] {
 }
 
 function getConfigFilePath(): string {
-  return path.resolve(process.cwd(), 'zhin.config.yml');
+  const configService = root.inject('config') as ConfigFeature | undefined;
+  const primaryFile = configService?.primaryFile || 'zhin.config.yml';
+  return path.resolve(process.cwd(), primaryFile);
 }
 
 export function setupWebSocket(webServer: WebServer) {
@@ -228,7 +230,7 @@ async function handleWebSocketMessage(
         const filePath = getConfigFilePath();
         fs.writeFileSync(filePath, yaml, 'utf-8');
         const configService = root.inject('config') as ConfigFeature;
-        const loader = configService.configs.get('zhin.config.yml');
+        const loader = configService.configs.get(configService.primaryFile);
         if (loader) loader.load();
         ws.send(JSON.stringify({ requestId, data: { success: true, message: '配置已保存，需重启生效' } }));
       } catch (error) {
@@ -243,7 +245,7 @@ async function handleWebSocketMessage(
     case "config:get":
       try {
         const configService = root.inject('config') as ConfigFeature;
-        const rawConfig = configService.getRaw<Record<string, any>>('zhin.config.yml');
+        const rawConfig = configService.getRaw<Record<string, any>>(configService.primaryFile);
         if (!pluginName) {
           ws.send(JSON.stringify({ requestId, data: rawConfig }));
         } else {
@@ -258,7 +260,7 @@ async function handleWebSocketMessage(
     case "config:get-all":
       try {
         const configService = root.inject('config') as ConfigFeature;
-        const rawConfig = configService.getRaw<Record<string, any>>('zhin.config.yml');
+        const rawConfig = configService.getRaw<Record<string, any>>(configService.primaryFile);
         const allConfigs: Record<string, any> = { ...rawConfig };
         const schemaService = root.inject('schema' as any) as SchemaFeature | null;
         if (schemaService) {
@@ -283,7 +285,7 @@ async function handleWebSocketMessage(
         }
         const configKey = resolveConfigKey(pluginName);
         const configService = root.inject('config') as ConfigFeature;
-        const loader = configService.configs.get('zhin.config.yml');
+        const loader = configService.configs.get(configService.primaryFile);
         if (!loader) {
           ws.send(JSON.stringify({ requestId, error: 'Config file not loaded' }));
           break;

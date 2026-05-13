@@ -31,10 +31,6 @@ import { UserProfileStore } from '../user-profile.js';
 import { RateLimiter } from '@zhin.js/ai';
 import { detectTone } from '@zhin.js/ai';
 import { SubagentManager, type SubagentResultSender } from '../subagent.js';
-import {
-  pruneHistoryForContext,
-  DEFAULT_CONTEXT_TOKENS,
-} from '@zhin.js/ai';
 import { triggerAIHook, createAIHookEvent } from '../hooks.js';
 
 // ── Sub-modules ─────────────────────────────────────────────────────
@@ -42,10 +38,8 @@ import {
   type ZhinAgentConfig,
   type OnChunkCallback,
   DEFAULT_CONFIG,
-  KEYWORD_TRIGGERS,
 } from './config.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
-import { collectRelevantTools } from './tool-collector.js';
 import {
   buildEnhancedPersona,
   buildContextHint,
@@ -53,42 +47,17 @@ import {
   buildUserMessageWithHistory,
 } from './prompt.js';
 import {
-  createChatHistoryTool,
-  createUserProfileTool,
-  createSpawnTaskTool,
-} from './builtin-tools.js';
+  buildPreExecFastPathPrompt,
+  collectRuntimeTools,
+  planToolRun,
+} from './tool-runtime.js';
+import { stripHallucinatedToolCalls, stripThinkBlocks } from './text-sanitize.js';
+import { pruneHistoryWithBudget } from './context-budget.js';
 
 export type { ZhinAgentConfig, OnChunkCallback } from './config.js';
 
 const logger = new Logger(null, 'ZhinAgent');
 const now = () => performance.now();
-
-/** Strip `<think>…</think>` blocks that some reasoning models embed in content. */
-function stripThinkBlocks(text: string): string {
-  return text.replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
-}
-
-/**
- * Strip hallucinated tool-call markup that some models emit as plain text
- * (e.g. `<tool_call …/>`, `<function=xxx>…</function>`, `<|plugin|>…`).
- * Only removes the markup; any surrounding real text is preserved.
- */
-function stripHallucinatedToolCalls(text: string): string {
-  let cleaned = text;
-  // <tool_call …/> or <tool_call …>…</tool_call>
-  cleaned = cleaned.replace(/<tool_call\b[\s\S]*?(?:\/>|<\/tool_call>)/gi, '');
-  // <tool_result …/> or <tool_result …>…</tool_result>
-  cleaned = cleaned.replace(/<tool_result\b[\s\S]*?(?:\/>|<\/tool_result>)/gi, '');
-  // <function=name>…</function>
-  cleaned = cleaned.replace(/<function=[^>]*>[\s\S]*?<\/function>/gi, '');
-  // {tool_result} / {tool_call} bare placeholders
-  cleaned = cleaned.replace(/\{tool_(?:result|call)\}/gi, '');
-  // <|plugin|>…<|/plugin|>  (some Chinese models)
-  cleaned = cleaned.replace(/<\|plugin\|>[\s\S]*?<\|\/plugin\|>/gi, '');
-  // <<<tool_call>>> … <<<end>>> style
-  cleaned = cleaned.replace(/<<<tool_call>>>[\s\S]*?<<<end>>>/gi, '');
-  return cleaned.trim();
-}
 
 // ============================================================================
 // ZhinAgent
@@ -143,6 +112,7 @@ export class ZhinAgent {
 
   setModelRegistry(registry: ModelRegistry): void {
     this.modelRegistry = registry;
+    this.subagentManager?.setModelRegistry(registry);
   }
 
   upgradeMemoryToDatabase(msgModel: any, sumModel: any): void {
@@ -160,6 +130,7 @@ export class ZhinAgent {
       createTools,
       maxIterations: this.config.maxSubagentIterations,
       execPolicyConfig: this.config,
+      modelRegistry: this.modelRegistry,
     });
     logger.debug('SubagentManager initialized');
   }
@@ -259,22 +230,19 @@ export class ZhinAgent {
 
     // 1. Collect tools
     const tFilter = now();
-    const allTools = collectRelevantTools(content, context, externalTools, {
+    const allTools = collectRuntimeTools({
+      content,
+      context,
+      externalTools,
       config: this.config,
       skillRegistry: this.skillRegistry,
       externalRegistered: this.externalTools,
+      sessionId,
+      userId,
+      memory: this.memory,
+      userProfiles: this.userProfiles,
+      subagentManager: this.subagentManager,
     });
-
-    // Inject context-aware built-in tools on keyword match
-    if (KEYWORD_TRIGGERS.chatHistory.test(content)) {
-      allTools.push(createChatHistoryTool(sessionId, this.memory));
-    }
-    if (KEYWORD_TRIGGERS.userProfile.test(content)) {
-      allTools.push(createUserProfileTool(userId, this.userProfiles));
-    }
-    if (this.subagentManager && KEYWORD_TRIGGERS.spawnTask.test(content)) {
-      allTools.push(createSpawnTaskTool(context, this.subagentManager));
-    }
 
     const filterMs = (now() - tFilter).toFixed(0);
 
@@ -287,14 +255,18 @@ export class ZhinAgent {
       this.userProfiles.buildProfileSummary(userId),
     ]);
 
-    const contextTokens = this.config.contextTokens ?? DEFAULT_CONTEXT_TOKENS;
-    const maxHistoryShare = this.config.maxHistoryShare ?? 0.5;
-    const pruneResult = pruneHistoryForContext({
+    const chatCandidates = this.resolveModelCandidates('chat');
+    const {
+      messages: historyMessages,
+      result: pruneResult,
+      budget: contextBudget,
+    } = pruneHistoryWithBudget({
       messages: rawHistoryMessages,
-      maxContextTokens: contextTokens,
-      maxHistoryShare,
+      config: this.config,
+      provider: this.provider,
+      modelRegistry: this.modelRegistry,
+      model: chatCandidates[0],
     });
-    let historyMessages = pruneResult.messages;
     if (pruneResult.droppedCount > 0) {
       logger.debug(`[上下文窗口] 丢弃 ${pruneResult.droppedCount} 条历史消息 (${pruneResult.droppedTokens} tokens)`);
     }
@@ -322,51 +294,24 @@ export class ZhinAgent {
     logger.debug(`[工具路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, ${allTools.length} 工具 (${allTools.map(t => t.name).join(', ')})`);
 
     // 4. Pre-executable tools
-    const preExecTools: AgentTool[] = [];
-    for (const tool of allTools) {
-      if (tool.preExecutable) preExecTools.push(tool);
+    const preExecCandidates = allTools.filter(tool => tool.preExecutable);
+    const tPre = preExecCandidates.length > 0 ? now() : 0;
+    if (preExecCandidates.length > 0) {
+      logger.debug(`预执行: ${preExecCandidates.map(t => t.name).join(', ')}`);
     }
-
-    // 5. Pre-execution
-    let preData = '';
-    if (preExecTools.length > 0) {
-      const tPre = now();
-      logger.debug(`预执行: ${preExecTools.map(t => t.name).join(', ')}`);
-      const results = await Promise.allSettled(
-        preExecTools.map(async (tool) => {
-          const result = await Promise.race([
-            tool.execute({}),
-            new Promise<never>((_, rej) =>
-              setTimeout(() => rej(new Error('超时')), this.config.preExecTimeout)),
-          ]);
-          return { name: tool.name, result };
-        }),
-      );
-      for (const r of results) {
-        if (r.status === 'fulfilled') {
-          let s = typeof r.value.result === 'string' ? r.value.result : JSON.stringify(r.value.result);
-          if (s.length > 500) {
-            s = s.slice(0, 500) + `\n... (truncated, ${s.length} chars total)`;
-          }
-          preData += `\n【${r.value.name}】${s}`;
-        }
-      }
+    const toolRun = await planToolRun(allTools, this.config.preExecTimeout);
+    const preData = toolRun.preExecution.data;
+    if (tPre > 0) {
       logger.debug(`预执行耗时: ${(now() - tPre).toFixed(0)}ms`);
     }
 
     // 6. Path selection
     let reply: string;
-    const hasNonPreExecTools = allTools.some(t => !t.preExecutable);
 
-    if (!hasNonPreExecTools && preData) {
+    if (toolRun.mode === 'pre-exec-fast-path') {
       // Fast path
       const tLLM = now();
-      const prompt = `${personaEnhanced}
-
-Pre-fetched data (from user's question):
-${preData}
-
-Answer the user's question based on the data above. Be clear and concise; use emoji when appropriate.`;
+      const prompt = buildPreExecFastPathPrompt(personaEnhanced, preData);
       logger.info(`[System Prompt] fast-path: ${prompt.length} chars`);
       reply = await this.streamChatWithHistory(content, prompt, historyMessages, onChunk);
       logger.info(`[快速路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, LLM=${(now() - tLLM).toFixed(0)}ms, 总=${(now() - t0).toFixed(0)}ms`);
@@ -399,7 +344,6 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
         ? this.config.maxIterations + SKILL_ITERATION_BOOST
         : this.config.maxIterations;
 
-      const chatCandidates = this.resolveModelCandidates('chat');
       const agent = createAgent(this.provider, {
         model: chatCandidates[0],
         modelFallbacks: chatCandidates.slice(1),
@@ -407,6 +351,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
         tools: agentTools,
         maxIterations: effectiveMaxIterations,
         turnTimeout: this.config.timeout,
+        contextWindow: contextBudget.contextWindow,
       });
 
       const userMessageWithHistory = buildUserMessageWithHistory(historyMessages, content);
@@ -445,7 +390,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       return parseOutput(rateCheck.message || '请稍后再试');
     }
 
-    const historyMessages = await this.buildHistoryMessages(sessionId);
+    const rawHistoryMessages = await this.buildHistoryMessages(sessionId);
     const profileSummary = await this.userProfiles.buildProfileSummary(userId);
     const personaEnhanced = buildEnhancedPersona(this.config, profileSummary, '');
 
@@ -487,6 +432,16 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
 
     const textContent = textFragments.join(' ') || '[多模态消息]';
     const visionCandidates = this.resolveModelCandidates('vision');
+    const { messages: historyMessages, result: pruneResult } = pruneHistoryWithBudget({
+      messages: rawHistoryMessages,
+      config: this.config,
+      provider: this.provider,
+      modelRegistry: this.modelRegistry,
+      model: visionCandidates[0],
+    });
+    if (pruneResult.droppedCount > 0) {
+      logger.debug(`[多模态上下文窗口] 丢弃 ${pruneResult.droppedCount} 条历史消息 (${pruneResult.droppedTokens} tokens)`);
+    }
 
     const messages: ChatMessage[] = [
       { role: 'system', content: personaEnhanced },

@@ -15,5 +15,6 @@
     "jsxImportSource": "react",
     "lib": ["ES2022", "DOM"]
   },
-  "include": ["client/**/*"]
+  "include": ["client/**/*"],
+  "exclude": ["**/*.test.ts"]
 }

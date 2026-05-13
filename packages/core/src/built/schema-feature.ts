@@ -161,7 +161,7 @@ export class SchemaFeature extends Feature<SchemaRecord> {
         // 读取当前配置并与默认值合并
         const root = plugin.root ?? plugin;
         const configService = root.inject('config') as any;
-        const appConfig = configService?.get?.('zhin.config.yml') ?? {};
+        const appConfig = configService?.getPrimary?.() ?? {};
         const current = appConfig[key] ?? {};
 
         return { ...defaults, ...current } as Required<T>;

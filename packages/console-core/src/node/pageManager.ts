@@ -21,16 +21,17 @@ export function mountConsoleRouter(router: Router): Koa.Middleware {
 
 export class PageManager {
   readonly router: Router;
+  readonly entryStore: EntryStore;
   private readonly _apiRouter: Router;
   private readonly serverOptions: ConsoleServerOptions;
-  static entryStore: EntryStore = createInMemoryEntryStore();
 
   constructor(options: ConsoleServerOptions) {
     this.serverOptions = options;
+    this.entryStore = options.entryStore ?? createInMemoryEntryStore();
     const basePath = options.path ?? DEFAULT_CONSOLE_BASE_PATH;
     const api = new Router({ prefix: basePath });
     this._apiRouter = api;
-    registerConsoleApiRoutes(api, PageManager.entryStore, options);
+    registerConsoleApiRoutes(api, this.entryStore, options);
     if (options.router) {
       options.router.use(api.routes());
       options.router.use(api.allowedMethods());
@@ -44,7 +45,7 @@ export class PageManager {
     const basePath = this.serverOptions.path ?? DEFAULT_CONSOLE_BASE_PATH;
     return {
       router: this._apiRouter,
-      entryStore: PageManager.entryStore,
+      entryStore: this.entryStore,
       basePath,
       runtimeEnvHint: this.serverOptions.runtimeEnvHint,
     };
@@ -85,7 +86,7 @@ export class PageManager {
       runtimeMode === "production" ? "production" : "development";
     const { pathToFileURL } = await import("node:url");
 
-    for (const e of PageManager.entryStore.list()) {
+    for (const e of this.entryStore.list()) {
       if (!e.serverPaths) continue;
       const abs = mode === "production" ? e.serverPaths.production : e.serverPaths.development;
       const href = pathToFileURL(abs).href;
@@ -134,7 +135,7 @@ export class PageManager {
     });
   }
 
-  static addEntry(input: ConsoleFileAddEntryInput) {
+  addEntry(input: ConsoleFileAddEntryInput) {
     const id =
       input.id ??
       `${path.basename(input.production, path.extname(input.production))}-${createHash("sha256").update(input.production).digest("hex").slice(0, 8)}`;
@@ -153,6 +154,6 @@ export class PageManager {
         production: input.serverProduction,
       };
     }
-    PageManager.entryStore.add(entry);
+    this.entryStore.add(entry);
   }
 }

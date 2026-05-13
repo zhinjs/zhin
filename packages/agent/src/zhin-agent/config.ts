@@ -4,6 +4,7 @@
 
 import type { RateLimitConfig } from '@zhin.js/ai';
 import { DEFAULT_CONTEXT_TOKENS } from '@zhin.js/ai';
+import { PERMISSION_LEVEL_PRIORITY } from '../orchestrator/tool-selection.js';
 
 export type ModelSizeHint = 'small' | 'medium' | 'large';
 
@@ -46,13 +47,7 @@ export const SECTION_SEP = '\n\n---\n\n';
 export const HISTORY_CONTEXT_MARKER = '[Chat messages since your last reply - for context]';
 export const CURRENT_MESSAGE_MARKER = '[Current message - respond to this]';
 
-export const PERM_MAP: Record<string, number> = {
-  user: 0,
-  group_admin: 1,
-  group_owner: 2,
-  bot_admin: 3,
-  owner: 4,
-};
+export const PERM_MAP: Record<string, number> = PERMISSION_LEVEL_PRIORITY;
 
 export type OnChunkCallback = (chunk: string, full: string) => void;
 
