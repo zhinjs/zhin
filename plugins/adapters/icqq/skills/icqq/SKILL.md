@@ -39,3 +39,4 @@ Load the corresponding reference file based on what the user wants:
 - CQ code syntax in messages: `[face:id]` `[image:path]` `[at:uid]` `[at:all]` `[dice]` `[rps]`
 - Quote strings with spaces: `icqq friend send 12345 "hello world"`
 - Chain batch ops with `&&`
+- **Agent / bash**：`icqq …` 多由 `bash` 执行；`execSecurity: allowlist` 下非敏感子命令通常直接放行，敏感操作与 Owner `approve rule` / `approve always bash` 等见框架文档 [docs/advanced/ai.md](../../../../../docs/advanced/ai.md)（`#icqq-bash-exec`、`#owner-approve-commands`）。

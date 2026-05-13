@@ -24,7 +24,8 @@ declare module "@zhin.js/core" {
   }
 }
 
-const { provide, root, useContext, logger, inject, onDispose } = usePlugin();
+const consolePlugin = usePlugin();
+const { provide, root, useContext, logger, inject, onDispose } = consolePlugin;
 
 const configService = inject("config");
 const appConfig = (configService?.getPrimary() || {}) as Record<string, unknown>;
@@ -118,6 +119,10 @@ if (enabled) {
         });
       },
     });
+
+    // 动态 provide 的 context 不会走 Plugin.start() 的 context.mounted 派发；适配器里
+    // useContext('web', …) 依赖该事件，否则永远不注册 addEntry（或与其它插件竞态）。
+    await consolePlugin.dispatch("context.mounted", "web");
 
     logger.info(
       `Web console started (${isDev ? "development" : "production"}) at /console`,

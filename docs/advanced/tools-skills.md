@@ -290,7 +290,7 @@ parameters:
 
 | 工具 | 说明 |
 |------|------|
-| `bash` | 执行 Shell 命令（受 execSecurity 策略约束） |
+| `bash` | 执行 Shell 命令（受 `execSecurity` / `execAsk` 约束；`allowlist` 下 `icqq …` 非敏感子命令可直接放行，敏感子命令见 [执行安全 — icqq](/advanced/ai#icqq-bash-exec)） |
 | `read_file` | 读取文件内容 |
 | `write_file` | 写入文件 |
 | `edit_file` | 编辑文件（基于 diff） |
@@ -312,6 +312,7 @@ parameters:
 `ask_user` 工具允许 AI 主动向用户提问并等待回答。典型场景：
 
 - **危险操作确认**：当 `execAsk: true` 且命令不在白名单时，AI 用 `ask_user` 向用户确认
+- **bash / icqq Owner 流程**：敏感 `icqq …` 子命令或需 Owner 硬编排的 bash 结果会触发确认；Bot Owner 可在私聊使用 **`approve always bash`**、**`approve rule <正则>`** 等减少重复确认，详见 [执行安全 — approve](/advanced/ai#owner-approve-commands)
 - **信息补全**：AI 需要更多信息才能完成任务时主动询问
 - **选择确认**：提供选项让用户选择
 

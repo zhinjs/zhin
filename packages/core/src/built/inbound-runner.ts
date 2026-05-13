@@ -26,16 +26,25 @@ function getDispatcher(plugin?: Plugin | null): MessageDispatcherService | undef
 
 /**
  * Ordered IM inbound pipeline:
- * dispatcher/guardrails/routes -> plugin lifecycle -> adapter observers.
+ * root plugin middleware (命令、Prompt / ask_user 等一次性监听) → 作为终端调用
+ * MessageDispatcher（护栏 / 路由 / AI）→ 根插件 `message.receive` 生命周期 → adapter observers。
  *
- * Plugin middleware remains a legacy/manual seam and is not invoked here.
+ * 适配器可能挂在子插件上，故中间件始终走 `plugin.root`，与 `addMiddleware` 注册在根插件上的
+ * Agent / 业务逻辑一致。
  */
 export async function runInboundMessage(options: RunInboundMessageOptions): Promise<InboundRunResult> {
   const { plugin, message, emitAdapterObservers } = options;
   const dispatcher = getDispatcher(plugin);
-  if (dispatcher) {
+  const root = plugin?.root;
+
+  if (dispatcher && root) {
+    await root.middleware(message, async () => {
+      await dispatcher.dispatch(message);
+    });
+  } else if (dispatcher) {
     await dispatcher.dispatch(message);
   }
+
   plugin?.dispatch('message.receive', message);
   emitAdapterObservers();
   return { dispatched: !!dispatcher };

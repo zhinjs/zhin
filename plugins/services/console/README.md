@@ -116,7 +116,7 @@ plugins:
 
 **默认值为 `false`（不延迟加载）**，原因：
 
-1. **其他插件依赖 `addEntry`**：`@zhin.js/adapter-sandbox`、`@zhin.js/adapter-icqq` 等插件需要在启动时调用 `web.addEntry()` 注册前端入口
+1. **其他插件依赖 `PageManager.addEntry`**：`@zhin.js/adapter-sandbox`、`@zhin.js/adapter-icqq` 等需在 `useContext('web', (pageManager) => { pageManager.addEntry({...}) })` 中注册控制台扩展（见各适配器 `src/index.ts`）
 2. **WebSocket 需要提前准备**：实时通信功能需要 WebSocket 服务器立即可用
 3. **用户体验更好**：访问控制台时立即可用，无需等待 Vite 启动
 

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { runInboundMessage } from '../src/built/inbound-runner.js';
 import { Plugin } from '../src/plugin.js';
 
@@ -34,10 +34,22 @@ describe('runInboundMessage', () => {
     expect(order).toEqual(['dispatcher', 'lifecycle', 'adapterObserver']);
   });
 
-  it('does not call legacy middleware on the IM inbound path', async () => {
+  it('runs root middleware before MessageDispatcher when dispatcher is registered', async () => {
     const plugin = new Plugin('/test/plugin.ts');
-    const middleware = vi.fn(async (_message, next) => { await next(); });
-    plugin.addMiddleware(middleware);
+    const order: string[] = [];
+    plugin.addMiddleware(async (_message, next) => {
+      order.push('middleware');
+      await next();
+    });
+    plugin.$contexts.set('dispatcher', {
+      name: 'dispatcher',
+      description: 'mock dispatcher',
+      value: {
+        dispatch: async () => {
+          order.push('dispatcher');
+        },
+      },
+    } as any);
 
     await runInboundMessage({
       plugin,
@@ -45,7 +57,7 @@ describe('runInboundMessage', () => {
       emitAdapterObservers: () => {},
     });
 
-    expect(middleware).not.toHaveBeenCalled();
+    expect(order).toEqual(['middleware', 'dispatcher']);
   });
 
   it('reports dispatched false when no dispatcher is registered', async () => {

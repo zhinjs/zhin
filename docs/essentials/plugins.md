@@ -176,7 +176,7 @@ addTool(
 
 详见 [工具与技能](/advanced/tools-skills)。
 
-> **安全提示**：涉及 bash 命令执行或文件操作的工具受 `execSecurity` 策略约束。详见 [执行安全](/advanced/ai#执行安全-execsecurity)。
+> **安全提示**：涉及 bash 命令执行或文件操作的工具受 `execSecurity` 策略约束；通过 bash 调用 `icqq` 时另有敏感子命令与 Owner `approve` 机制，详见 [执行安全](/advanced/ai#执行安全-execsecurity) 与 [icqq / approve](/advanced/ai#icqq-bash-exec)。
 
 ## 技能（Skill，文件化）
 

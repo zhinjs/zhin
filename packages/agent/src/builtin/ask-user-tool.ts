@@ -29,7 +29,8 @@ export async function askViaPrompt(
   questionType: string,
   timeoutMs: number,
 ): Promise<string> {
-  const prompt = new Prompt(plugin, message);
+  const host = plugin.root ?? plugin;
+  const prompt = new Prompt(host, message);
   try {
     switch (questionType) {
       case 'number': {
@@ -113,7 +114,7 @@ export function createAskUserTool(plugin: Plugin): Tool {
 export class AskUserBuiltinTool extends BuiltinBaseTool {
   readonly name = 'ask_user';
   readonly description =
-    '向 Bot Owner 发送问题并等待回复。用于需要确认、补充信息或做出选择时。在群聊中始终通过私聊向 Owner 确认，确保安全性。';
+    '向 Bot Owner 发送问题并等待回复；群聊场景下通过私聊确认。bash/icqq：Owner 私聊可用「#approve always bash」「#approve rule <正则>」（匹配整段 shell 子命令，如点赞类 icqq 不必固化解参数）、「#approve list」「#approve revoke rule <id>」「#approve revoke」等（亦支持 / 或无 #）。write_file / edit_file / web_fetch 的硬编排仍须逐次确认。';
   readonly parameters = ASK_USER_PARAMETERS;
   readonly kind = 'interaction';
 
@@ -189,6 +190,8 @@ export class AskUserBuiltinTool extends BuiltinBaseTool {
       return `Error: 无法向 Owner 发送私聊消息: ${errMsg(e)}`;
     }
 
+    const hostPlugin = this.plugin!.root ?? this.plugin!;
+
     return new Promise<string>((resolve) => {
       const middleware: MessageMiddleware = async (message, next) => {
         if (message.$channel?.type !== 'private') return next();
@@ -199,7 +202,7 @@ export class AskUserBuiltinTool extends BuiltinBaseTool {
         const raw = message.$raw;
         resolve(formatOwnerResponse(raw, questionType, recordArgs));
       };
-      const dispose = this.plugin!.addMiddleware(middleware);
+      const dispose = hostPlugin.addMiddleware(middleware);
       const timer = setTimeout(() => {
         dispose();
         if (args.default_value != null) {

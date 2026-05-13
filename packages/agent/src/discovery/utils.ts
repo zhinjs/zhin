@@ -39,7 +39,9 @@ export function buildStandardSkillDirs(): string[] {
 }
 
 /**
- * 从根插件树收集：根插件与**直接子插件**包目录下的 `skills/`（其下为 `<name>/SKILL.md`）
+ * 从根插件树收集：各插件包目录下的 `skills/`（其下为 `<name>/SKILL.md`）
+ *
+ * 递归整棵子树（不仅一层子插件），避免适配器套在目录/聚合插件下时技能目录被漏扫。
  */
 export function collectPluginSkillSearchRoots(root: Plugin | null | undefined): string[] {
   if (!root) return [];
@@ -57,10 +59,14 @@ export function collectPluginSkillSearchRoots(root: Plugin | null | undefined): 
       push(path.join(path.dirname(dir), 'skills'));
     }
   };
-  fromPlugin(root);
-  for (const child of root.children || []) {
-    fromPlugin(child);
-  }
+  const walk = (p: Plugin | null | undefined) => {
+    if (!p) return;
+    fromPlugin(p);
+    for (const child of p.children || []) {
+      walk(child);
+    }
+  };
+  walk(root);
   return dirs;
 }
 

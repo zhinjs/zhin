@@ -672,11 +672,15 @@ addCommand(
     (_, result) => result.remaining as MessageElement[]
   )
 );
-// 注册客户端页面
-useContext('web', (web) => {
-  const dispose = web.addEntry(
-    path.resolve(process.cwd(), "client/index.tsx"));
-  return dispose;
+// 注册客户端页面（PageManager.addEntry；需启用 @zhin.js/console）
+useContext('web', (pageManager) => {
+  if (!pageManager || typeof pageManager.addEntry !== 'function') return;
+  pageManager.addEntry({
+    id: 'example',
+    development: path.resolve(process.cwd(), 'client/index.tsx'),
+    production: path.resolve(process.cwd(), 'dist/index.js'),
+    meta: { name: 'Example' },
+  });
 });
 `);
   

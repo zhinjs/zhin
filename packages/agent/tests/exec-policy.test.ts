@@ -11,7 +11,13 @@
  *  - checkExecPolicy 端到端场景
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import type { Plugin } from '@zhin.js/core';
+import * as core from '@zhin.js/core';
+import * as utils from '../src/discovery/utils.js';
 import {
   isDangerousCommand,
   stripEnvVarPrefix,
@@ -23,6 +29,8 @@ import {
   EXEC_PRESETS,
 } from '../src/security/exec-policy.js';
 import type { ZhinAgentConfig } from '../src/zhin-agent/config.js';
+import { addBashApproveRule } from '../src/security/owner-approve-always-store.js';
+import { runWithBashToolContext } from '../src/security/bash-tool-context.js';
 
 // ── Helpers ──
 
@@ -54,6 +62,18 @@ function makeConfig(overrides: Partial<ZhinAgentConfig> = {}): Required<ZhinAgen
     skillInstructionMaxChars: 0,
     ...overrides,
   } as Required<ZhinAgentConfig>;
+}
+
+function makeRootPluginForIcqqExec(adapterName: string): Plugin {
+  const bots = new Map([['bot1', { $config: { owner: 'owner99' } }]]);
+  const p = {
+    inject: vi.fn((name: string) => {
+      if (name === adapterName) return { bots };
+      return undefined;
+    }),
+  } as unknown as Plugin;
+  (p as unknown as { root: Plugin }).root = p;
+  return p;
 }
 
 // ── 1. 危险命令黑名单 ──
@@ -351,5 +371,36 @@ describe('checkExecPolicy', () => {
     const config = makeConfig({ execPreset: 'network', execAllowlist: [] });
     expect(checkExecPolicy(config, 'curl http://example.com').allowed).toBe(true);
     expect(checkExecPolicy(config, 'npm install').allowed).toBe(false);
+  });
+
+  // icqq：非敏感直接放行；敏感需审批或 Owner 规则
+  it('allowlist: icqq 非敏感（如 friend like）无需白名单即可放行', () => {
+    const config = makeConfig({ execAllowlist: [], execAsk: true });
+    expect(checkExecPolicy(config, 'icqq friend like 123456').allowed).toBe(true);
+  });
+
+  it('allowlist: icqq 敏感子命令需审批（无 bash 上下文/无规则）', () => {
+    const config = makeConfig({ execAllowlist: [], execAsk: true });
+    const r = checkExecPolicy(config, 'icqq group kick 1 2 3');
+    expect(r.allowed).toBe(false);
+    expect(r.needsApproval).toBe(true);
+  });
+
+  it('allowlist: icqq 敏感在 bash 上下文中且 approve rule 正则匹配则放行', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-exec-icqq-'));
+    const getDataSpy = vi.spyOn(utils, 'getDataDir').mockReturnValue(tmpDir);
+    const plugin = makeRootPluginForIcqqExec('icqq');
+    const ctx = { platform: 'icqq', botId: 'bot1' };
+    expect(addBashApproveRule(plugin, ctx, '^icqq\\s+group\\s+kick\\b').ok).toBe(true);
+    const getPluginSpy = vi.spyOn(core, 'getPlugin').mockReturnValue(plugin as never);
+    const config = makeConfig({ execAllowlist: [], execAsk: true });
+    try {
+      const r = runWithBashToolContext(ctx, () => checkExecPolicy(config, 'icqq group kick 1 2'));
+      expect(r.allowed).toBe(true);
+    } finally {
+      getPluginSpy.mockRestore();
+      getDataSpy.mockRestore();
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });

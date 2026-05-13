@@ -211,7 +211,7 @@ ai:
     execSecurity: allowlist     # bash 执行策略：deny / allowlist / full
     execPreset: network         # 预设白名单：readonly / network / development / custom
     execAllowlist: ["docker"]   # 自定义允许的命令（与 preset 合并）
-    execAsk: false              # 未知命令是否提示用户审批（需 ask_user 工具）
+    execAsk: false              # 未知命令是否提示审批；icqq 敏感子命令亦依赖此项与 Owner approve，见 /advanced/ai#icqq-bash-exec
     maxIterations: 5            # 最大工具调用轮数
     contextTokens: 128000      # 上下文窗口 token 数
     maxHistoryShare: 0.5        # 历史记录占上下文窗口的最大比例

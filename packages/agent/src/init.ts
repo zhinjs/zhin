@@ -10,7 +10,7 @@
  *   - register-ai-trigger     — AI 触发处理器
  *   - register-db-upgrade     — 数据库存储升级（无竞态条件）
  *   - register-message-recorder — 消息记录中间件
- *   - register-management-tools — AI 管理工具
+ *   - register-owner-approve-commands — Owner 私聊 approve（仅 bash shell 硬确认白名单）
  *   - register-builtin-tools  — 内置系统工具 + 工作区技能
  */
 
@@ -25,6 +25,7 @@ import { registerAITrigger } from './init/register-ai-trigger.js';
 import { registerDbUpgrade } from './init/register-db-upgrade.js';
 import { registerMessageRecorder } from './init/register-message-recorder.js';
 import { registerManagementTools } from './init/register-management-tools.js';
+import { registerOwnerApproveCommands } from './init/register-owner-approve-commands.js';
 import { registerBuiltinTools } from './init/register-builtin-tools.js';
 
 /**
@@ -48,5 +49,6 @@ export function initAgentModule(): void {
   registerDbUpgrade(refs);
   registerMessageRecorder(refs);
   registerManagementTools();
+  registerOwnerApproveCommands();
   registerBuiltinTools(refs);
 }

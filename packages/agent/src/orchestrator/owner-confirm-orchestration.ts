@@ -9,17 +9,17 @@ import type { Plugin, ToolContext } from '@zhin.js/core';
 import type { ToolResultTransform } from '@zhin.js/ai';
 import { AskUserBuiltinTool } from '../builtin/ask-user-tool.js';
 import { errMsg } from '../discovery/utils.js';
+import {
+  clearPendingOrchestrationTool,
+  hasOwnerApproveAlways,
+  setPendingOrchestrationTool,
+} from '../security/owner-approve-always-store.js';
+import { OWNER_HARD_ORCHESTRATION_TOOLS } from './owner-orchestration-constants.js';
 
 /** 工具结果第一行须与此完全一致（行首无空白） */
 export const ZHIN_NEEDS_OWNER_FIRST_LINE = 'ZHIN_NEEDS_OWNER:' as const;
 
-/** 第一期硬编排白名单（与 PRD 对齐，可集中扩展） */
-export const OWNER_HARD_ORCHESTRATION_TOOLS = [
-  'bash',
-  'write_file',
-  'edit_file',
-  'web_fetch',
-] as const;
+export { OWNER_HARD_ORCHESTRATION_TOOLS } from './owner-orchestration-constants.js';
 
 const WHITELIST = new Set<string>(OWNER_HARD_ORCHESTRATION_TOOLS);
 
@@ -106,17 +106,30 @@ export function createOwnerOrchestratedToolResultTransform(
     const { body } = parseNeedsOwnerSignal(result);
     const question = buildConfirmQuestion(toolName, body);
 
-    const ownerRaw = await askTool.run(
-      { question, type: 'confirm', timeout: 120 },
-      options.toolContext,
-    );
-    const ownerStr = typeof ownerRaw === 'string' ? ownerRaw : String(ownerRaw);
-
-    if (ownerStr.startsWith('Error:')) {
-      return appendUnavailableNote(result, ownerStr);
+    if (toolName === 'bash' && hasOwnerApproveAlways(plugin, options.toolContext, toolName)) {
+      return appendOrchestratedOwnerAnswer(result, 'yes');
     }
 
-    usedOrchestrationSlots++;
-    return appendOrchestratedOwnerAnswer(result, ownerStr.trim());
+    if (toolName === 'bash') {
+      setPendingOrchestrationTool(plugin, options.toolContext, toolName);
+    }
+    try {
+      const ownerRaw = await askTool.run(
+        { question, type: 'confirm', timeout: 120 },
+        options.toolContext,
+      );
+      const ownerStr = typeof ownerRaw === 'string' ? ownerRaw : String(ownerRaw);
+
+      if (ownerStr.startsWith('Error:')) {
+        return appendUnavailableNote(result, ownerStr);
+      }
+
+      usedOrchestrationSlots++;
+      return appendOrchestratedOwnerAnswer(result, ownerStr.trim());
+    } finally {
+      if (toolName === 'bash') {
+        clearPendingOrchestrationTool(plugin, options.toolContext);
+      }
+    }
   };
 }

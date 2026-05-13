@@ -1,8 +1,13 @@
 /**
  * Owner 确认信号与硬编排（#398）
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import type { Plugin } from '@zhin.js/core';
+import * as utils from '../src/discovery/utils.js';
+import { addOwnerApproveAlways } from '../src/security/owner-approve-always-store.js';
 import {
   ZHIN_NEEDS_OWNER_FIRST_LINE,
   parseNeedsOwnerSignal,
@@ -18,8 +23,20 @@ const stubPlugin = {
 } as unknown as Plugin;
 
 describe('owner-confirm-orchestration', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-oc-'));
+    vi.spyOn(utils, 'getDataDir').mockReturnValue(tmpDir);
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
   });
 
   it('parseNeedsOwnerSignal：首行须精确匹配且不含前导空白', () => {
@@ -92,5 +109,29 @@ describe('owner-confirm-orchestration', () => {
     const o3 = await t({ toolName: 'bash', toolCallId: '3', args: {}, result: raw });
     expect(o3).toContain('已达上限');
     expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it('approve-always 白名单命中时不再调用 ask_user', async () => {
+    const bots = new Map([['bot1', { $config: { owner: 'O1' } }]]);
+    const pluginWithAdapter = {
+      inject: vi.fn((name: string) => {
+        if (name === 'icqq') return { bots };
+        return undefined;
+      }),
+    } as unknown as Plugin;
+    (pluginWithAdapter as unknown as { root: Plugin }).root = pluginWithAdapter;
+
+    addOwnerApproveAlways(pluginWithAdapter, { platform: 'icqq', botId: 'bot1' }, 'bash');
+
+    const spy = vi.spyOn(AskUserBuiltinTool.prototype, 'run');
+    const t = createOwnerOrchestratedToolResultTransform({
+      toolContext: { platform: 'icqq', botId: 'bot1', message: {} },
+      plugin: pluginWithAdapter,
+    });
+    const raw = `${ZHIN_NEEDS_OWNER_FIRST_LINE}\nreason`;
+    const out = await t({ toolName: 'bash', toolCallId: '1', args: {}, result: raw });
+    expect(spy).not.toHaveBeenCalled();
+    expect(out).toContain('[Owner confirmation (orchestrated)]');
+    expect(out).toContain('yes');
   });
 });

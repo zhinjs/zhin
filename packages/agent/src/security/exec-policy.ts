@@ -11,8 +11,14 @@
  */
 
 import type { AgentTool } from '@zhin.js/core';
+import { getPlugin } from '@zhin.js/core';
 import type { ZhinAgentConfig } from '../zhin-agent/config.js';
 import { classifyBashCommand } from './file-policy.js';
+import { getCurrentBashToolContext } from './bash-tool-context.js';
+import {
+  isIcqqSensitiveSubcommand,
+  matchesBashOwnerExecBypass,
+} from './owner-approve-always-store.js';
 
 // ── 预设命令白名单 ──────────────────────────────────────────────────
 
@@ -153,6 +159,17 @@ export function resolveExecAllowlist(config: Required<ZhinAgentConfig>): string[
   return merged;
 }
 
+function tryExecBypassForSensitiveIcqq(normalizedSubCommand: string): boolean {
+  const ctx = getCurrentBashToolContext();
+  if (!ctx?.platform || !ctx?.botId) return false;
+  try {
+    const plugin = getPlugin().root ?? getPlugin();
+    return matchesBashOwnerExecBypass(plugin, ctx, normalizedSubCommand);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * 检查单条子命令是否允许执行。
  * 内部函数 — 不做复合命令拆分。
@@ -178,6 +195,28 @@ function checkSingleCommand(
   const classification = classifyBashCommand(fullSubCommand);
   if (classification.isReadOnly) {
     return { allowed: true };
+  }
+
+  // 3.5 icqq CLI（allowlist 模式）：非敏感子命令直接放行；敏感子命令可走 Owner 正则/永久放行
+  if (security === 'allowlist' && cmdName === 'icqq') {
+    const norm = stripSafeWrappers(stripEnvVarPrefix(fullSubCommand.trim()));
+    if (!isIcqqSensitiveSubcommand(norm)) {
+      return { allowed: true };
+    }
+    if (tryExecBypassForSensitiveIcqq(norm)) {
+      return { allowed: true };
+    }
+    if (execAsk) {
+      return {
+        allowed: false,
+        needsApproval: true,
+        reason: `icqq 敏感操作需 Bot Owner 确认：${norm.slice(0, 280)}`,
+      };
+    }
+    return {
+      allowed: false,
+      reason: `icqq 敏感操作已被拒绝（未开启 execAsk）：${norm.slice(0, 280)}`,
+    };
   }
 
   // 4. 白名单匹配

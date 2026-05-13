@@ -19,6 +19,8 @@ import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from './reserved-too
 import { resolveContextBudget } from './zhin-agent/context-budget.js';
 import { createRestrictedToolView, DEFAULT_SUBAGENT_TOOL_NAMES } from './orchestrator/tool-selection.js';
 import { createOwnerOrchestratedToolResultTransform } from './orchestrator/owner-confirm-orchestration.js';
+import { runWithBashToolContext } from './security/bash-tool-context.js';
+import type { ToolContext } from '@zhin.js/core';
 
 const logger = new Logger(null, 'Subagent');
 
@@ -145,6 +147,13 @@ export class SubagentManager {
             model,
           })
         : null;
+      const bashToolContext: ToolContext = {
+        platform: origin.platform,
+        botId: origin.botId,
+        sceneId: origin.sceneId,
+        senderId: origin.senderId,
+      };
+
       const agent = createAgent(this.provider, {
         model,
         systemPrompt,
@@ -154,13 +163,13 @@ export class SubagentManager {
         reservedToolNamePrefixes: RESERVED_TOOL_NAME_PREFIXES,
         contextWindow: contextBudget?.contextWindow ?? this.provider.contextWindow,
         transformToolResult: createOwnerOrchestratedToolResultTransform({
-          toolContext: {},
+          toolContext: bashToolContext,
           disableHardOrchestration: true,
         }),
       });
 
       try {
-        const result = await agent.run(task);
+        const result = await runWithBashToolContext(bashToolContext, () => agent.run(task));
         const finalResult = result.content || '任务已完成，但未生成最终响应。';
 
         logger.info({ taskId }, 'Subagent completed successfully');

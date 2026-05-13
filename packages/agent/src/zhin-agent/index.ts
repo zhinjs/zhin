@@ -45,6 +45,7 @@ import {
   isPhaseTraceEnabled,
 } from './config.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
+import { runWithBashToolContext } from '../security/bash-tool-context.js';
 import {
   buildEnhancedPersona,
   buildContextHint,
@@ -406,7 +407,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       let result;
       try {
         this.logPhase('agent.run.start', sessionId, { model: chatCandidates[0] || '' });
-        result = await agent.run(userMessageWithHistory, []);
+        result = await runWithBashToolContext(contextForTools, () => agent.run(userMessageWithHistory, []));
         this.logPhase('agent.run.end', sessionId, { iterations: result.iterations });
       } finally {
         agent.dispose();
