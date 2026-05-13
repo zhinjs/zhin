@@ -1,5 +1,11 @@
 # @zhin.js/adapter-icqq
 
+## 2.0.24
+
+### Patch Changes
+
+- dc04e4a: fix: skill 优化
+
 ## 2.0.23
 
 ### Patch Changes
