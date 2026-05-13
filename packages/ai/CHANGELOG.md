@@ -1,5 +1,12 @@
 # @zhin.js/ai
 
+## 1.1.16
+
+### Patch Changes
+
+- cb9fbf1: fix: ai 增强
+  - @zhin.js/logger@0.1.58
+
 ## 1.1.15
 
 ### Patch Changes

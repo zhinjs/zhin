@@ -1,5 +1,13 @@
 # @zhin.js/adapter-wechat-mp
 
+## 0.1.64
+
+### Patch Changes
+
+- Updated dependencies [cb9fbf1]
+  - zhin.js@1.0.76
+  - @zhin.js/http@1.0.69
+
 ## 0.1.63
 
 ### Patch Changes

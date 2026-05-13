@@ -1,5 +1,14 @@
 # @zhin.js/agent
 
+## 0.1.16
+
+### Patch Changes
+
+- cb9fbf1: fix: ai 增强
+- Updated dependencies [cb9fbf1]
+  - @zhin.js/ai@1.1.16
+  - @zhin.js/core@1.1.18
+
 ## Unreleased
 
 ### Changed
