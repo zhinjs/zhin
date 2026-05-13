@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.40
+
+### Patch Changes
+
+- 88caeb2: fix: ask user 护栏
+
 ## 1.0.39
 
 ### Patch Changes

@@ -1,5 +1,16 @@
 # @zhin.js/console
 
+## 2.0.21
+
+### Patch Changes
+
+- 88caeb2: fix: ask user 护栏
+- Updated dependencies [88caeb2]
+  - @zhin.js/agent@0.1.18
+  - @zhin.js/core@1.1.20
+  - zhin.js@1.0.78
+  - @zhin.js/http@1.0.71
+
 ## 2.0.20
 
 ### Patch Changes
