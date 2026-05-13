@@ -27,7 +27,7 @@ declare module "@zhin.js/core" {
 const { provide, root, useContext, logger, inject, onDispose } = usePlugin();
 
 const configService = inject("config");
-const appConfig = (configService?.get("zhin.config.yml") || {}) as Record<string, unknown>;
+const appConfig = (configService?.getPrimary() || {}) as Record<string, unknown>;
 const consoleConfig: ConsoleConfig =
   (appConfig.plugins as Record<string, unknown>)?.console as ConsoleConfig || {};
 const { enabled = true } = consoleConfig;

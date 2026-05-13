@@ -12,9 +12,12 @@ import { randomUUID } from 'crypto';
 import { Logger } from '@zhin.js/core';
 import type { AIProvider, AgentTool } from '@zhin.js/core';
 import { createAgent } from '@zhin.js/ai';
+import type { ModelRegistry } from '@zhin.js/ai';
 import type { ZhinAgentConfig } from './zhin-agent/config.js';
 import { applyExecPolicyToTools } from './security/exec-policy.js';
 import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from './reserved-tools.js';
+import { resolveContextBudget } from './zhin-agent/context-budget.js';
+import { createRestrictedToolView, DEFAULT_SUBAGENT_TOOL_NAMES } from './orchestrator/tool-selection.js';
 
 const logger = new Logger(null, 'Subagent');
 
@@ -46,23 +49,8 @@ export interface SubagentManagerOptions {
   maxIterations?: number;
   /** Exec policy config to enforce on subagent bash tools */
   execPolicyConfig?: Required<ZhinAgentConfig>;
+  modelRegistry?: ModelRegistry | null;
 }
-
-// ============================================================================
-// 子 agent 允许使用的工具名单
-// ============================================================================
-
-const SUBAGENT_ALLOWED_TOOLS = new Set([
-  'read_file',
-  'write_file',
-  'edit_file',
-  'list_dir',
-  'glob',
-  'grep',
-  'bash',
-  'web_search',
-  'web_fetch',
-]);
 
 // ============================================================================
 // SubagentManager
@@ -73,8 +61,9 @@ export class SubagentManager {
   private workspace: string;
   private createTools: () => AgentTool[];
   private maxIterations: number;
-  private allowedTools: Set<string>;
+  private subagentTools: string[];
   private execPolicyConfig: Required<ZhinAgentConfig> | null;
+  private modelRegistry: ModelRegistry | null;
   private runningTasks: Map<string, AbortController> = new Map();
   private resultSender: SubagentResultSender | null = null;
 
@@ -83,15 +72,17 @@ export class SubagentManager {
     this.workspace = options.workspace;
     this.createTools = options.createTools;
     this.maxIterations = options.maxIterations ?? 15;
-    this.allowedTools = new Set([
-      ...SUBAGENT_ALLOWED_TOOLS,
-      ...(options.subagentTools || []),
-    ]);
+    this.subagentTools = options.subagentTools || [];
     this.execPolicyConfig = options.execPolicyConfig ?? null;
+    this.modelRegistry = options.modelRegistry ?? null;
   }
 
   setSender(sender: SubagentResultSender): void {
     this.resultSender = sender;
+  }
+
+  setModelRegistry(registry: ModelRegistry | null): void {
+    this.modelRegistry = registry;
   }
 
   async spawn(options: SpawnOptions): Promise<string> {
@@ -131,20 +122,36 @@ export class SubagentManager {
 
     try {
       const allTools = this.createTools();
-      let tools: AgentTool[] = allTools
-        .filter(t => this.allowedTools.has(t.name))
-        .map(t => ({ ...t, source: t.source || 'builtin' }));
+      let tools = createRestrictedToolView(allTools, {
+        allowedNames: this.subagentTools.length
+          ? this.subagentTools
+          : this.execPolicyConfig?.subagentTools?.length
+            ? this.execPolicyConfig.subagentTools
+          : DEFAULT_SUBAGENT_TOOL_NAMES,
+        disabledNames: this.execPolicyConfig?.disabledTools,
+      });
       if (this.execPolicyConfig) {
         tools = applyExecPolicyToTools(this.execPolicyConfig, tools);
       }
 
       const systemPrompt = this.buildSubagentPrompt(task);
+      const model = this.provider.models[0];
+      const contextBudget = this.execPolicyConfig
+        ? resolveContextBudget({
+            config: this.execPolicyConfig,
+            provider: this.provider,
+            modelRegistry: this.modelRegistry,
+            model,
+          })
+        : null;
       const agent = createAgent(this.provider, {
+        model,
         systemPrompt,
         tools,
         maxIterations: this.maxIterations,
         reservedToolNames: RESERVED_TOOL_NAMES,
         reservedToolNamePrefixes: RESERVED_TOOL_NAME_PREFIXES,
+        contextWindow: contextBudget?.contextWindow ?? this.provider.contextWindow,
       });
 
       try {

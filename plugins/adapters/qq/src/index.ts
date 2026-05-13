@@ -235,8 +235,8 @@ useContext('tool', 'qq', (toolService: ToolFeature, qq: QQAdapter) => {
 });
 
 // ── Web 控制台 ─────────────────────────────────────────────────────────
-useContext("web", () => {
-  PageManager.addEntry({
+useContext("web", (pageManager) => {
+  pageManager.addEntry({
     id: "qq",
     development: path.resolve(import.meta.dirname, "../client/index.tsx"),
     production: path.resolve(import.meta.dirname, "../dist/index.js"),

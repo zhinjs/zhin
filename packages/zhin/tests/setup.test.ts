@@ -26,7 +26,7 @@ describe('Setup - Default Configuration', () => {
       bots: [],
       database: {
         dialect: "sqlite",
-        filename: "./data/test.db"
+        filename: "./data/bot.db"
       },
       plugin_dirs: ['node_modules', './src/plugins'],
       plugins: ['@zhin.js/http', '@zhin.js/console', '@zhin.js/adapter-sandbox'],
@@ -45,7 +45,7 @@ describe('Setup - Default Configuration', () => {
     expect(config.bots).toEqual([])
     expect(config.database).toEqual({
       dialect: "sqlite",
-      filename: "./data/test.db"
+      filename: "./data/bot.db"
     })
     expect(config.plugin_dirs).toEqual(['node_modules', './src/plugins'])
     expect(config.plugins).toEqual(['@zhin.js/http', '@zhin.js/console', '@zhin.js/adapter-sandbox'])
@@ -63,7 +63,7 @@ describe('Setup - Default Configuration', () => {
       bots: [],
       database: {
         dialect: "sqlite",
-        filename: "./data/test.db"
+        filename: "./data/bot.db"
       },
       plugin_dirs: ['node_modules', './src/plugins'],
       plugins: ['@zhin.js/http', '@zhin.js/console', '@zhin.js/adapter-sandbox'],
@@ -78,6 +78,37 @@ describe('Setup - Default Configuration', () => {
     expect(config.plugin_dirs[1]).toBe('./src/plugins')
   })
 
+  it('should merge minimal config with runtime defaults', async () => {
+    const { ConfigService } = await import('@zhin.js/core')
+    const { LogLevel } = await import('@zhin.js/logger')
+
+    fs.writeFileSync(testConfigPath, [
+      'database:',
+      '  filename: ./data/custom.db',
+      'plugins: []',
+    ].join('\n'))
+
+    const configService = new ConfigService()
+    await configService.load('test-zhin-config.yml', {
+      log_level: LogLevel.INFO,
+      bots: [],
+      database: {
+        dialect: "sqlite",
+        filename: "./data/bot.db"
+      },
+      plugin_dirs: ['node_modules', './src/plugins'],
+      plugins: ['@zhin.js/http', '@zhin.js/console', '@zhin.js/adapter-sandbox'],
+      services: ['process', 'config', 'command', 'component', 'permission', 'cron'],
+    })
+
+    const config = configService.get('test-zhin-config.yml') as any
+    expect(config.log_level).toBe(LogLevel.INFO)
+    expect(config.database).toEqual({ dialect: 'sqlite', filename: './data/custom.db' })
+    expect(config.plugin_dirs).toEqual(['node_modules', './src/plugins'])
+    expect(config.plugins).toEqual([])
+    expect(config.services).toEqual(['process', 'config', 'command', 'component', 'permission', 'cron'])
+  })
+
   it('should have correct plugins loading order', async () => {
     const { ConfigService } = await import('@zhin.js/core')
     const { LogLevel } = await import('@zhin.js/logger')
@@ -89,7 +120,7 @@ describe('Setup - Default Configuration', () => {
       bots: [],
       database: {
         dialect: "sqlite",
-        filename: "./data/test.db"
+        filename: "./data/bot.db"
       },
       plugin_dirs: ['node_modules', './src/plugins'],
       plugins: ['@zhin.js/http', '@zhin.js/console', '@zhin.js/adapter-sandbox'],
@@ -125,7 +156,7 @@ describe('Setup - Default Configuration', () => {
       bots: [],
       database: {
         dialect: "sqlite",
-        filename: "./data/test.db"
+        filename: "./data/bot.db"
       },
       plugin_dirs: ['node_modules', './src/plugins'],
       plugins: ['@zhin.js/http', '@zhin.js/console', '@zhin.js/adapter-sandbox'],
@@ -151,7 +182,7 @@ describe('Setup - Default Configuration', () => {
       bots: [],
       database: {
         dialect: "sqlite",
-        filename: "./data/test.db"
+        filename: "./data/bot.db"
       },
       plugin_dirs: ['node_modules', './src/plugins'],
       plugins: ['@zhin.js/http', '@zhin.js/console', '@zhin.js/adapter-sandbox'],

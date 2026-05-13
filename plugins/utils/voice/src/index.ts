@@ -60,7 +60,7 @@ interface VoiceConfig {
 }
 
 const configService = root.inject('config');
-const appConfig = configService?.get<{ voice?: VoiceConfig }>('zhin.config.yml') || {};
+const appConfig = configService?.getPrimary<{ voice?: VoiceConfig }>() || {};
 const config: VoiceConfig = {
   stt: { enabled: true, provider: 'ollama', model: 'whisper', host: 'http://localhost:11434' },
   tts: { enabled: true, voice: 'zh-CN-XiaoxiaoNeural', rate: '+0%', pitch: '+0Hz', edgeTtsCommand: 'edge-tts' },

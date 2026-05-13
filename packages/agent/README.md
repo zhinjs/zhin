@@ -82,7 +82,7 @@ const result = await agent.run('你好')
 | Agent | `Agent`, `createAgent`, `formatToolTitle` |
 | 模型管理 | `ModelRegistry`, `computeTierScore`, `extractModelRoot`, `AIModelInfo` |
 | 服务与会话 | `AIService`, `SessionManager`, `MemorySessionManager`, `DatabaseSessionManager`, `createMemorySessionManager`, `createDatabaseSessionManager` |
-| ZhinAgent | `ZhinAgent`，以及 config / exec-policy / file-policy / tool-collector / prompt / builtin-tools 等子模块 |
+| ZhinAgent | `ZhinAgent`，以及 config / exec-policy / file-policy / tool-runtime / prompt / builtin-tools 等子模块 |
 | 安全策略 | `checkExecPolicy`, `applyExecPolicyToTools`, `isDangerousCommand`, `stripEnvVarPrefix`, `stripSafeWrappers`, `splitCompoundCommand`, `extractCommandName`, `ExecPolicyResult`, `checkFileAccess`, `classifyBashCommand`, `isBlockedDevicePath` |
 | 提示词构建 | `buildRichSystemPrompt`, `buildEnhancedPersona`, `buildUserMessageWithHistory`, `buildContextHint` |
 | 上下文与记忆 | `ContextManager`, `createContextManager`, `ConversationMemory`, `UserProfileStore` |
@@ -216,7 +216,7 @@ src/
 │   ├── index.ts                     # ZhinAgent（改造：从 Orchestrator 获取资源）
 │   ├── config.ts
 │   ├── prompt.ts
-│   ├── tool-collector.ts            # 改造：查询 ToolRegistry + SkillRegistry
+│   ├── tool-runtime.ts              # 运行时工具收集与执行路径规划
 │   └── context-tools.ts             # chat_history, user_profile, spawn_task
 │
 ├── discovery/                       # ★ 文件化资源发现

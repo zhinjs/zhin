@@ -42,12 +42,12 @@
     "@zhin.js/console-app": "workspace:*",
     "@zhin.js/console-core": "workspace:*",
     "@zhin.js/console-types": "workspace:*",
-    "ws": "^8.20.0"
+    "ws": "^8.20.1"
   },
   "devDependencies": {
     "@types/koa": "^2.15.0",
-    "esbuild": "^0.25.12",
-    "lucide-react": "^1.11.0",
+    "esbuild": "^0.28.0",
+    "lucide-react": "^1.14.0",
     "tsup": "^8.5.1",
     "yaml": "^2.8.3",
     "zhin.js": "workspace:*"

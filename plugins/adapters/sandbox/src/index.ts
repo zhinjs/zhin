@@ -229,8 +229,8 @@ plugin.useContext("router", async (router: Router) => {
 });
 
 // 使用 web 上下文注册客户端入口
-plugin.useContext("web", () => {
-  PageManager.addEntry({
+plugin.useContext("web", (pageManager) => {
+  pageManager.addEntry({
     id: "sandbox",
     development: path.resolve(import.meta.dirname, "../client/index.tsx"),
     production: path.resolve(import.meta.dirname, "../dist/index.js"),

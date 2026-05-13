@@ -1,13 +1,12 @@
 /**
  * ToolRegistry — unified tool management with common/specialized support.
  *
- * Absorbs functionality from:
+ * Owns registry state and delegates tool semantics to tool-selection:
  *   - core/built/tool.ts (ToolFeature, ZhinTool, permission checking)
  *   - ai/tool-filter.ts + tool-search-cache.ts (relevance filtering)
  */
 
 import type { AgentTool, ToolFilterOptions } from '@zhin.js/ai';
-import { filterTools, CachedToolFilter } from '@zhin.js/ai';
 import { isBuiltinToolSource, isReservedToolName } from '@zhin.js/ai';
 import { Logger } from '@zhin.js/core';
 import { ResourceRegistry } from './resource-registry.js';
@@ -21,38 +20,16 @@ import type {
   PropertySchema,
   ToolScope,
 } from './types.js';
+import {
+  canAccessTool,
+  hasPermissionLevel,
+  inferPermissionLevel,
+  sharedToolSelection,
+  type ToolLike,
+} from './tool-selection.js';
 
-// ============================================================================
-// Permission helpers
-// ============================================================================
-
-const PERMISSION_LEVEL_PRIORITY: Record<ToolPermissionLevel, number> = {
-  user: 0,
-  group_admin: 1,
-  group_owner: 2,
-  bot_admin: 3,
-  owner: 4,
-};
-
-export function hasPermissionLevel(userLevel: ToolPermissionLevel, requiredLevel: ToolPermissionLevel): boolean {
-  return PERMISSION_LEVEL_PRIORITY[userLevel] >= PERMISSION_LEVEL_PRIORITY[requiredLevel];
-}
-
-export function inferPermissionLevel(context: ToolContext): ToolPermissionLevel {
-  if (context.senderPermissionLevel) return context.senderPermissionLevel;
-  if (context.isOwner) return 'owner';
-  if (context.isBotAdmin) return 'bot_admin';
-  if (context.isGroupOwner) return 'group_owner';
-  if (context.isGroupAdmin) return 'group_admin';
-  return 'user';
-}
-
-export function canAccessTool(tool: Tool, context: ToolContext): boolean {
-  if (tool.platforms?.length && (!context.platform || !tool.platforms.includes(context.platform))) return false;
-  if (tool.scopes?.length && (!context.scope || !tool.scopes.includes(context.scope))) return false;
-  const requiredLevel = tool.permissionLevel || 'user';
-  return hasPermissionLevel(inferPermissionLevel(context), requiredLevel);
-}
+export { canAccessTool, hasPermissionLevel, inferPermissionLevel } from './tool-selection.js';
+export type { ToolLike } from './tool-selection.js';
 
 // ============================================================================
 // ZhinTool — chainable tool builder (migrated from core/built/tool.ts)
@@ -199,27 +176,26 @@ export function extractParamInfo(parameters: ToolParametersSchema): Tool.ParamIn
 
 export type ToolInput = Tool | ZhinTool;
 
-export interface ToolLike {
-  toTool(): Tool;
-}
-
 // ============================================================================
 // ToolRegistry
 // ============================================================================
 
 export class ToolRegistry extends ResourceRegistry<AgentTool> {
   private readonly logger = new Logger(null, 'ToolRegistry');
-  private readonly cachedFilter = new CachedToolFilter();
   private readonly toolPluginMap = new Map<string, string>();
 
   addTool(input: ToolInput | AgentTool | ToolLike, scope?: ResourceScope, source?: string): () => void {
     const incomingSource = source || 'unknown';
-    const tool = this.normalizeToAgentTool(input, incomingSource);
+    const normalized = sharedToolSelection.normalize(input);
+    const tool: AgentTool = {
+      ...normalized,
+      source: normalized.source || (input as { source?: string })?.source || incomingSource,
+    };
     const protectedName = isReservedToolName(tool.name, {
       reservedNames: RESERVED_TOOL_NAMES,
       reservedPrefixes: RESERVED_TOOL_NAME_PREFIXES,
     });
-    if (protectedName && !isBuiltinToolSource(incomingSource)) {
+    if (protectedName && !isBuiltinToolSource(tool.source)) {
       this.logger.warn(`[工具命名] name=${tool.name} source=${incomingSource} action=ignored reason=reserved_name`);
       return () => {};
     }
@@ -227,12 +203,12 @@ export class ToolRegistry extends ResourceRegistry<AgentTool> {
     if (existingEntry) {
       this.logger.warn(`[工具命名] name=${tool.name} source=${incomingSource} action=overridden previous=${existingEntry.source} reason=duplicate_name_last_wins`);
     }
-    this.cachedFilter.invalidate();
+    sharedToolSelection.invalidate();
     return this.add(tool, scope, incomingSource);
   }
 
   removeTool(name: string, scope?: ResourceScope): boolean {
-    this.cachedFilter.invalidate();
+    sharedToolSelection.invalidate();
     this.toolPluginMap.delete(name);
     return this.remove(name, scope);
   }
@@ -243,7 +219,7 @@ export class ToolRegistry extends ResourceRegistry<AgentTool> {
 
   filterByRelevance(message: string, agentId?: string, options?: ToolFilterOptions): AgentTool[] {
     const pool = agentId ? this.getForAgent(agentId) : this.getAll();
-    return this.cachedFilter.filter(message, pool, options);
+    return sharedToolSelection.filterByRelevance(message, pool, options);
   }
 
   async execute(name: string, args: Record<string, any>, _context?: ToolContext): Promise<unknown> {
@@ -273,41 +249,8 @@ export class ToolRegistry extends ResourceRegistry<AgentTool> {
 
   override dispose(): void {
     this.toolPluginMap.clear();
-    this.cachedFilter.invalidate();
+    sharedToolSelection.invalidate();
     super.dispose();
-  }
-
-  private normalizeToAgentTool(input: ToolInput | AgentTool | ToolLike, source: string): AgentTool {
-    if (isZhinTool(input)) {
-      return this.toolToAgentTool(input.toTool(), source);
-    }
-    if (typeof (input as any).toTool === 'function') {
-      return this.toolToAgentTool((input as ToolLike).toTool(), source);
-    }
-    const obj = input as any;
-    if ('execute' in obj && 'parameters' in obj) {
-      if ('platforms' in obj || 'scopes' in obj || (typeof obj.permissionLevel === 'string')) {
-        return this.toolToAgentTool(obj as Tool, source);
-      }
-    }
-    return { ...(obj as AgentTool), source: obj.source || source };
-  }
-
-  private toolToAgentTool(t: Tool, source: string): AgentTool {
-    const PERM_MAP: Record<string, number> = { user: 0, group_admin: 1, group_owner: 2, bot_admin: 3, owner: 4 };
-    const result: AgentTool = {
-      name: t.name,
-      description: t.description,
-      parameters: t.parameters,
-      execute: async (args) => t.execute(args),
-      source: t.source || source,
-      tags: t.tags,
-      keywords: t.keywords,
-      preExecutable: t.preExecutable,
-      kind: t.kind,
-    };
-    if (t.permissionLevel) result.permissionLevel = PERM_MAP[t.permissionLevel] ?? 0;
-    return result;
   }
 
   private findInSpecialized(name: string): AgentTool | undefined {

@@ -51,7 +51,6 @@ export class ConfigLoader<T extends object> {
           if (/^\$\{(.*)\}$/.test(result)) {
             const content = result.slice(2, -1);
             // 支持 bash 风格的默认值语法：${VAR:-default} 和 ${VAR:=default}
-            // 同时兼容简单语法 ${VAR:default}
             let key: string;
             let defaultValue: string | undefined;
             const bashDefaultMatch = content.match(/^([^:}]+):[-=](.*)$/);
@@ -59,11 +58,6 @@ export class ConfigLoader<T extends object> {
               // ${VAR:-default} 或 ${VAR:=default}
               key = bashDefaultMatch[1];
               defaultValue = bashDefaultMatch[2];
-            } else if (content.includes(':')) {
-              // ${VAR:default}（旧的简单语法）
-              const [k, ...rest] = content.split(':');
-              key = k;
-              defaultValue = rest.join(':');
             } else {
               key = content;
               defaultValue = undefined;
@@ -104,10 +98,11 @@ export class ConfigLoader<T extends object> {
         rawConfig = parseToml(content);
         break;
     }
+    const merged = mergeConfigDefaults(this.initial, rawConfig || {});
     if (this.schema) {
-      this.#data = this.schema(rawConfig || this.initial) as T;
+      this.#data = this.schema(merged) as T;
     } else {
-      this.#data = rawConfig as T;
+      this.#data = merged as T;
     }
   }
   save(fullPath: string) {
@@ -157,6 +152,33 @@ export class ConfigLoader<T extends object> {
     // 同步更新内存
     (this.#data as Record<string, any>)[key] = value;
   }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return !!value
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && Object.getPrototypeOf(value) === Object.prototype;
+}
+
+export function mergeConfigDefaults<T>(defaults: T, overrides: unknown): T {
+  if (Array.isArray(defaults)) {
+    return (Array.isArray(overrides) ? overrides : defaults) as T;
+  }
+  if (!isPlainObject(defaults)) {
+    return (overrides === undefined ? defaults : overrides) as T;
+  }
+  if (!isPlainObject(overrides)) {
+    return defaults;
+  }
+
+  const result: Record<string, unknown> = { ...defaults };
+  for (const [key, value] of Object.entries(overrides)) {
+    result[key] = key in result
+      ? mergeConfigDefaults(result[key], value)
+      : value;
+  }
+  return result as T;
 }
 
 export namespace ConfigLoader {

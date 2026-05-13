@@ -13,5 +13,6 @@
     "rootDir": "src/node",
     "esModuleInterop": true
   },
-  "include": ["src/node/**/*"]
+  "include": ["src/node/**/*"],
+  "exclude": ["**/*.test.ts"]
 }

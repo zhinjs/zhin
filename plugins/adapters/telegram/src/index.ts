@@ -305,8 +305,8 @@ useContext('tool', 'telegram', (toolService: ToolFeature, telegram: TelegramAdap
 });
 
 // ── Web 控制台 ─────────────────────────────────────────────────────────
-useContext("web", () => {
-  PageManager.addEntry({
+useContext("web", (pageManager) => {
+  pageManager.addEntry({
     id: "telegram",
     development: path.resolve(import.meta.dirname, "../client/index.tsx"),
     production: path.resolve(import.meta.dirname, "../dist/index.js"),

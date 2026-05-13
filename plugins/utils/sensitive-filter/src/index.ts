@@ -26,7 +26,7 @@ export interface SensitiveFilterConfig {
 
 // 获取配置
 const configService = root.inject("config");
-const appConfig = configService?.get<{ "sensitive-filter"?: SensitiveFilterConfig }>("zhin.config.yml") ?? {};
+const appConfig = configService?.getPrimary<{ "sensitive-filter"?: SensitiveFilterConfig }>() ?? {};
 const config: SensitiveFilterConfig = {
   political: true,
   violence: true,

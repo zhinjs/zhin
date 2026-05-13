@@ -467,8 +467,8 @@ const plugin = usePlugin();
 const { provide, useContext, logger } = plugin;
 
 function loadBotConfigsFromApp(): ${capitalizedName}BotConfig[] {
-  const cfg = plugin.root.inject('config') as { get?: (k: string) => unknown } | undefined;
-  const doc = cfg?.get?.('zhin.config.yml') as { bots?: ${capitalizedName}BotConfig[] } | undefined;
+  const cfg = plugin.root.inject('config') as { getPrimary?: () => unknown } | undefined;
+  const doc = cfg?.getPrimary?.() as { bots?: ${capitalizedName}BotConfig[] } | undefined;
   const bots = doc?.bots ?? [];
   return bots.filter((b) => (b as { context?: string }).context === '${camelId}');
 }
@@ -492,8 +492,8 @@ provide({
   },
 } as unknown as Context<'${camelId}'>);
 
-useContext('web', () => {
-  PageManager.addEntry({
+useContext('web', (pageManager) => {
+  pageManager.addEntry({
     id: '${pluginName}',
     development: path.resolve(import.meta.dirname, '../client/index.tsx'),
     production: path.resolve(import.meta.dirname, '../dist/index.js'),
@@ -542,8 +542,8 @@ addTool(
     })
 );
 
-useContext('web', () => {
-  PageManager.addEntry({
+useContext('web', (pageManager) => {
+  pageManager.addEntry({
     id: '${pluginName}',
     development: path.resolve(import.meta.dirname, '../client/index.tsx'),
     production: path.resolve(import.meta.dirname, '../dist/index.js'),

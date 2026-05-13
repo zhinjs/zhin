@@ -1,5 +1,5 @@
 /**
- * Register AI trigger handler via MessageDispatcher or fallback middleware.
+ * Register AI trigger handler via the core MessageDispatcher inbound pipeline.
  */
 import './types.js';
 import { getPlugin, Message, shouldTriggerAI, inferSenderPermissions, parseRichMediaContent, mergeAITriggerConfig } from '@zhin.js/core';
@@ -7,115 +7,8 @@ import type { Tool, ToolContext } from '@zhin.js/core';
 import type { ContentPart } from '@zhin.js/core';
 import type { OutputElement } from '@zhin.js/ai';
 import type { AIServiceRefs } from './shared-refs.js';
-
-/**
- * Extract multimodal ContentPart[] from a Message's structured $content segments.
- * Handles image, video, audio, and face/sticker types.
- * Falls back to raw string parsing for image URLs when $content has no media segments.
- */
-function extractMediaParts(message: Message<any>): ContentPart[] {
-  const parts: ContentPart[] = [];
-
-  // 1. Extract from structured $content segments
-  if (Array.isArray(message.$content)) {
-    for (const seg of message.$content) {
-      if (typeof seg === 'string' || !seg || !seg.type) continue;
-      const { type, data } = seg;
-      switch (type) {
-        case 'image': {
-          const url = data?.url || data?.file || data?.src;
-          if (url) parts.push({ type: 'image_url', image_url: { url } });
-          break;
-        }
-        case 'video': {
-          const url = data?.url || data?.file || data?.src;
-          if (url) parts.push({ type: 'video_url', video_url: { url } });
-          break;
-        }
-        case 'audio':
-        case 'record':
-        case 'voice': {
-          const dataStr = data?.data || data?.base64;
-          if (dataStr) {
-            const fmt = data?.format === 'wav' ? 'wav' : 'mp3';
-            parts.push({ type: 'audio', audio: { data: dataStr, format: fmt } });
-          } else {
-            const url = data?.url || data?.file || data?.src;
-            if (url) {
-              // Audio URL: describe as text since most LLMs can't play audio URLs directly
-              parts.push({ type: 'text', text: `[用户发送了一段语音: ${url}]` });
-            }
-          }
-          break;
-        }
-        case 'face':
-        case 'sticker':
-        case 'emoji': {
-          const id = String(data?.id ?? data?.face_id ?? '');
-          const text = data?.text || data?.name || data?.describe;
-          if (id) parts.push({ type: 'face', face: { id, text } });
-          break;
-        }
-      }
-    }
-  }
-
-  // 2. Fallback: parse image URLs from $raw for adapters that don't use structured $content
-  if (parts.length === 0) {
-    const raw = typeof message.$raw === 'string' ? message.$raw : JSON.stringify(message.$raw || '');
-
-    const xmlMatches = raw.match(/<image[^>]+url="([^"]+)"/g);
-    if (xmlMatches) {
-      for (const m of xmlMatches) {
-        const urlMatch = m.match(/url="([^"]+)"/);
-        if (urlMatch) parts.push({ type: 'image_url', image_url: { url: urlMatch[1] } });
-      }
-    }
-
-    const cqMatches = raw.match(/\[CQ:image[^\]]*url=([^\],]+)/g);
-    if (cqMatches) {
-      for (const m of cqMatches) {
-        const urlMatch = m.match(/url=([^\],]+)/);
-        if (urlMatch) parts.push({ type: 'image_url', image_url: { url: urlMatch[1] } });
-      }
-    }
-  }
-
-  return parts;
-}
-
-function renderOutput(elements: OutputElement[]): string {
-  const parts: string[] = [];
-  for (const el of elements) {
-    switch (el.type) {
-      case 'text':
-        if (el.content) parts.push(el.content);
-        break;
-      case 'image':
-        parts.push(`<image url="${el.url}"/>`);
-        break;
-      case 'audio':
-        parts.push(`<audio url="${el.url}"/>`);
-        break;
-      case 'video':
-        parts.push(`<video url="${el.url}"/>`);
-        break;
-      case 'card': {
-        const cp = [`📋 ${el.title}`];
-        if (el.description) cp.push(el.description);
-        if (el.fields?.length)
-          for (const f of el.fields) cp.push(`  ${f.label}: ${f.value}`);
-        if (el.imageUrl) cp.push(`<image url="${el.imageUrl}"/>`);
-        parts.push(cp.join('\n'));
-        break;
-      }
-      case 'file':
-        parts.push(`📎 ${el.name}: ${el.url}`);
-        break;
-    }
-  }
-  return parts.join('\n') || '';
-}
+import { extractMediaParts } from './message-media.js';
+import { renderOutput } from './output-renderer.js';
 
 export function registerAITrigger(refs: AIServiceRefs): void {
   const plugin = getPlugin();
@@ -189,37 +82,27 @@ export function registerAITrigger(refs: AIServiceRefs): void {
         // 每轮 LLM 调用在 Agent 内部已有 turnTimeout（来自 triggerConfig.timeout），
         // 这里不再设置全局超时，避免多轮工具调用被不合理地截断。
 
-        let responseText: string;
-        if (refs.zhinAgent) {
-          const mediaParts = extractMediaParts(message);
-          let elements: OutputElement[];
-          let firstChunkMs = 0;
-          const onChunk: (chunk: string, full: string) => void = (_chunk, _full) => {
-            if (!firstChunkMs) {
-              firstChunkMs = performance.now() - t0;
-              logger.debug(`[AI Handler] 首 token: ${firstChunkMs.toFixed(0)}ms`);
-            }
-          };
-          if (mediaParts.length > 0) {
-            const parts: ContentPart[] = [];
-            if (content) parts.push({ type: 'text', text: content });
-            parts.push(...mediaParts);
-            elements = await refs.zhinAgent.processMultimodal(parts, toolContext, onChunk);
-          } else {
-            elements = await refs.zhinAgent.process(content, toolContext, externalTools, onChunk);
-          }
-          responseText = renderOutput(elements);
-        } else {
-          // 非 ZhinAgent 路径：仍用单次超时保护
-          const timeout = new Promise<never>((_, rej) =>
-            setTimeout(() => rej(new Error('AI 响应超时')), triggerConfig.timeout),
-          );
-          const response = await Promise.race([
-            ai.process(content, toolContext, externalTools),
-            timeout,
-          ]);
-          responseText = typeof response === 'string' ? response : '';
+        if (!refs.zhinAgent) {
+          throw new Error('ZhinAgent is not initialized');
         }
+        const mediaParts = extractMediaParts(message);
+        let elements: OutputElement[];
+        let firstChunkMs = 0;
+        const onChunk: (chunk: string, full: string) => void = (_chunk, _full) => {
+          if (!firstChunkMs) {
+            firstChunkMs = performance.now() - t0;
+            logger.debug(`[AI Handler] 首 token: ${firstChunkMs.toFixed(0)}ms`);
+          }
+        };
+        if (mediaParts.length > 0) {
+          const parts: ContentPart[] = [];
+          if (content) parts.push({ type: 'text', text: content });
+          parts.push(...mediaParts);
+          elements = await refs.zhinAgent.processMultimodal(parts, toolContext, onChunk);
+        } else {
+          elements = await refs.zhinAgent.process(content, toolContext, externalTools, onChunk);
+        }
+        const responseText = renderOutput(elements);
 
         if (responseText) await replyOutbound(parseRichMediaContent(responseText));
         logger.info(`[AI Handler] 总耗时: ${(performance.now() - t0).toFixed(0)}ms`);
@@ -232,26 +115,16 @@ export function registerAITrigger(refs: AIServiceRefs): void {
 
     const dispatcher = root.inject('dispatcher');
 
-    if (dispatcher && typeof dispatcher.setAIHandler === 'function') {
-      dispatcher.setAITriggerMatcher((message: Message<any>) =>
-        shouldTriggerAI(message, triggerConfig),
-      );
-      dispatcher.setAIHandler(handleAIMessage);
-      logger.debug('AI Handler registered via MessageDispatcher');
-      return () => { logger.info('AI Handler unregistered'); };
+    if (!dispatcher || typeof dispatcher.setAIHandler !== 'function') {
+      logger.warn('AI Trigger skipped: MessageDispatcher is not available');
+      return;
     }
 
-    const aiMw = async (
-      message: Message<any>,
-      next: () => Promise<void>,
-    ) => {
-      const { triggered, content } = shouldTriggerAI(message, triggerConfig);
-      if (!triggered) return await next();
-      await handleAIMessage(message, content);
-      await next();
-    };
-    const dispose = root.addMiddleware(aiMw);
-    logger.debug('AI Trigger middleware registered (fallback mode)');
-    return () => { dispose(); };
+    dispatcher.setAITriggerMatcher((message: Message<any>) =>
+      shouldTriggerAI(message, triggerConfig),
+    );
+    dispatcher.setAIHandler(handleAIMessage);
+    logger.debug('AI Handler registered via MessageDispatcher');
+    return () => { logger.info('AI Handler unregistered'); };
   });
 }

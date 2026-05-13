@@ -377,6 +377,13 @@ describe('Adapter Core Functionality', () => {
     })
 
     describe('message.receive', () => {
+      const makeInboundMessage = () => ({
+        $bot: 'bot1',
+        $adapter: 'test',
+        $channel: { id: 'channel-id', type: 'text' },
+        $content: 'Hello',
+      } as any)
+
       it('should still dispatch plugin message.receive when dispatcher is missing (no middleware fallback)', async () => {
         const config = [{ id: 'bot1' }]
         const adapter = new MockAdapter(plugin, 'test', config)
@@ -393,12 +400,7 @@ describe('Adapter Core Functionality', () => {
           lifecycleCalled = true
         })
 
-        const message = {
-          $bot: 'bot1',
-          $adapter: 'test',
-          $channel: { id: 'channel-id', type: 'text' },
-          $content: 'Hello',
-        } as any
+        const message = makeInboundMessage()
 
         adapter.emit('message.receive', message)
         await new Promise((r) => setTimeout(r, 20))
@@ -426,12 +428,7 @@ describe('Adapter Core Functionality', () => {
           order.push('lifecycle')
         })
 
-        const message = {
-          $bot: 'bot1',
-          $adapter: 'test',
-          $channel: { id: 'channel-id', type: 'text' },
-          $content: 'Hello',
-        } as any
+        const message = makeInboundMessage()
 
         adapter.emit('message.receive', message)
         await new Promise((r) => setTimeout(r, 20))
@@ -453,16 +450,53 @@ describe('Adapter Core Functionality', () => {
         plugin.on('message.receive', () => order.push('lifecycle'))
         adapter.on('message.receive', () => order.push('adapterObserver'))
 
-        const message = {
-          $bot: 'bot1',
-          $adapter: 'test',
-          $channel: { id: 'channel-id', type: 'text' },
-          $content: 'Hello',
-        } as any
+        const message = makeInboundMessage()
 
         adapter.emit('message.receive', message)
         await new Promise((r) => setTimeout(r, 20))
         expect(order).toEqual(['lifecycle', 'adapterObserver'])
+      })
+
+      it('should drop message.receive when concurrency limit is reached', async () => {
+        plugin.$contexts.set('config', {
+          name: 'config',
+          description: 'mock config',
+          value: {
+            get: () => ({ max_concurrent_messages: 1 }),
+          },
+        } as any)
+        plugin.$contexts.set('dispatcher', {
+          name: 'dispatcher',
+          description: 'mock dispatcher',
+          value: {
+            dispatch: async () => new Promise(resolve => setTimeout(resolve, 30)),
+          },
+        } as any)
+        const warnSpy = vi.spyOn(adapter.logger, 'warn')
+
+        expect(adapter.emit('message.receive', makeInboundMessage())).toBe(true)
+        expect(adapter.pendingMessages).toBe(1)
+        expect(adapter.emit('message.receive', makeInboundMessage())).toBe(false)
+        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('concurrency limit reached'))
+
+        await vi.waitFor(() => expect(adapter.pendingMessages).toBe(0))
+      })
+
+      it('should restore pending count when inbound handling throws', async () => {
+        plugin.$contexts.set('dispatcher', {
+          name: 'dispatcher',
+          description: 'mock dispatcher',
+          value: {
+            dispatch: async () => { throw new Error('boom') },
+          },
+        } as any)
+        const warnSpy = vi.spyOn(adapter.logger, 'warn')
+
+        expect(adapter.emit('message.receive', makeInboundMessage())).toBe(true)
+        expect(adapter.pendingMessages).toBe(1)
+
+        await vi.waitFor(() => expect(adapter.pendingMessages).toBe(0))
+        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('message.receive handling error: boom'))
       })
     })
   })

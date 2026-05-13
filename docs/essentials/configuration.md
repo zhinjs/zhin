@@ -2,6 +2,8 @@
 
 Zhin.js 在项目根目录自动发现主配置文件，支持 **YAML**（`zhin.config.yml` / `.yaml`）、**JSON**（`zhin.config.json`）和 **TOML**（`zhin.config.toml`）。发现优先级：`.yml` → `.yaml` → `.json` → `.toml`。
 
+配置遵循“约定大于配置”：运行时会把默认约定作为 base，再把用户配置 deep merge 进去。普通对象按字段合并；`plugins`、`plugin_dirs`、`services` 等数组字段如果显式写出，就表示完整覆盖默认数组，省略则使用默认约定。
+
 ## 配置文件位置
 
 配置文件位于项目根目录：
@@ -48,6 +50,7 @@ plugin_dirs:
 ```
 
 **说明**：
+- 默认值为 `node_modules` 和 `./src/plugins`，通常可以省略。
 - `node_modules` - 通过 npm/pnpm 安装的插件包
 - `./src/plugins` - 你自己编写的插件文件
 - 框架按列表顺序搜索，先找到即加载
@@ -84,6 +87,7 @@ plugins:
 **注意**：
 - npm 插件使用完整包名（如 `@zhin.js/http`）
 - 本地插件使用文件名（如 `my-plugin` 对应 `src/plugins/my-plugin.ts`）
+- 一旦写出 `plugins` 数组，就表示完整插件列表；如果要保留默认 HTTP、Console、Sandbox 插件，需要一并写出。
 
 ## 机器人配置（bots）
 
@@ -397,7 +401,7 @@ Zhin.js 支持在配置文件中通过 `${VAR}` 引用环境变量：
 token: ${HTTP_TOKEN}
 
 # 带默认值
-port: ${PORT:8086}          # 如果 PORT 未设置，使用 8086
+port: ${PORT:-8086}         # 如果 PORT 未设置，使用 8086
 ```
 
 在项目根目录的 `.env` 文件中设置：

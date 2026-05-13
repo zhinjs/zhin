@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "xml2js": "^0.6.2",
-    "axios": "^1.15.2",
+    "axios": "^1.16.0",
     "form-data": "^4.0.0"
   },
   "peerDependencies": {
@@ -22,7 +22,7 @@
   "devDependencies": {
     "@types/xml2js": "^0.4.14",
     "@types/koa": "^2.15.0",
-    "@types/node": "^25.6.0",
+    "@types/node": "^25.7.0",
     "typescript": "^6.0.3",
     "zhin.js": "workspace:*"
   },

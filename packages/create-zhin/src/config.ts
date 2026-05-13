@@ -205,91 +205,30 @@ export async function createConfigFile(appPath: string, format: string, options:
 
   const configMap: Record<string, [string, string]> = {
     yaml: ['zhin.config.yml',
-`log_level: 1
-${databaseConfig ? `database:\n${databaseConfig}\n` : ''}plugin_dirs:
-  - node_modules
-  - ./src/plugins
-
-services:
-  - process
-  - config
-  - command
-  - component
-  - permission
-  - cron
-
-plugins:
+`${databaseConfig ? `database:\n${databaseConfig}\n\n` : ''}plugins:
 ${pluginsYamlLines}
 
 http:
-  port: 8086
   token: \${HTTP_TOKEN}
-  base: /api
-
-console:
-  enabled: true
-  lazyLoad: true
 ${yamlExtraConfig}
 `],
     json: ['zhin.config.json',
 `{
-  "log_level": 1,
-${databaseConfig ? `  ${databaseConfig}\n` : ''}  "plugin_dirs": [
-    "node_modules",
-    "./src/plugins"
-  ],
-  "services": [
-    "process",
-    "config",
-    "command",
-    "component",
-    "permission",
-    "cron"
-  ],
-  "plugins": [
+${databaseConfig ? `  ${databaseConfig}\n` : ''}  "plugins": [
 ${pluginsJsonLines}
   ],
   "http": {
-    "port": 8086,
-    "token": "\${HTTP_TOKEN}",
-    "base": "/api"
-  },
-  "console": {
-    "enabled": true,
-    "lazyLoad": true
+    "token": "\${HTTP_TOKEN}"
   }${jsonExtraConfig ? `,${jsonExtraConfig}` : ''}
 }
 `],
     toml: ['zhin.config.toml',
-`log_level = 1
-${databaseConfig}
-
-plugin_dirs = [
-  "node_modules",
-  "./src/plugins"
-]
-
-services = [
-  "process",
-  "config",
-  "command",
-  "component",
-  "permission",
-  "cron"
-]
-
-plugins = [
+`${databaseConfig ? `${databaseConfig}\n\n` : ''}plugins = [
 ${pluginsTomlLines}
 ]
 
 [http]
-port = 8086
 token = "\${HTTP_TOKEN}"
-base = "/api"
-
-[console]
-enabled = true
-lazyLoad = true
 ${tomlExtraConfig}
 `]
   };

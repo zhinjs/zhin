@@ -7,3 +7,14 @@ export {
 } from "./store/createRegistryStore.js";
 
 export { cn } from "./utils/cn.js";
+
+export {
+  fetchConsoleEntries,
+  createPluginRegisterHostApi,
+  getRegisterFn,
+  loadConsoleEntries,
+  registerConsolePluginsFromEntries,
+  type CreatePluginRegisterHostApiOptions,
+  type FetchConsoleEntriesOptions,
+  type LoadConsoleEntriesOptions,
+} from "./bootstrap/loadConsoleEntries.js";

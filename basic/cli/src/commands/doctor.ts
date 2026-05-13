@@ -259,11 +259,7 @@ export const doctorCommand = new Command('doctor')
   });
 
 async function createDefaultConfig(cwd: string): Promise<void> {
-  const configContent = `log_level: 0
-database:
-  dialect: sqlite
-  filename: ./data/bot.db
-bots:
+  const configContent = `bots:
   - context: sandbox
     name: sandbox-bot
 plugins:
@@ -271,11 +267,7 @@ plugins:
   - "@zhin.js/http"
   - "@zhin.js/console"
 http:
-  host: 0.0.0.0
-  port: 8086
   token: \${HTTP_TOKEN}
-ai:
-  enabled: false
 `;
   await fs.writeFile(path.join(cwd, 'zhin.config.yml'), configContent);
 }

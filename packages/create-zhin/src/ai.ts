@@ -179,7 +179,6 @@ export function generateAIConfigYaml(config: AISetupConfig): string {
   const lines: string[] = [
     '',
     'ai:',
-    '  enabled: true',
     `  defaultProvider: ${config.defaultProvider}`,
     '  providers:',
   ];
@@ -207,16 +206,12 @@ export function generateAIConfigYaml(config: AISetupConfig): string {
 
   if (config.trigger) {
     lines.push('  trigger:');
-    lines.push('    enabled: true');
     lines.push(`    respondToAt: ${config.trigger.respondToAt}`);
     lines.push(`    respondToPrivate: ${config.trigger.respondToPrivate}`);
     lines.push('    prefixes:');
     for (const prefix of config.trigger.prefixes) {
       lines.push(`      - "${prefix}"`);
     }
-    lines.push('    ignorePrefixes:');
-    lines.push('      - /');
-    lines.push('      - "!"');
   }
 
   return lines.join('\n');
@@ -228,7 +223,7 @@ export function generateAIConfigYaml(config: AISetupConfig): string {
 export function generateAIConfigToml(config: AISetupConfig): string {
   if (!config.enabled) return '';
 
-  const lines: string[] = ['', '[ai]', 'enabled = true', `defaultProvider = "${config.defaultProvider}"`];
+  const lines: string[] = ['', '[ai]', `defaultProvider = "${config.defaultProvider}"`];
 
   if (config.providers) {
     for (const [name, providerConfig] of Object.entries(config.providers)) {
@@ -244,11 +239,9 @@ export function generateAIConfigToml(config: AISetupConfig): string {
 
   if (config.trigger) {
     lines.push('', '[ai.trigger]');
-    lines.push('enabled = true');
     lines.push(`respondToAt = ${config.trigger.respondToAt}`);
     lines.push(`respondToPrivate = ${config.trigger.respondToPrivate}`);
     lines.push(`prefixes = ${JSON.stringify(config.trigger.prefixes)}`);
-    lines.push('ignorePrefixes = ["/", "!"]');
   }
 
   return lines.join('\n');
@@ -261,13 +254,10 @@ export function generateAIConfigJSON(config: AISetupConfig): string {
   if (!config.enabled) return '';
 
   const obj: any = {
-    enabled: true,
     defaultProvider: config.defaultProvider,
     providers: {},
     trigger: config.trigger ? {
-      enabled: true,
       ...config.trigger,
-      ignorePrefixes: ['/', '!'],
     } : undefined,
   };
 
@@ -282,5 +272,5 @@ export function generateAIConfigJSON(config: AISetupConfig): string {
     }
   }
 
-  return `  "ai": ${JSON.stringify(obj, null, 4).replace(/^/gm, '  ').trimStart()},`;
+  return `"ai": ${JSON.stringify(obj, null, 4).replace(/^/gm, '  ').trimStart()}`;
 }

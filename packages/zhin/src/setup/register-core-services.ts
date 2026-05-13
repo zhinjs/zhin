@@ -12,6 +12,7 @@ import {
 } from '@zhin.js/core';
 import type { Plugin, Message } from '@zhin.js/core';
 import type { AppConfig } from '../types.js';
+import { DEFAULT_CORE_SERVICES } from './load-config.js';
 
 /**
  * 注册配置服务（必须）及按配置注册可选服务：process / command / component / permission / cron / dispatcher / skill / agentPreset
@@ -25,7 +26,7 @@ export function registerCoreServices(
   provide(configFeature);
 
   const enabledServices = new Set(
-    appConfig.services || ['process', 'config', 'command', 'component', 'permission', 'cron'],
+    appConfig.services || DEFAULT_CORE_SERVICES,
   );
 
   if (enabledServices.has('process')) {

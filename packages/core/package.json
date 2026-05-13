@@ -16,6 +16,11 @@
       "development": "./src/tool-zod.ts",
       "import": "./lib/tool-zod.js"
     },
+    "./queue-im-field-contract": {
+      "types": "./lib/built/queue-im-field-contract.d.ts",
+      "development": "./src/built/queue-im-field-contract.ts",
+      "import": "./lib/built/queue-im-field-contract.js"
+    },
     "./jsx": {
       "types": "./lib/jsx.d.ts",
       "development": "./src/jsx.ts",
@@ -51,7 +56,7 @@
     "yaml": "^2.8.3"
   },
   "devDependencies": {
-    "@types/node": "^25.6.0",
+    "@types/node": "^25.7.0",
     "typescript": "^6.0.3"
   },
   "repository": {

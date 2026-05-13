@@ -1,7 +1,3 @@
-log_level: 1
-database:
-  dialect: sqlite
-  filename: ./data/test.db
 bots:
   - context: icqq
     name: "8596238"
@@ -12,7 +8,6 @@ bots:
     secret: ${QQ_SECRET}
     mode: websocket
     sandbox: true
-    maxRetry: 3
     timeout: 10000
     heartbeatInterval: 30000
     maxRetries: 3
@@ -41,16 +36,6 @@ bots:
     url: wss://onebot11.l2cl.link
     reconnect_interval: 5000
     heartbeat_interval: 30000
-plugin_dirs:
-  - node_modules
-  - ./src/plugins
-services:
-  - process
-  - config
-  - command
-  - component
-  - permission
-  - cron
 plugins:
   - test-plugin
   - test-jsx
@@ -74,7 +59,6 @@ plugins:
   - "@zhin.js/plugin-60s"
   - "@zhin.js/plugin-teach"
 console:
-  enabled: true
   lazyLoad: true
 inbox:
   enabled: true
@@ -87,11 +71,7 @@ group-daily-analysis:
   outputFormat: text
   maxMessagesPerAnalysis: 500
 ai:
-  enabled: true
   defaultProvider: openai
-  session:
-    maxHistory: 20
-    expireMs: 3600000
   providers:
     ollama:
       host: http://172.25.70.73:11434
@@ -130,17 +110,12 @@ ai:
       - ^docker (ps|logs|inspect)
     execAsk: true
   trigger:
-    enabled: true
     prefixes:
       - "#"
       - "AI:"
       - "ai:"
     respondToAt: true
     respondToPrivate: true
-    ignorePrefixes:
-      - /
-      - "!"
-      - ！
     timeout: 60000
     thinkingMessage: 🤔 思考中...
 htmlRenderer:
@@ -150,10 +125,7 @@ htmlRenderer:
 60s:
   apiBase: https://services.zhin.dev
 http:
-  host: 0.0.0.0
-  port: 8086
   token: ${HTTP_TOKEN}
-  base: /api
 teach:
   maxPerGroup: 200
   cooldown: 3000

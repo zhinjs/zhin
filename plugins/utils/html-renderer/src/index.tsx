@@ -322,7 +322,7 @@ function serializeJsxToHtml(element: any): string {
 }
 
 const configService = plugin.root.inject('config');
-const appConfig = configService?.get<{ htmlRenderer?: HtmlRendererConfig }>('zhin.config.yml') || {};
+const appConfig = configService?.getPrimary<{ htmlRenderer?: HtmlRendererConfig }>() || {};
 const pluginConfig = appConfig.htmlRenderer || {};
 const mergedHtmlRendererConfig: HtmlRendererConfig = { ...DEFAULT_CONFIG, ...pluginConfig };
 const rendererService = createHtmlRendererService(pluginConfig);

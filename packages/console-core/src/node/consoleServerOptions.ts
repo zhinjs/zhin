@@ -17,6 +17,7 @@ export type ConsoleServerRouteRegistrar = (ctx: PluginServerRegisterHostApi) => 
 export type ConsoleServerOptions = {
   path?: string;
   router?: Router;
+  entryStore?: EntryStore;
   runtimeEnvHint?: RuntimeEnv;
   clientPackageRoot: string;
   koa: Koa;

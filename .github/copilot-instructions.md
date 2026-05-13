@@ -300,7 +300,7 @@ class MyAdapter extends Adapter<MyBot> {
 plugin.provide({
   name: 'my-adapter',
   mounted: async (p) => {
-    const config = p.inject('config').getData('zhin.config.yml')
+    const config = p.inject('config').getPrimary()
     const adapter = new MyAdapter(p, config.bots?.filter(b => b.context === 'my-platform') || [])
     await adapter.start()
     return adapter
@@ -892,7 +892,7 @@ const config = getConfig()
 
 // ✅ 手动获取配置（不需要 Schema 验证时）
 const configService = plugin.inject('config')
-const appConfig = configService.get('zhin.config.yml')
+const appConfig = configService.getPrimary()
 const config = appConfig.pluginName || {}
 ```
 
@@ -952,7 +952,7 @@ declare module 'zhin.js' {
 - `app.dependencyList` → `plugin.children` (所有子插件)
 - `app.contextList` → `plugin.contexts` (Map<string, any>)
 - `app.getContext(name)` → `plugin.inject(name)`
-- `app.getConfig()` → `plugin.inject('config').getData('zhin.config.yml')`
+- `app.getConfig()` → `plugin.inject('config').getPrimary()`
 - `plugin.findPluginByName(name)` → 遍历 `plugin.children` 或使用文件路径判断
 - `plugin.schema` → 已移除，直接使用 `@zhin.js/schema`
 

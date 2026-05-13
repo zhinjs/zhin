@@ -33,7 +33,7 @@ interface Config {
 }
 
 const configService = root.inject('config');
-const appConfig = configService?.get<{ '60s'?: Config }>('zhin.config.yml') || {};
+const appConfig = configService?.getPrimary<{ '60s'?: Config }>() || {};
 const config: Config = {
   apiBase: 'https://60s.viki.moe',
   ...appConfig['60s'],

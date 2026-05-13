@@ -115,7 +115,7 @@ pnpm install
 | `@zhin.js/console` | `src/` → tsup → `lib/` | 胶水层：创建 PageManager、挂载路由、WebSocket 业务逻辑 |
 
 **插件注册契约**：
-- 服务端：`PageManager.addEntry({ id, development, production })`
+- 服务端：`useContext('web', pageManager => pageManager.addEntry({ id, development, production }))`
 - 浏览器：`export function register(api: PluginRegisterHostApi)`，使用 `api.React.createElement`、`api.addRoute`、`api.addTool`
 
 **共享依赖**：`/console/esm/*.mjs` 提供 canonical ESM（react、react-dom 等），esbuild 按需打包 + 缓存，无需 import map / farm-peer-shim。
