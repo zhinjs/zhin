@@ -1,5 +1,13 @@
 # test-bot
 
+## 0.1.91
+
+### Patch Changes
+
+- Updated dependencies [dc04e4a]
+  - @zhin.js/adapter-icqq@2.0.24
+  - @zhin.js/plugin-music@1.0.24
+
 ## 0.1.90
 
 ### Patch Changes
