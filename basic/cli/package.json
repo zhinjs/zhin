@@ -29,9 +29,9 @@
     "commander": "^14.0.2",
     "cross-spawn": "^7.0.6",
     "dotenv": "^17.4.2",
-    "fs-extra": "^11.3.2",
+    "fs-extra": "^11.3.5",
     "glob": "^13.0.6",
-    "inquirer": "^13.4.2",
+    "inquirer": "^13.4.3",
     "open": "^11.0.0",
     "ora": "^9.4.0",
     "yaml": "^2.8.3"
