@@ -60,7 +60,7 @@ export function mergeToolsByName(tools: AgentTool[], options: ToolNamePolicyOpti
 
     const currentSource = current.source || 'unknown';
     const currentProtected = isReservedToolName(name, options) || isBuiltinToolSource(currentSource);
-    const incomingProtected = isReservedToolName(name, options) || incomingIsBuiltin;
+    const incomingProtected = reserved || incomingIsBuiltin;
 
     if (currentProtected && !incomingProtected) {
       warnings.push({

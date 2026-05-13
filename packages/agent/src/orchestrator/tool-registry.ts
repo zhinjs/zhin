@@ -289,7 +289,6 @@ export class ToolRegistry extends ResourceRegistry<AgentTool> {
       if ('platforms' in obj || 'scopes' in obj || (typeof obj.permissionLevel === 'string')) {
         return this.toolToAgentTool(obj as Tool, source);
       }
-      return { ...(obj as AgentTool), source: obj.source || source };
     }
     return { ...(obj as AgentTool), source: obj.source || source };
   }

@@ -148,7 +148,7 @@ function buildSystemSection(): string {
 }
 
 function buildDisciplineSection(): string {
-  return ['# Discipline', ...prependBullets(FIXED_DISCIPLINE_RULES.map(rule => `${rule}`))].join('\n');
+  return ['# Discipline', ...prependBullets([...FIXED_DISCIPLINE_RULES])].join('\n');
 }
 
 /**
