@@ -1,5 +1,11 @@
 # @zhin.js/plugin-60s
 
+## 0.0.17
+
+### Patch Changes
+
+- zhin.js@1.0.79
+
 ## 0.0.16
 
 ### Patch Changes

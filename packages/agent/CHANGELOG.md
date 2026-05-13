@@ -1,5 +1,13 @@
 # @zhin.js/agent
 
+## 0.1.19
+
+### Patch Changes
+
+- 92da96d: fix skill 激活优化
+  - @zhin.js/core@1.1.21
+  - @zhin.js/ai@1.1.19
+
 ## 0.1.18
 
 ### Patch Changes

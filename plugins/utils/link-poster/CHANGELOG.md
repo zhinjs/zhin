@@ -1,5 +1,11 @@
 # @zhin.js/plugin-link-poster
 
+## 0.0.11
+
+### Patch Changes
+
+- zhin.js@1.0.79
+
 ## 0.0.10
 
 ### Patch Changes
