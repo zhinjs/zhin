@@ -1,5 +1,14 @@
 # @zhin.js/adapter-icqq
 
+## 2.0.21
+
+### Patch Changes
+
+- zhin.js@1.0.77
+- @zhin.js/core@1.1.19
+- @zhin.js/console@2.0.20
+- @zhin.js/http@1.0.70
+
 ## 2.0.20
 
 ### Patch Changes

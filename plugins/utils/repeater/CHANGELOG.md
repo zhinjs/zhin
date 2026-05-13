@@ -1,5 +1,11 @@
 # @zhin.js/plugin-repeater
 
+## 0.0.12
+
+### Patch Changes
+
+- zhin.js@1.0.77
+
 ## 0.0.11
 
 ### Patch Changes

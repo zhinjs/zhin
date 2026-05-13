@@ -1,5 +1,14 @@
 # @zhin.js/agent
 
+## 0.1.17
+
+### Patch Changes
+
+- fcad030: fix: agent ai 优化
+- Updated dependencies [fcad030]
+  - @zhin.js/ai@1.1.17
+  - @zhin.js/core@1.1.19
+
 ## 0.1.16
 
 ### Patch Changes
