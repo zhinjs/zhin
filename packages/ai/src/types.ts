@@ -389,6 +389,15 @@ export interface AIConfig {
     execAllowlist?: string[];
     /** allowlist 未命中时：true=需审批（当前实现为拒绝并提示），false=直接拒绝 */
     execAsk?: boolean;
+    /** 观测主回合阶段日志（或通过 ZHIN_AGENT_PHASE_TRACE=1 开启） */
+    phaseTrace?: boolean;
+    /** 按模型 / provider 模式覆盖 model harness */
+    modelHarness?: {
+      /** 模型级覆盖：支持 "gpt-4o" 或 "openai:gpt-4o" */
+      models?: Record<string, { maxIterations?: number }>;
+      /** provider 模式覆盖（支持 * 通配符） */
+      providerPatterns?: Record<string, { maxIterations?: number }>;
+    };
   };
   /** AI 触发配置 */
   trigger?: {
