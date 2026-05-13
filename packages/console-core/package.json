@@ -42,7 +42,7 @@
     "react": ">=18"
   },
   "dependencies": {
-    "@koa/router": "^13.1.0",
+    "@koa/router": "^15.5.0",
     "@zhin.js/console-types": "workspace:*",
     "clsx": "^2.1.1",
     "esbuild": "^0.25.9",
