@@ -16,7 +16,7 @@
  *  12. 多模态输入：图片/音频直接传给视觉模型
  */
 
-import { Logger } from '@zhin.js/core';
+import { Logger, getPlugin } from '@zhin.js/core';
 import type { AIProvider, AgentTool, ChatMessage, ContentPart } from '@zhin.js/ai';
 import type { Tool, ToolContext } from '../orchestrator/types.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
@@ -398,6 +398,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
         transformToolResult: createOwnerOrchestratedToolResultTransform({
           toolContext: contextForTools,
           disableHardOrchestration: false,
+          plugin: getPlugin(),
         }),
       });
 
