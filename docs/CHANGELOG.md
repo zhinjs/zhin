@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.28
+
+### Patch Changes
+
+- 92da96d: fix skill 激活优化
+
 ## 1.0.27
 
 ### Patch Changes
