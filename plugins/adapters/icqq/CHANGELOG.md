@@ -1,5 +1,15 @@
 # @zhin.js/adapter-icqq
 
+## 2.0.25
+
+### Patch Changes
+
+- 3b3e49b: fix: ask 工具修复,icqq skill 优化
+  - zhin.js@1.0.80
+  - @zhin.js/console@2.0.23
+  - @zhin.js/http@1.0.73
+  - @zhin.js/core@1.1.22
+
 ## 2.0.24
 
 ### Patch Changes

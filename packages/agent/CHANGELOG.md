@@ -1,5 +1,13 @@
 # @zhin.js/agent
 
+## 0.1.20
+
+### Patch Changes
+
+- 3b3e49b: fix: ask 工具修复,icqq skill 优化
+  - @zhin.js/core@1.1.22
+  - @zhin.js/ai@1.1.20
+
 ## 0.1.19
 
 ### Patch Changes
