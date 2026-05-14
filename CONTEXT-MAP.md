@@ -6,6 +6,7 @@
 - [Agent Runtime](./packages/agent/CONTEXT.md) - 负责 ZhinAgent 编排、工具、技能、子代理、上下文预算，以及对 `@zhin.js/ai` 的策略适配。
 - [Queue Contract](./docs/architecture/queue/CONTEXT.md) - 定义队列侧事件和出站字段词汇，并说明它们如何映射到 IM 运行时类型。
 - [Console Runtime](./packages/console-core/CONTEXT.md) - 负责控制台页面目录、PageManager、入口注册和浏览器插件启动。
+- [Bridge v1（胶水 DX）](./docs/bridge/index.md) - Bridge IPC / supervisor / 入站胶水 / 出站 gate、用户自备 Python·Node、token 与 e2e 说明；语义见 [ADR 0008](./docs/adr/0008-bridge-v1-nonebot-inbound-chain-dispatch-result.md)。
 
 ## 关系
 

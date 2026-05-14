@@ -1,0 +1,26 @@
+# --- Bridge glue：计划中的 Primary Config 形状（见 packages/bridge-supervisor/README.md）---
+# 以下为片段示意：复制到你的 zhin.config.yml 前请确认主仓库已支持 bridge_glue 字段。
+#
+# bridge_glue:
+#   instances:
+#     # 每个 (bot_id, ecosystem, instance_id) 对应一个独立子进程（N3）
+#     - bot_id: "main"
+#       ecosystem: "wechat-mp"
+#       instance_id: "default"
+#       # 用户自备解释器与入口脚本路径
+#       command: "node"
+#       args: ["./dist/glue.mjs"]
+#       # 运行时从环境变量读取 token 名，解析后再传入 BridgeSupervisor（勿把密钥写进 YAML）
+#       token_env: "ZHIN_BRIDGE_GLUE_TOKEN"
+#       cwd: "."
+#       # 可选：子进程临时目录相关 env 名
+#       tmpdir_env: "BRIDGE_GLUE_TMPDIR"
+#
+# Python NoneBot 子进程示例（command/args 按你的部署调整）：
+#     - bot_id: "main"
+#       ecosystem: "wechat-mp"
+#       instance_id: "nonebot"
+#       command: "uv"
+#       args: ["run", "--directory", "./glue/nonebot", "python", "-m", "bridge_nonebot_child"]
+#       token_env: "ZHIN_BRIDGE_GLUE_TOKEN"
+#       cwd: "."

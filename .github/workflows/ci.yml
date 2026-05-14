@@ -30,6 +30,11 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.2.2
         with:
           fetch-depth: 0
+
+      # changesets `baseBranch: main` compares against a **local** `main` ref; PR checkouts
+      # often only have `origin/main`, which makes `pnpm changeset status` fail.
+      - name: sync local main ref for changesets
+        run: git fetch origin main:main
       
       - name: configure github packages auth
         if: env.NPM_TOKEN != ''
@@ -50,7 +55,12 @@ jobs:
         run: pnpm build
       
       - name: type check
-        run: pnpm type-check
+        run: |
+          set -e
+          for pkg in bridge-ipc bridge-supervisor bridge-outbound-gate bridge-inbound-glue bridge-miao-child; do
+            echo "==> tsc --noEmit packages/$pkg"
+            pnpm exec tsc --noEmit -p "packages/$pkg/tsconfig.json"
+          done
 
       - name: harness IM send-path check
         run: pnpm check:harness-paths

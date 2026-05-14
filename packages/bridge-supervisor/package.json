@@ -1,0 +1,40 @@
+{
+  "name": "@zhin.js/bridge-supervisor",
+  "version": "0.0.1",
+  "description": "Bridge v1 glue supervisor: per-bot per-ecosystem child (N3), S1 no auto-retry, health and structured disable logs",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "vitest run --root ../.. --config vitest.config.ts packages/bridge-supervisor"
+  },
+  "dependencies": {
+    "@zhin.js/bridge-ipc": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.7.0",
+    "rimraf": "^6.1.2",
+    "typescript": "^6.0.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/bridge-supervisor"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}
