@@ -35,8 +35,9 @@
   ],
   "exclude": [
     "node_modules",
-    "lib",
+    "**/lib/**",
     "dist",
+    "**/dist/**",
     "plugins/**/client/**",
     "**/*.js"
   ]
