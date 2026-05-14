@@ -1,5 +1,11 @@
 # @zhin.js/plugin-group-admin
 
+## 0.0.12
+
+### Patch Changes
+
+- zhin.js@1.0.80
+
 ## 0.0.11
 
 ### Patch Changes
