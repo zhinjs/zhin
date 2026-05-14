@@ -16,7 +16,7 @@
  *  12. 多模态输入：图片/音频直接传给视觉模型
  */
 
-import { Logger, getPlugin } from '@zhin.js/core';
+import { Logger, getPlugin, type Plugin } from '@zhin.js/core';
 import type { AIProvider, AgentTool, ChatMessage, ContentPart } from '@zhin.js/ai';
 import type { Tool, ToolContext } from '../orchestrator/types.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
@@ -89,6 +89,8 @@ export class ZhinAgent {
   private skillsSummaryXML: string = '';
   private modelRegistry: ModelRegistry | null = null;
   private phaseTraceEnabled: boolean;
+  /** 根插件（createZhinAgentContext 注入）；避免在 Agent.run 路径依赖 AsyncLocalStorage 上的 getPlugin() */
+  private hostPlugin: Plugin | null = null;
 
   constructor(provider: AIProvider, config?: ZhinAgentConfig) {
     this.provider = provider;
@@ -125,6 +127,11 @@ export class ZhinAgent {
   setModelRegistry(registry: ModelRegistry): void {
     this.modelRegistry = registry;
     this.subagentManager?.setModelRegistry(registry);
+  }
+
+  /** 由 init 注入根插件，供 Owner 编排 / ask_user（勿依赖消息处理时的 getPlugin ALS） */
+  setHostPlugin(plugin: Plugin): void {
+    this.hostPlugin = plugin.root ?? plugin;
   }
 
   upgradeMemoryToDatabase(msgModel: any, sumModel: any): void {
@@ -386,6 +393,15 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
         effectiveMaxIterations,
       });
 
+      let orchestrationPlugin: Plugin | undefined = this.hostPlugin ?? undefined;
+      if (!orchestrationPlugin) {
+        try {
+          orchestrationPlugin = getPlugin().root ?? getPlugin();
+        } catch {
+          logger.warn('[ZhinAgent] 无 hostPlugin 且 getPlugin() 不可用，Owner 硬编排可能无法自动 ask_user');
+        }
+      }
+
       const agent = createAgent(this.provider, {
         model: chatCandidates[0],
         modelFallbacks: chatCandidates.slice(1),
@@ -399,7 +415,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
         transformToolResult: createOwnerOrchestratedToolResultTransform({
           toolContext: contextForTools,
           disableHardOrchestration: false,
-          plugin: getPlugin(),
+          plugin: orchestrationPlugin,
         }),
       });
 

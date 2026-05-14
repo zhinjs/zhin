@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "icqq": {
+      "source": "icqqjs/skills",
+      "sourceType": "github",
+      "skillPath": "icqq/SKILL.md",
+      "computedHash": "cbef229a7e35081184d7970b42fb5e5a644562837efc4bb2298881f8d0a18fc4"
+    }
+  }
+}

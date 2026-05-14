@@ -27,6 +27,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     const agentConfig = ai.getAgentConfig();
     const agent = new ZhinAgent(provider, agentConfig);
     refs.zhinAgent = agent;
+    agent.setHostPlugin(root);
 
     const orchestrator = root.inject('agent');
     if (orchestrator) agent.setSkillRegistry(orchestrator.skills);
