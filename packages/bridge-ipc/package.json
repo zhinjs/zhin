@@ -1,0 +1,38 @@
+{
+  "name": "@zhin.js/bridge-ipc",
+  "version": "0.0.1",
+  "description": "stdio NDJSON IPC for Bridge v1: hello handshake, framed records, echo reference child",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "files": [
+    "lib",
+    "bin"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "vitest run --root ../.. --config vitest.config.ts packages/bridge-ipc"
+  },
+  "devDependencies": {
+    "@types/node": "^25.7.0",
+    "rimraf": "^6.1.2",
+    "typescript": "^6.0.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/bridge-ipc"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "name": "@zhin.js/bridge-miao-child",
+  "version": "0.0.1",
+  "description": "Bridge v1 H1 (喵崽) tracer child: O1 plugin allowlist, dispatch → plugin → outbound_intent",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "files": [
+    "lib",
+    "bin",
+    "fixtures",
+    "shim"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "vitest run --root ../.. --config vitest.config.ts packages/bridge-miao-child"
+  },
+  "dependencies": {
+    "@zhin.js/bridge-ipc": "workspace:*",
+    "@zhin.js/bridge-outbound-gate": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.7.0",
+    "rimraf": "^6.1.2",
+    "typescript": "^6.0.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/bridge-miao-child"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

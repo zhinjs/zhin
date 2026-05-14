@@ -21,6 +21,7 @@ export default withMermaid(defineConfig({
           { text: '核心基础', link: '/essentials/' },
           { text: '消息如何流转', link: '/essentials/message-flow' },
           { text: '架构概览', link: '/architecture-overview' },
+          { text: 'Bridge v1（胶水 DX）', link: '/bridge/' },
           { text: '术语表', link: '/reference/glossary' },
         ],
       },
@@ -33,6 +34,7 @@ export default withMermaid(defineConfig({
           { text: '高级特性', link: '/advanced/' },
           { text: '插件市场', link: '/plugins/' },
           { text: '演练场', link: '/playground' },
+          { text: 'Bridge v1（胶水）', link: '/bridge/' },
           { text: '贡献指南', link: '/contributing' },
         ],
       },
@@ -81,6 +83,13 @@ export default withMermaid(defineConfig({
           text: '参考',
           items: [{ text: '术语表', link: '/reference/glossary' }],
         }
+      ],
+
+      '/bridge/': [
+        {
+          text: 'Bridge v1',
+          items: [{ text: '开发者指南（DX）', link: '/bridge/' }],
+        },
       ],
       
       '/advanced/ai': [
