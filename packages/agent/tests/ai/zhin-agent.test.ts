@@ -5,7 +5,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ZhinAgent } from '@zhin.js/agent';
-import { SkillFeature } from '@zhin.js/core';
+import { Logger, SkillFeature } from '@zhin.js/core';
 import type { AIProvider, AgentTool, ContentPart } from '@zhin.js/core';
 import type { Tool, ToolContext } from '@zhin.js/core';
 
@@ -154,15 +154,17 @@ describe('ZhinAgent', () => {
     });
 
     it('phaseTrace 开启时应输出可解析 phase 序列', async () => {
-      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      // logPhase 使用 @zhin.js/core Logger.info（非 console.log），CI 与本地 transport 可能不同
+      const logSpy = vi.spyOn(Logger.prototype, 'info').mockImplementation(() => {});
       const phaseAgent = new ZhinAgent(provider, { phaseTrace: true });
       const context = makeToolContext();
       try {
         await phaseAgent.process('phase trace', context, []);
-        const phaseLogs = logSpy.mock.calls
-          .flatMap(args => args.map(v => String(v)))
-          .filter(line => line.includes('[AGENT_PHASE]'));
-        const serialized = phaseLogs.join('\n');
+        const phaseLabels = logSpy.mock.calls
+          .filter(args => args[1] === '[AGENT_PHASE]')
+          .map(args => (args[0] as { phase?: string }).phase)
+          .filter((p): p is string => Boolean(p));
+        const serialized = phaseLabels.join('\n');
         expect(serialized).toContain('turn.start');
         expect(serialized).toContain('tools.collected');
         expect(serialized).toContain('context.ready');

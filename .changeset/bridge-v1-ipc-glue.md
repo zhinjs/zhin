@@ -5,6 +5,9 @@
 "@zhin.js/bridge-inbound-glue": minor
 "@zhin.js/bridge-miao-child": minor
 "@zhin.js/docs": patch
+"@zhin.js/agent": patch
 ---
 
-feat(bridge): add v1 IPC glue stack (stdio NDJSON, supervisor, outbound gate, inbound glue, NoneBot/Miao tracer children) and DX docs ([#404](https://github.com/zhinjs/zhin/issues/404)).
+feat(bridge): add v1 IPC glue stack and DX docs ([#404](https://github.com/zhinjs/zhin/issues/404)).
+
+Also: fix `phaseTrace` test to assert on `Logger.prototype.info` (matches `ZhinAgent` implementation) so CI is stable.
