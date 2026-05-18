@@ -1186,8 +1186,8 @@ importers:
         specifier: workspace:*
         version: link:../../../basic/logger
       qq-official-bot:
-        specifier: ^1.0.13
-        version: 1.0.13
+        specifier: ^1.1.2
+        version: 1.1.2
     devDependencies:
       '@types/react':
         specifier: ^19.2.14
@@ -7128,8 +7128,8 @@ packages:
     resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}
     engines: {node: '>=6'}
 
-  qq-official-bot@1.0.13:
-    resolution: {integrity: sha512-QoZ2L4BGp1JwGlmTjJtGlYUPbnLVpsTgxDnNleUr6CrY0lZmaxTLQViKPU1Y+HvfBoFmyABiV+GX4+PGHSUXRA==}
+  qq-official-bot@1.1.2:
+    resolution: {integrity: sha512-8OSzYK33U3qri6wI5bHBNPSW60iJ2jqOFGvefOY4KWzCxJz71sLx2MCU2VysEKErP4iFU9wtpstC4i2hDsQkWQ==}
     engines: {node: '>=16'}
 
   qs@6.15.0:
@@ -14077,7 +14077,7 @@ snapshots:
 
   punycode@2.3.1: {}
 
-  qq-official-bot@1.0.13:
+  qq-official-bot@1.1.2:
     dependencies:
       '@noble/curves': 1.9.7
       axios: 1.16.1
