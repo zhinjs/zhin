@@ -54,7 +54,7 @@
     "sqlite3": "latest",
     "zhin.js": "workspace:*",
     "@zhin.js/cli": "workspace:*",
-    "tsx": "^4.7.0"
+    "tsx": "^4.22.1"
   },
   "devDependencies": {
     "@radix-ui/themes": "^3.2.1",
