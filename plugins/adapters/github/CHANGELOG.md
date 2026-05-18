@@ -1,5 +1,14 @@
 # @zhin.js/adapter-github
 
+## 0.1.52
+
+### Patch Changes
+
+- 8086ccb: fix: ai 增强/优化
+- Updated dependencies [8086ccb]
+  - zhin.js@1.0.81
+  - @zhin.js/http@1.0.74
+
 ## 0.1.51
 
 ### Patch Changes

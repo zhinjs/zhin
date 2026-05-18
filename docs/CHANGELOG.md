@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.29
+
+### Patch Changes
+
+- 8086ccb: fix: ai 增强/优化
+
 ## 1.0.28
 
 ### Patch Changes

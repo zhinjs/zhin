@@ -1,5 +1,12 @@
 # @zhin.js/plugin-group-admin
 
+## 0.0.13
+
+### Patch Changes
+
+- Updated dependencies [8086ccb]
+  - zhin.js@1.0.81
+
 ## 0.0.12
 
 ### Patch Changes

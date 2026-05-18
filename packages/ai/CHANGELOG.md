@@ -1,5 +1,12 @@
 # @zhin.js/ai
 
+## 1.1.21
+
+### Patch Changes
+
+- 8086ccb: fix: ai 增强/优化
+  - @zhin.js/logger@0.1.63
+
 ## 1.1.20
 
 ### Patch Changes
