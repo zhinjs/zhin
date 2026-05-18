@@ -3,6 +3,7 @@ import type { AgentTool } from '@zhin.js/ai';
 import {
   ToolSelection,
   canAccessTool,
+  canAccessToolFromSkill,
   createRestrictedToolView,
   inferPermissionLevel,
   normalizeTool,
@@ -78,6 +79,18 @@ describe('tool-selection permissions', () => {
     expect(canAccessTool(tool, { platform: 'qq', scope: 'group', isGroupAdmin: true })).toBe(true);
     expect(canAccessTool(tool, { platform: 'qq', scope: 'private', isGroupAdmin: true })).toBe(false);
     expect(canAccessTool(tool, { platform: 'qq', scope: 'group' })).toBe(false);
+  });
+
+  it('canAccessToolFromSkill ignores platform but keeps scope and permission', () => {
+    const tool = makeTool({
+      platforms: ['github'],
+      scopes: ['private'],
+      permissionLevel: 'user',
+    });
+
+    expect(canAccessToolFromSkill(tool, { platform: 'qq', scope: 'private' })).toBe(true);
+    expect(canAccessToolFromSkill(tool, { platform: 'qq', scope: 'group' })).toBe(false);
+    expect(canAccessTool(tool, { platform: 'qq', scope: 'private' })).toBe(false);
   });
 });
 
@@ -164,10 +177,12 @@ describe('ToolSelection', () => {
       makeTool({ name: 'blocked', description: 'blocked tool', permissionLevel: 'owner', keywords: ['blocked'] }),
     ];
     const skillTool = makeTool({ name: 'deploy_tool', description: 'deploy app', keywords: ['deploy'] });
+    const deploySkill = { name: 'deploy', description: 'deploy', tools: [skillTool], pluginName: 'test', keywords: ['deploy'] };
     const skillRegistry = {
       size: 1,
-      getAll: () => [{ name: 'deploy', description: 'deploy', tools: [skillTool], pluginName: 'test', keywords: ['deploy'] }],
-      search: () => [{ name: 'deploy', description: 'deploy', tools: [skillTool], pluginName: 'test', keywords: ['deploy'] }],
+      getAll: () => [deploySkill],
+      getByName: (name: string) => (name === 'deploy' ? deploySkill : undefined),
+      search: () => [deploySkill],
     };
 
     const tools = selection.collectRelevantTools('please deploy this app', context, externalTools, {
@@ -178,6 +193,46 @@ describe('ToolSelection', () => {
 
     expect(tools.map(t => t.name)).toEqual(['activate_skill', 'deploy_tool', 'bash']);
     expect(tools.some(t => t.name === 'blocked')).toBe(false);
+  });
+
+  it('消息命中技能关键词时注入该技能工具（跨 IM 平台，如 QQ 上用 github_star）', () => {
+    const selection = new ToolSelection();
+    const context: ToolContext = { platform: 'qq', scope: 'private' };
+    const externalTools = [
+      makeTool({ name: 'activate_skill', description: 'activate a skill by name', keywords: [] }),
+      makeTool({ name: 'bash', description: 'run shell', keywords: [] }),
+    ];
+    const githubStar = makeTool({
+      name: 'github_star',
+      description: 'star a repo',
+      platforms: ['github'],
+      keywords: ['star'],
+    });
+    const skillsList = [
+      {
+        name: 'github',
+        description: 'github ops',
+        tools: [githubStar],
+        pluginName: 'adapter-github',
+        platforms: ['github'],
+        keywords: ['star', 'github'],
+      },
+    ];
+    const skillRegistry = {
+      size: 1,
+      getAll: () => skillsList,
+      getByName: (name: string) => skillsList.find(s => s.name === name),
+      search: () => [],
+    };
+
+    const tools = selection.collectRelevantTools('查看 zhinjs/qq-official-bot 的 star 数', context, externalTools, {
+      config: makeConfig({ maxSkills: 5, maxTools: 20 }),
+      skillRegistry: skillRegistry as any,
+      externalRegistered: new Map(),
+    });
+
+    expect(tools.map(t => t.name)).toContain('github_star');
+    expect(tools.map(t => t.name)).toContain('activate_skill');
   });
 
   it('当 context.platform 命中技能 platforms 时自动注入 activate_skill（消息无需含技能名）', () => {
@@ -201,6 +256,7 @@ describe('ToolSelection', () => {
     const skillRegistry = {
       size: 1,
       getAll: () => skillsList,
+      getByName: (name: string) => skillsList.find(s => s.name === name),
       search: () => [],
     };
 

@@ -30,7 +30,10 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     agent.setHostPlugin(root);
 
     const orchestrator = root.inject('agent');
-    if (orchestrator) agent.setSkillRegistry(orchestrator.skills);
+    if (orchestrator) {
+      agent.setSkillRegistry(orchestrator.skills);
+      agent.setOrchestrator(orchestrator);
+    }
 
     // Model Registry: discover models and wire to agent
     const dataDir = path.join(process.cwd(), 'data');

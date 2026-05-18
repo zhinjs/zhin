@@ -21,6 +21,7 @@ import {
   autoCompactIfNeeded,
   createAutoCompactTracking,
   estimateMessagesTokens,
+  microCompactMessages,
 } from '../compaction/index.js';
 import type { AutoCompactTrackingState } from '../compaction/index.js';
 
@@ -117,7 +118,7 @@ export interface AgentEvents {
  */
 export class Agent {
   private provider: AIProvider;
-  private config: Required<Pick<AgentConfig, 'provider' | 'model' | 'systemPrompt' | 'tools' | 'maxIterations' | 'temperature'>> & Pick<AgentConfig, 'contextWindow' | 'maxConcurrentTools' | 'modelFallbacks' | 'turnTimeout' | 'transformToolResult'>;
+  private config: Required<Pick<AgentConfig, 'provider' | 'model' | 'systemPrompt' | 'tools' | 'maxIterations' | 'temperature'>> & Pick<AgentConfig, 'contextWindow' | 'maxConcurrentTools' | 'modelFallbacks' | 'turnTimeout' | 'transformToolResult' | 'forceMicroCompactEachTurn'>;
   private tools: Map<string, AgentTool> = new Map();
   private eventHandlers: Map<keyof AgentEvents, Function[]> = new Map();
 
@@ -135,6 +136,7 @@ export class Agent {
       maxConcurrentTools: config.maxConcurrentTools,
       turnTimeout: config.turnTimeout,
       transformToolResult: config.transformToolResult,
+      forceMicroCompactEachTurn: config.forceMicroCompactEachTurn,
     };
 
     // 注册工具
@@ -263,6 +265,18 @@ export class Agent {
   /**
    * 获取工具定义（缓存在第一次调用后保持不变）
    */
+  private applyForcedMicroCompact(messages: ChatMessage[]): ChatMessage[] {
+    if (!this.config.forceMicroCompactEachTurn) return messages;
+    const compacted = microCompactMessages(messages, {
+      keepRecentToolResults: 2,
+      force: true,
+    });
+    if (compacted.didCompact) {
+      logger.debug(`[micro-compact] 强制清理 ${compacted.clearedCount} 条工具结果，节省约 ${compacted.savedTokens} tokens`);
+    }
+    return compacted.messages;
+  }
+
   private getToolDefinitions(): ChatToolDefinition[] {
     return Array.from(this.tools.values()).map(tool => ({
       type: 'function',
@@ -633,6 +647,7 @@ export class Agent {
             });
           }
 
+          state.messages = this.applyForcedMicroCompact(state.messages);
           continue;
         }
 
@@ -930,6 +945,8 @@ export class Agent {
           }
         }
 
+        const compacted = this.applyForcedMicroCompact(messages);
+        messages.splice(0, messages.length, ...compacted);
         continue;
       }
 

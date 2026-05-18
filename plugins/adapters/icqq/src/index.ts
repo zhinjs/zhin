@@ -2,7 +2,14 @@
  * ICQQ 适配器入口：类型扩展、导出、注册
  */
 import path from "path";
-import { usePlugin, type Plugin, type ToolFeature } from "zhin.js";
+import {
+  usePlugin,
+  type Plugin,
+  type ToolFeature,
+  registerAgentPromptContributor,
+  unregisterAgentPromptContributor,
+} from "zhin.js";
+import { createIcqqAgentPromptContributor } from "./agent-prompt.js";
 import type { Router } from "@zhin.js/http";
 import { PageManager } from "@zhin.js/console";
 import { IcqqAdapter } from "./adapter.js";
@@ -34,11 +41,13 @@ provide({
   name: "icqq",
   description: "ICQQ Adapter",
   mounted: async (p: Plugin) => {
+    registerAgentPromptContributor(createIcqqAgentPromptContributor());
     const adapter = new IcqqAdapter(p);
     await adapter.start();
     return adapter;
   },
   dispose: async (adapter: IcqqAdapter) => {
+    unregisterAgentPromptContributor("icqq");
     await adapter.stop();
   },
 } as any);

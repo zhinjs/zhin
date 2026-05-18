@@ -50,7 +50,7 @@ _避免使用_：preload、setup action、preflight
 
 ## 关系
 
-- **ZhinAgent** 通过 **Agent Orchestrator** 发现 **Tool**、**Skill**、**Subagent** 与 Hook；MCP 服务端条目可在 Orchestrator 上注册（`addMcp`），但连接与工具并入 ZhinAgent 工具池尚未贯通（见下方歧义）。
+- **ZhinAgent** 通过 **Agent Orchestrator** 发现 **Tool**、**Skill**、**Subagent** 与 Hook；MCP 条目经 `addMcp` / `ai.mcpServers` / 可选 `ai.memoryMcp`（`server-memory`）注册，在每次 AI 回合前懒连接，工具以 `mcp_{server}_{tool}` 并入工具池（不再使用内置 `read_memory`/`write_memory`）。
 - **Tool Selection** 在 **Permission Level** 检查后把 **Tool** 转换为 **AgentTool**。
 - **Tool Runtime** 基于 **Tool Selection** 的结果补充上下文工具，并决定 **Pre-executable Tool** 是走快速路径还是完整 Agent 路径。
 - **Skill** 可以在通用相关性过滤前贡献 Tool。
@@ -67,5 +67,5 @@ _避免使用_：preload、setup action、preflight
 
 - “tool” 过去同时指 Zhin 运行时工具和 Provider 工具。已决议：**Tool** 是面向 Zhin 的契约；**AgentTool** 是 `@zhin.js/ai` 的契约。
 - “maxTokens” 过去混用了生成预算和上下文容量。已决议：**Context Budget** 表示历史/模型窗口；生成限制仍属于模型或 Provider 选项。
-- **MCP Client 端到端**：`McpRegistry` 提供注册与 `connect` API；`mcp-client/` 含 `McpClientManager`（需可选依赖 `@modelcontextprotocol/sdk`）与 `bridge.ts`（MCP 能力 → `AgentTool`）。当前 `McpRegistry.connect()` 不委托真实连接，ZhinAgent `collectRuntimeTools` 不合并 MCP 工具。与 `plugins/services/mcp`（MCP **Server**）不同。对照表见 [docs/doc-code-audit.md](./docs/doc-code-audit.md)。
+- **MCP Client vs Server**：Client（`mcp-client/`）消费外部 MCP 工具；`plugins/services/mcp` 为 MCP **Server**（向外暴露 Zhin 工具）。SDK 为可选 peer；单 server 连接失败不阻塞 AI 回合。
 

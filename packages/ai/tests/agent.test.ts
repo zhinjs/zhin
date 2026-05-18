@@ -522,6 +522,26 @@ describe('Agent.filterTools 程序化过滤', () => {
     expect(result.length).toBeGreaterThanOrEqual(1);
     expect(result[0].name).toBe('clock_read');
   });
+
+  it('icqq 意图应优先 icqq_* 工具并压低 MCP', () => {
+    const tools = [
+      createMockTool({ name: 'icqq_send_user_like', description: '点赞' }),
+      createMockTool({ name: 'mcp_filesystem_search_files', description: 'search friend files' }),
+      createMockTool({ name: 'bash', description: 'shell' }),
+    ] as any[];
+    const result = Agent.filterTools('icqq friend like 1659488338', tools, { maxTools: 3 });
+    expect(result[0]?.name).toBe('icqq_send_user_like');
+  });
+
+  it('tool_query 精确工具名应优先于 MCP 泛匹配', () => {
+    const tools = [
+      createMockTool({ name: 'weather', description: '城市天气' }),
+      createMockTool({ name: 'mcp_filesystem_read_text_file', description: 'Read file from disk' }),
+      createMockTool({ name: 'mcp_filesystem_search_files', description: 'Search files' }),
+    ] as any[];
+    const result = Agent.filterTools('weather', tools, { maxTools: 3, minScore: 0.08 });
+    expect(result[0]?.name).toBe('weather');
+  });
 });
 
 describe('Agent run 带过滤选项', () => {

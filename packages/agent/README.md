@@ -93,7 +93,7 @@ const result = await agent.run('你好')
 | 输出与检测 | `parseOutput`, `renderToPlainText`, `renderToSatori`, `detectTone` |
 | 子代理 | `SubagentManager` |
 | 编排 | `AgentOrchestrator`、`ToolRegistry`、`SkillRegistry`、`SubAgentRegistry`、`McpRegistry`、`HookRegistry` |
-| MCP 客户端 | `McpClientManager`、`McpClientConnection`、`mcpToolToAgentTool`（见下方「MCP」；端到端未贯通） |
+| MCP 客户端 | `McpClientManager`、`McpClientConnection`、`mcpToolToAgentTool`、`ensureMcpConnections`（见下方「MCP」） |
 | 限流 | `RateLimiter` |
 | 存储抽象 | `StorageBackend`, `MemoryStorageBackend`, `DatabaseStorageBackend`, `createSwappableBackend` |
 
@@ -123,14 +123,21 @@ declare module '@zhin.js/core' {
 
 ## MCP（Client）
 
-编排层可 `addMcp` 注册外部 MCP Server 条目；`mcp-client/` 提供 `McpClientManager` 与 `mcpToolToAgentTool`（需可选安装 `@modelcontextprotocol/sdk`）。
+默认**不**注册 `@modelcontextprotocol/server-memory`；设 `ai.memoryMcp: true` 启用（`data/knowledge-graph.jsonl`）。另可通过 `ai.mcpServers`（或 `ctx.agent.addMcp`）注册更多 Server；每次 AI 回合前懒连接，`mcp_{server}_{tool}` 并入 ZhinAgent 工具池。需可选安装 `@modelcontextprotocol/sdk`（peer dependency）。
 
-**当前限制**（与 [CONTEXT.md](./CONTEXT.md)、[docs/doc-code-audit.md](./docs/doc-code-audit.md) 一致）：
+**记忆**：内置 `read_memory` / `write_memory` 已移除，请使用 `mcp_memory_read_graph`、`mcp_memory_create_entities` 等。工作区 `AGENTS.md` 仍由 bootstrap 注入。
 
-- `McpRegistry.connect()` 尚未委托 `McpClientManager` 建立真实连接；
-- ZhinAgent `collectRuntimeTools` **不会**自动合并 MCP 工具。
+```yaml
+ai:
+  memoryMcp: true   # 默认 false，显式开启
+  mcpServers:
+    - name: filesystem
+      transport: stdio
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/zhin-mcp-test"]
+```
 
-与 **`plugins/services/mcp`**（MCP **Server**，向外暴露 Zhin 工具）是不同方向，勿混淆。
+**限制**：单 server 连接失败仅 warn，不阻塞回合；resources/prompts 暂不注入模型。与 **`plugins/services/mcp`**（MCP **Server**）方向相反。验收见 [examples/test-bot/ACCEPTANCE.md](../../examples/test-bot/ACCEPTANCE.md)。
 
 ## 多 Agent 使用方式
 

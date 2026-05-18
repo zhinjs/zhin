@@ -159,7 +159,7 @@ graph TB
 | `ToolRegistry` | IM 工具权限（`ToolPermissionLevel`）、`ZhinTool` 契约、与 `@zhin.js/ai` 过滤集成 |
 | `SkillRegistry` | Skill 注册、按名索引、评分搜索 |
 | `SubAgentRegistry` | 子代理定义 + AgentPreset 并存注册 |
-| `McpRegistry` | MCP Server 条目注册；`connect` API 已有，真实连接与工具聚合尚未委托 `mcp-client`（见下） |
+| `McpRegistry` | MCP Server 条目注册；`connect` / `ensureConnected` 委托 `McpClientManager` |
 | `HookRegistry` | AI 生命周期 Hook（错误隔离触发） |
 | `ResourceRegistry<T>` | 通用注册表基类（公共 vs 专有、增删与监听） |
 
@@ -183,11 +183,11 @@ graph TB
 
 | 模块 | 说明 |
 |------|------|
-| `McpClientManager` | 多连接管理（需可选 `@modelcontextprotocol/sdk`）；**尚未**由 `McpRegistry.connect()` 委托 |
-| `McpClientConnection` | 单个 MCP Server 连接生命周期与状态 |
-| `bridge` | MCP 能力到 `AgentTool` 的转换（`mcp-client/bridge.ts`） |
+| `McpClientManager` | 多连接管理（需可选 `@modelcontextprotocol/sdk`） |
+| `McpClientConnection` | 单个 MCP Server 连接生命周期（stdio / streamable-http / sse） |
+| `bridge` | MCP 能力到 `AgentTool`（`mcp_{server}_{tool}`） |
 
-ZhinAgent `collectRuntimeTools` 当前不合并 MCP 工具。与 `plugins/services/mcp`（MCP **Server**，向外暴露 Zhin 工具）方向相反。详见 [packages/agent/CONTEXT.md](../packages/agent/CONTEXT.md)。
+ZhinAgent 在 AI 回合前 `ensureConnected`，`collectRuntimeTools` 合并 MCP 工具。配置：`ai.mcpServers`。与 `plugins/services/mcp`（MCP **Server**）方向相反。
 
 #### 顶层模块
 

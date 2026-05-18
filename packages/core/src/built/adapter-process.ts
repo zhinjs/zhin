@@ -24,11 +24,11 @@ export class ProcessBot implements Bot<{ owner?: string },{content:string,ts:num
             $adapter: 'process',
             $bot: `${process.pid}`,
             $sender: {
-                id: `${process.pid}`,
-                name: process.title,
+                id: `${process.env.USER}`,
+                name: process.env.USER,
             },
             $channel: {
-                id: `${process.pid}`,
+                id: `${process.env.USER}`,
                 type: 'private',
             },
             $content: [{type:'text',data:{text:event.content}}],
@@ -42,7 +42,7 @@ export class ProcessBot implements Bot<{ owner?: string },{content:string,ts:num
                     context: 'process',
                     bot: base.$bot,
                     content,
-                    id: base.$id,
+                    id: base.$sender.id,
                     type: base.$channel.type,
                 });
             },

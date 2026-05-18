@@ -74,7 +74,11 @@ GITHUB_APP_ID=123456
 GITHUB_WEBHOOK_SECRET=your-secret
 GITHUB_CLIENT_ID=Iv1.xxxxxxxxxx
 GITHUB_CLIENT_SECRET=xxxxxxxxxxxx
+# MCP server-github（适配器自动 addMcp，与 App 认证独立）
+GITHUB_PERSONAL_ACCESS_TOKEN=ghp_xxxxxxxxxxxx
 ```
+
+或在 `zhin.config.yml` 中设置 `ai.githubMcp.token`（优先于环境变量）。
 
 `private_key` 支持两种写法：
 - 文件路径：`./data/github-app.pem`
@@ -91,27 +95,20 @@ GitHub adapter 将 Issue/PR 映射为聊天频道：
 
 ## AI 工具
 
-适配器自动注册以下工具供 AI 调用：
+### 适配器内置（Zhin 专有）
 
-| 工具 | 说明 | 操作 |
-|------|------|------|
-| `github.pr` | PR 管理 | list / view / diff / merge / create / review / close |
-| `github.issue` | Issue 管理 | list / view / create / close / comment |
-| `github.repo` | 仓库查询 | info / branches / releases / runs(CI) / stars |
-| `github.search` | 全局搜索 | issues / repos / code |
-| `github.label` | 标签管理 | list / add / remove |
-| `github.assign` | 指派管理 | add / remove |
-| `github.file` | 读取仓库文件 | 返回文件内容或目录列表 |
-| `github.commits` | 提交查询 | list / compare |
-| `github.edit` | 编辑 Issue/PR | 修改标题、正文、状态 |
-| `github.subscribe` | 订阅事件通知 | 订阅仓库的 push/issue/star/fork/pr 事件 |
-| `github.unsubscribe` | 取消订阅 | — |
-| `github.subscriptions` | 查看订阅列表 | — |
-| `github.bind` | 绑定 GitHub 账号 | 生成 OAuth 授权链接 |
-| `github.unbind` | 解除绑定 | — |
-| `github.whoami` | 查看绑定信息 | — |
-| `github.star` | Star / Unstar 仓库 | 需要用户绑定 OAuth |
-| `github.fork` | Fork 仓库 | 需要用户绑定 OAuth |
+| 工具 | 说明 |
+|------|------|
+| `github_star` | Star / Unstar / 检查（per-user OAuth 或 Bot 默认） |
+| `github_bind` / `github_unbind` / `github_whoami` | 用户 GitHub 账号绑定 |
+| `github_install` | GitHub App 安装链接 |
+| `github_subscribe` / `github_unsubscribe` / `github_subscriptions` | 频道级 Webhook 订阅 |
+
+### MCP（`@modelcontextprotocol/server-github`）
+
+配置 `GITHUB_PERSONAL_ACCESS_TOKEN`（或 `ai.githubMcp.token`）后，适配器通过 `orchestrator.addMcp` 注册 `github` server；AI 侧工具名为 `mcp_github_*`（如 `mcp_github_fork_repository`、`mcp_github_create_issue`）。
+
+**BREAKING**：`github_fork` 已移除，请改用 `mcp_github_fork_repository`。
 
 ### 使用示例
 
@@ -127,7 +124,7 @@ AI: 对比 zhinjs/zhin 的 main 和 dev 分支
 AI: 编辑 zhinjs/zhin 的 issue #42 标题
 AI: 绑定我的 GitHub 账号
 AI: star zhinjs/zhin
-AI: fork zhinjs/zhin
+AI: fork zhinjs/zhin   # 使用 mcp_github_fork_repository
 ```
 
 ## Webhook 事件通知

@@ -303,6 +303,8 @@ export interface AgentConfig {
    * 用于 Owner 确认注入等编排；应保持幂等、避免长时间阻塞整批并发工具。
    */
   transformToolResult?: ToolResultTransform;
+  /** 每轮 tool 执行后强制 micro-compact（toolSearch Worker 路径） */
+  forceMicroCompactEachTurn?: boolean;
 }
 
 /** Agent 运行结果 */
@@ -392,6 +394,28 @@ export interface AIConfig {
     /** 自定义总结提示词 */
     summaryPrompt?: string;
   };
+  /**
+   * Opt-in: register @modelcontextprotocol/server-memory (knowledge graph in data/knowledge-graph.jsonl).
+   * Default off. Set true to enable; or add a server named "memory" under ai.mcpServers.
+   */
+  memoryMcp?: boolean;
+  /** PAT for adapter-github auto-registered server-github MCP (overrides env when set). */
+  githubMcp?: {
+    token?: string;
+  };
+  /**
+   * External MCP servers for the Agent MCP client (global, all bots).
+   * Listed servers are exposed to ZhinAgent tool pool when connected.
+   */
+  mcpServers?: Array<{
+    name: string;
+    transport: 'stdio' | 'streamable-http' | 'sse';
+    url?: string;
+    command?: string;
+    args?: string[];
+    env?: Record<string, string>;
+    headers?: Record<string, string>;
+  }>;
   /** Agent 工具开关与执行安全 */
   agent?: {
     /** 禁用的工具名列表，这些工具不会下发给 AI */
@@ -415,6 +439,11 @@ export interface AIConfig {
       /** provider 模式覆盖（支持 * 通配符） */
       providerPatterns?: Record<string, { maxIterations?: number }>;
     };
+    /** 启用 deferred + 同步 Worker 编排模式 */
+    toolSearch?: boolean;
+    toolSearchMaxResults?: number;
+    toolSearchOrchestratorTools?: string[];
+    toolSearchWorkerBaseTools?: string[];
   };
   /** AI 触发配置 */
   trigger?: {

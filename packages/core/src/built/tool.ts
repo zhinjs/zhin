@@ -387,6 +387,11 @@ export class ToolFeature extends Feature<Tool> {
     const zhinTool = isZhinTool(toolInput) ? toolInput : null;
     const tool: Tool = zhinTool ? zhinTool.toTool() : toolInput as Tool;
 
+    // Re-register (e.g. adapter hot-reload) must not leave duplicate entries in items[]
+    if (this.byName.has(tool.name)) {
+      this.removeTool(tool.name);
+    }
+
     const toolWithSource: Tool = {
       ...tool,
       source: tool.source || `plugin:${pluginName}`,

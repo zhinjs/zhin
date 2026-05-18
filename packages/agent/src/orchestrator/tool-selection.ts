@@ -117,6 +117,12 @@ export function canAccessTool(tool: Tool, context: ToolContext): boolean {
   return hasPermissionLevel(inferPermissionLevel(context), tool.permissionLevel || 'user');
 }
 
+/** 技能关联工具：跨 IM 平台可用（如 QQ 上 star 仓库），仅校验 scope/权限。 */
+export function canAccessToolFromSkill(tool: Tool, context: ToolContext): boolean {
+  if (tool.scopes?.length && (!context.scope || !tool.scopes.includes(context.scope))) return false;
+  return hasPermissionLevel(inferPermissionLevel(context), tool.permissionLevel || 'user');
+}
+
 export function createRestrictedToolView(
   tools: AgentTool[],
   options: RestrictedToolViewOptions = {},
@@ -274,6 +280,7 @@ export class ToolSelection {
     const collected: AgentTool[] = [];
     const collectedNames = new Set<string>();
     const platformOnlySkillToolNames = new Set<string>();
+    const mentionedSkillToolNames = new Set<string>();
 
     let mentionedSkill: string | null = null;
     if (skillRegistry && skillRegistry.size > 0) {
@@ -309,6 +316,23 @@ export class ToolSelection {
         collectedNames.add('activate_skill');
         logger.debug(`[技能激活] 已提前加入 activate_skill 工具（优先级最高）`);
       }
+      const skillByName = skillRegistry && typeof skillRegistry.getByName === 'function'
+        ? skillRegistry.getByName(mentionedSkill)
+        : undefined;
+      if (skillByName) {
+        for (const tool of skillByName.tools) {
+          if (!canAccessToolFromSkill(tool, context)) continue;
+          if (collectedNames.has(tool.name)) continue;
+          collected.push(this.normalize(tool, context));
+          collectedNames.add(tool.name);
+          mentionedSkillToolNames.add(tool.name);
+        }
+        if (mentionedSkillToolNames.size > 0) {
+          logger.debug(
+            `[技能工具] 已注入 ${mentionedSkill} 的 ${mentionedSkillToolNames.size} 个工具（跨平台）`,
+          );
+        }
+      }
     }
 
     if (skillRegistry) {
@@ -327,7 +351,7 @@ export class ToolSelection {
 
       for (const skill of skills) {
         for (const tool of skill.tools) {
-          if (!canAccessTool(tool, context)) continue;
+          if (!canAccessToolFromSkill(tool, context)) continue;
           if (collectedNames.has(tool.name)) continue;
           collected.push(this.normalize(tool, context));
           collectedNames.add(tool.name);
@@ -379,6 +403,13 @@ export class ToolSelection {
 
     /** 仅因「来源平台」合并进来的技能：其工具与用户句可能无语义重叠，仍须保留 */
     for (const name of platformOnlySkillToolNames) {
+      if (filtered.some(t => t.name === name)) continue;
+      const t = collected.find(x => x.name === name);
+      if (t) filtered.unshift(t);
+    }
+
+    /** 消息命中技能名/关键词时注入的工具：与 activate_skill 指引一致，须保留 */
+    for (const name of mentionedSkillToolNames) {
       if (filtered.some(t => t.name === name)) continue;
       const t = collected.find(x => x.name === name);
       if (t) filtered.unshift(t);

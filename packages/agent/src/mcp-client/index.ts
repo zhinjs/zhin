@@ -1,8 +1,7 @@
 /**
  * McpClientManager — manages all MCP client connections.
  *
- * Works with McpRegistry to auto-connect/disconnect and
- * bridge tools into the ToolRegistry.
+ * Used by McpRegistry for connect/disconnect; tools are merged in ZhinAgent via getAllMcpTools.
  */
 
 import type { AgentTool } from '@zhin.js/ai';

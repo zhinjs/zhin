@@ -69,12 +69,36 @@ export function filterTools(
   // ── 评分 ──
   const scored: { tool: AgentTool; score: number }[] = [];
 
+  const queryTrimmed = message.trim().toLowerCase();
+  const icqqIntent = /\bicqq\b/i.test(message) || /friend\s+like|点赞.*qq|qq.*点赞/i.test(message);
+
   for (const tool of tools) {
     if (tool.permissionLevel != null && tool.permissionLevel > callerPerm) {
       continue;
     }
 
     let score = 0;
+    const nameLower = tool.name.toLowerCase();
+
+    // 0. 工具名精确 / 整词匹配（Worker tool_query 优先命中如 weather、github_star）
+    if (queryTrimmed.length >= 2) {
+      if (nameLower === queryTrimmed) {
+        score += 8.0;
+      } else if (nameLower.includes(queryTrimmed) || queryTrimmed.includes(nameLower)) {
+        score += 4.0;
+      }
+    }
+    for (const mw of msgTokens) {
+      if (mw === nameLower) score += 8.0;
+      else if (nameLower === mw || nameLower.includes(mw)) score += 3.0;
+    }
+
+    if (icqqIntent) {
+      if (nameLower.startsWith('mcp_icqq_')) score += 7.0;
+      else if (nameLower.startsWith('icqq_')) score += 6.0;
+      else if (nameLower === 'bash') score += 2.0;
+      else if (nameLower.startsWith('mcp_')) score *= 0.12;
+    }
 
     // 1. keywords（最高基础权重）
     if (tool.keywords?.length) {

@@ -1,9 +1,20 @@
 /**
  * GitHub 适配器入口：类型扩展、模型、导出、注册
  */
-import { usePlugin, type Plugin, type Context, type ToolFeature, type Tool, type ToolContext } from 'zhin.js';
+import {
+  usePlugin,
+  type Plugin,
+  type Context,
+  type ToolFeature,
+  type Tool,
+  type ToolContext,
+  registerAgentPromptContributor,
+  unregisterAgentPromptContributor,
+} from 'zhin.js';
+import { createGithubAgentPromptContributor } from './agent-prompt.js';
 import { GitHubAdapter } from './adapter.js';
 import { GhClient } from './gh-client.js';
+import { registerGithubMcp } from './register-github-mcp.js';
 import type { EventType } from './types.js';
 
 declare module 'zhin.js' {
@@ -43,6 +54,8 @@ export { GhClient } from './gh-client.js';
 const plugin = usePlugin();
 const { provide, defineModel, useContext, logger } = plugin;
 
+registerGithubMcp(plugin);
+
 defineModel('github_subscriptions', {
   id: { type: 'integer', primary: true },
   repo: { type: 'text', nullable: false },
@@ -73,11 +86,13 @@ provide({
   name: 'github',
   description: 'GitHub Adapter — Issues/PRs as chat channels, full repo management via gh CLI',
   mounted: async (p: Plugin) => {
+    registerAgentPromptContributor(createGithubAgentPromptContributor());
     const adapter = new GitHubAdapter(p);
     await adapter.start();
     return adapter;
   },
   dispose: async (adapter: GitHubAdapter) => {
+    unregisterAgentPromptContributor('github');
     await adapter.stop();
   },
 } as Context<'github'>);
@@ -121,7 +136,6 @@ useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) 
         },
         required: ['action', 'repo'],
       },
-      platforms: ['github'],
       tags: ['github'],
       execute: async (args: Record<string, any>, context?: ToolContext) => {
         const gh = await adapter.getUserOrDefaultAPI(context?.platform, context?.senderId);
@@ -142,27 +156,6 @@ useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) 
           }
           default: return `❌ 未知操作: ${action}`;
         }
-      },
-    },
-    // --- Fork ---
-    {
-      name: 'github_fork',
-      description: 'Fork 一个 GitHub 仓库（使用你绑定的 GitHub 账号，未绑定则用 Bot 默认账号）',
-      parameters: {
-        type: 'object' as const,
-        properties: {
-          repo: { type: 'string' as const, description: 'owner/repo (必填)' },
-        },
-        required: ['repo'],
-      },
-      platforms: ['github'],
-      tags: ['github'],
-      execute: async (args: Record<string, any>, context?: ToolContext) => {
-        const gh = await adapter.getUserOrDefaultAPI(context?.platform, context?.senderId);
-        if (!gh) return '❌ 没有可用的 GitHub bot';
-        const r = await gh.forkRepo(args.repo);
-        if (!r.ok) return `❌ ${r.data?.message || JSON.stringify(r.data)}`;
-        return `🍴 已 Fork ${args.repo} → ${r.data.full_name}\n🔗 ${r.data.html_url}`;
       },
     },
     // --- Bind (Device Flow) ---

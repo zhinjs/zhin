@@ -126,6 +126,25 @@ describe('ToolFeature', () => {
         items: [],
       });
     });
+
+    it('同名工具重复注册不应在 items 中留下重复项', () => {
+      const def = {
+        name: 'github_star',
+        description: 'star',
+        parameters: { type: 'object' as const, properties: {} },
+        execute: async () => 'v1',
+      };
+      const dispose1 = feature.addTool(def, 'adapter-github');
+      expect(feature.getAll()).toHaveLength(1);
+      const dispose2 = feature.addTool(
+        { ...def, description: 'star v2', execute: async () => 'v2' },
+        'adapter-github',
+      );
+      expect(feature.getAll()).toHaveLength(1);
+      expect(feature.get('github_star')?.description).toBe('star v2');
+      dispose2();
+      dispose1();
+    });
   });
 
   describe('filterByContext', () => {

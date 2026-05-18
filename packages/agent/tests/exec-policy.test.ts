@@ -26,11 +26,13 @@ import {
   extractCommandName,
   resolveExecAllowlist,
   checkExecPolicy,
+  applyExecPolicyToTools,
   EXEC_PRESETS,
 } from '../src/security/exec-policy.js';
 import type { ZhinAgentConfig } from '../src/zhin-agent/config.js';
 import { addBashApproveRule } from '../src/security/owner-approve-always-store.js';
-import { runWithBashToolContext } from '../src/security/bash-tool-context.js';
+import { runWithBashToolContext, runWithDirectAgentExecution } from '../src/security/bash-tool-context.js';
+import type { AgentTool } from '@zhin.js/ai';
 
 // ── Helpers ──
 
@@ -402,5 +404,30 @@ describe('checkExecPolicy', () => {
       getDataSpy.mockRestore();
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
+  });
+
+  it('directExecution：子 Agent 作用域内跳过 execAsk 审批门并执行 bash', async () => {
+    const config = makeConfig({
+      execSecurity: 'allowlist',
+      execPreset: 'custom',
+      execAllowlist: ['echo'],
+      execAsk: true,
+    });
+    const base: AgentTool = {
+      name: 'bash',
+      description: 'bash',
+      parameters: { type: 'object', properties: { command: { type: 'string' } } },
+      execute: async (args: Record<string, unknown>) => `ran:${args.command}`,
+    };
+    const [wrapped] = applyExecPolicyToTools(config, [base]);
+    const ctx = { platform: 'test', botId: 'b1' };
+
+    const blocked = await wrapped.execute!({ command: 'curl example.com' });
+    expect(String(blocked).startsWith('ZHIN_NEEDS_OWNER:\n')).toBe(true);
+
+    const ran = await runWithDirectAgentExecution(ctx, () =>
+      wrapped.execute!({ command: 'curl example.com' }),
+    );
+    expect(ran).toBe('ran:curl example.com');
   });
 });

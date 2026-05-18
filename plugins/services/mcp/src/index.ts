@@ -87,10 +87,14 @@ function createMcpServer(toolFeature: ToolFeature | null): McpServer {
   registerResources(server);
   registerPrompts(server);
 
-  // 从 ToolFeature 读取所有注册的工具，暴露给外部 MCP 客户端
+  // 从 ToolFeature 读取所有注册的工具，暴露给外部 MCP 客户端（按 name 去重）
   if (toolFeature) {
+    const runtimeTools = new Map<string, Tool>();
     for (const tool of toolFeature.getAll()) {
       if (tool.hidden) continue;
+      runtimeTools.set(tool.name, tool);
+    }
+    for (const tool of runtimeTools.values()) {
       server.registerTool(
         tool.name,
         {

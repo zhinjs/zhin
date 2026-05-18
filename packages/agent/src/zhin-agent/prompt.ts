@@ -96,6 +96,10 @@ export interface RichSystemPromptContext {
   skillsSummaryXML: string;
   activeSkillsContext: string;
   bootstrapContext: string;
+  /** toolSearch 模式：deferred 域统计，如 github(8), mcp(26) */
+  toolSearchDeferredStats?: string;
+  /** Per-platform markdown from AgentPromptContributor (§6c). */
+  platformSections?: string;
 }
 
 // ── Section builders ──
@@ -123,7 +127,7 @@ function buildIdentitySection(config: Required<ZhinAgentConfig>): string {
     `CWD: ${cwd}`,
     `Platform: ${os.platform()} | Node ${process.version} | Shell: ${process.env.SHELL || 'unknown'}`,
     `Time: ${timeStr} (${tz})`,
-    `Memory: data/memory/MEMORY.md, data/memory/${todayStr}.md`,
+    `File memory: data/memory/MEMORY.md, data/memory/${todayStr}.md (knowledge-graph MCP: enable ai.memoryMcp)`,
   ];
 
   return [
@@ -189,16 +193,40 @@ function buildActionsSection(): string {
  * §5 Using Your Tools
  * 参考 Claude Code: getUsingYourToolsSection — 专用工具优先、并行调用
  */
-function buildUsingToolsSection(): string {
-  const items = [
-    'Prefer dedicated tools over bash: read_file, edit_file, write_file, glob, grep.',
-    'Call independent tools in parallel; dependent tools sequentially.',
-    'web_search: one tight query; summarize for the user—no raw dumps, no extra searches unless prior results were empty or useless.',
-    'Complex tasks → todo_write to track. Long tasks → spawn_task.',
-    'Skill install → install_skill(url) then activate_skill.',
-  ];
+function buildUsingToolsSection(toolSearchActive: boolean): string {
+  const items = toolSearchActive
+    ? [
+      'Orchestrator only: tool_search (browse deferred catalog), run_deferred_task (execute deferred work), ask_user.',
+      'All real work runs in the Worker via run_deferred_task — never call deferred tool names on this orchestrator.',
+      'Simple lookups → run_deferred_task immediately with goal + tool_query from the user message. Skip tool_search unless the domain is unclear.',
+      'Follow the Platform section below for adapter-specific tool_query hints when present.',
+      'Never call mcp_*, github_*, or other deferred tool names directly on this orchestrator.',
+      'spawn_task only when the user explicitly asks for background/async work.',
+    ]
+    : [
+      'Prefer dedicated tools over bash: read_file, edit_file, write_file, glob, grep.',
+      'Call independent tools in parallel; dependent tools sequentially.',
+      'web_search: one tight query; summarize for the user—no raw dumps, no extra searches unless prior results were empty or useless.',
+      'Complex tasks → todo_write to track. Long tasks → spawn_task.',
+      'Skill install → install_skill(url) then activate_skill.',
+    ];
 
   return ['# Tools', ...prependBullets(items)].join('\n');
+}
+
+function buildPlatformSection(platformSections: string | undefined): string | null {
+  const body = platformSections?.trim();
+  if (!body) return null;
+  return `# Platform\n\n${body}`;
+}
+
+function buildToolSearchDeferredSection(deferredStats: string | undefined): string | null {
+  if (!deferredStats) return null;
+  const items = [
+    `Deferred catalog domains: ${deferredStats}.`,
+    'bash and read_file run inside the Worker, not on this orchestrator.',
+  ];
+  return ['# Deferred tools', ...prependBullets(items)].join('\n');
 }
 
 /**
@@ -219,7 +247,24 @@ function buildCommunicationSection(): string {
 /**
  * §7 Skills
  */
-function buildSkillsSection(skillRegistry: SkillRegistry | null, skillsSummaryXML: string): string | null {
+function buildSkillsSection(
+  skillRegistry: SkillRegistry | null,
+  skillsSummaryXML: string,
+  toolSearchActive: boolean,
+): string | null {
+  if (toolSearchActive) {
+    if (!skillsSummaryXML && (!skillRegistry || skillRegistry.size === 0)) return null;
+    const body = skillsSummaryXML
+      || (skillRegistry
+        ? skillRegistry.getAll().map(s => ` - ${s.name}: ${s.description}`).join('\n')
+        : '');
+    return [
+      '# Skills (reference)',
+      body,
+      '',
+      'Skills are not activated on the orchestrator. Use run_deferred_task(goal, tool_query) instead.',
+    ].join('\n');
+  }
   if (skillsSummaryXML) {
     return '# Available Skills\n\n' + skillsSummaryXML + '\n\nIf the user message matches a skill (name/keywords) OR the chat platform matches a skill\'s `platforms` in frontmatter, call activate_skill(name) when you need that skill\'s full instructions—then follow them.';
   }
@@ -263,7 +308,11 @@ export interface PromptSectionDebugInfo {
  * 用于观测渐进披露与 token 压力，不改变线上 prompt 拼接逻辑。
  */
 export function describePromptSectionsForDebug(ctx: RichSystemPromptContext): PromptSectionDebugInfo[] {
-  const { config, skillRegistry, skillsSummaryXML, activeSkillsContext, bootstrapContext } = ctx;
+  const {
+    config, skillRegistry, skillsSummaryXML, activeSkillsContext, bootstrapContext,
+    toolSearchDeferredStats, platformSections,
+  } = ctx;
+  const toolSearchActive = !!config.toolSearch;
   const boot = bootstrapContext?.trim() ? bootstrapContext : null;
   const pairs: [string, string | null][] = [
     ['§1_identity_environment', buildIdentitySection(config)],
@@ -271,9 +320,11 @@ export function describePromptSectionsForDebug(ctx: RichSystemPromptContext): Pr
     ['§3_discipline', buildDisciplineSection()],
     ['§4_doing_tasks', buildDoingTasksSection()],
     ['§5_action_safety', buildActionsSection()],
-    ['§6_tools', buildUsingToolsSection()],
+    ['§6_tools', buildUsingToolsSection(toolSearchActive)],
+    ['§6c_platform', buildPlatformSection(platformSections)],
+    ['§6b_deferred', buildToolSearchDeferredSection(toolSearchDeferredStats)],
     ['§7_style', buildCommunicationSection()],
-    ['§8_skills', buildSkillsSection(skillRegistry, skillsSummaryXML)],
+    ['§8_skills', buildSkillsSection(skillRegistry, skillsSummaryXML, toolSearchActive)],
     ['§9_active_skills', buildActiveSkillsSection(activeSkillsContext)],
     ['§10_memory', buildMemorySection()],
     ['§11_bootstrap', boot],
@@ -284,7 +335,11 @@ export function describePromptSectionsForDebug(ctx: RichSystemPromptContext): Pr
 }
 
 export function buildRichSystemPrompt(ctx: RichSystemPromptContext): string {
-  const { config, skillRegistry, skillsSummaryXML, activeSkillsContext, bootstrapContext } = ctx;
+  const {
+    config, skillRegistry, skillsSummaryXML, activeSkillsContext, bootstrapContext,
+    toolSearchDeferredStats, platformSections,
+  } = ctx;
+  const toolSearchActive = !!config.toolSearch;
 
   const sections: (string | null)[] = [
     // Static sections (stable across turns)
@@ -293,14 +348,30 @@ export function buildRichSystemPrompt(ctx: RichSystemPromptContext): string {
     buildDisciplineSection(),           // §3
     buildDoingTasksSection(),           // §4
     buildActionsSection(),              // §5
-    buildUsingToolsSection(),           // §6
+    buildUsingToolsSection(toolSearchActive),           // §6
+    buildPlatformSection(platformSections),
+    buildToolSearchDeferredSection(toolSearchDeferredStats),
     buildCommunicationSection(),        // §7
     // Dynamic sections (vary per session/turn)
-    buildSkillsSection(skillRegistry, skillsSummaryXML),  // §8
+    buildSkillsSection(skillRegistry, skillsSummaryXML, toolSearchActive),  // §8
     buildActiveSkillsSection(activeSkillsContext),        // §9
     buildMemorySection(),               // §10
     bootstrapContext || null,           // §11
   ];
 
   return sections.filter(Boolean).join(SECTION_SEP);
+}
+
+/** Vision / lite paths: persona + optional platform + context hint. */
+export function buildLiteSystemPromptWithPlatform(
+  personaBlock: string,
+  platformSections?: string,
+  contextHint?: string,
+): string {
+  const parts: string[] = [personaBlock.trim()];
+  const platform = buildPlatformSection(platformSections);
+  if (platform) parts.push(platform);
+  const hint = contextHint?.trim();
+  if (hint) parts.push(hint);
+  return parts.join('\n\n');
 }

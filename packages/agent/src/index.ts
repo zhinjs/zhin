@@ -105,6 +105,7 @@ export {
 export type { OwnerOrchestrationOptions } from './orchestrator/owner-confirm-orchestration.js';
 export {
   buildRichSystemPrompt,
+  buildLiteSystemPromptWithPlatform,
   buildContextHint,
   buildEnhancedPersona,
   buildUserMessageWithHistory,
@@ -112,6 +113,17 @@ export {
   describePromptSectionsForDebug,
 } from './zhin-agent/prompt.js';
 export type { RichSystemPromptContext, PromptSectionDebugInfo } from './zhin-agent/prompt.js';
+export {
+  registerAgentPromptContributor,
+  unregisterAgentPromptContributor,
+  getAgentPromptContributor,
+  clearAgentPromptContributors,
+  resolveAgentPromptSections,
+  resolveAgentPromptMarkdown,
+  resolveDeferredToolsForPlatform,
+  formatAgentPromptSectionsMarkdown,
+} from './agent-prompt/index.js';
+export type { ResolveAgentPromptOptions } from './agent-prompt/index.js';
 export { createChatHistoryTool, createUserProfileTool, createSpawnTaskTool } from './zhin-agent/builtin-tools.js';
 
 export { UserProfileStore, AI_USER_PROFILE_MODEL } from './user-profile.js';
@@ -192,16 +204,6 @@ export {
   createTodoWriteTool,
   TODO_WRITE_PARAMETERS,
 } from './builtin/todo-write-tool.js';
-export {
-  ReadMemoryBuiltinTool,
-  createReadMemoryTool,
-  READ_MEMORY_PARAMETERS,
-} from './builtin/read-memory-tool.js';
-export {
-  WriteMemoryBuiltinTool,
-  createWriteMemoryTool,
-  WRITE_MEMORY_PARAMETERS,
-} from './builtin/write-memory-tool.js';
 export {
   ActivateSkillBuiltinTool,
   createActivateSkillTool,

@@ -27,6 +27,7 @@ export const COMPACTABLE_TOOLS = new Set([
   'web_fetch', 'web_search', 'fetch',
   'list_dir', 'list_directory',
   'read_notebook', 'run_notebook',
+  'activate_skill', 'tool_search', 'run_deferred_task',
 ]);
 
 /** 被清理后的占位文本 */
@@ -75,10 +76,12 @@ function findToolNameForResult(
 export interface MicroCompactOptions {
   /** 保留最近 N 条工具结果不清理 */
   keepRecentToolResults?: number;
-  /** 仅当总 token 超过此阈值时才执行微压缩 */
+  /** 仅当总 token 超过此阈值时才执行微压缩（force 为 true 时忽略） */
   tokenThreshold?: number;
   /** 可压缩的工具名集合（默认使用 COMPACTABLE_TOOLS） */
   compactableTools?: Set<string>;
+  /** 跳过 token 阈值检查，强制执行清理 */
+  force?: boolean;
 }
 
 export interface MicroCompactResult {
@@ -111,7 +114,7 @@ export function microCompactMessages(
   }
 
   // 如果设置了 token 阈值，先检查是否需要压缩
-  if (options.tokenThreshold) {
+  if (options.tokenThreshold != null && !options.force) {
     const totalTokens = messages.reduce((sum, m) => sum + estimateTokens(m), 0);
     if (totalTokens <= options.tokenThreshold) {
       return { messages, clearedCount: 0, savedTokens: 0, didCompact: false };

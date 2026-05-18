@@ -27,7 +27,10 @@ const DEFAULT_MAX_AUTO_ASK = 3;
 
 export interface OwnerOrchestrationOptions {
   toolContext: ToolContext;
-  /** 子 Agent 内为 true：仅保留信号，不执行 B */
+  /**
+   * 子 Agent / Worker 内为 true：不自动 ask_user（阶段 B）。
+   * 须配合 {@link runWithDirectAgentExecution}，否则 bash 仍可能只返回 `ZHIN_NEEDS_OWNER` 而不执行。
+   */
   disableHardOrchestration?: boolean;
   /** 每根任务自动 ask_user 上限，默认 3 */
   maxAutoOwnerAsk?: number;

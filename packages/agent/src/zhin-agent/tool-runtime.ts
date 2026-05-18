@@ -1,4 +1,5 @@
-import type { AgentTool } from '@zhin.js/ai';
+import { isReservedToolName, type AgentTool } from '@zhin.js/ai';
+import { Logger } from '@zhin.js/core';
 import type { Tool, ToolContext } from '../orchestrator/types.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { ZhinAgentConfig } from './config.js';
@@ -13,6 +14,9 @@ import type { UserProfileStore } from '../user-profile.js';
 import type { SubagentManager } from '../subagent.js';
 import { runPreExecutableTools, type PreExecuteResult } from './pre-exec.js';
 import { sharedToolSelection } from '../orchestrator/tool-selection.js';
+import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from '../reserved-tools.js';
+
+const logger = new Logger(null, 'ToolRuntime');
 
 export interface CollectRuntimeToolsOptions {
   content: string;
@@ -26,6 +30,8 @@ export interface CollectRuntimeToolsOptions {
   memory: ConversationMemory;
   userProfiles: UserProfileStore;
   subagentManager: SubagentManager | null;
+  /** MCP tools from connected servers (merged after skill/tool selection). */
+  mcpTools?: AgentTool[];
 }
 
 export function collectRuntimeTools(options: CollectRuntimeToolsOptions): AgentTool[] {
@@ -49,6 +55,17 @@ export function collectRuntimeTools(options: CollectRuntimeToolsOptions): AgentT
   }
   if (options.subagentManager && KEYWORD_TRIGGERS.spawnTask.test(options.content)) {
     add(createSpawnTaskTool(options.context, options.subagentManager));
+  }
+
+  for (const mcpTool of options.mcpTools ?? []) {
+    if (isReservedToolName(mcpTool.name, {
+      reservedNames: RESERVED_TOOL_NAMES,
+      reservedPrefixes: RESERVED_TOOL_NAME_PREFIXES,
+    })) {
+      logger.warn(`[MCP] Skipping tool "${mcpTool.name}": conflicts with reserved tool name`);
+      continue;
+    }
+    add(mcpTool);
   }
 
   return tools;

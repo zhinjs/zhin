@@ -27,4 +27,29 @@ describe('Prompt discipline block', () => {
     expect(prompt.indexOf('# Discipline')).toBeGreaterThan(-1);
     expect(prompt.indexOf('# Discipline')).toBeLessThan(prompt.indexOf('# Doing tasks'));
   });
+
+  it('toolSearch 通用段不含平台硬编码', () => {
+    const prompt = buildRichSystemPrompt({
+      config: { ...DEFAULT_CONFIG, toolSearch: true },
+      skillRegistry: null,
+      skillsSummaryXML: '',
+      activeSkillsContext: '',
+      bootstrapContext: '',
+    });
+    expect(prompt).not.toMatch(/mcp_icqq/);
+    expect(prompt).toContain('Platform section below');
+  });
+
+  it('platformSections 注入 §6c', () => {
+    const prompt = buildRichSystemPrompt({
+      config: { ...DEFAULT_CONFIG, toolSearch: true },
+      skillRegistry: null,
+      skillsSummaryXML: '',
+      activeSkillsContext: '',
+      bootstrapContext: '',
+      platformSections: 'icqq custom hint',
+    });
+    expect(prompt).toContain('# Platform');
+    expect(prompt).toContain('icqq custom hint');
+  });
 });

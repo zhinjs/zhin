@@ -14,7 +14,7 @@ import type { AgentTool } from '@zhin.js/core';
 import { getPlugin } from '@zhin.js/core';
 import type { ZhinAgentConfig } from '../zhin-agent/config.js';
 import { classifyBashCommand } from './file-policy.js';
-import { getCurrentBashToolContext } from './bash-tool-context.js';
+import { getCurrentBashToolContext, isDirectAgentExecution } from './bash-tool-context.js';
 import {
   isIcqqSensitiveSubcommand,
   matchesBashOwnerExecBypass,
@@ -312,6 +312,9 @@ export function applyExecPolicyToTools(config: Required<ZhinAgentConfig>, tools:
         const result = checkExecPolicy(config, cmd);
         if (!result.allowed) {
           if (result.needsApproval) {
+            if (isDirectAgentExecution()) {
+              return original(args);
+            }
             // 权威首行 + 正文：硬编排识别；与旧「请使用 ask_user」话术合并为单套
             return `ZHIN_NEEDS_OWNER:\n⚠️ ${result.reason}\n\n此 shell 命令需 Bot Owner 审批后方可执行。`;
           }

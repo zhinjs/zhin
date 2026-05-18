@@ -102,6 +102,20 @@ export interface AgentBootstrapEvent extends AIHookEvent {
   };
 }
 
+/** Agent 系统提示平台段解析（sections 可变，供 hook 追加） */
+export interface AgentPromptHookEvent extends AIHookEvent {
+  type: 'agent';
+  action: 'prompt';
+  context: {
+    slot: import('@zhin.js/core').AgentPromptSlot;
+    toolContext: import('@zhin.js/core').ToolContext;
+    toolSearch: boolean;
+    userMessagePreview?: string;
+    deferred?: import('@zhin.js/core').AgentPromptBuildContext['deferred'];
+    sections: import('@zhin.js/core').AgentPromptSection[];
+  };
+}
+
 /** 工具调用事件 */
 export interface ToolCallEvent extends AIHookEvent {
   type: 'tool';

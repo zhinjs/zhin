@@ -21,12 +21,13 @@ If enabled, `HEARTBEAT.md` is checked periodically. Manage task lists via `edit_
 ## Completed
 
 - Session compaction, hooks, bootstrap files
-- Structured system prompt
+- Structured system prompt (11 segments)
 - Skill-tool association
 - Subagent (spawn_task) support
+- MCP Client: `ai.mcpServers` + lazy connect on AI turn (see `ACCEPTANCE.md`)
 
 ## TODO
 
-- [ ] Validate all new features
+- [ ] Complete P0 items in [ACCEPTANCE.md](./ACCEPTANCE.md)
 - [ ] Performance benchmarks
 - [ ] Collect user feedback

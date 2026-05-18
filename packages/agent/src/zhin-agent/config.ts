@@ -95,7 +95,35 @@ export interface ZhinAgentConfig {
   modelHarness?: ModelHarnessConfig;
   /** 输出回合 phase 观测日志（或通过 ZHIN_AGENT_PHASE_TRACE 环境变量开启） */
   phaseTrace?: boolean;
+  /** 启用 Claude Code 式 deferred + 同步 Worker（主 Agent 仅编排） */
+  toolSearch?: boolean;
+  /** Worker 侧 TF-IDF 载入 deferred 工具数量上限 */
+  toolSearchMaxResults?: number;
+  /** toolSearch 模式下主 Agent 常驻工具名 */
+  toolSearchOrchestratorTools?: string[];
+  /** toolSearch 模式下 Worker 基础工具（另加 TF-IDF 载入的 deferred） */
+  toolSearchWorkerBaseTools?: string[];
+  /** 单轮平台 prompt 段 body 上限（字符） */
+  platformPromptSectionMaxChars?: number;
+  /** 单 slot 平台 prompt 合计上限（字符） */
+  platformPromptMaxChars?: number;
 }
+
+/** toolSearch 主 Agent 默认常驻（不含 activate_skill：执行一律经 Worker） */
+export const DEFAULT_TOOL_SEARCH_ORCHESTRATOR_TOOLS = [
+  'tool_search',
+  'run_deferred_task',
+  'ask_user',
+] as const;
+
+/** toolSearch 模式下不进入主编排也不进入 deferred 目录 */
+export const TOOL_SEARCH_EXCLUDED_TOOLS = ['activate_skill', 'install_skill'] as const;
+
+/** toolSearch Worker 默认基础工具 */
+export const DEFAULT_TOOL_SEARCH_WORKER_BASE_TOOLS = [
+  'bash',
+  'read_file',
+] as const;
 
 export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   persona: 'You are Zhin, an intelligent IM bot assistant. You help users through conversation and by using the tools provided to you. You are running inside the Zhin.js framework. You can ONLY perform actions through your available tools — never pretend to have capabilities you don\'t have.',
@@ -126,6 +154,12 @@ export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   skillInstructionMaxChars: 0,
   modelHarness: {},
   phaseTrace: false,
+  toolSearch: false,
+  toolSearchMaxResults: 5,
+  toolSearchOrchestratorTools: [...DEFAULT_TOOL_SEARCH_ORCHESTRATOR_TOOLS],
+  toolSearchWorkerBaseTools: [...DEFAULT_TOOL_SEARCH_WORKER_BASE_TOOLS],
+  platformPromptSectionMaxChars: 2048,
+  platformPromptMaxChars: 4096,
 };
 
 /** `env` 参数主要用于测试注入，运行时默认读取 `process.env`。 */

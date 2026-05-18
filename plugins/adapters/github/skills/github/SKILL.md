@@ -3,9 +3,9 @@ name: github
 platforms:
   - github
 description: >-
-  GitHub 全功能适配器技能：通过适配器内置工具完成用户交互操作（Star/Fork/账号绑定/Webhook 订阅/App 安装），
-  通过 bash + gh CLI 完成仓库自动化操作（Issue/PR/Release/CI/搜索/文件/Discussion）。
-  Bot 操作使用 GitHub App 身份，Star/Fork 等用户操作使用个人绑定的 OAuth Token。
+  GitHub 全功能适配器技能：内置工具处理 Star/绑定/订阅；MCP server-github 处理 Fork/PR/Issue 等 API；
+  bash + gh CLI 覆盖其余仓库自动化。
+  Bot 操作使用 GitHub App 身份；Star 等可使用用户 OAuth 绑定。
   每个 Zhin 实例通过 GH_TOKEN 环境变量注入身份，支持多实例协同。
   channel ID 格式：owner/repo/issues/N 或 owner/repo/pull/N。
 keywords:
@@ -53,7 +53,6 @@ tags:
 tools:
   - bash
   - github_star
-  - github_fork
   - github_bind
   - github_unbind
   - github_whoami
@@ -71,8 +70,9 @@ requires:
 
 # GitHub 全功能操作指南
 
-本技能提供两种操作方式：
+本技能提供三种操作方式：
 - **适配器内置工具**（`github_*`）：用户交互类操作，具备账号绑定、Device Flow 授权、频道级订阅等适配器专有逻辑
+- **MCP server-github**（`mcp_github_*`）：Issue/PR/搜索/Fork 等 GitHub API（需 `GITHUB_PERSONAL_ACCESS_TOKEN` 或 `ai.githubMcp.token`）
 - **bash + gh CLI**：仓库自动化操作，灵活覆盖 GitHub API 全场景
 
 ## 一、适配器内置工具
@@ -93,7 +93,13 @@ requires:
 | 工具 | 说明 |
 |------|------|
 | `github_star` | Star 或取消 Star 一个仓库。优先使用用户绑定的 GitHub 账号，未绑定则降级为 Bot 默认账号 |
-| `github_fork` | Fork 一个仓库。优先使用用户绑定的 GitHub 账号，未绑定则降级为 Bot 默认账号 |
+
+### MCP（server-github，单一 PAT）
+
+| 工具 | 说明 |
+|------|------|
+| `mcp_github_fork_repository` | Fork 仓库（替代已移除的 `github_fork`） |
+| `mcp_github_create_issue` 等 | Issue/PR/搜索/文件等，见 MCP 工具列表 |
 
 ### Webhook 订阅（频道级）
 
@@ -105,9 +111,10 @@ requires:
 
 ### 内置工具执行规则
 
-1. `github_star` 和 `github_fork` 优先使用用户绑定的 GitHub 账号，未绑定则降级为 Bot 默认账号
-2. 当用户想操作自己的 GitHub 账号时，先引导用户使用 `github_bind` 绑定
-3. Webhook 订阅关联到当前聊天通道，仅在该通道接收事件通知
+1. `github_star` 优先使用用户绑定的 GitHub 账号，未绑定则降级为 Bot 默认账号
+2. Fork 与通用 API 使用 `mcp_github_*`（Bot PAT，非 per-user OAuth）
+3. 当用户想操作自己的 GitHub 账号进行 Star 时，先引导用户使用 `github_bind` 绑定
+4. Webhook 订阅关联到当前聊天通道，仅在该通道接收事件通知
 
 ---
 

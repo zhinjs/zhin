@@ -5,7 +5,7 @@
  * Shell:     bash（builtin/bash-tool）
  * 网络:      web_search, web_fetch（builtin/web-*-tool）
  * 计划:      todo_read, todo_write（builtin/todo-*-tool）
- * 记忆:      read_memory, write_memory（builtin/read-memory-tool, write-memory-tool）
+ * 记忆 MCP:  mcp_memory_*（ai.memoryMcp: true 时注册 server-memory）
  * 技能:      activate_skill, install_skill（builtin/activate-skill-tool, install-skill-tool）
  * 交互:      ask_user（builtin/ask-user-tool）
  *
@@ -25,8 +25,6 @@ import { createWebSearchTool } from './builtin/web-search-tool.js';
 import { createWebFetchTool } from './builtin/web-fetch-tool.js';
 import { createTodoReadTool } from './builtin/todo-read-tool.js';
 import { createTodoWriteTool } from './builtin/todo-write-tool.js';
-import { createReadMemoryTool } from './builtin/read-memory-tool.js';
-import { createWriteMemoryTool } from './builtin/write-memory-tool.js';
 import { createActivateSkillTool } from './builtin/activate-skill-tool.js';
 import { createInstallSkillTool } from './builtin/install-skill-tool.js';
 import { createAskUserTool } from './builtin/ask-user-tool.js';
@@ -70,9 +68,6 @@ export function createBuiltinTools(options: BuiltinToolsOptions): ToolInput[] {
   tools.push(createWebFetchTool());
   tools.push(createTodoReadTool(DATA_DIR));
   tools.push(createTodoWriteTool(DATA_DIR));
-
-  tools.push(createReadMemoryTool(DATA_DIR));
-  tools.push(createWriteMemoryTool(DATA_DIR));
 
   tools.push(
     createActivateSkillTool({

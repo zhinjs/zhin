@@ -5,9 +5,13 @@
  * tools/resources/prompts into the agent's resource pool.
  */
 
+import { Logger } from '@zhin.js/core';
 import type { AgentTool } from '@zhin.js/ai';
+import { McpClientManager } from '../mcp-client/index.js';
 import { ResourceRegistry } from './resource-registry.js';
-import type { McpServerEntry, McpResource, McpPrompt } from './types.js';
+import type { McpServerEntry, McpResource, McpPrompt, ResourceScope } from './types.js';
+
+const logger = new Logger(null, 'McpRegistry');
 
 export interface McpConnection {
   name: string;
@@ -18,6 +22,7 @@ export interface McpConnection {
 }
 
 export class McpRegistry extends ResourceRegistry<McpServerEntry> {
+  private readonly manager = new McpClientManager();
   private readonly connections = new Map<string, McpConnection>();
 
   async connect(name: string): Promise<McpConnection> {
@@ -27,30 +32,36 @@ export class McpRegistry extends ResourceRegistry<McpServerEntry> {
     const existing = this.connections.get(name);
     if (existing?.connected) return existing;
 
+    const clientConn = await this.manager.connect(entry);
     const connection: McpConnection = {
       name,
-      connected: false,
-      tools: [],
-      resources: [],
-      prompts: [],
+      connected: clientConn.isConnected,
+      tools: clientConn.tools,
+      resources: clientConn.resources,
+      prompts: clientConn.prompts,
     };
-
-    try {
-      // MCP client connection will be implemented in mcp-client/ module
-      // For now, mark as connected with empty capabilities
-      connection.connected = true;
-      this.connections.set(name, connection);
-    } catch (err: any) {
-      throw err;
-    }
-
+    this.connections.set(name, connection);
     return connection;
   }
 
+  /** Lazy-connect all registered servers; per-server failures are logged, not thrown. */
+  async ensureConnected(): Promise<void> {
+    for (const entry of this.getAll()) {
+      if (this.isConnected(entry.name)) continue;
+      try {
+        await this.connect(entry.name);
+        if (!this.isConnected(entry.name)) {
+          logger.warn(`MCP server "${entry.name}" is registered but not connected (check SDK or server config)`);
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        logger.warn(`MCP server "${entry.name}" connect failed: ${message}`);
+      }
+    }
+  }
+
   disconnect(name: string): void {
-    const connection = this.connections.get(name);
-    if (!connection) return;
-    connection.connected = false;
+    void this.manager.disconnect(name);
     this.connections.delete(name);
   }
 
@@ -82,10 +93,15 @@ export class McpRegistry extends ResourceRegistry<McpServerEntry> {
     return this.connections.get(name)?.connected ?? false;
   }
 
+  override remove(name: string, scope?: ResourceScope): boolean {
+    const ok = super.remove(name, scope);
+    if (ok) this.disconnect(name);
+    return ok;
+  }
+
   override dispose(): void {
-    for (const name of this.connections.keys()) {
-      this.disconnect(name);
-    }
+    void this.manager.disconnectAll();
+    this.connections.clear();
     super.dispose();
   }
 }

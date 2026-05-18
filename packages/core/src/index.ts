@@ -78,6 +78,7 @@ export type {
 } from '@zhin.js/ai'
 
 export * from './types.js'
+export * from './agent-prompt.js'
 export * from './utils.js'
 export * from './errors.js'  // 导出错误处理系统
 export * from './cron.js'

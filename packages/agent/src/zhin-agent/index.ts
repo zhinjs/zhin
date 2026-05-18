@@ -20,6 +20,8 @@ import { Logger, getPlugin, type Plugin } from '@zhin.js/core';
 import type { AIProvider, AgentTool, ChatMessage, ContentPart } from '@zhin.js/ai';
 import type { Tool, ToolContext } from '../orchestrator/types.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
+import type { AgentOrchestrator } from '../orchestrator/index.js';
+import { ensureMcpConnections } from '../orchestrator/mcp-lifecycle.js';
 import { createAgent } from '@zhin.js/ai';
 import { SessionManager, createMemorySessionManager } from '@zhin.js/ai';
 import type { ContextManager } from '@zhin.js/ai';
@@ -36,6 +38,7 @@ import { RateLimiter } from '@zhin.js/ai';
 import { detectTone } from '@zhin.js/ai';
 import { SubagentManager, type SubagentResultSender } from '../subagent.js';
 import { triggerAIHook, createAIHookEvent } from '../hooks.js';
+import { resolveAgentPromptMarkdown } from '../agent-prompt/index.js';
 
 // ── Sub-modules ─────────────────────────────────────────────────────
 import {
@@ -50,6 +53,7 @@ import {
   buildEnhancedPersona,
   buildContextHint,
   buildRichSystemPrompt,
+  buildLiteSystemPromptWithPlatform,
   buildUserMessageWithHistory,
   FIXED_DISCIPLINE_RULES,
 } from './prompt.js';
@@ -58,6 +62,9 @@ import {
   collectRuntimeTools,
   planToolRun,
 } from './tool-runtime.js';
+import { DeferredWorkerRunner } from '../deferred-worker-runner.js';
+import { buildOrchestratorAgentTools } from './tool-search-orchestrator.js';
+import { filterToolsForToolSearchCatalog } from './tool-catalog.js';
 import { stripHallucinatedToolCalls, stripThinkBlocks } from './text-sanitize.js';
 import { pruneHistoryWithBudget } from './context-budget.js';
 import { resolveModelHarness } from './model-harness.js';
@@ -77,6 +84,7 @@ export class ZhinAgent {
   private provider: AIProvider;
   private config: Required<ZhinAgentConfig>;
   private skillRegistry: SkillRegistry | null = null;
+  private orchestrator: AgentOrchestrator | null = null;
   private sessions: SessionManager;
   private contextManager: ContextManager | null = null;
   private memory: ConversationMemory;
@@ -91,6 +99,9 @@ export class ZhinAgent {
   private phaseTraceEnabled: boolean;
   /** 根插件（createZhinAgentContext 注入）；避免在 Agent.run 路径依赖 AsyncLocalStorage 上的 getPlugin() */
   private hostPlugin: Plugin | null = null;
+  private deferredCatalog: AgentTool[] = [];
+  private readonly deferredWorkerRunner = new DeferredWorkerRunner();
+  private lastToolSearchDeferredStats?: string;
 
   constructor(provider: AIProvider, config?: ZhinAgentConfig) {
     this.provider = provider;
@@ -112,6 +123,11 @@ export class ZhinAgent {
   setSkillRegistry(registry: SkillRegistry): void {
     this.skillRegistry = registry;
     logger.debug(`SkillRegistry connected (${registry.size} skills)`);
+  }
+
+  setOrchestrator(orchestrator: AgentOrchestrator): void {
+    this.orchestrator = orchestrator;
+    logger.debug('AgentOrchestrator connected for MCP and resources');
   }
 
   setSessionManager(manager: SessionManager): void {
@@ -256,8 +272,14 @@ export class ZhinAgent {
       platform: platform || '',
     })).catch(() => {});
 
+    // 0.9 Lazy-connect configured MCP servers before tool collection
+    if (this.orchestrator) {
+      await ensureMcpConnections(this.orchestrator.mcps);
+    }
+
     // 1. Collect tools
     const tFilter = now();
+    const mcpTools = this.orchestrator?.mcps.getAllMcpTools() ?? [];
     const allTools = collectRuntimeTools({
       content,
       context: contextForTools,
@@ -270,12 +292,21 @@ export class ZhinAgent {
       memory: this.memory,
       userProfiles: this.userProfiles,
       subagentManager: this.subagentManager,
+      mcpTools,
     });
 
-    const filterMs = (now() - tFilter).toFixed(0);
-    this.logPhase('tools.collected', sessionId, { count: allTools.length });
+    const { tools: resolvedTools, deferredStats } = this.resolveAgentToolsForTurn(
+      allTools,
+      contextForTools,
+    );
+    this.lastToolSearchDeferredStats = deferredStats;
 
-    logger.info(`[工具过滤] ${allTools.length} 个工具: ${allTools.map(t => t.name).join(', ') || '(无)'}`);
+    const filterMs = (now() - tFilter).toFixed(0);
+    this.logPhase('tools.collected', sessionId, { count: resolvedTools.length });
+
+    logger.info(
+      `[工具过滤] ${resolvedTools.length} 个工具${this.config.toolSearch ? ' (toolSearch 编排)' : ''}: ${resolvedTools.map(t => t.name).join(', ') || '(无)'}`,
+    );
 
     // 2. History + profile (parallel)
     const tMem = now();
@@ -334,7 +365,7 @@ export class ZhinAgent {
     if (preExecCandidates.length > 0) {
       logger.debug(`预执行: ${preExecCandidates.map(t => t.name).join(', ')}`);
     }
-    const toolRun = await planToolRun(allTools, this.config.preExecTimeout);
+    const toolRun = await planToolRun(resolvedTools, this.config.preExecTimeout);
     this.logPhase('preexec.done', sessionId, {
       mode: toolRun.mode,
       preExecutedTools: toolRun.preExecution.tools.length,
@@ -363,12 +394,26 @@ export class ZhinAgent {
       logger.debug(`Agent 路径: ${allTools.length} 个工具`);
       const contextHint = buildContextHint(context, content);
 
+      const platformMarkdown = await resolveAgentPromptMarkdown({
+        ctx: {
+          slot: 'orchestrator',
+          toolContext: context,
+          toolSearch: !!this.config.toolSearch,
+          userMessagePreview: content.slice(0, 500),
+          deferred: deferredStats ? { goal: content, domainStats: deferredStats } : undefined,
+        },
+        config: this.config,
+        sessionId,
+      });
+
       const richPrompt = buildRichSystemPrompt({
         config: this.config,
         skillRegistry: this.skillRegistry,
         skillsSummaryXML: this.skillsSummaryXML,
         activeSkillsContext: this.activeSkillsContext,
         bootstrapContext: this.bootstrapContext,
+        toolSearchDeferredStats: deferredStats,
+        platformSections: platformMarkdown,
       });
       const systemPrompt = `${richPrompt}
 ${contextHint}
@@ -377,7 +422,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       logger.info(`[System Prompt] ${systemPrompt.length} chars`);
       logger.debug(`[System Prompt Full]\n${systemPrompt}\n---END---`);
 
-      const agentTools = applyExecPolicyToTools(this.config, allTools);
+      const agentTools = applyExecPolicyToTools(this.config, resolvedTools);
 
       // Adaptive maxIterations: boost when skills are active (multi-step skill flows)
       const SKILL_ITERATION_BOOST = 3;
@@ -442,6 +487,56 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
 
     this.logPhase('turn.end', sessionId, { path: toolRun.mode === 'pre-exec-fast-path' ? 'fast' : 'agent' });
     return parseOutput(reply);
+  }
+
+  private resolveAgentToolsForTurn(
+    allTools: AgentTool[],
+    context: ToolContext,
+  ): { tools: AgentTool[]; deferredStats?: string } {
+    if (!this.config.toolSearch) {
+      return { tools: allTools };
+    }
+    const toolSearchPool = filterToolsForToolSearchCatalog(allTools);
+    const built = buildOrchestratorAgentTools({
+      allTools: toolSearchPool,
+      config: this.config,
+      context,
+      getDeferredCatalog: () => this.deferredCatalog,
+      runWorker: (goal, toolQuery) => this.runDeferredWorker(goal, toolQuery, context, toolSearchPool),
+    });
+    this.deferredCatalog = built.deferred;
+    logger.info(
+      `[toolSearch] orchestrator=${built.orchestratorTools.length} deferred=${built.deferred.length} (${built.domainStats})`,
+    );
+    return { tools: built.orchestratorTools, deferredStats: built.domainStats };
+  }
+
+  private async runDeferredWorker(
+    goal: string,
+    toolQuery: string | undefined,
+    context: ToolContext,
+    allTools: AgentTool[],
+  ): Promise<string> {
+    const allByName = new Map(allTools.map(t => [t.name, t]));
+    const workerBase: AgentTool[] = [];
+    for (const name of this.config.toolSearchWorkerBaseTools) {
+      const t = allByName.get(name);
+      if (t) workerBase.push(t);
+    }
+    const result = await this.deferredWorkerRunner.runSync({
+      goal,
+      toolQuery,
+      deferredCatalog: this.deferredCatalog,
+      workerBaseTools: workerBase,
+      allToolsByName: allByName,
+      origin: context,
+      maxToolResults: this.config.toolSearchMaxResults,
+      execPolicyConfig: this.config,
+      modelRegistry: this.modelRegistry,
+      provider: this.provider,
+      maxIterations: this.config.maxSubagentIterations,
+    });
+    return result.summary;
   }
 
   private buildDisciplinedPrompt(basePrompt: string): string {
@@ -509,6 +604,21 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     }
 
     const textContent = textFragments.join(' ') || '[多模态消息]';
+    const platformMarkdown = await resolveAgentPromptMarkdown({
+      ctx: {
+        slot: 'orchestrator',
+        toolContext: context,
+        toolSearch: !!this.config.toolSearch,
+        userMessagePreview: textContent.slice(0, 500),
+      },
+      config: this.config,
+      sessionId,
+    });
+    const visionSystemPrompt = buildLiteSystemPromptWithPlatform(
+      personaEnhanced,
+      platformMarkdown,
+      buildContextHint(context, textContent),
+    );
     const visionCandidates = this.resolveModelCandidates('vision');
     const { messages: historyMessages, result: pruneResult } = pruneHistoryWithBudget({
       messages: rawHistoryMessages,
@@ -522,7 +632,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     }
 
     const messages: ChatMessage[] = [
-      { role: 'system', content: personaEnhanced },
+      { role: 'system', content: visionSystemPrompt },
       ...historyMessages,
       { role: 'user', content: llmParts },
     ];
