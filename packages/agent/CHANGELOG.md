@@ -1,5 +1,14 @@
 # @zhin.js/agent
 
+## 0.1.21
+
+### Patch Changes
+
+- 8086ccb: fix: ai 增强/优化
+- Updated dependencies [8086ccb]
+  - @zhin.js/core@1.1.23
+  - @zhin.js/ai@1.1.21
+
 ## 0.1.20
 
 ### Patch Changes

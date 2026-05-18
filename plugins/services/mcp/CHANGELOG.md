@@ -1,5 +1,13 @@
 # @zhin.js/mcp
 
+## 1.0.63
+
+### Patch Changes
+
+- 8086ccb: fix: ai 增强/优化
+- Updated dependencies [8086ccb]
+  - zhin.js@1.0.81
+
 ## 1.0.62
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.16
+
+### Patch Changes
+
+- Updated dependencies [8086ccb]
+  - zhin.js@1.0.81
+
 ## 0.0.15
 
 ### Patch Changes

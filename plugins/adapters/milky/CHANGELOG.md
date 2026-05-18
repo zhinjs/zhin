@@ -1,5 +1,13 @@
 # @zhin.js/adapter-milky
 
+## 0.0.31
+
+### Patch Changes
+
+- Updated dependencies [8086ccb]
+  - zhin.js@1.0.81
+  - @zhin.js/http@1.0.74
+
 ## 0.0.30
 
 ### Patch Changes
