@@ -41,11 +41,11 @@
   },
   "devDependencies": {
     "@zhin.js/cli": "workspace:*",
-    "@types/node": "^25.7.0",
+    "@types/node": "^25.8.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@zhin.js/console": "workspace:*",
-    "lucide-react": "^1.14.0",
+    "lucide-react": "^1.16.0",
     "typescript": "^6.0.3",
     "zhin.js": "workspace:*"
   },
