@@ -53,14 +53,6 @@ jobs:
       
       - name: build packages
         run: pnpm build
-      
-      - name: type check
-        run: |
-          set -e
-          for pkg in bridge-ipc bridge-supervisor bridge-outbound-gate bridge-inbound-glue bridge-miao-child; do
-            echo "==> tsc --noEmit packages/$pkg"
-            pnpm exec tsc --noEmit -p "packages/$pkg/tsconfig.json"
-          done
 
       - name: harness IM send-path check
         run: pnpm check:harness-paths

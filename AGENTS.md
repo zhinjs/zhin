@@ -10,7 +10,7 @@ Use the default five-label triage vocabulary: `needs-triage`, `needs-info`, `rea
 
 ### Domain docs
 
-Use a multi-context domain documentation layout with root `CONTEXT-MAP.md`, system ADRs in `docs/adr/`, and context-local `CONTEXT.md` / ADRs where applicable. See `docs/agents/domain.md`. **Bridge v1 glue (DX, packages, e2e):** `docs/bridge/index.md` (issue [#413](https://github.com/zhinjs/zhin/issues/413)).
+Use a multi-context domain documentation layout with root `CONTEXT-MAP.md`, system ADRs in `docs/adr/`, and context-local `CONTEXT.md` / ADRs where applicable. See `docs/agents/domain.md`.
 
 ### 可靠的开发流程 (`reliable-dev-workflow`, generic skill)
 

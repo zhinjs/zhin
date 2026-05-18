@@ -208,7 +208,6 @@ src/
 ├── mcp-client/                      # ★ MCP 客户端
 │   ├── index.ts                     # McpClientManager
 │   ├── connection.ts                # 单连接生命周期
-│   └── bridge.ts                    # MCP -> AgentTool/Resource/Prompt 桥接
 │
 ├── service.ts                       # AIService（保留，对接 Orchestrator）
 │

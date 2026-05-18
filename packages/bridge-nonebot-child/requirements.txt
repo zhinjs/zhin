@@ -1,4 +1,0 @@
-# Pin file for non-uv installs (`pip install -r requirements.txt`).
-# Prefer `uv sync` in this directory (see README).
-nonebot2>=2.3,<3
-nonebot-adapter-console>=0.9,<0.11
