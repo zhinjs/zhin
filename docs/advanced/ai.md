@@ -91,7 +91,7 @@ flowchart TD
 - **BootstrapLoader** - 引导文件加载（SOUL.md / AGENTS.md / TOOLS.md）
 - **ExecPolicy** - Bash 执行安全策略（6 层纵深防御）
 - **FilePolicy** - 文件访问安全验证（路径检查、设备路径拦截、命令读写分类）
-- **PromptBuilder** - 系统提示词构建器（10 段结构化架构）
+- **PromptBuilder** - 系统提示词构建器（11 段结构化架构）
 
 **@zhin.js/core（IM 层）**：
 - **SkillFeature** - 技能注册中心，管理所有 Skill
@@ -881,20 +881,21 @@ ai:
 
 ## 系统提示词架构
 
-ZhinAgent 的系统提示词采用 10 段结构化架构（参考 Claude Code 的 prompt 工程），每段职责清晰、可独立维护：
+ZhinAgent 的系统提示词采用 11 段结构化架构（`packages/agent/src/zhin-agent/prompt.ts`），每段职责清晰、可独立维护：
 
 | 段号 | 名称 | 内容 |
 |------|------|------|
 | §1 | **Identity & Environment** | 人格设定、当前时间、平台信息、用户信息 |
 | §2 | **System** | 系统级约束（安全边界、隐私规则） |
-| §3 | **Doing Tasks** | 任务执行准则（分步推理、验证结果） |
-| §4 | **Executing Actions** | 操作执行规范（文件操作、命令执行注意事项） |
-| §5 | **Using Tools** | 工具使用指南（参数格式、错误处理） |
-| §6 | **Communication** | 沟通风格（语气、格式、长度控制） |
-| §7 | **Skills** | 技能注册表摘要（可用技能列表） |
-| §8 | **Active Skills** | 已激活技能的详细指令 |
-| §9 | **Memory** | 文件制记忆注入（SOUL.md / AGENTS.md / TOOLS.md） |
-| §10 | **Bootstrap** | 引导文件内容（HEARTBEAT.md、用户画像等） |
+| §3 | **Discipline** | 执行纪律与边界 |
+| §4 | **Doing Tasks** | 任务执行准则（分步推理、验证结果） |
+| §5 | **Executing Actions** | 操作执行规范（文件操作、命令执行注意事项） |
+| §6 | **Using Tools** | 工具使用指南（参数格式、错误处理） |
+| §7 | **Communication** | 沟通风格（语气、格式、长度控制） |
+| §8 | **Skills** | 技能注册表摘要（可用技能列表） |
+| §9 | **Active Skills** | 已激活技能的详细指令 |
+| §10 | **Memory** | 记忆相关提示 |
+| §11 | **Bootstrap** | 工作区引导文件注入（SOUL.md / AGENTS.md / TOOLS.md 等） |
 
 每段由 `buildXxxSection()` 函数独立生成，最终由 `buildRichSystemPrompt()` 组装。空段自动跳过，不浪费 token。
 

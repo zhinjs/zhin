@@ -12,7 +12,7 @@ Zhin AI Agent 组合层：在 `@zhin.js/core` 的类型与 Provider 之上，提
 - 🛡️ **6 层 Bash 安全**：`ExecPolicy` 纵深防御（危险黑名单、环境变量剥离、wrapper 剥离、复合命令拆分、只读放行、交互式审批）
 - 📂 **文件访问安全**：`FilePolicy` 路径检查、设备路径拦截、命令读写分类
 - 📋 **11 段系统提示词**：`PromptBuilder` 结构化 prompt（Identity、System、Discipline、Tasks、Actions、Tools、Communication、Skills、Active Skills、Memory、Bootstrap）
-- 🔌 **框架挂载**：`initAgentModule()` 注册 `ctx.ai`、定时任务、DB 模型等
+- 🔌 **框架挂载**：`initAgentModule()` 注册 `ctx.ai`、`ctx.agent`、定时任务、DB 模型等
 - 📦 **上下文与记忆**：`ContextManager`、`ConversationMemory`、`UserProfileStore`
 - ⏰ **跟进与定时**：`FollowUpManager`、`PersistentCronEngine`、cron 工具
 - 🔧 **内置工具**：bash、read_file、write_file、ask_user、web_search、chat_history 等
@@ -92,10 +92,12 @@ const result = await agent.run('你好')
 | IM 内置工具工厂 | `createBuiltinTools`、`BuiltinBaseTool`；具体工具见 `src/builtin/*` |
 | 输出与检测 | `parseOutput`, `renderToPlainText`, `renderToSatori`, `detectTone` |
 | 子代理 | `SubagentManager` |
+| 编排 | `AgentOrchestrator`、`ToolRegistry`、`SkillRegistry`、`SubAgentRegistry`、`McpRegistry`、`HookRegistry` |
+| MCP 客户端 | `McpClientManager`、`McpClientConnection`、`mcpToolToAgentTool`（见下方「MCP」；端到端未贯通） |
 | 限流 | `RateLimiter` |
 | 存储抽象 | `StorageBackend`, `MemoryStorageBackend`, `DatabaseStorageBackend`, `createSwappableBackend` |
 
-类型（如 `ZhinAgentConfig`、`ContextConfig`、`AgentState` 等）均从包入口导出或从 `@zhin.js/core` 再导出。
+类型（如 `ZhinAgentConfig`、`ContextConfig`、`AgentState`、`McpServerEntry` 等）均从包入口导出或从 `@zhin.js/core` 再导出。
 
 ## 全局上下文
 
@@ -105,13 +107,30 @@ const result = await agent.run('你好')
 declare module '@zhin.js/core' {
   namespace Plugin {
     interface Contexts {
-      ai: AIService  // 由 @zhin.js/agent 提供
+      ai: AIService              // 会话、Provider、ZhinAgent、runAgent 等
+      agent: AgentOrchestrator   // 工具/技能/子代理/MCP 条目/Hook 注册表
     }
   }
 }
 ```
 
-主包 `zhin.js` 的 `Plugin.Contexts.ai` 类型已指向本包的 `AIService`。
+| Context | 用途 |
+|---------|------|
+| `ctx.ai` | 业务侧 AI 服务：会话、`createAgent` / `runAgent`、全局 ZhinAgent |
+| `ctx.agent` | 扩展编排资源：`orchestrator.addTool`、`addSkill`、`addMcp` 等；内置注册走 `root.inject('agent')` |
+
+主包 `zhin.js` 的 `Plugin.Contexts` 类型已包含上述两项。
+
+## MCP（Client）
+
+编排层可 `addMcp` 注册外部 MCP Server 条目；`mcp-client/` 提供 `McpClientManager` 与 `mcpToolToAgentTool`（需可选安装 `@modelcontextprotocol/sdk`）。
+
+**当前限制**（与 [CONTEXT.md](./CONTEXT.md)、[docs/doc-code-audit.md](./docs/doc-code-audit.md) 一致）：
+
+- `McpRegistry.connect()` 尚未委托 `McpClientManager` 建立真实连接；
+- ZhinAgent `collectRuntimeTools` **不会**自动合并 MCP 工具。
+
+与 **`plugins/services/mcp`**（MCP **Server**，向外暴露 Zhin 工具）是不同方向，勿混淆。
 
 ## 多 Agent 使用方式
 
@@ -205,9 +224,10 @@ src/
 │   ├── mcp-registry.ts              # McpRegistry
 │   └── hook-registry.ts             # HookRegistry
 │
-├── mcp-client/                      # ★ MCP 客户端
-│   ├── index.ts                     # McpClientManager
-│   ├── connection.ts                # 单连接生命周期
+├── mcp-client/                      # MCP 客户端（Manager / Connection / bridge）
+│
+├── init.ts                          # initAgentModule 入口
+├── init/                            # 挂载子模块（orchestrator、ai、builtin-tools…）
 │
 ├── service.ts                       # AIService（保留，对接 Orchestrator）
 │
@@ -242,22 +262,10 @@ src/
 ├── task-executor.ts
 ├── cron-engine.ts
 ├── bootstrap.ts
-├── user-profile.ts
-│
-└── init/
-    ├── index.ts                     # initAgentModule
-    ├── types.ts                     # declare Plugin.Contexts.agent: AgentOrchestrator
-    ├── shared-refs.ts
-    ├── register-orchestrator.ts     # ★ 新增：provide(new AgentOrchestrator())
-    ├── register-db-models.ts
-    ├── register-ai-service.ts
-    ├── create-zhin-agent.ts
-    ├── register-ai-trigger.ts
-    ├── register-db-upgrade.ts
-    ├── register-message-recorder.ts
-    ├── register-management-tools.ts
-    └── register-builtin-tools.ts    # 改造：通过 Orchestrator 注册默认资源
+└── user-profile.ts
 ```
+
+`init/` 目录含 `register-orchestrator.ts`（`provide('agent')`）、`register-ai-service.ts`、`register-builtin-tools.ts` 等，见 `src/init.ts`。
 
 ### 构建
 
