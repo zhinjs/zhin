@@ -27,7 +27,7 @@
     "@zhin.js/core": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^25.7.0",
+    "@types/node": "^25.8.0",
     "@zhin.js/bridge-outbound-gate": "workspace:*",
     "rimraf": "^6.1.2",
     "typescript": "^6.0.3"

@@ -22,7 +22,7 @@
     "test": "vitest run --root ../.. --config vitest.config.ts packages/bridge-ipc"
   },
   "devDependencies": {
-    "@types/node": "^25.7.0",
+    "@types/node": "^25.8.0",
     "rimraf": "^6.1.2",
     "typescript": "^6.0.3"
   },

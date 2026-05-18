@@ -21,7 +21,7 @@
   },
   "devDependencies": {
     "typescript": "^6.0.3",
-    "@types/node": "^25.7.0",
+    "@types/node": "^25.8.0",
     "zhin.js": "workspace:*"
   },
   "repository": {
