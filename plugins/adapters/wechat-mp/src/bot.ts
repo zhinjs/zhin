@@ -6,7 +6,7 @@ import * as xml2js from "xml2js";
 import { createHash, createDecipheriv, createCipheriv, randomBytes } from "crypto";
 import { EventEmitter } from "events";
 import FormData from "form-data";
-import { Bot, Message, SendOptions, SendContent, MessageSegment, segment } from "zhin.js";
+import { formatCompact, Bot, Message, MessageSegment, segment, SendContent, SendOptions } from 'zhin.js';
 import type { Context } from "koa";
 import type { Router } from "@zhin.js/http";
 import type { WeChatMPConfig, WeChatMessage, WeChatAPIResponse, TokenResponse } from "./types.js";
@@ -62,8 +62,8 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
             // 定期刷新access_token
             this.startTokenRefreshTimer();
             
-            this.logger.info(`WeChat MP bot connected: ${this.$config.name}`);
-            this.logger.info(`Webhook URL: ${this.$config.path}`);
+            this.logger.info(formatCompact({ bot: this.$config.name }));
+            this.logger.info(formatCompact( { op: "webhook", path: this.$config.path }));
             this.$connected= true;
         } catch (error) {
             this.logger.error('Failed to connect WeChat MP bot:', error);
@@ -77,7 +77,7 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
             this.tokenRefreshTimer = undefined;
         }
         this.$connected = false;
-        this.logger.info('WeChat MP bot disconnected');
+        this.logger.info(formatCompact( { op: "disconnect", bot: this.$config.name }));
     }
 
     private handleVerification(ctx: Context): void {
@@ -88,7 +88,7 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
             timestamp as string, 
             nonce as string
         )) {
-            this.logger.info('WeChat verification successful');
+            this.logger.info(formatCompact( { op: "verify" }));
             ctx.body = echostr;
         } else {
             this.logger.error('WeChat verification failed');
@@ -380,13 +380,13 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
         if (wechatMsg.MsgType === 'event') {
             switch (wechatMsg.Event) {
                 case 'subscribe':
-                    this.logger.info(`User subscribed: ${wechatMsg.FromUserName}${wechatMsg.EventKey ? `, scene: ${wechatMsg.EventKey}` : ''}`);
+                    this.logger.info(formatCompact( { op: "subscribe", user: wechatMsg.FromUserName, scene: wechatMsg.EventKey }));
                     return this.buildTextReply(wechatMsg, '感谢关注！');
                 case 'unsubscribe':
-                    this.logger.info(`User unsubscribed: ${wechatMsg.FromUserName}`);
+                    this.logger.info(formatCompact( { op: "unsubscribe", user: wechatMsg.FromUserName }));
                     return '';
                 case 'SCAN':
-                    this.logger.info(`User scanned QR: ${wechatMsg.FromUserName}, scene: ${wechatMsg.EventKey}`);
+                    this.logger.info(formatCompact( { op: "scan", user: wechatMsg.FromUserName, scene: wechatMsg.EventKey }));
                     return '';
                 case 'LOCATION':
                     this.logger.debug(`User location: ${wechatMsg.FromUserName}, lat=${wechatMsg.Location_X}, lng=${wechatMsg.Location_Y}`);
@@ -428,7 +428,7 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
             if (data.access_token) {
                 this.accessToken = data.access_token;
                 this.tokenExpireTime = Date.now() + (data.expires_in - 300) * 1000; // 提前5分钟刷新
-                this.logger.info('Access token refreshed successfully');
+                this.logger.debug(formatCompact( { op: "token_refresh" }));
             } else {
                 throw new Error('Failed to get access token');
             }

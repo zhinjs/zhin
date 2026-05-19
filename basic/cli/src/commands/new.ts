@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
 import fs from 'fs-extra';
 import path from 'path';
@@ -108,9 +109,8 @@ export const newCommand = new Command('new')
       }
       options.type = resolvedType;
 
-      logger.info(
-        `正在创建${options.type === 'service' ? '服务' : options.type === 'adapter' ? '适配器' : '插件'}包 ${name}...`,
-      );
+      const typeLabel = options.type === 'service' ? '服务' : options.type === 'adapter' ? '适配器' : '插件';
+      logger.info(formatCompact( { cmd: 'new', op: 'create', type: typeLabel, name }));
       
       // 创建插件包结构
       await createPluginPackage(pluginDir, name, options);
@@ -359,7 +359,7 @@ export function create${capitalizedName}Service(): ${capitalizedName}Service {
 `;
     await fs.writeFile(path.join(pluginDir, 'src', 'service.ts'), serviceSrc, 'utf8');
 
-    const indexSvc = `import { usePlugin, onDispose, type Context } from 'zhin.js';
+    const indexSvc = `import { formatCompact, onDispose, type Context, usePlugin } from 'zhin.js';
 import { create${capitalizedName}Service } from './service.js';
 
 declare module 'zhin.js' {
@@ -435,7 +435,7 @@ export class ${capitalizedName}Bot implements Bot<${capitalizedName}BotConfig, R
 `;
     await fs.writeFile(path.join(pluginDir, 'src', 'bot.ts'), botSrc, 'utf8');
 
-    const adapterSrc = `import { Adapter, type Plugin } from 'zhin.js';
+    const adapterSrc = `import { formatCompact, Adapter, type Plugin } from 'zhin.js';
 import { ${capitalizedName}Bot } from './bot.js';
 import type { ${capitalizedName}BotConfig } from './bot.js';
 
@@ -451,7 +451,7 @@ export class ${capitalizedName}Adapter extends Adapter<${capitalizedName}Bot> {
 `;
     await fs.writeFile(path.join(pluginDir, 'src', 'adapter.ts'), adapterSrc, 'utf8');
 
-    const indexAd = `import { usePlugin, type Plugin, type Context, onDispose } from 'zhin.js';
+    const indexAd = `import { formatCompact, onDispose, type Context, type Plugin, usePlugin } from 'zhin.js';
 import path from 'node:path';
 import { PageManager } from '@zhin.js/console';
 import { ${capitalizedName}Adapter } from './adapter.js';
@@ -513,13 +513,7 @@ export type { ${capitalizedName}BotConfig } from './bot.js';
 `;
     await fs.writeFile(path.join(pluginDir, 'src', 'index.ts'), indexAd, 'utf8');
   } else {
-    const indexNormal = `import {
-  usePlugin,
-  useContext,
-  onDispose,
-  ZhinTool,
-  MessageCommand,
-} from 'zhin.js';
+    const indexNormal = `import { formatCompact, MessageCommand, onDispose, useContext, usePlugin, ZhinTool } from 'zhin.js';
 import path from 'node:path';
 import { PageManager } from '@zhin.js/console';
 
@@ -701,7 +695,7 @@ coverage/
   
   // 安装依赖
   if (!options.skipInstall) {
-    logger.info('正在安装依赖...');
+    logger.info(formatCompact( { cmd: 'new', op: 'install_deps' }));
     try {
       execSync('pnpm install', {
         cwd: pluginDir,
@@ -709,7 +703,7 @@ coverage/
       });
       logger.success('✓ 依赖安装成功');
     } catch (error) {
-      logger.warn('⚠ 依赖安装失败，请手动执行 pnpm install');
+      logger.warn(formatCompact( { cmd: 'new', op: 'install_deps_failed', hint: 'pnpm install' }));
     }
   }
 }
@@ -743,7 +737,7 @@ async function generateTestFiles(
  */
 async function generatePluginTest(testsDir: string, pluginName: string, capitalizedName: string) {
   const testContent = `import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { Plugin } from 'zhin.js'
+import { formatCompact, Plugin } from 'zhin.js'
 
 describe('${capitalizedName} Plugin', () => {
   let plugin: Plugin
@@ -885,7 +879,7 @@ async function generateAdapterTest(
   camelId: string,
 ) {
   const testContent = `import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { Plugin } from 'zhin.js';
+import { formatCompact, Plugin } from 'zhin.js';
 import { ${capitalizedName}Adapter } from '../src/adapter.js';
 import { ${capitalizedName}Bot } from '../src/bot.js';
 
@@ -925,7 +919,7 @@ async function addPluginToApp(pluginName: string, isOfficial?: boolean) {
     
     // 检查根 package.json 是否存在
     if (!fs.existsSync(rootPackageJsonPath)) {
-      logger.warn('⚠ 未找到根目录 package.json，跳过依赖添加');
+      logger.warn(formatCompact( { cmd: 'new', op: 'skip_deps', reason: 'no package.json' }));
       return;
     }
     
@@ -946,7 +940,7 @@ async function addPluginToApp(pluginName: string, isOfficial?: boolean) {
     logger.success(`✓ 已将 ${packageName} 添加到 package.json`);
     
     // 重新安装依赖
-    logger.info('正在更新依赖...');
+    logger.info(formatCompact( { cmd: 'new', op: 'update_deps' }));
     try {
       execSync('pnpm install', {
         cwd: process.cwd(),
@@ -954,10 +948,10 @@ async function addPluginToApp(pluginName: string, isOfficial?: boolean) {
       });
       logger.success('✓ 依赖更新成功');
     } catch (error) {
-      logger.warn('⚠ 依赖更新失败，请手动执行 pnpm install');
+      logger.warn(formatCompact( { cmd: 'new', op: 'update_deps_failed', hint: 'pnpm install' }));
     }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.warn(`⚠ 添加到 package.json 失败: ${errorMessage}`);
+      logger.warn(formatCompact( { cmd: 'new', op: 'add_deps_failed', error: errorMessage }));
     }
 }

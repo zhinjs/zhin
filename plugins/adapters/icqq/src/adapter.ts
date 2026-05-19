@@ -1,7 +1,7 @@
 /**
  * ICQQ 适配器 — 通过 @icqqjs/cli 守护进程 IPC 管理 Bot 实例
  */
-import { Adapter, Plugin } from "zhin.js";
+import { formatCompact, Adapter, Plugin } from 'zhin.js';
 import { IcqqBot } from "./bot.js";
 import type { IcqqBotConfig, IpcMemberInfo } from "./types.js";
 import { Actions } from "./protocol.js";
@@ -17,12 +17,11 @@ export class IcqqAdapter extends Adapter<IcqqBot> {
 
   async start(): Promise<void> {
     await super.start();
-    this.logger.info("ICQQ 适配器已启动");
   }
 
   async stop(): Promise<void> {
     await super.stop();
-    this.logger.info("ICQQ 适配器已停止");
+    this.logger.debug(formatCompact({ stop: true }));
   }
 
   // ── IGroupManagement 标准群管方法（通过 IPC） ─────────────────────

@@ -4,7 +4,7 @@
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { clearInterval } from 'node:timers';
-import { Bot, Message, SendOptions, segment } from 'zhin.js';
+import { formatCompact, Bot, Message, segment, SendOptions } from 'zhin.js';
 import { callSatoriApi } from './api.js';
 import type { SatoriWsConfig, SatoriSignal, SatoriEventBody, SatoriLogin } from './types.js';
 import { SatoriOpcode } from './types.js';
@@ -65,7 +65,12 @@ export class SatoriWsClient extends EventEmitter implements Bot<SatoriWsConfig, 
     const delay = 5000;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = undefined;
-      this.$connect().catch((err) => this.logger.warn('Satori 重连失败', err));
+      this.$connect().catch((err) => this.logger.warn(formatCompact( {
+        op: 'reconnect',
+        bot: this.$id,
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      })));
     }, delay);
   }
 
@@ -77,7 +82,7 @@ export class SatoriWsClient extends EventEmitter implements Bot<SatoriWsConfig, 
 
       this.ws.on('open', () => {
         this.$connected = true;
-        this.logger.info(`${this.$config.name} 已连接 (WS: ${this.wsUrl})`);
+        this.logger.info(formatCompact({ bot: this.$id, mode: 'ws' }));
         this.sendSignal(SatoriOpcode.IDENTIFY, {
           token: this.$config.token,
           sn: this.lastSn,
@@ -93,7 +98,7 @@ export class SatoriWsClient extends EventEmitter implements Bot<SatoriWsConfig, 
             const logins = signal.body.logins as SatoriLogin[];
             this.login = logins[0];
             if (!this.login?.platform || !this.login?.user?.id) {
-              this.logger.warn('Satori READY 未包含 platform/user，API 调用可能失败');
+              this.logger.warn(formatCompact( { op: 'ready', ok: false, error: 'missing platform/user' }));
             }
           } else if (signal.op === SatoriOpcode.EVENT && signal.body) {
             if (signal.body.sn != null) this.lastSn = signal.body.sn as number;
@@ -108,13 +113,24 @@ export class SatoriWsClient extends EventEmitter implements Bot<SatoriWsConfig, 
         this.$connected = false;
         const reasonStr = reason?.toString?.() || String(reason);
         const codeHint = code === 1005 ? ' [无状态，多为服务端/代理未发 close 帧即断开]' : code === 1006 ? ' [异常关闭]' : '';
-        this.logger.warn(`${this.$config.name} 连接已断开 (code=${code}${codeHint}${reasonStr ? `, reason=${reasonStr}` : ''})，5000ms 后重连`);
+        this.logger.warn(formatCompact( {
+          op: 'disconnect',
+          bot: this.$config.name,
+          code,
+          error: `${reasonStr || 'closed'}${codeHint}`,
+          reconnect_ms: 5000,
+        }));
         reject(new Error(`Satori WS closed: ${code} ${reasonStr}`));
         this.scheduleReconnect();
       });
 
       this.ws.on('error', (error) => {
-        this.logger.warn(`${this.$config.name} WS 错误: ${error instanceof Error ? error.message : String(error)}`);
+        this.logger.warn(formatCompact( {
+          op: 'ws_error',
+          bot: this.$config.name,
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        }));
         reject(error);
       });
     });

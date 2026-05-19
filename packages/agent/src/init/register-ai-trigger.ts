@@ -2,7 +2,7 @@
  * Register AI trigger handler via the core MessageDispatcher inbound pipeline.
  */
 import './types.js';
-import { getPlugin, Message, shouldTriggerAI, inferSenderPermissions, parseRichMediaContent, mergeAITriggerConfig } from '@zhin.js/core';
+import { getPlugin, inferSenderPermissions, mergeAITriggerConfig, Message, parseRichMediaContent, shouldTriggerAI } from '@zhin.js/core';
 import type { Tool, ToolContext } from '@zhin.js/core';
 import type { ContentPart } from '@zhin.js/core';
 import type { OutputElement } from '@zhin.js/ai';
@@ -10,6 +10,8 @@ import type { AIServiceRefs } from './shared-refs.js';
 import { extractMediaParts } from './message-media.js';
 import { renderOutput } from './output-renderer.js';
 import { canAccessTool } from '../orchestrator/tool-selection.js';
+import { formatCompactLog, truncatePreview } from '@zhin.js/logger';
+import { formatAiHandlerCompleteLog } from '../zhin-agent/turn-metrics.js';
 
 export function registerAITrigger(refs: AIServiceRefs): void {
   const plugin = getPlugin();
@@ -19,7 +21,7 @@ export function registerAITrigger(refs: AIServiceRefs): void {
     const rawConfig = ai.getTriggerConfig();
     const triggerConfig = mergeAITriggerConfig(rawConfig);
     if (!triggerConfig.enabled) {
-      logger.info('AI Trigger is disabled');
+      logger.info(formatCompactLog('AI Handler', { disabled: true }));
       return;
     }
 
@@ -79,7 +81,10 @@ export function registerAITrigger(refs: AIServiceRefs): void {
       } else {
         externalTools = externalTools.filter(t => canAccessTool(t, toolContext));
       }
-      logger.debug(`[AI Handler] 工具收集: ${externalTools.length} 个, ${(performance.now() - tCollect).toFixed(0)}ms`);
+      logger.debug(formatCompactLog('AI Handler', {
+        tools: externalTools.length,
+        collect_ms: Math.round(performance.now() - tCollect),
+      }));
 
       try {
         // 每轮 LLM 调用在 Agent 内部已有 turnTimeout（来自 triggerConfig.timeout），
@@ -94,7 +99,7 @@ export function registerAITrigger(refs: AIServiceRefs): void {
         const onChunk: (chunk: string, full: string) => void = (_chunk, _full) => {
           if (!firstChunkMs) {
             firstChunkMs = performance.now() - t0;
-            logger.debug(`[AI Handler] 首 token: ${firstChunkMs.toFixed(0)}ms`);
+            logger.debug(formatCompactLog('AI Handler', { first_token_ms: Math.round(firstChunkMs) }));
           }
         };
         if (mediaParts.length > 0) {
@@ -108,10 +113,20 @@ export function registerAITrigger(refs: AIServiceRefs): void {
         const responseText = renderOutput(elements);
 
         if (responseText) await replyOutbound(parseRichMediaContent(responseText));
-        logger.info(`[AI Handler] 总耗时: ${(performance.now() - t0).toFixed(0)}ms`);
+        const totalMs = performance.now() - t0;
+        const turnMetrics = refs.zhinAgent.getLastTurnMetrics();
+        if (turnMetrics) {
+          logger.info(formatAiHandlerCompleteLog(turnMetrics, totalMs));
+        } else {
+          logger.info(formatCompactLog('AI Handler', { total_ms: Math.round(totalMs), usage: 'n/a' }));
+        }
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        logger.warn(`[AI Handler] 失败 (${(performance.now() - t0).toFixed(0)}ms): ${msg}`);
+        logger.warn(formatCompactLog('AI Handler', {
+          total_ms: Math.round(performance.now() - t0),
+          ok: false,
+          error: truncatePreview(msg, 120),
+        }));
         await replyOutbound(triggerConfig.errorTemplate.replace('{error}', msg));
       }
     };
@@ -119,7 +134,7 @@ export function registerAITrigger(refs: AIServiceRefs): void {
     const dispatcher = root.inject('dispatcher');
 
     if (!dispatcher || typeof dispatcher.setAIHandler !== 'function') {
-      logger.warn('AI Trigger skipped: MessageDispatcher is not available');
+      logger.warn(formatCompactLog('AI Handler', { error: 'no_dispatcher' }));
       return;
     }
 
@@ -127,7 +142,7 @@ export function registerAITrigger(refs: AIServiceRefs): void {
       shouldTriggerAI(message, triggerConfig),
     );
     dispatcher.setAIHandler(handleAIMessage);
-    logger.debug('AI Handler registered via MessageDispatcher');
-    return () => { logger.info('AI Handler unregistered'); };
+    logger.debug(formatCompactLog('AI Handler', { hook: 'on' }));
+    return () => { logger.debug(formatCompactLog('AI Handler', { hook: 'off' })); };
   });
 }

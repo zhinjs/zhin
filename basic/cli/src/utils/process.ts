@@ -1,6 +1,7 @@
 import { spawn, ChildProcess, exec, SpawnOptions } from 'child_process';
 import fs from 'fs-extra';
 import path from 'path';
+import { formatCompact } from '@zhin.js/logger';
 import { logger } from './logger.js';
 import os from 'os';
 
@@ -75,8 +76,7 @@ export async function startProcess(command: string, args: string[], options:Spaw
       // 检查是否是 Node 模块缺失的错误（tsx 依赖未安装）
       if (error.code === 'ERR_MODULE_NOT_FOUND' || error.message?.includes('Cannot find module')) {
         logger.error(`❌ 启动失败: 缺失必要的依赖模块（可能是 tsx）`);
-        logger.info('💡 请运行以下命令以安装或修复依赖：');
-        logger.info('   pnpm install');
+        logger.info(formatCompact( { op: 'hint', hint: 'pnpm install' }));
       } else {
         logger.error(`❌ 启动失败: ${error.message}`);
       }
@@ -96,7 +96,7 @@ export async function stopProcess(cwd: string): Promise<void> {
   const pidFile = path.join(cwd, PID_FILE);
   
   if (!fs.existsSync(pidFile)) {
-    logger.warn('没有找到运行中的机器人进程');
+    logger.warn(formatCompact( { op: 'no_process' }));
     return;
   }
 
@@ -106,7 +106,7 @@ export async function stopProcess(cwd: string): Promise<void> {
     // 检查进程是否存在
     const isRunning = await isProcessRunning(pid);
     if (!isRunning) {
-      logger.warn('进程已不存在，清理PID文件');
+      logger.warn(formatCompact( { op: 'stale_pid', action: 'cleanup' }));
       fs.removeSync(pidFile);
       return;
     }
@@ -114,7 +114,7 @@ export async function stopProcess(cwd: string): Promise<void> {
     // 终止进程
     const killed = await killProcess(pid, 'SIGTERM');
     if (!killed) {
-      logger.warn('无法终止进程，可能进程已结束');
+      logger.warn(formatCompact( { op: 'kill_failed' }));
       fs.removeSync(pidFile);
       return;
     }
@@ -132,7 +132,7 @@ export async function stopProcess(cwd: string): Promise<void> {
 
     // 如果进程仍然存在，强制结束
     if (attempts >= 30) {
-      logger.warn('进程未响应，尝试强制结束');
+      logger.warn(formatCompact( { op: 'kill', signal: 'SIGKILL' }));
       await killProcess(pid, 'SIGKILL');
       
       // 再次等待

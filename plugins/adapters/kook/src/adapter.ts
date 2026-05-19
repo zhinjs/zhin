@@ -1,10 +1,7 @@
 /**
  * KOOK 适配器
  */
-import {
-  Adapter,
-  Plugin,
-} from "zhin.js";
+import { formatCompact, Adapter, Plugin } from 'zhin.js';
 import { KookBot } from "./bot.js";
 import type { KookBotConfig } from "./types.js";
 
@@ -60,12 +57,11 @@ export class KookAdapter extends Adapter<KookBot> {
 
   async start(): Promise<void> {
     await super.start();
-    this.plugin.logger.info("KOOK 适配器已启动");
   }
 
   async stop(): Promise<void> {
     await super.stop();
-    this.plugin.logger.info("KOOK 适配器已停止");
+    this.plugin.logger.info(formatCompact( { op: "stop" }));
   }
 }
 

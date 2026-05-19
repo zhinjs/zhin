@@ -12,7 +12,7 @@
  *   - 语言白名单校验
  *   - 不执行本地代码，全部通过 glot.io 远程沙箱
  */
-import { usePlugin, MessageCommand, ZhinTool } from 'zhin.js'
+import { formatCompact, MessageCommand, usePlugin, ZhinTool } from 'zhin.js'
 
 const { addCommand, addTool, logger } = usePlugin()
 
@@ -126,7 +126,7 @@ addCommand(
     .desc('在沙箱中运行代码片段')
     .action(async (_message, result) => {
       const { language, code } = result.params as { language: string; code: string }
-      logger.info(`运行代码: language=${language}, length=${code.length}`)
+      logger.debug(formatCompact( { op: 'run', language, len: code.length }))
       const res = await runCode(language, code)
       return formatResult(res)
     }),

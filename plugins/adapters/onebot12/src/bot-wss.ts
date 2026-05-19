@@ -5,7 +5,7 @@ import WebSocket, { WebSocketServer } from 'ws';
 import { EventEmitter } from 'events';
 import { clearInterval, clearTimeout } from 'node:timers';
 import { IncomingMessage } from 'http';
-import { Bot, Message, SendOptions, segment } from 'zhin.js';
+import { formatCompact, Bot, Message, segment, SendOptions } from 'zhin.js';
 import type { Router } from '@zhin.js/http';
 import type { OneBot12WssConfig, OneBot12Event, OneBot12ActionRequest, OneBot12ActionResponse } from './types.js';
 import type { OneBot12Adapter } from './adapter.js';
@@ -77,7 +77,7 @@ export class OneBot12WssServer extends EventEmitter implements Bot<OneBot12WssCo
       }
       this.#client = ws;
       this.$connected = true;
-      this.logger.info(`OneBot12 反向 WS 已连接: ${this.$config.name}`);
+      this.logger.info(formatCompact({ bot: this.$config.name, mode: 'wss' }));
 
       ws.on('message', (data) => {
         try {
@@ -109,11 +109,21 @@ export class OneBot12WssServer extends EventEmitter implements Bot<OneBot12WssCo
         this.#client = undefined;
         const reasonStr = reason?.toString?.() || String(reason ?? '');
         const codeHint = code === 1005 ? ' [无状态]' : code === 1006 ? ' [异常关闭]' : '';
-        this.logger.warn(`OneBot12 反向 WS ${this.$config.name} 连接已断开 (code=${code ?? '?'}${codeHint}${reasonStr ? `, reason=${reasonStr}` : ''})`);
+        this.logger.warn(formatCompact( {
+          op: 'disconnect',
+          bot: this.$config.name,
+          code: code ?? '?',
+          error: `${reasonStr || 'closed'}${codeHint}`,
+        }));
       });
 
       ws.on('error', (err) => {
-        this.logger.warn(`OneBot12 反向 WS ${this.$config.name} 错误: ${err instanceof Error ? err.message : String(err)}`);
+        this.logger.warn(formatCompact( {
+          op: 'ws_error',
+          bot: this.$config.name,
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        }));
       });
     });
   }

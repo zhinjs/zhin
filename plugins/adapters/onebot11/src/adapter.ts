@@ -2,10 +2,7 @@
  * OneBot11 适配器：单一适配器支持正向 WS / 反向 WS，由 config.connection 区分
  */
 import type { Router } from '@zhin.js/http';
-import {
-  Adapter,
-  Plugin,
-} from 'zhin.js';
+import { formatCompact, Adapter, Plugin } from 'zhin.js';
 import { OneBot11WsClient } from './bot-ws-client.js';
 import { OneBot11WsServer } from './bot-ws-server.js';
 import type {
@@ -102,7 +99,6 @@ export class OneBot11Adapter extends Adapter<OneBot11Bot> {
       this.#router = router;
     });
     await super.start();
-    this.plugin.logger.info('OneBot11 适配器已启动');
   }
 
 }

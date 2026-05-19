@@ -2,7 +2,8 @@
  * Tool selection — normalization, permission checks, context injection and relevance caching.
  */
 
-import { Logger } from '@zhin.js/core';
+import { formatCompact, Logger } from '@zhin.js/core';
+import { formatCompact } from '@zhin.js/logger';
 import type { AgentTool, ToolFilterOptions } from '@zhin.js/ai';
 import { CachedToolFilter } from '@zhin.js/ai';
 import type { SkillRegistry } from './skill-registry.js';
@@ -458,12 +459,13 @@ export class ToolSelection {
     }
 
     if (final.length > 0) {
-      logger.debug(
-        `[工具收集] 收集了 ${collected.length} 个工具，过滤后 ${final.length} 个，` +
-        `用户消息相关性最高的: ${final.slice(0, 3).map(t => t.name).join(', ')}`
-      );
+      logger.debug(formatCompact( {
+        collected: collected.length,
+        filtered: final.length,
+        top: final.slice(0, 3).map(t => t.name).join(','),
+      }));
     } else {
-      logger.debug(`[工具收集] 收集了 ${collected.length} 个工具，但过滤后 0 个（没有超过相关性阈值的）`);
+      logger.debug(formatCompact( { collected: collected.length, filtered: 0 }));
     }
 
     return final;

@@ -113,7 +113,7 @@ export type {
   RouteRule,
 } from './agent-orchestrator.js';
 
-export { default as logger } from '@zhin.js/logger';
+export { default as logger, formatCompact, formatCompactLog, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
 
 // ================================================================================================
 // 模块声明 - 允许插件通过 declare module "zhin.js" 扩展类型

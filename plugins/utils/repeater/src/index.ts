@@ -23,7 +23,7 @@
  *   maxLength: 200
  * ```
  */
-import { usePlugin, MessageCommand, Schema } from "zhin.js";
+import { formatCompact, MessageCommand, Schema, usePlugin } from 'zhin.js';
 
 const plugin = usePlugin();
 const { logger, addCommand, addMiddleware, onDispose, declareConfig } = plugin;
@@ -133,4 +133,4 @@ addCommand(
     }),
 );
 
-logger.info(`插件已加载 (阈值=${config.threshold}人, 冷却=${config.cooldown / 1000}s)`);
+logger.info(formatCompact( { op: "load", threshold: config.threshold, cooldown_s: config.cooldown / 1000 }));

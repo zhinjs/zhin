@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
 import { loadEnvFiles } from '../utils/env.js';
 import { ChildProcess } from 'child_process';
@@ -18,8 +19,11 @@ export const startCommand = new Command('start')
       // 检查是否是Zhin项目
       if (!isZhinProject(cwd)) {
         logger.error('❌ 当前目录不是Zhin项目');
-        logger.info('💡 请在Zhin项目根目录运行此命令');
-        logger.info('   或使用 "zhin new <project-name>" 创建新项目');
+        logger.info(formatCompact( {
+          cmd: 'start',
+          op: 'hint',
+          hint: '在项目根目录运行，或 zhin new <project-name> 创建新项目',
+        }));
         process.exit(1);
       }
 
@@ -27,8 +31,7 @@ export const startCommand = new Command('start')
       const nodeModulesPath = path.join(cwd, 'node_modules');
       if (!fs.existsSync(nodeModulesPath)) {
         logger.error('❌ 依赖未安装或不完整');
-        logger.info('💡 请运行以下命令以安装依赖：');
-        logger.info('   pnpm install');
+        logger.info(formatCompact( { cmd: 'start', op: 'hint', hint: 'pnpm install' }));
         process.exit(1);
       }
       
@@ -94,7 +97,7 @@ export const startCommand = new Command('start')
         restartTimestamps.push(now);
         restartCount++;
         
-        logger.info(`🔄 正在重启机器人... (第 ${restartCount} 次)`);
+        logger.info(formatCompact( { cmd: 'start', op: 'restart', count: restartCount }));
         
         // 优雅关闭当前进程
         if (child && !child.killed) {
@@ -105,7 +108,7 @@ export const startCommand = new Command('start')
           await new Promise(resolve => {
             const timeout = setTimeout(() => {
               if (oldChild && !oldChild.killed) {
-                logger.warn('⚠️  进程未响应 SIGTERM，强制终止');
+                logger.warn(formatCompact( { cmd: 'start', op: 'kill', signal: 'SIGKILL' }));
                 oldChild.kill('SIGKILL');
               }
               resolve(null);
@@ -142,7 +145,7 @@ export const startCommand = new Command('start')
             
             if (code === 51) {
               // 主动重启信号
-              logger.info('🔄 收到重启信号 (exit code 51)');
+              logger.info(formatCompact( { cmd: 'start', op: 'restart_signal', code: 51 }));
               await restartBot();
             } else if (code !== 0 || signal) {
               // 异常退出，自动重启
@@ -150,16 +153,21 @@ export const startCommand = new Command('start')
               await restartBot();
             } else {
               // 正常退出，不重启
-              logger.info('✅ 机器人已正常退出');
+              logger.info(formatCompact( { cmd: 'start', op: 'exit', ok: true }));
               cleanup();
               process.exit(0);
             }
           });
           
-          logger.info(`✅ 机器人已在后台启动 (守护进程PID: ${process.pid}, 子进程PID: ${childProcess.pid})`);
+          logger.info(formatCompact( {
+            cmd: 'start',
+            op: 'daemon_start',
+            parent_pid: process.pid,
+            child_pid: childProcess.pid,
+          }));
           
           if (options.logFile) {
-            logger.info(`📝 日志输出到: ${options.logFile}`);
+            logger.info(formatCompact( { cmd: 'start', op: 'log_file', path: options.logFile }));
           }
         } else {
           // 前台运行
@@ -178,7 +186,7 @@ export const startCommand = new Command('start')
               if (code !== 0) {
                 logger.error(`💀 进程异常退出，代码: ${code}`);
               } else {
-                logger.info('✅ 机器人已正常退出');
+                logger.info(formatCompact( { cmd: 'start', op: 'exit', ok: true }));
               }
               process.exit(code || 0);
             }
@@ -196,14 +204,14 @@ export const startCommand = new Command('start')
         if (killing) return;
         killing = true;
         
-        logger.info('🛑 正在关闭机器人...');
+        logger.info(formatCompact( { cmd: 'start', op: 'shutdown' }));
         
         if (child && !child.killed) {
           child.kill('SIGTERM');
           
           setTimeout(() => {
             if (child && !child.killed) {
-              logger.warn('⚠️  进程未响应，强制终止');
+              logger.warn(formatCompact( { cmd: 'start', op: 'kill', signal: 'SIGKILL' }));
               child.kill('SIGKILL');
             }
             killing = false;
@@ -231,15 +239,27 @@ export const startCommand = new Command('start')
       if (options.daemon) {
         const pidFile = path.join(cwd, '.zhin.pid');
         fs.writeFileSync(pidFile, process.pid.toString());
-        logger.info(`📝 守护进程 PID 已写入: ${pidFile}`);
-        logger.info('💡 停止机器人: pnpm stop 或 kill -TERM ' + process.pid);
-        logger.info('💡 重启机器人: pnpm restart 或在插件中调用 process.exit(51)');
+        logger.info(formatCompact( { cmd: 'start', op: 'pid_file', path: pidFile }));
+        logger.info(formatCompact( {
+          cmd: 'start',
+          op: 'hint',
+          hint: `停止: pnpm stop 或 kill -TERM ${process.pid}`,
+        }));
+        logger.info(formatCompact( {
+          cmd: 'start',
+          op: 'hint',
+          hint: '重启: pnpm restart 或 process.exit(51)',
+        }));
         
         // 父进程保持运行，监督子进程
         // 不退出，让事件循环继续
       } else {
         // 前台运行时也显示重启提示
-        logger.info('🚀 前台运行中 (Ctrl+C 退出, process.exit(51) 重启)');
+        logger.info(formatCompact( {
+          cmd: 'start',
+          op: 'foreground',
+          hint: 'Ctrl+C 退出, process.exit(51) 重启',
+        }));
       }
     } catch (error) {
       logger.error(`❌ 启动失败: ${error}`);
@@ -257,7 +277,7 @@ export const restartCommand = new Command('restart')
       // 检查PID文件是否存在
       if (!fs.existsSync(pidFile)) {
         logger.error('未找到运行中的机器人进程');
-        logger.info('请先使用 zhin start 启动机器人');
+        logger.info(formatCompact( { cmd: 'restart', op: 'hint', hint: '先运行 zhin start' }));
         process.exit(1);
       }
       
@@ -275,7 +295,7 @@ export const restartCommand = new Command('restart')
         
         // 发送重启信号
         process.kill(pid, 51);
-        logger.info(`🔄 已发送重启信号给进程 ${pid}`);
+        logger.info(formatCompact( { cmd: 'restart', op: 'signal_sent', pid }));
         
       } catch (error: any) {
         if (error.code === 'ESRCH') {

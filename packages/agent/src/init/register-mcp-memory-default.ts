@@ -3,7 +3,7 @@
  * Registered only when ai.memoryMcp === true (default off). Skipped if name "memory" already registered.
  */
 import * as path from 'node:path';
-import { getPlugin } from '@zhin.js/core';
+import { formatCompact, getPlugin } from '@zhin.js/core';
 import type { AIConfig } from '@zhin.js/core';
 import { getDataDir } from '../discovery/utils.js';
 import type { AgentOrchestrator } from '../orchestrator/index.js';
@@ -36,8 +36,6 @@ export function registerMcpMemoryDefault(): void {
       {},
       'agent-default',
     );
-    logger.info(
-      `[MCP] Registered default memory server (MEMORY_FILE_PATH=${memoryPath}, lazy connect on AI turn)`,
-    );
+    logger.debug(formatCompact( { name: 'memory', source: 'agent-default', path: memoryPath }));
   });
 }

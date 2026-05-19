@@ -24,7 +24,7 @@
  *       edgeTtsCommand: edge-tts     # edge-tts CLI 路径
  * ```
  */
-import { usePlugin, ZhinTool } from 'zhin.js';
+import { formatCompact, usePlugin, ZhinTool } from 'zhin.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { tmpdir } from 'os';
@@ -212,7 +212,7 @@ if (config.stt?.enabled !== false) {
     });
 
   allTools.push(sttTool);
-  logger.info('Voice STT tool registered');
+  logger.info(formatCompact( { op: 'register', tool: 'stt' }));
 }
 
 if (config.tts?.enabled !== false) {
@@ -241,9 +241,13 @@ if (config.tts?.enabled !== false) {
     });
 
   allTools.push(ttsTool);
-  logger.info('Voice TTS tool registered');
+  logger.info(formatCompact( { op: 'register', tool: 'tts' }));
 }
 
 allTools.forEach((tool) => plugin.addTool(tool.toTool()));
 
-logger.info(`Voice plugin loaded (STT: ${config.stt?.enabled !== false ? 'on' : 'off'}, TTS: ${config.tts?.enabled !== false ? 'on' : 'off'})`);
+logger.info(formatCompact( {
+  op: 'load',
+  stt: config.stt?.enabled !== false,
+  tts: config.tts?.enabled !== false,
+}));

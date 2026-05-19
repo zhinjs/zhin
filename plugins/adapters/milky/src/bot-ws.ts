@@ -4,7 +4,7 @@
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { clearInterval } from 'node:timers';
-import { Bot, Message, SendOptions, segment } from 'zhin.js';
+import { formatCompact, Bot, Message, segment, SendOptions } from 'zhin.js';
 import { callApi } from './api.js';
 import type { MilkyWsConfig, MilkyEvent } from './types.js';
 import type { MilkyAdapter } from './adapter.js';
@@ -56,8 +56,10 @@ export class MilkyWsClient extends EventEmitter implements Bot<MilkyWsConfig, Mi
 
       this.ws.on('open', () => {
         this.$connected = true;
-        if (!this.$config.access_token) this.logger.warn('missing access_token, connection is not secured');
-        this.logger.info(`${this.$config.name} 已连接 (WS 正向: ${this.$config.baseUrl})`);
+        if (!this.$config.access_token) {
+          this.logger.warn(formatCompact({ bot: this.$id, ok: false, error: 'missing access_token' }));
+        }
+        this.logger.info(formatCompact({ bot: this.$id, mode: 'ws' }));
         this.startHeartbeat();
         resolve();
       });
@@ -75,13 +77,24 @@ export class MilkyWsClient extends EventEmitter implements Bot<MilkyWsConfig, Mi
         this.$connected = false;
         const reasonStr = reason?.toString?.() || String(reason);
         const codeHint = code === 1005 ? ' [无状态，多为服务端/代理未发 close 帧即断开]' : code === 1006 ? ' [异常关闭]' : '';
-        this.logger.warn(`${this.$config.name} 连接已断开 (code=${code}${codeHint}${reasonStr ? `, reason=${reasonStr}` : ''})，${this.$config.reconnect_interval ?? 5000}ms 后重连`);
+        this.logger.warn(formatCompact( {
+          op: 'disconnect',
+          bot: this.$config.name,
+          code,
+          error: `${reasonStr || 'closed'}${codeHint}`,
+          reconnect_ms: this.$config.reconnect_interval ?? 5000,
+        }));
         reject(new Error(`WS closed: ${code} ${reasonStr}`));
         this.scheduleReconnect();
       });
 
       this.ws.on('error', (error) => {
-        this.logger.warn(`${this.$config.name} WS 错误: ${error instanceof Error ? error.message : String(error)}`);
+        this.logger.warn(formatCompact( {
+          op: 'ws_error',
+          bot: this.$config.name,
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        }));
         reject(error);
       });
     });
@@ -197,7 +210,7 @@ export class MilkyWsClient extends EventEmitter implements Bot<MilkyWsConfig, Mi
       user_id: userId,
       reject_add_request: rejectAddRequest,
     });
-    this.logger.info(`Milky Bot ${this.$id} 踢出成员 ${userId}（群 ${groupId}）`);
+    this.logger.debug(formatCompact( { op: 'kick', bot: this.$id, group: groupId, user: userId }));
     return true;
   }
 
@@ -207,15 +220,13 @@ export class MilkyWsClient extends EventEmitter implements Bot<MilkyWsConfig, Mi
       user_id: userId,
       duration,
     });
-    this.logger.info(
-      `Milky Bot ${this.$id} ${duration > 0 ? `禁言成员 ${userId} ${duration}秒` : `解除禁言 ${userId}`}（群 ${groupId}）`,
-    );
+    this.logger.debug(formatCompact( { op: duration > 0 ? 'mute' : 'unmute', bot: this.$id, group: groupId, user: userId, duration }));
     return true;
   }
 
   async muteAll(groupId: number, enable = true): Promise<boolean> {
     await callApi(this.apiOptions(), 'set_group_whole_mute', { group_id: groupId, is_mute: enable });
-    this.logger.info(`Milky Bot ${this.$id} ${enable ? '开启' : '关闭'}全员禁言（群 ${groupId}）`);
+    this.logger.debug(formatCompact( { op: 'mute_all', bot: this.$id, group: groupId, enable }));
     return true;
   }
 
@@ -225,7 +236,7 @@ export class MilkyWsClient extends EventEmitter implements Bot<MilkyWsConfig, Mi
       user_id: userId,
       is_set: enable,
     });
-    this.logger.info(`Milky Bot ${this.$id} ${enable ? '设置' : '取消'}管理员 ${userId}（群 ${groupId}）`);
+    this.logger.debug(formatCompact( { op: 'set_admin', bot: this.$id, group: groupId, user: userId, enable }));
     return true;
   }
 
@@ -235,7 +246,7 @@ export class MilkyWsClient extends EventEmitter implements Bot<MilkyWsConfig, Mi
       user_id: userId,
       card,
     });
-    this.logger.info(`Milky Bot ${this.$id} 设置成员 ${userId} 群名片（群 ${groupId}）`);
+    this.logger.debug(formatCompact( { op: 'set_card', bot: this.$id, group: groupId, user: userId }));
     return true;
   }
 
@@ -245,13 +256,13 @@ export class MilkyWsClient extends EventEmitter implements Bot<MilkyWsConfig, Mi
       user_id: userId,
       special_title: title,
     });
-    this.logger.info(`Milky Bot ${this.$id} 设置成员 ${userId} 头衔（群 ${groupId}）`);
+    this.logger.debug(formatCompact( { op: 'set_title', bot: this.$id, group: groupId, user: userId }));
     return true;
   }
 
   async setGroupName(groupId: number, name: string): Promise<boolean> {
     await callApi(this.apiOptions(), 'set_group_name', { group_id: groupId, new_group_name: name });
-    this.logger.info(`Milky Bot ${this.$id} 设置群名（群 ${groupId}）`);
+    this.logger.debug(formatCompact( { op: 'set_group_name', bot: this.$id, group: groupId }));
     return true;
   }
 

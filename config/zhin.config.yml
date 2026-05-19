@@ -21,7 +21,10 @@ plugins: []
 #     anthropic:
 #       apiKey: sk-ant-xxx  # Anthropic API Key
 #     deepseek:
-#       apiKey: sk-xxx  # DeepSeek API Key
+#       apiKey: sk-xxx  # https://platform.deepseek.com/api_keys
+#       # baseUrl: https://api.deepseek.com  # 默认；strictTools 时用 /beta
+#       defaultModel: deepseek-v4-flash
+#       # reasoningEffort: medium  # 思考模式：low | medium | high
 #     ollama:
 #       host: http://localhost:11434  # Ollama 本地地址
 #       models:

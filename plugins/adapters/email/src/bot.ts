@@ -4,7 +4,7 @@
 import nodemailer from "nodemailer";
 import Imap from "imap";
 import { simpleParser, type ParsedMail, type Attachment } from "mailparser";
-import { Bot, Message, SendOptions, SendContent, MessageSegment, segment } from "zhin.js";
+import { formatCompact, Bot, Message, MessageSegment, segment, SendContent, SendOptions } from 'zhin.js';
 import { EventEmitter } from "events";
 import { createWriteStream, promises as fs } from "fs";
 import path from "path";
@@ -53,7 +53,7 @@ export class EmailBot extends EventEmitter implements Bot<EmailBotConfig, EmailM
 
             // 验证 SMTP 连接
             await this.smtpTransporter!.verify();
-            this.logger.info(`SMTP connection verified for ${this.$config.smtp.auth.user}`);
+            this.logger.info(formatCompact({ bot: this.$id, mode: "smtp" }));
 
             // 初始化 IMAP 连接
             this.imapConnection = new Imap({
@@ -74,7 +74,7 @@ export class EmailBot extends EventEmitter implements Bot<EmailBotConfig, EmailM
                 this.imapConnection!.connect();
             });
 
-            this.logger.info(`IMAP connection established for ${this.$config.imap.user}`);
+            this.logger.info(formatCompact({ bot: this.$id, mode: "imap" }));
 
             // 开始检查邮件
             this.startEmailCheck();
@@ -107,7 +107,7 @@ export class EmailBot extends EventEmitter implements Bot<EmailBotConfig, EmailM
             this.smtpTransporter = null;
         }
 
-        this.logger.info('Email bot disconnected');
+        this.logger.info(formatCompact( { op: "disconnect", bot: this.$id }));
     }
 
     private setupImapListeners(): void {
@@ -123,7 +123,7 @@ export class EmailBot extends EventEmitter implements Bot<EmailBotConfig, EmailM
         });
 
         this.imapConnection.on('end', () => {
-            this.logger.info('IMAP connection ended');
+            this.logger.info(formatCompact( { op: "disconnect", bot: this.$id, mode: "imap" }));
         });
     }
 

@@ -3,7 +3,7 @@
  * 支持本地 Ollama 模型
  */
 
-import { Logger } from '@zhin.js/logger';
+import { formatCompact, Logger } from '@zhin.js/logger';
 import { BaseProvider } from './base.js';
 import type {
   ProviderConfig,
@@ -151,7 +151,11 @@ export class OllamaProvider extends BaseProvider {
       json: ollamaRequest,
     });
     
-    logger.debug(`响应耗时: ${Date.now() - startTime}ms, 工具调用: ${response.message?.tool_calls?.length || 0}`);
+    logger.debug(formatCompact( {
+      op: 'chat',
+      ms: Date.now() - startTime,
+      tool_calls: response.message?.tool_calls?.length || 0,
+    }));
 
     // 转换响应格式
     const toolCalls = response.message?.tool_calls?.map((tc: any, i: number) => ({

@@ -1,4 +1,4 @@
-import { usePlugin, defineComponent, ZhinTool } from "zhin.js";
+import { formatCompact, defineComponent, usePlugin, ZhinTool } from 'zhin.js';
 import { musicServices } from "./sources/index.js";
 import { sourceConfigMap } from "./config.js";
 import type { MusicSource } from "./types.js";
@@ -58,7 +58,7 @@ const searchMusicTool = new ZhinTool('music_search')
       ? [source as MusicSource] 
       : ['qq', 'netease'];
 
-    logger.info(`AI 搜索音乐: ${keywordStr}, 来源: ${searchSources.join(', ')}`);
+    logger.debug(formatCompact( { op: 'search', keyword: keywordStr, sources: searchSources.join(',') }));
 
     // 并行搜索
     const searchPromises = searchSources.map(s => 

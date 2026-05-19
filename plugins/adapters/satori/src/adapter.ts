@@ -3,7 +3,7 @@
  * 协议文档：https://satori.chat/zh-CN/introduction.html
  */
 import type { Router } from '@zhin.js/http';
-import { Adapter, Plugin } from 'zhin.js';
+import { formatCompact, Adapter, Plugin } from 'zhin.js';
 import { SatoriWsClient } from './bot-ws.js';
 import { SatoriWebhookBot } from './bot-webhook.js';
 import type {
@@ -42,6 +42,5 @@ export class SatoriAdapter extends Adapter<SatoriBot> {
       this.#router = router;
     });
     await super.start();
-    this.plugin.logger.info('Satori 适配器已启动');
   }
 }

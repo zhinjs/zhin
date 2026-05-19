@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import fs from 'fs-extra';
 import path from 'path';
+import { formatCompact } from '@zhin.js/logger';
 import { logger } from './logger.js';
 
 /**
@@ -31,28 +32,34 @@ export function loadEnvFiles(cwd: string, nodeEnv: string): void {
           
           // 在debug模式下显示详细信息
           if (process.env.ZHIN_DEBUG === 'true') {
-            logger.debug(`已加载环境变量文件: ${envFile}`);
+            logger.debug(formatCompact({ file: envFile }));
             Object.keys(result.parsed).forEach(key => {
               const value = result.parsed![key];
               const displayValue = key.toLowerCase().includes('password') || 
                                  key.toLowerCase().includes('secret') || 
                                  key.toLowerCase().includes('token') 
                                  ? '***' : value;
-              logger.debug(`  - ${key}=${displayValue}`);
+              logger.debug(formatCompact({ key, value: displayValue }));
             });
           }
         }
       } catch (error) {
-        logger.warn(`⚠️  加载环境变量文件 ${envFile} 失败: ${error instanceof Error ? error.message : error}`);
+        logger.warn(formatCompact({
+          file: envFile,
+          error: error instanceof Error ? error.message : String(error),
+        }));
       }
     }
   }
 
   if (loadedFiles.length > 0) {
-    logger.info(`🔧 已加载环境变量: ${loadedFiles.join(', ')} (共 ${totalVars} 个变量)`);
+    logger.debug(formatCompact({
+      files: loadedFiles.join(', '),
+      count: totalVars,
+    }));
   } else {
     if (process.env.ZHIN_DEBUG === 'true') {
-      logger.info('💡 未找到环境变量文件，使用系统环境变量');
+      logger.debug(formatCompact({ hint: '使用系统环境变量' }));
     }
   }
 }

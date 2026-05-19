@@ -5,7 +5,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { getPlugin, isZhinTool } from '@zhin.js/core';
+import { formatCompact, getPlugin, isZhinTool } from '@zhin.js/core';
 import type { Tool } from '../orchestrator/types.js';
 import type { AgentOrchestrator } from '../orchestrator/index.js';
 import { createBuiltinTools } from '../builtin-tools.js';
@@ -50,8 +50,6 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       const plain = tool.toTool();
       disposers.push(toolService.addTool({ ...plain, source: 'builtin' }, root.name));
     }
-    logger.info(`Registered ${builtinTools.length} built-in + ${cronTools.length} cron tools`);
-
     let skillWatchers: fs.FSWatcher[] = [];
     let skillReloadDebounce: ReturnType<typeof setTimeout> | null = null;
     let toolReloadDebounce: ReturnType<typeof setTimeout> | null = null;
@@ -89,15 +87,16 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
         }
       }
     }
-    async function syncWorkspaceSkills(): Promise<number> {
+    async function syncWorkspaceSkills(): Promise<{ count: number; pluginTools: string }> {
       const orchestrator = root.inject?.('agent') as AgentOrchestrator | undefined;
-      if (!orchestrator) return 0;
+      if (!orchestrator) return { count: 0, pluginTools: '' };
       // Remove previously discovered skills
       for (const existing of orchestrator.skills.getAll()) {
         orchestrator.skills.remove(existing.name);
       }
       skillToolNames.clear();
       const skills = await discoverWorkspaceSkills(root);
+      const pluginToolCounts: string[] = [];
       if (skills.length > 0) {
         for (const s of skills) {
           const ownerName = s.ownerPlugin || root.name;
@@ -115,8 +114,9 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
             filePath: s.filePath,
             always: s.always,
           }, undefined, ownerName);
-          if(associatedTools.length){
-            logger.info(`[注册] ${associatedTools.length} 工具${s.platforms?.length ? ', 平台: ' + s.platforms.join(',') : ', 通用'}`);
+          if (associatedTools.length) {
+            const label = s.platforms?.length ? s.platforms.join('+') : 'generic';
+            pluginToolCounts.push(`${label}:${associatedTools.length}`);
           }
         }
       }
@@ -127,7 +127,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
         refs.zhinAgent.setActiveSkillsContext(alwaysContent);
         refs.zhinAgent.setSkillsSummaryXML(skillsXml);
       }
-      return skills.length;
+      return { count: skills.length, pluginTools: pluginToolCounts.join(',') };
     }
 
     // 文件化 Tool 的 disposer（用于热重载时移除旧 tool）
@@ -210,32 +210,30 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
     }
 
     (async () => {
+      let skillCount = 0;
+      let toolCount = 0;
+      let agentCount = 0;
+      let pluginTools = '';
+
       // Step 1: discover workspace skills
       try {
-        const count = await syncWorkspaceSkills();
-        if (count > 0) {
-          logger.info(`Registered ${count} workspace skills`);
-        }
+        const skillsResult = await syncWorkspaceSkills();
+        skillCount = skillsResult.count;
+        pluginTools = skillsResult.pluginTools;
       } catch (e: any) {
-        logger.warn(`Failed to discover workspace skills: ${e.message}`);
+        logger.warn(formatCompact( { error: e.message }));
       }
 
       // Step 1b: discover *.tool.md file-based tools
       try {
-        const toolCount = await syncWorkspaceTools();
-        if (toolCount > 0) {
-          logger.info(`Registered ${toolCount} workspace file-based tools`);
-        }
+        toolCount = await syncWorkspaceTools();
       } catch (e: any) {
-        logger.warn(`Failed to discover workspace tools: ${e.message}`);
+        logger.warn(formatCompact( { error: e.message }));
       }
 
       // Step 1c: discover *.agent.md agent presets
       try {
-        const agentCount = await syncWorkspaceAgents();
-        if (agentCount > 0) {
-          logger.info(`Registered ${agentCount} workspace agent presets`);
-        }
+        agentCount = await syncWorkspaceAgents();
       } catch (e: any) {
         logger.debug(`Failed to discover workspace agents: ${e.message}`);
       }
@@ -258,10 +256,6 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
         const agentsFile = contextFiles.find(f => f.path === 'AGENTS.md');
         if (agentsFile) loadedFiles.push('AGENTS.md');
 
-        if (loadedFiles.length > 0) {
-          logger.info(`Loaded bootstrap: ${loadedFiles.join(', ')} → agent prompt`);
-        }
-
         if (refs.zhinAgent && contextFiles.length > 0) {
           const contextSection = buildBootstrapContextSection(contextFiles);
           refs.zhinAgent.setBootstrapContext(contextSection);
@@ -269,6 +263,16 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       } catch (e: any) {
         logger.debug(`Bootstrap files not loaded: ${e.message}`);
       }
+
+      logger.info(formatCompact( {
+        builtin: builtinTools.length,
+        cron: cronTools.length,
+        skills: skillCount,
+        workspace_tools: toolCount,
+        agents: agentCount,
+        plugin_tools: pluginTools || undefined,
+        bootstrap: loadedFiles.length ? loadedFiles.join(',') : undefined,
+      }));
 
       // Trigger agent:bootstrap hook
       const orchestrator2 = root.inject?.('agent') as AgentOrchestrator | undefined;
@@ -290,9 +294,9 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
           toolReloadDebounce = null;
           try {
             const count = await syncWorkspaceTools();
-            if (count >= 0) logger.info(`[Tool热重载] 已更新，工作区文件化Tool: ${count}`);
+            if (count >= 0) logger.debug(formatCompact( { reload: count }));
           } catch (e: any) {
-            logger.warn(`[Tool热重载] 失败: ${e.message}`);
+            logger.warn(formatCompact( { reload: 'fail', error: e.message }));
           }
         }, 400);
       };
@@ -316,9 +320,9 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
           try {
             const count = await syncWorkspaceSkills();
             await triggerAIHook(createAIHookEvent('agent', 'skills-reloaded', undefined, { skillCount: count }));
-            if (count >= 0) logger.info(`[技能热重载] 已更新，工作区技能: ${count}`);
+            if (count >= 0) logger.debug(formatCompact( { reload: count }));
           } catch (e: any) {
-            logger.warn(`[技能热重载] 失败: ${e.message}`);
+            logger.warn(formatCompact( { reload: 'fail', error: e.message }));
           }
         }, 400);
       };

@@ -8,7 +8,7 @@
  * 依赖：主配置中启用 inbox.enabled 与 database。
  * 命令：/群分析 [天数]、/分析设置 enable|disable|status
  */
-import { usePlugin, MessageCommand, Schema, Cron, segment } from "zhin.js";
+import { formatCompact, Cron, MessageCommand, Schema, segment, usePlugin } from 'zhin.js';
 import type { InboxMessageRow } from "./analysis.js";
 import type {} from "@zhin.js/plugin-html-renderer";
 import {
@@ -241,7 +241,7 @@ async function queryInboxMessages(
     }
     return rows as InboxMessageRow[];
   } catch (e) {
-    logger.warn("查询收件箱失败", (e as Error)?.message);
+    logger.warn(formatCompact( { op: "inbox", ok: false, error: (e as Error)?.message }));
     return [];
   }
 }
@@ -491,13 +491,13 @@ useContext("database", () => {
                 .catch(() => {});
             }
           } catch (e) {
-            logger.warn("定时分析发送失败", t.channelId, (e as Error)?.message);
+            logger.warn(formatCompact( { op: "send", channel: t.channelId, ok: false, error: (e as Error)?.message }));
           }
         }
       }),
     );
   } catch (e) {
-    logger.warn("注册定时任务失败", (e as Error)?.message);
+    logger.warn(formatCompact( { op: "cron", ok: false, error: (e as Error)?.message }));
   }
 });
 

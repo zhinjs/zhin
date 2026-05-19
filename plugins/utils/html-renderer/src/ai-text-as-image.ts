@@ -2,7 +2,7 @@
  * 通过 before.sendMessage 将纯文本发送转为 PNG（可配置）。
  */
 import type { SendContent, SendOptions } from 'zhin.js';
-import { segment } from 'zhin.js';
+import { formatCompact, segment } from 'zhin.js';
 import type { HtmlRendererAiTextAsImageConfig, HtmlRendererConfig, HtmlRendererService } from './types.js';
 
 const RICH_STRING =
@@ -134,17 +134,18 @@ export function registerAiTextAsImageOutput(params: {
         content: segment('image', { url: dataUrl, name: aiOpts.fileName }),
       };
     } catch (e) {
-      logger.warn(
-        'html-renderer: 纯文本转图失败，已回退为原文:',
-        e instanceof Error ? e.message : e,
-      );
+      logger.warn(formatCompact( {
+        op: 'ai_text_as_image',
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+      }));
       return options;
     }
   };
 
   root.on('before.sendMessage', handler);
 
-  logger.info('html-renderer: 已启用 aiTextAsImage（before.sendMessage 纯文本→PNG）');
+  logger.info(formatCompact( { op: 'ai_text_as_image' }));
 
   return () => {
     root.off?.('before.sendMessage', handler);

@@ -9,8 +9,9 @@
  */
 
 import { randomUUID } from 'crypto';
-import { Logger } from '@zhin.js/core';
-import type { AIProvider, AgentTool } from '@zhin.js/core';
+import { formatCompact, Logger } from '@zhin.js/core';
+import { formatCompactUsage, truncatePreview } from '@zhin.js/logger';
+import type { AIProvider, AgentTool, Usage } from '@zhin.js/core';
 import { createAgent } from '@zhin.js/ai';
 import type { ModelRegistry } from '@zhin.js/ai';
 import type { ZhinAgentConfig } from './zhin-agent/config.js';
@@ -53,6 +54,10 @@ export interface SubagentManagerOptions {
   /** Exec policy config to enforce on subagent bash tools */
   execPolicyConfig?: Required<ZhinAgentConfig>;
   modelRegistry?: ModelRegistry | null;
+  /** 子 agent 完成后回传 token 用量（并入主会话 turn 统计） */
+  onSubagentUsage?: (usage: Usage) => void;
+  /** 注册子 agent 生命周期 Promise，供主会话在 turn 结束前可选等待 */
+  registerSubagentTask?: (done: Promise<void>) => void;
 }
 
 // ============================================================================
@@ -69,6 +74,8 @@ export class SubagentManager {
   private modelRegistry: ModelRegistry | null;
   private runningTasks: Map<string, AbortController> = new Map();
   private resultSender: SubagentResultSender | null = null;
+  private onSubagentUsage: ((usage: Usage) => void) | null;
+  private registerSubagentTask: ((done: Promise<void>) => void) | null;
 
   constructor(options: SubagentManagerOptions) {
     this.provider = options.provider;
@@ -78,6 +85,8 @@ export class SubagentManager {
     this.subagentTools = options.subagentTools || [];
     this.execPolicyConfig = options.execPolicyConfig ?? null;
     this.modelRegistry = options.modelRegistry ?? null;
+    this.onSubagentUsage = options.onSubagentUsage ?? null;
+    this.registerSubagentTask = options.registerSubagentTask ?? null;
   }
 
   setSender(sender: SubagentResultSender): void {
@@ -97,15 +106,16 @@ export class SubagentManager {
     const abortController = new AbortController();
     this.runningTasks.set(taskId, abortController);
 
-    this.runSubagent(taskId, options.task, displayLabel, options.origin)
+    const done = this.runSubagent(taskId, options.task, displayLabel, options.origin)
       .catch((error) => {
         logger.error({ error, taskId }, 'Subagent failed');
       })
       .finally(() => {
         this.runningTasks.delete(taskId);
       });
+    this.registerSubagentTask?.(done);
 
-    logger.info({ taskId, label: displayLabel }, 'Spawned subagent');
+    logger.debug(formatCompact( { spawn: taskId, label: displayLabel }));
     return `子任务 [${displayLabel}] 已启动 (id: ${taskId})，完成后会自动通知你。`;
   }
 
@@ -121,7 +131,8 @@ export class SubagentManager {
     label: string,
     origin: SubagentOrigin,
   ): Promise<void> {
-    logger.info({ taskId, label }, 'Subagent starting task');
+    const startedAt = Date.now();
+    logger.debug(formatCompact( { task_id: taskId, label }));
 
     try {
       const allTools = this.createTools();
@@ -170,9 +181,16 @@ export class SubagentManager {
 
       try {
         const result = await runWithDirectAgentExecution(bashToolContext, () => agent.run(task));
+        this.onSubagentUsage?.(result.usage);
         const finalResult = result.content || '任务已完成，但未生成最终响应。';
 
-        logger.info({ taskId }, 'Subagent completed successfully');
+        logger.debug(formatCompact( {
+          task_id: taskId,
+          total_ms: Date.now() - startedAt,
+          usage: formatCompactUsage(result.usage),
+          iter: result.iterations,
+          model,
+        }));
         await this.announceResult(taskId, label, task, finalResult, origin, 'ok');
       } finally {
         agent.dispose();
@@ -193,7 +211,7 @@ export class SubagentManager {
     status: 'ok' | 'error',
   ): Promise<void> {
     if (!this.resultSender) {
-      logger.warn({ taskId }, 'No result sender configured, discarding subagent result');
+      logger.warn(formatCompact( { task_id: taskId, error: 'no_sender' }));
       return;
     }
 

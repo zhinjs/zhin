@@ -84,7 +84,9 @@ const DEFAULT_PRICING: Record<string, ModelPricing> = {
   'claude-3.5-haiku': { inputPricePerMToken: 0.8, outputPricePerMToken: 4 },
   'claude-3-opus': { inputPricePerMToken: 15, outputPricePerMToken: 75 },
 
-  // DeepSeek
+  // DeepSeek（V4 价格以官方「模型 & 价格」为准，此处为近似占位）
+  'deepseek-v4-flash': { inputPricePerMToken: 0.14, outputPricePerMToken: 0.28 },
+  'deepseek-v4-pro': { inputPricePerMToken: 0.55, outputPricePerMToken: 2.19 },
   'deepseek-chat': { inputPricePerMToken: 0.14, outputPricePerMToken: 0.28 },
   'deepseek-reasoner': { inputPricePerMToken: 0.55, outputPricePerMToken: 2.19 },
 

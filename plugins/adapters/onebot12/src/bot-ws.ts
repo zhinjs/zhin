@@ -4,7 +4,7 @@
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { clearInterval, clearTimeout } from 'node:timers';
-import { Bot, Message, SendOptions, segment } from 'zhin.js';
+import { formatCompact, Bot, Message, segment, SendOptions } from 'zhin.js';
 import type { OneBot12WsConfig, OneBot12Event, OneBot12ActionRequest, OneBot12ActionResponse } from './types.js';
 import type { OneBot12Adapter } from './adapter.js';
 import { formatOneBot12MessagePayload, isMessageEvent, contentToOb12Segments } from './utils.js';
@@ -42,7 +42,12 @@ export class OneBot12WsClient extends EventEmitter implements Bot<OneBot12WsConf
     const delay = this.$config.reconnect_interval ?? 5000;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = undefined;
-      this.$connect().catch((err) => this.logger.warn('OneBot12 重连失败', err));
+      this.$connect().catch((err) => this.logger.warn(formatCompact( {
+        op: 'reconnect',
+        bot: this.$id,
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      })));
     }, delay);
   }
 
@@ -82,7 +87,7 @@ export class OneBot12WsClient extends EventEmitter implements Bot<OneBot12WsConf
         this.$connected = true;
         const safeUrl = new URL(connectUrl);
         safeUrl.searchParams.delete('access_token');
-        this.logger.info(`${this.$config.name} 已连接 (WS 正向: ${safeUrl})`);
+        this.logger.info(formatCompact({ bot: this.$id, mode: 'ws' }));
         this.startHeartbeat();
         resolve();
       });
@@ -116,13 +121,24 @@ export class OneBot12WsClient extends EventEmitter implements Bot<OneBot12WsConf
         this.$connected = false;
         const reasonStr = reason?.toString?.() || String(reason);
         const codeHint = code === 1005 ? ' [无状态，多为服务端/代理未发 close 帧即断开]' : code === 1006 ? ' [异常关闭]' : '';
-        this.logger.warn(`${this.$config.name} 连接已断开 (code=${code}${codeHint}${reasonStr ? `, reason=${reasonStr}` : ''})，${this.$config.reconnect_interval ?? 5000}ms 后重连`);
+        this.logger.warn(formatCompact( {
+          op: 'disconnect',
+          bot: this.$config.name,
+          code,
+          error: `${reasonStr || 'closed'}${codeHint}`,
+          reconnect_ms: this.$config.reconnect_interval ?? 5000,
+        }));
         reject(new Error(`OneBot12 WS 关闭: ${code} ${reasonStr}`));
         this.scheduleReconnect();
       });
 
       this.ws.on('error', (err) => {
-        this.logger.warn(`${this.$config.name} WS 错误: ${err instanceof Error ? err.message : String(err)}`);
+        this.logger.warn(formatCompact( {
+          op: 'ws_error',
+          bot: this.$config.name,
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        }));
         reject(err);
       });
     });

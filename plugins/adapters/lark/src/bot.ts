@@ -4,14 +4,7 @@
 import type { Context } from "koa";
 import axios, { type AxiosInstance } from "axios";
 import { createHash } from "crypto";
-import {
-  Bot,
-  Message,
-  SendOptions,
-  SendContent,
-  MessageSegment,
-  segment,
-} from "zhin.js";
+import { formatCompact, Bot, Message, MessageSegment, segment, SendContent, SendOptions } from 'zhin.js';
 import type { LarkBotConfig, LarkMessage, LarkEvent, AccessToken } from "./types.js";
 import type { LarkAdapter } from "./adapter.js";
 
@@ -75,7 +68,7 @@ export class LarkBot implements Bot<LarkBotConfig, LarkMessage> {
             if (this.$config.verificationToken) {
                 const token = headers['x-lark-request-token'] as string;
                 if (token !== this.$config.verificationToken) {
-                    this.logger.warn('Invalid verification token in webhook');
+                    this.logger.warn(formatCompact( { op: 'webhook', ok: false, error: 'invalid verification token' }));
                     ctx.status = 403;
                     ctx.body = 'Forbidden';
                     return;
@@ -90,7 +83,7 @@ export class LarkBot implements Bot<LarkBotConfig, LarkMessage> {
                 const bodyStr = JSON.stringify(body);
                 
                 if (!this.verifySignature(timestamp, nonce, bodyStr, signature)) {
-                    this.logger.warn('Invalid signature in webhook');
+                    this.logger.warn(formatCompact( { op: 'webhook', ok: false, error: 'invalid signature' }));
                     ctx.status = 403;
                     ctx.body = 'Forbidden';
                     return;
@@ -138,7 +131,13 @@ export class LarkBot implements Bot<LarkBotConfig, LarkMessage> {
         if (event.message) {
             const message = this.$formatMessage(event.message, event);
             this.adapter.emit('message.receive', message);
-            this.logger.info(`${this.$config.name} recv  ${message.$channel.type}(${message.$channel.id}): ${segment.raw(message.$content)}`);
+            this.logger.debug(formatCompact( {
+              op: 'recv',
+              bot: this.$config.name,
+              channel: message.$channel.type,
+              id: message.$channel.id,
+              len: segment.raw(message.$content).length,
+            }));
         }
     }
 
@@ -461,8 +460,8 @@ export class LarkBot implements Bot<LarkBotConfig, LarkMessage> {
             await this.refreshAccessToken();
             
             this.$connected = true;
-            this.logger.info(`Lark bot connected: ${this.$config.name}`);
-            this.logger.info(`Webhook URL: ${this.$config.webhookPath}`);
+            this.logger.info(formatCompact({ bot: this.$config.name }));
+            this.logger.info(formatCompact( { op: 'webhook', path: this.$config.webhookPath }));
             
         } catch (error) {
             this.logger.error('Failed to connect Lark bot:', error);
@@ -473,7 +472,7 @@ export class LarkBot implements Bot<LarkBotConfig, LarkMessage> {
     async $disconnect(): Promise<void> {
         try {
             this.$connected = false;
-            this.logger.info('Lark bot disconnected');
+            this.logger.info(formatCompact( { op: 'disconnect', bot: this.$config.name }));
         } catch (error) {
             this.logger.error('Error disconnecting Lark bot:', error);
         }
@@ -552,7 +551,7 @@ export class LarkBot implements Bot<LarkBotConfig, LarkMessage> {
             });
 
             if (response.data.code === 0) {
-                this.logger.info(`创建群聊成功: ${response.data.data.chat_id}`);
+                this.logger.debug(formatCompact( { op: 'create_chat', chat: response.data.data.chat_id }));
                 return response.data.data.chat_id;
             }
             throw new Error(`Failed to create chat: ${response.data.msg}`);
@@ -575,7 +574,7 @@ export class LarkBot implements Bot<LarkBotConfig, LarkMessage> {
             const response = await this.axiosInstance.put(`/im/v1/chats/${chatId}`, options);
 
             if (response.data.code === 0) {
-                this.logger.info(`更新群信息成功: ${chatId}`);
+                this.logger.debug(formatCompact( { op: 'update_chat', chat: chatId }));
                 return true;
             }
             throw new Error(`Failed to update chat: ${response.data.msg}`);
@@ -597,7 +596,7 @@ export class LarkBot implements Bot<LarkBotConfig, LarkMessage> {
             });
 
             if (response.data.code === 0) {
-                this.logger.info(`添加群成员成功: ${chatId}`);
+                this.logger.debug(formatCompact( { op: 'add_member', chat: chatId }));
                 return true;
             }
             throw new Error(`Failed to add members: ${response.data.msg}`);
@@ -619,7 +618,7 @@ export class LarkBot implements Bot<LarkBotConfig, LarkMessage> {
             });
 
             if (response.data.code === 0) {
-                this.logger.info(`移除群成员成功: ${chatId}`);
+                this.logger.debug(formatCompact( { op: 'remove_member', chat: chatId }));
                 return true;
             }
             throw new Error(`Failed to remove members: ${response.data.msg}`);
@@ -656,7 +655,7 @@ export class LarkBot implements Bot<LarkBotConfig, LarkMessage> {
             const response = await this.axiosInstance.delete(`/im/v1/chats/${chatId}`);
 
             if (response.data.code === 0) {
-                this.logger.info(`解散群聊成功: ${chatId}`);
+                this.logger.debug(formatCompact( { op: 'delete_chat', chat: chatId }));
                 return true;
             }
             throw new Error(`Failed to dissolve chat: ${response.data.msg}`);
@@ -678,7 +677,7 @@ export class LarkBot implements Bot<LarkBotConfig, LarkMessage> {
             });
 
             if (response.data.code === 0) {
-                this.logger.info(`设置群管理员成功: ${chatId}`);
+                this.logger.debug(formatCompact( { op: 'set_admin', chat: chatId }));
                 return true;
             }
             throw new Error(`Failed to set managers: ${response.data.msg}`);
@@ -700,7 +699,7 @@ export class LarkBot implements Bot<LarkBotConfig, LarkMessage> {
             });
 
             if (response.data.code === 0) {
-                this.logger.info(`移除群管理员成功: ${chatId}`);
+                this.logger.debug(formatCompact( { op: 'remove_admin', chat: chatId }));
                 return true;
             }
             throw new Error(`Failed to remove managers: ${response.data.msg}`);

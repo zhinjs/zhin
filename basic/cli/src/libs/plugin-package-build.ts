@@ -5,6 +5,7 @@ import fs from "fs-extra";
 import path from "path";
 import * as esbuild from "esbuild";
 import spawn from "cross-spawn";
+import { formatCompact } from '@zhin.js/logger';
 import { logger } from "../utils/logger.js";
 
 const CLIENT_ENTRY_CANDIDATES = [
@@ -125,7 +126,7 @@ async function intrinsicBuildServer(cwd: string): Promise<void> {
   if (!hasSrc) return;
   const tsconfig = resolveTsconfig(cwd);
   if (!tsconfig) {
-    logger.warn("存在 src/ 但未找到 tsconfig.json / tsconfig.build.json，跳过 tsc。");
+    logger.warn(formatCompact( { cmd: "build", op: "skip_tsc", reason: "no tsconfig" }));
     return;
   }
   const r = spawn.sync("npx", ["tsc", "-p", tsconfig], {
@@ -144,7 +145,7 @@ async function intrinsicBuildClient(
 ): Promise<void> {
   const entry = resolveClientEntry(cwd);
   if (!entry) {
-    logger.warn("存在 client/ 但未找到入口文件（index/main 或 client/src/index），跳过 client 构建。");
+    logger.warn(formatCompact( { cmd: "build", op: "skip_client", reason: "no entry" }));
     return;
   }
   const outDir = path.join(cwd, "dist");

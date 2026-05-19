@@ -14,7 +14,7 @@
  *   删除关键词 <keyword:text>               删除关键词
  *   关键词列表                               查看所有关键词
  */
-import { usePlugin, MessageCommand, ZhinTool } from 'zhin.js'
+import { formatCompact, MessageCommand, usePlugin, ZhinTool } from 'zhin.js'
 
 const plugin = usePlugin()
 const { addCommand, addMiddleware, addTool, logger } = plugin
@@ -43,7 +43,7 @@ plugin.on('notice.receive', async (notice) => {
       type: notice.$channel.type,
     })
   } catch (e: any) {
-    logger.warn(`发送入群欢迎消息失败: ${e.message}`)
+    logger.warn(formatCompact( { op: 'welcome', ok: false, error: e.message }))
   }
 })
 
@@ -134,7 +134,7 @@ plugin.on('notice.receive', async (notice) => {
       type: notice.$channel.type,
     })
   } catch (e: any) {
-    logger.warn(`发送撤回提示失败: ${e.message}`)
+    logger.warn(formatCompact( { op: 'recall_notice', ok: false, error: e.message }))
   }
 })
 

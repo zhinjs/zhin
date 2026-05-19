@@ -4,7 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { IncomingMessage, ServerResponse, Server } from "node:http";
 import type {} from "@zhin.js/http";
-import { usePlugin, type ToolFeature, type Tool } from "zhin.js";
+import { formatCompact, type Tool, type ToolFeature, usePlugin } from 'zhin.js';
 import { z } from "zod";
 import { registerTools } from "./tools.js";
 import { registerResources } from "./resources.js";
@@ -154,7 +154,7 @@ useContext("server", (server: Server) => {
   const { enabled = true, path: mcpPath = "/mcp" } = appConfig.mcp || {};
 
   if (!enabled) {
-    logger.info("MCP Server is disabled");
+    logger.info(formatCompact({ enabled: false }));
     return;
   }
 
@@ -224,7 +224,7 @@ useContext("server", (server: Server) => {
     }
   });
 
-  logger.info(`MCP Server ready at ${mcpPath} (stateless mode)`);
+  logger.info(formatCompact({ path: mcpPath, mode: "stateless" }));
 
   onDispose(() => {
     server.removeAllListeners("request");

@@ -1,4 +1,4 @@
-import { MessageCommand, ZhinTool, usePlugin } from 'zhin.js'
+import { formatCompact, MessageCommand, usePlugin, ZhinTool } from 'zhin.js'
 
 const { addCommand, addTool, logger } = usePlugin()
 
@@ -11,7 +11,7 @@ addCommand(
     .action(async (_message, result) => {
       const text = result.params.text
       const qrUrl = `${QR_API_BASE}/create-qr-code/?size=300x300&data=${encodeURIComponent(text)}`
-      logger.info(`生成二维码: ${text}`)
+      logger.debug(formatCompact( { op: 'generate', len: text.length }))
       return [{ type: 'image' as const, data: { url: qrUrl } }]
     }),
 )
@@ -37,7 +37,7 @@ addCommand(
         }
         return `识别结果：${symbol.data}`
       } catch (e) {
-        logger.warn('扫码失败', e)
+        logger.warn(formatCompact( { op: 'scan', ok: false, error: e instanceof Error ? e.message : String(e) }))
         return '二维码识别失败，请检查图片链接是否有效'
       }
     }),

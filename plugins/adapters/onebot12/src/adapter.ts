@@ -3,7 +3,7 @@
  * 协议文档：https://12.onebot.dev/
  */
 import type { Router } from '@zhin.js/http';
-import { Adapter, Plugin } from 'zhin.js';
+import { formatCompact, Adapter, Plugin } from 'zhin.js';
 import { OneBot12WsClient } from './bot-ws.js';
 import { OneBot12WebhookBot } from './bot-webhook.js';
 import { OneBot12WssServer } from './bot-wss.js';
@@ -48,6 +48,5 @@ export class OneBot12Adapter extends Adapter<OneBot12Bot> {
       this.#router = router;
     });
     await super.start();
-    this.plugin.logger.info('OneBot12 适配器已启动');
   }
 }

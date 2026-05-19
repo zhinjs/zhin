@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
 import { execFileSync } from 'node:child_process';
 
@@ -16,7 +17,7 @@ export const searchCommand = new Command('search')
   .option('--official', '仅显示官方插件', false)
   .action(async (keyword: string, options: SearchOptions) => {
     try {
-      logger.info('正在搜索插件...');
+      logger.info(formatCompact( { cmd: 'search', op: 'search' }));
       logger.log('');
 
       // 构建搜索查询
@@ -81,7 +82,7 @@ export const searchCommand = new Command('search')
 
         // 显示结果
         if (filteredResults.length === 0) {
-          logger.warn('未找到匹配的插件');
+          logger.warn(formatCompact( { cmd: 'search', op: 'no_results' }));
           logger.log('');
           logger.log('💡 提示：');
           logger.log('  - 尝试使用不同的关键词');
@@ -150,7 +151,7 @@ export const infoCommand = new Command('info')
   .argument('<package>', '插件包名')
   .action(async (packageName: string) => {
     try {
-      logger.info(`正在获取 ${packageName} 的信息...`);
+      logger.info(formatCompact( { cmd: 'info', op: 'fetch', package: packageName }));
       logger.log('');
 
       const viewArgs = ['view', packageName, '--json'];

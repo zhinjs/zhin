@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
 import { loadEnvFiles } from '../utils/env.js';
 import { spawn, ChildProcess } from 'child_process';
@@ -16,7 +17,11 @@ export const devCommand = new Command('dev')
       // 检查是否是Zhin项目
       if (!isZhinProject(cwd)) {
         logger.error('❌ 当前目录不是Zhin项目');
-        logger.info('💡 请在Zhin项目根目录运行此命令，或使用 "zhin new <project-name>" 创建新项目');
+        logger.info(formatCompact( {
+          cmd: 'dev',
+          op: 'hint',
+          hint: '在项目根目录运行，或 zhin new <project-name> 创建新项目',
+        }));
         process.exit(1);
       }
 
@@ -24,8 +29,7 @@ export const devCommand = new Command('dev')
       const nodeModulesPath = path.join(cwd, 'node_modules');
       if (!fs.existsSync(nodeModulesPath)) {
         logger.error('❌ 依赖未安装或不完整');
-        logger.info('💡 请运行以下命令以安装依赖：');
-        logger.info('   pnpm install');
+        logger.info(formatCompact( { cmd: 'dev', op: 'hint', hint: 'pnpm install' }));
         process.exit(1);
       }
 
@@ -96,7 +100,7 @@ export const devCommand = new Command('dev')
         if (isRestarting || isKilling) return;
         isRestarting = true;
 
-        logger.info('🔄 正在重启开发服务器...');
+        logger.info(formatCompact( { cmd: 'dev', op: 'restart' }));
 
         // 优雅关闭当前进程
         if (child && !child.killed) {
@@ -123,9 +127,9 @@ export const devCommand = new Command('dev')
             // 提供常见问题的解决建议
             if (error.message.includes('ENOENT')) {
               if (options.bun) {
-                  logger.info('💡 请确保已安装 bun: https://bun.sh/');
+                  logger.info(formatCompact( { cmd: 'dev', op: 'hint', hint: '安装 bun: https://bun.sh/' }));
               } else {
-                logger.info('💡 请确保已安装 tsx: npm install -D tsx');
+                logger.info(formatCompact( { cmd: 'dev', op: 'hint', hint: 'npm install -D tsx' }));
               }
             }
 
@@ -155,7 +159,7 @@ export const devCommand = new Command('dev')
       // 处理退出信号
       const cleanup = () => {
         if (isKilling) return;
-        logger.info('🛑 正在关闭开发服务器...');
+        logger.info(formatCompact( { cmd: 'dev', op: 'shutdown' }));
         isKilling = true;
 
         if (child && !child.killed) {
@@ -173,7 +177,7 @@ export const devCommand = new Command('dev')
             fs.removeSync(pidFile);
           }
 
-          logger.info('✅ 开发服务器已关闭');
+          logger.info(formatCompact( { cmd: 'dev', op: 'exit', ok: true }));
           process.exit(0);
         }, 3000);
       };
@@ -181,7 +185,7 @@ export const devCommand = new Command('dev')
       process.on('SIGINT', cleanup);
       process.on('SIGTERM', cleanup);
 
-      logger.info('📦 开发模式运行中 (Ctrl+C 退出, process.exit(51) 重启)');
+      logger.info(formatCompact({ hint: 'Ctrl+C 退出, process.exit(51) 重启' }));
 
     } catch (error) {
       logger.error(`❌ 开发模式启动失败: ${error}`);

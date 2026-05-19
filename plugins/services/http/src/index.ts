@@ -1,4 +1,4 @@
-import { usePlugin, DatabaseFeature, Models, Adapter, SystemLog, Plugin, Feature } from "zhin.js";
+import { formatCompact, Adapter, DatabaseFeature, Feature, Models, Plugin, SystemLog, usePlugin } from 'zhin.js';
 import { Schema } from "@zhin.js/schema";
 import { createServer, Server } from "http";
 import crypto from "node:crypto";
@@ -533,7 +533,7 @@ useContext("config", (configService) => {
         : `${host}:${address.port}`;
     const apiUrl = `http://${visitAddress}${base}`;
 
-    logger.info(`HTTP 服务已启动 (port=${port}, api=${apiUrl}, token=${token.slice(0, 6)}...)`);
+    logger.info(formatCompact({ port, api: apiUrl, token_prefix: token.slice(0, 6) }));
   });
 });
 

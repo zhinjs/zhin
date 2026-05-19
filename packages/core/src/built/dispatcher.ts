@@ -202,7 +202,16 @@ export function createMessageDispatcher(
   let dualRoute = resolveDualRouteConfig(options?.dualRoute);
 
   let commandPrefixIndex: Map<string, boolean> | null = null;
-  let lastCommandCount = -1;
+  let lastCommandSignature = '';
+
+  function commandIndexSignature(): string {
+    const commandService = rootPlugin?.inject('command');
+    if (!commandService?.items?.length) return '';
+    return commandService.items
+      .map((cmd) => cmd.pattern)
+      .sort()
+      .join('\0');
+  }
 
   function rebuildCommandIndex(): Map<string, boolean> {
     const index = new Map<string, boolean>();
@@ -219,11 +228,10 @@ export function createMessageDispatcher(
   }
 
   function getCommandIndex(): Map<string, boolean> {
-    const commandService = rootPlugin?.inject('command');
-    const currentCount = commandService?.items?.length ?? 0;
-    if (!commandPrefixIndex || currentCount !== lastCommandCount) {
+    const signature = commandIndexSignature();
+    if (!commandPrefixIndex || signature !== lastCommandSignature) {
       commandPrefixIndex = rebuildCommandIndex();
-      lastCommandCount = currentCount;
+      lastCommandSignature = signature;
     }
     return commandPrefixIndex;
   }
@@ -337,7 +345,7 @@ export function createMessageDispatcher(
     const commandService = rootPlugin.inject('command');
     if (!commandService) return;
     const response = await commandService.handle(message, rootPlugin);
-    if (response) {
+    if (response !== undefined && response !== null) {
       await replyWithPolishInternal(message, 'command', response);
     }
   }

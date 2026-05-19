@@ -5,14 +5,7 @@ import WebSocket, { WebSocketServer } from 'ws';
 import { EventEmitter } from 'events';
 import { clearInterval } from 'node:timers';
 import { IncomingMessage } from 'http';
-import {
-  Bot,
-  Message,
-  SendOptions,
-  segment,
-  Notice,
-  Request,
-} from 'zhin.js';
+import { formatCompact, Bot, Message, Notice, Request, segment, SendOptions } from 'zhin.js';
 import type { Router } from '@zhin.js/http';
 import type {
   OneBot11WsServerConfig,
@@ -51,7 +44,9 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11WsServ
   }
 
   async $connect(): Promise<void> {
-    if (!this.$config.access_token) this.logger.warn(`missing 'access_token', your OneBot protocol is not safely`);
+    if (!this.$config.access_token) {
+      this.logger.warn(formatCompact({ bot: this.$id, ok: false, error: 'missing access_token' }));
+    }
     this.#wss = this.router.ws(this.$config.path, {
       verifyClient: (info: { origin: string; secure: boolean; req: IncomingMessage }) => {
         const { req: { headers } } = info;
@@ -63,15 +58,26 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11WsServ
         return true;
       },
     });
-    this.logger.info(`ws server start at path:${this.$config.path}`);
+    this.logger.info(formatCompact( { op: 'listen', bot: this.$id, mode: 'wss', path: this.$config.path }));
     this.#wss.on('connection', (client, req) => {
       this.startHeartbeat();
-      this.logger.info(`已连接到协议端：${req.socket.remoteAddress}`);
-      client.on('error', (err) => this.logger.warn(`OneBot11 反向 WS 连接错误: ${err instanceof Error ? err.message : String(err)}`));
+      this.logger.info(formatCompact({ bot: this.$id, peer: req.socket.remoteAddress }));
+      client.on('error', (err) => this.logger.warn(formatCompact( {
+        op: 'ws_error',
+        bot: this.$id,
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      })));
       client.on('close', (code, reason) => {
         const reasonStr = reason?.toString?.() || String(reason ?? '');
         const codeHint = code === 1005 ? ' [无状态]' : code === 1006 ? ' [异常关闭]' : '';
-        this.logger.warn(`OneBot11 反向 WS 与协议端(${req.socket.remoteAddress})连接已断开 (code=${code ?? '?'}${codeHint}${reasonStr ? `, reason=${reasonStr}` : ''})`);
+        this.logger.warn(formatCompact( {
+          op: 'disconnect',
+          bot: this.$id,
+          peer: req.socket.remoteAddress,
+          code: code ?? '?',
+          error: `${reasonStr || 'closed'}${codeHint}`,
+        }));
         for (const [key, value] of this.#clientMap) {
           if (client === value) this.#clientMap.delete(key);
         }
@@ -272,7 +278,7 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11WsServ
       case 'connect':
         this.#clientMap.set(String(message.self_id), client);
         this.$connected = true;
-        this.logger.info(`client ${message.self_id} of ${this.$config.name} by ${this.$config.context} connected`);
+        this.logger.info(formatCompact({ bot: this.$config.name, self_id: message.self_id }));
         break;
     }
   }

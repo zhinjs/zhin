@@ -12,7 +12,7 @@ export interface AISetupConfig {
 const PROVIDERS = [
   { name: 'OpenAI (GPT-4o, 推荐)', value: 'openai', defaultModel: 'gpt-4o' },
   { name: 'Anthropic (Claude)', value: 'anthropic', defaultModel: 'claude-sonnet-4-20250514' },
-  { name: 'DeepSeek', value: 'deepseek', defaultModel: 'deepseek-chat' },
+  { name: 'DeepSeek', value: 'deepseek', defaultModel: 'deepseek-v4-flash' },
   { name: 'Moonshot (月之暗面)', value: 'moonshot', defaultModel: 'moonshot-v1-8k' },
   { name: '智谱 AI (GLM)', value: 'zhipu', defaultModel: 'glm-4' },
   { name: 'Ollama (本地部署)', value: 'ollama', defaultModel: 'qwen3:8b' },

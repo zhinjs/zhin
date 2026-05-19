@@ -3,6 +3,7 @@
  * 在 zhin.js 主包中基于 database 与 inbox.enabled 自动启用。
  */
 import type { Plugin,Message,Request,Notice,NoticeChannel,MessageSender } from '@zhin.js/core';
+import { formatCompact } from '@zhin.js/logger';
 import type { AppConfig } from '../types.js';
 
 const TABLE_MESSAGE = 'unified_inbox_message';
@@ -91,7 +92,7 @@ function persistMessage(plugin: Plugin, msg: Message): void {
     raw: msg?.$raw != null ? String(msg.$raw) : null,
     created_at: typeof msg?.$timestamp === 'number' ? msg.$timestamp : Date.now(),
   }).catch((err: unknown) => {
-    plugin.logger.warn('[inbox] persist message failed', (err as Error)?.message);
+    plugin.logger.warn(formatCompact( { persist: 'message', error: (err as Error)?.message }));
   });
 }
 
@@ -117,7 +118,7 @@ function persistRequest(plugin: Plugin, req: Request): void {
     resolved: 0,
     resolved_at: null,
   }).catch((err: unknown) => {
-    plugin.logger.warn('[inbox] persist request failed', (err as Error)?.message);
+    plugin.logger.warn(formatCompact( { persist: 'request', error: (err as Error)?.message }));
   });
 }
 
@@ -153,7 +154,7 @@ function persistNotice(plugin: Plugin, notice: Notice): void {
     payload: safeJson(payload),
     created_at: typeof notice?.$timestamp === 'number' ? notice.$timestamp : Date.now(),
   }).catch((err: unknown) => {
-    plugin.logger.warn('[inbox] persist notice failed', (err as Error)?.message);
+    plugin.logger.warn(formatCompact( { persist: 'notice', error: (err as Error)?.message }));
   });
 }
 
@@ -165,13 +166,13 @@ export function registerUnifiedInbox(plugin: Plugin, appConfig: AppConfig): void
   const enabled = !!appConfig?.inbox?.enabled;
   if (!enabled) return;
   if (!appConfig.database) {
-    plugin.logger.warn('[inbox] inbox.enabled is true but database is not configured; inbox disabled');
+    plugin.logger.warn(formatCompact( { error: 'no_database' }));
     return;
   }
 
   const defineModel = (plugin as unknown as { defineModel?: (name: string, def: unknown) => void }).defineModel;
   if (typeof defineModel !== 'function') {
-    plugin.logger.warn('[inbox] defineModel not available; inbox disabled');
+    plugin.logger.warn(formatCompact( { error: 'no_defineModel' }));
     return;
   }
 

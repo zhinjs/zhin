@@ -49,6 +49,7 @@ export {
 } from './providers/index.js';
 export type {
   OpenAIConfig,
+  DeepSeekConfig,
   AnthropicConfig,
   OllamaConfig,
 } from './providers/index.js';

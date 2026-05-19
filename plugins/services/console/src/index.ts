@@ -1,4 +1,4 @@
-import { usePlugin } from "@zhin.js/core";
+import { formatCompact, usePlugin } from '@zhin.js/core';
 import { PageManager, mountConsoleRouter } from "@zhin.js/console-core/node";
 import { existsSync, readFileSync } from "node:fs";
 import * as path from "path";
@@ -86,14 +86,14 @@ if (enabled) {
     try {
       attachment = await pageManager.start();
     } catch (err) {
-      logger.warn("[console] PageManager start failed (may need build):", (err as Error).message);
+      logger.warn(formatCompact( { op: "page_manager", ok: false, error: (err as Error).message }));
     }
 
     if (attachment && typeof attachment.bindDevWebSocket === "function" && router.server) {
       try {
         attachment.bindDevWebSocket(router.server);
       } catch (err) {
-        logger.warn("[console] Farm HMR WebSocket bind failed:", (err as Error).message);
+        logger.warn(formatCompact( { op: "hmr_ws", ok: false, error: (err as Error).message }));
       }
     }
 
@@ -124,8 +124,6 @@ if (enabled) {
     // useContext('web', …) 依赖该事件，否则永远不注册 addEntry（或与其它插件竞态）。
     await consolePlugin.dispatch("context.mounted", "web");
 
-    logger.info(
-      `Web console started (${isDev ? "development" : "production"}) at /console`,
-    );
+    logger.info(formatCompact({ mode: isDev ? "development" : "production", path: "/console" }));
   });
 }

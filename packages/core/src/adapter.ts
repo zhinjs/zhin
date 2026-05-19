@@ -7,6 +7,7 @@ import { Request } from "./request.js";
 import { BeforeSendHandler, SendOptions } from "./types.js";
 import { segment } from "./utils.js";
 import { runInboundMessage } from "./built/inbound-runner.js";
+import { formatCompact, truncatePreview } from '@zhin.js/logger';
 /**
  * Adapter类：适配器抽象，管理多平台Bot实例。
  * 负责根据配置启动/关闭各平台机器人，统一异常处理。
@@ -51,7 +52,7 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
     this.on('call.recallMessage', async(bot_id, id) => {
       const bot = this.bots.get(bot_id);
       if(!bot) throw new Error(`Bot ${bot_id} not found`);
-      this.logger.info(`${bot_id} recall ${id}`);
+      this.logger.debug(formatCompact( { recall: id, bot: bot_id }));
       await bot.$recallMessage(id);
     })
   }
@@ -70,12 +71,16 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
       return EventEmitter.prototype.emit.call(this, event, ...args);
     }
     const message = args[0] as Message;
-    this.logger.info(`${message.$bot} recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`);
+    this.logger.info(formatCompact( {
+      recv: `${message.$channel.type}(${message.$channel.id})`,
+      bot: message.$bot,
+      preview: truncatePreview(segment.raw(message.$content), 80),
+    }));
 
     // 背压控制：limit > 0 时启用，超出并发上限丢弃消息并告警
     const limit = this.maxConcurrentMessages;
     if (limit > 0 && this.#pendingMessages >= limit) {
-      this.logger.warn(`message dropped: concurrency limit reached (${limit})`);
+      this.logger.warn(formatCompact( { drop: 'concurrency', limit }));
       return false;
     }
 
@@ -118,7 +123,11 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
     options=await this.renderSendMessage(options);
     const bot = this.bots.get(options.bot);
     if(!bot) throw new Error(`Bot ${options.bot} not found`);
-    this.logger.info(`${options.bot} send ${options.type}(${options.id}):${segment.raw(options.content)}`);
+    this.logger.info(formatCompact( {
+      send: `${options.type}(${options.id})`,
+      bot: options.bot,
+      preview: truncatePreview(segment.raw(options.content), 80),
+    }));
     return await bot.$sendMessage(options);
   }
   async start() {
@@ -131,10 +140,10 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
     for (const config of this.config) {
       const bot = this.createBot(config);
       await bot.$connect();
-      this.logger.debug(`bot ${bot.$id} of adapter ${this.name} connected`);
+      this.logger.debug(formatCompact( { connect: bot.$id, adapter: this.name }));
       this.bots.set(bot.$id, bot);
     }
-    this.logger.debug(`adapter ${this.name} started`);
+    this.logger.debug(formatCompact( { adapter: this.name }));
   }
   /**
    * 停止适配器，断开并移除所有Bot实例
@@ -145,7 +154,7 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
     for (const [id, bot] of this.bots) {
       try {
         await bot.$disconnect();
-        this.logger.debug(`bot ${id} of adapter ${this.name} disconnected`);
+        this.logger.debug(formatCompact( { disconnect: id, adapter: this.name }));
       } catch (error) {
         errors.push(error instanceof Error ? error : new Error(String(error)));
         this.logger.error(`bot ${id} of adapter ${this.name} disconnect failed:`, error);
@@ -163,7 +172,7 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
     // 移除所有事件监听器
     this.removeAllListeners();
     
-    this.logger.info(`adapter ${this.name} stopped`);
+    this.logger.debug(formatCompact( { stop: this.name }));
     
     if (errors.length) {
       throw new AggregateError(errors, `adapter ${this.name}: ${errors.length} bot(s) failed to disconnect`);

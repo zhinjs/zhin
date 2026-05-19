@@ -1,7 +1,4 @@
-import {
-  usePlugin,
-  segment,
-} from "zhin.js";
+import { formatCompact, segment, usePlugin } from 'zhin.js';
 import type { SendOptions } from "zhin.js";
 import {
   getEnabledWords,
@@ -141,7 +138,7 @@ const sensitiveFilterHandler = async (options: SendOptions) => {
       return options;
     }
 
-    logger.warn(`检测到敏感词: ${detectedWords.join(", ")}`);
+    logger.warn(formatCompact( { op: "match", count: detectedWords.length }));
 
     // 如果配置为拦截模式，返回警告消息
     if (config.block) {
@@ -171,5 +168,4 @@ const sensitiveFilterHandler = async (options: SendOptions) => {
 plugin.on('before.sendMessage', sensitiveFilterHandler);
 plugin.onDispose(() => { plugin.off('before.sendMessage', sensitiveFilterHandler); });
 
-logger.info("敏感词过滤功能已启用");
-logger.info(`敏感词过滤插件已加载，共 ${sensitiveWords.length} 个敏感词`);
+logger.info(formatCompact( { op: "load", words: sensitiveWords.length }));

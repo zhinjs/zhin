@@ -4,14 +4,7 @@
  * 不再直接依赖 @icqqjs/icqq 协议库。
  * 登录由 `icqq login` 完成，本 Bot 只负责连接守护进程并收发消息。
  */
-import {
-  Bot,
-  Message,
-  SendOptions,
-  MessageSegment,
-  SendContent,
-  segment,
-} from "zhin.js";
+import { formatCompact, Bot, Message, MessageSegment, segment, SendContent, SendOptions } from 'zhin.js';
 import type {
   IcqqBotConfig,
   IcqqSenderInfo,
@@ -64,20 +57,20 @@ export class IcqqBot implements Bot<IcqqBotConfig, IpcMessageEventData> {
     this.intentionalDisconnect = false;
     const rpc = this.$config.rpc;
 
-    if (rpc) {
-      this.logger.info(
-        `[${this.$id}] 正在通过 RPC 连接 icqq 守护进程 (${rpc.host}:${rpc.port})...`,
-      );
-    } else {
-      this.logger.info(`[${this.$id}] 正在连接 icqq 守护进程...`);
-    }
+    this.logger.debug(formatCompact( {
+      connecting: this.$id,
+      mode: rpc ? "rpc" : "ipc",
+      host: rpc?.host,
+      port: rpc?.port,
+    }));
 
     await this.rebindIpcSession();
 
-    this.logger.info(`[${this.$id}] 已连接守护进程${rpc ? " (RPC)" : ""}`);
-    this.logger.info(
-      `[${this.$id}] 登录成功，好友 ${this.friends.size}，群 ${this.groups.size}`,
-    );
+    this.logger.info(formatCompact( {
+      bot: this.$id,
+      friends: this.friends.size,
+      groups: this.groups.size,
+    }));
   }
 
   /** 建立或恢复与守护进程的 IPC/RPC 会话（订阅、缓存列表） */
@@ -147,23 +140,33 @@ export class IcqqBot implements Bot<IcqqBotConfig, IpcMessageEventData> {
         const delayMs = base + jitter;
 
         this.$connected = false;
-        this.logger.warn(
-          `[${this.$id}] 与 icqq 守护进程连接已断开，${delayMs}ms 后尝试重连（第 ${attempt + 1} 次）…`,
-        );
+        this.logger.warn(formatCompact( {
+          op: "disconnect",
+          bot: this.$id,
+          ok: false,
+          delay_ms: delayMs,
+          attempt: attempt + 1,
+        }));
 
         await new Promise<void>((r) => setTimeout(r, delayMs));
         if (this.intentionalDisconnect) break;
 
         try {
           await this.rebindIpcSession();
-          this.logger.info(
-            `[${this.$id}] 已重新连接守护进程，好友 ${this.friends.size}，群 ${this.groups.size}`,
-          );
+          this.logger.info(formatCompact( {
+            op: "reconnect",
+            bot: this.$id,
+            friends: this.friends.size,
+            groups: this.groups.size,
+          }));
           break;
         } catch (e: any) {
-          this.logger.warn(
-            `[${this.$id}] 重连失败: ${e?.message ?? String(e)}`,
-          );
+          this.logger.warn(formatCompact( {
+            op: "reconnect",
+            bot: this.$id,
+            ok: false,
+            error: e?.message ?? String(e),
+          }));
         }
       }
     } finally {
@@ -204,7 +207,7 @@ export class IcqqBot implements Bot<IcqqBotConfig, IpcMessageEventData> {
     this.subscriptions = [];
     this.ipc?.close();
     this.$connected = false;
-    this.logger.info(`[${this.$id}] 已断开连接`);
+    this.logger.info(formatCompact( { op: "disconnect", bot: this.$id }));
   }
 
   // ── 消息处理 ───────────────────────────────────────────────────────
@@ -245,9 +248,12 @@ export class IcqqBot implements Bot<IcqqBotConfig, IpcMessageEventData> {
       $timestamp: raw.time * 1000,
       $recall: async () => {
         // 合成 id 无法撤回
-        this.logger.warn(
-          `[${this.$id}] 收到的消息无法撤回（守护进程推送不含 message_id）`,
-        );
+        this.logger.warn(formatCompact( {
+          op: "recall",
+          bot: this.$id,
+          ok: false,
+          error: "no message_id in push",
+        }));
       },
       $reply: async (
         content: SendContent,
@@ -278,7 +284,12 @@ export class IcqqBot implements Bot<IcqqBotConfig, IpcMessageEventData> {
       message_id: id,
     });
     if (!resp.ok) {
-      this.logger.warn(`[${this.$id}] 撤回消息失败: ${resp.error}`);
+      this.logger.warn(formatCompact( {
+        op: "recall",
+        bot: this.$id,
+        ok: false,
+        error: resp.error,
+      }));
     }
   }
 

@@ -18,7 +18,7 @@ import type {
   AddJobOptions,
   IScheduler,
 } from './types.js';
-import { Logger } from '@zhin.js/logger';
+import { formatCompact, Logger } from '@zhin.js/logger';
 
 const logger = new Logger(null, 'scheduler');
 
@@ -168,7 +168,7 @@ export class Scheduler implements IScheduler {
     this.recomputeNextRuns();
     this.saveStore();
     this.armTimer();
-    logger.info({ jobs: this.store?.jobs.length ?? 0 }, 'Scheduler started');
+    logger.info(formatCompact( { jobs: this.store?.jobs.length ?? 0 }));
   }
 
   stop(): void {
@@ -255,12 +255,12 @@ export class Scheduler implements IScheduler {
         return;
       }
     }
-    logger.info({ jobId: job.id, name: job.name }, 'Scheduler: executing job');
+    logger.info(formatCompact( { job: job.name, job_id: job.id }));
     try {
       if (this.onJob) await this.onJob(job);
       job.state.lastStatus = 'ok';
       job.state.lastError = undefined;
-      logger.info({ jobId: job.id, name: job.name }, 'Scheduler: job completed');
+      logger.info(formatCompact( { job: job.name, job_id: job.id }));
     } catch (error) {
       job.state.lastStatus = 'error';
       job.state.lastError = String(error);
@@ -315,7 +315,7 @@ export class Scheduler implements IScheduler {
     store.jobs.push(job);
     this.saveStore();
     this.armTimer();
-    logger.info({ jobId: job.id, name: job.name }, 'Scheduler: added job');
+    logger.info(formatCompact( { added: job.name, job_id: job.id }));
     return job;
   }
 
@@ -327,7 +327,7 @@ export class Scheduler implements IScheduler {
     if (removed) {
       this.saveStore();
       this.armTimer();
-      logger.info({ jobId }, 'Scheduler: removed job');
+      logger.info(formatCompact( { removed: jobId }));
     }
     return removed;
   }

@@ -31,7 +31,7 @@ export class OpenAIProvider extends BaseProvider {
   contextWindow: number;
   capabilities = { vision: true, streaming: true, toolCalling: true, thinking: false };
 
-  private baseUrl: string;
+  protected baseUrl: string;
 
   constructor(config: OpenAIConfig = {}) {
     super(config);
@@ -48,7 +48,7 @@ export class OpenAIProvider extends BaseProvider {
   }
 
   async chat(request: ChatCompletionRequest): Promise<ChatCompletionResponse> {
-    const body = OpenAIProvider.sanitizeRequest(request);
+    const body = this.buildRequestBody(request);
     try {
       return await this.fetch<ChatCompletionResponse>(
         `${this.baseUrl}/chat/completions`,
@@ -65,7 +65,7 @@ export class OpenAIProvider extends BaseProvider {
   }
 
   async *chatStream(request: ChatCompletionRequest): AsyncIterable<ChatCompletionChunk> {
-    const body = OpenAIProvider.sanitizeRequest(request);
+    const body = this.buildRequestBody(request);
     let finalBody = body;
     // Pre-flight: for streaming we can't easily retry, so do a quick non-stream
     // probe if needed. Instead, just send and if it fails, retry without the param.
@@ -134,7 +134,7 @@ export class OpenAIProvider extends BaseProvider {
    * Drops non-standard fields (think, etc.) and optional fields that are undefined,
    * so strict APIs won't reject unknown parameters.
    */
-  private static sanitizeRequest(request: ChatCompletionRequest) {
+  protected buildRequestBody(request: ChatCompletionRequest): Record<string, unknown> {
     const clean: Record<string, unknown> = {
       model: request.model,
       messages: OpenAIProvider.normalizeMessages(request.messages),
@@ -167,30 +167,6 @@ export class OpenAIProvider extends BaseProvider {
     if (!(param in body)) return null;
     const { [param]: _, ...rest } = body;
     return rest;
-  }
-}
-
-/**
- * DeepSeek Provider（基于 OpenAI 兼容接口）
- */
-export class DeepSeekProvider extends OpenAIProvider {
-  name = 'deepseek';
-  models = [
-    'deepseek-chat',
-    'deepseek-coder',
-    'deepseek-reasoner',
-  ];
-
-  constructor(config: ProviderConfig = {}) {
-    super({
-      ...config,
-      baseUrl: config.baseUrl || 'https://api.deepseek.com/v1',
-    });
-    if (config.models?.length) this.models = config.models;
-  }
-
-  async listModels(): Promise<string[]> {
-    return this.models;
   }
 }
 

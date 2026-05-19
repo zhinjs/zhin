@@ -3,7 +3,7 @@
  * 
  * 进程监控与重启通知插件
  */
-import { usePlugin } from 'zhin.js';
+import { formatCompact, usePlugin } from 'zhin.js';
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
@@ -39,7 +39,7 @@ const config: Config = {
 };
 
 if (!config.enabled) {
-  logger.info('进程监控已禁用');
+  logger.info(formatCompact( { op: 'load', enabled: false }));
 }
 
 // ─── 状态管理 ────────────────────────────────────────────────────────────────
@@ -69,7 +69,7 @@ function loadProcessState() {
       processState = JSON.parse(data);
     }
   } catch (error) {
-    logger.warn('加载进程状态失败:', error);
+    logger.warn(formatCompact( { op: 'load_state', ok: false, error: String(error) }));
   }
 }
 
@@ -78,7 +78,7 @@ function saveProcessState() {
     fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
     fs.writeFileSync(STATE_FILE, JSON.stringify(processState, null, 2));
   } catch (error) {
-    logger.warn('保存进程状态失败:', error);
+    logger.warn(formatCompact( { op: 'save_state', ok: false, error: String(error) }));
   }
 }
 
@@ -96,17 +96,17 @@ async function detectStartupReason() {
     if (timeSinceLastStart < 5 * 60 * 1000) {
       reason = 'crash';
       processState.crashCount++;
-      logger.warn(`检测到异常重启（距上次启动 ${Math.floor(timeSinceLastStart / 1000)}s）`);
+      logger.warn(formatCompact( { op: 'restart', abnormal: true, since_last_s: Math.floor(timeSinceLastStart / 1000) }));
     } else {
       reason = 'restart';
       processState.restartCount++;
-      logger.info('检测到正常重启');
+      logger.info(formatCompact( { op: 'restart', abnormal: false }));
     }
     
     uptime = timeSinceLastStart;
     processState.totalUptime += uptime;
   } else {
-    logger.info('首次启动');
+    logger.info(formatCompact({ first: true }));
   }
 
   processState.lastPid = currentPid;
@@ -205,12 +205,12 @@ if (config.enabled) {
   detectStartupReason();
 
   process.on('SIGTERM', () => {
-    logger.info('收到 SIGTERM 信号');
+    logger.info(formatCompact( { op: 'shutdown', signal: 'SIGTERM' }));
     saveProcessState();
   });
 
   process.on('SIGINT', () => {
-    logger.info('收到 SIGINT 信号');
+    logger.info(formatCompact( { op: 'shutdown', signal: 'SIGINT' }));
     saveProcessState();
   });
 }

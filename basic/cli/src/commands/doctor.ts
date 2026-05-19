@@ -4,6 +4,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
 
 const execAsync = promisify(exec);
@@ -77,7 +78,7 @@ export const doctorCommand = new Command('doctor')
       if (options.fix) {
         // 创建默认配置
         await createDefaultConfig(cwd);
-        logger.info('已创建默认配置文件: zhin.config.yml');
+        logger.info(formatCompact( { cmd: 'doctor', op: 'create_config', file: 'zhin.config.yml' }));
       }
     }
 
@@ -108,7 +109,7 @@ export const doctorCommand = new Command('doctor')
       
       if (options.fix) {
         await createMissingBootstrapFiles(cwd, missingBootstrap);
-        logger.info(`已创建引导文件: ${missingBootstrap.join(', ')}`);
+        logger.info(formatCompact( { cmd: 'doctor', op: 'create_bootstrap', files: missingBootstrap.join(', ') }));
       }
     }
 
@@ -220,7 +221,7 @@ export const doctorCommand = new Command('doctor')
       
       if (options.fix) {
         await fs.writeFile(envFile, '# Zhin.js 环境变量\n');
-        logger.info('已创建 .env 文件');
+        logger.info(formatCompact( { cmd: 'doctor', op: 'create_env', file: '.env' }));
       }
     }
 

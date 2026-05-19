@@ -1,14 +1,7 @@
 /**
  * GitHub Bot 实现（基于 gh CLI）
  */
-import {
-  Bot,
-  Message,
-  SendOptions,
-  SendContent,
-  segment,
-  type MessageSegment,
-} from 'zhin.js';
+import { formatCompact, Bot, Message, segment, SendContent, SendOptions, type MessageSegment } from 'zhin.js';
 import type {
   GitHubBotConfig,
   IssueCommentPayload,
@@ -69,12 +62,12 @@ export class GitHubBot implements Bot<GitHubBotConfig, IssueCommentPayload> {
     const result = await this.gh.verifyAuth();
     if (!result.ok) throw new Error(`GitHub 认证失败: ${result.message}`);
     this.$connected = true;
-    this.logger.info(`GitHub bot ${this.$id} 已连接 — ${result.message}`);
+    this.logger.info(formatCompact({ bot: this.$id }));
   }
 
   async $disconnect(): Promise<void> {
     this.$connected = false;
-    this.logger.info(`GitHub bot ${this.$id} 已断开`);
+    this.logger.debug(formatCompact({ bot: this.$id, disconnect: true }));
   }
 
   $formatMessage(payload: IssueCommentPayload): Message<IssueCommentPayload> {
@@ -176,6 +169,6 @@ export class GitHubBot implements Bot<GitHubBotConfig, IssueCommentPayload> {
   }
 
   async $recallMessage(id: string): Promise<void> {
-    this.logger.warn('$recallMessage 需要 repo 信息，请使用 message.$recall()');
+    this.logger.warn(formatCompact( { op: 'recall', ok: false, error: 'use message.$recall()' }));
   }
 }

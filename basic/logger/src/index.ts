@@ -33,6 +33,16 @@ export type {
   Timer
 } from './logger.js'
 
+export {
+  formatCompact,
+  formatCompactLog,
+  formatCompactUsage,
+  addCompactUsage,
+  truncatePreview,
+  EMPTY_COMPACT_USAGE,
+} from './compact-log.js'
+export type { CompactFieldValue, CompactUsage } from './compact-log.js'
+
 // 导入默认logger和便捷方法
 import defaultLogger from './logger.js'
 

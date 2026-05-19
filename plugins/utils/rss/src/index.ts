@@ -31,7 +31,7 @@
  *   timeout: 15000
  * ```
  */
-import { usePlugin, Cron, ZhinTool, MessageCommand, Adapter, Schema } from "zhin.js";
+import { formatCompact, Adapter, Cron, MessageCommand, Schema, usePlugin, ZhinTool } from 'zhin.js';
 import Parser from "rss-parser";
 
 const plugin = usePlugin();
@@ -117,7 +117,7 @@ useContext("database", (db: any) => {
     item_title: { type: "text", default: "" },
     seen_at: { type: "text", default: "" },
   });
-  logger.info("RSS 数据模型已注册");
+  logger.info(formatCompact( { op: "model" }));
 });
 
 function ts(): string {
@@ -163,7 +163,14 @@ async function pushToChannel(
     });
     return true;
   } catch (e) {
-    logger.warn(`推送失败 [${adapterName}:${botId} → ${channelType}:${channelId}]: ${(e as Error).message}`);
+    logger.warn(formatCompact( {
+      op: "push",
+      ok: false,
+      adapter: adapterName,
+      bot: botId,
+      channel: `${channelType}:${channelId}`,
+      error: (e as Error).message,
+    }));
     return false;
   }
 }
@@ -239,7 +246,7 @@ async function pollAllFeeds(): Promise<void> {
       }
     }
   } catch (e) {
-    logger.warn(`轮询异常: ${(e as Error).message}`);
+    logger.warn(formatCompact( { op: "poll", ok: false, error: (e as Error).message }));
   } finally {
     polling = false;
   }
@@ -546,4 +553,4 @@ plugin.addTool(
     .toTool(),
 );
 
-logger.info(`插件已加载 (轮询=${config.pollCron}, 上限=${config.maxPerGroup}/会话)`);
+logger.info(formatCompact( { op: "load", poll: config.pollCron, max_per_group: config.maxPerGroup }));

@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
 import fs from 'fs-extra';
 import path from 'path';
@@ -112,7 +113,7 @@ export const pubCommand = new Command('pub')
       if (!pluginName) {
         if (candidates.length === 1) {
           selected = candidates[0];
-          logger.info(`自动选择插件: ${selected!.relPath}`);
+          logger.info(formatCompact( { cmd: 'pub', op: 'select', plugin: selected!.relPath }));
         } else {
           const { plugin } = await inquirer.prompt([
             {
@@ -154,7 +155,7 @@ export const pubCommand = new Command('pub')
       const packageName = packageJson.name;
       const version = packageJson.version;
 
-      logger.info(`准备发布插件: ${packageName}@${version}`);
+      logger.info(formatCompact( { cmd: 'pub', op: 'prepare', package: packageName, version }));
       logger.log('');
 
       // 确认发布
@@ -169,14 +170,14 @@ export const pubCommand = new Command('pub')
         ]);
 
         if (!confirm) {
-          logger.warn('已取消发布');
+          logger.warn(formatCompact( { cmd: 'pub', op: 'cancelled' }));
           process.exit(0);
         }
       }
 
       // 构建插件
       if (!options.skipBuild) {
-        logger.info('正在构建插件...');
+        logger.info(formatCompact( { cmd: 'pub', op: 'build' }));
         try {
           execSync('pnpm build', {
             cwd: pluginDir,
@@ -212,7 +213,7 @@ export const pubCommand = new Command('pub')
       publishArgs.push('--no-git-checks');
 
       // 发布插件
-      logger.info(`正在发布${options.dryRun ? '（试运行）' : ''}...`);
+      logger.info(formatCompact( { cmd: 'pub', op: 'publish', dry_run: options.dryRun ?? false }));
       logger.log(`命令: pnpm ${publishArgs.join(' ')}`);
       logger.log('');
 

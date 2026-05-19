@@ -8,7 +8,7 @@
  *   5. 降级策略：摘要失败时使用更粗糙的摘要
  */
 
-import { Logger } from '@zhin.js/logger';
+import { formatCompact, Logger, truncatePreview } from '@zhin.js/logger';
 import type { AIProvider, ChatMessage } from '../types.js';
 import { microCompactMessages } from './micro-compact.js';
 import type { MicroCompactOptions } from './micro-compact.js';
@@ -240,7 +240,7 @@ The summary should be brief but informative so that later turns can quickly reco
     const result = response.choices?.[0]?.message?.content;
     return typeof result === 'string' ? result : DEFAULT_SUMMARY_FALLBACK;
   } catch (e: any) {
-    logger.warn(`摘要生成失败: ${e.message}`);
+    logger.warn(formatCompact( { summarize: 'fail', error: truncatePreview(e.message, 80) }));
     return DEFAULT_SUMMARY_FALLBACK;
   }
 }
@@ -296,7 +296,7 @@ export async function summarizeWithFallback(params: {
   try {
     return await summarizeChunks(params);
   } catch (fullError: any) {
-    logger.warn(`完整摘要失败，尝试部分摘要: ${fullError.message}`);
+    logger.warn(formatCompact( { summarize: 'partial_fail', error: truncatePreview(fullError.message, 80) }));
   }
 
   // 降级：排除超大消息
@@ -320,7 +320,7 @@ export async function summarizeWithFallback(params: {
       const notes = oversizedNotes.length > 0 ? `\n\n${oversizedNotes.join('\n')}` : '';
       return partial + notes;
     } catch (partialError: any) {
-      logger.warn(`部分摘要也失败: ${partialError.message}`);
+      logger.warn(formatCompact( { summarize: 'fail', error: truncatePreview(partialError.message, 80) }));
     }
   }
 
@@ -565,7 +565,7 @@ export function shouldAutoCompact(
 ): boolean {
   // 断路器
   if (tracking && tracking.consecutiveFailures >= MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES) {
-    logger.warn(`连续 ${tracking.consecutiveFailures} 次压缩失败，断路器开启，跳过压缩`);
+    logger.warn(formatCompact( { circuit_breaker: tracking.consecutiveFailures }));
     return false;
   }
 
@@ -608,9 +608,10 @@ export async function autoCompactIfNeeded(params: {
   if (microResult.didCompact) {
     messages = microResult.messages;
     microSavedTokens = microResult.savedTokens;
-    logger.info(
-      `Micro-compact 清理了 ${microResult.clearedCount} 条工具结果，节省约 ${microResult.savedTokens} tokens`,
-    );
+    logger.debug(formatCompact( {
+      micro: microResult.clearedCount,
+      saved: microResult.savedTokens,
+    }));
   }
 
   // 检查 micro-compact 后是否仍需 auto-compact
@@ -651,9 +652,10 @@ export async function autoCompactIfNeeded(params: {
       tracking.consecutiveFailures = 0;
     }
 
-    logger.info(
-      `Auto-compact 压缩了 ${result.compactedCount} 条消息，节省约 ${result.savedTokens} tokens`,
-    );
+    logger.debug(formatCompact( {
+      auto: result.compactedCount,
+      saved: result.savedTokens,
+    }));
 
     return {
       wasCompacted: true,

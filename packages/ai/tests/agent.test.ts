@@ -48,6 +48,7 @@ describe('Agent 完整流程测试', () => {
 
       expect(result.content).toBe('你好！');
       expect(result.iterations).toBe(1);
+      expect(result.usage.total_tokens).toBe(20);
     });
 
     it('应该正确统计 token 用量', async () => {

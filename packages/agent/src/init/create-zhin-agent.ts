@@ -3,7 +3,7 @@
  * (follow-up sender, subagent manager, cron engine, scheduler).
  */
 import * as path from 'path';
-import { getPlugin, Scheduler, getScheduler, setScheduler, type MessageType, type SendOptions, isZhinTool } from '@zhin.js/core';
+import { formatCompact, getPlugin, getScheduler, isZhinTool, Scheduler, setScheduler, type MessageType, type SendOptions } from '@zhin.js/core';
 import { ModelRegistry, computeTierScore } from '@zhin.js/ai';
 import { ZhinAgent } from '../zhin-agent/index.js';
 import { createBuiltinTools } from '../builtin-tools.js';
@@ -19,7 +19,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
 
   useContext('ai', (ai) => {
     if (!ai.isReady()) {
-      logger.warn('AI Service not ready, ZhinAgent not created');
+      logger.warn(formatCompact( { error: 'ai_not_ready' }));
       return;
     }
 
@@ -54,10 +54,10 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
         if (hadCache) {
           logger.debug(`ModelRegistry: refreshed ${discovered.length} models from ${provider.name}`);
         } else {
-          logger.info(`ModelRegistry: discovered ${discovered.length} models from ${provider.name}`);
+          logger.debug(formatCompact( { provider: provider.name, models: discovered.length }));
         }
       } catch (e) {
-        logger.warn(`ModelRegistry: discovery failed for ${provider.name}: ${(e as Error).message}`);
+        logger.warn(formatCompact( { provider: provider.name, error: (e as Error).message }));
       }
     })();
 
@@ -94,7 +94,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     agent.setSubagentSender(async (origin, content) => {
       const adapter = resolveAdapter(origin.platform);
       if (!adapter) {
-        logger.warn(`[子任务] 找不到适配器: ${origin.platform}`);
+        logger.warn(formatCompact( { error: 'adapter_not_found', platform: origin.platform }));
         return;
       }
       await adapter.sendMessage({
@@ -144,7 +144,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
       },
     });
     setScheduler(scheduler);
-    scheduler.start().catch((e) => logger.warn('Scheduler start failed: ' + (e as Error).message));
+    scheduler.start().catch((e) => logger.warn(formatCompact( { error: (e as Error).message })));
 
     logger.debug('ZhinAgent created');
     return () => {

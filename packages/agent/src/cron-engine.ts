@@ -11,9 +11,10 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { Cron, ZhinTool } from '@zhin.js/core';
+import { formatCompact, Cron, ZhinTool } from '@zhin.js/core';
+import { formatCompact } from '@zhin.js/logger';
 import type { ToolContext } from '@zhin.js/core';
-import { Logger } from '@zhin.js/core';
+import { formatCompact, Logger } from '@zhin.js/core';
 
 const logger = new Logger(null, 'cron-engine');
 
@@ -120,7 +121,7 @@ export class PersistentCronEngine {
         this.registerOne(job, addCron, runner);
       }
       if (jobs.filter((j) => j.enabled).length > 0) {
-        logger.info(`已加载 ${this.disposes.size} 个持久化定时任务`);
+        logger.debug(formatCompact( { jobs: this.disposes.size }));
       }
     }).catch((e) => {
       logger.warn('加载持久化定时任务失败: ' + (e?.message || String(e)));

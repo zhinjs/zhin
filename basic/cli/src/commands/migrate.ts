@@ -12,6 +12,7 @@ import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'path';
 import { execSync } from 'child_process';
+import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
 
 const cwd = process.cwd();
@@ -65,7 +66,7 @@ function upgradePackageJson(pkgPath: string, options: { toLatest: boolean; dryRu
 
   const zhinDeps = collectZhinDeps(pkg);
   if (zhinDeps.length === 0) {
-    logger.warn('未在 package.json 中发现 zhin.js 或 @zhin.js/* 依赖');
+    logger.warn(formatCompact( { cmd: 'migrate', op: 'no_zhin_deps' }));
     return false;
   }
 

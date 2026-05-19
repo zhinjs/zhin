@@ -1,7 +1,8 @@
 /**
  * DeferredWorkerRunner — 同步 Worker 子 Agent，在隔离上下文中执行 deferred 工具任务。
  */
-import { Logger } from '@zhin.js/core';
+import { formatCompact, Logger } from '@zhin.js/core';
+import { formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
 import type { AIProvider, AgentTool } from '@zhin.js/core';
 import { createAgent } from '@zhin.js/ai';
 import { selectDeferredToolsForWorker } from './deferred-worker-tool-load.js';
@@ -166,10 +167,12 @@ ${goal}${platformBlock}
       const result = await runWithDirectAgentExecution(origin, () => agent.run(goal));
       const raw = result.content?.trim() || 'Task completed with no text response.';
       const summary = truncateWorkerSummary(raw, summaryMaxChars);
-      logger.info(
-        { loadedToolNames, iterations: result.iterations },
-        'DeferredWorker completed',
-      );
+      logger.info(formatCompact( {
+        ok: true,
+        iter: result.iterations,
+        tools: loadedToolNames.join(','),
+        usage: formatCompactUsage(result.usage),
+      }));
       return {
         summary: JSON.stringify({
           status: 'ok',
@@ -183,7 +186,11 @@ ${goal}${platformBlock}
       };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      logger.warn({ error: errorMsg, loadedToolNames }, 'DeferredWorker failed');
+      logger.warn(formatCompact( {
+        ok: false,
+        tools: loadedToolNames.join(','),
+        error: truncatePreview(errorMsg, 120),
+      }));
       return {
         summary: JSON.stringify({
           status: 'error',

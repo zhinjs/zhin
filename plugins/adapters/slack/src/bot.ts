@@ -3,14 +3,7 @@
  */
 import { App as SlackApp, LogLevel } from "@slack/bolt";
 import { WebClient, type ChatPostMessageArguments } from "@slack/web-api";
-import {
-  Bot,
-  Message,
-  SendOptions,
-  SendContent,
-  MessageSegment,
-  segment,
-} from "zhin.js";
+import { formatCompact, Bot, Message, MessageSegment, segment, SendContent, SendOptions } from 'zhin.js';
 import type { SlackBotConfig, SlackMessageEvent } from "./types.js";
 import type { SlackAdapter } from "./adapter.js";
 
@@ -80,12 +73,10 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
 
       // Get bot info
       const authTest = await this.client!.auth.test();
-      this.logger.info(
-        `Slack bot ${this.$config.name} connected successfully as @${authTest.user}`
-      );
+      this.logger.info(formatCompact({ bot: this.$config.name, user: authTest.user }));
 
       if (!this.$config.socketMode) {
-        this.logger.info(`Slack bot listening on port ${port}`);
+        this.logger.info(formatCompact( { op: "listen", port }));
       }
     } catch (error) {
       this.logger.error("Failed to connect Slack bot:", error);
@@ -102,7 +93,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
     try {
       await this.app!.stop();
       this.$connected = false;
-      this.logger.info(`Slack bot ${this.$config.name} disconnected`);
+      this.logger.info(formatCompact( { op: "disconnect", bot: this.$config.name }));
     } catch (error) {
       this.logger.error("Error disconnecting Slack bot:", error);
       throw error;
@@ -485,7 +476,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
   async inviteToChannel(channel: string, users: string[]): Promise<boolean> {
     try {
       await this.client!.conversations.invite({ channel, users: users.join(',') });
-      this.logger.info(`Slack Bot ${this.$id} 邀请用户 ${users.join(',')} 到频道 ${channel}`);
+      this.logger.debug(formatCompact( { op: "invite", bot: this.$id, channel, users: users.join(",") }));
       return true;
     } catch (error) {
       this.logger.error(`Slack Bot ${this.$id} 邀请用户失败:`, error);
@@ -501,7 +492,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
   async kickFromChannel(channel: string, user: string): Promise<boolean> {
     try {
       await this.client!.conversations.kick({ channel, user });
-      this.logger.info(`Slack Bot ${this.$id} 将用户 ${user} 从频道 ${channel} 踢出`);
+      this.logger.debug(formatCompact( { op: "kick", bot: this.$id, channel, user }));
       return true;
     } catch (error) {
       this.logger.error(`Slack Bot ${this.$id} 踢出用户失败:`, error);
@@ -517,7 +508,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
   async setChannelTopic(channel: string, topic: string): Promise<boolean> {
     try {
       await this.client!.conversations.setTopic({ channel, topic });
-      this.logger.info(`Slack Bot ${this.$id} 设置频道 ${channel} 话题为 "${topic}"`);
+      this.logger.debug(formatCompact( { op: "set_topic", bot: this.$id, channel }));
       return true;
     } catch (error) {
       this.logger.error(`Slack Bot ${this.$id} 设置话题失败:`, error);
@@ -533,7 +524,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
   async setChannelPurpose(channel: string, purpose: string): Promise<boolean> {
     try {
       await this.client!.conversations.setPurpose({ channel, purpose });
-      this.logger.info(`Slack Bot ${this.$id} 设置频道 ${channel} 目的`);
+      this.logger.debug(formatCompact( { op: "set_purpose", bot: this.$id, channel }));
       return true;
     } catch (error) {
       this.logger.error(`Slack Bot ${this.$id} 设置目的失败:`, error);
@@ -548,7 +539,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
   async archiveChannel(channel: string): Promise<boolean> {
     try {
       await this.client!.conversations.archive({ channel });
-      this.logger.info(`Slack Bot ${this.$id} 归档频道 ${channel}`);
+      this.logger.debug(formatCompact( { op: "archive", bot: this.$id, channel }));
       return true;
     } catch (error) {
       this.logger.error(`Slack Bot ${this.$id} 归档频道失败:`, error);
@@ -563,7 +554,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
   async unarchiveChannel(channel: string): Promise<boolean> {
     try {
       await this.client!.conversations.unarchive({ channel });
-      this.logger.info(`Slack Bot ${this.$id} 取消归档频道 ${channel}`);
+      this.logger.debug(formatCompact( { op: "unarchive", bot: this.$id, channel }));
       return true;
     } catch (error) {
       this.logger.error(`Slack Bot ${this.$id} 取消归档失败:`, error);
@@ -579,7 +570,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
   async renameChannel(channel: string, name: string): Promise<boolean> {
     try {
       await this.client!.conversations.rename({ channel, name });
-      this.logger.info(`Slack Bot ${this.$id} 重命名频道 ${channel} 为 "${name}"`);
+      this.logger.debug(formatCompact( { op: "rename", bot: this.$id, channel, name }));
       return true;
     } catch (error) {
       this.logger.error(`Slack Bot ${this.$id} 重命名频道失败:`, error);
@@ -638,7 +629,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
   async addReaction(channel: string, timestamp: string, name: string): Promise<boolean> {
     try {
       await this.client!.reactions.add({ channel, timestamp, name });
-      this.logger.info(`Slack Bot ${this.$id} 添加反应 :${name}: 到消息`);
+      this.logger.debug(formatCompact( { op: "reaction_add", bot: this.$id, name }));
       return true;
     } catch (error) {
       this.logger.error(`Slack Bot ${this.$id} 添加反应失败:`, error);
@@ -655,7 +646,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
   async removeReaction(channel: string, timestamp: string, name: string): Promise<boolean> {
     try {
       await this.client!.reactions.remove({ channel, timestamp, name });
-      this.logger.info(`Slack Bot ${this.$id} 移除反应 :${name}:`);
+      this.logger.debug(formatCompact( { op: "reaction_remove", bot: this.$id, name }));
       return true;
     } catch (error) {
       this.logger.error(`Slack Bot ${this.$id} 移除反应失败:`, error);
@@ -671,7 +662,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
   async pinMessage(channel: string, timestamp: string): Promise<boolean> {
     try {
       await this.client!.pins.add({ channel, timestamp });
-      this.logger.info(`Slack Bot ${this.$id} 置顶消息（频道 ${channel}）`);
+      this.logger.debug(formatCompact( { op: "pin", bot: this.$id, channel }));
       return true;
     } catch (error) {
       this.logger.error(`Slack Bot ${this.$id} 置顶消息失败:`, error);
@@ -687,7 +678,7 @@ export class SlackBot implements Bot<SlackBotConfig, SlackMessageEvent> {
   async unpinMessage(channel: string, timestamp: string): Promise<boolean> {
     try {
       await this.client!.pins.remove({ channel, timestamp });
-      this.logger.info(`Slack Bot ${this.$id} 取消置顶消息`);
+      this.logger.debug(formatCompact( { op: "unpin", bot: this.$id, channel }));
       return true;
     } catch (error) {
       this.logger.error(`Slack Bot ${this.$id} 取消置顶失败:`, error);

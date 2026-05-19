@@ -459,5 +459,5 @@ useContext('github', (adapter: GitHubAdapter) => {
       }),
   );
 
-  logger.info('GitHub 命令插件已注册');
+  logger.debug('commands: registered');
 });

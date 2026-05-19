@@ -1,4 +1,5 @@
 import type { Plugin } from '@zhin.js/core';
+import { formatCompact } from '@zhin.js/logger';
 
 /**
  * 启动核心上下文并注册优雅关闭与异常处理
@@ -9,13 +10,13 @@ export async function registerSignalHandlers(plugin: Plugin): Promise<void> {
   await start();
 
   const handleSIGTERM = () => {
-    logger.info('Received SIGTERM, shutting down gracefully...');
+    logger.info(formatCompact( { shutdown: 'SIGTERM' }));
     stop();
     process.exit(0);
   };
 
   const handleSIGINT = () => {
-    logger.info('Received SIGINT, shutting down gracefully...');
+    logger.info(formatCompact( { shutdown: 'SIGINT' }));
     stop();
     process.exit(0);
   };

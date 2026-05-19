@@ -3,7 +3,7 @@
  */
 import EventSource from 'eventsource';
 import { EventEmitter } from 'events';
-import { Bot, Message, SendOptions, segment } from 'zhin.js';
+import { formatCompact, Bot, Message, segment, SendOptions } from 'zhin.js';
 import { callApi } from './api.js';
 import type { MilkySseConfig, MilkyEvent } from './types.js';
 import type { MilkyAdapter } from './adapter.js';
@@ -50,7 +50,9 @@ export class MilkySseClient extends EventEmitter implements Bot<MilkySseConfig, 
     }
     this.es = new EventSource(this.eventUrl, { headers });
     this.$connected = true;
-    if (!this.$config.access_token) this.logger.warn('missing access_token, SSE connection is not secured');
+    if (!this.$config.access_token) {
+      this.logger.warn(formatCompact({ bot: this.$id, ok: false, error: 'missing access_token' }));
+    }
 
     this.es.addEventListener('milky_event', (e: MessageEvent) => {
       try {

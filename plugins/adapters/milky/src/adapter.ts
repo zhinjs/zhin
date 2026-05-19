@@ -2,11 +2,7 @@
  * Milky 适配器：单一适配器支持 WS 正向 / SSE / Webhook / 反向 WS，由 config.connection 区分
  */
 import type { Router } from '@zhin.js/http';
-import {
-  Adapter,
-  Plugin,
-  type IGroupManagement,
-} from 'zhin.js';
+import { formatCompact, Adapter, Plugin, type IGroupManagement } from 'zhin.js';
 import { MilkyWsClient } from './bot-ws.js';
 import { MilkySseClient } from './bot-sse.js';
 import { MilkyWebhookBot } from './bot-webhook.js';
@@ -101,6 +97,5 @@ export class MilkyAdapter extends Adapter<MilkyBot> {
       this.#router = router;
     });
     await super.start();
-    this.plugin.logger.info('Milky 适配器已启动');
   }
 }

@@ -28,7 +28,7 @@
  *   rankSize: 10
  * ```
  */
-import { usePlugin, MessageCommand, Schema } from "zhin.js";
+import { formatCompact, MessageCommand, Schema, usePlugin } from 'zhin.js';
 
 const plugin = usePlugin();
 const { logger, root, addCommand, useContext, onDispose, declareConfig } = plugin;
@@ -87,7 +87,7 @@ useContext("database", (db: any) => {
     created_at: { type: "text", default: "" },
     updated_at: { type: "text", default: "" },
   });
-  logger.info("签到模型已注册");
+  logger.info(formatCompact( { op: "model" }));
 });
 
 // ─── 辅助 ────────────────────────────────────────────────────────────────────
@@ -248,4 +248,9 @@ addCommand(
 
 // AI 工具已迁移到 tools/*.tool.md，框架自动发现注册
 
-logger.info(`插件已加载 (基础积分=${config.basePointsMin}~${config.basePointsMax}, 连续奖励=${config.streakBonus}/天)`);
+logger.info(formatCompact( {
+  op: "load",
+  base_min: config.basePointsMin,
+  base_max: config.basePointsMax,
+  streak_bonus: config.streakBonus,
+}));

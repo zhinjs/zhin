@@ -1,14 +1,7 @@
 /**
  * 钉钉 Bot 实现
  */
-import {
-  Bot,
-  Message,
-  SendOptions,
-  SendContent,
-  MessageSegment,
-  segment,
-} from "zhin.js";
+import { formatCompact, Bot, Message, MessageSegment, segment, SendContent, SendOptions } from 'zhin.js';
 import type { Context } from "koa";
 import { createHmac } from "crypto";
 import type {
@@ -88,7 +81,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
       const sign = headers["sign"] as string;
       if (timestamp && sign) {
         if (!this.verifySignature(timestamp, sign)) {
-          this.logger.warn("Invalid signature in webhook");
+          this.logger.warn(formatCompact( { op: "webhook", ok: false, error: "invalid signature" }));
           ctx.status = 403;
           ctx.body = { code: -1, msg: "Forbidden" };
           return;
@@ -126,9 +119,13 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
     }
     const message = this.$formatMessage(event as any);
     this.adapter.emit("message.receive", message);
-    this.logger.info(
-      `${this.$config.name} recv  ${message.$channel.type}(${message.$channel.id}): ${segment.raw(message.$content)}`
-    );
+    this.logger.debug(formatCompact( {
+      op: "recv",
+      bot: this.$config.name,
+      channel: message.$channel.type,
+      id: message.$channel.id,
+      len: segment.raw(message.$content).length,
+    }));
   }
 
   private async ensureAccessToken(): Promise<void> {
@@ -345,7 +342,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
   }
 
   async $recallMessage(id: string): Promise<void> {
-    this.logger.warn("DingTalk robot does not support message recall");
+    this.logger.warn(formatCompact( { op: "recall", ok: false, error: "not supported" }));
   }
 
   private formatSendContent(content: SendContent): any {
@@ -430,8 +427,8 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
     try {
       await this.refreshAccessToken();
       this.$connected = true;
-      this.logger.info(`DingTalk bot connected: ${this.$config.name}`);
-      this.logger.info(`Webhook URL: ${this.$config.webhookPath}`);
+      this.logger.info(formatCompact({ bot: this.$config.name }));
+      this.logger.info(formatCompact( { op: "webhook", path: this.$config.webhookPath }));
     } catch (error) {
       this.logger.error("Failed to connect DingTalk bot:", error);
       throw error;
@@ -442,7 +439,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
     try {
       this.sessionWebhooks.clear();
       this.$connected = false;
-      this.logger.info("DingTalk bot disconnected");
+      this.logger.info(formatCompact( { op: "disconnect", bot: this.$config.name }));
     } catch (error) {
       this.logger.error("Error disconnecting DingTalk bot:", error);
     }
@@ -543,7 +540,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
         },
       });
       if (data.errcode === 0) {
-        this.logger.info(`创建群聊成功: ${data.chatid}`);
+        this.logger.debug(formatCompact( { op: "create_chat", chat: data.chatid }));
         return data.chatid;
       }
       throw new Error(`Failed to create chat: ${data.errmsg}`);
@@ -582,7 +579,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
         body: { chatid: chatId, ...options },
       });
       if (data.errcode === 0) {
-        this.logger.info(`更新群聊成功: ${chatId}`);
+        this.logger.debug(formatCompact( { op: "update_chat", chat: chatId }));
         return true;
       }
       throw new Error(`Failed to update chat: ${data.errmsg}`);

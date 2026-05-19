@@ -3,7 +3,7 @@
  * AI Agent 实现，支持工具调用和多轮对话
  */
 
-import { Logger } from '@zhin.js/logger';
+import { formatCompact, formatCompactUsage, Logger, truncatePreview } from '@zhin.js/logger';
 import type {
   AIProvider,
   AgentConfig,
@@ -145,7 +145,14 @@ export class Agent {
       reservedPrefixes: config.reservedToolNamePrefixes,
     });
     for (const warning of merged.warnings) {
-      logger.warn(`[工具命名] name=${warning.name} source=${warning.source} action=${warning.action}${warning.previousSource ? ` previous=${warning.previousSource}` : ''} reason=${warning.reason}`);
+      logger.warn(formatCompact( {
+        tool_naming: warning.action,
+        name: warning.name,
+        source: warning.source,
+        action: warning.action,
+        reason: warning.reason,
+        ...(warning.previousSource ? { previous: warning.previousSource } : {}),
+      }));
     }
     for (const tool of merged.tools) {
       this.tools.set(tool.name, tool);
@@ -194,14 +201,18 @@ export class Agent {
         }
         // 成功且切换了模型 → 将当前模型提升为首选（后续轮次直接用）
         if (i > 0) {
-          logger.info(`[模型降级] ${candidates[0]} → ${model} 成功，切换为首选模型`);
+          logger.info(formatCompact( { fallback: `${candidates[0]}→${model}` }));
           this.config.model = model;
         }
         return { response, usedModel: model };
       } catch (err) {
         lastError = err as Error;
         if (i < candidates.length - 1) {
-          logger.warn(`[模型降级] ${model} 失败: ${lastError.message}，尝试 ${candidates[i + 1]}`);
+          logger.warn(formatCompact( {
+            fallback: model,
+            error: truncatePreview(lastError.message, 80),
+            next: candidates[i + 1],
+          }));
         }
       }
     }
@@ -272,7 +283,10 @@ export class Agent {
       force: true,
     });
     if (compacted.didCompact) {
-      logger.debug(`[micro-compact] 强制清理 ${compacted.clearedCount} 条工具结果，节省约 ${compacted.savedTokens} tokens`);
+      logger.debug(formatCompact( {
+        micro_compact: compacted.clearedCount,
+        saved: compacted.savedTokens,
+      }));
     }
     return compacted.messages;
   }
@@ -365,7 +379,7 @@ export class Agent {
       return typeof result === 'string' ? result : JSON.stringify(result);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      logger.warn(`工具 ${toolCall.function.name} 执行失败: ${errorMsg}`);
+      logger.warn(formatCompact( { tool: toolCall.function.name, error: truncatePreview(errorMsg, 80) }));
       logger.error({ tool: toolCall.function.name, params: args, err: error }, 'Tool execution failed');
       // 向 AI 提供结构化的错误信息和恢复提示
       return JSON.stringify({
@@ -477,6 +491,25 @@ export class Agent {
     target.total_tokens += source.total_tokens;
   }
 
+  /** 任务结束时输出 token 汇总与总耗时（debug，主汇总见 AI Handler） */
+  private logTaskComplete(
+    startedAt: number,
+    result: Pick<AgentResult, 'usage' | 'iterations' | 'toolCalls'>,
+    opts?: { model?: string; stream?: boolean },
+  ): void {
+    const elapsedMs = Date.now() - startedAt;
+    const u = result.usage;
+    const toolCount = result.toolCalls?.length ?? 0;
+    logger.debug(formatCompact({
+      total_ms: elapsedMs,
+      usage: formatCompactUsage(u),
+      iter: result.iterations,
+      ...(opts?.stream ? { stream: true } : {}),
+      ...(toolCount > 0 ? { tools: toolCount } : {}),
+      ...(opts?.model ? { model: opts.model } : {}),
+    }));
+  }
+
   /**
    * 运行 Agent
    *
@@ -485,6 +518,8 @@ export class Agent {
    * @param filterOptions  工具过滤选项 —— 启用后在 AI 调用之前程序化筛选工具，省去额外的 AI 意图分析往返
    */
   async run(userMessage: string, context?: ChatMessage[], filterOptions?: ToolFilterOptions): Promise<AgentResult> {
+    const startedAt = Date.now();
+    let lastUsedModel = this.config.model;
     const state: AgentState = {
       messages: [
         { role: 'system', content: this.config.systemPrompt },
@@ -501,7 +536,7 @@ export class Agent {
     if (filterOptions) {
       const allTools = Array.from(this.tools.values());
       const filtered = Agent.filterTools(userMessage, allTools, filterOptions);
-      logger.info(`工具预过滤: ${allTools.length} -> ${filtered.length}`);
+      logger.debug(formatCompact( { tools: `${allTools.length}→${filtered.length}` }));
       toolDefinitions = filtered.map(tool => ({
         type: 'function' as const,
         function: {
@@ -544,10 +579,12 @@ export class Agent {
             totalMicroSaved += compactResult.microSavedTokens;
             totalAutoSaved += compactResult.autoSavedTokens;
             compactCount++;
-            logger.info(
-              `[第${state.iterations}轮] 上下文压缩: 节省 ${compactResult.savedTokens} tokens ` +
-              `(micro: ${compactResult.microSavedTokens}, auto: ${compactResult.autoSavedTokens})`,
-            );
+            logger.debug(formatCompact( {
+              iter: state.iterations,
+              compact: compactResult.savedTokens,
+              micro: compactResult.microSavedTokens,
+              auto: compactResult.autoSavedTokens,
+            }));
             this.emit('compaction', {
               microSavedTokens: compactResult.microSavedTokens,
               autoSavedTokens: compactResult.autoSavedTokens,
@@ -556,7 +593,11 @@ export class Agent {
             });
           }
         } catch (e) {
-          logger.warn(`[第${state.iterations}轮] 上下文压缩失败，继续执行: ${e}`);
+          logger.warn(formatCompact( {
+            iter: state.iterations,
+            compact: 'fail',
+            error: truncatePreview(String(e), 80),
+          }));
         }
       }
 
@@ -578,9 +619,14 @@ export class Agent {
           think: isToolCallRound ? false : undefined,
         };
         const { response, usedModel } = await this.chatWithFallback(chatRequest);
+        lastUsedModel = usedModel;
 
         Agent.addUsage(state.usage, response.usage);
-        logger.info(`[第${state.iterations}轮] token 用量: prompt=${state.usage.prompt_tokens}, completion=${state.usage.completion_tokens}, total=${state.usage.total_tokens} (model=${usedModel})`);
+        logger.debug(formatCompact( {
+          iter: state.iterations,
+          usage: formatCompactUsage(state.usage),
+          model: usedModel,
+        }));
         const choice = response.choices[0];
 
         // ── 分支 1: 模型想调用工具 ──
@@ -588,7 +634,10 @@ export class Agent {
           const callSummary = choice.message.tool_calls.map(
             (tc: any) => `${tc.function.name}(${tc.function.arguments})`
           ).join(', ');
-          logger.info(`[第${state.iterations}轮] 工具调用: ${callSummary}`);
+          logger.debug(formatCompact( {
+            iter: state.iterations,
+            tool_call: truncatePreview(callSummary, 200),
+          }));
           this.emit('thinking', '正在执行工具调用...');
           state.messages.push(buildAssistantHistoryMessage(choice.message));
 
@@ -601,7 +650,7 @@ export class Agent {
 
           if (results.length === 0) {
             consecutiveDuplicateRounds++;
-            logger.warn(`[第${state.iterations}轮] 检测到重复工具调用，已跳过执行，强制下轮文本回答`);
+            logger.warn(formatCompact( { iter: state.iterations, warn: 'dup_tool_calls' }));
 
             for (const tc of choice.message.tool_calls) {
               const key = Agent.toolCallKey(tc.function.name, tc.function.arguments);
@@ -629,8 +678,11 @@ export class Agent {
 
           // 将工具结果加入消息历史
           for (const { toolCall, result } of results) {
-            const resultPreview = result.length > 200 ? result.slice(0, 200) + '...' : result;
-            logger.info(`[第${state.iterations}轮] 工具结果 ${toolCall.function.name}: ${resultPreview}`);
+            logger.debug(formatCompact( {
+              iter: state.iterations,
+              tool: toolCall.function.name,
+              preview: truncatePreview(result, 120),
+            }));
             state.messages.push({
               role: 'tool',
               content: result,
@@ -664,6 +716,7 @@ export class Agent {
           ...(compactCount > 0 && { compaction: { microSavedTokens: totalMicroSaved, autoSavedTokens: totalAutoSaved, compactCount } }),
         };
 
+        this.logTaskComplete(startedAt, result, { model: lastUsedModel });
         this.emit('complete', result);
         return result;
 
@@ -674,7 +727,11 @@ export class Agent {
         // ── 错误恢复策略 ──
         // 如果已经有工具结果，注入恢复消息让 AI 基于已有数据回答
         if (state.toolCalls.length > 0) {
-          logger.warn(`第 ${state.iterations} 轮 LLM 调用失败，尝试基于已有数据恢复: ${err.message}`);
+          logger.warn(formatCompact( {
+            iter: state.iterations,
+            recover: true,
+            error: truncatePreview(err.message, 80),
+          }));
           const toolSummary = state.toolCalls.map(tc => {
             const r = typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result);
             return `【${tc.tool}】${r}`;
@@ -685,6 +742,7 @@ export class Agent {
             usage: state.usage,
             iterations: state.iterations,
           };
+          this.logTaskComplete(startedAt, fallbackResult, { model: lastUsedModel });
           this.emit('complete', fallbackResult);
           return fallbackResult;
         }
@@ -696,6 +754,7 @@ export class Agent {
           usage: state.usage,
           iterations: state.iterations,
         };
+        this.logTaskComplete(startedAt, fallbackResult, { model: lastUsedModel });
         this.emit('complete', fallbackResult);
         return fallbackResult;
       }
@@ -722,6 +781,7 @@ export class Agent {
       ...(compactCount > 0 && { compaction: { microSavedTokens: totalMicroSaved, autoSavedTokens: totalAutoSaved, compactCount } }),
     };
 
+    this.logTaskComplete(startedAt, result, { model: lastUsedModel });
     this.emit('complete', result);
     return result;
   }
@@ -737,6 +797,7 @@ export class Agent {
     type: 'content' | 'tool_call' | 'tool_result' | 'compaction' | 'done';
     data: any;
   }> {
+    const startedAt = Date.now();
     const messages: ChatMessage[] = [
       { role: 'system', content: this.config.systemPrompt },
       ...(context || []),
@@ -748,7 +809,7 @@ export class Agent {
     if (filterOptions) {
       const allTools = Array.from(this.tools.values());
       const filtered = Agent.filterTools(userMessage, allTools, filterOptions);
-      logger.debug(`流式工具预过滤: ${allTools.length} -> ${filtered.length}`);
+      logger.debug(formatCompact( { tools: `${allTools.length}→${filtered.length}` }));
       toolDefinitions = filtered.map(tool => ({
         type: 'function' as const,
         function: {
@@ -802,9 +863,10 @@ export class Agent {
             totalMicroSaved += compactResult.microSavedTokens;
             totalAutoSaved += compactResult.autoSavedTokens;
             compactCount++;
-            logger.info(
-              `[流式第${iterations}轮] 上下文压缩: 节省 ${compactResult.savedTokens} tokens`,
-            );
+            logger.debug(formatCompact( {
+              iter: iterations,
+              compact: compactResult.savedTokens,
+            }));
             const info = {
               microSavedTokens: compactResult.microSavedTokens,
               autoSavedTokens: compactResult.autoSavedTokens,
@@ -815,7 +877,11 @@ export class Agent {
             yield { type: 'compaction', data: info };
           }
         } catch (e) {
-          logger.warn(`[流式第${iterations}轮] 上下文压缩失败，继续执行: ${e}`);
+          logger.warn(formatCompact( {
+            iter: iterations,
+            compact: 'fail',
+            error: truncatePreview(String(e), 80),
+          }));
         }
       }
 
@@ -951,32 +1017,30 @@ export class Agent {
       }
 
       // 完成
-      yield {
-        type: 'done',
-        data: {
-          content,
-          toolCalls: toolCallHistory,
-          usage,
-          iterations,
-          ...(compactCount > 0 && { compaction: { microSavedTokens: totalMicroSaved, autoSavedTokens: totalAutoSaved, compactCount } }),
-        },
-      };
-      return;
-    }
-
-    // 达到最大迭代次数
-    yield {
-      type: 'done',
-      data: {
-        content: toolCallHistory.length > 0
-          ? `Done. Executed ${toolCallHistory.length} tool call(s).`
-          : 'Max iterations reached.',
+      const doneData = {
+        content,
         toolCalls: toolCallHistory,
         usage,
         iterations,
         ...(compactCount > 0 && { compaction: { microSavedTokens: totalMicroSaved, autoSavedTokens: totalAutoSaved, compactCount } }),
-      },
+      };
+      this.logTaskComplete(startedAt, doneData, { model: this.config.model, stream: true });
+      yield { type: 'done', data: doneData };
+      return;
+    }
+
+    // 达到最大迭代次数
+    const maxIterData = {
+      content: toolCallHistory.length > 0
+        ? `Done. Executed ${toolCallHistory.length} tool call(s).`
+        : 'Max iterations reached.',
+      toolCalls: toolCallHistory,
+      usage,
+      iterations,
+      ...(compactCount > 0 && { compaction: { microSavedTokens: totalMicroSaved, autoSavedTokens: totalAutoSaved, compactCount } }),
     };
+    this.logTaskComplete(startedAt, maxIterData, { model: this.config.model, stream: true });
+    yield { type: 'done', data: maxIterData };
   }
 }
 

@@ -16,8 +16,9 @@
  *  12. 多模态输入：图片/音频直接传给视觉模型
  */
 
-import { Logger, getPlugin, type Plugin } from '@zhin.js/core';
-import type { AIProvider, AgentTool, ChatMessage, ContentPart } from '@zhin.js/ai';
+import { formatCompact, getPlugin, Logger, type Plugin } from '@zhin.js/core';
+import { formatCompact, truncatePreview } from '@zhin.js/logger';
+import type { AIProvider, AgentTool, ChatMessage, ContentPart, Usage } from '@zhin.js/ai';
 import type { Tool, ToolContext } from '../orchestrator/types.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { AgentOrchestrator } from '../orchestrator/index.js';
@@ -28,6 +29,17 @@ import type { ContextManager } from '@zhin.js/ai';
 import { ConversationMemory } from '@zhin.js/ai';
 import type { OutputElement } from '@zhin.js/ai';
 import { parseOutput } from '@zhin.js/ai';
+import {
+  addUsage,
+  EMPTY_USAGE,
+  type ZhinAgentTurnMetrics,
+} from './turn-metrics.js';
+
+interface StreamChatResult {
+  content: string;
+  usage: Usage | null;
+  model: string;
+}
 import type { ModelRegistry } from '@zhin.js/ai';
 import { UserProfileStore } from '../user-profile.js';
 import {
@@ -72,6 +84,8 @@ import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from '../reserved-to
 import { createOwnerOrchestratedToolResultTransform } from '../orchestrator/owner-confirm-orchestration.js';
 
 export type { ZhinAgentConfig, OnChunkCallback } from './config.js';
+export type { ZhinAgentTurnMetrics, ZhinAgentTurnPath } from './turn-metrics.js';
+export { formatAiHandlerCompleteLog, formatZhinAgentTurnUsage } from './turn-metrics.js';
 
 const logger = new Logger(null, 'ZhinAgent');
 const now = () => performance.now();
@@ -102,6 +116,9 @@ export class ZhinAgent {
   private deferredCatalog: AgentTool[] = [];
   private readonly deferredWorkerRunner = new DeferredWorkerRunner();
   private lastToolSearchDeferredStats?: string;
+  private lastTurnMetrics: ZhinAgentTurnMetrics | null = null;
+  private activeTurnSubagentUsage: Usage | null = null;
+  private activeTurnSubagentWaits: Promise<void>[] = [];
 
   constructor(provider: AIProvider, config?: ZhinAgentConfig) {
     this.provider = provider;
@@ -167,6 +184,8 @@ export class ZhinAgent {
       maxIterations: this.config.maxSubagentIterations,
       execPolicyConfig: this.config,
       modelRegistry: this.modelRegistry,
+      onSubagentUsage: (usage) => this.addActiveTurnSubagentUsage(usage),
+      registerSubagentTask: (done) => this.trackActiveTurnSubagent(done),
     });
     logger.debug('SubagentManager initialized');
   }
@@ -238,6 +257,59 @@ export class ZhinAgent {
     this.skillsSummaryXML = xml || '';
   }
 
+  /** 上一轮 `process` / `processMultimodal` 的 token 等指标（供 AI Handler 打汇总日志） */
+  getLastTurnMetrics(): ZhinAgentTurnMetrics | null {
+    return this.lastTurnMetrics;
+  }
+
+  private beginActiveTurn(): void {
+    this.activeTurnSubagentUsage = { ...EMPTY_USAGE };
+    this.activeTurnSubagentWaits = [];
+  }
+
+  private addActiveTurnSubagentUsage(usage: Usage): void {
+    if (!this.activeTurnSubagentUsage) return;
+    addUsage(this.activeTurnSubagentUsage, usage);
+  }
+
+  private trackActiveTurnSubagent(done: Promise<void>): void {
+    if (!this.activeTurnSubagentUsage) return;
+    this.activeTurnSubagentWaits.push(done);
+  }
+
+  private async finalizeActiveTurn(
+    partial: Omit<ZhinAgentTurnMetrics, 'usage' | 'mainUsage' | 'subagentUsage'> & { usage: Usage },
+  ): Promise<void> {
+    const waitMs = this.config.subagentTurnWaitMs;
+    if (this.activeTurnSubagentWaits.length > 0 && waitMs > 0) {
+      await Promise.race([
+        Promise.allSettled(this.activeTurnSubagentWaits),
+        new Promise<void>(resolve => setTimeout(resolve, waitMs)),
+      ]);
+    }
+
+    const mainUsage = { ...partial.usage };
+    const subagentUsage = this.activeTurnSubagentUsage
+      && (this.activeTurnSubagentUsage.total_tokens > 0
+        || this.activeTurnSubagentUsage.prompt_tokens > 0
+        || this.activeTurnSubagentUsage.completion_tokens > 0)
+      ? { ...this.activeTurnSubagentUsage }
+      : undefined;
+
+    const totalUsage = { ...mainUsage };
+    if (subagentUsage) addUsage(totalUsage, subagentUsage);
+
+    this.lastTurnMetrics = {
+      ...partial,
+      usage: totalUsage,
+      mainUsage,
+      ...(subagentUsage ? { subagentUsage } : {}),
+    };
+
+    this.activeTurnSubagentUsage = null;
+    this.activeTurnSubagentWaits = [];
+  }
+
   // ── Core processing ─────────────────────────────────────────────────
 
   async process(
@@ -260,8 +332,11 @@ export class ZhinAgent {
     if (!rateCheck.allowed) {
       this.logPhase('turn.rate_limited', sessionId, { userId });
       logger.debug(`[速率限制] 用户 ${userId} 被限制: ${rateCheck.message}`);
+      await this.finalizeActiveTurn({ usage: EMPTY_USAGE, path: 'rate_limited' });
       return parseOutput(rateCheck.message || '请稍后再试');
     }
+
+    this.beginActiveTurn();
 
     // 0.5 工具上下文：web_search 语言（档案 preferred_language / language，否则默认中文）
     const contextForTools = await this.attachWebSearchLocale(context, userId);
@@ -304,9 +379,11 @@ export class ZhinAgent {
     const filterMs = (now() - tFilter).toFixed(0);
     this.logPhase('tools.collected', sessionId, { count: resolvedTools.length });
 
-    logger.info(
-      `[工具过滤] ${resolvedTools.length} 个工具${this.config.toolSearch ? ' (toolSearch 编排)' : ''}: ${resolvedTools.map(t => t.name).join(', ') || '(无)'}`,
-    );
+    logger.debug(formatCompact( {
+      tools: resolvedTools.length,
+      tool_search: this.config.toolSearch || undefined,
+      names: resolvedTools.map(t => t.name).join(',') || '(none)',
+    }));
 
     // 2. History + profile (parallel)
     const tMem = now();
@@ -343,16 +420,35 @@ export class ZhinAgent {
       this.logPhase('path.chat', sessionId, { toolCount: 0 });
       const liteModel = this.config.chatLiteModel || undefined;
       const chatSystemPrompt = this.buildDisciplinedPrompt(personaEnhanced);
-      logger.info(`[System Prompt] chat-path: ${chatSystemPrompt.length} chars${liteModel ? `, model=${liteModel}` : ''}`);
-      logger.debug(`[闲聊路径] 过滤=${filterMs}ms, 记忆=${memMs}ms (${historyMessages.length}条), 0 工具`);
+      logger.debug(formatCompact( {
+        mode: 'chat',
+        prompt_chars: chatSystemPrompt.length,
+        model: liteModel || chatCandidates[0] || undefined,
+      }));
       const tLLM = now();
       this.logPhase('chat.llm.start', sessionId, { model: liteModel || chatCandidates[0] || '' });
-      let reply = await this.streamChatWithHistory(content, chatSystemPrompt, historyMessages, onChunk, liteModel);
-      reply = stripHallucinatedToolCalls(reply);
+      const chatResult = await this.streamChatWithHistory(
+        content, chatSystemPrompt, historyMessages, onChunk, liteModel,
+      );
+      let reply = stripHallucinatedToolCalls(chatResult.content);
       const llmMs = (now() - tLLM).toFixed(0);
-      this.logPhase('chat.llm.end', sessionId, { durationMs: Number(llmMs) });
-      logger.info(`[闲聊路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, LLM=${llmMs}ms, 总=${(now() - t0).toFixed(0)}ms`);
+      this.logPhase('chat.llm.end', sessionId, {
+        durationMs: Number(llmMs),
+        ...this.usageLogFields(chatResult.usage ?? undefined),
+      });
+      logger.debug(formatCompact( {
+        mode: 'chat',
+        filter_ms: filterMs,
+        mem_ms: memMs,
+        llm_ms: llmMs,
+        total_ms: Math.round(now() - t0),
+      }));
       await this.saveToSession(sessionId, content, reply, sceneId);
+      await this.finalizeActiveTurn({
+        usage: chatResult.usage ?? EMPTY_USAGE,
+        path: 'chat',
+        model: chatResult.model,
+      });
       this.logPhase('turn.end', sessionId, { path: 'chat' });
       return parseOutput(reply);
     }
@@ -383,11 +479,20 @@ export class ZhinAgent {
       // Fast path
       const tLLM = now();
       const prompt = this.buildDisciplinedPrompt(buildPreExecFastPathPrompt(personaEnhanced, preData));
-      logger.info(`[System Prompt] fast-path: ${prompt.length} chars`);
+      logger.debug(formatCompact( { mode: 'fast', prompt_chars: prompt.length }));
       this.logPhase('fast.llm.start', sessionId, { model: chatCandidates[0] || '' });
-      reply = await this.streamChatWithHistory(content, prompt, historyMessages, onChunk);
-      this.logPhase('fast.llm.end', sessionId, { durationMs: Math.round(now() - tLLM) });
-      logger.info(`[快速路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, LLM=${(now() - tLLM).toFixed(0)}ms, 总=${(now() - t0).toFixed(0)}ms`);
+      const fastResult = await this.streamChatWithHistory(content, prompt, historyMessages, onChunk);
+      reply = fastResult.content;
+      this.logPhase('fast.llm.end', sessionId, {
+        durationMs: Math.round(now() - tLLM),
+        ...this.usageLogFields(fastResult.usage ?? undefined),
+      });
+      logger.debug(`[快速路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, LLM=${(now() - tLLM).toFixed(0)}ms, 总=${(now() - t0).toFixed(0)}ms`);
+      await this.finalizeActiveTurn({
+        usage: fastResult.usage ?? EMPTY_USAGE,
+        path: 'fast',
+        model: fastResult.model,
+      });
     } else {
       this.logPhase('path.agent', sessionId, { toolCount: allTools.length });
       const tAgent = now();
@@ -419,7 +524,7 @@ export class ZhinAgent {
 ${contextHint}
 ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
 
-      logger.info(`[System Prompt] ${systemPrompt.length} chars`);
+      logger.debug(formatCompact( { mode: 'agent', prompt_chars: systemPrompt.length }));
       logger.debug(`[System Prompt Full]\n${systemPrompt}\n---END---`);
 
       const agentTools = applyExecPolicyToTools(this.config, resolvedTools);
@@ -443,7 +548,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
         try {
           orchestrationPlugin = getPlugin().root ?? getPlugin();
         } catch {
-          logger.warn('[ZhinAgent] 无 hostPlugin 且 getPlugin() 不可用，Owner 硬编排可能无法自动 ask_user');
+          logger.warn(formatCompact( { warn: 'no_host_plugin' }));
         }
       }
 
@@ -469,12 +574,24 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       try {
         this.logPhase('agent.run.start', sessionId, { model: chatCandidates[0] || '' });
         result = await runWithBashToolContext(contextForTools, () => agent.run(userMessageWithHistory, []));
-        this.logPhase('agent.run.end', sessionId, { iterations: result.iterations });
+        this.logPhase('agent.run.end', sessionId, {
+          iterations: result.iterations,
+          durationMs: Math.round(now() - tAgent),
+          ...this.usageLogFields(result.usage),
+        });
       } finally {
         agent.dispose();
       }
       reply = stripHallucinatedToolCalls(stripThinkBlocks(result.content)) || this.fallbackFormat(result.toolCalls);
-      logger.info(`[Agent 路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, Agent=${(now() - tAgent).toFixed(0)}ms, 总=${(now() - t0).toFixed(0)}ms`);
+      logger.debug(
+        `[Agent 路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, Agent=${(now() - tAgent).toFixed(0)}ms, 总=${(now() - t0).toFixed(0)}ms`,
+      );
+      await this.finalizeActiveTurn({
+        usage: result.usage,
+        path: 'agent',
+        iterations: result.iterations,
+        model: chatCandidates[0] || undefined,
+      });
     }
 
     await this.saveToSession(sessionId, content, reply, sceneId);
@@ -505,9 +622,10 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       runWorker: (goal, toolQuery) => this.runDeferredWorker(goal, toolQuery, context, toolSearchPool),
     });
     this.deferredCatalog = built.deferred;
-    logger.info(
-      `[toolSearch] orchestrator=${built.orchestratorTools.length} deferred=${built.deferred.length} (${built.domainStats})`,
-    );
+    logger.debug(formatCompact( {
+      tool_search: `${built.orchestratorTools.length}+${built.deferred.length}`,
+      stats: built.domainStats,
+    }));
     return { tools: built.orchestratorTools, deferredStats: built.domainStats };
   }
 
@@ -544,9 +662,23 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     return `${discipline}\n\n${basePrompt}`;
   }
 
+  private usageLogFields(usage?: Usage): Record<string, number> {
+    if (!usage) return {};
+    return {
+      promptTokens: usage.prompt_tokens,
+      completionTokens: usage.completion_tokens,
+      totalTokens: usage.total_tokens,
+    };
+  }
+
   private logPhase(phase: string, sessionId: string, extra: Record<string, unknown> = {}): void {
     if (!this.phaseTraceEnabled) return;
-    logger.info({ phase, sessionId, ...extra }, '[AGENT_PHASE]');
+    const flat: Record<string, string | number | boolean> = { phase, session: sessionId };
+    for (const [k, v] of Object.entries(extra)) {
+      if (v === undefined || v === null) continue;
+      flat[k] = typeof v === 'object' ? JSON.stringify(v) : (v as string | number | boolean);
+    }
+    logger.info(formatCompact( flat));
   }
 
   async processMultimodal(
@@ -560,8 +692,11 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
 
     const rateCheck = this.rateLimiter.check(userId);
     if (!rateCheck.allowed) {
+      await this.finalizeActiveTurn({ usage: EMPTY_USAGE, path: 'rate_limited' });
       return parseOutput(rateCheck.message || '请稍后再试');
     }
+
+    this.beginActiveTurn();
 
     const rawHistoryMessages = await this.buildHistoryMessages(sessionId);
     const profileSummary = await this.userProfiles.buildProfileSummary(userId);
@@ -638,11 +773,15 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     ];
 
     let reply = '';
+    let lastUsage: Usage | null = null;
+    let usedVisionModel = visionCandidates[0] || '';
     for (let i = 0; i < visionCandidates.length; i++) {
       const visionModel = visionCandidates[i];
+      usedVisionModel = visionModel;
       try {
         reply = '';
         for await (const chunk of this.provider.chatStream({ model: visionModel, messages })) {
+          if (chunk.usage) lastUsage = chunk.usage;
           const delta = chunk.choices?.[0]?.delta;
           if (!delta) continue;
           const text = typeof delta.content === 'string' ? delta.content : '';
@@ -653,8 +792,9 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
         }
         reply = stripThinkBlocks(reply);
         if (!reply) {
-          logger.warn(`[processMultimodal] ${visionModel} 流式为空，尝试非流式`);
+          logger.warn(formatCompact( { mode: 'multimodal', fallback: visionModel, reason: 'empty_stream' }));
           const response = await this.provider.chat({ model: visionModel, messages });
+          if (response.usage) lastUsage = response.usage;
           const msg = response.choices[0]?.message?.content;
           reply = stripThinkBlocks(typeof msg === 'string' ? msg : '');
         }
@@ -664,11 +804,16 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
         if (isLast) {
           try {
             const response = await this.provider.chat({ model: visionModel, messages });
+            if (response.usage) lastUsage = response.usage;
             const msg = response.choices[0]?.message?.content;
             reply = stripThinkBlocks(typeof msg === 'string' ? msg : '');
           } catch { /* all candidates exhausted */ }
         } else {
-          logger.warn(`[processMultimodal] ${visionModel} 失败，降级到 ${visionCandidates[i + 1]}: ${(err as Error).message}`);
+          logger.warn(formatCompact( {
+            mode: 'multimodal',
+            fallback: `${visionModel}→${visionCandidates[i + 1]}`,
+            error: truncatePreview((err as Error).message, 80),
+          }));
         }
       }
     }
@@ -676,6 +821,11 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     if (!reply) reply = '抱歉，我无法理解这条消息。';
     reply = stripHallucinatedToolCalls(reply);
     await this.saveToSession(sessionId, textContent, reply, sceneId);
+    await this.finalizeActiveTurn({
+      usage: lastUsage ?? EMPTY_USAGE,
+      path: 'multimodal',
+      model: usedVisionModel,
+    });
     return parseOutput(reply);
   }
 
@@ -715,8 +865,9 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     history: ChatMessage[],
     onChunk?: OnChunkCallback,
     preferredModel?: string,
-  ): Promise<string> {
+  ): Promise<StreamChatResult> {
     const candidates = this.resolveModelCandidates('chat', preferredModel);
+    const empty = (model: string): StreamChatResult => ({ content: '', usage: null, model });
     const turnTimeout = this.config.timeout;
     const userContent = history.length > 0
       ? buildUserMessageWithHistory(history, content)
@@ -740,7 +891,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       const model = candidates[i];
       try {
         let result = '';
-        let lastUsage: any = null;
+        let lastUsage: Usage | null = null;
         // 对整个流式消费过程应用超时
         await withTurnTimeout((async () => {
           for await (const chunk of this.provider.chatStream({ model, messages })) {
@@ -754,19 +905,18 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
             }
           }
         })());
-        if (lastUsage) {
-          logger.info(`[闲聊] token 用量: prompt=${lastUsage.prompt_tokens}, completion=${lastUsage.completion_tokens}, total=${lastUsage.total_tokens} (model=${model})`);
-        }
         result = stripThinkBlocks(result);
-        if (result) return result;
+        if (result) {
+          return { content: result, usage: lastUsage, model };
+        }
         // Streaming returned empty content — try non-streaming with same model
-        logger.warn(`[streamChat] ${model} 流式响应为空，尝试非流式`);
+        logger.warn(formatCompact( { stream: 'empty', model }));
         const response = await withTurnTimeout(this.provider.chat({ model, messages }));
         const msg = response.choices?.[0]?.message?.content;
         result = stripThinkBlocks(typeof msg === 'string' ? msg : '');
         if (result) {
           if (onChunk) onChunk(result, result);
-          return result;
+          return { content: result, usage: response.usage ?? null, model };
         }
       } catch (err) {
         const isLast = i === candidates.length - 1;
@@ -777,15 +927,21 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
             const msg = response.choices?.[0]?.message?.content;
             let result = stripThinkBlocks(typeof msg === 'string' ? msg : '');
             if (onChunk && result) onChunk(result, result);
-            return result;
+            if (result) {
+              return { content: result, usage: response.usage ?? null, model };
+            }
+            return empty(model);
           } catch {
-            return '';
+            return empty(model);
           }
         }
-        logger.warn(`[streamChat] ${model} 失败，降级到 ${candidates[i + 1]}: ${(err as Error).message}`);
+        logger.warn(formatCompact( {
+          fallback: `${model}→${candidates[i + 1]}`,
+          error: truncatePreview((err as Error).message, 80),
+        }));
       }
     }
-    return '';
+    return empty(candidates[0] || '');
   }
 
   private async saveToSession(

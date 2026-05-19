@@ -10,7 +10,7 @@ import type { PluginManifest } from "./types.js";
 import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
-import logger, { Logger } from "@zhin.js/logger";
+import logger, { Logger, formatCompact } from "@zhin.js/logger";
 import { compose, remove, resolveEntry } from "./utils.js";
 import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, SendOptions } from "./types.js";
 import { Adapter, Adapters } from "./adapter.js";
@@ -155,7 +155,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     const commandService = this.inject('command');
     if (!commandService) return await next();
     const result = await commandService.handle(message, this);
-    if (!result) return await next();
+    if (result === undefined || result === null) return await next();
     const adapter = this.inject(message.$adapter) as Adapter;
     if (!adapter || !(adapter instanceof Adapter)) return await next();
     await message.$reply(result);
@@ -418,12 +418,11 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     for (const child of this.children) {
       await child.start(t);
     }
-    // 输出启动日志（使用 debug 级别，避免重复输出）
-    // 只在根插件或重要插件时使用 info 级别
-    if (!this.parent || this.name === 'setup') {
-    this.logger.info(`Plugin "${this.name}" ${t ? `reloaded in ${Date.now() - t}ms` : "started"}`);
-    } else {
-      this.logger.debug(`Plugin "${this.name}" ${t ? `reloaded in ${Date.now() - t}ms` : "started"}`);
+    if (t) {
+      this.logger.debug(formatCompact({
+        name: this.name,
+        reload_ms: Date.now() - t,
+      }));
     }
   }
   /**
@@ -676,17 +675,30 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
    * 重载插件
    */
   async reload(plugin: Plugin = this): Promise<void> {
-    this.logger.info(`Plugin "${plugin.name}" reloading...`);
+    this.logger.info(formatCompact( { name: plugin.name, reload: true }));
     const now=Date.now();
     if (!plugin.parent) {
       // 根插件重载 = 退出进程（由 CLI 重启）
       return process.exit(51);
     }
 
+    const entry = plugin.filePath;
+    const parent = plugin.parent;
     await plugin.stop();
-    await plugin.parent.import(plugin.filePath, now);
-    await plugin.broadcast("mounted");
-    this.logger.debug(`Plugin "${plugin.name}" reloaded`);
+    let fresh: Plugin;
+    try {
+      fresh = await parent.import(entry, now);
+    } catch (err) {
+      this.logger.error(formatCompact({
+        name: plugin.name,
+        reload: false,
+        error: err instanceof Error ? err.message : String(err),
+        hint: 'full_restart',
+      }));
+      throw err;
+    }
+    await fresh.broadcast('mounted');
+    this.logger.debug(formatCompact({ name: fresh.name, reload_ms: Date.now() - now }));
   }
 
   /**
@@ -758,10 +770,13 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     const entryFile = fs.existsSync(entry) ? entry : require.resolve(entry);
     const realPath = fs.realpathSync(entryFile);
 
-    // 检查模块是否已加载
+    // 检查模块是否已加载（跳过热重载后已 stop 的僵尸实例）
     const existing = loadedModules.get(realPath);
-    if (existing) {
+    if (existing?.started) {
       return existing;
+    }
+    if (existing) {
+      loadedModules.delete(realPath);
     }
 
     const plugin = new Plugin(realPath, parent);

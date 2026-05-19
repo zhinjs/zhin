@@ -2,7 +2,7 @@
  * HTML → 图片：@zhin.js/satori（htmlToSvg）+ @resvg/resvg-js（PNG）
  */
 
-import { usePlugin, defineComponent, ZhinTool } from "zhin.js";
+import { formatCompact, defineComponent, usePlugin, ZhinTool } from 'zhin.js';
 import { htmlToSvg, getAllBuiltinFonts } from '@zhin.js/satori';
 import { Resvg } from '@resvg/resvg-js';
 import type {
@@ -71,10 +71,10 @@ function ensureBuiltinFontsCached(): void {
       return;
     }
   } catch (e) {
-    logger.warn('Builtin fonts failed:', e);
+    logger.warn(formatCompact( { op: 'fonts', ok: false, error: e instanceof Error ? e.message : String(e) }));
   }
   defaultFontLoaded = true;
-  logger.warn('No fonts available');
+  logger.warn(formatCompact( { op: 'fonts', ok: false, error: 'none available' }));
 }
 
 async function loadFontFromUrl(url: string, name: string, weight: FontConfig['weight'] = 400): Promise<FontConfig | null> {
@@ -104,7 +104,7 @@ async function loadFontFromUrl(url: string, name: string, weight: FontConfig['we
     
     return font;
   } catch (error) {
-    logger.warn(`Failed to load font from ${url}:`, error);
+    logger.warn(formatCompact( { op: 'font_load', url, ok: false, error: error instanceof Error ? error.message : String(error) }));
     return null;
   }
 }
@@ -170,7 +170,7 @@ async function renderHtmlToSvg(
   /** 无论调用方是否已带字体，都先铺一层内置 CJK+拉丁，再叠缓存/ options（后者可覆盖同名） */
   const finalFonts = mergeFontLists(getAllBuiltinFonts().map(toFontConfig), fonts);
   if (finalFonts.length === 0) {
-    logger.warn('No fonts: non-ASCII text may fail');
+    logger.warn(formatCompact( { op: 'fonts', ok: false, error: 'non-ascii may fail' }));
   }
 
   const svg = await htmlToSvg(wrapHtmlFragment(html, backgroundColor ?? '#ffffff'), {

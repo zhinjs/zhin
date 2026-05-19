@@ -6,7 +6,7 @@
  *
  * 依赖：@zhin.js/plugin-html-renderer（提供 html-renderer Context）
  */
-import { usePlugin, segment } from 'zhin.js'
+import { formatCompact, segment, usePlugin } from 'zhin.js'
 import { detectAndParse } from './platforms.js'
 import { renderPoster } from './render.js'
 
@@ -28,7 +28,7 @@ declare module 'zhin.js' {
 const { addMiddleware, useContext, logger } = usePlugin()
 
 useContext('html-renderer', (renderer) => {
-  logger.info('link-poster: html-renderer 就绪，已启用链接海报')
+  logger.info(formatCompact( { op: 'load' }))
 
   addMiddleware(async (message, next) => {
     const text = message.$raw || ''
@@ -49,7 +49,7 @@ useContext('html-renderer', (renderer) => {
         }
       }
     } catch (e) {
-      logger.warn(`link-poster: 海报生成失败 - ${e instanceof Error ? e.message : e}`)
+      logger.warn(formatCompact( { op: 'render', ok: false, error: e instanceof Error ? e.message : String(e) }))
     }
 
     return next()

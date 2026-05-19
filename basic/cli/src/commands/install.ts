@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
 import fs from 'fs-extra';
 import path from 'path';
@@ -39,8 +40,8 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
     // 判断插件类型
     const pluginType = detectPluginType(pluginToInstall);
     
-    logger.info(`检测到插件类型: ${pluginType}`);
-    logger.info(`正在安装: ${pluginToInstall}`);
+    logger.info(formatCompact( { cmd: 'install', op: 'detect', type: pluginType }));
+    logger.info(formatCompact( { cmd: 'install', op: 'install', package: pluginToInstall }));
     logger.log('');
 
     // 构建安装命令

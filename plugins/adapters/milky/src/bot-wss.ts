@@ -5,7 +5,7 @@ import { IncomingMessage } from 'http';
 import WebSocket, { WebSocketServer } from 'ws';
 import { EventEmitter } from 'events';
 import { clearInterval } from 'node:timers';
-import { Bot, Message, SendOptions, segment } from 'zhin.js';
+import { formatCompact, Bot, Message, segment, SendOptions } from 'zhin.js';
 import type { Router } from '@zhin.js/http';
 import { callApi } from './api.js';
 import type { MilkyWssConfig, MilkyEvent } from './types.js';
@@ -59,7 +59,7 @@ export class MilkyWssServer extends EventEmitter implements Bot<MilkyWssConfig, 
   async $connect(): Promise<void> {
     const path = this.$config.path.startsWith('/') ? this.$config.path : `/${this.$config.path}`;
     const token = this.$config.access_token;
-    if (!token) this.logger.warn('missing access_token, reverse WS is not secured');
+    if (!token) this.logger.warn(formatCompact({ bot: this.$id, ok: false, error: 'missing access_token' }));
 
     this.#wss = this.router.ws(path, {
       verifyClient: (info: { req: IncomingMessage }) => {
@@ -73,12 +73,12 @@ export class MilkyWssServer extends EventEmitter implements Bot<MilkyWssConfig, 
     });
 
     this.$connected = true;
-    this.logger.info(`Milky 反向 WS 服务端已启动: ${path}`);
+    this.logger.info(formatCompact( { op: 'listen', bot: this.$id, mode: 'wss', path }));
 
     this.#wss.on('connection', (client, req) => {
       this.#client = client;
       this.startHeartbeat();
-      this.logger.info(`协议端已连接: ${req.socket?.remoteAddress}`);
+      this.logger.info(formatCompact({ bot: this.$id, peer: req.socket?.remoteAddress }));
 
       client.on('message', (data) => {
         try {
@@ -91,7 +91,7 @@ export class MilkyWssServer extends EventEmitter implements Bot<MilkyWssConfig, 
 
       client.on('close', () => {
         this.#client = undefined;
-        this.logger.warn('协议端断开连接');
+        this.logger.warn(formatCompact( { op: 'disconnect', bot: this.$id }));
       });
 
       client.on('error', (err) => this.logger.error('反向 WS 连接错误', err));

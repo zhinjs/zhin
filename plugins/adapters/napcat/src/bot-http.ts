@@ -3,6 +3,7 @@
  * 出站：HTTP POST 调用 NapCat API
  * 入站：挂载 webhook 路由接收 NapCat 的 HTTP POST 事件上报
  */
+import { formatCompact } from 'zhin.js';
 import { NapCatBotBase } from './bot-base.js';
 import type { NapCatHttpConfig, ApiResponse } from './types.js';
 import type { NapCatAdapter } from './adapter.js';
@@ -23,7 +24,7 @@ export class NapCatHttpBot extends NapCatBotBase {
     await this.checkConnection();
     this.startPoll();
     this.$connected = true;
-    this.logger.info(`${this.$id} HTTP mode started (api: ${this.$config.http_url}, post: ${this.$config.post_path})`);
+    this.logger.info(formatCompact({ bot: this.$id, mode: 'http' }));
   }
 
   async $disconnect(): Promise<void> {
@@ -61,9 +62,11 @@ export class NapCatHttpBot extends NapCatBotBase {
 
       ctx.status = 204;
       ctx.body = '';
-      try { this.dispatchEvent(body); } catch (e) { this.logger.warn(`${this.$id} HTTP event dispatch error: ${e}`); }
+      try { this.dispatchEvent(body); } catch (e) {
+        this.logger.warn(formatCompact( { op: 'recv', bot: this.$id, ok: false, error: String(e) }));
+      }
     });
-    this.logger.info(`${this.$id} webhook mounted at ${postPath}`);
+    this.logger.info(formatCompact( { op: 'webhook', bot: this.$id, path: postPath }));
   }
 
   private async checkConnection(): Promise<void> {
@@ -81,7 +84,7 @@ export class NapCatHttpBot extends NapCatBotBase {
         await this.callApi('get_status');
       } catch {
         this.$connected = false;
-        this.logger.warn(`${this.$id} HTTP heartbeat failed, marking as disconnected`);
+        this.logger.warn(formatCompact( { op: 'heartbeat', bot: this.$id, ok: false }));
       }
     }, interval);
   }

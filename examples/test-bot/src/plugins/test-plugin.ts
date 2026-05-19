@@ -18,8 +18,8 @@ declare module "zhin.js" {
     };
   }
 }
-const p2=usePlugin();
-const { addCommand, addComponent, root, useContext } = usePlugin()
+const plugin = usePlugin();
+const { addCommand, addComponent, root, useContext } = plugin;
 // 全局内存历史记录
 declare global {
   var _memoryHistory: Array<{ time: number; rss: number; heapUsed: number }> | undefined;
@@ -344,9 +344,6 @@ addComponent(async function foo(
 // 自动清理功能测试
 // ============================================
 
-// 获取当前插件实例用于测试
-const plugin = usePlugin();
-
 // 存储动态添加的 dispose 函数
 const dynamicDisposes: (() => void)[] = [];
 
@@ -551,8 +548,10 @@ useContext("database", async (db) => {
   // });
   // await model.delete({name:'张三'});
   if (model) {
-    const result = await model.select();
-    console.log(result);
+    const rows = await model.select();
+    if (rows.length > 0) {
+      plugin.logger.debug(`test_model rows: ${rows.length}`);
+    }
   }
 });
 

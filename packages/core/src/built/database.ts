@@ -3,6 +3,7 @@
  * 数据库服务，管理数据模型定义，继承自 Feature 抽象类
  */
 import { Registry, Definition, Databases, Database } from "@zhin.js/database";
+import { formatCompact } from '@zhin.js/logger';
 import { DatabaseConfig, Models } from "../types.js";
 import { Feature, FeatureJSON } from "../feature.js";
 import { Plugin, getPlugin } from "../plugin.js";
@@ -89,7 +90,7 @@ export class DatabaseFeature extends Feature<ModelRecord> {
    * 生命周期: 启动数据库
    */
   async mounted(plugin: PluginLike): Promise<void> {
-    plugin.logger.info('Database service started');
+    plugin.logger.debug(formatCompact({ ready: true }));
     await this.db.start();
   }
 

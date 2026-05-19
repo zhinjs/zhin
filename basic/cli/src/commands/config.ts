@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'path';
 import yaml from 'yaml';
+import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
 
 function findConfigFile(cwd: string): string | null {
@@ -20,7 +21,7 @@ async function readConfig(filePath: string): Promise<any> {
     return JSON.parse(content);
   } else if (ext === '.ts') {
     // TODO: 支持 TypeScript 配置文件
-    logger.warn('暂不支持直接读取 TypeScript 配置文件，请先运行 "zhin build"');
+    logger.warn(formatCompact( { cmd: 'config', op: 'unsupported_ts', hint: 'zhin build' }));
     return {};
   }
   return {};

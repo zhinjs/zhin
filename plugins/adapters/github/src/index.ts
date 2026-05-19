@@ -1,16 +1,7 @@
 /**
  * GitHub 适配器入口：类型扩展、模型、导出、注册
  */
-import {
-  usePlugin,
-  type Plugin,
-  type Context,
-  type ToolFeature,
-  type Tool,
-  type ToolContext,
-  registerAgentPromptContributor,
-  unregisterAgentPromptContributor,
-} from 'zhin.js';
+import { formatCompact, registerAgentPromptContributor, type Context, type Plugin, type Tool, type ToolContext, type ToolFeature, unregisterAgentPromptContributor, usePlugin } from 'zhin.js';
 import { createGithubAgentPromptContributor } from './agent-prompt.js';
 import { GitHubAdapter } from './adapter.js';
 import { GhClient } from './gh-client.js';
@@ -104,19 +95,19 @@ useContext('github', (adapter) => {
     const router = plugin.inject('router');
     if (router) {
       adapter.setupWebhook(router);
-      logger.info('GitHub 事件源: Webhook (实时)');
+      logger.debug(formatCompact( { op: 'events', source: 'webhook' }));
     } else {
       // router 还没就绪，等它挂载后再注册
       plugin.useContext('router', (r) => {
         adapter.setupWebhook(r);
-        logger.info('GitHub 事件源: Webhook (实时, 延迟注册)');
+        logger.debug(formatCompact( { op: 'events', source: 'webhook', deferred: true }));
       });
     }
   }
   // Webhook 未配置或未激活时，总是启动轮询作为兜底
   if (!adapter.webhookActive) {
     adapter.startPolling();
-    logger.info('GitHub 事件源: 轮询');
+    logger.debug(formatCompact( { op: 'events', source: 'poll' }));
   }
   return () => adapter.stopPolling();
 });
@@ -206,7 +197,7 @@ useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) 
           tokenPromise.then(async (tokenData) => {
             if (!tokenData) {
               // 授权超时或被拒绝 — 由于 execute 已经返回了，这里只能通过日志记录
-              logger.warn(`GitHub Device Flow 超时/拒绝: ${context.platform}:${context.senderId}`);
+              logger.warn(formatCompact( { op: 'device_flow', ok: false, platform: context.platform, sender: context.senderId }));
               return;
             }
 
@@ -223,7 +214,7 @@ useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) 
               access_token: tokenData.access_token,
               created_at: Date.now(),
             });
-            logger.info(`GitHub 账号绑定成功: ${context.platform}:${context.senderId} → ${login}`);
+            logger.info(formatCompact( { op: 'bind', platform: context.platform, sender: context.senderId, login }));
 
             // 尝试回复绑定成功消息
             if (context.message?.$reply) {

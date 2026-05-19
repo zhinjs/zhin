@@ -1,4 +1,4 @@
-import { usePlugin, MessageCommand, ZhinTool } from 'zhin.js'
+import { formatCompact, MessageCommand, usePlugin, ZhinTool } from 'zhin.js'
 
 const { addCommand, addTool, logger } = usePlugin()
 
@@ -42,7 +42,7 @@ addCommand(
         const short = await shortenUrl(url)
         return `短链接: ${short}`
       } catch (e: any) {
-        logger.warn('短链生成失败', e)
+        logger.warn(formatCompact( { op: 'shorten', ok: false, error: e instanceof Error ? e.message : String(e) }))
         return `缩短失败: ${e.message}`
       }
     }),
@@ -58,7 +58,7 @@ addCommand(
         const original = await expandUrl(url)
         return `原始链接: ${original}`
       } catch (e: any) {
-        logger.warn('链接展开失败', e)
+        logger.warn(formatCompact( { op: 'expand', ok: false, error: e instanceof Error ? e.message : String(e) }))
         return `展开失败: ${e.message}`
       }
     }),

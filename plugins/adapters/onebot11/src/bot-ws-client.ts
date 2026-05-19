@@ -4,14 +4,7 @@
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { clearInterval } from 'node:timers';
-import {
-  Bot,
-  Message,
-  SendOptions,
-  segment,
-  Notice,
-  Request,
-} from 'zhin.js';
+import { formatCompact, Bot, Message, Notice, Request, segment, SendOptions } from 'zhin.js';
 import type {
   OneBot11WsClientConfig,
   OneBot11Message,
@@ -57,8 +50,10 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11WsClie
 
       this.ws.on('open', () => {
         this.$connected = true;
-        if (!this.$config.access_token) this.logger.warn(`missing 'access_token', your OneBot protocol is not safely`);
-        this.logger.info(`${this.$config.name} 已连接 (WS 正向: ${this.$config.url})`);
+        if (!this.$config.access_token) {
+          this.logger.warn(formatCompact({ bot: this.$id, ok: false, error: 'missing access_token' }));
+        }
+        this.logger.info(formatCompact({ bot: this.$id, mode: 'ws' }));
         this.startHeartbeat();
         resolve();
       });
@@ -76,13 +71,24 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11WsClie
         this.$connected = false;
         const reasonStr = reason?.toString?.() || String(reason);
         const codeHint = code === 1005 ? ' [无状态，多为服务端/代理未发 close 帧即断开]' : code === 1006 ? ' [异常关闭]' : '';
-        this.logger.warn(`${this.$config.name} 连接已断开 (code=${code}${codeHint}${reasonStr ? `, reason=${reasonStr}` : ''})，${this.$config.reconnect_interval || 5000}ms 后重连`);
+        this.logger.warn(formatCompact( {
+          op: 'disconnect',
+          bot: this.$config.name,
+          code,
+          error: `${reasonStr || 'closed'}${codeHint}`,
+          reconnect_ms: this.$config.reconnect_interval || 5000,
+        }));
         reject({ code, reason });
         this.scheduleReconnect();
       });
 
       this.ws.on('error', (error) => {
-        this.logger.warn(`${this.$config.name} WS 错误: ${error instanceof Error ? error.message : String(error)}`);
+        this.logger.warn(formatCompact( {
+          op: 'ws_error',
+          bot: this.$config.name,
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        }));
         reject(error);
       });
     });
@@ -172,7 +178,7 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11WsClie
         user_id: userId,
         reject_add_request: rejectAddRequest,
       });
-      this.logger.info(`OneBot11 Bot ${this.$id} 踢出成员 ${userId}（群 ${groupId}）`);
+      this.logger.debug(formatCompact( { op: 'kick', bot: this.$id, group: groupId, user: userId }));
       return true;
     } catch (error) {
       this.logger.error(`OneBot11 Bot ${this.$id} 踢出成员失败:`, error);
@@ -187,7 +193,7 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11WsClie
         user_id: userId,
         duration,
       });
-      this.logger.info(`OneBot11 Bot ${this.$id} ${duration > 0 ? `禁言成员 ${userId} ${duration}秒` : `解除成员 ${userId} 禁言`}（群 ${groupId}）`);
+      this.logger.debug(formatCompact( { op: duration > 0 ? 'mute' : 'unmute', bot: this.$id, group: groupId, user: userId, duration }));
       return true;
     } catch (error) {
       this.logger.error(`OneBot11 Bot ${this.$id} 禁言操作失败:`, error);
@@ -198,7 +204,7 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11WsClie
   async muteAll(groupId: number, enable: boolean = true): Promise<boolean> {
     try {
       await this.callApi('set_group_whole_ban', { group_id: groupId, enable });
-      this.logger.info(`OneBot11 Bot ${this.$id} ${enable ? '开启' : '关闭'}全员禁言（群 ${groupId}）`);
+      this.logger.debug(formatCompact( { op: 'mute_all', bot: this.$id, group: groupId, enable }));
       return true;
     } catch (error) {
       this.logger.error(`OneBot11 Bot ${this.$id} 全员禁言操作失败:`, error);
@@ -209,7 +215,7 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11WsClie
   async setAdmin(groupId: number, userId: number, enable: boolean = true): Promise<boolean> {
     try {
       await this.callApi('set_group_admin', { group_id: groupId, user_id: userId, enable });
-      this.logger.info(`OneBot11 Bot ${this.$id} ${enable ? '设置' : '取消'}管理员 ${userId}（群 ${groupId}）`);
+      this.logger.debug(formatCompact( { op: 'set_admin', bot: this.$id, group: groupId, user: userId, enable }));
       return true;
     } catch (error) {
       this.logger.error(`OneBot11 Bot ${this.$id} 设置管理员失败:`, error);
@@ -220,7 +226,7 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11WsClie
   async setCard(groupId: number, userId: number, card: string): Promise<boolean> {
     try {
       await this.callApi('set_group_card', { group_id: groupId, user_id: userId, card });
-      this.logger.info(`OneBot11 Bot ${this.$id} 设置成员 ${userId} 群名片为 "${card}"（群 ${groupId}）`);
+      this.logger.debug(formatCompact( { op: 'set_card', bot: this.$id, group: groupId, user: userId }));
       return true;
     } catch (error) {
       this.logger.error(`OneBot11 Bot ${this.$id} 设置群名片失败:`, error);
@@ -236,7 +242,7 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11WsClie
         special_title: title,
         duration,
       });
-      this.logger.info(`OneBot11 Bot ${this.$id} 设置成员 ${userId} 头衔为 "${title}"（群 ${groupId}）`);
+      this.logger.debug(formatCompact( { op: 'set_title', bot: this.$id, group: groupId, user: userId }));
       return true;
     } catch (error) {
       this.logger.error(`OneBot11 Bot ${this.$id} 设置头衔失败:`, error);
@@ -247,7 +253,7 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11WsClie
   async setGroupName(groupId: number, name: string): Promise<boolean> {
     try {
       await this.callApi('set_group_name', { group_id: groupId, group_name: name });
-      this.logger.info(`OneBot11 Bot ${this.$id} 设置群名为 "${name}"（群 ${groupId}）`);
+      this.logger.debug(formatCompact( { op: 'set_group_name', bot: this.$id, group: groupId }));
       return true;
     } catch (error) {
       this.logger.error(`OneBot11 Bot ${this.$id} 设置群名失败:`, error);

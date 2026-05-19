@@ -2,6 +2,7 @@
  * NapCat 正向 WebSocket 连接
  */
 import WebSocket from 'ws';
+import { formatCompact } from 'zhin.js';
 import { NapCatBotBase } from './bot-base.js';
 import type { NapCatWsClientConfig, ApiResponse } from './types.js';
 import type { NapCatAdapter } from './adapter.js';
@@ -37,8 +38,10 @@ export class NapCatWsClient extends NapCatBotBase {
 
       this.ws.on('open', () => {
         this.$connected = true;
-        if (!this.$config.access_token) this.logger.warn(`[${this.$id}] missing 'access_token', connection is not secure`);
-        this.logger.info(`${this.$id} connected (WS forward: ${this.$config.url})`);
+        if (!this.$config.access_token) {
+          this.logger.warn(formatCompact({ bot: this.$id, ok: false, error: 'missing access_token' }));
+        }
+        this.logger.info(formatCompact({ bot: this.$id, mode: 'ws' }));
         this.startHeartbeat();
         resolve();
       });
@@ -55,13 +58,24 @@ export class NapCatWsClient extends NapCatBotBase {
         this.$connected = false;
         const reasonStr = reason?.toString?.() || '';
         const codeHint = code === 1005 ? ' [no status]' : code === 1006 ? ' [abnormal]' : '';
-        this.logger.warn(`${this.$id} disconnected (code=${code}${codeHint}${reasonStr ? `, reason=${reasonStr}` : ''}), reconnecting in ${this.$config.reconnect_interval || 5000}ms`);
+        this.logger.warn(formatCompact( {
+          op: 'disconnect',
+          bot: this.$id,
+          code,
+          error: reasonStr || 'closed',
+          reconnect_ms: this.$config.reconnect_interval || 5000,
+        }));
         reject({ code, reason });
         this.scheduleReconnect();
       });
 
       this.ws.on('error', (error) => {
-        this.logger.warn(`${this.$id} WS error: ${error instanceof Error ? error.message : String(error)}`);
+        this.logger.warn(formatCompact( {
+          op: 'ws_error',
+          bot: this.$id,
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        }));
         reject(error);
       });
     });

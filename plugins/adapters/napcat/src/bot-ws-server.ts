@@ -2,6 +2,7 @@
  * NapCat 反向 WebSocket 连接
  */
 import WebSocket, { WebSocketServer } from 'ws';
+import { formatCompact } from 'zhin.js';
 import type { IncomingMessage } from 'http';
 import { NapCatBotBase } from './bot-base.js';
 import type { NapCatWsServerConfig, ApiResponse } from './types.js';
@@ -26,7 +27,9 @@ export class NapCatWsServer extends NapCatBotBase {
   }
 
   async $connect(): Promise<void> {
-    if (!this.$config.access_token) this.logger.warn(`[${this.$id}] missing 'access_token', connection is not secure`);
+    if (!this.$config.access_token) {
+      this.logger.warn(formatCompact({ bot: this.$id, ok: false, error: 'missing access_token' }));
+    }
     this.#wss = this.router.ws(this.$config.path, {
       verifyClient: (info: { origin: string; secure: boolean; req: IncomingMessage }) => {
         const authorization = info.req.headers['authorization'] || '';
@@ -37,16 +40,26 @@ export class NapCatWsServer extends NapCatBotBase {
         return true;
       },
     });
-    this.logger.info(`${this.$id} WS server started at path: ${this.$config.path}`);
+    this.logger.info(formatCompact( { op: 'listen', bot: this.$id, mode: 'wss', path: this.$config.path }));
 
     this.#wss.on('connection', (client, req) => {
       this.startHeartbeat();
-      this.logger.info(`${this.$id} client connected: ${req.socket.remoteAddress}`);
+      this.logger.info(formatCompact({ bot: this.$id, peer: req.socket.remoteAddress }));
 
-      client.on('error', (err) => this.logger.warn(`${this.$id} WS error: ${err instanceof Error ? err.message : String(err)}`));
+      client.on('error', (err) => this.logger.warn(formatCompact( {
+        op: 'ws_error',
+        bot: this.$id,
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      })));
       client.on('close', (code, reason) => {
         const reasonStr = reason?.toString?.() || '';
-        this.logger.warn(`${this.$id} client disconnected (code=${code}${reasonStr ? `, reason=${reasonStr}` : ''})`);
+        this.logger.warn(formatCompact( {
+          op: 'disconnect',
+          bot: this.$id,
+          code,
+          error: reasonStr || undefined,
+        }));
         for (const [key, val] of this.#clientMap) {
           if (val === client) this.#clientMap.delete(key);
         }
@@ -104,7 +117,7 @@ export class NapCatWsServer extends NapCatBotBase {
     if (message.post_type === 'meta_event' && message.sub_type === 'connect') {
       this.#clientMap.set(String(message.self_id), client);
       this.$connected = true;
-      this.logger.info(`${this.$id} client ${message.self_id} connected via lifecycle`);
+      this.logger.info(formatCompact({ bot: this.$id, self_id: message.self_id }));
       return;
     }
     this.dispatchEvent(message);

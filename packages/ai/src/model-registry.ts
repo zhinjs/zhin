@@ -430,7 +430,10 @@ export function computeTierScore(modelId: string): number {
   if (root.includes('gemini')) return 80;
 
   // DeepSeek
+  if (root.includes('deepseek') && root.includes('v4-pro')) return 92;
+  if (root.includes('deepseek') && root.includes('v4-flash')) return 88;
   if (root.includes('deepseek') && root.includes('r1')) return 85;
+  if (root.includes('deepseek') && root.includes('reasoner')) return 86;
   if (root.includes('deepseek')) return 80;
 
   // Qwen

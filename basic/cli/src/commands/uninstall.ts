@@ -5,6 +5,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import yaml from 'yaml';
 import { execSync } from 'child_process';
+import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
 
 async function findConfigFile(cwd: string): Promise<string | null> {
@@ -47,7 +48,7 @@ async function uninstallLinuxService(serviceName: string): Promise<void> {
   const serviceFile = `/etc/systemd/system/${serviceName}.service`;
   
   if (!fs.existsSync(serviceFile)) {
-    logger.warn('服务未安装');
+    logger.warn(formatCompact( { cmd: 'uninstall', op: 'service_not_installed' }));
     return;
   }
 
@@ -72,7 +73,7 @@ async function uninstallMacService(serviceName: string): Promise<void> {
   const plistFile = path.join(process.env.HOME!, 'Library', 'LaunchAgents', `${serviceName}.plist`);
   
   if (!fs.existsSync(plistFile)) {
-    logger.warn('服务未安装');
+    logger.warn(formatCompact( { cmd: 'uninstall', op: 'service_not_installed' }));
     return;
   }
 
@@ -94,7 +95,7 @@ async function uninstallWindowsService(serviceName: string): Promise<void> {
     // 检查服务是否存在
     const services = execSync('sc query', { encoding: 'utf-8' });
     if (!services.includes(serviceName)) {
-      logger.warn('服务未安装');
+      logger.warn(formatCompact( { cmd: 'uninstall', op: 'service_not_installed' }));
       return;
     }
 
@@ -125,7 +126,7 @@ const serviceCommand = new Command('service')
     ]);
 
     if (!confirm) {
-      logger.info('已取消');
+      logger.info(formatCompact( { cmd: 'uninstall', op: 'cancelled' }));
       return;
     }
 
@@ -169,7 +170,7 @@ const pluginCommand = new Command('plugin')
           await saveConfig(configPath, config);
           logger.success(`已从配置文件中移除插件 "${name}"`);
         } else {
-          logger.warn(`配置文件中未找到插件 "${name}"`);
+          logger.warn(formatCompact( { cmd: 'uninstall', op: 'plugin_not_in_config', name }));
         }
       }
     }
@@ -196,7 +197,7 @@ const pluginCommand = new Command('plugin')
         // 提示用户重新安装依赖
         console.log(chalk.yellow('\n请运行 "pnpm install" 更新依赖'));
       } else {
-        logger.warn(`package.json 中未找到依赖 "${name}"`);
+        logger.warn(formatCompact( { cmd: 'uninstall', op: 'dep_not_found', name }));
       }
     }
 

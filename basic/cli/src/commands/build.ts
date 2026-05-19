@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import { formatCompact } from '@zhin.js/logger';
 import { logger } from "../utils/logger.js";
 import fs from "fs-extra";
 import path from "path";
@@ -48,7 +49,7 @@ export const buildCommand = new Command("build")
             logger.error("--watch 需要存在 client/ 目录");
             process.exit(1);
           }
-          logger.info("zhin build --watch：监听 client/ …（Ctrl+C 退出）");
+          logger.info(formatCompact( { cmd: "build", op: "watch", hint: "Ctrl+C 退出" }));
           await watchClientBundle(cwd);
           return;
         }
@@ -63,7 +64,7 @@ export const buildCommand = new Command("build")
           } catch {
             /* keep basename */
           }
-          logger.info(`智能构建: ${label}（当前目录）`);
+          logger.info(formatCompact( { cmd: "build", op: "smart", target: label }));
           await performSmartBuild(cwd, String(label), {
             clean: options.clean,
             production: options.production,
@@ -110,11 +111,11 @@ export const buildCommand = new Command("build")
           });
 
           if (validPlugins.length === 0) {
-            logger.warn("未找到任何插件");
+            logger.warn(formatCompact( { cmd: "build", op: "no_plugins" }));
             return;
           }
 
-          logger.info(`找到 ${validPlugins.length} 个插件，开始构建...`);
+          logger.info(formatCompact( { cmd: "build", op: "batch", count: validPlugins.length }));
 
           for (const plugin of validPlugins) {
             const pluginPath = path.join(pluginsDir, plugin);
@@ -139,7 +140,7 @@ async function buildOnePluginPath(
   pluginName: string,
   options: { clean: boolean; production: boolean; analyze: boolean },
 ): Promise<void> {
-  logger.info(`正在构建插件: ${pluginName}...`);
+  logger.info(formatCompact( { cmd: "build", op: "build", plugin: pluginName }));
 
   const hasSrc = fs.existsSync(path.join(pluginPath, "src"));
   const hasClient = fs.existsSync(path.join(pluginPath, "client"));
@@ -150,7 +151,7 @@ async function buildOnePluginPath(
   }
 
   if (options.production) {
-    logger.info(`📦 生产构建模式`);
+    logger.info(formatCompact( { cmd: "build", op: "production" }));
   }
 
   try {

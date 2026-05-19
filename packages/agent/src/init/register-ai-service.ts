@@ -2,7 +2,7 @@
  * Register AIService as a plugin context.
  */
 import './types.js';
-import { getPlugin, type Plugin } from '@zhin.js/core';
+import { formatCompact, getPlugin, type Plugin } from '@zhin.js/core';
 import type { AIConfig } from '@zhin.js/core';
 import { AIService } from '../service.js';
 import type { AIServiceRefs } from './shared-refs.js';
@@ -21,7 +21,7 @@ export function registerAIService(refs: AIServiceRefs): void {
       const config = appConfig.ai || {};
 
       if (config.enabled === false) {
-        logger.info('AI Service is disabled');
+        logger.info(formatCompact( { disabled: true }));
         return undefined as unknown as AIService;
       }
 
@@ -31,13 +31,9 @@ export function registerAIService(refs: AIServiceRefs): void {
 
       const providers = service.listProviders();
       if (providers.length === 0) {
-        logger.warn(
-          'No AI providers configured. Please add API keys in zhin.config (yml/json/toml)',
-        );
+        logger.warn(formatCompact( { error: 'no_providers' }));
       } else {
-        logger.info(
-          `AI Service started with providers: ${providers.join(', ')}`,
-        );
+        logger.debug(formatCompact({ providers: providers.join(',') }));
       }
 
       return service;
@@ -46,7 +42,7 @@ export function registerAIService(refs: AIServiceRefs): void {
       if (service) {
         service.dispose();
         refs.aiService = null;
-        logger.info('AI Service stopped');
+        logger.debug(formatCompact( { stopped: true }));
       }
     },
   });

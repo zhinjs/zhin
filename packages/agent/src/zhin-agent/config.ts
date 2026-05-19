@@ -87,6 +87,11 @@ export interface ZhinAgentConfig {
   execAsk?: boolean;
   maxSubagentIterations?: number;
   subagentTools?: string[];
+  /**
+   * 主会话 turn 结束前，等待本轮 spawn 的子 agent 完成以便合并 token（毫秒）。
+   * 0 表示不等待（仅统计在 wait 窗口内已完成的子 agent）。
+   */
+  subagentTurnWaitMs?: number;
   /** 模型大小提示，影响技能指令截断长度。留空则根据模型名自动推断 */
   modelSizeHint?: '' | 'small' | 'medium' | 'large';
   /** 技能指令最大字符数（覆盖 modelSizeHint 推断值） */
@@ -150,6 +155,7 @@ export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   execAsk: false,
   maxSubagentIterations: 15,
   subagentTools: [],
+  subagentTurnWaitMs: 180_000,
   modelSizeHint: '',
   skillInstructionMaxChars: 0,
   modelHarness: {},

@@ -26,7 +26,7 @@
  *   retentionDays: 90
  * ```
  */
-import { usePlugin, MessageCommand, Schema } from "zhin.js";
+import { formatCompact, MessageCommand, Schema, usePlugin } from 'zhin.js';
 
 const plugin = usePlugin();
 const { logger, root, addCommand, addMiddleware, useContext, onDispose, declareConfig } = plugin;
@@ -79,7 +79,7 @@ useContext("database", (db: any) => {
     count: { type: "integer", default: 0 },
     updated_at: { type: "text", default: "" },
   });
-  logger.info("消息统计模型已注册");
+  logger.info(formatCompact( { op: "model" }));
 });
 
 // ─── 辅助 ────────────────────────────────────────────────────────────────────
@@ -345,7 +345,7 @@ const cleanupTimer = setInterval(async () => {
       await M.delete().where({ id: row.id });
     }
     if (expired.length > 0) {
-      logger.info(`清理了 ${expired.length} 条过期记录`);
+      logger.info(formatCompact( { op: "cleanup", count: expired.length }));
     }
   } catch {
     // 清理失败不影响正常运行
@@ -354,4 +354,4 @@ const cleanupTimer = setInterval(async () => {
 
 onDispose(() => clearInterval(cleanupTimer));
 
-logger.info(`插件已加载 (排行数=${config.rankSize}, 保留天数=${config.retentionDays})`);
+logger.info(formatCompact( { op: "load", rank_size: config.rankSize, retention_days: config.retentionDays }));

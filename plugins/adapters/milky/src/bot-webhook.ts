@@ -2,7 +2,7 @@
  * Milky Webhook Bot：无长连接，在 router.post(path) 接收 POST 事件，鉴权后转 Message
  */
 import { EventEmitter } from 'events';
-import { Bot, Message, SendOptions, segment } from 'zhin.js';
+import { formatCompact, Bot, Message, segment, SendOptions } from 'zhin.js';
 import type { Router, RouterContext } from '@zhin.js/http';
 import { callApi } from './api.js';
 import type { MilkyWebhookConfig, MilkyEvent } from './types.js';
@@ -61,7 +61,7 @@ export class MilkyWebhookBot extends EventEmitter implements Bot<MilkyWebhookCon
       ctx.status = 200;
       ctx.body = { retcode: 0 };
     });
-    this.logger.info(`Milky Webhook 注册路径: ${path}`);
+    this.logger.info(formatCompact( { op: 'webhook', path }));
   }
 
   async $disconnect(): Promise<void> {

@@ -1,11 +1,7 @@
 /**
  * GitHub 适配器（基于 gh CLI + App 认证 + Webhook/轮询混合）
  */
-import {
-  Adapter,
-  Plugin,
-  Message,
-} from 'zhin.js';
+import { formatCompact, Adapter, Message, Plugin } from 'zhin.js';
 import crypto from 'node:crypto';
 import { GitHubBot } from './bot.js';
 import type { Router } from '@zhin.js/http';
@@ -168,7 +164,7 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
   setupWebhook(router: Router): void {
     const bot = this.bots.values().next().value as GitHubBot | undefined;
     if (!bot?.$config.webhook_secret) {
-      this.plugin.logger.warn('Webhook 配置缺失 webhook_secret，跳过注册');
+      this.plugin.logger.warn(formatCompact( { op: 'webhook', ok: false, error: 'missing webhook_secret' }));
       return;
     }
     const secret = bot.$config.webhook_secret;
@@ -189,7 +185,7 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
       const body = (ctx.request as any).rawBody || JSON.stringify((ctx.request as any).body);
       const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(body).digest('hex');
       if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
-        this.plugin.logger.warn(`Webhook 签名验证失败 (delivery: ${deliveryId})`);
+        this.plugin.logger.warn(formatCompact( { op: 'webhook', ok: false, error: 'invalid signature', delivery: deliveryId }));
         ctx.status = 401;
         ctx.body = { error: 'Invalid signature' };
         return;
@@ -206,7 +202,7 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
     });
 
     this._webhookActive = true;
-    this.plugin.logger.info(`GitHub Webhook 已注册: POST ${path}`);
+    this.plugin.logger.debug(formatCompact( { op: 'webhook', path }));
   }
 
   /** 处理 Webhook 推送的事件 */
@@ -275,7 +271,7 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
     if (this._pollTimer) return;
     const bot = this.bots.values().next().value as GitHubBot | undefined;
     const interval = (bot?.$config.poll_interval || 60) * 1000;
-    this.plugin.logger.info(`GitHub 事件轮询已启动 (间隔 ${interval / 1000}s)`);
+    this.plugin.logger.debug(formatCompact( { op: 'poll', interval_s: interval / 1000 }));
 
     // 立即执行一次
     this.pollAllRepos().catch(e => this.plugin.logger.error('轮询失败:', e));
@@ -312,7 +308,7 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
       try {
         await this.pollRepoEvents(repo, gh);
       } catch (e) {
-        this.plugin.logger.warn(`轮询 ${repo} 事件失败:`, e);
+        this.plugin.logger.warn(formatCompact( { op: 'poll', repo, ok: false, error: String(e) }));
       }
     }
   }
@@ -418,7 +414,7 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
     const db = this.plugin.root?.inject('database') as any;
     const model = db?.models?.get('github_subscriptions');
     if (!model) {
-      this.plugin.logger.warn('dispatchNotification: 数据库模型 github_subscriptions 未就绪');
+      this.plugin.logger.warn(formatCompact( { op: 'notify', ok: false, error: 'subscriptions model not ready' }));
       return;
     }
 
@@ -437,10 +433,10 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
       try {
         const adapter = this.plugin.root?.inject(s.adapter as any) as any;
         if (!adapter?.sendMessage) {
-          this.plugin.logger.warn(`dispatchNotification: 适配器 ${s.adapter} 不存在或无 sendMessage 方法`);
+          this.plugin.logger.warn(formatCompact( { op: 'notify', ok: false, adapter: s.adapter, error: 'no sendMessage' }));
           continue;
         }
-        this.plugin.logger.info(`dispatchNotification: 推送 ${eventType} → ${s.adapter}:${s.bot}:${s.target_id}`);
+        this.plugin.logger.debug(formatCompact( { op: 'notify', event: eventType, adapter: s.adapter, bot: s.bot, target: s.target_id }));
         await adapter.sendMessage({ context: s.adapter, bot: s.bot, id: s.target_id, type: s.target_type, content: text });
       } catch (e) {
         this.plugin.logger.error(`通知推送失败 → ${s.adapter}:${s.target_id}`, e);

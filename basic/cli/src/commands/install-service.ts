@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'fs-extra';
 import path from 'node:path';
 import os from 'node:os';
+import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
 
 /**
@@ -52,25 +53,41 @@ async function installSystemd(cwd: string, projectName: string, userMode: boolea
       execFileSync('systemctl', ['--user', 'daemon-reload'], { stdio: 'inherit' });
       logger.success('已执行 daemon-reload');
     } catch (e) {
-      logger.warn('daemon-reload 执行失败，请手动执行');
+      logger.warn(formatCompact( { cmd: 'service', op: 'daemon_reload_failed' }));
     }
 
     logger.log('');
-    logger.info('启用并启动服务：');
+    logger.info(formatCompact( {
+      cmd: 'service',
+      op: 'hint',
+      hint: `enable/start: systemctl --user enable|start ${projectName}.service`,
+    }));
     logger.log('  systemctl --user enable ' + projectName + '.service');
     logger.log('  systemctl --user start ' + projectName + '.service');
-    logger.info('查看状态：systemctl --user status ' + projectName + '.service');
-    logger.info('查看日志：journalctl --user -u ' + projectName + '.service -f');
+    logger.info(formatCompact( {
+      cmd: 'service',
+      op: 'hint',
+      hint: `status: systemctl --user status ${projectName}.service`,
+    }));
+    logger.info(formatCompact( {
+      cmd: 'service',
+      op: 'hint',
+      hint: `logs: journalctl --user -u ${projectName}.service -f`,
+    }));
   } else {
     const targetPath = `/etc/systemd/system/${projectName}.service`;
-    logger.info('系统级安装需要 root 权限，请执行：');
+    logger.info(formatCompact( { cmd: 'service', op: 'hint', hint: '系统级安装需要 root，见下方命令' }));
     logger.log('');
     logger.log(`  sudo cp ${serviceFile} ${targetPath}`);
     logger.log('  sudo systemctl daemon-reload');
     logger.log('  sudo systemctl enable ' + projectName + '.service');
     logger.log('  sudo systemctl start ' + projectName + '.service');
     logger.log('');
-    logger.info('查看状态：sudo systemctl status ' + projectName + '.service');
+    logger.info(formatCompact( {
+      cmd: 'service',
+      op: 'hint',
+      hint: `status: sudo systemctl status ${projectName}.service`,
+    }));
   }
 }
 
@@ -78,7 +95,7 @@ async function uninstallSystemd(projectName: string, userMode: boolean): Promise
   if (userMode) {
     const targetPath = path.join(os.homedir(), '.config', 'systemd', 'user', `${projectName}.service`);
     if (!(await fs.pathExists(targetPath))) {
-      logger.warn('用户服务未安装或已删除');
+      logger.warn(formatCompact( { cmd: 'service', op: 'not_installed', mode: 'user' }));
       return;
     }
     try {
@@ -93,7 +110,7 @@ async function uninstallSystemd(projectName: string, userMode: boolean): Promise
     } catch {}
     logger.success('已卸载用户服务');
   } else {
-    logger.info('请手动执行以下命令卸载系统服务：');
+    logger.info(formatCompact( { cmd: 'service', op: 'hint', hint: '手动卸载系统服务，见下方命令' }));
     logger.log('  sudo systemctl stop ' + projectName + '.service');
     logger.log('  sudo systemctl disable ' + projectName + '.service');
     logger.log('  sudo rm /etc/systemd/system/' + projectName + '.service');
@@ -120,18 +137,26 @@ async function installLaunchd(cwd: string, projectName: string): Promise<void> {
     execFileSync('launchctl', ['load', targetPath], { stdio: 'inherit' });
     logger.success('服务已加载并启动');
   } catch (e) {
-    logger.warn('launchctl load 失败，请手动执行: launchctl load ' + targetPath);
+    logger.warn(formatCompact( { cmd: 'service', op: 'launchctl_load_failed', path: targetPath }));
   }
 
   logger.log('');
-  logger.info('查看状态：launchctl list | grep ' + projectName);
-  logger.info('停止服务：launchctl unload ' + targetPath);
+  logger.info(formatCompact( {
+    cmd: 'service',
+    op: 'hint',
+    hint: `status: launchctl list | grep ${projectName}`,
+  }));
+  logger.info(formatCompact( {
+    cmd: 'service',
+    op: 'hint',
+    hint: `stop: launchctl unload ${targetPath}`,
+  }));
 }
 
 async function uninstallLaunchd(projectName: string): Promise<void> {
   const targetPath = path.join(os.homedir(), 'Library', 'LaunchAgents', `com.zhinjs.${projectName}.plist`);
   if (!(await fs.pathExists(targetPath))) {
-    logger.warn('服务未安装或已删除');
+    logger.warn(formatCompact( { cmd: 'service', op: 'not_installed' }));
     return;
   }
   try {
@@ -146,23 +171,23 @@ async function installWindows(cwd: string, projectName: string): Promise<void> {
   const psScript = path.join(cwd, 'install-service.ps1');
   const taskXml = path.join(cwd, `${projectName}-task.xml`);
 
-  logger.info('Windows 请任选一种方式安装服务：');
+  logger.info(formatCompact( { cmd: 'service', op: 'hint', platform: 'windows', hint: '任选安装方式，见下方' }));
   logger.log('');
-  logger.info('方式一：NSSM（推荐）');
+  logger.info(formatCompact( { cmd: 'service', op: 'hint', method: 'NSSM' }));
   logger.log('  1. 安装 NSSM: choco install nssm 或 scoop install nssm');
   logger.log('  2. 以管理员打开 PowerShell:');
   logger.log(`     cd "${cwd}"`);
   logger.log('     .\\install-service.ps1');
   logger.log('');
-  logger.info('方式二：任务计划程序');
+  logger.info(formatCompact( { cmd: 'service', op: 'hint', method: 'schtasks' }));
   logger.log(`  schtasks /Create /TN "${projectName}" /XML "${taskXml}"`);
   logger.log('');
-  logger.info('方式三：PM2');
+  logger.info(formatCompact( { cmd: 'service', op: 'hint', method: 'PM2' }));
   logger.log('  pnpm pm2:start && pm2 startup && pm2 save');
 }
 
 async function uninstallWindows(projectName: string): Promise<void> {
-  logger.info('请手动执行以下之一卸载：');
+  logger.info(formatCompact( { cmd: 'service', op: 'hint', hint: '手动卸载，见下方命令' }));
   logger.log('  NSSM:    nssm stop ' + projectName + ' && nssm remove ' + projectName + ' confirm');
   logger.log('  计划任务: schtasks /End /TN "' + projectName + '" && schtasks /Delete /TN "' + projectName + '" /F');
 }
@@ -175,7 +200,7 @@ async function statusSystemd(projectName: string, userMode: boolean): Promise<vo
       : ['status', `${projectName}.service`];
     execFileSync('systemctl', args, { stdio: 'inherit' });
   } catch (e: any) {
-    if (e.status !== 0) logger.warn('服务未运行或未安装');
+    if (e.status !== 0) logger.warn(formatCompact( { cmd: 'service', op: 'not_running' }));
   }
 }
 
@@ -241,7 +266,11 @@ const statusCmd = new Command('status')
     } else if (platform === 'darwin') {
       await statusLaunchd(projectName);
     } else {
-      logger.info('Windows 请使用: schtasks /Query /TN "' + projectName + '"');
+      logger.info(formatCompact( {
+        cmd: 'service',
+        op: 'hint',
+        hint: `schtasks /Query /TN "${projectName}"`,
+      }));
     }
   });
 

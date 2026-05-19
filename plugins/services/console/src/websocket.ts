@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import WebSocket from "ws";
-import { Plugin, usePlugin, Adapter } from "@zhin.js/core";
+import { formatCompact, Adapter, Plugin, usePlugin } from '@zhin.js/core';
 import type { SchemaFeature, ConfigFeature, DatabaseFeature } from "@zhin.js/core";
 export interface WebServerCompat {
   ws: import("ws").WebSocketServer;
@@ -173,7 +173,7 @@ export function setupWebSocket(webServer: WebServer) {
     }));
     ws.send(JSON.stringify({ type: "init-data", timestamp: Date.now() }));
     void sendCatchUpToClient(ws).catch((e) =>
-      logger.warn("[console] bot catch-up failed", (e as Error).message)
+      logger.warn(formatCompact( { op: "bot_catchup", ok: false, error: (e as Error).message }))
     );
 
     ws.on("message", async (data) => {
@@ -304,7 +304,7 @@ async function handleWebSocketMessage(
               await target.reload();
               ws.send(JSON.stringify({ requestId, data: { success: true, reloaded: true } }));
             } catch (reloadErr) {
-              logger.warn(`重载插件 ${pluginName} 失败: ${(reloadErr as Error).message}`);
+              logger.warn(formatCompact( { op: "reload_plugin", plugin: pluginName, ok: false, error: (reloadErr as Error).message }));
               ws.send(JSON.stringify({ requestId, data: { success: true, reloaded: false, message: '配置已保存，但重载失败' } }));
             }
           } else {
@@ -1108,7 +1108,7 @@ async function handleWebSocketMessage(
 
     case "system:restart": {
       try {
-        logger.info("[console] 收到重启请求，准备重启进程...");
+        logger.info(formatCompact( { op: "restart" }));
         ws.send(JSON.stringify({ requestId, data: { success: true, message: "正在重启..." } }));
         // 广播给所有客户端
         broadcastToAll(webServer, { type: "system:restarting" });

@@ -1,7 +1,8 @@
 /**
  * Register MCP server entries from zhin.config ai.mcpServers (global/common scope).
  */
-import { getPlugin } from '@zhin.js/core';
+import { formatCompact, getPlugin } from '@zhin.js/core';
+import { formatCompact } from '@zhin.js/logger';
 import type { AIConfig } from '@zhin.js/core';
 import type { AgentOrchestrator } from '../orchestrator/index.js';
 import type { McpServerEntry } from '../orchestrator/types.js';
@@ -58,7 +59,7 @@ export function registerMcpFromConfig(): void {
 
     const orchestrator = root.inject('agent') as AgentOrchestrator | undefined;
     if (!orchestrator) {
-      logger.warn('AgentOrchestrator not available; ai.mcpServers skipped');
+      logger.warn(formatCompact( { error: 'no_orchestrator' }));
       return;
     }
 
@@ -71,18 +72,18 @@ export function registerMcpFromConfig(): void {
     for (const raw of servers) {
       const entry = validateMcpServerEntry(raw);
       if (!entry) {
-        logger.warn(`[MCP] Invalid mcpServers entry skipped: ${JSON.stringify(raw)}`);
+        logger.warn(formatCompact( { error: 'invalid_entry', preview: JSON.stringify(raw) }));
         continue;
       }
       if (orchestrator.mcps.has(entry.name)) {
-        logger.warn(`[MCP] Duplicate server name "${entry.name}" in ai.mcpServers; skipping`);
+        logger.warn(formatCompact( { error: 'duplicate', name: entry.name }));
         continue;
       }
       orchestrator.addMcp(entry, {}, 'config');
       registered++;
     }
     if (registered > 0) {
-      logger.info(`[MCP] Registered ${registered} server(s) from ai.mcpServers (lazy connect on AI turn)`);
+      logger.debug(formatCompact( { count: registered, source: 'ai.mcpServers' }));
     }
   });
 }
