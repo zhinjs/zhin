@@ -1,5 +1,14 @@
 # @zhin.js/adapter-lark
 
+## 1.0.86
+
+### Patch Changes
+
+- 32049f5: fix: init publish
+- Updated dependencies [32049f5]
+  - @zhin.js/http@1.0.75
+  - zhin.js@1.0.82
+
 ## 1.0.85
 
 ### Patch Changes

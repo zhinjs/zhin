@@ -1,5 +1,15 @@
 # @zhin.js/agent
 
+## 0.1.22
+
+### Patch Changes
+
+- 32049f5: fix: init publish
+- Updated dependencies [32049f5]
+  - @zhin.js/logger@0.1.64
+  - @zhin.js/ai@1.1.22
+  - @zhin.js/core@1.1.24
+
 ## 0.1.21
 
 ### Patch Changes

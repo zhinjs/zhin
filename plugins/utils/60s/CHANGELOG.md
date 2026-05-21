@@ -1,5 +1,13 @@
 # @zhin.js/plugin-60s
 
+## 0.0.20
+
+### Patch Changes
+
+- 32049f5: fix: init publish
+- Updated dependencies [32049f5]
+  - zhin.js@1.0.82
+
 ## 0.0.19
 
 ### Patch Changes

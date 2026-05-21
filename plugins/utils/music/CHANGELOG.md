@@ -1,5 +1,14 @@
 # @zhin.js/plugin-music
 
+## 2.0.1
+
+### Patch Changes
+
+- 32049f5: fix: init publish
+- Updated dependencies [32049f5]
+  - zhin.js@1.0.82
+  - @zhin.js/adapter-icqq@3.0.1
+
 ## 2.0.0
 
 ### Patch Changes
