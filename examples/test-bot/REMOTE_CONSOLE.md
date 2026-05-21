@@ -49,6 +49,6 @@ pnpm --filter @zhin.js/console-app preview:remote
 
 ## 线上 Console（可选）
 
-独立仓库 **zhin-console**（主仓库 `console-site/` 模板）部署至 `https://console.zhin.dev`；`corsOrigins` 含 `https://console.zhin.dev`。
+独立仓库 **[zhinjs/zhin-console](https://github.com/zhinjs/zhin-console)** 部署至 `https://console.zhin.dev`；`corsOrigins` 含 `https://console.zhin.dev`。
 
 详见 [docs/console-remote.md](../../docs/console-remote.md).

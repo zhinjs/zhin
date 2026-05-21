@@ -103,11 +103,5 @@ apps/**/config.*
 
 **/dist/**
 
-# console-site scaffold: synced copies (canonical source under packages/ + plugins/)
-console-site/client/
-console-site/console-ui/
-console-site/dist/
-console-site/node_modules/
-
 # Heap snapshots (large binary, never commit)
 *.heapsnapshot

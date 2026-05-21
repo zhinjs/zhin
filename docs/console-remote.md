@@ -1,6 +1,6 @@
 # Remote Console（独立静态站）
 
-Zhin Host **不提供** `/console` 静态页，仅提供 Console API。官方 UI 在 **独立仓库** [zhinjs/zhin-console](https://github.com/zhinjs/zhin-console)（源码模板见主仓库 `console-site/`）通过 GitHub Pages 部署，与 VitePress 文档站（`zhin.pages.dev`）分离。使用方式：
+Zhin Host **不提供** `/console` 静态页，仅提供 Console API。官方 UI 在独立仓库 **[zhinjs/zhin-console](https://github.com/zhinjs/zhin-console)** 通过 GitHub Pages 部署（如 `console.zhin.dev`），与 VitePress 文档站（`zhin.pages.dev`）分离。使用方式：
 
 1. 打开 Console URL（推荐自定义域 **`https://console.zhin.dev`**，站点在域名根路径，**不需要** `/zhin/` 前缀）。深链刷新依赖 `404.html` SPA fallback（见 `packages/console-app/scripts/prepare-github-pages.mjs`）。
 2. 登录页填写 **API Base URL**（你的 Zhin Host，如 `http://127.0.0.1:8086`）与 **Bearer Token**（`zhin.config` / `.env` 中 `http.token` 或 `HTTP_TOKEN`）。
