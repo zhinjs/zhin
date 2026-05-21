@@ -1,5 +1,13 @@
 # @zhin.js/client
 
+## 1.1.1
+
+### Patch Changes
+
+- 32049f5: fix: init publish
+- Updated dependencies [32049f5]
+  - @zhin.js/console-types@0.1.2
+
 ## 1.1.0
 
 ### Minor Changes

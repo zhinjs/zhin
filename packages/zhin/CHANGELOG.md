@@ -1,5 +1,18 @@
 # zhin.js
 
+## 1.0.82
+
+### Patch Changes
+
+- 32049f5: fix: init publish
+- Updated dependencies [32049f5]
+  - @zhin.js/logger@0.1.64
+  - @zhin.js/schema@1.0.64
+  - @zhin.js/agent@0.1.22
+  - @zhin.js/ai@1.1.22
+  - @zhin.js/core@1.1.24
+  - @zhin.js/kernel@0.0.41
+
 ## 1.0.81
 
 ### Patch Changes

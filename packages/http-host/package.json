@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/http-host",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Fetch-based HTTP host: routing, auth, CORS, Node serve adapter",
   "type": "module",
   "main": "./lib/index.js",
@@ -21,7 +21,10 @@
     "koa": "^3.1.1",
     "ws": "^8.20.1"
   },
-  "files": ["lib", "src"],
+  "files": [
+    "lib",
+    "src"
+  ],
   "devDependencies": {
     "@types/koa": "latest",
     "@types/koa-static": "^4.0.4",

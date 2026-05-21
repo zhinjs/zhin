@@ -1,5 +1,14 @@
 # @zhin.js/kernel
 
+## 0.0.41
+
+### Patch Changes
+
+- 32049f5: fix: init publish
+- Updated dependencies [32049f5]
+  - @zhin.js/logger@0.1.64
+  - @zhin.js/schema@1.0.64
+
 ## 0.0.40
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.30
+
+### Patch Changes
+
+- 32049f5: fix: init publish
+
 ## 1.0.29
 
 ### Patch Changes

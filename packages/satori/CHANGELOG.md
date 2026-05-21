@@ -1,5 +1,11 @@
 # @zhin.js/satori
 
+## 0.2.8
+
+### Patch Changes
+
+- 32049f5: fix: init publish
+
 ## 0.2.7
 
 ### Patch Changes
