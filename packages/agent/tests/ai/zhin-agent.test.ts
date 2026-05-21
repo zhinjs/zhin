@@ -154,24 +154,21 @@ describe('ZhinAgent', () => {
     });
 
     it('phaseTrace 开启时应输出可解析 phase 序列', async () => {
-      // logPhase 使用 @zhin.js/core Logger.info（非 console.log），CI 与本地 transport 可能不同
       const logSpy = vi.spyOn(Logger.prototype, 'info').mockImplementation(() => {});
       const phaseAgent = new ZhinAgent(provider, { phaseTrace: true });
       const context = makeToolContext();
       try {
         await phaseAgent.process('phase trace', context, []);
-        const phaseLabels = logSpy.mock.calls
-          .filter(args => args[1] === '[AGENT_PHASE]')
-          .map(args => (args[0] as { phase?: string }).phase)
-          .filter((p): p is string => Boolean(p));
-        const serialized = phaseLabels.join('\n');
-        expect(serialized).toContain('turn.start');
-        expect(serialized).toContain('tools.collected');
-        expect(serialized).toContain('context.ready');
-        expect(serialized).toContain('path.chat');
-        expect(serialized).toContain('chat.llm.start');
-        expect(serialized).toContain('chat.llm.end');
-        expect(serialized).toContain('turn.end');
+        const serialized = logSpy.mock.calls
+          .map((args) => String(args[0]))
+          .join('\n');
+        expect(serialized).toContain('phase: turn.start');
+        expect(serialized).toContain('phase: tools.collected');
+        expect(serialized).toContain('phase: context.ready');
+        expect(serialized).toContain('phase: path.chat');
+        expect(serialized).toContain('phase: chat.llm.start');
+        expect(serialized).toContain('phase: chat.llm.end');
+        expect(serialized).toContain('phase: turn.end');
       } finally {
         phaseAgent.dispose();
         logSpy.mockRestore();

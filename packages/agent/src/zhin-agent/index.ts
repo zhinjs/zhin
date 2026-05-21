@@ -16,7 +16,7 @@
  *  12. 多模态输入：图片/音频直接传给视觉模型
  */
 
-import { formatCompact, getPlugin, Logger, type Plugin } from '@zhin.js/core';
+import { getPlugin, Logger, type Plugin } from '@zhin.js/core';
 import { formatCompact, truncatePreview } from '@zhin.js/logger';
 import type { AIProvider, AgentTool, ChatMessage, ContentPart, Usage } from '@zhin.js/ai';
 import type { Tool, ToolContext } from '../orchestrator/types.js';

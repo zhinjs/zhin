@@ -11,10 +11,9 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { formatCompact, Cron, ZhinTool } from '@zhin.js/core';
-import { formatCompact } from '@zhin.js/logger';
+import { Cron, ZhinTool, Logger } from '@zhin.js/core';
 import type { ToolContext } from '@zhin.js/core';
-import { formatCompact, Logger } from '@zhin.js/core';
+import { formatCompact } from '@zhin.js/logger';
 
 const logger = new Logger(null, 'cron-engine');
 

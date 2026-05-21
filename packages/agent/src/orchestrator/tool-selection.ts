@@ -2,7 +2,7 @@
  * Tool selection — normalization, permission checks, context injection and relevance caching.
  */
 
-import { formatCompact, Logger } from '@zhin.js/core';
+import { Logger } from '@zhin.js/core';
 import { formatCompact } from '@zhin.js/logger';
 import type { AgentTool, ToolFilterOptions } from '@zhin.js/ai';
 import { CachedToolFilter } from '@zhin.js/ai';

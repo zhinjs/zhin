@@ -318,9 +318,9 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
         skillReloadDebounce = setTimeout(async () => {
           skillReloadDebounce = null;
           try {
-            const count = await syncWorkspaceSkills();
-            await triggerAIHook(createAIHookEvent('agent', 'skills-reloaded', undefined, { skillCount: count }));
-            if (count >= 0) logger.debug(formatCompact( { reload: count }));
+            const skills = await syncWorkspaceSkills();
+            await triggerAIHook(createAIHookEvent('agent', 'skills-reloaded', undefined, { skillCount: skills.count }));
+            if (skills.count >= 0) logger.debug(formatCompact( { skills: skills.count }));
           } catch (e: any) {
             logger.warn(formatCompact( { reload: 'fail', error: e.message }));
           }

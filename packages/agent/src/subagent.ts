@@ -9,8 +9,8 @@
  */
 
 import { randomUUID } from 'crypto';
-import { formatCompact, Logger } from '@zhin.js/core';
-import { formatCompactUsage, truncatePreview } from '@zhin.js/logger';
+import { Logger } from '@zhin.js/core';
+import { formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
 import type { AIProvider, AgentTool, Usage } from '@zhin.js/core';
 import { createAgent } from '@zhin.js/ai';
 import type { ModelRegistry } from '@zhin.js/ai';

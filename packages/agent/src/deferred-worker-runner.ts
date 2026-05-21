@@ -1,7 +1,7 @@
 /**
  * DeferredWorkerRunner — 同步 Worker 子 Agent，在隔离上下文中执行 deferred 工具任务。
  */
-import { formatCompact, Logger } from '@zhin.js/core';
+import { Logger } from '@zhin.js/core';
 import { formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
 import type { AIProvider, AgentTool } from '@zhin.js/core';
 import { createAgent } from '@zhin.js/ai';

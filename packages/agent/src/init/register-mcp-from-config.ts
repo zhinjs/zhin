@@ -1,7 +1,7 @@
 /**
  * Register MCP server entries from zhin.config ai.mcpServers (global/common scope).
  */
-import { formatCompact, getPlugin } from '@zhin.js/core';
+import { getPlugin } from '@zhin.js/core';
 import { formatCompact } from '@zhin.js/logger';
 import type { AIConfig } from '@zhin.js/core';
 import type { AgentOrchestrator } from '../orchestrator/index.js';

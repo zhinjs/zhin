@@ -6,15 +6,18 @@ import { SubagentManager } from '@zhin.js/agent';
 import type { SubagentOrigin, SpawnOptions } from '@zhin.js/agent';
 import type { AgentTool, ChatCompletionResponse } from '@zhin.js/core';
 
-// Mock Logger
-vi.mock('@zhin.js/logger', () => ({
-  Logger: class {
-    debug = vi.fn();
-    info = vi.fn();
-    warn = vi.fn();
-    error = vi.fn();
-  },
-}));
+vi.mock('@zhin.js/logger', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@zhin.js/logger')>();
+  return {
+    ...actual,
+    Logger: class {
+      debug = vi.fn();
+      info = vi.fn();
+      warn = vi.fn();
+      error = vi.fn();
+    },
+  };
+});
 
 const baseOrigin: SubagentOrigin = {
   platform: 'test',
