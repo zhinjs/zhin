@@ -2,7 +2,7 @@
 
 Zhin Host **不提供** `/console` 静态页，仅提供 Console API。官方 UI 通过 GitHub Pages 发布（见 workflow `console-pages.yml`）。使用方式：
 
-1. 打开 Pages URL（release 后于 Actions 部署页查看）。
+1. 打开 Pages URL（项目站一般为 `https://zhinjs.github.io/zhin/`，以 Actions 部署页为准）。深链刷新依赖 `404.html` SPA fallback（见 `packages/console-app/scripts/prepare-github-pages.mjs`）。
 2. 登录页填写 **API Base URL**（你的 Zhin Host，如 `http://127.0.0.1:8086`）与 **Bearer Token**（`zhin.config` / `.env` 中 `http.token` 或 `HTTP_TOKEN`）。
 3. Host 需在 `zhin.config` 中配置 `http.corsOrigins`，包含 Pages 源，例如：
 

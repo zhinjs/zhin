@@ -11,6 +11,7 @@ import {
 } from "@zhin.js/console-types";
 import { BrowserRouter } from "react-router-dom";
 import { useWebSocket } from "@zhin.js/client";
+import { getRouterBasename } from "./pagesBase";
 import { ConsoleWebHost } from "./host/ConsoleWebHost";
 import { registerBuiltinConsolePages } from "@console/registerBuiltinShell";
 import { initializeTheme } from "@console/theme";
@@ -68,6 +69,7 @@ ReactDOMClient.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <TooltipProvider>
       <BrowserRouter
+        basename={getRouterBasename()}
         future={{
           v7_startTransition: true,
           v7_relativeSplatPath: true,

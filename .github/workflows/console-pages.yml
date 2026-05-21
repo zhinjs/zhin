@@ -42,8 +42,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Build console client
-        run: pnpm --filter @zhin.js/console-app build
+      - name: Build console client (GitHub Pages base + SPA fallback)
+        env:
+          CONSOLE_PAGES_BASE: /${{ github.event.repository.name }}
+        run: |
+          pnpm --filter @zhin.js/console-app build
+          node packages/console-app/scripts/prepare-github-pages.mjs
 
       - name: Locate dist
         id: dist

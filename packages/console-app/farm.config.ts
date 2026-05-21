@@ -40,6 +40,9 @@ const consoleDevProxy = {
 } as const;
 
 const farmEmbeddedInKoa = process.env.ZHIN_CONSOLE_FARM_EMBEDDED_IN_KOA === "1";
+/** GitHub project site: https://zhinjs.github.io/zhin/ → CONSOLE_PAGES_BASE=/zhin */
+const pagesBase = (process.env.CONSOLE_PAGES_BASE ?? "").replace(/\/$/, "");
+const assetPublicPath = pagesBase ? `${pagesBase}/` : "/";
 
 export default defineConfig({
   root: path.join(packageRoot, "client"),
@@ -65,7 +68,7 @@ export default defineConfig({
     },
     output: {
       path: path.join(packageRoot, "dist"),
-      publicPath: "/",
+      publicPath: assetPublicPath,
     },
     resolve: {
       dedupe: ["lucide-react"],
