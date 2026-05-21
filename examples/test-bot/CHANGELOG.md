@@ -1,5 +1,24 @@
 # test-bot
 
+## 0.1.94
+
+### Patch Changes
+
+- Updated dependencies
+  - @zhin.js/client@1.1.0
+  - @zhin.js/console@3.0.0
+  - @zhin.js/adapter-discord@2.0.0
+  - @zhin.js/adapter-icqq@3.0.0
+  - @zhin.js/adapter-kook@2.0.0
+  - @zhin.js/adapter-milky@0.0.31
+  - @zhin.js/adapter-onebot11@1.0.86
+  - @zhin.js/adapter-onebot12@0.0.31
+  - @zhin.js/adapter-qq@2.0.0
+  - @zhin.js/adapter-sandbox@3.0.0
+  - @zhin.js/adapter-satori@0.0.31
+  - @zhin.js/adapter-telegram@2.0.0
+  - @zhin.js/plugin-music@2.0.0
+
 ## 0.1.93
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/console-core",
-  "version": "0.1.1",
+  "version": "1.0.0",
   "description": "Zhin console Host runtime: PageManager + esbuild pipeline for adapter entries (no UI)",
   "type": "module",
   "exports": {
