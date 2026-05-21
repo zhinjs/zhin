@@ -1,5 +1,13 @@
 # @zhin.js/plugin-rss
 
+## 0.0.18
+
+### Patch Changes
+
+- 32049f5: fix: init publish
+- Updated dependencies [32049f5]
+  - zhin.js@1.0.82
+
 ## 0.0.17
 
 ### Patch Changes

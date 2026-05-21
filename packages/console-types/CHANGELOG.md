@@ -1,5 +1,11 @@
 # @zhin.js/console-types
 
+## 0.1.2
+
+### Patch Changes
+
+- 32049f5: fix: init publish
+
 ## 0.1.1
 
 ### Patch Changes

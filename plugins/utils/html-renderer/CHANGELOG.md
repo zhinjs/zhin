@@ -1,5 +1,14 @@
 # @zhin.js/plugin-html-renderer
 
+## 0.0.60
+
+### Patch Changes
+
+- 32049f5: fix: init publish
+- Updated dependencies [32049f5]
+  - @zhin.js/satori@0.2.8
+  - zhin.js@1.0.82
+
 ## 0.0.59
 
 ### Patch Changes

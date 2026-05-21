@@ -1,5 +1,19 @@
 # @zhin.js/console
 
+## 3.0.1
+
+### Patch Changes
+
+- 32049f5: fix: init publish
+- Updated dependencies [32049f5]
+  - @zhin.js/http@1.0.75
+  - @zhin.js/agent@0.1.22
+  - @zhin.js/client@1.1.1
+  - @zhin.js/console-core@1.0.1
+  - @zhin.js/console-types@0.1.2
+  - @zhin.js/core@1.1.24
+  - zhin.js@1.0.82
+
 ## 3.0.0
 
 ### Major Changes
