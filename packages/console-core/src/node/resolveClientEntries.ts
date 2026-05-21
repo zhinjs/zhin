@@ -4,6 +4,7 @@ import type {
   EntryModuleSpec,
   RuntimeEnv,
 } from "@zhin.js/console-types";
+import { joinConsolePublicPath } from "./esmForBrowser.js";
 
 export function chooseModule(spec: EntryModuleSpec, runtime: RuntimeEnv): string {
   if (typeof spec === "string") return spec;
@@ -30,8 +31,8 @@ export function rewriteEntriesForClient(options: {
     if (e.paths) {
       const resolvedModule =
         serverEnv === "development"
-          ? `${basePath}/@dev/${e.id}.mjs`
-          : `${basePath}/@assets/${e.id}.mjs`;
+          ? joinConsolePublicPath(basePath, `@dev/${e.id}.mjs`)
+          : joinConsolePublicPath(basePath, `@assets/${e.id}.mjs`);
       return { ...eForClient, packageEntry: undefined, resolvedModule };
     }
 

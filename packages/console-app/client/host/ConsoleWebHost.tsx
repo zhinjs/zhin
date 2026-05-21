@@ -1,11 +1,23 @@
 import * as React from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { loadConsoleEntries } from "../bootstrap/loadConsoleEntries";
 import { ConsoleView } from "../console-app/ConsoleView";
 import { useConsoleRouteElements } from "../console-app/ConsoleRoutes";
 import { DEFAULT_CONSOLE_BASE_PATH } from "@zhin.js/console-types";
 
-const dashboardPath = `${DEFAULT_CONSOLE_BASE_PATH}/dashboard`;
+const shellBase =
+  DEFAULT_CONSOLE_BASE_PATH === "/"
+    ? ""
+    : DEFAULT_CONSOLE_BASE_PATH.replace(/\/$/, "");
+const shellRoutePath = shellBase ? `${shellBase}/*` : "/*";
+const dashboardPath = `${shellBase || ""}/dashboard`.replace(/^\/\//, "/");
+
+/** Old bookmarks: /console/dashboard → /dashboard */
+function LegacyConsoleRedirect() {
+  const { pathname } = useLocation();
+  const rest = pathname.replace(/^\/console\/?/, "/") || "/dashboard";
+  return <Navigate to={rest.startsWith("/") ? rest : `/${rest}`} replace />;
+}
 
 function ShellLoading() {
   return (
@@ -47,7 +59,9 @@ export function ConsoleWebHost() {
 
   return (
     <Routes>
-      <Route path={`${DEFAULT_CONSOLE_BASE_PATH}/*`} element={<ConsoleView />}>
+      <Route path="/console" element={<Navigate to={dashboardPath} replace />} />
+      <Route path="/console/*" element={<LegacyConsoleRedirect />} />
+      <Route path={shellRoutePath} element={<ConsoleView />}>
         <Route index element={<Navigate to={dashboardPath} replace />} />
         {registeredRoutes}
         <Route path="*" element={<DashboardHome />} />

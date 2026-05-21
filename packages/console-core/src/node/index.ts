@@ -15,6 +15,8 @@ export type {
 } from "./consoleServerOptions.js";
 
 export { rewriteEntriesForClient } from "./resolveClientEntries.js";
+export { buildEntriesResponse } from "./entries-handler.js";
+export type { EntriesResponseBody } from "./entries-handler.js";
 export { serverRuntimeEnv } from "./env.js";
 export { attachConsoleClientHost } from "./startHost.js";
 

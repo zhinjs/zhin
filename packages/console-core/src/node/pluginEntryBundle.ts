@@ -1,5 +1,5 @@
 import { build } from "esbuild";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, statSync } from "node:fs";
 import { createHash } from "node:crypto";
 import * as path from "node:path";
 import * as os from "node:os";
@@ -8,17 +8,26 @@ const bundleCache = new Map<string, string>();
 
 const tmpDir = path.join(os.tmpdir(), "zhin-console-plugin-bundles");
 
+function cacheKeyWithMtime(cacheKey: string, absSource: string): string {
+  try {
+    return `${cacheKey}:${statSync(absSource).mtimeMs}`;
+  } catch {
+    return cacheKey;
+  }
+}
+
 export async function bundleEntryToTempFile(
   cacheKey: string,
   absSource: string,
   resolveDir: string,
 ): Promise<string> {
-  const cached = bundleCache.get(cacheKey);
+  const keyed = cacheKeyWithMtime(cacheKey, absSource);
+  const cached = bundleCache.get(keyed);
   if (cached && existsSync(cached)) return cached;
 
   if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });
 
-  const hash = createHash("sha256").update(cacheKey).digest("hex").slice(0, 12);
+  const hash = createHash("sha256").update(keyed).digest("hex").slice(0, 12);
   const outfile = path.join(tmpDir, `${hash}.mjs`);
 
   await build({
@@ -36,6 +45,6 @@ export async function bundleEntryToTempFile(
     logLevel: "warning",
   });
 
-  bundleCache.set(cacheKey, outfile);
+  bundleCache.set(keyed, outfile);
   return outfile;
 }

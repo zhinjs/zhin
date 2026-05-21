@@ -1,10 +1,38 @@
 import { formatCompact, Adapter, DatabaseFeature, Feature, Models, Plugin, SystemLog, usePlugin } from 'zhin.js';
 import { Schema } from "@zhin.js/schema";
-import { createServer, Server } from "http";
+import { createServer, type Server } from "node:http";
 import crypto from "node:crypto";
 import Koa from "koa";
-import body, { KoaBodyMiddlewareOptionsSchema } from "koa-body";
-import { Router, RouterContext} from "./router.js";
+import body from "koa-body";
+import {
+  RouteTable,
+  createFetchApp,
+  koaFallback,
+  koaJsonBodyMiddleware,
+  writeWebResponse,
+} from "@zhin.js/http-host";
+import { Router, type RouterContext } from "./router.js";
+
+async function nodeRequestToWebRequest(
+  req: import("node:http").IncomingMessage,
+): Promise<Request> {
+  const host = req.headers.host ?? "localhost";
+  const url = `http://${host}${req.url ?? "/"}`;
+  const method = req.method ?? "GET";
+  const headers = new Headers();
+  for (const [k, v] of Object.entries(req.headers)) {
+    if (v) headers.set(k, Array.isArray(v) ? v.join(", ") : v);
+  }
+  if (method === "GET" || method === "HEAD") {
+    return new Request(url, { method, headers });
+  }
+  return new Request(url, {
+    method,
+    headers,
+    body: req as unknown as BodyInit,
+    duplex: "half",
+  } as RequestInit);
+}
 
 export * from "./router.js";
 
@@ -27,6 +55,9 @@ export const httpSchema = Schema.object({
   base: Schema.string()
     .default("/api")
     .description("HTTP 路由前缀, 默认为 /api"),
+  corsOrigins: Schema.list(Schema.string())
+    .default([])
+    .description("Remote Console 允许的 CORS Origin 列表"),
 });
 
 export interface HttpConfig {
@@ -34,6 +65,7 @@ export interface HttpConfig {
   host?: string;
   token?: string;
   base?: string;
+  corsOrigins?: string[];
   /** 是否信任反向代理（Cloudflare、Nginx 等）的 X-Forwarded-* 头，部署在代理后时建议设为 true */
   trustProxy?: boolean;
 }
@@ -45,10 +77,30 @@ const { provide, root, useContext, logger, declareConfig } = plugin;
 
 declareConfig("http", httpSchema, { reloadable: false });
 
-// 创建实例
-const koa = new Koa();
-const server = createServer(koa.callback());
-const router = new Router(server, { prefix: process.env.routerPrefix || "" });
+// Fetch HttpHost + internal Koa（仅 Console 静态回落）
+const routeTable = new RouteTable();
+const internalKoa = new Koa();
+internalKoa.use(koaJsonBodyMiddleware());
+internalKoa.use(body());
+
+let fetchHandler: (req: Request) => Promise<Response> = async () =>
+  new Response(JSON.stringify({ success: false, error: "HTTP not configured" }), {
+    status: 503,
+    headers: { "content-type": "application/json" },
+  });
+
+const server = createServer(async (nodeReq, nodeRes) => {
+  try {
+    const webReq = await nodeRequestToWebRequest(nodeReq);
+    const webRes = await fetchHandler(webReq);
+    await writeWebResponse(nodeRes, webRes);
+  } catch (err) {
+    nodeRes.statusCode = 500;
+    nodeRes.end(JSON.stringify({ success: false, error: String(err) }));
+  }
+});
+
+const router = new Router(server, routeTable, process.env.routerPrefix || "");
 
 // 注册 server 上下文
 provide({
@@ -69,49 +121,19 @@ useContext("config", (configService) => {
     host = "127.0.0.1",
     token = generateToken(),
     base = "/api",
+    corsOrigins = [],
     trustProxy = false,
   } = httpConfig;
 
-  // 反向代理场景下信任 X-Forwarded-Host / X-Forwarded-Proto 等
-  koa.proxy = trustProxy;
+  internalKoa.proxy = trustProxy;
 
-  // 安全响应头
-  koa.use(async (ctx, next) => {
-    ctx.set('X-Content-Type-Options', 'nosniff');
-    ctx.set('X-Frame-Options', 'SAMEORIGIN');
-    await next();
-  });
-
-  // Token 认证中间件：仅对 API 路径要求认证
-  koa.use(async (ctx, next) => {
-    if (!ctx.path.startsWith(base + '/') && ctx.path !== base) return next();
-    // /pub 为公开前缀（webhook、OAuth、health 等），不校验 token
-    if (ctx.path.startsWith('/pub/') || ctx.path === '/pub') return next();
-    // 跳过 router 注册的非 API 路由（如 /mcp），避免误拦截
-    const whiteList: (string | RegExp)[] = router.whiteList || [];
-    const isWhitelisted = whiteList.some(p =>
-      typeof p === 'string' && !p.startsWith(base) && ctx.path.startsWith(p)
-    );
-    if (isWhitelisted) return next();
-
-    // 仅从 Authorization: Bearer 头提取 token（不接受 query 参数，避免凭据泄漏）
-    const authHeader = ctx.get('Authorization');
-    const reqToken = authHeader?.startsWith('Bearer ')
-      ? authHeader.slice(7)
-      : undefined;
-
-    // 使用 timingSafeEqual 做固定时间比较，避免时序攻击
-    const expectedBuf = Buffer.from(token, 'utf-8');
-    const receivedBuf = Buffer.from(reqToken || '', 'utf-8');
-    // timingSafeEqual 要求两个 buffer 等长；长度不等直接拒绝（长度本身不是秘密）
-    if (expectedBuf.length !== receivedBuf.length ||
-        !crypto.timingSafeEqual(expectedBuf, receivedBuf)) {
-      ctx.status = 401;
-      ctx.body = { success: false, error: 'Invalid or missing token' };
-      return;
-    }
-    await next();
-  });
+  fetchHandler = createFetchApp(routeTable, {
+    base,
+    token,
+    corsOrigins,
+    trustProxy,
+    fallback: koaFallback(internalKoa),
+  }).fetch;
 
   // ============================================================================
   // API 路由
@@ -673,17 +695,14 @@ useContext("database", (database: DatabaseFeature) => {
   });
 });
 
-// 注册 koa 和 router 上下文
 provide({
   name: "koa",
-  description: "koa instance",
-  value: koa,
+  description: "internal koa (console static fallback only)",
+  value: internalKoa,
 });
 
 provide({
   name: "router",
-  description: "koa router",
+  description: "fetch http router",
   value: router,
 });
-// 应用中间件
-koa.use(body()).use(router.routes()).use(router.allowedMethods());

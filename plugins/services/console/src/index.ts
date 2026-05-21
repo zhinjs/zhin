@@ -1,14 +1,22 @@
 import { formatCompact, usePlugin } from '@zhin.js/core';
-import { PageManager, mountConsoleRouter } from "@zhin.js/console-core/node";
+import {
+  PageManager,
+  mountConsoleRouter,
+  buildEntriesResponse,
+} from "@zhin.js/console-core/node";
+import type { RouterContext } from "@zhin.js/http";
 import { existsSync, readFileSync } from "node:fs";
-import * as path from "path";
 import { createRequire } from "node:module";
-import { setupWebSocket, notifyDataUpdate } from "./websocket.js";
+import * as path from "node:path";
+import { DEFAULT_CONSOLE_BASE_PATH } from "@zhin.js/console-types";
+import { initConsoleHub, notifyDataUpdate, type WebServerCompat } from "./websocket.js";
+import { registerConsoleApi } from "./console-api.js";
 import { registerBotModels } from "./bot-db-models.js";
 import { initBotPersistence } from "./bot-persistence.js";
 
 export interface ConsoleConfig {
   enabled?: boolean;
+  /** @deprecated Host 不再提供静态 UI；保留字段兼容旧配置 */
   port?: number;
 }
 
@@ -38,10 +46,10 @@ if (enabled) {
   initBotPersistence(root as { inject: (key: string) => unknown });
 
   const INIT_SYM = Symbol.for("__zhin_console_initialized__");
-  useContext("router",'koa', async (router, koa) => {
+  useContext("router", "koa", async (router, koa) => {
     if ((globalThis as any)[INIT_SYM]) return;
     (globalThis as any)[INIT_SYM] = true;
-    const isDev = process.env.NODE_ENV === "development";
+
     const require = createRequire(import.meta.url);
     let clientPackageRoot: string;
     try {
@@ -56,7 +64,10 @@ if (enabled) {
             const pkg = JSON.parse(
               readFileSync(path.join(dir, "package.json"), "utf8"),
             );
-            if (pkg.name === "@zhin.js/console-app") { clientPackageRoot = dir; break; }
+            if (pkg.name === "@zhin.js/console-app") {
+              clientPackageRoot = dir;
+              break;
+            }
           }
           dir = path.dirname(dir);
         }
@@ -67,7 +78,7 @@ if (enabled) {
           clientPackageRoot = monorepoDev;
         } else {
           throw new Error(
-            "未安装 @zhin.js/console-app（@zhin.js/console 的运行时依赖）。请在项目根执行: npm install @zhin.js/console-app 或 pnpm add @zhin.js/console-app，然后重新启动。",
+            "未安装 @zhin.js/console-app。请在项目根执行: pnpm add @zhin.js/console-app",
           );
         }
       }
@@ -75,55 +86,73 @@ if (enabled) {
 
     const pageManager = new PageManager({
       koa: koa as import("koa"),
-      path: "/console",
+      path: DEFAULT_CONSOLE_BASE_PATH,
       clientPackageRoot,
-      mode: isDev ? "development" : "production",
+      mode: "production",
+      serveClientHost: false,
     });
+
+    try {
+      await pageManager.start();
+    } catch (err) {
+      logger.warn(
+        formatCompact({ op: "page_manager", ok: false, error: (err as Error).message }),
+      );
+    }
 
     koa.use(mountConsoleRouter(pageManager.router));
 
-    let attachment: Awaited<ReturnType<typeof pageManager.start>> | null = null;
-    try {
-      attachment = await pageManager.start();
-    } catch (err) {
-      logger.warn(formatCompact( { op: "page_manager", ok: false, error: (err as Error).message }));
-    }
-
-    if (attachment && typeof attachment.bindDevWebSocket === "function" && router.server) {
+    router.get("/entries", async (ctx: RouterContext) => {
       try {
-        attachment.bindDevWebSocket(router.server);
+        ctx.body = buildEntriesResponse(
+          pageManager.entryStore,
+          DEFAULT_CONSOLE_BASE_PATH,
+        );
       } catch (err) {
-        logger.warn(formatCompact( { op: "hmr_ws", ok: false, error: (err as Error).message }));
+        ctx.status = 500;
+        ctx.body = {
+          message: err instanceof Error ? err.message : "Failed to prepare entries",
+        };
       }
-    }
+    });
 
-    const wss = router.ws("/server");
-    setupWebSocket({ ws: wss } as import("./websocket.js").WebServerCompat);
+    const configServiceHttp = inject("config");
+    const httpCfg = (configServiceHttp?.getPrimary() as { http?: { base?: string } })?.http;
+    const apiBase = httpCfg?.base ?? "/api";
+
+    const webServerCompat: WebServerCompat = {
+      ws: { clients: new Set() } as WebServerCompat["ws"],
+      entries: {},
+    };
+
+    initConsoleHub(webServerCompat);
+    registerConsoleApi(router, apiBase, () => webServerCompat);
 
     const dataUpdateInterval = setInterval(() => {
-      notifyDataUpdate({ ws: wss } as import("./websocket.js").WebServerCompat);
+      notifyDataUpdate(webServerCompat);
     }, 5000);
 
     onDispose(async () => {
       clearInterval(dataUpdateInterval);
-      if (attachment) await attachment.close();
     });
 
     provide({
       name: "web",
-      description: "web 控制台 (PageManager)",
+      description: "Console API (PageManager, no Host static UI)",
       value: pageManager,
       dispose() {
-        return new Promise<void>((resolve) => {
-          wss.close(() => resolve());
-        });
+        return Promise.resolve();
       },
     });
 
-    // 动态 provide 的 context 不会走 Plugin.start() 的 context.mounted 派发；适配器里
-    // useContext('web', …) 依赖该事件，否则永远不注册 addEntry（或与其它插件竞态）。
     await consolePlugin.dispatch("context.mounted", "web");
 
-    logger.info(formatCompact({ mode: isDev ? "development" : "production", path: "/console" }));
+    logger.info(
+      formatCompact({
+        op: "console",
+        mode: "api_only",
+        entries: `${DEFAULT_CONSOLE_BASE_PATH}/entries`,
+      }),
+    );
   });
 }

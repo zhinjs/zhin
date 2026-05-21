@@ -10,6 +10,8 @@ import {
   MessageError,
   RequestTimeoutError,
 } from "./types";
+import { getApiBase, getStoredToken, resolveApiUrl } from "./remote-settings.js";
+import { applyConsoleEvent } from "../persistence/idb-store.js";
 
 export class WebSocketManager {
   private ws: WebSocket | null = null;
@@ -24,6 +26,8 @@ export class WebSocketManager {
     { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }
   >();
   private connectedListeners = new Set<(connected: boolean) => void>();
+  private sseAbort: AbortController | null = null;
+  private useRestTransport = true;
 
   constructor(config: WebSocketConfig = {}, callbacks: WebSocketCallbacks = {}) {
     this.config = {
@@ -45,6 +49,10 @@ export class WebSocketManager {
   }
 
   connect(): void {
+    if (this.useRestTransport) {
+      void this.connectRestSse();
+      return;
+    }
     if (this.state === ConnectionState.CONNECTED || this.state === ConnectionState.CONNECTING) return;
     this.setState(ConnectionState.CONNECTING);
     try {
@@ -55,9 +63,82 @@ export class WebSocketManager {
     }
   }
 
+  private async connectRestSse(): Promise<void> {
+    const token = getStoredToken();
+    if (!token) {
+      this.setState(ConnectionState.DISCONNECTED);
+      this.notifyConnection(false);
+      return;
+    }
+    this.setState(ConnectionState.CONNECTING);
+    this.sseAbort?.abort();
+    this.sseAbort = new AbortController();
+    try {
+      const res = await fetch(resolveApiUrl("/api/events"), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "text/event-stream",
+        },
+        signal: this.sseAbort.signal,
+      });
+      if (!res.ok || !res.body) {
+        throw new ConnectionError(`SSE failed: HTTP ${res.status}`);
+      }
+      this.setState(ConnectionState.CONNECTED);
+      this.reconnectAttempts = 0;
+      this.notifyConnection(true);
+      this.callbacks.onConnect?.();
+      void this.pumpSse(res.body);
+    } catch (error) {
+      if ((error as Error).name === "AbortError") return;
+      this.handleConnectionError(
+        error instanceof ConnectionError ? error : new ConnectionError("SSE connect failed", error as Error),
+      );
+      this.scheduleReconnect();
+    }
+  }
+
+  private async pumpSse(body: ReadableStream<Uint8Array>): Promise<void> {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() ?? "";
+        for (const part of parts) {
+          const line = part.split("\n").find((l) => l.startsWith("data: "));
+          if (!line) continue;
+          const json = line.slice(6);
+          try {
+            const message = JSON.parse(json) as WebSocketMessage;
+            void applyConsoleEvent(message);
+            this.handleBroadcast(message);
+            this.callbacks.onMessage?.(message);
+          } catch {
+            /* skip */
+          }
+        }
+      }
+    } catch {
+      /* closed */
+    } finally {
+      if (this.state === ConnectionState.CONNECTED) {
+        this.notifyConnection(false);
+        this.setState(ConnectionState.RECONNECTING);
+        this.scheduleReconnect();
+      }
+    }
+  }
+
   disconnect(): void {
     this.clearReconnectTimer();
     this.clearPendingRequests();
+    this.sseAbort?.abort();
+    this.sseAbort = null;
     if (this.ws) {
       this.ws.close();
       this.ws = null;
@@ -67,6 +148,10 @@ export class WebSocketManager {
   }
 
   send(message: unknown): void {
+    if (this.useRestTransport) {
+      void this.sendRequest(message);
+      return;
+    }
     if (!this.isConnected()) throw new WebSocketError("WebSocket is not connected", "NOT_CONNECTED");
     try {
       this.ws!.send(JSON.stringify(message));
@@ -76,6 +161,9 @@ export class WebSocketManager {
   }
 
   async sendRequest<T = unknown>(message: unknown): Promise<T> {
+    if (this.useRestTransport) {
+      return this.sendRestRequest<T>(message);
+    }
     if (!this.isConnected()) throw new WebSocketError("WebSocket is not connected", "NOT_CONNECTED");
     return new Promise((resolve, reject) => {
       const requestId = ++this.requestId;
@@ -95,7 +183,46 @@ export class WebSocketManager {
     });
   }
 
+  private async sendRestRequest<T>(message: unknown): Promise<T> {
+    const token = getStoredToken();
+    if (!token) throw new WebSocketError("Not authenticated", "NOT_CONNECTED");
+    const requestId = ++this.requestId;
+    const body = { ...(message as Record<string, unknown>), requestId };
+    const timer = setTimeout(() => {
+      /* handled below */
+    }, this.config.requestTimeout);
+    try {
+      const res = await fetch(resolveApiUrl("/api/console/request"), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(this.config.requestTimeout),
+      });
+      clearTimeout(timer);
+      const json = (await res.json()) as {
+        success?: boolean;
+        data?: T;
+        error?: string;
+        requestId?: number;
+      };
+      if (!res.ok || json.success === false) {
+        throw new WebSocketError(json.error ?? `HTTP ${res.status}`, "SERVER_ERROR");
+      }
+      return json.data as T;
+    } catch (error) {
+      clearTimeout(timer);
+      if (error instanceof WebSocketError) throw error;
+      throw new MessageError("REST request failed", error as Error);
+    }
+  }
+
   isConnected(): boolean {
+    if (this.useRestTransport) {
+      return this.state === ConnectionState.CONNECTED;
+    }
     return this.ws?.readyState === WebSocket.OPEN;
   }
 
@@ -107,7 +234,11 @@ export class WebSocketManager {
     return this.sendRequest<unknown>({ type: "config:get", pluginName });
   }
   async setConfig(pluginName: string, config: unknown) {
-    return this.sendRequest<{ success?: boolean; reloaded?: boolean; message?: string }>({ type: "config:set", pluginName, data: config });
+    return this.sendRequest<{ success?: boolean; reloaded?: boolean; message?: string }>({
+      type: "config:set",
+      pluginName,
+      data: config,
+    });
   }
   async getSchema(pluginName: string) {
     return this.sendRequest<unknown>({ type: "schema:get", pluginName });
@@ -191,7 +322,8 @@ export class WebSocketManager {
     this.ws.onopen = () => this.handleConnectionOpen();
     this.ws.onmessage = (event) => this.handleMessage(event);
     this.ws.onclose = () => this.handleConnectionClose();
-    this.ws.onerror = (event) => this.handleConnectionError(new ConnectionError("WebSocket error", event as unknown as Error));
+    this.ws.onerror = (event) =>
+      this.handleConnectionError(new ConnectionError("WebSocket error", event as unknown as Error));
   }
 
   private handleConnectionOpen(): void {
@@ -208,6 +340,7 @@ export class WebSocketManager {
         this.handleRequestResponse(message);
         return;
       }
+      void applyConsoleEvent(message);
       this.handleBroadcast(message);
       this.callbacks.onMessage?.(message);
     } catch (error) {
@@ -260,7 +393,7 @@ export class WebSocketManager {
   private handleConnectionError(error: Error): void {
     this.clearReconnectTimer();
     this.setState(ConnectionState.ERROR);
-    console.error("[WebSocket] Connection error:", error);
+    console.error("[Console transport] Connection error:", error);
     this.callbacks.onError?.(error as unknown as Event);
   }
 

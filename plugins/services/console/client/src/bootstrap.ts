@@ -4,8 +4,7 @@ import {
   createPluginRegisterHostApi,
   loadConsoleEntries as loadEntriesFromCore,
 } from '@zhin.js/console-core/browser'
-import { DEFAULT_CONSOLE_BASE_PATH } from '@zhin.js/console-types'
-import { getToken } from './utils/auth'
+import { getApiBase, getToken } from './utils/auth'
 
 const addRoute = app.addRoute.bind(app)
 const defaultHostApi = createPluginRegisterHostApi({
@@ -23,13 +22,14 @@ export function loadConsoleEntries(): Promise<void> {
 }
 
 async function doLoad() {
+  const apiBase = getApiBase()
   await loadEntriesFromCore({
-    entriesUrl: `${window.location.origin}${DEFAULT_CONSOLE_BASE_PATH}/entries`,
+    entriesUrl: `${apiBase}/entries`,
+    assetOrigin: apiBase,
     hostApi: defaultHostApi,
     fetchInit: () => {
       const token = getToken()
       return {
-        credentials: 'include',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       }
     },

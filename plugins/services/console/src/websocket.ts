@@ -7,7 +7,7 @@ export interface WebServerCompat {
   ws: import("ws").WebSocketServer;
   entries?: Record<string, string>;
 }
-type WebServer = WebServerCompat;
+export type WebServer = WebServerCompat;
 import {
   initBotHub,
   setBotHubWss,
@@ -15,6 +15,7 @@ import {
   getPendingRequest,
   markRequestConsumedByPlatformId,
 } from "./bot-hub.js";
+import { broadcastSse } from "./sse-hub.js";
 import {
   markRequestsConsumed,
   markNoticesConsumed,
@@ -154,7 +155,8 @@ function getConfigFilePath(): string {
   return path.resolve(process.cwd(), primaryFile);
 }
 
-export function setupWebSocket(webServer: WebServer) {
+/** Bot hub + persistence hooks without binding legacy /server WebSocket. */
+export function initConsoleHub(webServer: WebServer) {
   setBotHubWss(webServer.ws);
   const disposeBotHub = initBotHub(root as {
     on: (ev: string, fn: (...a: unknown[]) => void) => void;
@@ -165,6 +167,10 @@ export function setupWebSocket(webServer: WebServer) {
   if (disposeBotHub) {
     plugin.onDispose(disposeBotHub);
   }
+}
+
+export function setupWebSocket(webServer: WebServer) {
+  initConsoleHub(webServer);
 
   webServer.ws.on("connection", (ws: WebSocket) => {
     ws.send(JSON.stringify({
@@ -190,7 +196,7 @@ export function setupWebSocket(webServer: WebServer) {
   });
 }
 
-async function handleWebSocketMessage(
+export async function handleWebSocketMessage(
   ws: WebSocket,
   message: any,
   webServer: WebServer
@@ -1516,6 +1522,7 @@ function findPluginByConfigKey(rootPlugin: Plugin, configKey: string): Plugin | 
 }
 
 export function broadcastToAll(webServer: WebServer, message: any) {
+  broadcastSse(message);
   for (const ws of webServer.ws.clients || []) {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(message));

@@ -1,4 +1,5 @@
-export const DEFAULT_CONSOLE_BASE_PATH = "/console";
+/** Host API + plugin entry routes (entries, esm, @assets). Remote UI uses root paths (/dashboard, …). */
+export const DEFAULT_CONSOLE_BASE_PATH = "/";
 
 export const CONSOLE_HOST_REACT_NAMESPACE_KEY = "__ZHIN_CONSOLE_HOST_REACT_NAMESPACE__";
 

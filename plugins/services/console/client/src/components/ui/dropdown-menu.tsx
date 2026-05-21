@@ -1,6 +1,8 @@
 import type * as React from "react"
 import { forwardRef } from "react"
-import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui"
+import * as Radix from "radix-ui"
+
+const DropdownMenuPrimitive = Radix.DropdownMenu
 import { cn } from "@zhin.js/client"
 import { Check, ChevronRight, Circle } from "lucide-react"
 

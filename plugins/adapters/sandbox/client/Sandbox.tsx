@@ -53,8 +53,11 @@ export default function Sandbox() {
     useEffect(() => { fetchFaceList() }, [])
 
     useEffect(() => {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-        wsRef.current = new WebSocket(`${protocol}//${window.location.host}/sandbox`)
+        const stored = localStorage.getItem('zhin_api_base')?.trim()
+        const base = (stored ? stored.replace(/\/$/, '') : null) ?? window.location.origin
+        const wsUrl = new URL('/sandbox', `${base}/`)
+        wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:'
+        wsRef.current = new WebSocket(wsUrl.href)
         wsRef.current.onopen = () => setConnected(true)
         wsRef.current.onmessage = (event) => {
             try {

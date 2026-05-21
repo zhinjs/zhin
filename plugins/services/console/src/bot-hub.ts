@@ -2,6 +2,7 @@
  * 机器人请求/通知：内存 Request 映射 + WS 广播 + 事件注册
  */
 import type WebSocket from "ws";
+import { broadcastSse } from "./sse-hub.js";
 import type { Request as ZhinRequest } from "@zhin.js/core";
 import {
   insertRequest,
@@ -23,6 +24,7 @@ export function setBotHubWss(wss: WsIterable) {
 }
 
 function broadcast(obj: object) {
+  broadcastSse(obj as { type: string; data?: unknown });
   const msg = JSON.stringify(obj);
   const clients = wssRef?.clients;
   if (!clients) return;

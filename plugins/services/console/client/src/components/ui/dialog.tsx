@@ -1,6 +1,8 @@
 import type * as React from "react"
 import { forwardRef } from "react"
-import { Dialog as DialogPrimitive } from "radix-ui"
+import * as Radix from "radix-ui"
+
+const DialogPrimitive = Radix.Dialog
 import { cn } from "@zhin.js/client"
 import { X } from "lucide-react"
 

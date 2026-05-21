@@ -1,0 +1,19 @@
+{
+  "name": "@zhin/deno-deploy-playground",
+  "version": "0.2.0",
+  "exports": "./main.ts",
+  "tasks": {
+    "dev": "deno run -A --env-file=.env --watch main.ts",
+    "start": "deno run -A --env-file=.env main.ts",
+    "check": "deno check main.ts",
+    "test": "deno test -A src/runtime/smoke_test.ts"
+  },
+  "imports": {
+    "zhin.js": "npm:zhin.js@1.0.81"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "lib": ["deno.ns", "deno.unstable", "dom", "esnext"]
+  },
+  "nodeModulesDir": "auto"
+}

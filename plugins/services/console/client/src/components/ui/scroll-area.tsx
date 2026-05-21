@@ -1,6 +1,8 @@
 import type * as React from "react"
 import { forwardRef } from "react"
-import { ScrollArea as ScrollAreaPrimitive } from "radix-ui"
+import * as Radix from "radix-ui"
+
+const ScrollAreaPrimitive = Radix.ScrollArea
 import { cn } from "@zhin.js/client"
 
 const ScrollArea = forwardRef<

@@ -28,6 +28,8 @@ export type ConsoleServerOptions = {
   port?: number;
   farmServerPort?: number;
   farmStrictPort?: boolean;
+  /** Mount Farm/static UI on Host Koa. Remote-only deployments should set false. */
+  serveClientHost?: boolean;
 };
 
 export type ConsoleClientHostAttachOptions = {

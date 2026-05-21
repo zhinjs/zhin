@@ -1,6 +1,8 @@
 import type * as React from "react"
 import { forwardRef } from "react"
-import { Separator as SeparatorPrimitive } from "radix-ui"
+import * as Radix from "radix-ui"
+
+const SeparatorPrimitive = Radix.Separator
 import { cn } from "@zhin.js/client"
 
 const Separator = forwardRef<

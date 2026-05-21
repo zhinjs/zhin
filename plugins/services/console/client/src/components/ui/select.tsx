@@ -1,6 +1,8 @@
 import type * as React from "react"
 import { forwardRef } from "react"
-import { Select as SelectPrimitive } from "radix-ui"
+import * as Radix from "radix-ui"
+
+const SelectPrimitive = Radix.Select
 import { cn } from "@zhin.js/client"
 import { Check, ChevronDown, ChevronUp } from "lucide-react"
 

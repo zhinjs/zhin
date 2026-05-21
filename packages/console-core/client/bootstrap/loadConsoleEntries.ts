@@ -13,6 +13,8 @@ export type FetchConsoleEntriesOptions = {
 };
 
 export type LoadConsoleEntriesOptions = FetchConsoleEntriesOptions & {
+  /** Origin for `/@dev` / `/@assets` module URLs (Remote Console: Host API base). */
+  assetOrigin?: string;
   hostApi: PluginRegisterHostApi;
   beforeLoad?: () => void;
   onEmpty?: () => void;
@@ -38,16 +40,34 @@ export function createPluginRegisterHostApi(
   };
 }
 
+const CONSOLE_API_BASE_STORAGE_KEY = "zhin_api_base";
+
+function resolveStoredApiBase(): string {
+  if (typeof window === "undefined") return "";
+  const stored = localStorage.getItem(CONSOLE_API_BASE_STORAGE_KEY)?.trim();
+  return stored ? stored.replace(/\/$/, "") : "";
+}
+
+function defaultEntriesUrl(): string {
+  const apiBase = resolveStoredApiBase();
+  if (apiBase) return `${apiBase}/entries`;
+  const root = DEFAULT_CONSOLE_BASE_PATH.replace(/\/$/, "");
+  return `${root ? `${root}/entries` : "/entries"}`;
+}
+
 function resolveRequestUrl(pathOrUrl: string): string {
   if (pathOrUrl.startsWith("http://") || pathOrUrl.startsWith("https://")) return pathOrUrl;
   if (typeof window === "undefined") return pathOrUrl;
-  return new URL(pathOrUrl, window.location.origin).href;
+  const apiBase = resolveStoredApiBase();
+  const origin = apiBase || window.location.origin;
+  return new URL(pathOrUrl, `${origin}/`).href;
 }
 
-function resolvePluginImportUrl(resolvedModule: string): string {
+function resolvePluginImportUrl(resolvedModule: string, assetOrigin?: string): string {
   if (resolvedModule.startsWith("http://") || resolvedModule.startsWith("https://")) return resolvedModule;
   if (typeof window === "undefined") return resolvedModule;
-  return new URL(resolvedModule, window.location.origin).href;
+  const origin = assetOrigin?.replace(/\/$/, "") || window.location.origin;
+  return new URL(resolvedModule, `${origin}/`).href;
 }
 
 function resolveFetchInit(init?: RequestInit | (() => RequestInit)): RequestInit {
@@ -57,11 +77,10 @@ function resolveFetchInit(init?: RequestInit | (() => RequestInit)): RequestInit
 export async function fetchConsoleEntries(
   options?: FetchConsoleEntriesOptions,
 ): Promise<ConsoleEntriesResponse> {
-  const pathOrUrl = options?.entriesUrl ?? `${DEFAULT_CONSOLE_BASE_PATH}/entries`;
+  const pathOrUrl = options?.entriesUrl ?? defaultEntriesUrl();
   const url = resolveRequestUrl(pathOrUrl);
   const init = resolveFetchInit(options?.fetchInit);
   const res = await fetch(url, {
-    credentials: "include",
     ...init,
     signal: options?.signal ?? init.signal,
   } as RequestInit);
@@ -82,12 +101,13 @@ export async function registerConsolePluginsFromEntries(
   entries: ConsoleClientEntry[],
   hostApi: PluginRegisterHostApi,
   onEntryError?: (entry: ConsoleClientEntry, error: unknown) => void,
+  assetOrigin?: string,
 ): Promise<void> {
   if (!entries.length) return;
   await Promise.all(
     entries.map(async (entry) => {
       try {
-        const specifier = resolvePluginImportUrl(entry.resolvedModule);
+        const specifier = resolvePluginImportUrl(entry.resolvedModule, assetOrigin);
         const mod = (await import(/* @vite-ignore */ specifier)) as Record<string, unknown>;
         const register = getRegisterFn(mod);
         if (register) await register(hostApi);
@@ -119,6 +139,11 @@ export async function loadConsoleEntries(options: LoadConsoleEntriesOptions): Pr
     options.onEmpty?.();
     return;
   }
-  await registerConsolePluginsFromEntries(data.entries, options.hostApi, options.onEntryError);
+  await registerConsolePluginsFromEntries(
+    data.entries,
+    options.hostApi,
+    options.onEntryError,
+    options.assetOrigin,
+  );
 }
 

@@ -9,6 +9,14 @@ export {
 export { cn } from "./utils/cn.js";
 
 export {
+  apiFetch,
+  getApiBase,
+  getToken,
+  resolveApiUrl,
+  resolveWebSocketUrl,
+} from "./utils/remoteApi.js";
+
+export {
   fetchConsoleEntries,
   createPluginRegisterHostApi,
   getRegisterFn,

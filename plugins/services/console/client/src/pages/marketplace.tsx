@@ -16,6 +16,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogFooter,
   DialogTitle, DialogDescription, DialogClose,
 } from '../components/ui/dialog'
+import { apiFetch } from '../utils/auth'
 
 interface MarketPlugin {
   name: string
@@ -101,7 +102,7 @@ export default function MarketplacePage() {
       if (officialOnly) params.set('official', 'true')
       params.set('limit', '50')
 
-      const res = await fetch(`/pub/marketplace/search?${params}`)
+      const res = await apiFetch(`/pub/marketplace/search?${params}`)
       if (!res.ok) throw new Error('搜索失败')
       const data = await res.json()
       if (data.success) {
@@ -130,10 +131,7 @@ export default function MarketplacePage() {
   const checkUpdates = useCallback(async () => {
     setUpdatesLoading(true)
     try {
-      const token = localStorage.getItem('zhin_api_token')
-      const res = await fetch('/api/marketplace/updates', {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
+      const res = await apiFetch('/api/marketplace/updates')
       if (res.ok) {
         const data = await res.json()
         if (data.success) setUpdates(data.data)
@@ -147,7 +145,7 @@ export default function MarketplacePage() {
     setDetailLoading(true)
     setDetail(null)
     try {
-      const res = await fetch(`/pub/marketplace/detail/${name}`)
+      const res = await apiFetch(`/pub/marketplace/detail/${name}`)
       if (res.ok) {
         const data = await res.json()
         if (data.success) setDetail(data.data)

@@ -54,6 +54,10 @@ export default defineConfig({
           name: "lucide-react",
           test: ["[\\\\/]lucide-react[\\\\/]", "lucide-react"],
         },
+        {
+          name: "radix-ui",
+          test: ["[\\\\/]radix-ui[\\\\/]", "radix-ui"],
+        },
       ],
     },
     input: {

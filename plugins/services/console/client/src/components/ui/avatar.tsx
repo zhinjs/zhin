@@ -1,6 +1,8 @@
 import type * as React from "react"
 import { forwardRef } from "react"
-import { Avatar as AvatarPrimitive } from "radix-ui"
+import * as Radix from "radix-ui"
+
+const AvatarPrimitive = Radix.Avatar
 import { cn } from "@zhin.js/client"
 
 const Avatar = forwardRef<

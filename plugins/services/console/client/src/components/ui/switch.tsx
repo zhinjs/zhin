@@ -1,6 +1,8 @@
 import type * as React from "react"
 import { forwardRef } from "react"
-import { Switch as SwitchPrimitive } from "radix-ui"
+import * as Radix from "radix-ui"
+
+const SwitchPrimitive = Radix.Switch
 import { cn } from "@zhin.js/client"
 
 const Switch = forwardRef<

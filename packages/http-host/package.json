@@ -1,0 +1,42 @@
+{
+  "name": "@zhin.js/http-host",
+  "version": "0.1.0",
+  "description": "Fetch-based HTTP host: routing, auth, CORS, Node serve adapter",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "dependencies": {
+    "koa": "^3.1.1",
+    "ws": "^8.20.1"
+  },
+  "files": ["lib", "src"],
+  "devDependencies": {
+    "@types/koa": "latest",
+    "@types/koa-static": "^4.0.4",
+    "@types/ws": "latest",
+    "koa-static": "^5.0.0",
+    "@types/node": "^25.8.0",
+    "typescript": "^6.0.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/http-host"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

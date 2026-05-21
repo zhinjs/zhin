@@ -65,8 +65,8 @@ function ConsoleShell() {
   return (
     <Routes>
       {registeredRoutes}
-      <Route path="/" element={<Navigate to="/console/dashboard" replace />} />
-      <Route path="*" element={<Navigate to="/console/dashboard" replace />} />
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   )
 }

@@ -23,6 +23,7 @@
     "build:lib": "tsc -p tsconfig.server.json",
     "build:web": "farm build",
     "dev": "farm start",
+    "preview:remote": "serve dist -l 5173",
     "dev:lib": "tsc -p tsconfig.server.json -w",
     "clean": "rimraf dist lib",
     "prepublishOnly": "pnpm run build"
@@ -59,6 +60,7 @@
     "react-refresh": "^0.18.0",
     "react-router-dom": "^7.15.1",
     "rimraf": "^6.0.1",
+    "serve": "^14.2.4",
     "tailwind-merge": "^3",
     "tailwindcss": "^4.3.0",
     "typescript": "^6.0.2",

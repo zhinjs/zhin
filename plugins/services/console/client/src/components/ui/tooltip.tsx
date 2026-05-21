@@ -1,6 +1,8 @@
 import type * as React from "react"
 import { forwardRef } from "react"
-import { Tooltip as TooltipPrimitive } from "radix-ui"
+import * as Radix from "radix-ui"
+
+const TooltipPrimitive = Radix.Tooltip
 import { cn } from "@zhin.js/client"
 
 const TooltipProvider = TooltipPrimitive.Provider

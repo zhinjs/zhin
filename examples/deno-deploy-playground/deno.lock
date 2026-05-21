@@ -1,0 +1,134 @@
+{
+  "version": "5",
+  "specifiers": {
+    "jsr:@std/assert@*": "1.0.19",
+    "jsr:@std/internal@^1.0.12": "1.0.13",
+    "npm:@zhin.js/agent@*": "0.1.21_zhin.js@1.0.81",
+    "npm:@zhin.js/agent@0.1.21": "0.1.21_zhin.js@1.0.81",
+    "npm:@zhin.js/core@*": "1.1.23_zhin.js@1.0.81",
+    "npm:@zhin.js/core@1.1.23": "1.1.23_zhin.js@1.0.81",
+    "npm:zhin.js@1.0.81": "1.0.81"
+  },
+  "jsr": {
+    "@std/assert@1.0.19": {
+      "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
+      "dependencies": [
+        "jsr:@std/internal"
+      ]
+    },
+    "@std/internal@1.0.13": {
+      "integrity": "2f9546691d4ac2d32859c82dff284aaeac980ddeca38430d07941e7e288725c0"
+    }
+  },
+  "npm": {
+    "@zhin.js/agent@0.1.21_zhin.js@1.0.81": {
+      "integrity": "sha512-Nz44UfnKkNXIpP8benQ6X55gRaX6j3fOCto1NlphxCZZ8jKPjW6Ze8O/FtfBMyJSWZfyalMKq+UWP6BOT+r4Sg==",
+      "dependencies": [
+        "@zhin.js/ai",
+        "@zhin.js/core",
+        "he",
+        "js-yaml"
+      ]
+    },
+    "@zhin.js/ai@1.1.21_zhin.js@1.0.81": {
+      "integrity": "sha512-LUY1Kgowbbt7lBFfdyPk1w4Yo+ELg84RDUfveIsw9U1Mcq7j4ul2nsp2CtCUwP9W1AG7IE4+jFnvOJ6Qq9dqtg==",
+      "dependencies": [
+        "@zhin.js/logger"
+      ]
+    },
+    "@zhin.js/core@1.1.23_zhin.js@1.0.81": {
+      "integrity": "sha512-g6TVz/TCJKhetA/p6PrsftVYdtSmB2h+Wp9oyBDYIfzq4INhmJgDTpnTQhdeod77nQYfxNMSGPuLnpCx7LzM5Q==",
+      "dependencies": [
+        "@zhin.js/ai",
+        "@zhin.js/database",
+        "@zhin.js/kernel",
+        "@zhin.js/logger",
+        "@zhin.js/schema",
+        "croner",
+        "segment-matcher",
+        "smol-toml",
+        "yaml"
+      ]
+    },
+    "@zhin.js/database@1.0.66_zhin.js@1.0.81": {
+      "integrity": "sha512-Gouq3/0fBasY7CJtqYMNVfJ0B9Gy8+5GMrz7wh4azZdg0Dis3LYnaBpdVr2pVAdxJfSBJmH2lVrm2BQljw7dGw==",
+      "dependencies": [
+        "zhin.js"
+      ]
+    },
+    "@zhin.js/kernel@0.0.40_zhin.js@1.0.81": {
+      "integrity": "sha512-a7lxteUHZqMUPWMLhPMQ2gODbuTcbxQKoMKgRw1q6NewP9SyabnXZWh/pDKQtivlyFJNQ6SbFpajL/Plt30Giw==",
+      "dependencies": [
+        "@zhin.js/logger",
+        "@zhin.js/schema",
+        "croner",
+        "smol-toml",
+        "yaml"
+      ]
+    },
+    "@zhin.js/logger@0.1.63_zhin.js@1.0.81": {
+      "integrity": "sha512-eUavPO7gGvfmLr7wuewRp/X/CbJ1aB80L/fznrvH0Kan0a4vcjmJ0mL1LRTWy89Wli4BF0jr2UCS59ut3JeCJg==",
+      "dependencies": [
+        "chalk",
+        "zhin.js"
+      ]
+    },
+    "@zhin.js/schema@1.0.63_zhin.js@1.0.81": {
+      "integrity": "sha512-eEyCd+NQIsJyfmlr64ZB7wx9wpb6HxfbzMluG2h7bmpi3Oo887/GuuoFH28BlDgB9CLqqxOo96dlscsfvTSZqg==",
+      "dependencies": [
+        "zhin.js"
+      ]
+    },
+    "argparse@2.0.1": {
+      "integrity": "sha512-8+9WqebbFzpX9OR+Wa6O29asIogeRMzcGtAINdpMHHyAg10f05aSFVBbcEqGf/PXw1EjAZ+q2/bEBg3DvurK3Q=="
+    },
+    "chalk@5.6.2": {
+      "integrity": "sha512-7NzBL0rN6fMUW+f7A6Io4h40qQlG+xGmtMxfbnH/K7TAtt8JQWVQK+6g0UXKMeVJoyV5EkkNsErQ8pVD3bLHbA=="
+    },
+    "croner@9.1.0": {
+      "integrity": "sha512-p9nwwR4qyT5W996vBZhdvBCnMhicY5ytZkR4D1Xj0wuTDEiMnjwR57Q3RXYY/s0EpX6Ay3vgIcfaR+ewGHsi+g=="
+    },
+    "dotenv@17.4.2": {
+      "integrity": "sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw=="
+    },
+    "he@1.2.0": {
+      "integrity": "sha512-F/1DnUGPopORZi0ni+CvrCgHQ5FyEAHRLSApuYWMmrbSwoN2Mn/7k+Gl38gJnR7yyDZk6WLXwiGod1JOWNDKGw==",
+      "bin": true
+    },
+    "js-yaml@4.1.1": {
+      "integrity": "sha512-qQKT4zQxXl8lLwBtHMWwaTcGfFOZviOJet3Oy/xmGk2gZH677CJM9EvtfdSkgWcATZhj/55JZ0rmy3myCT5lsA==",
+      "dependencies": [
+        "argparse"
+      ],
+      "bin": true
+    },
+    "segment-matcher@1.0.5": {
+      "integrity": "sha512-OJh+xF/Y6lFOmaP3MuUdvOEgv//zePa/GYut25Wn/Ei1k2S8g9YQyLIJl8Z8gv1ti7MS2+vbj1WNz79Iu/j+DA=="
+    },
+    "smol-toml@1.6.1": {
+      "integrity": "sha512-dWUG8F5sIIARXih1DTaQAX4SsiTXhInKf1buxdY9DIg4ZYPZK5nGM1VRIYmEbDbsHt7USo99xSLFu5Q1IqTmsg=="
+    },
+    "yaml@2.9.0": {
+      "integrity": "sha512-2AvhNX3mb8zd6Zy7INTtSpl1F15HW6Wnqj0srWlkKLcpYl/gMIMJiyuGq2KeI2YFxUPjdlB+3Lc10seMLtL4cA==",
+      "bin": true
+    },
+    "zhin.js@1.0.81": {
+      "integrity": "sha512-Mrc2hzW/lgmyUdnWFajPcnThQJLKzXAg9C8NdeyVGqxYBY5SpauMXi8NpKK6+3Qw/APBY4DGUs0urPzDZNEviQ==",
+      "dependencies": [
+        "@zhin.js/agent",
+        "@zhin.js/ai",
+        "@zhin.js/core",
+        "@zhin.js/kernel",
+        "@zhin.js/logger",
+        "@zhin.js/schema",
+        "dotenv",
+        "yaml"
+      ]
+    }
+  },
+  "workspace": {
+    "dependencies": [
+      "npm:zhin.js@1.0.81"
+    ]
+  }
+}

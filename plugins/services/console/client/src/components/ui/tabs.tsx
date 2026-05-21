@@ -1,6 +1,8 @@
 import type * as React from "react"
 import { forwardRef } from "react"
-import { Tabs as TabsPrimitive } from "radix-ui"
+import * as Radix from "radix-ui"
+
+const TabsPrimitive = Radix.Tabs
 import { cn } from "@zhin.js/client"
 
 const Tabs = TabsPrimitive.Root

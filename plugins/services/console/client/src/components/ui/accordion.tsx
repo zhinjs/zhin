@@ -1,6 +1,8 @@
 import type * as React from "react"
 import { forwardRef } from "react"
-import { Accordion as AccordionPrimitive } from "radix-ui"
+import * as Radix from "radix-ui"
+
+const AccordionPrimitive = Radix.Accordion
 import { cn } from "@zhin.js/client"
 import { ChevronDown } from "lucide-react"
 

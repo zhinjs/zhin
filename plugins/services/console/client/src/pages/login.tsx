@@ -3,19 +3,29 @@ import { cn } from '@zhin.js/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
 import { Button } from '../components/ui/button'
-import { setToken } from '../utils/auth'
+import { setToken, setApiBase, getApiBase } from '../utils/auth'
 
 interface LoginPageProps {
   onSuccess: () => void
 }
 
 export default function LoginPage({ onSuccess }: LoginPageProps) {
+  const [apiBase, setApiBaseValue] = useState(() => {
+    const stored = getApiBase()
+    if (stored && stored !== window.location.origin) return stored
+    return 'http://localhost:8086'
+  })
   const [token, setTokenValue] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   const handleLogin = useCallback(async () => {
     const trimmed = token.trim()
+    const base = apiBase.trim().replace(/\/$/, '')
+    if (!base) {
+      setError('请填写 API Base URL（如 http://localhost:8086）')
+      return
+    }
     if (!trimmed) {
       setError('请输入 Token')
       return
@@ -25,11 +35,12 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
     setError('')
 
     try {
-      const res = await fetch('/api/system/status', {
+      const res = await fetch(`${base}/api/system/status`, {
         headers: { Authorization: `Bearer ${trimmed}` },
       })
 
       if (res.ok) {
+        setApiBase(base)
         setToken(trimmed)
         onSuccess()
       } else if (res.status === 401) {
@@ -38,11 +49,11 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
         setError(`验证失败 (HTTP ${res.status})`)
       }
     } catch {
-      setError('无法连接到服务器')
+      setError('无法连接到 API，请检查 Base URL 与网络')
     } finally {
       setLoading(false)
     }
-  }, [token, onSuccess])
+  }, [token, apiBase, onSuccess])
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-background">
@@ -53,7 +64,7 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
           </div>
           <CardTitle className="text-xl">Zhin.js 控制台</CardTitle>
           <CardDescription>
-            请输入 API Token 以访问管理面板
+            配置 Remote Console：API 地址与 Bearer Token
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -65,6 +76,12 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
             className="space-y-4"
           >
             <div className="space-y-2">
+              <Input
+                type="url"
+                placeholder="API Base URL（如 http://127.0.0.1:8086）"
+                value={apiBase}
+                onChange={(e) => setApiBaseValue(e.target.value)}
+              />
               <Input
                 type="password"
                 placeholder="API Token"
@@ -80,11 +97,10 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
               )}
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? '验证中...' : '登录'}
+              {loading ? '验证中...' : '连接'}
             </Button>
             <p className="text-xs text-center text-muted-foreground">
-              Token 位于 <code className="text-xs bg-muted px-1 rounded">.env</code> 文件的{' '}
-              <code className="text-xs bg-muted px-1 rounded">HTTP_TOKEN</code> 中
+              须填写运行 test-bot 的 Host 地址（与预览站 5173 不同）。localhost 与 127.0.0.1 请与 corsOrigins 一致。
             </p>
           </form>
         </CardContent>

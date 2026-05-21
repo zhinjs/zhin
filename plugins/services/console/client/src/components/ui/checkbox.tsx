@@ -1,6 +1,8 @@
 import type * as React from "react"
 import { forwardRef } from "react"
-import { Checkbox as CheckboxPrimitive } from "radix-ui"
+import * as Radix from "radix-ui"
+
+const CheckboxPrimitive = Radix.Checkbox
 import { cn } from "@zhin.js/client"
 import { Check } from "lucide-react"
 

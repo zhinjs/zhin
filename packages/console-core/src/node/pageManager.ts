@@ -29,7 +29,10 @@ export class PageManager {
     this.serverOptions = options;
     this.entryStore = options.entryStore ?? createInMemoryEntryStore();
     const basePath = options.path ?? DEFAULT_CONSOLE_BASE_PATH;
-    const api = new Router({ prefix: basePath });
+    const api =
+      basePath === "/" || basePath === ""
+        ? new Router()
+        : new Router({ prefix: basePath });
     this._apiRouter = api;
     registerConsoleApiRoutes(api, this.entryStore, options);
     if (options.router) {
@@ -123,6 +126,14 @@ export class PageManager {
     const farmConfigPath =
       this.serverOptions.farmConfigPath ?? path.join(clientPackageRoot, "farm.config.ts");
     const port = this.serverOptions.port ?? Number(process.env.PORT ?? 3001);
+
+    if (this.serverOptions.serveClientHost === false) {
+      return {
+        bindDevWebSocket() {},
+        prepareListen: async () => {},
+        close: async () => {},
+      };
+    }
 
     return attachConsoleClientHost(this.serverOptions.koa, {
       clientPackageRoot,

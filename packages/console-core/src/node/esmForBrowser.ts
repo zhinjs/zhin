@@ -28,6 +28,16 @@ const HOST_PROXIED_MODULES = new Set([
 
 const esmCache = new Map<string, string>();
 const tmpDir = path.join(os.tmpdir(), "zhin-console-esm");
+
+/** `basePath` `/` must not become `//esm/...` (browser resolves to `http://esm/...`). */
+export function joinConsolePublicPath(basePath: string, subpath: string): string {
+  const base =
+    basePath === "/" || basePath === ""
+      ? ""
+      : basePath.replace(/\/$/, "").replace(/^\/+/, "");
+  const rest = subpath.replace(/^\/+/, "");
+  return base ? `/${base}/${rest}` : `/${rest}`;
+}
 const esmVersionTag = Date.now().toString(36);
 
 export function encodeSpecifierSegment(specifier: string): string {
@@ -127,7 +137,7 @@ export function rewriteBareImportsForBrowser(
 ): string {
   for (const canonical of ALLOWED_ESM_CANONICAL) {
     const enc = encodeSpecifierSegment(canonical);
-    const esmUrl = `${basePath}/esm/${enc}.mjs?v=${esmVersionTag}`;
+    const esmUrl = `${joinConsolePublicPath(basePath, `esm/${enc}.mjs`)}?v=${esmVersionTag}`;
     const pattern = new RegExp(
       `from\\s*["']${canonical.replace(/[.*+?^${}()|[\]\\\/]/g, "\\$&")}["']`,
       "g",
