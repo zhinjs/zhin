@@ -40,7 +40,7 @@ export class SatoriWebhookBot extends EventEmitter implements Bot<SatoriWebhookC
   async $connect(): Promise<void> {
     const path = this.$config.path.startsWith('/') ? this.$config.path : `/${this.$config.path}`;
     this.router.post(path, async (ctx: RouterContext) => {
-      const opcode = parseInt(ctx.headers['satori-opcode'] as string ?? '', 10);
+      const opcode = parseInt(ctx.get('satori-opcode') ?? '', 10);
       const body = ctx.request.body as SatoriEventBody | undefined;
       if (opcode === SatoriOpcode.EVENT && body) {
         if (body.login && !this.login) this.login = body.login;

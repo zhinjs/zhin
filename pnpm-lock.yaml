@@ -729,9 +729,6 @@ importers:
         specifier: ^1.0.3
         version: 1.0.3
     devDependencies:
-      '@types/koa':
-        specifier: ^3.0.0
-        version: 3.0.1
       '@types/node':
         specifier: ^25.8.0
         version: 25.8.0

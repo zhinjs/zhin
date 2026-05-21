@@ -1,7 +1,7 @@
 /**
  * 飞书/Lark Bot 实现
  */
-import type { Context } from "koa";
+import type { RouterContext } from "@zhin.js/http";
 import axios, { type AxiosInstance } from "axios";
 import { createHash } from "crypto";
 import { formatCompact, Bot, Message, MessageSegment, segment, SendContent, SendOptions } from 'zhin.js';
@@ -54,19 +54,18 @@ export class LarkBot implements Bot<LarkBotConfig, LarkMessage> {
     }
 
     private setupWebhookRoute(): void {
-        this.router.post(this.$config.webhookPath, (ctx: Context) => {
-            this.handleWebhook(ctx);
+        this.router.post(this.$config.webhookPath, (ctx: RouterContext) => {
+            void this.handleWebhook(ctx);
         });
     }
 
-    private async handleWebhook(ctx: Context): Promise<void> {
+    private async handleWebhook(ctx: RouterContext): Promise<void> {
         try {
-            const body = (ctx.request as any).body;
-            const headers = ctx.request.headers;
+            const body = ctx.request.body;
             
             // 验证请求（如果配置了验证令牌）
             if (this.$config.verificationToken) {
-                const token = headers['x-lark-request-token'] as string;
+                const token = ctx.get('x-lark-request-token');
                 if (token !== this.$config.verificationToken) {
                     this.logger.warn(formatCompact( { op: 'webhook', ok: false, error: 'invalid verification token' }));
                     ctx.status = 403;
@@ -77,12 +76,12 @@ export class LarkBot implements Bot<LarkBotConfig, LarkMessage> {
             
             // 签名验证（如果配置了加密密钥）
             if (this.$config.encryptKey) {
-                const timestamp = headers['x-lark-request-timestamp'] as string;
-                const nonce = headers['x-lark-request-nonce'] as string;
-                const signature = headers['x-lark-signature'] as string;
+                const timestamp = ctx.get('x-lark-request-timestamp');
+                const nonce = ctx.get('x-lark-request-nonce');
+                const signature = ctx.get('x-lark-signature');
                 const bodyStr = JSON.stringify(body);
                 
-                if (!this.verifySignature(timestamp, nonce, bodyStr, signature)) {
+                if (!timestamp || !nonce || !signature || !this.verifySignature(timestamp, nonce, bodyStr, signature)) {
                     this.logger.warn(formatCompact( { op: 'webhook', ok: false, error: 'invalid signature' }));
                     ctx.status = 403;
                     ctx.body = 'Forbidden';
@@ -90,7 +89,7 @@ export class LarkBot implements Bot<LarkBotConfig, LarkMessage> {
                 }
             }
             
-            const event: LarkEvent = body;
+            const event = body as LarkEvent;
             
             // URL 验证挑战（首次配置 webhook 时）
             if (event.type === 'url_verification') {

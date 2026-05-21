@@ -22,7 +22,7 @@ import {
 } from "discord.js";
 import nacl from "tweetnacl";
 import { Bot, Message, SendOptions, SendContent, MessageSegment, segment } from "zhin.js";
-import type { Context } from "koa";
+import type { RouterContext } from "@zhin.js/http";
 import type { DiscordInteractionsConfig } from "./types.js";
 import type { DiscordAdapter } from "./adapter.js";
 
@@ -61,16 +61,22 @@ export class DiscordInteractionsBot
 
   private setupInteractionsEndpoint(): void {
     // 设置路由处理 Discord Interactions
-    this.router.post(this.$config.interactionsPath, (ctx: Context) => {
-      this.handleInteraction(ctx);
+    this.router.post(this.$config.interactionsPath, (ctx: RouterContext) => {
+      void this.handleInteraction(ctx);
     });
   }
 
-  private async handleInteraction(ctx: Context): Promise<void> {
+  private async handleInteraction(ctx: RouterContext): Promise<void> {
     try {
       const signature = ctx.get("x-signature-ed25519");
       const timestamp = ctx.get("x-signature-timestamp");
-      const bodyString = JSON.stringify((ctx.request as any).body);
+      const bodyString = JSON.stringify(ctx.request.body);
+
+      if (!signature || !timestamp) {
+        ctx.status = 401;
+        ctx.body = "Unauthorized";
+        return;
+      }
 
       // 验证请求签名
       if (!this.verifyDiscordSignature(bodyString, signature, timestamp)) {
@@ -80,7 +86,7 @@ export class DiscordInteractionsBot
         return;
       }
 
-      const interaction = (ctx.request as any).body;
+      const interaction = ctx.request.body as Record<string, unknown>;
 
       // 处理不同类型的交互
       if (interaction.type === InteractionType.Ping) {

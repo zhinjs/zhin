@@ -372,7 +372,9 @@ describe('Adapter Core Functionality', () => {
         
         await adapter.sendMessage(options)
         
-        expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('bot1 send private(channel-id):Hello'))
+        expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('send: private(channel-id)'))
+        expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('bot: bot1'))
+        expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('preview: Hello'))
       })
     })
 
@@ -477,7 +479,7 @@ describe('Adapter Core Functionality', () => {
         expect(adapter.emit('message.receive', makeInboundMessage())).toBe(true)
         expect(adapter.pendingMessages).toBe(1)
         expect(adapter.emit('message.receive', makeInboundMessage())).toBe(false)
-        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('concurrency limit reached'))
+        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('drop: concurrency'))
 
         await vi.waitFor(() => expect(adapter.pendingMessages).toBe(0))
       })
@@ -496,7 +498,7 @@ describe('Adapter Core Functionality', () => {
         expect(adapter.pendingMessages).toBe(1)
 
         await vi.waitFor(() => expect(adapter.pendingMessages).toBe(0))
-        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('message.receive handling error: boom'))
+        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('error: boom'))
       })
     })
   })

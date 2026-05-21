@@ -46,6 +46,11 @@ declare module "zhin.js" {
   }
 }
 
+/** 官方 Remote Console 源（CORS + 启动日志中的打开链接） */
+export const REMOTE_CONSOLE_ORIGIN = "https://console.zhin.dev";
+
+const DEFAULT_CORS_ORIGINS = [REMOTE_CONSOLE_ORIGIN];
+
 // Schema 定义
 export const httpSchema = Schema.object({
   port: Schema.number().default(8086).description("HTTP 服务端口"),
@@ -56,8 +61,10 @@ export const httpSchema = Schema.object({
     .default("/api")
     .description("HTTP 路由前缀, 默认为 /api"),
   corsOrigins: Schema.list(Schema.string())
-    .default([])
-    .description("Remote Console 允许的 CORS Origin 列表"),
+    .default(DEFAULT_CORS_ORIGINS)
+    .description(
+      `Remote Console 允许的 CORS Origin 列表（默认含 ${REMOTE_CONSOLE_ORIGIN}）`,
+    ),
 });
 
 export interface HttpConfig {
@@ -121,9 +128,13 @@ useContext("config", (configService) => {
     host = "127.0.0.1",
     token = generateToken(),
     base = "/api",
-    corsOrigins = [],
+    corsOrigins: userCorsOrigins = [],
     trustProxy = false,
   } = httpConfig;
+
+  const corsOrigins = [
+    ...new Set([...DEFAULT_CORS_ORIGINS, ...userCorsOrigins]),
+  ];
 
   internalKoa.proxy = trustProxy;
 
@@ -549,13 +560,25 @@ useContext("config", (configService) => {
   server.listen({ host, port }, () => {
     const address = server.address();
     if (!address) return;
-    const visitAddress =
-      typeof address === "string"
-        ? address
-        : `${host}:${address.port}`;
+    const listenPort =
+      typeof address === "object" && address && "port" in address
+        ? address.port
+        : port;
+    const publicHost =
+      host === "0.0.0.0" || host === "::" ? "127.0.0.1" : host;
+    const visitAddress = `${publicHost}:${listenPort}`;
     const apiUrl = `http://${visitAddress}${base}`;
+    const apiBaseUrl = `http://${visitAddress}`;
+    const consoleUrl = `${REMOTE_CONSOLE_ORIGIN}/?apiBaseUrl=${encodeURIComponent(apiBaseUrl)}`;
 
-    logger.info(formatCompact({ port, api: apiUrl, token_prefix: token.slice(0, 6) }));
+    logger.info(
+      formatCompact({
+        port: listenPort,
+        api: apiUrl,
+        console: consoleUrl,
+        token_prefix: token.slice(0, 6),
+      }),
+    );
   });
 });
 

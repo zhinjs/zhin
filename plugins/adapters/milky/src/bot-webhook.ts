@@ -15,10 +15,10 @@ import {
 } from './utils.js';
 
 function getAccessTokenFromRequest(ctx: RouterContext): string | undefined {
-  const auth = ctx.headers['authorization'];
-  if (typeof auth === 'string' && auth.startsWith('Bearer ')) return auth.slice(7);
-  const q = ctx.request.query?.access_token;
-  return typeof q === 'string' ? q : undefined;
+  const auth = ctx.get('authorization');
+  if (auth?.startsWith('Bearer ')) return auth.slice(7);
+  const q = ctx.query.access_token;
+  return q || undefined;
 }
 
 export class MilkyWebhookBot extends EventEmitter implements Bot<MilkyWebhookConfig, MilkyEvent> {

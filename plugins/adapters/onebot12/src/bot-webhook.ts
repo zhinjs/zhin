@@ -43,7 +43,7 @@ export class OneBot12WebhookBot extends EventEmitter implements Bot<OneBot12Webh
         return;
       }
       const token = this.$config.access_token;
-      const auth = ctx.headers['authorization'];
+      const auth = ctx.get('authorization');
       if (token && auth !== `Bearer ${token}`) {
         ctx.status = 401;
         ctx.body = { message: 'Unauthorized' };

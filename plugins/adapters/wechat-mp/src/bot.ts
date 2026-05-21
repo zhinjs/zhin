@@ -7,8 +7,7 @@ import { createHash, createDecipheriv, createCipheriv, randomBytes } from "crypt
 import { EventEmitter } from "events";
 import FormData from "form-data";
 import { formatCompact, Bot, Message, MessageSegment, segment, SendContent, SendOptions } from 'zhin.js';
-import type { Context } from "koa";
-import type { Router } from "@zhin.js/http";
+import type { Router, RouterContext } from "@zhin.js/http";
 import type { WeChatMPConfig, WeChatMessage, WeChatAPIResponse, TokenResponse } from "./types.js";
 import type { WeChatMPAdapter } from "./adapter.js";
 
@@ -41,13 +40,13 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
         const path = this.$config.path;
         
         // 微信服务器验证 (GET)
-        this.router.get(path, (ctx: Context) => {
+        this.router.get(path, (ctx: RouterContext) => {
             this.handleVerification(ctx);
         });
         
         // 接收微信消息 (POST) 
-        this.router.post(path, (ctx: Context) => {
-            this.handleMessage(ctx);
+        this.router.post(path, (ctx: RouterContext) => {
+            void this.handleMessage(ctx);
         });
     }
 
@@ -80,7 +79,7 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
         this.logger.info(formatCompact( { op: "disconnect", bot: this.$config.name }));
     }
 
-    private handleVerification(ctx: Context): void {
+    private handleVerification(ctx: RouterContext): void {
         const { signature, timestamp, nonce, echostr } = ctx.query;
         
         if (this.verifySignature(
@@ -97,7 +96,7 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
         }
     }
 
-    private async handleMessage(ctx: Context): Promise<void> {
+    private async handleMessage(ctx: RouterContext): Promise<void> {
         try {
             const { signature, timestamp, nonce, msg_signature, encrypt_type } = ctx.query;
             
@@ -114,8 +113,7 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
             }
             
             // 获取原始XML数据
-            let xmlBody = (ctx as any).request.rawBody || (ctx as any).body;
-            let xmlString = xmlBody?.toString() || '';
+            let xmlString = typeof ctx.request.body === 'string' ? ctx.request.body : '';
 
             // AES 加密模式：先解密
             if (this.$config.encrypt && encrypt_type === 'aes' && this.$config.encodingAESKey) {

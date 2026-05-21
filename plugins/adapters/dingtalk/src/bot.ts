@@ -2,7 +2,7 @@
  * 钉钉 Bot 实现
  */
 import { formatCompact, Bot, Message, MessageSegment, segment, SendContent, SendOptions } from 'zhin.js';
-import type { Context } from "koa";
+import type { RouterContext } from "@zhin.js/http";
 import { createHmac } from "crypto";
 import type {
   DingTalkBotConfig,
@@ -68,17 +68,16 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
   }
 
   private setupWebhookRoute(): void {
-    this.router.post(this.$config.webhookPath, (ctx: Context) => {
-      this.handleWebhook(ctx);
+    this.router.post(this.$config.webhookPath, (ctx: RouterContext) => {
+      void this.handleWebhook(ctx);
     });
   }
 
-  private async handleWebhook(ctx: Context): Promise<void> {
+  private async handleWebhook(ctx: RouterContext): Promise<void> {
     try {
-      const body = (ctx.request as any).body;
-      const headers = ctx.request.headers;
-      const timestamp = headers["timestamp"] as string;
-      const sign = headers["sign"] as string;
+      const body = ctx.request.body;
+      const timestamp = ctx.get("timestamp");
+      const sign = ctx.get("sign");
       if (timestamp && sign) {
         if (!this.verifySignature(timestamp, sign)) {
           this.logger.warn(formatCompact( { op: "webhook", ok: false, error: "invalid signature" }));
@@ -87,7 +86,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
           return;
         }
       }
-      const event: DingTalkEvent = body;
+      const event = body as DingTalkEvent;
       if (event.msgtype) {
         await this.handleEvent(event);
       }

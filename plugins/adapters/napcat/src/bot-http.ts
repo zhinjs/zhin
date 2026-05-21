@@ -7,7 +7,7 @@ import { formatCompact } from 'zhin.js';
 import { NapCatBotBase } from './bot-base.js';
 import type { NapCatHttpConfig, ApiResponse } from './types.js';
 import type { NapCatAdapter } from './adapter.js';
-import type { Router } from '@zhin.js/http';
+import type { Router, RouterContext } from '@zhin.js/http';
 import * as crypto from 'crypto';
 
 export class NapCatHttpBot extends NapCatBotBase {
@@ -48,12 +48,12 @@ export class NapCatHttpBot extends NapCatBotBase {
 
   private mountWebhook(): void {
     const postPath = this.$config.post_path;
-    this.router.post(postPath, async (ctx: any) => {
+    this.router.post(postPath, async (ctx: RouterContext) => {
       const body = ctx.request.body;
       if (!body || typeof body !== 'object') { ctx.status = 400; ctx.body = { error: 'invalid body' }; return; }
 
       if (this.$config.access_token) {
-        const sig = ctx.headers['x-signature'];
+        const sig = ctx.get('x-signature');
         if (sig) {
           const expected = 'sha1=' + crypto.createHmac('sha1', this.$config.access_token).update(JSON.stringify(body)).digest('hex');
           if (sig !== expected) { ctx.status = 403; ctx.body = { error: 'signature mismatch' }; return; }
