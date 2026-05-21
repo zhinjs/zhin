@@ -42,9 +42,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Build console client (GitHub Pages base + SPA fallback)
+      - name: Build console client (SPA fallback; optional base/CNAME)
         env:
-          CONSOLE_PAGES_BASE: /${{ github.event.repository.name }}
+          # Empty = site root — use with custom domain (e.g. https://console.zhin.dev).
+          # For https://<user>.github.io/<repo>/ only, set repo variable CONSOLE_PAGES_BASE=/zhin
+          CONSOLE_PAGES_BASE: ${{ vars.CONSOLE_PAGES_BASE || '' }}
+          CONSOLE_PAGES_CNAME: ${{ vars.CONSOLE_PAGES_CNAME || 'console.zhin.dev' }}
         run: |
           pnpm --filter @zhin.js/console-app build
           node packages/console-app/scripts/prepare-github-pages.mjs

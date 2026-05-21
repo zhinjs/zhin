@@ -10,7 +10,7 @@ http:
   token: <与 .env HTTP_TOKEN 一致>
   corsOrigins:
     - "http://127.0.0.1:5173"
-    - "https://zhinjs.github.io"
+    - "https://console.zhin.dev"
 ```
 
 ## 2. 构建 Console 静态 UI

@@ -33,6 +33,13 @@ fs.writeFileSync(indexPath, html);
 fs.copyFileSync(indexPath, path.join(distDir, "404.html"));
 fs.writeFileSync(path.join(distDir, ".nojekyll"), "");
 
+const cname = (process.env.CONSOLE_PAGES_CNAME ?? "").trim();
+if (cname) {
+  fs.writeFileSync(path.join(distDir, "CNAME"), `${cname}\n`);
+}
+
 console.log(
-  `[prepare-github-pages] SPA fallback: 404.html, .nojekyll${pagesBase ? `, base=${pagesBase}` : ""}`,
+  `[prepare-github-pages] SPA fallback: 404.html, .nojekyll${pagesBase ? `, base=${pagesBase}` : ", base=/"}${
+    cname ? `, CNAME=${cname}` : ""
+  }`,
 );
