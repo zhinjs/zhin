@@ -1,5 +1,45 @@
 # test-bot
 
+## 0.1.96
+
+### Patch Changes
+
+- 775427e: fix: edge 支持
+- Updated dependencies [775427e]
+  - @zhin.js/plugin-group-daily-analysis@0.0.32
+  - @zhin.js/sensitive-filter@0.0.68
+  - @zhin.js/plugin-html-renderer@0.0.61
+  - @zhin.js/adapter-wechat-mp@0.1.71
+  - @zhin.js/adapter-dingtalk@1.0.71
+  - @zhin.js/adapter-onebot11@1.0.88
+  - @zhin.js/adapter-onebot12@0.0.33
+  - @zhin.js/adapter-telegram@2.0.2
+  - @zhin.js/adapter-discord@2.0.2
+  - @zhin.js/adapter-sandbox@3.0.2
+  - @zhin.js/console@3.0.2
+  - @zhin.js/adapter-github@0.1.54
+  - @zhin.js/adapter-napcat@0.1.11
+  - @zhin.js/adapter-satori@0.0.33
+  - @zhin.js/adapter-email@0.1.70
+  - @zhin.js/adapter-milky@0.0.33
+  - @zhin.js/adapter-slack@1.0.68
+  - @zhin.js/plugin-repeater@0.0.18
+  - @zhin.js/adapter-icqq@3.0.2
+  - @zhin.js/adapter-kook@2.0.2
+  - @zhin.js/adapter-lark@1.0.87
+  - @zhin.js/http@1.0.76
+  - @zhin.js/plugin-checkin@0.0.18
+  - @zhin.js/mcp@1.0.65
+  - @zhin.js/adapter-qq@2.0.2
+  - @zhin.js/plugin-music@2.0.2
+  - @zhin.js/plugin-stats@0.0.18
+  - @zhin.js/plugin-teach@0.0.18
+  - @zhin.js/plugin-60s@0.0.21
+  - @zhin.js/plugin-rss@0.0.19
+  - @zhin.js/client@1.1.2
+  - zhin.js@1.0.83
+  - @zhin.js/cli@1.0.79
+
 ## 0.1.95
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # @zhin.js/cli
 
+## 1.0.79
+
+### Patch Changes
+
+- 775427e: fix: edge 支持
+- Updated dependencies [775427e]
+  - zhin.js@1.0.83
+  - @zhin.js/logger@0.1.65
+
 ## 1.0.78
 
 ### Patch Changes

@@ -1,5 +1,17 @@
 # @zhin.js/core
 
+## 1.1.25
+
+### Patch Changes
+
+- 775427e: fix: edge 支持
+- Updated dependencies [775427e]
+  - @zhin.js/kernel@0.0.42
+  - @zhin.js/database@1.0.68
+  - @zhin.js/logger@0.1.65
+  - @zhin.js/schema@1.0.65
+  - @zhin.js/ai@1.1.23
+
 ## 1.1.24
 
 ### Patch Changes

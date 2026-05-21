@@ -1,5 +1,14 @@
 # @zhin.js/plugin-group-daily-analysis
 
+## 0.0.32
+
+### Patch Changes
+
+- 775427e: fix: edge 支持
+- Updated dependencies [775427e]
+  - @zhin.js/plugin-html-renderer@0.0.61
+  - zhin.js@1.0.83
+
 ## 0.0.31
 
 ### Patch Changes

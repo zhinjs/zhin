@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.42
+
+### Patch Changes
+
+- 775427e: fix: edge 支持
+
 ## 1.0.41
 
 ### Patch Changes
