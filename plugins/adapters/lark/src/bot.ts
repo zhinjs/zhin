@@ -1,7 +1,7 @@
 /**
  * 飞书/Lark Bot 实现
  */
-import type { RouterContext } from "@zhin.js/http";
+import { registerFetchRoute, type Router, type RouterContext } from "@zhin.js/http/router";
 import axios, { type AxiosInstance } from "axios";
 import { createHash } from "crypto";
 import { formatCompact, Bot, Message, MessageSegment, segment, SendContent, SendOptions } from 'zhin.js';
@@ -54,7 +54,7 @@ export class LarkBot implements Bot<LarkBotConfig, LarkMessage> {
     }
 
     private setupWebhookRoute(): void {
-        this.router.post(this.$config.webhookPath, (ctx: RouterContext) => {
+        registerFetchRoute(this.router, "POST", this.$config.webhookPath, (ctx: RouterContext) => {
             void this.handleWebhook(ctx);
         });
     }

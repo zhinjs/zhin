@@ -3,11 +3,13 @@
   "specifiers": {
     "jsr:@std/assert@*": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.13",
-    "npm:@zhin.js/agent@*": "0.1.21_zhin.js@1.0.81",
-    "npm:@zhin.js/agent@0.1.21": "0.1.21_zhin.js@1.0.81",
-    "npm:@zhin.js/core@*": "1.1.23_zhin.js@1.0.81",
-    "npm:@zhin.js/core@1.1.23": "1.1.23_zhin.js@1.0.81",
-    "npm:zhin.js@1.0.81": "1.0.81"
+    "npm:@zhin.js/agent@*": "0.1.21_pg@8.16.3_zhin.js@1.0.81__pg@8.16.3",
+    "npm:@zhin.js/agent@0.1.21": "0.1.21_pg@8.16.3_zhin.js@1.0.81__pg@8.16.3",
+    "npm:@zhin.js/core@*": "1.1.23_pg@8.16.3_zhin.js@1.0.81__pg@8.16.3",
+    "npm:@zhin.js/core@1.1.23": "1.1.23_pg@8.16.3_zhin.js@1.0.81__pg@8.16.3",
+    "npm:chalk@5.4.1": "5.4.1",
+    "npm:pg@8.16.3": "8.16.3",
+    "npm:zhin.js@1.0.81": "1.0.81_pg@8.16.3"
   },
   "jsr": {
     "@std/assert@1.0.19": {
@@ -21,25 +23,31 @@
     }
   },
   "npm": {
-    "@zhin.js/agent@0.1.21_zhin.js@1.0.81": {
+    "@zhin.js/agent@0.1.21_pg@8.16.3_zhin.js@1.0.81__pg@8.16.3": {
       "integrity": "sha512-Nz44UfnKkNXIpP8benQ6X55gRaX6j3fOCto1NlphxCZZ8jKPjW6Ze8O/FtfBMyJSWZfyalMKq+UWP6BOT+r4Sg==",
       "dependencies": [
-        "@zhin.js/ai",
+        "@zhin.js/ai@1.1.21_pg@8.16.3",
         "@zhin.js/core",
         "he",
         "js-yaml"
       ]
     },
-    "@zhin.js/ai@1.1.21_zhin.js@1.0.81": {
+    "@zhin.js/ai@1.1.21_pg@8.16.3": {
       "integrity": "sha512-LUY1Kgowbbt7lBFfdyPk1w4Yo+ELg84RDUfveIsw9U1Mcq7j4ul2nsp2CtCUwP9W1AG7IE4+jFnvOJ6Qq9dqtg==",
       "dependencies": [
         "@zhin.js/logger"
       ]
     },
-    "@zhin.js/core@1.1.23_zhin.js@1.0.81": {
+    "@zhin.js/ai@1.1.21_zhin.js@1.0.81__pg@8.16.3": {
+      "integrity": "sha512-LUY1Kgowbbt7lBFfdyPk1w4Yo+ELg84RDUfveIsw9U1Mcq7j4ul2nsp2CtCUwP9W1AG7IE4+jFnvOJ6Qq9dqtg==",
+      "dependencies": [
+        "@zhin.js/logger"
+      ]
+    },
+    "@zhin.js/core@1.1.23_pg@8.16.3_zhin.js@1.0.81__pg@8.16.3": {
       "integrity": "sha512-g6TVz/TCJKhetA/p6PrsftVYdtSmB2h+Wp9oyBDYIfzq4INhmJgDTpnTQhdeod77nQYfxNMSGPuLnpCx7LzM5Q==",
       "dependencies": [
-        "@zhin.js/ai",
+        "@zhin.js/ai@1.1.21_pg@8.16.3",
         "@zhin.js/database",
         "@zhin.js/kernel",
         "@zhin.js/logger",
@@ -50,13 +58,17 @@
         "yaml"
       ]
     },
-    "@zhin.js/database@1.0.66_zhin.js@1.0.81": {
+    "@zhin.js/database@1.0.66_pg@8.16.3_zhin.js@1.0.81__pg@8.16.3": {
       "integrity": "sha512-Gouq3/0fBasY7CJtqYMNVfJ0B9Gy8+5GMrz7wh4azZdg0Dis3LYnaBpdVr2pVAdxJfSBJmH2lVrm2BQljw7dGw==",
       "dependencies": [
+        "pg",
         "zhin.js"
+      ],
+      "optionalPeers": [
+        "pg"
       ]
     },
-    "@zhin.js/kernel@0.0.40_zhin.js@1.0.81": {
+    "@zhin.js/kernel@0.0.40_zhin.js@1.0.81__pg@8.16.3": {
       "integrity": "sha512-a7lxteUHZqMUPWMLhPMQ2gODbuTcbxQKoMKgRw1q6NewP9SyabnXZWh/pDKQtivlyFJNQ6SbFpajL/Plt30Giw==",
       "dependencies": [
         "@zhin.js/logger",
@@ -66,14 +78,14 @@
         "yaml"
       ]
     },
-    "@zhin.js/logger@0.1.63_zhin.js@1.0.81": {
+    "@zhin.js/logger@0.1.63_zhin.js@1.0.81__pg@8.16.3_pg@8.16.3": {
       "integrity": "sha512-eUavPO7gGvfmLr7wuewRp/X/CbJ1aB80L/fznrvH0Kan0a4vcjmJ0mL1LRTWy89Wli4BF0jr2UCS59ut3JeCJg==",
       "dependencies": [
-        "chalk",
+        "chalk@5.6.2",
         "zhin.js"
       ]
     },
-    "@zhin.js/schema@1.0.63_zhin.js@1.0.81": {
+    "@zhin.js/schema@1.0.63_zhin.js@1.0.81__pg@8.16.3": {
       "integrity": "sha512-eEyCd+NQIsJyfmlr64ZB7wx9wpb6HxfbzMluG2h7bmpi3Oo887/GuuoFH28BlDgB9CLqqxOo96dlscsfvTSZqg==",
       "dependencies": [
         "zhin.js"
@@ -81,6 +93,9 @@
     },
     "argparse@2.0.1": {
       "integrity": "sha512-8+9WqebbFzpX9OR+Wa6O29asIogeRMzcGtAINdpMHHyAg10f05aSFVBbcEqGf/PXw1EjAZ+q2/bEBg3DvurK3Q=="
+    },
+    "chalk@5.4.1": {
+      "integrity": "sha512-zgVZuo2WcZgfUEmsn6eO3kINexW8RAE4maiQ8QNs8CtpPCSyMiYsULR3HQYkm3w8FIA3SberyMJMSldGsW+U3w=="
     },
     "chalk@5.6.2": {
       "integrity": "sha512-7NzBL0rN6fMUW+f7A6Io4h40qQlG+xGmtMxfbnH/K7TAtt8JQWVQK+6g0UXKMeVJoyV5EkkNsErQ8pVD3bLHbA=="
@@ -102,21 +117,89 @@
       ],
       "bin": true
     },
+    "pg-cloudflare@1.4.0": {
+      "integrity": "sha512-Vo7z/6rrQYxpNRylp4Tlob2elzbh+N/MOQbxFVWCxS7oEx6jF53GTJFxK2WWpKuBRkmiin4Mt+xofFDjx09R0A=="
+    },
+    "pg-connection-string@2.13.0": {
+      "integrity": "sha512-EMnU9E2fSULdsbErBbMaXJvFeD9B4+nPcM3f+4lsiCR0BHLPrLVjv3DbyM2hgQQviKJaTWIRRTjKjWlHg3p2ig=="
+    },
+    "pg-int8@1.0.1": {
+      "integrity": "sha512-WCtabS6t3c8SkpDBUlb1kjOs7l66xsGdKpIPZsg4wR+B3+u9UAum2odSsF9tnvxg80h4ZxLWMy4pRjOsFIqQpw=="
+    },
+    "pg-pool@3.14.0_pg@8.16.3": {
+      "integrity": "sha512-gKtPkFdQPU3DksooVLi9LsjZxrsBUZIpa+7aVx+LV5pNh0KzP4Zleud2po+ConrxbuXGBJ6Hfer6hdgpIBpBaw==",
+      "dependencies": [
+        "pg"
+      ]
+    },
+    "pg-protocol@1.14.0": {
+      "integrity": "sha512-n5taZ1kO3s9ngDTVxsEznOqCyToTgz0FLuPq0B33COy5pPpuWJpY3/2oRBVETuOgzdqRXfWpM9HIhp2LBBT1BA=="
+    },
+    "pg-types@2.2.0": {
+      "integrity": "sha512-qTAAlrEsl8s4OiEQY69wDvcMIdQN6wdz5ojQiOy6YRMuynxenON0O5oCpJI6lshc6scgAY8qvJ2On/p+CXY0GA==",
+      "dependencies": [
+        "pg-int8",
+        "postgres-array",
+        "postgres-bytea",
+        "postgres-date",
+        "postgres-interval"
+      ]
+    },
+    "pg@8.16.3": {
+      "integrity": "sha512-enxc1h0jA/aq5oSDMvqyW3q89ra6XIIDZgCX9vkMrnz5DFTw/Ny3Li2lFQ+pt3L6MCgm/5o2o8HW9hiJji+xvw==",
+      "dependencies": [
+        "pg-connection-string",
+        "pg-pool",
+        "pg-protocol",
+        "pg-types",
+        "pgpass"
+      ],
+      "optionalDependencies": [
+        "pg-cloudflare"
+      ]
+    },
+    "pgpass@1.0.5": {
+      "integrity": "sha512-FdW9r/jQZhSeohs1Z3sI1yxFQNFvMcnmfuj4WBMUTxOrAyLMaTcE1aAMBiTlbMNaXvBCQuVi0R7hd8udDSP7ug==",
+      "dependencies": [
+        "split2"
+      ]
+    },
+    "postgres-array@2.0.0": {
+      "integrity": "sha512-VpZrUqU5A69eQyW2c5CA1jtLecCsN2U/bD6VilrFDWq5+5UIEVO7nazS3TEcHf1zuPYO/sqGvUvW62g86RXZuA=="
+    },
+    "postgres-bytea@1.0.1": {
+      "integrity": "sha512-5+5HqXnsZPE65IJZSMkZtURARZelel2oXUEO8rH83VS/hxH5vv1uHquPg5wZs8yMAfdv971IU+kcPUczi7NVBQ=="
+    },
+    "postgres-date@1.0.7": {
+      "integrity": "sha512-suDmjLVQg78nMK2UZ454hAG+OAW+HQPZ6n++TNDUX+L0+uUlLywnoxJKDou51Zm+zTCjrCl0Nq6J9C5hP9vK/Q=="
+    },
+    "postgres-interval@1.2.0": {
+      "integrity": "sha512-9ZhXKM/rw350N1ovuWHbGxnGh/SNJ4cnxHiM0rxE4VN41wsg8P8zWn9hv/buK00RP4WvlOyr/RBDiptyxVbkZQ==",
+      "dependencies": [
+        "xtend"
+      ]
+    },
     "segment-matcher@1.0.5": {
       "integrity": "sha512-OJh+xF/Y6lFOmaP3MuUdvOEgv//zePa/GYut25Wn/Ei1k2S8g9YQyLIJl8Z8gv1ti7MS2+vbj1WNz79Iu/j+DA=="
     },
     "smol-toml@1.6.1": {
       "integrity": "sha512-dWUG8F5sIIARXih1DTaQAX4SsiTXhInKf1buxdY9DIg4ZYPZK5nGM1VRIYmEbDbsHt7USo99xSLFu5Q1IqTmsg=="
     },
+    "split2@4.2.0": {
+      "integrity": "sha512-UcjcJOWknrNkF6PLX83qcHM6KHgVKNkV62Y8a5uYDVv9ydGQVwAHMKqHdJje1VTWpljG0WYpCDhrCdAOYH4TWg=="
+    },
+    "xtend@4.0.2": {
+      "integrity": "sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ=="
+    },
     "yaml@2.9.0": {
       "integrity": "sha512-2AvhNX3mb8zd6Zy7INTtSpl1F15HW6Wnqj0srWlkKLcpYl/gMIMJiyuGq2KeI2YFxUPjdlB+3Lc10seMLtL4cA==",
       "bin": true
     },
-    "zhin.js@1.0.81": {
+    "zhin.js@1.0.81_pg@8.16.3": {
       "integrity": "sha512-Mrc2hzW/lgmyUdnWFajPcnThQJLKzXAg9C8NdeyVGqxYBY5SpauMXi8NpKK6+3Qw/APBY4DGUs0urPzDZNEviQ==",
       "dependencies": [
         "@zhin.js/agent",
-        "@zhin.js/ai",
+        "@zhin.js/ai@1.1.21_zhin.js@1.0.81__pg@8.16.3",
         "@zhin.js/core",
         "@zhin.js/kernel",
         "@zhin.js/logger",
@@ -128,6 +211,8 @@
   },
   "workspace": {
     "dependencies": [
+      "npm:chalk@5.4.1",
+      "npm:pg@8.16.3",
       "npm:zhin.js@1.0.81"
     ]
   }

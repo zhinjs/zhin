@@ -4,8 +4,26 @@ import { WebSocketServer as WSS } from "ws";
 import { parse } from "node:url";
 import type { RouteHandler, RouteTable } from "./route-table.js";
 import type { RouterContext } from "./router-context.js";
+import { isRouteMeta, type RouteMeta } from "./route-meta.js";
 
 type Path = string | RegExp;
+
+function parseRouteArgs(
+  path: Path,
+  args: (RouteHandler | RouteMeta)[],
+): { pattern: string; handler: RouteHandler; meta?: RouteMeta } {
+  const fns = args.filter((a): a is RouteHandler => typeof a === "function");
+  const handler = fns[fns.length - 1];
+  if (!handler) {
+    throw new TypeError(`Router route ${String(path)} requires a handler function`);
+  }
+  const metaCandidate = args.find((a) => a !== handler && isRouteMeta(a));
+  return {
+    pattern: path as string,
+    handler,
+    meta: metaCandidate && isRouteMeta(metaCandidate) ? metaCandidate : undefined,
+  };
+}
 
 const remove = <T>(arr: T[], item: T): boolean => {
   const i = arr.indexOf(item);
@@ -18,6 +36,9 @@ const remove = <T>(arr: T[], item: T): boolean => {
 
 /**
  * Drop-in replacement for @zhin.js/http Router: registers routes on RouteTable + optional ws.
+ *
+ * @deprecated Prefer {@link registerFetchRoute} on a {@link RouteTable} from `@zhin.js/http-host`.
+ * Scheduled for removal in phase 3; see ADR-0009.
  */
 export class Router {
   wsStack: WebSocketServer[] = [];
@@ -30,39 +51,39 @@ export class Router {
     public prefix = "",
   ) {}
 
-  register(path: Path, ...handlers: RouteHandler[]): void {
-    const pattern = this.prefix + (path as string);
+  register(path: Path, ...handlers: (RouteHandler | RouteMeta)[]): void {
+    const { pattern, handler, meta } = parseRouteArgs(path, handlers);
+    const full = this.prefix + pattern;
     this.whiteList.push(path);
-    const handler = handlers[handlers.length - 1];
-    this.table.register("GET", pattern, handler);
+    this.table.register("GET", full, handler, meta);
   }
 
-  get(path: Path, ...handlers: RouteHandler[]): void {
-    const pattern = this.prefix + (path as string);
+  get(path: Path, ...handlers: (RouteHandler | RouteMeta)[]): void {
+    const { pattern, handler, meta } = parseRouteArgs(path, handlers);
+    const full = this.prefix + pattern;
     this.whiteList.push(path);
-    const handler = handlers[handlers.length - 1];
-    this.table.get(pattern, handler);
+    this.table.get(full, handler, meta);
   }
 
-  post(path: Path, ...handlers: RouteHandler[]): void {
-    const pattern = this.prefix + (path as string);
+  post(path: Path, ...handlers: (RouteHandler | RouteMeta)[]): void {
+    const { pattern, handler, meta } = parseRouteArgs(path, handlers);
+    const full = this.prefix + pattern;
     this.whiteList.push(path);
-    const handler = handlers[handlers.length - 1];
-    this.table.post(pattern, handler);
+    this.table.post(full, handler, meta);
   }
 
-  put(path: Path, ...handlers: RouteHandler[]): void {
-    const pattern = this.prefix + (path as string);
+  put(path: Path, ...handlers: (RouteHandler | RouteMeta)[]): void {
+    const { pattern, handler, meta } = parseRouteArgs(path, handlers);
+    const full = this.prefix + pattern;
     this.whiteList.push(path);
-    const handler = handlers[handlers.length - 1];
-    this.table.put(pattern, handler);
+    this.table.put(full, handler, meta);
   }
 
-  delete(path: Path, ...handlers: RouteHandler[]): void {
-    const pattern = this.prefix + (path as string);
+  delete(path: Path, ...handlers: (RouteHandler | RouteMeta)[]): void {
+    const { pattern, handler, meta } = parseRouteArgs(path, handlers);
+    const full = this.prefix + pattern;
     this.whiteList.push(path);
-    const handler = handlers[handlers.length - 1];
-    this.table.delete(pattern, handler);
+    this.table.delete(full, handler, meta);
   }
 
   /** Legacy middleware: only supports (ctx, next) with sync route continuation. */
@@ -77,8 +98,8 @@ export class Router {
     }
   }
 
-  routes(): { path: string }[] {
-    return [];
+  routes(): { path: string; method: string }[] {
+    return this.table.listRoutes().map((r) => ({ path: r.pattern, method: r.method }));
   }
 
   allowedMethods(): unknown {

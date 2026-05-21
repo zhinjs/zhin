@@ -22,7 +22,7 @@ import {
 } from "discord.js";
 import nacl from "tweetnacl";
 import { Bot, Message, SendOptions, SendContent, MessageSegment, segment } from "zhin.js";
-import type { RouterContext } from "@zhin.js/http";
+import { registerFetchRoute, type Router, type RouterContext } from "@zhin.js/http/router";
 import type { DiscordInteractionsConfig } from "./types.js";
 import type { DiscordAdapter } from "./adapter.js";
 
@@ -30,7 +30,7 @@ export class DiscordInteractionsBot
   extends Client
   implements Bot<DiscordInteractionsConfig, any> {
   $connected: boolean;
-  private router: import("@zhin.js/http").Router;
+  private router: Router;
   private slashCommandHandlers: Map<
     string,
     (interaction: any) => Promise<void>
@@ -44,7 +44,7 @@ export class DiscordInteractionsBot
     return this.$config.name;
   }
 
-  constructor(public adapter: DiscordAdapter, router: import("@zhin.js/http").Router, public $config: DiscordInteractionsConfig) {
+  constructor(public adapter: DiscordAdapter, router: Router, public $config: DiscordInteractionsConfig) {
     const intents = $config.intents || [
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMessages,
@@ -61,7 +61,7 @@ export class DiscordInteractionsBot
 
   private setupInteractionsEndpoint(): void {
     // 设置路由处理 Discord Interactions
-    this.router.post(this.$config.interactionsPath, (ctx: RouterContext) => {
+    registerFetchRoute(this.router, "POST", this.$config.interactionsPath, (ctx: RouterContext) => {
       void this.handleInteraction(ctx);
     });
   }

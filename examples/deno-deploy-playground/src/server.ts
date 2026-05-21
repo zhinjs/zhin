@@ -1,31 +1,51 @@
-import { getPlaygroundAdapter, zhinReady } from "./runtime/bootstrap.ts";
+import {
+  getPlaygroundConfigPath,
+  getPlaygroundEdgeConfig,
+  getPlaygroundHttpConfig,
+  getPlaygroundAdapter,
+  zhinReady,
+} from "./runtime/bootstrap.ts";
+import { createEdgeHttpApp } from "./edge-http.ts";
 
 const INDEX_URL = new URL("../static/index.html", import.meta.url);
+
+let edgeApp: ReturnType<typeof createEdgeHttpApp> | null = null;
+
+function getEdgeApp() {
+  if (!edgeApp) {
+    const http = getPlaygroundHttpConfig();
+    edgeApp = createEdgeHttpApp({ ...http, edge: getPlaygroundEdgeConfig() });
+  }
+  return edgeApp;
+}
 
 export function handleRequest(req: Request): Response | Promise<Response> {
   const url = new URL(req.url);
 
-  if (req.method === "GET" && url.pathname === "/health") {
-    return Response.json({ ok: true, runtime: "zhin.js" });
-  }
-
   if (req.method === "GET" && url.pathname === "/api/info") {
+    const http = getPlaygroundHttpConfig();
+    const apiBase = `${url.origin}${http.base}`;
     return Response.json({
       name: "Zhin Edge Playground",
+      config: getPlaygroundConfigPath(),
       stack: ["zhin.js", "@zhin.js/core", "@zhin.js/agent", "MessageDispatcher", "MessageCommand"],
-      websocket: "/ws",
-      consoleApi: "Use Remote Console (GitHub Pages) with API Base pointing at Zhin Host; Edge REST/SSE subset planned.",
+      websocket: `${url.origin}/ws`,
+      apiBase: url.origin,
+      openapi: `${url.origin}/pub/openapi.json`,
+      health: `${url.origin}/pub/health`,
+      consoleApi: `${apiBase}/console/request`,
+      events: `${apiBase}/events`,
+      queueIncoming: `${apiBase}/queue/incoming`,
       docs: "https://docs.deno.com/deploy/getting_started/",
     });
   }
 
-  if (url.pathname === "/api/events" || url.pathname === "/api/console/request") {
-    return Response.json(
-      {
-        error: "Console REST/SSE runs on Zhin Host; point Remote Console API Base to your Host (see docs/console-remote.md).",
-      },
-      { status: 501 },
-    );
+  if (
+    url.pathname.startsWith("/api/") ||
+    url.pathname.startsWith("/pub/") ||
+    url.pathname === "/entries"
+  ) {
+    return getEdgeApp().fetch(req);
   }
 
   if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {

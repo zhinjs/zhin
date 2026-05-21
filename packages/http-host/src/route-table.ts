@@ -1,7 +1,10 @@
 import type { RouterContext } from "./router-context.js";
 import { contextToResponse, createRouterContext } from "./router-context.js";
+import type { RouteMeta } from "./route-meta.js";
 
 export type RouteHandler = (ctx: RouterContext) => void | Promise<void>;
+
+export type { RouteMeta } from "./route-meta.js";
 
 type RouteEntry = {
   method: string;
@@ -9,6 +12,13 @@ type RouteEntry = {
   regexp: RegExp;
   paramNames: string[];
   handler: RouteHandler;
+  meta?: RouteMeta;
+};
+
+export type ListedRoute = {
+  method: string;
+  pattern: string;
+  meta?: RouteMeta;
 };
 
 export type Middleware = (
@@ -18,6 +28,20 @@ export type Middleware = (
 
 function pathToRegexp(pattern: string): { regexp: RegExp; paramNames: string[] } {
   const paramNames: string[] = [];
+  const plus = pattern.match(/:([A-Za-z0-9_]+)\+$/);
+  if (plus) {
+    paramNames.push(plus[1]);
+    const prefix = pattern.slice(0, pattern.length - plus[0].length).replace(/\/$/, "");
+    const prefixParts = prefix.split("/").filter(Boolean).map((seg) => {
+      if (seg.startsWith(":")) {
+        paramNames.splice(paramNames.length - 1, 0, seg.slice(1));
+        return "([^/]+)";
+      }
+      return seg.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    });
+    const base = prefixParts.length ? `/${prefixParts.join("/")}` : "";
+    return { regexp: new RegExp(`^${base}/(.+)$`), paramNames };
+  }
   const parts = pattern.split("/").map((seg) => {
     if (seg.startsWith(":")) {
       paramNames.push(seg.slice(1));
@@ -37,7 +61,7 @@ export class RouteTable {
     this.globalMiddleware.push(fn);
   }
 
-  register(method: string, pattern: string, handler: RouteHandler): void {
+  register(method: string, pattern: string, handler: RouteHandler, meta?: RouteMeta): void {
     this.whiteList.push(pattern);
     const { regexp, paramNames } = pathToRegexp(pattern);
     this.routes.push({
@@ -46,23 +70,33 @@ export class RouteTable {
       regexp,
       paramNames,
       handler,
+      meta,
     });
   }
 
-  get(pattern: string, handler: RouteHandler): void {
-    this.register("GET", pattern, handler);
+  /** Snapshot of registered Fetch routes (for OpenAPI / introspection). */
+  listRoutes(): ListedRoute[] {
+    return this.routes.map((r) => ({
+      method: r.method,
+      pattern: r.pattern,
+      meta: r.meta,
+    }));
   }
 
-  post(pattern: string, handler: RouteHandler): void {
-    this.register("POST", pattern, handler);
+  get(pattern: string, handler: RouteHandler, meta?: RouteMeta): void {
+    this.register("GET", pattern, handler, meta);
   }
 
-  put(pattern: string, handler: RouteHandler): void {
-    this.register("PUT", pattern, handler);
+  post(pattern: string, handler: RouteHandler, meta?: RouteMeta): void {
+    this.register("POST", pattern, handler, meta);
   }
 
-  delete(pattern: string, handler: RouteHandler): void {
-    this.register("DELETE", pattern, handler);
+  put(pattern: string, handler: RouteHandler, meta?: RouteMeta): void {
+    this.register("PUT", pattern, handler, meta);
+  }
+
+  delete(pattern: string, handler: RouteHandler, meta?: RouteMeta): void {
+    this.register("DELETE", pattern, handler, meta);
   }
 
   private match(method: string, pathname: string): { entry: RouteEntry; params: Record<string, string> } | null {

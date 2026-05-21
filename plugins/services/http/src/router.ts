@@ -1,1 +1,6 @@
-export { Router, type RouterContext } from "@zhin.js/http-host";
+export {
+  Router,
+  registerFetchRoute,
+  type RouterContext,
+  type RouteTable,
+} from "@zhin.js/http-host";

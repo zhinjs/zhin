@@ -7,7 +7,7 @@ import { createHash, createDecipheriv, createCipheriv, randomBytes } from "crypt
 import { EventEmitter } from "events";
 import FormData from "form-data";
 import { formatCompact, Bot, Message, MessageSegment, segment, SendContent, SendOptions } from 'zhin.js';
-import type { Router, RouterContext } from "@zhin.js/http";
+import { registerFetchRoute, type Router, type RouterContext } from "@zhin.js/http/router";
 import type { WeChatMPConfig, WeChatMessage, WeChatAPIResponse, TokenResponse } from "./types.js";
 import type { WeChatMPAdapter } from "./adapter.js";
 
@@ -40,12 +40,12 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
         const path = this.$config.path;
         
         // 微信服务器验证 (GET)
-        this.router.get(path, (ctx: RouterContext) => {
+        registerFetchRoute(this.router, "GET", path, (ctx: RouterContext) => {
             this.handleVerification(ctx);
         });
         
         // 接收微信消息 (POST) 
-        this.router.post(path, (ctx: RouterContext) => {
+        registerFetchRoute(this.router, "POST", path, (ctx: RouterContext) => {
             void this.handleMessage(ctx);
         });
     }

@@ -1,2 +1,4 @@
 .deno/
 deploy.json
+data/*.db
+data/*.db-*

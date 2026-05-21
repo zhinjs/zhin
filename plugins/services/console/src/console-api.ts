@@ -1,39 +1,43 @@
-import type { Router } from "@zhin.js/http";
-import type { RouterContext } from "@zhin.js/http-host";
-import { handleWebSocketMessage, type WebServerCompat } from "./websocket.js";
+import type { RouteTable, RouterContext } from "@zhin.js/http-host/edge";
 import { subscribeSse } from "./sse-hub.js";
-import type WebSocket from "ws";
+import type { ConsoleApiOptions } from "./console-api-types.js";
+import {
+  buildConsoleRpcContext,
+  dispatchConsoleRpc,
+  pickRpcReply,
+} from "./rpc/dispatch.js";
+import type { WebServerCompat } from "./websocket.js";
 
-export function registerConsoleApi(
-  router: Router,
+export type { ConsoleApiOptions } from "./console-api-types.js";
+
+export function registerConsoleRoutes(
+  table: RouteTable,
   base: string,
   getWebServer: () => WebServerCompat,
+  options: ConsoleApiOptions = {},
 ): void {
+  const parity = options.parity ?? "host";
   const apiBase = `${base}/console`;
 
-  router.post(`${apiBase}/request`, async (ctx: RouterContext) => {
+  table.post(`${apiBase}/request`, async (ctx: RouterContext) => {
     const message = (ctx.request.body ?? {}) as Record<string, unknown>;
-    const payloads: Record<string, unknown>[] = [];
-    const fakeWs = {
-      send(data: string) {
-        try {
-          payloads.push(JSON.parse(data) as Record<string, unknown>);
-        } catch {
-          payloads.push({ error: "invalid json response" });
-        }
-      },
-      readyState: 1,
-    } as unknown as WebSocket;
 
     try {
-      await handleWebSocketMessage(fakeWs, message, getWebServer());
-      const rid = message.requestId as number | undefined;
-      const match =
-        (rid != null && payloads.find((p) => p.requestId === rid)) ??
-        payloads[payloads.length - 1];
+      const payloads = await dispatchConsoleRpc(message, getWebServer, options);
+      const match = pickRpcReply(message, payloads);
       if (!match) {
         ctx.status = 500;
         ctx.body = { success: false, error: "No response" };
+        return;
+      }
+      if (match.error && match.code === "EDGE_UNSUPPORTED") {
+        ctx.status = 400;
+        ctx.body = {
+          success: false,
+          error: match.error,
+          code: "EDGE_UNSUPPORTED",
+          requestId: match.requestId,
+        };
         return;
       }
       if (match.error) {
@@ -48,13 +52,17 @@ export function registerConsoleApi(
     }
   });
 
-  router.get(`${base}/events`, async (ctx: RouterContext) => {
+  table.get(`${base}/events`, async (ctx: RouterContext) => {
     const webServer = getWebServer();
     const entries = Object.values(webServer.entries ?? {});
-    const { stream } = subscribeSse([
-      { type: "sync", data: { key: "entries", value: entries } },
-      { type: "init-data", timestamp: Date.now() },
-    ]);
+    const lastEventId = ctx.query["last-event-id"] ?? ctx.query.lastEventId;
+    const { stream } = subscribeSse(
+      [
+        { type: "sync", data: { key: "entries", value: entries } },
+        { type: "init-data", timestamp: Date.now() },
+      ],
+      lastEventId,
+    );
     ctx.status = 200;
     ctx.set("Content-Type", "text/event-stream; charset=utf-8");
     ctx.set("Cache-Control", "no-cache, no-transform");
@@ -62,4 +70,13 @@ export function registerConsoleApi(
     ctx.set("X-Accel-Buffering", "no");
     ctx.body = stream;
   });
+}
+
+export function registerConsoleApi(
+  router: { table: RouteTable },
+  base: string,
+  getWebServer: () => WebServerCompat,
+  options?: ConsoleApiOptions,
+): void {
+  registerConsoleRoutes(router.table, base, getWebServer, options);
 }

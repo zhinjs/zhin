@@ -3,7 +3,7 @@
  */
 import { EventEmitter } from 'events';
 import { formatCompact, Bot, Message, segment, SendOptions } from 'zhin.js';
-import type { Router, RouterContext } from '@zhin.js/http';
+import { registerFetchRoute, type Router, type RouterContext } from '@zhin.js/http/router';
 import { callApi } from './api.js';
 import type { MilkyWebhookConfig, MilkyEvent } from './types.js';
 import type { MilkyAdapter } from './adapter.js';
@@ -43,7 +43,7 @@ export class MilkyWebhookBot extends EventEmitter implements Bot<MilkyWebhookCon
   async $connect(): Promise<void> {
     const path = this.$config.path.startsWith('/') ? this.$config.path : `/${this.$config.path}`;
     const token = this.$config.access_token;
-    this.router.post(path, async (ctx: RouterContext) => {
+    registerFetchRoute(this.router, 'POST', path, async (ctx: RouterContext) => {
       const received = getAccessTokenFromRequest(ctx);
       if (token && received !== token) {
         ctx.status = 401;

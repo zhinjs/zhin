@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/http",
-  "version": "1.0.74",
+  "version": "1.0.76",
   "description": "HTTP server service for Zhin.js with routing and WebSocket support",
   "type": "module",
   "main": "./lib/index.js",
@@ -10,6 +10,31 @@
       "types": "./lib/index.d.ts",
       "development": "./src/index.ts",
       "import": "./lib/index.js"
+    },
+    "./router": {
+      "types": "./lib/router.d.ts",
+      "development": "./src/router.ts",
+      "import": "./lib/router.js"
+    },
+    "./host-rest-api": {
+      "types": "./lib/host-rest-api.d.ts",
+      "development": "./src/host-rest-api.ts",
+      "import": "./lib/host-rest-api.js"
+    },
+    "./marketplace-rest-api": {
+      "types": "./lib/marketplace-rest-api.d.ts",
+      "development": "./src/marketplace-rest-api.ts",
+      "import": "./lib/marketplace-rest-api.js"
+    },
+    "./logs-rest-api": {
+      "types": "./lib/logs-rest-api.d.ts",
+      "development": "./src/logs-rest-api.ts",
+      "import": "./lib/logs-rest-api.js"
+    },
+    "./adapter-api-stubs": {
+      "types": "./lib/adapter-api-stubs.d.ts",
+      "development": "./src/adapter-api-stubs.ts",
+      "import": "./lib/adapter-api-stubs.js"
     }
   },
   "keywords": [
@@ -41,7 +66,9 @@
   },
   "dependencies": {
     "@zhin.js/http-host": "workspace:*",
+    "@zhin.js/queue-runtime": "workspace:*",
     "@zhin.js/schema": "workspace:*",
+    "@zhin.js/storage-port": "workspace:*",
     "koa": "^3.1.1",
     "ws": "^8.20.1",
     "koa-body": "latest"

@@ -1,11 +1,20 @@
-import { zhinReady } from "./src/runtime/bootstrap.ts";
+import { zhinReady, getPlaygroundHttpConfig } from "./src/runtime/bootstrap.ts";
+import { logEdgeHttpListen } from "./src/edge-listen-log.ts";
 import { handleRequest } from "./src/server.ts";
-
-const port = Number(Deno.env.get("PORT") ?? "8000");
-const hostname = Deno.env.get("HOSTNAME") ?? "0.0.0.0";
 
 await zhinReady;
 
-Deno.serve({ port, hostname, onListen({ hostname: h, port: p }) {
-  console.log(`[Zhin:playground] http://${h}:${p} (zhin.js runtime)`);
-}}, handleRequest);
+const http = getPlaygroundHttpConfig();
+
+Deno.serve({
+  port: http.port,
+  hostname: http.host,
+  onListen({ hostname: h, port: p }) {
+    logEdgeHttpListen({
+      host: h,
+      port: p,
+      base: http.base,
+      token: http.token,
+    });
+  },
+}, handleRequest);

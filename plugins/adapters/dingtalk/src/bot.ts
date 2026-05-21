@@ -2,7 +2,7 @@
  * 钉钉 Bot 实现
  */
 import { formatCompact, Bot, Message, MessageSegment, segment, SendContent, SendOptions } from 'zhin.js';
-import type { RouterContext } from "@zhin.js/http";
+import { registerFetchRoute, type Router, type RouterContext } from "@zhin.js/http/router";
 import { createHmac } from "crypto";
 import type {
   DingTalkBotConfig,
@@ -68,7 +68,7 @@ export class DingTalkBot implements Bot<DingTalkBotConfig, DingTalkMessage> {
   }
 
   private setupWebhookRoute(): void {
-    this.router.post(this.$config.webhookPath, (ctx: RouterContext) => {
+    registerFetchRoute(this.router, "POST", this.$config.webhookPath, (ctx: RouterContext) => {
       void this.handleWebhook(ctx);
     });
   }

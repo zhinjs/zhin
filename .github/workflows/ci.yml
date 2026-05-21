@@ -56,6 +56,9 @@ jobs:
 
       - name: harness IM send-path check
         run: pnpm check:harness-paths
+
+      - name: check plugins do not import koa
+        run: pnpm check:no-koa
       
       - name: run tests
         run: pnpm test:reporter

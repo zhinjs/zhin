@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/http-host",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Fetch-based HTTP host: routing, auth, CORS, Node serve adapter",
   "type": "module",
   "main": "./lib/index.js",
@@ -10,6 +10,11 @@
       "types": "./lib/index.d.ts",
       "development": "./src/index.ts",
       "import": "./lib/index.js"
+    },
+    "./edge": {
+      "types": "./lib/edge.d.ts",
+      "development": "./src/edge.ts",
+      "import": "./lib/edge.js"
     }
   },
   "scripts": {

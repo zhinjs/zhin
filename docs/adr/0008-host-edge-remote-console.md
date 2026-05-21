@@ -42,4 +42,4 @@ Console 与 HTTP 服务绑定 Node 专有模式：Koa 第二栈、`/server` WebS
 
 - 破坏性：依赖 `useContext('koa')` 的插件需改接 `router` 或 Fetch 路由。
 - `/server` WebSocket 废弃；Remote Console 必须配置 API Base。
-- 二期见 [issue #427](https://github.com/zhinjs/zhin/issues/427)：Edge parity、StoragePort、Queue Edge。
+- 二期见 [ADR-0009](./0009-phase-2-edge-storage-queue.md) / [issue #427](https://github.com/zhinjs/zhin/issues/427)：Edge parity、StoragePort、Queue Edge、Fetch 原生路由。

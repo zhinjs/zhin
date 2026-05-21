@@ -27,6 +27,17 @@ describe("createFetchApp", () => {
     expect(res.status).toBe(401);
   });
 
+  it("serves /pub/openapi.json without token", async () => {
+    const routes = new RouteTable();
+    routes.get("/pub/openapi.json", async (ctx) => {
+      ctx.body = { openapi: "3.1.0", paths: {} };
+    });
+    const app = createFetchApp(routes, { base: "/api", token: "t" });
+    const res = await app.fetch(new Request("http://localhost/pub/openapi.json"));
+    expect(res.status).toBe(200);
+    expect((await res.json()).openapi).toBe("3.1.0");
+  });
+
   it("allows /pub without token", async () => {
     const routes = new RouteTable();
     routes.get("/pub/health", async (ctx) => {

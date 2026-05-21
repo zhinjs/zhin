@@ -117,6 +117,7 @@ declare module 'zhin.js' {
 - `POST /api/message/send` - 发送消息
 - `POST /api/plugins/:name/reload` - 重载插件
 - `GET /pub/health` - 健康检查
+- `GET /pub/openapi.json` - 当前实例 OpenAPI 3.1 路由清单（无需 Token）
 
 ### 自定义 HTTP 路由
 

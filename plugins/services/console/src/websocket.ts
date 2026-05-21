@@ -27,6 +27,8 @@ import {
 import { removePendingRequest } from "./bot-hub.js";
 import { getCronManager, generateCronJobId } from "@zhin.js/agent";
 import type { CronJobRecord } from "@zhin.js/agent";
+import { createNodeProjectFs } from "./rpc/project-fs.js";
+import { handleCoreRpc } from "./rpc/handlers-core.js";
 
 const plugin = usePlugin();
 const { root, logger } = plugin;
@@ -199,220 +201,25 @@ export function setupWebSocket(webServer: WebServer) {
 export async function handleWebSocketMessage(
   ws: WebSocket,
   message: any,
-  webServer: WebServer
+  webServer: WebServer,
+  hostOnly = false,
 ) {
   const { type, requestId, pluginName } = message;
 
+  if (!hostOnly) {
+    const handled = await handleCoreRpc(message, {
+      parity: "host",
+      root,
+      webServer,
+      projectFs: createNodeProjectFs(),
+      emit: (p) => ws.send(JSON.stringify(p)),
+    });
+    if (handled) return;
+  }
+
   switch (type) {
-    case "ping":
-      ws.send(JSON.stringify({ type: "pong", requestId }));
-      break;
-
-    case "entries:get":
-      ws.send(JSON.stringify({ requestId, data: Object.values(webServer.entries ?? {}) }));
-      break;
-
     // ================================================================
-    // 配置文件原始 YAML 读写（用于配置管理页面）
-    // ================================================================
-
-    case "config:get-yaml":
-      try {
-        const filePath = getConfigFilePath();
-        const yaml = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : '';
-        ws.send(JSON.stringify({ requestId, data: { yaml, pluginKeys: getPluginKeys() } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: `Failed to read config: ${(error as Error).message}` }));
-      }
-      break;
-
-    case "config:save-yaml":
-      try {
-        const { yaml } = message;
-        if (typeof yaml !== 'string') {
-          ws.send(JSON.stringify({ requestId, error: 'yaml field is required' }));
-          break;
-        }
-        const filePath = getConfigFilePath();
-        fs.writeFileSync(filePath, yaml, 'utf-8');
-        const configService = root.inject('config') as ConfigFeature;
-        const loader = configService.configs.get(configService.primaryFile);
-        if (loader) loader.load();
-        ws.send(JSON.stringify({ requestId, data: { success: true, message: '配置已保存，需重启生效' } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: `Failed to save config: ${(error as Error).message}` }));
-      }
-      break;
-
-    // ================================================================
-    // 插件配置（供 PluginConfigForm 使用）
-    // ================================================================
-
-    case "config:get":
-      try {
-        const configService = root.inject('config') as ConfigFeature;
-        const rawConfig = configService.getRaw<Record<string, any>>(configService.primaryFile);
-        if (!pluginName) {
-          ws.send(JSON.stringify({ requestId, data: rawConfig }));
-        } else {
-          const configKey = resolveConfigKey(pluginName);
-          ws.send(JSON.stringify({ requestId, data: rawConfig[configKey] || {} }));
-        }
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: `Failed to get config: ${(error as Error).message}` }));
-      }
-      break;
-
-    case "config:get-all":
-      try {
-        const configService = root.inject('config') as ConfigFeature;
-        const rawConfig = configService.getRaw<Record<string, any>>(configService.primaryFile);
-        const allConfigs: Record<string, any> = { ...rawConfig };
-        const schemaService = root.inject('schema' as any) as SchemaFeature | null;
-        if (schemaService) {
-          for (const [pName, configKey] of schemaService.getPluginKeyMap()) {
-            if (pName !== configKey) {
-              allConfigs[pName] = rawConfig[configKey] || {};
-            }
-          }
-        }
-        ws.send(JSON.stringify({ requestId, data: allConfigs }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: `Failed to get all configs: ${(error as Error).message}` }));
-      }
-      break;
-
-    case "config:set":
-      try {
-        const { data } = message;
-        if (!pluginName) {
-          ws.send(JSON.stringify({ requestId, error: 'Plugin name is required' }));
-          break;
-        }
-        const configKey = resolveConfigKey(pluginName);
-        const configService = root.inject('config') as ConfigFeature;
-        const loader = configService.configs.get(configService.primaryFile);
-        if (!loader) {
-          ws.send(JSON.stringify({ requestId, error: 'Config file not loaded' }));
-          break;
-        }
-        loader.patchKey(configKey, data);
-
-        broadcastToAll(webServer, { type: 'config:updated', data: { pluginName, config: data } });
-
-        const schemaService = root.inject('schema' as any) as SchemaFeature | null;
-        const reloadable = schemaService?.isReloadable?.(pluginName) ?? false;
-
-        if (reloadable) {
-          const target = findPluginByConfigKey(root, pluginName);
-          if (target) {
-            try {
-              await target.reload();
-              ws.send(JSON.stringify({ requestId, data: { success: true, reloaded: true } }));
-            } catch (reloadErr) {
-              logger.warn(formatCompact( { op: "reload_plugin", plugin: pluginName, ok: false, error: (reloadErr as Error).message }));
-              ws.send(JSON.stringify({ requestId, data: { success: true, reloaded: false, message: '配置已保存，但重载失败' } }));
-            }
-          } else {
-            ws.send(JSON.stringify({ requestId, data: { success: true, reloaded: false, message: '配置已保存' } }));
-          }
-        } else {
-          ws.send(JSON.stringify({ requestId, data: { success: true, reloaded: false, message: '配置已保存，需重启进程才能生效' } }));
-        }
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: `Failed to set config: ${(error as Error).message}` }));
-      }
-      break;
-
-    // ================================================================
-    // Schema（供 PluginConfigForm 使用）
-    // ================================================================
-
-    case "schema:get":
-      try {
-        const schemaService = root.inject('schema' as any) as SchemaFeature | null;
-        const schema = pluginName && schemaService ? schemaService.get(pluginName) : null;
-        ws.send(JSON.stringify({ requestId, data: schema ? schema.toJSON() : null }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: `Failed to get schema: ${(error as Error).message}` }));
-      }
-      break;
-
-    case "schema:get-all":
-      try {
-        const schemaService = root.inject('schema' as any) as SchemaFeature | null;
-        const schemas: Record<string, any> = {};
-        if (schemaService) {
-          for (const record of schemaService.items) {
-            if (record.key && record.schema) {
-              schemas[record.key] = record.schema.toJSON();
-            }
-          }
-          for (const [pName, configKey] of schemaService.getPluginKeyMap()) {
-            if (pName !== configKey && schemas[configKey]) {
-              schemas[pName] = schemas[configKey];
-            }
-          }
-        }
-        ws.send(JSON.stringify({ requestId, data: schemas }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: `Failed to get all schemas: ${(error as Error).message}` }));
-      }
-      break;
-
-    // ================================================================
-    // 环境变量文件管理
-    // ================================================================
-
-    case "env:list":
-      try {
-        const cwd = process.cwd();
-        const files = ENV_WHITELIST.map(name => ({
-          name,
-          exists: fs.existsSync(path.resolve(cwd, name)),
-        }));
-        ws.send(JSON.stringify({ requestId, data: { files } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: `Failed to list env files: ${(error as Error).message}` }));
-      }
-      break;
-
-    case "env:get":
-      try {
-        const { filename } = message;
-        if (!filename || !ENV_WHITELIST.includes(filename)) {
-          ws.send(JSON.stringify({ requestId, error: `Invalid env file: ${filename}` }));
-          break;
-        }
-        const envPath = path.resolve(process.cwd(), filename);
-        const content = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf-8') : '';
-        ws.send(JSON.stringify({ requestId, data: { content } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: `Failed to read env file: ${(error as Error).message}` }));
-      }
-      break;
-
-    case "env:save":
-      try {
-        const { filename, content } = message;
-        if (!filename || !ENV_WHITELIST.includes(filename)) {
-          ws.send(JSON.stringify({ requestId, error: `Invalid env file: ${filename}` }));
-          break;
-        }
-        if (typeof content !== 'string') {
-          ws.send(JSON.stringify({ requestId, error: 'content field is required' }));
-          break;
-        }
-        const envPath = path.resolve(process.cwd(), filename);
-        fs.writeFileSync(envPath, content, 'utf-8');
-        ws.send(JSON.stringify({ requestId, data: { success: true, message: '环境变量已保存，需重启生效' } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: `Failed to save env file: ${(error as Error).message}` }));
-      }
-      break;
-
-    // ================================================================
-    // 文件管理
+    // 文件管理（Host-only，Edge 由 Parity 矩阵拦截）
     // ================================================================
 
     case "files:tree":
@@ -599,92 +406,7 @@ export async function handleWebSocketMessage(
       }
       break;
 
-    // ================================================================
-    // 机器人管理（WebSocket）
-    // ================================================================
-
-    case "bot:list": {
-      try {
-        const botsWithPending = await collectBotsListWithPending();
-        ws.send(JSON.stringify({ requestId, data: { bots: botsWithPending } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
-      }
-      break;
-    }
-
-    case "bot:info": {
-      try {
-        const d = message.data || {};
-        const { adapter, botId } = d;
-        if (!adapter || !botId) {
-          ws.send(JSON.stringify({ requestId, error: "adapter and botId required" }));
-          break;
-        }
-        const ad = root.inject(adapter as keyof Plugin.Contexts);
-        if (!(ad instanceof Adapter)) {
-          ws.send(JSON.stringify({ requestId, error: "adapter not found" }));
-          break;
-        }
-        const bot = ad.bots.get(botId);
-        if (!bot) {
-          ws.send(JSON.stringify({ requestId, error: "bot not found" }));
-          break;
-        }
-        ws.send(
-          JSON.stringify({
-            requestId,
-            data: {
-              name: botId,
-              adapter: String(adapter),
-              connected: !!bot.$connected,
-              status: bot.$connected ? "online" : "offline",
-            },
-          })
-        );
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
-      }
-      break;
-    }
-
-    case "bot:sendMessage": {
-      try {
-        const d = message.data || {};
-        const { adapter, botId, id, type: msgType, content } = d;
-        if (!adapter || !botId || !id || !msgType || content === undefined) {
-          ws.send(
-            JSON.stringify({
-              requestId,
-              error: "adapter, botId, id, type, content required",
-            })
-          );
-          break;
-        }
-        const ad = root.inject(adapter as keyof Plugin.Contexts);
-        if (!(ad instanceof Adapter)) {
-          ws.send(JSON.stringify({ requestId, error: "adapter not found" }));
-          break;
-        }
-        const normalized =
-          typeof content === "string"
-            ? content
-            : Array.isArray(content)
-              ? content
-              : String(content);
-        const messageId = await ad.sendMessage({
-          context: adapter,
-          bot: botId,
-          id: String(id),
-          type: msgType as "private" | "group" | "channel",
-          content: normalized,
-        });
-        ws.send(JSON.stringify({ requestId, data: { messageId } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
-      }
-      break;
-    }
+    // bot:list / bot:info / bot:sendMessage → rpc/handlers-core.ts
 
     case "bot:friends":
     case "bot:groups": {
@@ -1128,123 +850,7 @@ export async function handleWebSocketMessage(
       break;
     }
 
-    // ================================================================
-    // 定时任务管理
-    // ================================================================
-
-    case "cron:list": {
-      try {
-        const m = getCronManager();
-        if (!m) {
-          ws.send(JSON.stringify({ requestId, error: "定时任务服务不可用（Agent 未初始化）" }));
-          break;
-        }
-        const memory = m.cronFeature.getStatus().map((s) => ({
-          type: "memory" as const,
-          expression: s.expression,
-          running: s.running,
-          nextExecution: s.nextExecution?.toISOString() ?? null,
-          plugin: s.plugin,
-        }));
-        const persistent = m.engine
-          ? (await m.engine.listJobs()).map((j) => ({
-              type: "persistent" as const,
-              ...j,
-            }))
-          : [];
-        ws.send(JSON.stringify({ requestId, data: { memory, persistent } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
-      }
-      break;
-    }
-
-    case "cron:add": {
-      try {
-        const m = getCronManager();
-        if (!m?.engine) {
-          ws.send(JSON.stringify({ requestId, error: "持久化定时任务引擎不可用" }));
-          break;
-        }
-        const { cronExpression, prompt, label, context: cronContext } = message as any;
-        if (!cronExpression || !prompt) {
-          ws.send(JSON.stringify({ requestId, error: "缺少 cronExpression 或 prompt" }));
-          break;
-        }
-        const record = await m.engine.addJob({
-          id: generateCronJobId(),
-          cronExpression,
-          prompt,
-          label: label || undefined,
-          enabled: true,
-          context: cronContext || undefined,
-        });
-        ws.send(JSON.stringify({ requestId, data: record }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
-      }
-      break;
-    }
-
-    case "cron:remove": {
-      try {
-        const m = getCronManager();
-        if (!m?.engine) {
-          ws.send(JSON.stringify({ requestId, error: "持久化定时任务引擎不可用" }));
-          break;
-        }
-        const { id } = message as any;
-        if (!id) {
-          ws.send(JSON.stringify({ requestId, error: "缺少任务 id" }));
-          break;
-        }
-        const ok = await m.engine.removeJob(id);
-        ws.send(JSON.stringify({ requestId, data: { success: ok } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
-      }
-      break;
-    }
-
-    case "cron:pause": {
-      try {
-        const m = getCronManager();
-        if (!m?.engine) {
-          ws.send(JSON.stringify({ requestId, error: "持久化定时任务引擎不可用" }));
-          break;
-        }
-        const { id } = message as any;
-        if (!id) {
-          ws.send(JSON.stringify({ requestId, error: "缺少任务 id" }));
-          break;
-        }
-        const ok = await m.engine.pauseJob(id);
-        ws.send(JSON.stringify({ requestId, data: { success: ok } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
-      }
-      break;
-    }
-
-    case "cron:resume": {
-      try {
-        const m = getCronManager();
-        if (!m?.engine) {
-          ws.send(JSON.stringify({ requestId, error: "持久化定时任务引擎不可用" }));
-          break;
-        }
-        const { id } = message as any;
-        if (!id) {
-          ws.send(JSON.stringify({ requestId, error: "缺少任务 id" }));
-          break;
-        }
-        const ok = await m.engine.resumeJob(id);
-        ws.send(JSON.stringify({ requestId, data: { success: ok } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
-      }
-      break;
-    }
+    // cron:* → rpc/handlers-core.ts
 
     default:
       ws.send(JSON.stringify({ requestId, error: `Unknown message type: ${type}` }));

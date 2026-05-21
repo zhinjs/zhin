@@ -3,7 +3,7 @@
  */
 import { EventEmitter } from 'events';
 import { formatCompact, Bot, Message, segment, SendOptions } from 'zhin.js';
-import type { Router, RouterContext } from '@zhin.js/http';
+import { registerFetchRoute, type Router, type RouterContext } from '@zhin.js/http/router';
 import { callOneBot12Action } from './api.js';
 import type { OneBot12WebhookConfig, OneBot12Event } from './types.js';
 import type { OneBot12Adapter } from './adapter.js';
@@ -35,7 +35,7 @@ export class OneBot12WebhookBot extends EventEmitter implements Bot<OneBot12Webh
 
   async $connect(): Promise<void> {
     const path = this.$config.path.startsWith('/') ? this.$config.path : `/${this.$config.path}`;
-    this.router.post(path, async (ctx: RouterContext) => {
+    registerFetchRoute(this.router, 'POST', path, async (ctx: RouterContext) => {
       const body = ctx.request.body as OneBot12Event | undefined;
       if (!body || typeof body !== 'object' || !body.id || body.time == null || !body.type) {
         ctx.status = 400;

@@ -8,7 +8,11 @@ import type { RouterContext } from "@zhin.js/http";
 import * as path from "node:path";
 import { DEFAULT_CONSOLE_BASE_PATH } from "@zhin.js/console-types";
 import { initConsoleHub, notifyDataUpdate, type WebServerCompat } from "./websocket.js";
-import { registerConsoleApi } from "./console-api.js";
+import { registerConsoleApi, registerConsoleRoutes } from "./console-api.js";
+export { registerConsoleRoutes, type ConsoleApiOptions } from "./console-api.js";
+export { dispatchConsoleRpc } from "./rpc/dispatch.js";
+export { createNodeProjectFs, createDenoProjectFs } from "./rpc/project-fs.js";
+export type { ConsoleParity } from "./rpc/parity.js";
 import { registerBotModels } from "./bot-db-models.js";
 import { initBotPersistence } from "./bot-persistence.js";
 
@@ -25,7 +29,6 @@ declare module "@zhin.js/core" {
     interface Contexts {
       web: PageManager;
       router: import("@zhin.js/http").Router;
-      koa: import("koa");
     }
   }
 }
@@ -53,7 +56,8 @@ if (enabled) {
       : process.cwd();
 
     const pageManager = new PageManager({
-      koa: koa as import("koa"),
+      // Host @zhin.js/http 注入 Koa 3；console-core 类型仍为 Koa 2，运行时兼容
+      koa: koa as never,
       path: DEFAULT_CONSOLE_BASE_PATH,
       clientPackageRoot: bundlerRoot,
       mode: "production",

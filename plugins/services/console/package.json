@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/console",
-  "version": "3.0.0",
+  "version": "3.0.2",
   "description": "Web console service for Zhin.js with real-time monitoring",
   "type": "module",
   "main": "./lib/index.js",
@@ -32,6 +32,16 @@
       "types": "./lib/index.d.ts",
       "development": "./src/index.ts",
       "import": "./lib/index.js"
+    },
+    "./console-api": {
+      "types": "./lib/console-api.d.ts",
+      "development": "./src/console-api.ts",
+      "import": "./lib/console-api.js"
+    },
+    "./rpc/project-fs": {
+      "types": "./lib/rpc/project-fs.d.ts",
+      "development": "./src/rpc/project-fs.ts",
+      "import": "./lib/rpc/project-fs.js"
     }
   },
   "scripts": {
@@ -41,10 +51,11 @@
   "dependencies": {
     "@zhin.js/console-core": "workspace:*",
     "@zhin.js/console-types": "workspace:*",
+    "@zhin.js/http-host": "workspace:*",
     "ws": "^8.20.1"
   },
   "devDependencies": {
-    "@types/koa": "^2.15.0",
+    "@types/koa": "^3.0.0",
     "esbuild": "^0.28.0",
     "lucide-react": "^1.16.0",
     "tsup": "^8.5.1",
@@ -57,7 +68,8 @@
     "@zhin.js/client": "workspace:^",
     "@zhin.js/core": "workspace:^",
     "@zhin.js/http": "workspace:^",
-    "koa": "^2.16.2",
+    "@zhin.js/http-host": "workspace:^",
+    "koa": "^3.1.1",
     "zhin.js": "workspace:*"
   },
   "files": [

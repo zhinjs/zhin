@@ -2,11 +2,13 @@ import { defineConfig } from 'tsup'
 
 export default defineConfig({
   entry: {
-    'index': 'src/index.ts',
-    'websocket': 'src/websocket.ts',
+    index: 'src/index.ts',
+    websocket: 'src/websocket.ts',
+    'console-api': 'src/console-api.ts',
+    'rpc/project-fs': 'src/rpc/project-fs.ts',
   },
   format: ['esm'],
-  dts: true,
+  dts: { compilerOptions: { skipLibCheck: true } },
   clean: true,
   treeshake: true,
   splitting: false,
@@ -15,6 +17,8 @@ export default defineConfig({
   external: [
     '@zhin.js/core',
     '@zhin.js/http',
+    '@zhin.js/http-host',
+    'zhin.js',
     '@zhin.js/client',
     '@zhin.js/agent',
     '@zhin.js/console-core',

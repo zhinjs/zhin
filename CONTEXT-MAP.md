@@ -5,6 +5,9 @@
 - [Core IM Runtime](./packages/core/CONTEXT.md) - 负责 IM 适配器、消息、调度、命令/AI 路由和出站发送链。
 - [Agent Runtime](./packages/agent/CONTEXT.md) - 负责 ZhinAgent 编排、工具、技能、子代理、上下文预算，以及对 `@zhin.js/ai` 的策略适配。
 - [Queue Contract](./docs/architecture/queue/CONTEXT.md) - 定义队列侧事件和出站字段词汇，并说明它们如何映射到 IM 运行时类型。
+- [Http Host](./packages/http-host/CONTEXT.md) - Fetch `Request → Response` 路由、CORS、Bearer；`registerFetchRoute` 为官方插件 HTTP 注册方式。
+- [StoragePort](./packages/storage-port/CONTEXT.md) - 轻量 KV 抽象（memory / sqlite / deno-kv / d1），供 Queue Edge 与可选 Console 索引使用。
+- [Queue Runtime](./packages/queue-runtime/CONTEXT.md) - `enqueueOutgoing` / `claimOutgoing` / `executeOutbound`；与 IM 栈平行，不经 MessageDispatcher。
 - [Console Runtime](./packages/console-core/CONTEXT.md) - 负责控制台页面目录、PageManager、入口注册和浏览器插件启动。关系
 
 - **Core IM Runtime -> Agent Runtime**：Core 分发符合条件的 IM 消息；Agent Runtime 处理 AI 触发回合，并通过 Core 的发送链回复。

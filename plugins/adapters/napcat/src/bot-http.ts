@@ -7,7 +7,7 @@ import { formatCompact } from 'zhin.js';
 import { NapCatBotBase } from './bot-base.js';
 import type { NapCatHttpConfig, ApiResponse } from './types.js';
 import type { NapCatAdapter } from './adapter.js';
-import type { Router, RouterContext } from '@zhin.js/http';
+import { registerFetchRoute, type Router, type RouterContext } from '@zhin.js/http/router';
 import * as crypto from 'crypto';
 
 export class NapCatHttpBot extends NapCatBotBase {
@@ -48,7 +48,7 @@ export class NapCatHttpBot extends NapCatBotBase {
 
   private mountWebhook(): void {
     const postPath = this.$config.post_path;
-    this.router.post(postPath, async (ctx: RouterContext) => {
+    registerFetchRoute(this.router, 'POST', postPath, async (ctx: RouterContext) => {
       const body = ctx.request.body;
       if (!body || typeof body !== 'object') { ctx.status = 400; ctx.body = { error: 'invalid body' }; return; }
 

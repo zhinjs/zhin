@@ -3,7 +3,7 @@
  */
 import { EventEmitter } from 'events';
 import { formatCompact, Bot, Message, segment, SendOptions } from 'zhin.js';
-import type { Router, RouterContext } from '@zhin.js/http';
+import { registerFetchRoute, type Router, type RouterContext } from '@zhin.js/http/router';
 import { callSatoriApi } from './api.js';
 import type { SatoriWebhookConfig, SatoriEventBody, SatoriLogin } from './types.js';
 import { SatoriOpcode } from './types.js';
@@ -39,7 +39,7 @@ export class SatoriWebhookBot extends EventEmitter implements Bot<SatoriWebhookC
 
   async $connect(): Promise<void> {
     const path = this.$config.path.startsWith('/') ? this.$config.path : `/${this.$config.path}`;
-    this.router.post(path, async (ctx: RouterContext) => {
+    registerFetchRoute(this.router, 'POST', path, async (ctx: RouterContext) => {
       const opcode = parseInt(ctx.get('satori-opcode') ?? '', 10);
       const body = ctx.request.body as SatoriEventBody | undefined;
       if (opcode === SatoriOpcode.EVENT && body) {

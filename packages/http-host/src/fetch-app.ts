@@ -1,5 +1,5 @@
-import crypto from "node:crypto";
 import type { RouteTable } from "./route-table.js";
+import { timingSafeEqualString } from "./timing-safe-equal.js";
 
 export type FetchAppOptions = {
   base?: string;
@@ -96,12 +96,7 @@ export function createFetchApp(routes: RouteTable, options: FetchAppOptions = {}
     if (requiresAuth(url.pathname, base, routes.whiteList) && token) {
       const auth = req.headers.get("Authorization");
       const reqToken = auth?.startsWith("Bearer ") ? auth.slice(7) : "";
-      const expectedBuf = Buffer.from(token, "utf-8");
-      const receivedBuf = Buffer.from(reqToken, "utf-8");
-      if (
-        expectedBuf.length !== receivedBuf.length ||
-        !crypto.timingSafeEqual(expectedBuf, receivedBuf)
-      ) {
+      if (!timingSafeEqualString(token, reqToken)) {
         const h = new Headers({ "content-type": "application/json" });
         applySecurityHeaders(h);
         if (cors) for (const [k, v] of Object.entries(cors)) h.set(k, v);

@@ -1,0 +1,28 @@
+{
+  "name": "@zhin/deno-deploy-playground",
+  "version": "0.2.0",
+  "exports": "./main.ts",
+  "tasks": {
+    "deploy": "deno deploy --prod --config deno.deploy.json main.ts"
+  },
+  "imports": {
+    "zhin.js": "npm:zhin.js@1.0.82",
+    "pg": "npm:pg@8.16.3",
+    "chalk": "npm:chalk@5.4.1",
+    "@zhin.js/http-host/edge": "npm:@zhin.js/http-host@0.1.2/edge",
+    "@zhin.js/http-host": "npm:@zhin.js/http-host@0.1.2/edge",
+    "@zhin.js/storage-port": "npm:@zhin.js/storage-port@0.1.0",
+    "@zhin.js/queue-runtime": "npm:@zhin.js/queue-runtime@0.1.0",
+    "@zhin.js/http/host-rest-api": "npm:@zhin.js/http@1.0.76/host-rest-api",
+    "@zhin.js/http/logs-rest-api": "npm:@zhin.js/http@1.0.76/logs-rest-api",
+    "@zhin.js/http/marketplace-rest-api": "npm:@zhin.js/http@1.0.76/marketplace-rest-api",
+    "@zhin.js/http/adapter-api-stubs": "npm:@zhin.js/http@1.0.76/adapter-api-stubs",
+    "@zhin.js/console/console-api": "npm:@zhin.js/console@3.0.2/console-api",
+    "@zhin.js/console/rpc/project-fs": "npm:@zhin.js/console@3.0.2/rpc/project-fs"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "lib": ["deno.ns", "deno.unstable", "dom", "esnext"]
+  },
+  "nodeModulesDir": "auto"
+}

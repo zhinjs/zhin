@@ -18,7 +18,11 @@ http:
 
 启动后日志会输出带 `apiBaseUrl` 的 Console 打开链接（Token 在 Console 登录页填写，勿通过 URL 传递）。
 
-协议：REST `POST /api/console/request` + SSE `GET /api/events`（见 ADR `docs/adr/0008-host-edge-remote-console.md`）。
+协议：REST `POST /api/console/request` + SSE `GET /api/events`（见 ADR [0008](./adr/0008-host-edge-remote-console.md)、二期 [0009](./adr/0009-phase-2-edge-storage-queue.md)）。
+
+**Zhin Edge** 仅支持 Console RPC 子集（`EDGE_UNSUPPORTED` 错误码）；队列入站 `POST /api/queue/incoming`。见 `examples/deno-deploy-playground`。
+
+Host 启动后可在 **`GET {API Base URL}/pub/openapi.json`** 获取当前实例的 **OpenAPI 3.1** 路由清单（无需 Token），便于 Console 与插件按运行时能力自适应。日志字段 `openapi` 为同地址。插件注册路由时可追加可选元数据对象（`summary`、`tags` 等），见 `@zhin.js/http-host` 的 `RouteMeta`。
 
 ## 仓库分工
 
