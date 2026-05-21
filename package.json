@@ -35,6 +35,7 @@
     "build": "pnpm -r --filter \"./basic/**\" build && pnpm install && pnpm -r --filter \"./packages/**\" build && pnpm -r --filter \"./plugins/services/**\" build && pnpm -r --filter \"./plugins/adapters/**\" build && pnpm -r --filter \"./plugins/games/**\" build && pnpm -r --filter \"./plugins/utils/**\" build",
     "clean": "pnpm -r clean",
     "lint": "eslint . --ext .ts,.tsx",
+    "sync:console-site": "node console-site/scripts/sync-from-zhin.mjs",
     "check:harness-paths": "node scripts/check-im-send-bypass.mjs",
     "type-check": "tsc --noEmit",
     "link": "pnpm --filter @zhin.js/cli exec npm link",

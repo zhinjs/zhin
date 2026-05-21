@@ -10,7 +10,7 @@ Console 与 HTTP 服务绑定 Node 专有模式：Koa 第二栈、`/server` WebS
 
 - **Zhin Host**（Node/Bun）：全量 IM、Agent、适配器 Webhook、`router.ws()`；单端口 **Fetch HttpHost**；Console API 为 REST + SSE。
 - **Zhin Edge**：单 `fetch` 入口；**无 IM 适配器**；Webhook + Sandbox WS 入站；REST/SSE **子集** + 同协议。
-- **Console Remote**：`console-app` 静态资源发布在 **GitHub Pages**；用户配置 **API Base URL**；**Bearer Token** + **CORS allowlist**。
+- **Console Remote**：静态 UI 在独立仓库 **`zhin-console`**（模板 `console-site/`）发布至 **GitHub Pages**（如 `console.zhin.dev`）；用户配置 **API Base URL**；**Bearer Token** + **CORS allowlist**。文档站仍在主仓库 Pages（`zhin.pages.dev`）。
 
 ### HTTP
 

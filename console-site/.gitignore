@@ -1,0 +1,6 @@
+node_modules
+dist
+.pnpm-store
+# Synced from zhin monorepo — do not commit in zhin; commit in zhin-console repo
+client
+console-ui

@@ -47,8 +47,8 @@ pnpm --filter @zhin.js/console-app preview:remote
 
 刷新后收件箱/列表仍可用。
 
-## GitHub Pages（可选）
+## 线上 Console（可选）
 
-`console-pages.yml` 或 release 后，Pages URL + 同上 API Base；`corsOrigins` 含 Pages origin。
+独立仓库 **zhin-console**（主仓库 `console-site/` 模板）部署至 `https://console.zhin.dev`；`corsOrigins` 含 `https://console.zhin.dev`。
 
 详见 [docs/console-remote.md](../../docs/console-remote.md).
