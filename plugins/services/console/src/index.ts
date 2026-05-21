@@ -5,8 +5,6 @@ import {
   buildEntriesResponse,
 } from "@zhin.js/console-core/node";
 import type { RouterContext } from "@zhin.js/http";
-import { existsSync, readFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import * as path from "node:path";
 import { DEFAULT_CONSOLE_BASE_PATH } from "@zhin.js/console-types";
 import { initConsoleHub, notifyDataUpdate, type WebServerCompat } from "./websocket.js";
@@ -50,44 +48,14 @@ if (enabled) {
     if ((globalThis as any)[INIT_SYM]) return;
     (globalThis as any)[INIT_SYM] = true;
 
-    const require = createRequire(import.meta.url);
-    let clientPackageRoot: string;
-    try {
-      const appPkg = require.resolve("@zhin.js/console-app/package.json");
-      clientPackageRoot = path.dirname(appPkg);
-    } catch {
-      try {
-        const entry = require.resolve("@zhin.js/console-app");
-        let dir = path.dirname(entry);
-        while (dir !== path.dirname(dir)) {
-          if (existsSync(path.join(dir, "package.json"))) {
-            const pkg = JSON.parse(
-              readFileSync(path.join(dir, "package.json"), "utf8"),
-            );
-            if (pkg.name === "@zhin.js/console-app") {
-              clientPackageRoot = dir;
-              break;
-            }
-          }
-          dir = path.dirname(dir);
-        }
-        clientPackageRoot ??= path.dirname(entry);
-      } catch {
-        const monorepoDev = path.resolve(import.meta.dirname, "../../../../packages/console-app");
-        if (existsSync(path.join(monorepoDev, "lib", "register.js"))) {
-          clientPackageRoot = monorepoDev;
-        } else {
-          throw new Error(
-            "未安装 @zhin.js/console-app。请在项目根执行: pnpm add @zhin.js/console-app",
-          );
-        }
-      }
-    }
+    const bundlerRoot = process.env.ZHIN_PROJECT_ROOT
+      ? path.resolve(process.env.ZHIN_PROJECT_ROOT)
+      : process.cwd();
 
     const pageManager = new PageManager({
       koa: koa as import("koa"),
       path: DEFAULT_CONSOLE_BASE_PATH,
-      clientPackageRoot,
+      clientPackageRoot: bundlerRoot,
       mode: "production",
       serveClientHost: false,
     });

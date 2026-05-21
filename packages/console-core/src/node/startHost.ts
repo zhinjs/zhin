@@ -82,7 +82,7 @@ async function attachProductionClientHost(
   const indexHtmlPath = path.join(browserDist, "index.html");
   if (!existsSync(indexHtmlPath)) {
     console.error(
-      `[zhin-console] Missing static: ${indexHtmlPath}. Build @zhin.js/console-app first.`,
+      `[zhin-console] Missing static: ${indexHtmlPath}. Build Remote Console UI (zhin-console) or enable serveClientHost with a dist.`,
     );
     return;
   }

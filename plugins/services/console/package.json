@@ -39,7 +39,6 @@
     "clean": "rimraf lib"
   },
   "dependencies": {
-    "@zhin.js/console-app": "workspace:*",
     "@zhin.js/console-core": "workspace:*",
     "@zhin.js/console-types": "workspace:*",
     "ws": "^8.20.1"

@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/client",
   "version": "1.0.18",
-  "description": "Zhin console client: app singleton + WebSocket + re-exports (aligned with page-manager)",
+  "description": "Zhin Remote Console client SDK (entries loader, app registry, REST/SSE) — UI lives in zhin-console repo",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -16,8 +16,9 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@zhin.js/console-core": "workspace:*",
-    "@zhin.js/console-types": "workspace:*"
+    "@zhin.js/console-types": "workspace:*",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.6.0"
   },
   "peerDependencies": {
     "react": ">=18"

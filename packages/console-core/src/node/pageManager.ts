@@ -54,34 +54,7 @@ export class PageManager {
     };
   }
 
-  private async registerBuiltinAppShellServer(): Promise<void> {
-    const clientRoot = this.serverOptions.clientPackageRoot;
-    const registerAbs = path.join(clientRoot, "lib", "register.js");
-    const { pathToFileURL } = await import("node:url");
-
-    if (!existsSync(registerAbs)) {
-      throw new Error(
-        `[zhin-console] Built-in shell server entry not found: ${registerAbs}. Build @zhin.js/console-app first (pnpm --filter @zhin.js/console-app build:lib).`,
-      );
-    }
-
-    const href = pathToFileURL(registerAbs).href;
-    const mod = (await import(href)) as {
-      register?: (api: PluginServerRegisterHostApi) => void | Promise<void>;
-      default?: { register?: (api: PluginServerRegisterHostApi) => void | Promise<void> };
-    };
-    const register = mod.register ?? mod.default?.register;
-    if (typeof register !== "function") {
-      throw new Error(
-        `[zhin-console] Built-in shell server module must export register(api): ${registerAbs}`,
-      );
-    }
-    await Promise.resolve(register(this.pluginServerRouteContext()));
-  }
-
   private async registerEntryServerPlugins(): Promise<void> {
-    await this.registerBuiltinAppShellServer();
-
     const runtimeMode =
       this.serverOptions.mode ??
       (process.env.NODE_ENV === "production" ? "production" : "development");

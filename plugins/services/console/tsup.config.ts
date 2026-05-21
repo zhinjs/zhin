@@ -19,7 +19,6 @@ export default defineConfig({
     '@zhin.js/agent',
     '@zhin.js/console-core',
     '@zhin.js/console-types',
-    '@zhin.js/console-app',
     'fs',
     'path',
     'url',

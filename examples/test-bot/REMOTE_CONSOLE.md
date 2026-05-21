@@ -1,6 +1,6 @@
 # Host 端到端：Remote Console 验收
 
-Host **不再**提供 `http://<host>:8086/console` 静态 UI，仅保留 Console **API**（`/entries`、`/api/console/*`、`/api/events` 等）。UI 使用 Remote 静态站（本地 5173 或 GitHub Pages）。
+Host **不再**提供 `http://<host>:8086/console` 静态 UI，仅保留 Console **API**（`/entries`、`/api/console/*`、`/api/events` 等）。UI 在独立仓库 **[zhinjs/zhin-console](https://github.com/zhinjs/zhin-console)** 构建与预览。
 
 ## 1. Host 配置（`zhin.config.yml`）
 
@@ -13,28 +13,25 @@ http:
     - "https://console.zhin.dev"
 ```
 
-## 2. 构建 Console 静态 UI
-
-```bash
-pnpm --filter @zhin.js/console-app build
-```
-
-## 3. 启动 Host
+## 2. 启动 Host（本仓库）
 
 ```bash
 cd examples/test-bot
 pnpm dev
 ```
 
-日志应含 `console` / `api_only`，**不应**再依赖访问 `:8086/console`。
+日志应含 `console` / `api_only`。
 
-## 4. Remote Console（跨源）
+## 3. Remote Console UI（zhin-console 仓库）
+
+在 **zhin-console** 工程中：
 
 ```bash
-pnpm --filter @zhin.js/console-app preview:remote
+pnpm install
+pnpm dev          # 或 preview，见该仓库 README
 ```
 
-浏览器 **http://127.0.0.1:5173**（路由为 `/dashboard`、`/marketplace` 等，**无** `/console` 前缀）：
+浏览器打开开发地址（通常 `http://127.0.0.1:5173`），登录：
 
 | 字段 | 值 |
 |------|-----|
@@ -43,12 +40,12 @@ pnpm --filter @zhin.js/console-app preview:remote
 
 验收：登录、bot 列表、发消息、插件市场、配置页；Network 中 API 指向 **8086**（含 `/entries`、`/api/console/request`、`/api/events`）。
 
-## 5. IndexedDB
+## 4. IndexedDB
 
 刷新后收件箱/列表仍可用。
 
-## 线上 Console（可选）
+## 5. 线上
 
-独立仓库 **[zhinjs/zhin-console](https://github.com/zhinjs/zhin-console)** 部署至 `https://console.zhin.dev`；`corsOrigins` 含 `https://console.zhin.dev`。
+**https://console.zhin.dev**（`zhin-console` GitHub Pages）。
 
 详见 [docs/console-remote.md](../../docs/console-remote.md).

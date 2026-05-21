@@ -4,8 +4,8 @@ let projectRoot: string | null = null;
 
 /**
  * 在加载主配置文件（zhin.config.*）之后立即调用。
- * 锁定「机器人项目根」（与配置文件同目录），避免后续 `process.chdir`（如嵌入 Farm 解析 console-app）
- * 导致 `loadPlugins` 仍用 `process.cwd()` 时误从 `packages/console-app` 解析 `node_modules` / `./src/plugins`。
+ * 锁定「机器人项目根」（与配置文件同目录），避免后续 `process.chdir`
+ * 导致 `loadPlugins` 仍用 `process.cwd()` 时误解析 `node_modules` / `./src/plugins`。
  */
 export function setZhinProjectRoot(root: string): void {
   projectRoot = path.resolve(root);

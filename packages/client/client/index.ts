@@ -37,12 +37,31 @@ export {
   CONSOLE_HOST_REACT_NAMESPACE_KEY,
 } from "@zhin.js/console-types";
 
-// Re-export console-core browser utilities
+export { configureConsole, getRuntimeEnv } from "./runtime/index.js";
+
 export {
   createRegistryStore,
   useRegistry,
   type RegistryStore,
-  configureConsole,
-  getRuntimeEnv,
-  cn,
-} from "@zhin.js/console-core/browser";
+} from "./store/createRegistryStore.js";
+
+export { cn } from "./console-utils/cn.js";
+
+export {
+  apiFetch,
+  getApiBase,
+  getToken,
+  resolveApiUrl,
+  resolveWebSocketUrl,
+} from "./console-utils/remoteApi.js";
+
+export {
+  fetchConsoleEntries,
+  createPluginRegisterHostApi,
+  getRegisterFn,
+  loadConsoleEntries,
+  registerConsolePluginsFromEntries,
+  type CreatePluginRegisterHostApiOptions,
+  type FetchConsoleEntriesOptions,
+  type LoadConsoleEntriesOptions,
+} from "./bootstrap/loadConsoleEntries.js";

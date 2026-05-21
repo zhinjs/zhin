@@ -109,10 +109,10 @@ pnpm install
 | 包 | 源码 → 产物 | 职责 |
 |---|---|---|
 | `@zhin.js/console-types` | `src/` → tsup → `dist/` | 共享类型与常量 |
-| `@zhin.js/console-core` | Node: `src/node/` → tsc → `lib/`；Browser: `client/` → tsc → `dist/` | PageManager、EntryStore、esbuild 管线、RegistryStore、cn 工具 |
-| `@zhin.js/console-app` | Server: `src/` → tsc → `lib/`；Client: `client/` → Farm → `dist/` | 默认壳 SPA + 内置 `GET /entries` |
-| `@zhin.js/client` | `client/` → tsc → `dist/` | `app` 单例 + WebSocket + re-export |
-| `@zhin.js/console` | `src/` → tsup → `lib/` | 胶水层：创建 PageManager、挂载路由、WebSocket 业务逻辑 |
+| `@zhin.js/console-core` | `src/node/` → tsc → `lib/` | PageManager、EntryStore、esbuild 管线（Host 侧，无 UI） |
+| `@zhin.js/client` | `client/` → tsc → `dist/` | Remote Console SDK：`app`、REST/SSE、`loadConsoleEntries` |
+| `@zhin.js/console` | `src/` → tsup → `lib/` | Host 胶水层：PageManager、REST/SSE API（`api_only`） |
+| **zhin-console**（独立仓库） | Farm / 未来 Vite | 全部 Console UI；依赖 npm 上的 `@zhin.js/client` 等 |
 
 **插件注册契约**：
 - 服务端：`useContext('web', pageManager => pageManager.addEntry({ id, development, production }))`
@@ -120,16 +120,16 @@ pnpm install
 
 **共享依赖**：`/console/esm/*.mjs` 提供 canonical ESM（react、react-dom 等），esbuild 按需打包 + 缓存，无需 import map / farm-peer-shim。
 
-**构建顺序**：`console-types` (tsup) → `console-core` (tsc×2) → `client` (tsc) → `console-app` (tsc + farm) → `console` (tsup)。
+**构建顺序（Host）**：`console-types` (tsup) → `console-core` (tsc) → `client` (tsc) → `console` (tsup)。
 
-**约定**：控制台相关 **Node 逻辑**（Koa、WebSocket、持久化）只放在 `plugins/services/console/src/`，不要放进 `client/src/`。适配器扩展保持「包根 `client/` + 少量文件」即可。
+**约定**：Host 侧逻辑在 `plugins/services/console/src/`；适配器控制台扩展仍在各适配器包根 `client/`（由 Host `/@dev` 打包）。**内置仪表盘等 UI** 仅在 **zhin-console** 仓库维护。
 
 ### 3.4 `@zhin.js/client`（`packages/client`）
 
 - **`packages/client/`**：npm 包 **`@zhin.js/client`** 的根。
 - **`packages/client/client/`**：浏览器端源码（`app.ts` 单例、WebSocket 模块、mediaSrc 工具）。
 - **构建输出**：`dist/`（`main`/`types` 指向 `./dist/...`）。
-- **核心导出**：`app` 单例（`addRoute`/`addTool`/`defineSidebar`/`defineToolbar` + `useSyncExternalStore`）；WebSocket hooks（`useWebSocket`/`useConfig`/`useFiles`/`useDatabase`）；re-export `console-types` 类型 + `console-core/browser` 工具。
+- **核心导出**：`app` 单例；WebSocket / REST+SSE hooks；`loadConsoleEntries`；`apiFetch` / `getApiBase`（Remote 用）。
 - **无 Redux**：状态管理由 `app` 单例 + `useSyncExternalStore` 替代。
 
 ## 4. 文件命名（前端 / TS）
