@@ -15,6 +15,7 @@ node console-site/scripts/sync-from-zhin.mjs
 
 # 2. 推到新仓库（首次）
 cd console-site
+# client/、console-ui/ 必须纳入 zhin-console 仓库（CI 会检查）
 git init
 git add .
 git commit -m "chore: bootstrap zhin-console site"
@@ -23,6 +24,8 @@ git push -u origin main
 ```
 
 后续 UI 改动在 **zhin monorepo** 的 `packages/console-app/client` 与 `plugins/services/console/client` 开发，发版前再跑一次 `sync` 并提交到 `zhin-console`。
+
+**说明**：`client/`、`console-ui/` 由 `sync` 生成。在 **zhin** 主仓里由根目录 `.gitignore` 忽略，避免重复提交；在 **zhin-console** 独立仓里应正常 `git add` 并提交。
 
 ## 本地开发
 
