@@ -1,5 +1,17 @@
 # @zhin.js/adapter-icqq
 
+## 3.0.2
+
+### Patch Changes
+
+- 775427e: fix: edge 支持
+- Updated dependencies [775427e]
+  - @zhin.js/console@3.0.2
+  - @zhin.js/http@1.0.76
+  - @zhin.js/client@1.1.2
+  - @zhin.js/core@1.1.25
+  - zhin.js@1.0.83
+
 ## 3.0.1
 
 ### Patch Changes

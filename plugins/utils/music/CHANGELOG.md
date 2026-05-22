@@ -1,5 +1,14 @@
 # @zhin.js/plugin-music
 
+## 2.0.2
+
+### Patch Changes
+
+- 775427e: fix: edge 支持
+- Updated dependencies [775427e]
+  - @zhin.js/adapter-icqq@3.0.2
+  - zhin.js@1.0.83
+
 ## 2.0.1
 
 ### Patch Changes

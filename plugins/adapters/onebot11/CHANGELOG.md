@@ -1,5 +1,14 @@
 # @zhin.js/adapter-onebot11
 
+## 1.0.88
+
+### Patch Changes
+
+- 775427e: fix: edge 支持
+- Updated dependencies [775427e]
+  - @zhin.js/http@1.0.76
+  - zhin.js@1.0.83
+
 ## 1.0.87
 
 ### Patch Changes

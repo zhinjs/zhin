@@ -1,5 +1,13 @@
 # @zhin.js/plugin-voice
 
+## 0.0.21
+
+### Patch Changes
+
+- 775427e: fix: edge 支持
+- Updated dependencies [775427e]
+  - zhin.js@1.0.83
+
 ## 0.0.20
 
 ### Patch Changes

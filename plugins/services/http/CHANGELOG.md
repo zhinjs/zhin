@@ -1,5 +1,16 @@
 # @zhin.js/http
 
+## 1.0.76
+
+### Patch Changes
+
+- 775427e: fix: edge 支持
+- Updated dependencies [775427e]
+  - @zhin.js/http-host@0.1.2
+  - zhin.js@1.0.83
+  - @zhin.js/schema@1.0.65
+  - @zhin.js/queue-runtime@0.0.1
+
 ## 1.0.75
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/queue-runtime",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Queue bot runtime: enqueueOutgoing, claimOutgoing, executeOutbound",
   "type": "module",
   "main": "./lib/index.js",
@@ -22,7 +22,10 @@
     "@zhin.js/http-host": "workspace:*",
     "@zhin.js/storage-port": "workspace:*"
   },
-  "files": ["lib", "src"],
+  "files": [
+    "lib",
+    "src"
+  ],
   "devDependencies": {
     "@types/node": "^25.8.0",
     "typescript": "^6.0.3",

@@ -1,5 +1,13 @@
 # @zhin.js/client
 
+## 1.1.2
+
+### Patch Changes
+
+- 775427e: fix: edge 支持
+- Updated dependencies [775427e]
+  - @zhin.js/console-types@0.1.3
+
 ## 1.1.1
 
 ### Patch Changes

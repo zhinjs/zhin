@@ -1,5 +1,13 @@
 # @zhin.js/ai
 
+## 1.1.23
+
+### Patch Changes
+
+- 775427e: fix: edge 支持
+- Updated dependencies [775427e]
+  - @zhin.js/logger@0.1.65
+
 ## 1.1.22
 
 ### Patch Changes

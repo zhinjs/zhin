@@ -1,5 +1,13 @@
 # @zhin.js/database
 
+## 1.0.68
+
+### Patch Changes
+
+- 775427e: fix: edge 支持
+- Updated dependencies [775427e]
+  - zhin.js@1.0.83
+
 ## 1.0.67
 
 ### Patch Changes

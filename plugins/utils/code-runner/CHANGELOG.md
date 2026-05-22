@@ -1,5 +1,13 @@
 # @zhin.js/plugin-code-runner
 
+## 0.0.15
+
+### Patch Changes
+
+- 775427e: fix: edge 支持
+- Updated dependencies [775427e]
+  - zhin.js@1.0.83
+
 ## 0.0.14
 
 ### Patch Changes

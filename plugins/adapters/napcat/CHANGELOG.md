@@ -1,5 +1,14 @@
 # @zhin.js/adapter-napcat
 
+## 0.1.11
+
+### Patch Changes
+
+- 775427e: fix: edge 支持
+- Updated dependencies [775427e]
+  - @zhin.js/http@1.0.76
+  - zhin.js@1.0.83
+
 ## 0.1.10
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.31
+
+### Patch Changes
+
+- 775427e: fix: edge 支持
+
 ## 1.0.30
 
 ### Patch Changes

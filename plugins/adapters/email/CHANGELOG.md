@@ -1,5 +1,13 @@
 # @zhin.js/adapter-email
 
+## 0.1.70
+
+### Patch Changes
+
+- 775427e: fix: edge 支持
+- Updated dependencies [775427e]
+  - zhin.js@1.0.83
+
 ## 0.1.69
 
 ### Patch Changes

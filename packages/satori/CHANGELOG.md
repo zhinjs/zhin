@@ -1,5 +1,11 @@
 # @zhin.js/satori
 
+## 0.2.9
+
+### Patch Changes
+
+- 775427e: fix: edge 支持
+
 ## 0.2.8
 
 ### Patch Changes

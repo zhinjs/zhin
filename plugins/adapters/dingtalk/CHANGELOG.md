@@ -1,5 +1,14 @@
 # @zhin.js/adapter-dingtalk
 
+## 1.0.71
+
+### Patch Changes
+
+- 775427e: fix: edge 支持
+- Updated dependencies [775427e]
+  - @zhin.js/http@1.0.76
+  - zhin.js@1.0.83
+
 ## 1.0.70
 
 ### Patch Changes
