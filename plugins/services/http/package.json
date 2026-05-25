@@ -69,7 +69,7 @@
     "@zhin.js/queue-runtime": "workspace:*",
     "@zhin.js/schema": "workspace:*",
     "@zhin.js/storage-port": "workspace:*",
-    "koa": "^3.1.1",
+    "koa": "^3.2.1",
     "ws": "^8.21.0",
     "koa-body": "latest"
   },

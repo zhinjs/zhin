@@ -23,7 +23,7 @@
     "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
-    "koa": "^3.1.1",
+    "koa": "^3.2.1",
     "ws": "^8.21.0"
   },
   "files": [
