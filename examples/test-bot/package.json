@@ -54,7 +54,7 @@
     "sqlite3": "latest",
     "zhin.js": "workspace:*",
     "@zhin.js/cli": "workspace:*",
-    "tsx": "^4.22.1"
+    "tsx": "^4.22.3"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

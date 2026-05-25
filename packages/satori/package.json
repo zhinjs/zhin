@@ -42,7 +42,7 @@
     "directory": "packages/satori"
   },
   "dependencies": {
-    "html-react-parser": "^6.1.1",
+    "html-react-parser": "^6.1.2",
     "react": "^19.2.6",
     "satori": "^0.12.0"
   },

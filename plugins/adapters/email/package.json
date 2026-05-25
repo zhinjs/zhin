@@ -13,7 +13,7 @@
   "dependencies": {
     "imap": "^0.8.19",
     "mailparser": "^3.9.8",
-    "nodemailer": "^8.0.6"
+    "nodemailer": "^8.0.8"
   },
   "peerDependencies": {
     "zhin.js": "workspace:*"
