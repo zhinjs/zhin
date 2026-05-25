@@ -1462,8 +1462,8 @@ importers:
         specifier: ^3.2.1
         version: 3.2.1
       koa-body:
-        specifier: latest
-        version: 7.0.1
+        specifier: ^8.0.0
+        version: 8.0.0
       ws:
         specifier: ^8.21.0
         version: 8.21.0
@@ -4299,8 +4299,8 @@ packages:
   '@types/express@5.0.6':
     resolution: {integrity: sha512-sKYVuV7Sv9fbPIt/442koC7+IIwK5olP1KWeD88e/idgoJqDm3JV/YUiPwkoKK92ylff2MGxSz1CSjsXelx0YA==}
 
-  '@types/formidable@3.5.0':
-    resolution: {integrity: sha512-fHChKoKkxUy/n7uCHHWTMQ8yA7/raxz1+K2B7edHTIQhwBHX9TfRnCX0ohmuR77ezEFgMapUuSksk0MA7nQCrA==}
+  '@types/formidable@3.5.1':
+    resolution: {integrity: sha512-aFQijSGbD8JCeEST2LEbwR7faHynbt43lojLIcTM/QhB2U06h41ZVRFVEql+Z1xdL+aKGIzm69V/P/uSW9N6XA==}
 
   '@types/fs-extra@11.0.4':
     resolution: {integrity: sha512-yTbItCNreRooED33qjunPthRcSjERP1r4MqCZc7wv0u2sUkzTFp45tgUfS5+r7FrZPdmCCNflLhVSP/o+SemsQ==}
@@ -6303,8 +6303,8 @@ packages:
     resolution: {integrity: sha512-o+NO+8WrRiQEE4/7nwRJhN1HWpVmJm511pBHUxPLtp0BUISzlBplORYSmTclCnJvQq2tKu/sgl3xVpkc7ZWuQQ==}
     engines: {node: '>=6'}
 
-  koa-body@7.0.1:
-    resolution: {integrity: sha512-fSCZyN7Mhf/gijDeoOr20H4+g29znYhqoNuCX5X1kPQkUiRYIG/lku0CaCx0BBuoZ4pDAjsbJJfiECtJspKP/Q==}
+  koa-body@8.0.0:
+    resolution: {integrity: sha512-gJNvXtezVmS/oAX8dJt5yG+DpnKP9dHsY0RXmynO6iQfY1yPDLMddpkspiBeU2uYExJHqcaHY9Ap2gTi+b7vbQ==}
 
   koa-compose@4.1.0:
     resolution: {integrity: sha512-8ODW8TrDuMYvXRwra/Kh7/rJo9BtOfPc6qO8eAfC80CnCvSjSl0bkRM24X6/XBBEyj0v1nRUQ1LyOy3dbqOWXw==}
@@ -7215,10 +7215,6 @@ packages:
     resolution: {integrity: sha512-sD//FQnh1UePFGiC3McUiP2svQtyJU8AX5zIwc/tbQS1phoWvhg8POz04M43Q3K7VyYsEUJ9ZFCB5vlL7V6ikQ==}
     engines: {node: '>=16'}
 
-  qs@6.15.0:
-    resolution: {integrity: sha512-mAZTtNCeetKMH+pSjrb76NAM8V9a05I9aBZOHztWy/UqcJdQYNsf59vrRKWnojAT9Y+GbIvoTBC++CPHqpDBhQ==}
-    engines: {node: '>=0.6'}
-
   qs@6.15.1:
     resolution: {integrity: sha512-6YHEFRL9mfgcAvql/XhwTvf5jKcOiiupt2FiJxHkiX1z4j7WL8J/jRHYLluORvc1XxB5rV20KoeK00gVJamspg==}
     engines: {node: '>=0.6'}
@@ -7919,10 +7915,6 @@ packages:
   type-check@0.4.0:
     resolution: {integrity: sha512-XleUoc9uwGXqjWwXaUTZAmzMcFZ5858QA2vvx1Ur5xIcixXIP+8LnFDgRplU30us6teqdlskFfu+ae4K79Ooew==}
     engines: {node: '>= 0.8.0'}
-
-  type-fest@5.4.4:
-    resolution: {integrity: sha512-JnTrzGu+zPV3aXIUhnyWJj4z/wigMsdYajGLIYakqyOW1nPllzXEJee0QQbHj+CTIQtXGlAjuK0UY+2xTyjVAw==}
-    engines: {node: '>=20'}
 
   type-fest@5.6.0:
     resolution: {integrity: sha512-8ZiHFm91orbSAe2PSAiSVBVko18pbhbiB3U9GglSzF/zCGkR+rxpHx6sEMCUm4kxY4LjDIUGgCfUMtwfZfjfUA==}
@@ -10870,7 +10862,7 @@ snapshots:
       '@types/express-serve-static-core': 5.1.1
       '@types/serve-static': 2.2.0
 
-  '@types/formidable@3.5.0':
+  '@types/formidable@3.5.1':
     dependencies:
       '@types/node': 25.9.1
 
@@ -11804,7 +11796,7 @@ snapshots:
     dependencies:
       '@hapi/bourne': 3.0.0
       inflation: 2.1.0
-      qs: 6.15.0
+      qs: 6.15.1
       raw-body: 2.5.3
       type-is: 1.6.18
 
@@ -13211,14 +13203,14 @@ snapshots:
 
   kleur@4.1.5: {}
 
-  koa-body@7.0.1:
+  koa-body@8.0.0:
     dependencies:
       '@types/co-body': 6.1.3
-      '@types/formidable': 3.5.0
+      '@types/formidable': 3.5.1
       '@types/koa': 3.0.3
       co-body: 6.2.0
       formidable: 3.5.4
-      type-fest: 5.4.4
+      type-fest: 5.6.0
       zod: 4.4.3
 
   koa-compose@4.1.0: {}
@@ -14157,10 +14149,6 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  qs@6.15.0:
-    dependencies:
-      side-channel: 1.1.0
-
   qs@6.15.1:
     dependencies:
       side-channel: 1.1.0
@@ -15031,14 +15019,9 @@ snapshots:
     dependencies:
       prelude-ls: 1.2.1
 
-  type-fest@5.4.4:
-    dependencies:
-      tagged-tag: 1.0.0
-
   type-fest@5.6.0:
     dependencies:
       tagged-tag: 1.0.0
-    optional: true
 
   type-is@1.6.18:
     dependencies:
