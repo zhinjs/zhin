@@ -90,16 +90,16 @@ importers:
         specifier: ^2.31.0
         version: 2.31.0(@types/node@25.9.1)
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
       '@typescript-eslint/eslint-plugin':
-        specifier: ^8.59.3
+        specifier: ^8.59.4
         version: 8.59.4(@typescript-eslint/parser@8.59.4(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3)
       '@typescript-eslint/parser':
-        specifier: ^8.59.3
+        specifier: ^8.59.4
         version: 8.59.4(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3)
       '@vitest/coverage-v8':
         specifier: ^3.2.4
@@ -175,7 +175,7 @@ importers:
         specifier: ^9.0.7
         version: 9.0.9
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       typescript:
         specifier: ^6.0.3
@@ -196,7 +196,7 @@ importers:
         specifier: ^3.22.3
         version: 3.22.3(@types/node@25.9.1)
       pg:
-        specifier: ^8.16.0
+        specifier: ^8.21.0
         version: 8.21.0
       redis:
         specifier: latest
@@ -215,7 +215,7 @@ importers:
         version: 5.6.2
     devDependencies:
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       typescript:
         specifier: ^6.0.3
@@ -227,7 +227,7 @@ importers:
   basic/schema:
     devDependencies:
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       typescript:
         specifier: ^6.0.3
@@ -416,7 +416,7 @@ importers:
         specifier: latest
         version: 6.0.1
       tsx:
-        specifier: ^4.22.1
+        specifier: ^4.22.3
         version: 4.22.3
       zhin.js:
         specifier: workspace:*
@@ -432,7 +432,7 @@ importers:
         specifier: latest
         version: 1.3.13
       '@types/react':
-        specifier: ^19.2.14
+        specifier: ^19.2.15
         version: 19.2.15
       '@types/react-dom':
         specifier: ^19.2.3
@@ -530,7 +530,7 @@ importers:
         specifier: ^4.0.9
         version: 4.0.9
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       rimraf:
         specifier: ^6.0.0
@@ -546,7 +546,7 @@ importers:
         version: link:../../basic/logger
     devDependencies:
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       typescript:
         specifier: ^6.0.3
@@ -568,7 +568,7 @@ importers:
         version: 3.6.0
     devDependencies:
       '@types/react':
-        specifier: ^19.2.14
+        specifier: ^19.2.15
         version: 19.2.15
       '@types/react-dom':
         specifier: ^19.2.3
@@ -587,7 +587,7 @@ importers:
     dependencies:
       '@koa/router':
         specifier: ^15.5.0
-        version: 15.5.0(koa@2.16.4)
+        version: 15.5.0(koa@3.2.1)
       '@zhin.js/console-types':
         specifier: workspace:*
         version: link:../console-types
@@ -595,8 +595,8 @@ importers:
         specifier: ^0.28.0
         version: 0.28.0
       koa:
-        specifier: ^2.16.2
-        version: 2.16.4
+        specifier: ^3.2.1
+        version: 3.2.1
       koa-compose:
         specifier: ^4.1.0
         version: 4.1.0
@@ -605,8 +605,8 @@ importers:
         version: 5.0.0
     devDependencies:
       '@types/koa':
-        specifier: ^2.15.0
-        version: 2.15.2
+        specifier: ^3.0.3
+        version: 3.0.3
       '@types/koa-compose':
         specifier: ^3.2.9
         version: 3.2.9
@@ -617,7 +617,7 @@ importers:
         specifier: ^12.0.4
         version: 12.0.5
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       rimraf:
         specifier: ^6.0.1
@@ -629,7 +629,7 @@ importers:
   packages/console-types:
     devDependencies:
       '@types/react':
-        specifier: ^19.2.14
+        specifier: ^19.2.15
         version: 19.2.15
       rimraf:
         specifier: ^6.0.1
@@ -672,7 +672,7 @@ importers:
         version: 2.9.0
     devDependencies:
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       typescript:
         specifier: ^6.0.3
@@ -700,7 +700,7 @@ importers:
         specifier: ^9.0.7
         version: 9.0.9
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       typescript:
         specifier: ^6.0.3
@@ -709,10 +709,10 @@ importers:
   packages/http-host:
     dependencies:
       koa:
-        specifier: '>=3.1.2'
+        specifier: ^3.2.1
         version: 3.2.1
       ws:
-        specifier: ^8.20.1
+        specifier: ^8.21.0
         version: 8.21.0
     devDependencies:
       '@types/koa':
@@ -722,7 +722,7 @@ importers:
         specifier: ^4.0.4
         version: 4.0.4
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       '@types/ws':
         specifier: latest
@@ -753,7 +753,7 @@ importers:
         version: 2.9.0
     devDependencies:
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       typescript:
         specifier: ^6.0.3
@@ -772,7 +772,7 @@ importers:
         version: link:../storage-port
     devDependencies:
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       typescript:
         specifier: ^6.0.3
@@ -784,7 +784,7 @@ importers:
   packages/satori:
     dependencies:
       html-react-parser:
-        specifier: ^6.1.1
+        specifier: ^6.1.2
         version: 6.1.2(@types/react@19.2.15)(react@19.2.6)
       react:
         specifier: ^19.2.6
@@ -794,7 +794,7 @@ importers:
         version: 0.12.2
     devDependencies:
       '@types/react':
-        specifier: ^19.2.14
+        specifier: ^19.2.15
         version: 19.2.15
       tsup:
         specifier: ^8.0.0
@@ -806,7 +806,7 @@ importers:
   packages/storage-port:
     devDependencies:
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       typescript:
         specifier: ^6.0.3
@@ -861,7 +861,7 @@ importers:
         version: 2.9.0
     devDependencies:
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       typescript:
         specifier: ^6.0.3
@@ -874,10 +874,10 @@ importers:
         version: link:../../services/http
     devDependencies:
       '@types/koa':
-        specifier: ^2.15.0
-        version: 2.15.2
+        specifier: ^3.0.3
+        version: 3.0.3
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       typescript:
         specifier: ^6.0.3
@@ -902,10 +902,10 @@ importers:
         version: 1.0.3
     devDependencies:
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       '@types/react':
-        specifier: ^19.2.14
+        specifier: ^19.2.15
         version: 19.2.15
       '@types/react-dom':
         specifier: ^19.2.3
@@ -935,7 +935,7 @@ importers:
         specifier: ^3.9.8
         version: 3.9.8
       nodemailer:
-        specifier: ^8.0.6
+        specifier: ^8.0.8
         version: 8.0.8
     devDependencies:
       '@types/imap':
@@ -945,7 +945,7 @@ importers:
         specifier: ^3.4.6
         version: 3.4.6
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       '@types/nodemailer':
         specifier: ^8.0.0
@@ -986,7 +986,7 @@ importers:
         specifier: ^3.2.1
         version: 3.3.0(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@types/react':
-        specifier: ^19.2.14
+        specifier: ^19.2.15
         version: 19.2.15
       '@types/react-dom':
         specifier: ^19.2.3
@@ -1026,7 +1026,7 @@ importers:
         version: 1.0.4
     devDependencies:
       '@types/react':
-        specifier: ^19.2.14
+        specifier: ^19.2.15
         version: 19.2.15
       '@types/react-dom':
         specifier: ^19.2.3
@@ -1057,10 +1057,10 @@ importers:
         version: 1.16.1
     devDependencies:
       '@types/koa':
-        specifier: ^2.15.0
-        version: 2.15.2
+        specifier: ^3.0.3
+        version: 3.0.3
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       typescript:
         specifier: ^6.0.3
@@ -1078,14 +1078,14 @@ importers:
         specifier: ^2.0.2
         version: 2.0.2
       ws:
-        specifier: ^8.20.1
+        specifier: ^8.21.0
         version: 8.21.0
     devDependencies:
       '@types/eventsource':
         specifier: ^1.1.15
         version: 1.1.15
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       '@types/ws':
         specifier: ^8.18.1
@@ -1109,11 +1109,11 @@ importers:
         specifier: workspace:*
         version: link:../../services/http
       ws:
-        specifier: ^8.20.1
+        specifier: ^8.21.0
         version: 8.21.0
     devDependencies:
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       '@types/ws':
         specifier: ^8.18.1
@@ -1134,11 +1134,11 @@ importers:
         specifier: workspace:*
         version: link:../../services/http
       ws:
-        specifier: ^8.20.1
+        specifier: ^8.21.0
         version: 8.21.0
     devDependencies:
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       '@types/ws':
         specifier: ^8.18.1
@@ -1162,11 +1162,11 @@ importers:
         specifier: workspace:*
         version: link:../../services/http
       ws:
-        specifier: ^8.20.1
+        specifier: ^8.21.0
         version: 8.21.0
     devDependencies:
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       '@types/ws':
         specifier: ^8.18.1
@@ -1196,11 +1196,11 @@ importers:
         specifier: workspace:*
         version: link:../../../basic/logger
       qq-official-bot:
-        specifier: ^1.1.2
+        specifier: ^1.2.1
         version: 1.2.1
     devDependencies:
       '@types/react':
-        specifier: ^19.2.14
+        specifier: ^19.2.15
         version: 19.2.15
       '@types/react-dom':
         specifier: ^19.2.3
@@ -1237,7 +1237,7 @@ importers:
         version: link:../../services/http
     devDependencies:
       '@types/react':
-        specifier: ^19.2.14
+        specifier: ^19.2.15
         version: 19.2.15
       '@types/react-dom':
         specifier: ^19.2.3
@@ -1267,11 +1267,11 @@ importers:
         specifier: workspace:*
         version: link:../../services/http
       ws:
-        specifier: ^8.20.1
+        specifier: ^8.21.0
         version: 8.21.0
     devDependencies:
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       '@types/ws':
         specifier: ^8.18.1
@@ -1299,7 +1299,7 @@ importers:
         version: 7.16.0
     devDependencies:
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       typescript:
         specifier: ^6.0.3
@@ -1324,10 +1324,10 @@ importers:
         version: 4.16.3
     devDependencies:
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       '@types/react':
-        specifier: ^19.2.14
+        specifier: ^19.2.15
         version: 19.2.15
       '@types/react-dom':
         specifier: ^19.2.3
@@ -1364,10 +1364,10 @@ importers:
         version: 0.6.2
     devDependencies:
       '@types/koa':
-        specifier: ^2.15.0
-        version: 2.15.2
+        specifier: ^3.0.3
+        version: 3.0.3
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       '@types/xml2js':
         specifier: ^0.4.14
@@ -1386,7 +1386,7 @@ importers:
         version: link:../../../packages/zhin
     devDependencies:
       '@types/node':
-        specifier: ^25.8.0
+        specifier: ^25.9.1
         version: 25.9.1
       typescript:
         specifier: ^6.0.3
@@ -1422,11 +1422,11 @@ importers:
         specifier: '>=3.1.2'
         version: 3.1.2
       ws:
-        specifier: ^8.20.1
+        specifier: ^8.21.0
         version: 8.21.0
     devDependencies:
       '@types/koa':
-        specifier: ^3.0.0
+        specifier: ^3.0.3
         version: 3.0.3
       esbuild:
         specifier: ^0.28.0
@@ -1459,13 +1459,13 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/storage-port
       koa:
-        specifier: '>=3.1.2'
+        specifier: ^3.2.1
         version: 3.2.1
       koa-body:
         specifier: ^8.0.0
         version: 8.0.0
       ws:
-        specifier: ^8.20.1
+        specifier: ^8.21.0
         version: 8.21.0
     devDependencies:
       '@types/koa':
@@ -4353,9 +4353,6 @@ packages:
   '@types/koa-static@4.0.4':
     resolution: {integrity: sha512-j1AUzzl7eJYEk9g01hNTlhmipFh8RFbOQmaMNLvLcNNAkPw0bdTs3XTa3V045XFlrWN0QYnblbDJv2RzawTn6A==}
 
-  '@types/koa@2.15.2':
-    resolution: {integrity: sha512-CB+iyjjh1uS5N6/CKwXvw0qA7USMS2WVc4Tjf660yCjhdvqzNr8gdFcIawB41zGGptOQ+d1fnpaQWIIUXYxR3w==}
-
   '@types/koa@3.0.1':
     resolution: {integrity: sha512-VkB6WJUQSe0zBpR+Q7/YIUESGp5wPHcaXr0xueU5W0EOUWtlSbblsl+Kl31lyRQ63nIILh0e/7gXjQ09JXJIHw==}
 
@@ -4401,8 +4398,8 @@ packages:
   '@types/pg@8.20.0':
     resolution: {integrity: sha512-bEPFOaMAHTEP1EzpvHTbmwR8UsFyHSKsRisLIHVMXnpNefSbGA1bD6CVy+qKjGSqmZqNqBDV2azOBo8TgkcVow==}
 
-  '@types/qs@6.15.1':
-    resolution: {integrity: sha512-GZHUBZR9hckSUhrxmp1nG6NwdpM9fCunJwyThLW1X3AyHgd9IlHb6VANpQQqDr2o/qQp6McZ3y/IA2rVzKzSbw==}
+  '@types/qs@6.15.0':
+    resolution: {integrity: sha512-JawvT8iBVWpzTrz3EGw9BTQFg3BQNmwERdKE22vlTxawwtbyUSlMppvZYKLZzB5zgACXdXxbD3m1bXaMqP/9ow==}
 
   '@types/range-parser@1.2.7':
     resolution: {integrity: sha512-hKormJbkJqzQGhziax5PItDUTMAM9uE2XXQmM37dyd4hVM+5aVl7oVxMVUiVQn2oCQFN/LKCZdvSM0pFRqbSmQ==}
@@ -4954,10 +4951,6 @@ packages:
     resolution: {integrity: sha512-3pUp4e8hv07k1QlijZu6Kn7c9+ZpWWk4j3F8N3xPuCExULobqJydKYOTj1FTq58srkJsXvO7LbGAH4C0ZU3WGw==}
     engines: {node: ^20.17.0 || >=22.9.0}
 
-  cache-content-type@1.0.1:
-    resolution: {integrity: sha512-IKufZ1o4Ut42YUrZSo8+qnMTrFuKkvyoLXUywKz9GJ5BrhOFGhLdkx9sG4KAnVvbY6kEcSFjLQul+DVmBm2bgA==}
-    engines: {node: '>= 6.0.0'}
-
   call-bind-apply-helpers@1.0.2:
     resolution: {integrity: sha512-Sp1ablJ0ivDkSzjcaJdxEunN5/XvksFJ2sMBFfq6x0ryhQV/2b/KwFe21cMpmHtPOSij8K99/wSfoEuTObmuMQ==}
     engines: {node: '>= 0.4'}
@@ -5042,10 +5035,6 @@ packages:
     resolution: {integrity: sha512-Kbpv2Yd1NdL1V/V4cwLVxraHDV6K8ayohr2rmH0J87Er8+zJjcTa6dAn9QMPC9CRgU8+aNajKbSf1TzDB1yKPA==}
     engines: {node: '>=8.0.0'}
 
-  co@4.6.0:
-    resolution: {integrity: sha512-QVb0dM5HvG+uaxitm8wONl7jltx8dqhfU33DcqtOZcLSVIKSDDLDi7+0LbAKiyI8hD9u42m2YxXSkMGWThaecQ==}
-    engines: {iojs: '>= 1.0.0', node: '>= 0.12.0'}
-
   code-block-writer@10.1.1:
     resolution: {integrity: sha512-67ueh2IRGst/51p0n6FvPrnRjAGHY5F8xdjkgrYE7DDzpJe6qA07RYQ9VcoUeo5ATOjSOiWpSL3SWBRRbempMw==}
 
@@ -5088,10 +5077,6 @@ packages:
   consola@3.4.2:
     resolution: {integrity: sha512-5IKcdX0nnYavi6G7TtOhwkYzyjfJlatbjMjuLSfE2kYT5pMDOilZ4OvMhi637CcDICTmz3wARPoyhqyX1Y+XvA==}
     engines: {node: ^14.18.0 || >=16.10.0}
-
-  content-disposition@0.5.4:
-    resolution: {integrity: sha512-FveZTNuGw04cxlAiWbzi6zTAL/lhehaWbTtgluJh4/E95DqMwTmha3KZN1aAWA8cFIhHzMZUvLevkw5Rqk+tSQ==}
-    engines: {node: '>= 0.6'}
 
   content-disposition@1.0.1:
     resolution: {integrity: sha512-oIXISMynqSqm241k6kcQ5UwttDILMK4BiurCfGEREw6+X9jkkpEe5T9FZaApyLGGOnFuyMWZpdolTXMtvEJ08Q==}
@@ -5533,10 +5518,6 @@ packages:
   emoji-regex@8.0.0:
     resolution: {integrity: sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==}
 
-  encodeurl@1.0.2:
-    resolution: {integrity: sha512-TPJXq8JqFaVYm2CWmPvnP2Iyo4ZSM7/QKcSmuMLDObfpH5fi7RUGmd/rTDf+rut/saiDiQEeVTNgAmJEdAOx0w==}
-    engines: {node: '>= 0.8'}
-
   encodeurl@2.0.0:
     resolution: {integrity: sha512-Q0n9HRi4m6JuGIV1eFlmvJB7ZEVxu93IrMyiMsGC0lrMJMWzRgx6WGquyfQgZVb31vhGgXnfmPNNXmxnOkRBrg==}
     engines: {node: '>= 0.8'}
@@ -5887,10 +5868,6 @@ packages:
   generate-function@2.3.1:
     resolution: {integrity: sha512-eeB5GfMNeevm/GRYq20ShmsaGcmI81kIX2K9XQx5miC8KdHaC6Jm0qQ8ZNeGOi7wYB8OsdxKs+Y2oVuTFuVwKQ==}
 
-  generator-function@2.0.1:
-    resolution: {integrity: sha512-SFdFmIJi+ybC0vjlHN0ZGVGHc3lgE0DxPAT0djjVg+kjOnSqclqmj0KQ7ykTOLP6YxoqOvuAODGdcHJn+43q3g==}
-    engines: {node: '>= 0.4'}
-
   generic-pool@3.4.2:
     resolution: {integrity: sha512-H7cUpwCQSiJmAHM4c/aFu6fUfrhWXW1ncyh8ftxEPMu6AiYkHw9K8br720TGPZJbk5eOH2bynjZD1yPvdDAmag==}
     engines: {node: '>= 4'}
@@ -6158,10 +6135,6 @@ packages:
     resolution: {integrity: sha512-zymm5+u+sCsSWyD9qNaejV3DFvhCKclKdizYaJUuHA83RLjb7nSuGnddCHGv0hk+KY7BMAlsWeK4Ueg6EV6XQg==}
     engines: {node: '>=8'}
 
-  is-generator-function@1.1.2:
-    resolution: {integrity: sha512-upqt1SkGkODW9tsGNG5mtXTXtECizwtS2kA161M+gJPc1xdb/Ax629af6YrTwcOeQHbewrPNlE5Dx7kzvXTizA==}
-    engines: {node: '>= 0.4'}
-
   is-glob@4.0.3:
     resolution: {integrity: sha512-xelSayHH36ZgE7ZWhli7pW34hNbNl8Ojv5KVmkJD4hBdD3th8Tfk9vYasLM+mXWOZhFkgZfxhLSnrwRr4elSSg==}
     engines: {node: '>=0.10.0'}
@@ -6194,10 +6167,6 @@ packages:
 
   is-property@1.0.2:
     resolution: {integrity: sha512-Ks/IoX00TtClbGQr4TWXemAnktAQvYB7HzcCxDGqEZU6oCmb2INHuOoKxbtR+HFkmYWBKv/dOZtGRiAjDhj92g==}
-
-  is-regex@1.2.1:
-    resolution: {integrity: sha512-MjYsKHO5O7mCsmRGxWcLWheFqN9DJ/2TmngvjKXihe6efViPqc274+Fx/4fYj/r03+ESvBdTXK0V6tA3rgez1g==}
-    engines: {node: '>= 0.4'}
 
   is-stream@2.0.1:
     resolution: {integrity: sha512-hFoiJiTl63nn+kstHGBtewWSKnQLpyb155KHheA1l39uvtO9nWIop1p3udqPcUd/xbF1VLMO4n7OI6p7RbngDg==}
@@ -6340,10 +6309,6 @@ packages:
   koa-compose@4.1.0:
     resolution: {integrity: sha512-8ODW8TrDuMYvXRwra/Kh7/rJo9BtOfPc6qO8eAfC80CnCvSjSl0bkRM24X6/XBBEyj0v1nRUQ1LyOy3dbqOWXw==}
 
-  koa-convert@2.0.0:
-    resolution: {integrity: sha512-asOvN6bFlSnxewce2e/DK3p4tltyfC4VM7ZwuTuepI7dEQVcvpyFuBcEARu1+Hxg8DIwytce2n7jrZtRlPrARA==}
-    engines: {node: '>= 10'}
-
   koa-send@5.0.1:
     resolution: {integrity: sha512-tmcyQ/wXXuxpDxyNXv5yNNkdAMdFRqwtegBXUaowiQzUKqJehttS0x2j0eOZDQAyloAth5w6wwBImnFzkUz3pQ==}
     engines: {node: '>= 8'}
@@ -6351,10 +6316,6 @@ packages:
   koa-static@5.0.0:
     resolution: {integrity: sha512-UqyYyH5YEXaJrf9S8E23GoJFQZXkBVJ9zYYMPGz919MSX1KuvAcycIuS0ci150HCoPf4XQVhQ84Qf8xRPWxFaQ==}
     engines: {node: '>= 7.6.0'}
-
-  koa@2.16.4:
-    resolution: {integrity: sha512-3An0GCLDSR34tsCO4H8Tef8Pp2ngtaZDAZnsWJYelqXUK5wyiHvGItgK/xcSkmHLSTn1Jcho1mRQs2ehRzvKKw==}
-    engines: {node: ^4.8.4 || ^6.10.1 || ^7.10.1 || >= 8.1.4}
 
   koa@3.1.2:
     resolution: {integrity: sha512-2LOQnFKu3m0VxpE+5sb5+BRTSKrXmNxGgxVRiKwD9s5KQB1zID/FRXhtzeV7RT1L2GVpdEEAfVuclFOMGl1ikA==}
@@ -6918,9 +6879,6 @@ packages:
   oniguruma-to-es@3.1.1:
     resolution: {integrity: sha512-bUH8SDvPkH3ho3dvwJwfonjlQ4R80vjyvrU8YpxuROddv55vAEJrTuCuCVUhhsHbtlD9tGGbaNApGQckXhS8iQ==}
 
-  only@0.0.2:
-    resolution: {integrity: sha512-Fvw+Jemq5fjjyWz6CpKx6w9s7xxqo3+JCyM0WXWeCSOboZ8ABkyvP8ID4CZuChA/wxSx+XSJmdOm8rGVyJ1hdQ==}
-
   open@11.0.0:
     resolution: {integrity: sha512-smsWv2LzFjP03xmvFoJ331ss6h+jixfA4UUV/Bsiyuu4YJPfN+FIQGOIiv4w9/+MoHkfkJ22UIaQWRVFRfH6Vw==}
     engines: {node: '>=20'}
@@ -7261,10 +7219,6 @@ packages:
     resolution: {integrity: sha512-6YHEFRL9mfgcAvql/XhwTvf5jKcOiiupt2FiJxHkiX1z4j7WL8J/jRHYLluORvc1XxB5rV20KoeK00gVJamspg==}
     engines: {node: '>=0.6'}
 
-  qs@6.15.2:
-    resolution: {integrity: sha512-Rzq0KEyX/w/tEybncDgdkZrJgVUsUMk3xjh3t5bv3S1HTAtg+uOYt72+ZfwiQwKdysThkTBdL/rTi6HDmX9Ddw==}
-    engines: {node: '>=0.6'}
-
   quansync@0.2.11:
     resolution: {integrity: sha512-AifT7QEbW9Nri4tAwR5M/uzpBuqfZf+zwaEM/QkzEjj7NBuFD2rBuy0K3dE+8wltbezDV7JMA0WfnCPYRSYbXA==}
 
@@ -7469,10 +7423,6 @@ packages:
   safe-compare@1.1.4:
     resolution: {integrity: sha512-b9wZ986HHCo/HbKrRpBJb2kqXMK9CEWIE1egeEvZsYn69ay3kdfl9nG3RyOcR+jInTDf7a86WQ1d4VJX7goSSQ==}
 
-  safe-regex-test@1.1.0:
-    resolution: {integrity: sha512-x/+Cz4YrimQxQccJf5mKEbIa1NzeCRNI5Ecl/ekmlYaampdNLPalVyIcCZNNH3MvmqBugV5TMYZXv0ljslUlaw==}
-    engines: {node: '>= 0.4'}
-
   safer-buffer@2.1.2:
     resolution: {integrity: sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==}
 
@@ -7515,11 +7465,6 @@ packages:
 
   semver@7.7.4:
     resolution: {integrity: sha512-vFKC2IEtQnVhpT78h1Yp8wzwrf8CM+MzKMHGJZfBtzhZNycRFnXsHk6E5TxIkkMsgNS7mdX3AGB7x2QM2di4lA==}
-    engines: {node: '>=10'}
-    hasBin: true
-
-  semver@7.8.1:
-    resolution: {integrity: sha512-rkVq3IXh+4FDGch+KwzX3aV9W3kO54GyEgpvBzSyctDA6Xtd7RJQV1xmXbeQp5v7+VzLOfVqiutSE6GICgPFvg==}
     engines: {node: '>=10'}
     hasBin: true
 
@@ -7844,11 +7789,11 @@ packages:
     resolution: {integrity: sha512-QXqwfEl9ddlGBaRFXIvNKK6OhipSiLXuRuLJX5DErz0o0Q0rYxulWLdFryTkV5PkdZct5iMInwYEGe/eR++1AA==}
     hasBin: true
 
-  tldts-core@7.1.2:
-    resolution: {integrity: sha512-26EbERPLf5wkNFKW+7egxArSPN1Nqipe/PIe1nvhpNu8HqQeY2pYdOeQk4sAiADv/e03VzHkLY0PPohKv1JMAQ==}
+  tldts-core@7.0.30:
+    resolution: {integrity: sha512-uiHN8PIB1VmWyS98eZYja4xzlYqeFZVjb4OuYlJQnZAuJhMw4PbKQOKgHKhBdJR3FE/t5mUQ1Kd80++B+qhD1Q==}
 
-  tldts@7.1.2:
-    resolution: {integrity: sha512-RUX5sQm8bl03ycwQ6nSgJiKw9FZWhA8GBzxX6X1lsG3xKzFIW+lYLLpM30FQbDD6XjTWa/VkF15VxjnAMWYJAQ==}
+  tldts@7.0.30:
+    resolution: {integrity: sha512-ELrFxuqsDdHUwoh0XxDbxuLD3Wnz49Z57IFvTtvWy1hJdcMZjXLIuonjilCiWHlT2GbE4Wlv1wKVTzDFnXH1aw==}
     hasBin: true
 
   to-regex-range@5.0.1:
@@ -8386,10 +8331,6 @@ packages:
 
   yauzl@2.10.0:
     resolution: {integrity: sha512-p4a9I6X6nu6IhoGmBqAcbJy1mlC4j27vEPZX9F4L4/vZT3Lyq1VkFHw/V/PUcB9Buo+DG3iHkT0x3Qya58zc3g==}
-
-  ylru@1.4.0:
-    resolution: {integrity: sha512-2OQsPNEmBCvXuFlIni/a+Rn+R2pHW9INm0BxXJ4hVDA8TirqMj+J/Rp9ItLatT/5pZqWwefVrTQcHpixsxnVlA==}
-    engines: {node: '>= 4.0.0'}
 
   yn@3.1.1:
     resolution: {integrity: sha512-Ux4ygGWsu2c7isFWe8Yu1YluJmqVhxqK2cLXNQA5AcC3QfbGNpM7fu0Y8b/z16pXLnFxZYvWhd3fhBY9DLmC6Q==}
@@ -9514,11 +9455,11 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@koa/router@15.5.0(koa@2.16.4)':
+  '@koa/router@15.5.0(koa@3.2.1)':
     dependencies:
       debug: 4.4.3
       http-errors: 2.0.1
-      koa: 2.16.4
+      koa: 3.2.1
       koa-compose: 4.1.0
       path-to-regexp: 8.4.2
     transitivePeerDependencies:
@@ -10764,7 +10705,7 @@ snapshots:
   '@types/co-body@6.1.3':
     dependencies:
       '@types/node': 25.9.1
-      '@types/qs': 6.15.1
+      '@types/qs': 6.15.0
 
   '@types/connect@3.4.38':
     dependencies:
@@ -10911,7 +10852,7 @@ snapshots:
   '@types/express-serve-static-core@5.1.1':
     dependencies:
       '@types/node': 25.9.1
-      '@types/qs': 6.15.1
+      '@types/qs': 6.15.0
       '@types/range-parser': 1.2.7
       '@types/send': 1.2.1
 
@@ -10972,27 +10913,16 @@ snapshots:
 
   '@types/koa-compose@3.2.9':
     dependencies:
-      '@types/koa': 2.15.2
+      '@types/koa': 3.0.3
 
   '@types/koa-send@4.1.6':
     dependencies:
-      '@types/koa': 2.15.2
+      '@types/koa': 3.0.3
 
   '@types/koa-static@4.0.4':
     dependencies:
-      '@types/koa': 2.15.2
+      '@types/koa': 3.0.3
       '@types/koa-send': 4.1.6
-
-  '@types/koa@2.15.2':
-    dependencies:
-      '@types/accepts': 1.3.7
-      '@types/content-disposition': 0.5.9
-      '@types/cookies': 0.9.2
-      '@types/http-assert': 1.5.6
-      '@types/http-errors': 2.0.5
-      '@types/keygrip': 1.0.6
-      '@types/koa-compose': 3.2.9
-      '@types/node': 25.9.1
 
   '@types/koa@3.0.1':
     dependencies:
@@ -11062,7 +10992,7 @@ snapshots:
       pg-protocol: 1.13.0
       pg-types: 2.2.0
 
-  '@types/qs@6.15.1': {}
+  '@types/qs@6.15.0': {}
 
   '@types/range-parser@1.2.7': {}
 
@@ -11186,7 +11116,7 @@ snapshots:
       '@typescript-eslint/visitor-keys': 8.59.4
       debug: 4.4.3
       minimatch: 10.2.4
-      semver: 7.8.1
+      semver: 7.7.4
       tinyglobby: 0.2.16
       ts-api-utils: 2.5.0(typescript@6.0.3)
       typescript: 6.0.3
@@ -11795,11 +11725,6 @@ snapshots:
       unique-filename: 5.0.0
     optional: true
 
-  cache-content-type@1.0.1:
-    dependencies:
-      mime-types: 2.1.35
-      ylru: 1.4.0
-
   call-bind-apply-helpers@1.0.2:
     dependencies:
       es-errors: 1.3.0
@@ -11871,11 +11796,9 @@ snapshots:
     dependencies:
       '@hapi/bourne': 3.0.0
       inflation: 2.1.0
-      qs: 6.15.2
+      qs: 6.15.1
       raw-body: 2.5.3
       type-is: 1.6.18
-
-  co@4.6.0: {}
 
   code-block-writer@10.1.1: {}
 
@@ -11906,10 +11829,6 @@ snapshots:
   confbox@0.1.8: {}
 
   consola@3.4.2: {}
-
-  content-disposition@0.5.4:
-    dependencies:
-      safe-buffer: 5.2.1
 
   content-disposition@1.0.1: {}
 
@@ -12347,8 +12266,6 @@ snapshots:
 
   emoji-regex@8.0.0:
     optional: true
-
-  encodeurl@1.0.2: {}
 
   encodeurl@2.0.0: {}
 
@@ -12818,8 +12735,6 @@ snapshots:
     dependencies:
       is-property: 1.0.2
 
-  generator-function@2.0.1: {}
-
   generic-pool@3.4.2: {}
 
   get-caller-file@2.0.5:
@@ -13109,14 +13024,6 @@ snapshots:
   is-fullwidth-code-point@3.0.0:
     optional: true
 
-  is-generator-function@1.1.2:
-    dependencies:
-      call-bound: 1.0.4
-      generator-function: 2.0.1
-      get-proto: 1.0.1
-      has-tostringtag: 1.0.2
-      safe-regex-test: 1.1.0
-
   is-glob@4.0.3:
     dependencies:
       is-extglob: 2.1.1
@@ -13140,13 +13047,6 @@ snapshots:
   is-promise@4.0.0: {}
 
   is-property@1.0.2: {}
-
-  is-regex@1.2.1:
-    dependencies:
-      call-bound: 1.0.4
-      gopd: 1.2.0
-      has-tostringtag: 1.0.2
-      hasown: 2.0.3
 
   is-stream@2.0.1: {}
 
@@ -13315,11 +13215,6 @@ snapshots:
 
   koa-compose@4.1.0: {}
 
-  koa-convert@2.0.0:
-    dependencies:
-      co: 4.6.0
-      koa-compose: 4.1.0
-
   koa-send@5.0.1:
     dependencies:
       debug: 4.4.3
@@ -13332,34 +13227,6 @@ snapshots:
     dependencies:
       debug: 3.2.7
       koa-send: 5.0.1
-    transitivePeerDependencies:
-      - supports-color
-
-  koa@2.16.4:
-    dependencies:
-      accepts: 1.3.8
-      cache-content-type: 1.0.1
-      content-disposition: 0.5.4
-      content-type: 1.0.5
-      cookies: 0.9.1
-      debug: 4.4.3
-      delegates: 1.0.0
-      depd: 2.0.0
-      destroy: 1.2.0
-      encodeurl: 1.0.2
-      escape-html: 1.0.3
-      fresh: 0.5.2
-      http-assert: 1.5.0
-      http-errors: 1.8.1
-      is-generator-function: 1.1.2
-      koa-compose: 4.1.0
-      koa-convert: 2.0.0
-      on-finished: 2.4.1
-      only: 0.0.2
-      parseurl: 1.3.3
-      statuses: 1.5.0
-      type-is: 1.6.18
-      vary: 1.1.2
     transitivePeerDependencies:
       - supports-color
 
@@ -13971,8 +13838,6 @@ snapshots:
       regex: 6.1.0
       regex-recursion: 6.0.2
 
-  only@0.0.2: {}
-
   open@11.0.0:
     dependencies:
       default-browser: 5.5.0
@@ -14288,10 +14153,6 @@ snapshots:
     dependencies:
       side-channel: 1.1.0
 
-  qs@6.15.2:
-    dependencies:
-      side-channel: 1.1.0
-
   quansync@0.2.11: {}
 
   querystringify@2.2.0:
@@ -14588,12 +14449,6 @@ snapshots:
     dependencies:
       buffer-alloc: 1.2.0
 
-  safe-regex-test@1.1.0:
-    dependencies:
-      call-bound: 1.0.4
-      es-errors: 1.3.0
-      is-regex: 1.2.1
-
   safer-buffer@2.1.2: {}
 
   sandwich-stream@2.0.2: {}
@@ -14637,8 +14492,6 @@ snapshots:
 
   semver@7.7.4: {}
 
-  semver@7.8.1: {}
-
   send@1.2.1:
     dependencies:
       debug: 4.4.3
@@ -14677,7 +14530,7 @@ snapshots:
     dependencies:
       '@img/colour': 1.1.0
       detect-libc: 2.1.2
-      semver: 7.8.1
+      semver: 7.7.4
     optionalDependencies:
       '@img/sharp-darwin-arm64': 0.34.5
       '@img/sharp-darwin-x64': 0.34.5
@@ -15036,12 +14889,12 @@ snapshots:
 
   tlds@1.261.0: {}
 
-  tldts-core@7.1.2:
+  tldts-core@7.0.30:
     optional: true
 
-  tldts@7.1.2:
+  tldts@7.0.30:
     dependencies:
-      tldts-core: 7.1.2
+      tldts-core: 7.0.30
     optional: true
 
   to-regex-range@5.0.1:
@@ -15064,7 +14917,7 @@ snapshots:
 
   tough-cookie@6.0.1:
     dependencies:
-      tldts: 7.1.2
+      tldts: 7.0.30
     optional: true
 
   tr46@0.0.3: {}
@@ -15628,8 +15481,6 @@ snapshots:
     dependencies:
       buffer-crc32: 0.2.13
       fd-slicer: 1.1.0
-
-  ylru@1.4.0: {}
 
   yn@3.1.1: {}
 

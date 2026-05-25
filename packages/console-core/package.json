@@ -25,16 +25,16 @@
     "@koa/router": "^15.5.0",
     "@zhin.js/console-types": "workspace:*",
     "esbuild": "^0.28.0",
-    "koa": "^2.16.2",
+    "koa": "^3.2.1",
     "koa-compose": "^4.1.0",
     "koa-static": "^5.0.0"
   },
   "devDependencies": {
-    "@types/koa": "^2.15.0",
+    "@types/koa": "^3.0.3",
     "@types/koa-compose": "^3.2.9",
     "@types/koa-static": "^4.0.4",
     "@types/koa__router": "^12.0.4",
-    "@types/node": "^25.8.0",
+    "@types/node": "^25.9.1",
     "rimraf": "^6.0.1",
     "typescript": "^6.0.2"
   },

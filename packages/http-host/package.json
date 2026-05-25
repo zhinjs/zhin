@@ -23,8 +23,8 @@
     "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
-    "koa": "^3.1.1",
-    "ws": "^8.20.1"
+    "koa": "^3.2.1",
+    "ws": "^8.21.0"
   },
   "files": [
     "lib",
@@ -35,7 +35,7 @@
     "@types/koa-static": "^4.0.4",
     "@types/ws": "latest",
     "koa-static": "^5.0.0",
-    "@types/node": "^25.8.0",
+    "@types/node": "^25.9.1",
     "typescript": "^6.0.3"
   },
   "repository": {
