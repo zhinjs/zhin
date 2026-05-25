@@ -1057,8 +1057,8 @@ importers:
         specifier: workspace:*
         version: link:../../../basic/logger
       qq-official-bot:
-        specifier: ^1.1.2
-        version: 1.1.2
+        specifier: ^1.2.1
+        version: 1.2.1
     devDependencies:
       '@types/react':
         specifier: ^19.2.14
@@ -6409,8 +6409,8 @@ packages:
     resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}
     engines: {node: '>=6'}
 
-  qq-official-bot@1.1.2:
-    resolution: {integrity: sha512-8OSzYK33U3qri6wI5bHBNPSW60iJ2jqOFGvefOY4KWzCxJz71sLx2MCU2VysEKErP4iFU9wtpstC4i2hDsQkWQ==}
+  qq-official-bot@1.2.1:
+    resolution: {integrity: sha512-sD//FQnh1UePFGiC3McUiP2svQtyJU8AX5zIwc/tbQS1phoWvhg8POz04M43Q3K7VyYsEUJ9ZFCB5vlL7V6ikQ==}
     engines: {node: '>=16'}
 
   qs@6.15.0:
@@ -6954,11 +6954,11 @@ packages:
     resolution: {integrity: sha512-QXqwfEl9ddlGBaRFXIvNKK6OhipSiLXuRuLJX5DErz0o0Q0rYxulWLdFryTkV5PkdZct5iMInwYEGe/eR++1AA==}
     hasBin: true
 
-  tldts-core@7.0.30:
-    resolution: {integrity: sha512-uiHN8PIB1VmWyS98eZYja4xzlYqeFZVjb4OuYlJQnZAuJhMw4PbKQOKgHKhBdJR3FE/t5mUQ1Kd80++B+qhD1Q==}
+  tldts-core@7.1.2:
+    resolution: {integrity: sha512-26EbERPLf5wkNFKW+7egxArSPN1Nqipe/PIe1nvhpNu8HqQeY2pYdOeQk4sAiADv/e03VzHkLY0PPohKv1JMAQ==}
 
-  tldts@7.0.30:
-    resolution: {integrity: sha512-ELrFxuqsDdHUwoh0XxDbxuLD3Wnz49Z57IFvTtvWy1hJdcMZjXLIuonjilCiWHlT2GbE4Wlv1wKVTzDFnXH1aw==}
+  tldts@7.1.2:
+    resolution: {integrity: sha512-RUX5sQm8bl03ycwQ6nSgJiKw9FZWhA8GBzxX6X1lsG3xKzFIW+lYLLpM30FQbDD6XjTWa/VkF15VxjnAMWYJAQ==}
     hasBin: true
 
   to-regex-range@5.0.1:
@@ -7339,6 +7339,18 @@ packages:
 
   ws@8.20.1:
     resolution: {integrity: sha512-It4dO0K5v//JtTXuPkfEOaI3uUN87iYPnqo/ZzqCoG3g8uhA66QUMs/SrM0YK7/NAu+r4LMh/9dq2A7k+rHs+w==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
+  ws@8.21.0:
+    resolution: {integrity: sha512-Vsp28b7DRcimFQvrqu2Wek3z1iYxDCWqHYB8Qsnk/S4RfaCQzPGPyBNuVjJV3cd6UiKtUtp6sNM77gWvzcCH+g==}
     engines: {node: '>=10.0.0'}
     peerDependencies:
       bufferutil: ^4.0.1
@@ -9464,7 +9476,7 @@ snapshots:
       '@types/node': 25.9.1
       '@types/ws': 8.18.1
       eventemitter3: 5.0.4
-      ws: 8.20.1
+      ws: 8.21.0
     transitivePeerDependencies:
       - bufferutil
       - debug
@@ -11719,7 +11731,7 @@ snapshots:
       whatwg-encoding: 3.1.1
       whatwg-mimetype: 4.0.0
       whatwg-url: 14.2.0
-      ws: 8.20.1
+      ws: 8.21.0
       xml-name-validator: 5.0.0
     transitivePeerDependencies:
       - bufferutil
@@ -12682,13 +12694,13 @@ snapshots:
 
   punycode@2.3.1: {}
 
-  qq-official-bot@1.1.2:
+  qq-official-bot@1.2.1:
     dependencies:
       '@noble/curves': 1.9.7
       axios: 1.16.1
       formdata-node: 6.0.3
       log4js: 6.9.1
-      ws: 8.20.1
+      ws: 8.21.0
     transitivePeerDependencies:
       - bufferutil
       - debug
@@ -13379,12 +13391,12 @@ snapshots:
 
   tlds@1.261.0: {}
 
-  tldts-core@7.0.30:
+  tldts-core@7.1.2:
     optional: true
 
-  tldts@7.0.30:
+  tldts@7.1.2:
     dependencies:
-      tldts-core: 7.0.30
+      tldts-core: 7.1.2
     optional: true
 
   to-regex-range@5.0.1:
@@ -13405,7 +13417,7 @@ snapshots:
 
   tough-cookie@6.0.1:
     dependencies:
-      tldts: 7.0.30
+      tldts: 7.1.2
     optional: true
 
   tr46@0.0.3: {}
@@ -13891,6 +13903,8 @@ snapshots:
   wrappy@1.0.2: {}
 
   ws@8.20.1: {}
+
+  ws@8.21.0: {}
 
   wsl-utils@0.3.1:
     dependencies:
