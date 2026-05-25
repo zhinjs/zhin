@@ -22,7 +22,7 @@
   "devDependencies": {
     "@types/xml2js": "^0.4.14",
     "@types/koa": "^2.15.0",
-    "@types/node": "^25.8.0",
+    "@types/node": "^25.9.1",
     "typescript": "^6.0.3",
     "zhin.js": "workspace:*"
   },
