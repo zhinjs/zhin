@@ -60,10 +60,9 @@ export const startCommand = new Command('start')
         
         // 选择运行时和参数
         const runtime = options.bun ? 'bun' : 'node';
-        // 使用 -e 参数启动 zhin.js/setup
         const args = options.bun 
-          ? ['-e', "import('zhin.js/setup')"]
-          : ['--import', 'tsx/esm', '--expose-gc', '-e', "import('zhin.js/setup')"];
+          ? ['-e', "import('zhin.js/node').then(m => m.bootstrapNode())"]
+          : ['--import', 'tsx/esm', '--expose-gc', '-e', "import('zhin.js/node').then(m => m.bootstrapNode())"];
         return startProcess(runtime, args, {
           cwd,
           env,

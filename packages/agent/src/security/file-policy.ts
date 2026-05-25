@@ -11,8 +11,8 @@
  *  4. bash 安全分类 — 环境变量泄漏 + 命令读写分类
  */
 
-import * as path from 'path';
-import * as os from 'os';
+import * as path from 'node:path';
+import * as os from 'node:os';
 
 // ── 设备路径阻止（参考 Claude Code FileReadTool BLOCKED_DEVICE_PATHS）──
 

@@ -1,15 +1,18 @@
 import { Adapter, Plugin, Bot, SendContent, SendOptions, MessageBase, Message, segment } from "@zhin.js/core";
+import { bindStdin, runtimePid, runtimeUser } from "./runtime-io.js";
+
 export class ProcessBot implements Bot<{ owner?: string },{content:string,ts:number}>{
-    $id=`${process.pid}`;
+    $id = runtimePid();
     get logger() {
         return this.adapter.logger;
     }
     $connected=false;
-    constructor(public adapter: ProcessAdapter, public $config: { owner?: string }={ owner: `${process.pid}` }) {
+    #unbindStdin: (() => void) | null = null;
+    constructor(public adapter: ProcessAdapter, public $config: { owner?: string }={ owner: runtimePid() }) {
         this.$listenInput=this.$listenInput.bind(this);
     }
-    $listenInput:(data:Buffer<ArrayBufferLike>)=>void=function (this:ProcessBot,data){
-        const content = data.toString().trim();
+    $listenInput(chunk: string) {
+        const content = chunk.trim();
         if (content) {
             this.adapter.emit('message.receive', this.$formatMessage({content,ts:Date.now()}));
         }
@@ -22,13 +25,13 @@ export class ProcessBot implements Bot<{ owner?: string },{content:string,ts:num
         const base:MessageBase={
             $id: `${event.ts}`,
             $adapter: 'process',
-            $bot: `${process.pid}`,
+            $bot: runtimePid(),
             $sender: {
-                id: `${process.env.USER}`,
-                name: process.env.USER,
+                id: runtimeUser(),
+                name: runtimeUser(),
             },
             $channel: {
-                id: `${process.env.USER}`,
+                id: runtimeUser(),
                 type: 'private',
             },
             $content: [{type:'text',data:{text:event.content}}],
@@ -55,16 +58,17 @@ export class ProcessBot implements Bot<{ owner?: string },{content:string,ts:num
         return `${Date.now()}`;
     }
     async $connect(): Promise<void> {
-        process.stdin.on('data', this.$listenInput);
+        this.#unbindStdin = bindStdin((chunk) => this.$listenInput(chunk));
         this.$connected = true;
     }
     async $disconnect() {
-        process.stdin.removeListener('data', this.$listenInput);
+        this.#unbindStdin?.();
+        this.#unbindStdin = null;
     }
 }
 export class ProcessAdapter extends Adapter<ProcessBot>{
     constructor(plugin: Plugin) {
-        super(plugin, 'process', [{ owner: `${process.pid}` }]);
+        super(plugin, 'process', [{ owner: runtimePid() }]);
     }
     
     createBot(config: Adapter.BotConfig<ProcessBot>): ProcessBot {

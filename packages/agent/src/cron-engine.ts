@@ -9,8 +9,8 @@
  * - CLI / AI 工具：可对持久化任务做 list / add / remove / pause / resume（AI 侧立即生效）
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { Cron, ZhinTool, Logger } from '@zhin.js/core';
 import type { ToolContext } from '@zhin.js/core';
 import { formatCompact } from '@zhin.js/logger';

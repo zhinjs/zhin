@@ -16,6 +16,8 @@ export { writeWebResponse } from "./node-response.js";
 export { koaFallback } from "./koa-bridge.js";
 export { koaJsonBodyMiddleware } from "./koa-json-body.js";
 export { registerFetchRoute } from "./register-fetch-route.js";
+export { registerWebSocketRoute } from "./register-websocket-route.js";
+export type { WebSocketConnectHandler } from "./register-websocket-route.js";
 export { getSystemStatusData, registerSystemStatusRoute } from "./system-routes.js";
 export type { SystemStatusData } from "./system-routes.js";
 export { timingSafeEqualString } from "./timing-safe-equal.js";

@@ -3,36 +3,26 @@
   "version": "0.2.0",
   "exports": "./main.ts",
   "tasks": {
+    "build:console-assets": "node scripts/build-console-assets.mjs",
     "dev": "deno run -A --sloppy-imports --env-file=.env --watch main.ts",
+    "predev": "node scripts/build-console-assets.mjs",
     "start": "deno run -A --sloppy-imports --env-file=.env main.ts",
     "check": "deno check --sloppy-imports main.ts",
     "test": "deno test -A --sloppy-imports src/runtime/smoke_test.ts",
     "deploy": "deno deploy --prod --config deno.deploy.json main.ts"
   },
   "imports": {
-    "zhin.js": "npm:zhin.js@1.0.81",
-    "@zhin.js/http-host/edge": "../../packages/http-host/src/edge.ts",
-    "@zhin.js/http-host": "../../packages/http-host/src/edge.ts",
-    "@zhin.js/storage-port": "../../packages/storage-port/src/index.ts",
-    "@zhin.js/queue-runtime": "../../packages/queue-runtime/src/index.ts",
-    "@zhin.js/core/queue-im-field-contract": "../../packages/core/src/built/queue-im-field-contract.ts",
+    "zhin.js/deno": "../../packages/zhin/src/deno.ts",
+    "zhin.js": "../../packages/zhin/src/index.ts",
     "@zhin.js/core": "../../packages/core/src/index.ts",
     "@zhin.js/core/": "../../packages/core/src/",
-    "@zhin.js/ai": "../../packages/ai/src/index.ts",
-    "@zhin.js/agent": "../../packages/agent/src/index.ts",
     "@zhin.js/logger": "../../basic/logger/src/index.ts",
-    "@zhin.js/http/host-rest-api": "../../plugins/services/http/src/host-rest-api.ts",
-    "@zhin.js/http/logs-rest-api": "../../plugins/services/http/src/logs-rest-api.ts",
-    "@zhin.js/http/marketplace-rest-api": "../../plugins/services/http/src/marketplace-rest-api.ts",
-    "@zhin.js/http/adapter-api-stubs": "../../plugins/services/http/src/adapter-api-stubs.ts",
-    "@zhin.js/console/console-api": "../../plugins/services/console/src/console-api.ts",
-    "@zhin.js/console/rpc/project-fs": "../../plugins/services/console/src/rpc/project-fs.ts",
-    "pg": "npm:pg@8.16.3",
-    "chalk": "npm:chalk@5.4.1"
+    "@zhin.js/http-host/edge": "../../packages/http-host/src/edge.ts",
+    "@zhin.js/console-types": "../../packages/console-types/src/index.ts",
+    "react": "npm:react@19.2.6"
   },
   "compilerOptions": {
     "strict": true,
     "lib": ["deno.ns", "deno.unstable", "dom", "esnext"]
-  },
-  "nodeModulesDir": "auto"
+  }
 }

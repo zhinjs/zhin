@@ -4,7 +4,8 @@ Zhin.js Sandbox 适配器，基于 WebSocket 的本地测试适配器，配合 W
 
 ## 功能特性
 
-- 基于 WebSocket 实时通信
+- **Node Host**：WebSocket `/sandbox`
+- **Edge**（Vercel 等）：`transport: http-sse` — `POST /sandbox/message` + `GET /sandbox/events`
 - 浏览器端 React 聊天 UI
 - 支持多客户端同时连接
 - 无需第三方平台账号，即开即用
@@ -31,6 +32,7 @@ Sandbox 适配器需要以下服务插件：
 bots:
   - context: sandbox
     name: sandbox-bot
+    # transport: http-sse   # Edge / Vercel；Node 省略或 websocket
 
 plugins:
   - adapter-sandbox
@@ -64,7 +66,19 @@ export default defineConfig({
 2. 打开浏览器访问 Web 控制台（默认 `http://localhost:8086`）
 3. 在控制台的 Sandbox 聊天窗口中发送消息进行测试
 
-每个浏览器客户端通过 WebSocket 连接后会自动创建一个 Sandbox Bot 实例，消息通过 JSON 格式在 WebSocket 上传输。
+每个浏览器客户端连接后创建 Sandbox Bot（无 yaml 固定名时为 `sandbox-xxxx`）。传输层在 `src/sandbox-ws.ts`（WS）与 `src/fetch-sse.ts`（SSE）。
+
+**Node**（默认 `transport: websocket`）：`Router.ws("/sandbox")`（插件 `useContext("router")` 自动挂载）。
+
+**Edge**（`zhin.config.yml` 中 `transport: http-sse`）：
+
+```typescript
+import { registerSandboxSseRoutes } from "@zhin.js/adapter-sandbox/edge";
+
+registerSandboxSseRoutes(routeTable, () => plugin.inject("sandbox"));
+```
+
+仍支持 Deno 等可 WS 的环境：`registerSandboxWebSocketRoutes`。
 
 ## 消息格式
 

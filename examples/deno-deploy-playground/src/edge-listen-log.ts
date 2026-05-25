@@ -1,4 +1,4 @@
-import { REMOTE_CONSOLE_ORIGIN } from "./runtime/http-config.ts";
+const REMOTE_CONSOLE_ORIGIN = "https://console.zhin.dev";
 
 export type EdgeListenLogOptions = {
   host: string;

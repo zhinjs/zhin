@@ -26,6 +26,45 @@ const HOST_PROXIED_MODULES = new Set([
   "react-router-dom",
 ]);
 
+/** discoverCjsExports 失败时的兜底（须与 Host Console 注册的 CJS 导出一致） */
+const KNOWN_NAMED_EXPORTS: Record<string, string[]> = {
+  "react/jsx-runtime": ["Fragment", "jsx", "jsxs"],
+  "react/jsx-dev-runtime": ["Fragment", "jsx", "jsxs", "jsxDEV"],
+  react: [
+    "Children",
+    "Component",
+    "Fragment",
+    "Profiler",
+    "PureComponent",
+    "StrictMode",
+    "Suspense",
+    "cloneElement",
+    "createContext",
+    "createElement",
+    "createFactory",
+    "createRef",
+    "forwardRef",
+    "isValidElement",
+    "lazy",
+    "memo",
+    "startTransition",
+    "useCallback",
+    "useContext",
+    "useDebugValue",
+    "useDeferredValue",
+    "useEffect",
+    "useId",
+    "useImperativeHandle",
+    "useInsertionEffect",
+    "useLayoutEffect",
+    "useMemo",
+    "useReducer",
+    "useRef",
+    "useState",
+    "version",
+  ],
+};
+
 const esmCache = new Map<string, string>();
 const tmpDir = path.join(os.tmpdir(), "zhin-console-esm");
 
@@ -61,6 +100,12 @@ function discoverCjsExports(canonical: string, resolveDir: string): string[] {
   return [];
 }
 
+function resolveNamedExports(canonical: string, resolveDir: string): string[] {
+  const discovered = discoverCjsExports(canonical, resolveDir);
+  const known = KNOWN_NAMED_EXPORTS[canonical] ?? [];
+  return [...new Set([...discovered, ...known])];
+}
+
 function buildHostProxyModule(canonical: string, namedExports: string[]): string {
   const lines = [
     `const _m = globalThis[${JSON.stringify(CONSOLE_SHARED_MODULES_KEY)}]?.get(${JSON.stringify(canonical)});`,
@@ -93,7 +138,7 @@ export async function getOrBuildCanonicalEsmBundle(
   const cached = esmCache.get(canonical);
   if (cached) return cached;
 
-  const namedExports = discoverCjsExports(canonical, resolveDir);
+  const namedExports = resolveNamedExports(canonical, resolveDir);
 
   if (HOST_PROXIED_MODULES.has(canonical)) {
     const code = buildHostProxyModule(canonical, namedExports);

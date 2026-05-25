@@ -8,7 +8,7 @@
  *   4. 完成后将结果投递回主流程，由主 agent 摘要后发送到原始频道
  */
 
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import { Logger } from '@zhin.js/core';
 import { formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
 import type { AIProvider, AgentTool, Usage } from '@zhin.js/core';

@@ -1,6 +1,6 @@
 import { Bot } from "./bot.js";
 import { Plugin } from "./plugin.js";
-import { EventEmitter } from "events";
+import { EventEmitter } from "node:events";
 import { Message } from "./message.js";
 import { Notice } from "./notice.js";
 import { Request } from "./request.js";

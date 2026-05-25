@@ -1,7 +1,7 @@
 import { Model} from '../../base/index.js';
 import { DocumentDatabase } from './database.js';
 import { DocumentQueryResult, Condition } from '../../types.js';
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 
 /**
  * 文档型模型类

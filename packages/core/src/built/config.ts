@@ -11,12 +11,28 @@ import { Schema } from "@zhin.js/schema";
 import { Feature, FeatureJSON } from "../feature.js";
 import { getPlugin } from "../plugin.js";
 
+/** Deno / Node 统一的工作目录（`Deno.chdir` 后应与 `process.cwd()` 一致） */
+export function runtimeCwd(): string {
+  const g = globalThis as { Deno?: { cwd: () => string } };
+  return g.Deno?.cwd?.() ?? process.cwd();
+}
+
+function envLookup(key: string): string | undefined {
+  const g = globalThis as {
+    Deno?: { env: { get: (k: string) => string | undefined } };
+    process?: { env: Record<string, string | undefined> };
+  };
+  return g.Deno?.env.get(key) ?? g.process?.env?.[key];
+}
+
 // ============================================================================
 // ConfigLoader（保持不变）
 // ============================================================================
 
 export class ConfigLoader<T extends object> {
   #data: T;
+  /** `load()` 时解析的绝对路径，避免 proxy `save` 写到 cwd 下错误目录 */
+  #resolvedPath = '';
   get data(): T {
     return this.#proxy(this.#data, this);
   }
@@ -62,27 +78,46 @@ export class ConfigLoader<T extends object> {
               key = content;
               defaultValue = undefined;
             }
-            return process.env[key] ?? defaultValue ?? (loader.initial as any)[key] ?? result;
+            return envLookup(key) ?? defaultValue ?? (loader.initial as any)[key] ?? result;
           }
         }
         return result;
       },
       set(target, prop, value, receiver) {
         const result = Reflect.set(target, prop, value, receiver);
-        loader.save(loader.filename);
+        loader.save();
         return result;
       },
       deleteProperty(target, prop) {
         const result = Reflect.deleteProperty(target, prop);
-        loader.save(loader.filename);
+        loader.save();
         return result;
       }
     });
   }
-  load() {
-    const fullPath = path.resolve(process.cwd(), this.filename);
+  resolvePath(baseDir: string = runtimeCwd()): string {
+    return path.isAbsolute(this.filename)
+      ? this.filename
+      : path.resolve(baseDir, this.filename);
+  }
+
+  load(baseDir: string = runtimeCwd()) {
+    const fullPath = this.resolvePath(baseDir);
+    this.#resolvedPath = fullPath;
     if (!fs.existsSync(fullPath)) {
-      this.save(fullPath);
+      try {
+        this.save(fullPath);
+      } catch {
+        // Workers 等无 fs.writeFileSync 的环境：使用内存 defaults
+        const hasDefaults =
+          this.initial != null && typeof this.initial === "object" && Object.keys(this.initial).length > 0;
+        if (hasDefaults) {
+          const merged = mergeConfigDefaults(this.initial, {});
+          this.#data = this.schema ? this.schema(merged) as T : merged as T;
+          return;
+        }
+        throw new Error(`Config file missing and cannot create: ${fullPath}`);
+      }
     }
     const content = fs.readFileSync(fullPath, "utf-8");
     let rawConfig: any;
@@ -105,17 +140,24 @@ export class ConfigLoader<T extends object> {
       this.#data = merged as T;
     }
   }
-  save(fullPath: string) {
+  save(fullPath?: string) {
+    if (fullPath) {
+      this.#resolvedPath = fullPath;
+    }
+    const target = this.#resolvedPath || this.resolvePath();
+    if (!target) {
+      throw new Error('ConfigLoader: call load() before save()');
+    }
     switch (this.extension) {
       case ".json":
-        fs.writeFileSync(fullPath, JSON.stringify(this.#data, null, 2));
+        fs.writeFileSync(target, JSON.stringify(this.#data, null, 2));
         break;
       case ".yaml":
       case ".yml":
-        fs.writeFileSync(fullPath, stringifyYaml(this.#data));
+        fs.writeFileSync(target, stringifyYaml(this.#data));
         break;
       case ".toml":
-        fs.writeFileSync(fullPath, stringifyToml(this.#data as Record<string, any>));
+        fs.writeFileSync(target, stringifyToml(this.#data as Record<string, any>));
         break;
     }
   }
@@ -124,7 +166,7 @@ export class ConfigLoader<T extends object> {
    * 保留注释、格式和未修改字段（如 ${VAR} 环境变量引用）
    */
   patchKey(key: string, value: any) {
-    const fullPath = path.resolve(process.cwd(), this.filename);
+    const fullPath = this.#resolvedPath || this.resolvePath();
     switch (this.extension) {
       case ".yaml":
       case ".yml": {
@@ -187,8 +229,7 @@ export namespace ConfigLoader {
   /**
    * 自动发现配置文件（按优先级：yml > yaml > json > toml）
    */
-  export function discover(basename: string): string | null {
-    const cwd = process.cwd();
+  export function discover(basename: string, cwd: string = runtimeCwd()): string | null {
     for (const ext of ['.yml', '.yaml', '.json', '.toml']) {
       const filename = `${basename}${ext}`;
       if (fs.existsSync(path.resolve(cwd, filename))) {
@@ -197,9 +238,14 @@ export namespace ConfigLoader {
     }
     return null;
   }
-  export function load<T extends object>(filename: string, initial?: T, schema?: Schema<T>) {
+  export function load<T extends object>(
+    filename: string,
+    initial?: T,
+    schema?: Schema<T>,
+    baseDir?: string,
+  ) {
     const result = new ConfigLoader<T>(filename, initial ?? {} as T, schema);
-    result.load();
+    result.load(baseDir);
     return result;
   }
 }
@@ -252,12 +298,17 @@ export class ConfigFeature extends Feature<ConfigRecord> {
   /**
    * 加载配置文件
    */
-  load<T extends object>(filename: string, initial?: Partial<T>, schema?: Schema<T>): ConfigLoader<T> {
+  load<T extends object>(
+    filename: string,
+    initial?: Partial<T>,
+    schema?: Schema<T>,
+    baseDir?: string,
+  ): ConfigLoader<T> {
     const ext = path.extname(filename).toLowerCase();
     if (!ConfigLoader.supportedExtensions.includes(ext)) {
       throw new Error(`不支持的配置文件格式: ${ext}`);
     }
-    const config = ConfigLoader.load(filename, initial as T, schema);
+    const config = ConfigLoader.load(filename, initial as T, schema, baseDir);
     this.configs.set(filename, config);
     if (!this.#primaryConfigFile) {
       this.#primaryConfigFile = filename;
@@ -300,7 +351,7 @@ export class ConfigFeature extends Feature<ConfigRecord> {
     const config = this.configs.get(filename);
     if (!config) throw new Error(`配置文件 ${filename} 未加载`);
     Object.assign(config.raw, data);
-    config.save(path.resolve(process.cwd(), filename));
+    config.save(path.resolve(runtimeCwd(), filename));
   }
 
   /**
@@ -336,7 +387,7 @@ export class ConfigFeature extends Feature<ConfigRecord> {
             const raw = config.raw as Record<string, any>;
             if (!(key in raw)) {
               raw[key] = defaultValue;
-              config.save(path.resolve(process.cwd(), feature.#primaryConfigFile));
+              config.save(path.resolve(runtimeCwd(), feature.#primaryConfigFile));
             }
           }
         }

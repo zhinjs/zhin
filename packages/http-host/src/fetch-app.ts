@@ -6,6 +6,8 @@ export type FetchAppOptions = {
   token?: string;
   corsOrigins?: string[];
   trustProxy?: boolean;
+  /** 精确或前缀匹配的路径跳过 Bearer（如 Edge 公开 `/api/events` 仍可由客户端带 token） */
+  authExemptPaths?: string[];
   /** Runs when no route matches (e.g. Koa console static). */
   fallback?: (req: Request) => Promise<Response>;
 };
@@ -49,7 +51,19 @@ function applySecurityHeaders(headers: Headers): void {
   headers.set("X-Frame-Options", "SAMEORIGIN");
 }
 
-function requiresAuth(pathname: string, base: string, whiteList: (string | RegExp)[]): boolean {
+/** Deno.upgradeWebSocket 的 Response 须原样返回，不可 new Response(body) 再包一层 */
+function isWebSocketUpgradeResponse(res: Response): boolean {
+  if (res.status === 101) return true;
+  return res.headers.get("upgrade")?.toLowerCase() === "websocket";
+}
+
+function requiresAuth(
+  pathname: string,
+  base: string,
+  whiteList: (string | RegExp)[],
+  exempt: string[] = [],
+): boolean {
+  if (exempt.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return false;
   if (pathname.startsWith("/pub/") || pathname === "/pub") return false;
   if (!pathname.startsWith(base + "/") && pathname !== base) {
     const wl = whiteList.some((p) => typeof p === "string" && !p.startsWith(base) && pathname.startsWith(p));
@@ -63,6 +77,7 @@ export function createFetchApp(routes: RouteTable, options: FetchAppOptions = {}
   const base = options.base ?? "/api";
   const token = options.token ?? "";
   const corsOrigins = options.corsOrigins ?? [];
+  const authExempt = options.authExemptPaths ?? [];
   const fallback = options.fallback;
 
   const fetch = async (req: Request): Promise<Response> => {
@@ -93,9 +108,13 @@ export function createFetchApp(routes: RouteTable, options: FetchAppOptions = {}
           })
         : req;
 
-    if (requiresAuth(url.pathname, base, routes.whiteList) && token) {
+    if (requiresAuth(url.pathname, base, routes.whiteList, authExempt) && token) {
       const auth = req.headers.get("Authorization");
-      const reqToken = auth?.startsWith("Bearer ") ? auth.slice(7) : "";
+      const queryToken =
+        url.searchParams.get("access_token") ?? url.searchParams.get("token") ?? "";
+      const reqToken = auth?.startsWith("Bearer ")
+        ? auth.slice(7)
+        : queryToken;
       if (!timingSafeEqualString(token, reqToken)) {
         const h = new Headers({ "content-type": "application/json" });
         applySecurityHeaders(h);
@@ -109,6 +128,9 @@ export function createFetchApp(routes: RouteTable, options: FetchAppOptions = {}
 
     const routed = await routes.dispatch(replayReq, body);
     if (routed) {
+      if (isWebSocketUpgradeResponse(routed)) {
+        return routed;
+      }
       const h = new Headers(routed.headers);
       applySecurityHeaders(h);
       if (cors) for (const [k, v] of Object.entries(cors)) h.set(k, v);
