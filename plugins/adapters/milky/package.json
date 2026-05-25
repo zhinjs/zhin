@@ -42,7 +42,7 @@
   },
   "dependencies": {
     "eventsource": "^2.0.2",
-    "ws": "^8.20.1"
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@zhin.js/cli": "workspace:*",
