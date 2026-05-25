@@ -55,10 +55,10 @@
     "@zhin.js/console-core": "workspace:*",
     "@zhin.js/console-types": "workspace:*",
     "@zhin.js/http-host": "workspace:*",
-    "ws": "^8.20.1"
+    "ws": "^8.21.0"
   },
   "devDependencies": {
-    "@types/koa": "^3.0.0",
+    "@types/koa": "^3.0.3",
     "esbuild": "^0.28.0",
     "lucide-react": "^1.16.0",
     "tsup": "^8.5.1",
