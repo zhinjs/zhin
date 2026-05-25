@@ -70,8 +70,8 @@
     "@zhin.js/schema": "workspace:*",
     "@zhin.js/storage-port": "workspace:*",
     "koa": "^3.1.1",
-    "ws": "^8.20.1",
-    "koa-body": "latest"
+    "koa-body": "^8.0.0",
+    "ws": "^8.20.1"
   },
   "peerDependencies": {
     "zhin.js": "workspace:*"
