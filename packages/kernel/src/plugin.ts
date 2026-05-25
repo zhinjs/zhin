@@ -6,19 +6,41 @@
  *
  * 上层框架可继承或组合此类来构建自己的插件系统。
  */
-import { EventEmitter } from "events";
-import * as fs from "fs";
-import * as path from "path";
-import { fileURLToPath, pathToFileURL } from "url";
-import { createHash } from "crypto";
-import { createRequire } from "module";
+import { EventEmitter } from "node:events";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
 import logger, { Logger } from "@zhin.js/logger";
 import { Feature } from "./feature.js";
 import type { PluginLike } from "./plugin-types.js";
 import { remove, resolveEntry, supportedPluginExtensions } from "./utils.js";
-import { AsyncLocalStorage } from "async_hooks";
+import { AsyncLocalStorage } from "node:async_hooks";
 
-const require = createRequire(import.meta.url);
+function runtimeCwd(): string {
+  const g = globalThis as { Deno?: { cwd: () => string } };
+  return g.Deno?.cwd?.() ?? process.cwd();
+}
+
+function resolvePluginResolveDir(parent?: PluginBase): string {
+  if (parent?.filePath) return path.dirname(parent.filePath);
+  const meta = import.meta.url;
+  if (typeof meta === "string" && meta.length > 0) {
+    return path.dirname(fileURLToPath(meta));
+  }
+  return runtimeCwd();
+}
+
+function pluginCreateRequire(): ReturnType<typeof createRequire> {
+  const metaUrl = import.meta.url;
+  if (typeof metaUrl === "string" && metaUrl.length > 0) {
+    return createRequire(metaUrl);
+  }
+  // Cloudflare Workers 等打包环境可能无 import.meta.url
+  const cwd = typeof process !== "undefined" && process.cwd ? process.cwd() : "/";
+  return createRequire(pathToFileURL(path.join(cwd, "package.json")).href);
+}
 
 // ── AsyncLocalStorage for plugin context ──
 export const pluginStorage = new AsyncLocalStorage<PluginBase>();
@@ -317,11 +339,8 @@ export class PluginBase extends EventEmitter<PluginBaseLifecycle> implements Plu
   }
 
   static async create(entry: string, parent?: PluginBase): Promise<PluginBase> {
-    entry = path.resolve(
-      path.dirname(parent?.filePath || fileURLToPath(import.meta.url)),
-      entry,
-    );
-    const entryFile = fs.existsSync(entry) ? entry : require.resolve(entry);
+    entry = path.resolve(resolvePluginResolveDir(parent), entry);
+    const entryFile = fs.existsSync(entry) ? entry : pluginCreateRequire().resolve(entry);
     const realPath = fs.realpathSync(entryFile);
 
     const existing = loadedModules.get(realPath);

@@ -2,6 +2,8 @@
  * Minimal router context compatible with legacy Koa-router handlers.
  */
 export type RouterContext = {
+  /** 原始 Fetch Request（WebSocket upgrade 等需要） */
+  req: Request;
   method: string;
   path: string;
   params: Record<string, string>;
@@ -30,6 +32,7 @@ export function createRouterContext(
     query[k] = v;
   });
   const ctx: RouterContext = {
+    req,
     method: req.method,
     path: url.pathname,
     params,
@@ -49,6 +52,9 @@ export function createRouterContext(
 }
 
 export function contextToResponse(ctx: RouterContext): Response {
+  if (ctx.body instanceof Response) {
+    return ctx.body;
+  }
   const status = ctx.status || 200;
   const headers = new Headers(Object.fromEntries(ctx._responseHeaders));
   if (ctx.body instanceof ReadableStream) {

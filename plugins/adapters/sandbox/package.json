@@ -8,8 +8,15 @@
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",
+      "deno": "./src/index.ts",
       "development": "./src/index.ts",
       "import": "./lib/index.js"
+    },
+    "./edge": {
+      "types": "./lib/edge.d.ts",
+      "deno": "./src/edge.ts",
+      "development": "./src/edge.ts",
+      "import": "./lib/edge.js"
     }
   },
   "files": [
@@ -47,8 +54,9 @@
     "clean": "rimraf lib"
   },
   "devDependencies": {
+    "@zhin.js/http-host": "workspace:*",
     "@zhin.js/cli": "workspace:*",
-    "@types/react": "^19.2.14",
+    "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "radix-ui": "^1.4.3",
     "lucide-react": "^1.16.0",
@@ -59,11 +67,15 @@
     "@zhin.js/core": "workspace:*",
     "@zhin.js/client": "workspace:*",
     "@zhin.js/http": "workspace:*",
+    "@zhin.js/http-host": "workspace:*",
     "@zhin.js/console": "workspace:*",
     "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@zhin.js/http": {
+      "optional": true
+    },
+    "@zhin.js/http-host": {
       "optional": true
     },
     "@zhin.js/console": {

@@ -79,8 +79,8 @@ export const devCommand = new Command('dev')
             : ['--import', 'tsx/esm','src/index.ts'];
         } else {
           args = options.bun 
-            ? ['-e', "import('zhin.js/setup')"]
-            : ['--import', 'tsx/esm','-e', "import('zhin.js/setup')"];
+            ? ['-e', "import('zhin.js/node').then(m => m.bootstrapNode())"]
+            : ['--import', 'tsx/esm','-e', "import('zhin.js/node').then(m => m.bootstrapNode())"];
         }
         
         // 启动机器人

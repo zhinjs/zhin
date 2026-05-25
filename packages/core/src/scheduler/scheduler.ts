@@ -5,9 +5,9 @@
  * 以及可选的 HEARTBEAT.md 周期检查。
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import { randomUUID } from 'crypto';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { Cron as Croner } from 'croner';
 import type {
   Schedule,

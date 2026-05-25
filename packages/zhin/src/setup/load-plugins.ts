@@ -1,7 +1,7 @@
 import { resolveEntry } from '@zhin.js/core';
 import type { Plugin } from '@zhin.js/core';
 import type { AppConfig } from '../types.js';
-import * as path from 'path';
+import * as path from 'node:path';
 import { getZhinProjectRoot } from './project-root.js';
 
 /**

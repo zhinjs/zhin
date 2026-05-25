@@ -1,0 +1,35 @@
+{
+  "name": "@zhin/cloudflare-workers-edge-playground",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:console-assets": "node scripts/build-console-assets.mjs",
+    "prepare-deploy": "node scripts/prepare-deploy.mjs",
+    "predev": "node scripts/build-console-assets.mjs",
+    "dev": "node --import tsx scripts/local-fetch-server.mjs",
+    "dev:wrangler": "node scripts/write-dev-vars.mjs && wrangler dev --port 8002",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@zhin.js/adapter-sandbox": "workspace:*",
+    "@zhin.js/agent": "workspace:*",
+    "@zhin.js/ai": "workspace:*",
+    "@zhin.js/console": "workspace:*",
+    "@zhin.js/console-types": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/database": "workspace:*",
+    "@zhin.js/http": "workspace:*",
+    "@zhin.js/http-host": "workspace:*",
+    "@zhin.js/kernel": "workspace:*",
+    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/queue-runtime": "workspace:*",
+    "@zhin.js/schema": "workspace:*",
+    "@zhin.js/storage-port": "workspace:*",
+    "zhin.js": "workspace:*"
+  },
+  "devDependencies": {
+    "dotenv": "^17.4.2",
+    "tsx": "^4.19.0",
+    "wrangler": "^4.14.0"
+  }
+}

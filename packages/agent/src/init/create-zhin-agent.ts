@@ -2,7 +2,7 @@
  * Create ZhinAgent global brain and wire up sub-systems
  * (follow-up sender, subagent manager, cron engine, scheduler).
  */
-import * as path from 'path';
+import * as path from 'node:path';
 import { formatCompact, getPlugin, getScheduler, isZhinTool, Scheduler, setScheduler, type MessageType, type SendOptions } from '@zhin.js/core';
 import { ModelRegistry, computeTierScore } from '@zhin.js/ai';
 import { ZhinAgent } from '../zhin-agent/index.js';
