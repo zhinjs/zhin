@@ -47,7 +47,7 @@
   "devDependencies": {
     "@zhin.js/cli": "workspace:*",
     "@types/eventsource": "^1.1.15",
-    "@types/node": "^25.8.0",
+    "@types/node": "^25.9.1",
     "@types/ws": "^8.18.1",
     "@zhin.js/client": "workspace:*",
     "typescript": "^6.0.3",
