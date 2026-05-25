@@ -30,6 +30,6 @@
   "devDependencies": {
     "dotenv": "^17.4.2",
     "tsx": "^4.19.0",
-    "wrangler": "^4.14.0"
+    "wrangler": "^4.94.0"
   }
 }
