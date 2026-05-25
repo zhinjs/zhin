@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import { runtimeCwd } from '@zhin.js/core';
 
 let projectRoot: string | null = null;
 
@@ -16,5 +17,5 @@ export function setZhinProjectRoot(root: string): void {
  * 也可在启动前设置环境变量 `ZHIN_PROJECT_ROOT`（由 loadConfig 读入并 set）。
  */
 export function getZhinProjectRoot(): string {
-  return projectRoot ?? process.cwd();
+  return projectRoot ?? runtimeCwd();
 }

@@ -5,9 +5,9 @@
  * 独立出来以避免循环导入。
  */
 
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import type { Plugin } from '@zhin.js/core';
 
 /** 将 unknown 错误转为字符串 */

@@ -1,20 +1,20 @@
-import { zhinReady, getPlaygroundHttpConfig } from "./src/runtime/bootstrap.ts";
-import { logEdgeHttpListen } from "./src/edge-listen-log.ts";
-import { handleRequest } from "./src/server.ts";
+import { bootstrapDeno } from "zhin.js/deno";
+import { fileURLToPath } from "node:url";
+import * as path from "node:path";
+import {
+  getEdgeConsoleEntriesRecord,
+  registerEdgeConsoleAssetRoutes,
+} from "./src/edge-console-assets.ts";
+const projectRoot = path.resolve(
+  import.meta.dirname ?? path.dirname(fileURLToPath(import.meta.url)),
+);
 
-await zhinReady;
+const rt = await bootstrapDeno({
+  projectRoot,
+  getConsoleEntriesRecord: getEdgeConsoleEntriesRecord,
+  registerAssetRoutes: registerEdgeConsoleAssetRoutes,
+});
 
-const http = getPlaygroundHttpConfig();
+const { http } = rt;
 
-Deno.serve({
-  port: http.port,
-  hostname: http.host,
-  onListen({ hostname: h, port: p }) {
-    logEdgeHttpListen({
-      host: h,
-      port: p,
-      base: http.base,
-      token: http.token,
-    });
-  },
-}, handleRequest);
+Deno.serve({ port: http.port, hostname: http.host }, rt.fetch);

@@ -1,4 +1,9 @@
 .deno/
+.deploy-tools/
+node_modules/
+# prepare-deploy / build-console-assets 产出，Deploy 构建时再生
+static/console/
+src/console-assets.manifest.json
 deploy.json
 data/*.db
 data/*.db-*

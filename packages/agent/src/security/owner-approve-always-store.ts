@@ -6,9 +6,9 @@
  *
  * icqq 子命令：非敏感操作默认直接放行；仅命中 {@link ICQQ_SENSITIVE_SUBCOMMAND_REGEXES} 时需审批，除非 always 或规则匹配。
  */
-import * as crypto from 'crypto';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as crypto from 'node:crypto';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import type { Adapter, Message, Plugin, ToolContext } from '@zhin.js/core';
 import { getDataDir } from '../discovery/utils.js';
 

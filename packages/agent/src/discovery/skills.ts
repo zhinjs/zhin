@@ -5,10 +5,10 @@
  * 同名先发现者优先，支持平台/依赖兼容性过滤
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
 import { Logger, type Plugin } from '@zhin.js/core';
 import { getSkillSearchDirectories, getDataDir } from './utils.js';
 

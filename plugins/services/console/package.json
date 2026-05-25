@@ -30,16 +30,19 @@
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",
+      "deno": "./src/index.ts",
       "development": "./src/index.ts",
       "import": "./lib/index.js"
     },
     "./console-api": {
       "types": "./lib/console-api.d.ts",
+      "deno": "./src/console-api.ts",
       "development": "./src/console-api.ts",
       "import": "./lib/console-api.js"
     },
     "./rpc/project-fs": {
       "types": "./lib/rpc/project-fs.d.ts",
+      "deno": "./src/rpc/project-fs.ts",
       "development": "./src/rpc/project-fs.ts",
       "import": "./lib/rpc/project-fs.js"
     }

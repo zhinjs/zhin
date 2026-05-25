@@ -9,6 +9,7 @@ import {
   createMessageDispatcher,
   ProcessAdapter,
   LoginAssist,
+  shouldBindProcessStdin,
 } from '@zhin.js/core';
 import type { Plugin, Message } from '@zhin.js/core';
 import type { AppConfig } from '../types.js';
@@ -29,7 +30,7 @@ export function registerCoreServices(
     appConfig.services || DEFAULT_CORE_SERVICES,
   );
 
-  if (enabledServices.has('process')) {
+  if (enabledServices.has('process') && shouldBindProcessStdin()) {
     provide({
       name: 'process',
       description: '命令行适配器',

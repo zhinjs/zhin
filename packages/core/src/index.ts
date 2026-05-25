@@ -18,6 +18,13 @@ export * from './built/command.js'
 export * from './built/cron.js'
 export * from './built/permission.js'
 export * from './built/adapter-process.js'
+export {
+  isDenoDeploy,
+  isInteractiveStdin,
+  shouldBindProcessStdin,
+  runtimePid,
+  runtimeUser,
+} from './built/runtime-io.js'
 export * from './built/component.js'
 export * from './built/database.js'
 export * from './built/message-filter.js'

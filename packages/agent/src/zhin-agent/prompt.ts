@@ -17,7 +17,7 @@
  *   §11 Bootstrap              — 额外上下文注入
  */
 
-import * as os from 'os';
+import * as os from 'node:os';
 import type { ContentPart } from '@zhin.js/ai';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { ToolContext } from '../orchestrator/types.js';

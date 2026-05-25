@@ -3,22 +3,40 @@
  * 移除 Dependency 继承，使用 AsyncLocalStorage 管理上下文
  */
 
-import { AsyncLocalStorage } from "async_hooks";
-import { EventEmitter } from "events";
-import { createRequire } from "module";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { EventEmitter } from "node:events";
+import { createRequire } from "node:module";
 import type { PluginManifest } from "./types.js";
-import * as fs from "fs";
-import * as path from "path";
-import { fileURLToPath, pathToFileURL } from "url";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import logger, { Logger, formatCompact } from "@zhin.js/logger";
 import { compose, remove, resolveEntry } from "./utils.js";
 import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, SendOptions } from "./types.js";
 import { Adapter, Adapters } from "./adapter.js";
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 import { Feature } from "./feature.js";
+import { runtimeCwd } from "./built/config.js";
 const contextsKey = Symbol("contexts");
+
+/** Edge/Workers 打包后 import.meta.url 可能为空 */
+function resolvePluginResolveDir(parent?: Plugin): string {
+  if (parent?.filePath) return path.dirname(parent.filePath);
+  const meta = import.meta.url;
+  if (typeof meta === "string" && meta.length > 0) {
+    return path.dirname(fileURLToPath(meta));
+  }
+  return runtimeCwd();
+}
 const loadedModules = new Map<string, Plugin>(); // 记录已加载的模块
-const require = createRequire(import.meta.url);
+function pluginCreateRequire(): ReturnType<typeof createRequire> {
+  const metaUrl = import.meta.url;
+  if (typeof metaUrl === "string" && metaUrl.length > 0) {
+    return createRequire(metaUrl);
+  }
+  const cwd = typeof process !== "undefined" && process.cwd ? process.cwd() : "/";
+  return createRequire(pathToFileURL(path.join(cwd, "package.json")).href);
+}
 
 
 export type SideEffect<A extends (keyof Plugin.Contexts)[]> = {
@@ -38,6 +56,9 @@ export const storage = new AsyncLocalStorage<Plugin>();
  * 获取当前文件路径（调用者）
  */
 function getCurrentFile(metaUrl = import.meta.url): string {
+  if (typeof metaUrl !== "string" || metaUrl.length === 0) {
+    return path.join(runtimeCwd(), "__zhin_edge_bootstrap__.mjs");
+  }
   const previousPrepareStackTrace = Error.prepareStackTrace;
   Error.prepareStackTrace = function (_, stack) {
     return stack;
@@ -51,7 +72,9 @@ function getCurrentFile(metaUrl = import.meta.url): string {
     (f) => f === fileURLToPath(metaUrl) || f === metaUrl
   );
   const result = stackFiles[idx + 1];
-  if (!result) throw new Error("Cannot resolve current file path");
+  if (!result) {
+    return path.join(runtimeCwd(), "__zhin_edge_bootstrap__.mjs");
+  }
   try {
     return fileURLToPath(result);
   } catch {
@@ -73,7 +96,11 @@ export function usePlugin(): Plugin {
   }
   const parentPlugin = current;
   const newPlugin = new Plugin(callerFile, parentPlugin);
-  storage.enterWith(newPlugin);
+  try {
+    storage.enterWith(newPlugin);
+  } catch {
+    // Cloudflare Workers 等环境未实现 enterWith；调用方须用 storage.run()
+  }
   return newPlugin;
 }
 
@@ -763,11 +790,8 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
    * 创建插件实例（异步加载）
    */
   static async create(entry: string, parent?: Plugin): Promise<Plugin> {
-    entry = path.resolve(
-      path.dirname(parent?.filePath || fileURLToPath(import.meta.url)),
-      entry
-    );
-    const entryFile = fs.existsSync(entry) ? entry : require.resolve(entry);
+    entry = path.resolve(resolvePluginResolveDir(parent), entry);
+    const entryFile = fs.existsSync(entry) ? entry : pluginCreateRequire().resolve(entry);
     const realPath = fs.realpathSync(entryFile);
 
     // 检查模块是否已加载（跳过热重载后已 stop 的僵尸实例）

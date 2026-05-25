@@ -1,37 +1,18 @@
-import { EventEmitter } from "events";
-import {
-  Bot,
-  Adapter,
-  usePlugin,
-  Message,
-  SendOptions,
-  segment,
-  SendContent,
-  MessageType,
-  MessageElement,
-  Plugin,
-} from "zhin.js";
+import path from "node:path";
+import { usePlugin, type Plugin } from "zhin.js";
 import type { WebSocket } from "ws";
-import { Router } from "@zhin.js/http";
+import {
+  SandboxWsHostAdapter,
+  resolveSandboxBot,
+  type SandboxWsSocket,
+} from "./sandbox-ws.js";
 import { PageManager } from "@zhin.js/console";
-import path from "path";
 
-export interface SandboxConfig {
-  context: "sandbox";
-  ws: WebSocket;
-  name: string;
-  /** 发言者即为 owner（沙箱模式） */
-  owner?: string;
-}
+type SandboxRouter = {
+  ws: (path: string) => NonNullable<SandboxAdapter["wss"]>;
+};
 
 declare module "zhin.js" {
-  namespace Plugin {
-    interface Contexts {
-      router: Router;
-      web: PageManager;
-    }
-  }
-
   interface Adapters {
     sandbox: SandboxAdapter;
   }
@@ -40,162 +21,44 @@ declare module "zhin.js" {
 const plugin = usePlugin();
 const logger = plugin.logger;
 
-interface WebSocketMessage {
-  type: MessageType;
-  id: string;
-  content: MessageElement[] | string;
-  timestamp: number;
-}
+/** Node：`Router.ws`；Deno/Edge：`registerSandboxWebSocketRoutes`（http-host） */
+export class SandboxAdapter extends SandboxWsHostAdapter {
+  wss?: { on: (ev: string, fn: (...args: unknown[]) => void) => void; close: () => void };
 
-export class SandboxBot extends EventEmitter implements Bot<SandboxConfig, { content: MessageElement[]; ts: number }> {
-  $connected: boolean = false;
-
-  get $id() {
-    return this.$config.name;
+  constructor(plugin: ReturnType<typeof usePlugin>) {
+    const appConfig = (plugin.inject("config")?.getPrimary() ?? {}) as Record<string, unknown>;
+    super(plugin, resolveSandboxBot(appConfig));
   }
 
-  private logger = logger;
-
-  constructor(public adapter: SandboxAdapter, public $config: SandboxConfig) {
-    super();
-    this.$config.ws.on("message", (data) => {
-      const message = JSON.parse(data.toString()) as WebSocketMessage;
-      // 确保 content 是 MessageElement[] 格式
-      const content: MessageElement[] = typeof message.content === 'string' 
-        ? [{ type: 'text', data: { text: message.content } }]
-        : message.content;
-      this.logger.debug(`${this.$config.name} recv  ${message.type}(${message.id}):${segment.raw(content)}`);
-      const formattedMessage = this.$formatMessage({ content: content, type: message.type, id: message.id, ts: message.timestamp });
-      this.adapter.emit("message.receive", formattedMessage);
-    });
-
-    this.$config.ws.on("close", () => {
-      this.logger.debug(`Sandbox bot ${this.$config.name} disconnected`);
-      this.$connected = false;
-      // 从 adapter 中移除 bot
-      this.adapter.bots.delete(this.$id);
-    });
-  }
-
-  async $connect(): Promise<void> {
-    this.$connected = true;
-  }
-
-  async $disconnect(): Promise<void> {
-    this.$config.ws.close();
-    this.$connected = false;
-  }
-
-  $formatMessage({ content, type, id, ts }: { content: MessageElement[]; id: string; type: MessageType; ts: number }) {
-    // 沙箱模式：发言者即为 owner
-    if (!this.$config.owner) this.$config.owner = id;
-    const message = Message.from(
-      { content, ts },
-      {
-        $id: `${ts}`,
-        $adapter: "sandbox" as const,
-        $bot: `${this.$config.name}`,
-        $sender: {
-          id: `${id}`,
-          name: `mock`,
-        },
-        $channel: {
-          id: `${id}`,
-          type: type,
-        },
-        $content: content,
-        $raw: segment.raw(content),
-        $timestamp: ts,
-        $recall: async () => {
-          await this.$recallMessage(message.$id);
-        },
-        $reply: async (content: SendContent, quote?: boolean | string): Promise<string> => {
-          if (!Array.isArray(content)) content = [content];
-          if (quote) content.unshift({ type: "reply", data: { id: typeof quote === "boolean" ? message.$id : quote } });
-          return await this.adapter.sendMessage({
-            ...message.$channel,
-            context: "sandbox",
-            bot: `${this.$config.name}`,
-            content,
-          });
-        },
-      }
+  override async start(): Promise<void> {
+    await super.start();
+    this.registerConfiguredPlaceholder();
+    logger.debug(
+      `Sandbox placeholder: ${this.defaults.name} (offline until /sandbox WS)`,
     );
-    return message;
   }
 
-  async $sendMessage(options: SendOptions): Promise<string> {
-    if (!this.$connected) return "";
-    this.logger.debug(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`);
-    options.bot = this.$config.name;
-    options.context = "sandbox";
-    this.$config.ws.send(
-      JSON.stringify({
-        ...options,
-        content: options.content, // 发送消息段数组
-        timestamp: Date.now(),
-      })
-    );
-    return "";
-  }
-
-  async $recallMessage(id: string): Promise<void> {
-    // 沙盒不支持撤回消息
-  }
-}
-
-class SandboxAdapter extends Adapter<SandboxBot> {
-  wss?: ReturnType<Router["ws"]>;
-
-  constructor(plugin: Plugin) {
-    super(plugin, "sandbox", []);
-  }
-
-  createBot(config: SandboxConfig): SandboxBot {
-    const bot = new SandboxBot(this, config);
-    // 将 bot 添加到 bots Map 中
-    this.bots.set(bot.$id, bot);
-    return bot;
-  }
-
-  async start(): Promise<void> {
-    // start 方法会在 mounted 时被调用
-    // WebSocket server 的创建在 useContext("router") 中处理
-  }
-
-  async setupWebSocket(router: Router): Promise<void> {
-    if (this.wss) return; // 已经设置过了
-    // 创建 WebSocket server
+  async setupWebSocket(router: SandboxRouter): Promise<void> {
+    if (this.wss) return;
     this.wss = router.ws("/sandbox");
 
-    this.wss.on("connection", (ws: WebSocket, req) => {
-      // 为每个连接创建一个唯一的 bot 名称
-      const botName = `sandbox-${Math.random().toString(36).slice(2, 9)}`;
-      logger.debug(`New sandbox connection: ${botName} from ${req.socket.remoteAddress}`);
-
-      // 创建 bot 配置
-      const config: SandboxConfig = {
-        context: "sandbox",
-        ws,
-        name: botName,
-      };
-
-      // 创建并连接 bot
-      const bot = this.createBot(config);
-      bot.$connect();
-
-      // WebSocket 关闭时清理
+    this.wss.on("connection", (...args: unknown[]) => {
+      const ws = args[0] as WebSocket;
+      const req = args[1] as { socket?: { remoteAddress?: string } };
+      logger.debug(
+        `New sandbox connection from ${req.socket?.remoteAddress ?? "unknown"}`,
+      );
+      const bot = this.acceptWebSocket(ws as SandboxWsSocket);
       ws.on("close", () => {
-        logger.debug(`Sandbox connection closed: ${botName}`);
+        logger.debug(`Sandbox connection closed: ${bot.$config.name}`);
         this.bots.delete(bot.$id);
       });
-
       ws.on("error", (error) => {
-        logger.error(`Sandbox WebSocket error for ${botName}:`, error);
+        logger.error(`Sandbox WebSocket error for ${bot.$config.name}:`, error);
       });
     });
 
-    logger.debug("Sandbox WebSocket server started at /sandbox");
+    logger.debug("Sandbox WebSocket server started at /sandbox (Node Router.ws)");
   }
 }
 
@@ -203,32 +66,25 @@ const { provide } = usePlugin();
 
 provide({
   name: "sandbox",
-  description: "Sandbox Adapter",
+  description: "Sandbox Adapter — Node Router.ws + Deno http-host WebSocket",
   mounted: async (p: Plugin) => {
     const adapter = new SandboxAdapter(p);
     await adapter.start();
     return adapter;
   },
   dispose: async (adapter: SandboxAdapter) => {
-    // 关闭所有 bot 连接
     for (const bot of adapter.bots.values()) {
       await bot.$disconnect();
     }
-    // 关闭 WebSocket server
     adapter.wss?.close();
     await adapter.stop();
   },
+} as never);
+
+plugin.useContext("router",'sandbox', async (router: SandboxRouter,adapter: SandboxAdapter) => {
+  await adapter.setupWebSocket(router);
 });
 
-// 使用 router 上下文创建 WebSocket server
-plugin.useContext("router", async (router: Router) => {
-  // 等待 sandbox adapter 就绪
-  plugin.useContext("sandbox", async (adapter: SandboxAdapter) => {
-    await adapter.setupWebSocket(router);
-  });
-});
-
-// 使用 web 上下文注册客户端入口
 plugin.useContext("web", (pageManager) => {
   pageManager.addEntry({
     id: "sandbox",
@@ -237,3 +93,23 @@ plugin.useContext("web", (pageManager) => {
     meta: { name: "Sandbox" },
   });
 });
+
+export {
+  registerSandboxWebSocketRoutes,
+  type RegisterSandboxWsOptions,
+} from "./fetch-ws.js";
+export {
+  registerSandboxSseRoutes,
+  type RegisterSandboxSseOptions,
+} from "./fetch-sse.js";
+export {
+  SandboxWsBot,
+  SandboxWsHostAdapter,
+  resolveSandboxBot,
+  bindSandboxWsSocket,
+  parseSandboxWsPayload,
+  type ResolvedSandboxBot,
+  type SandboxTransport,
+  type SandboxWsConfig,
+  type SandboxWsSocket,
+} from "./sandbox-ws.js";

@@ -1,0 +1,12 @@
+name = "zhin-cf-edge-playground"
+main = "src/index.ts"
+compatibility_date = "2024-11-12"
+compatibility_flags = ["nodejs_compat"]
+
+# 本地 `pnpm dev` 由 predev 构建资源；`wrangler deploy` 前请 `pnpm prepare-deploy`
+# （勿在此加 [build]，写入 src/console-assets.manifest.json 会触发 dev 无限重启）
+
+# 本地 dev 请用 `pnpm run dev:wrangler`（会注入 ZHIN_PROJECT_ROOT=$PWD）
+[vars]
+# 在 Cloudflare 控制台或 `wrangler secret put` 设置敏感项：
+# HTTP_TOKEN, DATABASE_URL, OPENAI_API_KEY, OPENAI_BASE_URL

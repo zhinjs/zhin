@@ -2,9 +2,14 @@
 
 ## 1.0.83
 
+### Breaking Changes
+
+- **移除** `zhin.js/setup` 侧效入口。Node/Bun 请改用 `import { bootstrapNode } from 'zhin.js/node'`（CLI `zhin dev` / `zhin start` 已切换）。Edge（Deno Deploy、Vercel、Cloudflare Workers）请使用 `zhin.js/deno`、`zhin.js/vercel` 或 `zhin.js/cloudflare` 的 `bootstrap*()`。
+
 ### Patch Changes
 
 - 775427e: fix: edge 支持
+- 多运行时 bootstrap：`zhin.js/node`、`zhin.js/deno`、`zhin.js/vercel`、`zhin.js/cloudflare`；共享 `bootstrapEdgeCore`（Fetch HTTP、Console 子集、Sandbox SSE/WS）
 - Updated dependencies [775427e]
   - @zhin.js/kernel@0.0.42
   - @zhin.js/agent@0.1.23

@@ -9,12 +9,33 @@ export type SystemStatusData = {
   platform: string;
   nodeVersion?: string;
   denoVersion?: string;
-  runtime: "node" | "deno" | "unknown";
+  runtime: "node" | "deno" | "edge" | "unknown";
   pid?: number;
   timestamp: string;
 };
 
-/** Host (Node) / Edge (Deno) 兼容的系统状态快照 */
+function isCloudflareWorkers(): boolean {
+  const ua = (globalThis as { navigator?: { userAgent?: string } }).navigator?.userAgent ?? "";
+  return ua.includes("Cloudflare-Workers");
+}
+
+function safeProcessMemory(): NodeJS.MemoryUsage | Record<string, number> {
+  try {
+    return process.memoryUsage();
+  } catch {
+    return {};
+  }
+}
+
+function safeProcessCpu(): { user: number; system: number } | undefined {
+  try {
+    return typeof process.cpuUsage === "function" ? process.cpuUsage() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Host (Node) / Edge (Deno / Workers) 兼容的系统状态快照 */
 export function getSystemStatusData(): SystemStatusData {
   const deno = (globalThis as { Deno?: { build: { os: string }; version: { deno: string }; memoryUsage: () => Record<string, number> } }).Deno;
   if (deno) {
@@ -27,11 +48,21 @@ export function getSystemStatusData(): SystemStatusData {
       timestamp: new Date().toISOString(),
     };
   }
+  if (isCloudflareWorkers()) {
+    return {
+      uptime: performance.now() / 1000,
+      memory: safeProcessMemory(),
+      cpu: safeProcessCpu(),
+      platform: "cloudflare-workers",
+      runtime: "edge",
+      timestamp: new Date().toISOString(),
+    };
+  }
   if (typeof process !== "undefined" && process.versions?.node) {
     return {
       uptime: process.uptime(),
-      memory: process.memoryUsage(),
-      cpu: process.cpuUsage(),
+      memory: safeProcessMemory(),
+      cpu: safeProcessCpu(),
       platform: process.platform,
       nodeVersion: process.version,
       runtime: "node",

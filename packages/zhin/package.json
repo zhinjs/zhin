@@ -21,10 +21,26 @@
       "development": "./src/jsx-runtime.ts",
       "import": "./lib/jsx-runtime.js"
     },
-    "./setup": {
-      "types": "./lib/setup.d.ts",
-      "development": "./src/setup.ts",
-      "import": "./lib/setup.js"
+    "./node": {
+      "types": "./lib/node.d.ts",
+      "development": "./src/node.ts",
+      "import": "./lib/node.js"
+    },
+    "./deno": {
+      "types": "./lib/deno.d.ts",
+      "deno": "./src/deno.ts",
+      "development": "./src/deno.ts",
+      "import": "./lib/deno.js"
+    },
+    "./vercel": {
+      "types": "./lib/vercel.d.ts",
+      "development": "./src/vercel.ts",
+      "import": "./lib/vercel.js"
+    },
+    "./cloudflare": {
+      "types": "./lib/cloudflare.d.ts",
+      "development": "./src/cloudflare.ts",
+      "import": "./lib/cloudflare.js"
     },
     "./jsx-dev-runtime": {
       "types": "./lib/jsx-dev-runtime.d.ts",
@@ -36,16 +52,22 @@
     "lib"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "rimraf lib && tsc",
     "clean": "rimraf lib"
   },
   "dependencies": {
+    "@zhin.js/adapter-sandbox": "workspace:*",
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/ai": "workspace:*",
+    "@zhin.js/console": "workspace:*",
     "@zhin.js/core": "workspace:*",
+    "@zhin.js/http": "workspace:*",
+    "@zhin.js/http-host": "workspace:*",
     "@zhin.js/kernel": "workspace:*",
     "@zhin.js/logger": "workspace:*",
+    "@zhin.js/queue-runtime": "workspace:*",
     "@zhin.js/schema": "workspace:*",
+    "@zhin.js/storage-port": "workspace:*",
     "yaml": "^2.9.0",
     "dotenv": "^17.4.2"
   },

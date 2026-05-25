@@ -1,5 +1,0 @@
-debug: true
-plugins:
-  - test-plugin
-test-plugin:
-  enabled: true

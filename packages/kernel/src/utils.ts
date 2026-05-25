@@ -1,6 +1,6 @@
-import * as path from "path";
-import * as fs from "fs";
-import * as vm from "vm";
+import * as path from "node:path";
+import * as fs from "node:fs";
+import * as vm from "node:vm";
 
 export type Dict<T = any> = Record<string, T>;
 
