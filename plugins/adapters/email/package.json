@@ -21,7 +21,7 @@
   "devDependencies": {
     "@types/imap": "^0.8.40",
     "@types/mailparser": "^3.4.6",
-    "@types/node": "^25.8.0",
+    "@types/node": "^25.9.1",
     "@types/nodemailer": "^8.0.0",
     "typescript": "^6.0.3",
     "zhin.js": "workspace:*"
