@@ -103,6 +103,11 @@ interface SummaryRecord {
 interface DbModel {
   select(...fields: string[]): any;  // 返回 Selection (thenable query builder)
   create(data: Record<string, any>): Promise<any>;
+  aggregate(): {
+    where(condition: Record<string, any>): {
+      max(field: string, alias: string): Promise<Record<string, unknown>[]>;
+    };
+  };
   delete?(condition: Record<string, any>): PromiseLike<any>;
 }
 

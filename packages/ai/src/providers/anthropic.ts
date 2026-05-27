@@ -70,6 +70,7 @@ interface AnthropicStreamEvent {
   delta?: { type: string; text?: string; stop_reason?: string };
   content_block?: { type: string; id?: string; name?: string; input?: string };
   message?: { id: string; model: string; usage: { input_tokens: number; output_tokens: number } };
+  usage?: { input_tokens: number; output_tokens: number };
 }
 
 interface AnthropicRequest {
@@ -112,7 +113,7 @@ function toAnthropicMessages(messages: ChatMessage[]): {
         role: 'user',
         content: [{
           type: 'tool_result',
-          tool_use_id: msg.tool_call_id,
+          tool_use_id: msg.tool_call_id ?? '',
           content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
         }],
       });
