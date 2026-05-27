@@ -13,7 +13,7 @@ export type { RouterContext } from "./router-context.js";
 export { createRouterContext, contextToResponse } from "./router-context.js";
 export { serveFetch, getListenAddress } from "./node-serve.js";
 export { writeWebResponse } from "./node-response.js";
-export { koaFallback } from "./koa-bridge.js";
+export { closeKoaSidecar, koaFallback } from "./koa-bridge.js";
 export { koaJsonBodyMiddleware } from "./koa-json-body.js";
 export { registerFetchRoute } from "./register-fetch-route.js";
 export { registerWebSocketRoute } from "./register-websocket-route.js";

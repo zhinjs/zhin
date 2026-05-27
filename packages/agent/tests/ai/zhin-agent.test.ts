@@ -5,7 +5,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ZhinAgent } from '@zhin.js/agent';
-import { Logger, SkillFeature } from '@zhin.js/core';
+import { SkillFeature } from '@zhin.js/core';
 import type { AIProvider, AgentTool, ContentPart } from '@zhin.js/core';
 import type { Tool, ToolContext } from '@zhin.js/core';
 
@@ -154,14 +154,15 @@ describe('ZhinAgent', () => {
     });
 
     it('phaseTrace 开启时应输出可解析 phase 序列', async () => {
-      const logSpy = vi.spyOn(Logger.prototype, 'info').mockImplementation(() => {});
-      const phaseAgent = new ZhinAgent(provider, { phaseTrace: true });
+      const phases: string[] = [];
+      const phaseAgent = new ZhinAgent(provider, {
+        phaseTrace: true,
+        onPhaseTrace: ({ phase }) => phases.push(phase),
+      });
       const context = makeToolContext();
       try {
         await phaseAgent.process('phase trace', context, []);
-        const serialized = logSpy.mock.calls
-          .map((args) => String(args[0]))
-          .join('\n');
+        const serialized = phases.map((p) => `phase: ${p}`).join('\n');
         expect(serialized).toContain('phase: turn.start');
         expect(serialized).toContain('phase: tools.collected');
         expect(serialized).toContain('phase: context.ready');
@@ -171,7 +172,6 @@ describe('ZhinAgent', () => {
         expect(serialized).toContain('phase: turn.end');
       } finally {
         phaseAgent.dispose();
-        logSpy.mockRestore();
       }
     });
   });

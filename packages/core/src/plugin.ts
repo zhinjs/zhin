@@ -5,7 +5,6 @@
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import { EventEmitter } from "node:events";
-import { createRequire } from "node:module";
 import type { PluginManifest } from "./types.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -14,28 +13,25 @@ import logger, { Logger, formatCompact } from "@zhin.js/logger";
 import { compose, remove, resolveEntry } from "./utils.js";
 import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, SendOptions } from "./types.js";
 import { Adapter, Adapters } from "./adapter.js";
-import { createHash } from "node:crypto";
 import { Feature } from "./feature.js";
-import { runtimeCwd } from "./built/config.js";
+import {
+  resolvePluginResolveDir as _resolvePluginResolveDir,
+  pluginCreateRequire as _pluginCreateRequire,
+  getFileHash,
+  watchFile,
+  registerExtension,
+  unregisterExtensions,
+  installExtensionProxy,
+} from "@zhin.js/kernel";
+
 const contextsKey = Symbol("contexts");
 
-/** Edge/Workers 打包后 import.meta.url 可能为空 */
 function resolvePluginResolveDir(parent?: Plugin): string {
-  if (parent?.filePath) return path.dirname(parent.filePath);
-  const meta = import.meta.url;
-  if (typeof meta === "string" && meta.length > 0) {
-    return path.dirname(fileURLToPath(meta));
-  }
-  return runtimeCwd();
+  return _resolvePluginResolveDir(parent);
 }
-const loadedModules = new Map<string, Plugin>(); // 记录已加载的模块
-function pluginCreateRequire(): ReturnType<typeof createRequire> {
-  const metaUrl = import.meta.url;
-  if (typeof metaUrl === "string" && metaUrl.length > 0) {
-    return createRequire(metaUrl);
-  }
-  const cwd = typeof process !== "undefined" && process.cwd ? process.cwd() : "/";
-  return createRequire(pathToFileURL(path.join(cwd, "package.json")).href);
+const loadedModules = new Map<string, Plugin>();
+function pluginCreateRequire(): ReturnType<typeof _pluginCreateRequire> {
+  return _pluginCreateRequire();
 }
 
 
@@ -114,37 +110,6 @@ export function getPlugin(): Plugin {
     throw new Error('getPlugin() must be called within a plugin context');
   }
   return plugin;
-}
-
-// ============================================================================
-// 文件工具函数
-// ============================================================================
-
-/**
- * 获取文件 Hash（用于检测变更）
- */
-function getFileHash(filePath: string): string {
-  try {
-    const content = fs.readFileSync(filePath, "utf-8");
-    return createHash("md5")
-      .update(content)
-      .digest("hex");
-  } catch {
-    return "";
-  }
-}
-
-/**
- * 监听文件变化
- */
-function watchFile(filePath: string, callback: () => void): () => void {
-  try {
-    const watcher = fs.watch(filePath, callback);
-    watcher.on("error", (_error) => { });
-    return () => watcher.close();
-  } catch (error) {
-    return () => { };
-  }
 }
 
 // ============================================================================
@@ -403,11 +368,12 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
             context.value = result;
           }
         }
-        // 注册扩展方法到 Plugin.prototype
+        // 注册扩展方法到共享 registry
         if (context.extensions) {
+          installExtensionProxy(Plugin.prototype);
           for (const [extName, fn] of Object.entries(context.extensions)) {
             if (typeof fn === 'function') {
-              Reflect.set(Plugin.prototype, extName, fn);
+              registerExtension(extName, fn);
             }
           }
         }
@@ -419,9 +385,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
           const { name: mName, context: mCtx } = mountedContexts[i];
           try {
             if (mCtx.extensions) {
-              for (const key of Object.keys(mCtx.extensions)) {
-                delete (Plugin.prototype as any)[key];
-              }
+              unregisterExtensions(Object.keys(mCtx.extensions));
             }
             if (typeof mCtx.dispose === 'function') {
               await mCtx.dispose(mCtx.value);
@@ -512,11 +476,9 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     // 停止服务
     for (const [name, context] of this.$contexts) {
       remove(Plugin[contextsKey], name);
-      // 移除扩展方法
+      // 从共享 registry 注销扩展方法（引用计数，不影响其他提供者）
       if (context.extensions) {
-        for (const key of Object.keys(context.extensions)) {
-          delete (Plugin.prototype as any)[key];
-        }
+        unregisterExtensions(Object.keys(context.extensions));
       }
       if (typeof context.dispose === "function") {
         await context.dispose(context.value);
@@ -606,7 +568,11 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   ): Promise<void> {
     const listeners = this.listeners(name) as ((...args: any[]) => any)[];
     for (const listener of listeners) {
-      await listener(...args);
+      try {
+        await listener(...args);
+      } catch (e) {
+        this.logger.warn(`Broadcast "${String(name)}" listener error: ${e}`);
+      }
     }
 
     for (const child of this.children) {
@@ -649,11 +615,12 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     }
     this.logger.debug(`Context "${context.name as string}" provided`);
     this.$contexts.set(context.name as string, context);
-    // 立即注册扩展方法到 Plugin.prototype，确保后续 import 的插件可用
+    // 注册扩展方法到共享 registry，确保后续 import 的插件可用
     if (context.extensions) {
+      installExtensionProxy(Plugin.prototype);
       for (const [name, fn] of Object.entries(context.extensions)) {
         if (typeof fn === 'function') {
-          Reflect.set(Plugin.prototype, name, fn);
+          registerExtension(name, fn);
         }
       }
     }

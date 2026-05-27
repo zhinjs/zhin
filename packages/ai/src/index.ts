@@ -46,12 +46,14 @@ export {
   ZhipuProvider,
   AnthropicProvider,
   OllamaProvider,
+  CloudflareProvider,
 } from './providers/index.js';
 export type {
   OpenAIConfig,
   DeepSeekConfig,
   AnthropicConfig,
   OllamaConfig,
+  CloudflareConfig,
 } from './providers/index.js';
 
 // ── Agent Engine ──

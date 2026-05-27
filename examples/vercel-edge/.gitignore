@@ -1,8 +1,0 @@
-.deploy-tools/
-node_modules/
-static/console/
-src/console-assets.manifest.json
-data/
-.env
-.env.*
-.vercel

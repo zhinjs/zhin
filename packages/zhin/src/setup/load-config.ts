@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { ConfigLoader, ConfigFeature, runtimeCwd, Bot } from '@zhin.js/core';
+import { ConfigLoader, ConfigFeature, runtimeCwd } from '@zhin.js/core';
 import { LogLevel } from '@zhin.js/logger';
 import type { AppConfig } from '../types.js';
 import { setZhinProjectRoot } from './project-root.js';
@@ -19,30 +19,10 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   services: [...DEFAULT_CORE_SERVICES],
 };
 
-/** Edge bootstrap 默认项（不含 @zhin.js/http / @zhin.js/console 插件） */
-export const DEFAULT_EDGE_APP_CONFIG: AppConfig = {
-  log_level: LogLevel.INFO,
-  bots: [
-    {
-      context: 'sandbox',
-      name: 'edge-bot',
-      owner: 'sandbox-user',
-      transport: 'http-sse',
-    },
-  ] as unknown as Bot.Config[],
-  database: {
-    dialect: 'sqlite' as const,
-    filename: './data/bot.db',
-  },
-  plugin_dirs: ['./src/plugins'],
-  plugins: ['adapter-sandbox'],
-  services: ['config', 'command', 'component', 'permission', 'cron'],
-};
-
 export type LoadConfigOptions = {
   /** 机器人项目根（与 zhin.config.* 同目录）；bootstrap 传入时优先于 cwd 发现 */
   projectRoot?: string;
-  /** 与配置文件合并的默认值；Edge 应传 DEFAULT_EDGE_APP_CONFIG */
+  /** 与配置文件合并的默认值 */
   defaults?: AppConfig;
 };
 

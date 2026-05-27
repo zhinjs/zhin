@@ -125,7 +125,7 @@ export function registerAITrigger(refs: AIServiceRefs): void {
         logger.warn(formatCompactLog('AI Handler', {
           total_ms: Math.round(performance.now() - t0),
           ok: false,
-          error: truncatePreview(msg, 120),
+          error: truncatePreview(msg),
         }));
         await replyOutbound(triggerConfig.errorTemplate.replace('{error}', msg));
       }

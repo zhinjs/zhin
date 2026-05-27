@@ -129,6 +129,7 @@ export class ZhinAgent {
       minTopicRounds: this.config.minTopicRounds,
       slidingWindowSize: this.config.slidingWindowSize,
       topicChangeThreshold: this.config.topicChangeThreshold,
+      topicDetectModel: this.config.chatLiteModel || undefined,
     });
     this.memory.setProvider(provider);
     this.userProfiles = new UserProfileStore();
@@ -590,7 +591,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
         usage: result.usage,
         path: 'agent',
         iterations: result.iterations,
-        model: chatCandidates[0] || undefined,
+        model: result.model ?? (chatCandidates[0] || undefined),
       });
     }
 
@@ -673,6 +674,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
 
   private logPhase(phase: string, sessionId: string, extra: Record<string, unknown> = {}): void {
     if (!this.phaseTraceEnabled) return;
+    this.config.onPhaseTrace?.({ phase, sessionId, extra });
     const flat: Record<string, string | number | boolean> = { phase, session: sessionId };
     for (const [k, v] of Object.entries(extra)) {
       if (v === undefined || v === null) continue;
@@ -812,7 +814,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
           logger.warn(formatCompact( {
             mode: 'multimodal',
             fallback: `${visionModel}→${visionCandidates[i + 1]}`,
-            error: truncatePreview((err as Error).message, 80),
+            error: truncatePreview((err as Error).message),
           }));
         }
       }
@@ -937,7 +939,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
         }
         logger.warn(formatCompact( {
           fallback: `${model}→${candidates[i + 1]}`,
-          error: truncatePreview((err as Error).message, 80),
+          error: truncatePreview((err as Error).message),
         }));
       }
     }

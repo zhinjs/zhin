@@ -200,11 +200,11 @@ export class MoonshotProvider extends OpenAIProvider {
 export class ZhipuProvider extends OpenAIProvider {
   name = 'zhipu';
   models = [
-    'glm-4-plus',
-    'glm-4',
-    'glm-4-air',
-    'glm-4-flash',
-    'glm-4v-plus',
+    'glm-4.7',
+    'glm-4.7-flash',
+    'glm-4.5-air',
+    'glm-4.1v-thinking',
+    'glm-4.6v',
   ];
 
   constructor(config: ProviderConfig = {}) {

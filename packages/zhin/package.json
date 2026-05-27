@@ -26,22 +26,6 @@
       "development": "./src/node.ts",
       "import": "./lib/node.js"
     },
-    "./deno": {
-      "types": "./lib/deno.d.ts",
-      "deno": "./src/deno.ts",
-      "development": "./src/deno.ts",
-      "import": "./lib/deno.js"
-    },
-    "./vercel": {
-      "types": "./lib/vercel.d.ts",
-      "development": "./src/vercel.ts",
-      "import": "./lib/vercel.js"
-    },
-    "./cloudflare": {
-      "types": "./lib/cloudflare.d.ts",
-      "development": "./src/cloudflare.ts",
-      "import": "./lib/cloudflare.js"
-    },
     "./jsx-dev-runtime": {
       "types": "./lib/jsx-dev-runtime.d.ts",
       "development": "./src/jsx-dev-runtime.ts",

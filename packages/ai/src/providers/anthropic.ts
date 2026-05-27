@@ -14,6 +14,77 @@ import type {
   ContentPart,
 } from '../types.js';
 
+// ── Anthropic API 类型 ──
+
+interface AnthropicTextBlock {
+  type: 'text';
+  text: string;
+}
+
+interface AnthropicImageBlock {
+  type: 'image';
+  source: { type: 'base64'; media_type: string; data: string } | { type: 'url'; url: string };
+}
+
+interface AnthropicToolUseBlock {
+  type: 'tool_use';
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+interface AnthropicToolResultBlock {
+  type: 'tool_result';
+  tool_use_id: string;
+  content: string;
+}
+
+type AnthropicContentBlock = AnthropicTextBlock | AnthropicImageBlock | AnthropicToolUseBlock | AnthropicToolResultBlock;
+
+interface AnthropicMessage {
+  role: 'user' | 'assistant';
+  content: string | AnthropicContentBlock[];
+}
+
+interface AnthropicTool {
+  name: string;
+  description?: string;
+  input_schema: Record<string, unknown>;
+}
+
+type AnthropicResponseContent =
+  | { type: 'text'; text: string }
+  | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> };
+
+interface AnthropicResponse {
+  id: string;
+  model: string;
+  content: AnthropicResponseContent[];
+  stop_reason: string;
+  usage: { input_tokens: number; output_tokens: number };
+}
+
+interface AnthropicStreamEvent {
+  type: string;
+  index?: number;
+  delta?: { type: string; text?: string; stop_reason?: string };
+  content_block?: { type: string; id?: string; name?: string; input?: string };
+  message?: { id: string; model: string; usage: { input_tokens: number; output_tokens: number } };
+}
+
+interface AnthropicRequest {
+  model: string;
+  messages: AnthropicMessage[];
+  max_tokens: number;
+  stream?: boolean;
+  system?: string | Array<{ type: string; text: string; cache_control?: { type: string } }>;
+  temperature?: number;
+  top_p?: number;
+  stop_sequences?: string[];
+  tools?: AnthropicTool[];
+  tool_choice?: { type: string };
+}
+
 export interface AnthropicConfig extends ProviderConfig {
   anthropicVersion?: string;
 }
@@ -23,10 +94,10 @@ export interface AnthropicConfig extends ProviderConfig {
  */
 function toAnthropicMessages(messages: ChatMessage[]): {
   system?: string;
-  messages: any[];
+  messages: AnthropicMessage[];
 } {
   let system: string | undefined;
-  const anthropicMessages: any[] = [];
+  const anthropicMessages: AnthropicMessage[] = [];
 
   for (const msg of messages) {
     if (msg.role === 'system') {
@@ -48,7 +119,7 @@ function toAnthropicMessages(messages: ChatMessage[]): {
       continue;
     }
 
-    let content: any;
+    let content: string | AnthropicContentBlock[];
     if (typeof msg.content === 'string') {
       content = msg.content;
     } else {
@@ -79,12 +150,20 @@ function toAnthropicMessages(messages: ChatMessage[]): {
 
     // 处理 tool_calls
     if (msg.tool_calls?.length) {
-      const toolUseContent = msg.tool_calls.map(tc => ({
-        type: 'tool_use',
-        id: tc.id,
-        name: tc.function.name,
-        input: JSON.parse(tc.function.arguments),
-      }));
+      const toolUseContent: AnthropicToolUseBlock[] = msg.tool_calls.map(tc => {
+        let input: Record<string, unknown>;
+        try {
+          input = JSON.parse(tc.function.arguments);
+        } catch {
+          input = {};
+        }
+        return {
+          type: 'tool_use' as const,
+          id: tc.id,
+          name: tc.function.name,
+          input,
+        };
+      });
       
       if (typeof content === 'string' && content) {
         content = [{ type: 'text', text: content }, ...toolUseContent];
@@ -107,7 +186,7 @@ function toAnthropicMessages(messages: ChatMessage[]): {
 /**
  * 转换工具定义
  */
-function toAnthropicTools(tools?: ToolDefinition[]): any[] | undefined {
+function toAnthropicTools(tools?: ToolDefinition[]): AnthropicTool[] | undefined {
   if (!tools?.length) return undefined;
   
   return tools.map(tool => ({
@@ -120,9 +199,9 @@ function toAnthropicTools(tools?: ToolDefinition[]): any[] | undefined {
 /**
  * 转换 Anthropic 响应为 OpenAI 格式
  */
-function fromAnthropicResponse(response: any): ChatCompletionResponse {
+function fromAnthropicResponse(response: AnthropicResponse): ChatCompletionResponse {
   const content: ContentPart[] = [];
-  const toolCalls: any[] = [];
+  const toolCalls: ChatCompletionResponse['choices'][0]['message']['tool_calls'] = [];
 
   for (const block of response.content || []) {
     if (block.type === 'text') {
@@ -192,7 +271,7 @@ export class AnthropicProvider extends BaseProvider {
     if (config.models?.length) this.models = config.models;
   }
 
-  protected async fetch<T>(url: string, options: RequestInit & { json?: any } = {}): Promise<T> {
+  protected async fetch<T>(url: string, options: RequestInit & { json?: unknown } = {}): Promise<T> {
     const { json, ...fetchOptions } = options;
     
     const headers: Record<string, string> = {
@@ -228,7 +307,7 @@ export class AnthropicProvider extends BaseProvider {
   async chat(request: ChatCompletionRequest): Promise<ChatCompletionResponse> {
     const { system, messages } = toAnthropicMessages(request.messages);
     
-    const anthropicRequest: any = {
+    const anthropicRequest: AnthropicRequest = {
       model: request.model,
       messages,
       max_tokens: request.max_tokens || 4096,
@@ -260,7 +339,7 @@ export class AnthropicProvider extends BaseProvider {
       anthropicRequest.tools = tools;
     }
 
-    const response = await this.fetch<any>(`${this.baseUrl}/v1/messages`, {
+    const response = await this.fetch<AnthropicResponse>(`${this.baseUrl}/v1/messages`, {
       method: 'POST',
       json: anthropicRequest,
     });
@@ -271,7 +350,7 @@ export class AnthropicProvider extends BaseProvider {
   async *chatStream(request: ChatCompletionRequest): AsyncIterable<ChatCompletionChunk> {
     const { system, messages } = toAnthropicMessages(request.messages);
     
-    const anthropicRequest: any = {
+    const anthropicRequest: AnthropicRequest = {
       model: request.model,
       messages,
       max_tokens: request.max_tokens || 4096,
@@ -338,8 +417,8 @@ export class AnthropicProvider extends BaseProvider {
           if (data === '[DONE]') continue;
 
           try {
-            const event = JSON.parse(data);
-            
+            const event: AnthropicStreamEvent = JSON.parse(data);
+
             if (event.type === 'message_start') {
               messageId = event.message?.id || '';
               model = event.message?.model || model;

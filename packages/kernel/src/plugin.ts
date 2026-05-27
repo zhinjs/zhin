@@ -16,14 +16,15 @@ import logger, { Logger } from "@zhin.js/logger";
 import { Feature } from "./feature.js";
 import type { PluginLike } from "./plugin-types.js";
 import { remove, resolveEntry, supportedPluginExtensions } from "./utils.js";
+import { registerExtension, unregisterExtensions, installExtensionProxy } from "./extension-registry.js";
 import { AsyncLocalStorage } from "node:async_hooks";
 
-function runtimeCwd(): string {
+export function runtimeCwd(): string {
   const g = globalThis as { Deno?: { cwd: () => string } };
   return g.Deno?.cwd?.() ?? process.cwd();
 }
 
-function resolvePluginResolveDir(parent?: PluginBase): string {
+export function resolvePluginResolveDir(parent?: { filePath?: string }): string {
   if (parent?.filePath) return path.dirname(parent.filePath);
   const meta = import.meta.url;
   if (typeof meta === "string" && meta.length > 0) {
@@ -32,7 +33,7 @@ function resolvePluginResolveDir(parent?: PluginBase): string {
   return runtimeCwd();
 }
 
-function pluginCreateRequire(): ReturnType<typeof createRequire> {
+export function pluginCreateRequire(): ReturnType<typeof createRequire> {
   const metaUrl = import.meta.url;
   if (typeof metaUrl === "string" && metaUrl.length > 0) {
     return createRequire(metaUrl);
@@ -47,9 +48,8 @@ export const pluginStorage = new AsyncLocalStorage<PluginBase>();
 
 const loadedModules = new Map<string, PluginBase>();
 const contextsKey = Symbol("contexts");
-const extensionOwnersKey = Symbol("extensionOwners");
 
-function getFileHash(filePath: string): string {
+export function getFileHash(filePath: string): string {
   try {
     const content = fs.readFileSync(filePath, "utf-8");
     return createHash("md5").update(content).digest("hex");
@@ -58,7 +58,7 @@ function getFileHash(filePath: string): string {
   }
 }
 
-function watchFile(filePath: string, callback: () => void): () => void {
+export function watchFile(filePath: string, callback: () => void): () => void {
   try {
     const watcher = fs.watch(filePath, callback);
     watcher.on("error", () => {});
@@ -97,7 +97,6 @@ export type MaybePromise<T> = [T] extends [Promise<infer U>] ? T | U : T | Promi
 
 export class PluginBase extends EventEmitter<PluginBaseLifecycle> implements PluginLike {
   static [contextsKey] = [] as string[];
-  static [extensionOwnersKey] = new Map<string, string>();
 
   private _cachedName?: string;
   private _explicitName?: string;
@@ -199,10 +198,10 @@ export class PluginBase extends EventEmitter<PluginBaseLifecycle> implements Plu
     this.logger.debug(`Context "${ctx.name}" provided`);
 
     if (ctx.extensions) {
+      installExtensionProxy(PluginBase.prototype);
       for (const [name, fn] of Object.entries(ctx.extensions)) {
         if (typeof fn === "function") {
-          Reflect.set(PluginBase.prototype, name, fn);
-          PluginBase[extensionOwnersKey].set(name, ctx.name);
+          registerExtension(name, fn);
         }
       }
     }
@@ -238,12 +237,7 @@ export class PluginBase extends EventEmitter<PluginBaseLifecycle> implements Plu
     for (const [name, ctx] of this.$contexts) {
       remove(PluginBase[contextsKey], name);
       if (ctx.extensions) {
-        for (const key of Object.keys(ctx.extensions)) {
-          if (PluginBase[extensionOwnersKey].get(key) === name) {
-            delete (PluginBase.prototype as unknown as Record<string, unknown>)[key];
-            PluginBase[extensionOwnersKey].delete(key);
-          }
-        }
+        unregisterExtensions(Object.keys(ctx.extensions));
       }
       if (typeof ctx.dispose === "function") {
         await ctx.dispose(ctx.value);
@@ -289,7 +283,13 @@ export class PluginBase extends EventEmitter<PluginBaseLifecycle> implements Plu
 
   async broadcast(name: string, ...args: unknown[]): Promise<void> {
     const listeners = this.listeners(name) as ((...a: any[]) => any)[];
-    for (const listener of listeners) await listener(...args);
+    for (const listener of listeners) {
+      try {
+        await listener(...args);
+      } catch (e) {
+        this.logger.warn(`Broadcast "${name}" listener error: ${e}`);
+      }
+    }
     for (const child of this.children) await child.broadcast(name, ...args);
   }
 

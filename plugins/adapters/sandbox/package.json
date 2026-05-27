@@ -8,15 +8,8 @@
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",
-      "deno": "./src/index.ts",
       "development": "./src/index.ts",
       "import": "./lib/index.js"
-    },
-    "./edge": {
-      "types": "./lib/edge.d.ts",
-      "deno": "./src/edge.ts",
-      "development": "./src/edge.ts",
-      "import": "./lib/edge.js"
     }
   },
   "files": [

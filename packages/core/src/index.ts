@@ -44,7 +44,7 @@ export * from './built/login-assist.js'
 // AI 模块 — selective re-export from @zhin.js/ai to avoid conflicts with core types
 export {
   BaseProvider, OpenAIProvider, DeepSeekProvider, MoonshotProvider,
-  ZhipuProvider, AnthropicProvider, OllamaProvider,
+  ZhipuProvider, AnthropicProvider, OllamaProvider, CloudflareProvider,
   Agent, createAgent, formatToolTitle,
   filterTools, tokenize,
   SessionManager, MemorySessionManager, DatabaseSessionManager,

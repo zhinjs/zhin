@@ -317,6 +317,8 @@ export interface AgentResult {
   }[];
   usage: Usage;
   iterations: number;
+  /** 实际完成请求的模型（含 modelFallbacks 降级后） */
+  model?: string;
   /** 压缩统计（仅当 contextWindow 开启时有值） */
   compaction?: {
     microSavedTokens: number;
@@ -370,6 +372,7 @@ export interface AIConfig {
     moonshot?: ProviderConfig;
     zhipu?: ProviderConfig;
     ollama?: OllamaProviderConfig;
+    cloudflare?: ProviderConfig & { accountId: string };
     custom?: ProviderConfig[];
   };
   sessions?: {

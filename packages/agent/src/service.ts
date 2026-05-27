@@ -22,6 +22,7 @@ import {
   ZhipuProvider,
   AnthropicProvider,
   OllamaProvider,
+  CloudflareProvider,
 } from '@zhin.js/core';
 import {
   SessionManager,
@@ -50,6 +51,7 @@ const PROVIDER_REGISTRY: Array<{
   { key: 'moonshot', factory: MoonshotProvider, requireApiKey: true },
   { key: 'zhipu', factory: ZhipuProvider, requireApiKey: true },
   { key: 'ollama', factory: OllamaProvider, requireApiKey: false },
+  { key: 'cloudflare', factory: CloudflareProvider, requireApiKey: true },
 ];
 
 export class AIService {

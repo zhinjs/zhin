@@ -39,6 +39,7 @@ export {
   formatCompactUsage,
   addCompactUsage,
   truncatePreview,
+  truncateError,
   EMPTY_COMPACT_USAGE,
 } from './compact-log.js'
 export type { CompactFieldValue, CompactUsage } from './compact-log.js'

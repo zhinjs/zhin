@@ -240,7 +240,7 @@ The summary should be brief but informative so that later turns can quickly reco
     const result = response.choices?.[0]?.message?.content;
     return typeof result === 'string' ? result : DEFAULT_SUMMARY_FALLBACK;
   } catch (e: any) {
-    logger.warn(formatCompact( { summarize: 'fail', error: truncatePreview(e.message, 80) }));
+    logger.warn(formatCompact( { summarize: 'fail', error: truncatePreview(e.message) }));
     return DEFAULT_SUMMARY_FALLBACK;
   }
 }
@@ -296,7 +296,7 @@ export async function summarizeWithFallback(params: {
   try {
     return await summarizeChunks(params);
   } catch (fullError: any) {
-    logger.warn(formatCompact( { summarize: 'partial_fail', error: truncatePreview(fullError.message, 80) }));
+    logger.warn(formatCompact( { summarize: 'partial_fail', error: truncatePreview(fullError.message) }));
   }
 
   // 降级：排除超大消息
@@ -320,7 +320,7 @@ export async function summarizeWithFallback(params: {
       const notes = oversizedNotes.length > 0 ? `\n\n${oversizedNotes.join('\n')}` : '';
       return partial + notes;
     } catch (partialError: any) {
-      logger.warn(formatCompact( { summarize: 'fail', error: truncatePreview(partialError.message, 80) }));
+      logger.warn(formatCompact( { summarize: 'fail', error: truncatePreview(partialError.message) }));
     }
   }
 

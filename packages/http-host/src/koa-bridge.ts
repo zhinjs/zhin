@@ -30,6 +30,16 @@ function ensureSidecar(koa: Koa): Promise<number> {
   return entry.port;
 }
 
+/** Close the loopback sidecar for a Koa app (tests / graceful shutdown). */
+export function closeKoaSidecar(koa: Koa): Promise<void> {
+  const entry = sidecars.get(koa);
+  if (!entry) return Promise.resolve();
+  sidecars.delete(koa);
+  return new Promise((resolve, reject) => {
+    entry.server.close((err) => (err ? reject(err) : resolve()));
+  });
+}
+
 /**
  * Delegate unmatched requests to a Koa app via a loopback sidecar server.
  *

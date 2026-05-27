@@ -100,6 +100,12 @@ export interface ZhinAgentConfig {
   modelHarness?: ModelHarnessConfig;
   /** 输出回合 phase 观测日志（或通过 ZHIN_AGENT_PHASE_TRACE 环境变量开启） */
   phaseTrace?: boolean;
+  /** phase 观测回调（测试或自定义遥测；与 phaseTrace 同时生效） */
+  onPhaseTrace?: (event: {
+    phase: string;
+    sessionId: string;
+    extra: Record<string, unknown>;
+  }) => void;
   /** 启用 Claude Code 式 deferred + 同步 Worker（主 Agent 仅编排） */
   toolSearch?: boolean;
   /** Worker 侧 TF-IDF 载入 deferred 工具数量上限 */

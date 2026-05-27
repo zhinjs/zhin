@@ -9,7 +9,7 @@
 export type { PluginLike } from './plugin-types.js';
 
 // ── PluginBase ──
-export { PluginBase, pluginStorage } from './plugin.js';
+export { PluginBase, pluginStorage, runtimeCwd, resolvePluginResolveDir, pluginCreateRequire, getFileHash, watchFile } from './plugin.js';
 export type { BaseContext, PluginBaseLifecycle, MaybePromise } from './plugin.js';
 
 // ── Feature ──
@@ -47,6 +47,9 @@ export type {
   IScheduler,
   SchedulerOptions,
 } from './scheduler/index.js';
+
+// ── Extension Registry ──
+export { registerExtension, unregisterExtensions, getExtension, hasExtension, installExtensionProxy } from './extension-registry.js';
 
 // ── Utils ──
 export {

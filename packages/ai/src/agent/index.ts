@@ -210,7 +210,7 @@ export class Agent {
         if (i < candidates.length - 1) {
           logger.warn(formatCompact( {
             fallback: model,
-            error: truncatePreview(lastError.message, 80),
+            error: truncatePreview(lastError.message),
             next: candidates[i + 1],
           }));
         }
@@ -379,7 +379,7 @@ export class Agent {
       return typeof result === 'string' ? result : JSON.stringify(result);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      logger.warn(formatCompact( { tool: toolCall.function.name, error: truncatePreview(errorMsg, 80) }));
+      logger.warn(formatCompact( { tool: toolCall.function.name, error: truncatePreview(errorMsg) }));
       logger.error({ tool: toolCall.function.name, params: args, err: error }, 'Tool execution failed');
       // 向 AI 提供结构化的错误信息和恢复提示
       return JSON.stringify({
@@ -596,7 +596,7 @@ export class Agent {
           logger.warn(formatCompact( {
             iter: state.iterations,
             compact: 'fail',
-            error: truncatePreview(String(e), 80),
+            error: truncatePreview(String(e)),
           }));
         }
       }
@@ -636,7 +636,7 @@ export class Agent {
           ).join(', ');
           logger.debug(formatCompact( {
             iter: state.iterations,
-            tool_call: truncatePreview(callSummary, 200),
+            tool_call: truncatePreview(callSummary),
           }));
           this.emit('thinking', '正在执行工具调用...');
           state.messages.push(buildAssistantHistoryMessage(choice.message));
@@ -681,7 +681,7 @@ export class Agent {
             logger.debug(formatCompact( {
               iter: state.iterations,
               tool: toolCall.function.name,
-              preview: truncatePreview(result, 120),
+              preview: truncatePreview(result),
             }));
             state.messages.push({
               role: 'tool',
@@ -713,6 +713,7 @@ export class Agent {
           toolCalls: state.toolCalls,
           usage: state.usage,
           iterations: state.iterations,
+          model: lastUsedModel,
           ...(compactCount > 0 && { compaction: { microSavedTokens: totalMicroSaved, autoSavedTokens: totalAutoSaved, compactCount } }),
         };
 
@@ -730,7 +731,7 @@ export class Agent {
           logger.warn(formatCompact( {
             iter: state.iterations,
             recover: true,
-            error: truncatePreview(err.message, 80),
+            error: truncatePreview(err.message),
           }));
           const toolSummary = state.toolCalls.map(tc => {
             const r = typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result);
@@ -741,6 +742,7 @@ export class Agent {
             toolCalls: state.toolCalls,
             usage: state.usage,
             iterations: state.iterations,
+            model: lastUsedModel,
           };
           this.logTaskComplete(startedAt, fallbackResult, { model: lastUsedModel });
           this.emit('complete', fallbackResult);
@@ -753,6 +755,7 @@ export class Agent {
           toolCalls: [],
           usage: state.usage,
           iterations: state.iterations,
+          model: lastUsedModel,
         };
         this.logTaskComplete(startedAt, fallbackResult, { model: lastUsedModel });
         this.emit('complete', fallbackResult);
@@ -778,6 +781,7 @@ export class Agent {
       toolCalls: state.toolCalls,
       usage: state.usage,
       iterations: state.iterations,
+      model: lastUsedModel,
       ...(compactCount > 0 && { compaction: { microSavedTokens: totalMicroSaved, autoSavedTokens: totalAutoSaved, compactCount } }),
     };
 
@@ -880,7 +884,7 @@ export class Agent {
           logger.warn(formatCompact( {
             iter: iterations,
             compact: 'fail',
-            error: truncatePreview(String(e), 80),
+            error: truncatePreview(String(e)),
           }));
         }
       }

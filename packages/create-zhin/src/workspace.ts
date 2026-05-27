@@ -618,7 +618,7 @@ NODE_ENV=production
   
   // src/plugins/example.ts（参考 test-bot 的风格）
   await fs.writeFile(path.join(projectPath, 'src', 'plugins', 'example.ts'),
-`import { usePlugin, MessageCommand, Time } from 'zhin.js';
+`import { usePlugin, MessageCommand, Time, type MessageElement } from 'zhin.js';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
@@ -751,7 +751,6 @@ export function register(api: PluginRegisterHostApi) {
       "moduleResolution": "bundler",
       "target": "ES2022",
       "jsx": "react-jsx",
-      "jsxImportSource": "zhin.js",
       "declarationMap": true,
       "sourceMap": true,
       "skipLibCheck": true,

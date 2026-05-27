@@ -189,7 +189,7 @@ ${goal}${platformBlock}
       logger.warn(formatCompact( {
         ok: false,
         tools: loadedToolNames.join(','),
-        error: truncatePreview(errorMsg, 120),
+        error: truncatePreview(errorMsg),
       }));
       return {
         summary: JSON.stringify({

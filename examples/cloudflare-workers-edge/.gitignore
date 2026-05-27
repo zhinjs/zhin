@@ -1,9 +1,0 @@
-.deploy-tools/
-node_modules/
-.wrangler/
-static/console/
-src/console-assets.manifest.json
-data/
-.env
-.env.*
-.dev.vars

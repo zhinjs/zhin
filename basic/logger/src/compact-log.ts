@@ -17,11 +17,15 @@ export interface CompactUsage {
   total_tokens: number;
 }
 
-export function truncatePreview(text: string, max = 120): string {
-  const oneLine = text.replace(/\s+/g, ' ').trim();
-  if (oneLine.length <= max) return oneLine;
-  return `${oneLine.slice(0, max)}...`;
+/** 日志字段原文（仅 trim，不截断长度） */
+export function truncatePreview(text: string, max?: number): string {
+  const normalized = text.trim();
+  if (max === undefined || normalized.length <= max) return normalized;
+  return `${normalized.slice(0, max)}...`;
 }
+
+/** @deprecated 与 truncatePreview 相同；保留别名便于语义区分 error 字段 */
+export const truncateError = truncatePreview;
 
 /** Body only — use when logger `name` / prefix already identifies the source. */
 export function formatCompact(

@@ -2,6 +2,8 @@
 // 错误处理系统
 // ============================================================================
 
+import logger from "@zhin.js/logger";
+
 /**
  * 基础错误类，所有自定义错误都应该继承此类
  */
@@ -170,19 +172,19 @@ export class ErrorManager {
             try {
                 await handler(error, context)
             } catch (handlerError) {
-                // console.error 已替换为注释
+                logger.error(`Error handler (global) threw: ${handlerError}`)
             }
         }
 
         // 然后调用特定类型的处理器
         const errorType = error.constructor.name
         const handlers = this.handlers.get(errorType) || []
-        
+
         for (const handler of handlers) {
             try {
                 await handler(error, context)
             } catch (handlerError) {
-                // console.error 已替换为注释
+                logger.error(`Error handler (${errorType}) threw: ${handlerError}`)
             }
         }
     }

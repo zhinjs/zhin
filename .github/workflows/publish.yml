@@ -49,6 +49,9 @@ jobs:
       - name: build packages
         run: pnpm build
 
+      - name: run tests
+        run: pnpm test
+
       - name: init new packages (first-time publish)
         run: node scripts/init-new-packages.mjs
         env:

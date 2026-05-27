@@ -74,7 +74,7 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
     this.logger.info(formatCompact( {
       recv: `${message.$channel.type}(${message.$channel.id})`,
       bot: message.$bot,
-      preview: truncatePreview(segment.raw(message.$content), 80),
+      preview: truncatePreview(segment.raw(message.$content)),
     }));
 
     // 背压控制：limit > 0 时启用，超出并发上限丢弃消息并告警
@@ -126,7 +126,7 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
     this.logger.info(formatCompact( {
       send: `${options.type}(${options.id})`,
       bot: options.bot,
-      preview: truncatePreview(segment.raw(options.content), 80),
+      preview: truncatePreview(segment.raw(options.content)),
     }));
     return await bot.$sendMessage(options);
   }

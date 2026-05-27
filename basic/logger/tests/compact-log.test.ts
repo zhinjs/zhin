@@ -25,8 +25,12 @@ describe('compact-log', () => {
     ).toBe('500 (In 300 / Out 200); main 300 + sub 200');
   });
 
-  it('truncatePreview', () => {
+  it('truncatePreview keeps full text by default', () => {
     expect(truncatePreview('hello world')).toBe('hello world');
+    expect(truncatePreview('x'.repeat(200))).toBe('x'.repeat(200));
+  });
+
+  it('truncatePreview can opt-in max length', () => {
     expect(truncatePreview('x'.repeat(200), 10)).toBe('xxxxxxxxxx...');
   });
 

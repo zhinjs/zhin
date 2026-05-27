@@ -30,10 +30,23 @@
  *      → 不连续：丢弃 summary，仅用 [window]
  */
 
-import { Logger } from '@zhin.js/logger';
+import { formatCompact, Logger } from '@zhin.js/logger';
 import type { AIProvider, ChatMessage } from '../types.js';
 
 const logger = new Logger(null, 'ConvMemory');
+
+function providerErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function isProviderRateLimitError(err: unknown): boolean {
+  const msg = providerErrorMessage(err);
+  return /API Error \(429\)/i.test(msg) || /"code"\s*:\s*"?1305"?/i.test(msg);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 // ============================================================================
 // 数据库模型定义
@@ -102,6 +115,8 @@ export interface ConversationMemoryConfig {
   topicChangeThreshold?: number;
   /** 数据库记录保留天数（默认 30，0 表示不自动清理） */
   dbTtlDays?: number;
+  /** 话题检测 LLM 模型（默认可用 provider 的首个模型；建议填轻量模型如 glm-4-flash） */
+  topicDetectModel?: string;
 }
 
 const DEFAULT_CONFIG: Required<ConversationMemoryConfig> = {
@@ -109,6 +124,7 @@ const DEFAULT_CONFIG: Required<ConversationMemoryConfig> = {
   slidingWindowSize: 5,
   topicChangeThreshold: 0.15,
   dbTtlDays: 30,
+  topicDetectModel: '',
 };
 
 // ============================================================================
@@ -230,36 +246,47 @@ class DatabaseStore implements IStore {
   }
 
   async getMaxRound(sessionId: string): Promise<number> {
-    const msgs = await this.getMessages(sessionId);
-    if (msgs.length === 0) return 0;
-    return Math.max(...msgs.map(m => m.round));
+    const rows = await this.msgModel
+      .aggregate()
+      .where({ session_id: sessionId })
+      .max('round', 'max_round');
+    const val = (rows as Record<string, unknown>[])[0]?.['max_round'];
+    return val != null ? Number(val) : 0;
   }
 
   async getMessagesAfterRound(sessionId: string, afterRound: number): Promise<MessageRecord[]> {
-    const msgs = await this.getMessages(sessionId);
-    return msgs.filter(m => m.round > afterRound);
+    return (await this.msgModel
+      .select()
+      .where({ session_id: sessionId, round: { $gt: afterRound } })) as MessageRecord[];
   }
 
   async getMessagesByRoundRange(sessionId: string, fromRound: number, toRound: number): Promise<MessageRecord[]> {
-    const msgs = await this.getMessages(sessionId);
-    return msgs.filter(m => m.round >= fromRound && m.round <= toRound);
+    return (await this.msgModel
+      .select()
+      .where({ session_id: sessionId, round: { $gte: fromRound, $lte: toRound } })) as MessageRecord[];
   }
 
   async searchMessages(sessionId: string, keyword: string): Promise<MessageRecord[]> {
-    const msgs = await this.getMessages(sessionId);
-    const kw = keyword.toLowerCase();
-    return msgs.filter(m => m.content.toLowerCase().includes(kw));
+    return (await this.msgModel
+      .select()
+      .where({ session_id: sessionId, content: { $like: `%${keyword}%` } })) as MessageRecord[];
   }
 
   async getLatestSummary(sessionId: string): Promise<SummaryRecord | null> {
-    const records = (await this.sumModel.select().where({ session_id: sessionId })) as SummaryRecord[];
-    if (records.length === 0) return null;
-    return records.reduce((a, b) => a.to_round > b.to_round ? a : b);
+    const records = (await this.sumModel
+      .select()
+      .where({ session_id: sessionId })
+      .orderBy('to_round', 'DESC')
+      .limit(1)) as SummaryRecord[];
+    return records[0] ?? null;
   }
 
   async getSummaryById(sessionId: string, summaryId: number): Promise<SummaryRecord | null> {
-    const records = (await this.sumModel.select().where({ session_id: sessionId })) as SummaryRecord[];
-    return records.find(s => s.id === summaryId) ?? null;
+    const records = (await this.sumModel
+      .select()
+      .where({ session_id: sessionId, id: summaryId })
+      .limit(1)) as SummaryRecord[];
+    return records[0] ?? null;
   }
 
   async addSummary(record: Omit<SummaryRecord, 'id'>): Promise<SummaryRecord> {
@@ -514,7 +541,12 @@ export class ConversationMemory {
         this.generateSummaryAsync(sessionId, topicStart, currentRound - 1);
       }
     }).catch((err) => {
-      logger.warn('[话题检测] LLM 调用失败，保持当前话题', err);
+      logger.warn(formatCompact({
+        topic_detect: 'llm_fail',
+        action: 'keep_topic',
+        rate_limited: isProviderRateLimitError(err),
+        error: providerErrorMessage(err),
+      }));
     });
   }
 
@@ -539,22 +571,39 @@ export class ConversationMemory {
     if (!this.provider) return false;
 
     const recentText = recentMessages.map((m, i) => `${i + 1}. ${m}`).join('\n');
-    const model = this.provider.models[0];
+    const model =
+      this.config.topicDetectModel ||
+      this.provider.models.find((m) => /flash|lite|mini/i.test(m)) ||
+      this.provider.models[0];
 
-    const response = await this.provider.chat({
+    const request = {
       model,
       messages: [
         {
-          role: 'system',
-          content: 'You are a topic-analysis assistant. Decide whether the user\'s latest message has switched to a completely new topic compared to the previous messages. Reply with exactly one word: yes or no.',
+          role: 'system' as const,
+          content:
+            'You are a topic-analysis assistant. Decide whether the user\'s latest message has switched to a completely new topic compared to the previous messages. Reply with exactly one word: yes or no.',
         },
         {
-          role: 'user',
+          role: 'user' as const,
           content: `Previous messages:\n${recentText}\n\nLatest message:\n${currentMessage}`,
         },
       ],
       temperature: 0.1,
-    });
+    };
+
+    const maxAttempts = 3;
+    let response: Awaited<ReturnType<AIProvider['chat']>> | undefined;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        response = await this.provider.chat(request);
+        break;
+      } catch (err) {
+        if (!isProviderRateLimitError(err) || attempt >= maxAttempts - 1) throw err;
+        await sleep(1500 * (attempt + 1));
+      }
+    }
+    if (!response) return false;
 
     const raw = response.choices[0]?.message?.content;
     const content = (typeof raw === 'string' ? raw : '').trim();

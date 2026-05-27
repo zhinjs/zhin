@@ -160,8 +160,9 @@ export abstract class BaseProvider implements AIProvider {
    * 健康检查
    */
   async healthCheck(): Promise<boolean> {
+    if (!this.listModels) return false;
     try {
-      await this.listModels?.();
+      await this.listModels();
       return true;
     } catch {
       return false;
