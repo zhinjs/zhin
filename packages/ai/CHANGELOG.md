@@ -1,5 +1,14 @@
 # @zhin.js/ai
 
+## 1.1.24
+
+### Patch Changes
+
+- f19d2e0: fix: remove multiple runtime support
+- 2d24338: fix: ai 优化
+- Updated dependencies [f19d2e0]
+  - @zhin.js/logger@0.1.66
+
 ## 1.1.23
 
 ### Patch Changes

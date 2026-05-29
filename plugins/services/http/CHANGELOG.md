@@ -1,5 +1,18 @@
 # @zhin.js/http
 
+## 1.0.77
+
+### Patch Changes
+
+- f19d2e0: fix: remove multiple runtime support
+- Updated dependencies [0db9fed]
+- Updated dependencies [f19d2e0]
+  - @zhin.js/http-host@0.1.3
+  - zhin.js@1.0.84
+  - @zhin.js/schema@1.0.66
+  - @zhin.js/queue-runtime@0.0.2
+  - @zhin.js/storage-port@0.0.1
+
 ## 1.0.76
 
 ### Patch Changes

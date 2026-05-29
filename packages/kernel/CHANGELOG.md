@@ -1,5 +1,15 @@
 # @zhin.js/kernel
 
+## 0.0.43
+
+### Patch Changes
+
+- 0db9fed: fix: deno deploy
+- f19d2e0: fix: remove multiple runtime support
+- Updated dependencies [f19d2e0]
+  - @zhin.js/logger@0.1.66
+  - @zhin.js/schema@1.0.66
+
 ## 0.0.42
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @zhin.js/client
 
+## 1.1.3
+
+### Patch Changes
+
+- f19d2e0: fix: remove multiple runtime support
+- Updated dependencies [f19d2e0]
+  - @zhin.js/console-types@0.1.4
+
 ## 1.1.2
 
 ### Patch Changes

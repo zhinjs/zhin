@@ -651,7 +651,6 @@ HTTP_TOKEN=change-me
       "sourceMap": true,
       "verbatimModuleSyntax": false,
       "jsx": "react-jsx",
-      "jsxImportSource": "zhin.js",
       "types": [
         "@types/node",
         "zhin.js",
