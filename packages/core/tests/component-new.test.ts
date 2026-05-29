@@ -197,14 +197,18 @@ describe('函数式组件系统测试', () => {
     })
 
     it('Fetch 组件应该正确获取远程内容', async () => {
-      // Mock fetch
-      global.fetch = vi.fn().mockResolvedValue({
-        text: () => Promise.resolve('Remote content')
-      })
+      const originalFetch = global.fetch;
+      try {
+        global.fetch = vi.fn().mockResolvedValue({
+          text: () => Promise.resolve('Remote content')
+        });
 
-      const result = await Fetch({ url: 'https://example.com' }, mockContext)
-      expect(result).toBe('Remote content')
-    })
+        const result = await Fetch({ url: 'https://example.com' }, mockContext);
+        expect(result).toBe('Remote content');
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
   })
 
   describe('renderComponents 函数测试', () => {

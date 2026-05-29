@@ -1,6 +1,64 @@
 import type Koa from "koa";
 import http from "node:http";
+import type { IncomingMessage } from "node:http";
 import type { AddressInfo } from "node:net";
+import { Readable } from "node:stream";
+
+function incomingMessageToResponse(msg: IncomingMessage): Response {
+  const headers = new Headers();
+  for (const [key, value] of Object.entries(msg.headers)) {
+    if (value == null) continue;
+    if (Array.isArray(value)) {
+      for (const item of value) headers.append(key, item);
+    } else {
+      headers.set(key, value);
+    }
+  }
+  const body = msg.readable
+    ? (Readable.toWeb(msg) as ReadableStream<Uint8Array>)
+    : null;
+  return new Response(body, {
+    status: msg.statusCode ?? 502,
+    statusText: msg.statusMessage,
+    headers,
+  });
+}
+
+function proxyToSidecar(port: number, webReq: Request): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    const url = new URL(webReq.url);
+    const headers: http.OutgoingHttpHeaders = {};
+    webReq.headers.forEach((value, key) => {
+      headers[key] = value;
+    });
+
+    const proxyReq = http.request(
+      {
+        hostname: "127.0.0.1",
+        port,
+        path: `${url.pathname}${url.search}`,
+        method: webReq.method,
+        headers,
+      },
+      (proxyRes) => resolve(incomingMessageToResponse(proxyRes)),
+    );
+
+    proxyReq.on("error", reject);
+
+    const hasBody =
+      webReq.method !== "GET" &&
+      webReq.method !== "HEAD" &&
+      webReq.body != null;
+
+    if (hasBody) {
+      Readable.fromWeb(webReq.body as import("node:stream/web").ReadableStream)
+        .on("error", reject)
+        .pipe(proxyReq);
+    } else {
+      proxyReq.end();
+    }
+  });
+}
 
 type Sidecar = {
   server: http.Server;
@@ -49,14 +107,6 @@ export function closeKoaSidecar(koa: Koa): Promise<void> {
 export function koaFallback(koa: Koa): (req: Request) => Promise<Response> {
   return async (webReq: Request) => {
     const port = await ensureSidecar(koa);
-    const url = new URL(webReq.url);
-    const target = `http://127.0.0.1:${port}${url.pathname}${url.search}`;
-    const headers = new Headers(webReq.headers);
-    const init: RequestInit = { method: webReq.method, headers, redirect: "manual" };
-    if (webReq.method !== "GET" && webReq.method !== "HEAD" && webReq.body) {
-      init.body = webReq.body;
-      (init as RequestInit & { duplex: string }).duplex = "half";
-    }
-    return fetch(target, init);
+    return proxyToSidecar(port, webReq);
   };
 }
