@@ -68,6 +68,12 @@ export interface AITriggerResult {
   content: string;
 }
 
+/** shouldTriggerAI 可选参数（如适配器提供的平台 @ ID） */
+export interface AITriggerOptions {
+  /** 用于 @ 匹配的 bot 标识符（默认仅 message.$bot） */
+  botAtIds?: string[];
+}
+
 /**
  * 发送者权限信息
  */
@@ -102,14 +108,75 @@ export const DEFAULT_AI_TRIGGER_CONFIG: Required<AITriggerConfig> = {
 // 工具函数
 // ============================================================================
 
+function normalizeAtIds(botAtIds?: string[]): string[] {
+  const ids = botAtIds?.length ? botAtIds : [];
+  return [...new Set(ids.map((id) => String(id)).filter(Boolean))];
+}
+
+function segmentAtUserId(seg: MessageElement): string {
+  const { data } = seg;
+  if (!data || typeof data !== 'object') return '';
+  const record = data as Record<string, unknown>;
+  const raw = record.user_id ?? record.qq ?? record.id;
+  return raw == null ? '' : String(raw);
+}
+
+function isAtSegmentForBot(seg: MessageElement, botIds: string[]): boolean {
+  if (seg.type !== 'at' && seg.type !== 'mention') return false;
+  const uid = segmentAtUserId(seg);
+  return uid !== '' && botIds.includes(uid);
+}
+
+function textMentionsBot(text: string, botIds: string[]): boolean {
+  for (const id of botIds) {
+    const re = new RegExp(`@${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|$|[\\u200b\\uFEFF])`);
+    if (re.test(text)) return true;
+  }
+  return false;
+}
+
+function stripTextAtBot(text: string, botIds: string[]): string {
+  let result = text;
+  for (const id of botIds) {
+    const re = new RegExp(`@${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|[\\u200b\\uFEFF])?`, 'g');
+    result = result.replace(re, '');
+  }
+  return result;
+}
+
+/**
+ * 收集用于 @ 匹配的 bot 标识符
+ */
+export function collectBotAtIds<T extends object>(
+  message: Message<T>,
+  extraIds?: string[],
+): string[] {
+  const ids = new Set<string>([String(message.$bot)]);
+  for (const id of extraIds ?? []) {
+    if (id) ids.add(String(id));
+  }
+  return [...ids];
+}
+
 /**
  * 检查消息是否 @ 了机器人
  */
-export function isAtBot<T extends object>(message: Message<T>): boolean {
-  const botId = String(message.$bot);
-  return message.$content.some(seg =>  {
-    return String(seg.data?.qq) === botId || String(seg.data?.user_id) === botId;
-  });
+export function isAtBot<T extends object>(
+  message: Message<T>,
+  botAtIds?: string[],
+): boolean {
+  const botIds = normalizeAtIds(
+    botAtIds?.length ? botAtIds : collectBotAtIds(message),
+  );
+  if (message.$content.some((seg) => isAtSegmentForBot(seg, botIds))) {
+    return true;
+  }
+  for (const seg of message.$content) {
+    if (seg.type === 'text' && seg.data?.text && textMentionsBot(seg.data.text, botIds)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -142,14 +209,22 @@ export function parseRichMediaContent(content: string): MessageElement[] {
 /**
  * 移除 @ 机器人的部分
  */
-export function removeAtBot<T extends object>(message: Message<T>): MessageElement[] {
-  const botId = String(message.$bot);
-  return message.$content.filter(seg => {
-    const { type, data } = seg;
-    if (type !== "at") return true; // 非 at 段全部保留
-    const userId = String(data?.user_id || data?.qq);
-    return userId !== botId; // 只移除 @机器人 的段，保留 @其他人
-  });
+export function removeAtBot<T extends object>(
+  message: Message<T>,
+  botAtIds?: string[],
+): MessageElement[] {
+  const botIds = normalizeAtIds(
+    botAtIds?.length ? botAtIds : collectBotAtIds(message),
+  );
+  return message.$content
+    .filter((seg) => !isAtSegmentForBot(seg, botIds))
+    .map((seg) => {
+      if (seg.type !== 'text' || !seg.data?.text) return seg;
+      const stripped = stripTextAtBot(seg.data.text, botIds).trim();
+      if (!stripped) return null;
+      return { ...seg, data: { ...seg.data, text: stripped } };
+    })
+    .filter((seg): seg is MessageElement => seg != null);
 }
 
 /**
@@ -199,9 +274,11 @@ export function inferSenderPermissions<T extends object>(
  */
 export function shouldTriggerAI<T extends object>(
   message: Message<T>, 
-  config: AITriggerConfig
+  config: AITriggerConfig,
+  options?: AITriggerOptions,
 ): AITriggerResult {
   const fullConfig = { ...DEFAULT_AI_TRIGGER_CONFIG, ...config };
+  const botAtIds = collectBotAtIds(message, options?.botAtIds);
   
   if (!fullConfig.enabled) {
     return { triggered: false, content: '' };
@@ -223,12 +300,13 @@ export function shouldTriggerAI<T extends object>(
     }
   }
   
-  // 2. 检查 @ 触发
-  if (fullConfig.respondToAt && isAtBot(message)) {
-    const content = removeAtBot(message);
-    if (content.length) {
-      return { triggered: true, content: segment.toString(content) };
-    }
+  // 2. 检查 @ 触发（仅 @ 无正文时也触发，由 Agent 处理空输入）
+  if (fullConfig.respondToAt && isAtBot(message, botAtIds)) {
+    const content = removeAtBot(message, botAtIds);
+    return {
+      triggered: true,
+      content: content.length ? segment.toString(content).trim() : '',
+    };
   }
   
   // 3. 检查私聊触发

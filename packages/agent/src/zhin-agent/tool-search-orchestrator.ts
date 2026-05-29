@@ -7,6 +7,7 @@ import { createToolSearchTool } from '../builtin/tool-search-tool.js';
 import { normalizeTool } from '../orchestrator/tool-selection.js';
 import type { ToolContext } from '../orchestrator/types.js';
 import type { ZhinAgentConfig } from './config.js';
+import { resolveDeferredTaskToolTimeout } from './config.js';
 import { filterToolsForToolSearchCatalog, partitionToolsForToolSearch } from './tool-catalog.js';
 
 /** toolSearch 主编排：压缩 activate_skill 回执，避免长工具列表占满主会话 */
@@ -94,8 +95,13 @@ export function buildOrchestratorAgentTools(params: BuildOrchestratorToolsParams
       context,
     ),
   );
-  const runDeferred = normalizeTool(createRunDeferredTaskTool({ runWorker }), context);
-  runDeferred.timeout = Math.max(180_000, (config.timeout ?? 60_000) * 2);
+  const runDeferred = normalizeTool(
+    createRunDeferredTaskTool({
+      runWorker,
+      timeoutMs: resolveDeferredTaskToolTimeout(config),
+    }),
+    context,
+  );
   byName.set('run_deferred_task', runDeferred);
 
   const orchestratorTools: AgentTool[] = [];

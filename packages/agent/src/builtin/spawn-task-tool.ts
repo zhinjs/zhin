@@ -3,6 +3,7 @@
  */
 import type { AgentTool, Tool, ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import type { SubagentManager, SubagentOrigin } from '../subagent.js';
+import { notifySubagentGoal } from '../subagent-goal-notify.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 
 export const SPAWN_TASK_PARAMETERS: ToolParametersSchema = {
@@ -61,6 +62,7 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
     const origin = originFromToolContext(this.sessionContext);
     const labelStr = typeof label === 'string' ? label : undefined;
 
+    await notifySubagentGoal(this.sessionContext, task);
     return this.manager.spawn({ task, label: labelStr, origin });
   }
 }

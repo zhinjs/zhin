@@ -3,7 +3,9 @@ import type { AgentTool } from '@zhin.js/ai';
 import {
   compactActivateSkillResultForToolSearch,
   wrapActivateSkillForToolSearch,
+  buildOrchestratorAgentTools,
 } from '../src/zhin-agent/tool-search-orchestrator.js';
+import { DEFAULT_CONFIG, resolveDeferredTaskToolTimeout } from '../src/zhin-agent/config.js';
 
 describe('tool-search-orchestrator', () => {
   it('compactActivateSkillResultForToolSearch 缩短技能回执并指向 run_deferred_task', () => {
@@ -44,5 +46,18 @@ Use weather for cities.`;
     const out = String(await wrapped.execute!({ name: '60s' }));
     expect(out).toContain('run_deferred_task');
     expect(out).not.toContain('请立即根据以下指导');
+  });
+
+  it('run_deferred_task 超时须远高于 Agent 默认 30s', () => {
+    expect(resolveDeferredTaskToolTimeout(DEFAULT_CONFIG)).toBeGreaterThanOrEqual(180_000);
+    const built = buildOrchestratorAgentTools({
+      allTools: [],
+      config: DEFAULT_CONFIG,
+      context: { platform: 't' } as any,
+      getDeferredCatalog: () => [],
+      runWorker: async () => '{}',
+    });
+    const deferred = built.orchestratorTools.find(t => t.name === 'run_deferred_task');
+    expect(deferred?.timeout).toBe(resolveDeferredTaskToolTimeout(DEFAULT_CONFIG));
   });
 });

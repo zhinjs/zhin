@@ -122,7 +122,7 @@ describe('AI Trigger 工具函数', () => {
       const result = shouldTriggerAI(message as any, { respondToAt: true });
       
       expect(result.triggered).toBe(true);
-      expect(result.content).toBe(' 你好呀');
+      expect(result.content).toBe('你好呀');
     });
 
     it('关闭 respondToAt 时不应触发', () => {
@@ -149,6 +149,58 @@ describe('AI Trigger 工具函数', () => {
       const result = shouldTriggerAI(message as any, { respondToAt: true });
       
       expect(result.triggered).toBe(false);
+    });
+
+    it('icqq 风格 @（data.qq）应触发', () => {
+      const message = createMockMessage({
+        content: [
+          { type: 'at', data: { qq: '8596238' } },
+          { type: 'text', data: { text: ' 你好' } },
+        ],
+        bot: '8596238',
+      });
+      const result = shouldTriggerAI(message as any, { respondToAt: true });
+
+      expect(result.triggered).toBe(true);
+      expect(result.content).toBe('你好');
+    });
+
+    it('仅 @ 机器人无正文也应触发', () => {
+      const message = createMockMessage({
+        content: [{ type: 'at', data: { qq: '8596238' } }],
+        bot: '8596238',
+      });
+      const result = shouldTriggerAI(message as any, { respondToAt: true });
+
+      expect(result.triggered).toBe(true);
+      expect(result.content).toBe('');
+    });
+
+    it('QQ 官方 mention 段应通过 botAtIds 匹配', () => {
+      const message = createMockMessage({
+        content: [
+          { type: 'mention', data: { user_id: '102069707' } },
+          { type: 'text', data: { text: ' 在吗' } },
+        ],
+        bot: 'zhin2号',
+      });
+      const result = shouldTriggerAI(message as any, { respondToAt: true }, {
+        botAtIds: ['zhin2号', '102069707'],
+      });
+
+      expect(result.triggered).toBe(true);
+      expect(result.content).toBe('在吗');
+    });
+
+    it('纯文本 @ 号（无 at 段）应触发', () => {
+      const message = createMockMessage({
+        content: [{ type: 'text', data: { text: '@8596238 帮忙查一下' } }],
+        bot: '8596238',
+      });
+      const result = shouldTriggerAI(message as any, { respondToAt: true });
+
+      expect(result.triggered).toBe(true);
+      expect(result.content).toBe('帮忙查一下');
     });
   });
 

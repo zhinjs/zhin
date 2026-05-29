@@ -28,6 +28,26 @@ import { sanitizeToolResult } from './tool-result-sanitizer.js';
 
 const logger = new Logger(null, 'Agent');
 
+const LOG_PREVIEW_CHARS = 480;
+
+function previewLogText(value: unknown, max = LOG_PREVIEW_CHARS): string {
+  if (value == null) return '';
+  const text = typeof value === 'string' ? value : JSON.stringify(value);
+  return truncatePreview(text, max);
+}
+
+function logAgentThinking(iter: number, reasoning: unknown): void {
+  const thinking = previewLogText(reasoning);
+  if (!thinking) return;
+  logger.debug(formatCompact({ iter, thinking }));
+}
+
+function logAgentAnswer(iter: number, content: string): void {
+  const answer = previewLogText(content);
+  if (!answer) return;
+  logger.debug(formatCompact({ iter, answer }));
+}
+
 /** 将 LLM 返回的 assistant 消息写入多轮 history（保留 tool_calls 与 reasoning_content） */
 function buildAssistantHistoryMessage(choiceMessage: ChatMessage): ChatMessage {
   const content = typeof choiceMessage.content === 'string' ? choiceMessage.content : '';
@@ -630,6 +650,7 @@ export class Agent {
           model: usedModel,
         }));
         const choice = response.choices[0];
+        logAgentThinking(state.iterations, choice.message.reasoning_content);
 
         // ── 分支 1: 模型想调用工具 ──
         if (choice.message.tool_calls?.length) {
@@ -682,8 +703,8 @@ export class Agent {
           for (const { toolCall, result } of results) {
             logger.debug(formatCompact( {
               iter: state.iterations,
-              tool: toolCall.function.name,
-              preview: truncatePreview(result),
+              tool_result: toolCall.function.name,
+              preview: previewLogText(result),
             }));
             state.messages.push({
               role: 'tool',
@@ -709,6 +730,7 @@ export class Agent {
         const content = typeof choice.message.content === 'string'
           ? choice.message.content
           : '';
+        logAgentAnswer(state.iterations, content);
 
         const result: AgentResult = {
           content,
@@ -955,6 +977,7 @@ export class Agent {
       };
       if (reasoningContent) assistantMsg.reasoning_content = reasoningContent;
       messages.push(assistantMsg);
+      logAgentThinking(iterations, reasoningContent);
 
       // 处理工具调用
       if (pendingToolCalls.length > 0 && finishReason === 'tool_calls') {
@@ -992,6 +1015,11 @@ export class Agent {
 
         // yield 工具结果并加入消息历史
         for (const { toolCall, result } of results) {
+          logger.debug(formatCompact( {
+            iter: iterations,
+            tool_result: toolCall.function.name,
+            preview: previewLogText(result),
+          }));
           yield { type: 'tool_result', data: { name: toolCall.function.name, result } };
           messages.push({
             role: 'tool',
@@ -1023,6 +1051,7 @@ export class Agent {
       }
 
       // 完成
+      logAgentAnswer(iterations, content);
       const doneData = {
         content,
         toolCalls: toolCallHistory,

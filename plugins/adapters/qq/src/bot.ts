@@ -24,6 +24,8 @@ export class QQBot<T extends ReceiverMode, M extends ApplicationPlatform = Appli
 {
   $connected: boolean = false;
   declare $config: QQBotConfig<T, M>;
+  /** 平台侧机器人 user_id，用于 @ 触发匹配 */
+  $platformUserId?: string;
 
   get pluginLogger() {
     return this.adapter.plugin.logger;
@@ -51,6 +53,16 @@ export class QQBot<T extends ReceiverMode, M extends ApplicationPlatform = Appli
     this.on("message.private", this.handleQQMessage.bind(this));
     await this.start();
     this.$connected = true;
+    try {
+      const self = await this.getSelfInfo();
+      const uid = (self as { id?: string; user_id?: string; username?: string })?.id
+        ?? (self as { user_id?: string })?.user_id;
+      if (uid) this.$platformUserId = String(uid);
+    } catch (err) {
+      this.pluginLogger.debug(
+        `${this.$config.name} getSelfInfo failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   async $disconnect(): Promise<void> {

@@ -248,6 +248,8 @@ export function normalizeTool(input: NormalizableTool, context?: ToolContext): A
   if (tool.preExecutable) agentTool.preExecutable = true;
   if (tool.kind) agentTool.kind = tool.kind;
   if (tool.source) agentTool.source = tool.source;
+  const toolTimeout = (tool as { timeout?: number }).timeout;
+  if (toolTimeout != null) agentTool.timeout = toolTimeout;
   return agentTool;
 }
 

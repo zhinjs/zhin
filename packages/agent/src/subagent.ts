@@ -115,7 +115,12 @@ export class SubagentManager {
       });
     this.registerSubagentTask?.(done);
 
-    logger.debug(formatCompact( { spawn: taskId, label: displayLabel }));
+    logger.info(formatCompact( {
+      subagent: 'spawn',
+      task_id: taskId,
+      label: displayLabel,
+      task: truncatePreview(options.task, 300),
+    }));
     return `子任务 [${displayLabel}] 已启动 (id: ${taskId})，完成后会自动通知你。`;
   }
 
@@ -184,12 +189,15 @@ export class SubagentManager {
         this.onSubagentUsage?.(result.usage);
         const finalResult = result.content || '任务已完成，但未生成最终响应。';
 
-        logger.debug(formatCompact( {
+        logger.info(formatCompact( {
+          subagent: 'done',
           task_id: taskId,
+          label,
           total_ms: Date.now() - startedAt,
           usage: formatCompactUsage(result.usage),
           iter: result.iterations,
           model,
+          result: truncatePreview(finalResult, 480),
         }));
         await this.announceResult(taskId, label, task, finalResult, origin, 'ok');
       } finally {
@@ -198,6 +206,13 @@ export class SubagentManager {
     } catch (error) {
       const errorMsg = `Error: ${error}`;
       logger.error({ taskId, error }, 'Subagent failed');
+      logger.info(formatCompact( {
+        subagent: 'done',
+        task_id: taskId,
+        label,
+        ok: false,
+        error: truncatePreview(errorMsg, 300),
+      }));
       await this.announceResult(taskId, label, task, errorMsg, origin, 'error');
     }
   }

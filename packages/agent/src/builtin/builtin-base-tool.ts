@@ -15,6 +15,8 @@ export abstract class BuiltinBaseTool {
   readonly kind?: string;
   /** 仅当为 true 时写入 Tool */
   readonly preExecutable?: boolean;
+  /** Agent 工具执行超时（毫秒），覆盖默认 30s */
+  readonly executionTimeoutMs?: number;
 
   /**
    * 核心执行逻辑（单测优先覆盖此处）。
@@ -36,6 +38,9 @@ export abstract class BuiltinBaseTool {
     if (this.keywords.length) tool.keywords = [...this.keywords];
     if (this.kind) tool.kind = this.kind;
     if (this.preExecutable) tool.preExecutable = true;
+    if (this.executionTimeoutMs != null) {
+      (tool as Tool & { timeout?: number }).timeout = this.executionTimeoutMs;
+    }
     return tool;
   }
 }

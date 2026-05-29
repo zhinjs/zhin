@@ -2,8 +2,8 @@
  * Register AI trigger handler via the core MessageDispatcher inbound pipeline.
  */
 import './types.js';
-import { getPlugin, inferSenderPermissions, mergeAITriggerConfig, Message, parseRichMediaContent, shouldTriggerAI } from '@zhin.js/core';
-import type { Tool, ToolContext } from '@zhin.js/core';
+import { getPlugin, inferSenderPermissions, isAtBot, mergeAITriggerConfig, Message, parseRichMediaContent, segment, shouldTriggerAI } from '@zhin.js/core';
+import type { Plugin, Tool, ToolContext } from '@zhin.js/core';
 import type { ContentPart } from '@zhin.js/core';
 import type { OutputElement } from '@zhin.js/ai';
 import type { AIServiceRefs } from './shared-refs.js';
@@ -12,6 +12,27 @@ import { renderOutput } from './output-renderer.js';
 import { canAccessTool } from '../orchestrator/tool-selection.js';
 import { formatCompactLog, truncatePreview } from '@zhin.js/logger';
 import { formatAiHandlerCompleteLog } from '../zhin-agent/turn-metrics.js';
+import {
+  formatSubagentProcessingMessage,
+  SUBAGENT_GOAL_NOTIFY_EXTRA_KEY,
+} from '../subagent-goal-notify.js';
+
+function resolveBotAtIds(message: Message<any>, root: Plugin): string[] {
+  const ids = new Set<string>([String(message.$bot)]);
+  try {
+    const adapter = root.inject(message.$adapter) as
+      | { bots?: Map<string, { $config?: Record<string, unknown>; $platformUserId?: string }> }
+      | undefined;
+    const bot = adapter?.bots?.get(message.$bot);
+    const cfg = bot?.$config;
+    if (cfg?.name) ids.add(String(cfg.name));
+    if (cfg?.appid) ids.add(String(cfg.appid));
+    if (bot?.$platformUserId) ids.add(String(bot.$platformUserId));
+  } catch {
+    // adapter 未就绪时仍用 message.$bot
+  }
+  return [...ids];
+}
 
 export function registerAITrigger(refs: AIServiceRefs): void {
   const plugin = getPlugin();
@@ -41,7 +62,10 @@ export function registerAITrigger(refs: AIServiceRefs): void {
       };
 
       const t0 = performance.now();
-      if (!ai.isReady()) return;
+      if (!ai.isReady()) {
+        logger.warn(formatCompactLog('AI Handler', { skip: 'not_ready', bot: message.$bot }));
+        return;
+      }
       if (triggerConfig.thinkingMessage)
         await replyOutbound(triggerConfig.thinkingMessage);
 
@@ -70,6 +94,11 @@ export function registerAITrigger(refs: AIServiceRefs): void {
         isGroupOwner: permissions.isGroupOwner,
         isBotAdmin: isOwner || permissions.isBotAdmin,
         isOwner,
+        extra: {
+          [SUBAGENT_GOAL_NOTIFY_EXTRA_KEY]: async (goal: string) => {
+            await replyOutbound(formatSubagentProcessingMessage(goal));
+          },
+        },
       };
 
       const tCollect = performance.now();
@@ -138,9 +167,18 @@ export function registerAITrigger(refs: AIServiceRefs): void {
       return;
     }
 
-    dispatcher.setAITriggerMatcher((message: Message<any>) =>
-      shouldTriggerAI(message, triggerConfig),
-    );
+    dispatcher.setAITriggerMatcher((message: Message<any>) => {
+      const botAtIds = resolveBotAtIds(message, root);
+      const result = shouldTriggerAI(message, triggerConfig, { botAtIds });
+      logger.debug(formatCompactLog('AI Trigger', {
+        adapter: message.$adapter,
+        bot: message.$bot,
+        at: isAtBot(message, botAtIds),
+        triggered: result.triggered,
+        preview: truncatePreview(segment.raw(message.$content)),
+      }));
+      return result;
+    });
     dispatcher.setAIHandler(handleAIMessage);
     logger.debug(formatCompactLog('AI Handler', { hook: 'on' }));
     return () => { logger.debug(formatCompactLog('AI Handler', { hook: 'off' })); };

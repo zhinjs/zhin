@@ -48,6 +48,7 @@ import {
 } from '../builtin/web-search-locale.js';
 import { RateLimiter } from '@zhin.js/ai';
 import { detectTone } from '@zhin.js/ai';
+import { notifySubagentGoal } from '../subagent-goal-notify.js';
 import { SubagentManager, type SubagentResultSender } from '../subagent.js';
 import { triggerAIHook, createAIHookEvent } from '../hooks.js';
 import { resolveAgentPromptMarkdown } from '../agent-prompt/index.js';
@@ -587,6 +588,22 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       reply = sanitizeAssistantReply(result.content, {
         toolSummary: formatToolCallsForUser(result.toolCalls),
       });
+      logger.debug(formatCompact( {
+        agent_answer: truncatePreview(reply, 480),
+        tool_calls: result.toolCalls.length,
+        ...(result.toolCalls.length
+          ? { tools: result.toolCalls.map(tc => tc.tool).join(',') }
+          : {}),
+      }));
+      for (const tc of result.toolCalls) {
+        logger.debug(formatCompact( {
+          tool_result: tc.tool,
+          preview: truncatePreview(
+            typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result),
+            480,
+          ),
+        }));
+      }
       logger.debug(
         `[Agent 路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, Agent=${(now() - tAgent).toFixed(0)}ms, 总=${(now() - t0).toFixed(0)}ms`,
       );
@@ -639,6 +656,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     context: ToolContext,
     allTools: AgentTool[],
   ): Promise<string> {
+    await notifySubagentGoal(context, goal);
     const allByName = new Map(allTools.map(t => [t.name, t]));
     const workerBase: AgentTool[] = [];
     for (const name of this.config.toolSearchWorkerBaseTools) {

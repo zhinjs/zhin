@@ -14,6 +14,7 @@ import {
 import type { AgentPromptBuildContext } from '@zhin.js/core';
 import type { ModelRegistry } from '@zhin.js/ai';
 import type { ZhinAgentConfig } from './zhin-agent/config.js';
+import { resolveWorkerSlowToolTimeout } from './zhin-agent/config.js';
 import { applyExecPolicyToTools } from './security/exec-policy.js';
 import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from './reserved-tools.js';
 import { resolveContextBudget } from './zhin-agent/context-budget.js';
@@ -97,6 +98,13 @@ export class DeferredWorkerRunner {
 
     const loadedToolNames = workerTools.map(t => t.name);
     if (loadedToolNames.length === 0) {
+      logger.info(formatCompact( {
+        worker: 'delegated',
+        ok: false,
+        goal: truncatePreview(goal, 300),
+        tool_query: truncatePreview(query, 120),
+        error: 'no_tools_matched',
+      }));
       return {
         summary: JSON.stringify({
           status: 'error',
@@ -113,6 +121,13 @@ export class DeferredWorkerRunner {
     let tools = workerTools;
     if (execPolicyConfig) {
       tools = applyExecPolicyToTools(execPolicyConfig, tools);
+    }
+    if (execPolicyConfig) {
+      const slowTimeout = resolveWorkerSlowToolTimeout(execPolicyConfig);
+      tools = tools.map((t) => ({
+        ...t,
+        timeout: t.timeout ?? (t.name.startsWith('mcp_') ? slowTimeout : 60_000),
+      }));
     }
 
     const model = provider.models[0];
@@ -148,11 +163,19 @@ ${goal}${platformBlock}
 
     const maxIterations = options.maxIterations ?? execPolicyConfig?.maxSubagentIterations ?? 15;
 
+    logger.info(formatCompact( {
+      worker: 'delegated',
+      goal: truncatePreview(goal, 300),
+      tool_query: query !== goal ? truncatePreview(query, 120) : undefined,
+      tools: loadedToolNames.join(','),
+    }));
+
     const agent = createAgent(provider, {
       model,
       systemPrompt,
       tools,
       maxIterations,
+      turnTimeout: execPolicyConfig?.timeout ?? 60_000,
       // Worker 须能注册 bash/read_file 等内置名；仅保留编排类元工具不可被插件覆盖
       reservedToolNames: [...ORCHESTRATOR_TOOL_SET],
       reservedToolNamePrefixes: RESERVED_TOOL_NAME_PREFIXES,
@@ -169,10 +192,12 @@ ${goal}${platformBlock}
       const raw = result.content?.trim() || 'Task completed with no text response.';
       const summary = truncateWorkerSummary(raw, summaryMaxChars);
       logger.info(formatCompact( {
+        worker: 'done',
         ok: true,
         iter: result.iterations,
         tools: loadedToolNames.join(','),
         usage: formatCompactUsage(result.usage),
+        summary: truncatePreview(summary, 480),
       }));
       return {
         summary: JSON.stringify({
@@ -188,6 +213,7 @@ ${goal}${platformBlock}
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       logger.warn(formatCompact( {
+        worker: 'done',
         ok: false,
         tools: loadedToolNames.join(','),
         error: truncatePreview(errorMsg),

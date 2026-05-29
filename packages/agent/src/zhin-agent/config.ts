@@ -181,3 +181,22 @@ export function isPhaseTraceEnabled(config: Required<ZhinAgentConfig>, env: Node
   const raw = env.ZHIN_AGENT_PHASE_TRACE?.trim().toLowerCase();
   return !!raw && TRUE_VALUES.has(raw);
 }
+
+/** run_deferred_task 外层超时：须覆盖 Worker 多轮 LLM + MCP（默认远高于 Agent 30s 工具超时） */
+export function resolveDeferredTaskToolTimeout(
+  config: Pick<Required<ZhinAgentConfig>, 'timeout' | 'subagentTurnWaitMs' | 'maxSubagentIterations'>,
+): number {
+  const turnMs = config.timeout ?? 60_000;
+  const waitMs = config.subagentTurnWaitMs ?? 180_000;
+  const maxIter = config.maxSubagentIterations ?? 15;
+  const iterationBudget = turnMs * Math.min(maxIter, 10);
+  return Math.max(waitMs, iterationBudget, 180_000);
+}
+
+/** Worker 内慢工具（MCP 等）默认超时 */
+export function resolveWorkerSlowToolTimeout(
+  config: Pick<Required<ZhinAgentConfig>, 'timeout' | 'maxSubagentIterations'>,
+): number {
+  const turnMs = config.timeout ?? 60_000;
+  return Math.min(180_000, Math.max(60_000, turnMs * 2));
+}

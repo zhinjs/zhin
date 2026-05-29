@@ -119,6 +119,8 @@ export class AskUserBuiltinTool extends BuiltinBaseTool {
     '向 Bot Owner 发送问题并等待回复；群聊场景下通过私聊确认。bash/icqq：Owner 私聊可用「#approve always bash」「#approve rule <正则>」（匹配整段 shell 子命令，如点赞类 icqq 不必固化解参数）、「#approve list」「#approve revoke rule <id>」「#approve revoke」等（亦支持 / 或无 #）。write_file / edit_file / web_fetch 的硬编排仍须逐次确认。';
   readonly parameters = ASK_USER_PARAMETERS;
   readonly kind = 'interaction';
+  /** 默认等待 Owner 120s，须大于 Agent 默认 30s 工具超时 */
+  readonly executionTimeoutMs = 150_000;
 
   constructor(private readonly plugin: Plugin) {
     super();

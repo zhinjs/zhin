@@ -46,6 +46,12 @@ describe('AskUserBuiltinTool', () => {
     const out = String(await agentTool.execute({ question: 'hi' }));
     expect(out).toContain('消息来源');
   });
+
+  it('normalizeTool 应保留 ask_user 长超时', () => {
+    const tool = createAskUserTool();
+    const agentTool = normalizeTool(tool, { platform: 't' } as ToolContext);
+    expect(agentTool.timeout).toBe(150_000);
+  });
 });
 
 describe('formatOwnerResponse', () => {

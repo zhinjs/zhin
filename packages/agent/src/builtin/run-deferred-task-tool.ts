@@ -21,6 +21,8 @@ export const RUN_DEFERRED_TASK_PARAMETERS: ToolParametersSchema = {
 
 export interface RunDeferredTaskToolOptions {
   runWorker: (goal: string, toolQuery?: string) => Promise<string>;
+  /** Agent 层工具执行超时（毫秒），默认 180_000 */
+  timeoutMs?: number;
 }
 
 export class RunDeferredTaskBuiltinTool extends BuiltinBaseTool {
@@ -29,9 +31,11 @@ export class RunDeferredTaskBuiltinTool extends BuiltinBaseTool {
     '在隔离的 Worker 子 Agent 中执行 deferred 工具任务（github/mcp/插件等）。这是调用 deferred 能力的唯一入口';
   readonly parameters = RUN_DEFERRED_TASK_PARAMETERS;
   readonly kind = 'meta';
+  readonly executionTimeoutMs: number;
 
   constructor(private readonly opts: RunDeferredTaskToolOptions) {
     super();
+    this.executionTimeoutMs = opts.timeoutMs ?? 180_000;
     this.tags.push('deferred', 'worker', 'delegate');
     this.keywords.push('执行', '委托', 'worker', 'deferred', 'github', 'mcp');
   }
