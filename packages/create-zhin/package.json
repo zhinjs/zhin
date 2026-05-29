@@ -14,6 +14,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "clean": "rimraf lib",
+    "test": "vitest run --root ../.. packages/create-zhin/tests",
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {

@@ -186,20 +186,39 @@ export async function createConfigFile(appPath: string, format: string, options:
   const aiYaml = options.ai ? generateAIConfigYaml(options.ai) : '';
   const aiJSON = options.ai ? generateAIConfigJSON(options.ai) : '';
   const aiToml = options.ai ? generateAIConfigToml(options.ai) : '';
+  const enableInbox = !!options.database;
 
   const pluginsYamlLines = plugins.map(p => `  - "${p}"`).join('\n');
   const pluginsJsonLines = plugins.map(p => `    "${p}"`).join(',\n');
   const pluginsTomlLines = plugins.map(p => `  "${p}"`).join(',\n');
 
   let yamlExtraConfig = '';
+  if (enableInbox) yamlExtraConfig += '\ninbox:\n  enabled: true\n';
   if (botsYaml) yamlExtraConfig += botsYaml;
   if (aiYaml) yamlExtraConfig += aiYaml;
 
-  let jsonExtraConfig = '';
-  if (botsJSON) jsonExtraConfig += `\n  ${botsJSON}`;
-  if (aiJSON) jsonExtraConfig += `\n  ${aiJSON}`;
+  const jsonSections: string[] = [];
+  if (databaseConfig) jsonSections.push(databaseConfig.trim().replace(/,$/, ''));
+  jsonSections.push(`"plugins": [
+${pluginsJsonLines}
+  ]`);
+  jsonSections.push(`"http": {
+    "token": "\${HTTP_TOKEN}",
+    "base": "/api",
+    "corsOrigins": [
+      "https://console.zhin.dev"
+    ]
+  }`);
+  if (enableInbox) {
+    jsonSections.push(`"inbox": {
+    "enabled": true
+  }`);
+  }
+  if (botsJSON) jsonSections.push(botsJSON.trim().replace(/,$/, ''));
+  if (aiJSON) jsonSections.push(aiJSON.trim());
 
   let tomlExtraConfig = '';
+  if (enableInbox) tomlExtraConfig += '\n[inbox]\nenabled = true\n';
   if (botsToml) tomlExtraConfig += botsToml;
   if (aiToml) tomlExtraConfig += aiToml;
 
@@ -210,16 +229,14 @@ ${pluginsYamlLines}
 
 http:
   token: \${HTTP_TOKEN}
+  base: /api
+  corsOrigins:
+    - "https://console.zhin.dev"
 ${yamlExtraConfig}
 `],
     json: ['zhin.config.json',
 `{
-${databaseConfig ? `  ${databaseConfig}\n` : ''}  "plugins": [
-${pluginsJsonLines}
-  ],
-  "http": {
-    "token": "\${HTTP_TOKEN}"
-  }${jsonExtraConfig ? `,${jsonExtraConfig}` : ''}
+  ${jsonSections.join(',\n  ')}
 }
 `],
     toml: ['zhin.config.toml',
@@ -229,6 +246,8 @@ ${pluginsTomlLines}
 
 [http]
 token = "\${HTTP_TOKEN}"
+base = "/api"
+corsOrigins = ["https://console.zhin.dev"]
 ${tomlExtraConfig}
 `]
   };

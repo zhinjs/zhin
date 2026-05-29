@@ -11,7 +11,7 @@ Zhin AI Agent 组合层：在 `@zhin.js/core` 的类型与 Provider 之上，提
 - 🔄 **模型自动降级**：首选模型失败时自动切换到次优模型，支持 Chat / Vision / Agent 三条路径
 - 🛡️ **6 层 Bash 安全**：`ExecPolicy` 纵深防御（危险黑名单、环境变量剥离、wrapper 剥离、复合命令拆分、只读放行、交互式审批）
 - 📂 **文件访问安全**：`FilePolicy` 路径检查、设备路径拦截、命令读写分类
-- 📋 **11 段系统提示词**：`PromptBuilder` 结构化 prompt（Identity、System、Discipline、Tasks、Actions、Tools、Communication、Skills、Active Skills、Memory、Bootstrap）
+- 📋 **精简系统提示词**：`PromptBuilder` 组装 Context、Style、Tools、Safety，并按需注入 Platform、Skills、Memory、Bootstrap
 - 🔌 **框架挂载**：`initAgentModule()` 注册 `ctx.ai`、`ctx.agent`、定时任务、DB 模型等
 - 📦 **上下文与记忆**：`ContextManager`、`ConversationMemory`、`UserProfileStore`
 - ⏰ **跟进与定时**：`FollowUpManager`、`PersistentCronEngine`、cron 工具

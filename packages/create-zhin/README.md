@@ -10,6 +10,8 @@
 - 🎯 **交互式配置**: 选择运行时、配置格式、数据库类型
 - 🗄️ **数据库支持**: 支持 SQLite、MySQL、PostgreSQL、MongoDB、Redis
 - 🔐 **安全配置**: 自动生成 HTTP Token 认证和环境变量管理
+- 🖥️ **Remote Console**: 默认配置 `https://console.zhin.dev` 访问所需的 API Base 与 CORS
+- 🤖 **AI Agent 引导**: 可选配置 Provider、触发方式、会话、上下文和安全默认值
 - 📊 **日志配置**: 内置完整的日志等级和清理配置
 - 🌐 **零安装**: 无需全局安装，直接使用
 
@@ -78,7 +80,7 @@ npm create zhin-app my-awesome-bot
 **交互式配置流程：**
 1. 📝 输入项目名称
 2. ⚙️ 选择运行时（Node.js / Bun）
-3. 📄 选择配置格式（TypeScript / JavaScript / YAML / JSON）
+3. 📄 选择配置格式（YAML / JSON / TOML）
 4. 🔐 配置 Web 控制台 Token
    - Token（默认：随机 32 位 hex 字符串，用于 Authorization: Bearer 或 ?token= 认证）
 5. 🗄️ 配置数据库
@@ -110,6 +112,9 @@ npm create zhin-app my-bot --yes
 - 包管理器: pnpm（自动安装）
 - 数据库: SQLite (`./data/bot.db`, WAL 模式)
 - HTTP Token: 随机生成 32 位 hex 字符串
+- 适配器: Sandbox
+- Web 控制台: 本地 API `http://localhost:8086/api`，Remote Console `https://console.zhin.dev`
+- 统一收件箱: 已启用 `inbox.enabled`
 - 日志等级: INFO
 - 日志清理: 7 天，10000 条记录
 
@@ -127,26 +132,22 @@ npm run dev
 ### 2. 生产项目创建
 
 ```bash
-# 使用 TypeScript + pnpm + node 的生产配置
-npm create zhin-app production-bot -- -c ts -p pnpm -r node
+# 按向导选择数据库、聊天适配器和 AI Provider
+npm create zhin-app production-bot
 ```
 
 ### 3. 团队标准项目
 
 ```bash
-# 为团队创建标准化项目
-npm create zhin-app team-bot -- \
-  --config ts \
-  --package-manager pnpm \
-  --runtime node \
-  --yes
+# 使用默认 Host/Node 模板，后续在 zhin.config.yml 中提交团队约定
+npm create zhin-app team-bot -y
 ```
 
 ### 4. 实验性项目
 
 ```bash
-# 使用最新技术栈
-npm create zhin-app experimental-bot -- -c ts -r node -y
+# 通过交互向导选择 Bun 或额外适配器
+npm create zhin-app experimental-bot
 ```
 
 ## 生成的项目结构
@@ -156,7 +157,6 @@ npm create zhin-app experimental-bot -- -c ts -r node -y
 ```
 my-awesome-bot/
 ├── src/                      # 应用源代码
-│   ├── index.ts             # 主入口文件
 │   └── plugins/             # 本地插件目录
 │       └── example.ts       # 示例插件
 ├── client/                   # 客户端页面
@@ -164,7 +164,7 @@ my-awesome-bot/
 ├── data/                     # 数据存储目录
 ├── plugins/                  # 插件开发目录（独立包）
 │   └── .gitkeep
-├── zhin.config.ts            # 配置文件
+├── zhin.config.yml           # 配置文件（可选 YAML / JSON / TOML）
 ├── package.json             # 根 package.json（包含依赖和脚本）
 ├── tsconfig.json            # TypeScript 根配置
 ├── pnpm-workspace.yaml      # workspace 配置
@@ -191,64 +191,35 @@ packages:
     "start": "zhin start",                      // 生产启动
     "daemon": "zhin start --daemon",            // 后台运行
     "stop": "zhin stop",                        // 停止服务
-    "build": "pnpm --filter \"./plugins/*\" build"  // 构建所有插件
+    "build": "zhin build"                          // 构建插件和客户端页面
   }
 }
 ```
 
 ## 配置文件格式
 
-### JavaScript 配置 (推荐)
+脚手架当前支持 YAML、JSON、TOML。默认生成 `zhin.config.yml`：
 
-```javascript
-// zhin.config.ts
-import { defineConfig } from 'zhin.js';
+```yaml
+database:
+  dialect: sqlite
+  filename: ./data/bot.db
+  mode: wal
 
-export default defineConfig(async (env) => {
-  return {
-    bots: [
-      {
-        context: 'process',
-        name: `${process.pid}`,
-      }
-    ],
-    plugin_dirs: ['./src/plugins', 'node_modules'],
-    plugins: ['process', 'test-plugin'],
-    debug: env.DEBUG === 'true'
-  };
-});
-```
+plugins:
+  - "example"
+  - "@zhin.js/http"
+  - "@zhin.js/console"
+  - "@zhin.js/adapter-sandbox"
 
-### TypeScript 配置
+http:
+  token: ${HTTP_TOKEN}
+  base: /api
+  corsOrigins:
+    - "https://console.zhin.dev"
 
-```typescript
-// zhin.config.ts
-import { defineConfig } from 'zhin.js';
-import type { AppConfig } from 'zhin.js';
-
-export default defineConfig<AppConfig>(async (env) => {
-  return {
-    bots: [
-      {
-        context: 'process',
-        name: `${process.pid}`,
-      }
-    ],
-    plugin_dirs: ['./src/plugins', 'node_modules', 'node_modules/@zhin.js'],
-    plugins: [
-      'adapter-process',
-      'http',
-      'console',
-      'example'
-    ],
-    http: {
-      port: 8086,
-      token: process.env.HTTP_TOKEN || 'your-token',
-      base: '/api'
-    },
-    debug: process.env.NODE_ENV === 'development'
-  };
-});
+inbox:
+  enabled: true
 ```
 
 ## 完整工作流
@@ -267,7 +238,7 @@ cd my-awesome-bot
 pnpm dev
 ```
 
-访问 `http://localhost:8086` 查看 Web 控制台
+访问 Remote Console `https://console.zhin.dev`，API Base 填写 `http://localhost:8086/api`。
 
 **访问信息：**
 - Token 在创建项目时已配置
@@ -309,18 +280,15 @@ zhin build my-awesome-plugin
 
 ### 6. 在配置中启用插件
 
-编辑 `zhin.config.ts`：
+编辑 `zhin.config.yml`：
 
-```typescript
-export default defineConfig({
-  plugins: [
-    'adapter-process',
-    'http',
-    'console',
-    'example',           // 内置示例
-    'my-awesome-plugin'  // 你的插件
-  ]
-});
+```yaml
+plugins:
+  - "@zhin.js/http"
+  - "@zhin.js/console"
+  - "@zhin.js/adapter-sandbox"
+  - example
+  - my-awesome-plugin
 ```
 
 ### 7. 生产环境部署

@@ -1,20 +1,17 @@
 # Agent 系统提示词 — 上下文块契约与 Debug 形状
 
-对应 `packages/agent/src/zhin-agent/prompt.ts` 中 **§1–§10** 分段架构（与文件头注释一致）。
+对应 `packages/agent/src/zhin-agent/prompt.ts` 中精简分层架构（与文件头注释一致）。
 
 ## 块顺序（稳定段 → 动态段）
 
 | ID（debug） | 章节 | 稳定性 | 说明 |
 |-------------|------|--------|------|
-| `§1_identity_environment` | Identity & Environment | 每轮重建 | persona、CWD、Node、时区、内存文件提示 |
-| `§2_system` | System | 固定模板 | 输出格式、注入警惕、压缩提示 |
-| `§3_discipline` | Discipline | 固定模板 | 不编造、诚实失败 |
-| `§4_doing_tasks` | Doing tasks | 固定模板 | 工具优先、安全编码 |
-| `§5_action_safety` | Action safety | 固定模板 | 只读/破坏性分界、ask_user |
-| `§6_tools` | Tools | 固定模板 | 专用工具优先、并行调用；toolSearch 为通用编排纪律 |
+| `§1_context` | Context | 每轮重建 | persona、CWD、Node、时区、内存文件提示 |
+| `§2_style` | Style | 固定模板 | 简洁、先给答案或结果 |
+| `§3_tools` | Tools | 固定模板 | 工具边界；toolSearch 为通用编排纪律 |
+| `§4_safety` | Safety | 固定模板 | 只读/破坏性分界、Owner 信号、注入防护 |
 | `§6c_platform` | Platform | **动态** | 适配器 `AgentPromptContributor`（按 `toolContext.platform`） |
-| `§6b_deferred` | Deferred tools | **动态** | toolSearch 域统计 |
-| `§7_style` | Style | 固定模板 | 简洁、语言跟随 |
+| `§6b_deferred` | Deferred Tools | **动态** | toolSearch 域统计 |
 | `§8_skills` | Available Skills | **动态** | 有技能 XML 或 registry 时出现 |
 | `§9_active_skills` | Active Skills | **动态** | 已激活技能上下文 |
 | `§10_memory` | Memory | **动态** | 文件记忆 MEMORY.md / 当日笔记 |

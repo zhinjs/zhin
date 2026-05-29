@@ -5,7 +5,30 @@ export interface AISetupConfig {
   enabled: boolean;
   defaultProvider?: string;
   providers?: Record<string, { apiKey?: string; host?: string; models?: string[]; baseUrl?: string }>;
-  trigger?: { respondToAt: boolean; respondToPrivate: boolean; prefixes: string[] };
+  sessions?: { useDatabase: boolean; maxHistory: number; expireMs: number };
+  context?: { enabled: boolean; maxRecentMessages: number; summaryThreshold: number; keepAfterSummary: number };
+  agent?: {
+    execSecurity: 'deny' | 'allowlist' | 'full';
+    execPreset: 'readonly' | 'network' | 'development' | 'custom';
+    execAllowlist: string[];
+    phaseTrace: boolean;
+    toolSearch: boolean;
+  };
+  trigger?: {
+    respondToAt: boolean;
+    respondToPrivate: boolean;
+    prefixes: string[];
+    ignorePrefixes: string[];
+    timeout: number;
+  };
+  memoryMcp?: boolean;
+  mcpServers?: Array<{
+    name: string;
+    transport: 'stdio' | 'streamable-http' | 'sse';
+    command?: string;
+    args?: string[];
+    url?: string;
+  }>;
 }
 
 // 提供商信息
@@ -17,6 +40,31 @@ const PROVIDERS = [
   { name: '智谱 AI (GLM)', value: 'zhipu', defaultModel: 'glm-4' },
   { name: 'Ollama (本地部署)', value: 'ollama', defaultModel: 'qwen3:8b' },
 ] as const;
+
+export const RECOMMENDED_AI_DEFAULTS = {
+  sessions: {
+    useDatabase: true,
+    maxHistory: 100,
+    expireMs: 7 * 24 * 60 * 60 * 1000,
+  },
+  context: {
+    enabled: true,
+    maxRecentMessages: 100,
+    summaryThreshold: 50,
+    keepAfterSummary: 10,
+  },
+  agent: {
+    execSecurity: 'deny' as const,
+    execPreset: 'custom' as const,
+    execAllowlist: [] as string[],
+    phaseTrace: false,
+    toolSearch: false,
+  },
+  trigger: {
+    ignorePrefixes: ['/', '!', '！'],
+    timeout: 60_000,
+  },
+};
 
 /**
  * AI 配置引导向导
@@ -144,11 +192,18 @@ export async function configureAI(): Promise<AISetupConfig> {
     providers: {
       [provider]: providerConfig,
     },
+    sessions: RECOMMENDED_AI_DEFAULTS.sessions,
+    context: RECOMMENDED_AI_DEFAULTS.context,
+    agent: RECOMMENDED_AI_DEFAULTS.agent,
     trigger: {
       respondToAt: triggerConfig.respondToAt,
       respondToPrivate: triggerConfig.respondToPrivate,
       prefixes: prefixes.length > 0 ? prefixes : ['#'],
+      ignorePrefixes: RECOMMENDED_AI_DEFAULTS.trigger.ignorePrefixes,
+      timeout: RECOMMENDED_AI_DEFAULTS.trigger.timeout,
     },
+    memoryMcp: false,
+    mcpServers: [],
   };
 }
 
@@ -212,7 +267,43 @@ export function generateAIConfigYaml(config: AISetupConfig): string {
     for (const prefix of config.trigger.prefixes) {
       lines.push(`      - "${prefix}"`);
     }
+    if (config.trigger.ignorePrefixes.length > 0) {
+      lines.push('    ignorePrefixes:');
+      for (const prefix of config.trigger.ignorePrefixes) {
+        lines.push(`      - "${prefix}"`);
+      }
+    }
+    lines.push(`    timeout: ${config.trigger.timeout}`);
   }
+
+  if (config.sessions) {
+    lines.push('  sessions:');
+    lines.push(`    useDatabase: ${config.sessions.useDatabase}`);
+    lines.push(`    maxHistory: ${config.sessions.maxHistory}`);
+    lines.push(`    expireMs: ${config.sessions.expireMs}`);
+  }
+
+  if (config.context) {
+    lines.push('  context:');
+    lines.push(`    enabled: ${config.context.enabled}`);
+    lines.push(`    maxRecentMessages: ${config.context.maxRecentMessages}`);
+    lines.push(`    summaryThreshold: ${config.context.summaryThreshold}`);
+    lines.push(`    keepAfterSummary: ${config.context.keepAfterSummary}`);
+  }
+
+  if (config.agent) {
+    lines.push('  agent:');
+    lines.push(`    execSecurity: ${config.agent.execSecurity}`);
+    lines.push(`    execPreset: ${config.agent.execPreset}`);
+    lines.push(`    phaseTrace: ${config.agent.phaseTrace}`);
+    lines.push(`    toolSearch: ${config.agent.toolSearch}`);
+    lines.push('    execAllowlist:');
+    for (const command of config.agent.execAllowlist) {
+      lines.push(`      - "${command}"`);
+    }
+  }
+
+  lines.push(`  memoryMcp: ${config.memoryMcp ?? false}`);
 
   return lines.join('\n');
 }
@@ -223,7 +314,12 @@ export function generateAIConfigYaml(config: AISetupConfig): string {
 export function generateAIConfigToml(config: AISetupConfig): string {
   if (!config.enabled) return '';
 
-  const lines: string[] = ['', '[ai]', `defaultProvider = "${config.defaultProvider}"`];
+  const lines: string[] = [
+    '',
+    '[ai]',
+    `defaultProvider = "${config.defaultProvider}"`,
+    `memoryMcp = ${config.memoryMcp ?? false}`,
+  ];
 
   if (config.providers) {
     for (const [name, providerConfig] of Object.entries(config.providers)) {
@@ -242,6 +338,32 @@ export function generateAIConfigToml(config: AISetupConfig): string {
     lines.push(`respondToAt = ${config.trigger.respondToAt}`);
     lines.push(`respondToPrivate = ${config.trigger.respondToPrivate}`);
     lines.push(`prefixes = ${JSON.stringify(config.trigger.prefixes)}`);
+    lines.push(`ignorePrefixes = ${JSON.stringify(config.trigger.ignorePrefixes)}`);
+    lines.push(`timeout = ${config.trigger.timeout}`);
+  }
+
+  if (config.sessions) {
+    lines.push('', '[ai.sessions]');
+    lines.push(`useDatabase = ${config.sessions.useDatabase}`);
+    lines.push(`maxHistory = ${config.sessions.maxHistory}`);
+    lines.push(`expireMs = ${config.sessions.expireMs}`);
+  }
+
+  if (config.context) {
+    lines.push('', '[ai.context]');
+    lines.push(`enabled = ${config.context.enabled}`);
+    lines.push(`maxRecentMessages = ${config.context.maxRecentMessages}`);
+    lines.push(`summaryThreshold = ${config.context.summaryThreshold}`);
+    lines.push(`keepAfterSummary = ${config.context.keepAfterSummary}`);
+  }
+
+  if (config.agent) {
+    lines.push('', '[ai.agent]');
+    lines.push(`execSecurity = "${config.agent.execSecurity}"`);
+    lines.push(`execPreset = "${config.agent.execPreset}"`);
+    lines.push(`execAllowlist = ${JSON.stringify(config.agent.execAllowlist)}`);
+    lines.push(`phaseTrace = ${config.agent.phaseTrace}`);
+    lines.push(`toolSearch = ${config.agent.toolSearch}`);
   }
 
   return lines.join('\n');
@@ -256,9 +378,14 @@ export function generateAIConfigJSON(config: AISetupConfig): string {
   const obj: any = {
     defaultProvider: config.defaultProvider,
     providers: {},
+    sessions: config.sessions,
+    context: config.context,
+    agent: config.agent,
     trigger: config.trigger ? {
       ...config.trigger,
     } : undefined,
+    memoryMcp: config.memoryMcp ?? false,
+    mcpServers: config.mcpServers ?? [],
   };
 
   if (config.providers) {

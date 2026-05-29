@@ -220,9 +220,10 @@ async function main() {
     console.log(chalk.green('🎉 项目初始化完成！'));
     console.log('');
     console.log(chalk.blue('🔐 Web 控制台访问信息：'));
-    console.log(`  ${chalk.gray('URL:')} ${chalk.cyan('http://localhost:8086')}`);
+    console.log(`  ${chalk.gray('本地 API:')} ${chalk.cyan('http://localhost:8086/api')}`);
+    console.log(`  ${chalk.gray('Remote Console:')} ${chalk.cyan('https://console.zhin.dev')}`);
     console.log(`  ${chalk.gray('Token:')} ${chalk.cyan(options.httpToken)}`);
-    console.log(`  ${chalk.yellow('⚠ Token 已保存到')} ${chalk.cyan('.env')} ${chalk.yellow('文件')}`);
+    console.log(`  ${chalk.yellow('⚠ Token 已保存到')} ${chalk.cyan('.env')} ${chalk.yellow('文件，用于 Bearer Token 或 Console 登录页')}`);
     
     // 显示数据库配置信息
     if (options.database) {
@@ -266,6 +267,8 @@ async function main() {
         if (options.ai.trigger.prefixes.length > 0) triggers.push(`前缀 ${options.ai.trigger.prefixes.join('/')}`);
         console.log(`  ${chalk.gray('触发方式:')} ${chalk.cyan(triggers.join('、'))}`);
       }
+      console.log(`  ${chalk.gray('会话/上下文:')} ${chalk.cyan('已启用推荐默认值')}`);
+      console.log(`  ${chalk.gray('执行安全:')} ${chalk.cyan(options.ai.agent?.execSecurity || 'deny')}`);
       console.log(`  ${chalk.yellow('⚠ API Key 已保存到')} ${chalk.cyan('.env')} ${chalk.yellow('文件')}`);
     }
 

@@ -74,7 +74,7 @@ describe('Harness inbound → tool/policy boundary', () => {
     };
     const d = describePromptSectionsForDebug(ctx);
     expect(d.length).toBeGreaterThan(0);
-    expect(d[0]?.id).toBe('§1_identity_environment');
+    expect(d[0]?.id).toBe('§1_context');
     expect(d.every((x) => x.approxChars > 0)).toBe(true);
   });
 });

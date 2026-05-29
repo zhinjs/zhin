@@ -9,7 +9,35 @@ import { SOUL_MD_TEMPLATE, TOOLS_MD_TEMPLATE, AGENTS_MD_TEMPLATE } from './templ
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+export const BASE_SKILL_NAMES = ['skill-creator', 'summarize', 'github'] as const;
+export const DEV_SKILL_NAMES = ['plugin-init', 'plugin-develop', 'plugin-test', 'plugin-quality', 'plugin-publish'] as const;
+
+async function copySkillTemplate(projectPath: string, skillName: string): Promise<void> {
+  const skillDir = path.join(projectPath, 'skills', skillName);
+  const skillSrcPath = path.join(__dirname, '../template/skills', skillName, 'SKILL.md');
+  if (!fs.existsSync(skillSrcPath)) {
+    throw new Error(`Missing create-zhin skill template: ${skillName}`);
+  }
+  await fs.ensureDir(skillDir);
+  await fs.copy(skillSrcPath, path.join(skillDir, 'SKILL.md'));
+}
+
+function getConfigFilename(format: InitOptions['config']): string {
+  switch (format) {
+    case 'json':
+      return 'zhin.config.json';
+    case 'toml':
+      return 'zhin.config.toml';
+    case 'yaml':
+    default:
+      return 'zhin.config.yml';
+  }
+}
+
 export async function createWorkspace(projectPath: string, projectName: string, options: InitOptions): Promise<void> {
+  const configFilename = getConfigFilename(options.config);
+  const configLanguage = options.config === 'json' ? 'json' : options.config === 'toml' ? 'toml' : 'yaml';
+
   await fs.ensureDir(projectPath);
   
   // 创建 pnpm-workspace.yaml (包含 plugins 目录，支持 zhin new 创建的插件)
@@ -68,6 +96,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       '@zhin.js/http': 'latest',
       '@zhin.js/client': 'latest',
       '@zhin.js/console': 'latest',
+      '@zhin.js/console-types': 'latest',
       'tsx': 'latest',
       ...adapterDeps,
       ...databaseDeps
@@ -87,7 +116,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       onlyBuiltDependencies: ['esbuild']
     },
     engines: {
-      node: '>=18.0.0'
+      node: '^20.19.0 || >=22.12.0'
     }
   }, { spaces: 2 });
   
@@ -99,36 +128,15 @@ export async function createWorkspace(projectPath: string, projectName: string, 
   await fs.writeFile(path.join(projectPath, 'TOOLS.md'), TOOLS_MD_TEMPLATE);
   await fs.writeFile(path.join(projectPath, 'AGENTS.md'), AGENTS_MD_TEMPLATE);
 
-  // 创建内置技能：skill-creator、summarize
-  const skillCreatorDir = path.join(projectPath, 'skills', 'skill-creator');
-  await fs.ensureDir(skillCreatorDir);
-  const skillCreatorPath = path.join(__dirname, '../template/skills/skill-creator/SKILL.md');
-  if (fs.existsSync(skillCreatorPath)) {
-    await fs.copy(skillCreatorPath, path.join(skillCreatorDir, 'SKILL.md'));
-  }
-  const summarizeDir = path.join(projectPath, 'skills', 'summarize');
-  await fs.ensureDir(summarizeDir);
-  const summarizePath = path.join(__dirname, '../template/skills/summarize/SKILL.md');
-  if (fs.existsSync(summarizePath)) {
-    await fs.copy(summarizePath, path.join(summarizeDir, 'SKILL.md'));
-  }
-  const githubDir = path.join(projectPath, 'skills', 'github');
-  await fs.ensureDir(githubDir);
-  const githubPath = path.join(__dirname, '../template/skills/github/SKILL.md');
-  if (fs.existsSync(githubPath)) {
-    await fs.copy(githubPath, path.join(githubDir, 'SKILL.md'));
+  // 创建内置技能
+  for (const skillName of BASE_SKILL_NAMES) {
+    await copySkillTemplate(projectPath, skillName);
   }
 
   // 创建插件开发技能（可选）
   if (options.devSkills) {
-    const devSkillNames = ['plugin-init', 'plugin-develop', 'plugin-test', 'plugin-quality', 'plugin-publish'];
-    for (const skillName of devSkillNames) {
-      const skillDir = path.join(projectPath, 'skills', skillName);
-      await fs.ensureDir(skillDir);
-      const skillSrcPath = path.join(__dirname, '../template/skills', skillName, 'SKILL.md');
-      if (fs.existsSync(skillSrcPath)) {
-        await fs.copy(skillSrcPath, path.join(skillDir, 'SKILL.md'));
-      }
+    for (const skillName of DEV_SKILL_NAMES) {
+      await copySkillTemplate(projectPath, skillName);
     }
   }
   
@@ -373,6 +381,7 @@ logs/
 .env.*
 !.env.development
 !.env.production
+!.env.example
 .DS_Store
 .zhin.pid
 .zhin-dev.pid
@@ -397,7 +406,7 @@ ${projectName}/
 │   ├── index.tsx          # 客户端入口
 │   └── tsconfig.json      # 客户端配置
 ├── data/                  # 数据目录（自动生成）
-├── zhin.config.${options.config}     # 配置文件
+├── ${configFilename}     # 配置文件
 ├── package.json
 ├── tsconfig.json
 └── pnpm-workspace.yaml
@@ -410,6 +419,21 @@ ${projectName}/
 \`\`\`bash
 pnpm dev          # 开发模式（支持热重载）
 \`\`\`
+
+启动后可以用 Sandbox 适配器在终端输入：
+
+\`\`\`text
+hello
+status
+\`\`\`
+
+### Web 控制台与 Remote Console
+
+- 本地 API: \`http://localhost:8086/api\`
+- Remote Console: \`https://console.zhin.dev\`
+- 认证方式: 使用 \`.env\` 中的 \`HTTP_TOKEN\`，通过 Bearer Token 或 Console 登录页填写 Token。
+
+默认配置已经允许官方 Remote Console Origin。如需本地开发控制台，在 \`${configFilename}\` 的 \`http.corsOrigins\` 中追加本地 Origin。
 
 ### 生产模式
 
@@ -530,14 +554,36 @@ addCommand(
 
 ### 配置插件
 
-在 \`zhin.config.${options.config}\` 中启用插件：
+在 \`${configFilename}\` 中启用插件：
 
-\`\`\`${options.config === 'json' ? 'json' : options.config === 'toml' ? 'toml' : 'yaml'}
+\`\`\`${configLanguage}
 plugins:
   - "@zhin.js/adapter-sandbox"
   - "@zhin.js/http"
   - "@zhin.js/console"
   - example  # 你的插件名称
+\`\`\`
+
+## 🤖 AI Agent
+
+如果初始化时启用了 AI，配置会写入 \`${configFilename}\`，API Key 会写入 \`.env\`。默认触发方式包括 @机器人、私聊和前缀触发。
+
+常用可选能力：
+
+- \`ai.agent.phaseTrace: true\`：输出 Agent 阶段日志，便于排障。
+- \`ai.agent.toolSearch: true\`：启用 deferred + Worker 工具编排。
+- \`ai.memoryMcp: true\`：启用本地知识图谱 memory MCP。
+- \`ai.mcpServers\`：接入外部 MCP Server。
+
+## 📥 统一收件箱
+
+默认 SQLite 项目会启用 \`inbox.enabled\`，消息、请求和通知会写入内置数据库，便于 Console 和后续排障查看。
+
+## ✅ 验证项目
+
+\`\`\`bash
+pnpm build        # 构建插件和客户端页面
+pnpm dev          # 开发模式运行
 \`\`\`
 
 ## 📚 文档
@@ -552,6 +598,9 @@ MIT License
 }
 
 async function createAppModule(projectPath: string, projectName: string, options: InitOptions): Promise<void> {
+  const configFilename = getConfigFilename(options.config);
+  const configLanguage = options.config === 'json' ? 'json' : options.config === 'toml' ? 'toml' : 'yaml';
+
   // 创建目录结构（与 test-bot 一致，不需要 src/index.ts）
   await fs.ensureDir(path.join(projectPath, 'src', 'plugins'));
   await fs.ensureDir(path.join(projectPath, 'client'));
@@ -574,6 +623,10 @@ await fs.writeFile(path.join(projectPath, '.env.production'),
 `# 调试模式
 DEBUG=false
 NODE_ENV=production
+`);
+await fs.writeFile(path.join(projectPath, '.env.example'),
+`# HTTP 服务配置（复制为 .env 后填写真实 Token）
+HTTP_TOKEN=change-me
 `);
   
   // tsconfig.json（与 test-bot 一致）
@@ -704,7 +757,7 @@ function HomePage() {
             <h2 className="text-xl font-semibold mb-2">🚀 快速开始</h2>
             <ul className="space-y-1 text-gray-600">
               <li>• 编辑插件: <code className="bg-gray-100 px-2 py-1 rounded">src/plugins/example.ts</code></li>
-              <li>• 修改配置: <code className="bg-gray-100 px-2 py-1 rounded">zhin.config.${options.config}</code></li>
+              <li>• 修改配置: <code className="bg-gray-100 px-2 py-1 rounded">${configFilename}</code></li>
               <li>• 查看日志: 控制台输出</li>
             </ul>
           </div>

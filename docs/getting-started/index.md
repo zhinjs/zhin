@@ -48,22 +48,20 @@ npm create zhin-app my-bot
 
 ```
 ? 选择配置格式
-  > TypeScript (推荐)
-    JavaScript
-    YAML
+  > YAML (推荐)
     JSON
+    TOML
 ```
 
-**建议**：选择 TypeScript，IDE 提示最友好；如果偏好纯配置文件，选择 YAML。
+**建议**：新手选择 YAML，最容易阅读和修改。
 
 ### 3. 配置 Web 控制台
 
 ```
-? Web 控制台用户名: admin
-? Web 控制台密码: ******
+? Web 控制台 Token (用于 Authorization: Bearer 或 ?token= 认证): ********
 ```
 
-这些信息会保存在 `.env` 文件中，用于登录 Web 控制台。
+Token 会保存在 `.env` 文件中，用于访问本地 API 或在 Remote Console 登录页填写。
 
 ### 4. 配置数据库
 
@@ -115,7 +113,7 @@ npm create zhin-app my-bot
 - 创建项目目录
 - 生成配置文件
 - 安装依赖包
-- 初始化 Git 仓库
+- 生成 Agent 引导文件和插件开发技能
 
 ## 项目结构
 
@@ -223,17 +221,36 @@ Zhin.js 提供了丰富的命令行工具：
 
 ## 访问 Web 控制台
 
-打开浏览器访问 `http://localhost:8086`
+打开 Remote Console：`https://console.zhin.dev`
+
+API Base 填写：
+
+```text
+http://localhost:8086/api
+```
 
 ### 登录
 
-使用创建项目时设置的用户名和密码登录。
+使用创建项目时生成的 Token 登录。Token 保存在 `.env` 的 `HTTP_TOKEN` 中，创建完成时终端也会显示一次。
+
+默认生成的 `http.corsOrigins` 已允许官方 Remote Console Origin。如果你本地开发控制台，在 `zhin.config.yml` 的 `http.corsOrigins` 中追加本地 Origin。
 
 ### 控制台功能
 
 - **仪表盘** - 查看机器人运行状态、内存使用、消息统计
 - **插件管理** - 查看插件列表和 Feature 统计
 - **日志查看** - 实时查看日志输出
+
+## 验证项目
+
+创建后建议先跑一遍构建，再启动开发模式：
+
+```bash
+pnpm build
+pnpm dev
+```
+
+如果启用了 AI，脚手架会同时写入推荐的 `ai.sessions`、`ai.context` 和 `ai.agent` 默认值。`phaseTrace`、`toolSearch`、`memoryMcp` 和 `mcpServers` 是进阶开关，按需在配置文件里开启。
 
 ## 第一个插件
 

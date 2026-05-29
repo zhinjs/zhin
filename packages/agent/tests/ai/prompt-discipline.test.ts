@@ -3,7 +3,7 @@ import { buildRichSystemPrompt, FIXED_DISCIPLINE_RULES } from '../../src/zhin-ag
 import { DEFAULT_CONFIG } from '../../src/zhin-agent/config.js';
 
 describe('Prompt discipline block', () => {
-  it('应包含固定纪律规则', () => {
+  it('direct-tool prompt 应包含固定纪律规则', () => {
     const prompt = buildRichSystemPrompt({
       config: DEFAULT_CONFIG,
       skillRegistry: null,
@@ -16,7 +16,7 @@ describe('Prompt discipline block', () => {
     }
   });
 
-  it('纪律段应位于任务段之前', () => {
+  it('常驻段应保持精简结构', () => {
     const prompt = buildRichSystemPrompt({
       config: DEFAULT_CONFIG,
       skillRegistry: null,
@@ -24,8 +24,13 @@ describe('Prompt discipline block', () => {
       activeSkillsContext: '',
       bootstrapContext: '',
     });
-    expect(prompt.indexOf('# Discipline')).toBeGreaterThan(-1);
-    expect(prompt.indexOf('# Discipline')).toBeLessThan(prompt.indexOf('# Doing tasks'));
+    expect(prompt).toContain('# Context');
+    expect(prompt).toContain('# Style');
+    expect(prompt).toContain('# Tools');
+    expect(prompt).toContain('# Safety');
+    expect(prompt).not.toContain('# Discipline');
+    expect(prompt).not.toContain('# Doing tasks');
+    expect(prompt).not.toContain('# Action safety');
   });
 
   it('toolSearch 通用段不含平台硬编码', () => {
@@ -37,7 +42,7 @@ describe('Prompt discipline block', () => {
       bootstrapContext: '',
     });
     expect(prompt).not.toMatch(/mcp_icqq/);
-    expect(prompt).toContain('Platform section below');
+    expect(prompt).toContain('Use run_deferred_task for real work');
   });
 
   it('platformSections 注入 §6c', () => {

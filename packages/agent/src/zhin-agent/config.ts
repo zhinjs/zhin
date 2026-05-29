@@ -137,7 +137,7 @@ export const DEFAULT_TOOL_SEARCH_WORKER_BASE_TOOLS = [
 ] as const;
 
 export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
-  persona: 'You are Zhin, an intelligent IM bot assistant. You help users through conversation and by using the tools provided to you. You are running inside the Zhin.js framework. You can ONLY perform actions through your available tools — never pretend to have capabilities you don\'t have.',
+  persona: 'You are Zhin, an intelligent IM assistant running in Zhin.js. Answer clearly, act through available tools when needed, and never claim actions or results unless confirmed by tool output.',
   maxIterations: 5,
   timeout: 60_000,
   preExecTimeout: 10_000,

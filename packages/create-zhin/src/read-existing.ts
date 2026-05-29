@@ -88,8 +88,15 @@ function mapAIFromConfig(ai: any, env: Record<string, string>): AISetupConfig | 
           respondToAt: ai.trigger.respondToAt !== false,
           respondToPrivate: ai.trigger.respondToPrivate !== false,
           prefixes: Array.isArray(ai.trigger.prefixes) ? ai.trigger.prefixes : ['#', 'AI:'],
+          ignorePrefixes: Array.isArray(ai.trigger.ignorePrefixes) ? ai.trigger.ignorePrefixes : ['/', '!', '！'],
+          timeout: typeof ai.trigger.timeout === 'number' ? ai.trigger.timeout : 60_000,
         }
       : undefined,
+    sessions: ai.sessions,
+    context: ai.context,
+    agent: ai.agent,
+    memoryMcp: ai.memoryMcp === true,
+    mcpServers: Array.isArray(ai.mcpServers) ? ai.mcpServers : [],
   };
 }
 

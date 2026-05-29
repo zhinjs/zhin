@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { generateDatabaseConfig, generateDatabaseEnvVars } from '../src/config'
-import type { DatabaseConfig } from '../src/types'
+import fs from 'fs-extra'
+import os from 'node:os'
+import path from 'node:path'
+import { createConfigFile, generateDatabaseConfig, generateDatabaseEnvVars } from '../src/config'
+import { RECOMMENDED_AI_DEFAULTS } from '../src/ai'
+import type { DatabaseConfig, InitOptions } from '../src/types'
 
 describe('create-zhin config', () => {
   describe('generateDatabaseEnvVars', () => {
@@ -153,6 +157,90 @@ describe('create-zhin config', () => {
       
       expect(tomlConfig).toContain('[database]')
       expect(tomlConfig).toContain('dialect = "sqlite"')
+    })
+  })
+
+  describe('createConfigFile', () => {
+    it('generates parseable JSON when adapters are configured and AI is disabled', async () => {
+      const root = await fs.mkdtemp(path.join(os.tmpdir(), 'create-zhin-config-'))
+      try {
+        const options: InitOptions = {
+          config: 'json',
+          runtime: 'node',
+          httpToken: 'token',
+          database: {
+            dialect: 'sqlite',
+            filename: './data/bot.db',
+            mode: 'wal'
+          },
+          adapters: {
+            packages: ['@zhin.js/adapter-sandbox'],
+            plugins: ['@zhin.js/adapter-sandbox'],
+            bots: [],
+            envVars: {}
+          },
+          ai: { enabled: false }
+        }
+
+        await createConfigFile(root, 'json', options)
+        const raw = await fs.readFile(path.join(root, 'zhin.config.json'), 'utf8')
+        const parsed = JSON.parse(raw)
+
+        expect(parsed.http.base).toBe('/api')
+        expect(parsed.http.corsOrigins).toEqual(['https://console.zhin.dev'])
+        expect(parsed.inbox.enabled).toBe(true)
+        expect(parsed.plugins).toContain('@zhin.js/adapter-sandbox')
+      } finally {
+        await fs.remove(root)
+      }
+    })
+
+    it('generates AI defaults in YAML config', async () => {
+      const root = await fs.mkdtemp(path.join(os.tmpdir(), 'create-zhin-config-'))
+      try {
+        const options: InitOptions = {
+          config: 'yaml',
+          runtime: 'node',
+          httpToken: 'token',
+          database: {
+            dialect: 'sqlite',
+            filename: './data/bot.db',
+            mode: 'wal'
+          },
+          ai: {
+            enabled: true,
+            defaultProvider: 'ollama',
+            providers: {
+              ollama: {
+                host: 'http://localhost:11434',
+                models: ['qwen3:8b']
+              }
+            },
+            sessions: RECOMMENDED_AI_DEFAULTS.sessions,
+            context: RECOMMENDED_AI_DEFAULTS.context,
+            agent: RECOMMENDED_AI_DEFAULTS.agent,
+            trigger: {
+              respondToAt: true,
+              respondToPrivate: true,
+              prefixes: ['#'],
+              ignorePrefixes: RECOMMENDED_AI_DEFAULTS.trigger.ignorePrefixes,
+              timeout: RECOMMENDED_AI_DEFAULTS.trigger.timeout
+            },
+            memoryMcp: false,
+            mcpServers: []
+          }
+        }
+
+        await createConfigFile(root, 'yaml', options)
+        const raw = await fs.readFile(path.join(root, 'zhin.config.yml'), 'utf8')
+
+        expect(raw).toContain('sessions:')
+        expect(raw).toContain('context:')
+        expect(raw).toContain('agent:')
+        expect(raw).toContain('memoryMcp: false')
+      } finally {
+        await fs.remove(root)
+      }
     })
   })
 })

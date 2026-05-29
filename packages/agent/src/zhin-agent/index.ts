@@ -662,8 +662,15 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
   }
 
   private buildDisciplinedPrompt(basePrompt: string): string {
-    const discipline = `# Discipline\n${FIXED_DISCIPLINE_RULES.map(rule => `- ${rule}`).join('\n')}`;
-    return `${discipline}\n\n${basePrompt}`;
+    const guidance = [
+      '# Style',
+      '- Lead with the answer or result.',
+      '- Be concise, direct, and useful.',
+      '',
+      '# Safety',
+      ...FIXED_DISCIPLINE_RULES.map(rule => `- ${rule}`),
+    ].join('\n');
+    return `${basePrompt}\n\n${guidance}`;
   }
 
   private usageLogFields(usage?: Usage): Record<string, number> {
