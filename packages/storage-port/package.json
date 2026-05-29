@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/storage-port",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Portable key-value storage abstraction for Host and Edge",
   "type": "module",
   "main": "./lib/index.js",
@@ -17,7 +17,10 @@
     "clean": "rimraf lib",
     "test": "vitest run"
   },
-  "files": ["lib", "src"],
+  "files": [
+    "lib",
+    "src"
+  ],
   "devDependencies": {
     "@types/node": "^25.9.1",
     "typescript": "^6.0.3",

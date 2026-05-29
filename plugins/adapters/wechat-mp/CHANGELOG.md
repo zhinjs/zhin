@@ -1,5 +1,15 @@
 # @zhin.js/adapter-wechat-mp
 
+## 0.1.72
+
+### Patch Changes
+
+- f19d2e0: fix: remove multiple runtime support
+- Updated dependencies [0db9fed]
+- Updated dependencies [f19d2e0]
+  - zhin.js@1.0.84
+  - @zhin.js/http@1.0.77
+
 ## 0.1.71
 
 ### Patch Changes

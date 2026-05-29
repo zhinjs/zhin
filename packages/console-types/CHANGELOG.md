@@ -1,5 +1,11 @@
 # @zhin.js/console-types
 
+## 0.1.4
+
+### Patch Changes
+
+- f19d2e0: fix: remove multiple runtime support
+
 ## 0.1.3
 
 ### Patch Changes

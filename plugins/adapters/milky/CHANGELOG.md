@@ -1,5 +1,16 @@
 # @zhin.js/adapter-milky
 
+## 0.0.34
+
+### Patch Changes
+
+- 0db9fed: fix: deno deploy
+- f19d2e0: fix: remove multiple runtime support
+- Updated dependencies [0db9fed]
+- Updated dependencies [f19d2e0]
+  - zhin.js@1.0.84
+  - @zhin.js/http@1.0.77
+
 ## 0.0.33
 
 ### Patch Changes

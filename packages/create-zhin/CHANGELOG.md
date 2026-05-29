@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.43
+
+### Patch Changes
+
+- f19d2e0: fix: remove multiple runtime support
+
 ## 1.0.42
 
 ### Patch Changes

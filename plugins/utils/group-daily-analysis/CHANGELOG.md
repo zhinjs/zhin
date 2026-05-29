@@ -1,5 +1,15 @@
 # @zhin.js/plugin-group-daily-analysis
 
+## 0.0.33
+
+### Patch Changes
+
+- f19d2e0: fix: remove multiple runtime support
+- Updated dependencies [0db9fed]
+- Updated dependencies [f19d2e0]
+  - @zhin.js/plugin-html-renderer@0.0.62
+  - zhin.js@1.0.84
+
 ## 0.0.32
 
 ### Patch Changes

@@ -1,5 +1,16 @@
 # @zhin.js/plugin-html-renderer
 
+## 0.0.62
+
+### Patch Changes
+
+- 0db9fed: fix: deno deploy
+- f19d2e0: fix: remove multiple runtime support
+- Updated dependencies [0db9fed]
+- Updated dependencies [f19d2e0]
+  - zhin.js@1.0.84
+  - @zhin.js/satori@0.2.10
+
 ## 0.0.61
 
 ### Patch Changes

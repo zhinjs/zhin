@@ -1,5 +1,27 @@
 # zhin.js
 
+## 1.0.84
+
+### Patch Changes
+
+- 0db9fed: fix: deno deploy
+- f19d2e0: fix: remove multiple runtime support
+- Updated dependencies [0db9fed]
+- Updated dependencies [f19d2e0]
+- Updated dependencies [2d24338]
+  - @zhin.js/adapter-sandbox@3.0.3
+  - @zhin.js/console@3.0.3
+  - @zhin.js/http-host@0.1.3
+  - @zhin.js/kernel@0.0.43
+  - @zhin.js/agent@0.1.24
+  - @zhin.js/core@1.1.26
+  - @zhin.js/logger@0.1.66
+  - @zhin.js/ai@1.1.24
+  - @zhin.js/schema@1.0.66
+  - @zhin.js/queue-runtime@0.0.2
+  - @zhin.js/storage-port@0.0.1
+  - @zhin.js/http@1.0.77
+
 ## 1.0.83
 
 ### Breaking Changes

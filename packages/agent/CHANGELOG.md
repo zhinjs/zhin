@@ -1,5 +1,19 @@
 # @zhin.js/agent
 
+## 0.1.24
+
+### Patch Changes
+
+- 0db9fed: fix: deno deploy
+- f19d2e0: fix: remove multiple runtime support
+- 2d24338: fix: ai 优化
+- Updated dependencies [0db9fed]
+- Updated dependencies [f19d2e0]
+- Updated dependencies [2d24338]
+  - @zhin.js/core@1.1.26
+  - @zhin.js/logger@0.1.66
+  - @zhin.js/ai@1.1.24
+
 ## 0.1.23
 
 ### Patch Changes
