@@ -598,7 +598,6 @@ NODE_ENV=production
       "sourceMap": true,
       "verbatimModuleSyntax": false,
       "jsx": "react-jsx",
-      "jsxImportSource": "zhin.js",
       "types": [
         "@types/node",
         "zhin.js",
