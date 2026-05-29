@@ -1,5 +1,11 @@
 # @zhin.js/plugin-rss
 
+## 0.0.21
+
+### Patch Changes
+
+- zhin.js@1.0.85
+
 ## 0.0.20
 
 ### Patch Changes

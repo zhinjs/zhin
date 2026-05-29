@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/queue-runtime",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Queue bot runtime: enqueueOutgoing, claimOutgoing, executeOutbound",
   "type": "module",
   "main": "./lib/index.js",

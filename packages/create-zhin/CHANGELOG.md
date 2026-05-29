@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.44
+
+### Patch Changes
+
+- b0e0a71: fix: 提示词优化,create-zhin 引导优化
+
 ## 1.0.43
 
 ### Patch Changes

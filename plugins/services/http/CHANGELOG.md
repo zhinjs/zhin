@@ -1,5 +1,13 @@
 # @zhin.js/http
 
+## 1.0.78
+
+### Patch Changes
+
+- zhin.js@1.0.85
+- @zhin.js/schema@1.0.67
+- @zhin.js/queue-runtime@0.0.3
+
 ## 1.0.77
 
 ### Patch Changes
