@@ -1,5 +1,19 @@
 # @zhin.js/adapter-icqq
 
+## 3.0.3
+
+### Patch Changes
+
+- f19d2e0: fix: remove multiple runtime support
+- Updated dependencies [0db9fed]
+- Updated dependencies [f19d2e0]
+- Updated dependencies [2d24338]
+  - @zhin.js/console@3.0.3
+  - @zhin.js/core@1.1.26
+  - zhin.js@1.0.84
+  - @zhin.js/client@1.1.3
+  - @zhin.js/http@1.0.77
+
 ## 3.0.2
 
 ### Patch Changes

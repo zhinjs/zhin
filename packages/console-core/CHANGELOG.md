@@ -1,5 +1,14 @@
 # @zhin.js/console-core
 
+## 1.0.3
+
+### Patch Changes
+
+- 0db9fed: fix: deno deploy
+- f19d2e0: fix: remove multiple runtime support
+- Updated dependencies [f19d2e0]
+  - @zhin.js/console-types@0.1.4
+
 ## 1.0.2
 
 ### Patch Changes

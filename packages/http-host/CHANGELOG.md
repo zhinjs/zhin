@@ -1,5 +1,12 @@
 # @zhin.js/http-host
 
+## 0.1.3
+
+### Patch Changes
+
+- 0db9fed: fix: deno deploy
+- f19d2e0: fix: remove multiple runtime support
+
 ## 0.1.2
 
 ### Patch Changes

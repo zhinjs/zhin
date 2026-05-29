@@ -1,5 +1,14 @@
 # @zhin.js/schema
 
+## 1.0.66
+
+### Patch Changes
+
+- f19d2e0: fix: remove multiple runtime support
+- Updated dependencies [0db9fed]
+- Updated dependencies [f19d2e0]
+  - zhin.js@1.0.84
+
 ## 1.0.65
 
 ### Patch Changes

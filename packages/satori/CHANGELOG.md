@@ -1,5 +1,11 @@
 # @zhin.js/satori
 
+## 0.2.10
+
+### Patch Changes
+
+- f19d2e0: fix: remove multiple runtime support
+
 ## 0.2.9
 
 ### Patch Changes

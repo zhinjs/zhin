@@ -1,5 +1,16 @@
 # @zhin.js/adapter-github
 
+## 0.1.55
+
+### Patch Changes
+
+- f19d2e0: fix: remove multiple runtime support
+- 2d24338: fix: ai 优化
+- Updated dependencies [0db9fed]
+- Updated dependencies [f19d2e0]
+  - zhin.js@1.0.84
+  - @zhin.js/http@1.0.77
+
 ## 0.1.54
 
 ### Patch Changes

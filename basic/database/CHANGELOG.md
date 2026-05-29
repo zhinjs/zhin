@@ -1,5 +1,15 @@
 # @zhin.js/database
 
+## 1.0.69
+
+### Patch Changes
+
+- 0db9fed: fix: deno deploy
+- f19d2e0: fix: remove multiple runtime support
+- Updated dependencies [0db9fed]
+- Updated dependencies [f19d2e0]
+  - zhin.js@1.0.84
+
 ## 1.0.68
 
 ### Patch Changes

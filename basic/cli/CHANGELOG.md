@@ -1,5 +1,16 @@
 # @zhin.js/cli
 
+## 1.0.80
+
+### Patch Changes
+
+- 0db9fed: fix: deno deploy
+- f19d2e0: fix: remove multiple runtime support
+- Updated dependencies [0db9fed]
+- Updated dependencies [f19d2e0]
+  - zhin.js@1.0.84
+  - @zhin.js/logger@0.1.66
+
 ## 1.0.79
 
 ### Patch Changes
