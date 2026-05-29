@@ -1,5 +1,14 @@
 # @zhin.js/agent
 
+## 0.1.25
+
+### Patch Changes
+
+- b0e0a71: fix: 提示词优化,create-zhin 引导优化
+  - @zhin.js/logger@0.1.67
+  - @zhin.js/core@1.1.27
+  - @zhin.js/ai@1.1.25
+
 ## 0.1.24
 
 ### Patch Changes
