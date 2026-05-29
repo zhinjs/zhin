@@ -1,5 +1,21 @@
 # zhin.js
 
+## 1.0.85
+
+### Patch Changes
+
+- Updated dependencies [b0e0a71]
+  - @zhin.js/agent@0.1.25
+  - @zhin.js/logger@0.1.67
+  - @zhin.js/schema@1.0.67
+  - @zhin.js/adapter-sandbox@3.0.4
+  - @zhin.js/console@3.0.4
+  - @zhin.js/http@1.0.78
+  - @zhin.js/core@1.1.27
+  - @zhin.js/ai@1.1.25
+  - @zhin.js/kernel@0.0.44
+  - @zhin.js/queue-runtime@0.0.3
+
 ## 1.0.84
 
 ### Patch Changes

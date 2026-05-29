@@ -1,5 +1,12 @@
 # @zhin.js/adapter-milky
 
+## 0.0.35
+
+### Patch Changes
+
+- zhin.js@1.0.85
+- @zhin.js/http@1.0.78
+
 ## 0.0.34
 
 ### Patch Changes
