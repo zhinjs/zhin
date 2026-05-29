@@ -20,7 +20,8 @@ useContext('ai', () => {
   
   // 注册消息发送 Hook
   const dispose2 = registerAIHook('message:sent', async (event) => {
-    logger.info(`[Hook] 📤 发送回复: ${event.context.content?.substring(0, 50)}...`);
+    const sent = event.context.content;
+    logger.info(`[Hook] 📤 发送回复: ${typeof sent === 'string' ? sent.substring(0, 50) : ''}...`);
   });
   
   // 注册 Agent 启动 Hook
@@ -28,7 +29,8 @@ useContext('ai', () => {
     logger.info(`[Hook] 🚀 Agent 启动完成:`);
     logger.info(`  - 工具数: ${event.context.toolCount}`);
     logger.info(`  - 技能数: ${event.context.skillCount}`);
-    logger.info(`  - 引导文件: ${event.context.bootstrapFiles?.join(', ')}`);
+    const files = event.context.bootstrapFiles;
+    logger.info(`  - 引导文件: ${Array.isArray(files) ? files.join(', ') : ''}`);
   });
   
   logger.info('✅ Hook 监听器已注册 (message:received, message:sent, agent:bootstrap)');

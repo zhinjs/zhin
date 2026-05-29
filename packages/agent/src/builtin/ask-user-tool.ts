@@ -92,10 +92,12 @@ export const ASK_USER_PARAMETERS: ToolParametersSchema = {
     question: { type: 'string', description: '要向 Owner 提出的问题文本' },
     type: {
       type: 'string',
+      enum: ['text', 'number', 'confirm', 'pick'],
       description: '问题类型: text(文本输入)、number(数字输入)、confirm(是/否确认)、pick(选项选择)。默认 text',
     },
     options: {
       type: 'array',
+      items: { type: 'string' },
       description: '选项列表（type=pick 时必填），每项为字符串，如 ["选项A","选项B","选项C"]',
     },
     default_value: { type: 'string', description: 'Owner 超时未回复时使用的默认值' },

@@ -232,8 +232,72 @@ export class GhClient {
 
   // ── Issue 评论 (聊天核心) ─────────────────────────────────────────
 
+  // ── REST 便捷方法（gh api 封装，供命令/技能调用） ─────────────────────
+
+  async getRepo(repo: string) {
+    return this.get(`/repos/${repo}`);
+  }
+
+  async listIssues(repo: string, state: 'open' | 'closed' | 'all' = 'open') {
+    return this.get<any[]>(`/repos/${repo}/issues?state=${state}&per_page=30`);
+  }
+
+  async getIssue(repo: string, number: number) {
+    return this.get(`/repos/${repo}/issues/${number}`);
+  }
+
+  async listPRs(repo: string, state: 'open' | 'closed' | 'all' = 'open') {
+    return this.get<any[]>(`/repos/${repo}/pulls?state=${state}&per_page=30`);
+  }
+
+  async getPR(repo: string, number: number) {
+    return this.get(`/repos/${repo}/pulls/${number}`);
+  }
+
+  async searchRepos(query: string, perPage = 10) {
+    return this.get<{ total_count: number; items: any[] }>(
+      `/search/repositories?q=${encodeURIComponent(query)}&per_page=${perPage}`,
+    );
+  }
+
+  async listCommits(
+    repo: string,
+    sha?: string,
+    _path?: string,
+    perPage = 10,
+  ) {
+    let path = `/repos/${repo}/commits?per_page=${perPage}`;
+    if (sha) path += `&sha=${encodeURIComponent(sha)}`;
+    return this.get<any[]>(path);
+  }
+
+  async listBranches(repo: string, perPage = 20) {
+    return this.get<any[]>(`/repos/${repo}/branches?per_page=${perPage}`);
+  }
+
+  async listReleases(repo: string, perPage = 10) {
+    return this.get<any[]>(`/repos/${repo}/releases?per_page=${perPage}`);
+  }
+
+  async listWorkflowRuns(repo: string, perPage = 10) {
+    return this.get<{ workflow_runs: any[] }>(
+      `/repos/${repo}/actions/runs?per_page=${perPage}`,
+    );
+  }
+
+  async closeIssue(repo: string, number: number) {
+    return this.patch(`/repos/${repo}/issues/${number}`, { state: 'closed' });
+  }
+
+  async closePR(repo: string, number: number) {
+    return this.patch(`/repos/${repo}/pulls/${number}`, { state: 'closed' });
+  }
+
   async createIssueComment(repo: string, issueNumber: number, body: string) {
-    return this.post<{ id: number; html_url: string }>(`/repos/${repo}/issues/${issueNumber}/comments`, { body });
+    return this.post<{ id: number; html_url: string; message?: string }>(
+      `/repos/${repo}/issues/${issueNumber}/comments`,
+      { body },
+    );
   }
 
   async deleteIssueComment(repo: string, commentId: number) {

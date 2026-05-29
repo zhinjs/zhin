@@ -38,6 +38,7 @@
     "@zhin.js/adapter-wechat-mp": "workspace:*",
     "@zhin.js/plugin-group-daily-analysis": "workspace:*",
     "@zhin.js/client": "workspace:*",
+    "@zhin.js/kernel": "workspace:*",
     "@zhin.js/console": "workspace:*",
     "@zhin.js/http": "workspace:*",
     "@zhin.js/mcp": "workspace:*",

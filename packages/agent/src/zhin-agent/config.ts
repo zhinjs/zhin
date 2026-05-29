@@ -166,6 +166,7 @@ export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   skillInstructionMaxChars: 0,
   modelHarness: {},
   phaseTrace: false,
+  onPhaseTrace: () => {},
   toolSearch: false,
   toolSearchMaxResults: 5,
   toolSearchOrchestratorTools: [...DEFAULT_TOOL_SEARCH_ORCHESTRATOR_TOOLS],

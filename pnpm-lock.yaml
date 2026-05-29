@@ -319,6 +319,9 @@ importers:
       '@zhin.js/http':
         specifier: workspace:*
         version: link:../../plugins/services/http
+      '@zhin.js/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
       '@zhin.js/mcp':
         specifier: workspace:*
         version: link:../../plugins/services/mcp

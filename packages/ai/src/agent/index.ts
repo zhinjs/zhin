@@ -24,6 +24,7 @@ import {
   microCompactMessages,
 } from '../compaction/index.js';
 import type { AutoCompactTrackingState } from '../compaction/index.js';
+import { sanitizeToolResult } from './tool-result-sanitizer.js';
 
 const logger = new Logger(null, 'Agent');
 
@@ -451,6 +452,7 @@ export class Agent {
           result,
         });
       }
+      result = sanitizeToolResult(result);
       const args = Agent.safeParse(tc.function.arguments);
       const parsedResult = Agent.safeParse(result);
 

@@ -4,11 +4,20 @@
 import { describe, it, expect } from 'vitest';
 import {
   AskUserBuiltinTool,
+  ASK_USER_PARAMETERS,
   createAskUserTool,
   formatOwnerResponse,
 } from '../../src/builtin/ask-user-tool.js';
 import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
 import type { ToolContext } from '@zhin.js/core';
+
+describe('ASK_USER_PARAMETERS', () => {
+  it('options array has string items (OpenAI strict schema)', () => {
+    const options = ASK_USER_PARAMETERS.properties!.options;
+    expect(options?.type).toBe('array');
+    expect(options?.items).toEqual({ type: 'string' });
+  });
+});
 
 describe('AskUserBuiltinTool', () => {
   it('无 message 上下文返回错误', async () => {

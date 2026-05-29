@@ -217,7 +217,7 @@ const runCodeTool = defineTool<{ code: string }>({
   },
 });
 
-plugin.addTool(runCodeTool, false);
+plugin.addTool(runCodeTool);
 
 // ============================================================================
 // 综合示例：出行建议工具

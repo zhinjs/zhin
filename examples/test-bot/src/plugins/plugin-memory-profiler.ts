@@ -74,12 +74,7 @@ addCommand(
         name: string;
         modules: number;
         estimatedSize: string;
-        features: {
-          commands: number;
-          components: number;
-          crons: number;
-          middlewares: number;
-        };
+        features: Record<string, number>;
       }> = [];
 
       // 强制 GC（如果可用）
@@ -172,7 +167,7 @@ addCommand(
       
       output += '功能统计:\n';
       for (const f of features) {
-        output += `  ${f.desc}: ${f.count}\n`;
+        output += `  ${f.name}: ${f.count}\n`;
       }
       output += '\n';
 

@@ -5,6 +5,7 @@ import { Logger } from '@zhin.js/core';
 import { formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
 import type { AIProvider, AgentTool } from '@zhin.js/core';
 import { createAgent } from '@zhin.js/ai';
+import { sanitizeToolResult } from '@zhin.js/ai';
 import { selectDeferredToolsForWorker } from './deferred-worker-tool-load.js';
 import {
   resolveAgentPromptMarkdown,
@@ -208,10 +209,8 @@ ${goal}${platformBlock}
 }
 
 function truncateWorkerSummary(text: string, maxChars: number): string {
-  let cleaned = text.trim();
-  if (/<tool_call|<function=/i.test(cleaned)) {
-    cleaned = 'Worker ended without a plain-text summary; check tool logs.';
-  }
+  let cleaned = sanitizeToolResult(text, { maxChars });
+  if (!cleaned) cleaned = 'Task completed with no text response.';
   if (cleaned.length <= maxChars) return cleaned;
   return cleaned.slice(0, maxChars) + '\n…[truncated]';
 }

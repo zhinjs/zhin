@@ -334,6 +334,14 @@ export type ToolPermissionLevel = 'user' | 'group_admin' | 'group_owner' | 'bot_
  */
 export type ToolResult = string | void | null | undefined | { text: string } | { data: unknown; format?: string } | Record<string, unknown> | unknown[];
 
+/** 工具关联的聊天命令配置（可选；需自行 addCommand 注册） */
+export interface ToolCommandConfig {
+  pattern: string;
+  alias?: string[];
+  usage?: string | string[];
+  examples?: string | string[];
+}
+
 /**
  * 统一的 Tool 定义（支持泛型参数类型推断）。
  *
@@ -421,6 +429,12 @@ export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
 
   /** 工具分类（如 file / shell / web），用于展示与 TOOLS.md 协同 */
   kind?: string;
+
+  /**
+   * 可选：关联的 IM 命令模式（历史字段；需自行 addCommand 注册聊天命令）。
+   * `false` 表示明确不暴露为命令。
+   */
+  command?: ToolCommandConfig | false;
 }
 
 /**

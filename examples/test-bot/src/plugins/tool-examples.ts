@@ -46,8 +46,8 @@ const calculatorTool = defineTool<{ expression: string }>({
       }
       
       // 使用框架的安全沙箱执行
-      const { evaluate } = await import('@zhin.js/kernel');
-      const result = evaluate(sanitized, {});
+      const { execute } = await import('@zhin.js/kernel');
+      const result = execute(`return (${sanitized})`, {});
       
       if (typeof result !== 'number' || !isFinite(result)) {
         return '❌ 计算结果无效';
@@ -176,7 +176,8 @@ const systemInfoTool = defineTool<{ type?: string }>({
 });
 
 // 仅注册工具，不生成命令
-plugin.addTool(systemInfoTool, false /* generateCommand: 不为该工具创建聊天命令，仅供 AI 调用 */);
+// 无 command 字段：仅供 AI 调用，不绑定聊天命令
+plugin.addTool(systemInfoTool);
 
 // ============================================================================
 // 示例 4: 传统命令 -> 自动转为 AI 工具

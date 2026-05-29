@@ -76,4 +76,53 @@ describe('DeferredWorkerRunner', () => {
     expect(result.loadedToolNames).toEqual([]);
     expect(provider.chat).not.toHaveBeenCalled();
   });
+
+  it('sanitizes noisy html payloads in worker summary', async () => {
+    const chat = vi.fn().mockResolvedValue({
+      choices: [{
+        message: {
+          role: 'assistant',
+          content: [
+            '【bash】[执行] STDOUT:',
+            '200',
+            '<!DOCTYPE html><html><head><script>window.location.assign("/antibot/verifycode")</script></head><body>captcha</body></html>',
+            'Final finding: source site blocks scraping, switch to web_search results.',
+          ].join('\n'),
+        },
+        finish_reason: 'stop',
+      }],
+      usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+    });
+
+    const provider = {
+      name: 'mock',
+      models: ['test-model'],
+      chat,
+    } as unknown as AIProvider;
+
+    const deferredCatalog = [makeTool('web_search', 'search web')];
+    const allByName = new Map<string, AgentTool>([
+      ['web_search', deferredCatalog[0]],
+      ['bash', makeTool('bash')],
+      ['read_file', makeTool('read_file')],
+    ]);
+
+    const runner = new DeferredWorkerRunner();
+    const result = await runner.runSync({
+      goal: 'Find Chengdu house price trends',
+      toolQuery: 'web search',
+      deferredCatalog,
+      workerBaseTools: [allByName.get('bash')!, allByName.get('read_file')!],
+      allToolsByName: allByName,
+      origin: { platform: 'qq', senderId: 'u1' },
+      maxToolResults: 5,
+      provider,
+      maxIterations: 3,
+    });
+
+    const payload = JSON.parse(result.summary) as { summary: string };
+    expect(payload.summary).toContain('Final finding');
+    expect(payload.summary).toContain('（已省略无关的页面/脚本噪声）');
+    expect(payload.summary.toLowerCase()).not.toContain('<html');
+  });
 });

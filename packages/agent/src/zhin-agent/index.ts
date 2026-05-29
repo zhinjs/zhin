@@ -77,7 +77,8 @@ import {
 import { DeferredWorkerRunner } from '../deferred-worker-runner.js';
 import { buildOrchestratorAgentTools } from './tool-search-orchestrator.js';
 import { filterToolsForToolSearchCatalog } from './tool-catalog.js';
-import { stripHallucinatedToolCalls, stripThinkBlocks } from './text-sanitize.js';
+import { sanitizeAssistantReply, stripThinkBlocks } from './text-sanitize.js';
+import { formatToolCallsForUser } from './tool-calls-user-format.js';
 import { pruneHistoryWithBudget } from './context-budget.js';
 import { resolveModelHarness } from './model-harness.js';
 import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from '../reserved-tools.js';
@@ -431,7 +432,7 @@ export class ZhinAgent {
       const chatResult = await this.streamChatWithHistory(
         content, chatSystemPrompt, historyMessages, onChunk, liteModel,
       );
-      let reply = stripHallucinatedToolCalls(chatResult.content);
+      let reply = sanitizeAssistantReply(chatResult.content);
       const llmMs = (now() - tLLM).toFixed(0);
       this.logPhase('chat.llm.end', sessionId, {
         durationMs: Number(llmMs),
@@ -483,7 +484,7 @@ export class ZhinAgent {
       logger.debug(formatCompact( { mode: 'fast', prompt_chars: prompt.length }));
       this.logPhase('fast.llm.start', sessionId, { model: chatCandidates[0] || '' });
       const fastResult = await this.streamChatWithHistory(content, prompt, historyMessages, onChunk);
-      reply = fastResult.content;
+      reply = sanitizeAssistantReply(fastResult.content);
       this.logPhase('fast.llm.end', sessionId, {
         durationMs: Math.round(now() - tLLM),
         ...this.usageLogFields(fastResult.usage ?? undefined),
@@ -583,7 +584,9 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       } finally {
         agent.dispose();
       }
-      reply = stripHallucinatedToolCalls(stripThinkBlocks(result.content)) || this.fallbackFormat(result.toolCalls);
+      reply = sanitizeAssistantReply(result.content, {
+        toolSummary: formatToolCallsForUser(result.toolCalls),
+      });
       logger.debug(
         `[Agent 路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, Agent=${(now() - tAgent).toFixed(0)}ms, 总=${(now() - t0).toFixed(0)}ms`,
       );
@@ -821,7 +824,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     }
 
     if (!reply) reply = '抱歉，我无法理解这条消息。';
-    reply = stripHallucinatedToolCalls(reply);
+    reply = sanitizeAssistantReply(reply);
     await this.saveToSession(sessionId, textContent, reply, sceneId);
     await this.finalizeActiveTurn({
       usage: lastUsage ?? EMPTY_USAGE,
@@ -960,16 +963,9 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     }
   }
 
+  /** @deprecated 使用 {@link formatToolCallsForUser} */
   private fallbackFormat(toolCalls: { tool: string; args: any; result: any }[]): string {
-    if (toolCalls.length === 0) return 'Done.';
-    const userFacing = toolCalls.filter(tc => tc.tool !== 'activate_skill');
-    if (userFacing.length === 0) {
-      return '技能已激活但未能完成后续操作，请重试或换一种方式描述你的需求。';
-    }
-    return userFacing.map(tc => {
-      const s = typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2);
-      return `【${tc.tool}】\n${s}`;
-    }).join('\n\n');
+    return formatToolCallsForUser(toolCalls);
   }
 
   // ── Lifecycle ───────────────────────────────────────────────────────

@@ -26,6 +26,11 @@ import {
 
 const contextsKey = Symbol("contexts");
 
+function runtimeCwd(): string {
+  const g = globalThis as { Deno?: { cwd: () => string } };
+  return g.Deno?.cwd?.() ?? process.cwd();
+}
+
 function resolvePluginResolveDir(parent?: Plugin): string {
   return _resolvePluginResolveDir(parent);
 }

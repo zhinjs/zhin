@@ -11,6 +11,14 @@ import { GhClient } from '@zhin.js/adapter-github';
 const plugin = usePlugin();
 const { addCommand, useContext, logger } = plugin;
 
+function ghApiMessage(data: unknown, fallback: string): string {
+  if (data && typeof data === 'object' && 'message' in data) {
+    const msg = (data as { message?: string }).message;
+    if (typeof msg === 'string' && msg) return msg;
+  }
+  return fallback;
+}
+
 // ── 辅助：从 message 中拿用户身份，获取对应 GhClient ──────────────
 async function getAPI(adapter: GitHubAdapter, message: any): Promise<GhClient | null> {
   return adapter.getUserOrDefaultAPI(message.$adapter, message.$sender?.id);
@@ -61,7 +69,7 @@ useContext('github', (adapter: GitHubAdapter) => {
         const api = await getAPI(adapter, message);
         if (!api) return '❌ GitHub 未就绪';
         const r = await api.getRepo(result.params.repo);
-        if (!r.ok) return `❌ ${r.data?.message || '仓库不存在'}`;
+        if (!r.ok) return `❌ ${ghApiMessage(r.data, '仓库不存在')}`;
         const d = r.data;
         return [
           `📦 ${d.full_name}${d.private ? ' 🔒' : ''}`,
@@ -87,7 +95,7 @@ useContext('github', (adapter: GitHubAdapter) => {
         const api = await getAPI(adapter, message);
         if (!api) return '❌ GitHub 未就绪';
         const r = await api.listIssues(result.params.repo, 'open');
-        if (!r.ok) return `❌ ${r.data?.message || '查询失败'}`;
+        if (!r.ok) return `❌ ${ghApiMessage(r.data, '查询失败')}`;
         const issues = r.data.filter((i: any) => !i.pull_request);
         if (!issues.length) return '📭 没有 open 状态的 Issue';
         return issues.slice(0, 15).map((i: any) => {
@@ -108,7 +116,7 @@ useContext('github', (adapter: GitHubAdapter) => {
         const api = await getAPI(adapter, message);
         if (!api) return '❌ GitHub 未就绪';
         const r = await api.getIssue(result.params.repo, result.params.number);
-        if (!r.ok) return `❌ ${r.data?.message || 'Issue 不存在'}`;
+        if (!r.ok) return `❌ ${ghApiMessage(r.data, 'Issue 不存在')}`;
         const i = r.data;
         return [
           `#${i.number} ${i.title}`,
@@ -131,7 +139,7 @@ useContext('github', (adapter: GitHubAdapter) => {
         const api = await getAPI(adapter, message);
         if (!api) return '❌ GitHub 未就绪';
         const r = await api.listPRs(result.params.repo, 'open');
-        if (!r.ok) return `❌ ${r.data?.message || '查询失败'}`;
+        if (!r.ok) return `❌ ${ghApiMessage(r.data, '查询失败')}`;
         if (!r.data.length) return '📭 没有 open 状态的 PR';
         return r.data.slice(0, 15).map((p: any) =>
           `#${p.number} ${p.draft ? '[Draft] ' : ''}${p.title}\n   👤 ${p.user.login} | 🌿 ${p.head.ref} → ${p.base.ref}`,
@@ -150,7 +158,7 @@ useContext('github', (adapter: GitHubAdapter) => {
         const api = await getAPI(adapter, message);
         if (!api) return '❌ GitHub 未就绪';
         const r = await api.getPR(result.params.repo, result.params.number);
-        if (!r.ok) return `❌ ${r.data?.message || 'PR 不存在'}`;
+        if (!r.ok) return `❌ ${ghApiMessage(r.data, 'PR 不存在')}`;
         const p = r.data;
         return [
           `#${p.number} ${p.title}`,
@@ -173,7 +181,7 @@ useContext('github', (adapter: GitHubAdapter) => {
         const api = await getAPI(adapter, message);
         if (!api) return '❌ GitHub 未就绪';
         const r = await api.searchRepos(result.params.query, 10);
-        if (!r.ok) return `❌ ${r.data?.message || '搜索失败'}`;
+        if (!r.ok) return `❌ ${ghApiMessage(r.data, '搜索失败')}`;
         if (!r.data.items?.length) return '📭 没有匹配的仓库';
         return `🔍 共 ${r.data.total_count} 条，显示前 ${r.data.items.length}:\n\n` +
           r.data.items.map((repo: any) =>
@@ -193,7 +201,7 @@ useContext('github', (adapter: GitHubAdapter) => {
         const api = await getAPI(adapter, message);
         if (!api) return '❌ GitHub 未就绪';
         const r = await api.starRepo(result.params.repo);
-        return r.ok ? `⭐ 已 Star ${result.params.repo}` : `❌ ${r.data?.message || 'Star 失败'}`;
+        return r.ok ? `⭐ 已 Star ${result.params.repo}` : `❌ ${ghApiMessage(r.data, 'Star 失败')}`;
       }),
   );
 
@@ -204,7 +212,7 @@ useContext('github', (adapter: GitHubAdapter) => {
         const api = await getAPI(adapter, message);
         if (!api) return '❌ GitHub 未就绪';
         const r = await api.unstarRepo(result.params.repo);
-        return r.ok ? `💔 已取消 Star ${result.params.repo}` : `❌ ${r.data?.message || '操作失败'}`;
+        return r.ok ? `💔 已取消 Star ${result.params.repo}` : `❌ ${ghApiMessage(r.data, '操作失败')}`;
       }),
   );
 
@@ -220,7 +228,7 @@ useContext('github', (adapter: GitHubAdapter) => {
         if (!api) return '❌ GitHub 未就绪';
         const limit = result.params.limit || 10;
         const r = await api.listCommits(result.params.repo, undefined, undefined, limit);
-        if (!r.ok) return `❌ ${r.data?.message || '查询失败'}`;
+        if (!r.ok) return `❌ ${ghApiMessage(r.data, '查询失败')}`;
         if (!r.data.length) return '📭 没有找到提交记录';
         return r.data.map((c: any) =>
           `• ${c.sha.substring(0, 7)} ${c.commit.message.split('\n')[0]}\n  👤 ${c.commit.author?.name || '?'} | 📅 ${c.commit.author?.date?.split('T')[0] || '?'}`,
@@ -239,7 +247,7 @@ useContext('github', (adapter: GitHubAdapter) => {
         const api = await getAPI(adapter, message);
         if (!api) return '❌ GitHub 未就绪';
         const r = await api.listBranches(result.params.repo, 20);
-        if (!r.ok) return `❌ ${r.data?.message || '查询失败'}`;
+        if (!r.ok) return `❌ ${ghApiMessage(r.data, '查询失败')}`;
         return r.data.length
           ? `🌿 分支 (${r.data.length}):\n${r.data.map((b: any) => `  • ${b.name}${b.protected ? ' 🔒' : ''}`).join('\n')}`
           : '没有找到分支';
@@ -257,7 +265,7 @@ useContext('github', (adapter: GitHubAdapter) => {
         const api = await getAPI(adapter, message);
         if (!api) return '❌ GitHub 未就绪';
         const r = await api.listReleases(result.params.repo, 10);
-        if (!r.ok) return `❌ ${r.data?.message || '查询失败'}`;
+        if (!r.ok) return `❌ ${ghApiMessage(r.data, '查询失败')}`;
         if (!r.data.length) return '📭 暂无发布';
         return r.data.map((rel: any) =>
           `${rel.prerelease ? '🧪' : '📦'} ${rel.tag_name} — ${rel.name || '(no title)'}\n   📅 ${rel.published_at?.split('T')[0]} | 👤 ${rel.author?.login}`,
@@ -276,7 +284,7 @@ useContext('github', (adapter: GitHubAdapter) => {
         const api = await getAPI(adapter, message);
         if (!api) return '❌ GitHub 未就绪';
         const r = await api.listWorkflowRuns(result.params.repo, 10);
-        if (!r.ok) return `❌ ${r.data?.message || '查询失败'}`;
+        if (!r.ok) return `❌ ${ghApiMessage(r.data, '查询失败')}`;
         const runs = r.data.workflow_runs || [];
         if (!runs.length) return '📭 暂无 CI 记录';
         return runs.map((run: any) => {
@@ -297,7 +305,7 @@ useContext('github', (adapter: GitHubAdapter) => {
         const api = await getAPI(adapter, message);
         if (!api) return '❌ GitHub 未就绪';
         const r = await api.createIssueComment(result.params.repo, result.params.number, result.params.body);
-        return r.ok ? `✅ 已评论 #${result.params.number}` : `❌ ${r.data?.message || '评论失败'}`;
+        return r.ok ? `✅ 已评论 #${result.params.number}` : `❌ ${ghApiMessage(r.data, '评论失败')}`;
       }),
   );
 
@@ -316,7 +324,7 @@ useContext('github', (adapter: GitHubAdapter) => {
         if (ir.ok) return `✅ Issue #${result.params.number} 已关闭`;
         const pr = await api.closePR(result.params.repo, result.params.number);
         if (pr.ok) return `✅ PR #${result.params.number} 已关闭`;
-        return `❌ 关闭失败: ${ir.data?.message || pr.data?.message || '未知错误'}`;
+        return `❌ 关闭失败: ${ghApiMessage(ir.data, ghApiMessage(pr.data, '未知错误'))}`;
       }),
   );
 
