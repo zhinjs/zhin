@@ -4,7 +4,7 @@
  * 不再直接依赖 @icqqjs/icqq 协议库。
  * 登录由 `icqq login` 完成，本 Bot 只负责连接守护进程并收发消息。
  */
-import { formatCompact, Bot, Message, MessageSegment, segment, SendContent, SendOptions } from 'zhin.js';
+import { formatCompact, Bot, Message, segment, SendContent, SendOptions } from 'zhin.js';
 import type {
   IcqqBotConfig,
   IcqqSenderInfo,
@@ -14,13 +14,35 @@ import type {
 } from "./types.js";
 import type { IcqqAdapter } from "./adapter.js";
 import { IpcClient } from "./ipc-client.js";
+import { Actions, type IpcEvent } from "./protocol.js";
+import type { IcqqIpcMessageEvent } from "./icqq-inbound.js";
 import {
-  Actions,
-  type IpcMessageEventData,
-  type IpcEvent,
-} from "./protocol.js";
+  InboundMessageDeduper,
+  isIcqqMessagePostType,
+  normalizeIcqqInboundMessage,
+  shouldSkipSelfInboundMessage,
+  unwrapIcqqIpcEventPayload,
+  type NormalizedIcqqInbound,
+} from "./icqq-inbound.js";
+import {
+  buildIcqqIpcMessage as buildIcqqIpcMessageImpl,
+  parseCqMessage as parseCqMessageImpl,
+  toCqString as toCqStringImpl,
+} from "./cq-message.js";
+import {
+  formatIcqqMetaLog,
+  formatIcqqNotice,
+  formatIcqqRequest,
+  isIcqqMetaPayload,
+  isIcqqNoticePayload,
+  isIcqqRequestPayload,
+  resolveIcqqEventPostType,
+  resolveSideEventDedupeKey,
+  shouldRefreshListsOnMeta,
+  type IcqqIpcRawEvent,
+} from "./icqq-side-events.js";
 
-export class IcqqBot implements Bot<IcqqBotConfig, IpcMessageEventData> {
+export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
   $connected = false;
   $config: IcqqBotConfig;
   ipc!: IpcClient;
@@ -31,6 +53,8 @@ export class IcqqBot implements Bot<IcqqBotConfig, IpcMessageEventData> {
   groups = new Map<number, IpcGroupInfo>();
 
   private subscriptions: Array<{ unsubscribe: () => Promise<void> }> = [];
+  /** 多路 subscribe 会重复推送同一 message_id */
+  private readonly inboundDeduper = new InboundMessageDeduper();
   /** 用户主动断开时为 true，阻止自动重连 */
   private intentionalDisconnect = false;
   /** 是否已有重连循环在跑（避免多次 schedule 叠套） */
@@ -205,6 +229,7 @@ export class IcqqBot implements Bot<IcqqBotConfig, IpcMessageEventData> {
       await sub.unsubscribe().catch(() => {});
     }
     this.subscriptions = [];
+    this.inboundDeduper.clear();
     this.ipc?.close();
     this.$connected = false;
     this.logger.info(formatCompact( { op: "disconnect", bot: this.$id }));
@@ -213,47 +238,210 @@ export class IcqqBot implements Bot<IcqqBotConfig, IpcMessageEventData> {
   // ── 消息处理 ───────────────────────────────────────────────────────
 
   private handleEvent(event: IpcEvent): void {
-    const data = event.data as IpcMessageEventData;
-    if (!data || !data.raw_message) return;
+    const payload = unwrapIcqqIpcEventPayload(event);
+    if (!payload || typeof payload !== "object") {
+      if (process.env.ICQQ_IPC_LOG_RAW === "1") {
+        this.logger.info(
+          formatCompact({
+            ipc_skip: "no_payload",
+            ipc_event: event.event,
+          }),
+        );
+      }
+      return;
+    }
 
-    const message = this.$formatMessage(data);
+    if (process.env.ICQQ_IPC_LOG_RAW === "1") {
+      this.logger.info(
+        formatCompact({
+          ipc_raw: JSON.stringify(payload).slice(0, 800),
+        }),
+      );
+    }
+
+    if (isIcqqNoticePayload(payload)) {
+      this.handleNoticeEvent(payload);
+      return;
+    }
+    if (isIcqqRequestPayload(payload)) {
+      this.handleRequestEvent(payload);
+      return;
+    }
+    if (isIcqqMetaPayload(payload)) {
+      this.handleMetaEvent(payload);
+      return;
+    }
+
+    if (!isIcqqMessagePostType(payload)) {
+      const postType = resolveIcqqEventPostType(
+        payload as Record<string, unknown>,
+      );
+      if (process.env.ICQQ_IPC_LOG_RAW === "1") {
+        this.logger.info(
+          formatCompact({ ipc_skip: postType ?? "unknown_event" }),
+        );
+      }
+      return;
+    }
+
+    const data = payload;
+
+    if (shouldSkipSelfInboundMessage(data)) {
+      if (process.env.ICQQ_IPC_LOG_RAW === "1") {
+        this.logger.info(formatCompact({ ipc_skip: "self_message" }));
+      }
+      return;
+    }
+
+    const normalized = normalizeIcqqInboundMessage(data);
+    if (!normalized) {
+      if (process.env.ICQQ_IPC_LOG_RAW === "1") {
+        this.logger.info(formatCompact({ ipc_skip: "normalize_failed" }));
+      }
+      return;
+    }
+
+    if (!this.inboundDeduper.shouldProcess(normalized.messageId)) {
+      if (process.env.ICQQ_IPC_LOG_RAW === "1") {
+        this.logger.info(
+          formatCompact({ ipc_dedupe: normalized.messageId }),
+        );
+      }
+      return;
+    }
+
+    this.logIpcInboundPayload(data, normalized);
+
+    const message = this.$formatMessage(normalized);
     this.adapter.emit("message.receive", message);
     this.logger.debug(
       `${this.$id} recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`,
     );
   }
 
-  $formatMessage(raw: IpcMessageEventData) {
-    const channelId =
-      raw.type === "group"
-        ? String(raw.group_id ?? raw.from_id)
-        : String(raw.from_id);
-    const channelType = raw.type === "group" ? "group" : "private";
-    // 守护进程推送无 message_id，合成一个
-    const syntheticId = `${raw.time}_${raw.user_id}_${channelId}`;
+  private handleNoticeEvent(event: IcqqIpcRawEvent): void {
+    const dedupeKey = resolveSideEventDedupeKey(event, "notice");
+    if (!this.inboundDeduper.shouldProcess(dedupeKey)) {
+      if (process.env.ICQQ_IPC_LOG_RAW === "1") {
+        this.logger.info(formatCompact({ ipc_dedupe: dedupeKey }));
+      }
+      return;
+    }
+    const notice = formatIcqqNotice(event, this.$config.name);
+    this.adapter.emit("notice.receive", notice);
+    this.logger.info(
+      formatCompact({
+        notice: notice.$type,
+        channel: `${notice.$channel.type}(${notice.$channel.id})`,
+        bot: this.$id,
+        sub_type: notice.$subType,
+      }),
+    );
+  }
 
+  private handleRequestEvent(event: IcqqIpcRawEvent): void {
+    const dedupeKey = resolveSideEventDedupeKey(event, "request");
+    if (!this.inboundDeduper.shouldProcess(dedupeKey)) {
+      if (process.env.ICQQ_IPC_LOG_RAW === "1") {
+        this.logger.info(formatCompact({ ipc_dedupe: dedupeKey }));
+      }
+      return;
+    }
+    const request = formatIcqqRequest(event, this.$config.name, this.ipc);
+    this.adapter.emit("request.receive", request);
+    this.logger.info(
+      formatCompact({
+        request: request.$type,
+        channel: `${request.$channel.type}(${request.$channel.id})`,
+        bot: this.$id,
+        from: request.$sender.id,
+      }),
+    );
+  }
+
+  private handleMetaEvent(event: IcqqIpcRawEvent): void {
+    const dedupeKey = resolveSideEventDedupeKey(event, "meta");
+    if (!this.inboundDeduper.shouldProcess(dedupeKey)) return;
+
+    this.logger.debug(formatIcqqMetaLog(event));
+    if (shouldRefreshListsOnMeta(event)) {
+      void this.refreshLists().catch((e: unknown) => {
+        this.logger.warn(
+          formatCompact({
+            op: "refresh_lists",
+            ok: false,
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+      });
+    }
+  }
+
+  /** 调试 IPC 入站字段：默认 debug；设 ICQQ_IPC_LOG_RAW=1 则 info 打完整 payload */
+  private logIpcInboundPayload(
+    data: IcqqIpcMessageEvent,
+    normalized: NormalizedIcqqInbound,
+  ): void {
+    const ext = data as IcqqIpcMessageEvent & Record<string, unknown>;
+    const keys = Object.keys(ext);
+    const idHints: Record<string, unknown> = {};
+    for (const key of keys) {
+      if (/message|msg|seq|id/i.test(key)) {
+        idHints[key] = ext[key];
+      }
+    }
+    const preview = JSON.stringify(data);
+    const compact = formatCompact({
+      post_type: data.post_type ?? "legacy",
+      message_type: data.message_type ?? data.type,
+      ipc_message_id: normalized.messageId,
+      id_source: normalized.idSource,
+      ipc_keys: keys.join(","),
+      ...(Object.keys(idHints).length ? { ipc_id_hints: JSON.stringify(idHints) } : {}),
+    });
+    this.logger.debug(compact);
+    this.logger.debug(formatCompact({ ipc_payload: preview.slice(0, 1200) }));
+  }
+
+  $formatMessage(
+    input: NormalizedIcqqInbound | IcqqIpcMessageEvent,
+  ): ReturnType<typeof Message.from<IcqqIpcMessageEvent>> {
+    const normalized =
+      "messageId" in input
+        ? input
+        : normalizeIcqqInboundMessage(input);
+    if (!normalized) {
+      throw new Error("无法解析 icqq 入站消息");
+    }
+    const raw = normalized.raw;
     const senderInfo: IcqqSenderInfo = {
-      id: String(raw.user_id),
-      name: raw.nickname,
+      id: normalized.userId,
+      name: normalized.nickname,
     };
 
     const result = Message.from(raw, {
-      $id: syntheticId,
+      $id: normalized.messageId,
       $adapter: "icqq" as const,
       $bot: this.$config.name,
       $sender: senderInfo,
-      $channel: { id: channelId, type: channelType },
-      $content: IcqqBot.parseCqMessage(raw.raw_message),
-      $raw: raw.raw_message,
-      $timestamp: raw.time * 1000,
+      $channel: {
+        id: normalized.channelId,
+        type: normalized.channelType,
+      },
+      $content: normalized.content,
+      $raw: normalized.rawMessage,
+      $timestamp: normalized.timestampMs,
       $recall: async () => {
-        // 合成 id 无法撤回
-        this.logger.warn(formatCompact( {
-          op: "recall",
-          bot: this.$id,
-          ok: false,
-          error: "no message_id in push",
-        }));
+        if (normalized.idSource === "synthetic") {
+          this.logger.warn(formatCompact( {
+            op: "recall",
+            bot: this.$id,
+            ok: false,
+            error: "no message_id in push",
+          }));
+          return;
+        }
+        await this.$recallMessage(result.$id);
       },
       $reply: async (
         content: SendContent,
@@ -296,7 +484,7 @@ export class IcqqBot implements Bot<IcqqBotConfig, IpcMessageEventData> {
   // ── 发送消息 ───────────────────────────────────────────────────────
 
   async $sendMessage(options: SendOptions): Promise<string> {
-    const content = IcqqBot.toCqString(options.content);
+    const message = buildIcqqIpcMessageImpl(options.content);
 
     let action: string;
     let params: Record<string, unknown>;
@@ -304,11 +492,11 @@ export class IcqqBot implements Bot<IcqqBotConfig, IpcMessageEventData> {
     switch (options.type) {
       case "private":
         action = Actions.SEND_PRIVATE_MSG;
-        params = { user_id: Number(options.id), message: content };
+        params = { user_id: Number(options.id), message };
         break;
       case "group":
         action = Actions.SEND_GROUP_MSG;
-        params = { group_id: Number(options.id), message: content };
+        params = { group_id: Number(options.id), message };
         break;
       default:
         throw new Error(`不支持的频道类型: ${options.type}`);
@@ -329,110 +517,9 @@ export class IcqqBot implements Bot<IcqqBotConfig, IpcMessageEventData> {
   }
 }
 
-// ── CQ 码解析工具 ──────────────────────────────────────────────────
-
+/** @deprecated 使用 `./cq-message.js` 导出 */
 export namespace IcqqBot {
-  /**
-   * 将 CQ 码原始消息字符串解析为 MessageSegment 数组。
-   * 格式: `[type:value]` 或纯文本
-   */
-  export function parseCqMessage(raw: string): MessageSegment[] {
-    const segments: MessageSegment[] = [];
-    // 匹配 [type:arg] 或 [type:arg1,arg2=val] 等 CQ 码
-    const cqRegex = /\[([a-z_]+)(?::([^\]]*))?\]/g;
-    let lastIndex = 0;
-
-    for (const match of raw.matchAll(cqRegex)) {
-      // 前面的纯文本
-      if (match.index! > lastIndex) {
-        const text = raw.slice(lastIndex, match.index!);
-        if (text) segments.push({ type: "text", data: { text } });
-      }
-
-      const type = match[1];
-      const arg = match[2] ?? "";
-
-      switch (type) {
-        case "face":
-          segments.push({ type: "face", data: { id: Number(arg) } });
-          break;
-        case "image":
-          segments.push({ type: "image", data: { url: arg, file: arg } });
-          break;
-        case "at":
-          if (arg === "all") {
-            segments.push({ type: "at", data: { qq: "all" } });
-          } else {
-            segments.push({ type: "at", data: { qq: arg } });
-          }
-          break;
-        case "dice":
-          segments.push({ type: "dice", data: {} });
-          break;
-        case "rps":
-          segments.push({ type: "rps", data: {} });
-          break;
-        case "record":
-        case "audio":
-          segments.push({ type: "record", data: { file: arg } });
-          break;
-        case "video":
-          segments.push({ type: "video", data: { file: arg } });
-          break;
-        case "reply":
-          segments.push({ type: "reply", data: { id: arg } });
-          break;
-        default:
-          segments.push({ type, data: { text: `[${type}:${arg}]` } });
-          break;
-      }
-
-      lastIndex = match.index! + match[0].length;
-    }
-
-    // 尾部文本
-    if (lastIndex < raw.length) {
-      const text = raw.slice(lastIndex);
-      if (text) segments.push({ type: "text", data: { text } });
-    }
-
-    return segments.length ? segments : [{ type: "text", data: { text: raw } }];
-  }
-
-  /**
-   * 将 SendContent（MessageSegment[] 或字符串）转为 CQ 码字符串。
-   * 守护进程使用 CQ 码字符串格式收发消息。
-   */
-  export function toCqString(content: SendContent): string {
-    if (!Array.isArray(content)) content = [content];
-    return content
-      .map((seg) => {
-        if (typeof seg === "string") return seg;
-        const { type, data } = seg as MessageSegment;
-        switch (type) {
-          case "text":
-            return data.text ?? "";
-          case "face":
-            return `[face:${data.id}]`;
-          case "image":
-            return `[image:${data.file || data.url || data.src}]`;
-          case "at":
-            return `[at:${data.qq ?? data.id}]`;
-          case "dice":
-            return "[dice]";
-          case "rps":
-            return "[rps]";
-          case "record":
-          case "audio":
-            return `[record:${data.file || data.url}]`;
-          case "video":
-            return `[video:${data.file || data.url}]`;
-          case "reply":
-            return `[reply:${data.id}]`;
-          default:
-            return segment.toString(seg);
-        }
-      })
-      .join("");
-  }
+  export const parseCqMessage = parseCqMessageImpl;
+  export const buildIcqqIpcMessage = buildIcqqIpcMessageImpl;
+  export const toCqString = toCqStringImpl;
 }

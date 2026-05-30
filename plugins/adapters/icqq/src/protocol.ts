@@ -29,16 +29,15 @@ export type IpcEvent = {
 
 export type IpcMessage = IpcResponse | IpcEvent;
 
-/** 收到的消息事件数据 */
-export interface IpcMessageEventData {
-  type: "group" | "private";
-  from_id: number;
-  user_id: number;
-  nickname: string;
-  raw_message: string;
-  time: number;
-  group_id?: number;
-}
+/** @deprecated 使用 {@link IcqqIpcMessageEvent}；保留别名便于旧代码 */
+export type IpcMessageEventData = import("./icqq-inbound.js").IcqqIpcMessageEvent;
+
+export type { IcqqIpcMessageEvent } from "./icqq-inbound.js";
+
+/** 从 IPC 入站 payload 解析可用于引用/撤回的消息 ID */
+export {
+  resolveIcqqInboundMessageId as resolveIpcInboundMessageId,
+} from "./icqq-inbound.js";
 
 /** Guild 消息事件数据 */
 export interface IpcGuildMessageEventData {

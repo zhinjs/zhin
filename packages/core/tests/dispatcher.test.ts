@@ -266,6 +266,19 @@ describe('createMessageDispatcher', () => {
       expect(msg.$reply).toHaveBeenCalledWith('hello');
     });
 
+    it('replyWithPolish 支持引用入站消息', async () => {
+      const root = new EventEmitter() as unknown as Plugin;
+      (root as any).inject = () => undefined;
+      (root as any).root = root;
+      context.mounted({ root } as Plugin);
+
+      const msg = makeMessage('x');
+      wireMessageReplyThroughBeforeSend(msg, root as unknown as EventEmitter);
+      await service.replyWithPolish(msg, 'ai', 'hello', { quote: true });
+
+      expect(msg.$reply).toHaveBeenCalledWith('hello', true);
+    });
+
     it('指令路径应经过润色', async () => {
       const root = makeRootWithCommand(async () => 'out');
       const fakePlugin = { root } as Plugin;

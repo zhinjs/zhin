@@ -118,6 +118,12 @@ export type GuardrailMiddleware = MessageMiddleware<RegisteredAdapter>;
 /** @alias OutboundReplySource：出站回复来源（指令 / AI） */
 export type ReplySource = OutboundReplySource;
 
+/** replyWithPolish 可选参数 */
+export interface ReplyWithPolishOptions {
+  /** 引用入站消息（true 用 message.$id；string 为指定消息 id） */
+  quote?: boolean | string;
+}
+
 export interface CreateMessageDispatcherOptions {
   dualRoute?: Partial<DualRouteConfig>;
 }
@@ -154,6 +160,7 @@ export interface MessageDispatcherService {
     message: Message<any>,
     source: ReplySource,
     content: SendContent,
+    options?: ReplyWithPolishOptions,
   ): Promise<unknown>;
 
   /**
@@ -333,11 +340,15 @@ export function createMessageDispatcher(
     message: Message<any>,
     source: ReplySource,
     content: SendContent,
+    options?: ReplyWithPolishOptions,
   ): Promise<unknown> {
+    const quote = options?.quote;
     if (!rootPlugin) {
-      return message.$reply(content);
+      return quote ? message.$reply(content, quote) : message.$reply(content);
     }
-    return outboundReplyAls.run({ message, source }, () => message.$reply(content));
+    return outboundReplyAls.run({ message, source }, () =>
+      quote ? message.$reply(content, quote) : message.$reply(content),
+    );
   }
 
   async function runCommandBranch(message: Message<any>): Promise<void> {
@@ -448,8 +459,8 @@ export function createMessageDispatcher(
       };
     },
 
-    replyWithPolish(message, source, content) {
-      return replyWithPolishInternal(message, source, content);
+    replyWithPolish(message, source, content, options) {
+      return replyWithPolishInternal(message, source, content, options);
     },
 
     matchCommand(message) {

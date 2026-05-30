@@ -47,18 +47,27 @@ export function registerAITrigger(refs: AIServiceRefs): void {
     }
 
     const dispatcherSvc = root.inject('dispatcher') as
-      | { replyWithPolish?: (m: Message<any>, s: 'ai' | 'command', c: unknown) => Promise<unknown> }
+      | {
+          replyWithPolish?: (
+            m: Message<any>,
+            s: 'ai' | 'command',
+            c: unknown,
+            options?: { quote?: boolean | string },
+          ) => Promise<unknown>;
+        }
       | undefined;
 
     const handleAIMessage = async (
       message: Message<any>,
       content: string,
     ) => {
+      const replyOptions = { quote: true as const };
+
       const replyOutbound = async (payload: unknown) => {
         if (dispatcherSvc && typeof dispatcherSvc.replyWithPolish === 'function') {
-          return dispatcherSvc.replyWithPolish(message, 'ai', payload as any);
+          return dispatcherSvc.replyWithPolish(message, 'ai', payload as any, replyOptions);
         }
-        return message.$reply(payload as any);
+        return message.$reply(payload as any, true);
       };
 
       const t0 = performance.now();

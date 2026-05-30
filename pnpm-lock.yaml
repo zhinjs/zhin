@@ -328,12 +328,9 @@ importers:
       '@zhin.js/plugin-60s':
         specifier: workspace:*
         version: link:../../plugins/utils/60s
-      '@zhin.js/plugin-checkin':
+      '@zhin.js/plugin-group-suite':
         specifier: workspace:*
-        version: link:../../plugins/utils/checkin
-      '@zhin.js/plugin-group-daily-analysis':
-        specifier: workspace:*
-        version: link:../../plugins/utils/group-daily-analysis
+        version: link:../../plugins/utils/group-suite
       '@zhin.js/plugin-html-renderer':
         specifier: workspace:*
         version: link:../../plugins/utils/html-renderer
@@ -346,12 +343,6 @@ importers:
       '@zhin.js/plugin-rss':
         specifier: workspace:*
         version: link:../../plugins/utils/rss
-      '@zhin.js/plugin-stats':
-        specifier: workspace:*
-        version: link:../../plugins/utils/stats
-      '@zhin.js/plugin-teach':
-        specifier: workspace:*
-        version: link:../../plugins/utils/teach
       '@zhin.js/sensitive-filter':
         specifier: workspace:*
         version: link:../../plugins/utils/sensitive-filter
@@ -1397,15 +1388,6 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/zhin
 
-  plugins/utils/checkin:
-    devDependencies:
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/zhin
-
   plugins/utils/code-runner:
     devDependencies:
       typescript:
@@ -1415,16 +1397,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/zhin
 
-  plugins/utils/group-admin:
-    devDependencies:
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/zhin
-
-  plugins/utils/group-daily-analysis:
+  plugins/utils/group-suite:
     devDependencies:
       '@zhin.js/plugin-html-renderer':
         specifier: workspace:*
@@ -1514,24 +1487,6 @@ importers:
         version: link:../../../packages/zhin
 
   plugins/utils/short-url:
-    devDependencies:
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/zhin
-
-  plugins/utils/stats:
-    devDependencies:
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/zhin
-
-  plugins/utils/teach:
     devDependencies:
       typescript:
         specifier: ^6.0.3
