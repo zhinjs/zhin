@@ -4,6 +4,7 @@
  * 展示如何在 ZhinAgent 中集成消息处理状态提示
  */
 
+import { getPlugin } from '@zhin.js/core';
 import type { Plugin, Bot } from '@zhin.js/core';
 import {
   TypingIndicatorManager,
@@ -105,13 +106,20 @@ export function createICQQAdapterFromBot(bot: ICQQBot): ReactionTypingIndicatorA
   const sendMessage = async (sessionId: string, content: string): Promise<string | null> => {
     try {
       const [type, id] = sessionId.split(':');
-      return await bot.$sendMessage({
+      const rootPlugin = getPlugin()?.root;
+      const adapterInstance = rootPlugin?.inject('icqq' as any) as any;
+      const sendOptions = {
         type: type as 'private' | 'group',
         id,
         context: 'icqq',
         bot: bot.$id,
         content: [{ type: 'text', data: { text: content } }],
-      });
+      };
+      if (adapterInstance && typeof adapterInstance.sendMessage === 'function') {
+        return await adapterInstance.sendMessage(sendOptions);
+      }
+      const anyBot = bot as any;
+      return await anyBot.$sendMessage(sendOptions);
     } catch (error) {
       console.error('[ICQQ] Failed to send message:', error);
       return null;
@@ -141,13 +149,20 @@ export function createGenericAdapterFromBot(bot: Bot, platform: string): Generic
   const sendMessage = async (sessionId: string, content: string): Promise<string | null> => {
     try {
       const [type, id] = sessionId.split(':');
-      return await bot.$sendMessage({
+      const rootPlugin = getPlugin()?.root;
+      const adapterInstance = rootPlugin?.inject(platform as any) as any;
+      const sendOptions = {
         type: type as 'private' | 'group',
         id,
         context: platform,
         bot: bot.$id,
         content: [{ type: 'text', data: { text: content } }],
-      });
+      };
+      if (adapterInstance && typeof adapterInstance.sendMessage === 'function') {
+        return await adapterInstance.sendMessage(sendOptions);
+      }
+      const anyBot = bot as any;
+      return await anyBot.$sendMessage(sendOptions);
     } catch (error) {
       console.error(`[${platform}] Failed to send message:`, error);
       return null;

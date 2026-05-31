@@ -144,6 +144,7 @@ export class MessageTypingIndicator implements TypingIndicator {
     private config: TypingIndicatorConfig,
     private sendMessage: (sessionId: string, content: string) => Promise<string | null>,
     private deleteMessage: (messageId: string) => Promise<void>,
+    private editMessage?: (messageId: string, content: string) => Promise<void>,
   ) {}
 
   async start(): Promise<void> {
@@ -172,8 +173,13 @@ export class MessageTypingIndicator implements TypingIndicator {
       return;
     }
 
-    // 某些平台支持编辑消息
-    // 这里可以添加编辑逻辑
+    if (this.editMessage) {
+      try {
+        await this.editMessage(this.messageId, message);
+      } catch (error) {
+        console.error('[TypingIndicator] Failed to edit message:', error);
+      }
+    }
   }
 
   async stop(): Promise<void> {
@@ -337,6 +343,7 @@ export class ReactionTypingIndicatorAdapter implements TypingIndicatorAdapter {
     private removeReaction: (messageId: string, reactionId: string) => Promise<void>,
     private sendMessage: (sessionId: string, content: string) => Promise<string | null>,
     private deleteMessage: (messageId: string) => Promise<void>,
+    private editMessage?: (messageId: string, content: string) => Promise<void>,
   ) {}
 
   createIndicator(
@@ -357,6 +364,7 @@ export class ReactionTypingIndicatorAdapter implements TypingIndicatorAdapter {
           config,
           this.sendMessage,
           this.deleteMessage,
+          this.editMessage,
         );
       default:
         return new NoneTypingIndicator();
@@ -375,6 +383,7 @@ export class GenericTypingIndicatorAdapter implements TypingIndicatorAdapter {
     platform: string,
     private sendMessage: (sessionId: string, content: string) => Promise<string | null>,
     private deleteMessage: (messageId: string) => Promise<void>,
+    private editMessage?: (messageId: string, content: string) => Promise<void>,
   ) {
     this.platform = platform;
   }
@@ -390,6 +399,7 @@ export class GenericTypingIndicatorAdapter implements TypingIndicatorAdapter {
           config,
           this.sendMessage,
           this.deleteMessage,
+          this.editMessage,
         );
       default:
         return new NoneTypingIndicator();

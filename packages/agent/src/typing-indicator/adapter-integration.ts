@@ -5,6 +5,7 @@
  * 支持自动初始化和配置管理。
  */
 
+import { getPlugin } from '@zhin.js/core';
 import type { Bot, Plugin } from '@zhin.js/core';
 import {
   TypingIndicatorManager,
@@ -305,13 +306,20 @@ export class AdapterTypingIndicatorManager {
         async (sessionId: string, content: string) => {
           try {
             const [type, id] = this.parseSessionId(sessionId);
-            return await bot.$sendMessage({
+            const rootPlugin = getPlugin()?.root;
+            const adapterInstance = rootPlugin?.inject(platform as any) as any;
+            const sendOptions = {
               type: type as 'private' | 'group',
               id,
               context: platform,
               bot: bot.$id,
               content: [{ type: 'text', data: { text: content } }],
-            });
+            };
+            if (adapterInstance && typeof adapterInstance.sendMessage === 'function') {
+              return await adapterInstance.sendMessage(sendOptions);
+            }
+            const anyBot = bot as any;
+            return await anyBot.$sendMessage(sendOptions);
           } catch (error) {
             console.error(`[${platform}] Failed to send message:`, error);
             return null;
@@ -323,6 +331,18 @@ export class AdapterTypingIndicatorManager {
             await bot.$recallMessage(messageId);
           } catch (error) {
             console.error(`[${platform}] Failed to delete message:`, error);
+          }
+        },
+        // editMessage
+        async (messageId: string, content: string) => {
+          try {
+            if (typeof (bot as any).$editMessage === 'function') {
+              await (bot as any).$editMessage(messageId, content);
+            } else if (typeof (bot as any).$updateMessage === 'function') {
+              await (bot as any).$updateMessage(messageId, content);
+            }
+          } catch (error) {
+            console.error(`[${platform}] Failed to edit message:`, error);
           }
         },
       );
@@ -336,13 +356,20 @@ export class AdapterTypingIndicatorManager {
         async (sessionId: string, content: string) => {
           try {
             const [type, id] = this.parseSessionId(sessionId);
-            return await bot.$sendMessage({
+            const rootPlugin = getPlugin()?.root;
+            const adapterInstance = rootPlugin?.inject(platform as any) as any;
+            const sendOptions = {
               type: type as 'private' | 'group',
               id,
               context: platform,
               bot: bot.$id,
               content: [{ type: 'text', data: { text: content } }],
-            });
+            };
+            if (adapterInstance && typeof adapterInstance.sendMessage === 'function') {
+              return await adapterInstance.sendMessage(sendOptions);
+            }
+            const anyBot = bot as any;
+            return await anyBot.$sendMessage(sendOptions);
           } catch (error) {
             console.error(`[${platform}] Failed to send message:`, error);
             return null;
@@ -354,6 +381,18 @@ export class AdapterTypingIndicatorManager {
             await bot.$recallMessage(messageId);
           } catch (error) {
             console.error(`[${platform}] Failed to delete message:`, error);
+          }
+        },
+        // editMessage
+        async (messageId: string, content: string) => {
+          try {
+            if (typeof (bot as any).$editMessage === 'function') {
+              await (bot as any).$editMessage(messageId, content);
+            } else if (typeof (bot as any).$updateMessage === 'function') {
+              await (bot as any).$updateMessage(messageId, content);
+            }
+          } catch (error) {
+            console.error(`[${platform}] Failed to edit message:`, error);
           }
         },
       );

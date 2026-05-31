@@ -219,23 +219,222 @@ AI 执行 bash 命令时受 **6 层纵深防御** 保护：
 | 5 | 只读命令自动放行（`cat`/`grep`/`ls` 无需白名单） |
 | 6 | 交互式审批（`execAsk: true` 时用 `ask_user` 向用户确认） |
 
-### AI 引擎架构
+## 架构设计
 
-```
-@zhin.js/ai（通用引擎，与 IM 无关）
-├── Provider    — LLM 统一接口（OpenAI / Ollama / Anthropic / DeepSeek …）
-├── Agent       — 多轮 tool-calling 循环
-├── Memory      — 短期滑动窗口 + 长期链式摘要
-├── CostTracker — Token 用量与成本追踪
-├── FileStateCache / MicroCompact / ToolSearchCache — 性能优化层
+Zhin.js 采用精密的松耦合分层体系和高度合规的安全架构，旨在将灵巧的 AI 编排、健壮的 IM 消息生命周期以及精细的任务/流思维指示器完美统一。更详尽的说明见 [docs/architecture-overview.md](docs/architecture-overview.md) 与 [docs/contributing/repo-structure.md](docs/contributing/repo-structure.md)。
 
-@zhin.js/agent（IM 编排）
-├── ExecPolicy    — 6 层 bash 安全
-├── FilePolicy    — 文件访问策略与设备路径拦截
-├── PromptBuilder — 11 段结构化系统提示词
-├── 内置工具      — bash / read_file / ask_user / web_search …
-└── 子任务 / 用户画像 / 定时跟进 / 引导文件
+### 1. Monorepo 分层依赖拓扑
+
+本系统是基于 pnpm workspace 的单体多包结构，严格遵循从**无状态元通用层**向**智能体/应用层**单向依赖流转：
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '14px' }}}%%
+graph TB
+  subgraph L5["🚀 zhin (主入口与聚合导出)"]
+    L5A("Zhin 实例化 & 引导启动")
+  end
+
+  subgraph L4["🤖 @zhin.js/agent (Agent 编排与 IM 深度集成)"]
+    L4A("ZhinAgent 中央编排")
+    L4B("McpClientManager 跨应用客户端")
+    L4C("能力动态扫描 (Discovery)")
+    L4D("安全策略 (ExecPolicy & FilePolicy)")
+  end
+
+  subgraph L3["核心能力双子星 (IM 层 + AI 引擎层)"]
+    subgraph L3A["💬 @zhin.js/core (IM 核心模块)"]
+      C1("Plugin & Adapter & Bot 契约")
+      C2("Command & Middleware 中间件")
+      C3("MessageDispatcher 分发器")
+    end
+    subgraph L3B["🧠 @zhin.js/ai (通用 AI 核心引擎)"]
+      A1("ModelRegistry 模型发现/降级")
+      A2("AIProvider 厂商适配层")
+      A3("Memory & Session 状态持久化")
+      A4("Compaction 压缩器 & CostTracker")
+    end
+  end
+
+  subgraph L2["⚙️ @zhin.js/kernel (运行时内核 - 无 IM 概念)"]
+    L2A("PluginBase 关系树 & 依赖注入 (DI)")
+    L2B("Feature 运行时服务抽象")
+    L2C("Cron & Scheduler 任务调度")
+  end
+
+  subgraph L1["📦 基础层 basic/ (通用底层原子基建)"]
+    L1A("@zhin.js/logger 结构化日志")
+    L1B("@zhin.js/database 统一数据库")
+    L1C("@zhin.js/schema 强类型配置")
+    L1D("@zhin.js/cli 编译与手写架")
+  end
+
+  %% 依赖流向
+  L5 --> L4
+  L4 --> L3A
+  L4 --> L3B
+  L3A --> L2
+  L3B --> L2
+  L2 --> L1
+
+  classDef main fill:#2e7d32,stroke:#1b5e20,color:#fff,rx:8
+  classDef agent fill:#1565c0,stroke:#0d47a1,color:#fff,rx:8
+  classDef core fill:#e65100,stroke:#bf360c,color:#fff,rx:8
+  classDef ai fill:#6a1b9a,stroke:#4a148c,color:#fff,rx:8
+  classDef kernel fill:#37474f,stroke:#263238,color:#fff,rx:8
+  classDef basic fill:#4e342e,stroke:#3e2723,color:#fff,rx:8
+
+  class L5,L5A main
+  class L4,L4A,L4B,L4C,L4D agent
+  class L3A,C1,C2,C3 core
+  class L3B,A1,A2,A3,A4 ai
+  class L2,L2A,L2B,L2C kernel
+  class L1,L1A,L1B,L1C,L1D basic
 ```
+
+*   **[packages/kernel](packages/kernel)** 剥离了一切 IM 交互要素，只负责插件和 Feature 开发契约，能作为独立任务框架。
+*   **[packages/ai](packages/ai)** 不包含聊天机器人特有逻辑，仅专注多轮 AI 交互及上下文管理，可在任意 Web 服务内单用。
+
+---
+
+### 2. IM 消息分发与中间件洋葱生命周期
+
+当外部事件到达时，[packages/core/src/built/dispatcher.ts](packages/core/src/built/dispatcher.ts) 分解为 Guardrail（护栏安全检查）、Route（规则路由）与 Handle（中间件洋葱路由与指令处理）三个阶段：
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as 用户 (QQ/Discord)
+    participant Adapter as 平台 Adapter
+    participant Disp as MessageDispatcher
+    participant Onion as 中间件 Onion (洋葱模型)
+    participant Cmd as 命令解析器
+    participant Agent as ZhinAgent (AI)
+
+    User->>Adapter: 发送原始消息 (Raw Event)
+    Adapter->>Adapter: 解析格式 & 构建标准 Message 实例
+    Adapter->>Disp: dispatch(message)
+    Note over Disp: Guardrail 阶段 (安全/限流校验)
+    Disp->>Onion: 进入洋葱中间件执行链
+    Note over Onion: 前置过滤器 (例如: 权限/敏感词校验)
+    Onion->>Cmd: next() -> 匹配指令或命令模式
+    alt 命中了特定 Command
+        Cmd->>Cmd: 解析参数 (SegmentMatcher)
+        Cmd->>Onion: 执行 Command.action() 或组件自渲染
+    else 未命中任何 Command 并且开启了 AI
+        Cmd->>Agent: 回退转发至 AI Agent
+        Agent->>Agent: AI 大脑编排与决策循环
+    end
+    Onion->>Disp: 返回执行结果
+    Disp->>User: 消息统一回复 / 回滚
+```
+
+---
+
+### 3. AI 智能体编排与文件化能力注册图
+
+[packages/agent/src/orchestrator](packages/agent/src/orchestrator) 是 AI 的交互中轴，它扫描目录，以零代/代码化的格式汇聚资产，并受运行、文件沙盒的多重审查机制保护：
+
+```mermaid
+graph TD
+    %% 发现与注册
+    subgraph Discovery [系统动态文件发现 (支持热重载)]
+        ToolMD["*.tool.md (Markdown工具)"] -->|Frontmatter & handler.ts| ToolReg["ToolRegistry (工具注册)"]
+        SkillMD["SKILL.md (技能/提示词模板)"] -->|依赖检查 & 摘要XML| SkillReg["SkillRegistry (技能注册)"]
+        AgentMD["*.agent.md (Agent预设)"] -->|元数据 & 系统提示| SubAgentReg["SubAgentRegistry (子代理)"]
+    end
+
+    %% MCP 接入
+    subgraph MCPClient [跨系统标准互联]
+        McpServer["MCP Servers (Claude-compatible)"] -.->|stdio / http-sse| McpMgr["McpClientManager (多客户端管理)"]
+        McpMgr -->|桥接转化为 AgentTool| ToolReg
+    end
+
+    %% AI 中枢大脑
+    subgraph Orchestrator [ZhinAgent 决策中枢]
+        ZhinAgent["ZhinAgent Core"]
+        PromptBuilder["PromptBuilder (11段式提示构建)"] --->|构建完整 Context| ZhinAgent
+        ModelRegistry["ModelRegistry (模型自动发现 & 自动降级)"] --->|智能分配最合适 LLM| ZhinAgent
+        AIProvider["AIProvider (接入 Ollama / OpenAI / DeepSeek 等)"] -.->|单/多轮 API 轮询| ZhinAgent
+    end
+
+    %% 安全策略层
+    subgraph Security [双重安全屏障]
+        ExecPolicy["ExecPolicy (6层Bash安全纵深防御)"]
+        FilePolicy["FilePolicy (路径校验 & 敏感设备/文件拦截)"]
+    end
+
+    %% 关联关系
+    ToolReg -->|获取执行清单| ZhinAgent
+    SkillReg -->|匹配历史上下文激活| ZhinAgent
+    SubAgentReg -->|嵌套派生 Subagent| ZhinAgent
+    ZhinAgent -->|1. 检查 Sandbox 命令| ExecPolicy
+    ZhinAgent -->|2. 检查读写操作| FilePolicy
+    ExecPolicy -->|拦截/合规执行| ToolReg
+    FilePolicy -->|合规访问| ToolReg
+
+    classDef disc fill:#fff3e0,stroke:#ffb74d,color:#5d4037
+    classDef mcp fill:#f3e5f5,stroke:#ba68c8,color:#4a148c
+    classDef orch fill:#e3f2fd,stroke:#64b5f6,color:#0d47a1
+    classDef sec fill:#ffebee,stroke:#e57373,color:#b71c1c
+
+    class ToolMD,SkillMD,AgentMD,ToolReg,SkillReg,SubAgentReg disc
+    class McpServer,McpMgr mcp
+    class ZhinAgent,PromptBuilder,ModelRegistry,AIProvider orch
+    class ExecPolicy,FilePolicy sec
+```
+
+---
+
+### 4. AI 思考状态连携与统一出站链路
+
+[packages/agent/src/init/register-typing-indicator.ts](packages/agent/src/init/register-typing-indicator.ts) 自动转换 AI 复杂的思考流、子任务分发状态并渲染给指示器。最终的渲染通过统一保护链路：
+
+```mermaid
+graph TD
+    %% AI 生命周期事件广播
+    subgraph EventStream [1. AI 生命周期事件流]
+        direction LR
+        Evt_Start["ai.processing.start"] ~~~ Evt_Think["ai.thinking.update"] ~~~ Evt_SubStart["ai.subagent.start"] ~~~ Evt_SubFinish["ai.subagent.finish"] ~~~ Evt_Finish["ai.processing.finish"]
+    end
+
+    %% 状态自动连携
+    subgraph StateBinding [2. AI 思考状态连携机制]
+        RegIndicator["register-typing-indicator (启动绑定)"]
+        TIM["TypingIndicatorManager (适配器管理)"]
+        ActiveInd["Active Typing Indicator (思考指示器)"]
+
+        RegIndicator -->|监听全部 ai.* 事件| TIM
+        TIM -->|启动 / 流式 editMessage / 终止| ActiveInd
+    end
+
+    %% 统一安全出站链路 (IM Send Path)
+    subgraph OutboundPipeline [3. 统一安全出站保护链路]
+        ActiveInd -->|流式思考内容 / 状态占位符| SendAPI["Adapter.sendMessage / Message.$reply"]
+        ZhinAgentAns["ZhinAgent 最终回复内容"] -->|输出内容| SendAPI
+
+        SendAPI -->|1. 经过模板渲染与组件自解析| Render["renderSendMessage (JSX 动态解析)"]
+        Render -->|2. before.sendMessage 终层防线拦截| BeforeHook["Root Plugin 挂载的拦截钩子"]
+        BeforeHook -->|3. 送达底层平台容器发送| BotSend["Bot.$sendMessage"]
+        BotSend -->|4. 分发到客户端| Client["QQ / Discord / Slack IM 界面"]
+    end
+
+    %% 事件流到绑定的连动
+    Evt_Start -->|1. 触发| RegIndicator
+    Evt_Think -->|2. 触发| RegIndicator
+    Evt_SubStart -->|3. 触发| RegIndicator
+    Evt_SubFinish -->|4. 触发| RegIndicator
+    Evt_Finish -->|5. 触发| RegIndicator
+
+    classDef stream fill:#eceff1,stroke:#90a4ae,color:#263238
+    classDef binding fill:#e8f5e9,stroke:#81c784,color:#1b5e20
+    classDef pipeline fill:#fff8e1,stroke:#ffb74d,color:#5d4037
+
+    class Evt_Start,Evt_Think,Evt_SubStart,Evt_SubFinish,Evt_Finish stream
+    class RegIndicator,TIM,ActiveInd binding
+    class SendAPI,ZhinAgentAns,Render,BeforeHook,BotSend,Client pipeline
+```
+
+*   **不允许直发绕过**：指示器和最终答案均触发统一的 [packages/core/src/adapter.ts](packages/core/src/adapter.ts) 中的发送生命周期，拒绝 `Bot.$sendMessage` 被业务层直接旁路调用。
 
 ## 多平台适配器
 
