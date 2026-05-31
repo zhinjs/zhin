@@ -13,6 +13,7 @@ import type { ZhinAgentConfig } from './config.js';
 import { SECTION_SEP, HISTORY_CONTEXT_MARKER, CURRENT_MESSAGE_MARKER } from './config.js';
 import type { ChatMessage } from '@zhin.js/ai';
 import { getFileMemoryContext } from '../bootstrap.js';
+import { PromptBuilder } from './prompt-builder.js';
 
 export const FIXED_DISCIPLINE_RULES = [
   'Never claim actions, results, or system state unless confirmed by tool output.',
@@ -294,6 +295,138 @@ export function buildRichSystemPrompt(ctx: RichSystemPromptContext): string {
   ];
 
   return sections.filter(Boolean).join(SECTION_SEP);
+}
+
+/**
+ * 使用 PromptBuilder 构建系统提示词
+ *
+ * 这是一个更现代的提示词构建方式，支持：
+ * - 分层提示词结构
+ * - 优先级排序
+ * - 字符数截断
+ * - 安全规则嵌入
+ */
+export function buildRichSystemPromptWithBuilder(ctx: RichSystemPromptContext): string {
+  const {
+    config, skillRegistry, skillsSummaryXML, activeSkillsContext, bootstrapContext,
+    toolSearchDeferredStats, platformSections,
+  } = ctx;
+  const toolSearchActive = !!config.toolSearch;
+
+  const builder = new PromptBuilder({
+    maxTotalChars: 100000,
+    enableSafetyRules: true,
+    enableConstraints: true,
+  });
+
+  // 1. 系统级提示词（最高优先级）
+  builder.addSystemPrompt(config.persona, { priority: 100 });
+
+  // 2. 上下文信息
+  const now = new Date();
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timeStr = now.toLocaleString('zh-CN', { timeZone: tz });
+  const cwd = process.cwd();
+  const todayStr = now.toISOString().split('T')[0];
+
+  builder.addContext({
+    cwd,
+    platform: os.platform(),
+    nodeVersion: process.version,
+    shell: process.env.SHELL || 'unknown',
+    timestamp: `${timeStr} (${tz})`,
+    memoryPath: `data/memory/MEMORY.md, data/memory/${todayStr}.md`,
+  });
+
+  // 3. 安全规则
+  builder.addSafetyRules();
+
+  // 4. 约束条件
+  builder.addConstraints();
+
+  // 5. 平台特定内容
+  if (platformSections?.trim()) {
+    builder.addCustomSection({
+      layer: 'context',
+      title: 'Platform',
+      content: `# Platform\n\n${platformSections}`,
+      priority: 70,
+      truncatable: true,
+      maxChars: 2048,
+    });
+  }
+
+  // 6. 延迟工具统计
+  if (toolSearchDeferredStats) {
+    builder.addCustomSection({
+      layer: 'tools',
+      title: 'Deferred Tools',
+      content: `# Deferred Tools\n\nDeferred catalog domains: ${toolSearchDeferredStats}.\nWorker-only tools include bash and read_file.`,
+      priority: 60,
+      truncatable: true,
+    });
+  }
+
+  // 7. 技能列表
+  if (skillsSummaryXML) {
+    const skillsContent = toolSearchActive
+      ? `# Skills (reference)\n${skillsSummaryXML}\n\nSkills are not activated on the orchestrator. Use run_deferred_task(goal, tool_query) instead.`
+      : `# Available Skills\n\n${skillsSummaryXML}\n\nIf the user message matches a skill (name/keywords) OR the chat platform matches a skill's 'platforms' in frontmatter, call activate_skill(name) when you need that skill's full instructions—then follow them.`;
+
+    builder.addCustomSection({
+      layer: 'context',
+      title: 'Skills',
+      content: skillsContent,
+      priority: 50,
+      truncatable: true,
+    });
+  } else if (skillRegistry && skillRegistry.size > 0) {
+    const skills = skillRegistry.getAll();
+    const skillsLines = skills.map(s => ` - ${s.name}: ${s.description}`);
+    const skillsContent = toolSearchActive
+      ? `# Skills (reference)\n${skillsLines.join('\n')}\n\nSkills are not activated on the orchestrator. Use run_deferred_task(goal, tool_query) instead.`
+      : `# Available Skills\n${skillsLines.join('\n')}\n\nIf the user message matches a skill (name/keywords) OR the chat platform matches a skill's 'platforms' in frontmatter, call activate_skill(name) when you need that skill's full instructions—then follow them.`;
+
+    builder.addCustomSection({
+      layer: 'context',
+      title: 'Skills',
+      content: skillsContent,
+      priority: 50,
+      truncatable: true,
+    });
+  }
+
+  // 8. 活跃技能上下文
+  if (activeSkillsContext) {
+    builder.addCustomSection({
+      layer: 'context',
+      title: 'Active Skills',
+      content: `# Active Skills\n\n${activeSkillsContext}`,
+      priority: 45,
+      truncatable: true,
+    });
+  }
+
+  // 9. 记忆上下文
+  const fileMemory = getFileMemoryContext();
+  if (fileMemory) {
+    builder.addMemory({
+      longTerm: [fileMemory],
+    });
+  }
+
+  // 10. 启动上下文
+  if (bootstrapContext?.trim()) {
+    builder.addCustomSection({
+      layer: 'context',
+      title: 'Bootstrap',
+      content: bootstrapContext,
+      priority: 30,
+      truncatable: true,
+    });
+  }
+
+  return builder.build();
 }
 
 /** Vision / lite paths: persona + optional platform + context hint. */

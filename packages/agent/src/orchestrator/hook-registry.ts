@@ -10,6 +10,7 @@
 
 import { ResourceRegistry } from './resource-registry.js';
 import type { ResourceScope, AIHook, AIHookEvent, AIHookEventType } from './types.js';
+import { emitAIHookBusEvent } from '../plugin-ai-hook-bus.js';
 
 export class HookRegistry extends ResourceRegistry<AIHook> {
   /**
@@ -17,6 +18,8 @@ export class HookRegistry extends ResourceRegistry<AIHook> {
    * Matches both broad type ('message') and specific key ('message:received').
    */
   async trigger(event: AIHookEvent, agentId?: string): Promise<void> {
+    emitAIHookBusEvent(event, 'orchestrator-hook', agentId);
+
     const hooks = agentId ? this.getForAgent(agentId) : this.getAll();
     const matching = hooks.filter(h =>
       h.event === event.type || h.event === `${event.type}:${event.action}`,

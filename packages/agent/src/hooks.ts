@@ -14,6 +14,7 @@
  */
 
 import { Logger } from '@zhin.js/core';
+import { emitAIHookBusEvent } from './plugin-ai-hook-bus.js';
 
 const logger = new Logger(null, 'AI-Hooks');
 
@@ -202,6 +203,8 @@ export function getRegisteredAIHookKeys(): string[] {
  * 处理函数按注册顺序执行，错误被捕获并记录，不影响其他处理函数。
  */
 export async function triggerAIHook(event: AIHookEvent): Promise<void> {
+  emitAIHookBusEvent(event, 'ai-hook');
+
   const typeHandlers = handlers.get(event.type) ?? [];
   const specificHandlers = handlers.get(`${event.type}:${event.action}`) ?? [];
   const allHandlers = [...typeHandlers, ...specificHandlers];

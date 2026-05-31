@@ -1,7 +1,7 @@
 /**
  * Micro-Compact — 工具结果微压缩
  *
- * 参考 Claude Code 的 microCompact.ts 设计：
+ * 设计：
  * 在主压缩（auto-compact）之前执行轻量级清理，
  * 对旧的工具调用结果替换为占位符，保留 user/assistant 文本块。
  *

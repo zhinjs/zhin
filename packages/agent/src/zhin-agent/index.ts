@@ -35,12 +35,10 @@ import {
   type ZhinAgentTurnMetrics,
 } from './turn-metrics.js';
 
-interface StreamChatResult {
-  content: string;
-  usage: Usage | null;
-  model: string;
-}
 import type { ModelRegistry } from '@zhin.js/ai';
+import { resolveModelCandidates } from './model-resolver.js';
+import { streamChatWithHistory, type StreamChatResult } from './llm-runner.js';
+import { saveToSession, buildHistoryMessages } from './session-io.js';
 import { UserProfileStore } from '../user-profile.js';
 import {
   WEB_SEARCH_LOCALE_EXTRA_KEY,
@@ -88,6 +86,9 @@ import { createOwnerOrchestratedToolResultTransform } from '../orchestrator/owne
 export type { ZhinAgentConfig, OnChunkCallback } from './config.js';
 export type { ZhinAgentTurnMetrics, ZhinAgentTurnPath } from './turn-metrics.js';
 export { formatAiHandlerCompleteLog, formatZhinAgentTurnUsage } from './turn-metrics.js';
+export * from './prompt-builder.js';
+export * from './prompt-templates.js';
+export * from './task-continuation.js';
 
 const logger = new Logger(null, 'ZhinAgent');
 const now = () => performance.now();
@@ -189,6 +190,35 @@ export class ZhinAgent {
       modelRegistry: this.modelRegistry,
       onSubagentUsage: (usage) => this.addActiveTurnSubagentUsage(usage),
       registerSubagentTask: (done) => this.trackActiveTurnSubagent(done),
+      onEvent: (event) => {
+        const sessionId = SessionManager.generateId(
+          event.origin.platform || '',
+          event.origin.senderId || '',
+          event.origin.sceneId,
+        );
+        const payload = this.createAIEventPayload(sessionId, {
+          platform: event.origin.platform,
+          botId: event.origin.botId,
+          sceneId: event.origin.sceneId,
+          senderId: event.origin.senderId,
+          scope: event.origin.sceneType === 'group' ? 'group' : 'private',
+        }, 'text', {
+          path: 'agent',
+          taskId: event.taskId,
+          label: event.label,
+          content: event.task,
+          status: event.status,
+          error: event.error,
+          reply: event.result,
+        });
+        if (event.phase === 'spawn') {
+          this.emitAIEvent('ai.subagent.spawn', payload);
+        } else if (event.phase === 'start') {
+          this.emitAIEvent('ai.subagent.start', payload);
+        } else {
+          this.emitAIEvent('ai.subagent.finish', payload);
+        }
+      },
     });
     logger.debug('SubagentManager initialized');
   }
@@ -205,41 +235,6 @@ export class ZhinAgent {
 
   getUserProfiles(): UserProfileStore {
     return this.userProfiles;
-  }
-
-  /** 根据任务类型选择最合适的模型，优先使用 config 显式指定，其次 ModelRegistry，回退到 provider.models[0] */
-  private resolveModel(task: 'chat' | 'vision' | 'tool_call' | 'summary' = 'chat', preferred?: string): string {
-    return this.resolveModelCandidates(task, preferred)[0];
-  }
-
-  /**
-   * 返回按优先级排序的候选模型列表（用于自动降级）。
-   * 第一个是最优选择，失败后依次尝试后续模型。
-   */
-  private resolveModelCandidates(task: 'chat' | 'vision' | 'tool_call' | 'summary' = 'chat', preferred?: string): string[] {
-    const candidates: string[] = [];
-
-    // 1. 用户显式指定 / 配置指定优先
-    if (preferred) candidates.push(preferred);
-    if (task === 'chat' && this.config.chatModel && !candidates.includes(this.config.chatModel)) {
-      candidates.push(this.config.chatModel);
-    }
-    if (task === 'vision' && this.config.visionModel && !candidates.includes(this.config.visionModel)) {
-      candidates.push(this.config.visionModel);
-    }
-
-    // 2. ModelRegistry 自动排序的候选列表
-    if (this.modelRegistry) {
-      for (const id of this.modelRegistry.selectModels(this.provider.name, task, 5)) {
-        if (!candidates.includes(id)) candidates.push(id);
-      }
-    }
-
-    // 3. 兜底: provider.models[0]
-    const fallback = this.provider.models[0];
-    if (fallback && !candidates.includes(fallback)) candidates.push(fallback);
-
-    return candidates;
   }
 
   registerTool(tool: AgentTool): () => void {
@@ -313,6 +308,47 @@ export class ZhinAgent {
     this.activeTurnSubagentWaits = [];
   }
 
+  private createAIEventPayload(
+    sessionId: string,
+    context: ToolContext,
+    mode: Plugin.AIEventPayload['mode'],
+    extra: Partial<Plugin.AIEventPayload> = {},
+  ): Plugin.AIEventPayload {
+    return {
+      sessionId,
+      source: 'zhin-agent',
+      mode,
+      userId: context.senderId,
+      platform: context.platform,
+      botId: context.botId,
+      sceneId: context.sceneId,
+      messageId: context.messageId,
+      scope: context.scope,
+      ...extra,
+    };
+  }
+
+  private async dispatchAIEvent(
+    name: keyof Plugin.Lifecycle,
+    payload: Plugin.AIEventPayload,
+  ): Promise<void> {
+    const root = this.hostPlugin?.root ?? this.hostPlugin;
+    if (!root) return;
+    await root.dispatch(name as any, payload);
+  }
+
+  private emitAIEvent(
+    name: keyof Plugin.Lifecycle,
+    payload: Plugin.AIEventPayload,
+  ): void {
+    this.dispatchAIEvent(name, payload).catch((error) => {
+      logger.warn(formatCompact({
+        ai_event: String(name),
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    });
+  }
+
   // ── Core processing ─────────────────────────────────────────────────
 
   async process(
@@ -322,9 +358,12 @@ export class ZhinAgent {
     onChunk?: OnChunkCallback,
   ): Promise<OutputElement[]> {
     const t0 = now();
-    const { senderId, sceneId, platform } = context;
+    const { senderId, sceneId, platform, botId, messageId } = context;
     const sessionId = SessionManager.generateId(platform || '', senderId || '', sceneId);
     const userId = senderId || 'unknown';
+    await this.dispatchAIEvent('ai.processing.start', this.createAIEventPayload(sessionId, context, 'text', {
+      content,
+    }));
     this.logPhase('turn.start', sessionId, {
       mode: 'text',
       provider: this.provider.name,
@@ -335,9 +374,19 @@ export class ZhinAgent {
     if (!rateCheck.allowed) {
       this.logPhase('turn.rate_limited', sessionId, { userId });
       logger.debug(`[速率限制] 用户 ${userId} 被限制: ${rateCheck.message}`);
+      await this.dispatchAIEvent('ai.processing.finish', this.createAIEventPayload(sessionId, context, 'text', {
+        path: 'rate_limited',
+        reply: rateCheck.message || '请稍后再试',
+        reason: 'rate_limited',
+      }));
       await this.finalizeActiveTurn({ usage: EMPTY_USAGE, path: 'rate_limited' });
       return parseOutput(rateCheck.message || '请稍后再试');
     }
+
+    // 0.1 发射 typing 事件，由适配器插件自行决定如何响应
+    this.emitAIEvent('ai.typing.start', this.createAIEventPayload(sessionId, context, 'text', {
+      reason: 'processing',
+    }));
 
     this.beginActiveTurn();
 
@@ -352,7 +401,22 @@ export class ZhinAgent {
 
     // 0.9 Lazy-connect configured MCP servers before tool collection
     if (this.orchestrator) {
-      await ensureMcpConnections(this.orchestrator.mcps);
+      await ensureMcpConnections(this.orchestrator.mcps, (event) => {
+        const payload = this.createAIEventPayload(sessionId, contextForTools, 'text', {
+          path: 'agent',
+          serverName: event.serverName,
+          loadedToolNames: event.toolNames,
+          reason: event.connected === false ? 'disconnected' : undefined,
+          error: event.error,
+        });
+        if (event.phase === 'start') {
+          this.emitAIEvent('ai.mcp.connect.start', payload);
+        } else if (event.phase === 'finish') {
+          this.emitAIEvent('ai.mcp.connect.finish', payload);
+        } else {
+          this.emitAIEvent('ai.mcp.connect.error', payload);
+        }
+      });
     }
 
     // 1. Collect tools
@@ -391,11 +455,11 @@ export class ZhinAgent {
     // 2. History + profile (parallel)
     const tMem = now();
     const [rawHistoryMessages, profileSummary] = await Promise.all([
-      this.buildHistoryMessages(sessionId),
+      buildHistoryMessages(this.memory, sessionId),
       this.userProfiles.buildProfileSummary(userId),
     ]);
 
-    const chatCandidates = this.resolveModelCandidates('chat');
+    const chatCandidates = resolveModelCandidates(this.provider.models, this.modelRegistry, this.provider.name, this.config, 'chat');
     const {
       messages: historyMessages,
       result: pruneResult,
@@ -430,10 +494,16 @@ export class ZhinAgent {
       }));
       const tLLM = now();
       this.logPhase('chat.llm.start', sessionId, { model: liteModel || chatCandidates[0] || '' });
-      const chatResult = await this.streamChatWithHistory(
+      const chatResult = await streamChatWithHistory(
+        { provider: this.provider, modelRegistry: this.modelRegistry, config: this.config },
         content, chatSystemPrompt, historyMessages, onChunk, liteModel,
       );
       let reply = sanitizeAssistantReply(chatResult.content);
+      await this.dispatchAIEvent('ai.response', this.createAIEventPayload(sessionId, context, 'text', {
+        path: 'chat',
+        model: chatResult.model,
+        reply,
+      }));
       const llmMs = (now() - tLLM).toFixed(0);
       this.logPhase('chat.llm.end', sessionId, {
         durationMs: Number(llmMs),
@@ -446,13 +516,29 @@ export class ZhinAgent {
         llm_ms: llmMs,
         total_ms: Math.round(now() - t0),
       }));
-      await this.saveToSession(sessionId, content, reply, sceneId);
+const isNewSession = !(await this.sessions.has(sessionId));
+      await saveToSession(
+        { memory: this.memory, sessions: this.sessions, contextManager: this.contextManager },
+        sessionId, content, reply, sceneId,
+      );
+      if (isNewSession) {
+        this.emitSessionNewEvent(sessionId, context, 'text', content, reply);
+      }
       await this.finalizeActiveTurn({
         usage: chatResult.usage ?? EMPTY_USAGE,
         path: 'chat',
         model: chatResult.model,
       });
+      await this.dispatchAIEvent('ai.processing.finish', this.createAIEventPayload(sessionId, context, 'text', {
+        path: 'chat',
+        model: chatResult.model,
+        reply,
+      }));
+      this.emitAIEvent('ai.typing.stop', this.createAIEventPayload(sessionId, context, 'text', {
+        reason: 'processing_complete',
+      }));
       this.logPhase('turn.end', sessionId, { path: 'chat' });
+
       return parseOutput(reply);
     }
 
@@ -484,7 +570,10 @@ export class ZhinAgent {
       const prompt = this.buildDisciplinedPrompt(buildPreExecFastPathPrompt(personaEnhanced, preData));
       logger.debug(formatCompact( { mode: 'fast', prompt_chars: prompt.length }));
       this.logPhase('fast.llm.start', sessionId, { model: chatCandidates[0] || '' });
-      const fastResult = await this.streamChatWithHistory(content, prompt, historyMessages, onChunk);
+      const fastResult = await streamChatWithHistory(
+        { provider: this.provider, modelRegistry: this.modelRegistry, config: this.config },
+        content, prompt, historyMessages, onChunk,
+      );
       reply = sanitizeAssistantReply(fastResult.content);
       this.logPhase('fast.llm.end', sessionId, {
         durationMs: Math.round(now() - tLLM),
@@ -572,9 +661,40 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
         }),
       });
 
+      agent.on('thinking', (message) => {
+        this.emitAIEvent('ai.thinking', this.createAIEventPayload(sessionId, contextForTools, 'text', {
+          path: 'agent',
+          thinking: message,
+        }));
+      });
+
+      agent.on('tool_call', (toolName, args) => {
+        this.emitAIEvent('ai.tool.call', this.createAIEventPayload(sessionId, contextForTools, 'text', {
+          path: 'agent',
+          toolName,
+          args,
+        }));
+      });
+
+      agent.on('tool_result', (toolName, result) => {
+        this.emitAIEvent('ai.tool.result', this.createAIEventPayload(sessionId, contextForTools, 'text', {
+          path: 'agent',
+          toolName,
+          result,
+        }));
+      });
+
+      agent.on('compaction', (info) => {
+        this.emitSessionCompactEvent(sessionId, contextForTools, 'text', info);
+      });
+
       const userMessageWithHistory = buildUserMessageWithHistory(historyMessages, content);
       let result;
       try {
+        await this.dispatchAIEvent('ai.agent.start', this.createAIEventPayload(sessionId, contextForTools, 'text', {
+          path: 'agent',
+          model: chatCandidates[0] || undefined,
+        }));
         this.logPhase('agent.run.start', sessionId, { model: chatCandidates[0] || '' });
         result = await runWithBashToolContext(contextForTools, () => agent.run(userMessageWithHistory, []));
         this.logPhase('agent.run.end', sessionId, {
@@ -582,12 +702,29 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
           durationMs: Math.round(now() - tAgent),
           ...this.usageLogFields(result.usage),
         });
+        await this.dispatchAIEvent('ai.agent.finish', this.createAIEventPayload(sessionId, contextForTools, 'text', {
+          path: 'agent',
+          model: result.model ?? (chatCandidates[0] || undefined),
+          iterations: result.iterations,
+        }));
+      } catch (error) {
+        await this.dispatchAIEvent('ai.processing.error', this.createAIEventPayload(sessionId, contextForTools, 'text', {
+          path: 'agent',
+          error: error instanceof Error ? error.message : String(error),
+        }));
+        throw error;
       } finally {
         agent.dispose();
       }
       reply = sanitizeAssistantReply(result.content, {
         toolSummary: formatToolCallsForUser(result.toolCalls),
       });
+      await this.dispatchAIEvent('ai.response', this.createAIEventPayload(sessionId, contextForTools, 'text', {
+        path: 'agent',
+        model: result.model ?? (chatCandidates[0] || undefined),
+        iterations: result.iterations,
+        reply,
+      }));
       logger.debug(formatCompact( {
         agent_answer: truncatePreview(reply, 480),
         tool_calls: result.toolCalls.length,
@@ -615,7 +752,14 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       });
     }
 
-    await this.saveToSession(sessionId, content, reply, sceneId);
+          const isNewSession = !(await this.sessions.has(sessionId));
+    await saveToSession(
+      { memory: this.memory, sessions: this.sessions, contextManager: this.contextManager },
+      sessionId, content, reply, sceneId,
+    );
+    if (isNewSession) {
+            this.emitSessionNewEvent(sessionId, context, 'text', content, reply);
+    }
 
     triggerAIHook(createAIHookEvent('message', 'sent', sessionId, {
       userId,
@@ -623,7 +767,17 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       platform: platform || '',
     })).catch(() => {});
 
+    await this.dispatchAIEvent('ai.processing.finish', this.createAIEventPayload(sessionId, context, 'text', {
+      path: toolRun.mode === 'pre-exec-fast-path' ? 'fast' : 'agent',
+      reply,
+    }));
+
     this.logPhase('turn.end', sessionId, { path: toolRun.mode === 'pre-exec-fast-path' ? 'fast' : 'agent' });
+
+    this.emitAIEvent('ai.typing.stop', this.createAIEventPayload(sessionId, context, 'text', {
+      reason: 'processing_complete',
+    }));
+
     return parseOutput(reply);
   }
 
@@ -675,6 +829,26 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       modelRegistry: this.modelRegistry,
       provider: this.provider,
       maxIterations: this.config.maxSubagentIterations,
+      onEvent: (event) => {
+        const sessionId = SessionManager.generateId(
+          context.platform || '',
+          context.senderId || '',
+          context.sceneId,
+        );
+        const payload = this.createAIEventPayload(sessionId, context, 'text', {
+          path: 'agent',
+          content: event.goal,
+          loadedToolNames: event.loadedToolNames,
+          status: event.status,
+          iterations: event.iterations,
+          error: event.error,
+        });
+        if (event.phase === 'start') {
+          this.emitAIEvent('ai.deferred.start', payload);
+        } else {
+          this.emitAIEvent('ai.deferred.finish', payload);
+        }
+      },
     });
     return result.summary;
   }
@@ -716,19 +890,30 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     context: ToolContext,
     onChunk?: OnChunkCallback,
   ): Promise<OutputElement[]> {
-    const { senderId, sceneId, platform } = context;
+    const { senderId, sceneId, platform, botId, messageId } = context;
     const sessionId = SessionManager.generateId(platform || '', senderId || '', sceneId);
     const userId = senderId || 'unknown';
+    await this.dispatchAIEvent('ai.processing.start', this.createAIEventPayload(sessionId, context, 'multimodal'));
 
     const rateCheck = this.rateLimiter.check(userId);
     if (!rateCheck.allowed) {
+      await this.dispatchAIEvent('ai.processing.finish', this.createAIEventPayload(sessionId, context, 'multimodal', {
+        path: 'rate_limited',
+        reply: rateCheck.message || '请稍后再试',
+        reason: 'rate_limited',
+      }));
       await this.finalizeActiveTurn({ usage: EMPTY_USAGE, path: 'rate_limited' });
       return parseOutput(rateCheck.message || '请稍后再试');
     }
 
+    // Typing Indicator：发射事件，由适配器插件自行决定如何响应
+    this.emitAIEvent('ai.typing.start', this.createAIEventPayload(sessionId, context, 'multimodal', {
+      reason: 'processing',
+    }));
+
     this.beginActiveTurn();
 
-    const rawHistoryMessages = await this.buildHistoryMessages(sessionId);
+    const rawHistoryMessages = await buildHistoryMessages(this.memory, sessionId);
     const profileSummary = await this.userProfiles.buildProfileSummary(userId);
     const personaEnhanced = this.buildDisciplinedPrompt(buildEnhancedPersona(this.config, profileSummary, ''));
 
@@ -784,7 +969,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       platformMarkdown,
       buildContextHint(context, textContent),
     );
-    const visionCandidates = this.resolveModelCandidates('vision');
+    const visionCandidates = resolveModelCandidates(this.provider.models, this.modelRegistry, this.provider.name, this.config, 'vision');
     const { messages: historyMessages, result: pruneResult } = pruneHistoryWithBudget({
       messages: rawHistoryMessages,
       config: this.config,
@@ -850,12 +1035,34 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
 
     if (!reply) reply = '抱歉，我无法理解这条消息。';
     reply = sanitizeAssistantReply(reply);
-    await this.saveToSession(sessionId, textContent, reply, sceneId);
+    await this.dispatchAIEvent('ai.response', this.createAIEventPayload(sessionId, context, 'multimodal', {
+      path: 'multimodal',
+      model: usedVisionModel,
+      reply,
+    }));
+    const isMultimodalNewSession = !(await this.sessions.has(sessionId));
+    await saveToSession(
+      { memory: this.memory, sessions: this.sessions, contextManager: this.contextManager },
+      sessionId, textContent, reply, sceneId,
+    );
+    if (isMultimodalNewSession) {
+      this.emitSessionNewEvent(sessionId, context, 'multimodal', textContent, reply);
+    }
     await this.finalizeActiveTurn({
       usage: lastUsage ?? EMPTY_USAGE,
       path: 'multimodal',
       model: usedVisionModel,
     });
+    await this.dispatchAIEvent('ai.processing.finish', this.createAIEventPayload(sessionId, context, 'multimodal', {
+      path: 'multimodal',
+      model: usedVisionModel,
+      reply,
+    }));
+
+    this.emitAIEvent('ai.typing.stop', this.createAIEventPayload(sessionId, context, 'multimodal', {
+      reason: 'processing_complete',
+    }));
+
     return parseOutput(reply);
   }
 
@@ -885,107 +1092,39 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     return { ...context, extra };
   }
 
-  private async buildHistoryMessages(sessionId: string): Promise<ChatMessage[]> {
-    return this.memory.buildContext(sessionId);
-  }
-
-  private async streamChatWithHistory(
-    content: string,
-    systemPrompt: string,
-    history: ChatMessage[],
-    onChunk?: OnChunkCallback,
-    preferredModel?: string,
-  ): Promise<StreamChatResult> {
-    const candidates = this.resolveModelCandidates('chat', preferredModel);
-    const empty = (model: string): StreamChatResult => ({ content: '', usage: null, model });
-    const turnTimeout = this.config.timeout;
-    const userContent = history.length > 0
-      ? buildUserMessageWithHistory(history, content)
-      : content;
-    const messages: ChatMessage[] = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userContent },
-    ];
-
-    const withTurnTimeout = <T>(promise: Promise<T>): Promise<T> =>
-      turnTimeout
-        ? Promise.race([
-            promise,
-            new Promise<never>((_, rej) =>
-              setTimeout(() => rej(new Error(`LLM 单轮响应超时 (${turnTimeout}ms)`)), turnTimeout),
-            ),
-          ])
-        : promise;
-
-    for (let i = 0; i < candidates.length; i++) {
-      const model = candidates[i];
-      try {
-        let result = '';
-        let lastUsage: Usage | null = null;
-        // 对整个流式消费过程应用超时
-        await withTurnTimeout((async () => {
-          for await (const chunk of this.provider.chatStream({ model, messages })) {
-            if (chunk.usage) lastUsage = chunk.usage;
-            const delta = chunk.choices?.[0]?.delta;
-            if (!delta) continue;
-            const text = typeof delta.content === 'string' ? delta.content : '';
-            if (text) {
-              result += text;
-              if (onChunk) onChunk(text, result);
-            }
-          }
-        })());
-        result = stripThinkBlocks(result);
-        if (result) {
-          return { content: result, usage: lastUsage, model };
-        }
-        // Streaming returned empty content — try non-streaming with same model
-        logger.warn(formatCompact( { stream: 'empty', model }));
-        const response = await withTurnTimeout(this.provider.chat({ model, messages }));
-        const msg = response.choices?.[0]?.message?.content;
-        result = stripThinkBlocks(typeof msg === 'string' ? msg : '');
-        if (result) {
-          if (onChunk) onChunk(result, result);
-          return { content: result, usage: response.usage ?? null, model };
-        }
-      } catch (err) {
-        const isLast = i === candidates.length - 1;
-        if (isLast) {
-          // No more candidates — try non-streaming as final attempt
-          try {
-            const response = await withTurnTimeout(this.provider.chat({ model, messages }));
-            const msg = response.choices?.[0]?.message?.content;
-            let result = stripThinkBlocks(typeof msg === 'string' ? msg : '');
-            if (onChunk && result) onChunk(result, result);
-            if (result) {
-              return { content: result, usage: response.usage ?? null, model };
-            }
-            return empty(model);
-          } catch {
-            return empty(model);
-          }
-        }
-        logger.warn(formatCompact( {
-          fallback: `${model}→${candidates[i + 1]}`,
-          error: truncatePreview((err as Error).message),
-        }));
-      }
-    }
-    return empty(candidates[0] || '');
-  }
-
-  private async saveToSession(
+  private emitSessionNewEvent(
     sessionId: string,
-    userContent: string,
-    assistantContent: string,
-    sceneId?: string,
-  ): Promise<void> {
-    await this.memory.saveRound(sessionId, userContent, assistantContent);
-    await this.sessions.addMessage(sessionId, { role: 'user', content: userContent });
-    await this.sessions.addMessage(sessionId, { role: 'assistant', content: assistantContent });
-    if (this.contextManager && sceneId) {
-      this.contextManager.autoSummarizeIfNeeded(sceneId).catch(() => {});
-    }
+    context: ToolContext,
+    mode: 'text' | 'multimodal',
+    content: string,
+    reply: string,
+  ): void {
+    this.emitAIEvent('ai.session.new', this.createAIEventPayload(sessionId, context, mode, {
+      reason: 'first_message',
+      content,
+      reply,
+    }));
+  }
+
+  private emitSessionCompactEvent(
+    sessionId: string,
+    context: ToolContext,
+    mode: 'text' | 'multimodal',
+    info: {
+      microSavedTokens: number;
+      autoSavedTokens: number;
+      totalTokensBefore: number;
+      totalTokensAfter: number;
+    },
+  ): void {
+    this.emitAIEvent('ai.session.compact', this.createAIEventPayload(sessionId, context, mode, {
+      path: 'agent',
+      compactedCount: 1,
+      savedTokens: info.microSavedTokens + info.autoSavedTokens,
+      totalTokensBefore: info.totalTokensBefore,
+      totalTokensAfter: info.totalTokensAfter,
+      result: info,
+    }));
   }
 
   /** @deprecated 使用 {@link formatToolCallsForUser} */

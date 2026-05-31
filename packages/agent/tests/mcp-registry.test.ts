@@ -85,6 +85,24 @@ describe('McpRegistry', () => {
     await expect(registry.ensureConnected()).resolves.toBeUndefined();
     expect(registry.getAllMcpTools()).toHaveLength(0);
   });
+
+  it('ensureConnected emits lifecycle events per server', async () => {
+    connectImpl.mockImplementation(async (entry) => {
+      if (entry.name === 'bad') throw new Error('boom');
+      return { isConnected: true, tools: [mockTool], resources: [], prompts: [] };
+    });
+    const registry = new McpRegistry();
+    const onEvent = vi.fn();
+    registry.add({ name: 'good', transport: 'stdio', command: 'echo' }, {}, 'test');
+    registry.add({ name: 'bad', transport: 'stdio', command: 'false' }, {}, 'test');
+
+    await registry.ensureConnected(onEvent);
+
+    expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ phase: 'start', serverName: 'good' }));
+    expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ phase: 'finish', serverName: 'good', connected: true }));
+    expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ phase: 'start', serverName: 'bad' }));
+    expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ phase: 'error', serverName: 'bad', error: 'boom' }));
+  });
 });
 
 describe('collectRuntimeTools MCP merge', () => {

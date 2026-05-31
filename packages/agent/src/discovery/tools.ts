@@ -70,7 +70,7 @@ export function collectPluginToolSearchRoots(root: Plugin | null | undefined): s
     }
   };
   fromPlugin(root);
-  for (const child of root.children || []) fromPlugin(child);
+  for (const child of (root.children || []) as Plugin[]) fromPlugin(child);
   return dirs;
 }
 
@@ -114,7 +114,7 @@ export async function discoverWorkspaceTools(root?: Plugin | null): Promise<Tool
       }
     };
     mapPlugin(root);
-    for (const child of root.children || []) mapPlugin(child);
+    for (const child of (root.children || []) as Plugin[]) mapPlugin(child);
   }
 
   for (const toolsDir of toolDirs) {

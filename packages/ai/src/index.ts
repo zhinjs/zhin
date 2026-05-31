@@ -59,7 +59,13 @@ export type {
 // ── Agent Engine ──
 export { Agent, createAgent, formatToolTitle } from './agent/index.js';
 export type { AgentState, AgentEvents } from './agent/index.js';
-export { sanitizeToolResult, relativizeCwdPaths } from './agent/tool-result-sanitizer.js';
+export {
+  sanitizeToolResult,
+  relativizeCwdPaths,
+  stripHallucinatedToolCalls,
+  isOmittedToolSummary,
+  TOOL_RESULT_OMITTED_PLAIN,
+} from './agent/tool-result-sanitizer.js';
 export type { ToolResultSanitizerOptions } from './agent/tool-result-sanitizer.js';
 export { filterTools, tokenize } from './agent/tool-filter.js';
 export {

@@ -13,8 +13,9 @@
 
 import * as path from 'node:path';
 import * as os from 'node:os';
+import { getAuditLogger } from './audit-logger.js';
 
-// ── 设备路径阻止（参考 Claude Code FileReadTool BLOCKED_DEVICE_PATHS）──
+// ── 设备路径阻止──────────────
 
 /**
  * 会导致进程挂起的设备文件路径。
@@ -52,7 +53,7 @@ export function isBlockedDevicePath(filePath: string): boolean {
   return false;
 }
 
-// ── 文件大小限制（参考 Claude Code FileEditTool MAX_EDIT_FILE_SIZE）──
+// ── 文件大小限制──────────────
 
 /** 读取文件最大字节数（256 MiB），防止 OOM */
 export const MAX_READ_FILE_SIZE = 256 * 1024 * 1024;
@@ -165,7 +166,17 @@ export function checkFileAccess(filePath: string): FileAccessCheckResult {
   // 1. 检查敏感路径前缀
   for (const prefix of SENSITIVE_PATH_PREFIXES) {
     if (normalizedCandidates.some(candidate => candidate.startsWith(prefix))) {
-      return { allowed: false, reason: `拒绝访问系统敏感文件: ${prefix}` };
+      const result = { allowed: false, reason: `拒绝访问系统敏感文件: ${prefix}` };
+
+      // 记录审计日志
+      try {
+        const auditLogger = getAuditLogger();
+        auditLogger.logFileAccess(filePath, false, result.reason);
+      } catch {
+        // 忽略审计日志错误
+      }
+
+      return result;
     }
   }
 
@@ -173,13 +184,33 @@ export function checkFileAccess(filePath: string): FileAccessCheckResult {
   const parts = normalizePathSeparators(resolved).split('/');
   for (let i = 0; i < parts.length; i++) {
     if (SENSITIVE_DIR_NAMES.has(parts[i])) {
-      return { allowed: false, reason: `拒绝访问敏感目录: ${parts[i]}` };
+      const result = { allowed: false, reason: `拒绝访问敏感目录: ${parts[i]}` };
+
+      // 记录审计日志
+      try {
+        const auditLogger = getAuditLogger();
+        auditLogger.logFileAccess(filePath, false, result.reason);
+      } catch {
+        // 忽略审计日志错误
+      }
+
+      return result;
     }
     // 对多级目录名做拼接检查（如 .config/gcloud）
     if (i > 0) {
       const twoLevel = `${parts[i - 1]}/${parts[i]}`;
       if (SENSITIVE_DIR_NAMES.has(twoLevel)) {
-        return { allowed: false, reason: `拒绝访问敏感目录: ${twoLevel}` };
+        const result = { allowed: false, reason: `拒绝访问敏感目录: ${twoLevel}` };
+
+        // 记录审计日志
+        try {
+          const auditLogger = getAuditLogger();
+          auditLogger.logFileAccess(filePath, false, result.reason);
+        } catch {
+          // 忽略审计日志错误
+        }
+
+        return result;
       }
     }
   }
@@ -187,8 +218,26 @@ export function checkFileAccess(filePath: string): FileAccessCheckResult {
   // 3. 检查敏感文件名
   for (const pattern of SENSITIVE_BASENAME_PATTERNS) {
     if (pattern.test(basename)) {
-      return { allowed: false, reason: `拒绝访问敏感文件: ${basename} 可能包含密钥或凭据` };
+      const result = { allowed: false, reason: `拒绝访问敏感文件: ${basename} 可能包含密钥或凭据` };
+
+      // 记录审计日志
+      try {
+        const auditLogger = getAuditLogger();
+        auditLogger.logFileAccess(filePath, false, result.reason);
+      } catch {
+        // 忽略审计日志错误
+      }
+
+      return result;
     }
+  }
+
+  // 记录成功的审计日志
+  try {
+    const auditLogger = getAuditLogger();
+    auditLogger.logFileAccess(filePath, true);
+  } catch {
+    // 忽略审计日志错误
   }
 
   return { allowed: true };
@@ -241,7 +290,7 @@ export function checkBashCommandSafety(command: string): { safe: boolean; reason
   return { safe: true };
 }
 
-// ── bash 命令读写分类（参考 Claude Code BashTool isSearchOrReadBashCommand）──
+// ── bash 命令读写分类──────────────
 
 /** 搜索类命令 */
 const BASH_SEARCH_COMMANDS: ReadonlySet<string> = new Set([
@@ -281,7 +330,6 @@ export interface BashCommandClassification {
  * 对管道命令（如 `cat file | grep pattern`），所有非中性部分
  * 都必须是搜索/读/列出类，整条命令才算只读。
  *
- * 参考 Claude Code BashTool `isSearchOrReadBashCommand`。
  */
 export function classifyBashCommand(command: string): BashCommandClassification {
   const trimmed = command.trim();
@@ -323,7 +371,7 @@ export function classifyBashCommand(command: string): BashCommandClassification 
   };
 }
 
-// ── 文件 mtime 比对（参考 Claude Code FileEditTool stale detection）──
+// ── 文件 mtime 比对──────────────
 
 /**
  * 文件修改时间快照，用于检测编辑前是否被并发修改。

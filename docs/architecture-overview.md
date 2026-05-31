@@ -102,7 +102,7 @@ graph TB
 | 模块 | 说明 |
 |------|------|
 | `Agent` | 无状态 Agent 引擎，执行多轮 tool-calling 循环 |
-| `CostTracker` | Token 用量与成本追踪，支持按模型/Provider 统计（Claude Code 风格） |
+| `CostTracker` | Token 用量与成本追踪，支持按模型/Provider|
 | `ToolFilter` / `CachedToolFilter` | TF-IDF 工具相关性过滤与带缓存的过滤器 |
 
 #### `memory/` — 会话与上下文

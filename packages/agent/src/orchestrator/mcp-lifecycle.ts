@@ -4,6 +4,9 @@
 
 import type { McpRegistry } from './mcp-registry.js';
 
-export async function ensureMcpConnections(mcps: McpRegistry): Promise<void> {
-  await mcps.ensureConnected();
+export async function ensureMcpConnections(
+  mcps: McpRegistry,
+  onEvent?: Parameters<McpRegistry['ensureConnected']>[0],
+): Promise<void> {
+  await mcps.ensureConnected(onEvent);
 }

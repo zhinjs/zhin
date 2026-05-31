@@ -62,8 +62,8 @@ export function collectPluginSkillSearchRoots(root: Plugin | null | undefined): 
   const walk = (p: Plugin | null | undefined) => {
     if (!p) return;
     fromPlugin(p);
-    for (const child of p.children || []) {
-      walk(child);
+    for (const child of (p.children || []) as Plugin[]) {
+      walk(child as Plugin);
     }
   };
   walk(root);

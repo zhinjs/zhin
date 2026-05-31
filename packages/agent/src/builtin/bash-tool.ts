@@ -1,5 +1,5 @@
 /**
- * bash — Shell 执行（安全检查 + 命令读写分类）
+ * bash — Shell 执行（安全检查 + 命令读写分类 + 沙箱保护）
  */
 import { exec, type ExecOptions } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -8,6 +8,7 @@ import {
   checkBashCommandSafety,
   classifyBashCommand,
 } from '../security/file-policy.js';
+import { getSandbox } from '../security/sandbox.js';
 import { errMsg } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 
@@ -36,10 +37,17 @@ export class BashBuiltinTool extends BuiltinBaseTool {
   readonly parameters = BASH_PARAMETERS;
   readonly kind = 'shell';
 
-  constructor(private readonly execAsync: BashExecAsync = defaultExecAsync) {
+  /** 是否使用沙箱（默认 true，测试时可设为 false） */
+  private useSandbox: boolean;
+
+  constructor(
+    private readonly execAsync: BashExecAsync = defaultExecAsync,
+    options?: { useSandbox?: boolean },
+  ) {
     super();
     this.tags.push('shell', 'exec');
     this.keywords.push('执行', '运行', '命令', '终端', 'shell', 'bash');
+    this.useSandbox = options?.useSandbox ?? true;
   }
 
   async run(args: Record<string, unknown>, _context?: ToolContext): Promise<ToolResult> {
@@ -50,11 +58,41 @@ export class BashBuiltinTool extends BuiltinBaseTool {
       if (!safety.safe) return `Error: ${safety.reason}`;
       const classification = classifyBashCommand(cmd);
       const cwd = (args.cwd as string | undefined) || process.cwd();
-      const { stdout, stderr } = await this.execAsync(cmd, {
-        cwd,
-        timeout,
-        maxBuffer: 1024 * 1024,
-      });
+
+      let stdout: string;
+      let stderr: string;
+
+      if (this.useSandbox) {
+        // 使用沙箱执行命令
+        const sandbox = getSandbox();
+        const sandboxResult = await sandbox.execute(cmd, {
+          cwd,
+          timeout,
+        });
+
+        // 检查是否被沙箱阻止
+        if (sandboxResult.blocked) {
+          return `Error: 命令被沙箱阻止 - ${sandboxResult.blockReason}`;
+        }
+
+        // 检查是否超时
+        if (sandboxResult.timedOut) {
+          return `Error: 命令执行超时（${timeout}ms）`;
+        }
+
+        stdout = sandboxResult.stdout;
+        stderr = sandboxResult.stderr;
+      } else {
+        // 使用传统的 exec 执行（用于测试）
+        const result = await this.execAsync(cmd, {
+          cwd,
+          timeout,
+          maxBuffer: 1024 * 1024,
+        });
+        stdout = result.stdout;
+        stderr = result.stderr;
+      }
+
       let result = '';
       const tag = classification.isReadOnly
         ? (classification.isSearch ? '[搜索]' : classification.isList ? '[列出]' : '[只读]')

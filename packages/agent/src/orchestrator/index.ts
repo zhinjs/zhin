@@ -151,3 +151,5 @@ export { McpRegistry } from './mcp-registry.js';
 export type { McpConnection } from './mcp-registry.js';
 export { HookRegistry, createAIHookEvent } from './hook-registry.js';
 export * from './types.js';
+export * from './agent-dispatcher.js';
+export * from './task-queue.js';

@@ -1117,11 +1117,11 @@ function buildDirectoryTree(cwd: string, relativePath: string, maxDepth: number)
 }
 
 function findPluginByConfigKey(rootPlugin: Plugin, configKey: string): Plugin | null {
-  for (const child of rootPlugin.children) {
+  for (const child of (rootPlugin.children as Plugin[])) {
     if (child.name === configKey || child.name.endsWith(`-${configKey}`) || child.name.includes(configKey)) {
       return child;
     }
-    const found = findPluginByConfigKey(child, configKey);
+    const found = findPluginByConfigKey(child as Plugin, configKey);
     if (found) return found;
   }
   return null;

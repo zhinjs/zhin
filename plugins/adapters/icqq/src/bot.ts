@@ -41,6 +41,7 @@ import {
   shouldRefreshListsOnMeta,
   type IcqqIpcRawEvent,
 } from "./icqq-side-events.js";
+import { enableTypingIndicator, type ICQQTypingIndicatorManager } from "./typing-indicator.js";
 
 export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
   $connected = false;
@@ -59,6 +60,9 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
   private intentionalDisconnect = false;
   /** 是否已有重连循环在跑（避免多次 schedule 叠套） */
   private reconnectRunning = false;
+
+  /** Typing Indicator 管理器 */
+  $typingIndicator?: ICQQTypingIndicatorManager;
 
   get $id() {
     return this.$config.name;
@@ -90,11 +94,48 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
 
     await this.rebindIpcSession();
 
+    // 根据配置自动启用 Typing Indicator
+    this.initTypingIndicator();
+
     this.logger.info(formatCompact( {
       bot: this.$id,
       friends: this.friends.size,
       groups: this.groups.size,
+      typingIndicator: this.$typingIndicator ? 'enabled' : 'disabled',
     }));
+  }
+
+  /**
+   * 初始化 Typing Indicator
+   * 根据配置自动启用或禁用
+   */
+  private initTypingIndicator(): void {
+    const typingConfig = this.$config.typingIndicator;
+
+    // 如果配置中明确设置为 false，则不启用
+    if (typingConfig?.enabled === false) {
+      this.logger.debug(formatCompact({
+        bot: this.$id,
+        typingIndicator: 'disabled_by_config',
+      }));
+      return;
+    }
+
+    // 启用 Typing Indicator
+    try {
+      this.$typingIndicator = enableTypingIndicator(this, typingConfig);
+      this.logger.debug(formatCompact({
+        bot: this.$id,
+        typingIndicator: 'enabled',
+        emoji: typingConfig?.defaultEmoji || '⏳',
+      }));
+    } catch (error) {
+      this.logger.warn(formatCompact({
+        bot: this.$id,
+        typingIndicator: 'failed',
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
   }
 
   /** 建立或恢复与守护进程的 IPC/RPC 会话（订阅、缓存列表） */
@@ -224,6 +265,13 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
 
   async $disconnect(): Promise<void> {
     this.intentionalDisconnect = true;
+
+    // 停止所有 Typing Indicator
+    if (this.$typingIndicator) {
+      await this.$typingIndicator.stopAll().catch(() => {});
+      this.$typingIndicator = undefined;
+    }
+
     this.ipc?.setOnRemoteDisconnect(null);
     for (const sub of this.subscriptions) {
       await sub.unsubscribe().catch(() => {});
@@ -504,6 +552,10 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
 
     const resp = await this.ipc.request(action, params);
     if (!resp.ok) {
+      this.logger.debug(formatCompact({
+        op: action,
+        ...params,
+      }));
       throw new Error(`发送消息失败: ${resp.error}`);
     }
 
@@ -514,6 +566,171 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
       `${this.$id} send ${options.type}(${options.id}):${segment.raw(options.content)}`,
     );
     return messageId;
+  }
+
+  // ── 消息回应 ───────────────────────────────────────────────────────
+
+  /**
+   * 表情符号到 emoji_id 的映射
+   * QQ 使用数字 ID 来标识表情，而不是 Unicode 字符
+   */
+  private static readonly EMOJI_MAP: Record<string, string> = {
+    '⏳': '1468368274',  // 沙漏
+    '👍': '128077',      // 竖起大拇指
+    '❤️': '10084',       // 红心
+    '😊': '128522',      // 微笑
+    '🎉': '127881',      // 派对
+    '🔥': '128293',      // 火
+    '✅': '9989',        // 勾选
+    '❌': '10060',       // 叉号
+    '⭐': '11088',       // 星星
+    '💯': '128175',      // 一百分
+  };
+
+  /**
+   * 将表情符号转换为 emoji_id
+   */
+  private getEmojiId(emoji: string): string {
+    // 如果已经是数字 ID，直接返回
+    if (/^\d+$/.test(emoji)) {
+      return emoji;
+    }
+
+    // 从映射中查找
+    const id = IcqqBot.EMOJI_MAP[emoji];
+    if (id) {
+      return id;
+    }
+
+    // 默认返回 Unicode 码点
+    return String(emoji.codePointAt(0) || 0);
+  }
+
+  /**
+   * 添加消息回应（表情）
+   *
+   * @param messageId - 消息 ID
+   * @param emoji - 表情符号或 emoji_id
+   * @param groupId - 群 ID（群聊消息必需）
+   * @returns 反应 ID，可用于后续移除
+   */
+  async $addReaction(messageId: string, emoji: string, groupId?: string): Promise<string | null> {
+    try {
+      const emojiId = this.getEmojiId(emoji);
+
+      const params: Record<string, unknown> = {
+        message_id: Number(messageId),
+        emoji_id: emojiId,
+        is_set: true,
+      };
+
+      // 如果是群聊消息，需要传递 group_id
+      if (groupId) {
+        params.group_id = Number(groupId);
+      }
+
+      const resp = await this.ipc.request(Actions.GROUP_SET_REACTION, params);
+
+      if (!resp.ok) {
+        this.logger.warn(formatCompact({
+          op: "add_reaction",
+          bot: this.$id,
+          message_id: messageId,
+          emoji,
+          emoji_id: emojiId,
+          group_id: groupId,
+          ok: false,
+          error: resp.error,
+        }));
+        return null;
+      }
+
+      this.logger.debug(formatCompact({
+        op: "add_reaction",
+        bot: this.$id,
+        message_id: messageId,
+        emoji,
+        emoji_id: emojiId,
+        group_id: groupId,
+        ok: true,
+      }));
+
+      // 返回反应 ID（使用 emoji_id 作为标识）
+      return `reaction_${emojiId}_${Date.now()}`;
+    } catch (error) {
+      this.logger.warn(formatCompact({
+        op: "add_reaction",
+        bot: this.$id,
+        message_id: messageId,
+        emoji,
+        group_id: groupId,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+      return null;
+    }
+  }
+
+  /**
+   * 移除消息回应
+   *
+   * @param messageId - 消息 ID
+   * @param reactionId - 反应 ID（由 $addReaction 返回）
+   * @param groupId - 群 ID（群聊消息必需）
+   */
+  async $removeReaction(messageId: string, reactionId: string, groupId?: string): Promise<void> {
+    try {
+      // 从 reactionId 中提取 emoji_id
+      // reactionId 格式：reaction_{emojiId}_{timestamp}
+      const parts = reactionId.split('_');
+      const emojiId = parts.length >= 2 ? parts[1] : reactionId;
+
+      const params: Record<string, unknown> = {
+        message_id: Number(messageId),
+        emoji_id: emojiId,
+        is_set: false,
+      };
+
+      // 如果是群聊消息，需要传递 group_id
+      if (groupId) {
+        params.group_id = Number(groupId);
+      }
+
+      const resp = await this.ipc.request(Actions.GROUP_DEL_REACTION, params);
+
+      if (!resp.ok) {
+        this.logger.warn(formatCompact({
+          op: "remove_reaction",
+          bot: this.$id,
+          message_id: messageId,
+          reaction_id: reactionId,
+          emoji_id: emojiId,
+          group_id: groupId,
+          ok: false,
+          error: resp.error,
+        }));
+      } else {
+        this.logger.debug(formatCompact({
+          op: "remove_reaction",
+          bot: this.$id,
+          message_id: messageId,
+          reaction_id: reactionId,
+          emoji_id: emojiId,
+          group_id: groupId,
+          ok: true,
+        }));
+      }
+    } catch (error) {
+      this.logger.warn(formatCompact({
+        op: "remove_reaction",
+        bot: this.$id,
+        message_id: messageId,
+        reaction_id: reactionId,
+        group_id: groupId,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
   }
 }
 

@@ -94,6 +94,7 @@ export function registerAITrigger(refs: AIServiceRefs): void {
       const toolContext: ToolContext = {
         platform: message.$adapter,
         botId: message.$bot,
+        messageId: message.$id,
         sceneId: message.$channel?.id || message.$sender.id,
         senderId: message.$sender.id,
         message,

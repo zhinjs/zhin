@@ -46,6 +46,9 @@ export function relativizeCwdPaths(text: string, cwd: string = process.cwd()): s
   return out;
 }
 
+export const TOOL_RESULT_OMITTED_PLAIN =
+  'Tool returned non-plain control payload; omitted.';
+
 const DEFAULT_MAX_CHARS = 12_000;
 const HTML_SIGNAL_RE = /<!doctype html|<html\b|<head\b|<body\b|<script\b|<meta\b|<\/\w+>/i;
 const ANTI_BOT_SIGNAL_RE = /verifycode|captcha|antibot|enablejs|window\.location\.assign/i;
@@ -56,6 +59,34 @@ const MINIFIED_JS_LINE_RE =
 function truncate(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;
   return `${text.slice(0, maxChars)}\n…[truncated]`;
+}
+
+/** 去掉模型误输出的 tool_call / DSML 等标记（保留其余正文） */
+export function stripHallucinatedToolCalls(text: string): string {
+  let cleaned = text;
+  cleaned = cleaned.replace(/<tool_call\b[\s\S]*?(?:\/>|<\/tool_call>)/gi, '');
+  cleaned = cleaned.replace(/<tool_result\b[\s\S]*?(?:\/>|<\/tool_result>)/gi, '');
+  cleaned = cleaned.replace(/<function=[^>]*>[\s\S]*?<\/function>/gi, '');
+  cleaned = cleaned.replace(/\{tool_(?:result|call)\}/gi, '');
+  cleaned = cleaned.replace(/<\|plugin\|>[\s\S]*?<\|\/plugin\|>/gi, '');
+  cleaned = cleaned.replace(/<<<tool_call>>>[\s\S]*?<<<end>>>/gi, '');
+  cleaned = cleaned.replace(/<\|tool_calls\|>[\s\S]*?<\|\/tool_calls\|>/gi, '');
+  cleaned = cleaned.replace(/<\|?tool_calls\|?>[\s\S]*?<\|?\/tool_calls\|?>/gi, '');
+
+  let prev: string;
+  do {
+    prev = cleaned;
+    cleaned = cleaned.replace(/<[^>]*DSML[^>]*>[\s\S]*?<\/[^>]*DSML[^>]*>/gi, '');
+  } while (cleaned !== prev);
+  cleaned = cleaned.replace(/<[^>]*DSML[^>]*tool_calls[^>]*>[\s\S]*$/gi, '');
+  cleaned = cleaned.replace(/<[^>]*DSML[^>]*>/gi, '');
+
+  return cleaned.trim();
+}
+
+export function isOmittedToolSummary(text: string): boolean {
+  const t = text.trim();
+  return !t || t === TOOL_RESULT_OMITTED_PLAIN;
 }
 
 function compactLine(line: string): string {
@@ -73,10 +104,10 @@ export function sanitizeToolResult(
 ): string {
   const maxChars = options.maxChars ?? DEFAULT_MAX_CHARS;
   const cwd = options.cwd;
-  const raw = (text || '').trim();
+  let raw = stripHallucinatedToolCalls((text || '').trim());
   if (!raw) return '';
   if (/<tool_call|<function=/i.test(raw)) {
-    return 'Tool returned non-plain control payload; omitted.';
+    return TOOL_RESULT_OMITTED_PLAIN;
   }
 
   const noisy =

@@ -97,7 +97,7 @@ export function registerHostRestRoutes(
       return {
         name: p.name,
         status: p.started ? "active" : "inactive",
-        description: (p.manifest as { description?: string } | undefined)?.description || p.name,
+        description: ((p as Plugin).manifest as { description?: string } | undefined)?.description || p.name,
         features,
       };
     });
@@ -125,7 +125,7 @@ export function registerHostRestRoutes(
         filename: plugin.filePath,
         filePath: plugin.filePath,
         status: plugin.started ? "active" : "inactive",
-        description: (plugin.manifest as { description?: string } | undefined)?.description || plugin.name,
+        description: ((plugin as Plugin).manifest as { description?: string } | undefined)?.description || plugin.name,
         features,
         contexts,
       },

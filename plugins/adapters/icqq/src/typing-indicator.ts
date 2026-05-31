@@ -1,0 +1,338 @@
+/**
+ * ICQQ Typing Indicator 集成
+ *
+ * 为 ICQQ 适配器提供消息处理状态提示功能，
+ * 使用消息回应（表情）来提示用户"AI 正在处理"。
+ */
+
+import type { IcqqBot } from './bot.js';
+import {
+  TypingIndicatorManager,
+  ReactionTypingIndicatorAdapter,
+  type TypingIndicatorOptions,
+  type TypingIndicatorConfig,
+  type TypingIndicator,
+} from '@zhin.js/agent';
+
+// ── ICQQ 特定配置 ────────────────────────────────────────────────────
+
+export interface ICQQTypingIndicatorConfig {
+  /** 是否启用 */
+  enabled: boolean;
+  /** 默认表情 */
+  defaultEmoji: string;
+  /** 是否在完成后自动移除 */
+  autoRemove: boolean;
+  /** 自动移除延迟（毫秒） */
+  removeDelay: number;
+  /** 私聊配置 */
+  privateConfig?: Partial<TypingIndicatorConfig>;
+  /** 群聊配置 */
+  groupConfig?: Partial<TypingIndicatorConfig>;
+}
+
+const DEFAULT_ICQQ_CONFIG: ICQQTypingIndicatorConfig = {
+  enabled: true,
+  defaultEmoji: '⏳',
+  autoRemove: true,
+  removeDelay: 5000,
+  privateConfig: {
+    type: 'message',
+    message: '正在思考中...',
+    autoRemove: true,
+    removeDelay: 3000,
+  },
+  groupConfig: {
+    type: 'reaction',
+    emoji: '⏳',
+    autoRemove: true,
+    removeDelay: 5000,
+  },
+};
+
+// ── ICQQ Typing Indicator 管理器 ─────────────────────────────────────
+
+export class ICQQTypingIndicatorManager {
+  private manager: TypingIndicatorManager;
+  private config: ICQQTypingIndicatorConfig;
+  private bot: IcqqBot;
+
+  constructor(bot: IcqqBot, config: Partial<ICQQTypingIndicatorConfig> = {}) {
+    this.bot = bot;
+    this.config = { ...DEFAULT_ICQQ_CONFIG, ...config };
+
+    // 创建 Typing Indicator 管理器
+    this.manager = new TypingIndicatorManager({
+      type: 'reaction',
+      emoji: this.config.defaultEmoji,
+      autoRemove: this.config.autoRemove,
+      removeDelay: this.config.removeDelay,
+    });
+
+    // 注册 ICQQ 适配器
+    this.registerAdapter();
+  }
+
+  /**
+   * 注册 ICQQ 适配器
+   */
+  private registerAdapter(): void {
+    const adapter = new ReactionTypingIndicatorAdapter(
+      // addReaction
+      async (messageId: string, emoji: string) => {
+        // 从当前选项中获取 groupId
+        const groupId = this.currentOptions?.groupId;
+        return await this.bot.$addReaction(messageId, emoji, groupId);
+      },
+      // removeReaction
+      async (messageId: string, reactionId: string) => {
+        // 从当前选项中获取 groupId
+        const groupId = this.currentOptions?.groupId;
+        await this.bot.$removeReaction(messageId, reactionId, groupId);
+      },
+      // sendMessage
+      async (sessionId: string, content: string) => {
+        try {
+          // 从存储的选项中获取场景信息
+          const options = this.currentOptions;
+          if (!options) {
+            console.error('[ICQQ:TypingIndicator] No current options for typing indicator');
+            return null;
+          }
+
+          console.debug('[ICQQ:TypingIndicator] sendMessage called', {
+            sessionId,
+            content,
+            sceneType: options.sceneType,
+            groupId: options.groupId,
+            userId: options.userId,
+          });
+
+          // 根据场景类型发送消息
+          if (options.sceneType === 'group' && options.groupId) {
+            console.debug('[ICQQ:TypingIndicator] sending group message', {
+              groupId: options.groupId,
+            });
+            return await this.bot.$sendMessage({
+              type: 'group',
+              id: options.groupId,
+              context: 'icqq',
+              bot: this.bot.$id,
+              content: [{ type: 'text', data: { text: content } }],
+            });
+          } else if (options.userId) {
+            console.debug('[ICQQ:TypingIndicator] sending private message', {
+              userId: options.userId,
+            });
+            return await this.bot.$sendMessage({
+              type: 'private',
+              id: options.userId,
+              context: 'icqq',
+              bot: this.bot.$id,
+              content: [{ type: 'text', data: { text: content } }],
+            });
+          }
+
+          console.debug('[ICQQ:TypingIndicator] no valid target', {
+            sceneType: options.sceneType,
+            groupId: options.groupId,
+            userId: options.userId,
+          });
+          return null;
+        } catch (error) {
+          console.error('[ICQQ:TypingIndicator] Failed to send typing message:', error);
+          return null;
+        }
+      },
+      // deleteMessage
+      async (messageId: string) => {
+        try {
+          await this.bot.$recallMessage(messageId);
+        } catch (error) {
+          console.error('[ICQQ] Failed to delete typing message:', error);
+        }
+      },
+    );
+
+    this.manager.registerAdapter(adapter);
+  }
+
+  /** 当前提示选项（用于 sendMessage 回调） */
+  private currentOptions?: {
+    messageId?: string;
+    sessionId: string;
+    userId?: string;
+    groupId?: string;
+    sceneType: 'private' | 'group';
+  };
+
+  /**
+   * 开始提示
+   */
+  async start(options: {
+    messageId?: string;
+    sessionId: string;
+    userId?: string;
+    groupId?: string;
+    sceneType: 'private' | 'group';
+  }): Promise<TypingIndicator> {
+    console.debug('[ICQQ:TypingIndicator] start called', {
+      enabled: this.config.enabled,
+      sceneType: options.sceneType,
+      messageId: options.messageId,
+      sessionId: options.sessionId,
+      userId: options.userId,
+      groupId: options.groupId,
+    });
+
+    if (!this.config.enabled) {
+      console.debug('[ICQQ:TypingIndicator] disabled, returning noop');
+      return {
+        start: async () => {},
+        stop: async () => {},
+        isActive: () => false,
+      };
+    }
+
+    // 保存当前选项（用于 sendMessage 回调）
+    this.currentOptions = options;
+
+    // 根据场景类型选择配置
+    const config = options.sceneType === 'group'
+      ? this.config.groupConfig
+      : this.config.privateConfig;
+
+    console.debug('[ICQQ:TypingIndicator] using config', {
+      sceneType: options.sceneType,
+      configType: config?.type,
+      configEmoji: config?.emoji,
+      configMessage: config?.message,
+    });
+
+    const typingOptions: TypingIndicatorOptions = {
+      messageId: options.messageId,
+      sessionId: options.sessionId,
+      userId: options.userId,
+      groupId: options.groupId,
+      platform: 'icqq',
+      botId: this.bot.$id,
+      sceneType: options.sceneType,
+    };
+
+    console.debug('[ICQQ:TypingIndicator] starting manager', typingOptions);
+
+    const result = await this.manager.start(typingOptions, config);
+
+    console.debug('[ICQQ:TypingIndicator] started', {
+      isActive: result.isActive(),
+    });
+
+    return result;
+  }
+
+  /**
+   * 停止提示
+   */
+  async stop(options: {
+    sessionId: string;
+    userId?: string;
+    groupId?: string;
+  }): Promise<void> {
+    console.debug('[ICQQ:TypingIndicator] stop called', {
+      sessionId: options.sessionId,
+      userId: options.userId,
+      groupId: options.groupId,
+    });
+
+    const typingOptions: TypingIndicatorOptions = {
+      sessionId: options.sessionId,
+      userId: options.userId,
+      groupId: options.groupId,
+      platform: 'icqq',
+      botId: this.bot.$id,
+      sceneType: 'private', // 默认值，实际会根据 sessionId 判断
+    };
+
+    await this.manager.stop(typingOptions);
+
+    // 清除当前选项
+    this.currentOptions = undefined;
+
+    console.debug('[ICQQ:TypingIndicator] stopped');
+  }
+
+  /**
+   * 停止所有提示
+   */
+  async stopAll(): Promise<void> {
+    console.debug('[ICQQ:TypingIndicator] stopAll called');
+    await this.manager.stopAll();
+    console.debug('[ICQQ:TypingIndicator] stopAll completed');
+  }
+
+  /**
+   * 更新配置
+   */
+  updateConfig(config: Partial<ICQQTypingIndicatorConfig>): void {
+    this.config = { ...this.config, ...config };
+  }
+
+  /**
+   * 获取配置
+   */
+  getConfig(): ICQQTypingIndicatorConfig {
+    return { ...this.config };
+  }
+}
+
+// ── 便捷函数 ──────────────────────────────────────────────────────────
+
+/**
+ * 为 ICQQ Bot 创建 Typing Indicator 管理器
+ */
+export function createICQQTypingIndicatorManager(
+  bot: IcqqBot,
+  config?: Partial<ICQQTypingIndicatorConfig>,
+): ICQQTypingIndicatorManager {
+  return new ICQQTypingIndicatorManager(bot, config);
+}
+
+/**
+ * 快速开始提示
+ */
+export async function startICQQTypingIndicator(
+  bot: IcqqBot,
+  options: {
+    messageId?: string;
+    sessionId: string;
+    userId?: string;
+    groupId?: string;
+    sceneType: 'private' | 'group';
+  },
+  config?: Partial<ICQQTypingIndicatorConfig>,
+): Promise<TypingIndicator> {
+  const manager = createICQQTypingIndicatorManager(bot, config);
+  return await manager.start(options);
+}
+
+// ── 类型扩展 ──────────────────────────────────────────────────────────
+
+declare module './bot.js' {
+  interface IcqqBot {
+    /** Typing Indicator 管理器 */
+    $typingIndicator?: ICQQTypingIndicatorManager;
+  }
+}
+
+/**
+ * 为 IcqqBot 添加 Typing Indicator 支持
+ */
+export function enableTypingIndicator(
+  bot: IcqqBot,
+  config?: Partial<ICQQTypingIndicatorConfig>,
+): ICQQTypingIndicatorManager {
+  if (!bot.$typingIndicator) {
+    bot.$typingIndicator = createICQQTypingIndicatorManager(bot, config);
+  }
+  return bot.$typingIndicator;
+}

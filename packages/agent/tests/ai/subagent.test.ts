@@ -134,6 +134,28 @@ describe('SubagentManager', () => {
       // 异步启动后应有 1 个运行中的任务
       expect(manager.getRunningCount()).toBe(1);
     });
+
+    it('应触发生命周期事件回调', async () => {
+      const onEvent = vi.fn();
+      const sender = vi.fn();
+      const eventManager = new SubagentManager({
+        provider: provider as any,
+        workspace: '/tmp/test-workspace',
+        createTools: () => mockTools,
+        maxIterations: 5,
+        onEvent,
+      });
+      eventManager.setSender(sender);
+
+      await eventManager.spawn({ task: '分析 README', label: 'README分析', origin: baseOrigin });
+      await vi.waitFor(() => expect(sender).toHaveBeenCalled(), { timeout: 2000 });
+
+      expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ phase: 'spawn', label: 'README分析' }));
+      expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ phase: 'start', label: 'README分析' }));
+      expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ phase: 'finish', label: 'README分析', status: 'ok' }));
+
+      eventManager.dispose();
+    });
   });
 
   describe('工具过滤', () => {

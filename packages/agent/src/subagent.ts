@@ -22,6 +22,7 @@ import { createRestrictedToolView, DEFAULT_SUBAGENT_TOOL_NAMES } from './orchest
 import { createOwnerOrchestratedToolResultTransform } from './orchestrator/owner-confirm-orchestration.js';
 import { runWithDirectAgentExecution } from './security/bash-tool-context.js';
 import type { ToolContext } from '@zhin.js/core';
+import { AgentDispatcher, type AgentRole } from './orchestrator/agent-dispatcher.js';
 
 const logger = new Logger(null, 'Subagent');
 
@@ -41,6 +42,22 @@ export interface SpawnOptions {
   task: string;
   label?: string;
   origin: SubagentOrigin;
+  /** Agent 角色（可选，默认为 'subtask'） */
+  role?: AgentRole;
+  /** 任务上下文（可选） */
+  context?: Record<string, unknown>;
+}
+
+export interface SubagentLifecycleEvent {
+  phase: 'spawn' | 'start' | 'finish';
+  taskId: string;
+  label: string;
+  task: string;
+  origin: SubagentOrigin;
+  role?: AgentRole;
+  status?: 'ok' | 'error';
+  result?: string;
+  error?: string;
 }
 
 export type SubagentResultSender = (origin: SubagentOrigin, content: string) => Promise<void>;
@@ -58,6 +75,10 @@ export interface SubagentManagerOptions {
   onSubagentUsage?: (usage: Usage) => void;
   /** 注册子 agent 生命周期 Promise，供主会话在 turn 结束前可选等待 */
   registerSubagentTask?: (done: Promise<void>) => void;
+  /** Agent 调度器（可选，用于角色管理） */
+  agentDispatcher?: AgentDispatcher;
+  /** 生命周期事件回调（供上层桥接到统一事件总线） */
+  onEvent?: (event: SubagentLifecycleEvent) => void | Promise<void>;
 }
 
 // ============================================================================
@@ -76,6 +97,8 @@ export class SubagentManager {
   private resultSender: SubagentResultSender | null = null;
   private onSubagentUsage: ((usage: Usage) => void) | null;
   private registerSubagentTask: ((done: Promise<void>) => void) | null;
+  private agentDispatcher: AgentDispatcher | null;
+  private onEvent: ((event: SubagentLifecycleEvent) => void | Promise<void>) | null;
 
   constructor(options: SubagentManagerOptions) {
     this.provider = options.provider;
@@ -87,6 +110,8 @@ export class SubagentManager {
     this.modelRegistry = options.modelRegistry ?? null;
     this.onSubagentUsage = options.onSubagentUsage ?? null;
     this.registerSubagentTask = options.registerSubagentTask ?? null;
+    this.agentDispatcher = options.agentDispatcher ?? null;
+    this.onEvent = options.onEvent ?? null;
   }
 
   setSender(sender: SubagentResultSender): void {
@@ -99,6 +124,7 @@ export class SubagentManager {
 
   async spawn(options: SpawnOptions): Promise<string> {
     const taskId = randomUUID().slice(0, 8);
+    const role = options.role || 'subtask';
     const displayLabel =
       options.label ||
       options.task.slice(0, 30) + (options.task.length > 30 ? '...' : '');
@@ -106,7 +132,7 @@ export class SubagentManager {
     const abortController = new AbortController();
     this.runningTasks.set(taskId, abortController);
 
-    const done = this.runSubagent(taskId, options.task, displayLabel, options.origin)
+    const done = this.runSubagent(taskId, options.task, displayLabel, options.origin, role, options.context)
       .catch((error) => {
         logger.error({ error, taskId }, 'Subagent failed');
       })
@@ -119,8 +145,17 @@ export class SubagentManager {
       subagent: 'spawn',
       task_id: taskId,
       label: displayLabel,
+      role,
       task: truncatePreview(options.task, 300),
     }));
+    void this.onEvent?.({
+      phase: 'spawn',
+      taskId,
+      label: displayLabel,
+      task: options.task,
+      origin: options.origin,
+      role,
+    });
     return `子任务 [${displayLabel}] 已启动 (id: ${taskId})，完成后会自动通知你。`;
   }
 
@@ -135,25 +170,57 @@ export class SubagentManager {
     task: string,
     label: string,
     origin: SubagentOrigin,
+    role: AgentRole = 'subtask',
+    context?: Record<string, unknown>,
   ): Promise<void> {
     const startedAt = Date.now();
-    logger.debug(formatCompact( { task_id: taskId, label }));
+    logger.debug(formatCompact( { task_id: taskId, label, role }));
+    await this.onEvent?.({
+      phase: 'start',
+      taskId,
+      label,
+      task,
+      origin,
+      role,
+    });
 
     try {
       const allTools = this.createTools();
-      let tools = createRestrictedToolView(allTools, {
-        allowedNames: this.subagentTools.length
-          ? this.subagentTools
-          : this.execPolicyConfig?.subagentTools?.length
-            ? this.execPolicyConfig.subagentTools
-          : DEFAULT_SUBAGENT_TOOL_NAMES,
-        disabledNames: this.execPolicyConfig?.disabledTools,
-      });
+
+      // 使用 Agent 调度器过滤工具（如果可用）
+      let tools;
+      if (this.agentDispatcher) {
+        tools = this.agentDispatcher.filterToolsByRole(allTools, role);
+      } else {
+        tools = createRestrictedToolView(allTools, {
+          allowedNames: this.subagentTools.length
+            ? this.subagentTools
+            : this.execPolicyConfig?.subagentTools?.length
+              ? this.execPolicyConfig.subagentTools
+            : DEFAULT_SUBAGENT_TOOL_NAMES,
+          disabledNames: this.execPolicyConfig?.disabledTools,
+        });
+      }
+
       if (this.execPolicyConfig) {
         tools = applyExecPolicyToTools(this.execPolicyConfig, tools);
       }
 
-      const systemPrompt = this.buildSubagentPrompt(task);
+      // 使用 Agent 调度器构建提示词（如果可用）
+      let systemPrompt;
+      if (this.agentDispatcher) {
+        const taskDef = this.agentDispatcher.createTask({
+          name: label,
+          description: task,
+          role,
+          goal: task,
+          priority: 'medium',
+          context,
+        });
+        systemPrompt = this.agentDispatcher.buildRolePrompt(role, taskDef);
+      } else {
+        systemPrompt = this.buildSubagentPrompt(task);
+      }
       const model = this.provider.models[0];
       const contextBudget = this.execPolicyConfig
         ? resolveContextBudget({
@@ -199,6 +266,16 @@ export class SubagentManager {
           model,
           result: truncatePreview(finalResult, 480),
         }));
+        await this.onEvent?.({
+          phase: 'finish',
+          taskId,
+          label,
+          task,
+          origin,
+          role,
+          status: 'ok',
+          result: finalResult,
+        });
         await this.announceResult(taskId, label, task, finalResult, origin, 'ok');
       } finally {
         agent.dispose();
@@ -213,6 +290,16 @@ export class SubagentManager {
         ok: false,
         error: truncatePreview(errorMsg, 300),
       }));
+      await this.onEvent?.({
+        phase: 'finish',
+        taskId,
+        label,
+        task,
+        origin,
+        role,
+        status: 'error',
+        error: errorMsg,
+      });
       await this.announceResult(taskId, label, task, errorMsg, origin, 'error');
     }
   }

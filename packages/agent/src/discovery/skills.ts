@@ -66,7 +66,7 @@ export async function discoverWorkspaceSkills(root?: Plugin | null): Promise<Ski
       }
     };
     mapPlugin(root);
-    for (const child of root.children || []) mapPlugin(child);
+    for (const child of (root.children || []) as Plugin[]) mapPlugin(child);
   }
 
   // 确保 data/skills 目录存在

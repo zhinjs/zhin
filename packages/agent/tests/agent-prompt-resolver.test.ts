@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { AgentPromptContributor } from '@zhin.js/core';
+import { Plugin, storage } from '@zhin.js/core';
 import {
   clearAgentPromptContributors,
   registerAgentPromptContributor,
@@ -50,6 +51,29 @@ describe('resolveAgentPromptSections', () => {
       },
     });
     expect(sections.map(s => s.id)).toContain('hook.extra');
+  });
+
+  it('bridges legacy hooks to plugin ai.hook bus', async () => {
+    const hostPlugin = new Plugin('/virtual/host-plugin.ts');
+    const payloads: any[] = [];
+    hostPlugin.on('ai.hook', payload => payloads.push(payload));
+
+    await storage.run(hostPlugin, async () => {
+      await resolveAgentPromptSections({
+        sessionId: 'test:scene1:user1',
+        ctx: {
+          slot: 'orchestrator',
+          toolContext: { platform: 'mock', senderId: 'user1', sceneId: 'scene1' },
+          toolSearch: true,
+        },
+      });
+    });
+
+    expect(payloads).toHaveLength(1);
+    expect(payloads[0].source).toBe('ai-hook');
+    expect(payloads[0].hookType).toBe('agent');
+    expect(payloads[0].hookAction).toBe('prompt');
+    expect(payloads[0].sessionId).toBe('test:scene1:user1');
   });
 
   it('isolates contributor errors', async () => {

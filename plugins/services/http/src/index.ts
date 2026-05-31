@@ -120,7 +120,7 @@ provide({
   name: "server",
   description: "http server",
   value: server,
-  dispose(s) {
+  dispose(s: Server) {
     s.close();
   },
 });

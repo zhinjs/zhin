@@ -505,7 +505,7 @@ export async function compactSession(params: {
 }
 
 // ============================================================================
-// 三级压缩管线（参考 Claude Code auto-compact 模式）
+// 三级压缩管线
 // ============================================================================
 
 /** 自动压缩缓冲 token 数 */
@@ -519,7 +519,6 @@ export const MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES = 3;
 
 /**
  * 自动压缩追踪状态
- * 参考 Claude Code 的 AutoCompactTrackingState
  */
 export interface AutoCompactTrackingState {
   /** 本轮是否已完成压缩 */
@@ -580,9 +579,8 @@ export function shouldAutoCompact(
  *
  * Level 1: Micro-Compact — 清理旧工具结果（无 LLM 调用）
  * Level 2: Auto-Compact — LLM 摘要 + 保留近期消息
- * Level 3: 参见 session-memory-compact.ts（持久化关键发现）
+ * Level 3: 持久化关键发现
  *
- * 参考 Claude Code 的 autoCompactIfNeeded
  */
 export async function autoCompactIfNeeded(params: {
   provider: AIProvider;

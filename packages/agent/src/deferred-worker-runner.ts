@@ -5,7 +5,13 @@ import { Logger } from '@zhin.js/core';
 import { formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
 import type { AIProvider, AgentTool } from '@zhin.js/core';
 import { createAgent } from '@zhin.js/ai';
-import { sanitizeToolResult } from '@zhin.js/ai';
+import {
+  isOmittedToolSummary,
+  sanitizeToolResult,
+  stripHallucinatedToolCalls,
+} from '@zhin.js/ai';
+import type { AgentResult } from '@zhin.js/ai';
+import { stripThinkBlocks } from './zhin-agent/text-sanitize.js';
 import { selectDeferredToolsForWorker } from './deferred-worker-tool-load.js';
 import {
   resolveAgentPromptMarkdown,
@@ -42,13 +48,24 @@ export interface DeferredWorkerRunOptions {
   modelRegistry?: ModelRegistry | null;
   provider: AIProvider;
   summaryMaxChars?: number;
+  onEvent?: (event: DeferredWorkerLifecycleEvent) => void | Promise<void>;
+}
+
+export interface DeferredWorkerLifecycleEvent {
+  phase: 'start' | 'finish';
+  goal: string;
+  toolQuery?: string;
+  status?: 'ok' | 'partial' | 'error';
+  loadedToolNames?: string[];
+  iterations?: number;
+  error?: string;
 }
 
 export interface DeferredWorkerResult {
   summary: string;
   loadedToolNames: string[];
   iterations: number;
-  status: 'ok' | 'error';
+  status: 'ok' | 'partial' | 'error';
 }
 
 export class DeferredWorkerRunner {
@@ -65,6 +82,7 @@ export class DeferredWorkerRunner {
       execPolicyConfig,
       modelRegistry,
       summaryMaxChars = DEFAULT_WORKER_SUMMARY_MAX_CHARS,
+      onEvent,
     } = options;
 
     const query = (toolQuery?.trim() || goal).trim();
@@ -169,6 +187,12 @@ ${goal}${platformBlock}
       tool_query: query !== goal ? truncatePreview(query, 120) : undefined,
       tools: loadedToolNames.join(','),
     }));
+    await onEvent?.({
+      phase: 'start',
+      goal,
+      toolQuery,
+      loadedToolNames,
+    });
 
     const agent = createAgent(provider, {
       model,
@@ -189,26 +213,35 @@ ${goal}${platformBlock}
 
     try {
       const result = await runWithDirectAgentExecution(origin, () => agent.run(goal));
-      const raw = result.content?.trim() || 'Task completed with no text response.';
-      const summary = truncateWorkerSummary(raw, summaryMaxChars);
+      const hitMaxIter = result.iterations >= maxIterations;
+      const summary = buildWorkerSummary(result, summaryMaxChars, hitMaxIter);
       logger.info(formatCompact( {
         worker: 'done',
         ok: true,
+        partial: hitMaxIter || undefined,
         iter: result.iterations,
         tools: loadedToolNames.join(','),
         usage: formatCompactUsage(result.usage),
         summary: truncatePreview(summary, 480),
       }));
+      await onEvent?.({
+        phase: 'finish',
+        goal,
+        toolQuery,
+        loadedToolNames,
+        iterations: result.iterations,
+        status: hitMaxIter ? 'partial' : 'ok',
+      });
       return {
         summary: JSON.stringify({
-          status: 'ok',
+          status: hitMaxIter ? 'partial' : 'ok',
           loaded_tools: loadedToolNames,
           iterations: result.iterations,
           summary,
         }),
         loadedToolNames,
         iterations: result.iterations,
-        status: 'ok',
+        status: hitMaxIter ? 'partial' : 'ok',
       };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -218,6 +251,14 @@ ${goal}${platformBlock}
         tools: loadedToolNames.join(','),
         error: truncatePreview(errorMsg),
       }));
+      await onEvent?.({
+        phase: 'finish',
+        goal,
+        toolQuery,
+        loadedToolNames,
+        status: 'error',
+        error: errorMsg,
+      });
       return {
         summary: JSON.stringify({
           status: 'error',
@@ -234,9 +275,49 @@ ${goal}${platformBlock}
   }
 }
 
-function truncateWorkerSummary(text: string, maxChars: number): string {
-  let cleaned = sanitizeToolResult(text, { maxChars });
-  if (!cleaned) cleaned = 'Task completed with no text response.';
+function buildWorkerSummary(
+  result: AgentResult,
+  maxChars: number,
+  hitMaxIter: boolean,
+): string {
+  const raw = result.content?.trim() || '';
+  let cleaned = sanitizeToolResult(
+    stripHallucinatedToolCalls(stripThinkBlocks(raw)),
+    { maxChars },
+  );
+  if (isOmittedToolSummary(cleaned)) {
+    cleaned = summarizeWorkerToolCalls(result.toolCalls, maxChars);
+  }
+  if (!cleaned) {
+    cleaned = '子任务未生成可读摘要。';
+  }
+  if (hitMaxIter) {
+    cleaned += '\n（已达 Worker 最大轮次，可能未完全完成；可拆成更小的子任务重试）';
+  }
   if (cleaned.length <= maxChars) return cleaned;
-  return cleaned.slice(0, maxChars) + '\n…[truncated]';
+  return `${cleaned.slice(0, maxChars)}\n…[truncated]`;
+}
+
+function summarizeWorkerToolCalls(
+  toolCalls: AgentResult['toolCalls'],
+  maxChars: number,
+): string {
+  if (!toolCalls?.length) {
+    return '子任务已执行但未留下工具结果，请缩小目标后重试。';
+  }
+  const parts: string[] = [];
+  for (const tc of toolCalls.slice(-12)) {
+    const raw =
+      typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result);
+    const block = sanitizeToolResult(raw, {
+      maxChars: Math.min(900, maxChars),
+    });
+    if (block && !isOmittedToolSummary(block)) {
+      parts.push(`${tc.tool}:\n${block}`);
+    }
+  }
+  if (!parts.length) {
+    return '子任务已调用工具，但结果无法整理成摘要；请缩小目标后重试。';
+  }
+  return parts.join('\n\n');
 }

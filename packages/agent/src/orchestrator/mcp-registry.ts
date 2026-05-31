@@ -21,6 +21,14 @@ export interface McpConnection {
   prompts: McpPrompt[];
 }
 
+export interface McpEnsureConnectionEvent {
+  phase: 'start' | 'finish' | 'error';
+  serverName: string;
+  connected?: boolean;
+  toolNames?: string[];
+  error?: string;
+}
+
 export class McpRegistry extends ResourceRegistry<McpServerEntry> {
   private readonly manager = new McpClientManager();
   private readonly connections = new Map<string, McpConnection>();
@@ -45,17 +53,32 @@ export class McpRegistry extends ResourceRegistry<McpServerEntry> {
   }
 
   /** Lazy-connect all registered servers; per-server failures are logged, not thrown. */
-  async ensureConnected(): Promise<void> {
+  async ensureConnected(onEvent?: (event: McpEnsureConnectionEvent) => void | Promise<void>): Promise<void> {
     for (const entry of this.getAll()) {
       if (this.isConnected(entry.name)) continue;
       try {
+        await onEvent?.({ phase: 'start', serverName: entry.name });
         await this.connect(entry.name);
         if (!this.isConnected(entry.name)) {
           logger.warn(`MCP server "${entry.name}" is registered but not connected (check SDK or server config)`);
+          await onEvent?.({
+            phase: 'finish',
+            serverName: entry.name,
+            connected: false,
+            toolNames: [],
+          });
+          continue;
         }
+        await onEvent?.({
+          phase: 'finish',
+          serverName: entry.name,
+          connected: true,
+          toolNames: this.getToolsFromServer(entry.name).map(tool => tool.name),
+        });
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         logger.warn(`MCP server "${entry.name}" connect failed: ${message}`);
+        await onEvent?.({ phase: 'error', serverName: entry.name, error: message });
       }
     }
   }

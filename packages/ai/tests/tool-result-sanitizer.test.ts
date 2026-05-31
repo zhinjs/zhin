@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import path from 'node:path';
-import { relativizeCwdPaths, sanitizeToolResult } from '../src/agent/tool-result-sanitizer.js';
+import {
+  relativizeCwdPaths,
+  sanitizeToolResult,
+  stripHallucinatedToolCalls,
+} from '../src/agent/tool-result-sanitizer.js';
 
 describe('sanitizeToolResult', () => {
   it('keeps normal text untouched', () => {
@@ -43,6 +47,15 @@ describe('sanitizeToolResult', () => {
     const root = path.resolve('/tmp/zhin-sanitize-root');
     const out = sanitizeToolResult(`file: ${root}/README.md`, { cwd: root });
     expect(out).toBe('file: ./README.md');
+  });
+
+  it('strips hallucinated tool_call markup but keeps prose', () => {
+    const input =
+      '项目结构如下：\n<tool_call>read_file</tool_call>\nplugins 在 examples/test-bot/src/plugins';
+    const out = sanitizeToolResult(input);
+    expect(out).toContain('项目结构如下');
+    expect(out).toContain('plugins');
+    expect(out).not.toContain('<tool_call');
   });
 
   it('truncates overly long output', () => {
