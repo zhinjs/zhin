@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **See also**: `AGENTS.md` for the universal agent entry point; `.github/copilot-instructions.md` for detailed API patterns and plugin examples.
+
 ## Project Overview
 
 Zhin.js is a TypeScript chatbot framework — AI-driven, plugin-based, hot-reload, multi-platform. ESM-only (`"type": "module"`), targets Node.js ^20.19.0 || >=22.12.0.
@@ -119,3 +121,14 @@ Publish workflow (`publish.yml`): On push to `main`, auto-bumps versions via Cha
 | Queue bot runner | `packages/queue-runtime/src/runner.ts` |
 | Architecture docs | `docs/architecture-overview.md` |
 | Repo structure | `docs/contributing/repo-structure.md` |
+
+## Guardrails
+
+These rules are non-negotiable — violating them will break the project:
+
+1. **Never bypass the send chain** — All outbound messages must flow through `Message.$reply` or `Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage` → platform Bot.
+2. **Respect the dependency direction** — `basic → kernel → ai → core → agent → zhin`. Lower layers must never import from higher layers.
+3. **`usePlugin()` at module top-level only** — Never inside async functions, callbacks, or lazy init paths (AsyncLocalStorage context will be lost).
+4. **Use `.js` extensions in imports** — TypeScript local imports require `.js` suffix (`import { x } from './y.js'`).
+5. **Build order matters** — When building incrementally, follow: logger/schema/database → kernel → ai → core → agent → zhin.
+6. **No git submodules** — This is a pnpm workspace monorepo; all packages live under `basic/`, `packages/`, `plugins/`, or `examples/`.

@@ -20,28 +20,6 @@
 - `$formatMessage` 返回的 Message 必须包含 `$recall` 方法
 - 正确触发事件：`message.receive`, `message.private.receive`, `message.group.receive`
 
-### 5. JSX 支持
-使用 JSX 构建消息组件（非 HTML）：
-
-```typescript
-// 配置 tsconfig.json
-{
-  "compilerOptions": {
-    "jsx": "react-jsx",
-    "jsxImportSource": "zhin.js"
-  }
-}
-
-// 使用 JSX
-import { defineComponent } from 'zhin.js'
-
-const MyComp = defineComponent(async function MyComp(
-  props: { title: string; count: number }
-) {
-  return `${props.title}: ${props.count}`
-})
-```
-
 ## 关键约定
 
 ### 1. 导入路径
@@ -67,7 +45,6 @@ declare module 'zhin.js' {
     my_model: { id: number; name: string }
   }
 }
-```
 ```
 
 ### 3. 生命周期管理
@@ -129,6 +106,28 @@ const MyComp = defineComponent(async function MyComp(
 ) {
   const message = `${props.title}: ${props.count}`
   return message
+})
+```
+
+### 6. JSX 支持
+使用 JSX 构建消息组件（非 HTML）：
+
+```typescript
+// 配置 tsconfig.json
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "zhin.js"
+  }
+}
+
+// 使用 JSX
+import { defineComponent } from 'zhin.js'
+
+const MyComp = defineComponent(async function MyComp(
+  props: { title: string; count: number }
+) {
+  return `${props.title}: ${props.count}`
 })
 ```
 
@@ -416,7 +415,7 @@ useContext('router', (router) => {
 })
 ```
 
-### 5. Web 控制台集成
+### 7. Web 控制台集成
 `console` 插件提供 Vite 开发服务器和 WebSocket 支持，插件可注册前端入口：
 
 ```typescript
@@ -429,7 +428,7 @@ useContext('web', (web) => {
 })
 ```
 
-### 6. 客户端页面开发
+### 8. 客户端页面开发
 使用 `@zhin.js/client` 动态添加前端页面（React Router 7）：
 
 ```tsx
