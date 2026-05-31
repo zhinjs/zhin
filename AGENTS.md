@@ -1,46 +1,34 @@
 # Zhin.js Agent Guide
 
-本文件是本仓库给 AI 编码代理（GitHub Copilot、Claude Code 等）的最小入口。
-详细说明尽量链接到现有文档，不在这里重复展开。
-
-> **其他 Agent 文件的关系**：
-> - `.github/copilot-instructions.md` — Copilot 自动加载的详细开发指南（API 示例、插件模式）。
-> - `CLAUDE.md` — Claude Code 专属的命令与约定速查。
-> - 本文件 — 通用入口，适用于所有 AI Agent。
+本文件是本仓库给 AI 编码代理的最小入口。详细说明尽量链接到现有文档，不在这里重复展开。
 
 ## 先读哪些文件
 
 按这个顺序建立心智模型：
 
-1. `docs/architecture-overview.md` — 分层架构图与各层职责
-2. `docs/contributing/repo-structure.md` — 目录结构与包职责
-3. `README.md` — 项目概述与快速上手
-4. 与当前改动最近的包 `README` 或 docs 页面
+1. docs/architecture-overview.md
+2. docs/contributing/repo-structure.md
+3. README.md
+4. 与当前改动最近的包 README 或 docs 页面
 
-如果任务属于插件实现，再读 `.github/instructions/zhin-plugin.instructions.md`。
+如果任务属于插件实现，再读 .github/instructions/zhin-plugin.instructions.md。
 
 ## 仓库事实
 
-| 项目 | 说明 |
-|------|------|
-| 包管理器 | pnpm 9 workspace monorepo，不使用 git submodule |
-| Node 版本 | ^20.19.0 或 >=22.12.0 |
-| 模块系统 | ESM-only (`"type": "module"`) |
-| 分层 | basic → kernel → ai → core → agent → zhin |
-| 队列运行时 | `packages/queue-runtime` 是平行运行时，不属于 IM 主发送链 |
-| 开发入口 | `examples/test-bot` |
+- 这是 pnpm workspace monorepo，不使用 git submodule。
+- Node 版本要求是 ^20.19.0 或 >=22.12.0；包管理器是 pnpm 9。
+- 主要分层：basic → kernel → ai → core → agent → zhin。
+- packages/queue-runtime 是平行运行时，不属于 IM 主发送链。
+- examples/test-bot 是默认开发入口。
 
 ## 常用命令
 
-```bash
-pnpm dev                        # 启动 examples/test-bot 热重载开发环境
-pnpm build                      # 按 basic → packages → plugins 的顺序构建全部包
-pnpm test                       # 运行 Vitest
-pnpm type-check                 # 运行 TypeScript 类型检查
-pnpm lint                       # 运行 ESLint
-pnpm --filter <pkg> build|test  # 只验证单个包
-pnpm vitest run <file>          # 运行单个测试文件
-```
+- pnpm dev：启动 examples/test-bot 热重载开发环境。
+- pnpm build：按 basic → packages → plugins 的顺序构建全部包。
+- pnpm test：运行 Vitest。
+- pnpm type-check：运行 TypeScript 类型检查。
+- pnpm lint：运行 ESLint。
+- pnpm --filter <pkg> build|test：只验证单个包。
 
 优先做最小范围验证，不要默认跑全量构建。
 

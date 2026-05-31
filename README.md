@@ -337,20 +337,20 @@ sequenceDiagram
 ```mermaid
 graph TD
     %% 发现与注册
-    subgraph Discovery [系统动态文件发现 (支持热重载)]
+    subgraph Discovery["系统动态文件发现（支持热重载）"]
         ToolMD["*.tool.md (Markdown工具)"] -->|Frontmatter & handler.ts| ToolReg["ToolRegistry (工具注册)"]
         SkillMD["SKILL.md (技能/提示词模板)"] -->|依赖检查 & 摘要XML| SkillReg["SkillRegistry (技能注册)"]
         AgentMD["*.agent.md (Agent预设)"] -->|元数据 & 系统提示| SubAgentReg["SubAgentRegistry (子代理)"]
     end
 
     %% MCP 接入
-    subgraph MCPClient [跨系统标准互联]
+    subgraph MCPClient["跨系统标准互联"]
         McpServer["MCP Servers (Claude-compatible)"] -.->|stdio / http-sse| McpMgr["McpClientManager (多客户端管理)"]
         McpMgr -->|桥接转化为 AgentTool| ToolReg
     end
 
     %% AI 中枢大脑
-    subgraph Orchestrator [ZhinAgent 决策中枢]
+    subgraph Orchestrator["ZhinAgent 决策中枢"]
         ZhinAgent["ZhinAgent Core"]
         PromptBuilder["PromptBuilder (11段式提示构建)"] --->|构建完整 Context| ZhinAgent
         ModelRegistry["ModelRegistry (模型自动发现 & 自动降级)"] --->|智能分配最合适 LLM| ZhinAgent
@@ -358,7 +358,7 @@ graph TD
     end
 
     %% 安全策略层
-    subgraph Security [双重安全屏障]
+    subgraph Security["双重安全屏障"]
         ExecPolicy["ExecPolicy (6层Bash安全纵深防御)"]
         FilePolicy["FilePolicy (路径校验 & 敏感设备/文件拦截)"]
     end
@@ -392,13 +392,13 @@ graph TD
 ```mermaid
 graph TD
     %% AI 生命周期事件广播
-    subgraph EventStream [1. AI 生命周期事件流]
+    subgraph EventStream["1. AI 生命周期事件流"]
         direction LR
         Evt_Start["ai.processing.start"] ~~~ Evt_Think["ai.thinking.update"] ~~~ Evt_SubStart["ai.subagent.start"] ~~~ Evt_SubFinish["ai.subagent.finish"] ~~~ Evt_Finish["ai.processing.finish"]
     end
 
     %% 状态自动连携
-    subgraph StateBinding [2. AI 思考状态连携机制]
+    subgraph StateBinding["2. AI 思考状态连携机制"]
         RegIndicator["register-typing-indicator (启动绑定)"]
         TIM["TypingIndicatorManager (适配器管理)"]
         ActiveInd["Active Typing Indicator (思考指示器)"]
@@ -408,7 +408,7 @@ graph TD
     end
 
     %% 统一安全出站链路 (IM Send Path)
-    subgraph OutboundPipeline [3. 统一安全出站保护链路]
+    subgraph OutboundPipeline["3. 统一安全出站保护链路"]
         ActiveInd -->|流式思考内容 / 状态占位符| SendAPI["Adapter.sendMessage / Message.$reply"]
         ZhinAgentAns["ZhinAgent 最终回复内容"] -->|输出内容| SendAPI
 
