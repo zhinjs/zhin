@@ -1,10 +1,13 @@
 /**
- * Plugin 类 - 基于 zhinjs/next 的 Hooks 实现
- * 移除 Dependency 继承，使用 AsyncLocalStorage 管理上下文
+ * Plugin 类 — IM 特化插件，继承 PluginBase
+ *
+ * 在 PluginBase 的 DI/生命周期/事件基础上增加：
+ * - Context 类型安全（Plugin.Contexts 映射）
+ * - 生命周期事件类型安全（Plugin.Lifecycle）
+ * - 中间件系统、适配器管理、useContext 等
  */
 
 import { AsyncLocalStorage } from "node:async_hooks";
-import { EventEmitter } from "node:events";
 import type { PluginManifest } from "./types.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -15,6 +18,9 @@ import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, SendOpti
 import { Adapter, Adapters } from "./adapter.js";
 import { Feature } from "./feature.js";
 import {
+  PluginBase,
+  BaseContext,
+  PluginBaseLifecycle,
   resolvePluginResolveDir as _resolvePluginResolveDir,
   pluginCreateRequire as _pluginCreateRequire,
   getFileHash,
@@ -23,13 +29,9 @@ import {
   unregisterExtensions,
   installExtensionProxy,
 } from "@zhin.js/kernel";
+import type { PluginLike } from "@zhin.js/kernel";
 
 const contextsKey = Symbol("contexts");
-
-function runtimeCwd(): string {
-  const g = globalThis as { Deno?: { cwd: () => string } };
-  return g.Deno?.cwd?.() ?? process.cwd();
-}
 
 function resolvePluginResolveDir(parent?: Plugin): string {
   return _resolvePluginResolveDir(parent);
@@ -58,7 +60,7 @@ export const storage = new AsyncLocalStorage<Plugin>();
  */
 function getCurrentFile(metaUrl = import.meta.url): string {
   if (typeof metaUrl !== "string" || metaUrl.length === 0) {
-    return path.join(runtimeCwd(), "__zhin_edge_bootstrap__.mjs");
+    return path.join(process.cwd(), "__zhin_edge_bootstrap__.mjs");
   }
   const previousPrepareStackTrace = Error.prepareStackTrace;
   Error.prepareStackTrace = function (_, stack) {
@@ -74,7 +76,7 @@ function getCurrentFile(metaUrl = import.meta.url): string {
   );
   const result = stackFiles[idx + 1];
   if (!result) {
-    return path.join(runtimeCwd(), "__zhin_edge_bootstrap__.mjs");
+    return path.join(process.cwd(), "__zhin_edge_bootstrap__.mjs");
   }
   try {
     return fileURLToPath(result);
@@ -121,33 +123,41 @@ export function getPlugin(): Plugin {
 // Plugin 类
 // ============================================================================
 
-export interface Plugin extends Plugin.Extensions { }
+export interface Plugin extends Plugin.Extensions {
+  on<K extends keyof Plugin.Lifecycle>(name: K, listener: (...args: Plugin.Lifecycle[K]) => void): this;
+  on(name: string | symbol, listener: (...args: any[]) => void): this;
+  off<K extends keyof Plugin.Lifecycle>(name: K, listener: (...args: Plugin.Lifecycle[K]) => void): this;
+  off(name: string | symbol, listener: (...args: any[]) => void): this;
+  once<K extends keyof Plugin.Lifecycle>(name: K, listener: (...args: Plugin.Lifecycle[K]) => void): this;
+  once(name: string | symbol, listener: (...args: any[]) => void): this;
+  emit<K extends keyof Plugin.Lifecycle>(name: K, ...args: Plugin.Lifecycle[K]): boolean;
+  emit(name: string | symbol, ...args: any[]): boolean;
+}
 /**
- * Plugin 类 - 核心插件系统
- * 直接继承 EventEmitter
+ * Plugin 类 - IM 特化插件，继承 PluginBase
+ *
+ * 类型窄化：
+ * - children: Plugin[] (而非 PluginBase[])
+ * - parent: Plugin | undefined
+ * - root: Plugin
+ * - $contexts: Map<string, Context<any>>
+ * - dispatch/broadcast: Plugin.Lifecycle 类型安全
  */
-export class Plugin extends EventEmitter<Plugin.Lifecycle> {
+export class Plugin extends PluginBase implements PluginLike {
   static [contextsKey] = [] as string[];
   
   #cachedName?: string;
   #manifest?: PluginManifest | null;
   adapters: (keyof Plugin.Contexts)[] = [];
-  started = false;
+  declare started: boolean;
 
-  // 上下文存储
-  $contexts: Map<string, Context<any>> = new Map();
+  // children/parent 继承 PluginBase 的类型（PluginBase[] / PluginBase | undefined），
+  // 具体的 Plugin 类型通过 getter/builder 方法按需窄化
+  override get root(): Plugin {
+    return super.root as Plugin;
+  }
 
-
-  // 子插件
-  children: Plugin[] = [];
-
-  // 文件信息
-  filePath: string;
-  fileHash: string = "";
-
-  // Logger
-  logger: Logger;
-
+  // 插件功能
   #messageMiddleware: MessageMiddleware<RegisteredAdapter> = async (message, next) => {
     const commandService = this.inject('command');
     if (!commandService) return await next();
@@ -157,7 +167,6 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     if (!adapter || !(adapter instanceof Adapter)) return await next();
     await message.$reply(result);
   };
-  // 插件功能
   #middlewares: MessageMiddleware<RegisteredAdapter>[] = [this.#messageMiddleware];
 
   // Feature 贡献追踪
@@ -179,20 +188,12 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   /**
    * 构造函数
    */
-  constructor(filePath: string = "", public parent?: Plugin) {
-    super();
+  constructor(filePath: string = "", parent?: Plugin) {
+    super(filePath, parent as PluginBase | undefined);
     
-    // 增加 EventEmitter 监听器限制，避免警告
-    // 因为插件可能注册多个命令/组件/中间件，每个都会添加 dispose 监听器
-    this.setMaxListeners(50);
-
-    this.filePath = filePath.replace(/\?t=\d+$/, "");
-    this.logger = this.name ? logger.getLogger(this.name) : logger;
-
-    // 自动添加到父节点
-    if (parent && !parent.children.includes(this)) {
-      parent.children.push(this);
-    }
+    // 自动添加到父节点 — PluginBase constructor 已处理，
+    // 但 PluginBase 使用 PluginBase[]，这里需要确保正确
+    // （super 已调用 parent.children.push(this)，类型已通过 declare 窄化）
 
     // 绑定方法以支持解构使用
     this.$bindMethods();
@@ -281,25 +282,11 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     return undefined;
   }
 
+  // 根插件类型窄化已在 interface Plugin 声明
+
   /**
-   * 根插件
+   * 上下文收集 — 使用类型窄化的 inject 替代直接 Map 访问
    */
-  get root(): Plugin {
-    if (!this.parent) return this;
-    return this.parent.root;
-  }
-  get contexts(): Map<string, Context> {
-    const result = new Map<string, Context>();
-    for (const [key, value] of this.$contexts) {
-      result.set(key, value);
-    }
-    for (const child of this.children) {
-      for (const [key, value] of child.contexts) {
-        result.set(key, value);
-      }
-    }
-    return result;
-  }
 
 
   useContext<T extends (keyof Plugin.Contexts)[]>(...args: [...T, SideEffect<T>]) {
@@ -359,7 +346,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   /**
    * 启动插件
    */
-  async start(t?:number): Promise<void> {
+  override async start(t?:number): Promise<void> {
     if (this.started) return;
     
     // 挂载所有 Context，支持部分失败回滚
@@ -367,7 +354,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     for (const [name, context] of this.$contexts) {
       try {
         if (typeof context.mounted === "function") {
-          const result = await context.mounted(this);
+          const result = await context.mounted(this as PluginBase);
           // 仅在没有预设 value 时才用 mounted 返回值赋值
           if (!context.value) {
             context.value = result;
@@ -459,7 +446,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     return {
       [this.name]: {
         features: this.features,
-        children: this.children.map(child => child.info())
+        children: (this.children as Plugin[]).map(child => child.info())
       }
     }
   }
@@ -467,7 +454,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   /**
    * 停止插件
    */
-  async stop(): Promise<void> {
+  override async stop(): Promise<void> {
     if (!this.started) return;
     this.logger.debug(`Stopping plugin "${this.name}"`);
     this.started = false;
@@ -508,7 +495,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     }
     this.#disposables.clear();
     
-    // 清理 middlewares 数组（保留默认的消息中间件）
+    // 清空 middlewares 数组（保留默认的消息中间件）
     this.#middlewares.length = 1;
 
     // 清理 feature 贡献记录
@@ -552,26 +539,26 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   // ============================================================================
 
   /**
-   * dispatch - 向上冒泡到父插件，或在根节点广播
+   * dispatch - 向上冒泡到父插件，或者在根节点广播（类型安全版本）
    */
   async dispatch<K extends keyof Plugin.Lifecycle>(
     name: K,
     ...args: Plugin.Lifecycle[K]
   ): Promise<void> {
     if (this.parent) {
-      return this.parent.dispatch(name, ...args);
+      return (this.parent as Plugin).dispatch(name, ...args);
     }
     return this.broadcast(name, ...args);
   }
 
   /**
-   * broadcast - 向下广播到所有子插件
+   * broadcast - 向下广播到所有子插件（类型安全版本）
    */
   async broadcast<K extends keyof Plugin.Lifecycle>(
     name: K,
     ...args: Plugin.Lifecycle[K]
   ): Promise<void> {
-    const listeners = this.listeners(name) as ((...args: any[]) => any)[];
+    const listeners = this.listeners(name as any) as ((...args: any[]) => any)[];
     for (const listener of listeners) {
       try {
         await listener(...args);
@@ -581,7 +568,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     }
 
     for (const child of this.children) {
-      await child.broadcast(name, ...args);
+      await (child as Plugin).broadcast(name, ...args);
     }
   }
 
@@ -590,21 +577,19 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   // ============================================================================
 
   /**
-   * 注册上下文
+   * 注册上下文（类型安全版本）
    */
-  provide<T extends keyof Plugin.Contexts>(context: Context<T>): this;
-  provide(feature: Feature<unknown>): this;
-  provide(target: Context<keyof Plugin.Contexts> | Feature<unknown>): this {
+  override provide(target: any): this {
     if (target instanceof Feature) {
       const feature = target;
-      const ctx: Context<keyof Plugin.Contexts> = {
-        name: feature.name as keyof Plugin.Contexts,
+      const ctx: BaseContext = {
+        name: feature.name,
         description: feature.desc,
-        value: feature as Plugin.Contexts[keyof Plugin.Contexts],
+        value: feature,
         mounted: feature.mounted
-          ? async (plugin: Plugin) => {
+          ? async (plugin: PluginBase) => {
               await feature.mounted!(plugin);
-              return feature as Plugin.Contexts[keyof Plugin.Contexts];
+              return feature;
             }
           : undefined,
         dispose: feature.dispose
@@ -612,14 +597,14 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
           : undefined,
         extensions: feature.extensions,
       };
-      return this.provide(ctx);
+      return this.provide(ctx as Context<keyof Plugin.Contexts>);
     }
-    const context = target;
+    const context = target as Context<keyof Plugin.Contexts>;
     if (!Plugin[contextsKey].includes(context.name as string)) {
       Plugin[contextsKey].push(context.name as string);
     }
     this.logger.debug(`Context "${context.name as string}" provided`);
-    this.$contexts.set(context.name as string, context);
+    this.$contexts.set(context.name as string, context as unknown as BaseContext);
     // 注册扩展方法到共享 registry，确保后续 import 的插件可用
     if (context.extensions) {
       installExtensionProxy(Plugin.prototype);
@@ -637,9 +622,9 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   // ============================================================================
 
   /**
-   * 导入插件
+   * 导入插件（Plugin 类型窄化版本）
    */
-  async import(entry: string,t?:number): Promise<Plugin> {
+  override async import(entry: string, t?: number): Promise<Plugin> {
     if (!entry) throw new Error(`import plugin failed: entry is empty`);
     const resolved = resolveEntry(path.isAbsolute(entry) ?
       entry :
@@ -652,7 +637,7 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     }
     // 避免重复加载同一路径的插件
     const normalized = realPath.replace(/\?t=\d+$/, '').replace(/\\/g, '/');
-    const existing = this.children.find(child => 
+    const existing = (this.children as Plugin[]).find(child => 
       child.filePath.replace(/\?t=\d+$/, '').replace(/\\/g, '/') === normalized
     );
     if (existing) {
@@ -665,31 +650,32 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
     if (this.started) await plugin.start(t);
 
     if (process.env.NODE_ENV === 'development') {
-      plugin.watch((p) => p.reload())
+      plugin.watch((p) => (p as Plugin).reload())
     }
     return plugin;
   }
 
   /**
-   * 重载插件
+   * 重载插件（Plugin 类型窄化版本）
    */
-  async reload(plugin: Plugin = this): Promise<void> {
-    this.logger.info(formatCompact( { name: plugin.name, reload: true }));
-    const now=Date.now();
-    if (!plugin.parent) {
+  override async reload(plugin: PluginBase = this): Promise<void> {
+    const p = plugin as Plugin;
+    this.logger.info(formatCompact( { name: p.name, reload: true }));
+    const now = Date.now();
+    if (!p.parent) {
       // 根插件重载 = 退出进程（由 CLI 重启）
       return process.exit(51);
     }
 
-    const entry = plugin.filePath;
-    const parent = plugin.parent;
-    await plugin.stop();
+    const entry = p.filePath;
+    const parent = p.parent as Plugin;
+    await p.stop();
     let fresh: Plugin;
     try {
-      fresh = await parent.import(entry, now);
+      fresh = await parent.import(entry, now) as Plugin;
     } catch (err) {
       this.logger.error(formatCompact({
-        name: plugin.name,
+        name: p.name,
         reload: false,
         error: err instanceof Error ? err.message : String(err),
         hint: 'full_restart',
@@ -701,10 +687,10 @@ export class Plugin extends EventEmitter<Plugin.Lifecycle> {
   }
 
   /**
-   * 监听文件变化
+   * 监听文件变化（Plugin 类型窄化版本）
    */
-  watch(
-    callback: (p: Plugin) => void | Promise<void>,
+  override watch(
+    callback: (p: PluginBase) => void | Promise<void>,
     recursive = false
   ): void {
     if (!this.filePath || this.filePath.includes("node_modules")) return;
@@ -816,22 +802,79 @@ export namespace Plugin {
 
   /**
    * 生命周期事件
+   *
+   * 必须包含索引签名以满足 PluginBaseLifecycle 结构子类型约束。
    */
-  export interface Lifecycle {
-    mounted: [];
-    dispose: [];
-    "before-start": [Plugin];
-    started: [Plugin];
+  export interface Lifecycle extends PluginBaseLifecycle {
     "before-mount": [Plugin];
     "before-dispose": [Plugin];
-    "call.recallMessage": [string, string, string];
-    'before.sendMessage': [SendOptions];
     "context.mounted": [keyof Plugin.Contexts];
     "context.dispose": [keyof Plugin.Contexts];
+    "call.recallMessage": [string, string, string];
+    'before.sendMessage': [SendOptions];
     "message.receive": [any];
     "bot.login.pending": [import('./built/login-assist.js').PendingLoginTask];
     "request.receive": [any];
     "notice.receive": [any];
+    "ai.processing.start": [Plugin.AIEventPayload];
+    "ai.processing.finish": [Plugin.AIEventPayload];
+    "ai.processing.error": [Plugin.AIEventPayload];
+    "ai.agent.start": [Plugin.AIEventPayload];
+    "ai.agent.finish": [Plugin.AIEventPayload];
+    "ai.thinking": [Plugin.AIEventPayload];
+    "ai.tool.call": [Plugin.AIEventPayload];
+    "ai.tool.result": [Plugin.AIEventPayload];
+    "ai.response": [Plugin.AIEventPayload];
+    "ai.typing.start": [Plugin.AIEventPayload];
+    "ai.typing.stop": [Plugin.AIEventPayload];
+    "ai.subagent.spawn": [Plugin.AIEventPayload];
+    "ai.subagent.start": [Plugin.AIEventPayload];
+    "ai.subagent.finish": [Plugin.AIEventPayload];
+    "ai.deferred.start": [Plugin.AIEventPayload];
+    "ai.deferred.finish": [Plugin.AIEventPayload];
+    "ai.mcp.connect.start": [Plugin.AIEventPayload];
+    "ai.mcp.connect.finish": [Plugin.AIEventPayload];
+    "ai.mcp.connect.error": [Plugin.AIEventPayload];
+    "ai.session.new": [Plugin.AIEventPayload];
+    "ai.session.compact": [Plugin.AIEventPayload];
+    "ai.hook": [Plugin.AIEventPayload];
+  }
+
+  export interface AIEventPayload {
+    sessionId: string;
+    source: 'zhin-agent' | 'ai-hook' | 'orchestrator-hook';
+    mode?: 'text' | 'multimodal';
+    path?: 'chat' | 'fast' | 'agent' | 'multimodal' | 'rate_limited';
+    userId?: string;
+    platform?: string;
+    botId?: string;
+    sceneId?: string;
+    messageId?: string;
+    scope?: string;
+    content?: string;
+    reply?: string;
+    thinking?: string;
+    toolName?: string;
+    args?: Record<string, unknown>;
+    result?: unknown;
+    error?: string;
+    model?: string;
+    iterations?: number;
+    reason?: string;
+    taskId?: string;
+    label?: string;
+    status?: 'ok' | 'partial' | 'error';
+    serverName?: string;
+    loadedToolNames?: string[];
+    hookType?: string;
+    hookAction?: string;
+    hookContext?: Record<string, unknown>;
+    messages?: string[];
+    agentId?: string;
+    compactedCount?: number;
+    savedTokens?: number;
+    totalTokensBefore?: number;
+    totalTokensAfter?: number;
   }
 
   /**

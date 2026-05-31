@@ -60,6 +60,7 @@
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {
+    "@zhin.js/agent": "workspace:*",
     "@zhin.js/client": "workspace:*",
     "@zhin.js/console": "workspace:*",
     "@zhin.js/core": "workspace:*",
@@ -67,6 +68,9 @@
     "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {
+    "@zhin.js/agent": {
+      "optional": true
+    },
     "@zhin.js/client": {
       "optional": true
     },

@@ -2,7 +2,7 @@
  * Format orchestrator tool-call history for end users (IM reply).
  * Avoids dumping raw JSON / internal meta-tool noise.
  */
-import { sanitizeToolResult } from '@zhin.js/ai';
+import { isOmittedToolSummary, sanitizeToolResult } from '@zhin.js/ai';
 
 export interface ToolCallRecord {
   tool: string;
@@ -49,8 +49,18 @@ function formatRunDeferredTaskResult(result: unknown): string | undefined {
       return parsed.error || '子任务执行失败。';
     }
     const summary = parsed.summary?.trim();
-    if (summary) {
-      return sanitizeToolResult(summary, { maxChars: 4000 });
+    if (summary && !isOmittedToolSummary(summary)) {
+      const cleaned = sanitizeToolResult(summary, { maxChars: 4000 });
+      if (!isOmittedToolSummary(cleaned)) {
+        const prefix =
+          parsed.status === 'partial'
+            ? '子任务未完全结束（已达最大轮次），以下为已收集结果：\n\n'
+            : '';
+        return `${prefix}${cleaned}`;
+      }
+    }
+    if (parsed.status === 'partial') {
+      return '子任务未完全结束（已达最大轮次），且没有可展示的摘要。请把目标拆小后重试。';
     }
     return '子任务已完成，但没有可展示的文本摘要。';
   }

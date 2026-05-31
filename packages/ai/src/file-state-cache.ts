@@ -1,7 +1,7 @@
 /**
  * File State Cache — LRU 文件状态缓存
  *
- * 参考 Claude Code 的 fileStateCache.ts 设计：
+ * 设计：
  * 使用路径归一化 + 大小驱逐的 LRU 缓存，
  * 避免 AI 工具重复读取同一文件。
  *

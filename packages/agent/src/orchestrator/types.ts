@@ -83,6 +83,7 @@ export interface ToolContext {
   sceneId?: string;
   scope?: ToolScope;
   botId?: string;
+  messageId?: string;
   senderPermissionLevel?: ToolPermissionLevel;
   isOwner?: boolean;
   isBotAdmin?: boolean;

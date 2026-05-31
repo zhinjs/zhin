@@ -231,14 +231,12 @@ export interface AgentTool {
   /**
    * 该工具是否为只读操作（如 read_file, grep, list_dir）。
    * 只读工具可以安全并发执行。
-   * 参考 Claude Code Tool.isReadOnly 模式。
    */
   isReadOnly?: boolean;
   /**
    * 该工具是否可以与其他工具并发执行。
    * 默认行为：isReadOnly 为 true 的工具自动视为并发安全。
    * 设为 false 可强制独占执行（如写文件、发送消息）。
-   * 参考 Claude Code Tool.isConcurrencySafe 模式。
    */
   isConcurrencySafe?: boolean;
 }
@@ -286,7 +284,6 @@ export interface AgentConfig {
   contextWindow?: number;
   /**
    * 最大并发工具执行数（默认 10）。
-   * 参考 Claude Code StreamingToolExecutor 的并发上限。
    */
   maxConcurrentTools?: number;
   /**

@@ -1,5 +1,7 @@
-import { relativizeCwdPaths } from '@zhin.js/ai';
+import { relativizeCwdPaths, stripHallucinatedToolCalls } from '@zhin.js/ai';
 import { looksLikeInternalToolDump } from './tool-calls-user-format.js';
+
+export { stripHallucinatedToolCalls };
 
 /** Strip `<think>...</think>` blocks that some reasoning models embed in content. */
 export function stripThinkBlocks(text: string): string {
@@ -14,33 +16,6 @@ const RAW_TOOL_MARKUP_RE =
  */
 export function looksLikeRawToolMarkup(text: string): boolean {
   return RAW_TOOL_MARKUP_RE.test(text);
-}
-
-/**
- * Strip hallucinated tool-call markup that some models emit as plain text.
- * Covers XML-style, plugin fences, and DeepSeek DSML (`<｜｜DSML｜｜invoke>` …).
- */
-export function stripHallucinatedToolCalls(text: string): string {
-  let cleaned = text;
-  cleaned = cleaned.replace(/<tool_call\b[\s\S]*?(?:\/>|<\/tool_call>)/gi, '');
-  cleaned = cleaned.replace(/<tool_result\b[\s\S]*?(?:\/>|<\/tool_result>)/gi, '');
-  cleaned = cleaned.replace(/<function=[^>]*>[\s\S]*?<\/function>/gi, '');
-  cleaned = cleaned.replace(/\{tool_(?:result|call)\}/gi, '');
-  cleaned = cleaned.replace(/<\|plugin\|>[\s\S]*?<\|\/plugin\|>/gi, '');
-  cleaned = cleaned.replace(/<<<tool_call>>>[\s\S]*?<<<end>>>/gi, '');
-  cleaned = cleaned.replace(/<\|tool_calls\|>[\s\S]*?<\|\/tool_calls\|>/gi, '');
-  cleaned = cleaned.replace(/<\|?tool_calls\|?>[\s\S]*?<\|?\/tool_calls\|?>/gi, '');
-
-  // DeepSeek DSML: nested `<…DSML…>…</…DSML…>` (fullwidth `｜` or ASCII `|`)
-  let prev: string;
-  do {
-    prev = cleaned;
-    cleaned = cleaned.replace(/<[^>]*DSML[^>]*>[\s\S]*?<\/[^>]*DSML[^>]*>/gi, '');
-  } while (cleaned !== prev);
-  cleaned = cleaned.replace(/<[^>]*DSML[^>]*tool_calls[^>]*>[\s\S]*$/gi, '');
-  cleaned = cleaned.replace(/<[^>]*DSML[^>]*>/gi, '');
-
-  return cleaned.trim();
 }
 
 export interface SanitizeAssistantReplyOptions {

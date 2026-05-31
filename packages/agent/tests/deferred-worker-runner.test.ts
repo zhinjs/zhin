@@ -125,4 +125,102 @@ describe('DeferredWorkerRunner', () => {
     expect(payload.summary).toContain('（已省略无关的页面/脚本噪声）');
     expect(payload.summary.toLowerCase()).not.toContain('<html');
   });
+
+  it('falls back to tool call results when final content is raw tool_call markup', async () => {
+    const chat = vi
+      .fn()
+      .mockResolvedValueOnce({
+        choices: [{
+          message: {
+            role: 'assistant',
+            tool_calls: [{
+              id: 'tc1',
+              type: 'function',
+              function: { name: 'bash', arguments: '{}' },
+            }],
+          },
+          finish_reason: 'tool_calls',
+        }],
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      })
+      .mockResolvedValueOnce({
+        choices: [{
+          message: {
+            role: 'assistant',
+            content: '<tool_call>read_file</tool_call>',
+          },
+          finish_reason: 'stop',
+        }],
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      });
+
+    const provider = {
+      name: 'mock',
+      models: ['test-model'],
+      chat,
+    } as unknown as AIProvider;
+
+    const bash = makeTool('bash');
+    const readFile = makeTool('read_file');
+    const allByName = new Map<string, AgentTool>([
+      ['bash', bash],
+      ['read_file', readFile],
+    ]);
+
+    const runner = new DeferredWorkerRunner();
+    const result = await runner.runSync({
+      goal: 'list project files',
+      deferredCatalog: [],
+      workerBaseTools: [bash, readFile],
+      allToolsByName: allByName,
+      origin: {},
+      maxToolResults: 5,
+      provider,
+      maxIterations: 5,
+    });
+
+    const payload = JSON.parse(result.summary) as { summary: string; status: string };
+    expect(payload.summary).toContain('ok:bash');
+    expect(payload.summary).not.toContain('Tool returned non-plain control payload');
+  });
+
+  it('emits lifecycle events', async () => {
+    const chat = vi.fn().mockResolvedValue({
+      choices: [{
+        message: { role: 'assistant', content: 'Deferred done' },
+        finish_reason: 'stop',
+      }],
+      usage: { prompt_tokens: 2, completion_tokens: 2, total_tokens: 4 },
+    });
+
+    const provider = {
+      name: 'mock',
+      models: ['test-model'],
+      chat,
+    } as unknown as AIProvider;
+
+    const deferredCatalog = [makeTool('github_star', 'star repo')];
+    const allByName = new Map<string, AgentTool>([
+      ['github_star', deferredCatalog[0]],
+      ['bash', makeTool('bash')],
+    ]);
+    const onEvent = vi.fn();
+
+    const runner = new DeferredWorkerRunner();
+    await runner.runSync({
+      goal: 'Check stars',
+      toolQuery: 'github star',
+      deferredCatalog,
+      workerBaseTools: [allByName.get('bash')!],
+      allToolsByName: allByName,
+      origin: { platform: 'qq', senderId: 'u1' },
+      maxToolResults: 5,
+      provider,
+      maxIterations: 3,
+      onEvent,
+    });
+
+    expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ phase: 'start', goal: 'Check stars' }));
+    expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ phase: 'finish', goal: 'Check stars', status: 'ok' }));
+  });
 });

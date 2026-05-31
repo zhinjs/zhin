@@ -152,7 +152,6 @@ export function filterTools(
 /**
  * Tool Search Cache — 工具搜索缓存
  *
- * 参考 Claude Code 的 memoize + 版本失效模式：
  * 缓存工具描述和过滤结果，避免每次请求都重新排序/过滤。
  *
  * 核心设计：
@@ -176,7 +175,6 @@ const MAX_CACHE_ENTRIES = 100;
  * 计算工具集的身份 hash
  *
  * 使用工具名排序后拼接，变化即意味着工具集被修改。
- * 参考 Claude Code 的 getDeferredToolsCacheKey。
  */
 export function computeToolSetHash(tools: AgentTool[]): string {
   return tools

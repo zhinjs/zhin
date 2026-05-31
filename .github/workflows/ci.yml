@@ -59,6 +59,15 @@ jobs:
 
       - name: check plugins do not import koa
         run: pnpm check:no-koa
+
+      - name: check production config
+        run: pnpm check:prod
+
+      - name: check plugin spec
+        run: pnpm check:plugin
+
+      - name: check architecture layers
+        run: pnpm check:architecture
       
       - name: run tests
         run: pnpm test:reporter

@@ -28,7 +28,11 @@ pnpm --filter @zhin.js/core test
 pnpm vitest run packages/core/tests/plugin.test.ts
 ```
 
-Custom lint checks: `pnpm check:harness-paths`, `pnpm check:no-koa`, `pnpm check:prod`, `pnpm check:plugin`.
+Custom lint checks:
+- `pnpm check:harness-paths` — 检测插件是否绕过 Adapter.sendMessage 直调 bot.$sendMessage
+- `pnpm check:no-koa` — 检测插件是否直接 import koa（应使用 RouterContext）
+- `pnpm check:prod` — 检查生产环境配置（无 console.log/debugger/TODO/FIXME）
+- `pnpm check:plugin` — 检查插件是否符合标准规范（入口文件、测试、README）
 
 ## Architecture
 
@@ -108,6 +112,174 @@ GitHub Actions (`ci.yml`): Install → changeset check → build → harness che
 
 Publish workflow (`publish.yml`): On push to `main`, auto-bumps versions via Changesets and publishes to npm.
 
+## Harness Engineering
+
+详细文档请参考：
+- [Harness Engineering 指南](docs/contributing/harness-engineering.md) — 项目级 harness engineering
+- [Agent Harness Engineering 指南](docs/advanced/agent-harness-engineering.md) — Agent 安全策略
+
+### 核心原则
+
+1. **架构约束优先** — 通过自动化检查强制执行架构边界
+2. **早期发现** — 在 CI 中捕获问题，而非生产环境
+3. **明确规范** — 所有约束必须文档化并可验证
+4. **最小化例外** — 任何绕过检查都需要明确的理由和审批
+
+### 快速检查
+
+```bash
+pnpm check:all              # 运行所有 harness 检查
+pnpm check:harness-paths    # 检查发送链路绕过
+pnpm check:no-koa           # 检查 koa 导入
+pnpm check:prod             # 检查生产配置
+pnpm check:plugin           # 检查插件规范
+pnpm check:architecture     # 检查架构层级
+```
+
+### Agent 安全策略
+
+Agent harness engineering 提供多层安全防护：
+
+1. **执行策略** — 命令执行安全检查（5 层防御）
+2. **文件策略** — 文件访问安全检查（4 层防御）
+3. **网络策略** — 网络访问安全检查（域名白名单、私有 IP 阻止）
+4. **预算限制** — 资源使用限制（Token/Cost、调用次数、时长）
+5. **审计日志** — 安全事件追踪
+6. **沙箱环境** — 进程隔离和资源限制
+
+详细配置请参考 [Agent Harness Engineering 指南](docs/advanced/agent-harness-engineering.md)。
+
+### Agent 调度器
+
+Agent 调度器提供角色管理和工具权限控制：
+
+- **7 种预定义角色**：main, subtask, worker, researcher, executor, reviewer, planner
+- **工具权限继承**：每种角色有独立的工具集
+- **任务依赖管理**：支持任务依赖验证
+- **上下文隔离**：角色特定的系统提示词
+
+### 提示词构建器
+
+提示词构建器提供分层提示词组装：
+
+- **分层结构**：系统、角色、任务、上下文、工具、安全、约束、示例、记忆
+- **动态注入**：运行时构建提示词
+- **安全规则嵌入**：8 条核心安全规则
+- **上下文窗口管理**：优先级排序、字符数截断
+
+### 任务续传机制
+
+任务续传机制支持复杂任务的智能分解和续传：
+
+- **智能任务分解**：自动分析任务复杂度，分解为子任务
+- **进度追踪**：记录每个子任务的完成状态
+- **续传能力**：当达到迭代限制时，可以继续执行未完成的任务
+- **上下文保持**：续传时保持之前的上下文和进度
+
+配置示例：
+```typescript
+{
+  maxIterations: 15,  // 增加到15次，支持复杂任务
+  timeout: 120_000,   // 增加到2分钟
+  maxSubagentIterations: 25,  // 增加子任务迭代次数
+  subagentTurnWaitMs: 300_000,  // 增加等待时间到5分钟
+}
+```
+
+### 消息处理状态适配层
+
+消息处理状态适配层提供统一的接口来提示用户"AI 正在处理"：
+
+- **多平台支持**：ICQQ（消息回应）、其他平台（发送消息）
+- **可配置**：支持 reaction、message、typing、none 等类型
+- **自动管理**：自动开始和停止提示
+- **平台适配**：不同平台可以有不同的实现方式
+
+配置示例：
+```typescript
+import { TypingIndicatorManager, ICQQTypingIndicatorAdapter } from '@zhin.js/agent';
+
+const manager = new TypingIndicatorManager({
+  type: 'reaction',
+  emoji: '⏳',
+  autoRemove: true,
+});
+
+// 注册 ICQQ 适配器
+manager.registerAdapter(new ICQQTypingIndicatorAdapter(...));
+
+// 使用
+const indicator = await manager.start({
+  platform: 'icqq',
+  botId: '75318',
+  sessionId: 'private:liuchunlang',
+  messageId: '123456',
+  sceneType: 'private',
+});
+
+// 处理完成后停止
+await indicator.stop();
+```
+
+### 架构层级检查
+
+项目依赖层级必须严格遵守：
+
+```
+basic/ (logger, schema, database, cli)
+  ↓
+packages/kernel (无 IM 概念)
+  ↓
+packages/ai (providers, agents, memory)
+  ↓
+packages/core (Plugin, Adapter, Bot, Command)
+  ↓
+packages/agent (ZhinAgent, security policies)
+  ↓
+packages/zhin (主入口)
+```
+
+**禁止的导入**：
+- `packages/kernel` 不能导入 `packages/core` 或更高层
+- `packages/ai` 不能导入 `packages/core` 或更高层
+- `packages/core` 不能导入 `packages/agent`
+- 插件不能直接导入 `packages/kernel`（应通过 `packages/core`）
+
+### 发送链路保护
+
+所有消息发送必须通过标准链路：
+
+```
+Message.$reply / Adapter.sendMessage
+  → renderSendMessage
+  → root plugin before.sendMessage
+  → platform Bot.$sendMessage
+```
+
+**禁止**：直接调用 `bot.$sendMessage()` 绕过中间件链
+
+### 插件规范
+
+每个插件必须包含：
+- `package.json`（name, main/exports 字段）
+- `src/` 目录（TypeScript 源码）
+- `tests/` 目录（至少一个 `.test.ts` 文件）
+- `README.md`（使用说明）
+
+### 代码质量检查
+
+- **ESLint** — 使用 flat config 格式（eslint.config.mjs）
+- **TypeScript** — 严格模式，禁止 `any` 类型
+- **导入路径** — 必须使用 `.js` 扩展名
+- **AsyncLocalStorage** — `usePlugin()` 必须在模块顶层调用
+
+### 例外处理
+
+如果确实需要绕过某个检查：
+1. 在代码中添加 `// harness-disable-next-line` 注释
+2. 在 PR 描述中说明理由
+3. 获得至少一位维护者审批
+
 ## Important Paths
 
 | What | Where |
@@ -116,11 +288,16 @@ Publish workflow (`publish.yml`): On push to `main`, auto-bumps versions via Cha
 | Adapter and send chain | `packages/core/src/adapter.ts` |
 | Message dispatcher | `packages/core/src/built/dispatcher.ts` |
 | Agent orchestrator | `packages/agent/src/orchestrator/` |
+| Agent dispatcher | `packages/agent/src/orchestrator/agent-dispatcher.ts` |
 | Security policies | `packages/agent/src/security/` |
+| Sandbox environment | `packages/agent/src/security/sandbox.ts` |
+| Prompt builder | `packages/agent/src/zhin-agent/prompt-builder.ts` |
 | AI providers | `packages/ai/src/providers/` |
 | Queue bot runner | `packages/queue-runtime/src/runner.ts` |
 | Architecture docs | `docs/architecture-overview.md` |
 | Repo structure | `docs/contributing/repo-structure.md` |
+| Harness engineering | `docs/contributing/harness-engineering.md` |
+| Agent harness engineering | `docs/advanced/agent-harness-engineering.md` |
 
 ## Guardrails
 

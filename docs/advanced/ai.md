@@ -568,7 +568,7 @@ preset 和 `execAllowlist` 会合并，即 `execPreset: network` + `execAllowlis
 
 ### 6 层纵深防御
 
-exec-policy 参考 Claude Code 的 bash 安全模型，实现了 6 层纵深防御：
+exec-policy 实现了 6 层纵深防御：
 
 | 层 | 防御内容 | 示例 |
 |----|---------|------|

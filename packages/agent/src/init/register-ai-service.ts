@@ -11,7 +11,7 @@ export function registerAIService(refs: AIServiceRefs): void {
   const plugin = getPlugin();
   const { provide, root, logger } = plugin;
 
-  provide<'ai'>({
+  provide({
     name: 'ai',
     description: 'AI Service - Multi-model LLM integration',
     async mounted(_p: Plugin) {
@@ -38,7 +38,7 @@ export function registerAIService(refs: AIServiceRefs): void {
 
       return service;
     },
-    async dispose(service) {
+    async dispose(service: AIService) {
       if (service) {
         service.dispose();
         refs.aiService = null;

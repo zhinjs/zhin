@@ -244,13 +244,15 @@ export interface ToolContext {
   platform?: string;
   /** 来源 Bot */
   botId?: string;
+  /** 消息 ID */
+  messageId?: string;
   /** 场景 ID（群号/频道ID/私聊用户ID） */
   sceneId?: string;
   /** 发送者 ID */
   senderId?: string;
   /** 原始消息对象（如果从消息触发） */
   message?: Message<any>;
-  /** 
+  /**
    * 消息场景类型
    * private: 私聊, group: 群聊, channel: 频道
    */

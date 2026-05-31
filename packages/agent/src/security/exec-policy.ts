@@ -1,7 +1,6 @@
 /**
  * ZhinAgent 执行策略 — bash 命令的安全检查与工具包装
  *
- * 参考 Claude Code bashPermissions.ts 的纵深防御策略：
  *   1. 危险命令黑名单  — 即使 full 模式也阻止解释器/提权命令
  *   2. 环境变量前缀剥离 — `FOO=bar cmd` → 按 `cmd` 做白名单匹配
  *   3. Safe wrapper 剥离 — `timeout 10 cmd` → 按 `cmd` 做匹配
@@ -19,6 +18,7 @@ import {
   isIcqqSensitiveSubcommand,
   matchesBashOwnerExecBypass,
 } from './owner-approve-always-store.js';
+import { getAuditLogger } from './audit-logger.js';
 
 // ── 预设命令白名单 ──────────────────────────────────────────────────
 
@@ -32,7 +32,7 @@ export const EXEC_PRESETS: Record<string, string[]> = {
   development: PRESET_DEVELOPMENT,
 };
 
-// ── 危险命令黑名单（参考 Claude Code DANGEROUS_COMMANDS）──────────────
+// ── 危险命令黑名单──────────────
 
 /**
  * 即使在 full 模式下也会被阻止的危险命令。
@@ -58,7 +58,7 @@ export function isDangerousCommand(cmdName: string): boolean {
   return DANGEROUS_COMMANDS.has(cmdName);
 }
 
-// ── 环境变量前缀剥离（参考 Claude Code stripEnvVars）──────────────
+// ── 环境变量前缀剥离──────────────
 
 /**
  * 剥离命令前面的 `KEY=value` 环境变量前缀。
@@ -74,7 +74,7 @@ export function stripEnvVarPrefix(command: string): string {
   ).trim();
 }
 
-// ── Safe wrapper 剥离（参考 Claude Code stripSafeWrappers）──────────
+// ── Safe wrapper 剥离──────────────
 
 /**
  * Safe wrapper 命令列表 — 这些命令本身是安全的"包装器"，
@@ -112,7 +112,7 @@ export function stripSafeWrappers(command: string): string {
   return remaining;
 }
 
-// ── 复合命令拆分（参考 Claude Code compound command checking）──────
+// ── 复合命令拆分──────────────
 
 /**
  * 将复合命令按 `&&`, `||`, `;` 拆分为独立子命令。
@@ -257,7 +257,17 @@ function checkSingleCommand(
 export function checkExecPolicy(config: Required<ZhinAgentConfig>, command: string): ExecPolicyResult {
   const security = config.execSecurity ?? 'deny';
   if (security === 'deny') {
-    return { allowed: false, reason: '当前配置禁止执行 Shell 命令（execSecurity=deny）。如需开放请在配置中设置 ai.agent.execSecurity。' };
+    const result = { allowed: false, reason: '当前配置禁止执行 Shell 命令（execSecurity=deny）。如需开放请在配置中设置 ai.agent.execSecurity。' };
+
+    // 记录审计日志
+    try {
+      const auditLogger = getAuditLogger();
+      auditLogger.logExecPolicy(command, false, result.reason);
+    } catch {
+      // 忽略审计日志错误
+    }
+
+    return result;
   }
 
   const allowlist = resolveExecAllowlist(config);
@@ -280,6 +290,14 @@ export function checkExecPolicy(config: Required<ZhinAgentConfig>, command: stri
 
     // deny 立即返回（deny > ask 优先级）
     if (!result.allowed && !result.needsApproval) {
+      // 记录审计日志
+      try {
+        const auditLogger = getAuditLogger();
+        auditLogger.logExecPolicy(sub, false, result.reason);
+      } catch {
+        // 忽略审计日志错误
+      }
+
       return result;
     }
 
@@ -291,7 +309,23 @@ export function checkExecPolicy(config: Required<ZhinAgentConfig>, command: stri
 
   // 有需要审批的段
   if (pendingApproval) {
+    // 记录审计日志
+    try {
+      const auditLogger = getAuditLogger();
+      auditLogger.logExecPolicy(cmd, false, pendingApproval.reason);
+    } catch {
+      // 忽略审计日志错误
+    }
+
     return pendingApproval;
+  }
+
+  // 记录成功的审计日志
+  try {
+    const auditLogger = getAuditLogger();
+    auditLogger.logExecPolicy(cmd, true);
+  } catch {
+    // 忽略审计日志错误
   }
 
   return { allowed: true };

@@ -177,41 +177,53 @@ export const GROUP_MANAGEMENT_SKILL_KEYWORDS = [
 // 工厂：根据已实现的方法为指定适配器生成群管 Tool 列表（各平台自行调用并 addTool）
 // ============================================================================
 
+export interface GroupManagementToolFactory<T> {
+  (spec: GroupMethodSpec, prefix: string, execute: (args: Record<string, any>) => Promise<any>): T;
+}
+
 export function createGroupManagementTools(
   adapter: IGroupManagement,
   prefix: string,
 ): Tool[] {
-  const tools: Tool[] = [];
+  return createGroupManagementToolsRaw<Tool>(adapter, prefix, (spec, prefix, execute) => ({
+    name: `${prefix}_${spec.toolSuffix}`,
+    description: `${spec.description} (${prefix})`,
+    parameters: {
+      type: 'object' as const,
+      properties: {
+        bot_id: { type: 'string', description: 'Bot ID', contextKey: 'botId' },
+        scene_id: { type: 'string', description: '群/服务器 ID', contextKey: 'sceneId' },
+        ...Object.fromEntries(Object.entries(spec.extraParams)),
+      },
+      required: ['bot_id', 'scene_id', ...(spec.extraRequired ?? [])],
+    },
+    execute,
+    tags: ['group', 'management', prefix],
+    keywords: spec.keywords,
+    permissionLevel: spec.permissionLevel,
+    scopes: ['group', 'channel'] as ToolScope[],
+    preExecutable: spec.preExecutable,
+  }));
+}
+
+export function createGroupManagementToolsRaw<T>(
+  adapter: IGroupManagement,
+  prefix: string,
+  factory: GroupManagementToolFactory<T>,
+): T[] {
+  const tools: T[] = [];
   for (const spec of GROUP_METHOD_SPECS) {
     const fn = adapter[spec.method];
     if (typeof fn !== 'function') continue;
 
-    const properties: Record<string, any> = {
-      bot_id: { type: 'string', description: 'Bot ID', contextKey: 'botId' },
-      scene_id: { type: 'string', description: '群/服务器 ID', contextKey: 'sceneId' },
-    };
-    const required: string[] = ['bot_id', 'scene_id'];
-    for (const [name, schema] of Object.entries(spec.extraParams)) {
-      properties[name] = schema;
-    }
-    if (spec.extraRequired) required.push(...spec.extraRequired);
-
     const boundFn = fn.bind(adapter);
-    tools.push({
-      name: `${prefix}_${spec.toolSuffix}`,
-      description: `${spec.description} (${prefix})`,
-      parameters: { type: 'object' as const, properties, required },
-      execute: async (args: Record<string, any>) => {
-        const { bot_id, scene_id, ...rest } = args;
-        const methodArgs = buildMethodArgs(spec.method, bot_id, scene_id, rest);
-        return (boundFn as (...a: any[]) => Promise<any>).apply(adapter, methodArgs);
-      },
-      tags: ['group', 'management', prefix],
-      keywords: spec.keywords,
-      permissionLevel: spec.permissionLevel,
-      scopes: ['group', 'channel'] as ToolScope[],
-      preExecutable: spec.preExecutable,
-    });
+    const execute = async (args: Record<string, any>) => {
+      const { bot_id, scene_id, ...rest } = args;
+      const methodArgs = buildMethodArgs(spec.method, bot_id, scene_id, rest);
+      return (boundFn as (...a: any[]) => Promise<any>).apply(adapter, methodArgs);
+    };
+
+    tools.push(factory(spec, prefix, execute));
   }
   return tools;
 }

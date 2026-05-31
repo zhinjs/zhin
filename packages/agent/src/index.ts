@@ -252,7 +252,67 @@ export type {
   SessionNewEvent, AgentBootstrapEvent, ToolCallEvent,
 } from './hooks.js';
 
+export {
+  createAIHookBusPayload,
+  isAISessionNewPayload,
+  isAISessionCompactPayload,
+  onAIHook,
+  onAISessionNew,
+  onAISessionCompact,
+} from './ai-event-bus.js';
+export type {
+  AIEventPayload,
+  AISessionNewPayload,
+  AISessionCompactPayload,
+} from './ai-event-bus.js';
+export {
+  AI_EVENT_NAMES,
+  subscribeAIEvents,
+} from './ai-event-subscriber.js';
+export type {
+  AIEventName,
+  AIEventFilter,
+  AIEventHandlers,
+} from './ai-event-subscriber.js';
+
 export { initAgentModule } from './init.js';
+
+// ── Typing Indicator ──
+export {
+  TypingIndicatorManager,
+  ReactionTypingIndicator,
+  MessageTypingIndicator,
+  NoneTypingIndicator,
+  ReactionTypingIndicatorAdapter,
+  GenericTypingIndicatorAdapter,
+  getTypingIndicatorManager,
+  initTypingIndicatorManager,
+  startTypingIndicator,
+  stopTypingIndicator,
+} from './typing-indicator/index.js';
+export type {
+  TypingIndicatorType,
+  TypingIndicatorConfig,
+  TypingIndicatorOptions,
+  TypingIndicator,
+  TypingIndicatorAdapter,
+} from './typing-indicator/index.js';
+
+// ── Adapter Typing Indicator Integration ──
+export {
+  AdapterTypingIndicatorManager,
+  PLATFORM_FEATURES,
+  getAdapterTypingIndicatorManager,
+  initAdapterTypingIndicatorManager,
+  enableTypingIndicatorForBot,
+  startTypingForBot,
+  stopTypingForBot,
+} from './typing-indicator/adapter-integration.js';
+export type {
+  AdapterTypingIndicatorConfig,
+  PlatformFeatures,
+  BotWithTypingIndicator,
+} from './typing-indicator/adapter-integration.js';
 
 // ── MCP Client ──
 export { McpClientManager, McpClientConnection, mcpToolToAgentTool } from './mcp-client/index.js';

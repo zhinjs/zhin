@@ -1,7 +1,7 @@
 /**
  * Cost Tracker — 成本追踪系统
  *
- * 参考 Claude Code 的 cost-tracker.ts 设计：
+ * 设计：
  * 为每次 LLM 调用记录 token 用量和 USD 成本，
  * 按模型分别追踪，支持会话级持久化。
  *
@@ -108,7 +108,6 @@ const DEFAULT_PRICING: Record<string, ModelPricing> = {
  * 成本追踪器
  *
  * 维护按模型分别的 token 用量和 USD 成本统计。
- * 参考 Claude Code 的中心化状态存储模式。
  */
 export class CostTracker {
   private modelUsage: Map<string, ModelUsage> = new Map();
@@ -273,7 +272,6 @@ export class CostTracker {
 
   /**
    * 格式化成本显示
-   * 参考 Claude Code 的 formatCost
    */
   static formatCost(cost: number, maxDecimalPlaces = 4): string {
     if (cost >= 0.5) return `$${cost.toFixed(2)}`;

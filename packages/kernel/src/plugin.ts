@@ -4,7 +4,7 @@
  * 提供 DI (provide/inject)、生命周期 (start/stop)、事件传播 (dispatch/broadcast)、
  * 插件树 (children/parent/root) 和 Feature 支持。
  *
- * 上层框架可继承或组合此类来构建自己的插件系统。
+ * 上层框架可继承此类来构建自己的插件系统。
  */
 import { EventEmitter } from "node:events";
 import * as fs from "node:fs";
@@ -38,12 +38,10 @@ export function pluginCreateRequire(): ReturnType<typeof createRequire> {
   if (typeof metaUrl === "string" && metaUrl.length > 0) {
     return createRequire(metaUrl);
   }
-  // Cloudflare Workers 等打包环境可能无 import.meta.url
   const cwd = typeof process !== "undefined" && process.cwd ? process.cwd() : "/";
   return createRequire(pathToFileURL(path.join(cwd, "package.json")).href);
 }
 
-// ── AsyncLocalStorage for plugin context ──
 export const pluginStorage = new AsyncLocalStorage<PluginBase>();
 
 const loadedModules = new Map<string, PluginBase>();
@@ -81,7 +79,11 @@ export interface BaseContext<T = unknown> {
 }
 
 /**
- * 生命周期事件
+ * 生命周期事件（kernel 基础层）
+ *
+ * 注意：上层 Plugin.Lifecycle 必须 extends 此接口，
+ * 且必须包含索引签名 `[event: string]: unknown[]`
+ * 以满足 TypeScript 结构子类型约束。
  */
 export interface PluginBaseLifecycle {
   mounted: [];
@@ -115,7 +117,11 @@ export class PluginBase extends EventEmitter<PluginBaseLifecycle> implements Plu
     super();
     this.setMaxListeners(50);
     this.filePath = filePath.replace(/\?t=\d+$/, "");
-    this.logger = this.name ? logger.getLogger(this.name) : logger;
+    // Use _cachedName directly to avoid calling the overridden name getter
+    // in subclasses that may use ES private fields (#cachedName)
+    // which are not yet initialized during this super() call.
+    const name = this._cachedName ?? this._explicitName;
+    this.logger = name ? logger.getLogger(name) : logger;
 
     if (parent && !parent.children.includes(this)) {
       parent.children.push(this);

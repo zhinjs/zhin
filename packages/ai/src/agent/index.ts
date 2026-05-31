@@ -71,7 +71,7 @@ const SYSTEM_TOOL_DUP_FORCE = 'Reply in natural language now; do not call more t
 /** 工具执行默认超时时间 (ms) */
 const DEFAULT_TOOL_TIMEOUT = 30_000;
 
-/** 默认最大并发工具执行数（参考 Claude Code StreamingToolExecutor） */
+/** 默认最大并发工具执行数 */
 const DEFAULT_MAX_CONCURRENT_TOOLS = 10;
 
 /**
@@ -79,7 +79,7 @@ const DEFAULT_MAX_CONCURRENT_TOOLS = 10;
  *
  * 优先使用显式的 isConcurrencySafe 标记；
  * 其次使用 isReadOnly 推断（只读工具默认可并发）；
- * 无标记时默认不可并发（fail-closed，参考 Claude Code buildTool 模式）。
+ * 无标记时默认不可并发（fail-closed）。
  */
 function isToolConcurrencySafe(tool: AgentTool): boolean {
   if (tool.isConcurrencySafe !== undefined) return tool.isConcurrencySafe;
@@ -197,7 +197,7 @@ export class Agent {
   }
 
   /**
-   * 带自动降级的 chat 调用：主模型失败时依次尝试 modelFallbacks。
+   * 带自动降级的 chat 调用：主模型失败时依次尝试 modelFallbacks
    * 每次 LLM 请求独立应用 turnTimeout，而非所有轮次共享。
    */
   private async chatWithFallback(request: Omit<import('../types.js').ChatCompletionRequest, 'model'>): Promise<{ response: import('../types.js').ChatCompletionResponse; usedModel: string }> {
@@ -284,7 +284,7 @@ export class Agent {
 
   /**
    * 释放事件处理器和工具引用，防止内存泄漏。
-   * Agent 通常是单次使用（创建 → run → 丢弃），run() 结束后自动调用。
+   * Agent 通常是单次使用（创建 → run → 丢弃），run() 结束后自动调用
    */
   dispose(): void {
     for (const handlers of this.eventHandlers.values()) {
@@ -350,7 +350,6 @@ export class Agent {
 
   /**
    * 程序化工具过滤 —— TF-IDF 加权的相关性评分
-   * @see filterTools (tool-filter.ts) 完整实现
    */
   static filterTools(
     message: string,
@@ -414,7 +413,7 @@ export class Agent {
   /**
    * 并行执行多个工具调用（跳过重复的）
    *
-   * 并发控制策略（参考 Claude Code StreamingToolExecutor）：
+   * 并发控制策略：
    * - 所有工具分为"并发安全"和"独占"两类
    * - 并发安全工具可同时执行（上限 maxConcurrentTools，默认 10）
    * - 独占工具串行执行，等待前面所有工具完成后再开始
@@ -576,7 +575,7 @@ export class Agent {
     // 连续全重复计数器
     let consecutiveDuplicateRounds = 0;
 
-    // ── 每轮压缩追踪（参考 Claude Code per-turn compression） ──
+    // ── 每轮压缩追踪 ──
     const contextWindow = this.config.contextWindow;
     const compactTracking = contextWindow ? createAutoCompactTracking() : undefined;
     let totalMicroSaved = 0;

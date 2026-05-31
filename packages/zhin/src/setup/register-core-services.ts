@@ -39,7 +39,7 @@ export function registerCoreServices(
         await adapter.start();
         return adapter;
       },
-      dispose: async (adapter) => {
+      dispose: async (adapter: ProcessAdapter) => {
         await adapter.stop();
       },
     });
@@ -74,6 +74,6 @@ export function registerCoreServices(
     name: 'loginAssist',
     description: '登录辅助（扫码/短信/滑块等）待办队列',
     mounted: async (p: Plugin) => new LoginAssist(p),
-    dispose: async (s) => s.dispose(),
+    dispose: async (s: LoginAssist) => s.dispose(),
   });
 }

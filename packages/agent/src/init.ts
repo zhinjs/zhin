@@ -29,6 +29,7 @@ import { registerMessageRecorder } from './init/register-message-recorder.js';
 import { registerManagementTools } from './init/register-management-tools.js';
 import { registerOwnerApproveCommands } from './init/register-owner-approve-commands.js';
 import { registerBuiltinTools } from './init/register-builtin-tools.js';
+import { registerTypingIndicator } from './init/register-typing-indicator.js';
 
 /**
  * 初始化 AI 模块
@@ -55,4 +56,5 @@ export function initAgentModule(): void {
   registerManagementTools();
   registerOwnerApproveCommands();
   registerBuiltinTools(refs);
+  registerTypingIndicator(refs);
 }

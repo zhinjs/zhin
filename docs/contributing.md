@@ -77,10 +77,30 @@ pnpm build:watch
 
 单仓布局、构建产物目录与前后端源码分界等约定，见 **[仓库结构与模块化约定](./contributing/repo-structure.md)**（与下述 TypeScript / 提交规范配合使用）。
 
+### Harness Engineering
+
+项目使用自动化检查来强制执行架构约束和代码质量标准。详细信息请参考 [Harness Engineering 指南](./contributing/harness-engineering.md)。
+
+**快速检查**：
+```bash
+pnpm check:all              # 运行所有 harness 检查
+pnpm check:harness-paths    # 检查发送链路绕过
+pnpm check:no-koa           # 检查 koa 导入
+pnpm check:prod             # 检查生产配置
+pnpm check:plugin           # 检查插件规范
+pnpm check:architecture     # 检查架构层级
+```
+
+**代码质量检查**：
+```bash
+pnpm lint                   # ESLint 检查
+pnpm type-check             # TypeScript 类型检查
+```
+
 ### TypeScript 规范
 - 使用 TypeScript 编写所有代码
 - 遵循严格的类型检查
-- 使用 ESLint 和 Prettier 格式化代码
+- 使用 ESLint 格式化代码（flat config 格式）
 
 ### 代码风格
 ```typescript

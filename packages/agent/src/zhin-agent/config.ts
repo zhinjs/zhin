@@ -106,7 +106,7 @@ export interface ZhinAgentConfig {
     sessionId: string;
     extra: Record<string, unknown>;
   }) => void;
-  /** 启用 Claude Code 式 deferred + 同步 Worker（主 Agent 仅编排） */
+  /** 启用 deferred + 同步 Worker（主 Agent 仅编排） */
   toolSearch?: boolean;
   /** Worker 侧 TF-IDF 载入 deferred 工具数量上限 */
   toolSearchMaxResults?: number;
@@ -138,11 +138,11 @@ export const DEFAULT_TOOL_SEARCH_WORKER_BASE_TOOLS = [
 
 export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   persona: 'You are Zhin, an intelligent IM assistant running in Zhin.js. Answer clearly, act through available tools when needed, and never claim actions or results unless confirmed by tool output.',
-  maxIterations: 5,
-  timeout: 60_000,
-  preExecTimeout: 10_000,
-  maxSkills: 3,
-  maxTools: 8,
+  maxIterations: 15,  // 增加到15次，支持复杂任务
+  timeout: 120_000,   // 增加到2分钟
+  preExecTimeout: 15_000,
+  maxSkills: 5,       // 增加技能数量
+  maxTools: 12,       // 增加工具数量
   minTopicRounds: 5,
   slidingWindowSize: 5,
   topicChangeThreshold: 0.15,
@@ -159,16 +159,16 @@ export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   execPreset: 'custom',
   execAllowlist: [],
   execAsk: false,
-  maxSubagentIterations: 15,
+  maxSubagentIterations: 25,  // 增加子任务迭代次数
   subagentTools: [],
-  subagentTurnWaitMs: 180_000,
+  subagentTurnWaitMs: 300_000,  // 增加等待时间到5分钟
   modelSizeHint: '',
   skillInstructionMaxChars: 0,
   modelHarness: {},
   phaseTrace: false,
   onPhaseTrace: () => {},
   toolSearch: false,
-  toolSearchMaxResults: 5,
+  toolSearchMaxResults: 8,  // 增加工具搜索结果数量
   toolSearchOrchestratorTools: [...DEFAULT_TOOL_SEARCH_ORCHESTRATOR_TOOLS],
   toolSearchWorkerBaseTools: [...DEFAULT_TOOL_SEARCH_WORKER_BASE_TOOLS],
   platformPromptSectionMaxChars: 2048,

@@ -1,5 +1,5 @@
 /**
- * 引号归一化 + 模糊匹配（参考 Claude Code FileEditTool/utils.ts），供 edit_file 使用。
+ * 引号归一化 + 模糊匹配，供 edit_file 使用。
  */
 
 /** 将弯引号归一化为直引号 */
@@ -22,7 +22,6 @@ export interface FuzzyMatchResult {
 
 /**
  * 在文件内容中查找字符串，支持精确匹配和引号归一化模糊匹配。
- * 参考 Claude Code `findActualString`。
  */
 export function findActualStringInFile(fileContent: string, searchString: string): FuzzyMatchResult | null {
   const exactCount = fileContent.split(searchString).length - 1;
@@ -44,7 +43,6 @@ export function findActualStringInFile(fileContent: string, searchString: string
 
 /**
  * 将 new_string 中的直引号替换为文件中原始的弯引号风格。
- * 参考 Claude Code `preserveQuoteStyle`。
  */
 export function preserveQuoteStyleInEdit(oldString: string, actualOldString: string, newString: string): string {
   if (oldString === actualOldString) return newString;

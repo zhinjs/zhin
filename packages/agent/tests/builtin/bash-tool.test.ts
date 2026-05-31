@@ -23,7 +23,7 @@ describe('BashBuiltinTool', () => {
     const mockExec: BashExecAsync = async () => {
       throw new Error('exec should not run');
     };
-    const inst = new BashBuiltinTool(mockExec);
+    const inst = new BashBuiltinTool(mockExec, { useSandbox: false });
     const out = String(await inst.run({ command: 'env' }));
     expect(out.startsWith('Error:')).toBe(true);
     expect(out).toContain('禁止执行环境变量导出命令');
@@ -39,7 +39,7 @@ describe('BashBuiltinTool', () => {
         sawOpts = opts;
         return { stdout: 'hello-out\n', stderr: '' };
       };
-      const inst = new BashBuiltinTool(mockExec);
+      const inst = new BashBuiltinTool(mockExec, { useSandbox: false });
       const out = String(await inst.run({ command: 'echo ok', cwd: tmp, timeout: 5000 }));
       expect(sawCmd).toBe('echo ok');
       expect(sawOpts?.cwd).toBe(tmp);
@@ -61,7 +61,7 @@ describe('BashBuiltinTool', () => {
       err.stderr = 'partial-err';
       throw err;
     };
-    const inst = new BashBuiltinTool(mockExec);
+    const inst = new BashBuiltinTool(mockExec, { useSandbox: false });
     const out = String(await inst.run({ command: 'echo x' }));
     expect(out).toContain('Error (exit 2)');
     expect(out).toContain('partial-out');
@@ -70,7 +70,7 @@ describe('BashBuiltinTool', () => {
 
   it('execute 与 normalizeTool 绑定 context 时可调用', async () => {
     const mockExec: BashExecAsync = async () => ({ stdout: 'via-tool\n', stderr: '' });
-    const tool = new BashBuiltinTool(mockExec).toTool();
+    const tool = new BashBuiltinTool(mockExec, { useSandbox: false }).toTool();
     const ctx = { platform: 'test' } as ToolContext;
     const agentTool = normalizeTool(tool, ctx);
     const result = await agentTool.execute({ command: 'echo hi' });

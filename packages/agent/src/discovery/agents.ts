@@ -69,8 +69,8 @@ export async function discoverWorkspaceAgents(root?: Plugin | null): Promise<Age
       }
     };
     addPluginDir(root);
-    for (const child of root.children || []) {
-      addPluginDir(child);
+    for (const child of (root.children || []) as Plugin[]) {
+      addPluginDir(child as Plugin);
     }
   }
 
