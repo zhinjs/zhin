@@ -16,8 +16,8 @@
  *  12. 多模态输入：图片/音频直接传给视觉模型
  */
 
-import { getPlugin, Logger, type Plugin } from '@zhin.js/core';
-import { formatCompact, truncatePreview } from '@zhin.js/logger';
+import { getPlugin, type Plugin } from '@zhin.js/core';
+import { formatCompact, truncatePreview, Logger } from '@zhin.js/logger';
 import type { AIProvider, AgentTool, ChatMessage, ContentPart, Usage } from '@zhin.js/ai';
 import type { Tool, ToolContext } from '../orchestrator/types.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
@@ -30,20 +30,19 @@ import { ConversationMemory } from '@zhin.js/ai';
 import type { OutputElement } from '@zhin.js/ai';
 import { parseOutput } from '@zhin.js/ai';
 import {
-  addUsage,
   EMPTY_USAGE,
   type ZhinAgentTurnMetrics,
 } from './turn-metrics.js';
+import { TurnTracker } from './turn-tracker.js';
+import { ZhinAgentEventEmitter } from './event-emitter.js';
+import { logPhase, usageLogFields, type PhaseTraceConfig } from './phase-trace.js';
+import { attachWebSearchLocale } from './web-search-locale-attach.js';
 
 import type { ModelRegistry } from '@zhin.js/ai';
 import { resolveModelCandidates } from './model-resolver.js';
 import { streamChatWithHistory, type StreamChatResult } from './llm-runner.js';
 import { saveToSession, buildHistoryMessages } from './session-io.js';
 import { UserProfileStore } from '../user-profile.js';
-import {
-  WEB_SEARCH_LOCALE_EXTRA_KEY,
-  normalizeWebSearchLocaleHint,
-} from '../builtin/web-search-locale.js';
 import { RateLimiter } from '@zhin.js/ai';
 import { detectTone } from '@zhin.js/ai';
 import { notifySubagentGoal } from '../subagent-goal-notify.js';
@@ -114,14 +113,14 @@ export class ZhinAgent {
   private skillsSummaryXML: string = '';
   private modelRegistry: ModelRegistry | null = null;
   private phaseTraceEnabled: boolean;
-  /** 根插件（createZhinAgentContext 注入）；避免在 Agent.run 路径依赖 AsyncLocalStorage 上的 getPlugin() */
-  private hostPlugin: Plugin | null = null;
+  private readonly emitter = new ZhinAgentEventEmitter();
   private deferredCatalog: AgentTool[] = [];
   private readonly deferredWorkerRunner = new DeferredWorkerRunner();
   private lastToolSearchDeferredStats?: string;
-  private lastTurnMetrics: ZhinAgentTurnMetrics | null = null;
-  private activeTurnSubagentUsage: Usage | null = null;
-  private activeTurnSubagentWaits: Promise<void>[] = [];
+  private readonly turnTracker: TurnTracker;
+  private get phaseConfig(): PhaseTraceConfig {
+    return { phaseTraceEnabled: this.phaseTraceEnabled, onPhaseTrace: this.config.onPhaseTrace };
+  }
 
   constructor(provider: AIProvider, config?: ZhinAgentConfig) {
     this.provider = provider;
@@ -137,6 +136,7 @@ export class ZhinAgent {
     this.memory.setProvider(provider);
     this.userProfiles = new UserProfileStore();
     this.rateLimiter = new RateLimiter(this.config.rateLimit);
+    this.turnTracker = new TurnTracker(this.config.subagentTurnWaitMs);
   }
 
   // ── DI setters ──────────────────────────────────────────────────────
@@ -166,9 +166,8 @@ export class ZhinAgent {
     this.subagentManager?.setModelRegistry(registry);
   }
 
-  /** 由 init 注入根插件，供 Owner 编排 / ask_user（勿依赖消息处理时的 getPlugin ALS） */
   setHostPlugin(plugin: Plugin): void {
-    this.hostPlugin = plugin.root ?? plugin;
+    this.emitter.setHostPlugin(plugin);
   }
 
   upgradeMemoryToDatabase(msgModel: any, sumModel: any): void {
@@ -188,15 +187,15 @@ export class ZhinAgent {
       maxIterations: this.config.maxSubagentIterations,
       execPolicyConfig: this.config,
       modelRegistry: this.modelRegistry,
-      onSubagentUsage: (usage) => this.addActiveTurnSubagentUsage(usage),
-      registerSubagentTask: (done) => this.trackActiveTurnSubagent(done),
+      onSubagentUsage: (usage) => this.turnTracker.addSubagentUsage(usage),
+      registerSubagentTask: (done) => this.turnTracker.trackSubagent(done),
       onEvent: (event) => {
         const sessionId = SessionManager.generateId(
           event.origin.platform || '',
           event.origin.senderId || '',
           event.origin.sceneId,
         );
-        const payload = this.createAIEventPayload(sessionId, {
+        const payload = this.emitter.createPayload(sessionId, {
           platform: event.origin.platform,
           botId: event.origin.botId,
           sceneId: event.origin.sceneId,
@@ -212,11 +211,11 @@ export class ZhinAgent {
           reply: event.result,
         });
         if (event.phase === 'spawn') {
-          this.emitAIEvent('ai.subagent.spawn', payload);
+          this.emitter.emit('ai.subagent.spawn', payload);
         } else if (event.phase === 'start') {
-          this.emitAIEvent('ai.subagent.start', payload);
+          this.emitter.emit('ai.subagent.start', payload);
         } else {
-          this.emitAIEvent('ai.subagent.finish', payload);
+          this.emitter.emit('ai.subagent.finish', payload);
         }
       },
     });
@@ -255,98 +254,53 @@ export class ZhinAgent {
     this.skillsSummaryXML = xml || '';
   }
 
-  /** 上一轮 `process` / `processMultimodal` 的 token 等指标（供 AI Handler 打汇总日志） */
   getLastTurnMetrics(): ZhinAgentTurnMetrics | null {
-    return this.lastTurnMetrics;
+    return this.turnTracker.lastMetrics;
   }
 
   private beginActiveTurn(): void {
-    this.activeTurnSubagentUsage = { ...EMPTY_USAGE };
-    this.activeTurnSubagentWaits = [];
-  }
-
-  private addActiveTurnSubagentUsage(usage: Usage): void {
-    if (!this.activeTurnSubagentUsage) return;
-    addUsage(this.activeTurnSubagentUsage, usage);
-  }
-
-  private trackActiveTurnSubagent(done: Promise<void>): void {
-    if (!this.activeTurnSubagentUsage) return;
-    this.activeTurnSubagentWaits.push(done);
+    this.turnTracker.begin();
   }
 
   private async finalizeActiveTurn(
     partial: Omit<ZhinAgentTurnMetrics, 'usage' | 'mainUsage' | 'subagentUsage'> & { usage: Usage },
   ): Promise<void> {
-    const waitMs = this.config.subagentTurnWaitMs;
-    if (this.activeTurnSubagentWaits.length > 0 && waitMs > 0) {
-      await Promise.race([
-        Promise.allSettled(this.activeTurnSubagentWaits),
-        new Promise<void>(resolve => setTimeout(resolve, waitMs)),
-      ]);
-    }
-
-    const mainUsage = { ...partial.usage };
-    const subagentUsage = this.activeTurnSubagentUsage
-      && (this.activeTurnSubagentUsage.total_tokens > 0
-        || this.activeTurnSubagentUsage.prompt_tokens > 0
-        || this.activeTurnSubagentUsage.completion_tokens > 0)
-      ? { ...this.activeTurnSubagentUsage }
-      : undefined;
-
-    const totalUsage = { ...mainUsage };
-    if (subagentUsage) addUsage(totalUsage, subagentUsage);
-
-    this.lastTurnMetrics = {
-      ...partial,
-      usage: totalUsage,
-      mainUsage,
-      ...(subagentUsage ? { subagentUsage } : {}),
-    };
-
-    this.activeTurnSubagentUsage = null;
-    this.activeTurnSubagentWaits = [];
+    await this.turnTracker.finalize(partial);
   }
 
-  private createAIEventPayload(
+  private emitSessionNewEvent(
     sessionId: string,
     context: ToolContext,
-    mode: Plugin.AIEventPayload['mode'],
-    extra: Partial<Plugin.AIEventPayload> = {},
-  ): Plugin.AIEventPayload {
-    return {
-      sessionId,
-      source: 'zhin-agent',
-      mode,
-      userId: context.senderId,
-      platform: context.platform,
-      botId: context.botId,
-      sceneId: context.sceneId,
-      messageId: context.messageId,
-      scope: context.scope,
-      ...extra,
-    };
-  }
-
-  private async dispatchAIEvent(
-    name: keyof Plugin.Lifecycle,
-    payload: Plugin.AIEventPayload,
-  ): Promise<void> {
-    const root = this.hostPlugin?.root ?? this.hostPlugin;
-    if (!root) return;
-    await root.dispatch(name as any, payload);
-  }
-
-  private emitAIEvent(
-    name: keyof Plugin.Lifecycle,
-    payload: Plugin.AIEventPayload,
+    mode: 'text' | 'multimodal',
+    content: string,
+    reply: string,
   ): void {
-    this.dispatchAIEvent(name, payload).catch((error) => {
-      logger.warn(formatCompact({
-        ai_event: String(name),
-        error: error instanceof Error ? error.message : String(error),
-      }));
-    });
+    this.emitter.emit('ai.session.new', this.emitter.createPayload(sessionId, context, mode, {
+      reason: 'first_message',
+      content,
+      reply,
+    }));
+  }
+
+  private emitSessionCompactEvent(
+    sessionId: string,
+    context: ToolContext,
+    mode: 'text' | 'multimodal',
+    info: {
+      microSavedTokens: number;
+      autoSavedTokens: number;
+      totalTokensBefore: number;
+      totalTokensAfter: number;
+    },
+  ): void {
+    this.emitter.emit('ai.session.compact', this.emitter.createPayload(sessionId, context, mode, {
+      path: 'agent',
+      compactedCount: 1,
+      savedTokens: info.microSavedTokens + info.autoSavedTokens,
+      totalTokensBefore: info.totalTokensBefore,
+      totalTokensAfter: info.totalTokensAfter,
+      result: info,
+    }));
   }
 
   // ── Core processing ─────────────────────────────────────────────────
@@ -361,10 +315,10 @@ export class ZhinAgent {
     const { senderId, sceneId, platform, botId, messageId } = context;
     const sessionId = SessionManager.generateId(platform || '', senderId || '', sceneId);
     const userId = senderId || 'unknown';
-    await this.dispatchAIEvent('ai.processing.start', this.createAIEventPayload(sessionId, context, 'text', {
+    await this.emitter.dispatch('ai.processing.start', this.emitter.createPayload(sessionId, context, 'text', {
       content,
     }));
-    this.logPhase('turn.start', sessionId, {
+    logPhase(this.phaseConfig, 'turn.start', sessionId, {
       mode: 'text',
       provider: this.provider.name,
     });
@@ -372,9 +326,9 @@ export class ZhinAgent {
     // 0. Rate limit
     const rateCheck = this.rateLimiter.check(userId);
     if (!rateCheck.allowed) {
-      this.logPhase('turn.rate_limited', sessionId, { userId });
+      logPhase(this.phaseConfig, 'turn.rate_limited', sessionId, { userId });
       logger.debug(`[速率限制] 用户 ${userId} 被限制: ${rateCheck.message}`);
-      await this.dispatchAIEvent('ai.processing.finish', this.createAIEventPayload(sessionId, context, 'text', {
+      await this.emitter.dispatch('ai.processing.finish', this.emitter.createPayload(sessionId, context, 'text', {
         path: 'rate_limited',
         reply: rateCheck.message || '请稍后再试',
         reason: 'rate_limited',
@@ -384,14 +338,14 @@ export class ZhinAgent {
     }
 
     // 0.1 发射 typing 事件，由适配器插件自行决定如何响应
-    this.emitAIEvent('ai.typing.start', this.createAIEventPayload(sessionId, context, 'text', {
+    this.emitter.emit('ai.typing.start', this.emitter.createPayload(sessionId, context, 'text', {
       reason: 'processing',
     }));
 
     this.beginActiveTurn();
 
     // 0.5 工具上下文：web_search 语言（档案 preferred_language / language，否则默认中文）
-    const contextForTools = await this.attachWebSearchLocale(context, userId);
+    const contextForTools = await attachWebSearchLocale(context, userId, this.userProfiles);
 
     triggerAIHook(createAIHookEvent('message', 'received', sessionId, {
       userId,
@@ -402,7 +356,7 @@ export class ZhinAgent {
     // 0.9 Lazy-connect configured MCP servers before tool collection
     if (this.orchestrator) {
       await ensureMcpConnections(this.orchestrator.mcps, (event) => {
-        const payload = this.createAIEventPayload(sessionId, contextForTools, 'text', {
+        const payload = this.emitter.createPayload(sessionId, contextForTools, 'text', {
           path: 'agent',
           serverName: event.serverName,
           loadedToolNames: event.toolNames,
@@ -410,11 +364,11 @@ export class ZhinAgent {
           error: event.error,
         });
         if (event.phase === 'start') {
-          this.emitAIEvent('ai.mcp.connect.start', payload);
+          this.emitter.emit('ai.mcp.connect.start', payload);
         } else if (event.phase === 'finish') {
-          this.emitAIEvent('ai.mcp.connect.finish', payload);
+          this.emitter.emit('ai.mcp.connect.finish', payload);
         } else {
-          this.emitAIEvent('ai.mcp.connect.error', payload);
+          this.emitter.emit('ai.mcp.connect.error', payload);
         }
       });
     }
@@ -444,7 +398,7 @@ export class ZhinAgent {
     this.lastToolSearchDeferredStats = deferredStats;
 
     const filterMs = (now() - tFilter).toFixed(0);
-    this.logPhase('tools.collected', sessionId, { count: resolvedTools.length });
+    logPhase(this.phaseConfig, 'tools.collected', sessionId, { count: resolvedTools.length });
 
     logger.debug(formatCompact( {
       tools: resolvedTools.length,
@@ -476,7 +430,7 @@ export class ZhinAgent {
     }
 
     const memMs = (now() - tMem).toFixed(0);
-    this.logPhase('context.ready', sessionId, { historyCount: historyMessages.length });
+    logPhase(this.phaseConfig, 'context.ready', sessionId, { historyCount: historyMessages.length });
 
     // 2.5 Tone + persona
     const toneHint = this.config.toneAwareness ? detectTone(content).hint : '';
@@ -484,7 +438,7 @@ export class ZhinAgent {
 
     // 3. No tools → chat path (prefer per-session model, then lightweight model)
     if (allTools.length === 0) {
-      this.logPhase('path.chat', sessionId, { toolCount: 0 });
+      logPhase(this.phaseConfig, 'path.chat', sessionId, { toolCount: 0 });
       const liteModel = this.config.chatLiteModel || undefined;
       const chatSystemPrompt = this.buildDisciplinedPrompt(personaEnhanced);
       logger.debug(formatCompact( {
@@ -493,21 +447,21 @@ export class ZhinAgent {
         model: liteModel || chatCandidates[0] || undefined,
       }));
       const tLLM = now();
-      this.logPhase('chat.llm.start', sessionId, { model: liteModel || chatCandidates[0] || '' });
+      logPhase(this.phaseConfig, 'chat.llm.start', sessionId, { model: liteModel || chatCandidates[0] || '' });
       const chatResult = await streamChatWithHistory(
         { provider: this.provider, modelRegistry: this.modelRegistry, config: this.config },
         content, chatSystemPrompt, historyMessages, onChunk, liteModel,
       );
       let reply = sanitizeAssistantReply(chatResult.content);
-      await this.dispatchAIEvent('ai.response', this.createAIEventPayload(sessionId, context, 'text', {
+      await this.emitter.dispatch('ai.response', this.emitter.createPayload(sessionId, context, 'text', {
         path: 'chat',
         model: chatResult.model,
         reply,
       }));
       const llmMs = (now() - tLLM).toFixed(0);
-      this.logPhase('chat.llm.end', sessionId, {
+      logPhase(this.phaseConfig, 'chat.llm.end', sessionId, {
         durationMs: Number(llmMs),
-        ...this.usageLogFields(chatResult.usage ?? undefined),
+        ...usageLogFields(chatResult.usage ?? undefined),
       });
       logger.debug(formatCompact( {
         mode: 'chat',
@@ -529,15 +483,15 @@ const isNewSession = !(await this.sessions.has(sessionId));
         path: 'chat',
         model: chatResult.model,
       });
-      await this.dispatchAIEvent('ai.processing.finish', this.createAIEventPayload(sessionId, context, 'text', {
+      await this.emitter.dispatch('ai.processing.finish', this.emitter.createPayload(sessionId, context, 'text', {
         path: 'chat',
         model: chatResult.model,
         reply,
       }));
-      this.emitAIEvent('ai.typing.stop', this.createAIEventPayload(sessionId, context, 'text', {
+      this.emitter.emit('ai.typing.stop', this.emitter.createPayload(sessionId, context, 'text', {
         reason: 'processing_complete',
       }));
-      this.logPhase('turn.end', sessionId, { path: 'chat' });
+      logPhase(this.phaseConfig, 'turn.end', sessionId, { path: 'chat' });
 
       return parseOutput(reply);
     }
@@ -551,7 +505,7 @@ const isNewSession = !(await this.sessions.has(sessionId));
       logger.debug(`预执行: ${preExecCandidates.map(t => t.name).join(', ')}`);
     }
     const toolRun = await planToolRun(resolvedTools, this.config.preExecTimeout);
-    this.logPhase('preexec.done', sessionId, {
+    logPhase(this.phaseConfig, 'preexec.done', sessionId, {
       mode: toolRun.mode,
       preExecutedTools: toolRun.preExecution.tools.length,
     });
@@ -564,20 +518,20 @@ const isNewSession = !(await this.sessions.has(sessionId));
     let reply: string;
 
     if (toolRun.mode === 'pre-exec-fast-path') {
-      this.logPhase('path.pre_exec_fast', sessionId, { toolCount: allTools.length });
+      logPhase(this.phaseConfig, 'path.pre_exec_fast', sessionId, { toolCount: allTools.length });
       // Fast path
       const tLLM = now();
       const prompt = this.buildDisciplinedPrompt(buildPreExecFastPathPrompt(personaEnhanced, preData));
       logger.debug(formatCompact( { mode: 'fast', prompt_chars: prompt.length }));
-      this.logPhase('fast.llm.start', sessionId, { model: chatCandidates[0] || '' });
+      logPhase(this.phaseConfig, 'fast.llm.start', sessionId, { model: chatCandidates[0] || '' });
       const fastResult = await streamChatWithHistory(
         { provider: this.provider, modelRegistry: this.modelRegistry, config: this.config },
         content, prompt, historyMessages, onChunk,
       );
       reply = sanitizeAssistantReply(fastResult.content);
-      this.logPhase('fast.llm.end', sessionId, {
+      logPhase(this.phaseConfig, 'fast.llm.end', sessionId, {
         durationMs: Math.round(now() - tLLM),
-        ...this.usageLogFields(fastResult.usage ?? undefined),
+        ...usageLogFields(fastResult.usage ?? undefined),
       });
       logger.debug(`[快速路径] 过滤=${filterMs}ms, 记忆=${memMs}ms, LLM=${(now() - tLLM).toFixed(0)}ms, 总=${(now() - t0).toFixed(0)}ms`);
       await this.finalizeActiveTurn({
@@ -586,7 +540,7 @@ const isNewSession = !(await this.sessions.has(sessionId));
         model: fastResult.model,
       });
     } else {
-      this.logPhase('path.agent', sessionId, { toolCount: allTools.length });
+      logPhase(this.phaseConfig, 'path.agent', sessionId, { toolCount: allTools.length });
       const tAgent = now();
       logger.debug(`Agent 路径: ${allTools.length} 个工具`);
       const contextHint = buildContextHint(context, content);
@@ -632,13 +586,13 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       const effectiveMaxIterations = hasSkillActivation
         ? baseIterations + SKILL_ITERATION_BOOST
         : baseIterations;
-      this.logPhase('harness.resolved', sessionId, {
+      logPhase(this.phaseConfig, 'harness.resolved', sessionId, {
         model: chatCandidates[0] || '',
         harnessMaxIterations: harness.maxIterations ?? null,
         effectiveMaxIterations,
       });
 
-      let orchestrationPlugin: Plugin | undefined = this.hostPlugin ?? undefined;
+      let orchestrationPlugin: Plugin | undefined = this.emitter.getHostPlugin() ?? undefined;
       if (!orchestrationPlugin) {
         try {
           orchestrationPlugin = getPlugin().root ?? getPlugin();
@@ -665,14 +619,14 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       });
 
       agent.on('thinking', (message) => {
-        this.emitAIEvent('ai.thinking', this.createAIEventPayload(sessionId, contextForTools, 'text', {
+        this.emitter.emit('ai.thinking', this.emitter.createPayload(sessionId, contextForTools, 'text', {
           path: 'agent',
           thinking: message,
         }));
       });
 
       agent.on('tool_call', (toolName, args) => {
-        this.emitAIEvent('ai.tool.call', this.createAIEventPayload(sessionId, contextForTools, 'text', {
+        this.emitter.emit('ai.tool.call', this.emitter.createPayload(sessionId, contextForTools, 'text', {
           path: 'agent',
           toolName,
           args,
@@ -680,7 +634,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       });
 
       agent.on('tool_result', (toolName, result) => {
-        this.emitAIEvent('ai.tool.result', this.createAIEventPayload(sessionId, contextForTools, 'text', {
+        this.emitter.emit('ai.tool.result', this.emitter.createPayload(sessionId, contextForTools, 'text', {
           path: 'agent',
           toolName,
           result,
@@ -694,24 +648,24 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       const userMessageWithHistory = buildUserMessageWithHistory(historyMessages, content);
       let result;
       try {
-        await this.dispatchAIEvent('ai.agent.start', this.createAIEventPayload(sessionId, contextForTools, 'text', {
+        await this.emitter.dispatch('ai.agent.start', this.emitter.createPayload(sessionId, contextForTools, 'text', {
           path: 'agent',
           model: chatCandidates[0] || undefined,
         }));
-        this.logPhase('agent.run.start', sessionId, { model: chatCandidates[0] || '' });
+        logPhase(this.phaseConfig, 'agent.run.start', sessionId, { model: chatCandidates[0] || '' });
         result = await runWithBashToolContext(contextForTools, () => agent.run(userMessageWithHistory, []));
-        this.logPhase('agent.run.end', sessionId, {
+        logPhase(this.phaseConfig, 'agent.run.end', sessionId, {
           iterations: result.iterations,
           durationMs: Math.round(now() - tAgent),
-          ...this.usageLogFields(result.usage),
+          ...usageLogFields(result.usage),
         });
-        await this.dispatchAIEvent('ai.agent.finish', this.createAIEventPayload(sessionId, contextForTools, 'text', {
+        await this.emitter.dispatch('ai.agent.finish', this.emitter.createPayload(sessionId, contextForTools, 'text', {
           path: 'agent',
           model: result.model ?? (chatCandidates[0] || undefined),
           iterations: result.iterations,
         }));
       } catch (error) {
-        await this.dispatchAIEvent('ai.processing.error', this.createAIEventPayload(sessionId, contextForTools, 'text', {
+        await this.emitter.dispatch('ai.processing.error', this.emitter.createPayload(sessionId, contextForTools, 'text', {
           path: 'agent',
           error: error instanceof Error ? error.message : String(error),
         }));
@@ -722,7 +676,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       reply = sanitizeAssistantReply(result.content, {
         toolSummary: formatToolCallsForUser(result.toolCalls),
       });
-      await this.dispatchAIEvent('ai.response', this.createAIEventPayload(sessionId, contextForTools, 'text', {
+      await this.emitter.dispatch('ai.response', this.emitter.createPayload(sessionId, contextForTools, 'text', {
         path: 'agent',
         model: result.model ?? (chatCandidates[0] || undefined),
         iterations: result.iterations,
@@ -770,14 +724,14 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       platform: platform || '',
     })).catch(() => {});
 
-    await this.dispatchAIEvent('ai.processing.finish', this.createAIEventPayload(sessionId, context, 'text', {
+    await this.emitter.dispatch('ai.processing.finish', this.emitter.createPayload(sessionId, context, 'text', {
       path: toolRun.mode === 'pre-exec-fast-path' ? 'fast' : 'agent',
       reply,
     }));
 
-    this.logPhase('turn.end', sessionId, { path: toolRun.mode === 'pre-exec-fast-path' ? 'fast' : 'agent' });
+    logPhase(this.phaseConfig, 'turn.end', sessionId, { path: toolRun.mode === 'pre-exec-fast-path' ? 'fast' : 'agent' });
 
-    this.emitAIEvent('ai.typing.stop', this.createAIEventPayload(sessionId, context, 'text', {
+    this.emitter.emit('ai.typing.stop', this.emitter.createPayload(sessionId, context, 'text', {
       reason: 'processing_complete',
     }));
 
@@ -839,7 +793,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
           context.senderId || '',
           context.sceneId,
         );
-        const payload = this.createAIEventPayload(sessionId, context, 'text', {
+        const payload = this.emitter.createPayload(sessionId, context, 'text', {
           path: 'agent',
           content: event.goal,
           loadedToolNames: event.loadedToolNames,
@@ -848,9 +802,9 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
           error: event.error,
         });
         if (event.phase === 'start') {
-          this.emitAIEvent('ai.deferred.start', payload);
+          this.emitter.emit('ai.deferred.start', payload);
         } else {
-          this.emitAIEvent('ai.deferred.finish', payload);
+          this.emitter.emit('ai.deferred.finish', payload);
         }
       },
     });
@@ -869,26 +823,6 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     return `${basePrompt}\n\n${guidance}`;
   }
 
-  private usageLogFields(usage?: Usage): Record<string, number> {
-    if (!usage) return {};
-    return {
-      promptTokens: usage.prompt_tokens,
-      completionTokens: usage.completion_tokens,
-      totalTokens: usage.total_tokens,
-    };
-  }
-
-  private logPhase(phase: string, sessionId: string, extra: Record<string, unknown> = {}): void {
-    if (!this.phaseTraceEnabled) return;
-    this.config.onPhaseTrace?.({ phase, sessionId, extra });
-    const flat: Record<string, string | number | boolean> = { phase, session: sessionId };
-    for (const [k, v] of Object.entries(extra)) {
-      if (v === undefined || v === null) continue;
-      flat[k] = typeof v === 'object' ? JSON.stringify(v) : (v as string | number | boolean);
-    }
-    logger.info(formatCompact( flat));
-  }
-
   async processMultimodal(
     parts: ContentPart[],
     context: ToolContext,
@@ -897,11 +831,11 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     const { senderId, sceneId, platform, botId, messageId } = context;
     const sessionId = SessionManager.generateId(platform || '', senderId || '', sceneId);
     const userId = senderId || 'unknown';
-    await this.dispatchAIEvent('ai.processing.start', this.createAIEventPayload(sessionId, context, 'multimodal'));
+    await this.emitter.dispatch('ai.processing.start', this.emitter.createPayload(sessionId, context, 'multimodal'));
 
     const rateCheck = this.rateLimiter.check(userId);
     if (!rateCheck.allowed) {
-      await this.dispatchAIEvent('ai.processing.finish', this.createAIEventPayload(sessionId, context, 'multimodal', {
+      await this.emitter.dispatch('ai.processing.finish', this.emitter.createPayload(sessionId, context, 'multimodal', {
         path: 'rate_limited',
         reply: rateCheck.message || '请稍后再试',
         reason: 'rate_limited',
@@ -911,7 +845,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
     }
 
     // Typing Indicator：发射事件，由适配器插件自行决定如何响应
-    this.emitAIEvent('ai.typing.start', this.createAIEventPayload(sessionId, context, 'multimodal', {
+    this.emitter.emit('ai.typing.start', this.emitter.createPayload(sessionId, context, 'multimodal', {
       reason: 'processing',
     }));
 
@@ -1039,7 +973,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
 
     if (!reply) reply = '抱歉，我无法理解这条消息。';
     reply = sanitizeAssistantReply(reply);
-    await this.dispatchAIEvent('ai.response', this.createAIEventPayload(sessionId, context, 'multimodal', {
+    await this.emitter.dispatch('ai.response', this.emitter.createPayload(sessionId, context, 'multimodal', {
       path: 'multimodal',
       model: usedVisionModel,
       reply,
@@ -1057,13 +991,13 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       path: 'multimodal',
       model: usedVisionModel,
     });
-    await this.dispatchAIEvent('ai.processing.finish', this.createAIEventPayload(sessionId, context, 'multimodal', {
+    await this.emitter.dispatch('ai.processing.finish', this.emitter.createPayload(sessionId, context, 'multimodal', {
       path: 'multimodal',
       model: usedVisionModel,
       reply,
     }));
 
-    this.emitAIEvent('ai.typing.stop', this.createAIEventPayload(sessionId, context, 'multimodal', {
+    this.emitter.emit('ai.typing.stop', this.emitter.createPayload(sessionId, context, 'multimodal', {
       reason: 'processing_complete',
     }));
 
@@ -1071,70 +1005,6 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
   }
 
   // ── Internal helpers ────────────────────────────────────────────────
-
-  /**
-   * 为内置工具注入 `extra.web_search_locale`：
-   * - 若调用方已在 `context.extra.web_search_locale` 中设置，则规范化后沿用；
-   * - 否则读取用户档案 `preferred_language` / `language`；
-   * - 均未设置时不在 extra 中写入，web_search 默认使用中文市场。
-   */
-  private async attachWebSearchLocale(context: ToolContext, userId: string): Promise<ToolContext> {
-    const extra: Record<string, unknown> = { ...(context.extra ?? {}) };
-    const existing = extra[WEB_SEARCH_LOCALE_EXTRA_KEY];
-    if (typeof existing === 'string' && existing.trim()) {
-      extra[WEB_SEARCH_LOCALE_EXTRA_KEY] = normalizeWebSearchLocaleHint(existing);
-      return { ...context, extra };
-    }
-    const [preferred, language] = await Promise.all([
-      this.userProfiles.get(userId, 'preferred_language'),
-      this.userProfiles.get(userId, 'language'),
-    ]);
-    const hint = (preferred ?? language)?.trim();
-    if (hint) {
-      extra[WEB_SEARCH_LOCALE_EXTRA_KEY] = normalizeWebSearchLocaleHint(hint);
-    }
-    return { ...context, extra };
-  }
-
-  private emitSessionNewEvent(
-    sessionId: string,
-    context: ToolContext,
-    mode: 'text' | 'multimodal',
-    content: string,
-    reply: string,
-  ): void {
-    this.emitAIEvent('ai.session.new', this.createAIEventPayload(sessionId, context, mode, {
-      reason: 'first_message',
-      content,
-      reply,
-    }));
-  }
-
-  private emitSessionCompactEvent(
-    sessionId: string,
-    context: ToolContext,
-    mode: 'text' | 'multimodal',
-    info: {
-      microSavedTokens: number;
-      autoSavedTokens: number;
-      totalTokensBefore: number;
-      totalTokensAfter: number;
-    },
-  ): void {
-    this.emitAIEvent('ai.session.compact', this.createAIEventPayload(sessionId, context, mode, {
-      path: 'agent',
-      compactedCount: 1,
-      savedTokens: info.microSavedTokens + info.autoSavedTokens,
-      totalTokensBefore: info.totalTokensBefore,
-      totalTokensAfter: info.totalTokensAfter,
-      result: info,
-    }));
-  }
-
-  /** @deprecated 使用 {@link formatToolCallsForUser} */
-  private fallbackFormat(toolCalls: { tool: string; args: any; result: any }[]): string {
-    return formatToolCallsForUser(toolCalls);
-  }
 
   // ── Lifecycle ───────────────────────────────────────────────────────
 
