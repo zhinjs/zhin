@@ -60,7 +60,7 @@
   "devDependencies": {
     "@types/koa": "^3.0.3",
     "esbuild": "^0.28.0",
-    "lucide-react": "^1.16.0",
+    "lucide-react": "^1.17.0",
     "tsup": "^8.5.1",
     "yaml": "^2.9.0",
     "zhin.js": "workspace:*"
