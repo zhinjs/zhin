@@ -67,11 +67,11 @@ Zhin.js 团队和社区非常重视安全问题。我们感谢您帮助我们保
 
 2. **保护凭证**
    - 永远不要将 `.env` 文件提交到版本控制
-   - 使用强密码保护 Web 控制台
+   - 使用强 `HTTP_TOKEN`；勿将 Token 写入 URL 或提交到版本库
    - 定期轮换 API 密钥和令牌
 
 3. **访问控制**
-   - 限制 Web 控制台的访问（使用防火墙规则）
+   - 限制 Host API（`:8086`）的暴露范围；Remote Console 见 [docs/console-remote.md](docs/console-remote.md)
    - 在生产环境中使用 HTTPS
    - 考虑使用反向代理（如 Nginx）增加安全层
 
@@ -174,10 +174,9 @@ Zhin.js 团队和社区非常重视安全问题。我们感谢您帮助我们保
 
 ### ⚠️ 已知安全注意事项
 
-1. **Web 控制台访问**
-   - 默认配置下，Web 控制台监听所有接口（0.0.0.0）
-   - 建议在生产环境中限制访问来源
-   - 使用强密码并考虑启用双因素认证（未来版本）
+1. **Remote Console / Host API**
+   - Host HTTP 默认 `127.0.0.1:8086`（仅 API）；勿将 `:8086` 暴露为公网 UI 入口
+   - 生产环境限制 API 来源、使用强 `HTTP_TOKEN`；Remote Console 登录见 [docs/console-remote.md](docs/console-remote.md)
 
 2. **插件系统**
    - 插件在同一进程中运行，具有完整的系统访问权限

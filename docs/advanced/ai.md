@@ -91,7 +91,8 @@ flowchart TD
 - **BootstrapLoader** - 引导文件加载（SOUL.md / AGENTS.md / TOOLS.md）
 - **ExecPolicy** - Bash 执行安全策略（6 层纵深防御）
 - **FilePolicy** - 文件访问安全验证（路径检查、设备路径拦截、命令读写分类）
-- **PromptBuilder** - 系统提示词构建器（精简常驻段 + 按需上下文注入）
+- **buildRichSystemPrompt** - ZhinAgent 主路径 system prompt（常驻段 + Platform / Skills / Bootstrap 注入）
+- **PromptBuilder** - 可选分层提示词 API（非默认主路径）
 
 **@zhin.js/core（IM 层）**：
 - **SkillFeature** - 技能注册中心，管理所有 Skill
@@ -182,7 +183,7 @@ ai:
 | `execSecurity` | string | 'deny' | bash 执行策略：deny / allowlist / full |
 | `execPreset` | string | 'custom' | 预设命令白名单：readonly / network / development / custom |
 | `execAllowlist` | string[] | [] | 白名单匹配**首段命令名**（见 exec-policy）；`allowlist` 下 **`icqq` 非敏感子命令**另有单独放行，见下文 [icqq 与 allowlist](#icqq-bash-exec) |
-| `execAsk` | boolean | false | 未匹配白名单的命令是否提示审批；**敏感 icqq** 亦依赖此项触发 Owner 确认，见 [icqq 与 allowlist](#icqq-bash-exec) |
+| `execApprovalMode` | `'ask' \| 'allow' \| 'deny'` | `'deny'` | 主 Agent 对白名单外 bash 的处理：`ask` 触发 Owner 确认（`ask_user` / `ZHIN_NEEDS_OWNER`）；见 [icqq 与 allowlist](#icqq-bash-exec) |
 | `disabledTools` | string[] | [] | 禁用的工具列表 |
 | `allowedTools` | string[] | [] | 仅允许的工具列表（优先于 disabledTools） |
 | `rateLimit` | object | {} | 速率限制配置 |
@@ -578,18 +579,18 @@ exec-policy 实现了 6 层纵深防御：
 | **4. 复合命令拆分** | 按 `&&`, `||`, `;` 拆分，每段独立检查，deny 优先 | `ls && rm -rf /` → 拦截 `rm` |
 | **5. 只读命令自动放行** | 与 file-policy 的 `classifyBashCommand` 集成，只读命令无需白名单 | `cat file \| grep pattern` → 自动放行 |
 | **5+. icqq 子命令分级** | `allowlist` 下首词为 `icqq` 时：非敏感子命令直接放行；敏感子命令需 Owner 确认或已配置的放行正则 / `approve always bash` | `icqq friend like 123` 通常直接放行；`icqq group kick …` 可能需确认 |
-| **6. ask_user 审批集成** | `execAsk: true` 时，未知命令返回审批标记而非硬拒绝 | `npm install` → 提示用户确认 |
+| **6. Owner 审批信号** | `execApprovalMode: ask` 时，未知命令返回 `ZHIN_NEEDS_OWNER` 而非硬拒绝 | `npm install` → 提示用户确认 |
 
-### 交互式审批 (execAsk)
+### 交互式审批 (`execApprovalMode: ask`)
 
-设置 `execAsk: true` 后，不在白名单但也不在黑名单的命令不会被直接拒绝，而是返回审批请求。AI 会调用 `ask_user` 工具向用户确认是否执行：
+设置 `execApprovalMode: ask` 后，不在白名单但也不在黑名单的命令不会被直接拒绝，而是返回审批请求。AI 会调用 `ask_user` 工具向用户确认是否执行：
 
 ```yaml
 ai:
   agent:
     execSecurity: allowlist
     execPreset: readonly
-    execAsk: true    # 未知命令请求用户确认，而非直接拒绝
+    execApprovalMode: ask    # 未知命令请求用户确认，而非直接拒绝
 ```
 
 工作流程：
@@ -598,14 +599,16 @@ ai:
 3. AI 调用 `ask_user` 工具："要执行 `npm install`，是否允许？"
 4. 用户确认后 AI 再执行
 
-> **注意**：危险命令（黑名单中的 `sudo`/`eval`/`dd` 等）即使 `execAsk: true` 也会被直接拒绝，不可审批。
+> **注意**：危险命令（黑名单中的 `sudo`/`eval`/`dd` 等）即使 `execApprovalMode: ask` 也会被直接拒绝，不可审批。
 
 ### icqq CLI 与 allowlist（bash 路径） {#icqq-bash-exec}
 
 当 AI 通过 **`bash`** 执行 `icqq …` 子命令时（常见路径：启用 icqq 技能后由模型生成 shell）：
 
 - **`execSecurity: allowlist`** 下，**非敏感** icqq 子命令（如状态查询、好友点赞等）**不需要**写进 `execAllowlist`，也**不需要**先加 `approve rule`，exec-policy 会直接放行（仍受危险命令黑名单、环境变量 / wrapper 剥离、复合命令拆分等约束）。
-- **敏感**子命令（踢人、禁言、群解散/转让、好友删除/拉黑/移动、支付与钱包、撤回、部分群文件删除等）在 `execAsk: true` 时会走 **Owner 确认**（编排层 `ask_user` / `ZHIN_NEEDS_OWNER`）；Owner 可在私聊用 **`approve rule <正则>`** 对**整条规范化后的子命令**做持久化匹配（例如 `^icqq\s+friend\s+like\b`），避免把 QQ 号写死在白名单里。敏感子命令的判定见源码 `packages/agent/src/security/owner-approve-always-store.ts` 中的 `ICQQ_SENSITIVE_SUBCOMMAND_REGEXES`。
+- **敏感**子命令（踢人、禁言、群解散/转让、好友删除/拉黑/移动、支付与钱包、撤回、部分群文件删除等）在 `execApprovalMode: ask` 时会走 **Owner 确认**（编排层 `ask_user` / `ZHIN_NEEDS_OWNER`）；Owner 可在私聊用 **`approve rule <正则>`** 对**整条规范化后的子命令**做持久化匹配（例如 `^icqq\s+friend\s+like\b`），避免把 QQ 号写死在白名单里。敏感子命令的判定见源码 `packages/agent/src/security/owner-approve-always-store.ts` 中的 `ICQQ_SENSITIVE_SUBCOMMAND_REGEXES`。
+
+> **说明**：旧文档中的 `execAsk` 已废弃；配置请使用 `execApprovalMode`（实现见 `packages/agent/src/zhin-agent/config.ts`）。
 
 ### Bot Owner 私聊指令（approve） {#owner-approve-commands}
 

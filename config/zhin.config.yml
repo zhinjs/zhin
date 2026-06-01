@@ -42,7 +42,7 @@ plugins: []
 #   agent:
 #     execSecurity: allowlist  # bash 执行策略: deny(禁止) / allowlist(白名单) / full(不限制)
 #     execPreset: network      # 预设白名单: readonly / network / development / custom
-#     execAsk: true            # 未知命令向 Owner 私聊审批
+#     execApprovalMode: ask    # 未知命令向 Owner 私聊审批
 #   trigger:
 #     prefixes: ['#', 'AI:', 'ai:']
 #     respondToAt: true

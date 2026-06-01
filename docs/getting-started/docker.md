@@ -53,10 +53,10 @@ docker run --rm \
 ```
 [INFO] [Zhin:CLI]: ✓ 机器人已启动
 [INFO] [Zhin:http]: HTTP 服务已启动 (port=8086)
-[INFO] [Zhin:console]: Web 控制台已启动
+[INFO] [Zhin:console]: 控制台（仅 API）
 ```
 
-此时打开浏览器访问 `http://localhost:8086` 即可看到 Web 控制台。
+Host 监听 `http://127.0.0.1:8086`（API）。在 **[console.zhin.dev](https://console.zhin.dev)** 登录，API Base 指向该地址，Token 见 `.env` 的 `HTTP_TOKEN`。见 [console-remote.md](../console-remote.md)。
 
 按 **Ctrl+C** 可以停止。
 
@@ -205,7 +205,7 @@ docker run -it --rm -v $(pwd):/app ghcr.io/zhinjs/zhin shell
 如需自行构建：
 
 ```bash
-git clone --recurse-submodules https://github.com/zhinjs/zhin.git
+git clone https://github.com/zhinjs/zhin.git
 cd zhin
 docker build -t zhin:local .
 docker run --rm zhin:local help

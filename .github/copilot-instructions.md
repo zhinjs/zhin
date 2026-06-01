@@ -13,7 +13,7 @@
 - TypeScript 导入本地文件时通常必须带 .js 扩展名。
 - usePlugin() 应在模块顶层调用，不要放进异步函数或延迟初始化路径。
 - 任何 IM 出站发送都必须走统一链路：Message.$reply 或 Adapter.sendMessage → renderSendMessage → before.sendMessage → 平台 Bot；不要旁路发送。
-- 修改架构或仓库结构前，先看 docs/architecture-overview.md 和 docs/contributing/repo-structure.md，避免违反分层和目录约定。
+- 修改架构或仓库结构前，先看 docs/architecture/README.md、docs/architecture-overview.md 和 docs/contributing/repo-structure.md，避免违反分层和目录约定。队列运行时为 Beta，见 docs/architecture/queue-roadmap.md 与 docs/architecture/queue/CONTEXT.md。
 
 **关键要点**：
 - `$sendMessage` 必须返回消息 ID
@@ -682,10 +682,10 @@ declare module 'zhin.js' {
 - 内置 API: `/api/adapters`, `/api/system/status`, `/api/plugins`
 
 ### Console 插件 (`@zhin.js/console`)
-- Vite 开发服务器，访问 `http://localhost:8086/vite/`
-- 提供 `web` Context，支持 `addEntry(entry: string)` 方法
-- 自动处理客户端入口文件的热重载
-- WebSocket 同步动态入口脚本
+- Host 侧 **仅 Console API**（`serveClientHost: false`）；UI 在 **Remote Console**（[console.zhin.dev](https://console.zhin.dev) / 仓库 `zhin-console`）
+- 提供 `web` Context（`PageManager`），适配器经 `addEntry` 注册扩展；`GET /entries` 供 Remote UI 拉取
+- SSE `/api/events`、RPC `POST /api/console/request`
+- 见 `docs/console-remote.md`、`examples/test-bot/REMOTE_CONSOLE.md`
 
 ### Client 插件 (`@zhin.js/client`)
 - React Router 7 + Redux 状态管理

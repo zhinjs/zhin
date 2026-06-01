@@ -1,16 +1,14 @@
 # @zhin.js/console
 
-Zhin 机器人框架的 Web 控制台插件，提供开发环境下的可视化管理界面和调试工具。
+Zhin Host 上的 **Console API** 插件：`PageManager`、`POST /api/console/request`、SSE `/api/events`、`GET /entries` 等。**聊天与管理 UI 不在本 Host 提供**（`serveClientHost: false`），请使用 **[Remote Console](https://console.zhin.dev)**（仓库 [zhin-console](https://github.com/zhinjs/zhin-console)）。说明见 [docs/console-remote.md](../../../docs/console-remote.md)。
 
-## 功能特性
+## 功能特性（Host 侧）
 
-- 🌐 基于 Vite 的开发服务器
-- 🔥 支持热模块替换 (HMR)
-- 📊 实时状态监控
-- 🔧 插件开发调试
-- 📝 日志实时查看
-- 🛠️ 开发工具集成
-- 📱 WebSocket 实时通信
+- 📡 Console API + SSE 事件流
+- 📋 `PageManager` / `addEntry`（适配器注册扩展入口，供 Remote UI 拉取）
+- 📊 运行时状态经 API 暴露
+- 🔧 插件与 Feature 调试数据
+- 📝 日志与 OpenAPI（`GET /pub/openapi.json`）
 
 ### ICQQ 登录辅助（不在 Console 提供）
 
@@ -36,13 +34,10 @@ Node 侧 **`src/`** 可参考 **`@zhin.js/console/node.tsconfig.json`**，并在
 
 ## 技术架构
 
-- **构建工具**: Vite 7.x
-- **前端框架**: React 18 + React Router 7 + TypeScript
-- **UI 组件库**: Radix UI + Tailwind CSS
-- **状态管理**: Redux Toolkit + Redux Persist
-- **开发服务器**: 集成到 Koa 路由
-- **WebSocket**: 实时数据同步
-- **构建优化**: Vendor Chunks 分割，支持插件复用公共依赖
+- **Host**：`@zhin.js/console` + `@zhin.js/console-core`（`PageManager`、`/@dev` 扩展打包）
+- **UI**：独立仓库 **zhin-console**（Farm/Vite 等由该仓库维护）
+- **客户端 SDK**：`@zhin.js/client`（Remote Console 依赖）
+- **适配器扩展**：`client/` 产物经 `addEntry` 注册，由 Remote UI 加载
 
 ## 安装
 
@@ -83,18 +78,15 @@ pnpm add @zhin.js/console --prod
 import '@zhin.js/console'
 ```
 
-插件会自动：
-1. 启动 Vite 开发服务器（开发模式）
-2. 配置路由中间件
-3. 设置 WebSocket 连接
-4. 提供静态文件服务
+插件会自动注册 Console API 路由（与 `@zhin.js/http` 同端口，默认 `8086`）。
 
-### 访问地址
+### 访问 UI（Remote Console）
 
-默认情况下，控制台可以通过以下地址访问：
-```
-http://localhost:8086/vite/
-```
+1. 启动 Host：`pnpm dev` / `pnpm start`。
+2. 浏览器打开 **https://console.zhin.dev**（或本地 [zhin-console](https://github.com/zhinjs/zhin-console) 开发服，如 `http://127.0.0.1:5173`）。
+3. 登录：**API Base** `http://127.0.0.1:8086` 或 `http://127.0.0.1:8086/api`；**Token** 与 `.env` 中 `HTTP_TOKEN` 一致。
+
+**勿**将 `http://localhost:8086` 或 `/vite/` 当作内置聊天 UI 入口（Host 不托管静态 Console 页）。健康检查可用 `GET http://127.0.0.1:8086/pub/health`。
 
 ### 配置选项
 
@@ -106,9 +98,9 @@ plugins:
     # 是否启用控制台插件，默认 true
     enabled: true
     
-    # 是否延迟加载 Vite（开发模式），默认 false
-    # false: 启动时立即加载 Vite（推荐，确保 addEntry 等功能可用）
-    # true: 首次访问时才启动 Vite（节省 ~23MB 内存，但可能导致其他插件功能异常）
+    # 是否延迟初始化 PageManager，默认 false
+    # false: 启动时立即可用 addEntry（推荐）
+    # true: 首次需要时再初始化（省内存，可能导致 sandbox/icqq 等扩展注册异常）
     lazyLoad: false
 ```
 
@@ -117,103 +109,21 @@ plugins:
 **默认值为 `false`（不延迟加载）**，原因：
 
 1. **其他插件依赖 `PageManager.addEntry`**：`@zhin.js/adapter-sandbox`、`@zhin.js/adapter-icqq` 等需在 `useContext('web', (pageManager) => { pageManager.addEntry({...}) })` 中注册控制台扩展（见各适配器 `src/index.ts`）
-2. **WebSocket 需要提前准备**：实时通信功能需要 WebSocket 服务器立即可用
-3. **用户体验更好**：访问控制台时立即可用，无需等待 Vite 启动
+2. **Remote UI 依赖 entries**：Sandbox、ICQQ 等需在启动阶段完成 `addEntry`
 
-**如果你确定不需要这些功能**，可以启用延迟加载节省内存：
-```yaml
-plugins:
-  console:
-    lazyLoad: true  # 节省 ~23MB 启动内存
-```
-- ✅ 启动时内存: **18-20MB**
-- ⚠️ 首次访问控制台: **+23MB**（Vite + React 生态）
-- 💡 适合：不常访问控制台的生产环境
-
-**立即加载模式**：
-```yaml
-plugins:
-  console:
-    lazyLoad: false
-```
-- ⚠️ 启动时内存: **42MB**
-- ✅ 访问控制台: 无延迟
-- 💡 适合：频繁使用控制台的开发环境
-
-**禁用控制台**：
+**禁用 Console API**：
 ```yaml
 plugins:
   console:
     enabled: false
 ```
-- ✅ 内存: **0MB**（不加载）
-- 💡 适合：生产环境或不需要 Web 控制台
+- 💡 适合：仅需 IM/队列、不需要 Remote Console 与 Sandbox 浏览器调试的场景
 
-## 生产环境优化
+## 生产环境
 
-### 依赖优化
+Host 侧始终为 **API-only**（不向 `:8086` 提供 Console 静态站）。生产部署 Remote Console 到 CDN/独立域名，Host 暴露 API 并配置 `http.token`、`http.corsOrigins`（含 `https://console.zhin.dev`）。详见 [docs/console-remote.md](../../../docs/console-remote.md)。
 
-Console 插件采用**构建时打包**策略：
-
-**构建时**（开发环境）：
-```bash
-# 安装所有依赖（包括 React、Vite）
-pnpm install
-
-# 构建前端到 dist/ 目录
-pnpm --filter @zhin.js/console build:client
-```
-
-**运行时**（生产环境）：
-```bash
-# 只安装生产依赖（mime + ws）
-pnpm install --prod
-
-# 直接读取 dist/ 静态文件，无需 React
-NODE_ENV=production pnpm start
-```
-
-**节省效果**：
-- ✅ 磁盘空间: ~200MB → ~2MB（98% 减少）
-- ✅ 依赖数量: 20+ → 2（90% 减少）
-- ✅ 运行时内存: 保持 17MB（无额外开销）
-
-### 环境变量
-
-```bash
-# 生产模式（使用预构建的静态文件）
-NODE_ENV=production pnpm start
-
-# 开发模式（使用 Vite HMR）
-NODE_ENV=development pnpm dev
-```
-
-### 部署建议
-
-1. **仅 API 服务**：禁用 console 插件
-   ```yaml
-   plugins:
-     console:
-       enabled: false
-   ```
-
-2. **需要 Web 控制台**：使用静态模式
-   ```bash
-   # 构建前端
-   pnpm --filter @zhin.js/console build:client
-   
-   # 生产环境启动（自动使用静态文件）
-   NODE_ENV=production pnpm start
-   ```
-
-3. **开发环境**：使用完整功能
-   ```bash
-   # 安装所有依赖（包括可选依赖）
-   pnpm install
-   
-   # 开发模式启动
-   pnpm dev
-```
+不需要 Remote Console / Sandbox 浏览器调试时，可 `console.enabled: false`。
 
 ## 核心功能
 

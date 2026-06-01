@@ -27,6 +27,8 @@ pnpm check:no-koa           # 检查 koa 导入
 pnpm check:prod             # 检查生产配置
 pnpm check:plugin           # 检查插件规范
 pnpm check:architecture     # 检查架构层级
+pnpm check:doc-links        # 检查文档相对链接（AGENTS、architecture 等）
+pnpm check:stable           # Stable smoke（Sandbox + minimal-bot 契约，无 LLM）
 ```
 
 ### 代码质量检查

@@ -19,12 +19,15 @@ const connectImpl = vi.hoisted(() =>
   })),
 );
 
+const isHealthyImpl = vi.hoisted(() => vi.fn(async () => true));
+
 vi.mock('../src/mcp-client/index.js', () => ({
   McpClientManager: vi.fn(function McpClientManager() {
     return {
       connect: (entry: { name: string }) => connectImpl(entry),
       disconnect: vi.fn(),
       disconnectAll: vi.fn(),
+      isHealthy: (_name: string) => isHealthyImpl(),
     };
   }),
 }));
@@ -35,6 +38,8 @@ let McpRegistry: McpRegistryCtor;
 describe('McpRegistry', () => {
   beforeEach(async () => {
     connectImpl.mockReset();
+    isHealthyImpl.mockReset();
+    isHealthyImpl.mockResolvedValue(true);
     connectImpl.mockImplementation(async () => ({
       isConnected: true,
       tools: [mockTool],
@@ -43,6 +48,30 @@ describe('McpRegistry', () => {
     }));
     vi.resetModules();
     ({ McpRegistry } = await import('../src/orchestrator/mcp-registry.js'));
+  });
+
+  it('reconnects when cached connection fails health check', async () => {
+    const registry = new McpRegistry();
+    registry.add(
+      { name: 'fs', transport: 'stdio', command: 'echo', args: [] },
+      {},
+      'test',
+    );
+    await registry.connect('fs');
+    expect(connectImpl).toHaveBeenCalledTimes(1);
+    isHealthyImpl.mockResolvedValueOnce(false);
+    await registry.connect('fs');
+    expect(connectImpl).toHaveBeenCalledTimes(2);
+    expect(registry.getAllMcpTools().map(t => t.name)).toContain('mcp_fs_read');
+  });
+
+  it('ensureConnected replaces stale connections', async () => {
+    const registry = new McpRegistry();
+    registry.add({ name: 'fs', transport: 'stdio', command: 'echo' }, {}, 'test');
+    await registry.connect('fs');
+    isHealthyImpl.mockResolvedValue(false);
+    await registry.ensureConnected();
+    expect(connectImpl.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
   it('connect delegates to McpClientManager and exposes tools', async () => {

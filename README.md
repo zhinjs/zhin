@@ -3,24 +3,28 @@
 现代 TypeScript 聊天机器人框架 —— AI 驱动、插件化、热重载、多平台
 
 [文档](https://zhin.js.org)
-[CI](https://github.com/zhinjs/zhin/actions/workflows/publish.yml)
+[CI](https://github.com/zhinjs/zhin/actions/workflows/ci.yml)
 [codecov](https://codecov.io/github/zhinjs/zhin)
 [License](./LICENSE)
 
 ## 核心特性
 
+能力按成熟度分档：**Stable**（推荐首跑与对外默认承诺）、**Advanced**（多 bot / toolSearch / MCP 等）、**Beta**（队列 / qbot）。完整分档见下表。
 
-| 特性                | 说明                                                           |
-| ----------------- | ------------------------------------------------------------ |
-| 🤖 **AI 驱动**      | 内置 ZhinAgent 智能体，接入 OpenAI / Ollama 等大模型，支持多轮对话、工具调用、6 层安全防御 |
-| 🔌 **插件化架构**      | `usePlugin()` Hooks 风格 API，AsyncLocalStorage 上下文管理           |
-| ♻️ **智能热重载**      | 代码、配置变更自动生效，无需重启，错误自动回滚                                      |
-| 🌐 **多平台**        | QQ、Discord、Telegram、KOOK、Slack、钉钉、飞书、OneBot 等 14+ 平台         |
-| 🧩 **Feature 体系** | 命令、工具、技能、定时任务、数据库等统一抽象，插件按需组合                                |
-| 🛡️ **安全纵深**      | Bash 6 层防御、文件访问策略、设备路径拦截、交互式审批                               |
-| 🎯 **TypeScript** | 完整的类型推导和提示，极致开发体验                                            |
-| 🖥️ **Web 控制台**   | 实时监控、插件管理、日志查看                                               |
+| Tier | 特性 | 说明 |
+|------|------|------|
+| **Stable** | AI 驱动 | ZhinAgent + 单 Provider；Sandbox 本地调试；基础多轮与工具调用 |
+| **Stable** | 插件化架构 | `usePlugin()` Hooks API，AsyncLocalStorage 上下文 |
+| **Stable** | 热重载 | 代码与配置变更自动生效 |
+| **Stable** | Remote Console | Host 仅 API（`:8086`）；UI 在 [console.zhin.dev](https://console.zhin.dev)（Sandbox 聊天） |
+| **Stable** | TypeScript | 完整类型推导 |
+| **Stable** | 安全（基础） | Bash allowlist、文件策略、交互式审批（见 [Agent 安全文档](./docs/advanced/agent-harness-engineering.md)） |
+| **Advanced** | 多平台 IM | 适配器见 [plugins/adapters](./plugins/adapters) 与 [适配器文档](./docs/essentials/adapters.md)（成熟度因平台而异） |
+| **Advanced** | Feature 体系 | 命令、工具、技能、cron、数据库等组合 |
+| **Advanced** | toolSearch / MCP | 编排工具、deferred worker、MCP Client/Server |
+| **Beta** | 队列 / qbot | `packages/queue-runtime` 平行栈；示例 [minimal-qbot](./examples/minimal-qbot/)（非 Stable 首跑） |
 
+> **推荐首跑**：克隆仓库后进入 [`examples/minimal-bot`](./examples/minimal-bot/)（Sandbox + 最少插件）。[`examples/test-bot`](./examples/test-bot/) 为维护者**厨房水槽**配置，勿当作默认模板。
 
 ## 快速开始
 
@@ -29,7 +33,22 @@
 - **Node.js** 20.19.0+ 或 22.12.0+
 - **pnpm** 9.0+（`npm install -g pnpm`）
 
-### 创建项目
+### 在 monorepo 内首跑（Stable，推荐）
+
+```bash
+git clone https://github.com/zhinjs/zhin.git
+cd zhin
+pnpm install
+cd examples/minimal-bot
+cp .env.example .env   # 可选：配置 Ollama 或 OpenAI
+pnpm dev
+```
+
+1. 保持 `pnpm dev` 运行（Host 监听 `http://127.0.0.1:8086`，**无**内置网页 UI）。
+2. 打开 **[Remote Console](https://console.zhin.dev)**，API Base 填 `http://127.0.0.1:8086`（或 `http://127.0.0.1:8086/api`，以登录页说明为准），Token 与 `.env` 中 `HTTP_TOKEN` 一致。
+3. 在 Sandbox 窗口发 `hello`；AI 回合需 Ollama 或 API Key。详见 [minimal-bot README](./examples/minimal-bot/README.md) 与 [Remote Console 说明](./docs/console-remote.md)。
+
+### 创建独立项目（脚手架）
 
 ```bash
 npm create zhin-app my-bot
@@ -39,7 +58,7 @@ pnpm dev          # 开发模式（热重载）
 
 脚手架会引导你选择运行时、数据库、聊天平台和 AI 提供商。
 
-启动后可访问 Web 控制台：`http://localhost:8086`
+启动后在本机提供 Console **API**（默认 `http://127.0.0.1:8086`）。在 **[console.zhin.dev](https://console.zhin.dev)** 登录并填写 API Base 与 Token（见 [docs/console-remote.md](./docs/console-remote.md)）。
 
 > **Windows 用户** 📌：遇到问题请参考 [Windows 初始化指南](./docs/essentials/windows-setup.md)。
 
@@ -114,7 +133,7 @@ ai:
     visionModel: ''            # 留空自动选择视觉模型
     execSecurity: allowlist    # bash 执行策略：deny / allowlist / full
     execPreset: network        # 预设白名单：readonly / network / development
-    execAsk: true              # 未知命令交互式审批
+    execApprovalMode: ask      # 白名单外命令：ask=Owner 确认 / allow=放行 / deny=拒绝
 ```
 
 插件通过 `addTool` 注册 AI 可调用的工具：
@@ -203,7 +222,7 @@ tools: [web_search]
 
 #### 发现顺序
 
-框架按 `**cwd/` → `~/.zhin/` → `data/` → 已加载插件包根** 的顺序扫描 `tools/`、`skills/`、`agents/` 目录，同名先发现者优先；工作区内的文件变更支持**热重载**。
+框架按 **`./tools`（或 `./skills` / `./agents`）→ `~/.zhin/<kind>/` → `data/<kind>/` → 已加载插件包内对应目录** 的顺序扫描（实现见 `packages/agent/src/discovery/`），同名先发现者优先；插件模块变更可通过 `Plugin.watch` **热重载**。
 
 📖 详见：[AI 模块](./docs/advanced/ai.md) · [工具与技能](./docs/advanced/tools-skills.md)
 
@@ -219,12 +238,12 @@ AI 执行 bash 命令时受 **6 层纵深防御** 保护：
 | 3   | Safe wrapper 剥离（`timeout 10 rm` → 识别为 `rm`） |
 | 4   | 复合命令拆分（`ls && rm -rf /` → 逐段检查）             |
 | 5   | 只读命令自动放行（`cat`/`grep`/`ls` 无需白名单）           |
-| 6   | 交互式审批（`execAsk: true` 时用 `ask_user` 向用户确认）  |
+| 6   | Owner 审批信号（`execApprovalMode: ask` 时经 `ask_user` / `ZHIN_NEEDS_OWNER` 确认）  |
 
 
 ## 架构设计
 
-Zhin.js 采用精密的松耦合分层体系和高度合规的安全架构，旨在将灵巧的 AI 编排、健壮的 IM 消息生命周期以及精细的任务/流思维指示器完美统一。更详尽的说明见 [docs/architecture-overview.md](docs/architecture-overview.md) 与 [docs/contributing/repo-structure.md](docs/contributing/repo-structure.md)。
+Zhin.js 采用分层架构，将 AI 编排、IM 消息生命周期与可选队列运行时分离。入口：[docs/architecture/README.md](docs/architecture/README.md)、[docs/architecture-overview.md](docs/architecture-overview.md)、[docs/contributing/repo-structure.md](docs/contributing/repo-structure.md)。**默认开发示例**：`examples/minimal-bot`；全功能回归：`examples/test-bot`。
 
 ### 1. Monorepo 分层依赖拓扑
 
@@ -311,26 +330,25 @@ sequenceDiagram
     actor User as 用户 (QQ/Discord)
     participant Adapter as 平台 Adapter
     participant Disp as MessageDispatcher
-    participant Onion as 中间件 Onion (洋葱模型)
+    participant Handle as Handle 阶段
     participant Cmd as 命令解析器
     participant Agent as ZhinAgent (AI)
 
     User->>Adapter: 发送原始消息 (Raw Event)
     Adapter->>Adapter: 解析格式 & 构建标准 Message 实例
     Adapter->>Disp: dispatch(message)
-    Note over Disp: Guardrail 阶段 (安全/限流校验)
-    Disp->>Onion: 进入洋葱中间件执行链
-    Note over Onion: 前置过滤器 (例如: 权限/敏感词校验)
-    Onion->>Cmd: next() -> 匹配指令或命令模式
-    alt 命中了特定 Command
+    Note over Disp: Stage 1 Guardrail（鉴权/过滤/日志）
+    Note over Disp: Stage 2 Route（exclusive 或 dualRoute）
+    Disp->>Handle: Stage 3 Handle
+    alt 命中 Command
+        Handle->>Cmd: commandService.handle()
         Cmd->>Cmd: 解析参数 (SegmentMatcher)
-        Cmd->>Onion: 执行 Command.action() 或组件自渲染
-    else 未命中任何 Command 并且开启了 AI
-        Cmd->>Agent: 回退转发至 AI Agent
-        Agent->>Agent: AI 大脑编排与决策循环
+    else 未命中 Command 且应触发 AI
+        Handle->>Agent: aiHandler → ZhinAgent.process()
+        Agent->>Agent: 工具收集 / 提示词 / Agent.run 循环
     end
-    Onion->>Disp: 返回执行结果
-    Disp->>User: 消息统一回复 / 回滚
+    Handle->>Disp: 经 replyWithPolish → $reply → sendMessage
+    Disp->>User: 统一出站（before.sendMessage → Bot）
 ```
 
 
@@ -359,7 +377,8 @@ graph TD
     %% AI 中枢大脑
     subgraph Orchestrator["ZhinAgent 决策中枢"]
         ZhinAgent["ZhinAgent Core"]
-        PromptBuilder["PromptBuilder (11段式提示构建)"] --->|构建完整 Context| ZhinAgent
+        RichPrompt["buildRichSystemPrompt（主路径常驻段）"] --->|system prompt| ZhinAgent
+        PromptBuilder["PromptBuilder（可选分层 API）"] -.->|buildRichSystemPromptWithBuilder| ZhinAgent
         ModelRegistry["ModelRegistry (模型自动发现 & 自动降级)"] --->|智能分配最合适 LLM| ZhinAgent
         AIProvider["AIProvider (接入 Ollama / OpenAI / DeepSeek 等)"] -.->|单/多轮 API 轮询| ZhinAgent
     end
@@ -386,7 +405,7 @@ graph TD
 
     class ToolMD,SkillMD,AgentMD,ToolReg,SkillReg,SubAgentReg disc
     class McpServer,McpMgr mcp
-    class ZhinAgent,PromptBuilder,ModelRegistry,AIProvider orch
+    class ZhinAgent,RichPrompt,PromptBuilder,ModelRegistry,AIProvider orch
     class ExecPolicy,FilePolicy sec
 ```
 
@@ -449,15 +468,19 @@ graph TD
 
 ## 多平台适配器
 
+仓库内 [`plugins/adapters/`](./plugins/adapters/) 共 **17** 个适配器包（成熟度因平台而异，对外默认承诺以 Sandbox 为主）：
 
-| 平台         | 包名                          | 平台      | 包名                           |
-| ---------- | --------------------------- | ------- | ---------------------------- |
-| QQ (ICQQ)  | `@zhin.js/adapter-icqq`     | QQ 官方   | `@zhin.js/adapter-qq`        |
-| KOOK       | `@zhin.js/adapter-kook`     | Discord | `@zhin.js/adapter-discord`   |
-| Telegram   | `@zhin.js/adapter-telegram` | Slack   | `@zhin.js/adapter-slack`     |
-| 钉钉         | `@zhin.js/adapter-dingtalk` | 飞书      | `@zhin.js/adapter-lark`      |
-| OneBot v11 | `@zhin.js/adapter-onebot11` | 微信公众号   | `@zhin.js/adapter-wechat-mp` |
-| Sandbox    | `@zhin.js/adapter-sandbox`  | Email   | `@zhin.js/adapter-email`     |
+| 平台 | 包名 | 平台 | 包名 |
+|------|------|------|------|
+| Sandbox（Stable 首跑） | `@zhin.js/adapter-sandbox` | QQ (ICQQ) | `@zhin.js/adapter-icqq` |
+| QQ 官方 | `@zhin.js/adapter-qq` | NapCat | `@zhin.js/adapter-napcat` |
+| OneBot v11 | `@zhin.js/adapter-onebot11` | OneBot v12 | `@zhin.js/adapter-onebot12` |
+| Milky | `@zhin.js/adapter-milky` | KOOK | `@zhin.js/adapter-kook` |
+| Discord | `@zhin.js/adapter-discord` | Telegram | `@zhin.js/adapter-telegram` |
+| Slack | `@zhin.js/adapter-slack` | 钉钉 | `@zhin.js/adapter-dingtalk` |
+| 飞书 | `@zhin.js/adapter-lark` | 微信公众号 | `@zhin.js/adapter-wechat-mp` |
+| Email | `@zhin.js/adapter-email` | GitHub | `@zhin.js/adapter-github` |
+| Satori | `@zhin.js/adapter-satori` | | |
 
 
 ## 常用命令
@@ -511,6 +534,8 @@ zhin/                          # 主仓库 (github.com/zhinjs/zhin)
 │   ├── client/                #   Web 控制台
 │   ├── satori/                #   渲染引擎
 │   ├── create-zhin/           #   项目脚手架
+│   ├── http-host/             #   HTTP 路由抽象（Koa）
+│   ├── queue-runtime/         #   队列运行时（Beta，平行于 IM 栈）
 │   └── zhin/                  #   主入口包
 ├── plugins/                   # 插件生态（适配器 / 服务 / 特性 / 工具）
 ├── docs/                      # VitePress 文档站
@@ -531,7 +556,7 @@ zhin/                          # 主仓库 (github.com/zhinjs/zhin)
 git clone https://github.com/zhinjs/zhin.git
 cd zhin
 pnpm install && pnpm build
-pnpm dev
+cd examples/minimal-bot && pnpm dev   # Stable 黄金路径（根目录 pnpm dev 启动的是 test-bot）
 ```
 
 📖 详见：[贡献指南](./docs/contributing.md)

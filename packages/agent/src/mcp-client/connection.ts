@@ -86,6 +86,14 @@ export class McpClientConnection {
     return result;
   }
 
+  /** Lightweight health check; fails if transport or child process died. */
+  async ping(): Promise<void> {
+    if (!this.client || !this.state.connected) {
+      throw new Error(`MCP server "${this.name}" is not connected`);
+    }
+    await this.client.listTools();
+  }
+
   private async loadSdk(): Promise<any> {
     try {
       // Dynamic import — @modelcontextprotocol/sdk is an optional dependency

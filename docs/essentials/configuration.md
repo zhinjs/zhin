@@ -211,7 +211,7 @@ ai:
     execSecurity: allowlist     # bash 执行策略：deny / allowlist / full
     execPreset: network         # 预设白名单：readonly / network / development / custom
     execAllowlist: ["docker"]   # 自定义允许的命令（与 preset 合并）
-    execAsk: false              # 未知命令是否提示审批；icqq 敏感子命令亦依赖此项与 Owner approve，见 /advanced/ai#icqq-bash-exec
+    execApprovalMode: deny      # ask=白名单外需 Owner 确认 / allow=放行 / deny=拒绝；见 [advanced/ai.md](/advanced/ai#交互式审批-execapprovalmode-ask)
     maxIterations: 5            # 最大工具调用轮数
     contextTokens: 128000      # 上下文窗口 token 数
     maxHistoryShare: 0.5        # 历史记录占上下文窗口的最大比例
@@ -254,7 +254,7 @@ http:
   trustProxy: false         # 通过 Cloudflare/Nginx 等反向代理访问时设为 true
 ```
 
-**认证方式**：Token 认证，仅保护 API 路径（`/api/*`）。Web 控制台页面无需认证即可加载，打开后会展示 Token 登录页。
+**认证方式**：Token 认证，仅保护 API 路径（`/api/*`）。**Remote Console**（[console.zhin.dev](https://console.zhin.dev)）在登录页填写 API Base（如 `http://127.0.0.1:8086` 或 `http://127.0.0.1:8086/api`）与 Token。Host **不提供** `:8086` 上的静态聊天 UI。
 
 Token 传递方式：
 - **Header**: `Authorization: Bearer <token>`
@@ -394,12 +394,12 @@ scoop install nssm
 
 ## Web 控制台配置
 
-配置 Web 管理界面：
+`@zhin.js/console` 在 Host 上注册 **Console API**（`PageManager`、`/api/console/*`、`/api/events` 等）。UI 在 **[Remote Console](https://console.zhin.dev)**（独立仓库 [zhin-console](https://github.com/zhinjs/zhin-console)）。详见 [console-remote.md](../console-remote.md)。
 
 ```yaml
 console:
-  enabled: true      # 是否启用控制台
-  lazyLoad: false    # 是否延迟加载（开发时建议 false）
+  enabled: true      # 是否启用 Console API（非 Host 静态页）
+  lazyLoad: false    # 是否延迟初始化 PageManager（与 Remote UI 无关）
 ```
 
 ## 环境变量

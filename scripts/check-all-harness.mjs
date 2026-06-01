@@ -36,6 +36,26 @@ const checks = [
     command: 'pnpm check:architecture',
     description: '检查架构层级依赖是否正确',
   },
+  {
+    name: 'Doc Links',
+    command: 'pnpm check:doc-links',
+    description: '检查文档相对链接是否断裂',
+  },
+  {
+    name: 'Stable Smoke',
+    command: 'pnpm check:stable',
+    description: 'Stable 路径 smoke（Sandbox + Agent 核心单测 + minimal-bot 契约）',
+  },
+  {
+    name: 'Queue Beta Smoke',
+    command: 'pnpm check:queue-beta',
+    description: 'queue-runtime Vitest + minimal-qbot 启动',
+  },
+  {
+    name: 'usePlugin Top-Level',
+    command: 'pnpm check:use-plugin-top-level',
+    description: '插件 usePlugin() 须在模块顶层',
+  },
 ];
 
 console.log('Running all harness checks...\n');

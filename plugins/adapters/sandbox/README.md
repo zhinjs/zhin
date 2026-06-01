@@ -1,6 +1,6 @@
 # @zhin.js/adapter-sandbox
 
-Zhin.js Sandbox 适配器，基于 WebSocket 的本地测试适配器，配合 Web 控制台提供浏览器端聊天窗口进行调试。
+Zhin.js Sandbox 适配器，基于 WebSocket 的本地测试适配器；浏览器端聊天 UI 在 **[Remote Console](https://console.zhin.dev)**（Host 仅 Console API）中打开 Sandbox 窗口调试。
 
 ## 功能特性
 
@@ -21,8 +21,8 @@ pnpm add @zhin.js/adapter-sandbox
 Sandbox 适配器需要以下服务插件：
 
 - `@zhin.js/http` — HTTP 服务（提供 Router 和 WebSocket）
-- `@zhin.js/console` — Web 控制台（提供前端 UI）
-- `@zhin.js/client` — 控制台客户端框架
+- `@zhin.js/console` — Host 侧 Console API（`addEntry` 注册 Sandbox 扩展）
+- `@zhin.js/client` — Remote Console 客户端 SDK（UI 在 zhin-console 仓库）
 
 ## 配置
 
@@ -60,9 +60,9 @@ export default defineConfig({
 
 ## 使用方式
 
-1. 启动机器人：`pnpm dev`
-2. 打开浏览器访问 Web 控制台（默认 `http://localhost:8086`）
-3. 在控制台的 Sandbox 聊天窗口中发送消息进行测试
+1. 启动机器人：`pnpm dev`（Host 默认 `http://127.0.0.1:8086` 仅 **Console API**）
+2. 打开 **[Remote Console](https://console.zhin.dev)**，API Base 指向上述 Host，Token 与 `http.token` / `HTTP_TOKEN` 一致
+3. 在 Sandbox 聊天窗口中发送消息进行测试（勿将 `http://localhost:8086` 根路径当作 UI 入口）
 
 每个浏览器客户端连接后创建 Sandbox Bot（无 yaml 固定名时为 `sandbox-xxxx`）。
 

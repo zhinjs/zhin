@@ -427,11 +427,11 @@ hello
 status
 \`\`\`
 
-### Web 控制台与 Remote Console
+### Remote Console
 
-- 本地 API: \`http://localhost:8086/api\`
-- Remote Console: \`https://console.zhin.dev\`
-- 认证方式: 使用 \`.env\` 中的 \`HTTP_TOKEN\`，通过 Bearer Token 或 Console 登录页填写 Token。
+- UI: \`https://console.zhin.dev\`（勿将 \`http://127.0.0.1:8086\` 根路径当作聊天页）
+- API Base: \`http://127.0.0.1:8086\` 或 \`http://127.0.0.1:8086/api\`
+- Token: \`.env\` 中的 \`HTTP_TOKEN\`，在 Console 登录页填写
 
 默认配置已经允许官方 Remote Console Origin。如需本地开发控制台，在 \`${configFilename}\` 的 \`http.corsOrigins\` 中追加本地 Origin。
 

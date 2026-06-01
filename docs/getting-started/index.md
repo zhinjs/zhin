@@ -24,6 +24,24 @@ pnpm -v   # 应该显示 9.0.2 或更高
 npm install -g pnpm
 ```
 
+## 推荐首跑（Stable）
+
+若你已克隆 [Zhin.js monorepo](https://github.com/zhinjs/zhin)，优先使用黄金路径示例（单 Sandbox、最少插件）：
+
+```bash
+pnpm install          # 在仓库根目录
+cd examples/minimal-bot
+cp .env.example .env
+pnpm dev
+```
+
+保持 `pnpm dev` 运行后，打开 **[Remote Console](https://console.zhin.dev)**，API Base 填 `http://127.0.0.1:8086`（或 `/api` 后缀，见登录页），Token 与 `.env` 的 `HTTP_TOKEN` 一致；在 Sandbox 窗口发送 `hello`。配置 Ollama 后可发送 `ai: …` 验证 AI。说明见 [console-remote.md](../console-remote.md)。
+
+- 示例说明：[examples/minimal-bot/README.md](https://github.com/zhinjs/zhin/blob/main/examples/minimal-bot/README.md)
+- 全功能维护者配置（**非默认模板**）：`examples/test-bot`
+
+独立新项目请继续阅读下文「创建项目」。
+
 ## 创建项目
 
 使用 `npm create` 创建新项目：
@@ -152,7 +170,8 @@ pnpm dev
 ```
 [INFO] Zhin.js v2.0.0
 [INFO] 数据库已连接
-[INFO] HTTP 服务启动在 http://localhost:8086
+[INFO] HTTP 服务启动在 http://127.0.0.1:8086
+[INFO] 控制台: 仅 API（模式=api_only）
 [INFO] 适配器 sandbox 已启动
 [INFO] 机器人已启动，输入消息测试...
 ```
@@ -219,15 +238,18 @@ Zhin.js 提供了丰富的命令行工具：
 
 这是内置的 `sandbox` 适配器，可以在终端中直接测试命令。
 
-## 访问 Web 控制台
+## 访问 Remote Console
 
-打开 Remote Console：`https://console.zhin.dev`
+打开 **[console.zhin.dev](https://console.zhin.dev)**（勿在浏览器打开 `http://localhost:8086` 根路径指望出现聊天页）。
 
-API Base 填写：
+API Base 填写（二选一，与登录页说明一致）：
 
 ```text
-http://localhost:8086/api
+http://127.0.0.1:8086
+http://127.0.0.1:8086/api
 ```
+
+详见 [console-remote.md](../console-remote.md)。
 
 ### 登录
 

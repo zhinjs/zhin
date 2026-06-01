@@ -13,12 +13,28 @@ export class McpClientManager {
 
   async connect(entry: McpServerEntry): Promise<McpClientConnection> {
     let conn = this.connections.get(entry.name);
-    if (conn?.isConnected) return conn;
+    if (conn?.isConnected) {
+      const healthy = await this.isHealthy(entry.name);
+      if (healthy) return conn;
+      await this.disconnect(entry.name);
+    }
 
     conn = new McpClientConnection(entry);
     this.connections.set(entry.name, conn);
     await conn.connect();
     return conn;
+  }
+
+  /** Returns false when the connection is missing or the server no longer responds. */
+  async isHealthy(name: string): Promise<boolean> {
+    const conn = this.connections.get(name);
+    if (!conn?.isConnected) return false;
+    try {
+      await conn.ping();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async disconnect(name: string): Promise<void> {

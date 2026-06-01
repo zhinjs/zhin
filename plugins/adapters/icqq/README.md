@@ -384,7 +384,7 @@ onGroupMessage(async (message) => {
 
 ## icqq CLI 与 AI bash 安全
 
-启用 **icqq 技能**（`skills/icqq`）时，模型通常会通过 **`bash`** 调用 `icqq …` 命令行。此时由框架 **`execSecurity` / `execAsk`** 与 **Owner 私聊指令**（`approve always bash`、`approve rule <正则>` 等）共同约束：在 `allowlist` 下，**非敏感**子命令多数可直接执行；**敏感**子命令（踢人、禁言、解散、支付等）在开启 `execAsk` 时需 Owner 确认，并可用 **正则匹配整条子命令** 做持久化放行（不必把 QQ 号写进配置）。持久化文件为数据目录下的 `owner-approve-always.json`。
+启用 **icqq 技能**（`skills/icqq`）时，模型通常会通过 **`bash`** 调用 `icqq …` 命令行。此时由框架 **`execSecurity` / `execApprovalMode`** 与 **Owner 私聊指令**（`approve always bash`、`approve rule <正则>` 等）共同约束：在 `allowlist` 下，**非敏感**子命令多数可直接执行；**敏感**子命令（踢人、禁言、解散、支付等）在 `execApprovalMode: ask` 时需 Owner 确认，并可用 **正则匹配整条子命令** 做持久化放行（不必把 QQ 号写进配置）。持久化文件为数据目录下的 `owner-approve-always.json`。
 
 完整说明与指令表见仓库文档：[docs/advanced/ai.md](../../../docs/advanced/ai.md)（锚点：`#icqq-bash-exec`、`#owner-approve-commands`）。
 

@@ -29,13 +29,11 @@
 
 ### 1. 克隆仓库
 ```bash
-# 需初始化所有子模块
-git clone --recurse-submodules https://github.com/zhinjs/zhin.git
+git clone https://github.com/zhinjs/zhin.git
 cd zhin
-
-# 若已克隆但未初始化子模块
-git submodule update --init --recursive
 ```
+
+本仓库为 **pnpm workspace 单仓**，不使用 git submodule（见 [monorepo-no-submodules](./contributing/monorepo-no-submodules.md)）。
 
 ### 2. 安装依赖
 ```bash
@@ -66,11 +64,12 @@ pnpm test --filter @zhin.js/core
 
 ### 5. 开发模式
 ```bash
-# 启动开发服务器
-pnpm dev
+# Stable 黄金路径（推荐）
+cd examples/minimal-bot && pnpm dev
 
-# 监听模式构建
-pnpm build:watch
+# 全功能厨房水槽（维护者回归）
+cd examples/test-bot && pnpm dev
+# 或在仓库根目录：pnpm dev  # 等价于 test-bot
 ```
 
 ## 📝 代码规范
@@ -89,6 +88,17 @@ pnpm check:no-koa           # 检查 koa 导入
 pnpm check:prod             # 检查生产配置
 pnpm check:plugin           # 检查插件规范
 pnpm check:architecture     # 检查架构层级
+pnpm check:doc-links        # 文档相对链接（AGENTS、architecture 等）
+pnpm check:stable           # Stable 产品 smoke（Sandbox 入站 + minimal-bot 契约）
+pnpm check:queue-beta       # Queue Beta（queue-runtime + minimal-qbot）
+pnpm check:use-plugin-top-level  # 适配器/特性插件 usePlugin 顶层约束
+```
+
+修改 **Stable 路径**（`examples/minimal-bot`、`plugins/adapters/sandbox` 入站链、`shouldTriggerAI` / `spawn_task` / `exec-policy` 相关代码）时，请至少运行：
+
+```bash
+pnpm check:doc-links
+pnpm check:stable
 ```
 
 **代码质量检查**：

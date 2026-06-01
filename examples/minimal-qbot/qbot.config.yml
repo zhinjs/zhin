@@ -1,0 +1,3 @@
+# minimal-qbot 配置（本仓库尚无统一 loadQBotConfig；示例内联解析，见 README）
+botId: minimal-qbot
+namespace: queue:minimal-qbot

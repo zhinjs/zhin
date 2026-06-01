@@ -254,6 +254,40 @@ importers:
         specifier: ^2.9.0
         version: 2.9.0
 
+  examples/minimal-bot:
+    dependencies:
+      '@zhin.js/adapter-sandbox':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/sandbox
+      '@zhin.js/cli':
+        specifier: workspace:*
+        version: link:../../basic/cli
+      '@zhin.js/console':
+        specifier: workspace:*
+        version: link:../../plugins/services/console
+      '@zhin.js/http':
+        specifier: workspace:*
+        version: link:../../plugins/services/http
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../packages/zhin
+    devDependencies:
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  examples/minimal-qbot:
+    dependencies:
+      '@zhin.js/queue-runtime':
+        specifier: workspace:*
+        version: link:../../packages/queue-runtime
+      '@zhin.js/storage-port':
+        specifier: workspace:*
+        version: link:../../packages/storage-port
+      yaml:
+        specifier: ^2.9.0
+        version: 2.9.0
+
   examples/test-bot:
     dependencies:
       '@zhin.js/adapter-dingtalk':

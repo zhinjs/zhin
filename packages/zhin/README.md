@@ -41,7 +41,7 @@ ai:
     chatModel: ''              # 留空自动选择最优模型
     execSecurity: allowlist    # bash 执行策略：deny / allowlist / full
     execPreset: network        # 预设白名单：readonly / network / development
-    execAsk: true              # 未知命令交互式审批
+    execApprovalMode: ask      # 白名单外命令 Owner 确认
 ```
 
 ## 编写插件

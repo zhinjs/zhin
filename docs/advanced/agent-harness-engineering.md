@@ -125,7 +125,7 @@ execSecurity: 'full'
 
 #### Owner 确认机制
 
-当 `execAsk: true` 时，不在白名单的命令会触发 Owner 确认：
+当 `execApprovalMode: ask` 时，不在白名单的命令会触发 Owner 确认：
 
 ```typescript
 // 命令返回 ZHIN_NEEDS_OWNER 信号
@@ -384,7 +384,7 @@ console.log('会话预算使用:', sessionStats);
 1. 检查 `execSecurity` 配置
 2. 将命令添加到 `execAllowlist`
 3. 使用 `execPreset: 'development'`
-4. 启用 `execAsk` 以触发 Owner 确认
+4. 设置 `execApprovalMode: ask` 以触发 Owner 确认
 
 ### 文件访问被拒绝
 

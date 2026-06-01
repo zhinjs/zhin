@@ -192,7 +192,7 @@ Token 传递方式：
 - 包含 `/webhook` 的路径（有自己的签名验证）
 - 以 `/pub` 为前缀的路径（含 `/pub/health`）
 
-Web 控制台打开时会展示 Token 登录页，输入 `.env` 中的 `HTTP_TOKEN` 即可进入管理面板。
+在 **[Remote Console](https://console.zhin.dev)** 登录页填写 API Base（本 Host 地址 + `/api` 若需要）与 `.env` 中的 `HTTP_TOKEN`。Host 根路径不提供内置管理页 UI。
 
 ## WebSocket 功能
 

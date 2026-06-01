@@ -68,6 +68,18 @@ jobs:
 
       - name: check architecture layers
         run: pnpm check:architecture
+
+      - name: check documentation links
+        run: pnpm check:doc-links
+
+      - name: stable path smoke
+        run: pnpm check:stable
+
+      - name: queue beta smoke
+        run: pnpm check:queue-beta
+
+      - name: usePlugin top-level check
+        run: pnpm check:use-plugin-top-level
       
       - name: run tests
         run: pnpm test:reporter

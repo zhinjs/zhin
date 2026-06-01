@@ -35,10 +35,11 @@ Windows 用户在首次初始化 Zhin.js 项目时可能遇到一些常见问题
    
    此命令会启动热重载开发环境，任何代码修改都会自动重新加载。
    
-   **预期输出**:
+   **预期输出**（示例）:
    ```
    ✅ 机器人已启动
-   💻 Web 控制台: http://localhost:8086
+   [INFO] HTTP 服务已启动 (port=8086)
+   [INFO] 控制台: 仅 API（模式=api_only）
    ```
 
 3. **生产启动**（可选）
@@ -46,8 +47,11 @@ Windows 用户在首次初始化 Zhin.js 项目时可能遇到一些常见问题
    pnpm start
    ```
 
-4. **访问 Web 控制台**
-   打开浏览器，访问：`http://localhost:8086`
+4. **访问 Remote Console**
+   - 保持 `pnpm dev` / `pnpm start` 运行（Host API 默认 `http://127.0.0.1:8086`）。
+   - 浏览器打开 **[https://console.zhin.dev](https://console.zhin.dev)**。
+   - 登录：API Base `http://127.0.0.1:8086`（或 `http://127.0.0.1:8086/api`）；Token 与 `.env` 中 `HTTP_TOKEN` 一致。
+   - 在 Sandbox 窗口测试消息。说明见 [console-remote.md](../console-remote.md)。
 
 ---
 

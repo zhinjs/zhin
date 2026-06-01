@@ -305,8 +305,8 @@ execAllowlist: ['git', 'npm', 'pnpm'],
 // 或使用预设
 execPreset: 'development',
 
-// 或启用 execAsk
-execAsk: true,
+// 或启用 Owner 确认
+execApprovalMode: ask,
 ```
 
 ### 2. 文件访问被拒绝

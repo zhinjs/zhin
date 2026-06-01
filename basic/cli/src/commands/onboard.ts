@@ -176,7 +176,8 @@ function printNextSteps(): void {
   console.log(chalk.cyan('  pnpm dev') + chalk.gray('          # 开发模式（热重载）'));
   console.log(chalk.cyan('  zhin doctor') + chalk.gray('        # 检查项目健康'));
   console.log(chalk.cyan('  zhin setup') + chalk.gray('         # 再次打开配置向导'));
-  console.log(chalk.gray('  Web 控制台: ') + chalk.cyan('http://localhost:8086'));
+  console.log(chalk.gray('  Remote Console: ') + chalk.cyan('https://console.zhin.dev'));
+  console.log(chalk.gray('  Host API Base: ') + chalk.cyan('http://127.0.0.1:8086'));
   console.log('');
 }
 
@@ -186,7 +187,7 @@ function printQuickStart(): void {
   console.log(chalk.white('  1. 创建项目: ') + chalk.cyan('npx create-zhin my-bot'));
   console.log(chalk.white('  2. 进入目录: ') + chalk.cyan('cd my-bot'));
   console.log(chalk.white('  3. 启动开发: ') + chalk.cyan('pnpm dev'));
-  console.log(chalk.white('  4. 控制台:   ') + chalk.cyan('http://localhost:8086'));
+  console.log(chalk.white('  4. 控制台:   ') + chalk.cyan('https://console.zhin.dev （API → 127.0.0.1:8086）'));
   console.log('');
 }
 

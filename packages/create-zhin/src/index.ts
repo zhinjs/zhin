@@ -12,6 +12,7 @@ import { createWorkspace } from './workspace.js';
 import { ensurePnpmInstalled, installDependencies } from './install.js';
 import { configureAdapters } from './adapter.js';
 import { configureAI } from './ai.js';
+import { applyStableYesDefaults } from './stable-yes-defaults.js';
 
 async function main() {
   const args = process.argv.slice(2);
@@ -26,11 +27,6 @@ async function main() {
     options.config = 'yaml';
     options.runtime = 'node';
     options.httpToken = generateToken(16);
-    options.database = {
-      dialect: 'sqlite',
-      filename: './data/bot.db',
-      mode: 'wal'
-    };
   }
   
   // 检测并安装 pnpm
@@ -114,8 +110,8 @@ async function main() {
       options.httpToken = token;
     }
     
-    // 数据库配置
-    if (!options.database) {
+    // 数据库配置（-y Stable 默认无数据库 / inbox）
+    if (!options.database && !options.yes) {
       console.log('');
       console.log(chalk.blue('🗄️  配置数据库'));
       
@@ -123,27 +119,14 @@ async function main() {
       options.database = databaseConfig;
     }
 
-    // 适配器选择
-    if (!options.adapters) {
-      if (options.yes) {
-        // -y 模式：只使用 Sandbox
-        options.adapters = {
-          packages: ['@zhin.js/adapter-sandbox'],
-          plugins: ['@zhin.js/adapter-sandbox'],
-          bots: [],
-          envVars: {},
-        };
-      } else {
+    // 适配器 + AI（-y 对齐 minimal-bot）
+    if (options.yes) {
+      applyStableYesDefaults(options);
+    } else {
+      if (!options.adapters) {
         options.adapters = await configureAdapters();
       }
-    }
-
-    // AI 配置引导
-    if (!options.ai) {
-      if (options.yes) {
-        // -y 模式：不启用 AI
-        options.ai = { enabled: false };
-      } else {
+      if (!options.ai) {
         options.ai = await configureAI();
       }
     }
@@ -188,9 +171,8 @@ async function main() {
       options.devSkills = devSkills;
     }
 
-    // -y 模式下默认安装开发技能
     if (options.devSkills === undefined) {
-      options.devSkills = true;
+      options.devSkills = options.yes ? false : true;
     }
 
     if (!name?.trim()) {
@@ -219,9 +201,9 @@ async function main() {
     console.log('');
     console.log(chalk.green('🎉 项目初始化完成！'));
     console.log('');
-    console.log(chalk.blue('🔐 Web 控制台访问信息：'));
-    console.log(`  ${chalk.gray('本地 API:')} ${chalk.cyan('http://localhost:8086/api')}`);
-    console.log(`  ${chalk.gray('Remote Console:')} ${chalk.cyan('https://console.zhin.dev')}`);
+    console.log(chalk.blue('🔐 Remote Console 登录信息：'));
+    console.log(`  ${chalk.gray('UI:')} ${chalk.cyan('https://console.zhin.dev')}`);
+    console.log(`  ${chalk.gray('API Base:')} ${chalk.cyan('http://127.0.0.1:8086')} ${chalk.gray('或')} ${chalk.cyan('http://127.0.0.1:8086/api')}`);
     console.log(`  ${chalk.gray('Token:')} ${chalk.cyan(options.httpToken)}`);
     console.log(`  ${chalk.yellow('⚠ Token 已保存到')} ${chalk.cyan('.env')} ${chalk.yellow('文件，用于 Bearer Token 或 Console 登录页')}`);
     

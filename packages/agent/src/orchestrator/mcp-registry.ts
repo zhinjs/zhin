@@ -38,7 +38,11 @@ export class McpRegistry extends ResourceRegistry<McpServerEntry> {
     if (!entry) throw new Error(`MCP server "${name}" not registered`);
 
     const existing = this.connections.get(name);
-    if (existing?.connected) return existing;
+    if (existing?.connected) {
+      const healthy = await this.manager.isHealthy(name);
+      if (healthy) return existing;
+      this.disconnect(name);
+    }
 
     const clientConn = await this.manager.connect(entry);
     const connection: McpConnection = {
@@ -55,7 +59,11 @@ export class McpRegistry extends ResourceRegistry<McpServerEntry> {
   /** Lazy-connect all registered servers; per-server failures are logged, not thrown. */
   async ensureConnected(onEvent?: (event: McpEnsureConnectionEvent) => void | Promise<void>): Promise<void> {
     for (const entry of this.getAll()) {
-      if (this.isConnected(entry.name)) continue;
+      if (this.isConnected(entry.name)) {
+        const healthy = await this.manager.isHealthy(entry.name);
+        if (healthy) continue;
+        this.disconnect(entry.name);
+      }
       try {
         await onEvent?.({ phase: 'start', serverName: entry.name });
         await this.connect(entry.name);

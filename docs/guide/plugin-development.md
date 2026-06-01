@@ -380,14 +380,16 @@ pnpm test:watch
 pnpm test:coverage
 ```
 
-### 使用 Web 控制台调试
+### 使用 Remote Console 调试
 
-启动开发模式后访问 `http://localhost:8086`，在 Web 控制台中可以：
+启动 `pnpm dev` 后，打开 **[console.zhin.dev](https://console.zhin.dev)**（或本地 [zhin-console](https://github.com/zhinjs/zhin-console) 开发服），API Base 填 `http://127.0.0.1:8086`，Token 与 `HTTP_TOKEN` 一致。在控制台中可以：
 
 - 查看插件加载状态
 - 查看 Feature 注册情况（命令、工具、定时任务等）
 - 实时查看日志输出
 - 监控内存使用和消息统计
+
+勿将 `http://localhost:8086` 根路径当作 UI 入口（Host 仅 API）。见 [console-remote.md](../console-remote.md)。
 
 ## 构建插件
 

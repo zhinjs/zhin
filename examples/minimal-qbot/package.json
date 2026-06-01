@@ -1,0 +1,19 @@
+{
+  "name": "minimal-qbot",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Zhin.js Queue Beta 示例（queue-runtime 双队列出站链）",
+  "type": "module",
+  "scripts": {
+    "start": "node --experimental-strip-types src/main.ts",
+    "dev": "node --experimental-strip-types src/main.ts"
+  },
+  "dependencies": {
+    "@zhin.js/queue-runtime": "workspace:*",
+    "@zhin.js/storage-port": "workspace:*",
+    "yaml": "^2.9.0"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  }
+}

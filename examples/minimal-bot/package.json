@@ -1,0 +1,25 @@
+{
+  "name": "minimal-bot",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Zhin.js Stable 黄金路径示例（Sandbox + 最少插件）",
+  "type": "module",
+  "scripts": {
+    "dev": "zhin dev",
+    "start": "zhin start",
+    "build": "zhin build"
+  },
+  "dependencies": {
+    "@zhin.js/adapter-sandbox": "workspace:*",
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/console": "workspace:*",
+    "@zhin.js/http": "workspace:*",
+    "zhin.js": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  }
+}

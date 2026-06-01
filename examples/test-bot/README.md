@@ -1,6 +1,9 @@
-# test-bot
+# test-bot（厨房水槽 · Advanced）
 
-Zhin.js 框架的测试机器人项目，用于演示和测试框架功能。
+> **这不是默认入门模板。** 新用户请使用 [`../minimal-bot`](../minimal-bot/)（Stable 黄金路径）。  
+> 能力验收见 [ACCEPTANCE.md](./ACCEPTANCE.md)（Stable vs Advanced）。
+
+Zhin.js 维护者用**全功能**机器人：多适配器、toolSearch、MCP、多 bot 同开，用于回归与 Advanced 验收。
 
 ## 功能
 

@@ -156,6 +156,10 @@ export function generateDatabaseConfig(config: DatabaseConfig, format: 'yaml' | 
 
 // 构建 plugins 列表（根据用户选择的适配器）
 function buildPluginsList(options: InitOptions): string[] {
+  if (options.yes) {
+    return ['example', '@zhin.js/http', '@zhin.js/console', '@zhin.js/adapter-sandbox'];
+  }
+
   const plugins: string[] = ['example', '@zhin.js/http', '@zhin.js/console'];
 
   if (options.adapters?.plugins) {

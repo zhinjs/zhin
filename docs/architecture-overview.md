@@ -199,7 +199,8 @@ ZhinAgent 在 AI 回合前 `ensureConnected`，`collectRuntimeTools` 合并 MCP 
 | `UserProfileStore` | 用户画像管理（跨会话个性化） |
 | `PersistentCronEngine` | AI 感知的持久化 cron 引擎 |
 | `BootstrapLoader` | 引导文件加载（SOUL.md / AGENTS.md / TOOLS.md） |
-| `PromptBuilder` | 系统提示词构建器（Context / Style / Tools / Safety + 按需 Platform、Skills、Memory、Bootstrap） |
+| `buildRichSystemPrompt` | ZhinAgent 主路径 system prompt（Context / Style / Tools / Safety + Platform / Skills / Memory / Bootstrap） |
+| `PromptBuilder` | 可选分层提示词 API（`buildRichSystemPromptWithBuilder` 等） |
 | `defaults/` | 默认工具/子代理/Hook |
 | `common-adapter-tools` | 适配器群管方法 → AI 工具自动生成 |
 | 内置工具 | `bash`、`read_file`、`write_file`、`ask_user`、`web_search`、`chat_history` 等 |

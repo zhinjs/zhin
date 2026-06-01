@@ -293,8 +293,9 @@ Message.$reply / Adapter.sendMessage
 | Sandbox environment | `packages/agent/src/security/sandbox.ts` |
 | Prompt builder | `packages/agent/src/zhin-agent/prompt-builder.ts` |
 | AI providers | `packages/ai/src/providers/` |
-| Queue bot runner | `packages/queue-runtime/src/runner.ts` |
-| Architecture docs | `docs/architecture-overview.md` |
+| Queue runtime | `packages/queue-runtime/src/runtime.ts` |
+| Architecture docs index | `docs/architecture/README.md` |
+| Architecture overview | `docs/architecture-overview.md` |
 | Repo structure | `docs/contributing/repo-structure.md` |
 | Harness engineering | `docs/contributing/harness-engineering.md` |
 | Agent harness engineering | `docs/advanced/agent-harness-engineering.md` |
