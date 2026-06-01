@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.45
+
+### Patch Changes
+
+- 7e14f8d: fix: 统一发个版,优化一些列安全问题
+
 ## 1.0.44
 
 ### Patch Changes

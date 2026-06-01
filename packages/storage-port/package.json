@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/storage-port",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Portable key-value storage abstraction for Host and Edge",
   "type": "module",
   "main": "./lib/index.js",

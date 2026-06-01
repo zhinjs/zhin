@@ -1,5 +1,19 @@
 # @zhin.js/agent
 
+## 0.1.26
+
+### Patch Changes
+
+- 6295cbd: fix: @优化
+- 7e14f8d: fix: 统一发个版,优化一些列安全问题
+- 996ebb3: fix: ai 优化
+- Updated dependencies [6295cbd]
+- Updated dependencies [7e14f8d]
+- Updated dependencies [996ebb3]
+  - @zhin.js/core@1.1.28
+  - @zhin.js/logger@0.1.68
+  - @zhin.js/ai@1.1.26
+
 ## 0.1.25
 
 ### Patch Changes

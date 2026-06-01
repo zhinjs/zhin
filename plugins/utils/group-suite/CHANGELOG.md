@@ -1,5 +1,14 @@
 # @zhin.js/plugin-group-suite
 
+## 0.1.1
+
+### Patch Changes
+
+- 7e14f8d: fix: 统一发个版,优化一些列安全问题
+- Updated dependencies [7e14f8d]
+  - zhin.js@1.0.86
+  - @zhin.js/plugin-html-renderer@0.0.64
+
 ## 0.1.0
 
 ### Breaking

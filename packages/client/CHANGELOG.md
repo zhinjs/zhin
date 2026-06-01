@@ -1,5 +1,13 @@
 # @zhin.js/client
 
+## 1.1.4
+
+### Patch Changes
+
+- 7e14f8d: fix: 统一发个版,优化一些列安全问题
+- Updated dependencies [7e14f8d]
+  - @zhin.js/console-types@0.1.5
+
 ## 1.1.3
 
 ### Patch Changes

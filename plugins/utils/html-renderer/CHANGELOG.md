@@ -1,5 +1,14 @@
 # @zhin.js/plugin-html-renderer
 
+## 0.0.64
+
+### Patch Changes
+
+- 7e14f8d: fix: 统一发个版,优化一些列安全问题
+- Updated dependencies [7e14f8d]
+  - @zhin.js/satori@0.2.11
+  - zhin.js@1.0.86
+
 ## 0.0.63
 
 ### Patch Changes

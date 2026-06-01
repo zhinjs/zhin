@@ -1,5 +1,13 @@
 # @zhin.js/logger
 
+## 0.1.68
+
+### Patch Changes
+
+- 7e14f8d: fix: 统一发个版,优化一些列安全问题
+- Updated dependencies [7e14f8d]
+  - zhin.js@1.0.86
+
 ## 0.1.67
 
 ### Patch Changes

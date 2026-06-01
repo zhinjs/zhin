@@ -1,5 +1,14 @@
 # @zhin.js/adapter-dingtalk
 
+## 1.0.74
+
+### Patch Changes
+
+- 7e14f8d: fix: 统一发个版,优化一些列安全问题
+- Updated dependencies [7e14f8d]
+  - zhin.js@1.0.86
+  - @zhin.js/http@1.0.79
+
 ## 1.0.73
 
 ### Patch Changes

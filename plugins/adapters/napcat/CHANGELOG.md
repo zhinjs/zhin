@@ -1,5 +1,18 @@
 # @zhin.js/adapter-napcat
 
+## 0.1.14
+
+### Patch Changes
+
+- 7e14f8d: fix: 统一发个版,优化一些列安全问题
+- Updated dependencies [6295cbd]
+- Updated dependencies [7e14f8d]
+- Updated dependencies [996ebb3]
+  - @zhin.js/agent@0.1.26
+  - zhin.js@1.0.86
+  - @zhin.js/console@3.0.5
+  - @zhin.js/http@1.0.79
+
 ## 0.1.13
 
 ### Patch Changes
