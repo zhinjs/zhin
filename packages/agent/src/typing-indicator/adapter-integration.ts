@@ -24,7 +24,7 @@ interface MessageEditableBot {
   $updateMessage?(messageId: string, content: string): Promise<void>;
 }
 
-type BotWithEditing = Bot & Partial<MessageEditableBot>;
+export type BotWithEditing = Bot & Partial<MessageEditableBot>;
 
 /**
  * 适配器实例需要具备的最小接口

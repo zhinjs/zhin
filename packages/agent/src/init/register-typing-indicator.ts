@@ -8,7 +8,7 @@
 import { getPlugin } from '@zhin.js/core';
 import type { Plugin } from '@zhin.js/core';
 import { subscribeAIEvents } from '../ai-event-subscriber.js';
-import { enableTypingIndicatorForBot } from '../typing-indicator/adapter-integration.js';
+import { enableTypingIndicatorForBot, type BotWithTypingIndicator } from '../typing-indicator/adapter-integration.js';
 import type { AIServiceRefs } from './shared-refs.js';
 
 function resolveSceneType(sceneId?: string): 'private' | 'group' | 'channel' {
@@ -30,16 +30,16 @@ export function registerTypingIndicator(refs: AIServiceRefs): void {
       if (!platform || !botId) return;
 
       try {
-        const adapter = root.inject(platform as any) as any;
-        const bot = adapter?.bots?.get(botId);
+        const adapter = root.injectAdapter(platform);
+        const bot = adapter?.bots?.get(botId) as BotWithTypingIndicator | undefined;
         if (!bot) {
           logger.debug(`[TypingIndicator] Bot not found for platform: ${platform}, botId: ${botId}`);
           return;
         }
 
         // 获取此 bot 的独有配置
-        const botConfig = bot.$config || {};
-        const config = botConfig.typingIndicator || {};
+        const botConfig = (bot.$config || {}) as Record<string, unknown>;
+        const config = (botConfig.typingIndicator || {}) as Record<string, unknown>;
 
         // 如果配置中明确指明禁用，则不为其开启
         if (config.enabled === false) {
@@ -71,8 +71,8 @@ export function registerTypingIndicator(refs: AIServiceRefs): void {
       if (!platform || !botId) return;
 
       try {
-        const adapter = root.inject(platform as any) as any;
-        const bot = adapter?.bots?.get(botId);
+        const adapter = root.injectAdapter(platform);
+        const bot = adapter?.bots?.get(botId) as BotWithTypingIndicator | undefined;
         if (!bot) return;
 
         const manager = bot.$typingIndicator;
@@ -97,8 +97,8 @@ export function registerTypingIndicator(refs: AIServiceRefs): void {
       if (!platform || !botId) return;
 
       try {
-        const adapter = root.inject(platform as any) as any;
-        const bot = adapter?.bots?.get(botId);
+        const adapter = root.injectAdapter(platform);
+        const bot = adapter?.bots?.get(botId) as BotWithTypingIndicator | undefined;
         if (!bot) return;
 
         const manager = bot.$typingIndicator;
@@ -123,8 +123,8 @@ export function registerTypingIndicator(refs: AIServiceRefs): void {
       if (!platform || !botId || !thinking) return;
 
       try {
-        const adapter = root.inject(platform as any) as any;
-        const bot = adapter?.bots?.get(botId);
+        const adapter = root.injectAdapter(platform);
+        const bot = adapter?.bots?.get(botId) as BotWithTypingIndicator | undefined;
         if (!bot) return;
 
         const manager = bot.$typingIndicator;
@@ -152,8 +152,8 @@ export function registerTypingIndicator(refs: AIServiceRefs): void {
       if (!platform || !botId) return;
 
       try {
-        const adapter = root.inject(platform as any) as any;
-        const bot = adapter?.bots?.get(botId);
+        const adapter = root.injectAdapter(platform);
+        const bot = adapter?.bots?.get(botId) as BotWithTypingIndicator | undefined;
         if (!bot) return;
 
         const manager = bot.$typingIndicator;
@@ -182,8 +182,8 @@ export function registerTypingIndicator(refs: AIServiceRefs): void {
       if (!platform || !botId) return;
 
       try {
-        const adapter = root.inject(platform as any) as any;
-        const bot = adapter?.bots?.get(botId);
+        const adapter = root.injectAdapter(platform);
+        const bot = adapter?.bots?.get(botId) as BotWithTypingIndicator | undefined;
         if (!bot) return;
 
         const manager = bot.$typingIndicator;
@@ -199,9 +199,9 @@ export function registerTypingIndicator(refs: AIServiceRefs): void {
         });
 
         if (indicator && typeof indicator.update === 'function') {
-          const botConfig = bot.$config || {};
-          const config = botConfig.typingIndicator || {};
-          const msg = config.message || '正在处理中...';
+          const botConfig = (bot.$config || {}) as Record<string, unknown>;
+          const config = (botConfig.typingIndicator || {}) as Record<string, unknown>;
+          const msg = String(config.message || '正在处理中...');
           await indicator.update(msg);
         }
       } catch (error) {

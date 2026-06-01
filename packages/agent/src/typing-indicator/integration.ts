@@ -13,6 +13,7 @@ import {
   type TypingIndicatorOptions,
   type TypingIndicatorConfig,
 } from './index.js';
+import type { BotWithEditing } from './adapter-integration.js';
 
 // ── ZhinAgent 集成 ────────────────────────────────────────────────────
 
@@ -107,7 +108,7 @@ export function createICQQAdapterFromBot(bot: ICQQBot): ReactionTypingIndicatorA
     try {
       const [type, id] = sessionId.split(':');
       const rootPlugin = getPlugin()?.root;
-      const adapterInstance = rootPlugin?.inject('icqq' as any) as any;
+      const adapterInstance = rootPlugin?.injectAdapter('icqq');
       const sendOptions = {
         type: type as 'private' | 'group',
         id,
@@ -118,8 +119,8 @@ export function createICQQAdapterFromBot(bot: ICQQBot): ReactionTypingIndicatorA
       if (adapterInstance && typeof adapterInstance.sendMessage === 'function') {
         return await adapterInstance.sendMessage(sendOptions);
       }
-      const anyBot = bot as any;
-      return await anyBot.$sendMessage(sendOptions);
+      const typedBot = bot as BotWithEditing & { $sendMessage?(options: any): Promise<string | null> };
+      return await typedBot.$sendMessage?.(sendOptions) ?? null;
     } catch (error) {
       console.error('[ICQQ] Failed to send message:', error);
       return null;
@@ -150,7 +151,7 @@ export function createGenericAdapterFromBot(bot: Bot, platform: string): Generic
     try {
       const [type, id] = sessionId.split(':');
       const rootPlugin = getPlugin()?.root;
-      const adapterInstance = rootPlugin?.inject(platform as any) as any;
+      const adapterInstance = rootPlugin?.injectAdapter(platform);
       const sendOptions = {
         type: type as 'private' | 'group',
         id,
@@ -161,8 +162,8 @@ export function createGenericAdapterFromBot(bot: Bot, platform: string): Generic
       if (adapterInstance && typeof adapterInstance.sendMessage === 'function') {
         return await adapterInstance.sendMessage(sendOptions);
       }
-      const anyBot = bot as any;
-      return await anyBot.$sendMessage(sendOptions);
+      const typedBot = bot as BotWithEditing & { $sendMessage?(options: any): Promise<string | null> };
+      return await typedBot.$sendMessage?.(sendOptions) ?? null;
     } catch (error) {
       console.error(`[${platform}] Failed to send message:`, error);
       return null;

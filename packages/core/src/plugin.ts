@@ -328,6 +328,11 @@ export class Plugin extends PluginBase implements PluginLike {
     const context = this.root.contexts.get(name);
     return context?.value;
   }
+
+  injectAdapter(name: string): Adapter | undefined {
+    const value = this.inject(name);
+    return value instanceof Adapter ? value : undefined;
+  }
   #contextsIsReady<CS extends (keyof Plugin.Contexts)[]>(contexts: CS) {
     if (!contexts.length) return true
     return contexts.every(name => this.contextIsReady(name))
