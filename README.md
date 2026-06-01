@@ -1,25 +1,26 @@
-
 # Zhin.js
 
 现代 TypeScript 聊天机器人框架 —— AI 驱动、插件化、热重载、多平台
 
-[![文档](https://img.shields.io/badge/文档-zhin.js.org-blue)](https://zhin.js.org)
-[![CI](https://github.com/zhinjs/zhin/actions/workflows/publish.yml/badge.svg)](https://github.com/zhinjs/zhin/actions/workflows/publish.yml)
-[![codecov](https://codecov.io/github/zhinjs/zhin/graph/badge.svg?token=37OE7DHMAI)](https://codecov.io/github/zhinjs/zhin)
-[![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
+[文档](https://zhin.js.org)
+[CI](https://github.com/zhinjs/zhin/actions/workflows/publish.yml)
+[codecov](https://codecov.io/github/zhinjs/zhin)
+[License](./LICENSE)
 
 ## 核心特性
 
-| 特性 | 说明 |
-|------|------|
-| 🤖 **AI 驱动** | 内置 ZhinAgent 智能体，接入 OpenAI / Ollama 等大模型，支持多轮对话、工具调用、6 层安全防御 |
-| 🔌 **插件化架构** | `usePlugin()` Hooks 风格 API，AsyncLocalStorage 上下文管理 |
-| ♻️ **智能热重载** | 代码、配置变更自动生效，无需重启，错误自动回滚 |
-| 🌐 **多平台** | QQ、Discord、Telegram、KOOK、Slack、钉钉、飞书、OneBot 等 14+ 平台 |
-| 🧩 **Feature 体系** | 命令、工具、技能、定时任务、数据库等统一抽象，插件按需组合 |
-| 🛡️ **安全纵深** | Bash 6 层防御、文件访问策略、设备路径拦截、交互式审批 |
-| 🎯 **TypeScript** | 完整的类型推导和提示，极致开发体验 |
-| 🖥️ **Web 控制台** | 实时监控、插件管理、日志查看 |
+
+| 特性                | 说明                                                           |
+| ----------------- | ------------------------------------------------------------ |
+| 🤖 **AI 驱动**      | 内置 ZhinAgent 智能体，接入 OpenAI / Ollama 等大模型，支持多轮对话、工具调用、6 层安全防御 |
+| 🔌 **插件化架构**      | `usePlugin()` Hooks 风格 API，AsyncLocalStorage 上下文管理           |
+| ♻️ **智能热重载**      | 代码、配置变更自动生效，无需重启，错误自动回滚                                      |
+| 🌐 **多平台**        | QQ、Discord、Telegram、KOOK、Slack、钉钉、飞书、OneBot 等 14+ 平台         |
+| 🧩 **Feature 体系** | 命令、工具、技能、定时任务、数据库等统一抽象，插件按需组合                                |
+| 🛡️ **安全纵深**      | Bash 6 层防御、文件访问策略、设备路径拦截、交互式审批                               |
+| 🎯 **TypeScript** | 完整的类型推导和提示，极致开发体验                                            |
+| 🖥️ **Web 控制台**   | 实时监控、插件管理、日志查看                                               |
+
 
 ## 快速开始
 
@@ -202,7 +203,7 @@ tools: [web_search]
 
 #### 发现顺序
 
-框架按 **`cwd/` → `~/.zhin/` → `data/` → 已加载插件包根** 的顺序扫描 `tools/`、`skills/`、`agents/` 目录，同名先发现者优先；工作区内的文件变更支持**热重载**。
+框架按 `**cwd/` → `~/.zhin/` → `data/` → 已加载插件包根** 的顺序扫描 `tools/`、`skills/`、`agents/` 目录，同名先发现者优先；工作区内的文件变更支持**热重载**。
 
 📖 详见：[AI 模块](./docs/advanced/ai.md) · [工具与技能](./docs/advanced/tools-skills.md)
 
@@ -210,14 +211,16 @@ tools: [web_search]
 
 AI 执行 bash 命令时受 **6 层纵深防御** 保护：
 
-| 层 | 防御 |
-|----|------|
-| 1 | 危险命令黑名单（`sudo`/`eval`/`dd` 等即使 full 模式也拦截） |
-| 2 | 环境变量前缀剥离（`FOO=bar rm` → 识别为 `rm`） |
-| 3 | Safe wrapper 剥离（`timeout 10 rm` → 识别为 `rm`） |
-| 4 | 复合命令拆分（`ls && rm -rf /` → 逐段检查） |
-| 5 | 只读命令自动放行（`cat`/`grep`/`ls` 无需白名单） |
-| 6 | 交互式审批（`execAsk: true` 时用 `ask_user` 向用户确认） |
+
+| 层   | 防御                                          |
+| --- | ------------------------------------------- |
+| 1   | 危险命令黑名单（`sudo`/`eval`/`dd` 等即使 full 模式也拦截）  |
+| 2   | 环境变量前缀剥离（`FOO=bar rm` → 识别为 `rm`）           |
+| 3   | Safe wrapper 剥离（`timeout 10 rm` → 识别为 `rm`） |
+| 4   | 复合命令拆分（`ls && rm -rf /` → 逐段检查）             |
+| 5   | 只读命令自动放行（`cat`/`grep`/`ls` 无需白名单）           |
+| 6   | 交互式审批（`execAsk: true` 时用 `ask_user` 向用户确认）  |
+
 
 ## 架构设计
 
@@ -291,8 +294,10 @@ graph TB
   class L1,L1A,L1B,L1C,L1D basic
 ```
 
-*   **[packages/kernel](packages/kernel)** 剥离了一切 IM 交互要素，只负责插件和 Feature 开发契约，能作为独立任务框架。
-*   **[packages/ai](packages/ai)** 不包含聊天机器人特有逻辑，仅专注多轮 AI 交互及上下文管理，可在任意 Web 服务内单用。
+
+
+- **[packages/kernel](packages/kernel)** 剥离了一切 IM 交互要素，只负责插件和 Feature 开发契约，能作为独立任务框架。
+- **[packages/ai](packages/ai)** 不包含聊天机器人特有逻辑，仅专注多轮 AI 交互及上下文管理，可在任意 Web 服务内单用。
 
 ---
 
@@ -327,6 +332,8 @@ sequenceDiagram
     Onion->>Disp: 返回执行结果
     Disp->>User: 消息统一回复 / 回滚
 ```
+
+
 
 ---
 
@@ -383,6 +390,8 @@ graph TD
     class ExecPolicy,FilePolicy sec
 ```
 
+
+
 ---
 
 ### 4. AI 思考状态连携与统一出站链路
@@ -434,18 +443,22 @@ graph TD
     class SendAPI,ZhinAgentAns,Render,BeforeHook,BotSend,Client pipeline
 ```
 
-*   **不允许直发绕过**：指示器和最终答案均触发统一的 [packages/core/src/adapter.ts](packages/core/src/adapter.ts) 中的发送生命周期，拒绝 `Bot.$sendMessage` 被业务层直接旁路调用。
+
+
+- **不允许直发绕过**：指示器和最终答案均触发统一的 [packages/core/src/adapter.ts](packages/core/src/adapter.ts) 中的发送生命周期，拒绝 `Bot.$sendMessage` 被业务层直接旁路调用。
 
 ## 多平台适配器
 
-| 平台 | 包名 | 平台 | 包名 |
-|------|------|------|------|
-| QQ (ICQQ) | `@zhin.js/adapter-icqq` | QQ 官方 | `@zhin.js/adapter-qq` |
-| KOOK | `@zhin.js/adapter-kook` | Discord | `@zhin.js/adapter-discord` |
-| Telegram | `@zhin.js/adapter-telegram` | Slack | `@zhin.js/adapter-slack` |
-| 钉钉 | `@zhin.js/adapter-dingtalk` | 飞书 | `@zhin.js/adapter-lark` |
-| OneBot v11 | `@zhin.js/adapter-onebot11` | 微信公众号 | `@zhin.js/adapter-wechat-mp` |
-| Sandbox | `@zhin.js/adapter-sandbox` | Email | `@zhin.js/adapter-email` |
+
+| 平台         | 包名                          | 平台      | 包名                           |
+| ---------- | --------------------------- | ------- | ---------------------------- |
+| QQ (ICQQ)  | `@zhin.js/adapter-icqq`     | QQ 官方   | `@zhin.js/adapter-qq`        |
+| KOOK       | `@zhin.js/adapter-kook`     | Discord | `@zhin.js/adapter-discord`   |
+| Telegram   | `@zhin.js/adapter-telegram` | Slack   | `@zhin.js/adapter-slack`     |
+| 钉钉         | `@zhin.js/adapter-dingtalk` | 飞书      | `@zhin.js/adapter-lark`      |
+| OneBot v11 | `@zhin.js/adapter-onebot11` | 微信公众号   | `@zhin.js/adapter-wechat-mp` |
+| Sandbox    | `@zhin.js/adapter-sandbox`  | Email   | `@zhin.js/adapter-email`     |
+
 
 ## 常用命令
 
@@ -470,12 +483,14 @@ npx zhin setup                # 交互式配置向导
 
 ## 文档导航
 
-| 分类 | 链接 |
-|------|------|
-| **入门** | [快速开始](./docs/getting-started/index.md) · [Docker 部署](./docs/getting-started/docker.md) · [Windows 环境](./docs/essentials/windows-setup.md) |
-| **基础** | [核心概念](./docs/essentials/index.md) · [配置文件](./docs/essentials/configuration.md) · [命令系统](./docs/essentials/commands.md) · [插件系统](./docs/essentials/plugins.md) |
+
+| 分类     | 链接                                                                                                                                                                |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **入门** | [快速开始](./docs/getting-started/index.md) · [Docker 部署](./docs/getting-started/docker.md) · [Windows 环境](./docs/essentials/windows-setup.md)                        |
+| **基础** | [核心概念](./docs/essentials/index.md) · [配置文件](./docs/essentials/configuration.md) · [命令系统](./docs/essentials/commands.md) · [插件系统](./docs/essentials/plugins.md)    |
 | **进阶** | [AI 模块](./docs/advanced/ai.md) · [Feature 系统](./docs/advanced/features.md) · [工具与技能](./docs/advanced/tools-skills.md) · [消息流转](./docs/essentials/message-flow.md) |
-| **开发** | [插件开发指南](./docs/guide/plugin-development.md) · [贡献指南](./docs/contributing.md) · [架构概览](./docs/architecture-overview.md) · [API 参考](./docs/api/index.md) |
+| **开发** | [插件开发指南](./docs/guide/plugin-development.md) · [贡献指南](./docs/contributing.md) · [架构概览](./docs/architecture-overview.md) · [API 参考](./docs/api/index.md)           |
+
 
 ## 项目结构
 
@@ -506,6 +521,12 @@ zhin/                          # 主仓库 (github.com/zhinjs/zhin)
 
 ## 贡献者
 
+[贡献者](https://github.com/zhinjs/zhin/graphs/contributors)
+Alt
+
+
+
+## 参与贡献
 ```bash
 git clone https://github.com/zhinjs/zhin.git
 cd zhin
