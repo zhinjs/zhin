@@ -53,11 +53,10 @@ describe('ICQQTypingIndicatorManager', () => {
       const indicator = await manager.start({
         messageId: '123456',
         sessionId: 'group:789012',
-        groupId: '789012',
         sceneType: 'group',
       });
 
-      expect(mockBot.$addReaction).toHaveBeenCalledWith('123456', '⏳', '789012');
+      expect(mockBot.$addReaction).toHaveBeenCalledWith('123456', '⏳');
       expect(indicator.isActive()).toBe(true);
     });
 

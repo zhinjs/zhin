@@ -80,15 +80,11 @@ export class ICQQTypingIndicatorManager {
     const adapter = new ReactionTypingIndicatorAdapter(
       // addReaction
       async (messageId: string, emoji: string) => {
-        // 从当前选项中获取 groupId
-        const groupId = this.currentOptions?.groupId;
-        return await this.bot.$addReaction(messageId, emoji, groupId);
+        return await this.bot.$addReaction(messageId, emoji);
       },
       // removeReaction
       async (messageId: string, reactionId: string) => {
-        // 从当前选项中获取 groupId
-        const groupId = this.currentOptions?.groupId;
-        await this.bot.$removeReaction(messageId, reactionId, groupId);
+        await this.bot.$removeReaction(messageId, reactionId);
       },
       // sendMessage
       async (sessionId: string, content: string) => {
@@ -96,11 +92,11 @@ export class ICQQTypingIndicatorManager {
           // 从存储的选项中获取场景信息
           const options = this.currentOptions;
           if (!options) {
-            console.error('[ICQQ:TypingIndicator] No current options for typing indicator');
+            this.bot.logger.error('[ICQQ:TypingIndicator] No current options for typing indicator');
             return null;
           }
 
-          console.debug('[ICQQ:TypingIndicator] sendMessage called', {
+          this.bot.logger.debug('[ICQQ:TypingIndicator] sendMessage called', {
             sessionId,
             content,
             sceneType: options.sceneType,
@@ -110,7 +106,7 @@ export class ICQQTypingIndicatorManager {
 
           // 根据场景类型发送消息
           if (options.sceneType === 'group' && options.groupId) {
-            console.debug('[ICQQ:TypingIndicator] sending group message', {
+            this.bot.logger.debug('[ICQQ:TypingIndicator] sending group message', {
               groupId: options.groupId,
             });
             return await this.bot.$sendMessage({
@@ -121,7 +117,7 @@ export class ICQQTypingIndicatorManager {
               content: [{ type: 'text', data: { text: content } }],
             });
           } else if (options.userId) {
-            console.debug('[ICQQ:TypingIndicator] sending private message', {
+            this.bot.logger.debug('[ICQQ:TypingIndicator] sending private message', {
               userId: options.userId,
             });
             return await this.bot.$sendMessage({
@@ -133,14 +129,14 @@ export class ICQQTypingIndicatorManager {
             });
           }
 
-          console.debug('[ICQQ:TypingIndicator] no valid target', {
+          this.bot.logger.debug('[ICQQ:TypingIndicator] no valid target', {
             sceneType: options.sceneType,
             groupId: options.groupId,
             userId: options.userId,
           });
           return null;
         } catch (error) {
-          console.error('[ICQQ:TypingIndicator] Failed to send typing message:', error);
+          this.bot.logger.error('[ICQQ:TypingIndicator] Failed to send typing message:', error);
           return null;
         }
       },
@@ -149,7 +145,7 @@ export class ICQQTypingIndicatorManager {
         try {
           await this.bot.$recallMessage(messageId);
         } catch (error) {
-          console.error('[ICQQ] Failed to delete typing message:', error);
+          this.bot.logger.error('[ICQQ:TypingIndicator] Failed to delete typing message:', error);
         }
       },
     );
@@ -176,7 +172,7 @@ export class ICQQTypingIndicatorManager {
     groupId?: string;
     sceneType: 'private' | 'group';
   }): Promise<TypingIndicator> {
-    console.debug('[ICQQ:TypingIndicator] start called', {
+    this.bot.logger.debug('[ICQQ:TypingIndicator] start called', {
       enabled: this.config.enabled,
       sceneType: options.sceneType,
       messageId: options.messageId,
@@ -186,7 +182,7 @@ export class ICQQTypingIndicatorManager {
     });
 
     if (!this.config.enabled) {
-      console.debug('[ICQQ:TypingIndicator] disabled, returning noop');
+      this.bot.logger.debug('[ICQQ:TypingIndicator] disabled, returning noop');
       return {
         start: async () => {},
         stop: async () => {},
@@ -202,7 +198,7 @@ export class ICQQTypingIndicatorManager {
       ? this.config.groupConfig
       : this.config.privateConfig;
 
-    console.debug('[ICQQ:TypingIndicator] using config', {
+    this.bot.logger.debug('[ICQQ:TypingIndicator] using config', {
       sceneType: options.sceneType,
       configType: config?.type,
       configEmoji: config?.emoji,
@@ -219,11 +215,11 @@ export class ICQQTypingIndicatorManager {
       sceneType: options.sceneType,
     };
 
-    console.debug('[ICQQ:TypingIndicator] starting manager', typingOptions);
+    this.bot.logger.debug('[ICQQ:TypingIndicator] starting manager', typingOptions);
 
     const result = await this.manager.start(typingOptions, config);
 
-    console.debug('[ICQQ:TypingIndicator] started', {
+    this.bot.logger.debug('[ICQQ:TypingIndicator] started', {
       isActive: result.isActive(),
     });
 
@@ -238,7 +234,7 @@ export class ICQQTypingIndicatorManager {
     userId?: string;
     groupId?: string;
   }): Promise<void> {
-    console.debug('[ICQQ:TypingIndicator] stop called', {
+    this.bot.logger.debug('[ICQQ:TypingIndicator] stop called', {
       sessionId: options.sessionId,
       userId: options.userId,
       groupId: options.groupId,
@@ -258,16 +254,16 @@ export class ICQQTypingIndicatorManager {
     // 清除当前选项
     this.currentOptions = undefined;
 
-    console.debug('[ICQQ:TypingIndicator] stopped');
+    this.bot.logger.debug('[ICQQ:TypingIndicator] stopped');
   }
 
   /**
    * 停止所有提示
    */
   async stopAll(): Promise<void> {
-    console.debug('[ICQQ:TypingIndicator] stopAll called');
+    this.bot.logger.debug('[ICQQ:TypingIndicator] stopAll called');
     await this.manager.stopAll();
-    console.debug('[ICQQ:TypingIndicator] stopAll completed');
+    this.bot.logger.debug('[ICQQ:TypingIndicator] stopAll completed');
   }
 
   /**

@@ -54,7 +54,7 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
   groups = new Map<number, IpcGroupInfo>();
 
   private subscriptions: Array<{ unsubscribe: () => Promise<void> }> = [];
-  /** 多路 subscribe 会重复推送同一 message_id */
+  /** 事件去重：覆盖多端回流/服务端重复推送等场景 */
   private readonly inboundDeduper = new InboundMessageDeduper();
   /** 用户主动断开时为 true，阻止自动重连 */
   private intentionalDisconnect = false;
@@ -167,23 +167,13 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
 
     await this.refreshLists();
 
-    for (const [uid] of this.friends) {
-      const sub = this.ipc.subscribe(
-        Actions.SUBSCRIBE,
-        { type: "private", id: uid },
-        (event) => this.handleEvent(event),
-      );
-      this.subscriptions.push(sub);
-    }
-
-    for (const [gid] of this.groups) {
-      const sub = this.ipc.subscribe(
-        Actions.SUBSCRIBE,
-        { type: "group", id: gid },
-        (event) => this.handleEvent(event),
-      );
-      this.subscriptions.push(sub);
-    }
+    // 新版 icqq cli 在认证后自动广播事件，订阅过滤改为客户端侧完成。
+    const sub = this.ipc.subscribe(
+      Actions.SUBSCRIBE,
+      {},
+      (event) => this.handleEvent(event),
+    );
+    this.subscriptions.push(sub);
 
     this.$connected = true;
   }
@@ -571,7 +561,7 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
   // ── 消息回应 ───────────────────────────────────────────────────────
 
   /**
-   * 表情符号到 emoji_id 的映射
+   * 表情符号到 reaction id 的映射
    * QQ 使用数字 ID 来标识表情，而不是 Unicode 字符
    */
   private static readonly EMOJI_MAP: Record<string, string> = {
@@ -588,7 +578,7 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
   };
 
   /**
-   * 将表情符号转换为 emoji_id
+   * 将表情符号转换为 reaction id
    */
   private getEmojiId(emoji: string): string {
     // 如果已经是数字 ID，直接返回
@@ -610,26 +600,17 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
    * 添加消息回应（表情）
    *
    * @param messageId - 消息 ID
-   * @param emoji - 表情符号或 emoji_id
-   * @param groupId - 群 ID（群聊消息必需）
+  * @param emoji - 表情符号或 reaction id
    * @returns 反应 ID，可用于后续移除
    */
-  async $addReaction(messageId: string, emoji: string, groupId?: string): Promise<string | null> {
+  async $addReaction(messageId: string, emoji: string): Promise<string | null> {
     try {
       const emojiId = this.getEmojiId(emoji);
 
-      const params: Record<string, unknown> = {
-        message_id: Number(messageId),
-        emoji_id: emojiId,
-        is_set: true,
-      };
-
-      // 如果是群聊消息，需要传递 group_id
-      if (groupId) {
-        params.group_id = Number(groupId);
-      }
-
-      const resp = await this.ipc.request(Actions.GROUP_SET_REACTION, params);
+      const resp = await this.ipc.request(Actions.GROUP_SET_REACTION, {
+        message_id: messageId,
+        id: emojiId,
+      });
 
       if (!resp.ok) {
         this.logger.warn(formatCompact({
@@ -637,8 +618,7 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
           bot: this.$id,
           message_id: messageId,
           emoji,
-          emoji_id: emojiId,
-          group_id: groupId,
+          id: emojiId,
           ok: false,
           error: resp.error,
         }));
@@ -650,20 +630,18 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
         bot: this.$id,
         message_id: messageId,
         emoji,
-        emoji_id: emojiId,
-        group_id: groupId,
+        id: emojiId,
         ok: true,
       }));
 
-      // 返回反应 ID（使用 emoji_id 作为标识）
-      return `reaction_${emojiId}_${Date.now()}`;
+      // 返回 reaction id，供 $removeReaction 直接使用
+      return emojiId;
     } catch (error) {
       this.logger.warn(formatCompact({
         op: "add_reaction",
         bot: this.$id,
         message_id: messageId,
         emoji,
-        group_id: groupId,
         ok: false,
         error: error instanceof Error ? error.message : String(error),
       }));
@@ -676,27 +654,19 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
    *
    * @param messageId - 消息 ID
    * @param reactionId - 反应 ID（由 $addReaction 返回）
-   * @param groupId - 群 ID（群聊消息必需）
    */
-  async $removeReaction(messageId: string, reactionId: string, groupId?: string): Promise<void> {
+  async $removeReaction(messageId: string, reactionId: string): Promise<void> {
     try {
-      // 从 reactionId 中提取 emoji_id
-      // reactionId 格式：reaction_{emojiId}_{timestamp}
+      // 兼容两种格式：
+      // 1) 旧格式 reaction_{id}_{timestamp}
+      // 2) 新格式直接为 id
       const parts = reactionId.split('_');
       const emojiId = parts.length >= 2 ? parts[1] : reactionId;
 
-      const params: Record<string, unknown> = {
-        message_id: Number(messageId),
-        emoji_id: emojiId,
-        is_set: false,
-      };
-
-      // 如果是群聊消息，需要传递 group_id
-      if (groupId) {
-        params.group_id = Number(groupId);
-      }
-
-      const resp = await this.ipc.request(Actions.GROUP_DEL_REACTION, params);
+      const resp = await this.ipc.request(Actions.GROUP_DEL_REACTION, {
+        message_id: messageId,
+        id: emojiId,
+      });
 
       if (!resp.ok) {
         this.logger.warn(formatCompact({
@@ -704,8 +674,7 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
           bot: this.$id,
           message_id: messageId,
           reaction_id: reactionId,
-          emoji_id: emojiId,
-          group_id: groupId,
+          id: emojiId,
           ok: false,
           error: resp.error,
         }));
@@ -715,8 +684,7 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
           bot: this.$id,
           message_id: messageId,
           reaction_id: reactionId,
-          emoji_id: emojiId,
-          group_id: groupId,
+          id: emojiId,
           ok: true,
         }));
       }
@@ -726,7 +694,6 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
         bot: this.$id,
         message_id: messageId,
         reaction_id: reactionId,
-        group_id: groupId,
         ok: false,
         error: error instanceof Error ? error.message : String(error),
       }));

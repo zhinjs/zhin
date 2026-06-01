@@ -38,6 +38,40 @@ function getRpcPortPath(uin: number): string {
   return path.join(getIcqqHome(), String(uin), "daemon.rpc");
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function isChatMessageEvent(
+  event: IpcEvent,
+  type: "private" | "group",
+  id: number,
+): boolean {
+  if (!event.event.startsWith("message.")) return false;
+  const data = asRecord(event.data);
+  if (!data) return false;
+
+  const msgType = String(data.message_type ?? "");
+  if (msgType !== type) return false;
+
+  if (type === "private") {
+    const from = Number(data.from_id ?? data.user_id);
+    return Number.isFinite(from) && from === id;
+  }
+
+  const groupId = Number(data.group_id);
+  return Number.isFinite(groupId) && groupId === id;
+}
+
+function isGuildChannelMessageEvent(event: IpcEvent, channelId: string): boolean {
+  if (!event.event.startsWith("message.guild")) return false;
+  const data = asRecord(event.data);
+  if (!data) return false;
+  return String(data.channel_id ?? "") === channelId;
+}
+
 export class IpcClient {
   private socket: net.Socket;
   private buffer = "";
@@ -260,8 +294,15 @@ export class IpcClient {
       try {
         const msg = JSON.parse(line) as IpcMessage;
         if ("event" in msg) {
-          const handler = this.eventHandlers.get(msg.id);
-          handler?.(msg as IpcEvent);
+          const event = msg as IpcEvent;
+          if (event.id === "*") {
+            for (const handler of this.eventHandlers.values()) {
+              handler(event);
+            }
+          } else {
+            const handler = this.eventHandlers.get(event.id);
+            handler?.(event);
+          }
         } else {
           const p = this.pending.get(msg.id);
           if (p) {
@@ -273,6 +314,18 @@ export class IpcClient {
         // ignore malformed JSON
       }
     }
+  }
+
+  /**
+   * 注册 icqq 事件回调。
+   * 新版守护进程在认证后会自动广播事件（event.id = "*"）。
+   */
+  onEvent(onEvent: (event: IpcEvent) => void): () => void {
+    const id = randomUUID();
+    this.eventHandlers.set(id, onEvent);
+    return () => {
+      this.eventHandlers.delete(id);
+    };
   }
 
   /**
@@ -313,31 +366,38 @@ export class IpcClient {
   }
 
   /**
-   * 订阅消息推送。
+   * @deprecated 兼容旧调用方式：服务端已自动推送事件，type/id 过滤在客户端完成。
    * @returns 订阅句柄，包含 unsubscribe() 方法
    */
   subscribe(
-    action: string,
+    _action: string,
     params: Record<string, unknown>,
     onEvent: (event: IpcEvent) => void,
   ): { id: string; unsubscribe: () => Promise<void> } {
+    let off: () => void;
+    if (params.type === "private" || params.type === "group") {
+      const chatType: "private" | "group" = params.type;
+      const sessionId = Number(params.id);
+      off = Number.isFinite(sessionId) && sessionId > 0
+        ? this.onEvent((event) => {
+          if (isChatMessageEvent(event, chatType, sessionId)) onEvent(event);
+        })
+        : this.onEvent(onEvent);
+    } else if (params.type === "guild" && params.id != null && params.id !== "") {
+      const channelId = String(params.id);
+      off = this.onEvent((event) => {
+        if (isGuildChannelMessageEvent(event, channelId)) onEvent(event);
+      });
+    } else {
+      off = this.onEvent(onEvent);
+    }
+
     const id = randomUUID();
-    this.eventHandlers.set(id, onEvent);
-    const req: IpcRequest = { id, action, params };
-    this.socket.write(JSON.stringify(req) + "\n");
 
     return {
       id,
       unsubscribe: async () => {
-        this.eventHandlers.delete(id);
-        if (!this._closed) {
-          const unsub: IpcRequest = {
-            id: randomUUID(),
-            action: "unsubscribe",
-            params,
-          };
-          this.socket.write(JSON.stringify(unsub) + "\n");
-        }
+        off();
       },
     };
   }
