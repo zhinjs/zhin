@@ -8,6 +8,7 @@ import { NapCatBotBase } from './bot-base.js';
 import type { NapCatWsServerConfig, ApiResponse } from './types.js';
 import type { NapCatAdapter } from './adapter.js';
 import type { Router } from '@zhin.js/http';
+import { enableTypingIndicator } from './typing-indicator.js';
 
 export class NapCatWsServer extends NapCatBotBase {
   #wss?: WebSocketServer;
@@ -76,6 +77,7 @@ export class NapCatWsServer extends NapCatBotBase {
     if (this.heartbeatTimer) { clearInterval(this.heartbeatTimer); this.heartbeatTimer = undefined; }
     for (const [, req] of this.pendingRequests) { clearTimeout(req.timeout); req.reject(new Error('Connection closed')); }
     this.pendingRequests.clear();
+    this.inboundDeduper.clear();
     this.$connected = false;
   }
 
@@ -118,6 +120,7 @@ export class NapCatWsServer extends NapCatBotBase {
       this.#clientMap.set(String(message.self_id), client);
       this.$connected = true;
       this.logger.info(formatCompact({ bot: this.$id, self_id: message.self_id }));
+      this.initTypingIndicator();
       return;
     }
     this.dispatchEvent(message);
@@ -131,5 +134,17 @@ export class NapCatWsServer extends NapCatBotBase {
         if (client.readyState === WebSocket.OPEN) client.ping();
       }
     }, interval);
+  }
+
+  private initTypingIndicator(): void {
+    const tiConfig = (this.$config as any).typingIndicator;
+    if (tiConfig && tiConfig.enabled !== false) {
+      enableTypingIndicator(this, {
+        enabled: true,
+        defaultEmoji: tiConfig.defaultEmoji || '128516',
+        autoRemove: true,
+        removeDelay: 5000,
+      });
+    }
   }
 }

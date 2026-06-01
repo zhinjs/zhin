@@ -13,9 +13,11 @@ import {
 } from 'zhin.js';
 import type { NapCatBotConfig, NapCatMessageEvent, MessageSegment, ApiResponse } from './types.js';
 import type { NapCatAdapter } from './adapter.js';
+import { InboundMessageDeduper, isSelfMessage, normalizeMessage, resolveSideEventDedupeKey } from './napcat-inbound.js';
 
 export abstract class NapCatBotBase extends EventEmitter implements Bot<NapCatBotConfig, NapCatMessageEvent> {
   $connected = false;
+  protected readonly inboundDeduper = new InboundMessageDeduper();
 
   get logger() { return this.adapter.plugin.logger; }
   get $id() { return this.$config.name; }
@@ -46,7 +48,7 @@ export abstract class NapCatBotBase extends EventEmitter implements Bot<NapCatBo
         id: (ev.group_id || ev.user_id).toString(),
         type: ev.group_id ? 'group' : 'private',
       },
-      $content: ev.message,
+      $content: normalizeMessage(ev.message),
       $raw: ev.raw_message,
       $timestamp: ev.time,
       $recall: async () => { await this.deleteMsg(ev.message_id); },
@@ -83,6 +85,18 @@ export abstract class NapCatBotBase extends EventEmitter implements Bot<NapCatBo
     await this.deleteMsg(parseInt(id));
   }
 
+  async $addReaction(messageId: string, emojiId: string): Promise<string> {
+    await this.setMsgEmojiLike(parseInt(messageId), emojiId);
+    return `reaction:${messageId}:${emojiId}`;
+  }
+
+  async $removeReaction(messageId: string, _reactionId: string): Promise<void> {
+    // NapCat 的 set_msg_emoji_like 是 toggle 行为，再调一次即取消
+    const parts = _reactionId.split(':');
+    const emojiId = parts[2] || parts[0];
+    await this.setMsgEmojiLike(parseInt(messageId), emojiId);
+  }
+
   // ══════════════════════════════════════════════════════════════════
   // 事件分发
   // ══════════════════════════════════════════════════════════════════
@@ -102,12 +116,18 @@ export abstract class NapCatBotBase extends EventEmitter implements Bot<NapCatBo
   }
 
   private handleMessage(ev: NapCatMessageEvent): void {
+    if (isSelfMessage(ev)) return;
+    const msgId = ev.message_id.toString();
+    if (!this.inboundDeduper.shouldProcess(msgId)) return;
+    ev.message = normalizeMessage(ev.message);
     const message = this.$formatMessage(ev);
     this.adapter.emit('message.receive', message);
     this.logger.debug(`${this.$id} recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`);
   }
 
   private handleNotice(event: any): void {
+    const dedupeKey = resolveSideEventDedupeKey(event, 'notice');
+    if (!this.inboundDeduper.shouldProcess(dedupeKey)) return;
     const noticeTypeMap: Record<string, string> = {
       group_increase: 'group_member_increase',
       group_decrease: 'group_member_decrease',
@@ -152,6 +172,8 @@ export abstract class NapCatBotBase extends EventEmitter implements Bot<NapCatBo
   }
 
   private handleRequest(event: any): void {
+    const dedupeKey = resolveSideEventDedupeKey(event, 'request');
+    if (!this.inboundDeduper.shouldProcess(dedupeKey)) return;
     const typeMap: Record<string, string> = {
       friend: 'friend_add',
       group: event.sub_type === 'invite' ? 'group_invite' : 'group_add',

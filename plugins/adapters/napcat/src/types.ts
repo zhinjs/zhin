@@ -5,10 +5,23 @@
 
 // ── 配置 ─────────────────────────────────────────────────────────────
 
+export interface TypingIndicatorConfig {
+  /** 是否启用（默认 true） */
+  enabled?: boolean;
+  /** 默认表情 ID */
+  defaultEmoji?: string;
+  /** 私聊配置 */
+  privateConfig?: { type?: 'message' | 'typing'; message?: string };
+  /** 群聊配置 */
+  groupConfig?: { type?: 'reaction'; emoji?: string };
+}
+
 export interface NapCatConfigBase {
   context: 'napcat';
   name: string;
   access_token?: string;
+  /** Typing Indicator 配置 */
+  typingIndicator?: TypingIndicatorConfig;
 }
 
 /** 正向 WebSocket */

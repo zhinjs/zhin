@@ -6,6 +6,7 @@ import { formatCompact } from 'zhin.js';
 import { NapCatBotBase } from './bot-base.js';
 import type { NapCatWsClientConfig, ApiResponse } from './types.js';
 import type { NapCatAdapter } from './adapter.js';
+import { enableTypingIndicator } from './typing-indicator.js';
 
 export class NapCatWsClient extends NapCatBotBase {
   private ws?: WebSocket;
@@ -43,6 +44,7 @@ export class NapCatWsClient extends NapCatBotBase {
         }
         this.logger.info(formatCompact({ bot: this.$id, mode: 'ws' }));
         this.startHeartbeat();
+        this.initTypingIndicator();
         resolve();
       });
 
@@ -87,6 +89,7 @@ export class NapCatWsClient extends NapCatBotBase {
     for (const [, req] of this.pendingRequests) { clearTimeout(req.timeout); req.reject(new Error('Connection closed')); }
     this.pendingRequests.clear();
     if (this.ws) { this.ws.close(); this.ws = undefined; }
+    this.inboundDeduper.clear();
     this.$connected = false;
   }
 
@@ -126,5 +129,36 @@ export class NapCatWsClient extends NapCatBotBase {
       this.reconnectTimer = undefined;
       try { await this.$connect(); } catch { this.scheduleReconnect(); }
     }, interval);
+  }
+
+  protected handleMeta(event: any): void {
+    if (event.meta_event_type === 'lifecycle' && event.sub_type === 'connect') {
+      this.logger.info(formatCompact({ bot: this.$id, lifecycle: 'connect', self_id: event.self_id }));
+    }
+  }
+
+  private initTypingIndicator(): void {
+    const tiConfig = this.$config.typingIndicator;
+    if (tiConfig && tiConfig.enabled !== false) {
+      enableTypingIndicator(this, {
+        enabled: tiConfig.enabled !== false,
+        defaultEmoji: tiConfig.defaultEmoji || '128516',
+        autoRemove: true,
+        removeDelay: 5000,
+        privateConfig: tiConfig.privateConfig ? {
+          type: tiConfig.privateConfig.type || 'message',
+          message: tiConfig.privateConfig.message || '正在思考中...',
+          autoRemove: true,
+          removeDelay: 3000,
+        } : undefined,
+        groupConfig: tiConfig.groupConfig ? {
+          type: tiConfig.groupConfig.type || 'reaction',
+          emoji: tiConfig.groupConfig.emoji || '128516',
+          autoRemove: true,
+          removeDelay: 5000,
+        } : undefined,
+      });
+      this.logger.info(formatCompact({ bot: this.$id, typingIndicator: 'enabled' }));
+    }
   }
 }

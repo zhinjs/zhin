@@ -19,6 +19,8 @@
   "files": [
     "src",
     "lib",
+    "client",
+    "dist",
     "skills",
     "plugin.yml",
     "README.md",
@@ -52,16 +54,28 @@
   },
   "devDependencies": {
     "@zhin.js/cli": "workspace:*",
+    "@zhin.js/console": "workspace:*",
     "@types/node": "^25.9.1",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
     "@types/ws": "^8.18.1",
+    "lucide-react": "^1.16.0",
     "typescript": "^6.0.3",
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {
+    "@zhin.js/agent": "workspace:*",
+    "@zhin.js/console": "workspace:*",
     "@zhin.js/http": "workspace:*",
     "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {
+    "@zhin.js/agent": {
+      "optional": true
+    },
+    "@zhin.js/console": {
+      "optional": true
+    },
     "@zhin.js/http": {
       "optional": true
     }

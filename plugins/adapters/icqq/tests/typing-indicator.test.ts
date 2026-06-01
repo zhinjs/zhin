@@ -8,6 +8,12 @@ import {
 // Mock IcqqBot
 const createMockBot = () => ({
   $id: '75318',
+  logger: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  },
   $addReaction: vi.fn().mockResolvedValue('reaction-123'),
   $removeReaction: vi.fn().mockResolvedValue(undefined),
   $sendMessage: vi.fn().mockResolvedValue('message-123'),

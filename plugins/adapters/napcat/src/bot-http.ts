@@ -9,6 +9,7 @@ import type { NapCatHttpConfig, ApiResponse } from './types.js';
 import type { NapCatAdapter } from './adapter.js';
 import { registerFetchRoute, type Router, type RouterContext } from '@zhin.js/http/router';
 import * as crypto from 'crypto';
+import { enableTypingIndicator } from './typing-indicator.js';
 
 export class NapCatHttpBot extends NapCatBotBase {
   private pollTimer?: NodeJS.Timeout;
@@ -24,11 +25,13 @@ export class NapCatHttpBot extends NapCatBotBase {
     await this.checkConnection();
     this.startPoll();
     this.$connected = true;
+    this.initTypingIndicator();
     this.logger.info(formatCompact({ bot: this.$id, mode: 'http' }));
   }
 
   async $disconnect(): Promise<void> {
     if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = undefined; }
+    this.inboundDeduper.clear();
     this.$connected = false;
   }
 
@@ -54,9 +57,12 @@ export class NapCatHttpBot extends NapCatBotBase {
 
       if (this.$config.access_token) {
         const sig = ctx.get('x-signature');
+        const authHeader = ctx.get('authorization');
         if (sig) {
           const expected = 'sha1=' + crypto.createHmac('sha1', this.$config.access_token).update(JSON.stringify(body)).digest('hex');
           if (sig !== expected) { ctx.status = 403; ctx.body = { error: 'signature mismatch' }; return; }
+        } else if (authHeader) {
+          if (authHeader !== `Bearer ${this.$config.access_token}`) { ctx.status = 403; ctx.body = { error: 'auth failed' }; return; }
         }
       }
 
@@ -87,5 +93,17 @@ export class NapCatHttpBot extends NapCatBotBase {
         this.logger.warn(formatCompact( { op: 'heartbeat', bot: this.$id, ok: false }));
       }
     }, interval);
+  }
+
+  private initTypingIndicator(): void {
+    const tiConfig = (this.$config as any).typingIndicator;
+    if (tiConfig && tiConfig.enabled !== false) {
+      enableTypingIndicator(this, {
+        enabled: true,
+        defaultEmoji: tiConfig.defaultEmoji || '128516',
+        autoRemove: true,
+        removeDelay: 5000,
+      });
+    }
   }
 }

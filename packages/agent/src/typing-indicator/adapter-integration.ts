@@ -154,11 +154,11 @@ export const PLATFORM_FEATURES: Record<string, PlatformFeatures> = {
   },
   napcat: {
     platform: 'napcat',
-    supportsReaction: false,
+    supportsReaction: true,
     supportsEdit: false,
     supportsDelete: true,
-    supportsTyping: false,
-    defaultType: 'message',
+    supportsTyping: true,
+    defaultType: 'reaction',
   },
   github: {
     platform: 'github',
