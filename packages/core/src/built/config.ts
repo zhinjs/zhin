@@ -8,7 +8,7 @@ import fs from "node:fs";
 import { stringify as stringifyYaml, parse as parseYaml, parseDocument } from "yaml";
 import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
 import { Schema } from "@zhin.js/schema";
-import { Feature, FeatureJSON } from "../feature.js";
+import { Feature, FeatureJSON } from "@zhin.js/kernel";
 import { getPlugin } from "../plugin.js";
 
 /** Deno / Node 统一的工作目录（`Deno.chdir` 后应与 `process.cwd()` 一致） */

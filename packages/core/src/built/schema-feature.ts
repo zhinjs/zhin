@@ -10,11 +10,10 @@
  *   - reloadable 标记决定保存后是否自动重载插件
  */
 
-import { Feature, FeatureJSON } from '../feature.js';
 import { Schema } from '@zhin.js/schema';
 import { Plugin, getPlugin } from '../plugin.js';
 
-// ============================================================================
+import { Feature, FeatureJSON } from '@zhin.js/kernel';
 // 类型
 // ============================================================================
 

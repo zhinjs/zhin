@@ -9,7 +9,8 @@ import {
   MAX_EDIT_FILE_SIZE,
   isFileStale,
 } from '../security/file-policy.js';
-import { checkFilePermission, formatFilePermissionMessage } from '../security/file-role-policy.js';
+import { checkFilePermission, formatFilePermissionMessage, toolRequesterRoleToFileRole } from '../security/file-role-policy.js';
+import { checkFileToolAccess, checkSensitiveFilePathAccess, checkDangerousToolAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
 import { expandHome, nodeErrToFileMessage } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import {
@@ -66,16 +67,37 @@ export class EditFileBuiltinTool extends BuiltinBaseTool {
       return 'Error: new_string is required';
     }
 
-    const role = context?.fileRole ?? 'owner';
-    const permResult = checkFilePermission(role, 'update', filePathArg);
+    // 第 1 层：角色门控
+    const roleDecision = checkFileToolAccess('edit_file', context);
+    if (!roleDecision.allowed) {
+      if (roleDecision.needsOwnerApproval) return toOwnerSignal(roleDecision);
+      return toDenyError(roleDecision);
+    }
+
+    // 第 1.5 层：危险工具审批
+    const dangerousDecision = checkDangerousToolAccess('edit_file', context);
+    if (!dangerousDecision.allowed) {
+      if (dangerousDecision.needsOwnerApproval) return toOwnerSignal(dangerousDecision);
+      return toDenyError(dangerousDecision);
+    }
+
+    // 第 2 层：文件角色权限矩阵
+    const fileRole = context?.fileRole ?? toolRequesterRoleToFileRole(roleDecision.role);
+    const permResult = checkFilePermission(fileRole, 'update', filePathArg);
     if (!permResult.allowed) {
       return formatFilePermissionMessage(permResult, 'edit_file');
     }
     const confirmMsg = formatFilePermissionMessage(permResult, 'edit_file');
     if (confirmMsg) return confirmMsg;
 
+    // 第 3 层：路径安全 + 文件操作
     try {
       const fp = expandHome(filePathArg);
+      const sensitiveDecision = checkSensitiveFilePathAccess('edit_file', fp, context);
+      if (!sensitiveDecision.allowed) {
+        if (sensitiveDecision.needsOwnerApproval) return toOwnerSignal(sensitiveDecision);
+        return toDenyError(sensitiveDecision);
+      }
       if (isBlockedDevicePath(fp)) {
         return `Error: 禁止访问设备路径: ${fp}`;
       }

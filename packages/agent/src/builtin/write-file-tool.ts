@@ -5,7 +5,8 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { Tool, ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import { checkFileAccess, isBlockedDevicePath } from '../security/file-policy.js';
-import { checkFilePermission, formatFilePermissionMessage } from '../security/file-role-policy.js';
+import { checkFilePermission, formatFilePermissionMessage, toolRequesterRoleToFileRole } from '../security/file-role-policy.js';
+import { checkFileToolAccess, checkSensitiveFilePathAccess, checkDangerousToolAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
 import { expandHome, nodeErrToFileMessage } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 
@@ -50,16 +51,37 @@ export class WriteFileBuiltinTool extends BuiltinBaseTool {
       return 'Error: content is required';
     }
 
-    const role = context?.fileRole ?? 'owner';
-    const permResult = checkFilePermission(role, 'create', filePathArg);
+    // 第 1 层：角色门控（dangerous-tool-policy 从 bot 配置动态获取角色）
+    const roleDecision = checkFileToolAccess('write_file', context);
+    if (!roleDecision.allowed) {
+      if (roleDecision.needsOwnerApproval) return toOwnerSignal(roleDecision);
+      return toDenyError(roleDecision);
+    }
+
+    // 第 1.5 层：危险工具审批（admin 调用 write_file 需 execAllowlist 或 Owner 确认）
+    const dangerousDecision = checkDangerousToolAccess('write_file', context);
+    if (!dangerousDecision.allowed) {
+      if (dangerousDecision.needsOwnerApproval) return toOwnerSignal(dangerousDecision);
+      return toDenyError(dangerousDecision);
+    }
+
+    // 第 2 层：文件角色权限矩阵（file-role-policy）
+    const fileRole = context?.fileRole ?? toolRequesterRoleToFileRole(roleDecision.role);
+    const permResult = checkFilePermission(fileRole, 'create', filePathArg);
     if (!permResult.allowed) {
       return formatFilePermissionMessage(permResult, 'write_file');
     }
     const confirmMsg = formatFilePermissionMessage(permResult, 'write_file');
     if (confirmMsg) return confirmMsg;
 
+    // 第 3 层：敏感路径检测（dangerous-tool-policy + file-policy）
     try {
       const fp = expandHome(filePathArg);
+      const sensitiveDecision = checkSensitiveFilePathAccess('write_file', fp, context);
+      if (!sensitiveDecision.allowed) {
+        if (sensitiveDecision.needsOwnerApproval) return toOwnerSignal(sensitiveDecision);
+        return toDenyError(sensitiveDecision);
+      }
       if (isBlockedDevicePath(fp)) {
         return `Error: 禁止访问设备路径: ${fp}`;
       }

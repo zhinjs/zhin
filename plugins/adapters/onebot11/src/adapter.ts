@@ -21,7 +21,7 @@ export class OneBot11Adapter extends Adapter<OneBot11Bot> {
   }
 
   createBot(config: OneBot11BotConfig): OneBot11Bot {
-    const connection = config.connection ?? ((config as { type?: string }).type === 'ws_reverse' ? 'wss' : 'ws');
+    const connection = config.connection ?? 'ws';
     switch (connection) {
       case 'ws':
         return new OneBot11WsClient(this, config as OneBot11WsClientConfig);

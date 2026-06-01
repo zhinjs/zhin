@@ -1,4 +1,4 @@
-import type { RouteTable, RouterContext } from "@zhin.js/http-host/edge";
+import type { RouteTable, RouterContext } from "@zhin.js/http-host";
 import { subscribeSse } from "./sse-hub.js";
 import type { ConsoleApiOptions } from "./console-api-types.js";
 import {
@@ -6,17 +6,16 @@ import {
   dispatchConsoleRpc,
   pickRpcReply,
 } from "./rpc/dispatch.js";
-import type { WebServerCompat } from "./websocket.js";
+import type { ConsoleWebServer } from "./websocket.js";
 
 export type { ConsoleApiOptions } from "./console-api-types.js";
 
 export function registerConsoleRoutes(
   table: RouteTable,
   base: string,
-  getWebServer: () => WebServerCompat,
+  getWebServer: () => ConsoleWebServer,
   options: ConsoleApiOptions = {},
 ): void {
-  const parity = options.parity ?? "host";
   const apiBase = `${base}/console`;
 
   table.post(`${apiBase}/request`, async (ctx: RouterContext) => {
@@ -28,16 +27,6 @@ export function registerConsoleRoutes(
       if (!match) {
         ctx.status = 500;
         ctx.body = { success: false, error: "No response" };
-        return;
-      }
-      if (match.error && match.code === "EDGE_UNSUPPORTED") {
-        ctx.status = 400;
-        ctx.body = {
-          success: false,
-          error: match.error,
-          code: "EDGE_UNSUPPORTED",
-          requestId: match.requestId,
-        };
         return;
       }
       if (match.error) {
@@ -75,7 +64,7 @@ export function registerConsoleRoutes(
 export function registerConsoleApi(
   router: { table: RouteTable },
   base: string,
-  getWebServer: () => WebServerCompat,
+  getWebServer: () => ConsoleWebServer,
   options?: ConsoleApiOptions,
 ): void {
   registerConsoleRoutes(router.table, base, getWebServer, options);

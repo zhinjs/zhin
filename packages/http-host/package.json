@@ -10,11 +10,6 @@
       "types": "./lib/index.d.ts",
       "development": "./src/index.ts",
       "import": "./lib/index.js"
-    },
-    "./edge": {
-      "types": "./lib/edge.d.ts",
-      "development": "./src/edge.ts",
-      "import": "./lib/edge.js"
     }
   },
   "scripts": {

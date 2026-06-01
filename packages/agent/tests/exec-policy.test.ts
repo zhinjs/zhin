@@ -25,13 +25,15 @@ import {
   splitCompoundCommand,
   extractCommandName,
   resolveExecAllowlist,
+  resolveExecApprovalMode,
   checkExecPolicy,
+  checkExecPolicyWithOptions,
   applyExecPolicyToTools,
   EXEC_PRESETS,
 } from '../src/security/exec-policy.js';
 import type { ZhinAgentConfig } from '../src/zhin-agent/config.js';
 import { addBashApproveRule } from '../src/security/owner-approve-always-store.js';
-import { runWithBashToolContext, runWithDirectAgentExecution } from '../src/security/bash-tool-context.js';
+import { runWithBashToolContext } from '../src/security/bash-tool-context.js';
 import type { AgentTool } from '@zhin.js/ai';
 
 // ── Helpers ──
@@ -57,7 +59,10 @@ function makeConfig(overrides: Partial<ZhinAgentConfig> = {}): Required<ZhinAgen
     execSecurity: 'allowlist',
     execPreset: 'custom',
     execAllowlist: [],
-    execAsk: false,
+    execApprovalMode: 'deny',
+    subagentExecApprovalMode: 'deny',
+    workerExecApprovalMode: 'deny',
+    taskExecApprovalMode: 'deny',
     maxSubagentIterations: 15,
     subagentTools: [],
     modelSizeHint: '',
@@ -68,6 +73,18 @@ function makeConfig(overrides: Partial<ZhinAgentConfig> = {}): Required<ZhinAgen
 
 function makeRootPluginForIcqqExec(adapterName: string): Plugin {
   const bots = new Map([['bot1', { $config: { owner: 'owner99' } }]]);
+  const p = {
+    inject: vi.fn((name: string) => {
+      if (name === adapterName) return { bots };
+      return undefined;
+    }),
+  } as unknown as Plugin;
+  (p as unknown as { root: Plugin }).root = p;
+  return p;
+}
+
+function makeRootPluginWithOwnerAdmins(adapterName: string, owner = 'owner99', admins: string[] = ['admin42']): Plugin {
+  const bots = new Map([['bot1', { $config: { owner, admins } }]]);
   const p = {
     inject: vi.fn((name: string) => {
       if (name === adapterName) return { bots };
@@ -318,6 +335,20 @@ describe('checkExecPolicy', () => {
     expect(result.reason).toContain('危险命令');
   });
 
+  it('should hard-deny rm -rf node_modules even if rm is allowlisted', () => {
+    const config = makeConfig({ execAllowlist: ['rm'], execApprovalMode: 'allow' });
+    const result = checkExecPolicy(config, 'rm -rf node_modules');
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toContain('node_modules');
+  });
+
+  it('should hard-deny find node_modules -delete', () => {
+    const config = makeConfig({ execAllowlist: ['find'], execApprovalMode: 'allow' });
+    const result = checkExecPolicy(config, 'find ./node_modules -type f -delete');
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toContain('node_modules');
+  });
+
   it('should allow compound of all-allowed commands', () => {
     const config = makeConfig({ execAllowlist: ['echo', 'pwd'] });
     expect(checkExecPolicy(config, 'echo hello && pwd').allowed).toBe(true);
@@ -337,16 +368,22 @@ describe('checkExecPolicy', () => {
     expect(result.allowed).toBe(false);
   });
 
-  // execAsk mode
-  it('should return needsApproval when execAsk=true and command not in allowlist', () => {
-    const config = makeConfig({ execAsk: true, execAllowlist: ['ls'] });
+  // execApprovalMode mode
+  it('should return needsApproval when execApprovalMode=ask and command not in allowlist', () => {
+    const config = makeConfig({ execApprovalMode: 'ask', execAllowlist: ['ls'] });
     const result = checkExecPolicy(config, 'npm install');
     expect(result.allowed).toBe(false);
     expect(result.needsApproval).toBe(true);
   });
 
-  it('should NOT return needsApproval for dangerous commands even with execAsk', () => {
-    const config = makeConfig({ execAsk: true, execAllowlist: ['ls'] });
+  it('should auto allow non-whitelisted command when execApprovalMode=allow', () => {
+    const config = makeConfig({ execApprovalMode: 'allow', execAllowlist: ['ls'] });
+    const result = checkExecPolicy(config, 'npm install');
+    expect(result.allowed).toBe(true);
+  });
+
+  it('should NOT return needsApproval for dangerous commands even with execApprovalMode=ask', () => {
+    const config = makeConfig({ execApprovalMode: 'ask', execAllowlist: ['ls'] });
     const result = checkExecPolicy(config, 'sudo rm -rf /');
     expect(result.allowed).toBe(false);
     expect(result.needsApproval).toBeUndefined();
@@ -355,7 +392,7 @@ describe('checkExecPolicy', () => {
 
   // deny priority over ask in compound commands
   it('should deny (not ask) when compound has dangerous + unknown cmd', () => {
-    const config = makeConfig({ execAsk: true, execAllowlist: ['ls'] });
+    const config = makeConfig({ execApprovalMode: 'ask', execAllowlist: ['ls'] });
     const result = checkExecPolicy(config, 'npm install && sudo reboot');
     expect(result.allowed).toBe(false);
     expect(result.needsApproval).toBeUndefined(); // deny, not ask
@@ -377,12 +414,12 @@ describe('checkExecPolicy', () => {
 
   // icqq：非敏感直接放行；敏感需审批或 Owner 规则
   it('allowlist: icqq 非敏感（如 friend like）无需白名单即可放行', () => {
-    const config = makeConfig({ execAllowlist: [], execAsk: true });
+    const config = makeConfig({ execAllowlist: [], execApprovalMode: 'ask' });
     expect(checkExecPolicy(config, 'icqq friend like 123456').allowed).toBe(true);
   });
 
   it('allowlist: icqq 敏感子命令需审批（无 bash 上下文/无规则）', () => {
-    const config = makeConfig({ execAllowlist: [], execAsk: true });
+    const config = makeConfig({ execAllowlist: [], execApprovalMode: 'ask' });
     const r = checkExecPolicy(config, 'icqq group kick 1 2 3');
     expect(r.allowed).toBe(false);
     expect(r.needsApproval).toBe(true);
@@ -395,7 +432,7 @@ describe('checkExecPolicy', () => {
     const ctx = { platform: 'icqq', botId: 'bot1' };
     expect(addBashApproveRule(plugin, ctx, '^icqq\\s+group\\s+kick\\b').ok).toBe(true);
     const getPluginSpy = vi.spyOn(core, 'getPlugin').mockReturnValue(plugin as never);
-    const config = makeConfig({ execAllowlist: [], execAsk: true });
+    const config = makeConfig({ execAllowlist: [], execApprovalMode: 'ask' });
     try {
       const r = runWithBashToolContext(ctx, () => checkExecPolicy(config, 'icqq group kick 1 2'));
       expect(r.allowed).toBe(true);
@@ -406,12 +443,12 @@ describe('checkExecPolicy', () => {
     }
   });
 
-  it('directExecution：子 Agent 作用域内跳过 execAsk 审批门并执行 bash', async () => {
+  it('applyExecPolicyToTools: ask 模式返回 ZHIN_NEEDS_OWNER', async () => {
     const config = makeConfig({
       execSecurity: 'allowlist',
       execPreset: 'custom',
       execAllowlist: ['echo'],
-      execAsk: true,
+      execApprovalMode: 'ask',
     });
     const base: AgentTool = {
       name: 'bash',
@@ -420,14 +457,84 @@ describe('checkExecPolicy', () => {
       execute: async (args: Record<string, unknown>) => `ran:${args.command}`,
     };
     const [wrapped] = applyExecPolicyToTools(config, [base]);
-    const ctx = { platform: 'test', botId: 'b1' };
 
     const blocked = await wrapped.execute!({ command: 'curl example.com' });
     expect(String(blocked).startsWith('ZHIN_NEEDS_OWNER:\n')).toBe(true);
+  });
 
-    const ran = await runWithDirectAgentExecution(ctx, () =>
-      wrapped.execute!({ command: 'curl example.com' }),
-    );
-    expect(ran).toBe('ran:curl example.com');
+  it('applyExecPolicyToTools: deny 模式直接拒绝', async () => {
+    const config = makeConfig({
+      execSecurity: 'allowlist',
+      execPreset: 'custom',
+      execAllowlist: ['echo'],
+      execApprovalMode: 'deny',
+    });
+    const base: AgentTool = {
+      name: 'bash',
+      description: 'bash',
+      parameters: { type: 'object', properties: { command: { type: 'string' } } },
+      execute: async (args: Record<string, unknown>) => `ran:${args.command}`,
+    };
+    const [wrapped] = applyExecPolicyToTools(config, [base]);
+
+    await expect(wrapped.execute!({ command: 'curl example.com' })).rejects.toThrow(/需要用户确认|已被拒绝|审批/);
+  });
+
+  it('checkExecPolicyWithOptions: 可覆盖为 allow（用于子/worker/task 独立配置）', () => {
+    const config = makeConfig({ execApprovalMode: 'deny', execAllowlist: ['ls'] });
+    const result = checkExecPolicyWithOptions(config, 'npm install', { approvalMode: 'allow' });
+    expect(result.allowed).toBe(true);
+  });
+
+  it('resolveExecApprovalMode: 直接返回枚举字段', () => {
+    const config = makeConfig({ execApprovalMode: 'deny' });
+    expect(resolveExecApprovalMode(config)).toBe('deny');
+  });
+
+  it('owner 发起：不在 execAllowlist 也直接放行（无需 ask）', () => {
+    const plugin = makeRootPluginWithOwnerAdmins('icqq', 'owner99', ['admin42']);
+    const getPluginSpy = vi.spyOn(core, 'getPlugin').mockReturnValue(plugin as never);
+    const config = makeConfig({ execAllowlist: ['ls'], execApprovalMode: 'ask' });
+    const ctx = { platform: 'icqq', botId: 'bot1', senderId: 'owner99' };
+
+    try {
+      const r = runWithBashToolContext(ctx, () => checkExecPolicy(config, 'npm install'));
+      expect(r.allowed).toBe(true);
+      expect(r.needsApproval).toBeUndefined();
+    } finally {
+      getPluginSpy.mockRestore();
+    }
+  });
+
+  it('admin 发起：不在 execAllowlist 触发 owner 审批', () => {
+    const plugin = makeRootPluginWithOwnerAdmins('icqq', 'owner99', ['admin42']);
+    const getPluginSpy = vi.spyOn(core, 'getPlugin').mockReturnValue(plugin as never);
+    const config = makeConfig({ execAllowlist: ['ls'], execApprovalMode: 'deny' });
+    const ctx = { platform: 'icqq', botId: 'bot1', senderId: 'admin42' };
+
+    try {
+      const r = runWithBashToolContext(ctx, () => checkExecPolicy(config, 'npm install'));
+      expect(r.allowed).toBe(false);
+      expect(r.needsApproval).toBe(true);
+      expect(r.reason).toContain('Owner');
+    } finally {
+      getPluginSpy.mockRestore();
+    }
+  });
+
+  it('其他人发起：不在 execAllowlist 直接拒绝', () => {
+    const plugin = makeRootPluginWithOwnerAdmins('icqq', 'owner99', ['admin42']);
+    const getPluginSpy = vi.spyOn(core, 'getPlugin').mockReturnValue(plugin as never);
+    const config = makeConfig({ execAllowlist: ['ls'], execApprovalMode: 'ask' });
+    const ctx = { platform: 'icqq', botId: 'bot1', senderId: 'user777' };
+
+    try {
+      const r = runWithBashToolContext(ctx, () => checkExecPolicy(config, 'npm install'));
+      expect(r.allowed).toBe(false);
+      expect(r.needsApproval).toBeUndefined();
+      expect(r.reason).toContain('owner/admin');
+    } finally {
+      getPluginSpy.mockRestore();
+    }
   });
 });

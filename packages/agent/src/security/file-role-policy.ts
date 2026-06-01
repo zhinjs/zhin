@@ -216,9 +216,25 @@ export function inferFileRole(context: {
 }
 
 /**
- * 将 bash 命令分类为文件操作类型
+ * 从 ToolRequesterRole（dangerous-tool-policy 推导出的角色）转换为 FileRole
  *
- * 用于在 bash 工具中判断命令是否涉及文件操作及其类型。
+ * 映射规则:
+ *  - 'owner' → 'owner'
+ *  - 'admin' → 'admin'
+ *  - 'other' → 'user'
+ *  - 'unknown' → 'owner'（无上下文时默认最高权限，向后兼容）
+ */
+export function toolRequesterRoleToFileRole(role: 'owner' | 'admin' | 'other' | 'unknown'): FileRole {
+  switch (role) {
+    case 'owner': return 'owner';
+    case 'admin': return 'admin';
+    case 'other': return 'user';
+    case 'unknown': return 'owner';
+  }
+}
+
+/**
+ * 将 bash 命令分类为文件操作类型
  * 返回 null 表示非文件操作命令（如纯查询命令）。
  */
 export function classifyBashFileOperation(command: string): FileOperation | null {

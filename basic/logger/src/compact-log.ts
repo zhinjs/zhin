@@ -24,9 +24,6 @@ export function truncatePreview(text: string, max?: number): string {
   return `${normalized.slice(0, max)}...`;
 }
 
-/** @deprecated 与 truncatePreview 相同；保留别名便于语义区分 error 字段 */
-export const truncateError = truncatePreview;
-
 /** Body only — use when logger `name` / prefix already identifies the source. */
 export function formatCompact(
   fields: Record<string, CompactFieldValue | undefined | null>,

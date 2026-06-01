@@ -5,11 +5,11 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { Tool, ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import {
-  assertFileAccess,
   isBlockedDevicePath,
   MAX_READ_FILE_SIZE,
 } from '../security/file-policy.js';
-import { checkFilePermission, formatFilePermissionMessage } from '../security/file-role-policy.js';
+import { checkFilePermission, formatFilePermissionMessage, toolRequesterRoleToFileRole } from '../security/file-role-policy.js';
+import { checkFileToolAccess, checkSensitiveFilePathAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
 import { expandHome, nodeErrToFileMessage } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 
@@ -64,18 +64,31 @@ export class ReadFileBuiltinTool extends BuiltinBaseTool {
       return 'Error: file_path is required';
     }
 
-    const role = context?.fileRole ?? 'owner';
-    const permResult = checkFilePermission(role, 'read', filePathArg);
+    // 第 1 层：角色门控（所有角色均可读取，但需走统一流程）
+    const roleDecision = checkFileToolAccess('read_file', context);
+    if (!roleDecision.allowed) {
+      if (roleDecision.needsOwnerApproval) return toOwnerSignal(roleDecision);
+      return toDenyError(roleDecision);
+    }
+
+    // 第 2 层：文件角色权限矩阵（user 只有 read 权限，安全放行）
+    const fileRole = context?.fileRole ?? toolRequesterRoleToFileRole(roleDecision.role);
+    const permResult = checkFilePermission(fileRole, 'read', filePathArg);
     if (!permResult.allowed) {
       return formatFilePermissionMessage(permResult, 'read_file');
     }
 
+    // 第 3 层：敏感路径检测 + 文件操作
     try {
       const fp = expandHome(filePathArg);
+      const sensitiveDecision = checkSensitiveFilePathAccess('read_file', fp, context);
+      if (!sensitiveDecision.allowed) {
+        if (sensitiveDecision.needsOwnerApproval) return toOwnerSignal(sensitiveDecision);
+        return toDenyError(sensitiveDecision);
+      }
       if (isBlockedDevicePath(fp)) {
         return `Error: 禁止读取设备文件 ${fp}（会导致进程挂起或注入攻击）`;
       }
-      assertFileAccess(fp);
       const stat = await fs.stat(fp);
       if (stat.size > MAX_READ_FILE_SIZE) {
         return `Error: 文件过大 (${(stat.size / 1024 / 1024).toFixed(1)} MiB)，超过 ${MAX_READ_FILE_SIZE / 1024 / 1024} MiB 限制。请使用 offset/limit 分段读取。`;

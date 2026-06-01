@@ -2,7 +2,7 @@
  * PermissionFeature
  * 权限管理服务，继承自 Feature 抽象类
  */
-import { Feature, FeatureJSON } from "../feature.js";
+import { Feature, FeatureJSON } from "@zhin.js/kernel";
 import { getPlugin } from "../plugin.js";
 import type { MaybePromise, RegisteredAdapter, AdapterMessage } from "../types.js";
 import { Message as MessageClass } from "../message.js";

@@ -2,7 +2,7 @@
  * ToolFeature — 统一的工具管理服务
  * 工具仅面向 AI（通过 MCP 注册），不再与 Command 互转
  */
-import { Feature, FeatureJSON } from "../feature.js";
+import { Feature, FeatureJSON } from "@zhin.js/kernel";
 import { Plugin, getPlugin } from "../plugin.js";
 import type { Tool, ToolContext, ToolJsonSchema, ToolParametersSchema, PropertySchema, MaybePromise, ToolPermissionLevel, ToolScope } from "../types.js";
 

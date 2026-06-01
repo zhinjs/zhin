@@ -14,6 +14,8 @@ import { getDataDir } from '../discovery/utils.js';
 
 export const OWNER_APPROVE_ALWAYS_TOOL = 'bash' as const;
 
+export type ToolRequesterRole = 'owner' | 'admin' | 'other' | 'unknown';
+
 const STORE_FILE = 'owner-approve-always.json';
 const STORE_VERSION = 2 as const;
 
@@ -137,6 +139,40 @@ function getBotOwner(plugin: Plugin, ctx: ToolContext): string | undefined {
   const bot = adapter?.bots?.get(ctx.botId!);
   const owner = (bot?.$config as Record<string, unknown> | undefined)?.owner;
   return owner != null ? String(owner) : undefined;
+}
+
+function normalizeIdList(input: unknown): string[] {
+  if (Array.isArray(input)) return input.map((v) => String(v)).filter(Boolean);
+  if (typeof input === 'string') {
+    return input
+      .split(/[\s,]+/)
+      .map((v) => v.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function getBotAdmins(plugin: Plugin, ctx: ToolContext): string[] {
+  const root = plugin.root ?? plugin;
+  const adapter = root.inject(ctx.platform!) as Adapter | undefined;
+  const bot = adapter?.bots?.get(ctx.botId!);
+  const botConfig = (bot?.$config as Record<string, unknown> | undefined) ?? {};
+  return [
+    ...normalizeIdList(botConfig.admins),
+    ...normalizeIdList(botConfig.botAdmins),
+    ...normalizeIdList(botConfig.bot_admins),
+    ...normalizeIdList(botConfig.admin),
+  ];
+}
+
+export function resolveToolRequesterRole(plugin: Plugin, ctx: ToolContext): ToolRequesterRole {
+  if (!ctx.platform || !ctx.botId || !ctx.senderId) return 'unknown';
+  const senderId = String(ctx.senderId);
+  const ownerId = getBotOwner(plugin, ctx);
+  if (ownerId && senderId === String(ownerId)) return 'owner';
+  const admins = getBotAdmins(plugin, ctx);
+  if (admins.includes(senderId)) return 'admin';
+  return 'other';
 }
 
 function getEntry(plugin: Plugin, ctx: ToolContext): BashApprovalBotEntry | undefined {

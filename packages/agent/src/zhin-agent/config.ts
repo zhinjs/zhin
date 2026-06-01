@@ -8,6 +8,7 @@ import { PERMISSION_LEVEL_PRIORITY } from '../orchestrator/tool-selection.js';
 import type { ModelHarnessConfig } from './model-harness.js';
 
 export type ModelSizeHint = 'small' | 'medium' | 'large';
+export type ExecApprovalMode = 'ask' | 'allow' | 'deny';
 
 const SMALL_MODEL_RE = /[:\-_](0\.5|1\.?[58]?|[3-8])b\b/i;
 const MEDIUM_MODEL_RE = /[:\-_](14|[12][0-9]|32)b\b/i;
@@ -84,7 +85,14 @@ export interface ZhinAgentConfig {
   execSecurity?: 'deny' | 'allowlist' | 'full';
   execPreset?: 'readonly' | 'network' | 'development' | 'custom';
   execAllowlist?: string[];
-  execAsk?: boolean;
+  /** 主 Agent：白名单外命令处理模式（ask=请求确认，allow=自动放行，deny=直接拒绝） */
+  execApprovalMode?: ExecApprovalMode;
+  /** 子 Agent（spawn_task）执行模式 */
+  subagentExecApprovalMode?: ExecApprovalMode;
+  /** Worker 执行模式（deferred worker 默认） */
+  workerExecApprovalMode?: ExecApprovalMode;
+  /** Task 执行模式（run_deferred_task 入口） */
+  taskExecApprovalMode?: ExecApprovalMode;
   maxSubagentIterations?: number;
   subagentTools?: string[];
   /**
@@ -158,7 +166,10 @@ export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   execSecurity: 'deny',
   execPreset: 'custom',
   execAllowlist: [],
-  execAsk: false,
+  execApprovalMode: 'deny',
+  subagentExecApprovalMode: 'deny',
+  workerExecApprovalMode: 'deny',
+  taskExecApprovalMode: 'deny',
   maxSubagentIterations: 25,  // 增加子任务迭代次数
   subagentTools: [],
   subagentTurnWaitMs: 300_000,  // 增加等待时间到5分钟

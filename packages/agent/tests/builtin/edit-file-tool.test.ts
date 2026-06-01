@@ -1,10 +1,11 @@
 /**
  * edit_file 内置工具（BuiltinBaseTool）单测
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import * as core from '@zhin.js/core';
 import { createEditFileTool, EditFileBuiltinTool } from '../../src/builtin/edit-file-tool.js';
 import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
 import type { ToolContext } from '@zhin.js/core';
@@ -15,8 +16,25 @@ describe('EditFileBuiltinTool', () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-edit-file-'));
   });
   afterEach(() => {
+    vi.restoreAllMocks();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
+
+  function mockPlugin(owner = 'owner1', admins: string[] = ['admin1'], execAllowlist: string[] = []) {
+    const plugin = {
+      inject: (name: string) => {
+        if (name === 'icqq') {
+          return { bots: new Map([['bot1', { $config: { owner, admins } }]]) };
+        }
+        if (name === 'ai') {
+          return { getAgentConfig: () => ({ execAllowlist }) };
+        }
+        return undefined;
+      },
+    } as unknown as core.Plugin;
+    (plugin as unknown as { root: core.Plugin }).root = plugin;
+    vi.spyOn(core, 'getPlugin').mockReturnValue(plugin as never);
+  }
 
   it('toTool 元数据与 schema 完整', () => {
     const tool = createEditFileTool();
@@ -72,5 +90,27 @@ describe('EditFileBuiltinTool', () => {
     });
     expect(String(result)).toContain('Edited');
     expect(fs.readFileSync(fp, 'utf-8')).toBe('one three');
+  });
+
+  it('admin 且 edit_file 不在 execAllowlist 时返回 ZHIN_NEEDS_OWNER', async () => {
+    mockPlugin('owner1', ['admin1'], []);
+    const fp = path.join(tmpDir, 'role-edit.txt');
+    fs.writeFileSync(fp, 'before', 'utf-8');
+    const inst = new EditFileBuiltinTool();
+    const ctx = { platform: 'icqq', botId: 'bot1', senderId: 'admin1' } as ToolContext;
+    const out = String(await inst.run({ file_path: fp, old_string: 'before', new_string: 'after' }, ctx));
+    expect(out.startsWith('ZHIN_NEEDS_OWNER:\n')).toBe(true);
+    expect(fs.readFileSync(fp, 'utf-8')).toBe('before');
+  });
+
+  it('普通用户调用 edit_file 直接拒绝', async () => {
+    mockPlugin('owner1', ['admin1'], []);
+    const fp = path.join(tmpDir, 'role-edit-deny.txt');
+    fs.writeFileSync(fp, 'before', 'utf-8');
+    const inst = new EditFileBuiltinTool();
+    const ctx = { platform: 'icqq', botId: 'bot1', senderId: 'user1' } as ToolContext;
+    const out = String(await inst.run({ file_path: fp, old_string: 'before', new_string: 'after' }, ctx));
+    expect(out).toMatch(/^Error:/);
+    expect(fs.readFileSync(fp, 'utf-8')).toBe('before');
   });
 });

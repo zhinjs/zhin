@@ -2,7 +2,7 @@
  * IM 适配器管理 API 桩（Edge / 无对应适配器时与 Host OpenAPI 路径对齐）。
  * Host 上由 qq/kook/icqq 等插件注册真实实现；勿在已加载适配器的 RouteTable 上重复注册。
  */
-import { registerFetchRoute, type RouteTable, type RouterContext } from "@zhin.js/http-host/edge";
+import { registerFetchRoute, type RouteTable, type RouterContext } from "@zhin.js/http-host";
 
 const emptyBots = (ctx: RouterContext) => {
   ctx.body = { success: true, data: [] };

@@ -1,7 +1,7 @@
 /**
  * 系统日志 REST（Host 接 Database；Edge 无库时返回空数据以保持 OpenAPI 对齐）。
  */
-import { registerFetchRoute, type RouteTable, type RouterContext } from "@zhin.js/http-host/edge";
+import { registerFetchRoute, type RouteTable, type RouterContext } from "@zhin.js/http-host";
 
 export type LogsRestDeps = {
   getLogModel: () => unknown;

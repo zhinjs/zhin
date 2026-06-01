@@ -8,8 +8,8 @@ import type { ToolContext } from '@zhin.js/core';
 export interface BashToolExecutionScope {
   toolContext?: ToolContext;
   /**
-   * Worker / 异步子 Agent：跳过 execAsk 的 Owner 审批门（仍拒绝危险命令与 deny）。
-   * 与 {@link createOwnerOrchestratedToolResultTransform} 的 `disableHardOrchestration` 配合使用。
+   * Worker / 异步子 Agent 的执行上下文标记。
+   * 该标记本身不再决定审批行为；审批由各路径的 execApprovalMode 控制。
    */
   directExecution?: boolean;
 }
@@ -46,7 +46,7 @@ export function runWithBashToolContext<T>(
   return als.run({ toolContext: ctx, directExecution: options?.directExecution }, fn);
 }
 
-/** 子 Agent / Deferred Worker：免 Owner 在线审批，在策略允许范围内直接执行 bash */
+/** 子 Agent / Deferred Worker：在独立执行上下文中运行 bash（审批策略由 execApprovalMode 决定） */
 export function runWithDirectAgentExecution<T>(ctx: ToolContext | undefined, fn: () => T): T;
 export function runWithDirectAgentExecution<T>(ctx: ToolContext | undefined, fn: () => Promise<T>): Promise<T>;
 export function runWithDirectAgentExecution<T>(

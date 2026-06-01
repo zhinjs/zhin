@@ -13,7 +13,7 @@
  *   - 插件通过 `addFilterRule()` 动态注册规则，卸载时自动清理
  */
 
-import { Feature, FeatureJSON } from '../feature.js';
+import { Feature, FeatureJSON } from '@zhin.js/kernel';
 import { getPlugin } from '../plugin.js';
 import type { Message, MessageType } from '../message.js';
 

@@ -21,7 +21,7 @@ declare module "zhin.js" {
 const plugin = usePlugin();
 const logger = plugin.logger;
 
-/** Node：`Router.ws`；Deno/Edge：`registerSandboxWebSocketRoutes`（http-host） */
+/** Node：`Router.ws` */
 export class SandboxAdapter extends SandboxWsHostAdapter {
   wss?: { on: (ev: string, fn: (...args: unknown[]) => void) => void; close: () => void };
 
@@ -66,7 +66,7 @@ const { provide } = usePlugin();
 
 provide({
   name: "sandbox",
-  description: "Sandbox Adapter — Node Router.ws + Deno http-host WebSocket",
+  description: "Sandbox Adapter — Node Router.ws",
   mounted: async (p: Plugin) => {
     const adapter = new SandboxAdapter(p);
     await adapter.start();
@@ -96,12 +96,7 @@ plugin.useContext("web", (pageManager) => {
 
 export {
   registerSandboxWebSocketRoutes,
-  type RegisterSandboxWsOptions,
 } from "./fetch-ws.js";
-export {
-  registerSandboxSseRoutes,
-  type RegisterSandboxSseOptions,
-} from "./fetch-sse.js";
 export {
   SandboxWsBot,
   SandboxWsHostAdapter,
@@ -109,7 +104,6 @@ export {
   bindSandboxWsSocket,
   parseSandboxWsPayload,
   type ResolvedSandboxBot,
-  type SandboxTransport,
   type SandboxWsConfig,
   type SandboxWsSocket,
 } from "./sandbox-ws.js";

@@ -196,18 +196,19 @@ useContext("config", (configService) => {
     const publicHost =
       host === "0.0.0.0" || host === "::" ? "127.0.0.1" : host;
     const visitAddress = `${publicHost}:${listenPort}`;
+    const originUrl = `http://${visitAddress}`;
     const apiUrl = `http://${visitAddress}${base}`;
-    const apiBaseUrl = `http://${visitAddress}`;
-    const openapiUrl = `${apiBaseUrl}/pub/openapi.json`;
+    const apiBaseUrl = apiUrl;
+    const openapiUrl = `${originUrl}/pub/openapi.json`;
     const consoleUrl = `${REMOTE_CONSOLE_ORIGIN}/?apiBaseUrl=${encodeURIComponent(apiBaseUrl)}`;
 
     logger.info(
       formatCompact({
-        port: listenPort,
-        api: apiUrl,
-        openapi: openapiUrl,
-        console: consoleUrl,
-        token_prefix: token.slice(0, 6),
+        服务端口: listenPort,
+        接口地址: apiUrl,
+        文档地址: openapiUrl,
+        控制台: consoleUrl,
+        令牌前缀: token.slice(0, 6),
       }),
     );
   });

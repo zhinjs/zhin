@@ -265,13 +265,13 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       }
 
       logger.info(formatCompact( {
-        builtin: builtinTools.length,
-        cron: cronTools.length,
-        skills: skillCount,
-        workspace_tools: toolCount,
-        agents: agentCount,
-        plugin_tools: pluginTools || undefined,
-        bootstrap: loadedFiles.length ? loadedFiles.join(',') : undefined,
+        内置工具: builtinTools.length,
+        定时任务工具: cronTools.length,
+        技能数量: skillCount,
+        工作区工具: toolCount,
+        预设代理: agentCount,
+        插件工具: pluginTools || undefined,
+        引导文件: loadedFiles.length ? loadedFiles.join(',') : undefined,
       }));
 
       // Trigger agent:bootstrap hook

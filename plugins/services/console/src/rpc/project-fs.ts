@@ -35,62 +35,6 @@ export function createNodeProjectFs(cwd = process.cwd()): ProjectFs {
   };
 }
 
-type DenoFileInfo = { isFile: boolean; isDirectory: boolean; size: number };
-
-type DenoLike = {
-  statSync(path: string): DenoFileInfo;
-  readTextFileSync(path: string): string;
-  writeTextFileSync(path: string, content: string): void;
-};
-
-function getDeno(): DenoLike {
-  const d = (globalThis as { Deno?: DenoLike }).Deno;
-  if (!d) throw new Error("createDenoProjectFs requires a Deno runtime");
-  return d;
-}
-
-/** Deno / Edge：相对 playground 或 Deploy 项目根 */
-export function createDenoProjectFs(projectRoot: string): ProjectFs {
-  const root = projectRoot.replace(/\/$/, "");
-  return {
-    cwd: () => root,
-    exists: (filePath) => {
-      try {
-        getDeno().statSync(filePath);
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    readText: (filePath) => getDeno().readTextFileSync(filePath),
-    writeText: (filePath, content) => getDeno().writeTextFileSync(filePath, content),
-    stat: (filePath) => {
-      try {
-        const s = getDeno().statSync(filePath);
-        return { isFile: s.isFile, isDirectory: s.isDirectory, size: s.size };
-      } catch {
-        return nodeStat(filePath);
-      }
-    },
-    readDir: (dirPath) => {
-      try {
-        const entries: ProjectFsDirEntry[] = [];
-        for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
-          entries.push({
-            name: entry.name,
-            isFile: entry.isFile(),
-            isDirectory: entry.isDirectory(),
-          });
-        }
-        return entries;
-      } catch {
-        return [];
-      }
-    },
-    mkdirp: (dirPath) => fs.mkdirSync(dirPath, { recursive: true }),
-  };
-}
-
 export function listEnvFiles(projectFs: ProjectFs): { name: string; exists: boolean }[] {
   const cwd = projectFs.cwd();
   return ENV_WHITELIST.map((name) => ({

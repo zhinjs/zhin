@@ -10,7 +10,7 @@ import { createAdapterTestSuite } from '../../../../packages/core/tests/adapter-
 import { IcqqAdapter } from '../src/adapter.js';
 import { IcqqBot } from '../src/bot.js';
 import type { IcqqBotConfig } from '../src/types.js';
-import type { IpcMessageEventData } from '../src/protocol.js';
+import type { IcqqIpcMessageEvent } from '../src/protocol.js';
 
 const FIXED_TS = 1700000000000;
 
@@ -53,7 +53,7 @@ class MockIcqqAdapter extends IcqqAdapter {
 
 // ── 原始消息工厂 ──
 
-function createIcqqRawEvent(overrides: Partial<IpcMessageEventData> = {}): IpcMessageEventData {
+function createIcqqRawEvent(overrides: Partial<IcqqIpcMessageEvent> = {}): IcqqIpcMessageEvent {
   return {
     type: 'group',
     user_id: 99999,
@@ -68,7 +68,7 @@ function createIcqqRawEvent(overrides: Partial<IpcMessageEventData> = {}): IpcMe
 
 // ── Harness 标准测试套件（接口合规、生命周期、消息链路、错误处理）──
 
-createAdapterTestSuite<MockIcqqAdapter, IpcMessageEventData>({
+createAdapterTestSuite<MockIcqqAdapter, IcqqIpcMessageEvent>({
   adapterName: 'icqq',
   botId: '10001',
   createAdapter: (plugin) => {

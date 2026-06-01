@@ -5,7 +5,8 @@ import { exec, type ExecOptions } from 'node:child_process';
 import { promisify } from 'node:util';
 import * as path from 'node:path';
 import type { Tool, ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
-import { assertFileAccess, shellEscape } from '../security/file-policy.js';
+import { shellEscape } from '../security/file-policy.js';
+import { checkFileToolAccess, checkSensitiveFilePathAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
 import { errMsg } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 
@@ -46,14 +47,24 @@ export class GrepBuiltinTool extends BuiltinBaseTool {
     this.keywords.push('搜索', '查找内容', 'grep', '正则', 'rg', 'ripgrep');
   }
 
-  async run(args: Record<string, unknown>, _context?: ToolContext): Promise<ToolResult> {
+  async run(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
     const patternArg = args.pattern;
     if (typeof patternArg !== 'string' || !patternArg.trim()) {
       return 'Error: pattern is required';
     }
     try {
       const searchPath = typeof args.path === 'string' && args.path.trim() ? args.path : '.';
-      assertFileAccess(path.resolve(process.cwd(), searchPath));
+      const roleDecision = checkFileToolAccess('grep', context);
+      if (!roleDecision.allowed) {
+        if (roleDecision.needsOwnerApproval) return toOwnerSignal(roleDecision);
+        return toDenyError(roleDecision);
+      }
+      const absSearchPath = path.resolve(process.cwd(), searchPath);
+      const sensitiveDecision = checkSensitiveFilePathAccess('grep', absSearchPath, context);
+      if (!sensitiveDecision.allowed) {
+        if (sensitiveDecision.needsOwnerApproval) return toOwnerSignal(sensitiveDecision);
+        return toDenyError(sensitiveDecision);
+      }
       const safePattern = shellEscape(patternArg);
       const safePath = shellEscape(searchPath);
       const limit = typeof args.limit === 'number' && Number.isFinite(args.limit) ? args.limit : 50;

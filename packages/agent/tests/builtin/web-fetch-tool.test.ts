@@ -2,6 +2,7 @@
  * web_fetch 内置工具（BuiltinBaseTool）单测 — fetch 全局 mock
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import * as core from '@zhin.js/core';
 import {
   createWebFetchTool,
   WebFetchBuiltinTool,
@@ -17,6 +18,22 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 });
+
+function mockPlugin(owner = 'owner1', admins: string[] = ['admin1'], execAllowlist: string[] = []) {
+  const plugin = {
+    inject: (name: string) => {
+      if (name === 'icqq') {
+        return { bots: new Map([['bot1', { $config: { owner, admins } }]]) };
+      }
+      if (name === 'ai') {
+        return { getAgentConfig: () => ({ execAllowlist }) };
+      }
+      return undefined;
+    },
+  } as unknown as core.Plugin;
+  (plugin as unknown as { root: core.Plugin }).root = plugin;
+  vi.spyOn(core, 'getPlugin').mockReturnValue(plugin as never);
+}
 
 describe('WebFetchBuiltinTool', () => {
   it('SSRF：拒绝 localhost', async () => {
@@ -80,5 +97,25 @@ describe('WebFetchBuiltinTool', () => {
     const agentTool = normalizeTool(tool, ctx);
     const result = await agentTool.execute({ url: 'https://example.com/' });
     expect(String(result)).toContain('OK');
+  });
+
+  it('admin 且 web_fetch 不在 execAllowlist 时返回 ZHIN_NEEDS_OWNER', async () => {
+    mockPlugin('owner1', ['admin1'], []);
+    vi.stubGlobal('fetch', vi.fn());
+    const inst = new WebFetchBuiltinTool();
+    const ctx = { platform: 'icqq', botId: 'bot1', senderId: 'admin1' } as ToolContext;
+    const out = String(await inst.run({ url: 'https://example.com/' }, ctx));
+    expect(out.startsWith('ZHIN_NEEDS_OWNER:\n')).toBe(true);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('普通用户调用 web_fetch 直接拒绝', async () => {
+    mockPlugin('owner1', ['admin1'], []);
+    vi.stubGlobal('fetch', vi.fn());
+    const inst = new WebFetchBuiltinTool();
+    const ctx = { platform: 'icqq', botId: 'bot1', senderId: 'user1' } as ToolContext;
+    const out = String(await inst.run({ url: 'https://example.com/' }, ctx));
+    expect(out).toMatch(/^Error:/);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });

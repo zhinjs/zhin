@@ -215,6 +215,8 @@ function validateCommand(command: string, config: SandboxConfig): { valid: boole
     /wget.*\|\s*sh/,           // wget | sh
     /curl.*&&.*\./,            // curl && ./...
     /wget.*&&.*\./,            // wget && ./...
+    /\b(?:rm|rmdir)\b[^\n]*\bnode_modules\b/i, // 删除依赖目录
+    /\bfind\b[^\n]*\bnode_modules\b[^\n]*(?:^|\s)-delete(?:\s|$)/i, // find -delete 依赖目录
     /eval\s*\(/,               // eval()
     /exec\s*\(/,               // exec()
     /child_process/,           // child_process
