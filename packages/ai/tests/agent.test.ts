@@ -733,3 +733,41 @@ describe('模型自动降级', () => {
     expect(result.content).toContain('model error');
   });
 });
+
+describe('策略拒绝熔断', () => {
+  it('累计 2 次策略拒绝后应强制文本回答，不再调用工具', async () => {
+    const mockProvider = createMockProvider();
+    const policyError = new Error('命令「sqlite3」不在允许列表中，已被拒绝。');
+    const bashTool = createMockTool({
+      name: 'bash',
+      parameters: { command: { type: 'string', description: 'cmd' } },
+      required: ['command'],
+      executeError: policyError,
+    });
+
+    mockProvider.chat
+      .mockResolvedValueOnce(createChatResponse('', [{
+        id: 'call-1',
+        type: 'function',
+        function: { name: 'bash', arguments: JSON.stringify({ command: 'sqlite3 x' }) },
+      }]))
+      .mockResolvedValueOnce(createChatResponse('', [{
+        id: 'call-2',
+        type: 'function',
+        function: { name: 'bash', arguments: JSON.stringify({ command: 'cat data/bot.db' }) },
+      }]))
+      .mockResolvedValueOnce(createChatResponse('策略已阻止，请 Owner 配置 execAllowlist。'));
+
+    const agent = createAgent(mockProvider as any, {
+      tools: [bashTool],
+      policyDenialStopAfter: 2,
+      maxIterations: 10,
+    });
+
+    const result = await agent.run('查数据库');
+    expect(result.content).toContain('execAllowlist');
+    expect(mockProvider.chat).toHaveBeenCalledTimes(3);
+    const lastReq = mockProvider.chat.mock.calls[2][0] as { tools?: unknown };
+    expect(lastReq.tools).toBeUndefined();
+  });
+});

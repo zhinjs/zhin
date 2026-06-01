@@ -141,7 +141,7 @@ export class NapCatWsClient extends NapCatBotBase {
     const tiConfig = this.$config.typingIndicator;
     if (tiConfig && tiConfig.enabled !== false) {
       enableTypingIndicator(this, {
-        enabled: tiConfig.enabled !== false,
+        enabled: tiConfig.enabled ?? true,
         defaultEmoji: tiConfig.defaultEmoji || '128516',
         autoRemove: true,
         removeDelay: 5000,

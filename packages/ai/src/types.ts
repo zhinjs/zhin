@@ -302,6 +302,11 @@ export interface AgentConfig {
   transformToolResult?: ToolResultTransform;
   /** 每轮 tool 执行后强制 micro-compact（toolSearch Worker 路径） */
   forceMicroCompactEachTurn?: boolean;
+  /**
+   * 同一轮对话内累计多少次「策略/安全拒绝」后强制结束工具循环（默认 2）。
+   * 设为 0 表示禁用熔断。
+   */
+  policyDenialStopAfter?: number;
 }
 
 /** Agent 运行结果 */

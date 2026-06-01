@@ -25,6 +25,13 @@ import {
 } from '../compaction/index.js';
 import type { AutoCompactTrackingState } from '../compaction/index.js';
 import { sanitizeToolResult } from './tool-result-sanitizer.js';
+import {
+  DEFAULT_POLICY_DENIAL_STOP_AFTER,
+  isPolicyDenialMessage,
+  isPolicyDenialToolResult,
+  POLICY_DENIAL_TOOL_HINT,
+  SYSTEM_POLICY_DENIAL_STOP,
+} from './policy-denial.js';
 
 const logger = new Logger(null, 'Agent');
 
@@ -139,7 +146,7 @@ export interface AgentEvents {
  */
 export class Agent {
   private provider: AIProvider;
-  private config: Required<Pick<AgentConfig, 'provider' | 'model' | 'systemPrompt' | 'tools' | 'maxIterations' | 'temperature'>> & Pick<AgentConfig, 'contextWindow' | 'maxConcurrentTools' | 'modelFallbacks' | 'turnTimeout' | 'transformToolResult' | 'forceMicroCompactEachTurn'>;
+  private config: Required<Pick<AgentConfig, 'provider' | 'model' | 'systemPrompt' | 'tools' | 'maxIterations' | 'temperature'>> & Pick<AgentConfig, 'contextWindow' | 'maxConcurrentTools' | 'modelFallbacks' | 'turnTimeout' | 'transformToolResult' | 'forceMicroCompactEachTurn' | 'policyDenialStopAfter'>;
   private tools: Map<string, AgentTool> = new Map();
   private eventHandlers: Map<keyof AgentEvents, Function[]> = new Map();
 
@@ -158,6 +165,7 @@ export class Agent {
       turnTimeout: config.turnTimeout,
       transformToolResult: config.transformToolResult,
       forceMicroCompactEachTurn: config.forceMicroCompactEachTurn,
+      policyDenialStopAfter: config.policyDenialStopAfter ?? DEFAULT_POLICY_DENIAL_STOP_AFTER,
     };
 
     // 注册工具
@@ -189,7 +197,8 @@ export class Agent {
 # Principles
  - Understand the user's intent and choose appropriate tools
  - If multiple steps are needed, execute them in order
- - On tool failure, try alternatives — do not dump raw errors to user
+ - On transient tool failure (timeout, network), you may try one alternative
+ - On security/policy denial (policyBlocked, ZHIN_NEEDS_OWNER, execAllowlist), do NOT retry with other tools — explain limits to the user
  - If a task cannot be completed, say so honestly
  - NEVER claim to have performed an action unless you called a tool and got a confirmed result
  - If the user asks you to do something you have no tool for, say so honestly — do NOT fabricate a success response
@@ -401,11 +410,14 @@ export class Agent {
       const errorMsg = error instanceof Error ? error.message : String(error);
       logger.warn(formatCompact( { tool: toolCall.function.name, error: truncatePreview(errorMsg) }));
       logger.error({ tool: toolCall.function.name, params: args, err: error }, 'Tool execution failed');
-      // 向 AI 提供结构化的错误信息和恢复提示
+      const policyBlocked = isPolicyDenialMessage(errorMsg);
       return JSON.stringify({
         error: errorMsg,
         tool: toolCall.function.name,
-        hint: '该工具执行失败。请尝试使用不同的参数重试，或换一个工具来完成任务。如果所有工具都无法使用，请直接用文字回答用户。',
+        ...(policyBlocked ? { policyBlocked: true } : {}),
+        hint: policyBlocked
+          ? POLICY_DENIAL_TOOL_HINT
+          : '该工具执行失败。若为临时错误可换参数重试一次；若与安全策略相关请勿换工具重试，直接向用户说明。',
       });
     }
   }
@@ -574,6 +586,8 @@ export class Agent {
     const seenToolKeys = new Set<string>();
     // 连续全重复计数器
     let consecutiveDuplicateRounds = 0;
+    let policyDenialCount = 0;
+    const policyDenialStopAfter = this.config.policyDenialStopAfter ?? DEFAULT_POLICY_DENIAL_STOP_AFTER;
 
     // ── 每轮压缩追踪 ──
     const contextWindow = this.config.contextWindow;
@@ -626,7 +640,9 @@ export class Agent {
       // 1. 检测到连续重复工具调用
       // 2. 最后一轮迭代且已有工具结果 —— 保证 Agent 始终输出文本，不再需要额外的 summary 往返
       const isLastIteration = state.iterations >= this.config.maxIterations;
+      const policyCircuitOpen = policyDenialStopAfter > 0 && policyDenialCount >= policyDenialStopAfter;
       const forceAnswer = consecutiveDuplicateRounds > 0 ||
+        policyCircuitOpen ||
         (isLastIteration && state.toolCalls.length > 0);
 
       try {
@@ -698,8 +714,10 @@ export class Agent {
           // 有新的工具调用被执行
           consecutiveDuplicateRounds = 0;
 
+          let batchPolicyDenials = 0;
           // 将工具结果加入消息历史
           for (const { toolCall, result } of results) {
+            if (isPolicyDenialToolResult(result)) batchPolicyDenials++;
             logger.debug(formatCompact( {
               iter: state.iterations,
               tool_result: toolCall.function.name,
@@ -712,13 +730,33 @@ export class Agent {
             });
           }
 
-          // 如果工具返回的是最终结果（非查询中间步骤），引导模型直接回复
-          const allSucceeded = results.every(r => !r.result.startsWith('{'));
-          if (allSucceeded && results.length > 0) {
+          if (batchPolicyDenials > 0) {
+            policyDenialCount += batchPolicyDenials;
+            logger.warn(formatCompact( {
+              iter: state.iterations,
+              warn: 'policy_denial',
+              count: policyDenialCount,
+              stop_after: policyDenialStopAfter,
+            }));
+          }
+
+          if (
+            policyDenialStopAfter > 0 &&
+            policyDenialCount >= policyDenialStopAfter
+          ) {
             state.messages.push({
               role: 'system',
-              content: SYSTEM_TOOL_FOLLOWUP_ANSWER,
+              content: SYSTEM_POLICY_DENIAL_STOP,
             });
+          } else {
+            // 如果工具返回的是最终结果（非查询中间步骤），引导模型直接回复
+            const allSucceeded = results.every(r => !r.result.startsWith('{'));
+            if (allSucceeded && results.length > 0 && batchPolicyDenials === 0) {
+              state.messages.push({
+                role: 'system',
+                content: SYSTEM_TOOL_FOLLOWUP_ANSWER,
+              });
+            }
           }
 
           state.messages = this.applyForcedMicroCompact(state.messages);
@@ -854,6 +892,8 @@ export class Agent {
     const usage: Usage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
     const seenToolKeys = new Set<string>();
     let consecutiveDuplicateRounds = 0;
+    let policyDenialCount = 0;
+    const policyDenialStopAfter = this.config.policyDenialStopAfter ?? DEFAULT_POLICY_DENIAL_STOP_AFTER;
 
     // ── 每轮压缩追踪 ──
     const contextWindow = this.config.contextWindow;
@@ -917,7 +957,9 @@ export class Agent {
       const pendingToolCalls: ToolCall[] = [];
       let finishReason: string | null = null;
       const isLastIteration = iterations >= this.config.maxIterations;
+      const policyCircuitOpen = policyDenialStopAfter > 0 && policyDenialCount >= policyDenialStopAfter;
       const forceAnswer = consecutiveDuplicateRounds > 0 ||
+        policyCircuitOpen ||
         (isLastIteration && toolCallHistory.length > 0);
 
       // 流式获取响应
@@ -1012,8 +1054,10 @@ export class Agent {
 
         consecutiveDuplicateRounds = 0;
 
+        let batchPolicyDenials = 0;
         // yield 工具结果并加入消息历史
         for (const { toolCall, result } of results) {
+          if (isPolicyDenialToolResult(result)) batchPolicyDenials++;
           logger.debug(formatCompact( {
             iter: iterations,
             tool_result: toolCall.function.name,
@@ -1024,6 +1068,26 @@ export class Agent {
             role: 'tool',
             content: result,
             tool_call_id: toolCall.id,
+          });
+        }
+
+        if (batchPolicyDenials > 0) {
+          policyDenialCount += batchPolicyDenials;
+          logger.warn(formatCompact( {
+            iter: iterations,
+            warn: 'policy_denial',
+            count: policyDenialCount,
+            stop_after: policyDenialStopAfter,
+          }));
+        }
+
+        if (
+          policyDenialStopAfter > 0 &&
+          policyDenialCount >= policyDenialStopAfter
+        ) {
+          messages.push({
+            role: 'system',
+            content: SYSTEM_POLICY_DENIAL_STOP,
           });
         }
 

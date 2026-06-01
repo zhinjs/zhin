@@ -1,7 +1,19 @@
-import { usePlugin } from "zhin.js";
+import { getPlugin, usePlugin, type Plugin } from "@zhin.js/core";
 import type { ConsoleRpcContext, ConsoleWebServer, ProjectFs } from "./context.js";
 import { createNodeProjectFs } from "./project-fs.js";
 import { handleCoreRpc } from "./handlers-core.js";
+
+/** REST 等路径须通过 options.root 注入；仅在已有 ALS 插件上下文时回退 getPlugin().root */
+function resolveRpcRoot(options: DispatchConsoleRpcOptions): Plugin {
+  if (options.root) return options.root;
+  try {
+    const current = getPlugin();
+    return current.root ?? current;
+  } catch {
+    const fallback = usePlugin();
+    return fallback.root ?? fallback;
+  }
+}
 
 export type DispatchConsoleRpcOptions = {
   root?: ReturnType<typeof usePlugin>;
@@ -14,7 +26,7 @@ export function buildConsoleRpcContext(
   emit: ConsoleRpcContext["emit"],
 ): ConsoleRpcContext {
   return {
-    root: options.root ?? usePlugin(),
+    root: resolveRpcRoot(options),
     webServer: getWebServer(),
     projectFs: options.projectFs ?? createNodeProjectFs(),
     emit,

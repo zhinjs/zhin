@@ -126,6 +126,11 @@ export interface ZhinAgentConfig {
   platformPromptSectionMaxChars?: number;
   /** 单 slot 平台 prompt 合计上限（字符） */
   platformPromptMaxChars?: number;
+  /**
+   * 同一轮对话内累计多少次策略/安全拒绝后强制结束工具循环（默认 2，传给 Agent）。
+   * 设为 0 禁用熔断。
+   */
+  policyDenialStopAfter?: number;
 }
 
 /** toolSearch 主 Agent 默认常驻（不含 activate_skill：执行一律经 Worker） */
@@ -184,6 +189,7 @@ export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   toolSearchWorkerBaseTools: [...DEFAULT_TOOL_SEARCH_WORKER_BASE_TOOLS],
   platformPromptSectionMaxChars: 2048,
   platformPromptMaxChars: 4096,
+  policyDenialStopAfter: 2,
 };
 
 /** `env` 参数主要用于测试注入，运行时默认读取 `process.env`。 */

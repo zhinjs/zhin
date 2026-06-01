@@ -616,6 +616,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
           disableHardOrchestration: false,
           plugin: orchestrationPlugin,
         }),
+        policyDenialStopAfter: this.config.policyDenialStopAfter,
       });
 
       agent.on('thinking', (message) => {

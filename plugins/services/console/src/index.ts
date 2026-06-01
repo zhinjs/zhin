@@ -95,7 +95,8 @@ if (enabled) {
     };
 
     initConsoleHub(webServer);
-    registerConsoleApi(router, apiBase, () => webServer);
+    // 必须传入 bot 根插件：HTTP 请求不在 usePlugin() 的 ALS 上下文中，否则会新建空 Plugin 导致 bot:list 恒为 []
+    registerConsoleApi(router, apiBase, () => webServer, { root });
 
     const dataUpdateInterval = setInterval(() => {
       notifyDataUpdate(webServer);

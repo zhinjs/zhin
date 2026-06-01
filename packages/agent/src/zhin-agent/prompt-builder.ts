@@ -94,7 +94,7 @@ const SAFETY_RULES = [
   },
   {
     id: 'needs_owner_signal',
-    rule: 'If a tool result starts exactly with `ZHIN_NEEDS_OWNER:`, explain the situation and wait for confirmation.',
+    rule: 'If a tool result starts with `ZHIN_NEEDS_OWNER:` or policyBlocked, explain limits; ask_user cannot change exec/file policy — stop retrying other tools.',
     priority: 100,
   },
   {
