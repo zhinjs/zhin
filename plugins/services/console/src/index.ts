@@ -7,19 +7,16 @@ import {
 import type { RouterContext } from "@zhin.js/http";
 import * as path from "node:path";
 import { DEFAULT_CONSOLE_BASE_PATH } from "@zhin.js/console-types";
-import { initConsoleHub, notifyDataUpdate, type WebServerCompat } from "./websocket.js";
+import { initConsoleHub, notifyDataUpdate, type ConsoleWebServer } from "./websocket.js";
 import { registerConsoleApi, registerConsoleRoutes } from "./console-api.js";
 export { registerConsoleRoutes, type ConsoleApiOptions } from "./console-api.js";
 export { dispatchConsoleRpc } from "./rpc/dispatch.js";
-export { createNodeProjectFs, createDenoProjectFs } from "./rpc/project-fs.js";
-export type { ConsoleParity } from "./rpc/parity.js";
+export { createNodeProjectFs } from "./rpc/project-fs.js";
 import { registerBotModels } from "./bot-db-models.js";
 import { initBotPersistence } from "./bot-persistence.js";
 
 export interface ConsoleConfig {
   enabled?: boolean;
-  /** @deprecated Host 不再提供静态 UI；保留字段兼容旧配置 */
-  port?: number;
 }
 
 export { PageManager };
@@ -92,16 +89,16 @@ if (enabled) {
     const httpCfg = (configServiceHttp?.getPrimary() as { http?: { base?: string } })?.http;
     const apiBase = httpCfg?.base ?? "/api";
 
-    const webServerCompat: WebServerCompat = {
-      ws: { clients: new Set() } as WebServerCompat["ws"],
+    const webServer: ConsoleWebServer = {
+      ws: { clients: new Set() } as ConsoleWebServer["ws"],
       entries: {},
     };
 
-    initConsoleHub(webServerCompat);
-    registerConsoleApi(router, apiBase, () => webServerCompat);
+    initConsoleHub(webServer);
+    registerConsoleApi(router, apiBase, () => webServer);
 
     const dataUpdateInterval = setInterval(() => {
-      notifyDataUpdate(webServerCompat);
+      notifyDataUpdate(webServer);
     }, 5000);
 
     onDispose(async () => {
@@ -121,9 +118,9 @@ if (enabled) {
 
     logger.info(
       formatCompact({
-        op: "console",
-        mode: "api_only",
-        entries: `${DEFAULT_CONSOLE_BASE_PATH}/entries`,
+        服务: "控制台",
+        模式: "仅API",
+        入口: `${DEFAULT_CONSOLE_BASE_PATH}/entries`,
       }),
     );
   });

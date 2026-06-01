@@ -619,7 +619,9 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       logger.debug(formatCompact( { mode: 'agent', prompt_chars: systemPrompt.length }));
       logger.debug(`[System Prompt Full]\n${systemPrompt}\n---END---`);
 
-      const agentTools = applyExecPolicyToTools(this.config, resolvedTools);
+      const agentTools = applyExecPolicyToTools(this.config, resolvedTools, {
+        approvalMode: this.config.execApprovalMode,
+      });
 
       // Adaptive maxIterations: boost when skills are active (multi-step skill flows)
       const SKILL_ITERATION_BOOST = 3;
@@ -826,6 +828,7 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       origin: context,
       maxToolResults: this.config.toolSearchMaxResults,
       execPolicyConfig: this.config,
+      execApprovalMode: this.config.taskExecApprovalMode,
       modelRegistry: this.modelRegistry,
       provider: this.provider,
       maxIterations: this.config.maxSubagentIterations,

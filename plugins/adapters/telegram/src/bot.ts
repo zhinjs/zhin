@@ -16,6 +16,8 @@ import type { TelegramAdapter } from "./adapter.js";
 
 export class TelegramBot extends Telegraf implements Bot<TelegramBotConfig, TelegramMessage> {
   $connected: boolean = false;
+  /** message_id -> chat_id，用于在仅有 message_id 的场景执行 reaction 操作 */
+  private readonly messageChatMap = new Map<string, string>();
 
   get pluginLogger() {
     return this.adapter.plugin.logger;
@@ -154,6 +156,8 @@ export class TelegramBot extends Telegraf implements Bot<TelegramBotConfig, Tele
         });
       },
     });
+
+    this.messageChatMap.set(result.$id, channelId);
 
     return result;
   }
@@ -419,6 +423,7 @@ export class TelegramBot extends Telegraf implements Bot<TelegramBotConfig, Tele
     try {
       const chatId = parseInt(options.id);
       const result = await this.sendContentToChat(chatId, options.content);
+      this.messageChatMap.set(result.message_id.toString(), options.id);
       this.pluginLogger.debug(
         `${this.$config.name} send ${options.type}(${options.id}): ${segment.raw(options.content)}`
       );
@@ -623,6 +628,59 @@ export class TelegramBot extends Telegraf implements Bot<TelegramBotConfig, Tele
       "TelegramBot.$recallMessage: Message recall not supported without chat_id. " +
       "Use message.$recall() method instead, which contains the required context."
     );
+  }
+
+  private resolveTelegramMessageRef(messageId: string): { chatId: number; msgId: number } | null {
+    if (messageId.includes(':')) {
+      const [chatIdRaw, msgIdRaw] = messageId.split(':');
+      const chatId = Number(chatIdRaw);
+      const msgId = Number(msgIdRaw);
+      if (Number.isFinite(chatId) && Number.isFinite(msgId)) {
+        this.messageChatMap.set(String(msgId), String(chatId));
+        return { chatId, msgId };
+      }
+    }
+
+    const mappedChatId = this.messageChatMap.get(messageId);
+    if (!mappedChatId) return null;
+    const chatId = Number(mappedChatId);
+    const msgId = Number(messageId);
+    if (!Number.isFinite(chatId) || !Number.isFinite(msgId)) return null;
+    return { chatId, msgId };
+  }
+
+  async $addReaction(messageId: string, emoji: string): Promise<string | null> {
+    const ref = this.resolveTelegramMessageRef(messageId);
+    if (!ref) {
+      this.pluginLogger.warn(`Telegram Bot ${this.$id} 无法根据 message_id=${messageId} 定位 chat_id，跳过 addReaction`);
+      return null;
+    }
+
+    try {
+      await this.setMessageReaction(ref.chatId, ref.msgId, emoji);
+      return emoji;
+    } catch (error) {
+      this.pluginLogger.error(`Telegram Bot ${this.$id} 添加 reaction 失败:`, error);
+      return null;
+    }
+  }
+
+  async $removeReaction(messageId: string, _reactionId: string): Promise<void> {
+    const ref = this.resolveTelegramMessageRef(messageId);
+    if (!ref) {
+      this.pluginLogger.warn(`Telegram Bot ${this.$id} 无法根据 message_id=${messageId} 定位 chat_id，跳过 removeReaction`);
+      return;
+    }
+
+    try {
+      await (this.telegram as any).callApi('setMessageReaction', {
+        chat_id: ref.chatId,
+        message_id: ref.msgId,
+        reaction: [],
+      });
+    } catch (error) {
+      this.pluginLogger.error(`Telegram Bot ${this.$id} 移除 reaction 失败:`, error);
+    }
   }
   // ==================== 群组管理 API ====================
 

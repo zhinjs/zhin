@@ -3,11 +3,11 @@ import path from "node:path";
 import WebSocket from "ws";
 import { formatCompact, Adapter, Plugin, usePlugin } from '@zhin.js/core';
 import type { SchemaFeature, ConfigFeature, DatabaseFeature } from "@zhin.js/core";
-export interface WebServerCompat {
+export interface ConsoleWebServer {
   ws: import("ws").WebSocketServer;
   entries?: Record<string, string>;
 }
-export type WebServer = WebServerCompat;
+export type WebServer = ConsoleWebServer;
 import {
   initBotHub,
   setBotHubWss,
@@ -157,7 +157,7 @@ function getConfigFilePath(): string {
   return path.resolve(process.cwd(), primaryFile);
 }
 
-/** Bot hub + persistence hooks without binding legacy /server WebSocket. */
+/** Bot hub + persistence hooks without binding /server WebSocket. */
 export function initConsoleHub(webServer: WebServer) {
   setBotHubWss(webServer.ws);
   const disposeBotHub = initBotHub(root as {
@@ -208,7 +208,6 @@ export async function handleWebSocketMessage(
 
   if (!hostOnly) {
     const handled = await handleCoreRpc(message, {
-      parity: "host",
       root,
       webServer,
       projectFs: createNodeProjectFs(),
@@ -219,7 +218,7 @@ export async function handleWebSocketMessage(
 
   switch (type) {
     // ================================================================
-    // 文件管理（Host-only，Edge 由 Parity 矩阵拦截）
+    // 文件管理（Host-only）
     // ================================================================
 
     case "files:tree":

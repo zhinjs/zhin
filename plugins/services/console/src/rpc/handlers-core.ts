@@ -1,7 +1,6 @@
 import { Adapter, type Plugin } from "zhin.js";
 import type { SchemaFeature, ConfigFeature } from "zhin.js";
 import { broadcastSse } from "../sse-hub.js";
-import type { ConsoleParity } from "./parity.js";
 import type { ConsoleRpcContext } from "./context.js";
 import {
   collectBotsListWithPending,
@@ -48,9 +47,8 @@ function mapMemoryCronStatus(cronFeature: CronFeatureLike) {
   }));
 }
 
-/** Host 专用：拉取持久化任务（避免 Edge 动态 import @zhin.js/agent → logger/chalk） */
-async function listPersistentCronJobs(parity: ConsoleParity) {
-  if (parity === "edge") return [];
+/** 拉取持久化任务 */
+async function listPersistentCronJobs() {
   const { getCronManager } = await import("@zhin.js/agent");
   const m = getCronManager();
   if (!m?.engine) return [];
@@ -61,7 +59,6 @@ async function listPersistentCronJobs(parity: ConsoleParity) {
 }
 
 async function withPersistentCronEngine(
-  parity: ConsoleParity,
   requestId: number | undefined,
   ctx: ConsoleRpcContext,
   run: (engine: {
@@ -71,10 +68,6 @@ async function withPersistentCronEngine(
     resumeJob: (id: string) => Promise<boolean>;
   }) => Promise<void>,
 ): Promise<boolean> {
-  if (parity === "edge") {
-    reply(ctx, { requestId, error: "Edge 暂不支持持久化定时任务操作" });
-    return true;
-  }
   const { getCronManager } = await import("@zhin.js/agent");
   const m = getCronManager();
   if (!m?.engine) {
@@ -85,7 +78,7 @@ async function withPersistentCronEngine(
   return true;
 }
 
-/** Edge + Host 共用的 Console RPC（无 IM 社交）。返回是否已处理。 */
+/** Console RPC（返回是否已处理）。 */
 export async function handleCoreRpc(
   message: Record<string, unknown>,
   ctx: ConsoleRpcContext,
@@ -425,7 +418,7 @@ export async function handleCoreRpc(
           return true;
         }
         const memory = mapMemoryCronStatus(cronFeature);
-        const persistent = await listPersistentCronJobs(ctx.parity);
+        const persistent = await listPersistentCronJobs();
         reply(ctx, { requestId, data: { memory, persistent } });
       } catch (error) {
         reply(ctx, { requestId, error: (error as Error).message });
@@ -441,7 +434,7 @@ export async function handleCoreRpc(
           reply(ctx, { requestId, error: "缺少 cronExpression 或 prompt" });
           return true;
         }
-        return await withPersistentCronEngine(ctx.parity, requestId, ctx, async (engine) => {
+        return await withPersistentCronEngine(requestId, ctx, async (engine) => {
           const { generateCronJobId } = await import("@zhin.js/agent");
           const record = await engine.addJob({
             id: generateCronJobId(),
@@ -466,7 +459,7 @@ export async function handleCoreRpc(
           reply(ctx, { requestId, error: "缺少任务 id" });
           return true;
         }
-        return await withPersistentCronEngine(ctx.parity, requestId, ctx, async (engine) => {
+        return await withPersistentCronEngine(requestId, ctx, async (engine) => {
           const ok = await engine.removeJob(id);
           reply(ctx, { requestId, data: { success: ok } });
         });
@@ -483,7 +476,7 @@ export async function handleCoreRpc(
           reply(ctx, { requestId, error: "缺少任务 id" });
           return true;
         }
-        return await withPersistentCronEngine(ctx.parity, requestId, ctx, async (engine) => {
+        return await withPersistentCronEngine(requestId, ctx, async (engine) => {
           const ok = await engine.pauseJob(id);
           reply(ctx, { requestId, data: { success: ok } });
         });
@@ -500,7 +493,7 @@ export async function handleCoreRpc(
           reply(ctx, { requestId, error: "缺少任务 id" });
           return true;
         }
-        return await withPersistentCronEngine(ctx.parity, requestId, ctx, async (engine) => {
+        return await withPersistentCronEngine(requestId, ctx, async (engine) => {
           const ok = await engine.resumeJob(id);
           reply(ctx, { requestId, data: { success: ok } });
         });

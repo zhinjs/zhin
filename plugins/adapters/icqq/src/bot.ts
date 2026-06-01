@@ -98,10 +98,10 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
     this.initTypingIndicator();
 
     this.logger.info(formatCompact( {
-      bot: this.$id,
-      friends: this.friends.size,
-      groups: this.groups.size,
-      typingIndicator: this.$typingIndicator ? 'enabled' : 'disabled',
+      机器人: this.$id,
+      好友数: this.friends.size,
+      群组数: this.groups.size,
+      思考提示: this.$typingIndicator ? '已启用' : '未启用',
     }));
   }
 

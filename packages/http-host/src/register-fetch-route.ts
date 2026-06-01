@@ -1,6 +1,6 @@
 import type { RouteHandler, RouteTable } from "./route-table.js";
 
-/** Compat {@link Router} from `./compat-router.js` (duck-typed; avoids `ws` on Edge). */
+/** {@link Router} from `./compat-router.js` (duck-typed). */
 export type RouteRegisterTarget = RouteTable | { table: RouteTable };
 
 function resolveTable(target: RouteRegisterTarget): RouteTable {
@@ -12,7 +12,7 @@ function resolveTable(target: RouteRegisterTarget): RouteTable {
 
 /**
  * Register a Fetch-native route on a {@link RouteTable} or {@link Router}.
- * Preferred over legacy compat shim methods for new plugins.
+ * Preferred route registration method for new plugins.
  */
 export function registerFetchRoute(
   target: RouteRegisterTarget,

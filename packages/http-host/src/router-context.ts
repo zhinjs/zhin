@@ -1,5 +1,5 @@
 /**
- * Minimal router context compatible with legacy Koa-router handlers.
+ * Minimal router context for Koa-router style handlers.
  */
 export type RouterContext = {
   /** 原始 Fetch Request（WebSocket upgrade 等需要） */

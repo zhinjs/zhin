@@ -16,7 +16,7 @@ import logger, { Logger, formatCompact } from "@zhin.js/logger";
 import { compose, remove, resolveEntry } from "./utils.js";
 import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, SendOptions } from "./types.js";
 import { Adapter, Adapters } from "./adapter.js";
-import { Feature } from "./feature.js";
+import { Feature } from "@zhin.js/kernel";
 import {
   PluginBase,
   BaseContext,

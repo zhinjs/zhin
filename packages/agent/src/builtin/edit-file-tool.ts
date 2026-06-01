@@ -4,11 +4,11 @@
 import * as fs from 'node:fs/promises';
 import type { Tool, ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import {
-  checkFileAccess,
   isBlockedDevicePath,
   MAX_EDIT_FILE_SIZE,
   isFileStale,
 } from '../security/file-policy.js';
+import { checkFileToolAccess, checkSensitiveFilePathAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
 import { expandHome, nodeErrToFileMessage } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import {
@@ -51,7 +51,7 @@ export class EditFileBuiltinTool extends BuiltinBaseTool {
     );
   }
 
-  async run(args: Record<string, unknown>, _context?: ToolContext): Promise<ToolResult> {
+  async run(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
     const filePathArg = args.file_path;
     const oldStringArg = args.old_string;
     const newStringArg = args.new_string;
@@ -66,12 +66,18 @@ export class EditFileBuiltinTool extends BuiltinBaseTool {
     }
     try {
       const fp = expandHome(filePathArg);
+      const roleDecision = checkFileToolAccess('edit_file', context);
+      if (!roleDecision.allowed) {
+        if (roleDecision.needsOwnerApproval) return toOwnerSignal(roleDecision);
+        return toDenyError(roleDecision);
+      }
+      const sensitiveDecision = checkSensitiveFilePathAccess('edit_file', fp, context);
+      if (!sensitiveDecision.allowed) {
+        if (sensitiveDecision.needsOwnerApproval) return toOwnerSignal(sensitiveDecision);
+        return toDenyError(sensitiveDecision);
+      }
       if (isBlockedDevicePath(fp)) {
         return `Error: 禁止访问设备路径: ${fp}`;
-      }
-      const access = checkFileAccess(fp);
-      if (!access.allowed) {
-        return `ZHIN_NEEDS_OWNER:\n${access.reason!}\n\n（文件访问策略拒绝；仅 Owner 确认后在受控环境可重试或调整策略。）`;
       }
       const stat = await fs.stat(fp);
       if (stat.size > MAX_EDIT_FILE_SIZE) {

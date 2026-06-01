@@ -36,7 +36,7 @@ export function registerCheckin(plugin: Plugin, cfg: GroupSuiteConfig): void {
       created_at: { type: "text", default: "" },
       updated_at: { type: "text", default: "" },
     });
-    logger.info(formatCompact({ op: "checkin_model" }));
+    logger.info(formatCompact({ 模块: "签到", 数据模型: "已就绪" }));
   });
 
   async function getOrCreateUser(
@@ -183,9 +183,10 @@ export function registerCheckin(plugin: Plugin, cfg: GroupSuiteConfig): void {
 
   logger.info(
     formatCompact({
-      op: "checkin_load",
-      base_min: cfg.basePointsMin,
-      base_max: cfg.basePointsMax,
+      模块: "签到",
+      状态: "已加载",
+      基础积分最小值: cfg.basePointsMin,
+      基础积分最大值: cfg.basePointsMax,
     }),
   );
 }

@@ -10,7 +10,7 @@
  * 主 Agent（ZhinAgent）可根据用户请求自动委派给匹配的专长 Agent。
  */
 
-import { Feature, type FeatureJSON } from '../feature.js';
+import { Feature, type FeatureJSON } from '@zhin.js/kernel';
 import type { Tool } from '../types.js';
 
 // ============================================================================
@@ -139,3 +139,6 @@ export class AgentPresetFeature extends Feature<AgentPreset> {
     };
   }
 }
+
+import { resolveEntry } from '../utils.js';
+import { usePlugin } from '../plugin.js';

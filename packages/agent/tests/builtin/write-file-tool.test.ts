@@ -1,10 +1,11 @@
 /**
  * write_file 内置工具（BuiltinBaseTool）单测
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import * as core from '@zhin.js/core';
 import { createWriteFileTool, WriteFileBuiltinTool } from '../../src/builtin/write-file-tool.js';
 import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
 import type { ToolContext } from '@zhin.js/core';
@@ -15,8 +16,25 @@ describe('WriteFileBuiltinTool', () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-write-file-'));
   });
   afterEach(() => {
+    vi.restoreAllMocks();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
+
+  function mockPlugin(owner = 'owner1', admins: string[] = ['admin1'], execAllowlist: string[] = []) {
+    const plugin = {
+      inject: (name: string) => {
+        if (name === 'icqq') {
+          return { bots: new Map([['bot1', { $config: { owner, admins } }]]) };
+        }
+        if (name === 'ai') {
+          return { getAgentConfig: () => ({ execAllowlist }) };
+        }
+        return undefined;
+      },
+    } as unknown as core.Plugin;
+    (plugin as unknown as { root: core.Plugin }).root = plugin;
+    vi.spyOn(core, 'getPlugin').mockReturnValue(plugin as never);
+  }
 
   it('toTool 元数据与 schema 完整', () => {
     const tool = createWriteFileTool();
@@ -60,5 +78,45 @@ describe('WriteFileBuiltinTool', () => {
     const result = await agentTool.execute({ file_path: fp, content: 'ok' });
     expect(String(result)).toContain('Wrote');
     expect(fs.readFileSync(fp, 'utf-8')).toBe('ok');
+  });
+
+  it('admin 且 write_file 不在 execAllowlist 时返回 ZHIN_NEEDS_OWNER', async () => {
+    mockPlugin('owner1', ['admin1'], []);
+    const fp = path.join(tmpDir, 'blocked-by-role.txt');
+    const inst = new WriteFileBuiltinTool();
+    const ctx = { platform: 'icqq', botId: 'bot1', senderId: 'admin1' } as ToolContext;
+    const out = String(await inst.run({ file_path: fp, content: 'x' }, ctx));
+    expect(out.startsWith('ZHIN_NEEDS_OWNER:\n')).toBe(true);
+    expect(fs.existsSync(fp)).toBe(false);
+  });
+
+  it('普通用户调用 write_file 直接拒绝', async () => {
+    mockPlugin('owner1', ['admin1'], []);
+    const fp = path.join(tmpDir, 'deny-by-role.txt');
+    const inst = new WriteFileBuiltinTool();
+    const ctx = { platform: 'icqq', botId: 'bot1', senderId: 'user1' } as ToolContext;
+    const out = String(await inst.run({ file_path: fp, content: 'x' }, ctx));
+    expect(out).toMatch(/^Error:/);
+    expect(fs.existsSync(fp)).toBe(false);
+  });
+
+  it('owner 调用 write_file 直接放行', async () => {
+    mockPlugin('owner1', ['admin1'], []);
+    const fp = path.join(tmpDir, 'owner-allowed.txt');
+    const inst = new WriteFileBuiltinTool();
+    const ctx = { platform: 'icqq', botId: 'bot1', senderId: 'owner1' } as ToolContext;
+    const out = String(await inst.run({ file_path: fp, content: 'owner-ok' }, ctx));
+    expect(out).toContain('Wrote');
+    expect(fs.readFileSync(fp, 'utf-8')).toBe('owner-ok');
+  });
+
+  it('admin 且 write_file 在 execAllowlist 时可直接执行', async () => {
+    mockPlugin('owner1', ['admin1'], ['write_file']);
+    const fp = path.join(tmpDir, 'admin-allowlisted.txt');
+    const inst = new WriteFileBuiltinTool();
+    const ctx = { platform: 'icqq', botId: 'bot1', senderId: 'admin1' } as ToolContext;
+    const out = String(await inst.run({ file_path: fp, content: 'allowlisted' }, ctx));
+    expect(out).toContain('Wrote');
+    expect(fs.readFileSync(fp, 'utf-8')).toBe('allowlisted');
   });
 });

@@ -203,7 +203,9 @@ export class SubagentManager {
       }
 
       if (this.execPolicyConfig) {
-        tools = applyExecPolicyToTools(this.execPolicyConfig, tools);
+        tools = applyExecPolicyToTools(this.execPolicyConfig, tools, {
+          approvalMode: this.execPolicyConfig.subagentExecApprovalMode,
+        });
       }
 
       // 使用 Agent 调度器构建提示词（如果可用）

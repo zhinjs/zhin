@@ -139,7 +139,7 @@ export function registerStats(plugin: Plugin, cfg: GroupSuiteConfig): void {
       count: { type: "integer", default: 0 },
       updated_at: { type: "text", default: "" },
     });
-    logger.info(formatCompact({ op: "stats_model" }));
+    logger.info(formatCompact({ 模块: "消息统计", 数据模型: "已就绪" }));
   });
 
   const flushTimer = setInterval(flushStatsBuffer, 10_000);
@@ -280,9 +280,10 @@ export function registerStats(plugin: Plugin, cfg: GroupSuiteConfig): void {
 
   logger.info(
     formatCompact({
-      op: "stats_load",
-      rank_size: cfg.rankSize,
-      retention_days: cfg.statsRetentionDays,
+      模块: "消息统计",
+      状态: "已加载",
+      排行榜大小: cfg.rankSize,
+      数据保留天数: cfg.statsRetentionDays,
     }),
   );
 }

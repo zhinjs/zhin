@@ -3,6 +3,7 @@
  */
 import type { Tool, ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import { errMsg } from '../discovery/utils.js';
+import { checkDangerousToolAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import { WEB_TOOL_FETCH_TIMEOUT_MS, ZHIN_WEB_USER_AGENT } from './web-tool-utils.js';
 
@@ -73,8 +74,16 @@ export class WebFetchBuiltinTool extends BuiltinBaseTool {
     );
   }
 
-  async run(args: Record<string, unknown>, _context?: ToolContext): Promise<ToolResult> {
+  async run(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
     try {
+      const accessDecision = checkDangerousToolAccess('web_fetch', context);
+      if (!accessDecision.allowed) {
+        if (accessDecision.needsOwnerApproval) {
+          return toOwnerSignal(accessDecision);
+        }
+        return toDenyError(accessDecision);
+      }
+
       let parsedUrl: URL;
       try {
         parsedUrl = new URL(String(args.url ?? ''));

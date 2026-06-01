@@ -10,13 +10,13 @@ import {
 import type { SendOptions } from '../src/types.js';
 
 describe('queue IM field contract', () => {
-  it('normalizes aliases into canonical outbound detail', () => {
+  it('normalizes canonical outbound detail', () => {
     const detail = normalizeQueueOutboundDetail({
-      adapter: 'qq',
+      context: 'qq',
       bot: 'bot1',
-      id: 'group1',
-      type: 'group',
-      text: 'hello',
+      channelId: 'group1',
+      channelType: 'group',
+      content: 'hello',
       senderId: 'user1',
     });
 
@@ -30,23 +30,14 @@ describe('queue IM field contract', () => {
     });
   });
 
-  it('prefers canonical keys when aliases conflict', () => {
-    const detail = normalizeQueueOutboundDetail({
-      context: 'qq',
-      adapter: 'telegram',
+  it('rejects legacy alias keys', () => {
+    expect(() => normalizeQueueOutboundDetail({
+      adapter: 'qq',
       bot: 'bot1',
-      channelId: 'canonical',
       id: 'legacy',
-      channelType: 'private',
       type: 'group',
-      content: 'canonical content',
       text: 'legacy text',
-    });
-
-    expect(detail.context).toBe('qq');
-    expect(detail.channelId).toBe('canonical');
-    expect(detail.channelType).toBe('private');
-    expect(detail.content).toBe('canonical content');
+    })).toThrow(QueueIMFieldContractError);
   });
 
   it('rejects invalid message type', () => {

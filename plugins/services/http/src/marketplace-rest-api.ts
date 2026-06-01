@@ -2,7 +2,7 @@
  * 插件市场 REST（Host / Edge 共用，仅依赖 global fetch）。
  */
 import type { Plugin } from "zhin.js";
-import { registerFetchRoute, type RouteTable, type RouterContext } from "@zhin.js/http-host/edge";
+import { registerFetchRoute, type RouteTable, type RouterContext } from "@zhin.js/http-host";
 
 let pluginsCache: { data: unknown[]; ts: number } | null = null;
 const CACHE_TTL = 5 * 60 * 1000;

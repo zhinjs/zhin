@@ -78,7 +78,7 @@ export async function collectBotsListWithPending(root: Plugin) {
       persistence.listUnconsumedNotices(),
     ]);
   } catch {
-    // Edge / 无 DB 时忽略
+    // 无 DB 时忽略
   }
   return bots.map((bot) => ({
     ...bot,

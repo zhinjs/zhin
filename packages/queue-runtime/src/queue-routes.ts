@@ -1,4 +1,4 @@
-import type { RouteTable, RouterContext } from "@zhin.js/http-host/edge";
+import type { RouteTable, RouterContext } from "@zhin.js/http-host";
 import type { QueueRuntime } from "./runtime.js";
 
 export function registerQueueRoutes(

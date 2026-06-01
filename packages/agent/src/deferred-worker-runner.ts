@@ -19,7 +19,7 @@ import {
 } from './agent-prompt/index.js';
 import type { AgentPromptBuildContext } from '@zhin.js/core';
 import type { ModelRegistry } from '@zhin.js/ai';
-import type { ZhinAgentConfig } from './zhin-agent/config.js';
+import type { ZhinAgentConfig, ExecApprovalMode } from './zhin-agent/config.js';
 import { resolveWorkerSlowToolTimeout } from './zhin-agent/config.js';
 import { applyExecPolicyToTools } from './security/exec-policy.js';
 import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from './reserved-tools.js';
@@ -45,6 +45,7 @@ export interface DeferredWorkerRunOptions {
   maxToolResults: number;
   maxIterations?: number;
   execPolicyConfig?: Required<ZhinAgentConfig>;
+  execApprovalMode?: ExecApprovalMode;
   modelRegistry?: ModelRegistry | null;
   provider: AIProvider;
   summaryMaxChars?: number;
@@ -80,6 +81,7 @@ export class DeferredWorkerRunner {
       maxToolResults,
       provider,
       execPolicyConfig,
+      execApprovalMode,
       modelRegistry,
       summaryMaxChars = DEFAULT_WORKER_SUMMARY_MAX_CHARS,
       onEvent,
@@ -138,7 +140,9 @@ export class DeferredWorkerRunner {
 
     let tools = workerTools;
     if (execPolicyConfig) {
-      tools = applyExecPolicyToTools(execPolicyConfig, tools);
+      tools = applyExecPolicyToTools(execPolicyConfig, tools, {
+        approvalMode: execApprovalMode ?? execPolicyConfig.workerExecApprovalMode,
+      });
     }
     if (execPolicyConfig) {
       const slowTimeout = resolveWorkerSlowToolTimeout(execPolicyConfig);
@@ -175,7 +179,7 @@ ${goal}${platformBlock}
 
 ## Rules
 - Use tools to complete the task; do not describe steps without acting.
-- Shell runs without Owner online approval in this Worker (still subject to deny/dangerous blocks).
+- Shell approval follows Worker/Task execApprovalMode configuration.
 - If a tool fails, try an alternative once, then report honestly.
 - Final answer: plain language summary for the orchestrator (no tool call syntax).`;
 

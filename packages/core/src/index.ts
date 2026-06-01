@@ -1,5 +1,4 @@
 // Core exports
-export * from './feature.js'
 export * from './bot.js'
 export * from './plugin.js'
 export * from './command.js'
@@ -88,11 +87,29 @@ export * from './types.js'
 export * from './agent-prompt.js'
 export * from './utils.js'
 export * from './errors.js'  // 导出错误处理系统
-export * from './cron.js'
-export * from './scheduler/index.js'
 export * from '@zhin.js/database'
 export * from '@zhin.js/logger'
 // 只导出 Schema 类，避免与 utils.js 的 isEmpty 冲突
 export { Schema } from '@zhin.js/schema'
 // Re-export PluginLike from kernel (generic plugin interface)
 export type { PluginLike } from '@zhin.js/kernel'
+export {
+  Feature,
+  Cron,
+  Scheduler,
+  getScheduler,
+  setScheduler,
+} from '@zhin.js/kernel'
+export type {
+  FeatureJSON,
+  FeatureListener,
+  Schedule,
+  JobPayload,
+  JobState,
+  ScheduledJob,
+  JobStore,
+  JobCallback,
+  AddJobOptions,
+  IScheduler,
+  SchedulerOptions,
+} from '@zhin.js/kernel'

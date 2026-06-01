@@ -6,17 +6,19 @@
  *   3. Safe wrapper 剥离 — `timeout 10 cmd` → 按 `cmd` 做匹配
  *   4. 复合命令拆分   — `&&` `||` `;` 逐段独立检查，deny 优先
  *   5. 只读命令自动放行 — 与 file-policy classifyBashCommand 集成
- *   6. Owner 信号 — execAsk=true 时返回需审批（ZHIN_NEEDS_OWNER），由编排层可硬触发 ask_user
+ *   6. Owner 信号 — execApprovalMode=ask 时返回需审批（ZHIN_NEEDS_OWNER），由编排层可硬触发 ask_user
  */
 
 import type { AgentTool } from '@zhin.js/core';
 import { getPlugin } from '@zhin.js/core';
-import type { ZhinAgentConfig } from '../zhin-agent/config.js';
+import type { ZhinAgentConfig, ExecApprovalMode } from '../zhin-agent/config.js';
 import { classifyBashCommand } from './file-policy.js';
-import { getCurrentBashToolContext, isDirectAgentExecution } from './bash-tool-context.js';
+import { getCurrentBashToolContext } from './bash-tool-context.js';
 import {
   isIcqqSensitiveSubcommand,
   matchesBashOwnerExecBypass,
+  resolveToolRequesterRole,
+  type ToolRequesterRole,
 } from './owner-approve-always-store.js';
 import { getAuditLogger } from './audit-logger.js';
 
@@ -52,10 +54,32 @@ const DANGEROUS_COMMANDS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * 无论审批模式如何都禁止的破坏性路径操作（避免误删依赖目录）。
+ */
+const HARD_BLOCK_COMMAND_PATTERNS: ReadonlyArray<{ re: RegExp; reason: string }> = [
+  {
+    re: /\b(?:rm|rmdir)\b[^\n]*\bnode_modules\b/i,
+    reason: '拒绝删除依赖目录 node_modules（高风险破坏操作）。',
+  },
+  {
+    re: /\bfind\b[^\n]*\bnode_modules\b[^\n]*(?:^|\s)-delete(?:\s|$)/i,
+    reason: '拒绝通过 find -delete 删除 node_modules（高风险破坏操作）。',
+  },
+];
+
+/**
  * 检查命令是否在危险黑名单中。
  */
 export function isDangerousCommand(cmdName: string): boolean {
   return DANGEROUS_COMMANDS.has(cmdName);
+}
+
+function matchHardBlockedCommand(command: string): string | undefined {
+  const text = command.trim();
+  for (const item of HARD_BLOCK_COMMAND_PATTERNS) {
+    if (item.re.test(text)) return item.reason;
+  }
+  return undefined;
 }
 
 // ── 环境变量前缀剥离──────────────
@@ -142,8 +166,37 @@ export interface ExecPolicyResult {
   allowed: boolean;
   /** 如果不允许，拒绝原因 */
   reason?: string;
-  /** 如果需要用户确认（execAsk=true 且命令不在白名单但也不在黑名单） */
+  /** 如果需要用户确认（execApprovalMode=ask 且命令不在白名单但也不在黑名单） */
   needsApproval?: boolean;
+}
+
+/**
+ * 解析有效审批模式。
+ */
+export function resolveExecApprovalMode(config: Required<ZhinAgentConfig>): ExecApprovalMode {
+  return config.execApprovalMode;
+}
+
+export interface ApplyExecPolicyOptions {
+  /** 覆盖当前执行路径的审批模式（主/子/worker/task 可分别传入） */
+  approvalMode?: ExecApprovalMode;
+}
+
+export interface CheckExecPolicyOptions {
+  /** 覆盖配置中的审批模式 */
+  approvalMode?: ExecApprovalMode;
+}
+
+function resolveRequesterRole(): 'owner' | 'admin' | 'other' | 'unknown' {
+  const ctx = getCurrentBashToolContext();
+  if (!ctx?.platform || !ctx?.botId || !ctx?.senderId) return 'unknown';
+
+  try {
+    const plugin = getPlugin().root ?? getPlugin();
+    return resolveToolRequesterRole(plugin, ctx);
+  } catch {
+    return 'unknown';
+  }
 }
 
 // ── 核心检查函数 ────────────────────────────────────────────────────
@@ -179,8 +232,14 @@ function checkSingleCommand(
   fullSubCommand: string,
   allowlist: string[],
   security: string,
-  execAsk: boolean,
+  approvalMode: ExecApprovalMode,
+  requesterRole: ToolRequesterRole,
 ): ExecPolicyResult {
+  const hardBlockedReason = matchHardBlockedCommand(fullSubCommand);
+  if (hardBlockedReason) {
+    return { allowed: false, reason: hardBlockedReason };
+  }
+
   // 1. 危险黑名单 — 任何模式都拒绝
   if (isDangerousCommand(cmdName)) {
     return { allowed: false, reason: `拒绝执行危险命令「${cmdName}」— 该命令可提权或执行任意代码。` };
@@ -206,7 +265,26 @@ function checkSingleCommand(
     if (tryExecBypassForSensitiveIcqq(norm)) {
       return { allowed: true };
     }
-    if (execAsk) {
+    if (requesterRole === 'owner') {
+      return { allowed: true };
+    }
+    if (requesterRole === 'admin') {
+      return {
+        allowed: false,
+        needsApproval: true,
+        reason: `icqq 敏感操作不在 execAllowlist，需 Owner 确认：${norm.slice(0, 280)}`,
+      };
+    }
+    if (requesterRole === 'other') {
+      return {
+        allowed: false,
+        reason: `icqq 敏感操作仅允许 owner 直接执行；admin 需 Owner 审批：${norm.slice(0, 280)}`,
+      };
+    }
+    if (approvalMode === 'allow') {
+      return { allowed: true };
+    }
+    if (approvalMode === 'ask') {
       return {
         allowed: false,
         needsApproval: true,
@@ -215,7 +293,7 @@ function checkSingleCommand(
     }
     return {
       allowed: false,
-      reason: `icqq 敏感操作已被拒绝（未开启 execAsk）：${norm.slice(0, 280)}`,
+      reason: `icqq 敏感操作已被拒绝（execApprovalMode=deny）：${norm.slice(0, 280)}`,
     };
   }
 
@@ -233,8 +311,31 @@ function checkSingleCommand(
     return { allowed: true };
   }
 
+  if (requesterRole === 'owner') {
+    return { allowed: true };
+  }
+
+  if (requesterRole === 'admin') {
+    return {
+      allowed: false,
+      needsApproval: true,
+      reason: `命令「${cmdName}」不在 execAllowlist，需 Owner 确认后执行。`,
+    };
+  }
+
+  if (requesterRole === 'other') {
+    return {
+      allowed: false,
+      reason: `命令「${cmdName}」不在 execAllowlist，且发起者不是 owner/admin，已拒绝。`,
+    };
+  }
+
   // 5. 需审批或拒绝
-  if (execAsk) {
+  if (approvalMode === 'allow') {
+    return { allowed: true };
+  }
+
+  if (approvalMode === 'ask') {
     return {
       allowed: false,
       needsApproval: true,
@@ -271,7 +372,8 @@ export function checkExecPolicy(config: Required<ZhinAgentConfig>, command: stri
   }
 
   const allowlist = resolveExecAllowlist(config);
-  const execAsk = config.execAsk ?? false;
+  const approvalMode = resolveExecApprovalMode(config);
+  const requesterRole = resolveRequesterRole();
   const cmd = (command || '').trim();
 
   if (!cmd) {
@@ -286,7 +388,7 @@ export function checkExecPolicy(config: Required<ZhinAgentConfig>, command: stri
     const cmdName = extractCommandName(sub);
     if (!cmdName) continue;
 
-    const result = checkSingleCommand(cmdName, sub, allowlist, security, execAsk);
+    const result = checkSingleCommand(cmdName, sub, allowlist, security, approvalMode, requesterRole);
 
     // deny 立即返回（deny > ask 优先级）
     if (!result.allowed && !result.needsApproval) {
@@ -331,11 +433,30 @@ export function checkExecPolicy(config: Required<ZhinAgentConfig>, command: stri
   return { allowed: true };
 }
 
+export function checkExecPolicyWithOptions(
+  config: Required<ZhinAgentConfig>,
+  command: string,
+  options: CheckExecPolicyOptions = {},
+): ExecPolicyResult {
+  if (!options.approvalMode) {
+    return checkExecPolicy(config, command);
+  }
+  const shadowConfig = {
+    ...config,
+    execApprovalMode: options.approvalMode,
+  } as Required<ZhinAgentConfig>;
+  return checkExecPolicy(shadowConfig, command);
+}
+
 /**
  * Wrap `bash` tools with exec policy enforcement.
- * 当 execAsk=true 且命令需审批时，返回提示信息而非抛错。
+ * 当 execApprovalMode=ask 且命令需审批时，返回提示信息而非抛错。
  */
-export function applyExecPolicyToTools(config: Required<ZhinAgentConfig>, tools: AgentTool[]): AgentTool[] {
+export function applyExecPolicyToTools(
+  config: Required<ZhinAgentConfig>,
+  tools: AgentTool[],
+  options: ApplyExecPolicyOptions = {},
+): AgentTool[] {
   return tools.map(t => {
     if (t.name !== 'bash') return t;
     const original = t.execute;
@@ -343,12 +464,11 @@ export function applyExecPolicyToTools(config: Required<ZhinAgentConfig>, tools:
       ...t,
       execute: async (args: Record<string, any>) => {
         const cmd = args?.command != null ? String(args.command) : '';
-        const result = checkExecPolicy(config, cmd);
+        const result = checkExecPolicyWithOptions(config, cmd, {
+          approvalMode: options.approvalMode,
+        });
         if (!result.allowed) {
           if (result.needsApproval) {
-            if (isDirectAgentExecution()) {
-              return original(args);
-            }
             // 权威首行 + 正文：硬编排识别；与旧「请使用 ask_user」话术合并为单套
             return `ZHIN_NEEDS_OWNER:\n⚠️ ${result.reason}\n\n此 shell 命令需 Bot Owner 审批后方可执行。`;
           }

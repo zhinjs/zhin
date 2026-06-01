@@ -1,5 +1,4 @@
 import type { Plugin } from "zhin.js";
-import type { ConsoleParity } from "./parity.js";
 
 export type ProjectFsStat = {
   isFile: boolean;
@@ -28,7 +27,6 @@ export type ConsoleWebServer = {
 };
 
 export type ConsoleRpcContext = {
-  parity: ConsoleParity;
   root: Plugin;
   webServer: ConsoleWebServer;
   projectFs: ProjectFs;

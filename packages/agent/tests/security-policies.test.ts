@@ -393,7 +393,7 @@ describe('Agent Security Policies', () => {
         execSecurity: 'allowlist',
         execPreset: 'readonly',
         execAllowlist: [],
-        execAsk: false,
+        execApprovalMode: 'deny',
       } as any;
 
       // 允许只读命令

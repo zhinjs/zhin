@@ -12,7 +12,7 @@
  *   2. 细筛：从选中 Skill 内选择具体 Tool
  */
 
-import { Feature, FeatureJSON } from '../feature.js';
+import { Feature, FeatureJSON } from '@zhin.js/kernel';
 import type { Tool } from '../types.js';
 
 // ============================================================================

@@ -2,10 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MessageSegment, cn, resolveMediaSrc, pickMediaRawUrl } from '@zhin.js/client';
 import {
     getSandboxApiBase,
-    getSandboxAuthHeaders,
-    getSandboxSessionId,
-    resolveSandboxTransport,
-    transportFromModuleUrl,
 } from './sandboxTransport';
 import { User, Users, Trash2, Send, Hash, MessageSquare, Wifi, WifiOff, Smile, Image, X, Check, Info, Search, Bot, UserPlus, Bell, Video, Music } from 'lucide-react';
 import RichTextEditor, { RichTextEditorRef } from './RichTextEditor';
@@ -50,10 +46,6 @@ export default function Sandbox() {
     const [viewMode, setViewMode] = useState<'chat' | 'requests' | 'notices'>('chat')
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const wsRef = useRef<WebSocket | null>(null)
-    const esRef = useRef<EventSource | null>(null)
-    const transportRef = useRef<'websocket' | 'http-sse'>('websocket')
-    const apiBaseRef = useRef('')
-    const sessionIdRef = useRef('')
     const editorRef = useRef<RichTextEditorRef>(null)
 
     const fetchFaceList = async () => {
@@ -92,62 +84,20 @@ export default function Sandbox() {
     }
 
     useEffect(() => {
-        let cancelled = false
         const base = getSandboxApiBase()
-        const sessionId = getSandboxSessionId()
-        apiBaseRef.current = base
-        sessionIdRef.current = sessionId
-
-        const connectWebSocket = () => {
-            if (wsRef.current) return
-            transportRef.current = 'websocket'
-            const wsUrl = new URL('/sandbox', `${base}/`)
-            wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:'
-            wsRef.current = new WebSocket(wsUrl.href)
-            wsRef.current.onopen = () => setConnected(true)
-            wsRef.current.onmessage = (event) => {
-                try { handleInboundPayload(JSON.parse(event.data)) }
-                catch (err) { console.error('[Sandbox] Failed to parse message:', err) }
-            }
-            wsRef.current.onclose = () => setConnected(false)
+        const wsUrl = new URL('/sandbox', `${base}/`)
+        wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:'
+        wsRef.current = new WebSocket(wsUrl.href)
+        wsRef.current.onopen = () => setConnected(true)
+        wsRef.current.onmessage = (event) => {
+            try { handleInboundPayload(JSON.parse(event.data)) }
+            catch (err) { console.error('[Sandbox] Failed to parse message:', err) }
         }
-
-        const connectSse = () => {
-            if (esRef.current) return
-            transportRef.current = 'http-sse'
-            const eventsUrl = new URL('/sandbox/events', `${base}/`)
-            eventsUrl.searchParams.set('session', sessionId)
-            const auth = getSandboxAuthHeaders().Authorization
-            if (auth?.startsWith('Bearer ')) {
-                eventsUrl.searchParams.set('access_token', auth.slice(7))
-            }
-            esRef.current = new EventSource(eventsUrl.href)
-            esRef.current.onopen = () => setConnected(true)
-            esRef.current.onmessage = (event) => {
-                try { handleInboundPayload(JSON.parse(event.data)) }
-                catch (err) { console.error('[Sandbox] Failed to parse SSE message:', err) }
-            }
-            esRef.current.onerror = () => setConnected(false)
-        }
-
-        const moduleMode = transportFromModuleUrl()
-        if (moduleMode === 'http-sse') {
-            connectSse()
-        } else {
-            void (async () => {
-                const mode = await resolveSandboxTransport(base)
-                if (cancelled) return
-                if (mode === 'http-sse') connectSse()
-                else connectWebSocket()
-            })()
-        }
+        wsRef.current.onclose = () => setConnected(false)
 
         return () => {
-            cancelled = true
             wsRef.current?.close()
             wsRef.current = null
-            esRef.current?.close()
-            esRef.current = null
             setConnected(false)
         }
     }, [])
@@ -255,20 +205,7 @@ export default function Sandbox() {
         setMessages((prev) => [...prev, newMessage]); setInputText(''); setPreviewSegments([])
         editorRef.current?.clear()
         const payload = JSON.stringify({ type: activeChannel.type, id: activeChannel.id, content: segments, timestamp: Date.now() })
-        if (transportRef.current === 'http-sse') {
-            const url = new URL('/sandbox/message', `${apiBaseRef.current}/`)
-            void fetch(url.href, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Sandbox-Session': sessionIdRef.current,
-                    ...getSandboxAuthHeaders(),
-                },
-                body: payload,
-            }).catch((err) => console.error('[Sandbox] POST message failed:', err))
-        } else {
-            wsRef.current?.send(payload)
-        }
+        wsRef.current?.send(payload)
     }
 
     const clearMessages = () => { if (confirm('确定清空所有消息记录？')) setMessages([]) }

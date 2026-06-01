@@ -224,7 +224,7 @@ useContext("server", (server: Server) => {
     }
   });
 
-  logger.info(formatCompact({ path: mcpPath, mode: "stateless" }));
+  logger.info(formatCompact({ MCP路径: mcpPath, 运行模式: "无状态" }));
 
   onDispose(() => {
     server.removeAllListeners("request");

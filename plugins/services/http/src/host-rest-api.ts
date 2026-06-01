@@ -9,7 +9,7 @@ import {
   registerSystemStatusRoute,
   type RouteTable,
   type RouterContext,
-} from "@zhin.js/http-host/edge";
+} from "@zhin.js/http-host";
 
 export type EntriesResponseBody = {
   entries: unknown[];
@@ -207,7 +207,7 @@ export function registerHostRestRoutes(
     ctx.body = { success: true, data: schemas };
   });
 
-  registerFetchRoute(table, "GET", `${base}/schema/:name`, async (ctx: RouterContext) => {
+  registerFetchRoute(table, "GET", `${base}/schemas/:name`, async (ctx: RouterContext) => {
     const schemaService = getRoot().inject("schema" as never) as unknown as {
       get: (n: string) => { toJSON: () => unknown } | undefined;
     } | null;

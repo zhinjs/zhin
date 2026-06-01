@@ -34,10 +34,6 @@ export function isMessageType(value: unknown): value is MessageType {
   return typeof value === 'string' && MESSAGE_TYPES.has(value as MessageType);
 }
 
-function pickAlias(record: Record<string, unknown>, preferred: string, fallback: string): unknown {
-  return record[preferred] ?? record[fallback];
-}
-
 function requireString(value: unknown, field: string): string {
   if (typeof value === 'string' && value.length > 0) return value;
   throw new QueueIMFieldContractError(`Missing required queue IM field: ${field}`, 'missing_field', field);
@@ -50,17 +46,12 @@ function requireContent(value: unknown): SendContent {
   return value as SendContent;
 }
 
-/**
- * Normalize queue outbound aliases into the canonical queue-IM shape.
- *
- * Alias precedence is canonical-first: `context` over `adapter`,
- * `channelId` over `id`, `channelType` over `type`, and `content` over `text`.
- */
+/** Normalize queue outbound detail into the canonical queue-IM shape. */
 export function normalizeQueueOutboundDetail(record: Record<string, unknown>): NormalizedQueueOutboundDetail {
-  const context = requireString(pickAlias(record, 'context', 'adapter'), 'context');
+  const context = requireString(record.context, 'context');
   const bot = requireString(record.bot, 'bot');
-  const channelId = requireString(pickAlias(record, 'channelId', 'id'), 'channelId');
-  const channelTypeValue = pickAlias(record, 'channelType', 'type');
+  const channelId = requireString(record.channelId, 'channelId');
+  const channelTypeValue = record.channelType;
   if (!isMessageType(channelTypeValue)) {
     throw new QueueIMFieldContractError(
       `Invalid queue IM field channelType: ${String(channelTypeValue)}`,
@@ -74,7 +65,7 @@ export function normalizeQueueOutboundDetail(record: Record<string, unknown>): N
     bot,
     channelId,
     channelType: channelTypeValue,
-    content: requireContent(pickAlias(record, 'content', 'text')),
+    content: requireContent(record.content),
   };
 
   if (typeof record.senderId === 'string') normalized.senderId = record.senderId;

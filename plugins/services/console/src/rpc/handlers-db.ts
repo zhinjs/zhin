@@ -223,7 +223,7 @@ async function kvGetEntries(root: Plugin, table: string) {
   return entries.map(([k, v]) => ({ key: k, value: v }));
 }
 
-/** Edge + Host：db:* RPC（无 database 时读接口返回空、写接口报错） */
+/** db:* RPC（无 database 时读接口返回空、写接口报错） */
 export async function handleDbRpc(
   message: Record<string, unknown>,
   ctx: ConsoleRpcContext,

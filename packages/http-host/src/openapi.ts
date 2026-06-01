@@ -112,7 +112,7 @@ function buildOperation(
     op.summary = meta?.summary ?? "Console RPC";
     op.description =
       meta?.description ??
-      "Remote Console request envelope: `{ type, data?, requestId? }` (same as legacy WebSocket `type`).";
+         "Remote Console request envelope: `{ type, data?, requestId? }`.";
     op.requestBody = {
       required: true,
       content: {

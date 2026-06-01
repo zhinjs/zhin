@@ -2,7 +2,7 @@
  * ComponentFeature
  * 管理所有插件注册的组件，继承自 Feature 抽象类
  */
-import { Feature, FeatureJSON } from "../feature.js";
+import { Feature, FeatureJSON } from "@zhin.js/kernel";
 import { Component, renderComponents } from "../component.js";
 import { SendOptions, MaybePromise } from "../types.js";
 import { Plugin, getPlugin } from "../plugin.js";

@@ -2,8 +2,7 @@
  * CronFeature
  * 管理所有插件注册的定时任务，继承自 Feature 抽象类
  */
-import { Feature, FeatureJSON } from "../feature.js";
-import { Cron } from "../cron.js";
+import { Cron, Feature, FeatureJSON } from "@zhin.js/kernel";
 import { Plugin, getPlugin } from "../plugin.js";
 
 /**

@@ -43,6 +43,8 @@ export class DiscordBot
     string,
     (interaction: ChatInputCommandInteraction) => Promise<void>
   > = new Map();
+  /** message_id -> channel_id，用于在仅有 message_id 的场景执行 reaction 操作 */
+  private readonly messageChannelMap = new Map<string, string>();
   $connected: boolean = false;
   get pluginLogger() {
     return this.adapter.plugin.logger;
@@ -252,6 +254,8 @@ export class DiscordBot
         return res;
       },
     });
+
+    this.messageChannelMap.set(result.$id, channelId);
 
     return result;
   }
@@ -520,6 +524,7 @@ export class DiscordBot
         channel as any,
         options.content
       );
+      this.messageChannelMap.set(result.id, options.id);
       this.pluginLogger.debug(
         `${this.$config.name} send ${options.type}(${options.id}): ${segment.raw(options.content)}`
       );
@@ -838,6 +843,63 @@ export class DiscordBot
     } catch (error) {
       this.pluginLogger.error(`Discord Bot ${this.$id} 添加反应失败:`, error);
       throw error;
+    }
+  }
+
+  private resolveDiscordMessageRef(messageId: string): { channelId: string; msgId: string } | null {
+    if (messageId.includes(':')) {
+      const [channelId, msgId] = messageId.split(':');
+      if (channelId && msgId) {
+        this.messageChannelMap.set(msgId, channelId);
+        return { channelId, msgId };
+      }
+    }
+
+    const channelId = this.messageChannelMap.get(messageId);
+    if (!channelId) return null;
+    return { channelId, msgId: messageId };
+  }
+
+  async $addReaction(messageId: string, emoji: string): Promise<string | null> {
+    const ref = this.resolveDiscordMessageRef(messageId);
+    if (!ref) {
+      this.pluginLogger.warn(`Discord Bot ${this.$id} 无法根据 message_id=${messageId} 定位 channel_id，跳过 addReaction`);
+      return null;
+    }
+
+    try {
+      await this.addReaction(ref.channelId, ref.msgId, emoji);
+      return emoji;
+    } catch (error) {
+      this.pluginLogger.error(`Discord Bot ${this.$id} 添加 reaction 失败:`, error);
+      return null;
+    }
+  }
+
+  async $removeReaction(messageId: string, reactionId: string): Promise<void> {
+    const ref = this.resolveDiscordMessageRef(messageId);
+    if (!ref) {
+      this.pluginLogger.warn(`Discord Bot ${this.$id} 无法根据 message_id=${messageId} 定位 channel_id，跳过 removeReaction`);
+      return;
+    }
+
+    try {
+      const channel = await this.channels.fetch(ref.channelId);
+      if (!channel || !channel.isTextBased()) return;
+      const message = await (channel as TextChannel).messages.fetch(ref.msgId);
+      const targetReaction =
+        message.reactions.resolve(reactionId as any) ||
+        message.reactions.cache.find(
+          (reaction) =>
+            reaction.emoji.toString() === reactionId ||
+            reaction.emoji.name === reactionId ||
+            reaction.emoji.id === reactionId,
+        );
+      if (targetReaction && this.user?.id) {
+        await targetReaction.users.remove(this.user.id);
+      }
+    } catch (error) {
+      this.pluginLogger.error(`Discord Bot ${this.$id} 移除 reaction 失败:`, error);
     }
   }
 

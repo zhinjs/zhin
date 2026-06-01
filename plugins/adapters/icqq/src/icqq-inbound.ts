@@ -187,19 +187,17 @@ export function resolveIcqqInboundMessageId(
   data: IcqqIpcMessageEvent,
   channelId: string,
 ): { id: string; source: "message_id" | "msg_id" | "seq" | "synthetic" } {
-  const ext = data as IcqqIpcMessageEvent & Record<string, unknown>;
-  const messageId = ext.message_id ?? ext.messageId;
-  if (messageId != null && String(messageId) !== "") {
-    return { id: String(messageId), source: "message_id" };
+  if (data.message_id != null && String(data.message_id) !== "") {
+    return { id: String(data.message_id), source: "message_id" };
   }
-  if (ext.msg_id != null && String(ext.msg_id) !== "") {
-    return { id: String(ext.msg_id), source: "msg_id" };
+  if (data.msg_id != null && String(data.msg_id) !== "") {
+    return { id: String(data.msg_id), source: "msg_id" };
   }
-  if (ext.seq != null && String(ext.seq) !== "") {
-    return { id: String(ext.seq), source: "seq" };
+  if (data.seq != null && String(data.seq) !== "") {
+    return { id: String(data.seq), source: "seq" };
   }
   const uid =
-    resolveIcqqInboundUserId(ext as Record<string, unknown>) ?? 0;
+    resolveIcqqInboundUserId(data as unknown as Record<string, unknown>) ?? 0;
   return {
     id: `${data.time}_${uid}_${channelId}`,
     source: "synthetic",
