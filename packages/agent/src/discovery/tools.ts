@@ -9,8 +9,22 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawn } from 'node:child_process';
-import { Logger, type Plugin, type ToolParametersSchema } from '@zhin.js/core';
+import { Logger, type Plugin, type ToolParametersSchema, type ToolScope, type ToolPermissionLevel } from '@zhin.js/core';
 import { getDataDir } from './utils.js';
+
+const VALID_TOOL_SCOPES: readonly ToolScope[] = ['private', 'group', 'channel'];
+const VALID_TOOL_LEVELS: readonly ToolPermissionLevel[] = ['user', 'group_admin', 'group_owner', 'bot_admin', 'owner'];
+
+function parseScopes(raw?: string[]): ToolScope[] | undefined {
+  if (!raw || raw.length === 0) return undefined;
+  const filtered = raw.filter((s): s is ToolScope => (VALID_TOOL_SCOPES as readonly string[]).includes(s));
+  return filtered.length > 0 ? filtered : undefined;
+}
+
+function parsePermissionLevel(raw?: string): ToolPermissionLevel | undefined {
+  if (!raw) return undefined;
+  return (VALID_TOOL_LEVELS as readonly string[]).includes(raw) ? raw as ToolPermissionLevel : undefined;
+}
 
 const logger = new Logger(null, 'builtin-tools');
 
@@ -23,7 +37,7 @@ export interface ToolParamShorthand {
   description?: string;
   required?: boolean;
   enum?: string[];
-  default?: any;
+  default?: unknown;
 }
 
 export interface ToolMeta {
@@ -303,8 +317,8 @@ export async function buildToolFromMeta(meta: ToolMeta): Promise<import('@zhin.j
     tags: meta.tags,
     keywords: meta.keywords,
     platforms: meta.platforms,
-    scopes: meta.scopes as any,
-    permissionLevel: meta.permissionLevel as any,
+    scopes: parseScopes(meta.scopes),
+    permissionLevel: parsePermissionLevel(meta.permissionLevel),
     hidden: meta.hidden,
     preExecutable: meta.preExecutable,
     kind: meta.kind,

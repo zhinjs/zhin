@@ -2,7 +2,7 @@
  * CronFeature 测试（Cron 类测试已迁移到 @zhin.js/kernel）
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { Cron } from '../src/cron'
+import { Cron } from '@zhin.js/kernel'
 
 describe('CronFeature', () => {
   let feature: import('../src/built/cron.js').CronFeature

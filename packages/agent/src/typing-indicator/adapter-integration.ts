@@ -6,7 +6,7 @@
  */
 
 import { getPlugin } from '@zhin.js/core';
-import type { Bot, Plugin } from '@zhin.js/core';
+import type { Bot, Plugin, SendOptions } from '@zhin.js/core';
 import {
   TypingIndicatorManager,
   ReactionTypingIndicatorAdapter,
@@ -15,6 +15,23 @@ import {
   type TypingIndicatorConfig,
   type TypingIndicator,
 } from './index.js';
+
+/**
+ * 平台 Bot 可能具备的扩展消息编辑能力
+ */
+interface MessageEditableBot {
+  $editMessage?(messageId: string, content: string): Promise<void>;
+  $updateMessage?(messageId: string, content: string): Promise<void>;
+}
+
+type BotWithEditing = Bot & Partial<MessageEditableBot>;
+
+/**
+ * 适配器实例需要具备的最小接口
+ */
+interface AdapterInstance {
+  sendMessage(options: SendOptions): Promise<string>;
+}
 
 // ── 适配器 Typing Indicator 配置 ─────────────────────────────────────
 
@@ -307,19 +324,18 @@ export class AdapterTypingIndicatorManager {
           try {
             const [type, id] = this.parseSessionId(sessionId);
             const rootPlugin = getPlugin()?.root;
-            const adapterInstance = rootPlugin?.inject(platform as any) as any;
-            const sendOptions = {
+            const adapterInstance = rootPlugin?.inject(platform) as AdapterInstance | undefined;
+            const sendOptions: SendOptions = {
               type: type as 'private' | 'group',
               id,
               context: platform,
               bot: bot.$id,
-              content: [{ type: 'text', data: { text: content } }],
+              content: [{ type: 'text' as const, data: { text: content } }],
             };
             if (adapterInstance && typeof adapterInstance.sendMessage === 'function') {
               return await adapterInstance.sendMessage(sendOptions);
             }
-            const anyBot = bot as any;
-            return await anyBot.$sendMessage(sendOptions);
+            return await bot.$sendMessage(sendOptions);
           } catch (error) {
             console.error(`[${platform}] Failed to send message:`, error);
             return null;
@@ -336,10 +352,11 @@ export class AdapterTypingIndicatorManager {
         // editMessage
         async (messageId: string, content: string) => {
           try {
-            if (typeof (bot as any).$editMessage === 'function') {
-              await (bot as any).$editMessage(messageId, content);
-            } else if (typeof (bot as any).$updateMessage === 'function') {
-              await (bot as any).$updateMessage(messageId, content);
+            const editBot = bot as BotWithEditing;
+            if (typeof editBot.$editMessage === 'function') {
+              await editBot.$editMessage!(messageId, content);
+            } else if (typeof editBot.$updateMessage === 'function') {
+              await editBot.$updateMessage!(messageId, content);
             }
           } catch (error) {
             console.error(`[${platform}] Failed to edit message:`, error);
@@ -357,19 +374,18 @@ export class AdapterTypingIndicatorManager {
           try {
             const [type, id] = this.parseSessionId(sessionId);
             const rootPlugin = getPlugin()?.root;
-            const adapterInstance = rootPlugin?.inject(platform as any) as any;
-            const sendOptions = {
+            const adapterInstance2 = rootPlugin?.inject(platform) as AdapterInstance | undefined;
+            const sendOptions: SendOptions = {
               type: type as 'private' | 'group',
               id,
               context: platform,
               bot: bot.$id,
-              content: [{ type: 'text', data: { text: content } }],
+              content: [{ type: 'text' as const, data: { text: content } }],
             };
-            if (adapterInstance && typeof adapterInstance.sendMessage === 'function') {
-              return await adapterInstance.sendMessage(sendOptions);
+            if (adapterInstance2 && typeof adapterInstance2.sendMessage === 'function') {
+              return await adapterInstance2.sendMessage(sendOptions);
             }
-            const anyBot = bot as any;
-            return await anyBot.$sendMessage(sendOptions);
+            return await bot.$sendMessage(sendOptions);
           } catch (error) {
             console.error(`[${platform}] Failed to send message:`, error);
             return null;
@@ -386,10 +402,11 @@ export class AdapterTypingIndicatorManager {
         // editMessage
         async (messageId: string, content: string) => {
           try {
-            if (typeof (bot as any).$editMessage === 'function') {
-              await (bot as any).$editMessage(messageId, content);
-            } else if (typeof (bot as any).$updateMessage === 'function') {
-              await (bot as any).$updateMessage(messageId, content);
+            const editBot = bot as BotWithEditing;
+            if (typeof editBot.$editMessage === 'function') {
+              await editBot.$editMessage!(messageId, content);
+            } else if (typeof editBot.$updateMessage === 'function') {
+              await editBot.$updateMessage!(messageId, content);
             }
           } catch (error) {
             console.error(`[${platform}] Failed to edit message:`, error);
