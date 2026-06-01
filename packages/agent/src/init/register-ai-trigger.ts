@@ -10,6 +10,7 @@ import type { AIServiceRefs } from './shared-refs.js';
 import { extractMediaParts } from './message-media.js';
 import { renderOutput } from './output-renderer.js';
 import { canAccessTool } from '../orchestrator/tool-selection.js';
+import { inferFileRole } from '../security/file-role-policy.js';
 import { formatCompactLog, truncatePreview } from '@zhin.js/logger';
 import { formatAiHandlerCompleteLog } from '../zhin-agent/turn-metrics.js';
 import {
@@ -104,6 +105,7 @@ export function registerAITrigger(refs: AIServiceRefs): void {
         isGroupOwner: permissions.isGroupOwner,
         isBotAdmin: isOwner || permissions.isBotAdmin,
         isOwner,
+        fileRole: inferFileRole({ isOwner, isBotAdmin: isOwner || permissions.isBotAdmin, isGroupOwner: permissions.isGroupOwner, isGroupAdmin: permissions.isGroupAdmin, senderPermissionLevel: permissionLevel }),
         extra: {
           [SUBAGENT_GOAL_NOTIFY_EXTRA_KEY]: async (goal: string) => {
             await replyOutbound(formatSubagentProcessingMessage(goal));

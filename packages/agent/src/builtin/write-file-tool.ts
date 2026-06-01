@@ -5,6 +5,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { Tool, ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import { checkFileAccess, isBlockedDevicePath } from '../security/file-policy.js';
+import { checkFilePermission, formatFilePermissionMessage } from '../security/file-role-policy.js';
 import { expandHome, nodeErrToFileMessage } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 
@@ -39,7 +40,7 @@ export class WriteFileBuiltinTool extends BuiltinBaseTool {
     );
   }
 
-  async run(args: Record<string, unknown>, _context?: ToolContext): Promise<ToolResult> {
+  async run(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
     const filePathArg = args.file_path;
     const contentArg = args.content;
     if (typeof filePathArg !== 'string' || !filePathArg.trim()) {
@@ -48,6 +49,15 @@ export class WriteFileBuiltinTool extends BuiltinBaseTool {
     if (typeof contentArg !== 'string') {
       return 'Error: content is required';
     }
+
+    const role = context?.fileRole ?? 'owner';
+    const permResult = checkFilePermission(role, 'create', filePathArg);
+    if (!permResult.allowed) {
+      return formatFilePermissionMessage(permResult, 'write_file');
+    }
+    const confirmMsg = formatFilePermissionMessage(permResult, 'write_file');
+    if (confirmMsg) return confirmMsg;
+
     try {
       const fp = expandHome(filePathArg);
       if (isBlockedDevicePath(fp)) {

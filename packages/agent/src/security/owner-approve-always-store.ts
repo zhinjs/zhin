@@ -170,6 +170,8 @@ export function getOwnerToolContextOrUndefined(plugin: Plugin, message: Message<
     senderId: message.$sender.id,
     message,
     scope: 'private',
+    isOwner: true,
+    fileRole: 'owner',
   };
   const ownerId = getBotOwner(plugin, ctx);
   if (ownerId == null || String(message.$sender.id) !== String(ownerId)) return undefined;

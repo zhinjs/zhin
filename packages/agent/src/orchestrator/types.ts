@@ -23,6 +23,12 @@ export interface ResourceEntry<T> {
 // ============================================================================
 
 export type ToolPermissionLevel = 'user' | 'group_admin' | 'group_owner' | 'bot_admin' | 'owner';
+
+/**
+ * 文件操作角色 — 在 IM 场景中对文件操作的权限分级
+ * @see {@link FileRole} in @zhin.js/core for full documentation
+ */
+export type FileRole = 'owner' | 'admin' | 'user';
 export type ToolScope = 'private' | 'group' | 'channel';
 
 export interface ToolParametersSchema extends JsonSchema {
@@ -90,6 +96,8 @@ export interface ToolContext {
   isGroupAdmin?: boolean;
   isGroupOwner?: boolean;
   message?: unknown;
+  /** 文件操作角色 */
+  fileRole?: FileRole;
   /** 与 @zhin.js/core.ToolContext.extra 对齐：供内置工具等读取扩展字段（如 web_search_locale） */
   extra?: Record<string, unknown>;
 }

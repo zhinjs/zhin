@@ -9,6 +9,7 @@ import {
   MAX_EDIT_FILE_SIZE,
   isFileStale,
 } from '../security/file-policy.js';
+import { checkFilePermission, formatFilePermissionMessage } from '../security/file-role-policy.js';
 import { expandHome, nodeErrToFileMessage } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import {
@@ -51,7 +52,7 @@ export class EditFileBuiltinTool extends BuiltinBaseTool {
     );
   }
 
-  async run(args: Record<string, unknown>, _context?: ToolContext): Promise<ToolResult> {
+  async run(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
     const filePathArg = args.file_path;
     const oldStringArg = args.old_string;
     const newStringArg = args.new_string;
@@ -64,6 +65,15 @@ export class EditFileBuiltinTool extends BuiltinBaseTool {
     if (typeof newStringArg !== 'string') {
       return 'Error: new_string is required';
     }
+
+    const role = context?.fileRole ?? 'owner';
+    const permResult = checkFilePermission(role, 'update', filePathArg);
+    if (!permResult.allowed) {
+      return formatFilePermissionMessage(permResult, 'edit_file');
+    }
+    const confirmMsg = formatFilePermissionMessage(permResult, 'edit_file');
+    if (confirmMsg) return confirmMsg;
+
     try {
       const fp = expandHome(filePathArg);
       if (isBlockedDevicePath(fp)) {

@@ -611,6 +611,7 @@ const isNewSession = !(await this.sessions.has(sessionId));
         bootstrapContext: this.bootstrapContext,
         toolSearchDeferredStats: deferredStats,
         platformSections: platformMarkdown,
+        fileRole: contextForTools.fileRole,
       });
       const systemPrompt = `${richPrompt}
 ${contextHint}

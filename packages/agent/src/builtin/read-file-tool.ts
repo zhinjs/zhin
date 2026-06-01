@@ -9,6 +9,7 @@ import {
   isBlockedDevicePath,
   MAX_READ_FILE_SIZE,
 } from '../security/file-policy.js';
+import { checkFilePermission, formatFilePermissionMessage } from '../security/file-role-policy.js';
 import { expandHome, nodeErrToFileMessage } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 
@@ -57,11 +58,18 @@ export class ReadFileBuiltinTool extends BuiltinBaseTool {
     );
   }
 
-  async run(args: Record<string, unknown>, _context?: ToolContext): Promise<ToolResult> {
+  async run(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
     const filePathArg = args.file_path;
     if (typeof filePathArg !== 'string' || !filePathArg.trim()) {
       return 'Error: file_path is required';
     }
+
+    const role = context?.fileRole ?? 'owner';
+    const permResult = checkFilePermission(role, 'read', filePathArg);
+    if (!permResult.allowed) {
+      return formatFilePermissionMessage(permResult, 'read_file');
+    }
+
     try {
       const fp = expandHome(filePathArg);
       if (isBlockedDevicePath(fp)) {

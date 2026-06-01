@@ -1,5 +1,5 @@
 /**
- * bash — Shell 执行（安全检查 + 命令读写分类 + 沙箱保护）
+ * bash — Shell 执行（安全检查 + 命令读写分类 + 沙箱保护 + 文件角色权限）
  */
 import { exec, type ExecOptions } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -8,6 +8,7 @@ import {
   checkBashCommandSafety,
   classifyBashCommand,
 } from '../security/file-policy.js';
+import { checkBashFilePermission, formatFilePermissionMessage } from '../security/file-role-policy.js';
 import { getSandbox } from '../security/sandbox.js';
 import { errMsg } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
@@ -50,12 +51,25 @@ export class BashBuiltinTool extends BuiltinBaseTool {
     this.useSandbox = options?.useSandbox ?? true;
   }
 
-  async run(args: Record<string, unknown>, _context?: ToolContext): Promise<ToolResult> {
+  async run(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
     try {
-      const timeout = (args.timeout as number | undefined) ?? 30000;
       const cmd = String(args.command || '');
+      if (!cmd.trim()) return 'Error: command is required';
+
       const safety = checkBashCommandSafety(cmd);
       if (!safety.safe) return `Error: ${safety.reason}`;
+
+      const role = context?.fileRole ?? 'owner';
+      const filePermResult = checkBashFilePermission(role, cmd);
+      if (!filePermResult.allowed) {
+        return formatFilePermissionMessage(filePermResult, 'bash', `Shell 命令: ${cmd.slice(0, 200)}`);
+      }
+      if (filePermResult.needsOwnerConfirmation || filePermResult.needsConfirmation) {
+        const msg = formatFilePermissionMessage(filePermResult, 'bash', `Shell 命令: ${cmd.slice(0, 200)}`);
+        if (msg) return msg;
+      }
+
+      const timeout = (args.timeout as number | undefined) ?? 30000;
       const classification = classifyBashCommand(cmd);
       const cwd = (args.cwd as string | undefined) || process.cwd();
 

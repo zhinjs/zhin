@@ -24,6 +24,7 @@ export * from './owner-approve-always-store.js';
 export * from './sandbox.js';
 export * from './sandbox-enhanced.js';
 export * from './anomaly-detection.js';
+export * from './file-role-policy.js';
 
 // ── 安全策略工厂 ──────────────────────────────────────────────────────
 

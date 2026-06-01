@@ -278,6 +278,10 @@ export interface ToolContext {
    * 发送者是否为 Zhin 拥有者
    */
   isOwner?: boolean;
+  /**
+   * 文件操作角色 — 用于文件工具的权限控制
+   */
+  fileRole?: FileRole;
   /** 额外数据 */
   extra?: Record<string, any>;
 }
@@ -324,6 +328,14 @@ export type ToolScope = 'private' | 'group' | 'channel';
  * - owner: Zhin 拥有者（最高权限）
  */
 export type ToolPermissionLevel = 'user' | 'group_admin' | 'group_owner' | 'bot_admin' | 'owner';
+
+/**
+ * 文件操作角色 — 在 IM 场景中对文件操作的权限分级
+ * - owner:  增删改查，敏感操作需二次确认
+ * - admin:  增改查（无删），敏感操作需 Owner 确认
+ * - user:   只查（读），危险操作直接拒绝
+ */
+export type FileRole = 'owner' | 'admin' | 'user';
 
 /**
  * 标准化工具返回类型。

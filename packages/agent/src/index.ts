@@ -341,7 +341,7 @@ export {
 export type {
   ToolInput, McpConnection,
   ResourceScope, ResourceEntry,
-  Tool, ToolContext, IMToolContext, ToolPermissionLevel, ToolScope,
+  Tool, ToolContext, IMToolContext, ToolPermissionLevel, ToolScope, FileRole,
   ToolParametersSchema, PropertySchema, ToolJsonSchema,
   Skill, SkillMetadata,
   SubAgentDef, AgentPreset,

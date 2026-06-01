@@ -22,6 +22,7 @@ import { createRestrictedToolView, DEFAULT_SUBAGENT_TOOL_NAMES } from './orchest
 import { createOwnerOrchestratedToolResultTransform } from './orchestrator/owner-confirm-orchestration.js';
 import { runWithDirectAgentExecution } from './security/bash-tool-context.js';
 import type { ToolContext } from '@zhin.js/core';
+import type { FileRole } from './security/file-role-policy.js';
 import { AgentDispatcher, type AgentRole } from './orchestrator/agent-dispatcher.js';
 
 const logger = new Logger(null, 'Subagent');
@@ -36,6 +37,7 @@ export interface SubagentOrigin {
   sceneId: string;
   senderId: string;
   sceneType: string;
+  fileRole?: FileRole;
 }
 
 export interface SpawnOptions {
@@ -235,6 +237,7 @@ export class SubagentManager {
         botId: origin.botId,
         sceneId: origin.sceneId,
         senderId: origin.senderId,
+        fileRole: origin.fileRole,
       };
 
       const agent = createAgent(this.provider, {

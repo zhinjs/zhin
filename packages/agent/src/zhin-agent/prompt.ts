@@ -14,6 +14,7 @@ import { SECTION_SEP, HISTORY_CONTEXT_MARKER, CURRENT_MESSAGE_MARKER } from './c
 import type { ChatMessage } from '@zhin.js/ai';
 import { getFileMemoryContext } from '../bootstrap.js';
 import { PromptBuilder } from './prompt-builder.js';
+import { buildFileRolePrompt, type FileRole } from '../security/file-role-policy.js';
 
 export const FIXED_DISCIPLINE_RULES = [
   'Never claim actions, results, or system state unless confirmed by tool output.',
@@ -73,7 +74,7 @@ export function buildContextHint(context: ToolContext, _content: string): string
   if (context.botId) parts.push(`bot:${context.botId}`);
   if (context.senderId) parts.push(`user:${context.senderId}`);
   if (context.scope) parts.push(`scope:${context.scope}`);
-  if (context.sceneId) parts.push(`scene:${context.sceneId}`);
+  if (context.fileRole) parts.push(`file_role:${context.fileRole}`);
   if (parts.length === 0) return '';
   return `\nContext: ${parts.join(' | ')}`;
 }
@@ -88,6 +89,8 @@ export interface RichSystemPromptContext {
   toolSearchDeferredStats?: string;
   /** Per-platform markdown from AgentPromptContributor (§6c). */
   platformSections?: string;
+  /** 当前用户的文件操作角色，用于提示词注入 */
+  fileRole?: FileRole;
 }
 
 // ── Section builders ──
@@ -156,6 +159,12 @@ function buildSafetySection(): string {
     'Diagnose failures before retrying.',
   ];
   return ['# Safety', ...prependBullets(items)].join('\n');
+}
+
+function buildFileRoleSection(fileRole?: FileRole): string | null {
+  if (!fileRole) return null;
+  const content = buildFileRolePrompt(fileRole);
+  return `# File Permissions\n\n${content}`;
 }
 
 function buildPlatformSection(platformSections: string | undefined): string | null {
@@ -261,6 +270,7 @@ export function describePromptSectionsForDebug(ctx: RichSystemPromptContext): Pr
     ['§1_context', buildContextSection(config)],
     ['§2_style', buildCommunicationSection()],
     ['§3_tools', buildUsingToolsSection(toolSearchActive)],
+    ['§3b_file_role', buildFileRoleSection(ctx.fileRole)],
     ['§4_safety', buildSafetySection()],
     ['§6c_platform', buildPlatformSection(platformSections)],
     ['§6b_deferred', buildToolSearchDeferredSection(toolSearchDeferredStats)],
@@ -285,6 +295,7 @@ export function buildRichSystemPrompt(ctx: RichSystemPromptContext): string {
     buildContextSection(config),
     buildCommunicationSection(),
     buildUsingToolsSection(toolSearchActive),
+    buildFileRoleSection(ctx.fileRole),
     buildSafetySection(),
     buildPlatformSection(platformSections),
     buildToolSearchDeferredSection(toolSearchDeferredStats),
@@ -338,7 +349,20 @@ export function buildRichSystemPromptWithBuilder(ctx: RichSystemPromptContext): 
     memoryPath: `data/memory/MEMORY.md, data/memory/${todayStr}.md`,
   });
 
-  // 3. 安全规则
+  // 3. 文件角色提示词
+  const fileRoleSection = buildFileRoleSection(ctx.fileRole);
+  if (fileRoleSection) {
+    builder.addCustomSection({
+      layer: 'context',
+      title: 'File Permissions',
+      content: fileRoleSection,
+      priority: 85,
+      truncatable: true,
+      maxChars: 1024,
+    });
+  }
+
+  // 4. 安全规则
   builder.addSafetyRules();
 
   // 4. 约束条件
