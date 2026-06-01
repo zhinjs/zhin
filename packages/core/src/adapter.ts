@@ -75,6 +75,7 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
       recv: `${message.$channel.type}(${message.$channel.id})`,
       bot: message.$bot,
       preview: truncatePreview(segment.raw(message.$content)),
+      ...(message.$quote_id ? { quote_id: message.$quote_id } : {}),
     }));
 
     // 背压控制：limit > 0 时启用，超出并发上限丢弃消息并告警

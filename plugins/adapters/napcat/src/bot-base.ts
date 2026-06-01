@@ -10,7 +10,9 @@ import {
   segment,
   Notice,
   Request,
+  type QuotedMessagePayload,
 } from 'zhin.js';
+import { parseOneBotGetMsgResponse } from './onebot-get-msg.js';
 import type { NapCatBotConfig, NapCatMessageEvent, MessageSegment, ApiResponse } from './types.js';
 import type { NapCatAdapter } from './adapter.js';
 import { InboundMessageDeduper, isSelfMessage, normalizeMessage, resolveSideEventDedupeKey } from './napcat-inbound.js';
@@ -35,6 +37,10 @@ export abstract class NapCatBotBase extends EventEmitter implements Bot<NapCatBo
   // ══════════════════════════════════════════════════════════════════
 
   $formatMessage(ev: NapCatMessageEvent): Message<NapCatMessageEvent> {
+    const content = normalizeMessage(ev.message);
+    const quoteId = Message.quoteIdFromContent(content);
+    Message.alignReplySegments(content, quoteId);
+
     const message = Message.from(ev, {
       $id: ev.message_id.toString(),
       $adapter: 'napcat',
@@ -48,7 +54,8 @@ export abstract class NapCatBotBase extends EventEmitter implements Bot<NapCatBo
         id: (ev.group_id || ev.user_id).toString(),
         type: ev.group_id ? 'group' : 'private',
       },
-      $content: normalizeMessage(ev.message),
+      $content: content,
+      $quote_id: quoteId,
       $raw: ev.raw_message,
       $timestamp: ev.time,
       $recall: async () => { await this.deleteMsg(ev.message_id); },
@@ -221,6 +228,12 @@ export abstract class NapCatBotBase extends EventEmitter implements Bot<NapCatBo
   }
   async deleteMsg(messageId: number) { return this.callApi('delete_msg', { message_id: messageId }); }
   async getMsg(messageId: number) { return this.callApi('get_msg', { message_id: messageId }); }
+
+  async $getMsg(messageId: string): Promise<QuotedMessagePayload> {
+    const idParam = /^\d+$/.test(messageId) ? Number(messageId) : messageId;
+    const data = await this.callApi('get_msg', { message_id: idParam });
+    return parseOneBotGetMsgResponse(messageId, data);
+  }
   async getForwardMsg(id: string) { return this.callApi('get_forward_msg', { id }); }
   async sendLike(userId: number, times = 1) { return this.callApi('send_like', { user_id: userId, times }); }
 

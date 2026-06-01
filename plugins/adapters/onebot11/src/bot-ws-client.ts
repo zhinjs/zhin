@@ -4,7 +4,8 @@
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { clearInterval } from 'node:timers';
-import { formatCompact, Bot, Message, Notice, Request, segment, SendOptions } from 'zhin.js';
+import { formatCompact, Bot, Message, Notice, Request, segment, SendOptions, type QuotedMessagePayload } from 'zhin.js';
+import { parseOneBotGetMsgResponse } from './onebot-get-msg.js';
 import type {
   OneBot11WsClientConfig,
   OneBot11Message,
@@ -115,6 +116,10 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11WsClie
   }
 
   $formatMessage(onebotMsg: OneBot11Message) {
+    const content = Array.isArray(onebotMsg.message) ? [...onebotMsg.message] : [];
+    const quoteId = Message.quoteIdFromContent(content);
+    Message.alignReplySegments(content, quoteId);
+
     const message = Message.from(onebotMsg, {
       $id: onebotMsg.message_id.toString(),
       $adapter: 'onebot11',
@@ -127,7 +132,8 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11WsClie
         id: (onebotMsg.group_id || onebotMsg.user_id).toString(),
         type: onebotMsg.group_id ? 'group' : 'private',
       },
-      $content: onebotMsg.message,
+      $content: content,
+      $quote_id: quoteId,
       $raw: onebotMsg.raw_message,
       $timestamp: onebotMsg.time,
       $recall: async () => {
@@ -169,6 +175,12 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11WsClie
 
   async $recallMessage(id: string): Promise<void> {
     await this.callApi('delete_msg', { message_id: parseInt(id) });
+  }
+
+  async $getMsg(messageId: string): Promise<QuotedMessagePayload> {
+    const idParam = /^\d+$/.test(messageId) ? Number(messageId) : messageId;
+    const data = await this.callApi('get_msg', { message_id: idParam });
+    return parseOneBotGetMsgResponse(messageId, data);
   }
 
   async kickMember(groupId: number, userId: number, rejectAddRequest: boolean = false): Promise<boolean> {

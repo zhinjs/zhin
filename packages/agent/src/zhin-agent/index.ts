@@ -62,6 +62,7 @@ import { runWithBashToolContext } from '../security/bash-tool-context.js';
 import {
   buildEnhancedPersona,
   buildContextHint,
+  appendQuoteContextSystemHint,
   buildRichSystemPrompt,
   buildLiteSystemPromptWithPlatform,
   buildUserMessageWithHistory,
@@ -440,7 +441,10 @@ export class ZhinAgent {
     if (allTools.length === 0) {
       logPhase(this.phaseConfig, 'path.chat', sessionId, { toolCount: 0 });
       const liteModel = this.config.chatLiteModel || undefined;
-      const chatSystemPrompt = this.buildDisciplinedPrompt(personaEnhanced);
+      const chatSystemPrompt = appendQuoteContextSystemHint(
+        this.buildDisciplinedPrompt(personaEnhanced),
+        contextForTools,
+      );
       logger.debug(formatCompact( {
         mode: 'chat',
         prompt_chars: chatSystemPrompt.length,
@@ -521,7 +525,10 @@ const isNewSession = !(await this.sessions.has(sessionId));
       logPhase(this.phaseConfig, 'path.pre_exec_fast', sessionId, { toolCount: allTools.length });
       // Fast path
       const tLLM = now();
-      const prompt = this.buildDisciplinedPrompt(buildPreExecFastPathPrompt(personaEnhanced, preData));
+      const prompt = appendQuoteContextSystemHint(
+        this.buildDisciplinedPrompt(buildPreExecFastPathPrompt(personaEnhanced, preData)),
+        contextForTools,
+      );
       logger.debug(formatCompact( { mode: 'fast', prompt_chars: prompt.length }));
       logPhase(this.phaseConfig, 'fast.llm.start', sessionId, { model: chatCandidates[0] || '' });
       const fastResult = await streamChatWithHistory(
@@ -567,9 +574,12 @@ const isNewSession = !(await this.sessions.has(sessionId));
         platformSections: platformMarkdown,
         fileRole: contextForTools.fileRole,
       });
-      const systemPrompt = `${richPrompt}
+      const systemPrompt = appendQuoteContextSystemHint(
+        `${richPrompt}
 ${contextHint}
-${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
+${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`,
+        contextForTools,
+      );
 
       logger.debug(formatCompact( { mode: 'agent', prompt_chars: systemPrompt.length }));
       logger.debug(`[System Prompt Full]\n${systemPrompt}\n---END---`);
@@ -903,10 +913,13 @@ ${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`;
       config: this.config,
       sessionId,
     });
-    const visionSystemPrompt = buildLiteSystemPromptWithPlatform(
-      personaEnhanced,
-      platformMarkdown,
-      buildContextHint(context, textContent),
+    const visionSystemPrompt = appendQuoteContextSystemHint(
+      buildLiteSystemPromptWithPlatform(
+        personaEnhanced,
+        platformMarkdown,
+        buildContextHint(context, textContent),
+      ),
+      context,
     );
     const visionCandidates = resolveModelCandidates(this.provider.models, this.modelRegistry, this.provider.name, this.config, 'vision');
     const { messages: historyMessages, result: pruneResult } = pruneHistoryWithBudget({

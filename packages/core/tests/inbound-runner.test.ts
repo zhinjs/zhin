@@ -60,6 +60,26 @@ describe('runInboundMessage', () => {
     expect(order).toEqual(['middleware', 'dispatcher']);
   });
 
+  it('syncs $quote_id from reply segment before dispatch', async () => {
+    const plugin = new Plugin('/test/plugin.ts');
+    plugin.$contexts.set('dispatcher', {
+      name: 'dispatcher',
+      description: 'mock dispatcher',
+      value: { dispatch: async () => {} },
+    } as any);
+    const message = makeMessage();
+    message.$content = [
+      { type: 'reply', data: { message_id: '777' } },
+      { type: 'text', data: { text: 'hi' } },
+    ];
+    await runInboundMessage({
+      plugin,
+      message,
+      emitAdapterObservers: () => {},
+    });
+    expect(message.$quote_id).toBe('777');
+  });
+
   it('reports dispatched false when no dispatcher is registered', async () => {
     const plugin = new Plugin('/test/plugin.ts');
     const order: string[] = [];

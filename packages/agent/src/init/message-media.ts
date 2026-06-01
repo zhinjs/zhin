@@ -1,4 +1,5 @@
-import type { ContentPart, Message } from '@zhin.js/core';
+import type { ContentPart, Message, QuotedMessagePayload } from '@zhin.js/core';
+import { Message as MessageNs } from '@zhin.js/core';
 
 /**
  * Extract multimodal ContentPart[] from a Message's structured $content segments.
@@ -71,5 +72,31 @@ export function extractMediaParts(message: Message<any>): ContentPart[] {
   }
 
   return parts;
+}
+
+/** 从已拉取的引用消息 payload 提取多模态部分（如被引消息里的图片） */
+export function extractMediaPartsFromQuotedPayload(
+  payload: QuotedMessagePayload,
+  adapter: Message<any>['$adapter'] = 'process',
+): ContentPart[] {
+  if (!payload.content || !Array.isArray(payload.content) || !payload.content.length) {
+    return [];
+  }
+  const stub = MessageNs.from(
+    {},
+    {
+      $id: payload.messageId,
+      $adapter: adapter,
+      $bot: '',
+      $content: payload.content,
+      $sender: { id: payload.sender?.id ?? '' },
+      $reply: async () => payload.messageId,
+      $recall: async () => {},
+      $channel: { id: '', type: 'private' },
+      $timestamp: payload.time ?? 0,
+      $raw: payload.raw ?? '',
+    },
+  );
+  return extractMediaParts(stub);
 }
 

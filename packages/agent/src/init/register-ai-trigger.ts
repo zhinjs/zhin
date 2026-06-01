@@ -2,12 +2,26 @@
  * Register AI trigger handler via the core MessageDispatcher inbound pipeline.
  */
 import './types.js';
-import { getPlugin, inferSenderPermissions, isAtBot, mergeAITriggerConfig, Message, parseRichMediaContent, segment, shouldTriggerAI } from '@zhin.js/core';
+import {
+  getPlugin,
+  inferSenderPermissions,
+  isAtBot,
+  mergeAITriggerConfig,
+  Message,
+  parseRichMediaContent,
+  prependQuoteContext,
+  QUOTE_CONTEXT_SYSTEM_EXTRA_KEY,
+  QUOTE_CONTEXT_SYSTEM_HINT,
+  QUOTED_MESSAGE_CONTEXT_MARKER,
+  resolveQuotedMessagePayload,
+  segment,
+  shouldTriggerAI,
+} from '@zhin.js/core';
+import { extractMediaParts, extractMediaPartsFromQuotedPayload } from './message-media.js';
 import type { Plugin, Tool, ToolContext } from '@zhin.js/core';
 import type { ContentPart } from '@zhin.js/core';
 import type { OutputElement } from '@zhin.js/ai';
 import type { AIServiceRefs } from './shared-refs.js';
-import { extractMediaParts } from './message-media.js';
 import { renderOutput } from './output-renderer.js';
 import { canAccessTool } from '../orchestrator/tool-selection.js';
 import { inferFileRole } from '../security/file-role-policy.js';
@@ -134,7 +148,21 @@ export function registerAITrigger(refs: AIServiceRefs): void {
         if (!refs.zhinAgent) {
           throw new Error('ZhinAgent is not initialized');
         }
-        const mediaParts = extractMediaParts(message);
+        let mediaParts = extractMediaParts(message);
+        if (message.$quote_id && triggerConfig.resolveQuotedMessages) {
+          const quoted = await resolveQuotedMessagePayload(message, root, {
+            enabled: true,
+          });
+          if (quoted) {
+            const fromQuote = extractMediaPartsFromQuotedPayload(
+              quoted,
+              message.$adapter,
+            );
+            if (fromQuote.length) {
+              mediaParts = [...fromQuote, ...mediaParts];
+            }
+          }
+        }
         let elements: OutputElement[];
         let firstChunkMs = 0;
         const onChunk: (chunk: string, full: string) => void = (_chunk, _full) => {
@@ -143,13 +171,22 @@ export function registerAITrigger(refs: AIServiceRefs): void {
             logger.debug(formatCompactLog('AI Handler', { first_token_ms: Math.round(firstChunkMs) }));
           }
         };
+        const aiContent = await prependQuoteContext(message, root, content, {
+          enabled: triggerConfig.resolveQuotedMessages,
+        });
+        if (aiContent.includes(QUOTED_MESSAGE_CONTEXT_MARKER)) {
+          toolContext.extra = {
+            ...toolContext.extra,
+            [QUOTE_CONTEXT_SYSTEM_EXTRA_KEY]: QUOTE_CONTEXT_SYSTEM_HINT,
+          };
+        }
         if (mediaParts.length > 0) {
           const parts: ContentPart[] = [];
-          if (content) parts.push({ type: 'text', text: content });
+          if (aiContent) parts.push({ type: 'text', text: aiContent });
           parts.push(...mediaParts);
           elements = await refs.zhinAgent.processMultimodal(parts, toolContext, onChunk);
         } else {
-          elements = await refs.zhinAgent.process(content, toolContext, externalTools, onChunk);
+          elements = await refs.zhinAgent.process(aiContent, toolContext, externalTools, onChunk);
         }
         const responseText = renderOutput(elements);
 

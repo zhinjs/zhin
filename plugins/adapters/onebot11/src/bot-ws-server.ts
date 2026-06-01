@@ -5,7 +5,8 @@ import WebSocket, { WebSocketServer } from 'ws';
 import { EventEmitter } from 'events';
 import { clearInterval } from 'node:timers';
 import { IncomingMessage } from 'http';
-import { formatCompact, Bot, Message, Notice, Request, segment, SendOptions } from 'zhin.js';
+import { formatCompact, Bot, Message, Notice, Request, segment, SendOptions, type QuotedMessagePayload } from 'zhin.js';
+import { parseOneBotGetMsgResponse } from './onebot-get-msg.js';
 import type { Router } from '@zhin.js/http';
 import type {
   OneBot11WsServerConfig,
@@ -110,6 +111,10 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11WsServ
       id: [onebotMsg.self_id, (onebotMsg.group_id || onebotMsg.user_id)].join(':'),
       type: (onebotMsg.group_id ? 'group' : 'private') as 'group' | 'private',
     };
+    const content = Array.isArray(onebotMsg.message) ? [...onebotMsg.message] : [];
+    const quoteId = Message.quoteIdFromContent(content);
+    Message.alignReplySegments(content, quoteId);
+
     const message = Message.from(onebotMsg, {
       $id: msgId,
       $adapter: 'onebot11',
@@ -119,7 +124,8 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11WsServ
         name: onebotMsg.user_id.toString(),
       },
       $channel: channel,
-      $content: onebotMsg.message,
+      $content: content,
+      $quote_id: quoteId,
       $raw: onebotMsg.raw_message,
       $timestamp: onebotMsg.time,
       $recall: async (): Promise<void> => await this.$recallMessage(msgId),
@@ -163,6 +169,13 @@ export class OneBot11WsServer extends EventEmitter implements Bot<OneBot11WsServ
   async $recallMessage(id: string): Promise<void> {
     const [self_id, message_id] = id.split(':');
     await this.callApi(self_id, 'delete_msg', { message_id: parseInt(message_id) });
+  }
+
+  async $getMsg(messageId: string): Promise<QuotedMessagePayload> {
+    const selfId = this.getFirstSelfId();
+    const idParam = /^\d+$/.test(messageId) ? Number(messageId) : messageId;
+    const data = await this.callApi(selfId, 'get_msg', { message_id: idParam });
+    return parseOneBotGetMsgResponse(messageId, data);
   }
 
   private getFirstSelfId(): string {

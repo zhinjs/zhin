@@ -5,6 +5,11 @@ import {
   isIcqqMessagePostType,
   normalizeIcqqInboundMessage,
   resolveIcqqInboundMessageId,
+  resolveInboundContent,
+  resolveIcqqQuoteIdFromEvent,
+  findIcqqNestedMessageSource,
+  resolveQuoteIdFromIcqqSource,
+  quotedPayloadFromIcqqSource,
   shouldSkipSelfInboundMessage,
   unwrapIcqqIpcEventPayload,
 } from "../src/icqq-inbound.js";
@@ -48,6 +53,131 @@ describe("isIcqqMessagePostType", () => {
         time: 100,
       }),
     ).toBe(true);
+  });
+});
+
+describe("IcqqMessageEvent.source", () => {
+  it("resolveQuoteIdFromIcqqSource 读取 message_id", () => {
+    expect(
+      resolveQuoteIdFromIcqqSource({
+        message_id: "YunIUgAArBE+Jdi2ahlnsgA=",
+        time: 100,
+        seq: 1,
+      }),
+    ).toBe("YunIUgAArBE+Jdi2ahlnsgA=");
+  });
+
+  it("resolveIcqqQuoteIdFromEvent 优先 source", () => {
+    expect(
+      resolveIcqqQuoteIdFromEvent({
+        post_type: "message",
+        user_id: 1,
+        time: 100,
+        message_type: "group",
+        source: { message_id: "quoted-id-1" },
+      } as any),
+    ).toBe("quoted-id-1");
+  });
+
+  it("findIcqqNestedMessageSource 从嵌套 data 找到 source", () => {
+    const nested = {
+      post_type: "message",
+      message_type: "group",
+      group_id: 1,
+      user_id: 2,
+      time: 1,
+      data: {
+        detail: {
+          source: {
+            message_id: "nested-quote-id",
+            raw_message: "被引用的图",
+            message: [{ type: "image", url: "https://example.com/a.jpg" }],
+          },
+        },
+      },
+    };
+    expect(findIcqqNestedMessageSource(nested)?.message_id).toBe(
+      "nested-quote-id",
+    );
+    expect(resolveIcqqQuoteIdFromEvent(nested as any)).toBe("nested-quote-id");
+  });
+
+  it("NT source 仅有 seq/rand + 字符串 message 时仍可解析引用", () => {
+    const source = {
+      user_id: 8596238,
+      time: 1780306134,
+      seq: 6127,
+      rand: 1260414771,
+      message: "抱歉，我无法查看您发送的图片。",
+    };
+    expect(resolveQuoteIdFromIcqqSource(source)).toBe("6127:1260414771");
+    const p = quotedPayloadFromIcqqSource(source);
+    expect(p?.messageId).toBe("6127:1260414771");
+    expect(p?.content).toEqual([
+      { type: "text", data: { text: "抱歉，我无法查看您发送的图片。" } },
+    ]);
+    expect(
+      resolveIcqqQuoteIdFromEvent({
+        post_type: "message",
+        user_id: 1659488338,
+        time: 1780306622,
+        message_type: "group",
+        group_id: 201193925,
+        source,
+      } as any),
+    ).toBe("6127:1260414771");
+  });
+
+  it("quotedPayloadFromIcqqSource 解析正文", () => {
+    const p = quotedPayloadFromIcqqSource({
+      message_id: "q1",
+      raw_message: "被引用的文字",
+      sender: { user_id: 2, nickname: "Alice" },
+    });
+    expect(p?.messageId).toBe("q1");
+    expect(p?.content).toEqual([
+      { type: "text", data: { text: "被引用的文字" } },
+    ]);
+  });
+
+  it("resolveInboundContent 从 source 补 reply 段", () => {
+    const content = resolveInboundContent({
+      post_type: "message",
+      user_id: 1,
+      time: 100,
+      message_type: "group",
+      group_id: 1,
+      message: [{ type: "text", text: "这是什么" }],
+      raw_message: "这是什么",
+      source: { message_id: "src-msg-id", raw_message: "原消息" },
+    } as any);
+    expect(content[0].type).toBe("reply");
+    expect(content[0].data).toMatchObject({ id: "src-msg-id" });
+  });
+});
+
+describe("resolveInboundContent", () => {
+  it("message 段无 reply 时从 raw_message 的 [reply:id] 合并", () => {
+    const content = resolveInboundContent({
+      post_type: "message",
+      user_id: 1,
+      time: 100,
+      message_type: "group",
+      group_id: 860669870,
+      message: [
+        { type: "at", qq: "907624307" },
+        { type: "at", qq: "8596238" },
+        { type: "text", text: "这是什么" },
+      ],
+      raw_message: "[reply:M0zHrrS7mJ0AC8rBcOxj/moZcDUB]@907624307 @8596238 这是什么",
+    } as any);
+    expect(content[0]).toEqual({
+      type: "reply",
+      data: {
+        id: "M0zHrrS7mJ0AC8rBcOxj/moZcDUB",
+        message_id: "M0zHrrS7mJ0AC8rBcOxj/moZcDUB",
+      },
+    });
   });
 });
 

@@ -47,6 +47,7 @@ export function resolveSkillInstructionMaxChars(config: Required<ZhinAgentConfig
 
 export const SECTION_SEP = '\n\n---\n\n';
 export const HISTORY_CONTEXT_MARKER = '[Chat messages since your last reply - for context]';
+/** 与 @zhin.js/core `CURRENT_USER_MESSAGE_MARKER` 保持一致 */
 export const CURRENT_MESSAGE_MARKER = '[Current message - respond to this]';
 
 export const PERM_MAP: Record<string, number> = PERMISSION_LEVEL_PRIORITY;

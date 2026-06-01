@@ -4,7 +4,7 @@
  * 不再直接依赖 @icqqjs/icqq 协议库。
  * 登录由 `icqq login` 完成，本 Bot 只负责连接守护进程并收发消息。
  */
-import { formatCompact, Bot, Message, segment, SendContent, SendOptions } from 'zhin.js';
+import { formatCompact, Bot, Message, segment, SendContent, SendOptions, type QuotedMessagePayload } from 'zhin.js';
 import type {
   IcqqBotConfig,
   IcqqSenderInfo,
@@ -17,9 +17,13 @@ import { IpcClient } from "./ipc-client.js";
 import { Actions, type IpcEvent } from "./protocol.js";
 import type { IcqqIpcMessageEvent } from "./icqq-inbound.js";
 import {
+  findIcqqNestedMessageSource,
   InboundMessageDeduper,
   isIcqqMessagePostType,
   normalizeIcqqInboundMessage,
+  quotedPayloadFromIcqqSource,
+  resolveIcqqQuoteIdFromEvent,
+  resolveQuoteIdFromIcqqSource,
   shouldSkipSelfInboundMessage,
   unwrapIcqqIpcEventPayload,
   type NormalizedIcqqInbound,
@@ -42,6 +46,8 @@ import {
   type IcqqIpcRawEvent,
 } from "./icqq-side-events.js";
 import { enableTypingIndicator, type ICQQTypingIndicatorManager } from "./typing-indicator.js";
+import { parseIcqqGetMsgResponse } from "./get-msg.js";
+import { enrichQuotedPayloadWithForward, isForwardPlaceholderPayload } from "./forward-msg.js";
 
 export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
   $connected = false;
@@ -56,6 +62,8 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
   private subscriptions: Array<{ unsubscribe: () => Promise<void> }> = [];
   /** 事件去重：覆盖多端回流/服务端重复推送等场景 */
   private readonly inboundDeduper = new InboundMessageDeduper();
+  /** MessageEvent.source 解析结果，供 $getMsg 优先命中 */
+  private readonly quotedSourceCache = new Map<string, QuotedMessagePayload>();
   /** 用户主动断开时为 true，阻止自动重连 */
   private intentionalDisconnect = false;
   /** 是否已有重连循环在跑（避免多次 schedule 叠套） */
@@ -348,12 +356,23 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
       return;
     }
 
+    void this.dispatchInboundMessage(data, normalized);
+  }
+
+  private async dispatchInboundMessage(
+    data: IcqqIpcMessageEvent,
+    normalized: NormalizedIcqqInbound,
+  ): Promise<void> {
     this.logIpcInboundPayload(data, normalized);
+
+    await this.primeQuotedSourceCache(
+      data.source ?? findIcqqNestedMessageSource(data),
+    );
 
     const message = this.$formatMessage(normalized);
     this.adapter.emit("message.receive", message);
     this.logger.debug(
-      `${this.$id} recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`,
+      `${this.$id} recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}${message.$quote_id ? ` quote_id=${message.$quote_id}` : ""}`,
     );
   }
 
@@ -424,7 +443,7 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
     const keys = Object.keys(ext);
     const idHints: Record<string, unknown> = {};
     for (const key of keys) {
-      if (/message|msg|seq|id/i.test(key)) {
+      if (/message|msg|seq|id|source/i.test(key)) {
         idHints[key] = ext[key];
       }
     }
@@ -457,6 +476,11 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
       name: normalized.nickname,
     };
 
+    const quoteId =
+      Message.quoteIdFromContent(normalized.content) ??
+      resolveIcqqQuoteIdFromEvent(normalized.raw);
+    Message.alignReplySegments(normalized.content, quoteId);
+
     const result = Message.from(raw, {
       $id: normalized.messageId,
       $adapter: "icqq" as const,
@@ -467,6 +491,7 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
         type: normalized.channelType,
       },
       $content: normalized.content,
+      $quote_id: quoteId,
       $raw: normalized.rawMessage,
       $timestamp: normalized.timestampMs,
       $recall: async () => {
@@ -501,6 +526,85 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
       },
     });
     return result;
+  }
+
+  /**
+   * 有 source.message_id 时用 get_msg 拉全量正文；否则仅用 source 内联摘要。
+   */
+  private async primeQuotedSourceCache(source: unknown): Promise<void> {
+    if (!source) return;
+    const quoteId = resolveQuoteIdFromIcqqSource(source);
+    const s = source as { message_id?: unknown };
+    const hasCanonicalId =
+      quoteId &&
+      s.message_id != null &&
+      String(s.message_id).trim() === quoteId;
+
+    if (hasCanonicalId) {
+      try {
+        await this.fetchQuotedMessagePayload(quoteId);
+        return;
+      } catch (e: unknown) {
+        this.logger.debug(
+          formatCompact({
+            op: "quote_get_msg",
+            message_id: quoteId,
+            ok: false,
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+      }
+    }
+
+    const sourcePayload = quotedPayloadFromIcqqSource(source);
+    if (!sourcePayload) return;
+    const enriched = await enrichQuotedPayloadWithForward(
+      this.ipc,
+      sourcePayload,
+    );
+    this.quotedSourceCache.set(enriched.messageId, enriched);
+  }
+
+  private async fetchQuotedMessagePayload(
+    messageId: string,
+  ): Promise<QuotedMessagePayload> {
+    const resp = await this.ipc.request(Actions.GET_MSG, {
+      message_id: messageId,
+    });
+    if (!resp.ok) {
+      throw new Error(resp.error ?? "get_msg failed");
+    }
+    const payload = parseIcqqGetMsgResponse(messageId, resp.data);
+    const enriched = await enrichQuotedPayloadWithForward(
+      this.ipc,
+      payload,
+      resp.data,
+    );
+    if (
+      isForwardPlaceholderPayload(enriched) &&
+      !String(
+        Array.isArray(enriched.content)
+          ? segment.raw(enriched.content)
+          : enriched.content ?? "",
+      ).includes("[Merged chat history")
+    ) {
+      this.logger.debug(
+        formatCompact({
+          op: "forward_unresolved",
+          message_id: messageId,
+        }),
+      );
+    }
+    this.quotedSourceCache.set(messageId, enriched);
+    return enriched;
+  }
+
+  async $getMsg(messageId: string): Promise<QuotedMessagePayload> {
+    const cached = this.quotedSourceCache.get(messageId);
+    if (cached) {
+      return enrichQuotedPayloadWithForward(this.ipc, cached);
+    }
+    return this.fetchQuotedMessagePayload(messageId);
   }
 
   // ── 撤回 ───────────────────────────────────────────────────────────

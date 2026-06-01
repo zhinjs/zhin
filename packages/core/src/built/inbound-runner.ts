@@ -2,13 +2,13 @@
  * Inbound runner — one ordered entry for IM message.receive processing.
  */
 
-import type { Message } from '../message.js';
+import { Message, type Message as MessageType } from '../message.js';
 import type { Plugin } from '../plugin.js';
 import type { MessageDispatcherService } from './dispatcher.js';
 
 export interface RunInboundMessageOptions {
   plugin?: Plugin | null;
-  message: Message<any>;
+  message: MessageType<any>;
   emitAdapterObservers: () => void;
 }
 
@@ -34,6 +34,7 @@ function getDispatcher(plugin?: Plugin | null): MessageDispatcherService | undef
  */
 export async function runInboundMessage(options: RunInboundMessageOptions): Promise<InboundRunResult> {
   const { plugin, message, emitAdapterObservers } = options;
+  Message.syncQuoteId(message);
   const dispatcher = getDispatcher(plugin);
   const root = plugin?.root;
 

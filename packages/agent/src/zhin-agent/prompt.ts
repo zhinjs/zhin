@@ -6,6 +6,7 @@
  */
 
 import * as os from 'node:os';
+import { QUOTE_CONTEXT_SYSTEM_EXTRA_KEY } from '@zhin.js/core';
 import type { ContentPart } from '@zhin.js/ai';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { ToolContext } from '../orchestrator/types.js';
@@ -466,4 +467,11 @@ export function buildLiteSystemPromptWithPlatform(
   const hint = contextHint?.trim();
   if (hint) parts.push(hint);
   return parts.join('\n\n');
+}
+
+/** 本轮有引用消息时追加说明；不写入常驻 system 模板，避免每轮无引用也膨胀 */
+export function appendQuoteContextSystemHint(prompt: string, context?: ToolContext): string {
+  const hint = context?.extra?.[QUOTE_CONTEXT_SYSTEM_EXTRA_KEY];
+  if (typeof hint !== 'string' || !hint.trim()) return prompt;
+  return `${prompt.trim()}\n\n${hint.trim()}`;
 }

@@ -10,6 +10,7 @@ import {
   SendContent,
   MessageSegment,
   segment,
+  type QuotedMessagePayload,
 } from "zhin.js";
 import type { TelegramBotConfig, TelegramSenderInfo } from "./types.js";
 import type { TelegramAdapter } from "./adapter.js";
@@ -18,6 +19,8 @@ export class TelegramBot extends Telegraf implements Bot<TelegramBotConfig, Tele
   $connected: boolean = false;
   /** message_id -> chat_id，用于在仅有 message_id 的场景执行 reaction 操作 */
   private readonly messageChatMap = new Map<string, string>();
+  /** reply_to_message 解析结果缓存，供 $getMsg 使用 */
+  private readonly quotedPayloadCache = new Map<string, QuotedMessagePayload>();
 
   get pluginLogger() {
     return this.adapter.plugin.logger;
@@ -112,6 +115,8 @@ export class TelegramBot extends Telegraf implements Bot<TelegramBotConfig, Tele
 
     // Parse message content
     const content = this.parseMessageContent(msg);
+    const quoteId = Message.quoteIdFromContent(content);
+    Message.alignReplySegments(content, quoteId);
 
     const result = Message.from(msg, {
       $id: msg.message_id.toString(),
@@ -126,6 +131,7 @@ export class TelegramBot extends Telegraf implements Bot<TelegramBotConfig, Tele
         type: channelType,
       },
       $content: content,
+      $quote_id: quoteId,
       $raw: "text" in msg ? msg.text || "" : "",
       $timestamp: msg.date * 1000,
       $recall: async () => {
@@ -160,6 +166,31 @@ export class TelegramBot extends Telegraf implements Bot<TelegramBotConfig, Tele
     this.messageChatMap.set(result.$id, channelId);
 
     return result;
+  }
+
+  async $getMsg(messageId: string): Promise<QuotedMessagePayload> {
+    const hit = this.quotedPayloadCache.get(messageId);
+    if (!hit) {
+      throw new Error(`Telegram quoted message ${messageId} is not cached`);
+    }
+    return hit;
+  }
+
+  private cacheQuotedTelegramMessage(msg: TelegramMessage): void {
+    const segments = this.parseMessageContent(msg);
+    const payload: QuotedMessagePayload = {
+      messageId: msg.message_id.toString(),
+      sender: msg.from
+        ? {
+            id: msg.from.id.toString(),
+            name: msg.from.username || msg.from.first_name,
+          }
+        : undefined,
+      content: segments,
+      raw: "text" in msg ? msg.text : undefined,
+      time: msg.date,
+    };
+    this.quotedPayloadCache.set(payload.messageId, payload);
   }
 
   private $formatCallbackQuery(ctx: TelegrafContext): Message<any> {
@@ -211,11 +242,11 @@ export class TelegramBot extends Telegraf implements Bot<TelegramBotConfig, Tele
     if ("text" in msg && msg.text) {
       // Check for reply
       if (msg.reply_to_message) {
+        this.cacheQuotedTelegramMessage(msg.reply_to_message);
+        const replyId = msg.reply_to_message.message_id.toString();
         segments.push({
           type: "reply",
-          data: {
-            id: msg.reply_to_message.message_id.toString(),
-          },
+          data: { id: replyId, message_id: replyId },
         });
       }
 

@@ -5,6 +5,18 @@ export * from './command.js'
 export * from './component.js'
 export * from './adapter.js'
 export * from './message.js'
+export { quoteIdFromContent, quoteIdFromRaw, syncQuoteId, alignReplySegments } from './message-quote.js'
+export {
+  prependQuoteContext,
+  resolveQuotedMessagePayload,
+  resolveQuoteContextBlock,
+  buildUserTurnWithQuoteContext,
+  formatQuoteContextBlock,
+  QUOTED_MESSAGE_CONTEXT_MARKER,
+  CURRENT_USER_MESSAGE_MARKER,
+  QUOTE_CONTEXT_SYSTEM_HINT,
+  QUOTE_CONTEXT_SYSTEM_EXTRA_KEY,
+} from './built/prepend-quote-context.js'
 export * from './notice.js'
 export * from './request.js'
 export * from './prompt.js'

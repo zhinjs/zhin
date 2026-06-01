@@ -64,6 +64,20 @@ export type MaybeArray<T>=T|T[]
  */
 export type SendContent=MaybeArray<string|MessageElement>
 
+/** $getMsg 返回的被引用消息载荷 */
+export interface QuotedMessagePayload {
+  messageId: string;
+  sender?: { id?: string; name?: string };
+  content: MessageElement[] | string;
+  raw?: string;
+  time?: number;
+}
+
+/** 支持按 message_id 拉取历史消息的 Bot（可选实现） */
+export interface QuotableBot {
+  $getMsg(messageId: string): Promise<QuotedMessagePayload>;
+}
+
 /** 出站回复来源（指令 / AI），仅当经 MessageDispatcher.replyWithPolish 发出时由框架填入异步上下文 */
 export type OutboundReplySource = 'command' | 'ai'
 
