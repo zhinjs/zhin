@@ -43,24 +43,69 @@ function resolveExecAllowlistFromAiService(plugin: ReturnType<typeof getPlugin>)
   return allowlist.map((v) => String(v)).filter(Boolean);
 }
 
-function resolveRoleFromContext(context?: ToolContext): { role: ToolRequesterRole; plugin?: ReturnType<typeof getPlugin> } {
-  if (!context?.platform || !context?.botId || !context?.senderId) {
-    return { role: 'unknown' };
+function hasToolIdentity(context?: ToolContext): boolean {
+  return Boolean(context?.platform && context?.botId && context?.senderId);
+}
+
+function resolveRoleFromContext(context?: ToolContext): {
+  role: ToolRequesterRole;
+  plugin?: ReturnType<typeof getPlugin>;
+  hasIdentity: boolean;
+} {
+  const hasIdentity = hasToolIdentity(context);
+  if (!hasIdentity) {
+    return { role: 'unknown', hasIdentity: false };
   }
   try {
     const plugin = getPlugin();
-    return { role: resolveToolRequesterRole(plugin, context), plugin };
+    return {
+      role: resolveToolRequesterRole(plugin, context!),
+      plugin,
+      hasIdentity: true,
+    };
   } catch {
-    return { role: 'unknown' };
+    return {
+      role: resolveRoleFromToolContextFallback(context!),
+      hasIdentity: true,
+    };
   }
 }
 
+/** getPlugin 不可用时，从 ToolContext 上的 IM 标记推断角色（测试/降级路径） */
+function resolveRoleFromToolContextFallback(context: ToolContext): ToolRequesterRole {
+  if (context.isOwner === true) return 'owner';
+  if (context.isBotAdmin === true) return 'admin';
+  if (context.fileRole === 'owner') return 'owner';
+  if (context.fileRole === 'admin') return 'admin';
+  if (context.fileRole === 'user') return 'other';
+  return 'unknown';
+}
+
+function denyUnidentifiedTool(toolName: string): DangerousToolDecision {
+  return {
+    allowed: false,
+    role: 'unknown',
+    reason: `无法确认调用者身份：工具「${toolName}」已拒绝。`,
+  };
+}
+
 export function checkFileToolAccess(toolName: FileToolName, context?: ToolContext): DangerousToolDecision {
-  const { role } = resolveRoleFromContext(context);
+  const { role, hasIdentity } = resolveRoleFromContext(context);
   const op = FILE_TOOL_OPERATION[toolName];
 
-  if (role === 'owner' || role === 'unknown') {
+  if (role === 'owner') {
     return { allowed: true, role };
+  }
+
+  if (!hasIdentity) {
+    return { allowed: true, role: 'unknown' };
+  }
+
+  if (role === 'unknown') {
+    if (op === 'read') {
+      return { allowed: true, role };
+    }
+    return denyUnidentifiedTool(toolName);
   }
 
   if (role === 'admin') {
@@ -118,10 +163,19 @@ export function checkSensitiveFilePathAccess(toolName: FileToolName, filePath: s
 }
 
 export function checkDangerousToolAccess(toolName: 'write_file' | 'edit_file' | 'web_fetch', context?: ToolContext): DangerousToolDecision {
-  const { role, plugin } = resolveRoleFromContext(context);
+  const { role, plugin, hasIdentity } = resolveRoleFromContext(context);
+
+  if (!hasIdentity) {
+    return { allowed: true, role: 'unknown' };
+  }
+
   try {
     if (role === 'owner') {
       return { allowed: true, role };
+    }
+
+    if (role === 'unknown') {
+      return denyUnidentifiedTool(toolName);
     }
 
     if (role === 'admin') {
@@ -145,9 +199,9 @@ export function checkDangerousToolAccess(toolName: 'write_file' | 'edit_file' | 
       };
     }
 
-    return { allowed: true, role: 'unknown' };
+    return denyUnidentifiedTool(toolName);
   } catch {
-    return { allowed: true, role: 'unknown' };
+    return denyUnidentifiedTool(toolName);
   }
 }
 

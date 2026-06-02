@@ -103,7 +103,12 @@ describe('WebFetchBuiltinTool', () => {
     mockPlugin('owner1', ['admin1'], []);
     vi.stubGlobal('fetch', vi.fn());
     const inst = new WebFetchBuiltinTool();
-    const ctx = { platform: 'icqq', botId: 'bot1', senderId: 'admin1' } as ToolContext;
+    const ctx = {
+      platform: 'icqq',
+      botId: 'bot1',
+      senderId: 'admin1',
+      isBotAdmin: true,
+    } as ToolContext;
     const out = String(await inst.run({ url: 'https://example.com/' }, ctx));
     expect(out.startsWith('ZHIN_NEEDS_OWNER:\n')).toBe(true);
     expect(globalThis.fetch).not.toHaveBeenCalled();
@@ -113,7 +118,12 @@ describe('WebFetchBuiltinTool', () => {
     mockPlugin('owner1', ['admin1'], []);
     vi.stubGlobal('fetch', vi.fn());
     const inst = new WebFetchBuiltinTool();
-    const ctx = { platform: 'icqq', botId: 'bot1', senderId: 'user1' } as ToolContext;
+    const ctx = {
+      platform: 'icqq',
+      botId: 'bot1',
+      senderId: 'user1',
+      fileRole: 'user',
+    } as ToolContext;
     const out = String(await inst.run({ url: 'https://example.com/' }, ctx));
     expect(out).toMatch(/^Error:/);
     expect(globalThis.fetch).not.toHaveBeenCalled();

@@ -97,7 +97,12 @@ describe('EditFileBuiltinTool', () => {
     const fp = path.join(tmpDir, 'role-edit.txt');
     fs.writeFileSync(fp, 'before', 'utf-8');
     const inst = new EditFileBuiltinTool();
-    const ctx = { platform: 'icqq', botId: 'bot1', senderId: 'admin1' } as ToolContext;
+    const ctx = {
+      platform: 'icqq',
+      botId: 'bot1',
+      senderId: 'admin1',
+      isBotAdmin: true,
+    } as ToolContext;
     const out = String(await inst.run({ file_path: fp, old_string: 'before', new_string: 'after' }, ctx));
     expect(out.startsWith('ZHIN_NEEDS_OWNER:\n')).toBe(true);
     expect(fs.readFileSync(fp, 'utf-8')).toBe('before');
@@ -108,7 +113,12 @@ describe('EditFileBuiltinTool', () => {
     const fp = path.join(tmpDir, 'role-edit-deny.txt');
     fs.writeFileSync(fp, 'before', 'utf-8');
     const inst = new EditFileBuiltinTool();
-    const ctx = { platform: 'icqq', botId: 'bot1', senderId: 'user1' } as ToolContext;
+    const ctx = {
+      platform: 'icqq',
+      botId: 'bot1',
+      senderId: 'user1',
+      fileRole: 'user',
+    } as ToolContext;
     const out = String(await inst.run({ file_path: fp, old_string: 'before', new_string: 'after' }, ctx));
     expect(out).toMatch(/^Error:/);
     expect(fs.readFileSync(fp, 'utf-8')).toBe('before');

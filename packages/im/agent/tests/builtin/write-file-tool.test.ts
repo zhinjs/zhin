@@ -85,7 +85,12 @@ describe('WriteFileBuiltinTool', () => {
     mockPlugin('owner1', ['admin1'], []);
     const fp = path.join(tmpDir, 'blocked-by-role.txt');
     const inst = new WriteFileBuiltinTool();
-    const ctx = { platform: 'icqq', botId: 'bot1', senderId: 'admin1' } as ToolContext;
+    const ctx = {
+      platform: 'icqq',
+      botId: 'bot1',
+      senderId: 'admin1',
+      isBotAdmin: true,
+    } as ToolContext;
     const out = String(await inst.run({ file_path: fp, content: 'x' }, ctx));
     expect(out.startsWith('ZHIN_NEEDS_OWNER:\n')).toBe(true);
     expect(fs.existsSync(fp)).toBe(false);
@@ -95,7 +100,12 @@ describe('WriteFileBuiltinTool', () => {
     mockPlugin('owner1', ['admin1'], []);
     const fp = path.join(tmpDir, 'deny-by-role.txt');
     const inst = new WriteFileBuiltinTool();
-    const ctx = { platform: 'icqq', botId: 'bot1', senderId: 'user1' } as ToolContext;
+    const ctx = {
+      platform: 'icqq',
+      botId: 'bot1',
+      senderId: 'user1',
+      fileRole: 'user',
+    } as ToolContext;
     const out = String(await inst.run({ file_path: fp, content: 'x' }, ctx));
     expect(out).toMatch(/^Error:/);
     expect(fs.existsSync(fp)).toBe(false);
@@ -105,7 +115,12 @@ describe('WriteFileBuiltinTool', () => {
     mockPlugin('owner1', ['admin1'], []);
     const fp = path.join(tmpDir, 'owner-allowed.txt');
     const inst = new WriteFileBuiltinTool();
-    const ctx = { platform: 'icqq', botId: 'bot1', senderId: 'owner1' } as ToolContext;
+    const ctx = {
+      platform: 'icqq',
+      botId: 'bot1',
+      senderId: 'owner1',
+      isOwner: true,
+    } as ToolContext;
     const out = String(await inst.run({ file_path: fp, content: 'owner-ok' }, ctx));
     expect(out).toContain('Wrote');
     expect(fs.readFileSync(fp, 'utf-8')).toBe('owner-ok');
@@ -115,7 +130,12 @@ describe('WriteFileBuiltinTool', () => {
     mockPlugin('owner1', ['admin1'], ['write_file']);
     const fp = path.join(tmpDir, 'admin-allowlisted.txt');
     const inst = new WriteFileBuiltinTool();
-    const ctx = { platform: 'icqq', botId: 'bot1', senderId: 'admin1' } as ToolContext;
+    const ctx = {
+      platform: 'icqq',
+      botId: 'bot1',
+      senderId: 'admin1',
+      isBotAdmin: true,
+    } as ToolContext;
     const out = String(await inst.run({ file_path: fp, content: 'allowlisted' }, ctx));
     expect(out).toContain('Wrote');
     expect(fs.readFileSync(fp, 'utf-8')).toBe('allowlisted');
