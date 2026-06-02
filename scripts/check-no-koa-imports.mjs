@@ -7,10 +7,12 @@ import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");
 const pluginsDir = path.join(root, "plugins");
-/** http 插件内部 Koa 仅用于 Console API 回落 */
-const allowPaths = new Set([
-  path.join(pluginsDir, "services", "http", "src", "index.ts"),
-]);
+/** host-router 插件内部允许直接 import koa */
+const hostRouterSrc = path.join(root, "packages", "host", "router", "src");
+function isHostRouterInternal(file) {
+  const rel = path.relative(hostRouterSrc, file);
+  return rel && !rel.startsWith("..") && !path.isAbsolute(rel);
+}
 const bad = /from\s+['"]koa['"]|require\s*\(\s*['"]koa['"]\s*\)/;
 
 function walk(dir, out = []) {
@@ -30,11 +32,11 @@ function walk(dir, out = []) {
 const violations = [];
 for (const file of walk(pluginsDir)) {
   const text = fs.readFileSync(file, "utf8");
-  if (bad.test(text) && !allowPaths.has(file)) violations.push(path.relative(root, file));
+  if (bad.test(text) && !isHostRouterInternal(file)) violations.push(path.relative(root, file));
 }
 
 if (violations.length) {
-  console.error("Koa imports found in plugins (use @zhin.js/http RouterContext):");
+  console.error("Koa imports found in plugins (use @zhin.js/host-router RouterContext):");
   for (const v of violations) console.error("  " + v);
   process.exit(1);
 }

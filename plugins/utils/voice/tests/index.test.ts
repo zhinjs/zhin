@@ -3,7 +3,7 @@
  * 测试 STT/TTS provider 选择逻辑和工具注册
  */
 import { describe, it, expect } from 'vitest';
-import { ZhinTool } from '../../../../packages/core/src/built/tool.js';
+import { ZhinTool } from '../../../../packages/im/core/src/built/tool.js';
 
 describe('voice 插件工具定义', () => {
   // 模拟 TTS 工具定义

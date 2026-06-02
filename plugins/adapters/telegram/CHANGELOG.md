@@ -10,7 +10,7 @@
   - @zhin.js/client@1.1.4
   - zhin.js@1.0.86
   - @zhin.js/console@3.0.5
-  - @zhin.js/http@1.0.79
+  - @zhin.js/host-router@1.0.79
 
 ## 2.0.4
 
@@ -19,7 +19,7 @@
 - zhin.js@1.0.85
 - @zhin.js/logger@0.1.67
 - @zhin.js/console@3.0.4
-- @zhin.js/http@1.0.78
+- @zhin.js/host-router@1.0.78
 
 ## 2.0.3
 
@@ -32,7 +32,7 @@
   - zhin.js@1.0.84
   - @zhin.js/logger@0.1.66
   - @zhin.js/client@1.1.3
-  - @zhin.js/http@1.0.77
+  - @zhin.js/host-router@1.0.77
 
 ## 2.0.2
 
@@ -41,7 +41,7 @@
 - 775427e: fix: edge 支持
 - Updated dependencies [775427e]
   - @zhin.js/console@3.0.2
-  - @zhin.js/http@1.0.76
+  - @zhin.js/host-router@1.0.76
   - @zhin.js/client@1.1.2
   - zhin.js@1.0.83
   - @zhin.js/logger@0.1.65
@@ -53,7 +53,7 @@
 - 32049f5: fix: init publish
 - Updated dependencies [32049f5]
   - @zhin.js/console@3.0.1
-  - @zhin.js/http@1.0.75
+  - @zhin.js/host-router@1.0.75
   - @zhin.js/logger@0.1.64
   - @zhin.js/client@1.1.1
   - zhin.js@1.0.82
@@ -74,7 +74,7 @@
   - zhin.js@1.0.81
   - @zhin.js/logger@0.1.63
   - @zhin.js/console@2.0.24
-  - @zhin.js/http@1.0.74
+  - @zhin.js/host-router@1.0.74
 
 ## 1.0.68
 
@@ -83,7 +83,7 @@
 - zhin.js@1.0.80
 - @zhin.js/logger@0.1.62
 - @zhin.js/console@2.0.23
-- @zhin.js/http@1.0.73
+- @zhin.js/host-router@1.0.73
 
 ## 1.0.67
 
@@ -92,7 +92,7 @@
 - zhin.js@1.0.79
 - @zhin.js/logger@0.1.61
 - @zhin.js/console@2.0.22
-- @zhin.js/http@1.0.72
+- @zhin.js/host-router@1.0.72
 
 ## 1.0.66
 
@@ -102,7 +102,7 @@
   - @zhin.js/console@2.0.21
   - zhin.js@1.0.78
   - @zhin.js/logger@0.1.60
-  - @zhin.js/http@1.0.71
+  - @zhin.js/host-router@1.0.71
 
 ## 1.0.65
 
@@ -111,7 +111,7 @@
 - zhin.js@1.0.77
 - @zhin.js/logger@0.1.59
 - @zhin.js/console@2.0.20
-- @zhin.js/http@1.0.70
+- @zhin.js/host-router@1.0.70
 
 ## 1.0.64
 
@@ -121,7 +121,7 @@
   - zhin.js@1.0.76
   - @zhin.js/logger@0.1.58
   - @zhin.js/console@2.0.19
-  - @zhin.js/http@1.0.69
+  - @zhin.js/host-router@1.0.69
 
 ## 1.0.63
 
@@ -130,7 +130,7 @@
 - zhin.js@1.0.75
 - @zhin.js/logger@0.1.57
 - @zhin.js/console@2.0.18
-- @zhin.js/http@1.0.68
+- @zhin.js/host-router@1.0.68
 
 ## 1.0.62
 
@@ -140,7 +140,7 @@
   - zhin.js@1.0.74
   - @zhin.js/logger@0.1.56
   - @zhin.js/console@2.0.17
-  - @zhin.js/http@1.0.67
+  - @zhin.js/host-router@1.0.67
 
 ## 1.0.61
 
@@ -150,7 +150,7 @@
   - zhin.js@1.0.73
   - @zhin.js/logger@0.1.55
   - @zhin.js/console@2.0.16
-  - @zhin.js/http@1.0.66
+  - @zhin.js/host-router@1.0.66
 
 ## 1.0.60
 
@@ -177,7 +177,7 @@
   - @zhin.js/client@1.0.18
   - zhin.js@1.0.72
   - @zhin.js/console@2.0.13
-  - @zhin.js/http@1.0.65
+  - @zhin.js/host-router@1.0.65
 
 ## 1.0.57
 
@@ -196,7 +196,7 @@
   - @zhin.js/client@1.0.17
   - zhin.js@1.0.71
   - @zhin.js/console@2.0.11
-  - @zhin.js/http@1.0.64
+  - @zhin.js/host-router@1.0.64
 
 ## 1.0.55
 
@@ -205,14 +205,14 @@
 - zhin.js@1.0.68
 - @zhin.js/logger@0.1.52
 - @zhin.js/console@2.0.10
-- @zhin.js/http@1.0.63
+- @zhin.js/host-router@1.0.63
 
 ## 1.0.54
 
 ### Patch Changes
 
 - Updated dependencies [0eba6d6]
-  - @zhin.js/http@1.0.62
+  - @zhin.js/host-router@1.0.62
   - zhin.js@1.0.67
   - @zhin.js/logger@0.1.51
   - @zhin.js/console@2.0.9
@@ -224,7 +224,7 @@
 - zhin.js@1.0.66
 - @zhin.js/logger@0.1.50
 - @zhin.js/console@2.0.8
-- @zhin.js/http@1.0.61
+- @zhin.js/host-router@1.0.61
 
 ## 1.0.52
 
@@ -233,7 +233,7 @@
 - zhin.js@1.0.65
 - @zhin.js/logger@0.1.49
 - @zhin.js/console@2.0.7
-- @zhin.js/http@1.0.60
+- @zhin.js/host-router@1.0.60
 
 ## 1.0.51
 
@@ -245,7 +245,7 @@
   - @zhin.js/client@1.0.16
   - zhin.js@1.0.64
   - @zhin.js/console@2.0.6
-  - @zhin.js/http@1.0.59
+  - @zhin.js/host-router@1.0.59
 
 ## 1.0.50
 
@@ -254,7 +254,7 @@
 - ba30934: fix: web 优化
 - Updated dependencies [ba30934]
   - @zhin.js/console@2.0.5
-  - @zhin.js/http@1.0.58
+  - @zhin.js/host-router@1.0.58
   - zhin.js@1.0.63
   - @zhin.js/logger@0.1.47
 

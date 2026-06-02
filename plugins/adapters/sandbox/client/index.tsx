@@ -1,4 +1,4 @@
-import type { PluginRegisterHostApi } from '@zhin.js/console-types'
+import type { PluginRegisterHostApi } from '@zhin.js/contract'
 import Sandbox from './Sandbox'
 
 export function register(api: PluginRegisterHostApi) {

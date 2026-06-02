@@ -11,9 +11,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 
 const scanRoots = [
-  'packages/zhin/src',
-  'packages/agent/src',
+  'packages/im/zhin/src',
+  'packages/im/agent/src',
   'plugins/features',
+  'packages/host',
   'plugins/services',
   'plugins/utils',
   'plugins/games',

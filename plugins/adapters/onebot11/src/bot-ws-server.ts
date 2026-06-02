@@ -7,7 +7,7 @@ import { clearInterval } from 'node:timers';
 import { IncomingMessage } from 'http';
 import { formatCompact, Bot, Message, Notice, Request, segment, SendOptions, type QuotedMessagePayload } from 'zhin.js';
 import { parseOneBotGetMsgResponse } from './onebot-get-msg.js';
-import type { Router } from '@zhin.js/http';
+import type { Router } from '@zhin.js/host-router';
 import type {
   OneBot11WsServerConfig,
   OneBot11Message,

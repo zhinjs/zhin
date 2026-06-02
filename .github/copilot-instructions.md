@@ -13,7 +13,7 @@
 - TypeScript 导入本地文件时通常必须带 .js 扩展名。
 - usePlugin() 应在模块顶层调用，不要放进异步函数或延迟初始化路径。
 - 任何 IM 出站发送都必须走统一链路：Message.$reply 或 Adapter.sendMessage → renderSendMessage → before.sendMessage → 平台 Bot；不要旁路发送。
-- 修改架构或仓库结构前，先看 docs/architecture/README.md、docs/architecture-overview.md 和 docs/contributing/repo-structure.md，避免违反分层和目录约定。队列运行时为 Beta，见 docs/architecture/queue-roadmap.md 与 docs/architecture/queue/CONTEXT.md。
+- 修改架构或仓库结构前，先看 docs/architecture/README.md、docs/architecture-overview.md 和 docs/contributing/repo-structure.md，避免违反分层和目录约定。
 
 **关键要点**：
 - `$sendMessage` 必须返回消息 ID
@@ -48,7 +48,7 @@ const MyComp = defineComponent(async function MyComp(
 - 使用 `.js` 扩展名导入 TS 文件: `import { foo } from './bar.js'`
 - TypeScript 配置使用 `moduleResolution: "bundler"`
 - 核心包别名: `@zhin.js/core`, `@zhin.js/logger`, `@zhin.js/database`
-- **类型定义**: 所有类型现在统一在 `@zhin.js/core` 中 (`packages/core/src/types.ts`)
+- **类型定义**: 所有类型现在统一在 `@zhin.js/core` 中 (`packages/im/core/src/types.ts`)
 - **注意**: `console` 插件使用 `moduleResolution: "nodenext"` (Vite 兼容性)
 ### 2. 类型扩展
 通过模块声明扩展全局类型 (在 `@zhin.js/core` 中定义)：
@@ -148,7 +148,7 @@ pnpm --filter @zhin.js/core build
 # 构建流程（CI 中的实际顺序）
 # 1. basic/** (logger, schema, cli, database)
 # 2. packages/** (core, client, zhin, create-zhin)  
-# 3. plugins/services/** (http, console, mcp)
+# 3. packages/host/** (host-router, host-api, mcp)
 # 4. plugins/adapters/** (icqq, kook, discord, qq, onebot11, process)
 # 5. plugins/utils/** (music, sensitive-filter 等工具插件)
 ```
@@ -540,7 +540,7 @@ async function setup() {
 **按以下顺序进行重构**（从高到低）：
 1. **packages/** - 核心框架层，所有插件的基础
    - core, client, create-zhin, zhin
-2. **plugins/services/** - 基础服务插件，其他插件的依赖
+2. **packages/host/** - Host 运行时（router / api / mcp），其他插件常作 peer 依赖
    - http, console, mcp
 3. **plugins/adapters/** - 平台适配器
    - process (已内置到 core), icqq, kook, discord, qq, onebot11, telegram, slack 等
@@ -675,17 +675,16 @@ declare module 'zhin.js' {
 
 ## 插件系统
 
-### HTTP 插件 (`@zhin.js/http`)
-- 基于 Koa.js 的 HTTP 服务器
-- 提供 `koa`、`router`、`server` 三个 Context
-- 默认端口 8086，支持 Token 认证（Bearer / Query）
-- 内置 API: `/api/adapters`, `/api/system/status`, `/api/plugins`
+### Host Router (`@zhin.js/host-router`)
+- Koa + `Router`（`useContext('router')` 挂路由）、Bearer、CORS
+- 提供 `koa`、`router`、`server` Context；配置段 **`http:`**（port/token/base）
+- 公开路由：`GET /pub/health`、`GET /pub/openapi.json`
 
-### Console 插件 (`@zhin.js/console`)
-- Host 侧 **仅 Console API**（`serveClientHost: false`）；UI 在 **Remote Console**（[console.zhin.dev](https://console.zhin.dev) / 仓库 `zhin-console`）
-- 提供 `web` Context（`PageManager`），适配器经 `addEntry` 注册扩展；`GET /entries` 供 Remote UI 拉取
-- SSE `/api/events`、RPC `POST /api/console/request`
-- 见 `docs/console-remote.md`、`examples/test-bot/REMOTE_CONSOLE.md`
+### Host API (`@zhin.js/host-api`)
+- 管理面 REST（plugins/bots/config 等）、Console RPC/SSE、`PageManager` / `GET /entries`
+- Host **无内置 SPA**（`serveClientHost: false`）；UI 在 **Remote Console**（[console.zhin.dev](https://console.zhin.dev) / `zhin-console`）
+- 需与 `@zhin.js/host-router` 同启
+- 见 `docs/console-remote.md`
 
 ### Client 插件 (`@zhin.js/client`)
 - React Router 7 + Redux 状态管理

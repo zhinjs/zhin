@@ -45,15 +45,17 @@
     "@zhin.js/cli": "workspace:*",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
-    "@zhin.js/console": "workspace:*",
+    "@zhin.js/host-api": "workspace:*",
+    "@zhin.js/contract": "workspace:*",
     "lucide-react": "^1.17.0",
     "typescript": "^6.0.3",
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {
     "@zhin.js/client": "workspace:*",
-    "@zhin.js/console": "workspace:*",
-    "@zhin.js/http": "workspace:*",
+    "@zhin.js/host-api": "workspace:*",
+    "@zhin.js/contract": "workspace:*",
+    "@zhin.js/host-router": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "zhin.js": "workspace:*"
   },
@@ -61,10 +63,10 @@
     "@zhin.js/client": {
       "optional": true
     },
-    "@zhin.js/http": {
+    "@zhin.js/host-router": {
       "optional": true
     },
-    "@zhin.js/console": {
+    "@zhin.js/host-api": {
       "optional": true
     }
   },

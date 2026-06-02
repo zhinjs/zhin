@@ -25,7 +25,7 @@ user-invocable: true
 
 ## 参考适配器
 
-开发前先阅读 `plugins/adapters/` 下已有适配器的实际实现，尤其是 `process`（最简）和 `icqq`（完整 WebSocket + HTTP API）。关键源码入口见 `packages/core/src/adapter.ts` 和 `packages/core/src/bot.ts`。
+开发前先阅读 `plugins/adapters/` 下已有适配器的实际实现，尤其是 `process`（最简）和 `icqq`（完整 WebSocket + HTTP API）。关键源码入口见 `packages/im/core/src/adapter.ts` 和 `packages/im/core/src/bot.ts`。
 
 ## 关键约定
 

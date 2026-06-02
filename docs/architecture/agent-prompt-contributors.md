@@ -8,9 +8,11 @@
 
 - `AgentPromptSlot`: `orchestrator` | `deferred_worker`
 - `AgentPromptContributor`: `platform` + `buildSections` + 可选 `matchesDeferredTask` / `selectDeferredTools`
-- 类型定义：[`packages/core/src/agent-prompt.ts`](../../packages/core/src/agent-prompt.ts)
+- 类型定义：[`packages/im/core/src/agent-prompt.ts`](../../packages/im/core/src/agent-prompt.ts)
 
 ## 注册
+
+**勿**从其它插件 `import '@zhin.js/adapter-xxx'` 拉运行时符号（会执行适配器 `index` 的 `provide`/`mounted` 副作用，导致 `AgentPromptContributor` 重复注册）。插件 `client/` 契约类型用 `@zhin.js/contract`；工具类请用适配器子路径（如 `@zhin.js/adapter-github/gh-client`）。
 
 适配器在 `provide.mounted` 中：
 

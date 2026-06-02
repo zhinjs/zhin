@@ -1,4 +1,4 @@
-import type { PluginRegisterHostApi } from '@zhin.js/console-types';
+import type { PluginRegisterHostApi } from '@zhin.js/contract';
 import NapCatManagement from './NapCatManagement';
 
 export function register(api: PluginRegisterHostApi) {

@@ -44,11 +44,11 @@
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {
-    "@zhin.js/http": "workspace:*",
+    "@zhin.js/host-router": "workspace:*",
     "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {
-    "@zhin.js/http": {
+    "@zhin.js/host-router": {
       "optional": false
     }
   },

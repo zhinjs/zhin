@@ -7,7 +7,7 @@ import { formatCompact } from 'zhin.js';
 import { NapCatBotBase } from './bot-base.js';
 import type { NapCatHttpConfig, ApiResponse } from './types.js';
 import type { NapCatAdapter } from './adapter.js';
-import { registerFetchRoute, type Router, type RouterContext } from '@zhin.js/http/router';
+import { registerFetchRoute, type Router, type RouterContext } from '@zhin.js/host-router/router';
 import * as crypto from 'crypto';
 import { enableTypingIndicator } from './typing-indicator.js';
 

@@ -11,6 +11,11 @@
       "development": "./src/index.ts",
       "import": "./lib/index.js"
     },
+    "./gh-client": {
+      "types": "./lib/gh-client.d.ts",
+      "development": "./src/gh-client.ts",
+      "import": "./lib/gh-client.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -48,11 +53,11 @@
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {
-    "@zhin.js/http": "workspace:*",
+    "@zhin.js/host-router": "workspace:*",
     "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {
-    "@zhin.js/http": {
+    "@zhin.js/host-router": {
       "optional": true
     }
   },

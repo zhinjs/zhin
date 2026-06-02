@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { EventEmitter } from 'events';
 import { Adapter, Bot, Message, Plugin, segment, SendOptions, SendContent, MessageType } from 'zhin.js';
-import { createAdapterTestSuite } from '../../../../packages/core/tests/adapter-harness.js';
+import { createAdapterTestSuite } from '../../../../packages/im/core/tests/adapter-harness.js';
 
 const FIXED_TS = 1700000000000;
 

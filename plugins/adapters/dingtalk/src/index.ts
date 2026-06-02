@@ -7,7 +7,7 @@ import { DingTalkAdapter } from "./adapter.js";
 declare module "zhin.js" {
   namespace Plugin {
     interface Contexts {
-      router: import("@zhin.js/http").Router;
+      router: import("@zhin.js/host-router").Router;
     }
   }
   interface Adapters {

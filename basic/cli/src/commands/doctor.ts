@@ -265,8 +265,8 @@ async function createDefaultConfig(cwd: string): Promise<void> {
     name: sandbox-bot
 plugins:
   - "@zhin.js/adapter-sandbox"
-  - "@zhin.js/http"
-  - "@zhin.js/console"
+  - "@zhin.js/host-router"
+  - "@zhin.js/host-api"
 http:
   token: \${HTTP_TOKEN}
 `;

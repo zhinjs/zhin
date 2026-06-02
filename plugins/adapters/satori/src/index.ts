@@ -2,7 +2,7 @@
  * Satori 适配器入口：单一适配器，支持 WS / Webhook，协议文档 https://satori.chat/zh-CN/introduction.html
  */
 import { usePlugin, type Plugin, type Context } from 'zhin.js';
-import type { Router } from '@zhin.js/http';
+import type { Router } from '@zhin.js/host-router';
 import { SatoriAdapter } from './adapter.js';
 
 export * from './types.js';
@@ -15,7 +15,7 @@ export { SatoriAdapter, type SatoriBot } from './adapter.js';
 declare module 'zhin.js' {
   namespace Plugin {
     interface Contexts {
-      router: import('@zhin.js/http').Router;
+      router: import('@zhin.js/host-router').Router;
     }
   }
   interface Adapters {

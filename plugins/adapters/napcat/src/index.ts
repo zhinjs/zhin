@@ -14,8 +14,8 @@ import {
   registerAgentPromptContributor,
   unregisterAgentPromptContributor,
 } from 'zhin.js';
-import type { Router } from '@zhin.js/http';
-import { PageManager } from '@zhin.js/console';
+import type { Router } from '@zhin.js/host-router';
+import { PageManager } from '@zhin.js/host-api';
 import { NapCatAdapter } from './adapter.js';
 import { createNapCatTools } from './tools.js';
 import { createNapCatAgentPromptContributor } from './agent-prompt.js';

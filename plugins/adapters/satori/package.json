@@ -51,10 +51,10 @@
   },
   "peerDependencies": {
     "zhin.js": "workspace:*",
-    "@zhin.js/http": "workspace:*"
+    "@zhin.js/host-router": "workspace:*"
   },
   "peerDependenciesMeta": {
-    "@zhin.js/http": {
+    "@zhin.js/host-router": {
       "optional": true
     }
   }

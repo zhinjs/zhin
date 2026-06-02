@@ -6,7 +6,7 @@
 - npm 或 pnpm
 - 可访问的域名或公网IP
 - SSL证书（推荐，微信要求HTTPS）
-- `@zhin.js/http` 插件（必须）
+- `@zhin.js/host-router` 插件（必须）
 
 ## 部署步骤
 

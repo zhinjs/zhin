@@ -24,7 +24,7 @@ Zhin.js NapCatQQ 适配器，支持 OneBot11 标准 + go-cqhttp 扩展 + NapCat 
 pnpm add @zhin.js/adapter-napcat ws
 ```
 
-反向 WS / HTTP 模式需同时启用 `@zhin.js/http`。
+反向 WS / HTTP 模式需同时启用 `@zhin.js/host-router`。
 
 ## 配置
 
@@ -50,7 +50,7 @@ bots:
 
 ```yaml
 plugins:
-  - "@zhin.js/http"
+  - "@zhin.js/host-router"
   - "@zhin.js/adapter-napcat"
 
 bots:
@@ -66,7 +66,7 @@ bots:
 
 ```yaml
 plugins:
-  - "@zhin.js/http"
+  - "@zhin.js/host-router"
   - "@zhin.js/adapter-napcat"
 
 bots:

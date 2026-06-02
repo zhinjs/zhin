@@ -20,10 +20,10 @@ Zhin.js [Milky](https://milky.ntqqrev.org/) 协议适配器，**一个适配器*
 pnpm add @zhin.js/adapter-milky ws eventsource
 ```
 
-适配器依赖 `@zhin.js/http` 提供的 `router` 才能注册（Webhook/反向 WS 需挂路由），请同时启用 HTTP 服务：
+适配器依赖 `@zhin.js/host-router` 提供的 `router` 才能注册（Webhook/反向 WS 需挂路由），请同时启用 HTTP 服务：
 
 ```bash
-pnpm add @zhin.js/http
+pnpm add @zhin.js/host-router
 ```
 
 ## 配置
@@ -34,7 +34,7 @@ pnpm add @zhin.js/http
 
 ```yaml
 plugins:
-  - "@zhin.js/http"
+  - "@zhin.js/host-router"
   - "@zhin.js/adapter-milky"
 
 bots:
@@ -145,7 +145,7 @@ addCommand(new MessageCommand('pic')
 - `ws` - WebSocket 客户端/服务端
 - `eventsource` - SSE 客户端
 - `zhin.js` - Zhin 核心
-- `@zhin.js/http` - 提供 router，适配器注册依赖
+- `@zhin.js/host-router` - 提供 router，适配器注册依赖
 
 ## 开发
 

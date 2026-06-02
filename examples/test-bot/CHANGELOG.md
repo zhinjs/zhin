@@ -32,7 +32,7 @@
   - @zhin.js/adapter-telegram@2.0.5
   - @zhin.js/adapter-wechat-mp@0.1.74
   - @zhin.js/console@3.0.5
-  - @zhin.js/http@1.0.79
+  - @zhin.js/host-router@1.0.79
   - @zhin.js/mcp@1.0.68
   - @zhin.js/plugin-60s@0.0.24
   - @zhin.js/plugin-group-suite@0.1.1
@@ -66,7 +66,7 @@
 - @zhin.js/adapter-telegram@2.0.4
 - @zhin.js/adapter-wechat-mp@0.1.73
 - @zhin.js/console@3.0.4
-- @zhin.js/http@1.0.78
+- @zhin.js/host-router@1.0.78
 - @zhin.js/mcp@1.0.67
 - @zhin.js/plugin-60s@0.0.23
 - @zhin.js/plugin-checkin@0.0.20
@@ -112,7 +112,7 @@
   - @zhin.js/adapter-slack@1.0.69
   - @zhin.js/adapter-telegram@2.0.3
   - @zhin.js/adapter-wechat-mp@0.1.72
-  - @zhin.js/http@1.0.77
+  - @zhin.js/host-router@1.0.77
   - @zhin.js/mcp@1.0.66
   - @zhin.js/plugin-60s@0.0.22
   - @zhin.js/plugin-checkin@0.0.19
@@ -151,7 +151,7 @@
   - @zhin.js/adapter-icqq@3.0.2
   - @zhin.js/adapter-kook@2.0.2
   - @zhin.js/adapter-lark@1.0.87
-  - @zhin.js/http@1.0.76
+  - @zhin.js/host-router@1.0.76
   - @zhin.js/plugin-checkin@0.0.18
   - @zhin.js/mcp@1.0.65
   - @zhin.js/adapter-qq@2.0.2
@@ -179,7 +179,7 @@
   - @zhin.js/adapter-satori@0.0.32
   - @zhin.js/adapter-milky@0.0.32
   - @zhin.js/adapter-lark@1.0.86
-  - @zhin.js/http@1.0.75
+  - @zhin.js/host-router@1.0.75
   - @zhin.js/cli@1.0.78
   - @zhin.js/client@1.1.1
   - zhin.js@1.0.82
@@ -251,7 +251,7 @@
   - @zhin.js/adapter-telegram@1.0.69
   - @zhin.js/adapter-wechat-mp@0.1.69
   - @zhin.js/console@2.0.24
-  - @zhin.js/http@1.0.74
+  - @zhin.js/host-router@1.0.74
   - @zhin.js/plugin-60s@0.0.19
   - @zhin.js/plugin-checkin@0.0.16
   - @zhin.js/plugin-group-daily-analysis@0.0.30
@@ -288,7 +288,7 @@
   - @zhin.js/adapter-telegram@1.0.68
   - @zhin.js/adapter-wechat-mp@0.1.68
   - @zhin.js/console@2.0.23
-  - @zhin.js/http@1.0.73
+  - @zhin.js/host-router@1.0.73
   - @zhin.js/mcp@1.0.62
   - @zhin.js/plugin-60s@0.0.18
   - @zhin.js/plugin-checkin@0.0.15
@@ -335,7 +335,7 @@
   - @zhin.js/adapter-telegram@1.0.67
   - @zhin.js/adapter-wechat-mp@0.1.67
   - @zhin.js/console@2.0.22
-  - @zhin.js/http@1.0.72
+  - @zhin.js/host-router@1.0.72
   - @zhin.js/mcp@1.0.61
   - @zhin.js/plugin-60s@0.0.17
   - @zhin.js/plugin-checkin@0.0.14
@@ -373,7 +373,7 @@
   - @zhin.js/adapter-satori@0.0.28
   - @zhin.js/adapter-slack@1.0.63
   - @zhin.js/adapter-wechat-mp@0.1.66
-  - @zhin.js/http@1.0.71
+  - @zhin.js/host-router@1.0.71
   - @zhin.js/mcp@1.0.60
   - @zhin.js/plugin-60s@0.0.16
   - @zhin.js/plugin-checkin@0.0.13
@@ -409,7 +409,7 @@
 - @zhin.js/adapter-telegram@1.0.65
 - @zhin.js/adapter-wechat-mp@0.1.65
 - @zhin.js/console@2.0.20
-- @zhin.js/http@1.0.70
+- @zhin.js/host-router@1.0.70
 - @zhin.js/mcp@1.0.59
 - @zhin.js/plugin-60s@0.0.15
 - @zhin.js/plugin-checkin@0.0.12
@@ -449,7 +449,7 @@
   - @zhin.js/adapter-telegram@1.0.64
   - @zhin.js/adapter-wechat-mp@0.1.64
   - @zhin.js/console@2.0.19
-  - @zhin.js/http@1.0.69
+  - @zhin.js/host-router@1.0.69
   - @zhin.js/mcp@1.0.58
   - @zhin.js/plugin-60s@0.0.14
   - @zhin.js/plugin-checkin@0.0.11
@@ -486,7 +486,7 @@
 - @zhin.js/adapter-telegram@1.0.63
 - @zhin.js/adapter-wechat-mp@0.1.63
 - @zhin.js/console@2.0.18
-- @zhin.js/http@1.0.68
+- @zhin.js/host-router@1.0.68
 - @zhin.js/mcp@1.0.57
 - @zhin.js/plugin-60s@0.0.13
 - @zhin.js/plugin-checkin@0.0.10
@@ -525,7 +525,7 @@
   - @zhin.js/adapter-telegram@1.0.62
   - @zhin.js/adapter-wechat-mp@0.1.62
   - @zhin.js/console@2.0.17
-  - @zhin.js/http@1.0.67
+  - @zhin.js/host-router@1.0.67
   - @zhin.js/mcp@1.0.56
   - @zhin.js/plugin-60s@0.0.12
   - @zhin.js/plugin-checkin@0.0.9
@@ -571,7 +571,7 @@
   - @zhin.js/adapter-github@0.1.44
   - @zhin.js/adapter-icqq@2.0.17
   - @zhin.js/console@2.0.16
-  - @zhin.js/http@1.0.66
+  - @zhin.js/host-router@1.0.66
   - @zhin.js/mcp@1.0.55
   - @zhin.js/plugin-html-renderer@0.0.51
   - @zhin.js/sensitive-filter@0.0.58
@@ -639,7 +639,7 @@
   - @zhin.js/adapter-telegram@1.0.58
   - @zhin.js/adapter-wechat-mp@0.1.60
   - @zhin.js/console@2.0.13
-  - @zhin.js/http@1.0.65
+  - @zhin.js/host-router@1.0.65
   - @zhin.js/plugin-60s@0.0.10
   - @zhin.js/plugin-checkin@0.0.7
   - @zhin.js/plugin-group-daily-analysis@0.0.21
@@ -693,7 +693,7 @@
   - @zhin.js/adapter-telegram@1.0.56
   - @zhin.js/adapter-wechat-mp@0.1.59
   - @zhin.js/console@2.0.11
-  - @zhin.js/http@1.0.64
+  - @zhin.js/host-router@1.0.64
   - @zhin.js/mcp@1.0.53
   - @zhin.js/plugin-60s@0.0.9
   - @zhin.js/plugin-checkin@0.0.6
@@ -716,7 +716,7 @@
   - @zhin.js/adapter-kook@1.0.71
   - @zhin.js/adapter-qq@1.0.71
   - @zhin.js/adapter-telegram@1.0.56
-  - @zhin.js/http@1.0.64
+  - @zhin.js/host-router@1.0.64
   - @zhin.js/adapter-icqq@2.0.12
   - @zhin.js/adapter-sandbox@2.0.11
   - @zhin.js/console@2.0.11
@@ -775,7 +775,7 @@
   - @zhin.js/adapter-telegram@1.0.55
   - @zhin.js/adapter-wechat-mp@0.1.58
   - @zhin.js/console@2.0.10
-  - @zhin.js/http@1.0.63
+  - @zhin.js/host-router@1.0.63
   - @zhin.js/mcp@1.0.52
   - @zhin.js/plugin-60s@0.0.8
   - @zhin.js/plugin-checkin@0.0.5
@@ -794,7 +794,7 @@
 
 - 0eba6d6: fix: 完善生命周期,确保生产稳定
 - Updated dependencies [0eba6d6]
-  - @zhin.js/http@1.0.62
+  - @zhin.js/host-router@1.0.62
   - @zhin.js/adapter-dingtalk@1.0.57
   - @zhin.js/adapter-discord@1.0.72
   - @zhin.js/adapter-github@0.1.39
@@ -848,7 +848,7 @@
 - @zhin.js/adapter-telegram@1.0.53
 - @zhin.js/adapter-wechat-mp@0.1.56
 - @zhin.js/console@2.0.8
-- @zhin.js/http@1.0.61
+- @zhin.js/host-router@1.0.61
 - @zhin.js/mcp@1.0.50
 - @zhin.js/plugin-60s@0.0.8
 - @zhin.js/plugin-checkin@0.0.5
@@ -884,7 +884,7 @@
   - @zhin.js/adapter-telegram@1.0.52
   - @zhin.js/adapter-wechat-mp@0.1.55
   - @zhin.js/console@2.0.7
-  - @zhin.js/http@1.0.60
+  - @zhin.js/host-router@1.0.60
   - @zhin.js/mcp@1.0.49
   - @zhin.js/plugin-60s@0.0.8
   - @zhin.js/plugin-checkin@0.0.5
@@ -932,7 +932,7 @@
   - @zhin.js/adapter-telegram@1.0.51
   - @zhin.js/adapter-wechat-mp@0.1.54
   - @zhin.js/console@2.0.6
-  - @zhin.js/http@1.0.59
+  - @zhin.js/host-router@1.0.59
   - @zhin.js/mcp@1.0.48
   - @zhin.js/plugin-60s@0.0.8
   - @zhin.js/plugin-checkin@0.0.5
@@ -958,7 +958,7 @@
   - @zhin.js/adapter-email@0.1.52
   - @zhin.js/adapter-icqq@2.0.5
   - @zhin.js/adapter-kook@1.0.65
-  - @zhin.js/http@1.0.58
+  - @zhin.js/host-router@1.0.58
   - @zhin.js/adapter-qq@1.0.65
   - @zhin.js/plugin-music@1.0.5
   - @zhin.js/adapter-dingtalk@1.0.53
@@ -1010,7 +1010,7 @@
 - @zhin.js/adapter-telegram@1.0.49
 - @zhin.js/adapter-wechat-mp@0.1.52
 - @zhin.js/console@2.0.4
-- @zhin.js/http@1.0.57
+- @zhin.js/host-router@1.0.57
 - @zhin.js/mcp@1.0.46
 - @zhin.js/plugin-60s@0.0.7
 - @zhin.js/plugin-checkin@0.0.4
@@ -1045,7 +1045,7 @@
 - @zhin.js/adapter-telegram@1.0.48
 - @zhin.js/adapter-wechat-mp@0.1.51
 - @zhin.js/console@2.0.3
-- @zhin.js/http@1.0.56
+- @zhin.js/host-router@1.0.56
 - @zhin.js/mcp@1.0.45
 - @zhin.js/plugin-60s@0.0.7
 - @zhin.js/plugin-checkin@0.0.4
@@ -1099,7 +1099,7 @@
   - @zhin.js/plugin-60s@0.0.7
   - @zhin.js/plugin-rss@0.0.5
   - zhin.js@1.0.60
-  - @zhin.js/http@1.0.55
+  - @zhin.js/host-router@1.0.55
 
 ## 0.1.65
 
@@ -1126,7 +1126,7 @@
   - @zhin.js/adapter-telegram@1.0.46
   - @zhin.js/adapter-wechat-mp@0.1.49
   - @zhin.js/console@2.0.1
-  - @zhin.js/http@1.0.54
+  - @zhin.js/host-router@1.0.54
   - @zhin.js/mcp@1.0.43
   - @zhin.js/plugin-60s@0.0.6
   - @zhin.js/plugin-checkin@0.0.3
@@ -1170,7 +1170,7 @@
   - @zhin.js/adapter-slack@1.0.45
   - @zhin.js/adapter-telegram@1.0.45
   - @zhin.js/adapter-wechat-mp@0.1.48
-  - @zhin.js/http@1.0.53
+  - @zhin.js/host-router@1.0.53
   - @zhin.js/mcp@1.0.42
   - @zhin.js/plugin-60s@0.0.5
   - @zhin.js/plugin-checkin@0.0.2
@@ -1206,7 +1206,7 @@
   - @zhin.js/adapter-telegram@1.0.44
   - @zhin.js/adapter-wechat-mp@0.1.47
   - @zhin.js/console@1.0.59
-  - @zhin.js/http@1.0.52
+  - @zhin.js/host-router@1.0.52
   - @zhin.js/mcp@1.0.41
   - @zhin.js/plugin-60s@0.0.5
   - @zhin.js/plugin-checkin@0.0.2
@@ -1241,7 +1241,7 @@
 - @zhin.js/adapter-telegram@1.0.43
 - @zhin.js/adapter-wechat-mp@0.1.46
 - @zhin.js/console@1.0.58
-- @zhin.js/http@1.0.51
+- @zhin.js/host-router@1.0.51
 - @zhin.js/mcp@1.0.40
 - @zhin.js/plugin-60s@0.0.5
 - @zhin.js/plugin-checkin@0.0.2
@@ -1287,7 +1287,7 @@
 - @zhin.js/adapter-telegram@1.0.42
 - @zhin.js/adapter-wechat-mp@0.1.45
 - @zhin.js/console@1.0.56
-- @zhin.js/http@1.0.50
+- @zhin.js/host-router@1.0.50
 - @zhin.js/mcp@1.0.39
 - @zhin.js/plugin-60s@0.0.5
 - @zhin.js/plugin-checkin@0.0.2
@@ -1325,7 +1325,7 @@
   - @zhin.js/adapter-telegram@1.0.41
   - @zhin.js/adapter-wechat-mp@0.1.44
   - @zhin.js/console@1.0.55
-  - @zhin.js/http@1.0.49
+  - @zhin.js/host-router@1.0.49
   - @zhin.js/mcp@1.0.38
   - @zhin.js/plugin-60s@0.0.5
   - @zhin.js/plugin-checkin@0.0.2
@@ -1360,7 +1360,7 @@
 - @zhin.js/adapter-telegram@1.0.40
 - @zhin.js/adapter-wechat-mp@0.1.43
 - @zhin.js/console@1.0.54
-- @zhin.js/http@1.0.48
+- @zhin.js/host-router@1.0.48
 - @zhin.js/mcp@1.0.37
 - @zhin.js/plugin-60s@0.0.4
 - @zhin.js/plugin-checkin@0.0.1
@@ -1395,7 +1395,7 @@
   - @zhin.js/adapter-telegram@1.0.39
   - @zhin.js/adapter-wechat-mp@0.1.42
   - @zhin.js/console@1.0.53
-  - @zhin.js/http@1.0.47
+  - @zhin.js/host-router@1.0.47
   - @zhin.js/mcp@1.0.36
   - @zhin.js/plugin-60s@0.0.4
   - @zhin.js/plugin-checkin@0.0.1
@@ -1434,7 +1434,7 @@
   - @zhin.js/adapter-slack@1.0.38
   - @zhin.js/adapter-telegram@1.0.38
   - @zhin.js/adapter-wechat-mp@0.1.41
-  - @zhin.js/http@1.0.46
+  - @zhin.js/host-router@1.0.46
   - @zhin.js/mcp@1.0.35
   - @zhin.js/plugin-60s@0.0.3
   - @zhin.js/plugin-checkin@0.0.0
@@ -1482,7 +1482,7 @@
   - @zhin.js/adapter-telegram@1.0.37
   - @zhin.js/adapter-wechat-mp@0.1.40
   - @zhin.js/console@1.0.50
-  - @zhin.js/http@1.0.45
+  - @zhin.js/host-router@1.0.45
   - @zhin.js/mcp@1.0.34
   - @zhin.js/plugin-60s@0.0.3
   - @zhin.js/plugin-checkin@0.0.0
@@ -1523,7 +1523,7 @@
 - @zhin.js/adapter-telegram@1.0.36
 - @zhin.js/adapter-wechat-mp@0.1.39
 - @zhin.js/console@1.0.48
-- @zhin.js/http@1.0.44
+- @zhin.js/host-router@1.0.44
 - @zhin.js/mcp@1.0.33
 - @zhin.js/plugin-60s@0.0.3
 - @zhin.js/plugin-checkin@0.0.0
@@ -1555,7 +1555,7 @@
   - @zhin.js/adapter-telegram@1.0.35
   - @zhin.js/adapter-wechat-mp@0.1.38
   - @zhin.js/console@1.0.47
-  - @zhin.js/http@1.0.43
+  - @zhin.js/host-router@1.0.43
   - @zhin.js/mcp@1.0.32
   - @zhin.js/plugin-60s@0.0.3
   - @zhin.js/plugin-checkin@0.0.0
@@ -1587,7 +1587,7 @@
   - @zhin.js/adapter-telegram@1.0.34
   - @zhin.js/adapter-wechat-mp@0.1.37
   - @zhin.js/console@1.0.46
-  - @zhin.js/http@1.0.42
+  - @zhin.js/host-router@1.0.42
   - @zhin.js/mcp@1.0.31
   - @zhin.js/plugin-60s@0.0.3
   - @zhin.js/plugin-checkin@0.0.0
@@ -1621,7 +1621,7 @@
   - @zhin.js/adapter-telegram@1.0.33
   - @zhin.js/adapter-wechat-mp@0.1.36
   - @zhin.js/console@1.0.45
-  - @zhin.js/http@1.0.41
+  - @zhin.js/host-router@1.0.41
   - @zhin.js/mcp@1.0.30
   - @zhin.js/plugin-60s@0.0.3
   - @zhin.js/plugin-checkin@0.0.0
@@ -1654,7 +1654,7 @@
   - @zhin.js/adapter-telegram@1.0.32
   - @zhin.js/adapter-wechat-mp@0.1.35
   - @zhin.js/console@1.0.44
-  - @zhin.js/http@1.0.40
+  - @zhin.js/host-router@1.0.40
   - @zhin.js/mcp@1.0.29
   - @zhin.js/plugin-60s@0.0.3
   - @zhin.js/plugin-checkin@0.0.0
@@ -1686,7 +1686,7 @@
   - @zhin.js/adapter-telegram@1.0.31
   - @zhin.js/adapter-wechat-mp@0.1.34
   - @zhin.js/console@1.0.43
-  - @zhin.js/http@1.0.39
+  - @zhin.js/host-router@1.0.39
   - @zhin.js/mcp@1.0.28
   - @zhin.js/plugin-60s@0.0.3
   - @zhin.js/plugin-checkin@0.0.0
@@ -1717,7 +1717,7 @@
 - @zhin.js/adapter-telegram@1.0.30
 - @zhin.js/adapter-wechat-mp@0.1.33
 - @zhin.js/console@1.0.42
-- @zhin.js/http@1.0.38
+- @zhin.js/host-router@1.0.38
 - @zhin.js/mcp@1.0.27
 - @zhin.js/plugin-60s@0.0.3
 - @zhin.js/plugin-checkin@0.0.0
@@ -1736,7 +1736,7 @@
 - 72ec4ba: fix: 新增插件,控制台调优
 - Updated dependencies [72ec4ba]
   - @zhin.js/console@1.0.41
-  - @zhin.js/http@1.0.37
+  - @zhin.js/host-router@1.0.37
   - @zhin.js/mcp@1.0.26
   - @zhin.js/client@1.0.11
   - zhin.js@1.0.43
@@ -1794,7 +1794,7 @@
   - @zhin.js/adapter-telegram@1.0.28
   - @zhin.js/adapter-wechat-mp@0.1.31
   - @zhin.js/console@1.0.39
-  - @zhin.js/http@1.0.36
+  - @zhin.js/host-router@1.0.36
   - @zhin.js/mcp@1.0.25
   - @zhin.js/plugin-html-renderer@0.0.20
   - @zhin.js/plugin-music@0.0.32
@@ -1822,7 +1822,7 @@
   - @zhin.js/adapter-telegram@1.0.27
   - @zhin.js/adapter-wechat-mp@0.1.30
   - @zhin.js/console@1.0.38
-  - @zhin.js/http@1.0.35
+  - @zhin.js/host-router@1.0.35
   - @zhin.js/mcp@1.0.24
   - @zhin.js/plugin-60s@0.0.2
   - @zhin.js/plugin-html-renderer@0.0.19
@@ -1851,7 +1851,7 @@
   - @zhin.js/adapter-sandbox@1.0.48
   - @zhin.js/adapter-kook@1.0.41
   - @zhin.js/console@1.0.37
-  - @zhin.js/http@1.0.34
+  - @zhin.js/host-router@1.0.34
   - @zhin.js/plugin-60s@0.0.2
   - @zhin.js/plugin-html-renderer@0.0.18
   - @zhin.js/sensitive-filter@0.0.26
@@ -1879,7 +1879,7 @@
   - @zhin.js/adapter-telegram@1.0.25
   - @zhin.js/adapter-wechat-mp@0.1.28
   - @zhin.js/console@1.0.36
-  - @zhin.js/http@1.0.33
+  - @zhin.js/host-router@1.0.33
   - @zhin.js/mcp@1.0.22
   - @zhin.js/plugin-60s@0.0.2
   - @zhin.js/sensitive-filter@0.0.25
@@ -1905,7 +1905,7 @@
   - @zhin.js/adapter-github@0.1.7
   - @zhin.js/adapter-wechat-mp@0.1.27
   - @zhin.js/console@1.0.35
-  - @zhin.js/http@1.0.32
+  - @zhin.js/host-router@1.0.32
   - @zhin.js/mcp@1.0.21
   - @zhin.js/plugin-60s@0.0.2
   - @zhin.js/plugin-html-renderer@0.0.16
@@ -1918,7 +1918,7 @@
 - Updated dependencies [631da6e]
   - @zhin.js/console@1.0.34
   - @zhin.js/adapter-github@0.1.6
-  - @zhin.js/http@1.0.31
+  - @zhin.js/host-router@1.0.31
   - @zhin.js/adapter-icqq@1.0.46
   - @zhin.js/adapter-sandbox@1.0.45
   - @zhin.js/adapter-dingtalk@1.0.26
@@ -1973,7 +1973,7 @@
   - @zhin.js/adapter-telegram@1.0.22
   - @zhin.js/adapter-wechat-mp@0.1.25
   - @zhin.js/console@1.0.33
-  - @zhin.js/http@1.0.30
+  - @zhin.js/host-router@1.0.30
   - @zhin.js/mcp@1.0.20
   - @zhin.js/plugin-60s@0.0.2
   - @zhin.js/plugin-html-renderer@0.0.15
@@ -1996,7 +1996,7 @@
 - Updated dependencies [432d0a5]
 - Updated dependencies [6d94111]
   - @zhin.js/console@1.0.32
-  - @zhin.js/http@1.0.29
+  - @zhin.js/host-router@1.0.29
   - @zhin.js/adapter-icqq@1.0.43
   - @zhin.js/adapter-sandbox@1.0.43
   - @zhin.js/adapter-dingtalk@1.0.23
@@ -2037,7 +2037,7 @@
   - @zhin.js/adapter-wechat-mp@0.1.23
   - @zhin.js/console@1.0.31
   - @zhin.js/plugin-github-notify@0.0.24
-  - @zhin.js/http@1.0.28
+  - @zhin.js/host-router@1.0.28
   - @zhin.js/mcp@1.0.18
   - @zhin.js/plugin-60s@0.0.2
   - @zhin.js/plugin-html-renderer@0.0.13
@@ -2064,7 +2064,7 @@
   - @zhin.js/adapter-wechat-mp@0.1.22
   - @zhin.js/console@1.0.30
   - @zhin.js/plugin-github-notify@0.0.23
-  - @zhin.js/http@1.0.27
+  - @zhin.js/host-router@1.0.27
   - @zhin.js/mcp@1.0.17
   - @zhin.js/plugin-60s@0.0.2
   - @zhin.js/plugin-html-renderer@0.0.12
@@ -2090,7 +2090,7 @@
 - @zhin.js/adapter-wechat-mp@0.1.21
 - @zhin.js/console@1.0.29
 - @zhin.js/plugin-github-notify@0.0.22
-- @zhin.js/http@1.0.26
+- @zhin.js/host-router@1.0.26
 - @zhin.js/mcp@1.0.16
 - @zhin.js/plugin-60s@0.0.2
 - @zhin.js/plugin-html-renderer@0.0.11
@@ -2104,10 +2104,10 @@
 - 48481a8: fix: @zhin.js/adapter-icqq 内置点赞工具
   fix: create-zhin-app 默认增加 send 指令
   fix: @zhin.js/cli 重命名 onborading 为 onborad 并重写实现,新增 zhin send 命令，用于直接通过 send 命令发送消息
-  fix: @zhin.js/http 新增消息发送 api
+  fix: @zhin.js/host-router 新增消息发送 api
 - Updated dependencies [48481a8]
   - @zhin.js/adapter-icqq@1.0.39
-  - @zhin.js/http@1.0.25
+  - @zhin.js/host-router@1.0.25
   - @zhin.js/plugin-music@0.0.20
   - @zhin.js/adapter-dingtalk@1.0.19
   - @zhin.js/adapter-discord@1.0.34
@@ -2136,7 +2136,7 @@
 - @zhin.js/adapter-wechat-mp@0.1.19
 - @zhin.js/console@1.0.28
 - @zhin.js/plugin-github-notify@0.0.20
-- @zhin.js/http@1.0.24
+- @zhin.js/host-router@1.0.24
 - @zhin.js/mcp@1.0.15
 - @zhin.js/plugin-60s@0.0.2
 - @zhin.js/plugin-html-renderer@0.0.10
@@ -2162,7 +2162,7 @@
 - @zhin.js/adapter-wechat-mp@0.1.18
 - @zhin.js/console@1.0.27
 - @zhin.js/plugin-github-notify@0.0.19
-- @zhin.js/http@1.0.23
+- @zhin.js/host-router@1.0.23
 - @zhin.js/mcp@1.0.14
 - @zhin.js/plugin-60s@0.0.2
 - @zhin.js/plugin-html-renderer@0.0.9
@@ -2189,7 +2189,7 @@
   - @zhin.js/adapter-wechat-mp@0.1.17
   - @zhin.js/console@1.0.26
   - @zhin.js/plugin-github-notify@0.0.18
-  - @zhin.js/http@1.0.22
+  - @zhin.js/host-router@1.0.22
   - @zhin.js/mcp@1.0.13
   - @zhin.js/plugin-60s@0.0.2
   - @zhin.js/plugin-html-renderer@0.0.8
@@ -2215,7 +2215,7 @@
 - @zhin.js/adapter-wechat-mp@0.1.16
 - @zhin.js/console@1.0.25
 - @zhin.js/plugin-github-notify@0.0.17
-- @zhin.js/http@1.0.21
+- @zhin.js/host-router@1.0.21
 - @zhin.js/mcp@1.0.12
 - @zhin.js/plugin-60s@0.0.2
 - @zhin.js/plugin-html-renderer@0.0.7
@@ -2230,7 +2230,7 @@
 - Updated dependencies [05a514d]
   - @zhin.js/adapter-dingtalk@1.0.14
   - @zhin.js/console@1.0.24
-  - @zhin.js/http@1.0.20
+  - @zhin.js/host-router@1.0.20
   - @zhin.js/mcp@1.0.11
   - @zhin.js/client@1.0.10
   - @zhin.js/adapter-icqq@1.0.34
@@ -2256,7 +2256,7 @@
 ### Patch Changes
 
 - Updated dependencies [2b44e18]
-  - @zhin.js/http@1.0.19
+  - @zhin.js/host-router@1.0.19
   - @zhin.js/adapter-dingtalk@1.0.13
   - @zhin.js/adapter-discord@1.0.28
   - @zhin.js/adapter-icqq@1.0.33
@@ -2273,7 +2273,7 @@
 
 - b27e633: fix: cli 优化
 - Updated dependencies [b27e633]
-  - @zhin.js/http@1.0.18
+  - @zhin.js/host-router@1.0.18
   - zhin.js@1.0.27
   - @zhin.js/adapter-dingtalk@1.0.12
   - @zhin.js/adapter-discord@1.0.27
@@ -2323,7 +2323,7 @@
   - @zhin.js/adapter-icqq@1.0.31
   - @zhin.js/adapter-kook@1.0.26
   - @zhin.js/adapter-lark@1.0.27
-  - @zhin.js/http@1.0.17
+  - @zhin.js/host-router@1.0.17
   - @zhin.js/mcp@1.0.9
   - @zhin.js/adapter-qq@1.0.26
   - @zhin.js/plugin-music@0.0.12
@@ -2362,7 +2362,7 @@
   - @zhin.js/adapter-wechat-mp@0.1.11
   - @zhin.js/console@1.0.21
   - @zhin.js/plugin-github-notify@0.0.12
-  - @zhin.js/http@1.0.16
+  - @zhin.js/host-router@1.0.16
   - @zhin.js/mcp@1.0.8
   - @zhin.js/plugin-html-renderer@0.0.2
   - @zhin.js/plugin-music@0.0.11
@@ -2387,7 +2387,7 @@
 - @zhin.js/adapter-wechat-mp@0.1.10
 - @zhin.js/console@1.0.20
 - @zhin.js/plugin-github-notify@0.0.11
-- @zhin.js/http@1.0.15
+- @zhin.js/host-router@1.0.15
 - @zhin.js/mcp@1.0.7
 - @zhin.js/plugin-music@0.0.10
 - @zhin.js/sensitive-filter@0.0.10
@@ -2414,7 +2414,7 @@
   - zhin.js@1.0.23
   - @zhin.js/plugin-music@0.0.9
   - @zhin.js/console@1.0.19
-  - @zhin.js/http@1.0.14
+  - @zhin.js/host-router@1.0.14
   - @zhin.js/mcp@1.0.6
   - @zhin.js/sensitive-filter@0.0.9
 
@@ -2439,7 +2439,7 @@
   - @zhin.js/adapter-wechat-mp@0.1.8
   - @zhin.js/console@1.0.18
   - @zhin.js/plugin-github-notify@0.0.9
-  - @zhin.js/http@1.0.13
+  - @zhin.js/host-router@1.0.13
   - @zhin.js/mcp@1.0.5
   - @zhin.js/plugin-music@0.0.8
   - @zhin.js/sensitive-filter@0.0.8
@@ -2463,7 +2463,7 @@
 - @zhin.js/adapter-wechat-mp@0.1.7
 - @zhin.js/console@1.0.17
 - @zhin.js/plugin-github-notify@0.0.8
-- @zhin.js/http@1.0.12
+- @zhin.js/host-router@1.0.12
 - @zhin.js/mcp@1.0.4
 - @zhin.js/plugin-music@0.0.7
 - @zhin.js/sensitive-filter@0.0.7
@@ -2488,7 +2488,7 @@
   - @zhin.js/adapter-icqq@1.0.25
   - @zhin.js/adapter-kook@1.0.20
   - @zhin.js/adapter-lark@1.0.21
-  - @zhin.js/http@1.0.11
+  - @zhin.js/host-router@1.0.11
   - @zhin.js/mcp@1.0.3
   - @zhin.js/adapter-qq@1.0.20
   - @zhin.js/plugin-music@0.0.6
@@ -2516,7 +2516,7 @@
   - @zhin.js/adapter-wechat-mp@0.1.5
   - @zhin.js/console@1.0.15
   - @zhin.js/plugin-github-notify@0.0.6
-  - @zhin.js/http@1.0.10
+  - @zhin.js/host-router@1.0.10
   - @zhin.js/mcp@1.0.2
   - @zhin.js/plugin-music@0.0.5
   - @zhin.js/sensitive-filter@0.0.5
@@ -2543,7 +2543,7 @@
   - @zhin.js/adapter-wechat-mp@0.1.4
   - @zhin.js/console@1.0.14
   - @zhin.js/plugin-github-notify@0.0.5
-  - @zhin.js/http@1.0.9
+  - @zhin.js/host-router@1.0.9
   - @zhin.js/mcp@1.0.1
   - @zhin.js/plugin-music@0.0.4
   - @zhin.js/sensitive-filter@0.0.4
@@ -2655,6 +2655,6 @@
   - @zhin.js/console@1.0.10
   - @zhin.js/adapter-icqq@1.0.16
   - @zhin.js/adapter-kook@1.0.14
-  - @zhin.js/http@1.0.7
+  - @zhin.js/host-router@1.0.7
   - @zhin.js/adapter-qq@1.0.14
   - zhin.js@1.0.14

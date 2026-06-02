@@ -8,7 +8,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['**/*.test.ts'],
-    exclude: ['**/node_modules/**', '**/lib/**', '**/packages/satori/**'],
+    exclude: ['**/node_modules/**', '**/lib/**', '**/packages/toolkit/satori/**'],
     setupFiles: ['./vitest.setup.ts'],
     testTimeout: 10000,
     hookTimeout: 10000,

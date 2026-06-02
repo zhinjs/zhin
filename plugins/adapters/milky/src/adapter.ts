@@ -1,8 +1,8 @@
 /**
  * Milky 适配器：单一适配器支持 WS 正向 / SSE / Webhook / 反向 WS，由 config.connection 区分
  */
-import type { Router } from '@zhin.js/http';
 import { formatCompact, Adapter, Plugin, type IGroupManagement } from 'zhin.js';
+import type { Router } from '@zhin.js/host-router';
 import { MilkyWsClient } from './bot-ws.js';
 import { MilkySseClient } from './bot-sse.js';
 import { MilkyWebhookBot } from './bot-webhook.js';
@@ -31,10 +31,10 @@ export class MilkyAdapter extends Adapter<MilkyBot> {
       case 'sse':
         return new MilkySseClient(this, config as MilkySseConfig);
       case 'webhook':
-        if (!this.#router) throw new Error('Milky connection: webhook 需要 router，请安装并在配置中启用 @zhin.js/http');
+        if (!this.#router) throw new Error('Milky connection: webhook 需要 router，请安装并在配置中启用 @zhin.js/host-router');
         return new MilkyWebhookBot(this, this.#router, config as MilkyWebhookConfig);
       case 'wss':
-        if (!this.#router) throw new Error('Milky connection: wss 需要 router，请安装并在配置中启用 @zhin.js/http');
+        if (!this.#router) throw new Error('Milky connection: wss 需要 router，请安装并在配置中启用 @zhin.js/host-router');
         return new MilkyWssServer(this, this.#router, config as MilkyWssConfig);
       default:
         throw new Error(`Unknown Milky connection: ${(config as MilkyBotConfig).connection}`);

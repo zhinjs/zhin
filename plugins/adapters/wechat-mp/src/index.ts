@@ -2,13 +2,13 @@
  * 微信公众号适配器入口：类型扩展、导出、注册
  */
 import { usePlugin, type Plugin, type Context } from "zhin.js";
-import type { Router } from "@zhin.js/http";
+import type { Router } from "@zhin.js/host-router";
 import { WeChatMPAdapter } from "./adapter.js";
 
 declare module "zhin.js" {
   namespace Plugin {
     interface Contexts {
-      router: import("@zhin.js/http").Router;
+      router: import("@zhin.js/host-router").Router;
     }
   }
   interface Adapters {

@@ -22,14 +22,14 @@ const CLIENT_ENTRIES = [
 ];
 const CLIENT_EXTERNAL = [
   "react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime",
-  "react-dom/client", "@zhin.js/client", "@zhin.js/console-types",
-  "@zhin.js/console-core", "react-router-dom", "react-router",
+  "react-dom/client", "@zhin.js/client", "@zhin.js/contract",
+  "@zhin.js/pagemanager", "react-router-dom", "react-router",
 ];
 
 function findEsbuild() {
   const candidates = [
     join(MONOREPO_ROOT, "basic/cli/node_modules/esbuild"),
-    join(MONOREPO_ROOT, "plugins/services/console/node_modules/esbuild"),
+    join(MONOREPO_ROOT, "packages/host/api/node_modules/esbuild"),
     join(MONOREPO_ROOT, "node_modules/esbuild"),
   ];
   for (const p of candidates) {

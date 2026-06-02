@@ -75,9 +75,6 @@ jobs:
       - name: stable path smoke
         run: pnpm check:stable
 
-      - name: queue beta smoke
-        run: pnpm check:queue-beta
-
       - name: usePlugin top-level check
         run: pnpm check:use-plugin-top-level
       

@@ -1,14 +1,14 @@
 {
   "plugins": [
     {
-      "name": "@zhin.js/http",
-      "displayName": "http",
-      "description": "HTTP server service for Zhin.js with routing and WebSocket support",
+      "name": "@zhin.js/host-router",
+      "displayName": "host-router",
+      "description": "Zhin Host HTTP runtime (Koa, Bearer auth, CORS, health/OpenAPI)",
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "service",
-      "version": "1.0.78",
-      "npm": "https://www.npmjs.com/package/@zhin.js/http",
+      "version": "0.0.0",
+      "npm": "https://www.npmjs.com/package/@zhin.js/host-router",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
@@ -27,7 +27,7 @@
         "weekly": 1210,
         "monthly": 2988
       },
-      "readme": "基于 Koa 的 HTTP 服务器插件，为 Zhin 机器人框架提供 HTTP API 和 WebSocket 支持。\n- 🌐 基于 Koa.js 的 HTTP 服务器\n- 🔐 Token 身份验证\n- 🛠️ RESTful API 支持\n- 📡 WebSocket 实时通信\n- 🔄 请求体解析 (JSON)\n- 🌍 可配置的服务器设置\n- 📊 路由管理和中间件支持\n- 📋 内置 ",
+      "readme": "Zhin Host HTTP 运行时（Koa）：监听端口、Bearer 鉴权、CORS、`/pub/health` 与 `/pub/openapi.json`。管理面 REST/Console 协议由 @zhin.js/host-api 注册到同一 router。",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
@@ -35,14 +35,14 @@
       }
     },
     {
-      "name": "@zhin.js/console",
-      "displayName": "console",
-      "description": "Web console service for Zhin.js with real-time monitoring",
+      "name": "@zhin.js/host-api",
+      "displayName": "host-api",
+      "description": "Zhin Host management API (REST, Console RPC/SSE, PageManager entries)",
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "service",
-      "version": "3.0.4",
-      "npm": "https://www.npmjs.com/package/@zhin.js/console",
+      "version": "0.0.0",
+      "npm": "https://www.npmjs.com/package/@zhin.js/host-api",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
@@ -61,7 +61,7 @@
         "weekly": 1160,
         "monthly": 2764
       },
-      "readme": "Zhin 机器人框架的 Web 控制台插件，提供开发环境下的可视化管理界面和调试工具。\n- 🌐 基于 Vite 的开发服务器\n- 🔥 支持热模块替换 (HMR)\n- 📊 实时状态监控\n- 🔧 插件开发调试\n- 📝 日志实时查看\n- 🛠️ 开发工具集成\n- 📱 WebSocket 实时通信\n- 登录辅助的 HTTP API 与 Web UI 由 @zhin.js/adapter-icq",
+      "readme": "Zhin Host 管理面 API：Console RPC/SSE、/entries、系统与插件 REST、市场与日志 API。UI 使用 Remote Console（zhin-console），本包不向 Host 提供静态前端。",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
@@ -70,8 +70,7 @@
         "@zhin.js/agent": "^0.1.25",
         "@zhin.js/client": "^1.1.3",
         "@zhin.js/core": "^1.1.27",
-        "@zhin.js/http": "^1.0.78",
-        "@zhin.js/http-host": "^0.1.3",
+        "@zhin.js/host-router": "^0.0.0",
         "zhin.js": "1.0.85"
       }
     },
@@ -107,9 +106,8 @@
       "peerDependencies": {
         "@zhin.js/core": "1.1.27",
         "@zhin.js/client": "1.1.3",
-        "@zhin.js/http": "1.0.78",
-        "@zhin.js/http-host": "0.1.3",
-        "@zhin.js/console": "3.0.4",
+        "@zhin.js/host-router": "0.0.0",
+        "@zhin.js/host-api": "0.0.0",
         "zhin.js": "1.0.85"
       }
     },
@@ -178,7 +176,7 @@
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "@zhin.js/http": "1.0.78",
+        "@zhin.js/host-router": "0.0.0",
         "zhin.js": "1.0.85"
       }
     },
@@ -208,14 +206,14 @@
         "weekly": 495,
         "monthly": 2188
       },
-      "readme": "Zhin.js ICQQ 适配器，基于 ICQQ 库实现的 QQ 机器人适配器，支持 QQ 群聊和私聊消息。\n- 🤖 支持 QQ 群聊和私聊消息处理\n- 🔐 完整的登录验证支持（短信验证、二维码、滑块验证）\n- 🖥️ Web 控制台登录辅助：与 @zhin.js/console 同时启用时，在 /icqq 页面提供「概览 + 登录辅助」；HTTP 接口为 GET /api/login-ass",
+      "readme": "Zhin.js ICQQ 适配器，基于 ICQQ 库实现的 QQ 机器人适配器，支持 QQ 群聊和私聊消息。\n- 🤖 支持 QQ 群聊和私聊消息处理\n- 🔐 完整的登录验证支持（短信验证、二维码、滑块验证）\n- 🖥️ Web 控制台登录辅助：与 @zhin.js/host-api 同时启用时，在 /icqq 页面提供「概览 + 登录辅助」；HTTP 接口为 GET /api/login-ass",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
         "@zhin.js/client": "1.1.3",
-        "@zhin.js/console": "3.0.4",
+        "@zhin.js/host-api": "0.0.0",
         "@zhin.js/core": "1.1.27",
-        "@zhin.js/http": "1.0.78",
+        "@zhin.js/host-router": "0.0.0",
         "zhin.js": "1.0.85"
       }
     },
@@ -248,8 +246,8 @@
       "engines": {},
       "peerDependencies": {
         "@zhin.js/client": "1.1.3",
-        "@zhin.js/console": "3.0.4",
-        "@zhin.js/http": "1.0.78",
+        "@zhin.js/host-api": "0.0.0",
+        "@zhin.js/host-router": "0.0.0",
         "zhin.js": "1.0.85"
       }
     },
@@ -282,7 +280,7 @@
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "@zhin.js/http": "1.0.78",
+        "@zhin.js/host-router": "0.0.0",
         "zhin.js": "1.0.85"
       }
     },
@@ -316,7 +314,7 @@
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "@zhin.js/http": "1.0.78",
+        "@zhin.js/host-router": "0.0.0",
         "zhin.js": "1.0.85"
       }
     },
@@ -348,12 +346,12 @@
         "weekly": 433,
         "monthly": 1763
       },
-      "readme": "Zhin.js 微信公众号适配器，支持微信公众号的消息收发。\n- Webhook 事件接收（HTTP 回调）\n- 签名验证\n- Access Token 自动刷新\n- XML 消息解析\n- 可选消息加密（AES）\nbash\npnpm add @zhin.js/adapter-wechat-mp\n- @zhin.js/http — HTTP 服务（提供 Webhook 路由）\nyaml\nbots:\n",
+      "readme": "Zhin.js 微信公众号适配器，支持微信公众号的消息收发。\n- Webhook 事件接收（HTTP 回调）\n- 签名验证\n- Access Token 自动刷新\n- XML 消息解析\n- 可选消息加密（AES）\nbash\npnpm add @zhin.js/adapter-wechat-mp\n- @zhin.js/host-router — HTTP 服务（提供 Webhook 路由）\nyaml\nbots:\n",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
         "zhin.js": "1.0.85",
-        "@zhin.js/http": "1.0.78"
+        "@zhin.js/host-router": "0.0.0"
       }
     },
     {
@@ -385,8 +383,8 @@
       "engines": {},
       "peerDependencies": {
         "@zhin.js/client": "1.1.3",
-        "@zhin.js/console": "3.0.4",
-        "@zhin.js/http": "1.0.78",
+        "@zhin.js/host-api": "0.0.0",
+        "@zhin.js/host-router": "0.0.0",
         "@zhin.js/logger": "0.1.67",
         "zhin.js": "1.0.85"
       }
@@ -421,10 +419,10 @@
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "@zhin.js/console": "3.0.4",
+        "@zhin.js/host-api": "0.0.0",
         "@zhin.js/client": "1.1.3",
         "@zhin.js/logger": "0.1.67",
-        "@zhin.js/http": "1.0.78",
+        "@zhin.js/host-router": "0.0.0",
         "zhin.js": "1.0.85"
       }
     },
@@ -458,8 +456,8 @@
       "engines": {},
       "peerDependencies": {
         "@zhin.js/client": "1.1.3",
-        "@zhin.js/console": "3.0.4",
-        "@zhin.js/http": "1.0.78",
+        "@zhin.js/host-api": "0.0.0",
+        "@zhin.js/host-router": "0.0.0",
         "@zhin.js/logger": "0.1.67",
         "zhin.js": "1.0.85"
       }
@@ -493,7 +491,7 @@
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "@zhin.js/http": "1.0.78",
+        "@zhin.js/host-router": "0.0.0",
         "zhin.js": "1.0.85"
       }
     },
@@ -526,7 +524,7 @@
       "engines": {},
       "peerDependencies": {
         "zhin.js": "1.0.85",
-        "@zhin.js/http": "1.0.78"
+        "@zhin.js/host-router": "0.0.0"
       }
     },
     {
@@ -559,7 +557,7 @@
       "engines": {},
       "peerDependencies": {
         "zhin.js": "1.0.85",
-        "@zhin.js/http": "1.0.78"
+        "@zhin.js/host-router": "0.0.0"
       }
     },
     {
@@ -901,7 +899,7 @@
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "@zhin.js/http": "1.0.78",
+        "@zhin.js/host-router": "0.0.0",
         "zhin.js": "1.0.85"
       }
     },
@@ -1004,7 +1002,7 @@
       "engines": {},
       "peerDependencies": {
         "zhin.js": "1.0.85",
-        "@zhin.js/http": "1.0.78"
+        "@zhin.js/host-router": "0.0.0"
       }
     },
     {
@@ -1037,7 +1035,7 @@
       "engines": {},
       "peerDependencies": {
         "zhin.js": "1.0.35",
-        "@zhin.js/http": "1.0.28"
+        "@zhin.js/host-router": "1.0.28"
       }
     },
     {
@@ -1104,14 +1102,36 @@
       }
     },
     {
-      "name": "@zhin.js/console-core",
-      "displayName": "console-core",
-      "description": "Zhin console Host runtime: PageManager + esbuild pipeline for adapter entries (no UI)",
+      "name": "@zhin.js/contract",
+      "displayName": "contract",
+      "description": "Zhin console / PageManager shared contract (PluginRegisterHostApi, ConsoleEntry)",
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "util",
-      "version": "1.0.3",
-      "npm": "https://www.npmjs.com/package/@zhin.js/console-core",
+      "version": "1.0.0",
+      "npm": "https://www.npmjs.com/package/@zhin.js/contract",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [],
+      "lastUpdate": "2026-06-02T00:00:00.000Z",
+      "downloads": {
+        "weekly": 0,
+        "monthly": 0
+      },
+      "readme": "ERROR: No README data found!",
+      "license": "MIT",
+      "engines": {},
+      "peerDependencies": {}
+    },
+    {
+      "name": "@zhin.js/pagemanager",
+      "displayName": "pagemanager",
+      "description": "Zhin PageManager Host runtime (entries, esbuild pipeline; no UI)",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": "util",
+      "version": "2.0.0",
+      "npm": "https://www.npmjs.com/package/@zhin.js/pagemanager",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [],
@@ -1151,55 +1171,11 @@
       "engines": {},
       "peerDependencies": {
         "zhin.js": "1.0.17",
-        "@zhin.js/http": "1.0.7",
+        "@zhin.js/host-router": "1.0.7",
         "@zhin.js/client": "1.0.5",
         "@zhin.js/types": "1.0.5",
-        "@zhin.js/console": "1.0.13"
+        "@zhin.js/host-api": "0.0.0"
       }
-    },
-    {
-      "name": "@zhin.js/http-host",
-      "displayName": "http-host",
-      "description": "Fetch-based HTTP host: routing, auth, CORS, Node serve adapter",
-      "author": "GitHub Actions",
-      "isOfficial": true,
-      "category": "util",
-      "version": "0.1.3",
-      "npm": "https://www.npmjs.com/package/@zhin.js/http-host",
-      "github": "git+https://github.com/zhinjs/zhin.git",
-      "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [],
-      "lastUpdate": "2026-05-29T02:36:42.860Z",
-      "downloads": {
-        "weekly": 0,
-        "monthly": 0
-      },
-      "readme": "ERROR: No README data found!",
-      "license": "",
-      "engines": {},
-      "peerDependencies": {}
-    },
-    {
-      "name": "@zhin.js/console-types",
-      "displayName": "console-types",
-      "description": "Zhin console / page-manager 对齐的共享类型（对标 @page-manager/types）",
-      "author": "GitHub Actions",
-      "isOfficial": true,
-      "category": "util",
-      "version": "0.1.4",
-      "npm": "https://www.npmjs.com/package/@zhin.js/console-types",
-      "github": "git+https://github.com/zhinjs/zhin.git",
-      "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [],
-      "lastUpdate": "2026-05-29T02:36:37.558Z",
-      "downloads": {
-        "weekly": 0,
-        "monthly": 0
-      },
-      "readme": "ERROR: No README data found!",
-      "license": "MIT",
-      "engines": {},
-      "peerDependencies": {}
     },
     {
       "name": "@zhin.js/console-app",
@@ -1260,50 +1236,6 @@
       "peerDependencies": {
         "zhin.js": "1.0.85"
       }
-    },
-    {
-      "name": "@zhin.js/queue-runtime",
-      "displayName": "queue-runtime",
-      "description": "Queue bot runtime: enqueueOutgoing, claimOutgoing, executeOutbound",
-      "author": "GitHub Actions",
-      "isOfficial": true,
-      "category": "util",
-      "version": "0.0.3",
-      "npm": "https://www.npmjs.com/package/@zhin.js/queue-runtime",
-      "github": "git+https://github.com/zhinjs/zhin.git",
-      "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [],
-      "lastUpdate": "2026-05-29T08:39:55.568Z",
-      "downloads": {
-        "weekly": 0,
-        "monthly": 0
-      },
-      "readme": "ERROR: No README data found!",
-      "license": "",
-      "engines": {},
-      "peerDependencies": {}
-    },
-    {
-      "name": "@zhin.js/storage-port",
-      "displayName": "storage-port",
-      "description": "Portable key-value storage abstraction for Host and Edge",
-      "author": "GitHub Actions",
-      "isOfficial": true,
-      "category": "util",
-      "version": "0.0.1",
-      "npm": "https://www.npmjs.com/package/@zhin.js/storage-port",
-      "github": "git+https://github.com/zhinjs/zhin.git",
-      "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [],
-      "lastUpdate": "2026-05-29T02:36:46.553Z",
-      "downloads": {
-        "weekly": 0,
-        "monthly": 0
-      },
-      "readme": "ERROR: No README data found!",
-      "license": "",
-      "engines": {},
-      "peerDependencies": {}
     },
     {
       "name": "@zhin.js/devteam",

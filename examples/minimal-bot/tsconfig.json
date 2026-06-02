@@ -9,7 +9,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "types": ["@types/node", "zhin.js", "@zhin.js/adapter-sandbox", "@zhin.js/console", "@zhin.js/http"]
+    "types": ["@types/node", "zhin.js", "@zhin.js/adapter-sandbox", "@zhin.js/host-api", "@zhin.js/host-router"]
   },
   "include": ["src/**/*"],
   "exclude": ["lib", "node_modules"]

@@ -1,7 +1,7 @@
 /**
  * send — 在 daemon 运行时向指定平台发送消息（借鉴 OpenClaw message send）
  *
- * 调用运行中实例的 HTTP API POST /api/message/send，需启用 @zhin.js/http。
+ * 调用运行中实例的 HTTP API POST /api/message/send，需启用 @zhin.js/host-router。
  * 默认 --scene private，--adapter process（sandbox）。
  */
 

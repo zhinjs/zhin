@@ -4,11 +4,11 @@
  *
  * 依赖层级（从低到高）：
  * 1. basic/ (logger, schema, database, cli)
- * 2. packages/kernel (无 IM 概念)
- * 3. packages/ai (providers, agents, memory)
- * 4. packages/core (Plugin, Adapter, Bot, Command)
- * 5. packages/agent (ZhinAgent, security policies)
- * 6. packages/zhin (主入口)
+ * 2. packages/im/kernel (无 IM 概念)
+ * 3. packages/im/ai (providers, agents, memory)
+ * 4. packages/im/core (Plugin, Adapter, Bot, Command)
+ * 5. packages/im/agent (ZhinAgent, security policies)
+ * 6. packages/im/zhin (主入口)
  *
  * 禁止的导入：
  * - kernel 不能导入 core/agent/zhin
@@ -27,11 +27,14 @@ const repoRoot = path.resolve(__dirname, '..');
 // basic/ 内部的包可以相互导入
 const layers = {
   'basic': { level: 0, allowedImports: ['basic'] },
-  'packages/kernel': { level: 1, allowedImports: ['basic'] },
-  'packages/ai': { level: 2, allowedImports: ['basic', 'packages/kernel'] },
-  'packages/core': { level: 3, allowedImports: ['basic', 'packages/kernel', 'packages/ai'] },
-  'packages/agent': { level: 4, allowedImports: ['basic', 'packages/kernel', 'packages/ai', 'packages/core'] },
-  'packages/zhin': { level: 5, allowedImports: ['basic', 'packages/kernel', 'packages/ai', 'packages/core', 'packages/agent'] },
+  'packages/im/kernel': { level: 1, allowedImports: ['basic'] },
+  'packages/im/ai': { level: 2, allowedImports: ['basic', 'packages/im/kernel'] },
+  'packages/im/core': { level: 3, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai'] },
+  'packages/im/agent': { level: 4, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core'] },
+  'packages/im/zhin': { level: 5, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent'] },
+  'packages/console/contract': { level: 10, allowedImports: ['basic'] },
+  'packages/console/pagemanager': { level: 11, allowedImports: ['basic', 'packages/console/contract'] },
+  'packages/console/client': { level: 12, allowedImports: ['basic', 'packages/console/contract'] },
 };
 
 // 包名到路径的映射
@@ -40,11 +43,14 @@ const packageNameToPath = {
   '@zhin.js/schema': 'basic/schema',
   '@zhin.js/database': 'basic/database',
   '@zhin.js/cli': 'basic/cli',
-  '@zhin.js/kernel': 'packages/kernel',
-  '@zhin.js/ai': 'packages/ai',
-  '@zhin.js/core': 'packages/core',
-  '@zhin.js/agent': 'packages/agent',
-  'zhin.js': 'packages/zhin',
+  '@zhin.js/kernel': 'packages/im/kernel',
+  '@zhin.js/ai': 'packages/im/ai',
+  '@zhin.js/core': 'packages/im/core',
+  '@zhin.js/agent': 'packages/im/agent',
+  'zhin.js': 'packages/im/zhin',
+  '@zhin.js/contract': 'packages/console/contract',
+  '@zhin.js/pagemanager': 'packages/console/pagemanager',
+  '@zhin.js/client': 'packages/console/client',
 };
 
 const skipDirNames = new Set(['node_modules', 'lib', 'dist', 'coverage', '.git', 'tests', '__tests__']);
@@ -239,11 +245,12 @@ if (violations.length) {
 
   console.error('Architecture layers (bottom → top):');
   console.error('  1. basic/ (logger, schema, database, cli)');
-  console.error('  2. packages/kernel (no IM concepts)');
-  console.error('  3. packages/ai (providers, agents, memory)');
-  console.error('  4. packages/core (Plugin, Adapter, Bot, Command)');
-  console.error('  5. packages/agent (ZhinAgent, security policies)');
-  console.error('  6. packages/zhin (main entry)\n');
+  console.error('  2. packages/im/kernel (no IM concepts)');
+  console.error('  3. packages/im/ai (providers, agents, memory)');
+  console.error('  4. packages/im/core (Plugin, Adapter, Bot, Command)');
+  console.error('  5. packages/im/agent (ZhinAgent, security policies)');
+  console.error('  6. packages/im/zhin (main entry)');
+  console.error('  (parallel) packages/console/{contract,pagemanager,client}\n');
 
   console.error('Each layer can only import from layers below it.');
   console.error('See CLAUDE.md for details.\n');

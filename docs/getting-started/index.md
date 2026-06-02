@@ -300,16 +300,16 @@ addCommand(new MessageCommand("hello").desc("打个招呼").action(() => "你好
 ```yaml [zhin.config.yml]
 plugins:
   - hello
-  - "@zhin.js/http"
-  - "@zhin.js/console"
+  - "@zhin.js/host-router"
+  - "@zhin.js/host-api"
   - "@zhin.js/adapter-sandbox"
 ```
 
 ```json [zhin.config.json]
 "plugins": [
   "hello",
-  "@zhin.js/http",
-  "@zhin.js/console",
+  "@zhin.js/host-router",
+  "@zhin.js/host-api",
   "@zhin.js/adapter-sandbox"
 ]
 ```

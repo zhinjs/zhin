@@ -1,0 +1,95 @@
+{
+  "name": "@zhin.js/host-api",
+  "version": "0.0.0",
+  "description": "Zhin Host management API (REST, Console protocol, PageManager entries)",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "service",
+    "host-api",
+    "console",
+    "dashboard",
+    "monitoring",
+    "admin"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "type": "git",
+    "directory": "packages/host/api"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "deno": "./src/index.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./console-api": {
+      "types": "./lib/console-api.d.ts",
+      "deno": "./src/console-api.ts",
+      "development": "./src/console-api.ts",
+      "import": "./lib/console-api.js"
+    },
+    "./host-rest-api": {
+      "types": "./lib/rest/host-rest-api.d.ts",
+      "deno": "./src/rest/host-rest-api.ts",
+      "development": "./src/rest/host-rest-api.ts",
+      "import": "./lib/rest/host-rest-api.js"
+    },
+    "./rpc/project-fs": {
+      "types": "./lib/rpc/project-fs.d.ts",
+      "deno": "./src/rpc/project-fs.ts",
+      "development": "./src/rpc/project-fs.ts",
+      "import": "./lib/rpc/project-fs.js"
+    },
+    "./browser.tsconfig.json": "./browser.tsconfig.json",
+    "./node.tsconfig.json": "./node.tsconfig.json"
+  },
+  "scripts": {
+    "build": "tsup",
+    "clean": "rimraf lib"
+  },
+  "dependencies": {
+    "@zhin.js/contract": "workspace:*",
+    "@zhin.js/pagemanager": "workspace:*",
+    "@zhin.js/schema": "workspace:*",
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "@types/koa": "^3.0.3",
+    "esbuild": "^0.28.0",
+    "lucide-react": "^1.17.0",
+    "tsup": "^8.5.1",
+    "yaml": "^2.0.0"
+  },
+  "peerDependencies": {
+    "@types/ws": "^8.18.1",
+    "@zhin.js/agent": "workspace:^",
+    "@zhin.js/client": "workspace:^",
+    "@zhin.js/core": "workspace:^",
+    "@zhin.js/host-router": "workspace:^",
+    "koa": "^3.1.1"
+  },
+  "files": [
+    "src",
+    "lib",
+    "browser.tsconfig.json",
+    "node.tsconfig.json",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

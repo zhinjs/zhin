@@ -24,7 +24,7 @@ function toCamelCaseId(pluginName: string): string {
 function tryZhinWorkspaceDevDependencies(): Record<string, string> | null {
   const root = process.cwd();
   if (!fs.existsSync(path.join(root, 'pnpm-workspace.yaml'))) return null;
-  if (!fs.existsSync(path.join(root, 'packages/zhin/package.json'))) return null;
+  if (!fs.existsSync(path.join(root, 'packages/im/zhin/package.json'))) return null;
   const pkgPath = path.join(root, 'package.json');
   if (!fs.existsSync(pkgPath)) return null;
   try {
@@ -42,8 +42,7 @@ function tryZhinWorkspaceDevDependencies(): Record<string, string> | null {
       'zhin.js': 'workspace:*',
       '@zhin.js/cli': 'workspace:*',
       '@zhin.js/client': 'workspace:*',
-      '@zhin.js/console': 'workspace:*',
-      '@zhin.js/console-types': 'workspace:*',
+      '@zhin.js/host-api': 'workspace:*',
     };
   } catch {
     return null;
@@ -170,8 +169,7 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
       'zhin.js': 'latest',
       '@zhin.js/cli': 'latest',
       '@zhin.js/client': 'latest',
-      '@zhin.js/console': 'latest',
-      '@zhin.js/console-types': 'latest',
+      '@zhin.js/host-api': 'latest',
     } satisfies Record<string, string>);
 
   const description =
@@ -207,12 +205,12 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
   const peerDependenciesMeta: Record<string, { optional: boolean }> = {};
   if (withClient) {
     peerDependencies['@zhin.js/client'] = '>=1.0.0';
-    peerDependencies['@zhin.js/console'] = '>=1.0.0';
-    peerDependenciesMeta['@zhin.js/console'] = { optional: true };
+    peerDependencies['@zhin.js/host-api'] = '>=1.0.0';
+    peerDependenciesMeta['@zhin.js/host-api'] = { optional: true };
   }
   if (kind === 'adapter') {
-    peerDependencies['@zhin.js/http'] = '>=1.0.0';
-    peerDependenciesMeta['@zhin.js/http'] = { optional: true };
+    peerDependencies['@zhin.js/host-router'] = '>=1.0.0';
+    peerDependenciesMeta['@zhin.js/host-router'] = { optional: true };
   }
 
   const devDependencies: Record<string, string> = {
@@ -453,7 +451,7 @@ export class ${capitalizedName}Adapter extends Adapter<${capitalizedName}Bot> {
 
     const indexAd = `import { formatCompact, onDispose, type Context, type Plugin, usePlugin } from 'zhin.js';
 import path from 'node:path';
-import { PageManager } from '@zhin.js/console';
+import { PageManager } from '@zhin.js/host-api';
 import { ${capitalizedName}Adapter } from './adapter.js';
 import type { ${capitalizedName}BotConfig } from './bot.js';
 
@@ -515,7 +513,7 @@ export type { ${capitalizedName}BotConfig } from './bot.js';
   } else {
     const indexNormal = `import { formatCompact, MessageCommand, onDispose, useContext, usePlugin, ZhinTool } from 'zhin.js';
 import path from 'node:path';
-import { PageManager } from '@zhin.js/console';
+import { PageManager } from '@zhin.js/host-api';
 
 const { addCommand, addTool, logger } = usePlugin();
 
@@ -555,7 +553,7 @@ logger.info('${capitalizedName} 插件已加载');
   }
 
   if (withClient) {
-    const clientContent = `import type { PluginRegisterHostApi } from '@zhin.js/console-types';
+    const clientContent = `import type { PluginRegisterHostApi } from '@zhin.js/contract';
 import ${capitalizedName}Page from './pages/${capitalizedName}Page';
 
 export function register(api: PluginRegisterHostApi) {
@@ -610,10 +608,10 @@ bots:
     token: your-token-here
 \`\`\`
 
-可选：安装 \`@zhin.js/http\` 以便后续注册 Webhook 路由。控制台页需启用 \`@zhin.js/console\`。`
+可选：安装 \`@zhin.js/host-router\` 以便后续注册 Webhook 路由。控制台页需启用 \`@zhin.js/host-api\`。`
       : kind === 'service'
         ? `在 \`zhin.config.yml\` 的 \`plugins\` 中加入 \`${packageName}\`。其它插件中通过 \`root.inject(\"${serviceCtxName}\")\` 获取服务实例（类型由模板中的 declare module 提供）。`
-        : `在 \`zhin.config.yml\`（或 \`zhin.config.ts\`）的 \`plugins\` 中加入 \`${packageName}\`。若使用控制台页，请启用 \`@zhin.js/console\`。`;
+        : `在 \`zhin.config.yml\`（或 \`zhin.config.ts\`）的 \`plugins\` 中加入 \`${packageName}\`。若使用控制台页，请启用 \`@zhin.js/host-api\`。`;
 
   const readmeContent = `# ${packageName}
 
@@ -642,7 +640,7 @@ pnpm dev
 ${withClient ? 'pnpm dev:client   # 仅 client 监听\n' : ''}
 \`\`\`
 
-在 **本仓库** 根执行 \`zhin new\` 时：若存在 \`pnpm-workspace.yaml\`、\`packages/zhin/package.json\`，且根 \`package.json\` 声明了 \`zhin.js\`，模板会将 \`zhin.js\` / \`@zhin.js/*\` 开发依赖写为 \`workspace:*\`。
+在 **本仓库** 根执行 \`zhin new\` 时：若存在 \`pnpm-workspace.yaml\`、\`packages/im/zhin/package.json\`，且根 \`package.json\` 声明了 \`zhin.js\`，模板会将 \`zhin.js\` / \`@zhin.js/*\` 开发依赖写为 \`workspace:*\`。
 
 ## 许可证
 

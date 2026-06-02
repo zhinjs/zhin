@@ -6,7 +6,7 @@
  */
 import { usePlugin, MessageCommand } from 'zhin.js';
 import type { GitHubAdapter } from '@zhin.js/adapter-github';
-import { GhClient } from '@zhin.js/adapter-github';
+import { GhClient } from '@zhin.js/adapter-github/gh-client';
 
 const plugin = usePlugin();
 const { addCommand, useContext, logger } = plugin;

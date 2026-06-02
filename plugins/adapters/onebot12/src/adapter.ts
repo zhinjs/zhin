@@ -2,8 +2,8 @@
  * OneBot 12 适配器：单一适配器支持正向 WS / Webhook / 反向 WS，由 config.connection 区分
  * 协议文档：https://12.onebot.dev/
  */
-import type { Router } from '@zhin.js/http';
 import { formatCompact, Adapter, Plugin } from 'zhin.js';
+import type { Router } from '@zhin.js/host-router';
 import { OneBot12WsClient } from './bot-ws.js';
 import { OneBot12WebhookBot } from './bot-webhook.js';
 import { OneBot12WssServer } from './bot-wss.js';
@@ -29,12 +29,12 @@ export class OneBot12Adapter extends Adapter<OneBot12Bot> {
         return new OneBot12WsClient(this, config as OneBot12WsConfig);
       case 'webhook':
         if (!this.#router) {
-          throw new Error('OneBot12 connection: webhook 需要 router，请安装并在配置中启用 @zhin.js/http');
+          throw new Error('OneBot12 connection: webhook 需要 router，请安装并在配置中启用 @zhin.js/host-router');
         }
         return new OneBot12WebhookBot(this, this.#router, config as OneBot12WebhookConfig);
       case 'wss':
         if (!this.#router) {
-          throw new Error('OneBot12 connection: wss 需要 router，请安装并在配置中启用 @zhin.js/http');
+          throw new Error('OneBot12 connection: wss 需要 router，请安装并在配置中启用 @zhin.js/host-router');
         }
         return new OneBot12WssServer(this, this.#router, config as OneBot12WssConfig);
       default:

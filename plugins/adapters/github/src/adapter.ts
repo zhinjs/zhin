@@ -4,7 +4,7 @@
 import { formatCompact, Adapter, Message, Plugin } from 'zhin.js';
 import crypto from 'node:crypto';
 import { GitHubBot } from './bot.js';
-import type { Router } from '@zhin.js/http';
+import type { Router } from '@zhin.js/host-router';
 import type { GitHubBotConfig, EventType, GenericWebhookPayload, Subscription } from './types.js';
 import type { GhClient } from './gh-client.js';
 import type { IssueCommentPayload, PRReviewCommentPayload, PRReviewPayload } from './types.js';

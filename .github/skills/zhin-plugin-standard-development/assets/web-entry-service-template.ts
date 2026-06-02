@@ -1,5 +1,5 @@
 import path from 'node:path'
-import type { PageManager } from '@zhin.js/console'
+import type { PageManager } from '@zhin.js/host-api'
 
 export function registerWebEntry(pageManager: PageManager) {
   const clientEntry = path.resolve(import.meta.dirname, '../client/index.tsx')

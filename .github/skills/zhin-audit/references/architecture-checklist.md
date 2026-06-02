@@ -23,14 +23,14 @@
   - 验证无反向依赖（如 kernel 依赖 core）
 
 - [ ] **IM 概念隔离**
-  - `packages/kernel/` 禁止引用：`Adapter`, `Bot`, `Message`, `Command`
-  - `packages/ai/` 禁止引用：`Adapter`, `Bot`, `Message`（IM 特有）
+  - `packages/im/kernel/` 禁止引用：`Adapter`, `Bot`, `Message`, `Command`
+  - `packages/im/ai/` 禁止引用：`Adapter`, `Bot`, `Message`（IM 特有）
   - 搜索：`import.*from.*@zhin.js/core` 出现在 kernel/ai 中
 
 - [ ] **类型定义位置**
-  - 所有 IM 类型在 `packages/core/src/types.ts`
-  - 内核类型在 `packages/kernel/src/`
-  - AI 类型在 `packages/ai/src/`
+  - 所有 IM 类型在 `packages/im/core/src/types.ts`
+  - 内核类型在 `packages/im/kernel/src/`
+  - AI 类型在 `packages/im/ai/src/`
   - 无跨层类型泄漏
 
 ## 2. AsyncLocalStorage [高]
@@ -41,8 +41,8 @@
   - 搜索 `usePlugin()` 出现在 `setTimeout`/`setInterval` 回调中的情况
 
 - [ ] **上下文传播完整性**
-  - 文件：`packages/core/src/plugin.ts`（`pluginAls`）
-  - 文件：`packages/core/src/built/dispatcher.ts`（`outboundReplyAls`）
+  - 文件：`packages/im/core/src/plugin.ts`（`pluginAls`）
+  - 文件：`packages/im/core/src/built/dispatcher.ts`（`outboundReplyAls`）
   - 验证：跨 `await` 边界上下文不丢失
   - 验证：`Promise.all`/`Promise.race` 中上下文正确
 

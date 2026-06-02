@@ -47,31 +47,25 @@
     "clean": "rimraf lib"
   },
   "devDependencies": {
-    "@zhin.js/http-host": "workspace:*",
     "@zhin.js/cli": "workspace:*",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "radix-ui": "^1.4.3",
     "lucide-react": "^1.17.0",
-    "typescript": "^6.0.3",
-    "zhin.js": "workspace:*"
+    "typescript": "^6.0.3"
   },
   "peerDependencies": {
     "@zhin.js/core": "workspace:*",
     "@zhin.js/client": "workspace:*",
-    "@zhin.js/http": "workspace:*",
-    "@zhin.js/http-host": "workspace:*",
-    "@zhin.js/console": "workspace:*",
-    "zhin.js": "workspace:*"
+    "@zhin.js/host-router": "workspace:*",
+    "@zhin.js/host-api": "workspace:*",
+    "@zhin.js/contract": "workspace:*"
   },
   "peerDependenciesMeta": {
-    "@zhin.js/http": {
+    "@zhin.js/host-router": {
       "optional": true
     },
-    "@zhin.js/http-host": {
-      "optional": true
-    },
-    "@zhin.js/console": {
+    "@zhin.js/host-api": {
       "optional": true
     },
     "@zhin.js/client": {

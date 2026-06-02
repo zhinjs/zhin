@@ -54,7 +54,8 @@
   },
   "devDependencies": {
     "@zhin.js/cli": "workspace:*",
-    "@zhin.js/console": "workspace:*",
+    "@zhin.js/host-api": "workspace:*",
+    "@zhin.js/contract": "workspace:*",
     "@types/node": "^25.9.1",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
@@ -65,18 +66,19 @@
   },
   "peerDependencies": {
     "@zhin.js/agent": "workspace:*",
-    "@zhin.js/console": "workspace:*",
-    "@zhin.js/http": "workspace:*",
+    "@zhin.js/host-api": "workspace:*",
+    "@zhin.js/contract": "workspace:*",
+    "@zhin.js/host-router": "workspace:*",
     "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@zhin.js/agent": {
       "optional": true
     },
-    "@zhin.js/console": {
+    "@zhin.js/host-api": {
       "optional": true
     },
-    "@zhin.js/http": {
+    "@zhin.js/host-router": {
       "optional": true
     }
   },

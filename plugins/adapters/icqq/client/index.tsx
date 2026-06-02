@@ -1,4 +1,4 @@
-import type { PluginRegisterHostApi } from '@zhin.js/console-types'
+import type { PluginRegisterHostApi } from '@zhin.js/contract'
 import ICQQManagement from './ICQQManagement'
 
 export function register(api: PluginRegisterHostApi) {

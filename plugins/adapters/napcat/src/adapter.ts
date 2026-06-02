@@ -1,8 +1,8 @@
 /**
  * NapCat 适配器：支持正向 WS / 反向 WS / HTTP
  */
-import type { Router } from '@zhin.js/http';
 import { formatCompact, Adapter, Plugin } from 'zhin.js';
+import type { Router } from '@zhin.js/host-router';
 import { NapCatWsClient } from './bot-ws-client.js';
 import { NapCatWsServer } from './bot-ws-server.js';
 import { NapCatHttpBot } from './bot-http.js';
@@ -23,10 +23,10 @@ export class NapCatAdapter extends Adapter<NapCatBot> {
       case 'ws':
         return new NapCatWsClient(this, config as NapCatWsClientConfig);
       case 'wss':
-        if (!this.#router) throw new Error('NapCat connection: wss requires router. Enable @zhin.js/http first.');
+        if (!this.#router) throw new Error('NapCat connection: wss requires router. Enable @zhin.js/host-router first.');
         return new NapCatWsServer(this, this.#router, config as NapCatWsServerConfig);
       case 'http':
-        if (!this.#router) throw new Error('NapCat connection: http requires router. Enable @zhin.js/http first.');
+        if (!this.#router) throw new Error('NapCat connection: http requires router. Enable @zhin.js/host-router first.');
         return new NapCatHttpBot(this, this.#router, config as NapCatHttpConfig);
       default:
         throw new Error(`Unknown NapCat connection: ${connection}`);

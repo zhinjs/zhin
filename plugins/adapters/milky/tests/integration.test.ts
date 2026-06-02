@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Plugin, type SendOptions } from 'zhin.js';
-import { createAdapterTestSuite } from '../../../../packages/core/tests/adapter-harness.js';
+import { createAdapterTestSuite } from '../../../../packages/im/core/tests/adapter-harness.js';
 import { MilkyAdapter } from '../src/adapter.js';
 import { MilkyWsClient } from '../src/bot-ws.js';
 import type { MilkyWsConfig, MilkyEvent } from '../src/types.js';

@@ -6,7 +6,7 @@ import WebSocket, { WebSocketServer } from 'ws';
 import { EventEmitter } from 'events';
 import { clearInterval } from 'node:timers';
 import { formatCompact, Bot, Message, segment, SendOptions } from 'zhin.js';
-import type { Router } from '@zhin.js/http';
+import type { Router } from '@zhin.js/host-router';
 import { callApi } from './api.js';
 import type { MilkyWssConfig, MilkyEvent } from './types.js';
 import type { MilkyAdapter } from './adapter.js';

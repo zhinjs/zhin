@@ -1,5 +1,5 @@
 // @ts-nocheck
-import type { Router, RouterContext } from '@zhin.js/http'
+import type { Router, RouterContext } from '@zhin.js/host-router'
 
 interface PluginLike {
   name?: string

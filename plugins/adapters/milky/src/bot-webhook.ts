@@ -3,7 +3,7 @@
  */
 import { EventEmitter } from 'events';
 import { formatCompact, Bot, Message, segment, SendOptions } from 'zhin.js';
-import { registerFetchRoute, type Router, type RouterContext } from '@zhin.js/http/router';
+import { firstHeader, firstQuery, registerFetchRoute, type Router, type RouterContext } from '@zhin.js/host-router/router';
 import { callApi } from './api.js';
 import type { MilkyWebhookConfig, MilkyEvent } from './types.js';
 import type { MilkyAdapter } from './adapter.js';
@@ -15,10 +15,9 @@ import {
 } from './utils.js';
 
 function getAccessTokenFromRequest(ctx: RouterContext): string | undefined {
-  const auth = ctx.get('authorization');
+  const auth = firstHeader(ctx, 'authorization');
   if (auth?.startsWith('Bearer ')) return auth.slice(7);
-  const q = ctx.query.access_token;
-  return q || undefined;
+  return firstQuery(ctx, 'access_token');
 }
 
 export class MilkyWebhookBot extends EventEmitter implements Bot<MilkyWebhookConfig, MilkyEvent> {

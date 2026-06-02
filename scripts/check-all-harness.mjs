@@ -47,11 +47,6 @@ const checks = [
     description: 'Stable 路径 smoke（Sandbox + Agent 核心单测 + minimal-bot 契约）',
   },
   {
-    name: 'Queue Beta Smoke',
-    command: 'pnpm check:queue-beta',
-    description: 'queue-runtime Vitest + minimal-qbot 启动',
-  },
-  {
     name: 'usePlugin Top-Level',
     command: 'pnpm check:use-plugin-top-level',
     description: '插件 usePlugin() 须在模块顶层',

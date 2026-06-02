@@ -21,7 +21,6 @@ const scanRoots = [
   'docs/contributing/harness-engineering.md',
   'docs/getting-started/index.md',
   'examples/minimal-bot',
-  'examples/minimal-qbot',
   'examples/test-bot/ACCEPTANCE.md',
   'plugins/adapters/README.md',
   'examples/test-bot/README.md',

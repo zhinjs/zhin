@@ -47,6 +47,7 @@ const scanRoots = [
   'packages/agent/src',
   'packages/zhin/src',
   'plugins/features',
+  'packages/host',
   'plugins/services',
   'plugins/utils',
   'plugins/games',

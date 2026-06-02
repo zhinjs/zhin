@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Plugin } from 'zhin.js';
-import { createAdapterTestSuite } from '../../../../packages/core/tests/adapter-harness.js';
+import { createAdapterTestSuite } from '../../../../packages/im/core/tests/adapter-harness.js';
 import { NapCatAdapter, type NapCatBot } from '../src/adapter';
 import { NapCatWsClient } from '../src/bot-ws-client';
 import type { NapCatWsClientConfig, NapCatMessageEvent } from '../src/types';

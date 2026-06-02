@@ -26,27 +26,30 @@ pnpm install
 | `basic/database` | `zhinjs/database` |
 | `basic/logger` | `zhinjs/logger` |
 | `basic/schema` | `zhinjs/schema` |
-| `packages/kernel` | `zhinjs/kernel` |
-| `packages/ai` | `zhinjs/ai` |
-| `packages/agent` | `zhinjs/agent` |
-| `packages/client` | `zhinjs/client` |
-| `packages/create-zhin` | `zhinjs/create-zhin` |
-| `packages/satori` | `zhinjs/satori` |
+| `packages/im/kernel` | `zhinjs/kernel` |
+| `packages/im/ai` | `zhinjs/ai` |
+| `packages/im/agent` | `zhinjs/agent` |
+| `packages/console/client` | `zhinjs/client` |
+| `packages/toolkit/create-zhin` | `zhinjs/create-zhin` |
+| `packages/toolkit/satori` | `zhinjs/satori` |
 | `plugins` | `zhinjs/plugins` |
 | `docs` | `zhinjs/docs` |
 
-**主仓库内常驻包**：`packages/core`、`packages/zhin`、`examples/*`。
+**主仓库内常驻包**：`packages/im/*`、`packages/console/*`、`packages/toolkit/*`、`packages/host/*`、`examples/*`。
 
 ### pnpm workspace
 
 根目录 `pnpm-workspace.yaml` 已声明：
 
 - `basic/*` — 基础能力（CLI、数据库、日志、schema 等）
-- `packages/*` — 框架核心与运行时（`kernel`、`core`、`zhin`、`agent`、`client`、`ai` 等）
-  - `ai`：通用 AI 引擎，按子模块组织——`agent/`（Agent 引擎 + CostTracker + ToolFilter）、`memory/`（Session + Context + ConversationMemory）、`compaction/`（分阶段摘要 + MicroCompact + token 估算）
-  - `agent`：IM Agent 编排，按子模块组织——`orchestrator/`（五类注册表）、`discovery/`（文件化发现）、`security/`（ExecPolicy + FilePolicy）、`mcp-client/`（MCP 连接管理）、`defaults/`（默认资源注册）
+- `packages/im/*` — IM 主链：`kernel` → `ai` → `core` → `agent` → `zhin`
+  - `ai`：通用 AI 引擎（`agent/`、`memory/`、`compaction/`）
+  - `agent`：IM Agent 编排（`orchestrator/`、`discovery/`、`security/`、`mcp-client/`、`defaults/`）
+- `packages/console/*` — 控制台：`contract`、`pagemanager`、`client`（npm 名均为单词包名）
+- `packages/toolkit/*` — 脚手架与独立工具库：`create-zhin`、`satori`
+- `packages/host/*` — Host 运行时：`host-router`、`host-api`、`mcp`
 - `plugins/adapters/*` — 平台适配器
-- `plugins/services/*` — 服务类插件（如 HTTP、Console）
+- `plugins/services/*` — **可选**服务类插件（内置 Host 栈见 `packages/host/`）
 - `plugins/features/*` — 特性类插件
 - `plugins/utils/*` — 工具类插件
 - `plugins/games/*` — 游戏类插件（可为空，仅保留说明时请放 `README.md`）
@@ -62,7 +65,7 @@ pnpm install
 | 核心/共享库 | `@zhin.js/<短名>` | `@zhin.js/core`、`@zhin.js/kernel` |
 | 适配器 | `@zhin.js/adapter-<平台>` | `@zhin.js/adapter-icqq` |
 | 工具插件 | `@zhin.js/plugin-<名称>` | `@zhin.js/plugin-rss` |
-| 服务 | `@zhin.js/<服务名>` | `@zhin.js/console`、`@zhin.js/http` |
+| 服务 | `@zhin.js/<服务名>` | `@zhin.js/host-api`、`@zhin.js/host-router` |
 
 目录名（文件夹）优先 **kebab-case**；与平台强相关的缩写（如 `icqq`、`qq`）可保持小写短名。
 
@@ -93,12 +96,12 @@ pnpm install
   tests/
 ```
 
-典型：`@zhin.js/core`、`@zhin.js/adapter-*` 服务端部分、`basic/database` 等。
+典型：`packages/im/core`、`@zhin.js/adapter-*` 服务端部分、`basic/database` 等。
 
 ### 3.2 带浏览器扩展的适配器 / 插件
 
 - **Node 适配逻辑**：`src/` → `lib/`。
-- **控制台扩展 UI**：源码在包根 **`client/`**（如 `client/index.tsx`），由 `@zhin.js/console` 的构建能力打包；产物落在**该包根目录下的 `dist/`**（与 `plugins/services/console/src/build.ts` 行为一致）。
+- **控制台扩展 UI**：源码在包根 **`client/`**（如 `client/index.tsx`），由 **`zhin build`**（CLI esbuild）打包；产物落在**该包根目录下的 `dist/`**。
 
 `package.json` 的 `files` 中通常需包含 **`client`**（源码供开发/扩展加载）及构建生成的 **`dist`**（若对外分发预构建产物）。
 
@@ -108,10 +111,11 @@ pnpm install
 
 | 包 | 源码 → 产物 | 职责 |
 |---|---|---|
-| `@zhin.js/console-types` | `src/` → tsup → `dist/` | 共享类型与常量 |
-| `@zhin.js/console-core` | `src/node/` → tsc → `lib/` | PageManager、EntryStore、esbuild 管线（Host 侧，无 UI） |
+| `@zhin.js/contract` | `src/` → tsc → `lib/` | Console / PageManager **契约**（`PluginRegisterHostApi`、`ConsoleEntry`、常量） |
+| `@zhin.js/pagemanager` | `src/node/` → tsc → `lib/` | PageManager、EntryStore、esbuild 管线（Host 运行时） |
 | `@zhin.js/client` | `client/` → tsc → `dist/` | Remote Console SDK：`app`、REST/SSE、`loadConsoleEntries` |
-| `@zhin.js/console` | `src/` → tsup → `lib/` | Host 胶水层：PageManager、REST/SSE API（`api_only`） |
+| `@zhin.js/host-router` | `src/` → tsc → `lib/` | Host 传输：Koa、Router、Bearer、CORS |
+| `@zhin.js/host-api` | `src/` → tsup → `lib/` | Host 管理面：REST + Console 协议（`api_only`） |
 | **zhin-console**（独立仓库） | Farm / 未来 Vite | 全部 Console UI；依赖 npm 上的 `@zhin.js/client` 等 |
 
 **插件注册契约**：
@@ -120,14 +124,16 @@ pnpm install
 
 **共享依赖**：`/console/esm/*.mjs` 提供 canonical ESM（react、react-dom 等），esbuild 按需打包 + 缓存，无需 import map / farm-peer-shim。
 
-**构建顺序（Host）**：`console-types` (tsup) → `console-core` (tsc) → `client` (tsc) → `console` (tsup)。
+**构建顺序（Host）**：`contract` (tsc) → `pagemanager` (tsc) → `client` (tsc) → `host-router` (tsc) → `host-api` (tsup)。
 
-**约定**：Host 侧逻辑在 `plugins/services/console/src/`；适配器控制台扩展仍在各适配器包根 `client/`（由 Host `/@dev` 打包）。**内置仪表盘等 UI** 仅在 **zhin-console** 仓库维护。
+**类型导入**：适配器 `client/` 使用 `import type { PluginRegisterHostApi } from '@zhin.js/contract'`（类型勿从 `host-api` 主入口副作用 import；`PageManager` 类型可 `import type { PageManager } from '@zhin.js/host-api'`）。
 
-### 3.4 `@zhin.js/client`（`packages/client`）
+**约定**：Host 传输在 `packages/host/router/src/`；管理面 API 在 `packages/host/api/src/`；适配器控制台扩展仍在各适配器包根 `client/`（由 Host `/@dev` 打包）。**内置仪表盘等 UI** 仅在 **zhin-console** 仓库维护。
 
-- **`packages/client/`**：npm 包 **`@zhin.js/client`** 的根。
-- **`packages/client/client/`**：浏览器端源码（`app.ts` 单例、WebSocket 模块、mediaSrc 工具）。
+### 3.4 `@zhin.js/client`（`packages/console/client`）
+
+- **`packages/console/client/`**：npm 包 **`@zhin.js/client`** 的根。
+- **`packages/console/client/client/`**：浏览器端源码（`app.ts` 单例、WebSocket 模块、mediaSrc 工具）。
 - **构建输出**：`dist/`（`main`/`types` 指向 `./dist/...`）。
 - **核心导出**：`app` 单例；WebSocket / REST+SSE hooks；`loadConsoleEntries`；`apiFetch` / `getApiBase`（Remote 用）。
 - **无 Redux**：状态管理由 `app` 单例 + `useSyncExternalStore` 替代。
@@ -161,8 +167,9 @@ pnpm install
 |------|------|------|
 | 多数 `plugins/*`、`packages/*`、`basic/*`（仅 Node） | ✅ | `src/` → `lib/`，与约定一致。 |
 | `@zhin.js/client` | ✅ | 浏览器源码在 `client/`，发布入口在 `dist/`。 |
-| 含 `client/` 的适配器 | ✅ | 扩展构建输出目标为包根 `dist/`（Console `build.ts`）。 |
-| `@zhin.js/console` | ✅ | `src/` → `lib/`，大前端 `client/` → `dist/`；不再导出无效的 `exports["./client"]`（SPA 由 `dist/` 静态资源承载）。 |
+| 含 `client/` 的适配器 | ✅ | 扩展构建输出目标为包根 `dist/`（`zhin build`）。 |
+| `@zhin.js/host-router` | ✅ | `src/` → `lib/`；Koa + Router + 鉴权。 |
+| `@zhin.js/host-api` | ✅ | `src/` → `lib/`；Host **api_only**（无内置 SPA）。 |
 | `@zhin.js/satori`（`packages/satori`） | ✅ | Node 库：`src/` → **`lib/`**（tsup），与全局约定一致。 |
 | `examples/*` | ℹ️ | 示例工程可能直接运行 `src`，不强制 `lib`/`dist`，不纳入插件包约定。 |
 

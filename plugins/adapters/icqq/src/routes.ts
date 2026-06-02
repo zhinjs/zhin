@@ -1,7 +1,7 @@
 /**
  * ICQQ HTTP 路由注册 — 通过 IPC 查询守护进程数据
  */
-import type { Router } from "@zhin.js/http";
+import type { Router } from "@zhin.js/host-router";
 import type { Plugin } from "zhin.js";
 import type { IcqqAdapter } from "./adapter.js";
 import { Actions } from "./protocol.js";

@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Plugin, type SendOptions } from 'zhin.js';
-import { createAdapterTestSuite } from '../../../../packages/core/tests/adapter-harness.js';
+import { createAdapterTestSuite } from '../../../../packages/im/core/tests/adapter-harness.js';
 import { KookAdapter } from '../src/adapter.js';
 import { KookBot } from '../src/bot.js';
 import type { KookBotConfig } from '../src/types.js';

@@ -1,6 +1,6 @@
 # AI Agent modelHarness YAML 覆盖与合并边界
 
-`ai.agent.modelHarness` 允许在主配置中覆盖 TypeScript 默认 harness（`packages/agent/src/zhin-agent/model-harness.ts`），用于无代码调参。
+`ai.agent.modelHarness` 允许在主配置中覆盖 TypeScript 默认 harness（`packages/im/agent/src/zhin-agent/model-harness.ts`），用于无代码调参。
 
 ## 配置形状
 

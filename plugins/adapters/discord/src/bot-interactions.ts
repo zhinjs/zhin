@@ -22,7 +22,7 @@ import {
 } from "discord.js";
 import nacl from "tweetnacl";
 import { Bot, Message, SendOptions, SendContent, MessageSegment, segment } from "zhin.js";
-import { registerFetchRoute, type Router, type RouterContext } from "@zhin.js/http/router";
+import { registerFetchRoute, type Router, type RouterContext } from "@zhin.js/host-router/router";
 import type { DiscordInteractionsConfig } from "./types.js";
 import type { DiscordAdapter } from "./adapter.js";
 

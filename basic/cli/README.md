@@ -522,7 +522,7 @@ zhin onboard [options]
 
 ### send - 向运行中的机器人发送消息
 
-在 daemon 运行时，通过 HTTP API 向指定适配器/场景发送一条消息（需启用 `@zhin.js/http`，借鉴 OpenClaw `message send`）。
+在 daemon 运行时，通过 HTTP API 向指定适配器/场景发送一条消息（需启用 `@zhin.js/host-router`，借鉴 OpenClaw `message send`）。
 
 ```bash
 zhin send <scene_id> [内容...] [options]

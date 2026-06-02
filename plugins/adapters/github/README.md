@@ -23,7 +23,7 @@ pnpm add @zhin.js/adapter-github
 
 ## 依赖
 
-- `@zhin.js/http`（可选）— 提供 Webhook 路由，用于接收 GitHub 事件推送
+- `@zhin.js/host-router`（可选）— 提供 Webhook 路由，用于接收 GitHub 事件推送
 
 ## GitHub App 创建
 
@@ -65,7 +65,7 @@ bots:
 
 plugins:
   - "@zhin.js/adapter-github"
-  - "@zhin.js/http"                       # 可选，提供 Webhook + OAuth 能力
+  - "@zhin.js/host-router"                       # 可选，提供 Webhook + OAuth 能力
 ```
 
 `.env` 文件：
@@ -185,7 +185,7 @@ Headers:
 ### 前置条件
 
 - 需要配置 `client_id` 和 `client_secret`
-- 需要 `@zhin.js/http` 插件（提供 HTTP 路由）
+- 需要 `@zhin.js/host-router` 插件（提供 HTTP 路由）
 - GitHub App 设置页中的 Callback URL 须指向 `https://your-domain/pub/github/oauth/callback`
 
 ## 数据库表
@@ -237,8 +237,8 @@ adapter-github/
 └── README.md
 ```
 
-- **无 `@zhin.js/http` 时**：适配器正常运行，可使用所有 API 工具（PR/Issue/Repo 管理），但无法接收 Webhook 推送和 OAuth 绑定
-- **有 `@zhin.js/http` 时**：通过 `useContext('router')` 自动注册 Webhook 路由 + OAuth 路由，获得事件通知、聊天消息接收和用户绑定能力
+- **无 `@zhin.js/host-router` 时**：适配器正常运行，可使用所有 API 工具（PR/Issue/Repo 管理），但无法接收 Webhook 推送和 OAuth 绑定
+- **有 `@zhin.js/host-router` 时**：通过 `useContext('router')` 自动注册 Webhook 路由 + OAuth 路由，获得事件通知、聊天消息接收和用户绑定能力
 
 ## 许可证
 

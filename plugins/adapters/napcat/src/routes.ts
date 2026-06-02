@@ -1,4 +1,4 @@
-import type { Router } from '@zhin.js/http';
+import type { Router } from '@zhin.js/host-router';
 import type { NapCatAdapter } from './adapter.js';
 
 export function registerRoutes(router: Router, napcat: NapCatAdapter): void {

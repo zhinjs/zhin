@@ -17,7 +17,8 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "verbatimModuleSyntax": false
+    "verbatimModuleSyntax": false,
+    "types": ["@zhin.js/host-router"]
   },
   "include": ["src/**/*"],
   "exclude": ["lib", "node_modules"]

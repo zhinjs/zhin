@@ -27,8 +27,7 @@
     "mongodb": ">=3.1.13",
     "mysql2": ">=3.9.8",
     "pg": ">=2.11.2",
-    "redis": "latest",
-    "zhin.js": "workspace:*"
+    "redis": "latest"
   },
   "peerDependenciesMeta": {
     "mysql2": {
@@ -50,8 +49,7 @@
     "mysql2": "^3.22.4",
     "pg": "^8.21.0",
     "redis": "latest",
-    "typescript": "^6.0.3",
-    "zhin.js": "workspace:*"
+    "typescript": "^6.0.3"
   },
   "repository": {
     "type": "git",

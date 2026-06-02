@@ -3,7 +3,7 @@
  * 测试 ZhinTool metadata 完整性和工具函数
  */
 import { describe, it, expect } from 'vitest';
-import { ZhinTool } from '../../../../packages/core/src/built/tool.js';
+import { ZhinTool } from '../../../../packages/im/core/src/built/tool.js';
 
 describe('60s 插件 ZhinTool 定义', () => {
   // 模拟插件中的工具定义

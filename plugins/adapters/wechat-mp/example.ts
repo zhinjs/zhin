@@ -4,7 +4,7 @@ import WeChatMPAdapter from './lib/index.js'
 // 创建微信公众号机器人应用
 const app = createApp({
   // 需要先启用 HTTP 插件
-  plugins: ['@zhin.js/http'],
+  plugins: ['@zhin.js/host-router'],
   adapters: {
     'wechat-mp': {
       context: 'wechat-mp',

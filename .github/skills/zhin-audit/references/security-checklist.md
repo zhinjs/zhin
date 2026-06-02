@@ -6,7 +6,7 @@
 
 - [ ] **eval / Function 构造器**
   - 搜索：`eval(`, `new Function(`, `Function(`
-  - 重点文件：`packages/agent/src/builtin-tools.ts`, `packages/kernel/src/`
+  - 重点文件：`packages/im/agent/src/builtin-tools.ts`, `packages/im/kernel/src/`
   - 验证：所有动态代码执行是否有沙箱隔离
 
 - [ ] **Shell 命令执行**
@@ -16,7 +16,7 @@
 
 - [ ] **动态导入**
   - 搜索：`import(` 拼接用户输入的路径
-  - 重点文件：`packages/core/src/plugin.ts`（热重载机制）
+  - 重点文件：`packages/im/core/src/plugin.ts`（热重载机制）
   - 验证：导入路径是否限制在安全目录内
 
 ## 2. 注入攻击 [严重]
@@ -27,19 +27,19 @@
   - 检查 `where` 条件构建是否拼接字符串
 
 - [ ] **命令注入**
-  - 重点文件：`packages/agent/src/builtin-tools.ts`
+  - 重点文件：`packages/im/agent/src/builtin-tools.ts`
   - 验证：bash 命令参数是否经过 `checkBashCommandSafety()`
   - 检查正则 `[\s;|&]` 分割是否可被绕过
 
 - [ ] **XSS / HTML 注入**
-  - 重点文件：`packages/satori/src/html-to-svg.ts`
+  - 重点文件：`packages/toolkit/satori/src/html-to-svg.ts`
   - 验证：用户输入是否在 HTML 渲染前转义
   - 检查 SVG 输出是否包含 `<script>` 等危险标签
 
 ## 3. 认证与授权 [高]
 
 - [ ] **Token 比较**
-  - 文件：`plugins/services/http/src/index.ts`
+  - 文件：`packages/host/router/src/index.ts`
   - 验证：是否使用 `crypto.timingSafeEqual()` 防止时序攻击
   - 当前状态：使用 `===` 直接比较（⚠️ 时序攻击风险）
 
@@ -76,7 +76,7 @@
 - [ ] **路径遍历**
   - 搜索文件读写操作中的用户输入
   - 验证：路径经过 `path.resolve` + 边界检查
-  - 重点：`packages/agent/src/security/file-policy.ts` 黑名单完整性
+  - 重点：`packages/im/agent/src/security/file-policy.ts` 黑名单完整性
 
 - [ ] **文件上传**
   - 检查是否有文件上传功能

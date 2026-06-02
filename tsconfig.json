@@ -20,10 +20,10 @@
     "sourceMap": true,
     "paths": {
       "@zhin.js/core": [
-        "./packages/core/src/index.ts"
+        "./packages/im/core/src/index.ts"
       ],
       "@zhin.js/core/*": [
-        "./packages/core/src/*"
+        "./packages/im/core/src/*"
       ]
     },
     "types": []

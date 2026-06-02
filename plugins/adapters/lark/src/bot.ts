@@ -1,7 +1,7 @@
 /**
  * 飞书/Lark Bot 实现
  */
-import { registerFetchRoute, type Router, type RouterContext } from "@zhin.js/http/router";
+import { registerFetchRoute, type Router, type RouterContext } from "@zhin.js/host-router/router";
 import axios, { type AxiosInstance } from "axios";
 import { createHash } from "crypto";
 import { formatCompact, Bot, Message, MessageSegment, segment, SendContent, SendOptions } from 'zhin.js';

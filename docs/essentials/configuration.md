@@ -77,15 +77,15 @@ services:
 
 ```yaml
 plugins:
-  - "@zhin.js/http"            # HTTP 服务
-  - "@zhin.js/console"         # Web 控制台
+  - "@zhin.js/host-router"            # HTTP 服务
+  - "@zhin.js/host-api"        # Host 管理面 API（REST + Console 协议）
   - "@zhin.js/adapter-sandbox" # 终端适配器
   - "@zhin.js/adapter-icqq"   # ICQQ 适配器
   - my-plugin                  # 你的本地插件
 ```
 
 **注意**：
-- npm 插件使用完整包名（如 `@zhin.js/http`）
+- npm 插件使用完整包名（如 `@zhin.js/host-router`）
 - 本地插件使用文件名（如 `my-plugin` 对应 `src/plugins/my-plugin.ts`）
 - 一旦写出 `plugins` 数组，就表示完整插件列表；如果要保留默认 HTTP、Console、Sandbox 插件，需要一并写出。
 
@@ -394,11 +394,11 @@ scoop install nssm
 
 ## Web 控制台配置
 
-`@zhin.js/console` 在 Host 上注册 **Console API**（`PageManager`、`/api/console/*`、`/api/events` 等）。UI 在 **[Remote Console](https://console.zhin.dev)**（独立仓库 [zhin-console](https://github.com/zhinjs/zhin-console)）。详见 [console-remote.md](../console-remote.md)。
+`@zhin.js/host-api` 在 `@zhin.js/host-router` 的 Router 上注册 **管理面 API**（系统/插件/Bot REST、`PageManager`、`/api/console/*`、`/api/events` 等）。UI 在 **[Remote Console](https://console.zhin.dev)**（独立仓库 [zhin-console](https://github.com/zhinjs/zhin-console)）。详见 [console-remote.md](../console-remote.md)。
 
 ```yaml
-console:
-  enabled: true      # 是否启用 Console API（非 Host 静态页）
+hostApi:
+  enabled: true      # 是否启用 Host API（非 Host 静态页）
   lazyLoad: false    # 是否延迟初始化 PageManager（与 Remote UI 无关）
 ```
 
@@ -463,7 +463,7 @@ pnpm add @zhin.js/plugin-music
 **配置**：
 ```yaml
 plugins:
-  - "@zhin.js/http"          # HTTP 服务
+  - "@zhin.js/host-router"          # HTTP 服务
   - "@zhin.js/plugin-music"  # 音乐插件
 ```
 
@@ -476,8 +476,8 @@ plugins:
 http:
   port: 8086
 
-# 控制台插件配置
-console:
+# Host API 插件配置
+hostApi:
   enabled: true
 
 # 自定义插件配置（通过 addConfig 注册）
@@ -492,7 +492,7 @@ my-plugin:
 
 ```yaml
 plugins:
-  - "@zhin.js/http"
+  - "@zhin.js/host-router"
   # - "@zhin.js/plugin-music"  # 已禁用
 ```
 
@@ -536,8 +536,8 @@ services:
 
 plugins:
   - my-plugin
-  - "@zhin.js/http"
-  - "@zhin.js/console"
+  - "@zhin.js/host-router"
+  - "@zhin.js/host-api"
   - "@zhin.js/adapter-sandbox"
   - "@zhin.js/adapter-icqq"
 
@@ -552,7 +552,7 @@ http:
   port: 8086
   token: ${HTTP_TOKEN}
 
-console:
+hostApi:
   enabled: true
   lazyLoad: false
 

@@ -10,8 +10,8 @@ import {
   unregisterAgentPromptContributor,
 } from "zhin.js";
 import { createIcqqAgentPromptContributor } from "./agent-prompt.js";
-import type { Router } from "@zhin.js/http";
-import { PageManager } from "@zhin.js/console";
+import type { Router } from "@zhin.js/host-router";
+import { PageManager } from "@zhin.js/host-api";
 import { IcqqAdapter } from "./adapter.js";
 import { registerCommands } from "./commands/index.js";
 import { registerTools } from "./tools/index.js";

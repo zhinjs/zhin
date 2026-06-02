@@ -12,8 +12,8 @@
   "dependencies": {
     "@zhin.js/adapter-sandbox": "workspace:*",
     "@zhin.js/cli": "workspace:*",
-    "@zhin.js/console": "workspace:*",
-    "@zhin.js/http": "workspace:*",
+    "@zhin.js/host-api": "workspace:*",
+    "@zhin.js/host-router": "workspace:*",
     "zhin.js": "workspace:*"
   },
   "devDependencies": {

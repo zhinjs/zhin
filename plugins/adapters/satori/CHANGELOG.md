@@ -7,14 +7,14 @@
 - 7e14f8d: fix: 统一发个版,优化一些列安全问题
 - Updated dependencies [7e14f8d]
   - zhin.js@1.0.86
-  - @zhin.js/http@1.0.79
+  - @zhin.js/host-router@1.0.79
 
 ## 0.0.35
 
 ### Patch Changes
 
 - zhin.js@1.0.85
-- @zhin.js/http@1.0.78
+- @zhin.js/host-router@1.0.78
 
 ## 0.0.34
 
@@ -24,7 +24,7 @@
 - Updated dependencies [0db9fed]
 - Updated dependencies [f19d2e0]
   - zhin.js@1.0.84
-  - @zhin.js/http@1.0.77
+  - @zhin.js/host-router@1.0.77
 
 ## 0.0.33
 
@@ -32,7 +32,7 @@
 
 - 775427e: fix: edge 支持
 - Updated dependencies [775427e]
-  - @zhin.js/http@1.0.76
+  - @zhin.js/host-router@1.0.76
   - zhin.js@1.0.83
 
 ## 0.0.32
@@ -41,7 +41,7 @@
 
 - 32049f5: fix: init publish
 - Updated dependencies [32049f5]
-  - @zhin.js/http@1.0.75
+  - @zhin.js/host-router@1.0.75
   - zhin.js@1.0.82
 
 ## 0.0.31
@@ -50,35 +50,35 @@
 
 - Updated dependencies [8086ccb]
   - zhin.js@1.0.81
-  - @zhin.js/http@1.0.74
+  - @zhin.js/host-router@1.0.74
 
 ## 0.0.30
 
 ### Patch Changes
 
 - zhin.js@1.0.80
-- @zhin.js/http@1.0.73
+- @zhin.js/host-router@1.0.73
 
 ## 0.0.29
 
 ### Patch Changes
 
 - zhin.js@1.0.79
-- @zhin.js/http@1.0.72
+- @zhin.js/host-router@1.0.72
 
 ## 0.0.28
 
 ### Patch Changes
 
 - zhin.js@1.0.78
-- @zhin.js/http@1.0.71
+- @zhin.js/host-router@1.0.71
 
 ## 0.0.27
 
 ### Patch Changes
 
 - zhin.js@1.0.77
-- @zhin.js/http@1.0.70
+- @zhin.js/host-router@1.0.70
 
 ## 0.0.26
 
@@ -86,14 +86,14 @@
 
 - Updated dependencies [cb9fbf1]
   - zhin.js@1.0.76
-  - @zhin.js/http@1.0.69
+  - @zhin.js/host-router@1.0.69
 
 ## 0.0.25
 
 ### Patch Changes
 
 - zhin.js@1.0.75
-- @zhin.js/http@1.0.68
+- @zhin.js/host-router@1.0.68
 
 ## 0.0.24
 
@@ -101,7 +101,7 @@
 
 - Updated dependencies [c9dec38]
   - zhin.js@1.0.74
-  - @zhin.js/http@1.0.67
+  - @zhin.js/host-router@1.0.67
 
 ## 0.0.23
 
@@ -109,7 +109,7 @@
 
 - f1e9a76: fix: 提高 skill 质量
   - zhin.js@1.0.73
-  - @zhin.js/http@1.0.66
+  - @zhin.js/host-router@1.0.66
 
 ## 0.0.22
 
@@ -124,7 +124,7 @@
 - e28fd7c: fix: 重新发版
 - Updated dependencies [e28fd7c]
   - zhin.js@1.0.72
-  - @zhin.js/http@1.0.65
+  - @zhin.js/host-router@1.0.65
 
 ## 0.0.20
 
@@ -133,21 +133,21 @@
 - 4304825: fix: 重新发版
 - Updated dependencies [4304825]
   - zhin.js@1.0.71
-  - @zhin.js/http@1.0.64
+  - @zhin.js/host-router@1.0.64
 
 ## 0.0.19
 
 ### Patch Changes
 
 - zhin.js@1.0.68
-- @zhin.js/http@1.0.63
+- @zhin.js/host-router@1.0.63
 
 ## 0.0.18
 
 ### Patch Changes
 
 - Updated dependencies [0eba6d6]
-  - @zhin.js/http@1.0.62
+  - @zhin.js/host-router@1.0.62
   - zhin.js@1.0.67
 
 ## 0.0.17
@@ -155,14 +155,14 @@
 ### Patch Changes
 
 - zhin.js@1.0.66
-- @zhin.js/http@1.0.61
+- @zhin.js/host-router@1.0.61
 
 ## 0.0.16
 
 ### Patch Changes
 
 - zhin.js@1.0.65
-- @zhin.js/http@1.0.60
+- @zhin.js/host-router@1.0.60
 
 ## 0.0.15
 
@@ -171,14 +171,14 @@
 - 9577eba: fix: tool 收集 bug,升级 ts 到 6.0.2
 - Updated dependencies [9577eba]
   - zhin.js@1.0.64
-  - @zhin.js/http@1.0.59
+  - @zhin.js/host-router@1.0.59
 
 ## 0.0.14
 
 ### Patch Changes
 
 - Updated dependencies [ba30934]
-  - @zhin.js/http@1.0.58
+  - @zhin.js/host-router@1.0.58
   - zhin.js@1.0.63
 
 ## 0.0.13
@@ -186,14 +186,14 @@
 ### Patch Changes
 
 - zhin.js@1.0.62
-- @zhin.js/http@1.0.57
+- @zhin.js/host-router@1.0.57
 
 ## 0.0.12
 
 ### Patch Changes
 
 - zhin.js@1.0.61
-- @zhin.js/http@1.0.56
+- @zhin.js/host-router@1.0.56
 
 ## 0.0.11
 
@@ -208,7 +208,7 @@
   chore: update tsconfig to include plugins directory for TypeScript compilation
 - Updated dependencies [5073d4c]
   - zhin.js@1.0.60
-  - @zhin.js/http@1.0.55
+  - @zhin.js/host-router@1.0.55
 
 ## 0.0.10
 
@@ -217,35 +217,35 @@
 - c212bf7: fix: 适配器优化
 - Updated dependencies [c212bf7]
   - zhin.js@1.0.59
-  - @zhin.js/http@1.0.54
+  - @zhin.js/host-router@1.0.54
 
 ## 0.0.9
 
 ### Patch Changes
 
 - zhin.js@1.0.58
-- @zhin.js/http@1.0.53
+- @zhin.js/host-router@1.0.53
 
 ## 0.0.8
 
 ### Patch Changes
 
 - zhin.js@1.0.57
-- @zhin.js/http@1.0.52
+- @zhin.js/host-router@1.0.52
 
 ## 0.0.7
 
 ### Patch Changes
 
 - zhin.js@1.0.56
-- @zhin.js/http@1.0.51
+- @zhin.js/host-router@1.0.51
 
 ## 0.0.6
 
 ### Patch Changes
 
 - zhin.js@1.0.55
-- @zhin.js/http@1.0.50
+- @zhin.js/host-router@1.0.50
 
 ## 0.0.5
 
@@ -254,14 +254,14 @@
 - 16c8f92: fix: 统一发一次版
 - Updated dependencies [16c8f92]
   - zhin.js@1.0.54
-  - @zhin.js/http@1.0.49
+  - @zhin.js/host-router@1.0.49
 
 ## 0.0.4
 
 ### Patch Changes
 
 - zhin.js@1.0.53
-- @zhin.js/http@1.0.48
+- @zhin.js/host-router@1.0.48
 
 ## 0.0.3
 
@@ -269,7 +269,7 @@
 
 - a3511a0: 各包内 Agent 技能说明已固定为随包发布的 `skills/*/SKILL.md`（替代已移除的运行时 `declareSkill`）。本批为 registry / 分发侧对齐的 **patch** 版本递增。
 - Updated dependencies [a3511a0]
-  - @zhin.js/http@1.0.47
+  - @zhin.js/host-router@1.0.47
 
 ## 0.0.2
 
@@ -278,11 +278,11 @@
 - Updated dependencies [bb6bfa8]
 - Updated dependencies [bb6bfa8]
   - zhin.js@1.0.52
-  - @zhin.js/http@1.0.46
+  - @zhin.js/host-router@1.0.46
 
 ## 0.0.1
 
 ### Patch Changes
 
 - zhin.js@1.0.51
-- @zhin.js/http@1.0.45
+- @zhin.js/host-router@1.0.45

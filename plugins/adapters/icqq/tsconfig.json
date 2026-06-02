@@ -19,7 +19,7 @@
     "sourceMap": true,
     "verbatimModuleSyntax": false,
     "types": [
-      "@zhin.js/http"
+      "@zhin.js/host-router"
     ]
   },
   "include": ["src/**/*"],

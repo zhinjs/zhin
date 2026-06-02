@@ -108,10 +108,10 @@ await message.$reply(message);
 
 ### 检查范围
 
-- `packages/zhin/src`
-- `packages/agent/src`
+- `packages/im/zhin/src`
+- `packages/im/agent/src`
 - `plugins/features`
-- `plugins/services`
+- `packages/host`
 - `plugins/utils`
 - `plugins/games`
 

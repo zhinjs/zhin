@@ -7,7 +7,7 @@ import type { IncomingMessage } from 'http';
 import { NapCatBotBase } from './bot-base.js';
 import type { NapCatWsServerConfig, ApiResponse } from './types.js';
 import type { NapCatAdapter } from './adapter.js';
-import type { Router } from '@zhin.js/http';
+import type { Router } from '@zhin.js/host-router';
 import { enableTypingIndicator } from './typing-indicator.js';
 
 export class NapCatWsServer extends NapCatBotBase {

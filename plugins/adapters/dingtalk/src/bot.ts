@@ -2,7 +2,7 @@
  * 钉钉 Bot 实现
  */
 import { formatCompact, Bot, Message, MessageSegment, segment, SendContent, SendOptions } from 'zhin.js';
-import { registerFetchRoute, type Router, type RouterContext } from "@zhin.js/http/router";
+import { registerFetchRoute, type Router, type RouterContext } from "@zhin.js/host-router/router";
 import { createHmac } from "crypto";
 import type {
   DingTalkBotConfig,

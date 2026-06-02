@@ -6,7 +6,7 @@ import { EventEmitter } from 'events';
 import { clearInterval, clearTimeout } from 'node:timers';
 import { IncomingMessage } from 'http';
 import { formatCompact, Bot, Message, segment, SendOptions } from 'zhin.js';
-import type { Router } from '@zhin.js/http';
+import type { Router } from '@zhin.js/host-router';
 import type { OneBot12WssConfig, OneBot12Event, OneBot12ActionRequest, OneBot12ActionResponse } from './types.js';
 import type { OneBot12Adapter } from './adapter.js';
 import { formatOneBot12MessagePayload, isMessageEvent, contentToOb12Segments } from './utils.js';

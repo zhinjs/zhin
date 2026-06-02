@@ -15,6 +15,7 @@ const repoRoot = path.resolve(__dirname, '..');
 
 const pluginDirs = [
   'plugins/adapters',
+  'packages/host',
   'plugins/services',
   'plugins/features',
   'plugins/games',

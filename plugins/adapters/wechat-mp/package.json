@@ -16,7 +16,7 @@
     "form-data": "^4.0.0"
   },
   "peerDependencies": {
-    "@zhin.js/http": "workspace:*",
+    "@zhin.js/host-router": "workspace:*",
     "zhin.js": "workspace:*"
   },
   "devDependencies": {

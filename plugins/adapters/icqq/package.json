@@ -53,7 +53,8 @@
     "@radix-ui/themes": "^3.2.1",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
-    "@zhin.js/console": "workspace:*",
+    "@zhin.js/host-api": "workspace:*",
+    "@zhin.js/contract": "workspace:*",
     "lucide-react": "^1.17.0",
     "radix-ui": "^1.4.3",
     "typescript": "^6.0.3",
@@ -62,9 +63,10 @@
   "peerDependencies": {
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/client": "workspace:*",
-    "@zhin.js/console": "workspace:*",
+    "@zhin.js/host-api": "workspace:*",
+    "@zhin.js/contract": "workspace:*",
     "@zhin.js/core": "workspace:*",
-    "@zhin.js/http": "workspace:*",
+    "@zhin.js/host-router": "workspace:*",
     "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {
@@ -74,10 +76,10 @@
     "@zhin.js/client": {
       "optional": true
     },
-    "@zhin.js/http": {
+    "@zhin.js/host-router": {
       "optional": true
     },
-    "@zhin.js/console": {
+    "@zhin.js/host-api": {
       "optional": true
     }
   },

@@ -1,6 +1,6 @@
 # Agent 系统提示词 — 上下文块契约与 Debug 形状
 
-对应 `packages/agent/src/zhin-agent/prompt.ts` 中精简分层架构（与文件头注释一致）。
+对应 `packages/im/agent/src/zhin-agent/prompt.ts` 中精简分层架构（与文件头注释一致）。
 
 ## 块顺序（稳定段 → 动态段）
 
@@ -19,7 +19,7 @@
 
 平台专属文案（icqq/github 等）见 [agent-prompt-contributors.md](./agent-prompt-contributors.md)，**不再**写入 agent 包内 `prompt.ts`。
 
-块之间使用 `SECTION_SEP`（`packages/agent/src/zhin-agent/config.ts` 导出）拼接。
+块之间使用 `SECTION_SEP`（`packages/im/agent/src/zhin-agent/config.ts` 导出）拼接。
 
 ## 用户消息与历史
 
@@ -36,6 +36,6 @@
 
 | Tier | 本仓库载体 |
 |------|------------|
-| 1 常驻 | `AGENTS.md` + 本文 + [im-queue-outbound-invariants.md](./im-queue-outbound-invariants.md) |
+| 1 常驻 | `AGENTS.md` + 本文 |
 | 2 按需 | `docs/architecture-overview.md`、`docs/architecture/*` |
 | 3 深读 | 具体包内源码、`docs/advanced/*` |

@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Plugin, type SendOptions } from 'zhin.js';
-import { createAdapterTestSuite } from '../../../../packages/core/tests/adapter-harness.js';
+import { createAdapterTestSuite } from '../../../../packages/im/core/tests/adapter-harness.js';
 import { OneBot12Adapter } from '../src/adapter.js';
 import { OneBot12WsClient } from '../src/bot-ws.js';
 import type { OneBot12WsConfig, OneBot12Event } from '../src/types.js';

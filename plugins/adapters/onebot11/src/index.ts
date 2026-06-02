@@ -2,7 +2,7 @@
  * OneBot11 适配器入口：单一适配器，支持正向 WS / 反向 WS（connection: ws | wss）
  */
 import { usePlugin, type Plugin, type Context, type IGroupManagement, createGroupManagementTools, type ToolFeature } from 'zhin.js';
-import type { Router } from '@zhin.js/http';
+import type { Router } from '@zhin.js/host-router';
 import { OneBot11Adapter } from './adapter.js';
 
 export * from './types.js';
@@ -13,7 +13,7 @@ export { OneBot11Adapter, type OneBot11Bot } from './adapter.js';
 declare module 'zhin.js' {
   namespace Plugin {
     interface Contexts {
-      router: import('@zhin.js/http').Router;
+      router: import('@zhin.js/host-router').Router;
     }
   }
   interface Adapters {

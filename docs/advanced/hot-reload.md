@@ -28,7 +28,7 @@ addCommand(
 # zhin.config.yml
 plugins:
   - my-plugin
-  - "@zhin.js/http"
+  - "@zhin.js/host-router"
 
 # 修改配置后自动重载
 ```

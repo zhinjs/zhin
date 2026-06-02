@@ -114,7 +114,7 @@ describe('CLI new command integration', () => {
     expect(await fs.pathExists(clientIndexPath)).toBe(true)
     const clientIndex = await fs.readFile(clientIndexPath, 'utf-8')
     expect(clientIndex).toContain('addRoute')
-    expect(clientIndex).toContain('@zhin.js/console-types')
+    expect(clientIndex).toContain('@zhin.js/contract')
 
     const clientTsconfigPath = path.join(pluginDir, 'client', 'tsconfig.json')
     expect(await fs.pathExists(clientTsconfigPath)).toBe(true)

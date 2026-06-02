@@ -2,8 +2,8 @@
  * Satori 适配器：单一适配器支持 WS 正向 / Webhook，由 config.connection 区分
  * 协议文档：https://satori.chat/zh-CN/introduction.html
  */
-import type { Router } from '@zhin.js/http';
 import { formatCompact, Adapter, Plugin } from 'zhin.js';
+import type { Router } from '@zhin.js/host-router';
 import { SatoriWsClient } from './bot-ws.js';
 import { SatoriWebhookBot } from './bot-webhook.js';
 import type {
@@ -28,7 +28,7 @@ export class SatoriAdapter extends Adapter<SatoriBot> {
         return new SatoriWsClient(this, config as SatoriWsConfig);
       case 'webhook':
         if (!this.#router) {
-          throw new Error('Satori connection: webhook 需要 router，请安装并在配置中启用 @zhin.js/http');
+          throw new Error('Satori connection: webhook 需要 router，请安装并在配置中启用 @zhin.js/host-router');
         }
         return new SatoriWebhookBot(this, this.#router, config as SatoriWebhookConfig);
       default:

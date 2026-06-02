@@ -1,8 +1,8 @@
 /**
  * OneBot11 适配器：单一适配器支持正向 WS / 反向 WS，由 config.connection 区分
  */
-import type { Router } from '@zhin.js/http';
 import { formatCompact, Adapter, Plugin } from 'zhin.js';
+import type { Router } from '@zhin.js/host-router';
 import { OneBot11WsClient } from './bot-ws-client.js';
 import { OneBot11WsServer } from './bot-ws-server.js';
 import type {
@@ -27,7 +27,7 @@ export class OneBot11Adapter extends Adapter<OneBot11Bot> {
         return new OneBot11WsClient(this, config as OneBot11WsClientConfig);
       case 'wss':
         if (!this.#router) {
-          throw new Error('OneBot11 connection: wss 需要 router，请安装并在配置中启用 @zhin.js/http');
+          throw new Error('OneBot11 connection: wss 需要 router，请安装并在配置中启用 @zhin.js/host-router');
         }
         return new OneBot11WsServer(this, this.#router, config as OneBot11WsServerConfig);
       default:

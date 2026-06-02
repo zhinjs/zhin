@@ -6,7 +6,7 @@ import {
   resolveSandboxBot,
   type SandboxWsSocket,
 } from "./sandbox-ws.js";
-import { PageManager } from "@zhin.js/console";
+import { PageManager } from "@zhin.js/host-api";
 
 type SandboxRouter = {
   ws: (path: string) => NonNullable<SandboxAdapter["wss"]>;
@@ -94,9 +94,6 @@ plugin.useContext("web", (pageManager) => {
   });
 });
 
-export {
-  registerSandboxWebSocketRoutes,
-} from "./fetch-ws.js";
 export {
   SandboxWsBot,
   SandboxWsHostAdapter,

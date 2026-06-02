@@ -2,7 +2,7 @@
  * Milky 适配器入口：单一适配器，支持 WS/SSE/Webhook/反向 WS，依赖 router 注册
  */
 import { usePlugin, type Plugin, type Context, createGroupManagementTools, type ToolFeature } from 'zhin.js';
-import type { Router } from '@zhin.js/http';
+import type { Router } from '@zhin.js/host-router';
 import { MilkyAdapter } from './adapter.js';
 import type { IGroupManagement } from 'zhin.js';
 
@@ -18,7 +18,7 @@ export { MilkyAdapter, type MilkyBot } from './adapter.js';
 declare module 'zhin.js' {
   namespace Plugin {
     interface Contexts {
-      router: import('@zhin.js/http').Router;
+      router: import('@zhin.js/host-router').Router;
     }
   }
   interface Adapters {

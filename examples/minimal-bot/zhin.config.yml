@@ -5,11 +5,11 @@ bots: []
 
 plugins:
   - "@zhin.js/adapter-sandbox"
-  - "@zhin.js/http"
-  - "@zhin.js/console"
+  - "@zhin.js/host-router"
+  - "@zhin.js/host-api"
   - hello
 
-console:
+hostApi:
   lazyLoad: true
 
 ai:

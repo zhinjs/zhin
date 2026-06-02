@@ -21,7 +21,7 @@ Zhin.js OneBot v11 协议适配器，通过 WebSocket 连接各种支持 OneBot 
 pnpm add @zhin.js/adapter-onebot11 ws
 ```
 
-反向 WS 需同时启用 `@zhin.js/http`。
+反向 WS 需同时启用 `@zhin.js/host-router`。
 
 ## 配置
 
@@ -47,7 +47,7 @@ bots:
 
 ```yaml
 plugins:
-  - "@zhin.js/http"
+  - "@zhin.js/host-router"
   - "@zhin.js/adapter-onebot11"
 
 bots:

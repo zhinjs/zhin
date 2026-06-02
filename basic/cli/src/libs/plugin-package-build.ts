@@ -27,8 +27,8 @@ const CLIENT_EXTERNAL = [
   "react/jsx-dev-runtime",
   "react-dom/client",
   "@zhin.js/client",
-  "@zhin.js/console-types",
-  "@zhin.js/console-core",
+  "@zhin.js/contract",
+  "@zhin.js/pagemanager",
   "react-router-dom",
   "react-router",
 ];

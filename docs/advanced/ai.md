@@ -195,7 +195,7 @@ ai:
 | `modelHarness.providerPatterns` | object | {} | 按 provider 模式（支持 `*`）覆盖 harness |
 | `modelHarness.models` | object | {} | 按 model id 覆盖 harness；支持 `model` 或 `provider:model` 精确键 |
 
-`modelHarness` 与 TypeScript 默认表（`packages/agent/src/zhin-agent/model-harness.ts`）按 **ADR 0006** 规则合并：对象 deep merge，数组显式写出时完整覆盖默认数组。
+`modelHarness` 与 TypeScript 默认表（`packages/im/agent/src/zhin-agent/model-harness.ts`）按 **ADR 0006** 规则合并：对象 deep merge，数组显式写出时完整覆盖默认数组。
 
 ### Agent phase 观测（排障）
 
@@ -606,9 +606,9 @@ ai:
 当 AI 通过 **`bash`** 执行 `icqq …` 子命令时（常见路径：启用 icqq 技能后由模型生成 shell）：
 
 - **`execSecurity: allowlist`** 下，**非敏感** icqq 子命令（如状态查询、好友点赞等）**不需要**写进 `execAllowlist`，也**不需要**先加 `approve rule`，exec-policy 会直接放行（仍受危险命令黑名单、环境变量 / wrapper 剥离、复合命令拆分等约束）。
-- **敏感**子命令（踢人、禁言、群解散/转让、好友删除/拉黑/移动、支付与钱包、撤回、部分群文件删除等）在 `execApprovalMode: ask` 时会走 **Owner 确认**（编排层 `ask_user` / `ZHIN_NEEDS_OWNER`）；Owner 可在私聊用 **`approve rule <正则>`** 对**整条规范化后的子命令**做持久化匹配（例如 `^icqq\s+friend\s+like\b`），避免把 QQ 号写死在白名单里。敏感子命令的判定见源码 `packages/agent/src/security/owner-approve-always-store.ts` 中的 `ICQQ_SENSITIVE_SUBCOMMAND_REGEXES`。
+- **敏感**子命令（踢人、禁言、群解散/转让、好友删除/拉黑/移动、支付与钱包、撤回、部分群文件删除等）在 `execApprovalMode: ask` 时会走 **Owner 确认**（编排层 `ask_user` / `ZHIN_NEEDS_OWNER`）；Owner 可在私聊用 **`approve rule <正则>`** 对**整条规范化后的子命令**做持久化匹配（例如 `^icqq\s+friend\s+like\b`），避免把 QQ 号写死在白名单里。敏感子命令的判定见源码 `packages/im/agent/src/security/owner-approve-always-store.ts` 中的 `ICQQ_SENSITIVE_SUBCOMMAND_REGEXES`。
 
-> **说明**：旧文档中的 `execAsk` 已废弃；配置请使用 `execApprovalMode`（实现见 `packages/agent/src/zhin-agent/config.ts`）。
+> **说明**：旧文档中的 `execAsk` 已废弃；配置请使用 `execApprovalMode`（实现见 `packages/im/agent/src/zhin-agent/config.ts`）。
 
 ### Bot Owner 私聊指令（approve） {#owner-approve-commands}
 
@@ -884,7 +884,7 @@ ai:
 
 ## 系统提示词架构
 
-ZhinAgent 的系统提示词采用精简分层架构（`packages/agent/src/zhin-agent/prompt.ts`）：常驻段只保留必要边界，平台、技能、记忆等按需注入。
+ZhinAgent 的系统提示词采用精简分层架构（`packages/im/agent/src/zhin-agent/prompt.ts`）：常驻段只保留必要边界，平台、技能、记忆等按需注入。
 
 | 名称 | 内容 |
 |------|------|

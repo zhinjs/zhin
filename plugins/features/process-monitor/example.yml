@@ -27,8 +27,8 @@ process-monitor:
 plugins:
   - "@zhin.js/process-monitor"
   - "@zhin.js/adapter-icqq"
-  - "@zhin.js/http"
-  - "@zhin.js/console"
+  - "@zhin.js/host-router"
+  - "@zhin.js/host-api"
 
 # 环境变量配置（.env 文件）
 # ADMIN_USER_ID=123456789

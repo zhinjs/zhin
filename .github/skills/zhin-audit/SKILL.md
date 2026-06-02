@@ -26,8 +26,8 @@ user-invocable: true
 | 范围 | 目标目录 | 触发词 |
 |------|----------|--------|
 | 全面审计 | `packages/`, `plugins/`, `basic/` | "全面审计", "全量检查" |
-| 安全专项 | `packages/core/`, `packages/agent/`, `plugins/services/http/`, `packages/satori/` | "安全", "漏洞", "XSS", "注入" |
-| 性能专项 | `packages/core/src/plugin.ts`, `packages/core/src/built/`, `packages/core/src/adapter.ts` | "性能", "内存", "泄漏", "慢" |
+| 安全专项 | `packages/im/core/`, `packages/im/agent/`, `packages/host/router/`, `packages/toolkit/satori/` | "安全", "漏洞", "XSS", "注入" |
+| 性能专项 | `packages/im/core/src/plugin.ts`, `packages/im/core/src/built/`, `packages/im/core/src/adapter.ts` | "性能", "内存", "泄漏", "慢" |
 | 架构专项 | `packages/*/package.json`, `packages/*/src/index.ts` | "架构", "依赖", "分层", "耦合" |
 | 变更审计 | `git diff` 涉及的文件 | "审查变更", "PR 审查" |
 
@@ -40,16 +40,16 @@ user-invocable: true
 1. **代码执行风险 [严重]**
    - 搜索 `eval`, `Function(`, `new Function`, `vm.runIn`
    - 搜索 `child_process`, `exec(`, `execSync`, `spawn`
-   - 检查 `packages/agent/src/builtin-tools.ts` 中 bash 命令安全策略
-   - 验证 `packages/agent/src/security/file-policy.ts` 文件访问控制覆盖率
+   - 检查 `packages/im/agent/src/builtin-tools.ts` 中 bash 命令安全策略
+   - 验证 `packages/im/agent/src/security/file-policy.ts` 文件访问控制覆盖率
 
 2. **注入攻击 [严重]**
    - SQL 注入：检查 `basic/database/src/` 中参数化查询
    - 命令注入：检查所有 `exec()` 调用的参数转义
-   - XSS：检查 `packages/satori/src/` HTML 渲染中的输入转义
+   - XSS：检查 `packages/toolkit/satori/src/` HTML 渲染中的输入转义
 
 3. **认证与授权 [高]**
-   - 检查 `plugins/services/http/src/index.ts` Token 校验逻辑
+   - 检查 `packages/host/router/src/index.ts` Token 校验逻辑
    - 验证 Bearer token 是否使用 `crypto.timingSafeEqual` 比较
    - 确认 query 参数 token 不会泄漏到日志
    - 检查 `/pub/` 公共路径配置是否合理
@@ -61,7 +61,7 @@ user-invocable: true
 
 5. **路径遍历 [中]**
    - 检查文件操作是否验证路径边界
-   - 验证 `packages/agent/src/security/file-policy.ts` 的 `SENSITIVE_FILENAMES` 列表完整性
+   - 验证 `packages/im/agent/src/security/file-policy.ts` 的 `SENSITIVE_FILENAMES` 列表完整性
 
 ### 第 3 步：运行性能检查
 
@@ -166,9 +166,9 @@ grep -rn "eval\|Function(\|exec(\|execSync\|spawn(" packages/ plugins/ basic/ --
 grep -rn "token\|password\|secret\|apiKey" packages/ plugins/ --include="*.ts" | grep -v "\.d\.ts" | grep -v "type\|interface\|declare"
 
 # 性能：查找未清理的监听器
-grep -rn "setInterval\|setTimeout\|\.on(" packages/core/src/ --include="*.ts"
+grep -rn "setInterval\|setTimeout\|\.on(" packages/im/core/src/ --include="*.ts"
 
 # 架构：检查反向依赖
-cat packages/kernel/package.json | grep -A 20 '"dependencies"'
-cat packages/ai/package.json | grep -A 20 '"dependencies"'
+cat packages/im/kernel/package.json | grep -A 20 '"dependencies"'
+cat packages/im/ai/package.json | grep -A 20 '"dependencies"'
 ```

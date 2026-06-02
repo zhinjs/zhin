@@ -4,7 +4,7 @@
 import path from "node:path";
 import { usePlugin, type Plugin, type Context, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
 import { TelegramAdapter } from "./adapter.js";
-import { PageManager } from "@zhin.js/console";
+import { PageManager } from "@zhin.js/host-api";
 
 declare module "zhin.js" {
   namespace Plugin {

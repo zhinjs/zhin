@@ -35,8 +35,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
-    "typescript": "^6.0.3",
-    "zhin.js": "workspace:*"
+    "typescript": "^6.0.3"
   },
   "files": [
     "lib"
@@ -48,8 +47,5 @@
     "type": "git",
     "url": "git+https://github.com/zhinjs/zhin.git",
     "directory": "basic/logger"
-  },
-  "peerDependencies": {
-    "zhin.js": "workspace:*"
   }
 }

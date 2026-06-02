@@ -1,11 +1,8 @@
 /**
  * Discord 适配器：单一适配器支持 Gateway / Interactions，由 config.connection 区分
  */
-import type { Router } from "@zhin.js/http";
-import {
-  Adapter,
-  Plugin,
-} from "zhin.js";
+import { Adapter, Plugin } from "zhin.js";
+import type { Router } from "@zhin.js/host-router";
 import { DiscordBot } from "./bot.js";
 import { DiscordInteractionsBot } from "./bot-interactions.js";
 import type {
@@ -35,7 +32,7 @@ export class DiscordAdapter extends Adapter<DiscordBotLike> {
       case "interactions":
         if (!this.#router) {
           throw new Error(
-            "Discord connection: interactions 需要 router，请安装并在配置中启用 @zhin.js/http"
+            "Discord connection: interactions 需要 router，请安装并在配置中启用 @zhin.js/host-router"
           );
         }
         return new DiscordInteractionsBot(this, this.#router, config as DiscordInteractionsConfig);

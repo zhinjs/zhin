@@ -2,7 +2,7 @@
  * 微信公众号适配器
  */
 import { Adapter, Plugin } from "zhin.js";
-import type { Router } from "@zhin.js/http";
+import type { Router } from "@zhin.js/host-router";
 import { WeChatMPBot } from "./bot.js";
 import type { WeChatMPConfig } from "./types.js";
 

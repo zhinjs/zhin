@@ -187,7 +187,7 @@ graph TB
 | `McpClientConnection` | 单个 MCP Server 连接生命周期（stdio / streamable-http / sse） |
 | `bridge` | MCP 能力到 `AgentTool`（`mcp_{server}_{tool}`） |
 
-ZhinAgent 在 AI 回合前 `ensureConnected`，`collectRuntimeTools` 合并 MCP 工具。配置：`ai.mcpServers`。与 `plugins/services/mcp`（MCP **Server**）方向相反。
+ZhinAgent 在 AI 回合前 `ensureConnected`，`collectRuntimeTools` 合并 MCP 工具。配置：`ai.mcpServers`。与 `packages/host/mcp`（MCP **Server**）方向相反。
 
 #### 顶层模块
 
@@ -342,9 +342,9 @@ flowchart TD
 3. **根插件** 的 **`before.sendMessage`** 生命周期：可读取/改写即将发出的 `options`（例如统一润色 `content`、审计、限流）。
 4. 最终落到具体 **`Bot` / 平台 SDK**（如 `bot.$sendMessage`）。
 
-**Dispatcher 出站润色（`packages/core/src/built/dispatcher.ts`）**：在调用 `$reply` 的异步上下文中，用 **`AsyncLocalStorage`** 标记「本次发送由 Dispatcher 发起的回复」；`addOutboundPolish` 向根注册额外的 **`before.sendMessage`**，仅在存储命中时修改 `options.content`。这样润色与**普通插件发消息**走同一 `before.sendMessage` 链，行为一致、可组合。
+**Dispatcher 出站润色（`packages/im/core/src/built/dispatcher.ts`）**：在调用 `$reply` 的异步上下文中，用 **`AsyncLocalStorage`** 标记「本次发送由 Dispatcher 发起的回复」；`addOutboundPolish` 向根注册额外的 **`before.sendMessage`**，仅在存储命中时修改 `options.content`。这样润色与**普通插件发消息**走同一 `before.sendMessage` 链，行为一致、可组合。
 
-扩展阅读：`docs/advanced/ai.md`（若涉及 AI 触发与出站）；根目录 **`AGENTS.md`**（速查表）；**Harness / 不变量**见 `docs/architecture/` 下 [im-queue-outbound-invariants.md](./architecture/im-queue-outbound-invariants.md) 与 [harness-engineering-sources.md](./architecture/harness-engineering-sources.md)。
+扩展阅读：`docs/advanced/ai.md`（若涉及 AI 触发与出站）；根目录 **`AGENTS.md`**（速查表）；Harness 依据见 [harness-engineering-sources.md](./architecture/harness-engineering-sources.md)。
 
 ## 插件系统
 

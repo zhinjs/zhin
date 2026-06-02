@@ -10,7 +10,6 @@ applyTo: "basic/**,packages/**"
 
 - 依赖方向保持单向：basic → kernel → ai → core → agent → zhin。
 - kernel 和 ai 不应引入 IM 概念，如 Adapter、Bot、Message。
-- packages/queue-runtime 是平行运行时，不要把 IM 主发送链规则混进它。
 
 ## 目录语义
 
@@ -22,7 +21,7 @@ applyTo: "basic/**,packages/**"
 
 - TypeScript 本地导入通常必须带 .js 扩展名。
 - 包的 public surface 应与真实构建产物一致；不要新增指向不存在文件的 exports。
-- 变更聚合导出时，优先检查 packages/zhin/src/index.ts 是否需要同步。
+- 变更聚合导出时，优先检查 packages/im/zhin/src/index.ts 是否需要同步。
 
 ## 运行时不变量
 

@@ -1,0 +1,71 @@
+{
+  "name": "@zhin.js/core",
+  "version": "1.1.28",
+  "description": "Zhin机器人核心框架",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./tool-zod": {
+      "types": "./lib/tool-zod.d.ts",
+      "development": "./src/tool-zod.ts",
+      "import": "./lib/tool-zod.js"
+    },
+    "./queue-im-field-contract": {
+      "types": "./lib/built/queue-im-field-contract.d.ts",
+      "development": "./src/built/queue-im-field-contract.ts",
+      "import": "./lib/built/queue-im-field-contract.js"
+    },
+    "./jsx": {
+      "types": "./lib/jsx.d.ts",
+      "development": "./src/jsx.ts",
+      "import": "./lib/jsx.js"
+    },
+    "./jsx-runtime": {
+      "types": "./lib/jsx-runtime.d.ts",
+      "development": "./src/jsx-runtime.ts",
+      "import": "./lib/jsx-runtime.js"
+    },
+    "./jsx-dev-runtime": {
+      "types": "./lib/jsx-dev-runtime.d.ts",
+      "development": "./src/jsx-dev-runtime.ts",
+      "import": "./lib/jsx-dev-runtime.js"
+    }
+  },
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib"
+  },
+  "dependencies": {
+    "@zhin.js/ai": "workspace:*",
+    "@zhin.js/database": "workspace:*",
+    "@zhin.js/kernel": "workspace:*",
+    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/schema": "workspace:*",
+    "croner": "^9.1.0",
+    "segment-matcher": "^1.0.5",
+    "smol-toml": "^1.6.1",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/im/core"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

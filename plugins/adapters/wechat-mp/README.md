@@ -18,7 +18,7 @@ pnpm add @zhin.js/adapter-wechat-mp
 
 ## 依赖
 
-- `@zhin.js/http` — HTTP 服务（提供 Webhook 路由）
+- `@zhin.js/host-router` — HTTP 服务（提供 Webhook 路由）
 
 ## 配置
 

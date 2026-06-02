@@ -68,7 +68,7 @@ user-invocable: true
 
 ### 2. 确认放在哪一层
 
-- 通用业务能力优先考虑 `plugins/services/` 或 `plugins/utils/`
+- 内置 Host 服务见 `packages/host/`；可选第三方服务放 `plugins/services/` 或 `plugins/utils/`
 - 平台无关的业务插件放在 `plugins/` 下对应分类
 - 仅示例或开发验证用途，放在 `examples/test-bot` 或示例项目里
 - 不要把平台适配逻辑写进普通插件，适配器问题交给 adapter 层

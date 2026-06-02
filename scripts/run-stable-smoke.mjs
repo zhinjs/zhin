@@ -12,9 +12,9 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 /** @type {string[]} */
 const stableTestFiles = [
   'plugins/adapters/sandbox/tests/integration.test.ts',
-  'packages/agent/tests/ai/integration.test.ts',
-  'packages/agent/tests/builtin/spawn-task-tool.test.ts',
-  'packages/agent/tests/exec-policy.test.ts',
+  'packages/im/agent/tests/ai/integration.test.ts',
+  'packages/im/agent/tests/builtin/spawn-task-tool.test.ts',
+  'packages/im/agent/tests/exec-policy.test.ts',
   'examples/minimal-bot/tests/stable-path.test.ts',
 ];
 

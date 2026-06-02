@@ -25,7 +25,7 @@ pnpm --filter @zhin.js/core build
 pnpm --filter @zhin.js/core test
 
 # Run a single test file
-pnpm vitest run packages/core/tests/plugin.test.ts
+pnpm vitest run packages/im/core/tests/plugin.test.ts
 ```
 
 Custom lint checks:
@@ -41,37 +41,36 @@ Monorepo managed with **pnpm 9.0.2 workspaces** (no Turborepo). Versioning via *
 ### Dependency layers (bottom → top)
 
 ```
-basic/                  # @zhin.js/logger, schema, database, cli
+basic/                      # @zhin.js/logger, schema, database, cli
   ↓
-packages/kernel         # Runtime kernel (no IM concepts)
+packages/im/kernel          # Runtime kernel (no IM concepts)
   ↓
-packages/ai             # AI engine (providers, agents, memory, compaction)
+packages/im/ai              # AI engine (providers, agents, memory, compaction)
   ↓
-packages/core           # IM framework (Plugin, Adapter, Bot, Command, MessageDispatcher)
+packages/im/core            # IM framework (Plugin, Adapter, Bot, Command, MessageDispatcher)
   ↓
-packages/agent          # Agent orchestration (ZhinAgent, security policies, MCP client)
+packages/im/agent           # Agent orchestration (ZhinAgent, security policies, MCP client)
   ↓
-packages/zhin           # Main entry — re-exports core + agent
-```
+packages/im/zhin            # Main entry — re-exports core + agent
 
-Parallel to IM stack: `packages/queue-runtime` (queue-based bot runtime, depends on kernel, not core).
+packages/console/{contract,pagemanager,client}  # 控制台栈（平行，不经 IM 发送链）
+packages/toolkit/{create-zhin,satori}         # 脚手架与渲染库
+```
 
 ### Key packages at a glance
 
 | Package | Path | Role |
 |---------|------|------|
-| kernel | `packages/kernel/src/` | PluginBase, Feature, Cron, Scheduler, error hierarchy |
-| ai | `packages/ai/src/` | Provider abstraction, Agent, ModelRegistry, Memory, Compaction, CostTracker |
-| core | `packages/core/src/` | Plugin (AsyncLocalStorage), Adapter, Bot, Command, MessageDispatcher |
-| agent | `packages/agent/src/` | ZhinAgent orchestrator, security (ExecPolicy, FilePolicy), MCP client |
-| http-host | `packages/http-host/src/` | HTTP routing abstraction (Koa-based) |
-| queue-runtime | `packages/queue-runtime/src/` | Queue bot runner, dual-queue architecture |
+| kernel | `packages/im/kernel/src/` | PluginBase, Feature, Cron, Scheduler, error hierarchy |
+| ai | `packages/im/ai/src/` | Provider abstraction, Agent, ModelRegistry, Memory, Compaction, CostTracker |
+| core | `packages/im/core/src/` | Plugin (AsyncLocalStorage), Adapter, Bot, Command, MessageDispatcher |
+| agent | `packages/im/agent/src/` | ZhinAgent orchestrator, security (ExecPolicy, FilePolicy), MCP client |
+| host-router | `packages/host/router/src/` | Koa 监听、Router、Bearer/CORS |
+| host-api | `packages/host/api/src/` | Host 管理面 REST、Console 协议、entries |
 
 ### Outbound send chain (do not bypass)
 
 IM stack: `Message.$reply` / `Adapter.sendMessage` → `renderSendMessage` → root plugin `before.sendMessage` → platform `Bot`. All outbound must go through this chain — no parallel `Plugin#sendMessage` bypass.
-
-Queue stack: `enqueueOutgoing` → `claimOutgoing` → `executeOutbound`. Separate from IM chain.
 
 ### Plugin system
 
@@ -95,7 +94,7 @@ Key config (`vitest.config.ts`):
 - Isolation: `false` (shared state for performance)
 - Timeout: 10s
 - Test pattern: `**/*.test.ts`
-- Excludes: `**/lib/**`, `**/packages/satori/**`
+- Excludes: `**/lib/**`, `**/packages/toolkit/satori/**`
 - Setup file sets `process.env.NODE_ENV = 'test'`
 
 ## Key Conventions
@@ -228,22 +227,22 @@ await indicator.stop();
 ```
 basic/ (logger, schema, database, cli)
   ↓
-packages/kernel (无 IM 概念)
+packages/im/kernel (无 IM 概念)
   ↓
-packages/ai (providers, agents, memory)
+packages/im/ai (providers, agents, memory)
   ↓
-packages/core (Plugin, Adapter, Bot, Command)
+packages/im/core (Plugin, Adapter, Bot, Command)
   ↓
-packages/agent (ZhinAgent, security policies)
+packages/im/agent (ZhinAgent, security policies)
   ↓
-packages/zhin (主入口)
+packages/im/zhin (主入口)
 ```
 
 **禁止的导入**：
-- `packages/kernel` 不能导入 `packages/core` 或更高层
-- `packages/ai` 不能导入 `packages/core` 或更高层
-- `packages/core` 不能导入 `packages/agent`
-- 插件不能直接导入 `packages/kernel`（应通过 `packages/core`）
+- `packages/im/kernel` 不能导入 `core` / `agent` / `zhin` 层
+- `packages/im/ai` 不能导入 `core` / `agent` / `zhin` 层
+- `packages/im/core` 不能导入 `packages/im/agent` 或 `zhin`
+- 插件不能直接导入 `packages/im/kernel`（应通过 `@zhin.js/core`）
 
 ### 发送链路保护
 
@@ -284,16 +283,15 @@ Message.$reply / Adapter.sendMessage
 
 | What | Where |
 |------|-------|
-| Plugin/Command/Middleware | `packages/core/src/plugin.ts` |
-| Adapter and send chain | `packages/core/src/adapter.ts` |
-| Message dispatcher | `packages/core/src/built/dispatcher.ts` |
-| Agent orchestrator | `packages/agent/src/orchestrator/` |
-| Agent dispatcher | `packages/agent/src/orchestrator/agent-dispatcher.ts` |
-| Security policies | `packages/agent/src/security/` |
-| Sandbox environment | `packages/agent/src/security/sandbox.ts` |
-| Prompt builder | `packages/agent/src/zhin-agent/prompt-builder.ts` |
-| AI providers | `packages/ai/src/providers/` |
-| Queue runtime | `packages/queue-runtime/src/runtime.ts` |
+| Plugin/Command/Middleware | `packages/im/core/src/plugin.ts` |
+| Adapter and send chain | `packages/im/core/src/adapter.ts` |
+| Message dispatcher | `packages/im/core/src/built/dispatcher.ts` |
+| Agent orchestrator | `packages/im/agent/src/orchestrator/` |
+| Agent dispatcher | `packages/im/agent/src/orchestrator/agent-dispatcher.ts` |
+| Security policies | `packages/im/agent/src/security/` |
+| Sandbox environment | `packages/im/agent/src/security/sandbox.ts` |
+| Prompt builder | `packages/im/agent/src/zhin-agent/prompt-builder.ts` |
+| AI providers | `packages/im/ai/src/providers/` |
 | Architecture docs index | `docs/architecture/README.md` |
 | Architecture overview | `docs/architecture-overview.md` |
 | Repo structure | `docs/contributing/repo-structure.md` |

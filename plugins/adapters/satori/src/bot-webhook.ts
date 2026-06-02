@@ -3,7 +3,7 @@
  */
 import { EventEmitter } from 'events';
 import { formatCompact, Bot, Message, segment, SendOptions } from 'zhin.js';
-import { registerFetchRoute, type Router, type RouterContext } from '@zhin.js/http/router';
+import { registerFetchRoute, type Router, type RouterContext } from '@zhin.js/host-router/router';
 import { callSatoriApi } from './api.js';
 import type { SatoriWebhookConfig, SatoriEventBody, SatoriLogin } from './types.js';
 import { SatoriOpcode } from './types.js';

@@ -9,7 +9,7 @@
 
 ## 核心特性
 
-能力按成熟度分档：**Stable**（推荐首跑与对外默认承诺）、**Advanced**（多 bot / toolSearch / MCP 等）、**Beta**（队列 / qbot）。完整分档见下表。
+能力按成熟度分档：**Stable**（推荐首跑与对外默认承诺）、**Advanced**（多 bot / toolSearch / MCP 等）。完整分档见下表。
 
 | Tier | 特性 | 说明 |
 |------|------|------|
@@ -22,7 +22,6 @@
 | **Advanced** | 多平台 IM | 适配器见 [plugins/adapters](./plugins/adapters) 与 [适配器文档](./docs/essentials/adapters.md)（成熟度因平台而异） |
 | **Advanced** | Feature 体系 | 命令、工具、技能、cron、数据库等组合 |
 | **Advanced** | toolSearch / MCP | 编排工具、deferred worker、MCP Client/Server |
-| **Beta** | 队列 / qbot | `packages/queue-runtime` 平行栈；示例 [minimal-qbot](./examples/minimal-qbot/)（非 Stable 首跑） |
 
 > **推荐首跑**：克隆仓库后进入 [`examples/minimal-bot`](./examples/minimal-bot/)（Sandbox + 最少插件）。[`examples/test-bot`](./examples/test-bot/) 为维护者**厨房水槽**配置，勿当作默认模板。
 
@@ -222,7 +221,7 @@ tools: [web_search]
 
 #### 发现顺序
 
-框架按 **`./tools`（或 `./skills` / `./agents`）→ `~/.zhin/<kind>/` → `data/<kind>/` → 已加载插件包内对应目录** 的顺序扫描（实现见 `packages/agent/src/discovery/`），同名先发现者优先；插件模块变更可通过 `Plugin.watch` **热重载**。
+框架按 **`./tools`（或 `./skills` / `./agents`）→ `~/.zhin/<kind>/` → `data/<kind>/` → 已加载插件包内对应目录** 的顺序扫描（实现见 `packages/im/agent/src/discovery/`），同名先发现者优先；插件模块变更可通过 `Plugin.watch` **热重载**。
 
 📖 详见：[AI 模块](./docs/advanced/ai.md) · [工具与技能](./docs/advanced/tools-skills.md)
 
@@ -322,7 +321,7 @@ graph TB
 
 ### 2. IM 消息分发与中间件洋葱生命周期
 
-当外部事件到达时，[packages/core/src/built/dispatcher.ts](packages/core/src/built/dispatcher.ts) 分解为 Guardrail（护栏安全检查）、Route（规则路由）与 Handle（中间件洋葱路由与指令处理）三个阶段：
+当外部事件到达时，[packages/im/core/src/built/dispatcher.ts](packages/im/core/src/built/dispatcher.ts) 分解为 Guardrail（护栏安全检查）、Route（规则路由）与 Handle（中间件洋葱路由与指令处理）三个阶段：
 
 ```mermaid
 sequenceDiagram
@@ -357,7 +356,7 @@ sequenceDiagram
 
 ### 3. AI 智能体编排与文件化能力注册图
 
-[packages/agent/src/orchestrator](packages/agent/src/orchestrator) 是 AI 的交互中轴，它扫描目录，以零代/代码化的格式汇聚资产，并受运行、文件沙盒的多重审查机制保护：
+[packages/im/agent/src/orchestrator](packages/im/agent/src/orchestrator) 是 AI 的交互中轴，它扫描目录，以零代/代码化的格式汇聚资产，并受运行、文件沙盒的多重审查机制保护：
 
 ```mermaid
 graph TD
@@ -415,7 +414,7 @@ graph TD
 
 ### 4. AI 思考状态连携与统一出站链路
 
-[packages/agent/src/init/register-typing-indicator.ts](packages/agent/src/init/register-typing-indicator.ts) 自动转换 AI 复杂的思考流、子任务分发状态并渲染给指示器。最终的渲染通过统一保护链路：
+[packages/im/agent/src/init/register-typing-indicator.ts](packages/im/agent/src/init/register-typing-indicator.ts) 自动转换 AI 复杂的思考流、子任务分发状态并渲染给指示器。最终的渲染通过统一保护链路：
 
 ```mermaid
 graph TD
@@ -464,7 +463,7 @@ graph TD
 
 
 
-- **不允许直发绕过**：指示器和最终答案均触发统一的 [packages/core/src/adapter.ts](packages/core/src/adapter.ts) 中的发送生命周期，拒绝 `Bot.$sendMessage` 被业务层直接旁路调用。
+- **不允许直发绕过**：指示器和最终答案均触发统一的 [packages/im/core/src/adapter.ts](packages/im/core/src/adapter.ts) 中的发送生命周期，拒绝 `Bot.$sendMessage` 被业务层直接旁路调用。
 
 ## 多平台适配器
 
@@ -534,8 +533,6 @@ zhin/                          # 主仓库 (github.com/zhinjs/zhin)
 │   ├── client/                #   Web 控制台
 │   ├── satori/                #   渲染引擎
 │   ├── create-zhin/           #   项目脚手架
-│   ├── http-host/             #   HTTP 路由抽象（Koa）
-│   ├── queue-runtime/         #   队列运行时（Beta，平行于 IM 栈）
 │   └── zhin/                  #   主入口包
 ├── plugins/                   # 插件生态（适配器 / 服务 / 特性 / 工具）
 ├── docs/                      # VitePress 文档站

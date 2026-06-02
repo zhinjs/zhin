@@ -5,7 +5,7 @@
 ## 1. 内存泄漏 [高]
 
 - [ ] **事件监听器清理**
-  - 重点文件：`packages/core/src/plugin.ts`
+  - 重点文件：`packages/im/core/src/plugin.ts`
   - 检查：所有 `on()` 注册是否返回 dispose 函数
   - 检查：`#disposables` Set 是否在 `stop()` 时完整清理
   - 检查：是否有循环引用阻止 GC
@@ -17,7 +17,7 @@
 
 - [ ] **文件监听器清理**
   - 搜索：`fs.watch(`, `fs.watchFile(`
-  - 重点文件：`packages/core/src/plugin.ts` 中的 `watchFile()`
+  - 重点文件：`packages/im/core/src/plugin.ts` 中的 `watchFile()`
   - 验证：监听器在模块重载时关闭旧实例
 
 - [ ] **WebSocket 连接**
@@ -32,21 +32,21 @@
 ## 2. 无界集合 [高]
 
 - [ ] **Plugin.#tools Map**
-  - 文件：`packages/core/src/plugin.ts`
+  - 文件：`packages/im/core/src/plugin.ts`
   - 检查：工具注册后是否有对应移除逻辑
   - 检查：与 ToolService 的同步机制
 
 - [ ] **Plugin.#middlewares 数组**
-  - 文件：`packages/core/src/plugin.ts`
+  - 文件：`packages/im/core/src/plugin.ts`
   - 检查：热重载时旧中间件是否被清除
 
 - [ ] **Plugin.#featureContributions Map**
-  - 文件：`packages/core/src/plugin.ts`
+  - 文件：`packages/im/core/src/plugin.ts`
   - 检查：Feature 卸载时是否从 Map 中移除
 
 - [ ] **消息缓存/历史**
   - 搜索：AI 相关的消息历史存储
-  - 重点：`packages/ai/src/` 中的 Memory/Session
+  - 重点：`packages/im/ai/src/` 中的 Memory/Session
   - 验证：是否有最大长度限制或 Compaction 机制
 
 - [ ] **日志缓冲区**
@@ -56,7 +56,7 @@
 ## 3. 热路径优化 [中]
 
 - [ ] **消息分发路径**
-  - 文件：`packages/core/src/built/dispatcher.ts`
+  - 文件：`packages/im/core/src/built/dispatcher.ts`
   - 检查：`extractText()` 是否被重复调用（应缓存结果）
   - 检查：命令匹配是否使用高效数据结构
 
@@ -79,7 +79,7 @@
 
 - [ ] **Fire-and-forget Promise**
   - 搜索：`void this.`, 未 `await` 的 async 调用
-  - 重点文件：`packages/core/src/adapter.ts`
+  - 重点文件：`packages/im/core/src/adapter.ts`
   - 验证：是否有 `.catch()` 兜底或全局错误处理
 
 - [ ] **未处理的 rejection**

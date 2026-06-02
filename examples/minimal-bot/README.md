@@ -38,7 +38,7 @@ pnpm dev
 | 项 | 值 |
 |----|-----|
 | `bots` | `[]`（Sandbox 在 Console 沙盒页连接时自动创建，一般无需写 `context: sandbox`） |
-| Plugins | adapter-sandbox、http、console、hello |
+| Plugins | adapter-sandbox、host-router、host-api、hello |
 | `ai.agent.toolSearch` | `false`（Advanced 能力在 test-bot 验证） |
 
 ## 验收

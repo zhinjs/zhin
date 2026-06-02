@@ -16,10 +16,9 @@
 
 ## 仓库事实
 
-- 这是 pnpm workspace monorepo，不使用 git submodule。
+- 这是 pnpm workspace monorepo；`packages/` 按 `im/`、`console/`、`toolkit/` 分子目录。Remote UI 可选 submodule：`zhin-console/`。
 - Node 版本要求是 ^20.19.0 或 >=22.12.0；包管理器是 pnpm 9。
 - 主要分层：basic → kernel → ai → core → agent → zhin。
-- `packages/queue-runtime` 是平行运行时（**Beta**），不属于 IM 主发送链；示例见 `examples/minimal-qbot/`。
 - **推荐首跑**： [examples/minimal-bot](examples/minimal-bot/)（Stable 黄金路径）。
 - [examples/test-bot](examples/test-bot/) 为维护者厨房水槽（多 bot / Advanced 能力），非默认模板。
 
@@ -51,19 +50,20 @@
 - AI 引擎、Session、Compaction、Provider：看 packages/ai。
 - AI 编排、工具发现、安全策略、MCP client：看 packages/agent。
 - 应用入口和聚合导出：看 packages/zhin。
-- 服务插件与控制台接入：看 plugins/services。
+- Host 运行时（router / api / mcp）：看 packages/host。
+- 可选服务插件：看 plugins/services。
 - 平台适配器：看 plugins/adapters。
 - 插件开发样例和本地验证：优先 examples/minimal-bot；全量见 examples/test-bot。
 
 ## 高价值路径
 
-- packages/core/src/plugin.ts
-- packages/core/src/adapter.ts
-- packages/core/src/built/dispatcher.ts
-- packages/agent/src/orchestrator/
-- packages/agent/src/security/
-- packages/agent/src/bootstrap.ts
-- packages/zhin/src/index.ts
+- packages/im/core/src/plugin.ts
+- packages/im/core/src/adapter.ts
+- packages/im/core/src/built/dispatcher.ts
+- packages/im/agent/src/orchestrator/
+- packages/im/agent/src/security/
+- packages/im/agent/src/bootstrap.ts
+- packages/im/zhin/src/index.ts
 
 ## 现成自定义能力
 

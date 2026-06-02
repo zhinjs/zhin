@@ -108,7 +108,7 @@ bots:
     token: "${DISCORD_TOKEN}"
 ```
 
-Interactions 模式需启用 `@zhin.js/http`，并配置 `connection: interactions`、`applicationId`、`publicKey`、`interactionsPath`，详见 [@zhin.js/adapter-discord](https://github.com/zhinjs/zhin/tree/master/plugins/adapters/discord) README。
+Interactions 模式需启用 `@zhin.js/host-router`，并配置 `connection: interactions`、`applicationId`、`publicKey`、`interactionsPath`，详见 [@zhin.js/adapter-discord](https://github.com/zhinjs/zhin/tree/master/plugins/adapters/discord) README。
 
 ### Telegram
 
@@ -202,7 +202,7 @@ bots:
 pnpm add @zhin.js/adapter-onebot11 ws
 ```
 
-反向 WS 需同时启用 `@zhin.js/http`。
+反向 WS 需同时启用 `@zhin.js/host-router`。
 
 配置（正向 WS）：
 
@@ -230,13 +230,13 @@ bots:
 pnpm add @zhin.js/adapter-milky ws eventsource
 ```
 
-需同时启用 `@zhin.js/http`（适配器依赖 router 注册）。
+需同时启用 `@zhin.js/host-router`（适配器依赖 router 注册）。
 
 配置示例（WebSocket 正向）：
 
 ```yaml
 plugins:
-  - "@zhin.js/http"
+  - "@zhin.js/host-router"
   - "@zhin.js/adapter-milky"
 
 bots:
@@ -261,7 +261,7 @@ bots:
 pnpm add @zhin.js/adapter-satori ws
 ```
 
-Webhook 方式需同时启用 `@zhin.js/http`。
+Webhook 方式需同时启用 `@zhin.js/host-router`。
 
 配置示例（WebSocket 正向）：
 
@@ -289,7 +289,7 @@ bots:
 pnpm add @zhin.js/adapter-onebot12 ws
 ```
 
-Webhook / 反向 WS 需同时启用 `@zhin.js/http`。
+Webhook / 反向 WS 需同时启用 `@zhin.js/host-router`。
 
 配置示例（正向 WebSocket）：
 

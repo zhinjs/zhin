@@ -20,8 +20,8 @@ pnpm add @zhin.js/adapter-sandbox
 
 Sandbox 适配器需要以下服务插件：
 
-- `@zhin.js/http` — HTTP 服务（提供 Router 和 WebSocket）
-- `@zhin.js/console` — Host 侧 Console API（`addEntry` 注册 Sandbox 扩展）
+- `@zhin.js/host-router` — HTTP 服务（提供 Router 和 WebSocket）
+- `@zhin.js/host-api` — Host 侧 Console API（`addEntry` 注册 Sandbox 扩展）
 - `@zhin.js/client` — Remote Console 客户端 SDK（UI 在 zhin-console 仓库）
 
 ## 配置
@@ -34,8 +34,8 @@ bots: []
 
 plugins:
   - "@zhin.js/adapter-sandbox"
-  - "@zhin.js/http"
-  - "@zhin.js/console"
+  - "@zhin.js/host-router"
+  - "@zhin.js/host-api"
 ```
 
 可选：若需在启动时即在 bot 列表显示**固定名称**的离线占位 bot，可显式配置：

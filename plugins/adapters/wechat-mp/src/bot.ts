@@ -7,7 +7,7 @@ import { createHash, createDecipheriv, createCipheriv, randomBytes } from "crypt
 import { EventEmitter } from "events";
 import FormData from "form-data";
 import { formatCompact, Bot, Message, MessageSegment, segment, SendContent, SendOptions } from 'zhin.js';
-import { registerFetchRoute, type Router, type RouterContext } from "@zhin.js/http/router";
+import { registerFetchRoute, type Router, type RouterContext } from "@zhin.js/host-router/router";
 import type { WeChatMPConfig, WeChatMessage, WeChatAPIResponse, TokenResponse } from "./types.js";
 import type { WeChatMPAdapter } from "./adapter.js";
 

@@ -19,6 +19,6 @@
 | Harness 主题 | Zhin 文档 |
 |--------------|-----------|
 | Tier1 常驻上下文 | [AGENTS.md](https://github.com/zhinjs/zhin/blob/main/AGENTS.md)（仓库根） |
-| IM / 队列 / 出站不变量 | [im-queue-outbound-invariants.md](./im-queue-outbound-invariants.md) |
+| IM 出站发送链 | [harness-engineering.md](../contributing/harness-engineering.md) |
 | Prompt 分段与 debug 形状 | [agent-context-blocks.md](./agent-context-blocks.md) |
-| IM `SendOptions` ↔ 队列事件字段 | [queue-im-field-contract.md](./queue-im-field-contract.md) |
+| 出站字段规范化（cron 等） | `packages/im/core/src/built/queue-im-field-contract.ts` |

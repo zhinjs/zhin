@@ -1,0 +1,50 @@
+{
+  "name": "@zhin.js/pagemanager",
+  "version": "2.0.0",
+  "description": "Zhin PageManager Host runtime: entries, esbuild pipeline (no UI; contract in @zhin.js/contract)",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./lib/node/index.d.ts",
+      "import": "./lib/node/index.js",
+      "default": "./lib/node/index.js"
+    },
+    "./node": {
+      "types": "./lib/node/index.d.ts",
+      "import": "./lib/node/index.js",
+      "default": "./lib/node/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "build:node": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rimraf dist lib"
+  },
+  "dependencies": {
+    "@zhin.js/contract": "workspace:*",
+    "@koa/router": "^15.6.0",
+    "esbuild": "^0.28.0",
+    "koa": "^3.2.1",
+    "koa-compose": "^4.1.0",
+    "koa-static": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/koa": "^3.0.3",
+    "@types/koa-compose": "^3.2.9",
+    "@types/koa-static": "^4.0.4",
+    "@types/koa__router": "^12.0.4",
+    "@types/node": "^25.9.1",
+    "rimraf": "^6.0.1",
+    "typescript": "^6.0.2"
+  },
+  "files": [
+    "lib"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/console/pagemanager"
+  }
+}

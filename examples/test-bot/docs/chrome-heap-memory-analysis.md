@@ -142,7 +142,7 @@ process.memoryUsage():
 这通常**不是业务逻辑泄漏**，而是 **MDN 浏览器兼容性数据集** 被整包加载进 Node 进程：
 
 - 本仓库依赖链里，**`farm-browserslist-generator`**（随 **`@farmfe/core`** / Farm 构建链）依赖 **`@mdn/browser-compat-data`**。
-- **test-bot** 若启用 **`@zhin.js/console`**，会拉到 **`@zhin.js/console-app`**，其构建/开发管线使用 Farm，运行时相关模块会把这份 JSON 树解析成大量 **Object + string**，从而在快照里出现上述形状。
+- **test-bot** 若启用 **`@zhin.js/host-api`**，会拉到 **`@zhin.js/console-app`**，其构建/开发管线使用 Farm，运行时相关模块会把这份 JSON 树解析成大量 **Object + string**，从而在快照里出现上述形状。
 
 同时你会看到 **`ModuleLoader` / `LoadCache` / `ModuleWrap` / `ModuleJob`** 等占几 MB～十几 MB：这是 **Node 加载大量 ESM/CJS 模块** 的正常开销（多适配器、多插件、AI 栈、控制台栈一起进进程）。
 
@@ -156,7 +156,7 @@ process.memoryUsage():
 
 ### 若希望「纯机器人」堆明显变小（可选）
 
-- 在 **`zhin.config.yml`** 中**关闭不需要的插件**；若不需要 Web 控制台，可暂时**不加载 `@zhin.js/console`**，避免 Farm 相关依赖进入同一 Node 进程（具体以你当前配置为准）。
+- 在 **`zhin.config.yml`** 中**关闭不需要的插件**；若不需要 Web 控制台，可暂时**不加载 `@zhin.js/host-api`**，避免 Farm 相关依赖进入同一 Node 进程（具体以你当前配置为准）。
 - 或减少 **同时启用的适配器** 数量，降低 **compiled code + 模块图** 体积。
 
 以上与 **ZhinAgent / 会话内存** 无直接矛盾；要验证 AI 路径是否泄漏，仍应对比「空闲一段时间前后」两份快照的 **Delta**，而不是单看这一份基线快照。

@@ -3,7 +3,7 @@
  * 协议文档 https://12.onebot.dev/
  */
 import { usePlugin, type Plugin, type Context } from 'zhin.js';
-import type { Router } from '@zhin.js/http';
+import type { Router } from '@zhin.js/host-router';
 import { OneBot12Adapter } from './adapter.js';
 
 export * from './types.js';
@@ -17,7 +17,7 @@ export { OneBot12Adapter, type OneBot12Bot } from './adapter.js';
 declare module 'zhin.js' {
   namespace Plugin {
     interface Contexts {
-      router: import('@zhin.js/http').Router;
+      router: import('@zhin.js/host-router').Router;
     }
   }
   interface Adapters {

@@ -1,0 +1,54 @@
+{
+  "name": "@zhin.js/agent",
+  "version": "0.1.26",
+  "description": "Zhin AI Agent — session, ZhinAgent, init; composes @zhin.js/core providers and tools",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib"
+  },
+  "dependencies": {
+    "@zhin.js/ai": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/logger": "workspace:*",
+    "he": "^1.2.0",
+    "js-yaml": "^4.2.0"
+  },
+  "peerDependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  },
+  "peerDependenciesMeta": {
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@types/he": "^1.2.3",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^25.9.1",
+    "rimraf": "^6.0.0",
+    "typescript": "^6.0.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/im/agent"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

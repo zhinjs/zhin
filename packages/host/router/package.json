@@ -1,0 +1,74 @@
+{
+  "name": "@zhin.js/host-router",
+  "version": "0.0.0",
+  "description": "Zhin Host HTTP runtime: Koa, Router, Bearer auth, CORS (pair with @zhin.js/host-api)",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./router": {
+      "types": "./lib/router.d.ts",
+      "development": "./src/router.ts",
+      "import": "./lib/router.js"
+    }
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "service",
+    "host-router",
+    "router",
+    "koa",
+    "websocket",
+    "auth"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "type": "git",
+    "directory": "packages/host/router"
+  },
+  "scripts": {
+    "build": "pnpm build:node",
+    "clean": "rimraf lib",
+    "build:node": "tsc"
+  },
+  "dependencies": {
+    "@koa/router": "^15.6.0",
+    "@zhin.js/schema": "workspace:*",
+    "koa": "^3.2.1",
+    "koa-body": "^8.0.0",
+    "ws": "^8.21.0"
+  },
+  "peerDependencies": {
+    "@zhin.js/core": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/koa": "latest",
+    "@types/koa-bodyparser": "latest",
+    "@types/koa__router": "latest",
+    "@types/ws": "latest",
+    "@zhin.js/core": "workspace:*"
+  },
+  "files": [
+    "src",
+    "lib",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

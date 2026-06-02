@@ -3,14 +3,14 @@
  */
 import path from "node:path";
 import { usePlugin, type Plugin, type Context, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
-import type { Router } from "@zhin.js/http";
-import { PageManager } from "@zhin.js/console";
+import type { Router } from "@zhin.js/host-router";
+import { PageManager } from "@zhin.js/host-api";
 import { DiscordAdapter, type DiscordBotLike } from "./adapter.js";
 
 declare module "zhin.js" {
   namespace Plugin {
     interface Contexts {
-      router: import("@zhin.js/http").Router;
+      router: import("@zhin.js/host-router").Router;
       web: PageManager;
     }
   }
@@ -37,7 +37,7 @@ provide({
   dispose: async (adapter: DiscordAdapter) => {
     await adapter.stop();
   },
-} as unknown as Context<"discord">);
+});
 
 useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter) => {
   const groupTools = createGroupManagementTools(

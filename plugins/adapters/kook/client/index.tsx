@@ -1,4 +1,4 @@
-import type { PluginRegisterHostApi } from '@zhin.js/console-types'
+import type { PluginRegisterHostApi } from '@zhin.js/contract'
 import KookDashboard from './Dashboard'
 
 export function register(api: PluginRegisterHostApi) {

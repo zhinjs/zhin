@@ -90,7 +90,6 @@ pnpm check:plugin           # 检查插件规范
 pnpm check:architecture     # 检查架构层级
 pnpm check:doc-links        # 文档相对链接（AGENTS、architecture 等）
 pnpm check:stable           # Stable 产品 smoke（Sandbox 入站 + minimal-bot 契约）
-pnpm check:queue-beta       # Queue Beta（queue-runtime + minimal-qbot）
 pnpm check:use-plugin-top-level  # 适配器/特性插件 usePlugin 顶层约束
 ```
 

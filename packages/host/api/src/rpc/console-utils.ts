@@ -1,0 +1,92 @@
+import path from "node:path";
+import { Adapter, type Plugin } from "@zhin.js/core";
+import type { SchemaFeature, ConfigFeature } from "@zhin.js/core";
+import type { ConsoleRpcContext } from "./context.js";
+
+export function resolveConfigKey(root: Plugin, pluginName: string): string {
+  const schemaService = root.inject("schema" as never) as SchemaFeature | null;
+  return schemaService?.resolveConfigKey(pluginName) ?? pluginName;
+}
+
+export function getPluginKeys(root: Plugin): string[] {
+  const schemaService = root.inject("schema" as never) as SchemaFeature | null;
+  if (!schemaService) return [];
+  const keys = new Set<string>();
+  for (const [, configKey] of schemaService.getPluginKeyMap()) {
+    keys.add(configKey);
+  }
+  return Array.from(keys);
+}
+
+export function getConfigFilePath(ctx: ConsoleRpcContext): string {
+  const configService = ctx.root.inject("config") as ConfigFeature | undefined;
+  const primaryFile = configService?.primaryFile || "zhin.config.yml";
+  return path.resolve(ctx.projectFs.cwd(), primaryFile);
+}
+
+export function findPluginByConfigKey(rootPlugin: Plugin, configKey: string): Plugin | null {
+  for (const child of rootPlugin.children) {
+    if (child.name === configKey || child.name.endsWith(`-${configKey}`) || child.name.includes(configKey)) {
+      return child;
+    }
+    const found = findPluginByConfigKey(child, configKey);
+    if (found) return found;
+  }
+  return null;
+}
+
+export function collectBotsList(root: Plugin): Array<{
+  name: string;
+  adapter: string;
+  connected: boolean;
+  status: "online" | "offline";
+}> {
+  const bots: Array<{
+    name: string;
+    adapter: string;
+    connected: boolean;
+    status: "online" | "offline";
+  }> = [];
+  const seenAdapterNames = new Set<string>();
+  for (const name of root.adapters) {
+    const key = String(name);
+    if (seenAdapterNames.has(key)) continue;
+    seenAdapterNames.add(key);
+    const adapter = root.inject(name as keyof Plugin.Contexts);
+    if (adapter instanceof Adapter) {
+      for (const [botName, bot] of adapter.bots.entries()) {
+        bots.push({
+          name: botName,
+          adapter: key,
+          connected: !!(bot as { $connected?: boolean }).$connected,
+          status: (bot as { $connected?: boolean }).$connected ? "online" : "offline",
+        });
+      }
+    }
+  }
+  return bots;
+}
+
+export async function collectBotsListWithPending(root: Plugin) {
+  const bots = collectBotsList(root);
+  let reqs: Awaited<ReturnType<typeof listUnconsumedRequests>> = [];
+  let notices: Awaited<ReturnType<typeof listUnconsumedNotices>> = [];
+  try {
+    const persistence = await import("../bot-persistence.js");
+    [reqs, notices] = await Promise.all([
+      persistence.listUnconsumedRequests(),
+      persistence.listUnconsumedNotices(),
+    ]);
+  } catch {
+    // 无 DB 时忽略
+  }
+  return bots.map((bot) => ({
+    ...bot,
+    pendingRequestCount: reqs.filter(
+      (r) => r.adapter === bot.adapter && r.bot_id === bot.name,
+    ).length,
+    pendingNoticeCount: notices.filter(
+      (n) => n.adapter === bot.adapter && n.bot_id === bot.name,
+    ).length,
+  }));
+}
