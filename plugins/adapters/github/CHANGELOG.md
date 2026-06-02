@@ -1,5 +1,12 @@
 # @zhin.js/adapter-github
 
+## 0.1.59
+
+### Patch Changes
+
+- Updated dependencies [ccb6e24]
+  - zhin.js@1.0.88
+
 ## 0.1.58
 
 ### Patch Changes
