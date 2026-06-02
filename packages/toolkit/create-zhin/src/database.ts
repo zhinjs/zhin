@@ -5,7 +5,7 @@ import { DatabaseConfig } from './types.js';
 export async function configureDatabaseOptions(): Promise<DatabaseConfig> {
   const { dialect } = await inquirer.prompt([
     {
-      type: 'list',
+      type: 'select',
       name: 'dialect',
       message: '选择数据库类型:',
       choices: [
@@ -49,7 +49,7 @@ async function configureSQLite(): Promise<DatabaseConfig> {
       }
     },
     {
-      type: 'list',
+      type: 'select',
       name: 'mode',
       message: 'SQLite 模式:',
       choices: [

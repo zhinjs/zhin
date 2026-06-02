@@ -22,7 +22,7 @@ interface AdapterDefinition {
 interface AdapterField {
   key: string;
   message: string;
-  type?: 'input' | 'password' | 'list';
+  type?: 'input' | 'password' | 'select';
   default?: string;
   required?: boolean;
   envKey?: string;       // 如果是敏感信息，对应的环境变量名
@@ -57,7 +57,7 @@ const ADAPTERS: AdapterDefinition[] = [
     fields: [
       { key: 'appId', message: 'App ID:', required: true, envKey: 'QQ_APP_ID' },
       { key: 'appSecret', message: 'App Secret:', required: true, type: 'password', envKey: 'QQ_APP_SECRET' },
-      { key: 'mode', message: '接受消息模式:', type: 'list', default: 'public',
+      { key: 'mode', message: '接受消息模式:', type: 'select', default: 'public',
         choices: [
           { name: 'websocket 模式（推荐）', value: 'websocket' },
           { name: 'webhook 模式', value: 'webhook' },
@@ -65,7 +65,7 @@ const ADAPTERS: AdapterDefinition[] = [
         ]
       },
       {
-        key: 'sandbox', message: '是否为沙箱环境:', type: 'list', default: 'false',
+        key: 'sandbox', message: '是否为沙箱环境:', type: 'select', default: 'false',
         choices: [
           { name: '正式环境', value: 'false' },
           { name: '沙箱环境', value: 'true' },
@@ -147,7 +147,7 @@ const ADAPTERS: AdapterDefinition[] = [
     needsHttp: false,
     fields: [
       {
-        key: 'type', message: '连接方式:', type: 'list', default: 'ws_reverse',
+        key: 'type', message: '连接方式:', type: 'select', default: 'ws_reverse',
         choices: [
           { name: '反向 WebSocket（推荐）', value: 'ws_reverse' },
           { name: '正向 WebSocket', value: 'ws' },
@@ -272,7 +272,7 @@ export async function configureAdapters(): Promise<AdapterSetupResult> {
         default: field.default,
       };
 
-      if (field.type === 'list' && field.choices) {
+      if (field.type === 'select' && field.choices) {
         promptConfig.choices = field.choices;
       }
 

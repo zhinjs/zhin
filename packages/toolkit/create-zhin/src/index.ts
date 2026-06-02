@@ -57,7 +57,7 @@ async function main() {
     if (!options.runtime) {
       const { runtime } = await inquirer.prompt([
         {
-          type: 'list',
+          type: 'select',
           name: 'runtime',
           message: '选择运行时:',
           choices: [
@@ -73,7 +73,7 @@ async function main() {
     if (!options.config) {
       const { configFormat } = await inquirer.prompt([
         {
-          type: 'list',
+          type: 'select',
           name: 'configFormat',
           message: '选择配置文件格式:',
           choices: [

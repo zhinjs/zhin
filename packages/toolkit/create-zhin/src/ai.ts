@@ -89,7 +89,7 @@ export async function configureAI(): Promise<AISetupConfig> {
   // 选择提供商
   const { provider } = await inquirer.prompt([
     {
-      type: 'list',
+      type: 'select',
       name: 'provider',
       message: '选择 AI 提供商:',
       choices: PROVIDERS.map(p => ({ name: p.name, value: p.value })),
