@@ -15,15 +15,7 @@ vi.mock('@zhin.js/core', async (importOriginal) => {
   return {
     ...original,
     defineModel: vi.fn(), // Mock defineModel
-    getPlugin: vi.fn(() => ({
-      name: 'test-plugin',
-      root: {
-        inject: vi.fn(),
-        dispatch: vi.fn().mockResolvedValue(undefined),
-      },
-      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-      onDispose: vi.fn(),
-    })),
+    // 保留原始 getPlugin（依赖 AsyncLocalStorage）；勿全局 stub，否则 hook-registry / write-file 等单测失效
     usePlugin: vi.fn(() => ({
       name: 'test-plugin',
       root: { 
