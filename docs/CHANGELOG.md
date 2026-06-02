@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.34
+
+### Patch Changes
+
+- 90d9efd: fix: 处理包名
+
 ## 1.0.33
 
 ### Patch Changes

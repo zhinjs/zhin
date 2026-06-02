@@ -1,5 +1,13 @@
 # @zhin.js/cli
 
+## 1.0.83
+
+### Patch Changes
+
+- 90d9efd: fix: 处理包名
+- Updated dependencies [90d9efd]
+  - @zhin.js/logger@0.1.69
+
 ## 1.0.82
 
 ### Patch Changes

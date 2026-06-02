@@ -1,5 +1,11 @@
 # @zhin.js/schema
 
+## 1.0.69
+
+### Patch Changes
+
+- 90d9efd: fix: 处理包名
+
 ## 1.0.68
 
 ### Patch Changes

@@ -1,5 +1,15 @@
 # @zhin.js/adapter-napcat
 
+## 0.1.15
+
+### Patch Changes
+
+- 90d9efd: fix: 处理包名
+  - zhin.js@1.0.87
+  - @zhin.js/agent@0.1.27
+  - @zhin.js/host-api@0.0.1
+  - @zhin.js/host-router@0.0.1
+
 ## 0.1.14
 
 ### Patch Changes

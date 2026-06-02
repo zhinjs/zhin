@@ -1,5 +1,16 @@
 # @zhin.js/adapter-kook
 
+## 2.0.6
+
+### Patch Changes
+
+- 90d9efd: fix: 处理包名
+- Updated dependencies [90d9efd]
+  - @zhin.js/logger@0.1.69
+  - zhin.js@1.0.87
+  - @zhin.js/host-api@0.0.1
+  - @zhin.js/host-router@0.0.1
+
 ## 2.0.5
 
 ### Patch Changes

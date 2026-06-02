@@ -1,5 +1,12 @@
 # @zhin.js/plugin-60s
 
+## 0.0.25
+
+### Patch Changes
+
+- 90d9efd: fix: 处理包名
+  - zhin.js@1.0.87
+
 ## 0.0.24
 
 ### Patch Changes

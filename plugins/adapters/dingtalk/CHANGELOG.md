@@ -1,5 +1,13 @@
 # @zhin.js/adapter-dingtalk
 
+## 1.0.75
+
+### Patch Changes
+
+- 90d9efd: fix: 处理包名
+  - zhin.js@1.0.87
+  - @zhin.js/host-router@0.0.1
+
 ## 1.0.74
 
 ### Patch Changes
