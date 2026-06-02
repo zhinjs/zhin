@@ -105,11 +105,17 @@ export function createICQQAdapterFromBot(bot: ICQQBot, outbound?: OutboundAdapte
     }
   };
 
-  const sendMessage = async (sessionId: string, content: string): Promise<string | null> => {
+  const sendMessage = async (
+    options: TypingIndicatorOptions,
+    content: string,
+  ): Promise<string | null> => {
     try {
-      const [type, id] = sessionId.split(':');
+      const isGroup = options.sceneType === 'group' || options.sceneType === 'channel';
+      const id = isGroup
+        ? (options.groupId ?? options.sessionId?.split(':')[1] ?? '')
+        : (options.userId ?? options.sessionId?.split(':').pop() ?? '');
       const sendOptions = {
-        type: type as 'private' | 'group',
+        type: (isGroup ? 'group' : 'private') as 'private' | 'group',
         id,
         context: 'icqq',
         bot: bot.$id,
@@ -146,11 +152,17 @@ export function createICQQAdapterFromBot(bot: ICQQBot, outbound?: OutboundAdapte
  * 创建通用适配器
  */
 export function createGenericAdapterFromBot(bot: Bot, platform: string, outbound?: OutboundAdapter): GenericTypingIndicatorAdapter {
-  const sendMessage = async (sessionId: string, content: string): Promise<string | null> => {
+  const sendMessage = async (
+    options: TypingIndicatorOptions,
+    content: string,
+  ): Promise<string | null> => {
     try {
-      const [type, id] = sessionId.split(':');
+      const isGroup = options.sceneType === 'group' || options.sceneType === 'channel';
+      const id = isGroup
+        ? (options.groupId ?? options.sessionId?.split(':')[1] ?? '')
+        : (options.userId ?? options.sessionId?.split(':').pop() ?? '');
       const sendOptions = {
-        type: type as 'private' | 'group',
+        type: (isGroup ? 'group' : 'private') as 'private' | 'group',
         id,
         context: platform,
         bot: bot.$id,

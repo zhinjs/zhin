@@ -87,17 +87,10 @@ export class ICQQTypingIndicatorManager {
         await this.bot.$removeReaction(messageId, reactionId);
       },
       // sendMessage
-      async (sessionId: string, content: string) => {
+      async (options: TypingIndicatorOptions, content: string) => {
         try {
-          // 从存储的选项中获取场景信息
-          const options = this.currentOptions;
-          if (!options) {
-            this.bot.logger.error('[ICQQ:TypingIndicator] No current options for typing indicator');
-            return null;
-          }
-
           this.bot.logger.debug('[ICQQ:TypingIndicator] sendMessage called', {
-            sessionId,
+            sessionId: options.sessionId,
             content,
             sceneType: options.sceneType,
             groupId: options.groupId,
@@ -153,15 +146,6 @@ export class ICQQTypingIndicatorManager {
     this.manager.registerAdapter(adapter);
   }
 
-  /** 当前提示选项（用于 sendMessage 回调） */
-  private currentOptions?: {
-    messageId?: string;
-    sessionId: string;
-    userId?: string;
-    groupId?: string;
-    sceneType: 'private' | 'group';
-  };
-
   /**
    * 开始提示
    */
@@ -189,9 +173,6 @@ export class ICQQTypingIndicatorManager {
         isActive: () => false,
       };
     }
-
-    // 保存当前选项（用于 sendMessage 回调）
-    this.currentOptions = options;
 
     // 根据场景类型选择配置
     const config = options.sceneType === 'group'
@@ -250,9 +231,6 @@ export class ICQQTypingIndicatorManager {
     };
 
     await this.manager.stop(typingOptions);
-
-    // 清除当前选项
-    this.currentOptions = undefined;
 
     this.bot.logger.debug('[ICQQ:TypingIndicator] stopped');
   }

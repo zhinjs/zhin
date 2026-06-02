@@ -58,7 +58,11 @@ export async function flushStatsBuffer(): Promise<void> {
           count: (existing[0].count || 0) + entry.count,
           user_name: entry.user_name,
           updated_at: ts(),
-        }).where({ id: existing[0].id });
+        }).where({
+          user_id: entry.user_id,
+          group_id: entry.group_id,
+          date: entry.date,
+        });
       } else {
         await M.insert({
           user_id: entry.user_id,
@@ -269,7 +273,11 @@ export function registerStats(plugin: Plugin, cfg: GroupSuiteConfig): void {
       const cutoffStr = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, "0")}-${String(cutoff.getDate()).padStart(2, "0")}`;
       const all: any[] = await M.select();
       for (const row of all.filter((r) => r.date < cutoffStr)) {
-        await M.delete().where({ id: row.id });
+        await M.delete().where({
+          user_id: row.user_id,
+          group_id: row.group_id,
+          date: row.date,
+        });
       }
     } catch {
       /* ignore */

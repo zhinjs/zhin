@@ -3,6 +3,11 @@
  * 管理所有插件注册的命令，继承自 Feature 抽象类
  */
 import { Feature, FeatureJSON } from "@zhin.js/kernel";
+
+/** 命令 pattern 的首个词（用于前缀排序） */
+export function commandLeadingToken(pattern: string): string {
+  return pattern.split(/\s/)[0] ?? "";
+}
 import { MessageCommand } from "../command.js";
 import { Message } from "../message.js";
 import { Plugin, getPlugin } from "../plugin.js";
@@ -61,10 +66,13 @@ export class CommandFeature extends Feature<MessageCommand<RegisteredAdapter>> {
   }
 
   /**
-   * 处理消息，依次尝试匹配命令
+   * 处理消息，依次尝试匹配命令（较长前缀优先，避免 `teach` 抢 `teach-list`）
    */
   async handle(message: Message<AdapterMessage<RegisteredAdapter>>, plugin: Plugin): Promise<any> {
-    for (const command of this.items) {
+    const commands = [...this.items].sort(
+      (a, b) => commandLeadingToken(b.pattern).length - commandLeadingToken(a.pattern).length,
+    );
+    for (const command of commands) {
       const result = await command.handle(message, plugin);
       if (result) return result;
     }

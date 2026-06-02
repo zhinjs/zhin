@@ -243,6 +243,18 @@ export function createMessageDispatcher(
     return commandPrefixIndex;
   }
 
+  /** 命令前缀须为完整词（`teach` 不匹配 `teach-list`） */
+  function matchesCommandLeadingToken(text: string, prefix: string): boolean {
+    if (!text.startsWith(prefix)) return false;
+    if (text.length === prefix.length) return true;
+    const next = text.charAt(prefix.length);
+    return next === ' ' || next === '\t';
+  }
+
+  function getSortedCommandPrefixes(index: Map<string, boolean>): string[] {
+    return [...index.keys()].sort((a, b) => b.length - a.length);
+  }
+
   async function runGuardrails(message: Message<any>): Promise<boolean> {
     if (guardrails.length === 0) return true;
 
@@ -276,8 +288,8 @@ export function createMessageDispatcher(
     const text = extractText(message);
     if (commandMatcher && commandMatcher(text, message)) return true;
     const index = getCommandIndex();
-    for (const [prefix] of index) {
-      if (text.startsWith(prefix)) return true;
+    for (const prefix of getSortedCommandPrefixes(index)) {
+      if (matchesCommandLeadingToken(text, prefix)) return true;
     }
     return false;
   }
@@ -296,8 +308,8 @@ export function createMessageDispatcher(
     }
 
     const index = getCommandIndex();
-    for (const [prefix] of index) {
-      if (text.startsWith(prefix)) {
+    for (const prefix of getSortedCommandPrefixes(index)) {
+      if (matchesCommandLeadingToken(text, prefix)) {
         return { type: 'command' };
       }
     }

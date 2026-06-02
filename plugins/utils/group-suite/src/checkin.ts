@@ -110,7 +110,11 @@ export function registerCheckin(plugin: Plugin, cfg: GroupSuiteConfig): void {
           last_checkin: today,
           user_name: userName,
           updated_at: ts(),
-        }).where({ id: user.id });
+        }).where({
+          user_id: userId,
+          context_type: ctxType,
+          context_id: ctxId,
+        });
 
         const lines = [`签到成功！`, `基础积分: +${base}`];
         if (bonus > 0) lines.push(`连续奖励: +${bonus} (连续${newStreak}天)`);

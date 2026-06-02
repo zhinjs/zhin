@@ -176,48 +176,32 @@ export function registerTeach(plugin: Plugin, cfg: GroupSuiteConfig): void {
     return;
   });
 
+  // 先注册较长前缀，避免 `teach [...]` 误匹配 teach-list / teach-regex
   addCommand(
-    new MessageCommand("teach [...payload:text]")
-      .desc("教我问答", "教会 Bot 一个新的问答对")
-      .usage("teach 关键词 回答", "teach 问题|答案")
+    new MessageCommand("teach-list [page:number]")
+      .desc("问答列表", "查看问答对")
       .action(async (message, result) => {
         const QA = getQA();
-        if (!QA) return "问答数据库尚未就绪，请稍后重试";
-        const parsed = parseTeachPair(extractRestParam(result.params.payload));
-        if (!parsed) return TEACH_USAGE_HINT;
-        const { question, answer } = parsed;
+        if (!QA) return "问答数据库尚未就绪";
+        const page = Math.max(1, result.params.page || 1);
         const { type: ctxType, id: ctxId } = getMessageContextKey(message);
-        if (ctxType === "group") {
-          const existing: any[] = await QA.select().where({
-            context_type: ctxType,
-            context_id: ctxId,
-          });
-          if (existing.length >= cfg.teachMaxPerGroup) {
-            return `该群问答数已达上限 (${cfg.teachMaxPerGroup})`;
-          }
-        }
-        const duplicate: any[] = await QA.select().where({
-          question,
-          context_type: ctxType,
-          context_id: ctxId,
+        const allItems: any[] = await QA.select().where(
+          ctxType === "global"
+            ? { context_type: "global" }
+            : { context_type: ctxType, context_id: ctxId },
+        );
+        if (allItems.length === 0) return "还没有教过任何问答哦～";
+        const totalPages = Math.ceil(allItems.length / cfg.teachPageSize);
+        const safePage = Math.min(page, totalPages);
+        const start = (safePage - 1) * cfg.teachPageSize;
+        const pageItems = allItems.slice(start, start + cfg.teachPageSize);
+        const lines = pageItems.map((item, i) => {
+          const prefix = item.is_regex ? "[正则]" : "[精确]";
+          const q = item.is_regex ? `/${item.question}/` : item.question;
+          return `${start + i + 1}. ${prefix} ${q} → ${item.answer}`;
         });
-        if (duplicate.length > 0) {
-          await QA.update({ answer, updated_at: ts() }).where(qaWhereKey(duplicate[0]));
-          return `已更新问答：「${question}」→「${answer}」`;
-        }
-        await QA.insert({
-          question,
-          answer,
-          is_regex: 0,
-          context_type: ctxType,
-          context_id: ctxId,
-          creator_id: message.$sender?.id || "",
-          creator_name: message.$sender?.name || "",
-          hit_count: 0,
-          created_at: ts(),
-          updated_at: ts(),
-        });
-        return `学会了！发送「${question}」我会回复「${answer}」`;
+        const header = ctxType === "global" ? "全局问答列表" : "本群问答列表";
+        return `${header}\n${lines.join("\n")}\n第 ${safePage}/${totalPages} 页 · 共 ${allItems.length} 条`;
       }),
   );
 
@@ -277,30 +261,47 @@ export function registerTeach(plugin: Plugin, cfg: GroupSuiteConfig): void {
   );
 
   addCommand(
-    new MessageCommand("teach-list [page:number]")
-      .desc("问答列表", "查看问答对")
+    new MessageCommand("teach [...payload:text]")
+      .desc("教我问答", "教会 Bot 一个新的问答对")
+      .usage("teach 关键词 回答", "teach 问题|答案")
       .action(async (message, result) => {
         const QA = getQA();
-        if (!QA) return "问答数据库尚未就绪";
-        const page = Math.max(1, result.params.page || 1);
+        if (!QA) return "问答数据库尚未就绪，请稍后重试";
+        const parsed = parseTeachPair(extractRestParam(result.params.payload));
+        if (!parsed) return TEACH_USAGE_HINT;
+        const { question, answer } = parsed;
         const { type: ctxType, id: ctxId } = getMessageContextKey(message);
-        const allItems: any[] = await QA.select().where(
-          ctxType === "global"
-            ? { context_type: "global" }
-            : { context_type: ctxType, context_id: ctxId },
-        );
-        if (allItems.length === 0) return "还没有教过任何问答哦～";
-        const totalPages = Math.ceil(allItems.length / cfg.teachPageSize);
-        const safePage = Math.min(page, totalPages);
-        const start = (safePage - 1) * cfg.teachPageSize;
-        const pageItems = allItems.slice(start, start + cfg.teachPageSize);
-        const lines = pageItems.map((item, i) => {
-          const prefix = item.is_regex ? "[正则]" : "[精确]";
-          const q = item.is_regex ? `/${item.question}/` : item.question;
-          return `${start + i + 1}. ${prefix} ${q} → ${item.answer}`;
+        if (ctxType === "group") {
+          const existing: any[] = await QA.select().where({
+            context_type: ctxType,
+            context_id: ctxId,
+          });
+          if (existing.length >= cfg.teachMaxPerGroup) {
+            return `该群问答数已达上限 (${cfg.teachMaxPerGroup})`;
+          }
+        }
+        const duplicate: any[] = await QA.select().where({
+          question,
+          context_type: ctxType,
+          context_id: ctxId,
         });
-        const header = ctxType === "global" ? "全局问答列表" : "本群问答列表";
-        return `${header}\n${lines.join("\n")}\n第 ${safePage}/${totalPages} 页 · 共 ${allItems.length} 条`;
+        if (duplicate.length > 0) {
+          await QA.update({ answer, updated_at: ts() }).where(qaWhereKey(duplicate[0]));
+          return `已更新问答：「${question}」→「${answer}」`;
+        }
+        await QA.insert({
+          question,
+          answer,
+          is_regex: 0,
+          context_type: ctxType,
+          context_id: ctxId,
+          creator_id: message.$sender?.id || "",
+          creator_name: message.$sender?.name || "",
+          hit_count: 0,
+          created_at: ts(),
+          updated_at: ts(),
+        });
+        return `学会了！发送「${question}」我会回复「${answer}」`;
       }),
   );
 }

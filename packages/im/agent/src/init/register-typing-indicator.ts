@@ -18,37 +18,58 @@ import type { TypingIndicatorManager } from '../typing-indicator/index.js';
 import type { AIServiceRefs } from './shared-refs.js';
 import type { AIEventPayload } from '../ai-event-subscriber.js';
 
-function resolveSceneType(sceneId?: string): 'private' | 'group' | 'channel' {
-  if (!sceneId) return 'private';
+/** 与 ToolContext.scope / Message.$channel.type 一致（群聊 sceneId 通常只是群号，无 group: 前缀） */
+function resolveSceneType(payload: AIEventPayload): 'private' | 'group' | 'channel' {
+  const scope = payload.scope;
+  if (scope === 'group' || scope === 'channel' || scope === 'private') {
+    return scope;
+  }
+  const sceneId = payload.sceneId ?? '';
   if (sceneId.startsWith('group:')) return 'group';
   if (sceneId.startsWith('channel:')) return 'channel';
   if (sceneId.startsWith('private:')) return 'private';
   return 'private';
 }
 
-/** 从事件 payload 解析 ICQQ 等平台 start/stop 需要的 userId / groupId */
+/** sessionId 形如 platform:channelId:userId；群聊 channelId 在 sceneId */
 function resolveTypingTargets(payload: AIEventPayload, sceneType: 'private' | 'group' | 'channel') {
   const { sceneId, userId, sessionId } = payload;
-  let groupId: string | undefined;
+  const parts = sessionId.split(':').filter((p) => p.length > 0);
   let resolvedUserId = userId;
+  let groupId: string | undefined;
 
-  if (sceneId?.startsWith('group:')) {
-    groupId = sceneId.slice('group:'.length);
-  } else if (sceneId?.startsWith('private:') && !resolvedUserId) {
-    resolvedUserId = sceneId.slice('private:'.length);
-  }
-
-  if (!groupId && sessionId.startsWith('group:')) {
-    groupId = sessionId.slice('group:'.length);
-  }
-  if (!resolvedUserId && sessionId.startsWith('private:')) {
-    resolvedUserId = sessionId.slice('private:'.length);
+  if (sceneType === 'group' || sceneType === 'channel') {
+    groupId = sceneId?.replace(/^(group|channel):/, '') || sceneId;
+    if (!groupId && parts.length >= 3) {
+      groupId = parts[1];
+    }
+    if (!resolvedUserId && parts.length >= 3) {
+      resolvedUserId = parts[parts.length - 1];
+    }
+  } else {
+    if (sceneId?.startsWith('private:')) {
+      resolvedUserId = sceneId.slice('private:'.length);
+    } else if (!resolvedUserId && parts.length >= 2) {
+      resolvedUserId = parts.length >= 3 ? parts[parts.length - 1] : parts[1];
+    }
   }
 
   return {
     userId: resolvedUserId,
-    groupId: sceneType === 'group' ? groupId : undefined,
+    groupId: sceneType === 'group' || sceneType === 'channel' ? groupId : undefined,
   };
+}
+
+function resolveTypingSceneConfig(
+  config: Record<string, unknown>,
+  sceneType: 'private' | 'group' | 'channel',
+): Record<string, unknown> {
+  const groupCfg = config.groupConfig as Record<string, unknown> | undefined;
+  const privateCfg = config.privateConfig as Record<string, unknown> | undefined;
+  if (sceneType === 'group' || sceneType === 'channel') {
+    return { ...config, ...groupCfg };
+  }
+  return { ...config, ...privateCfg };
 }
 
 function isGenericTypingManager(manager: BotTypingIndicatorManager): manager is TypingIndicatorManager {
@@ -91,8 +112,9 @@ export function registerTypingIndicator(_refs: AIServiceRefs): void {
         }
 
         const manager = resolveTypingManager(bot, platform, config, adapter!);
-        const sceneType = resolveSceneType(sceneId);
+        const sceneType = resolveSceneType(payload);
         const targets = resolveTypingTargets(payload, sceneType);
+        const sceneConfig = resolveTypingSceneConfig(config, sceneType);
 
         logger.debug(
           `[TypingIndicator] Auto starting indicator on event: processing.start for session: ${sessionId}`,
@@ -109,7 +131,7 @@ export function registerTypingIndicator(_refs: AIServiceRefs): void {
               userId: targets.userId,
               groupId: targets.groupId,
             },
-            config,
+            sceneConfig,
           );
         } else {
           await manager.start({
@@ -134,7 +156,7 @@ export function registerTypingIndicator(_refs: AIServiceRefs): void {
         const bot = adapter?.bots?.get(botId) as BotWithTypingIndicator | undefined;
         if (!bot?.$typingIndicator) return;
 
-        const sceneType = resolveSceneType(sceneId);
+        const sceneType = resolveSceneType(payload);
         const targets = resolveTypingTargets(payload, sceneType);
         const manager = bot.$typingIndicator;
 
@@ -173,7 +195,7 @@ export function registerTypingIndicator(_refs: AIServiceRefs): void {
         const bot = adapter?.bots?.get(botId) as BotWithTypingIndicator | undefined;
         if (!bot?.$typingIndicator) return;
 
-        const sceneType = resolveSceneType(sceneId);
+        const sceneType = resolveSceneType(payload);
         const targets = resolveTypingTargets(payload, sceneType);
         const manager = bot.$typingIndicator;
 
@@ -213,13 +235,16 @@ export function registerTypingIndicator(_refs: AIServiceRefs): void {
         const manager = bot?.$typingIndicator;
         if (!manager || !isGenericTypingManager(manager)) return;
 
-        const sceneType = resolveSceneType(sceneId);
+        const sceneType = resolveSceneType(payload);
+        const targets = resolveTypingTargets(payload, sceneType);
         const indicator = manager.getActiveIndicator({
           platform,
           botId,
           sessionId,
           messageId,
           sceneType,
+          userId: targets.userId,
+          groupId: targets.groupId,
         });
 
         if (indicator && typeof indicator.update === 'function') {
@@ -240,13 +265,16 @@ export function registerTypingIndicator(_refs: AIServiceRefs): void {
         const manager = bot?.$typingIndicator;
         if (!manager || !isGenericTypingManager(manager)) return;
 
-        const sceneType = resolveSceneType(sceneId);
+        const sceneType = resolveSceneType(payload);
+        const targets = resolveTypingTargets(payload, sceneType);
         const indicator = manager.getActiveIndicator({
           platform,
           botId,
           sessionId,
           messageId,
           sceneType,
+          userId: targets.userId,
+          groupId: targets.groupId,
         });
 
         if (indicator && typeof indicator.update === 'function') {
@@ -268,13 +296,16 @@ export function registerTypingIndicator(_refs: AIServiceRefs): void {
         const manager = bot?.$typingIndicator;
         if (!manager || !isGenericTypingManager(manager)) return;
 
-        const sceneType = resolveSceneType(sceneId);
+        const sceneType = resolveSceneType(payload);
+        const targets = resolveTypingTargets(payload, sceneType);
         const indicator = manager.getActiveIndicator({
           platform,
           botId,
           sessionId,
           messageId,
           sceneType,
+          userId: targets.userId,
+          groupId: targets.groupId,
         });
 
         if (indicator && typeof indicator.update === 'function') {

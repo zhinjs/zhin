@@ -396,7 +396,15 @@ describe('MessageTypingIndicator', () => {
 
     await indicator.start();
 
-    expect(sendMessage).toHaveBeenCalledWith('private:liuchunlang', '正在处理中...');
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        platform: 'icqq',
+        botId: '75318',
+        sessionId: 'private:liuchunlang',
+        sceneType: 'private',
+      }),
+      '正在处理中...',
+    );
     expect(indicator.isActive()).toBe(true);
   });
 

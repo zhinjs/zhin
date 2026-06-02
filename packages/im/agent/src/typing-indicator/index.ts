@@ -135,6 +135,17 @@ export class ReactionTypingIndicator implements TypingIndicator {
 
 // ── 消息式提示 ────────────────────────────────────────────────────────
 
+function hasTypingSendTarget(options: TypingIndicatorOptions): boolean {
+  if (options.userId) return true;
+  if (
+    (options.sceneType === 'group' || options.sceneType === 'channel') &&
+    options.groupId
+  ) {
+    return true;
+  }
+  return Boolean(options.sessionId?.trim());
+}
+
 export class MessageTypingIndicator implements TypingIndicator {
   private active = false;
   private messageId: string | null = null;
@@ -142,24 +153,19 @@ export class MessageTypingIndicator implements TypingIndicator {
   constructor(
     private options: TypingIndicatorOptions,
     private config: TypingIndicatorConfig,
-    private sendMessage: (sessionId: string, content: string) => Promise<string | null>,
+    private sendMessage: (options: TypingIndicatorOptions, content: string) => Promise<string | null>,
     private deleteMessage: (messageId: string) => Promise<void>,
     private editMessage?: (messageId: string, content: string) => Promise<void>,
   ) {}
 
   async start(): Promise<void> {
-    if (this.active) {
+    if (this.active || !hasTypingSendTarget(this.options)) {
       return;
     }
 
     try {
-      const sessionId = this.options.sessionId;
-      if (!sessionId) {
-        return;
-      }
-
       this.messageId = await this.sendMessage(
-        sessionId,
+        this.options,
         this.config.message || '正在处理中...',
       );
       this.active = true;
@@ -341,7 +347,7 @@ export class ReactionTypingIndicatorAdapter implements TypingIndicatorAdapter {
   constructor(
     private addReaction: (messageId: string, emoji: string) => Promise<string | null>,
     private removeReaction: (messageId: string, reactionId: string) => Promise<void>,
-    private sendMessage: (sessionId: string, content: string) => Promise<string | null>,
+    private sendMessage: (options: TypingIndicatorOptions, content: string) => Promise<string | null>,
     private deleteMessage: (messageId: string) => Promise<void>,
     private editMessage?: (messageId: string, content: string) => Promise<void>,
   ) {}
@@ -381,7 +387,7 @@ export class GenericTypingIndicatorAdapter implements TypingIndicatorAdapter {
 
   constructor(
     platform: string,
-    private sendMessage: (sessionId: string, content: string) => Promise<string | null>,
+    private sendMessage: (options: TypingIndicatorOptions, content: string) => Promise<string | null>,
     private deleteMessage: (messageId: string) => Promise<void>,
     private editMessage?: (messageId: string, content: string) => Promise<void>,
   ) {

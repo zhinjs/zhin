@@ -28,17 +28,39 @@ export type BotWithEditing = Bot & Partial<MessageEditableBot>;
 /** 出站发送：优先 Adapter.sendMessage（走 before.sendMessage 链） */
 type OutboundAdapter = Pick<Adapter, 'sendMessage'>;
 
+function resolveTypingSendTarget(options: TypingIndicatorOptions): {
+  type: 'private' | 'group';
+  id: string;
+} {
+  if (
+    (options.sceneType === 'group' || options.sceneType === 'channel') &&
+    options.groupId
+  ) {
+    return { type: 'group', id: options.groupId };
+  }
+  if (options.userId) {
+    return { type: 'private', id: options.userId };
+  }
+  const parts = (options.sessionId ?? '').split(':').filter((p) => p.length > 0);
+  if (parts.length >= 3) {
+    return { type: 'group', id: parts[1]! };
+  }
+  if (parts.length >= 2) {
+    return { type: 'private', id: parts[parts.length - 1]! };
+  }
+  return { type: 'private', id: options.sessionId ?? '' };
+}
+
 function createOutboundSendMessage(
   bot: Bot,
   platform: string,
-  parseSessionId: (sessionId: string) => [string, string],
   outbound?: OutboundAdapter,
-): (sessionId: string, content: string) => Promise<string | null> {
-  return async (sessionId: string, content: string) => {
+): (options: TypingIndicatorOptions, content: string) => Promise<string | null> {
+  return async (options: TypingIndicatorOptions, content: string) => {
     try {
-      const [type, id] = parseSessionId(sessionId);
+      const { type, id } = resolveTypingSendTarget(options);
       const sendOptions: SendOptions = {
-        type: type as 'private' | 'group',
+        type,
         id,
         context: platform,
         bot: bot.$id,
@@ -340,7 +362,7 @@ export class AdapterTypingIndicatorManager {
     features: PlatformFeatures,
     outbound?: OutboundAdapter,
   ): void {
-    const sendMessage = createOutboundSendMessage(bot, platform, (id) => this.parseSessionId(id), outbound);
+    const sendMessage = createOutboundSendMessage(bot, platform, outbound);
     if (features.supportsReaction && bot.$addReaction && bot.$removeReaction) {
       // 支持 reaction 的平台使用 ReactionTypingIndicatorAdapter
       const adapter = new ReactionTypingIndicatorAdapter(

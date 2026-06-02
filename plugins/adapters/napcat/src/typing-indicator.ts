@@ -47,14 +47,6 @@ export class NapCatTypingIndicatorManager {
   private config: NapCatTypingIndicatorConfig;
   private bot: NapCatBotBase;
 
-  private currentOptions?: {
-    messageId?: string;
-    sessionId: string;
-    userId?: string;
-    groupId?: string;
-    sceneType: 'private' | 'group';
-  };
-
   constructor(bot: NapCatBotBase, config: Partial<NapCatTypingIndicatorConfig> = {}) {
     this.bot = bot;
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -75,10 +67,8 @@ export class NapCatTypingIndicatorManager {
       async (messageId: string, reactionId: string) => {
         await this.bot.$removeReaction(messageId, reactionId);
       },
-      async (sessionId: string, content: string) => {
+      async (options: TypingIndicatorOptions, content: string) => {
         try {
-          const options = this.currentOptions;
-          if (!options) return null;
           if (options.sceneType === 'group' && options.groupId) {
             return await this.bot.$sendMessage({
               type: 'group',
@@ -130,8 +120,6 @@ export class NapCatTypingIndicatorManager {
       };
     }
 
-    this.currentOptions = options;
-
     const config = options.sceneType === 'group'
       ? this.config.groupConfig
       : this.config.privateConfig;
@@ -163,7 +151,6 @@ export class NapCatTypingIndicatorManager {
       sceneType: 'private',
     };
     await this.manager.stop(typingOptions);
-    this.currentOptions = undefined;
   }
 
   async stopAll(): Promise<void> {
