@@ -1,5 +1,12 @@
 # @zhin.js/adapter-satori
 
+## 0.0.38
+
+### Patch Changes
+
+- Updated dependencies [ccb6e24]
+  - zhin.js@1.0.88
+
 ## 0.0.37
 
 ### Patch Changes

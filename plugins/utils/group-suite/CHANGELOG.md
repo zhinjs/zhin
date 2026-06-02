@@ -1,5 +1,13 @@
 # @zhin.js/plugin-group-suite
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies [ccb6e24]
+  - zhin.js@1.0.88
+  - @zhin.js/plugin-html-renderer@0.0.66
+
 ## 0.1.2
 
 ### Patch Changes

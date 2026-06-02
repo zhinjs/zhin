@@ -1,5 +1,12 @@
 # create-zhin-app
 
+## 1.0.46
+
+### Patch Changes
+
+- ccb6e24: fix: zhin.js 瘦身
+- fdd6653: fix: change inquire list => select
+
 ## 1.0.45
 
 ### Patch Changes

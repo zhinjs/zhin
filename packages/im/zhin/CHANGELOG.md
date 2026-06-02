@@ -1,5 +1,11 @@
 # zhin.js
 
+## 1.0.88
+
+### Patch Changes
+
+- ccb6e24: fix: zhin.js 瘦身
+
 ## 1.0.87
 
 ### Patch Changes
