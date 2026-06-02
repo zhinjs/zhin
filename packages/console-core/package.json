@@ -22,7 +22,7 @@
     "clean": "rimraf dist lib"
   },
   "dependencies": {
-    "@koa/router": "^15.5.0",
+    "@koa/router": "^15.6.0",
     "@zhin.js/console-types": "workspace:*",
     "esbuild": "^0.28.0",
     "koa": "^3.2.1",

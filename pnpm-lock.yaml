@@ -496,8 +496,8 @@ importers:
   packages/console-core:
     dependencies:
       '@koa/router':
-        specifier: ^15.5.0
-        version: 15.5.0(koa@3.2.1)
+        specifier: ^15.6.0
+        version: 15.6.0(koa@3.2.1)
       '@zhin.js/console-types':
         specifier: workspace:*
         version: link:../console-types
@@ -2603,8 +2603,8 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@koa/router@15.5.0':
-    resolution: {integrity: sha512-KSC0oG/5t6ITu5wqX4lJseA/dngoj14hEaohrLZEXtlUT2RRyJvwaJ0KV+5uQoaWrY3A8ClHOrBEU4g8dujn8Q==}
+  '@koa/router@15.6.0':
+    resolution: {integrity: sha512-iEOXlvGIBqSNkGXrg0XtMARAOm5zA24oedXxiTGEkrD4JgwVjfRDddCQvW1s4WEcwDYvyecRbf8BikXsuEEj8w==}
     engines: {node: '>= 20'}
     peerDependencies:
       koa: '>=3.1.2'
@@ -8440,7 +8440,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@koa/router@15.5.0(koa@3.2.1)':
+  '@koa/router@15.6.0(koa@3.2.1)':
     dependencies:
       debug: 4.4.3
       http-errors: 2.0.1
