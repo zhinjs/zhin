@@ -113,7 +113,7 @@ npm create zhin-app my-bot --yes
 - 数据库: SQLite (`./data/bot.db`, WAL 模式)
 - HTTP Token: 随机生成 32 位 hex 字符串
 - 适配器: Sandbox
-- Remote Console: `https://console.zhin.dev`；API Base `http://127.0.0.1:8086` 或 `/api` 后缀（Host 无静态 UI）
+- Remote Console: `https://console.zhin.dev`；API Base 与 Host 地址一致（如 `http://127.0.0.1:8086`）
 - 统一收件箱: 已启用 `inbox.enabled`
 - 日志等级: INFO
 - 日志清理: 7 天，10000 条记录
@@ -238,7 +238,7 @@ cd my-awesome-bot
 pnpm dev
 ```
 
-访问 Remote Console `https://console.zhin.dev`，API Base 填写 `http://127.0.0.1:8086` 或 `http://127.0.0.1:8086/api`（Host 不提供 `:8086` 静态 UI）。
+访问 Remote Console `https://console.zhin.dev`，API Base 填写与 Host 一致的地址（如 `http://127.0.0.1:8086`）。
 
 **访问信息：**
 - Token 在创建项目时已配置

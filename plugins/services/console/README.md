@@ -84,9 +84,9 @@ import '@zhin.js/console'
 
 1. 启动 Host：`pnpm dev` / `pnpm start`。
 2. 浏览器打开 **https://console.zhin.dev**（或本地 [zhin-console](https://github.com/zhinjs/zhin-console) 开发服，如 `http://127.0.0.1:5173`）。
-3. 登录：**API Base** `http://127.0.0.1:8086` 或 `http://127.0.0.1:8086/api`；**Token** 与 `.env` 中 `HTTP_TOKEN` 一致。
+3. 登录：**API Base** 填 Host 监听地址（如 `http://127.0.0.1:8086`），**Token** 与 `.env` 中 `HTTP_TOKEN` 一致。
 
-**勿**将 `http://localhost:8086` 或 `/vite/` 当作内置聊天 UI 入口（Host 不托管静态 Console 页）。健康检查可用 `GET http://127.0.0.1:8086/pub/health`。
+UI 在 Remote Console 打开，不在本机 `:8086` 上。健康检查：`GET http://127.0.0.1:8086/pub/health`。
 
 ### 配置选项
 

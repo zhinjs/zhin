@@ -35,7 +35,7 @@ cp .env.example .env
 pnpm dev
 ```
 
-保持 `pnpm dev` 运行后，打开 **[Remote Console](https://console.zhin.dev)**，API Base 填 `http://127.0.0.1:8086`（或 `/api` 后缀，见登录页），Token 与 `.env` 的 `HTTP_TOKEN` 一致；在 Sandbox 窗口发送 `hello`。配置 Ollama 后可发送 `ai: …` 验证 AI。说明见 [console-remote.md](../console-remote.md)。
+保持 `pnpm dev` 运行后，打开 **[Remote Console](https://console.zhin.dev)**，用终端里显示的 Host 地址作为 API Base，Token 与 `.env` 的 `HTTP_TOKEN` 一致；在 Console **沙盒** 页连接后发送 `hello`。配置 Ollama 后可发送 `ai: …` 验证 AI。说明见 [console-remote.md](../console-remote.md)。
 
 - 示例说明：[examples/minimal-bot/README.md](https://github.com/zhinjs/zhin/blob/main/examples/minimal-bot/README.md)
 - 全功能维护者配置（**非默认模板**）：`examples/test-bot`
@@ -240,13 +240,12 @@ Zhin.js 提供了丰富的命令行工具：
 
 ## 访问 Remote Console
 
-打开 **[console.zhin.dev](https://console.zhin.dev)**（勿在浏览器打开 `http://localhost:8086` 根路径指望出现聊天页）。
+在 **[console.zhin.dev](https://console.zhin.dev)** 登录（聊天与管理界面在这里，不在本机 `:8086` 网页上）。
 
-API Base 填写（二选一，与登录页说明一致）：
+API Base 与启动日志中的 Host 地址一致，例如：
 
 ```text
 http://127.0.0.1:8086
-http://127.0.0.1:8086/api
 ```
 
 详见 [console-remote.md](../console-remote.md)。

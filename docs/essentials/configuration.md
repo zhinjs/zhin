@@ -254,7 +254,7 @@ http:
   trustProxy: false         # 通过 Cloudflare/Nginx 等反向代理访问时设为 true
 ```
 
-**认证方式**：Token 认证，仅保护 API 路径（`/api/*`）。**Remote Console**（[console.zhin.dev](https://console.zhin.dev)）在登录页填写 API Base（如 `http://127.0.0.1:8086` 或 `http://127.0.0.1:8086/api`）与 Token。Host **不提供** `:8086` 上的静态聊天 UI。
+**认证方式**：Token 认证，仅保护 API 路径（`/api/*`）。在 **[Remote Console](https://console.zhin.dev)** 登录时填写 API Base（与 Host 监听地址一致，如 `http://127.0.0.1:8086`）和 Token；`:8086` 仅提供 API，不提供内置网页 UI。
 
 Token 传递方式：
 - **Header**: `Authorization: Bearer <token>`

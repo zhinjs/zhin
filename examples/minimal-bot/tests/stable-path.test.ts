@@ -19,6 +19,11 @@ describe('minimal-bot Stable 配置契约', () => {
     expect(configText).toMatch(/toolSearch:\s*false/);
   });
 
+  it('bots 为空（Sandbox 由 Console 沙盒页连接时自动创建）', () => {
+    expect(configText).toMatch(/bots:\s*\[\]/);
+    expect(configText).not.toMatch(/context:\s*sandbox/);
+  });
+
   it('插件集为 Sandbox + http + console + hello', () => {
     expect(configText).toContain('@zhin.js/adapter-sandbox');
     expect(configText).toContain('@zhin.js/http');

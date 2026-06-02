@@ -26,43 +26,31 @@ Sandbox 适配器需要以下服务插件：
 
 ## 配置
 
+**推荐（与 [minimal-bot](../../../examples/minimal-bot/) 一致）**：`bots: []`，在 Remote Console 打开「沙盒」页时经 `/sandbox` WebSocket **自动创建** bot（如 `sandbox-xxxx`），无需在 yaml 里写 `context: sandbox`。
+
 ```yaml
 # zhin.config.yml
+bots: []
+
+plugins:
+  - "@zhin.js/adapter-sandbox"
+  - "@zhin.js/http"
+  - "@zhin.js/console"
+```
+
+可选：若需在启动时即在 bot 列表显示**固定名称**的离线占位 bot，可显式配置：
+
+```yaml
 bots:
   - context: sandbox
     name: sandbox-bot
-
-plugins:
-  - adapter-sandbox
-  - http
-  - console
-```
-
-或使用 TypeScript 配置：
-
-```typescript
-import { defineConfig } from 'zhin.js'
-
-export default defineConfig({
-  bots: [
-    {
-      context: 'sandbox',
-      name: 'sandbox-bot',
-    }
-  ],
-  plugins: [
-    'adapter-sandbox',
-    'http',
-    'console',
-  ]
-})
 ```
 
 ## 使用方式
 
-1. 启动机器人：`pnpm dev`（Host 默认 `http://127.0.0.1:8086` 仅 **Console API**）
-2. 打开 **[Remote Console](https://console.zhin.dev)**，API Base 指向上述 Host，Token 与 `http.token` / `HTTP_TOKEN` 一致
-3. 在 Sandbox 聊天窗口中发送消息进行测试（勿将 `http://localhost:8086` 根路径当作 UI 入口）
+1. 启动机器人：`pnpm dev`（终端会打印 Host 地址，一般为 `http://127.0.0.1:8086`）
+2. 打开 **[Remote Console](https://console.zhin.dev)**，API Base 与 Host 地址一致，Token 与 `http.token` / `HTTP_TOKEN` 一致
+3. 在 Console **沙盒** 页连接后发送消息进行测试
 
 每个浏览器客户端连接后创建 Sandbox Bot（无 yaml 固定名时为 `sandbox-xxxx`）。
 

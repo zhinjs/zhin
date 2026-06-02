@@ -199,9 +199,8 @@ useContext("config", (configService) => {
     const visitAddress = `${publicHost}:${listenPort}`;
     const originUrl = `http://${visitAddress}`;
     const apiUrl = `http://${visitAddress}${base}`;
-    const apiBaseUrl = apiUrl;
     const openapiUrl = `${originUrl}/pub/openapi.json`;
-    const consoleUrl = `${REMOTE_CONSOLE_ORIGIN}/?apiBaseUrl=${encodeURIComponent(apiBaseUrl)}`;
+    const consoleUrl = `${REMOTE_CONSOLE_ORIGIN}/?apiBaseUrl=${encodeURIComponent(originUrl)}`;
 
     logger.info(
       formatCompact({

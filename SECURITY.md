@@ -175,7 +175,7 @@ Zhin.js 团队和社区非常重视安全问题。我们感谢您帮助我们保
 ### ⚠️ 已知安全注意事项
 
 1. **Remote Console / Host API**
-   - Host HTTP 默认 `127.0.0.1:8086`（仅 API）；勿将 `:8086` 暴露为公网 UI 入口
+   - Host HTTP 默认 `127.0.0.1:8086`（仅 API）；管理界面在 Remote Console，勿把该端口当作公网 Web UI 暴露
    - 生产环境限制 API 来源、使用强 `HTTP_TOKEN`；Remote Console 登录见 [docs/console-remote.md](docs/console-remote.md)
 
 2. **插件系统**

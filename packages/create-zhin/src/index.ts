@@ -203,7 +203,7 @@ async function main() {
     console.log('');
     console.log(chalk.blue('🔐 Remote Console 登录信息：'));
     console.log(`  ${chalk.gray('UI:')} ${chalk.cyan('https://console.zhin.dev')}`);
-    console.log(`  ${chalk.gray('API Base:')} ${chalk.cyan('http://127.0.0.1:8086')} ${chalk.gray('或')} ${chalk.cyan('http://127.0.0.1:8086/api')}`);
+    console.log(`  ${chalk.gray('API Base:')} ${chalk.cyan('http://127.0.0.1:8086')}`);
     console.log(`  ${chalk.gray('Token:')} ${chalk.cyan(options.httpToken)}`);
     console.log(`  ${chalk.yellow('⚠ Token 已保存到')} ${chalk.cyan('.env')} ${chalk.yellow('文件，用于 Bearer Token 或 Console 登录页')}`);
     

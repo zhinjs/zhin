@@ -45,7 +45,7 @@ pnpm dev
 ```
 
 1. 保持 `pnpm dev` 运行（Host 监听 `http://127.0.0.1:8086`，**无**内置网页 UI）。
-2. 打开 **[Remote Console](https://console.zhin.dev)**，API Base 填 `http://127.0.0.1:8086`（或 `http://127.0.0.1:8086/api`，以登录页说明为准），Token 与 `.env` 中 `HTTP_TOKEN` 一致。
+2. 打开 **[Remote Console](https://console.zhin.dev)**，API Base 填终端日志中的 Host 地址（如 `http://127.0.0.1:8086`），Token 与 `.env` 中 `HTTP_TOKEN` 一致。
 3. 在 Sandbox 窗口发 `hello`；AI 回合需 Ollama 或 API Key。详见 [minimal-bot README](./examples/minimal-bot/README.md) 与 [Remote Console 说明](./docs/console-remote.md)。
 
 ### 创建独立项目（脚手架）

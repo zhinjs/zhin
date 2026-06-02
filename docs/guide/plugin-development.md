@@ -389,7 +389,7 @@ pnpm test:coverage
 - 实时查看日志输出
 - 监控内存使用和消息统计
 
-勿将 `http://localhost:8086` 根路径当作 UI 入口（Host 仅 API）。见 [console-remote.md](../console-remote.md)。
+管理界面在 [Remote Console](https://console.zhin.dev) 登录，API Base 填 Host 监听地址。见 [console-remote.md](../console-remote.md)。
 
 ## 构建插件
 

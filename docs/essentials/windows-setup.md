@@ -50,7 +50,7 @@ Windows 用户在首次初始化 Zhin.js 项目时可能遇到一些常见问题
 4. **访问 Remote Console**
    - 保持 `pnpm dev` / `pnpm start` 运行（Host API 默认 `http://127.0.0.1:8086`）。
    - 浏览器打开 **[https://console.zhin.dev](https://console.zhin.dev)**。
-   - 登录：API Base `http://127.0.0.1:8086`（或 `http://127.0.0.1:8086/api`）；Token 与 `.env` 中 `HTTP_TOKEN` 一致。
+   - 登录：API Base 与 Host 启动日志中的地址一致（如 `http://127.0.0.1:8086`）；Token 与 `.env` 中 `HTTP_TOKEN` 一致。
    - 在 Sandbox 窗口测试消息。说明见 [console-remote.md](../console-remote.md)。
 
 ---
