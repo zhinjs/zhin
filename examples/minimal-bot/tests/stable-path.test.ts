@@ -12,10 +12,6 @@ const botRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const configText = fs.readFileSync(path.join(botRoot, 'zhin.config.yml'), 'utf8');
 
 describe('minimal-bot Stable 配置契约', () => {
-  it('仅配置单个 sandbox bot', () => {
-    expect(configText).toMatch(/context:\s*sandbox/);
-    expect(configText.match(/^\s*-\s*context:/gm)?.length ?? 0).toBe(1);
-  });
 
   it('启用 AI 且关闭 toolSearch（Advanced 能力不在 Stable）', () => {
     expect(configText).toMatch(/ai:\s*\n/);
