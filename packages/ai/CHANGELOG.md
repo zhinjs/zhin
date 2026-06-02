@@ -1,5 +1,14 @@
 # @zhin.js/ai
 
+## 1.1.26
+
+### Patch Changes
+
+- 7e14f8d: fix: 统一发个版,优化一些列安全问题
+- 996ebb3: fix: ai 优化
+- Updated dependencies [7e14f8d]
+  - @zhin.js/logger@0.1.68
+
 ## 1.1.25
 
 ### Patch Changes

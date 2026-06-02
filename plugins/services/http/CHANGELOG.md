@@ -1,5 +1,17 @@
 # @zhin.js/http
 
+## 1.0.79
+
+### Patch Changes
+
+- 7e14f8d: fix: 统一发个版,优化一些列安全问题
+- Updated dependencies [7e14f8d]
+  - @zhin.js/schema@1.0.68
+  - @zhin.js/http-host@0.1.4
+  - @zhin.js/queue-runtime@0.0.4
+  - @zhin.js/storage-port@0.0.2
+  - zhin.js@1.0.86
+
 ## 1.0.78
 
 ### Patch Changes

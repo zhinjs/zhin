@@ -1,5 +1,12 @@
 # @zhin.js/docs
 
+## 1.0.33
+
+### Patch Changes
+
+- 6295cbd: fix: @优化
+- 7e14f8d: fix: 统一发个版,优化一些列安全问题
+
 ## 1.0.32
 
 ### Patch Changes

@@ -1,5 +1,47 @@
 # test-bot
 
+## 0.1.99
+
+### Patch Changes
+
+- 6295cbd: fix: @优化
+- 7e14f8d: fix: 统一发个版,优化一些列安全问题
+- Updated dependencies [6295cbd]
+- Updated dependencies [a51d504]
+- Updated dependencies [7e14f8d]
+- Updated dependencies [996ebb3]
+  - @zhin.js/adapter-icqq@3.0.5
+  - @zhin.js/adapter-napcat@0.1.14
+  - @zhin.js/cli@1.0.82
+  - @zhin.js/client@1.1.4
+  - @zhin.js/kernel@0.0.45
+  - zhin.js@1.0.86
+  - @zhin.js/adapter-dingtalk@1.0.74
+  - @zhin.js/adapter-discord@2.0.5
+  - @zhin.js/adapter-email@0.1.73
+  - @zhin.js/adapter-github@0.1.57
+  - @zhin.js/adapter-kook@2.0.5
+  - @zhin.js/adapter-lark@1.0.90
+  - @zhin.js/adapter-milky@0.0.36
+  - @zhin.js/adapter-onebot11@1.0.91
+  - @zhin.js/adapter-onebot12@0.0.36
+  - @zhin.js/adapter-qq@2.0.5
+  - @zhin.js/adapter-sandbox@3.0.5
+  - @zhin.js/adapter-satori@0.0.36
+  - @zhin.js/adapter-slack@1.0.71
+  - @zhin.js/adapter-telegram@2.0.5
+  - @zhin.js/adapter-wechat-mp@0.1.74
+  - @zhin.js/console@3.0.5
+  - @zhin.js/http@1.0.79
+  - @zhin.js/mcp@1.0.68
+  - @zhin.js/plugin-60s@0.0.24
+  - @zhin.js/plugin-group-suite@0.1.1
+  - @zhin.js/plugin-html-renderer@0.0.64
+  - @zhin.js/plugin-music@2.0.5
+  - @zhin.js/plugin-repeater@0.0.21
+  - @zhin.js/plugin-rss@0.0.22
+  - @zhin.js/sensitive-filter@0.0.71
+
 ## 0.1.98
 
 ### Patch Changes

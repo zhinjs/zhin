@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.71
+
+### Patch Changes
+
+- 7e14f8d: fix: 统一发个版,优化一些列安全问题
+- Updated dependencies [7e14f8d]
+  - zhin.js@1.0.86
+
 ## 1.0.70
 
 ### Patch Changes

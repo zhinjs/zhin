@@ -1,5 +1,26 @@
 # zhin.js
 
+## 1.0.86
+
+### Patch Changes
+
+- 7e14f8d: fix: 统一发个版,优化一些列安全问题
+- Updated dependencies [6295cbd]
+- Updated dependencies [7e14f8d]
+- Updated dependencies [996ebb3]
+  - @zhin.js/agent@0.1.26
+  - @zhin.js/core@1.1.28
+  - @zhin.js/logger@0.1.68
+  - @zhin.js/schema@1.0.68
+  - @zhin.js/ai@1.1.26
+  - @zhin.js/http-host@0.1.4
+  - @zhin.js/kernel@0.0.45
+  - @zhin.js/queue-runtime@0.0.4
+  - @zhin.js/storage-port@0.0.2
+  - @zhin.js/adapter-sandbox@3.0.5
+  - @zhin.js/console@3.0.5
+  - @zhin.js/http@1.0.79
+
 ## 1.0.85
 
 ### Patch Changes

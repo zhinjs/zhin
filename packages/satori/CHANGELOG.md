@@ -1,5 +1,11 @@
 # @zhin.js/satori
 
+## 0.2.11
+
+### Patch Changes
+
+- 7e14f8d: fix: 统一发个版,优化一些列安全问题
+
 ## 0.2.10
 
 ### Patch Changes

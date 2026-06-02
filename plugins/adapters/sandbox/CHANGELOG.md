@@ -1,5 +1,20 @@
 # @zhin.js/adapter-process
 
+## 3.0.5
+
+### Patch Changes
+
+- 7e14f8d: fix: 统一发个版,优化一些列安全问题
+- Updated dependencies [6295cbd]
+- Updated dependencies [7e14f8d]
+- Updated dependencies [996ebb3]
+  - @zhin.js/core@1.1.28
+  - @zhin.js/client@1.1.4
+  - @zhin.js/http-host@0.1.4
+  - zhin.js@1.0.86
+  - @zhin.js/console@3.0.5
+  - @zhin.js/http@1.0.79
+
 ## 3.0.4
 
 ### Patch Changes

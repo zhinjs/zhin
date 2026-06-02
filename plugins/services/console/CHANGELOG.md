@@ -1,5 +1,22 @@
 # @zhin.js/console
 
+## 3.0.5
+
+### Patch Changes
+
+- 7e14f8d: fix: 统一发个版,优化一些列安全问题
+- Updated dependencies [6295cbd]
+- Updated dependencies [7e14f8d]
+- Updated dependencies [996ebb3]
+  - @zhin.js/agent@0.1.26
+  - @zhin.js/core@1.1.28
+  - @zhin.js/client@1.1.4
+  - @zhin.js/console-core@1.0.4
+  - @zhin.js/console-types@0.1.5
+  - @zhin.js/http-host@0.1.4
+  - zhin.js@1.0.86
+  - @zhin.js/http@1.0.79
+
 ## 3.0.4
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/http-host",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Fetch-based HTTP host: routing, auth, CORS, Node serve adapter",
   "type": "module",
   "main": "./lib/index.js",

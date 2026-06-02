@@ -1,5 +1,17 @@
 # @zhin.js/adapter-kook
 
+## 2.0.5
+
+### Patch Changes
+
+- 7e14f8d: fix: 统一发个版,优化一些列安全问题
+- Updated dependencies [7e14f8d]
+  - @zhin.js/logger@0.1.68
+  - @zhin.js/client@1.1.4
+  - zhin.js@1.0.86
+  - @zhin.js/console@3.0.5
+  - @zhin.js/http@1.0.79
+
 ## 2.0.4
 
 ### Patch Changes

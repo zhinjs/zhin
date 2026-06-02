@@ -1,5 +1,16 @@
 # @zhin.js/plugin-music
 
+## 2.0.5
+
+### Patch Changes
+
+- 7e14f8d: fix: 统一发个版,优化一些列安全问题
+- Updated dependencies [6295cbd]
+- Updated dependencies [a51d504]
+- Updated dependencies [7e14f8d]
+  - @zhin.js/adapter-icqq@3.0.5
+  - zhin.js@1.0.86
+
 ## 2.0.4
 
 ### Patch Changes
