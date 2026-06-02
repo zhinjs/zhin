@@ -1,0 +1,31 @@
+log_level: 1
+
+bots: []
+
+plugins:
+  - "@zhin.js/adapter-sandbox"
+  - "@zhin.js/http"
+  - "@zhin.js/console"
+  - hello
+
+console:
+  lazyLoad: true
+
+ai:
+  enabled: true
+  defaultProvider: ollama
+  providers:
+    ollama:
+      host: http://127.0.0.1:11434
+  agent:
+    toolSearch: false
+    execSecurity: allowlist
+    execPreset: readonly
+  trigger:
+    prefixes:
+      - "ai:"
+    respondToAt: true
+    respondToPrivate: true
+
+http:
+  token: ${HTTP_TOKEN:-minimal-dev-token}

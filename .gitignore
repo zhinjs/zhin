@@ -20,6 +20,7 @@ lib/
 build/
 examples/**/data/
 examples/**/zhin.config.*
+!examples/minimal-bot/zhin.config.yml
 # Environment variables
 .env
 .env.local
