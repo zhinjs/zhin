@@ -488,10 +488,8 @@ const prompt = builder
 
 ## 参考资料
 
-- [Agent Harness Engineering 指南](./agent-harness-engineering.md)
-- [安全策略配置](./security-policies.md)
-- [监控和可观测性](./monitoring.md)
-- [API 参考](../api/agent.md)
+- [Agent Harness Engineering 指南](./agent-harness-engineering.md)（含安全策略、审计日志）
+- [API 参考](../api/)
 
 ## 获取帮助
 

@@ -4,7 +4,7 @@
 
 ## IM 主栈（Stable）
 
-默认开发与对外承诺范围以 [examples/minimal-bot](../../examples/minimal-bot/) 为准。
+默认开发与对外承诺范围以 [examples/minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) 为准。
 
 | 文档 | 说明 |
 |------|------|
@@ -15,7 +15,7 @@
 | [Agent 上下文块](agent-context-blocks.md) | 系统提示词分段与贡献者约定 |
 | [IM ↔ 队列出站不变量](im-queue-outbound-invariants.md) | 队列 detail 与 Core `SendOptions` 对齐 |
 
-根目录 [AGENTS.md](../../AGENTS.md) 为 AI 编码代理的最小入口。
+根目录 [AGENTS.md](https://github.com/zhinjs/zhin/blob/main/AGENTS.md) 为 AI 编码代理的最小入口。
 
 ## 队列 / qbot（Beta）
 
@@ -27,7 +27,7 @@
 | [Queue 术语与关系](queue/CONTEXT.md) | Envelope、Outbound Detail、Field Contract 等统一词汇 |
 | [队列 ↔ IM 字段契约](queue-im-field-contract.md) | 字段别名与规范化规则 |
 
-黄金路径示例：[examples/minimal-qbot](../../examples/minimal-qbot/)。**非** Stable 默认首跑（首跑仍用 minimal-bot）。
+黄金路径示例：[examples/minimal-qbot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-qbot)。**非** Stable 默认首跑（首跑仍用 minimal-bot）。
 
 ## 已移除的文档路径（勿再引用）
 

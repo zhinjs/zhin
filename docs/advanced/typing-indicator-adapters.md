@@ -454,6 +454,6 @@ for (const platform of platforms) {
 
 ## 参考资料
 
-- [ICQQ Typing Indicator 配置](../../plugins/adapters/icqq/TYPING_INDICATOR.md)
+- [ICQQ Typing Indicator 配置](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/icqq/TYPING_INDICATOR.md)
 - [Agent Harness Engineering](./agent-harness-engineering.md)
 - [Agent 最佳实践](./agent-best-practices.md)

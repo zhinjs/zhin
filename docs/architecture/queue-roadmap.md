@@ -6,13 +6,13 @@
 
 - 提供可测的出站 API：`enqueueOutgoing` → `claimOutgoing` → `executeOutbound`
 - 与 IM 出站字段对齐（见 [im-queue-outbound-invariants.md](./im-queue-outbound-invariants.md)）
-- 示例 [`examples/minimal-qbot`](../../examples/minimal-qbot/) 可本地 `pnpm start` 跑通
+- 示例 [`examples/minimal-qbot`](https://github.com/zhinjs/zhin/tree/main/examples/minimal-qbot) 可本地 `pnpm start` 跑通
 - Vitest smoke：`packages/queue-runtime/tests/`
 
 ## 非目标（Beta 不做）
 
 - 与 `zhin dev` / `MessageDispatcher` 合并为单一运行时
-- 升 **Stable**（对外默认仍用 [minimal-bot](../../examples/minimal-bot/)）
+- 升 **Stable**（对外默认仍用 [minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot)）
 - 全平台适配器生产级联调
 - 统一 `loadQBotConfig` 与 `zhin.config` queue 段（可后续 issue）
 
