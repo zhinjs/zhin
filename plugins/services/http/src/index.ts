@@ -11,6 +11,7 @@ import {
   koaFallback,
   koaJsonBodyMiddleware,
   writeWebResponse,
+  INTERNAL_ERROR_JSON,
 } from "@zhin.js/http-host";
 import { Router } from "./router.js";
 import { registerHostRestRoutes } from "./host-rest-api.js";
@@ -109,7 +110,7 @@ const server = createServer(async (nodeReq, nodeRes) => {
     await writeWebResponse(nodeRes, webRes);
   } catch (err) {
     nodeRes.statusCode = 500;
-    nodeRes.end(JSON.stringify({ success: false, error: String(err) }));
+    nodeRes.end(INTERNAL_ERROR_JSON);
   }
 });
 

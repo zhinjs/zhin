@@ -4,7 +4,7 @@
 import nodemailer from "nodemailer";
 import Imap from "imap";
 import { simpleParser, type ParsedMail, type Attachment } from "mailparser";
-import { formatCompact, Bot, Message, MessageSegment, segment, SendContent, SendOptions } from 'zhin.js';
+import { formatCompact, Bot, Message, MessageSegment, segment, SendContent, SendOptions, htmlToPlainTextWithBlockBreaks } from 'zhin.js';
 import { EventEmitter } from "events";
 import { createWriteStream, promises as fs } from "fs";
 import path from "path";
@@ -413,33 +413,7 @@ export class EmailBot extends EventEmitter implements Bot<EmailBotConfig, EmailM
      * HTML → 纯文本转换，处理常见标签和实体
      */
     static htmlToText(html: string): string {
-        return html
-            // 块级标签换行
-            .replace(/<br\s*\/?>/gi, '\n')
-            .replace(/<\/p>/gi, '\n\n')
-            .replace(/<\/div>/gi, '\n')
-            .replace(/<\/li>/gi, '\n')
-            .replace(/<\/tr>/gi, '\n')
-            .replace(/<\/h[1-6]>/gi, '\n\n')
-            // 移除 style 和 script 块
-            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-            // 移除所有剩余标签
-            .replace(/<[^>]*>/g, '')
-            // HTML 实体解码
-            .replace(/&nbsp;/g, ' ')
-            .replace(/&amp;/g, '&')
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>')
-            .replace(/&quot;/g, '"')
-            .replace(/&#39;/g, "'")
-            .replace(/&apos;/g, "'")
-            .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
-            .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
-            // 清理多余空白
-            .replace(/\n{3,}/g, '\n\n')
-            .replace(/[ \t]+/g, ' ')
-            .trim();
+        return htmlToPlainTextWithBlockBreaks(html);
     }
 }
 

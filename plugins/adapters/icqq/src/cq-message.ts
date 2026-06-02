@@ -4,61 +4,76 @@
  */
 import { MessageSegment, segment, SendContent } from "zhin.js";
 
-export function parseCqMessage(raw: string): MessageSegment[] {
-  const segments: MessageSegment[] = [];
-  const cqRegex = /\[([a-z_]+)(?::([^\]]*))?\]/g;
-  let lastIndex = 0;
+const MAX_CQ_PARSE_LEN = 256_000;
 
-  for (const match of raw.matchAll(cqRegex)) {
-    if (match.index! > lastIndex) {
-      const text = raw.slice(lastIndex, match.index!);
-      if (text) segments.push({ type: "text", data: { text } });
-    }
-
-    const type = match[1];
-    const arg = match[2] ?? "";
-
-    switch (type) {
-      case "face":
-        segments.push({ type: "face", data: { id: Number(arg) } });
-        break;
-      case "image":
-        segments.push({ type: "image", data: { url: arg, file: arg } });
-        break;
-      case "at":
-        if (arg === "all") {
-          segments.push({ type: "at", data: { qq: "all" } });
-        } else {
-          segments.push({ type: "at", data: { qq: arg } });
-        }
-        break;
-      case "dice":
-        segments.push({ type: "dice", data: {} });
-        break;
-      case "rps":
-        segments.push({ type: "rps", data: {} });
-        break;
-      case "record":
-      case "audio":
-        segments.push({ type: "record", data: { file: arg } });
-        break;
-      case "video":
-        segments.push({ type: "video", data: { file: arg } });
-        break;
-      case "reply":
-        segments.push({ type: "reply", data: { id: arg } });
-        break;
-      default:
-        segments.push({ type, data: { text: `[${type}:${arg}]` } });
-        break;
-    }
-
-    lastIndex = match.index! + match[0].length;
+function pushCqSegment(segments: MessageSegment[], type: string, arg: string): void {
+  switch (type) {
+    case "face":
+      segments.push({ type: "face", data: { id: Number(arg) } });
+      break;
+    case "image":
+      segments.push({ type: "image", data: { url: arg, file: arg } });
+      break;
+    case "at":
+      if (arg === "all") {
+        segments.push({ type: "at", data: { qq: "all" } });
+      } else {
+        segments.push({ type: "at", data: { qq: arg } });
+      }
+      break;
+    case "dice":
+      segments.push({ type: "dice", data: {} });
+      break;
+    case "rps":
+      segments.push({ type: "rps", data: {} });
+      break;
+    case "record":
+    case "audio":
+      segments.push({ type: "record", data: { file: arg } });
+      break;
+    case "video":
+      segments.push({ type: "video", data: { file: arg } });
+      break;
+    case "reply":
+      segments.push({ type: "reply", data: { id: arg } });
+      break;
+    default:
+      segments.push({ type, data: { text: `[${type}:${arg}]` } });
+      break;
   }
+}
 
-  if (lastIndex < raw.length) {
-    const text = raw.slice(lastIndex);
-    if (text) segments.push({ type: "text", data: { text } });
+export function parseCqMessage(raw: string): MessageSegment[] {
+  const text = raw.length > MAX_CQ_PARSE_LEN ? raw.slice(0, MAX_CQ_PARSE_LEN) : raw;
+  const segments: MessageSegment[] = [];
+  let i = 0;
+
+  while (i < text.length) {
+    if (text[i] !== "[") {
+      const next = text.indexOf("[", i);
+      const chunk = next === -1 ? text.slice(i) : text.slice(i, next);
+      if (chunk) segments.push({ type: "text", data: { text: chunk } });
+      if (next === -1) break;
+      i = next;
+      continue;
+    }
+
+    const close = text.indexOf("]", i + 1);
+    if (close === -1) {
+      segments.push({ type: "text", data: { text: text.slice(i) } });
+      break;
+    }
+
+    const inner = text.slice(i + 1, close);
+    const colon = inner.indexOf(":");
+    const type = (colon === -1 ? inner : inner.slice(0, colon)).trim().toLowerCase();
+    const arg = colon === -1 ? "" : inner.slice(colon + 1);
+    if (/^[a-z_]+$/.test(type)) {
+      pushCqSegment(segments, type, arg);
+    } else {
+      segments.push({ type: "text", data: { text: text.slice(i, close + 1) } });
+    }
+    i = close + 1;
   }
 
   return segments.length ? segments : [{ type: "text", data: { text: raw } }];

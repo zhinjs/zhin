@@ -2,6 +2,7 @@
  * web_fetch — HTTP(S) 抓取、SSRF 防护、HTML 去标签与长度截断
  */
 import type { Tool, ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import { htmlToPlainText } from '@zhin.js/core';
 import { errMsg } from '../discovery/utils.js';
 import { checkDangerousToolAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
@@ -18,24 +19,9 @@ export const WEB_FETCH_PARAMETERS: ToolParametersSchema = {
   required: ['url'],
 };
 
-/** 与原先 builtin-tools 中 web_fetch 一致的正文提取链 */
+/** 与原先 builtin-tools 中 web_fetch 一致的正文提取（实现见 @zhin.js/core htmlToPlainText） */
 export function stripFetchedHtmlToText(html: string): string {
-  return html
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
-    .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
-    .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, ' ')
-    .replace(/<form[^>]*>[\s\S]*?<\/form>/gi, '')
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return htmlToPlainText(html);
 }
 
 function isBlockedSsrfHostname(hostname: string): boolean {

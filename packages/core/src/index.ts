@@ -6,6 +6,7 @@ export * from './component.js'
 export * from './adapter.js'
 export * from './message.js'
 export { quoteIdFromContent, quoteIdFromRaw, syncQuoteId, alignReplySegments } from './message-quote.js'
+export { htmlToPlainText, htmlToPlainTextWithBlockBreaks } from './built/html-to-text.js'
 export {
   prependQuoteContext,
   resolveQuotedMessagePayload,

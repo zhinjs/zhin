@@ -5,10 +5,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { getPlugin, type Plugin, type ToolContext } from '@zhin.js/core';
 import * as core from '@zhin.js/core';
 import { createWriteFileTool, WriteFileBuiltinTool } from '../../src/builtin/write-file-tool.js';
 import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
-import type { ToolContext } from '@zhin.js/core';
 
 describe('WriteFileBuiltinTool', () => {
   let tmpDir: string;
@@ -31,9 +31,14 @@ describe('WriteFileBuiltinTool', () => {
         }
         return undefined;
       },
-    } as unknown as core.Plugin;
-    (plugin as unknown as { root: core.Plugin }).root = plugin;
-    vi.spyOn(core, 'getPlugin').mockReturnValue(plugin as never);
+      dispatch: vi.fn(),
+    } as unknown as Plugin;
+    (plugin as unknown as { root: Plugin }).root = plugin;
+    if (vi.isMockFunction(getPlugin)) {
+      vi.mocked(getPlugin).mockReturnValue(plugin as never);
+    } else {
+      vi.spyOn(core, 'getPlugin').mockReturnValue(plugin as never);
+    }
   }
 
   it('toTool 元数据与 schema 完整', () => {

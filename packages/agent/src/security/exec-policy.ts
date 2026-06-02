@@ -56,17 +56,6 @@ const DANGEROUS_COMMANDS: ReadonlySet<string> = new Set([
 /**
  * 无论审批模式如何都禁止的破坏性路径操作（避免误删依赖目录）。
  */
-const HARD_BLOCK_COMMAND_PATTERNS: ReadonlyArray<{ re: RegExp; reason: string }> = [
-  {
-    re: /\b(?:rm|rmdir)\b[^\n]*\bnode_modules\b/i,
-    reason: '拒绝删除依赖目录 node_modules（高风险破坏操作）。',
-  },
-  {
-    re: /\bfind\b[^\n]*\bnode_modules\b[^\n]*(?:^|\s)-delete(?:\s|$)/i,
-    reason: '拒绝通过 find -delete 删除 node_modules（高风险破坏操作）。',
-  },
-];
-
 /**
  * 检查命令是否在危险黑名单中。
  */
@@ -75,9 +64,12 @@ export function isDangerousCommand(cmdName: string): boolean {
 }
 
 function matchHardBlockedCommand(command: string): string | undefined {
-  const text = command.trim();
-  for (const item of HARD_BLOCK_COMMAND_PATTERNS) {
-    if (item.re.test(text)) return item.reason;
+  const lower = command.trim().toLowerCase();
+  if (/\b(?:rm|rmdir)\b/.test(lower) && lower.includes('node_modules')) {
+    return '拒绝删除依赖目录 node_modules（高风险破坏操作）。';
+  }
+  if (lower.includes('find') && lower.includes('node_modules') && lower.includes('-delete')) {
+    return '拒绝通过 find -delete 删除 node_modules（高风险破坏操作）。';
   }
   return undefined;
 }
@@ -90,12 +82,35 @@ function matchHardBlockedCommand(command: string): string | undefined {
  *
  * 只剥离安全的 key=value 对，不剥离含特殊字符的值（可能是注入）。
  */
+function tryStripOneEnvAssignment(command: string): { rest: string; stripped: boolean } {
+  const trimmed = command.trimStart();
+  const keyMatch = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)=/);
+  if (!keyMatch) return { rest: command, stripped: false };
+  let i = keyMatch[0].length;
+  const ch = trimmed[i];
+  if (ch === "'") {
+    const end = trimmed.indexOf("'", i + 1);
+    if (end === -1) return { rest: command, stripped: false };
+    i = end + 1;
+  } else if (ch === '"') {
+    const end = trimmed.indexOf('"', i + 1);
+    if (end === -1) return { rest: command, stripped: false };
+    i = end + 1;
+  } else {
+    while (i < trimmed.length && !/[\s;|&]/.test(trimmed[i])) i++;
+  }
+  while (i < trimmed.length && /\s/.test(trimmed[i])) i++;
+  return { rest: trimmed.slice(i), stripped: true };
+}
+
 export function stripEnvVarPrefix(command: string): string {
-  // env 前缀环境变量格式: WORD=VALUE (VALUE 可以被引号或不含空格的字符串)
-  return command.replace(
-    /^(\s*[A-Za-z_][A-Za-z0-9_]*=(('[^']*'|"[^"]*"|[^\s;|&]*))\s*)+/,
-    '',
-  ).trim();
+  let rest = command;
+  for (let n = 0; n < 32; n++) {
+    const next = tryStripOneEnvAssignment(rest);
+    if (!next.stripped) break;
+    rest = next.rest;
+  }
+  return rest.trim();
 }
 
 // ── Safe wrapper 剥离──────────────
@@ -145,8 +160,26 @@ export function stripSafeWrappers(command: string): string {
  * 注意：不处理 subshell `$(...)` 和反引号 — 这些场景由危险黑名单覆盖。
  */
 export function splitCompoundCommand(command: string): string[] {
-  // 按 &&, ||, ; 拆分，保留管道作为整体
-  return command.split(/\s*(?:&&|\|\||;)\s*/).map(s => s.trim()).filter(Boolean);
+  const parts: string[] = [];
+  let current = '';
+  let i = 0;
+  while (i < command.length) {
+    if (command.startsWith('&&', i) || command.startsWith('||', i) || command[i] === ';') {
+      const trimmed = current.trim();
+      if (trimmed) parts.push(trimmed);
+      current = '';
+      if (command.startsWith('&&', i)) i += 2;
+      else if (command.startsWith('||', i)) i += 2;
+      else i += 1;
+      while (i < command.length && /\s/.test(command[i])) i++;
+      continue;
+    }
+    current += command[i];
+    i++;
+  }
+  const tail = current.trim();
+  if (tail) parts.push(tail);
+  return parts;
 }
 
 /**

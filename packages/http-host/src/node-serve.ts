@@ -27,6 +27,7 @@ function nodeRequestToWebRequest(req: import("node:http").IncomingMessage): Requ
 }
 
 import { writeWebResponse } from "./node-response.js";
+import { INTERNAL_ERROR_JSON } from "./safe-json-error.js";
 
 export function serveFetch(options: ServeOptions): Server {
   const server = createServer(async (nodeReq, nodeRes) => {
@@ -36,7 +37,7 @@ export function serveFetch(options: ServeOptions): Server {
       await writeWebResponse(nodeRes, webRes);
     } catch (err) {
       nodeRes.statusCode = 500;
-      nodeRes.end(JSON.stringify({ success: false, error: String(err) }));
+      nodeRes.end(INTERNAL_ERROR_JSON);
     }
   });
   server.listen(options.port, options.host ?? "127.0.0.1");

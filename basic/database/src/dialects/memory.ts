@@ -14,6 +14,47 @@ interface MemoryIndex {
   columns: string[];
   unique: boolean;
 }
+
+function readSqlIdentifier(sql: string, start: number): { name: string; end: number } | null {
+  let i = start;
+  while (i < sql.length && /\s/.test(sql[i])) i++;
+  if (i >= sql.length) return null;
+  if (sql[i] === '"') {
+    const close = sql.indexOf('"', i + 1);
+    if (close === -1) return null;
+    return { name: sql.slice(i + 1, close), end: close + 1 };
+  }
+  let end = i;
+  while (end < sql.length && /[\w]/.test(sql[end])) end++;
+  if (end === i) return null;
+  return { name: sql.slice(i, end), end };
+}
+
+function parseCreateIndexSql(
+  sql: string,
+): { indexName: string; tableName: string; columnsStr: string } | null {
+  let s = sql.trim();
+  if (!/^create\s/i.test(s)) return null;
+  s = s.slice(7).trimStart();
+  if (/^unique\s/i.test(s)) s = s.slice(6).trimStart();
+  if (!/^index\s/i.test(s)) return null;
+  s = s.slice(5).trimStart();
+  if (/^if\s+not\s+exists\s/i.test(s)) s = s.replace(/^if\s+not\s+exists\s+/i, '').trimStart();
+  const idx = readSqlIdentifier(s, 0);
+  if (!idx) return null;
+  s = s.slice(idx.end).trimStart();
+  if (!/^on\s/i.test(s)) return null;
+  s = s.slice(2).trimStart();
+  const tbl = readSqlIdentifier(s, 0);
+  if (!tbl) return null;
+  s = s.slice(tbl.end).trimStart();
+  if (!s.startsWith('(')) return null;
+  const closeParen = s.indexOf(')');
+  if (closeParen === -1) return null;
+  const columnsStr = s.slice(1, closeParen).trim();
+  if (!columnsStr) return null;
+  return { indexName: idx.name, tableName: tbl.name, columnsStr };
+}
 export interface MemoryConfig{}
 export class MemoryDialect<S extends Record<string, object>> extends Dialect<MemoryConfig,S, string> {
   private connected = false;
@@ -483,14 +524,15 @@ export class MemoryDialect<S extends Record<string, object>> extends Dialect<Mem
   }
 
   private executeCreateIndex(sql: string, params?: any[]): any {
-    const match = sql.match(/CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?"?(\w+)"?\s+ON\s+"?(\w+)"?\s*\(([^)]+)\)/i);
+    if (sql.length > 4096) {
+      throw new Error('CREATE INDEX statement too long');
+    }
+    const match = parseCreateIndexSql(sql);
     if (!match) {
       throw new Error(`Invalid CREATE INDEX syntax: ${sql}`);
     }
 
-    const indexName = match[1];
-    const tableName = match[2];
-    const columnsStr = match[3];
+    const { indexName, tableName, columnsStr } = match;
     const unique = sql.toLowerCase().includes('unique');
     const ifNotExists = sql.toLowerCase().includes('if not exists');
     

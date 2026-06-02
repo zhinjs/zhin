@@ -14,10 +14,18 @@ export default defineConfig({
     hookTimeout: 10000,
     isolate: false,
     sequence: {
-      hooks: 'list'
+      hooks: 'list',
     },
+  },
+  server: {
     deps: {
-      moduleDirectories: ['node_modules', 'basic/cli/node_modules', 'basic/logger/node_modules', 'basic/schema/node_modules', 'basic/database/node_modules'],
-    }
-  }
+      moduleDirectories: [
+        'node_modules',
+        'basic/cli/node_modules',
+        'basic/logger/node_modules',
+        'basic/schema/node_modules',
+        'basic/database/node_modules',
+      ],
+    },
+  },
 })

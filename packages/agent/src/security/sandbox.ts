@@ -162,6 +162,37 @@ function cleanEnvironment(config: SandboxConfig): Record<string, string> {
 
 // ── 命令验证 ──────────────────────────────────────────────────────────
 
+function matchDangerousSandboxCommand(command: string): string | undefined {
+  const lower = command.toLowerCase();
+  if (
+    (lower.includes('curl') || lower.includes('wget')) &&
+    lower.includes('|') &&
+    /\bsh\b/.test(lower)
+  ) {
+    return '沙箱内禁止执行危险命令模式: curl|sh / wget|sh 类管道';
+  }
+  if (
+    (lower.includes('curl') || lower.includes('wget')) &&
+    lower.includes('&&') &&
+    lower.includes('./')
+  ) {
+    return '沙箱内禁止执行危险命令模式: curl/wget 下载后直接执行';
+  }
+  if (/\b(?:rm|rmdir)\b/.test(lower) && lower.includes('node_modules')) {
+    return '沙箱内禁止执行危险命令模式: 删除 node_modules';
+  }
+  if (lower.includes('find') && lower.includes('node_modules') && lower.includes('-delete')) {
+    return '沙箱内禁止执行危险命令模式: find -delete node_modules';
+  }
+  if (lower.includes('eval(') || lower.includes('exec(')) {
+    return '沙箱内禁止执行危险命令模式: eval/exec';
+  }
+  if (lower.includes('child_process') || lower.includes('spawn(') || lower.includes('fork(')) {
+    return '沙箱内禁止执行危险命令模式: 进程注入相关调用';
+  }
+  return undefined;
+}
+
 /**
  * 验证命令是否在沙箱允许范围内
  */
@@ -209,28 +240,9 @@ function validateCommand(command: string, config: SandboxConfig): { valid: boole
     }
   }
 
-  // 检查是否尝试下载恶意内容
-  const dangerousPatterns = [
-    /curl.*\|\s*sh/,           // curl | sh
-    /wget.*\|\s*sh/,           // wget | sh
-    /curl.*&&.*\./,            // curl && ./...
-    /wget.*&&.*\./,            // wget && ./...
-    /\b(?:rm|rmdir)\b[^\n]*\bnode_modules\b/i, // 删除依赖目录
-    /\bfind\b[^\n]*\bnode_modules\b[^\n]*(?:^|\s)-delete(?:\s|$)/i, // find -delete 依赖目录
-    /eval\s*\(/,               // eval()
-    /exec\s*\(/,               // exec()
-    /child_process/,           // child_process
-    /spawn\s*\(/,              // spawn()
-    /fork\s*\(/,               // fork()
-  ];
-
-  for (const pattern of dangerousPatterns) {
-    if (pattern.test(command)) {
-      return {
-        valid: false,
-        reason: `沙箱内禁止执行危险命令模式: ${pattern.source}`,
-      };
-    }
+  const blocked = matchDangerousSandboxCommand(command);
+  if (blocked) {
+    return { valid: false, reason: blocked };
   }
 
   return { valid: true };

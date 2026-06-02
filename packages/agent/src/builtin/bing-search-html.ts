@@ -3,6 +3,7 @@
  * https://github.com/claude-code-best/claude-code/blob/main/packages/builtin-tools/src/tools/WebSearchTool/adapters/bingAdapter.ts
  */
 import he from 'he';
+import { htmlToPlainText } from '@zhin.js/core';
 import { acceptLanguageForMarket, DEFAULT_WEB_SEARCH_MARKET } from './web-search-locale.js';
 
 export interface BingSearchResultRow {
@@ -33,7 +34,7 @@ export function extractBingResults(html: string): BingSearchResultRow[] {
     const url = resolveBingUrl(rawUrl);
     if (!url) continue;
 
-    const title = decodeHtmlEntities(titleHtml.replace(/<[^>]+>/g, '').trim());
+    const title = decodeHtmlEntities(htmlToPlainText(titleHtml));
     const snippet = extractSnippet(block);
     results.push({ title, url, snippet });
   }
@@ -45,20 +46,20 @@ function extractSnippet(block: string): string | undefined {
   const lineclampRegex = /<p[^>]*class="b_lineclamp[^"]*"[^>]*>([\s\S]*?)<\/p>/i;
   let match = lineclampRegex.exec(block);
   if (match) {
-    return decodeHtmlEntities(match[1].replace(/<[^>]+>/g, '').trim());
+    return decodeHtmlEntities(htmlToPlainText(match[1]));
   }
 
   const captionPRegex =
     /<div[^>]*class="b_caption[^"]*"[^>]*>[\s\S]*?<p[^>]*>([\s\S]*?)<\/p>/i;
   match = captionPRegex.exec(block);
   if (match) {
-    return decodeHtmlEntities(match[1].replace(/<[^>]+>/g, '').trim());
+    return decodeHtmlEntities(htmlToPlainText(match[1]));
   }
 
   const fallbackRegex = /<div[^>]*class="b_caption[^"]*"[^>]*>([\s\S]*?)<\/div>/i;
   const fallbackMatch = fallbackRegex.exec(block);
   if (fallbackMatch) {
-    const text = fallbackMatch[1].replace(/<[^>]+>/g, '').trim();
+    const text = htmlToPlainText(fallbackMatch[1]);
     if (text) return decodeHtmlEntities(text);
   }
 
@@ -86,8 +87,13 @@ export function resolveBingUrl(rawUrl: string): string | undefined {
     }
   }
 
-  if (!rawUrl.includes('bing.com')) return rawUrl;
-  return undefined;
+  try {
+    const host = new URL(rawUrl).hostname.toLowerCase();
+    if (host === 'bing.com' || host.endsWith('.bing.com')) return undefined;
+  } catch {
+    /* not an absolute URL */
+  }
+  return rawUrl;
 }
 
 /** 与 bingAdapter 一致：浏览器风格请求头（不含 Accept-Language，由 {@link bingSearchFetchHeaders} 按市场注入） */

@@ -16,7 +16,7 @@ export function emitAIHookBusEvent(
   agentId?: string,
 ): void {
   const root = resolveRootPlugin();
-  if (!root) return;
+  if (!root || typeof root.dispatch !== 'function') return;
   const payload = createAIHookBusPayload(event, source, agentId);
   root.dispatch('ai.hook', payload);
 

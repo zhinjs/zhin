@@ -73,15 +73,50 @@ export function stripHallucinatedToolCalls(text: string): string {
   cleaned = cleaned.replace(/<\|tool_calls\|>[\s\S]*?<\|\/tool_calls\|>/gi, '');
   cleaned = cleaned.replace(/<\|?tool_calls\|?>[\s\S]*?<\|?\/tool_calls\|?>/gi, '');
 
-  let prev: string;
-  do {
-    prev = cleaned;
-    cleaned = cleaned.replace(/<[^>]*DSML[^>]*>[\s\S]*?<\/[^>]*DSML[^>]*>/gi, '');
-  } while (cleaned !== prev);
-  cleaned = cleaned.replace(/<[^>]*DSML[^>]*tool_calls[^>]*>[\s\S]*$/gi, '');
-  cleaned = cleaned.replace(/<[^>]*DSML[^>]*>/gi, '');
+  cleaned = stripDsmlMarkup(cleaned);
 
   return cleaned.trim();
+}
+
+/** 线性移除含 DSML 的伪标签（避免嵌套回溯正则） */
+function stripDsmlMarkup(text: string): string {
+  let work = text;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    let i = 0;
+    let out = '';
+    while (i < work.length) {
+      const lt = work.indexOf('<', i);
+      if (lt === -1) {
+        out += work.slice(i);
+        break;
+      }
+      out += work.slice(i, lt);
+      const gt = work.indexOf('>', lt + 1);
+      if (gt === -1) {
+        out += work.slice(lt);
+        break;
+      }
+      const tag = work.slice(lt, gt + 1);
+      if (/DSML/i.test(tag)) {
+        const closeLt = work.indexOf('</', gt + 1);
+        if (closeLt !== -1) {
+          const closeGt = work.indexOf('>', closeLt + 2);
+          i = closeGt === -1 ? work.length : closeGt + 1;
+          changed = true;
+          continue;
+        }
+        i = gt + 1;
+        changed = true;
+        continue;
+      }
+      out += tag;
+      i = gt + 1;
+    }
+    work = out;
+  }
+  return work;
 }
 
 export function isOmittedToolSummary(text: string): boolean {

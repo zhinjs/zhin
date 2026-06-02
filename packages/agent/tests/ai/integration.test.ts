@@ -17,7 +17,10 @@ vi.mock('@zhin.js/core', async (importOriginal) => {
     defineModel: vi.fn(), // Mock defineModel
     getPlugin: vi.fn(() => ({
       name: 'test-plugin',
-      root: { inject: vi.fn() },
+      root: {
+        inject: vi.fn(),
+        dispatch: vi.fn().mockResolvedValue(undefined),
+      },
       logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
       onDispose: vi.fn(),
     })),
@@ -25,6 +28,7 @@ vi.mock('@zhin.js/core', async (importOriginal) => {
       name: 'test-plugin',
       root: { 
         inject: vi.fn(),
+        dispatch: vi.fn().mockResolvedValue(undefined),
         addMiddleware: vi.fn(),
       },
       provide: vi.fn(),

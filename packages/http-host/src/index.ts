@@ -12,6 +12,7 @@ export { Router } from "./compat-router.js";
 export type { RouterContext } from "./router-context.js";
 export { createRouterContext, contextToResponse } from "./router-context.js";
 export { serveFetch, getListenAddress } from "./node-serve.js";
+export { INTERNAL_ERROR_JSON } from "./safe-json-error.js";
 export { writeWebResponse } from "./node-response.js";
 export { closeKoaSidecar, koaFallback } from "./koa-bridge.js";
 export { koaJsonBodyMiddleware } from "./koa-json-body.js";

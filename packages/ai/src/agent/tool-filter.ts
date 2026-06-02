@@ -70,7 +70,11 @@ export function filterTools(
   const scored: { tool: AgentTool; score: number }[] = [];
 
   const queryTrimmed = message.trim().toLowerCase();
-  const icqqIntent = /\bicqq\b/i.test(message) || /friend\s+like|点赞.*qq|qq.*点赞/i.test(message);
+  const icqqIntent =
+    queryTrimmed.includes('icqq') ||
+    (queryTrimmed.includes('friend') && queryTrimmed.includes('like')) ||
+    (queryTrimmed.includes('点赞') && queryTrimmed.includes('qq')) ||
+    (queryTrimmed.includes('qq') && queryTrimmed.includes('点赞'));
 
   for (const tool of tools) {
     if (tool.permissionLevel != null && tool.permissionLevel > callerPerm) {

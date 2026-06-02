@@ -262,7 +262,57 @@ export function assertFileAccess(filePath: string): void {
  */
 const ENV_DUMP_COMMANDS = /^\s*(env|printenv|export|set)\b/;
 const ENV_ECHO_PATTERN = /\$\{?\w*(KEY|SECRET|TOKEN|PASSWORD|PASS|CREDENTIAL|AUTH|APIKEY|API_KEY)\w*\}?/i;
-const ENV_CAT_SENSITIVE = /\bcat\b.*\.(env|pem|key|p12|pfx)\b/i;
+function splitPipeSegments(command: string): string[] {
+  const parts: string[] = [];
+  let current = '';
+  for (let i = 0; i < command.length; i++) {
+    if (command[i] === '|' && command[i + 1] !== '|') {
+      const seg = current.trim();
+      if (seg) parts.push(seg);
+      current = '';
+      continue;
+    }
+    current += command[i];
+  }
+  const tail = current.trim();
+  if (tail) parts.push(tail);
+  return parts;
+}
+
+function isCatSensitiveFile(command: string): boolean {
+  const lower = command.toLowerCase();
+  if (!/\bcat\b/.test(lower)) return false;
+  return (
+    lower.includes('.env') ||
+    lower.includes('.pem') ||
+    lower.includes('.key') ||
+    lower.includes('.p12') ||
+    lower.includes('.pfx')
+  );
+}
+
+function splitShellOperatorParts(command: string): string[] {
+  const parts: string[] = [];
+  let current = '';
+  let i = 0;
+  while (i < command.length) {
+    if (command.startsWith('&&', i) || command.startsWith('||', i) || command[i] === ';' || command[i] === '|') {
+      const trimmed = current.trim();
+      if (trimmed) parts.push(trimmed);
+      current = '';
+      if (command.startsWith('&&', i)) i += 2;
+      else if (command.startsWith('||', i)) i += 2;
+      else i += 1;
+      while (i < command.length && /\s/.test(command[i])) i++;
+      continue;
+    }
+    current += command[i];
+    i++;
+  }
+  const tail = current.trim();
+  if (tail) parts.push(tail);
+  return parts;
+}
 
 /**
  * 检查 bash 命令是否可能泄漏敏感环境变量或文件。
@@ -272,7 +322,7 @@ export function checkBashCommandSafety(command: string): { safe: boolean; reason
   const trimmed = command.trim();
 
   // 拆管道，检查每段
-  const segments = trimmed.split(/\s*\|\s*/);
+  const segments = splitPipeSegments(trimmed);
   for (const seg of segments) {
     if (ENV_DUMP_COMMANDS.test(seg)) {
       return { safe: false, reason: '禁止执行环境变量导出命令（env/printenv/export/set），可能泄漏密钥' };
@@ -283,7 +333,7 @@ export function checkBashCommandSafety(command: string): { safe: boolean; reason
     return { safe: false, reason: '禁止通过 echo/printf 输出含密钥名的环境变量' };
   }
 
-  if (ENV_CAT_SENSITIVE.test(trimmed)) {
+  if (isCatSensitiveFile(trimmed)) {
     return { safe: false, reason: '禁止通过 cat 读取敏感文件（.env/.pem/.key）' };
   }
 
@@ -333,8 +383,7 @@ export interface BashCommandClassification {
  */
 export function classifyBashCommand(command: string): BashCommandClassification {
   const trimmed = command.trim();
-  // 按管道和操作符拆分
-  const parts = trimmed.split(/\s*(?:\|\||&&|\||;)\s*/);
+  const parts = splitShellOperatorParts(trimmed);
 
   let hasSearch = false;
   let hasRead = false;
