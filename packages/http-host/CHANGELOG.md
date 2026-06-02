@@ -1,5 +1,11 @@
 # @zhin.js/http-host
 
+## 0.1.4
+
+### Patch Changes
+
+- 7e14f8d: fix: 统一发个版,优化一些列安全问题
+
 ## 0.1.3
 
 ### Patch Changes

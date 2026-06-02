@@ -1,5 +1,14 @@
 # @zhin.js/kernel
 
+## 0.0.45
+
+### Patch Changes
+
+- 7e14f8d: fix: 统一发个版,优化一些列安全问题
+- Updated dependencies [7e14f8d]
+  - @zhin.js/logger@0.1.68
+  - @zhin.js/schema@1.0.68
+
 ## 0.0.44
 
 ### Patch Changes

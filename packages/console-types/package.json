@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/console-types",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Zhin console / page-manager 对齐的共享类型（对标 @page-manager/types）",
   "type": "module",
   "main": "./dist/index.js",

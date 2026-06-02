@@ -1,5 +1,17 @@
 # @zhin.js/queue-runtime
 
+## 0.0.4
+
+### Patch Changes
+
+- 7e14f8d: fix: 统一发个版,优化一些列安全问题
+- Updated dependencies [6295cbd]
+- Updated dependencies [7e14f8d]
+- Updated dependencies [996ebb3]
+  - @zhin.js/core@1.1.28
+  - @zhin.js/http-host@0.1.4
+  - @zhin.js/storage-port@0.0.2
+
 ## 0.0.3
 
 ### Patch Changes
