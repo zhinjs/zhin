@@ -704,10 +704,10 @@ importers:
         specifier: workspace:*
         version: link:../core
       '@zhin.js/host-api':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../host/api
       '@zhin.js/host-router':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../host/router
       '@zhin.js/kernel':
         specifier: workspace:*

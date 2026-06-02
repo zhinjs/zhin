@@ -121,8 +121,6 @@ declare module "zhin.js" {
   namespace Plugin {
     interface Contexts {
       ai: AIServiceType;
-      router: import('@zhin.js/host-router').Router;
-      web: import('@zhin.js/host-api').PageManager;
     }
     interface Extensions {
       defineModel<K extends keyof Models>(name: K, definition: import('@zhin.js/core').Definition<Models[K]>): void;

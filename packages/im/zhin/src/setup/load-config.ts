@@ -15,7 +15,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     filename: './data/bot.db',
   },
   plugin_dirs: ['node_modules', './src/plugins'],
-  plugins: ['@zhin.js/host-router', '@zhin.js/host-api', '@zhin.js/adapter-sandbox'],
+  plugins: ['@zhin.js/adapter-sandbox'],
   services: [...DEFAULT_CORE_SERVICES],
 };
 

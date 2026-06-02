@@ -155,12 +155,18 @@ export function generateDatabaseConfig(config: DatabaseConfig, format: 'yaml' | 
 }
 
 // 构建 plugins 列表（根据用户选择的适配器）
+/** Remote Console / HTTP Host 插件（由脚手架写入项目，不随 zhin.js 安装） */
+export const CONSOLE_HOST_PLUGINS = [
+  '@zhin.js/host-router',
+  '@zhin.js/host-api',
+] as const;
+
 function buildPluginsList(options: InitOptions): string[] {
   if (options.yes) {
-    return ['example', '@zhin.js/host-router', '@zhin.js/host-api', '@zhin.js/adapter-sandbox'];
+    return [...CONSOLE_HOST_PLUGINS, '@zhin.js/adapter-sandbox'];
   }
 
-  const plugins: string[] = ['example', '@zhin.js/host-router', '@zhin.js/host-api'];
+  const plugins: string[] = ['example', ...CONSOLE_HOST_PLUGINS];
 
   if (options.adapters?.plugins) {
     for (const plugin of options.adapters.plugins) {
