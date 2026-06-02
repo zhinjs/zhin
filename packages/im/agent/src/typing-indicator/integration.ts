@@ -4,8 +4,9 @@
  * 展示如何在 ZhinAgent 中集成消息处理状态提示
  */
 
-import { getPlugin } from '@zhin.js/core';
-import type { Plugin, Bot } from '@zhin.js/core';
+import type { Adapter, Bot } from '@zhin.js/core';
+
+type OutboundAdapter = Pick<Adapter, 'sendMessage'>;
 import {
   TypingIndicatorManager,
   ReactionTypingIndicatorAdapter,
@@ -81,7 +82,7 @@ interface ICQQBot extends Bot {
  * 注意：实际使用时需要从 ICQQ 适配器实例获取 bot
  * 这里提供的是示例实现框架
  */
-export function createICQQAdapterFromBot(bot: ICQQBot): ReactionTypingIndicatorAdapter {
+export function createICQQAdapterFromBot(bot: ICQQBot, outbound?: OutboundAdapter): ReactionTypingIndicatorAdapter {
   const addReaction = async (messageId: string, emoji: string): Promise<string | null> => {
     try {
       if (bot.$addReaction) {
@@ -107,8 +108,6 @@ export function createICQQAdapterFromBot(bot: ICQQBot): ReactionTypingIndicatorA
   const sendMessage = async (sessionId: string, content: string): Promise<string | null> => {
     try {
       const [type, id] = sessionId.split(':');
-      const rootPlugin = getPlugin()?.root;
-      const adapterInstance = rootPlugin?.injectAdapter('icqq');
       const sendOptions = {
         type: type as 'private' | 'group',
         id,
@@ -116,8 +115,8 @@ export function createICQQAdapterFromBot(bot: ICQQBot): ReactionTypingIndicatorA
         bot: bot.$id,
         content: [{ type: 'text', data: { text: content } }],
       };
-      if (adapterInstance && typeof adapterInstance.sendMessage === 'function') {
-        return await adapterInstance.sendMessage(sendOptions);
+      if (outbound) {
+        return await outbound.sendMessage(sendOptions);
       }
       const typedBot = bot as BotWithEditing & { $sendMessage?(options: any): Promise<string | null> };
       return await typedBot.$sendMessage?.(sendOptions) ?? null;
@@ -146,12 +145,10 @@ export function createICQQAdapterFromBot(bot: ICQQBot): ReactionTypingIndicatorA
 /**
  * 创建通用适配器
  */
-export function createGenericAdapterFromBot(bot: Bot, platform: string): GenericTypingIndicatorAdapter {
+export function createGenericAdapterFromBot(bot: Bot, platform: string, outbound?: OutboundAdapter): GenericTypingIndicatorAdapter {
   const sendMessage = async (sessionId: string, content: string): Promise<string | null> => {
     try {
       const [type, id] = sessionId.split(':');
-      const rootPlugin = getPlugin()?.root;
-      const adapterInstance = rootPlugin?.injectAdapter(platform);
       const sendOptions = {
         type: type as 'private' | 'group',
         id,
@@ -159,8 +156,8 @@ export function createGenericAdapterFromBot(bot: Bot, platform: string): Generic
         bot: bot.$id,
         content: [{ type: 'text', data: { text: content } }],
       };
-      if (adapterInstance && typeof adapterInstance.sendMessage === 'function') {
-        return await adapterInstance.sendMessage(sendOptions);
+      if (outbound) {
+        return await outbound.sendMessage(sendOptions);
       }
       const typedBot = bot as BotWithEditing & { $sendMessage?(options: any): Promise<string | null> };
       return await typedBot.$sendMessage?.(sendOptions) ?? null;

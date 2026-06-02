@@ -65,5 +65,5 @@ groupSuite:
 | `签到` / `checkin` / `mypoints` / `rank` | 签到 |
 | `stats` / `stats-week` / `stats-rank` / `mystats` | 统计 |
 | `群分析` / `分析设置` | 日报 |
-| `teach` / `teach-regex` / `forget` / `teach-list` | 问答 |
+| `teach` / `teach-regex` / `forget` / `teach-list` | 问答（`teach 问题 回答` 或 `teach 问题\|答案`） |
 | `添加关键词` … | 仅 `keywordReply: true` |

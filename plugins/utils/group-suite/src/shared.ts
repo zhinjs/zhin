@@ -1,4 +1,4 @@
-import type { Plugin } from "zhin.js";
+import { segment, type Message, type Plugin } from "zhin.js";
 
 export function todayStr(): string {
   const d = new Date();
@@ -7,6 +7,15 @@ export function todayStr(): string {
 
 export function ts(): string {
   return new Date().toISOString();
+}
+
+/** 入站纯文本（与 AI trigger 一致：segment.toString($content)，否则 $raw） */
+export function extractInboundText(message: Pick<Message, "$raw" | "$content">): string {
+  if (message.$content?.length) {
+    const fromContent = segment.toString(message.$content).trim();
+    if (fromContent) return fromContent;
+  }
+  return (message.$raw ?? "").trim();
 }
 
 /** 消息所属群/全局上下文 */

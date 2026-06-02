@@ -1,3 +1,4 @@
+import { storage } from '@zhin.js/core';
 import type { Plugin } from '@zhin.js/core';
 
 export type AIEventName =
@@ -105,12 +106,15 @@ export function subscribeAIEvents(
   const disposers = AI_EVENT_NAMES.map((eventName) => {
     const listener = (payload: AIEventPayload) => {
       if (!matchesFilter(payload, filter)) return;
-      handlers.onAny?.(eventName, payload);
-      const handlerName = EVENT_HANDLER_MAP[eventName];
-      const handler = handlerName ? handlers[handlerName] : undefined;
-      if (typeof handler === 'function') {
-        (handler as (payload: AIEventPayload) => void)(payload);
-      }
+      // broadcast 不经过 usePlugin 加载栈；在订阅方入口恢复 ALS，避免监听里 getPlugin() 失效
+      void storage.run(plugin, async () => {
+        handlers.onAny?.(eventName, payload);
+        const handlerName = EVENT_HANDLER_MAP[eventName];
+        const handler = handlerName ? handlers[handlerName] : undefined;
+        if (typeof handler === 'function') {
+          await (handler as (payload: AIEventPayload) => void | Promise<void>)(payload);
+        }
+      });
     };
     plugin.on(eventName, listener);
     return () => plugin.off(eventName, listener);

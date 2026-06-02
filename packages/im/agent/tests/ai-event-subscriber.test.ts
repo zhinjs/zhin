@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Plugin } from '@zhin.js/core';
+import { getPlugin, Plugin } from '@zhin.js/core';
 import { AI_EVENT_NAMES, subscribeAIEvents } from '../src/ai-event-subscriber.js';
 
 describe('ai-event-subscriber', () => {
@@ -9,7 +9,7 @@ describe('ai-event-subscriber', () => {
     expect(AI_EVENT_NAMES).toContain('ai.hook');
   });
 
-  it('dispatches to onAny and specific handlers', () => {
+  it('dispatches to onAny and specific handlers', async () => {
     const plugin = new Plugin('/virtual/host-plugin.ts');
     const received: string[] = [];
 
@@ -19,8 +19,8 @@ describe('ai-event-subscriber', () => {
       onSessionNew: () => received.push('session:new'),
     });
 
-    plugin.dispatch('ai.processing.start', { sessionId: 's1', source: 'zhin-agent' });
-    plugin.dispatch('ai.session.new', { sessionId: 's1', source: 'zhin-agent', reason: 'first_message' });
+    await plugin.dispatch('ai.processing.start', { sessionId: 's1', source: 'zhin-agent' });
+    await plugin.dispatch('ai.session.new', { sessionId: 's1', source: 'zhin-agent', reason: 'first_message' });
     dispose();
 
     expect(received).toEqual([
@@ -31,7 +31,21 @@ describe('ai-event-subscriber', () => {
     ]);
   });
 
-  it('filters by session and source and can dispose', () => {
+  it('runs handlers inside plugin AsyncLocalStorage context', async () => {
+    const plugin = new Plugin('/virtual/host-plugin.ts');
+    let seen: Plugin | undefined;
+
+    subscribeAIEvents(plugin, {
+      onProcessingStart: () => {
+        seen = getPlugin();
+      },
+    });
+
+    await plugin.dispatch('ai.processing.start', { sessionId: 's1', source: 'zhin-agent' });
+    expect(seen).toBe(plugin);
+  });
+
+  it('filters by session and source and can dispose', async () => {
     const plugin = new Plugin('/virtual/host-plugin.ts');
     const received: string[] = [];
 
@@ -42,11 +56,11 @@ describe('ai-event-subscriber', () => {
       source: 'zhin-agent',
     });
 
-    plugin.dispatch('ai.response', { sessionId: 's2', source: 'zhin-agent' });
-    plugin.dispatch('ai.response', { sessionId: 's1', source: 'ai-hook' });
-    plugin.dispatch('ai.response', { sessionId: 's1', source: 'zhin-agent' });
+    await plugin.dispatch('ai.response', { sessionId: 's2', source: 'zhin-agent' });
+    await plugin.dispatch('ai.response', { sessionId: 's1', source: 'ai-hook' });
+    await plugin.dispatch('ai.response', { sessionId: 's1', source: 'zhin-agent' });
     dispose();
-    plugin.dispatch('ai.response', { sessionId: 's1', source: 'zhin-agent' });
+    await plugin.dispatch('ai.response', { sessionId: 's1', source: 'zhin-agent' });
 
     expect(received).toEqual(['ai.response']);
   });

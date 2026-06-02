@@ -127,7 +127,7 @@ function formatRank(
 }
 
 export function registerStats(plugin: Plugin, cfg: GroupSuiteConfig): void {
-  const { logger, addCommand, addMiddleware, useContext, onDispose } = plugin;
+  const { logger, addCommand, useContext, onDispose } = plugin;
 
   useContext("database", (db: any) => {
     _db = db;
@@ -149,7 +149,7 @@ export function registerStats(plugin: Plugin, cfg: GroupSuiteConfig): void {
     buffer.clear();
   });
 
-  addMiddleware(async (message, next) => {
+  plugin.root.addMiddleware(async (message, next) => {
     const userId = String(message.$sender?.id || "");
     if (!userId) return next();
     const key = bufferKey(userId, getGroupId(message), todayStr());

@@ -8,7 +8,7 @@ import { adapterAllowed } from "./shared.js";
 import type { GroupSuiteConfig } from "./config.js";
 
 export function registerAdmin(plugin: Plugin, cfg: GroupSuiteConfig): void {
-  const { addCommand, addMiddleware, addTool, logger } = plugin;
+  const { addCommand, addTool, logger } = plugin;
   const welcomeTemplate = cfg.welcome;
   const noticeAdapters = cfg.noticeAdapters;
 
@@ -73,7 +73,7 @@ export function registerAdmin(plugin: Plugin, cfg: GroupSuiteConfig): void {
 
   const keywords = new Map<string, string>();
 
-  addMiddleware(async (message, next) => {
+  plugin.root.addMiddleware(async (message, next) => {
     if (message.$channel.type !== "group") {
       await next();
       return;

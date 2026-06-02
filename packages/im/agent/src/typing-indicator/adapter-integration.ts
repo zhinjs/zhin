@@ -5,8 +5,7 @@
  * 支持自动初始化和配置管理。
  */
 
-import { getPlugin } from '@zhin.js/core';
-import type { Bot, Plugin, SendOptions } from '@zhin.js/core';
+import type { Adapter, Bot, SendOptions } from '@zhin.js/core';
 import {
   TypingIndicatorManager,
   ReactionTypingIndicatorAdapter,
@@ -26,11 +25,34 @@ interface MessageEditableBot {
 
 export type BotWithEditing = Bot & Partial<MessageEditableBot>;
 
-/**
- * 适配器实例需要具备的最小接口
- */
-interface AdapterInstance {
-  sendMessage(options: SendOptions): Promise<string>;
+/** 出站发送：优先 Adapter.sendMessage（走 before.sendMessage 链） */
+type OutboundAdapter = Pick<Adapter, 'sendMessage'>;
+
+function createOutboundSendMessage(
+  bot: Bot,
+  platform: string,
+  parseSessionId: (sessionId: string) => [string, string],
+  outbound?: OutboundAdapter,
+): (sessionId: string, content: string) => Promise<string | null> {
+  return async (sessionId: string, content: string) => {
+    try {
+      const [type, id] = parseSessionId(sessionId);
+      const sendOptions: SendOptions = {
+        type: type as 'private' | 'group',
+        id,
+        context: platform,
+        bot: bot.$id,
+        content: [{ type: 'text' as const, data: { text: content } }],
+      };
+      if (outbound) {
+        return await outbound.sendMessage(sendOptions);
+      }
+      return await bot.$sendMessage(sendOptions);
+    } catch (error) {
+      console.error(`[${platform}] Failed to send message:`, error);
+      return null;
+    }
+  };
 }
 
 // ── 适配器 Typing Indicator 配置 ─────────────────────────────────────
@@ -212,8 +234,26 @@ export const PLATFORM_FEATURES: Record<string, PlatformFeatures> = {
 
 // ── 通用 Bot 接口扩展 ────────────────────────────────────────────────
 
+/** 平台适配器自管的 Typing Indicator（如 ICQQ），与 agent 内置 TypingIndicatorManager 区分 */
+export interface PlatformTypingIndicatorManager {
+  start(options: {
+    messageId?: string;
+    sessionId: string;
+    userId?: string;
+    groupId?: string;
+    sceneType: 'private' | 'group';
+  }): Promise<unknown>;
+  stop(options: {
+    sessionId: string;
+    userId?: string;
+    groupId?: string;
+  }): Promise<void>;
+}
+
+export type BotTypingIndicatorManager = TypingIndicatorManager | PlatformTypingIndicatorManager;
+
 export interface BotWithTypingIndicator extends Bot {
-  $typingIndicator?: TypingIndicatorManager;
+  $typingIndicator?: BotTypingIndicatorManager;
   $addReaction?(messageId: string, emoji: string): Promise<string | null>;
   $removeReaction?(messageId: string, reactionId: string): Promise<void>;
 }
@@ -231,6 +271,7 @@ export class AdapterTypingIndicatorManager {
     bot: BotWithTypingIndicator,
     platform: string,
     config?: Partial<AdapterTypingIndicatorConfig>,
+    outbound?: OutboundAdapter,
   ): TypingIndicatorManager {
     const botKey = `${platform}:${bot.$id}`;
 
@@ -277,8 +318,7 @@ export class AdapterTypingIndicatorManager {
       removeDelay: mergedConfig.removeDelay,
     });
 
-    // 注册适配器
-    this.registerAdapter(manager, bot, platform, features);
+    this.registerAdapter(manager, bot, platform, features, outbound);
 
     // 存储管理器和配置
     this.managers.set(botKey, manager);
@@ -298,7 +338,9 @@ export class AdapterTypingIndicatorManager {
     bot: BotWithTypingIndicator,
     platform: string,
     features: PlatformFeatures,
+    outbound?: OutboundAdapter,
   ): void {
+    const sendMessage = createOutboundSendMessage(bot, platform, (id) => this.parseSessionId(id), outbound);
     if (features.supportsReaction && bot.$addReaction && bot.$removeReaction) {
       // 支持 reaction 的平台使用 ReactionTypingIndicatorAdapter
       const adapter = new ReactionTypingIndicatorAdapter(
@@ -319,28 +361,7 @@ export class AdapterTypingIndicatorManager {
             console.error(`[${platform}] Failed to remove reaction:`, error);
           }
         },
-        // sendMessage
-        async (sessionId: string, content: string) => {
-          try {
-            const [type, id] = this.parseSessionId(sessionId);
-            const rootPlugin = getPlugin()?.root;
-            const adapterInstance = rootPlugin?.inject(platform) as AdapterInstance | undefined;
-            const sendOptions: SendOptions = {
-              type: type as 'private' | 'group',
-              id,
-              context: platform,
-              bot: bot.$id,
-              content: [{ type: 'text' as const, data: { text: content } }],
-            };
-            if (adapterInstance && typeof adapterInstance.sendMessage === 'function') {
-              return await adapterInstance.sendMessage(sendOptions);
-            }
-            return await bot.$sendMessage(sendOptions);
-          } catch (error) {
-            console.error(`[${platform}] Failed to send message:`, error);
-            return null;
-          }
-        },
+        sendMessage,
         // deleteMessage
         async (messageId: string) => {
           try {
@@ -369,28 +390,7 @@ export class AdapterTypingIndicatorManager {
       // 不支持 reaction 的平台使用 GenericTypingIndicatorAdapter
       const adapter = new GenericTypingIndicatorAdapter(
         platform,
-        // sendMessage
-        async (sessionId: string, content: string) => {
-          try {
-            const [type, id] = this.parseSessionId(sessionId);
-            const rootPlugin = getPlugin()?.root;
-            const adapterInstance2 = rootPlugin?.inject(platform) as AdapterInstance | undefined;
-            const sendOptions: SendOptions = {
-              type: type as 'private' | 'group',
-              id,
-              context: platform,
-              bot: bot.$id,
-              content: [{ type: 'text' as const, data: { text: content } }],
-            };
-            if (adapterInstance2 && typeof adapterInstance2.sendMessage === 'function') {
-              return await adapterInstance2.sendMessage(sendOptions);
-            }
-            return await bot.$sendMessage(sendOptions);
-          } catch (error) {
-            console.error(`[${platform}] Failed to send message:`, error);
-            return null;
-          }
-        },
+        sendMessage,
         // deleteMessage
         async (messageId: string) => {
           try {
@@ -552,8 +552,9 @@ export function enableTypingIndicatorForBot(
   bot: BotWithTypingIndicator,
   platform: string,
   config?: Partial<AdapterTypingIndicatorConfig>,
+  outbound?: OutboundAdapter,
 ): TypingIndicatorManager {
-  return getAdapterTypingIndicatorManager().enableForBot(bot, platform, config);
+  return getAdapterTypingIndicatorManager().enableForBot(bot, platform, config, outbound);
 }
 
 /**
@@ -570,8 +571,9 @@ export async function startTypingForBot(
     sceneType?: 'private' | 'group' | 'channel';
   },
   config?: Partial<AdapterTypingIndicatorConfig>,
+  outbound?: OutboundAdapter,
 ): Promise<TypingIndicator> {
-  const manager = enableTypingIndicatorForBot(bot, platform, config);
+  const manager = enableTypingIndicatorForBot(bot, platform, config, outbound);
   return await manager.start({
     ...options,
     platform,
