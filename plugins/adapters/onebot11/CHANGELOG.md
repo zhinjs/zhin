@@ -1,5 +1,13 @@
 # @zhin.js/adapter-onebot11
 
+## 1.0.92
+
+### Patch Changes
+
+- 90d9efd: fix: 处理包名
+  - zhin.js@1.0.87
+  - @zhin.js/host-router@0.0.1
+
 ## 1.0.91
 
 ### Patch Changes

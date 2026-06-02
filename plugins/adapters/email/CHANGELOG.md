@@ -1,5 +1,12 @@
 # @zhin.js/adapter-email
 
+## 0.1.74
+
+### Patch Changes
+
+- 90d9efd: fix: 处理包名
+  - zhin.js@1.0.87
+
 ## 0.1.73
 
 ### Patch Changes

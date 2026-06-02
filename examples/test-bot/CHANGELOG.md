@@ -1,5 +1,42 @@
 # test-bot
 
+## 0.1.100
+
+### Patch Changes
+
+- 90d9efd: fix: 处理包名
+- Updated dependencies [90d9efd]
+  - @zhin.js/adapter-wechat-mp@0.1.75
+  - @zhin.js/adapter-dingtalk@1.0.75
+  - @zhin.js/adapter-onebot11@1.0.92
+  - @zhin.js/adapter-onebot12@0.0.37
+  - @zhin.js/adapter-telegram@2.0.6
+  - @zhin.js/adapter-discord@2.0.6
+  - @zhin.js/adapter-sandbox@3.0.6
+  - @zhin.js/adapter-github@0.1.58
+  - @zhin.js/adapter-napcat@0.1.15
+  - @zhin.js/adapter-satori@0.0.37
+  - @zhin.js/adapter-email@0.1.74
+  - @zhin.js/adapter-milky@0.0.37
+  - @zhin.js/adapter-slack@1.0.72
+  - @zhin.js/adapter-icqq@3.0.6
+  - @zhin.js/adapter-kook@2.0.6
+  - @zhin.js/adapter-lark@1.0.91
+  - @zhin.js/adapter-qq@2.0.6
+  - @zhin.js/plugin-60s@0.0.25
+  - @zhin.js/cli@1.0.83
+  - zhin.js@1.0.87
+  - @zhin.js/plugin-music@2.0.6
+  - @zhin.js/kernel@0.0.46
+  - @zhin.js/host-api@0.0.1
+  - @zhin.js/host-router@0.0.1
+  - @zhin.js/mcp@1.0.69
+  - @zhin.js/plugin-group-suite@0.1.2
+  - @zhin.js/plugin-html-renderer@0.0.65
+  - @zhin.js/plugin-repeater@0.0.22
+  - @zhin.js/plugin-rss@0.0.23
+  - @zhin.js/sensitive-filter@0.0.72
+
 ## 0.1.99
 
 ### Patch Changes

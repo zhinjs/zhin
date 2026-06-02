@@ -1,5 +1,11 @@
 # @zhin.js/database
 
+## 1.0.72
+
+### Patch Changes
+
+- 90d9efd: fix: 处理包名
+
 ## 1.0.71
 
 ### Patch Changes

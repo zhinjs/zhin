@@ -1,5 +1,11 @@
 # @zhin.js/logger
 
+## 0.1.69
+
+### Patch Changes
+
+- 90d9efd: fix: 处理包名
+
 ## 0.1.68
 
 ### Patch Changes
