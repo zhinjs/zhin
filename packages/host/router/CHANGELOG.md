@@ -1,5 +1,13 @@
 # @zhin.js/host-router
 
+## 0.0.2
+
+### Patch Changes
+
+- c78d2cd: fix: cli 更新,文档更新
+- Updated dependencies [c78d2cd]
+  - @zhin.js/core@1.1.30
+
 ## 0.0.1
 
 ### Patch Changes

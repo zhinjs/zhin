@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.74
+
+### Patch Changes
+
+- c78d2cd: fix: cli 更新,文档更新
+- Updated dependencies [c78d2cd]
+  - zhin.js@1.0.89
+
 ## 1.0.73
 
 ### Patch Changes

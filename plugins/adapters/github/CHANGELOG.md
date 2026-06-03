@@ -1,5 +1,14 @@
 # @zhin.js/adapter-github
 
+## 0.1.60
+
+### Patch Changes
+
+- c78d2cd: fix: cli 更新,文档更新
+- Updated dependencies [c78d2cd]
+  - @zhin.js/host-router@0.0.2
+  - zhin.js@1.0.89
+
 ## 0.1.59
 
 ### Patch Changes

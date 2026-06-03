@@ -1,5 +1,15 @@
 # @zhin.js/adapter-napcat
 
+## 0.1.17
+
+### Patch Changes
+
+- Updated dependencies [c78d2cd]
+  - @zhin.js/host-router@0.0.2
+  - @zhin.js/agent@0.1.28
+  - zhin.js@1.0.89
+  - @zhin.js/host-api@0.0.2
+
 ## 0.1.16
 
 ### Patch Changes

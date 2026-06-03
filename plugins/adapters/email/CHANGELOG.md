@@ -1,5 +1,13 @@
 # @zhin.js/adapter-email
 
+## 0.1.76
+
+### Patch Changes
+
+- c78d2cd: fix: cli 更新,文档更新
+- Updated dependencies [c78d2cd]
+  - zhin.js@1.0.89
+
 ## 0.1.75
 
 ### Patch Changes

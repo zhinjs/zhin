@@ -1,5 +1,11 @@
 # @zhin.js/kernel
 
+## 0.0.47
+
+### Patch Changes
+
+- c78d2cd: fix: cli 更新,文档更新
+
 ## 0.0.46
 
 ### Patch Changes

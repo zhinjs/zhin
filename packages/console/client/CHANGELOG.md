@@ -1,5 +1,11 @@
 # @zhin.js/client
 
+## 2.0.1
+
+### Patch Changes
+
+- c78d2cd: fix: cli 更新,文档更新
+
 ## 1.1.4
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/host-router",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Zhin Host HTTP runtime: Koa, Router, Bearer auth, CORS (pair with @zhin.js/host-api)",
   "type": "module",
   "main": "./lib/index.js",

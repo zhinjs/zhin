@@ -1,5 +1,14 @@
 # @zhin.js/core
 
+## 1.1.30
+
+### Patch Changes
+
+- c78d2cd: fix: cli 更新,文档更新
+- Updated dependencies [c78d2cd]
+  - @zhin.js/kernel@0.0.47
+  - @zhin.js/ai@1.1.28
+
 ## 1.1.29
 
 ### Patch Changes

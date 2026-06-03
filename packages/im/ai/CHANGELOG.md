@@ -1,5 +1,11 @@
 # @zhin.js/ai
 
+## 1.1.28
+
+### Patch Changes
+
+- c78d2cd: fix: cli 更新,文档更新
+
 ## 1.1.27
 
 ### Patch Changes
