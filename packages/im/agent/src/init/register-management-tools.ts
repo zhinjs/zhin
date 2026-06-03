@@ -3,9 +3,9 @@
  */
 import './types.js';
 import { getPlugin, Message, ZhinTool, MessageCommand } from '@zhin.js/core';
-import { SessionManager } from '@zhin.js/ai';
+import type { AIServiceRefs } from './shared-refs.js';
 
-export function registerManagementTools(): void {
+export function registerManagementTools(refs: AIServiceRefs): void {
   const plugin = getPlugin();
   const { useContext, root, logger } = plugin;
 
@@ -22,15 +22,14 @@ export function registerManagementTools(): void {
       });
 
     const clearSessionTool = new ZhinTool('ai_clear')
-      .desc('清除当前对话的历史记录')
-      .keyword('清除', '清空', '重置', 'clear', 'reset')
+      .desc('归档当前对话会话（保留 chat_messages 审计；下次 @ 开新纪元）')
+      .keyword('清除', '清空', '重置', 'clear', 'reset', 'new')
       .tag('ai', 'session')
       .execute(async (_args, context) => {
         if (!context?.message) return { success: false, error: '无消息上下文' };
-        const msg = context.message as Message;
-        const sid = SessionManager.generateId(msg.$adapter, msg.$sender.id, msg.$channel?.id);
-        await ai.sessions.reset(sid);
-        return { success: true, message: '对话历史已清除' };
+        if (!refs.zhinAgent) return { success: false, error: 'Agent 未就绪' };
+        const ok = await refs.zhinAgent.archiveSessionForContext(context);
+        return { success: ok, message: ok ? '会话已归档，下次对话将开启新上下文' : '无活跃会话可归档' };
       });
 
     const healthCheckTool = new ZhinTool('ai_health')
@@ -62,14 +61,43 @@ export function registerManagementTools(): void {
       commandService.add(modelsCmd, root.name);
       disposers.push(() => commandService.remove(modelsCmd));
 
-      const clearCmd = new MessageCommand('ai.clear').desc('清除当前对话的历史记录');
+      const clearCmd = new MessageCommand('ai.clear').desc('归档当前对话会话');
       clearCmd.action(async (message: Message) => {
-        const sid = SessionManager.generateId(message.$adapter, message.$sender.id, message.$channel?.id);
-        await ai.sessions.reset(sid);
-        return '✅ 对话历史已清除';
+        if (!refs.zhinAgent) return '❌ Agent 未就绪';
+        const ok = await refs.zhinAgent.archiveSessionForContext({
+          platform: message.$adapter,
+          botId: message.$bot,
+          messageId: message.$id,
+          sceneId: message.$channel?.id || message.$sender.id,
+          senderId: message.$sender.id,
+          message,
+          scope: (message.$channel?.type === 'group' || message.$channel?.type === 'channel'
+            ? message.$channel.type
+            : 'private') as 'private' | 'group' | 'channel',
+        });
+        return ok ? '✅ 会话已归档，下次 @ 将使用新上下文' : 'ℹ️ 无活跃会话可归档';
       });
       commandService.add(clearCmd, root.name);
       disposers.push(() => commandService.remove(clearCmd));
+
+      const newCmd = new MessageCommand('new').desc('开启新对话（归档当前 active 会话）');
+      newCmd.action(async (message: Message) => {
+        if (!refs.zhinAgent) return '❌ Agent 未就绪';
+        const ok = await refs.zhinAgent.archiveSessionForContext({
+          platform: message.$adapter,
+          botId: message.$bot,
+          messageId: message.$id,
+          sceneId: message.$channel?.id || message.$sender.id,
+          senderId: message.$sender.id,
+          message,
+          scope: (message.$channel?.type === 'group' || message.$channel?.type === 'channel'
+            ? message.$channel.type
+            : 'private') as 'private' | 'group' | 'channel',
+        });
+        return ok ? '✅ 已开启新对话上下文' : 'ℹ️ 无活跃会话可归档';
+      });
+      commandService.add(newCmd, root.name);
+      disposers.push(() => commandService.remove(newCmd));
 
       const healthCmd = new MessageCommand('ai.health').desc('检查 AI 服务的健康状态');
       healthCmd.action(async () => {

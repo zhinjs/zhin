@@ -24,10 +24,15 @@ describe('Prompt discipline block', () => {
       activeSkillsContext: '',
       bootstrapContext: '',
     });
-    expect(prompt).toContain('# Context');
+    expect(prompt).toContain('# Runtime');
+    expect(prompt).toContain('Host:');
     expect(prompt).toContain('# Style');
     expect(prompt).toContain('# Tools');
-    expect(prompt).toContain('# Safety');
+    expect(prompt).toContain('# Security');
+    expect(prompt).toContain('Never disclose implementation');
+    expect(prompt).not.toContain('# Context');
+    expect(prompt).not.toContain('# Safety');
+    expect(prompt).not.toContain('# File Permissions');
     expect(prompt).not.toContain('# Discipline');
     expect(prompt).not.toContain('# Doing tasks');
     expect(prompt).not.toContain('# Action safety');
@@ -42,7 +47,10 @@ describe('Prompt discipline block', () => {
       bootstrapContext: '',
     });
     expect(prompt).not.toMatch(/mcp_icqq/);
+    expect(prompt).toContain('# Orchestration');
     expect(prompt).toContain('Use run_deferred_task for real work');
+    expect(prompt).not.toContain('# Style');
+    expect(prompt).not.toContain('# Deferred Tools');
   });
 
   it('platformSections 注入 §6c', () => {

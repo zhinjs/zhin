@@ -20,11 +20,11 @@ describe('EditFileBuiltinTool', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  function mockPlugin(owner = 'owner1', admins: string[] = ['admin1'], execAllowlist: string[] = []) {
+  function mockPlugin(master = 'owner1', trusted: string[] = ['admin1'], execAllowlist: string[] = []) {
     const plugin = {
       inject: (name: string) => {
         if (name === 'icqq') {
-          return { bots: new Map([['bot1', { $config: { owner, admins } }]]) };
+          return { bots: new Map([['bot1', { $config: { master, trusted } }]]) };
         }
         if (name === 'ai') {
           return { getAgentConfig: () => ({ execAllowlist }) };
@@ -101,7 +101,7 @@ describe('EditFileBuiltinTool', () => {
       platform: 'icqq',
       botId: 'bot1',
       senderId: 'admin1',
-      isBotAdmin: true,
+      roles: ['trusted'],
     } as ToolContext;
     const out = String(await inst.run({ file_path: fp, old_string: 'before', new_string: 'after' }, ctx));
     expect(out.startsWith('ZHIN_NEEDS_OWNER:\n')).toBe(true);

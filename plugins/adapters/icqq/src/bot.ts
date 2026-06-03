@@ -475,6 +475,16 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
       id: normalized.userId,
       name: normalized.nickname,
     };
+    if (normalized.senderRole && normalized.senderRole !== "member") {
+      senderInfo.role = normalized.senderRole;
+      if (normalized.senderRole === "owner") {
+        senderInfo.isOwner = true;
+        senderInfo.permissions = ["owner"];
+      } else if (normalized.senderRole === "admin") {
+        senderInfo.isAdmin = true;
+        senderInfo.permissions = ["admin"];
+      }
+    }
 
     const quoteId =
       Message.quoteIdFromContent(normalized.content) ??

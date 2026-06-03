@@ -73,10 +73,11 @@ function resolveRoleFromContext(context?: ToolContext): {
 
 /** getPlugin 不可用时，从 ToolContext 上的 IM 标记推断角色（测试/降级路径） */
 function resolveRoleFromToolContextFallback(context: ToolContext): ToolRequesterRole {
-  if (context.isOwner === true) return 'owner';
-  if (context.isBotAdmin === true) return 'admin';
-  if (context.fileRole === 'owner') return 'owner';
-  if (context.fileRole === 'admin') return 'admin';
+  const roles = context.roles ?? [];
+  if (roles.includes('master')) return 'master';
+  if (roles.includes('trusted')) return 'trusted';
+  if (context.fileRole === 'owner') return 'master';
+  if (context.fileRole === 'admin') return 'trusted';
   if (context.fileRole === 'user') return 'other';
   return 'unknown';
 }
@@ -93,7 +94,7 @@ export function checkFileToolAccess(toolName: FileToolName, context?: ToolContex
   const { role, hasIdentity } = resolveRoleFromContext(context);
   const op = FILE_TOOL_OPERATION[toolName];
 
-  if (role === 'owner') {
+  if (role === 'master') {
     return { allowed: true, role };
   }
 
@@ -108,12 +109,12 @@ export function checkFileToolAccess(toolName: FileToolName, context?: ToolContex
     return denyUnidentifiedTool(toolName);
   }
 
-  if (role === 'admin') {
+  if (role === 'trusted') {
     if (op === 'delete') {
       return {
         allowed: false,
         role,
-        reason: `admin 无删除权限：工具「${toolName}」已拒绝。`,
+        reason: `trusted 无删除权限：工具「${toolName}」已拒绝。`,
       };
     }
     return { allowed: true, role };
@@ -137,21 +138,21 @@ export function checkSensitiveFilePathAccess(toolName: FileToolName, filePath: s
     return { allowed: true, role };
   }
 
-  if (role === 'owner') {
-    return {
-      allowed: false,
-      needsOwnerApproval: true,
-      role,
-      reason: `工具「${toolName}」访问敏感路径需二次确认：${base.reason ?? '命中敏感路径策略'}`,
-    };
-  }
+    if (role === 'master') {
+      return {
+        allowed: false,
+        needsOwnerApproval: true,
+        role,
+        reason: `工具「${toolName}」访问敏感路径需二次确认：${base.reason ?? '命中敏感路径策略'}`,
+      };
+    }
 
-  if (role === 'admin') {
+  if (role === 'trusted') {
     return {
       allowed: false,
       needsOwnerApproval: true,
       role,
-      reason: `工具「${toolName}」访问敏感路径需 Owner 确认：${base.reason ?? '命中敏感路径策略'}`,
+      reason: `工具「${toolName}」访问敏感路径需 Master 确认：${base.reason ?? '命中敏感路径策略'}`,
     };
   }
 
@@ -170,7 +171,7 @@ export function checkDangerousToolAccess(toolName: 'write_file' | 'edit_file' | 
   }
 
   try {
-    if (role === 'owner') {
+    if (role === 'master') {
       return { allowed: true, role };
     }
 
@@ -178,7 +179,7 @@ export function checkDangerousToolAccess(toolName: 'write_file' | 'edit_file' | 
       return denyUnidentifiedTool(toolName);
     }
 
-    if (role === 'admin') {
+    if (role === 'trusted') {
       const allowlist = plugin ? resolveExecAllowlistFromAiService(plugin) : [];
       if (isAllowlisted(allowlist, toolName)) {
         return { allowed: true, role };
@@ -187,7 +188,7 @@ export function checkDangerousToolAccess(toolName: 'write_file' | 'edit_file' | 
         allowed: false,
         needsOwnerApproval: true,
         role,
-        reason: `工具「${toolName}」不在 execAllowlist，admin 需 Owner 确认后执行。`,
+        reason: `工具「${toolName}」不在 execAllowlist，trusted 需 Master 确认后执行。`,
       };
     }
 
@@ -195,7 +196,7 @@ export function checkDangerousToolAccess(toolName: 'write_file' | 'edit_file' | 
       return {
         allowed: false,
         role,
-        reason: `工具「${toolName}」为危险操作，仅 owner 可直接执行；admin 需 Owner 审批。`,
+        reason: `工具「${toolName}」为危险操作，仅 master 可直接执行；trusted 需 Master 审批。`,
       };
     }
 
@@ -206,7 +207,7 @@ export function checkDangerousToolAccess(toolName: 'write_file' | 'edit_file' | 
 }
 
 export function toOwnerSignal(decision: DangerousToolDecision): string {
-  return `ZHIN_NEEDS_OWNER:\n${decision.reason ?? '该操作需要 Owner 确认。'}`;
+  return `ZHIN_NEEDS_OWNER:\n${decision.reason ?? '该操作需要 Master 确认。'}`;
 }
 
 export function toDenyError(decision: DangerousToolDecision): string {

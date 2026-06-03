@@ -7,7 +7,12 @@ import { formatCompact } from '@zhin.js/logger';
 import type { AgentTool, ToolFilterOptions } from '@zhin.js/ai';
 import { CachedToolFilter } from '@zhin.js/ai';
 import type { SkillRegistry } from './skill-registry.js';
-import type { Skill, Tool, ToolContext, ToolPermissionLevel } from './types.js';
+import {
+  canAccessTool as coreCanAccessTool,
+  roleSatisfies,
+  resolveRolesFromContext,
+} from '@zhin.js/core';
+import type { Skill, Tool, ToolContext } from './types.js';
 import type { ZhinAgentConfig } from '../zhin-agent/config.js';
 
 const logger = new Logger(null, 'ZhinAgent:ToolSelection');
@@ -53,14 +58,6 @@ function mergeSkillsWithPlatformAffinity(
   return out;
 }
 
-export const PERMISSION_LEVEL_PRIORITY: Record<ToolPermissionLevel, number> = {
-  user: 0,
-  group_admin: 1,
-  group_owner: 2,
-  bot_admin: 3,
-  owner: 4,
-};
-
 export type ToolLike = {
   toTool(): Tool;
 };
@@ -90,38 +87,14 @@ export interface RestrictedToolViewOptions {
   disabledNames?: readonly string[];
 }
 
-export function permissionLevelToPriority(level: ToolPermissionLevel | string | undefined): number {
-  if (!level) return 0;
-  return PERMISSION_LEVEL_PRIORITY[level as ToolPermissionLevel] ?? 0;
-}
-
-export function hasPermissionLevel(userLevel: ToolPermissionLevel, requiredLevel: ToolPermissionLevel): boolean {
-  return permissionLevelToPriority(userLevel) >= permissionLevelToPriority(requiredLevel);
-}
-
-export function inferPermissionLevel(context: ToolContext): ToolPermissionLevel {
-  if (context.senderPermissionLevel) return context.senderPermissionLevel;
-  if (context.isOwner) return 'owner';
-  if (context.isBotAdmin) return 'bot_admin';
-  if (context.isGroupOwner) return 'group_owner';
-  if (context.isGroupAdmin) return 'group_admin';
-  return 'user';
-}
-
-export function inferPermissionPriority(context: ToolContext): number {
-  return permissionLevelToPriority(inferPermissionLevel(context));
-}
-
 export function canAccessTool(tool: Tool, context: ToolContext): boolean {
-  if (tool.platforms?.length && (!context.platform || !tool.platforms.includes(context.platform))) return false;
-  if (tool.scopes?.length && (!context.scope || !tool.scopes.includes(context.scope))) return false;
-  return hasPermissionLevel(inferPermissionLevel(context), tool.permissionLevel || 'user');
+  return coreCanAccessTool(tool as import('@zhin.js/core').Tool, context);
 }
 
 /** 技能关联工具：跨 IM 平台可用（如 QQ 上 star 仓库），仅校验 scope/权限。 */
 export function canAccessToolFromSkill(tool: Tool, context: ToolContext): boolean {
   if (tool.scopes?.length && (!context.scope || !tool.scopes.includes(context.scope))) return false;
-  return hasPermissionLevel(inferPermissionLevel(context), tool.permissionLevel || 'user');
+  return roleSatisfies(resolveRolesFromContext(context), tool.requiredAnyRole);
 }
 
 export function createRestrictedToolView(
@@ -161,7 +134,7 @@ function isIMTool(input: unknown): input is Tool {
   const obj = input as Partial<Tool>;
   return 'platforms' in obj
     || 'scopes' in obj
-    || typeof obj.permissionLevel === 'string'
+    || Array.isArray(obj.requiredAnyRole)
     || 'permissions' in obj
     || 'hidden' in obj
     || 'source' in obj;
@@ -244,7 +217,7 @@ export function normalizeTool(input: NormalizableTool, context?: ToolContext): A
 
   if (tool.tags?.length) agentTool.tags = tool.tags;
   if (tool.keywords?.length) agentTool.keywords = tool.keywords;
-  if (tool.permissionLevel) agentTool.permissionLevel = permissionLevelToPriority(tool.permissionLevel);
+  if (tool.requiredAnyRole?.length) agentTool.requiredAnyRole = [...tool.requiredAnyRole];
   if (tool.preExecutable) agentTool.preExecutable = true;
   if (tool.kind) agentTool.kind = tool.kind;
   if (tool.source) agentTool.source = tool.source;
@@ -279,7 +252,6 @@ export class ToolSelection {
     ctx: CollectToolsContext,
   ): AgentTool[] {
     const { config, skillRegistry, externalRegistered } = ctx;
-    const callerPerm = inferPermissionPriority(context);
     const collected: AgentTool[] = [];
     const collectedNames = new Set<string>();
     const platformOnlySkillToolNames = new Set<string>();
@@ -377,14 +349,12 @@ export class ToolSelection {
     }
 
     for (const tool of externalRegistered.values()) {
-      if (tool.permissionLevel != null && tool.permissionLevel > callerPerm) continue;
       if (collectedNames.has(tool.name)) continue;
       collected.push(tool);
       collectedNames.add(tool.name);
     }
 
     const filtered = this.filterByRelevance(message, collected, {
-      callerPermissionLevel: callerPerm,
       maxTools: config.maxTools,
       minScore: 0.3,
     });

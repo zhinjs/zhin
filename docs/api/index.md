@@ -173,7 +173,7 @@ new ZhinTool('tool_name')
   .param('unit', 'string', '温度单位', false)   // 可选参数
   .platform('icqq')                             // 限定平台
   .scope('group')                               // 限定场景
-  .permission('group_admin')                    // 权限要求
+  .requireAnyRole('group_admin')                 // 需具备的角色之一
   .execute(async (args) => {                    // 执行函数
     return { temp: 25 }
   })
@@ -194,7 +194,7 @@ interface Tool {
   keywords?: string[]           // 触发关键词
   platforms?: string[]          // 限定平台
   scopes?: ToolScope[]          // 限定场景 ('private' | 'group' | 'channel')
-  permissionLevel?: ToolPermissionLevel  // 权限要求
+  requiredAnyRole?: SenderRole[]  // 需具备的角色之一（省略=仅需 user）
   hidden?: boolean              // 是否对 AI 隐藏
 }
 ```
@@ -208,14 +208,14 @@ interface ToolContext {
   sceneId?: string              // 场景 ID（群号/频道 ID）
   senderId?: string             // 发送者 ID
   scope?: 'private' | 'group' | 'channel'
-  senderPermissionLevel?: ToolPermissionLevel
+  roles?: readonly SenderRole[]  // 发送者角色集合
   message?: Message
-  isGroupAdmin?: boolean
-  isGroupOwner?: boolean
-  isBotAdmin?: boolean
-  isOwner?: boolean
 }
 ```
+
+`SenderRole`: `'user' | 'group_admin' | 'group_owner' | 'trusted' | 'master'`。匹配时 `group_owner` 隐含 `group_admin`，`master` 隐含 `trusted`。
+
+**Breaking（vNext）**：`permissionLevel` / `.permission()` → `requiredAnyRole` / `.requireAnyRole()`；`AITriggerConfig.owners` → `masters`；`botAdmins` → `trusted`；`bots[].owner` → `bots[].master`。
 
 ## SkillFeature
 

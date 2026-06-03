@@ -14,13 +14,73 @@ import type { ChatMessage, SessionConfig, Session } from '../types.js';
 
 const logger = new Logger(null, 'AI-Session');
 
+/** IM 场景类型，用于 sessionId 的 type 段 */
+export type IMSessionScope = 'private' | 'group' | 'channel';
+
+export interface ResolveIMSessionIdInput {
+  platform: string;
+  botId: string;
+  scope: IMSessionScope;
+  sceneId: string;
+}
+
+/**
+ * 解析 IM 会话 ID：`platform:botId:type:sceneId`
+ * - 群/频道：sceneId 为群号或频道 ID（不含 senderId）
+ * - 私聊：sceneId 为对方用户 ID
+ */
+export function resolveIMSessionId(input: ResolveIMSessionIdInput): string {
+  const platform = String(input.platform || 'unknown');
+  const botId = String(input.botId || 'default');
+  const scope: IMSessionScope = input.scope || 'private';
+  const sceneId = String(input.sceneId || 'unknown');
+  return `${platform}:${botId}:${scope}:${sceneId}`;
+}
+
+/** 按场景决定写入 sessionId 的 scene 段 */
+export function resolveIMSceneIdForSession(
+  scope: IMSessionScope,
+  sceneId?: string,
+  senderId?: string,
+): string {
+  if (scope === 'group' || scope === 'channel') {
+    return sceneId || senderId || 'unknown';
+  }
+  return senderId || sceneId || 'unknown';
+}
+
+/** 从 ToolContext 字段生成 IM sessionId */
+export function resolveIMSessionIdFromToolContext(context: {
+  platform?: string;
+  botId?: string;
+  scope?: IMSessionScope;
+  sceneId?: string;
+  senderId?: string;
+}): string {
+  const scope = (context.scope || 'private') as IMSessionScope;
+  const sceneId = resolveIMSceneIdForSession(scope, context.sceneId, context.senderId);
+  return resolveIMSessionId({
+    platform: context.platform || '',
+    botId: context.botId || '',
+    scope,
+    sceneId,
+  });
+}
+
 /**
  * 数据库模型定义
  */
+export type AISessionStatus = 'active' | 'archived';
+
 export const AI_SESSION_MODEL = {
   session_id: { type: 'text' as const, nullable: false },
-  messages: { type: 'json' as const, default: [] },
-  config: { type: 'json' as const, default: {} },
+  session_key: { type: 'text' as const, nullable: false },
+  platform: { type: 'text' as const, nullable: false },
+  bot_id: { type: 'text' as const, nullable: false },
+  scene_id: { type: 'text' as const, nullable: false },
+  scene_type: { type: 'text' as const, nullable: false },
+  model: { type: 'text' as const, default: '' },
+  status: { type: 'text' as const, default: 'active' },
   created_at: { type: 'integer' as const, default: 0 },
   updated_at: { type: 'integer' as const, default: 0 },
 };
@@ -31,8 +91,16 @@ export const AI_SESSION_MODEL = {
 interface SessionRecord {
   id?: number;
   session_id: string;
-  messages: ChatMessage[];
-  config: SessionConfig;
+  session_key?: string;
+  platform?: string;
+  bot_id?: string;
+  scene_id?: string;
+  scene_type?: string;
+  model?: string;
+  status?: string;
+  /** @deprecated 仅内存缓存；持久化消息在 chat_messages */
+  messages?: ChatMessage[];
+  config?: SessionConfig;
   created_at: number;
   updated_at: number;
 }
@@ -217,13 +285,16 @@ export class DatabaseSessionManager implements ISessionManager {
       const records = await this.model.select().where({ session_id: sessionId });
       if (records && records.length > 0) {
         const record = records[0] as SessionRecord;
-        // SQLite 中 json 类型存储为 TEXT，读回时需要解析
-        const messages = typeof record.messages === 'string'
-          ? JSON.parse(record.messages)
-          : (record.messages || []);
-        const config = typeof record.config === 'string'
-          ? JSON.parse(record.config)
-          : (record.config || { provider: 'openai' });
+        const messages = record.messages
+          ? (typeof record.messages === 'string'
+            ? JSON.parse(record.messages as string)
+            : record.messages)
+          : [];
+        const config = record.config
+          ? (typeof record.config === 'string'
+            ? JSON.parse(record.config as string)
+            : record.config)
+          : { provider: 'openai' };
         return {
           id: record.session_id,
           config: Array.isArray(config) ? { provider: 'openai' } : config,
@@ -263,8 +334,12 @@ export class DatabaseSessionManager implements ISessionManager {
         const existing = await this.model.select().where({ session_id: session.id });
         const record: Partial<SessionRecord> = {
           session_id: session.id,
-          messages: session.messages,
-          config: session.config,
+          session_key: session.id,
+          platform: '',
+          bot_id: '',
+          scene_id: '',
+          scene_type: 'private',
+          status: 'active',
           updated_at: session.updatedAt,
         };
 
@@ -487,7 +562,8 @@ export class SessionManager implements ISessionManager {
   }
 
   /**
-   * 生成会话 ID
+   * 生成会话 ID（旧格式，per-user + channel）
+   * @deprecated 请使用 {@link resolveIMSessionId} / {@link resolveIMSessionIdFromToolContext}
    */
   static generateId(platform: string, userId: string, channelId?: string): string {
     return channelId 

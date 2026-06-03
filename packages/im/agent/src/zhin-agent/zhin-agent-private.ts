@@ -4,7 +4,8 @@
  */
 import type { AIProvider, AgentTool, ContentPart, Usage } from '@zhin.js/ai';
 import type { OutputElement } from '@zhin.js/ai';
-import type { ContextManager } from '@zhin.js/ai';
+import type { ChatHistoryContext } from '@zhin.js/ai';
+import type { IMSessionStore, MemoryIMSessionStore } from '@zhin.js/ai';
 import type { ModelRegistry } from '@zhin.js/ai';
 import type { Plugin } from '@zhin.js/core';
 import type { Tool, ToolContext } from '../orchestrator/types.js';
@@ -28,7 +29,8 @@ export interface ZhinAgentPrivate {
   readonly skillRegistry: SkillRegistry | null;
   readonly orchestrator: AgentOrchestrator | null;
   readonly sessions: SessionManager;
-  readonly contextManager: ContextManager | null;
+  readonly chatHistory: ChatHistoryContext | null;
+  readonly imSessionStore: IMSessionStore | MemoryIMSessionStore;
   readonly memory: ConversationMemory;
   readonly externalTools: Map<string, AgentTool>;
   readonly userProfiles: UserProfileStore;
@@ -45,6 +47,7 @@ export interface ZhinAgentPrivate {
   lastToolSearchDeferredStats?: string;
   readonly turnTracker: TurnTracker;
 
+  waitForMemoryPersistence(): Promise<void>;
   beginActiveTurn(): void;
   finalizeActiveTurn(
     partial: Omit<ZhinAgentTurnMetrics, 'usage' | 'mainUsage' | 'subagentUsage'> & { usage: Usage },

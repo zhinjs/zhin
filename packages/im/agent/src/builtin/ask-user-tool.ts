@@ -154,16 +154,16 @@ export class AskUserBuiltinTool extends BuiltinBaseTool {
     const botId = context.botId!;
     const adapter = this.plugin.inject(platform) as Adapter | undefined;
     const bot = adapter?.bots?.get(botId);
-    const botOwner: string | undefined = (bot?.$config as any)?.owner;
-    const isPrivateOwner = context.scope === 'private'
-      && botOwner != null && String(context.senderId) === String(botOwner);
+    const botMaster: string | undefined = (bot?.$config as { master?: string })?.master;
+    const isPrivateMaster = context.scope === 'private'
+      && botMaster != null && String(context.senderId) === String(botMaster);
 
-    if (isPrivateOwner) {
+    if (isPrivateMaster) {
       return askViaPrompt(this.plugin, context.message, recordArgs, questionType, timeoutMs);
     }
 
-    if (!botOwner) {
-      return 'Error: 当前 Bot 未配置 owner，无法进行安全确认。请在 bots 配置中设置 owner 字段。';
+    if (!botMaster) {
+      return 'Error: 当前 Bot 未配置 master，无法进行安全确认。请在 bots 配置中设置 master 字段。';
     }
 
     if (!adapter || typeof adapter.sendMessage !== 'function') {
@@ -186,7 +186,7 @@ export class AskUserBuiltinTool extends BuiltinBaseTool {
       await adapter.sendMessage({
         context: platform,
         bot: botId,
-        id: botOwner,
+        id: botMaster,
         type: 'private',
         content: questionText,
       } satisfies SendOptions);
@@ -199,7 +199,7 @@ export class AskUserBuiltinTool extends BuiltinBaseTool {
     return new Promise<string>((resolve) => {
       const middleware: MessageMiddleware = async (message, next) => {
         if (message.$channel?.type !== 'private') return next();
-        if (String(message.$sender.id) !== String(botOwner)) return next();
+        if (String(message.$sender.id) !== String(botMaster)) return next();
         if (String(message.$bot) !== String(botId)) return next();
         dispose();
         clearTimeout(timer);

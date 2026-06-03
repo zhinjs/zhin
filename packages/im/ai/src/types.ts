@@ -220,8 +220,8 @@ export interface AgentTool {
   tags?: string[];
   /** 触发关键词，用户消息包含这些词时优先选择此工具 */
   keywords?: string[];
-  /** 所需权限级别 (0=所有人, 1=群管理, 2=群主, 3=Bot管理员, 4=拥有者) */
-  permissionLevel?: number;
+  /** 调用者需具备的角色之一 */
+  requiredAnyRole?: readonly string[];
   /** 是否允许预执行（opt-in），默认 false */
   preExecutable?: boolean;
   /** 工具执行超时时间（毫秒），默认 30000 */
@@ -247,8 +247,6 @@ export interface AgentTool {
  * 省去额外的 AI 意图分析往返
  */
 export interface ToolFilterOptions {
-  /** 调用者权限级别 (0-4)，高于工具要求才能使用 */
-  callerPermissionLevel?: number;
   /** 最大返回工具数量 (默认 10) */
   maxTools?: number;
   /** 最低相关性得分阈值，低于此分数的工具被过滤掉 (默认 0.1) */
@@ -384,6 +382,12 @@ export interface AIConfig {
     expireMs?: number;
     /** 是否使用数据库持久化存储（默认 true） */
     useDatabase?: boolean;
+    /** 无摘要时冷启动最多条数（默认 50） */
+    coldStartMaxMessages?: number;
+    /** 冷启动时间窗（毫秒，默认 24h） */
+    coldStartMaxAgeMs?: number;
+    /** 空闲后自动归档 active 会话（毫秒，默认 7 天；0=关闭） */
+    sessionIdleArchiveMs?: number;
   };
   context?: {
     /** 是否启用消息记录（默认 true） */

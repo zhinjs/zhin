@@ -80,9 +80,11 @@ flowchart TD
 **@zhin.js/ai（通用 AI 引擎）**：
 - **AIProvider** - LLM 提供者统一接口（OpenAI、Anthropic、Ollama、DeepSeek、Moonshot、Zhipu）
 - **Agent** - 无状态 Agent 引擎，执行多轮 tool-calling 循环
-- **SessionManager** - 会话管理（内存 / 数据库持久化）
-- **ContextManager** - 上下文管理，消息记录与摘要
-- **ConversationMemory** - 对话记忆，主题检测 + 链式摘要
+- **SessionManager** - 会话元数据（遗留 API；IM 活跃会话见 `IMSessionStore` + `ai_sessions`）
+- **ChatHistoryContext** - 只读：从 `chat_messages` + `ai_summaries` 拼 LLM 历史
+- **IMSessionStore** - `ai_sessions` 活跃/归档（`session_key` → 纪元 `session_id`）
+- **ContextManager** - 场景级摘要（`context_summaries`，非 IM 主路径）
+- **ConversationMemory** - 主题检测 + 链式摘要（`ai_summaries`；不再写 `ai_messages`）
 - **CostTracker** - Token 用量与成本追踪器，支持按模型/Provider 统计
 - **FileStateCache** - 文件状态缓存，减少重复磁盘读取
 - **MicroCompact** - 微压缩引擎，增量式上下文摘要
@@ -106,6 +108,17 @@ flowchart TD
 - **SkillFeature** - 技能注册中心，管理所有 Skill
 - **ToolFeature** - 工具注册中心，管理所有 Tool
 - **MessageDispatcher** - 消息调度器，判断消息是否触发 AI
+
+### IM 消息事实源（chat_messages）
+
+入站、出站消息由 **zhin.js 主包**在 core 生命周期落库，**不经过** `@zhin.js/ai` 写入：
+
+| 事件 | 时机 | 表 |
+|------|------|-----|
+| `message.receive` | MessageDispatcher 处理完成后 | `chat_messages`（direction=inbound） |
+| `message.send` | `Adapter.sendMessage` 平台发送成功后 | `chat_messages`（direction=outbound） |
+
+`@` 触发时 `ChatHistoryContext` 只读上述表；当前用户句由 turn-pipeline 显式 append。归档会话：`/new` 或 `ai.clear`（归档 `ai_sessions`，保留审计行）。
 
 ## 配置
 
@@ -135,7 +148,10 @@ ai:
     useDatabase: true
     maxHistory: 50
     expireMs: 3600000
-  
+    coldStartMaxMessages: 50      # 无 ai_summary 时从 chat_messages 冷启动条数
+    coldStartMaxAgeMs: 86400000   # 冷启动时间窗（毫秒）
+    sessionIdleArchiveMs: 604800000  # 空闲归档 active 会话（0=关闭）
+
   context:
     enabled: true
     maxRecentMessages: 100    # 读取的最近消息数（默认 100）
@@ -223,9 +239,9 @@ ai:
 
 AI 不会处理所有消息。只有满足以下条件之一时才会触发：
 
-1. **@机器人** - 在群聊中 @机器人（需 `respondToAt: true`）
+1. **@机器人** - 群/频道中 **仅 @** 触发 AI 回复（需 `respondToAt: true`）；未 @ 的群消息会**旁听写入**同 session 上下文，供下次 @ 时带入
 2. **私聊** - 直接发私聊消息（需 `respondToPrivate: true`）
-3. **前缀触发** - 消息以指定前缀开头（如 `#今天天气怎样`）
+3. **前缀触发** - 私聊等单人会话中，消息以指定前缀开头（如 `#今天天气怎样`）；群/频道不用此前缀触发
 
 以下消息会被排除：
 - 以 `ignorePrefixes` 中的前缀开头的消息（通常是命令）
@@ -565,17 +581,11 @@ const guard = evaluateContextWindowGuard({
 - `renderToPlainText(elements)` — 渲染为纯文本
 - `renderToSatori(elements)` — 渲染为 Satori XML
 
-## 权限控制
+## 权限控制（SenderRole）
 
-工具可以设置权限级别，AI Agent 会根据发送者权限自动过滤：
+工具通过 `requiredAnyRole` 声明所需角色；`ToolContext.roles` 为发送者角色集合（`user`、`group_admin`、`group_owner`、`trusted`、`master`）。详见 [工具与技能](/advanced/tools-skills#权限控制senderrole-集合)。
 
-| 级别 | 说明 | 数值 |
-|------|------|------|
-| `user` | 普通用户（所有人） | 0 |
-| `group_admin` | 群管理员 | 1 |
-| `group_owner` | 群主 | 2 |
-| `bot_admin` | 机器人管理员 | 3 |
-| `owner` | 机器人拥有者 | 4 |
+**Breaking**：阶梯 `permissionLevel` 已移除；trigger 配置使用 `masters` / `trusted`，bot 配置使用 `bots[].master` / `bots[].trusted`。
 
 ## 执行安全 (execSecurity)
 

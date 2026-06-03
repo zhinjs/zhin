@@ -106,7 +106,7 @@ export interface MockToolOptions {
   required?: string[];
   tags?: string[];
   keywords?: string[];
-  permissionLevel?: number;
+  requiredAnyRole?: readonly string[];
   executeResult?: any;
   executeError?: Error;
 }
@@ -119,7 +119,7 @@ export const createMockTool = (options: MockToolOptions): AgentTool => {
     required = [],
     tags = [],
     keywords = [],
-    permissionLevel,
+    requiredAnyRole,
     executeResult = 'success',
     executeError,
   } = options;
@@ -142,7 +142,7 @@ export const createMockTool = (options: MockToolOptions): AgentTool => {
     },
     tags,
     keywords,
-    permissionLevel,
+    requiredAnyRole,
     execute: executeError
       ? vi.fn().mockRejectedValue(executeError)
       : vi.fn().mockResolvedValue(executeResult),

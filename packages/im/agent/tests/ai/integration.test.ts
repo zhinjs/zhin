@@ -56,7 +56,7 @@ vi.mock('@zhin.js/core', async (importOriginal) => {
 
 // Import after mocking — AIService + builtin tools from agent; Tool/trigger from core
 import { AIService } from '@zhin.js/agent';
-import { ToolFeature, ZhinTool, shouldTriggerAI, inferSenderPermissions } from '@zhin.js/core';
+import { ToolFeature, ZhinTool, shouldTriggerAI, resolveSenderRoles } from '@zhin.js/core';
 import type { Tool, ToolContext, AgentTool } from '@zhin.js/core';
 
 // ============================================================================
@@ -362,14 +362,14 @@ describe('Tool Service 集成测试', () => {
         name: 'admin_tool',
         description: '',
         parameters: { type: 'object', properties: {} },
-        permissionLevel: 'bot_admin',
+        requiredAnyRole: ['trusted'],
         execute: async () => '',
       }, 'test', false);
 
       const allTools = service.getAll();
       
       const userContext: ToolContext = {};
-      const adminContext: ToolContext = { isBotAdmin: true };
+      const adminContext: ToolContext = { roles: ['trusted'] };
       
       const userFiltered = service.filterByContext(allTools, userContext);
       expect(userFiltered.some(t => t.name === 'admin_tool')).toBe(false);
@@ -440,20 +440,17 @@ describe('AI Trigger 工具函数测试', () => {
     });
   });
 
-  describe('inferSenderPermissions', () => {
-    it('应该正确推断 owner 权限', () => {
+  describe('resolveSenderRoles', () => {
+    it('应该正确解析 master 角色', () => {
       const message = createMockMessage({ content: 'test', senderId: 'owner1' });
-      const result = inferSenderPermissions(message as any, { owners: ['owner1'] });
-      
-      expect(result.isOwner).toBe(true);
-      expect(result.permissionLevel).toBe('owner');
+      const result = resolveSenderRoles(message as any, { masters: ['owner1'] });
+      expect(result.roles).toContain('master');
     });
 
-    it('默认应该是 user 权限', () => {
+    it('默认应该是 user 角色', () => {
       const message = createMockMessage({ content: 'test' });
-      const result = inferSenderPermissions(message as any, {});
-      
-      expect(result.permissionLevel).toBe('user');
+      const result = resolveSenderRoles(message as any, {});
+      expect(result.roles).toEqual(['user']);
     });
   });
 });
@@ -470,7 +467,6 @@ describe('ZhinTool 完整流程', () => {
       .param('optional_param', { type: 'number', description: '可选参数' }, false)
       .platform('qq', 'telegram')
       .scope('group', 'private')
-      .permission('user')
       .tag('test', 'example')
       .execute(async (args, ctx) => {
         return {

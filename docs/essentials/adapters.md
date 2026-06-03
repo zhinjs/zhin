@@ -128,7 +128,7 @@ private registerPlatformTools() {
     name: 'icqq_set_title',
     description: '设置群成员的专属头衔',
     parameters: { /* JSON Schema */ },
-    permissionLevel: 'group_owner',
+    requiredAnyRole: ['group_owner'],
     execute: async (args) => { /* ... */ },
   })
 }

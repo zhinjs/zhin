@@ -99,7 +99,7 @@ interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
   // 可选 - 约束
   platforms?: string[]            // 限定平台（如 ['icqq']）
   scopes?: ('private'|'group'|'channel')[]  // 限定场景
-  permissionLevel?: ToolPermissionLevel     // 权限要求
+  requiredAnyRole?: SenderRole[]            // 需具备的角色之一（省略=仅需 user）
   hidden?: boolean                // 对 AI 隐藏
   preExecutable?: boolean         // 允许预执行（无副作用的只读工具）
   
@@ -138,7 +138,7 @@ addTool(
     .param('unit', 'string', '温度单位(C/F)', false)
     .platform('icqq')           // 仅 ICQQ 平台可用
     .scope('group')             // 仅群聊可用
-    .permission('user')         // 所有用户可用
+    // 省略 requireAnyRole 即所有 user 可用
     .execute(async (args) => {
       return await fetchWeather(args.city, args.unit)
     })
@@ -261,7 +261,7 @@ tags: [utility]
 | `tags` | string[] | — | 分类标签 |
 | `platforms` | string[] | — | 限定平台 |
 | `scopes` | string[] | — | 限定场景 |
-| `permissionLevel` | string | — | 权限级别 |
+| `requiredAnyRole` | string / string[] | — | 需具备的角色之一（如 `trusted`、`group_admin`） |
 | `kind` | string | — | 工具分类 |
 | `hidden` | boolean | — | 是否隐藏 |
 
@@ -540,37 +540,34 @@ interface Skill {
 }
 ```
 
-## 权限控制
+## 权限控制（SenderRole 集合）
 
-### 权限级别
+### 角色
 
 ```typescript
-type ToolPermissionLevel = 
-  | 'user'          // 普通用户（默认，所有人可用）
-  | 'group_admin'   // 群管理员
-  | 'group_owner'   // 群主
-  | 'bot_admin'     // 机器人管理员
-  | 'owner'         // 机器人拥有者
+type SenderRole = 'user' | 'group_admin' | 'group_owner' | 'trusted' | 'master'
 ```
+
+| 角色 | 含义 |
+|------|------|
+| `user` | 默认（无其它角色时仅此） |
+| `group_admin` / `group_owner` | IM 群管 / 群主 |
+| `trusted` | 本 bot 可信操作员（配置 `trusted` / `bots[].trusted`） |
+| `master` | 本 bot 主人 + 全局 trigger `masters` |
+
+工具声明 `requiredAnyRole?: SenderRole[]`：调用者 `context.roles` 须**包含其一**（匹配时 `group_owner` 隐含 `group_admin`，`master` 隐含 `trusted`；`master` 不隐含群管角色）。
 
 ### 两层校验
 
-**第一层：AI 前过滤**
-在工具收集阶段，权限不足的工具不会出现在 AI 的可选列表中：
-```
-发送者是普通用户 → AI 只能看到 permissionLevel: 'user' 的工具
-发送者是群管理员 → AI 能看到 'user' + 'group_admin' 的工具
-```
+**第一层：AI 前过滤** — `canAccessTool` 在工具收集阶段按 `roles` + `requiredAnyRole` 过滤。
 
-**第二层：运行时校验**
-工具执行时，ToolContext 会注入到 execute 函数中，适配器在执行前再次校验权限：
+**第二层：运行时** — `execute` 收到的 `ToolContext.roles` 与文件/命令安全策略一致。
 
-```typescript
-execute: async (args, context) => {
-  this.checkPermission(context, 'group_admin')  // 运行时二次校验
-  // ... 执行实际操作
-}
-```
+### Breaking Changes
+
+- 删除阶梯 `permissionLevel` / `ToolPermissionLevel`；改用 `requiredAnyRole` 与 `ZhinTool.requireAnyRole()`。
+- 配置：`owners`→`masters`，`botAdmins`→`trusted`，`bots[].owner`→`bots[].master`，`bots[].admins`→`bots[].trusted`。
+- 群聊 session 用户消息前缀：`roles=`（不再使用 `perm=`）。
 
 ## Tool 与 Command 互转
 

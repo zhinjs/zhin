@@ -2,7 +2,7 @@ import { getPlugin, type Plugin } from '@zhin.js/core';
 import { formatCompact, truncatePreview, Logger } from '@zhin.js/logger';
 import type { AgentTool, ChatMessage, ContentPart, Usage } from '@zhin.js/ai';
 import { createAgent } from '@zhin.js/ai';
-import { SessionManager } from '@zhin.js/ai';
+import { resolveIMSessionIdFromToolContext } from '@zhin.js/ai';
 import { parseOutput } from '@zhin.js/ai';
 import { detectTone } from '@zhin.js/ai';
 import { ensureMcpConnections } from '../orchestrator/mcp-lifecycle.js';
@@ -11,7 +11,14 @@ import { runWithBashToolContext } from '../security/bash-tool-context.js';
 import { triggerAIHook, createAIHookEvent } from '../hooks.js';
 import { resolveModelCandidates } from './model-resolver.js';
 import { streamChatWithHistory } from './llm-runner.js';
-import { saveToSession, buildHistoryMessages } from './session-io.js';
+import {
+  buildSessionCreateInput,
+  touchSession,
+  buildHistoryMessages,
+  formatUserContentForSession,
+  resolveSessionIsNewBeforeCreate,
+  type SessionIODeps,
+} from './session-io.js';
 import { buildEnhancedPersona } from './prompt.js';
 import { collectRuntimeTools, planToolRun } from './tool-runtime.js';
 import { sanitizeAssistantReply, stripThinkBlocks } from './text-sanitize.js';
@@ -42,6 +49,24 @@ import type {
 const logger = new Logger(null, 'ZhinAgent');
 const now = () => performance.now();
 
+function sessionDeps(host: ZhinAgentPrivate): SessionIODeps {
+  return { chatHistory: host.chatHistory, imSessionStore: host.imSessionStore };
+}
+
+async function beginTurnSession(host: ZhinAgentPrivate, context: ToolContext) {
+  const sessionKey = resolveIMSessionIdFromToolContext({
+    platform: context.platform,
+    botId: context.botId,
+    scope: context.scope,
+    sceneId: context.sceneId,
+    senderId: context.senderId,
+  });
+  const imSession = await host.imSessionStore.getOrCreateActive(
+    buildSessionCreateInput(sessionKey, context),
+  );
+  return { sessionKey, sessionId: imSession.session_id };
+}
+
 export async function processTextTurn(
   host: ZhinAgentPrivate,
   content: string,
@@ -51,8 +76,22 @@ export async function processTextTurn(
 ): Promise<OutputElement[]> {
     const t0 = now();
     const { senderId, sceneId, platform, botId, messageId } = context;
-    const sessionId = SessionManager.generateId(platform || '', senderId || '', sceneId);
+    const sessionUserContent = formatUserContentForSession(context, content);
     const userId = senderId || 'unknown';
+    const sessionKey = resolveIMSessionIdFromToolContext({
+      platform,
+      botId,
+      scope: context.scope,
+      sceneId,
+      senderId,
+    });
+    const isNewSession = await resolveSessionIsNewBeforeCreate(
+      sessionDeps(host),
+      sessionKey,
+      context,
+    );
+    await host.waitForMemoryPersistence();
+    const { sessionId } = await beginTurnSession(host, context);
     await host.emitter.dispatch('ai.processing.start', host.emitter.createPayload(sessionId, context, 'text', {
       content,
     }));
@@ -147,7 +186,7 @@ export async function processTextTurn(
     // 2. History + profile (parallel)
     const tMem = now();
     const [rawHistoryMessages, profileSummary] = await Promise.all([
-      buildHistoryMessages(host.memory, sessionId),
+      buildHistoryMessages(sessionDeps(host), sessionId, context, sessionUserContent),
       host.userProfiles.buildProfileSummary(userId),
     ]);
 
@@ -188,7 +227,7 @@ export async function processTextTurn(
       logPhase(host.phaseConfig, 'chat.llm.start', sessionId, { model: liteModel || chatCandidates[0] || '' });
       const chatResult = await streamChatWithHistory(
         { provider: host.provider, modelRegistry: host.modelRegistry, config: host.config },
-        content, chatSystemPrompt, historyMessages, onChunk, liteModel,
+        sessionUserContent, chatSystemPrompt, historyMessages, onChunk, liteModel,
       );
       let reply = sanitizeAssistantReply(chatResult.content);
       await host.emitter.dispatch('ai.response', host.emitter.createPayload(sessionId, context, 'text', {
@@ -208,13 +247,9 @@ export async function processTextTurn(
         llm_ms: llmMs,
         total_ms: Math.round(now() - t0),
       }));
-const isNewSession = !(await host.sessions.has(sessionId));
-      await saveToSession(
-        { memory: host.memory, sessions: host.sessions, contextManager: host.contextManager },
-        sessionId, content, reply, sceneId,
-      );
+      await touchSession(sessionDeps(host), sessionId);
       if (isNewSession) {
-        host.emitSessionNewEvent(sessionId, context, 'text', content, reply);
+        host.emitSessionNewEvent(sessionId, context, 'text', sessionUserContent, reply);
       }
       await host.finalizeActiveTurn({
         usage: chatResult.usage ?? EMPTY_USAGE,
@@ -264,7 +299,7 @@ const isNewSession = !(await host.sessions.has(sessionId));
       logPhase(host.phaseConfig, 'fast.llm.start', sessionId, { model: chatCandidates[0] || '' });
       const fastResult = await streamChatWithHistory(
         { provider: host.provider, modelRegistry: host.modelRegistry, config: host.config },
-        content, prompt, historyMessages, onChunk,
+        sessionUserContent, prompt, historyMessages, onChunk,
       );
       reply = sanitizeAssistantReply(fastResult.content);
       logPhase(host.phaseConfig, 'fast.llm.end', sessionId, {
@@ -365,7 +400,7 @@ const isNewSession = !(await host.sessions.has(sessionId));
         host.emitSessionCompactEvent(sessionId, contextForTools, 'text', info);
       });
 
-      const userMessageWithHistory = buildAgentUserMessage(historyMessages, content);
+      const userMessageWithHistory = buildAgentUserMessage(historyMessages, sessionUserContent);
       let result;
       try {
         await host.emitter.dispatch('ai.agent.start', host.emitter.createPayload(sessionId, contextForTools, 'text', {
@@ -429,13 +464,9 @@ const isNewSession = !(await host.sessions.has(sessionId));
       });
     }
 
-          const isNewSession = !(await host.sessions.has(sessionId));
-    await saveToSession(
-      { memory: host.memory, sessions: host.sessions, contextManager: host.contextManager },
-      sessionId, content, reply, sceneId,
-    );
+    await touchSession(sessionDeps(host), sessionId);
     if (isNewSession) {
-            host.emitSessionNewEvent(sessionId, context, 'text', content, reply);
+      host.emitSessionNewEvent(sessionId, context, 'text', sessionUserContent, reply);
     }
 
     triggerAIHook(createAIHookEvent('message', 'sent', sessionId, {
@@ -470,9 +501,22 @@ export async function processMultimodalTurn(
   context: ToolContext,
   onChunk?: OnChunkCallback,
 ): Promise<OutputElement[]> {
-  const { senderId, sceneId, platform } = context;
-  const sessionId = SessionManager.generateId(platform || '', senderId || '', sceneId);
+  const { senderId, sceneId, platform, botId } = context;
   const userId = senderId || 'unknown';
+  const sessionKey = resolveIMSessionIdFromToolContext({
+    platform,
+    botId,
+    scope: context.scope,
+    sceneId,
+    senderId,
+  });
+  const isNewSession = await resolveSessionIsNewBeforeCreate(
+    sessionDeps(host),
+    sessionKey,
+    context,
+  );
+  await host.waitForMemoryPersistence();
+  const { sessionId } = await beginTurnSession(host, context);
   await host.emitter.dispatch('ai.processing.start', host.emitter.createPayload(sessionId, context, 'multimodal'));
 
   const rateCheck = host.rateLimiter.check(userId);
@@ -492,7 +536,19 @@ export async function processMultimodalTurn(
 
   host.beginActiveTurn();
 
-  const rawHistoryMessages = await buildHistoryMessages(host.memory, sessionId);
+  const textFragmentsEarly: string[] = [];
+  for (const p of parts as MultimodalPart[]) {
+    if (p.type === 'text') textFragmentsEarly.push(p.text);
+  }
+  const textContentEarly = textFragmentsEarly.join(' ') || '[多模态消息]';
+  const sessionUserContentEarly = formatUserContentForSession(context, textContentEarly);
+
+  const rawHistoryMessages = await buildHistoryMessages(
+    sessionDeps(host),
+    sessionId,
+    context,
+    sessionUserContentEarly,
+  );
   const profileSummary = await host.userProfiles.buildProfileSummary(userId);
   const personaEnhanced = host.buildDisciplinedPrompt(
     buildEnhancedPersona(host.config, profileSummary, ''),
@@ -530,6 +586,7 @@ export async function processMultimodalTurn(
   }
 
   const textContent = textFragments.join(' ') || '[多模态消息]';
+  const sessionUserContent = formatUserContentForSession(context, textContent);
   const visionSystemPrompt = await buildMultimodalVisionSystemPrompt(host, {
     context,
     sessionId,
@@ -615,16 +672,9 @@ export async function processMultimodalTurn(
     model: usedVisionModel,
     reply,
   }));
-  const isMultimodalNewSession = !(await host.sessions.has(sessionId));
-  await saveToSession(
-    { memory: host.memory, sessions: host.sessions, contextManager: host.contextManager },
-    sessionId,
-    textContent,
-    reply,
-    sceneId,
-  );
-  if (isMultimodalNewSession) {
-    host.emitSessionNewEvent(sessionId, context, 'multimodal', textContent, reply);
+  await touchSession(sessionDeps(host), sessionId);
+  if (isNewSession) {
+    host.emitSessionNewEvent(sessionId, context, 'multimodal', sessionUserContent, reply);
   }
   await host.finalizeActiveTurn({
     usage: lastUsage ?? EMPTY_USAGE,

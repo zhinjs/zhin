@@ -11,7 +11,9 @@ import { collectPluginSkillSearchRoots } from '../discovery/utils.js';
 import { resolveSkillInstructionMaxChars, DEFAULT_CONFIG } from '../zhin-agent/config.js';
 import { PersistentCronEngine, setCronManager } from '../cron-engine.js';
 import { createTaskExecutor } from '../task-executor.js';
+import type { AIConfig, Plugin } from '@zhin.js/core';
 import type { AIServiceRefs } from './shared-refs.js';
+import { activateAiDatabaseStorage } from './activate-ai-database-storage.js';
 
 export function createZhinAgentContext(refs: AIServiceRefs): void {
   const plugin = getPlugin();
@@ -28,6 +30,22 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     const agent = new ZhinAgent(provider, agentConfig);
     refs.zhinAgent = agent;
     agent.setHostPlugin(root);
+
+    const configService = root.inject('config');
+    const appConfig = configService?.getPrimary<{ ai?: AIConfig }>() || {};
+    const useDb = appConfig.ai?.sessions?.useDatabase !== false;
+    const db = root.inject('database' as keyof Plugin.Contexts) as
+      | { models?: Map<string, unknown> }
+      | undefined;
+    if (!useDb) {
+      agent.markMemoryPersistenceReady();
+    } else if (db) {
+      void activateAiDatabaseStorage(db, refs, appConfig.ai || {})
+        .catch((e) => logger.error('AI Session: database setup failed:', e))
+        .finally(() => agent.markMemoryPersistenceReady());
+    } else {
+      agent.markMemoryPersistenceReady();
+    }
 
     const orchestrator = root.inject('agent');
     if (orchestrator) {

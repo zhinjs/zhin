@@ -6,8 +6,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   extractParamInfo,
   canAccessTool,
-  inferPermissionLevel,
-  hasPermissionLevel,
   ZhinTool,
   isZhinTool,
   ToolFeature,
@@ -65,41 +63,10 @@ describe('canAccessTool', () => {
     expect(canAccessTool(tool, { ...baseContext, scope: 'group' })).toBe(true);
   });
 
-  it('应检查权限级别', () => {
-    const tool = { ...baseTool, permissionLevel: 'group_admin' as const };
-    expect(canAccessTool(tool, { ...baseContext })).toBe(false); // user level
-    expect(canAccessTool(tool, { ...baseContext, isGroupAdmin: true })).toBe(true);
-  });
-});
-
-describe('inferPermissionLevel', () => {
-  it('应使用 senderPermissionLevel 优先', () => {
-    expect(inferPermissionLevel({ senderPermissionLevel: 'owner' } as any)).toBe('owner');
-  });
-
-  it('应按优先级推断', () => {
-    expect(inferPermissionLevel({ isOwner: true } as any)).toBe('owner');
-    expect(inferPermissionLevel({ isBotAdmin: true } as any)).toBe('bot_admin');
-    expect(inferPermissionLevel({ isGroupOwner: true } as any)).toBe('group_owner');
-    expect(inferPermissionLevel({ isGroupAdmin: true } as any)).toBe('group_admin');
-    expect(inferPermissionLevel({} as any)).toBe('user');
-  });
-});
-
-describe('hasPermissionLevel', () => {
-  it('相同级别应返回 true', () => {
-    expect(hasPermissionLevel('user', 'user')).toBe(true);
-    expect(hasPermissionLevel('owner', 'owner')).toBe(true);
-  });
-
-  it('高级别应能访问低级别', () => {
-    expect(hasPermissionLevel('owner', 'user')).toBe(true);
-    expect(hasPermissionLevel('bot_admin', 'group_admin')).toBe(true);
-  });
-
-  it('低级别不能访问高级别', () => {
-    expect(hasPermissionLevel('user', 'group_admin')).toBe(false);
-    expect(hasPermissionLevel('group_admin', 'owner')).toBe(false);
+  it('应检查 requiredAnyRole', () => {
+    const tool = { ...baseTool, requiredAnyRole: ['group_admin'] as const };
+    expect(canAccessTool(tool, { ...baseContext })).toBe(false);
+    expect(canAccessTool(tool, { ...baseContext, roles: ['group_admin'] })).toBe(true);
   });
 });
 
@@ -151,7 +118,7 @@ describe('ToolFeature', () => {
     it('应过滤不符合权限的工具', () => {
       const tools: Tool[] = [
         { name: 'public', description: '公开', parameters: { type: 'object', properties: {} }, execute: async () => '' },
-        { name: 'admin', description: '管理', parameters: { type: 'object', properties: {} }, execute: async () => '', permissionLevel: 'bot_admin' },
+        { name: 'admin', description: '管理', parameters: { type: 'object', properties: {} }, execute: async () => '', requiredAnyRole: ['trusted'] },
       ];
       const context: ToolContext = { platform: 'qq', botId: 'b', sceneId: 's', senderId: 'u' };
       const filtered = feature.filterByContext(tools, context);
@@ -204,7 +171,7 @@ describe('ZhinTool', () => {
       .param('a', { type: 'string' }, true)
       .tag('t1')
       .platform('qq')
-      .permission('bot_admin')
+      .requireAnyRole('trusted')
       .execute(async () => '');
 
     const json = zt.toJSON();
@@ -212,6 +179,6 @@ describe('ZhinTool', () => {
     expect(json.description).toBe('描述');
     expect(json.tags).toEqual(['t1']);
     expect(json.platforms).toEqual(['qq']);
-    expect(json.permissionLevel).toBe('bot_admin');
+    expect(json.requiredAnyRole).toEqual(['trusted']);
   });
 });

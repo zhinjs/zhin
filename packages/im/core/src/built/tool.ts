@@ -4,75 +4,20 @@
  */
 import { Feature, FeatureJSON } from "@zhin.js/kernel";
 import { Plugin, getPlugin } from "../plugin.js";
-import type { Tool, ToolContext, ToolJsonSchema, ToolParametersSchema, PropertySchema, MaybePromise, ToolPermissionLevel, ToolScope } from "../types.js";
-
-// ============================================================================
-// 权限级别比较
-// ============================================================================
-
-/**
- * 权限级别优先级（数字越大权限越高）
- */
-const PERMISSION_LEVEL_PRIORITY: Record<ToolPermissionLevel, number> = {
-  'user': 0,
-  'group_admin': 1,
-  'group_owner': 2,
-  'bot_admin': 3,
-  'owner': 4,
-};
-
-/**
- * 比较两个权限级别
- * @returns 如果 a >= b 返回 true
- */
-function hasPermissionLevel(userLevel: ToolPermissionLevel, requiredLevel: ToolPermissionLevel): boolean {
-  return PERMISSION_LEVEL_PRIORITY[userLevel] >= PERMISSION_LEVEL_PRIORITY[requiredLevel];
-}
-
-/**
- * 从 ToolContext 推断用户的权限级别
- */
-function inferPermissionLevel(context: ToolContext): ToolPermissionLevel {
-  if (context.senderPermissionLevel) {
-    return context.senderPermissionLevel;
-  }
-  
-  // 按优先级检查
-  if (context.isOwner) return 'owner';
-  if (context.isBotAdmin) return 'bot_admin';
-  if (context.isGroupOwner) return 'group_owner';
-  if (context.isGroupAdmin) return 'group_admin';
-  
-  return 'user';
-}
+import type { Tool, ToolContext, ToolJsonSchema, ToolParametersSchema, PropertySchema, MaybePromise, ToolScope } from "../types.js";
+import { roleSatisfies, resolveRolesFromContext } from './roles.js';
 
 /**
  * 检查工具是否可被当前上下文访问
  */
-function canAccessTool(tool: Tool, context: ToolContext): boolean {
-  // 1. 检查平台限制
-  if (tool.platforms && tool.platforms.length > 0) {
-    if (!context.platform || !tool.platforms.includes(context.platform)) {
-      return false;
-    }
-  }
-  
-  // 2. 检查场景限制
-  if (tool.scopes && tool.scopes.length > 0) {
-    if (!context.scope || !tool.scopes.includes(context.scope)) {
-      return false;
-    }
-  }
-  
-  // 3. 检查权限级别
-  const requiredLevel = tool.permissionLevel || 'user';
-  const userLevel = inferPermissionLevel(context);
-  
-  if (!hasPermissionLevel(userLevel, requiredLevel)) {
+export function canAccessTool(tool: Tool, context: ToolContext): boolean {
+  if (tool.platforms?.length && (!context.platform || !tool.platforms.includes(context.platform))) {
     return false;
   }
-  
-  return true;
+  if (tool.scopes?.length && (!context.scope || !tool.scopes.includes(context.scope))) {
+    return false;
+  }
+  return roleSatisfies(resolveRolesFromContext(context), tool.requiredAnyRole);
 }
 
 // ============================================================================
@@ -130,7 +75,7 @@ export class ZhinTool {
   #execute?: (args: Record<string, any>, context?: ToolContext) => MaybePromise<any>;
   #platforms: string[] = [];
   #scopes: ToolScope[] = [];
-  #permissionLevel: ToolPermissionLevel = 'user';
+  #requiredAnyRole: import('./roles.js').SenderRole[] = [];
   #permissions: string[] = [];
   #tags: string[] = [];
   #keywords: string[] = [];
@@ -180,8 +125,8 @@ export class ZhinTool {
     return this;
   }
 
-  permission(level: ToolPermissionLevel): this {
-    this.#permissionLevel = level;
+  requireAnyRole(...roles: import('./roles.js').SenderRole[]): this {
+    this.#requiredAnyRole = [...roles];
     return this;
   }
 
@@ -264,7 +209,7 @@ export class ZhinTool {
 
     if (this.#platforms.length > 0) tool.platforms = this.#platforms;
     if (this.#scopes.length > 0) tool.scopes = this.#scopes;
-    if (this.#permissionLevel !== 'user') tool.permissionLevel = this.#permissionLevel;
+    if (this.#requiredAnyRole.length > 0) tool.requiredAnyRole = [...this.#requiredAnyRole];
     if (this.#permissions.length > 0) tool.permissions = this.#permissions;
     if (this.#tags.length > 0) tool.tags = this.#tags;
     if (this.#hidden) tool.hidden = this.#hidden;
@@ -282,7 +227,7 @@ export class ZhinTool {
     parameters: ToolParametersSchema;
     platforms?: string[];
     scopes?: ToolScope[];
-    permissionLevel?: ToolPermissionLevel;
+    requiredAnyRole?: import('./roles.js').SenderRole[];
     tags?: string[];
   } {
     const json: ReturnType<ZhinTool['toJSON']> = {
@@ -293,7 +238,7 @@ export class ZhinTool {
 
     if (this.#platforms.length > 0) json.platforms = this.#platforms;
     if (this.#scopes.length > 0) json.scopes = this.#scopes;
-    if (this.#permissionLevel !== 'user') json.permissionLevel = this.#permissionLevel;
+    if (this.#requiredAnyRole.length > 0) json.requiredAnyRole = [...this.#requiredAnyRole];
     if (this.#tags.length > 0) json.tags = this.#tags;
 
     return json;
@@ -312,8 +257,8 @@ export class ZhinTool {
       }
     }
     
-    if (this.#permissionLevel !== 'user') {
-      lines.push(`  权限: ${this.#permissionLevel}`);
+    if (this.#requiredAnyRole.length > 0) {
+      lines.push(`  角色: ${this.#requiredAnyRole.join(', ')}`);
     }
     
     if (this.#platforms.length > 0) {
@@ -531,11 +476,3 @@ export class ToolFeature extends Feature<Tool> {
     };
   }
 }
-
-// 导出类型和工具函数
-export { 
-  canAccessTool,
-  inferPermissionLevel,
-  hasPermissionLevel,
-  PERMISSION_LEVEL_PRIORITY,
-};

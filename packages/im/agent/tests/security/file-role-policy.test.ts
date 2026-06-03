@@ -95,44 +95,22 @@ describe('isDangerousFileOperation', () => {
 });
 
 describe('inferFileRole', () => {
-  it('isOwner → owner', () => {
-    expect(inferFileRole({ isOwner: true })).toBe('owner');
+  it('master → owner', () => {
+    expect(inferFileRole({ roles: ['master'] })).toBe('owner');
   });
 
-  it('senderPermissionLevel=owner → owner', () => {
-    expect(inferFileRole({ senderPermissionLevel: 'owner' })).toBe('owner');
+  it('trusted → admin', () => {
+    expect(inferFileRole({ roles: ['trusted'] })).toBe('admin');
   });
 
-  it('senderPermissionLevel=bot_admin → admin', () => {
-    expect(inferFileRole({ senderPermissionLevel: 'bot_admin' })).toBe('admin');
+  it('group_owner / group_admin → admin', () => {
+    expect(inferFileRole({ roles: ['group_owner'] })).toBe('admin');
+    expect(inferFileRole({ roles: ['group_admin'] })).toBe('admin');
   });
 
-  it('senderPermissionLevel=group_owner → admin', () => {
-    expect(inferFileRole({ senderPermissionLevel: 'group_owner' })).toBe('admin');
-  });
-
-  it('senderPermissionLevel=group_admin → admin', () => {
-    expect(inferFileRole({ senderPermissionLevel: 'group_admin' })).toBe('admin');
-  });
-
-  it('isBotAdmin → admin', () => {
-    expect(inferFileRole({ isBotAdmin: true })).toBe('admin');
-  });
-
-  it('isGroupOwner → admin', () => {
-    expect(inferFileRole({ isGroupOwner: true })).toBe('admin');
-  });
-
-  it('isGroupAdmin → admin', () => {
-    expect(inferFileRole({ isGroupAdmin: true })).toBe('admin');
-  });
-
-  it('无权限标志 → user', () => {
+  it('无角色或仅 user → user', () => {
     expect(inferFileRole({})).toBe('user');
-  });
-
-  it('senderPermissionLevel=user → user', () => {
-    expect(inferFileRole({ senderPermissionLevel: 'user' })).toBe('user');
+    expect(inferFileRole({ roles: ['user'] })).toBe('user');
   });
 });
 

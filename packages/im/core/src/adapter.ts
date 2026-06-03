@@ -5,6 +5,7 @@ import { Message } from "./message.js";
 import { Notice } from "./notice.js";
 import { Request } from "./request.js";
 import { BeforeSendHandler, SendOptions } from "./types.js";
+import { getOutboundReplyStore } from "./built/dispatcher.js";
 import { segment } from "./utils.js";
 import { runInboundMessage } from "./built/inbound-runner.js";
 import { formatCompact, truncatePreview } from '@zhin.js/logger';
@@ -129,7 +130,16 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
       bot: options.bot,
       preview: truncatePreview(segment.raw(options.content)),
     }));
-    return await bot.$sendMessage(options);
+    const messageId = await bot.$sendMessage(options);
+    const replyStore = getOutboundReplyStore();
+    this.plugin.root.dispatch('message.send', {
+      adapter: this.name,
+      options,
+      messageId,
+      replySource: replyStore?.source,
+      replyMessage: replyStore?.message,
+    });
+    return messageId;
   }
   async start() {
     const rootAdapters = this.plugin.root.adapters;

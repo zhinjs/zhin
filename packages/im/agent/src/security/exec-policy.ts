@@ -220,7 +220,7 @@ export interface CheckExecPolicyOptions {
   approvalMode?: ExecApprovalMode;
 }
 
-function resolveRequesterRole(): 'owner' | 'admin' | 'other' | 'unknown' {
+function resolveRequesterRole(): ToolRequesterRole {
   const ctx = getCurrentBashToolContext();
   if (!ctx?.platform || !ctx?.botId || !ctx?.senderId) return 'unknown';
 
@@ -298,10 +298,10 @@ function checkSingleCommand(
     if (tryExecBypassForSensitiveIcqq(norm)) {
       return { allowed: true };
     }
-    if (requesterRole === 'owner') {
+    if (requesterRole === 'master') {
       return { allowed: true };
     }
-    if (requesterRole === 'admin') {
+    if (requesterRole === 'trusted') {
       return {
         allowed: false,
         needsApproval: true,
@@ -344,11 +344,11 @@ function checkSingleCommand(
     return { allowed: true };
   }
 
-  if (requesterRole === 'owner') {
+  if (requesterRole === 'master') {
     return { allowed: true };
   }
 
-  if (requesterRole === 'admin') {
+  if (requesterRole === 'trusted') {
     return {
       allowed: false,
       needsApproval: true,

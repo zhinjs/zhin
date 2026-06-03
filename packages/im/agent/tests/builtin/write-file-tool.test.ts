@@ -20,11 +20,11 @@ describe('WriteFileBuiltinTool', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  function mockPlugin(owner = 'owner1', admins: string[] = ['admin1'], execAllowlist: string[] = []) {
+  function mockPlugin(master = 'owner1', trusted: string[] = ['admin1'], execAllowlist: string[] = []) {
     const plugin = {
       inject: (name: string) => {
         if (name === 'icqq') {
-          return { bots: new Map([['bot1', { $config: { owner, admins } }]]) };
+          return { bots: new Map([['bot1', { $config: { master, trusted } }]]) };
         }
         if (name === 'ai') {
           return { getAgentConfig: () => ({ execAllowlist }) };
@@ -89,7 +89,7 @@ describe('WriteFileBuiltinTool', () => {
       platform: 'icqq',
       botId: 'bot1',
       senderId: 'admin1',
-      isBotAdmin: true,
+      roles: ['trusted'],
     } as ToolContext;
     const out = String(await inst.run({ file_path: fp, content: 'x' }, ctx));
     expect(out.startsWith('ZHIN_NEEDS_OWNER:\n')).toBe(true);
@@ -111,7 +111,7 @@ describe('WriteFileBuiltinTool', () => {
     expect(fs.existsSync(fp)).toBe(false);
   });
 
-  it('owner 调用 write_file 直接放行', async () => {
+  it('master 调用 write_file 直接放行', async () => {
     mockPlugin('owner1', ['admin1'], []);
     const fp = path.join(tmpDir, 'owner-allowed.txt');
     const inst = new WriteFileBuiltinTool();
@@ -119,7 +119,7 @@ describe('WriteFileBuiltinTool', () => {
       platform: 'icqq',
       botId: 'bot1',
       senderId: 'owner1',
-      isOwner: true,
+      roles: ['master'],
     } as ToolContext;
     const out = String(await inst.run({ file_path: fp, content: 'owner-ok' }, ctx));
     expect(out).toContain('Wrote');
@@ -134,7 +134,7 @@ describe('WriteFileBuiltinTool', () => {
       platform: 'icqq',
       botId: 'bot1',
       senderId: 'admin1',
-      isBotAdmin: true,
+      roles: ['trusted'],
     } as ToolContext;
     const out = String(await inst.run({ file_path: fp, content: 'allowlisted' }, ctx));
     expect(out).toContain('Wrote');

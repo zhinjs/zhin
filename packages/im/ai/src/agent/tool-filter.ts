@@ -38,7 +38,6 @@ export function filterTools(
 
   const maxTools = options?.maxTools ?? 10;
   const minScore = options?.minScore ?? 0.1;
-  const callerPerm = options?.callerPermissionLevel ?? Infinity;
   const N = tools.length;
 
   const msgLower = message.toLowerCase();
@@ -77,10 +76,6 @@ export function filterTools(
     (queryTrimmed.includes('qq') && queryTrimmed.includes('点赞'));
 
   for (const tool of tools) {
-    if (tool.permissionLevel != null && tool.permissionLevel > callerPerm) {
-      continue;
-    }
-
     let score = 0;
     const nameLower = tool.name.toLowerCase();
 
@@ -269,7 +264,7 @@ export class CachedToolFilter {
   private buildCacheKey(message: string, options?: ToolFilterOptions): string {
     const msgKey = message.toLowerCase().trim();
     const optKey = options
-      ? `${options.callerPermissionLevel ?? ''}_${options.maxTools ?? ''}_${options.minScore ?? ''}`
+      ? `${options.maxTools ?? ''}_${options.minScore ?? ''}`
       : '';
     return `${msgKey}::${optKey}`;
   }

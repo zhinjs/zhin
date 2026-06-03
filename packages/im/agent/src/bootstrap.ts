@@ -267,7 +267,7 @@ export async function loadAgentsMemory(workspaceDir?: string): Promise<string | 
  *
  * 格式与 OpenClaw 一致：
  * ```
- * # Project Context
+ * # Workspace
  *
  * The following project context files have been loaded:
  * If SOUL.md is present, embody its persona and tone.
@@ -289,15 +289,13 @@ export function buildBootstrapContextSection(contextFiles: ContextFile[]): strin
   );
 
   const lines: string[] = [
-    '# Project Context',
+    '# Workspace',
     '',
-    'The following project context files have been loaded:',
+    'Loaded workspace files (persona / agent notes / tool habits):',
   ];
 
   if (hasSoul) {
-    lines.push(
-      'If SOUL.md is present, embody its persona and tone. Avoid generic responses.',
-    );
+    lines.push('Use SOUL.md for persona and tone.');
   }
   lines.push('');
 

@@ -4,6 +4,7 @@
 import { Message, type MessageSegment, type QuotedMessagePayload } from "zhin.js";
 import { parseCqMessage } from "./cq-message.js";
 import { extractForwardResidFromJsonElement } from "./forward-msg.js";
+import type { GroupRole } from "./types.js";
 
 /** 守护进程推送的通用事件壳 */
 export interface IcqqIpcEventBase {
@@ -29,6 +30,8 @@ export interface IcqqIpcMessageEvent extends IcqqIpcEventBase {
     user_uid?: string;
     nickname?: string;
     card?: string;
+    /** NT/IPC 群成员角色：owner | admin | member */
+    role?: GroupRole | string;
   };
   from_id?: number;
   from_uid?: string;
@@ -80,6 +83,8 @@ export interface NormalizedIcqqInbound {
   channelId: string;
   userId: string;
   nickname: string;
+  /** 群聊时来自 IPC sender.role（私聊无） */
+  senderRole?: GroupRole;
   content: MessageSegment[];
   rawMessage: string;
   timestampMs: number;
@@ -87,6 +92,18 @@ export interface NormalizedIcqqInbound {
 }
 
 const DEDUPE_TTL_MS = 120_000;
+
+const ICQQ_GROUP_ROLES = new Set<GroupRole>(["owner", "admin", "member"]);
+
+/** 从 IPC sender.role 解析群成员角色（供 Message.$sender → resolveSenderRoles） */
+export function parseIcqqSenderGroupRole(
+  sender: { role?: unknown } | undefined,
+): GroupRole | undefined {
+  const raw = sender?.role;
+  if (typeof raw !== "string" || !raw.trim()) return undefined;
+  const role = raw.trim().toLowerCase() as GroupRole;
+  return ICQQ_GROUP_ROLES.has(role) ? role : undefined;
+}
 
 const MESSAGE_POST_TYPES = new Set(["message"]);
 
@@ -581,6 +598,10 @@ export function normalizeIcqqInboundMessage(
   const resolved = resolveIcqqInboundMessageId(data, channelId);
   const nickname =
     data.sender?.nickname ?? data.nickname ?? String(userIdNum);
+  const senderRole =
+    channelType === "group"
+      ? parseIcqqSenderGroupRole(data.sender)
+      : undefined;
   const rawMessage = data.raw_message ?? "";
   return {
     messageId: resolved.id,
@@ -589,6 +610,7 @@ export function normalizeIcqqInboundMessage(
     channelId,
     userId: String(userIdNum),
     nickname,
+    senderRole,
     content: resolveInboundContent(data),
     rawMessage,
     timestampMs: data.time * 1000,

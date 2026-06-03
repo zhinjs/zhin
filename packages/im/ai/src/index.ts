@@ -88,8 +88,27 @@ export {
   createMemorySessionManager,
   createDatabaseSessionManager,
   AI_SESSION_MODEL,
+  resolveIMSessionId,
+  resolveIMSceneIdForSession,
+  resolveIMSessionIdFromToolContext,
 } from './memory/session.js';
-export type { ISessionManager } from './memory/session.js';
+export type { ISessionManager, IMSessionScope, ResolveIMSessionIdInput, AISessionStatus } from './memory/session.js';
+
+export {
+  ChatHistoryContext,
+} from './memory/chat-history-context.js';
+export type { ChatHistoryConfig, ChatHistoryQuery } from './memory/chat-history-context.js';
+
+export {
+  IMSessionStore,
+  MemoryIMSessionStore,
+  createSessionEpochId,
+} from './memory/im-session-store.js';
+export type {
+  IMSessionRecord,
+  CreateIMSessionInput,
+  IMSessionStoreConfig,
+} from './memory/im-session-store.js';
 
 // ── Context & Compaction ──
 export {
@@ -167,6 +186,7 @@ export type {
   SummaryRecord,
   ContextConfig,
   SceneContext,
+  ChatMessageDirection,
 } from './memory/context-manager.js';
 
 // ── Conversation Memory ──
@@ -175,7 +195,7 @@ export {
   AI_MESSAGE_MODEL,
   AI_SUMMARY_MODEL,
 } from './memory/conversation-memory.js';
-export type { ConversationMemoryConfig } from './memory/conversation-memory.js';
+export type { ConversationMemoryConfig, SaveRoundMeta } from './memory/conversation-memory.js';
 
 // ── Output Parsing ──
 export { parseOutput, renderToPlainText, renderToSatori } from './output.js';

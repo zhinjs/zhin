@@ -13,7 +13,8 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   shouldTriggerAI,
   mergeAITriggerConfig,
-  inferSenderPermissions,
+  resolveSenderRoles,
+  resolveIMSessionIdFromMessage,
   parseRichMediaContent,
   DEFAULT_AI_TRIGGER_CONFIG,
   type AITriggerConfig,
@@ -107,6 +108,33 @@ describe('AI Trigger 工具函数', () => {
       });
       
       expect(result.triggered).toBe(false);
+    });
+  });
+
+  describe('shouldTriggerAI - 群/频道仅 @ 触发', () => {
+    it('群聊 # 前缀不触发 AI（旁听由 session 被动写入）', () => {
+      const message = createMockMessage({
+        content: '# 你好',
+        channelType: 'group',
+        channelId: 'g1',
+      });
+      const result = shouldTriggerAI(message as any, { prefixes: ['#'], respondToAt: true });
+      expect(result.triggered).toBe(false);
+    });
+
+    it('群聊 @ 仍触发 AI', () => {
+      const message = createMockMessage({
+        content: [
+          { type: 'at', data: { user_id: 'bot123' } },
+          { type: 'text', data: { text: ' 问题' } },
+        ],
+        bot: 'bot123',
+        channelType: 'group',
+        channelId: 'g1',
+      });
+      const result = shouldTriggerAI(message as any, { prefixes: ['#'], respondToAt: true });
+      expect(result.triggered).toBe(true);
+      expect(result.content).toBe('问题');
     });
   });
 
@@ -335,64 +363,99 @@ describe('AI Trigger 工具函数', () => {
     });
   });
 
-  describe('inferSenderPermissions', () => {
-    it('应该推断 owner 权限', () => {
+  describe('resolveSenderRoles', () => {
+    it('应该解析 master 角色', () => {
       const message = createMockMessage({
         content: 'test',
-        senderId: 'owner1',
+        senderId: 'master1',
       });
-      const result = inferSenderPermissions(message as any, { owners: ['owner1'] });
-      
-      expect(result.isOwner).toBe(true);
-      expect(result.permissionLevel).toBe('owner');
+      const result = resolveSenderRoles(message as any, { masters: ['master1'] });
+      expect(result.roles).toContain('master');
     });
 
-    it('应该推断 bot_admin 权限', () => {
+    it('应该解析 trusted 角色', () => {
       const message = createMockMessage({
         content: 'test',
         senderId: 'admin1',
       });
-      const result = inferSenderPermissions(message as any, { botAdmins: ['admin1'] });
-      
-      expect(result.isBotAdmin).toBe(true);
-      expect(result.permissionLevel).toBe('bot_admin');
+      const result = resolveSenderRoles(message as any, { trusted: ['admin1'] });
+      expect(result.roles).toContain('trusted');
+      expect(result.roles).not.toContain('master');
     });
 
-    it('应该推断 group_owner 权限', () => {
+    it('应该解析 group_owner 角色', () => {
       const message = createMockMessage({
         content: 'test',
         senderPermissions: ['owner'],
       });
-      const result = inferSenderPermissions(message as any, {});
-      
-      expect(result.isGroupOwner).toBe(true);
-      expect(result.permissionLevel).toBe('group_owner');
+      const result = resolveSenderRoles(message as any, {});
+      expect(result.roles).toContain('group_owner');
     });
 
-    it('应该推断 group_admin 权限', () => {
+    it('应该解析 group_admin 角色', () => {
       const message = createMockMessage({
         content: 'test',
         senderPermissions: ['admin'],
       });
-      const result = inferSenderPermissions(message as any, {});
-      
-      expect(result.isGroupAdmin).toBe(true);
-      expect(result.permissionLevel).toBe('group_admin');
+      const result = resolveSenderRoles(message as any, {});
+      expect(result.roles).toContain('group_admin');
+      expect(result.roles).not.toContain('group_owner');
     });
 
-    it('默认应该是 user 权限', () => {
+    it('默认应该是 user 角色', () => {
       const message = createMockMessage({ content: 'test' });
-      const result = inferSenderPermissions(message as any, {});
-      
-      expect(result.permissionLevel).toBe('user');
+      const result = resolveSenderRoles(message as any, {});
+      expect(result.roles).toEqual(['user']);
     });
 
     it('应该推断 scope', () => {
       const privateMsg = createMockMessage({ content: 'test', channelType: 'private' });
       const groupMsg = createMockMessage({ content: 'test', channelType: 'group' });
-      
-      expect(inferSenderPermissions(privateMsg as any, {}).scope).toBe('private');
-      expect(inferSenderPermissions(groupMsg as any, {}).scope).toBe('group');
+      expect(resolveSenderRoles(privateMsg as any, {}).scope).toBe('private');
+      expect(resolveSenderRoles(groupMsg as any, {}).scope).toBe('group');
+    });
+
+    it('bots[].master 应赋予 master', () => {
+      const message = createMockMessage({ content: 'hi', senderId: 'qq111' });
+      const result = resolveSenderRoles(message as any, {}, { master: 'qq111' });
+      expect(result.roles).toContain('master');
+    });
+
+    it('bots[].trusted 应赋予 trusted（群内可为普通成员）', () => {
+      const message = createMockMessage({
+        content: 'hi',
+        senderId: 'adminQQ',
+        channelType: 'group',
+      });
+      const result = resolveSenderRoles(message as any, {}, { trusted: ['adminQQ'] });
+      expect(result.roles).toContain('trusted');
+      expect(result.roles).not.toContain('group_admin');
+    });
+
+    it('bot master 与群管角色可并存', () => {
+      const message = createMockMessage({
+        content: 'hi',
+        senderId: 'ownerQQ',
+        channelType: 'group',
+        senderPermissions: ['admin'],
+      });
+      const result = resolveSenderRoles(message as any, {}, { master: 'ownerQQ' });
+      expect(result.roles).toContain('master');
+      expect(result.roles).toContain('group_admin');
+    });
+  });
+
+  describe('resolveIMSessionIdFromMessage', () => {
+    it('群聊：不同 sender 共享同一 sessionId', () => {
+      const u1 = createMockMessage({ content: 'a', channelType: 'group', senderId: 'u1' });
+      const u2 = createMockMessage({ content: 'b', channelType: 'group', senderId: 'u2' });
+      expect(resolveIMSessionIdFromMessage(u1 as any)).toBe('test:bot123:group:channel1');
+      expect(resolveIMSessionIdFromMessage(u2 as any)).toBe(resolveIMSessionIdFromMessage(u1 as any));
+    });
+
+    it('私聊：按 sender 区分', () => {
+      const msg = createMockMessage({ content: 'hi', channelType: 'private', senderId: 'userA' });
+      expect(resolveIMSessionIdFromMessage(msg as any)).toBe('test:bot123:private:userA');
     });
   });
 

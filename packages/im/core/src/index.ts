@@ -17,6 +17,8 @@ export {
   CURRENT_USER_MESSAGE_MARKER,
   QUOTE_CONTEXT_SYSTEM_HINT,
   QUOTE_CONTEXT_SYSTEM_EXTRA_KEY,
+  QUOTED_CONTENT_UNTRUSTED_NOTE,
+  sanitizeQuotedBodyForPrompt,
 } from './built/prepend-quote-context.js'
 export * from './notice.js'
 export * from './request.js'
@@ -46,6 +48,7 @@ export * from './built/skill.js'
 export * from './built/agent-preset.js'
 export * from './built/common-adapter-tools.js'
 // AI Trigger Service (纯工具，无副作用)
+export * from './built/roles.js'
 export * from './built/ai-trigger.js'
 // MessageDispatcher (消息调度器)
 export * from './built/dispatcher.js'
@@ -62,6 +65,7 @@ export {
   SessionManager, MemorySessionManager, DatabaseSessionManager,
   createSessionManager, createMemorySessionManager, createDatabaseSessionManager,
   AI_SESSION_MODEL,
+  resolveIMSessionId, resolveIMSceneIdForSession, resolveIMSessionIdFromToolContext,
   ContextManager, createContextManager, CHAT_MESSAGE_MODEL, CONTEXT_SUMMARY_MODEL,
   ConversationMemory, AI_MESSAGE_MODEL, AI_SUMMARY_MODEL,
   estimateTokens, estimateMessagesTokens,

@@ -87,7 +87,7 @@ export { AIService } from './service.js';
 export { ZhinAgent } from './zhin-agent/index.js';
 export type { ZhinAgentConfig, OnChunkCallback } from './zhin-agent/index.js';
 
-export { PERM_MAP, DEFAULT_CONFIG as ZHIN_AGENT_DEFAULT_CONFIG, SECTION_SEP } from './zhin-agent/config.js';
+export { DEFAULT_CONFIG as ZHIN_AGENT_DEFAULT_CONFIG, SECTION_SEP } from './zhin-agent/config.js';
 export { MODEL_HARNESS_DEFAULTS, resolveModelHarness, mergeModelHarnessValues } from './zhin-agent/model-harness.js';
 export type { ModelHarnessRow, ResolvedModelHarness, ModelHarnessConfig } from './zhin-agent/model-harness.js';
 export {
@@ -330,7 +330,7 @@ export { AgentOrchestrator } from './orchestrator/index.js';
 export {
   ResourceRegistry,
   ToolRegistry, ZhinTool, isZhinTool, defineTool, extractParamInfo,
-  canAccessTool, inferPermissionLevel, hasPermissionLevel,
+  canAccessTool,
   normalizeTool, sharedToolSelection,
   SkillRegistry,
   SubAgentRegistry,
@@ -341,7 +341,7 @@ export {
 export type {
   ToolInput, McpConnection,
   ResourceScope, ResourceEntry,
-  Tool, ToolContext, IMToolContext, ToolPermissionLevel, ToolScope, FileRole,
+  Tool, ToolContext, IMToolContext, SenderRole, ToolScope, FileRole,
   ToolParametersSchema, PropertySchema, ToolJsonSchema,
   Skill, SkillMetadata,
   SubAgentDef, AgentPreset,

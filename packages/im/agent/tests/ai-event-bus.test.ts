@@ -15,6 +15,8 @@ describe('ai-event-bus helpers', () => {
     const payload = createAIHookBusPayload(
       createAIHookEvent('tool', 'call', undefined, {
         platform: 'mock',
+        botId: 'bot1',
+        scope: 'private',
         senderId: 'user1',
         sceneId: 'scene1',
         toolName: 'read_file',
@@ -24,7 +26,7 @@ describe('ai-event-bus helpers', () => {
       'agent-1',
     );
 
-    expect(payload.sessionId).toBe('mock:scene1:user1');
+    expect(payload.sessionId).toBe('mock:bot1:private:user1');
     expect(payload.toolName).toBe('read_file');
     expect(payload.agentId).toBe('agent-1');
   });

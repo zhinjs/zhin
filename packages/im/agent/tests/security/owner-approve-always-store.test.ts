@@ -17,7 +17,7 @@ import {
 } from '../../src/security/owner-approve-always-store.js';
 
 function makeRootPlugin(adapterName: string): Plugin {
-  const bots = new Map([['bot1', { $config: { owner: 'owner99' } }]]);
+  const bots = new Map([['bot1', { $config: { master: 'owner99' } }]]);
   const p = {
     inject: vi.fn((name: string) => {
       if (name === adapterName) return { bots };

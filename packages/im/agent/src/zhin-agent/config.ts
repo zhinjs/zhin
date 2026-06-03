@@ -4,7 +4,6 @@
 
 import type { RateLimitConfig } from '@zhin.js/ai';
 import { DEFAULT_CONTEXT_TOKENS } from '@zhin.js/ai';
-import { PERMISSION_LEVEL_PRIORITY } from '../orchestrator/tool-selection.js';
 import type { ModelHarnessConfig } from './model-harness.js';
 
 export type ModelSizeHint = 'small' | 'medium' | 'large';
@@ -49,8 +48,6 @@ export const SECTION_SEP = '\n\n---\n\n';
 export const HISTORY_CONTEXT_MARKER = '[Chat messages since your last reply - for context]';
 /** 与 @zhin.js/core `CURRENT_USER_MESSAGE_MARKER` 保持一致 */
 export const CURRENT_MESSAGE_MARKER = '[Current message - respond to this]';
-
-export const PERM_MAP: Record<string, number> = PERMISSION_LEVEL_PRIORITY;
 
 export type OnChunkCallback = (chunk: string, full: string) => void;
 const TRUE_VALUES = new Set(['1', 'true', 'yes', 'on']);

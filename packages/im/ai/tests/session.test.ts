@@ -21,6 +21,8 @@ import {
   DatabaseSessionManager,
   SessionManager,
   createMemorySessionManager,
+  resolveIMSessionId,
+  resolveIMSessionIdFromToolContext,
 } from '@zhin.js/ai';
 
 describe('MemorySessionManager', () => {
@@ -192,6 +194,43 @@ describe('SessionManager', () => {
       const id = SessionManager.generateId('telegram', 'user123');
       expect(id).toBe('telegram:user123');
     });
+  });
+});
+
+describe('resolveIMSessionId', () => {
+  it('群聊：同群不同用户 sessionId 相同', () => {
+    const a = resolveIMSessionId({
+      platform: 'icqq',
+      botId: '75318',
+      scope: 'group',
+      sceneId: '123456',
+    });
+    const b = resolveIMSessionId({
+      platform: 'icqq',
+      botId: '75318',
+      scope: 'group',
+      sceneId: '123456',
+    });
+    expect(a).toBe('icqq:75318:group:123456');
+    expect(a).toBe(b);
+  });
+
+  it('私聊：按用户区分', () => {
+    expect(resolveIMSessionIdFromToolContext({
+      platform: 'icqq',
+      botId: '75318',
+      scope: 'private',
+      senderId: 'userA',
+    })).toBe('icqq:75318:private:userA');
+  });
+
+  it('频道：使用 channel scope', () => {
+    expect(resolveIMSessionId({
+      platform: 'discord',
+      botId: 'bot1',
+      scope: 'channel',
+      sceneId: 'ch99',
+    })).toBe('discord:bot1:channel:ch99');
   });
 });
 

@@ -141,7 +141,7 @@ export class AgentOrchestrator {
 
 // Re-export everything consumers need
 export { ResourceRegistry } from './resource-registry.js';
-export { ToolRegistry, ZhinTool, isZhinTool, defineTool, extractParamInfo, canAccessTool, inferPermissionLevel, hasPermissionLevel } from './tool-registry.js';
+export { ToolRegistry, ZhinTool, isZhinTool, defineTool, extractParamInfo, canAccessTool } from './tool-registry.js';
 export type { ToolInput } from './tool-registry.js';
 export { normalizeTool, sharedToolSelection } from './tool-selection.js';
 export type { CollectToolsContext } from './tool-selection.js';

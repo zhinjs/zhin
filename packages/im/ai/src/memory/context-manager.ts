@@ -22,14 +22,18 @@ const logger = new Logger(null, 'ContextManager');
  * 聊天消息记录模型定义
  */
 export const CHAT_MESSAGE_MODEL = {
-  platform: { type: 'text' as const, nullable: false },      // 平台：icqq, kook, discord 等
-  scene_id: { type: 'text' as const, nullable: false },      // 场景ID：群号/频道ID/用户ID
-  scene_type: { type: 'text' as const, nullable: false },    // 场景类型：group, private, channel
-  scene_name: { type: 'text' as const, default: '' },        // 场景名称
-  sender_id: { type: 'text' as const, nullable: false },     // 发送者ID
-  sender_name: { type: 'text' as const, default: '' },       // 发送者名称
-  message: { type: 'text' as const, nullable: false },       // 消息内容
-  time: { type: 'integer' as const, nullable: false },       // 时间戳（毫秒）
+  message_id: { type: 'text' as const, default: '' },
+  platform: { type: 'text' as const, nullable: false },
+  bot_id: { type: 'text' as const, nullable: false },
+  scene_id: { type: 'text' as const, nullable: false },
+  scene_type: { type: 'text' as const, nullable: false },
+  scene_name: { type: 'text' as const, default: '' },
+  sender_id: { type: 'text' as const, nullable: false },
+  sender_name: { type: 'text' as const, default: '' },
+  sender_role: { type: 'text' as const, default: 'user' },
+  direction: { type: 'text' as const, nullable: false },
+  message: { type: 'text' as const, nullable: false },
+  time: { type: 'integer' as const, nullable: false },
 };
 
 /**
@@ -51,14 +55,20 @@ export const CONTEXT_SUMMARY_MODEL = {
 /**
  * 消息记录
  */
+export type ChatMessageDirection = 'inbound' | 'outbound';
+
 export interface MessageRecord {
   id?: number;
+  message_id?: string;
   platform: string;
+  bot_id: string;
   scene_id: string;
   scene_type: 'group' | 'private' | 'channel' | string;
   scene_name: string;
   sender_id: string;
   sender_name: string;
+  sender_role: string;
+  direction: ChatMessageDirection;
   message: string;
   time: number;
 }

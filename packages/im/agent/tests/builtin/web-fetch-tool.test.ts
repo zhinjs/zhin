@@ -19,11 +19,11 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function mockPlugin(owner = 'owner1', admins: string[] = ['admin1'], execAllowlist: string[] = []) {
+function mockPlugin(master = 'owner1', trusted: string[] = ['admin1'], execAllowlist: string[] = []) {
   const plugin = {
     inject: (name: string) => {
       if (name === 'icqq') {
-        return { bots: new Map([['bot1', { $config: { owner, admins } }]]) };
+        return { bots: new Map([['bot1', { $config: { master, trusted } }]]) };
       }
       if (name === 'ai') {
         return { getAgentConfig: () => ({ execAllowlist }) };
@@ -107,7 +107,7 @@ describe('WebFetchBuiltinTool', () => {
       platform: 'icqq',
       botId: 'bot1',
       senderId: 'admin1',
-      isBotAdmin: true,
+      roles: ['trusted'],
     } as ToolContext;
     const out = String(await inst.run({ url: 'https://example.com/' }, ctx));
     expect(out.startsWith('ZHIN_NEEDS_OWNER:\n')).toBe(true);

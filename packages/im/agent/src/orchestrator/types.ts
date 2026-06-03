@@ -22,7 +22,8 @@ export interface ResourceEntry<T> {
 // Skill
 // ============================================================================
 
-export type ToolPermissionLevel = 'user' | 'group_admin' | 'group_owner' | 'bot_admin' | 'owner';
+import type { SenderRole, ToolContext } from '@zhin.js/core';
+export type { SenderRole, ToolContext };
 
 /**
  * 文件操作角色 — 在 IM 场景中对文件操作的权限分级
@@ -58,7 +59,7 @@ export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
   execute: (args: TArgs, context?: ToolContext) => unknown | Promise<unknown>;
   platforms?: string[];
   scopes?: ToolScope[];
-  permissionLevel?: ToolPermissionLevel;
+  requiredAnyRole?: readonly import('@zhin.js/core').SenderRole[];
   permissions?: string[];
   tags?: string[];
   keywords?: string[];
@@ -79,29 +80,7 @@ export namespace Tool {
   }
 }
 
-/**
- * IM-aware tool execution context.
- * Extends @zhin.js/ai ToolContext with IM-specific fields.
- */
-export interface ToolContext {
-  platform?: string;
-  senderId?: string;
-  sceneId?: string;
-  scope?: ToolScope;
-  botId?: string;
-  messageId?: string;
-  senderPermissionLevel?: ToolPermissionLevel;
-  isOwner?: boolean;
-  isBotAdmin?: boolean;
-  isGroupAdmin?: boolean;
-  isGroupOwner?: boolean;
-  message?: unknown;
-  /** 文件操作角色 */
-  fileRole?: FileRole;
-  /** 与 @zhin.js/core.ToolContext.extra 对齐：供内置工具等读取扩展字段（如 web_search_locale） */
-  extra?: Record<string, unknown>;
-}
-
+/** IM-aware tool execution context（与 @zhin.js/core ToolContext 一致） */
 export type IMToolContext = ToolContext;
 
 export interface ToolJsonSchema extends JsonSchema {

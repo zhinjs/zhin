@@ -7,6 +7,7 @@ import { registerAI } from '../setup/register-ai.js';
 import { registerCoreServices } from '../setup/register-core-services.js';
 import { registerSignalHandlers } from '../setup/signal-handlers.js';
 import { registerUnifiedInboxMessageListeners } from '../setup/register-inbox.js';
+import { registerChatMessageStore } from '../setup/register-chat-message-store.js';
 import { chdirToProjectRoot, resolveConfigPath } from './shared.js';
 import type { BootstrapNodeResult, BootstrapOptions } from './types.js';
 
@@ -50,6 +51,7 @@ export async function bootstrapNode(options: BootstrapOptions = {}): Promise<Boo
   await connectBots(plugin, appConfig);
   await loadPlugins(plugin, appConfig);
   registerUnifiedInboxMessageListeners(plugin, appConfig);
+  registerChatMessageStore(plugin, appConfig);
   await registerSignalHandlers(plugin);
 
   return { plugin, configFeature, appConfig, configPath };

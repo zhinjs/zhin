@@ -7,6 +7,8 @@ import { User } from "./models/user.js";
 import { Databases,Registry } from "@zhin.js/database";
 import { MessageComponent } from "./message.js";
 import { ProcessAdapter } from "./built/adapter-process.js";
+import type { SenderRole } from "./built/roles.js";
+export type { SenderRole } from "./built/roles.js";
 
 export type ArrayItem<T>=T extends Array<infer R>?R:unknown
 export interface Models extends Record<string,object>{
@@ -143,6 +145,17 @@ export interface SendOptions extends MessageChannel{
   content:SendContent
 }
 
+/** `Adapter.sendMessage` 成功发出后由 core 分发的载荷 */
+export interface MessageSendPayload {
+  adapter: string;
+  options: SendOptions;
+  messageId: string;
+  /** 经 `replyWithPolish` 发出时由 dispatcher 填入 */
+  replySource?: OutboundReplySource;
+  /** 触发回复的入站消息（replyWithPolish 时可用） */
+  replyMessage?: Message;
+}
+
 // export type PermissionChecker<T extends RegisteredAdapter = RegisteredAdapter> = (name: string, message: Message<AdapterMessage<T>>) => MaybePromise<boolean>
 // export type PermissionItem<T extends RegisteredAdapter = RegisteredAdapter> = {
 //    name: string | RegExp
@@ -271,27 +284,8 @@ export interface ToolContext {
    * private: 私聊, group: 群聊, channel: 频道
    */
   scope?: ToolScope;
-  /**
-   * 发送者权限级别
-   * 用于工具权限过滤
-   */
-  senderPermissionLevel?: ToolPermissionLevel;
-  /**
-   * 发送者是否为群管理员
-   */
-  isGroupAdmin?: boolean;
-  /**
-   * 发送者是否为群主
-   */
-  isGroupOwner?: boolean;
-  /**
-   * 发送者是否为机器人管理员
-   */
-  isBotAdmin?: boolean;
-  /**
-   * 发送者是否为 Zhin 拥有者
-   */
-  isOwner?: boolean;
+  /** 发送者角色集合（群角色 + bot master/trusted 可并存） */
+  roles?: readonly SenderRole[];
   /**
    * 文件操作角色 — 用于文件工具的权限控制
    */
@@ -332,16 +326,6 @@ export interface ToolContext {
  * 消息场景类型
  */
 export type ToolScope = 'private' | 'group' | 'channel';
-
-/**
- * 工具权限级别
- * - user: 普通用户（默认）
- * - group_admin: 群管理员
- * - group_owner: 群主
- * - bot_admin: 机器人管理员
- * - owner: Zhin 拥有者（最高权限）
- */
-export type ToolPermissionLevel = 'user' | 'group_admin' | 'group_owner' | 'bot_admin' | 'owner';
 
 /**
  * 文件操作角色 — 在 IM 场景中对文件操作的权限分级
@@ -436,10 +420,10 @@ export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
   scopes?: ToolScope[];
   
   /**
-   * 调用所需的最低权限级别
-   * 默认为 'user'（普通用户可调用）
+   * 调用者需具备的角色之一（隐含升格见 roles.ts）
+   * 省略则仅需 user
    */
-  permissionLevel?: ToolPermissionLevel;
+  requiredAnyRole?: readonly SenderRole[];
   
   /**
    * 是否隐藏

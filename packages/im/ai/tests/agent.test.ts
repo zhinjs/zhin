@@ -474,19 +474,6 @@ describe('Agent.filterTools 程序化过滤', () => {
     expect(result[0].name).toBe('gold_price');
   });
 
-  it('应该按权限过滤工具', () => {
-    const tools = [
-      createMockTool({ name: 'public_tool', description: '公共工具' }),
-      createMockTool({ name: 'admin_tool', description: '管理员工具' }),
-    ] as any[];
-    tools[0].permissionLevel = 0;
-    tools[1].permissionLevel = 3;
-
-    const result = Agent.filterTools('管理', tools, { callerPermissionLevel: 1 });
-    const names = result.map((t: any) => t.name);
-    expect(names).not.toContain('admin_tool');
-  });
-
   it('应该按分数排序并限制数量', () => {
     const tools = [
       createMockTool({ name: 'tool1', description: '天气查询', keywords: ['天气'] }),

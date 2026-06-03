@@ -2,7 +2,7 @@ import type { ToolContext } from '../orchestrator/types.js';
 import { resolveAgentPromptMarkdown } from '../agent-prompt/index.js';
 import {
   buildEnhancedPersona,
-  buildContextHint,
+  formatSessionContextLine,
   appendQuoteContextSystemHint,
   buildRichSystemPrompt,
   buildLiteSystemPromptWithPlatform,
@@ -37,7 +37,6 @@ export async function buildAgentPathSystemPrompt(
   },
 ): Promise<string> {
   const { content, context, sessionId, personaEnhanced, preData, deferredStats } = options;
-  const contextHint = buildContextHint(context, content);
 
   const platformMarkdown = await resolveAgentPromptMarkdown({
     ctx: {
@@ -57,15 +56,13 @@ export async function buildAgentPathSystemPrompt(
     skillsSummaryXML: agent.skillsSummaryXML,
     activeSkillsContext: agent.activeSkillsContext,
     bootstrapContext: agent.bootstrapContext,
+    toolContext: context,
     toolSearchDeferredStats: deferredStats,
     platformSections: platformMarkdown,
-    fileRole: context.fileRole,
   });
 
   return appendQuoteContextSystemHint(
-    `${richPrompt}
-${contextHint}
-${preData ? `\nPre-fetched data:\n${preData}\n` : ''}`,
+    `${richPrompt}${preData ? `\n\nPre-fetched data:\n${preData}` : ''}`,
     context,
   );
 }
@@ -117,7 +114,7 @@ export async function buildMultimodalVisionSystemPrompt(
     buildLiteSystemPromptWithPlatform(
       personaEnhanced,
       platformMarkdown,
-      buildContextHint(context, textContent),
+      formatSessionContextLine(context) ?? undefined,
     ),
     context,
   );

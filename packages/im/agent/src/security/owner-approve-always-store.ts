@@ -14,7 +14,7 @@ import { getDataDir } from '../discovery/utils.js';
 
 export const OWNER_APPROVE_ALWAYS_TOOL = 'bash' as const;
 
-export type ToolRequesterRole = 'owner' | 'admin' | 'other' | 'unknown';
+export type ToolRequesterRole = 'master' | 'trusted' | 'other' | 'unknown';
 
 const STORE_FILE = 'owner-approve-always.json';
 const STORE_VERSION = 2 as const;
@@ -133,12 +133,12 @@ function writeStore(data: StoreV2): void {
   fs.renameSync(tmp, p);
 }
 
-function getBotOwner(plugin: Plugin, ctx: ToolContext): string | undefined {
+export function getBotMaster(plugin: Plugin, ctx: ToolContext): string | undefined {
   const root = plugin.root ?? plugin;
   const adapter = root.inject(ctx.platform!) as Adapter | undefined;
   const bot = adapter?.bots?.get(ctx.botId!);
-  const owner = (bot?.$config as Record<string, unknown> | undefined)?.owner;
-  return owner != null ? String(owner) : undefined;
+  const master = (bot?.$config as Record<string, unknown> | undefined)?.master;
+  return master != null ? String(master) : undefined;
 }
 
 function normalizeIdList(input: unknown): string[] {
@@ -152,32 +152,32 @@ function normalizeIdList(input: unknown): string[] {
   return [];
 }
 
-function getBotAdmins(plugin: Plugin, ctx: ToolContext): string[] {
+function getBotTrustedIds(plugin: Plugin, ctx: ToolContext): string[] {
   const root = plugin.root ?? plugin;
   const adapter = root.inject(ctx.platform!) as Adapter | undefined;
   const bot = adapter?.bots?.get(ctx.botId!);
   const botConfig = (bot?.$config as Record<string, unknown> | undefined) ?? {};
-  return [
-    ...normalizeIdList(botConfig.admins),
-    ...normalizeIdList(botConfig.botAdmins),
-    ...normalizeIdList(botConfig.bot_admins),
-    ...normalizeIdList(botConfig.admin),
-  ];
+  return normalizeIdList(botConfig.trusted);
 }
 
 export function resolveToolRequesterRole(plugin: Plugin, ctx: ToolContext): ToolRequesterRole {
+  if (ctx.roles?.length) {
+    if (ctx.roles.includes('master')) return 'master';
+    if (ctx.roles.includes('trusted')) return 'trusted';
+    return 'other';
+  }
   if (!ctx.platform || !ctx.botId || !ctx.senderId) return 'unknown';
   const senderId = String(ctx.senderId);
-  const ownerId = getBotOwner(plugin, ctx);
-  if (ownerId && senderId === String(ownerId)) return 'owner';
-  const admins = getBotAdmins(plugin, ctx);
-  if (admins.includes(senderId)) return 'admin';
+  const masterId = getBotMaster(plugin, ctx);
+  if (masterId && senderId === String(masterId)) return 'master';
+  const trusted = getBotTrustedIds(plugin, ctx);
+  if (trusted.includes(senderId)) return 'trusted';
   return 'other';
 }
 
 function getEntry(plugin: Plugin, ctx: ToolContext): BashApprovalBotEntry | undefined {
   if (!ctx.platform || !ctx.botId) return undefined;
-  const ownerId = getBotOwner(plugin, ctx);
+  const ownerId = getBotMaster(plugin, ctx);
   if (ownerId == null) return undefined;
   const key = normalizeBotKey(ctx.platform, ctx.botId, ownerId);
   const data = readStore();
@@ -186,7 +186,7 @@ function getEntry(plugin: Plugin, ctx: ToolContext): BashApprovalBotEntry | unde
 
 function ensureEntry(plugin: Plugin, ctx: ToolContext): BashApprovalBotEntry {
   if (!ctx.platform || !ctx.botId) return { bashRules: [] };
-  const ownerId = getBotOwner(plugin, ctx);
+  const ownerId = getBotMaster(plugin, ctx);
   if (ownerId == null) return { bashRules: [] };
   const key = normalizeBotKey(ctx.platform, ctx.botId, ownerId);
   const data = readStore();
@@ -206,10 +206,10 @@ export function getOwnerToolContextOrUndefined(plugin: Plugin, message: Message<
     senderId: message.$sender.id,
     message,
     scope: 'private',
-    isOwner: true,
+    roles: ['master'],
     fileRole: 'owner',
   };
-  const ownerId = getBotOwner(plugin, ctx);
+  const ownerId = getBotMaster(plugin, ctx);
   if (ownerId == null || String(message.$sender.id) !== String(ownerId)) return undefined;
   return ctx;
 }
@@ -224,7 +224,7 @@ export function hasOwnerApproveAlways(plugin: Plugin, ctx: ToolContext, toolName
 
 export function setBashAlways(plugin: Plugin, ctx: ToolContext, value: boolean): void {
   if (!ctx.platform || !ctx.botId) return;
-  const ownerId = getBotOwner(plugin, ctx);
+  const ownerId = getBotMaster(plugin, ctx);
   if (ownerId == null) return;
   const key = normalizeBotKey(ctx.platform, ctx.botId, ownerId);
   const data = readStore();
@@ -244,7 +244,7 @@ export function addOwnerApproveAlways(plugin: Plugin, ctx: ToolContext, toolName
   if (toolName.trim().toLowerCase() !== OWNER_APPROVE_ALWAYS_TOOL) {
     return { ok: false, error: '永久放行仅支持 bash（shell 安全确认）。' };
   }
-  if (getBotOwner(plugin, ctx) == null) {
+  if (getBotMaster(plugin, ctx) == null) {
     return { ok: false, error: '当前 Bot 未配置 owner' };
   }
   setBashAlways(plugin, ctx, true);
@@ -258,7 +258,7 @@ export function removeOwnerApproveAlways(plugin: Plugin, ctx: ToolContext, toolN
   if (toolName.trim().toLowerCase() !== OWNER_APPROVE_ALWAYS_TOOL) {
     return { ok: false, error: '仅可撤销 bash 的永久放行。' };
   }
-  if (getBotOwner(plugin, ctx) == null) {
+  if (getBotMaster(plugin, ctx) == null) {
     return { ok: false, error: '当前 Bot 未配置 owner' };
   }
   const ent = getEntry(plugin, ctx);
@@ -284,10 +284,10 @@ export function addBashApproveRule(
   } catch (e) {
     return { ok: false, error: `无效正则: ${e instanceof Error ? e.message : String(e)}` };
   }
-  if (!ctx.platform || !ctx.botId || getBotOwner(plugin, ctx) == null) {
+  if (!ctx.platform || !ctx.botId || getBotMaster(plugin, ctx) == null) {
     return { ok: false, error: '缺少 platform/botId 或未配置 owner。' };
   }
-  const ownerId = getBotOwner(plugin, ctx)!;
+  const ownerId = getBotMaster(plugin, ctx)!;
   const key = normalizeBotKey(ctx.platform, ctx.botId, ownerId);
   const data = readStore();
   const ent: BashApprovalBotEntry = { ...(data.bots[key] ?? { bashRules: [] }), bashRules: [...(data.bots[key]?.bashRules ?? [])] };
@@ -306,10 +306,10 @@ export function removeBashApproveRule(
 ): { ok: true } | { ok: false; error: string } {
   const id = ruleId.trim();
   if (!id) return { ok: false, error: '请提供规则 id。' };
-  if (!ctx.platform || !ctx.botId || getBotOwner(plugin, ctx) == null) {
+  if (!ctx.platform || !ctx.botId || getBotMaster(plugin, ctx) == null) {
     return { ok: false, error: '缺少 platform/botId 或未配置 owner。' };
   }
-  const ownerId = getBotOwner(plugin, ctx)!;
+  const ownerId = getBotMaster(plugin, ctx)!;
   const key = normalizeBotKey(ctx.platform, ctx.botId, ownerId);
   const data = readStore();
   const ent = data.bots[key];
@@ -385,7 +385,7 @@ function pendingKey(adapter: string, botId: string, ownerId: string): string {
 export function setPendingOrchestrationTool(plugin: Plugin, ctx: ToolContext, toolName: string): void {
   if (toolName !== OWNER_APPROVE_ALWAYS_TOOL) return;
   if (!ctx.platform || !ctx.botId) return;
-  const ownerId = getBotOwner(plugin, ctx);
+  const ownerId = getBotMaster(plugin, ctx);
   if (ownerId == null) return;
   pendingOrchestration.set(pendingKey(ctx.platform, ctx.botId, ownerId), {
     toolName: OWNER_APPROVE_ALWAYS_TOOL,
@@ -395,14 +395,14 @@ export function setPendingOrchestrationTool(plugin: Plugin, ctx: ToolContext, to
 
 export function clearPendingOrchestrationTool(plugin: Plugin, ctx: ToolContext): void {
   if (!ctx.platform || !ctx.botId) return;
-  const ownerId = getBotOwner(plugin, ctx);
+  const ownerId = getBotMaster(plugin, ctx);
   if (ownerId == null) return;
   pendingOrchestration.delete(pendingKey(ctx.platform, ctx.botId, ownerId));
 }
 
 export function getPendingOrchestrationTool(plugin: Plugin, ctx: ToolContext): string | undefined {
   if (!ctx.platform || !ctx.botId) return undefined;
-  const ownerId = getBotOwner(plugin, ctx);
+  const ownerId = getBotMaster(plugin, ctx);
   if (ownerId == null) return undefined;
   const key = pendingKey(ctx.platform, ctx.botId, ownerId);
   const p = pendingOrchestration.get(key);

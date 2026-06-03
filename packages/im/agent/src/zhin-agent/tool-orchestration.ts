@@ -2,7 +2,7 @@ import { formatCompact, Logger } from '@zhin.js/logger';
 import type { AgentTool } from '@zhin.js/ai';
 import type { ToolContext } from '../orchestrator/types.js';
 import { notifySubagentGoal } from '../subagent-goal-notify.js';
-import { SessionManager } from '@zhin.js/ai';
+import { resolveIMSessionIdFromToolContext } from '@zhin.js/ai';
 import { buildOrchestratorAgentTools } from './tool-search-orchestrator.js';
 import { filterToolsForToolSearchCatalog } from './tool-catalog.js';
 import type { ZhinAgentPrivate } from './zhin-agent-private.js';
@@ -62,11 +62,13 @@ export async function runDeferredWorker(
     provider: agent.provider,
     maxIterations: agent.config.maxSubagentIterations,
     onEvent: (event) => {
-      const sessionId = SessionManager.generateId(
-        context.platform || '',
-        context.senderId || '',
-        context.sceneId,
-      );
+      const sessionId = resolveIMSessionIdFromToolContext({
+        platform: context.platform,
+        botId: context.botId,
+        scope: context.scope,
+        sceneId: context.sceneId,
+        senderId: context.senderId,
+      });
       const payload = agent.emitter.createPayload(sessionId, context, 'text', {
         path: 'agent',
         content: event.goal,

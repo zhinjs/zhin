@@ -43,6 +43,51 @@ describe('ConversationMemory（内存模式）', () => {
       const round = await memory.getCurrentRound('s1');
       expect(round).toBe(3);
     });
+
+    it('upgradeToDatabase 迁移内存中的消息', async () => {
+      const mem = new ConversationMemory({ slidingWindowSize: 5, minTopicRounds: 5, topicChangeThreshold: 0.15 });
+      await mem.appendPassiveGroupUserMessage('s-migrate', '旁听', { senderId: 'u1' });
+      const rows: Array<{ session_id: string; round: number; role: string; content: string; created_at: number }> = [];
+      const msgModel = {
+        create: async (r: typeof rows[0]) => {
+          rows.push(r);
+          return r;
+        },
+        select: async () => rows,
+        aggregate: () => ({
+          where: (q: { session_id?: string }) => ({
+            max: async (_col: string, alias: string) => {
+              const sid = q.session_id;
+              const matched = sid ? rows.filter((r) => r.session_id === sid) : rows;
+              const max = matched.length ? Math.max(...matched.map((r) => r.round)) : 0;
+              return [{ [alias]: max }];
+            },
+          }),
+        }),
+      };
+      const sumModel = {
+        create: async () => ({}),
+        select: async () => [],
+      };
+      await mem.upgradeToDatabase(msgModel as any, sumModel as any);
+      expect(await mem.hasStoredMessages('s-migrate')).toBe(true);
+      expect(rows.some((r) => r.content === '旁听')).toBe(true);
+      mem.dispose();
+    });
+
+    it('appendPassiveGroupUserMessage 仅写入 user 行供后续 @ 带入', async () => {
+      await memory.appendPassiveGroupUserMessage(
+        'g1',
+        '[sender:id=u2 name=Bob roles=user] 旁听一句',
+        { senderId: 'u2', senderRoles: ['user'] },
+      );
+      await memory.saveRound('g1', '[sender:id=u1 roles=master] @bot 继续', '好的');
+
+      const context = await memory.buildContext('g1');
+      expect(context.some(m => m.content.includes('旁听一句'))).toBe(true);
+      expect(context.some(m => m.content === '好的')).toBe(true);
+      expect(await memory.getCurrentRound('g1')).toBe(2);
+    });
   });
 
   describe('滑动窗口', () => {

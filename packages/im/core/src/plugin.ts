@@ -14,7 +14,7 @@ import * as path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import logger, { Logger, formatCompact } from "@zhin.js/logger";
 import { compose, remove, resolveEntry } from "./utils.js";
-import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, SendOptions } from "./types.js";
+import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, SendOptions, MessageSendPayload } from "./types.js";
 import { Adapter, Adapters } from "./adapter.js";
 import { Feature } from "@zhin.js/kernel";
 import {
@@ -817,6 +817,7 @@ export namespace Plugin {
     "context.dispose": [keyof Plugin.Contexts];
     "call.recallMessage": [string, string, string];
     'before.sendMessage': [SendOptions];
+    'message.send': [MessageSendPayload];
     "message.receive": [any];
     "bot.login.pending": [import('./built/login-assist.js').PendingLoginTask];
     "request.receive": [any];

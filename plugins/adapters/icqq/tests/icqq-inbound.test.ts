@@ -192,7 +192,25 @@ describe("normalizeIcqqInboundMessage", () => {
       userId: "1659488338",
       nickname: "归雨",
     });
+    expect(n?.senderRole).toBeUndefined();
     expect(n?.content).toEqual([{ type: "text", data: { text: "te" } }]);
+  });
+
+  it("群聊 payload 保留 sender.role", () => {
+    const n = normalizeIcqqInboundMessage({
+      post_type: "message",
+      message_id: "C/35xWLpyFIAABgcUEQr0Wof1QkB",
+      user_id: 1659488338,
+      time: 1780471049,
+      message: [{ type: "text", text: "test" }],
+      raw_message: "test",
+      message_type: "group",
+      sender: { user_id: 1659488338, nickname: "归雨", role: "owner" },
+      group_id: 201193925,
+      self_id: 8596238,
+    } as any);
+    expect(n?.channelType).toBe("group");
+    expect(n?.senderRole).toBe("owner");
   });
 });
 

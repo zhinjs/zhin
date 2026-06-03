@@ -5,9 +5,7 @@ import {
   canAccessTool,
   canAccessToolFromSkill,
   createRestrictedToolView,
-  inferPermissionLevel,
   normalizeTool,
-  permissionLevelToPriority,
 } from '../src/orchestrator/tool-selection.js';
 import { planToolRun } from '../src/zhin-agent/tool-runtime.js';
 import type { Tool, ToolContext } from '../src/orchestrator/types.js';
@@ -65,22 +63,15 @@ function makeTool(overrides: Partial<Tool> = {}): Tool {
 }
 
 describe('tool-selection permissions', () => {
-  it('maps and infers permission levels consistently', () => {
-    expect(permissionLevelToPriority('user')).toBe(0);
-    expect(permissionLevelToPriority('owner')).toBe(4);
-    expect(inferPermissionLevel({ isGroupAdmin: true })).toBe('group_admin');
-    expect(inferPermissionLevel({ senderPermissionLevel: 'bot_admin', isOwner: true })).toBe('bot_admin');
-  });
-
-  it('checks platform, scope and permission in one place', () => {
+  it('checks platform, scope and requiredAnyRole in one place', () => {
     const tool = makeTool({
       platforms: ['qq'],
       scopes: ['group'],
-      permissionLevel: 'group_admin',
+      requiredAnyRole: ['group_admin'],
     });
 
-    expect(canAccessTool(tool, { platform: 'qq', scope: 'group', isGroupAdmin: true })).toBe(true);
-    expect(canAccessTool(tool, { platform: 'qq', scope: 'private', isGroupAdmin: true })).toBe(false);
+    expect(canAccessTool(tool, { platform: 'qq', scope: 'group', roles: ['group_admin'] })).toBe(true);
+    expect(canAccessTool(tool, { platform: 'qq', scope: 'private', roles: ['group_admin'] })).toBe(false);
     expect(canAccessTool(tool, { platform: 'qq', scope: 'group' })).toBe(false);
   });
 
@@ -88,7 +79,6 @@ describe('tool-selection permissions', () => {
     const tool = makeTool({
       platforms: ['github'],
       scopes: ['private'],
-      permissionLevel: 'user',
     });
 
     expect(canAccessToolFromSkill(tool, { platform: 'qq', scope: 'private' })).toBe(true);
@@ -98,18 +88,18 @@ describe('tool-selection permissions', () => {
 });
 
 describe('normalizeTool', () => {
-  it('preserves agent metadata and numeric permission', () => {
+  it('preserves agent metadata and requiredAnyRole', () => {
     const agentTool = normalizeTool(makeTool({
       tags: ['files'],
       keywords: ['read'],
-      permissionLevel: 'bot_admin',
+      requiredAnyRole: ['trusted'],
       preExecutable: true,
       kind: 'builtin',
     }));
 
     expect(agentTool.tags).toEqual(['files']);
     expect(agentTool.keywords).toEqual(['read']);
-    expect(agentTool.permissionLevel).toBe(3);
+    expect(agentTool.requiredAnyRole).toEqual(['trusted']);
     expect(agentTool.preExecutable).toBe(true);
     expect(agentTool.kind).toBe('builtin');
   });
@@ -177,7 +167,7 @@ describe('ToolSelection', () => {
       makeTool({ name: 'activate_skill', description: 'activate skill', keywords: ['deploy'] }),
       makeTool({ name: 'bash', description: 'run shell command', keywords: ['shell'] }),
       makeTool({ name: 'web_search', description: 'search web', keywords: ['search'] }),
-      makeTool({ name: 'blocked', description: 'blocked tool', permissionLevel: 'owner', keywords: ['blocked'] }),
+      makeTool({ name: 'blocked', description: 'blocked tool', requiredAnyRole: ['master'], keywords: ['blocked'] }),
     ];
     const skillTool = makeTool({ name: 'deploy_tool', description: 'deploy app', keywords: ['deploy'] });
     const deploySkill = { name: 'deploy', description: 'deploy', tools: [skillTool], pluginName: 'test', keywords: ['deploy'] };

@@ -30,7 +30,7 @@ describe('checkDangerousToolAccess', () => {
     expect(d.needsOwnerApproval).toBeUndefined();
   });
 
-  it('有身份且 isBotAdmin 时未入 allowlist 需 Owner 确认', () => {
+  it('有身份且 trusted 时未入 allowlist 需 Master 确认', () => {
     vi.spyOn(core, 'getPlugin').mockImplementation(() => {
       throw new Error('no ALS');
     });
@@ -38,7 +38,7 @@ describe('checkDangerousToolAccess', () => {
       platform: 'icqq',
       botId: 'b1',
       senderId: 'admin1',
-      isBotAdmin: true,
+      roles: ['trusted'],
     } as ToolContext;
     const d = checkDangerousToolAccess('write_file', ctx);
     expect(d.allowed).toBe(false);

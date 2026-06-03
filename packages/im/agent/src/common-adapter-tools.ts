@@ -13,7 +13,7 @@ import {
   GROUP_MANAGEMENT_SKILL_TAGS,
 } from '@zhin.js/core';
 import type { IGroupManagement, GroupMethodSpec } from '@zhin.js/core';
-import type { Tool, ToolPermissionLevel, ToolScope } from './orchestrator/types.js';
+import type { Tool, ToolScope } from './orchestrator/types.js';
 
 export type { IGroupManagement, GroupMethodSpec };
 export { GROUP_METHOD_SPECS, GROUP_MANAGEMENT_SKILL_KEYWORDS, GROUP_MANAGEMENT_SKILL_TAGS, buildMethodArgs };
@@ -37,7 +37,7 @@ export function createGroupManagementTools(
     execute,
     tags: ['group', 'management', prefix],
     keywords: spec.keywords,
-    permissionLevel: spec.permissionLevel as ToolPermissionLevel,
+    ...(spec.requiredAnyRole?.length ? { requiredAnyRole: spec.requiredAnyRole } : {}),
     scopes: ['group'] as ToolScope[],
     preExecutable: spec.preExecutable,
   }));

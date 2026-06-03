@@ -76,8 +76,13 @@ describe('Harness inbound → tool/policy boundary', () => {
       bootstrapContext: '',
     };
     const d = describePromptSectionsForDebug(ctx);
+    const ids = d.map((x) => x.id);
     expect(d.length).toBeGreaterThan(0);
-    expect(d[0]?.id).toBe('§1_context');
+    expect(d[0]?.id).toBe('§1_runtime');
+    expect(ids).toContain('§2_style');
+    expect(ids).toContain('§3_tools');
+    expect(ids).toContain('§4_security');
+    expect(ids).not.toContain('§1_context');
     expect(d.every((x) => x.approxChars > 0)).toBe(true);
   });
 });

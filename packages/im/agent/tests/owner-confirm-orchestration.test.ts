@@ -112,7 +112,7 @@ describe('owner-confirm-orchestration', () => {
   });
 
   it('approve-always 白名单命中时不再调用 ask_user', async () => {
-    const bots = new Map([['bot1', { $config: { owner: 'O1' } }]]);
+    const bots = new Map([['bot1', { $config: { master: 'O1' } }]]);
     const pluginWithAdapter = {
       inject: vi.fn((name: string) => {
         if (name === 'icqq') return { bots };

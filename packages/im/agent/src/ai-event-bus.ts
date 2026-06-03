@@ -1,4 +1,5 @@
 import type { Plugin } from '@zhin.js/core';
+import { resolveIMSessionIdFromToolContext, type IMSessionScope } from '@zhin.js/ai';
 import type { AIHookEvent } from './orchestrator/types.js';
 
 export type AIEventPayload = Plugin.AIEventPayload;
@@ -16,18 +17,24 @@ export interface AISessionCompactPayload extends Plugin.AIEventPayload {
 
 function resolveSessionId(event: AIHookEvent): string {
   if (event.sessionId) return event.sessionId;
-  const platform = typeof event.context.platform === 'string' ? event.context.platform : 'system';
-  const sceneId = typeof event.context.sceneId === 'string'
-    ? event.context.sceneId
-    : typeof event.context.channelId === 'string'
-      ? event.context.channelId
-      : `${event.type}:${event.action}`;
-  const userId = typeof event.context.senderId === 'string'
-    ? event.context.senderId
-    : typeof event.context.from === 'string'
-      ? event.context.from
-      : 'system';
-  return `${platform}:${sceneId}:${userId}`;
+  const scope = (typeof event.context.scope === 'string'
+    ? event.context.scope
+    : 'private') as IMSessionScope;
+  return resolveIMSessionIdFromToolContext({
+    platform: typeof event.context.platform === 'string' ? event.context.platform : 'system',
+    botId: typeof event.context.botId === 'string' ? event.context.botId : 'default',
+    scope,
+    sceneId: typeof event.context.sceneId === 'string'
+      ? event.context.sceneId
+      : typeof event.context.channelId === 'string'
+        ? event.context.channelId
+        : undefined,
+    senderId: typeof event.context.senderId === 'string'
+      ? event.context.senderId
+      : typeof event.context.from === 'string'
+        ? event.context.from
+        : undefined,
+  });
 }
 
 export function createAIHookBusPayload(

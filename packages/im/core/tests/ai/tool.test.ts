@@ -14,12 +14,10 @@ import {
   defineTool, 
   isZhinTool,
   extractParamInfo,
-  hasPermissionLevel,
-  inferPermissionLevel,
   canAccessTool,
-  PERMISSION_LEVEL_PRIORITY,
+  roleSatisfies,
 } from '@zhin.js/core';
-import type { Tool, ToolContext, ToolPermissionLevel } from '@zhin.js/core';
+import type { Tool, ToolContext } from '@zhin.js/core';
 
 describe('ZhinTool 类', () => {
   it('应该能创建基本工具', () => {
@@ -58,14 +56,14 @@ describe('ZhinTool 类', () => {
     expect(toolObj.scopes).toEqual(['group']);
   });
 
-  it('应该能设置权限级别', () => {
+  it('应该能设置 requiredAnyRole', () => {
     const tool = new ZhinTool('admin_tool')
       .desc('管理员工具')
-      .permission('bot_admin')
+      .requireAnyRole('trusted')
       .execute(async () => '结果');
 
     const toolObj = tool.toTool();
-    expect(toolObj.permissionLevel).toBe('bot_admin');
+    expect(toolObj.requiredAnyRole).toEqual(['trusted']);
   });
 
   it('应该能转换为 Tool 对象', () => {
@@ -94,7 +92,7 @@ describe('ZhinTool 类', () => {
     const tool = new ZhinTool('help_test')
       .desc('帮助测试')
       .param('name', { type: 'string', description: '名字' }, true)
-      .permission('group_admin')
+      .requireAnyRole('group_admin')
       .platform('qq')
       .scope('group')
       .execute(async () => '');
@@ -198,29 +196,13 @@ describe('extractParamInfo 函数', () => {
   });
 });
 
-describe('权限级别判断', () => {
-  it('PERMISSION_LEVEL_PRIORITY 应该正确排序', () => {
-    expect(PERMISSION_LEVEL_PRIORITY['user']).toBeLessThan(PERMISSION_LEVEL_PRIORITY['group_admin']);
-    expect(PERMISSION_LEVEL_PRIORITY['group_admin']).toBeLessThan(PERMISSION_LEVEL_PRIORITY['group_owner']);
-    expect(PERMISSION_LEVEL_PRIORITY['group_owner']).toBeLessThan(PERMISSION_LEVEL_PRIORITY['bot_admin']);
-    expect(PERMISSION_LEVEL_PRIORITY['bot_admin']).toBeLessThan(PERMISSION_LEVEL_PRIORITY['owner']);
+describe('roleSatisfies', () => {
+  it('master 可满足 trusted 要求', () => {
+    expect(roleSatisfies(['master'], ['trusted'])).toBe(true);
   });
 
-  it('hasPermissionLevel 应该正确比较权限', () => {
-    expect(hasPermissionLevel('owner', 'user')).toBe(true);
-    expect(hasPermissionLevel('owner', 'owner')).toBe(true);
-    expect(hasPermissionLevel('user', 'owner')).toBe(false);
-    expect(hasPermissionLevel('group_admin', 'group_admin')).toBe(true);
-    expect(hasPermissionLevel('group_admin', 'group_owner')).toBe(false);
-  });
-
-  it('inferPermissionLevel 应该正确推断权限', () => {
-    expect(inferPermissionLevel({ isOwner: true } as ToolContext)).toBe('owner');
-    expect(inferPermissionLevel({ isBotAdmin: true } as ToolContext)).toBe('bot_admin');
-    expect(inferPermissionLevel({ isGroupOwner: true } as ToolContext)).toBe('group_owner');
-    expect(inferPermissionLevel({ isGroupAdmin: true } as ToolContext)).toBe('group_admin');
-    expect(inferPermissionLevel({} as ToolContext)).toBe('user');
-    expect(inferPermissionLevel({ senderPermissionLevel: 'bot_admin' } as ToolContext)).toBe('bot_admin');
+  it('user 无法满足 group_admin 要求', () => {
+    expect(roleSatisfies(['user'], ['group_admin'])).toBe(false);
   });
 });
 
@@ -252,12 +234,12 @@ describe('canAccessTool 函数', () => {
     expect(canAccessTool(tool, { scope: 'private' } as ToolContext)).toBe(false);
   });
 
-  it('应该正确检查权限级别', () => {
-    const tool: Tool = { ...baseTool, permissionLevel: 'group_admin' };
+  it('应该正确检查 requiredAnyRole', () => {
+    const tool: Tool = { ...baseTool, requiredAnyRole: ['group_admin'] };
     
-    expect(canAccessTool(tool, { isGroupAdmin: true } as ToolContext)).toBe(true);
-    expect(canAccessTool(tool, { isGroupOwner: true } as ToolContext)).toBe(true);
-    expect(canAccessTool(tool, { isOwner: true } as ToolContext)).toBe(true);
+    expect(canAccessTool(tool, { roles: ['group_admin'] } as ToolContext)).toBe(true);
+    expect(canAccessTool(tool, { roles: ['group_owner'] } as ToolContext)).toBe(true);
+    expect(canAccessTool(tool, { roles: ['master'] } as ToolContext)).toBe(false);
     expect(canAccessTool(tool, {} as ToolContext)).toBe(false);
   });
 
@@ -266,28 +248,28 @@ describe('canAccessTool 函数', () => {
       ...baseTool,
       platforms: ['qq'],
       scopes: ['group'],
-      permissionLevel: 'group_admin',
+      requiredAnyRole: ['group_admin'],
     };
 
     // 全部满足
     expect(canAccessTool(tool, {
       platform: 'qq',
       scope: 'group',
-      isGroupAdmin: true,
+      roles: ['group_admin'],
     } as ToolContext)).toBe(true);
 
     // 平台不满足
     expect(canAccessTool(tool, {
       platform: 'telegram',
       scope: 'group',
-      isGroupAdmin: true,
+      roles: ['group_admin'],
     } as ToolContext)).toBe(false);
 
     // 场景不满足
     expect(canAccessTool(tool, {
       platform: 'qq',
       scope: 'private',
-      isGroupAdmin: true,
+      roles: ['group_admin'],
     } as ToolContext)).toBe(false);
 
     // 权限不满足
@@ -377,7 +359,7 @@ describe('ZhinTool 高级功能', () => {
       .param('city', { type: 'string', description: '城市' }, true)
       .platform('qq')
       .scope('group')
-      .permission('group_admin')
+      .requireAnyRole('group_admin')
       .tag('test')
       .execute(async () => '');
 
@@ -388,7 +370,7 @@ describe('ZhinTool 高级功能', () => {
     expect(json.parameters.properties).toHaveProperty('city');
     expect(json.platforms).toContain('qq');
     expect(json.scopes).toContain('group');
-    expect(json.permissionLevel).toBe('group_admin');
+    expect(json.requiredAnyRole).toEqual(['group_admin']);
     expect(json.tags).toContain('test');
     // execute 不应该在 JSON 中
     expect(json).not.toHaveProperty('execute');
@@ -425,14 +407,13 @@ describe('ZhinTool 高级功能', () => {
     expect(toolObj.platforms).toEqual(['qq', 'telegram', 'discord']);
   });
 
-  it('默认权限级别应该是 user', () => {
+  it('默认无 requiredAnyRole', () => {
     const tool = new ZhinTool('default_perm')
       .desc('默认权限')
       .execute(async () => '');
 
     const toolObj = tool.toTool();
-    // 默认 user 不会设置到 toolObj
-    expect(toolObj.permissionLevel).toBeUndefined();
+    expect(toolObj.requiredAnyRole).toBeUndefined();
   });
 });
 
@@ -550,12 +531,12 @@ describe('defineTool 高级用法', () => {
       description: '带权限',
       parameters: { type: 'object', properties: {} },
       permissions: ['admin'],
-      permissionLevel: 'bot_admin',
+      requiredAnyRole: ['trusted'],
       execute: async () => '',
     });
 
     expect(tool.permissions).toContain('admin');
-    expect(tool.permissionLevel).toBe('bot_admin');
+    expect(tool.requiredAnyRole).toEqual(['trusted']);
   });
 
   it('应该支持设置标签', () => {
@@ -610,50 +591,3 @@ describe('defineTool 高级用法', () => {
   });
 });
 
-describe('权限系统完整测试', () => {
-  it('owner 权限应该高于所有其他权限', () => {
-    expect(hasPermissionLevel('owner', 'user')).toBe(true);
-    expect(hasPermissionLevel('owner', 'group_admin')).toBe(true);
-    expect(hasPermissionLevel('owner', 'group_owner')).toBe(true);
-    expect(hasPermissionLevel('owner', 'bot_admin')).toBe(true);
-    expect(hasPermissionLevel('owner', 'owner')).toBe(true);
-  });
-
-  it('user 权限应该只能访问 user 级别工具', () => {
-    expect(hasPermissionLevel('user', 'user')).toBe(true);
-    expect(hasPermissionLevel('user', 'group_admin')).toBe(false);
-    expect(hasPermissionLevel('user', 'group_owner')).toBe(false);
-    expect(hasPermissionLevel('user', 'bot_admin')).toBe(false);
-    expect(hasPermissionLevel('user', 'owner')).toBe(false);
-  });
-
-  it('group_admin 可以访问 user 和 group_admin 级别', () => {
-    expect(hasPermissionLevel('group_admin', 'user')).toBe(true);
-    expect(hasPermissionLevel('group_admin', 'group_admin')).toBe(true);
-    expect(hasPermissionLevel('group_admin', 'group_owner')).toBe(false);
-  });
-
-  it('bot_admin 可以访问除 owner 外的所有级别', () => {
-    expect(hasPermissionLevel('bot_admin', 'user')).toBe(true);
-    expect(hasPermissionLevel('bot_admin', 'group_admin')).toBe(true);
-    expect(hasPermissionLevel('bot_admin', 'group_owner')).toBe(true);
-    expect(hasPermissionLevel('bot_admin', 'bot_admin')).toBe(true);
-    expect(hasPermissionLevel('bot_admin', 'owner')).toBe(false);
-  });
-
-  it('inferPermissionLevel 应该优先使用 senderPermissionLevel', () => {
-    expect(inferPermissionLevel({
-      senderPermissionLevel: 'owner',
-      isGroupAdmin: true,
-    } as ToolContext)).toBe('owner');
-  });
-
-  it('inferPermissionLevel 在无任何权限时返回 user', () => {
-    expect(inferPermissionLevel({
-      isGroupAdmin: false,
-      isGroupOwner: false,
-      isBotAdmin: false,
-      isOwner: false,
-    } as ToolContext)).toBe('user');
-  });
-});

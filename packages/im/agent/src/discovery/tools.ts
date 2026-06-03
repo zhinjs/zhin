@@ -9,11 +9,11 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawn } from 'node:child_process';
-import { Logger, type Plugin, type ToolParametersSchema, type ToolScope, type ToolPermissionLevel } from '@zhin.js/core';
+import { Logger, type Plugin, type ToolParametersSchema, type ToolScope, type SenderRole } from '@zhin.js/core';
 import { getDataDir } from './utils.js';
 
 const VALID_TOOL_SCOPES: readonly ToolScope[] = ['private', 'group', 'channel'];
-const VALID_TOOL_LEVELS: readonly ToolPermissionLevel[] = ['user', 'group_admin', 'group_owner', 'bot_admin', 'owner'];
+const VALID_SENDER_ROLES: readonly SenderRole[] = ['group_admin', 'group_owner', 'trusted', 'master'];
 
 function parseScopes(raw?: string[]): ToolScope[] | undefined {
   if (!raw || raw.length === 0) return undefined;
@@ -21,9 +21,10 @@ function parseScopes(raw?: string[]): ToolScope[] | undefined {
   return filtered.length > 0 ? filtered : undefined;
 }
 
-function parsePermissionLevel(raw?: string): ToolPermissionLevel | undefined {
-  if (!raw) return undefined;
-  return (VALID_TOOL_LEVELS as readonly string[]).includes(raw) ? raw as ToolPermissionLevel : undefined;
+function parseRequiredAnyRole(raw?: string | string[]): SenderRole[] | undefined {
+  const items = raw == null ? [] : Array.isArray(raw) ? raw : [raw];
+  const roles = items.filter((r): r is SenderRole => (VALID_SENDER_ROLES as readonly string[]).includes(r));
+  return roles.length > 0 ? roles : undefined;
 }
 
 const logger = new Logger(null, 'builtin-tools');
@@ -47,7 +48,7 @@ export interface ToolMeta {
   parameters?: Record<string, ToolParamShorthand>;
   platforms?: string[];
   scopes?: string[];
-  permissionLevel?: string;
+  requiredAnyRole?: string | string[];
   tags?: string[];
   keywords?: string[];
   kind?: string;
@@ -188,7 +189,7 @@ export async function discoverWorkspaceTools(root?: Plugin | null): Promise<Tool
           parameters: metadata.parameters || undefined,
           platforms: metadata.platforms,
           scopes: metadata.scopes,
-          permissionLevel: metadata.permissionLevel,
+          requiredAnyRole: metadata.requiredAnyRole,
           tags: metadata.tags || [],
           keywords: metadata.keywords || [],
           kind: metadata.kind,
@@ -318,7 +319,7 @@ export async function buildToolFromMeta(meta: ToolMeta): Promise<import('@zhin.j
     keywords: meta.keywords,
     platforms: meta.platforms,
     scopes: parseScopes(meta.scopes),
-    permissionLevel: parsePermissionLevel(meta.permissionLevel),
+    requiredAnyRole: parseRequiredAnyRole(meta.requiredAnyRole),
     hidden: meta.hidden,
     preExecutable: meta.preExecutable,
     kind: meta.kind,

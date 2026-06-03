@@ -4,7 +4,7 @@
 import './types.js';
 import {
   getPlugin,
-  inferSenderPermissions,
+  resolveSenderRoles,
   isAtBot,
   mergeAITriggerConfig,
   Message,
@@ -88,23 +88,22 @@ export function registerAITrigger(refs: AIServiceRefs): void {
       const t0 = performance.now();
       if (!ai.isReady()) {
         logger.warn(formatCompactLog('AI Handler', { skip: 'not_ready', bot: message.$bot }));
+        await replyOutbound('AI 服务未就绪，请检查 zhin.config.yml 中的 providers 配置。');
+        return;
+      }
+      if (!refs.zhinAgent) {
+        logger.warn(formatCompactLog('AI Handler', { skip: 'no_zhin_agent', bot: message.$bot }));
+        await replyOutbound('AI Agent 未初始化，请查看启动日志。');
         return;
       }
       if (triggerConfig.thinkingMessage)
         await replyOutbound(triggerConfig.thinkingMessage);
 
-      const permissions = inferSenderPermissions(message, triggerConfig);
-
-      // 从 bot 配置中查找 owner（bots[].owner）
       const adapterInstance = root.inject(message.$adapter) as
         | { bots?: Map<string, { $config?: Record<string, any> }> }
         | undefined;
       const botConfig = adapterInstance?.bots?.get(message.$bot)?.$config as Record<string, any> | undefined;
-      const botOwner: string | undefined = botConfig?.owner;
-
-      // 用 bot 级别 owner 覆盖权限判断
-      const isOwner = botOwner ? String(message.$sender.id) === String(botOwner) : permissions.isOwner;
-      const permissionLevel = isOwner ? 'owner' as const : permissions.permissionLevel;
+      const { scope, roles } = resolveSenderRoles(message, triggerConfig, botConfig);
 
       const toolContext: ToolContext = {
         platform: message.$adapter,
@@ -113,13 +112,9 @@ export function registerAITrigger(refs: AIServiceRefs): void {
         sceneId: message.$channel?.id || message.$sender.id,
         senderId: message.$sender.id,
         message,
-        scope: permissions.scope,
-        senderPermissionLevel: permissionLevel,
-        isGroupAdmin: permissions.isGroupAdmin,
-        isGroupOwner: permissions.isGroupOwner,
-        isBotAdmin: isOwner || permissions.isBotAdmin,
-        isOwner,
-        fileRole: inferFileRole({ isOwner, isBotAdmin: isOwner || permissions.isBotAdmin, isGroupOwner: permissions.isGroupOwner, isGroupAdmin: permissions.isGroupAdmin, senderPermissionLevel: permissionLevel }),
+        scope,
+        roles,
+        fileRole: inferFileRole({ roles }),
         extra: {
           [SUBAGENT_GOAL_NOTIFY_EXTRA_KEY]: async (goal: string) => {
             await replyOutbound(formatSubagentProcessingMessage(goal));
@@ -145,9 +140,6 @@ export function registerAITrigger(refs: AIServiceRefs): void {
         // 每轮 LLM 调用在 Agent 内部已有 turnTimeout（来自 triggerConfig.timeout），
         // 这里不再设置全局超时，避免多轮工具调用被不合理地截断。
 
-        if (!refs.zhinAgent) {
-          throw new Error('ZhinAgent is not initialized');
-        }
         let mediaParts = extractMediaParts(message);
         if (message.$quote_id && triggerConfig.resolveQuotedMessages) {
           const quoted = await resolveQuotedMessagePayload(message, root, {

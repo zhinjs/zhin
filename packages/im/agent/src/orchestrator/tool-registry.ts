@@ -15,20 +15,18 @@ import type {
   ResourceScope,
   Tool,
   ToolContext,
-  ToolPermissionLevel,
+  SenderRole,
   ToolParametersSchema,
   PropertySchema,
   ToolScope,
 } from './types.js';
 import {
   canAccessTool,
-  hasPermissionLevel,
-  inferPermissionLevel,
   sharedToolSelection,
   type ToolLike,
 } from './tool-selection.js';
 
-export { canAccessTool, hasPermissionLevel, inferPermissionLevel } from './tool-selection.js';
+export { canAccessTool } from './tool-selection.js';
 export type { ToolLike } from './tool-selection.js';
 
 // ============================================================================
@@ -50,7 +48,7 @@ export class ZhinTool {
   #execute?: (args: Record<string, any>, context?: ToolContext) => MaybePromise<any>;
   #platforms: string[] = [];
   #scopes: ToolScope[] = [];
-  #permissionLevel: ToolPermissionLevel = 'user';
+  #requiredAnyRole: SenderRole[] = [];
   #permissions: string[] = [];
   #tags: string[] = [];
   #keywords: string[] = [];
@@ -76,7 +74,7 @@ export class ZhinTool {
 
   platform(...platforms: string[]): this { this.#platforms.push(...platforms); return this; }
   scope(...scopes: ToolScope[]): this { this.#scopes.push(...scopes); return this; }
-  permission(level: ToolPermissionLevel): this { this.#permissionLevel = level; return this; }
+  requireAnyRole(...roles: SenderRole[]): this { this.#requiredAnyRole = [...roles]; return this; }
   permit(...permissions: string[]): this { this.#permissions.push(...permissions); return this; }
   tag(...tags: string[]): this { this.#tags.push(...tags); return this; }
   keyword(...keywords: string[]): this { this.#keywords.push(...keywords); return this; }
@@ -114,7 +112,7 @@ export class ZhinTool {
     };
     if (this.#platforms.length > 0) tool.platforms = this.#platforms;
     if (this.#scopes.length > 0) tool.scopes = this.#scopes;
-    if (this.#permissionLevel !== 'user') tool.permissionLevel = this.#permissionLevel;
+    if (this.#requiredAnyRole.length > 0) tool.requiredAnyRole = [...this.#requiredAnyRole];
     if (this.#permissions.length > 0) tool.permissions = this.#permissions;
     if (this.#tags.length > 0) tool.tags = this.#tags;
     if (this.#hidden) tool.hidden = this.#hidden;
@@ -133,7 +131,7 @@ export class ZhinTool {
     };
     if (this.#platforms.length > 0) json.platforms = this.#platforms;
     if (this.#scopes.length > 0) json.scopes = this.#scopes;
-    if (this.#permissionLevel !== 'user') json.permissionLevel = this.#permissionLevel;
+    if (this.#requiredAnyRole.length > 0) json.requiredAnyRole = [...this.#requiredAnyRole];
     if (this.#tags.length > 0) json.tags = this.#tags;
     return json;
   }
@@ -148,7 +146,7 @@ export class ZhinTool {
         lines.push(`    ${p.name}: ${p.schema.type} ${req} ${p.schema.description || ''}`);
       }
     }
-    if (this.#permissionLevel !== 'user') lines.push(`  权限: ${this.#permissionLevel}`);
+    if (this.#requiredAnyRole.length > 0) lines.push(`  角色: ${this.#requiredAnyRole.join(', ')}`);
     if (this.#platforms.length > 0) lines.push(`  平台: ${this.#platforms.join(', ')}`);
     if (this.#scopes.length > 0) lines.push(`  场景: ${this.#scopes.join(', ')}`);
     return lines.join('\n');

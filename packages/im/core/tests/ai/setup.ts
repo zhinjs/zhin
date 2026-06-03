@@ -103,7 +103,7 @@ export interface MockToolOptions {
   required?: string[];
   platforms?: string[];
   scopes?: ('group' | 'private' | 'guild')[];
-  permissionLevel?: 'user' | 'group_admin' | 'group_owner' | 'bot_admin' | 'owner';
+  requiredAnyRole?: import('@zhin.js/core').SenderRole[];
   tags?: string[];
   keywords?: string[];
   executeResult?: any;
@@ -118,7 +118,7 @@ export const createMockTool = (options: MockToolOptions): Tool => {
     required = [],
     platforms,
     scopes,
-    permissionLevel,
+    requiredAnyRole,
     tags = [],
     keywords = [],
     executeResult = 'success',
@@ -143,7 +143,7 @@ export const createMockTool = (options: MockToolOptions): Tool => {
     },
     platforms,
     scopes,
-    permissionLevel,
+    requiredAnyRole,
     tags,
     execute: executeError
       ? vi.fn().mockRejectedValue(executeError)
@@ -213,7 +213,7 @@ export const createMockProvider = (options: MockProviderOptions = {}) => {
 export const createToolContext = (options: Partial<ToolContext> = {}): ToolContext => ({
   platform: 'test',
   scope: 'group',
-  permissionLevel: 'user',
+  roles: ['user'],
   ...options,
 });
 

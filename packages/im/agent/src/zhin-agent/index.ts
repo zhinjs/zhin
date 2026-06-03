@@ -22,9 +22,17 @@ import type { AIProvider, AgentTool, ContentPart, Usage } from '@zhin.js/ai';
 import type { Tool, ToolContext } from '../orchestrator/types.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { AgentOrchestrator } from '../orchestrator/index.js';
-import { SessionManager, createMemorySessionManager } from '@zhin.js/ai';
-import type { ContextManager } from '@zhin.js/ai';
-import { ConversationMemory } from '@zhin.js/ai';
+import {
+  createMemorySessionManager,
+  resolveIMSessionIdFromToolContext,
+  type SessionManager,
+} from '@zhin.js/ai';
+import type { ChatHistoryContext } from '@zhin.js/ai';
+import {
+  ConversationMemory,
+  MemoryIMSessionStore,
+  type IMSessionStore,
+} from '@zhin.js/ai';
 import type { OutputElement } from '@zhin.js/ai';
 import { type ZhinAgentTurnMetrics } from './turn-metrics.js';
 import { TurnTracker } from './turn-tracker.js';
@@ -43,6 +51,7 @@ import {
 } from './config.js';
 import { DeferredWorkerRunner } from '../deferred-worker-runner.js';
 import { processTextTurn, processMultimodalTurn } from './turn-pipeline.js';
+import { formatUserContentForSession } from './session-io.js';
 import { asPrivate } from './zhin-agent-private.js';
 import { buildDisciplinedPrompt as assembleDisciplinedPrompt } from './prompt-assembly.js';
 import {
@@ -69,7 +78,8 @@ export class ZhinAgent {
   private skillRegistry: SkillRegistry | null = null;
   private orchestrator: AgentOrchestrator | null = null;
   private sessions: SessionManager;
-  private contextManager: ContextManager | null = null;
+  private chatHistory: ChatHistoryContext | null = null;
+  private imSessionStore: IMSessionStore | MemoryIMSessionStore = new MemoryIMSessionStore();
   private memory: ConversationMemory;
   private externalTools: Map<string, AgentTool> = new Map();
   private userProfiles: UserProfileStore;
@@ -85,6 +95,9 @@ export class ZhinAgent {
   private readonly deferredWorkerRunner = new DeferredWorkerRunner();
   private lastToolSearchDeferredStats?: string;
   private readonly turnTracker: TurnTracker;
+  private memoryPersistenceReady: Promise<void>;
+  private resolveMemoryPersistenceReady!: () => void;
+  private memoryPersistenceDone = false;
   private get phaseConfig(): PhaseTraceConfig {
     return { phaseTraceEnabled: this.phaseTraceEnabled, onPhaseTrace: this.config.onPhaseTrace };
   }
@@ -93,6 +106,9 @@ export class ZhinAgent {
     this.provider = provider;
     this.config = { ...DEFAULT_CONFIG, ...config } as Required<ZhinAgentConfig>;
     this.phaseTraceEnabled = isPhaseTraceEnabled(this.config);
+    this.memoryPersistenceReady = new Promise<void>((resolve) => {
+      this.resolveMemoryPersistenceReady = resolve;
+    });
     this.sessions = createMemorySessionManager();
     this.memory = new ConversationMemory({
       minTopicRounds: this.config.minTopicRounds,
@@ -104,6 +120,8 @@ export class ZhinAgent {
     this.userProfiles = new UserProfileStore();
     this.rateLimiter = new RateLimiter(this.config.rateLimit);
     this.turnTracker = new TurnTracker(this.config.subagentTurnWaitMs);
+    // 默认可用内存会话；DB 注入后由 bootstrap 覆盖 store，不阻塞单测与首条消息
+    this.markMemoryPersistenceReady();
   }
 
   // ── DI setters ──────────────────────────────────────────────────────
@@ -123,9 +141,12 @@ export class ZhinAgent {
     this.sessions = manager;
   }
 
-  setContextManager(manager: ContextManager): void {
-    this.contextManager = manager;
-    manager.setAIProvider(this.provider);
+  setChatHistory(history: ChatHistoryContext): void {
+    this.chatHistory = history;
+  }
+
+  setIMSessionStore(store: IMSessionStore): void {
+    this.imSessionStore = store;
   }
 
   setModelRegistry(registry: ModelRegistry): void {
@@ -137,8 +158,35 @@ export class ZhinAgent {
     this.emitter.setHostPlugin(plugin);
   }
 
-  upgradeMemoryToDatabase(msgModel: any, sumModel: any): void {
-    this.memory.upgradeToDatabase(msgModel, sumModel);
+  /** @deprecated 消息事实源已迁至 chat_messages，保留空实现以兼容旧 bootstrap */
+  async upgradeMemoryToDatabase(_msgModel: unknown, _sumModel: unknown): Promise<void> {
+    return;
+  }
+
+  /** 等待 DB store 注入（bootstrap 会 mark；已 mark 时立即返回） */
+  async waitForMemoryPersistence(): Promise<void> {
+    if (this.memoryPersistenceDone) return;
+    const timeoutMs = process.env.NODE_ENV === 'test' ? 50 : 5_000;
+    await Promise.race([
+      this.memoryPersistenceReady,
+      new Promise<void>((resolve) => {
+        setTimeout(() => {
+          if (!this.memoryPersistenceDone) {
+            logger.warn(
+              'waitForMemoryPersistence: timeout, proceeding with in-memory session/history',
+            );
+            this.markMemoryPersistenceReady();
+          }
+          resolve();
+        }, timeoutMs);
+      }),
+    ]);
+  }
+
+  markMemoryPersistenceReady(): void {
+    if (this.memoryPersistenceDone) return;
+    this.memoryPersistenceDone = true;
+    this.resolveMemoryPersistenceReady?.();
   }
 
   upgradeProfilesToDatabase(model: any): void {
@@ -157,11 +205,15 @@ export class ZhinAgent {
       onSubagentUsage: (usage) => this.turnTracker.addSubagentUsage(usage),
       registerSubagentTask: (done) => this.turnTracker.trackSubagent(done),
       onEvent: (event) => {
-        const sessionId = SessionManager.generateId(
-          event.origin.platform || '',
-          event.origin.senderId || '',
-          event.origin.sceneId,
-        );
+        const sessionId = resolveIMSessionIdFromToolContext({
+          platform: event.origin.platform,
+          botId: event.origin.botId,
+          scope: event.origin.sceneType === 'group' || event.origin.sceneType === 'channel'
+            ? event.origin.sceneType
+            : 'private',
+          sceneId: event.origin.sceneId,
+          senderId: event.origin.senderId,
+        });
         const payload = this.emitter.createPayload(sessionId, {
           platform: event.origin.platform,
           botId: event.origin.botId,
@@ -271,6 +323,23 @@ export class ZhinAgent {
   }
 
   // ── Core processing ─────────────────────────────────────────────────
+
+  /** 旁听由 zhin `message.receive` 写入 chat_messages，此处保留空实现 */
+  async appendPassiveGroupChatter(_context: ToolContext, _rawContent: string): Promise<void> {
+    return;
+  }
+
+  /** 归档当前场景 active 会话（/new、ai.clear）；下次 @ 将创建新 session 纪元 */
+  async archiveSessionForContext(context: ToolContext): Promise<boolean> {
+    const sessionKey = resolveIMSessionIdFromToolContext({
+      platform: context.platform,
+      botId: context.botId,
+      scope: context.scope,
+      sceneId: context.sceneId,
+      senderId: context.senderId,
+    });
+    return this.imSessionStore.archiveByKey(sessionKey);
+  }
 
   async process(
     content: string,

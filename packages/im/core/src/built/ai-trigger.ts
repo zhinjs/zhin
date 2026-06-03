@@ -3,20 +3,27 @@
  * 提供 AI 触发相关的工具函数，可在插件中直接使用
  * 
  * 触发方式：
- * 1. @机器人 - 在群聊中 @ 机器人触发
- * 2. 前缀触发 - 使用配置的前缀（如 # 或 AI:）
+ * 1. @机器人 - 群/频道共享会话中**仅** @ 触发 AI（前缀/关键词不在群内触发）
+ * 2. 前缀触发 - 私聊等单人会话使用配置的前缀（如 # 或 AI:）
  * 3. 私聊直接对话 - 私聊时直接对话
- * 4. 关键词触发 - 包含特定关键词时触发
+ * 4. 关键词触发 - 非群/频道场景下匹配关键词时触发
  */
 
 import { Message } from "../message.js";
 import type { 
   MessageElement,
   ToolScope,
-  ToolPermissionLevel,
   MaybePromise, 
 } from "../types.js";
 import { segment } from "../utils.js";
+import {
+  resolveIMSessionId,
+  type IMSessionScope,
+} from '@zhin.js/ai';
+import {
+  type SenderRole,
+  normalizeSenderRoles,
+} from './roles.js';
 
 // ============================================================================
 // 类型定义
@@ -53,11 +60,11 @@ export interface AITriggerConfig {
   /** 错误消息模板 */
   errorTemplate?: string;
   
-  /** Zhin 拥有者 ID 列表 */
-  owners?: string[];
-  
-  /** 机器人管理员 ID 列表 */
-  botAdmins?: string[];
+  /** 全局 master（trigger 级，赋予 master 角色） */
+  masters?: string[];
+
+  /** 全局 trusted（trigger 级） */
+  trusted?: string[];
 
   /** 是否在 AI 入参前拉取 $quote_id 对应消息正文（默认 true） */
   resolveQuotedMessages?: boolean;
@@ -77,16 +84,10 @@ export interface AITriggerOptions {
   botAtIds?: string[];
 }
 
-/**
- * 发送者权限信息
- */
-export interface SenderPermissions {
+/** 发送者角色解析结果 */
+export interface SenderRolesResult {
   scope: ToolScope;
-  isGroupAdmin: boolean;
-  isGroupOwner: boolean;
-  isBotAdmin: boolean;
-  isOwner: boolean;
-  permissionLevel: ToolPermissionLevel;
+  roles: SenderRole[];
 }
 
 // ============================================================================
@@ -103,8 +104,8 @@ export const DEFAULT_AI_TRIGGER_CONFIG: Required<AITriggerConfig> = {
   timeout: 60000,
   thinkingMessage: '',
   errorTemplate: '❌ AI 处理失败: {error}',
-  owners: [],
-  botAdmins: [],
+  masters: [],
+  trusted: [],
   resolveQuotedMessages: true,
 };
 
@@ -231,46 +232,79 @@ export function removeAtBot<T extends object>(
     .filter((seg): seg is MessageElement => seg != null);
 }
 
+function normalizeBotIdList(input: unknown): string[] {
+  if (Array.isArray(input)) return input.map((v) => String(v)).filter(Boolean);
+  if (typeof input === 'string') {
+    return input.split(/[\s,]+/).map((v) => v.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+/** Bot 配置（adapter bots[].$config） */
+export interface BotConfigRoles {
+  master?: unknown;
+  trusted?: unknown;
+}
+
+function collectBotTrustedIds(botConfig?: BotConfigRoles | null): string[] {
+  if (!botConfig) return [];
+  return normalizeBotIdList(botConfig.trusted);
+}
+
 /**
- * 从消息中推断发送者的权限级别
+ * 解析发送者角色集合（IM 群角色 + trigger + bots[].$config）
  */
-export function inferSenderPermissions<T extends object>(
+export function resolveSenderRoles<T extends object>(
   message: Message<T>,
-  config: AITriggerConfig
-): SenderPermissions {
-  const scope: ToolScope = message.$channel?.type as ToolScope || 'private';
-  const senderId = message.$sender.id;
+  config: AITriggerConfig,
+  botConfig?: BotConfigRoles | Record<string, unknown> | null,
+): SenderRolesResult {
+  const scope: ToolScope = (message.$channel?.type as ToolScope) || 'private';
+  const senderId = String(message.$sender.id);
   const senderPermissions = message.$sender.permissions || [];
-  
-  const owners = config.owners || [];
-  const isOwner = owners.includes(senderId);
-  
-  const botAdmins = config.botAdmins || [];
-  const isBotAdmin = isOwner || botAdmins.includes(senderId);
-  
-  const isGroupOwner = senderPermissions.includes('owner') || 
-                       senderPermissions.includes('group_owner') ||
-                       message.$sender?.role === 'owner';
-  
-  const isGroupAdmin = isGroupOwner || 
-                       senderPermissions.includes('admin') || 
-                       senderPermissions.includes('group_admin') ||
-                       message.$sender?.role === 'admin';
-  
-  let permissionLevel: ToolPermissionLevel = 'user';
-  if (isOwner) permissionLevel = 'owner';
-  else if (isBotAdmin) permissionLevel = 'bot_admin';
-  else if (isGroupOwner) permissionLevel = 'group_owner';
-  else if (isGroupAdmin) permissionLevel = 'group_admin';
-  
+  const roles: SenderRole[] = [];
+
+  const masters = config.masters || [];
+  const globalTrusted = config.trusted || [];
+  const cfg = botConfig as BotConfigRoles | undefined;
+  const botMaster = cfg?.master != null ? String(cfg.master) : undefined;
+  const botTrustedIds = collectBotTrustedIds(cfg);
+
+  if (masters.includes(senderId) || (botMaster != null && senderId === botMaster)) {
+    roles.push('master');
+  } else if (globalTrusted.includes(senderId) || botTrustedIds.includes(senderId)) {
+    roles.push('trusted');
+  }
+
+  const isGroupOwner = senderPermissions.includes('owner')
+    || senderPermissions.includes('group_owner')
+    || message.$sender?.role === 'owner';
+  const isGroupAdmin = isGroupOwner
+    || senderPermissions.includes('admin')
+    || senderPermissions.includes('group_admin')
+    || message.$sender?.role === 'admin';
+
+  if (isGroupOwner) roles.push('group_owner');
+  else if (isGroupAdmin) roles.push('group_admin');
+
   return {
     scope,
-    isGroupAdmin,
-    isGroupOwner,
-    isBotAdmin,
-    isOwner,
-    permissionLevel,
+    roles: normalizeSenderRoles(roles),
   };
+}
+
+/** 从 IM 消息生成 sessionId（platform:botId:type:sceneId） */
+export function resolveIMSessionIdFromMessage<T extends object>(message: Message<T>): string {
+  const scope = (message.$channel?.type || 'private') as IMSessionScope;
+  const sceneId = scope === 'private'
+    ? String(message.$sender.id)
+    : String(message.$channel?.id || message.$sender.id);
+  return resolveIMSessionId({
+    platform: message.$adapter,
+    botId: message.$bot,
+    scope,
+    sceneId,
+  });
 }
 
 /**
@@ -289,6 +323,8 @@ export function shouldTriggerAI<T extends object>(
   }
   
   const text = extractTextContent(message);
+  const scope = (message.$channel?.type as ToolScope) || 'private';
+  const isSharedSession = scope === 'group' || scope === 'channel';
   
   // 检查忽略前缀
   for (const prefix of fullConfig.ignorePrefixes) {
@@ -297,14 +333,16 @@ export function shouldTriggerAI<T extends object>(
     }
   }
   
-  // 1. 检查前缀触发
-  for (const prefix of fullConfig.prefixes) {
-    if (text.startsWith(prefix)) {
-      return { triggered: true, content: text.slice(prefix.length).trim() };
+  // 1. 前缀触发（群/频道共享 session 不走此前缀，仅 @ 触发 AI）
+  if (!isSharedSession) {
+    for (const prefix of fullConfig.prefixes) {
+      if (text.startsWith(prefix)) {
+        return { triggered: true, content: text.slice(prefix.length).trim() };
+      }
     }
   }
   
-  // 2. 检查 @ 触发（仅 @ 无正文时也触发，由 Agent 处理空输入）
+  // 2. 检查 @ 触发（群/频道主路径；仅 @ 无正文时也触发，由 Agent 处理空输入）
   if (fullConfig.respondToAt && isAtBot(message, botAtIds)) {
     const content = removeAtBot(message, botAtIds);
     return {
@@ -320,8 +358,8 @@ export function shouldTriggerAI<T extends object>(
     }
   }
   
-  // 4. 检查关键词触发
-  if (fullConfig.keywords.length > 0) {
+  // 4. 关键词触发（群/频道不启用，避免旁听消息误触发）
+  if (!isSharedSession && fullConfig.keywords.length > 0) {
     const lowerText = text.toLowerCase();
     for (const keyword of fullConfig.keywords) {
       if (lowerText.includes(keyword.toLowerCase())) {

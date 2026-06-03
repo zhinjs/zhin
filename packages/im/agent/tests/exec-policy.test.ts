@@ -72,7 +72,7 @@ function makeConfig(overrides: Partial<ZhinAgentConfig> = {}): Required<ZhinAgen
 }
 
 function makeRootPluginForIcqqExec(adapterName: string): Plugin {
-  const bots = new Map([['bot1', { $config: { owner: 'owner99' } }]]);
+  const bots = new Map([['bot1', { $config: { master: 'owner99' } }]]);
   const p = {
     inject: vi.fn((name: string) => {
       if (name === adapterName) return { bots };
@@ -83,8 +83,8 @@ function makeRootPluginForIcqqExec(adapterName: string): Plugin {
   return p;
 }
 
-function makeRootPluginWithOwnerAdmins(adapterName: string, owner = 'owner99', admins: string[] = ['admin42']): Plugin {
-  const bots = new Map([['bot1', { $config: { owner, admins } }]]);
+function makeRootPluginWithOwnerAdmins(adapterName: string, master = 'owner99', trusted: string[] = ['admin42']): Plugin {
+  const bots = new Map([['bot1', { $config: { master, trusted } }]]);
   const p = {
     inject: vi.fn((name: string) => {
       if (name === adapterName) return { bots };

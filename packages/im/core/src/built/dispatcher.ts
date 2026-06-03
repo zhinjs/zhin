@@ -113,6 +113,11 @@ export type CommandMatcher = (text: string, message: Message<any>) => boolean;
  */
 export type AITriggerMatcher = (message: Message<any>) => { triggered: boolean; content: string };
 
+/**
+ * 群/频道未触发 AI 时的旁听写入（由 Agent 注册；仅写 session 上下文，不回复）
+ */
+export type GroupPassiveContextHandler = (message: Message<any>) => MaybePromise<void>;
+
 export type GuardrailMiddleware = MessageMiddleware<RegisteredAdapter>;
 
 /** @alias OutboundReplySource：出站回复来源（指令 / AI） */
@@ -142,6 +147,9 @@ export interface MessageDispatcherService {
   setAITriggerMatcher(matcher: AITriggerMatcher): void;
 
   setAIHandler(handler: AIHandler): void;
+
+  /** 群/频道消息未走 AI 时写入共享 session（如未 @ 的闲聊） */
+  setGroupPassiveContextHandler(handler: GroupPassiveContextHandler | null): void;
 
   hasAIHandler(): boolean;
 
@@ -204,6 +212,7 @@ export function createMessageDispatcher(
   const pendingOutboundPolish: OutboundPolishMiddleware[] = [];
   let aiHandler: AIHandler | null = null;
   let aiTriggerMatcher: AITriggerMatcher | null = null;
+  let groupPassiveContextHandler: GroupPassiveContextHandler | null = null;
   let commandMatcher: CommandMatcher | null = null;
   let rootPlugin: Plugin | null = null;
   let dualRoute = resolveDualRouteConfig(options?.dualRoute);
@@ -363,6 +372,17 @@ export function createMessageDispatcher(
     );
   }
 
+  async function maybeRecordGroupPassiveContext(message: Message<any>): Promise<void> {
+    if (!groupPassiveContextHandler) return;
+    const scope = message.$channel?.type;
+    if (scope !== 'group' && scope !== 'channel') return;
+    try {
+      await groupPassiveContextHandler(message);
+    } catch {
+      // 旁听写入失败不影响主链路
+    }
+  }
+
   async function runCommandBranch(message: Message<any>): Promise<void> {
     if (!rootPlugin) return;
     const commandService = rootPlugin.inject('command');
@@ -390,6 +410,7 @@ export function createMessageDispatcher(
             if (aiHandler) await aiHandler(message, result.content);
             break;
           default:
+            await maybeRecordGroupPassiveContext(message);
             break;
         }
         return;
@@ -401,6 +422,7 @@ export function createMessageDispatcher(
       let wantAi = aiRes.triggered;
 
       if (!wantCmd && !wantAi) {
+        await maybeRecordGroupPassiveContext(message);
         return;
       }
 
@@ -443,6 +465,10 @@ export function createMessageDispatcher(
 
     setAIHandler(handler: AIHandler) {
       aiHandler = handler;
+    },
+
+    setGroupPassiveContextHandler(handler: GroupPassiveContextHandler | null) {
+      groupPassiveContextHandler = handler;
     },
 
     hasAIHandler() {

@@ -59,6 +59,8 @@ export const AI_MESSAGE_MODEL = {
   content: { type: 'text' as const, nullable: false },
   round: { type: 'integer' as const, nullable: false },
   created_at: { type: 'integer' as const, default: 0 },
+  sender_id: { type: 'text' as const, default: '' },
+  sender_roles: { type: 'text' as const, default: '' },
 };
 
 /** ai_summaries 表结构（链式） */
@@ -67,6 +69,7 @@ export const AI_SUMMARY_MODEL = {
   parent_id: { type: 'integer' as const, nullable: true },
   from_round: { type: 'integer' as const, nullable: false },
   to_round: { type: 'integer' as const, nullable: false },
+  anchor_message_id: { type: 'text' as const, default: '' },
   summary: { type: 'text' as const, nullable: false },
   created_at: { type: 'integer' as const, default: 0 },
 };
@@ -82,6 +85,13 @@ interface MessageRecord {
   content: string;
   round: number;
   created_at: number;
+  sender_id?: string;
+  sender_roles?: string;
+}
+
+export interface SaveRoundMeta {
+  senderId?: string;
+  senderRoles?: readonly string[];
 }
 
 interface SummaryRecord {
@@ -90,6 +100,7 @@ interface SummaryRecord {
   parent_id: number | null;
   from_round: number;
   to_round: number;
+  anchor_message_id?: string;
   summary: string;
   created_at: number;
 }
@@ -227,6 +238,21 @@ class MemoryStore implements IStore {
       else this.summaries.set(sid, kept);
     }
     return deleted;
+  }
+
+  /** 将进程内缓存刷入目标 store（DB 升级时避免丢失旁听/早到的轮次） */
+  async flushTo(target: IStore): Promise<void> {
+    for (const list of this.messages.values()) {
+      for (const record of list) {
+        await target.addMessage(record);
+      }
+    }
+    for (const list of this.summaries.values()) {
+      for (const summary of list) {
+        const { id: _id, ...rest } = summary;
+        await target.addSummary(rest);
+      }
+    }
   }
 
   dispose(): void {
@@ -413,11 +439,21 @@ export class ConversationMemory {
     this.provider = provider;
   }
 
-  upgradeToDatabase(msgModel: DbModel, sumModel: DbModel): void {
+  async upgradeToDatabase(msgModel: DbModel, sumModel: DbModel): Promise<void> {
     const old = this.store;
-    this.store = new DatabaseStore(msgModel, sumModel);
+    const next = new DatabaseStore(msgModel, sumModel);
+    if (old instanceof MemoryStore) {
+      await old.flushTo(next);
+    }
+    this.store = next;
     old.dispose();
     logger.debug('ConversationMemory: upgraded to database storage');
+  }
+
+  /** 是否已有持久化对话行（ai_messages 或升级前的内存缓存） */
+  async hasStoredMessages(sessionId: string): Promise<boolean> {
+    const maxRound = this.roundCache.get(sessionId) ?? await this.store.getMaxRound(sessionId);
+    return maxRound > 0;
   }
 
   // ── 写入 ──
@@ -429,6 +465,7 @@ export class ConversationMemory {
     sessionId: string,
     userContent: string,
     assistantContent: string,
+    meta?: SaveRoundMeta,
   ): Promise<void> {
     this.lastAccess.set(sessionId, Date.now());
     this.pruneStaleSessionCaches();
@@ -450,6 +487,8 @@ export class ConversationMemory {
       content: userContent,
       round: currentRound,
       created_at: ts,
+      sender_id: meta?.senderId ?? '',
+      sender_roles: meta?.senderRoles?.length ? JSON.stringify(meta.senderRoles) : '',
     });
     await this.store.addMessage({
       session_id: sessionId,
@@ -461,6 +500,36 @@ export class ConversationMemory {
 
     // 话题切换检测 + 异步摘要
     this.handleTopicAndSummary(sessionId, userContent, currentRound);
+  }
+
+  /**
+   * 群/频道共享 session：记录未 @ 机器人的用户发言（仅 user 行，不触发话题摘要 LLM）。
+   */
+  async appendPassiveGroupUserMessage(
+    sessionId: string,
+    userContent: string,
+    meta?: SaveRoundMeta,
+  ): Promise<void> {
+    const text = userContent.trim();
+    if (!text) return;
+
+    this.lastAccess.set(sessionId, Date.now());
+    this.pruneStaleSessionCaches();
+
+    let round = this.roundCache.get(sessionId) ?? await this.store.getMaxRound(sessionId);
+    if (!Number.isFinite(round) || round < 0) round = 0;
+    round += 1;
+    this.roundCache.set(sessionId, round);
+
+    await this.store.addMessage({
+      session_id: sessionId,
+      role: 'user',
+      content: text,
+      round,
+      created_at: Date.now(),
+      sender_id: meta?.senderId ?? '',
+      sender_roles: meta?.senderRoles?.length ? JSON.stringify(meta.senderRoles) : '',
+    });
   }
 
   // ── 话题检测 + 摘要触发 ──

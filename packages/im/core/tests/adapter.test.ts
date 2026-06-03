@@ -325,6 +325,30 @@ describe('Adapter Core Functionality', () => {
         }))
       })
 
+      it('should dispatch message.send after successful $sendMessage', async () => {
+        const config = [{ id: 'bot1' }]
+        const adapter = new MockAdapter(plugin, 'test', config)
+        await adapter.start()
+
+        const payloads: Array<{ messageId: string; adapter: string }> = []
+        plugin.root.on('message.send', (payload) => {
+          payloads.push({ messageId: payload.messageId, adapter: payload.adapter })
+        })
+
+        const bot = adapter.bots.get('bot1')!
+        vi.spyOn(bot, '$sendMessage').mockResolvedValue('mid-42')
+
+        await adapter.sendMessage({
+          context: 'test',
+          bot: 'bot1',
+          content: 'Hello',
+          id: 'channel-id',
+          type: 'text' as const,
+        })
+
+        expect(payloads).toEqual([{ messageId: 'mid-42', adapter: 'test' }])
+      })
+
       it('should handle multiple before.sendMessage handlers', async () => {
         const config = [{ id: 'bot1' }]
         const adapter = new MockAdapter(plugin, 'test', config)

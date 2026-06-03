@@ -7,7 +7,7 @@ function countSection(prompt: string, heading: string): number {
 }
 
 describe('buildRichSystemPrompt section dedup', () => {
-  it('默认 persona 下只注入一次精简 Context / Safety 段', () => {
+  it('toolSearch 下只注入一次 Runtime / Security / Orchestration 段', () => {
     const prompt = buildRichSystemPrompt({
       config: { ...DEFAULT_CONFIG, toolSearch: true },
       skillRegistry: null,
@@ -17,8 +17,10 @@ describe('buildRichSystemPrompt section dedup', () => {
       toolSearchDeferredStats: 'other(9), github(8)',
       platformSections: '## icqq / QQ\n\nhint',
     });
-    expect(countSection(prompt, 'Context')).toBe(1);
-    expect(countSection(prompt, 'Safety')).toBe(1);
+    expect(countSection(prompt, 'Runtime')).toBe(1);
+    expect(countSection(prompt, 'Security')).toBe(1);
+    expect(countSection(prompt, 'Orchestration')).toBe(1);
+    expect(countSection(prompt, 'Deferred Tools')).toBe(0);
     expect(countSection(prompt, 'Environment')).toBe(0);
     expect(countSection(prompt, 'System')).toBe(0);
   });
@@ -45,6 +47,6 @@ describe('buildRichSystemPrompt section dedup', () => {
     });
     expect(countSection(prompt, 'Environment')).toBe(1);
     expect(countSection(prompt, 'System')).toBe(1);
-    expect(countSection(prompt, 'Context')).toBe(1);
+    expect(countSection(prompt, 'Runtime')).toBe(1);
   });
 });
