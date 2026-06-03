@@ -18,6 +18,7 @@ packages/
     client/
   toolkit/      # 脚手架与独立库
     create-zhin/
+    scaffold-wizard/   # 共享项目配置向导（create-zhin-app + zhin setup）
     satori/
   host/         # Host 运行时（router、api、mcp）
     router/

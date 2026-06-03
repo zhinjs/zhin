@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { BASE_SKILL_NAMES, DEV_SKILL_NAMES, createWorkspace } from '../src/workspace'
+import { MCP_SDK_VERSION } from '@zhin.js/scaffold-wizard'
 import type { InitOptions } from '../src/types'
 
 const tmpRoots: string[] = []
@@ -81,5 +82,17 @@ describe('createWorkspace', () => {
     expect(await fs.pathExists(path.join(projectPath, 'zhin.config.json'))).toBe(true)
     expect(readme).toContain('zhin.config.json')
     expect(client).toContain('zhin.config.json')
+  })
+
+  it('writes MCP SDK into package.json when AI is enabled', async () => {
+    const projectPath = await makeProject({
+      ai: {
+        enabled: true,
+        defaultProvider: 'ollama',
+        providers: { ollama: { host: 'http://127.0.0.1:11434' } },
+      },
+    })
+    const pkg = await fs.readJson(path.join(projectPath, 'package.json'))
+    expect(pkg.dependencies['@modelcontextprotocol/sdk']).toBe(MCP_SDK_VERSION)
   })
 })

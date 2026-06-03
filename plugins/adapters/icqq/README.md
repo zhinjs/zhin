@@ -1,11 +1,11 @@
 # @zhin.js/adapter-icqq
 
-Zhin.js ICQQ 适配器，基于 ICQQ 库实现的 QQ 机器人适配器，支持 QQ 群聊和私聊消息。
+Zhin.js ICQQ 适配器，通过 **[@icqqjs/cli](https://github.com/icqqjs/cli) 守护进程 IPC** 连接已登录的 QQ 账号，支持群聊和私聊消息。协议与登录由 CLI 负责，Zhin 侧只配置 QQ 号并连接本地/远程守护进程。
 
 ## 功能特性
 
 - 🤖 支持 QQ 群聊和私聊消息处理
-- 🔐 完整的登录验证支持（短信验证、二维码、滑块验证）
+- 🔐 登录由 `icqq login` 完成（短信/二维码/滑块等由 CLI 处理）
 - 🖥️ **Web 控制台登录辅助**：与 `@zhin.js/host-api` 同时启用时，在 **`/icqq`** 页面提供「概览 + 登录辅助」；HTTP 接口为 **`GET /api/login-assist/pending`**、**`POST /api/login-assist/submit`**、**`POST /api/login-assist/cancel`**（由本适配器在路由上下文中注册，依赖核心 `loginAssist` 服务）。
 - 📨 消息发送和接收处理
 - 🔄 消息格式转换和适配
@@ -18,50 +18,53 @@ Zhin.js ICQQ 适配器，基于 ICQQ 库实现的 QQ 机器人适配器，支持
 ## 安装
 
 ```bash
-pnpm add @zhin.js/adapter-icqq @icqqjs/icqq
+pnpm add @zhin.js/adapter-icqq
+```
+
+登录与守护进程由 **@icqqjs/cli** 提供（与适配器包解耦，可全局安装）：
+
+```bash
+pnpm add -g @icqqjs/cli
+# 或：npx icqq login
 ```
 
 ## 配置
 
-### 密码登录
+在 `zhin.config.yml` 中声明 bot（**不在此填写 QQ 密码**）：
+
+```yaml
+bots:
+  - context: icqq
+    name: "${ICQQ_ACCOUNT}"   # QQ 号，须与 icqq login 的账号一致
+    autoReconnect: true         # IPC 断开后自动重连，默认 true
+    # 远程 RPC（可选；默认连接 ~/.icqq/<uin>/daemon.sock）
+    # rpc:
+    #   host: 10.0.0.2
+    #   port: 9527
+    #   token: ${ICQQ_RPC_TOKEN}
+    typingIndicator:          # 可选：AI 处理中的群/私聊提示
+      enabled: true
+      defaultEmoji: "⏳"
+
+plugins:
+  - "@zhin.js/adapter-icqq"
+  - "@zhin.js/host-router"     # 可选
+  - "@zhin.js/host-api"        # 可选，Remote Console /icqq 页
+```
+
+TypeScript 配置等价写法：
 
 ```typescript
-// zhin.config.ts
 import { defineConfig } from 'zhin.js'
 
 export default defineConfig({
   bots: [
     {
       context: 'icqq',
-      name: process.env.ICQQ_LOGIN_UIN,      // QQ 号（必需）
-      password: process.env.ICQQ_PASSWORD,   // QQ 密码
-      platform: 2,                            // 登录设备平台
-      log_level: 'info',                      // 日志级别
-      data_dir: './data',                     // 数据目录
-      sign_api_addr: process.env.SIGN_API    // 签名 API 地址（可选）
-    }
+      name: process.env.ICQQ_ACCOUNT!,
+    },
   ],
-  plugins: [
-    'adapter-icqq'
-  ]
-})
-```
-
-### 扫码登录
-
-```typescript
-export default defineConfig({
-  bots: [
-    {
-      context: 'icqq',
-      name: process.env.ICQQ_LOGIN_UIN,  // QQ 号
-      password: '',                       // 留空使用扫码登录
-      platform: 2,
-      log_level: 'info',
-      data_dir: './data'
-    }
-  ],
-  plugins: ['adapter-icqq']
+  plugins: ['@zhin.js/adapter-icqq'],
 })
 ```
 
@@ -70,27 +73,13 @@ export default defineConfig({
 ### 必需参数
 
 - `context`: 固定为 `'icqq'`
-- `name`: QQ 账号（字符串格式）
+- `name`: QQ 号（字符串，与守护进程账号一致）
 
 ### 可选参数
 
-- `password`: QQ 密码（留空则使用扫码登录）
-- `platform`: 登录平台类型
-  - `1`: Android Phone（安卓手机）
-  - `2`: Android Watch（安卓手表，推荐）
-  - `3`: MacOS
-  - `4`: 企点
-  - `5`: iPad
-- `log_level`: 日志级别
-  - `'off'`: 关闭
-  - `'fatal'`: 致命错误
-  - `'error'`: 错误
-  - `'warn'`: 警告
-  - `'info'`: 信息
-  - `'debug'`: 调试
-  - `'trace'`: 追踪
-- `data_dir`: 数据存储目录（默认：`./data`）
-- `sign_api_addr`: 签名服务器地址（可选，用于提高稳定性）
+- `autoReconnect`: IPC/RPC 意外断开时是否指数退避重连（默认 `true`）
+- `rpc`: 远程守护进程连接（`host` / `port` / `token`）；不配置则使用本地 Unix socket `~/.icqq/<uin>/daemon.sock`
+- `typingIndicator`: AI 处理中的 reaction 或临时消息提示（见 `IcqqBotConfig` 类型）
 
 ## 使用示例
 
@@ -168,35 +157,15 @@ addCommand(new MessageCommand('at <user:at>')
 )
 ```
 
-## Web 控制台登录辅助
-
-1. 配置中同时启用 **`@zhin.js/host-api`** 与本适配器（且 console 建议 **`lazyLoad: false`**，以便扩展 `addEntry` 正常注册）。
-2. 打开控制台中的 **ICQQ 管理**（`/icqq`），切换到 **登录辅助** Tab；仅展示当前 **icqq** 适配器相关的待处理登录步骤。
-3. 若未启用 console，仅启动机器人进程时，仍可通过日志完成登录；**不提供** Console 专属的 `/api/login-assist` 降级路径。
-
 ## 登录流程
 
-### 密码登录
+1. **先登录 QQ**：在终端执行 `icqq login`，按 CLI 提示完成密码/扫码/滑块/设备锁等验证；会话由 `@icqqjs/cli` 守护进程维护。
+2. **再启动 Zhin**：`zhin.config.yml` 中 `bots[].name` 与上一步 QQ 号一致，启动 `zhin dev` / `zhin start`；适配器连接守护进程并开始收发消息。
+3. 若守护进程未运行或账号未登录，适配器会保持未连接状态，日志中会提示检查 `icqq` 守护进程。
 
-1. 配置 QQ 号和密码
-2. 启动机器人
-3. 如需验证，根据提示输入验证码或完成滑块验证
-4. 登录成功后会保存登录状态
+### Web 控制台登录辅助（可选）
 
-### 扫码登录
-
-1. 配置 QQ 号，密码留空
-2. 启动机器人
-3. 扫描控制台显示的二维码
-4. 手机 QQ 确认登录
-5. 登录成功后会保存登录状态
-
-### 设备锁验证
-
-如遇设备锁：
-1. 选择短信验证或扫码验证
-2. 短信验证：输入收到的验证码
-3. 扫码验证：扫描二维码并在手机确认
+与 **`@zhin.js/host-api`** 同时启用时，Remote Console 的 **ICQQ 管理**（`/icqq`）可提供登录辅助 Tab，对应 API：`GET/POST /api/login-assist/*`（依赖核心 `loginAssist` 服务）。**不能替代** `icqq login`；仅用于在 Host 已运行时配合完成验证步骤。
 
 ## 消息类型支持
 
@@ -388,64 +357,32 @@ onGroupMessage(async (message) => {
 
 完整说明与指令表见仓库文档：[docs/advanced/ai.md](../../../docs/advanced/ai.md)（锚点：`#icqq-bash-exec`、`#owner-approve-commands`）。
 
-## 签名服务器
-
-为了提高登录稳定性和避免风控，建议配置签名服务器：
-
-```typescript
-{
-  sign_api_addr: 'http://localhost:8080/sign'  // 签名服务器地址
-}
-```
-
-常用签名服务器：
-- [unidbg-fetch-qsign](https://github.com/fuqiuluo/unidbg-fetch-qsign)
-- [qsign](https://github.com/MliKiowa/NapCatQQ)
-
 ## 注意事项
 
 ### 账号安全
 
 - 建议使用小号测试
 - 避免短时间内发送大量消息
-- 建议配置签名服务器
-- 定期更新 ICQQ 版本
+- 保持 `@icqqjs/cli` 与适配器版本更新
 
-### 风控问题
+### 风控与掉线
 
-如遇风控：
-1. 降低消息发送频率
-2. 配置签名服务器
-3. 更换登录设备类型（platform 参数）
-4. 使用扫码登录
-5. 等待一段时间后重试
-
-### 设备选择
-
-推荐使用的 platform 值：
-- `2` (Android Watch): 最稳定，推荐
-- `5` (iPad): 功能较全
-- `3` (MacOS): 较稳定
-
-避免使用：
-- `1` (Android Phone): 容易被风控
+- 登录设备类型、签名服务等由 **`icqq login` / CLI 配置** 管理，不在 `zhin.config` 的 bot 段配置
+- 掉线时先检查守护进程：`icqq` 是否仍在运行、账号是否被踢下线
+- 可降低发消息频率，并在手机 QQ 完成安全验证后重新 `icqq login`
 
 ## 常见问题
 
-### Q: 登录时提示"密码错误"？
-
-A: 
-1. 确认密码是否正确
-2. 尝试使用扫码登录
-3. 检查是否被风控，需要在手机 QQ 上验证
-
-### Q: 登录后频繁掉线？
+### Q: 启动后 bot 一直未连接？
 
 A:
-1. 配置签名服务器
-2. 更换 platform 参数
-3. 检查网络连接是否稳定
-4. 降低消息发送频率
+1. 确认已对该 QQ 号执行过 `icqq login` 且守护进程在运行
+2. 确认 `bots[].name` 与登录 QQ 号一致
+3. 远程部署时检查 `rpc.host` / `rpc.port` / `rpc.token`
+
+### Q: 还需要在 zhin.config 里写 password / platform 吗？
+
+A: **不需要**。这些字段属于旧版直连协议，当前适配器仅通过 IPC 连接 CLI 守护进程。
 
 ### Q: 无法发送图片？
 
@@ -454,24 +391,22 @@ A:
 2. 本地文件需使用绝对路径
 3. 确认图片格式和大小符合要求
 
-### Q: 如何处理滑块验证？
+### Q: 如何处理滑块/设备锁验证？
 
-A:
-1. 控制台会显示滑块验证链接
-2. 在浏览器中打开链接
-3. 完成滑块验证
-4. 将验证票据复制到控制台
+A: 在运行 `icqq login` 的终端按提示操作；若启用了 Host API，也可在 Remote Console `/icqq` 登录辅助 Tab 提交验证码。
 
 ## 相关链接
 
-- [ICQQ 项目](https://github.com/icqqjs/icqq)
+- [@icqqjs/cli](https://github.com/icqqjs/cli)
+- [ICQQ 协议库](https://github.com/icqqjs/icqq)
 - [Zhin.js 官方文档](https://github.com/zhinjs/zhin)
 - [签名服务器](https://github.com/fuqiuluo/unidbg-fetch-qsign)
 
 ## 依赖项
 
-- `@icqqjs/icqq` - ICQQ 核心库
-- `zhin.js` - Zhin 核心框架
+- `@icqqjs/cli` - 登录与守护进程（运行时需已安装并在 PATH 中）
+- `zhin.js` / `@zhin.js/core` - Zhin 框架（peer）
+- `@zhin.js/host-router` / `@zhin.js/host-api` - 可选，Console 与 HTTP 路由
 
 ## 开发
 

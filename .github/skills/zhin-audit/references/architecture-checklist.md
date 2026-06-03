@@ -9,15 +9,15 @@
   ```
   basic/ (logger, database, schema, cli)
     ↑
-  packages/kernel (可依赖: basic/*)
+  packages/im/kernel (可依赖: basic/*)
     ↑
-  packages/ai (可依赖: kernel, basic/logger)
+  packages/im/ai (可依赖: kernel, basic/logger)
     ↑
-  packages/core (可依赖: ai, kernel, basic/*)
+  packages/im/core (可依赖: ai, kernel, basic/*)
     ↑
-  packages/agent (可依赖: core, ai)
+  packages/im/agent (可依赖: core, ai)
     ↑
-  packages/zhin (可依赖: 所有 packages/*)
+  packages/im/zhin (可依赖: 所有 IM 层 + 按需 re-export)
   ```
   - 检查每个包的 `package.json` dependencies
   - 验证无反向依赖（如 kernel 依赖 core）

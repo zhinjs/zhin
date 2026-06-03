@@ -6,6 +6,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
+import { formatNodeRequirementMessage, isNodeVersionSupported } from '../utils/node-requirements.js';
 
 const execAsync = promisify(exec);
 
@@ -29,14 +30,12 @@ export const doctorCommand = new Command('doctor')
 
     // 1. 检查 Node.js 版本
     const nodeVersion = process.version;
-    const nodeMajor = parseInt(nodeVersion.slice(1).split('.')[0], 10);
+    const nodeOk = isNodeVersionSupported(nodeVersion);
     results.push({
       name: 'Node.js 版本',
-      status: nodeMajor >= 18 ? 'ok' : 'error',
-      message: nodeMajor >= 18 
-        ? `${nodeVersion} (推荐 >= 18.0.0)` 
-        : `${nodeVersion} (需要 >= 18.0.0)`,
-      fix: nodeMajor < 18 ? '请升级 Node.js: https://nodejs.org' : undefined
+      status: nodeOk ? 'ok' : 'error',
+      message: formatNodeRequirementMessage(nodeVersion),
+      fix: nodeOk ? undefined : '请升级 Node.js: https://nodejs.org',
     });
 
     // 2. 检查 pnpm

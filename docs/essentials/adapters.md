@@ -2,326 +2,67 @@
 
 适配器用于连接不同的聊天平台。每个适配器管理一个或多个 Bot 实例，负责消息收发和平台特定的 API 调用。
 
-## 内置适配器
+## 平台适配器文档
 
-### Sandbox（本地测试）
+各平台的安装、配置与 API 说明已拆分为**独立文档页**，内容与 `plugins/adapters/*/README.md` 自动同步：
 
-```yaml
-plugins:
-  - "@zhin.js/adapter-sandbox"
-```
+👉 **[平台适配器索引](/adapters/)** — 按 Stable / Advanced / Experimental 分类，17 个适配器各一篇
 
-在终端中直接输入消息测试，无需任何外部平台配置。开发调试首选。
+**档位说明**：Experimental **不等于**没有测试；表示部署差异大、**无全量 CI/实机对外承诺**，使用前请自行验证环境。
 
-### Process（进程适配器）
+### Stable
 
-框架核心服务之一，在 `services` 中配置 `process` 即可启用。提供标准输入输出的消息交互。
+| 适配器 | 包名 | 文档 |
+|--------|------|------|
+| Sandbox | `@zhin.js/adapter-sandbox` | [Sandbox](/adapters/sandbox) |
 
-## 平台适配器
+### Advanced
 
-### ICQQ（QQ - 非官方协议）
+| 适配器 | 包名 | 文档 |
+|--------|------|------|
+| ICQQ (QQ) | `@zhin.js/adapter-icqq` | [ICQQ](/adapters/icqq) |
+| QQ 官方 | `@zhin.js/adapter-qq` | [QQ 官方](/adapters/qq) |
+| OneBot v11 | `@zhin.js/adapter-onebot11` | [OneBot v11](/adapters/onebot11) |
+| KOOK | `@zhin.js/adapter-kook` | [KOOK](/adapters/kook) |
+| Discord | `@zhin.js/adapter-discord` | [Discord](/adapters/discord) |
+| Telegram | `@zhin.js/adapter-telegram` | [Telegram](/adapters/telegram) |
+| Slack | `@zhin.js/adapter-slack` | [Slack](/adapters/slack) |
+| 钉钉 | `@zhin.js/adapter-dingtalk` | [钉钉](/adapters/dingtalk) |
+| 飞书 | `@zhin.js/adapter-lark` | [飞书](/adapters/lark) |
+| 微信公众号 | `@zhin.js/adapter-wechat-mp` | [微信公众号](/adapters/wechat-mp) |
 
-安装：
+### Experimental
 
-```bash
-pnpm add @zhin.js/adapter-icqq
-```
+| 适配器 | 包名 | 文档 |
+|--------|------|------|
+| NapCat | `@zhin.js/adapter-napcat` | [NapCat](/adapters/napcat) |
+| OneBot v12 | `@zhin.js/adapter-onebot12` | [OneBot v12](/adapters/onebot12) |
+| Milky | `@zhin.js/adapter-milky` | [Milky](/adapters/milky) |
+| Satori | `@zhin.js/adapter-satori` | [Satori](/adapters/satori) |
+| Email | `@zhin.js/adapter-email` | [Email](/adapters/email) |
+| GitHub | `@zhin.js/adapter-github` | [GitHub](/adapters/github) |
 
-配置：
+完整索引与档位说明亦见 **[平台适配器索引](/adapters/)**。
 
-```yaml
-plugins:
-  - "@zhin.js/adapter-icqq"
+修改适配器文档请编辑对应包内 `README.md`，再运行 `pnpm sync:adapter-docs`。
 
-bots:
-  - context: icqq
-    name: "${ICQQ_ACCOUNT}"       # QQ 号
-    password: "${ICQQ_PASSWORD}"   # 密码（可选，不填则扫码登录）
-    platform: 5                    # 登录平台 (1:安卓 2:iPad 3:Watch 5:Mac)
-    scope: icqqjs
-    data_dir: ./data
-```
+## Process（进程适配器）
 
-ICQQ 适配器通过覆写 `IGroupManagement` 方法自动注册群管理工具（踢人、禁言、设管理员、改名片等），同时提供平台特有工具（头衔、群公告、戳一戳等）。详见 [工具与技能](/advanced/tools-skills)。
+**不是** `@zhin.js/adapter-*` 插件，而是 `@zhin.js/core` 内置的 **核心服务**（[`adapter-process.ts`](https://github.com/zhinjs/zhin/tree/main/packages/im/core/src/built/adapter-process.ts)）。
 
-### QQ 官方机器人
-
-安装：
-
-```bash
-pnpm add @zhin.js/adapter-qq
-```
-
-配置：
-
-```yaml
-plugins:
-  - "@zhin.js/adapter-qq"
-
-bots:
-  - context: qq
-    name: qq-bot
-    appid: "${QQ_APPID}"
-    secret: "${QQ_SECRET}"
-```
-
-### KOOK
-
-安装：
-
-```bash
-pnpm add @zhin.js/adapter-kook
-```
-
-配置：
+| 项 | 说明 |
+|----|------|
+| 启用 | 默认在 `services` 中含 `process`；可从列表移除以关闭 |
+| `context` | `process`（自动注册 bot，**通常无需**写 `bots:` 条目） |
+| 输入 | 仅当 stdin 为 **TTY** 或设置 `ZHIN_BIND_STDIN=1` 时绑定终端 |
+| 与 Sandbox | Sandbox = WebSocket + Remote Console；Process = 本机 stdin，**Stable 调试请用 Sandbox** |
 
 ```yaml
-plugins:
-  - "@zhin.js/adapter-kook"
-
-bots:
-  - context: kook
-    name: kook-bot
-    token: "${KOOK_TOKEN}"
+services:
+  - process   # 默认已含；非 TTY 环境（如 CI）可省略或关闭
 ```
 
-### Discord
-
-Discord 适配器**一个适配器**支持 Gateway（WebSocket）与 Interactions（HTTP 斜杠命令等），由配置项 `connection` 区分。
-
-安装：
-
-```bash
-pnpm add @zhin.js/adapter-discord discord.js
-```
-
-配置（Gateway，默认）：
-
-```yaml
-plugins:
-  - "@zhin.js/adapter-discord"
-
-bots:
-  - context: discord
-    connection: gateway
-    name: discord-bot
-    token: "${DISCORD_TOKEN}"
-```
-
-Interactions 模式需启用 `@zhin.js/host-router`，并配置 `connection: interactions`、`applicationId`、`publicKey`、`interactionsPath`，详见 [@zhin.js/adapter-discord](https://github.com/zhinjs/zhin/tree/master/plugins/adapters/discord) README。
-
-### Telegram
-
-安装：
-
-```bash
-pnpm add @zhin.js/adapter-telegram
-```
-
-配置：
-
-```yaml
-plugins:
-  - "@zhin.js/adapter-telegram"
-
-bots:
-  - context: telegram
-    name: telegram-bot
-    token: "${TELEGRAM_TOKEN}"
-```
-
-### Slack
-
-安装：
-
-```bash
-pnpm add @zhin.js/adapter-slack
-```
-
-配置：
-
-```yaml
-plugins:
-  - "@zhin.js/adapter-slack"
-
-bots:
-  - context: slack
-    name: slack-bot
-    token: "${SLACK_TOKEN}"
-```
-
-### 钉钉
-
-安装：
-
-```bash
-pnpm add @zhin.js/adapter-dingtalk
-```
-
-配置：
-
-```yaml
-plugins:
-  - "@zhin.js/adapter-dingtalk"
-
-bots:
-  - context: dingtalk
-    name: dingtalk-bot
-    appKey: "${DINGTALK_APP_KEY}"
-    appSecret: "${DINGTALK_APP_SECRET}"
-```
-
-### 飞书
-
-安装：
-
-```bash
-pnpm add @zhin.js/adapter-lark
-```
-
-配置：
-
-```yaml
-plugins:
-  - "@zhin.js/adapter-lark"
-
-bots:
-  - context: lark
-    name: lark-bot
-    appId: "${LARK_APP_ID}"
-    appSecret: "${LARK_APP_SECRET}"
-```
-
-### OneBot v11
-
-[OneBot 11](https://github.com/botuniverse/onebot) 协议适配器，**一个适配器**支持正向 WebSocket 与反向 WebSocket，由配置项 `connection` 区分。
-
-安装：
-
-```bash
-pnpm add @zhin.js/adapter-onebot11 ws
-```
-
-反向 WS 需同时启用 `@zhin.js/host-router`。
-
-配置（正向 WS）：
-
-```yaml
-plugins:
-  - "@zhin.js/adapter-onebot11"
-
-bots:
-  - context: onebot11
-    connection: ws
-    name: onebot-bot
-    url: "ws://127.0.0.1:6700"
-    access_token: "${ONEBOT11_ACCESS_TOKEN}"
-```
-
-反向 WS：`connection: wss`，并配置 `path`，详见 [@zhin.js/adapter-onebot11](https://github.com/zhinjs/zhin/tree/master/plugins/adapters/onebot11) README。
-
-### Milky
-
-[Milky](https://milky.ntqqrev.org/) 协议适配器，**一个适配器**支持四种连接方式（WebSocket 正向/反向、SSE、Webhook），由配置项 `connection` 区分；支持 HTTP API 与 `access_token` 鉴权。
-
-安装：
-
-```bash
-pnpm add @zhin.js/adapter-milky ws eventsource
-```
-
-需同时启用 `@zhin.js/host-router`（适配器依赖 router 注册）。
-
-配置示例（WebSocket 正向）：
-
-```yaml
-plugins:
-  - "@zhin.js/host-router"
-  - "@zhin.js/adapter-milky"
-
-bots:
-  - context: milky
-    connection: ws
-    name: milky-bot
-    baseUrl: "http://127.0.0.1:8080"
-    access_token: "${MILKY_ACCESS_TOKEN}"
-```
-
-其他连接方式：`connection: sse`（SSE）、`connection: webhook`（Webhook）、`connection: wss`（反向 WS），详见 [@zhin.js/adapter-milky](https://github.com/zhinjs/zhin/tree/master/plugins/adapters/milky) README。
-
-### Satori（协议适配器）
-
-[Satori](https://satori.chat/zh-CN/introduction.html) **通用聊天协议**适配器（npm：`@zhin.js/adapter-satori`），**一个适配器**支持 WebSocket 正向与 Webhook，由配置项 `connection` 区分；支持 HTTP API 与 Bearer Token 鉴权。
-
-与 **`@zhin.js/satori`（独立包，`packages/satori`）无关**：后者是 Vercel **satori** 的 SVG 渲染封装，用于生成图片，不是 IM 协议。见 [术语表](/reference/glossary)。
-
-安装：
-
-```bash
-pnpm add @zhin.js/adapter-satori ws
-```
-
-Webhook 方式需同时启用 `@zhin.js/host-router`。
-
-配置示例（WebSocket 正向）：
-
-```yaml
-plugins:
-  - "@zhin.js/adapter-satori"
-
-bots:
-  - context: satori
-    connection: ws
-    name: satori-bot
-    baseUrl: "http://127.0.0.1:5140"
-    token: "${SATORI_TOKEN}"
-```
-
-其他连接方式：`connection: webhook`（Webhook），详见 [@zhin.js/adapter-satori](https://github.com/zhinjs/zhin/tree/master/plugins/adapters/satori) README。
-
-### OneBot 12
-
-[OneBot 12](https://12.onebot.dev/) 标准适配器，**一个适配器**支持正向 WebSocket、HTTP Webhook、反向 WebSocket，由配置项 `connection` 区分。
-
-安装：
-
-```bash
-pnpm add @zhin.js/adapter-onebot12 ws
-```
-
-Webhook / 反向 WS 需同时启用 `@zhin.js/host-router`。
-
-配置示例（正向 WebSocket）：
-
-```yaml
-plugins:
-  - "@zhin.js/adapter-onebot12"
-
-bots:
-  - context: onebot12
-    connection: ws
-    name: ob12-bot
-    url: "ws://127.0.0.1:6700"
-    access_token: "${ONEBOT12_ACCESS_TOKEN}"
-```
-
-其他连接方式：`connection: webhook`（Webhook，可选 `api_url` 用于发消息）、`connection: wss`（反向 WS），详见 [@zhin.js/adapter-onebot12](https://github.com/zhinjs/zhin/tree/master/plugins/adapters/onebot12) README。
-
-### 微信公众号
-
-安装：
-
-```bash
-pnpm add @zhin.js/adapter-wechat-mp
-```
-
-### 邮件
-
-安装：
-
-```bash
-pnpm add @zhin.js/adapter-email
-```
+Deno Deploy 等环境会自动跳过 process 绑定。
 
 ## 多平台同时运行
 
@@ -332,22 +73,21 @@ plugins:
   - "@zhin.js/adapter-discord"
 
 bots:
+  # ICQQ：先 `icqq login`，name 与 QQ 号一致
   - context: icqq
     name: "${ICQQ_ACCOUNT}"
-    password: "${ICQQ_PASSWORD}"
-    platform: 5
-    scope: icqqjs
-  
+
   - context: kook
     name: kook-bot
     token: "${KOOK_TOKEN}"
   
   - context: discord
+    connection: gateway
     name: discord-bot
     token: "${DISCORD_TOKEN}"
 ```
 
-所有平台共享同一套插件和命令，消息处理逻辑完全统一。
+所有平台共享同一套插件和命令，消息处理逻辑完全统一。各平台 bot 字段详见 [平台适配器索引](/adapters/)。
 
 ## 适配器工具与技能
 
@@ -376,7 +116,7 @@ class IcqqAdapter extends Adapter<IcqqBot> {
 }
 ```
 
-目前 10 余个 IM 适配器（ICQQ、OneBot11、Milky、QQ 官方、Telegram、Discord、KOOK、Slack、钉钉、飞书等）以及 Satori、OneBot 12 等协议适配器均已接入，详见下方 [可用适配器一览](#可用适配器一览)。
+目前多数 IM 适配器（ICQQ、OneBot11、Milky、QQ 官方、Telegram、Discord、KOOK、Slack、钉钉、飞书等）以及 Satori、OneBot 12 等协议适配器均已接入，详见 [平台适配器索引](/adapters/)。
 
 ### 平台特有工具（addTool）
 
@@ -395,23 +135,3 @@ private registerPlatformTools() {
 ```
 
 详见 [工具与技能](/advanced/tools-skills)。
-
-## 可用适配器一览
-
-| 平台 | 包名 | 说明 |
-|------|------|------|
-| ICQQ (QQ) | `@zhin.js/adapter-icqq` | QQ 非官方协议，功能最全 |
-| QQ 官方 | `@zhin.js/adapter-qq` | QQ 官方机器人 API |
-| KOOK | `@zhin.js/adapter-kook` | KOOK（开黑啦）|
-| Discord | `@zhin.js/adapter-discord` | Discord（单适配器，connection: gateway/interactions） |
-| Telegram | `@zhin.js/adapter-telegram` | Telegram |
-| Slack | `@zhin.js/adapter-slack` | Slack |
-| 钉钉 | `@zhin.js/adapter-dingtalk` | 钉钉 |
-| 飞书 | `@zhin.js/adapter-lark` | 飞书 / Lark |
-| OneBot v11 | `@zhin.js/adapter-onebot11` | OneBot v11 协议（单适配器，connection: ws/wss） |
-| Milky | `@zhin.js/adapter-milky` | Milky 协议（单适配器，connection: ws/sse/webhook/wss） |
-| Satori | `@zhin.js/adapter-satori` | Satori 协议（单适配器，connection: ws/webhook） |
-| OneBot 12 | `@zhin.js/adapter-onebot12` | OneBot 12 标准（单适配器，connection: ws/webhook/wss） |
-| 微信公众号 | `@zhin.js/adapter-wechat-mp` | 微信公众号 |
-| Sandbox | `@zhin.js/adapter-sandbox` | 终端测试 |
-| Email | `@zhin.js/adapter-email` | 邮件 |

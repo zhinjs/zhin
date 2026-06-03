@@ -1,5 +1,5 @@
-import type { InitOptions } from './types.js';
-import { RECOMMENDED_AI_DEFAULTS } from './ai.js';
+import type { InitOptions } from '@zhin.js/scaffold-wizard';
+import { RECOMMENDED_AI_DEFAULTS } from '@zhin.js/scaffold-wizard';
 
 /**
  * `create-zhin -y` 与 monorepo examples/minimal-bot 对齐的 Stable 脚手架默认值。

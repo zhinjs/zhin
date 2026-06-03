@@ -126,6 +126,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../logger
+      '@zhin.js/scaffold-wizard':
+        specifier: workspace:*
+        version: link:../../packages/toolkit/scaffold-wizard
       adm-zip:
         specifier: ^0.5.16
         version: 0.5.17
@@ -737,6 +740,9 @@ importers:
 
   packages/toolkit/create-zhin:
     dependencies:
+      '@zhin.js/scaffold-wizard':
+        specifier: workspace:*
+        version: link:../scaffold-wizard
       chalk:
         specifier: ^5.6.2
         version: 5.6.2
@@ -781,6 +787,31 @@ importers:
       tsup:
         specifier: ^8.0.0
         version: 8.5.1(jiti@2.6.1)(postcss@8.5.15)(tsx@4.22.4)(typescript@6.0.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/toolkit/scaffold-wizard:
+    dependencies:
+      chalk:
+        specifier: ^5.6.2
+        version: 5.6.2
+      fs-extra:
+        specifier: ^11.3.5
+        version: 11.3.5
+      inquirer:
+        specifier: ^14.0.2
+        version: 14.0.2(@types/node@25.9.1)
+    devDependencies:
+      '@types/fs-extra':
+        specifier: ^11.0.4
+        version: 11.0.4
+      '@types/inquirer':
+        specifier: ^9.0.7
+        version: 9.0.9
+      '@types/node':
+        specifier: ^25.9.1
+        version: 25.9.1
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1189,6 +1220,9 @@ importers:
       '@zhin.js/host-router':
         specifier: workspace:*
         version: link:../../../packages/host/router
+      lucide-react:
+        specifier: ^1.17.0
+        version: 1.17.0(react@19.2.6)
     devDependencies:
       '@types/react':
         specifier: ^19.2.15
@@ -1199,12 +1233,6 @@ importers:
       '@zhin.js/cli':
         specifier: workspace:*
         version: link:../../../basic/cli
-      lucide-react:
-        specifier: ^1.17.0
-        version: 1.17.0(react@19.2.6)
-      radix-ui:
-        specifier: ^1.4.3
-        version: 1.4.3(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

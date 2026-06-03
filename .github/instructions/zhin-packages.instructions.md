@@ -31,11 +31,11 @@ applyTo: "basic/**,packages/**"
 
 ## 变更落点
 
-- Plugin、Adapter、Dispatcher、消息链：packages/core。
-- AI 引擎、Session、Memory、Compaction、Provider：packages/ai。
-- AI 编排、工具发现、安全策略、MCP client：packages/agent。
-- 应用入口与聚合 re-export：packages/zhin。
-- 底层通用能力：basic/* 和 packages/kernel。
+- Plugin、Adapter、Dispatcher、消息链：packages/im/core。
+- AI 引擎、Session、Memory、Compaction、Provider：packages/im/ai。
+- AI 编排、工具发现、安全策略、MCP client：packages/im/agent。
+- 应用入口与聚合 re-export：packages/im/zhin。
+- 底层通用能力：basic/* 和 packages/im/kernel。
 
 ## 验证习惯
 

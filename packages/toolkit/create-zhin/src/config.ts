@@ -1,8 +1,15 @@
 import fs from 'fs-extra';
 import path from 'path';
-import { InitOptions, DatabaseConfig } from './types.js';
-import { generateAIConfigYaml, generateAIConfigJSON, generateAIConfigToml } from './ai.js';
-import { generateBotsConfigYaml, generateBotsConfigJSON, generateBotsConfigToml } from './adapter.js';
+import { InitOptions, DatabaseConfig, DATABASE_PACKAGES } from '@zhin.js/scaffold-wizard';
+import {
+  generateAIConfigYaml,
+  generateAIConfigJSON,
+  generateAIConfigToml,
+  generateBotsConfigYaml,
+  generateBotsConfigJSON,
+  generateBotsConfigToml,
+  CONSOLE_HOST_PLUGINS,
+} from '@zhin.js/scaffold-wizard';
 
 // 生成数据库环境变量
 export function generateDatabaseEnvVars(config: DatabaseConfig): string {
@@ -156,10 +163,7 @@ export function generateDatabaseConfig(config: DatabaseConfig, format: 'yaml' | 
 
 // 构建 plugins 列表（根据用户选择的适配器）
 /** Remote Console / HTTP Host 插件（由脚手架写入项目，不随 zhin.js 安装） */
-export const CONSOLE_HOST_PLUGINS = [
-  '@zhin.js/host-router',
-  '@zhin.js/host-api',
-] as const;
+export { CONSOLE_HOST_PLUGINS } from '@zhin.js/scaffold-wizard';
 
 function buildPluginsList(options: InitOptions): string[] {
   if (options.yes) {

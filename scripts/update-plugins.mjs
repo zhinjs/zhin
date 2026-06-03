@@ -44,6 +44,7 @@ const CORE_PACKAGES = new Set([
   '@zhin.js/storage-port',
   '@zhin.js/host-router',
   '@zhin.js/host-api',
+  '@zhin.js/adapter-process', // 已废弃，见 @zhin.js/adapter-sandbox
   'zhin.js',
 ]);
 

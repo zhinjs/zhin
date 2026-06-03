@@ -1,10 +1,8 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { InitOptions, DATABASE_PACKAGES } from './types.js';
+import { InitOptions, DATABASE_PACKAGES, generateAdapterEnvVars, generateAIEnvVars, getAdapterDependencies, getAIDependencies } from '@zhin.js/scaffold-wizard';
 import { createConfigFile, generateDatabaseEnvVars } from './config.js';
-import { generateAdapterEnvVars, getAdapterDependencies } from './adapter.js';
-import { generateAIEnvVars } from './ai.js';
 import { SOUL_MD_TEMPLATE, TOOLS_MD_TEMPLATE, AGENTS_MD_TEMPLATE } from './templates/bootstrap.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -69,6 +67,9 @@ export async function createWorkspace(projectPath: string, projectName: string, 
     adapterDeps['@zhin.js/adapter-sandbox'] = 'latest';
   }
 
+  // AI 启用时预装 MCP SDK
+  const aiDeps = getAIDependencies(options.ai);
+
   // 创建根 package.json（与 test-bot 结构一致）
   await fs.writeJson(path.join(projectPath, 'package.json'), {
     name: projectName,
@@ -99,7 +100,8 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       '@zhin.js/contract': 'latest',
       'tsx': 'latest',
       ...adapterDeps,
-      ...databaseDeps
+      ...databaseDeps,
+      ...aiDeps
     },
     devDependencies: {
       '@types/node': 'latest',
@@ -566,12 +568,12 @@ plugins:
 
 ## 🤖 AI Agent
 
-如果初始化时启用了 AI，配置会写入 \`${configFilename}\`，API Key 会写入 \`.env\`。默认触发方式包括 @机器人、私聊和前缀触发。
+如果初始化时启用了 AI，配置会写入 \`${configFilename}\`，API Key 会写入 \`.env\`。脚手架已预装 \`@modelcontextprotocol/sdk\`，可直接使用 MCP 扩展。
 
-常用可选能力：
+常用可选能力（详见 [Agent 概念入门](https://zhin.js.org/advanced/agent-concepts) 与 [MCP 集成](https://zhin.js.org/advanced/mcp)）：
 
 - \`ai.agent.phaseTrace: true\`：输出 Agent 阶段日志，便于排障。
-- \`ai.agent.toolSearch: true\`：启用 deferred + Worker 工具编排。
+- \`ai.agent.toolSearch: true\`：启用 deferred + Worker 工具编排（Stable 默认关闭）。
 - \`ai.memoryMcp: true\`：启用本地知识图谱 memory MCP。
 - \`ai.mcpServers\`：接入外部 MCP Server。
 

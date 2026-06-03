@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { formatCompact } from '@zhin.js/logger';
+import { CREATE_PROJECT_COMMAND } from '../utils/create-project.js';
 import { logger } from '../utils/logger.js';
 import { loadEnvFiles } from '../utils/env.js';
 import { ChildProcess } from 'child_process';
@@ -22,7 +23,7 @@ export const startCommand = new Command('start')
         logger.info(formatCompact( {
           cmd: 'start',
           op: 'hint',
-          hint: '在项目根目录运行，或 zhin new <project-name> 创建新项目',
+          hint: `在项目根目录运行，或使用 ${CREATE_PROJECT_COMMAND} 创建项目、zhin new 创建插件`,
         }));
         process.exit(1);
       }

@@ -1146,38 +1146,6 @@
       "peerDependencies": {}
     },
     {
-      "name": "@zhin.js/adapter-process",
-      "displayName": "process",
-      "description": "zhin adapter for process",
-      "author": "lc_cn",
-      "isOfficial": true,
-      "category": "adapter",
-      "version": "1.0.22",
-      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-process",
-      "github": "git+https://github.com/zhinjs/zhin.git",
-      "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [
-        "zhin",
-        "adapter",
-        "process"
-      ],
-      "lastUpdate": "2025-11-25T02:06:34.673Z",
-      "downloads": {
-        "weekly": 0,
-        "monthly": 0
-      },
-      "readme": "基于进程标准输入输出的 Zhin 机器人适配器，用于命令行环境下的测试和开发。\n- 🖥️ 命令行交互界面\n- ⌨️ 标准输入输出处理\n- 🧪 测试和开发友好\n- 📝 简单的消息格式\n- 🔄 实时消息处理\nbash\nnpm install @zhin.js/adapter-process\njavascript\n// zhin.config.ts\nexport default {\n  bots",
-      "license": "MIT",
-      "engines": {},
-      "peerDependencies": {
-        "zhin.js": "1.0.17",
-        "@zhin.js/host-router": "1.0.7",
-        "@zhin.js/client": "1.0.5",
-        "@zhin.js/types": "1.0.5",
-        "@zhin.js/host-api": "0.0.0"
-      }
-    },
-    {
       "name": "@zhin.js/console-app",
       "displayName": "console-app",
       "description": "Zhin console Farm + React shell (aligned with @page-manager/app)",
@@ -1307,14 +1275,14 @@
     }
   ],
   "stats": {
-    "total": 42,
-    "official": 42,
+    "total": 38,
+    "official": 41,
     "community": 0,
-    "adapters": 18,
+    "adapters": 17,
     "services": 4,
     "utils": 19,
     "games": 0,
     "features": 1
   },
-  "updatedAt": "2026-06-01T11:04:56.498Z"
+  "updatedAt": "2026-06-03T01:46:59.737Z"
 }

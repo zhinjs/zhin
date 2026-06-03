@@ -4,7 +4,20 @@ import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'path';
 import yaml from 'yaml';
+import { CREATE_PROJECT_COMMAND } from '../utils/create-project.js';
 import { logger } from '../utils/logger.js';
+import {
+  configureDatabaseOptions,
+  configureAdapters,
+  configureAI,
+  getAdapterSetupNotes,
+  applyWizardOptionsToConfig,
+  appendWizardEnvVars,
+  collectWizardDependencies,
+  mergeDependenciesIntoPackageJson,
+  finalizeWizardOptions,
+  type InitOptions,
+} from '@zhin.js/scaffold-wizard';
 
 // 引导文件模板（与 create-zhin 保持一致）
 const SOUL_MD_TEMPLATE = `# Soul
@@ -135,241 +148,6 @@ async function setupBootstrapFiles(cwd: string): Promise<void> {
   }
 }
 
-async function setupDatabase(config: any): Promise<void> {
-  console.log('');
-  console.log(chalk.blue('🗄️  配置数据库'));
-  console.log('');
-
-  const { dbType } = await inquirer.prompt([
-    {
-      type: 'list',
-      name: 'dbType',
-      message: '选择数据库类型:',
-      choices: [
-        { name: 'SQLite (推荐，无需额外配置)', value: 'sqlite' },
-        { name: 'MySQL', value: 'mysql' },
-        { name: 'PostgreSQL', value: 'postgresql' }
-      ],
-      default: 'sqlite'
-    }
-  ]);
-
-  config.database = config.database || {};
-
-  if (dbType === 'sqlite') {
-    const { filename } = await inquirer.prompt([
-      {
-        type: 'input',
-        name: 'filename',
-        message: 'SQLite 数据库文件路径:',
-        default: './data/bot.db'
-      }
-    ]);
-    config.database.dialect = 'sqlite';
-    config.database.filename = filename;
-  } else {
-    const dbConfig = await inquirer.prompt([
-      {
-        type: 'input',
-        name: 'host',
-        message: '数据库主机:',
-        default: 'localhost'
-      },
-      {
-        type: 'number',
-        name: 'port',
-        message: '端口:',
-        default: dbType === 'mysql' ? 3306 : 5432
-      },
-      {
-        type: 'input',
-        name: 'username',
-        message: '用户名:',
-        default: 'root'
-      },
-      {
-        type: 'password',
-        name: 'password',
-        message: '密码:',
-        mask: '*'
-      },
-      {
-        type: 'input',
-        name: 'database',
-        message: '数据库名:',
-        default: 'zhin'
-      }
-    ]);
-
-    config.database.dialect = dbType;
-    Object.assign(config.database, dbConfig);
-  }
-
-  console.log(chalk.green('  ✓ 数据库配置完成'));
-}
-
-async function setupAdapters(config: any): Promise<void> {
-  console.log('');
-  console.log(chalk.blue('🔌 配置适配器'));
-  console.log('');
-
-  const { adapters } = await inquirer.prompt([
-    {
-      type: 'checkbox',
-      name: 'adapters',
-      message: '选择要使用的适配器 (多选):',
-      choices: [
-        { name: 'Sandbox (本地测试)', value: '@zhin.js/adapter-sandbox', checked: true },
-        { name: 'QQ (ICQQ)', value: '@zhin.js/adapter-icqq' },
-        { name: 'QQ 官方', value: '@zhin.js/adapter-qq' },
-        { name: 'KOOK', value: '@zhin.js/adapter-kook' },
-        { name: 'Discord', value: '@zhin.js/adapter-discord' },
-        { name: 'Telegram', value: '@zhin.js/adapter-telegram' },
-        { name: 'Slack', value: '@zhin.js/adapter-slack' }
-      ]
-    }
-  ]);
-
-  config.plugins = config.plugins || [];
-  
-  for (const adapter of adapters) {
-    if (!config.plugins.includes(adapter)) {
-      config.plugins.push(adapter);
-    }
-  }
-
-  console.log(chalk.green(`  ✓ 已配置 ${adapters.length} 个适配器`));
-}
-
-async function setupAI(config: any): Promise<void> {
-  console.log('');
-  console.log(chalk.blue('🤖 配置 AI'));
-  console.log('');
-
-  const { enableAI } = await inquirer.prompt([
-    {
-      type: 'confirm',
-      name: 'enableAI',
-      message: '是否启用 AI 功能？',
-      default: true
-    }
-  ]);
-
-  if (!enableAI) {
-    config.ai = { enabled: false };
-    return;
-  }
-
-  const { provider } = await inquirer.prompt([
-    {
-      type: 'list',
-      name: 'provider',
-      message: '选择 AI 提供商:',
-      choices: [
-        { name: 'Ollama (本地)', value: 'ollama' },
-        { name: 'OpenAI', value: 'openai' },
-        { name: 'DeepSeek', value: 'deepseek' },
-        { name: 'Moonshot (月之暗面)', value: 'moonshot' },
-        { name: 'Zhipu (智谱 AI)', value: 'zhipu' },
-        { name: 'Gemini', value: 'gemini' }
-      ]
-    }
-  ]);
-
-  config.ai = config.ai || {};
-  config.ai.enabled = true;
-  config.ai.defaultProvider = provider;
-  config.ai.providers = config.ai.providers || {};
-
-  if (provider === 'ollama') {
-    const { host, model } = await inquirer.prompt([
-      {
-        type: 'input',
-        name: 'host',
-        message: 'Ollama 服务地址:',
-        default: 'http://localhost:11434'
-      },
-      {
-        type: 'input',
-        name: 'model',
-        message: '模型名称:',
-        default: 'qwen2.5'
-      }
-    ]);
-
-    config.ai.providers.ollama = {
-      host,
-      models: [model]
-    };
-  } else {
-    const { apiKey, model } = await inquirer.prompt([
-      {
-        type: 'password',
-        name: 'apiKey',
-        message: `${provider.toUpperCase()} API Key:`,
-        mask: '*'
-      },
-      {
-        type: 'input',
-        name: 'model',
-        message: '模型名称:',
-        default: provider === 'openai' ? 'gpt-4' : 'default'
-      }
-    ]);
-
-    config.ai.providers[provider] = {
-      apiKey: `\${${provider.toUpperCase()}_API_KEY}`,
-      models: [model]
-    };
-
-    // 保存到 .env
-    const envPath = path.join(process.cwd(), '.env');
-    let envContent = '';
-    if (fs.existsSync(envPath)) {
-      envContent = await fs.readFile(envPath, 'utf-8');
-    }
-    
-    if (!envContent.includes(`${provider.toUpperCase()}_API_KEY=`)) {
-      envContent += `\n${provider.toUpperCase()}_API_KEY=${apiKey}\n`;
-      await fs.writeFile(envPath, envContent);
-    }
-  }
-
-  // 触发配置
-  const { trigger } = await inquirer.prompt([
-    {
-      type: 'checkbox',
-      name: 'trigger',
-      message: 'AI 触发方式:',
-      choices: [
-        { name: '@提及机器人', value: 'at', checked: true },
-        { name: '私聊自动回复', value: 'private', checked: true },
-        { name: '使用前缀 (如: #, AI:)', value: 'prefix' }
-      ]
-    }
-  ]);
-
-  config.ai.trigger = config.ai.trigger || {};
-  config.ai.trigger.respondToAt = trigger.includes('at');
-  config.ai.trigger.respondToPrivate = trigger.includes('private');
-
-  if (trigger.includes('prefix')) {
-    const { prefixes } = await inquirer.prompt([
-      {
-        type: 'input',
-        name: 'prefixes',
-        message: '输入前缀 (逗号分隔):',
-        default: '#,AI:,ai:'
-      }
-    ]);
-    config.ai.trigger.prefixes = prefixes.split(',').map((p: string) => p.trim());
-  } else {
-    config.ai.trigger.prefixes = [];
-  }
-
-  console.log(chalk.green('  ✓ AI 配置完成'));
-}
-
 function findConfigFile(cwd: string): string | null {
   const candidates = ['zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json', 'zhin.config.toml', 'zhin.config.ts'];
   return candidates.find(f => fs.existsSync(path.join(cwd, f))) || null;
@@ -409,7 +187,7 @@ export const setupCommand = new Command('setup')
     const pkgPath = path.join(cwd, 'package.json');
     
     if (!fs.existsSync(pkgPath)) {
-      logger.error('当前目录不是有效的 Zhin 项目，请先使用 "zhin new" 创建项目');
+      logger.error(`当前目录不是有效的 Zhin 项目，请先使用 ${CREATE_PROJECT_COMMAND} 创建项目`);
       process.exit(1);
     }
 
@@ -434,21 +212,43 @@ export const setupCommand = new Command('setup')
     }
 
     try {
-      // 根据选项决定执行哪些配置
+      const wizardOptions: InitOptions = {};
+
       if (options.bootstrap || (!options.database && !options.adapters && !options.ai)) {
         await setupBootstrapFiles(cwd);
       }
-      
+
       if (options.database || (!options.bootstrap && !options.adapters && !options.ai)) {
-        await setupDatabase(config);
+        wizardOptions.database = await configureDatabaseOptions();
       }
-      
+
       if (options.adapters || (!options.bootstrap && !options.database && !options.ai)) {
-        await setupAdapters(config);
+        wizardOptions.adapters = await configureAdapters();
       }
-      
+
       if (options.ai || (!options.bootstrap && !options.database && !options.adapters)) {
-        await setupAI(config);
+        wizardOptions.ai = await configureAI();
+      }
+
+      finalizeWizardOptions(wizardOptions);
+      applyWizardOptionsToConfig(config, wizardOptions);
+      await appendWizardEnvVars(cwd, wizardOptions.adapters, wizardOptions.ai);
+
+      const deps = collectWizardDependencies(wizardOptions);
+      const depsChanged = await mergeDependenciesIntoPackageJson(cwd, deps);
+      if (depsChanged) {
+        console.log(chalk.gray('  ✓ 已更新 package.json 依赖，请运行 pnpm install'));
+      }
+
+      if (wizardOptions.adapters) {
+        const notes = getAdapterSetupNotes(wizardOptions.adapters);
+        if (notes.length > 0) {
+          console.log('');
+          console.log(chalk.gray('  适配器后续步骤：'));
+          for (const note of notes) {
+            console.log(chalk.gray(`    • ${note}`));
+          }
+        }
       }
 
       // 保存配置

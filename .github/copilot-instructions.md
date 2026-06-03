@@ -515,10 +515,10 @@ useContext('database', (db) => {
 ```typescript
 // ✅ 正确的顺序
 plugins: [
-  'http',              // 先加载 HTTP
-  'adapter-process',   // 然后加载适配器
-  'console',           // 然后加载控制台
-  'my-plugin'          // 最后加载依赖上述插件的插件
+  '@zhin.js/host-router',  // 先加载 Host HTTP / Router
+  '@zhin.js/host-api',     // Console 管理面 API（可选）
+  '@zhin.js/adapter-sandbox',
+  'my-plugin',             // 最后加载依赖 router 的插件
 ]
 ```
 
@@ -716,10 +716,10 @@ export default defineConfig(async (env) => {
       path.join('node_modules', '@zhin.js')
     ],
     plugins: [
-      'http',              // 先加载 HTTP 服务
-      'adapter-process',   // 然后加载适配器
-      'console',           // 最后加载控制台
-      'my-plugin'
+      '@zhin.js/host-router',
+      '@zhin.js/host-api',
+      '@zhin.js/adapter-sandbox',
+      'my-plugin',
     ],
     debug: env.DEBUG === 'true'
   }
@@ -727,10 +727,10 @@ export default defineConfig(async (env) => {
 ```
 
 **插件加载顺序**：
-1. `http` - 注册 HTTP 服务和基础 API
-2. 适配器插件 - 注册平台相关 API (如 `/api/icqq/*`)
-3. `console` - 提供 Vite 开发服务器和静态文件处理
-4. 业务插件 - 依赖上述 Context
+1. `@zhin.js/host-router` — HTTP 监听与 `router` 上下文
+2. `@zhin.js/host-api` — 管理面 API / PageManager（可选）
+3. 适配器插件 — 平台消息与扩展路由（如 `/api/icqq/*`）
+4. 业务插件 — 依赖 `router` / `ai` 等上下文
 
 ## 环境要求
 

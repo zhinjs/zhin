@@ -19,6 +19,14 @@ ai:
 
 [了解更多 →](./ai)
 
+## Agent 与 MCP
+
+AI 原生能力的分层说明与 Advanced 开关：
+
+- [Agent 概念入门](./agent-concepts) — `ctx.ai` / `ctx.agent`、Subagent、toolSearch
+- [MCP 集成](./mcp) — Client 接外部工具 / Server 供 IDE 开发插件
+- [Agent 安全与角色](./agent-harness-engineering) — 执行策略与七种编排角色
+
 ## Feature 系统
 
 Feature 是 Zhin.js 的核心扩展机制，所有内置功能（命令、工具、定时任务等）均基于 Feature 实现：

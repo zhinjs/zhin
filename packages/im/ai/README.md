@@ -43,24 +43,33 @@ const response = await provider.chat({
 无状态的多轮 tool-calling 循环引擎：
 
 ```typescript
-import { Agent, createAgent } from '@zhin.js/ai'
+import { createAgent } from '@zhin.js/ai'
+import type { AgentTool } from '@zhin.js/ai'
 
-const agent = createAgent(provider, logger, {
+const weatherTool: AgentTool = {
+  name: 'get_weather',
+  description: '查询城市天气',
+  parameters: {
+    type: 'object',
+    properties: { city: { type: 'string', description: '城市名' } },
+    required: ['city'],
+  },
+  execute: async ({ city }) => `${city}：晴，25°C`,
+}
+
+const agent = createAgent(provider, {
   maxIterations: 5,
-  timeout: 60000,
-  modelFallbacks: ['gpt-4o-mini'],  // 可选：降级模型列表
-})
-
-const result = await agent.run({
-  messages: [
-    { role: 'system', content: '你是一个助手' },
-    { role: 'user', content: '今天天气怎么样？' },
-  ],
+  turnTimeout: 60000,
+  modelFallbacks: ['gpt-4o-mini'],
+  systemPrompt: '你是一个助手',
   tools: [weatherTool],
 })
+
+// run(userMessage, contextMessages?, filterOptions?)
+const result = await agent.run('今天北京天气怎么样？')
 ```
 
-Agent 支持自动模型降级：当主模型请求失败时，依次尝试 `modelFallbacks` 中的模型。
+`createAgent(provider, config)` 的 `config` 为 `Omit<AgentConfig, 'provider'>`；`agent.run()` 接受用户字符串与可选历史 `ChatMessage[]`。Agent 支持自动模型降级：主模型失败时依次尝试 `modelFallbacks`。
 
 ### ModelRegistry（模型注册表）
 
@@ -69,7 +78,7 @@ Agent 支持自动模型降级：当主模型请求失败时，依次尝试 `mod
 ```typescript
 import { ModelRegistry } from '@zhin.js/ai'
 
-const registry = new ModelRegistry(logger)
+const registry = new ModelRegistry() // 可选 dataDir，默认 data/model-registry-cache.json
 
 // 自动发现可用模型
 const models = await registry.discover(provider)
@@ -114,12 +123,19 @@ const dbSessionManager = createDatabaseSessionManager(databaseModel, {
 管理消息记录和上下文摘要：
 
 ```typescript
-import { createContextManager } from '@zhin.js/ai'
+import {
+  createContextManager,
+  CHAT_MESSAGE_MODEL,
+  CONTEXT_SUMMARY_MODEL,
+} from '@zhin.js/ai'
 
-const contextManager = createContextManager(logger, {
+// 需先通过 DatabaseFeature 注册 CHAT_MESSAGE_MODEL / CONTEXT_SUMMARY_MODEL
+const contextManager = createContextManager(messageModel, summaryModel, {
   enabled: true,
-  maxMessagesBeforeSummary: 100,
-  summaryRetentionDays: 30,
+  maxRecentMessages: 100,
+  summaryThreshold: 50,
+  keepAfterSummary: 10,
+  maxContextTokens: 4000,
 })
 ```
 
@@ -130,11 +146,12 @@ const contextManager = createContextManager(logger, {
 ```typescript
 import { ConversationMemory } from '@zhin.js/ai'
 
-const memory = new ConversationMemory(provider, logger, {
-  shortTermWindow: 5,
+const memory = new ConversationMemory({
+  slidingWindowSize: 5,
   minTopicRounds: 3,
   topicChangeThreshold: 0.5,
 })
+memory.setProvider(provider) // 摘要生成需要 Provider
 ```
 
 ### Compaction（上下文压缩）
@@ -224,27 +241,43 @@ const cache = new FileStateCache({ maxEntries: 500, ttlMs: 30000 })
 const content = await cache.getOrRead('/path/to/file.ts')
 ```
 
-### MicroCompact（微压缩）
+### microCompactMessages（微压缩）
 
-轻量级上下文压缩引擎，在完整 LLM 摘要之前先做增量裁剪，降低 token 消耗：
-
-```typescript
-import { MicroCompact } from '@zhin.js/ai'
-
-const compactor = new MicroCompact({ maxTokens: 2000 })
-const compacted = compactor.compact(messages)
-```
-
-### ToolSearchCache（工具搜索缓存）
-
-缓存工具关键词匹配结果，避免每轮对话重复扫描全部工具：
+轻量级上下文压缩，在完整 LLM 摘要之前清理旧工具结果，降低 token 消耗：
 
 ```typescript
-import { ToolSearchCache } from '@zhin.js/ai'
+import { microCompactMessages } from '@zhin.js/ai'
 
-const cache = new ToolSearchCache({ maxSize: 100, ttlMs: 60000 })
-const tools = cache.getOrSearch('天气查询', () => searchTools('天气查询'))
+const { messages: compacted, savedTokens } = microCompactMessages(messages, {
+  keepRecentToolResults: 6,
+})
 ```
+
+### CachedToolFilter（工具过滤缓存）
+
+缓存 `filterTools` 结果，避免相同用户消息与工具集重复评分：
+
+```typescript
+import { CachedToolFilter } from '@zhin.js/ai'
+
+const cache = new CachedToolFilter()
+const tools = cache.filter('天气查询', allTools, { maxTools: 10 })
+```
+
+## 配置类型
+
+框架无关的配置形状定义在 [`src/types.ts`](./src/types.ts)：
+
+| 类型 | 用途 |
+|------|------|
+| `ProviderConfig` / `OllamaProviderConfig` | 各 LLM Provider 连接与能力 |
+| `AgentConfig` | `createAgent`：模型、`modelFallbacks`、`maxIterations`、`turnTimeout`、工具列表等 |
+| `SessionConfig` | 会话 `maxHistory`、`expireMs` |
+| `ContextConfig` | `ContextManager` 总结阈值与 token 预算 |
+| `ConversationMemoryConfig` | 话题切换与短期窗口 |
+| `AIConfig` | 应用级 YAML `ai:` 块的 TypeScript 形状（Provider、sessions、context、trigger、`agent.modelHarness` 等） |
+
+完整 AI 模块文档：[zhin.js.org/advanced/ai](https://zhin.js.org/advanced/ai)
 
 ## 主要导出
 
@@ -252,14 +285,14 @@ const tools = cache.getOrSearch('天气查询', () => searchTools('天气查询'
 |------|------|
 | `OpenAIProvider` / `AnthropicProvider` / `OllamaProvider` | LLM 提供者 |
 | `Agent` / `createAgent` | Agent 引擎 |
+| `ModelRegistry` | 模型发现与 Tier 选择 |
 | `SessionManager` | 会话管理 |
-| `ContextManager` | 上下文管理 |
+| `ContextManager` / `createContextManager` | 上下文管理 |
 | `ConversationMemory` | 对话记忆 |
-| `compactSession` / `pruneHistoryForContext` | 上下文压缩 |
+| `compactSession` / `pruneHistoryForContext` / `microCompactMessages` | 上下文压缩 |
 | `CostTracker` | Token 用量与成本追踪 |
 | `FileStateCache` | 文件状态缓存 |
-| `MicroCompact` | 微压缩引擎 |
-| `ToolSearchCache` | 工具搜索缓存 |
+| `CachedToolFilter` | 工具过滤缓存 |
 | `parseOutput` / `renderToPlainText` | 输出解析 |
 | `RateLimiter` | 速率限制 |
 | `detectTone` | 情绪检测 |

@@ -14,6 +14,15 @@ import path from 'path';
 import { execSync, spawnSync } from 'child_process';
 import yaml from 'yaml';
 import { logger } from '../utils/logger.js';
+import {
+  CREATE_PROJECT_COMMAND,
+  spawnCreateProject,
+} from '../utils/create-project.js';
+import {
+  formatNodeRequirementMessage,
+  isNodeVersionSupported,
+  NODE_ENGINES_HINT,
+} from '../utils/node-requirements.js';
 
 const cwd = process.cwd();
 
@@ -23,10 +32,7 @@ const cwd = process.cwd();
 
 function checkEnvironment(): { node: boolean; pnpm: boolean; git: boolean } {
   const checks = { node: false, pnpm: false, git: false };
-  try {
-    const v = execSync('node -v', { encoding: 'utf-8' }).trim();
-    checks.node = parseInt(v.slice(1).split('.')[0], 10) >= 18;
-  } catch {}
+  checks.node = isNodeVersionSupported(process.version);
   try {
     execSync('pnpm -v', { encoding: 'utf-8' });
     checks.pnpm = true;
@@ -41,7 +47,11 @@ function checkEnvironment(): { node: boolean; pnpm: boolean; git: boolean } {
 function printEnvironmentCheck(checks: ReturnType<typeof checkEnvironment>): void {
   console.log(chalk.bold.blue('📋 环境检查'));
   console.log('');
-  console.log(checks.node ? chalk.green('  ✓ Node.js (>= 18)') : chalk.red('  ✗ Node.js (需要 >= 18)'));
+  console.log(
+    checks.node
+      ? chalk.green(`  ✓ Node.js (${NODE_ENGINES_HINT})`)
+      : chalk.red(`  ✗ Node.js（需要 ${NODE_ENGINES_HINT}，当前 ${process.version}）`),
+  );
   console.log(checks.pnpm ? chalk.green('  ✓ pnpm') : chalk.red('  ✗ pnpm (推荐: npm install -g pnpm)'));
   console.log(checks.git ? chalk.green('  ✓ Git') : chalk.yellow('  ○ Git (可选)'));
   console.log('');
@@ -184,7 +194,7 @@ function printNextSteps(): void {
 function printQuickStart(): void {
   console.log(chalk.bold.blue('🚀 快速开始'));
   console.log('');
-  console.log(chalk.white('  1. 创建项目: ') + chalk.cyan('npx create-zhin my-bot'));
+  console.log(chalk.white('  1. 创建项目: ') + chalk.cyan(CREATE_PROJECT_COMMAND + ' my-bot'));
   console.log(chalk.white('  2. 进入目录: ') + chalk.cyan('cd my-bot'));
   console.log(chalk.white('  3. 启动开发: ') + chalk.cyan('pnpm dev'));
   console.log(chalk.white('  4. 控制台:   ') + chalk.cyan('https://console.zhin.dev （API → 127.0.0.1:8086）'));
@@ -283,7 +293,7 @@ async function runOutsideProject(checks: ReturnType<typeof checkEnvironment>): P
       name: 'choice',
       message: '选择操作:',
       choices: [
-        { name: '创建新项目（npx create-zhin）', value: 'create' },
+        { name: `创建新项目（${CREATE_PROJECT_COMMAND}）`, value: 'create' },
         { name: '仅显示快速开始步骤', value: 'quick' },
         { name: '退出', value: 'exit' },
       ],
@@ -315,16 +325,16 @@ async function runOutsideProject(checks: ReturnType<typeof checkEnvironment>): P
   ]);
 
   console.log('');
-  try {
-    spawnSync('npx', ['create-zhin', projectName], { stdio: 'inherit' });
+  const exitCode = spawnCreateProject(projectName);
+  if (exitCode === 0) {
     console.log('');
     console.log(chalk.bold.green('✅ 项目已创建'));
     console.log(chalk.cyan(`  cd ${projectName}`));
     console.log(chalk.cyan('  zhin onboard') + chalk.gray('  # 在项目内继续配置'));
     console.log(chalk.cyan('  pnpm dev'));
-  } catch {
-    logger.error('创建项目失败');
-    process.exitCode = 1;
+  } else {
+    logger.error('创建项目失败，可手动运行: ' + CREATE_PROJECT_COMMAND + ' ' + projectName);
+    process.exitCode = exitCode ?? 1;
   }
 }
 
@@ -347,7 +357,7 @@ export const onboardCommand = new Command('onboard')
     }
 
     if (!checks.node || !checks.pnpm) {
-      console.log(chalk.yellow('请先安装 Node.js (>=18) 与 pnpm 后重试。'));
+      console.log(chalk.yellow(`请先安装 Node.js (${NODE_ENGINES_HINT}) 与 pnpm 后重试。`));
       process.exitCode = 1;
       return;
     }

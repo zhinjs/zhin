@@ -9,21 +9,52 @@ Zhin.js KOOK（开黑啦）适配器，基于 KOOK 官方 API 开发，支持频
 - 🔄 消息格式转换和适配
 - 📁 自动数据目录管理
 - ⚡ 基于 WebSocket 的实时通信
-- 🎯 支持 Webhook 和 WebSocket 双模式
 - 📝 支持 Markdown 消息格式
 
 ## 安装
 
 ```bash
-pnpm add @zhin.js/adapter-kook kook-client
+pnpm add @zhin.js/adapter-kook
+```
+
+## 前置条件
+
+| 要求 | 说明 |
+|------|------|
+| **Bot Token** | 在 [KOOK 开发者平台](https://developer.kookapp.cn/) 创建应用并获取 |
+| **邀请入服** | 将机器人邀请到目标服务器，并授予查看频道、发送消息等权限 |
+| **连接方式** | 当前适配器通过 **WebSocket** 连接 KOOK（`kook-client`）；无需公网 URL |
+| **host-router** | 不需要 |
+
+必填字段见 `KookBotConfig`：`context`、`name`、`token`。
+
+## 最小配置
+
+```yaml
+plugins:
+  - "@zhin.js/adapter-kook"
+
+bots:
+  - context: kook
+    name: my-kook-bot
+    token: "${KOOK_TOKEN}"
 ```
 
 ## 配置
 
-### WebSocket 模式（推荐）
+可选字段（见 `KookBotConfig`）：`data_dir`、`timeout`、`max_retry`、`ignore`、`logLevel`。
+
+```yaml
+bots:
+  - context: kook
+    name: my-kook-bot
+    token: "${KOOK_TOKEN}"
+    data_dir: ./data/kook
+```
+
+TypeScript 等价写法：
 
 ```typescript
-// zhin.config.ts
 import { defineConfig } from 'zhin.js'
 
 export default defineConfig({
@@ -31,38 +62,11 @@ export default defineConfig({
     {
       context: 'kook',
       name: 'my-kook-bot',
-      token: process.env.KOOK_TOKEN,        // KOOK 机器人 Token（必需）
-      mode: 'websocket',                     // WebSocket 模式
-      data_dir: './data'                     // 数据目录（可选）
-    }
+      token: process.env.KOOK_TOKEN!,
+      data_dir: './data/kook',
+    },
   ],
-  plugins: [
-    'http',
-    'adapter-kook'
-  ]
-})
-```
-
-### Webhook 模式
-
-```typescript
-export default defineConfig({
-  bots: [
-    {
-      context: 'kook',
-      name: 'my-kook-bot',
-      token: process.env.KOOK_TOKEN,         // KOOK 机器人 Token（必需）
-      mode: 'webhook',                        // Webhook 模式
-      endpoint: process.env.KOOK_ENDPOINT,   // Webhook 端点（必需）
-      verifyToken: process.env.KOOK_VERIFY,  // 验证令牌（可选）
-      encryptKey: process.env.KOOK_ENCRYPT,  // 加密密钥（可选）
-      data_dir: './data'
-    }
-  ],
-  plugins: [
-    'http',
-    'adapter-kook'
-  ]
+  plugins: ['@zhin.js/adapter-kook'],
 })
 ```
 
@@ -78,8 +82,7 @@ export default defineConfig({
 
 在应用设置中：
 - 获取 **Bot Token**（必需）
-- 配置 Webhook 地址（Webhook 模式）
-- 设置验证令牌和加密密钥（可选，增强安全性）
+- 将机器人邀请到需要的服务器并配置频道权限
 
 ### 3. 邀请机器人
 
@@ -314,19 +317,9 @@ onMessage(async (message) => {
 })
 ```
 
-## WebSocket vs Webhook
+## 连接说明
 
-### WebSocket 模式（推荐）
-- ✅ 更低的延迟
-- ✅ 实时双向通信
-- ✅ 无需公网 IP
-- ✅ 配置简单
-
-### Webhook 模式
-- ✅ 服务器资源占用少
-- ✅ 可扩展性强
-- ⚠️ 需要公网 IP
-- ⚠️ 需要配置回调地址
+本适配器固定使用 **WebSocket** 与 KOOK 通信（由 `kook-client` 实现），无需配置 Webhook 回调地址。
 
 ## 消息 ID 格式
 
@@ -351,27 +344,23 @@ KOOK 有消息发送频率限制：
 - 每秒最多 5 条消息
 - 建议添加发送队列管理
 
-## 常见问题
+## 故障排查
 
-### Q: 机器人无法收到消息？
+### 机器人无法收到消息
 
-A: 检查以下几点：
 1. Token 是否正确
 2. 机器人是否已加入服务器
 3. 机器人是否有查看频道权限
-4. WebSocket 连接是否正常
+4. WebSocket 连接是否正常（查看启动日志）
 
-### Q: Webhook 模式无法工作？
+### 发送失败或频率限制
 
-A: 确认：
-1. Webhook URL 可以从公网访问
-2. 验证令牌配置正确
-3. 端口已开放
-4. HTTPS 配置正确（推荐）
+KOOK 有发送频率限制（约每秒 5 条）；建议队列化发送并检查 API 错误码。
 
-### Q: 如何发送卡片消息？
+### 如何发送卡片消息
 
-A: 使用 KOOK 的卡片消息格式：
+使用 KOOK 卡片消息格式：
+
 ```typescript
 await bot.sendChannelMsg(channelId, [
   {
@@ -383,12 +372,13 @@ await bot.sendChannelMsg(channelId, [
 ])
 ```
 
-## 相关链接
+## 文档链接
 
+- [KOOK 适配器文档](https://zhin.js.org/adapters/kook)
+- [适配器概览](https://zhin.js.org/essentials/adapters)
 - [KOOK 开发者平台](https://developer.kookapp.cn/)
 - [KOOK 开发文档](https://developer.kookapp.cn/doc/)
-- [kook-client 文档](https://github.com/zhinjs/kook-client)
-- [Zhin.js 官方文档](https://github.com/zhinjs/zhin)
+- [kook-client](https://github.com/zhinjs/kook-client)
 
 ## 依赖项
 

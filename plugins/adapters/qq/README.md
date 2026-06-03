@@ -19,19 +19,17 @@ export default defineConfig({
   bots: [
     {
       context: 'qq',
-      name: '你的机器人ID', // 机器人的 AppID
-      appID: process.env.QQ_APP_ID,
-      token: process.env.QQ_TOKEN,
+      name: 'my-qq-bot',
+      appid: process.env.QQ_APPID,
       secret: process.env.QQ_SECRET,
-      mode: 'public', // 或 'private'
-      platform: 'qq', // 'qq' | 'qzone'
-      data_dir: './data' // 数据存储目录
-    }
+      mode: 'websocket',
+      sandbox: true,
+      data_dir: './data',
+    },
   ],
   plugins: [
-    'http',
-    'adapter-qq'
-  ]
+    '@zhin.js/adapter-qq',
+  ],
 })
 ```
 
@@ -40,11 +38,10 @@ export default defineConfig({
 ```typescript
 const config: QQBotConfig = {
   context: 'qq',
-  name: '机器人ID',
-  appID: 'YOUR_APP_ID',        // 机器人 AppID（必需）
-  token: 'YOUR_TOKEN',         // 机器人 Token（必需）
+  name: 'my-qq-bot',
+  appid: 'YOUR_APPID',         // 机器人 AppID（必需，小写 appid）
   secret: 'YOUR_SECRET',       // 机器人 Secret（必需）
-  mode: 'public',              // 'public' | 'private' 接收模式
+  mode: 'websocket',           // 接收模式，见 qq-official-bot ReceiverMode
   platform: 'qq',              // 'qq' | 'qzone' 平台类型
   intents: [                   // 事件订阅意图
     'GUILDS',
@@ -64,8 +61,8 @@ const config: QQBotConfig = {
 1. 访问 [QQ 开放平台](https://q.qq.com/bot)
 2. 登录并创建机器人应用
 3. 在「开发设置」中获取：
-   - **AppID**: 机器人应用 ID
-   - **Token**: 机器人令牌
+   - **AppID**（配置字段 `appid`）: 机器人应用 ID
+   - **Secret**: 机器人密钥（`secret`）
    - **Secret**: 机器人密钥
 
 ### 2. 配置权限

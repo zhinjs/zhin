@@ -10,7 +10,7 @@ Zhin 机器人框架的全功能命令行工具，提供项目创建、开发调
 - 🛠️ **进程管理**: 生产环境启动、停止、重启、后台运行
 - ⚙️ **多运行时**: 支持 Node.js 和 Bun 运行时
 
-> **注意**: 项目初始化功能已移至 `create-zhin-app`，请使用 `npm create zhin-app` 创建新项目。
+> **注意**: 新建 workspace 请用 `pnpm create zhin-app`（`create-zhin-app`）。`zhin setup` / `zhin onboard` 的 database / adapters / AI 向导与 create 共用 [`@zhin.js/scaffold-wizard`](../../packages/toolkit/scaffold-wizard/)。
 
 ## 命令详解
 
@@ -236,7 +236,7 @@ zhin new my-awesome-plugin
 # 插件会自动添加到 package.json 依赖
 # 在配置文件中启用插件
 # 编辑 zhin.config.yml，添加到 plugins 数组：
-# plugins: ['adapter-process', 'http', 'console', 'my-awesome-plugin']
+# plugins: ['@zhin.js/host-router', '@zhin.js/host-api', 'my-awesome-plugin']
 ```
 
 ### 4. 构建插件
@@ -300,19 +300,19 @@ export default defineConfig(async (env) => {
   return {
     bots: [
       {
-        context: 'process',
-        name: `${process.pid}`,
-      }
+        context: 'sandbox',
+        name: 'sandbox-bot',
+      },
     ],
     plugin_dirs: [
       './src/plugins',
       ...(isProduction ? [] : ['./dev-plugins'])
     ],
     plugins: [
-      'adapter-process',
-      'http',
-      'console',
-      'test-plugin'
+      '@zhin.js/adapter-sandbox',
+      '@zhin.js/host-router',
+      '@zhin.js/host-api',
+      'test-plugin',
     ],
     debug: !isProduction
   };
@@ -443,7 +443,7 @@ zhin doctor [options]
 - `--fix`: 自动修复可修复的问题（如创建默认配置文件、引导文件、`.env` 文件等）
 
 **检查项目：**
-- Node.js 版本（>= 18）
+- Node.js 版本（^20.19.0 或 >=22.12.0，与 create-zhin-app 一致）
 - pnpm 安装
 - 配置文件（`zhin.config.yml` 等）
 - 引导文件（`SOUL.md`、`TOOLS.md`、`AGENTS.md`）
@@ -455,7 +455,7 @@ zhin doctor [options]
 
 ### setup - 配置向导
 
-交互式引导配置项目：
+交互式引导配置已有项目（database / adapters / AI / bootstrap）。database、adapters、AI 三步与 `pnpm create zhin-app` 共用 `@zhin.js/scaffold-wizard`，行为一致。
 
 ```bash
 zhin setup [options]
@@ -463,8 +463,8 @@ zhin setup [options]
 
 **选项：**
 - `--bootstrap`: 仅配置引导文件（SOUL.md、TOOLS.md、AGENTS.md）
-- `--database`: 仅配置数据库（SQLite / MySQL / PostgreSQL）
-- `--adapters`: 仅配置适配器（Sandbox、QQ、KOOK、Discord 等）
+- `--database`: 仅配置数据库（SQLite / MySQL / PostgreSQL 等）
+- `--adapters`: 仅配置适配器（Sandbox、Telegram、Discord、GitHub 等）
 - `--ai`: 仅配置 AI（Ollama、OpenAI、DeepSeek 等）
 
 不带选项时，运行完整配置向导。
@@ -518,7 +518,9 @@ zhin onboard [options]
 - `-q, --quick`: 仅显示快速开始步骤，不进入向导
 - `--flow <flow>`: 配置流程，可选 `quickstart` | `full`（默认）
 
-**项目内流程：** 环境检查 → 若存在配置则显示摘要 → 选择「保持 / 重新配置 / 重置」→ 重新配置或重置时启动 `zhin setup`，复用现有配置文件、环境变量与 data 目录 → 可选运行 `zhin doctor`。
+**项目内流程：** 环境检查 → 若存在配置则显示摘要 → 选择「保持 / 重新配置 / 重置」→ 重新配置或重置时启动 `zhin setup`（共用 scaffold-wizard）→ 可选运行 `zhin doctor`。
+
+**项目外：** 引导执行 `pnpm create zhin-app` 创建新项目（Node ^20.19.0 或 >=22.12.0）。
 
 ### send - 向运行中的机器人发送消息
 
@@ -534,19 +536,41 @@ zhin send <scene_id> [内容...] [options]
 
 **选项：**
 - `-s, --scene <type>`: 场景类型，`private` | `group` | `channel`，默认 `private`
-- `-a, --adapter <name>`: 适配器名称（如 `icqq`、`discord`、`process`），默认 `process`
+- `-a, --adapter <name>`: 适配器名称（如 `sandbox`、`icqq`、`discord`），默认 `sandbox`
 - `-b, --bot <id>`: 指定 Bot ID；不传则使用该适配器下第一个在线 Bot
 
 **示例：**
 ```bash
 zhin send 1659488338 你好啊
 zhin send 123456 --scene group --adapter icqq 群发一条
-echo "长内容" | zhin send 1659488338 --adapter process
+echo "长内容" | zhin send 1659488338 --adapter sandbox
 ```
 
 ### migrate - 项目升级
 
-将老版本 Zhin 项目依赖与结构升级到最新，见上文「migrate」说明。
+将老版本 Zhin 项目依赖与结构升级到最新（`src/commands/migrate.ts`）。
+
+```bash
+zhin migrate [options]
+```
+
+**步骤：**
+1. 将 `package.json` 中 `zhin.js` 与所有 `@zhin.js/*` 依赖升级到 `latest`（monorepo 内保留 `workspace:*`）
+2. 补全推荐 `scripts`（`dev` / `start` / `daemon` / `stop` / `build`）与 `engines.node`
+3. 确保 `data/`、`plugins/` 等目录存在
+4. 升级引导文件（`SOUL.md`、`TOOLS.md`、`AGENTS.md`）
+5. 执行 `pnpm install`（可用 `--no-install` 跳过）
+
+**选项：**
+- `--dry-run`: 仅打印将要执行的操作，不写入文件也不安装依赖
+- `--no-install`: 跳过最后一步依赖安装
+
+**示例：**
+```bash
+zhin migrate --dry-run   # 预览变更
+zhin migrate             # 升级并安装
+zhin migrate --no-install
+```
 
 ### install-service / uninstall-service - 系统服务
 
@@ -592,6 +616,12 @@ zhin uninstall-service
    # 确保项目目录权限
    chmod -R 755 ./my-bot
    ```
+
+## 环境要求
+
+- **Node.js**: `^20.19.0 || >=22.12.0`（与 `src/utils/node-requirements.ts`、create-zhin-app 一致）
+- **pnpm**: 推荐 9+（workspace 项目）
+- **操作系统**: Windows 10+、macOS 10.15+、现代 Linux
 
 ## 依赖项
 

@@ -44,9 +44,7 @@ pnpm add @zhin.js/adapter-github
    - Issue comment、Pull request、Pull request review、Pull request review comment
    - Push、Star、Fork（用于通知）
 6. 创建后记录 **App ID**，点击 **Generate a private key** 下载 `.pem` 文件
-7. 如需 OAuth 用户绑定功能，记录 **Client ID** 和 **Client Secret**（在 App 设置页的 General 中）
-8. 在 App 设置页配置 **Callback URL**: `https://your-domain/pub/github/oauth/callback`
-9. 安装 App 到目标仓库/组织
+7. 安装 App 到目标仓库/组织
 
 ## 配置
 
@@ -57,25 +55,21 @@ bots:
     name: my-github-bot
     app_id: 123456
     private_key: ./data/github-app.pem   # PEM 文件路径或直接粘贴内容
-    # installation_id: 78901234           # 可选，不填则自动获取第一个
-    # webhook_secret: your-secret         # 可选，Webhook 签名验证
-    # client_id: Iv1.xxxxxxxxxx           # 可选，OAuth 用户绑定
-    # client_secret: xxxxxxxxxxxx         # 可选，配合 client_id 使用
-    # public_url: https://bot.example.com # 可选，OAuth 回调和绑定链接的公开地址
+    webhook_secret: your-secret          # 可选；配置后启用 Webhook
+    webhook_path: /pub/github/webhook    # 可选；默认 /github/webhook，/pub/* 可绕过 Bearer
 
 plugins:
+  - database
   - "@zhin.js/adapter-github"
-  - "@zhin.js/host-router"                       # 可选，提供 Webhook + OAuth 能力
+  - "@zhin.js/host-router"                # Webhook 需要
 ```
 
-`.env` 文件：
 ```env
 GITHUB_APP_ID=123456
 GITHUB_WEBHOOK_SECRET=your-secret
-GITHUB_CLIENT_ID=Iv1.xxxxxxxxxx
-GITHUB_CLIENT_SECRET=xxxxxxxxxxxx
 # MCP server-github（适配器自动 addMcp，与 App 认证独立）
 GITHUB_PERSONAL_ACCESS_TOKEN=ghp_xxxxxxxxxxxx
+# 或 ai.githubMcp.token / ai.mcpServers
 ```
 
 或在 `zhin.config.yml` 中设置 `ai.githubMcp.token`（优先于环境变量）。
@@ -150,9 +144,9 @@ Headers:
 - `X-GitHub-Event`: 事件类型
 - `X-Hub-Signature-256`: 签名（配置了 secret 时）
 
-## OAuth 用户绑定
+## OAuth 用户绑定（Device Flow）
 
-支持聊天平台用户绑定自己的 GitHub 账号。绑定后，star/fork 等个人操作将以用户自己的身份执行。
+用户通过工具 **`github_bind`** 绑定 GitHub 账号（[OAuth Device Flow](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#device-flow)），**不是**浏览器 OAuth 回调页面。
 
 ### 认证策略
 
@@ -162,31 +156,20 @@ Headers:
 | 评论（bot 发言） | App JWT | 以机器人身份发言 |
 | star / unstar | User OAuth | 个人行为 |
 | fork | User OAuth | 个人行为 |
-| 创建 issue / PR | 视场景选择 | 已绑定用用户 token，未绑定用 App |
 
 ### 绑定流程
 
-1. 用户在聊天中发送"绑定 GitHub 账号"或触发 `github.bind` 工具
-2. Bot 返回一个带有 `state` 的 OAuth 授权链接
-3. 用户点击链接 → 浏览器跳转到 GitHub 授权页面
-4. 用户授权后 → GitHub 回调到 `/pub/github/oauth/callback`
-5. 服务端交换 code → access_token，获取用户信息，存入数据库
-6. 用户看到"绑定成功"页面
+1. 用户在聊天中触发 `github_bind`（或说「绑定 GitHub」）
+2. Bot 返回 **verification URI** 与 **user code**（GitHub Device Flow）
+3. 用户在浏览器打开链接并输入 code 完成授权
+4. Token 写入 `github_oauth_users` 表；可用 `github_whoami` / `github_unbind` 管理
 
-### OAuth 端点
-
-| 路由 | 说明 |
-|------|------|
-| `GET /pub/github/oauth?state=xxx` | 发起 GitHub 授权重定向 |
-| `GET /pub/github/oauth/callback?code=xxx&state=xxx` | GitHub 回调，完成绑定 |
-
-> OAuth 路由注册在 `/github/` 而非 `/api/` 下，因此不受 API Token 认证限制，用户浏览器可直接访问。
+**Client ID**：从 GitHub App 的 `/app` API 自动获取（`GhClient.getClientId()`），**无需**在 bot 配置里写 `client_id` / `client_secret`。
 
 ### 前置条件
 
-- 需要配置 `client_id` 和 `client_secret`
-- 需要 `@zhin.js/host-router` 插件（提供 HTTP 路由）
-- GitHub App 设置页中的 Callback URL 须指向 `https://your-domain/pub/github/oauth/callback`
+- 需要 **`database`** 插件（`github_oauth_users` 模型）
+- Device Flow 在 IM 内完成，**不依赖** `/pub/github/oauth` HTTP 路由
 
 ## 数据库表
 
@@ -216,29 +199,30 @@ Headers:
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | integer | 主键 |
-| platform | text | 聊天平台 (icqq / kook / discord) |
-| platform_uid | text | 聊天平台用户 ID |
+| platform | text | 聊天平台 |
+| platform_uid | text | 平台用户 ID |
 | github_login | text | GitHub 用户名 |
-| github_id | integer | GitHub 用户 ID |
-| access_token | text | OAuth access_token |
-| scope | text | 授权范围 |
-| created_at | date | 创建时间 |
-| updated_at | date | 更新时间 |
+| access_token | text | Device Flow 获得的 token |
+| created_at | integer | 创建时间戳 |
 
 ## 架构说明
 
 ```
 adapter-github/
 ├── src/
-│   ├── index.ts     # GitHubBot + GitHubAdapter + 工具注册 + Webhook
-│   ├── api.ts       # GitHub REST API 客户端 (JWT 认证)
-│   └── types.ts     # 类型定义 (BotConfig, Webhook Payloads, Channel ID)
+│   ├── index.ts              # 插件入口：provide、useContext、模型表
+│   ├── adapter.ts            # GitHubAdapter
+│   ├── bot.ts                # GitHubBot（Issue/PR 频道）
+│   ├── gh-client.ts          # GitHub REST（App JWT / Installation Token）
+│   ├── register-github-mcp.ts # orchestrator.addMcp(server-github)
+│   ├── agent-prompt.ts       # 平台 prompt / deferred 工具筛选
+│   └── types.ts              # BotConfig、Webhook payload、Channel ID
 ├── package.json
 └── README.md
 ```
 
-- **无 `@zhin.js/host-router` 时**：适配器正常运行，可使用所有 API 工具（PR/Issue/Repo 管理），但无法接收 Webhook 推送和 OAuth 绑定
-- **有 `@zhin.js/host-router` 时**：通过 `useContext('router')` 自动注册 Webhook 路由 + OAuth 路由，获得事件通知、聊天消息接收和用户绑定能力
+- **无 `@zhin.js/host-router` 时**：REST 工具与轮询仍可用，但无法注册 Webhook
+- **有 `@zhin.js/host-router` 时**：注册 Webhook；MCP 通过 `orchestrator.addMcp`（需 PAT 或 `ai.githubMcp.token`）
 
 ## 许可证
 

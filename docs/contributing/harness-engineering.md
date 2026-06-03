@@ -28,6 +28,8 @@ pnpm check:prod             # 检查生产配置
 pnpm check:plugin           # 检查插件规范
 pnpm check:architecture     # 检查架构层级
 pnpm check:doc-links        # 检查文档相对链接（AGENTS、architecture 等）
+pnpm check:adapter-docs     # 适配器 README 与 docs/adapters 是否同步
+pnpm sync:adapter-docs      # 从 plugins/adapters/*/README 生成 docs/adapters/*
 pnpm check:stable           # Stable smoke（Sandbox + minimal-bot 契约，无 LLM）
 ```
 
@@ -45,15 +47,15 @@ pnpm type-check             # TypeScript 类型检查
 ```
 1. basic/ (logger, schema, database, cli)
    ↓
-2. packages/kernel (无 IM 概念)
+2. packages/im/kernel (无 IM 概念)
    ↓
-3. packages/ai (providers, agents, memory)
+3. packages/im/ai (providers, agents, memory)
    ↓
-4. packages/core (Plugin, Adapter, Bot, Command)
+4. packages/im/core (Plugin, Adapter, Bot, Command)
    ↓
-5. packages/agent (ZhinAgent, security policies)
+5. packages/im/agent (ZhinAgent, security policies)
    ↓
-6. packages/zhin (主入口)
+6. packages/im/zhin (主入口)
 ```
 
 ### 允许的导入关系
@@ -61,18 +63,18 @@ pnpm type-check             # TypeScript 类型检查
 | 层级 | 可以导入 |
 |------|----------|
 | basic/ | 无（基础层）|
-| packages/kernel | basic/ |
-| packages/ai | basic/, packages/kernel |
-| packages/core | basic/, packages/kernel, packages/ai |
-| packages/agent | basic/, packages/kernel, packages/ai, packages/core |
-| packages/zhin | 所有层级 |
+| packages/im/kernel | basic/ |
+| packages/im/ai | basic/, packages/im/kernel |
+| packages/im/core | basic/, packages/im/kernel, packages/im/ai |
+| packages/im/agent | basic/, packages/im/kernel, packages/im/ai, packages/im/core |
+| packages/im/zhin | 所有 IM 层级 + 按需 re-export |
 
 ### 禁止的导入
 
-- ❌ `packages/kernel` 不能导入 `packages/core` 或更高层
-- ❌ `packages/ai` 不能导入 `packages/core` 或更高层
-- ❌ `packages/core` 不能导入 `packages/agent`
-- ❌ 插件不能直接导入 `packages/kernel`（应通过 `packages/core`）
+- ❌ `packages/im/kernel` 不能导入 `packages/im/core` 或更高层
+- ❌ `packages/im/ai` 不能导入 `packages/im/core` 或更高层
+- ❌ `packages/im/core` 不能导入 `packages/im/agent`
+- ❌ 插件不能直接导入 `packages/im/kernel`（应通过 `@zhin.js/core` / `zhin.js`）
 
 ## 发送链路保护
 
@@ -263,7 +265,7 @@ CI 工作流在 PR 到 `main` 分支时自动运行：
 
 **错误信息**：
 ```
-Layer "packages/kernel" cannot import from "packages/core"
+Layer "packages/im/kernel" cannot import from "packages/im/core"
 ```
 
 **解决方案**：

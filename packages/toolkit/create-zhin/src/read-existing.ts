@@ -4,9 +4,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import yaml from 'yaml';
-import type { InitOptions, DatabaseConfig } from './types.js';
-import type { AdapterSetupResult } from './adapter.js';
-import type { AISetupConfig } from './ai.js';
+import type { InitOptions, DatabaseConfig, AdapterSetupResult, AISetupConfig } from '@zhin.js/scaffold-wizard';
 
 const CONFIG_CANDIDATES = ['zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json'];
 

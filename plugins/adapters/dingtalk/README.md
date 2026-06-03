@@ -128,10 +128,9 @@ export default defineConfig({
     }
   ],
   plugins: [
-    'http',              // HTTP 服务（必需，提供 webhook 接口）
-    'adapter-dingtalk',  // 钉钉适配器
-    // 其他插件...
-  ]
+    '@zhin.js/host-router',
+    '@zhin.js/adapter-dingtalk',
+  ],
 })
 ```
 

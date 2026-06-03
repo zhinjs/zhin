@@ -16,14 +16,45 @@ Zhin.js 微信公众号适配器，支持微信公众号的消息收发。
 pnpm add @zhin.js/adapter-wechat-mp
 ```
 
+## 前置条件
+
+| 要求 | 说明 |
+|------|------|
+| **公众号** | 已注册微信公众号，并在 [微信公众平台](https://mp.weixin.qq.com/) 获取 `AppID`、`AppSecret` |
+| **服务器配置** | 配置 Token（与 `token` 字段一致）；服务器 URL 须公网可访问 |
+| **host-router** | **必需** — 适配器在 `path` 上注册 GET/POST Webhook 路由 |
+| **响应时限** | 微信要求 **5 秒内**响应；超时会导致接入失败 |
+| **消息加密** | 可选；启用时配置 `encodingAESKey` 与 `encrypt: true` |
+
+必填字段见 `WeChatMPConfig`：`context`、`name`、`appId`、`appSecret`、`token`、`path`。
+
+## 最小配置
+
+```yaml
+plugins:
+  - "@zhin.js/adapter-wechat-mp"
+  - "@zhin.js/host-router"
+
+bots:
+  - context: wechat-mp
+    name: my-wechat-bot
+    appId: "${WECHAT_APP_ID}"
+    appSecret: "${WECHAT_APP_SECRET}"
+    token: "${WECHAT_TOKEN}"
+    path: /wechat/webhook
+```
+
 ## 依赖
 
 - `@zhin.js/host-router` — HTTP 服务（提供 Webhook 路由）
 
 ## 配置
 
+### TypeScript 配置
+
+完整选项示例（含可选加密字段）：
+
 ```yaml
-# zhin.config.yml
 bots:
   - context: wechat-mp
     name: my-wechat-bot
@@ -31,16 +62,9 @@ bots:
     appSecret: ${WECHAT_APP_SECRET}
     token: ${WECHAT_TOKEN}
     path: /wechat/webhook
-    # 可选配置
     # encodingAESKey: your-aes-key
     # encrypt: false
-
-plugins:
-  - adapter-wechat-mp
-  - http
 ```
-
-### TypeScript 配置
 
 ```typescript
 import { defineConfig } from 'zhin.js'
@@ -56,7 +80,7 @@ export default defineConfig({
       path: '/wechat/webhook',
     }
   ],
-  plugins: ['adapter-wechat-mp', 'http']
+  plugins: ['@zhin.js/adapter-wechat-mp', '@zhin.js/host-router']
 })
 ```
 
@@ -99,11 +123,20 @@ addMiddleware(async (message, next) => {
 4. 设置 Token（与配置文件中的 `token` 一致）
 5. 如需消息加解密，设置 EncodingAESKey
 
-## 注意事项
+## 故障排查
 
-- 微信公众号要求服务器必须在 5 秒内响应
-- 服务器地址必须是公网可访问的 HTTP/HTTPS URL
-- 建议使用已备案的域名
+| 现象 | 排查 |
+|------|------|
+| 服务器配置验证失败 | `token` 与公众平台一致；URL 为 `http(s)://<host>/api<path>`（Host 默认前缀 `/api`）；Host 已启动且公网可达 |
+| 收不到用户消息 | 公众号类型是否支持消息接口；用户是否已关注；`path` 与公众平台 URL 一致 |
+| 回复超时 | 业务逻辑须在 5 秒内返回；耗时操作应异步处理后再调用客服接口 |
+| 加密模式报错 | `encodingAESKey`、`encrypt` 与公众平台「安全模式」设置一致 |
+
+## 文档链接
+
+- [微信公众号适配器文档](https://zhin.js.org/adapters/wechat-mp)
+- [适配器概览](https://zhin.js.org/essentials/adapters)
+- [微信公众平台](https://mp.weixin.qq.com/)
 
 ## 许可证
 

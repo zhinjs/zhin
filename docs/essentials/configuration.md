@@ -95,13 +95,9 @@ plugins:
 
 ```yaml
 bots:
-  # ICQQ (QQ) 机器人
+  # ICQQ (QQ)：须先 `icqq login`，再配置同名 QQ 号
   - context: icqq
-    name: "${ICQQ_ACCOUNT}"       # QQ 号
-    password: "${ICQQ_PASSWORD}"   # 密码（可选，不填则扫码）
-    platform: 5                    # 登录平台
-    scope: icqqjs
-    data_dir: ./data
+    name: "${ICQQ_ACCOUNT}"
 
   # QQ 官方机器人
   - context: qq
@@ -170,33 +166,34 @@ ai:
   # AI 提供者配置
   providers:
     ollama:
-      baseURL: "http://localhost:11434"
+      host: "http://127.0.0.1:11434"
       # models 可省略 — ModelRegistry 自动发现并按 Tier 评分排序
-      # models:
-      #   - qwen2.5:7b
     openai:
       apiKey: "${OPENAI_API_KEY}"
       baseURL: "https://api.openai.com/v1"
       # models 可省略 — 自动通过 /v1/models 发现
 
-  # 会话配置
+  # 会话配置（省略时使用框架默认：DB 模式 maxHistory 200 / expireMs 7 天；内存模式 100 / 24 小时）
   sessions:
-    useDatabase: true           # 使用数据库持久化会话
-    maxHistory: 20              # 最大历史消息数
-    expireMs: 3600000           # 会话过期时间（毫秒）
+    useDatabase: true
+    maxHistory: 50
+    expireMs: 3600000
 
-  # 上下文管理
+  # 上下文管理（@zhin.js/ai ContextManager）
   context:
-    maxMessagesBeforeSummary: 10  # 触发摘要的消息数
-    summaryRetentionDays: 30     # 摘要保留天数
+    enabled: true
+    maxRecentMessages: 100
+    summaryThreshold: 50
+    keepAfterSummary: 10
+    maxContextTokens: 4000
 
-  # 触发配置
+  # 触发配置（默认前缀：#、AI:、ai:）
   trigger:
-    respondToAt: true           # 是否响应 @机器人
-    respondToPrivate: true      # 是否响应私聊
-    prefixes: ["ai "]           # AI 触发前缀
-    ignorePrefixes: ["/", "!"]  # 忽略的前缀（通常是命令前缀）
-    timeout: 60000              # AI 处理超时（毫秒）
+    respondToAt: true
+    respondToPrivate: true
+    prefixes: ["#", "AI:", "ai:"]
+    ignorePrefixes: ["/", "!", "！"]
+    timeout: 60000
 ```
 
 ### Agent 配置
@@ -206,19 +203,19 @@ AI Agent 的行为控制在 `ai.agent` 下配置：
 ```yaml
 ai:
   agent:
-    chatModel: ''               # 聊天模型（留空自动选择最优）
-    visionModel: ''             # 视觉模型（留空自动选择）
-    execSecurity: allowlist     # bash 执行策略：deny / allowlist / full
-    execPreset: network         # 预设白名单：readonly / network / development / custom
-    execAllowlist: ["docker"]   # 自定义允许的命令（与 preset 合并）
-    execApprovalMode: deny      # ask=白名单外需 Owner 确认 / allow=放行 / deny=拒绝；见 [advanced/ai.md](/advanced/ai#交互式审批-execapprovalmode-ask)
-    maxIterations: 5            # 最大工具调用轮数
-    contextTokens: 128000      # 上下文窗口 token 数
-    maxHistoryShare: 0.5        # 历史记录占上下文窗口的最大比例
-    toneAwareness: true         # 是否启用情绪感知
-    modelSizeHint: ""           # 模型大小提示：small / medium / large（留空自动推断）
-    skillInstructionMaxChars: 0 # 技能指令最大字符数（0 表示按模型大小自动推断）
-    maxSubagentIterations: 15   # 子 agent 最大工具调用轮数
+    chatModel: ''               # 留空自动选择最优
+    visionModel: ''
+    execSecurity: allowlist     # deny / allowlist / full（默认 deny，示例为 allowlist）
+    execPreset: custom          # readonly / network / development / custom（默认 custom）
+    execAllowlist: ["docker"]   # 与 preset 合并
+    execApprovalMode: deny      # ask / allow / deny（默认 deny）；见 [advanced/ai.md](/advanced/ai#交互式审批-execapprovalmode-ask)
+    maxIterations: 15           # 默认 15
+    contextTokens: 128000
+    maxHistoryShare: 0.5
+    toneAwareness: true
+    modelSizeHint: ""           # small / medium / large，留空按模型名推断
+    skillInstructionMaxChars: 0 # 0 = 按 modelSizeHint 自动推断
+    maxSubagentIterations: 25   # 默认 25
     phaseTrace: false           # 输出 Agent 回合 phase 日志（也可用 ZHIN_AGENT_PHASE_TRACE=1）
     modelHarness:               # 按 provider 模式 / model id 覆盖 harness（与 TS 默认 deep merge）
       providerPatterns:
@@ -230,6 +227,36 @@ ai:
 ```
 
 完整配置项说明详见 [AI 模块文档 — Agent 配置详解](/advanced/ai#agent-配置详解)。
+
+### Advanced AI 开关
+
+以下能力属于 **Advanced**，Stable 脚手架与 [minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) 默认关闭。概念说明见 [Agent 概念入门](/advanced/agent-concepts)，MCP 实操见 [MCP 集成](/advanced/mcp)。
+
+```yaml
+ai:
+  # 本地知识图谱 memory MCP（默认 false）
+  memoryMcp: false
+
+  # 外部 MCP Server 列表（默认 []）
+  mcpServers:
+    - name: filesystem
+      transport: stdio
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/zhin-mcp-test"]
+
+  # GitHub MCP（可选；配合 @zhin.js/adapter-github，见 /adapters/github）
+  githubMcp:
+    token: "${GITHUB_PERSONAL_ACCESS_TOKEN}"
+
+  agent:
+    # deferred Worker 工具编排（Stable 默认 false）
+    toolSearch: false
+    phaseTrace: false   # Agent 阶段日志，排障时可开 true
+```
+
+::: tip SDK 依赖
+使用 `mcpServers` 或 `memoryMcp: true` 前请安装：`pnpm add @modelcontextprotocol/sdk`
+:::
 
 **说明**：
 - AI 模块需要配置至少一个 provider 才能工作
@@ -418,8 +445,7 @@ port: ${PORT:-8086}         # 如果 PORT 未设置，使用 8086
 
 ```bash
 HTTP_TOKEN=your_secure_token
-ICQQ_ACCOUNT=123456789
-ICQQ_PASSWORD=your_qq_password
+ICQQ_ACCOUNT=123456789   # ICQQ：仅 QQ 号；登录在 icqq login / CLI 中完成，勿写入 zhin.config
 ```
 
 **为什么使用环境变量？**
@@ -544,9 +570,6 @@ plugins:
 bots:
   - context: icqq
     name: "${ICQQ_ACCOUNT}"
-    password: "${ICQQ_PASSWORD}"
-    platform: 5
-    scope: icqqjs
 
 http:
   port: 8086
@@ -561,8 +584,7 @@ ai:
   defaultProvider: ollama
   providers:
     ollama:
-      baseURL: "http://localhost:11434"
-      model: "qwen2.5:7b"
+      host: "http://127.0.0.1:11434"
   trigger:
     respondToAt: true
     respondToPrivate: true

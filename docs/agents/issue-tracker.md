@@ -1,3 +1,9 @@
+---
+title: Issue 流程
+sidebar: false
+maintainer: true
+---
+
 # Issue tracker: GitHub
 
 Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all operations.

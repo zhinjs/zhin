@@ -7,11 +7,16 @@ import chalk from 'chalk';
 
 import { InitOptions } from './types.js';
 import { generateToken, getDatabaseDisplayName } from './utils.js';
-import { configureDatabaseOptions } from './database.js';
+import {
+  configureDatabaseOptions,
+  configureAdapters,
+  configureAI,
+  getAdapterSetupNotes,
+  ensureDatabaseForAI,
+  ensureDatabaseForAdapters,
+} from '@zhin.js/scaffold-wizard';
 import { createWorkspace } from './workspace.js';
 import { ensurePnpmInstalled, installDependencies } from './install.js';
-import { configureAdapters } from './adapter.js';
-import { configureAI } from './ai.js';
 import { applyStableYesDefaults } from './stable-yes-defaults.js';
 
 async function main() {
@@ -131,6 +136,9 @@ async function main() {
       }
     }
 
+    ensureDatabaseForAI(options);
+    ensureDatabaseForAdapters(options);
+
     // 全局 CLI 安装选项
     if (options.installGlobalCli === undefined && !options.yes) {
       console.log('');
@@ -235,6 +243,14 @@ async function main() {
       if (Object.keys(options.adapters.envVars).length > 0) {
         console.log(`  ${chalk.yellow('⚠ 适配器凭据已保存到')} ${chalk.cyan('.env')} ${chalk.yellow('文件')}`);
       }
+      const adapterNotes = getAdapterSetupNotes(options.adapters);
+      if (adapterNotes.length > 0) {
+        console.log('');
+        console.log(chalk.gray('  后续步骤：'));
+        for (const note of adapterNotes) {
+          console.log(chalk.gray(`    • ${note}`));
+        }
+      }
     }
 
     // 显示 AI 配置信息
@@ -251,7 +267,19 @@ async function main() {
       }
       console.log(`  ${chalk.gray('会话/上下文:')} ${chalk.cyan('已启用推荐默认值')}`);
       console.log(`  ${chalk.gray('执行安全:')} ${chalk.cyan(options.ai.agent?.execSecurity || 'deny')}`);
-      console.log(`  ${chalk.yellow('⚠ API Key 已保存到')} ${chalk.cyan('.env')} ${chalk.yellow('文件')}`);
+      if (options.ai.memoryMcp) {
+        console.log(`  ${chalk.gray('Memory MCP:')} ${chalk.cyan('已启用')}`);
+      }
+      console.log(`  ${chalk.gray('MCP SDK:')} ${chalk.cyan('已预装 @modelcontextprotocol/sdk')}`);
+      if (options.database && options.ai.sessions?.useDatabase !== false) {
+        console.log(`  ${chalk.gray('会话存储:')} ${chalk.cyan('SQLite 持久化')}`);
+      }
+      const providerKey = options.ai.providers && Object.values(options.ai.providers)[0];
+      if (providerKey && (providerKey as { apiKey?: string }).apiKey) {
+        console.log(`  ${chalk.yellow('⚠ API Key 已保存到')} ${chalk.cyan('.env')} ${chalk.yellow('文件（AI_API_KEY）')}`);
+      } else if (options.ai.defaultProvider === 'ollama') {
+        console.log(`  ${chalk.gray('提示:')} 请确保 Ollama 已启动且模型已 pull`);
+      }
     }
 
     // 显示开发技能信息

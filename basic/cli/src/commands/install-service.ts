@@ -35,7 +35,7 @@ async function installSystemd(cwd: string, projectName: string, userMode: boolea
   const serviceFile = path.join(cwd, `${projectName}.service`);
   if (!(await fs.pathExists(serviceFile))) {
     logger.error(`未找到服务文件: ${serviceFile}`);
-    logger.log('请使用 create-zhin 创建的项目或手动创建 .service 文件');
+    logger.log('请使用 create-zhin-app 创建的项目或手动创建 .service 文件');
     process.exit(1);
   }
 
@@ -123,7 +123,7 @@ async function installLaunchd(cwd: string, projectName: string): Promise<void> {
   const plistFile = path.join(cwd, `com.zhinjs.${projectName}.plist`);
   if (!(await fs.pathExists(plistFile))) {
     logger.error(`未找到 launchd 配置: ${plistFile}`);
-    logger.log('请使用 create-zhin 创建的项目或手动创建 .plist 文件');
+    logger.log('请使用 create-zhin-app 创建的项目或手动创建 .plist 文件');
     process.exit(1);
   }
 

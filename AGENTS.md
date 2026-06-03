@@ -21,6 +21,7 @@
 - 主要分层：basic → kernel → ai → core → agent → zhin。
 - **推荐首跑**： [examples/minimal-bot](examples/minimal-bot/)（Stable 黄金路径）。
 - [examples/test-bot](examples/test-bot/) 为维护者厨房水槽（多 bot / Advanced 能力），非默认模板。
+- **项目脚手架**：新建 workspace 用 `pnpm create zhin-app`（`create-zhin-app`）；已有项目增量配置用 `zhin setup`。二者共用 [`@zhin.js/scaffold-wizard`](packages/toolkit/scaffold-wizard/)。
 
 ## 常用命令
 
@@ -31,6 +32,7 @@
 - `pnpm type-check`：运行 TypeScript 类型检查。
 - `pnpm lint`：运行 ESLint。
 - `pnpm check:doc-links`：检查文档相对链接是否断裂。
+- `pnpm sync:adapter-docs` / `pnpm check:adapter-docs`：平台适配器文档与 `plugins/adapters/*/README.md` 同步。
 - `pnpm --filter <pkg> build|test`：只验证单个包。
 
 优先做最小范围验证，不要默认跑全量构建。
@@ -46,14 +48,15 @@
 
 ## 任务路由
 
-- 框架核心、Plugin/Adapter/Dispatcher：看 packages/core。
-- AI 引擎、Session、Compaction、Provider：看 packages/ai。
-- AI 编排、工具发现、安全策略、MCP client：看 packages/agent。
+- 框架核心、Plugin/Adapter/Dispatcher：看 packages/im/core。
+- AI 引擎、Session、Compaction、Provider：看 packages/im/ai。
+- AI 编排、工具发现、安全策略、MCP client：看 packages/im/agent。
 - 应用入口和聚合导出：看 packages/zhin。
 - Host 运行时（router / api / mcp）：看 packages/host。
 - 可选服务插件：看 plugins/services。
 - 平台适配器：看 plugins/adapters。
 - 插件开发样例和本地验证：优先 examples/minimal-bot；全量见 examples/test-bot。
+- **项目创建 / 配置向导**（适配器、AI、database 交互与写配置）：看 `packages/toolkit/scaffold-wizard/`；`create-zhin-app` 与 `basic/cli` 的 `setup` 均依赖它。
 
 ## 高价值路径
 
@@ -64,6 +67,9 @@
 - packages/im/agent/src/security/
 - packages/im/agent/src/bootstrap.ts
 - packages/im/zhin/src/index.ts
+- packages/toolkit/scaffold-wizard/src/（`adapter.ts`、`ai.ts`、`apply.ts` — 改向导时优先改这里）
+- packages/toolkit/create-zhin/src/workspace.ts（生成项目文件树，不含向导逻辑）
+- basic/cli/src/commands/setup.ts（已有项目增量向导入口）
 
 ## 现成自定义能力
 

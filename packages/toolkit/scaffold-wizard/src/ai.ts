@@ -33,12 +33,48 @@ export interface AISetupConfig {
 
 // 提供商信息
 const PROVIDERS = [
-  { name: 'OpenAI (GPT-4o, 推荐)', value: 'openai', defaultModel: 'gpt-4o' },
-  { name: 'Anthropic (Claude)', value: 'anthropic', defaultModel: 'claude-sonnet-4-20250514' },
-  { name: 'DeepSeek', value: 'deepseek', defaultModel: 'deepseek-v4-flash' },
-  { name: 'Moonshot (月之暗面)', value: 'moonshot', defaultModel: 'moonshot-v1-8k' },
-  { name: '智谱 AI (GLM)', value: 'zhipu', defaultModel: 'glm-4' },
-  { name: 'Ollama (本地部署)', value: 'ollama', defaultModel: 'qwen3:8b' },
+  {
+    name: 'OpenAI (GPT-4o, 推荐)',
+    value: 'openai',
+    defaultModel: 'gpt-4o',
+    hint: '需 OpenAI API Key；国内可用代理 baseUrl',
+    keyPlaceholder: 'sk-...',
+  },
+  {
+    name: 'Anthropic (Claude)',
+    value: 'anthropic',
+    defaultModel: 'claude-sonnet-4-20250514',
+    hint: '需 Anthropic API Key',
+    keyPlaceholder: 'sk-ant-...',
+  },
+  {
+    name: 'DeepSeek',
+    value: 'deepseek',
+    defaultModel: 'deepseek-chat',
+    hint: '性价比高，国内直连',
+    keyPlaceholder: 'sk-...',
+  },
+  {
+    name: 'Moonshot (月之暗面)',
+    value: 'moonshot',
+    defaultModel: 'moonshot-v1-8k',
+    hint: 'Kimi 同款 API',
+    keyPlaceholder: 'sk-...',
+  },
+  {
+    name: '智谱 AI (GLM)',
+    value: 'zhipu',
+    defaultModel: 'glm-4-flash',
+    hint: '国内直连，open.bigmodel.cn',
+    keyPlaceholder: '...',
+  },
+  {
+    name: 'Ollama (本地部署)',
+    value: 'ollama',
+    defaultModel: 'qwen3:8b',
+    hint: '本地运行，无需 API Key；先 ollama pull 模型',
+    keyPlaceholder: '',
+  },
 ] as const;
 
 export const RECOMMENDED_AI_DEFAULTS = {
@@ -72,6 +108,8 @@ export const RECOMMENDED_AI_DEFAULTS = {
 export async function configureAI(): Promise<AISetupConfig> {
   console.log('');
   console.log(chalk.blue('🤖 配置 AI 智能体'));
+  console.log(chalk.gray('  启用后将预装 @modelcontextprotocol/sdk，支持 MCP 与 memory 扩展。'));
+  console.log(chalk.gray('  会话持久化默认开启，将自动配置 SQLite 数据库（若尚未选择）。'));
 
   const { enableAI } = await inquirer.prompt([
     {
@@ -86,49 +124,58 @@ export async function configureAI(): Promise<AISetupConfig> {
     return { enabled: false };
   }
 
-  // 选择提供商
   const { provider } = await inquirer.prompt([
     {
       type: 'select',
       name: 'provider',
       message: '选择 AI 提供商:',
-      choices: PROVIDERS.map(p => ({ name: p.name, value: p.value })),
+      choices: PROVIDERS.map(p => ({
+        name: `${p.name} — ${p.hint}`,
+        value: p.value,
+      })),
+      pageSize: 10,
     }
   ]);
 
   const providerInfo = PROVIDERS.find(p => p.value === provider)!;
+  console.log(chalk.gray(`  ${providerInfo.hint}`));
+
   let providerConfig: Record<string, any> = {};
   const envVarName = `AI_API_KEY`;
 
   if (provider === 'ollama') {
-    // Ollama 本地部署
     const ollamaConfig = await inquirer.prompt([
       {
         type: 'input',
         name: 'host',
         message: 'Ollama 地址:',
-        default: 'http://localhost:11434',
+        default: 'http://127.0.0.1:11434',
+        validate: (input: string) => {
+          if (!input.trim()) return '地址不能为空';
+          if (!/^https?:\/\//.test(input.trim())) return '请输入 http:// 或 https:// 开头的地址';
+          return true;
+        },
       },
       {
         type: 'input',
         name: 'model',
-        message: '模型名称:',
+        message: '模型名称（需已 ollama pull）:',
         default: providerInfo.defaultModel,
+        validate: (input: string) => (input.trim() ? true : '模型名不能为空'),
       }
     ]);
     providerConfig = {
-      host: ollamaConfig.host,
-      models: [ollamaConfig.model],
+      host: ollamaConfig.host.trim(),
+      models: [ollamaConfig.model.trim()],
     };
   } else {
-    // 云端提供商
     const cloudConfig = await inquirer.prompt([
       {
         type: 'input',
         name: 'apiKey',
         message: `${providerInfo.name.split(' (')[0]} API Key:`,
         validate: (input: string) => {
-          if (!input.trim()) return 'API Key 不能为空（稍后可在 .env 文件中修改）';
+          if (!input.trim()) return 'API Key 不能为空（可稍后在 .env 中填写 AI_API_KEY）';
           return true;
         }
       },
@@ -141,24 +188,23 @@ export async function configureAI(): Promise<AISetupConfig> {
       {
         type: 'input',
         name: 'baseUrl',
-        message: '自定义 API 地址（留空使用默认）:',
+        message: '自定义 API 地址（留空使用官方默认）:',
         default: '',
       }
     ]);
 
     providerConfig = {
       apiKey: `\${${envVarName}}`,
-      models: [cloudConfig.model || providerInfo.defaultModel],
-      ...(cloudConfig.baseUrl ? { baseUrl: cloudConfig.baseUrl } : {}),
+      models: [cloudConfig.model?.trim() || providerInfo.defaultModel],
+      ...(cloudConfig.baseUrl?.trim() ? { baseUrl: cloudConfig.baseUrl.trim() } : {}),
     };
 
-    // 保存实际 API Key 到环境变量映射
-    (providerConfig as any).__envApiKey = cloudConfig.apiKey;
+    (providerConfig as any).__envApiKey = cloudConfig.apiKey.trim();
   }
 
-  // 触发方式配置
   console.log('');
   console.log(chalk.blue('⚡ 配置 AI 触发方式'));
+  console.log(chalk.gray('  决定 Bot 何时自动调用大模型；命令（/ 开头）不会被 AI 拦截。'));
 
   const triggerConfig = await inquirer.prompt([
     {
@@ -176,7 +222,7 @@ export async function configureAI(): Promise<AISetupConfig> {
     {
       type: 'input',
       name: 'prefixes',
-      message: '触发前缀（逗号分隔，如 #,AI:）:',
+      message: '触发前缀（逗号分隔，如 #,ai:）:',
       default: '#',
     }
   ]);
@@ -186,6 +232,48 @@ export async function configureAI(): Promise<AISetupConfig> {
     .map((p: string) => p.trim())
     .filter(Boolean);
 
+  console.log('');
+  console.log(chalk.blue('🛡️  配置 Agent 安全与能力'));
+  console.log(chalk.gray('  生产环境建议 execSecurity: deny；开发调试可选 allowlist。'));
+
+  const agentConfig = await inquirer.prompt([
+    {
+      type: 'select',
+      name: 'execSecurity',
+      message: '命令执行安全策略:',
+      choices: [
+        { name: 'deny — 禁止执行 shell（推荐）', value: 'deny' },
+        { name: 'allowlist — 仅允许白名单命令', value: 'allowlist' },
+        { name: 'full — 允许任意命令（仅本地调试）', value: 'full' },
+      ],
+      default: 'deny',
+    },
+    {
+      type: 'confirm',
+      name: 'memoryMcp',
+      message: '启用本地知识图谱 memory MCP？（data/knowledge-graph.jsonl）',
+      default: false,
+    },
+    {
+      type: 'confirm',
+      name: 'toolSearch',
+      message: '启用 deferred + Worker 工具编排（toolSearch，Advanced）？',
+      default: false,
+    },
+    {
+      type: 'confirm',
+      name: 'phaseTrace',
+      message: '输出 Agent 阶段日志（便于排障）？',
+      default: false,
+    },
+  ]);
+
+  const execPreset = agentConfig.execSecurity === 'deny'
+    ? 'readonly'
+    : agentConfig.execSecurity === 'allowlist'
+      ? 'development'
+      : 'custom';
+
   return {
     enabled: true,
     defaultProvider: provider,
@@ -194,7 +282,13 @@ export async function configureAI(): Promise<AISetupConfig> {
     },
     sessions: RECOMMENDED_AI_DEFAULTS.sessions,
     context: RECOMMENDED_AI_DEFAULTS.context,
-    agent: RECOMMENDED_AI_DEFAULTS.agent,
+    agent: {
+      execSecurity: agentConfig.execSecurity,
+      execPreset,
+      execAllowlist: [],
+      phaseTrace: agentConfig.phaseTrace,
+      toolSearch: agentConfig.toolSearch,
+    },
     trigger: {
       respondToAt: triggerConfig.respondToAt,
       respondToPrivate: triggerConfig.respondToPrivate,
@@ -202,7 +296,7 @@ export async function configureAI(): Promise<AISetupConfig> {
       ignorePrefixes: RECOMMENDED_AI_DEFAULTS.trigger.ignorePrefixes,
       timeout: RECOMMENDED_AI_DEFAULTS.trigger.timeout,
     },
-    memoryMcp: false,
+    memoryMcp: agentConfig.memoryMcp,
     mcpServers: [],
   };
 }

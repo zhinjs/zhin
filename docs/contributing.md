@@ -11,8 +11,8 @@
 | 类型 | 适合 | 说明 |
 |------|------|------|
 | **文档与示例** | 所有人 | 修正错别字、补充 [学习路径](/essentials/learning-paths) 相关交叉链接、改进上手体验。 |
-| **插件 / 适配器** | 熟悉业务 API | 在 `plugins/` 或自有仓库发布；通常不必通读 `packages/kernel`。参考 [插件开发指南](/guide/plugin-development)。 |
-| **框架核心** | 维护者 / 资深贡献者 | `packages/core`、`packages/agent`、`zhin.js` 启动链等；动手前务必读 [仓库结构与模块化约定](./contributing/repo-structure) 与根目录 **`AGENTS.md`**。 |
+| **插件 / 适配器** | 熟悉业务 API | 在 `plugins/` 或自有仓库发布；通常不必通读 `packages/im/kernel`。参考 [插件开发指南](/guide/plugin-development)。 |
+| **框架核心** | 维护者 / 资深贡献者 | `packages/im/core`、`packages/im/agent`、`packages/im/zhin` 启动链等；动手前务必读 [仓库结构与模块化约定](./contributing/repo-structure) 与根目录 **`AGENTS.md`**。 |
 
 ### 报告问题
 - 🐛 **Bug 报告**: 使用 [Bug 报告模板](https://github.com/zhinjs/zhin/issues/new?template=bug_report.yml)
@@ -89,8 +89,13 @@ pnpm check:prod             # 检查生产配置
 pnpm check:plugin           # 检查插件规范
 pnpm check:architecture     # 检查架构层级
 pnpm check:doc-links        # 文档相对链接（AGENTS、architecture 等）
+pnpm check:adapter-docs     # 平台适配器文档与包 README 同步
+pnpm sync:adapter-docs      # 生成 docs/adapters/* 页面
 pnpm check:stable           # Stable 产品 smoke（Sandbox 入站 + minimal-bot 契约）
 pnpm check:use-plugin-top-level  # 适配器/特性插件 usePlugin 顶层约束
+pnpm check:doc-orphans           # 站点 Markdown 须在侧栏或 allowlist
+pnpm check:readme-exports        # README import 与包导出一致（im + adapters）
+pnpm check:config-docs           # 配置文档与 DEFAULT_CONFIG 关键字段对齐
 ```
 
 修改 **Stable 路径**（`examples/minimal-bot`、`plugins/adapters/sandbox` 入站链、`shouldTriggerAI` / `spawn_task` / `exec-policy` 相关代码）时，请至少运行：
@@ -237,15 +242,39 @@ pnpm test:coverage
 ```
 docs/
 ├── architecture-overview.md  # 分层架构概览（kernel/ai/core/agent/zhin）
+├── architecture/             # 架构契约索引、Agent 上下文块、提示词贡献者等
+├── adr/                      # 架构决策记录（ADR 索引）
+├── host/                     # Host 栈（router / api / mcp / Console）
 ├── getting-started/          # 快速开始
-├── essentials/               # 核心基础（配置、命令、插件、中间件、适配器）
-├── advanced/                 # 高级特性（AI、Feature、工具与技能、组件、定时任务、数据库、热重载）
-├── api/                      # API 参考
+├── console-remote.md         # Remote Console 使用说明
+├── essentials/               # 核心基础（配置、命令、插件、中间件、适配器概念、学习路径）
+├── adapters/                 # 平台适配器（由 plugins/adapters/*/README 同步，pnpm sync:adapter-docs）
+├── guide/                    # 插件开发指南
+├── reference/                # 术语表、CLI 命令参考
+├── advanced/                 # 高级特性（AI、Agent 概念、MCP、Harness、Feature、组件等）
+├── agents/                   # 维护者流程（Issue、triage、领域词汇）
+├── api/                      # API 概念索引（非权威导出表）
 ├── plugins/                  # 插件市场
 ├── contributing.md           # 贡献指南（本页）
 └── contributing/
-    └── repo-structure.md     # 仓库结构、src/lib 与 client/dist、命名、代码组织、审计备忘
+    ├── repo-structure.md     # 仓库结构、src/lib 与 client/dist、命名、代码组织
+    ├── harness-engineering.md
+    └── monorepo-no-submodules.md
 ```
+
+### 文档 SSOT 同步清单
+
+修改下列源码时，请同步对应文档（PR 合并前跑 `pnpm check:doc-links` 与相关 harness）：
+
+| 变更类型 | 必同步 |
+|----------|--------|
+| `packages/im/ai/src/types.ts`（Provider / Context） | `docs/essentials/configuration.md`（L1 子集）、`docs/advanced/ai.md` |
+| `packages/im/agent/.../config.ts`（`DEFAULT_CONFIG`） | `configuration.md` 的 `ai.agent` 示例、`docs/advanced/ai.md` 默认值表 |
+| `plugins/adapters/<name>/src/types.ts` | `plugins/adapters/<name>/README.md` → `pnpm sync:adapter-docs` |
+| `examples/minimal-bot/zhin.config.yml` 或 `create-zhin` Stable 默认 | `examples/minimal-bot/README.md`、`docs/getting-started/` |
+| 包 `index.ts` 导出变更 | 同包 `README.md` 示例 import（`pnpm check:readme-exports`） |
+
+**适配器**：权威来源为 `plugins/adapters/<name>/README.md`；站点页由 `pnpm sync:adapter-docs` 生成，勿手改 `docs/adapters/<name>.md` 正文。
 
 开发新包或调整目录前，请先阅读 [仓库结构与模块化约定](/contributing/repo-structure)。
 

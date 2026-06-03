@@ -1,3 +1,8 @@
+---
+sidebar: false
+maintainer: true
+---
+
 # miniclawd 对照与可借鉴点
 
 本文对照 [miniclawd](https://github.com/nicksanders/miniclawd)（路径：`/Users/liuchunlang/miniclawd`）在**记忆、工具错误处理、可观测性、调度与子任务**上的做法，给出 zhin 可借鉴的改进方向。
@@ -102,7 +107,7 @@
 - **spawn 工具**：用户或主 agent 调用 `spawn({ task, label?, originChannel, originChatId })`，返回「子任务已启动，完成后会通知」。
 - **SubagentManager**：
   - 为每次 spawn 创建独立上下文：专用 system prompt + 仅带部分工具（read_file, write_file, list_dir, exec, web_search, web_fetch）的 ToolRegistry。
-  - 在独立循环中跑子 agent（maxIterations=15），不阻塞主对话。
+  - 在独立循环中跑子 agent（zhin 默认 `maxSubagentIterations: 25`），不阻塞主对话。
   - 完成后通过 MessageBus 向主 channel 投递结果（或失败信息），实现「后台跑完再通知」。
 
 适用于：耗时任务、多步检索+写作、需要单独上下文的子目标。

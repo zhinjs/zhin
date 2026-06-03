@@ -56,6 +56,15 @@ bots:
 
 未写 `connection` 时默认为 `gateway`。
 
+### 如何选择 connection
+
+| 模式 | 适用场景 | 依赖 |
+|------|----------|------|
+| **gateway** | 常规 Bot：读消息、群管、Gateway 事件 | Bot Token + Intents |
+| **interactions** | 仅需斜杠命令 / 交互组件，或 Gateway 与 HTTP 并存 | `@zhin.js/host-router` + Application ID + Public Key |
+
+Gateway 需开启 **MESSAGE CONTENT INTENT**；Interactions 须在 Developer Portal 配置 **Interactions Endpoint URL**（指向 `interactionsPath`）。
+
 ## 使用示例
 
 ### 注册命令

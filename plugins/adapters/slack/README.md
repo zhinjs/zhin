@@ -10,6 +10,22 @@ pnpm add @zhin.js/adapter-slack
 
 ## Configuration
 
+通过 **`socketMode`** 选择连接方式（默认 `true` 时为 Socket Mode）。
+
+### 模式对比
+
+| 模式 | `socketMode` | 适用场景 | 额外字段 |
+|------|--------------|----------|----------|
+| **Socket Mode** | `true`（推荐本地/内网） | 无需公网 URL，WebSocket 长连接 | `appToken`（`xapp-...`） |
+| **HTTP Events** | `false` | 生产环境，有公网 HTTPS | `port`（Bolt 监听端口） |
+
+#### HTTP 模式前置条件
+
+- Slack App 中配置 **Event Subscriptions** 的 Request URL（须公网 HTTPS 可达）
+- 启用对应 Bot Events（`message.*`、`app_mention` 等）
+- 防火墙 / 反向代理放行 `port`
+- **不需要** `@zhin.js/host-router`（由 `@slack/bolt` 自行监听）
+
 ### Socket Mode (Recommended for Development)
 
 ```typescript

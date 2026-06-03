@@ -1,6 +1,8 @@
 # @zhin.js/core
 
-Zhin.js 核心框架包，提供插件系统、Feature 架构、AI 智能体、消息路由等全部核心能力。
+Zhin.js IM 核心框架包，提供插件系统、Feature 架构、适配器、消息路由与出站发送链。**AI 编排（ZhinAgent、工具安全、MCP）在 [`@zhin.js/agent`](../agent/README.md)**；本包仅 selective re-export `@zhin.js/ai` 的 Provider / Agent 原语供插件直接使用。
+
+领域词汇见 [CONTEXT.md](./CONTEXT.md)；入站/出站流程见 [消息如何流转](../../docs/essentials/message-flow.md)。
 
 ## 核心概念
 
@@ -118,66 +120,49 @@ class IcqqAdapter extends Adapter<IcqqBot> {
 
 - **Guardrail** — 鉴权、速率限制、黑名单等前置检查
 - **Route** — 判断消息是命令还是 AI 对话
-- **Handle** — CommandFeature 处理命令，ZhinAgent 处理 AI 对话
+- **Handle** — CommandFeature 处理命令；AI 对话由 `@zhin.js/agent` 的 ZhinAgent / AIService 处理（经 Dispatcher 注册）
 
-### AI 模块（ZhinAgent）
+### AI 与 @zhin.js/agent
 
-内置 AI 智能体，支持 OpenAI / Ollama 等大模型。
+Core **不包含** ZhinAgent 实现。IM 侧的 AI 对话、工具收集、执行策略、MCP 客户端与 `ctx.ai` / `ctx.agent` 挂载均在 **`@zhin.js/agent`**（主包 `zhin.js` 会 `initAgentModule()` 并 re-export）。
 
-```
-用户消息 → 速率限制 → 工具过滤 → 会话记忆 → LLM 调用 → 输出
-                                    │
-                              三条路径选择：
-                         闲聊（0工具）→ 1次 LLM
-                         快速（无参数工具）→ 预执行 + 1次 LLM
-                         Agent（有参数工具）→ 多轮 tool-calling
-```
+本包从 `@zhin.js/ai` selective re-export 以下内容，供插件或适配器在不依赖 agent 层时使用：
 
-核心子模块：
+| 类别 | 示例导出 |
+|------|----------|
+| Provider | `OpenAIProvider`、`OllamaProvider`、`AnthropicProvider` 等 |
+| Agent 原语 | `Agent`、`createAgent`、`ModelRegistry` |
+| 会话 / 上下文 | `SessionManager`、`ContextManager`、`ConversationMemory` |
+| 压缩 / 限流 / 输出 | `compactSession`、`RateLimiter`、`parseOutput`、`CostTracker` |
 
-| 模块 | 说明 |
-|------|------|
-| `SessionManager` | 会话管理（内存/数据库） |
-| `ContextManager` | 上下文构建与滑动窗口 |
-| `ConversationMemory` | 话题感知、链式摘要 |
-| `UserProfileStore` | 用户画像 |
-| `RateLimiter` | 频率限制 |
-| `FollowUpManager` | 定时提醒（持久化） |
-| `ToneDetector` | 情绪分析 |
-| `OutputParser` | 多模态输出解析 |
+完整 Agent 能力与配置见 [`@zhin.js/agent`](../agent/README.md) 与 [AI 模块](https://zhin.js.org/advanced/ai)。
 
 ## 主要导出
+
+入口为 [`src/index.ts`](./src/index.ts)。摘要如下（非完整列表）：
 
 ```typescript
 // 插件系统
 export { Plugin, usePlugin, getPlugin, definePlugin } from './plugin.js'
 
-// Feature 体系
-export { Feature } from './feature.js'
-export { CommandFeature } from './built/command.js'
-export { ToolFeature, ZhinTool } from './built/tool.js'
-export { SkillFeature } from './built/skill.js'
-export { CronFeature } from './built/cron.js'
-export { DatabaseFeature } from './built/database.js'
-export { ComponentFeature } from './built/component.js'
-export { ConfigFeature } from './built/config.js'
-export { PermissionFeature } from './built/permission.js'
+// Feature 体系（Cron / Scheduler 来自 @zhin.js/kernel）
+export { Feature, Cron, Scheduler } from '@zhin.js/kernel'
+export { CommandFeature, ToolFeature, SkillFeature, CronFeature, DatabaseFeature, ... } from './built/*.js'
 
 // 消息路由
 export { createMessageDispatcher } from './built/dispatcher.js'
 
-// AI
-export { ZhinAgent } from './ai/index.js'
+// 适配器与消息
+export { Adapter, Message, MessageCommand, Bot, ... } from './'
 
-// 适配器
-export { Adapter } from './adapter.js'
-
-// 工具
-export { MessageCommand } from './command.js'
-export { Message } from './message.js'
-export { Cron } from './cron.js'
-export { Schema } from '@zhin.js/schema'
+// AI 原语（来自 @zhin.js/ai，非 ZhinAgent）
+export {
+  OpenAIProvider, OllamaProvider, Agent, createAgent, ModelRegistry,
+  SessionManager, ContextManager, ConversationMemory, compactSession, ...
+} from '@zhin.js/ai'
 ```
+
+> ZhinAgent、`initAgentModule`、`AIService`、ExecPolicy、编排 Registry 等请从 **`zhin.js`** 或 **`@zhin.js/agent`** 引入。
 
 ## 安装
 

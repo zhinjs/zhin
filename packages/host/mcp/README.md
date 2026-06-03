@@ -31,8 +31,8 @@ import { defineConfig } from 'zhin.js'
 
 export default defineConfig({
   plugins: [
-    'http',           // MCP 依赖 HTTP 插件
-    'mcp',            // 启用 MCP Server
+    '@zhin.js/host-router',
+    '@zhin.js/mcp',
   ],
   mcp: {
     enabled: true,    // 启用 MCP
@@ -43,29 +43,33 @@ export default defineConfig({
 
 ### 2. 配置 AI 助手
 
-#### Claude Desktop
+本插件以 **无状态 Streamable HTTP** 运行：每个请求独立处理，**仅接受 `POST`**（`GET`/`DELETE` 返回 405）。客户端应配置 **HTTP URL**，不要用 `curl -N`（那是 GET 长连接，与本端点不兼容）。
 
-编辑 `~/Library/Application Support/Claude/claude_desktop_config.json`:
+#### Claude Desktop / Cursor / VS Code
+
+在 MCP 配置中使用 Streamable HTTP URL（路径与 `mcp.path` 一致，默认 `/mcp`）：
 
 ```json
 {
   "mcpServers": {
     "zhin": {
-      "command": "curl",
-      "args": [
-        "-N",
-        "http://localhost:8086/mcp"
-      ]
+      "url": "http://127.0.0.1:8086/mcp"
     }
   }
 }
 ```
 
-确保你的 Zhin 应用正在运行，且 HTTP 插件已启用（默认端口 8086）。
+Claude Desktop 配置文件路径因平台而异（macOS 常见 `~/Library/Application Support/Claude/claude_desktop_config.json`）。Cursor 使用项目或全局 `.cursor/mcp.json` 同类字段。
 
-#### Cursor/VSCode
+确保 Zhin 应用已启动，且 **`@zhin.js/host-router`** 与 **`@zhin.js/mcp`** 均已启用（`http.port` 默认 8086）。
 
-安装 MCP 扩展，然后在设置中配置服务器。
+#### 手动 smoke test（POST）
+
+```bash
+curl -sS -X POST http://127.0.0.1:8086/mcp \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"curl","version":"1.0"}}}'
+```
 
 ### 3. 开始使用
 
@@ -152,7 +156,7 @@ AI: 好的！我会使用 create_plugin 工具为你创建插件...
 
 **示例:**
 ```
-查询 http 插件的信息
+查询 host-router 插件的信息
 ```
 
 ### 7. list_plugins
@@ -269,8 +273,8 @@ export default defineConfig({
 ```typescript
 export default defineConfig({
   plugins: [
-    'http',  // 必需：MCP 依赖 HTTP 插件
-    'mcp',
+    '@zhin.js/host-router',
+    '@zhin.js/mcp',
   ],
   http: {
     port: 8086,  // HTTP 服务器端口

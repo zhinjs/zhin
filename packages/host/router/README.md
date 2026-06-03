@@ -6,7 +6,7 @@ Zhin Host **传输层**：`node:http` 监听、Koa、`Router`（含 WebSocket）
 
 - 🌐 基于 Koa.js 的 HTTP 服务器
 - 🔐 Token 身份验证
-- 🛠️ RESTful API 支持
+- 🛠️ HTTP 路由与中间件（管理面 REST 由 `@zhin.js/host-api` 注册）
 - 📡 WebSocket 实时通信
 - 🔄 请求体解析 (JSON)
 - 🌍 可配置的服务器设置
@@ -90,38 +90,11 @@ declare module 'zhin.js' {
 
 ## API 使用
 
-### 内置 API 端点
+### 管理面 REST / Console 协议
 
-插件提供以下内置 API：
+本包**仅提供传输层**（Koa、`Router`、Bearer、CORS）。系统/插件/Bot REST、`POST /api/console/request`、SSE `/api/events`、`GET /entries` 等管理面路由由 [**@zhin.js/host-api**](../api/README.md) 注册。运行时路由清单：`GET /pub/openapi.json`（无需 Token）。
 
-#### 适配器管理 API
-- `GET /api/adapters` - 获取所有上下文列表
-
-**响应格式:**
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "name": "icqq-adapter",
-      "desc": "ICQQ适配器，用于连接QQ平台"
-    },
-    {
-      "name": "web-console", 
-      "desc": "Web控制台服务，提供管理界面"
-    }
-  ]
-}
-```
-
-#### 其他 API
-- `GET /api/system/status` - 系统状态信息
-- `GET /api/plugins` - 插件列表
-- `GET /api/config` - 配置信息
-- `POST /api/message/send` - 发送消息
-- `POST /api/plugins/:name/reload` - 重载插件
-- `GET /pub/health` - 健康检查
-- `GET /pub/openapi.json` - 当前实例 OpenAPI 3.1 路由清单（无需 Token）
+Remote Console UI 不在 Host 端口提供，见 [docs/console-remote.md](../../../docs/console-remote.md)。
 
 ### 自定义 HTTP 路由
 
@@ -187,7 +160,7 @@ useContext('koa', async (koa) => {
 
 ### 身份验证
 
-默认启用 Token 认证，**仅保护 API 路径**（`/api/*`），静态文件和 SPA 路由不受限制。
+默认启用 Token 认证，**仅保护 API 路径**（`/api/*`）。
 
 Token 传递方式：
 - **Header**: `Authorization: Bearer <token>`

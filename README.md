@@ -314,8 +314,8 @@ graph TB
 
 
 
-- **[packages/kernel](packages/kernel)** 剥离了一切 IM 交互要素，只负责插件和 Feature 开发契约，能作为独立任务框架。
-- **[packages/ai](packages/ai)** 不包含聊天机器人特有逻辑，仅专注多轮 AI 交互及上下文管理，可在任意 Web 服务内单用。
+- **[packages/im/kernel](packages/im/kernel)** 剥离了一切 IM 交互要素，只负责插件和 Feature 开发契约，能作为独立任务框架。
+- **[packages/im/ai](packages/im/ai)** 不包含聊天机器人特有逻辑，仅专注多轮 AI 交互及上下文管理，可在任意 Web 服务内单用。
 
 ---
 
@@ -532,7 +532,8 @@ zhin/                          # 主仓库 (github.com/zhinjs/zhin)
 │   ├── agent/                 #   Agent 编排
 │   ├── client/                #   Web 控制台
 │   ├── satori/                #   渲染引擎
-│   ├── create-zhin/           #   项目脚手架
+│   ├── create-zhin/           #   项目脚手架（create zhin-app）
+│   ├── scaffold-wizard/       #   共享配置向导（create + zhin setup）
 │   └── zhin/                  #   主入口包
 ├── plugins/                   # 插件生态（适配器 / 服务 / 特性 / 工具）
 ├── docs/                      # VitePress 文档站

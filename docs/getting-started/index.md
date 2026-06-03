@@ -109,6 +109,10 @@ Token 会保存在 `.env` 文件中，用于访问本地 API 或在 Remote Conso
 
 选择需要的聊天平台，Sandbox 为必选项。选择后会逐个引导你配置 Bot 的连接信息（如 Token、API Key 等），敏感信息会保存在 `.env` 文件中。
 
+::: tip ICQQ (QQ)
+需先在终端执行 `icqq login`（`@icqqjs/cli`），再在配置里填写与登录一致的 QQ 号（`ICQQ_ACCOUNT`）。**不要**在 `zhin.config` 的 bot 段填写 QQ 密码或 `platform`。
+:::
+
 ### 6. 配置 AI 智能体
 
 ```
@@ -191,52 +195,22 @@ npx zhin start --daemon
 npx zhin stop
 ```
 
-## CLI 命令一览
+## CLI 命令
 
-Zhin.js 提供了丰富的命令行工具：
+Stable 路径常用：`pnpm dev`（等价 `zhin dev`）、`pnpm start`、`npx zhin stop`。完整命令表见 **[CLI 命令参考](/reference/cli)** 与仓库 [`@zhin.js/cli`](https://github.com/zhinjs/zhin/tree/main/basic/cli) README。
 
-### 开发与运维
+## 测试机器人（Stable：Remote Console 沙盒）
 
-| 命令           | 说明                                                              |
-| -------------- | ----------------------------------------------------------------- |
-| `zhin dev`     | 开发模式启动（热重载），支持 `-p/--port`、`--verbose`、`--bun`    |
-| `zhin start`   | 生产模式启动，支持 `-d/--daemon`、`--log-file`、`--bun`           |
-| `zhin restart` | 重启后台运行的机器人                                              |
-| `zhin stop`    | 停止后台运行的机器人                                              |
-| `zhin build`   | 构建插件，支持 `--clean`、`--production`、`--analyze`             |
+Stable 路径下 **Sandbox 不走终端 stdin**。启动 `pnpm dev` 后：
 
-### 插件管理
+1. 打开 **[console.zhin.dev](https://console.zhin.dev)**，API Base 与日志中的 Host 一致（如 `http://127.0.0.1:8086`），Token 与 `.env` 的 `HTTP_TOKEN` 一致
+2. 进入 **沙盒** 页连接 WebSocket，发送 `hello` 或 `ai: …` 验证
 
-| 命令           | 说明                                                              |
-| -------------- | ----------------------------------------------------------------- |
-| `zhin new`     | 创建插件模板（normal/service/adapter），支持 `--type`             |
-| `zhin install` | 安装插件（npm 或 git），支持 `-S/--save`、`-D/--save-dev`、`-g`  |
-| `zhin add`     | `install` 的别名                                                  |
-| `zhin pub`     | 发布插件到 npm，支持 `--tag`、`--dry-run`、`--access`             |
-| `zhin search`  | 搜索 npm 上的 Zhin 插件，支持 `-c/--category`、`--official`       |
-| `zhin info`    | 查看某个插件的详细信息                                            |
+这与 [minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) 一致：`bots: []` 时 Console 打开沙盒页会自动创建 bot。
 
-### 配置与诊断
-
-| 命令                    | 说明                                                       |
-| ----------------------- | ---------------------------------------------------------- |
-| `zhin setup`            | 交互式配置向导（数据库、适配器、AI 等）                    |
-| `zhin config`           | 管理配置文件（子命令：`list`/`get`/`set`/`delete`/`path`） |
-| `zhin doctor`           | 检查系统环境和项目配置，支持 `--fix` 自动修复              |
-| `zhin onboard`          | 引导与配置向导：项目内保持/重新配置/重置，复用现有配置与 data；非项目内可创建新项目或查看快速开始 |
-| `zhin install-service`  | 注册为系统服务（systemd/launchd/NSSM），支持 `--user`      |
-| `zhin uninstall-service`| 卸载系统服务                                               |
-
-## 测试机器人
-
-机器人启动后，你可以直接在终端输入消息测试：
-
-```bash
-> hello
-机器人: 你好！欢迎使用 Zhin.js
-```
-
-这是内置的 `sandbox` 适配器，可以在终端中直接测试命令。
+::: info 终端里的 `> hello` 是什么？
+那是 **`process` 核心服务**（stdin/stdout），不是 Sandbox。默认启用但仅在 TTY 下绑定 stdin；Stable 调试请用 Console 沙盒。详见 [适配器 — Process](/essentials/adapters#process进程适配器)。
+:::
 
 ## 访问 Remote Console
 
@@ -272,6 +246,14 @@ pnpm dev
 ```
 
 如果启用了 AI，脚手架会同时写入推荐的 `ai.sessions`、`ai.context` 和 `ai.agent` 默认值。`phaseTrace`、`toolSearch`、`memoryMcp` 和 `mcpServers` 是进阶开关，按需在配置文件里开启。
+
+::: tip 下一步：Advanced 能力
+跑通 Stable 路径后，可按 [学习路径 L3+](/essentials/learning-paths#l3-ai-与-mcp-进阶) 继续：
+
+- [Agent 概念入门](/advanced/agent-concepts) — `ctx.ai` / Subagent / toolSearch
+- [MCP 集成](/advanced/mcp) — 接入外部工具或 IDE 插件开发
+- [配置文件 — Advanced AI 开关](/essentials/configuration#advanced-ai-开关)
+:::
 
 ## 第一个插件
 
@@ -318,12 +300,13 @@ plugins:
 
 ### 3. 测试插件
 
-保存文件后，机器人会自动热重载。在终端输入：
+保存文件后，机器人会自动热重载。在 **Remote Console 沙盒** 中发送：
 
-```bash
-> hello
-机器人: 你好！
+```text
+hello
 ```
+
+应收到插件回复。若你启用了 `process` 服务且终端为 TTY，也可在终端输入 `hello`（非 Stable 默认路径）。
 
 ## 添加带参数的命令
 
@@ -401,5 +384,6 @@ http:
 - **[配置文件](/essentials/configuration)** - 了解更多配置选项
 - **[命令系统](/essentials/commands)** - 学习创建复杂命令
 - **[插件系统](/essentials/plugins)** - 深入理解插件开发
-- **[适配器](/essentials/adapters)** - 连接到 QQ、Discord、Satori、OneBot 12 等平台
+- **[适配器概览](/essentials/adapters)** — 多平台、群管工具等框架概念
+- **[平台适配器](/adapters/)** — QQ、Discord、Telegram、Satori 等各平台配置（与包 README 同步）
 - **[AI 模块](/advanced/ai)** - 集成 AI 大模型能力

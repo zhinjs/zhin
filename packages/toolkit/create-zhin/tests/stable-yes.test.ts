@@ -2,6 +2,7 @@ import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { MCP_SDK_VERSION } from '@zhin.js/scaffold-wizard';
 import { createWorkspace } from '../src/workspace.js';
 import { applyStableYesDefaults } from '../src/stable-yes-defaults.js';
 import type { InitOptions } from '../src/types.js';
@@ -51,5 +52,16 @@ describe('create-zhin -y Stable 默认值', () => {
     await expect(fs.pathExists(path.join(projectPath, 'skills', 'plugin-init', 'SKILL.md'))).resolves.toBe(
       false,
     );
+  });
+
+  it('AI 启用时预装 MCP SDK', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'create-zhin-stable-'));
+    tmpRoots.push(root);
+    const projectPath = path.join(root, 'stable-bot');
+
+    await createWorkspace(projectPath, 'stable-bot', stableYesOptions());
+
+    const pkg = await fs.readJson(path.join(projectPath, 'package.json'));
+    expect(pkg.dependencies['@modelcontextprotocol/sdk']).toBe(MCP_SDK_VERSION);
   });
 });

@@ -2,12 +2,14 @@
 
 Zhin AI Agent 组合层：在 `@zhin.js/core` 的类型与 Provider 之上，提供会话管理、Agent 执行循环、ZhinAgent 与框架挂载（init）。
 
+领域词汇见 [CONTEXT.md](./CONTEXT.md)。用户向文档：[AI 模块](https://zhin.js.org/advanced/ai)、[消息如何流转](../../docs/essentials/message-flow.md)。
+
 ## 功能特性
 
 - 🤖 **Agent 循环**：`Agent` / `createAgent`，支持工具调用、迭代与事件
 - 📝 **会话管理**：`SessionManager`、内存/数据库会话、`SessionManager.generateId`
 - 🧠 **ZhinAgent**：与 Zhin 消息流集成的智能体（SOUL/TOOLS/AGENTS、工具收集、执行策略）
-- 🔍 **模型自动发现**：ModelRegistry 自动发现 Provider 可用模型，Tier 评分智能选择
+- 🔍 **模型自动发现**：通过 `@zhin.js/ai` 的 `ModelRegistry`（本包 re-export AI 原语，不单独导出 Registry）
 - 🔄 **模型自动降级**：首选模型失败时自动切换到次优模型，支持 Chat / Vision / Agent 三条路径
 - 🛡️ **6 层 Bash 安全**：`ExecPolicy` 纵深防御（危险黑名单、环境变量剥离、wrapper 剥离、复合命令拆分、只读放行、交互式审批）
 - 📂 **文件访问安全**：`FilePolicy` 路径检查、设备路径拦截、命令读写分类
@@ -38,9 +40,9 @@ npm install zhin.js
 
 主包 `zhin.js` 已依赖 `@zhin.js/agent` 并在 setup 中调用 `initAgentModule()`，插件可直接从 `zhin.js` 使用：
 
-```javascript
+```typescript
 import {
-  initAIModule,   // 即 initAgentModule 的别名
+  initAgentModule,
   ZhinAgent,
   Agent,
   createAgent,
@@ -80,7 +82,7 @@ const result = await agent.run('你好')
 |------|------|
 | 初始化 | `initAgentModule` |
 | Agent | `Agent`, `createAgent`, `formatToolTitle` |
-| 模型管理 | `ModelRegistry`, `computeTierScore`, `extractModelRoot`, `AIModelInfo` |
+| Model harness | `MODEL_HARNESS_DEFAULTS`, `resolveModelHarness`, `mergeModelHarnessValues` |
 | 服务与会话 | `AIService`, `SessionManager`, `MemorySessionManager`, `DatabaseSessionManager`, `createMemorySessionManager`, `createDatabaseSessionManager` |
 | ZhinAgent | `ZhinAgent`，以及 config / exec-policy / file-policy / tool-runtime / prompt / builtin-tools 等子模块 |
 | 安全策略 | `checkExecPolicy`, `applyExecPolicyToTools`, `isDangerousCommand`, `stripEnvVarPrefix`, `stripSafeWrappers`, `splitCompoundCommand`, `extractCommandName`, `ExecPolicyResult`, `checkFileAccess`, `classifyBashCommand`, `isBlockedDevicePath` |
@@ -151,18 +153,6 @@ ai:
 
 无需额外配置即可使用；若需放宽子 Agent 的工具范围，使用 `ai.agent.subagentTools` 显式追加白名单（不会自动继承主会话全部 skill/tool）。
 
-## 工具命名策略
-
-- 保留/内置工具名（如 `bash`、`read_file`、`spawn_task`）不可被插件或文件化工具覆盖。
-- 非保留工具同名时采用 **后注册覆盖前注册**。
-- 冲突统一以 warn 记录：包含 `name`、`source`、`action`（`ignored`/`overridden`）。
-
-## Model harness（第一期）
-
-- 默认参数通过 TypeScript 表维护：`src/zhin-agent/model-harness.ts`。
-- 为新 provider/model 增补默认值时，直接在该表新增行并附测试。
-- 第一阶段不引入新的 YAML 配置键；后续若支持 YAML 覆盖，TS 表仍作为默认层。
-
 ### 2. 用 AIService 创建多个不同配置的 Agent
 
 `ctx.ai`（AIService）可以按需创建**多个互不共享状态的 Agent**，每个可指定不同 provider、model、systemPrompt、tools：
@@ -212,6 +202,40 @@ useContext('ai', async (ai) => {
 ### 4. 多 Agent 协作/编排（由 zhin.js 层实现）
 
 本包只提供基础能力：`createAgent`、`ZhinAgent`、`ai.createAgent` 等。**多 Agent 串联/并联编排**（例如 A 的输出作为 B 的输入、按条件路由到不同专业 Agent）以及**按 bot / 按群组配置多个 ZhinAgent** 的调度与路由，将在 **zhin.js 主包**实现；插件侧通过 zhin.js 暴露的 API 使用即可，无需在业务里手写多实例维护与路由逻辑。
+
+## 工具命名策略
+
+- 保留/内置工具名（如 `bash`、`read_file`、`spawn_task`）不可被插件或文件化工具覆盖。
+- 非保留工具同名时采用 **后注册覆盖前注册**。
+- 冲突统一以 warn 记录：包含 `name`、`source`、`action`（`ignored`/`overridden`）。
+
+## Model harness
+
+按 provider / model 覆盖 Agent 循环默认参数（当前主要为 **`maxIterations`**）。
+
+**合并顺序**（约定优先，详见 [ADR 0007](../../docs/adr/0007-ai-agent-model-harness-yaml-overrides.md)）：
+
+1. TypeScript 默认表 `MODEL_HARNESS_DEFAULTS`（[`src/zhin-agent/model-harness.ts`](./src/zhin-agent/model-harness.ts)）
+2. YAML `ai.agent.modelHarness.providerPatterns`（匹配当前 provider，支持 `*` 通配；按对象键插入顺序叠加）
+3. YAML `ai.agent.modelHarness.models`（`model` 或 `provider:model` 精确键）
+
+```yaml
+ai:
+  agent:
+    modelHarness:
+      providerPatterns:
+        "open*":
+          maxIterations: 7
+      models:
+        "gpt-4o":
+          maxIterations: 8
+        "openai:gpt-4o":
+          maxIterations: 9
+```
+
+运行时由 `resolveModelHarness(providerName, modelName, config?.modelHarness)` 解析；包入口导出 `MODEL_HARNESS_DEFAULTS`、`resolveModelHarness`、`mergeModelHarnessValues` 与 `ModelHarnessConfig` 类型。未命中任何规则时回退 TS 默认行或空对象；当前仅消费 `maxIterations`，未知 YAML 字段会被忽略。
+
+增补内置默认值：在 `model-harness.ts` 增加 `ModelHarnessRow` 并附测试；YAML 只做覆盖，不替代 TS 约定层。
 
 ## 开发
 

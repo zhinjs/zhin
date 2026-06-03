@@ -37,9 +37,29 @@ const checks = [
     description: '检查架构层级依赖是否正确',
   },
   {
+    name: 'Adapter Docs Sync',
+    command: 'pnpm check:adapter-docs',
+    description: '检查平台适配器文档是否与 plugins/adapters README 同步',
+  },
+  {
     name: 'Doc Links',
     command: 'pnpm check:doc-links',
     description: '检查文档相对链接是否断裂',
+  },
+  {
+    name: 'Doc Orphans',
+    command: 'pnpm check:doc-orphans',
+    description: '检查站点 Markdown 是否在侧栏或 allowlist',
+  },
+  {
+    name: 'README Exports',
+    command: 'pnpm check:readme-exports',
+    description: '检查 README import 与包导出一致',
+  },
+  {
+    name: 'Config Docs',
+    command: 'pnpm check:config-docs',
+    description: '配置文档与 DEFAULT_CONFIG 关键字段对齐',
   },
   {
     name: 'Stable Smoke',

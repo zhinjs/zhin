@@ -23,6 +23,33 @@ pnpm add @zhin.js/adapter-onebot11 ws
 
 反向 WS 需同时启用 `@zhin.js/host-router`。
 
+## 前置条件
+
+| 要求 | 说明 |
+|------|------|
+| **OneBot 实现** | 已运行 go-cqhttp、Lagrange、Shamrock 等，并开启 WS 服务 |
+| **正向 WS（`connection: ws`）** | 配置 OneBot 实现的 WS 地址；应用主动连接 |
+| **反向 WS（`connection: wss`）** | 需 `@zhin.js/host-router`；OneBot 实现连到本 Bot 的 `path` |
+| **access_token** | 可选；须与 OneBot 实现侧配置一致 |
+
+必填字段见 `OneBot11BotConfig`：`context`、`name`、`connection`；`ws` 需 `url`，`wss` 需 `path`。
+
+## 最小配置
+
+正向 WebSocket（本地开发推荐）：
+
+```yaml
+plugins:
+  - "@zhin.js/adapter-onebot11"
+
+bots:
+  - context: onebot11
+    connection: ws
+    name: my-bot
+    url: "ws://127.0.0.1:6700"
+    access_token: "${ONEBOT11_ACCESS_TOKEN}"
+```
+
 ## 配置
 
 所有 Bot 使用 **同一 context：`onebot11`**，通过 **`connection`** 区分连接方式。
@@ -319,35 +346,32 @@ OneBot 实现需要配置相同的 Token。
 
 API 调用默认 30 秒超时，可在代码中调整。
 
-## 常见问题
+## 故障排查
 
-### Q: 连接不上 OneBot 服务？
+### 连接不上 OneBot 服务
 
-A: 检查：
-1. OneBot 服务是否启动
-2. WebSocket 地址是否正确
-3. Access Token 是否匹配
+1. OneBot 服务是否已启动
+2. WebSocket 地址（`url`）或反向路径（`path`）是否正确
+3. `access_token` 是否与实现侧一致
 4. 防火墙是否阻止连接
 
-### Q: 消息发送失败？
+### 消息发送失败
 
-A: 可能原因：
-1. 未登录或登录失败
-2. 被风控限制
+1. QQ 未登录或登录失效
+2. 账号风控限制
 3. 群/好友不存在
-4. 消息格式错误
+4. 消息段格式错误
 
-### Q: 反向 WS 无法连接？
+### 反向 WS 无法连接
 
-A: 确认：
-1. HTTP 服务已启动
-2. WebSocket 路径配置正确
-3. OneBot 配置的反向 WS 地址正确
-4. 端口已开放
+1. `@zhin.js/host-router` 已启用且 HTTP 服务正常
+2. `path` 与 OneBot 实现配置的反向 WS 地址一致
+3. 端口已从公网或内网可达
 
-### Q: 如何处理 CQ 码？
+### CQ 码与消息段
 
-A: OneBot11 适配器自动处理 CQ 码转换，使用消息段格式即可：
+适配器自动处理 CQ 码转换；发送时使用消息段格式即可：
+
 ```typescript
 [
   { type: 'text', data: { text: '文本' } },
@@ -355,13 +379,18 @@ A: OneBot11 适配器自动处理 CQ 码转换，使用消息段格式即可：
 ]
 ```
 
+## 文档链接
+
+- [OneBot v11 适配器文档](https://zhin.js.org/adapters/onebot11)
+- [适配器概览](https://zhin.js.org/essentials/adapters)
+- [OneBot 11 标准](https://github.com/botuniverse/onebot-11)
+
 ## 相关链接
 
 - [OneBot 标准](https://github.com/botuniverse/onebot-11)
 - [go-cqhttp](https://github.com/Mrs4s/go-cqhttp)
 - [LagrangeGo](https://github.com/LagrangeDev/Lagrange.Core)
 - [Shamrock](https://github.com/whitechi73/OpenShamrock)
-- [Zhin.js 官方文档](https://github.com/zhinjs/zhin)
 
 ## 依赖项
 

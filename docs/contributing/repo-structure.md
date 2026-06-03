@@ -31,6 +31,7 @@ pnpm install
 | `packages/im/agent` | `zhinjs/agent` |
 | `packages/console/client` | `zhinjs/client` |
 | `packages/toolkit/create-zhin` | `zhinjs/create-zhin` |
+| `packages/toolkit/scaffold-wizard` | （monorepo 内新建） |
 | `packages/toolkit/satori` | `zhinjs/satori` |
 | `plugins` | `zhinjs/plugins` |
 | `docs` | `zhinjs/docs` |
@@ -46,7 +47,7 @@ pnpm install
   - `ai`：通用 AI 引擎（`agent/`、`memory/`、`compaction/`）
   - `agent`：IM Agent 编排（`orchestrator/`、`discovery/`、`security/`、`mcp-client/`、`defaults/`）
 - `packages/console/*` — 控制台：`contract`、`pagemanager`、`client`（npm 名均为单词包名）
-- `packages/toolkit/*` — 脚手架与独立工具库：`create-zhin`、`satori`
+- `packages/toolkit/*` — 脚手架与独立工具库：`create-zhin`、`scaffold-wizard`、`satori`
 - `packages/host/*` — Host 运行时：`host-router`、`host-api`、`mcp`
 - `plugins/adapters/*` — 平台适配器
 - `plugins/services/*` — **可选**服务类插件（内置 Host 栈见 `packages/host/`）
@@ -180,7 +181,7 @@ pnpm install
 
 ## 8. 代码组织与可维护性
 
-- **分层：** `packages/kernel` → `core` → `zhin` 等依赖方向保持单向；插件只通过公开 API 与 `zhin.js` / `@zhin.js/core` 交互，避免环形依赖。
+- **分层：** `packages/im/kernel` → `ai` → `core` → `agent` → `zhin` 依赖方向保持单向；插件只通过公开 API 与 `zhin.js` / `@zhin.js/core` 交互，避免环形依赖。
 - **单文件体量：** 页面或路由文件若超过约 **400～500 行**，优先拆出子组件、`hooks/`、`utils/` 或 `types.ts`（控制台 `bot-detail`、`database` 等可按此渐进拆分）。
 - **副作用入口：** 插件 `src/index.ts` 宜保持「注册路由 / 命令 / 生命周期」为主；重逻辑抽到同目录 `*.service.ts` 或 `lib/` 子模块便于测试。
 - **日志：** 构建脚本、CLI 中避免长期保留无环境变量的 `console.log` 调试输出；必要进度信息可用 `console.error`（stderr）或受 `DEBUG=*` 控制。

@@ -38,8 +38,8 @@ bots:
     # apiBaseUrl: https://open.feishu.cn/open-apis   # 自定义 API 地址
 
 plugins:
-  - adapter-lark
-  - http
+  - "@zhin.js/adapter-lark"
+  - "@zhin.js/host-router"
 ```
 
 或使用 TypeScript 配置：
@@ -57,7 +57,7 @@ export default defineConfig({
       webhookPath: '/lark/webhook',
     }
   ],
-  plugins: ['adapter-lark', 'http']
+  plugins: ['@zhin.js/adapter-lark', '@zhin.js/host-router']
 })
 ```
 

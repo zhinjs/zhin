@@ -2,7 +2,7 @@
 
 Zhin.js 主入口包 —— 现代 TypeScript 聊天机器人框架，AI 驱动、插件化、多平台。
 
-本包是 Zhin.js 框架的统一入口，重新导出 `@zhin.js/core` 全部 API 并注入框架级类型声明。
+本包 re-export **`@zhin.js/core` 全部 API**，并 selective re-export **`@zhin.js/agent`** 与多 Agent 编排 helper；**不包含** Host HTTP 栈（`@zhin.js/host-router`、`@zhin.js/host-api` 为可选插件，用于控制台与 REST 管理面）。
 
 ## 快速开始
 
@@ -21,27 +21,26 @@ pnpm dev          # 开发模式（热重载）
 # zhin.config.yml
 bots:
   - context: icqq
-    name: '123456789'
-    password: ''
-    platform: 2
+    name: '123456789'   # 须先 icqq login，与 QQ 号一致
 
 plugins:
-  - adapter-icqq
-  - http
-  - console
+  - "@zhin.js/adapter-icqq"
+  # 可选：控制台与 Host REST（Stable 黄金路径见 examples/minimal-bot）
+  - "@zhin.js/host-router"
+  - "@zhin.js/host-api"
 
 ai:
   enabled: true
   defaultProvider: ollama
   providers:
     ollama:
-      host: "http://localhost:11434"
+      host: "http://127.0.0.1:11434"
       # models 可省略 — 自动发现
   agent:
-    chatModel: ''              # 留空自动选择最优模型
-    execSecurity: allowlist    # bash 执行策略：deny / allowlist / full
-    execPreset: network        # 预设白名单：readonly / network / development
-    execApprovalMode: ask      # 白名单外命令 Owner 确认
+    chatModel: ''
+    execSecurity: allowlist
+    execPreset: custom
+    execApprovalMode: ask
 ```
 
 ## 编写插件
@@ -73,13 +72,16 @@ addTool(
 
 ## 导出内容
 
-```typescript
-// 重新导出 @zhin.js/core 全部 API
-export * from '@zhin.js/core'
+入口为 [`src/index.ts`](./src/index.ts)：
 
-// 日志模块
-export { default as logger } from '@zhin.js/logger'
-```
+| 来源 | 内容 |
+|------|------|
+| `@zhin.js/core` | `export *` — Plugin、Adapter、MessageDispatcher、Feature、Provider re-export 等 **全部 Core API** |
+| `@zhin.js/agent` | **部分** re-export：`initAgentModule`（`initAIModule` 别名）、`ZhinAgent`、`AIService`、`createAgent`、`SessionManager`、Hook、Bootstrap、压缩/输出 helper 等（见源码列表，非 `export *`） |
+| `./agent-orchestrator.js` | `runPipeline`、`runParallel`、`route` 及对应类型 |
+| `@zhin.js/logger` | `logger` 默认导出与 `formatCompact` 等 |
+
+未从本包导出的 Agent 能力（如 `AgentOrchestrator`、完整 builtin 工具工厂、`ExecPolicy` 细节）请直接 `import` **`@zhin.js/agent`**。Host 路由/API 来自可选插件 **`@zhin.js/host-router`** / **`@zhin.js/host-api`**，不在 `zhin.js` 包体内。
 
 ## 核心概念
 
@@ -168,6 +170,7 @@ npx zhin build    # 构建插件
 
 ## 文档
 
+- 站点首页：[zhin.js.org](https://zhin.js.org/)
 - [快速开始](https://zhin.js.org/getting-started/)
 - [核心概念](https://zhin.js.org/essentials/)
 - [AI 模块](https://zhin.js.org/advanced/ai)

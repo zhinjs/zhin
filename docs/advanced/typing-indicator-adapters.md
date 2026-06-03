@@ -1,3 +1,8 @@
+---
+sidebar: false
+maintainer: true
+---
+
 # Typing Indicator 适配器集成指南
 
 本文档介绍如何为所有适配器启用 Typing Indicator 功能。

@@ -110,8 +110,8 @@ useContext('database', (db) => {
 ### 等待多个上下文
 
 ```typescript
-useContext('database', 'http', (db, http) => {
-  // 等数据库和 HTTP 服务都启动后执行
+useContext('database', 'router', (db, router) => {
+  // 等数据库与 @zhin.js/host-router 都启动后执行
   console.log('所有服务已就绪')
 })
 ```

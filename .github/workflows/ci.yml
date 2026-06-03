@@ -72,6 +72,18 @@ jobs:
       - name: check documentation links
         run: pnpm check:doc-links
 
+      - name: check documentation orphans
+        run: pnpm check:doc-orphans
+
+      - name: check readme exports
+        run: pnpm check:readme-exports
+
+      - name: check config docs alignment
+        run: pnpm check:config-docs
+
+      - name: check adapter docs sync
+        run: pnpm check:adapter-docs
+
       - name: stable path smoke
         run: pnpm check:stable
 

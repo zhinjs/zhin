@@ -48,20 +48,22 @@ pnpm build
 
 ## 工作原理
 
-`create-zhin-app` 是独立的项目脚手架工具，它的工作流程如下：
+`create-zhin-app` 负责**生成 workspace 文件树**与依赖安装；适配器 / AI / 数据库的**交互向导**来自共享包 [`@zhin.js/scaffold-wizard`](../scaffold-wizard/)（与 `zhin setup` 同一套逻辑）。
+
+工作流程：
 
 1. **启动脚手架**: 当你运行 `npm create zhin-app` 时
 2. **检测 pnpm**: 自动检测并安装 pnpm（如果未安装）
 3. **交互式配置**: 询问项目名称、运行时、配置格式
 4. **HTTP Token 认证配置**: 配置 Web 控制台访问 Token
    - 默认 Token：随机生成 32 位 hex 字符串
-5. **数据库配置**: 选择数据库类型和连接参数
-   - SQLite (默认，零配置)
-   - MySQL、PostgreSQL、MongoDB、Redis
-   - 自动安装对应的数据库驱动包
+5. **数据库 / 适配器 / AI 向导**（`@zhin.js/scaffold-wizard`）: 分步选择并写入配置
+   - 数据库：SQLite、MySQL、PostgreSQL、MongoDB、Redis
+   - 适配器：Sandbox、Telegram、Discord、GitHub 等（含模式与 env 引导）
+   - AI：Provider、触发、会话；启用时预装 `@modelcontextprotocol/sdk`
 6. **创建 Workspace**: 生成 pnpm workspace 结构
-7. **生成配置文件**: 包含数据库、日志等完整配置
-8. **生成 .env 文件**: 保存 HTTP Token 和数据库连接信息
+7. **生成配置文件**: 合并 wizard 结果到 `zhin.config.*`
+8. **生成 .env 文件**: 保存 Token、适配器与 AI 环境变量
 9. **自动安装依赖**: 在项目根目录执行 `pnpm install`
 10. **完成提示**: 显示 Token、数据库配置和下一步操作
 
@@ -106,17 +108,33 @@ npm create zhin-app my-bot --yes
 | `[project-name]` | 项目名称（可选，会提示输入） | `my-zhin-bot` |
 | `-y, --yes` | 跳过交互，使用默认配置 | `false` |
 
-**默认配置（使用 `-y` 时）：**
+**默认配置（使用 `-y` 时，见 `src/stable-yes-defaults.ts`，由 `tests/stable-yes.test.ts` 断言）：**
 - 配置格式: YAML (`zhin.config.yml`)
 - 运行时: Node.js
 - 包管理器: pnpm（自动安装）
-- 数据库: SQLite (`./data/bot.db`, WAL 模式)
-- HTTP Token: 随机生成 32 位 hex 字符串
-- 适配器: Sandbox
-- Remote Console: `https://console.zhin.dev`；API Base 与 Host 地址一致（如 `http://127.0.0.1:8086`）
-- 统一收件箱: 已启用 `inbox.enabled`
-- 日志等级: INFO
-- 日志清理: 7 天，10000 条记录
+- 数据库: 无（内存会话；需持久化请交互式创建或手动加 SQLite）
+- HTTP Token: 随机生成
+- 适配器: `@zhin.js/adapter-sandbox`；`bots` 含 `{ context: sandbox, name: sandbox-bot }`（开箱可在终端直接对话）
+- AI: 启用 Ollama（`http://127.0.0.1:11434`）；`toolSearch: false`；`execSecurity: allowlist` / `execPreset: readonly`；`memoryMcp: false`
+- Remote Console: `https://console.zhin.dev`；API Base `http://127.0.0.1:8086`（见 [docs/console-remote.md](../../docs/console-remote.md)）
+- MCP SDK: 启用 AI 时预装 `@modelcontextprotocol/sdk`
+- 统一收件箱: 未启用（无 `database:` 块）
+- 插件开发技能模板: 未安装（`devSkills: false`）
+
+**与 [examples/minimal-bot](../../examples/minimal-bot/) 的差异：** monorepo Stable 示例使用 `bots: []`——Sandbox bot 在 Remote Console 打开「沙盒」页并通过 WebSocket 连接时**自动创建**（如 `sandbox-xxxx`），一般无需在 yaml 写 `context: sandbox`。`-y` 脚手架则写入固定 `sandbox-bot`，便于未开 Console 时在终端即测 IM 路径。AI / Host 插件约定 otherwise 与 minimal-bot 一致。
+
+## 与 @zhin.js/cli 的分工
+
+| 工具 | 用途 |
+|------|------|
+| **create-zhin-app** (`pnpm create zhin-app`) | 创建完整 workspace 项目（生成文件树 + 向导） |
+| **@zhin.js/scaffold-wizard** | 共享向导库（database / adapters / AI）；被上表两项消费 |
+| **zhin new** | 在已有项目内创建插件/服务/适配器包 |
+| **zhin setup** | 已有项目内增量配置（与 create 共用 scaffold-wizard） |
+| **zhin onboard** | 项目内外统一入口：新建项目或复用配置运行 setup |
+| **zhin doctor** | 健康检查与环境修复 |
+
+新建项目请优先 `pnpm create zhin-app`；已有项目加适配器/AI 用 `zhin setup`；插件开发用 `zhin new`。
 
 ## 使用场景
 
@@ -198,30 +216,37 @@ packages:
 
 ## 配置文件格式
 
-脚手架当前支持 YAML、JSON、TOML。默认生成 `zhin.config.yml`：
+脚手架当前支持 YAML、JSON、TOML。`-y` 默认生成 `zhin.config.yml`（节选）：
 
 ```yaml
-database:
-  dialect: sqlite
-  filename: ./data/bot.db
-  mode: wal
+bots:
+  - context: sandbox
+    name: sandbox-bot
 
 plugins:
-  - "example"
-  - "@zhin.js/host-router"
+  - "@zhin.js/adapter-sandbox"
   - "@zhin.js/host-router"
   - "@zhin.js/host-api"
-  - "@zhin.js/adapter-sandbox"
+  - example
 
 http:
   token: ${HTTP_TOKEN}
-  base: /api
   corsOrigins:
     - "https://console.zhin.dev"
 
-inbox:
+ai:
   enabled: true
+  defaultProvider: ollama
+  providers:
+    ollama:
+      host: http://127.0.0.1:11434
+  agent:
+    toolSearch: false
+    execSecurity: allowlist
+    execPreset: readonly
 ```
+
+交互式选择 SQLite 等数据库时会追加 `database:` 与 `inbox: enabled: true`。Remote Console 用法见 [docs/console-remote.md](../../docs/console-remote.md)；Stable 手测见 [examples/minimal-bot/README.md](../../examples/minimal-bot/README.md)。
 
 ## 完整工作流
 
@@ -285,10 +310,9 @@ zhin build my-awesome-plugin
 
 ```yaml
 plugins:
-  - "@zhin.js/host-router"
+  - "@zhin.js/adapter-sandbox"
   - "@zhin.js/host-router"
   - "@zhin.js/host-api"
-  - "@zhin.js/adapter-sandbox"
   - example
   - my-awesome-plugin
 ```
@@ -413,6 +437,9 @@ npm install
 ## 贡献指南
 
 `create-zhin-app` 是开源项目，欢迎贡献：
+
+- **向导逻辑**（适配器/AI/数据库交互、写 config/env/deps）：改 [`@zhin.js/scaffold-wizard`](../scaffold-wizard/)，并跑 `pnpm --filter @zhin.js/scaffold-wizard test`
+- **项目模板与生成**（目录结构、README、skills）：改本包 `src/workspace.ts` 等，并跑 `pnpm --filter create-zhin-app test`
 
 1. Fork 项目
 2. 创建特性分支

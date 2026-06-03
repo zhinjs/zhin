@@ -1,5 +1,9 @@
 # API 参考
 
+::: warning 概念索引，非权威 API 清单
+本页汇总常用 API **用法示例**，不等同于 TypeScript 导出表。完整 `usePlugin()` 能力与插件生命周期见 **[插件系统](/essentials/plugins)**；插件开发流程见 **[插件开发指南](/guide/plugin-development)**。类型与导出以 `zhin.js` / `@zhin.js/core` 源码为准。
+:::
+
 Zhin.js 核心 API 文档。
 
 ## usePlugin()

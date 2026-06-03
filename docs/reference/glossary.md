@@ -32,6 +32,20 @@
 | **@zhin.js/agent** | L3 | IM 场景下 ZhinAgent、AIService 等编排。 |
 | **@zhin.js/satori** | L3 | **Vercel satori** 的 SVG 渲染工具包；**不是** [Satori 协议适配器](https://www.npmjs.com/package/@zhin.js/adapter-satori)。 |
 
+## AI 与 Agent
+
+| 术语 | 级别 | 简述 |
+|------|------|------|
+| **ZhinAgent** | L3 | IM 场景主 Agent：收集工具、构建上下文、调用 `@zhin.js/ai` 引擎完成回合。 |
+| **AgentOrchestrator** | L3 | `ctx.agent` 背后的编排中枢：Tool / Skill / SubAgent / MCP / Hook 注册表。 |
+| **`ctx.ai`（AIService）** | L3 | 业务侧 AI 服务：会话、`createAgent`、`runAgent`。 |
+| **`ctx.agent`** | L3 | 扩展编排： `addTool`、`addSkill`、`addMcp` 等注册 API。 |
+| **Subagent（`spawn_task`）** | L3 | 主 Agent 派发的后台子任务，默认即可用，与 harness「角色」不同。 |
+| **toolSearch** | L3+ | Advanced：`ai.agent.toolSearch: true` 启用 deferred Worker 编排，控制 prompt 体积。 |
+| **MCP Client** | L3+ | Zhin **消费**外部 MCP Server 工具（`ai.mcpServers`、`ai.memoryMcp`）。 |
+| **MCP Server** | L3+ | Zhin **对外暴露**工具（`@zhin.js/mcp`），供 Claude / Cursor 等调用。 |
+| **Bootstrap** | L2～L3 | `SOUL.md` / `AGENTS.md` / `TOOLS.md` 注入 system prompt 的引导文件。 |
+
 ## AI 能力文件约定
 
 | 术语 | 级别 | 简述 |
