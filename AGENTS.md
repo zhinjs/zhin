@@ -34,6 +34,7 @@
 - `pnpm check:doc-links`：检查文档相对链接是否断裂。
 - `pnpm sync:adapter-docs` / `pnpm check:adapter-docs`：平台适配器文档与 `plugins/adapters/*/README.md` 同步。
 - `pnpm --filter <pkg> build|test`：只验证单个包。
+- 改 **CLI** 或 **create-zhin-app** 前，若报找不到 `@zhin.js/scaffold-wizard`，先执行 `pnpm --filter @zhin.js/scaffold-wizard build`（或 `pnpm prepare:cli` / 全量 `pnpm build`）。该包产物在 `lib/`，未构建时 Node 无法解析。
 
 优先做最小范围验证，不要默认跑全量构建。
 

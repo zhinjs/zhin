@@ -53,6 +53,8 @@ pnpm --filter @zhin.js/scaffold-wizard build
 pnpm --filter @zhin.js/scaffold-wizard test
 ```
 
+`create-zhin-app` 与 `@zhin.js/cli` 的 `build` 脚本会自动先构建本包；单独 `pnpm --filter @zhin.js/cli build` 也会触发依赖构建。
+
 修改向导行为时，请同时跑：
 
 ```bash
