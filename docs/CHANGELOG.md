@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.35
+
+### Patch Changes
+
+- c78d2cd: fix: cli 更新,文档更新
+
 ## 1.0.34
 
 ### Patch Changes

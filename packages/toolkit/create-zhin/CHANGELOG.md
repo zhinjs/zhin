@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.47
+
+### Patch Changes
+
+- c78d2cd: fix: cli 更新,文档更新
+
 ## 1.0.46
 
 ### Patch Changes

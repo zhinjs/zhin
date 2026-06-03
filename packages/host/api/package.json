@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/host-api",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Zhin Host management API (REST, Console protocol, PageManager entries)",
   "type": "module",
   "main": "./lib/index.js",

@@ -1,5 +1,13 @@
 # @zhin.js/mcp
 
+## 1.0.71
+
+### Patch Changes
+
+- c78d2cd: fix: cli 更新,文档更新
+- Updated dependencies [c78d2cd]
+  - zhin.js@1.0.89
+
 ## 1.0.70
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @zhin.js/adapter-milky
 
+## 0.0.39
+
+### Patch Changes
+
+- Updated dependencies [c78d2cd]
+  - @zhin.js/host-router@0.0.2
+  - zhin.js@1.0.89
+
 ## 0.0.38
 
 ### Patch Changes
