@@ -20,7 +20,7 @@ cd examples/test-bot
 pnpm dev
 ```
 
-日志应含 `console` / `api_only`。
+日志应含 Host HTTP 启动信息，以及 Host API 的 `服务: Host API`、`模式: 仅API`（或等价 `[Zhin:host-api]` 行）。
 
 ## 3. Remote Console UI（zhin-console 仓库）
 

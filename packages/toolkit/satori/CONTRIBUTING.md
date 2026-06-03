@@ -5,4 +5,4 @@
 - **与本包封装相关**（`htmlToSvg`、内置字体路径、导出 API）：请在 Zhin 仓库提 Issue / PR。
 - **渲染行为、布局、CSS 子集**：请查阅 [satori 文档与 Issues](https://github.com/vercel/satori)。
 
-本地开发：`pnpm install` → `pnpm build`（在仓库根目录或 `packages/satori` 下）。
+本地开发：`pnpm install` → `pnpm build`（在仓库根目录或 `packages/toolkit/satori` 下）。

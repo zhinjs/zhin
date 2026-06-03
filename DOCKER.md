@@ -53,7 +53,7 @@ docker run --rm \
 ```
 [INFO] [Zhin:CLI]: ✓ 机器人已启动
 [INFO] [Zhin:http]: HTTP 服务已启动 (port=8086)
-[INFO] [Zhin:console]: 控制台（仅 API）
+[INFO] [Zhin:host-api]: Host 管理面 API 已就绪（仅 API，无内置 SPA）
 ```
 
 此时 Host 在 `http://127.0.0.1:8086` 提供 **Console API**（健康检查等可用根路径 `/pub/health`）。聊天 UI 请打开 **[Remote Console](https://console.zhin.dev)**，API Base 填 `http://127.0.0.1:8086`，Token 与容器/项目 `.env` 中 `HTTP_TOKEN` 一致。见 [docs/console-remote.md](docs/console-remote.md)。

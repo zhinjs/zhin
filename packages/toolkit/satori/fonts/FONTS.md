@@ -17,7 +17,7 @@ These are **SubsetOTF** static fonts from [googlefonts/noto-cjk](https://github.
 - **NotoSansJP-Regular.otf** — Japanese — ~4.3 MB  
 - **NotoSansKR-Regular.otf** — Korean — ~4.4 MB  
 
-> **Important**: If these files are accidentally replaced by an HTML page (e.g. wrong `curl` URL or Git LFS misconfiguration), `file *.otf` will show `HTML document` and **CJK will render as tofu**. Re-fetch with `pnpm fetch-noto-cjk` from `packages/satori`.
+> **Important**: If these files are accidentally replaced by an HTML page (e.g. wrong `curl` URL or Git LFS misconfiguration), `file *.otf` will show `HTML document` and **CJK will render as tofu**. Re-fetch with `pnpm fetch-noto-cjk` from `packages/toolkit/satori`.
 
 ### Noto Color Emoji Font (SIL Open Font License 1.1)
 
@@ -88,7 +88,7 @@ const emoji = getNotoColorEmoji();
 No extra download is required for normal installs; to **refresh** Noto CJK files after a bad copy:
 
 ```bash
-cd packages/satori && pnpm fetch-noto-cjk
+cd packages/toolkit/satori && pnpm fetch-noto-cjk
 ```
 
 ## Adding More Fonts

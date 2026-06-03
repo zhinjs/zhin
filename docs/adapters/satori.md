@@ -8,13 +8,13 @@ tier: Experimental
 本页由 [`plugins/adapters/satori/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/satori/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=cd493e5d01735ae5 -->
+<!-- sync-adapter-docs:sha256=d037ddb071e52491 -->
 
 # @zhin.js/adapter-satori
 
 Zhin.js [Satori](https://satori.chat/zh-CN/introduction.html) **聊天协议**适配器，**一个适配器**支持 WebSocket 正向与 Webhook 两种连接方式，由配置项 `connection` 区分；支持 HTTP API 与 Bearer Token 鉴权。
 
-> **勿与本仓库的 `@zhin.js/satori` 混淆**：后者是 [Vercel satori](https://github.com/vercel/satori) 的 **SVG 图片渲染**工具包（`packages/satori`），用于把 HTML/React 画成 SVG，**不是**聊天协议。参见 [@zhin.js/satori README](https://github.com/zhinjs/zhin/tree/master/packages/satori)。
+> **勿与本仓库的 `@zhin.js/satori` 混淆**：后者是 [Vercel satori](https://github.com/vercel/satori) 的 **SVG 图片渲染**工具包（`packages/toolkit/satori`），用于把 HTML/React 画成 SVG，**不是**聊天协议。参见 [@zhin.js/satori README](https://github.com/zhinjs/zhin/tree/main/packages/toolkit/satori)。
 
 ## 功能特性
 

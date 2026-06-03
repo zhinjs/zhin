@@ -24,7 +24,7 @@ describe('minimal-bot Stable 配置契约', () => {
     expect(configText).not.toMatch(/context:\s*sandbox/);
   });
 
-  it('插件集为 Sandbox + http + host-api + hello', () => {
+  it('插件集为 Sandbox + host-router + host-api + hello', () => {
     expect(configText).toContain('@zhin.js/adapter-sandbox');
     expect(configText).toContain('@zhin.js/host-router');
     expect(configText).toContain('@zhin.js/host-api');

@@ -35,7 +35,7 @@ pnpm start    # 生产模式
 | [docs/console-remote.md](../../docs/console-remote.md) | Remote Console 架构与 CORS 说明 |
 | [docs/adapters/index.md](../../docs/adapters/index.md) | 平台适配器矩阵（Stable / Advanced / Experimental 档位与各包文档） |
 
-本目录 `zhin.config.yml` 启用多 bot（ICQQ、QQ 官方、GitHub、Sandbox 等）；新增或切换平台时对照上表适配器索引与包内 README。
+本目录 `zhin.config.yml` 启用多 bot（ICQQ、QQ 官方、GitHub、Sandbox 等）。**ICQQ** 须先 `icqq login`，配置里只写 QQ 号（`name`）；新增或切换平台时对照 [适配器索引](../../docs/adapters/index.md) 与包内 README。
 
 ## 功能
 

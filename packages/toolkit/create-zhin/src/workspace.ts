@@ -422,14 +422,11 @@ ${projectName}/
 pnpm dev          # 开发模式（支持热重载）
 \`\`\`
 
-启动后可以用 Sandbox 适配器在终端输入：
+1. 确认终端里 Host 已启动（一般为 \`http://127.0.0.1:8086\`）。
+2. 打开 **[Remote Console](https://console.zhin.dev)**，API Base 与 Token（\`.env\` 的 \`HTTP_TOKEN\`）与日志一致。
+3. 在 **沙盒** 页连接后发送 \`hello\`（\`bots: []\` 时自动创建 Sandbox bot，如 \`sandbox-xxxx\`）。
 
-\`\`\`text
-hello
-status
-\`\`\`
-
-### Remote Console
+### Remote Console（同上）
 
 - UI: \`https://console.zhin.dev\`
 - API Base: \`http://127.0.0.1:8086\`（与 Host 启动日志一致）

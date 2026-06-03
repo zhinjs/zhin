@@ -1,6 +1,6 @@
 # @zhin.js/plugin-html-renderer
 
-使用 [@zhin.js/satori](https://github.com/zhinjs/zhin/tree/main/packages/satori) 将 HTML/CSS 渲染为图片的 Zhin.js 插件。
+使用 [@zhin.js/satori](https://github.com/zhinjs/zhin/tree/main/packages/toolkit/satori) 将 HTML/CSS 渲染为图片的 Zhin.js 插件。
 
 ## 特点
 
@@ -155,7 +155,7 @@ renderer.registerFont({
 
 ## 支持的 CSS 属性
 
-参考 [@zhin.js/satori 文档](https://github.com/zhinjs/zhin/tree/main/packages/satori)
+参考 [@zhin.js/satori 文档](https://github.com/zhinjs/zhin/tree/main/packages/toolkit/satori)
 
 主要支持：
 - **布局**: `display: flex`, `position`

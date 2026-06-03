@@ -39,7 +39,7 @@ Windows 用户在首次初始化 Zhin.js 项目时可能遇到一些常见问题
    ```
    ✅ 机器人已启动
    [INFO] HTTP 服务已启动 (port=8086)
-   [INFO] 控制台: 仅 API（模式=api_only）
+   [INFO] [Zhin:host-api]: 服务: Host API | 模式: 仅API
    ```
 
 3. **生产启动**（可选）

@@ -408,7 +408,13 @@ function appendYamlValue(lines: string[], key: string, value: unknown, indent: n
  * 生成 YAML 格式的 bots 配置段
  */
 export function generateBotsConfigYaml(result: AdapterSetupResult): string {
-  if (result.bots.length === 0) return '';
+  if (result.bots.length === 0) {
+    return `
+
+# Sandbox：Remote Console 打开「沙盒」页并通过 WebSocket 连接时自动创建 bot
+bots: []
+`;
+  }
 
   const lines: string[] = ['', 'bots:'];
   for (const bot of result.bots) {

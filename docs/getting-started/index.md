@@ -175,9 +175,14 @@ pnpm dev
 [INFO] Zhin.js v2.0.0
 [INFO] 数据库已连接
 [INFO] HTTP 服务启动在 http://127.0.0.1:8086
-[INFO] 控制台: 仅 API（模式=api_only）
-[INFO] 适配器 sandbox 已启动
-[INFO] 机器人已启动，输入消息测试...
+[INFO] [Zhin:host-api]: 服务: Host API | 模式: 仅API
+[INFO] 适配器 sandbox 已就绪
+```
+
+在 **[console.zhin.dev](https://console.zhin.dev)** 打开沙盒页连接后发送 `hello` 测试（非终端 stdin）：
+
+```text
+hello
 ```
 
 ### 其他启动方式

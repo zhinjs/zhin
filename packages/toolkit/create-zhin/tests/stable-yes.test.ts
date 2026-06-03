@@ -26,7 +26,7 @@ afterEach(async () => {
 });
 
 describe('create-zhin -y Stable 默认值', () => {
-  it('生成单 sandbox bot、启用 AI、toolSearch 关闭、无 inbox', async () => {
+  it('bots 为空（Sandbox 由 Console 连接时自动创建）、启用 AI、toolSearch 关闭、无 inbox', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'create-zhin-stable-'));
     tmpRoots.push(root);
     const projectPath = path.join(root, 'stable-bot');
@@ -34,8 +34,8 @@ describe('create-zhin -y Stable 默认值', () => {
     await createWorkspace(projectPath, 'stable-bot', stableYesOptions());
 
     const config = await fs.readFile(path.join(projectPath, 'zhin.config.yml'), 'utf8');
-    expect(config).toContain('context: sandbox');
-    expect(config).toContain('name: sandbox-bot');
+    expect(config).toMatch(/bots:\s*\[\]/);
+    expect(config).not.toMatch(/context:\s*sandbox/);
     expect(config).toContain('toolSearch: false');
     expect(config).toContain('defaultProvider: ollama');
     expect(config).not.toContain('inbox:');

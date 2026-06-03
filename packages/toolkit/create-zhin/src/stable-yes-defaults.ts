@@ -13,7 +13,7 @@ export function applyStableYesDefaults(options: InitOptions): void {
   options.adapters = {
     packages: ['@zhin.js/adapter-sandbox'],
     plugins: ['@zhin.js/adapter-sandbox'],
-    bots: [{ context: 'sandbox', name: 'sandbox-bot' }],
+    bots: [],
     envVars: {},
   };
 

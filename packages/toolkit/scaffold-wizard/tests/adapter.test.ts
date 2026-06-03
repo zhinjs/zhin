@@ -44,6 +44,17 @@ describe('adapter setup notes', () => {
 });
 
 describe('generateBotsConfigYaml', () => {
+  it('emits bots: [] when no bot entries (Sandbox-only)', () => {
+    const yaml = generateBotsConfigYaml({
+      packages: ['@zhin.js/adapter-sandbox'],
+      plugins: ['@zhin.js/adapter-sandbox'],
+      envVars: {},
+      bots: [],
+    });
+    expect(yaml).toMatch(/bots:\s*\[\]/);
+    expect(yaml).not.toContain('context:');
+  });
+
   it('renders nested webhook object as YAML', () => {
     const yaml = generateBotsConfigYaml({
       packages: [],

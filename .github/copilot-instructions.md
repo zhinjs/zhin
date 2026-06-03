@@ -49,7 +49,7 @@ const MyComp = defineComponent(async function MyComp(
 - TypeScript 配置使用 `moduleResolution: "bundler"`
 - 核心包别名: `@zhin.js/core`, `@zhin.js/logger`, `@zhin.js/database`
 - **类型定义**: 所有类型现在统一在 `@zhin.js/core` 中 (`packages/im/core/src/types.ts`)
-- **注意**: `console` 插件使用 `moduleResolution: "nodenext"` (Vite 兼容性)
+- **注意**: `@zhin.js/client`（Remote Console 扩展）与部分 Host 客户端子包可能使用 `moduleResolution: "nodenext"`
 ### 2. 类型扩展
 通过模块声明扩展全局类型 (在 `@zhin.js/core` 中定义)：
 
@@ -400,7 +400,7 @@ plugin.useContext('database', async (db) => {
 ```
 
 ### 6. HTTP 路由
-依赖 `http` 插件和 `router` Context：
+启用 `@zhin.js/host-router` 后通过 `router` Context 挂路由：
 
 ```typescript
 useContext('router', (router) => {
@@ -416,8 +416,8 @@ useContext('router', (router) => {
 })
 ```
 
-### 5. Web 控制台集成
-`console` 插件提供 Vite 开发服务器和 WebSocket 支持，插件可注册前端入口：
+### 5. Remote Console 扩展（Host API）
+`@zhin.js/host-api` 提供 `web`（PageManager）上下文；聊天 UI 在 **[console.zhin.dev](https://console.zhin.dev)**，插件可注册 Console 扩展入口：
 
 ```typescript
 useContext('web', (web) => {
@@ -541,9 +541,9 @@ async function setup() {
 1. **packages/** - 核心框架层，所有插件的基础
    - core, client, create-zhin, zhin
 2. **packages/host/** - Host 运行时（router / api / mcp），其他插件常作 peer 依赖
-   - http, console, mcp
+   - host-router, host-api, mcp
 3. **plugins/adapters/** - 平台适配器
-   - process (已内置到 core), icqq, kook, discord, qq, onebot11, telegram, slack 等
+   - process（`services` 内置，非 adapter 包）, icqq, kook, discord, qq, onebot11, telegram, slack 等
 4. **plugins/utils/** - 工具插件
    - music, sensitive-filter 等
 

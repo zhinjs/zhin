@@ -171,7 +171,7 @@ pnpm install
 | 含 `client/` 的适配器 | ✅ | 扩展构建输出目标为包根 `dist/`（`zhin build`）。 |
 | `@zhin.js/host-router` | ✅ | `src/` → `lib/`；Koa + Router + 鉴权。 |
 | `@zhin.js/host-api` | ✅ | `src/` → `lib/`；Host **api_only**（无内置 SPA）。 |
-| `@zhin.js/satori`（`packages/satori`） | ✅ | Node 库：`src/` → **`lib/`**（tsup），与全局约定一致。 |
+| `@zhin.js/satori`（`packages/toolkit/satori`） | ✅ | Node 库：`src/` → **`lib/`**（tsup），与全局约定一致。 |
 | `examples/*` | ℹ️ | 示例工程可能直接运行 `src`，不强制 `lib`/`dist`，不纳入插件包约定。 |
 
 ## 7. 其他说明

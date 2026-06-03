@@ -53,7 +53,7 @@ docker run --rm \
 ```
 [INFO] [Zhin:CLI]: ✓ 机器人已启动
 [INFO] [Zhin:http]: HTTP 服务已启动 (port=8086)
-[INFO] [Zhin:console]: 控制台（仅 API）
+[INFO] [Zhin:host-api]: Host 管理面 API 已就绪（仅 API，无内置 SPA）
 ```
 
 Host 监听 `http://127.0.0.1:8086`（API）。在 **[console.zhin.dev](https://console.zhin.dev)** 登录，API Base 指向该地址，Token 见 `.env` 的 `HTTP_TOKEN`。见 [console-remote.md](../console-remote.md)。
