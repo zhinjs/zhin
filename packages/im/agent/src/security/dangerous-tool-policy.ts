@@ -1,8 +1,13 @@
-import { getPlugin } from '@zhin.js/core';
+import * as zhinCore from '@zhin.js/core';
 import type { ToolContext } from '@zhin.js/core';
 import type { ZhinAgentConfig } from '../zhin-agent/config.js';
 import { resolveToolRequesterRole, type ToolRequesterRole } from './owner-approve-always-store.js';
 import { checkFileAccess } from './file-policy.js';
+
+/** 命名空间调用，便于单测 vi.spyOn(core, 'getPlugin') 与实现一致 */
+function getPlugin(): zhinCore.Plugin {
+  return zhinCore.getPlugin();
+}
 
 export interface DangerousToolDecision {
   allowed: boolean;

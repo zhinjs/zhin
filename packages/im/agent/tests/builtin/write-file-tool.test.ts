@@ -34,7 +34,7 @@ describe('WriteFileBuiltinTool', () => {
       dispatch: vi.fn(),
     } as unknown as Plugin;
     (plugin as unknown as { root: Plugin }).root = plugin;
-    vi.spyOn(core, 'getPlugin').mockImplementation(() => plugin as never);
+    vi.spyOn(core, 'getPlugin').mockImplementation(() => plugin);
   }
 
   it('toTool 元数据与 schema 完整', () => {
@@ -135,6 +135,7 @@ describe('WriteFileBuiltinTool', () => {
       botId: 'bot1',
       senderId: 'admin1',
       roles: ['trusted'],
+      extra: { execAllowlist: ['write_file'] },
     } as ToolContext;
     const out = String(await inst.run({ file_path: fp, content: 'allowlisted' }, ctx));
     expect(out).toContain('Wrote');
