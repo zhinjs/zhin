@@ -27,14 +27,14 @@ describe('WriteFileBuiltinTool', () => {
           return { bots: new Map([['bot1', { $config: { master, trusted } }]]) };
         }
         if (name === 'ai') {
-          return { getAgentConfig: () => ({ execAllowlist }) };
+          return { getAgentConfig: () => ({ execAllowlist: [...execAllowlist] }) };
         }
         return undefined;
       },
       dispatch: vi.fn(),
     } as unknown as Plugin;
     (plugin as unknown as { root: Plugin }).root = plugin;
-    vi.spyOn(core, 'getPlugin').mockReturnValue(plugin as never);
+    vi.spyOn(core, 'getPlugin').mockImplementation(() => plugin as never);
   }
 
   it('toTool 元数据与 schema 完整', () => {

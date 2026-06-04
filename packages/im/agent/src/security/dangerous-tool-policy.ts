@@ -43,6 +43,34 @@ function resolveExecAllowlistFromAiService(plugin: ReturnType<typeof getPlugin>)
   return allowlist.map((v) => String(v)).filter(Boolean);
 }
 
+function resolveExecAllowlistFromContext(context?: ToolContext): string[] {
+  const extra = context?.extra as { execAllowlist?: string[] } | undefined;
+  if (Array.isArray(extra?.execAllowlist) && extra.execAllowlist.length > 0) {
+    return extra.execAllowlist.map((v) => String(v)).filter(Boolean);
+  }
+  return [];
+}
+
+/** 优先 context.extra，再尝试 plugin / getPlugin() 读取 ai.agent.execAllowlist */
+function resolveExecAllowlistSafe(
+  plugin: ReturnType<typeof getPlugin> | undefined,
+  context?: ToolContext,
+): string[] {
+  const fromExtra = resolveExecAllowlistFromContext(context);
+  if (fromExtra.length > 0) return fromExtra;
+
+  if (plugin) {
+    const fromPlugin = resolveExecAllowlistFromAiService(plugin);
+    if (fromPlugin.length > 0) return fromPlugin;
+  }
+
+  try {
+    return resolveExecAllowlistFromAiService(getPlugin());
+  } catch {
+    return [];
+  }
+}
+
 function hasToolIdentity(context?: ToolContext): boolean {
   return Boolean(context?.platform && context?.botId && context?.senderId);
 }
@@ -64,8 +92,15 @@ function resolveRoleFromContext(context?: ToolContext): {
       hasIdentity: true,
     };
   } catch {
+    let plugin: ReturnType<typeof getPlugin> | undefined;
+    try {
+      plugin = getPlugin();
+    } catch {
+      plugin = undefined;
+    }
     return {
       role: resolveRoleFromToolContextFallback(context!),
+      plugin,
       hasIdentity: true,
     };
   }
@@ -180,7 +215,7 @@ export function checkDangerousToolAccess(toolName: 'write_file' | 'edit_file' | 
     }
 
     if (role === 'trusted') {
-      const allowlist = plugin ? resolveExecAllowlistFromAiService(plugin) : [];
+      const allowlist = resolveExecAllowlistSafe(plugin, context);
       if (isAllowlisted(allowlist, toolName)) {
         return { allowed: true, role };
       }
