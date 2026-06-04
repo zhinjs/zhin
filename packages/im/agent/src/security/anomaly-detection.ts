@@ -73,6 +73,7 @@ export class AnomalyDetector {
   private rules: Map<string, DetectionRule> = new Map();
   private events: AnomalyEvent[] = [];
   private listeners: Array<(event: AnomalyEvent) => void> = [];
+  private static readonly MAX_EVENTS = 500;
 
   /**
    * 添加行为模式
@@ -118,8 +119,7 @@ export class AnomalyDetector {
         const event = rule.detect(data);
         if (event) {
           anomalies.push(event);
-          this.events.push(event);
-          this.notifyListeners(event);
+          this.pushEvent(event);
         }
       } catch (error) {
         console.error(`[AnomalyDetector] Rule ${ruleId} failed:`, error);
@@ -131,12 +131,19 @@ export class AnomalyDetector {
       const anomaly = this.checkPattern(pattern, data);
       if (anomaly) {
         anomalies.push(anomaly);
-        this.events.push(anomaly);
-        this.notifyListeners(anomaly);
+        this.pushEvent(anomaly);
       }
     }
 
     return anomalies;
+  }
+
+  private pushEvent(event: AnomalyEvent): void {
+    this.events.push(event);
+    if (this.events.length > AnomalyDetector.MAX_EVENTS) {
+      this.events.splice(0, this.events.length - AnomalyDetector.MAX_EVENTS);
+    }
+    this.notifyListeners(event);
   }
 
   /**

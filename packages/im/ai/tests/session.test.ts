@@ -370,4 +370,32 @@ describe('DatabaseSessionManager', () => {
       manager.dispose();
     });
   });
+
+  describe('内存缓存 TTL', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    it('cleanup 应淘汰过期的内存 cache 条目', async () => {
+      const model = createMockModel([]);
+      const manager = new DatabaseSessionManager(model, { expireMs: 60_000 });
+      await manager.get('cache-stale');
+      await manager.addMessage('cache-stale', { role: 'user', content: 'old' });
+
+      vi.advanceTimersByTime(61_000);
+      const cleaned = await manager.cleanup();
+      expect(cleaned).toBeGreaterThanOrEqual(1);
+      expect(await manager.has('cache-stale')).toBe(false);
+      manager.dispose();
+    });
+
+    it('reset 无 system 消息时应从 cache 移除', async () => {
+      const model = createMockModel([]);
+      const manager = new DatabaseSessionManager(model);
+      await manager.addMessage('cache-reset', { role: 'user', content: 'hi' });
+      await manager.reset('cache-reset');
+      expect(await manager.has('cache-reset')).toBe(false);
+      manager.dispose();
+    });
+  });
 });

@@ -318,15 +318,23 @@ export class TaskContinuationManager {
    * 清理过期任务
    */
   private cleanup(): void {
+    const now = Date.now();
+    const completedTtlMs = 7 * 24 * 60 * 60 * 1000;
+    for (const [taskId, task] of this.tasks) {
+      if (
+        (task.status === 'completed' || task.status === 'failed') &&
+        now - task.updatedAt > completedTtlMs
+      ) {
+        this.tasks.delete(taskId);
+      }
+    }
+
     if (this.tasks.size <= this.maxStoredTasks) {
       return;
     }
 
-    // 按更新时间排序，删除最旧的任务
     const sortedTasks = Array.from(this.tasks.entries())
       .sort(([, a], [, b]) => b.updatedAt - a.updatedAt);
-
-    // 保留最新的任务
     const tasksToKeep = sortedTasks.slice(0, this.maxStoredTasks);
     this.tasks = new Map(tasksToKeep);
   }

@@ -146,13 +146,17 @@ export interface NetworkPolicyResult {
 export class NetworkPolicy {
   private config: NetworkPolicyConfig;
   private rateLimiter: RateLimiter;
+  private cleanupTimer?: ReturnType<typeof setInterval>;
 
   constructor(config: Partial<NetworkPolicyConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.rateLimiter = new RateLimiter();
 
     // 定期清理速率限制器
-    setInterval(() => this.rateLimiter.cleanup(), 60000);
+    this.cleanupTimer = setInterval(() => this.rateLimiter.cleanup(), 60000);
+    if (this.cleanupTimer && typeof this.cleanupTimer === 'object' && 'unref' in this.cleanupTimer) {
+      this.cleanupTimer.unref();
+    }
   }
 
   /**
@@ -335,6 +339,13 @@ export class NetworkPolicy {
    */
   getConfig(): NetworkPolicyConfig {
     return { ...this.config };
+  }
+
+  dispose(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = undefined;
+    }
   }
 }
 

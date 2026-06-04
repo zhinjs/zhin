@@ -186,6 +186,7 @@ export class SubagentManager {
       role,
     });
 
+    let dispatcherTaskId: string | undefined;
     try {
       const allTools = this.createTools();
 
@@ -221,6 +222,7 @@ export class SubagentManager {
           priority: 'medium',
           context,
         });
+        dispatcherTaskId = taskDef.id;
         systemPrompt = this.agentDispatcher.buildRolePrompt(role, taskDef);
       } else {
         systemPrompt = this.buildSubagentPrompt(task);
@@ -306,6 +308,10 @@ export class SubagentManager {
         error: errorMsg,
       });
       await this.announceResult(taskId, label, task, errorMsg, origin, 'error');
+    } finally {
+      if (this.agentDispatcher && dispatcherTaskId) {
+        this.agentDispatcher.releaseTask(dispatcherTaskId);
+      }
     }
   }
 

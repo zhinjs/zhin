@@ -419,11 +419,15 @@ export class ConversationMemory {
   private lastAccess: Map<string, number> = new Map();
   /** DB TTL 自动清理定时器 */
   private dbTtlTimer: ReturnType<typeof setInterval> | null = null;
+  /** topicStates / roundCache 定时淘汰 */
+  private sessionCachePruneTimer: ReturnType<typeof setInterval> | null = null;
 
-  /** 内存缓存上限：超过此数量时淘汰过期条目 */
-  private static readonly MAX_TRACKED_SESSIONS = 5000;
+  /** 内存缓存上限：超过此数量时 LRU 淘汰 */
+  private static readonly MAX_TRACKED_SESSIONS = 2000;
   /** 缓存过期时间：24 小时未访问即淘汰 */
   private static readonly SESSION_CACHE_TTL = 24 * 60 * 60 * 1000;
+  /** 内存缓存清扫间隔 */
+  private static readonly SESSION_CACHE_PRUNE_INTERVAL = 5 * 60 * 1000;
   /** DB TTL 清理间隔：每 24 小时执行一次 */
   private static readonly DB_TTL_INTERVAL = 24 * 60 * 60 * 1000;
 
@@ -431,6 +435,7 @@ export class ConversationMemory {
     this.store = new MemoryStore();
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.startDbTtlTimer();
+    this.startSessionCachePruneTimer();
   }
 
   // ── 依赖注入 ──
@@ -947,36 +952,50 @@ export class ConversationMemory {
 
   /**
    * 淘汰长时间未访问的 session 缓存，防止 topicStates/roundCache 无限增长。
-   * 触发条件：Map size 超过 MAX_TRACKED_SESSIONS。
    */
   private pruneStaleSessionCaches(): void {
-    if (this.lastAccess.size <= ConversationMemory.MAX_TRACKED_SESSIONS) return;
-
     const now = Date.now();
     const ttl = ConversationMemory.SESSION_CACHE_TTL;
     for (const [sid, ts] of this.lastAccess) {
       if (now - ts > ttl) {
-        this.topicStates.delete(sid);
-        this.roundCache.delete(sid);
-        this.lastAccess.delete(sid);
-        this.summarizing.delete(sid);
+        this.evictSessionCacheEntry(sid);
       }
     }
 
-    // 如果 TTL 淘汰后仍超限，按 LRU 删除最旧的
     if (this.lastAccess.size > ConversationMemory.MAX_TRACKED_SESSIONS) {
       const entries = [...this.lastAccess.entries()].sort((a, b) => a[1] - b[1]);
       const toRemove = entries.slice(0, entries.length - ConversationMemory.MAX_TRACKED_SESSIONS);
       for (const [sid] of toRemove) {
-        this.topicStates.delete(sid);
-        this.roundCache.delete(sid);
-        this.lastAccess.delete(sid);
-        this.summarizing.delete(sid);
+        this.evictSessionCacheEntry(sid);
       }
     }
   }
 
+  private evictSessionCacheEntry(sessionId: string): void {
+    this.topicStates.delete(sessionId);
+    this.roundCache.delete(sessionId);
+    this.lastAccess.delete(sessionId);
+    this.summarizing.delete(sessionId);
+  }
+
+  private startSessionCachePruneTimer(): void {
+    this.sessionCachePruneTimer = setInterval(() => {
+      this.pruneStaleSessionCaches();
+    }, ConversationMemory.SESSION_CACHE_PRUNE_INTERVAL);
+    if (
+      this.sessionCachePruneTimer &&
+      typeof this.sessionCachePruneTimer === 'object' &&
+      'unref' in this.sessionCachePruneTimer
+    ) {
+      this.sessionCachePruneTimer.unref();
+    }
+  }
+
   dispose(): void {
+    if (this.sessionCachePruneTimer) {
+      clearInterval(this.sessionCachePruneTimer);
+      this.sessionCachePruneTimer = null;
+    }
     if (this.dbTtlTimer) {
       clearInterval(this.dbTtlTimer);
       this.dbTtlTimer = null;

@@ -28,9 +28,17 @@ interface SummaryRow {
   created_at: number;
 }
 
+type WhereResult =
+  | PromiseLike<MessageRecord[]>
+  | {
+      orderBy(field: string, dir: 'ASC' | 'DESC'): {
+        limit(n: number): PromiseLike<MessageRecord[]>;
+      };
+    };
+
 interface DbModel {
   select(...fields: string[]): {
-    where(condition: Record<string, unknown>): PromiseLike<MessageRecord[]>;
+    where(condition: Record<string, unknown>): WhereResult;
   };
 }
 
@@ -44,12 +52,46 @@ interface SummaryDbModel {
   };
 }
 
+function isQueryChain(result: WhereResult): result is {
+  orderBy(field: string, dir: 'ASC' | 'DESC'): {
+    limit(n: number): PromiseLike<MessageRecord[]>;
+  };
+} {
+  return (
+    result != null &&
+    typeof result === 'object' &&
+    'orderBy' in result &&
+    typeof (result as { orderBy?: unknown }).orderBy === 'function'
+  );
+}
+
 function recordToChatMessage(row: MessageRecord): ChatMessage {
   const role =
     row.direction === 'outbound' || row.sender_role === 'assistant' || row.sender_role === 'bot'
       ? 'assistant'
       : 'user';
   return { role, content: row.message };
+}
+
+function applyAfterAnchorFilter(
+  rows: MessageRecord[],
+  afterTime?: number,
+  afterId?: number,
+): MessageRecord[] {
+  if (afterTime == null) return rows;
+  return rows.filter(
+    (r) =>
+      r.time > afterTime ||
+      (r.time === afterTime && (r.id ?? 0) > (afterId ?? 0)),
+  );
+}
+
+function sortAndTail(rows: MessageRecord[], limit?: number): MessageRecord[] {
+  rows.sort((a, b) => a.time - b.time || (a.id ?? 0) - (b.id ?? 0));
+  if (limit != null && rows.length > limit) {
+    return rows.slice(-limit);
+  }
+  return rows;
 }
 
 export class ChatHistoryContext {
@@ -135,7 +177,8 @@ export class ChatHistoryContext {
         scene_id: query.sceneId,
         message_id: anchorMessageId,
       });
-      return rows[0] ?? null;
+      const list = await Promise.resolve(rows as MessageRecord[] | PromiseLike<MessageRecord[]>);
+      return list[0] ?? null;
     } catch {
       return null;
     }
@@ -150,32 +193,57 @@ export class ChatHistoryContext {
     return rows;
   }
 
+  private sceneKeysWhere(query: ChatHistoryQuery): Record<string, unknown> {
+    return {
+      platform: query.platform,
+      bot_id: query.botId,
+      scene_id: query.sceneId,
+    };
+  }
+
+  private sceneWhereWithTime(
+    query: ChatHistoryQuery,
+    opts: { sinceTime?: number; afterTime?: number },
+  ): Record<string, unknown> {
+    const where = this.sceneKeysWhere(query);
+    if (opts.sinceTime != null) {
+      where.time = { $gte: opts.sinceTime };
+    } else if (opts.afterTime != null) {
+      where.time = { $gt: opts.afterTime };
+    }
+    return where;
+  }
+
   private async querySceneMessages(
     query: ChatHistoryQuery,
     opts: { sinceTime?: number; afterTime?: number; afterId?: number; limit?: number },
   ): Promise<MessageRecord[]> {
+    const limit = opts.limit ?? this.config.coldStartMaxMessages;
     try {
-      const base = {
-        platform: query.platform,
-        bot_id: query.botId,
-        scene_id: query.sceneId,
-      };
-      let rows = await this.messageModel.select().where(base);
+      const probe = this.messageModel.select().where(this.sceneKeysWhere(query));
+
+      if (isQueryChain(probe)) {
+        const fetchN = Math.min(Math.max(limit * 4, limit), 500);
+        const timed = this.messageModel.select().where(this.sceneWhereWithTime(query, opts));
+        if (!isQueryChain(timed)) {
+          return [];
+        }
+        let rows = (await timed.orderBy('time', 'DESC').limit(fetchN)) as MessageRecord[];
+        rows = rows.reverse();
+        rows = applyAfterAnchorFilter(rows, opts.afterTime, opts.afterId);
+        return sortAndTail(rows, limit);
+      }
+
+      let rows = (await Promise.resolve(
+        probe as PromiseLike<MessageRecord[]>,
+      )) as MessageRecord[];
       if (opts.sinceTime != null) {
         rows = rows.filter((r) => r.time >= opts.sinceTime!);
       }
       if (opts.afterTime != null) {
-        rows = rows.filter(
-          (r) =>
-            r.time > opts.afterTime! ||
-            (r.time === opts.afterTime && (r.id ?? 0) > (opts.afterId ?? 0)),
-        );
+        rows = applyAfterAnchorFilter(rows, opts.afterTime, opts.afterId);
       }
-      rows.sort((a, b) => a.time - b.time || (a.id ?? 0) - (b.id ?? 0));
-      if (opts.limit != null && rows.length > opts.limit) {
-        rows = rows.slice(-opts.limit);
-      }
-      return rows;
+      return sortAndTail(rows, limit);
     } catch (err) {
       logger.debug('querySceneMessages failed:', err);
       return [];

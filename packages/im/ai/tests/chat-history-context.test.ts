@@ -36,7 +36,17 @@ const seed: MessageRecord[] = [
 ];
 
 function matchWhere(row: MessageRecord, cond: Record<string, unknown>): boolean {
-  return Object.entries(cond).every(([k, v]) => (row as Record<string, unknown>)[k] === v);
+  for (const [k, v] of Object.entries(cond)) {
+    if (k === 'time' && v && typeof v === 'object') {
+      const t = row.time;
+      const op = v as { $gte?: number; $gt?: number };
+      if (op.$gte != null && t < op.$gte) return false;
+      if (op.$gt != null && t <= op.$gt) return false;
+      continue;
+    }
+    if ((row as Record<string, unknown>)[k] !== v) return false;
+  }
+  return true;
 }
 
 function createModels(messages: MessageRecord[]) {
@@ -74,5 +84,61 @@ describe('ChatHistoryContext', () => {
 
     const userLines = hist.filter((m) => m.role === 'user').map((m) => m.content);
     expect(userLines).toEqual(['hello b1']);
+  });
+
+  it('支持 orderBy/limit 链式查询时只取最近 N 条', async () => {
+    const many: MessageRecord[] = [];
+    for (let i = 0; i < 120; i++) {
+      many.push({
+        id: i + 1,
+        platform: 'icqq',
+        bot_id: 'b1',
+        scene_id: 'g1',
+        scene_type: 'group',
+        scene_name: '',
+        sender_id: 'u1',
+        sender_name: 'u1',
+        sender_role: 'user',
+        direction: 'inbound',
+        message: `m${i}`,
+        time: now - (120 - i) * 1000,
+      });
+    }
+    const messageModel = {
+      select: () => ({
+        where: (cond: Record<string, unknown>) => ({
+          orderBy: (_f: string, dir: 'ASC' | 'DESC') => ({
+            limit: (n: number) => {
+              let rows = many.filter((m) => matchWhere(m, cond));
+              rows.sort((a, b) => (dir === 'DESC' ? b.time - a.time : a.time - b.time));
+              return Promise.resolve(rows.slice(0, n));
+            },
+          }),
+        }),
+      }),
+    };
+    const summaryModel = {
+      select: () => ({
+        where: () => ({
+          orderBy: () => ({
+            limit: () => Promise.resolve([]),
+          }),
+        }),
+      }),
+    };
+    const ctx = new ChatHistoryContext(messageModel, summaryModel, {
+      coldStartMaxMessages: 10,
+      coldStartMaxAgeMs: 86400000,
+    });
+    const hist = await ctx.buildHistoryMessages({
+      sessionId: 's1',
+      platform: 'icqq',
+      botId: 'b1',
+      sceneId: 'g1',
+    });
+    const userLines = hist.filter((m) => m.role === 'user').map((m) => m.content);
+    expect(userLines).toHaveLength(10);
+    expect(userLines[0]).toBe('m110');
+    expect(userLines[9]).toBe('m119');
   });
 });

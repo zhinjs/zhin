@@ -165,6 +165,7 @@ export function filterTools(
 
 /** 缓存条目上限 */
 const MAX_CACHE_ENTRIES = 100;
+const CACHE_ENTRY_TTL_MS = 60 * 60 * 1000;
 
 // ============================================================================
 // 工具集 Hash
@@ -215,6 +216,8 @@ export class CachedToolFilter {
     tools: AgentTool[],
     options?: ToolFilterOptions,
   ): AgentTool[] {
+    this.pruneExpiredEntries();
+
     // 检查工具集是否变化
     const currentHash = computeToolSetHash(tools);
     if (currentHash !== this.toolSetHash) {
@@ -267,6 +270,15 @@ export class CachedToolFilter {
       ? `${options.maxTools ?? ''}_${options.minScore ?? ''}`
       : '';
     return `${msgKey}::${optKey}`;
+  }
+
+  private pruneExpiredEntries(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.cache.entries()) {
+      if (now - entry.accessedAt > CACHE_ENTRY_TTL_MS) {
+        this.cache.delete(key);
+      }
+    }
   }
 
   private evictOldest(): void {

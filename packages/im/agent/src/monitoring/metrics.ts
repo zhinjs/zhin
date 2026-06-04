@@ -34,6 +34,7 @@ export interface MetricDefinition {
 export class MetricsCollector {
   private metrics: Map<string, MetricDefinition> = new Map();
   private values: Map<string, MetricValue[]> = new Map();
+  private static readonly MAX_HISTOGRAM_SAMPLES = 500;
 
   /**
    * 注册指标
@@ -114,8 +115,14 @@ export class MetricsCollector {
       labels,
       timestamp: Date.now(),
     });
+    this.trimHistogramSamples(values);
 
     this.values.set(name, values);
+  }
+
+  private trimHistogramSamples(values: MetricValue[]): void {
+    if (values.length <= MetricsCollector.MAX_HISTOGRAM_SAMPLES) return;
+    values.splice(0, values.length - MetricsCollector.MAX_HISTOGRAM_SAMPLES);
   }
 
   /**
@@ -266,6 +273,7 @@ export interface TraceSpan {
 export class TraceCollector {
   private spans: Map<string, TraceSpan> = new Map();
   private activeSpans: Map<string, TraceSpan> = new Map();
+  private static readonly MAX_SPANS = 2000;
 
   /**
    * 开始一个新的 Span
@@ -318,6 +326,18 @@ export class TraceCollector {
     }
 
     this.activeSpans.delete(spanId);
+    this.pruneFinishedSpans();
+  }
+
+  private pruneFinishedSpans(): void {
+    if (this.spans.size <= TraceCollector.MAX_SPANS) return;
+    const finished = [...this.spans.entries()]
+      .filter(([, span]) => span.endTime != null)
+      .sort((a, b) => (a[1].endTime ?? 0) - (b[1].endTime ?? 0));
+    const excess = this.spans.size - TraceCollector.MAX_SPANS;
+    for (let i = 0; i < excess && i < finished.length; i++) {
+      this.spans.delete(finished[i][0]);
+    }
   }
 
   /**

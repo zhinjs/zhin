@@ -115,12 +115,16 @@ export class BudgetLimiter {
   private config: BudgetConfig;
   private sessions: Map<string, SessionBudget> = new Map();
   private dailyUsage: Map<string, TokenUsage> = new Map(); // userId -> usage
+  private cleanupTimer?: ReturnType<typeof setInterval>;
 
   constructor(config: Partial<BudgetConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
 
     // 定期清理过期会话
-    setInterval(() => this.cleanup(), 300000); // 每 5 分钟
+    this.cleanupTimer = setInterval(() => this.cleanup(), 300000);
+    if (this.cleanupTimer && typeof this.cleanupTimer === 'object' && 'unref' in this.cleanupTimer) {
+      this.cleanupTimer.unref();
+    }
   }
 
   /**
@@ -452,6 +456,15 @@ export class BudgetLimiter {
    */
   getConfig(): BudgetConfig {
     return { ...this.config };
+  }
+
+  dispose(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = undefined;
+    }
+    this.sessions.clear();
+    this.dailyUsage.clear();
   }
 }
 

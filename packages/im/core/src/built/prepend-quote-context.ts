@@ -5,7 +5,22 @@ import { stripUserSpoofedSenderPrefix } from './roles.js';
 import { segment } from '../utils.js';
 
 const CACHE_TTL_MS = 180_000;
+const MAX_CACHE_ENTRIES = 500;
 const cache = new Map<string, { at: number; payload: QuotedMessagePayload }>();
+
+function sweepQuoteCache(now: number): void {
+  for (const [key, entry] of cache) {
+    if (now - entry.at >= CACHE_TTL_MS) {
+      cache.delete(key);
+    }
+  }
+  if (cache.size <= MAX_CACHE_ENTRIES) return;
+  const ranked = [...cache.entries()].sort((a, b) => a[1].at - b[1].at);
+  const excess = cache.size - MAX_CACHE_ENTRIES;
+  for (let i = 0; i < excess && i < ranked.length; i++) {
+    cache.delete(ranked[i][0]);
+  }
+}
 
 /** 与 agent `CURRENT_MESSAGE_MARKER` 文案一致，便于模型区分 context / 当前轮 */
 export const QUOTED_MESSAGE_CONTEXT_MARKER =
@@ -109,12 +124,14 @@ async function fetchQuotedPayload(
 
   const key = cacheKey(adapterName, botId, quoteId);
   const now = Date.now();
+  sweepQuoteCache(now);
   const hit = cache.get(key);
   if (hit && now - hit.at < CACHE_TTL_MS) return hit.payload;
 
   try {
     const payload = await bot.$getMsg(quoteId);
     cache.set(key, { at: now, payload });
+    sweepQuoteCache(now);
     return payload;
   } catch {
     return null;

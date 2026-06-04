@@ -273,8 +273,27 @@ export class DatabaseSessionManager implements ISessionManager {
       expireMs: config.expireMs ?? 7 * 24 * 60 * 60 * 1000,
     };
 
-    // 定期清理过期会话（每小时）
-    this.cleanupTimer = setInterval(() => this.cleanup(), 60 * 60 * 1000);
+    // 内存缓存 TTL（与 MemorySessionManager 一致）；DB 全量清理在 cleanup() 内一并执行
+    this.cleanupTimer = setInterval(() => {
+      void this.cleanup();
+    }, 5 * 60 * 1000);
+    if (this.cleanupTimer && typeof this.cleanupTimer === 'object' && 'unref' in this.cleanupTimer) {
+      this.cleanupTimer.unref();
+    }
+  }
+
+  /** 按 expireMs 淘汰内存 cache，避免热 session 长期占用 RSS */
+  private pruneMemoryCache(now = Date.now()): number {
+    let cleaned = 0;
+    for (const [id, session] of this.cache) {
+      const expireMs = session.config.expireMs ?? this.config.expireMs;
+      if (now - session.updatedAt > expireMs) {
+        this.cache.delete(id);
+        this.saveQueue.delete(id);
+        cleaned++;
+      }
+    }
+    return cleaned;
   }
 
   /**
@@ -465,6 +484,10 @@ export class DatabaseSessionManager implements ISessionManager {
     session.messages = systemMessages;
     session.updatedAt = Date.now();
     this.schedulesSave(session);
+    if (systemMessages.length === 0) {
+      this.cache.delete(sessionId);
+      this.saveQueue.delete(sessionId);
+    }
   }
 
   async listSessions(): Promise<string[]> {
@@ -513,7 +536,7 @@ export class DatabaseSessionManager implements ISessionManager {
 
   async cleanup(): Promise<number> {
     const now = Date.now();
-    let cleaned = 0;
+    let cleaned = this.pruneMemoryCache(now);
 
     try {
       const records = await this.model.select() as SessionRecord[];

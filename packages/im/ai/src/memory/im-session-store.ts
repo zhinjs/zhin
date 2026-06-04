@@ -158,6 +158,29 @@ export class IMSessionStore {
 
 export class MemoryIMSessionStore {
   private sessions = new Map<string, IMSessionRecord>();
+  private static readonly MAX_ENTRIES = 2000;
+  private static readonly ARCHIVED_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+  private prune(): void {
+    const now = Date.now();
+    for (const [id, s] of this.sessions) {
+      if (s.status === 'archived' && now - s.updated_at > MemoryIMSessionStore.ARCHIVED_TTL_MS) {
+        this.sessions.delete(id);
+      }
+    }
+    if (this.sessions.size <= MemoryIMSessionStore.MAX_ENTRIES) return;
+
+    const ranked = [...this.sessions.entries()].sort((a, b) => {
+      const archivedA = a[1].status === 'archived' ? 0 : 1;
+      const archivedB = b[1].status === 'archived' ? 0 : 1;
+      if (archivedA !== archivedB) return archivedA - archivedB;
+      return a[1].updated_at - b[1].updated_at;
+    });
+    const excess = this.sessions.size - MemoryIMSessionStore.MAX_ENTRIES;
+    for (let i = 0; i < excess && i < ranked.length; i++) {
+      this.sessions.delete(ranked[i][0]);
+    }
+  }
 
   async findActive(sessionKey: string): Promise<IMSessionRecord | null> {
     for (const s of this.sessions.values()) {
@@ -186,6 +209,7 @@ export class MemoryIMSessionStore {
       updated_at: now,
     };
     this.sessions.set(record.session_id, record);
+    this.prune();
     return record;
   }
 
@@ -203,6 +227,7 @@ export class MemoryIMSessionStore {
         ok = true;
       }
     }
+    this.prune();
     return ok;
   }
 

@@ -241,6 +241,19 @@ export class AgentDispatcher {
   private tasks: Map<string, AgentTask> = new Map();
   private results: Map<string, AgentResult> = new Map();
   private running: Map<string, Promise<AgentResult>> = new Map();
+  private taskTimestamps = new Map<string, number>();
+  private cleanupTimer?: ReturnType<typeof setInterval>;
+
+  private static readonly MAX_STORED_TASKS = 500;
+  private static readonly TASK_TTL_MS = 24 * 60 * 60 * 1000;
+  private static readonly CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+
+  constructor() {
+    this.cleanupTimer = setInterval(() => this.cleanup(), AgentDispatcher.CLEANUP_INTERVAL_MS);
+    if (this.cleanupTimer && typeof this.cleanupTimer === 'object' && 'unref' in this.cleanupTimer) {
+      this.cleanupTimer.unref();
+    }
+  }
 
   /**
    * 创建任务
@@ -249,7 +262,19 @@ export class AgentDispatcher {
     const id = randomUUID().slice(0, 8);
     const fullTask: AgentTask = { ...task, id };
     this.tasks.set(id, fullTask);
+    this.taskTimestamps.set(id, Date.now());
+    this.evictIfOverCapacity();
     return fullTask;
+  }
+
+  /**
+   * 释放任务元数据（子 Agent 仅借用调度器生成 prompt 时应在 finally 中调用）
+   */
+  releaseTask(taskId: string): void {
+    this.tasks.delete(taskId);
+    this.results.delete(taskId);
+    this.running.delete(taskId);
+    this.taskTimestamps.delete(taskId);
   }
 
   /**
@@ -462,15 +487,50 @@ export class AgentDispatcher {
   }
 
   /**
-   * 清理已完成的任务
+   * 清理已完成/过期任务，返回移除数量
    */
-  cleanup(): void {
+  cleanup(): number {
+    const now = Date.now();
+    let cleaned = 0;
+
     for (const [taskId, result] of this.results.entries()) {
       if (result.success) {
-        this.tasks.delete(taskId);
-        this.results.delete(taskId);
+        this.releaseTask(taskId);
+        cleaned++;
       }
     }
+
+    for (const [taskId, createdAt] of this.taskTimestamps.entries()) {
+      if (now - createdAt > AgentDispatcher.TASK_TTL_MS) {
+        this.releaseTask(taskId);
+        cleaned++;
+      }
+    }
+
+    cleaned += this.evictIfOverCapacity();
+    return cleaned;
+  }
+
+  private evictIfOverCapacity(): number {
+    let cleaned = 0;
+    while (this.tasks.size > AgentDispatcher.MAX_STORED_TASKS) {
+      const oldest = [...this.taskTimestamps.entries()].sort((a, b) => a[1] - b[1])[0];
+      if (!oldest) break;
+      this.releaseTask(oldest[0]);
+      cleaned++;
+    }
+    return cleaned;
+  }
+
+  dispose(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = undefined;
+    }
+    this.tasks.clear();
+    this.results.clear();
+    this.running.clear();
+    this.taskTimestamps.clear();
   }
 
   /**

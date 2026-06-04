@@ -1,7 +1,7 @@
 /**
  * ConversationMemory 测试
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ConversationMemory } from '@zhin.js/ai';
 
 describe('ConversationMemory（内存模式）', () => {
@@ -158,6 +158,25 @@ describe('ConversationMemory（内存模式）', () => {
       expect(ctx1.some(m => m.content === '会话1')).toBe(true);
       expect(ctx1.some(m => m.content === '会话2')).toBe(false);
       expect(ctx2.some(m => m.content === '会话2')).toBe(true);
+    });
+  });
+
+  describe('session 内存缓存淘汰', () => {
+    it('定时器应淘汰 24h 未访问的 lastAccess', async () => {
+      vi.useFakeTimers();
+      const mem = new ConversationMemory({
+        minTopicRounds: 5,
+        slidingWindowSize: 3,
+        topicChangeThreshold: 0.15,
+      });
+      await mem.saveRound('stale-cache', 'u', 'a');
+      const access = (mem as unknown as { lastAccess: Map<string, number> }).lastAccess;
+      access.set('stale-cache', Date.now() - 25 * 60 * 60 * 1000);
+
+      vi.advanceTimersByTime(5 * 60 * 1000);
+      expect(access.has('stale-cache')).toBe(false);
+      mem.dispose();
+      vi.useRealTimers();
     });
   });
 
