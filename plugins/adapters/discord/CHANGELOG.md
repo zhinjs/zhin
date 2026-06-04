@@ -1,5 +1,17 @@
 # @zhin.js/adapter-discord
 
+## 2.0.9
+
+### Patch Changes
+
+- c8f8207: fix: 修复内存泄露问题
+- Updated dependencies [c8f8207]
+  - @zhin.js/client@2.0.2
+  - @zhin.js/contract@1.0.1
+  - @zhin.js/host-api@0.0.3
+  - @zhin.js/host-router@0.0.3
+  - zhin.js@1.0.90
+
 ## 2.0.8
 
 ### Patch Changes

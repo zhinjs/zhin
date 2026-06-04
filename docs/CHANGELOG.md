@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.36
+
+### Patch Changes
+
+- c8f8207: fix: 修复内存泄露问题
+
 ## 1.0.35
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # @zhin.js/adapter-milky
 
+## 0.0.40
+
+### Patch Changes
+
+- c8f8207: fix: 修复内存泄露问题
+- Updated dependencies [c8f8207]
+  - @zhin.js/host-router@0.0.3
+  - zhin.js@1.0.90
+
 ## 0.0.39
 
 ### Patch Changes

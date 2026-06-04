@@ -1,5 +1,17 @@
 # minimal-bot
 
+## 0.0.4
+
+### Patch Changes
+
+- c8f8207: fix: 修复内存泄露问题
+- Updated dependencies [c8f8207]
+  - @zhin.js/cli@1.0.86
+  - @zhin.js/host-api@0.0.3
+  - @zhin.js/host-router@0.0.3
+  - zhin.js@1.0.90
+  - @zhin.js/adapter-sandbox@3.0.8
+
 ## 0.0.3
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @zhin.js/database
 
+## 1.0.73
+
+### Patch Changes
+
+- c8f8207: fix: 修复内存泄露问题
+
 ## 1.0.72
 
 ### Patch Changes

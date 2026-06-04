@@ -1,5 +1,14 @@
 # @zhin.js/ai
 
+## 1.1.29
+
+### Patch Changes
+
+- c8f8207: fix: 修复内存泄露问题
+- a26e496: fix: 增加群旁听模式
+- Updated dependencies [c8f8207]
+  - @zhin.js/logger@0.1.70
+
 ## 1.1.28
 
 ### Patch Changes

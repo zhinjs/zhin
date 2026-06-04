@@ -1,5 +1,14 @@
 # @zhin.js/kernel
 
+## 0.0.48
+
+### Patch Changes
+
+- c8f8207: fix: 修复内存泄露问题
+- Updated dependencies [c8f8207]
+  - @zhin.js/logger@0.1.70
+  - @zhin.js/schema@1.0.70
+
 ## 0.0.47
 
 ### Patch Changes

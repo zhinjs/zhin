@@ -1,5 +1,18 @@
 # @zhin.js/agent
 
+## 0.1.29
+
+### Patch Changes
+
+- c8f8207: fix: 修复内存泄露问题
+- a26e496: fix: 增加群旁听模式
+- c8f8207: fix: 增加重启恢复会话功能
+- Updated dependencies [c8f8207]
+- Updated dependencies [a26e496]
+  - @zhin.js/logger@0.1.70
+  - @zhin.js/ai@1.1.29
+  - @zhin.js/core@1.1.31
+
 ## 0.1.28
 
 ### Patch Changes

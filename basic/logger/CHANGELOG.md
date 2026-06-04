@@ -1,5 +1,11 @@
 # @zhin.js/logger
 
+## 0.1.70
+
+### Patch Changes
+
+- c8f8207: fix: 修复内存泄露问题
+
 ## 0.1.69
 
 ### Patch Changes

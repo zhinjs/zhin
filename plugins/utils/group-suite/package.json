@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-group-suite",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Zhin.js 群运营套件 — 群管、签到、统计、日常分析、问答（合并原 5 个插件）",
   "type": "module",
   "main": "./lib/index.js",
