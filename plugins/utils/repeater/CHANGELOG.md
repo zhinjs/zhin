@@ -1,5 +1,13 @@
 # @zhin.js/plugin-repeater
 
+## 0.0.25
+
+### Patch Changes
+
+- c8f8207: fix: 修复内存泄露问题
+- Updated dependencies [c8f8207]
+  - zhin.js@1.0.90
+
 ## 0.0.24
 
 ### Patch Changes

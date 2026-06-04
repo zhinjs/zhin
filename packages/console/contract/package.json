@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/contract",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Zhin console / PageManager shared contract (entries, PluginRegisterHostApi)",
   "type": "module",
   "exports": {

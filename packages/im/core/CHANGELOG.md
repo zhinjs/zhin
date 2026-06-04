@@ -1,5 +1,19 @@
 # @zhin.js/core
 
+## 1.1.31
+
+### Patch Changes
+
+- c8f8207: fix: 修复内存泄露问题
+- a26e496: fix: 增加群旁听模式
+- Updated dependencies [c8f8207]
+- Updated dependencies [a26e496]
+  - @zhin.js/database@1.0.73
+  - @zhin.js/logger@0.1.70
+  - @zhin.js/schema@1.0.70
+  - @zhin.js/ai@1.1.29
+  - @zhin.js/kernel@0.0.48
+
 ## 1.1.30
 
 ### Patch Changes

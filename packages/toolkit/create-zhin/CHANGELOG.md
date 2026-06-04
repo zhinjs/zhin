@@ -1,5 +1,13 @@
 # create-zhin-app
 
+## 1.0.48
+
+### Patch Changes
+
+- c8f8207: fix: 修复内存泄露问题
+- Updated dependencies [c8f8207]
+  - @zhin.js/scaffold-wizard@0.1.1
+
 ## 1.0.47
 
 ### Patch Changes

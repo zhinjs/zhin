@@ -1,5 +1,13 @@
 # @zhin.js/client
 
+## 2.0.2
+
+### Patch Changes
+
+- c8f8207: fix: 修复内存泄露问题
+- Updated dependencies [c8f8207]
+  - @zhin.js/contract@1.0.1
+
 ## 2.0.1
 
 ### Patch Changes

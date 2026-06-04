@@ -1,5 +1,11 @@
 # @zhin.js/satori
 
+## 0.2.12
+
+### Patch Changes
+
+- c8f8207: fix: 修复内存泄露问题
+
 ## 0.2.11
 
 ### Patch Changes

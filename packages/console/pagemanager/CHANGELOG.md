@@ -1,5 +1,13 @@
 # @zhin.js/pagemanager
 
+## 2.0.1
+
+### Patch Changes
+
+- c8f8207: fix: 修复内存泄露问题
+- Updated dependencies [c8f8207]
+  - @zhin.js/contract@1.0.1
+
 ## 1.0.4
 
 ### Patch Changes

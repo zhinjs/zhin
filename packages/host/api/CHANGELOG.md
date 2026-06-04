@@ -1,5 +1,21 @@
 # @zhin.js/host-api
 
+## 0.0.3
+
+### Patch Changes
+
+- c8f8207: fix: 修复内存泄露问题
+- Updated dependencies [c8f8207]
+- Updated dependencies [a26e496]
+- Updated dependencies [c8f8207]
+  - @zhin.js/schema@1.0.70
+  - @zhin.js/client@2.0.2
+  - @zhin.js/contract@1.0.1
+  - @zhin.js/pagemanager@2.0.1
+  - @zhin.js/host-router@0.0.3
+  - @zhin.js/agent@0.1.29
+  - @zhin.js/core@1.1.31
+
 ## 0.0.2
 
 ### Patch Changes

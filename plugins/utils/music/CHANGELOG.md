@@ -1,5 +1,14 @@
 # @zhin.js/plugin-music
 
+## 2.0.9
+
+### Patch Changes
+
+- c8f8207: fix: 修复内存泄露问题
+- Updated dependencies [c8f8207]
+  - zhin.js@1.0.90
+  - @zhin.js/adapter-icqq@3.0.9
+
 ## 2.0.8
 
 ### Patch Changes

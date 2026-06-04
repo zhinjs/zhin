@@ -1,5 +1,14 @@
 # @zhin.js/cli
 
+## 1.0.86
+
+### Patch Changes
+
+- c8f8207: fix: 修复内存泄露问题
+- Updated dependencies [c8f8207]
+  - @zhin.js/logger@0.1.70
+  - @zhin.js/scaffold-wizard@0.1.1
+
 ## 1.0.85
 
 ### Patch Changes
