@@ -7,82 +7,75 @@
 
 import type { ToolContext } from '@zhin.js/core';
 import type { AgentTool } from '@zhin.js/core';
-import type { ConversationMemory } from '@zhin.js/ai';
+import type { ChatHistoryContext, ChatHistoryQuery, ChatHistorySearchHit } from '@zhin.js/ai';
 import type { UserProfileStore } from '../user-profile.js';
 
 export { createSpawnTaskTool } from '../builtin/spawn-task-tool.js';
 
-export function createChatHistoryTool(sessionId: string, memory: ConversationMemory): AgentTool {
+function formatHitLine(hit: ChatHistorySearchHit): string {
+  const role = hit.role === 'user' ? '用户' : '助手';
+  const time = new Date(hit.time).toLocaleString('zh-CN');
+  const who = hit.senderName && hit.role === 'user' ? ` (${hit.senderName})` : '';
+  return `[${time}] ${role}${who}: ${hit.content}`;
+}
+
+function formatToolResult(
+  result: { summary: string | null; messages: ChatHistorySearchHit[] },
+  header: string,
+): string {
+  let output = header;
+  if (result.summary) {
+    output += `\n\n📋 对话摘要：\n${result.summary}`;
+  }
+  if (result.messages.length > 0) {
+    output += `\n\n💬 聊天记录：\n${result.messages.map(formatHitLine).join('\n')}`;
+  } else {
+    output += '\n\n未找到相关聊天记录。';
+  }
+  return output;
+}
+
+export function createChatHistoryTool(
+  chatHistory: ChatHistoryContext,
+  query: ChatHistoryQuery,
+): AgentTool {
   return {
     name: 'chat_history',
     source: 'builtin:context',
-    description: '搜索与用户的历史聊天记录。可以按关键词搜索，也可以按对话轮次范围查询。当用户问到"之前聊过什么""我们讨论过什么"等回忆类问题时使用。',
+    description:
+      '从数据库按需查询本场景历史聊天（platform+bot+群/私聊）。支持关键词模糊搜索；keyword 留空则返回最近若干条。当用户问「之前聊过什么」「我们讨论过什么」时使用。',
     parameters: {
       type: 'object',
       properties: {
         keyword: {
           type: 'string',
-          description: '搜索关键词（模糊匹配消息内容和摘要）。留空则返回最近几轮记录',
+          description: '搜索关键词（匹配消息正文）。留空则返回最近记录',
         },
-        from_round: {
+        limit: {
           type: 'number',
-          description: '起始轮次（与 to_round 配合使用，精确查询某段对话）',
-        },
-        to_round: {
-          type: 'number',
-          description: '结束轮次',
+          description: '最多返回条数（默认 10，最大 100）',
         },
       },
-      required: ['keyword'],
     },
     tags: ['memory', 'history', '聊天记录', '回忆', '之前'],
     keywords: ['之前', '历史', '聊过', '讨论过', '记得', '上次', '以前', '回忆'],
-    async execute(args: Record<string, any>) {
-      const { keyword, from_round, to_round } = args;
-      const currentRound = await memory.getCurrentRound(sessionId);
+    async execute(args: Record<string, unknown>) {
+      const keyword = typeof args.keyword === 'string' ? args.keyword : '';
+      const limit =
+        typeof args.limit === 'number' && Number.isFinite(args.limit)
+          ? Math.floor(args.limit)
+          : 10;
 
-      if (keyword) {
-        const result = await memory.traceByKeyword(sessionId, keyword);
-        const msgs = result.messages.map(m => {
-          const role = m.role === 'user' ? '用户' : '助手';
-          const time = new Date(m.time).toLocaleString('zh-CN');
-          return `[第${m.round}轮 ${time}] ${role}: ${m.content}`;
-        }).join('\n');
-
-        let output = `当前是第 ${currentRound} 轮对话。\n\n`;
-        if (result.summary) {
-          output += `📋 找到相关摘要（覆盖第${result.summary.fromRound}-${result.summary.toRound}轮）：\n${result.summary.summary}\n\n`;
-        }
-        output += msgs ? `💬 相关聊天记录：\n${msgs}` : '未找到包含该关键词的聊天记录。';
-        return output;
+      if (keyword.trim()) {
+        const result = await chatHistory.searchMessages(query, keyword, limit);
+        return formatToolResult(
+          result,
+          `关键词「${keyword.trim()}」的搜索结果（最多 ${limit} 条）：`,
+        );
       }
 
-      if (from_round != null && to_round != null) {
-        const messages = await memory.getMessagesByRound(sessionId, from_round, to_round);
-        if (messages.length === 0) {
-          return `第 ${from_round}-${to_round} 轮没有聊天记录。当前是第 ${currentRound} 轮。`;
-        }
-        const msgs = messages.map(m => {
-          const role = m.role === 'user' ? '用户' : '助手';
-          const time = new Date(m.time).toLocaleString('zh-CN');
-          return `[第${m.round}轮 ${time}] ${role}: ${m.content}`;
-        }).join('\n');
-        return `第 ${from_round}-${to_round} 轮聊天记录（当前第 ${currentRound} 轮）：\n${msgs}`;
-      }
-
-      const messages = await memory.getMessagesByRound(
-        sessionId,
-        Math.max(1, currentRound - 4),
-        currentRound,
-      );
-      if (messages.length === 0) {
-        return '暂无聊天记录。';
-      }
-      const msgs = messages.map(m => {
-        const role = m.role === 'user' ? '用户' : '助手';
-        return `[第${m.round}轮] ${role}: ${m.content}`;
-      }).join('\n');
-      return `最近的聊天记录（当前第 ${currentRound} 轮）：\n${msgs}`;
+      const result = await chatHistory.listRecentMessages(query, limit);
+      return formatToolResult(result, `最近 ${limit} 条聊天记录：`);
     },
   };
 }

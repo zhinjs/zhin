@@ -9,8 +9,9 @@ import {
   createSpawnTaskTool,
   createUserProfileTool,
 } from './builtin-tools.js';
-import type { ConversationMemory } from '@zhin.js/ai';
+import type { ChatHistoryContext } from '@zhin.js/ai';
 import type { UserProfileStore } from '../user-profile.js';
+import { buildChatHistoryQuery } from './session-io.js';
 import type { SubagentManager } from '../subagent.js';
 import { runPreExecutableTools, type PreExecuteResult } from './pre-exec.js';
 import { sharedToolSelection } from '../orchestrator/tool-selection.js';
@@ -27,7 +28,7 @@ export interface CollectRuntimeToolsOptions {
   externalRegistered: Map<string, AgentTool>;
   sessionId: string;
   userId: string;
-  memory: ConversationMemory;
+  chatHistory: ChatHistoryContext | null;
   userProfiles: UserProfileStore;
   subagentManager: SubagentManager | null;
   /** MCP tools from connected servers (merged after skill/tool selection). */
@@ -47,8 +48,13 @@ export function collectRuntimeTools(options: CollectRuntimeToolsOptions): AgentT
     names.add(tool.name);
   };
 
-  if (KEYWORD_TRIGGERS.chatHistory.test(options.content)) {
-    add(createChatHistoryTool(options.sessionId, options.memory));
+  if (KEYWORD_TRIGGERS.chatHistory.test(options.content) && options.chatHistory) {
+    add(
+      createChatHistoryTool(
+        options.chatHistory,
+        buildChatHistoryQuery(options.sessionId, options.context),
+      ),
+    );
   }
   if (KEYWORD_TRIGGERS.userProfile.test(options.content)) {
     add(createUserProfileTool(options.userId, options.userProfiles));

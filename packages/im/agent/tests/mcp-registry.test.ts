@@ -145,7 +145,7 @@ describe('collectRuntimeTools MCP merge', () => {
       externalRegistered: new Map(),
       sessionId: 's1',
       userId: 'u1',
-      memory: { getHistory: async () => [] } as any,
+      chatHistory: null,
       userProfiles: { buildProfileSummary: async () => '' } as any,
       subagentManager: null,
       mcpTools: [mockTool],
@@ -163,7 +163,7 @@ describe('collectRuntimeTools MCP merge', () => {
       externalRegistered: new Map(),
       sessionId: 's1',
       userId: 'u1',
-      memory: { getHistory: async () => [] } as any,
+      chatHistory: null,
       userProfiles: { buildProfileSummary: async () => '' } as any,
       subagentManager: null,
       mcpTools: [{

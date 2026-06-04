@@ -141,4 +141,27 @@ describe('ChatHistoryContext', () => {
     expect(userLines[0]).toBe('m110');
     expect(userLines[9]).toBe('m119');
   });
+
+  it('searchMessages 按关键词从场景消息中筛选', async () => {
+    const { messageModel, summaryModel } = createModels(seed);
+    const ctx = new ChatHistoryContext(messageModel, summaryModel);
+    const result = await ctx.searchMessages(
+      { sessionId: 's1', platform: 'icqq', botId: 'b1', sceneId: 'g1' },
+      'hello',
+      10,
+    );
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0].content).toBe('hello b1');
+  });
+
+  it('listRecentMessages 返回最近条数', async () => {
+    const { messageModel, summaryModel } = createModels(seed);
+    const ctx = new ChatHistoryContext(messageModel, summaryModel);
+    const result = await ctx.listRecentMessages(
+      { sessionId: 's1', platform: 'icqq', botId: 'b2', sceneId: 'g1' },
+      5,
+    );
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0].content).toBe('hello b2');
+  });
 });

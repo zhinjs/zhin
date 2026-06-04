@@ -487,10 +487,10 @@ Zhin 可作为 **MCP Client** 消费外部工具（`ai.mcpServers`、`ai.memoryM
 
 ### chat_history 工具
 
-当用户消息包含"之前"、"上次"、"历史"、"回忆"等关键词时，`chat_history` 工具被注入，支持：
-- 按关键词搜索历史记录
-- 按轮次范围查询
-- 无参数返回最近几轮
+当用户消息包含"之前"、"上次"、"历史"、"回忆"等关键词时，且已注入 `ChatHistoryContext`（`chat_messages` 表就绪），`chat_history` 工具被注入。执行时**按需从数据库查询**，不在进程内缓存全量历史：
+- `keyword`：模糊匹配 `chat_messages.message`（同 `platform` + `bot_id` + `scene_id`）
+- `keyword` 留空：返回最近 N 条（`limit`，默认 10）
+- 若存在 `ai_summaries`，会在结果中附带最新摘要文本
 
 ## Hook 系统
 

@@ -162,7 +162,7 @@ export async function processTextTurn(
       externalRegistered: host.externalTools,
       sessionId,
       userId,
-      memory: host.memory,
+      chatHistory: host.chatHistory,
       userProfiles: host.userProfiles,
       subagentManager: host.subagentManager,
       mcpTools,

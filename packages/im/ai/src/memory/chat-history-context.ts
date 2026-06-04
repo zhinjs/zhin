@@ -65,6 +65,31 @@ function isQueryChain(result: WhereResult): result is {
   );
 }
 
+export interface ChatHistorySearchHit {
+  time: number;
+  role: 'user' | 'assistant';
+  content: string;
+  senderName?: string;
+}
+
+export interface ChatHistoryToolResult {
+  summary: string | null;
+  messages: ChatHistorySearchHit[];
+}
+
+function rowToHit(row: MessageRecord): ChatHistorySearchHit {
+  const role =
+    row.direction === 'outbound' || row.sender_role === 'assistant' || row.sender_role === 'bot'
+      ? 'assistant'
+      : 'user';
+  return {
+    time: row.time,
+    role,
+    content: row.message,
+    senderName: row.sender_name || undefined,
+  };
+}
+
 function recordToChatMessage(row: MessageRecord): ChatMessage {
   const role =
     row.direction === 'outbound' || row.sender_role === 'assistant' || row.sender_role === 'bot'
@@ -118,6 +143,71 @@ export class ChatHistoryContext {
       limit: 1,
     });
     return rows.length > 0;
+  }
+
+  /** 关键词搜索（只读 chat_messages，带条数上限） */
+  async searchMessages(
+    query: ChatHistoryQuery,
+    keyword: string,
+    limit = 20,
+  ): Promise<ChatHistoryToolResult> {
+    const kw = keyword.trim();
+    if (!kw) {
+      return this.listRecentMessages(query, limit);
+    }
+    const since = Date.now() - this.config.coldStartMaxAgeMs;
+    const cap = Math.min(Math.max(limit, 1), 100);
+    let rows: MessageRecord[] = [];
+    try {
+      const where: Record<string, unknown> = {
+        ...this.sceneKeysWhere(query),
+        message: { $like: `%${kw}%` },
+        time: { $gte: since },
+      };
+      const probe = this.messageModel.select().where(this.sceneKeysWhere(query));
+      if (isQueryChain(probe)) {
+        const timed = this.messageModel.select().where(where);
+        if (isQueryChain(timed)) {
+          rows = (await timed.orderBy('time', 'DESC').limit(cap)) as MessageRecord[];
+          rows = rows.reverse();
+        }
+      } else {
+        const all = (await Promise.resolve(
+          probe as PromiseLike<MessageRecord[]>,
+        )) as MessageRecord[];
+        const lower = kw.toLowerCase();
+        rows = all
+          .filter((r) => r.time >= since && r.message.toLowerCase().includes(lower))
+          .sort((a, b) => a.time - b.time || (a.id ?? 0) - (b.id ?? 0));
+        if (rows.length > cap) {
+          rows = rows.slice(-cap);
+        }
+      }
+    } catch (err) {
+      logger.debug('searchMessages failed:', err);
+    }
+    const summary = await this.getLatestSummary(query.sessionId);
+    return {
+      summary: summary?.summary ?? null,
+      messages: rows.map(rowToHit),
+    };
+  }
+
+  /** 最近 N 条（按时间，无关键词） */
+  async listRecentMessages(
+    query: ChatHistoryQuery,
+    limit = 10,
+  ): Promise<ChatHistoryToolResult> {
+    const cap = Math.min(Math.max(limit, 1), 100);
+    const rows = await this.querySceneMessages(query, {
+      sinceTime: Date.now() - this.config.coldStartMaxAgeMs,
+      limit: cap,
+    });
+    const summary = await this.getLatestSummary(query.sessionId);
+    return {
+      summary: summary?.summary ?? null,
+      messages: rows.map(rowToHit),
+    };
   }
 
   async buildHistoryMessages(query: ChatHistoryQuery): Promise<ChatMessage[]> {

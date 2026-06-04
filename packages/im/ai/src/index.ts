@@ -97,7 +97,12 @@ export type { ISessionManager, IMSessionScope, ResolveIMSessionIdInput, AISessio
 export {
   ChatHistoryContext,
 } from './memory/chat-history-context.js';
-export type { ChatHistoryConfig, ChatHistoryQuery } from './memory/chat-history-context.js';
+export type {
+  ChatHistoryConfig,
+  ChatHistoryQuery,
+  ChatHistorySearchHit,
+  ChatHistoryToolResult,
+} from './memory/chat-history-context.js';
 
 export {
   IMSessionStore,
