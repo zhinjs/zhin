@@ -3,8 +3,8 @@
 本文描述 Zhin.js 从 **IM 聊天 Bot** 演进到 **个人助手（Personal Assistant）** 的架构方案、分阶段交付、每步需改动的模块，以及 **破坏性变更** 边界。
 
 - **决策记录**：[ADR 0008 — 引入 Assistant Runtime](../adr/0008-introduce-assistant-runtime.md)
-- **跟踪待办**：[`.feature/assistant-runtime/todo.md`](../../.feature/assistant-runtime/todo.md)
-- **能力矩阵**：[`.feature/assistant-runtime/plan.md`](../../.feature/assistant-runtime/plan.md)
+- **跟踪待办**：`.feature/assistant-runtime/todo.md`（仓库根目录）
+- **能力矩阵**：`.feature/assistant-runtime/plan.md`（仓库根目录）
 
 ---
 

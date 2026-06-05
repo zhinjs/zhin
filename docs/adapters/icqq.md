@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=38dabc6201109fdc -->
+<!-- sync-adapter-docs:sha256=d5150abcc2b08f90 -->
 
 # @zhin.js/adapter-icqq
 
@@ -141,6 +141,18 @@ addCommand(new MessageCommand('pic <url:text>')
     ]
   })
 )
+```
+
+**Zhin 与 icqq 守护进程不在同一台机器时**，请在 `zhin.config.yml` 为该 bot 设置 `outboundMedia: base64`（或配置 `rpc` 时会自动默认 `base64`）。此时 segment 保留 `base64`，经 CQ `[image:base64://...]` 交给守护进程解码，不要使用仅在本机有效的临时文件路径。
+
+Agent **`generate_image` 文生图**出站的大图同样依赖上述配置；同机默认可用本机临时文件路径（`outboundMedia: file`）。详见 [文生图 (generate_image)](https://github.com/zhinjs/zhin/blob/main/docs/advanced/ai.md#文生图-generate_image)。
+
+```yaml
+bots:
+  - context: icqq
+    name: "123456"
+    outboundMedia: base64   # 异机 / 远程 RPC
+    # rpc: { host: ..., port: ..., token: ... }  # 配置 rpc 时默认已是 base64
 ```
 
 ### 发送语音
